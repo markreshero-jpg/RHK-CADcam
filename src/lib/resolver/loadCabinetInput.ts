@@ -86,13 +86,13 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     methodRes,
   ] = await Promise.all([
     asmSchedId
-      ? supabase.from('assembly_schedule_rows').select('material_role, materials(*)').eq('schedule_id', asmSchedId).eq('assembly_class', cab.assembly_class)
+      ? supabase.from('assembly_schedule_rows').select('material_role, edgeband_id, materials(*)').eq('schedule_id', asmSchedId).eq('assembly_class', cab.assembly_class)
       : Promise.resolve({ data: [] as unknown[] }),
     frontSchedId
-      ? supabase.from('front_schedule_rows').select('materials(*)').eq('schedule_id', frontSchedId).eq('assembly_class', cab.assembly_class).maybeSingle()
+      ? supabase.from('front_schedule_rows').select('edgeband_id, materials(*)').eq('schedule_id', frontSchedId).eq('assembly_class', cab.assembly_class).maybeSingle()
       : Promise.resolve({ data: null }),
     tkSchedId
-      ? supabase.from('toekick_schedule_rows').select('part_role, materials(*)').eq('schedule_id', tkSchedId)
+      ? supabase.from('toekick_schedule_rows').select('part_role, edgeband_id, materials(*)').eq('schedule_id', tkSchedId)
       : Promise.resolve({ data: [] as unknown[] }),
     projectId
       ? supabase.from('job_materials').select('material_role, materials(*)').eq('project_id', projectId).eq('assembly_class', cab.assembly_class)
@@ -111,16 +111,34 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   // ── 6. Build material maps through cascade ───────────────────────────────────
   const matMap = new Map<string, Material>()
   const tkMap  = new Map<string, Material>()
+  const ebMap  = new Map<string, string>()  // role → edgeband_id
+
+  type AsmRow = MatRow & { material_role?: string; edgeband_id?: string | null }
+  type TkRow  = MatRow & { part_role?: string;     edgeband_id?: string | null }
+  type FrontRow = MatRow & { edgeband_id?: string | null }
 
   // Assembly schedule rows (excludes door_face — that comes from front schedule)
-  applyRows((asmRowsRes as { data: unknown[] }).data ?? [], 'material_role', matMap)
+  for (const row of ((asmRowsRes as { data: unknown[] }).data ?? []) as AsmRow[]) {
+    if (row.material_role && row.materials) {
+      matMap.set(row.material_role, dbRowToMaterial(row.materials as Record<string, unknown>))
+      if (row.edgeband_id) ebMap.set(row.material_role, row.edgeband_id)
+    }
+  }
 
   // Front schedule → door_face
-  const frontRow = (frontRowsRes as { data: unknown }).data as MatRow | null
-  if (frontRow?.materials) matMap.set('door_face', dbRowToMaterial(frontRow.materials as Record<string, unknown>))
+  const frontRow = (frontRowsRes as { data: unknown }).data as FrontRow | null
+  if (frontRow?.materials) {
+    matMap.set('door_face', dbRowToMaterial(frontRow.materials as Record<string, unknown>))
+    if (frontRow.edgeband_id) ebMap.set('door_face', frontRow.edgeband_id)
+  }
 
   // Toekick schedule rows
-  applyRows((tkRowsRes as { data: unknown[] }).data ?? [], 'part_role', tkMap)
+  for (const row of ((tkRowsRes as { data: unknown[] }).data ?? []) as TkRow[]) {
+    if (row.part_role && row.materials) {
+      tkMap.set(row.part_role, dbRowToMaterial(row.materials as Record<string, unknown>))
+      if (row.edgeband_id) ebMap.set(`tk_${row.part_role}`, row.edgeband_id)
+    }
+  }
 
   // Per-role overrides: job → room (each can override any role incl. door_face)
   applyRows((jobMatsRes  as { data: unknown[] }).data ?? [], 'material_role', matMap)
@@ -178,6 +196,11 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     shelf_material:            shelf,
     toekick_face_material:     tkFace,
     toekick_interior_material: tkInt,
+    interior_edgeband_id:         ebMap.get('interior'),
+    door_edgeband_id:             ebMap.get('door_face'),
+    shelf_edgeband_id:            ebMap.get('shelf') ?? ebMap.get('interior'),
+    toekick_face_edgeband_id:     ebMap.get('tk_face'),
+    toekick_interior_edgeband_id: ebMap.get('tk_interior'),
     slide_side_deduction:      slideRes.data?.side_deduction ?? 13,
     rules,
     face_grid:     (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID,

@@ -2,11 +2,11 @@ import { AssemblyClass } from '@/src/lib/types'
 import { MIN_ZOOM, MAX_ZOOM } from '@/src/lib/geometry'
 import type { Wall, CabinetInstance } from '@/src/lib/types'
 import type { Pt } from '@/src/lib/geometry'
-import type { DisplayConfig, PresetId, LayerId } from '@/src/lib/displayConfig'
-import { DEFAULT_DISPLAY_CONFIG, applyPreset, toggleLayer, cycleLayerStyle } from '@/src/lib/displayConfig'
+import type { DisplayConfig, PresetId, LayerId, AnnotationId } from '@/src/lib/displayConfig'
+import { DEFAULT_DISPLAY_CONFIG, applyPreset, toggleLayer, cycleLayerStyle, toggleAnnotation } from '@/src/lib/displayConfig'
 
-export type { DisplayConfig, PresetId, LayerId }
-export { DEFAULT_DISPLAY_CONFIG, applyPreset, toggleLayer, cycleLayerStyle }
+export type { DisplayConfig, PresetId, LayerId, AnnotationId }
+export { DEFAULT_DISPLAY_CONFIG, applyPreset, toggleLayer, cycleLayerStyle, toggleAnnotation }
 
 export type CanvasView = 'plan' | 'elevation' | '3d'
 
@@ -40,7 +40,7 @@ export type CabResize = {
   livePosY?: number
 }
 
-export type MenuItem = { label: string; action?: () => void; disabled?: boolean; shortcut?: string } | null
+export type MenuItem = { label: string; action?: () => void; disabled?: boolean; shortcut?: string; checked?: boolean } | null
 export type MenuGroup = { label: string; items: MenuItem[] }
 
 export type ContextMenuSubItem = { label: string; onClick: () => void; disabled?: boolean; color?: 'red' | 'blue' | 'amber' }

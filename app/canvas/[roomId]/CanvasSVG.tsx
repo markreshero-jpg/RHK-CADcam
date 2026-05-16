@@ -39,18 +39,20 @@ interface CanvasSVGProps {
   setSelected: (s: Selected) => void
   setContextMenu: (m: ContextMenuState | null) => void
   onCabinetPointerDown: (e: React.PointerEvent, cab: CabinetInstance) => void
-  onCabinetMovePointerDown: (e: React.PointerEvent, cab: CabinetInstance) => void
+  onCabinetCrosshairClick: (e: React.MouseEvent, cab: CabinetInstance) => void
   onCabinetContextMenu: (e: React.MouseEvent, cabId: string) => void
   onCabinetDoubleClick: (e: React.MouseEvent, cabId: string) => void
   onCabMarkerPointerDown: (e: React.PointerEvent, cab: CabinetInstance, side: 'left' | 'right' | 'front', wall: Wall, perp: Pt) => void
+  cabFollowing: { id: string } | null
+  onSVGClick: (e: React.MouseEvent) => void
 }
 
 export default function CanvasSVG({
   svgRef, walls, cabinets, view, svgSize, selected, mode, displayConfig,
   drawStart, drawCursor, drawThickness, placeGhost, clipboard, cabDrag, cabMoveDrag, cabResize, multiSelect, marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
-  setSelected, setContextMenu, onCabinetPointerDown, onCabinetMovePointerDown, onCabinetContextMenu, onCabinetDoubleClick,
-  onCabMarkerPointerDown,
+  setSelected, setContextMenu, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
+  onCabMarkerPointerDown, cabFollowing, onSVGClick,
 }: CanvasSVGProps) {
   const cx = centroid(walls)
   const dots = gridDots(view.panX, view.panY, view.zoom, svgSize.w, svgSize.h)
@@ -71,6 +73,7 @@ export default function CanvasSVG({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onClick={onSVGClick}
       onContextMenu={e => {
         e.preventDefault()
         if (mode === 'draw_wall' || mode === 'draw_island') onCancelDraw()
@@ -205,10 +208,10 @@ export default function CanvasSVG({
 
           const isBeingMoved = cabMoveDrag?.id === cab.id
           return (
-            <g key={cab.id} opacity={isBeingMoved ? 0.25 : 1}>
+            <g key={cab.id} opacity={isBeingMoved ? 0.4 : 1}>
               {/* Invisible hit polygon — always present so cabinet is always clickable */}
               <polygon points={pts} fill="transparent" stroke="none"
-                style={{ cursor: mode === 'select' ? 'grab' : undefined }}
+                style={{ cursor: mode === 'select' ? 'default' : undefined }}
                 onPointerDown={ev => onCabinetPointerDown(ev, displayCab)}
                 onClick={ev => ev.stopPropagation()}
                 onContextMenu={ev => onCabinetContextMenu(ev, cab.id)}
@@ -294,22 +297,25 @@ export default function CanvasSVG({
                 </text>
               )}
 
-              {/* Centre move handle */}
-              {(() => {
+              {/* Centre move handle — only visible when selected */}
+              {isSel && (() => {
                 const arm = 10 / view.zoom
+                const isFollowing = cabFollowing?.id === cab.id
+                const crosshairOpacity = isFollowing ? 1 : 0.5
                 return (
-                  <g style={{ cursor: mode === 'select' ? 'move' : undefined }}>
+                  <g style={{ cursor: mode === 'select' ? (isFollowing ? 'crosshair' : 'move') : undefined }}>
                     <line x1={center.x - arm} y1={center.y} x2={center.x + arm} y2={center.y}
-                      stroke="white" strokeWidth={1.5 / view.zoom} opacity={0.4} strokeLinecap="round"
+                      stroke={isFollowing ? '#60a5fa' : 'white'} strokeWidth={1.5 / view.zoom} opacity={crosshairOpacity} strokeLinecap="round"
                       style={{ pointerEvents: 'none' }} />
                     <line x1={center.x} y1={center.y - arm} x2={center.x} y2={center.y + arm}
-                      stroke="white" strokeWidth={1.5 / view.zoom} opacity={0.4} strokeLinecap="round"
+                      stroke={isFollowing ? '#60a5fa' : 'white'} strokeWidth={1.5 / view.zoom} opacity={crosshairOpacity} strokeLinecap="round"
                       style={{ pointerEvents: 'none' }} />
                     <circle cx={center.x} cy={center.y} r={3 / view.zoom}
-                      fill="white" opacity={0.4} style={{ pointerEvents: 'none' }} />
+                      fill={isFollowing ? '#60a5fa' : 'white'} opacity={crosshairOpacity} style={{ pointerEvents: 'none' }} />
                     <circle cx={center.x} cy={center.y} r={8 / view.zoom}
                       fill="transparent"
-                      onPointerDown={ev => { ev.stopPropagation(); onCabinetMovePointerDown(ev, displayCab) }} />
+                      onPointerDown={ev => ev.stopPropagation()}
+                      onClick={ev => { ev.stopPropagation(); onCabinetCrosshairClick(ev, displayCab) }} />
                   </g>
                 )
               })()}
@@ -346,6 +352,102 @@ export default function CanvasSVG({
           )
         })}
 
+        {/* ── Door swings + drawer lines (plan annotations) ── */}
+        {(displayConfig.annotations.plan_door_swings || displayConfig.annotations.plan_drawer_lines) && cabinets.flatMap(cab => {
+          if (!cab.has_face) return []
+          const wall = walls.find(w => w.id === cab.wall_id)
+          if (!wall) return []
+          const perp = islandCabPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
+          const wd = wallDir(wall)
+          const frontLeft = { x: cab.pos_x + cab.dz * perp.x, y: cab.pos_y + cab.dz * perp.y }
+
+          type FgZone = { col_index: number; row_index: number; face_type: string; hinge_side?: string }
+          type FgCol  = { col_index: number }
+          const fg = cab.face_grid as { cols?: FgCol[]; zones?: FgZone[] } | null
+
+          // Match resolver default when face_grid is null: 2 cols, left+right hinge doors
+          const cols  = fg?.cols  ?? [{ col_index: 0 }, { col_index: 1 }]
+          const zones: FgZone[] = fg?.zones ?? [
+            { row_index: 0, col_index: 0, face_type: 'door', hinge_side: 'left'  },
+            { row_index: 0, col_index: 1, face_type: 'door', hinge_side: 'right' },
+          ]
+          const nCols = cols.length
+          const colW  = cab.dx / nCols
+
+          const nodes: React.ReactNode[] = []
+
+          // Door swing arcs — one per column (rows irrelevant in plan view)
+          if (displayConfig.annotations.plan_door_swings) {
+            const baseCross  = wd.x * perp.y - wd.y * perp.x
+            const leftSweep  = baseCross > 0 ? 1 : 0
+            const rightSweep = 1 - leftSweep
+            const seenDoor = new Set<number>()
+            for (const z of zones) {
+              if (z.face_type !== 'door' || seenDoor.has(z.col_index)) continue
+              seenDoor.add(z.col_index)
+              const { col, hinge } = { col: z.col_index, hinge: (z.hinge_side ?? 'left') as 'left' | 'right' }
+              const colLeft  = { x: frontLeft.x + col * colW * wd.x, y: frontLeft.y + col * colW * wd.y }
+              const colRight = { x: colLeft.x + colW * wd.x, y: colLeft.y + colW * wd.y }
+              const r = colW
+              // End point at 15° of opening: interpolate between start direction and perp
+              // cos(θ)·startDir + sin(θ)·perp works for any wall orientation
+              const θ = 15 * Math.PI / 180
+              const c15 = Math.cos(θ), s15 = Math.sin(θ)
+              if (hinge === 'left') {
+                const endX = colLeft.x + r * (c15 * wd.x + s15 * perp.x)
+                const endY = colLeft.y + r * (c15 * wd.y + s15 * perp.y)
+                nodes.push(<path key={`swing-${cab.id}-${col}`}
+                  d={`M ${colLeft.x} ${colLeft.y} L ${colRight.x} ${colRight.y} A ${r} ${r} 0 0 ${leftSweep} ${endX} ${endY} Z`}
+                  fill="#3b82f615" stroke="#60a5fa60"
+                  strokeWidth={0.75 / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
+                  style={{ pointerEvents: 'none' }} />)
+              } else {
+                const endX = colRight.x + r * (c15 * (-wd.x) + s15 * perp.x)
+                const endY = colRight.y + r * (c15 * (-wd.y) + s15 * perp.y)
+                nodes.push(<path key={`swing-${cab.id}-${col}`}
+                  d={`M ${colRight.x} ${colRight.y} L ${colLeft.x} ${colLeft.y} A ${r} ${r} 0 0 ${rightSweep} ${endX} ${endY} Z`}
+                  fill="#3b82f615" stroke="#60a5fa60"
+                  strokeWidth={0.75 / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
+                  style={{ pointerEvents: 'none' }} />)
+              }
+            }
+          }
+
+          // Drawer lines — one dashed line per drawer zone, offset progressively from front
+          // Stacked drawers (same col, different rows) each get their own line at +10px per step.
+          if (displayConfig.annotations.plan_drawer_lines) {
+            // Group rows per column so each column tracks its own step count
+            const colRowsSeen = new Map<number, number[]>()
+            for (const z of zones) {
+              if (z.face_type !== 'drawer_face') continue
+              if (!colRowsSeen.has(z.col_index)) colRowsSeen.set(z.col_index, [])
+              const rows = colRowsSeen.get(z.col_index)!
+              if (!rows.includes(z.row_index)) rows.push(z.row_index)
+            }
+            for (const [col, rowIndices] of colRowsSeen) {
+              rowIndices.sort((a, b) => a - b)
+              const colLeft  = { x: frontLeft.x + col * colW * wd.x, y: frontLeft.y + col * colW * wd.y }
+              const colRight = { x: colLeft.x + colW * wd.x, y: colLeft.y + colW * wd.y }
+              for (let i = 0; i < rowIndices.length; i++) {
+                const perpOff   = (i + 1) * 10 / view.zoom  // 10 screen-px out per step
+                const widthInset = (i + 1) * 20 / view.zoom  // 20 screen-px inset per end per step
+                nodes.push(<line key={`drawer-${cab.id}-${col}-${rowIndices[i]}`}
+                  x1={colLeft.x  + perpOff * perp.x + widthInset * wd.x}
+                  y1={colLeft.y  + perpOff * perp.y + widthInset * wd.y}
+                  x2={colRight.x + perpOff * perp.x - widthInset * wd.x}
+                  y2={colRight.y + perpOff * perp.y - widthInset * wd.y}
+                  stroke="#f59e0b90"
+                  strokeWidth={0.75 / view.zoom}
+                  strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+                  strokeLinecap="round"
+                  style={{ pointerEvents: 'none' }} />)
+              }
+            }
+          }
+
+          return nodes
+        })}
+
         {/* ── Cabinet move ghost (cross-wall drag via centre handle) ── */}
         {cabMoveDrag && (() => {
           const movingCab = cabinets.find(c => c.id === cabMoveDrag.id)
@@ -356,20 +458,12 @@ export default function CanvasSVG({
             ? { x: -basePerp.x, y: -basePerp.y } : basePerp
           const ghostCab = { ...movingCab, pos_x: cabMoveDrag.pos_x, pos_y: cabMoveDrag.pos_y }
           const pts = cabinetPolygon(ghostCab, moveWall, perp)
-          const gCenter = cabinetCenterPt(ghostCab, moveWall, perp)
           return (
-            <>
-              <polygon points={pts}
-                fill={CAB_FILL[movingCab.assembly_class] + 'cc'}
-                stroke={CAB_FILL_SEL[movingCab.assembly_class]}
-                strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
-                style={{ pointerEvents: 'none' }} />
-              <text x={gCenter.x} y={gCenter.y} textAnchor="middle" dominantBaseline="middle"
-                fontSize={cabLabelFs} fill="#e2e8f0"
-                style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                {movingCab.label ?? movingCab.assembly_class}
-              </text>
-            </>
+            <polygon points={pts}
+              fill="none"
+              stroke={CAB_FILL_SEL[movingCab.assembly_class]}
+              strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+              style={{ pointerEvents: 'none' }} />
           )
         })()}
 

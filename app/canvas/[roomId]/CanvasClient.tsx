@@ -18,7 +18,7 @@ import { useCanvasHistory } from './useCanvasHistory'
 import {
   Mode, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, MenuGroup,
   viewReducer, modeAssemblyClass, DisplayConfig, PresetId,
-  DEFAULT_DISPLAY_CONFIG, applyPreset,
+  DEFAULT_DISPLAY_CONFIG, applyPreset, toggleAnnotation,
 } from './canvasTypes'
 import { DISPLAY_PRESETS } from '@/src/lib/displayConfig'
 import CanvasMenubar from './CanvasMenubar'
@@ -59,6 +59,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [cabDrag, setCabDrag] = useState<CabDrag | null>(null)
   const [cabResize, setCabResize] = useState<CabResize | null>(null)
   const [cabMoveDrag, setCabMoveDrag] = useState<CabMoveDrag | null>(null)
+  const [cabFollowing, setCabFollowing] = useState<{ id: string; assemblyClass: string } | null>(null)
   const [multiSelect, setMultiSelect] = useState<string[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [deleteWallPending, setDeleteWallPending] = useState<string | null>(null)
@@ -87,7 +88,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const cabDragRef = useRef<{ cabId: string; assemblyClass: AssemblyClass; wall: Wall; cabDX: number; dragOffset: number } | null>(null)
   const cabDragOriginRef = useRef<Pt | null>(null)
   const cabResizeDragging = useRef(false)
-  const cabMoveDragRef = useRef<{ cabId: string; assemblyClass: AssemblyClass } | null>(null)
   const spaceRef = useRef(false)
   const shiftRef = useRef(false)
   const placingRef = useRef(false)
@@ -187,7 +187,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !isInput(e.target)) { e.preventDefault(); void handleUndo() }
       if (((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey) && !isInput(e.target)) || ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && e.shiftKey && !isInput(e.target))) { e.preventDefault(); void handleRedo() }
-      if (e.key === 'Escape') { setCabResize(null); setMultiSelect([]); setMode('select'); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null }
+      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode('select'); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput(e.target)) {
         if (selected?.type === 'cabinet') handleDeleteCabinet(selected.id)
         if (selected?.type === 'wall') handleDeleteWall(selected.id)
@@ -335,6 +335,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return
     }
     if (e.button !== 0) return
+    if (cabFollowing) return
     if (mode === 'draw_wall' || mode === 'draw_island') {
       e.preventDefault()
       if (!drawStart) {
@@ -424,19 +425,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
     }
 
-    if (cabMoveDragRef.current && mode === 'select') {
-      const { cabId, assemblyClass } = cabMoveDragRef.current
-      const cab = cabinets.find(c => c.id === cabId)
+    if (cabFollowing && mode === 'select') {
+      const { id, assemblyClass } = cabFollowing
+      const cab = cabinets.find(c => c.id === id)
       if (cab) {
-        const raw = nearestWall(wp, walls, cab.dx, WALL_SNAP_PX / view.zoom)
+        // No distance limit — ghost always snaps to nearest wall regardless of cursor position
+        const raw = nearestWall(wp, walls, cab.dx, Infinity)
         if (raw) {
           const wd = wallDir(raw.wall)
           const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
-          const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === raw.wall.id && cabBlocks(assemblyClass, c.assembly_class)).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+          const occupied = cabinets.filter(c => c.id !== id && c.wall_id === raw.wall.id && cabBlocks(assemblyClass, c.assembly_class)).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
           const t = findFreeSlot(desired, cab.dx, raw.wall.length, occupied)
-          setCabMoveDrag({ id: cabId, wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: islandFlipFor(raw.wall) })
-        } else {
-          setCabMoveDrag(null)
+          setCabMoveDrag({ id, wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: islandFlipFor(raw.wall) })
         }
       }
     }
@@ -485,6 +485,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
     if (panRef.current) { panRef.current = null; return }
     if (e.button !== 0) return
+    if (cabFollowing) return
 
     const svgP = svgCoords(e)
     const wp = toWorld(svgP.x, svgP.y)
@@ -557,25 +558,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       cabResizeDragging.current = false
       if (cabResize) {
         captureSnapshot()
-        const update: Partial<CabinetInstance> = { [cabResize.dim]: cabResize.liveValue }
-        if (cabResize.side === 'left' && cabResize.livePosX !== undefined) {
-          update.pos_x = cabResize.livePosX
-          update.pos_y = cabResize.livePosY
+        const { cabId, dim, side, liveValue, livePosX, livePosY } = cabResize
+        const update: Partial<CabinetInstance> = { [dim]: liveValue }
+        if (side === 'left' && livePosX !== undefined) {
+          update.pos_x = livePosX
+          update.pos_y = livePosY
         }
-        await handleUpdateCabinet(cabResize.cabId, update)
-      }
-      return
-    }
-
-    if (cabMoveDragRef.current) {
-      const { cabId } = cabMoveDragRef.current
-      cabMoveDragRef.current = null
-      if (cabMoveDrag) {
-        captureSnapshot()
-        const { wall, pos_x, pos_y, islandFlip } = cabMoveDrag
-        const newRotation = islandFlip ? wall.angle + 180 : wall.angle
-        setCabMoveDrag(null)
-        await handleUpdateCabinet(cabId, { wall_id: wall.id, pos_x, pos_y, rotation: newRotation })
+        setCabResize(null)
+        await handleUpdateCabinet(cabId, update)
       }
       return
     }
@@ -633,6 +623,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     svgPointerDownRef.current = true
     setContextMenu(null); setOpenMenu(null); setCabMenuOpen(false)
     setCabResize(null)
+    if (cabFollowing) { setCabFollowing(null); setCabMoveDrag(null) }
     setSelected({ type: 'cabinet', id: cab.id })
 
     if (shiftRef.current) {
@@ -644,26 +635,38 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
 
     setMultiSelect([])
-    const wall = walls.find(w => w.id === cab.wall_id)
-    if (!wall) return
-    const svgP0 = svgCoords(e)
-    const wp0 = toWorld(svgP0.x, svgP0.y)
-    const wd0 = wallDir(wall)
-    const cursorT0 = (wp0.x - wall.pos_x) * wd0.x + (wp0.y - wall.pos_y) * wd0.y
-    cabDragRef.current = { cabId: cab.id, assemblyClass: cab.assembly_class, wall, cabDX: cab.dx, dragOffset: cursorT0 - cabT(cab, wall) }
-    cabDragOriginRef.current = svgP0
-    svgRef.current?.setPointerCapture(e.pointerId)
   }
 
-  function onCabinetMovePointerDown(e: React.PointerEvent, cab: CabinetInstance) {
-    if (mode !== 'select' || e.button !== 0) return
+  function onCabinetCrosshairClick(e: React.MouseEvent, cab: CabinetInstance) {
+    if (mode !== 'select') return
     e.stopPropagation()
-    svgPointerDownRef.current = true
-    setContextMenu(null); setOpenMenu(null); setCabMenuOpen(false)
-    setCabResize(null); setMultiSelect([])
-    setSelected({ type: 'cabinet', id: cab.id })
-    cabMoveDragRef.current = { cabId: cab.id, assemblyClass: cab.assembly_class }
-    svgRef.current?.setPointerCapture(e.pointerId)
+    if (cabFollowing?.id === cab.id) {
+      setCabFollowing(null)
+      setCabMoveDrag(null)
+    } else {
+      setCabResize(null); setMultiSelect([])
+      setSelected({ type: 'cabinet', id: cab.id })
+      // Seed ghost immediately at cabinet's current position so it's visible before any cursor movement
+      const wall = walls.find(w => w.id === cab.wall_id)
+      if (wall) {
+        const islandFlip = wall.wall_type === 'island' &&
+          (((cab.rotation - wall.angle) % 360 + 360) % 360) > 90
+        setCabMoveDrag({ id: cab.id, wall, pos_x: cab.pos_x, pos_y: cab.pos_y, islandFlip })
+      }
+      setCabFollowing({ id: cab.id, assemblyClass: cab.assembly_class })
+    }
+  }
+
+  async function onSVGClick(e: React.MouseEvent) {
+    if (!cabFollowing) return
+    if (!cabMoveDrag) { setCabFollowing(null); return }
+    const { id } = cabFollowing
+    const { wall, pos_x, pos_y, islandFlip } = cabMoveDrag
+    setCabFollowing(null)
+    setCabMoveDrag(null)
+    captureSnapshot()
+    const newRotation = islandFlip ? wall.angle + 180 : wall.angle
+    await handleUpdateCabinet(id, { wall_id: wall.id, pos_x, pos_y, rotation: newRotation })
   }
 
   function onCabinetContextMenu(e: React.MouseEvent, cabId: string) {
@@ -885,6 +888,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       null,
       { label: '3D View', action: () => switchView('3d') },
     ]},
+    { label: 'Annotations', items: [
+      { label: 'Door swings (plan)',        checked: displayConfig.annotations.plan_door_swings,   action: () => setDisplayConfig(c => toggleAnnotation(c, 'plan_door_swings')) },
+      { label: 'Drawer lines (plan)',       checked: displayConfig.annotations.plan_drawer_lines,  action: () => setDisplayConfig(c => toggleAnnotation(c, 'plan_drawer_lines')) },
+      { label: 'Door chevrons (elevation)', checked: displayConfig.annotations.elev_door_chevrons, action: () => setDisplayConfig(c => toggleAnnotation(c, 'elev_door_chevrons')) },
+    ]},
     { label: 'Job', items: [
       { label: 'Details',      action: () => setJobModalTab('details') },
       { label: 'Dimensions',   action: () => setJobModalTab('dimensions') },
@@ -1009,11 +1017,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               setSelected={setSelected}
               setContextMenu={setContextMenu}
               onCabinetPointerDown={onCabinetPointerDown}
-              onCabinetMovePointerDown={onCabinetMovePointerDown}
+              onCabinetCrosshairClick={onCabinetCrosshairClick}
               onCabinetContextMenu={onCabinetContextMenu}
               onCabinetDoubleClick={onCabinetDoubleClick}
               onCabMarkerPointerDown={onCabMarkerPointerDown}
               cabMoveDrag={cabMoveDrag}
+              cabFollowing={cabFollowing}
+              onSVGClick={onSVGClick}
             />
             {(mode === 'draw_wall' || mode === 'draw_island') && !drawStart && (
               <WallDrawPanel
@@ -1077,6 +1087,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             cabResize={cabResize}
             onCabResizeStart={r => { setSelected({ type: 'cabinet', id: r.cabId }); setMultiSelect([]); setCabResize(r) }}
             onCabResizeUpdate={updates => setCabResize(r => r ? { ...r, ...updates } : r)}
+            onCabResizeDone={() => setCabResize(null)}
             resolvedParts={resolvedParts}
             onDeselect={() => setSelected(null)}
           />

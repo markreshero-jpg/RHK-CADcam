@@ -82,6 +82,7 @@ interface ElevationSVGProps {
   cabResize: CabResize | null
   onCabResizeStart: (r: CabResize) => void
   onCabResizeUpdate: (updates: { liveValue: number; livePosX?: number; livePosY?: number }) => void
+  onCabResizeDone: () => void
   resolvedParts?: Map<string, ResolvedCabinet>
   onDeselect: () => void
 }
@@ -91,7 +92,7 @@ export default function ElevationSVG({
   multiSelect, canEqualize, mode, clipboard,
   onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu,
   onBlankWallContextMenu, onShiftSelectCabinet, onEqualizeWidths,
-  cabResize, onCabResizeStart, onCabResizeUpdate,
+  cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
   resolvedParts, onDeselect,
 }: ElevationSVGProps) {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -299,14 +300,19 @@ export default function ElevationSVG({
     if (cabResizeDragging.current) {
       cabResizeDragging.current = false
       if (cabResize && cabResizeLiveRef.current) {
-        const update: Partial<CabinetInstance> = { [cabResize.dim]: cabResizeLiveRef.current.value }
-        if (cabResize.side === 'left' && cabResizeLiveRef.current.livePosX !== undefined) {
-          update.pos_x = cabResizeLiveRef.current.livePosX
-          update.pos_y = cabResizeLiveRef.current.livePosY
+        const { cabId, dim, side } = cabResize
+        const { value, livePosX, livePosY } = cabResizeLiveRef.current
+        const update: Partial<CabinetInstance> = { [dim]: value }
+        if (side === 'left' && livePosX !== undefined) {
+          update.pos_x = livePosX
+          update.pos_y = livePosY
         }
-        await onUpdateCabinet(cabResize.cabId, update)
+        onCabResizeDone()
+        cabResizeLiveRef.current = null
+        await onUpdateCabinet(cabId, update)
+      } else {
+        cabResizeLiveRef.current = null
       }
-      cabResizeLiveRef.current = null
       return
     }
 
@@ -659,6 +665,18 @@ export default function ElevationSVG({
                           : fz.hinge_side === 'right'
                           ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={fill} strokeWidth={2 / z} style={{ pointerEvents: 'none' }} />
                           : null
+                        const chevron = displayConfig.annotations.elev_door_chevrons && fz.face_type === 'door' && fz.hinge_side
+                          ? (() => {
+                              const pts = fz.hinge_side === 'left'
+                                ? `${x},${y} ${x + w},${y + h / 2} ${x},${y + h}`
+                                : `${x + w},${y} ${x},${y + h / 2} ${x + w},${y + h}`
+                              return <polyline points={pts} fill="none" stroke={fill}
+                                strokeWidth={0.5 / z} strokeOpacity={0.7}
+                                strokeDasharray={`${6 / z} ${3 / z}`}
+                                strokeLinejoin="miter" strokeLinecap="butt"
+                                style={{ pointerEvents: 'none' }} />
+                            })()
+                          : null
                         return (
                           <g key={`fz-${i}`} style={{ pointerEvents: 'none' }}>
                             <rect x={x} y={y} width={w} height={h}
@@ -666,6 +684,7 @@ export default function ElevationSVG({
                               stroke={isSel ? '#e2e8f0' : fill} strokeWidth={1 / z}
                               opacity={faceP.opacity} />
                             {hingeLine}
+                            {chevron}
                           </g>
                         )
                       })}

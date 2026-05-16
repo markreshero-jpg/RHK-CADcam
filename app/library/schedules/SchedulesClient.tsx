@@ -7,15 +7,15 @@ import { supabase } from '@/src/lib/supabase'
 // ── Tab config ────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { key: 'assembly',        label: 'Assembly',             table: 'assembly_schedules',       type: 'asm_grid',   valueCol: null           },
-  { key: 'toekick',         label: 'Toe Kick',             table: 'toekick_schedules',         type: 'tk_list',    valueCol: null           },
-  { key: 'front',           label: 'Door & Drawer Fronts', table: 'front_schedules',           type: 'front_list', valueCol: null           },
-  { key: 'drawerbox',       label: 'Drawer Box',           table: 'drawerbox_schedules',       type: 'mat_single', valueCol: 'material_id'  },
-  { key: 'inner_drawerbox', label: 'Inner Drawer Box',     table: 'inner_drawerbox_schedules', type: 'mat_single', valueCol: 'material_id'  },
-  { key: 'hinge',           label: 'Hinges',               table: 'hinge_schedules',           type: 'hw_single',  valueCol: 'hinge_id'     },
-  { key: 'slide',           label: 'Slides',               table: 'slide_schedules',           type: 'hw_single',  valueCol: 'slide_id'     },
-  { key: 'handle',          label: 'Handles',              table: 'handle_schedules',          type: 'hw_single',  valueCol: 'handle_id'    },
-  { key: 'benchtop',        label: 'Benchtops',            table: 'benchtop_schedules',        type: 'bt_single',  valueCol: 'benchtop_id'  },
+  { key: 'assembly',        label: 'Assembly',             table: 'assembly_schedules',       type: 'asm_grid',   valueCol: null,          ebCol: null           },
+  { key: 'toekick',         label: 'Toe Kick',             table: 'toekick_schedules',         type: 'tk_list',    valueCol: null,          ebCol: null           },
+  { key: 'front',           label: 'Door & Drawer Fronts', table: 'front_schedules',           type: 'front_list', valueCol: null,          ebCol: null           },
+  { key: 'drawerbox',       label: 'Drawer Box',           table: 'drawerbox_schedules',       type: 'mat_single', valueCol: 'material_id', ebCol: 'edgeband_id'  },
+  { key: 'inner_drawerbox', label: 'Inner Drawer Box',     table: 'inner_drawerbox_schedules', type: 'mat_single', valueCol: 'material_id', ebCol: 'edgeband_id'  },
+  { key: 'hinge',           label: 'Hinges',               table: 'hinge_schedules',           type: 'hw_single',  valueCol: 'hinge_id',   ebCol: null           },
+  { key: 'slide',           label: 'Slides',               table: 'slide_schedules',           type: 'hw_single',  valueCol: 'slide_id',   ebCol: null           },
+  { key: 'handle',          label: 'Handles',              table: 'handle_schedules',          type: 'hw_single',  valueCol: 'handle_id',  ebCol: null           },
+  { key: 'benchtop',        label: 'Benchtops',            table: 'benchtop_schedules',        type: 'bt_single',  valueCol: 'benchtop_id', ebCol: null          },
 ] as const
 
 type SchedKey = typeof TABS[number]['key']
@@ -28,7 +28,7 @@ const ASM_ROLES = [
   { key: 'shelf',            label: 'Shelf' },
   { key: 'end_panel',        label: 'End Panel' },
 ]
-const TK_ROLES  = [
+const TK_ROLES = [
   { key: 'face',     label: 'Face',     desc: 'Visible front face' },
   { key: 'interior', label: 'Interior', desc: 'Structural members' },
 ]
@@ -48,25 +48,32 @@ type SchedRecord = {
 type MatItem      = { id: string; name: string; dz: number }
 type BenchtopItem = { id: string; name: string; dz: number; material_type: string | null }
 type HwItem       = { id: string; name: string; brand: string | null }
+type EbItem       = { id: string; name: string; thickness: number; material_match_id: string | null }
+
+// rowData keys:
+//   assembly:  `${cls}|${role}`     → material_id   `${cls}|${role}|eb`  → edgeband_id
+//   toekick:   `${role}`            → material_id   `${role}|eb`         → edgeband_id
+//   front:     `${cls}`             → material_id   `${cls}|eb`          → edgeband_id
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SchedulesClient() {
-  const [loading,     setLoading]     = useState(true)
-  const [materials,   setMaterials]   = useState<MatItem[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [materials,    setMaterials]    = useState<MatItem[]>([])
+  const [edgebands,    setEdgebands]    = useState<EbItem[]>([])
   const [benchtopMats, setBenchtopMats] = useState<BenchtopItem[]>([])
-  const [hinges,      setHinges]      = useState<HwItem[]>([])
-  const [slides,      setSlides]      = useState<HwItem[]>([])
-  const [handles,     setHandles]     = useState<HwItem[]>([])
-  const [schedLists,  setSchedLists]  = useState<Partial<Record<SchedKey, SchedRecord[]>>>({})
-  const [activeTab,   setActiveTab]   = useState<SchedKey>('assembly')
-  const [selectedId,  setSelectedId]  = useState<string | null>(null)
-  const [editName,    setEditName]    = useState('')
-  const [editDesc,    setEditDesc]    = useState('')
-  const [newName,     setNewName]     = useState('')
-  const [creating,    setCreating]    = useState(false)
-  const [rowData,     setRowData]     = useState<Record<string, string>>({})
-  const [rowsLoading, setRowsLoading] = useState(false)
+  const [hinges,       setHinges]       = useState<HwItem[]>([])
+  const [slides,       setSlides]       = useState<HwItem[]>([])
+  const [handles,      setHandles]      = useState<HwItem[]>([])
+  const [schedLists,   setSchedLists]   = useState<Partial<Record<SchedKey, SchedRecord[]>>>({})
+  const [activeTab,    setActiveTab]    = useState<SchedKey>('assembly')
+  const [selectedId,   setSelectedId]   = useState<string | null>(null)
+  const [editName,     setEditName]     = useState('')
+  const [editDesc,     setEditDesc]     = useState('')
+  const [newName,      setNewName]      = useState('')
+  const [creating,     setCreating]     = useState(false)
+  const [rowData,      setRowData]      = useState<Record<string, string>>({})
+  const [rowsLoading,  setRowsLoading]  = useState(false)
 
   // ── Initial load ──────────────────────────────────────────────────────────
 
@@ -75,18 +82,19 @@ export default function SchedulesClient() {
     async function load() {
       const [
         asmR, tkR, frR, dbR, idbR, hiR, slR, haR, btR,
-        matsR, btMatsR, hingesR, slidesR, handlesR,
+        matsR, ebR, btMatsR, hingesR, slidesR, handlesR,
       ] = await Promise.all([
         supabase.from('assembly_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('toekick_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('front_schedules').select('id,name,description,is_default,active').order('name'),
-        supabase.from('drawerbox_schedules').select('id,name,description,is_default,active,material_id').order('name'),
-        supabase.from('inner_drawerbox_schedules').select('id,name,description,is_default,active,material_id').order('name'),
+        supabase.from('drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id').order('name'),
+        supabase.from('inner_drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id').order('name'),
         supabase.from('hinge_schedules').select('id,name,description,is_default,active,hinge_id').order('name'),
         supabase.from('slide_schedules').select('id,name,description,is_default,active,slide_id').order('name'),
         supabase.from('handle_schedules').select('id,name,description,is_default,active,handle_id').order('name'),
         supabase.from('benchtop_schedules').select('id,name,description,is_default,active,benchtop_id').order('name'),
         supabase.from('materials').select('id,name,dz').eq('active', true).order('name'),
+        supabase.from('edge_banding').select('id,name,thickness,material_match_id').eq('active', true).order('name'),
         supabase.from('benchtop_materials').select('id,name,dz,material_type').eq('active', true).order('name'),
         supabase.from('hardware_hinges').select('id,name,brand').eq('active', true).order('name'),
         supabase.from('hardware_slides').select('id,name,brand').eq('active', true).order('name'),
@@ -106,6 +114,7 @@ export default function SchedulesClient() {
         benchtop:        (btR.data   ?? []) as SchedRecord[],
       })
       setMaterials((matsR.data    ?? []) as MatItem[])
+      setEdgebands((ebR.data      ?? []) as EbItem[])
       setBenchtopMats((btMatsR.data ?? []) as BenchtopItem[])
       setHinges((hingesR.data  ?? []) as HwItem[])
       setSlides((slidesR.data  ?? []) as HwItem[])
@@ -115,6 +124,15 @@ export default function SchedulesClient() {
     load()
     return () => { cancelled = true }
   }, [])
+
+  // ── Edgeband filter helper ────────────────────────────────────────────────
+  // Returns bandings matching the given material, or all bandings if none match.
+
+  function ebOpts(matId: string): EbItem[] {
+    if (!matId) return edgebands
+    const matched = edgebands.filter(eb => eb.material_match_id === matId)
+    return matched.length > 0 ? matched : edgebands
+  }
 
   // ── Select ────────────────────────────────────────────────────────────────
 
@@ -138,17 +156,32 @@ export default function SchedulesClient() {
   async function fetchRows(type: string, schedId: string): Promise<Record<string, string>> {
     const map: Record<string, string> = {}
     if (type === 'asm_grid') {
-      const { data } = await supabase.from('assembly_schedule_rows').select('assembly_class,material_role,material_id').eq('schedule_id', schedId)
-      for (const r of (data ?? []) as { assembly_class: string; material_role: string; material_id: string }[])
-        map[`${r.assembly_class}|${r.material_role}`] = r.material_id
+      const { data } = await supabase
+        .from('assembly_schedule_rows')
+        .select('assembly_class,material_role,material_id,edgeband_id')
+        .eq('schedule_id', schedId)
+      for (const r of (data ?? []) as { assembly_class: string; material_role: string; material_id: string; edgeband_id: string | null }[]) {
+        map[`${r.assembly_class}|${r.material_role}`]       = r.material_id
+        if (r.edgeband_id) map[`${r.assembly_class}|${r.material_role}|eb`] = r.edgeband_id
+      }
     } else if (type === 'tk_list') {
-      const { data } = await supabase.from('toekick_schedule_rows').select('part_role,material_id').eq('schedule_id', schedId)
-      for (const r of (data ?? []) as { part_role: string; material_id: string }[])
-        map[r.part_role] = r.material_id
+      const { data } = await supabase
+        .from('toekick_schedule_rows')
+        .select('part_role,material_id,edgeband_id')
+        .eq('schedule_id', schedId)
+      for (const r of (data ?? []) as { part_role: string; material_id: string; edgeband_id: string | null }[]) {
+        map[r.part_role]          = r.material_id
+        if (r.edgeband_id) map[`${r.part_role}|eb`] = r.edgeband_id
+      }
     } else if (type === 'front_list') {
-      const { data } = await supabase.from('front_schedule_rows').select('assembly_class,material_id').eq('schedule_id', schedId)
-      for (const r of (data ?? []) as { assembly_class: string; material_id: string }[])
-        map[r.assembly_class] = r.material_id
+      const { data } = await supabase
+        .from('front_schedule_rows')
+        .select('assembly_class,material_id,edgeband_id')
+        .eq('schedule_id', schedId)
+      for (const r of (data ?? []) as { assembly_class: string; material_id: string; edgeband_id: string | null }[]) {
+        map[r.assembly_class]          = r.material_id
+        if (r.edgeband_id) map[`${r.assembly_class}|eb`] = r.edgeband_id
+      }
     }
     return map
   }
@@ -193,7 +226,7 @@ export default function SchedulesClient() {
 
   async function saveName() {
     if (!selectedId || !editName.trim()) return
-    const tab = TABS.find(t => t.key === activeTab)!
+    const tab  = TABS.find(t => t.key === activeTab)!
     const name = editName.trim()
     await supabase.from(tab.table).update({ name }).eq('id', selectedId)
     setSchedLists(prev => ({
@@ -233,49 +266,82 @@ export default function SchedulesClient() {
     }))
   }
 
-  // ── Row value saves ───────────────────────────────────────────────────────
+  // ── Row material + edgeband saves ─────────────────────────────────────────
 
-  async function saveAsmRow(cls: string, role: string, matId: string) {
+  async function saveAsmMat(cls: string, role: string, matId: string) {
     if (!selectedId) return
     const k = `${cls}|${role}`
+    const ebId = rowData[`${k}|eb`] || null
     if (matId) {
       await supabase.from('assembly_schedule_rows').upsert(
-        { schedule_id: selectedId, assembly_class: cls, material_role: role, material_id: matId },
+        { schedule_id: selectedId, assembly_class: cls, material_role: role, material_id: matId, edgeband_id: ebId },
         { onConflict: 'schedule_id,assembly_class,material_role' }
       )
       setRowData(p => ({ ...p, [k]: matId }))
     } else {
-      await supabase.from('assembly_schedule_rows').delete().eq('schedule_id', selectedId).eq('assembly_class', cls).eq('material_role', role)
-      setRowData(p => { const n = { ...p }; delete n[k]; return n })
+      await supabase.from('assembly_schedule_rows').delete()
+        .eq('schedule_id', selectedId).eq('assembly_class', cls).eq('material_role', role)
+      setRowData(p => { const n = { ...p }; delete n[k]; delete n[`${k}|eb`]; return n })
     }
   }
 
-  async function saveTkRow(partRole: string, matId: string) {
+  async function saveAsmEb(cls: string, role: string, ebId: string) {
+    if (!selectedId || !rowData[`${cls}|${role}`]) return
+    const k = `${cls}|${role}|eb`
+    await supabase.from('assembly_schedule_rows')
+      .update({ edgeband_id: ebId || null })
+      .eq('schedule_id', selectedId).eq('assembly_class', cls).eq('material_role', role)
+    setRowData(p => ebId ? { ...p, [k]: ebId } : (({ [k]: _, ...rest }) => rest)(p))
+  }
+
+  async function saveTkMat(partRole: string, matId: string) {
     if (!selectedId) return
+    const ebId = rowData[`${partRole}|eb`] || null
     if (matId) {
       await supabase.from('toekick_schedule_rows').upsert(
-        { schedule_id: selectedId, part_role: partRole, material_id: matId },
+        { schedule_id: selectedId, part_role: partRole, material_id: matId, edgeband_id: ebId },
         { onConflict: 'schedule_id,part_role' }
       )
       setRowData(p => ({ ...p, [partRole]: matId }))
     } else {
-      await supabase.from('toekick_schedule_rows').delete().eq('schedule_id', selectedId).eq('part_role', partRole)
-      setRowData(p => { const n = { ...p }; delete n[partRole]; return n })
+      await supabase.from('toekick_schedule_rows').delete()
+        .eq('schedule_id', selectedId).eq('part_role', partRole)
+      setRowData(p => { const n = { ...p }; delete n[partRole]; delete n[`${partRole}|eb`]; return n })
     }
   }
 
-  async function saveFrontRow(cls: string, matId: string) {
+  async function saveTkEb(partRole: string, ebId: string) {
+    if (!selectedId || !rowData[partRole]) return
+    const k = `${partRole}|eb`
+    await supabase.from('toekick_schedule_rows')
+      .update({ edgeband_id: ebId || null })
+      .eq('schedule_id', selectedId).eq('part_role', partRole)
+    setRowData(p => ebId ? { ...p, [k]: ebId } : (({ [k]: _, ...rest }) => rest)(p))
+  }
+
+  async function saveFrontMat(cls: string, matId: string) {
     if (!selectedId) return
+    const ebId = rowData[`${cls}|eb`] || null
     if (matId) {
       await supabase.from('front_schedule_rows').upsert(
-        { schedule_id: selectedId, assembly_class: cls, material_id: matId },
+        { schedule_id: selectedId, assembly_class: cls, material_id: matId, edgeband_id: ebId },
         { onConflict: 'schedule_id,assembly_class' }
       )
       setRowData(p => ({ ...p, [cls]: matId }))
     } else {
-      await supabase.from('front_schedule_rows').delete().eq('schedule_id', selectedId).eq('assembly_class', cls)
-      setRowData(p => { const n = { ...p }; delete n[cls]; return n })
+      await supabase.from('front_schedule_rows').delete()
+        .eq('schedule_id', selectedId).eq('assembly_class', cls)
+      setRowData(p => { const n = { ...p }; delete n[cls]; delete n[`${cls}|eb`]; return n })
     }
+  }
+
+  async function saveFrontEb(cls: string, ebId: string) {
+    if (!selectedId || !rowData[cls]) return
+    const k = `${cls}|eb`
+    await supabase.from('front_schedule_rows')
+      .update({ edgeband_id: ebId || null })
+      .eq('schedule_id', selectedId).eq('assembly_class', cls)
+    setRowData(p => ebId ? { ...p, [k]: ebId } : (({ [k]: _, ...rest }) => rest)(p))
   }
 
   async function saveSingleValue(col: string, value: string) {
@@ -290,29 +356,66 @@ export default function SchedulesClient() {
 
   // ── CSS helpers ───────────────────────────────────────────────────────────
 
-  const sel = 'w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500'
-  const inp = 'bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 w-full'
+  const sel    = 'w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500'
+  const selEb  = 'w-full bg-gray-800/60 border border-gray-700/60 rounded px-2 py-1 text-[10px] text-gray-400 focus:outline-none focus:border-purple-600 focus:text-purple-300'
+  const inp    = 'bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 w-full'
+
+  // ── MatCell: stacked material + edgeband dropdowns ────────────────────────
+
+  function MatCell({
+    matId, ebId, matKey, ebKey,
+    onMatChange, onEbChange,
+    className = '',
+  }: {
+    matId: string; ebId: string
+    matKey: string; ebKey: string
+    onMatChange: (v: string) => void
+    onEbChange:  (v: string) => void
+    className?: string
+  }) {
+    const opts = ebOpts(matId)
+    return (
+      <div className={`space-y-1 ${className}`}>
+        <select value={matId} onChange={e => onMatChange(e.target.value)} className={sel}>
+          {!matId && <option value="">— not set —</option>}
+          {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>)}
+        </select>
+        <select
+          value={ebId}
+          onChange={e => onEbChange(e.target.value)}
+          disabled={!matId}
+          className={selEb}
+        >
+          <option value="">{matId ? '— no banding —' : '—'}</option>
+          {opts.map(eb => <option key={eb.id} value={eb.id}>{eb.name} ({eb.thickness}mm)</option>)}
+        </select>
+      </div>
+    )
+  }
 
   // ── Editor sections ───────────────────────────────────────────────────────
 
   function renderAsmGrid() {
     return (
-      <div className="grid grid-cols-[130px_1fr_1fr_1fr] gap-px bg-gray-700/50 rounded overflow-hidden border border-gray-700 text-xs">
+      <div className="grid grid-cols-[120px_1fr_1fr_1fr] gap-px bg-gray-700/50 rounded overflow-hidden border border-gray-700 text-xs">
         <div className="bg-gray-800 px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Role</div>
         {CLASSES.map(c => (
           <div key={c} className="bg-gray-800 px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide capitalize">{c}</div>
         ))}
         {ASM_ROLES.map(role => (
           <Fragment key={role.key}>
-            <div className="bg-gray-900 px-2 py-2 flex items-center text-xs text-gray-300">{role.label}</div>
+            <div className="bg-gray-900 px-2 py-2.5 flex items-start pt-3 text-xs text-gray-300">{role.label}</div>
             {CLASSES.map(cls => {
-              const val = rowData[`${cls}|${role.key}`] ?? ''
+              const mK = `${cls}|${role.key}`
+              const eK = `${mK}|eb`
               return (
                 <div key={cls} className="bg-gray-900 px-2 py-2">
-                  <select value={val} onChange={e => saveAsmRow(cls, role.key, e.target.value)} className={sel}>
-                    {!val && <option value="">— not set —</option>}
-                    {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>)}
-                  </select>
+                  <MatCell
+                    matId={rowData[mK] ?? ''} ebId={rowData[eK] ?? ''}
+                    matKey={mK} ebKey={eK}
+                    onMatChange={v => saveAsmMat(cls, role.key, v)}
+                    onEbChange={v  => saveAsmEb(cls, role.key, v)}
+                  />
                 </div>
               )
             })}
@@ -326,17 +429,21 @@ export default function SchedulesClient() {
     return (
       <div className="space-y-3">
         {TK_ROLES.map(role => {
-          const val = rowData[role.key] ?? ''
+          const mK = role.key
+          const eK = `${role.key}|eb`
           return (
-            <div key={role.key} className="flex items-center gap-3">
-              <div className="w-28 shrink-0">
+            <div key={role.key} className="flex items-start gap-3">
+              <div className="w-28 shrink-0 pt-1">
                 <p className="text-xs text-gray-300">{role.label}</p>
                 <p className="text-[9px] text-gray-600">{role.desc}</p>
               </div>
-              <select value={val} onChange={e => saveTkRow(role.key, e.target.value)} className={`flex-1 ${sel}`}>
-                {!val && <option value="">— not set —</option>}
-                {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>)}
-              </select>
+              <MatCell
+                matId={rowData[mK] ?? ''} ebId={rowData[eK] ?? ''}
+                matKey={mK} ebKey={eK}
+                onMatChange={v => saveTkMat(role.key, v)}
+                onEbChange={v  => saveTkEb(role.key, v)}
+                className="flex-1"
+              />
             </div>
           )
         })}
@@ -347,14 +454,32 @@ export default function SchedulesClient() {
   function renderFrontList() {
     return (
       <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="w-12 shrink-0" />
+          <span className="flex-1 text-[10px] text-gray-600 pl-1">Board</span>
+          <span className="flex-1 text-[10px] text-gray-600 pl-1">Edgebanding</span>
+        </div>
         {CLASSES.map(cls => {
-          const val = rowData[cls] ?? ''
+          const mK = cls
+          const eK = `${cls}|eb`
+          const matId = rowData[mK] ?? ''
+          const ebId  = rowData[eK] ?? ''
+          const opts  = ebOpts(matId)
           return (
             <div key={cls} className="flex items-center gap-3">
               <span className="w-12 shrink-0 text-xs text-gray-400 capitalize">{cls}</span>
-              <select value={val} onChange={e => saveFrontRow(cls, e.target.value)} className={`flex-1 ${sel}`}>
-                {!val && <option value="">— not set —</option>}
+              <select value={matId} onChange={e => saveFrontMat(cls, e.target.value)} className={`flex-1 ${sel}`}>
+                {!matId && <option value="">— not set —</option>}
                 {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>)}
+              </select>
+              <select
+                value={ebId}
+                onChange={e => saveFrontEb(cls, e.target.value)}
+                disabled={!matId}
+                className={`flex-1 ${selEb} ${matId ? '' : 'opacity-40'}`}
+              >
+                <option value="">{matId ? '— no banding —' : '—'}</option>
+                {opts.map(eb => <option key={eb.id} value={eb.id}>{eb.name} ({eb.thickness}mm)</option>)}
               </select>
             </div>
           )
@@ -363,23 +488,41 @@ export default function SchedulesClient() {
     )
   }
 
-  function renderMatSingle(col: string) {
-    const sched = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
-    const val = (sched?.[col] as string) ?? ''
+  function renderMatSingle(matCol: string, ebCol: string | null) {
+    const sched  = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
+    const matId  = (sched?.[matCol] as string) ?? ''
+    const ebId   = ebCol ? ((sched?.[ebCol] as string) ?? '') : ''
+    const opts   = ebOpts(matId)
     return (
-      <div className="flex items-center gap-3">
-        <span className="w-20 shrink-0 text-xs text-gray-400">Material</span>
-        <select value={val} onChange={e => saveSingleValue(col, e.target.value)} className={`flex-1 max-w-sm ${sel}`}>
-          {!val && <option value="">— not set —</option>}
-          {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>)}
-        </select>
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="w-24 shrink-0 text-xs text-gray-400">Board</span>
+          <select value={matId} onChange={e => saveSingleValue(matCol, e.target.value)} className={`flex-1 max-w-sm ${sel}`}>
+            {!matId && <option value="">— not set —</option>}
+            {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>)}
+          </select>
+        </div>
+        {ebCol && (
+          <div className="flex items-center gap-3">
+            <span className="w-24 shrink-0 text-xs text-gray-400">Edgebanding</span>
+            <select
+              value={ebId}
+              onChange={e => saveSingleValue(ebCol, e.target.value)}
+              disabled={!matId}
+              className={`flex-1 max-w-sm ${selEb} ${matId ? '' : 'opacity-40'}`}
+            >
+              <option value="">{matId ? '— no banding —' : '—'}</option>
+              {opts.map(eb => <option key={eb.id} value={eb.id}>{eb.name} ({eb.thickness}mm)</option>)}
+            </select>
+          </div>
+        )}
       </div>
     )
   }
 
   function renderBtSingle() {
     const sched = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
-    const val = (sched?.['benchtop_id'] as string) ?? ''
+    const val   = (sched?.['benchtop_id'] as string) ?? ''
     return (
       <div className="flex items-center gap-3">
         <span className="w-20 shrink-0 text-xs text-gray-400">Benchtop</span>
@@ -392,10 +535,10 @@ export default function SchedulesClient() {
   }
 
   function renderHwSingle() {
-    const tab   = TABS.find(t => t.key === activeTab)!
-    const col   = tab.valueCol as string
-    const sched = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
-    const val   = (sched?.[col] as string) ?? ''
+    const tab     = TABS.find(t => t.key === activeTab)!
+    const col     = tab.valueCol as string
+    const sched   = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
+    const val     = (sched?.[col] as string) ?? ''
     const catalog = activeTab === 'hinge' ? hinges : activeTab === 'slide' ? slides : handles
     const label   = activeTab === 'hinge' ? 'Hinge' : activeTab === 'slide' ? 'Slide' : 'Handle'
     return (
@@ -459,14 +602,20 @@ export default function SchedulesClient() {
 
         {/* Content editor */}
         <div className="border-t border-gray-800 pt-4">
-          {rowsLoading && <p className="text-xs text-gray-500">Loading…</p>}
-          {!rowsLoading && tab.type === 'asm_grid'   && renderAsmGrid()}
-          {!rowsLoading && tab.type === 'tk_list'    && renderTkList()}
-          {!rowsLoading && tab.type === 'front_list' && renderFrontList()}
-          {tab.type === 'mat_single' && renderMatSingle(tab.valueCol as string)}
-          {tab.type === 'bt_single'  && renderBtSingle()}
-          {tab.type === 'hw_single'  && renderHwSingle()}
+          {tab.type === 'asm_grid'    && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderAsmGrid()}</>}
+          {tab.type === 'tk_list'     && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderTkList()}</>}
+          {tab.type === 'front_list'  && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderFrontList()}</>}
+          {tab.type === 'mat_single'  && renderMatSingle(tab.valueCol as string, tab.ebCol)}
+          {tab.type === 'bt_single'   && renderBtSingle()}
+          {tab.type === 'hw_single'   && renderHwSingle()}
         </div>
+
+        {/* Edging defaults hint for row-based tabs */}
+        {(tab.type === 'asm_grid' || tab.type === 'tk_list' || tab.type === 'front_list') && (
+          <p className="text-[10px] text-gray-600 border-t border-gray-800/50 pt-3">
+            Which parts and edges receive banding is configured in the construction method settings.
+          </p>
+        )}
       </div>
     )
   }
@@ -517,7 +666,6 @@ export default function SchedulesClient() {
 
         {/* Schedule list */}
         <div className="w-56 shrink-0 border-r border-gray-800 flex flex-col overflow-hidden">
-          {/* New schedule input */}
           <div className="flex-none px-3 py-2.5 border-b border-gray-800 flex gap-2">
             <input
               value={newName}
@@ -535,7 +683,6 @@ export default function SchedulesClient() {
             </button>
           </div>
 
-          {/* List */}
           <div className="flex-1 overflow-y-auto divide-y divide-gray-800/50">
             {activeList.length === 0 && (
               <p className="text-[10px] text-gray-600 px-3 py-4 text-center">No schedules yet</p>

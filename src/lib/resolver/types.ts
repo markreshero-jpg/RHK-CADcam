@@ -38,7 +38,72 @@ export interface EdgeBanding {
   bottom: boolean
   left:   boolean
   right:  boolean
-  id?:    string
+  id?:    string   // edgeband catalog ID — same banding on all banded edges of this part
+}
+
+// Edging defaults per part type (stored in construction method rules)
+export type EdgeSides = ('top' | 'bottom' | 'left' | 'right')[]
+
+export interface EdgingDefaults {
+  // Case parts
+  left_side?:          EdgeSides
+  right_side?:         EdgeSides
+  bottom?:             EdgeSides
+  back?:               EdgeSides
+  full_top?:           EdgeSides
+  front_rail?:         EdgeSides
+  back_rail?:          EdgeSides
+  // Toekick parts
+  kick_front_face?:    EdgeSides
+  kick_sub_front?:     EdgeSides
+  kick_back?:          EdgeSides
+  spreader_vertical?:  EdgeSides
+  spreader_horizontal?:EdgeSides
+  // Internal parts
+  adj_shelf?:          EdgeSides
+  fixed_shelf?:        EdgeSides
+  inner_drawer_bottom?:EdgeSides
+  inner_drawer_back?:  EdgeSides
+  // Face zones
+  door?:               EdgeSides
+  drawer_face?:        EdgeSides
+  false_panel?:        EdgeSides
+}
+
+// Converts a sides list to an EdgeBanding struct
+export function edgeSidesToBanding(sides: EdgeSides, ebId?: string): EdgeBanding {
+  return {
+    top:    sides.includes('top'),
+    bottom: sides.includes('bottom'),
+    left:   sides.includes('left'),
+    right:  sides.includes('right'),
+    id:     ebId,
+  }
+}
+
+// Shop-sensible defaults for standard frameless EU construction.
+// Edge names are from the sheet perspective: top/bottom are the long horizontal edges,
+// left/right are the short vertical/depth edges of the cut panel.
+export const DEFAULT_EDGING: Required<EdgingDefaults> = {
+  left_side:           ['top', 'bottom', 'left', 'right'],   // all 4 edges on side panels
+  right_side:          ['top', 'bottom', 'left', 'right'],
+  bottom:              ['top', 'left', 'right'],              // top = front edge of base bottom
+  back:                [],
+  full_top:            ['top', 'left', 'right'],
+  front_rail:          ['top'],
+  back_rail:           [],
+  kick_front_face:     ['top'],
+  kick_sub_front:      ['top'],
+  kick_back:           [],
+  spreader_vertical:   [],
+  spreader_horizontal: [],
+  adj_shelf:           ['top'],                               // top = front-facing edge of shelf
+  fixed_shelf:         ['top'],
+  inner_drawer_bottom: [],
+  inner_drawer_back:   ['top'],
+  door:                ['top', 'bottom', 'left', 'right'],
+  drawer_face:         ['top', 'bottom', 'left', 'right'],
+  false_panel:         ['top', 'bottom', 'left', 'right'],
 }
 
 // ── Construction Method Rules ─────────────────────────────────
@@ -94,6 +159,9 @@ export interface ConstructionRules {
   // Face position
   FACBUF:   number   // buffer pad clearance (overlay mode)
   FACINS:   number   // inset depth (0 = overlay)
+
+  // Edging defaults (optional — falls back to DEFAULT_EDGING if absent)
+  EDGING?:  EdgingDefaults
 }
 
 // Default construction rules — Standard Frameless EU
@@ -146,6 +214,13 @@ export interface CabinetInput {
   shelf_material:  Material   // shelf material
   toekick_face_material:     Material
   toekick_interior_material: Material
+
+  // Edgeband IDs per material role (resolved from schedule, optional)
+  interior_edgeband_id?:         string
+  door_edgeband_id?:             string
+  shelf_edgeband_id?:            string
+  toekick_face_edgeband_id?:     string
+  toekick_interior_edgeband_id?: string
 
   // Slide hardware (for inner drawers)
   slide_side_deduction: number   // mm per side

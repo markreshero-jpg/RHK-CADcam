@@ -35,9 +35,10 @@ export default function CanvasMenubar({ projectName, roomName, openMenu, setOpen
                 ) : (
                   <button key={item.label} disabled={item.disabled}
                     onClick={() => { item.action?.(); setOpenMenu(null) }}
-                    className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 hover:text-white disabled:text-gray-600 disabled:cursor-not-allowed"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 hover:text-white disabled:text-gray-600 disabled:cursor-not-allowed"
                   >
-                    <span>{item.label}</span>
+                    <span className={`w-3 text-center shrink-0 ${item.checked ? 'text-blue-400' : 'text-transparent'}`}>✓</span>
+                    <span className="flex-1 text-left">{item.label}</span>
                     {item.shortcut && <span className="text-gray-500 text-[10px]">{item.shortcut}</span>}
                   </button>
                 )

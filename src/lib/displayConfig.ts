@@ -10,6 +10,19 @@ export interface LayerConfig {
   style: LayerStyle
 }
 
+export type AnnotationId =
+  | 'plan_door_swings'
+  | 'plan_drawer_lines'
+  | 'elev_door_chevrons'
+
+export type AnnotationSet = Record<AnnotationId, boolean>
+
+const DEFAULT_ANNOTATIONS: AnnotationSet = {
+  plan_door_swings: true,
+  plan_drawer_lines: true,
+  elev_door_chevrons: true,
+}
+
 export type LayerId =
   | 'carcass'          // cabinet box shell
   | 'face'             // doors, drawer fronts, end panels
@@ -37,6 +50,7 @@ export type PresetId =
 export interface DisplayConfig {
   activePreset: PresetId
   layers: LayerSet
+  annotations: AnnotationSet
 }
 
 // ── Presets ───────────────────────────────────────────────────────────────────
@@ -129,17 +143,19 @@ export const DISPLAY_PRESETS: Record<Exclude<PresetId, 'custom'>, { label: strin
 export const DEFAULT_DISPLAY_CONFIG: DisplayConfig = {
   activePreset: 'schematic',
   layers: DISPLAY_PRESETS.schematic.layers,
+  annotations: DEFAULT_ANNOTATIONS,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function applyPreset(presetId: Exclude<PresetId, 'custom'>): DisplayConfig {
-  return { activePreset: presetId, layers: DISPLAY_PRESETS[presetId].layers }
+  return { activePreset: presetId, layers: DISPLAY_PRESETS[presetId].layers, annotations: DEFAULT_ANNOTATIONS }
 }
 
 /** Toggle a single layer on/off; marks activePreset as 'custom'. */
 export function toggleLayer(config: DisplayConfig, id: LayerId): DisplayConfig {
   return {
+    ...config,
     activePreset: 'custom',
     layers: {
       ...config.layers,
@@ -148,10 +164,19 @@ export function toggleLayer(config: DisplayConfig, id: LayerId): DisplayConfig {
   }
 }
 
+/** Toggle an annotation flag on/off. */
+export function toggleAnnotation(config: DisplayConfig, id: AnnotationId): DisplayConfig {
+  return {
+    ...config,
+    annotations: { ...config.annotations, [id]: !config.annotations[id] },
+  }
+}
+
 /** Cycle a layer's style: solid → dashed → ghost → solid. */
 export function cycleLayerStyle(config: DisplayConfig, id: LayerId): DisplayConfig {
   const next: Record<LayerStyle, LayerStyle> = { solid: 'dashed', dashed: 'ghost', ghost: 'solid' }
   return {
+    ...config,
     activePreset: 'custom',
     layers: {
       ...config.layers,

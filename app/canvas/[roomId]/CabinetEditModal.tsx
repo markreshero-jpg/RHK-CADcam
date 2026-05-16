@@ -286,7 +286,16 @@ function ResolvedTop({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabinet })
 function ResolvedSide({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabinet }) {
   const { dz, dy } = cab
   const wallW = 40
-  const pl = 80 + wallW, pt = 50, pr = 60, pb = 40
+
+  const tkHeight = rp.toekick_parts
+    .filter(p => p.part_key !== 'spreader_horizontal')
+    .reduce((max, p) => Math.max(max, p.DX), 0)
+
+  const visibleZones = rp.face_zones
+    .filter(z => z.face_type !== 'open')
+    .sort((a, b) => a.Y - b.Y)
+
+  const pl = 80 + wallW, pt = 80, pr = visibleZones.length > 0 ? 185 : 110, pb = 40
   const vw = dz + pl + pr
   const vh = dy + pt + pb
   const oz = pl, oy = pt  // SVG: Z goes left→right, Y goes bottom→top (flipped)
@@ -341,8 +350,21 @@ function ResolvedSide({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabinet }
       <rect x={oz} y={oy} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} />
       <line x1={oz-20} y1={oy+dy} x2={oz+dz+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" />
 
-      {dimH(oz, oz + dz, oy - 35, `${dz}mm`, true)}
+      {dimH(oz, oz + dz, oy - 50, `${dz}mm`, false)}
       {dimV(oz + dz + 55, oy, oy + dy, `${dy}mm`, true)}
+      {tkHeight > 0 && dimV(oz + dz + 90, oy + dy - tkHeight, oy + dy, `${Math.round(tkHeight)}mm`, true)}
+      {visibleZones.map((z, i) => {
+        const y1 = oy + dy - (z.Y + z.DX)
+        const y2 = oy + dy - z.Y
+        const next = visibleZones[i + 1]
+        const gap = next ? next.Y - (z.Y + z.DX) : 0
+        return (
+          <g key={`fd${i}`}>
+            {dimV(oz + dz + 125, y1, y2, `${Math.round(z.DX)}mm`, true)}
+            {gap > 1 && dimV(oz + dz + 158, oy + dy - next.Y, y1, `${Math.round(gap)}mm`, true)}
+          </g>
+        )
+      })}
       {viewLabel(oz + dz/2, vh - 14, 'SIDE — DEPTH × HEIGHT')}
     </svg>
   )
@@ -459,6 +481,7 @@ function SideView({ cab }: { cab: CabinetInstance }) {
       <line x1={x0-20} y1={y0+dy} x2={x0+dz+20} y2={y0+dy} stroke="#334155" strokeWidth={2} strokeDasharray="10 5" />
       {dimH(x0, x0+dz, y0-50, `${dz}mm`, true)}
       {dimV(x0+dz+55, y0, y0+dy, `${dy}mm`, true)}
+      {isBase && has_toekick && dimV(x0+dz+90, y0+carcH, y0+dy, `${TKH}mm`, true)}
       {viewLabel(x0+dz/2, vh-14, 'SIDE — DEPTH × HEIGHT')}
     </svg>
   )
