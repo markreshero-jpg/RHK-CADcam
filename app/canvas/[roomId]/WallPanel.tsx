@@ -7,7 +7,7 @@ import { wallEnd } from '@/src/lib/geometry'
 export default function WallPanel({ wall, onUpdate, onDelete }: {
   wall: Wall
   onUpdate: (id: string, u: Partial<Wall>) => Promise<void>
-  onDelete: (id: string) => Promise<void>
+  onDelete: (id: string) => void
 }) {
   const [local, setLocal] = useState<Partial<Wall>>({})
   const [saving, setSaving] = useState(false)
