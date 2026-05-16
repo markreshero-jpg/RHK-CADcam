@@ -30,6 +30,7 @@ interface CanvasSVGProps {
   cabMoveDrag: CabMoveDrag | null
   cabResize: CabResize | null
   multiSelect: string[]
+  marquee: { x1: number; y1: number; x2: number; y2: number } | null
   cursor: string
   onPointerDown: (e: React.PointerEvent) => void
   onPointerMove: (e: React.PointerEvent) => void
@@ -46,7 +47,7 @@ interface CanvasSVGProps {
 
 export default function CanvasSVG({
   svgRef, walls, cabinets, view, svgSize, selected, mode, displayConfig,
-  drawStart, drawCursor, drawThickness, placeGhost, clipboard, cabDrag, cabMoveDrag, cabResize, multiSelect, cursor,
+  drawStart, drawCursor, drawThickness, placeGhost, clipboard, cabDrag, cabMoveDrag, cabResize, multiSelect, marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
   setSelected, setContextMenu, onCabinetPointerDown, onCabinetMovePointerDown, onCabinetContextMenu, onCabinetDoubleClick,
   onCabMarkerPointerDown,
@@ -111,6 +112,13 @@ export default function CanvasSVG({
                   style={{ userSelect: 'none', pointerEvents: 'none' }}>
                   {w.name}
                 </text>
+                <WallDimensionChain
+                  wall={w} walls={walls} cabinets={cabinets}
+                  centX={cx.x} centY={cx.y} zoom={view.zoom} selected={isSel}
+                  layerOverall={displayConfig.layers.dim_wall_overall}
+                  layerBase={displayConfig.layers.dim_base_chain}
+                  layerWallCab={displayConfig.layers.dim_wall_chain}
+                />
               </Fragment>
             )
           }
@@ -149,8 +157,11 @@ export default function CanvasSVG({
           )
         })}
 
-        {/* ── Cabinets ── */}
-        {cabinets.map(cab => {
+        {/* ── Cabinets ── rendered low→high so overheads overlap bases in plan */}
+        {[...cabinets].sort((a, b) => {
+          const order: Record<string, number> = { base: 0, base_corner: 0, tall: 1, tall_corner: 1, wall: 2, wall_corner: 2 }
+          return (order[a.assembly_class] ?? 0) - (order[b.assembly_class] ?? 0)
+        }).map(cab => {
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return null
           const perp = islandCabPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
@@ -180,7 +191,6 @@ export default function CanvasSVG({
           const carcL = displayConfig.layers.carcass
           const faceL = displayConfig.layers.face
           const intL  = displayConfig.layers.internal
-          const wtL   = displayConfig.layers.worktop
           const lblL  = displayConfig.layers.labels
           const dimL  = displayConfig.layers.dimensions
 
@@ -188,7 +198,6 @@ export default function CanvasSVG({
           const carcP = layerSVGProps(carcL.style, view.zoom)
           const faceP = layerSVGProps(faceL.style, view.zoom)
           const intP  = layerSVGProps(intL.style, view.zoom)
-          const wtP   = layerSVGProps(wtL.style, view.zoom)
 
           // Front-edge endpoints for face layer
           const frontLeft  = { x: displayCab.pos_x + displayCab.dz * perp.x, y: displayCab.pos_y + displayCab.dz * perp.y }
@@ -201,23 +210,10 @@ export default function CanvasSVG({
               <polygon points={pts} fill="transparent" stroke="none"
                 style={{ cursor: mode === 'select' ? 'grab' : undefined }}
                 onPointerDown={ev => onCabinetPointerDown(ev, displayCab)}
+                onClick={ev => ev.stopPropagation()}
                 onContextMenu={ev => onCabinetContextMenu(ev, cab.id)}
                 onDoubleClick={ev => onCabinetDoubleClick(ev, cab.id)}
               />
-
-              {/* Worktop — expanded footprint for base cabinets (+25mm front overhang) */}
-              {wtL.visible && isBase && (() => {
-                const wtPts = cabinetPolygon({ ...displayCab, dz: displayCab.dz + 25 }, wall, perp)
-                return (
-                  <polygon points={wtPts}
-                    fill="#374151" fillOpacity={wtP.fillOpacity}
-                    stroke="#6b7280" strokeWidth={1 / view.zoom}
-                    strokeDasharray={wtP.strokeDasharray}
-                    opacity={wtP.opacity}
-                    style={{ pointerEvents: 'none' }}
-                  />
-                )
-              })()}
 
               {/* Carcass — main cabinet footprint */}
               {carcL.visible && (
@@ -292,7 +288,7 @@ export default function CanvasSVG({
                 <text x={center.x} y={center.y + cabDimFs * 0.7}
                   textAnchor="middle" dominantBaseline="middle"
                   fontSize={cabDimFs}
-                  fill={isSel ? '#cbd5e1' : '#4b5563'}
+                  fill={isSel ? '#e2e8f0' : '#94a3b8'}
                   style={{ userSelect: 'none', pointerEvents: 'none' }}>
                   {displayCab.dx}×{displayCab.dz}
                 </text>
@@ -464,6 +460,17 @@ export default function CanvasSVG({
             </>
           )
         })()}
+
+        {/* ── Marquee selection rect ── */}
+        {marquee && (
+          <rect
+            x={Math.min(marquee.x1, marquee.x2)} y={Math.min(marquee.y1, marquee.y2)}
+            width={Math.abs(marquee.x2 - marquee.x1)} height={Math.abs(marquee.y2 - marquee.y1)}
+            fill="rgba(59,130,246,0.08)" stroke="#3b82f6"
+            strokeWidth={1 / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
 
       </g>
 

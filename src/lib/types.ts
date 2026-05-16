@@ -22,6 +22,16 @@ export interface Project {
   class_dimension_defaults: Record<string, unknown>
   hardware_overrides: Record<string, unknown>
   notes: string | null
+  // Schedule assignments (null = use shop default)
+  assembly_schedule_id:        string | null
+  toekick_schedule_id:         string | null
+  front_schedule_id:           string | null
+  drawerbox_schedule_id:       string | null
+  inner_drawerbox_schedule_id: string | null
+  hinge_schedule_id:           string | null
+  slide_schedule_id:           string | null
+  handle_schedule_id:          string | null
+  benchtop_schedule_id:        string | null
   created_at: string
   updated_at: string
 }
@@ -40,6 +50,16 @@ export interface Room {
   rule_overrides: Record<string, unknown>
   hardware_overrides: Record<string, unknown>
   notes: string | null
+  // Schedule assignments (null = inherit from job/shop default)
+  assembly_schedule_id:        string | null
+  toekick_schedule_id:         string | null
+  front_schedule_id:           string | null
+  drawerbox_schedule_id:       string | null
+  inner_drawerbox_schedule_id: string | null
+  hinge_schedule_id:           string | null
+  slide_schedule_id:           string | null
+  handle_schedule_id:          string | null
+  benchtop_schedule_id:        string | null
   created_at: string
   updated_at: string
 }

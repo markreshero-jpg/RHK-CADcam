@@ -9,9 +9,11 @@ import {
   wallEnd, wallDir,
   snapEndpoint, snapAngle,
   nearestWall, findFreeSlot, cabBlocks, cabT, nextLabel,
+  centroid, wallInwardNormal, islandCabPerp, cabinetCenterPt,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbSaveCabinet, dbUpdateCabinet, dbDeleteCabinet } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadResolvedParts } from './canvasDB'
+import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { useCanvasHistory } from './useCanvasHistory'
 import {
   Mode, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, MenuGroup,
@@ -24,14 +26,17 @@ import CanvasSidebar from './CanvasSidebar'
 import CanvasSVG from './CanvasSVG'
 import ElevationSVG from './ElevationSVG'
 import CanvasContextMenu from './CanvasContextMenu'
+import { buildContextMenuGroups } from './canvasContextItems'
 import DeleteWallModal from './DeleteWallModal'
 import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
 import WallDrawPanel from './WallDrawPanel'
 import WallPanel from './WallPanel'
 import CabinetPanel from './CabinetPanel'
 import CabinetResizePanel from './CabinetResizePanel'
+import CabinetEditModal from './CabinetEditModal'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
 import RoomPropertiesModal, { type RoomPropertiesTab } from './RoomPropertiesModal'
+import Room3DScene from './Room3DScene'
 
 export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets }: {
   project: Project | null
@@ -69,6 +74,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(DEFAULT_DISPLAY_CONFIG)
   const [jobModalTab, setJobModalTab] = useState<JobPropertiesTab | null>(null)
   const [roomModalTab, setRoomModalTab] = useState<RoomPropertiesTab | null>(null)
+  const [editCabId, setEditCabId] = useState<string | null>(null)
+  const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation'>('elevation')
+  const [resolvedParts, setResolvedParts] = useState<Map<string, ResolvedCabinet>>(new Map())
+  const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
 
   const { captureSnapshot, handleUndo, handleRedo, wallsRef, cabinetsRef, canUndo, canRedo } =
     useCanvasHistory(walls, cabinets, setWalls, setCabinets, setSelected)
@@ -83,6 +92,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const shiftRef = useRef(false)
   const placingRef = useRef(false)
   const sidebarResizeRef = useRef<{ startX: number; startW: number } | null>(null)
+  const marqueeStartRef = useRef<Pt | null>(null)
   // Tracks whether a pointerdown actually fired on the SVG — guards against phantom
   // pointerup events that arrive when Next.js mounts the canvas mid-navigation-click.
   const svgPointerDownRef = useRef(false)
@@ -124,6 +134,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const ro = new ResizeObserver(([e]) => setSvgSize({ w: e.contentRect.width, h: e.contentRect.height }))
     ro.observe(svg); return () => ro.disconnect()
   }, [])
+
+  // Load persisted resolved parts for all cabinets that exist on page mount
+  useEffect(() => {
+    const ids = initialCabinets.map(c => c.id)
+    if (ids.length === 0) return
+    dbLoadResolvedParts(ids).then(map => {
+      if (map.size > 0) setResolvedParts(map)
+    })
+  }, []) // intentionally mount-only
 
   useEffect(() => {
     if (canvasView !== 'plan') return
@@ -168,7 +187,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !isInput(e.target)) { e.preventDefault(); void handleUndo() }
       if (((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey) && !isInput(e.target)) || ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && e.shiftKey && !isInput(e.target))) { e.preventDefault(); void handleRedo() }
-      if (e.key === 'Escape') { setCabResize(null); setMultiSelect([]); setMode('select'); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null) }
+      if (e.key === 'Escape') { setCabResize(null); setMultiSelect([]); setMode('select'); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput(e.target)) {
         if (selected?.type === 'cabinet') handleDeleteCabinet(selected.id)
         if (selected?.type === 'wall') handleDeleteWall(selected.id)
@@ -231,17 +250,21 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   const handleUpdateCabinet = useCallback(async (id: string, u: Partial<CabinetInstance>) => {
     setCabinets(cs => cs.map(c => c.id === id ? { ...c, ...u } : c))
-    await dbUpdateCabinet(id, u)
+    const resolved = await dbUpdateCabinet(id, u)
+    if (resolved) setResolvedParts(m => new Map(m).set(id, resolved))
   }, [])
 
   async function placeCabinet(wall: Wall, pos_x: number, pos_y: number, cls: AssemblyClass, isEP = false, islandFlip = false) {
     captureSnapshot()
     const dims = DEFAULT_DIMS[cls] ?? DEFAULT_DIMS.base
+    // Map corner variants back to their base class key to look up job dimension defaults
+    const baseKey = cls.replace('_corner', '') as 'base' | 'wall' | 'tall'
+    const jobDims = (project?.class_dimension_defaults as Record<string, { dy?: number; dz?: number }> | null)?.[baseKey]
     const data: Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'> = {
       room_id: room.id, wall_id: wall.id, cabinet_definition_id: null,
       label: nextLabel(cabinets, isEP ? 'ep' : cls), assembly_class: cls,
       pos_x, pos_y, pos_z: 0, rotation: islandFlip ? wall.angle + 180 : wall.angle,
-      dx: dims.dx, dy: dims.dy, dz: dims.dz,
+      dx: dims.dx, dy: jobDims?.dy ?? dims.dy, dz: jobDims?.dz ?? dims.dz,
       has_carcass: !isEP, has_internal: !isEP, has_face: true,
       has_toekick: cls === 'base' || cls === 'tall' || cls === 'base_corner' || cls === 'tall_corner',
       construction_method_id: null, top_type: 'front_rail', toe_type: 'ladder',
@@ -250,8 +273,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       toekick_overrides: {}, drawerbox_overrides: {}, hardware_overrides: {},
       face_grid: null, schema_version: '0.4', notes: null,
     }
-    const saved = await dbSaveCabinet(data)
-    if (saved) { setCabinets(cs => [...cs, saved]); setSelected({ type: 'cabinet', id: saved.id }) }
+    const cabinet = await dbInsertCabinet(data)
+    if (cabinet) {
+      setCabinets(cs => [...cs, cabinet])
+      setSelected({ type: 'cabinet', id: cabinet.id })
+      dbResolveAndPersistCabinet(cabinet.id).then(resolved => {
+        if (resolved) setResolvedParts(m => new Map(m).set(cabinet.id, resolved))
+      })
+    }
   }
 
   async function pasteCabinet(wall: Wall, pos_x: number, pos_y: number) {
@@ -259,8 +288,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     captureSnapshot()
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, created_at, updated_at, ...rest } = clipboard
-    const saved = await dbSaveCabinet({ ...rest, room_id: room.id, wall_id: wall.id, label: nextLabel(cabinets, clipboard.assembly_class), pos_x, pos_y, rotation: wall.angle })
-    if (saved) { setCabinets(cs => [...cs, saved]); setSelected({ type: 'cabinet', id: saved.id }) }
+    const cabinet = await dbInsertCabinet({ ...rest, room_id: room.id, wall_id: wall.id, label: nextLabel(cabinets, clipboard.assembly_class), pos_x, pos_y, rotation: wall.angle })
+    if (cabinet) {
+      setCabinets(cs => [...cs, cabinet])
+      setSelected({ type: 'cabinet', id: cabinet.id })
+      dbResolveAndPersistCabinet(cabinet.id).then(resolved => {
+        if (resolved) setResolvedParts(m => new Map(m).set(cabinet.id, resolved))
+      })
+    }
   }
 
   function onUpdateDrawPreview(length: number, angle: number) {
@@ -313,7 +348,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setSelected(null)
     setCabResize(null)
     setMultiSelect([])
-    void wp
+    marqueeStartRef.current = wp
+    svgRef.current?.setPointerCapture(e.pointerId)
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -370,15 +406,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return
     }
 
+    if (marqueeStartRef.current && mode === 'select') {
+      setMarquee({ x1: marqueeStartRef.current.x, y1: marqueeStartRef.current.y, x2: wp.x, y2: wp.y })
+    }
+
     if (cabDragRef.current && mode === 'select') {
-      if (cabDragOriginRef.current && dist(svgP, cabDragOriginRef.current) < 5) return
-      const { cabId, assemblyClass, wall, cabDX, dragOffset } = cabDragRef.current
-      const wd = wallDir(wall)
-      const cursorT = (wp.x - wall.pos_x) * wd.x + (wp.y - wall.pos_y) * wd.y
-      const desired = Math.max(0, Math.min(wall.length - cabDX, cursorT - dragOffset))
-      const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && cabBlocks(assemblyClass, c.assembly_class)).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-      const t = findFreeSlot(desired, cabDX, wall.length, occupied)
-      setCabDrag({ id: cabId, pos_x: wall.pos_x + t * wd.x, pos_y: wall.pos_y + t * wd.y })
+      // Require 6 SVG pixels of movement before activating drag — prevents accidental
+      // micro-drags when clicking quickly.
+      if (!cabDragOriginRef.current || dist(svgP, cabDragOriginRef.current) >= 6) {
+        const { cabId, assemblyClass, wall, cabDX, dragOffset } = cabDragRef.current
+        const wd = wallDir(wall)
+        const cursorT = (wp.x - wall.pos_x) * wd.x + (wp.y - wall.pos_y) * wd.y
+        const desired = Math.max(0, Math.min(wall.length - cabDX, cursorT - dragOffset))
+        const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && cabBlocks(assemblyClass, c.assembly_class)).map(c => ({ t: cabT(c, wall), dx: c.dx }))
+        const t = findFreeSlot(desired, cabDX, wall.length, occupied)
+        setCabDrag({ id: cabId, pos_x: wall.pos_x + t * wd.x, pos_y: wall.pos_y + t * wd.y })
+      }
     }
 
     if (cabMoveDragRef.current && mode === 'select') {
@@ -481,8 +524,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
 
     if (mode === 'paste') {
-      if (placeGhost && clipboard) {
-        await pasteCabinet(placeGhost.wall, placeGhost.pos_x, placeGhost.pos_y)
+      let ghost = placeGhost
+      if (!ghost && clipboard) {
+        const raw = nearestWall(wp, walls, clipboard.dx, WALL_SNAP_PX / view.zoom)
+        if (raw) {
+          const wd2 = wallDir(raw.wall)
+          const desired = (raw.pos_x - raw.wall.pos_x) * wd2.x + (raw.pos_y - raw.wall.pos_y) * wd2.y
+          const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabBlocks(clipboard.assembly_class, c.assembly_class)).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+          const t = findFreeSlot(desired, clipboard.dx, raw.wall.length, occupied)
+          ghost = { wall: raw.wall, pos_x: raw.wall.pos_x + t * wd2.x, pos_y: raw.wall.pos_y + t * wd2.y, islandFlip: false }
+        }
+      }
+      if (ghost && clipboard) {
+        await pasteCabinet(ghost.wall, ghost.pos_x, ghost.pos_y)
         setMode('select'); setPlaceGhost(null)
       }
       return
@@ -530,10 +584,43 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const { cabId } = cabDragRef.current
       cabDragRef.current = null; cabDragOriginRef.current = null
       if (cabDrag) {
-        captureSnapshot()
-        const { pos_x, pos_y } = cabDrag
+        const origCab = cabinets.find(c => c.id === cabId)
+        const moved = !origCab ||
+          Math.abs(cabDrag.pos_x - origCab.pos_x) + Math.abs(cabDrag.pos_y - origCab.pos_y) > 2
         setCabDrag(null)
-        await handleUpdateCabinet(cabId, { pos_x, pos_y })
+        if (moved) {
+          captureSnapshot()
+          await handleUpdateCabinet(cabId, { pos_x: cabDrag.pos_x, pos_y: cabDrag.pos_y })
+        }
+      }
+      return
+    }
+
+    if (marqueeStartRef.current) {
+      const start = marqueeStartRef.current
+      marqueeStartRef.current = null
+      setMarquee(null)
+      const widthPx = Math.abs(wp.x - start.x) * view.zoom
+      const heightPx = Math.abs(wp.y - start.y) * view.zoom
+      if (widthPx > 5 || heightPx > 5) {
+        const minX = Math.min(start.x, wp.x), maxX = Math.max(start.x, wp.x)
+        const minY = Math.min(start.y, wp.y), maxY = Math.max(start.y, wp.y)
+        const cxpt = centroid(walls)
+        const ids = cabinets.filter(cab => {
+          const wall = walls.find(w => w.id === cab.wall_id)
+          if (!wall) return false
+          const basePerp = wallInwardNormal(wall, cxpt.x, cxpt.y)
+          const perp = islandCabPerp(cab, wall, basePerp)
+          const center = cabinetCenterPt(cab, wall, perp)
+          return center.x >= minX && center.x <= maxX && center.y >= minY && center.y <= maxY
+        }).map(c => c.id)
+        if (ids.length >= 2) {
+          setMultiSelect(ids)
+          setSelected({ type: 'cabinet', id: ids[0] })
+        } else if (ids.length === 1) {
+          setSelected({ type: 'cabinet', id: ids[0] })
+          setMultiSelect([])
+        }
       }
     }
   }
@@ -586,9 +673,67 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setContextMenu({ x: e.clientX, y: e.clientY, cabId })
   }
 
+  function onBlankWallContextMenu(e: React.MouseEvent, wallId: string, wallT: number) {
+    setContextMenu({ x: e.clientX, y: e.clientY, elevWallId: wallId, elevWallT: wallT })
+  }
+
+  async function handleInsertAdjacent(cabId: string, type: 'panel' | 'filler', side: 'left' | 'right') {
+    const cab = cabinets.find(c => c.id === cabId)
+    if (!cab) return
+    const wall = walls.find(w => w.id === cab.wall_id)
+    if (!wall) return
+    const dx = type === 'panel' ? 18 : 50
+    const t = cabT(cab, wall)
+    const occ = cabinets
+      .filter(c => c.id !== cab.id && c.wall_id === wall.id && cabBlocks('base', c.assembly_class))
+      .map(c => ({ t: cabT(c, wall), dx: c.dx }))
+    const desired = side === 'right'
+      ? Math.min(wall.length - dx, t + cab.dx)       // snap in from the right edge of the cabinet
+      : Math.max(0, t - dx)                           // snap in from the left edge of the cabinet
+    const freeT = findFreeSlot(desired, dx, wall.length, occ)
+    const wd = wallDir(wall)
+    captureSnapshot()
+    const data: Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'> = {
+      room_id: room.id, wall_id: wall.id, cabinet_definition_id: null,
+      label: nextLabel(cabinets, 'ep'),
+      assembly_class: 'base',
+      pos_x: wall.pos_x + freeT * wd.x,
+      pos_y: wall.pos_y + freeT * wd.y,
+      pos_z: 0, rotation: wall.angle,
+      dx, dy: cab.dy, dz: cab.dz,
+      has_carcass: false, has_internal: false, has_face: true, has_toekick: false,
+      construction_method_id: null, top_type: 'front_rail', toe_type: 'ladder',
+      left_neighbour_type: 'wall', right_neighbour_type: 'wall',
+      exposed_interior: false, rule_overrides: {}, material_overrides: {},
+      toekick_overrides: {}, drawerbox_overrides: {}, hardware_overrides: {},
+      face_grid: null, schema_version: '0.4', notes: null,
+    }
+    const cabinet = await dbInsertCabinet(data)
+    if (cabinet) {
+      setCabinets(cs => [...cs, cabinet])
+      setSelected({ type: 'cabinet', id: cabinet.id })
+      dbResolveAndPersistCabinet(cabinet.id).then(resolved => {
+        if (resolved) setResolvedParts(m => new Map(m).set(cabinet.id, resolved))
+      })
+    }
+  }
+
+  async function handleInsertCabinetAtElevT(wallId: string, wallT: number, cls: AssemblyClass) {
+    const wall = walls.find(w => w.id === wallId)
+    if (!wall) return
+    const dims = DEFAULT_DIMS[cls] ?? DEFAULT_DIMS.base
+    const occ = cabinets
+      .filter(c => c.wall_id === wallId && cabBlocks(cls, c.assembly_class))
+      .map(c => ({ t: cabT(c, wall), dx: c.dx }))
+    const t = findFreeSlot(Math.max(0, Math.min(wall.length - dims.dx, wallT)), dims.dx, wall.length, occ)
+    const wd = wallDir(wall)
+    await placeCabinet(wall, wall.pos_x + t * wd.x, wall.pos_y + t * wd.y, cls)
+  }
+
   function onCabinetDoubleClick(e: React.MouseEvent, cabId: string) {
     e.stopPropagation()
-    console.log('double-click cabinet', cabId)
+    setContextMenu(null)
+    setEditCabId(cabId)
   }
 
   function onCabMarkerPointerDown(e: React.PointerEvent, cab: CabinetInstance, side: 'left' | 'right' | 'front', wall: Wall, perp: { x: number; y: number }) {
@@ -721,21 +866,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       null,
       { label: 'Export…', disabled: true },
     ]},
-    { label: 'Job', items: [
-      { label: 'Details',      action: () => setJobModalTab('details') },
-      { label: 'Dimensions',   action: () => setJobModalTab('dimensions') },
-      { label: 'Construction', action: () => setJobModalTab('construction') },
-      { label: 'Hardware',     action: () => setJobModalTab('hardware') },
-      null,
-      { label: 'Overrides',   action: () => setJobModalTab('overrides') },
-    ]},
-    { label: 'Room', items: [
-      { label: 'Room Details', action: () => setRoomModalTab('details') },
-      { label: 'Construction', action: () => setRoomModalTab('construction') },
-      { label: 'Hardware',     action: () => setRoomModalTab('hardware') },
-      null,
-      { label: 'Overrides',   action: () => setRoomModalTab('overrides') },
-    ]},
     { label: 'Edit', items: [
       { label: 'Undo', shortcut: 'Ctrl+Z', disabled: !canUndo, action: () => { void handleUndo() } },
       { label: 'Redo', shortcut: 'Ctrl+Y', disabled: !canRedo, action: () => { void handleRedo() } },
@@ -753,16 +883,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       { label: 'Zoom Out', shortcut: '−', action: () => dispatchView({ type: 'zoom', factor: 1/1.25, svgX: svgSize.w/2, svgY: svgSize.h/2 }) },
       { label: 'Fit to Screen', shortcut: 'F', action: fitToWalls },
       null,
-      { label: '3D View…', disabled: true },
+      { label: '3D View', action: () => switchView('3d') },
     ]},
-    { label: 'Draw', items: [
-      { label: 'Wall', action: () => onSelectMode('draw_wall') },
+    { label: 'Job', items: [
+      { label: 'Details',      action: () => setJobModalTab('details') },
+      { label: 'Dimensions',   action: () => setJobModalTab('dimensions') },
+      { label: 'Construction', action: () => setJobModalTab('construction') },
+      { label: 'Hardware',     action: () => setJobModalTab('hardware') },
+      null,
+      { label: 'Overrides',   action: () => setJobModalTab('overrides') },
     ]},
-    { label: 'Cabinet', items: [
-      { label: 'Base Cabinet',  action: () => setMode('place_base') },
-      { label: 'Wall Unit',     action: () => setMode('place_wall_unit') },
-      { label: 'Tall Cabinet',  action: () => setMode('place_tall') },
-      { label: 'End Panel',     action: () => setMode('place_end_panel') },
+    { label: 'Room', items: [
+      { label: 'Room Details', action: () => setRoomModalTab('details') },
+      { label: 'Construction', action: () => setRoomModalTab('construction') },
+      { label: 'Hardware',     action: () => setRoomModalTab('hardware') },
+      null,
+      { label: 'Overrides',   action: () => setRoomModalTab('overrides') },
     ]},
     { label: 'Production', items: [
       { label: 'Cut List…',          disabled: true },
@@ -791,17 +927,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       />
 
       {/* View tab bar */}
-      <div className="flex-none h-8 bg-gray-900 border-b border-gray-800 flex items-center px-3 gap-1 shrink-0">
-        {(['plan', 'elevation', '3d'] as CanvasView[]).map(v => (
-          <button key={v} onClick={() => switchView(v)}
-            className={`px-3 py-1 text-xs rounded transition-colors ${
-              canvasView === v
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
-            }`}>
-            {v === 'plan' ? 'Plan' : v === 'elevation' ? 'Elevation' : '3D'}
-          </button>
-        ))}
+      <div className="flex-none h-8 bg-gray-900 border-b border-gray-800 flex items-center px-3 shrink-0 relative">
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1">
+          {(['plan', 'elevation', '3d'] as CanvasView[]).map(v => (
+            <button key={v} onClick={() => switchView(v)}
+              className={`px-3 py-1 text-xs rounded transition-colors ${
+                canvasView === v
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+              }`}>
+              {v === 'plan' ? 'Plan' : v === 'elevation' ? 'Elevation' : '3D'}
+            </button>
+          ))}
+        </div>
         <div className="ml-auto flex items-center gap-2">
           <span className="text-[10px] text-gray-600 uppercase tracking-wider select-none">Detail</span>
           <select
@@ -862,6 +1000,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               cabDrag={cabDrag}
               cabResize={cabResize}
               multiSelect={multiSelect}
+              marquee={marquee}
               cursor={cursor}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
@@ -909,11 +1048,24 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             displayConfig={displayConfig}
             multiSelect={multiSelect}
             canEqualize={canEqualize}
+            mode={mode}
+            clipboard={clipboard}
             onSelectCabinet={id => { setSelected({ type: 'cabinet', id }); setMultiSelect([]); setCabResize(null) }}
             onSelectWall={id => setSelected({ type: 'wall', id })}
             onSetElevWall={setElevWallId}
             onUpdateCabinet={handleUpdateCabinet}
+            onPlaceAtWall={async (wall, pos_x, pos_y) => {
+              if (mode === 'paste' && clipboard) {
+                await pasteCabinet(wall, pos_x, pos_y)
+              } else {
+                const clsInfo = modeAssemblyClass(mode)
+                if (clsInfo) await placeCabinet(wall, pos_x, pos_y, clsInfo.cls, clsInfo.ep)
+              }
+              setMode('select')
+              setPlaceGhost(null)
+            }}
             onCabinetContextMenu={onCabinetContextMenu}
+            onBlankWallContextMenu={onBlankWallContextMenu}
             onShiftSelectCabinet={id => {
               setSelected({ type: 'cabinet', id })
               setMultiSelect(prev => {
@@ -925,13 +1077,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             cabResize={cabResize}
             onCabResizeStart={r => { setSelected({ type: 'cabinet', id: r.cabId }); setMultiSelect([]); setCabResize(r) }}
             onCabResizeUpdate={updates => setCabResize(r => r ? { ...r, ...updates } : r)}
+            resolvedParts={resolvedParts}
+            onDeselect={() => setSelected(null)}
           />
         )}
 
         {canvasView === '3d' && (
-          <div className="flex-1 flex items-center justify-center text-gray-600 text-sm select-none">
-            3D view — coming soon
-          </div>
+          <Room3DScene
+            walls={walls}
+            cabinets={cabinets}
+            room={room}
+            selectedId={selected?.type === 'cabinet' ? selected.id : null}
+            onSelectCabinet={id => { setSelected({ type: 'cabinet', id }); setMultiSelect([]) }}
+            onEditCabinet={id => { setEditCabInitialView('3d'); setEditCabId(id) }}
+            onDeleteCabinet={id => handleDeleteCabinet(id)}
+            resolvedParts={resolvedParts}
+          />
         )}
 
         {mode !== 'draw_wall' && mode !== 'draw_island' && selectedWall && (canvasView === 'plan' || canvasView === 'elevation') && (
@@ -980,6 +1141,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             cabinet={selectedCab}
             wall={walls.find(w => w.id === selectedCab.wall_id) ?? null}
             wallCabinets={cabinets.filter(c => c.wall_id === selectedCab.wall_id)}
+            room={room}
             onUpdate={handleUpdateCabinet}
             onDelete={handleDeleteCabinet}
           />
@@ -1011,16 +1173,64 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
       {contextMenu && (
         <CanvasContextMenu
-          contextMenu={contextMenu}
-          clipboard={clipboard}
-          canEqualize={canEqualize}
-          onDeleteWall={handleDeleteWall}
-          onCopy={() => { const cab = cabinets.find(c => c.id === contextMenu.cabId); if (cab) { setClipboard(cab); setMode('paste'); setContextMenu(null); setPlaceGhost(null) } }}
-          onPaste={() => { if (clipboard) { setMode('paste'); setContextMenu(null) } }}
-          onDelete={async () => { if (contextMenu.cabId) await handleDeleteCabinet(contextMenu.cabId); setContextMenu(null) }}
-          onEqualizeWidths={handleEqualizeWidths}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          groups={buildContextMenuGroups({
+            cabId: contextMenu.cabId,
+            wallId: contextMenu.wallId,
+            elevWallId: contextMenu.elevWallId,
+            elevWallT: contextMenu.elevWallT,
+            canEqualize,
+            clipboard,
+            cabinets,
+            onDeleteWall: handleDeleteWall,
+            onDeleteCabinet: id => void handleDeleteCabinet(id),
+            onInsertCabinet: (wId, t, cls) => { void handleInsertCabinetAtElevT(wId, t, cls) },
+            onInsertAdjacent: (cabId, type, side) => { void handleInsertAdjacent(cabId, type, side) },
+            onCopy: cab => {
+              setClipboard(cab)
+              setMode('paste')
+              const raw = nearestWall(mouseWorld, walls, cab.dx, WALL_SNAP_PX / view.zoom)
+              if (raw) {
+                const wd = wallDir(raw.wall)
+                const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
+                const occupied = cabinets
+                  .filter(c => c.wall_id === raw.wall.id && cabBlocks(cab.assembly_class, c.assembly_class))
+                  .map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+                const t = findFreeSlot(desired, cab.dx, raw.wall.length, occupied)
+                const perp = { x: -wd.y, y: wd.x }
+                const islandFlip = raw.wall.wall_type === 'island' &&
+                  (mouseWorld.x - raw.wall.pos_x) * perp.x + (mouseWorld.y - raw.wall.pos_y) * perp.y < 0
+                setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip })
+              } else {
+                setPlaceGhost(null)
+              }
+            },
+            onPaste: () => { if (clipboard) setMode('paste') },
+            onEdit: id => setEditCabId(id),
+            onEqualizeWidths: handleEqualizeWidths,
+          })}
+          onClose={() => setContextMenu(null)}
         />
       )}
+
+      {editCabId && (() => {
+        const cab = cabinets.find(c => c.id === editCabId)
+        if (!cab) return null
+        const wall = walls.find(w => w.id === cab.wall_id) ?? null
+        return (
+          <CabinetEditModal
+            cabinet={cab}
+            wall={wall}
+            wallCabinets={wall ? cabinets.filter(c => c.wall_id === wall.id) : []}
+            resolvedCabinet={resolvedParts.get(cab.id)}
+            initialView={editCabInitialView}
+            onUpdate={handleUpdateCabinet}
+            onDelete={handleDeleteCabinet}
+            onClose={() => { setEditCabId(null); setEditCabInitialView('elevation') }}
+          />
+        )
+      })()}
 
       {deleteWallPending && (
         <DeleteWallModal

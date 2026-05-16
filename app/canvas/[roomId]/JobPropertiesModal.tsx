@@ -2,8 +2,9 @@
 import { useState } from 'react'
 import { Project, ProjectStatus, DEFAULT_DIMS } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
+import MaterialsScheduleTab from './MaterialsScheduleTab'
 
-export type JobPropertiesTab = 'details' | 'dimensions' | 'construction' | 'hardware' | 'overrides'
+export type JobPropertiesTab = 'details' | 'dimensions' | 'construction' | 'materials' | 'hardware' | 'overrides'
 
 type Rules = typeof DEFAULT_CONSTRUCTION_METHOD.rules
 type RuleKey = keyof Rules
@@ -106,6 +107,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
     { id: 'details',      label: 'Details' },
     { id: 'dimensions',   label: 'Dimensions' },
     { id: 'construction', label: 'Construction' },
+    { id: 'materials',    label: 'Materials' },
     { id: 'hardware',     label: 'Hardware' },
     { id: 'overrides',    label: overrideKeys.length > 0 ? `Overrides (${overrideKeys.length})` : 'Overrides' },
   ]
@@ -134,7 +136,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onPointerDown={onClose}>
-      <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-[700px] max-h-[85vh] flex flex-col"
+      <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-[700px] h-[85vh] flex flex-col"
         onPointerDown={e => e.stopPropagation()}>
 
         {/* Header */}
@@ -250,6 +252,10 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                 </div>
               ))}
             </div>
+          )}
+
+          {tab === 'materials' && (
+            <MaterialsScheduleTab mode="job" projectId={project.id} />
           )}
 
           {tab === 'hardware' && (

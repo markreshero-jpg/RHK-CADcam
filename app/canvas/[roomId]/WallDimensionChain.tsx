@@ -50,9 +50,8 @@ function DimLine({
   const wd = wallDir(wall)
   const thick = wall.thickness
   const sw = 1 / z
-  const fs = 9 / z
+  const fs = 12 / z
   const tickH = 6 / z
-  const labelOff = fs * 1.4
   const textAngle = Math.cos(toRad(wall.angle)) < -0.001 ? wall.angle + 180 : wall.angle
 
   const pt = (t: number) => ({
@@ -79,18 +78,65 @@ function DimLine({
       {segs.map((seg, i) => {
         const mid = (seg.from + seg.to) / 2
         const p = pt(mid)
-        const tx = p.x + out.x * labelOff
-        const ty = p.y + out.y * labelOff
+        const padX = fs * 1.8
+        const padY = fs * 0.6
         return (
-          <text key={i}
-            x={tx} y={ty}
-            textAnchor="middle" dominantBaseline="middle"
-            fontSize={fs} fill={col}
-            transform={`rotate(${textAngle}, ${tx}, ${ty})`}>
-            {seg.label}
-          </text>
+          <g key={i} transform={`rotate(${textAngle}, ${p.x}, ${p.y})`}>
+            <rect x={p.x - padX} y={p.y - padY} width={padX * 2} height={padY * 2} fill="#030712" />
+            <text x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>
+              {seg.label}
+            </text>
+          </g>
         )
       })}
+    </g>
+  )
+}
+
+// Perpendicular depth dimension at a wall end — runs from wall face to cabinet front face
+function DepthDim({
+  wall, inward, tPos, dz, zoom, col, sign,
+}: {
+  wall: Wall
+  inward: { x: number; y: number }
+  tPos: number
+  dz: number
+  zoom: number
+  col: string
+  sign: 1 | -1
+}) {
+  const wd = wallDir(wall)
+  const z = zoom
+  const sw = 1 / z
+  const fs = 12 / z
+  const tickH = 6 / z
+
+  const offX = wd.x * sign * 20 / z
+  const offY = wd.y * sign * 20 / z
+
+  const sx = wall.pos_x + tPos * wd.x + offX
+  const sy = wall.pos_y + tPos * wd.y + offY
+  const ex = sx + inward.x * dz
+  const ey = sy + inward.y * dz
+  const midX = (sx + ex) / 2
+  const midY = (sy + ey) / 2
+
+  // Angle of the inward direction — normalise so text reads left-to-right
+  const rawAngle = Math.atan2(inward.y, inward.x) * 180 / Math.PI
+  const textAngle = Math.abs(rawAngle) > 90 ? rawAngle + 180 : rawAngle
+
+  return (
+    <g pointerEvents="none" style={{ userSelect: 'none' }}>
+      <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={col} strokeWidth={sw} />
+      {/* Ticks run along the wall direction */}
+      <line x1={sx - wd.x * tickH} y1={sy - wd.y * tickH} x2={sx + wd.x * tickH} y2={sy + wd.y * tickH} stroke={col} strokeWidth={sw} />
+      <line x1={ex - wd.x * tickH} y1={ey - wd.y * tickH} x2={ex + wd.x * tickH} y2={ey + wd.y * tickH} stroke={col} strokeWidth={sw} />
+      <g transform={`rotate(${textAngle}, ${midX}, ${midY})`}>
+        <rect x={midX - fs * 1.8} y={midY - fs * 0.6} width={fs * 3.6} height={fs * 1.2} fill="#030712" />
+        <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>
+          {Math.round(dz)}
+        </text>
+      </g>
     </g>
   )
 }
@@ -99,12 +145,10 @@ export default function WallDimensionChain({
   wall, walls, cabinets, centX, centY, zoom, selected,
   layerOverall, layerBase, layerWallCab,
 }: Props) {
-  if (wall.wall_type === 'island') return null
-
   const inward = wallInwardNormal(wall, centX, centY)
   const out = { x: -inward.x, y: -inward.y }
   const z = zoom
-  const col = selected ? '#93c5fd' : '#94a3b8'
+  const col = selected ? '#bfdbfe' : '#cbd5e1'
 
   const baseCabs = cabinets.filter(c =>
     c.wall_id === wall.id &&
@@ -119,31 +163,51 @@ export default function WallDimensionChain({
   const wallCabSegs = computeChain(wallCabs, wall)
   const overallSeg: Seg[] = [{ from: 0, to: wall.length, label: Math.round(wall.length) }]
 
+  const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
+  const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
+  // Only show wall depth separately if it differs meaningfully from base depth
+  const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
+
   return (
     <g>
-      {layerWallCab.visible && (
+      {/* Wall-parallel chain lines */}
+      {layerWallCab.visible && wallCabs.length > 0 && (
         <DimLine
           wall={wall} out={out}
-          dist={80 / z}
-          segs={wallCabSegs.length > 0 ? wallCabSegs : overallSeg}
+          dist={25 / z}
+          segs={wallCabSegs}
           zoom={z} col={col}
         />
       )}
-      {layerBase.visible && (
+      {layerBase.visible && baseCabs.length > 0 && (
         <DimLine
           wall={wall} out={out}
-          dist={160 / z}
-          segs={baseSegs.length > 0 ? baseSegs : overallSeg}
+          dist={50 / z}
+          segs={baseSegs}
           zoom={z} col={col}
         />
       )}
       {layerOverall.visible && (
         <DimLine
           wall={wall} out={out}
-          dist={240 / z}
+          dist={75 / z}
           segs={overallSeg}
           zoom={z} col={col}
         />
+      )}
+
+      {/* Perpendicular depth dimensions at wall ends */}
+      {layerBase.visible && baseDz > 0 && (
+        <>
+          <DepthDim wall={wall} inward={inward} tPos={0}           dz={baseDz} zoom={z} col={col} sign={-1} />
+          <DepthDim wall={wall} inward={inward} tPos={wall.length} dz={baseDz} zoom={z} col={col} sign={1} />
+        </>
+      )}
+      {layerWallCab.visible && showWallDepthSeparate && (
+        <>
+          <DepthDim wall={wall} inward={inward} tPos={0}           dz={wallDz} zoom={z} col={col} sign={-1} />
+          <DepthDim wall={wall} inward={inward} tPos={wall.length} dz={wallDz} zoom={z} col={col} sign={1} />
+        </>
       )}
     </g>
   )

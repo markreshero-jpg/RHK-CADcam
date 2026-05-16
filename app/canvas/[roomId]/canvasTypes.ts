@@ -18,7 +18,7 @@ export type Mode =
 
 export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: string } | null
 
-export type ContextMenuState = { x: number; y: number; cabId?: string; wallId?: string }
+export type ContextMenuState = { x: number; y: number; cabId?: string; wallId?: string; elevWallId?: string; elevWallT?: number }
 
 export type PlaceGhost = { wall: Wall; pos_x: number; pos_y: number; islandFlip?: boolean }
 
@@ -42,6 +42,9 @@ export type CabResize = {
 
 export type MenuItem = { label: string; action?: () => void; disabled?: boolean; shortcut?: string } | null
 export type MenuGroup = { label: string; items: MenuItem[] }
+
+export type ContextMenuSubItem = { label: string; onClick: () => void; disabled?: boolean; color?: 'red' | 'blue' | 'amber' }
+export type ContextMenuItem = { label: string; onClick?: () => void; children?: ContextMenuSubItem[]; disabled?: boolean; color?: 'red' | 'blue' | 'amber' } | null
 
 export interface ViewState { panX: number; panY: number; zoom: number }
 export type ViewAction =

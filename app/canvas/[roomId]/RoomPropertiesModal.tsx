@@ -2,8 +2,9 @@
 import { useState } from 'react'
 import { Room, Project } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
+import MaterialsScheduleTab from './MaterialsScheduleTab'
 
-export type RoomPropertiesTab = 'details' | 'construction' | 'hardware' | 'overrides'
+export type RoomPropertiesTab = 'details' | 'construction' | 'materials' | 'hardware' | 'overrides'
 
 type Rules = typeof DEFAULT_CONSTRUCTION_METHOD.rules
 type RuleKey = keyof Rules
@@ -99,6 +100,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
   const TABS: { id: RoomPropertiesTab; label: string }[] = [
     { id: 'details',      label: 'Room Details' },
     { id: 'construction', label: 'Construction' },
+    { id: 'materials',    label: 'Materials' },
     { id: 'hardware',     label: 'Hardware' },
     { id: 'overrides',    label: overrideKeys.length > 0 ? `Overrides (${overrideKeys.length})` : 'Overrides' },
   ]
@@ -125,7 +127,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onPointerDown={onClose}>
-      <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-[700px] max-h-[85vh] flex flex-col"
+      <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-[700px] h-[85vh] flex flex-col"
         onPointerDown={e => e.stopPropagation()}>
 
         {/* Header */}
@@ -206,6 +208,10 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
                 </div>
               ))}
             </div>
+          )}
+
+          {tab === 'materials' && (
+            <MaterialsScheduleTab mode="room" projectId={room.project_id} roomId={room.id} />
           )}
 
           {tab === 'hardware' && (

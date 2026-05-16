@@ -15,14 +15,13 @@ export type LayerId =
   | 'face'             // doors, drawer fronts, end panels
   | 'internal'         // shelves, drawer boxes, internal fittings
   | 'toekick'          // plinth / kickboard
-  | 'worktop'          // benchtops / countertops
   | 'dimensions'       // cabinet inline size labels
   | 'labels'           // cabinet name labels
   | 'dim_wall_overall' // plan: overall wall length (outermost line)
   | 'dim_base_chain'   // plan: base cabinet segment chain
   | 'dim_wall_chain'   // plan: wall cabinet segment chain
   | 'dim_elevation_y'  // elevation: floor-to-ceiling height chain
-  | 'dim_refs'         // elevation: reference lines (worktop, soffit, wall-unit top)
+  | 'dim_refs'         // elevation: reference lines (soffit, wall-unit top)
 
 export type LayerSet = Record<LayerId, LayerConfig>
 
@@ -30,7 +29,7 @@ export type PresetId =
   | 'schematic'
   | 'design'
   | 'working'
-  | 'worktop_plan'
+
   | 'face_elevation'
   | 'full_parts'
   | 'custom'
@@ -52,7 +51,6 @@ export const DISPLAY_PRESETS: Record<Exclude<PresetId, 'custom'>, { label: strin
       face:             L(false, 'solid'),
       internal:         L(false, 'solid'),
       toekick:          L(false, 'solid'),
-      worktop:          L(false, 'solid'),
       dimensions:       L(true,  'solid'),
       labels:           L(true,  'solid'),
       dim_wall_overall: L(true,  'solid'),
@@ -69,7 +67,6 @@ export const DISPLAY_PRESETS: Record<Exclude<PresetId, 'custom'>, { label: strin
       face:             L(true,  'solid'),
       internal:         L(false, 'solid'),
       toekick:          L(true,  'solid'),
-      worktop:          L(true,  'solid'),
       dimensions:       L(true,  'solid'),
       labels:           L(true,  'solid'),
       dim_wall_overall: L(true,  'solid'),
@@ -86,30 +83,12 @@ export const DISPLAY_PRESETS: Record<Exclude<PresetId, 'custom'>, { label: strin
       face:             L(true,  'solid'),
       internal:         L(true,  'dashed'),
       toekick:          L(true,  'solid'),
-      worktop:          L(true,  'solid'),
       dimensions:       L(true,  'solid'),
       labels:           L(true,  'solid'),
       dim_wall_overall: L(true,  'solid'),
       dim_base_chain:   L(true,  'solid'),
       dim_wall_chain:   L(true,  'solid'),
       dim_elevation_y:  L(true,  'solid'),
-      dim_refs:         L(true,  'solid'),
-    },
-  },
-  worktop_plan: {
-    label: 'Benchtop plan',
-    layers: {
-      carcass:          L(true,  'ghost'),
-      face:             L(false, 'solid'),
-      internal:         L(false, 'solid'),
-      toekick:          L(false, 'solid'),
-      worktop:          L(true,  'solid'),
-      dimensions:       L(true,  'solid'),
-      labels:           L(false, 'solid'),
-      dim_wall_overall: L(true,  'solid'),
-      dim_base_chain:   L(true,  'solid'),
-      dim_wall_chain:   L(false, 'solid'),
-      dim_elevation_y:  L(false, 'solid'),
       dim_refs:         L(true,  'solid'),
     },
   },
@@ -120,7 +99,6 @@ export const DISPLAY_PRESETS: Record<Exclude<PresetId, 'custom'>, { label: strin
       face:             L(true,  'solid'),
       internal:         L(false, 'solid'),
       toekick:          L(true,  'solid'),
-      worktop:          L(false, 'solid'),
       dimensions:       L(true,  'solid'),
       labels:           L(true,  'solid'),
       dim_wall_overall: L(false, 'solid'),
@@ -137,7 +115,6 @@ export const DISPLAY_PRESETS: Record<Exclude<PresetId, 'custom'>, { label: strin
       face:             L(true,  'solid'),
       internal:         L(true,  'solid'),
       toekick:          L(true,  'solid'),
-      worktop:          L(true,  'solid'),
       dimensions:       L(true,  'solid'),
       labels:           L(true,  'solid'),
       dim_wall_overall: L(true,  'solid'),

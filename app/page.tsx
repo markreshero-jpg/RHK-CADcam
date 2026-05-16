@@ -47,12 +47,26 @@ export default async function HomePage() {
           <h1 className="text-lg font-bold text-white tracking-tight">RHK CADcam</h1>
           <p className="text-xs text-gray-500">Cabinet Design & Manufacturing</p>
         </div>
-        <Link
-          href="/projects/new"
-          className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-        >
-          + New Project
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/library/materials"
+            className="text-gray-400 hover:text-gray-200 text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            Materials
+          </Link>
+          <Link
+            href="/library/schedules"
+            className="text-gray-400 hover:text-gray-200 text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            Schedules
+          </Link>
+          <Link
+            href="/projects/new"
+            className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+          >
+            + New Project
+          </Link>
+        </div>
       </div>
 
       <div className="px-8 py-6 max-w-5xl">
