@@ -1,65 +1,118 @@
-import Image from "next/image";
+import Link from 'next/link'
+import { createServerClient } from '@/src/lib/supabase-server'
+import { Project, Room } from '@/src/lib/types'
 
-export default function Home() {
+export const dynamic = 'force-dynamic'
+
+const STATUS_COLOURS: Record<string, string> = {
+  draft:         'bg-gray-700 text-gray-300',
+  quoted:        'bg-yellow-900/50 text-yellow-300',
+  approved:      'bg-blue-900/50 text-blue-300',
+  in_production: 'bg-green-900/50 text-green-300',
+  completed:     'bg-purple-900/50 text-purple-300',
+  archived:      'bg-gray-800 text-gray-500',
+}
+
+async function getProjectsWithFirstRoom(): Promise<(Project & { first_room_id: string | null })[]> {
+  const supabase = createServerClient()
+
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (!projects?.length) return []
+
+  const { data: rooms } = await supabase
+    .from('rooms')
+    .select('id, project_id')
+    .in('project_id', projects.map((p) => p.id))
+    .order('created_at', { ascending: true })
+
+  const firstRoom: Record<string, string> = {}
+  for (const r of (rooms ?? []) as Pick<Room, 'id' | 'project_id'>[]) {
+    if (!firstRoom[r.project_id]) firstRoom[r.project_id] = r.id
+  }
+
+  return projects.map((p) => ({ ...p, first_room_id: firstRoom[p.id] ?? null }))
+}
+
+export default async function HomePage() {
+  const projects = await getProjectsWithFirstRoom()
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-gray-950 text-white">
+      <div className="border-b border-gray-800 px-8 py-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-bold text-white tracking-tight">RHK CADcam</h1>
+          <p className="text-xs text-gray-500">Cabinet Design & Manufacturing</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        <Link
+          href="/projects/new"
+          className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+        >
+          + New Project
+        </Link>
+      </div>
+
+      <div className="px-8 py-6 max-w-5xl">
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
+          Projects
+        </h2>
+
+        {projects.length === 0 ? (
+          <div className="bg-gray-900 border border-gray-800 rounded-lg p-12 text-center">
+            <p className="text-gray-500 text-sm mb-4">No projects yet</p>
+            <Link
+              href="/projects/new"
+              className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+            >
+              Create your first project →
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {projects.map((p) => (
+              <div
+                key={p.id}
+                className="bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-lg px-5 py-4 transition-all group flex items-center justify-between"
+              >
+                <div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-white">{p.name}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${STATUS_COLOURS[p.status] ?? STATUS_COLOURS.draft}`}>
+                      {p.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                  {p.client_name && (
+                    <p className="text-sm text-gray-400 mt-0.5">{p.client_name}</p>
+                  )}
+                  {p.client_address && (
+                    <p className="text-xs text-gray-600 mt-0.5">{p.client_address}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-4">
+                  <p className="text-xs text-gray-600">
+                    {new Date(p.created_at).toLocaleDateString('en-AU', {
+                      day: 'numeric', month: 'short', year: 'numeric',
+                    })}
+                  </p>
+                  {p.first_room_id ? (
+                    <Link
+                      href={`/canvas/${p.first_room_id}`}
+                      className="text-sm text-blue-400 hover:text-blue-300 px-3 py-1.5 border border-blue-800 hover:border-blue-600 rounded transition-colors"
+                    >
+                      Open Canvas →
+                    </Link>
+                  ) : (
+                    <span className="text-xs text-gray-600 italic">No rooms</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
-  );
+  )
 }

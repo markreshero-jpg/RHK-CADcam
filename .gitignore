@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# editor / AI tooling
+.claude/
+.cursor/
+.cursorignore
+.cursorrules
+
+# project-specific
+Error_Pics/
