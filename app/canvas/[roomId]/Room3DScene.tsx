@@ -417,27 +417,46 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
 
 type MenuState = { x: number; y: number; cabId: string }
 
-export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onEditCabinet, onDeleteCabinet, resolvedParts }: {
+export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, resolvedParts }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
   selectedId: string | null
   onSelectCabinet: (id: string) => void
+  onDeselect: () => void
   onEditCabinet: (id: string) => void
   onDeleteCabinet: (id: string) => void
   resolvedParts: Map<string, ResolvedCabinet>
 }) {
   const [menu, setMenu] = useState<MenuState | null>(null)
+  // Tracks whether the right-click landed on a cabinet so the div-level handler
+  // can distinguish "empty space" right-clicks (which should deselect).
+  const hitCabRef = useRef(false)
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { setMenu(null); onDeselect() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onDeselect])
 
   return (
-    <div className="flex-1 relative" onContextMenu={e => e.preventDefault()}>
+    <div
+      className="flex-1 relative"
+      onContextMenu={e => {
+        e.preventDefault()
+        if (!hitCabRef.current) { setMenu(null); onDeselect() }
+        hitCabRef.current = false
+      }}
+    >
       <Canvas gl={{ antialias: true }} dpr={[1, 2]} style={{ background: '#e8e4de' }}>
         <Suspense fallback={null}>
           {walls.length > 0 && (
             <RoomScene
               walls={walls} cabinets={cabinets} room={room}
               selectedId={selectedId} onSelectCabinet={onSelectCabinet}
-              onCabContextMenu={(cabId, x, y) => setMenu({ cabId, x, y })}
+              onCabContextMenu={(cabId, x, y) => { hitCabRef.current = true; setMenu({ cabId, x, y }) }}
               resolvedParts={resolvedParts}
             />
           )}

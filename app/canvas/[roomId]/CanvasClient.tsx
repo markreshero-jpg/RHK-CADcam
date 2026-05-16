@@ -1089,6 +1089,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             room={room}
             selectedId={selected?.type === 'cabinet' ? selected.id : null}
             onSelectCabinet={id => { setSelected({ type: 'cabinet', id }); setMultiSelect([]) }}
+            onDeselect={() => { setSelected(null); setMultiSelect([]) }}
             onEditCabinet={id => { setEditCabInitialView('3d'); setEditCabId(id) }}
             onDeleteCabinet={id => handleDeleteCabinet(id)}
             resolvedParts={resolvedParts}

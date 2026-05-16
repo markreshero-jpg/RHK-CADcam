@@ -14,7 +14,7 @@ import { layerSVGProps } from '@/src/lib/displayConfig'
 
 interface CanvasSVGProps {
   displayConfig: DisplayConfig
-  svgRef: React.RefObject<SVGSVGElement>
+  svgRef: React.RefObject<SVGSVGElement | null>
   walls: Wall[]
   cabinets: CabinetInstance[]
   view: ViewState
