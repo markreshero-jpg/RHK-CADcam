@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { Wall, WallType } from '@/src/lib/types'
 import { wallEnd } from '@/src/lib/geometry'
 
-export default function WallPanel({ wall, onUpdate, onDelete }: {
+export default function WallPanel({ wall, roomHeight, onUpdate, onDelete }: {
   wall: Wall
+  roomHeight?: number
   onUpdate: (id: string, u: Partial<Wall>) => Promise<void>
   onDelete: (id: string) => void
 }) {
@@ -70,10 +71,17 @@ export default function WallPanel({ wall, onUpdate, onDelete }: {
           <div>
             <label className={lbl}>Height (mm)</label>
             <input type="number" value={(f('height') ?? '') as number}
-              placeholder="Room default"
+              placeholder={roomHeight != null ? String(roomHeight) : 'Room default'}
               onChange={e => set('height', parseFloat(e.target.value) || null as unknown as number)}
               onFocus={e => e.target.select()} onBlur={save} className={inp + ' text-right'} />
           </div>
+        </div>
+        <div>
+          <label className={lbl}>Soffit Height (mm)</label>
+          <input type="number" value={(f('soffit_height') ?? '') as number}
+            placeholder="Room default"
+            onChange={e => set('soffit_height', parseFloat(e.target.value) || null as unknown as number)}
+            onFocus={e => e.target.select()} onBlur={save} className={inp + ' text-right'} />
         </div>
         <div>
           <label className={lbl}>Start position (mm)</label>

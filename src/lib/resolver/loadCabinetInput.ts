@@ -46,27 +46,36 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
 
   if (cabErr || !cab) throw new Error(`Cabinet not found: ${cabinetId}`)
 
-  // ── 2. Load room + shop default schedule IDs in parallel ────────────────────
-  const [roomRes, shopAsmRes, shopTkRes, shopFrontRes] = await Promise.all([
-    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id').eq('id', cab.room_id).single(),
+  // ── 2. Load room + shop defaults in parallel ─────────────────────────────────
+  const [roomRes, shopAsmRes, shopTkRes, shopFrontRes, shopSettingsRes] = await Promise.all([
+    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id').eq('id', cab.room_id).single(),
     supabase.from('assembly_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('toekick_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('front_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
+    supabase.from('shop_settings').select('construction_schedule_id').limit(1).maybeSingle(),
   ])
 
-  const room      = roomRes.data
-  const projectId = room?.project_id as string | undefined
+  const room       = roomRes.data
+  const projectId  = room?.project_id as string | undefined
+  const shopConStrSchedId = shopSettingsRes.data?.construction_schedule_id as string | undefined
 
   // ── 3. Load project schedule IDs (if we have a project) ─────────────────────
   let projRow: Record<string, string | null> | null = null
   if (projectId) {
     const { data } = await supabase
       .from('projects')
-      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id')
+      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id')
       .eq('id', projectId)
       .single()
     projRow = data as Record<string, string | null> | null
   }
+
+  // Resolve effective construction method schedule: room → project → shop
+  const conStrSchedId =
+    (room?.construction_schedule_id as string | null)
+    ?? projRow?.construction_schedule_id
+    ?? shopConStrSchedId
+    ?? null
 
   // ── 4. Resolve effective schedule IDs: room → project → shop default ─────────
   const asmSchedId   = room?.assembly_schedule_id   ?? projRow?.assembly_schedule_id   ?? shopAsmRes.data?.id   ?? null
@@ -84,6 +93,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     roomTkRes,
     slideRes,
     methodRes,
+    conStrSchedRowRes,
   ] = await Promise.all([
     asmSchedId
       ? supabase.from('assembly_schedule_rows').select('material_role, edgeband_id, materials(*)').eq('schedule_id', asmSchedId).eq('assembly_class', cab.assembly_class)
@@ -106,6 +116,10 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     cab.construction_method_id
       ? supabase.from('construction_methods').select('rules').eq('id', cab.construction_method_id).single()
       : supabase.from('construction_methods').select('rules').eq('is_default', true).limit(1).maybeSingle(),
+    // Construction method schedule row for this assembly class
+    conStrSchedId
+      ? supabase.from('construction_method_schedule_rows').select('rules').eq('schedule_id', conStrSchedId).eq('assembly_class', cab.assembly_class).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
 
   // ── 6. Build material maps through cascade ───────────────────────────────────
@@ -159,8 +173,10 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   }
 
   // ── 7. Build construction rules ──────────────────────────────────────────────
-  const methodRules = (methodRes.data?.rules ?? {}) as Partial<ConstructionRules>
-  const rules = mergeRules(DEFAULT_RULES, methodRules, (cab.rule_overrides ?? {}) as Partial<ConstructionRules>)
+  // Cascade: system defaults → schedule row → cabinet method → cabinet overrides
+  const scheduleRules = (conStrSchedRowRes.data?.rules ?? {}) as Partial<ConstructionRules>
+  const methodRules   = (methodRes.data?.rules ?? {}) as Partial<ConstructionRules>
+  const rules = mergeRules(DEFAULT_RULES, scheduleRules, methodRules, (cab.rule_overrides ?? {}) as Partial<ConstructionRules>)
 
   // ── 8. Resolve required materials ───────────────────────────────────────────
   const interior = matMap.get('interior')

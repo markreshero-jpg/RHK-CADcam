@@ -375,6 +375,8 @@ export default function Cabinet3DView({ cab, rp }: { cab: CabinetInstance; rp?: 
         gl={{ antialias: true, preserveDrawingBuffer: false }}
         dpr={[1, 2]}
         style={{ background: '#e8e4de' }}
+        onPointerMissed={() => setSelectedPart(null)}
+        onContextMenu={(e) => { e.preventDefault(); setSelectedPart(null) }}
       >
         <Suspense fallback={null}>
           {rp
@@ -389,7 +391,7 @@ export default function Cabinet3DView({ cab, rp }: { cab: CabinetInstance; rp?: 
       )}
 
       <div className="absolute bottom-2 left-3 text-[10px] text-gray-700 pointer-events-none select-none">
-        Left-drag rotate · scroll zoom · right-drag pan · click part to inspect
+        Left-drag rotate · scroll zoom · right-drag pan · click part to inspect · click empty to deselect
       </div>
     </div>
   )

@@ -5,17 +5,8 @@
 
 import {
   CabinetInput, ResolvedCasePart, ConstructionRules,
-  EdgeBanding, ResolverError
+  ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
-
-const NO_EDGE: EdgeBanding = { top: false, bottom: false, left: false, right: false }
-const FRONT_ONLY: EdgeBanding = { top: false, bottom: false, left: false, right: true }
-
-function caseEdge(all = false): EdgeBanding {
-  return all
-    ? { top: true, bottom: true, left: true, right: true }
-    : NO_EDGE
-}
 
 export function resolveCaseParts(
   cab: CabinetInput,
@@ -23,6 +14,9 @@ export function resolveCaseParts(
 ): { parts: ResolvedCasePart[], errors: ResolverError[] } {
   const parts: ResolvedCasePart[] = []
   const errors: ResolverError[] = []
+
+  const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }
+  const ebId = cab.interior_edgeband_id
 
   const T  = cab.material.DZ    // material thickness
   const DX = cab.DX             // cabinet width
@@ -51,7 +45,7 @@ export function resolveCaseParts(
     Z:  0,
     AX: 0, AY: 0, AZ: 0,
     material_id: mid,
-    edge_band: NO_EDGE,
+    edge_band: edgeSidesToBanding(edging.left_side, ebId),
   })
 
   // ── Right Side ───────────────────────────────────────────────
@@ -65,7 +59,7 @@ export function resolveCaseParts(
     Z:  0,
     AX: 0, AY: 0, AZ: 0,
     material_id: mid,
-    edge_band: NO_EDGE,
+    edge_band: edgeSidesToBanding(edging.right_side, ebId),
   })
 
   // ── Bottom Panel ─────────────────────────────────────────────
@@ -80,7 +74,7 @@ export function resolveCaseParts(
     Z:  0,
     AX: 0, AY: 0, AZ: 0,
     material_id: mid,
-    edge_band: NO_EDGE,
+    edge_band: edgeSidesToBanding(edging.bottom, ebId),
   })
 
   // ── Back Panel ───────────────────────────────────────────────
@@ -96,7 +90,7 @@ export function resolveCaseParts(
     Z:  r.SCRBK,
     AX: 0, AY: 0, AZ: 0,
     material_id: mid,
-    edge_band: NO_EDGE,
+    edge_band: edgeSidesToBanding(edging.back, ebId),
   })
 
   // ── Top Options ───────────────────────────────────────────────
@@ -114,7 +108,7 @@ export function resolveCaseParts(
       Z:  T + r.SCRBK,
       AX: 0, AY: 0, AZ: 0,
       material_id: mid,
-      edge_band: NO_EDGE,
+      edge_band: edgeSidesToBanding(edging.full_top, ebId),
     })
 
   } else if (topType === 'front_rail') {
@@ -132,7 +126,7 @@ export function resolveCaseParts(
         Z:  DZ - r.RD,
         AX: 0, AY: 0, AZ: 0,
         material_id: mid,
-        edge_band: NO_EDGE,
+        edge_band: edgeSidesToBanding(edging.front_rail, ebId),
       })
     }
 
@@ -148,7 +142,7 @@ export function resolveCaseParts(
       Z:  DZ - r.RD,
       AX: 0, AY: 0, AZ: 0,
       material_id: mid,
-      edge_band: NO_EDGE,
+      edge_band: edgeSidesToBanding(edging.front_rail, ebId),
     })
     // Back rail — aligns with back panel front face
     parts.push({
@@ -161,7 +155,7 @@ export function resolveCaseParts(
       Z:  T + r.SCRBK,
       AX: 0, AY: 0, AZ: 0,
       material_id: mid,
-      edge_band: NO_EDGE,
+      edge_band: edgeSidesToBanding(edging.back_rail, ebId),
     })
   }
   // TOP_TYPE 'none' → no top parts added

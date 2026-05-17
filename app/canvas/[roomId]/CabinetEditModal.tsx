@@ -291,11 +291,14 @@ function ResolvedSide({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabinet }
     .filter(p => p.part_key !== 'spreader_horizontal')
     .reduce((max, p) => Math.max(max, p.DX), 0)
 
+  const kickZmin = rp.toekick_parts.reduce((min, p) => Math.min(min, p.Z), Infinity)
+  const kickZmax = rp.toekick_parts.reduce((max, p) => Math.max(max, p.Z + p.DZ), -Infinity)
+
   const visibleZones = rp.face_zones
     .filter(z => z.face_type !== 'open')
     .sort((a, b) => a.Y - b.Y)
 
-  const pl = 80 + wallW, pt = 80, pr = visibleZones.length > 0 ? 185 : 110, pb = 40
+  const pl = 80 + wallW, pt = 80, pr = visibleZones.length > 0 ? 275 : 110, pb = 80
   const vw = dz + pl + pr
   const vh = dy + pt + pb
   const oz = pl, oy = pt  // SVG: Z goes left→right, Y goes bottom→top (flipped)
@@ -351,7 +354,8 @@ function ResolvedSide({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabinet }
       <line x1={oz-20} y1={oy+dy} x2={oz+dz+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" />
 
       {dimH(oz, oz + dz, oy - 50, `${dz}mm`, false)}
-      {dimV(oz + dz + 55, oy, oy + dy, `${dy}mm`, true)}
+      {kickZmin < Infinity && dimH(oz + kickZmin, oz + kickZmax, oy + dy + 30, `${Math.round(kickZmax - kickZmin)}mm`)}
+      {dimV(visibleZones.length > 0 ? oz + dz + 250 : oz + dz + 55, oy, oy + dy, `${dy}mm`, true)}
       {tkHeight > 0 && dimV(oz + dz + 90, oy + dy - tkHeight, oy + dy, `${Math.round(tkHeight)}mm`, true)}
       {visibleZones.map((z, i) => {
         const y1 = oy + dy - (z.Y + z.DX)
@@ -360,12 +364,11 @@ function ResolvedSide({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabinet }
         const gap = next ? next.Y - (z.Y + z.DX) : 0
         return (
           <g key={`fd${i}`}>
-            {dimV(oz + dz + 125, y1, y2, `${Math.round(z.DX)}mm`, true)}
-            {gap > 1 && dimV(oz + dz + 158, oy + dy - next.Y, y1, `${Math.round(gap)}mm`, true)}
+            {dimV(oz + dz + 90, y1, y2, `${Math.round(z.DX)}mm`, true)}
+            {gap > 1 && dimV(oz + dz + 125, oy + dy - next.Y, y1, `${Math.round(gap)}mm`, true)}
           </g>
         )
       })}
-      {viewLabel(oz + dz/2, vh - 14, 'SIDE — DEPTH × HEIGHT')}
     </svg>
   )
 }

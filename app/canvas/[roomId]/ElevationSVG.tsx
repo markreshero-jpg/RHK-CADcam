@@ -1,7 +1,7 @@
 'use client'
 import { useState, useReducer, useRef, useEffect } from 'react'
-import { Room, Wall, CabinetInstance, AssemblyClass, DEFAULT_DIMS } from '@/src/lib/types'
-import { cabT, wallDir, findFreeSlot, cabBlocks, nearestWall, CAB_FILL, CAB_FILL_SEL } from '@/src/lib/geometry'
+import { Room, Wall, CabinetInstance, DEFAULT_DIMS } from '@/src/lib/types'
+import { cabT, wallDir, wallEnd, dist, findFreeSlot, cabBlocks, CAB_FILL, CAB_FILL_SEL } from '@/src/lib/geometry'
 import { Selected, CabResize, viewReducer, DisplayConfig, Mode, modeAssemblyClass } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone, ResolvedInternalPart } from '@/src/lib/resolver/types'
@@ -18,8 +18,6 @@ const PART_COLORS: Record<string, string> = {
   door: '#60a5fa', drawer_face: '#f472b6', false_panel: '#60a5fa',
 }
 
-// Project case part onto elevation (X-Y) plane.
-// Returns coords relative to cabinet origin (0,0 = bottom-left of cabinet).
 function caseElevRect(p: ResolvedCasePart) {
   if (p.part_key === 'left_side' || p.part_key === 'right_side') {
     return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
@@ -29,34 +27,34 @@ function caseElevRect(p: ResolvedCasePart) {
 
 function tkElevRect(p: ResolvedToekickPart) {
   if (p.part_key === 'spreader_horizontal') {
-    // Lies flat at top of kick: DX = X extent (width), DY = Y extent (material thickness)
     return { ex: p.X, ey: p.Y + p.DY, ew: p.DX, eh: p.DY }
   }
-  // Vertical panels (kick faces, spreader_vertical): DX = Y height, DY = X width
   return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
 }
 
 function zoneElevRect(z: ResolvedFaceZone) {
-  // DX = zone height, DY = zone width
   return { ex: z.X, ey: z.Y + z.DX, ew: z.DY, eh: z.DX }
 }
 
 function shelfElevRect(p: ResolvedInternalPart) {
   if (p.part_type === 'inner_drawer_back') {
-    // Vertical panel: DX = Y height, DY = X width
     return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
   }
-  // Flat panels (shelves, drawer bottoms): DY = width, DZ = thickness
   return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
 }
 
-// Height above floor (mm) for the bottom of each assembly class
-function cabBottomZ(cab: CabinetInstance, room: Room): number {
+// Height above floor (mm) for the bottom of each assembly class.
+// wallCabTop falls back: wall.soffit_height → room.soffit_height → room.wall_cabinet_top → 2100
+function cabBottomZ(cab: CabinetInstance, room: Room, elevWall?: Wall | null): number {
   if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') {
-    const top = room.wall_cabinet_top ?? 2100
+    const top = elevWall?.soffit_height ?? room.soffit_height ?? room.wall_cabinet_top ?? 2100
     return top - cab.dy
   }
   return 0
+}
+
+function wallCabTopFor(w: Wall | null, room: Room): number {
+  return w?.soffit_height ?? room.soffit_height ?? room.wall_cabinet_top ?? 2100
 }
 
 interface ElevationSVGProps {
@@ -100,14 +98,13 @@ export default function ElevationSVG({
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
   const spaceRef = useRef(false)
   const shiftRef = useRef(false)
-  const [cabDrag, setCabDrag] = useState<{ id: string; t: number } | null>(null)
-  const cabDragRef = useRef<{ cabId: string; assemblyClass: AssemblyClass; cabDX: number; dragOffset: number } | null>(null)
-  const cabDragOriginRef = useRef<{ x: number; y: number } | null>(null)
-  const [cabMoveDrag, setCabMoveDrag] = useState<{ id: string; wall: Wall; t: number } | null>(null)
-  const cabMoveDragRef = useRef<{ cabId: string; assemblyClass: AssemblyClass; cabDX: number } | null>(null)
-  const [placeGhost, setPlaceGhost] = useState<{ t: number; cls: string; dx: number; dy: number } | null>(null)
 
-  useEffect(() => { setPlaceGhost(null) }, [mode])
+  // Click-to-grab following state
+  const [elevCabFollowing, setElevCabFollowing] = useState<{ id: string } | null>(null)
+  // Cursor position in wall coords: t = along wall (mm), ht = height above floor (mm)
+  const [elevCabFloat, setElevCabFloat] = useState<{ t: number; ht: number } | null>(null)
+
+  const [placeGhost, setPlaceGhost] = useState<{ t: number; cls: string; dx: number; dy: number } | null>(null)
   const cabResizeDragging = useRef(false)
   const cabResizeLiveRef = useRef<{ value: number; livePosX?: number; livePosY?: number } | null>(null)
 
@@ -115,9 +112,16 @@ export default function ElevationSVG({
   const wallCabs = wall ? cabinets.filter(c => c.wall_id === wall.id) : []
   const roomH = room.room_dy ?? 2400
 
-  // Fit to wall on wall change (skip during cross-wall drag to avoid coordinate jump)
   useEffect(() => {
-    if (cabMoveDragRef.current) return
+    setPlaceGhost(null)
+    setElevCabFollowing(null)
+    setElevCabFloat(null)
+  }, [mode])
+
+  // Fit to wall on wall change; also clears any in-progress following
+  useEffect(() => {
+    setElevCabFollowing(null)
+    setElevCabFloat(null)
     if (!svgRef.current || !wall) return
     const { width, height } = svgRef.current.getBoundingClientRect()
     const pad = 100
@@ -148,6 +152,7 @@ export default function ElevationSVG({
     const kd = (e: KeyboardEvent) => {
       if (e.key === ' ') { spaceRef.current = true; e.preventDefault() }
       if (e.key === 'Shift') shiftRef.current = true
+      if (e.key === 'Escape') { setElevCabFollowing(null); setElevCabFloat(null) }
     }
     const ku = (e: KeyboardEvent) => {
       if (e.key === ' ') spaceRef.current = false
@@ -164,6 +169,7 @@ export default function ElevationSVG({
       svgRef.current?.setPointerCapture(e.pointerId)
       return
     }
+    if (elevCabFollowing) return
     if (e.button === 0 && wall && (modeAssemblyClass(mode) || mode === 'paste')) {
       svgRef.current?.setPointerCapture(e.pointerId)
       return
@@ -185,8 +191,8 @@ export default function ElevationSVG({
 
     if (cabResizeDragging.current && cabResize && wall) {
       const svgR = svgRef.current!.getBoundingClientRect()
-      const z = view.zoom
-      const cursorT = (e.clientX - svgR.left - view.panX) / z
+      const vz = view.zoom
+      const cursorT = (e.clientX - svgR.left - view.panX) / vz
       const { side, wall: resWall, startCabT, startCabEndT, cabId } = cabResize
       const wd = wallDir(resWall)
       const resizingCls = cabinets.find(c => c.id === cabId)?.assembly_class ?? 'base'
@@ -208,10 +214,10 @@ export default function ElevationSVG({
         cabResizeLiveRef.current = { value: newDx, livePosX, livePosY }
         onCabResizeUpdate({ liveValue: newDx, livePosX, livePosY })
       } else if (side === 'top') {
-        const cursorY = (e.clientY - svgR.top - view.panY) / z
+        const cursorY = (e.clientY - svgR.top - view.panY) / vz
         const cab = cabinets.find(c => c.id === cabId)
         if (cab) {
-          const newDy = Math.round(Math.max(50, Math.min(5000, roomH - cabBottomZ(cab, room) - cursorY)))
+          const newDy = Math.round(Math.max(50, Math.min(5000, roomH - cabBottomZ(cab, room, wall) - cursorY)))
           cabResizeLiveRef.current = { value: newDy }
           onCabResizeUpdate({ liveValue: newDy })
         }
@@ -219,7 +225,16 @@ export default function ElevationSVG({
       return
     }
 
-    // Placement ghost — track cursor position when a cabinet/paste mode is active
+    // Following mode — float ghost at cursor
+    if (elevCabFollowing && wall && mode === 'select') {
+      const svgR = svgRef.current!.getBoundingClientRect()
+      const t  = (e.clientX - svgR.left - view.panX) / view.zoom
+      const sy = (e.clientY - svgR.top  - view.panY) / view.zoom
+      setElevCabFloat({ t, ht: roomH - sy })
+      return
+    }
+
+    // Placement ghost — track cursor when in a place mode
     const clsInfo = modeAssemblyClass(mode)
     if ((clsInfo || mode === 'paste') && wall) {
       const svgR = svgRef.current!.getBoundingClientRect()
@@ -238,55 +253,11 @@ export default function ElevationSVG({
       return
     }
     if (mode === 'select') setPlaceGhost(null)
-
-    if (cabMoveDragRef.current) {
-      const { cabId, assemblyClass, cabDX } = cabMoveDragRef.current
-      const svgR = svgRef.current!.getBoundingClientRect()
-      const displayedWall = walls.find(w => w.id === elevWallId) ?? wall
-      if (!displayedWall) return
-      const cursorT = (e.clientX - svgR.left - view.panX) / view.zoom
-      const d = wallDir(displayedWall)
-      // Convert elevation cursor X to a world XY point along the displayed wall's line
-      const worldPt = { x: displayedWall.pos_x + cursorT * d.x, y: displayedWall.pos_y + cursorT * d.y }
-
-      let targetWall = displayedWall
-      // If cursor goes past the wall edges, snap to the nearest other wall
-      if (cursorT < -80 || cursorT > displayedWall.length + 80) {
-        const snap = nearestWall(worldPt, walls.filter(w => w.id !== displayedWall.id), cabDX, 6000)
-        if (snap) {
-          targetWall = snap.wall
-          onSetElevWall(targetWall.id)
-        }
-      }
-
-      const wd = wallDir(targetWall)
-      const desiredT = (worldPt.x - targetWall.pos_x) * wd.x + (worldPt.y - targetWall.pos_y) * wd.y
-      const occ = cabinets
-        .filter(c => c.id !== cabId && c.wall_id === targetWall.id && cabBlocks(assemblyClass, c.assembly_class))
-        .map(c => ({ t: cabT(c, targetWall), dx: c.dx }))
-      const t = findFreeSlot(Math.max(0, Math.min(targetWall.length - cabDX, desiredT)), cabDX, targetWall.length, occ)
-      setCabMoveDrag({ id: cabId, wall: targetWall, t })
-      return
-    }
-
-    if (cabDragRef.current && wall) {
-      if (cabDragOriginRef.current) {
-        const dx = e.clientX - cabDragOriginRef.current.x
-        const dy = e.clientY - cabDragOriginRef.current.y
-        if (Math.sqrt(dx * dx + dy * dy) < 5) return
-      }
-      const { cabId, assemblyClass, cabDX, dragOffset } = cabDragRef.current
-      const svgR = svgRef.current!.getBoundingClientRect()
-      const cursorT = (e.clientX - svgR.left - view.panX) / view.zoom
-      const desired = Math.max(0, Math.min(wall.length - cabDX, cursorT - dragOffset))
-      const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && cabBlocks(assemblyClass, c.assembly_class)).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-      const t = findFreeSlot(desired, cabDX, wall.length, occupied)
-      setCabDrag({ id: cabId, t })
-    }
   }
 
   async function onPointerUp() {
     panRef.current = null
+    if (elevCabFollowing) return
 
     if ((modeAssemblyClass(mode) || mode === 'paste') && wall && placeGhost) {
       const wd = wallDir(wall)
@@ -313,61 +284,65 @@ export default function ElevationSVG({
       } else {
         cabResizeLiveRef.current = null
       }
-      return
-    }
-
-    if (cabMoveDragRef.current) {
-      const { cabId } = cabMoveDragRef.current
-      cabMoveDragRef.current = null
-      if (cabMoveDrag) {
-        const { wall: targetWall, t } = cabMoveDrag
-        const wd = wallDir(targetWall)
-        const pos_x = targetWall.pos_x + t * wd.x
-        const pos_y = targetWall.pos_y + t * wd.y
-        setCabMoveDrag(null)
-        await onUpdateCabinet(cabId, { wall_id: targetWall.id, pos_x, pos_y, rotation: targetWall.angle })
-        onSetElevWall(targetWall.id)
-      } else {
-        setCabMoveDrag(null)
-      }
-      return
-    }
-
-    if (cabDragRef.current && wall) {
-      const { cabId } = cabDragRef.current
-      cabDragRef.current = null
-      cabDragOriginRef.current = null
-      if (cabDrag) {
-        const wd = wallDir(wall)
-        const pos_x = wall.pos_x + cabDrag.t * wd.x
-        const pos_y = wall.pos_y + cabDrag.t * wd.y
-        setCabDrag(null)
-        await onUpdateCabinet(cabId, { pos_x, pos_y })
-      }
     }
   }
 
-  function onCabMovePointerDown(e: React.PointerEvent, cab: CabinetInstance) {
-    if (e.button !== 0 || !wall || spaceRef.current) return
+  // Click on blank SVG area → place the following cabinet at snap position
+  function onSVGClick() {
+    if (!elevCabFollowing || !elevCabFloat || !wall) return
+    const { id } = elevCabFollowing
+    const cab = cabinets.find(c => c.id === id)
+    if (!cab) { setElevCabFollowing(null); setElevCabFloat(null); return }
+
+    const isWallCab = cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner'
+    const wcTop = wallCabTopFor(wall, room)
+    const snapBottomZ = isWallCab ? Math.max(0, wcTop - cab.dy) : 0
+
+    const occupied = cabinets
+      .filter(c => c.id !== id && c.wall_id === wall.id && cabBlocks(cab.assembly_class, c.assembly_class))
+      .map(c => ({ t: cabT(c, wall), dx: c.dx }))
+    const snapT = findFreeSlot(
+      Math.max(0, Math.min(wall.length - cab.dx, elevCabFloat.t - cab.dx / 2)),
+      cab.dx, wall.length, occupied
+    )
+    const wd = wallDir(wall)
+    const pos_x = wall.pos_x + snapT * wd.x
+    const pos_y = wall.pos_y + snapT * wd.y
+
+    setElevCabFollowing(null)
+    setElevCabFloat(null)
+    onUpdateCabinet(id, { wall_id: wall.id, pos_x, pos_y, pos_z: snapBottomZ, rotation: wall.angle })
+  }
+
+  function onCabCrosshairClick(e: React.MouseEvent, cab: CabinetInstance) {
+    if (mode !== 'select' || !wall) return
     e.stopPropagation()
-    onSelectCabinet(cab.id)
-    cabMoveDragRef.current = { cabId: cab.id, assemblyClass: cab.assembly_class, cabDX: cab.dx }
-    svgRef.current?.setPointerCapture(e.pointerId)
+    if (elevCabFollowing?.id === cab.id) {
+      setElevCabFollowing(null)
+      setElevCabFloat(null)
+    } else {
+      // Seed ghost at cabinet's current centre
+      const t  = cabT(cab, wall) + cab.dx / 2
+      const ht = cabBottomZ(cab, room, wall) + cab.dy / 2
+      setElevCabFollowing({ id: cab.id })
+      setElevCabFloat({ t, ht })
+      onSelectCabinet(cab.id)
+    }
   }
 
   function onCabPointerDown(e: React.PointerEvent, cab: CabinetInstance) {
     if (e.button !== 0 || !wall || spaceRef.current) return
     e.stopPropagation()
+    if (elevCabFollowing) {
+      setElevCabFollowing(null)
+      setElevCabFloat(null)
+      return
+    }
     if (shiftRef.current) {
       onShiftSelectCabinet(cab.id)
       return
     }
     onSelectCabinet(cab.id)
-    const svgR = svgRef.current!.getBoundingClientRect()
-    const cursorT = (e.clientX - svgR.left - view.panX) / view.zoom
-    cabDragRef.current = { cabId: cab.id, assemblyClass: cab.assembly_class, cabDX: cab.dx, dragOffset: cursorT - cabT(cab, wall) }
-    cabDragOriginRef.current = { x: e.clientX, y: e.clientY }
-    svgRef.current?.setPointerCapture(e.pointerId)
   }
 
   function onMarkerPointerDown(e: React.PointerEvent, cab: CabinetInstance, side: 'left' | 'right' | 'top') {
@@ -432,10 +407,11 @@ export default function ElevationSVG({
       <svg
         ref={svgRef}
         className="flex-1 bg-gray-950 select-none"
-        style={{ cursor: cabMoveDrag || cabDrag ? 'grabbing' : spaceRef.current ? 'grab' : 'default' }}
+        style={{ cursor: elevCabFollowing ? 'crosshair' : spaceRef.current ? 'grab' : 'default' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onClick={onSVGClick}
       >
         {!wall ? (
           <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle"
@@ -480,31 +456,108 @@ export default function ElevationSVG({
               )
             })()}
 
-            {/* Floor line — shows island width even without a solid wall */}
+            {/* Floor line */}
             <line x1={0} y1={roomH} x2={wall.length} y2={roomH}
               stroke="#4b5563" strokeWidth={2 / z} />
 
             {/* Ceiling / soffit / wall-cabinet-top — not applicable to islands */}
-            {wall.wall_type !== 'island' && (<>
-              <line x1={0} y1={0} x2={wall.length} y2={0}
-                stroke="#374151" strokeWidth={1 / z}
-                strokeDasharray={`${8 / z} ${4 / z}`} />
-              {room.soffit_height != null && (
-                <line x1={0} y1={roomH - room.soffit_height} x2={wall.length} y2={roomH - room.soffit_height}
-                  stroke="#78350f" strokeWidth={0.5 / z} strokeDasharray={`${6 / z} ${3 / z}`} />
-              )}
-              {room.wall_cabinet_top != null && (
-                <line x1={0} y1={roomH - room.wall_cabinet_top} x2={wall.length} y2={roomH - room.wall_cabinet_top}
-                  stroke="#1e3a5f" strokeWidth={0.5 / z} strokeDasharray={`${4 / z} ${4 / z}`} />
-              )}
-            </>)}
+            {wall.wall_type !== 'island' && (() => {
+              const soffitH = wall.soffit_height ?? room.soffit_height ?? null
+              const wcTop   = room.wall_cabinet_top ?? null
+              return (<>
+                <line x1={0} y1={0} x2={wall.length} y2={0}
+                  stroke="#374151" strokeWidth={1 / z}
+                  strokeDasharray={`${8 / z} ${4 / z}`} />
+                {soffitH != null && (
+                  <line x1={0} y1={roomH - soffitH} x2={wall.length} y2={roomH - soffitH}
+                    stroke="#78350f" strokeWidth={0.5 / z} strokeDasharray={`${6 / z} ${3 / z}`} />
+                )}
+                {wcTop != null && (
+                  <line x1={0} y1={roomH - wcTop} x2={wall.length} y2={roomH - wcTop}
+                    stroke="#1e3a5f" strokeWidth={0.5 / z} strokeDasharray={`${4 / z} ${4 / z}`} />
+                )}
+              </>)
+            })()}
+
+            {/* Return walls */}
+            {(() => {
+              const TOL = 50
+              const wS = { x: wall.pos_x, y: wall.pos_y }
+              const wE = wallEnd(wall)
+              let leftReturn: Wall | null = null
+              let rightReturn: Wall | null = null
+              for (const w of walls) {
+                if (w.id === wall.id || w.wall_type === 'island') continue
+                const s = { x: w.pos_x, y: w.pos_y }
+                const e = wallEnd(w)
+                if (!leftReturn  && (dist(s, wS) < TOL || dist(e, wS) < TOL)) leftReturn  = w
+                if (!rightReturn && (dist(s, wE) < TOL || dist(e, wE) < TOL)) rightReturn = w
+              }
+
+              const dimFs2 = 10 / z
+              const renderReturn = (rw: Wall, isLeft: boolean) => {
+                const t    = rw.thickness
+                const rwH  = rw.height ?? room.room_dy ?? 2400
+                const x0   = isLeft ? -t : wall.length
+                const slabY = roomH - rwH
+                const midY  = slabY + rwH / 2
+                const midX  = x0 + t / 2
+                const clipId = `return-clip-${rw.id}`
+                return (
+                  <g key={rw.id} style={{ pointerEvents: 'none' }}>
+                    <defs>
+                      <clipPath id={clipId}>
+                        <rect x={x0} y={slabY} width={t} height={rwH} />
+                      </clipPath>
+                    </defs>
+                    <rect x={x0} y={slabY} width={t} height={rwH}
+                      fill="#111827" stroke="#4b5563" strokeWidth={1 / z} />
+                    <g clipPath={`url(#${clipId})`}>
+                      {Array.from({ length: Math.floor(rwH / (t * 1.5)) + 2 }, (_, i) => {
+                        const y1 = slabY + i * t * 1.5 - t
+                        return <line key={i} x1={x0} y1={y1} x2={x0 + t} y2={y1 + t}
+                          stroke="#1f2937" strokeWidth={1.5 / z} />
+                      })}
+                    </g>
+                    {slabY > 1 && (
+                      <line x1={x0} y1={slabY} x2={x0 + t} y2={slabY}
+                        stroke="#6b7280" strokeWidth={1.5 / z}
+                        strokeDasharray={`${4 / z} ${3 / z}`} />
+                    )}
+                    <text x={midX} y={midY}
+                      textAnchor="middle" dominantBaseline="middle"
+                      fontSize={dimFs2} fill="#6b7280"
+                      transform={`rotate(-90,${midX},${midY})`}
+                      style={{ userSelect: 'none' }}>
+                      {rw.name}
+                    </text>
+                    <line x1={x0} y1={slabY - tickH * 0.7} x2={x0 + t} y2={slabY - tickH * 0.7}
+                      stroke="#4b5563" strokeWidth={1 / z} />
+                    <line x1={x0}     y1={slabY - tickH * 0.3} x2={x0}     y2={slabY - tickH * 1.1} stroke="#4b5563" strokeWidth={1 / z} />
+                    <line x1={x0 + t} y1={slabY - tickH * 0.3} x2={x0 + t} y2={slabY - tickH * 1.1} stroke="#4b5563" strokeWidth={1 / z} />
+                    <text x={midX} y={slabY - tickH * 1.5}
+                      textAnchor="middle" dominantBaseline="middle"
+                      fontSize={dimFs2} fill="#4b5563"
+                      style={{ userSelect: 'none' }}>
+                      {t}
+                    </text>
+                  </g>
+                )
+              }
+
+              return (<>
+                {leftReturn  && renderReturn(leftReturn,  true)}
+                {rightReturn && renderReturn(rightReturn, false)}
+              </>)
+            })()}
 
             {/* Cabinets */}
             {wallCabs.map(cab => {
-              const baseT   = cabDrag?.id === cab.id ? cabDrag.t : cabT(cab, wall)
-              const bottomZ = cabBottomZ(cab, room)
+              const baseT   = cabT(cab, wall)
+              const bottomZ = cabBottomZ(cab, room, wall)
               const isSel   = selected?.type === 'cabinet' && selected.id === cab.id
               const isMultiSel = multiSelect.includes(cab.id)
+              const isFollowing = elevCabFollowing?.id === cab.id
 
               // Apply live resize values
               let displayDx = cab.dx
@@ -527,15 +580,12 @@ export default function ElevationSVG({
 
               const isBase = cab.assembly_class === 'base' || cab.assembly_class === 'base_corner'
               const isTall = cab.assembly_class === 'tall' || cab.assembly_class === 'tall_corner'
-
-              // Toekick height — 150mm default; only base and tall have toekicks
               const tkH = (isBase || isTall) && cab.has_toekick ? 150 : 0
 
               const baseColor = isSel ? CAB_FILL_SEL[cab.assembly_class] : CAB_FILL[cab.assembly_class]
               const cabStroke = isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : '#3b82f6'
               const cabStrokeW = isSel || isMultiSel ? 2 / z : 1 / z
 
-              // Layer configs
               const carcL = displayConfig.layers.carcass
               const faceL = displayConfig.layers.face
               const intL  = displayConfig.layers.internal
@@ -543,13 +593,11 @@ export default function ElevationSVG({
               const lblL  = displayConfig.layers.labels
               const dimL  = displayConfig.layers.dimensions
 
-              // SVG visual props per layer style
               const carcP = layerSVGProps(carcL.style, z)
               const faceP = layerSVGProps(faceL.style, z)
               const intP  = layerSVGProps(intL.style, z)
               const tkP   = layerSVGProps(tkL.style, z)
 
-              // Shelf Y positions for the internal layer
               const shelfYs: number[] = []
               if (intL.visible && cab.has_internal) {
                 const bottom = ry + displayDy - tkH
@@ -562,11 +610,10 @@ export default function ElevationSVG({
                 shelfYs.splice(0, shelfYs.length, ...shelfYs.filter(sy => sy > ry + 20 / z && sy < bottom - 20 / z))
               }
 
-              const isBeingMoved = cabMoveDrag?.id === cab.id
               return (
                 <g key={cab.id}
-                  style={{ cursor: 'grab' }}
-                  opacity={isBeingMoved ? 0.25 : 1}
+                  style={{ cursor: 'default' }}
+                  opacity={isFollowing ? 0.4 : 1}
                   onPointerDown={e => onCabPointerDown(e, cab)}
                   onClick={e => { e.stopPropagation(); if (!shiftRef.current) onSelectCabinet(cab.id) }}
                   onContextMenu={e => onCabinetContextMenu(e, cab.id)}
@@ -578,7 +625,6 @@ export default function ElevationSVG({
                   {(() => {
                     const rp = resolvedParts?.get(cab.id)
                     if (!rp) {
-                      // Fallback: approximate bounding box + toekick zone
                       return (<>
                         {carcL.visible && (
                           <rect x={rx} y={ry} width={displayDx} height={displayDy}
@@ -608,15 +654,11 @@ export default function ElevationSVG({
                       </>)
                     }
 
-                    // Resolved: render actual panels
-                    // Coordinate conversion: svgX = rx + ex, svgY = ry + displayDy - ey
                     const toSVG = (ex: number, ey: number, ew: number, eh: number) => ({
                       x: rx + ex, y: ry + displayDy - ey, w: ew, h: eh,
                     })
 
                     return (<>
-                      {/* Case parts — back panel is hidden in front elevation and its
-                          PartTransform doesn't encode full height, so we skip it */}
                       {carcL.visible && rp.case_parts.filter(p => p.part_key !== 'back').map((p, i) => {
                         const { ex, ey, ew, eh } = caseElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
@@ -628,8 +670,6 @@ export default function ElevationSVG({
                             opacity={carcP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
-
-                      {/* Toekick parts */}
                       {tkL.visible && rp.toekick_parts.map((p, i) => {
                         const { ex, ey, ew, eh } = tkElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
@@ -641,8 +681,6 @@ export default function ElevationSVG({
                             opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
-
-                      {/* Internal parts (shelves) */}
                       {intL.visible && rp.internal_parts.map((p, i) => {
                         const { ex, ey, ew, eh } = shelfElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
@@ -654,8 +692,6 @@ export default function ElevationSVG({
                             opacity={intP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
-
-                      {/* Face zones (doors, drawers) */}
                       {faceL.visible && rp.face_zones.map((fz, i) => {
                         const { ex, ey, ew, eh } = zoneElevRect(fz)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
@@ -723,23 +759,30 @@ export default function ElevationSVG({
                     </text>
                   )}
 
-                  {/* Centre move handle */}
-                  {(() => {
+                  {/* Centre crosshair — visible only when selected */}
+                  {isSel && (() => {
                     const cx = rx + displayDx / 2
                     const cy = ry + displayDy / 2
                     const arm = 10 / z
+                    const isF = isFollowing
                     return (
-                      <g style={{ cursor: 'move' }}>
+                      <g>
                         <line x1={cx - arm} y1={cy} x2={cx + arm} y2={cy}
-                          stroke="white" strokeWidth={1.5 / z} opacity={0.4} strokeLinecap="round"
+                          stroke={isF ? '#60a5fa' : 'white'} strokeWidth={1.5 / z}
+                          opacity={isF ? 1 : 0.4} strokeLinecap="round"
                           style={{ pointerEvents: 'none' }} />
                         <line x1={cx} y1={cy - arm} x2={cx} y2={cy + arm}
-                          stroke="white" strokeWidth={1.5 / z} opacity={0.4} strokeLinecap="round"
+                          stroke={isF ? '#60a5fa' : 'white'} strokeWidth={1.5 / z}
+                          opacity={isF ? 1 : 0.4} strokeLinecap="round"
                           style={{ pointerEvents: 'none' }} />
                         <circle cx={cx} cy={cy} r={3 / z}
-                          fill="white" opacity={0.4} style={{ pointerEvents: 'none' }} />
+                          fill={isF ? '#60a5fa' : 'white'} opacity={isF ? 1 : 0.4}
+                          style={{ pointerEvents: 'none' }} />
+                        {/* Transparent hit circle — blocks body pointerDown, handles click */}
                         <circle cx={cx} cy={cy} r={8 / z} fill="transparent"
-                          onPointerDown={e => { e.stopPropagation(); onCabMovePointerDown(e, cab) }} />
+                          style={{ cursor: isF ? 'crosshair' : 'move' }}
+                          onPointerDown={ev => ev.stopPropagation()}
+                          onClick={ev => onCabCrosshairClick(ev, cab)} />
                       </g>
                     )
                   })()}
@@ -771,7 +814,8 @@ export default function ElevationSVG({
             {/* Placement ghost */}
             {placeGhost && (() => {
               const isWallCls = placeGhost.cls === 'wall' || placeGhost.cls === 'wall_corner'
-              const ghostBZ = isWallCls ? Math.max(0, (room.wall_cabinet_top ?? 2100) - placeGhost.dy) : 0
+              const wcTop = wallCabTopFor(wall, room)
+              const ghostBZ = isWallCls ? Math.max(0, wcTop - placeGhost.dy) : 0
               const gx = placeGhost.t
               const gy = roomH - ghostBZ - placeGhost.dy
               const fill = CAB_FILL[placeGhost.cls] ?? CAB_FILL.base
@@ -784,28 +828,74 @@ export default function ElevationSVG({
               )
             })()}
 
-            {/* Cross-wall move ghost */}
-            {cabMoveDrag && cabMoveDrag.wall.id === wall.id && (() => {
-              const movingCab = cabinets.find(c => c.id === cabMoveDrag.id)
-              if (!movingCab) return null
-              const gx = cabMoveDrag.t
-              const gy = roomH - cabBottomZ(movingCab, room) - movingCab.dy
-              const baseColor = CAB_FILL[movingCab.assembly_class]
-              return (
-                <>
-                  <rect x={gx} y={gy} width={movingCab.dx} height={movingCab.dy}
-                    fill={baseColor + 'cc'}
-                    stroke={CAB_FILL_SEL[movingCab.assembly_class]}
-                    strokeWidth={2 / z} strokeDasharray={`${6 / z} ${3 / z}`}
-                    style={{ pointerEvents: 'none' }} />
-                  <text x={gx + movingCab.dx / 2} y={gy + movingCab.dy / 2}
-                    textAnchor="middle" dominantBaseline="middle"
-                    fontSize={labelFs} fill="#e2e8f0"
-                    style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                    {movingCab.label ?? movingCab.assembly_class}
-                  </text>
-                </>
+            {/* Following ghost — free-float at cursor, shows snap landing + arrow */}
+            {elevCabFollowing && elevCabFloat && (() => {
+              const followingCab = cabinets.find(c => c.id === elevCabFollowing.id)
+              if (!followingCab || !wall) return null
+
+              const isWallCab = followingCab.assembly_class === 'wall' || followingCab.assembly_class === 'wall_corner'
+              const wcTop = wallCabTopFor(wall, room)
+              const snapBottomZ = isWallCab ? Math.max(0, wcTop - followingCab.dy) : 0
+
+              // Ghost centred on cursor
+              const gx = elevCabFloat.t - followingCab.dx / 2
+              const gy = roomH - elevCabFloat.ht - followingCab.dy / 2
+
+              // Snap landing
+              const occupied = cabinets
+                .filter(c => c.id !== elevCabFollowing.id && c.wall_id === wall.id && cabBlocks(followingCab.assembly_class, c.assembly_class))
+                .map(c => ({ t: cabT(c, wall), dx: c.dx }))
+              const snapT = findFreeSlot(
+                Math.max(0, Math.min(wall.length - followingCab.dx, elevCabFloat.t - followingCab.dx / 2)),
+                followingCab.dx, wall.length, occupied
               )
+              const snapX = snapT
+              const snapY = roomH - snapBottomZ - followingCab.dy
+
+              // Arrow: from ghost face (bottom for base/tall, top for wall) toward snap surface
+              const arrowFromX = elevCabFloat.t
+              const arrowFromY = isWallCab ? gy : gy + followingCab.dy
+              const arrowToX   = snapT + followingCab.dx / 2
+              const arrowToY   = isWallCab ? (roomH - wcTop) : roomH
+
+              const arrowSize = 12 / z
+              const adx = arrowToX - arrowFromX
+              const ady = arrowToY - arrowFromY
+              const alen = Math.sqrt(adx * adx + ady * ady)
+              const showArrow = alen > arrowSize * 1.5
+
+              const baseColor = CAB_FILL[followingCab.assembly_class]
+              const selColor  = CAB_FILL_SEL[followingCab.assembly_class]
+
+              return (<>
+                {/* Snap landing outline */}
+                <rect x={snapX} y={snapY} width={followingCab.dx} height={followingCab.dy}
+                  fill="none" stroke="#60a5fa" strokeWidth={1 / z}
+                  strokeDasharray={`${4 / z} ${4 / z}`} opacity={0.5}
+                  style={{ pointerEvents: 'none' }} />
+
+                {/* Arrow + arrowhead from ghost face to snap surface */}
+                {showArrow && (<>
+                  <line x1={arrowFromX} y1={arrowFromY} x2={arrowToX} y2={arrowToY}
+                    stroke="#60a5fa" strokeWidth={1.5 / z}
+                    strokeDasharray={`${8 / z} ${4 / z}`}
+                    style={{ pointerEvents: 'none' }} />
+                  <polygon
+                    points={[
+                      `${arrowToX},${arrowToY}`,
+                      `${arrowToX - (adx / alen) * arrowSize - (ady / alen) * arrowSize * 0.4},${arrowToY - (ady / alen) * arrowSize + (adx / alen) * arrowSize * 0.4}`,
+                      `${arrowToX - (adx / alen) * arrowSize + (ady / alen) * arrowSize * 0.4},${arrowToY - (ady / alen) * arrowSize - (adx / alen) * arrowSize * 0.4}`,
+                    ].join(' ')}
+                    fill="#60a5fa"
+                    style={{ pointerEvents: 'none' }} />
+                </>)}
+
+                {/* Floating ghost */}
+                <rect x={gx} y={gy} width={followingCab.dx} height={followingCab.dy}
+                  fill={baseColor + 'cc'} stroke={selColor}
+                  strokeWidth={2 / z} strokeDasharray={`${6 / z} ${3 / z}`}
+                  style={{ pointerEvents: 'none' }} />
+              </>)
             })()}
 
             {/* Bottom dimension — wall length */}
@@ -837,11 +927,9 @@ export default function ElevationSVG({
               const overheadCabEl = wallCabs.find(c => c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') ?? null
               const kickH = baseCabEl?.has_toekick ? 150 : 0
               const baseDy = baseCabEl?.dy ?? 0
-              const wallCabTop = room.wall_cabinet_top ?? 2100
+              const wallCabTop = wallCabTopFor(wall, room)
               const overheadDy = overheadCabEl?.dy ?? 0
 
-              // Build segments in SVG Y coords (y=0 ceiling, y=roomH floor)
-              // cursorY tracks position as we move upward (decreasing y)
               const segs: { fromY: number; toY: number; label: string }[] = []
               let cursorY = roomH
 

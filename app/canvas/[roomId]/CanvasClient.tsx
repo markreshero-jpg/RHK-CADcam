@@ -87,7 +87,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
   const cabDragRef = useRef<{ cabId: string; assemblyClass: AssemblyClass; wall: Wall; cabDX: number; dragOffset: number } | null>(null)
   const cabDragOriginRef = useRef<Pt | null>(null)
-  const cabResizeDragging = useRef(false)
   const spaceRef = useRef(false)
   const shiftRef = useRef(false)
   const placingRef = useRef(false)
@@ -254,6 +253,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (resolved) setResolvedParts(m => new Map(m).set(id, resolved))
   }, [])
 
+  function commitResize() {
+    if (!cabResize) return
+    captureSnapshot()
+    const { cabId, dim, side, liveValue, livePosX, livePosY } = cabResize
+    const update: Partial<CabinetInstance> = { [dim]: liveValue }
+    if (side === 'left' && livePosX !== undefined) {
+      update.pos_x = livePosX
+      update.pos_y = livePosY
+    }
+    setCabResize(null)
+    void handleUpdateCabinet(cabId, update)
+  }
+
   async function placeCabinet(wall: Wall, pos_x: number, pos_y: number, cls: AssemblyClass, isEP = false, islandFlip = false) {
     captureSnapshot()
     const dims = DEFAULT_DIMS[cls] ?? DEFAULT_DIMS.base
@@ -313,6 +325,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       sort_order: walls.length, length, angle,
       pos_x: drawStart.x, pos_y: drawStart.y,
       thickness: drawThickness, height: drawHeight,
+      soffit_height: null,
       wall_type: 'standard',
     }
     const saved = await dbSaveWall(data)
@@ -346,8 +359,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return
     }
     if (modeAssemblyClass(mode) || mode === 'paste') { svgRef.current.setPointerCapture(e.pointerId); return }
+    commitResize()
     setSelected(null)
-    setCabResize(null)
     setMultiSelect([])
     marqueeStartRef.current = wp
     svgRef.current?.setPointerCapture(e.pointerId)
@@ -436,12 +449,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
           const occupied = cabinets.filter(c => c.id !== id && c.wall_id === raw.wall.id && cabBlocks(assemblyClass, c.assembly_class)).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
           const t = findFreeSlot(desired, cab.dx, raw.wall.length, occupied)
-          setCabMoveDrag({ id, wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: islandFlipFor(raw.wall) })
+          setCabMoveDrag({ id, wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: islandFlipFor(raw.wall), freePos: wp })
         }
       }
     }
 
-    if (cabResizeDragging.current && cabResize && mode === 'select') {
+    if (cabResize && mode === 'select') {
       const { side, wall, perp, startCabT, startCabEndT, cabId } = cabResize
       const wd = wallDir(wall)
       const resizingCls = cabinets.find(c => c.id === cabId)?.assembly_class ?? 'base'
@@ -513,6 +526,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             sort_order: walls.length, length: len, angle,
             pos_x: adjStart.x, pos_y: adjStart.y,
             thickness: isIsland ? 0 : drawThickness, height: drawHeight,
+            soffit_height: null,
             wall_type: isIsland ? 'island' : 'standard',
           }
           const saved = await dbSaveWall(data)
@@ -550,22 +564,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         await placeCabinet(placeGhost.wall, placeGhost.pos_x, placeGhost.pos_y, clsInfo.cls, clsInfo.ep, placeGhost.islandFlip)
         setPlaceGhost(null); setMode('select')
         placingRef.current = false
-      }
-      return
-    }
-
-    if (cabResizeDragging.current) {
-      cabResizeDragging.current = false
-      if (cabResize) {
-        captureSnapshot()
-        const { cabId, dim, side, liveValue, livePosX, livePosY } = cabResize
-        const update: Partial<CabinetInstance> = { [dim]: liveValue }
-        if (side === 'left' && livePosX !== undefined) {
-          update.pos_x = livePosX
-          update.pos_y = livePosY
-        }
-        setCabResize(null)
-        await handleUpdateCabinet(cabId, update)
       }
       return
     }
@@ -615,6 +613,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }
 
+  function onWallPointerDown(e: React.PointerEvent, wallId: string) {
+    const clickable = mode !== 'draw_wall' && mode !== 'draw_island' && mode !== 'paste' && !modeAssemblyClass(mode)
+    if (!clickable || e.button !== 0 || spaceRef.current) return
+    e.stopPropagation()
+    svgPointerDownRef.current = true
+    setContextMenu(null); setOpenMenu(null); setWallMenuOpen(false); setCabMenuOpen(false)
+    setSelected({ type: 'wall', id: wallId })
+    setCabResize(null)
+    setMultiSelect([])
+  }
+
   function onCabinetPointerDown(e: React.PointerEvent, cab: CabinetInstance) {
     if (mode !== 'select' || e.button !== 0) return
     e.stopPropagation()
@@ -622,7 +631,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     // otherwise onPointerUp's phantom-event guard exits early and the drag save never fires.
     svgPointerDownRef.current = true
     setContextMenu(null); setOpenMenu(null); setCabMenuOpen(false)
-    setCabResize(null)
+    commitResize()
     if (cabFollowing) { setCabFollowing(null); setCabMoveDrag(null) }
     setSelected({ type: 'cabinet', id: cab.id })
 
@@ -658,6 +667,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }
 
   async function onSVGClick(e: React.MouseEvent) {
+    if (cabResize) { commitResize(); return }
     if (!cabFollowing) return
     if (!cabMoveDrag) { setCabFollowing(null); return }
     const { id } = cabFollowing
@@ -739,12 +749,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setEditCabId(cabId)
   }
 
-  function onCabMarkerPointerDown(e: React.PointerEvent, cab: CabinetInstance, side: 'left' | 'right' | 'front', wall: Wall, perp: { x: number; y: number }) {
-    if (mode !== 'select' || e.button !== 0) return
+  function onCabMarkerClick(e: React.MouseEvent, cab: CabinetInstance, side: 'left' | 'right' | 'front', wall: Wall, perp: { x: number; y: number }) {
+    if (mode !== 'select') return
     e.stopPropagation()
-    svgPointerDownRef.current = true
     setContextMenu(null); setOpenMenu(null); setCabMenuOpen(false)
     setSelected({ type: 'cabinet', id: cab.id })
+    // Commit any existing resize before starting a new one
+    commitResize()
     const t = cabT(cab, wall)
     const dim: 'dx' | 'dz' = side === 'front' ? 'dz' : 'dx'
     setCabResize({
@@ -752,8 +763,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       startCabT: t, startCabEndT: t + cab.dx,
       liveValue: dim === 'dx' ? cab.dx : cab.dz,
     })
-    cabResizeDragging.current = true
-    svgRef.current?.setPointerCapture(e.pointerId)
   }
 
   function onResizePointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -813,6 +822,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const cursor = spaceRef.current ? 'grab'
     : (mode === 'draw_wall' || mode === 'draw_island') ? 'crosshair'
     : (modeAssemblyClass(mode) || mode === 'paste') ? 'cell'
+    : cabResize ? 'crosshair'
     : 'default'
 
   function fitToWalls() {
@@ -1016,11 +1026,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               onCancelDraw={() => { setDrawStart(null); setDrawCursor(null); setMode('select') }}
               setSelected={setSelected}
               setContextMenu={setContextMenu}
+              onWallPointerDown={onWallPointerDown}
               onCabinetPointerDown={onCabinetPointerDown}
               onCabinetCrosshairClick={onCabinetCrosshairClick}
               onCabinetContextMenu={onCabinetContextMenu}
               onCabinetDoubleClick={onCabinetDoubleClick}
-              onCabMarkerPointerDown={onCabMarkerPointerDown}
+              onCabMarkerClick={onCabMarkerClick}
               cabMoveDrag={cabMoveDrag}
               cabFollowing={cabFollowing}
               onSVGClick={onSVGClick}
@@ -1108,7 +1119,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         )}
 
         {mode !== 'draw_wall' && mode !== 'draw_island' && selectedWall && (canvasView === 'plan' || canvasView === 'elevation') && (
-          <WallPanel wall={selectedWall} onUpdate={handleUpdateWall} onDelete={handleDeleteWall} />
+          <WallPanel wall={selectedWall} roomHeight={room.room_dy ?? undefined} onUpdate={handleUpdateWall} onDelete={handleDeleteWall} />
         )}
         {selectedCab && cabResize?.cabId === selectedCab.id && (
           <CabinetResizePanel

@@ -32,6 +32,7 @@ export interface ShopSettings {
   slide_schedule_id: string | null
   handle_schedule_id: string | null
   benchtop_schedule_id: string | null
+  construction_schedule_id: string | null
 }
 
 export type SchedKey =
@@ -250,6 +251,7 @@ const EMPTY_SETTINGS: ShopSettings = {
   drawerbox_schedule_id: null, inner_drawerbox_schedule_id: null,
   hinge_schedule_id: null, slide_schedule_id: null,
   handle_schedule_id: null, benchtop_schedule_id: null,
+  construction_schedule_id: null,
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -336,7 +338,7 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
     }
   }
 
-  const hasSaveFooter = ['company', 'dimensions', 'construction'].includes(tab)
+  const hasSaveFooter = ['company', 'dimensions', 'construction', 'cabinet_builder'].includes(tab)
 
   const activeTabDef = TABS.find(t => t.id === tab)!
 
@@ -530,8 +532,59 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
               </div>
             )}
 
+            {/* ── Cabinet Builder ── */}
+            {tab === 'cabinet_builder' && (
+              <div className="space-y-5">
+                <p className="text-xs text-gray-500">
+                  Construction method schedules define how cabinets are built — toe kick, top rail, reveals, edging defaults —
+                  per assembly class (base, wall, tall). Assign a schedule to the shop, a job, or a room.
+                </p>
+                <div className="border border-gray-700 rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-800/50 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-300">Shop Default Construction Schedule</span>
+                    <Link href="/library/construction-methods"
+                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                      Manage schedules →
+                    </Link>
+                  </div>
+                  <div className="px-4 py-4 space-y-2">
+                    <p className="text-xs text-gray-500">
+                      Create and edit named construction method schedules in the library, then assign the shop
+                      default there. The active default applies to all new jobs unless overridden at job or room level.
+                    </p>
+                    <Link href="/library/construction-methods"
+                      className="inline-block mt-2 px-4 py-2 text-xs rounded-lg bg-blue-600/20 border border-blue-700/50 text-blue-300 hover:bg-blue-600/30 transition-colors">
+                      Open Construction Method Library →
+                    </Link>
+                  </div>
+                </div>
+                <div className="border border-gray-700 rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-800/50">
+                    <span className="text-xs font-medium text-gray-300">Legacy Shop Rule Overrides</span>
+                  </div>
+                  <div className="px-4 py-3">
+                    <p className="text-xs text-gray-500 mb-3">
+                      Class-agnostic rule overrides applied to all cabinets (below the schedule cascade).
+                      Prefer construction method schedules for new work.
+                    </p>
+                    {RULE_GROUPS.map(group => (
+                      <div key={group.label} className="mb-4">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{group.label}</p>
+                        <div className="space-y-px">
+                          {group.keys.map(k => (
+                            <RuleRow key={k} ruleKey={k} value={rules[k]} baseline={SYS[k]}
+                              onChange={v => setRule(k, v as Rules[typeof k])} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── Placeholder tabs ── */}
-            {['cabinet_builder', 'drawer_builder', 'benchtop_builder', 'cnc_tool', 'cnc_machine'].includes(tab) && (
+            {['drawer_builder', 'benchtop_builder', 'cnc_tool', 'cnc_machine'].includes(tab) && (
               <ComingSoon label={activeTabDef.label} />
             )}
 

@@ -32,6 +32,7 @@ export interface Project {
   slide_schedule_id:           string | null
   handle_schedule_id:          string | null
   benchtop_schedule_id:        string | null
+  construction_schedule_id:    string | null
   created_at: string
   updated_at: string
 }
@@ -60,8 +61,27 @@ export interface Room {
   slide_schedule_id:           string | null
   handle_schedule_id:          string | null
   benchtop_schedule_id:        string | null
+  construction_schedule_id:    string | null
   created_at: string
   updated_at: string
+}
+
+// ── Construction method schedules ─────────────────────────────────────────────
+
+export interface ConstructionMethodSchedule {
+  id:          string
+  name:        string
+  description: string | null
+  is_default:  boolean
+  created_at:  string
+  updated_at:  string
+}
+
+export interface ConstructionMethodScheduleRow {
+  id:             string
+  schedule_id:    string
+  assembly_class: 'base' | 'wall' | 'tall'
+  rules:          Record<string, unknown>
 }
 
 export type WallType = 'standard' | 'island'
@@ -72,7 +92,8 @@ export interface Wall {
   name: string
   sort_order: number
   length: number            // mm
-  height: number | null     // mm (inherits from room if null)
+  height: number | null       // mm (inherits from room if null)
+  soffit_height: number | null  // mm; overrides room.soffit_height for wall cabinet top on this wall
   angle: number             // degrees from east (0=right, 90=down in screen/SVG coords)
   pos_x: number             // room X of wall start mm
   pos_y: number             // room Y of wall start mm

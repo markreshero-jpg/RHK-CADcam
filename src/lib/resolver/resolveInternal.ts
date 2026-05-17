@@ -5,12 +5,10 @@
 
 import {
   CabinetInput, ResolvedInternalPart, ConstructionRules,
-  EdgeBanding, ResolverError, AdjShelfInput, FixedShelfInput,
-  InnerDrawerInput, ResolvedFaceZone
+  ResolverError, AdjShelfInput, FixedShelfInput,
+  InnerDrawerInput, ResolvedFaceZone,
+  edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
-
-const NO_EDGE:    EdgeBanding = { top: false, bottom: false, left: false, right: false }
-const FRONT_EDGE: EdgeBanding = { top: false, bottom: false, left: false, right: true }
 
 export function resolveInternalParts(
   cab: CabinetInput,
@@ -19,6 +17,8 @@ export function resolveInternalParts(
 ): { parts: ResolvedInternalPart[], errors: ResolverError[] } {
   const parts:  ResolvedInternalPart[] = []
   const errors: ResolverError[]        = []
+
+  const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }
 
   const T   = cab.material.DZ
   const TS  = cab.shelf_material.DZ
@@ -82,7 +82,7 @@ export function resolveInternalParts(
           Z:  shZ,
           AX: 0, AY: 0, AZ: 0,
           material_id: sid,
-          edge_band:   FRONT_EDGE,
+          edge_band:   edgeSidesToBanding(edging.adj_shelf, cab.shelf_edgeband_id),
           y_locked:    shelf.y_locked,
         })
       }
@@ -117,7 +117,7 @@ export function resolveInternalParts(
       Z:  fsZ,
       AX: 0, AY: 0, AZ: 0,
       material_id: sid,
-      edge_band:   FRONT_EDGE,
+      edge_band:   edgeSidesToBanding(edging.fixed_shelf, cab.shelf_edgeband_id),
       y_locked:    shelf.y_locked,
     })
   }
@@ -173,7 +173,7 @@ export function resolveInternalParts(
       Z:  r.SCRBK + T,    // flush with back panel inner face
       AX: 0, AY: 0, AZ: 0,
       material_id: mid,   // drawer box material (will be from drawerbox schedule)
-      edge_band:   { top: false, bottom: false, left: false, right: false },
+      edge_band:   edgeSidesToBanding(edging.inner_drawer_bottom, cab.interior_edgeband_id),
       y_locked:    false,
     })
 
@@ -191,7 +191,7 @@ export function resolveInternalParts(
       Z:  r.SCRBK + T + runnerDepth - T,
       AX: 0, AY: 0, AZ: 0,
       material_id: mid,
-      edge_band:   { top: false, bottom: false, left: false, right: false },
+      edge_band:   edgeSidesToBanding(edging.inner_drawer_back, cab.interior_edgeband_id),
       y_locked:    false,
     })
   }

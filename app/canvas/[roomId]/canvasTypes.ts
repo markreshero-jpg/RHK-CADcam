@@ -24,8 +24,9 @@ export type PlaceGhost = { wall: Wall; pos_x: number; pos_y: number; islandFlip?
 
 export type CabDrag = { id: string; pos_x: number; pos_y: number }
 
-// Cross-wall move drag: cabinet being picked up from one wall and dropped onto another
-export type CabMoveDrag = { id: string; wall: Wall; pos_x: number; pos_y: number; islandFlip: boolean }
+// Cross-wall move drag / free-float: cabinet picked up and following cursor.
+// freePos = raw cursor world position when floating freely; absent = snapped to wall.
+export type CabMoveDrag = { id: string; wall: Wall; pos_x: number; pos_y: number; islandFlip: boolean; freePos?: { x: number; y: number } }
 
 export type CabResize = {
   cabId: string

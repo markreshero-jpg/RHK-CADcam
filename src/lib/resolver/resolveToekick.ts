@@ -4,10 +4,8 @@
 
 import {
   CabinetInput, ResolvedToekickPart, ConstructionRules,
-  EdgeBanding, ResolverError
+  ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
-
-const NO_EDGE: EdgeBanding = { top: false, bottom: false, left: false, right: false }
 
 export function resolveToekickParts(
   cab: CabinetInput,
@@ -22,6 +20,8 @@ export function resolveToekickParts(
   if (toeType === 'none' || cab.assembly_class === 'wall') {
     return { parts, errors }
   }
+
+  const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }
 
   const DX  = cab.DX
   const DZ  = cab.DZ
@@ -50,7 +50,7 @@ export function resolveToekickParts(
       X: 0, Y: 0, Z: kickFrontZ,
       AX: 0, AY: 0, AZ: 0,
       material_id: fid,
-      edge_band: NO_EDGE,
+      edge_band: edgeSidesToBanding(edging.kick_front_face, cab.toekick_face_edgeband_id),
       is_detached: false,
     })
     return { parts, errors }
@@ -68,7 +68,7 @@ export function resolveToekickParts(
     X: 0, Y: 0, Z: kickFrontZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: fid,
-    edge_band: NO_EDGE,
+    edge_band: edgeSidesToBanding(edging.kick_front_face, cab.toekick_face_edgeband_id),
     is_detached: false,
   })
 
@@ -83,7 +83,7 @@ export function resolveToekickParts(
     X: 0, Y: TI, Z: kickSubZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: iid,
-    edge_band: NO_EDGE,
+    edge_band: edgeSidesToBanding(edging.kick_sub_front, cab.toekick_interior_edgeband_id),
     is_detached: false,
   })
 
@@ -97,7 +97,7 @@ export function resolveToekickParts(
     X: 0, Y: TI, Z: kickBackZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: iid,
-    edge_band: NO_EDGE,
+    edge_band: edgeSidesToBanding(edging.kick_back, cab.toekick_interior_edgeband_id),
     is_detached: false,
   })
 
@@ -137,7 +137,7 @@ export function resolveToekickParts(
       X: x, Y: TI, Z: sprZ0,
       AX: 0, AY: 0, AZ: 0,
       material_id: iid,
-      edge_band: NO_EDGE,
+      edge_band: edgeSidesToBanding(edging.spreader_vertical, cab.toekick_interior_edgeband_id),
       is_detached: false,
     })
     // Horizontal brace — 100mm wide, lays flat on top of spreader
@@ -151,7 +151,7 @@ export function resolveToekickParts(
       X: braceX, Y: TK - TI, Z: sprZ0,
       AX: 0, AY: 0, AZ: 0,
       material_id: iid,
-      edge_band: NO_EDGE,
+      edge_band: edgeSidesToBanding(edging.spreader_horizontal, cab.toekick_interior_edgeband_id),
       is_detached: false,
     })
   }
@@ -173,7 +173,7 @@ export function resolveToekickParts(
       X: sx, Y: TI, Z: sprZ0,
       AX: 0, AY: 0, AZ: 0,
       material_id: iid,
-      edge_band: NO_EDGE,
+      edge_band: edgeSidesToBanding(edging.spreader_vertical, cab.toekick_interior_edgeband_id),
       is_detached: false,
     })
     // Horizontal brace — offset inward by TI to clear spreader
@@ -186,7 +186,7 @@ export function resolveToekickParts(
       X: sx + TI, Y: TK - TI, Z: sprZ0,
       AX: 0, AY: 0, AZ: 0,
       material_id: iid,
-      edge_band: NO_EDGE,
+      edge_band: edgeSidesToBanding(edging.spreader_horizontal, cab.toekick_interior_edgeband_id),
       is_detached: false,
     })
   }

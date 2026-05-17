@@ -38,11 +38,12 @@ interface CanvasSVGProps {
   onCancelDraw: () => void
   setSelected: (s: Selected) => void
   setContextMenu: (m: ContextMenuState | null) => void
+  onWallPointerDown: (e: React.PointerEvent, wallId: string) => void
   onCabinetPointerDown: (e: React.PointerEvent, cab: CabinetInstance) => void
   onCabinetCrosshairClick: (e: React.MouseEvent, cab: CabinetInstance) => void
   onCabinetContextMenu: (e: React.MouseEvent, cabId: string) => void
   onCabinetDoubleClick: (e: React.MouseEvent, cabId: string) => void
-  onCabMarkerPointerDown: (e: React.PointerEvent, cab: CabinetInstance, side: 'left' | 'right' | 'front', wall: Wall, perp: Pt) => void
+  onCabMarkerClick: (e: React.MouseEvent, cab: CabinetInstance, side: 'left' | 'right' | 'front', wall: Wall, perp: Pt) => void
   cabFollowing: { id: string } | null
   onSVGClick: (e: React.MouseEvent) => void
 }
@@ -51,8 +52,8 @@ export default function CanvasSVG({
   svgRef, walls, cabinets, view, svgSize, selected, mode, displayConfig,
   drawStart, drawCursor, drawThickness, placeGhost, clipboard, cabDrag, cabMoveDrag, cabResize, multiSelect, marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
-  setSelected, setContextMenu, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
-  onCabMarkerPointerDown, cabFollowing, onSVGClick,
+  setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
+  onCabMarkerClick, cabFollowing, onSVGClick,
 }: CanvasSVGProps) {
   const cx = centroid(walls)
   const dots = gridDots(view.panX, view.panY, view.zoom, svgSize.w, svgSize.h)
@@ -103,6 +104,7 @@ export default function CanvasSVG({
                 <line x1={w.pos_x} y1={w.pos_y} x2={e.x} y2={e.y}
                   stroke="transparent" strokeWidth={12 / view.zoom}
                   style={{ cursor: mode === 'select' ? 'pointer' : undefined }}
+                  onPointerDown={ev => onWallPointerDown(ev, w.id)}
                   onClick={onClick} onContextMenu={onCtx} />
                 <line x1={w.pos_x} y1={w.pos_y} x2={e.x} y2={e.y}
                   stroke={isSel ? '#f59e0b' : '#78350f'}
@@ -134,6 +136,7 @@ export default function CanvasSVG({
                 stroke={isSel ? '#3b82f6' : '#374151'}
                 strokeWidth={isSel ? 2 / view.zoom : 1 / view.zoom}
                 style={{ cursor: mode === 'select' ? 'pointer' : undefined }}
+                onPointerDown={ev => onWallPointerDown(ev, w.id)}
                 onClick={onClick} onContextMenu={onCtx}
               />
               {(() => {
@@ -331,19 +334,25 @@ export default function CanvasSVG({
                 return (
                   <>
                     <circle cx={leftPt.x} cy={leftPt.y} r={mr}
-                      fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.5 / view.zoom}
+                      fill={cabResize?.cabId === cab.id && cabResize.side === 'left' ? '#3b82f6' : '#1d4ed8'}
+                      stroke="#93c5fd" strokeWidth={1.5 / view.zoom}
                       style={{ cursor: 'ew-resize' }}
-                      onPointerDown={e => { e.stopPropagation(); onCabMarkerPointerDown(e, displayCab, 'left', wall, perp) }}
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={e => onCabMarkerClick(e, displayCab, 'left', wall, perp)}
                     />
                     <circle cx={rightPt.x} cy={rightPt.y} r={mr}
-                      fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.5 / view.zoom}
+                      fill={cabResize?.cabId === cab.id && cabResize.side === 'right' ? '#3b82f6' : '#1d4ed8'}
+                      stroke="#93c5fd" strokeWidth={1.5 / view.zoom}
                       style={{ cursor: 'ew-resize' }}
-                      onPointerDown={e => { e.stopPropagation(); onCabMarkerPointerDown(e, displayCab, 'right', wall, perp) }}
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={e => onCabMarkerClick(e, displayCab, 'right', wall, perp)}
                     />
                     <circle cx={frontPt.x} cy={frontPt.y} r={mr}
-                      fill="#7c3aed" stroke="#c4b5fd" strokeWidth={1.5 / view.zoom}
+                      fill={cabResize?.cabId === cab.id && cabResize.side === 'front' ? '#a855f7' : '#7c3aed'}
+                      stroke="#c4b5fd" strokeWidth={1.5 / view.zoom}
                       style={{ cursor: 'crosshair' }}
-                      onPointerDown={e => { e.stopPropagation(); onCabMarkerPointerDown(e, displayCab, 'front', wall, perp) }}
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={e => onCabMarkerClick(e, displayCab, 'front', wall, perp)}
                     />
                   </>
                 )
@@ -448,7 +457,7 @@ export default function CanvasSVG({
           return nodes
         })}
 
-        {/* ── Cabinet move ghost (cross-wall drag via centre handle) ── */}
+        {/* ── Cabinet move ghost ── */}
         {cabMoveDrag && (() => {
           const movingCab = cabinets.find(c => c.id === cabMoveDrag.id)
           if (!movingCab) return null
@@ -456,6 +465,66 @@ export default function CanvasSVG({
           const basePerp = wallInwardNormal(moveWall, cx.x, cx.y)
           const perp = moveWall.wall_type === 'island' && cabMoveDrag.islandFlip
             ? { x: -basePerp.x, y: -basePerp.y } : basePerp
+          const wd = wallDir(moveWall)
+
+          if (cabMoveDrag.freePos) {
+            // Free-floating ghost: cabinet centered on cursor, oriented by nearest wall
+            const fp = cabMoveDrag.freePos
+            const freeBackLeft = {
+              x: fp.x - (movingCab.dx / 2) * wd.x - (movingCab.dz / 2) * perp.x,
+              y: fp.y - (movingCab.dx / 2) * wd.y - (movingCab.dz / 2) * perp.y,
+            }
+            const floatCab = { ...movingCab, pos_x: freeBackLeft.x, pos_y: freeBackLeft.y }
+            const floatPts = cabinetPolygon(floatCab, moveWall, perp)
+
+            // Back-centre of floating ghost (on the wall-touching edge)
+            const ghostBackCx = freeBackLeft.x + (movingCab.dx / 2) * wd.x
+            const ghostBackCy = freeBackLeft.y + (movingCab.dx / 2) * wd.y
+            // Back-centre of snap landing spot
+            const snapBackCx = cabMoveDrag.pos_x + (movingCab.dx / 2) * wd.x
+            const snapBackCy = cabMoveDrag.pos_y + (movingCab.dx / 2) * wd.y
+
+            const adx = snapBackCx - ghostBackCx
+            const ady = snapBackCy - ghostBackCy
+            const alen = Math.sqrt(adx * adx + ady * ady)
+            const arrowSize = 10 / view.zoom
+
+            return (
+              <>
+                {/* Floating ghost outline */}
+                <polygon points={floatPts}
+                  fill="none"
+                  stroke={CAB_FILL_SEL[movingCab.assembly_class]}
+                  strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+                  style={{ pointerEvents: 'none' }} />
+
+                {/* Snap arrow: dashed line + arrowhead from ghost back → snap landing */}
+                {alen > arrowSize * 1.5 && (() => {
+                  const ux = adx / alen, uy = ady / alen
+                  const px = -uy, py = ux  // perpendicular
+                  const tipX = snapBackCx, tipY = snapBackCy
+                  const baseX = tipX - ux * arrowSize, baseY = tipY - uy * arrowSize
+                  return (
+                    <>
+                      <line
+                        x1={ghostBackCx} y1={ghostBackCy}
+                        x2={baseX} y2={baseY}
+                        stroke="#60a5fa" strokeWidth={1.5 / view.zoom}
+                        strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`}
+                        strokeLinecap="round"
+                        style={{ pointerEvents: 'none' }} />
+                      <polygon
+                        points={`${tipX},${tipY} ${baseX + px * arrowSize * 0.45},${baseY + py * arrowSize * 0.45} ${baseX - px * arrowSize * 0.45},${baseY - py * arrowSize * 0.45}`}
+                        fill="#60a5fa"
+                        style={{ pointerEvents: 'none' }} />
+                    </>
+                  )
+                })()}
+              </>
+            )
+          }
+
+          // Seeded ghost at current cabinet position (before cursor moves)
           const ghostCab = { ...movingCab, pos_x: cabMoveDrag.pos_x, pos_y: cabMoveDrag.pos_y }
           const pts = cabinetPolygon(ghostCab, moveWall, perp)
           return (

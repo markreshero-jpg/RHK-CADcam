@@ -1,4 +1,5 @@
 'use client'
+import { useEffect, useRef } from 'react'
 import { MenuGroup } from './canvasTypes'
 
 export default function CanvasMenubar({ projectName, roomName, openMenu, setOpenMenu, menus }: {
@@ -8,8 +9,20 @@ export default function CanvasMenubar({ projectName, roomName, openMenu, setOpen
   setOpenMenu: (v: string | null) => void
   menus: MenuGroup[]
 }) {
+  const navRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!openMenu) return
+    const handler = (e: PointerEvent) => {
+      if (!navRef.current?.contains(e.target as Node)) setOpenMenu(null)
+    }
+    document.addEventListener('pointerdown', handler, { capture: true })
+    return () => document.removeEventListener('pointerdown', handler, { capture: true })
+  }, [openMenu, setOpenMenu])
+
   return (
     <nav
+      ref={navRef}
       className="flex-none h-8 bg-gray-900 border-b border-gray-800 flex items-stretch text-xs select-none"
       onPointerDown={e => e.stopPropagation()}
     >

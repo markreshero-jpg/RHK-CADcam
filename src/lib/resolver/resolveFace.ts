@@ -4,14 +4,12 @@
 // ============================================================
 
 import {
-  CabinetInput, ConstructionRules, EdgeBanding, ResolverError,
+  CabinetInput, ConstructionRules, ResolverError,
   ResolvedFaceRow, ResolvedFaceCol, ResolvedFaceZone,
-  FaceRowInput, FaceColInput, FaceZoneInput
+  FaceRowInput, FaceColInput, FaceZoneInput,
+  edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
 import { resolveReveal, resolveFaceZ } from './mergeRules'
-
-const ALL_EDGES: EdgeBanding = { top: true, bottom: true, left: true, right: true }
-const NO_EDGE:   EdgeBanding = { top: false, bottom: false, left: false, right: false }
 
 export interface FaceResolution {
   rows:   ResolvedFaceRow[]
@@ -24,6 +22,9 @@ export function resolveFace(
   cab: CabinetInput,
   r: ConstructionRules
 ): FaceResolution {
+  const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }
+  const ebId = cab.door_edgeband_id
+
   const errors: ResolverError[] = []
   const TK  = r.TOEH
   const DX  = cab.DX
@@ -175,7 +176,7 @@ export function resolveFace(
       AX: 0, AY: 0, AZ: 0,
 
       material_id: fid,
-      edge_band:   ALL_EDGES,   // face panels — all four edges banded by default
+      edge_band:   edgeSidesToBanding(edging[zone.face_type], ebId),
     })
   }
 
