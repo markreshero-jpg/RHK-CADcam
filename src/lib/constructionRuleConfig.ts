@@ -41,6 +41,11 @@ export const RULE_LABELS: Record<RuleKey, string> = {
   GAPR:    'Row Gap (mm)',
   FACBUF:  'Face Buffer (mm)',
   FACINS:  'Face Inset (mm)',
+  BOTTOM_JOIN:      'Bottom Join',
+  BOTTOM_BACK_JOIN: 'Bottom / Back Join',
+  BACK_JOIN:        'Back Join',
+  TOP_BACK_JOIN:    'Top / Back Join',
+  RAIL_JOIN:        'Rail / Top Join',
 }
 
 export const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
@@ -52,6 +57,7 @@ export const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'IDRUN'] },
   { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR'] },
   { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
+  { label: 'Joinery',            keys: ['BOTTOM_JOIN', 'BOTTOM_BACK_JOIN', 'BACK_JOIN', 'TOP_BACK_JOIN', 'RAIL_JOIN'] },
 ]
 
 export const EDGING_LABELS: Record<EdgingKey, string> = {

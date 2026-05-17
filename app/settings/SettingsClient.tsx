@@ -3,6 +3,11 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
+import MaterialsClient from '@/app/library/materials/MaterialsClient'
+import SchedulesClient from '@/app/library/schedules/SchedulesClient'
+import ConstructionMethodsClient from '@/app/library/construction-methods/ConstructionMethodsClient'
+import DrawerBoxesClient from '@/app/library/drawer-boxes/DrawerBoxesClient'
+import JointsClient from '@/app/library/joints/JointsClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
 import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
@@ -117,6 +122,7 @@ type SettingsTab =
   | 'company' | 'dimensions' | 'construction' | 'materials'
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'cnc_tool' | 'cnc_machine'
+  | 'materials_library' | 'materials_schedule' | 'joints_library'
 
 interface TabDef {
   id: SettingsTab
@@ -244,9 +250,44 @@ const TABS: TabDef[] = [
       </svg>
     ),
   },
+  {
+    id: 'materials_library', label: 'Materials Library', group: 'Library',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1.5" y="2" width="12" height="2.5" rx="0.5" fill="currentColor" fillOpacity="0.15"/>
+        <rect x="1.5" y="6" width="12" height="2.5" rx="0.5" fill="currentColor" fillOpacity="0.15"/>
+        <rect x="1.5" y="10" width="12" height="2.5" rx="0.5" fill="currentColor" fillOpacity="0.15"/>
+        <rect x="1.5" y="2" width="12" height="2.5" rx="0.5"/>
+        <rect x="1.5" y="6" width="12" height="2.5" rx="0.5"/>
+        <rect x="1.5" y="10" width="12" height="2.5" rx="0.5"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'materials_schedule', label: 'Materials Schedule', group: 'Library',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1.5" y="1.5" width="12" height="12" rx="1"/>
+        <line x1="1.5" y1="5.5" x2="13.5" y2="5.5"/>
+        <line x1="6" y1="5.5" x2="6" y2="13.5"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'joints_library', label: 'Joints Library', group: 'Library',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="6" width="5" height="3" rx="0.5"/>
+        <rect x="9" y="6" width="5" height="3" rx="0.5"/>
+        <line x1="6" y1="7.5" x2="9" y2="7.5"/>
+        <circle cx="7.5" cy="7.5" r="1.2" fill="currentColor" fillOpacity="0.3"/>
+        <circle cx="7.5" cy="7.5" r="1.2"/>
+      </svg>
+    ),
+  },
 ]
 
-const GROUPS = ['User', 'Shop', 'Builders', 'CNC'] as const
+const GROUPS = ['User', 'Shop', 'Builders', 'CNC', 'Library'] as const
 
 // ── Empty defaults ────────────────────────────────────────────────────────────
 
@@ -358,7 +399,7 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
     }
   }
 
-  const hasSaveFooter = ['company', 'dimensions', 'construction', 'cabinet_builder'].includes(tab)
+  const hasSaveFooter = ['company', 'dimensions', 'construction'].includes(tab)
 
   const activeTabDef = TABS.find(t => t.id === tab)!
 
@@ -407,10 +448,22 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
               })}
             </div>
           ))}
+
         </aside>
 
         {/* Content area */}
         <div className="flex-1 flex flex-col overflow-hidden">
+          {tab === 'materials_library' ? (
+            <MaterialsClient embedded />
+          ) : tab === 'materials_schedule' ? (
+            <SchedulesClient embedded />
+          ) : tab === 'joints_library' ? (
+            <JointsClient embedded />
+          ) : tab === 'cabinet_builder' ? (
+            <ConstructionMethodsClient embedded />
+          ) : tab === 'drawer_builder' ? (
+            <DrawerBoxesClient embedded />
+          ) : (<>
           <div className="flex-1 overflow-y-auto px-8 py-6 max-w-3xl">
 
             {/* Section heading */}
@@ -585,59 +638,8 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
               </div>
             )}
 
-            {/* ── Cabinet Builder ── */}
-            {tab === 'cabinet_builder' && (
-              <div className="space-y-5">
-                <p className="text-xs text-gray-500">
-                  Construction method schedules define how cabinets are built — toe kick, top rail, reveals, edging defaults —
-                  per assembly class (base, wall, tall). Assign a schedule to the shop, a job, or a room.
-                </p>
-                <div className="border border-gray-700 rounded-lg overflow-hidden">
-                  <div className="px-4 py-3 bg-gray-800/50 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-300">Shop Default Construction Schedule</span>
-                    <Link href="/library/construction-methods"
-                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                      Manage schedules →
-                    </Link>
-                  </div>
-                  <div className="px-4 py-4 space-y-2">
-                    <p className="text-xs text-gray-500">
-                      Create and edit named construction method schedules in the library, then assign the shop
-                      default there. The active default applies to all new jobs unless overridden at job or room level.
-                    </p>
-                    <Link href="/library/construction-methods"
-                      className="inline-block mt-2 px-4 py-2 text-xs rounded-lg bg-blue-600/20 border border-blue-700/50 text-blue-300 hover:bg-blue-600/30 transition-colors">
-                      Open Construction Method Library →
-                    </Link>
-                  </div>
-                </div>
-                <div className="border border-gray-700 rounded-lg overflow-hidden">
-                  <div className="px-4 py-3 bg-gray-800/50">
-                    <span className="text-xs font-medium text-gray-300">Legacy Shop Rule Overrides</span>
-                  </div>
-                  <div className="px-4 py-3">
-                    <p className="text-xs text-gray-500 mb-3">
-                      Class-agnostic rule overrides applied to all cabinets (below the schedule cascade).
-                      Prefer construction method schedules for new work.
-                    </p>
-                    {RULE_GROUPS.map(group => (
-                      <div key={group.label} className="mb-4">
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{group.label}</p>
-                        <div className="space-y-px">
-                          {group.keys.map(k => (
-                            <RuleRow key={k} ruleKey={k} value={rules[k]} baseline={SYS[k]}
-                              onChange={v => setRule(k, v as Rules[typeof k])} />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* ── Placeholder tabs ── */}
-            {['drawer_builder', 'benchtop_builder', 'cnc_tool', 'cnc_machine'].includes(tab) && (
+            {['benchtop_builder', 'cnc_tool', 'cnc_machine'].includes(tab) && (
               <ComingSoon label={activeTabDef.label} />
             )}
 
@@ -653,6 +655,7 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
               </button>
             </div>
           )}
+        </>)}
         </div>
       </div>
     </div>

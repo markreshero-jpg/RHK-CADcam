@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 
@@ -11,7 +11,7 @@ type FVal = string | boolean
 interface FieldConfig {
   key: string
   label: string
-  type: 'text' | 'number' | 'boolean' | 'select'
+  type: 'text' | 'number' | 'boolean' | 'select' | 'colour'
   w: number
   placeholder?: string
   step?: string
@@ -41,7 +41,7 @@ interface InitialData {
 const TABS: TabConfig[] = [
   {
     id: 'board', label: 'Board Stock', table: 'materials', initKey: 'board',
-    defaults: { name: '', brand: null, finish: null, dz: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, cost_per_sheet: null, active: true },
+    defaults: { name: '', brand: null, finish: null, dz: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, face_colour: null, back_colour: null, edge_colour: null, cost_per_sheet: null, active: true },
     fields: [
       { key: 'name',           label: 'Name',     type: 'text',    w: 180 },
       { key: 'brand',          label: 'Brand',    type: 'text',    w: 110, placeholder: 'Laminex' },
@@ -50,6 +50,9 @@ const TABS: TabConfig[] = [
       { key: 'sheet_dx',       label: 'L mm',     type: 'number',  w: 65 },
       { key: 'sheet_dy',       label: 'W mm',     type: 'number',  w: 65 },
       { key: 'has_grain',      label: 'Grain',    type: 'boolean', w: 48 },
+      { key: 'face_colour',    label: 'Face',     type: 'colour',  w: 90 },
+      { key: 'back_colour',    label: 'Back',     type: 'colour',  w: 90 },
+      { key: 'edge_colour',    label: 'Edge',     type: 'colour',  w: 90 },
       { key: 'cost_per_sheet', label: '$/sht',    type: 'number',  w: 72,  step: '0.01' },
       { key: 'active',         label: 'Active',   type: 'boolean', w: 48 },
     ],
@@ -60,7 +63,7 @@ const TABS: TabConfig[] = [
     fields: [
       { key: 'name',           label: 'Name',     type: 'text',    w: 180 },
       { key: 'brand',          label: 'Brand',    type: 'text',    w: 110 },
-      { key: 'color',          label: 'Colour',   type: 'text',    w: 120 },
+      { key: 'color',          label: 'Colour',   type: 'colour',  w: 90  },
       { key: 'finish',         label: 'Finish',   type: 'text',    w: 110 },
       { key: 'thickness',      label: 'Thk mm',   type: 'number',  w: 65,  step: '0.1' },
       { key: 'width',          label: 'W mm',     type: 'number',  w: 60 },
@@ -200,12 +203,38 @@ function fmtCell(val: unknown, f: FieldConfig): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function MaterialsClient({ initialData }: { initialData: InitialData }) {
+export default function MaterialsClient({ initialData, embedded }: { initialData?: InitialData; embedded?: boolean }) {
   const [activeTab, setActiveTab] = useState(TABS[0].id)
 
   const [allRows, setAllRows] = useState<Record<string, Record<string, unknown>[]>>(() =>
-    Object.fromEntries(TABS.map(t => [t.id, initialData[t.initKey]]))
+    Object.fromEntries(TABS.map(t => [t.id, initialData ? initialData[t.initKey] : []]))
   )
+
+  useEffect(() => {
+    if (initialData) return
+    let cancelled = false
+    async function load() {
+      const [boards, bands, benchtops, hinges, handles, slides] = await Promise.all([
+        supabase.from('materials').select('*').order('name'),
+        supabase.from('edge_banding').select('*').order('name'),
+        supabase.from('benchtop_materials').select('*').order('name'),
+        supabase.from('hardware_hinges').select('*').order('name'),
+        supabase.from('hardware_handles').select('*').order('name'),
+        supabase.from('hardware_slides').select('*').order('name'),
+      ])
+      if (cancelled) return
+      setAllRows({
+        board:    (boards.data    ?? []) as Record<string, unknown>[],
+        edgeband: (bands.data     ?? []) as Record<string, unknown>[],
+        benchtop: (benchtops.data ?? []) as Record<string, unknown>[],
+        hinges:   (hinges.data    ?? []) as Record<string, unknown>[],
+        handles:  (handles.data   ?? []) as Record<string, unknown>[],
+        slides:   (slides.data    ?? []) as Record<string, unknown>[],
+      })
+    }
+    load()
+    return () => { cancelled = true }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [forms, setForms] = useState<Record<string, Record<string, FVal>>>(() =>
     Object.fromEntries(TABS.map(t => [t.id, mkForm(t.defaults)]))
@@ -271,16 +300,18 @@ export default function MaterialsClient({ initialData }: { initialData: InitialD
     `flex-none px-2 ${i < last ? 'border-r' : ''}`
 
   return (
-    <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
+    <div className={embedded ? "flex-1 flex flex-col overflow-hidden" : "h-screen bg-gray-950 text-white flex flex-col overflow-hidden"}>
 
       {/* Header */}
-      <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
-        <Link href="/" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">
-          ← Projects
-        </Link>
-        <span className="text-gray-700">|</span>
-        <span className="text-sm font-semibold text-white">Materials Library</span>
-      </div>
+      {!embedded && (
+        <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
+          <Link href="/" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">
+            ← Projects
+          </Link>
+          <span className="text-gray-700">|</span>
+          <span className="text-sm font-semibold text-white">Materials Library</span>
+        </div>
+      )}
 
       {/* Tabs + inactive toggle */}
       <div className="flex-none border-b border-gray-800 flex items-end gap-0.5 px-4">
@@ -335,6 +366,29 @@ export default function MaterialsClient({ initialData }: { initialData: InitialD
                       onChange={e => patchForm({ [f.key]: e.target.checked })}
                       className="accent-blue-500 w-3.5 h-3.5"
                     />
+                  </div>
+                ) : f.type === 'colour' ? (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <input
+                      type="color"
+                      value={String(form[f.key] || '#ffffff')}
+                      onChange={e => patchForm({ [f.key]: e.target.value })}
+                      className="w-6 h-5 rounded cursor-pointer border border-gray-600 bg-transparent p-0 flex-none"
+                    />
+                    <input
+                      type="text"
+                      value={String(form[f.key] ?? '')}
+                      placeholder="#——"
+                      maxLength={7}
+                      onChange={e => patchForm({ [f.key]: e.target.value })}
+                      className="min-w-0 flex-1 bg-transparent border-b border-gray-700 px-0.5 py-0.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
+                    />
+                    {form[f.key] && (
+                      <button
+                        onClick={() => patchForm({ [f.key]: '' })}
+                        className="text-gray-600 hover:text-gray-400 text-[10px] flex-none"
+                      >✕</button>
+                    )}
                   </div>
                 ) : f.type === 'select' ? (
                   <select
@@ -426,10 +480,21 @@ export default function MaterialsClient({ initialData }: { initialData: InitialD
                       className={`${cellCls(f, i, tab.fields.length - 1)} border-gray-800/50 py-1.5 text-xs truncate ${
                         f.type === 'number'  ? 'text-right  text-gray-300 tabular-nums' :
                         f.type === 'boolean' ? 'text-center text-blue-400' :
+                        f.type === 'colour'  ? 'flex items-center gap-1.5' :
                         'text-gray-300'
                       }`}
                     >
-                      {fmtCell(row[f.key], f)}
+                      {f.type === 'colour' ? (
+                        <>
+                          {row[f.key]
+                            ? <span className="w-3.5 h-3.5 rounded-sm flex-none border border-gray-600" style={{ background: String(row[f.key]) }} />
+                            : <span className="w-3.5 h-3.5 rounded-sm flex-none border border-dashed border-gray-700" />
+                          }
+                          <span className={`font-mono text-[10px] ${row[f.key] ? 'text-gray-300' : 'text-gray-700'}`}>
+                            {row[f.key] ? String(row[f.key]) : '—'}
+                          </span>
+                        </>
+                      ) : fmtCell(row[f.key], f)}
                     </div>
                   ))}
                 </div>

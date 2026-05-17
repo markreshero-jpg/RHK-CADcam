@@ -18,114 +18,164 @@ export function resolveCaseParts(
   const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }
   const ebId = cab.interior_edgeband_id
 
-  const T  = cab.material.DZ    // material thickness
-  const DX = cab.DX             // cabinet width
-  const DY = cab.DY             // cabinet height
-  const DZ = cab.DZ             // cabinet depth
-  const TK = r.TOEH             // toe kick height
-  const mid = cab.material.id
+  // ── Per-part material references ─────────────────────────────
+  // All case parts currently use the primary carcass material.
+  // Individual part-level overrides wire in here when supported.
+  const sideMat   = cab.material
+  const bottomMat = cab.material
+  const backMat   = cab.material
+  const topMat    = cab.material
 
-  // Validate minimum sizes
-  if (DX <= 2 * T) {
-    errors.push({ code: 'CASE_TOO_NARROW', message: `Cabinet DX (${DX}mm) is too narrow for material thickness (${T}mm)`, part: 'case' })
+  const sideT   = sideMat.DZ
+  const bottomT = bottomMat.DZ
+  const backT   = backMat.DZ
+  const topT    = topMat.DZ
+
+  const DX = cab.DX   // cabinet width
+  const DY = cab.DY   // cabinet height
+  const DZ = cab.DZ   // cabinet depth
+  const TK = r.TOEH   // toe kick height
+
+  if (DX <= 2 * sideT) {
+    errors.push({ code: 'CASE_TOO_NARROW', message: `Cabinet DX (${DX}mm) is too narrow for side material thickness (${sideT}mm)`, part: 'case' })
     return { parts, errors }
   }
 
+  // ── Joinery ──────────────────────────────────────────────────
+  const bottomJoin     = r.BOTTOM_JOIN
+  const bottomBackJoin = r.BOTTOM_BACK_JOIN
+  const backJoin       = r.BACK_JOIN
+  const topBackJoin    = r.TOP_BACK_JOIN
+  const railJoin       = r.RAIL_JOIN
+
+  // Side depth/position: when back wraps behind the sides, sides must be shallower
+  // by exactly the back material thickness and offset forward so they sit in
+  // front of the back panel (not overlapping it).
+  const sideDepth  = backJoin === 'behind_sides' ? DZ - backT : DZ
+  const sideZstart = backJoin === 'behind_sides' ? backT      : 0
+
+  // Side vertical extent: shifts up if bottom is outside; shrinks if rail is on top
+  const sideYstart = TK + (bottomJoin === 'bottom_outside' ? bottomT : 0)
+  const sideHeight = DY - sideYstart - (railJoin === 'on_top_of_sides' ? topT : 0)
+
+  // Bottom: full-width or between sides (X/width)
+  const botX = bottomJoin === 'bottom_outside' ? 0  : sideT
+  const botW  = bottomJoin === 'bottom_outside' ? DX : DX - 2 * sideT
+
+  // Bottom: depth relationship with back panel (Z/depth)
+  const botZstart = bottomBackJoin === 'butts_into_back' ? r.SCRBK + backT : 0
+  const botDepth  = DZ - botZstart
+
+  // Back: between sides or wrapping full-width behind them
+  const backX = backJoin === 'behind_sides' ? 0      : sideT
+  const backW  = backJoin === 'behind_sides' ? DX     : DX - 2 * sideT
+
+  // Rail / top: between sides or spanning full width on top of them
+  const railX = railJoin === 'on_top_of_sides' ? 0  : sideT
+  const railW  = railJoin === 'on_top_of_sides' ? DX : DX - 2 * sideT
+
+  // Top / back relationship: where full_top and back_rail start in Z
+  const topZstart = topBackJoin === 'sits_over_back' ? r.SCRBK : backT + r.SCRBK
+  const topDepth  = DZ - topZstart
+
   // ── Left Side ────────────────────────────────────────────────
-  // DX = Cabinet.DZ (cabinet depth becomes panel width on sheet)
-  // DY = Cabinet.DY - TOEH (height less toe kick)
-  // DZ = @material.DZ
   parts.push({
     part_key: 'left_side',
-    DX: DZ,
-    DY: DY - TK,
-    DZ: T,
+    DX: sideDepth,
+    DY: sideHeight,
+    DZ: sideT,
     X:  0,
-    Y:  TK,
-    Z:  0,
+    Y:  sideYstart,
+    Z:  sideZstart,
     AX: 0, AY: 0, AZ: 0,
-    material_id: mid,
+    material_id: sideMat.id,
     edge_band: edgeSidesToBanding(edging.left_side, ebId),
   })
 
   // ── Right Side ───────────────────────────────────────────────
   parts.push({
     part_key: 'right_side',
-    DX: DZ,
-    DY: DY - TK,
-    DZ: T,
-    X:  DX - T,
-    Y:  TK,
-    Z:  0,
+    DX: sideDepth,
+    DY: sideHeight,
+    DZ: sideT,
+    X:  DX - sideT,
+    Y:  sideYstart,
+    Z:  sideZstart,
     AX: 0, AY: 0, AZ: 0,
-    material_id: mid,
+    material_id: sideMat.id,
     edge_band: edgeSidesToBanding(edging.right_side, ebId),
   })
 
-  // ── Bottom Panel ─────────────────────────────────────────────
-  // Sits between the two sides
+  // ── Bottom ───────────────────────────────────────────────────
   parts.push({
     part_key: 'bottom',
-    DX: DZ,
-    DY: DX - 2 * T,
-    DZ: T,
-    X:  T,
+    DX: botDepth,
+    DY: botW,
+    DZ: bottomT,
+    X:  botX,
     Y:  TK,
-    Z:  0,
+    Z:  botZstart,
     AX: 0, AY: 0, AZ: 0,
-    material_id: mid,
+    material_id: bottomMat.id,
     edge_band: edgeSidesToBanding(edging.bottom, ebId),
   })
 
-  // ── Back Panel ───────────────────────────────────────────────
-  // Butt jointed, full height, sits between sides
-  // Z = SCRBK (offset from back by scribe)
+  // ── Back ─────────────────────────────────────────────────────
+  // Bottom joinery shifts the back's stored Y so its 3D bottom face (p.Y + p.DZ)
+  // lands at TK (butts_into_back) or TK + backT (back_on_bottom).
+  const backY = bottomBackJoin === 'butts_into_back' ? TK - backT : TK
+
+  // Top joinery trims the back's top face by topT when the top sits over it.
+  // Cabinet3DView now uses p.DX directly as the rendered height of the back panel,
+  // so compute it as (top face) − (bottom face in 3D).
+  const backBottom3D = backY + backT  // = TK (butts_into_back) or TK + backT
+  const backTop3D    = DY - (topBackJoin === 'sits_over_back' ? topT : 0)
+  const backDX       = backTop3D - backBottom3D
+
   parts.push({
     part_key: 'back',
-    DX: DZ - r.SCRBK,
-    DY: DX - 2 * T,
-    DZ: T,
-    X:  T,
-    Y:  TK,
+    DX: backDX,
+    DY: backW,
+    DZ: backT,
+    X:  backX,
+    Y:  backY,
     Z:  r.SCRBK,
     AX: 0, AY: 0, AZ: 0,
-    material_id: mid,
+    material_id: backMat.id,
     edge_band: edgeSidesToBanding(edging.back, ebId),
   })
 
-  // ── Top Options ───────────────────────────────────────────────
+  // ── Top options ───────────────────────────────────────────────
   const topType = cab.top_type ?? r.TOP_TYPE
 
   if (topType === 'full_top') {
-    // Full top: between sides, inset from back
     parts.push({
       part_key: 'full_top',
-      DX: DZ - T - r.SCRBK,
-      DY: DX - 2 * T,
-      DZ: T,
-      X:  T,
-      Y:  DY - T,
-      Z:  T + r.SCRBK,
+      DX: topDepth,
+      DY: railW,
+      DZ: topT,
+      X:  railX,
+      Y:  DY - topT,
+      Z:  topZstart,
       AX: 0, AY: 0, AZ: 0,
-      material_id: mid,
+      material_id: topMat.id,
       edge_band: edgeSidesToBanding(edging.full_top, ebId),
     })
 
   } else if (topType === 'front_rail') {
-    // Front rail only — RD deep, flush with cabinet front
     if (r.RD <= 0) {
       errors.push({ code: 'INVALID_RAIL_DEPTH', message: 'RD must be > 0 for front_rail top type', part: 'front_rail' })
     } else {
       parts.push({
         part_key: 'front_rail',
         DX: r.RD,
-        DY: DX - 2 * T,
-        DZ: T,
-        X:  T,
-        Y:  DY - T,
+        DY: railW,
+        DZ: topT,
+        X:  railX,
+        Y:  DY - topT,
         Z:  DZ - r.RD,
         AX: 0, AY: 0, AZ: 0,
-        material_id: mid,
+        material_id: topMat.id,
         edge_band: edgeSidesToBanding(edging.front_rail, ebId),
       })
     }
@@ -135,26 +185,26 @@ export function resolveCaseParts(
     parts.push({
       part_key: 'front_rail',
       DX: r.RD,
-      DY: DX - 2 * T,
-      DZ: T,
-      X:  T,
-      Y:  DY - T,
+      DY: railW,
+      DZ: topT,
+      X:  railX,
+      Y:  DY - topT,
       Z:  DZ - r.RD,
       AX: 0, AY: 0, AZ: 0,
-      material_id: mid,
+      material_id: topMat.id,
       edge_band: edgeSidesToBanding(edging.front_rail, ebId),
     })
-    // Back rail — aligns with back panel front face
+    // Back rail: Z follows same top/back join rule as full_top
     parts.push({
       part_key: 'back_rail',
       DX: r.RD,
-      DY: DX - 2 * T,
-      DZ: T,
-      X:  T,
-      Y:  DY - T,
-      Z:  T + r.SCRBK,
+      DY: railW,
+      DZ: topT,
+      X:  railX,
+      Y:  DY - topT,
+      Z:  topZstart,
       AX: 0, AY: 0, AZ: 0,
-      material_id: mid,
+      material_id: topMat.id,
       edge_band: edgeSidesToBanding(edging.back_rail, ebId),
     })
   }

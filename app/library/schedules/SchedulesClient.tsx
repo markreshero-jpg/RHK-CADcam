@@ -10,7 +10,7 @@ const TABS = [
   { key: 'assembly',        label: 'Assembly',             table: 'assembly_schedules',       type: 'asm_grid',   valueCol: null,          ebCol: null           },
   { key: 'toekick',         label: 'Toe Kick',             table: 'toekick_schedules',         type: 'tk_list',    valueCol: null,          ebCol: null           },
   { key: 'front',           label: 'Door & Drawer Fronts', table: 'front_schedules',           type: 'front_list', valueCol: null,          ebCol: null           },
-  { key: 'drawerbox',       label: 'Drawer Box',           table: 'drawerbox_schedules',       type: 'mat_single', valueCol: 'material_id', ebCol: 'edgeband_id'  },
+  { key: 'drawerbox',       label: 'Drawer Box',           table: 'drawerbox_schedules',       type: 'db_list',    valueCol: null,          ebCol: null           },
   { key: 'inner_drawerbox', label: 'Inner Drawer Box',     table: 'inner_drawerbox_schedules', type: 'mat_single', valueCol: 'material_id', ebCol: 'edgeband_id'  },
   { key: 'hinge',           label: 'Hinges',               table: 'hinge_schedules',           type: 'hw_single',  valueCol: 'hinge_id',   ebCol: null           },
   { key: 'slide',           label: 'Slides',               table: 'slide_schedules',           type: 'hw_single',  valueCol: 'slide_id',   ebCol: null           },
@@ -57,7 +57,7 @@ type EbItem       = { id: string; name: string; thickness: number; material_matc
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function SchedulesClient() {
+export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
   const [loading,      setLoading]      = useState(true)
   const [materials,    setMaterials]    = useState<MatItem[]>([])
   const [edgebands,    setEdgebands]    = useState<EbItem[]>([])
@@ -74,6 +74,7 @@ export default function SchedulesClient() {
   const [creating,     setCreating]     = useState(false)
   const [rowData,      setRowData]      = useState<Record<string, string>>({})
   const [rowsLoading,  setRowsLoading]  = useState(false)
+  const [createError,  setCreateError]  = useState<string | null>(null)
 
   // ── Initial load ──────────────────────────────────────────────────────────
 
@@ -87,7 +88,7 @@ export default function SchedulesClient() {
         supabase.from('assembly_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('toekick_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('front_schedules').select('id,name,description,is_default,active').order('name'),
-        supabase.from('drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id').order('name'),
+        supabase.from('drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id,bottom_material_id,bottom_edgeband_id').order('name'),
         supabase.from('inner_drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id').order('name'),
         supabase.from('hinge_schedules').select('id,name,description,is_default,active,hinge_id').order('name'),
         supabase.from('slide_schedules').select('id,name,description,is_default,active,slide_id').order('name'),
@@ -193,6 +194,7 @@ export default function SchedulesClient() {
     setSelectedId(null)
     setRowData({})
     setNewName('')
+    setCreateError(null)
   }
 
   // ── Create / delete ───────────────────────────────────────────────────────
@@ -202,9 +204,11 @@ export default function SchedulesClient() {
     if (!name || creating) return
     const tab = TABS.find(t => t.key === activeTab)!
     setCreating(true)
+    setCreateError(null)
     const { data, error } = await supabase.from(tab.table).insert({ name, is_default: false, active: true }).select().single()
     setCreating(false)
-    if (error || !data) return
+    if (error) { setCreateError(error.message); return }
+    if (!data) return
     const newSched = data as SchedRecord
     setSchedLists(prev => ({ ...prev, [activeTab]: [newSched, ...(prev[activeTab] ?? [])] }))
     setNewName('')
@@ -488,6 +492,54 @@ export default function SchedulesClient() {
     )
   }
 
+  const DB_ROLES = [
+    { key: 'box',    label: 'Box Panels',   desc: 'Sides, front & back',  matCol: 'material_id',        ebCol: 'edgeband_id'         },
+    { key: 'bottom', label: 'Bottom Panel', desc: 'Base / floor of box',  matCol: 'bottom_material_id', ebCol: 'bottom_edgeband_id'  },
+  ] as const
+
+  function renderDbList() {
+    const sched = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-3 mb-1">
+          <span className="w-28 shrink-0" />
+          <span className="flex-1 text-[10px] text-gray-600 pl-1">Board</span>
+          <span className="flex-1 text-[10px] text-gray-600 pl-1">Edgebanding</span>
+        </div>
+        {DB_ROLES.map(role => {
+          const mId = (sched?.[role.matCol] as string) ?? ''
+          const eId = (sched?.[role.ebCol]  as string) ?? ''
+          const opts = ebOpts(mId)
+          return (
+            <div key={role.key} className="flex items-center gap-3">
+              <div className="w-28 shrink-0">
+                <p className="text-xs text-gray-300">{role.label}</p>
+                <p className="text-[9px] text-gray-600">{role.desc}</p>
+              </div>
+              <select
+                value={mId}
+                onChange={e => saveSingleValue(role.matCol, e.target.value)}
+                className={`flex-1 ${sel}`}
+              >
+                {!mId && <option value="">— not set —</option>}
+                {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>)}
+              </select>
+              <select
+                value={eId}
+                onChange={e => saveSingleValue(role.ebCol, e.target.value)}
+                disabled={!mId}
+                className={`flex-1 ${selEb} ${mId ? '' : 'opacity-40'}`}
+              >
+                <option value="">{mId ? '— no banding —' : '—'}</option>
+                {opts.map(eb => <option key={eb.id} value={eb.id}>{eb.name} ({eb.thickness}mm)</option>)}
+              </select>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   function renderMatSingle(matCol: string, ebCol: string | null) {
     const sched  = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
     const matId  = (sched?.[matCol] as string) ?? ''
@@ -605,6 +657,7 @@ export default function SchedulesClient() {
           {tab.type === 'asm_grid'    && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderAsmGrid()}</>}
           {tab.type === 'tk_list'     && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderTkList()}</>}
           {tab.type === 'front_list'  && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderFrontList()}</>}
+          {tab.type === 'db_list'     && renderDbList()}
           {tab.type === 'mat_single'  && renderMatSingle(tab.valueCol as string, tab.ebCol)}
           {tab.type === 'bt_single'   && renderBtSingle()}
           {tab.type === 'hw_single'   && renderHwSingle()}
@@ -624,7 +677,7 @@ export default function SchedulesClient() {
 
   if (loading) {
     return (
-      <div className="h-screen bg-gray-950 flex items-center justify-center">
+      <div className={embedded ? "flex-1 flex items-center justify-center" : "h-screen bg-gray-950 flex items-center justify-center"}>
         <p className="text-xs text-gray-500">Loading schedules…</p>
       </div>
     )
@@ -633,17 +686,17 @@ export default function SchedulesClient() {
   const activeList = schedLists[activeTab] ?? []
 
   return (
-    <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
+    <div className={embedded ? "flex-1 flex flex-col overflow-hidden" : "h-screen bg-gray-950 text-white flex flex-col overflow-hidden"}>
 
       {/* Header */}
-      <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
-        <Link href="/" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">← Projects</Link>
-        <span className="text-gray-700">|</span>
-        <Link href="/library/materials" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">Materials Library</Link>
-        <span className="text-gray-700">|</span>
-        <span className="text-sm font-semibold text-white">Schedules</span>
-        <span className="text-xs text-gray-600 ml-1">· Named templates applied to jobs and rooms</span>
-      </div>
+      {!embedded && (
+        <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
+          <Link href="/" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">← Projects</Link>
+          <span className="text-gray-700">|</span>
+          <span className="text-sm font-semibold text-white">Schedules</span>
+          <span className="text-xs text-gray-600 ml-1">· Named templates applied to jobs and rooms</span>
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
 
@@ -666,21 +719,26 @@ export default function SchedulesClient() {
 
         {/* Schedule list */}
         <div className="w-56 shrink-0 border-r border-gray-800 flex flex-col overflow-hidden">
-          <div className="flex-none px-3 py-2.5 border-b border-gray-800 flex gap-2">
-            <input
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && createSchedule()}
-              placeholder="New schedule name…"
-              className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-            />
-            <button
-              onClick={createSchedule}
-              disabled={creating || !newName.trim()}
-              className="text-xs px-2.5 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
-            >
-              +
-            </button>
+          <div className="flex-none border-b border-gray-800">
+            <div className="px-3 py-2.5 flex gap-2">
+              <input
+                value={newName}
+                onChange={e => { setNewName(e.target.value); setCreateError(null) }}
+                onKeyDown={e => e.key === 'Enter' && createSchedule()}
+                placeholder="New schedule name…"
+                className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={createSchedule}
+                disabled={creating || !newName.trim()}
+                className="text-xs px-2.5 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
+              >
+                {creating ? '…' : '+'}
+              </button>
+            </div>
+            {createError && (
+              <p className="px-3 pb-2 text-[10px] text-red-400">{createError}</p>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto divide-y divide-gray-800/50">

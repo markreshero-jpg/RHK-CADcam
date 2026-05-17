@@ -30,6 +30,9 @@ export interface Material {
   sheet_dy:       number
   has_grain:      boolean
   grain_direction?: 'horizontal' | 'vertical'
+  face_colour?:   string | null
+  back_colour?:   string | null
+  edge_colour?:   string | null
 }
 
 // ── Edge Banding ──────────────────────────────────────────────
@@ -160,8 +163,41 @@ export interface ConstructionRules {
   FACBUF:   number   // buffer pad clearance (overlay mode)
   FACINS:   number   // inset depth (0 = overlay)
 
+  // Joinery — how panels connect to each other
+  BOTTOM_JOIN:      'sides_outside' | 'bottom_outside'    // sides span full height vs bottom spans full width
+  BOTTOM_BACK_JOIN: 'back_on_bottom' | 'butts_into_back'  // bottom runs behind back vs stops at back inner face
+  BACK_JOIN:        'between_sides' | 'behind_sides'      // back fits between sides vs wraps behind them
+  TOP_BACK_JOIN:    'butts_into_back' | 'sits_over_back'  // top/rail starts at back inner face vs runs full depth over back
+  RAIL_JOIN:        'between_sides' | 'on_top_of_sides'   // top rail fits between sides vs sits on top
+
   // Edging defaults (optional — falls back to DEFAULT_EDGING if absent)
   EDGING?:  EdgingDefaults
+}
+
+// ── Joinery Configuration ─────────────────────────────────────
+// Controls how case panels connect to each other.
+// Defaults match Standard Frameless EU (sides outside, all between).
+
+export interface JoineryConfig {
+  // Side-to-Bottom: which panel is dominant (full-size)?
+  bottom_join:    'sides_outside' | 'bottom_outside'
+
+  // Side-to-Back: does the back sit between the sides or behind them?
+  back_join:      'between_sides' | 'behind_sides'
+
+  // Bottom-to-Back: does the back panel start above the bottom panel?
+  back_on_bottom: boolean
+
+  // Side-to-Rail/Top: does the top element sit between the sides or on top of them?
+  // When 'on_top_of_sides', sides are shorter by T.
+  rail_join:      'between_sides' | 'on_top_of_sides'
+}
+
+export const DEFAULT_JOINERY: JoineryConfig = {
+  bottom_join:    'sides_outside',
+  back_join:      'between_sides',
+  back_on_bottom: true,
+  rail_join:      'between_sides',
 }
 
 // Default construction rules — Standard Frameless EU
@@ -176,6 +212,61 @@ export const DEFAULT_RULES: ConstructionRules = {
   REVT: 4, REVB: 0, REVL: 1, REVR: 1,
   REVENDL: 2, REVENDR: 2, GAPC: 2, GAPR: 2,
   FACBUF: 2, FACINS: 0,
+  BOTTOM_JOIN: 'sides_outside', BOTTOM_BACK_JOIN: 'back_on_bottom',
+  BACK_JOIN: 'between_sides', TOP_BACK_JOIN: 'butts_into_back', RAIL_JOIN: 'between_sides',
+}
+
+// ── Drawer Box Edging ─────────────────────────────────────────
+export type DbEdgingKey = 'db_left_side' | 'db_right_side' | 'db_bottom' | 'db_front' | 'db_back'
+export type DbEdgingDefaults = Partial<Record<DbEdgingKey, EdgeSides>>
+
+export const DEFAULT_DB_EDGING: Record<DbEdgingKey, EdgeSides> = {
+  db_left_side:  ['top', 'left', 'right'],
+  db_right_side: ['top', 'left', 'right'],
+  db_bottom:     [],
+  db_front:      ['top', 'left', 'right'],
+  db_back:       ['top', 'left', 'right'],
+}
+
+// ── Drawer Box Rules ──────────────────────────────────────────
+export interface DrawerBoxRules {
+  DB_SIDE_T:       number                         // side/front/back panel thickness (mm)
+  DB_BOTTOM_T:     number                         // bottom panel thickness (mm)
+  DB_BOTTOM_JOIN:  'dado' | 'screwed'             // how bottom attaches to sides
+  DB_DADO_HEIGHT:  number                         // dado groove height from bottom face (mm)
+  DB_DADO_DEPTH:   number                         // dado cut depth (mm)
+  DB_BACK_SETBACK: number                         // bottom panel setback from back face (mm)
+  DB_JOINT_TYPE:   'butt' | 'dado' | 'dovetail'  // how front/back connect to sides
+  DB_EDGING?:      DbEdgingDefaults               // per-part edge sides (absent = use DEFAULT_DB_EDGING)
+}
+
+export const DEFAULT_DB_RULES: DrawerBoxRules = {
+  DB_SIDE_T:       12,
+  DB_BOTTOM_T:     6,
+  DB_BOTTOM_JOIN:  'dado',
+  DB_DADO_HEIGHT:  12,
+  DB_DADO_DEPTH:   8,
+  DB_BACK_SETBACK: 25,
+  DB_JOINT_TYPE:   'butt',
+}
+
+// ── Drawer Box Input ──────────────────────────────────────────
+export interface DrawerBoxInput {
+  box_width:         number   // outer width (mm)
+  box_height:        number   // outer height (mm)
+  box_depth:         number   // runner depth (mm)
+  material:          Material
+  edgeband_id?:      string
+  bottom_material?:  Material  // if omitted, falls back to material
+  bottom_edgeband_id?: string
+  rules:             DrawerBoxRules
+}
+
+// ── Resolved Drawer Box Part ──────────────────────────────────
+export type DrawerBoxPartType = 'db_left_side' | 'db_right_side' | 'db_bottom' | 'db_front' | 'db_back'
+
+export interface ResolvedDrawerBoxPart extends ResolvedPart {
+  part_type: DrawerBoxPartType
 }
 
 // ── Cabinet Input ─────────────────────────────────────────────

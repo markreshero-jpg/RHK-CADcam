@@ -1,7 +1,11 @@
 import { supabase } from '@/src/lib/supabase'
 import type { Wall, CabinetInstance } from '@/src/lib/types'
-import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { resolveCabinetFromDB, getCachedInput, setCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { resolveCabinet } from '@/src/lib/resolver/resolver'
+import { persistResolved } from '@/src/lib/resolver/persistResolved'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+
+const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 
 export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<string, ResolvedCabinet>> {
   if (cabinetIds.length === 0) return new Map()
@@ -114,6 +118,24 @@ export async function dbUpdateCabinet(
 ): Promise<ResolvedCabinet | null> {
   const { error } = await supabase.from('cabinet_instances').update(u).eq('id', id)
   if (error) { console.error(error); return null }
+
+  // Fast path: dimension-only change + cached input → resolve synchronously,
+  // persist in background. Eliminates ~17 Supabase round-trips per resize.
+  const keys = Object.keys(u)
+  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k)) ? getCachedInput(id) : undefined
+  if (cached) {
+    const updated = {
+      ...cached,
+      ...(u.dx !== undefined && { DX: Number(u.dx) }),
+      ...(u.dy !== undefined && { DY: Number(u.dy) }),
+      ...(u.dz !== undefined && { DZ: Number(u.dz) }),
+    }
+    setCachedInput(id, updated)
+    const resolved = resolveCabinet(updated)
+    persistResolved(resolved).catch(e => console.error('persist:', e))
+    return resolved
+  }
+
   try { return await resolveCabinetFromDB(id) } catch (e) { console.error('resolve after update:', e); return null }
 }
 

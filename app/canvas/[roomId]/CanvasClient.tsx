@@ -12,11 +12,15 @@ import {
   centroid, wallInwardNormal, islandCabPerp, cabinetCenterPt,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadResolvedParts } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { useCanvasHistory } from './useCanvasHistory'
+import { useMaterialColours } from './useMaterialColours'
+import { useCabinetOps } from './useCabinetOps'
+import { useMultiSelectOps } from './useMultiSelectOps'
+import { buildMenus } from './canvasMenuConfig'
 import {
-  Mode, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, MenuGroup,
+  Mode, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState,
   viewReducer, modeAssemblyClass, DisplayConfig, PresetId,
   DEFAULT_DISPLAY_CONFIG, applyPreset, toggleAnnotation,
 } from './canvasTypes'
@@ -28,6 +32,7 @@ import ElevationSVG from './ElevationSVG'
 import CanvasContextMenu from './CanvasContextMenu'
 import { buildContextMenuGroups } from './canvasContextItems'
 import DeleteWallModal from './DeleteWallModal'
+import SplitCabinetModal from './SplitCabinetModal'
 import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
 import WallDrawPanel from './WallDrawPanel'
 import WallPanel from './WallPanel'
@@ -64,6 +69,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [multiSelect, setMultiSelect] = useState<string[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [deleteWallPending, setDeleteWallPending] = useState<string | null>(null)
+  const [splitCabId, setSplitCabId] = useState<string | null>(null)
   const [clipboard, setClipboard] = useState<CabinetInstance | null>(null)
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [wallMenuOpen, setWallMenuOpen] = useState(false)
@@ -78,11 +84,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [roomModalTab, setRoomModalTab] = useState<RoomPropertiesTab | null>(null)
   const [editCabId, setEditCabId] = useState<string | null>(null)
   const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation'>('elevation')
-  const [resolvedParts, setResolvedParts] = useState<Map<string, ResolvedCabinet>>(new Map())
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
 
   const { captureSnapshot, handleUndo, handleRedo, wallsRef, cabinetsRef, canUndo, canRedo } =
     useCanvasHistory(walls, cabinets, setWalls, setCabinets, setSelected)
+
+  const {
+    resolvedParts, setResolvedParts,
+    matColours, ebByMatId,
+    applyInputColours, applyInputEdgebands,
+  } = useMaterialColours(initialCabinets)
 
   const svgRef = useRef<SVGSVGElement>(null)
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
@@ -135,15 +146,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     ro.observe(svg); return () => ro.disconnect()
   }, [])
 
-  // Load persisted resolved parts for all cabinets that exist on page mount
-  useEffect(() => {
-    const ids = initialCabinets.map(c => c.id)
-    if (ids.length === 0) return
-    dbLoadResolvedParts(ids).then(map => {
-      if (map.size > 0) setResolvedParts(map)
-    })
-  }, []) // intentionally mount-only
-
   useEffect(() => {
     if (canvasView !== 'plan') return
     const svg = svgRef.current; if (!svg) return
@@ -151,7 +153,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       e.preventDefault()
       const r = svg.getBoundingClientRect()
       const inv = getUserPrefs().invertScroll
-      const factor = (e.deltaY < 0) !== inv ? 1 / 1.15 : 1.15
+      const factor = (e.deltaY < 0) !== inv ? 1.15 : 1 / 1.15
       dispatchView({ type: 'zoom', factor, svgX: e.clientX - r.left, svgY: e.clientY - r.top })
     }
     svg.addEventListener('wheel', handler, { passive: false })
@@ -272,8 +274,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   const handleUpdateCabinet = useCallback(async (id: string, u: Partial<CabinetInstance>) => {
     setCabinets(cs => cs.map(c => c.id === id ? { ...c, ...u } : c))
+    // Drop stale resolved geometry immediately on dimension changes so the cabinet shows a
+    // clean simple-rect at the new size rather than mismatched old panel coords while re-resolving.
+    if ('dx' in u || 'dy' in u || 'dz' in u) {
+      setResolvedParts(m => { const next = new Map(m); next.delete(id); return next })
+    }
     const resolved = await dbUpdateCabinet(id, u)
-    if (resolved) setResolvedParts(m => new Map(m).set(id, resolved))
+    if (resolved) { setResolvedParts(m => new Map(m).set(id, resolved)); applyInputColours(id); applyInputEdgebands(id) }
   }, [])
 
   function commitResize() {
@@ -313,7 +320,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       setCabinets(cs => [...cs, cabinet])
       setSelected({ type: 'cabinet', id: cabinet.id })
       dbResolveAndPersistCabinet(cabinet.id).then(resolved => {
-        if (resolved) setResolvedParts(m => new Map(m).set(cabinet.id, resolved))
+        if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
       })
     }
   }
@@ -328,7 +335,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       setCabinets(cs => [...cs, cabinet])
       setSelected({ type: 'cabinet', id: cabinet.id })
       dbResolveAndPersistCabinet(cabinet.id).then(resolved => {
-        if (resolved) setResolvedParts(m => new Map(m).set(cabinet.id, resolved))
+        if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
       })
     }
   }
@@ -713,58 +720,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setContextMenu({ x: e.clientX, y: e.clientY, elevWallId: wallId, elevWallT: wallT })
   }
 
-  async function handleInsertAdjacent(cabId: string, type: 'panel' | 'filler', side: 'left' | 'right') {
-    const cab = cabinets.find(c => c.id === cabId)
-    if (!cab) return
-    const wall = walls.find(w => w.id === cab.wall_id)
-    if (!wall) return
-    const dx = type === 'panel' ? 18 : 50
-    const t = cabT(cab, wall)
-    const occ = cabinets
-      .filter(c => c.id !== cab.id && c.wall_id === wall.id && cabBlocks('base', c.assembly_class))
-      .map(c => ({ t: cabT(c, wall), dx: c.dx }))
-    const desired = side === 'right'
-      ? Math.min(wall.length - dx, t + cab.dx)       // snap in from the right edge of the cabinet
-      : Math.max(0, t - dx)                           // snap in from the left edge of the cabinet
-    const freeT = findFreeSlot(desired, dx, wall.length, occ)
-    const wd = wallDir(wall)
-    captureSnapshot()
-    const data: Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'> = {
-      room_id: room.id, wall_id: wall.id, cabinet_definition_id: null,
-      label: nextLabel(cabinets, 'ep'),
-      assembly_class: 'base',
-      pos_x: wall.pos_x + freeT * wd.x,
-      pos_y: wall.pos_y + freeT * wd.y,
-      pos_z: 0, rotation: wall.angle,
-      dx, dy: cab.dy, dz: cab.dz,
-      has_carcass: false, has_internal: false, has_face: true, has_toekick: false,
-      construction_method_id: null, top_type: 'front_rail', toe_type: 'ladder',
-      left_neighbour_type: 'wall', right_neighbour_type: 'wall',
-      exposed_interior: false, rule_overrides: {}, material_overrides: {},
-      toekick_overrides: {}, drawerbox_overrides: {}, hardware_overrides: {},
-      face_grid: null, schema_version: '0.4', notes: null,
-    }
-    const cabinet = await dbInsertCabinet(data)
-    if (cabinet) {
-      setCabinets(cs => [...cs, cabinet])
-      setSelected({ type: 'cabinet', id: cabinet.id })
-      dbResolveAndPersistCabinet(cabinet.id).then(resolved => {
-        if (resolved) setResolvedParts(m => new Map(m).set(cabinet.id, resolved))
-      })
-    }
-  }
-
-  async function handleInsertCabinetAtElevT(wallId: string, wallT: number, cls: AssemblyClass) {
-    const wall = walls.find(w => w.id === wallId)
-    if (!wall) return
-    const dims = DEFAULT_DIMS[cls] ?? DEFAULT_DIMS.base
-    const occ = cabinets
-      .filter(c => c.wall_id === wallId && cabBlocks(cls, c.assembly_class))
-      .map(c => ({ t: cabT(c, wall), dx: c.dx }))
-    const t = findFreeSlot(Math.max(0, Math.min(wall.length - dims.dx, wallT)), dims.dx, wall.length, occ)
-    const wd = wallDir(wall)
-    await placeCabinet(wall, wall.pos_x + t * wd.x, wall.pos_y + t * wd.y, cls)
-  }
+  const { handleInsertAdjacent, handleSplitCabinet, handleInsertCabinetAtElevT } = useCabinetOps({
+    cabinets, walls, room, captureSnapshot,
+    setCabinets, setSelected, setResolvedParts, setSplitCabId,
+    applyInputColours, applyInputEdgebands,
+    handleUpdateCabinet, placeCabinet,
+  })
 
   function onCabinetDoubleClick(e: React.MouseEvent, cabId: string) {
     e.stopPropagation()
@@ -799,25 +760,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }
   function onResizePointerUp() { sidebarResizeRef.current = null }
 
-  async function handleEqualizeWidths() {
-    if (multiSelect.length < 2) return
-    const sel = cabinets.filter(c => multiSelect.includes(c.id))
-    const wallIds = [...new Set(sel.map(c => c.wall_id))]
-    if (wallIds.length !== 1) return
-    const wall = walls.find(w => w.id === wallIds[0])
-    if (!wall) return
-    const sorted = [...sel].sort((a, b) => cabT(a, wall) - cabT(b, wall))
-    const newDx = Math.round(sorted.reduce((sum, c) => sum + c.dx, 0) / sorted.length)
-    const wd = wallDir(wall)
-    let t = cabT(sorted[0], wall)
-    await Promise.all(sorted.map(cab => {
-      const pos_x = wall.pos_x + t * wd.x
-      const pos_y = wall.pos_y + t * wd.y
-      t += newDx
-      return handleUpdateCabinet(cab.id, { dx: newDx, pos_x, pos_y })
-    }))
-    setContextMenu(null)
-  }
+  const { handleEqualizeWidths, handleAlignLeft, handleAlignRight } = useMultiSelectOps({
+    multiSelect, cabinets, walls, handleUpdateCabinet, setContextMenu,
+  })
 
   // ── Project / Room save handlers ──────────────────────────────────────────
 
@@ -896,63 +841,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     : selected?.type === 'cabinet' && selectedCab  ? `${selectedCab.assembly_class.replace(/_/g,' ')} · ${selectedCab.label ?? '—'} · ${selectedCab.dx}×${selectedCab.dy}×${selectedCab.dz}`
     : null
 
-  const menus: MenuGroup[] = [
-    { label: 'File', items: [
-      { label: '← Back to Projects', action: () => { window.location.href = '/' } },
-      null,
-      { label: 'Export…', disabled: true },
-    ]},
-    { label: 'Edit', items: [
-      { label: 'Undo', shortcut: 'Ctrl+Z', disabled: !canUndo, action: () => { void handleUndo() } },
-      { label: 'Redo', shortcut: 'Ctrl+Y', disabled: !canRedo, action: () => { void handleRedo() } },
-      null,
-      { label: 'Copy Cabinet', shortcut: 'Ctrl+C', disabled: selected?.type !== 'cabinet',
-        action: () => { const cab = cabinets.find(c => c.id === selected?.id); if (cab) { setClipboard(cab); setMode('paste'); setPlaceGhost(null) } } },
-      { label: 'Paste Cabinet', shortcut: 'Ctrl+V', disabled: !clipboard,
-        action: () => { if (clipboard) { setMode('paste'); setPlaceGhost(null) } } },
-      null,
-      { label: 'Delete', shortcut: 'Del', disabled: !selected,
-        action: () => { if (selected?.type === 'cabinet') handleDeleteCabinet(selected.id); if (selected?.type === 'wall') handleDeleteWall(selected.id) } },
-    ]},
-    { label: 'View', items: [
-      { label: 'Zoom In',  shortcut: '+', action: () => dispatchView({ type: 'zoom', factor: 1.25,   svgX: svgSize.w/2, svgY: svgSize.h/2 }) },
-      { label: 'Zoom Out', shortcut: '−', action: () => dispatchView({ type: 'zoom', factor: 1/1.25, svgX: svgSize.w/2, svgY: svgSize.h/2 }) },
-      { label: 'Fit to Screen', shortcut: 'F', action: fitToWalls },
-      null,
-      { label: '3D View', action: () => switchView('3d') },
-    ]},
-    { label: 'Annotations', items: [
-      { label: 'Door swings (plan)',        checked: displayConfig.annotations.plan_door_swings,   action: () => setDisplayConfig(c => toggleAnnotation(c, 'plan_door_swings')) },
-      { label: 'Drawer lines (plan)',       checked: displayConfig.annotations.plan_drawer_lines,  action: () => setDisplayConfig(c => toggleAnnotation(c, 'plan_drawer_lines')) },
-      { label: 'Door chevrons (elevation)', checked: displayConfig.annotations.elev_door_chevrons, action: () => setDisplayConfig(c => toggleAnnotation(c, 'elev_door_chevrons')) },
-    ]},
-    { label: 'Job', items: [
-      { label: 'Details',      action: () => setJobModalTab('details') },
-      { label: 'Dimensions',   action: () => setJobModalTab('dimensions') },
-      { label: 'Construction', action: () => setJobModalTab('construction') },
-      { label: 'Hardware',     action: () => setJobModalTab('hardware') },
-      null,
-      { label: 'Overrides',   action: () => setJobModalTab('overrides') },
-    ]},
-    { label: 'Room', items: [
-      { label: 'Room Details', action: () => setRoomModalTab('details') },
-      { label: 'Construction', action: () => setRoomModalTab('construction') },
-      { label: 'Hardware',     action: () => setRoomModalTab('hardware') },
-      null,
-      { label: 'Overrides',   action: () => setRoomModalTab('overrides') },
-    ]},
-    { label: 'Production', items: [
-      { label: 'Cut List…',          disabled: true },
-      { label: 'Material Schedule…', disabled: true },
-      { label: 'Shop Drawings…',     disabled: true },
-      null,
-      { label: 'Generate CNC…',      disabled: true },
-    ]},
-    { label: 'Help', items: [
-      { label: 'Documentation',    disabled: true },
-      { label: 'About RHK CADcam', disabled: true },
-    ]},
-  ]
+  const menus = buildMenus({
+    canUndo, canRedo, handleUndo, handleRedo,
+    selected, cabinets, clipboard, setClipboard, setMode, setPlaceGhost,
+    handleDeleteCabinet, handleDeleteWall,
+    dispatchView, svgSize, fitToWalls, switchView,
+    displayConfig, setDisplayConfig,
+    setJobModalTab, setRoomModalTab,
+  })
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1138,6 +1034,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onEditCabinet={id => { setEditCabInitialView('3d'); setEditCabId(id) }}
             onDeleteCabinet={id => handleDeleteCabinet(id)}
             resolvedParts={resolvedParts}
+            materialColours={matColours}
           />
         )}
 
@@ -1255,6 +1152,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onPaste: () => { if (clipboard) setMode('paste') },
             onEdit: id => setEditCabId(id),
             onEqualizeWidths: handleEqualizeWidths,
+            onAlignLeft: handleAlignLeft,
+            onAlignRight: handleAlignRight,
+            onSplit: id => { setContextMenu(null); setSplitCabId(id) },
           })}
           onClose={() => setContextMenu(null)}
         />
@@ -1274,6 +1174,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onUpdate={handleUpdateCabinet}
             onDelete={handleDeleteCabinet}
             onClose={() => { setEditCabId(null); setEditCabInitialView('elevation') }}
+            materialColours={matColours}
+            ebByMatId={ebByMatId}
           />
         )
       })()}
@@ -1284,6 +1186,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           onCancel={() => setDeleteWallPending(null)}
         />
       )}
+
+      {splitCabId && (() => {
+        const cab = cabinets.find(c => c.id === splitCabId)
+        if (!cab) return null
+        return (
+          <SplitCabinetModal
+            width={cab.dx}
+            onSplit={count => void handleSplitCabinet(splitCabId, count)}
+            onCancel={() => setSplitCabId(null)}
+          />
+        )
+      })()}
 
       {jobModalTab && project && (
         <JobPropertiesModal

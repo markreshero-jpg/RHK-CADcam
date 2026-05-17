@@ -47,6 +47,7 @@ export type PresetId =
 
   | 'face_elevation'
   | 'full_parts'
+  | 'line_drawing'
   | 'custom'
 
 export interface DisplayConfig {
@@ -134,6 +135,24 @@ export const DISPLAY_PRESETS: Record<Exclude<PresetId, 'custom'>, { label: strin
   },
   full_parts: {
     label: 'Full parts',
+    layers: {
+      carcass:               L(true,  'solid'),
+      face:                  L(true,  'solid'),
+      internal:              L(true,  'solid'),
+      toekick:               L(true,  'solid'),
+      dimensions:            L(true,  'solid'),
+      labels:                L(true,  'solid'),
+      dim_wall_overall:      L(true,  'solid'),
+      dim_base_chain:        L(true,  'solid'),
+      dim_wall_chain:        L(true,  'solid'),
+      dim_elevation_y:       L(true,  'solid'),
+      dim_refs:              L(true,  'solid'),
+      dim_elev_floor_chain:  L(true,  'solid'),
+      dim_elev_wall_chain:   L(true,  'solid'),
+    },
+  },
+  line_drawing: {
+    label: 'Line drawing',
     layers: {
       carcass:               L(true,  'solid'),
       face:                  L(true,  'solid'),

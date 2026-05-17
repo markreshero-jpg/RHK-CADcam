@@ -17,22 +17,6 @@ const LogoIcon = () => (
   </svg>
 )
 
-const MaterialsIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="1.5" y="1.5" width="12" height="3" rx="0.6"/>
-    <rect x="1.5" y="6" width="12" height="3" rx="0.6"/>
-    <rect x="1.5" y="10.5" width="12" height="3" rx="0.6"/>
-  </svg>
-)
-
-const SchedulesIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="1.5" y="1.5" width="12" height="12" rx="1"/>
-    <line x1="1.5" y1="5.5" x2="13.5" y2="5.5"/>
-    <line x1="6" y1="5.5" x2="6" y2="13.5"/>
-  </svg>
-)
-
 const SettingsIcon = () => (
   <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="7.5" cy="7.5" r="2"/>
@@ -141,20 +125,6 @@ export default async function HomePage() {
         </div>
 
         <nav className="flex items-center gap-1">
-          <Link
-            href="/library/materials"
-            className="flex items-center gap-2 text-gray-400 hover:text-gray-100 text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            <MaterialsIcon />
-            Materials
-          </Link>
-          <Link
-            href="/library/schedules"
-            className="flex items-center gap-2 text-gray-400 hover:text-gray-100 text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            <SchedulesIcon />
-            Schedules
-          </Link>
           <Link
             href="/settings"
             className="flex items-center gap-2 text-gray-400 hover:text-gray-100 text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"

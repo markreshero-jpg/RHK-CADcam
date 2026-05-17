@@ -3,7 +3,8 @@ import type { CabinetInstance, ContextMenuItem } from './canvasTypes'
 
 export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, canEqualize, clipboard, cabinets,
-  onDeleteWall, onDeleteCabinet, onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent,
+  onDeleteWall, onDeleteCabinet, onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
+  onAlignLeft, onAlignRight,
 }: {
   cabId?: string
   wallId?: string
@@ -20,6 +21,9 @@ export function buildContextMenuGroups({
   onEqualizeWidths: () => void
   onInsertCabinet?: (wallId: string, wallT: number, cls: AssemblyClass) => void
   onInsertAdjacent?: (cabId: string, type: 'panel' | 'filler', side: 'left' | 'right') => void
+  onSplit?: (cabId: string) => void
+  onAlignLeft?: () => void
+  onAlignRight?: () => void
 }): ContextMenuItem[][] {
   if (wallId) {
     return [[{ label: 'Delete Wall', onClick: () => onDeleteWall(wallId), color: 'red' }]]
@@ -46,9 +50,19 @@ export function buildContextMenuGroups({
   const cab = cabinets.find(c => c.id === cabId)
   const groups: ContextMenuItem[][] = []
 
-  if (canEqualize) groups.push([{ label: 'Equalise Widths', onClick: onEqualizeWidths, color: 'amber' }])
+  if (canEqualize) {
+    groups.push([{ label: 'Equalise Widths', onClick: onEqualizeWidths, color: 'amber' }])
+    if (onAlignLeft && onAlignRight) {
+      groups.push([
+        { label: 'Align Left',  onClick: onAlignLeft,  color: 'amber' },
+        { label: 'Align Right', onClick: onAlignRight, color: 'amber' },
+      ])
+    }
+  }
 
   groups.push([{ label: 'Edit…', onClick: () => onEdit(cabId), color: 'blue' }])
+
+  if (onSplit) groups.push([{ label: 'Split…', onClick: () => onSplit(cabId) }])
 
   if (onInsertAdjacent) {
     groups.push([{

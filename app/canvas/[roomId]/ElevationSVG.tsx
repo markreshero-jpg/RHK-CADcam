@@ -19,6 +19,19 @@ const PART_COLORS: Record<string, string> = {
   door: '#60a5fa', drawer_face: '#f472b6', false_panel: '#60a5fa',
 }
 
+// ── Line-drawing mode colours ─────────────────────────────────
+const LINE_DRAW_COLORS: Record<string, string> = {
+  left_side: '#94a3b8', right_side: '#94a3b8',
+  bottom: '#94a3b8', back: '#475569',
+  full_top: '#4ade80', front_rail: '#4ade80', back_rail: '#4ade80',
+  kick_front_face: '#fbbf24',
+  kick_sub_front: '#f97316', kick_back: '#f97316',
+  spreader_vertical: '#f97316', spreader_horizontal: '#f97316',
+  adj_shelf: '#a78bfa', fixed_shelf: '#818cf8',
+  inner_drawer_back: '#818cf8',
+  door: '#60a5fa', drawer_face: '#f472b6', false_panel: '#60a5fa',
+}
+
 function caseElevRect(p: ResolvedCasePart) {
   if (p.part_key === 'left_side' || p.part_key === 'right_side') {
     return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
@@ -43,6 +56,7 @@ function shelfElevRect(p: ResolvedInternalPart) {
   }
   return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
 }
+
 
 // wall.soffit_height is stored as depth FROM THE TOP (e.g. 300 = soffit drops 300mm from ceiling).
 // Convert to height-from-floor: wallHeight - soffit_height.
@@ -133,7 +147,7 @@ export default function ElevationSVG({
   const [elevResizeLive, setElevResizeLive] = useState<{
     cabId: string; dim: 'dx' | 'dy'; value: number; posX?: number; posY?: number
   } | null>(null)
-  // Prevents onMarkerClick from re-starting a resize on the same pointerup→click event that just confirmed one.
+  // Prevents onMarkerClick from re-starting a resize on the same pointerup→click that just confirmed one.
   const justConfirmedRef = useRef(false)
   // Sync ref updated every render — gives the native pointermove handler fresh values without stale closures.
   const rfData = useRef({ elevResizeFollowing, view, cabinets, room } as {
@@ -184,7 +198,7 @@ export default function ElevationSVG({
       e.preventDefault()
       const r = svg.getBoundingClientRect()
       const inv = getUserPrefs().invertScroll
-      const factor = (e.deltaY < 0) !== inv ? 1 / 1.15 : 1.15
+      const factor = (e.deltaY < 0) !== inv ? 1.15 : 1 / 1.15
       dispatchView({ type: 'zoom', factor, svgX: e.clientX - r.left, svgY: e.clientY - r.top })
     }
     svg.addEventListener('wheel', handler, { passive: false })
@@ -207,49 +221,6 @@ export default function ElevationSVG({
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku)
     return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku) }
   }, [])
-
-  // Native pointermove listener: fires for all pointer events (no bubbling dependency).
-  // Reads fresh values from rfData ref — no stale closures, no Math.round so display is sub-mm smooth.
-  useEffect(() => {
-    if (!elevResizeFollowing) return
-    const svg = svgRef.current
-    const handleMove = (e: PointerEvent) => {
-      const { elevResizeFollowing: rf, view: v, cabinets: cabs, room: rm } = rfData.current
-      if (!rf || !svg) return
-      const { cabId, dim, side, startCabT, startCabEndT, resWall, neighbours } = rf
-      const svgR = svg.getBoundingClientRect()
-      const vz = v.zoom
-      const wd = wallDir(resWall)
-      const rH = rm.room_dy ?? 2400
-
-      if (side === 'right') {
-        const cursorT = (e.clientX - svgR.left - v.panX) / vz
-        const rightBound = neighbours.filter(o => o.t > startCabT + 1).reduce((min, o) => Math.min(min, o.t), resWall.length)
-        const newDx = Math.max(50, Math.min(rightBound - startCabT, cursorT - startCabT))
-        setElevResizeLive({ cabId, dim, value: newDx })
-        onCabResizeUpdate({ liveValue: Math.round(newDx) })
-      } else if (side === 'left') {
-        const cursorT = (e.clientX - svgR.left - v.panX) / vz
-        const leftBound = neighbours.filter(o => o.t + o.dx < startCabEndT - 1).reduce((max, o) => Math.max(max, o.t + o.dx), 0)
-        const newT = Math.max(leftBound, Math.min(startCabEndT - 50, cursorT))
-        const newDx = startCabEndT - newT
-        const livePosX = resWall.pos_x + newT * wd.x
-        const livePosY = resWall.pos_y + newT * wd.y
-        setElevResizeLive({ cabId, dim, value: newDx, posX: livePosX, posY: livePosY })
-        onCabResizeUpdate({ liveValue: Math.round(newDx), livePosX, livePosY })
-      } else if (side === 'top') {
-        const cursorY = (e.clientY - svgR.top - v.panY) / vz
-        const cab = cabs.find(c => c.id === cabId)
-        if (cab) {
-          const newDy = Math.max(50, Math.min(5000, rH - cabBottomZ(cab, rm, resWall) - cursorY))
-          setElevResizeLive({ cabId, dim: 'dy', value: newDy })
-          onCabResizeUpdate({ liveValue: Math.round(newDy) })
-        }
-      }
-    }
-    window.addEventListener('pointermove', handleMove)
-    return () => window.removeEventListener('pointermove', handleMove)
-  }, [elevResizeFollowing, onCabResizeUpdate])
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button === 1 || (e.button === 0 && spaceRef.current)) {
@@ -275,6 +246,44 @@ export default function ElevationSVG({
       })
       panRef.current.startX = e.clientX; panRef.current.startY = e.clientY
       panRef.current.panX = view.panX; panRef.current.panY = view.panY
+      return
+    }
+
+    // Resize following — read from ref so view/elevResizeFollowing are always fresh (no stale closure)
+    const rf = rfData.current.elevResizeFollowing
+    if (rf) {
+      const { cabId, dim, side, startCabT, startCabEndT, resWall, neighbours } = rf
+      const v = rfData.current.view
+      const svgR = svgRef.current!.getBoundingClientRect()
+      const vz = v.zoom
+      const wd = wallDir(resWall)
+      const snap10 = (n: number) => Math.round(n / 10) * 10
+      if (side === 'right') {
+        const cursorT = (e.clientX - svgR.left - v.panX) / vz
+        const rightBound = neighbours.filter(o => o.t > startCabT + 1).reduce((min, o) => Math.min(min, o.t), resWall.length)
+        const newDx = Math.max(50, Math.min(rightBound - startCabT, snap10(cursorT - startCabT)))
+        setElevResizeLive({ cabId, dim, value: newDx })
+        onCabResizeUpdate({ liveValue: newDx })
+      } else if (side === 'left') {
+        const cursorT = (e.clientX - svgR.left - v.panX) / vz
+        const leftBound = neighbours.filter(o => o.t + o.dx < startCabEndT - 1).reduce((max, o) => Math.max(max, o.t + o.dx), 0)
+        const newDx = Math.max(50, Math.min(startCabEndT - leftBound, snap10(startCabEndT - cursorT)))
+        const newT = startCabEndT - newDx
+        const livePosX = resWall.pos_x + newT * wd.x
+        const livePosY = resWall.pos_y + newT * wd.y
+        setElevResizeLive({ cabId, dim, value: newDx, posX: livePosX, posY: livePosY })
+        onCabResizeUpdate({ liveValue: newDx, livePosX, livePosY })
+      } else if (side === 'top') {
+        const cursorY = (e.clientY - svgR.top - v.panY) / vz
+        const cab = rfData.current.cabinets.find(c => c.id === cabId)
+        if (cab) {
+          const rm = rfData.current.room
+          const rH = rm.room_dy ?? 2400
+          const newDy = Math.max(50, Math.min(5000, snap10(rH - cabBottomZ(cab, rm, resWall) - cursorY)))
+          setElevResizeLive({ cabId, dim: 'dy', value: newDy })
+          onCabResizeUpdate({ liveValue: newDy })
+        }
+      }
       return
     }
 
@@ -343,9 +352,9 @@ export default function ElevationSVG({
     await onUpdateCabinet(cabId, update)
   }
 
-  // Click on blank SVG area → confirm resize if following, or place/move a cabinet
+  // Click on blank SVG area → confirm resize if active, or place/move a cabinet
   function onSVGClick() {
-    if (elevResizeFollowing) { confirmResize(); return }
+    if (elevResizeFollowing) { void confirmResize(); return }
     if (!elevCabFollowing || !elevCabFloat || !wall) return
     const { id } = elevCabFollowing
     const cab = cabinets.find(c => c.id === id)
@@ -405,7 +414,6 @@ export default function ElevationSVG({
   function onMarkerClick(e: React.MouseEvent, cab: CabinetInstance, side: 'left' | 'right' | 'top') {
     if (mode !== 'select' || !wall) return
     e.stopPropagation()
-    // onPointerUp fires before onClick — if it just confirmed a resize, skip re-starting one.
     if (justConfirmedRef.current) return
     onSelectCabinet(cab.id)
     const t = cabT(cab, wall)
@@ -423,6 +431,8 @@ export default function ElevationSVG({
       liveValue: dim === 'dx' ? cab.dx : cab.dy,
     })
   }
+
+  const isLineDrawing = displayConfig.activePreset === 'line_drawing'
 
   const z = view.zoom
   const labelFs = 11 / z
@@ -509,7 +519,7 @@ export default function ElevationSVG({
                   onContextMenu={cmHandler} />
               ) : (
                 <rect x={0} y={0} width={wall.length} height={roomH}
-                  fill="#1f2937"
+                  fill={isLineDrawing ? 'none' : '#1f2937'}
                   stroke={isWallSel ? '#3b82f6' : '#374151'}
                   strokeWidth={isWallSel ? 2 / z : 1 / z}
                   style={{ cursor: 'pointer' }}
@@ -691,33 +701,47 @@ export default function ElevationSVG({
 
                   {/* ── Resolved geometry — actual panels ── */}
                   {(() => {
-                    const rp = resolvedParts?.get(cab.id)
+                    // During live resize, resolved panel coords are stale (fixed at original dims).
+                    // Fall back to simple rect so the resize renders live.
+                    const isBeingResized = elevResizeLive?.cabId === cab.id
+                    const rp = isBeingResized ? undefined : resolvedParts?.get(cab.id)
                     if (!rp) {
                       return (<>
                         {carcL.visible && (
                           <rect x={rx} y={ry} width={displayDx} height={displayDy}
-                            fill={baseColor} fillOpacity={carcP.fillOpacity}
-                            stroke={cabStroke} strokeWidth={cabStrokeW}
-                            strokeDasharray={carcP.strokeDasharray} opacity={carcP.opacity} />
+                            fill={isLineDrawing ? 'none' : baseColor}
+                            fillOpacity={isLineDrawing ? 0 : carcP.fillOpacity}
+                            stroke={isLineDrawing ? (isSel ? '#e2e8f0' : '#94a3b8') : cabStroke}
+                            strokeWidth={isLineDrawing ? 1 / z : cabStrokeW}
+                            strokeDasharray={isLineDrawing ? undefined : carcP.strokeDasharray}
+                            opacity={carcP.opacity} />
                         )}
                         {tkL.visible && cab.has_toekick && tkH > 0 && (
                           <rect x={rx} y={ry + displayDy - tkH} width={displayDx} height={tkH}
-                            fill={baseColor} fillOpacity={(tkP.fillOpacity * 0.5) || 0}
-                            stroke={isSel ? '#e2e8f0' : '#475569'} strokeWidth={1 / z}
-                            strokeDasharray={tkP.strokeDasharray ?? `${4 / z} ${2 / z}`} opacity={tkP.opacity} />
+                            fill={isLineDrawing ? 'none' : baseColor}
+                            fillOpacity={isLineDrawing ? 0 : (tkP.fillOpacity * 0.5) || 0}
+                            stroke={isLineDrawing ? '#fbbf24' : (isSel ? '#e2e8f0' : '#475569')}
+                            strokeWidth={1 / z}
+                            strokeDasharray={isLineDrawing ? undefined : (tkP.strokeDasharray ?? `${4 / z} ${2 / z}`)}
+                            opacity={tkP.opacity} />
                         )}
                         {intL.visible && shelfYs.map((sy, i) => (
                           <line key={i} x1={rx + 4 / z} y1={sy} x2={rx + displayDx - 4 / z} y2={sy}
-                            stroke={isSel ? '#cbd5e1' : '#4b5563'} strokeWidth={1 / z}
-                            strokeDasharray={intL.style === 'solid' ? undefined : `${8 / z} ${4 / z}`} opacity={intP.opacity} />
+                            stroke={isLineDrawing ? '#a78bfa' : (isSel ? '#cbd5e1' : '#4b5563')}
+                            strokeWidth={1 / z}
+                            strokeDasharray={isLineDrawing || intL.style === 'solid' ? undefined : `${8 / z} ${4 / z}`}
+                            opacity={intP.opacity} />
                         ))}
                         {faceL.visible && cab.has_face && (() => {
                           const ins = 15; const fw = displayDx - ins * 2; const fh = displayDy - tkH - ins * 2
                           if (fw <= 0 || fh <= 0) return null
                           return <rect x={rx + ins} y={ry + ins} width={fw} height={fh}
-                            fill={baseColor} fillOpacity={faceP.fillOpacity * 0.45}
-                            stroke={isSel ? '#e2e8f0' : baseColor} strokeWidth={0.75 / z}
-                            strokeDasharray={faceP.strokeDasharray} opacity={faceP.opacity} />
+                            fill={isLineDrawing ? 'none' : baseColor}
+                            fillOpacity={isLineDrawing ? 0 : faceP.fillOpacity * 0.45}
+                            stroke={isLineDrawing ? '#60a5fa' : (isSel ? '#e2e8f0' : baseColor)}
+                            strokeWidth={isLineDrawing ? 1 / z : 0.75 / z}
+                            strokeDasharray={isLineDrawing ? undefined : faceP.strokeDasharray}
+                            opacity={faceP.opacity} />
                         })()}
                       </>)
                     }
@@ -731,10 +755,13 @@ export default function ElevationSVG({
                         const { ex, ey, ew, eh } = caseElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                         const fill = PART_COLORS[p.part_key] ?? '#b8c8dc'
+                        const ldStroke = LINE_DRAW_COLORS[p.part_key] ?? '#94a3b8'
                         return (
                           <rect key={`cp-${i}`} x={x} y={y} width={w} height={h}
-                            fill={fill} fillOpacity={0.6}
-                            stroke={isSel ? '#e2e8f0' : fill} strokeWidth={0.5 / z}
+                            fill={isLineDrawing ? 'none' : fill}
+                            fillOpacity={isLineDrawing ? 0 : 0.6}
+                            stroke={isLineDrawing ? ldStroke : (isSel ? '#e2e8f0' : fill)}
+                            strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
                             opacity={carcP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
@@ -742,21 +769,39 @@ export default function ElevationSVG({
                         const { ex, ey, ew, eh } = tkElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                         const fill = PART_COLORS[p.part_key] ?? '#f59e0b'
-                        return (
-                          <rect key={`tk-${i}`} x={x} y={y} width={w} height={h}
-                            fill={fill} fillOpacity={0.7}
-                            stroke={isSel ? '#e2e8f0' : fill} strokeWidth={0.5 / z}
-                            opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
-                        )
+                        const ldStroke = LINE_DRAW_COLORS[p.part_key] ?? '#fbbf24'
+                        const isSpreader = p.part_key === 'spreader_vertical' || p.part_key === 'spreader_horizontal'
+                        if (isLineDrawing) {
+                          return (
+                            <rect key={`tk-${i}`} x={x} y={y} width={w} height={h}
+                              fill="none"
+                              stroke={ldStroke} strokeWidth={1 / z}
+                              strokeDasharray={isSpreader ? `${4 / z} ${3 / z}` : undefined}
+                              opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
+                          )
+                        }
+                        return isSpreader
+                          ? <rect key={`tk-${i}`} x={x} y={y} width={w} height={h}
+                              fill="none"
+                              stroke={isSel ? '#e2e8f0' : fill} strokeWidth={1 / z}
+                              strokeDasharray={`${4 / z} ${3 / z}`}
+                              opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
+                          : <rect key={`tk-${i}`} x={x} y={y} width={w} height={h}
+                              fill={fill} fillOpacity={0.7}
+                              stroke={isSel ? '#e2e8f0' : fill} strokeWidth={0.5 / z}
+                              opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                       })}
                       {intL.visible && rp.internal_parts.map((p, i) => {
                         const { ex, ey, ew, eh } = shelfElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                         const fill = PART_COLORS[p.part_type] ?? '#818cf8'
+                        const ldStroke = LINE_DRAW_COLORS[p.part_type] ?? '#a78bfa'
                         return (
                           <rect key={`ip-${i}`} x={x} y={y} width={w} height={h}
-                            fill={fill} fillOpacity={0.6}
-                            stroke={fill} strokeWidth={0.5 / z}
+                            fill={isLineDrawing ? 'none' : fill}
+                            fillOpacity={isLineDrawing ? 0 : 0.6}
+                            stroke={isLineDrawing ? ldStroke : fill}
+                            strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
                             opacity={intP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
@@ -764,17 +809,19 @@ export default function ElevationSVG({
                         const { ex, ey, ew, eh } = zoneElevRect(fz)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                         const fill = PART_COLORS[fz.face_type] ?? '#60a5fa'
+                        const ldStroke = LINE_DRAW_COLORS[fz.face_type] ?? '#60a5fa'
+                        const faceStroke = isLineDrawing ? ldStroke : (isSel ? '#e2e8f0' : fill)
                         const hingeLine = fz.hinge_side === 'left'
-                          ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={fill} strokeWidth={2 / z} style={{ pointerEvents: 'none' }} />
+                          ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={faceStroke} strokeWidth={isLineDrawing ? 1.5 / z : 2 / z} style={{ pointerEvents: 'none' }} />
                           : fz.hinge_side === 'right'
-                          ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={fill} strokeWidth={2 / z} style={{ pointerEvents: 'none' }} />
+                          ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={faceStroke} strokeWidth={isLineDrawing ? 1.5 / z : 2 / z} style={{ pointerEvents: 'none' }} />
                           : null
                         const chevron = displayConfig.annotations.elev_door_chevrons && fz.face_type === 'door' && fz.hinge_side
                           ? (() => {
                               const pts = fz.hinge_side === 'left'
                                 ? `${x},${y} ${x + w},${y + h / 2} ${x},${y + h}`
                                 : `${x + w},${y} ${x},${y + h / 2} ${x + w},${y + h}`
-                              return <polyline points={pts} fill="none" stroke={fill}
+                              return <polyline points={pts} fill="none" stroke={faceStroke}
                                 strokeWidth={0.5 / z} strokeOpacity={0.7}
                                 strokeDasharray={`${6 / z} ${3 / z}`}
                                 strokeLinejoin="miter" strokeLinecap="butt"
@@ -784,8 +831,9 @@ export default function ElevationSVG({
                         return (
                           <g key={`fz-${i}`} style={{ pointerEvents: 'none' }}>
                             <rect x={x} y={y} width={w} height={h}
-                              fill={fill} fillOpacity={0.25}
-                              stroke={isSel ? '#e2e8f0' : fill} strokeWidth={1 / z}
+                              fill={isLineDrawing ? 'none' : fill}
+                              fillOpacity={isLineDrawing ? 0 : 0.25}
+                              stroke={faceStroke} strokeWidth={1 / z}
                               opacity={faceP.opacity} />
                             {hingeLine}
                             {chevron}

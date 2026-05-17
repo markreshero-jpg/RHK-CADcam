@@ -147,7 +147,14 @@ function WallMesh({ wall, walls, room, cx, cy }: {
 //   isFlipped (island)    → cabinet faces opposite side → flip again
 //   net: needFlip = (isNaturalPerp === isFlipped)
 
-function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMenu, rp }: {
+type MatColEntry = string | { face?: string; back?: string; edge?: string }
+function matFace(spec: MatColEntry | undefined, fallback: string) {
+  if (!spec) return fallback
+  if (typeof spec === 'string') return spec
+  return spec.face ?? fallback
+}
+
+function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMenu, rp, materialColours }: {
   cab: CabinetInstance
   wall: Wall
   cx: number; cy: number
@@ -156,6 +163,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
   onSelect: () => void
   onContextMenu: (x: number, y: number) => void
   rp?: ResolvedCabinet
+  materialColours?: Record<string, MatColEntry>
 }) {
   const angleRad = wall.angle * TO_RAD
   const perp     = wallInwardNormal(wall, cx, cy)
@@ -203,7 +211,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
         {rp.case_parts.map((p, i) => (
           <Part key={`c${i}`}
             b={caseBox(p, cab.dy)}
-            color={selected ? SEL : '#ddd3bb'}
+            color={selected ? SEL : matFace(materialColours?.[p.material_id], '#ddd3bb')}
             edgeColor={selected ? SELE : '#b8a98e'}
           />
         ))}
@@ -212,7 +220,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
         {rp.toekick_parts.map((p, i) => (
           <Part key={`t${i}`}
             b={tkBox(p)}
-            color={selected ? SEL : '#78716c'}
+            color={selected ? SEL : matFace(materialColours?.[p.material_id], '#78716c')}
             edgeColor={selected ? SELE : '#57534e'}
           />
         ))}
@@ -221,7 +229,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
         {rp.internal_parts.map((p, i) => (
           <Part key={`s${i}`}
             b={intBox(p)}
-            color={selected ? SEL : '#e8dece'}
+            color={selected ? SEL : matFace(materialColours?.[p.material_id], '#e8dece')}
             edgeColor={selected ? SELE : '#c4b49c'}
           />
         ))}
@@ -230,7 +238,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
         {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => (
           <Part key={`f${i}`}
             b={zoneBox(z)}
-            color={selected ? SEL : (z.face_type === 'drawer_face' ? '#e2d9c8' : '#f0ebe0')}
+            color={selected ? SEL : matFace(materialColours?.[z.material_id], z.face_type === 'drawer_face' ? '#e2d9c8' : '#f0ebe0')}
             edgeColor={selected ? SELE : '#b8a98e'}
           />
         ))}
@@ -295,7 +303,7 @@ function CabContextMenu({ x, y, onEdit, onDelete, onClose }: {
 // Replaces OrbitControls built-in scroll zoom so we can vary speed per modifier
 // and zoom toward the 3D point under the cursor rather than the orbit target.
 //
-// Scroll direction is reversed (scroll down = zoom in) matching the rest of the app.
+// Standard direction: scroll up = zoom in. Reversed by user pref (Settings → User → Preferences).
 // Ctrl = fast zoom, Shift = fine zoom, no modifier = normal.
 
 function CustomZoom({ controlsRef }: { controlsRef: React.RefObject<any> }) {
@@ -313,9 +321,9 @@ function CustomZoom({ controlsRef }: { controlsRef: React.RefObject<any> }) {
       if (e.ctrlKey)  speed = 0.40
       if (e.shiftKey) speed = 0.03
 
-      // Default: deltaY > 0 (scroll down) = zoom in; inverted: scroll up = zoom in
+      // Standard: scroll up (deltaY < 0) = zoom in; toggle inverts
       const inv = getUserPrefs().invertScroll
-      const zoomIn = inv ? e.deltaY < 0 : e.deltaY > 0
+      const zoomIn = inv ? e.deltaY > 0 : e.deltaY < 0
 
       // Standard dolly: move along camera's forward axis toward the orbit target
       const dir = new Vector3()
@@ -338,7 +346,7 @@ function CustomZoom({ controlsRef }: { controlsRef: React.RefObject<any> }) {
 
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts }: {
+function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -346,6 +354,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
   onSelectCabinet: (id: string) => void
   onCabContextMenu: (cabId: string, x: number, y: number) => void
   resolvedParts: Map<string, ResolvedCabinet>
+  materialColours?: Record<string, MatColEntry>
 }) {
   const controlsRef = useRef<any>(null)
   const { x: cx, y: cy } = useMemo(() => centroid(walls), [walls])
@@ -408,6 +417,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
             onSelect={() => onSelectCabinet(cab.id)}
             onContextMenu={(x, y) => onCabContextMenu(cab.id, x, y)}
             rp={resolvedParts.get(cab.id)}
+            materialColours={materialColours}
           />
         )
       })}
@@ -419,7 +429,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
 
 type MenuState = { x: number; y: number; cabId: string }
 
-export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, resolvedParts }: {
+export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, resolvedParts, materialColours }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -429,6 +439,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   onEditCabinet: (id: string) => void
   onDeleteCabinet: (id: string) => void
   resolvedParts: Map<string, ResolvedCabinet>
+  materialColours?: Record<string, MatColEntry>
 }) {
   const [menu, setMenu] = useState<MenuState | null>(null)
   // Tracks whether the right-click landed on a cabinet so the div-level handler
@@ -460,6 +471,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
               selectedId={selectedId} onSelectCabinet={onSelectCabinet}
               onCabContextMenu={(cabId, x, y) => { hitCabRef.current = true; setMenu({ cabId, x, y }) }}
               resolvedParts={resolvedParts}
+              materialColours={materialColours}
             />
           )}
         </Suspense>

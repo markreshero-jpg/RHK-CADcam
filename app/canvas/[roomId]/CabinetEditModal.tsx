@@ -174,8 +174,12 @@ function ResolvedElevation({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabi
       {rp.toekick_parts.map((p, i) => {
         const { ex, ey, ew, eh } = tkElevRect(p)
         const r = toSVG(ex, ey, ew, eh)
-        return <rect key={`tk${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
-          fill={RC.toekick.fill} stroke={RC.toekick.stroke} strokeWidth={0.75} />
+        const isSpreader = p.part_key === 'spreader_vertical' || p.part_key === 'spreader_horizontal'
+        return isSpreader
+          ? <rect key={`tk${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
+              fill="none" stroke={RC.toekick.stroke} strokeWidth={1} strokeDasharray="4 3" />
+          : <rect key={`tk${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
+              fill={RC.toekick.fill} stroke={RC.toekick.stroke} strokeWidth={0.75} />
       })}
 
       {/* Shelves */}
@@ -734,7 +738,7 @@ function PartsView({ rp }: { rp: ResolvedCabinet }) {
 
 // ── MODAL ─────────────────────────────────────────────────────────────────────
 export default function CabinetEditModal({
-  cabinet, wall, wallCabinets, resolvedCabinet, initialView, onUpdate, onDelete, onClose,
+  cabinet, wall, wallCabinets, resolvedCabinet, initialView, onUpdate, onDelete, onClose, materialColours, ebByMatId,
 }: {
   cabinet: CabinetInstance
   wall: Wall | null
@@ -744,6 +748,8 @@ export default function CabinetEditModal({
   onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onClose: () => void
+  materialColours?: Record<string, string | { face?: string; back?: string; edge?: string }>
+  ebByMatId?: Record<string, { thickness: number; color: string | null }>
 }) {
   const [activeView, setActiveView] = useState<ViewId>(initialView ?? 'elevation')
 
@@ -822,7 +828,7 @@ export default function CabinetEditModal({
             {activeView === 'section-face'     && <SectionFaceView     cab={cabinet} />}
             {activeView === 'section-interior' && <SectionInteriorView cab={cabinet} />}
             {activeView === 'face'             && <FaceGridEditor cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
-            {activeView === '3d'               && rp && <Cabinet3DView cab={cabinet} rp={rp} />}
+            {activeView === '3d'               && rp && <Cabinet3DView cab={cabinet} rp={rp} materialColours={materialColours} ebByMatId={ebByMatId} />}
             {activeView === 'parts'            && rp && <PartsView rp={rp} />}
           </div>
         </div>

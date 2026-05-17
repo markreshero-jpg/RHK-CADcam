@@ -11,6 +11,9 @@ function dbRowToMaterial(row: Record<string, unknown>): Material {
     sheet_dy:        Number(row.sheet_dy),
     has_grain:       Boolean(row.has_grain),
     grain_direction: row.grain_direction as Material['grain_direction'],
+    face_colour:     (row.face_colour as string | null) ?? undefined,
+    back_colour:     (row.back_colour as string | null) ?? undefined,
+    edge_colour:     (row.edge_colour as string | null) ?? undefined,
   }
 }
 

@@ -1,4 +1,5 @@
 'use client'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Mode, CabinetInstance, modeAssemblyClass } from './canvasTypes'
 
@@ -97,17 +98,36 @@ const WALL_ITEMS: { mode: Mode; label: string; icon: React.ReactNode; color: str
 ]
 const WALL_MODES = WALL_ITEMS.map(w => w.mode)
 
-const CAB_ITEMS: { mode: Mode; label: string; icon: React.ReactNode; color: string }[] = [
-  { mode: 'place_base',        label: 'Base Cabinet',  icon: <BaseCabIcon />,  color: 'text-blue-400' },
-  { mode: 'place_wall_unit',   label: 'Wall Unit',     icon: <WallUnitIcon />, color: 'text-emerald-400' },
-  { mode: 'place_tall',        label: 'Tall Cabinet',  icon: <TallCabIcon />,  color: 'text-purple-400' },
-  { mode: 'place_end_panel',   label: 'End Panel',     icon: <EndPanelIcon />, color: 'text-slate-400' },
-  { mode: 'place_base_corner', label: 'Base Corner',   icon: <CornerIcon />,   color: 'text-blue-300' },
-  { mode: 'place_wall_corner', label: 'Wall Corner',   icon: <CornerIcon />,   color: 'text-emerald-300' },
-  { mode: 'place_tall_corner', label: 'Tall Corner',   icon: <CornerIcon />,   color: 'text-purple-300' },
+type CabItem = { mode: Mode; label: string; icon: React.ReactNode; color: string }
+type CabGroup = { label: string; accentClass: string; items: CabItem[] }
+
+const CAB_GROUPS: CabGroup[] = [
+  {
+    label: 'Base', accentClass: 'text-blue-400',
+    items: [
+      { mode: 'place_base',        label: 'Base Cabinet', icon: <BaseCabIcon />,  color: 'text-blue-400' },
+      { mode: 'place_base_corner', label: 'Base Corner',  icon: <CornerIcon />,   color: 'text-blue-300' },
+      { mode: 'place_end_panel',   label: 'End Panel',    icon: <EndPanelIcon />, color: 'text-slate-400' },
+    ],
+  },
+  {
+    label: 'Wall', accentClass: 'text-emerald-400',
+    items: [
+      { mode: 'place_wall_unit',   label: 'Wall Unit',    icon: <WallUnitIcon />, color: 'text-emerald-400' },
+      { mode: 'place_wall_corner', label: 'Wall Corner',  icon: <CornerIcon />,   color: 'text-emerald-300' },
+    ],
+  },
+  {
+    label: 'Tall', accentClass: 'text-purple-400',
+    items: [
+      { mode: 'place_tall',        label: 'Tall Cabinet', icon: <TallCabIcon />,  color: 'text-purple-400' },
+      { mode: 'place_tall_corner', label: 'Tall Corner',  icon: <CornerIcon />,   color: 'text-purple-300' },
+    ],
+  },
 ]
 
-const PLACE_MODES = CAB_ITEMS.map(c => c.mode)
+const ALL_CAB_ITEMS = CAB_GROUPS.flatMap(g => g.items)
+const PLACE_MODES   = ALL_CAB_ITEMS.map(c => c.mode)
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -148,16 +168,96 @@ export default function CanvasSidebar({
     )
   }
 
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+
+  function toggleGroup(label: string) {
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(label)) next.delete(label); else next.add(label)
+      return next
+    })
+  }
+
+  const [customGroupLabels, setCustomGroupLabels] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('rhk-cab-groups') ?? '[]') } catch { return [] }
+  })
+  const [ctxMenu, setCtxMenu] = useState<{
+    x: number; y: number
+    groupLabel?: string
+    subGroup?: { label: string; parent: string }
+  } | null>(null)
+  const [addingGroup, setAddingGroup] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [customSubGroups, setCustomSubGroups] = useState<Record<string, string[]>>(() => {
+    try { return JSON.parse(localStorage.getItem('rhk-cab-subgroups') ?? '{}') } catch { return {} }
+  })
+  const [addingSubGroup, setAddingSubGroup] = useState<string | null>(null)
+  const [newSubGroupName, setNewSubGroupName] = useState('')
+
+  useEffect(() => {
+    if (!ctxMenu) return
+    const close = () => setCtxMenu(null)
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [ctxMenu])
+
+  function saveCustomGroups(labels: string[]) {
+    localStorage.setItem('rhk-cab-groups', JSON.stringify(labels))
+    setCustomGroupLabels(labels)
+  }
+
+  function handleAddGroup() {
+    const name = newGroupName.trim()
+    if (!name) return
+    if (CAB_GROUPS.some(g => g.label === name) || customGroupLabels.includes(name)) return
+    saveCustomGroups([...customGroupLabels, name])
+    setNewGroupName('')
+    setAddingGroup(false)
+  }
+
+  function handleDeleteGroup(label: string) {
+    saveCustomGroups(customGroupLabels.filter(l => l !== label))
+    setCtxMenu(null)
+  }
+
+  function saveSubGroups(groups: Record<string, string[]>) {
+    localStorage.setItem('rhk-cab-subgroups', JSON.stringify(groups))
+    setCustomSubGroups(groups)
+  }
+
+  function handleAddSubGroup() {
+    if (!addingSubGroup) return
+    const name = newSubGroupName.trim()
+    if (!name) return
+    const existing = customSubGroups[addingSubGroup] ?? []
+    if (existing.includes(name)) return
+    saveSubGroups({ ...customSubGroups, [addingSubGroup]: [...existing, name] })
+    setNewSubGroupName('')
+    setAddingSubGroup(null)
+  }
+
+  function handleDeleteSubGroup(parent: string, label: string) {
+    const existing = customSubGroups[parent] ?? []
+    saveSubGroups({ ...customSubGroups, [parent]: existing.filter(l => l !== label) })
+    setCtxMenu(null)
+  }
+
+  const allGroups: CabGroup[] = [
+    ...CAB_GROUPS,
+    ...customGroupLabels.map(label => ({ label, accentClass: 'text-gray-400', items: [] as CabItem[] })),
+  ]
+
   const cabActive  = PLACE_MODES.includes(mode)
   const wallActive = WALL_MODES.includes(mode)
 
-  const previewItem = cabActive ? CAB_ITEMS.find(c => c.mode === mode) : null
+  const previewItem = cabActive ? ALL_CAB_ITEMS.find(c => c.mode === mode) : null
   const previewMac  = cabActive ? modeAssemblyClass(mode) : null
 
   return (
     <aside
       className="flex-none bg-gray-900 flex flex-col border-r border-gray-800"
       style={{ width: sidebarW }}
+      onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }) }}
     >
       {/* ── Scrollable tool area ── */}
       <div className="flex-1 flex flex-col py-2 gap-0.5 overflow-y-auto px-2 min-h-0">
@@ -219,19 +319,99 @@ export default function CanvasSidebar({
 
         {cabMenuOpen && (
           <div className="flex flex-col gap-px pt-0.5">
-            {CAB_ITEMS.map(({ mode: m, label, icon, color }) => (
-              <button
-                key={m}
-                onClick={() => onSelectMode(m)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
-                  ${mode === m ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-              >
-                <span className={`flex-none w-4 flex items-center justify-center ${mode === m ? 'text-white' : color}`}>
-                  {icon}
-                </span>
-                <span className="truncate">{label}</span>
-              </button>
-            ))}
+            {allGroups.map(group => {
+              const isCustom = customGroupLabels.includes(group.label)
+              const groupActive = group.items.some(i => i.mode === mode)
+              const isOpen = openGroups.has(group.label) || groupActive
+              const subs = customSubGroups[group.label] ?? []
+              return (
+                <div key={group.label}>
+                  <button
+                    onClick={() => toggleGroup(group.label)}
+                    onContextMenu={e => { e.stopPropagation(); e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, groupLabel: group.label }) }}
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-colors
+                      ${groupActive ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                    <span className={`flex-1 text-left ${groupActive ? group.accentClass : ''}`}>{group.label}</span>
+                    {isCustom && <span className="text-[9px] text-gray-600 normal-case font-normal tracking-normal italic mr-1">custom</span>}
+                    <span className="opacity-40 text-[10px]">{isOpen ? '▴' : '▾'}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="flex flex-col gap-px pb-1">
+                      {group.items.map(({ mode: m, label, icon, color }) => (
+                        <button
+                          key={m}
+                          onClick={() => onSelectMode(m)}
+                          className={`w-full flex items-center gap-2.5 pl-5 pr-3 py-2 rounded-md text-sm transition-colors
+                            ${mode === m ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+                        >
+                          <span className={`flex-none w-4 flex items-center justify-center ${mode === m ? 'text-white' : color}`}>
+                            {icon}
+                          </span>
+                          <span className="truncate">{label}</span>
+                        </button>
+                      ))}
+
+                      {subs.map(subLabel => {
+                        const subKey = `${group.label}::${subLabel}`
+                        const subOpen = openGroups.has(subKey)
+                        return (
+                          <div key={subLabel}>
+                            <button
+                              onClick={() => toggleGroup(subKey)}
+                              onContextMenu={e => { e.stopPropagation(); e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, subGroup: { label: subLabel, parent: group.label } }) }}
+                              className="w-full flex items-center gap-2 pl-5 pr-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-colors text-gray-600 hover:text-gray-400"
+                            >
+                              <span className="flex-1 text-left">{subLabel}</span>
+                              <span className="opacity-40 text-[10px]">{subOpen ? '▴' : '▾'}</span>
+                            </button>
+                            {subOpen && (
+                              <p className="pl-8 pr-3 py-1.5 text-xs text-gray-600 italic">No items yet</p>
+                            )}
+                          </div>
+                        )
+                      })}
+
+                      {addingSubGroup === group.label && (
+                        <div className="pl-5 pr-2 py-1">
+                          <input
+                            autoFocus
+                            value={newSubGroupName}
+                            onChange={e => setNewSubGroupName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleAddSubGroup()
+                              if (e.key === 'Escape') { setAddingSubGroup(null); setNewSubGroupName('') }
+                            }}
+                            placeholder="Sub-category name…"
+                            className="w-full bg-gray-800 border border-gray-600 rounded-md px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-blue-500"
+                          />
+                        </div>
+                      )}
+
+                      {group.items.length === 0 && subs.length === 0 && addingSubGroup !== group.label && (
+                        <p className="pl-5 pr-3 py-1.5 text-xs text-gray-600 italic">No items yet</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {addingGroup && (
+              <div className="px-2 py-1.5">
+                <input
+                  autoFocus
+                  value={newGroupName}
+                  onChange={e => setNewGroupName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleAddGroup()
+                    if (e.key === 'Escape') { setAddingGroup(false); setNewGroupName('') }
+                  }}
+                  placeholder="Category name…"
+                  className="w-full bg-gray-800 border border-gray-600 rounded-md px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-blue-500"
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -257,6 +437,51 @@ export default function CanvasSidebar({
             label={previewItem.label}
             canvasWidth={sidebarW - 16}
           />
+        </div>
+      )}
+      {ctxMenu && (
+        <div
+          className="fixed z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[170px] text-sm"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onMouseDown={e => e.stopPropagation()}
+          onContextMenu={e => e.preventDefault()}
+        >
+          {ctxMenu.subGroup ? (
+            <button
+              onClick={() => handleDeleteSubGroup(ctxMenu.subGroup!.parent, ctxMenu.subGroup!.label)}
+              className="w-full text-left px-3 py-2 text-red-400 hover:bg-gray-700 rounded-md"
+            >
+              Delete &ldquo;{ctxMenu.subGroup.label}&rdquo;
+            </button>
+          ) : ctxMenu.groupLabel ? (
+            <>
+              <button
+                onClick={() => {
+                  if (!openGroups.has(ctxMenu.groupLabel!)) toggleGroup(ctxMenu.groupLabel!)
+                  setAddingSubGroup(ctxMenu.groupLabel!)
+                  setCtxMenu(null)
+                }}
+                className="w-full text-left px-3 py-2 text-gray-300 hover:bg-gray-700 rounded-md"
+              >
+                + Add sub-category
+              </button>
+              {customGroupLabels.includes(ctxMenu.groupLabel) && (
+                <button
+                  onClick={() => handleDeleteGroup(ctxMenu.groupLabel!)}
+                  className="w-full text-left px-3 py-2 text-red-400 hover:bg-gray-700 rounded-md"
+                >
+                  Delete &ldquo;{ctxMenu.groupLabel}&rdquo;
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              onClick={() => { setAddingGroup(true); setCtxMenu(null) }}
+              className="w-full text-left px-3 py-2 text-gray-300 hover:bg-gray-700 rounded-md"
+            >
+              + Add Category
+            </button>
+          )}
         </div>
       )}
     </aside>

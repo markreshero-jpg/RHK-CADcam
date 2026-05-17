@@ -43,7 +43,7 @@ function emptyDeltas(): ClassDeltas {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function ConstructionMethodsClient() {
+export default function ConstructionMethodsClient({ embedded }: { embedded?: boolean }) {
   const [schedules,    setSchedules]    = useState<Schedule[]>([])
   const [selId,        setSelId]        = useState<string | null>(null)
   const [schedName,    setSchedName]    = useState('')
@@ -54,16 +54,50 @@ export default function ConstructionMethodsClient() {
   const [newName,      setNewName]      = useState('')
   const [creating,     setCreating]     = useState(false)
   const [shopSchedId,  setShopSchedId]  = useState<string | null>(null)
+  const [viewMode,     setViewMode]     = useState<'questions' | 'rules'>('questions')
+  const [hoverParts,   setHoverParts]   = useState<string[] | null>(null)
+  const [previewMats,  setPreviewMats]  = useState<Record<AssClass, Material>>({
+    base: PREVIEW_MATERIAL, wall: PREVIEW_MATERIAL, tall: PREVIEW_MATERIAL,
+  })
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
   const loadSchedules = useCallback(async () => {
     const [{ data: scheds }, { data: shop }] = await Promise.all([
       supabase.from('construction_method_schedules').select('id,name,is_default').order('name'),
-      supabase.from('shop_settings').select('construction_schedule_id').limit(1).maybeSingle(),
+      supabase.from('shop_settings').select('construction_schedule_id,assembly_schedule_id').limit(1).maybeSingle(),
     ])
     setSchedules(scheds ?? [])
     setShopSchedId(shop?.construction_schedule_id ?? null)
+
+    // Load per-class interior material from the shop assembly schedule
+    const asmSchedId = shop?.assembly_schedule_id
+    if (asmSchedId) {
+      const { data: rows } = await supabase
+        .from('assembly_schedule_rows')
+        .select('assembly_class,material_id')
+        .eq('schedule_id', asmSchedId)
+        .eq('material_role', 'interior')
+      if (rows?.length) {
+        const matIds = [...new Set(rows.map(r => r.material_id).filter(Boolean))]
+        const { data: mats } = await supabase
+          .from('materials').select('id,name,dz,face_colour,back_colour,edge_colour').in('id', matIds)
+        if (mats?.length) {
+          const byId = Object.fromEntries(mats.map(m => [m.id, m]))
+          setPreviewMats(prev => {
+            const next = { ...prev }
+            for (const row of rows) {
+              const cls = row.assembly_class as AssClass
+              const mat = byId[row.material_id]
+              if (mat && (cls === 'base' || cls === 'wall' || cls === 'tall')) {
+                next[cls] = { id: mat.id, name: mat.name, DZ: mat.dz, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, face_colour: mat.face_colour ?? undefined, back_colour: mat.back_colour ?? undefined, edge_colour: mat.edge_colour ?? undefined }
+              }
+            }
+            return next
+          })
+        }
+      }
+    }
   }, [])
 
   useEffect(() => { loadSchedules() }, [loadSchedules])
@@ -195,16 +229,20 @@ export default function ConstructionMethodsClient() {
     + Object.keys(delta.EDGING ?? {}).length
 
   return (
-    <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
+    <div className={embedded ? "flex-1 flex flex-col overflow-hidden" : "h-screen bg-gray-950 text-white flex flex-col overflow-hidden"}>
 
       {/* Header */}
+      {!embedded && (
       <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
         <Link href="/settings" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">← Settings</Link>
         <span className="text-gray-700">|</span>
         <Link href="/library/schedules" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">Material Schedules</Link>
         <span className="text-gray-700">|</span>
+        <Link href="/library/drawer-boxes" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">Drawer Box Methods</Link>
+        <span className="text-gray-700">|</span>
         <span className="text-sm font-semibold text-white">Construction Methods</span>
       </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
 
@@ -306,83 +344,114 @@ export default function ConstructionMethodsClient() {
             {/* Tab content */}
             <div className="flex-1 overflow-hidden flex">
 
-              {/* Rule fields — scrollable */}
-              <div className="flex-1 overflow-y-auto px-6 py-4">
-                <div className="max-w-2xl space-y-6">
+              {/* Left: view toggle + content */}
+              <div className="flex-1 overflow-hidden flex flex-col">
 
-                  {/* Rule groups */}
-                  {RULE_GROUPS.map(group => (
-                    <div key={group.label}>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{group.label}</p>
-                      <div className="space-y-px">
-                        {group.keys.map(k => (
-                          <RuleRow key={k} ruleKey={k} delta={delta}
-                            onChange={v => setRule(classTab, k, v as ConstructionRules[RuleKey])} />
-                        ))}
-                      </div>
-                    </div>
+                {/* View mode toggle */}
+                <div className="flex-none border-b border-gray-800 px-6 py-2 flex items-center gap-1">
+                  {(['questions','rules'] as const).map(mode => (
+                    <button key={mode} onClick={() => setViewMode(mode)}
+                      className={`px-3 py-1 text-xs rounded transition-colors ${
+                        viewMode === mode ? 'bg-gray-700 text-gray-100' : 'text-gray-500 hover:text-gray-300'
+                      }`}>
+                      {mode === 'questions' ? 'Questions' : 'All Rules'}
+                    </button>
                   ))}
+                  {overrideCount > 0 && (
+                    <span className="ml-2 text-[10px] text-gray-600">
+                      {overrideCount} override{overrideCount !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
 
-                  {/* Edging */}
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Edging Defaults</p>
-                    <p className="text-xs text-gray-600 mb-3">
-                      Edges that get banded. T = top · B = bottom · L = left · R = right (sheet perspective).
-                      Blue = overridden from system default.
-                    </p>
-                    <div className="space-y-4">
-                      {EDGING_GROUPS.map(group => (
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                  {viewMode === 'questions' ? (
+                    <QuestionPanel
+                      classTab={classTab}
+                      delta={delta}
+                      onChange={(k, v) => setRule(classTab, k, v)}
+                      onHoverParts={setHoverParts}
+                    />
+                  ) : (
+                    <div className="max-w-2xl space-y-6">
+
+                      {/* Rule groups */}
+                      {RULE_GROUPS.map(group => (
                         <div key={group.label}>
-                          <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-1">{group.label}</p>
-                          <table className="w-full text-xs">
-                            <thead>
-                              <tr className="text-gray-600">
-                                <th className="text-left py-1 pr-4 font-normal w-44">Part</th>
-                                {EDGE_SIDES.map(s => (
-                                  <th key={s} className="text-center py-1 w-10 font-medium text-gray-500">{EDGE_LABELS[s]}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {group.keys.map(part => {
-                                const sides    = effectiveEdgeSides(delta, part)
-                                const defSides = DEFAULT_EDGING[part]
-                                const isOver   = !sidesEqual(sides, defSides)
-                                return (
-                                  <tr key={part} className={`${isOver ? 'bg-blue-950/20' : 'hover:bg-gray-800/30'} rounded`}>
-                                    <td className={`py-1 pr-4 ${isOver ? 'text-blue-300' : 'text-gray-400'}`}>
-                                      {EDGING_LABELS[part]}
-                                    </td>
-                                    {EDGE_SIDES.map(side => {
-                                      const checked = sides.includes(side)
-                                      const defCheck = defSides.includes(side)
-                                      const changed  = checked !== defCheck
-                                      return (
-                                        <td key={side} className="py-1 text-center">
-                                          <input
-                                            type="checkbox"
-                                            checked={checked}
-                                            onChange={() => toggleEdgeSide(classTab, part, side)}
-                                            className={`rounded cursor-pointer ${changed ? 'accent-blue-500' : ''}`}
-                                          />
-                                        </td>
-                                      )
-                                    })}
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{group.label}</p>
+                          <div className="space-y-px">
+                            {group.keys.map(k => (
+                              <RuleRow key={k} ruleKey={k} delta={delta}
+                                onChange={v => setRule(classTab, k, v as ConstructionRules[RuleKey])} />
+                            ))}
+                          </div>
                         </div>
                       ))}
-                    </div>
-                  </div>
 
+                      {/* Edging */}
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Edging Defaults</p>
+                        <p className="text-xs text-gray-600 mb-3">
+                          Edges that get banded. T = top · B = bottom · L = left · R = right (sheet perspective).
+                          Blue = overridden from system default.
+                        </p>
+                        <div className="space-y-4">
+                          {EDGING_GROUPS.map(group => (
+                            <div key={group.label}>
+                              <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-1">{group.label}</p>
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-gray-600">
+                                    <th className="text-left py-1 pr-4 font-normal w-44">Part</th>
+                                    {EDGE_SIDES.map(s => (
+                                      <th key={s} className="text-center py-1 w-10 font-medium text-gray-500">{EDGE_LABELS[s]}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {group.keys.map(part => {
+                                    const sides    = effectiveEdgeSides(delta, part)
+                                    const defSides = DEFAULT_EDGING[part]
+                                    const isOver   = !sidesEqual(sides, defSides)
+                                    return (
+                                      <tr key={part} className={`${isOver ? 'bg-blue-950/20' : 'hover:bg-gray-800/30'} rounded`}>
+                                        <td className={`py-1 pr-4 ${isOver ? 'text-blue-300' : 'text-gray-400'}`}>
+                                          {EDGING_LABELS[part]}
+                                        </td>
+                                        {EDGE_SIDES.map(side => {
+                                          const checked  = sides.includes(side)
+                                          const defCheck = defSides.includes(side)
+                                          const changed  = checked !== defCheck
+                                          return (
+                                            <td key={side} className="py-1 text-center">
+                                              <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => toggleEdgeSide(classTab, part, side)}
+                                                className={`rounded cursor-pointer ${changed ? 'accent-blue-500' : ''}`}
+                                              />
+                                            </td>
+                                          )
+                                        })}
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                    </div>
+                  )}
                 </div>
+
               </div>
 
               {/* 3D Preview panel */}
-              <PreviewPanel classTab={classTab} delta={delta} />
+              <PreviewPanel classTab={classTab} delta={delta} highlightPartKeys={hoverParts} material={previewMats[classTab]} />
 
             </div>
 
@@ -627,13 +696,56 @@ const PREVIEW_VIEWS: { id: PView; label: string }[] = [
   { id: '3d',    label: '3D'    },
 ]
 
-function PreviewPanel({ classTab, delta }: { classTab: AssClass; delta: Partial<ConstructionRules> }) {
-  const [panelW,     setPanelW]     = useState(380)
-  const [activeView, setActiveView] = useState<PView>('3d')
+function PreviewPanel({ classTab, delta, highlightPartKeys, material }: {
+  classTab: AssClass
+  delta: Partial<ConstructionRules>
+  highlightPartKeys?: string[] | null
+  material?: Material
+}) {
+  const [panelW,       setPanelW]       = useState(380)
+  const [activeView,   setActiveView]   = useState<PView>('3d')
+  const [asmSchedules, setAsmSchedules] = useState<{ id: string; name: string }[]>([])
+  const [selectedAsmId, setSelectedAsmId] = useState<string>('')
+  const [overrideMat,  setOverrideMat]  = useState<Material | null>(null)
   const resizeRef = useRef<{ startX: number; startW: number } | null>(null)
+
+  // Set initial width to half the available space (sidebar = 240px)
+  useEffect(() => {
+    setPanelW(Math.round((window.innerWidth - 240) / 2))
+  }, [])
+
+  // Load assembly schedule list once
+  useEffect(() => {
+    supabase.from('assembly_schedules').select('id,name').order('name')
+      .then(({ data }) => setAsmSchedules(data ?? []))
+  }, [])
+
+  // Reload interior material when schedule selection or class tab changes
+  useEffect(() => {
+    if (!selectedAsmId) { setOverrideMat(null); return }
+    let cancelled = false
+    ;(async () => {
+      const { data: row } = await supabase
+        .from('assembly_schedule_rows')
+        .select('material_id')
+        .eq('schedule_id', selectedAsmId)
+        .eq('assembly_class', classTab)
+        .eq('material_role', 'interior')
+        .maybeSingle()
+      if (cancelled || !row?.material_id) { if (!cancelled) setOverrideMat(null); return }
+      const { data: m } = await supabase
+        .from('materials').select('id,name,dz,face_colour,back_colour,edge_colour')
+        .eq('id', row.material_id).single()
+      if (!cancelled && m) {
+        setOverrideMat({ id: m.id, name: m.name, DZ: m.dz, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, face_colour: m.face_colour ?? undefined, back_colour: m.back_colour ?? undefined, edge_colour: m.edge_colour ?? undefined })
+      }
+    })()
+    return () => { cancelled = true }
+  }, [selectedAsmId, classTab])
 
   const { dx, dy, dz } = DEFAULT_DIMS[classTab] ?? DEFAULT_DIMS.base
   const isWall = classTab === 'wall'
+  const mat = overrideMat ?? material ?? PREVIEW_MATERIAL
 
   const rules = useMemo(
     () => ({ ...DEFAULT_RULES, ...delta } as ConstructionRules),
@@ -654,11 +766,11 @@ function PreviewPanel({ classTab, delta }: { classTab: AssClass; delta: Partial<
       left_neighbour: 'wall',
       right_neighbour: 'wall',
       exposed_interior: false,
-      material:                    PREVIEW_MATERIAL,
-      door_material:               PREVIEW_MATERIAL,
-      shelf_material:              PREVIEW_MATERIAL,
-      toekick_face_material:       PREVIEW_MATERIAL,
-      toekick_interior_material:   PREVIEW_MATERIAL,
+      material:                    mat,
+      door_material:               mat,
+      shelf_material:              mat,
+      toekick_face_material:       mat,
+      toekick_interior_material:   mat,
       slide_side_deduction: 13,
       rules,
       face_grid: {
@@ -671,10 +783,19 @@ function PreviewPanel({ classTab, delta }: { classTab: AssClass; delta: Partial<
       inner_drawers: [],
     }
     return resolveCabinet(input)
-  }, [classTab, dx, dy, dz, isWall, rules])
+  }, [classTab, dx, dy, dz, isWall, rules, mat])
 
   const fakeDims: PrevDims = { dx, dy, dz }
   const toeh = rules.TOEH
+  const materialColours = useMemo(() => ({
+    [mat.id]: { face: mat.face_colour ?? undefined, back: mat.back_colour ?? undefined, edge: mat.edge_colour ?? undefined },
+  }), [mat])
+  // ebByMatId drives edgeband STRIP colour — separate from the raw board edge.
+  // Use null here so the 3D view picks its neutral fallback (#c8b89a).
+  const ebByMatId = useMemo(
+    () => ({ [mat.id]: { thickness: 1, color: null } }),
+    [mat],
+  )
 
   function onResizeDown(e: React.PointerEvent<HTMLDivElement>) {
     resizeRef.current = { startX: e.clientX, startW: panelW }
@@ -718,7 +839,7 @@ function PreviewPanel({ classTab, delta }: { classTab: AssClass; delta: Partial<
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {activeView === '3d' ? (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <Cabinet3DView cab={{ id: 'preview', dx, dy, dz } as CabinetInstance} rp={resolvedCab} />
+            <Cabinet3DView cab={{ id: 'preview', dx, dy, dz } as CabinetInstance} rp={resolvedCab} highlightPartKeys={highlightPartKeys} materialColours={materialColours} ebByMatId={ebByMatId} />
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center p-4 min-h-0">
@@ -729,11 +850,294 @@ function PreviewPanel({ classTab, delta }: { classTab: AssClass; delta: Partial<
         )}
       </div>
 
-      {/* Footer: active rule summary */}
-      <div className="flex-none px-4 py-2 border-t border-gray-800 flex items-center gap-5 text-[10px]">
-        <span className="text-gray-600">Top: <span className="text-gray-300 font-mono capitalize">{rules.TOP_TYPE.replace(/_/g, ' ')}</span></span>
-        <span className="text-gray-600">Toe: <span className="text-gray-300 font-mono capitalize">{isWall || rules.TOE_TYPE === 'none' ? 'none' : `${rules.TOE_TYPE} · ${toeh}mm`}</span></span>
+      {/* Footer */}
+      <div className="flex-none px-4 py-2 border-t border-gray-800 space-y-1.5 text-[10px]">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600 shrink-0">Schedule</span>
+          <select
+            value={selectedAsmId}
+            onChange={e => setSelectedAsmId(e.target.value)}
+            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+          >
+            <option value="">Shop default</option>
+            {asmSchedules.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-4 text-gray-600">
+          <span>Top: <span className="text-gray-300 font-mono capitalize">{rules.TOP_TYPE.replace(/_/g, ' ')}</span></span>
+          <span>Toe: <span className="text-gray-300 font-mono capitalize">{isWall || rules.TOE_TYPE === 'none' ? 'none' : `${rules.TOE_TYPE} · ${toeh}mm`}</span></span>
+          <span className="ml-auto">Board: <span className="text-gray-300 font-mono">{mat.name} ({mat.DZ}mm)</span></span>
+        </div>
       </div>
+    </div>
+  )
+}
+
+// ── Guided questions panel ────────────────────────────────────────────────────
+
+function ChipSelect({ options, value, onChange }: {
+  options:  { label: string; value: string }[]
+  value:    string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="flex gap-2 flex-wrap">
+      {options.map(opt => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+            value === opt.value
+              ? 'border-blue-500 bg-blue-600/20 text-blue-300'
+              : 'border-gray-700 bg-gray-800/60 text-gray-400 hover:border-gray-600 hover:text-gray-300'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function QCard({ question, isOverride, partKeys, onHover, children }: {
+  question:   string
+  isOverride: boolean
+  partKeys?:  string[]
+  onHover?:   (keys: string[] | null) => void
+  children:   React.ReactNode
+}) {
+  return (
+    <div
+      className={`p-4 rounded-lg border transition-colors ${
+        isOverride ? 'border-blue-800/50 bg-blue-950/20' : 'border-gray-800 bg-gray-900/30'
+      }`}
+      onMouseEnter={() => partKeys && onHover?.(partKeys)}
+      onMouseLeave={() => onHover?.(null)}
+    >
+      <p className={`text-xs font-medium mb-3 ${isOverride ? 'text-blue-300' : 'text-gray-300'}`}>
+        {question}
+      </p>
+      {children}
+    </div>
+  )
+}
+
+function MmInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="number" value={value}
+        onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) onChange(v) }}
+        onFocus={e => e.target.select()}
+        className="w-20 text-right bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs font-mono text-white focus:outline-none focus:border-blue-500"
+      />
+      <span className="text-xs text-gray-600">mm</span>
+    </div>
+  )
+}
+
+function QuestionPanel({ classTab, delta, onChange, onHoverParts }: {
+  classTab:     AssClass
+  delta:        Partial<ConstructionRules>
+  onChange:     (key: RuleKey, value: ConstructionRules[RuleKey]) => void
+  onHoverParts: (keys: string[] | null) => void
+}) {
+  const isWall  = classTab === 'wall'
+  const toeType = effectiveRule(delta, 'TOE_TYPE')
+  const topType = effectiveRule(delta, 'TOP_TYPE')
+  const facIns  = effectiveRule(delta, 'FACINS')
+  const revL    = effectiveRule(delta, 'REVL')
+  const revR    = effectiveRule(delta, 'REVR')
+  const revEL   = effectiveRule(delta, 'REVENDL')
+  const revER   = effectiveRule(delta, 'REVENDR')
+
+  const asymAdj  = revL !== revR
+  const asymWall = revEL !== revER
+  const hasRail  = topType === 'front_rail' || topType === 'double_rail'
+
+  return (
+    <div className="max-w-xl space-y-3">
+
+      {/* ── Toe kick ── */}
+      {!isWall && (<>
+        <QCard question="How is the toe kick constructed?" isOverride={'TOE_TYPE' in delta}
+          partKeys={['kick_front_face','kick_sub_front','kick_back','spreader_vertical','spreader_horizontal']}
+          onHover={onHoverParts}>
+          <ChipSelect
+            value={toeType}
+            onChange={v => onChange('TOE_TYPE', v as ConstructionRules['TOE_TYPE'])}
+            options={[
+              { label: 'Ladder frame', value: 'ladder' },
+              { label: 'Leg supports', value: 'leg' },
+              { label: 'No toe kick',  value: 'none' },
+            ]}
+          />
+        </QCard>
+
+        {toeType !== 'none' && (
+          <QCard question="Toe kick height" isOverride={'TOEH' in delta}
+            partKeys={['kick_front_face','kick_sub_front','kick_back','spreader_vertical','spreader_horizontal']}
+            onHover={onHoverParts}>
+            <MmInput value={effectiveRule(delta, 'TOEH')} onChange={v => onChange('TOEH', v as ConstructionRules[RuleKey])} />
+          </QCard>
+        )}
+      </>)}
+
+      {/* ── Cabinet top ── */}
+      <QCard question="What closes the top of the cabinet?" isOverride={'TOP_TYPE' in delta}
+        partKeys={['full_top','front_rail','back_rail']}
+        onHover={onHoverParts}>
+        <ChipSelect
+          value={topType}
+          onChange={v => onChange('TOP_TYPE', v as ConstructionRules['TOP_TYPE'])}
+          options={[
+            { label: 'Full panel',         value: 'full_top' },
+            { label: 'Front rail',         value: 'front_rail' },
+            { label: 'Front & back rails', value: 'double_rail' },
+            { label: 'Nothing',            value: 'none' },
+          ]}
+        />
+      </QCard>
+
+      {hasRail && (
+        <QCard question="Rail depth" isOverride={'RD' in delta}
+          partKeys={['front_rail','back_rail']}
+          onHover={onHoverParts}>
+          <MmInput value={effectiveRule(delta, 'RD')} onChange={v => onChange('RD', v as ConstructionRules[RuleKey])} />
+        </QCard>
+      )}
+
+      {/* ── Face mounting ── */}
+      <QCard question="How are door and drawer faces mounted?" isOverride={'FACINS' in delta}
+        partKeys={['door','drawer_face','false_panel']}
+        onHover={onHoverParts}>
+        <ChipSelect
+          value={facIns > 0 ? 'inset' : 'overlay'}
+          onChange={v => onChange('FACINS', (v === 'inset' ? (facIns > 0 ? facIns : 20) : 0) as ConstructionRules[RuleKey])}
+          options={[
+            { label: 'Full overlay', value: 'overlay' },
+            { label: 'Inset',        value: 'inset' },
+          ]}
+        />
+        {facIns > 0 && (
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs text-gray-500">Inset depth</span>
+            <MmInput value={facIns} onChange={v => onChange('FACINS', v as ConstructionRules[RuleKey])} />
+          </div>
+        )}
+      </QCard>
+
+      {/* ── Reveals ── */}
+      <QCard question="Reveal between adjacent cabinet faces (per side)" isOverride={'REVL' in delta || 'REVR' in delta}>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            value={asymAdj ? '' : revL}
+            placeholder={asymAdj ? 'L≠R' : undefined}
+            onChange={e => {
+              const v = parseFloat(e.target.value)
+              if (!isNaN(v)) {
+                onChange('REVL', v as ConstructionRules[RuleKey])
+                onChange('REVR', v as ConstructionRules[RuleKey])
+              }
+            }}
+            onFocus={e => e.target.select()}
+            className="w-20 text-right bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs font-mono text-white focus:outline-none focus:border-blue-500"
+          />
+          <span className="text-xs text-gray-600">mm</span>
+          {asymAdj && <span className="text-[10px] text-amber-600">L≠R — use All Rules to edit individually</span>}
+        </div>
+      </QCard>
+
+      <QCard question="Reveal where cabinet meets wall or end panel" isOverride={'REVENDL' in delta || 'REVENDR' in delta}>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            value={asymWall ? '' : revEL}
+            placeholder={asymWall ? 'L≠R' : undefined}
+            onChange={e => {
+              const v = parseFloat(e.target.value)
+              if (!isNaN(v)) {
+                onChange('REVENDL', v as ConstructionRules[RuleKey])
+                onChange('REVENDR', v as ConstructionRules[RuleKey])
+              }
+            }}
+            onFocus={e => e.target.select()}
+            className="w-20 text-right bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs font-mono text-white focus:outline-none focus:border-blue-500"
+          />
+          <span className="text-xs text-gray-600">mm</span>
+          {asymWall && <span className="text-[10px] text-amber-600">L≠R — use All Rules to edit individually</span>}
+        </div>
+      </QCard>
+
+      {/* ── Joinery ── */}
+      <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider pt-2">Joinery</p>
+
+      <QCard question="How does the bottom panel connect to the sides?" isOverride={'BOTTOM_JOIN' in delta}
+        partKeys={['bottom','left_side','right_side']}
+        onHover={onHoverParts}>
+        <ChipSelect
+          value={effectiveRule(delta, 'BOTTOM_JOIN')}
+          onChange={v => onChange('BOTTOM_JOIN', v as ConstructionRules['BOTTOM_JOIN'])}
+          options={[
+            { label: 'Sides are full height — bottom fits between', value: 'sides_outside' },
+            { label: 'Bottom is full width — sides sit on top',     value: 'bottom_outside' },
+          ]}
+        />
+      </QCard>
+
+      <QCard question="How does the bottom panel meet the back panel?" isOverride={'BOTTOM_BACK_JOIN' in delta}
+        partKeys={['bottom','back']}
+        onHover={onHoverParts}>
+        <ChipSelect
+          value={effectiveRule(delta, 'BOTTOM_BACK_JOIN')}
+          onChange={v => onChange('BOTTOM_BACK_JOIN', v as ConstructionRules['BOTTOM_BACK_JOIN'])}
+          options={[
+            { label: 'Back sits on bottom — bottom runs full depth behind back', value: 'back_on_bottom' },
+            { label: 'Bottom butts into back — bottom stops at back inner face',  value: 'butts_into_back' },
+          ]}
+        />
+      </QCard>
+
+      <QCard question="How does the back panel sit?" isOverride={'BACK_JOIN' in delta}
+        partKeys={['back','left_side','right_side']}
+        onHover={onHoverParts}>
+        <ChipSelect
+          value={effectiveRule(delta, 'BACK_JOIN')}
+          onChange={v => onChange('BACK_JOIN', v as ConstructionRules['BACK_JOIN'])}
+          options={[
+            { label: 'Back fits between the sides',         value: 'between_sides' },
+            { label: 'Back wraps behind and covers sides',  value: 'behind_sides' },
+          ]}
+        />
+      </QCard>
+
+      <QCard question="How does the top panel connect to the back?" isOverride={'TOP_BACK_JOIN' in delta}
+        partKeys={['full_top','front_rail','back_rail','back']}
+        onHover={onHoverParts}>
+        <ChipSelect
+          value={effectiveRule(delta, 'TOP_BACK_JOIN')}
+          onChange={v => onChange('TOP_BACK_JOIN', v as ConstructionRules['TOP_BACK_JOIN'])}
+          options={[
+            { label: 'Top butts into back — starts at back inner face', value: 'butts_into_back' },
+            { label: 'Top sits over back — runs full depth past back',   value: 'sits_over_back' },
+          ]}
+        />
+      </QCard>
+
+      <QCard question="How do the top rail or panel connect to the sides?" isOverride={'RAIL_JOIN' in delta}
+        partKeys={['full_top','front_rail','back_rail','left_side','right_side']}
+        onHover={onHoverParts}>
+        <ChipSelect
+          value={effectiveRule(delta, 'RAIL_JOIN')}
+          onChange={v => onChange('RAIL_JOIN', v as ConstructionRules['RAIL_JOIN'])}
+          options={[
+            { label: 'Rail fits between the sides',      value: 'between_sides' },
+            { label: 'Rail sits on top of the sides',    value: 'on_top_of_sides' },
+          ]}
+        />
+      </QCard>
+
     </div>
   )
 }
@@ -783,6 +1187,81 @@ function RuleRow({ ruleKey, delta, onChange }: {
             <option value="front_rail">Front Rail</option>
             <option value="double_rail">Double Rail</option>
             <option value="none">None</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'BOTTOM_JOIN') {
+    return (
+      <div className={rowCls}>
+        <span className={txtCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
+            <option value="sides_outside">Sides outside</option>
+            <option value="bottom_outside">Bottom outside</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'BOTTOM_BACK_JOIN') {
+    return (
+      <div className={rowCls}>
+        <span className={txtCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
+            <option value="back_on_bottom">Back on bottom</option>
+            <option value="butts_into_back">Butts into back</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'TOP_BACK_JOIN') {
+    return (
+      <div className={rowCls}>
+        <span className={txtCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
+            <option value="butts_into_back">Butts into back</option>
+            <option value="sits_over_back">Sits over back</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'BACK_JOIN') {
+    return (
+      <div className={rowCls}>
+        <span className={txtCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
+            <option value="between_sides">Between sides</option>
+            <option value="behind_sides">Behind sides</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'RAIL_JOIN') {
+    return (
+      <div className={rowCls}>
+        <span className={txtCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
+            <option value="between_sides">Between sides</option>
+            <option value="on_top_of_sides">On top of sides</option>
           </select>
         </div>
       </div>
