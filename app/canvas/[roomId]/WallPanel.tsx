@@ -77,7 +77,7 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete }: {
           </div>
         </div>
         <div>
-          <label className={lbl}>Soffit Height (mm)</label>
+          <label className={lbl}>Soffit Depth from top (mm)</label>
           <input type="number" value={(f('soffit_height') ?? '') as number}
             placeholder="Room default"
             onChange={e => set('soffit_height', parseFloat(e.target.value) || null as unknown as number)}

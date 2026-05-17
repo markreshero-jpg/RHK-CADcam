@@ -1,5 +1,5 @@
 'use client'
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import { Wall, CabinetInstance, DEFAULT_DIMS } from '@/src/lib/types'
 import {
   Pt, MIN_WALL_LEN, SNAP_PX, CAB_FILL, CAB_FILL_SEL,
@@ -55,6 +55,8 @@ export default function CanvasSVG({
   setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
   onCabMarkerClick, cabFollowing, onSVGClick,
 }: CanvasSVGProps) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+
   const cx = centroid(walls)
   const dots = gridDots(view.panX, view.panY, view.zoom, svgSize.w, svgSize.h)
   const dotR = 1.5 / view.zoom
@@ -173,6 +175,7 @@ export default function CanvasSVG({
           const perp = islandCabPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
           const isSel = selected?.type === 'cabinet' && selected.id === cab.id
           const isMultiSel = multiSelect.includes(cab.id)
+          const isHover = hoveredId === cab.id && !isSel && !isMultiSel
 
           // Apply position drag and resize live values
           let displayCab = cabDrag?.id === cab.id ? { ...cab, pos_x: cabDrag.pos_x, pos_y: cabDrag.pos_y } : cab
@@ -216,6 +219,8 @@ export default function CanvasSVG({
               <polygon points={pts} fill="transparent" stroke="none"
                 style={{ cursor: mode === 'select' ? 'default' : undefined }}
                 onPointerDown={ev => onCabinetPointerDown(ev, displayCab)}
+                onPointerEnter={() => setHoveredId(cab.id)}
+                onPointerLeave={() => setHoveredId(null)}
                 onClick={ev => ev.stopPropagation()}
                 onContextMenu={ev => onCabinetContextMenu(ev, cab.id)}
                 onDoubleClick={ev => onCabinetDoubleClick(ev, cab.id)}
@@ -225,8 +230,8 @@ export default function CanvasSVG({
               {carcL.visible && (
                 <polygon points={pts}
                   fill={baseColor} fillOpacity={carcP.fillOpacity}
-                  stroke={isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : '#3b82f6'}
-                  strokeWidth={isSel || isMultiSel ? 2 / view.zoom : 1 / view.zoom}
+                  stroke={isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : isHover ? '#f97316' : '#3b82f6'}
+                  strokeWidth={isSel || isMultiSel || isHover ? 2 / view.zoom : 1 / view.zoom}
                   strokeDasharray={carcP.strokeDasharray}
                   opacity={carcP.opacity}
                   style={{ pointerEvents: 'none' }}

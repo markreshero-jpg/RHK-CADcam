@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import { DEFAULT_DIMS } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
+import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -112,6 +113,7 @@ const SCHED_TYPES: { key: SchedKey; label: string; col: keyof ShopSettings }[] =
 // ── Tab config ────────────────────────────────────────────────────────────────
 
 type SettingsTab =
+  | 'user_preferences'
   | 'company' | 'dimensions' | 'construction' | 'materials'
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'cnc_tool' | 'cnc_machine'
@@ -124,6 +126,15 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
+  {
+    id: 'user_preferences', label: 'Preferences', group: 'User',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="7.5" cy="5" r="2.5"/>
+        <path d="M2 13c0-2.76 2.46-5 5.5-5s5.5 2.24 5.5 5"/>
+      </svg>
+    ),
+  },
   {
     id: 'company', label: 'Company', group: 'Shop',
     icon: (
@@ -235,7 +246,7 @@ const TABS: TabDef[] = [
   },
 ]
 
-const GROUPS = ['Shop', 'Builders', 'CNC'] as const
+const GROUPS = ['User', 'Shop', 'Builders', 'CNC'] as const
 
 // ── Empty defaults ────────────────────────────────────────────────────────────
 
@@ -292,6 +303,15 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
   }
 
   const overrideCount = (Object.keys(SYS) as RuleKey[]).filter(k => rules[k] !== SYS[k]).length
+
+  // User preferences (localStorage)
+  const [invertScroll, setInvertScroll] = useState(false)
+  useEffect(() => { setInvertScroll(getUserPrefs().invertScroll) }, [])
+
+  function toggleInvertScroll(val: boolean) {
+    setInvertScroll(val)
+    setUserPrefs({ invertScroll: val })
+  }
 
   // Materials (schedule IDs) — save immediately on change
   const [schedIds, setSchedIds] = useState<Partial<Record<string, string | null>>>(() => {
@@ -398,6 +418,39 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
               <span className="text-gray-400">{activeTabDef.icon}</span>
               <h2 className="text-sm font-semibold text-white">{activeTabDef.label}</h2>
             </div>
+
+            {/* ── User Preferences ── */}
+            {tab === 'user_preferences' && (
+              <div className="space-y-6 max-w-md">
+                <p className="text-xs text-gray-500">
+                  Personal preferences stored locally in your browser. These apply to your account on this device only.
+                </p>
+
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Viewport Controls</p>
+                  <div className="border border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-700/60">
+                    <div className="flex items-center justify-between px-4 py-3 bg-gray-900">
+                      <div>
+                        <p className="text-xs font-medium text-gray-200">Reverse scroll wheel zoom</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Applies to plan, elevation, and 3D views</p>
+                      </div>
+                      <button
+                        onClick={() => toggleInvertScroll(!invertScroll)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                          invertScroll ? 'bg-blue-600' : 'bg-gray-700'
+                        }`}
+                        role="switch"
+                        aria-checked={invertScroll}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                          invertScroll ? 'translate-x-4' : 'translate-x-0'
+                        }`} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ── Company ── */}
             {tab === 'company' && (

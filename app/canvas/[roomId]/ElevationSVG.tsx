@@ -1,9 +1,10 @@
-'use client'
+﻿'use client'
 import { useState, useReducer, useRef, useEffect } from 'react'
 import { Room, Wall, CabinetInstance, DEFAULT_DIMS } from '@/src/lib/types'
 import { cabT, wallDir, wallEnd, dist, findFreeSlot, cabBlocks, CAB_FILL, CAB_FILL_SEL } from '@/src/lib/geometry'
 import { Selected, CabResize, viewReducer, DisplayConfig, Mode, modeAssemblyClass } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
+import { getUserPrefs } from '@/src/lib/userPrefs'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone, ResolvedInternalPart } from '@/src/lib/resolver/types'
 
 // ── Colour coding per spec ────────────────────────────────────
@@ -43,18 +44,36 @@ function shelfElevRect(p: ResolvedInternalPart) {
   return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
 }
 
-// Height above floor (mm) for the bottom of each assembly class.
-// wallCabTop falls back: wall.soffit_height → room.soffit_height → room.wall_cabinet_top → 2100
+// wall.soffit_height is stored as depth FROM THE TOP (e.g. 300 = soffit drops 300mm from ceiling).
+// Convert to height-from-floor: wallHeight - soffit_height.
+// room.soffit_height and room.wall_cabinet_top are stored as height-from-floor.
+function wallCabTopFor(w: Wall | null, room: Room): number {
+  if (w?.soffit_height != null) {
+    const wallH = w.height ?? room.room_dy ?? 2400
+    return wallH - w.soffit_height
+  }
+  return room.soffit_height ?? room.wall_cabinet_top ?? 2100
+}
+
 function cabBottomZ(cab: CabinetInstance, room: Room, elevWall?: Wall | null): number {
   if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') {
-    const top = elevWall?.soffit_height ?? room.soffit_height ?? room.wall_cabinet_top ?? 2100
-    return top - cab.dy
+    return wallCabTopFor(elevWall ?? null, room) - cab.dy
   }
   return 0
 }
 
-function wallCabTopFor(w: Wall | null, room: Room): number {
-  return w?.soffit_height ?? room.soffit_height ?? room.wall_cabinet_top ?? 2100
+function computeElevChain(cabs: CabinetInstance[], wall: Wall) {
+  const sorted = [...cabs].sort((a, b) => cabT(a, wall) - cabT(b, wall))
+  const segs: { from: number; to: number; label: number }[] = []
+  let cursor = 0
+  for (const cab of sorted) {
+    const t = cabT(cab, wall)
+    if (t > cursor + 0.5) segs.push({ from: cursor, to: t, label: Math.round(t - cursor) })
+    segs.push({ from: t, to: t + cab.dx, label: Math.round(cab.dx) })
+    cursor = t + cab.dx
+  }
+  if (cursor < wall.length - 0.5) segs.push({ from: cursor, to: wall.length, label: Math.round(wall.length - cursor) })
+  return segs
 }
 
 interface ElevationSVGProps {
@@ -104,24 +123,46 @@ export default function ElevationSVG({
   // Cursor position in wall coords: t = along wall (mm), ht = height above floor (mm)
   const [elevCabFloat, setElevCabFloat] = useState<{ t: number; ht: number } | null>(null)
 
+  const [hoveredCabId, setHoveredCabId] = useState<string | null>(null)
   const [placeGhost, setPlaceGhost] = useState<{ t: number; cls: string; dx: number; dy: number } | null>(null)
-  const cabResizeDragging = useRef(false)
-  const cabResizeLiveRef = useRef<{ value: number; livePosX?: number; livePosY?: number } | null>(null)
+  const [elevResizeFollowing, setElevResizeFollowing] = useState<{
+    cabId: string; dim: 'dx' | 'dy'; side: 'left' | 'right' | 'top'
+    startCabT: number; startCabEndT: number
+    resWall: Wall; neighbours: { t: number; dx: number }[]
+  } | null>(null)
+  const [elevResizeLive, setElevResizeLive] = useState<{
+    cabId: string; dim: 'dx' | 'dy'; value: number; posX?: number; posY?: number
+  } | null>(null)
+  // Prevents onMarkerClick from re-starting a resize on the same pointerup→click event that just confirmed one.
+  const justConfirmedRef = useRef(false)
+  // Sync ref updated every render — gives the native pointermove handler fresh values without stale closures.
+  const rfData = useRef({ elevResizeFollowing, view, cabinets, room } as {
+    elevResizeFollowing: typeof elevResizeFollowing
+    view: typeof view
+    cabinets: CabinetInstance[]
+    room: Room
+  })
 
   const wall = walls.find(w => w.id === elevWallId) ?? null
   const wallCabs = wall ? cabinets.filter(c => c.wall_id === wall.id) : []
   const roomH = room.room_dy ?? 2400
+  // Keep rfData current on every render (synchronous assignment, no useEffect needed).
+  rfData.current = { elevResizeFollowing, view, cabinets, room }
 
   useEffect(() => {
     setPlaceGhost(null)
     setElevCabFollowing(null)
     setElevCabFloat(null)
+    setElevResizeFollowing(null)
+    setElevResizeLive(null)
   }, [mode])
 
   // Fit to wall on wall change; also clears any in-progress following
   useEffect(() => {
     setElevCabFollowing(null)
     setElevCabFloat(null)
+    setElevResizeFollowing(null)
+    setElevResizeLive(null)
     if (!svgRef.current || !wall) return
     const { width, height } = svgRef.current.getBoundingClientRect()
     const pad = 100
@@ -142,7 +183,9 @@ export default function ElevationSVG({
     const handler = (e: WheelEvent) => {
       e.preventDefault()
       const r = svg.getBoundingClientRect()
-      dispatchView({ type: 'zoom', factor: e.deltaY < 0 ? 1 / 1.15 : 1.15, svgX: e.clientX - r.left, svgY: e.clientY - r.top })
+      const inv = getUserPrefs().invertScroll
+      const factor = (e.deltaY < 0) !== inv ? 1 / 1.15 : 1.15
+      dispatchView({ type: 'zoom', factor, svgX: e.clientX - r.left, svgY: e.clientY - r.top })
     }
     svg.addEventListener('wheel', handler, { passive: false })
     return () => svg.removeEventListener('wheel', handler)
@@ -152,7 +195,10 @@ export default function ElevationSVG({
     const kd = (e: KeyboardEvent) => {
       if (e.key === ' ') { spaceRef.current = true; e.preventDefault() }
       if (e.key === 'Shift') shiftRef.current = true
-      if (e.key === 'Escape') { setElevCabFollowing(null); setElevCabFloat(null) }
+      if (e.key === 'Escape') {
+        setElevCabFollowing(null); setElevCabFloat(null)
+        setElevResizeFollowing(null); setElevResizeLive(null); onCabResizeDone()
+      }
     }
     const ku = (e: KeyboardEvent) => {
       if (e.key === ' ') spaceRef.current = false
@@ -162,6 +208,49 @@ export default function ElevationSVG({
     return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku) }
   }, [])
 
+  // Native pointermove listener: fires for all pointer events (no bubbling dependency).
+  // Reads fresh values from rfData ref — no stale closures, no Math.round so display is sub-mm smooth.
+  useEffect(() => {
+    if (!elevResizeFollowing) return
+    const svg = svgRef.current
+    const handleMove = (e: PointerEvent) => {
+      const { elevResizeFollowing: rf, view: v, cabinets: cabs, room: rm } = rfData.current
+      if (!rf || !svg) return
+      const { cabId, dim, side, startCabT, startCabEndT, resWall, neighbours } = rf
+      const svgR = svg.getBoundingClientRect()
+      const vz = v.zoom
+      const wd = wallDir(resWall)
+      const rH = rm.room_dy ?? 2400
+
+      if (side === 'right') {
+        const cursorT = (e.clientX - svgR.left - v.panX) / vz
+        const rightBound = neighbours.filter(o => o.t > startCabT + 1).reduce((min, o) => Math.min(min, o.t), resWall.length)
+        const newDx = Math.max(50, Math.min(rightBound - startCabT, cursorT - startCabT))
+        setElevResizeLive({ cabId, dim, value: newDx })
+        onCabResizeUpdate({ liveValue: Math.round(newDx) })
+      } else if (side === 'left') {
+        const cursorT = (e.clientX - svgR.left - v.panX) / vz
+        const leftBound = neighbours.filter(o => o.t + o.dx < startCabEndT - 1).reduce((max, o) => Math.max(max, o.t + o.dx), 0)
+        const newT = Math.max(leftBound, Math.min(startCabEndT - 50, cursorT))
+        const newDx = startCabEndT - newT
+        const livePosX = resWall.pos_x + newT * wd.x
+        const livePosY = resWall.pos_y + newT * wd.y
+        setElevResizeLive({ cabId, dim, value: newDx, posX: livePosX, posY: livePosY })
+        onCabResizeUpdate({ liveValue: Math.round(newDx), livePosX, livePosY })
+      } else if (side === 'top') {
+        const cursorY = (e.clientY - svgR.top - v.panY) / vz
+        const cab = cabs.find(c => c.id === cabId)
+        if (cab) {
+          const newDy = Math.max(50, Math.min(5000, rH - cabBottomZ(cab, rm, resWall) - cursorY))
+          setElevResizeLive({ cabId, dim: 'dy', value: newDy })
+          onCabResizeUpdate({ liveValue: Math.round(newDy) })
+        }
+      }
+    }
+    window.addEventListener('pointermove', handleMove)
+    return () => window.removeEventListener('pointermove', handleMove)
+  }, [elevResizeFollowing, onCabResizeUpdate])
+
   function onPointerDown(e: React.PointerEvent) {
     if (e.button === 1 || (e.button === 0 && spaceRef.current)) {
       e.preventDefault()
@@ -169,7 +258,7 @@ export default function ElevationSVG({
       svgRef.current?.setPointerCapture(e.pointerId)
       return
     }
-    if (elevCabFollowing) return
+    if (elevCabFollowing || elevResizeFollowing) return
     if (e.button === 0 && wall && (modeAssemblyClass(mode) || mode === 'paste')) {
       svgRef.current?.setPointerCapture(e.pointerId)
       return
@@ -186,42 +275,6 @@ export default function ElevationSVG({
       })
       panRef.current.startX = e.clientX; panRef.current.startY = e.clientY
       panRef.current.panX = view.panX; panRef.current.panY = view.panY
-      return
-    }
-
-    if (cabResizeDragging.current && cabResize && wall) {
-      const svgR = svgRef.current!.getBoundingClientRect()
-      const vz = view.zoom
-      const cursorT = (e.clientX - svgR.left - view.panX) / vz
-      const { side, wall: resWall, startCabT, startCabEndT, cabId } = cabResize
-      const wd = wallDir(resWall)
-      const resizingCls = cabinets.find(c => c.id === cabId)?.assembly_class ?? 'base'
-      const neighbours = cabinets
-        .filter(c => c.id !== cabId && c.wall_id === resWall.id && cabBlocks(resizingCls, c.assembly_class))
-        .map(c => ({ t: cabT(c, resWall), dx: c.dx }))
-
-      if (side === 'right') {
-        const rightBound = neighbours.filter(o => o.t > startCabT + 1).reduce((min, o) => Math.min(min, o.t), resWall.length)
-        const newDx = Math.round(Math.max(50, Math.min(rightBound - startCabT, cursorT - startCabT)))
-        cabResizeLiveRef.current = { value: newDx }
-        onCabResizeUpdate({ liveValue: newDx })
-      } else if (side === 'left') {
-        const leftBound = neighbours.filter(o => o.t + o.dx < startCabEndT - 1).reduce((max, o) => Math.max(max, o.t + o.dx), 0)
-        const newT = Math.max(leftBound, Math.min(startCabEndT - 50, cursorT))
-        const newDx = Math.round(startCabEndT - newT)
-        const livePosX = resWall.pos_x + newT * wd.x
-        const livePosY = resWall.pos_y + newT * wd.y
-        cabResizeLiveRef.current = { value: newDx, livePosX, livePosY }
-        onCabResizeUpdate({ liveValue: newDx, livePosX, livePosY })
-      } else if (side === 'top') {
-        const cursorY = (e.clientY - svgR.top - view.panY) / vz
-        const cab = cabinets.find(c => c.id === cabId)
-        if (cab) {
-          const newDy = Math.round(Math.max(50, Math.min(5000, roomH - cabBottomZ(cab, room, wall) - cursorY)))
-          cabResizeLiveRef.current = { value: newDy }
-          onCabResizeUpdate({ liveValue: newDy })
-        }
-      }
       return
     }
 
@@ -256,8 +309,11 @@ export default function ElevationSVG({
   }
 
   async function onPointerUp() {
+    const wasPanning = panRef.current !== null
     panRef.current = null
-    if (elevCabFollowing) return
+    if (wasPanning || elevCabFollowing) return
+
+    if (elevResizeFollowing) { await confirmResize(); return }
 
     if ((modeAssemblyClass(mode) || mode === 'paste') && wall && placeGhost) {
       const wd = wallDir(wall)
@@ -268,27 +324,28 @@ export default function ElevationSVG({
       return
     }
 
-    if (cabResizeDragging.current) {
-      cabResizeDragging.current = false
-      if (cabResize && cabResizeLiveRef.current) {
-        const { cabId, dim, side } = cabResize
-        const { value, livePosX, livePosY } = cabResizeLiveRef.current
-        const update: Partial<CabinetInstance> = { [dim]: value }
-        if (side === 'left' && livePosX !== undefined) {
-          update.pos_x = livePosX
-          update.pos_y = livePosY
-        }
-        onCabResizeDone()
-        cabResizeLiveRef.current = null
-        await onUpdateCabinet(cabId, update)
-      } else {
-        cabResizeLiveRef.current = null
-      }
-    }
   }
 
-  // Click on blank SVG area → place the following cabinet at snap position
+  async function confirmResize() {
+    if (!elevResizeFollowing || !elevResizeLive) return
+    const { cabId, dim, side } = elevResizeFollowing
+    const { value, posX, posY } = elevResizeLive
+    const update: Partial<CabinetInstance> = { [dim]: Math.round(value) }
+    if (side === 'left' && posX !== undefined) {
+      update.pos_x = Math.round(posX)
+      update.pos_y = Math.round(posY!)
+    }
+    justConfirmedRef.current = true
+    setTimeout(() => { justConfirmedRef.current = false }, 0)
+    setElevResizeFollowing(null)
+    setElevResizeLive(null)
+    onCabResizeDone()
+    await onUpdateCabinet(cabId, update)
+  }
+
+  // Click on blank SVG area → confirm resize if following, or place/move a cabinet
   function onSVGClick() {
+    if (elevResizeFollowing) { confirmResize(); return }
     if (!elevCabFollowing || !elevCabFloat || !wall) return
     const { id } = elevCabFollowing
     const cab = cabinets.find(c => c.id === id)
@@ -345,21 +402,26 @@ export default function ElevationSVG({
     onSelectCabinet(cab.id)
   }
 
-  function onMarkerPointerDown(e: React.PointerEvent, cab: CabinetInstance, side: 'left' | 'right' | 'top') {
-    if (e.button !== 0 || !wall) return
+  function onMarkerClick(e: React.MouseEvent, cab: CabinetInstance, side: 'left' | 'right' | 'top') {
+    if (mode !== 'select' || !wall) return
     e.stopPropagation()
+    // onPointerUp fires before onClick — if it just confirmed a resize, skip re-starting one.
+    if (justConfirmedRef.current) return
     onSelectCabinet(cab.id)
     const t = cabT(cab, wall)
     const wd = wallDir(wall)
     const perp = { x: -wd.y, y: wd.x }
     const dim: 'dx' | 'dy' = side === 'top' ? 'dy' : 'dx'
+    const neighbours = cabinets
+      .filter(c => c.id !== cab.id && c.wall_id === wall.id && cabBlocks(cab.assembly_class, c.assembly_class))
+      .map(c => ({ t: cabT(c, wall), dx: c.dx }))
+    setElevResizeFollowing({ cabId: cab.id, dim, side, startCabT: t, startCabEndT: t + cab.dx, resWall: wall, neighbours })
+    setElevResizeLive({ cabId: cab.id, dim, value: dim === 'dx' ? cab.dx : cab.dy })
     onCabResizeStart({
       cabId: cab.id, dim, side, wall, perp,
       startCabT: t, startCabEndT: t + cab.dx,
       liveValue: dim === 'dx' ? cab.dx : cab.dy,
     })
-    cabResizeDragging.current = true
-    svgRef.current?.setPointerCapture(e.pointerId)
   }
 
   const z = view.zoom
@@ -407,7 +469,7 @@ export default function ElevationSVG({
       <svg
         ref={svgRef}
         className="flex-1 bg-gray-950 select-none"
-        style={{ cursor: elevCabFollowing ? 'crosshair' : spaceRef.current ? 'grab' : 'default' }}
+        style={{ cursor: elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -462,7 +524,10 @@ export default function ElevationSVG({
 
             {/* Ceiling / soffit / wall-cabinet-top — not applicable to islands */}
             {wall.wall_type !== 'island' && (() => {
-              const soffitH = wall.soffit_height ?? room.soffit_height ?? null
+              // soffitH = height from floor; wall.soffit_height stored as depth-from-top
+              const soffitH = wall.soffit_height != null
+                ? (wall.height ?? roomH) - wall.soffit_height
+                : room.soffit_height ?? null
               const wcTop   = room.wall_cabinet_top ?? null
               return (<>
                 <line x1={0} y1={0} x2={wall.length} y2={0}
@@ -563,15 +628,15 @@ export default function ElevationSVG({
               let displayDx = cab.dx
               let displayDy = cab.dy
               let displayT  = baseT
-              if (cabResize?.cabId === cab.id) {
-                if (cabResize.dim === 'dx') {
-                  displayDx = cabResize.liveValue
-                  if (cabResize.livePosX !== undefined) {
-                    const wd = wallDir(wall)
-                    displayT = (cabResize.livePosX - wall.pos_x) * wd.x + (cabResize.livePosY! - wall.pos_y) * wd.y
+              if (elevResizeLive?.cabId === cab.id) {
+                if (elevResizeLive.dim === 'dx') {
+                  displayDx = elevResizeLive.value
+                  if (elevResizeLive.posX !== undefined) {
+                    const wd2 = wallDir(wall)
+                    displayT = (elevResizeLive.posX - wall.pos_x) * wd2.x + (elevResizeLive.posY! - wall.pos_y) * wd2.y
                   }
-                } else if (cabResize.dim === 'dy') {
-                  displayDy = cabResize.liveValue
+                } else if (elevResizeLive.dim === 'dy') {
+                  displayDy = elevResizeLive.value
                 }
               }
 
@@ -583,8 +648,9 @@ export default function ElevationSVG({
               const tkH = (isBase || isTall) && cab.has_toekick ? 150 : 0
 
               const baseColor = isSel ? CAB_FILL_SEL[cab.assembly_class] : CAB_FILL[cab.assembly_class]
-              const cabStroke = isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : '#3b82f6'
-              const cabStrokeW = isSel || isMultiSel ? 2 / z : 1 / z
+              const isHover = hoveredCabId === cab.id && !isSel && !isMultiSel
+              const cabStroke = isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : isHover ? '#f97316' : '#3b82f6'
+              const cabStrokeW = isSel || isMultiSel || isHover ? 2 / z : 1 / z
 
               const carcL = displayConfig.layers.carcass
               const faceL = displayConfig.layers.face
@@ -615,6 +681,8 @@ export default function ElevationSVG({
                   style={{ cursor: 'default' }}
                   opacity={isFollowing ? 0.4 : 1}
                   onPointerDown={e => onCabPointerDown(e, cab)}
+                  onPointerEnter={() => setHoveredCabId(cab.id)}
+                  onPointerLeave={() => setHoveredCabId(null)}
                   onClick={e => { e.stopPropagation(); if (!shiftRef.current) onSelectCabinet(cab.id) }}
                   onContextMenu={e => onCabinetContextMenu(e, cab.id)}
                 >
@@ -793,17 +861,20 @@ export default function ElevationSVG({
                       <circle cx={rx} cy={ry + displayDy / 2} r={mr}
                         fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.5 / z}
                         style={{ cursor: 'ew-resize' }}
-                        onPointerDown={e => { e.stopPropagation(); onMarkerPointerDown(e, cab, 'left') }}
+                        onPointerDown={e => e.stopPropagation()}
+                        onClick={e => onMarkerClick(e, cab, 'left')}
                       />
                       <circle cx={rx + displayDx} cy={ry + displayDy / 2} r={mr}
                         fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.5 / z}
                         style={{ cursor: 'ew-resize' }}
-                        onPointerDown={e => { e.stopPropagation(); onMarkerPointerDown(e, cab, 'right') }}
+                        onPointerDown={e => e.stopPropagation()}
+                        onClick={e => onMarkerClick(e, cab, 'right')}
                       />
                       <circle cx={rx + displayDx / 2} cy={ry} r={mr}
                         fill="#7c3aed" stroke="#c4b5fd" strokeWidth={1.5 / z}
                         style={{ cursor: 'ns-resize' }}
-                        onPointerDown={e => { e.stopPropagation(); onMarkerPointerDown(e, cab, 'top') }}
+                        onPointerDown={e => e.stopPropagation()}
+                        onClick={e => onMarkerClick(e, cab, 'top')}
                       />
                     </>
                   )}
@@ -898,28 +969,94 @@ export default function ElevationSVG({
               </>)
             })()}
 
-            {/* Bottom dimension — wall length */}
-            <g>
-              <line x1={0} y1={roomH + tickH} x2={wall.length} y2={roomH + tickH}
-                stroke="#cbd5e1" strokeWidth={1 / z} />
-              <line x1={0}           y1={roomH + tickH * 0.5} x2={0}           y2={roomH + tickH * 1.5} stroke="#cbd5e1" strokeWidth={1 / z} />
-              <line x1={wall.length} y1={roomH + tickH * 0.5} x2={wall.length} y2={roomH + tickH * 1.5} stroke="#cbd5e1" strokeWidth={1 / z} />
-              {(() => {
-                const fs = 12 / z
-                const mx = wall.length / 2
-                const my = roomH + tickH * 2.2
-                return (
-                  <g>
-                    <rect x={mx - fs * 2.5} y={my - fs * 0.6} width={fs * 5} height={fs * 1.2} fill="#030712" />
-                    <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle"
-                      fontSize={fs} fill="#cbd5e1"
-                      style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                      {Math.round(wall.length)}
-                    </text>
-                  </g>
-                )
-              })()}
-            </g>
+            {/* Top horizontal chain — overhead cabs (wall + wall_corner) */}
+            {displayConfig.layers.dim_elev_wall_chain.visible && (() => {
+              const overheadCabs = wallCabs.filter(c =>
+                c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'
+              )
+              if (overheadCabs.length === 0) return null
+              const segs = computeElevChain(overheadCabs, wall)
+              const chainY = -tickH * 2
+              const col = '#cbd5e1'
+              const sw = 1 / z, fs = 12 / z, tk = 8 / z
+              const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
+              return (
+                <g pointerEvents="none" style={{ userSelect: 'none' }}>
+                  <line x1={0} y1={chainY} x2={wall.length} y2={chainY} stroke={col} strokeWidth={sw} />
+                  {boundaries.map((x, i) => (
+                    <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={col} strokeWidth={sw} />
+                  ))}
+                  {segs.map((seg, i) => {
+                    const mx = (seg.from + seg.to) / 2
+                    const padX = fs * 1.8, padY = fs * 0.6
+                    return (
+                      <g key={i}>
+                        <rect x={mx - padX} y={chainY - padY} width={padX * 2} height={padY * 2} fill="#030712" />
+                        <text x={mx} y={chainY} textAnchor="middle" dominantBaseline="middle"
+                          fontSize={fs} fill={col} style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                          {seg.label}
+                        </text>
+                      </g>
+                    )
+                  })}
+                </g>
+              )
+            })()}
+
+            {/* Bottom horizontal chain — floor-touching cabs (base + tall), closest to the elevation */}
+            {displayConfig.layers.dim_elev_floor_chain.visible && (() => {
+              const floorCabs = wallCabs.filter(c =>
+                c.assembly_class === 'base' || c.assembly_class === 'base_corner' ||
+                c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'
+              )
+              if (floorCabs.length === 0) return null
+              const segs = computeElevChain(floorCabs, wall)
+              const chainY = roomH + tickH * 1.5
+              const col = '#cbd5e1'
+              const sw = 1 / z, fs = 12 / z, tk = 8 / z
+              const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
+              return (
+                <g pointerEvents="none" style={{ userSelect: 'none' }}>
+                  <line x1={0} y1={chainY} x2={wall.length} y2={chainY} stroke={col} strokeWidth={sw} />
+                  {boundaries.map((x, i) => (
+                    <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={col} strokeWidth={sw} />
+                  ))}
+                  {segs.map((seg, i) => {
+                    const mx = (seg.from + seg.to) / 2
+                    const padX = fs * 1.8, padY = fs * 0.6
+                    return (
+                      <g key={i}>
+                        <rect x={mx - padX} y={chainY - padY} width={padX * 2} height={padY * 2} fill="#030712" />
+                        <text x={mx} y={chainY} textAnchor="middle" dominantBaseline="middle"
+                          fontSize={fs} fill={col} style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                          {seg.label}
+                        </text>
+                      </g>
+                    )
+                  })}
+                </g>
+              )
+            })()}
+
+            {/* Bottom dimension — overall wall length */}
+            {(() => {
+              const dimY = roomH + tickH * 4
+              const fs = 12 / z, tk = 8 / z, sw = 1 / z, col = '#cbd5e1'
+              const mx = wall.length / 2
+              const padX = fs * 1.8, padY = fs * 0.6
+              return (
+                <g pointerEvents="none" style={{ userSelect: 'none' }}>
+                  <line x1={0} y1={dimY} x2={wall.length} y2={dimY} stroke={col} strokeWidth={sw} />
+                  <line x1={0}           y1={dimY - tk} x2={0}           y2={dimY + tk} stroke={col} strokeWidth={sw} />
+                  <line x1={wall.length} y1={dimY - tk} x2={wall.length} y2={dimY + tk} stroke={col} strokeWidth={sw} />
+                  <rect x={mx - padX} y={dimY - padY} width={padX * 2} height={padY * 2} fill="#030712" />
+                  <text x={mx} y={dimY} textAnchor="middle" dominantBaseline="middle"
+                    fontSize={fs} fill={col} style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                    {Math.round(wall.length)}
+                  </text>
+                </g>
+              )
+            })()}
 
             {/* Left dimension — Y-axis height chain */}
             {displayConfig.layers.dim_elevation_y.visible && (() => {

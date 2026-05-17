@@ -37,6 +37,7 @@ import CabinetEditModal from './CabinetEditModal'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
 import RoomPropertiesModal, { type RoomPropertiesTab } from './RoomPropertiesModal'
 import Room3DScene from './Room3DScene'
+import { getUserPrefs } from '@/src/lib/userPrefs'
 
 export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets }: {
   project: Project | null
@@ -149,7 +150,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const handler = (e: WheelEvent) => {
       e.preventDefault()
       const r = svg.getBoundingClientRect()
-      dispatchView({ type: 'zoom', factor: e.deltaY < 0 ? 1 / 1.15 : 1.15, svgX: e.clientX - r.left, svgY: e.clientY - r.top })
+      const inv = getUserPrefs().invertScroll
+      const factor = (e.deltaY < 0) !== inv ? 1 / 1.15 : 1.15
+      dispatchView({ type: 'zoom', factor, svgX: e.clientX - r.left, svgY: e.clientY - r.top })
     }
     svg.addEventListener('wheel', handler, { passive: false })
     return () => svg.removeEventListener('wheel', handler)
@@ -235,9 +238,29 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return next
     })
 
+    // When soffit_height changes, reposition wall-class cabinets on this wall
+    if ('soffit_height' in u && old) {
+      const updatedWall = { ...old, ...u } as Wall
+      const wallH = updatedWall.height ?? room.room_dy ?? 2400
+      const wcTop = updatedWall.soffit_height != null
+        ? wallH - updatedWall.soffit_height
+        : room.soffit_height ?? room.wall_cabinet_top ?? 2100
+      const affected = cabinetsRef.current.filter(c =>
+        c.wall_id === id && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner')
+      )
+      if (affected.length > 0) {
+        const cabUpdates = affected.map(c => ({ id: c.id, pos_z: Math.max(0, wcTop - c.dy) }))
+        setCabinets(cs => cs.map(c => {
+          const upd = cabUpdates.find(cu => cu.id === c.id)
+          return upd ? { ...c, pos_z: upd.pos_z } : c
+        }))
+        await Promise.all(cabUpdates.map(({ id: cid, pos_z }) => dbUpdateCabinet(cid, { pos_z })))
+      }
+    }
+
     await dbUpdateWall(id, u)
     await Promise.all(propagated.map(({ id: pid, update }) => dbUpdateWall(pid, update)))
-  }, [])
+  }, [room])
 
   async function handleDeleteCabinet(id: string) {
     if (!confirm('Delete this cabinet?')) return

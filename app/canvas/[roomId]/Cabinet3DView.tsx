@@ -150,7 +150,7 @@ function Part({
   const [hovered, setHovered] = useState(false)
 
   const fill = selected ? '#f59e0b' : color
-  const edge = selected ? '#92400e' : hovered ? '#f0f9ff' : edgeColor
+  const edge = selected ? '#92400e' : hovered ? '#f97316' : edgeColor
 
   return (
     <mesh

@@ -27,9 +27,12 @@ interface Props {
   isEndPanel?: boolean
   label: string
   canvasWidth: number
+  toeType?: 'ladder' | 'leg' | 'none'
+  topType?: 'full_top' | 'front_rail' | 'double_rail' | 'none'
+  showFace?: boolean
 }
 
-export default function CabinetPreview3D({ assemblyClass, isEndPanel, label, canvasWidth }: Props) {
+export default function CabinetPreview3D({ assemblyClass, isEndPanel, label, canvasWidth, toeType, topType, showFace = true }: Props) {
   const mountRef   = useRef<HTMLDivElement>(null)
   const pivotRef   = useRef<THREE.Group | null>(null)
   const renderRef  = useRef<(() => void) | null>(null)
@@ -75,7 +78,7 @@ export default function CabinetPreview3D({ assemblyClass, isEndPanel, label, can
     const bodyMat = new THREE.MeshPhongMaterial({ color: BODY_HEX[assemblyClass], shininess: 20 })
     const doorMat = new THREE.MeshPhongMaterial({ color: DOOR_HEX[assemblyClass], shininess: 90, specular: 0x555555 })
     const tkMat   = new THREE.MeshPhongMaterial({ color: 0x1c1c1c, shininess: 5 })
-    const edgeMat = new THREE.LineBasicMaterial({ color: 0x111111, opacity: 0.22, transparent: true })
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0xf97316, opacity: 0.65, transparent: true })
     scene.add(pivot)
 
     function box(w: number, h: number, d: number, x: number, y: number, z: number, mat: THREE.Material) {
@@ -95,25 +98,41 @@ export default function CabinetPreview3D({ assemblyClass, isEndPanel, label, can
     } else if (isCorner) {
       box(nw,       nh, nd * 0.5,   0,          0, -nd * 0.25, bodyMat)
       box(nw * 0.5, nh, nd * 0.5,  -nw * 0.25,  0,  nd * 0.25, bodyMat)
-      box(nw * 0.44, nh * 0.84, 5,  nw * 0.12,  0,  2.5,       doorMat)
+      if (showFace) box(nw * 0.44, nh * 0.84, 5,  nw * 0.12,  0,  2.5, doorMat)
     } else if (assemblyClass === 'tall') {
       box(nw, nh, nd, 0, 0, 0, bodyMat)
-      const dw = nw * 0.46, dh = nh * 0.44
-      box(dw, dh, 5, -nw / 4,  nh * 0.275, nd / 2 + 2.5, doorMat)
-      box(dw, dh, 5,  nw / 4,  nh * 0.275, nd / 2 + 2.5, doorMat)
-      box(dw, dh, 5, -nw / 4, -nh * 0.275, nd / 2 + 2.5, doorMat)
-      box(dw, dh, 5,  nw / 4, -nh * 0.275, nd / 2 + 2.5, doorMat)
+      if (showFace) {
+        const dw = nw * 0.46, dh = nh * 0.44
+        box(dw, dh, 5, -nw / 4,  nh * 0.275, nd / 2 + 2.5, doorMat)
+        box(dw, dh, 5,  nw / 4,  nh * 0.275, nd / 2 + 2.5, doorMat)
+        box(dw, dh, 5, -nw / 4, -nh * 0.275, nd / 2 + 2.5, doorMat)
+        box(dw, dh, 5,  nw / 4, -nh * 0.275, nd / 2 + 2.5, doorMat)
+      }
     } else {
       box(nw, nh, nd, 0, 0, 0, bodyMat)
-      const dw = nw * 0.46, dh = nh * 0.84
-      box(dw, dh, 5, -nw / 4, 0, nd / 2 + 2.5, doorMat)
-      box(dw, dh, 5,  nw / 4, 0, nd / 2 + 2.5, doorMat)
+      if (showFace) {
+        const dw = nw * 0.46, dh = nh * 0.84
+        box(dw, dh, 5, -nw / 4, 0, nd / 2 + 2.5, doorMat)
+        box(dw, dh, 5,  nw / 4, 0, nd / 2 + 2.5, doorMat)
+      }
     }
 
-    if (assemblyClass === 'base' || assemblyClass === 'base_corner') {
+    const hasToe = (assemblyClass === 'base' || assemblyClass === 'base_corner' || assemblyClass === 'tall' || assemblyClass === 'tall_corner')
+      && toeType !== 'none'
+    if (hasToe) {
       const tkH = nh * 0.165
       const tkD = nd * 0.12
       box(isCorner ? nw : nw * 0.98, tkH, tkD, 0, -(nh / 2 - tkH / 2), nd / 2 - tkD / 2, tkMat)
+    }
+
+    // Top rail hint for front_rail / double_rail
+    if (topType === 'front_rail' || topType === 'double_rail') {
+      const railH = nh * 0.055
+      const railD = nd * 0.18
+      box(nw, railH, railD, 0, nh / 2 - railH / 2, nd / 2 - railD / 2, tkMat)
+      if (topType === 'double_rail') {
+        box(nw, railH, railD, 0, nh / 2 - railH / 2, -nd / 2 + railD / 2, tkMat)
+      }
     }
 
     pivot.rotation.y = -Math.PI / 5
@@ -136,7 +155,7 @@ export default function CabinetPreview3D({ assemblyClass, isEndPanel, label, can
       renderer.dispose()
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement)
     }
-  }, [assemblyClass, isEndPanel, W, H, dims])
+  }, [assemblyClass, isEndPanel, W, H, dims, toeType, topType, showFace])
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     isDragging.current = true
@@ -166,7 +185,7 @@ export default function CabinetPreview3D({ assemblyClass, isEndPanel, label, can
   const dispDx = isEndPanel ? 18 : dx
 
   return (
-    <div className="rounded-lg bg-gray-950 border border-gray-800 overflow-hidden select-none">
+    <div className="rounded-lg bg-gray-950 border border-gray-800 hover:border-orange-500 overflow-hidden select-none transition-colors">
       <div
         ref={mountRef}
         style={{ width: W, height: H, cursor: isDragging.current ? 'grabbing' : 'grab' }}

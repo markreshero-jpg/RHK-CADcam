@@ -13,6 +13,7 @@ import {
   wallDir, wallInwardNormal, centroid, wallEnd, lineIntersect, dist,
 } from '@/src/lib/geometry'
 import type { Pt } from '@/src/lib/geometry'
+import { getUserPrefs } from '@/src/lib/userPrefs'
 
 const TO_RAD = Math.PI / 180
 const FOV    = 40
@@ -312,8 +313,9 @@ function CustomZoom({ controlsRef }: { controlsRef: React.RefObject<any> }) {
       if (e.ctrlKey)  speed = 0.40
       if (e.shiftKey) speed = 0.03
 
-      // Reversed scroll: deltaY > 0 (scroll down) = zoom in
-      const zoomIn = e.deltaY > 0
+      // Default: deltaY > 0 (scroll down) = zoom in; inverted: scroll up = zoom in
+      const inv = getUserPrefs().invertScroll
+      const zoomIn = inv ? e.deltaY < 0 : e.deltaY > 0
 
       // Standard dolly: move along camera's forward axis toward the orbit target
       const dir = new Vector3()

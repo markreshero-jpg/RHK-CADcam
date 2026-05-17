@@ -1,9 +1,19 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
+
+const Cabinet3DView = dynamic(() => import('@/app/canvas/[roomId]/Cabinet3DView'), { ssr: false })
 import { supabase } from '@/src/lib/supabase'
-import { ConstructionRules, DEFAULT_RULES, EdgingDefaults, DEFAULT_EDGING, EdgeSides } from '@/src/lib/resolver/types'
+import {
+  ConstructionRules, DEFAULT_RULES, EdgingDefaults, DEFAULT_EDGING, EdgeSides,
+  CabinetInput, Material,
+  ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone,
+} from '@/src/lib/resolver/types'
+import { resolveCabinet } from '@/src/lib/resolver/resolver'
+import { DEFAULT_DIMS } from '@/src/lib/types'
+import type { CabinetInstance } from '@/src/lib/types'
 import {
   RuleKey, EdgingKey,
   RULE_LABELS, RULE_GROUPS,
@@ -294,82 +304,435 @@ export default function ConstructionMethodsClient() {
             </div>
 
             {/* Tab content */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              <div className="max-w-2xl space-y-6">
+            <div className="flex-1 overflow-hidden flex">
 
-                {/* Rule groups */}
-                {RULE_GROUPS.map(group => (
-                  <div key={group.label}>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{group.label}</p>
-                    <div className="space-y-px">
-                      {group.keys.map(k => (
-                        <RuleRow key={k} ruleKey={k} delta={delta}
-                          onChange={v => setRule(classTab, k, v as ConstructionRules[RuleKey])} />
+              {/* Rule fields — scrollable */}
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                <div className="max-w-2xl space-y-6">
+
+                  {/* Rule groups */}
+                  {RULE_GROUPS.map(group => (
+                    <div key={group.label}>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{group.label}</p>
+                      <div className="space-y-px">
+                        {group.keys.map(k => (
+                          <RuleRow key={k} ruleKey={k} delta={delta}
+                            onChange={v => setRule(classTab, k, v as ConstructionRules[RuleKey])} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Edging */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Edging Defaults</p>
+                    <p className="text-xs text-gray-600 mb-3">
+                      Edges that get banded. T = top · B = bottom · L = left · R = right (sheet perspective).
+                      Blue = overridden from system default.
+                    </p>
+                    <div className="space-y-4">
+                      {EDGING_GROUPS.map(group => (
+                        <div key={group.label}>
+                          <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-1">{group.label}</p>
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-gray-600">
+                                <th className="text-left py-1 pr-4 font-normal w-44">Part</th>
+                                {EDGE_SIDES.map(s => (
+                                  <th key={s} className="text-center py-1 w-10 font-medium text-gray-500">{EDGE_LABELS[s]}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.keys.map(part => {
+                                const sides    = effectiveEdgeSides(delta, part)
+                                const defSides = DEFAULT_EDGING[part]
+                                const isOver   = !sidesEqual(sides, defSides)
+                                return (
+                                  <tr key={part} className={`${isOver ? 'bg-blue-950/20' : 'hover:bg-gray-800/30'} rounded`}>
+                                    <td className={`py-1 pr-4 ${isOver ? 'text-blue-300' : 'text-gray-400'}`}>
+                                      {EDGING_LABELS[part]}
+                                    </td>
+                                    {EDGE_SIDES.map(side => {
+                                      const checked = sides.includes(side)
+                                      const defCheck = defSides.includes(side)
+                                      const changed  = checked !== defCheck
+                                      return (
+                                        <td key={side} className="py-1 text-center">
+                                          <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={() => toggleEdgeSide(classTab, part, side)}
+                                            className={`rounded cursor-pointer ${changed ? 'accent-blue-500' : ''}`}
+                                          />
+                                        </td>
+                                      )
+                                    })}
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       ))}
                     </div>
                   </div>
-                ))}
 
-                {/* Edging */}
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Edging Defaults</p>
-                  <p className="text-xs text-gray-600 mb-3">
-                    Edges that get banded. T = top · B = bottom · L = left · R = right (sheet perspective).
-                    Blue = overridden from system default.
-                  </p>
-                  <div className="space-y-4">
-                    {EDGING_GROUPS.map(group => (
-                      <div key={group.label}>
-                        <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-1">{group.label}</p>
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="text-gray-600">
-                              <th className="text-left py-1 pr-4 font-normal w-44">Part</th>
-                              {EDGE_SIDES.map(s => (
-                                <th key={s} className="text-center py-1 w-10 font-medium text-gray-500">{EDGE_LABELS[s]}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {group.keys.map(part => {
-                              const sides    = effectiveEdgeSides(delta, part)
-                              const defSides = DEFAULT_EDGING[part]
-                              const isOver   = !sidesEqual(sides, defSides)
-                              return (
-                                <tr key={part} className={`${isOver ? 'bg-blue-950/20' : 'hover:bg-gray-800/30'} rounded`}>
-                                  <td className={`py-1 pr-4 ${isOver ? 'text-blue-300' : 'text-gray-400'}`}>
-                                    {EDGING_LABELS[part]}
-                                  </td>
-                                  {EDGE_SIDES.map(side => {
-                                    const checked = sides.includes(side)
-                                    const defCheck = defSides.includes(side)
-                                    const changed  = checked !== defCheck
-                                    return (
-                                      <td key={side} className="py-1 text-center">
-                                        <input
-                                          type="checkbox"
-                                          checked={checked}
-                                          onChange={() => toggleEdgeSide(classTab, part, side)}
-                                          className={`rounded cursor-pointer ${changed ? 'accent-blue-500' : ''}`}
-                                        />
-                                      </td>
-                                    )
-                                  })}
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    ))}
-                  </div>
                 </div>
-
               </div>
+
+              {/* 3D Preview panel */}
+              <PreviewPanel classTab={classTab} delta={delta} />
+
             </div>
 
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── Preview: 18mm dummy material + resolved-geometry helpers ─────────────────
+
+const PREVIEW_MATERIAL: Material = {
+  id: 'preview', name: '18mm Board', DZ: 18,
+  sheet_dx: 2400, sheet_dy: 1200, has_grain: false,
+}
+
+const C_STROKE = '#4b5563'
+const C_INT    = '#0f172a'
+const C_DIM    = '#6b7280'
+const C_LABEL  = '#9ca3af'
+const C_WALL   = '#1e293b'
+const C_CUT    = '#475569'
+
+const RC = {
+  carcass: { fill: '#374151', stroke: '#4b5563' },
+  toekick: { fill: '#451a03', stroke: '#92400e' },
+  shelf:   { fill: '#1e1b4b', stroke: '#4338ca' },
+}
+
+function isSidePanel(key: string) { return key === 'left_side' || key === 'right_side' }
+
+function elevRect(p: { X: number; Y: number; DX: number; DY: number; DZ: number; part_key?: string }) {
+  const isSide = p.part_key ? isSidePanel(p.part_key) : false
+  return isSide
+    ? { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+    : { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
+}
+function tkElevRect(p: ResolvedToekickPart) {
+  if (p.part_key === 'spreader_horizontal') return { ex: p.X, ey: p.Y + p.DY, ew: p.DX, eh: p.DY }
+  return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
+}
+function shelfElevRect(p: ResolvedInternalPart) { return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ } }
+
+function topRect(p: ResolvedCasePart) {
+  if (isSidePanel(p.part_key)) return { tx: p.X, tz: p.Z, tw: p.DZ, td: p.DX }
+  if (p.part_key === 'back')   return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DZ }
+  return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX }
+}
+function tkTopRect(p: ResolvedToekickPart) {
+  if (p.part_key === 'spreader_horizontal') return { tx: p.X, tz: p.Z, tw: p.DX, td: p.DZ }
+  return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DZ }
+}
+function shelfTopRect(p: ResolvedInternalPart) { return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX } }
+
+function sideRect(p: ResolvedCasePart): { sz: number; cy_top: number; sw: number; sh: number } | null {
+  if (isSidePanel(p.part_key)) return { sz: p.Z, cy_top: p.Y + p.DY, sw: p.DX, sh: p.DY }
+  if (p.part_key === 'back')   return null
+  return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
+}
+function tkSideRect(p: ResolvedToekickPart) {
+  if (p.part_key === 'spreader_horizontal') return { sz: p.Z, cy_top: p.Y + p.DY, sw: p.DZ, sh: p.DY }
+  return { sz: p.Z, cy_top: p.Y + p.DX, sw: p.DZ, sh: p.DX }
+}
+function shelfSideRect(p: ResolvedInternalPart) { return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ } }
+
+function dimH(x1: number, x2: number, y: number, label: string, above = false) {
+  const mid = (x1 + x2) / 2
+  const ty = above ? y - 28 : y + 28
+  return (
+    <g>
+      <line x1={x1} y1={y} x2={x2} y2={y} stroke={C_DIM} strokeWidth={1.5} strokeDasharray="5 3" />
+      <line x1={x1} y1={y - 8} x2={x1} y2={y + 8} stroke={C_DIM} strokeWidth={1.5} />
+      <line x1={x2} y1={y - 8} x2={x2} y2={y + 8} stroke={C_DIM} strokeWidth={1.5} />
+      <text x={mid} y={ty} textAnchor="middle" dominantBaseline="central" fontSize={24} fill={C_LABEL} fontFamily="system-ui,sans-serif">{label}</text>
+    </g>
+  )
+}
+
+function dimV(x: number, y1: number, y2: number, label: string, right = false) {
+  const mid = (y1 + y2) / 2
+  const tx = right ? x + 14 : x - 14
+  const anchor = right ? 'start' : 'end'
+  return (
+    <g>
+      <line x1={x} y1={y1} x2={x} y2={y2} stroke={C_DIM} strokeWidth={1.5} strokeDasharray="5 3" />
+      <line x1={x - 8} y1={y1} x2={x + 8} y2={y1} stroke={C_DIM} strokeWidth={1.5} />
+      <line x1={x - 8} y1={y2} x2={x + 8} y2={y2} stroke={C_DIM} strokeWidth={1.5} />
+      <text x={tx} y={mid} textAnchor={anchor} dominantBaseline="central" fontSize={24} fill={C_LABEL} fontFamily="system-ui,sans-serif">{label}</text>
+    </g>
+  )
+}
+
+function viewLabel(cx: number, y: number, text: string) {
+  return <text x={cx} y={y} textAnchor="middle" dominantBaseline="central" fontSize={20} fill={C_CUT} fontFamily="system-ui,sans-serif" letterSpacing={1}>{text}</text>
+}
+
+type PrevDims = { dx: number; dy: number; dz: number }
+
+function ResolvedElevation({ cab, rp }: { cab: PrevDims; rp: ResolvedCabinet }) {
+  const { dx, dy } = cab
+  const pl = 80, pt = 50, pr = 40, pb = 40
+  const vw = dx + pl + pr
+  const vh = dy + pt + pb
+  const ox = pl, oy = pt
+
+  function toSVG(ex: number, ey: number, ew: number, eh: number) {
+    return { x: ox + ex, y: oy + dy - ey, w: ew, h: eh }
+  }
+
+  return (
+    <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
+      <rect x={ox} y={oy} width={dx} height={dy} fill={C_INT} />
+      {rp.toekick_parts.map((p, i) => {
+        const { ex, ey, ew, eh } = tkElevRect(p)
+        const r = toSVG(ex, ey, ew, eh)
+        return <rect key={`tk${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
+          fill={RC.toekick.fill} stroke={RC.toekick.stroke} strokeWidth={0.75} />
+      })}
+      {rp.internal_parts.map((p, i) => {
+        const { ex, ey, ew, eh } = shelfElevRect(p)
+        const r = toSVG(ex, ey, ew, eh)
+        return <rect key={`sh${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
+          fill={RC.shelf.fill} stroke={RC.shelf.stroke} strokeWidth={0.5} />
+      })}
+      {rp.case_parts.map((p, i) => {
+        const { ex, ey, ew, eh } = elevRect({ ...p, part_key: p.part_key })
+        const r = toSVG(ex, ey, ew, eh)
+        return <rect key={`cp${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
+          fill={RC.carcass.fill} stroke={RC.carcass.stroke} strokeWidth={0.75} />
+      })}
+      <rect x={ox} y={oy} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} />
+      <line x1={ox-20} y1={oy+dy} x2={ox+dx+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" />
+      {dimH(ox, ox+dx, oy-35, `${dx}mm`, true)}
+      {dimV(ox-50, oy, oy+dy, `${dy}mm`)}
+      {viewLabel(ox+dx/2, vh-14, 'ELEVATION — WIDTH × HEIGHT')}
+    </svg>
+  )
+}
+
+function ResolvedTop({ cab, rp }: { cab: PrevDims; rp: ResolvedCabinet }) {
+  const { dx, dz } = cab
+  const wallH = 40
+  const pl = 80, pt = 50 + wallH, pr = 40, pb = 50
+  const vw = dx + pl + pr
+  const vh = dz + pt + pb
+  const ox = pl, oz = pt
+
+  function toSVG(tx: number, tz: number, tw: number, td: number) {
+    return { x: ox + tx, y: oz + tz, w: tw, h: td }
+  }
+
+  return (
+    <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
+      <rect x={ox} y={oz - wallH} width={dx} height={wallH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} />
+      <text x={ox + dx/2} y={oz - wallH/2} textAnchor="middle" dominantBaseline="central"
+        fontSize={18} fill="#475569" fontFamily="system-ui,sans-serif" letterSpacing={2}>WALL</text>
+      <rect x={ox} y={oz} width={dx} height={dz} fill={C_INT} />
+      {rp.internal_parts.map((p, i) => {
+        const r = shelfTopRect(p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+        return <rect key={`sh${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
+          fill={RC.shelf.fill} stroke={RC.shelf.stroke} strokeWidth={0.5} />
+      })}
+      {rp.case_parts.map((p, i) => {
+        const r = topRect(p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+        return <rect key={`cp${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
+          fill={RC.carcass.fill} stroke={RC.carcass.stroke} strokeWidth={0.75} />
+      })}
+      {rp.toekick_parts.map((p, i) => {
+        const r = tkTopRect(p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+        return <rect key={`tk${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
+          fill={RC.toekick.fill} stroke={RC.toekick.stroke} strokeWidth={0.75} />
+      })}
+      <rect x={ox} y={oz} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={1.5} />
+      <text x={ox + dx/2} y={oz + dz + 22} textAnchor="middle" dominantBaseline="central"
+        fontSize={18} fill="#374151" fontFamily="system-ui,sans-serif">ACCESS</text>
+      {dimH(ox, ox + dx, oz + dz + 50, `${dx}mm`)}
+      {dimV(ox - 50, oz, oz + dz, `${dz}mm`)}
+      {viewLabel(ox + dx/2, vh - 14, 'TOP — WIDTH × DEPTH')}
+    </svg>
+  )
+}
+
+function ResolvedSide({ cab, rp }: { cab: PrevDims; rp: ResolvedCabinet }) {
+  const { dz, dy } = cab
+  const wallW = 40
+  const tkHeight = rp.toekick_parts
+    .filter(p => p.part_key !== 'spreader_horizontal')
+    .reduce((max, p) => Math.max(max, p.DX), 0)
+  const kickZmin = rp.toekick_parts.reduce((min, p) => Math.min(min, p.Z), Infinity)
+  const kickZmax = rp.toekick_parts.reduce((max, p) => Math.max(max, p.Z + p.DZ), -Infinity)
+  const pl = 80 + wallW, pt = 80, pr = 110, pb = 80
+  const vw = dz + pl + pr
+  const vh = dy + pt + pb
+  const oz = pl, oy = pt
+
+  function toSVG(sz: number, cy_top: number, sw: number, sh: number) {
+    return { x: oz + sz, y: oy + dy - cy_top, w: sw, h: sh }
+  }
+
+  return (
+    <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
+      <rect x={oz - wallW} y={oy} width={wallW} height={dy} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} />
+      <text x={oz - wallW/2} y={oy + dy/2} textAnchor="middle" dominantBaseline="central"
+        fontSize={16} fill="#475569" fontFamily="system-ui,sans-serif"
+        transform={`rotate(-90,${oz - wallW/2},${oy + dy/2})`}>WALL</text>
+      <rect x={oz} y={oy} width={dz} height={dy} fill={C_INT} />
+      {rp.internal_parts.map((p, i) => {
+        const r = shelfSideRect(p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+        return <rect key={`sh${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
+          fill={RC.shelf.fill} stroke={RC.shelf.stroke} strokeWidth={0.5} />
+      })}
+      {rp.case_parts.map((p, i) => {
+        const r = sideRect(p); if (!r) return null
+        const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+        return <rect key={`cp${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
+          fill={RC.carcass.fill} stroke={RC.carcass.stroke} strokeWidth={0.75} />
+      })}
+      {rp.toekick_parts.map((p, i) => {
+        const r = tkSideRect(p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+        return <rect key={`tk${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
+          fill={RC.toekick.fill} stroke={RC.toekick.stroke} strokeWidth={0.75} />
+      })}
+      <rect x={oz} y={oy} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} />
+      <line x1={oz-20} y1={oy+dy} x2={oz+dz+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" />
+      {dimH(oz, oz + dz, oy - 50, `${dz}mm`, false)}
+      {kickZmin < Infinity && dimH(oz + kickZmin, oz + kickZmax, oy + dy + 30, `${Math.round(kickZmax - kickZmin)}mm`)}
+      {dimV(oz + dz + 55, oy, oy + dy, `${dy}mm`, true)}
+      {tkHeight > 0 && dimV(oz + dz + 90, oy + dy - tkHeight, oy + dy, `${Math.round(tkHeight)}mm`, true)}
+      {viewLabel(oz + dz/2, vh - 14, 'SIDE — DEPTH × HEIGHT')}
+    </svg>
+  )
+}
+
+// ── Preview panel (resizable, tabbed) ─────────────────────────────────────────
+
+type PView = 'front' | 'top' | 'side' | '3d'
+const PREVIEW_VIEWS: { id: PView; label: string }[] = [
+  { id: 'front', label: 'Front' },
+  { id: 'top',   label: 'Top'   },
+  { id: 'side',  label: 'Side'  },
+  { id: '3d',    label: '3D'    },
+]
+
+function PreviewPanel({ classTab, delta }: { classTab: AssClass; delta: Partial<ConstructionRules> }) {
+  const [panelW,     setPanelW]     = useState(380)
+  const [activeView, setActiveView] = useState<PView>('3d')
+  const resizeRef = useRef<{ startX: number; startW: number } | null>(null)
+
+  const { dx, dy, dz } = DEFAULT_DIMS[classTab] ?? DEFAULT_DIMS.base
+  const isWall = classTab === 'wall'
+
+  const rules = useMemo(
+    () => ({ ...DEFAULT_RULES, ...delta } as ConstructionRules),
+    [delta],
+  )
+
+  const resolvedCab = useMemo(() => {
+    const input: CabinetInput = {
+      id: 'preview',
+      assembly_class: classTab,
+      DX: dx, DY: dy, DZ: dz,
+      has_carcass: true,
+      has_internal: true,
+      has_face: false,
+      has_toekick: !isWall && rules.TOE_TYPE !== 'none',
+      top_type: rules.TOP_TYPE,
+      toe_type: isWall ? 'none' : rules.TOE_TYPE,
+      left_neighbour: 'wall',
+      right_neighbour: 'wall',
+      exposed_interior: false,
+      material:                    PREVIEW_MATERIAL,
+      door_material:               PREVIEW_MATERIAL,
+      shelf_material:              PREVIEW_MATERIAL,
+      toekick_face_material:       PREVIEW_MATERIAL,
+      toekick_interior_material:   PREVIEW_MATERIAL,
+      slide_side_deduction: 13,
+      rules,
+      face_grid: {
+        rows:  [{ row_index: 0, height_locked: false }],
+        cols:  [{ col_index: 0, width_locked: false }],
+        zones: [{ row_index: 0, col_index: 0, face_type: 'open' }],
+      },
+      adj_shelves:   [{ sort_order: 0, y_locked: false }, { sort_order: 1, y_locked: false }],
+      fixed_shelves: [],
+      inner_drawers: [],
+    }
+    return resolveCabinet(input)
+  }, [classTab, dx, dy, dz, isWall, rules])
+
+  const fakeDims: PrevDims = { dx, dy, dz }
+  const toeh = rules.TOEH
+
+  function onResizeDown(e: React.PointerEvent<HTMLDivElement>) {
+    resizeRef.current = { startX: e.clientX, startW: panelW }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  function onResizeMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!resizeRef.current) return
+    // dragging handle LEFT makes panel wider
+    const diff = resizeRef.current.startX - e.clientX
+    setPanelW(Math.max(280, Math.min(760, resizeRef.current.startW + diff)))
+  }
+  function onResizeUp() { resizeRef.current = null }
+
+  const tabCls = (active: boolean) =>
+    `px-2.5 py-1 text-[10px] font-medium rounded transition-colors ${active ? 'bg-gray-700 text-gray-100' : 'text-gray-500 hover:text-gray-300'}`
+
+  return (
+    <div style={{ width: panelW }} className="flex-none border-l border-gray-800 flex flex-col bg-gray-900/40 relative">
+
+      {/* Drag-to-resize handle on left edge */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/60 active:bg-blue-500 transition-colors z-10"
+        style={{ touchAction: 'none' }}
+        onPointerDown={onResizeDown}
+        onPointerMove={onResizeMove}
+        onPointerUp={onResizeUp}
+      />
+
+      {/* Header: label + view tabs + dims */}
+      <div className="flex-none pl-3 pr-4 py-2 border-b border-gray-800 flex items-center gap-0.5">
+        <span className="text-[9px] text-gray-600 uppercase tracking-wider mr-2 select-none">Preview</span>
+        {PREVIEW_VIEWS.map(v => (
+          <button key={v.id} onClick={() => setActiveView(v.id)} className={tabCls(activeView === v.id)}>
+            {v.label}
+          </button>
+        ))}
+        <span className="ml-auto text-[9px] text-gray-600 font-mono whitespace-nowrap pl-2">{dx}×{dy}×{dz}</span>
+      </div>
+
+      {/* View content */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        {activeView === '3d' ? (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <Cabinet3DView cab={{ id: 'preview', dx, dy, dz } as CabinetInstance} rp={resolvedCab} />
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center p-4 min-h-0">
+            {activeView === 'front' && <ResolvedElevation cab={fakeDims} rp={resolvedCab} />}
+            {activeView === 'top'   && <ResolvedTop       cab={fakeDims} rp={resolvedCab} />}
+            {activeView === 'side'  && <ResolvedSide      cab={fakeDims} rp={resolvedCab} />}
+          </div>
+        )}
+      </div>
+
+      {/* Footer: active rule summary */}
+      <div className="flex-none px-4 py-2 border-t border-gray-800 flex items-center gap-5 text-[10px]">
+        <span className="text-gray-600">Top: <span className="text-gray-300 font-mono capitalize">{rules.TOP_TYPE.replace(/_/g, ' ')}</span></span>
+        <span className="text-gray-600">Toe: <span className="text-gray-300 font-mono capitalize">{isWall || rules.TOE_TYPE === 'none' ? 'none' : `${rules.TOE_TYPE} · ${toeh}mm`}</span></span>
       </div>
     </div>
   )
