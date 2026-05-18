@@ -13,6 +13,7 @@ import { resolveCaseParts }      from './resolveCase'
 import { resolveToekickParts }   from './resolveToekick'
 import { resolveInternalParts }  from './resolveInternal'
 import { resolveFace }           from './resolveFace'
+import { resolveDrawerStacks }   from './resolveDrawerStack'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -45,7 +46,13 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     : { parts: [], errors: [] }
   allErrors.push(...internalErrors)
 
-  // ── 5. Warnings ───────────────────────────────────────────────
+  // ── 5. Drawer Stacks ──────────────────────────────────────────
+  // Resolves one drawer box + two slides per drawer_face zone
+  const drawerStacks = cab.has_face
+    ? resolveDrawerStacks(cab, r, zones)
+    : []
+
+  // ── 6. Warnings ───────────────────────────────────────────────
   // Non-fatal checks
   if (cab.DX > 1200) {
     allWarnings.push({
@@ -68,6 +75,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     face_rows:      rows,
     face_cols:      cols,
     face_zones:     zones,
+    drawer_stacks:  drawerStacks,
     errors:         allErrors,
     warnings:       allWarnings,
   }

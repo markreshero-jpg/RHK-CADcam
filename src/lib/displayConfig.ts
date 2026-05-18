@@ -14,6 +14,7 @@ export type AnnotationId =
   | 'plan_door_swings'
   | 'plan_drawer_lines'
   | 'elev_door_chevrons'
+  | 'elev_drawer_labels'
 
 export type AnnotationSet = Record<AnnotationId, boolean>
 
@@ -21,6 +22,7 @@ const DEFAULT_ANNOTATIONS: AnnotationSet = {
   plan_door_swings: true,
   plan_drawer_lines: true,
   elev_door_chevrons: true,
+  elev_drawer_labels: true,
 }
 
 export type LayerId =

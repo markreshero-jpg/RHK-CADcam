@@ -216,6 +216,43 @@ export const DEFAULT_RULES: ConstructionRules = {
   BACK_JOIN: 'between_sides', TOP_BACK_JOIN: 'butts_into_back', RAIL_JOIN: 'between_sides',
 }
 
+// ── Drawer Types ─────────────────────────────────────────────
+export type DrawerType = 'system' | 'five_piece' | 'inner'
+
+export interface DrawerTypeConfig {
+  type: DrawerType
+  // system drawer: references a specific slide product — box_height comes from slide.box_height
+  slide_product_id?: string
+  // five_piece / inner: box_height = face_opening_height − height_adjustment
+  height_adjustment?: number
+}
+
+// ── Slide Product ─────────────────────────────────────────────
+// Mirrors a row in hardware_slides. One row = one specific NL + height variant.
+export interface SlideProduct {
+  id:               string
+  name:             string
+  brand:            string | null
+  nominal_length:   number | null   // e.g. 450 mm (the NL)
+  box_height:       number | null   // e.g. 128 mm — drives system drawer box height
+  side_deduction:   number          // total width deducted from opening (both sides)
+  runner_thickness: number          // thickness of each slide rail (for 3D, mm)
+  min_runner_depth: number | null   // min drawer depth this slide handles
+  max_runner_depth: number | null   // max drawer depth this slide handles
+  soft_close:       boolean
+  full_extension:   boolean
+  cost_per_pair:    number | null
+}
+
+// Slide schedule entry: maps a drawer depth range to a specific slide product
+export interface SlideScheduleEntry {
+  id:          string
+  schedule_id: string
+  min_depth:   number
+  max_depth:   number
+  slide_id:    string
+}
+
 // ── Drawer Box Edging ─────────────────────────────────────────
 export type DbEdgingKey = 'db_left_side' | 'db_right_side' | 'db_bottom' | 'db_front' | 'db_back'
 export type DbEdgingDefaults = Partial<Record<DbEdgingKey, EdgeSides>>
@@ -313,8 +350,16 @@ export interface CabinetInput {
   toekick_face_edgeband_id?:     string
   toekick_interior_edgeband_id?: string
 
-  // Slide hardware (for inner drawers)
-  slide_side_deduction: number   // mm per side
+  // Slide hardware (for inner drawers — legacy scalar, kept for fallback)
+  slide_side_deduction: number
+
+  // Drawer box construction
+  drawer_material?:   Material          // drawer box panels (e.g. 12mm HMR)
+  drawer_box_rules?:  DrawerBoxRules    // box joinery rules (defaults to DEFAULT_DB_RULES)
+
+  // Slide products + schedule (resolved before passing to resolver)
+  slide_products?:  SlideProduct[]        // all active slide products available
+  slide_schedule?:  SlideScheduleEntry[]  // depth-range → slide_id mapping
 
   // Construction rules (already merged from system → job → room → cabinet)
   rules:           ConstructionRules
@@ -354,6 +399,7 @@ export interface FaceZoneInput {
   hinge_side?: 'left' | 'right'
   face_ins?:  number   // per-zone inset override
   face_buf?:  number   // per-zone buffer override
+  drawer_type_config?: DrawerTypeConfig  // only used when face_type === 'drawer_face'
 }
 
 // ── Internal Part Inputs ──────────────────────────────────────
@@ -394,6 +440,7 @@ export interface ResolvedCabinet {
   face_rows:     ResolvedFaceRow[]
   face_cols:     ResolvedFaceCol[]
   face_zones:    ResolvedFaceZone[]
+  drawer_stacks: ResolvedDrawerStack[]
   // Validation errors — non-empty means something is wrong
   errors:        ResolverError[]
   warnings:      ResolverError[]
@@ -440,6 +487,42 @@ export interface ResolvedFaceZone extends ResolvedPart {
   col_index:  number
   face_type:  'door' | 'drawer_face' | 'false_panel' | 'open'
   hinge_side?: 'left' | 'right'
+}
+
+// ── Resolved Drawer Stack ─────────────────────────────────────
+// One stack per drawer_face zone: the front panel (already in face_zones),
+// the 5-piece drawer box behind it, and the two slide rails.
+
+export interface ResolvedDrawerSlide {
+  side: 'left' | 'right'
+  // Position (cabinet origin = bottom-left-back corner)
+  X: number   // left edge of this slide rail
+  Y: number   // bottom of slide (aligns with drawer box bottom)
+  Z: number   // back face of slide (= back of cabinet for most cases)
+  // Dimensions (resolver convention)
+  DX: number  // nominal_length — slide runs depth-wise (cabinet Z direction)
+  DY: number  // 30mm — height of the slide channel (cabinet Y direction)
+  DZ: number  // runner_thickness — sits against gable face (cabinet X direction)
+  // Source
+  slide_id:         string
+  nominal_length:   number
+  box_height:       number
+  runner_thickness: number
+}
+
+export interface ResolvedDrawerStack {
+  face_zone_row: number
+  face_zone_col: number
+  drawer_type:   DrawerType
+  box_parts:     ResolvedDrawerBoxPart[]
+  slides:        ResolvedDrawerSlide[]
+  // Box summary dimensions (cabinet space)
+  box_width:  number
+  box_height: number
+  box_depth:  number
+  box_X:      number   // left edge of box in cabinet space
+  box_Y:      number   // bottom of box (= bottom of face zone)
+  box_Z:      number   // back face of box
 }
 
 export interface ResolverError {

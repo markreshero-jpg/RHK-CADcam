@@ -1,13 +1,23 @@
-import { createClient } from '@supabase/supabase-js'
+import { createServerClient as createSupabaseServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
-export function createServerClient() {
-  return createClient(
+export async function createServerClient() {
+  const cookieStore = await cookies()
+  return createSupabaseServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      global: {
-        fetch: (url, init = {}) =>
-          fetch(url, { ...init, cache: 'no-store' }),
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (cookiesToSet) => {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {
+            // Called from a Server Component — cookies are read-only, safe to ignore
+          }
+        },
       },
     }
   )

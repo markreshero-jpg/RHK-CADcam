@@ -21,9 +21,13 @@ export interface Project {
   rule_overrides: Record<string, unknown>
   class_dimension_defaults: Record<string, unknown>
   hardware_overrides: Record<string, unknown>
+  job_number: string | null
   notes: string | null
   // Schedule assignments (null = use shop default)
   assembly_schedule_id:        string | null
+  base_assembly_schedule_id:   string | null
+  wall_assembly_schedule_id:   string | null
+  tall_assembly_schedule_id:   string | null
   toekick_schedule_id:         string | null
   front_schedule_id:           string | null
   drawerbox_schedule_id:       string | null
@@ -33,6 +37,7 @@ export interface Project {
   handle_schedule_id:          string | null
   benchtop_schedule_id:        string | null
   construction_schedule_id:    string | null
+  drawer_box_method_id:        string | null
   created_at: string
   updated_at: string
 }

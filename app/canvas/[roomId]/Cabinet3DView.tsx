@@ -1,13 +1,16 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import * as THREE from 'three'
+import { useFrame } from '@react-three/fiber'
 import type { CabinetInstance } from '@/src/lib/types'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
   ResolvedInternalPart, ResolvedFaceZone,
+  ResolvedDrawerStack, ResolvedDrawerSlide, ResolvedDrawerBoxPart,
 } from '@/src/lib/resolver/types'
 import {
-  Box, PanelKind, PartMeta,
+  Box, PanelKind, PartMeta, PartEdge,
   MatColSpec, MatColMap, EbSpec,
   panelFaceColors, unpackMatCol,
   Part, PartPropertiesPanel, PreviewCanvas,
@@ -43,6 +46,25 @@ function zoneBox(z: ResolvedFaceZone): Box {
   return { x: z.X, y: z.Y, z: z.Z, w: z.DY, h: z.DX, d: z.DZ }
 }
 
+function dbBox(p: ResolvedDrawerBoxPart): Box {
+  switch (p.part_type) {
+    case 'db_left_side':
+    case 'db_right_side':
+      return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
+    case 'db_bottom':
+      return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+    case 'db_front':
+    case 'db_back':
+    default:
+      return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
+  }
+}
+
+function slideBox(s: ResolvedDrawerSlide): Box {
+  // DX=depth (Z direction), DY=channel height (Y direction), DZ=runner thickness (X direction)
+  return { x: s.X, y: s.Y, z: s.Z, w: s.DZ, h: s.DY, d: s.DX }
+}
+
 // ── Part labels ────────────────────────────────────────────────────────────────
 
 const CASE_LABELS: Record<string, string> = {
@@ -74,6 +96,14 @@ const FACE_LABELS: Record<string, string> = {
   door:        'Door',
   drawer_face: 'Drawer Face',
   false_panel: 'False Panel',
+}
+
+const DB_PART_LABELS: Record<string, string> = {
+  db_left_side:  'Drawer Box Left Side',
+  db_right_side: 'Drawer Box Right Side',
+  db_bottom:     'Drawer Box Bottom',
+  db_front:      'Drawer Box Front',
+  db_back:       'Drawer Box Back',
 }
 
 // ── PartMeta builders ─────────────────────────────────────────────────────────
@@ -113,6 +143,31 @@ function buildIntInfo(p: ResolvedInternalPart, b: Box): PartMeta {
   }
 }
 
+function buildDbPartInfo(p: ResolvedDrawerBoxPart, b: Box, stack: ResolvedDrawerStack): PartMeta {
+  return {
+    id:        `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`,
+    label:     DB_PART_LABELS[p.part_type] ?? p.part_type,
+    w: b.w, h: b.h, d: b.d,
+    thickness: p.DZ,
+    edge:      p.edge_band,
+    panelKind: (p.part_type === 'db_left_side' || p.part_type === 'db_right_side') ? 'side'
+               : (p.part_type === 'db_bottom') ? 'horizontal' : 'face',
+    detail:    `Row ${stack.face_zone_row + 1}, Col ${stack.face_zone_col + 1} · ${stack.drawer_type}`,
+  }
+}
+
+function buildSlideInfo(s: ResolvedDrawerSlide, b: Box, stack: ResolvedDrawerStack): PartMeta {
+  return {
+    id:        `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`,
+    label:     `Drawer Slide (${s.side})`,
+    w: b.w, h: b.h, d: b.d,
+    thickness: s.DZ,
+    edge:      { top: false, bottom: false, left: false, right: false },
+    panelKind: 'side',
+    detail:    `${s.nominal_length}mm NL · Box ht ${s.box_height}mm`,
+  }
+}
+
 function buildZoneInfo(z: ResolvedFaceZone, b: Box): PartMeta {
   return {
     id:        `zone_${z.row_index}_${z.col_index}`,
@@ -128,10 +183,60 @@ function buildZoneInfo(z: ResolvedFaceZone, b: Box): PartMeta {
   }
 }
 
+// ── Door panel with animated hinge ────────────────────────────────────────────
+// Wraps Part in a group whose Y rotation is lerped each frame toward the open/closed target.
+// hingeX is the cabinet-space X of the hinge edge; the Part is offset so that edge aligns
+// with the group origin, enabling rotation around it.
+
+type PartProps = {
+  faceColors:         [string, string, string, string, string, string]
+  edgeLineColor:      string
+  meta:               PartMeta
+  selected:           boolean
+  highlighted:        boolean
+  onSelect:           (info: PartMeta | null) => void
+  dragRef:            React.MutableRefObject<boolean>
+  ebSpec?:            EbSpec
+  contextMenuSelect?: boolean
+}
+
+function DoorPanel({ b, hingeSide, doorsOpen, ...partProps }: PartProps & {
+  b:          Box
+  hingeSide:  'left' | 'right'
+  doorsOpen:  boolean
+}) {
+  const groupRef     = useRef<THREE.Group>(null)
+  const curAngle     = useRef(0)
+  const doorsOpenRef = useRef(doorsOpen)
+  doorsOpenRef.current = doorsOpen
+
+  const openAngle = hingeSide === 'left' ? -Math.PI / 2 : Math.PI / 2
+  const hingeX    = hingeSide === 'left' ? b.x : b.x + b.w
+  const localB: Box = { x: hingeSide === 'left' ? 0 : -b.w, y: 0, z: 0, w: b.w, h: b.h, d: b.d }
+
+  useFrame(() => {
+    if (!groupRef.current) return
+    const target = doorsOpenRef.current ? openAngle : 0
+    if (Math.abs(curAngle.current - target) < 0.001) {
+      curAngle.current = target
+      groupRef.current.rotation.y = target
+      return
+    }
+    curAngle.current = THREE.MathUtils.lerp(curAngle.current, target, 0.12)
+    groupRef.current.rotation.y = curAngle.current
+  })
+
+  return (
+    <group ref={groupRef} position={[hingeX, b.y, b.z]}>
+      <Part b={localB} {...partProps} />
+    </group>
+  )
+}
+
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
 
 function CabinetScene({
-  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId,
+  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen,
 }: {
   cab:               CabinetInstance
   rp:                ResolvedCabinet
@@ -140,6 +245,7 @@ function CabinetScene({
   highlightPartKeys?: string[] | null
   materialColours?:  MatColMap
   ebByMatId?:        Record<string, { thickness: number; color: string | null }>
+  doorsOpen:         boolean
 }) {
   const { dx, dy, dz } = cab
   const dragRef = useRef(false)
@@ -171,6 +277,7 @@ function CabinetScene({
             selected={selected?.id === info.id}
             highlighted={hlSet?.has(p.part_key) ?? false}
             onSelect={onSelect}
+            contextMenuSelect
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id)}
           />
@@ -190,6 +297,7 @@ function CabinetScene({
             selected={selected?.id === info.id}
             highlighted={hlSet?.has(p.part_key) ?? false}
             onSelect={onSelect}
+            contextMenuSelect
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id)}
           />
@@ -209,30 +317,88 @@ function CabinetScene({
             selected={selected?.id === info.id}
             highlighted={hlSet?.has(p.part_type) ?? false}
             onSelect={onSelect}
+            contextMenuSelect
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id)}
           />
         )
+      })}
+      {(rp.drawer_stacks ?? []).flatMap((stack, si) => {
+        const boxColor   = '#d4c8a8'
+        const slideColor = '#6b7280'
+
+        const boxParts = stack.box_parts.map((p, pi) => {
+          const b    = dbBox(p)
+          const info = buildDbPartInfo(p, b, stack)
+          const panelKind = info.panelKind as PanelKind
+          const faceColors = panelFaceColors(panelKind, p.part_type, boxColor, boxColor, '#a89880')
+          return (
+            <Part
+              key={`db_${si}_${pi}`}
+              b={b}
+              faceColors={faceColors}
+              edgeLineColor="#8a7a60"
+              meta={info}
+              selected={selected?.id === info.id}
+              highlighted={false}
+              onSelect={onSelect}
+              dragRef={dragRef}
+            />
+          )
+        })
+
+        const slideparts = stack.slides.map((s, li) => {
+          const b    = slideBox(s)
+          const info = buildSlideInfo(s, b, stack)
+          const faceColors = panelFaceColors('side', `slide_${s.side}`, slideColor, slideColor, slideColor)
+          return (
+            <Part
+              key={`sl_${si}_${li}`}
+              b={b}
+              faceColors={faceColors}
+              edgeLineColor="#4b5563"
+              meta={info}
+              selected={selected?.id === info.id}
+              highlighted={false}
+              onSelect={onSelect}
+              dragRef={dragRef}
+            />
+          )
+        })
+
+        return [...boxParts, ...slideparts]
       })}
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
         const b    = zoneBox(z)
         const info = buildZoneInfo(z, b)
         const isDoor = z.face_type !== 'drawer_face'
         const s    = matSpec(z.material_id, isDoor ? '#f0ebe0' : '#e2d9c8')
-        return (
-          <Part
-            key={`f${i}`}
-            b={b}
-            faceColors={panelFaceColors(info.panelKind, z.face_type, s.face, s.back, s.edge)}
-            edgeLineColor="#b8a98e"
-            meta={info}
-            selected={selected?.id === info.id}
-            highlighted={hlSet?.has(z.face_type) ?? false}
-            onSelect={onSelect}
-            dragRef={dragRef}
-            ebSpec={ebFor(z.material_id)}
-          />
-        )
+        const faceColors = panelFaceColors(info.panelKind, z.face_type, s.face, s.back, s.edge)
+        const partProps: PartProps = {
+          faceColors,
+          edgeLineColor:    '#b8a98e',
+          meta:             info,
+          selected:         selected?.id === info.id,
+          highlighted:      hlSet?.has(z.face_type) ?? false,
+          onSelect,
+          contextMenuSelect: true,
+          dragRef,
+          ebSpec:           ebFor(z.material_id),
+        }
+
+        if (z.face_type === 'door' && z.hinge_side) {
+          return (
+            <DoorPanel
+              key={`f${i}`}
+              b={b}
+              hingeSide={z.hinge_side}
+              doorsOpen={doorsOpen}
+              {...partProps}
+            />
+          )
+        }
+
+        return <Part key={`f${i}`} b={b} {...partProps} />
       })}
     </group>
   )
@@ -250,7 +416,29 @@ export default function Cabinet3DView({
   ebByMatId?:        Record<string, { thickness: number; color: string | null }>
 }) {
   const [selectedPart, setSelectedPart] = useState<PartMeta | null>(null)
+  const [doorsOpen, setDoorsOpen]       = useState(false)
   const { dx, dy, dz } = cab
+
+  // Set to true when a part's onContextMenu fires so the canvas-level handler
+  // knows not to deselect on the same right-click event.
+  const didHitPartRef = useRef(false)
+
+  function handleSelect(info: PartMeta | null) {
+    if (info !== null) didHitPartRef.current = true
+    setSelectedPart(info)
+  }
+
+  function handleEdgeChange(edge: PartEdge) {
+    setSelectedPart(prev => prev ? { ...prev, edge } : null)
+  }
+
+  function handleCanvasContextMenu(e: React.MouseEvent) {
+    e.preventDefault()
+    if (!didHitPartRef.current) setSelectedPart(null)
+    didHitPartRef.current = false
+  }
+
+  const hasDoors = rp?.face_zones.some(z => z.face_type === 'door' && z.hinge_side) ?? false
 
   return (
     <PreviewCanvas
@@ -258,15 +446,30 @@ export default function Cabinet3DView({
       bgColor="#e8e4de"
       enablePan
       onDeselect={() => setSelectedPart(null)}
-      overlay={selectedPart && <PartPropertiesPanel part={selectedPart} onClose={() => setSelectedPart(null)} />}
+      onContextMenu={handleCanvasContextMenu}
+      hint="Left-drag rotate · scroll zoom · right-click part to inspect · click empty to deselect"
+      overlay={
+        <>
+          {selectedPart && <PartPropertiesPanel part={selectedPart} onClose={() => setSelectedPart(null)} onEdgeChange={handleEdgeChange} />}
+          {hasDoors && (
+            <button
+              onClick={() => setDoorsOpen(o => !o)}
+              className="absolute bottom-8 right-3 text-[11px] font-mono text-orange-700 hover:text-orange-600 bg-white/70 hover:bg-white/90 border border-orange-300 hover:border-orange-400 rounded px-2 py-1 transition-colors pointer-events-auto select-none"
+            >
+              {doorsOpen ? 'Close doors' : 'Open doors'}
+            </button>
+          )}
+        </>
+      }
     >
       {rp ? (
         <CabinetScene
           cab={cab} rp={rp}
-          selected={selectedPart} onSelect={setSelectedPart}
+          selected={selectedPart} onSelect={handleSelect}
           highlightPartKeys={highlightPartKeys}
           materialColours={materialColours}
           ebByMatId={ebByMatId}
+          doorsOpen={doorsOpen}
         />
       ) : (
         <mesh>

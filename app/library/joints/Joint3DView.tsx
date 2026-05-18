@@ -28,27 +28,46 @@ type MachineOp = 'drill' | 'route' | 'pocket' | 'saw'
 type TargetPart = 'part_a' | 'part_b'
 
 export interface JointOp3D {
-  operation_order:  number
-  target_part:      TargetPart
+  operation_order:   number
+  target_part:       TargetPart
   machine_operation: MachineOp
-  tool_diameter_mm: number
-  depth_mm:         number
-  offset_x_mm:      number
-  offset_y_mm:      number
+  tool_diameter_mm:  number
+  depth_mm:          number
+  offset_x_mm:       number
+  offset_y_mm:       number
+  offset_z_mm:       number
 }
 
 // ── Panel mesh ────────────────────────────────────────────────────────────────
 
-function Panel({ cx, cy, cz, w, h, d, color }: {
+function Panel({ cx, cy, cz, w, h, d, color, wire }: {
   cx: number; cy: number; cz: number
   w: number;  h: number;  d: number
   color: string
+  wire?: boolean
 }) {
+  const geo = new THREE.BoxGeometry(w, h, d)
   return (
-    <mesh position={[cx, cy, cz]} castShadow>
-      <boxGeometry args={[w, h, d]} />
-      <meshStandardMaterial color={color} roughness={0.6} metalness={0.0} />
-    </mesh>
+    <group position={[cx, cy, cz]}>
+      <mesh>
+        <primitive object={geo} attach="geometry" />
+        <meshStandardMaterial
+          color={color}
+          roughness={0.6}
+          metalness={wire ? 0.0 : 0.0}
+          transparent={wire}
+          opacity={wire ? 0.12 : 1}
+          depthWrite={!wire}
+          side={wire ? THREE.DoubleSide : THREE.FrontSide}
+        />
+      </mesh>
+      {wire && (
+        <lineSegments>
+          <edgesGeometry args={[geo]} />
+          <lineBasicMaterial color={color} />
+        </lineSegments>
+      )}
+    </group>
   )
 }
 
@@ -58,17 +77,15 @@ function Panel({ cx, cy, cz, w, h, d, color }: {
 function OpMarker({ x, y, z, radius, depthLen, axis, color }: {
   x: number; y: number; z: number
   radius: number; depthLen: number
-  axis: 'y-' | 'x+' // y- = going into Part A from top; x+ = going into Part B from left
+  axis: 'x-' | 'x+' // x- = into Part A from right end; x+ = into Part B from left face
   color: string
 }) {
   const cylLen  = Math.max(2, depthLen)
   const cylQuat = new THREE.Quaternion()
-  if (axis === 'x+') {
-    cylQuat.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)
-  }
-  const cylOffset = axis === 'y-'
-    ? { dx: 0, dy: -(cylLen / 2), dz: 0 }
-    : { dx: cylLen / 2, dy: 0,    dz: 0 }
+  cylQuat.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)
+  const cylOffset = axis === 'x-'
+    ? { dx: -(cylLen / 2), dy: 0, dz: 0 }
+    : { dx:  (cylLen / 2), dy: 0, dz: 0 }
 
   return (
     <group position={[x, y, z]}>
@@ -88,9 +105,10 @@ function OpMarker({ x, y, z, radius, depthLen, axis, color }: {
 
 // ── Main 3D canvas ────────────────────────────────────────────────────────────
 
-export default function Joint3DView({ ops, thickness }: {
+export default function Joint3DView({ ops, thickness, wire = false }: {
   ops:       JointOp3D[]
   thickness: number   // panel thickness in mm (configurable)
+  wire?:     boolean  // transparent wireframe mode
 }) {
   const t = thickness
 
@@ -136,41 +154,35 @@ export default function Joint3DView({ ops, thickness }: {
       <directionalLight position={[-150, 100, -100]} intensity={0.35} />
 
       {/* Part A — horizontal shelf */}
-      <Panel cx={partACX} cy={partACY} cz={0} w={A_LEN} h={t} d={D} color={COL_A} />
+      <Panel cx={partACX} cy={partACY} cz={0} w={A_LEN} h={t} d={D} color={COL_A} wire={wire} />
 
       {/* Part B — vertical side */}
-      <Panel cx={partBCX} cy={partBCY} cz={0} w={t} h={partBTotalH} d={D} color={COL_B} />
-
-      {/* Edge outlines */}
-      <lineSegments>
-        <edgesGeometry args={[new THREE.BoxGeometry(A_LEN, t, D)]} />
-        <lineBasicMaterial color={COL_EDGE} />
-      </lineSegments>
+      <Panel cx={partBCX} cy={partBCY} cz={0} w={t} h={partBTotalH} d={D} color={COL_B} wire={wire} />
 
       {/* Operation markers */}
       {ops.map((op, i) => {
-        const r = Math.max(1.5, op.tool_diameter_mm / 2)
+        const r     = Math.max(1.5, op.tool_diameter_mm / 2)
         const depth = Math.max(2, op.depth_mm)
 
         if (op.target_part === 'part_a') {
-          // On Part A's top face (Y=0), coming from above (axis = y-)
-          const mx = -op.offset_x_mm
+          // Enters Part A's right end face. offset_x sets back from face into panel (-X).
+          // offset_y: within panel thickness from centre. offset_z: front-to-back (panel depth).
           return (
             <OpMarker
               key={i}
-              x={mx} y={0} z={0}
+              x={-op.offset_x_mm} y={-t / 2 + op.offset_y_mm} z={op.offset_z_mm}
               radius={r} depthLen={depth}
-              axis="y-"
+              axis="x-"
               color={COL_OP_A}
             />
           )
         } else {
-          // On Part B's left face (X=0), coming from left (axis = x+)
-          const my = op.offset_y_mm
+          // Enters Part B's left face. offset_x sets into panel (+X).
+          // offset_y: height from joint line. offset_z: front-to-back (panel depth).
           return (
             <OpMarker
               key={i}
-              x={0} y={my} z={0}
+              x={op.offset_x_mm} y={op.offset_y_mm} z={op.offset_z_mm}
               radius={r} depthLen={depth}
               axis="x+"
               color={COL_OP_B}

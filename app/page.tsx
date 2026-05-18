@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createServerClient } from '@/src/lib/supabase-server'
+import { SignOutButton } from './SignOutButton'
 import { Project, Room } from '@/src/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -81,7 +82,7 @@ const STATUS_CONFIG: Record<string, { badge: string; bar: string; dot: string }>
 // ── Data ──────────────────────────────────────────────────────────────────────
 
 async function getProjectsWithFirstRoom(): Promise<(Project & { first_room_id: string | null })[]> {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: projects } = await supabase
     .from('projects')
@@ -140,6 +141,7 @@ export default async function HomePage() {
             <PlusIcon />
             New Project
           </Link>
+          <SignOutButton />
         </nav>
       </header>
 

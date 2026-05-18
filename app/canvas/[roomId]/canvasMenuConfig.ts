@@ -5,6 +5,7 @@ import type {
 import { toggleAnnotation } from './canvasTypes'
 import type { JobPropertiesTab } from './JobPropertiesModal'
 import type { RoomPropertiesTab } from './RoomPropertiesModal'
+import type { ReportScope } from './ReportsModal'
 
 export interface MenuActions {
   // Undo / redo
@@ -31,8 +32,9 @@ export interface MenuActions {
   displayConfig:    DisplayConfig
   setDisplayConfig: React.Dispatch<React.SetStateAction<DisplayConfig>>
   // Modals
-  setJobModalTab:  (tab: JobPropertiesTab) => void
-  setRoomModalTab: (tab: RoomPropertiesTab) => void
+  setJobModalTab:    (tab: JobPropertiesTab) => void
+  setRoomModalTab:   (tab: RoomPropertiesTab) => void
+  openReportModal:   (scope: ReportScope) => void
 }
 
 export function buildMenus(a: MenuActions): MenuGroup[] {
@@ -71,17 +73,16 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
       { label: '3D View', action: () => a.switchView('3d') },
     ]},
     { label: 'Annotations', items: [
-      { label: 'Door swings (plan)',        checked: a.displayConfig.annotations.plan_door_swings,   action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'plan_door_swings')) },
-      { label: 'Drawer lines (plan)',       checked: a.displayConfig.annotations.plan_drawer_lines,  action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'plan_drawer_lines')) },
-      { label: 'Door chevrons (elevation)', checked: a.displayConfig.annotations.elev_door_chevrons, action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_door_chevrons')) },
+      { label: 'Door swings (plan)',         checked: a.displayConfig.annotations.plan_door_swings,    action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'plan_door_swings')) },
+      { label: 'Drawer lines (plan)',        checked: a.displayConfig.annotations.plan_drawer_lines,   action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'plan_drawer_lines')) },
+      { label: 'Door chevrons (elevation)',  checked: a.displayConfig.annotations.elev_door_chevrons,  action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_door_chevrons')) },
+      { label: 'Drawer labels (elevation)',  checked: a.displayConfig.annotations.elev_drawer_labels,  action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_drawer_labels')) },
     ]},
     { label: 'Job', items: [
-      { label: 'Details',      action: () => a.setJobModalTab('details') },
-      { label: 'Dimensions',   action: () => a.setJobModalTab('dimensions') },
-      { label: 'Construction', action: () => a.setJobModalTab('construction') },
-      { label: 'Hardware',     action: () => a.setJobModalTab('hardware') },
+      { label: 'Details',           action: () => a.setJobModalTab('details') },
+      { label: 'Cabinet Standards', action: () => a.setJobModalTab('cabinet_standards') },
       null,
-      { label: 'Overrides',    action: () => a.setJobModalTab('overrides') },
+      { label: 'Overrides',         action: () => a.setJobModalTab('overrides') },
     ]},
     { label: 'Room', items: [
       { label: 'Room Details', action: () => a.setRoomModalTab('details') },
@@ -89,6 +90,10 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
       { label: 'Hardware',     action: () => a.setRoomModalTab('hardware') },
       null,
       { label: 'Overrides',    action: () => a.setRoomModalTab('overrides') },
+    ]},
+    { label: 'Reports', items: [
+      { label: 'Job Reports…',  action: () => a.openReportModal('job') },
+      { label: 'Room Reports…', action: () => a.openReportModal('room') },
     ]},
     { label: 'Production', items: [
       { label: 'Cut List…',          disabled: true },

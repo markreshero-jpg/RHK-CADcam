@@ -16,7 +16,7 @@ const SCHED_TABLES: { key: SchedKey; table: string }[] = [
 ]
 
 export default async function SettingsPage() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const settingsRes = await supabase.from('shop_settings').select('*').single()
 

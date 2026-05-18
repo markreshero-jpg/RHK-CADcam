@@ -41,6 +41,7 @@ import CabinetResizePanel from './CabinetResizePanel'
 import CabinetEditModal from './CabinetEditModal'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
 import RoomPropertiesModal, { type RoomPropertiesTab } from './RoomPropertiesModal'
+import ReportsModal, { type ReportScope } from './ReportsModal'
 import Room3DScene from './Room3DScene'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 
@@ -79,9 +80,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [mouseWorld, setMouseWorld] = useState<Pt>({ x: 0, y: 0 })
   const [canvasView, setCanvasView] = useState<CanvasView>('plan')
   const [elevWallId, setElevWallId] = useState<string | null>(null)
-  const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(DEFAULT_DISPLAY_CONFIG)
+  const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(() => {
+    const preset = getUserPrefs().defaultDrawingPreset
+    return applyPreset(preset)
+  })
   const [jobModalTab, setJobModalTab] = useState<JobPropertiesTab | null>(null)
   const [roomModalTab, setRoomModalTab] = useState<RoomPropertiesTab | null>(null)
+  const [reportScope, setReportScope] = useState<ReportScope | null>(null)
   const [editCabId, setEditCabId] = useState<string | null>(null)
   const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation'>('elevation')
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
@@ -848,6 +853,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     dispatchView, svgSize, fitToWalls, switchView,
     displayConfig, setDisplayConfig,
     setJobModalTab, setRoomModalTab,
+    openReportModal: setReportScope,
   })
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1215,6 +1221,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           initialTab={roomModalTab}
           onClose={() => setRoomModalTab(null)}
           onSave={handleUpdateRoom}
+        />
+      )}
+
+      {reportScope && (
+        <ReportsModal
+          initialScope={reportScope}
+          project={project}
+          room={room}
+          walls={walls}
+          cabinets={cabinets}
+          resolvedParts={resolvedParts}
+          onClose={() => setReportScope(null)}
         />
       )}
 

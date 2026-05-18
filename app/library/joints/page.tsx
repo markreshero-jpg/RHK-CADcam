@@ -4,7 +4,7 @@ import JointsClient from './JointsClient'
 export const dynamic = 'force-dynamic'
 
 export default async function JointsPage() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const [joints, fasteners] = await Promise.all([
     supabase.from('joint_types').select('*').order('name'),

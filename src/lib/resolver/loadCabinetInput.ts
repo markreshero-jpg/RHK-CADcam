@@ -1,5 +1,8 @@
 import { supabase } from '@/src/lib/supabase'
-import { CabinetInput, ConstructionRules, FaceGridInput, Material, DEFAULT_RULES } from './types'
+import {
+  CabinetInput, ConstructionRules, FaceGridInput, Material, DEFAULT_RULES,
+  SlideProduct, SlideScheduleEntry, DrawerBoxRules, DEFAULT_DB_RULES,
+} from './types'
 import { mergeRules } from './mergeRules'
 
 function dbRowToMaterial(row: Record<string, unknown>): Material {
@@ -55,23 +58,27 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     supabase.from('assembly_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('toekick_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('front_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
-    supabase.from('shop_settings').select('construction_schedule_id').limit(1).maybeSingle(),
+    supabase.from('shop_settings').select('construction_schedule_id, drawer_box_method_id').limit(1).maybeSingle(),
   ])
 
   const room       = roomRes.data
   const projectId  = room?.project_id as string | undefined
-  const shopConStrSchedId = shopSettingsRes.data?.construction_schedule_id as string | undefined
+  const shopConStrSchedId  = shopSettingsRes.data?.construction_schedule_id as string | undefined
+  const shopDbMethodId     = shopSettingsRes.data?.drawer_box_method_id     as string | undefined
 
   // ── 3. Load project schedule IDs (if we have a project) ─────────────────────
   let projRow: Record<string, string | null> | null = null
   if (projectId) {
     const { data } = await supabase
       .from('projects')
-      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id')
+      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id')
       .eq('id', projectId)
       .single()
     projRow = data as Record<string, string | null> | null
   }
+
+  // Effective drawer box method: project overrides shop default
+  const effectiveDbMethodId = projRow?.drawer_box_method_id ?? shopDbMethodId ?? null
 
   // Resolve effective construction method schedule: room → project → shop
   const conStrSchedId =
@@ -97,6 +104,8 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     slideRes,
     methodRes,
     conStrSchedRowRes,
+    slideSchedEntryRes,
+    dbMethodRes,
   ] = await Promise.all([
     asmSchedId
       ? supabase.from('assembly_schedule_rows').select('material_role, edgeband_id, materials(*)').eq('schedule_id', asmSchedId).eq('assembly_class', cab.assembly_class)
@@ -115,13 +124,24 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
       : Promise.resolve({ data: [] as unknown[] }),
     supabase.from('room_materials').select('material_role, materials(*)').eq('room_id', cab.room_id).eq('assembly_class', cab.assembly_class),
     supabase.from('room_toekick_materials').select('part_role, materials(*)').eq('room_id', cab.room_id),
-    supabase.from('hardware_slides').select('side_deduction').eq('active', true).order('created_at', { ascending: true }).limit(1).maybeSingle(),
+    // All active slide products (for resolver lookup)
+    supabase
+      .from('hardware_slides')
+      .select('id, name, brand, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair')
+      .eq('active', true)
+      .order('nominal_length', { ascending: true }),
     cab.construction_method_id
       ? supabase.from('construction_methods').select('rules').eq('id', cab.construction_method_id).single()
       : supabase.from('construction_methods').select('rules').eq('is_default', true).limit(1).maybeSingle(),
     // Construction method schedule row for this assembly class
     conStrSchedId
       ? supabase.from('construction_method_schedule_rows').select('rules').eq('schedule_id', conStrSchedId).eq('assembly_class', cab.assembly_class).maybeSingle()
+      : Promise.resolve({ data: null }),
+    // Slide schedule entries (stub — schedule UI built separately)
+    Promise.resolve({ data: null as unknown }),
+    // Drawer box method rules (project → shop cascade, resolved above)
+    effectiveDbMethodId
+      ? supabase.from('drawer_box_methods').select('rules').eq('id', effectiveDbMethodId).single()
       : Promise.resolve({ data: null }),
   ])
 
@@ -182,17 +202,50 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   const rules = mergeRules(DEFAULT_RULES, scheduleRules, methodRules, (cab.rule_overrides ?? {}) as Partial<ConstructionRules>)
 
   // ── 8. Resolve required materials ───────────────────────────────────────────
-  const interior = matMap.get('interior')
-  const doorFace = matMap.get('door_face')
-  const shelf    = matMap.get('shelf') ?? matMap.get('interior')
-  const tkFace   = tkMap.get('face')
-  const tkInt    = tkMap.get('interior')
+  const interior   = matMap.get('interior')
+  const doorFace   = matMap.get('door_face')
+  const shelf      = matMap.get('shelf') ?? matMap.get('interior')
+  const tkFace     = tkMap.get('face')
+  const tkInt      = tkMap.get('interior')
+  const drawerboxMat = matMap.get('drawerbox') ?? matMap.get('interior')
 
   if (!interior) throw new Error(`No interior material for assembly_class: ${cab.assembly_class}`)
   if (!doorFace) throw new Error(`No door_face material for assembly_class: ${cab.assembly_class}`)
   if (!shelf)    throw new Error(`No shelf material`)
   if (!tkFace)   throw new Error(`No toekick face material`)
   if (!tkInt)    throw new Error(`No toekick interior material`)
+
+  // ── 9. Build slide products list ────────────────────────────────────────────
+  type SlideRow = Record<string, unknown>
+  const slideRows = ((slideRes as { data: unknown[] | null }).data ?? []) as SlideRow[]
+  const slideProducts: SlideProduct[] = slideRows.map(r => ({
+    id:               r.id as string,
+    name:             r.name as string,
+    brand:            (r.brand as string | null) ?? null,
+    nominal_length:   r.nominal_length != null ? Number(r.nominal_length) : null,
+    box_height:       r.box_height     != null ? Number(r.box_height)     : null,
+    runner_thickness: r.runner_thickness != null ? Number(r.runner_thickness) : 12,
+    side_deduction:   Number(r.side_deduction ?? 13),
+    min_runner_depth: r.min_runner_depth != null ? Number(r.min_runner_depth) : null,
+    max_runner_depth: r.max_runner_depth != null ? Number(r.max_runner_depth) : null,
+    soft_close:       Boolean(r.soft_close),
+    full_extension:   Boolean(r.full_extension),
+    cost_per_pair:    r.cost_per_pair != null ? Number(r.cost_per_pair) : null,
+  }))
+
+  // Slide schedule entries (stub — schedule UI is built separately)
+  const slideSchedule: SlideScheduleEntry[] = ((slideSchedEntryRes as { data: unknown[] | null }).data ?? []) as SlideScheduleEntry[]
+
+  // Drawer box rules cascade: system defaults → method (project/shop) → cabinet overrides
+  const dbMethodRules = (dbMethodRes.data?.rules ?? {}) as Partial<DrawerBoxRules>
+  const drawerBoxRules: DrawerBoxRules = {
+    ...DEFAULT_DB_RULES,
+    ...dbMethodRules,
+    ...((cab.drawerbox_overrides ?? {}) as Partial<DrawerBoxRules>),
+  }
+
+  // Fallback side_deduction from first slide product
+  const fallbackDeduction = slideProducts[0]?.side_deduction ?? 13
 
   return {
     id:              cab.id,
@@ -220,7 +273,11 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     shelf_edgeband_id:            ebMap.get('shelf') ?? ebMap.get('interior'),
     toekick_face_edgeband_id:     ebMap.get('tk_face'),
     toekick_interior_edgeband_id: ebMap.get('tk_interior'),
-    slide_side_deduction:      slideRes.data?.side_deduction ?? 13,
+    slide_side_deduction:      fallbackDeduction,
+    drawer_material:           drawerboxMat ?? interior,
+    drawer_box_rules:          drawerBoxRules,
+    slide_products:            slideProducts,
+    slide_schedule:            slideSchedule,
     rules,
     face_grid:     (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID,
     adj_shelves:   [],

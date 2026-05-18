@@ -62,28 +62,34 @@ function JointSectionSVG({ ops, thickness: t }: { ops: JointOp3D[]; thickness: n
         const depth = Math.max(3, op.depth_mm)
 
         if (op.target_part === 'part_a') {
-          // Enters top face (y=0) going down
+          // Entry face at X=0. offset_x sets the marker back into Part A (moves left in section).
+          // offset_y positions within panel thickness from centre.
           const cx = sx(-op.offset_x_mm)
-          const cy = sy(0)
+          const cy = sy(-t / 2 + op.offset_y_mm)
+          const zNote = op.offset_z_mm !== 0 ? ` z${op.offset_z_mm > 0 ? '+' : ''}${op.offset_z_mm}` : ''
           return (
             <g key={i}>
-              <rect x={cx - r} y={cy} width={r * 2} height={depth}
+              {/* Depth shown as cylinder going further left */}
+              <rect x={cx - depth} y={cy - r} width={depth} height={r * 2}
                 fill="#f59e0b" fillOpacity={0.18}
                 stroke="#f59e0b" strokeWidth={0.5} strokeDasharray="2 1.5" />
               <circle cx={cx} cy={cy} r={r}
                 fill="#f59e0b" fillOpacity={0.45} stroke="#f59e0b" strokeWidth={1} />
-              <text x={cx} y={cy + depth + 7}
-                textAnchor="middle" fill="#fbbf24" fontSize={6.5}>
-                {op.machine_operation} Ø{op.tool_diameter_mm}
+              <text x={cx - depth - 4} y={cy}
+                textAnchor="end" dominantBaseline="middle" fill="#fbbf24" fontSize={6.5}>
+                {op.machine_operation} Ø{op.tool_diameter_mm}{zNote}
               </text>
             </g>
           )
         } else {
-          // Enters left face (x=0) going right
-          const cx = sx(0)
+          // Entry face at X=0. offset_x sets the marker into Part B (moves right in section).
+          // offset_y positions height from joint line.
+          const cx = sx(op.offset_x_mm)
           const cy = sy(op.offset_y_mm)
+          const zNote = op.offset_z_mm !== 0 ? ` z${op.offset_z_mm > 0 ? '+' : ''}${op.offset_z_mm}` : ''
           return (
             <g key={i}>
+              {/* Depth shown as cylinder going further right */}
               <rect x={cx} y={cy - r} width={depth} height={r * 2}
                 fill="#60a5fa" fillOpacity={0.18}
                 stroke="#60a5fa" strokeWidth={0.5} strokeDasharray="2 1.5" />
@@ -91,7 +97,7 @@ function JointSectionSVG({ ops, thickness: t }: { ops: JointOp3D[]; thickness: n
                 fill="#60a5fa" fillOpacity={0.45} stroke="#60a5fa" strokeWidth={1} />
               <text x={cx + depth + 4} y={cy}
                 dominantBaseline="middle" fill="#93c5fd" fontSize={6.5}>
-                {op.machine_operation} Ø{op.tool_diameter_mm}
+                {op.machine_operation} Ø{op.tool_diameter_mm}{zNote}
               </text>
             </g>
           )
@@ -110,6 +116,7 @@ export default function JointPreviewPanel({ ops, defaultThickness = 18 }: {
   const [panelW, setPanelW] = useState(360)
   const [view,   setView]   = useState<PView>('section')
   const [thick,  setThick]  = useState(defaultThickness)
+  const [wire,   setWire]   = useState(false)
   const resizeRef = useRef<{ startX: number; startW: number } | null>(null)
 
   function onResizeDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -143,12 +150,27 @@ export default function JointPreviewPanel({ ops, defaultThickness = 18 }: {
         onPointerUp={onResizeUp}
       />
 
-      {/* Tab bar + thickness control */}
-      <div className="flex-none border-b border-gray-800 px-4 pt-1 flex items-center justify-between">
-        <div className="flex gap-0.5">
+      {/* Tab bar + controls */}
+      <div className="flex-none border-b border-gray-800 px-4 pt-1 flex items-center gap-3">
+        <div className="flex gap-0.5 flex-1">
           <button className={tabCls(view === 'section')} onClick={() => setView('section')}>Section</button>
           <button className={tabCls(view === '3d')}     onClick={() => setView('3d')}>3D</button>
         </div>
+
+        {/* Wire toggle — only relevant in 3D view */}
+        {view === '3d' && (
+          <button
+            onClick={() => setWire(w => !w)}
+            className={`pb-1.5 text-[10px] px-2 py-0.5 rounded transition-colors border ${
+              wire
+                ? 'bg-blue-600/20 border-blue-600 text-blue-300'
+                : 'bg-transparent border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-500'
+            }`}
+          >
+            Wire
+          </button>
+        )}
+
         <div className="flex items-center gap-1.5 pb-1.5">
           <span className="text-[10px] text-gray-600">t =</span>
           <input
@@ -165,7 +187,7 @@ export default function JointPreviewPanel({ ops, defaultThickness = 18 }: {
         <div className="w-full h-full rounded-lg overflow-hidden">
           {view === 'section'
             ? <JointSectionSVG ops={ops} thickness={thick} />
-            : <Joint3DView     ops={ops} thickness={thick} />
+            : <Joint3DView     ops={ops} thickness={thick} wire={wire} />
           }
         </div>
       </div>

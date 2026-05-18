@@ -828,6 +828,16 @@ export default function ElevationSVG({
                                 style={{ pointerEvents: 'none' }} />
                             })()
                           : null
+                        const drawerLabel = fz.face_type === 'drawer_face' && displayConfig.annotations.elev_drawer_labels
+                          ? (
+                            <text
+                              x={x + w / 2} y={y + h - 4 / z}
+                              textAnchor="middle" dominantBaseline="auto"
+                              fontSize={11 / z} fill={faceStroke} fillOpacity={0.7}
+                              style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                              drawer
+                            </text>
+                          ) : null
                         return (
                           <g key={`fz-${i}`} style={{ pointerEvents: 'none' }}>
                             <rect x={x} y={y} width={w} height={h}
@@ -837,6 +847,7 @@ export default function ElevationSVG({
                               opacity={faceP.opacity} />
                             {hingeLine}
                             {chevron}
+                            {drawerLabel}
                           </g>
                         )
                       })}

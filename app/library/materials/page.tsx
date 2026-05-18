@@ -4,7 +4,7 @@ import MaterialsClient from './MaterialsClient'
 export const dynamic = 'force-dynamic'
 
 export default async function MaterialsPage() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const [boards, bands, benchtops, hinges, handles, slides] = await Promise.all([
     supabase.from('materials').select('*').order('name'),

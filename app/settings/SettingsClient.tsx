@@ -10,7 +10,8 @@ import DrawerBoxesClient from '@/app/library/drawer-boxes/DrawerBoxesClient'
 import JointsClient from '@/app/library/joints/JointsClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
-import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
+import { getUserPrefs, setUserPrefs, type DrawingPreset } from '@/src/lib/userPrefs'
+import { DISPLAY_PRESETS } from '@/src/lib/displayConfig'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -347,11 +348,21 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
 
   // User preferences (localStorage)
   const [invertScroll, setInvertScroll] = useState(false)
-  useEffect(() => { setInvertScroll(getUserPrefs().invertScroll) }, [])
+  const [defaultDrawingPreset, setDefaultDrawingPreset] = useState<DrawingPreset>('full_parts')
+  useEffect(() => {
+    const prefs = getUserPrefs()
+    setInvertScroll(prefs.invertScroll)
+    setDefaultDrawingPreset(prefs.defaultDrawingPreset)
+  }, [])
 
   function toggleInvertScroll(val: boolean) {
     setInvertScroll(val)
     setUserPrefs({ invertScroll: val })
+  }
+
+  function handleDrawingPreset(val: DrawingPreset) {
+    setDefaultDrawingPreset(val)
+    setUserPrefs({ defaultDrawingPreset: val })
   }
 
   // Materials (schedule IDs) — save immediately on change
@@ -499,6 +510,27 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
                           invertScroll ? 'translate-x-4' : 'translate-x-0'
                         }`} />
                       </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Drawing</p>
+                  <div className="border border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-700/60">
+                    <div className="flex items-center justify-between px-4 py-3 bg-gray-900">
+                      <div>
+                        <p className="text-xs font-medium text-gray-200">Default drawing layer</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Starting detail level when opening a job</p>
+                      </div>
+                      <select
+                        value={defaultDrawingPreset}
+                        onChange={e => handleDrawingPreset(e.target.value as DrawingPreset)}
+                        className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+                      >
+                        {(Object.entries(DISPLAY_PRESETS) as [DrawingPreset, { label: string }][]).map(([id, { label }]) => (
+                          <option key={id} value={id}>{label}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>

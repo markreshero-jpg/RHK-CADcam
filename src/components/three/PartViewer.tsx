@@ -103,16 +103,18 @@ export function fitCamDist(dx: number, dy: number, dz: number) {
 
 export function Part({
   b, faceColors, edgeLineColor, meta, selected, highlighted, onSelect, dragRef, ebSpec,
+  contextMenuSelect = false,
 }: {
-  b:             Box
-  faceColors:    [string, string, string, string, string, string]
-  edgeLineColor: string
-  meta:          PartMeta
-  selected:      boolean
-  highlighted:   boolean
-  onSelect:      (meta: PartMeta | null) => void
-  dragRef:       React.MutableRefObject<boolean>
-  ebSpec?:       EbSpec
+  b:                  Box
+  faceColors:         [string, string, string, string, string, string]
+  edgeLineColor:      string
+  meta:               PartMeta
+  selected:           boolean
+  highlighted:        boolean
+  onSelect:           (meta: PartMeta | null) => void
+  dragRef:            React.MutableRefObject<boolean>
+  ebSpec?:            EbSpec
+  contextMenuSelect?: boolean
 }) {
   const [hovered, setHovered] = useState(false)
 
@@ -138,7 +140,8 @@ export function Part({
         position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]}
         onPointerDown={() => { dragRef.current = false }}
         onPointerMove={(e) => { if (e.buttons) dragRef.current = true }}
-        onClick={(e) => { e.stopPropagation(); if (!dragRef.current) onSelect(selected ? null : meta) }}
+        onClick={contextMenuSelect ? undefined : (e) => { e.stopPropagation(); if (!dragRef.current) onSelect(selected ? null : meta) }}
+        onContextMenu={contextMenuSelect ? (e) => { e.stopPropagation(); onSelect(meta) } : undefined}
         onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
         onPointerOut={() => setHovered(false)}
       >
@@ -167,14 +170,13 @@ export function Part({
 
 // ── Properties panel overlay ───────────────────────────────────────────────────
 
-export function PartPropertiesPanel({ part, onClose }: { part: PartMeta; onClose: () => void }) {
-  const edges = [
-    part.edge.top    && 'Top',
-    part.edge.bottom && 'Bottom',
-    part.edge.left   && 'Left',
-    part.edge.right  && 'Right',
-  ].filter(Boolean) as string[]
-
+export function PartPropertiesPanel({
+  part, onClose, onEdgeChange,
+}: {
+  part: PartMeta
+  onClose: () => void
+  onEdgeChange?: (edge: PartEdge) => void
+}) {
   return (
     <div className="absolute top-3 right-3 w-56 bg-gray-900/95 border border-gray-700 rounded-lg shadow-xl pointer-events-auto select-none">
       <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-gray-700">
@@ -190,8 +192,21 @@ export function PartPropertiesPanel({ part, onClose }: { part: PartMeta; onClose
         <span className="text-gray-200 text-right">{Math.round(part.d)} mm</span>
         <span className="text-gray-500">Thickness</span>
         <span className="text-gray-200 text-right">{Math.round(part.thickness)} mm</span>
-        <span className="text-gray-500">Edge band</span>
-        <span className="text-gray-200 text-right">{edges.length ? edges.join(' · ') : '—'}</span>
+        <span className="text-gray-500 self-start pt-0.5">Edge band</span>
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+          {(['top', 'bottom', 'left', 'right'] as const).map(e => (
+            <label key={e} className="flex items-center gap-1.5 cursor-pointer text-gray-400 hover:text-gray-200">
+              <input
+                type="checkbox"
+                checked={part.edge[e]}
+                onChange={() => onEdgeChange?.({ ...part.edge, [e]: !part.edge[e] })}
+                disabled={!onEdgeChange}
+                className="accent-orange-500 cursor-pointer w-3 h-3"
+              />
+              <span className="text-[10px] capitalize">{e === 'bottom' ? 'bot' : e}</span>
+            </label>
+          ))}
+        </div>
         {part.detail && (
           <>
             <span className="text-gray-500">Info</span>
@@ -212,17 +227,21 @@ export function PreviewCanvas({
   bgColor = '#111827',
   enablePan = false,
   onDeselect,
+  onContextMenu,
   overlay,
+  hint,
   children,
 }: {
-  dx:          number
-  dy:          number
-  dz:          number
-  bgColor?:    string
-  enablePan?:  boolean
-  onDeselect?: () => void
-  overlay?:    React.ReactNode
-  children?:   React.ReactNode
+  dx:             number
+  dy:             number
+  dz:             number
+  bgColor?:       string
+  enablePan?:     boolean
+  onDeselect?:    () => void
+  onContextMenu?: (e: React.MouseEvent) => void
+  overlay?:       React.ReactNode
+  hint?:          string
+  children?:      React.ReactNode
 }) {
   const maxDim  = Math.max(dx, dy, dz)
   const camDist = fitCamDist(dx, dy, dz)
@@ -234,7 +253,7 @@ export function PreviewCanvas({
         dpr={[1, 2]}
         style={{ width: '100%', height: '100%', background: bgColor }}
         onPointerMissed={onDeselect}
-        onContextMenu={e => { e.preventDefault(); onDeselect?.() }}
+        onContextMenu={onContextMenu ?? (e => { e.preventDefault(); onDeselect?.() })}
       >
         <PerspectiveCamera
           makeDefault
@@ -259,7 +278,7 @@ export function PreviewCanvas({
       </Canvas>
       {overlay}
       <div className="absolute bottom-2 left-3 text-[10px] text-gray-600 pointer-events-none select-none">
-        Left-drag rotate · scroll zoom{enablePan ? ' · right-drag pan' : ''} · click part to inspect · click empty to deselect
+        {hint ?? `Left-drag rotate · scroll zoom${enablePan ? ' · right-drag pan' : ''} · click part to inspect · click empty to deselect`}
       </div>
     </div>
   )

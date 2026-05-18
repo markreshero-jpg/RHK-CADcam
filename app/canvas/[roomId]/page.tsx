@@ -11,7 +11,7 @@ export default async function CanvasPage({
   params: Promise<{ roomId: string }>
 }) {
   const { roomId } = await params
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   // Load room
   const { data: room } = await supabase

@@ -20,16 +20,17 @@ interface JointType {
 }
 
 interface JointTypeOperation {
-  id:               string
-  joint_type_id:    string
-  operation_order:  number
-  target_part:      TargetPart
+  id:                string
+  joint_type_id:     string
+  operation_order:   number
+  target_part:       TargetPart
   machine_operation: MachineOp
-  tool_diameter_mm: number
-  depth_mm:         number
-  offset_x_mm:      number
-  offset_y_mm:      number
-  notes:            string | null
+  tool_diameter_mm:  number
+  depth_mm:          number
+  offset_x_mm:       number
+  offset_y_mm:       number
+  offset_z_mm:       number
+  notes:             string | null
 }
 
 interface Fastener {
@@ -76,14 +77,15 @@ const FASTENER_DEFAULTS: Omit<Fastener, 'id'> = {
 }
 
 const OP_DEFAULTS: Omit<JointTypeOperation, 'id' | 'joint_type_id'> = {
-  operation_order: 1,
-  target_part: 'part_a',
+  operation_order:   1,
+  target_part:       'part_a',
   machine_operation: 'drill',
-  tool_diameter_mm: 8,
-  depth_mm: 15,
-  offset_x_mm: 0,
-  offset_y_mm: 0,
-  notes: null,
+  tool_diameter_mm:  8,
+  depth_mm:          15,
+  offset_x_mm:       0,
+  offset_y_mm:       0,
+  offset_z_mm:       0,
+  notes:             null,
 }
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -103,6 +105,7 @@ function toOp(r: Record<string, unknown>): JointTypeOperation {
     depth_mm:          r.depth_mm as number,
     offset_x_mm:       (r.offset_x_mm as number) ?? 0,
     offset_y_mm:       (r.offset_y_mm as number) ?? 0,
+    offset_z_mm:       (r.offset_z_mm as number) ?? 0,
     notes:             (r.notes as string | null) ?? null,
   }
 }
@@ -241,7 +244,7 @@ export default function JointsClient({
   }
 
   async function patchOp(id: string, key: keyof JointTypeOperation, raw: string | number) {
-    const numKeys: (keyof JointTypeOperation)[] = ['operation_order','tool_diameter_mm','depth_mm','offset_x_mm','offset_y_mm']
+    const numKeys: (keyof JointTypeOperation)[] = ['operation_order','tool_diameter_mm','depth_mm','offset_x_mm','offset_y_mm','offset_z_mm']
     const val = numKeys.includes(key) ? parseFloat(raw as string) : raw
     if (numKeys.includes(key) && isNaN(val as number)) return
     await supabase.from('joint_type_operations').update({ [key]: val }).eq('id', id)
@@ -410,6 +413,7 @@ export default function JointsClient({
                   depth_mm:          op.depth_mm,
                   offset_x_mm:       op.offset_x_mm,
                   offset_y_mm:       op.offset_y_mm,
+                  offset_z_mm:       op.offset_z_mm,
                 }))}
               />
             )}
@@ -458,6 +462,7 @@ function OpsTable({
               <th className={thCls} style={{ width: 76 }}>Depth mm</th>
               <th className={thCls} style={{ width: 68 }}>Offset X</th>
               <th className={thCls} style={{ width: 68 }}>Offset Y</th>
+              <th className={thCls} style={{ width: 68 }}>Offset Z</th>
               <th className={thCls}>Notes</th>
               <th className={thCls} style={{ width: 32 }} />
             </tr>
@@ -466,9 +471,8 @@ function OpsTable({
             {ops.map((op, i) => (
               <tr key={op.id} className={`border-b border-gray-800/40 ${i % 2 === 0 ? '' : 'bg-gray-900/20'}`}>
                 <td className={tdCls}>
-                  <input type="number" value={op.operation_order}
-                    onChange={e => onPatch(op.id, 'operation_order', e.target.value)}
-                    onFocus={e => e.target.select()}
+                  <NumCell value={op.operation_order}
+                    onChange={n => onPatch(op.id, 'operation_order', n)}
                     className={numCls} style={{ width: 36 }} />
                 </td>
                 <td className={tdCls}>
@@ -486,27 +490,28 @@ function OpsTable({
                   </select>
                 </td>
                 <td className={tdCls}>
-                  <input type="number" value={op.tool_diameter_mm}
-                    onChange={e => onPatch(op.id, 'tool_diameter_mm', e.target.value)}
-                    onFocus={e => e.target.select()}
+                  <NumCell value={op.tool_diameter_mm}
+                    onChange={n => onPatch(op.id, 'tool_diameter_mm', n)}
                     className={numCls} />
                 </td>
                 <td className={tdCls}>
-                  <input type="number" value={op.depth_mm}
-                    onChange={e => onPatch(op.id, 'depth_mm', e.target.value)}
-                    onFocus={e => e.target.select()}
+                  <NumCell value={op.depth_mm}
+                    onChange={n => onPatch(op.id, 'depth_mm', n)}
                     className={numCls} />
                 </td>
                 <td className={tdCls}>
-                  <input type="number" value={op.offset_x_mm}
-                    onChange={e => onPatch(op.id, 'offset_x_mm', e.target.value)}
-                    onFocus={e => e.target.select()}
+                  <NumCell value={op.offset_x_mm}
+                    onChange={n => onPatch(op.id, 'offset_x_mm', n)}
                     className={numCls} />
                 </td>
                 <td className={tdCls}>
-                  <input type="number" value={op.offset_y_mm}
-                    onChange={e => onPatch(op.id, 'offset_y_mm', e.target.value)}
-                    onFocus={e => e.target.select()}
+                  <NumCell value={op.offset_y_mm}
+                    onChange={n => onPatch(op.id, 'offset_y_mm', n)}
+                    className={numCls} />
+                </td>
+                <td className={tdCls}>
+                  <NumCell value={op.offset_z_mm}
+                    onChange={n => onPatch(op.id, 'offset_z_mm', n)}
                     className={numCls} />
                 </td>
                 <td className={tdCls}>
@@ -523,7 +528,7 @@ function OpsTable({
             ))}
             {ops.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-6 text-center text-xs text-gray-600">
+                <td colSpan={10} className="px-4 py-6 text-center text-xs text-gray-600">
                   No operations yet. Click + Add operation below.
                 </td>
               </tr>
@@ -628,6 +633,48 @@ function FastenersTable({
         </table>
       </div>
     </div>
+  )
+}
+
+// ── NumCell — local-draft numeric input ───────────────────────────────────────
+// Holds a string draft while the user types; only calls onChange on blur / Enter.
+// Selects all content on focus so typing immediately overwrites.
+
+function NumCell({ value, onChange, className, style }: {
+  value:     number
+  onChange:  (n: number) => void
+  className?: string
+  style?:    React.CSSProperties
+}) {
+  const [draft,   setDraft]   = useState(String(value))
+  const [focused, setFocused] = useState(false)
+
+  // Sync display when the value changes externally (e.g. another user or reset)
+  useEffect(() => {
+    if (!focused) setDraft(String(value))
+  }, [value, focused])
+
+  function commit(raw: string) {
+    const n = parseFloat(raw)
+    if (!isNaN(n)) {
+      onChange(n)
+    } else {
+      setDraft(String(value)) // revert to last good value
+    }
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={draft}
+      className={className}
+      style={style}
+      onChange={e => setDraft(e.target.value)}
+      onFocus={e => { setFocused(true); e.target.select() }}
+      onBlur={e  => { setFocused(false); commit(e.target.value) }}
+      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+    />
   )
 }
 

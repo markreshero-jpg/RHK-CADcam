@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance, Wall } from '@/src/lib/types'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone } from '@/src/lib/resolver/types'
 import CabinetPanel from './CabinetPanel'
@@ -635,7 +636,7 @@ function EBDots({ t, b, l, r }: { t: boolean; b: boolean; l: boolean; r: boolean
 function SectionHeader({ color, title, count }: { color: string; title: string; count: number }) {
   return (
     <tr>
-      <td colSpan={5} className="pt-4 pb-1 px-3">
+      <td colSpan={6} className="pt-4 pb-1 px-3">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full flex-none" style={{ background: color }} />
           <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">{title}</span>
@@ -646,13 +647,14 @@ function SectionHeader({ color, title, count }: { color: string; title: string; 
   )
 }
 
-function PartRow({ name, dy, dx, dz, eb }: {
-  name: string; dy: number; dx: number; dz: number
+function PartRow({ name, material, dy, dx, dz, eb }: {
+  name: string; material: string; dy: number; dx: number; dz: number
   eb: { top: boolean; bottom: boolean; left: boolean; right: boolean }
 }) {
   return (
     <tr className="border-t border-gray-800/60 hover:bg-gray-800/30">
       <td className="px-3 py-1.5 text-xs text-gray-300">{name}</td>
+      <td className="px-3 py-1.5 text-xs text-gray-400">{material}</td>
       <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{Math.round(dy)}</td>
       <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{Math.round(dx)}</td>
       <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-400">{Math.round(dz)}</td>
@@ -664,6 +666,25 @@ function PartRow({ name, dy, dx, dz, eb }: {
 }
 
 function PartsView({ rp }: { rp: ResolvedCabinet }) {
+  const [matNames, setMatNames] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    const ids = new Set<string>()
+    rp.case_parts.forEach(p    => ids.add(p.material_id))
+    rp.toekick_parts.forEach(p => ids.add(p.material_id))
+    rp.internal_parts.forEach(p => ids.add(p.material_id))
+    rp.face_zones.forEach(z    => ids.add(z.material_id))
+    if (ids.size === 0) return
+    supabase.from('materials').select('id,name').in('id', [...ids]).then(({ data }) => {
+      if (!data) return
+      const map: Record<string, string> = {}
+      for (const m of data) map[m.id] = m.name
+      setMatNames(map)
+    })
+  }, [rp])
+
+  const mat = (id: string) => matNames[id] ?? '—'
+
   const faceCount = rp.face_zones.filter(z => z.face_type !== 'open').length
   const totalParts = rp.case_parts.length + rp.toekick_parts.length + rp.internal_parts.length + faceCount
 
@@ -683,6 +704,7 @@ function PartsView({ rp }: { rp: ResolvedCabinet }) {
         <thead>
           <tr className="border-b border-gray-700">
             <th className="px-3 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">Part</th>
+            <th className="px-3 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">Material</th>
             <th className="px-3 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider text-right">W (DY)</th>
             <th className="px-3 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider text-right">H (DX)</th>
             <th className="px-3 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider text-right">T (DZ)</th>
@@ -695,7 +717,7 @@ function PartsView({ rp }: { rp: ResolvedCabinet }) {
               <SectionHeader color={SECTION_COLOR.carcass} title="Carcass" count={rp.case_parts.length} />
               {rp.case_parts.map((p: ResolvedCasePart, i: number) => (
                 <PartRow key={`cp-${i}`} name={PART_LABEL[p.part_key] ?? p.part_key}
-                  dy={p.DY} dx={p.DX} dz={p.DZ} eb={p.edge_band} />
+                  material={mat(p.material_id)} dy={p.DY} dx={p.DX} dz={p.DZ} eb={p.edge_band} />
               ))}
             </>
           )}
@@ -704,7 +726,7 @@ function PartsView({ rp }: { rp: ResolvedCabinet }) {
               <SectionHeader color={SECTION_COLOR.toekick} title="Toekick" count={rp.toekick_parts.length} />
               {rp.toekick_parts.map((p: ResolvedToekickPart, i: number) => (
                 <PartRow key={`tk-${i}`} name={PART_LABEL[p.part_key] ?? p.part_key}
-                  dy={p.DY} dx={p.DX} dz={p.DZ} eb={p.edge_band} />
+                  material={mat(p.material_id)} dy={p.DY} dx={p.DX} dz={p.DZ} eb={p.edge_band} />
               ))}
             </>
           )}
@@ -713,7 +735,7 @@ function PartsView({ rp }: { rp: ResolvedCabinet }) {
               <SectionHeader color={SECTION_COLOR.internal} title="Internal" count={rp.internal_parts.length} />
               {rp.internal_parts.map((p: ResolvedInternalPart, i: number) => (
                 <PartRow key={`ip-${i}`} name={PART_LABEL[p.part_type] ?? p.part_type}
-                  dy={p.DY} dx={p.DX} dz={p.DZ} eb={p.edge_band} />
+                  material={mat(p.material_id)} dy={p.DY} dx={p.DX} dz={p.DZ} eb={p.edge_band} />
               ))}
             </>
           )}
@@ -723,7 +745,7 @@ function PartsView({ rp }: { rp: ResolvedCabinet }) {
               {rp.face_zones.filter((z: ResolvedFaceZone) => z.face_type !== 'open').map((z: ResolvedFaceZone, i: number) => (
                 <PartRow key={`fz-${i}`}
                   name={`${z.face_type === 'door' ? 'Door' : z.face_type === 'drawer_face' ? 'Drawer Face' : 'False Panel'} R${z.row_index + 1}C${z.col_index + 1}`}
-                  dy={z.DY} dx={z.DX} dz={z.DZ} eb={z.edge_band} />
+                  material={mat(z.material_id)} dy={z.DY} dx={z.DX} dz={z.DZ} eb={z.edge_band} />
               ))}
             </>
           )}
