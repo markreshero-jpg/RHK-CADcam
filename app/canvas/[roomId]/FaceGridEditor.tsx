@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
-import type { FaceGridInput, FaceZoneInput } from '@/src/lib/resolver/types'
+import type { FaceGridInput, FaceZoneInput, DrawerType } from '@/src/lib/resolver/types'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -93,6 +93,7 @@ export default function FaceGridEditor({
   const [grid, setGrid] = useState<FaceGridInput>(() =>
     (cabinet.face_grid as FaceGridInput | null) ?? DEFAULT_GRID
   )
+  const [selectedZone, setSelectedZone] = useState<{ row: number; col: number } | null>(null)
 
   const isBase = cabinet.assembly_class === 'base' || cabinet.assembly_class === 'base_corner'
   const d = computeDisplay(grid, cabinet.dx, cabinet.dy, isBase)
@@ -116,6 +117,12 @@ export default function FaceGridEditor({
     })
   }
 
+  function selectZone(rowIdx: number, colIdx: number) {
+    setSelectedZone(prev =>
+      prev?.row === rowIdx && prev?.col === colIdx ? null : { row: rowIdx, col: colIdx }
+    )
+  }
+
   function toggleHinge(rowIdx: number, colIdx: number) {
     save({
       ...grid,
@@ -124,6 +131,31 @@ export default function FaceGridEditor({
           ? { ...z, hinge_side: z.hinge_side === 'left' ? 'right' : 'left' }
           : z
       ),
+    })
+  }
+
+  function setDrawerType(rowIdx: number, colIdx: number, type: DrawerType | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        if (type === null) {
+          const { drawer_type_config: _, ...rest } = z
+          return rest
+        }
+        return { ...z, drawer_type_config: { ...z.drawer_type_config, type } }
+      }),
+    })
+  }
+
+  function setHeightAdjustment(rowIdx: number, colIdx: number, adj: number | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        const cfg = z.drawer_type_config ?? { type: 'five_piece' as DrawerType }
+        return { ...z, drawer_type_config: { ...cfg, height_adjustment: adj ?? undefined } }
+      }),
     })
   }
 
@@ -282,7 +314,7 @@ export default function FaceGridEditor({
           <button className={addBtn} onClick={() => addCol('right')}>+ Right</button>
         </div>
         <span className="text-gray-600 hidden sm:inline">·</span>
-        <span className="text-gray-600 text-[10px] hidden sm:inline">click zone to cycle type · click hinge bar to flip side</span>
+        <span className="text-gray-600 text-[10px] hidden sm:inline">click zone to select · double-click to cycle type · click hinge bar to flip side</span>
         {errors.length > 0 && (
           <span className="ml-auto text-[10px] text-red-400">{errors.length} error{errors.length !== 1 ? 's' : ''}</span>
         )}
@@ -333,14 +365,19 @@ export default function FaceGridEditor({
               const arrowX  = gz.hinge_side === 'left' ? zx + colW - 4 : zx + 4
               const arrowAnchor = gz.hinge_side === 'left' ? 'end' : 'start'
 
+              const isSel = selectedZone?.row === gz.row_index && selectedZone?.col === gz.col_index
+
               return (
                 <g
                   key={`${gz.row_index}-${gz.col_index}`}
-                  onClick={() => cycleZone(gz.row_index, gz.col_index)}
+                  onClick={() => selectZone(gz.row_index, gz.col_index)}
+                  onDoubleClick={() => cycleZone(gz.row_index, gz.col_index)}
                   style={{ cursor: 'pointer' }}
                 >
                   <rect x={zx} y={zy} width={colW} height={rowH}
-                    fill={s.fill} stroke={s.stroke} strokeWidth={1} />
+                    fill={s.fill}
+                    stroke={isSel ? '#ffffff' : s.stroke}
+                    strokeWidth={isSel ? 2 : 1} />
 
                   <text
                     x={zx + colW / 2} y={zy + rowH / 2}
@@ -457,6 +494,81 @@ export default function FaceGridEditor({
               ))}
             </div>
           </div>
+
+          {/* Selected zone config */}
+          {(() => {
+            if (!selectedZone) return null
+            const gz = grid.zones.find(z => z.row_index === selectedZone.row && z.col_index === selectedZone.col)
+            if (!gz) return null
+            const selBtnBase = 'flex-1 py-0.5 rounded text-[10px] transition-colors border'
+            return (
+              <div className="rounded bg-gray-800/60 border border-gray-700 p-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-gray-400 font-medium">R{gz.row_index} C{gz.col_index}</p>
+                  <button onClick={() => setSelectedZone(null)} className="text-gray-600 hover:text-white text-[11px] leading-none">✕</button>
+                </div>
+
+                {/* Cycle type button */}
+                <div>
+                  <p className="text-gray-600 mb-1">Type</p>
+                  <button
+                    onClick={() => cycleZone(gz.row_index, gz.col_index)}
+                    className="w-full py-0.5 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors border border-gray-600"
+                  >
+                    {ZONE_STYLE[gz.face_type]?.label ?? gz.face_type} → cycle
+                  </button>
+                </div>
+
+                {/* Drawer type selector — only for drawer_face zones */}
+                {gz.face_type === 'drawer_face' && (
+                  <div>
+                    <p className="text-gray-600 mb-1">Drawer type</p>
+                    <div className="flex gap-1">
+                      {(['system', 'five_piece'] as DrawerType[]).map(dt => {
+                        const active = (gz.drawer_type_config?.type ?? null) === dt
+                        return (
+                          <button
+                            key={dt}
+                            onClick={() => setDrawerType(gz.row_index, gz.col_index, active ? null : dt)}
+                            className={`${selBtnBase} ${
+                              active
+                                ? 'bg-violet-700 border-violet-500 text-white'
+                                : 'bg-gray-700 border-gray-600 text-gray-400 hover:bg-gray-600'
+                            }`}
+                          >
+                            {dt === 'system' ? 'System' : '5-Piece'}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="text-gray-600 mt-1">
+                      {gz.drawer_type_config?.type
+                        ? `Zone: ${gz.drawer_type_config.type}`
+                        : 'Using job default'}
+                    </p>
+
+                    {/* Height adjustment for five_piece */}
+                    {gz.drawer_type_config?.type === 'five_piece' && (
+                      <div className="mt-1.5">
+                        <p className="text-gray-600 mb-0.5">Height adj (mm)</p>
+                        <input
+                          type="number"
+                          defaultValue={gz.drawer_type_config?.height_adjustment ?? ''}
+                          placeholder="25"
+                          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                          onBlur={e => {
+                            const v = parseFloat(e.target.value)
+                            setHeightAdjustment(gz.row_index, gz.col_index, isNaN(v) ? null : v)
+                          }}
+                          className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-500 w-full text-right"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Resolver errors */}
           {errors.length > 0 && (

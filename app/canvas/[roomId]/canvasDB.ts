@@ -1,6 +1,6 @@
 import { supabase } from '@/src/lib/supabase'
 import type { Wall, CabinetInstance } from '@/src/lib/types'
-import { resolveCabinetFromDB, getCachedInput, setCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { resolveCabinetFromDB, getCachedInput, setCachedInput, applyEdgeOverridesFromCache } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { persistResolved } from '@/src/lib/resolver/persistResolved'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
@@ -133,6 +133,7 @@ export async function dbUpdateCabinet(
     }
     setCachedInput(id, updated)
     const resolved = resolveCabinet(updated)
+    applyEdgeOverridesFromCache(resolved)
     persistResolved(resolved).catch(e => console.error('persist:', e))
     return resolved
   }

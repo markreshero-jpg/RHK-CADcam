@@ -4,11 +4,15 @@
 //   1. The 5-piece drawer box (positioned in cabinet space)
 //   2. Two slide rails (left + right, mounted to gable inner faces)
 //
-// Coordinate convention matches the cabinet resolver:
-//   DX = depth direction (cabinet Z)
-//   DY = width / height direction (cabinet X or Y)
-//   DZ = thickness
-//   X/Y/Z = back-bottom-left origin
+// Drawer box local convention (resolveDrawerBox output):
+//   Z=0 = front face of the box; Z increases toward the back.
+//   DX = depth extent, DY = width/height, DZ = thickness.
+//
+// Cabinet-space mapping applied here:
+//   cabinet_Z = zone.Z - local_Z
+//   (local front Z=0 → cabinet zone.Z; local back Z=D → cabinet zone.Z - D)
+//
+// Slide rails remain in cabinet-space back-origin coords (Z = boxZ).
 // ============================================================
 
 import {
@@ -19,7 +23,6 @@ import {
 } from './types'
 import { resolveDrawerBox } from './resolveDrawerBox'
 
-const SLIDE_CHANNEL_HEIGHT = 30  // mm — visual height of the rendered slide rail
 
 function findSlide(
   depth: number,
@@ -65,15 +68,15 @@ export function resolveDrawerStacks(
       z => z.row_index === zone.row_index && z.col_index === zone.col_index
     )
     const config = zoneInput?.drawer_type_config
-    const drawerType: DrawerType = config?.type ?? 'system'
+    const drawerType: DrawerType = config?.type ?? cab.default_drawer_type ?? 'system'
 
     const slide = findSlide(IDRUN, slideProducts, slideSchedule, config?.slide_product_id)
 
     const sideDeduction  = slide?.side_deduction   ?? cab.slide_side_deduction
-    const runnerThick    = slide?.runner_thickness  ?? 12
+    const runnerThick    = slide?.runner_thickness  ?? 0
     const nominalLength  = slide?.nominal_length    ?? IDRUN
 
-    // Box height: system drawer uses slide.box_height; five_piece/inner uses opening minus adjustment
+    // Box height: system drawer uses slide.box_height; five_piece uses opening minus adjustment
     const openingHeight = zone.DX
     let boxHeight: number
     if (drawerType === 'system') {
@@ -82,29 +85,36 @@ export function resolveDrawerStacks(
       boxHeight = openingHeight - (config?.height_adjustment ?? 25)
     }
 
-    // Box width: inner opening (between gables) minus clearances minus slide deduction
-    const boxWidth = Math.max(1, cab.DX - 2 * T - r.IDCL - r.IDCR - sideDeduction)
+    // Box width: inner opening (between gables) minus clearances minus runner thickness on each side
+    const boxWidth = Math.max(1, cab.DX - 2 * T - r.IDCL - r.IDCR - runnerThick * 2)
     const boxDepth = IDRUN
 
     // Cabinet-space origin of the box
     const boxX = T + r.IDCL           // inside left gable + clearance
     const boxY = zone.Y               // bottom aligns with bottom of face zone
-    const boxZ = zone.Z - boxDepth    // box front sits against back face of drawer front panel
+    const boxZ = zone.Z - boxDepth    // cabinet Z of the back face of the box (used for slides)
 
-    // Resolve the 5-part box in local coords, then offset to cabinet space
+    // Resolve box parts in local coords, filter by drawer type, then offset to cabinet space.
+    // Local convention: Z=0 = front of box (against back face of drawer front), Z increases toward back.
+    // Cabinet mapping: cabinet_Z = zone.Z - local_Z
+    // System drawers: sides are metal runners — only back and bottom are manufactured timber.
+    // Five-piece drawers: all 5 parts are manufactured timber.
+    const SYSTEM_PARTS = new Set(['db_back', 'db_bottom'])
+    const rulesForResolve = drawerType === 'system' ? { ...dbRules, DB_SIDE_T: 0 } : dbRules
     const localParts = resolveDrawerBox({
-      box_width:  boxWidth,
-      box_height: boxHeight,
-      box_depth:  boxDepth,
-      material:   drawerMat,
-      rules:      dbRules,
-    })
+      box_width:        boxWidth,
+      box_height:       boxHeight,
+      box_depth:        boxDepth,
+      material:         drawerMat,
+      rules:            rulesForResolve,
+      slide_box_height: slide?.box_height ?? undefined,
+    }).filter(p => drawerType === 'five_piece' || SYSTEM_PARTS.has(p.part_type))
 
     const boxParts = localParts.map(p => ({
       ...p,
       X: p.X + boxX,
       Y: p.Y + boxY,
-      Z: p.Z + boxZ,
+      Z: zone.Z - p.Z,   // local Z=0 (front) → cabinet Z = zone.Z
     }))
 
     // Slide rails — one on each gable inner face
@@ -112,12 +122,13 @@ export function resolveDrawerStacks(
       Y: boxY,
       Z: boxZ,
       DX: nominalLength,
-      DY: SLIDE_CHANNEL_HEIGHT,
+      DY: slide?.box_height ?? boxHeight,
       DZ: runnerThick,
       slide_id:         slide?.id ?? '',
       nominal_length:   nominalLength,
       box_height:       slide?.box_height ?? boxHeight,
       runner_thickness: runnerThick,
+      colour:           slide?.colour ?? null,
     }
 
     const slides: ResolvedDrawerSlide[] = [

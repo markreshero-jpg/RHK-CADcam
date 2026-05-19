@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/src/lib/supabase'
-import { DrawerBoxRules, DEFAULT_DB_RULES, Material, ResolvedDrawerBoxPart } from '@/src/lib/resolver/types'
+import { DrawerBoxRules, DEFAULT_DB_RULES, Material, ResolvedDrawerBoxPart, DrawerType } from '@/src/lib/resolver/types'
 import { resolveDrawerBox, mergeDbRules } from '@/src/lib/resolver/resolveDrawerBox'
 import type { MatColour } from './DrawerBox3DView'
 
@@ -52,10 +52,108 @@ interface EbRow {
   id:                string
   name:              string
   thickness:         number
+  color:             string | null
   material_match_id: string | null
 }
 
+interface SlideRow {
+  id:               string
+  name:             string
+  brand:            string | null
+  nominal_length:   number | null
+  box_height:       number | null
+  runner_thickness: number
+  colour:           string | null
+  side_deduction:   number
+}
+
 type PView = 'front' | 'top' | 'side' | '3d'
+
+const SLIDE_H = 30   // rendered channel height (mm)
+
+// ── Zoomable SVG wrapper ────────────────────────────────────────────────────────
+
+function ZoomableArea({ children, resetKey }: { children: React.ReactNode; resetKey?: unknown }) {
+  const [view, setView] = useState({ scale: 1, tx: 0, ty: 0 })
+  const viewRef = useRef({ scale: 1, tx: 0, ty: 0 })
+  viewRef.current = view
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ sx: number; sy: number; tx0: number; ty0: number } | null>(null)
+
+  useEffect(() => {
+    const v = { scale: 1, tx: 0, ty: 0 }
+    viewRef.current = v
+    setView(v)
+  }, [resetKey])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => {
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      const mx = e.clientX - rect.left
+      const my = e.clientY - rect.top
+      const factor = e.deltaY < 0 ? 1.15 : 0.87
+      const prev = viewRef.current
+      const ns = Math.max(0.1, Math.min(12, prev.scale * factor))
+      const r = ns / prev.scale
+      const next = { scale: ns, tx: mx * (1 - r) + prev.tx * r, ty: my * (1 - r) + prev.ty * r }
+      viewRef.current = next
+      setView(next)
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [])
+
+  const isIdentity = view.scale === 1 && view.tx === 0 && view.ty === 0
+
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-full relative overflow-hidden select-none"
+      style={{ cursor: dragRef.current ? 'grabbing' : 'grab' }}
+      onPointerDown={e => {
+        dragRef.current = { sx: e.clientX, sy: e.clientY, tx0: viewRef.current.tx, ty0: viewRef.current.ty }
+        ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      }}
+      onPointerMove={e => {
+        if (!dragRef.current) return
+        const { sx, sy, tx0, ty0 } = dragRef.current
+        const next = { scale: viewRef.current.scale, tx: tx0 + e.clientX - sx, ty: ty0 + e.clientY - sy }
+        viewRef.current = next
+        setView(next)
+      }}
+      onPointerUp={() => { dragRef.current = null }}
+      onPointerCancel={() => { dragRef.current = null }}
+    >
+      <div
+        style={{
+          transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`,
+          transformOrigin: '0 0',
+          width: '100%',
+          height: '100%',
+        }}
+      >
+        {children}
+      </div>
+      {!isIdentity && (
+        <button
+          className="absolute bottom-2 right-2 text-[9px] bg-gray-700/80 hover:bg-gray-600 text-gray-300 rounded px-2 py-0.5 z-10"
+          onPointerDown={e => e.stopPropagation()}
+          onClick={() => {
+            const v = { scale: 1, tx: 0, ty: 0 }
+            viewRef.current = v
+            setView(v)
+          }}
+        >
+          Reset view
+        </button>
+      )}
+    </div>
+  )
+}
 
 // ── SVG helpers ────────────────────────────────────────────────────────────────
 
@@ -164,8 +262,16 @@ function partColour(pt: ResolvedDrawerBoxPart['part_type'], mat: MatColour) {
 
 // ── SVG View components ────────────────────────────────────────────────────────
 
-function DbFrontView({ parts, W, H, mat }: { parts: ResolvedDrawerBoxPart[]; W: number; H: number; mat: MatColour }) {
-  const pl = 80, pt = 50, pr = 40, pb = 40
+function DbFrontView({ parts, W, H, mat, slide, casinetW, isSystem }: { parts: ResolvedDrawerBoxPart[]; W: number; H: number; mat: MatColour; slide?: SlideRow | null; casinetW?: number; isSystem?: boolean }) {
+  // System drawers: runner_thickness IS the side; always render runners at full box height.
+  // Five-piece drawers: render runners only when a slide is selected, at SLIDE_H band height.
+  const sw = slide?.runner_thickness ?? 0
+  const showRunners = sw > 0 && (isSystem || !!slide)
+  const runnerH = isSystem ? H : SLIDE_H
+  const showCarcase = casinetW !== undefined && casinetW > W
+  const halfDed = showCarcase ? (casinetW - W) / 2 : 0
+  // pt must leave room for: carcase dim (+ 40px label) and box dim (+ 28px label) above box
+  const pl = 80, pt = showCarcase ? 115 : 80, pr = 40, pb = 40
   const vw = W + pl + pr
   const vh = H + pt + pb
   const ox = pl, oy = pt
@@ -174,9 +280,38 @@ function DbFrontView({ parts, W, H, mat }: { parts: ResolvedDrawerBoxPart[]; W: 
     return { x: ox + r.x, y: oy + H - r.yBottom - r.h, w: r.w, h: r.h }
   }
 
+  const sc = slide?.colour ?? '#6b7280'
+  const lx = ox - halfDed
+  const rx = ox + W + halfDed
+
   return (
     <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
       <rect x={ox} y={oy} width={W} height={H} fill={C_INT} />
+      {/* Carcase internal boundary lines */}
+      {showCarcase && (
+        <g>
+          <line x1={lx} y1={oy - 8} x2={lx} y2={oy + H + 8} stroke={C_CUT} strokeWidth={1} strokeDasharray="5 3" />
+          <line x1={rx} y1={oy - 8} x2={rx} y2={oy + H + 8} stroke={C_CUT} strokeWidth={1} strokeDasharray="5 3" />
+          {dimH(lx, rx, oy - 75, `${casinetW}mm`, true)}
+          <text x={(lx + rx) / 2} y={oy - 78} textAnchor="middle" dominantBaseline="auto"
+            fontSize={15} fill={C_CUT} fontFamily="system-ui,sans-serif" letterSpacing={0.5}>CARCASE INT.</text>
+        </g>
+      )}
+      {/* Runners / system sides — drawn behind box parts */}
+      {showRunners && (() => {
+        const lr = toSVG({ x: -sw, yBottom: 0, w: sw, h: runnerH })
+        const rr = toSVG({ x: W,   yBottom: 0, w: sw, h: runnerH })
+        return (
+          <g>
+            <rect x={lr.x} y={lr.y} width={lr.w} height={lr.h} fill={sc} fillOpacity={0.85} rx={1} />
+            <rect x={rr.x} y={rr.y} width={rr.w} height={rr.h} fill={sc} fillOpacity={0.85} rx={1} />
+            {!isSystem && (
+              <text x={lr.x - 3} y={lr.y + lr.h / 2} textAnchor="end" dominantBaseline="central"
+                fontSize={18} fill={C_LABEL} fontFamily="system-ui,sans-serif">runner</text>
+            )}
+          </g>
+        )
+      })()}
       {/* Back panel first (deepest) */}
       {parts.filter(p => p.part_type === 'db_back').map((p, i) => {
         const r = toSVG(frontRect(p)); const c = partColour(p.part_type, mat)
@@ -198,14 +333,14 @@ function DbFrontView({ parts, W, H, mat }: { parts: ResolvedDrawerBoxPart[]; W: 
         return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={c.fill} stroke={c.stroke} strokeWidth={0.75} />
       })}
       <rect x={ox} y={oy} width={W} height={H} fill="none" stroke="#6b7280" strokeWidth={1.5} />
-      {dimH(ox, ox + W, oy - 35, `${W}mm`, true)}
+      {dimH(ox, ox + W, oy - 40, `${W}mm`, true)}
       {dimV(ox - 50, oy, oy + H, `${H}mm`)}
-      {viewLabel(ox + W / 2, vh - 14, 'FRONT — WIDTH × HEIGHT')}
+      {viewLabel(ox + W / 2, vh - 14, 'FRONT — BOX W × HEIGHT')}
     </svg>
   )
 }
 
-function DbSideView({ parts, D, H, mat }: { parts: ResolvedDrawerBoxPart[]; D: number; H: number; mat: MatColour }) {
+function DbSideView({ parts, D, H, mat, isSystem, slide }: { parts: ResolvedDrawerBoxPart[]; D: number; H: number; mat: MatColour; isSystem?: boolean; slide?: SlideRow | null }) {
   const pl = 80, pt = 60, pr = 80, pb = 40
   const vw = D + pl + pr
   const vh = H + pt + pb
@@ -215,19 +350,38 @@ function DbSideView({ parts, D, H, mat }: { parts: ResolvedDrawerBoxPart[]; D: n
     return { x: oz + r.z, y: oy + H - r.yBottom - r.h, w: r.d, h: r.h }
   }
 
-  // Draw side panel outline, then overlay internal parts
   const side = parts.find(p => p.part_type === 'db_right_side')
 
   return (
     <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
       {/* Background interior space */}
       <rect x={oz} y={oy} width={D} height={H} fill={C_INT} />
-      {/* Side panel (solid block) */}
-      {side && (() => {
+      {/* Slide runner band — drawn before box parts (behind them) */}
+      {slide && (() => {
+        const runnerD = Math.min(slide.nominal_length ?? D, D)
+        const sc = slide.colour ?? '#6b7280'
+        const r = toSVG({ z: 0, yBottom: 0, d: runnerD, h: SLIDE_H })
+        return (
+          <g>
+            <rect x={r.x} y={r.y} width={r.w} height={r.h} fill={sc} fillOpacity={0.85} rx={1} />
+            <text x={r.x + r.w + 3} y={r.y + r.h / 2} textAnchor="start" dominantBaseline="central"
+              fontSize={18} fill={C_LABEL} fontFamily="system-ui,sans-serif">runner</text>
+          </g>
+        )
+      })()}
+      {/* Side panel — solid for 5-piece, dashed outline for system (metal runner) */}
+      {isSystem ? (
+        <rect x={oz} y={oy} width={D} height={H} fill="none" stroke="#6b7280" strokeWidth={1.5} strokeDasharray="6 3" />
+      ) : side ? (() => {
         const r = toSVG(sideRect(side)); const c = partColour(side.part_type, mat)
         return <rect x={r.x} y={r.y} width={r.w} height={r.h} fill={c.fill} stroke={c.stroke} strokeWidth={0.75} />
-      })()}
-      {/* Bottom panel (visible within the side's cross-section) */}
+      })() : null}
+      {/* System label */}
+      {isSystem && (
+        <text x={oz + D / 2} y={oy + H / 2 - 10} textAnchor="middle" dominantBaseline="central"
+          fontSize={18} fill="#6b7280" fontFamily="system-ui,sans-serif">metal runner</text>
+      )}
+      {/* Bottom panel */}
       {parts.filter(p => p.part_type === 'db_bottom').map((p, i) => {
         const r = toSVG(sideRect(p)); const c = partColour(p.part_type, mat)
         return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={c.fill} stroke={c.stroke} strokeWidth={0.75} />
@@ -252,9 +406,15 @@ function DbSideView({ parts, D, H, mat }: { parts: ResolvedDrawerBoxPart[]; D: n
   )
 }
 
-function DbTopView({ parts, W, D, mat }: { parts: ResolvedDrawerBoxPart[]; W: number; D: number; mat: MatColour }) {
+function DbTopView({ parts, W, D, mat, slide, casinetW, isSystem }: { parts: ResolvedDrawerBoxPart[]; W: number; D: number; mat: MatColour; slide?: SlideRow | null; casinetW?: number; isSystem?: boolean }) {
   // Top view: X horizontal, Z vertical (front of box at bottom of SVG)
-  const pl = 80, pt = 40, pr = 40, pb = 50
+  const sw = slide?.runner_thickness ?? 0
+  const showRunners = sw > 0 && (isSystem || !!slide)
+  const showCarcase = casinetW !== undefined && casinetW > W
+  const halfDed = showCarcase ? (casinetW - W) / 2 : 0
+  // Pad sides enough to fit both runners and carcase boundary lines
+  const padSide = Math.max(sw, halfDed)
+  const pl = 80 + padSide, pt = showCarcase ? 110 : 80, pr = 40 + padSide, pb = 50
   const vw = W + pl + pr
   const vh = D + pt + pb
   const ox = pl, oz = pt
@@ -263,9 +423,36 @@ function DbTopView({ parts, W, D, mat }: { parts: ResolvedDrawerBoxPart[]; W: nu
     return { x: ox + r.x, y: oz + r.z, w: r.w, h: r.d }
   }
 
+  const sc = slide?.colour ?? '#6b7280'
+  const lx = ox - halfDed
+  const rx = ox + W + halfDed
+
   return (
     <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
       <rect x={ox} y={oz} width={W} height={D} fill={C_INT} />
+      {/* Carcase internal boundary lines */}
+      {showCarcase && (
+        <g>
+          <line x1={lx} y1={oz - 8} x2={lx} y2={oz + D + 8} stroke={C_CUT} strokeWidth={1} strokeDasharray="5 3" />
+          <line x1={rx} y1={oz - 8} x2={rx} y2={oz + D + 8} stroke={C_CUT} strokeWidth={1} strokeDasharray="5 3" />
+          {dimH(lx, rx, oz - 70, `${casinetW}mm`, true)}
+          <text x={(lx + rx) / 2} y={oz - 73} textAnchor="middle" dominantBaseline="auto"
+            fontSize={15} fill={C_CUT} fontFamily="system-ui,sans-serif" letterSpacing={0.5}>CARCASE INT.</text>
+        </g>
+      )}
+      {/* Runners / system sides — drawn before box parts */}
+      {showRunners && (() => {
+        // System: runner spans full depth; 5-piece: runner spans nominal_length
+        const runnerD = isSystem ? D : Math.min(slide?.nominal_length ?? D, D)
+        const lr = toSVG({ x: -sw, z: 0, w: sw, d: runnerD })
+        const rr = toSVG({ x: W,   z: 0, w: sw, d: runnerD })
+        return (
+          <g>
+            <rect x={lr.x} y={lr.y} width={lr.w} height={lr.h} fill={sc} fillOpacity={0.85} rx={1} />
+            <rect x={rr.x} y={rr.y} width={rr.w} height={rr.h} fill={sc} fillOpacity={0.85} rx={1} />
+          </g>
+        )
+      })()}
       {/* Bottom first */}
       {parts.filter(p => p.part_type === 'db_bottom').map((p, i) => {
         const r = toSVG(topRect(p)); const c = partColour(p.part_type, mat)
@@ -282,12 +469,14 @@ function DbTopView({ parts, W, D, mat }: { parts: ResolvedDrawerBoxPart[]; W: nu
         return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={c.fill} stroke={c.stroke} strokeWidth={0.75} />
       })}
       <rect x={ox} y={oz} width={W} height={D} fill="none" stroke="#6b7280" strokeWidth={1.5} />
-      {/* "FRONT" label at the bottom */}
-      <text x={ox + W / 2} y={oz + D + 22} textAnchor="middle" dominantBaseline="central"
+      {/* "FRONT" label at the top (Z=0 = front face) */}
+      <text x={ox + W / 2} y={oz - 16} textAnchor="middle" dominantBaseline="central"
         fontSize={18} fill="#374151" fontFamily="system-ui,sans-serif">FRONT</text>
-      {dimH(ox, ox + W, oz - 35, `${W}mm`, true)}
-      {dimV(ox - 50, oz, oz + D, `${D}mm`)}
-      {viewLabel(ox + W / 2, vh - 14, 'TOP — WIDTH × DEPTH')}
+      <text x={ox + W / 2} y={oz + D + 22} textAnchor="middle" dominantBaseline="central"
+        fontSize={18} fill="#374151" fontFamily="system-ui,sans-serif">BACK</text>
+      {dimH(ox, ox + W, oz - 45, `${W}mm`, true)}
+      {dimV(ox - padSide - 40, oz, oz + D, `${D}mm`)}
+      {viewLabel(ox + W / 2, vh - 14, 'TOP — BOX W × DEPTH')}
     </svg>
   )
 }
@@ -301,6 +490,14 @@ const VIEWS: { id: PView; label: string }[] = [
   { id: '3d',    label: '3D'    },
 ]
 
+const PART_LABELS: Record<string, string> = {
+  db_left_side:  'L.Side',
+  db_right_side: 'R.Side',
+  db_bottom:     'Bottom',
+  db_front:      'Front',
+  db_back:       'Back',
+}
+
 const FALLBACK_MATERIAL: Material = {
   id: '__preview__', name: 'Generic', DZ: 18,
   sheet_dx: 2400, sheet_dy: 1200, has_grain: false,
@@ -308,7 +505,9 @@ const FALLBACK_MATERIAL: Material = {
 
 const FALLBACK_COL: MatColour = { face: '#374151', back: '#1e293b', edge: '#4b5563' }
 
-export default function DrawerBoxPreviewPanel({ delta }: { delta: Partial<DrawerBoxRules> }) {
+const SYSTEM_PART_TYPES = new Set(['db_back', 'db_bottom'])
+
+export default function DrawerBoxPreviewPanel({ delta, drawerType = 'five_piece' }: { delta: Partial<DrawerBoxRules>; drawerType?: DrawerType }) {
   const [panelW,      setPanelW]      = useState(420)
   const [activeView,  setActiveView]  = useState<PView>('3d')
   const [dbScheds,    setDbScheds]    = useState<DbSched[]>([])
@@ -318,6 +517,8 @@ export default function DrawerBoxPreviewPanel({ delta }: { delta: Partial<Drawer
   const [prevW,       setPrevW]       = useState(400)
   const [prevH,       setPrevH]       = useState(200)
   const [prevD,       setPrevD]       = useState(450)
+  const [slides,      setSlides]      = useState<SlideRow[]>([])
+  const [selSlideId,  setSelSlideId]  = useState<string | null>(null)
   const resizeRef = useRef<{ startX: number; startW: number } | null>(null)
 
   // Set initial width to ~half the remaining space
@@ -335,22 +536,34 @@ export default function DrawerBoxPreviewPanel({ delta }: { delta: Partial<Drawer
         .select('id,name,dz,face_colour,back_colour,edge_colour')
         .eq('active', true).order('name'),
       supabase.from('edge_banding')
-        .select('id,name,thickness,material_match_id')
+        .select('id,name,thickness,color,material_match_id')
         .eq('active', true).order('name'),
-    ]).then(([schedRes, matsRes, ebRes]) => {
+      supabase.from('hardware_slides')
+        .select('id,name,brand,nominal_length,box_height,runner_thickness,colour,side_deduction')
+        .eq('active', true).order('nominal_length'),
+    ]).then(([schedRes, matsRes, ebRes, slideRes]) => {
       const scheds = (schedRes.data ?? []) as DbSched[]
       setDbScheds(scheds)
       setSelSchedId(scheds.find(s => s.is_default)?.id ?? scheds[0]?.id ?? null)
       setMaterials((matsRes.data ?? []) as MatRow[])
       setEdgebands((ebRes.data ?? []) as EbRow[])
+      setSlides((slideRes.data ?? []) as SlideRow[])
     })
   }, [])
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
-  const selSched   = dbScheds.find(s => s.id === selSchedId) ?? null
-  const selMat     = materials.find(m => m.id === selSched?.material_id)    ?? null
-  const selBotMat  = materials.find(m => m.id === selSched?.bottom_material_id) ?? null
+  const selSched    = dbScheds.find(s => s.id === selSchedId) ?? null
+  const selMat      = materials.find(m => m.id === selSched?.material_id)        ?? null
+  const selBotMat   = materials.find(m => m.id === selSched?.bottom_material_id) ?? null
+  const selSlide    = slides.find(s => s.id === selSlideId) ?? null
+  const selEb       = edgebands.find(e => e.id === selSched?.edgeband_id) ?? null
+  const runnerThick = selSlide ? Number(selSlide.runner_thickness) : 0
+  const boxW        = Math.max(1, prevW - runnerThick * 2)
+  // System: height is fixed by the slide product; 5-piece: user-entered opening height
+  const boxH        = drawerType === 'system' && selSlide?.box_height != null
+    ? Number(selSlide.box_height)
+    : prevH
 
   function toMaterial(row: MatRow): Material {
     return {
@@ -382,6 +595,10 @@ export default function DrawerBoxPreviewPanel({ delta }: { delta: Partial<Drawer
     edge: selMat?.edge_colour ?? FALLBACK_COL.edge,
   }), [selMat])
 
+  const ebSpec = selEb
+    ? { thick: Number(selEb.thickness), color: selEb.color ?? matCol.edge }
+    : undefined
+
   // Use material DZ as DB_SIDE_T so preview reflects real sheet thickness
   const effectiveRules = useMemo(() => {
     const merged = mergeDbRules(DEFAULT_DB_RULES, delta)
@@ -405,18 +622,25 @@ export default function DrawerBoxPreviewPanel({ delta }: { delta: Partial<Drawer
 
   const previewParts: ResolvedDrawerBoxPart[] = useMemo(() => {
     try {
-      return resolveDrawerBox({
-        box_width:          prevW,
-        box_height:         prevH,
+      const rulesForResolve = drawerType === 'system'
+        ? { ...effectiveRules, DB_SIDE_T: 0 }
+        : effectiveRules
+      const all = resolveDrawerBox({
+        box_width:          boxW,
+        box_height:         boxH,
         box_depth:          prevD,
         material:           previewMaterial,
         edgeband_id:        selSched?.edgeband_id        ?? undefined,
         bottom_material:    bottomMaterial,
         bottom_edgeband_id: selSched?.bottom_edgeband_id ?? undefined,
-        rules:              effectiveRules,
+        rules:              rulesForResolve,
+        slide_box_height:   selSlide?.box_height != null ? Number(selSlide.box_height) : undefined,
       })
+      return drawerType === 'system'
+        ? all.filter(p => SYSTEM_PART_TYPES.has(p.part_type))
+        : all
     } catch { return [] }
-  }, [prevW, prevH, prevD, previewMaterial, bottomMaterial, selSched, effectiveRules])
+  }, [boxW, boxH, prevD, previewMaterial, bottomMaterial, selSched, effectiveRules, drawerType, selSlide])
 
   // ── Resize ─────────────────────────────────────────────────────────────────
 
@@ -454,30 +678,68 @@ export default function DrawerBoxPreviewPanel({ delta }: { delta: Partial<Drawer
             {v.label}
           </button>
         ))}
+        <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded font-medium ${
+          drawerType === 'system'
+            ? 'bg-violet-900/50 text-violet-300'
+            : 'bg-blue-900/50 text-blue-300'
+        }`}>
+          {drawerType === 'system' ? 'System' : '5-Piece'}
+        </span>
         <span className="ml-auto text-[9px] text-gray-600 font-mono whitespace-nowrap pl-2">
-          {prevW}×{prevH}×{prevD}
+          {prevW}×{boxH}×{prevD}
         </span>
       </div>
 
       {/* View content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {activeView === '3d' ? (
-          <div className="w-full h-full">
-            <DrawerBox3DView
-              parts={previewParts}
-              boxWidth={prevW}
-              boxHeight={prevH}
-              boxDepth={prevD}
-              matCol={matCol}
-            />
-          </div>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center p-4">
-            {activeView === 'front' && <DbFrontView parts={previewParts} W={prevW} H={prevH} mat={matCol} />}
-            {activeView === 'top'   && <DbTopView   parts={previewParts} W={prevW} D={prevD} mat={matCol} />}
-            {activeView === 'side'  && <DbSideView  parts={previewParts} D={prevD} H={prevH} mat={matCol} />}
-          </div>
-        )}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+
+        {/* Parts strip */}
+        <div className="flex-none border-b border-gray-700">
+          <table className="w-full text-[11px] border-collapse">
+            <thead>
+              <tr className="bg-gray-800/80 text-gray-400 uppercase tracking-wide text-[9px]">
+                <th className="text-left font-semibold px-2 py-1 border-r border-gray-700">Part</th>
+                <th className="text-right font-semibold px-2 py-1 border-r border-gray-700">L</th>
+                <th className="text-right font-semibold px-2 py-1 border-r border-gray-700">W</th>
+                <th className="text-right font-semibold px-2 py-1">T</th>
+              </tr>
+            </thead>
+            <tbody>
+              {previewParts.map((p, i) => (
+                <tr key={i} className="border-t border-gray-800 even:bg-gray-800/20">
+                  <td className="px-2 py-0.5 text-gray-400 border-r border-gray-800">{PART_LABELS[p.part_type] ?? p.part_type}</td>
+                  <td className="px-2 py-0.5 text-right font-mono text-gray-200 border-r border-gray-800">{Math.max(p.DX, p.DY)}</td>
+                  <td className="px-2 py-0.5 text-right font-mono text-gray-200 border-r border-gray-800">{Math.min(p.DX, p.DY)}</td>
+                  <td className="px-2 py-0.5 text-right font-mono text-gray-200">{p.DZ}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Viewer */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {activeView === '3d' ? (
+            <div className="w-full h-full">
+              <DrawerBox3DView
+                parts={previewParts}
+                boxWidth={prevW}
+                boxHeight={boxH}
+                boxDepth={prevD}
+                matCol={matCol}
+                ebSpec={ebSpec}
+              />
+            </div>
+          ) : (
+            <ZoomableArea resetKey={`${activeView}-${prevW}-${boxH}-${prevD}`}>
+              <div className="w-full h-full flex items-center justify-center p-4">
+                {activeView === 'front' && <DbFrontView parts={previewParts} W={boxW} H={boxH} mat={matCol} slide={selSlide} casinetW={prevW} isSystem={drawerType === 'system'} />}
+                {activeView === 'top'   && <DbTopView   parts={previewParts} W={boxW} D={prevD} mat={matCol} slide={selSlide} casinetW={prevW} isSystem={drawerType === 'system'} />}
+                {activeView === 'side'  && <DbSideView  parts={previewParts} D={prevD} H={boxH} mat={matCol} isSystem={drawerType === 'system'} slide={selSlide} />}
+              </div>
+            </ZoomableArea>
+          )}
+        </div>
       </div>
 
       {/* Footer: material schedule + dimension inputs */}
@@ -493,6 +755,22 @@ export default function DrawerBoxPreviewPanel({ delta }: { delta: Partial<Drawer
             <option value="">— generic —</option>
             {dbScheds.map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+        {/* Slide picker */}
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600 w-12 shrink-0">Slide</span>
+          <select
+            value={selSlideId ?? ''}
+            onChange={e => setSelSlideId(e.target.value || null)}
+            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+          >
+            <option value="">— none —</option>
+            {slides.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.brand ? `${s.brand} — ` : ''}{s.name}{s.nominal_length ? ` (${s.nominal_length}mm)` : ''}
+              </option>
             ))}
           </select>
         </div>
@@ -531,9 +809,9 @@ export default function DrawerBoxPreviewPanel({ delta }: { delta: Partial<Drawer
             })}
           </>
         )}
-        {/* W / H / D inputs */}
+        {/* Carcass / H / D inputs */}
         <div className="flex items-center gap-3 text-gray-600 pt-0.5 border-t border-gray-800/60">
-          {([['W', prevW, setPrevW], ['H', prevH, setPrevH], ['D', prevD, setPrevD]] as const).map(([label, val, set]) => (
+          {([['Carcass', prevW, setPrevW], ['D', prevD, setPrevD]] as const).map(([label, val, set]) => (
             <label key={label} className="flex items-center gap-1">
               <span>{label}</span>
               <input
@@ -547,8 +825,26 @@ export default function DrawerBoxPreviewPanel({ delta }: { delta: Partial<Drawer
               <span className="text-gray-700">mm</span>
             </label>
           ))}
-          <span className="ml-auto">
-            Board: <span className="text-gray-300 font-mono">{previewMaterial.name} ({previewMaterial.DZ}mm)</span>
+          {/* H input: editable for 5-piece; read-only from slide for system */}
+          <label className="flex items-center gap-1">
+            <span>H</span>
+            {drawerType === 'system' && selSlide?.box_height != null ? (
+              <span className="w-14 bg-gray-800/50 border border-gray-700/50 rounded px-1.5 py-0.5 text-[10px] text-right text-gray-500 font-mono select-none">{boxH}</span>
+            ) : (
+              <input
+                type="number"
+                min={50}
+                max={1200}
+                value={prevH}
+                onChange={e => setPrevH(Number(e.target.value))}
+                className="w-14 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-right text-gray-300 focus:outline-none focus:border-blue-500"
+              />
+            )}
+            <span className="text-gray-700">mm</span>
+          </label>
+          <span className="ml-auto text-right space-x-2">
+            <span><span className="text-gray-500">box W: </span><span className="text-gray-300 font-mono">{boxW}mm</span></span>
+            <span><span className="text-gray-500">box H: </span><span className="text-gray-300 font-mono">{boxH}mm</span></span>
           </span>
         </div>
       </div>

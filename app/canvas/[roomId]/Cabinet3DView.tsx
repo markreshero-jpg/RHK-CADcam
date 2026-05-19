@@ -1,8 +1,10 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
+import { supabase } from '@/src/lib/supabase'
+import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
 import type { CabinetInstance } from '@/src/lib/types'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
@@ -47,16 +49,17 @@ function zoneBox(z: ResolvedFaceZone): Box {
 }
 
 function dbBox(p: ResolvedDrawerBoxPart): Box {
+  // Resolver Z is the front face; subtract depth extent to get the minimum-Z (back) corner.
   switch (p.part_type) {
     case 'db_left_side':
     case 'db_right_side':
-      return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
+      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DZ, h: p.DY, d: p.DX }
     case 'db_bottom':
-      return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DY, h: p.DZ, d: p.DX }
     case 'db_front':
     case 'db_back':
     default:
-      return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
+      return { x: p.X, y: p.Y, z: p.Z - p.DZ, w: p.DY, h: p.DX, d: p.DZ }
   }
 }
 
@@ -233,10 +236,55 @@ function DoorPanel({ b, hingeSide, doorsOpen, ...partProps }: PartProps & {
   )
 }
 
+// ── Edge band persistence ─────────────────────────────────────────────────────
+// Parses PartMeta.id to determine which table/row to update. Internal parts use
+// front/back column names instead of right/left due to their coordinate mapping.
+
+async function saveEdge(cabId: string, part: PartMeta) {
+  const { id, edge } = part
+  const direct = { edge_band_top: edge.top, edge_band_bottom: edge.bottom,
+                   edge_band_left: edge.left, edge_band_right: edge.right }
+
+  let result: { error: unknown }
+
+  if (id.startsWith('case_')) {
+    result = await supabase.from('case_parts').update(direct)
+      .eq('cabinet_instance_id', cabId).eq('part_key', id.slice(5))
+
+  } else if (id.startsWith('tk_')) {
+    const rest = id.slice(3), cut = rest.lastIndexOf('_')
+    result = await supabase.from('toekick_parts').update(direct)
+      .eq('cabinet_instance_id', cabId)
+      .eq('part_key', rest.slice(0, cut))
+      .eq('sort_order', parseInt(rest.slice(cut + 1)))
+
+  } else if (id.startsWith('int_')) {
+    const rest = id.slice(4), cut = rest.lastIndexOf('_')
+    result = await supabase.from('internal_parts').update({
+      edge_band_top: edge.top, edge_band_bottom: edge.bottom,
+      edge_band_back: edge.left, edge_band_front: edge.right,
+    }).eq('cabinet_instance_id', cabId)
+      .eq('part_type', rest.slice(0, cut))
+      .eq('sort_order', parseInt(rest.slice(cut + 1)))
+
+  } else if (id.startsWith('zone_')) {
+    const [row, col] = id.slice(5).split('_').map(Number)
+    result = await supabase.from('face_zones').update(direct)
+      .eq('cabinet_instance_id', cabId)
+      .eq('row_index', row).eq('col_index', col)
+
+  } else {
+    return // drawer box / slide parts — no edge band columns
+  }
+
+  if (result.error) console.error('[edge save]', result.error)
+  else patchEdgeOverrideCache(cabId, id, edge)
+}
+
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
 
 function CabinetScene({
-  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen,
+  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, edgeOverrides,
 }: {
   cab:               CabinetInstance
   rp:                ResolvedCabinet
@@ -246,10 +294,16 @@ function CabinetScene({
   materialColours?:  MatColMap
   ebByMatId?:        Record<string, { thickness: number; color: string | null }>
   doorsOpen:         boolean
+  edgeOverrides:     Map<string, PartEdge>
 }) {
   const { dx, dy, dz } = cab
   const dragRef = useRef(false)
   const hlSet   = highlightPartKeys ? new Set(highlightPartKeys) : null
+
+  function applyEdge<T extends PartMeta>(info: T): T {
+    const ov = edgeOverrides.get(info.id)
+    return ov ? { ...info, edge: ov } : info
+  }
 
   function matSpec(matId: string, fallback: string) {
     return unpackMatCol(materialColours?.[matId], fallback)
@@ -265,7 +319,7 @@ function CabinetScene({
     <group position={[-dx / 2, -dy / 2, -dz / 2]}>
       {rp.case_parts.map((p, i) => {
         const b    = caseBox(p)
-        const info = buildCaseInfo(p, b)
+        const info = applyEdge(buildCaseInfo(p, b))
         const s    = matSpec(p.material_id, '#ddd3bb')
         return (
           <Part
@@ -285,7 +339,7 @@ function CabinetScene({
       })}
       {rp.toekick_parts.map((p, i) => {
         const b    = tkBox(p)
-        const info = buildTkInfo(p, b)
+        const info = applyEdge(buildTkInfo(p, b))
         const s    = matSpec(p.material_id, '#78716c')
         return (
           <Part
@@ -305,7 +359,7 @@ function CabinetScene({
       })}
       {rp.internal_parts.map((p, i) => {
         const b    = intBox(p)
-        const info = buildIntInfo(p, b)
+        const info = applyEdge(buildIntInfo(p, b))
         const s    = matSpec(p.material_id, '#e8dece')
         return (
           <Part
@@ -350,7 +404,8 @@ function CabinetScene({
         const slideparts = stack.slides.map((s, li) => {
           const b    = slideBox(s)
           const info = buildSlideInfo(s, b, stack)
-          const faceColors = panelFaceColors('side', `slide_${s.side}`, slideColor, slideColor, slideColor)
+          const sc   = s.colour ?? slideColor
+          const faceColors = panelFaceColors('side', `slide_${s.side}`, sc, sc, sc)
           return (
             <Part
               key={`sl_${si}_${li}`}
@@ -370,7 +425,7 @@ function CabinetScene({
       })}
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
         const b    = zoneBox(z)
-        const info = buildZoneInfo(z, b)
+        const info = applyEdge(buildZoneInfo(z, b))
         const isDoor = z.face_type !== 'drawer_face'
         const s    = matSpec(z.material_id, isDoor ? '#f0ebe0' : '#e2d9c8')
         const faceColors = panelFaceColors(info.panelKind, z.face_type, s.face, s.back, s.edge)
@@ -415,13 +470,34 @@ export default function Cabinet3DView({
   materialColours?:  MatColMap
   ebByMatId?:        Record<string, { thickness: number; color: string | null }>
 }) {
-  const [selectedPart, setSelectedPart] = useState<PartMeta | null>(null)
-  const [doorsOpen, setDoorsOpen]       = useState(false)
+  const [selectedPart, setSelectedPart]   = useState<PartMeta | null>(null)
+  const [doorsOpen, setDoorsOpen]         = useState(false)
+  const [edgeOverrides, setEdgeOverrides] = useState<Map<string, PartEdge>>(new Map())
   const { dx, dy, dz } = cab
 
-  // Set to true when a part's onContextMenu fires so the canvas-level handler
-  // knows not to deselect on the same right-click event.
-  const didHitPartRef = useRef(false)
+  const didHitPartRef   = useRef(false)
+  const prevPartRef     = useRef<PartMeta | null>(null)
+  const originalEdgeRef = useRef<PartEdge | null>(null)
+
+  // Persist edge band changes when the selection moves away from a part.
+  useEffect(() => {
+    const prev  = prevPartRef.current
+    const prevId = prev?.id
+    const curId  = selectedPart?.id
+
+    if (prev && prevId !== curId && originalEdgeRef.current) {
+      const orig    = originalEdgeRef.current
+      const changed = (Object.keys(orig) as (keyof PartEdge)[]).some(k => prev.edge[k] !== orig[k])
+      if (changed) saveEdge(cab.id, prev)
+    }
+
+    if (selectedPart && selectedPart.id !== prevId) {
+      originalEdgeRef.current = { ...selectedPart.edge }
+    } else if (!selectedPart) {
+      originalEdgeRef.current = null
+    }
+    prevPartRef.current = selectedPart
+  }, [selectedPart]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSelect(info: PartMeta | null) {
     if (info !== null) didHitPartRef.current = true
@@ -429,7 +505,11 @@ export default function Cabinet3DView({
   }
 
   function handleEdgeChange(edge: PartEdge) {
-    setSelectedPart(prev => prev ? { ...prev, edge } : null)
+    setSelectedPart(prev => {
+      if (!prev) return null
+      setEdgeOverrides(m => { const n = new Map(m); n.set(prev.id, edge); return n })
+      return { ...prev, edge }
+    })
   }
 
   function handleCanvasContextMenu(e: React.MouseEvent) {
@@ -470,6 +550,7 @@ export default function Cabinet3DView({
           materialColours={materialColours}
           ebByMatId={ebByMatId}
           doorsOpen={doorsOpen}
+          edgeOverrides={edgeOverrides}
         />
       ) : (
         <mesh>

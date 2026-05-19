@@ -11,12 +11,12 @@ export { DEFAULT_DISPLAY_CONFIG, applyPreset, toggleLayer, cycleLayerStyle, togg
 export type CanvasView = 'plan' | 'elevation' | '3d'
 
 export type Mode =
-  | 'select' | 'draw_wall' | 'draw_island'
+  | 'select' | 'draw_wall' | 'draw_island' | 'draw_benchtop' | 'draw_benchtop_rect'
   | 'place_base' | 'place_wall_unit' | 'place_tall' | 'place_end_panel'
   | 'place_base_corner' | 'place_wall_corner' | 'place_tall_corner'
   | 'paste'
 
-export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: string } | null
+export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: string } | { type: 'benchtop'; id: string } | null
 
 export type ContextMenuState = { x: number; y: number; cabId?: string; wallId?: string; elevWallId?: string; elevWallT?: number }
 

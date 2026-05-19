@@ -12,6 +12,7 @@ import {
   DEFAULT_DB_EDGING,
   effectiveDbRule, effectiveDbEdgeSides, dbSidesEqual,
 } from '@/src/lib/drawerBoxConfig'
+import type { DrawerType } from '@/src/lib/resolver/types'
 import DrawerBoxPreviewPanel from './DrawerBoxPreviewPanel'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -23,6 +24,7 @@ interface Method {
   is_default:  boolean
   active:      boolean
   rules:       Partial<DrawerBoxRules>
+  drawer_type: 'system' | 'five_piece'
 }
 
 // ── Rule row component ────────────────────────────────────────────────────────
@@ -62,7 +64,7 @@ function RuleRow({
         <>
           <input
             type="number"
-            min={1}
+            min={0}
             value={value as number}
             onChange={e => onChange(Number(e.target.value))}
             className={inputCls}
@@ -81,6 +83,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
   const [selId,       setSelId]       = useState<string | null>(null)
   const [editName,    setEditName]    = useState('')
   const [editDesc,    setEditDesc]    = useState('')
+  const [editType,    setEditType]    = useState<DrawerType>('five_piece')
   const [delta,       setDelta]       = useState<Partial<DrawerBoxRules>>({})
   const [dirty,       setDirty]       = useState(false)
   const [saving,      setSaving]      = useState(false)
@@ -92,7 +95,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
 
   const load = useCallback(async () => {
     const [methodsRes, shopRes] = await Promise.all([
-      supabase.from('drawer_box_methods').select('id,name,description,is_default,active,rules').order('name'),
+      supabase.from('drawer_box_methods').select('id,name,description,is_default,active,rules,drawer_type').order('name'),
       supabase.from('shop_settings').select('drawer_box_method_id').limit(1).maybeSingle(),
     ])
     setMethods((methodsRes.data ?? []) as Method[])
@@ -107,6 +110,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
     if (m) {
       setEditName(m.name)
       setEditDesc(m.description ?? '')
+      setEditType(m.drawer_type ?? 'five_piece')
       setDelta(m.rules ?? {})
       setDirty(false)
     }
@@ -147,6 +151,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
         .update({
           name:        editName.trim() || undefined,
           description: editDesc.trim() || null,
+          drawer_type: editType,
           rules:       delta,
           updated_at:  new Date().toISOString(),
         })
@@ -339,6 +344,37 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                 />
               </div>
 
+              {/* Drawer type */}
+              <div className="flex-none px-6 py-3 border-b border-gray-800">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-gray-500 w-24 shrink-0">Drawer Type</span>
+                  <div className="flex gap-2">
+                    {([
+                      { value: 'system',     label: 'System',       hint: 'e.g. Blum Legrabox — metal sides, timber back + bottom only' },
+                      { value: 'five_piece', label: '5-Piece',       hint: 'All timber sides, front, back, and bottom' },
+                    ] as { value: DrawerType; label: string; hint: string }[]).map(opt => (
+                      <button
+                        key={opt.value}
+                        title={opt.hint}
+                        onClick={() => { setEditType(opt.value); setDirty(true) }}
+                        className={`px-4 py-1.5 text-xs rounded-lg border transition-colors ${
+                          editType === opt.value
+                            ? 'bg-violet-700 border-violet-500 text-white'
+                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-gray-600">
+                    {editType === 'system'
+                      ? 'Metal sides supplied by slide — only back & bottom are cut'
+                      : 'All 5 panels cut from sheet material'}
+                  </span>
+                </div>
+              </div>
+
               {/* Rules editor */}
               <div className="flex-1 overflow-y-auto px-6 py-4">
                 <div className="max-w-lg space-y-5">
@@ -407,7 +443,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
             </div>
 
             {/* ── Preview panel (self-contained) ──────────────────────────── */}
-            <DrawerBoxPreviewPanel delta={delta} />
+            <DrawerBoxPreviewPanel delta={delta} drawerType={editType} />
 
           </div>
         )}

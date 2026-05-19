@@ -50,8 +50,8 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete }: {
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className={lbl}>Length (mm)</label>
-            <input type="number" value={f('length') as number}
-              onChange={e => set('length', parseFloat(e.target.value) || 0)}
+            <input type="number" step={0.1} value={Math.round((f('length') as number) * 10) / 10}
+              onChange={e => set('length', Math.round((parseFloat(e.target.value) || 0) * 10) / 10)}
               onFocus={e => e.target.select()} onBlur={save} className={inp + ' text-right'} />
           </div>
           <div>

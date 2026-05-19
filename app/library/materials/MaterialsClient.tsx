@@ -73,11 +73,11 @@ const TABS: TabConfig[] = [
   },
   {
     id: 'benchtop', label: 'Benchtops', table: 'benchtop_materials', initKey: 'benchtop',
-    defaults: { name: '', brand: null, material_type: 'laminate', finish: null, dz: 33, edge_profile: null, cost_per_metre: null, active: true },
+    defaults: { name: '', brand: null, material_type: 'laminate', finish: null, dz: 33, sheet_dx: 3600, sheet_dy: 600, has_grain: false, grain_direction: null, edge_profile: null, cost_per_metre: null, active: true },
     fields: [
-      { key: 'name',           label: 'Name',     type: 'text',    w: 160 },
-      { key: 'brand',          label: 'Brand',    type: 'text',    w: 100 },
-      { key: 'material_type',  label: 'Type',     type: 'select',  w: 100,
+      { key: 'name',            label: 'Name',      type: 'text',    w: 160 },
+      { key: 'brand',           label: 'Brand',     type: 'text',    w: 100 },
+      { key: 'material_type',   label: 'Type',      type: 'select',  w: 100,
         options: [
           { value: 'laminate',   label: 'Laminate' },
           { value: 'stone',      label: 'Stone' },
@@ -86,11 +86,20 @@ const TABS: TabConfig[] = [
           { value: 'other',      label: 'Other' },
         ],
       },
-      { key: 'finish',         label: 'Finish',   type: 'text',    w: 120 },
-      { key: 'dz',             label: 'dz mm',    type: 'number',  w: 60 },
-      { key: 'edge_profile',   label: 'Edge',     type: 'text',    w: 110 },
-      { key: 'cost_per_metre', label: '$/m',      type: 'number',  w: 72,  step: '0.01' },
-      { key: 'active',         label: 'Active',   type: 'boolean', w: 48 },
+      { key: 'finish',          label: 'Finish',    type: 'text',    w: 110 },
+      { key: 'dz',              label: 'dz mm',     type: 'number',  w: 60 },
+      { key: 'sheet_dx',        label: 'L mm',      type: 'number',  w: 65 },
+      { key: 'sheet_dy',        label: 'W mm',      type: 'number',  w: 65 },
+      { key: 'has_grain',       label: 'Grain',     type: 'boolean', w: 48 },
+      { key: 'grain_direction', label: 'Grain dir', type: 'select',  w: 80,
+        options: [
+          { value: 'length', label: 'Length' },
+          { value: 'width',  label: 'Width'  },
+        ],
+      },
+      { key: 'edge_profile',    label: 'Edge',      type: 'text',    w: 100 },
+      { key: 'cost_per_metre',  label: '$/m',       type: 'number',  w: 72,  step: '0.01' },
+      { key: 'active',          label: 'Active',    type: 'boolean', w: 48 },
     ],
   },
   {
@@ -139,7 +148,7 @@ const TABS: TabConfig[] = [
   },
   {
     id: 'slides', label: 'Slides', table: 'hardware_slides', initKey: 'slides',
-    defaults: { name: '', brand: null, nominal_length: null, box_height: null, runner_thickness: 12, side_deduction: 13, min_runner_depth: null, max_runner_depth: null, soft_close: true, full_extension: true, cost_per_pair: null, active: true },
+    defaults: { name: '', brand: null, nominal_length: null, box_height: null, runner_thickness: 12, side_deduction: 13, min_runner_depth: null, max_runner_depth: null, soft_close: true, full_extension: true, cost_per_pair: null, colour: null, active: true },
     fields: [
       { key: 'name',             label: 'Name',       type: 'text',    w: 160 },
       { key: 'brand',            label: 'Brand',      type: 'text',    w: 100 },
@@ -152,6 +161,7 @@ const TABS: TabConfig[] = [
       { key: 'soft_close',       label: 'Soft-C',     type: 'boolean', w: 52  },
       { key: 'full_extension',   label: 'Full ext',   type: 'boolean', w: 60  },
       { key: 'cost_per_pair',    label: '$/pair',     type: 'number',  w: 70,  step: '0.01' },
+      { key: 'colour',           label: 'Colour',     type: 'colour',  w: 90  },
       { key: 'active',           label: 'Active',     type: 'boolean', w: 48  },
     ],
   },

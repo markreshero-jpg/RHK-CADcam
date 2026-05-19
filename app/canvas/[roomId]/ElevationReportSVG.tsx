@@ -70,8 +70,9 @@ export default function ElevationReportSVG({ wall, cabinets, room, scale = 20, s
 
   // ViewBox — origin at (0, 0) = floor-left corner of wall.
   // Up = negative Y (ceiling at Y = -roomH), dim zone = positive Y (below floor).
+  // vbY must reach the ceiling (-roomH) plus title zone above it.
   const vbX = -LEFT_W
-  const vbY = -(TOP_PAD + TITLE_H)
+  const vbY = -(TOP_PAD + TITLE_H + roomH)
   const vbW =  wall.length + LEFT_W + RIGHT_W
   const vbH =  TOP_PAD + TITLE_H + roomH + DIM_GAP + DIM_ROW * 2
 
@@ -109,9 +110,9 @@ export default function ElevationReportSVG({ wall, cabinets, room, scale = 20, s
       data-vb-w={vbW} data-vb-h={vbH}
       style={{ width: '100%', height: 'auto', display: 'block', background: 'white' }}
     >
-      {/* Wall name */}
+      {/* Wall name — sits in the title zone above the ceiling */}
       <text
-        x={wall.length / 2} y={-(TOP_PAD * 0.45 + TITLE_H * 0.3)}
+        x={wall.length / 2} y={-(roomH + TOP_PAD + TITLE_H / 2)}
         textAnchor="middle" dominantBaseline="central"
         fontSize={TITLE_FS} fontWeight="bold" fill="#111"
         fontFamily="Arial, Helvetica, sans-serif"

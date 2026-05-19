@@ -96,7 +96,7 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
       { label: 'Room Reports…', action: () => a.openReportModal('room') },
     ]},
     { label: 'Production', items: [
-      { label: 'Cut List…',          disabled: true },
+      { label: 'Cut List…',          action: () => a.openReportModal('room') },
       { label: 'Material Schedule…', disabled: true },
       { label: 'Shop Drawings…',     disabled: true },
       null,

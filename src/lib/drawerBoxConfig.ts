@@ -11,19 +11,20 @@ export { DEFAULT_DB_EDGING }
 export type DbRuleKey = Exclude<keyof DrawerBoxRules, 'DB_EDGING'>
 
 export const DB_RULE_LABELS: Record<DbRuleKey, string> = {
-  DB_SIDE_T:       'Side / Front / Back Thickness (mm)',
-  DB_BOTTOM_T:     'Bottom Panel Thickness (mm)',
-  DB_BOTTOM_JOIN:  'Bottom Join',
-  DB_DADO_HEIGHT:  'Dado Height from Bottom (mm)',
-  DB_DADO_DEPTH:   'Dado Cut Depth (mm)',
-  DB_BACK_SETBACK: 'Bottom Setback from Back (mm)',
-  DB_JOINT_TYPE:   'Front / Back Joint Type',
+  DB_SIDE_T:             'Side / Front / Back Thickness (mm)',
+  DB_BOTTOM_T:           'Bottom Panel Thickness (mm)',
+  DB_BOTTOM_JOIN:        'Bottom Join',
+  DB_DADO_HEIGHT:        'Dado Height from Bottom (mm)',
+  DB_DADO_DEPTH:         'Dado Cut Depth (mm)',
+  DB_BACK_SETBACK:       'Bottom Setback from Back (mm)',
+  DB_JOINT_TYPE:         'Front / Back Joint Type',
+  DB_BACK_HEIGHT_ADJUST: 'Back Panel Height Adjust (mm)',
 }
 
 export const DB_RULE_GROUPS: { label: string; keys: DbRuleKey[] }[] = [
-  { label: 'Thickness',   keys: ['DB_SIDE_T', 'DB_BOTTOM_T'] },
   { label: 'Bottom',      keys: ['DB_BOTTOM_JOIN', 'DB_DADO_HEIGHT', 'DB_DADO_DEPTH', 'DB_BACK_SETBACK'] },
   { label: 'Joinery',     keys: ['DB_JOINT_TYPE'] },
+  { label: 'Back Panel',  keys: ['DB_BACK_HEIGHT_ADJUST'] },
 ]
 
 export const DB_BOTTOM_JOIN_OPTIONS = [

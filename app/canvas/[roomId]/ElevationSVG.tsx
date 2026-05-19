@@ -11,7 +11,7 @@ import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFa
 const PART_COLORS: Record<string, string> = {
   left_side: '#b8c8dc', right_side: '#b8c8dc',
   bottom: '#b8c8dc', back: '#b8c8dc',
-  full_top: '#34d399', front_rail: '#34d399', back_rail: '#34d399',
+  full_top: '#b8c8dc', front_rail: '#b8c8dc', back_rail: '#b8c8dc',
   kick_front_face: '#f59e0b',
   kick_sub_front: '#d97706', kick_back: '#ea580c',
   spreader_vertical: '#dc2626', spreader_horizontal: '#dc2626',
@@ -23,7 +23,7 @@ const PART_COLORS: Record<string, string> = {
 const LINE_DRAW_COLORS: Record<string, string> = {
   left_side: '#94a3b8', right_side: '#94a3b8',
   bottom: '#94a3b8', back: '#475569',
-  full_top: '#4ade80', front_rail: '#4ade80', back_rail: '#4ade80',
+  full_top: '#94a3b8', front_rail: '#94a3b8', back_rail: '#94a3b8',
   kick_front_face: '#fbbf24',
   kick_sub_front: '#f97316', kick_back: '#f97316',
   spreader_vertical: '#f97316', spreader_horizontal: '#f97316',

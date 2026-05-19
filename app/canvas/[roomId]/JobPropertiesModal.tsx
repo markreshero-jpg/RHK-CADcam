@@ -109,6 +109,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   // ── Construction method schedules ─────────────────────────────────────────
   const [constructionSched,   setConstructionSched]   = useState(project.construction_schedule_id ?? '')
   const [drawerBoxMethod,     setDrawerBoxMethod]     = useState(project.drawer_box_method_id ?? '')
+  const [defaultDrawerType,   setDefaultDrawerType]   = useState<'system' | 'five_piece' | ''>(project.default_drawer_type ?? '')
   const [constructionScheds,  setConstructionScheds]  = useState<SchedItem[]>([])
   const [drawerBoxMethods,    setDrawerBoxMethods]    = useState<SchedItem[]>([])
 
@@ -188,6 +189,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       },
       construction_schedule_id: constructionSched || null,
       drawer_box_method_id:     drawerBoxMethod  || null,
+      default_drawer_type:      (defaultDrawerType || null) as 'system' | 'five_piece' | null,
       base_assembly_schedule_id: baseAsmSched || null,
       wall_assembly_schedule_id: wallAsmSched || null,
       tall_assembly_schedule_id: tallAsmSched || null,
@@ -365,6 +367,21 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                         ))}
                       </select>
                     )}
+                  </section>
+
+                  {/* Default drawer type */}
+                  <section>
+                    <SectionHead>Default Drawer Type</SectionHead>
+                    <p className="text-xs text-gray-500 mb-2">Applied to all drawer face zones unless overridden per-zone.</p>
+                    <select
+                      value={defaultDrawerType}
+                      onChange={e => setDefaultDrawerType(e.target.value as 'system' | 'five_piece' | '')}
+                      className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">System (default)</option>
+                      <option value="system">System (e.g. Blum Legrabox)</option>
+                      <option value="five_piece">5-Piece Timber Box</option>
+                    </select>
                   </section>
 
                   {/* Cabinet method rule overrides */}

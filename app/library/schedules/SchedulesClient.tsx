@@ -15,7 +15,7 @@ const TABS = [
   { key: 'hinge',           label: 'Hinges',               table: 'hinge_schedules',           type: 'hw_single',  valueCol: 'hinge_id',   ebCol: null           },
   { key: 'slide',           label: 'Slides',               table: 'slide_schedules',           type: 'hw_single',  valueCol: 'slide_id',   ebCol: null           },
   { key: 'handle',          label: 'Handles',              table: 'handle_schedules',          type: 'hw_single',  valueCol: 'handle_id',  ebCol: null           },
-  { key: 'benchtop',        label: 'Benchtops',            table: 'benchtop_schedules',        type: 'bt_single',  valueCol: 'benchtop_id', ebCol: null          },
+  { key: 'benchtop',        label: 'Benchtops',            table: 'benchtop_schedules',        type: 'bt_roles',   valueCol: null,          ebCol: null          },
 ] as const
 
 type SchedKey = typeof TABS[number]['key']
@@ -32,6 +32,16 @@ const TK_ROLES = [
   { key: 'face',     label: 'Face',     desc: 'Visible front face' },
   { key: 'interior', label: 'Interior', desc: 'Structural members' },
 ]
+const BT_ROLES = [
+  { key: 'worktop_panel',        label: 'Worktop Panel',     desc: 'Main surface',               source: 'benchtop', hasEb: false },
+  { key: 'stone_slab',           label: 'Stone Slab',        desc: 'Full-thickness stone panel',  source: 'benchtop', hasEb: false },
+  { key: 'buildup_rail',         label: 'Build-Up Rail',     desc: 'Perimeter framing strips',    source: 'board',    hasEb: true  },
+  { key: 'buildup_cross_member', label: 'Cross Member',      desc: 'Internal support members',    source: 'board',    hasEb: false },
+  { key: 'subtop',               label: 'Substrate',         desc: 'Under-stone substrate',       source: 'board',    hasEb: false },
+  { key: 'drop_front_fascia',    label: 'Drop Front Fascia', desc: 'Exposed front face',          source: 'board',    hasEb: true  },
+  { key: 'side_fascia',          label: 'Side Fascia',       desc: 'Exposed end face',            source: 'board',    hasEb: true  },
+  { key: 'back_fascia',          label: 'Back Fascia',       desc: 'Exposed back (islands)',      source: 'board',    hasEb: true  },
+] as const
 const CLASSES = ['base', 'wall', 'tall'] as const
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -146,7 +156,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     setEditName(s.name)
     setEditDesc(s.description ?? '')
     setRowData({})
-    if (tab.type === 'asm_grid' || tab.type === 'tk_list' || tab.type === 'front_list') {
+    if (tab.type === 'asm_grid' || tab.type === 'tk_list' || tab.type === 'front_list' || tab.type === 'bt_roles') {
       setRowsLoading(true)
       const rows = await fetchRows(tab.type, id)
       setRowData(rows)
@@ -182,6 +192,16 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
       for (const r of (data ?? []) as { assembly_class: string; material_id: string; edgeband_id: string | null }[]) {
         map[r.assembly_class]          = r.material_id
         if (r.edgeband_id) map[`${r.assembly_class}|eb`] = r.edgeband_id
+      }
+    } else if (type === 'bt_roles') {
+      const { data } = await supabase
+        .from('benchtop_schedule_rows')
+        .select('part_role,material_id,benchtop_material_id,edgeband_id')
+        .eq('schedule_id', schedId)
+      for (const r of (data ?? []) as { part_role: string; material_id: string | null; benchtop_material_id: string | null; edgeband_id: string | null }[]) {
+        const matId = r.material_id ?? r.benchtop_material_id
+        if (matId) map[r.part_role] = matId
+        if (r.edgeband_id) map[`${r.part_role}|eb`] = r.edgeband_id
       }
     }
     return map
@@ -345,6 +365,32 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     await supabase.from('front_schedule_rows')
       .update({ edgeband_id: ebId || null })
       .eq('schedule_id', selectedId).eq('assembly_class', cls)
+    setRowData(p => ebId ? { ...p, [k]: ebId } : (({ [k]: _, ...rest }) => rest)(p))
+  }
+
+  async function saveBtMat(partRole: string, matId: string, source: 'board' | 'benchtop') {
+    if (!selectedId) return
+    const matCol = source === 'benchtop' ? 'benchtop_material_id' : 'material_id'
+    const ebId   = rowData[`${partRole}|eb`] || null
+    if (matId) {
+      await supabase.from('benchtop_schedule_rows').upsert(
+        { schedule_id: selectedId, part_role: partRole, [matCol]: matId, edgeband_id: ebId },
+        { onConflict: 'schedule_id,part_role' }
+      )
+      setRowData(p => ({ ...p, [partRole]: matId }))
+    } else {
+      await supabase.from('benchtop_schedule_rows').delete()
+        .eq('schedule_id', selectedId).eq('part_role', partRole)
+      setRowData(p => { const n = { ...p }; delete n[partRole]; delete n[`${partRole}|eb`]; return n })
+    }
+  }
+
+  async function saveBtEb(partRole: string, ebId: string) {
+    if (!selectedId || !rowData[partRole]) return
+    const k = `${partRole}|eb`
+    await supabase.from('benchtop_schedule_rows')
+      .update({ edgeband_id: ebId || null })
+      .eq('schedule_id', selectedId).eq('part_role', partRole)
     setRowData(p => ebId ? { ...p, [k]: ebId } : (({ [k]: _, ...rest }) => rest)(p))
   }
 
@@ -540,6 +586,52 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     )
   }
 
+  function renderBtRoles() {
+    return (
+      <div className="space-y-3">
+        {BT_ROLES.map(role => {
+          const mK      = role.key
+          const eK      = `${role.key}|eb`
+          const matId   = rowData[mK] ?? ''
+          const ebId    = rowData[eK] ?? ''
+          const catalog = role.source === 'benchtop' ? benchtopMats : materials
+          const opts    = role.hasEb ? ebOpts(matId) : []
+          return (
+            <div key={role.key} className="flex items-start gap-3">
+              <div className="w-36 shrink-0 pt-1">
+                <p className="text-xs text-gray-300">{role.label}</p>
+                <p className="text-[9px] text-gray-600">{role.desc}</p>
+              </div>
+              <div className="flex-1 space-y-1">
+                <select
+                  value={matId}
+                  onChange={e => saveBtMat(role.key, e.target.value, role.source as 'board' | 'benchtop')}
+                  className={sel}
+                >
+                  {!matId && <option value="">— not set —</option>}
+                  {(catalog as { id: string; name: string; dz: number }[]).map(m => (
+                    <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
+                  ))}
+                </select>
+                {role.hasEb && (
+                  <select
+                    value={ebId}
+                    onChange={e => saveBtEb(role.key, e.target.value)}
+                    disabled={!matId}
+                    className={`${selEb} ${matId ? '' : 'opacity-40'}`}
+                  >
+                    <option value="">{matId ? '— no banding —' : '—'}</option>
+                    {opts.map(eb => <option key={eb.id} value={eb.id}>{eb.name} ({eb.thickness}mm)</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   function renderMatSingle(matCol: string, ebCol: string | null) {
     const sched  = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
     const matId  = (sched?.[matCol] as string) ?? ''
@@ -568,20 +660,6 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
             </select>
           </div>
         )}
-      </div>
-    )
-  }
-
-  function renderBtSingle() {
-    const sched = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
-    const val   = (sched?.['benchtop_id'] as string) ?? ''
-    return (
-      <div className="flex items-center gap-3">
-        <span className="w-20 shrink-0 text-xs text-gray-400">Benchtop</span>
-        <select value={val} onChange={e => saveSingleValue('benchtop_id', e.target.value)} className={`flex-1 max-w-sm ${sel}`}>
-          {!val && <option value="">— not set —</option>}
-          {benchtopMats.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dz}mm{m.material_type ? ` · ${m.material_type}` : ''})</option>)}
-        </select>
       </div>
     )
   }
@@ -659,7 +737,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           {tab.type === 'front_list'  && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderFrontList()}</>}
           {tab.type === 'db_list'     && renderDbList()}
           {tab.type === 'mat_single'  && renderMatSingle(tab.valueCol as string, tab.ebCol)}
-          {tab.type === 'bt_single'   && renderBtSingle()}
+          {tab.type === 'bt_roles'    && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderBtRoles()}</>}
           {tab.type === 'hw_single'   && renderHwSingle()}
         </div>
 

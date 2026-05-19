@@ -36,8 +36,10 @@ export interface Project {
   slide_schedule_id:           string | null
   handle_schedule_id:          string | null
   benchtop_schedule_id:        string | null
+  benchtop_build_method_id:    string | null
   construction_schedule_id:    string | null
   drawer_box_method_id:        string | null
+  default_drawer_type:         'system' | 'five_piece' | null
   created_at: string
   updated_at: string
 }
@@ -66,6 +68,7 @@ export interface Room {
   slide_schedule_id:           string | null
   handle_schedule_id:          string | null
   benchtop_schedule_id:        string | null
+  benchtop_build_method_id:    string | null
   construction_schedule_id:    string | null
   created_at: string
   updated_at: string
@@ -192,6 +195,82 @@ export interface CabinetDefinition {
   active: boolean
   created_at: string
   updated_at: string
+}
+
+// ── Benchtop instance ─────────────────────────────────────────────────────────
+
+export interface BenchtopEdgeTag {
+  edge_index: number
+  type: 'exposed' | 'wall'
+}
+
+export interface BenchtopJoinPoint {
+  vertex_index: number
+  join_type: BenchtopJoinType
+}
+
+export interface BenchtopArcSegment {
+  edge_index: number
+  cpx: number
+  cpy: number
+}
+
+export interface BenchtopInstance {
+  id: string
+  room_id: string
+  label: string | null
+  polygon: Array<{ x: number; y: number }>
+  arc_segments: BenchtopArcSegment[]
+  edge_tags: BenchtopEdgeTag[]
+  join_types: BenchtopJoinPoint[]
+  benchtop_build_method_id: string | null
+  benchtop_schedule_id: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ── Benchtop build method ─────────────────────────────────────────────────────
+
+export type BenchtopJoinType      = 'butt' | 'mitre'
+export type BenchtopGrainDir      = 'length' | 'width'
+
+export interface BenchtopBuildMethod {
+  id:                  string
+  name:                string
+  description:         string | null
+  active_part_roles:   BenchtopPartRole[]
+  buildup_rail_depth:  number | null
+  drop_front_height:   number | null
+  default_join_type:   BenchtopJoinType
+  grain_direction:     BenchtopGrainDir
+  corner_join_type:    BenchtopJoinType
+  wizard_answers:      Record<string, unknown>
+  is_default:          boolean
+  active:              boolean
+  created_at:          string
+  updated_at:          string
+}
+
+// ── Benchtop schedule ─────────────────────────────────────────────────────────
+
+export type BenchtopPartRole =
+  | 'worktop_panel'
+  | 'buildup_rail'
+  | 'buildup_cross_member'
+  | 'subtop'
+  | 'drop_front_fascia'
+  | 'side_fascia'
+  | 'back_fascia'
+  | 'stone_slab'
+
+export interface BenchtopScheduleRow {
+  id:                   string
+  schedule_id:          string
+  part_role:            BenchtopPartRole
+  material_id:          string | null   // board stock (structural parts)
+  benchtop_material_id: string | null   // surface material (worktop, stone)
+  edgeband_id:          string | null
 }
 
 // ── Default dimensions by assembly class (mm) ─────────────────────────────────

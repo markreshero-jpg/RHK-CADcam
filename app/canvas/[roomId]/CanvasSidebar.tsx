@@ -37,6 +37,13 @@ const CabinetIcon = () => (
   </svg>
 )
 
+const BenchtopIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 6 L10 3 L17 6 L17 14 L10 17 L3 14 Z" fill="currentColor" fillOpacity="0.12"/>
+    <path d="M3 6 L10 3 L17 6 L17 14 L10 17 L3 14 Z"/>
+  </svg>
+)
+
 const PasteIcon = () => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <rect x="5.5" y="5" width="10" height="13" rx="1.2"/>
@@ -134,7 +141,9 @@ const PLACE_MODES   = ALL_CAB_ITEMS.map(c => c.mode)
 export default function CanvasSidebar({
   mode, onSelectMode,
   wallMenuOpen, setWallMenuOpen,
-  cabMenuOpen, setCabMenuOpen, clipboard, sidebarW,
+  cabMenuOpen, setCabMenuOpen,
+  benchtopMenuOpen, setBenchtopMenuOpen,
+  clipboard, sidebarW,
 }: {
   mode: Mode
   onSelectMode: (m: Mode) => void
@@ -142,6 +151,8 @@ export default function CanvasSidebar({
   setWallMenuOpen: (v: boolean) => void
   cabMenuOpen: boolean
   setCabMenuOpen: (v: boolean) => void
+  benchtopMenuOpen: boolean
+  setBenchtopMenuOpen: (v: boolean) => void
   clipboard: CabinetInstance | null
   sidebarW: number
 }) {
@@ -247,8 +258,9 @@ export default function CanvasSidebar({
     ...customGroupLabels.map(label => ({ label, accentClass: 'text-gray-400', items: [] as CabItem[] })),
   ]
 
-  const cabActive  = PLACE_MODES.includes(mode)
-  const wallActive = WALL_MODES.includes(mode)
+  const cabActive       = PLACE_MODES.includes(mode)
+  const wallActive      = WALL_MODES.includes(mode)
+  const benchtopActive  = mode === 'draw_benchtop' || mode === 'draw_benchtop_rect'
 
   const previewItem = cabActive ? ALL_CAB_ITEMS.find(c => c.mode === mode) : null
   const previewMac  = cabActive ? modeAssemblyClass(mode) : null
@@ -412,6 +424,51 @@ export default function CanvasSidebar({
                 />
               </div>
             )}
+          </div>
+        )}
+
+        <div className="border-t border-gray-800 my-1 mx-1" />
+
+        {/* Benchtop dropdown */}
+        <button
+          title="Benchtop (F4)"
+          onClick={() => setBenchtopMenuOpen(!benchtopMenuOpen)}
+          className={`w-full px-3 h-11 rounded-lg flex items-center gap-3 text-sm font-medium transition-colors
+            ${benchtopActive ? 'bg-teal-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}`}
+        >
+          <span className="flex-none w-5 flex items-center justify-center"><BenchtopIcon /></span>
+          <span className="flex-1 truncate text-left">Benchtop</span>
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0
+            ${benchtopActive ? 'border-white/30 text-white/60' : 'border-gray-700 text-gray-600'}`}>
+            F4
+          </span>
+          <span className="text-xs opacity-40">{benchtopMenuOpen ? '▴' : '▾'}</span>
+        </button>
+
+        {benchtopMenuOpen && (
+          <div className="flex flex-col gap-px pt-0.5">
+            <button
+              onClick={() => { onSelectMode('draw_benchtop'); setBenchtopMenuOpen(false) }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
+                ${mode === 'draw_benchtop' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            >
+              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop' ? 'text-white' : 'text-teal-400'}`}>
+                <BenchtopIcon />
+              </span>
+              <span className="truncate">Draw Polygon</span>
+            </button>
+            <button
+              onClick={() => { onSelectMode('draw_benchtop_rect'); setBenchtopMenuOpen(false) }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
+                ${mode === 'draw_benchtop_rect' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            >
+              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop_rect' ? 'text-white' : 'text-teal-400'}`}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="12" height="8" rx="0.8" fill="currentColor" fillOpacity="0.12"/>
+                </svg>
+              </span>
+              <span className="truncate">Draw Rectangle</span>
+            </button>
           </div>
         )}
 

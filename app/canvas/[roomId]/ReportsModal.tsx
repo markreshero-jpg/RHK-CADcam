@@ -1,8 +1,10 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import type { Project, Room, Wall, CabinetInstance } from '@/src/lib/types'
+import { generateElevationPDF } from './generateElevationPDF'
+import type { Project, Room, Wall, CabinetInstance, BenchtopInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { dbLoadResolvedParts } from './canvasDB'
 import PlanDrawingSVG from './PlanDrawingSVG'
 import ElevationReportSVG from './ElevationReportSVG'
@@ -33,12 +35,14 @@ const FACE_LABELS: Record<string, string> = {
 }
 
 interface PartRow {
-  cabinetLabel: string
-  partDesc: string
-  width: number
-  depth: number
-  thickness: number
-  materialId: string
+  sourceLabel:  string
+  partDesc:     string
+  width:        number
+  depth:        number
+  thickness:    number
+  quantity:     number
+  materialId:   string | null
+  materialName?: string   // pre-resolved; overrides materialNames[materialId] lookup
 }
 
 function collectParts(cabinets: CabinetInstance[], resolved: Map<string, ResolvedCabinet>): PartRow[] {
@@ -48,42 +52,92 @@ function collectParts(cabinets: CabinetInstance[], resolved: Map<string, Resolve
     if (!r) continue
     const lbl = cab.label ?? cab.assembly_class
     for (const p of r.case_parts)
-      rows.push({ cabinetLabel: lbl, partDesc: CASE_LABELS[p.part_key] ?? p.part_key, width: p.DY, depth: p.DX, thickness: p.DZ, materialId: p.material_id })
+      rows.push({ sourceLabel: lbl, partDesc: CASE_LABELS[p.part_key] ?? p.part_key, width: p.DY, depth: p.DX, thickness: p.DZ, quantity: 1, materialId: p.material_id })
     for (const p of r.toekick_parts)
-      rows.push({ cabinetLabel: lbl, partDesc: TK_LABELS[p.part_key] ?? p.part_key, width: p.DY, depth: p.DX, thickness: p.DZ, materialId: p.material_id })
+      rows.push({ sourceLabel: lbl, partDesc: TK_LABELS[p.part_key] ?? p.part_key, width: p.DY, depth: p.DX, thickness: p.DZ, quantity: 1, materialId: p.material_id })
     for (const p of r.internal_parts)
-      rows.push({ cabinetLabel: lbl, partDesc: INT_LABELS[p.part_type] ?? p.part_type, width: p.DY, depth: p.DX, thickness: p.DZ, materialId: p.material_id })
+      rows.push({ sourceLabel: lbl, partDesc: INT_LABELS[p.part_type] ?? p.part_type, width: p.DY, depth: p.DX, thickness: p.DZ, quantity: 1, materialId: p.material_id })
     for (const z of r.face_zones) {
       if (z.face_type === 'open') continue
-      rows.push({ cabinetLabel: lbl, partDesc: FACE_LABELS[z.face_type] ?? z.face_type, width: z.DY, depth: z.DX, thickness: z.DZ, materialId: z.material_id })
+      rows.push({ sourceLabel: lbl, partDesc: FACE_LABELS[z.face_type] ?? z.face_type, width: z.DY, depth: z.DX, thickness: z.DZ, quantity: 1, materialId: z.material_id })
     }
   }
   return rows
 }
 
-export default function ReportsModal({ initialScope, project, room, walls, cabinets, resolvedParts, onClose }: {
+type StoredBtPart = ResolvedBenchtopPart & { benchtop_id: string }
+
+function collectBtParts(
+  benchtops: BenchtopInstance[],
+  resolvedRows: StoredBtPart[],
+): PartRow[] {
+  const byBtId = new Map<string, StoredBtPart[]>()
+  for (const r of resolvedRows) {
+    const arr = byBtId.get(r.benchtop_id) ?? []
+    arr.push(r)
+    byBtId.set(r.benchtop_id, arr)
+  }
+  const rows: PartRow[] = []
+  for (const bt of benchtops) {
+    const btParts = byBtId.get(bt.id) ?? []
+    const lbl = bt.label ?? 'Benchtop'
+    for (const p of btParts) {
+      rows.push({
+        sourceLabel:  lbl,
+        partDesc:     p.label,
+        width:        p.width_mm,
+        depth:        p.length_mm,
+        thickness:    p.thickness_mm,
+        quantity:     p.quantity,
+        materialId:   p.material_id ?? p.benchtop_material_id ?? null,
+        materialName: p.material_name ?? p.benchtop_material_name ?? undefined,
+      })
+    }
+  }
+  return rows
+}
+
+const PAPER = {
+  A4L: { w: 297, h: 210, label: 'A4 Landscape' },
+  A3L: { w: 420, h: 297, label: 'A3 Landscape' },
+  A2L: { w: 594, h: 420, label: 'A2 Landscape' },
+  A1L: { w: 841, h: 594, label: 'A1 Landscape' },
+}
+
+// Downloads an SVG at a fixed paper size — all drawings output identically sized.
+// preserveAspectRatio="xMinYMin meet" scales content to fill the page without distortion.
+function downloadSvgFile(svgEl: SVGSVGElement, filename: string, paperW: number, paperH: number) {
+  const clone = svgEl.cloneNode(true) as SVGSVGElement
+  clone.setAttribute('width',  `${paperW}mm`)
+  clone.setAttribute('height', `${paperH}mm`)
+  clone.setAttribute('preserveAspectRatio', 'xMinYMin meet')
+  clone.removeAttribute('style')
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+  const svgStr = new XMLSerializer().serializeToString(clone)
+  const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export default function ReportsModal({ initialScope, project, room, walls, cabinets, resolvedParts, benchtops, onClose }: {
   initialScope: ReportScope
   project: Project | null
   room: Room
   walls: Wall[]
   cabinets: CabinetInstance[]
   resolvedParts: Map<string, ResolvedCabinet>
+  benchtops: BenchtopInstance[]
   onClose: () => void
 }) {
   const [scope, setScope] = useState<ReportScope>(initialScope)
   const [selectedReport, setSelectedReport] = useState<ReportId>('parts_list_summary')
   const planSVGRef = useRef<SVGSVGElement>(null)
 
-  // Print settings
-  const [printPaper, setPrintPaper] = useState<'A4L' | 'A3L' | 'A2L' | 'A1L'>('A3L')
+  // Paper size + scale for SVG output
+  const [printPaper, setPrintPaper] = useState<keyof typeof PAPER>('A3L')
   const [printScale, setPrintScale] = useState(20)
-
-  const PAPER = {
-    A4L: { w: 297, h: 210, label: 'A4 Landscape',  cssSize: 'A4 landscape'  },
-    A3L: { w: 420, h: 297, label: 'A3 Landscape',  cssSize: 'A3 landscape'  },
-    A2L: { w: 594, h: 420, label: 'A2 Landscape',  cssSize: 'A2 landscape'  },
-    A1L: { w: 841, h: 594, label: 'A1 Landscape',  cssSize: 'A1 landscape'  },
-  }
   const SCALES = [5, 10, 15, 20, 25, 50, 100]
   const paper = PAPER[printPaper]
 
@@ -105,11 +159,17 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
   const [jobResolved, setJobResolved] = useState<Map<string, ResolvedCabinet>>(new Map())
   const [loadingJob, setLoadingJob] = useState(false)
 
+  const [roomBtParts, setRoomBtParts] = useState<StoredBtPart[]>([])
+  const [jobBtInstances, setJobBtInstances] = useState<BenchtopInstance[]>([])
+  const [jobBtParts, setJobBtParts] = useState<StoredBtPart[]>([])
+
   const [materialNames, setMaterialNames] = useState<Record<string, string>>({})
 
-  const rooms       = scope === 'room' ? [room]        : jobRooms
-  const allCabinets = scope === 'room' ? cabinets      : jobCabinets
-  const allResolved = scope === 'room' ? resolvedParts : jobResolved
+  const rooms          = scope === 'room' ? [room]        : jobRooms
+  const allCabinets    = scope === 'room' ? cabinets      : jobCabinets
+  const allResolved    = scope === 'room' ? resolvedParts : jobResolved
+  const allBtInstances = scope === 'room' ? benchtops     : jobBtInstances
+  const allBtParts     = scope === 'room' ? roomBtParts   : jobBtParts
 
   useEffect(() => {
     if (scope !== 'job' || !project || jobRooms.length > 0) return
@@ -118,11 +178,22 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
       const { data: rms } = await supabase.from('rooms').select('*').eq('project_id', project!.id).order('sort_order')
       if (!rms) { setLoadingJob(false); return }
       setJobRooms(rms as Room[])
-      const { data: cabs } = await supabase.from('cabinet_instances').select('*').in('room_id', rms.map(r => r.id))
+      const roomIds = rms.map(r => r.id)
+      const [{ data: cabs }, { data: bts }] = await Promise.all([
+        supabase.from('cabinet_instances').select('*').in('room_id', roomIds),
+        supabase.from('benchtop_instances').select('*').in('room_id', roomIds),
+      ])
       if (!cabs) { setLoadingJob(false); return }
       setJobCabinets(cabs as CabinetInstance[])
-      const resolved = await dbLoadResolvedParts(cabs.map(c => c.id))
+      setJobBtInstances((bts ?? []) as BenchtopInstance[])
+      const [resolved, btPartsResult] = await Promise.all([
+        dbLoadResolvedParts(cabs.map(c => c.id)),
+        (bts ?? []).length > 0
+          ? supabase.from('benchtop_resolved_parts').select('*').in('benchtop_id', (bts ?? []).map(b => (b as { id: string }).id))
+          : Promise.resolve({ data: [] }),
+      ])
       setJobResolved(resolved)
+      setJobBtParts((btPartsResult.data ?? []) as StoredBtPart[])
       setLoadingJob(false)
     }
     void load()
@@ -148,23 +219,35 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
     })
   }, [allResolved]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load resolved parts for the current room's benchtops once on modal open.
+  // The modal remounts on each open so this is effectively a per-open fetch.
+  useEffect(() => {
+    const ids = benchtops.map(b => b.id)
+    if (ids.length === 0) return
+    void supabase.from('benchtop_resolved_parts').select('*').in('benchtop_id', ids)
+      .then(({ data }) => setRoomBtParts((data ?? []) as StoredBtPart[]))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const reportData = useMemo(() => {
     return rooms.map(r => {
       const roomCabs = allCabinets
         .filter(c => c.room_id === r.id)
         .sort((a, b) => (a.label ?? '').localeCompare(b.label ?? '', undefined, { numeric: true }))
-      const parts = collectParts(roomCabs, allResolved)
+      const cabParts = collectParts(roomCabs, allResolved)
+      const roomBenchtops = allBtInstances.filter(bt => bt.room_id === r.id)
+      const btParts = collectBtParts(roomBenchtops, allBtParts)
+      const allParts = [...cabParts, ...btParts]
       const byMat = new Map<string, PartRow[]>()
-      for (const p of parts) {
-        const name = materialNames[p.materialId] ?? p.materialId
+      for (const p of allParts) {
+        const name = p.materialName ?? (p.materialId != null ? (materialNames[p.materialId] ?? p.materialId) : null) ?? 'Unknown'
         byMat.set(name, [...(byMat.get(name) ?? []), p])
       }
       const materialGroups = [...byMat.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([matName, ps]) => ({ matName, parts: ps }))
-      return { room: r, materialGroups, totalParts: parts.length }
+      return { room: r, materialGroups, totalParts: allParts.length }
     })
-  }, [rooms, allCabinets, allResolved, materialNames])
+  }, [rooms, allCabinets, allResolved, allBtInstances, allBtParts, materialNames])
 
   function handlePrint() {
     const reportTitle = REPORTS.find(r => r.id === selectedReport)?.label ?? 'Report'
@@ -176,15 +259,16 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
         ${materialGroups.map(({ matName, parts }) => `
           <h3>${matName}</h3>
           <table>
-            <thead><tr><th>Cabinet</th><th>Part</th><th class="r">Width (mm)</th><th class="r">Depth (mm)</th><th class="r">Thk (mm)</th></tr></thead>
+            <thead><tr><th>Source</th><th>Part</th><th class="r">Width (mm)</th><th class="r">Depth (mm)</th><th class="r">Thk (mm)</th><th class="r">Qty</th></tr></thead>
             <tbody>
               ${parts.map((p, i) => `
                 <tr class="${i % 2 ? 'alt' : ''}">
-                  <td class="mono">${p.cabinetLabel}</td>
+                  <td class="mono">${p.sourceLabel}</td>
                   <td>${p.partDesc}</td>
                   <td class="r mono">${Math.round(p.width)}</td>
                   <td class="r mono">${Math.round(p.depth)}</td>
                   <td class="r mono">${Math.round(p.thickness)}</td>
+                  <td class="r mono">${p.quantity}</td>
                 </tr>`).join('')}
             </tbody>
           </table>`).join('')}
@@ -223,79 +307,30 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
     setTimeout(() => win.print(), 250)
   }
 
-  function handlePrintPlan() {
+  function handleDownloadPlan() {
     const svgEl = planSVGRef.current
     if (!svgEl) return
-    const svgStr = new XMLSerializer().serializeToString(svgEl)
-    const scopeLabel = scope === 'room' ? room.name : (project?.name ?? 'Job')
-    const win = window.open('', '_blank', 'width=1200,height=850')
-    if (!win) return
-    win.document.write(`<!DOCTYPE html><html><head>
-      <title>Plan View — ${scopeLabel}</title>
-      <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: white; font-family: Arial, Helvetica, sans-serif; }
-        .page { padding: 10mm; }
-        .title-block { border-bottom: 2px solid #111; padding-bottom: 6px; margin-bottom: 10px; }
-        .title-block h1 { font-size: 13px; font-weight: bold; }
-        .title-block p { font-size: 9px; color: #555; margin-top: 2px; }
-        svg { width: 100%; height: auto; display: block; }
-        @media print {
-          body { margin: 0; }
-          @page { margin: 8mm; size: A3 landscape; }
-        }
-      </style>
-    </head><body>
-      <div class="page">
-        <div class="title-block">
-          <h1>Plan View &mdash; ${scopeLabel}</h1>
-          <p>${project?.name ?? ''} &nbsp;&middot;&nbsp; Scale: NTS &nbsp;&middot;&nbsp; ${new Date().toLocaleDateString()}</p>
-        </div>
-        ${svgStr}
-      </div>
-    </body></html>`)
-    win.document.close()
-    win.focus()
-    setTimeout(() => win.print(), 300)
+    const scopeLabel = (scope === 'room' ? room.name : (project?.name ?? 'Job')).replace(/[^\w-]/g, '_')
+    downloadSvgFile(svgEl, `plan-${scopeLabel}.svg`, paper.w, paper.h)
   }
 
-  function handlePrintElev() {
-    const scopeLabel = scope === 'room' ? room.name : (project?.name ?? 'Job')
-    const entries = visibleWalls
-      .map(w => elevSvgRefs.current.get(w.id))
-      .filter((el): el is SVGSVGElement => !!el)
-    if (entries.length === 0) return
-    const svgStrings = entries.map(el => new XMLSerializer().serializeToString(el))
-    const win = window.open('', '_blank', 'width=1100,height=800')
-    if (!win) return
-    win.document.write(`<!DOCTYPE html><html><head>
-      <title>Elevation Views — ${scopeLabel}</title>
-      <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: white; font-family: Arial, Helvetica, sans-serif; }
-        .page { padding: 10mm; }
-        .header { border-bottom: 2px solid #111; padding-bottom: 5px; margin-bottom: 12px; }
-        .header h1 { font-size: 13px; font-weight: bold; }
-        .header p { font-size: 9px; color: #555; margin-top: 2px; }
-        .elev-block { margin-bottom: 18px; page-break-inside: avoid; }
-        svg { width: 100%; height: auto; display: block; }
-        @media print { body { margin: 0; } @page { margin: 8mm; size: A3 landscape; } }
-      </style>
-    </head><body><div class="page">
-      <div class="header">
-        <h1>Elevation Views &mdash; ${scopeLabel}</h1>
-        <p>${project?.name ?? ''} &nbsp;&middot;&nbsp; Scale: NTS &nbsp;&middot;&nbsp; ${new Date().toLocaleDateString()}</p>
-      </div>
-      ${svgStrings.map(s => `<div class="elev-block">${s}</div>`).join('')}
-    </div></body></html>`)
-    win.document.close()
-    win.focus()
-    setTimeout(() => win.print(), 300)
+  function handleDownloadElev() {
+    if (visibleWalls.length === 0) return
+    const activeCabs = scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)
+    const doc = generateElevationPDF(visibleWalls, activeCabs, room, paper)
+    const scopeLabel = (scope === 'room' ? room.name : (project?.name ?? 'Job')).replace(/[^\w-]/g, '_')
+    const blob = doc.output('blob')
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `elevations-${scopeLabel}.pdf`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   function handlePrintActive() {
-    if (selectedReport === 'shop_drawing_plan') handlePrintPlan()
-    else if (selectedReport === 'elevation_view') handlePrintElev()
+    if (selectedReport === 'shop_drawing_plan') handleDownloadPlan()
+    else if (selectedReport === 'elevation_view') handleDownloadElev()
     else handlePrint()
   }
 
@@ -350,10 +385,29 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                   {scope === 'room' ? room.name : (project?.name ?? 'Job')}
                 </span>
               </div>
-              <button onClick={handlePrintActive}
-                className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium">
-                Print / PDF
-              </button>
+              <div className="flex items-center gap-2">
+                {(selectedReport === 'shop_drawing_plan' || selectedReport === 'elevation_view') && (
+                  <>
+                    <select value={printScale} onChange={e => setPrintScale(Number(e.target.value))}
+                      className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1"
+                      title="Annotation scale — affects text and line sizes inside the drawing">
+                      {SCALES.map(s => <option key={s} value={s}>1:{s}</option>)}
+                    </select>
+                    <select value={printPaper} onChange={e => setPrintPaper(e.target.value as keyof typeof PAPER)}
+                      className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1">
+                      {(Object.keys(PAPER) as (keyof typeof PAPER)[]).map(k => (
+                        <option key={k} value={k}>{PAPER[k].label}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+                <button onClick={handlePrintActive}
+                  className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium">
+                  {selectedReport === 'shop_drawing_plan' ? 'Download SVG'
+                    : selectedReport === 'elevation_view' ? 'Download PDF'
+                    : 'Print / PDF'}
+                </button>
+              </div>
             </div>
 
             {/* Content */}
@@ -366,6 +420,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                     walls={walls}
                     cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
                     svgRef={planSVGRef}
+                    scale={printScale}
                   />
                 </div>
               ) : selectedReport === 'elevation_view' ? (
@@ -373,6 +428,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                   walls={walls}
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
                   room={room}
+                  scale={printScale}
                   selectedWallIds={selectedWallIds}
                   onToggleWall={toggleWall}
                   svgRefCallback={(wallId, el) => {
@@ -392,10 +448,11 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
   )
 }
 
-function ElevationViewReport({ walls, cabinets, room, selectedWallIds, onToggleWall, svgRefCallback }: {
+function ElevationViewReport({ walls, cabinets, room, scale, selectedWallIds, onToggleWall, svgRefCallback }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
+  scale: number
   selectedWallIds: Set<string>
   onToggleWall: (id: string) => void
   svgRefCallback: (wallId: string, el: SVGSVGElement | null) => void
@@ -434,6 +491,7 @@ function ElevationViewReport({ walls, cabinets, room, selectedWallIds, onToggleW
               wall={w}
               cabinets={wallCabs}
               room={room}
+              scale={scale}
               svgRef={(el: SVGSVGElement | null) => svgRefCallback(w.id, el)}
             />
           </div>
@@ -454,7 +512,7 @@ function PartsListSummary({ data }: {
     return (
       <div className="text-center py-12 text-gray-500 text-sm">
         No resolved parts found.
-        <div className="text-xs mt-1 text-gray-600">Open cabinets and allow them to resolve to generate reports.</div>
+        <div className="text-xs mt-1 text-gray-600">Open cabinets or use the Benchtop &quot;Resolve Parts&quot; button to generate reports.</div>
       </div>
     )
   }
@@ -474,21 +532,23 @@ function PartsListSummary({ data }: {
                 <table className="w-full text-[11px] border-collapse">
                   <thead>
                     <tr className="text-gray-500 text-[10px]">
-                      <th className="text-left pb-1 pr-3 font-medium w-16 border-b border-gray-800">Cabinet</th>
+                      <th className="text-left pb-1 pr-3 font-medium w-16 border-b border-gray-800">Source</th>
                       <th className="text-left pb-1 pr-3 font-medium border-b border-gray-800">Part</th>
                       <th className="text-right pb-1 pr-3 font-medium w-24 border-b border-gray-800">Width&nbsp;mm</th>
                       <th className="text-right pb-1 pr-3 font-medium w-24 border-b border-gray-800">Depth&nbsp;mm</th>
-                      <th className="text-right pb-1 font-medium w-16 border-b border-gray-800">Thk&nbsp;mm</th>
+                      <th className="text-right pb-1 pr-3 font-medium w-16 border-b border-gray-800">Thk&nbsp;mm</th>
+                      <th className="text-right pb-1 font-medium w-10 border-b border-gray-800">Qty</th>
                     </tr>
                   </thead>
                   <tbody>
                     {parts.map((p, i) => (
                       <tr key={i} className={i % 2 === 0 ? 'text-gray-300' : 'text-gray-400 bg-gray-800/30'}>
-                        <td className="py-0.5 pr-3 font-mono text-gray-500 text-[10px]">{p.cabinetLabel}</td>
+                        <td className="py-0.5 pr-3 font-mono text-gray-500 text-[10px]">{p.sourceLabel}</td>
                         <td className="py-0.5 pr-3">{p.partDesc}</td>
                         <td className="py-0.5 pr-3 text-right font-mono">{Math.round(p.width)}</td>
                         <td className="py-0.5 pr-3 text-right font-mono">{Math.round(p.depth)}</td>
-                        <td className="py-0.5 text-right font-mono">{Math.round(p.thickness)}</td>
+                        <td className="py-0.5 pr-3 text-right font-mono">{Math.round(p.thickness)}</td>
+                        <td className="py-0.5 text-right font-mono">{p.quantity}</td>
                       </tr>
                     ))}
                   </tbody>

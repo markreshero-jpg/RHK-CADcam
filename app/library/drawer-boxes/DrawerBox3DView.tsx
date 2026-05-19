@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import type { ResolvedDrawerBoxPart } from '@/src/lib/resolver/types'
 import {
-  Box, PanelKind, PartMeta,
+  Box, PanelKind, PartMeta, EbSpec,
   panelFaceColors,
   Part, PartPropertiesPanel, PreviewCanvas,
 } from '@/src/components/three/PartViewer'
@@ -29,30 +29,33 @@ const DB_LABELS: Record<ResolvedDrawerBoxPart['part_type'], string> = {
 }
 
 // ── Box + kind conversion ──────────────────────────────────────────────────────
+// Resolver uses Z=0=front; three.js group sits at -D/2 with +Z toward viewer.
+// Transform: box.z = D - local_Z - depth_extent (maps front→world+D/2, back→world-D/2).
 
-function dbBoxAndKind(p: ResolvedDrawerBoxPart): { box: Box; kind: PanelKind } {
+function dbBoxAndKind(p: ResolvedDrawerBoxPart, D: number): { box: Box; kind: PanelKind } {
   switch (p.part_type) {
     case 'db_left_side':
     case 'db_right_side':
-      return { box: { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }, kind: 'side' }
+      return { box: { x: p.X, y: p.Y, z: D - p.Z - p.DX, w: p.DZ, h: p.DY, d: p.DX }, kind: 'side' }
     case 'db_bottom':
-      return { box: { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }, kind: 'horizontal' }
+      return { box: { x: p.X, y: p.Y, z: D - p.Z - p.DX, w: p.DY, h: p.DZ, d: p.DX }, kind: 'horizontal' }
     case 'db_front':
     case 'db_back':
-      return { box: { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }, kind: 'face' }
+      return { box: { x: p.X, y: p.Y, z: D - p.Z - p.DZ, w: p.DY, h: p.DX, d: p.DZ }, kind: 'face' }
   }
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function DrawerBox3DView({
-  parts, boxWidth, boxHeight, boxDepth, matCol,
+  parts, boxWidth, boxHeight, boxDepth, matCol, ebSpec,
 }: {
   parts:     ResolvedDrawerBoxPart[]
   boxWidth:  number
   boxHeight: number
   boxDepth:  number
   matCol?:   MatColour
+  ebSpec?:   EbSpec
 }) {
   const [selectedPart, setSelectedPart] = useState<PartMeta | null>(null)
   const dragRef = useRef(false)
@@ -72,7 +75,7 @@ export default function DrawerBox3DView({
     >
       <group position={[ox, oy, oz]}>
         {parts.map((p, i) => {
-          const { box: b, kind } = dbBoxAndKind(p)
+          const { box: b, kind } = dbBoxAndKind(p, boxDepth)
           const isBottom = p.part_type === 'db_bottom'
           const c = {
             face: isBottom ? col.back : col.face,
@@ -98,6 +101,7 @@ export default function DrawerBox3DView({
               highlighted={false}
               onSelect={setSelectedPart}
               dragRef={dragRef}
+              ebSpec={ebSpec}
             />
           )
         })}

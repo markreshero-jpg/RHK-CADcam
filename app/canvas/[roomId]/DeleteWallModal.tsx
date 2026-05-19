@@ -1,9 +1,20 @@
 'use client'
 
+import { useEffect } from 'react'
+
 export default function DeleteWallModal({ onConfirm, onCancel }: {
   onConfirm: () => void
   onCancel: () => void
 }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') { e.preventDefault(); onConfirm() }
+      if (e.key === 'Escape') { e.preventDefault(); onCancel() }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onConfirm, onCancel])
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onPointerDown={onCancel}>

@@ -2,8 +2,8 @@ import type { AssemblyClass } from '@/src/lib/types'
 import type { CabinetInstance, ContextMenuItem } from './canvasTypes'
 
 export function buildContextMenuGroups({
-  cabId, wallId, elevWallId, elevWallT, canEqualize, clipboard, cabinets,
-  onDeleteWall, onDeleteCabinet, onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
+  cabId, wallId, elevWallId, elevWallT, canEqualize, clipboard, cabinets, multiSelect,
+  onDeleteWall, onDeleteCabinet, onDeleteMultiple, onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
   onAlignLeft, onAlignRight,
 }: {
   cabId?: string
@@ -13,8 +13,10 @@ export function buildContextMenuGroups({
   canEqualize: boolean
   clipboard: CabinetInstance | null
   cabinets: CabinetInstance[]
+  multiSelect?: string[]
   onDeleteWall: (id: string) => void
   onDeleteCabinet: (id: string) => void
+  onDeleteMultiple?: (ids: string[]) => void
   onCopy: (cab: CabinetInstance) => void
   onPaste: () => void
   onEdit: (id: string) => void
@@ -85,7 +87,12 @@ export function buildContextMenuGroups({
     },
   ])
 
-  groups.push([{ label: 'Delete', onClick: () => onDeleteCabinet(cabId), color: 'red' }])
+  const isMultiSel = multiSelect && multiSelect.length > 1 && cabId && multiSelect.includes(cabId)
+  if (isMultiSel && onDeleteMultiple) {
+    groups.push([{ label: `Delete ${multiSelect!.length} Cabinets`, onClick: () => onDeleteMultiple(multiSelect!), color: 'red' }])
+  } else {
+    groups.push([{ label: 'Delete', onClick: () => onDeleteCabinet(cabId), color: 'red' }])
+  }
 
   return groups
 }

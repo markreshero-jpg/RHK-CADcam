@@ -71,7 +71,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   if (projectId) {
     const { data } = await supabase
       .from('projects')
-      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id')
+      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, default_drawer_type')
       .eq('id', projectId)
       .single()
     projRow = data as Record<string, string | null> | null
@@ -127,7 +127,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     // All active slide products (for resolver lookup)
     supabase
       .from('hardware_slides')
-      .select('id, name, brand, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair')
+      .select('id, name, brand, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair, colour')
       .eq('active', true)
       .order('nominal_length', { ascending: true }),
     cab.construction_method_id
@@ -141,7 +141,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     Promise.resolve({ data: null as unknown }),
     // Drawer box method rules (project → shop cascade, resolved above)
     effectiveDbMethodId
-      ? supabase.from('drawer_box_methods').select('rules').eq('id', effectiveDbMethodId).single()
+      ? supabase.from('drawer_box_methods').select('rules, drawer_type').eq('id', effectiveDbMethodId).single()
       : Promise.resolve({ data: null }),
   ])
 
@@ -231,6 +231,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     soft_close:       Boolean(r.soft_close),
     full_extension:   Boolean(r.full_extension),
     cost_per_pair:    r.cost_per_pair != null ? Number(r.cost_per_pair) : null,
+    colour:           (r.colour as string | null) ?? null,
   }))
 
   // Slide schedule entries (stub — schedule UI is built separately)
@@ -274,6 +275,9 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     toekick_face_edgeband_id:     ebMap.get('tk_face'),
     toekick_interior_edgeband_id: ebMap.get('tk_interior'),
     slide_side_deduction:      fallbackDeduction,
+    default_drawer_type:       (projRow?.default_drawer_type as 'system' | 'five_piece' | null)
+                               ?? (dbMethodRes.data?.drawer_type as 'system' | 'five_piece' | null)
+                               ?? undefined,
     drawer_material:           drawerboxMat ?? interior,
     drawer_box_rules:          drawerBoxRules,
     slide_products:            slideProducts,

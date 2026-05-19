@@ -39,6 +39,17 @@ const TK_ROLES = [
 const CLASSES = ['base', 'wall', 'tall'] as const
 type AsmClass = typeof CLASSES[number]
 
+const BT_ROLES_CONFIG = [
+  { key: 'worktop_panel',        label: 'Worktop Panel',     desc: 'Main surface',              source: 'benchtop' as const },
+  { key: 'stone_slab',           label: 'Stone Slab',        desc: 'Full-thickness stone panel', source: 'benchtop' as const },
+  { key: 'buildup_rail',         label: 'Build-Up Rail',     desc: 'Perimeter framing strips',   source: 'board'    as const },
+  { key: 'buildup_cross_member', label: 'Cross Member',      desc: 'Internal support members',   source: 'board'    as const },
+  { key: 'subtop',               label: 'Substrate',         desc: 'Under-stone substrate',      source: 'board'    as const },
+  { key: 'drop_front_fascia',    label: 'Drop Front Fascia', desc: 'Exposed front face',         source: 'board'    as const },
+  { key: 'side_fascia',          label: 'Side Fascia',       desc: 'Exposed end face',           source: 'board'    as const },
+  { key: 'back_fascia',          label: 'Back Fascia',       desc: 'Exposed back (islands)',     source: 'board'    as const },
+]
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Schedule { id: string; name: string; is_default: boolean }
@@ -56,22 +67,25 @@ interface Props {
 
 export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props) {
   const [loading,   setLoading]   = useState(true)
-  const [allMats,   setAllMats]   = useState<{ id: string; name: string; dz: number }[]>([])
+  const [allMats,    setAllMats]    = useState<{ id: string; name: string; dz: number }[]>([])
+  const [allBtMats,  setAllBtMats]  = useState<{ id: string; name: string; dz: number; material_type: string | null }[]>([])
   const [schedLists, setSchedLists] = useState<SchedListMap>({})
-  const [ownIds,    setOwnIds]    = useState<SchedMap>({})
-  const [parentIds, setParentIds] = useState<SchedMap>({})
-  const [matOvr,    setMatOvr]    = useState<MatMap>({})   // `${cls}|${role}` → mat_id
-  const [tkOvr,     setTkOvr]     = useState<MatMap>({})   // role → mat_id
-  const [schedMat,  setSchedMat]  = useState<MatMap>({})   // `${cls}|${role}` → mat_id (from schedules)
-  const [schedTk,   setSchedTk]   = useState<MatMap>({})   // role → mat_id (from toekick schedule)
+  const [ownIds,     setOwnIds]     = useState<SchedMap>({})
+  const [parentIds,  setParentIds]  = useState<SchedMap>({})
+  const [matOvr,     setMatOvr]     = useState<MatMap>({})  // `${cls}|${role}` → mat_id
+  const [tkOvr,      setTkOvr]      = useState<MatMap>({})  // role → mat_id
+  const [btOvr,      setBtOvr]      = useState<MatMap>({})  // part_role → mat_id or benchtop_material_id
+  const [schedMat,   setSchedMat]   = useState<MatMap>({})  // `${cls}|${role}` → mat_id (from schedules)
+  const [schedTk,    setSchedTk]    = useState<MatMap>({})  // role → mat_id (from toekick schedule)
+  const [schedBt,    setSchedBt]    = useState<MatMap>({})  // part_role → mat_id (from benchtop schedule)
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
 
-      // Load all 9 schedule lists + own row + parent row + overrides + materials catalog in parallel
-      const [listsResults, ownRes, parentRes, matOvrRes, tkOvrRes, matsRes] = await Promise.all([
+      // Load all 9 schedule lists + own row + parent row + overrides + materials catalogs in parallel
+      const [listsResults, ownRes, parentRes, matOvrRes, tkOvrRes, matsRes, btMatsRes, btOvrRes] = await Promise.all([
         Promise.all(SCHED_TYPES.map(st => supabase.from(st.table).select('id, name, is_default').order('name'))),
         mode === 'room' && roomId
           ? supabase.from('rooms').select(ALL_SCHED_COLS).eq('id', roomId).single()
@@ -86,6 +100,10 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props)
           ? supabase.from('room_toekick_materials').select('part_role, material_id').eq('room_id', roomId)
           : supabase.from('job_toekick_materials').select('part_role, material_id').eq('project_id', projectId),
         supabase.from('materials').select('id, name, dz').eq('active', true).order('name'),
+        supabase.from('benchtop_materials').select('id, name, dz, material_type').eq('active', true).order('name'),
+        mode === 'room' && roomId
+          ? supabase.from('room_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('room_id', roomId)
+          : supabase.from('job_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('project_id', projectId),
       ])
 
       if (cancelled) return
@@ -128,12 +146,21 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props)
       setTkOvr(to)
 
       setAllMats(matsRes.data ?? [])
+      setAllBtMats((btMatsRes.data ?? []) as { id: string; name: string; dz: number; material_type: string | null }[])
 
-      // Load schedule rows for effective assembly, toekick, front schedules
+      const bto: MatMap = {}
+      for (const r of (btOvrRes.data ?? []) as { part_role: string; material_id: string | null; benchtop_material_id: string | null }[]) {
+        const matId = r.material_id ?? r.benchtop_material_id
+        if (matId) bto[r.part_role] = matId
+      }
+      setBtOvr(bto)
+
+      // Load schedule rows for effective assembly, toekick, front, benchtop schedules
       const effAsm   = own.assembly   ?? parent.assembly   ?? null
       const effTk    = own.toekick    ?? parent.toekick    ?? null
       const effFront = own.front      ?? parent.front      ?? null
-      await loadScheduleRows(effAsm, effTk, effFront, cancelled)
+      const effBt    = own.benchtop   ?? parent.benchtop   ?? null
+      await loadScheduleRows(effAsm, effTk, effFront, effBt, cancelled)
 
       if (!cancelled) setLoading(false)
     }
@@ -146,12 +173,14 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props)
     asmId: string | null,
     tkId: string | null,
     frontId: string | null,
+    btId: string | null,
     cancelled = false,
   ) {
-    const [asmRows, tkRows, frontRows] = await Promise.all([
-      asmId   ? supabase.from('assembly_schedule_rows').select('assembly_class, material_role, material_id').eq('schedule_id', asmId)   : Promise.resolve({ data: [] }),
-      tkId    ? supabase.from('toekick_schedule_rows').select('part_role, material_id').eq('schedule_id', tkId)                         : Promise.resolve({ data: [] }),
-      frontId ? supabase.from('front_schedule_rows').select('assembly_class, material_id').eq('schedule_id', frontId)                   : Promise.resolve({ data: [] }),
+    const [asmRows, tkRows, frontRows, btRows] = await Promise.all([
+      asmId   ? supabase.from('assembly_schedule_rows').select('assembly_class, material_role, material_id').eq('schedule_id', asmId)                          : Promise.resolve({ data: [] }),
+      tkId    ? supabase.from('toekick_schedule_rows').select('part_role, material_id').eq('schedule_id', tkId)                                                : Promise.resolve({ data: [] }),
+      frontId ? supabase.from('front_schedule_rows').select('assembly_class, material_id').eq('schedule_id', frontId)                                          : Promise.resolve({ data: [] }),
+      btId    ? supabase.from('benchtop_schedule_rows').select('part_role, material_id, benchtop_material_id').eq('schedule_id', btId) : Promise.resolve({ data: [] }),
     ])
     if (cancelled) return
 
@@ -169,6 +198,13 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props)
       st[r.part_role] = r.material_id
     }
     setSchedTk(st)
+
+    const sbt: MatMap = {}
+    for (const r of (btRows.data ?? []) as { part_role: string; material_id: string | null; benchtop_material_id: string | null }[]) {
+      const matId = r.material_id ?? r.benchtop_material_id
+      if (matId) sbt[r.part_role] = matId
+    }
+    setSchedBt(sbt)
   }
 
   // ── Save schedule assignment ───────────────────────────────────────────────
@@ -181,11 +217,12 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props)
     const newOwn = { ...ownIds, [key]: schedId }
     setOwnIds(newOwn)
 
-    if (key === 'assembly' || key === 'toekick' || key === 'front') {
-      const effAsm   = (key === 'assembly' ? schedId : ownIds.assembly)   ?? parentIds.assembly   ?? null
-      const effTk    = (key === 'toekick'  ? schedId : ownIds.toekick)    ?? parentIds.toekick    ?? null
-      const effFront = (key === 'front'    ? schedId : ownIds.front)      ?? parentIds.front      ?? null
-      await loadScheduleRows(effAsm, effTk, effFront)
+    if (key === 'assembly' || key === 'toekick' || key === 'front' || key === 'benchtop') {
+      const effAsm   = (key === 'assembly'  ? schedId : ownIds.assembly)  ?? parentIds.assembly  ?? null
+      const effTk    = (key === 'toekick'   ? schedId : ownIds.toekick)   ?? parentIds.toekick   ?? null
+      const effFront = (key === 'front'     ? schedId : ownIds.front)     ?? parentIds.front     ?? null
+      const effBt    = (key === 'benchtop'  ? schedId : ownIds.benchtop)  ?? parentIds.benchtop  ?? null
+      await loadScheduleRows(effAsm, effTk, effFront, effBt)
     }
   }
 
@@ -244,11 +281,46 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props)
     }
   }
 
+  async function saveBtOverride(role: string, matId: string, source: 'board' | 'benchtop') {
+    const matCol = source === 'benchtop' ? 'benchtop_material_id' : 'material_id'
+    if (mode === 'room' && roomId) {
+      if (matId) {
+        await supabase.from('room_benchtop_materials').upsert(
+          { room_id: roomId, part_role: role, [matCol]: matId },
+          { onConflict: 'room_id,part_role' }
+        )
+        setBtOvr(p => ({ ...p, [role]: matId }))
+      } else {
+        await supabase.from('room_benchtop_materials').delete().eq('room_id', roomId).eq('part_role', role)
+        setBtOvr(p => { const n = { ...p }; delete n[role]; return n })
+      }
+    } else {
+      if (matId) {
+        await supabase.from('job_benchtop_materials').upsert(
+          { project_id: projectId, part_role: role, [matCol]: matId },
+          { onConflict: 'project_id,part_role' }
+        )
+        setBtOvr(p => ({ ...p, [role]: matId }))
+      } else {
+        await supabase.from('job_benchtop_materials').delete().eq('project_id', projectId).eq('part_role', role)
+        setBtOvr(p => { const n = { ...p }; delete n[role]; return n })
+      }
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   function matName(id: string) {
     const m = allMats.find(m => m.id === id)
     return m ? `${m.name} (${m.dz}mm)` : id.slice(0, 8)
+  }
+
+  function btMatName(id: string, source: 'board' | 'benchtop') {
+    if (source === 'benchtop') {
+      const m = allBtMats.find(m => m.id === id)
+      return m ? `${m.name} (${m.dz}mm)` : id.slice(0, 8)
+    }
+    return matName(id)
   }
 
   function inheritedSchedName(key: SchedKey): string {
@@ -389,6 +461,36 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props)
             )
           })}
         </div>
+      </div>
+
+      {/* Benchtop per-role overrides */}
+      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Benchtops</p>
+      <div className="border border-gray-700 rounded overflow-hidden divide-y divide-gray-700/60">
+        {BT_ROLES_CONFIG.map(role => {
+          const cur     = btOvr[role.key] ?? ''
+          const inh     = schedBt[role.key] ?? ''
+          const catalog = role.source === 'benchtop' ? allBtMats : allMats
+          return (
+            <div key={role.key} className="flex items-center gap-3 px-3 py-2 bg-gray-900">
+              <div className="w-36 shrink-0">
+                <p className={`text-xs font-medium ${cur ? 'text-blue-300' : 'text-gray-300'}`}>{role.label}</p>
+                <p className="text-[9px] text-gray-600">{role.desc}</p>
+              </div>
+              <select
+                value={cur}
+                onChange={e => saveBtOverride(role.key, e.target.value, role.source)}
+                className={`flex-1 max-w-xs ${selCls(!!cur)}`}
+              >
+                <option value="">
+                  {inh ? btMatName(inh, role.source) : '— no schedule value —'}
+                </option>
+                {(catalog as { id: string; name: string; dz: number }[]).map(m => (
+                  <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
+                ))}
+              </select>
+            </div>
+          )
+        })}
       </div>
 
       <p className="text-[10px] text-gray-600">Changes save immediately.</p>

@@ -217,7 +217,7 @@ export const DEFAULT_RULES: ConstructionRules = {
 }
 
 // ── Drawer Types ─────────────────────────────────────────────
-export type DrawerType = 'system' | 'five_piece' | 'inner'
+export type DrawerType = 'system' | 'five_piece'
 
 export interface DrawerTypeConfig {
   type: DrawerType
@@ -242,6 +242,7 @@ export interface SlideProduct {
   soft_close:       boolean
   full_extension:   boolean
   cost_per_pair:    number | null
+  colour:           string | null   // hex colour for 3D rendering
 }
 
 // Slide schedule entry: maps a drawer depth range to a specific slide product
@@ -267,24 +268,26 @@ export const DEFAULT_DB_EDGING: Record<DbEdgingKey, EdgeSides> = {
 
 // ── Drawer Box Rules ──────────────────────────────────────────
 export interface DrawerBoxRules {
-  DB_SIDE_T:       number                         // side/front/back panel thickness (mm)
-  DB_BOTTOM_T:     number                         // bottom panel thickness (mm)
-  DB_BOTTOM_JOIN:  'dado' | 'screwed'             // how bottom attaches to sides
-  DB_DADO_HEIGHT:  number                         // dado groove height from bottom face (mm)
-  DB_DADO_DEPTH:   number                         // dado cut depth (mm)
-  DB_BACK_SETBACK: number                         // bottom panel setback from back face (mm)
-  DB_JOINT_TYPE:   'butt' | 'dado' | 'dovetail'  // how front/back connect to sides
-  DB_EDGING?:      DbEdgingDefaults               // per-part edge sides (absent = use DEFAULT_DB_EDGING)
+  DB_SIDE_T:             number                         // side/front/back panel thickness (mm)
+  DB_BOTTOM_T:           number                         // bottom panel thickness (mm)
+  DB_BOTTOM_JOIN:        'dado' | 'screwed'             // how bottom attaches to sides
+  DB_DADO_HEIGHT:        number                         // dado groove height from bottom face (mm)
+  DB_DADO_DEPTH:         number                         // dado cut depth (mm)
+  DB_BACK_SETBACK:       number                         // bottom panel setback from back face (mm)
+  DB_JOINT_TYPE:         'butt' | 'dado' | 'dovetail'  // how front/back connect to sides
+  DB_BACK_HEIGHT_ADJUST: number                         // deducted from slide box_height to get back panel height (mm)
+  DB_EDGING?:            DbEdgingDefaults               // per-part edge sides (absent = use DEFAULT_DB_EDGING)
 }
 
 export const DEFAULT_DB_RULES: DrawerBoxRules = {
-  DB_SIDE_T:       12,
-  DB_BOTTOM_T:     6,
-  DB_BOTTOM_JOIN:  'dado',
-  DB_DADO_HEIGHT:  12,
-  DB_DADO_DEPTH:   8,
-  DB_BACK_SETBACK: 25,
-  DB_JOINT_TYPE:   'butt',
+  DB_SIDE_T:             12,
+  DB_BOTTOM_T:           6,
+  DB_BOTTOM_JOIN:        'dado',
+  DB_DADO_HEIGHT:        12,
+  DB_DADO_DEPTH:         8,
+  DB_BACK_SETBACK:       25,
+  DB_JOINT_TYPE:         'butt',
+  DB_BACK_HEIGHT_ADJUST: 0,
 }
 
 // ── Drawer Box Input ──────────────────────────────────────────
@@ -297,6 +300,7 @@ export interface DrawerBoxInput {
   bottom_material?:  Material  // if omitted, falls back to material
   bottom_edgeband_id?: string
   rules:             DrawerBoxRules
+  slide_box_height?: number   // slide product box_height — when provided, drives back panel height
 }
 
 // ── Resolved Drawer Box Part ──────────────────────────────────
@@ -352,6 +356,9 @@ export interface CabinetInput {
 
   // Slide hardware (for inner drawers — legacy scalar, kept for fallback)
   slide_side_deduction: number
+
+  // Default drawer type for this job (project-level, overridable per face zone)
+  default_drawer_type?: DrawerType
 
   // Drawer box construction
   drawer_material?:   Material          // drawer box panels (e.g. 12mm HMR)
@@ -501,13 +508,14 @@ export interface ResolvedDrawerSlide {
   Z: number   // back face of slide (= back of cabinet for most cases)
   // Dimensions (resolver convention)
   DX: number  // nominal_length — slide runs depth-wise (cabinet Z direction)
-  DY: number  // 30mm — height of the slide channel (cabinet Y direction)
+  DY: number  // box_height — height of the slide channel (cabinet Y direction)
   DZ: number  // runner_thickness — sits against gable face (cabinet X direction)
   // Source
   slide_id:         string
   nominal_length:   number
   box_height:       number
   runner_thickness: number
+  colour:           string | null
 }
 
 export interface ResolvedDrawerStack {

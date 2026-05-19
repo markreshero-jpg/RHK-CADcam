@@ -1,6 +1,6 @@
 'use client'
-import { Fragment, useState } from 'react'
-import { Wall, CabinetInstance, DEFAULT_DIMS } from '@/src/lib/types'
+import React, { Fragment, useState } from 'react'
+import { Wall, CabinetInstance, DEFAULT_DIMS, BenchtopInstance, BenchtopArcSegment } from '@/src/lib/types'
 import {
   Pt, MIN_WALL_LEN, SNAP_PX, CAB_FILL, CAB_FILL_SEL,
   toRad, toDeg, dist,
@@ -11,6 +11,21 @@ import {
 import WallDimensionChain from './WallDimensionChain'
 import { Mode, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, modeAssemblyClass, DisplayConfig } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
+
+function buildBenchtopPath(pts: Array<{ x: number; y: number }>, arcs: BenchtopArcSegment[]): string {
+  if (pts.length < 2) return ''
+  let d = `M ${pts[0].x} ${pts[0].y}`
+  for (let i = 0; i < pts.length; i++) {
+    const next = pts[(i + 1) % pts.length]
+    const arc = arcs.find(a => a.edge_index === i)
+    if (arc) {
+      d += ` Q ${arc.cpx} ${arc.cpy} ${next.x} ${next.y}`
+    } else {
+      d += ` L ${next.x} ${next.y}`
+    }
+  }
+  return d + ' Z'
+}
 
 interface CanvasSVGProps {
   displayConfig: DisplayConfig
@@ -46,6 +61,24 @@ interface CanvasSVGProps {
   onCabMarkerClick: (e: React.MouseEvent, cab: CabinetInstance, side: 'left' | 'right' | 'front', wall: Wall, perp: Pt) => void
   cabFollowing: { id: string } | null
   onSVGClick: (e: React.MouseEvent) => void
+  // Benchtop drawing
+  benchtops: BenchtopInstance[]
+  selectedBenchtopId: string | null
+  btDrawPoly: Pt[]
+  btDrawCursor: Pt | null
+  onBenchtopClick: (id: string) => void
+  onBenchtopEdgeClick: (id: string, edgeIndex: number) => void
+  onBenchtopVertexClick: (id: string, vertexIndex: number) => void
+  onBenchtopVertexPointerDown: (e: React.PointerEvent, btId: string, vi: number) => void
+  onBenchtopEdgeShiftClick: (id: string, edgeIndex: number) => void
+  onBenchtopEdgeAltClick: (id: string, edgeIndex: number) => void
+  onBenchtopArcPointerDown: (e: React.PointerEvent, btId: string, edgeIndex: number) => void
+  onBtUndoVertex: () => void
+  btDrawArcs: BenchtopArcSegment[]
+  btArcMode: boolean
+  btArcMidpoint: Pt | null
+  btRectStart: Pt | null
+  btRectCursor: Pt | null
 }
 
 export default function CanvasSVG({
@@ -54,6 +87,9 @@ export default function CanvasSVG({
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
   setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
   onCabMarkerClick, cabFollowing, onSVGClick,
+  benchtops, selectedBenchtopId, btDrawPoly, btDrawCursor, onBenchtopClick, onBenchtopEdgeClick, onBenchtopVertexClick,
+  onBenchtopVertexPointerDown, onBenchtopEdgeShiftClick, onBenchtopEdgeAltClick, onBenchtopArcPointerDown, onBtUndoVertex,
+  btDrawArcs, btArcMode, btArcMidpoint, btRectStart, btRectCursor,
 }: CanvasSVGProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
@@ -80,6 +116,7 @@ export default function CanvasSVG({
       onContextMenu={e => {
         e.preventDefault()
         if (mode === 'draw_wall' || mode === 'draw_island') onCancelDraw()
+        if (mode === 'draw_benchtop') onBtUndoVertex()
       }}
     >
       <g transform={`translate(${view.panX},${view.panY}) scale(${view.zoom})`}>
@@ -88,6 +125,328 @@ export default function CanvasSVG({
 
         <line x1={-30 / view.zoom} y1={0} x2={30 / view.zoom} y2={0} stroke="#374151" strokeWidth={1 / view.zoom} />
         <line x1={0} y1={-30 / view.zoom} x2={0} y2={30 / view.zoom} stroke="#374151" strokeWidth={1 / view.zoom} />
+
+        {/* ── Benchtop instances ── rendered below walls so cabinets/walls sit on top */}
+        {benchtops.map(bt => {
+          const pts = bt.polygon
+          if (pts.length < 2) return null
+          const isSel = bt.id === selectedBenchtopId
+          const arcs = bt.arc_segments ?? []
+          const bcx = pts.reduce((s, p) => s + p.x, 0) / pts.length
+          const bcy = pts.reduce((s, p) => s + p.y, 0) / pts.length
+          const vr = 5 / view.zoom
+          const er = 6 / view.zoom
+
+          return (
+            <Fragment key={bt.id}>
+              {/* Fill + border */}
+              <path
+                d={buildBenchtopPath(pts, arcs)}
+                fill={isSel ? 'rgba(20,184,166,0.22)' : 'rgba(20,184,166,0.10)'}
+                stroke={isSel ? '#f59e0b' : '#0d9488'}
+                strokeWidth={(isSel ? 2 : 1.5) / view.zoom}
+                onPointerDown={e => e.stopPropagation()}
+                onClick={e => { e.stopPropagation(); onBenchtopClick(bt.id) }}
+                style={{ cursor: mode === 'select' ? 'pointer' : undefined }}
+              />
+
+              {/* Label */}
+              <text x={bcx} y={bcy} textAnchor="middle" dominantBaseline="middle"
+                fontSize={11 / view.zoom} fill={isSel ? '#fcd34d' : '#5eead4'}
+                style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                {bt.label ?? '—'}
+              </text>
+
+              {/* Edge midpoint handles — W/E/A label, shift=insert vertex, alt=toggle arc */}
+              {pts.map((p, i) => {
+                const next = pts[(i + 1) % pts.length]
+                const arcSeg = arcs.find(a => a.edge_index === i)
+                const isArcEdge = !!arcSeg
+                const mx = arcSeg ? 0.25 * p.x + 0.5 * arcSeg.cpx + 0.25 * next.x : (p.x + next.x) / 2
+                const my = arcSeg ? 0.25 * p.y + 0.5 * arcSeg.cpy + 0.25 * next.y : (p.y + next.y) / 2
+                const isWallEdge = bt.edge_tags.some(t => t.edge_index === i && t.type === 'wall')
+                const hFill = isArcEdge ? '#7c3aed' : isWallEdge ? '#6b7280' : '#0d9488'
+                const hStroke = isArcEdge ? '#a78bfa' : isWallEdge ? '#9ca3af' : '#14b8a6'
+                const hLabel = isArcEdge ? 'A' : isWallEdge ? 'W' : 'E'
+                const hTextFill = isArcEdge ? '#e9d5ff' : isWallEdge ? '#d1d5db' : '#ccfbf1'
+                if (isSel) {
+                  const ew = er * 2, eh = er * 2
+                  return (
+                    <g key={`e${i}`}>
+                      <rect
+                        x={mx - er} y={my - er} width={ew} height={eh}
+                        rx={isArcEdge ? er : 1.5 / view.zoom}
+                        fill={hFill} stroke={hStroke} strokeWidth={1 / view.zoom}
+                        onClick={e => {
+                          e.stopPropagation()
+                          if (e.shiftKey) onBenchtopEdgeShiftClick(bt.id, i)
+                          else if (e.altKey) onBenchtopEdgeAltClick(bt.id, i)
+                          else onBenchtopEdgeClick(bt.id, i)
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <title>{isArcEdge
+                          ? 'Arc edge · click to toggle wall/exposed · Alt-click to make straight · Shift-click to insert vertex'
+                          : isWallEdge
+                            ? 'Wall edge · click to set exposed · Alt-click to arc · Shift-click to insert vertex'
+                            : 'Exposed edge · click to set wall · Alt-click to arc · Shift-click to insert vertex'}</title>
+                      </rect>
+                      <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle"
+                        fontSize={er * 1.1} fill={hTextFill}
+                        style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                        {hLabel}
+                      </text>
+                    </g>
+                  )
+                } else {
+                  return (
+                    <circle key={`edot${i}`} cx={mx} cy={my} r={2.5 / view.zoom}
+                      fill={hFill} style={{ pointerEvents: 'none' }} />
+                  )
+                }
+              })}
+
+              {/* Edge length labels when selected */}
+              {isSel && pts.map((p, i) => {
+                const next = pts[(i + 1) % pts.length]
+                const arcSeg = arcs.find(a => a.edge_index === i)
+                const len = Math.round(Math.sqrt((next.x - p.x) ** 2 + (next.y - p.y) ** 2))
+                const mx = arcSeg ? 0.25 * p.x + 0.5 * arcSeg.cpx + 0.25 * next.x : (p.x + next.x) / 2
+                const my = arcSeg ? 0.25 * p.y + 0.5 * arcSeg.cpy + 0.25 * next.y : (p.y + next.y) / 2
+                const ex = next.x - p.x, ey = next.y - p.y
+                const el = Math.sqrt(ex * ex + ey * ey)
+                if (el < 1) return null
+                const nx = -ey / el, ny = ex / el
+                const outward = (nx * (mx - bcx) + ny * (my - bcy)) >= 0 ? 1 : -1
+                const off = 18 / view.zoom
+                return (
+                  <text
+                    key={`len${i}`}
+                    x={mx + nx * outward * off} y={my + ny * outward * off}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fontSize={9 / view.zoom} fill={arcSeg ? '#c4b5fd' : '#94a3b8'}
+                    style={{ userSelect: 'none', pointerEvents: 'none' }}
+                  >
+                    {arcSeg ? `~${len}` : len}
+                  </text>
+                )
+              })}
+
+              {/* Vertex handles when selected — draggable */}
+              {isSel && pts.map((p, i) => {
+                const isMitre = bt.join_types.some(j => j.vertex_index === i && j.join_type === 'mitre')
+                return isMitre ? (
+                  <g key={`v${i}`}>
+                    <polygon
+                      points={`${p.x},${p.y - vr * 1.5} ${p.x + vr * 1.5},${p.y} ${p.x},${p.y + vr * 1.5} ${p.x - vr * 1.5},${p.y}`}
+                      fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom}
+                      onPointerDown={e => { e.stopPropagation(); onBenchtopVertexPointerDown(e, bt.id, i) }}
+                      style={{ cursor: 'grab' }}
+                    >
+                      <title>Mitre join — drag to reshape · click to set butt</title>
+                    </polygon>
+                  </g>
+                ) : (
+                  <g key={`v${i}`}>
+                    <circle
+                      cx={p.x} cy={p.y} r={vr}
+                      fill="#14b8a6" stroke="#111827" strokeWidth={1 / view.zoom}
+                      onPointerDown={e => { e.stopPropagation(); onBenchtopVertexPointerDown(e, bt.id, i) }}
+                      style={{ cursor: 'grab' }}
+                    >
+                      <title>Butt join — drag to reshape · click to set mitre</title>
+                    </circle>
+                  </g>
+                )
+              })}
+
+              {/* Arc control point handles — draggable purple diamonds */}
+              {isSel && arcs.map(arc => {
+                const p0 = pts[arc.edge_index]
+                const p1 = pts[(arc.edge_index + 1) % pts.length]
+                if (!p0 || !p1) return null
+                const dr = 4.5 / view.zoom
+                const smx = (p0.x + p1.x) / 2
+                const smy = (p0.y + p1.y) / 2
+                return (
+                  <g key={`acp${arc.edge_index}`}>
+                    <line x1={smx} y1={smy} x2={arc.cpx} y2={arc.cpy}
+                      stroke="#a855f7" strokeWidth={0.75 / view.zoom}
+                      strokeDasharray={`${3 / view.zoom} ${2 / view.zoom}`}
+                      style={{ pointerEvents: 'none' }} />
+                    <polygon
+                      points={`${arc.cpx},${arc.cpy - dr * 1.5} ${arc.cpx + dr * 1.5},${arc.cpy} ${arc.cpx},${arc.cpy + dr * 1.5} ${arc.cpx - dr * 1.5},${arc.cpy}`}
+                      fill="#a855f7" stroke="#111827" strokeWidth={0.75 / view.zoom}
+                      onPointerDown={e => { e.stopPropagation(); onBenchtopArcPointerDown(e, bt.id, arc.edge_index) }}
+                      style={{ cursor: 'grab' }}
+                    >
+                      <title>Arc control point — drag to reshape curve</title>
+                    </polygon>
+                  </g>
+                )
+              })}
+            </Fragment>
+          )
+        })}
+
+        {/* ── In-progress benchtop polygon ── */}
+        {mode === 'draw_benchtop' && (() => {
+          const snapDist = SNAP_PX / view.zoom
+          const nearClose = btDrawPoly.length >= 3 && btDrawCursor != null && dist(btDrawCursor, btDrawPoly[0]) < snapDist
+          const last = btDrawPoly.length > 0 ? btDrawPoly[btDrawPoly.length - 1] : null
+          const segLen = last && btDrawCursor ? Math.round(dist(last, btDrawCursor)) : 0
+          const segAngle = last && btDrawCursor ? Math.round(toDeg(Math.atan2(btDrawCursor.y - last.y, btDrawCursor.x - last.x))) : 0
+          const labelFs = 10 / view.zoom
+          const labelPad = 6 / view.zoom
+
+          // Arc preview: if btArcMidpoint set, compute bezier CP and show curve
+          const showArcPreview = btArcMode && btArcMidpoint != null && last != null && btDrawCursor != null
+          const arcCpx = showArcPreview ? 2 * btArcMidpoint!.x - (last!.x + btDrawCursor!.x) / 2 : 0
+          const arcCpy = showArcPreview ? 2 * btArcMidpoint!.y - (last!.y + btDrawCursor!.y) / 2 : 0
+
+          return (
+            <Fragment>
+              {/* Committed segments (including any arc segments already placed) */}
+              {btDrawPoly.length >= 2 && (() => {
+                let d = `M ${btDrawPoly[0].x} ${btDrawPoly[0].y}`
+                for (let i = 0; i < btDrawPoly.length - 1; i++) {
+                  const next = btDrawPoly[i + 1]
+                  const arc = btDrawArcs.find(a => a.edge_index === i)
+                  d += arc ? ` Q ${arc.cpx} ${arc.cpy} ${next.x} ${next.y}` : ` L ${next.x} ${next.y}`
+                }
+                return (
+                  <path d={d} fill="none" stroke="#14b8a6"
+                    strokeWidth={1.5 / view.zoom}
+                    strokeDasharray={`${8 / view.zoom} ${4 / view.zoom}`}
+                    style={{ pointerEvents: 'none' }}
+                  />
+                )
+              })()}
+
+              {/* Live segment/arc to cursor */}
+              {last && btDrawCursor && !nearClose && !showArcPreview && (
+                <line
+                  x1={last.x} y1={last.y}
+                  x2={btDrawCursor.x} y2={btDrawCursor.y}
+                  stroke={btArcMode ? '#a855f7' : '#14b8a6'} strokeWidth={1.5 / view.zoom}
+                  strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`}
+                  style={{ pointerEvents: 'none' }}
+                />
+              )}
+
+              {/* Arc curve preview when midpoint is placed */}
+              {showArcPreview && (
+                <path
+                  d={`M ${last!.x} ${last!.y} Q ${arcCpx} ${arcCpy} ${btDrawCursor!.x} ${btDrawCursor!.y}`}
+                  fill="none" stroke="#a855f7" strokeWidth={1.5 / view.zoom}
+                  strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`}
+                  style={{ pointerEvents: 'none' }}
+                />
+              )}
+
+              {/* Arc midpoint dot */}
+              {btArcMidpoint && (
+                <circle cx={btArcMidpoint.x} cy={btArcMidpoint.y} r={3.5 / view.zoom}
+                  fill="#a855f7" stroke="#111827" strokeWidth={1 / view.zoom}
+                  style={{ pointerEvents: 'none' }}
+                />
+              )}
+
+              {/* Snap ring on first vertex when close enough to close */}
+              {nearClose && (
+                <circle
+                  cx={btDrawPoly[0].x} cy={btDrawPoly[0].y}
+                  r={snapDist}
+                  fill="rgba(20,184,166,0.25)" stroke="#14b8a6"
+                  strokeWidth={1.5 / view.zoom}
+                  style={{ pointerEvents: 'none' }}
+                />
+              )}
+              {/* Placed vertex dots */}
+              {btDrawPoly.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={4 / view.zoom}
+                  fill={i === 0 ? '#14b8a6' : '#e5e7eb'}
+                  stroke="#0d9488" strokeWidth={1 / view.zoom}
+                  style={{ pointerEvents: 'none' }}
+                />
+              ))}
+              {/* Cursor dot — purple in arc mode */}
+              {btDrawCursor && !nearClose && (
+                <circle cx={btDrawCursor.x} cy={btDrawCursor.y} r={3 / view.zoom}
+                  fill={btArcMode ? '#a855f7' : '#f59e0b'} stroke="#111827" strokeWidth={1 / view.zoom}
+                  style={{ pointerEvents: 'none' }}
+                />
+              )}
+              {/* Arc mode badge near cursor */}
+              {btArcMode && btDrawCursor && !nearClose && (
+                <text x={btDrawCursor.x + 8 / view.zoom} y={btDrawCursor.y - 8 / view.zoom}
+                  fontSize={8 / view.zoom} fill="#a855f7"
+                  style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                  {btArcMidpoint ? 'arc→end' : 'arc mid'}
+                </text>
+              )}
+              {/* Segment length + angle readout near cursor */}
+              {last && btDrawCursor && segLen > 0 && !nearClose && !btArcMode && (
+                <g style={{ pointerEvents: 'none' }}>
+                  <rect
+                    x={btDrawCursor.x + labelPad} y={btDrawCursor.y - labelFs * 1.5 - labelPad}
+                    width={labelFs * 5.5} height={labelFs * 3 + labelPad}
+                    rx={2 / view.zoom}
+                    fill="rgba(17,24,39,0.85)" stroke="#374151" strokeWidth={0.5 / view.zoom}
+                  />
+                  <text x={btDrawCursor.x + labelPad * 2} y={btDrawCursor.y - labelFs * 0.5}
+                    fontSize={labelFs} fill="#f3f4f6"
+                    style={{ userSelect: 'none' }}>
+                    {segLen}mm
+                  </text>
+                  <text x={btDrawCursor.x + labelPad * 2} y={btDrawCursor.y + labelFs * 0.8}
+                    fontSize={labelFs * 0.85} fill="#9ca3af"
+                    style={{ userSelect: 'none' }}>
+                    {segAngle < 0 ? segAngle + 360 : segAngle}°
+                  </text>
+                </g>
+              )}
+            </Fragment>
+          )
+        })()}
+
+        {/* ── In-progress rectangle benchtop ── */}
+        {mode === 'draw_benchtop_rect' && (() => {
+          if (!btRectStart) return null
+          if (btRectCursor) {
+            const rx = Math.min(btRectStart.x, btRectCursor.x)
+            const ry = Math.min(btRectStart.y, btRectCursor.y)
+            const rw = Math.abs(btRectCursor.x - btRectStart.x)
+            const rh = Math.abs(btRectCursor.y - btRectStart.y)
+            return (
+              <Fragment>
+                <rect x={rx} y={ry} width={rw} height={rh}
+                  fill="rgba(20,184,166,0.12)" stroke="#14b8a6"
+                  strokeWidth={1.5 / view.zoom}
+                  strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+                  style={{ pointerEvents: 'none' }} />
+                {rw > 20 / view.zoom && rh > 12 / view.zoom && (
+                  <text x={rx + rw / 2} y={ry + rh / 2} textAnchor="middle" dominantBaseline="middle"
+                    fontSize={10 / view.zoom} fill="#5eead4"
+                    style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                    {Math.round(rw)}×{Math.round(rh)}
+                  </text>
+                )}
+                <circle cx={btRectStart.x} cy={btRectStart.y} r={4 / view.zoom}
+                  fill="#14b8a6" stroke="#111827" strokeWidth={1 / view.zoom}
+                  style={{ pointerEvents: 'none' }} />
+                <circle cx={btRectCursor.x} cy={btRectCursor.y} r={3 / view.zoom}
+                  fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom}
+                  style={{ pointerEvents: 'none' }} />
+              </Fragment>
+            )
+          }
+          return (
+            <circle cx={btRectStart.x} cy={btRectStart.y} r={4 / view.zoom}
+              fill="#14b8a6" stroke="#111827" strokeWidth={1 / view.zoom}
+              style={{ pointerEvents: 'none' }} />
+          )
+        })()}
 
         {/* ── Walls ── */}
         {walls.map(w => {
