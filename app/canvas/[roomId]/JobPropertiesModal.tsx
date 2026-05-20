@@ -114,10 +114,14 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const [drawerBoxMethods,    setDrawerBoxMethods]    = useState<SchedItem[]>([])
 
   // ── Material schedules (per zone) ─────────────────────────────────────────
-  const [baseAsmSched, setBaseAsmSched] = useState(project.base_assembly_schedule_id ?? '')
-  const [wallAsmSched, setWallAsmSched] = useState(project.wall_assembly_schedule_id ?? '')
-  const [tallAsmSched, setTallAsmSched] = useState(project.tall_assembly_schedule_id ?? '')
-  const [asmSchedules,  setAsmSchedules]  = useState<SchedItem[]>([])
+  const [baseAsmSched,      setBaseAsmSched]      = useState(project.base_assembly_schedule_id ?? '')
+  const [wallAsmSched,      setWallAsmSched]      = useState(project.wall_assembly_schedule_id ?? '')
+  const [tallAsmSched,      setTallAsmSched]      = useState(project.tall_assembly_schedule_id ?? '')
+  const [drawerBoxSched,    setDrawerBoxSched]    = useState(project.drawerbox_schedule_id ?? '')
+  const [innerDbSched,      setInnerDbSched]      = useState(project.inner_drawerbox_schedule_id ?? '')
+  const [asmSchedules,        setAsmSchedules]        = useState<SchedItem[]>([])
+  const [drawerBoxScheds,     setDrawerBoxScheds]     = useState<SchedItem[]>([])
+  const [innerDrawerBoxScheds, setInnerDrawerBoxScheds] = useState<SchedItem[]>([])
 
   // ── Hardware schedules ────────────────────────────────────────────────────
   const [handleSched, setHandleSched] = useState(project.handle_schedule_id ?? '')
@@ -133,21 +137,25 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
     let cancelled = false
     async function load() {
       setSchedLoading(true)
-      const [cmsR, dbmR, asmR, hdlR, slR, hiR] = await Promise.all([
+      const [cmsR, dbmR, asmR, hdlR, slR, hiR, dbsR, idbsR] = await Promise.all([
         supabase.from('construction_method_schedules').select('id,name,is_default').order('name'),
         supabase.from('drawer_box_methods').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('assembly_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('handle_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('slide_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('hinge_schedules').select('id,name,is_default').eq('active', true).order('name'),
+        supabase.from('drawerbox_schedules').select('id,name,is_default').eq('active', true).order('name'),
+        supabase.from('inner_drawerbox_schedules').select('id,name,is_default').eq('active', true).order('name'),
       ])
       if (cancelled) return
-      setConstructionScheds((cmsR.data ?? []) as SchedItem[])
-      setDrawerBoxMethods(  (dbmR.data ?? []) as SchedItem[])
-      setAsmSchedules(      (asmR.data ?? []) as SchedItem[])
-      setHandleScheds(      (hdlR.data ?? []) as SchedItem[])
-      setSlideScheds(       (slR.data  ?? []) as SchedItem[])
-      setHingeScheds(       (hiR.data  ?? []) as SchedItem[])
+      setConstructionScheds(    (cmsR.data  ?? []) as SchedItem[])
+      setDrawerBoxMethods(      (dbmR.data  ?? []) as SchedItem[])
+      setAsmSchedules(          (asmR.data  ?? []) as SchedItem[])
+      setHandleScheds(          (hdlR.data  ?? []) as SchedItem[])
+      setSlideScheds(           (slR.data   ?? []) as SchedItem[])
+      setHingeScheds(           (hiR.data   ?? []) as SchedItem[])
+      setDrawerBoxScheds(       (dbsR.data  ?? []) as SchedItem[])
+      setInnerDrawerBoxScheds(  (idbsR.data ?? []) as SchedItem[])
       setSchedLoading(false)
     }
     load()
@@ -190,9 +198,11 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       construction_schedule_id: constructionSched || null,
       drawer_box_method_id:     drawerBoxMethod  || null,
       default_drawer_type:      (defaultDrawerType || null) as 'system' | 'five_piece' | null,
-      base_assembly_schedule_id: baseAsmSched || null,
-      wall_assembly_schedule_id: wallAsmSched || null,
-      tall_assembly_schedule_id: tallAsmSched || null,
+      base_assembly_schedule_id:  baseAsmSched   || null,
+      wall_assembly_schedule_id:  wallAsmSched   || null,
+      tall_assembly_schedule_id:  tallAsmSched   || null,
+      drawerbox_schedule_id:      drawerBoxSched || null,
+      inner_drawerbox_schedule_id: innerDbSched  || null,
       handle_schedule_id: handleSched || null,
       slide_schedule_id:  slideSched  || null,
       hinge_schedule_id:  hingeSched  || null,
@@ -407,35 +417,47 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
               {/* Material Schedules */}
               {csTab === 'materials' && (
                 <div className="space-y-5">
-                  <p className="text-xs text-gray-500">
-                    Assign an assembly material schedule per cabinet class. Leave blank to inherit the shop default.
-                  </p>
                   {schedLoading ? (
                     <p className="text-xs text-gray-500">Loading schedules…</p>
                   ) : (
-                    <div className="space-y-3">
-                      {([
-                        { label: 'Base', value: baseAsmSched, set: setBaseAsmSched },
-                        { label: 'Wall', value: wallAsmSched, set: setWallAsmSched },
-                        { label: 'Tall', value: tallAsmSched, set: setTallAsmSched },
-                      ] as const).map(zone => (
-                        <div key={zone.label} className="flex items-center gap-4">
-                          <span className="w-10 shrink-0 text-xs font-medium text-gray-300">{zone.label}</span>
-                          <select
-                            value={zone.value}
-                            onChange={e => zone.set(e.target.value)}
-                            className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                          >
-                            <option value="">— shop default —</option>
-                            {asmSchedules.map(s => (
-                              <option key={s.id} value={s.id}>
-                                {s.name}{s.is_default ? ' (default)' : ''}
-                              </option>
-                            ))}
-                          </select>
+                    <>
+                      <section>
+                        <SectionHead>Assembly Schedules</SectionHead>
+                        <p className="text-xs text-gray-500 mb-3">Per cabinet class. Leave blank to inherit the shop default.</p>
+                        <div className="space-y-3">
+                          {([
+                            { label: 'Base', value: baseAsmSched, set: setBaseAsmSched },
+                            { label: 'Wall', value: wallAsmSched, set: setWallAsmSched },
+                            { label: 'Tall', value: tallAsmSched, set: setTallAsmSched },
+                          ] as const).map(zone => (
+                            <div key={zone.label} className="flex items-center gap-4">
+                              <span className="w-10 shrink-0 text-xs font-medium text-gray-300">{zone.label}</span>
+                              <select
+                                value={zone.value}
+                                onChange={e => zone.set(e.target.value)}
+                                className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                              >
+                                <option value="">— shop default —</option>
+                                {asmSchedules.map(s => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.name}{s.is_default ? ' (default)' : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </section>
+
+                      <section>
+                        <SectionHead>Drawer Box Schedules</SectionHead>
+                        <p className="text-xs text-gray-500 mb-3">Leave blank to inherit the shop default.</p>
+                        <div className="space-y-3">
+                          <SchedPicker label="Drawer Box"       value={drawerBoxSched} onChange={setDrawerBoxSched} items={drawerBoxScheds}      />
+                          <SchedPicker label="Inner Drawer Box" value={innerDbSched}   onChange={setInnerDbSched}   items={innerDrawerBoxScheds} />
+                        </div>
+                      </section>
+                    </>
                   )}
                 </div>
               )}
@@ -533,7 +555,7 @@ function SchedPicker({ label, value, onChange, items }: {
 }) {
   return (
     <div className="flex items-center gap-4">
-      <span className="w-16 shrink-0 text-xs font-medium text-gray-300">{label}</span>
+      <span className="w-32 shrink-0 text-xs font-medium text-gray-300">{label}</span>
       <select
         value={value}
         onChange={e => onChange(e.target.value)}

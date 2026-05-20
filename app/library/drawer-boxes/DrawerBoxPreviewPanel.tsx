@@ -270,8 +270,8 @@ function DbFrontView({ parts, W, H, mat, slide, casinetW, isSystem }: { parts: R
   const runnerH = isSystem ? H : SLIDE_H
   const showCarcase = casinetW !== undefined && casinetW > W
   const halfDed = showCarcase ? (casinetW - W) / 2 : 0
-  // pt must leave room for: carcase dim (+ 40px label) and box dim (+ 28px label) above box
-  const pl = 80, pt = showCarcase ? 115 : 80, pr = 40, pb = 40
+  // pl must leave room for the height dim label (anchor-end, ~70 svg units wide) to the left of the box
+  const pl = 150, pt = showCarcase ? 130 : 100, pr = 40, pb = 40
   const vw = W + pl + pr
   const vh = H + pt + pb
   const ox = pl, oy = pt

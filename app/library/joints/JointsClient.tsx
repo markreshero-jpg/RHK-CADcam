@@ -4,12 +4,13 @@ import { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import JointPreviewPanel from './JointPreviewPanel'
-import type { JointOp3D } from './JointPreviewPanel'
+import type { JointOpForPreview } from './JointPreviewPanel'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type TargetPart      = 'part_a' | 'part_b'
 type MachineOp       = 'drill' | 'route' | 'pocket' | 'saw'
+type FaceType        = 'normal' | 'end' | 'top' | 'bottom'
 type FastenerType    = 'screw' | 'bolt' | 'dowel' | 'cam_lock' | 'biscuit' | 'staple' | 'bracket' | 'other'
 type Tab             = 'joints' | 'fasteners'
 
@@ -25,12 +26,17 @@ interface JointTypeOperation {
   operation_order:   number
   target_part:       TargetPart
   machine_operation: MachineOp
+  face:              FaceType
   tool_diameter_mm:  number
   depth_mm:          number
   offset_x_mm:       number
   offset_y_mm:       number
   offset_z_mm:       number
+  qty:               number
+  spacing_mm:        number | null
+  tool:              string | null
   notes:             string | null
+  expressions:       Record<string, string> | null
 }
 
 interface Fastener {
@@ -60,6 +66,13 @@ const MACHINE_OPS: { value: MachineOp; label: string }[] = [
   { value: 'saw',    label: 'Saw' },
 ]
 
+const FACE_TYPES: { value: FaceType; label: string }[] = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'end',    label: 'End' },
+  { value: 'top',    label: 'Top' },
+  { value: 'bottom', label: 'Bottom' },
+]
+
 const FASTENER_TYPES: { value: FastenerType; label: string }[] = [
   { value: 'screw',    label: 'Screw' },
   { value: 'bolt',     label: 'Bolt' },
@@ -80,12 +93,17 @@ const OP_DEFAULTS: Omit<JointTypeOperation, 'id' | 'joint_type_id'> = {
   operation_order:   1,
   target_part:       'part_a',
   machine_operation: 'drill',
+  face:              'normal',
   tool_diameter_mm:  8,
   depth_mm:          15,
   offset_x_mm:       0,
   offset_y_mm:       0,
   offset_z_mm:       0,
+  qty:               1,
+  spacing_mm:        null,
+  tool:              null,
   notes:             null,
+  expressions:       null,
 }
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -101,12 +119,17 @@ function toOp(r: Record<string, unknown>): JointTypeOperation {
     operation_order:   r.operation_order as number,
     target_part:       r.target_part as TargetPart,
     machine_operation: r.machine_operation as MachineOp,
+    face:              (r.face as FaceType) ?? 'normal',
     tool_diameter_mm:  r.tool_diameter_mm as number,
     depth_mm:          r.depth_mm as number,
     offset_x_mm:       (r.offset_x_mm as number) ?? 0,
     offset_y_mm:       (r.offset_y_mm as number) ?? 0,
     offset_z_mm:       (r.offset_z_mm as number) ?? 0,
+    qty:               (r.qty as number) ?? 1,
+    spacing_mm:        (r.spacing_mm as number | null) ?? null,
+    tool:              (r.tool as string | null) ?? null,
     notes:             (r.notes as string | null) ?? null,
+    expressions:       (r.expressions as Record<string, string> | null) ?? null,
   }
 }
 
@@ -143,6 +166,7 @@ export default function JointsClient({
   const [saving,    setSaving]    = useState(false)
   const [nameDirty, setNameDirty] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [selOpId,   setSelOpId]   = useState<string | null>(null)
 
   // ── Load ─────────────────────────────────────────────────────────────────
 
@@ -169,8 +193,9 @@ export default function JointsClient({
     if (embedded) { reloadJoints(); reloadFasteners() }
   }, [embedded, reloadJoints, reloadFasteners])
 
-  // When selection changes, load ops
+  // When selection changes, load ops and clear selected op
   useEffect(() => {
+    setSelOpId(null)
     if (isNew || !selId) { setOps([]); return }
     loadOps(selId)
   }, [selId, isNew, loadOps])
@@ -244,11 +269,22 @@ export default function JointsClient({
   }
 
   async function patchOp(id: string, key: keyof JointTypeOperation, raw: string | number) {
-    const numKeys: (keyof JointTypeOperation)[] = ['operation_order','tool_diameter_mm','depth_mm','offset_x_mm','offset_y_mm','offset_z_mm']
+    const numKeys: (keyof JointTypeOperation)[] = ['operation_order','tool_diameter_mm','depth_mm','offset_x_mm','offset_y_mm','offset_z_mm','qty','spacing_mm']
     const val = numKeys.includes(key) ? parseFloat(raw as string) : raw
     if (numKeys.includes(key) && isNaN(val as number)) return
     await supabase.from('joint_type_operations').update({ [key]: val }).eq('id', id)
     setOps(prev => prev.map(o => o.id === id ? { ...o, [key]: val } : o))
+  }
+
+  async function patchExpr(opId: string, field: string, expr: string | null) {
+    const op = ops.find(o => o.id === opId)
+    if (!op) return
+    const exprs = { ...(op.expressions ?? {}) }
+    if (expr && expr.trim()) exprs[field] = expr.trim()
+    else delete exprs[field]
+    const expressions = Object.keys(exprs).length ? exprs : null
+    await supabase.from('joint_type_operations').update({ expressions }).eq('id', opId)
+    setOps(prev => prev.map(o => o.id === opId ? { ...o, expressions } : o))
   }
 
   async function deleteOp(id: string) {
@@ -390,7 +426,8 @@ export default function JointsClient({
                   {/* Operations */}
                   {!isNew && (
                     <Section label="Operations" sublabel="The individual machine operations that make up this joint. Each operation targets either the Master or Slave part.">
-                      <OpsTable ops={ops} onPatch={patchOp} onDelete={deleteOp} onAdd={addOp} />
+                      <OpsTable ops={ops} onPatch={patchOp} onPatchExpr={patchExpr} onDelete={deleteOp} onAdd={addOp}
+                        selOpId={selOpId} onSelOpChange={setSelOpId} />
                     </Section>
                   )}
 
@@ -405,7 +442,9 @@ export default function JointsClient({
             {/* ── Right: preview panel (only when editing a saved joint) ── */}
             {selId && !isNew && (
               <JointPreviewPanel
-                ops={ops.map((op): JointOp3D => ({
+                selOpId={selOpId}
+                ops={ops.map((op): JointOpForPreview => ({
+                  id:                op.id,
                   operation_order:   op.operation_order,
                   target_part:       op.target_part,
                   machine_operation: op.machine_operation,
@@ -414,6 +453,7 @@ export default function JointsClient({
                   offset_x_mm:       op.offset_x_mm,
                   offset_y_mm:       op.offset_y_mm,
                   offset_z_mm:       op.offset_z_mm,
+                  expressions:       op.expressions ?? undefined,
                 }))}
               />
             )}
@@ -437,16 +477,20 @@ export default function JointsClient({
 // ── Operations table ──────────────────────────────────────────────────────────
 
 function OpsTable({
-  ops, onPatch, onDelete, onAdd,
+  ops, onPatch, onPatchExpr, onDelete, onAdd, selOpId, onSelOpChange,
 }: {
-  ops:      JointTypeOperation[]
-  onPatch:  (id: string, key: keyof JointTypeOperation, val: string | number) => void
-  onDelete: (id: string) => void
-  onAdd:    () => void
+  ops:            JointTypeOperation[]
+  onPatch:        (id: string, key: keyof JointTypeOperation, val: string | number) => void
+  onPatchExpr:    (opId: string, field: string, expr: string | null) => void
+  onDelete:       (id: string) => void
+  onAdd:          () => void
+  selOpId:        string | null
+  onSelOpChange:  (id: string | null) => void
 }) {
-  const thCls = 'text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-1.5 whitespace-nowrap'
-  const tdCls = 'px-2 py-1'
-  const celCls = 'bg-gray-800/60 border border-transparent hover:border-gray-600 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500 w-full'
+
+  const thCls = 'text-left text-[9px] font-semibold text-gray-500 uppercase tracking-wider px-1.5 py-1 whitespace-nowrap'
+  const tdCls = 'px-1 py-0.5'
+  const celCls = 'bg-gray-800/60 border border-transparent hover:border-gray-600 rounded px-1 py-px text-[11px] text-white focus:outline-none focus:border-blue-500 w-full'
   const numCls = celCls + ' text-right font-mono'
 
   return (
@@ -455,80 +499,128 @@ function OpsTable({
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr className="border-b border-gray-800 bg-gray-900/50">
-              <th className={thCls} style={{ width: 36 }}>#</th>
-              <th className={thCls} style={{ width: 90 }}>Part</th>
-              <th className={thCls} style={{ width: 90 }}>Operation</th>
-              <th className={thCls} style={{ width: 76 }}>Ø dia mm</th>
-              <th className={thCls} style={{ width: 76 }}>Depth mm</th>
-              <th className={thCls} style={{ width: 68 }}>Offset X</th>
-              <th className={thCls} style={{ width: 68 }}>Offset Y</th>
-              <th className={thCls} style={{ width: 68 }}>Offset Z</th>
+              <th className={thCls} style={{ width: 28 }}>#</th>
+              <th className={thCls} style={{ width: 72 }}>Part</th>
+              <th className={thCls} style={{ width: 72 }}>Op</th>
+              <th className={thCls} style={{ width: 68 }}>Face</th>
+              <th className={thCls} style={{ width: 32 }}>Qty</th>
+              <th className={thCls} style={{ width: 52 }}>Space</th>
+              <th className={thCls} style={{ width: 72 }}>Tool</th>
+              <th className={thCls} style={{ width: 56 }}>Ø dia</th>
+              <th className={thCls} style={{ width: 52 }}>Depth</th>
+              <th className={thCls} style={{ width: 48 }}>X off</th>
+              <th className={thCls} style={{ width: 48 }}>Y off</th>
+              <th className={thCls} style={{ width: 48 }}>Z off</th>
               <th className={thCls}>Notes</th>
-              <th className={thCls} style={{ width: 32 }} />
+              <th className={thCls} style={{ width: 24 }} />
             </tr>
           </thead>
           <tbody>
-            {ops.map((op, i) => (
-              <tr key={op.id} className={`border-b border-gray-800/40 ${i % 2 === 0 ? '' : 'bg-gray-900/20'}`}>
-                <td className={tdCls}>
-                  <NumCell value={op.operation_order}
-                    onChange={n => onPatch(op.id, 'operation_order', n)}
-                    className={numCls} style={{ width: 36 }} />
-                </td>
-                <td className={tdCls}>
-                  <select value={op.target_part}
-                    onChange={e => onPatch(op.id, 'target_part', e.target.value)}
-                    className={`${celCls} cursor-pointer`}>
-                    {TARGET_PARTS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
-                </td>
-                <td className={tdCls}>
-                  <select value={op.machine_operation}
-                    onChange={e => onPatch(op.id, 'machine_operation', e.target.value)}
-                    className={`${celCls} cursor-pointer`}>
-                    {MACHINE_OPS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                  </select>
-                </td>
-                <td className={tdCls}>
-                  <NumCell value={op.tool_diameter_mm}
-                    onChange={n => onPatch(op.id, 'tool_diameter_mm', n)}
-                    className={numCls} />
-                </td>
-                <td className={tdCls}>
-                  <NumCell value={op.depth_mm}
-                    onChange={n => onPatch(op.id, 'depth_mm', n)}
-                    className={numCls} />
-                </td>
-                <td className={tdCls}>
-                  <NumCell value={op.offset_x_mm}
-                    onChange={n => onPatch(op.id, 'offset_x_mm', n)}
-                    className={numCls} />
-                </td>
-                <td className={tdCls}>
-                  <NumCell value={op.offset_y_mm}
-                    onChange={n => onPatch(op.id, 'offset_y_mm', n)}
-                    className={numCls} />
-                </td>
-                <td className={tdCls}>
-                  <NumCell value={op.offset_z_mm}
-                    onChange={n => onPatch(op.id, 'offset_z_mm', n)}
-                    className={numCls} />
-                </td>
-                <td className={tdCls}>
-                  <input type="text" value={op.notes ?? ''}
-                    onChange={e => onPatch(op.id, 'notes', e.target.value)}
-                    placeholder="e.g. cam barrel hole"
-                    className={celCls} />
-                </td>
-                <td className={tdCls}>
-                  <button onClick={() => onDelete(op.id)}
-                    className="text-gray-600 hover:text-red-400 transition-colors px-1">✕</button>
-                </td>
-              </tr>
-            ))}
+            {ops.map((op, i) => {
+              const selected = op.id === selOpId
+              const rowCls = selected
+                ? 'border-b border-blue-700/50 bg-blue-900/20 ring-1 ring-inset ring-blue-600/30'
+                : `border-b border-gray-800/40 ${i % 2 === 0 ? '' : 'bg-gray-900/20'} hover:bg-gray-800/30`
+              return (
+                <tr key={op.id} className={`cursor-pointer transition-colors ${rowCls}`}
+                  onClick={() => onSelOpChange(selOpId === op.id ? null : op.id)}>
+                  <td className={tdCls}>
+                    <NumCell value={op.operation_order}
+                      onChange={n => onPatch(op.id, 'operation_order', n)}
+                      className={numCls} style={{ width: 28 }} />
+                  </td>
+                  <td className={tdCls}>
+                    <select value={op.target_part}
+                      onChange={e => onPatch(op.id, 'target_part', e.target.value)}
+                      className={`${celCls} cursor-pointer`}>
+                      {TARGET_PARTS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                    </select>
+                  </td>
+                  <td className={tdCls}>
+                    <select value={op.machine_operation}
+                      onChange={e => onPatch(op.id, 'machine_operation', e.target.value)}
+                      className={`${celCls} cursor-pointer`}>
+                      {MACHINE_OPS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                  </td>
+                  <td className={tdCls}>
+                    <select value={op.face}
+                      onChange={e => onPatch(op.id, 'face', e.target.value)}
+                      className={`${celCls} cursor-pointer`}>
+                      {FACE_TYPES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                    </select>
+                  </td>
+                  <td className={tdCls}>
+                    <NumCell value={op.qty}
+                      onChange={n => onPatch(op.id, 'qty', Math.max(1, Math.round(n)))}
+                      className={numCls} style={{ width: 32 }} />
+                  </td>
+                  <td className={tdCls}>
+                    <ExprCell value={op.spacing_mm ?? 0} fieldKey="spacing_mm"
+                      expressions={op.expressions} nullable={op.spacing_mm == null}
+                      onPatch={n => onPatch(op.id, 'spacing_mm', n)}
+                      onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
+                      placeholder="—" className={numCls} style={{ width: 52 }} />
+                  </td>
+                  <td className={tdCls}>
+                    <input type="text" value={op.tool ?? ''}
+                      onChange={e => onPatch(op.id, 'tool', e.target.value)}
+                      onFocus={e => e.target.select()}
+                      placeholder="e.g. T01"
+                      className={celCls} />
+                  </td>
+                  <td className={tdCls}>
+                    <ExprCell value={op.tool_diameter_mm} fieldKey="tool_diameter_mm"
+                      expressions={op.expressions}
+                      onPatch={n => onPatch(op.id, 'tool_diameter_mm', n)}
+                      onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
+                      className={numCls} />
+                  </td>
+                  <td className={tdCls}>
+                    <ExprCell value={op.depth_mm} fieldKey="depth_mm"
+                      expressions={op.expressions}
+                      onPatch={n => onPatch(op.id, 'depth_mm', n)}
+                      onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
+                      className={numCls} />
+                  </td>
+                  <td className={tdCls}>
+                    <ExprCell value={op.offset_x_mm} fieldKey="offset_x_mm"
+                      expressions={op.expressions}
+                      onPatch={n => onPatch(op.id, 'offset_x_mm', n)}
+                      onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
+                      className={numCls} />
+                  </td>
+                  <td className={tdCls}>
+                    <ExprCell value={op.offset_y_mm} fieldKey="offset_y_mm"
+                      expressions={op.expressions}
+                      onPatch={n => onPatch(op.id, 'offset_y_mm', n)}
+                      onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
+                      className={numCls} />
+                  </td>
+                  <td className={tdCls}>
+                    <ExprCell value={op.offset_z_mm} fieldKey="offset_z_mm"
+                      expressions={op.expressions}
+                      onPatch={n => onPatch(op.id, 'offset_z_mm', n)}
+                      onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
+                      className={numCls} />
+                  </td>
+                  <td className={tdCls}>
+                    <input type="text" value={op.notes ?? ''}
+                      onChange={e => onPatch(op.id, 'notes', e.target.value)}
+                      onFocus={e => e.target.select()}
+                      placeholder="e.g. cam barrel hole"
+                      className={celCls} />
+                  </td>
+                  <td className={tdCls}>
+                    <button onClick={e => { e.stopPropagation(); onDelete(op.id) }}
+                      className="text-gray-600 hover:text-red-400 transition-colors px-1">✕</button>
+                  </td>
+                </tr>
+              )
+            })}
             {ops.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-6 text-center text-xs text-gray-600">
+                <td colSpan={14} className="px-4 py-6 text-center text-xs text-gray-600">
                   No operations yet. Click + Add operation below.
                 </td>
               </tr>
@@ -669,6 +761,108 @@ function NumCell({ value, onChange, className, style }: {
       inputMode="decimal"
       value={draft}
       className={className}
+      style={style}
+      onChange={e => setDraft(e.target.value)}
+      onFocus={e => { setFocused(true); e.target.select() }}
+      onBlur={e  => { setFocused(false); commit(e.target.value) }}
+      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+    />
+  )
+}
+
+// ── NullNumCell — like NumCell but allows empty (null) value ─────────────────
+
+function NullNumCell({ value, onChange, placeholder, className, style }: {
+  value:       number | null
+  onChange:    (n: number | null) => void
+  placeholder?: string
+  className?:  string
+  style?:      React.CSSProperties
+}) {
+  const [draft,   setDraft]   = useState(value == null ? '' : String(value))
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (!focused) setDraft(value == null ? '' : String(value))
+  }, [value, focused])
+
+  function commit(raw: string) {
+    if (raw.trim() === '') { onChange(null); return }
+    const n = parseFloat(raw)
+    if (!isNaN(n)) onChange(n)
+    else setDraft(value == null ? '' : String(value))
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={draft}
+      placeholder={placeholder}
+      className={className}
+      style={style}
+      onChange={e => setDraft(e.target.value)}
+      onFocus={e => { setFocused(true); e.target.select() }}
+      onBlur={e  => { setFocused(false); commit(e.target.value) }}
+      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+    />
+  )
+}
+
+// ── ExprCell — numeric cell that also accepts expression strings ──────────────
+// Typing a pure number clears any stored expression. Typing letters stores it as
+// an expression (cyan text) and the preview panel evaluates it against sample dims.
+
+function ExprCell({
+  value, fieldKey, expressions, nullable = false,
+  onPatch, onPatchExpr,
+  placeholder, className, style,
+}: {
+  value:        number
+  fieldKey:     string
+  expressions:  Record<string, string> | null
+  nullable?:    boolean
+  onPatch:      (n: number) => void
+  onPatchExpr:  (field: string, expr: string | null) => void
+  placeholder?: string
+  className?:   string
+  style?:       React.CSSProperties
+}) {
+  const expr    = expressions?.[fieldKey]
+  const isExpr  = !!expr
+  const display = isExpr ? expr : (nullable && value === 0 ? '' : String(value))
+
+  const [draft,   setDraft]   = useState(display)
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (!focused) setDraft(isExpr ? expr! : (nullable && value === 0 ? '' : String(value)))
+  }, [expr, value, focused, isExpr, nullable])
+
+  function commit(raw: string) {
+    const trimmed = raw.trim()
+    if (!trimmed) {
+      if (nullable) { onPatchExpr(fieldKey, null); onPatch(0) }
+      else setDraft(isExpr ? expr! : String(value))
+      return
+    }
+    const n = parseFloat(trimmed)
+    if (!isNaN(n) && !/[a-zA-Z]/.test(trimmed)) {
+      onPatchExpr(fieldKey, null)   // clear any expression
+      onPatch(n)
+    } else {
+      onPatchExpr(fieldKey, trimmed)
+    }
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode={isExpr ? 'text' : 'decimal'}
+      value={draft}
+      placeholder={placeholder}
+      title={isExpr ? `expr: ${expr}  (last value: ${value})` : undefined}
+      className={`${className ?? ''} ${isExpr ? 'text-cyan-400' : ''}`}
       style={style}
       onChange={e => setDraft(e.target.value)}
       onFocus={e => { setFocused(true); e.target.select() }}

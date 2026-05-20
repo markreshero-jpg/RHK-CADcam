@@ -19,10 +19,24 @@ const ROLE_LABELS: Record<string, string> = {
   stone_slab:            'Stone Slab',
 }
 
-export default function BenchtopPanel({ benchtop, onUpdate, onDelete }: {
+export default function BenchtopPanel({
+  benchtop, onUpdate, onDelete,
+  filletRadius, setFilletRadius,
+  onMirrorH, onMirrorV, onOffset, onRotate,
+  onDeleteCutout, onDrawCutoutRect, onDrawCutoutCircle,
+}: {
   benchtop: BenchtopInstance
   onUpdate: (id: string, u: Partial<BenchtopInstance>) => Promise<void>
   onDelete: (id: string) => void
+  filletRadius: number
+  setFilletRadius: (r: number) => void
+  onMirrorH: (id: string) => void
+  onMirrorV: (id: string) => void
+  onOffset: (id: string, amount: number) => void
+  onRotate: (id: string, angleDeg: number) => void
+  onDeleteCutout: (id: string, i: number) => void
+  onDrawCutoutRect: () => void
+  onDrawCutoutCircle: () => void
 }) {
   const [label, setLabel] = useState(benchtop.label ?? '')
   const [methods, setMethods] = useState<BenchtopBuildMethod[]>([])
@@ -30,6 +44,8 @@ export default function BenchtopPanel({ benchtop, onUpdate, onDelete }: {
   const [parts, setParts] = useState<ResolvedBenchtopPart[]>([])
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState<string | null>(null)
+  const [offsetAmt, setOffsetAmt] = useState(0)
+  const [rotateAmt, setRotateAmt] = useState(0)
 
   useEffect(() => {
     setLabel(benchtop.label ?? '')
@@ -137,6 +153,97 @@ export default function BenchtopPanel({ benchtop, onUpdate, onDelete }: {
             <span><span className="inline-block w-2.5 h-2.5 rotate-45 bg-amber-500 mr-1 align-middle" style={{ display: 'inline-block' }} />{mitreCount} mitre</span>
           </div>
           <p className="text-[10px] text-gray-600">Click vertex dots on plan to toggle</p>
+        </div>
+
+        {/* ── Transform ── */}
+        <div className="border-t border-gray-800 pt-3 space-y-2">
+          <p className={lbl}>Transform</p>
+
+          {/* Rotate */}
+          <div>
+            <label className={lbl}>Rotate (°)</label>
+            <div className="flex gap-1">
+              <input type="number" value={rotateAmt} onChange={e => setRotateAmt(Number(e.target.value))}
+                className={inp + ' flex-1'} placeholder="0" />
+              <button onClick={() => { onRotate(benchtop.id, rotateAmt); setRotateAmt(0) }}
+                className="px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white">
+                Apply
+              </button>
+            </div>
+            <div className="flex gap-1 mt-1">
+              {[45, 90, -90, 180].map(a => (
+                <button key={a} onClick={() => onRotate(benchtop.id, a)}
+                  className="flex-1 px-1 py-0.5 rounded text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300">
+                  {a > 0 ? `+${a}°` : `${a}°`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Mirror */}
+          <div>
+            <label className={lbl}>Mirror</label>
+            <div className="flex gap-1">
+              <button onClick={() => onMirrorH(benchtop.id)}
+                className="flex-1 px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white">
+                ↔ Horizontal
+              </button>
+              <button onClick={() => onMirrorV(benchtop.id)}
+                className="flex-1 px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white">
+                ↕ Vertical
+              </button>
+            </div>
+          </div>
+
+          {/* Offset */}
+          <div>
+            <label className={lbl}>Offset shape (mm)</label>
+            <div className="flex gap-1">
+              <input type="number" value={offsetAmt} onChange={e => setOffsetAmt(Number(e.target.value))}
+                className={inp + ' flex-1'} placeholder="0" />
+              <button onClick={() => { if (offsetAmt !== 0) { onOffset(benchtop.id, offsetAmt); setOffsetAmt(0) } }}
+                className="px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white">
+                Apply
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-600">+ expands · − shrinks</p>
+          </div>
+
+          {/* Fillet radius */}
+          <div>
+            <label className={lbl}>Corner radius (mm)</label>
+            <div className="flex gap-1">
+              <input type="number" value={filletRadius} min={1} max={500}
+                onChange={e => setFilletRadius(Math.max(1, Number(e.target.value)))}
+                className={inp + ' flex-1'} />
+              <span className="text-[10px] text-gray-500 self-center pr-1">used by<br/>Round/Chamfer</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Cutouts ── */}
+        <div className="border-t border-gray-800 pt-3 space-y-2">
+          <p className={lbl}>Cutouts</p>
+          <div className="flex gap-1">
+            <button onClick={onDrawCutoutRect}
+              className="flex-1 px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white">
+              + Rect
+            </button>
+            <button onClick={onDrawCutoutCircle}
+              className="flex-1 px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white">
+              + Circle
+            </button>
+          </div>
+          {(benchtop.cutout_polygons ?? []).length === 0 && (
+            <p className="text-[10px] text-gray-600">No cutouts</p>
+          )}
+          {(benchtop.cutout_polygons ?? []).map((cut, i) => (
+            <div key={i} className="flex items-center justify-between bg-gray-800 rounded px-2 py-1 text-[10px]">
+              <span className="text-gray-400">Cutout {i + 1} · {cut.length} pts</span>
+              <button onClick={() => onDeleteCutout(benchtop.id, i)}
+                className="text-red-500 hover:text-red-400 ml-2">✕</button>
+            </div>
+          ))}
         </div>
 
         {/* Notes */}

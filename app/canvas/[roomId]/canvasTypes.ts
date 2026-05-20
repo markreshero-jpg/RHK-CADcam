@@ -1,6 +1,6 @@
 import { AssemblyClass } from '@/src/lib/types'
 import { MIN_ZOOM, MAX_ZOOM } from '@/src/lib/geometry'
-import type { Wall, CabinetInstance } from '@/src/lib/types'
+import type { Wall, CabinetInstance, BenchtopArcSegment } from '@/src/lib/types'
 import type { Pt } from '@/src/lib/geometry'
 import type { DisplayConfig, PresetId, LayerId, AnnotationId } from '@/src/lib/displayConfig'
 import { DEFAULT_DISPLAY_CONFIG, applyPreset, toggleLayer, cycleLayerStyle, toggleAnnotation } from '@/src/lib/displayConfig'
@@ -11,14 +11,16 @@ export { DEFAULT_DISPLAY_CONFIG, applyPreset, toggleLayer, cycleLayerStyle, togg
 export type CanvasView = 'plan' | 'elevation' | '3d'
 
 export type Mode =
-  | 'select' | 'draw_wall' | 'draw_island' | 'draw_benchtop' | 'draw_benchtop_rect'
+  | 'select' | 'draw_wall' | 'draw_island'
+  | 'draw_benchtop' | 'draw_benchtop_rect' | 'draw_benchtop_l' | 'draw_benchtop_u'
+  | 'draw_benchtop_cutout_rect' | 'draw_benchtop_cutout_circle'
   | 'place_base' | 'place_wall_unit' | 'place_tall' | 'place_end_panel'
   | 'place_base_corner' | 'place_wall_corner' | 'place_tall_corner'
   | 'paste'
 
 export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: string } | { type: 'benchtop'; id: string } | null
 
-export type ContextMenuState = { x: number; y: number; cabId?: string; wallId?: string; elevWallId?: string; elevWallT?: number }
+export type ContextMenuState = { x: number; y: number; cabId?: string; wallId?: string; elevWallId?: string; elevWallT?: number; benchtopId?: string; vertexContext?: { btId: string; vi: number } }
 
 export type PlaceGhost = { wall: Wall; pos_x: number; pos_y: number; islandFlip?: boolean }
 
@@ -40,6 +42,9 @@ export type CabResize = {
   livePosX?: number
   livePosY?: number
 }
+
+export type BtMoveDrag = { id: string; originX: number; originY: number; originalPolygon: Array<{x:number;y:number}>; originalArcs: BenchtopArcSegment[]; hasMoved: boolean }
+export type BtRotateDrag = { id: string; originX: number; originY: number; centX: number; centY: number; startAngle: number; hasMoved: boolean; originalPolygon: Array<{x:number;y:number}>; originalArcs: BenchtopArcSegment[] }
 
 export type MenuItem = { label: string; action?: () => void; disabled?: boolean; shortcut?: string; checked?: boolean } | null
 export type MenuGroup = { label: string; items: MenuItem[] }
@@ -76,4 +81,4 @@ export function modeAssemblyClass(m: Mode): { cls: AssemblyClass; ep: boolean } 
 }
 
 // Re-export types used across canvas files so imports stay short
-export type { Wall, CabinetInstance, Pt }
+export type { Wall, CabinetInstance, BenchtopArcSegment, Pt }

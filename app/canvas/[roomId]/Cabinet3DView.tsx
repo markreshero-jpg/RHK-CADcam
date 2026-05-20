@@ -378,14 +378,13 @@ function CabinetScene({
         )
       })}
       {(rp.drawer_stacks ?? []).flatMap((stack, si) => {
-        const boxColor   = '#d4c8a8'
         const slideColor = '#6b7280'
 
         const boxParts = stack.box_parts.map((p, pi) => {
           const b    = dbBox(p)
           const info = buildDbPartInfo(p, b, stack)
-          const panelKind = info.panelKind as PanelKind
-          const faceColors = panelFaceColors(panelKind, p.part_type, boxColor, boxColor, '#a89880')
+          const s    = matSpec(p.material_id, '#d4c8a8')
+          const faceColors = panelFaceColors(info.panelKind as PanelKind, p.part_type, s.face, s.back, s.edge)
           return (
             <Part
               key={`db_${si}_${pi}`}
@@ -397,6 +396,7 @@ function CabinetScene({
               highlighted={false}
               onSelect={onSelect}
               dragRef={dragRef}
+              ebSpec={ebFor(p.material_id)}
             />
           )
         })

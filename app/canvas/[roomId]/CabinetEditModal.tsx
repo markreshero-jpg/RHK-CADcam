@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance, Wall } from '@/src/lib/types'
-import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack } from '@/src/lib/resolver/types'
+import { PartMeta, PartEdge, PartPropertiesPanel } from '@/src/components/three/PartViewer'
+import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { dbResolveAndPersistCabinet } from './canvasDB'
 import CabinetPanel from './CabinetPanel'
 import Cabinet3DView from './Cabinet3DView'
 import FaceGridEditor from './FaceGridEditor'
@@ -47,12 +50,14 @@ const C_CUT    = '#475569'
 
 // Resolved part colours
 const RC = {
-  carcass: { fill: '#374151', stroke: '#4b5563' },
-  toekick: { fill: '#451a03', stroke: '#92400e' },
-  shelf:   { fill: '#1e1b4b', stroke: '#4338ca' },
-  door:    { fill: '#1e3a5f', stroke: '#3b82f6' },
-  drawer:  { fill: '#3b1f5f', stroke: '#8b5cf6' },
-  face:    { fill: '#0f2240', stroke: '#60a5fa' },
+  carcass:   { fill: '#374151', stroke: '#4b5563' },
+  toekick:   { fill: '#451a03', stroke: '#92400e' },
+  shelf:     { fill: '#1e1b4b', stroke: '#4338ca' },
+  door:      { fill: '#1e3a5f', stroke: '#3b82f6' },
+  drawer:    { fill: '#3b1f5f', stroke: '#8b5cf6' },
+  face:      { fill: '#0f2240', stroke: '#60a5fa' },
+  drawerBox: { fill: '#052e16', stroke: '#22c55e' },
+  slide:     { fill: '#1c1917', stroke: '#d97706' },
 }
 
 function Hatch({ id }: { id: string }) {
@@ -148,76 +153,332 @@ function tkSideRect(p: ResolvedToekickPart) {
 function shelfSideRect(p: ResolvedInternalPart){ return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ } }
 function zoneSideRect(z: ResolvedFaceZone)     { return { sz: z.Z, cy_top: z.Y + z.DX, sw: z.DZ, sh: z.DX } }
 
+// ── Drawer box & slide rect helpers ──────────────────────────────────────────
+// p.Z for db parts is the front face Z; subtract DX/DZ to get the back face.
+
+function dbElevRect(p: ResolvedDrawerBoxPart) {
+  switch (p.part_type) {
+    case 'db_left_side':
+    case 'db_right_side': return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+    case 'db_bottom':     return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
+    case 'db_front':
+    case 'db_back':
+    default:              return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
+  }
+}
+function dbTopRect(p: ResolvedDrawerBoxPart) {
+  switch (p.part_type) {
+    case 'db_left_side':
+    case 'db_right_side': return { tx: p.X, tz: p.Z - p.DX, tw: p.DZ, td: p.DX }
+    case 'db_bottom':     return { tx: p.X, tz: p.Z - p.DX, tw: p.DY, td: p.DX }
+    case 'db_front':
+    case 'db_back':
+    default:              return { tx: p.X, tz: p.Z - p.DZ, tw: p.DY, td: p.DZ }
+  }
+}
+function dbSideRect(p: ResolvedDrawerBoxPart) {
+  switch (p.part_type) {
+    case 'db_left_side':
+    case 'db_right_side': return { sz: p.Z - p.DX, cy_top: p.Y + p.DY, sw: p.DX, sh: p.DY }
+    case 'db_bottom':     return { sz: p.Z - p.DX, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
+    case 'db_front':
+    case 'db_back':
+    default:              return { sz: p.Z - p.DZ, cy_top: p.Y + p.DX, sw: p.DZ, sh: p.DX }
+  }
+}
+function slideElevRect(s: ResolvedDrawerSlide) { return { ex: s.X, ey: s.Y + s.DY, ew: s.DZ, eh: s.DY } }
+function slideTopRect(s: ResolvedDrawerSlide)  { return { tx: s.X, tz: s.Z, tw: s.DZ, td: s.DX } }
+function slideSideRect(s: ResolvedDrawerSlide) { return { sz: s.Z, cy_top: s.Y + s.DY, sw: s.DX, sh: s.DY } }
+
+// ── PartMeta builders (for click-to-inspect in SVG views) ─────────────────────
+
+const CASE_LABELS: Record<string, string> = {
+  left_side: 'Left Gable', right_side: 'Right Gable', bottom: 'Bottom Panel',
+  back: 'Back Panel', full_top: 'Top Panel', front_rail: 'Front Top Rail', back_rail: 'Back Top Rail',
+}
+const TK_LABELS: Record<string, string> = {
+  kick_front_face: 'Toe Kick Face', kick_sub_front: 'Toe Kick Sub-Front',
+  kick_back: 'Toe Kick Back', spreader_vertical: 'Toe Kick Leg', spreader_horizontal: 'Toe Kick Spreader',
+}
+const INT_LABELS: Record<string, string> = {
+  adj_shelf: 'Adjustable Shelf', fixed_shelf: 'Fixed Shelf',
+  inner_drawer_bottom: 'Inner Drawer Bottom', inner_drawer_back: 'Inner Drawer Back',
+}
+const FACE_LABELS_MAP: Record<string, string> = {
+  door: 'Door', drawer_face: 'Drawer Face', false_panel: 'False Panel',
+}
+const DB_PART_LABELS: Record<string, string> = {
+  db_left_side: 'Drawer Box Left Side', db_right_side: 'Drawer Box Right Side',
+  db_bottom: 'Drawer Box Bottom', db_front: 'Drawer Box Front', db_back: 'Drawer Box Back',
+}
+
+function svgCaseMeta(p: ResolvedCasePart): PartMeta {
+  const isS = isSidePanel(p.part_key), isB = p.part_key === 'back'
+  return {
+    id: `case_${p.part_key}`, label: CASE_LABELS[p.part_key] ?? p.part_key,
+    w: isS ? p.DZ : p.DY, h: isS ? p.DY : isB ? p.DX : p.DZ, d: isS ? p.DX : isB ? p.DZ : p.DX,
+    thickness: p.DZ, edge: p.edge_band,
+    panelKind: isS ? 'side' : isB ? 'face' : 'horizontal',
+    x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
+  }
+}
+function svgTkMeta(p: ResolvedToekickPart): PartMeta {
+  const isH = p.part_key === 'spreader_horizontal'
+  return {
+    id: `tk_${p.part_key}_${p.sort_order}`, label: TK_LABELS[p.part_key] ?? p.part_key,
+    w: isH ? p.DX : p.DY, h: isH ? p.DY : p.DX, d: p.DZ,
+    thickness: p.DZ, edge: p.edge_band,
+    panelKind: isH ? 'horizontal' : 'face',
+    detail: p.sort_order > 0 ? `#${p.sort_order}` : undefined,
+    x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
+  }
+}
+function svgIntMeta(p: ResolvedInternalPart): PartMeta {
+  return {
+    id: `int_${p.part_type}_${p.sort_order}`,
+    label: `${INT_LABELS[p.part_type] ?? p.part_type} ${p.sort_order + 1}`,
+    w: p.DY, h: p.DZ, d: p.DX,
+    thickness: p.DZ, edge: p.edge_band, panelKind: 'horizontal',
+    detail: p.y_locked ? 'Position locked' : undefined,
+    x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
+  }
+}
+function svgZoneMeta(z: ResolvedFaceZone): PartMeta {
+  return {
+    id: `zone_${z.row_index}_${z.col_index}`,
+    label: FACE_LABELS_MAP[z.face_type] ?? z.face_type,
+    w: z.DY, h: z.DX, d: z.DZ,
+    thickness: z.DZ, edge: z.edge_band, panelKind: 'face',
+    detail: [`Row ${z.row_index + 1}, Col ${z.col_index + 1}`, z.hinge_side ? `Hinge: ${z.hinge_side}` : null].filter(Boolean).join(' · '),
+    x: z.X, y: z.Y, z: z.Z, ax: z.AX, ay: z.AY, az: z.AZ,
+  }
+}
+function svgDbMeta(p: ResolvedDrawerBoxPart, stack: ResolvedDrawerStack): PartMeta {
+  const isS = p.part_type === 'db_left_side' || p.part_type === 'db_right_side'
+  const isH = p.part_type === 'db_bottom'
+  const [w, h, d] = isS ? [p.DZ, p.DY, p.DX] : isH ? [p.DY, p.DZ, p.DX] : [p.DY, p.DX, p.DZ]
+  return {
+    id: `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`,
+    label: DB_PART_LABELS[p.part_type] ?? p.part_type,
+    w, h, d, thickness: p.DZ, edge: p.edge_band,
+    panelKind: isS ? 'side' : isH ? 'horizontal' : 'face',
+    detail: `Row ${stack.face_zone_row + 1}, Col ${stack.face_zone_col + 1} · ${stack.drawer_type}`,
+    x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
+  }
+}
+function svgSlideMeta(s: ResolvedDrawerSlide, stack: ResolvedDrawerStack): PartMeta {
+  return {
+    id: `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`,
+    label: `Drawer Slide (${s.side})`,
+    w: s.DZ, h: s.DY, d: s.DX, thickness: s.DZ,
+    edge: { top: false, bottom: false, left: false, right: false }, panelKind: 'side',
+    detail: `${s.nominal_length}mm NL · Box ht ${s.box_height}mm`,
+    x: s.X, y: s.Y, z: s.Z,
+  }
+}
+
+async function saveSVGEdge(cabId: string, part: PartMeta) {
+  const { id, edge } = part
+  const direct = { edge_band_top: edge.top, edge_band_bottom: edge.bottom, edge_band_left: edge.left, edge_band_right: edge.right }
+  let result: { error: unknown }
+  if (id.startsWith('case_')) {
+    result = await supabase.from('case_parts').update(direct).eq('cabinet_instance_id', cabId).eq('part_key', id.slice(5))
+  } else if (id.startsWith('tk_')) {
+    const rest = id.slice(3), cut = rest.lastIndexOf('_')
+    result = await supabase.from('toekick_parts').update(direct).eq('cabinet_instance_id', cabId).eq('part_key', rest.slice(0, cut)).eq('sort_order', parseInt(rest.slice(cut + 1)))
+  } else if (id.startsWith('int_')) {
+    const rest = id.slice(4), cut = rest.lastIndexOf('_')
+    result = await supabase.from('internal_parts').update({ edge_band_top: edge.top, edge_band_bottom: edge.bottom, edge_band_back: edge.left, edge_band_front: edge.right }).eq('cabinet_instance_id', cabId).eq('part_type', rest.slice(0, cut)).eq('sort_order', parseInt(rest.slice(cut + 1)))
+  } else if (id.startsWith('zone_')) {
+    const [row, col] = id.slice(5).split('_').map(Number)
+    result = await supabase.from('face_zones').update(direct).eq('cabinet_instance_id', cabId).eq('row_index', row).eq('col_index', col)
+  } else {
+    return
+  }
+  if (result.error) console.error('[svg edge save]', result.error)
+  else patchEdgeOverrideCache(cabId, id, edge)
+}
+
+// ── Multi-part hit testing & picker ──────────────────────────────────────────
+
+function svgHitParts(e: React.MouseEvent, partMap: Map<string, PartMeta>): PartMeta[] {
+  const hits: PartMeta[] = []
+  const seen = new Set<string>()
+  for (const el of document.elementsFromPoint(e.clientX, e.clientY)) {
+    const id = el.getAttribute('data-part-id')
+    if (id && partMap.has(id) && !seen.has(id)) {
+      hits.push(partMap.get(id)!)
+      seen.add(id)
+    }
+  }
+  return hits
+}
+
+function partIdColor(id: string): string {
+  if (id.startsWith('case_'))  return RC.carcass.stroke
+  if (id.startsWith('tk_'))    return RC.toekick.stroke
+  if (id.startsWith('int_'))   return RC.shelf.stroke
+  if (id.startsWith('zone_'))  return RC.door.stroke
+  if (id.startsWith('db_'))    return RC.drawerBox.stroke
+  if (id.startsWith('slide_')) return RC.slide.stroke
+  return '#6b7280'
+}
+
+function PartPickerMenu({ parts, clientX, clientY, onPick, onClose }: {
+  parts: PartMeta[]; clientX: number; clientY: number
+  onPick: (part: PartMeta) => void; onClose: () => void
+}) {
+  useEffect(() => {
+    const handler = () => onClose()
+    const t = setTimeout(() => window.addEventListener('click', handler), 10)
+    return () => { clearTimeout(t); window.removeEventListener('click', handler) }
+  }, [onClose])
+
+  const menuH = parts.length * 30 + 44
+  const top  = Math.min(clientY + 6, window.innerHeight - menuH - 8)
+  const left = Math.min(clientX + 6, window.innerWidth  - 200)
+
+  return (
+    <div
+      className="fixed z-[70] bg-gray-800 border border-gray-600 rounded-lg shadow-2xl overflow-hidden"
+      style={{ top, left, minWidth: 180 }}
+      onClick={e => e.stopPropagation()}
+    >
+      <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 border-b border-gray-700 bg-gray-900/60">
+        {parts.length} parts here — pick one
+      </div>
+      {parts.map(p => (
+        <button
+          key={p.id}
+          className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2"
+          onClick={() => onPick(p)}
+        >
+          <span className="w-2 h-2 rounded-full flex-none" style={{ background: partIdColor(p.id) }} />
+          <span className="flex-1 truncate">{p.label}</span>
+          {p.detail && <span className="text-gray-500 text-[10px] shrink-0">{p.detail.split(' · ')[0]}</span>}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// Highlight stroke helper
+const SEL_STROKE = '#f59e0b'
+
 // ── Resolved views ────────────────────────────────────────────────────────────
 
-function ResolvedElevation({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabinet }) {
+function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint }: {
+  cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
+  selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
+}) {
   const { dx, dy } = cab
   const pl = 80, pt = 50, pr = 40, pb = 40
   const vw = dx + pl + pr
   const vh = dy + pt + pb
   const ox = pl, oy = pt
 
-  // ey = top of part in cabinet Y; svgY = oy + dy - ey
   function toSVG(ex: number, ey: number, ew: number, eh: number) {
     return { x: ox + ex, y: oy + dy - ey, w: ew, h: eh }
   }
+  function sel(id: string) { return selectedPartId === id }
+  function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
+  function sw(id: string, base: number) { return sel(id) ? 2 : base }
+  const cp: React.CSSProperties = { cursor: 'pointer' }
+  function faceColor(ft: string) { return ft === 'drawer_face' ? RC.drawer : RC.door }
 
-  function faceColor(ft: string) {
-    return ft === 'drawer_face' ? RC.drawer : RC.door
+  const partMap = new Map<string, PartMeta>()
+  rp.case_parts.forEach(p => { const m = svgCaseMeta(p); partMap.set(m.id, m) })
+  rp.toekick_parts.forEach(p => { const m = svgTkMeta(p); partMap.set(m.id, m) })
+  rp.internal_parts.forEach(p => { const m = svgIntMeta(p); partMap.set(m.id, m) })
+  rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const m = svgZoneMeta(z); partMap.set(m.id, m) })
+  ;(rp.drawer_stacks ?? []).forEach(stack => {
+    stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
+    stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
+  })
+
+  function handleClick(e: React.MouseEvent<SVGSVGElement>) {
+    e.stopPropagation()
+    onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
   }
 
   return (
-    <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
-      {/* Interior bg */}
-      <rect x={ox} y={oy} width={dx} height={dy} fill={C_INT} />
+    <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick}>
+      <rect x={ox} y={oy} width={dx} height={dy} fill={wireMode ? '#050a12' : C_INT} />
 
-      {/* Toekick */}
+      {showInternals && (rp.drawer_stacks ?? []).flatMap((stack, si) => [
+        ...stack.box_parts.map((p, pi) => {
+          const meta = svgDbMeta(p, stack)
+          const { ex, ey, ew, eh } = dbElevRect(p)
+          const r = toSVG(ex, ey, ew, eh)
+          return <rect key={`db${si}_${pi}`} x={r.x} y={r.y} width={r.w} height={r.h}
+            fill={wireMode ? 'transparent' : RC.drawerBox.fill}
+            stroke={stroke(meta.id, RC.drawerBox.stroke)} strokeWidth={sw(meta.id, 0.5)}
+            data-part-id={meta.id} style={cp} />
+        }),
+        ...stack.slides.map((s, li) => {
+          const meta = svgSlideMeta(s, stack)
+          const { ex, ey, ew, eh } = slideElevRect(s)
+          const r = toSVG(ex, ey, ew, eh)
+          return <rect key={`sl${si}_${li}`} x={r.x} y={r.y} width={r.w} height={r.h}
+            fill={wireMode ? 'transparent' : RC.slide.fill}
+            stroke={stroke(meta.id, RC.slide.stroke)} strokeWidth={sw(meta.id, 0.5)}
+            strokeDasharray={sel(meta.id) ? undefined : '3 2'}
+            data-part-id={meta.id} style={cp} />
+        }),
+      ])}
+
       {rp.toekick_parts.map((p, i) => {
+        const meta = svgTkMeta(p)
         const { ex, ey, ew, eh } = tkElevRect(p)
         const r = toSVG(ex, ey, ew, eh)
         const isSpreader = p.part_key === 'spreader_vertical' || p.part_key === 'spreader_horizontal'
-        return isSpreader
-          ? <rect key={`tk${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
-              fill="none" stroke={RC.toekick.stroke} strokeWidth={1} strokeDasharray="4 3" />
-          : <rect key={`tk${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
-              fill={RC.toekick.fill} stroke={RC.toekick.stroke} strokeWidth={0.75} />
+        return <rect key={`tk${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
+          fill={isSpreader || wireMode ? 'transparent' : RC.toekick.fill}
+          stroke={stroke(meta.id, RC.toekick.stroke)} strokeWidth={sw(meta.id, isSpreader ? 1 : 0.75)}
+          strokeDasharray={isSpreader && !sel(meta.id) ? '4 3' : undefined}
+          data-part-id={meta.id} style={cp} />
       })}
 
-      {/* Shelves */}
       {rp.internal_parts.map((p, i) => {
+        const meta = svgIntMeta(p)
         const { ex, ey, ew, eh } = shelfElevRect(p)
         const r = toSVG(ex, ey, ew, eh)
         return <rect key={`sh${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
-          fill={RC.shelf.fill} stroke={RC.shelf.stroke} strokeWidth={0.5} />
+          fill={wireMode ? 'transparent' : RC.shelf.fill}
+          stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
+          data-part-id={meta.id} style={cp} />
       })}
 
-      {/* Carcass */}
       {rp.case_parts.map((p, i) => {
+        const meta = svgCaseMeta(p)
         const { ex, ey, ew, eh } = elevRect({ ...p, part_key: p.part_key })
         const r = toSVG(ex, ey, ew, eh)
         return <rect key={`cp${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
-          fill={RC.carcass.fill} stroke={RC.carcass.stroke} strokeWidth={0.75} />
+          fill={wireMode ? 'transparent' : RC.carcass.fill}
+          stroke={stroke(meta.id, RC.carcass.stroke)} strokeWidth={sw(meta.id, 0.75)}
+          data-part-id={meta.id} style={cp} />
       })}
 
-      {/* Face zones */}
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
+        const meta = svgZoneMeta(z)
         const { ex, ey, ew, eh } = zoneElevRect(z)
         const r = toSVG(ex, ey, ew, eh)
         const col = faceColor(z.face_type)
         return (
           <g key={`fz${i}`}>
             <rect x={r.x} y={r.y} width={r.w} height={r.h}
-              fill={col.fill} stroke={col.stroke} strokeWidth={1} fillOpacity={0.85} />
-            {z.hinge_side === 'left'  && <line x1={r.x}      y1={r.y} x2={r.x}      y2={r.y+r.h} stroke={col.stroke} strokeWidth={2} />}
-            {z.hinge_side === 'right' && <line x1={r.x+r.w}  y1={r.y} x2={r.x+r.w}  y2={r.y+r.h} stroke={col.stroke} strokeWidth={2} />}
+              fill={wireMode ? 'transparent' : col.fill}
+              stroke={stroke(meta.id, col.stroke)} strokeWidth={sw(meta.id, wireMode ? 0.75 : 1)}
+              fillOpacity={wireMode ? 1 : 0.85}
+              data-part-id={meta.id} style={cp} />
+            {z.hinge_side === 'left'  && <line x1={r.x}     y1={r.y} x2={r.x}     y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} data-part-id={meta.id} style={cp} />}
+            {z.hinge_side === 'right' && <line x1={r.x+r.w} y1={r.y} x2={r.x+r.w} y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} data-part-id={meta.id} style={cp} />}
           </g>
         )
       })}
 
-      {/* Outline + floor */}
-      <rect x={ox} y={oy} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} />
-      <line x1={ox-20} y1={oy+dy} x2={ox+dx+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" />
-
+      <rect x={ox} y={oy} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
+      <line x1={ox-20} y1={oy+dy} x2={ox+dx+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" style={{ pointerEvents: 'none' }} />
       {dimH(ox, ox+dx, oy-35, `${dx}mm`, true)}
       {dimV(ox-50, oy, oy+dy, `${dy}mm`)}
       {viewLabel(ox+dx/2, vh-14, 'ELEVATION — WIDTH × HEIGHT')}
@@ -225,62 +486,108 @@ function ResolvedElevation({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabi
   )
 }
 
-function ResolvedTop({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabinet }) {
+function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint }: {
+  cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
+  selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
+}) {
   const { dx, dz } = cab
   const wallH = 40
   const pl = 80, pt = 50 + wallH, pr = 40, pb = 50
   const vw = dx + pl + pr
   const vh = dz + pt + pb
-  const ox = pl, oz = pt  // SVG origin: wall at top (z=0), front at bottom (z=dz)
+  const ox = pl, oz = pt
 
   function toSVG(tx: number, tz: number, tw: number, td: number) {
     return { x: ox + tx, y: oz + tz, w: tw, h: td }
   }
+  function sel(id: string) { return selectedPartId === id }
+  function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
+  function sw(id: string, base: number) { return sel(id) ? 2 : base }
+  const cp: React.CSSProperties = { cursor: 'pointer' }
+
+  const partMap = new Map<string, PartMeta>()
+  rp.case_parts.forEach(p => { const m = svgCaseMeta(p); partMap.set(m.id, m) })
+  rp.toekick_parts.forEach(p => { const m = svgTkMeta(p); partMap.set(m.id, m) })
+  rp.internal_parts.forEach(p => { const m = svgIntMeta(p); partMap.set(m.id, m) })
+  rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const m = svgZoneMeta(z); partMap.set(m.id, m) })
+  ;(rp.drawer_stacks ?? []).forEach(stack => {
+    stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
+    stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
+  })
+
+  function handleClick(e: React.MouseEvent<SVGSVGElement>) {
+    e.stopPropagation()
+    onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
+  }
 
   return (
-    <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
-      {/* Wall indicator */}
-      <rect x={ox} y={oz - wallH} width={dx} height={wallH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} />
+    <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick}>
+      <rect x={ox} y={oz - wallH} width={dx} height={wallH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} style={{ pointerEvents: 'none' }} />
       <text x={ox + dx/2} y={oz - wallH/2} textAnchor="middle" dominantBaseline="central"
         fontSize={18} fill="#475569" fontFamily="system-ui,sans-serif" letterSpacing={2}>WALL</text>
+      <rect x={ox} y={oz} width={dx} height={dz} fill={wireMode ? '#050a12' : C_INT} />
 
-      {/* Interior bg */}
-      <rect x={ox} y={oz} width={dx} height={dz} fill={C_INT} />
+      {showInternals && (rp.drawer_stacks ?? []).flatMap((stack, si) => [
+        ...stack.box_parts.map((p, pi) => {
+          const meta = svgDbMeta(p, stack)
+          const r = dbTopRect(p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+          return <rect key={`db${si}_${pi}`} x={s.x} y={s.y} width={s.w} height={s.h}
+            fill={wireMode ? 'transparent' : RC.drawerBox.fill}
+            stroke={stroke(meta.id, RC.drawerBox.stroke)} strokeWidth={sw(meta.id, 0.5)}
+            data-part-id={meta.id} style={cp} />
+        }),
+        ...stack.slides.map((sl, li) => {
+          const meta = svgSlideMeta(sl, stack)
+          const r = slideTopRect(sl); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+          return <rect key={`sl${si}_${li}`} x={s.x} y={s.y} width={s.w} height={s.h}
+            fill={wireMode ? 'transparent' : RC.slide.fill}
+            stroke={stroke(meta.id, RC.slide.stroke)} strokeWidth={sw(meta.id, 0.5)}
+            strokeDasharray={sel(meta.id) ? undefined : '3 2'}
+            data-part-id={meta.id} style={cp} />
+        }),
+      ])}
 
-      {/* Shelves */}
       {rp.internal_parts.map((p, i) => {
+        const meta = svgIntMeta(p)
         const r = shelfTopRect(p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
         return <rect key={`sh${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
-          fill={RC.shelf.fill} stroke={RC.shelf.stroke} strokeWidth={0.5} />
+          fill={wireMode ? 'transparent' : RC.shelf.fill}
+          stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
+          data-part-id={meta.id} style={cp} />
       })}
 
-      {/* Carcass */}
       {rp.case_parts.map((p, i) => {
+        const meta = svgCaseMeta(p)
         const r = topRect(p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
         return <rect key={`cp${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
-          fill={RC.carcass.fill} stroke={RC.carcass.stroke} strokeWidth={0.75} />
+          fill={wireMode ? 'transparent' : RC.carcass.fill}
+          stroke={stroke(meta.id, RC.carcass.stroke)} strokeWidth={sw(meta.id, 0.75)}
+          data-part-id={meta.id} style={cp} />
       })}
 
-      {/* Toekick */}
       {rp.toekick_parts.map((p, i) => {
+        const meta = svgTkMeta(p)
         const r = tkTopRect(p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
-        return <rect key={`tk${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
-          fill={RC.toekick.fill} stroke={RC.toekick.stroke} strokeWidth={0.75} />
+        return <rect key={`tk${i}`} x={s.x} y={s.y} width={s.h} height={s.h}
+          fill={wireMode ? 'transparent' : RC.toekick.fill}
+          stroke={stroke(meta.id, RC.toekick.stroke)} strokeWidth={sw(meta.id, 0.75)}
+          data-part-id={meta.id} style={cp} />
       })}
 
-      {/* Face zones */}
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
+        const meta = svgZoneMeta(z)
         const r = zoneTopRect(z); const s = toSVG(r.tx, r.tz, r.tw, r.td)
         const col = z.face_type === 'drawer_face' ? RC.drawer : RC.door
         return <rect key={`fz${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
-          fill={col.fill} stroke={col.stroke} strokeWidth={1} fillOpacity={0.85} />
+          fill={wireMode ? 'transparent' : col.fill}
+          stroke={stroke(meta.id, col.stroke)} strokeWidth={sw(meta.id, wireMode ? 0.75 : 1)}
+          fillOpacity={wireMode ? 1 : 0.85}
+          data-part-id={meta.id} style={cp} />
       })}
 
-      {/* Outline + front label */}
-      <rect x={ox} y={oz} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={1.5} />
+      <rect x={ox} y={oz} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
       <text x={ox + dx/2} y={oz + dz + 22} textAnchor="middle" dominantBaseline="central"
         fontSize={18} fill="#374151" fontFamily="system-ui,sans-serif">ACCESS</text>
-
       {dimH(ox, ox + dx, oz + dz + 50, `${dx}mm`)}
       {dimV(ox - 50, oz, oz + dz, `${dz}mm`)}
       {viewLabel(ox + dx/2, vh - 14, 'TOP — WIDTH × DEPTH')}
@@ -288,7 +595,10 @@ function ResolvedTop({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabinet })
   )
 }
 
-function ResolvedSide({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabinet }) {
+function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint }: {
+  cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
+  selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
+}) {
   const { dz, dy } = cab
   const wallW = 40
 
@@ -308,55 +618,98 @@ function ResolvedSide({ cab, rp }: { cab: CabinetInstance; rp: ResolvedCabinet }
   const vh = dy + pt + pb
   const oz = pl, oy = pt  // SVG: Z goes left→right, Y goes bottom→top (flipped)
 
-  // cy_top = top of part in cabinet Y
-  function toSVG(sz: number, cy_top: number, sw: number, sh: number) {
-    return { x: oz + sz, y: oy + dy - cy_top, w: sw, h: sh }
+  function toSVG(sz: number, cy_top: number, w: number, h: number) {
+    return { x: oz + sz, y: oy + dy - cy_top, w, h }
+  }
+  function sel(id: string) { return selectedPartId === id }
+  function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
+  function sw(id: string, base: number) { return sel(id) ? 2 : base }
+  const cp: React.CSSProperties = { cursor: 'pointer' }
+
+  const partMap = new Map<string, PartMeta>()
+  rp.case_parts.forEach(p => { const m = svgCaseMeta(p); partMap.set(m.id, m) })
+  rp.toekick_parts.forEach(p => { const m = svgTkMeta(p); partMap.set(m.id, m) })
+  rp.internal_parts.forEach(p => { const m = svgIntMeta(p); partMap.set(m.id, m) })
+  rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const m = svgZoneMeta(z); partMap.set(m.id, m) })
+  ;(rp.drawer_stacks ?? []).forEach(stack => {
+    stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
+    stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
+  })
+
+  function handleClick(e: React.MouseEvent<SVGSVGElement>) {
+    e.stopPropagation()
+    onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
   }
 
   return (
-    <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
-      {/* Wall indicator */}
-      <rect x={oz - wallW} y={oy} width={wallW} height={dy} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} />
+    <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick}>
+      <rect x={oz - wallW} y={oy} width={wallW} height={dy} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} style={{ pointerEvents: 'none' }} />
       <text x={oz - wallW/2} y={oy + dy/2} textAnchor="middle" dominantBaseline="central"
         fontSize={16} fill="#475569" fontFamily="system-ui,sans-serif"
         transform={`rotate(-90,${oz - wallW/2},${oy + dy/2})`}>WALL</text>
+      <rect x={oz} y={oy} width={dz} height={dy} fill={wireMode ? '#050a12' : C_INT} />
 
-      {/* Interior bg */}
-      <rect x={oz} y={oy} width={dz} height={dy} fill={C_INT} />
+      {showInternals && (rp.drawer_stacks ?? []).flatMap((stack, si) => [
+        ...stack.box_parts.map((p, pi) => {
+          const meta = svgDbMeta(p, stack)
+          const r = dbSideRect(p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+          return <rect key={`db${si}_${pi}`} x={s.x} y={s.y} width={s.w} height={s.h}
+            fill={wireMode ? 'transparent' : RC.drawerBox.fill}
+            stroke={stroke(meta.id, RC.drawerBox.stroke)} strokeWidth={sw(meta.id, 0.5)}
+            data-part-id={meta.id} style={cp} />
+        }),
+        ...stack.slides.map((sl, li) => {
+          const meta = svgSlideMeta(sl, stack)
+          const r = slideSideRect(sl); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+          return <rect key={`sl${si}_${li}`} x={s.x} y={s.y} width={s.w} height={s.h}
+            fill={wireMode ? 'transparent' : RC.slide.fill}
+            stroke={stroke(meta.id, RC.slide.stroke)} strokeWidth={sw(meta.id, 0.5)}
+            strokeDasharray={sel(meta.id) ? undefined : '3 2'}
+            data-part-id={meta.id} style={cp} />
+        }),
+      ])}
 
-      {/* Shelves */}
       {rp.internal_parts.map((p, i) => {
+        const meta = svgIntMeta(p)
         const r = shelfSideRect(p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
         return <rect key={`sh${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
-          fill={RC.shelf.fill} stroke={RC.shelf.stroke} strokeWidth={0.5} />
+          fill={wireMode ? 'transparent' : RC.shelf.fill}
+          stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
+          data-part-id={meta.id} style={cp} />
       })}
 
-      {/* Carcass */}
       {rp.case_parts.map((p, i) => {
+        const meta = svgCaseMeta(p)
         const r = sideRect(p); if (!r) return null
         const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
         return <rect key={`cp${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
-          fill={RC.carcass.fill} stroke={RC.carcass.stroke} strokeWidth={0.75} />
+          fill={wireMode ? 'transparent' : RC.carcass.fill}
+          stroke={stroke(meta.id, RC.carcass.stroke)} strokeWidth={sw(meta.id, 0.75)}
+          data-part-id={meta.id} style={cp} />
       })}
 
-      {/* Toekick */}
       {rp.toekick_parts.map((p, i) => {
+        const meta = svgTkMeta(p)
         const r = tkSideRect(p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
         return <rect key={`tk${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
-          fill={RC.toekick.fill} stroke={RC.toekick.stroke} strokeWidth={0.75} />
+          fill={wireMode ? 'transparent' : RC.toekick.fill}
+          stroke={stroke(meta.id, RC.toekick.stroke)} strokeWidth={sw(meta.id, 0.75)}
+          data-part-id={meta.id} style={cp} />
       })}
 
-      {/* Face zones */}
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
+        const meta = svgZoneMeta(z)
         const r = zoneSideRect(z); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
         const col = z.face_type === 'drawer_face' ? RC.drawer : RC.door
         return <rect key={`fz${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
-          fill={col.fill} stroke={col.stroke} strokeWidth={1} fillOpacity={0.85} />
+          fill={wireMode ? 'transparent' : col.fill}
+          stroke={stroke(meta.id, col.stroke)} strokeWidth={sw(meta.id, wireMode ? 0.75 : 1)}
+          fillOpacity={wireMode ? 1 : 0.85}
+          data-part-id={meta.id} style={cp} />
       })}
 
-      {/* Outline + floor */}
-      <rect x={oz} y={oy} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} />
-      <line x1={oz-20} y1={oy+dy} x2={oz+dz+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" />
+      <rect x={oz} y={oy} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
+      <line x1={oz-20} y1={oy+dy} x2={oz+dz+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" style={{ pointerEvents: 'none' }} />
 
       {dimH(oz, oz + dz, oy - 50, `${dz}mm`, false)}
       {kickZmin < Infinity && dimH(oz + kickZmin, oz + kickZmax, oy + dy + 30, `${Math.round(kickZmax - kickZmin)}mm`)}
@@ -773,7 +1126,27 @@ export default function CabinetEditModal({
   materialColours?: Record<string, string | { face?: string; back?: string; edge?: string }>
   ebByMatId?: Record<string, { thickness: number; color: string | null }>
 }) {
-  const [activeView, setActiveView] = useState<ViewId>(initialView ?? 'elevation')
+  const [activeView, setActiveView]       = useState<ViewId>(initialView ?? 'elevation')
+  const [wireMode, setWireMode]           = useState(true)
+  const [showInternals, setShowInternals] = useState(true)
+  const [selectedSVGPart, setSelectedSVGPart] = useState<PartMeta | null>(null)
+  const [picker, setPicker] = useState<{ parts: PartMeta[]; clientX: number; clientY: number } | null>(null)
+  const [localRp, setLocalRp]             = useState<ResolvedCabinet | null>(null)
+  const [resolving, setResolving]         = useState(false)
+
+  const prevPartRef     = useRef<PartMeta | null>(null)
+  const originalEdgeRef = useRef<PartEdge | null>(null)
+
+  const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face'
+
+  // If parent didn't supply resolved data, resolve now so the interactive views work
+  useEffect(() => {
+    if (resolvedCabinet) return
+    setResolving(true)
+    dbResolveAndPersistCabinet(cabinet.id).then(result => {
+      if (result) setLocalRp(result)
+    }).finally(() => setResolving(false))
+  }, [cabinet.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
@@ -781,7 +1154,38 @@ export default function CabinetEditModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const rp = resolvedCabinet
+  // Auto-save edge changes when selection moves to another part
+  useEffect(() => {
+    const prev = prevPartRef.current
+    if (prev && prev.id !== selectedSVGPart?.id && originalEdgeRef.current) {
+      const orig = originalEdgeRef.current
+      const changed = (Object.keys(orig) as (keyof PartEdge)[]).some(k => prev.edge[k] !== orig[k])
+      if (changed) saveSVGEdge(cabinet.id, prev)
+    }
+    if (selectedSVGPart && selectedSVGPart.id !== prev?.id) {
+      originalEdgeRef.current = { ...selectedSVGPart.edge }
+    } else if (!selectedSVGPart) {
+      originalEdgeRef.current = null
+    }
+    prevPartRef.current = selectedSVGPart
+  }, [selectedSVGPart]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handlePartsAtPoint(parts: PartMeta[], cx: number, cy: number) {
+    setPicker(null)
+    if (parts.length === 0) {
+      setSelectedSVGPart(null)
+    } else if (parts.length === 1) {
+      setSelectedSVGPart(prev => prev?.id === parts[0].id ? null : parts[0])
+    } else {
+      setPicker({ parts, clientX: cx, clientY: cy })
+    }
+  }
+
+  function handleSVGEdgeChange(edge: PartEdge) {
+    setSelectedSVGPart(prev => prev ? { ...prev, edge } : null)
+  }
+
+  const rp = resolvedCabinet ?? localRp ?? undefined
 
   return (
     <div
@@ -803,14 +1207,17 @@ export default function CabinetEditModal({
               <span className="text-xs text-gray-500 font-mono">
                 {cabinet.dx} × {cabinet.dy} × {cabinet.dz}mm
               </span>
-              {!rp && (
+              {!rp && resolving && (
+                <span className="text-[10px] text-sky-500 italic">resolving…</span>
+              )}
+              {!rp && !resolving && (
                 <span className="text-[10px] text-amber-600 italic">resolver data unavailable — showing approximate views</span>
               )}
             </div>
             <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none px-1">✕</button>
           </div>
           {/* Tabs */}
-          <div className="flex-none bg-gray-800/60 border-b border-gray-700 px-4 py-1.5 flex gap-1">
+          <div className="flex-none bg-gray-800/60 border-b border-gray-700 px-4 py-1.5 flex items-center gap-1">
             {VIEWS.map(v => {
               const disabled = (v.id === 'parts' || v.id === '3d') && !rp
               return (
@@ -830,28 +1237,81 @@ export default function CabinetEditModal({
                 </button>
               )
             })}
+            {isOrthoView && rp && (
+              <div className="ml-auto flex items-center gap-1.5">
+                <button
+                  onClick={() => setWireMode(w => !w)}
+                  title="Toggle wire / solid view"
+                  className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                    wireMode
+                      ? 'bg-sky-700/80 text-sky-200 hover:bg-sky-600/80'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'
+                  }`}
+                >
+                  Wire
+                </button>
+                <button
+                  onClick={() => setShowInternals(s => !s)}
+                  title="Toggle drawer box / slide visibility"
+                  className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                    showInternals
+                      ? 'bg-emerald-800/80 text-emerald-300 hover:bg-emerald-700/80'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'
+                  }`}
+                >
+                  Internals
+                </button>
+              </div>
+            )}
           </div>
           {/* Content */}
-          <div className={`flex-1 overflow-hidden ${
-            activeView === 'parts' ? 'bg-gray-900'
-            : activeView === '3d'  ? 'bg-gray-950'
-            : activeView === 'face' ? 'bg-gray-950'
-            : 'flex items-center justify-center bg-gray-950 p-6'
-          }`}>
+          <div
+            className={`flex-1 overflow-hidden relative ${
+              activeView === 'parts' ? 'bg-gray-900'
+              : activeView === '3d'  ? 'bg-gray-950'
+              : activeView === 'face' ? 'bg-gray-950'
+              : 'flex items-center justify-center bg-gray-950 p-6'
+            }`}
+            onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null) } : undefined}
+          >
             {activeView === 'top' && (
-              rp ? <ResolvedTop cab={cabinet} rp={rp} /> : <TopView cab={cabinet} />
+              rp ? <ResolvedTop cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals}
+                selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint} />
+              : <TopView cab={cabinet} />
             )}
             {activeView === 'elevation' && (
-              rp ? <ResolvedElevation cab={cabinet} rp={rp} /> : <ElevationView cab={cabinet} />
+              rp ? <ResolvedElevation cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals}
+                selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint} />
+              : <ElevationView cab={cabinet} />
             )}
             {activeView === 'side' && (
-              rp ? <ResolvedSide cab={cabinet} rp={rp} /> : <SideView cab={cabinet} />
+              rp ? <ResolvedSide cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals}
+                selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint} />
+              : <SideView cab={cabinet} />
             )}
             {activeView === 'section-face'     && <SectionFaceView     cab={cabinet} />}
             {activeView === 'section-interior' && <SectionInteriorView cab={cabinet} />}
             {activeView === 'face'             && <FaceGridEditor cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
             {activeView === '3d'               && rp && <Cabinet3DView cab={cabinet} rp={rp} materialColours={materialColours} ebByMatId={ebByMatId} />}
             {activeView === 'parts'            && rp && <PartsView rp={rp} />}
+            {/* Part info panel overlay */}
+            {selectedSVGPart && isOrthoView && (
+              <PartPropertiesPanel
+                part={selectedSVGPart}
+                onClose={() => setSelectedSVGPart(null)}
+                onEdgeChange={handleSVGEdgeChange}
+              />
+            )}
+            {/* Part picker — shown when multiple parts overlap at the click point */}
+            {picker && (
+              <PartPickerMenu
+                parts={picker.parts}
+                clientX={picker.clientX}
+                clientY={picker.clientY}
+                onPick={part => { setSelectedSVGPart(part); setPicker(null) }}
+                onClose={() => setPicker(null)}
+              />
+            )}
           </div>
         </div>
 

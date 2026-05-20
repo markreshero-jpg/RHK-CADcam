@@ -223,6 +223,7 @@ export interface BenchtopInstance {
   arc_segments: BenchtopArcSegment[]
   edge_tags: BenchtopEdgeTag[]
   join_types: BenchtopJoinPoint[]
+  cutout_polygons: Array<Array<{ x: number; y: number }>>
   benchtop_build_method_id: string | null
   benchtop_schedule_id: string | null
   notes: string | null

@@ -3,7 +3,7 @@ import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { dbLoadResolvedParts } from './canvasDB'
+import { dbLoadResolvedParts, dbResolveAndPersistCabinet } from './canvasDB'
 
 export type MatColours  = Record<string, { face?: string; back?: string; edge?: string }>
 export type EbByMatId   = Record<string, { thickness: number; color: string | null }>
@@ -20,6 +20,22 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
     dbLoadResolvedParts(ids).then(async map => {
       if (map.size === 0) return
       setResolvedParts(map)
+
+      // Re-resolve cabinets with drawer face zones so drawer_stacks are populated
+      const drawerCabIds = [...map.keys()].filter(id =>
+        (map.get(id)?.face_zones ?? []).some(z => z.face_type === 'drawer_face')
+      )
+      if (drawerCabIds.length > 0) {
+        Promise.allSettled(drawerCabIds.map(id => dbResolveAndPersistCabinet(id))).then(results => {
+          setResolvedParts(prev => {
+            const next = new Map(prev)
+            results.forEach((r, i) => {
+              if (r.status === 'fulfilled' && r.value) next.set(drawerCabIds[i], r.value)
+            })
+            return next
+          })
+        })
+      }
 
       // Collect unique material IDs across all parts
       const matIds = new Set<string>()

@@ -101,19 +101,19 @@ export function resolveDrawerBox(input: DrawerBoxInput): ResolvedDrawerBoxPart[]
       edge_band:   ebFromSides(getEdging('db_front', r), edgeband_id),
     })
 
-    // Back panel — sits at the back face of the box (Z = D - panelT)
+    // Back panel — front face aligns with the bottom's back edge (Z = D - DB_BACK_SETBACK)
     const backH = slide_box_height != null
       ? slide_box_height - r.DB_BACK_HEIGHT_ADJUST
       : (r.DB_BOTTOM_JOIN === 'dado' ? H - r.DB_DADO_HEIGHT - Tb : H)
-    const backY = slide_box_height != null
+    const backY = (slide_box_height != null
       ? 0
-      : (r.DB_BOTTOM_JOIN === 'dado' ? r.DB_DADO_HEIGHT + Tb : 0)
+      : (r.DB_BOTTOM_JOIN === 'dado' ? r.DB_DADO_HEIGHT + Tb : 0)) + r.DB_BACK_Y_OFFSET
     parts.push({
       part_type:   'db_back',
       DX: backH,
       DY: W - 2 * Ts,
       DZ: panelT,
-      X: Ts, Y: backY, Z: D - panelT,
+      X: Ts, Y: backY, Z: D - r.DB_BACK_SETBACK,
       AX: 0, AY: 0, AZ: 0,
       material_id: mid,
       edge_band:   ebFromSides(getEdging('db_back', r), edgeband_id),

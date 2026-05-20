@@ -276,6 +276,7 @@ export interface DrawerBoxRules {
   DB_BACK_SETBACK:       number                         // bottom panel setback from back face (mm)
   DB_JOINT_TYPE:         'butt' | 'dado' | 'dovetail'  // how front/back connect to sides
   DB_BACK_HEIGHT_ADJUST: number                         // deducted from slide box_height to get back panel height (mm)
+  DB_BACK_Y_OFFSET:      number                         // raises back panel off box floor (mm), added to auto-calculated backY
   DB_EDGING?:            DbEdgingDefaults               // per-part edge sides (absent = use DEFAULT_DB_EDGING)
 }
 
@@ -288,6 +289,7 @@ export const DEFAULT_DB_RULES: DrawerBoxRules = {
   DB_BACK_SETBACK:       25,
   DB_JOINT_TYPE:         'butt',
   DB_BACK_HEIGHT_ADJUST: 0,
+  DB_BACK_Y_OFFSET:      0,
 }
 
 // ── Drawer Box Input ──────────────────────────────────────────

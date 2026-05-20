@@ -26,6 +26,13 @@ export interface PartMeta {
   edge:      PartEdge
   panelKind: PanelKind
   detail?:   string
+  // Cabinet-space position & rotation (optional — only set when viewing resolved parts)
+  x?:  number
+  y?:  number
+  z?:  number
+  ax?: number
+  ay?: number
+  az?: number
 }
 
 export type MatColSpec = { face?: string; back?: string; edge?: string }
@@ -184,29 +191,51 @@ export function PartPropertiesPanel({
         <button onClick={onClose} className="text-gray-500 hover:text-white text-base leading-none ml-2" aria-label="Close">✕</button>
       </div>
       <div className="px-3 py-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pb-0.5">Size</span>
         <span className="text-gray-500">Width</span>
-        <span className="text-gray-200 text-right">{Math.round(part.w)} mm</span>
+        <span className="text-gray-200 text-right font-mono">{Math.round(part.w)} mm</span>
         <span className="text-gray-500">Height</span>
-        <span className="text-gray-200 text-right">{Math.round(part.h)} mm</span>
+        <span className="text-gray-200 text-right font-mono">{Math.round(part.h)} mm</span>
         <span className="text-gray-500">Depth</span>
-        <span className="text-gray-200 text-right">{Math.round(part.d)} mm</span>
+        <span className="text-gray-200 text-right font-mono">{Math.round(part.d)} mm</span>
         <span className="text-gray-500">Thickness</span>
-        <span className="text-gray-200 text-right">{Math.round(part.thickness)} mm</span>
-        <span className="text-gray-500 self-start pt-0.5">Edge band</span>
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-          {(['top', 'bottom', 'left', 'right'] as const).map(e => (
-            <label key={e} className="flex items-center gap-1.5 cursor-pointer text-gray-400 hover:text-gray-200">
-              <input
-                type="checkbox"
-                checked={part.edge[e]}
-                onChange={() => onEdgeChange?.({ ...part.edge, [e]: !part.edge[e] })}
-                disabled={!onEdgeChange}
-                className="accent-orange-500 cursor-pointer w-3 h-3"
-              />
-              <span className="text-[10px] capitalize">{e === 'bottom' ? 'bot' : e}</span>
-            </label>
-          ))}
-        </div>
+        <span className="text-gray-200 text-right font-mono">{Math.round(part.thickness)} mm</span>
+        {(part.x != null || part.y != null || part.z != null) && (
+          <>
+            <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Position</span>
+            <span className="text-gray-500">X</span>
+            <span className="text-gray-200 text-right font-mono">{Math.round(part.x ?? 0)} mm</span>
+            <span className="text-gray-500">Y</span>
+            <span className="text-gray-200 text-right font-mono">{Math.round(part.y ?? 0)} mm</span>
+            <span className="text-gray-500">Z</span>
+            <span className="text-gray-200 text-right font-mono">{Math.round(part.z ?? 0)} mm</span>
+          </>
+        )}
+        {(part.ax != null || part.ay != null || part.az != null) && (
+          (part.ax !== 0 || part.ay !== 0 || part.az !== 0) && <>
+            <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Rotation</span>
+            {part.ax !== 0 && <><span className="text-gray-500">AX</span><span className="text-gray-200 text-right font-mono">{part.ax}°</span></>}
+            {part.ay !== 0 && <><span className="text-gray-500">AY</span><span className="text-gray-200 text-right font-mono">{part.ay}°</span></>}
+            {part.az !== 0 && <><span className="text-gray-500">AZ</span><span className="text-gray-200 text-right font-mono">{part.az}°</span></>}
+          </>
+        )}
+        <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Edge band</span>
+        <span className="col-span-2">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+            {(['top', 'bottom', 'left', 'right'] as const).map(e => (
+              <label key={e} className="flex items-center gap-1.5 cursor-pointer text-gray-400 hover:text-gray-200">
+                <input
+                  type="checkbox"
+                  checked={part.edge[e]}
+                  onChange={() => onEdgeChange?.({ ...part.edge, [e]: !part.edge[e] })}
+                  disabled={!onEdgeChange}
+                  className="accent-orange-500 cursor-pointer w-3 h-3"
+                />
+                <span className="text-[10px] capitalize">{e === 'bottom' ? 'bot' : e}</span>
+              </label>
+            ))}
+          </div>
+        </span>
         {part.detail && (
           <>
             <span className="text-gray-500">Info</span>

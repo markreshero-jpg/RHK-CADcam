@@ -2,14 +2,17 @@ import type { AssemblyClass } from '@/src/lib/types'
 import type { CabinetInstance, ContextMenuItem } from './canvasTypes'
 
 export function buildContextMenuGroups({
-  cabId, wallId, elevWallId, elevWallT, canEqualize, clipboard, cabinets, multiSelect,
-  onDeleteWall, onDeleteCabinet, onDeleteMultiple, onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
+  cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, canEqualize, clipboard, cabinets, multiSelect,
+  onDeleteWall, onDeleteCabinet, onDeleteMultiple, onDeleteBenchtop, onDeleteBenchtopVertex, onRoundCorner, onChamfer,
+  onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
   onAlignLeft, onAlignRight,
 }: {
   cabId?: string
   wallId?: string
   elevWallId?: string
   elevWallT?: number
+  benchtopId?: string
+  vertexContext?: { btId: string; vi: number }
   canEqualize: boolean
   clipboard: CabinetInstance | null
   cabinets: CabinetInstance[]
@@ -17,6 +20,10 @@ export function buildContextMenuGroups({
   onDeleteWall: (id: string) => void
   onDeleteCabinet: (id: string) => void
   onDeleteMultiple?: (ids: string[]) => void
+  onDeleteBenchtop?: (id: string) => void
+  onDeleteBenchtopVertex?: (btId: string, vi: number) => void
+  onRoundCorner?: (btId: string, vi: number) => void
+  onChamfer?: (btId: string, vi: number) => void
   onCopy: (cab: CabinetInstance) => void
   onPaste: () => void
   onEdit: (id: string) => void
@@ -27,6 +34,19 @@ export function buildContextMenuGroups({
   onAlignLeft?: () => void
   onAlignRight?: () => void
 }): ContextMenuItem[][] {
+  if (vertexContext && onDeleteBenchtopVertex) {
+    const { btId, vi } = vertexContext
+    return [[
+      { label: 'Remove Vertex', onClick: () => onDeleteBenchtopVertex(btId, vi), color: 'red' },
+      ...(onRoundCorner ? [{ label: 'Round Corner', onClick: () => onRoundCorner(btId, vi), color: 'blue' as const }] : []),
+      ...(onChamfer ? [{ label: 'Chamfer', onClick: () => onChamfer(btId, vi), color: 'blue' as const }] : []),
+    ]]
+  }
+
+  if (benchtopId && onDeleteBenchtop) {
+    return [[{ label: 'Delete Benchtop', onClick: () => onDeleteBenchtop(benchtopId), color: 'red' }]]
+  }
+
   if (wallId) {
     return [[{ label: 'Delete Wall', onClick: () => onDeleteWall(wallId), color: 'red' }]]
   }

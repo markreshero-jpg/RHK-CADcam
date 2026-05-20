@@ -92,7 +92,11 @@ export function resolveDrawerStacks(
     // Cabinet-space origin of the box
     const boxX = T + r.IDCL           // inside left gable + clearance
     const boxY = zone.Y               // bottom aligns with bottom of face zone
-    const boxZ = zone.Z - boxDepth    // cabinet Z of the back face of the box (used for slides)
+    const boxZ = zone.Z - boxDepth    // cabinet Z of the back face of the box
+
+    // Slide Z: back of slide rail, referenced from the back face of the drawer box front panel.
+    // Front of slide sits at zone.Z - drawerMat.DZ (back face of db_front panel).
+    const slideZ = zone.Z - drawerMat.DZ - nominalLength
 
     // Resolve box parts in local coords, filter by drawer type, then offset to cabinet space.
     // Local convention: Z=0 = front of box (against back face of drawer front), Z increases toward back.
@@ -100,7 +104,9 @@ export function resolveDrawerStacks(
     // System drawers: sides are metal runners — only back and bottom are manufactured timber.
     // Five-piece drawers: all 5 parts are manufactured timber.
     const SYSTEM_PARTS = new Set(['db_back', 'db_bottom'])
-    const rulesForResolve = drawerType === 'system' ? { ...dbRules, DB_SIDE_T: 0 } : dbRules
+    const rulesForResolve = drawerType === 'system'
+      ? { ...dbRules, DB_SIDE_T: 0 }
+      : { ...dbRules, DB_SIDE_T: drawerMat.DZ }
     const localParts = resolveDrawerBox({
       box_width:        boxWidth,
       box_height:       boxHeight,
@@ -120,7 +126,7 @@ export function resolveDrawerStacks(
     // Slide rails — one on each gable inner face
     const slideBase: Omit<ResolvedDrawerSlide, 'side' | 'X'> = {
       Y: boxY,
-      Z: boxZ,
+      Z: slideZ,
       DX: nominalLength,
       DY: slide?.box_height ?? boxHeight,
       DZ: runnerThick,

@@ -12,19 +12,27 @@ import WallDimensionChain from './WallDimensionChain'
 import { Mode, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, modeAssemblyClass, DisplayConfig } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
 
-function buildBenchtopPath(pts: Array<{ x: number; y: number }>, arcs: BenchtopArcSegment[]): string {
+function buildBenchtopPath(
+  pts: Array<{ x: number; y: number }>,
+  arcs: BenchtopArcSegment[],
+  cutouts?: Array<Array<{ x: number; y: number }>>,
+): string {
   if (pts.length < 2) return ''
   let d = `M ${pts[0].x} ${pts[0].y}`
   for (let i = 0; i < pts.length; i++) {
     const next = pts[(i + 1) % pts.length]
     const arc = arcs.find(a => a.edge_index === i)
-    if (arc) {
-      d += ` Q ${arc.cpx} ${arc.cpy} ${next.x} ${next.y}`
-    } else {
-      d += ` L ${next.x} ${next.y}`
-    }
+    if (arc) { d += ` Q ${arc.cpx} ${arc.cpy} ${next.x} ${next.y}` }
+    else { d += ` L ${next.x} ${next.y}` }
   }
-  return d + ' Z'
+  d += ' Z'
+  for (const cut of cutouts ?? []) {
+    if (cut.length < 3) continue
+    d += ` M ${cut[0].x} ${cut[0].y}`
+    for (let i = 1; i < cut.length; i++) d += ` L ${cut[i].x} ${cut[i].y}`
+    d += ' Z'
+  }
+  return d
 }
 
 interface CanvasSVGProps {
@@ -70,6 +78,7 @@ interface CanvasSVGProps {
   onBenchtopEdgeClick: (id: string, edgeIndex: number) => void
   onBenchtopVertexClick: (id: string, vertexIndex: number) => void
   onBenchtopVertexPointerDown: (e: React.PointerEvent, btId: string, vi: number) => void
+  onBenchtopContextMenu: (e: React.MouseEvent, id: string) => void
   onBenchtopEdgeShiftClick: (id: string, edgeIndex: number) => void
   onBenchtopEdgeAltClick: (id: string, edgeIndex: number) => void
   onBenchtopArcPointerDown: (e: React.PointerEvent, btId: string, edgeIndex: number) => void
@@ -79,6 +88,17 @@ interface CanvasSVGProps {
   btArcMidpoint: Pt | null
   btRectStart: Pt | null
   btRectCursor: Pt | null
+  onBenchtopVertexContextMenu: (e: React.MouseEvent, btId: string, vi: number) => void
+  onBenchtopPointerDown: (e: React.PointerEvent, id: string) => void
+  onBenchtopRotateHandlePointerDown: (e: React.PointerEvent, id: string) => void
+  // L-shape / U-shape draw state
+  btLPoints: Pt[]
+  btLCursor: Pt | null
+  btUPoints: Pt[]
+  btUCursor: Pt | null
+  // Cutout draw state
+  btCutoutStart: Pt | null
+  btCutoutCursor: Pt | null
 }
 
 export default function CanvasSVG({
@@ -88,8 +108,12 @@ export default function CanvasSVG({
   setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
   onCabMarkerClick, cabFollowing, onSVGClick,
   benchtops, selectedBenchtopId, btDrawPoly, btDrawCursor, onBenchtopClick, onBenchtopEdgeClick, onBenchtopVertexClick,
-  onBenchtopVertexPointerDown, onBenchtopEdgeShiftClick, onBenchtopEdgeAltClick, onBenchtopArcPointerDown, onBtUndoVertex,
+  onBenchtopVertexPointerDown, onBenchtopContextMenu, onBenchtopEdgeShiftClick, onBenchtopEdgeAltClick, onBenchtopArcPointerDown, onBtUndoVertex,
   btDrawArcs, btArcMode, btArcMidpoint, btRectStart, btRectCursor,
+  onBenchtopVertexContextMenu, onBenchtopPointerDown, onBenchtopRotateHandlePointerDown,
+  btLPoints, btLCursor,
+  btUPoints, btUCursor,
+  btCutoutStart, btCutoutCursor,
 }: CanvasSVGProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
@@ -139,15 +163,17 @@ export default function CanvasSVG({
 
           return (
             <Fragment key={bt.id}>
-              {/* Fill + border */}
+              {/* Fill + border (evenodd fill-rule creates cutout holes) */}
               <path
-                d={buildBenchtopPath(pts, arcs)}
+                d={buildBenchtopPath(pts, arcs, bt.cutout_polygons ?? [])}
+                fillRule="evenodd"
                 fill={isSel ? 'rgba(20,184,166,0.22)' : 'rgba(20,184,166,0.10)'}
                 stroke={isSel ? '#f59e0b' : '#0d9488'}
                 strokeWidth={(isSel ? 2 : 1.5) / view.zoom}
-                onPointerDown={e => e.stopPropagation()}
+                onPointerDown={e => { e.stopPropagation(); onBenchtopPointerDown(e, bt.id) }}
                 onClick={e => { e.stopPropagation(); onBenchtopClick(bt.id) }}
-                style={{ cursor: mode === 'select' ? 'pointer' : undefined }}
+                onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onBenchtopContextMenu(e, bt.id) }}
+                style={{ cursor: mode === 'select' ? 'move' : undefined }}
               />
 
               {/* Label */}
@@ -241,9 +267,10 @@ export default function CanvasSVG({
                       points={`${p.x},${p.y - vr * 1.5} ${p.x + vr * 1.5},${p.y} ${p.x},${p.y + vr * 1.5} ${p.x - vr * 1.5},${p.y}`}
                       fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom}
                       onPointerDown={e => { e.stopPropagation(); onBenchtopVertexPointerDown(e, bt.id, i) }}
+                      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onBenchtopVertexContextMenu(e, bt.id, i) }}
                       style={{ cursor: 'grab' }}
                     >
-                      <title>Mitre join — drag to reshape · click to set butt</title>
+                      <title>Mitre join — drag to reshape · click to set butt · right-click for options</title>
                     </polygon>
                   </g>
                 ) : (
@@ -252,9 +279,10 @@ export default function CanvasSVG({
                       cx={p.x} cy={p.y} r={vr}
                       fill="#14b8a6" stroke="#111827" strokeWidth={1 / view.zoom}
                       onPointerDown={e => { e.stopPropagation(); onBenchtopVertexPointerDown(e, bt.id, i) }}
+                      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onBenchtopVertexContextMenu(e, bt.id, i) }}
                       style={{ cursor: 'grab' }}
                     >
-                      <title>Butt join — drag to reshape · click to set mitre</title>
+                      <title>Butt join — drag to reshape · click to set mitre · right-click for options</title>
                     </circle>
                   </g>
                 )
@@ -285,6 +313,34 @@ export default function CanvasSVG({
                   </g>
                 )
               })}
+
+              {/* Rotate handle — amber circle above bounding box */}
+              {isSel && (() => {
+                const minY = Math.min(...pts.map(p => p.y))
+                const rhr = 7 / view.zoom
+                const rhOff = 22 / view.zoom
+                return (
+                  <g>
+                    <line x1={bcx} y1={minY} x2={bcx} y2={minY - rhOff + rhr}
+                      stroke="#f59e0b" strokeWidth={0.75 / view.zoom}
+                      strokeDasharray={`${3 / view.zoom} ${2 / view.zoom}`}
+                      style={{ pointerEvents: 'none' }} />
+                    <circle
+                      cx={bcx} cy={minY - rhOff}
+                      r={rhr}
+                      fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom}
+                      onPointerDown={e => { e.stopPropagation(); onBenchtopRotateHandlePointerDown(e, bt.id) }}
+                      style={{ cursor: 'grab' }}
+                    >
+                      <title>Drag to rotate benchtop</title>
+                    </circle>
+                    <text x={bcx} y={minY - rhOff}
+                      textAnchor="middle" dominantBaseline="middle"
+                      fontSize={rhr * 1.4} fill="#111827"
+                      style={{ userSelect: 'none', pointerEvents: 'none' }}>↻</text>
+                  </g>
+                )
+              })()}
             </Fragment>
           )
         })}
@@ -410,6 +466,132 @@ export default function CanvasSVG({
           )
         })()}
 
+        {/* ── In-progress L-shape benchtop ── */}
+        {mode === 'draw_benchtop_l' && (() => {
+          const snapDist = SNAP_PX / view.zoom
+          return (
+            <Fragment>
+              {/* Placed corner dots */}
+              {btLPoints.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={4 / view.zoom}
+                  fill={i === 0 ? '#14b8a6' : '#f59e0b'} stroke="#111827" strokeWidth={1 / view.zoom}
+                  style={{ pointerEvents: 'none' }} />
+              ))}
+
+              {/* Preview line from last placed to cursor */}
+              {btLPoints.length > 0 && btLCursor && (
+                <line
+                  x1={btLPoints[btLPoints.length - 1].x} y1={btLPoints[btLPoints.length - 1].y}
+                  x2={btLCursor.x} y2={btLCursor.y}
+                  stroke="#14b8a6" strokeWidth={1.5 / view.zoom}
+                  strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`}
+                  style={{ pointerEvents: 'none' }} />
+              )}
+
+              {/* L-shape preview after 2 points placed */}
+              {btLPoints.length === 2 && btLCursor && (() => {
+                const [a, b] = btLPoints
+                const c = btLCursor
+                const d1x = b.x - a.x, d1y = b.y - a.y
+                const d1len = Math.sqrt(d1x * d1x + d1y * d1y)
+                const d2x = c.x - b.x, d2y = c.y - b.y
+                const d2len = Math.sqrt(d2x * d2x + d2y * d2y)
+                if (d1len < 1 || d2len < 1) return null
+                const u1x = d1x / d1len, u1y = d1y / d1len
+                const u2x = d2x / d2len, u2y = d2y / d2len
+                const cross = u1x * u2y - u1y * u2x
+                const sign = cross >= 0 ? 1 : -1
+                const depth = 600
+                const p1x = sign * u1y, p1y = -sign * u1x
+                const p2x = sign * u2y, p2y = -sign * u2x
+                const polygon = [
+                  a,
+                  { x: a.x + depth * p1x, y: a.y + depth * p1y },
+                  { x: b.x + depth * p1x + depth * p2x, y: b.y + depth * p1y + depth * p2y },
+                  { x: c.x + depth * p2x, y: c.y + depth * p2y },
+                  c,
+                  b,
+                ]
+                const pts2 = polygon.map(p => `${p.x},${p.y}`).join(' ')
+                return (
+                  <polygon points={pts2}
+                    fill="rgba(20,184,166,0.12)" stroke="#14b8a6"
+                    strokeWidth={1.5 / view.zoom}
+                    strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+                    style={{ pointerEvents: 'none' }} />
+                )
+              })()}
+
+              {/* Cursor dot */}
+              {btLCursor && (
+                <circle cx={btLCursor.x} cy={btLCursor.y} r={3 / view.zoom}
+                  fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom}
+                  style={{ pointerEvents: 'none' }} />
+              )}
+
+              {/* Hint label */}
+              {btLCursor && (
+                <text x={btLCursor.x + 10 / view.zoom} y={btLCursor.y - 8 / view.zoom}
+                  fontSize={9 / view.zoom} fill="#5eead4"
+                  style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                  {btLPoints.length === 0 ? 'click inner corner start' : btLPoints.length === 1 ? 'click inner corner' : 'click end'}
+                </text>
+              )}
+            </Fragment>
+          )
+        })()}
+
+        {/* ── In-progress U-shape benchtop ── */}
+        {mode === 'draw_benchtop_u' && (() => {
+          return (
+            <Fragment>
+              {btUPoints.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={4 / view.zoom}
+                  fill={i === 0 ? '#14b8a6' : '#f59e0b'} stroke="#111827" strokeWidth={1 / view.zoom}
+                  style={{ pointerEvents: 'none' }} />
+              ))}
+              {btUPoints.length > 0 && btUCursor && (
+                <line x1={btUPoints[btUPoints.length - 1].x} y1={btUPoints[btUPoints.length - 1].y}
+                  x2={btUCursor.x} y2={btUCursor.y}
+                  stroke="#14b8a6" strokeWidth={1.5 / view.zoom}
+                  strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`}
+                  style={{ pointerEvents: 'none' }} />
+              )}
+              {/* Ghost U after 3 points */}
+              {btUPoints.length === 3 && btUCursor && (() => {
+                const [a, b, upc] = btUPoints; const d = btUCursor
+                const d1x = b.x-a.x, d1y = b.y-a.y, l1 = Math.sqrt(d1x*d1x+d1y*d1y)
+                const d2x = upc.x-b.x, d2y = upc.y-b.y, l2 = Math.sqrt(d2x*d2x+d2y*d2y)
+                const d3x = d.x-upc.x, d3y = d.y-upc.y, l3 = Math.sqrt(d3x*d3x+d3y*d3y)
+                if (l1 < 1 || l2 < 1 || l3 < 1) return null
+                const u1x=d1x/l1, u1y=d1y/l1, u2x=d2x/l2, u2y=d2y/l2, u3x=d3x/l3, u3y=d3y/l3
+                const cross = u1x*u2y - u1y*u2x; const s = cross >= 0 ? 1 : -1
+                const p1 = {x: s*u1y, y:-s*u1x}, p2 = {x: s*u2y, y:-s*u2x}, p3 = {x: s*u3y, y:-s*u3x}
+                const dep = 600
+                // miter corners
+                const miter = (pt: Pt, n1: Pt, n2: Pt) => {
+                  const bx=n1.x+n2.x, by=n1.y+n2.y, bl=Math.sqrt(bx*bx+by*by)
+                  if(bl<0.01) return {x:pt.x+n1.x*dep,y:pt.y+n1.y*dep}
+                  const nx=bx/bl, ny=by/bl, dot=n1.x*nx+n1.y*ny, sc=Math.abs(dot)>0.05?dep/dot:dep*4
+                  return {x:pt.x+nx*sc,y:pt.y+ny*sc}
+                }
+                const poly = [a,{x:a.x+p1.x*dep,y:a.y+p1.y*dep},miter(b,p1,p2),miter(upc,p2,p3),{x:d.x+p3.x*dep,y:d.y+p3.y*dep},d,upc,b]
+                return (
+                  <polygon points={poly.map(p=>`${p.x},${p.y}`).join(' ')}
+                    fill="rgba(20,184,166,0.12)" stroke="#14b8a6"
+                    strokeWidth={1.5/view.zoom} strokeDasharray={`${6/view.zoom} ${3/view.zoom}`}
+                    style={{ pointerEvents: 'none' }} />
+                )
+              })()}
+              {btUCursor && (
+                <circle cx={btUCursor.x} cy={btUCursor.y} r={3/view.zoom}
+                  fill="#f59e0b" stroke="#111827" strokeWidth={1/view.zoom}
+                  style={{ pointerEvents: 'none' }} />
+              )}
+            </Fragment>
+          )
+        })()}
+
         {/* ── In-progress rectangle benchtop ── */}
         {mode === 'draw_benchtop_rect' && (() => {
           if (!btRectStart) return null
@@ -445,6 +627,59 @@ export default function CanvasSVG({
             <circle cx={btRectStart.x} cy={btRectStart.y} r={4 / view.zoom}
               fill="#14b8a6" stroke="#111827" strokeWidth={1 / view.zoom}
               style={{ pointerEvents: 'none' }} />
+          )
+        })()}
+
+        {/* ── In-progress cutout rectangle ── */}
+        {mode === 'draw_benchtop_cutout_rect' && btCutoutStart && btCutoutCursor && (() => {
+          const rx = Math.min(btCutoutStart.x, btCutoutCursor.x)
+          const ry = Math.min(btCutoutStart.y, btCutoutCursor.y)
+          const rw = Math.abs(btCutoutCursor.x - btCutoutStart.x)
+          const rh = Math.abs(btCutoutCursor.y - btCutoutStart.y)
+          return (
+            <Fragment>
+              <rect x={rx} y={ry} width={rw} height={rh}
+                fill="rgba(239,68,68,0.15)" stroke="#ef4444"
+                strokeWidth={1.5/view.zoom} strokeDasharray={`${5/view.zoom} ${3/view.zoom}`}
+                style={{ pointerEvents: 'none' }} />
+              {rw > 20/view.zoom && rh > 12/view.zoom && (
+                <text x={rx+rw/2} y={ry+rh/2} textAnchor="middle" dominantBaseline="middle"
+                  fontSize={10/view.zoom} fill="#fca5a5"
+                  style={{ userSelect:'none', pointerEvents:'none' }}>
+                  {Math.round(rw)}×{Math.round(rh)}
+                </text>
+              )}
+              <circle cx={btCutoutStart.x} cy={btCutoutStart.y} r={4/view.zoom}
+                fill="#ef4444" stroke="#111827" strokeWidth={1/view.zoom} style={{ pointerEvents:'none' }} />
+              <circle cx={btCutoutCursor.x} cy={btCutoutCursor.y} r={3/view.zoom}
+                fill="#f59e0b" stroke="#111827" strokeWidth={1/view.zoom} style={{ pointerEvents:'none' }} />
+            </Fragment>
+          )
+        })()}
+
+        {/* ── In-progress cutout circle ── */}
+        {mode === 'draw_benchtop_cutout_circle' && btCutoutStart && (() => {
+          const r = btCutoutCursor ? Math.sqrt((btCutoutCursor.x-btCutoutStart.x)**2+(btCutoutCursor.y-btCutoutStart.y)**2) : 0
+          return (
+            <Fragment>
+              <circle cx={btCutoutStart.x} cy={btCutoutStart.y} r={Math.max(r, 1/view.zoom)}
+                fill="rgba(239,68,68,0.15)" stroke="#ef4444"
+                strokeWidth={1.5/view.zoom} strokeDasharray={`${5/view.zoom} ${3/view.zoom}`}
+                style={{ pointerEvents:'none' }} />
+              {r > 10 && (
+                <text x={btCutoutStart.x} y={btCutoutStart.y} textAnchor="middle" dominantBaseline="middle"
+                  fontSize={10/view.zoom} fill="#fca5a5"
+                  style={{ userSelect:'none', pointerEvents:'none' }}>
+                  ⌀{Math.round(r*2)}
+                </text>
+              )}
+              <circle cx={btCutoutStart.x} cy={btCutoutStart.y} r={4/view.zoom}
+                fill="#ef4444" stroke="#111827" strokeWidth={1/view.zoom} style={{ pointerEvents:'none' }} />
+              {btCutoutCursor && (
+                <circle cx={btCutoutCursor.x} cy={btCutoutCursor.y} r={3/view.zoom}
+                  fill="#f59e0b" stroke="#111827" strokeWidth={1/view.zoom} style={{ pointerEvents:'none' }} />
+              )}
+            </Fragment>
           )
         })()}
 

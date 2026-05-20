@@ -11,9 +11,6 @@ import * as THREE from 'three'
 // Joint reference point = (0, 0, 0).
 
 const THICK  = 18
-const A_LEN  = 120
-const B_HGT  = 90
-const D      = 50   // panel depth (Z axis)
 const FOV    = 32
 
 // Colours
@@ -28,6 +25,7 @@ type MachineOp = 'drill' | 'route' | 'pocket' | 'saw'
 type TargetPart = 'part_a' | 'part_b'
 
 export interface JointOp3D {
+  id:                string
   operation_order:   number
   target_part:       TargetPart
   machine_operation: MachineOp
@@ -74,11 +72,12 @@ function Panel({ cx, cy, cz, w, h, d, color, wire }: {
 // ── Operation marker ──────────────────────────────────────────────────────────
 // Shows as a sphere + depth cylinder indicating the operation entry point and direction.
 
-function OpMarker({ x, y, z, radius, depthLen, axis, color }: {
+function OpMarker({ x, y, z, radius, depthLen, axis, color, emissiveIntensity = 0.25 }: {
   x: number; y: number; z: number
   radius: number; depthLen: number
-  axis: 'x-' | 'x+' // x- = into Part A from right end; x+ = into Part B from left face
+  axis: 'x-' | 'x+'
   color: string
+  emissiveIntensity?: number
 }) {
   const cylLen  = Math.max(2, depthLen)
   const cylQuat = new THREE.Quaternion()
@@ -92,7 +91,7 @@ function OpMarker({ x, y, z, radius, depthLen, axis, color }: {
       {/* Entry point sphere */}
       <mesh>
         <sphereGeometry args={[radius, 12, 12]} />
-        <meshStandardMaterial color={color} roughness={0.3} metalness={0.2} emissive={color} emissiveIntensity={0.25} />
+        <meshStandardMaterial color={color} roughness={0.3} metalness={0.2} emissive={color} emissiveIntensity={emissiveIntensity} />
       </mesh>
       {/* Depth cylinder */}
       <mesh position={[cylOffset.dx, cylOffset.dy, cylOffset.dz]} quaternion={cylQuat}>
@@ -105,27 +104,42 @@ function OpMarker({ x, y, z, radius, depthLen, axis, color }: {
 
 // ── Main 3D canvas ────────────────────────────────────────────────────────────
 
-export default function Joint3DView({ ops, thickness, wire = false }: {
+const DEG = Math.PI / 180
+
+export default function Joint3DView({ ops, thickness, wire = false,
+  masterW = 120, masterDx = 0,
+  slaveL = 250,  slaveDy = 18,
+  depth = 50,
+  selOpId = null,
+  jointRx = 0, jointRy = 0, jointRz = 0,
+}: {
   ops:       JointOp3D[]
-  thickness: number   // panel thickness in mm (configurable)
-  wire?:     boolean  // transparent wireframe mode
+  thickness: number
+  wire?:     boolean
+  masterW?:  number
+  masterDx?: number
+  slaveL?:   number
+  slaveDy?:  number
+  depth?:    number
+  selOpId?:  string | null
+  jointRx?:  number
+  jointRy?:  number
+  jointRz?:  number
 }) {
   const t = thickness
 
-  // Part A: horizontal shelf, right edge at X=0, top face at Y=0
-  const partACX = -A_LEN / 2
+  // Part A: extends from X=-(masterW-masterDx) to X=+masterDx, Y=-t to Y=0
+  const partACX = masterDx - masterW / 2
   const partACY = -t / 2
 
-  // Part B: vertical side, left face at X=0, bottom at Y=0 (touches Part A top)
-  // Extends from Y=0 up to Y=B_HGT, plus downward through Part A thickness
-  const partBTotalH = B_HGT + t
+  // Part B: extends from Y=-slaveDy to Y=(slaveL-slaveDy), X=0 to X=t
   const partBCX = t / 2
-  const partBCY = (B_HGT - t) / 2  // = (B_HGT+t)/2 - t = B_HGT/2
+  const partBCY = slaveL / 2 - slaveDy
 
-  // Camera: look at the joint corner from front-right-above
-  const sceneCX = (partACX)           // roughly centre of Part A
-  const sceneCY = (partBCY)           // roughly centre of Part B
-  const diag    = Math.sqrt((A_LEN + t) ** 2 + (B_HGT + t) ** 2 + D ** 2)
+  // Camera: frame both parts
+  const sceneCX = partACX
+  const sceneCY = partBCY
+  const diag    = Math.sqrt(masterW ** 2 + slaveL ** 2 + depth ** 2)
   const camD    = (diag / Math.tan((FOV / 2) * (Math.PI / 180))) * 0.65
 
   const dragRef = useRef(false)
@@ -153,46 +167,50 @@ export default function Joint3DView({ ops, thickness, wire = false }: {
       <directionalLight position={[200, 300, 200]} intensity={1.1} castShadow />
       <directionalLight position={[-150, 100, -100]} intensity={0.35} />
 
-      {/* Part A — horizontal shelf */}
-      <Panel cx={partACX} cy={partACY} cz={0} w={A_LEN} h={t} d={D} color={COL_A} wire={wire} />
+      {/* Joint assembly — rotatable as a unit */}
+      <group rotation={[jointRx * DEG, jointRy * DEG, jointRz * DEG]}>
+        {/* Part A — horizontal shelf */}
+        <Panel cx={partACX} cy={partACY} cz={0} w={masterW} h={t} d={depth} color={COL_A} wire={wire} />
 
-      {/* Part B — vertical side */}
-      <Panel cx={partBCX} cy={partBCY} cz={0} w={t} h={partBTotalH} d={D} color={COL_B} wire={wire} />
+        {/* Part B — vertical side */}
+        <Panel cx={partBCX} cy={partBCY} cz={0} w={t} h={slaveL} d={depth} color={COL_B} wire={wire} />
 
-      {/* Operation markers */}
-      {ops.map((op, i) => {
-        const r     = Math.max(1.5, op.tool_diameter_mm / 2)
-        const depth = Math.max(2, op.depth_mm)
+        {/* Operation markers */}
+        {ops.map((op, i) => {
+          const sel     = op.id === selOpId
+          const r       = Math.max(1.5, op.tool_diameter_mm / 2) * (sel ? 1.45 : 1)
+          const opDepth = Math.max(2, op.depth_mm)
+          const colA    = sel ? '#fcd34d' : COL_OP_A
+          const colB    = sel ? '#93c5fd' : COL_OP_B
 
-        if (op.target_part === 'part_a') {
-          // Enters Part A's right end face. offset_x sets back from face into panel (-X).
-          // offset_y: within panel thickness from centre. offset_z: front-to-back (panel depth).
-          return (
-            <OpMarker
-              key={i}
-              x={-op.offset_x_mm} y={-t / 2 + op.offset_y_mm} z={op.offset_z_mm}
-              radius={r} depthLen={depth}
-              axis="x-"
-              color={COL_OP_A}
-            />
-          )
-        } else {
-          // Enters Part B's left face. offset_x sets into panel (+X).
-          // offset_y: height from joint line. offset_z: front-to-back (panel depth).
-          return (
-            <OpMarker
-              key={i}
-              x={op.offset_x_mm} y={op.offset_y_mm} z={op.offset_z_mm}
-              radius={r} depthLen={depth}
-              axis="x+"
-              color={COL_OP_B}
-            />
-          )
-        }
-      })}
+          if (op.target_part === 'part_a') {
+            return (
+              <OpMarker
+                key={i}
+                x={-op.offset_x_mm} y={-t / 2 + op.offset_y_mm} z={op.offset_z_mm}
+                radius={r} depthLen={opDepth}
+                axis="x-"
+                color={colA}
+                emissiveIntensity={sel ? 0.8 : 0.25}
+              />
+            )
+          } else {
+            return (
+              <OpMarker
+                key={i}
+                x={op.offset_x_mm} y={op.offset_y_mm} z={op.offset_z_mm}
+                radius={r} depthLen={opDepth}
+                axis="x+"
+                color={colB}
+                emissiveIntensity={sel ? 0.8 : 0.25}
+              />
+            )
+          }
+        })}
+      </group>
 
       {/* Ground shadow plane */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -t - 4, 0]}>
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -(t + slaveDy) - 4, 0]}>
         <planeGeometry args={[1000, 1000]} />
         <shadowMaterial opacity={0.15} />
       </mesh>

@@ -260,7 +260,7 @@ export default function CanvasSidebar({
 
   const cabActive       = PLACE_MODES.includes(mode)
   const wallActive      = WALL_MODES.includes(mode)
-  const benchtopActive  = mode === 'draw_benchtop' || mode === 'draw_benchtop_rect'
+  const benchtopActive  = mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u' || mode === 'draw_benchtop_cutout_rect' || mode === 'draw_benchtop_cutout_circle'
 
   const previewItem = cabActive ? ALL_CAB_ITEMS.find(c => c.mode === mode) : null
   const previewMac  = cabActive ? modeAssemblyClass(mode) : null
@@ -468,6 +468,57 @@ export default function CanvasSidebar({
                 </svg>
               </span>
               <span className="truncate">Draw Rectangle</span>
+            </button>
+            <button
+              onClick={() => { onSelectMode('draw_benchtop_l'); setBenchtopMenuOpen(false) }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
+                ${mode === 'draw_benchtop_l' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            >
+              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop_l' ? 'text-white' : 'text-teal-400'}`}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 2 L2 14 L8 14 L8 8 L14 8 L14 2 Z" fill="currentColor" fillOpacity="0.12"/>
+                </svg>
+              </span>
+              <span className="truncate">Draw L-Shape</span>
+            </button>
+            <button
+              onClick={() => { onSelectMode('draw_benchtop_u'); setBenchtopMenuOpen(false) }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
+                ${mode === 'draw_benchtop_u' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            >
+              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop_u' ? 'text-white' : 'text-teal-400'}`}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 2 L2 14 L5 14 L5 8 L11 8 L11 14 L14 14 L14 2 Z" fill="currentColor" fillOpacity="0.12"/>
+                </svg>
+              </span>
+              <span className="truncate">Draw U-Shape</span>
+            </button>
+            <div className="border-t border-gray-800 my-1 mx-1" />
+            <button
+              onClick={() => { onSelectMode('draw_benchtop_cutout_rect'); setBenchtopMenuOpen(false) }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
+                ${mode === 'draw_benchtop_cutout_rect' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            >
+              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop_cutout_rect' ? 'text-white' : 'text-red-400'}`}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="1" width="14" height="14" rx="1" fill="currentColor" fillOpacity="0.08"/>
+                  <rect x="4" y="4" width="8" height="8" rx="0.5" fill="#111827" stroke="currentColor" strokeDasharray="2 1.5"/>
+                </svg>
+              </span>
+              <span className="truncate">Rect Cutout</span>
+            </button>
+            <button
+              onClick={() => { onSelectMode('draw_benchtop_cutout_circle'); setBenchtopMenuOpen(false) }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
+                ${mode === 'draw_benchtop_cutout_circle' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            >
+              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop_cutout_circle' ? 'text-white' : 'text-red-400'}`}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="1" width="14" height="14" rx="1" fill="currentColor" fillOpacity="0.08"/>
+                  <circle cx="8" cy="8" r="4" fill="#111827" stroke="currentColor" strokeDasharray="2 1.5"/>
+                </svg>
+              </span>
+              <span className="truncate">Circle Cutout</span>
             </button>
           </div>
         )}

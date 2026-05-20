@@ -2,12 +2,12 @@
 
 import { useState, useRef, useEffect, useCallback, useReducer } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import { Project, Room, Wall, CabinetInstance, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopArcSegment } from '@/src/lib/types'
+import { Project, Room, Wall, CabinetInstance, AssemblyClass, DEFAULT_DIMS, BenchtopInstance } from '@/src/lib/types'
 import {
   Pt, MIN_ZOOM, MAX_ZOOM, MIN_WALL_LEN, SNAP_PX, WALL_SNAP_PX,
   toDeg, dist,
   wallEnd, wallDir,
-  snapEndpoint, snapAngle,
+  snapEndpoint, snapAngle, ptToSeg,
   nearestWall, findFreeSlot, cabBlocks, cabT, nextLabel,
   centroid, wallInwardNormal, islandCabPerp, cabinetCenterPt,
 } from '@/src/lib/geometry'
@@ -24,6 +24,7 @@ import {
   viewReducer, modeAssemblyClass, DisplayConfig, PresetId,
   DEFAULT_DISPLAY_CONFIG, applyPreset, toggleAnnotation,
 } from './canvasTypes'
+import { useBenchtopInteraction } from './useBenchtopInteraction'
 import { DISPLAY_PRESETS } from '@/src/lib/displayConfig'
 import CanvasMenubar from './CanvasMenubar'
 import CanvasSidebar from './CanvasSidebar'
@@ -93,31 +94,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation'>('elevation')
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
-  const [btDrawPoly, setBtDrawPoly] = useState<Pt[]>([])
-  const [btDrawCursor, setBtDrawCursor] = useState<Pt | null>(null)
-  const [btDrawArcs, setBtDrawArcs] = useState<BenchtopArcSegment[]>([])
-  const [btArcMode, setBtArcMode] = useState(false)
-  const [btArcMidpoint, setBtArcMidpoint] = useState<Pt | null>(null)
-  const [btRectStart, setBtRectStart] = useState<Pt | null>(null)
-  const [btRectCursor, setBtRectCursor] = useState<Pt | null>(null)
-  const [benchtopMenuOpen, setBenchtopMenuOpen] = useState(false)
-  const btVertexDragRef = useRef<{
-    btId: string; vertexIndex: number; hasMoved: boolean
-    originX: number; originY: number
-    originalPolygon: Pt[]; currentPolygon: Pt[]
-  } | null>(null)
-  const btArcDragRef = useRef<{
-    btId: string; edgeIndex: number; hasMoved: boolean
-    originX: number; originY: number
-    currentArcs: BenchtopArcSegment[]
-  } | null>(null)
+  const ctrlRef = useRef(false)
 
   const { captureSnapshot, pushSnapshot, handleUndo, handleRedo, wallsRef, cabinetsRef, benchtopsRef, canUndo, canRedo } =
     useCanvasHistory(walls, cabinets, benchtops, setWalls, setCabinets, setBenchtops, setSelected)
-
-  // Holds the benchtops array at the moment a drag starts, so we can record the
-  // pre-drag state as the undo entry once we know the drag actually moved.
-  const preDragBenchtopsRef = useRef<BenchtopInstance[]>([])
 
   const {
     resolvedParts, setResolvedParts,
@@ -140,6 +120,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Set to true when pointerDown starts the draw (so the matching pointerUp doesn't finish it).
   const drawStartedThisDownRef = useRef(false)
   const drawingPanelRef = useRef<DrawingPanelHandle>(null)
+
+  const bt = useBenchtopInteraction({
+    room, walls, cabinets,
+    benchtops, setBenchtops, benchtopsRef,
+    wallsRef, cabinetsRef,
+    mode, zoom: view.zoom,
+    svgRef, svgPointerDownRef, ctrlRef, shiftRef,
+    selected,
+    setSelected, setContextMenu, setMode,
+    captureSnapshot, pushSnapshot,
+  })
 
   // ── Coordinate helpers ────────────────────────────────────────────────────
 
@@ -205,6 +196,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const kd = (e: KeyboardEvent) => {
       if (e.key === ' ' && !isInput(e.target)) { spaceRef.current = true; e.preventDefault() }
       if (e.key === 'Shift') shiftRef.current = true
+      if (e.key === 'Control') ctrlRef.current = true
       if (e.key === 'Tab' && mode === 'draw_wall' && drawStart && !isInput(e.target)) {
         e.preventDefault(); drawingPanelRef.current?.focusLength()
       }
@@ -221,31 +213,30 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       if (e.key === 'F4' && !isInput(e.target)) {
         e.preventDefault()
-        const isBt = mode === 'draw_benchtop' || mode === 'draw_benchtop_rect'
+        const isBt = mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u' || mode === 'draw_benchtop_cutout_rect' || mode === 'draw_benchtop_cutout_circle'
         const next = isBt ? 'select' : 'draw_benchtop'
         setMode(next)
-        setBenchtopMenuOpen(next === 'draw_benchtop')
-        setBtDrawPoly([]); setBtDrawCursor(null); setBtDrawArcs([]); setBtArcMode(false); setBtArcMidpoint(null)
-        setBtRectStart(null); setBtRectCursor(null)
+        bt.resetDraw()
+        bt.setBenchtopMenuOpen(next === 'draw_benchtop')
       }
-      if (e.key === 'a' && !isInput(e.target) && (mode === 'draw_benchtop') && btDrawPoly.length > 0) {
+      if (e.key === 'a' && !isInput(e.target) && (mode === 'draw_benchtop') && bt.btDrawPoly.length > 0) {
         e.preventDefault()
-        setBtArcMode(v => !v)
-        setBtArcMidpoint(null)
+        bt.toggleArcMode()
       }
       if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !isInput(e.target)) { e.preventDefault(); void handleUndo() }
       if (((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey) && !isInput(e.target)) || ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && e.shiftKey && !isInput(e.target))) { e.preventDefault(); void handleRedo() }
-      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode('select'); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; setBtDrawPoly([]); setBtDrawCursor(null); setBtDrawArcs([]); setBtArcMode(false); setBtArcMidpoint(null); setBtRectStart(null); setBtRectCursor(null); setBenchtopMenuOpen(false); setDeleteWallPending(null) }
+      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode('select'); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null) }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput(e.target)) {
-        if (mode === 'draw_benchtop' && e.key === 'Backspace') { setBtDrawPoly(prev => prev.slice(0, -1)); return }
+        if (mode === 'draw_benchtop' && e.key === 'Backspace') { bt.undoVertex(); return }
         if (selected?.type === 'cabinet') handleDeleteCabinet(selected.id)
         if (selected?.type === 'wall') handleDeleteWall(selected.id)
-        if (selected?.type === 'benchtop') void handleDeleteBenchtop(selected.id)
+        if (selected?.type === 'benchtop') void bt.handleDeleteBenchtop(selected.id)
       }
     }
     const ku = (e: KeyboardEvent) => {
       if (e.key === ' ') spaceRef.current = false
       if (e.key === 'Shift') shiftRef.current = false
+      if (e.key === 'Control') ctrlRef.current = false
     }
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku)
     return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku) }
@@ -326,141 +317,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setMultiSelect([])
     setContextMenu(null)
     await Promise.all(ids.map(id => dbDeleteCabinet(id)))
-  }
-
-  async function saveBenchtop(polygon: Pt[], arcSegs: BenchtopArcSegment[] = []) {
-    captureSnapshot()
-    const data = {
-      room_id: room.id,
-      label: `Benchtop ${benchtops.length + 1}`,
-      polygon,
-      arc_segments: arcSegs,
-      edge_tags: [] as { edge_index: number; type: string }[],
-      join_types: [] as { vertex_index: number; join_type: string }[],
-      benchtop_build_method_id: null,
-      benchtop_schedule_id: null,
-      notes: null,
-    }
-    const { data: saved, error } = await supabase.from('benchtop_instances').insert(data).select().single()
-    if (!error && saved) {
-      setBenchtops(bs => [...bs, saved as BenchtopInstance])
-      setSelected({ type: 'benchtop', id: (saved as BenchtopInstance).id })
-      setMode('select')
-      setBenchtopMenuOpen(false)
-      setBtDrawPoly([]); setBtDrawArcs([]); setBtArcMode(false); setBtArcMidpoint(null)
-      setBtRectStart(null); setBtRectCursor(null)
-    }
-  }
-
-  function onBtArcPointerDown(e: React.PointerEvent, btId: string, edgeIndex: number) {
-    if (mode !== 'select') return
-    const bt = benchtops.find(b => b.id === btId)
-    if (!bt) return
-    e.stopPropagation()
-    svgPointerDownRef.current = true
-    svgRef.current?.setPointerCapture(e.pointerId)
-    preDragBenchtopsRef.current = benchtopsRef.current
-    btArcDragRef.current = {
-      btId, edgeIndex, hasMoved: false,
-      originX: e.clientX, originY: e.clientY,
-      currentArcs: bt.arc_segments ?? [],
-    }
-  }
-
-  function onBenchtopEdgeShiftClick(id: string, edgeIndex: number) {
-    const bt = benchtops.find(b => b.id === id)
-    if (!bt || mode !== 'select') return
-    const p = bt.polygon[edgeIndex]
-    const next = bt.polygon[(edgeIndex + 1) % bt.polygon.length]
-    const mid: Pt = { x: (p.x + next.x) / 2, y: (p.y + next.y) / 2 }
-    const newPolygon = [...bt.polygon.slice(0, edgeIndex + 1), mid, ...bt.polygon.slice(edgeIndex + 1)]
-    // Shift all edge/vertex indices that come after the split point
-    const oldTag = bt.edge_tags.find(t => t.edge_index === edgeIndex)
-    const newEdgeTags = [
-      ...bt.edge_tags.map(t => t.edge_index > edgeIndex ? { ...t, edge_index: t.edge_index + 1 } : t),
-      ...(oldTag ? [{ edge_index: edgeIndex + 1, type: oldTag.type }] : []),
-    ]
-    const newJoinTypes = bt.join_types.map(j =>
-      j.vertex_index > edgeIndex ? { ...j, vertex_index: j.vertex_index + 1 } : j
-    )
-    const newArcSegments = (bt.arc_segments ?? [])
-      .filter(a => a.edge_index !== edgeIndex)
-      .map(a => a.edge_index > edgeIndex ? { ...a, edge_index: a.edge_index + 1 } : a)
-    void handleUpdateBenchtop(id, { polygon: newPolygon, edge_tags: newEdgeTags, join_types: newJoinTypes, arc_segments: newArcSegments })
-  }
-
-  function onBenchtopEdgeAltClick(id: string, edgeIndex: number) {
-    const bt = benchtops.find(b => b.id === id)
-    if (!bt || mode !== 'select') return
-    const existing = (bt.arc_segments ?? []).find(a => a.edge_index === edgeIndex)
-    if (existing) {
-      // Remove arc — convert back to straight line
-      const newArcs = (bt.arc_segments ?? []).filter(a => a.edge_index !== edgeIndex)
-      void handleUpdateBenchtop(id, { arc_segments: newArcs })
-    } else {
-      // Add arc — default control point at edge midpoint offset outward
-      const p = bt.polygon[edgeIndex]
-      const next = bt.polygon[(edgeIndex + 1) % bt.polygon.length]
-      const cx2 = (p.x + next.x) / 2, cy2 = (p.y + next.y) / 2
-      const len = Math.sqrt((next.x - p.x) ** 2 + (next.y - p.y) ** 2)
-      const nx = -(next.y - p.y) / len, ny = (next.x - p.x) / len
-      const centX = bt.polygon.reduce((s, pt) => s + pt.x, 0) / bt.polygon.length
-      const centY = bt.polygon.reduce((s, pt) => s + pt.y, 0) / bt.polygon.length
-      const outward = (nx * (cx2 - centX) + ny * (cy2 - centY)) >= 0 ? 1 : -1
-      const newArcs = [...(bt.arc_segments ?? []), { edge_index: edgeIndex, cpx: cx2 + nx * outward * len * 0.25, cpy: cy2 + ny * outward * len * 0.25 }]
-      void handleUpdateBenchtop(id, { arc_segments: newArcs })
-    }
-  }
-
-  async function handleUpdateBenchtop(id: string, u: Partial<BenchtopInstance>) {
-    captureSnapshot()
-    setBenchtops(bs => bs.map(b => b.id === id ? { ...b, ...u } : b))
-    const { error } = await supabase.from('benchtop_instances').update(u).eq('id', id)
-    if (error) console.error('Failed to save benchtop:', error)
-  }
-
-  async function handleDeleteBenchtop(id: string) {
-    if (!confirm('Delete this benchtop?')) return
-    captureSnapshot()
-    setBenchtops(bs => bs.filter(b => b.id !== id))
-    setSelected(null)
-    await supabase.from('benchtop_instances').delete().eq('id', id)
-  }
-
-  function onBenchtopEdgeClick(id: string, edgeIndex: number) {
-    const bt = benchtops.find(b => b.id === id)
-    if (!bt || mode !== 'select') return
-    const existing = bt.edge_tags.find(t => t.edge_index === edgeIndex)
-    const newType = !existing || existing.type === 'exposed' ? 'wall' : 'exposed'
-    const edge_tags = bt.edge_tags.filter(t => t.edge_index !== edgeIndex)
-    if (newType === 'wall') edge_tags.push({ edge_index: edgeIndex, type: 'wall' })
-    void handleUpdateBenchtop(id, { edge_tags })
-  }
-
-  function onBenchtopVertexClick(id: string, vertexIndex: number) {
-    const bt = benchtops.find(b => b.id === id)
-    if (!bt || mode !== 'select') return
-    const existing = bt.join_types.find(j => j.vertex_index === vertexIndex)
-    const newJoin = !existing || existing.join_type === 'butt' ? 'mitre' : 'butt'
-    const join_types = bt.join_types.filter(j => j.vertex_index !== vertexIndex)
-    if (newJoin === 'mitre') join_types.push({ vertex_index: vertexIndex, join_type: 'mitre' })
-    void handleUpdateBenchtop(id, { join_types })
-  }
-
-  function onBtVertexPointerDown(e: React.PointerEvent, btId: string, vi: number) {
-    if (mode !== 'select') return
-    const bt = benchtops.find(b => b.id === btId)
-    if (!bt) return
-    e.stopPropagation()
-    svgPointerDownRef.current = true
-    svgRef.current?.setPointerCapture(e.pointerId)
-    preDragBenchtopsRef.current = benchtopsRef.current
-    btVertexDragRef.current = {
-      btId, vertexIndex: vi, hasMoved: false,
-      originX: e.clientX, originY: e.clientY,
-      originalPolygon: bt.polygon,
-      currentPolygon: bt.polygon,
-    }
   }
 
   const handleUpdateCabinet = useCallback(async (id: string, u: Partial<CabinetInstance>) => {
@@ -570,7 +426,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     if (e.button !== 0) return
     if (cabFollowing) return
-    if (mode === 'draw_benchtop' || mode === 'draw_benchtop_rect') {
+    if (mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l') {
       e.preventDefault()
       return
     }
@@ -603,71 +459,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return
     }
 
-    if (btArcDragRef.current) {
-      const drag = btArcDragRef.current
-      const dx = e.clientX - drag.originX, dy = e.clientY - drag.originY
-      if (Math.sqrt(dx * dx + dy * dy) < 4 && !drag.hasMoved) return
-      drag.hasMoved = true
-      drag.currentArcs = drag.currentArcs.map(a =>
-        a.edge_index === drag.edgeIndex ? { ...a, cpx: wp.x, cpy: wp.y } : a
-      )
-      setBenchtops(bs => bs.map(b => b.id === drag.btId ? { ...b, arc_segments: drag.currentArcs } : b))
-      return
-    }
+    if (bt.handlePointerMove(wp, e)) return
 
-    if (btVertexDragRef.current) {
-      const drag = btVertexDragRef.current
-      const dx = e.clientX - drag.originX, dy = e.clientY - drag.originY
-      if (Math.sqrt(dx * dx + dy * dy) < 4 && !drag.hasMoved) return
-      drag.hasMoved = true
-      const snapDist = SNAP_PX / view.zoom
-      let snapped: Pt = wp, bestDist = snapDist
-      for (const w of walls) {
-        for (const ep of [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)]) {
-          const d = dist(ep, wp); if (d < bestDist) { bestDist = d; snapped = ep }
-        }
-      }
-      const newPolygon = drag.originalPolygon.map((p, i) => i === drag.vertexIndex ? snapped : p)
-      drag.currentPolygon = newPolygon
-      setBenchtops(bs => bs.map(b => b.id === drag.btId ? { ...b, polygon: newPolygon } : b))
-      return
-    }
-
-    if (mode === 'draw_benchtop_rect') {
-      const snapDist = SNAP_PX / view.zoom
-      let snapped: Pt = wp, bestDist = snapDist
-      for (const w of walls) {
-        for (const ep of [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)]) {
-          const d = dist(ep, wp); if (d < bestDist) { bestDist = d; snapped = ep }
-        }
-      }
-      if (shiftRef.current && btRectStart) snapped = snapAngle(btRectStart, snapped, 45)
-      setBtRectCursor(snapped)
-      return
-    }
-
-    if (mode === 'draw_benchtop') {
-      const snapDist = SNAP_PX / view.zoom
-      let best: Pt = wp, bestDist = snapDist
-      for (const w of walls) {
-        for (const ep of [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)]) {
-          const d = dist(ep, wp); if (d < bestDist) { bestDist = d; best = ep }
-        }
-      }
-      for (const b of benchtops) {
-        for (const v of b.polygon) {
-          const d = dist(v, wp); if (d < bestDist) { bestDist = d; best = v }
-        }
-      }
-      for (const v of btDrawPoly) {
-        const d = dist(v, wp); if (d < bestDist) { bestDist = d; best = v }
-      }
-      if (shiftRef.current && btDrawPoly.length > 0) {
-        best = snapAngle(btDrawPoly[btDrawPoly.length - 1], best, 45)
-      }
-      setBtDrawCursor(best)
-      return
-    }
     if (mode === 'draw_wall' || mode === 'draw_island') {
       const cornerSnap = snapEndpoint(wp, walls, SNAP_PX / view.zoom)
       const hitCorner = dist(cornerSnap, wp) > 0.5
@@ -793,106 +586,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const svgP = svgCoords(e)
     const wp = toWorld(svgP.x, svgP.y)
 
-    if (btArcDragRef.current) {
-      const drag = btArcDragRef.current
-      btArcDragRef.current = null
-      if (drag.hasMoved) {
-        pushSnapshot({ walls: wallsRef.current, cabinets: cabinetsRef.current, benchtops: preDragBenchtopsRef.current })
-        const { error } = await supabase.from('benchtop_instances').update({ arc_segments: drag.currentArcs }).eq('id', drag.btId)
-        if (error) console.error('Failed to save arc:', error)
-      }
-      return
-    }
+    if (await bt.handlePointerUp(wp, e)) return
 
-    if (btVertexDragRef.current) {
-      const drag = btVertexDragRef.current
-      btVertexDragRef.current = null
-      if (drag.hasMoved) {
-        pushSnapshot({ walls: wallsRef.current, cabinets: cabinetsRef.current, benchtops: preDragBenchtopsRef.current })
-        const { error } = await supabase.from('benchtop_instances').update({ polygon: drag.currentPolygon }).eq('id', drag.btId)
-        if (error) console.error('Failed to save benchtop polygon:', error)
-      } else {
-        onBenchtopVertexClick(drag.btId, drag.vertexIndex)
-      }
-      return
-    }
-
-    if (mode === 'draw_benchtop_rect') {
-      const snapDist = SNAP_PX / view.zoom
-      let snapped: Pt = wp, bestDist = snapDist
-      for (const w of walls) {
-        for (const ep of [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)]) {
-          const d = dist(ep, wp); if (d < bestDist) { bestDist = d; snapped = ep }
-        }
-      }
-      if (shiftRef.current && btRectStart) snapped = snapAngle(btRectStart, snapped, 45)
-      if (!btRectStart) {
-        setBtRectStart(snapped)
-      } else {
-        const x1 = btRectStart.x, y1 = btRectStart.y, x2 = snapped.x, y2 = snapped.y
-        if (Math.abs(x2 - x1) > 10 && Math.abs(y2 - y1) > 10) {
-          const polygon: Pt[] = [{ x: x1, y: y1 }, { x: x2, y: y1 }, { x: x2, y: y2 }, { x: x1, y: y2 }]
-          setBtRectStart(null); setBtRectCursor(null)
-          await saveBenchtop(polygon)
-        }
-      }
-      return
-    }
-
-    if (mode === 'draw_benchtop') {
-      const snapDist = SNAP_PX / view.zoom
-      let snapped: Pt = wp, bestDist = snapDist
-      for (const w of walls) {
-        for (const ep of [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)]) {
-          const d = dist(ep, wp); if (d < bestDist) { bestDist = d; snapped = ep }
-        }
-      }
-      for (const b of benchtops) {
-        for (const v of b.polygon) {
-          const d = dist(v, wp); if (d < bestDist) { bestDist = d; snapped = v }
-        }
-      }
-      for (const v of btDrawPoly) {
-        const d = dist(v, wp); if (d < bestDist) { bestDist = d; snapped = v }
-      }
-      if (shiftRef.current && btDrawPoly.length > 0 && !btArcMode) {
-        snapped = snapAngle(btDrawPoly[btDrawPoly.length - 1], snapped, 45)
-      }
-
-      // Close polygon when near first vertex (only allowed in straight mode)
-      if (!btArcMode && btDrawPoly.length >= 3 && dist(snapped, btDrawPoly[0]) < snapDist) {
-        const polygon = [...btDrawPoly]
-        const arcs = [...btDrawArcs]
-        setBtDrawPoly([]); setBtDrawCursor(null); setBtDrawArcs([]); setBtArcMode(false); setBtArcMidpoint(null)
-        await saveBenchtop(polygon, arcs)
-        return
-      }
-
-      if (btArcMode && btDrawPoly.length > 0) {
-        if (!btArcMidpoint) {
-          // First click in arc mode: record the on-curve midpoint
-          setBtArcMidpoint(snapped)
-        } else {
-          // Second click: endpoint — compute bezier CP from 3 points, add arc + vertex
-          const start = btDrawPoly[btDrawPoly.length - 1]
-          const end = snapped
-          const mid = btArcMidpoint
-          const cpx = 2 * mid.x - (start.x + end.x) / 2
-          const cpy = 2 * mid.y - (start.y + end.y) / 2
-          const edgeIndex = btDrawPoly.length - 1
-          setBtDrawArcs(prev => [...prev, { edge_index: edgeIndex, cpx, cpy }])
-          setBtDrawPoly(prev => [...prev, end])
-          setBtArcMidpoint(null)
-          setBtArcMode(false)
-        }
-        return
-      }
-
-      if (btDrawPoly.length === 0 || dist(snapped, btDrawPoly[btDrawPoly.length - 1]) > 10) {
-        setBtDrawPoly(prev => [...prev, snapped])
-      }
-      return
-    }
     if (mode === 'draw_wall' || mode === 'draw_island') {
       if (drawStartedThisDownRef.current) { drawStartedThisDownRef.current = false; return }
       const isIsland = mode === 'draw_island'
@@ -1149,8 +844,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const canEqualize = multiSelectCabs.length >= 2 && new Set(multiSelectCabs.map(c => c.wall_id)).size === 1
 
   const cursor = spaceRef.current ? 'grab'
-    : (btVertexDragRef.current?.hasMoved || btArcDragRef.current?.hasMoved) ? 'grabbing'
-    : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect') ? 'crosshair'
+    : bt.isDragging ? 'grabbing'
+    : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l') ? 'crosshair'
     : (modeAssemblyClass(mode) || mode === 'paste') ? 'cell'
     : cabResize ? 'crosshair'
     : 'default'
@@ -1185,12 +880,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }
 
   const modeHint =
-    mode === 'draw_benchtop_rect'? (!btRectStart ? 'Click first corner · Shift = 45° snap' : 'Click opposite corner to finish · Esc = cancel')
-    : mode === 'draw_benchtop'   ? (btArcMode
-        ? (!btArcMidpoint ? 'Arc mode: click a point ON the arc curve' : 'Arc mode: click the arc endpoint')
-        : btDrawPoly.length === 0 ? 'Click first vertex · Shift=45° snap · A=arc · Esc=cancel'
-        : btDrawPoly.length < 3 ? `${btDrawPoly.length} ${btDrawPoly.length === 1 ? 'vertex' : 'vertices'} · Backspace=undo · Shift=45° · A=arc`
-        : `${btDrawPoly.length} vertices · click near first vertex to close · Backspace=undo · A=arc`)
+    mode === 'draw_benchtop_rect'? (!bt.btRectStart ? 'Click first corner · Shift=45° · Ctrl=ortho' : 'Click opposite corner to finish · Esc=cancel · Ctrl=ortho')
+    : mode === 'draw_benchtop_l' ? (bt.btLPoints.length === 0 ? 'L-shape: click start of first leg · Ctrl=ortho · Esc=cancel' : bt.btLPoints.length === 1 ? 'Click inner corner · Ctrl=ortho' : 'Click end of second leg to complete L-shape')
+    : mode === 'draw_benchtop_u' ? (['U-shape: click start of arm 1 · Ctrl=ortho · Esc=cancel', 'Click inner corner 1', 'Click inner corner 2', 'Click end of arm 2'][bt.btUPoints.length] ?? 'Click end of arm 2')
+    : mode === 'draw_benchtop_cutout_rect' ? (!bt.btCutoutStart ? 'Cutout: click first corner of rectangle · Esc=cancel' : 'Click opposite corner to finish cutout')
+    : mode === 'draw_benchtop_cutout_circle' ? (!bt.btCutoutStart ? 'Cutout: click centre of circle · Esc=cancel' : 'Click to set radius and finish cutout')
+    : mode === 'draw_benchtop'   ? (bt.btArcMode
+        ? (!bt.btArcMidpoint ? 'Arc mode: click a point ON the arc curve' : 'Arc mode: click the arc endpoint')
+        : bt.btDrawPoly.length === 0 ? 'Click first vertex · Shift=45° · Ctrl=ortho · A=arc · Esc=cancel'
+        : bt.btDrawPoly.length < 3 ? `${bt.btDrawPoly.length} ${bt.btDrawPoly.length === 1 ? 'vertex' : 'vertices'} · Backspace=undo · Shift=45° · Ctrl=ortho · A=arc`
+        : `${bt.btDrawPoly.length} vertices · click near first vertex to close · Backspace=undo · A=arc`)
     : mode === 'draw_wall'       ? (!drawStart ? 'Click to set start point · snap rings show existing endpoints' : 'Click to finish · Shift = 5° snap · or type in panel →')
     : mode === 'draw_island'     ? (!drawStart ? 'Click to set island start · Shift = 5° snap · Right-click = cancel' : 'Click to finish island · cabinets snap to either side')
     : mode === 'place_base'        ? 'Click near a wall to place base cabinet · Esc = cancel'
@@ -1276,8 +975,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           setWallMenuOpen={setWallMenuOpen}
           cabMenuOpen={cabMenuOpen}
           setCabMenuOpen={setCabMenuOpen}
-          benchtopMenuOpen={benchtopMenuOpen}
-          setBenchtopMenuOpen={setBenchtopMenuOpen}
+          benchtopMenuOpen={bt.benchtopMenuOpen}
+          setBenchtopMenuOpen={bt.setBenchtopMenuOpen}
           clipboard={clipboard}
           sidebarW={sidebarW}
         />
@@ -1328,21 +1027,31 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               onSVGClick={onSVGClick}
               benchtops={benchtops}
               selectedBenchtopId={selectedBenchtop?.id ?? null}
-              btDrawPoly={btDrawPoly}
-              btDrawCursor={btDrawCursor}
+              btDrawPoly={bt.btDrawPoly}
+              btDrawCursor={bt.btDrawCursor}
               onBenchtopClick={id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]) }}
-              onBenchtopEdgeClick={onBenchtopEdgeClick}
-              onBenchtopEdgeShiftClick={onBenchtopEdgeShiftClick}
-              onBenchtopEdgeAltClick={onBenchtopEdgeAltClick}
-              onBenchtopVertexClick={onBenchtopVertexClick}
-              onBenchtopVertexPointerDown={onBtVertexPointerDown}
-              onBenchtopArcPointerDown={onBtArcPointerDown}
-              onBtUndoVertex={() => { setBtDrawPoly(prev => prev.slice(0, -1)); setBtDrawArcs(prev => prev.filter(a => a.edge_index < btDrawPoly.length - 2)); setBtArcMode(false); setBtArcMidpoint(null) }}
-              btDrawArcs={btDrawArcs}
-              btArcMode={btArcMode}
-              btArcMidpoint={btArcMidpoint}
-              btRectStart={btRectStart}
-              btRectCursor={btRectCursor}
+              onBenchtopEdgeClick={bt.onBenchtopEdgeClick}
+              onBenchtopEdgeShiftClick={bt.onBenchtopEdgeShiftClick}
+              onBenchtopEdgeAltClick={bt.onBenchtopEdgeAltClick}
+              onBenchtopVertexClick={bt.onBenchtopVertexClick}
+              onBenchtopVertexPointerDown={bt.onBtVertexPointerDown}
+              onBenchtopContextMenu={bt.onBenchtopContextMenu}
+              onBenchtopArcPointerDown={bt.onBtArcPointerDown}
+              onBtUndoVertex={bt.undoVertex}
+              btDrawArcs={bt.btDrawArcs}
+              btArcMode={bt.btArcMode}
+              btArcMidpoint={bt.btArcMidpoint}
+              btRectStart={bt.btRectStart}
+              btRectCursor={bt.btRectCursor}
+              onBenchtopVertexContextMenu={bt.onBenchtopVertexContextMenu}
+              onBenchtopPointerDown={bt.onBenchtopPointerDown}
+              onBenchtopRotateHandlePointerDown={bt.onBenchtopRotateHandlePointerDown}
+              btLPoints={bt.btLPoints}
+              btLCursor={bt.btLCursor}
+              btUPoints={bt.btUPoints}
+              btUCursor={bt.btUCursor}
+              btCutoutStart={bt.btCutoutStart}
+              btCutoutCursor={bt.btCutoutCursor}
             />
             {(mode === 'draw_wall' || mode === 'draw_island') && !drawStart && (
               <WallDrawPanel
@@ -1481,8 +1190,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         {selectedBenchtop && (
           <BenchtopPanel
             benchtop={selectedBenchtop}
-            onUpdate={handleUpdateBenchtop}
-            onDelete={handleDeleteBenchtop}
+            onUpdate={bt.handleUpdateBenchtop}
+            onDelete={bt.handleDeleteBenchtop}
+            filletRadius={bt.filletRadius}
+            setFilletRadius={bt.setFilletRadius}
+            onMirrorH={bt.handleMirrorH}
+            onMirrorV={bt.handleMirrorV}
+            onOffset={bt.handleOffset}
+            onRotate={bt.handleRotateByAngle}
+            onDeleteCutout={bt.handleDeleteCutout}
+            onDrawCutoutRect={() => setMode('draw_benchtop_cutout_rect')}
+            onDrawCutoutCircle={() => setMode('draw_benchtop_cutout_circle')}
           />
         )}
 
@@ -1519,6 +1237,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             wallId: contextMenu.wallId,
             elevWallId: contextMenu.elevWallId,
             elevWallT: contextMenu.elevWallT,
+            benchtopId: contextMenu.benchtopId,
+            vertexContext: contextMenu.vertexContext,
+            onDeleteBenchtop: id => void bt.handleDeleteBenchtop(id),
+            onDeleteBenchtopVertex: bt.handleDeleteBenchtopVertex,
+            onRoundCorner: bt.handleRoundCorner,
+            onChamfer: bt.handleChamfer,
             canEqualize,
             clipboard,
             cabinets,
