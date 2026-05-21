@@ -40,6 +40,7 @@ import WallPanel from './WallPanel'
 import CabinetPanel from './CabinetPanel'
 import CabinetResizePanel from './CabinetResizePanel'
 import CabinetEditModal from './CabinetEditModal'
+import EdgeJointPicker from './EdgeJointPicker'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
 import RoomPropertiesModal, { type RoomPropertiesTab } from './RoomPropertiesModal'
 import ReportsModal, { type ReportScope } from './ReportsModal'
@@ -83,6 +84,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [mouseWorld, setMouseWorld] = useState<Pt>({ x: 0, y: 0 })
   const [canvasView, setCanvasView] = useState<CanvasView>('plan')
   const [elevWallId, setElevWallId] = useState<string | null>(null)
+  const [selectedSeam, setSelectedSeam] = useState<{ cabId: string; edgeKey: string; label: string } | null>(null)
   const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(() => {
     const preset = getUserPrefs().defaultDrawingPreset
     return applyPreset(preset)
@@ -360,7 +362,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       left_neighbour_type: 'wall', right_neighbour_type: 'wall',
       exposed_interior: false, rule_overrides: {}, material_overrides: {},
       toekick_overrides: {}, drawerbox_overrides: {}, hardware_overrides: {},
-      face_grid: null, schema_version: '0.4', notes: null,
+      face_grid: null, carcase_joints: {}, schema_version: '0.4', notes: null,
     }
     const cabinet = await dbInsertCabinet(data)
     if (cabinet) {
@@ -876,6 +878,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (v !== 'plan') {
       setMode('select'); setDrawStart(null); setPlaceGhost(null); setContextMenu(null)
     }
+    if (v !== 'elevation') setSelectedSeam(null)
     setCanvasView(v)
   }
 
@@ -1118,8 +1121,29 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onCabResizeDone={() => setCabResize(null)}
             resolvedParts={resolvedParts}
             onDeselect={() => setSelected(null)}
+            onSeamClick={(cabId, edgeKey, label) => {
+              setSelected({ type: 'cabinet', id: cabId })
+              setMultiSelect([])
+              setSelectedSeam({ cabId, edgeKey, label })
+            }}
+            selectedSeam={selectedSeam}
           />
         )}
+
+        {canvasView === 'elevation' && selectedSeam && (() => {
+          const cab = cabinets.find(c => c.id === selectedSeam.cabId)
+          if (!cab) return null
+          return (
+            <EdgeJointPicker
+              cabId={selectedSeam.cabId}
+              edgeKey={selectedSeam.edgeKey}
+              edgeLabel={selectedSeam.label}
+              cabinet={cab}
+              onUpdate={handleUpdateCabinet}
+              onClose={() => setSelectedSeam(null)}
+            />
+          )
+        })()}
 
         {canvasView === '3d' && (
           <Room3DScene

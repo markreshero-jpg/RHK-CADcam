@@ -245,13 +245,13 @@ export interface SlideProduct {
   colour:           string | null   // hex colour for 3D rendering
 }
 
-// Slide schedule entry: maps a drawer depth range to a specific slide product
+// Slide schedule entry: depth+height tier → specific slide product
 export interface SlideScheduleEntry {
-  id:          string
-  schedule_id: string
-  min_depth:   number
-  max_depth:   number
-  slide_id:    string
+  id:               string
+  schedule_id:      string
+  depth_threshold:  number   // smallest NL that satisfies this entry, e.g. 450
+  height_threshold: number   // minimum opening height required, e.g. 104 (= box_height of that slide)
+  slide_id:         string
 }
 
 // ── Drawer Box Edging ─────────────────────────────────────────

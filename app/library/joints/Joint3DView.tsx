@@ -21,19 +21,51 @@ const COL_OP_A   = '#f59e0b'  // operations on Part A (amber)
 const COL_OP_B   = '#60a5fa'  // operations on Part B (blue)
 const COL_BG     = '#111827'
 
-type MachineOp = 'drill' | 'route' | 'pocket' | 'saw'
+type MachineOp  = 'drill' | 'route' | 'pocket' | 'saw'
 type TargetPart = 'part_a' | 'part_b'
+type FaceType   = 'normal' | 'end' | 'top' | 'bottom'
+type DrillAxis  = 'x-' | 'x+' | 'y-' | 'y+'
 
 export interface JointOp3D {
   id:                string
   operation_order:   number
   target_part:       TargetPart
   machine_operation: MachineOp
+  face:              FaceType
   tool_diameter_mm:  number
   depth_mm:          number
   offset_x_mm:       number
   offset_y_mm:       number
   offset_z_mm:       number
+}
+
+// Returns the 3D entry point and drill axis for an operation based on its face.
+// Part A: horizontal shelf, right end at X=0, top face at Y=0.
+// Part B: vertical side,  left face at X=0, bottom at Y=-slaveDy.
+// Offset interpretation:
+//   X-drill faces (normal/end): offset_y=Y on face, offset_z=from front; offset_x=X inset
+//   Y-drill faces (top/bottom): offset_x=X position, offset_z=from front; offset_y unused
+function opPlacement(
+  op: JointOp3D,
+  t: number, masterW: number, masterDx: number,
+  slaveL: number, slaveDy: number, depth: number,
+): { x: number; y: number; z: number; axis: DrillAxis } {
+  const oz = depth / 2 - op.offset_z_mm
+  if (op.target_part === 'part_a') {
+    switch (op.face) {
+      case 'end':    return { x: -(masterW - masterDx),  y: -op.offset_y_mm, z: oz, axis: 'x+' }
+      case 'top':    return { x: -op.offset_x_mm,        y: 0,               z: oz, axis: 'y-' }
+      case 'bottom': return { x: -op.offset_x_mm,        y: -t,              z: oz, axis: 'y+' }
+      default:       return { x: -op.offset_x_mm,        y: -op.offset_y_mm, z: oz, axis: 'x-' }
+    }
+  } else {
+    switch (op.face) {
+      case 'end':    return { x: t,              y: -op.offset_y_mm,  z: oz, axis: 'x-' }
+      case 'top':    return { x: op.offset_x_mm, y: slaveL - slaveDy, z: oz, axis: 'y-' }
+      case 'bottom': return { x: op.offset_x_mm, y: -slaveDy,         z: oz, axis: 'y+' }
+      default:       return { x: op.offset_x_mm, y: -op.offset_y_mm,  z: oz, axis: 'x+' }
+    }
+  }
 }
 
 // ── Panel mesh ────────────────────────────────────────────────────────────────
@@ -89,26 +121,28 @@ function CrosshairLines({ size, color }: { size: number; color: string }) {
   )
 }
 
-function OpMarker({ x, y, z, radius, depthLen, axis, color, emissiveIntensity = 0.25 }: {
+function OpMarker({ x, y, z, radius, depthLen, axis, color }: {
   x: number; y: number; z: number
   radius: number; depthLen: number
-  axis: 'x-' | 'x+'
+  axis: DrillAxis
   color: string
-  emissiveIntensity?: number
 }) {
   const cylLen  = Math.max(2, depthLen)
   const cylQuat = new THREE.Quaternion()
-  cylQuat.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)
-  const cylOffset = axis === 'x-'
-    ? { dx: -(cylLen / 2), dy: 0, dz: 0 }
-    : { dx:  (cylLen / 2), dy: 0, dz: 0 }
+  let dx = 0, dy = 0
+
+  if (axis === 'x-' || axis === 'x+') {
+    cylQuat.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)
+    dx = axis === 'x-' ? -(cylLen / 2) : (cylLen / 2)
+  } else {
+    // Y axis — Three.js CylinderGeometry is already Y-aligned, no rotation needed
+    dy = axis === 'y-' ? -(cylLen / 2) : (cylLen / 2)
+  }
 
   return (
     <group position={[x, y, z]}>
-      {/* Entry point crosshair */}
       <CrosshairLines size={radius * 2} color="#ef4444" />
-      {/* Depth cylinder */}
-      <mesh position={[cylOffset.dx, cylOffset.dy, cylOffset.dz]} quaternion={cylQuat}>
+      <mesh position={[dx, dy, 0]} quaternion={cylQuat}>
         <cylinderGeometry args={[radius * 0.55, radius * 0.55, cylLen, 10]} />
         <meshStandardMaterial color={color} roughness={0.4} metalness={0.1} transparent opacity={0.55} />
       </mesh>
@@ -199,35 +233,17 @@ export default function Joint3DView({ ops, thickness, wire = false,
 
         {/* Operation markers */}
         {ops.map((op, i) => {
-          const sel     = op.id === selOpId
-          const r       = Math.max(1.5, op.tool_diameter_mm / 2) * (sel ? 1.45 : 1)
-          const opDepth = Math.max(2, op.depth_mm)
-          const colA    = sel ? '#fcd34d' : COL_OP_A
-          const colB    = sel ? '#93c5fd' : COL_OP_B
-
-          if (op.target_part === 'part_a') {
-            return (
-              <OpMarker
-                key={i}
-                x={-op.offset_x_mm} y={-op.offset_y_mm} z={depth / 2 - op.offset_z_mm}
-                radius={r} depthLen={opDepth}
-                axis="x-"
-                color={colA}
-                emissiveIntensity={sel ? 0.8 : 0.25}
-              />
-            )
-          } else {
-            return (
-              <OpMarker
-                key={i}
-                x={op.offset_x_mm} y={-op.offset_y_mm} z={depth / 2 - op.offset_z_mm}
-                radius={r} depthLen={opDepth}
-                axis="x+"
-                color={colB}
-                emissiveIntensity={sel ? 0.8 : 0.25}
-              />
-            )
-          }
+          const sel   = op.id === selOpId
+          const r     = Math.max(1.5, op.tool_diameter_mm / 2) * (sel ? 1.45 : 1)
+          const color = op.target_part === 'part_a'
+            ? (sel ? '#fcd34d' : COL_OP_A)
+            : (sel ? '#93c5fd' : COL_OP_B)
+          const { x, y, z, axis } = opPlacement(op, t, masterW, masterDx, slaveL, slaveDy, depth)
+          return (
+            <OpMarker key={i} x={x} y={y} z={z}
+              radius={r} depthLen={Math.max(2, op.depth_mm)}
+              axis={axis} color={color} />
+          )
         })}
       </group>
 

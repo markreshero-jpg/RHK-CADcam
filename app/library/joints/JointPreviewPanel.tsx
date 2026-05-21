@@ -17,6 +17,61 @@ const Joint3DView = dynamic(() => import('./Joint3DView'), { ssr: false })
 // Scene constants (mm) — must match Joint3DView
 const PAD = 18   // padding around the scene
 
+// ── Face-aware SVG helpers ────────────────────────────────────────────────────
+
+type DrillAxis = 'x-' | 'x+' | 'y-' | 'y+'
+
+// Returns drill axis for an op in the given part/face combination.
+function opAxis(op: JointOp3D): DrillAxis {
+  if (op.target_part === 'part_a') {
+    if (op.face === 'end')    return 'x+'
+    if (op.face === 'top')    return 'y-'
+    if (op.face === 'bottom') return 'y+'
+    return 'x-'
+  } else {
+    if (op.face === 'end')    return 'x-'
+    if (op.face === 'top')    return 'y-'
+    if (op.face === 'bottom') return 'y+'
+    return 'x+'
+  }
+}
+
+// Section view (XY, looking along Z): returns entry (worldX, worldY) and drill axis.
+function sectionEntry(
+  op: JointOp3D, t: number, masterW: number, masterDx: number, slaveL: number, slaveDy: number,
+): { wx: number; wy: number; axis: DrillAxis } {
+  if (op.target_part === 'part_a') {
+    switch (op.face) {
+      case 'end':    return { wx: -(masterW - masterDx), wy: -op.offset_y_mm,  axis: 'x+' }
+      case 'top':    return { wx: -op.offset_x_mm,       wy: 0,                axis: 'y-' }
+      case 'bottom': return { wx: -op.offset_x_mm,       wy: -t,               axis: 'y+' }
+      default:       return { wx: -op.offset_x_mm,       wy: -op.offset_y_mm,  axis: 'x-' }
+    }
+  } else {
+    switch (op.face) {
+      case 'end':    return { wx: t,              wy: -op.offset_y_mm,  axis: 'x-' }
+      case 'top':    return { wx: op.offset_x_mm, wy: slaveL - slaveDy, axis: 'y-' }
+      case 'bottom': return { wx: op.offset_x_mm, wy: -slaveDy,         axis: 'y+' }
+      default:       return { wx: op.offset_x_mm, wy: -op.offset_y_mm,  axis: 'x+' }
+    }
+  }
+}
+
+// Depth rect for the section SVG view based on drill axis.
+// In SVG: y increases downward; world Y increases upward, so sy inverts Y.
+// y- drill (into shelf from top): world Y goes toward -t → SVG y increases → rect extends down.
+// y+ drill (into side from below): world Y goes toward 0 → SVG y decreases → rect extends up.
+function sectionDepthRect(
+  axis: DrillAxis, cx: number, cy: number, depthPx: number, r: number,
+): { x: number; y: number; w: number; h: number } {
+  switch (axis) {
+    case 'x-': return { x: cx - depthPx, y: cy - r,        w: depthPx, h: r * 2 }
+    case 'x+': return { x: cx,           y: cy - r,        w: depthPx, h: r * 2 }
+    case 'y-': return { x: cx - r,       y: cy,            w: r * 2,   h: depthPx }
+    case 'y+': return { x: cx - r,       y: cy - depthPx,  w: r * 2,   h: depthPx }
+  }
+}
+
 // ── Expression evaluator ──────────────────────────────────────────────────────
 // Variables: W/L/D = target part dims, T = thickness, MW/ML/MD/SW/SL/SD = both parts.
 // Math globals (floor, ceil, round, abs, min, max, PI) are available via the JS global scope.
@@ -85,6 +140,19 @@ function NumField({ value, onChange, min, max, className }: {
   )
 }
 
+// ── SVG crosshair marker ──────────────────────────────────────────────────────
+
+function SvgCrosshair({ cx, cy, r, sel }: { cx: number; cy: number; r: number; sel: boolean }) {
+  const arm = r * (sel ? 1.9 : 1.4)
+  const sw  = sel ? 1.8 : 1.2
+  return (
+    <>
+      <line x1={cx - arm} y1={cy} x2={cx + arm} y2={cy} stroke="#ef4444" strokeWidth={sw} />
+      <line x1={cx} y1={cy - arm} x2={cx} y2={cy + arm} stroke="#ef4444" strokeWidth={sw} />
+    </>
+  )
+}
+
 // ── SVG cross-section view ────────────────────────────────────────────────────
 
 function JointSectionSVG({ ops, thickness: t, masterW, masterDx, slaveL, slaveDy, wire = false, selOpId = null }: {
@@ -150,51 +218,32 @@ function JointSectionSVG({ ops, thickness: t, masterW, masterDx, slaveL, slaveDy
 
       {/* Operations */}
       {ops.map((op, i) => {
-        const sel   = op.id === selOpId
-        const r     = Math.max(2, op.tool_diameter_mm / 2)
-        const depth = Math.max(3, op.depth_mm)
-
-        if (op.target_part === 'part_a') {
-          const cx = sx(-op.offset_x_mm)
-          const cy = sy(-op.offset_y_mm)
-          const zNote = op.offset_z_mm !== 0 ? ` z${op.offset_z_mm > 0 ? '+' : ''}${op.offset_z_mm}` : ''
-          return (
-            <g key={i}>
-              <rect x={cx - depth} y={cy - r} width={depth} height={r * 2}
-                fill="#f59e0b" fillOpacity={sel ? 0.35 : 0.18}
-                stroke="#f59e0b" strokeWidth={sel ? 1 : 0.5} strokeDasharray="2 1.5" />
-              {sel && <circle cx={cx} cy={cy} r={r * 1.9} fill="none" stroke="#fcd34d" strokeWidth={1} opacity={0.6} />}
-              <circle cx={cx} cy={cy} r={r}
-                fill="#f59e0b" fillOpacity={sel ? 0.85 : 0.45}
-                stroke={sel ? '#fcd34d' : '#f59e0b'} strokeWidth={sel ? 1.5 : 1} />
-              <text x={cx - depth - 4} y={cy}
-                textAnchor="end" dominantBaseline="middle"
-                fill={sel ? '#fcd34d' : '#fbbf24'} fontSize={sel ? 7.5 : 6.5} fontWeight={sel ? 'bold' : 'normal'}>
-                {op.machine_operation} Ø{op.tool_diameter_mm}{zNote}
-              </text>
-            </g>
-          )
-        } else {
-          const cx = sx(op.offset_x_mm)
-          const cy = sy(-op.offset_y_mm)
-          const zNote = op.offset_z_mm !== 0 ? ` z${op.offset_z_mm > 0 ? '+' : ''}${op.offset_z_mm}` : ''
-          return (
-            <g key={i}>
-              <rect x={cx} y={cy - r} width={depth} height={r * 2}
-                fill="#60a5fa" fillOpacity={sel ? 0.35 : 0.18}
-                stroke="#60a5fa" strokeWidth={sel ? 1 : 0.5} strokeDasharray="2 1.5" />
-              {sel && <circle cx={cx} cy={cy} r={r * 1.9} fill="none" stroke="#93c5fd" strokeWidth={1} opacity={0.6} />}
-              <circle cx={cx} cy={cy} r={r}
-                fill="#60a5fa" fillOpacity={sel ? 0.85 : 0.45}
-                stroke={sel ? '#93c5fd' : '#60a5fa'} strokeWidth={sel ? 1.5 : 1} />
-              <text x={cx + depth + 4} y={cy}
-                dominantBaseline="middle"
-                fill={sel ? '#93c5fd' : '#93c5fd'} fontSize={sel ? 7.5 : 6.5} fontWeight={sel ? 'bold' : 'normal'}>
-                {op.machine_operation} Ø{op.tool_diameter_mm}{zNote}
-              </text>
-            </g>
-          )
-        }
+        const sel    = op.id === selOpId
+        const r      = Math.max(2, op.tool_diameter_mm / 2)
+        const depthPx = Math.max(3, op.depth_mm)
+        const isA    = op.target_part === 'part_a'
+        const col    = isA ? (sel ? '#fcd34d' : '#f59e0b') : (sel ? '#93c5fd' : '#60a5fa')
+        const { wx, wy, axis } = sectionEntry(op, t, masterW, masterDx, slaveL, slaveDy)
+        const cx = sx(wx)
+        const cy = sy(wy)
+        const dr = sectionDepthRect(axis, cx, cy, depthPx, r)
+        const zNote = op.offset_z_mm !== 0 ? ` z${op.offset_z_mm > 0 ? '+' : ''}${op.offset_z_mm}` : ''
+        const labelX = axis === 'x-' ? cx - depthPx - 4 : axis === 'x+' ? cx + depthPx + 4 : cx
+        const labelAnchor = axis === 'x-' ? 'end' : axis === 'x+' ? 'start' : 'middle'
+        const labelY = axis === 'y-' ? cy - depthPx - 4 : axis === 'y+' ? cy + depthPx + 4 : cy
+        return (
+          <g key={i}>
+            <rect x={dr.x} y={dr.y} width={dr.w} height={dr.h}
+              fill={col} fillOpacity={sel ? 0.35 : 0.18}
+              stroke={col} strokeWidth={sel ? 1 : 0.5} strokeDasharray="2 1.5" />
+            <SvgCrosshair cx={cx} cy={cy} r={r} sel={sel} />
+            <text x={labelX} y={labelY}
+              textAnchor={labelAnchor} dominantBaseline="middle"
+              fill={col} fontSize={sel ? 7.5 : 6.5} fontWeight={sel ? 'bold' : 'normal'}>
+              {op.machine_operation} Ø{op.tool_diameter_mm}{zNote}
+            </text>
+          </g>
+        )
       })}
     </svg>
   )
@@ -253,48 +302,43 @@ function JointFaceViewSVG({ ops, thickness: t, masterW, masterDx, slaveL, slaveD
       <line x1={bX} y1={bY + slaveDy} x2={bX + bW} y2={bY + slaveDy}
         stroke="#4b5563" strokeWidth={0.5} strokeDasharray="2 2" />
 
-      {/* Operations */}
+      {/* Operations — entry point projected onto each panel's face (looking along Z) */}
       {ops.map((op, i) => {
         const sel = op.id === selOpId
         const r   = Math.max(2, op.tool_diameter_mm / 2)
+        const col = op.target_part === 'part_a'
+          ? (sel ? '#fcd34d' : '#f59e0b')
+          : (sel ? '#93c5fd' : '#60a5fa')
 
+        let cx: number, cy: number
         if (op.target_part === 'part_a') {
-          // X from right edge (masterDx=0 means rightmost), Y from top
-          const cx = aX + aW - masterDx - op.offset_x_mm
-          const cy = aY + op.offset_y_mm
-          const colFill   = sel ? '#fcd34d' : '#f59e0b'
-          const colStroke = sel ? '#fcd34d' : '#f59e0b'
-          return (
-            <g key={i}>
-              {sel && <circle cx={cx} cy={cy} r={r * 1.9} fill="none" stroke={colStroke} strokeWidth={1} opacity={0.6} />}
-              <circle cx={cx} cy={cy} r={r}
-                fill={colFill} fillOpacity={sel ? 0.85 : 0.45}
-                stroke={colStroke} strokeWidth={sel ? 1.5 : 1} />
-              <text x={cx} y={cy - r - 2} textAnchor="middle"
-                fill={colFill} fontSize={5} fontWeight={sel ? 'bold' : 'normal'}>
-                Ø{op.tool_diameter_mm}
-              </text>
-            </g>
-          )
+          // Part A: SVG origin at (aX, aY), X runs right (joint end at aX+aW-masterDx), Y runs down
+          const jointEdgeX = aX + aW - masterDx
+          switch (op.face) {
+            case 'end':    cx = aX;              cy = aY + op.offset_y_mm; break  // far end
+            case 'top':    cx = jointEdgeX - op.offset_x_mm; cy = aY;      break  // top edge
+            case 'bottom': cx = jointEdgeX - op.offset_x_mm; cy = aY + aH; break  // bottom edge
+            default:       cx = jointEdgeX;      cy = aY + op.offset_y_mm; break  // normal = joint end
+          }
         } else {
-          // X from left edge of slave, Y from joint reference line downward
-          const cx = bX + op.offset_x_mm
-          const cy = bY + slaveDy + op.offset_y_mm
-          const colFill   = sel ? '#93c5fd' : '#60a5fa'
-          const colStroke = sel ? '#93c5fd' : '#60a5fa'
-          return (
-            <g key={i}>
-              {sel && <circle cx={cx} cy={cy} r={r * 1.9} fill="none" stroke={colStroke} strokeWidth={1} opacity={0.6} />}
-              <circle cx={cx} cy={cy} r={r}
-                fill={colFill} fillOpacity={sel ? 0.85 : 0.45}
-                stroke={colStroke} strokeWidth={sel ? 1.5 : 1} />
-              <text x={cx} y={cy - r - 2} textAnchor="middle"
-                fill={colFill} fontSize={5} fontWeight={sel ? 'bold' : 'normal'}>
-                Ø{op.tool_diameter_mm}
-              </text>
-            </g>
-          )
+          // Part B: SVG origin at (bX, bY), joint ref line at bY+slaveDy, X=left face
+          switch (op.face) {
+            case 'end':    cx = bX + bW;         cy = bY + slaveDy + op.offset_y_mm; break  // right face
+            case 'top':    cx = bX + op.offset_x_mm; cy = bY;                        break  // top end
+            case 'bottom': cx = bX + op.offset_x_mm; cy = bY + bH;                  break  // bottom end
+            default:       cx = bX;              cy = bY + slaveDy + op.offset_y_mm; break  // normal = left face
+          }
         }
+
+        return (
+          <g key={i}>
+            <SvgCrosshair cx={cx} cy={cy} r={r} sel={sel} />
+            <text x={cx} y={cy - r - 2} textAnchor="middle"
+              fill={col} fontSize={5} fontWeight={sel ? 'bold' : 'normal'}>
+              Ø{op.tool_diameter_mm}
+            </text>
+          </g>
+        )
       })}
     </svg>
   )
@@ -364,36 +408,45 @@ function JointTopViewSVG({ ops, thickness: t, masterW, masterDx, depth, wire = f
       <text x={sx(-(masterLeft) - 2)} y={sz(depth)} textAnchor="end" dominantBaseline="middle"
         fill="#4b5563" fontSize={5}>back</text>
 
-      {/* Operations */}
+      {/* Operations — projected onto XZ plane (top view looking down Y) */}
       {ops.map((op, i) => {
-        const sel = op.id === selOpId
-        const r   = Math.max(2, op.tool_diameter_mm / 2)
+        const sel  = op.id === selOpId
+        const r    = Math.max(2, op.tool_diameter_mm / 2)
+        const col  = op.target_part === 'part_a'
+          ? (sel ? '#fcd34d' : '#f59e0b')
+          : (sel ? '#93c5fd' : '#60a5fa')
+        const axis = opAxis(op)
 
+        // XZ projection: X is world X, Z = offset_z from front face
+        let cx: number
         if (op.target_part === 'part_a') {
-          // Drill from top (Y-): position = (−offset_x from right edge, offset_z from front)
-          const cx = sx(-op.offset_x_mm)
-          const cy = sz(op.offset_z_mm)
-          return (
-            <g key={i}>
-              {sel && <circle cx={cx} cy={cy} r={r * 1.9} fill="none" stroke="#fcd34d" strokeWidth={1} opacity={0.6} />}
-              <circle cx={cx} cy={cy} r={r}
-                fill="#f59e0b" fillOpacity={sel ? 0.85 : 0.45}
-                stroke={sel ? '#fcd34d' : '#f59e0b'} strokeWidth={sel ? 1.5 : 1} />
-            </g>
-          )
+          switch (op.face) {
+            case 'end':    cx = sx(-(masterW - masterDx)); break  // far end
+            case 'top':
+            case 'bottom': cx = sx(-op.offset_x_mm);      break  // Y-drill: X position
+            default:       cx = sx(-op.offset_x_mm);      break  // normal: X inset
+          }
         } else {
-          // Drill from left face (X+): position = (offset_x within thickness, offset_z from front)
-          const cx = sx(op.offset_x_mm)
-          const cy = sz(op.offset_z_mm)
-          return (
-            <g key={i}>
-              {sel && <circle cx={cx} cy={cy} r={r * 1.9} fill="none" stroke="#93c5fd" strokeWidth={1} opacity={0.6} />}
-              <circle cx={cx} cy={cy} r={r}
-                fill="#60a5fa" fillOpacity={sel ? 0.85 : 0.45}
-                stroke={sel ? '#93c5fd' : '#60a5fa'} strokeWidth={sel ? 1.5 : 1} />
-            </g>
-          )
+          switch (op.face) {
+            case 'end':    cx = sx(t);             break  // right face
+            case 'top':
+            case 'bottom': cx = sx(op.offset_x_mm); break  // Y-drill: X within thickness
+            default:       cx = sx(op.offset_x_mm); break  // normal: X inset
+          }
         }
+        const cy = sz(op.offset_z_mm)
+
+        // Y-direction drills enter from above/below — show as a filled circle (visible hole from top)
+        // X-direction drills appear as edge markers — show as crosshair on the panel edge
+        const isYDrill = axis === 'y-' || axis === 'y+'
+        return (
+          <g key={i}>
+            {isYDrill
+              ? <circle cx={cx} cy={cy} r={r} fill={col} fillOpacity={sel ? 0.55 : 0.3} stroke={col} strokeWidth={sel ? 1 : 0.5} />
+              : <SvgCrosshair cx={cx} cy={cy} r={r} sel={sel} />
+            }
+          </g>
+        )
       })}
     </svg>
   )
@@ -458,6 +511,7 @@ export default function JointPreviewPanel({ ops, defaultThickness = 18, selOpId 
       operation_order:   op.operation_order,
       target_part:       op.target_part,
       machine_operation: op.machine_operation,
+      face:              op.face ?? 'normal',
       tool_diameter_mm:  ev('tool_diameter_mm', op.tool_diameter_mm),
       depth_mm:          ev('depth_mm', op.depth_mm),
       offset_x_mm:       ev('offset_x_mm', op.offset_x_mm),

@@ -6,6 +6,7 @@ import { Selected, CabResize, viewReducer, DisplayConfig, Mode, modeAssemblyClas
 import { layerSVGProps } from '@/src/lib/displayConfig'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone, ResolvedInternalPart } from '@/src/lib/resolver/types'
+import { computeElevSeams } from '@/src/lib/cabinetSeams'
 
 // ── Colour coding per spec ────────────────────────────────────
 const PART_COLORS: Record<string, string> = {
@@ -116,6 +117,8 @@ interface ElevationSVGProps {
   onCabResizeDone: () => void
   resolvedParts?: Map<string, ResolvedCabinet>
   onDeselect: () => void
+  onSeamClick?: (cabId: string, edgeKey: string, label: string) => void
+  selectedSeam?: { cabId: string; edgeKey: string } | null
 }
 
 export default function ElevationSVG({
@@ -124,7 +127,7 @@ export default function ElevationSVG({
   onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu,
   onBlankWallContextMenu, onShiftSelectCabinet, onEqualizeWidths,
   cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
-  resolvedParts, onDeselect,
+  resolvedParts, onDeselect, onSeamClick, selectedSeam,
 }: ElevationSVGProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [view, dispatchView] = useReducer(viewReducer, { panX: 80, panY: 60, zoom: 1 })
@@ -652,6 +655,7 @@ export default function ElevationSVG({
 
               const rx = displayT
               const ry = roomH - bottomZ - displayDy
+              const toSVGPt = (ex: number, ey: number) => ({ x: rx + ex, y: ry + displayDy - ey })
 
               const isBase = cab.assembly_class === 'base' || cab.assembly_class === 'base_corner'
               const isTall = cab.assembly_class === 'tall' || cab.assembly_class === 'tall_corner'
@@ -910,6 +914,49 @@ export default function ElevationSVG({
                           style={{ cursor: isF ? 'crosshair' : 'move' }}
                           onPointerDown={ev => ev.stopPropagation()}
                           onClick={ev => onCabCrosshairClick(ev, cab)} />
+                      </g>
+                    )
+                  })()}
+
+                  {/* Seam joint markers — show on hover/select or when a joint is assigned */}
+                  {onSeamClick && mode === 'select' && (() => {
+                    const rp = resolvedParts?.get(cab.id)
+                    if (!rp) return null
+                    const seams = computeElevSeams(rp)
+                    if (!seams.length) return null
+                    return (
+                      <g>
+                        {seams.map(seam => {
+                          const pt = toSVGPt(seam.ex, seam.ey)
+                          const isSel2 = selectedSeam?.cabId === cab.id && selectedSeam.edgeKey === seam.key
+                          const joints = cab.carcase_joints ?? {}
+                          const isKeySet = Object.prototype.hasOwnProperty.call(joints, seam.key)
+                          const val = isKeySet ? (joints as Record<string, string | null>)[seam.key] : undefined
+                          const hasJoint    = typeof val === 'string'
+                          const isSuppressed = val === null
+                          if (!isSel2 && !isHover && !isSel && !hasJoint && !isSuppressed) return null
+                          const col = isSel2 ? '#38bdf8' : hasJoint ? '#22c55e' : isSuppressed ? '#ef4444' : '#6b7280'
+                          const r  = 4.5 / z
+                          const hr = 8   / z
+                          return (
+                            <g key={seam.key} style={{ cursor: 'pointer' }}
+                              onPointerDown={e => e.stopPropagation()}
+                              onClick={e => { e.stopPropagation(); onSeamClick(cab.id, seam.key, seam.label) }}>
+                              <circle cx={pt.x} cy={pt.y} r={hr} fill="transparent" />
+                              <circle cx={pt.x} cy={pt.y} r={r}
+                                fill={hasJoint || isSuppressed ? col : 'transparent'}
+                                fillOpacity={hasJoint || isSuppressed ? 0.2 : 0}
+                                stroke={col} strokeWidth={(isSel2 ? 1.5 : 1) / z}
+                                strokeDasharray={!hasJoint && !isSuppressed ? `${2 / z} ${1.5 / z}` : undefined}
+                              />
+                              {isSuppressed && (<>
+                                <line x1={pt.x - r * 0.6} y1={pt.y - r * 0.6} x2={pt.x + r * 0.6} y2={pt.y + r * 0.6} stroke="#ef4444" strokeWidth={1.2 / z} />
+                                <line x1={pt.x + r * 0.6} y1={pt.y - r * 0.6} x2={pt.x - r * 0.6} y2={pt.y + r * 0.6} stroke="#ef4444" strokeWidth={1.2 / z} />
+                              </>)}
+                              {isSel2 && <circle cx={pt.x} cy={pt.y} r={r * 1.8} fill="none" stroke="#38bdf8" strokeWidth={0.8 / z} opacity={0.6} />}
+                            </g>
+                          )
+                        })}
                       </g>
                     )
                   })()}

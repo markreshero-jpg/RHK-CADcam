@@ -111,6 +111,7 @@ export function fitCamDist(dx: number, dy: number, dz: number) {
 export function Part({
   b, faceColors, edgeLineColor, meta, selected, highlighted, onSelect, dragRef, ebSpec,
   contextMenuSelect = false,
+  wire = false,
 }: {
   b:                  Box
   faceColors:         [string, string, string, string, string, string]
@@ -122,8 +123,19 @@ export function Part({
   dragRef:            React.MutableRefObject<boolean>
   ebSpec?:            EbSpec
   contextMenuSelect?: boolean
+  wire?:              boolean
 }) {
   const [hovered, setHovered] = useState(false)
+
+  if (wire) {
+    return (
+      <mesh position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]}>
+        <boxGeometry args={[b.w, b.h, b.d]} />
+        <meshStandardMaterial color="#9ca3af" transparent opacity={0.08} depthWrite={false} />
+        <Edges threshold={10} color="#94a3b8" linewidth={1} />
+      </mesh>
+    )
+  }
 
   const SEL = '#f59e0b', HL = '#7dd3fc'
   const mats: [string, string, string, string, string, string] =

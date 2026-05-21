@@ -53,12 +53,13 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   if (cabErr || !cab) throw new Error(`Cabinet not found: ${cabinetId}`)
 
   // ── 2. Load room + shop defaults in parallel ─────────────────────────────────
-  const [roomRes, shopAsmRes, shopTkRes, shopFrontRes, shopSettingsRes] = await Promise.all([
-    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id').eq('id', cab.room_id).single(),
+  const [roomRes, shopAsmRes, shopTkRes, shopFrontRes, shopSettingsRes, shopSlideRes] = await Promise.all([
+    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id').eq('id', cab.room_id).single(),
     supabase.from('assembly_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('toekick_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('front_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('shop_settings').select('construction_schedule_id, drawer_box_method_id').limit(1).maybeSingle(),
+    supabase.from('slide_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
   ])
 
   const room       = roomRes.data
@@ -71,7 +72,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   if (projectId) {
     const { data } = await supabase
       .from('projects')
-      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, default_drawer_type')
+      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, default_drawer_type, slide_schedule_id')
       .eq('id', projectId)
       .single()
     projRow = data as Record<string, string | null> | null
@@ -91,6 +92,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   const asmSchedId   = room?.assembly_schedule_id   ?? projRow?.assembly_schedule_id   ?? shopAsmRes.data?.id   ?? null
   const tkSchedId    = room?.toekick_schedule_id     ?? projRow?.toekick_schedule_id     ?? shopTkRes.data?.id    ?? null
   const frontSchedId = room?.front_schedule_id       ?? projRow?.front_schedule_id       ?? shopFrontRes.data?.id ?? null
+  const slideSchedId = (room?.slide_schedule_id as string | null) ?? (projRow?.slide_schedule_id as string | null) ?? shopSlideRes.data?.id ?? null
 
   // ── 5. Load schedule rows + per-role overrides + construction method in parallel
   const [
@@ -137,8 +139,9 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     conStrSchedId
       ? supabase.from('construction_method_schedule_rows').select('rules').eq('schedule_id', conStrSchedId).eq('assembly_class', cab.assembly_class).maybeSingle()
       : Promise.resolve({ data: null }),
-    // Slide schedule entries (stub — schedule UI built separately)
-    Promise.resolve({ data: null as unknown }),
+    slideSchedId
+      ? supabase.from('slide_schedule_entries').select('id, schedule_id, depth_threshold, height_threshold, slide_id').eq('schedule_id', slideSchedId).order('depth_threshold').order('height_threshold')
+      : Promise.resolve({ data: [] as unknown[] }),
     // Drawer box method rules (project → shop cascade, resolved above)
     effectiveDbMethodId
       ? supabase.from('drawer_box_methods').select('rules, drawer_type').eq('id', effectiveDbMethodId).single()
@@ -234,8 +237,14 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     colour:           (r.colour as string | null) ?? null,
   }))
 
-  // Slide schedule entries (stub — schedule UI is built separately)
-  const slideSchedule: SlideScheduleEntry[] = ((slideSchedEntryRes as { data: unknown[] | null }).data ?? []) as SlideScheduleEntry[]
+  type SlideEntryRow = { id: string; schedule_id: string; depth_threshold: unknown; height_threshold: unknown; slide_id: string }
+  const slideSchedule: SlideScheduleEntry[] = ((slideSchedEntryRes as { data: SlideEntryRow[] | null }).data ?? []).map(r => ({
+    id:               r.id,
+    schedule_id:      r.schedule_id,
+    depth_threshold:  Number(r.depth_threshold),
+    height_threshold: Number(r.height_threshold),
+    slide_id:         r.slide_id,
+  }))
 
   // Drawer box rules cascade: system defaults → method (project/shop) → cabinet overrides
   const dbMethodRules = (dbMethodRes.data?.rules ?? {}) as Partial<DrawerBoxRules>

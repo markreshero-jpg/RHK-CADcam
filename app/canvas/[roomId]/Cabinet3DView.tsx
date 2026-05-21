@@ -201,6 +201,7 @@ type PartProps = {
   dragRef:            React.MutableRefObject<boolean>
   ebSpec?:            EbSpec
   contextMenuSelect?: boolean
+  wire?:              boolean
 }
 
 function DoorPanel({ b, hingeSide, doorsOpen, ...partProps }: PartProps & {
@@ -284,7 +285,7 @@ async function saveEdge(cabId: string, part: PartMeta) {
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
 
 function CabinetScene({
-  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, edgeOverrides,
+  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, edgeOverrides, wire,
 }: {
   cab:               CabinetInstance
   rp:                ResolvedCabinet
@@ -295,6 +296,7 @@ function CabinetScene({
   ebByMatId?:        Record<string, { thickness: number; color: string | null }>
   doorsOpen:         boolean
   edgeOverrides:     Map<string, PartEdge>
+  wire?:             boolean
 }) {
   const { dx, dy, dz } = cab
   const dragRef = useRef(false)
@@ -334,6 +336,7 @@ function CabinetScene({
             contextMenuSelect
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id)}
+            wire={wire}
           />
         )
       })}
@@ -354,6 +357,7 @@ function CabinetScene({
             contextMenuSelect
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id)}
+            wire={wire}
           />
         )
       })}
@@ -374,6 +378,7 @@ function CabinetScene({
             contextMenuSelect
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id)}
+            wire={wire}
           />
         )
       })}
@@ -395,8 +400,10 @@ function CabinetScene({
               selected={selected?.id === info.id}
               highlighted={false}
               onSelect={onSelect}
+              contextMenuSelect
               dragRef={dragRef}
               ebSpec={ebFor(p.material_id)}
+              wire={wire}
             />
           )
         })
@@ -416,7 +423,9 @@ function CabinetScene({
               selected={selected?.id === info.id}
               highlighted={false}
               onSelect={onSelect}
+              contextMenuSelect
               dragRef={dragRef}
+              wire={wire}
             />
           )
         })
@@ -439,6 +448,7 @@ function CabinetScene({
           contextMenuSelect: true,
           dragRef,
           ebSpec:           ebFor(z.material_id),
+          wire,
         }
 
         if (z.face_type === 'door' && z.hinge_side) {
@@ -462,13 +472,14 @@ function CabinetScene({
 // ── Public component ─────────────────────────────────────────────────────────
 
 export default function Cabinet3DView({
-  cab, rp, highlightPartKeys, materialColours, ebByMatId,
+  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
   highlightPartKeys?: string[] | null
   materialColours?:  MatColMap
   ebByMatId?:        Record<string, { thickness: number; color: string | null }>
+  wire?:             boolean
 }) {
   const [selectedPart, setSelectedPart]   = useState<PartMeta | null>(null)
   const [doorsOpen, setDoorsOpen]         = useState(false)
@@ -551,6 +562,7 @@ export default function Cabinet3DView({
           ebByMatId={ebByMatId}
           doorsOpen={doorsOpen}
           edgeOverrides={edgeOverrides}
+          wire={wire}
         />
       ) : (
         <mesh>

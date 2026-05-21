@@ -26,6 +26,7 @@ import { resolveDrawerBox } from './resolveDrawerBox'
 
 function findSlide(
   depth: number,
+  openingHeight: number,
   products: SlideProduct[],
   schedule: SlideScheduleEntry[],
   productId?: string,
@@ -33,9 +34,19 @@ function findSlide(
   if (productId) {
     return products.find(p => p.id === productId) ?? null
   }
-  const entry = schedule.find(e => depth >= e.min_depth && depth <= e.max_depth)
-  if (entry) {
-    return products.find(p => p.id === entry.slide_id) ?? null
+  if (schedule.length > 0) {
+    // Step 1: smallest depth_threshold >= drawer depth (NL selection)
+    const eligible = schedule.filter(e => e.depth_threshold >= depth)
+    if (eligible.length > 0) {
+      const minDepth = Math.min(...eligible.map(e => e.depth_threshold))
+      const atDepth  = eligible.filter(e => e.depth_threshold === minDepth)
+      // Step 2: tallest height_threshold that still fits in the opening
+      const fitting  = atDepth.filter(e => e.height_threshold <= openingHeight)
+      const pool     = fitting.length > 0 ? fitting : atDepth  // best-effort if nothing fits
+      const maxH     = Math.max(...pool.map(e => e.height_threshold))
+      const entry    = pool.find(e => e.height_threshold === maxH)!
+      return products.find(p => p.id === entry.slide_id) ?? null
+    }
   }
   // Fallback: product whose depth range includes this depth
   return (
@@ -70,7 +81,7 @@ export function resolveDrawerStacks(
     const config = zoneInput?.drawer_type_config
     const drawerType: DrawerType = config?.type ?? cab.default_drawer_type ?? 'system'
 
-    const slide = findSlide(IDRUN, slideProducts, slideSchedule, config?.slide_product_id)
+    const slide = findSlide(IDRUN, openingHeight, slideProducts, slideSchedule, config?.slide_product_id)
 
     const sideDeduction  = slide?.side_deduction   ?? cab.slide_side_deduction
     const runnerThick    = slide?.runner_thickness  ?? 0
@@ -89,8 +100,8 @@ export function resolveDrawerStacks(
     const boxWidth = Math.max(1, cab.DX - 2 * T - r.IDCL - r.IDCR - runnerThick * 2)
     const boxDepth = IDRUN
 
-    // Cabinet-space origin of the box
-    const boxX = T + r.IDCL           // inside left gable + clearance
+    // Cabinet-space origin of the box — offset past the left runner so the box sits between the two rails
+    const boxX = T + r.IDCL + runnerThick
     const boxY = zone.Y               // bottom aligns with bottom of face zone
     const boxZ = zone.Z - boxDepth    // cabinet Z of the back face of the box
 

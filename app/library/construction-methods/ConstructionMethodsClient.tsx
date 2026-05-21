@@ -21,6 +21,18 @@ import {
   effectiveRule, effectiveEdgeSides, sidesEqual, computeDelta,
 } from '@/src/lib/constructionRuleConfig'
 
+// ── Carcase seam definitions (used by joint defaults UI) ─────────────────────
+
+const CARCASE_SEAM_DEFS = [
+  { key: 'bottom:left_side',  label: 'Bottom → Left Gable' },
+  { key: 'bottom:right_side', label: 'Bottom → Right Gable' },
+  { key: 'top:left_side',     label: 'Top Element → Left Gable' },
+  { key: 'top:right_side',    label: 'Top Element → Right Gable' },
+  { key: 'back:left_side',    label: 'Back Panel → Left Gable' },
+  { key: 'back:right_side',   label: 'Back Panel → Right Gable' },
+  { key: 'back:bottom',       label: 'Back Panel → Bottom' },
+] as const
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Schedule {
@@ -56,6 +68,8 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
   const [shopSchedId,  setShopSchedId]  = useState<string | null>(null)
   const [viewMode,     setViewMode]     = useState<'questions' | 'rules'>('questions')
   const [hoverParts,   setHoverParts]   = useState<string[] | null>(null)
+  const [jointDeltas,  setJointDeltas]  = useState<Record<AssClass, Record<string, string>>>({ base: {}, wall: {}, tall: {} })
+  const [jointTypes,   setJointTypes]   = useState<{ id: string; name: string }[]>([])
   const [previewMats,  setPreviewMats]  = useState<Record<AssClass, Material>>({
     base: PREVIEW_MATERIAL, wall: PREVIEW_MATERIAL, tall: PREVIEW_MATERIAL,
   })
@@ -101,23 +115,30 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
   }, [])
 
   useEffect(() => { loadSchedules() }, [loadSchedules])
+  useEffect(() => {
+    supabase.from('joint_types').select('id, name').order('name')
+      .then(({ data }) => setJointTypes(data ?? []))
+  }, [])
 
   useEffect(() => {
     if (!selId) { setDeltas(emptyDeltas()); setSchedName(''); setDirty(false); return }
     const found = schedules.find(s => s.id === selId)
     setSchedName(found?.name ?? '')
     supabase.from('construction_method_schedule_rows')
-      .select('assembly_class, rules')
+      .select('assembly_class, rules, joint_defaults')
       .eq('schedule_id', selId)
       .then(({ data }) => {
-        const d = emptyDeltas()
+        const d  = emptyDeltas()
+        const jd: Record<AssClass, Record<string, string>> = { base: {}, wall: {}, tall: {} }
         for (const row of data ?? []) {
           const cls = row.assembly_class as AssClass
           if (cls === 'base' || cls === 'wall' || cls === 'tall') {
-            d[cls] = row.rules as RuleDelta
+            d[cls]  = row.rules as RuleDelta
+            jd[cls] = (row.joint_defaults ?? {}) as Record<string, string>
           }
         }
         setDeltas(d)
+        setJointDeltas(jd)
         setDirty(false)
       })
   }, [selId, schedules])
@@ -159,9 +180,9 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
           .eq('id', selId)
       }
       // Upsert all 3 class rows
-      const rows: { schedule_id: string; assembly_class: string; rules: RuleDelta }[] = []
+      const rows: { schedule_id: string; assembly_class: string; rules: RuleDelta; joint_defaults: Record<string, string> }[] = []
       for (const cls of ['base','wall','tall'] as AssClass[]) {
-        rows.push({ schedule_id: selId, assembly_class: cls, rules: deltas[cls] })
+        rows.push({ schedule_id: selId, assembly_class: cls, rules: deltas[cls], joint_defaults: jointDeltas[cls] })
       }
       await supabase.from('construction_method_schedule_rows').upsert(rows, { onConflict: 'schedule_id,assembly_class' })
       setDirty(false)
@@ -192,6 +213,16 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
       } else {
         (d as Record<string, unknown>)[key] = value
       }
+      return { ...prev, [cls]: d }
+    })
+    setDirty(true)
+  }
+
+  function setJointDefault(cls: AssClass, key: string, jointTypeId: string | null) {
+    setJointDeltas(prev => {
+      const d = { ...prev[cls] }
+      if (!jointTypeId) delete d[key]
+      else d[key] = jointTypeId
       return { ...prev, [cls]: d }
     })
     setDirty(true)
@@ -442,6 +473,45 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                             </div>
                           ))}
                         </div>
+                      </div>
+
+                      {/* Joint Defaults */}
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Joint Defaults</p>
+                        <p className="text-xs text-gray-600 mb-3">
+                          Default joint type for each carcase connection. Cabinets using this schedule inherit these automatically.
+                          Individual cabinets can override or suppress any edge in the elevation view.
+                        </p>
+                        {jointTypes.length === 0 ? (
+                          <p className="text-xs text-gray-600 italic">
+                            No joint types in library yet — add them in Library → Joints first.
+                          </p>
+                        ) : (
+                          <div className="space-y-px">
+                            {CARCASE_SEAM_DEFS.map(seam => {
+                              const val    = jointDeltas[classTab][seam.key] ?? ''
+                              const isOver = !!val
+                              return (
+                                <div key={seam.key}
+                                  className={`flex items-center gap-4 px-2 py-1.5 rounded ${isOver ? 'bg-blue-950/20' : 'hover:bg-gray-800/30'}`}>
+                                  <span className={`flex-1 text-xs ${isOver ? 'text-blue-300' : 'text-gray-400'}`}>
+                                    {seam.label}
+                                  </span>
+                                  <select
+                                    value={val}
+                                    onChange={e => setJointDefault(classTab, seam.key, e.target.value || null)}
+                                    className="w-56 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+                                  >
+                                    <option value="">— No default —</option>
+                                    {jointTypes.map(j => (
+                                      <option key={j.id} value={j.id}>{j.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
 
                     </div>
@@ -704,6 +774,7 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material }: {
 }) {
   const [panelW,       setPanelW]       = useState(380)
   const [activeView,   setActiveView]   = useState<PView>('3d')
+  const [wireMode,     setWireMode]     = useState(false)
   const [asmSchedules, setAsmSchedules] = useState<{ id: string; name: string }[]>([])
   const [selectedAsmId, setSelectedAsmId] = useState<string>('')
   const [overrideMat,  setOverrideMat]  = useState<Material | null>(null)
@@ -832,6 +903,15 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material }: {
             {v.label}
           </button>
         ))}
+        {activeView === '3d' && (
+          <button
+            onClick={() => setWireMode(w => !w)}
+            title="Toggle wire frame"
+            className={tabCls(wireMode)}
+          >
+            Wire
+          </button>
+        )}
         <span className="ml-auto text-[9px] text-gray-600 font-mono whitespace-nowrap pl-2">{dx}×{dy}×{dz}</span>
       </div>
 
@@ -839,7 +919,7 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material }: {
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {activeView === '3d' ? (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <Cabinet3DView cab={{ id: 'preview', dx, dy, dz } as CabinetInstance} rp={resolvedCab} highlightPartKeys={highlightPartKeys} materialColours={materialColours} ebByMatId={ebByMatId} />
+            <Cabinet3DView cab={{ id: 'preview', dx, dy, dz } as CabinetInstance} rp={resolvedCab} highlightPartKeys={highlightPartKeys} materialColours={materialColours} ebByMatId={ebByMatId} wire={wireMode} />
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center p-4 min-h-0">

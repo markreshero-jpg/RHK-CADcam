@@ -13,7 +13,7 @@ const TABS = [
   { key: 'drawerbox',       label: 'Drawer Box',           table: 'drawerbox_schedules',       type: 'db_list',    valueCol: null,          ebCol: null           },
   { key: 'inner_drawerbox', label: 'Inner Drawer Box',     table: 'inner_drawerbox_schedules', type: 'mat_single', valueCol: 'material_id', ebCol: 'edgeband_id'  },
   { key: 'hinge',           label: 'Hinges',               table: 'hinge_schedules',           type: 'hw_single',  valueCol: 'hinge_id',   ebCol: null           },
-  { key: 'slide',           label: 'Slides',               table: 'slide_schedules',           type: 'hw_single',  valueCol: 'slide_id',   ebCol: null           },
+  { key: 'slide',           label: 'Slides',               table: 'slide_schedules',           type: 'slide_grid', valueCol: null,         ebCol: null           },
   { key: 'handle',          label: 'Handles',              table: 'handle_schedules',          type: 'hw_single',  valueCol: 'handle_id',  ebCol: null           },
   { key: 'benchtop',        label: 'Benchtops',            table: 'benchtop_schedules',        type: 'bt_roles',   valueCol: null,          ebCol: null          },
 ] as const
@@ -55,10 +55,12 @@ type SchedRecord = {
   [key: string]: unknown
 }
 
-type MatItem      = { id: string; name: string; dz: number }
-type BenchtopItem = { id: string; name: string; dz: number; material_type: string | null }
-type HwItem       = { id: string; name: string; brand: string | null }
-type EbItem       = { id: string; name: string; thickness: number; material_match_id: string | null }
+type MatItem       = { id: string; name: string; dz: number }
+type BenchtopItem  = { id: string; name: string; dz: number; material_type: string | null }
+type HwItem        = { id: string; name: string; brand: string | null }
+type HwSlideItem   = { id: string; name: string; brand: string | null; nominal_length: number | null; box_height: number | null }
+type SlideEntryRow = { id: string; depth_threshold: number; height_threshold: number; slide_id: string }
+type EbItem        = { id: string; name: string; thickness: number; material_match_id: string | null }
 
 // rowData keys:
 //   assembly:  `${cls}|${role}`     → material_id   `${cls}|${role}|eb`  → edgeband_id
@@ -72,19 +74,24 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
   const [materials,    setMaterials]    = useState<MatItem[]>([])
   const [edgebands,    setEdgebands]    = useState<EbItem[]>([])
   const [benchtopMats, setBenchtopMats] = useState<BenchtopItem[]>([])
-  const [hinges,       setHinges]       = useState<HwItem[]>([])
-  const [slides,       setSlides]       = useState<HwItem[]>([])
-  const [handles,      setHandles]      = useState<HwItem[]>([])
-  const [schedLists,   setSchedLists]   = useState<Partial<Record<SchedKey, SchedRecord[]>>>({})
-  const [activeTab,    setActiveTab]    = useState<SchedKey>('assembly')
-  const [selectedId,   setSelectedId]   = useState<string | null>(null)
-  const [editName,     setEditName]     = useState('')
-  const [editDesc,     setEditDesc]     = useState('')
-  const [newName,      setNewName]      = useState('')
-  const [creating,     setCreating]     = useState(false)
-  const [rowData,      setRowData]      = useState<Record<string, string>>({})
-  const [rowsLoading,  setRowsLoading]  = useState(false)
-  const [createError,  setCreateError]  = useState<string | null>(null)
+  const [hinges,        setHinges]        = useState<HwItem[]>([])
+  const [slides,        setSlides]        = useState<HwSlideItem[]>([])
+  const [handles,       setHandles]       = useState<HwItem[]>([])
+  const [schedLists,    setSchedLists]    = useState<Partial<Record<SchedKey, SchedRecord[]>>>({})
+  const [activeTab,     setActiveTab]     = useState<SchedKey>('assembly')
+  const [selectedId,    setSelectedId]    = useState<string | null>(null)
+  const [editName,      setEditName]      = useState('')
+  const [editDesc,      setEditDesc]      = useState('')
+  const [newName,       setNewName]       = useState('')
+  const [creating,      setCreating]      = useState(false)
+  const [rowData,       setRowData]       = useState<Record<string, string>>({})
+  const [rowsLoading,   setRowsLoading]   = useState(false)
+  const [createError,   setCreateError]   = useState<string | null>(null)
+  const [slideEntries,  setSlideEntries]  = useState<SlideEntryRow[]>([])
+  const [addingInDepth, setAddingInDepth] = useState<Record<number, { height: string; slideId: string }>>({})
+  const [newTierDepth,  setNewTierDepth]  = useState('')
+  const [newTierHeight, setNewTierHeight] = useState('')
+  const [newTierSlide,  setNewTierSlide]  = useState('')
 
   // ── Initial load ──────────────────────────────────────────────────────────
 
@@ -101,14 +108,14 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         supabase.from('drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id,bottom_material_id,bottom_edgeband_id').order('name'),
         supabase.from('inner_drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id').order('name'),
         supabase.from('hinge_schedules').select('id,name,description,is_default,active,hinge_id').order('name'),
-        supabase.from('slide_schedules').select('id,name,description,is_default,active,slide_id').order('name'),
+        supabase.from('slide_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('handle_schedules').select('id,name,description,is_default,active,handle_id').order('name'),
         supabase.from('benchtop_schedules').select('id,name,description,is_default,active,benchtop_id').order('name'),
         supabase.from('materials').select('id,name,dz').eq('active', true).order('name'),
         supabase.from('edge_banding').select('id,name,thickness,material_match_id').eq('active', true).order('name'),
         supabase.from('benchtop_materials').select('id,name,dz,material_type').eq('active', true).order('name'),
         supabase.from('hardware_hinges').select('id,name,brand').eq('active', true).order('name'),
-        supabase.from('hardware_slides').select('id,name,brand').eq('active', true).order('name'),
+        supabase.from('hardware_slides').select('id,name,brand,nominal_length,box_height').eq('active', true).order('name'),
         supabase.from('hardware_handles').select('id,name,brand').eq('active', true).order('name'),
       ])
       if (cancelled) return
@@ -128,7 +135,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
       setEdgebands((ebR.data      ?? []) as EbItem[])
       setBenchtopMats((btMatsR.data ?? []) as BenchtopItem[])
       setHinges((hingesR.data  ?? []) as HwItem[])
-      setSlides((slidesR.data  ?? []) as HwItem[])
+      setSlides((slidesR.data  ?? []) as HwSlideItem[])
       setHandles((handlesR.data ?? []) as HwItem[])
       setLoading(false)
     }
@@ -156,10 +163,22 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     setEditName(s.name)
     setEditDesc(s.description ?? '')
     setRowData({})
+    setSlideEntries([])
+    setAddingInDepth({})
     if (tab.type === 'asm_grid' || tab.type === 'tk_list' || tab.type === 'front_list' || tab.type === 'bt_roles') {
       setRowsLoading(true)
       const rows = await fetchRows(tab.type, id)
       setRowData(rows)
+      setRowsLoading(false)
+    } else if (tab.type === 'slide_grid') {
+      setRowsLoading(true)
+      const { data } = await supabase
+        .from('slide_schedule_entries')
+        .select('id, depth_threshold, height_threshold, slide_id')
+        .eq('schedule_id', id)
+        .order('depth_threshold')
+        .order('height_threshold')
+      setSlideEntries((data ?? []) as SlideEntryRow[])
       setRowsLoading(false)
     }
   }
@@ -213,6 +232,11 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     setActiveTab(key)
     setSelectedId(null)
     setRowData({})
+    setSlideEntries([])
+    setAddingInDepth({})
+    setNewTierDepth('')
+    setNewTierHeight('')
+    setNewTierSlide('')
     setNewName('')
     setCreateError(null)
   }
@@ -402,6 +426,40 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     setSchedLists(prev => ({
       ...prev, [activeTab]: (prev[activeTab] ?? []).map(s => s.id === selectedId ? { ...s, [col]: v } : s),
     }))
+  }
+
+  // ── Slide entry CRUD ──────────────────────────────────────────────────────
+
+  async function addSlideEntry(depth: number, height: number, slideId: string) {
+    if (!selectedId || !slideId) return
+    const { data, error } = await supabase
+      .from('slide_schedule_entries')
+      .insert({ schedule_id: selectedId, depth_threshold: depth, height_threshold: height, slide_id: slideId })
+      .select('id, depth_threshold, height_threshold, slide_id')
+      .single()
+    if (error || !data) return
+    const entry = data as SlideEntryRow
+    setSlideEntries(prev =>
+      [...prev, entry].sort((a, b) => a.depth_threshold - b.depth_threshold || a.height_threshold - b.height_threshold)
+    )
+  }
+
+  async function updateSlideEntry(entryId: string, slideId: string) {
+    if (!slideId) return
+    await supabase.from('slide_schedule_entries').update({ slide_id: slideId }).eq('id', entryId)
+    setSlideEntries(prev => prev.map(e => e.id === entryId ? { ...e, slide_id: slideId } : e))
+  }
+
+  async function deleteSlideEntry(entryId: string) {
+    await supabase.from('slide_schedule_entries').delete().eq('id', entryId)
+    setSlideEntries(prev => prev.filter(e => e.id !== entryId))
+  }
+
+  async function deleteDepthTier(depth: number) {
+    if (!selectedId) return
+    await supabase.from('slide_schedule_entries').delete().eq('schedule_id', selectedId).eq('depth_threshold', depth)
+    setSlideEntries(prev => prev.filter(e => e.depth_threshold !== depth))
+    setAddingInDepth(prev => { const n = { ...prev }; delete n[depth]; return n })
   }
 
   // ── CSS helpers ───────────────────────────────────────────────────────────
@@ -684,6 +742,118 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     )
   }
 
+  function renderSlideGrid() {
+    const depths = [...new Set(slideEntries.map(e => e.depth_threshold))].sort((a, b) => a - b)
+    const slideLabel = (s: HwSlideItem) =>
+      `${s.name}${s.brand ? ` — ${s.brand}` : ''}${s.box_height != null ? ` (H${s.box_height})` : ''}`
+
+    return (
+      <div className="space-y-3">
+        {depths.map(depth => {
+          const rows   = slideEntries.filter(e => e.depth_threshold === depth).sort((a, b) => a.height_threshold - b.height_threshold)
+          const adding = addingInDepth[depth] ?? { height: '', slideId: '' }
+          return (
+            <div key={depth} className="border border-gray-700 rounded overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/60 border-b border-gray-700">
+                <span className="text-xs font-semibold text-gray-200">Depth ≥ {depth} mm</span>
+                <button
+                  onClick={() => deleteDepthTier(depth)}
+                  className="ml-auto text-gray-600 hover:text-red-400 text-base leading-none transition-colors"
+                  title="Delete depth tier"
+                >×</button>
+              </div>
+              {rows.map(entry => (
+                <div key={entry.id} className="flex items-center gap-3 px-3 py-2 border-b border-gray-800/50">
+                  <span className="text-xs text-gray-500 w-28 shrink-0">Height ≥ {entry.height_threshold} mm</span>
+                  <select
+                    value={entry.slide_id}
+                    onChange={e => updateSlideEntry(entry.id, e.target.value)}
+                    className={`flex-1 ${sel}`}
+                  >
+                    {slides.map(s => <option key={s.id} value={s.id}>{slideLabel(s)}</option>)}
+                  </select>
+                  <button
+                    onClick={() => deleteSlideEntry(entry.id)}
+                    className="text-gray-600 hover:text-red-400 text-base leading-none shrink-0 transition-colors"
+                  >×</button>
+                </div>
+              ))}
+              {/* Add height row within this depth */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-900/20">
+                <span className="text-[10px] text-gray-600 w-28 shrink-0">+ height (mm)</span>
+                <input
+                  type="number"
+                  value={adding.height}
+                  onChange={e => setAddingInDepth(prev => ({ ...prev, [depth]: { ...adding, height: e.target.value } }))}
+                  placeholder="e.g. 104"
+                  className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+                />
+                <select
+                  value={adding.slideId}
+                  onChange={e => setAddingInDepth(prev => ({ ...prev, [depth]: { ...adding, slideId: e.target.value } }))}
+                  className={`flex-1 ${sel}`}
+                >
+                  <option value="">— select slide —</option>
+                  {slides.map(s => <option key={s.id} value={s.id}>{slideLabel(s)}</option>)}
+                </select>
+                <button
+                  onClick={async () => {
+                    const h = parseInt(adding.height)
+                    if (!h || !adding.slideId) return
+                    await addSlideEntry(depth, h, adding.slideId)
+                    setAddingInDepth(prev => ({ ...prev, [depth]: { height: '', slideId: '' } }))
+                  }}
+                  disabled={!adding.height || !adding.slideId}
+                  className="text-xs px-2.5 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded shrink-0 transition-colors"
+                >Add</button>
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Add new depth tier (depth + first height + slide all at once) */}
+        <div className="flex items-center gap-2 pt-3 border-t border-gray-800/50">
+          <span className="text-[10px] text-gray-500 shrink-0">New tier</span>
+          <input
+            type="number"
+            value={newTierDepth}
+            onChange={e => setNewTierDepth(e.target.value)}
+            placeholder="depth (mm)"
+            className="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+          />
+          <input
+            type="number"
+            value={newTierHeight}
+            onChange={e => setNewTierHeight(e.target.value)}
+            placeholder="height (mm)"
+            className="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+          />
+          <select
+            value={newTierSlide}
+            onChange={e => setNewTierSlide(e.target.value)}
+            className={`flex-1 ${sel}`}
+          >
+            <option value="">— select slide —</option>
+            {slides.map(s => <option key={s.id} value={s.id}>{slideLabel(s)}</option>)}
+          </select>
+          <button
+            onClick={async () => {
+              const d = parseInt(newTierDepth)
+              const h = parseInt(newTierHeight)
+              if (!d || !h || !newTierSlide) return
+              await addSlideEntry(d, h, newTierSlide)
+              setNewTierDepth('')
+              setNewTierHeight('')
+              setNewTierSlide('')
+            }}
+            disabled={!newTierDepth || !newTierHeight || !newTierSlide}
+            className="text-xs px-2.5 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded shrink-0 transition-colors"
+          >Add</button>
+        </div>
+      </div>
+    )
+  }
+
   function renderEditor() {
     if (!selectedId) {
       return (
@@ -739,6 +909,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           {tab.type === 'mat_single'  && renderMatSingle(tab.valueCol as string, tab.ebCol)}
           {tab.type === 'bt_roles'    && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderBtRoles()}</>}
           {tab.type === 'hw_single'   && renderHwSingle()}
+          {tab.type === 'slide_grid'  && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderSlideGrid()}</>}
         </div>
 
         {/* Edging defaults hint for row-based tabs */}

@@ -449,6 +449,7 @@ export default function JointsClient({
                   operation_order:   op.operation_order,
                   target_part:       op.target_part,
                   machine_operation: op.machine_operation,
+                  face:              op.face,
                   tool_diameter_mm:  op.tool_diameter_mm,
                   depth_mm:          op.depth_mm,
                   offset_x_mm:       op.offset_x_mm,
