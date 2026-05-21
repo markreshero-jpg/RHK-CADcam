@@ -961,10 +961,12 @@ const PART_LABEL: Record<string, string> = {
 }
 
 const SECTION_COLOR: Record<string, string> = {
-  carcass:  '#3b82f6',
-  toekick:  '#f59e0b',
-  internal: '#818cf8',
-  face:     '#60a5fa',
+  carcass:   '#3b82f6',
+  toekick:   '#f59e0b',
+  internal:  '#818cf8',
+  face:      '#60a5fa',
+  drawerbox: '#22c55e',
+  slide:     '#d97706',
 }
 
 function EBDots({ t, b, l, r }: { t: boolean; b: boolean; l: boolean; r: boolean }) {
@@ -1008,9 +1010,9 @@ function PartRow({ name, material, dy, dx, dz, eb }: {
     <tr className="border-t border-gray-800/60 hover:bg-gray-800/30">
       <td className="px-3 py-1.5 text-xs text-gray-300">{name}</td>
       <td className="px-3 py-1.5 text-xs text-gray-400">{material}</td>
-      <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{Math.round(dy)}</td>
-      <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{Math.round(dx)}</td>
-      <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-400">{Math.round(dz)}</td>
+      <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{dy.toFixed(1)}</td>
+      <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{dx.toFixed(1)}</td>
+      <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-400">{dz.toFixed(1)}</td>
       <td className="px-3 py-1.5">
         <EBDots t={eb.top} b={eb.bottom} l={eb.left} r={eb.right} />
       </td>
@@ -1027,6 +1029,7 @@ function PartsView({ rp }: { rp: ResolvedCabinet }) {
     rp.toekick_parts.forEach(p => ids.add(p.material_id))
     rp.internal_parts.forEach(p => ids.add(p.material_id))
     rp.face_zones.forEach(z    => ids.add(z.material_id))
+    ;(rp.drawer_stacks ?? []).forEach(stack => stack.box_parts.forEach(p => ids.add(p.material_id)))
     if (ids.size === 0) return
     supabase.from('materials').select('id,name').in('id', [...ids]).then(({ data }) => {
       if (!data) return
@@ -1038,8 +1041,10 @@ function PartsView({ rp }: { rp: ResolvedCabinet }) {
 
   const mat = (id: string) => matNames[id] ?? '—'
 
-  const faceCount = rp.face_zones.filter(z => z.face_type !== 'open').length
-  const totalParts = rp.case_parts.length + rp.toekick_parts.length + rp.internal_parts.length + faceCount
+  const faceCount      = rp.face_zones.filter(z => z.face_type !== 'open').length
+  const drawerBoxCount = (rp.drawer_stacks ?? []).reduce((n, s) => n + s.box_parts.length, 0)
+  const slideCount     = (rp.drawer_stacks ?? []).reduce((n, s) => n + s.slides.length, 0)
+  const totalParts     = rp.case_parts.length + rp.toekick_parts.length + rp.internal_parts.length + faceCount + drawerBoxCount + slideCount
 
   return (
     <div className="w-full h-full overflow-auto p-4">
@@ -1100,6 +1105,32 @@ function PartsView({ rp }: { rp: ResolvedCabinet }) {
                   name={`${z.face_type === 'door' ? 'Door' : z.face_type === 'drawer_face' ? 'Drawer Face' : 'False Panel'} R${z.row_index + 1}C${z.col_index + 1}`}
                   material={mat(z.material_id)} dy={z.DY} dx={z.DX} dz={z.DZ} eb={z.edge_band} />
               ))}
+            </>
+          )}
+          {drawerBoxCount > 0 && (
+            <>
+              <SectionHeader color={SECTION_COLOR.drawerbox} title="Drawer Boxes" count={drawerBoxCount} />
+              {(rp.drawer_stacks ?? []).flatMap((stack, si) =>
+                stack.box_parts.map((p: ResolvedDrawerBoxPart, pi: number) => (
+                  <PartRow key={`db-${si}-${pi}`}
+                    name={`${DB_PART_LABELS[p.part_type] ?? p.part_type} R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`}
+                    material={mat(p.material_id)} dy={p.DY} dx={p.DX} dz={p.DZ} eb={p.edge_band} />
+                ))
+              )}
+            </>
+          )}
+          {slideCount > 0 && (
+            <>
+              <SectionHeader color={SECTION_COLOR.slide} title="Drawer Slides" count={slideCount} />
+              {(rp.drawer_stacks ?? []).flatMap((stack, si) =>
+                stack.slides.map((s: ResolvedDrawerSlide, li: number) => (
+                  <PartRow key={`sl-${si}-${li}`}
+                    name={`Slide (${s.side}) R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`}
+                    material={`${s.nominal_length}mm NL`}
+                    dy={s.DY} dx={s.DX} dz={s.DZ}
+                    eb={{ top: false, bottom: false, left: false, right: false }} />
+                ))
+              )}
             </>
           )}
         </tbody>

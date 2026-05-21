@@ -148,7 +148,7 @@ export default function WallDimensionChain({
   const inward = wallInwardNormal(wall, centX, centY)
   const out = { x: -inward.x, y: -inward.y }
   const z = zoom
-  const col = selected ? '#bfdbfe' : '#cbd5e1'
+  const col = '#ffffff'
 
   const baseCabs = cabinets.filter(c =>
     c.wall_id === wall.id &&

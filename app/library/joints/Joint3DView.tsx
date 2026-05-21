@@ -70,7 +70,24 @@ function Panel({ cx, cy, cz, w, h, d, color, wire }: {
 }
 
 // ── Operation marker ──────────────────────────────────────────────────────────
-// Shows as a sphere + depth cylinder indicating the operation entry point and direction.
+// Shows as a red crosshair + depth cylinder indicating the operation entry point and direction.
+
+function CrosshairLines({ size, color }: { size: number; color: string }) {
+  const mat = new THREE.LineBasicMaterial({ color })
+  const axes: [THREE.Vector3, THREE.Vector3][] = [
+    [new THREE.Vector3(-size, 0, 0), new THREE.Vector3(size, 0, 0)],
+    [new THREE.Vector3(0, -size, 0), new THREE.Vector3(0, size, 0)],
+    [new THREE.Vector3(0, 0, -size), new THREE.Vector3(0, 0, size)],
+  ]
+  return (
+    <>
+      {axes.map(([a, b], i) => {
+        const geo = new THREE.BufferGeometry().setFromPoints([a, b])
+        return <primitive key={i} object={new THREE.Line(geo, mat)} />
+      })}
+    </>
+  )
+}
 
 function OpMarker({ x, y, z, radius, depthLen, axis, color, emissiveIntensity = 0.25 }: {
   x: number; y: number; z: number
@@ -88,11 +105,8 @@ function OpMarker({ x, y, z, radius, depthLen, axis, color, emissiveIntensity = 
 
   return (
     <group position={[x, y, z]}>
-      {/* Entry point sphere */}
-      <mesh>
-        <sphereGeometry args={[radius, 12, 12]} />
-        <meshStandardMaterial color={color} roughness={0.3} metalness={0.2} emissive={color} emissiveIntensity={emissiveIntensity} />
-      </mesh>
+      {/* Entry point crosshair */}
+      <CrosshairLines size={radius * 2} color="#ef4444" />
       {/* Depth cylinder */}
       <mesh position={[cylOffset.dx, cylOffset.dy, cylOffset.dz]} quaternion={cylQuat}>
         <cylinderGeometry args={[radius * 0.55, radius * 0.55, cylLen, 10]} />
@@ -175,6 +189,14 @@ export default function Joint3DView({ ops, thickness, wire = false,
         {/* Part B — vertical side */}
         <Panel cx={partBCX} cy={partBCY} cz={0} w={t} h={slaveL} d={depth} color={COL_B} wire={wire} />
 
+        {/* Joint zone — flat outline rectangle at the joint reference plane (X=0) */}
+        <group position={[0, -t / 2, 0]}>
+          <lineSegments>
+            <edgesGeometry args={[new THREE.BoxGeometry(0.1, t, depth)]} />
+            <lineBasicMaterial color="#34d399" opacity={0.65} transparent />
+          </lineSegments>
+        </group>
+
         {/* Operation markers */}
         {ops.map((op, i) => {
           const sel     = op.id === selOpId
@@ -187,7 +209,7 @@ export default function Joint3DView({ ops, thickness, wire = false,
             return (
               <OpMarker
                 key={i}
-                x={-op.offset_x_mm} y={-t / 2 + op.offset_y_mm} z={op.offset_z_mm}
+                x={-op.offset_x_mm} y={-op.offset_y_mm} z={depth / 2 - op.offset_z_mm}
                 radius={r} depthLen={opDepth}
                 axis="x-"
                 color={colA}
@@ -198,7 +220,7 @@ export default function Joint3DView({ ops, thickness, wire = false,
             return (
               <OpMarker
                 key={i}
-                x={op.offset_x_mm} y={op.offset_y_mm} z={op.offset_z_mm}
+                x={op.offset_x_mm} y={-op.offset_y_mm} z={depth / 2 - op.offset_z_mm}
                 radius={r} depthLen={opDepth}
                 axis="x+"
                 color={colB}

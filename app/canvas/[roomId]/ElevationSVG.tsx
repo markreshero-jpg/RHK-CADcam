@@ -880,7 +880,7 @@ export default function ElevationSVG({
                     <text
                       x={rx + displayDx / 2} y={ry + displayDy / 2 + dimFs * 0.8}
                       textAnchor="middle" dominantBaseline="middle"
-                      fontSize={dimFs} fill={isSel ? '#e2e8f0' : '#94a3b8'}
+                      fontSize={dimFs} fill='#ffffff'
                       style={{ userSelect: 'none', pointerEvents: 'none' }}>
                       {displayDx}W × {displayDy}H
                     </text>
@@ -1036,7 +1036,7 @@ export default function ElevationSVG({
               if (overheadCabs.length === 0) return null
               const segs = computeElevChain(overheadCabs, wall)
               const chainY = -tickH * 2
-              const col = '#cbd5e1'
+              const col = '#ffffff'
               const sw = 1 / z, fs = 12 / z, tk = 8 / z
               const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
               return (
@@ -1071,7 +1071,7 @@ export default function ElevationSVG({
               if (floorCabs.length === 0) return null
               const segs = computeElevChain(floorCabs, wall)
               const chainY = roomH + tickH * 1.5
-              const col = '#cbd5e1'
+              const col = '#ffffff'
               const sw = 1 / z, fs = 12 / z, tk = 8 / z
               const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
               return (
@@ -1100,7 +1100,7 @@ export default function ElevationSVG({
             {/* Bottom dimension — overall wall length */}
             {(() => {
               const dimY = roomH + tickH * 4
-              const fs = 12 / z, tk = 8 / z, sw = 1 / z, col = '#cbd5e1'
+              const fs = 12 / z, tk = 8 / z, sw = 1 / z, col = '#ffffff'
               const mx = wall.length / 2
               const padX = fs * 1.8, padY = fs * 0.6
               return (
@@ -1162,7 +1162,7 @@ export default function ElevationSVG({
               const tkLen = 8 / z
               const sw = 1 / z
               const fs = 12 / z
-              const dimCol = '#cbd5e1'
+              const dimCol = '#ffffff'
               const boundaries = Array.from(new Set(segs.flatMap(s => [s.fromY, s.toY])))
 
               return (

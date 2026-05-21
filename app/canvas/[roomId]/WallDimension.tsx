@@ -35,7 +35,7 @@ export default function WallDimension({ wall, walls, centX, centY, zoom, selecte
   const mx = (dl1.x + dl2.x) / 2, my = (dl1.y + dl2.y) / 2
   const tx = mx + out.x * fs * 0.9, ty = my + out.y * fs * 0.9
   const textAngle = Math.cos(toRad(wall.angle)) < -0.001 ? wall.angle + 180 : wall.angle
-  const col = selected ? '#93c5fd' : '#94a3b8'
+  const col = '#ffffff'
 
   return (
     <g pointerEvents="none" style={{ userSelect: 'none' }}>

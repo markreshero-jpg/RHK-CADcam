@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import JointPreviewPanel from './JointPreviewPanel'
@@ -383,7 +384,7 @@ export default function JointsClient({
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto px-8 py-6 min-w-0">
-                <div className="max-w-2xl space-y-6">
+                <div className="max-w-[712px] space-y-6">
 
                   {/* Header row */}
                   <div className="flex items-center gap-4">
@@ -454,6 +455,8 @@ export default function JointsClient({
                   offset_y_mm:       op.offset_y_mm,
                   offset_z_mm:       op.offset_z_mm,
                   expressions:       op.expressions ?? undefined,
+                  qty:               op.qty,
+                  spacing_mm:        op.spacing_mm,
                 }))}
               />
             )}
@@ -474,6 +477,53 @@ export default function JointsClient({
   )
 }
 
+// ── Expression suggestions ────────────────────────────────────────────────────
+
+const EXPR_SUGGESTIONS: Record<string, { label: string; formula: string }[]> = {
+  tool_diameter_mm: [
+    { label: '5 mm bit',           formula: '5' },
+    { label: '6 mm bit',           formula: '6' },
+    { label: '8 mm bit',           formula: '8' },
+    { label: '10 mm bit',          formula: '10' },
+    { label: '40% of thickness',   formula: 'Math.round(T * 0.4)' },
+  ],
+  depth_mm: [
+    { label: 'Full thickness',     formula: 'T' },
+    { label: '80% of thickness',   formula: 'T * 0.8' },
+    { label: 'Thickness minus 3',  formula: 'T - 3' },
+    { label: 'Half thickness',     formula: 'T / 2' },
+  ],
+  offset_x_mm: [
+    { label: 'Flush (zero)',       formula: '0' },
+    { label: '32 mm from edge',    formula: '32' },
+    { label: '37 mm from edge',    formula: '37' },
+    { label: 'Half part width',    formula: 'W / 2' },
+  ],
+  offset_y_mm: [
+    { label: 'Centre (zero)',      formula: '0' },
+    { label: 'Half thickness',     formula: 'T / 2' },
+    { label: 'Half part width',    formula: 'W / 2' },
+  ],
+  offset_z_mm: [
+    { label: 'Front edge (zero)',  formula: '0' },
+    { label: 'Half joint length',  formula: 'D / 2' },
+    { label: 'Third joint length', formula: 'D / 3' },
+  ],
+  spacing_mm: [
+    { label: '32 mm shelf pitch',  formula: '32' },
+    { label: '64 mm pitch',        formula: '64' },
+    { label: 'Half joint length',  formula: 'D / 2' },
+    { label: 'Third joint length', formula: 'D / 3' },
+    { label: 'Quarter joint length', formula: 'D / 4' },
+  ],
+  qty: [
+    { label: '1',                       formula: '1' },
+    { label: '2',                       formula: '2' },
+    { label: 'Holes per 32 mm pitch',   formula: 'Math.floor(D / 32)' },
+    { label: 'Holes per 64 mm pitch',   formula: 'Math.floor(D / 64)' },
+  ],
+}
+
 // ── Operations table ──────────────────────────────────────────────────────────
 
 function OpsTable({
@@ -488,9 +538,9 @@ function OpsTable({
   onSelOpChange:  (id: string | null) => void
 }) {
 
-  const thCls = 'text-left text-[9px] font-semibold text-gray-500 uppercase tracking-wider px-1.5 py-1 whitespace-nowrap'
-  const tdCls = 'px-1 py-0.5'
-  const celCls = 'bg-gray-800/60 border border-transparent hover:border-gray-600 rounded px-1 py-px text-[11px] text-white focus:outline-none focus:border-blue-500 w-full'
+  const thCls = 'text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-2 py-1 border border-gray-700 whitespace-nowrap'
+  const tdCls = 'border border-gray-700 p-0'
+  const celCls = 'bg-transparent px-1.5 py-0.5 text-[11px] text-white focus:outline-none focus:bg-blue-950/40 w-full'
   const numCls = celCls + ' text-right font-mono'
 
   return (
@@ -498,29 +548,29 @@ function OpsTable({
       <div className="overflow-x-auto rounded-lg border border-gray-800">
         <table className="w-full border-collapse text-xs">
           <thead>
-            <tr className="border-b border-gray-800 bg-gray-900/50">
-              <th className={thCls} style={{ width: 28 }}>#</th>
-              <th className={thCls} style={{ width: 72 }}>Part</th>
-              <th className={thCls} style={{ width: 72 }}>Op</th>
-              <th className={thCls} style={{ width: 68 }}>Face</th>
-              <th className={thCls} style={{ width: 32 }}>Qty</th>
-              <th className={thCls} style={{ width: 52 }}>Space</th>
-              <th className={thCls} style={{ width: 72 }}>Tool</th>
-              <th className={thCls} style={{ width: 56 }}>Ø dia</th>
-              <th className={thCls} style={{ width: 52 }}>Depth</th>
-              <th className={thCls} style={{ width: 48 }}>X off</th>
-              <th className={thCls} style={{ width: 48 }}>Y off</th>
-              <th className={thCls} style={{ width: 48 }}>Z off</th>
-              <th className={thCls}>Notes</th>
-              <th className={thCls} style={{ width: 24 }} />
+            <tr className="bg-gray-900/70">
+              <th className={thCls} style={{ width: 32 }}>#</th>
+              <th className={thCls} style={{ minWidth: 120 }}>Op name</th>
+              <th className={thCls} style={{ width: 80 }}>Part</th>
+              <th className={thCls} style={{ width: 76 }}>Op</th>
+              <th className={thCls} style={{ width: 90 }}>Face</th>
+              <th className={thCls} style={{ width: 44 }}>Qty</th>
+              <th className={thCls} style={{ width: 76 }}>Space</th>
+              <th className={thCls} style={{ width: 100 }}>Tool</th>
+              <th className={thCls} style={{ width: 60 }}>Ø dia</th>
+              <th className={thCls} style={{ width: 58 }}>Depth</th>
+              <th className={thCls} style={{ width: 56 }}>X off</th>
+              <th className={thCls} style={{ width: 56 }}>Y off</th>
+              <th className={thCls} style={{ width: 56 }}>Z off</th>
+              <th className={thCls} style={{ width: 28 }} />
             </tr>
           </thead>
           <tbody>
             {ops.map((op, i) => {
               const selected = op.id === selOpId
               const rowCls = selected
-                ? 'border-b border-blue-700/50 bg-blue-900/20 ring-1 ring-inset ring-blue-600/30'
-                : `border-b border-gray-800/40 ${i % 2 === 0 ? '' : 'bg-gray-900/20'} hover:bg-gray-800/30`
+                ? 'bg-blue-900/20 ring-1 ring-inset ring-blue-600/30'
+                : 'bg-gray-950/30 hover:bg-gray-800/20'
               return (
                 <tr key={op.id} className={`cursor-pointer transition-colors ${rowCls}`}
                   onClick={() => onSelOpChange(selOpId === op.id ? null : op.id)}>
@@ -528,6 +578,13 @@ function OpsTable({
                     <NumCell value={op.operation_order}
                       onChange={n => onPatch(op.id, 'operation_order', n)}
                       className={numCls} style={{ width: 28 }} />
+                  </td>
+                  <td className={tdCls}>
+                    <input type="text" value={op.notes ?? ''}
+                      onChange={e => onPatch(op.id, 'notes', e.target.value)}
+                      onFocus={e => e.target.select()}
+                      placeholder="e.g. cam barrel hole"
+                      className={celCls} />
                   </td>
                   <td className={tdCls}>
                     <select value={op.target_part}
@@ -551,8 +608,10 @@ function OpsTable({
                     </select>
                   </td>
                   <td className={tdCls}>
-                    <NumCell value={op.qty}
-                      onChange={n => onPatch(op.id, 'qty', Math.max(1, Math.round(n)))}
+                    <ExprCell value={op.qty} fieldKey="qty"
+                      expressions={op.expressions}
+                      onPatch={n => onPatch(op.id, 'qty', Math.max(1, Math.round(n)))}
+                      onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
                       className={numCls} style={{ width: 32 }} />
                   </td>
                   <td className={tdCls}>
@@ -560,7 +619,7 @@ function OpsTable({
                       expressions={op.expressions} nullable={op.spacing_mm == null}
                       onPatch={n => onPatch(op.id, 'spacing_mm', n)}
                       onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
-                      placeholder="—" className={numCls} style={{ width: 52 }} />
+                      placeholder="—" className={numCls} />
                   </td>
                   <td className={tdCls}>
                     <input type="text" value={op.tool ?? ''}
@@ -604,16 +663,9 @@ function OpsTable({
                       onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
                       className={numCls} />
                   </td>
-                  <td className={tdCls}>
-                    <input type="text" value={op.notes ?? ''}
-                      onChange={e => onPatch(op.id, 'notes', e.target.value)}
-                      onFocus={e => e.target.select()}
-                      placeholder="e.g. cam barrel hole"
-                      className={celCls} />
-                  </td>
-                  <td className={tdCls}>
+                  <td className="border border-gray-700 px-1.5 text-center">
                     <button onClick={e => { e.stopPropagation(); onDelete(op.id) }}
-                      className="text-gray-600 hover:text-red-400 transition-colors px-1">✕</button>
+                      className="text-gray-600 hover:text-red-400 transition-colors">✕</button>
                   </td>
                 </tr>
               )
@@ -809,9 +861,9 @@ function NullNumCell({ value, onChange, placeholder, className, style }: {
   )
 }
 
-// ── ExprCell — numeric cell that also accepts expression strings ──────────────
-// Typing a pure number clears any stored expression. Typing letters stores it as
-// an expression (cyan text) and the preview panel evaluates it against sample dims.
+// ── ExprCell — numeric cell with expression support and formula suggestions ───
+// A pure number clears any stored expression. Letters store it as an expression
+// (shown in cyan). On focus a suggestion dropdown appears with common formulas.
 
 function ExprCell({
   value, fieldKey, expressions, nullable = false,
@@ -834,6 +886,8 @@ function ExprCell({
 
   const [draft,   setDraft]   = useState(display)
   const [focused, setFocused] = useState(false)
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!focused) setDraft(isExpr ? expr! : (nullable && value === 0 ? '' : String(value)))
@@ -848,27 +902,64 @@ function ExprCell({
     }
     const n = parseFloat(trimmed)
     if (!isNaN(n) && !/[a-zA-Z]/.test(trimmed)) {
-      onPatchExpr(fieldKey, null)   // clear any expression
+      onPatchExpr(fieldKey, null)
       onPatch(n)
     } else {
       onPatchExpr(fieldKey, trimmed)
     }
   }
 
+  const suggestions = EXPR_SUGGESTIONS[fieldKey] ?? []
+
   return (
-    <input
-      type="text"
-      inputMode={isExpr ? 'text' : 'decimal'}
-      value={draft}
-      placeholder={placeholder}
-      title={isExpr ? `expr: ${expr}  (last value: ${value})` : undefined}
-      className={`${className ?? ''} ${isExpr ? 'text-cyan-400' : ''}`}
-      style={style}
-      onChange={e => setDraft(e.target.value)}
-      onFocus={e => { setFocused(true); e.target.select() }}
-      onBlur={e  => { setFocused(false); commit(e.target.value) }}
-      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-    />
+    <>
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode={isExpr ? 'text' : 'decimal'}
+        value={draft}
+        placeholder={placeholder}
+        title={isExpr ? `= ${expr}  (stored: ${value})` : undefined}
+        className={`${className ?? ''} ${isExpr ? 'text-cyan-400' : ''}`}
+        style={style}
+        onChange={e => setDraft(e.target.value)}
+        onFocus={e => {
+          setFocused(true)
+          e.target.select()
+          if (suggestions.length > 0) {
+            const r = e.target.getBoundingClientRect()
+            setDropPos({ top: r.bottom + 2, left: r.left, width: Math.max(230, r.width) })
+          }
+        }}
+        onBlur={e => { setFocused(false); setDropPos(null); commit(e.target.value) }}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+      />
+      {focused && dropPos && suggestions.length > 0 && createPortal(
+        <div
+          className="bg-gray-900 border border-gray-700 rounded-md shadow-2xl overflow-hidden py-0.5"
+          style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, minWidth: dropPos.width, zIndex: 9999 }}
+        >
+          <div className="px-2 pt-0.5 pb-1 border-b border-gray-800">
+            <span className="text-[9px] text-gray-600 uppercase tracking-wider">Formulas  —  T=thickness  W/L/D=part  M=master  S=slave</span>
+          </div>
+          {suggestions.map(s => (
+            <button
+              key={s.formula}
+              onMouseDown={e => {
+                e.preventDefault()
+                setDraft(s.formula)
+                setTimeout(() => inputRef.current?.blur(), 0)
+              }}
+              className="w-full text-left px-2.5 py-1 flex items-center justify-between gap-4 hover:bg-gray-800 transition-colors"
+            >
+              <span className="text-[11px] text-gray-400">{s.label}</span>
+              <span className="text-[11px] text-cyan-400 font-mono shrink-0">{s.formula}</span>
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
   )
 }
 

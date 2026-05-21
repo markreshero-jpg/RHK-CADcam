@@ -94,9 +94,9 @@ export function resolveDrawerStacks(
     const boxY = zone.Y               // bottom aligns with bottom of face zone
     const boxZ = zone.Z - boxDepth    // cabinet Z of the back face of the box
 
-    // Slide Z: back of slide rail, referenced from the back face of the drawer box front panel.
-    // Front of slide sits at zone.Z - drawerMat.DZ (back face of db_front panel).
-    const slideZ = zone.Z - drawerMat.DZ - nominalLength
+    // Slide Z: back of slide rail. Front of slide aligns with the front face of the box sides
+    // (zone.Z in cabinet space), not the back face of db_front.
+    const slideZ = zone.Z - nominalLength
 
     // Resolve box parts in local coords, filter by drawer type, then offset to cabinet space.
     // Local convention: Z=0 = front of box (against back face of drawer front), Z increases toward back.
