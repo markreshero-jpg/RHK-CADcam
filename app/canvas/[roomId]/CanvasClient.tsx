@@ -20,7 +20,7 @@ import { useCabinetOps } from './useCabinetOps'
 import { useMultiSelectOps } from './useMultiSelectOps'
 import { buildMenus } from './canvasMenuConfig'
 import {
-  Mode, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState,
+  Mode, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, SectionCut,
   viewReducer, modeAssemblyClass, DisplayConfig, PresetId,
   DEFAULT_DISPLAY_CONFIG, applyPreset, toggleAnnotation,
 } from './canvasTypes'
@@ -30,6 +30,7 @@ import CanvasMenubar from './CanvasMenubar'
 import CanvasSidebar from './CanvasSidebar'
 import CanvasSVG from './CanvasSVG'
 import ElevationSVG from './ElevationSVG'
+import SectionSVG from './SectionSVG'
 import CanvasContextMenu from './CanvasContextMenu'
 import { buildContextMenuGroups } from './canvasContextItems'
 import DeleteWallModal from './DeleteWallModal'
@@ -42,6 +43,7 @@ import CabinetResizePanel from './CabinetResizePanel'
 import CabinetEditModal from './CabinetEditModal'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
 import RoomPropertiesModal, { type RoomPropertiesTab } from './RoomPropertiesModal'
+import ObjectTreeModal from './ObjectTreeModal'
 import ReportsModal, { type ReportScope } from './ReportsModal'
 import Room3DScene from './Room3DScene'
 import BenchtopPanel from './BenchtopPanel'
@@ -88,13 +90,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const preset = getUserPrefs().defaultDrawingPreset
     return applyPreset(preset)
   })
-  const [jobModalTab, setJobModalTab] = useState<JobPropertiesTab | null>(null)
+  const [jobModalTab, setJobModalTab]   = useState<JobPropertiesTab | null>(null)
   const [roomModalTab, setRoomModalTab] = useState<RoomPropertiesTab | null>(null)
+  const [showObjectTree, setShowObjectTree] = useState(false)
   const [reportScope, setReportScope] = useState<ReportScope | null>(null)
   const [editCabId, setEditCabId] = useState<string | null>(null)
   const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation' | 'joints'>('elevation')
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
+  const [sectionCut, setSectionCut] = useState<SectionCut | null>(null)
+  const [sectionDrag, setSectionDrag] = useState<{ offsetX: number; offsetY: number } | null>(null)
   const ctrlRef = useRef(false)
 
   const { captureSnapshot, pushSnapshot, handleUndo, handleRedo, wallsRef, cabinetsRef, benchtopsRef, canUndo, canRedo } =
@@ -363,7 +368,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       left_neighbour_type: 'wall', right_neighbour_type: 'wall',
       exposed_interior: false, rule_overrides: {}, material_overrides: {},
       toekick_overrides: {}, drawerbox_overrides: {}, hardware_overrides: {},
-      face_grid: null, carcase_joints: {}, schema_version: '0.4', notes: null,
+      face_grid: null, internal_grid: null, carcase_joints: {}, schema_version: '0.4', notes: null,
     }
     const cabinet = await dbInsertCabinet(data)
     if (cabinet) {
@@ -442,6 +447,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       return
     }
+    if (mode === 'draw_section') {
+      e.preventDefault()
+      if (!drawStart) {
+        setDrawStart(wp); setDrawCursor(wp)
+        drawStartedThisDownRef.current = true
+      }
+      return
+    }
     if (modeAssemblyClass(mode) || mode === 'paste') { svgRef.current.setPointerCapture(e.pointerId); return }
     commitResize()
     setSelected(null)
@@ -462,6 +475,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return
     }
 
+    if (sectionDrag && sectionCut) {
+      const newX1 = wp.x + sectionDrag.offsetX
+      const newY1 = wp.y + sectionDrag.offsetY
+      const ddx = sectionCut.x2 - sectionCut.x1, ddy = sectionCut.y2 - sectionCut.y1
+      setSectionCut({ ...sectionCut, x1: newX1, y1: newY1, x2: newX1 + ddx, y2: newY1 + ddy })
+      return
+    }
+
     if (bt.handlePointerMove(wp, e)) return
 
     if (mode === 'draw_wall' || mode === 'draw_island') {
@@ -471,6 +492,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (drawStart && !hitCorner) {
         end = snapAngle(drawStart, end, shiftRef.current ? 5 : 22.5)
       }
+      setDrawCursor(end)
+      return
+    }
+    if (mode === 'draw_section') {
+      let end = wp
+      if (drawStart && shiftRef.current) end = snapAngle(drawStart, end, 45)
       setDrawCursor(end)
       return
     }
@@ -597,6 +624,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
     if (panRef.current) { panRef.current = null; return }
     if (e.button !== 0) return
+    if (sectionDrag) { setSectionDrag(null); return }
     if (cabFollowing) return
 
     const svgP = svgCoords(e)
@@ -632,6 +660,23 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           }
           const saved = await dbSaveWall(data)
           if (saved) { setWalls(ws => [...ws, saved]); setSelected({ type: 'wall', id: saved.id }) }
+        }
+        setDrawStart(null); setDrawCursor(null)
+        placingRef.current = false
+      }
+      return
+    }
+
+    if (mode === 'draw_section') {
+      if (drawStartedThisDownRef.current) { drawStartedThisDownRef.current = false; return }
+      if (drawStart && !placingRef.current) {
+        placingRef.current = true
+        let end = wp
+        if (shiftRef.current) end = snapAngle(drawStart, end, 45)
+        const len = dist(drawStart, end)
+        if (len >= 20) {
+          setSectionCut({ x1: drawStart.x, y1: drawStart.y, x2: end.x, y2: end.y, lookDir: 1 })
+          switchView('section')
         }
         setDrawStart(null); setDrawCursor(null)
         placingRef.current = false
@@ -831,6 +876,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     })
   }
 
+  function onSectionLinePointerDown(e: React.PointerEvent) {
+    if (!sectionCut || e.button !== 0) return
+    e.stopPropagation()
+    svgPointerDownRef.current = true
+    const svgP = svgCoords(e)
+    const wp = toWorld(svgP.x, svgP.y)
+    setSectionDrag({ offsetX: sectionCut.x1 - wp.x, offsetY: sectionCut.y1 - wp.y })
+    svgRef.current?.setPointerCapture(e.pointerId)
+  }
+
   function onResizePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault()
     sidebarResizeRef.current = { startX: e.clientX, startW: sidebarW }
@@ -886,7 +941,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   const cursor = spaceRef.current ? 'grab'
     : bt.isDragging ? 'grabbing'
-    : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l') ? 'crosshair'
+    : sectionDrag ? 'grabbing'
+    : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_section' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l') ? 'crosshair'
     : (modeAssemblyClass(mode) || mode === 'paste') ? 'cell'
     : cabResize ? 'crosshair'
     : 'default'
@@ -931,6 +987,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         : bt.btDrawPoly.length === 0 ? 'Click first vertex · Shift=45° · Ctrl=ortho · A=arc · Esc=cancel'
         : bt.btDrawPoly.length < 3 ? `${bt.btDrawPoly.length} ${bt.btDrawPoly.length === 1 ? 'vertex' : 'vertices'} · Backspace=undo · Shift=45° · Ctrl=ortho · A=arc`
         : `${bt.btDrawPoly.length} vertices · click near first vertex to close · Backspace=undo · A=arc`)
+    : mode === 'draw_section'     ? (!drawStart ? 'Click to set start of section cut · Esc=cancel' : 'Click to finish · Shift=45° snap · Esc=cancel')
     : mode === 'draw_wall'       ? (!drawStart ? 'Click to set start point · snap rings show existing endpoints' : 'Click to finish · Shift = 5° snap · or type in panel →')
     : mode === 'draw_island'     ? (!drawStart ? 'Click to set island start · Shift = 5° snap · Right-click = cancel' : 'Click to finish island · cabinets snap to either side')
     : mode === 'place_base'        ? 'Click near a wall to place base cabinet · Esc = cancel'
@@ -958,6 +1015,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     displayConfig, setDisplayConfig,
     setJobModalTab, setRoomModalTab,
     openReportModal: setReportScope,
+    openObjectTree: () => setShowObjectTree(true),
   })
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -976,18 +1034,30 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       {/* View tab bar */}
       <div className="flex-none h-8 bg-gray-900 border-b border-gray-800 flex items-center px-3 shrink-0 relative">
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1">
-          {(['plan', 'elevation', '3d'] as CanvasView[]).map(v => (
+          {(['plan', 'elevation', 'section', '3d'] as CanvasView[]).map(v => (
             <button key={v} onClick={() => switchView(v)}
               className={`px-3 py-1 text-xs rounded transition-colors ${
                 canvasView === v
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
               }`}>
-              {v === 'plan' ? 'Plan' : v === 'elevation' ? 'Elevation' : '3D'}
+              {v === 'plan' ? 'Plan' : v === 'elevation' ? 'Elevation' : v === 'section' ? 'Section' : '3D'}
             </button>
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {canvasView === 'plan' && (
+            <button
+              onClick={() => onSelectMode('draw_section')}
+              className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                mode === 'draw_section'
+                  ? 'bg-amber-500 text-white'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700'
+              }`}
+            >
+              Section Cut
+            </button>
+          )}
           <span className="text-[10px] text-gray-600 uppercase tracking-wider select-none">Detail</span>
           <select
             value={displayConfig.activePreset}
@@ -1093,6 +1163,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               btUCursor={bt.btUCursor}
               btCutoutStart={bt.btCutoutStart}
               btCutoutCursor={bt.btCutoutCursor}
+              sectionCut={sectionCut}
+              onSectionFlipLook={() => setSectionCut(c => c ? { ...c, lookDir: (-c.lookDir) as 1 | -1 } : null)}
+              onSectionClear={() => setSectionCut(null)}
+              onSectionLinePointerDown={onSectionLinePointerDown}
             />
             {(mode === 'draw_wall' || mode === 'draw_island') && !drawStart && (
               <WallDrawPanel
@@ -1167,6 +1241,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               setEditCabInitialView('joints')
               setEditCabId(cabId)
             }}
+          />
+        )}
+
+        {canvasView === 'section' && (
+          <SectionSVG
+            walls={walls}
+            cabinets={cabinets}
+            room={room}
+            sectionCut={sectionCut}
+            onFlipLook={() => setSectionCut(c => c ? { ...c, lookDir: (-c.lookDir) as 1 | -1 } : null)}
+            onClearCut={() => { setSectionCut(null); switchView('plan') }}
           />
         )}
 
@@ -1394,6 +1479,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           initialTab={roomModalTab}
           onClose={() => setRoomModalTab(null)}
           onSave={handleUpdateRoom}
+        />
+      )}
+
+      {showObjectTree && (
+        <ObjectTreeModal
+          room={room}
+          walls={walls}
+          cabinets={cabinets}
+          resolvedParts={resolvedParts}
+          onUpdateCabinet={handleUpdateCabinet}
+          onClose={() => setShowObjectTree(false)}
         />
       )}
 

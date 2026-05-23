@@ -2,7 +2,7 @@
 
 import { Suspense, useMemo, useEffect, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls, PerspectiveCamera, Edges } from '@react-three/drei'
+import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei'
 import { Shape, ExtrudeGeometry, Vector3 } from 'three'
 import type { Wall, CabinetInstance, Room } from '@/src/lib/types'
 import type {
@@ -135,6 +135,35 @@ function WallMesh({ wall, walls, room, cx, cy }: {
   )
 }
 
+// ── Wall label (flat text on wall top edge) ───────────────────────────────────
+
+function WallLabel({ wall, room, cx, cy }: { wall: Wall; room: Room; cx: number; cy: number }) {
+  if (wall.wall_type === 'island') return null
+  const height = (wall.height ?? room.room_dy ?? 2400) + 10
+  const e = wallEnd(wall)
+  // Start from the midpoint of the inner face, then shift outward by half the wall thickness
+  // so the label sits over the wall centre rather than just the inner edge.
+  const inward = wallInwardNormal(wall, cx, cy)
+  const midX = (wall.pos_x + e.x) / 2 - inward.x * wall.thickness / 2
+  const midZ = (wall.pos_y + e.y) / 2 - inward.y * wall.thickness / 2
+  const angleRad = wall.angle * TO_RAD
+
+  return (
+    <Text
+      position={[midX, height, midZ]}
+      rotation={[-Math.PI / 2, 0, -angleRad]}
+      fontSize={75}
+      color="#1e293b"
+      anchorX="center"
+      anchorY="middle"
+      outlineWidth={5}
+      outlineColor="#f1f5f9"
+    >
+      {wall.name}
+    </Text>
+  )
+}
+
 // ── Cabinet mesh ──────────────────────────────────────────────────────────────
 // The resolved cabinet's local space matches Cabinet3DView exactly:
 //   +X = along wall (width), +Y = up (height), +Z = into room (depth).
@@ -258,6 +287,77 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
   )
 }
 
+// ── Wall visibility menu (DOM overlay) ───────────────────────────────────────
+
+function WallVisibilityMenu({ x, y, walls, hiddenWallIds, onToggle, onShowAll, onBirdsEye, onClose }: {
+  x: number; y: number
+  walls: Wall[]
+  hiddenWallIds: Set<string>
+  onToggle: (id: string) => void
+  onShowAll: () => void
+  onBirdsEye: () => void
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const handler = () => onClose()
+    window.addEventListener('pointerdown', handler)
+    window.addEventListener('keydown', handler)
+    return () => {
+      window.removeEventListener('pointerdown', handler)
+      window.removeEventListener('keydown', handler)
+    }
+  }, [onClose])
+
+  const standardWalls = walls.filter(w => w.wall_type !== 'island')
+
+  return (
+    <div
+      className="fixed z-50 bg-gray-800 border border-gray-600 rounded shadow-xl py-1 min-w-[190px] select-none"
+      style={{ left: x, top: y }}
+      onPointerDown={e => e.stopPropagation()}
+    >
+      <div className="px-3 py-1.5 text-xs text-gray-400 font-medium uppercase tracking-wider border-b border-gray-700">
+        Wall Visibility
+      </div>
+      {standardWalls.map(w => (
+        <label
+          key={w.id}
+          className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700 cursor-pointer"
+        >
+          <input
+            type="checkbox"
+            checked={!hiddenWallIds.has(w.id)}
+            onChange={() => onToggle(w.id)}
+            className="w-3.5 h-3.5 accent-blue-500 cursor-pointer"
+          />
+          <span className="truncate">{w.name}</span>
+        </label>
+      ))}
+      {hiddenWallIds.size > 0 && (
+        <>
+          <div className="my-1 border-t border-gray-700" />
+          <button
+            className="w-full text-left px-3 py-1.5 text-xs text-blue-400 hover:bg-gray-700"
+            onClick={onShowAll}
+          >
+            Show all walls
+          </button>
+        </>
+      )}
+      <div className="my-1 border-t border-gray-700" />
+      <div className="px-3 py-1 text-xs text-gray-400 font-medium uppercase tracking-wider">
+        Views
+      </div>
+      <button
+        className="w-full text-left px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700"
+        onClick={() => { onBirdsEye(); onClose() }}
+      >
+        Bird's Eye
+      </button>
+    </div>
+  )
+}
+
 // ── Cabinet context menu (DOM overlay) ───────────────────────────────────────
 
 function CabContextMenu({ x, y, onEdit, onDelete, onClose }: {
@@ -344,9 +444,30 @@ function CustomZoom({ controlsRef }: { controlsRef: React.RefObject<any> }) {
   return null
 }
 
+// ── Camera controller ─────────────────────────────────────────────────────────
+// Reacts to an incrementing signal to programmatically reposition the camera.
+
+function CameraController({ signal, controlsRef, midX, midZ, camHeight, targetY }: {
+  signal: number
+  controlsRef: React.RefObject<any>
+  midX: number; midZ: number; camHeight: number; targetY: number
+}) {
+  const { camera } = useThree()
+
+  useEffect(() => {
+    if (signal === 0 || !controlsRef.current) return
+    // Tiny Z offset prevents gimbal lock when camera is directly above target.
+    camera.position.set(midX, camHeight, midZ + 1)
+    controlsRef.current.target.set(midX, targetY, midZ)
+    controlsRef.current.update()
+  }, [signal]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null
+}
+
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours }: {
+function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, hiddenWallIds, birdsEyeSignal }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -355,6 +476,8 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
   onCabContextMenu: (cabId: string, x: number, y: number) => void
   resolvedParts: Map<string, ResolvedCabinet>
   materialColours?: Record<string, MatColEntry>
+  hiddenWallIds: Set<string>
+  birdsEyeSignal: number
 }) {
   const controlsRef = useRef<any>(null)
   const { x: cx, y: cy } = useMemo(() => centroid(walls), [walls])
@@ -389,6 +512,13 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
         enableZoom={false}
       />
       <CustomZoom controlsRef={controlsRef} />
+      <CameraController
+        signal={birdsEyeSignal}
+        controlsRef={controlsRef}
+        midX={midX} midZ={midZ}
+        camHeight={span * 2}
+        targetY={0}
+      />
 
       <ambientLight intensity={1.8} />
       <directionalLight position={[midX + span, roomH * 2, midZ + span * 0.8]} intensity={1.6} />
@@ -401,14 +531,19 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
       </mesh>
 
       {/* Walls */}
-      {walls.map(w => (
+      {walls.map(w => hiddenWallIds.has(w.id) ? null : (
         <WallMesh key={w.id} wall={w} walls={walls} room={room} cx={cx} cy={cy} />
+      ))}
+
+      {/* Wall name labels on top edge */}
+      {walls.map(w => hiddenWallIds.has(w.id) ? null : (
+        <WallLabel key={`lbl_${w.id}`} wall={w} room={room} cx={cx} cy={cy} />
       ))}
 
       {/* Cabinets */}
       {cabinets.map(cab => {
         const wall = walls.find(w => w.id === cab.wall_id)
-        if (!wall) return null
+        if (!wall || (cab.wall_id != null && hiddenWallIds.has(cab.wall_id))) return null
         return (
           <CabinetMesh
             key={cab.id}
@@ -427,7 +562,8 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
 
 // ── Public component ──────────────────────────────────────────────────────────
 
-type MenuState = { x: number; y: number; cabId: string }
+type MenuState     = { x: number; y: number; cabId: string }
+type WallMenuState = { x: number; y: number }
 
 export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, resolvedParts, materialColours }: {
   walls: Wall[]
@@ -441,25 +577,41 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   resolvedParts: Map<string, ResolvedCabinet>
   materialColours?: Record<string, MatColEntry>
 }) {
-  const [menu, setMenu] = useState<MenuState | null>(null)
+  const [menu, setMenu]               = useState<MenuState | null>(null)
+  const [wallMenu, setWallMenu]       = useState<WallMenuState | null>(null)
+  const [hiddenWallIds, setHiddenWallIds] = useState<Set<string>>(new Set())
+  const [birdsEyeSignal, setBirdsEyeSignal] = useState(0)
   // Tracks whether the right-click landed on a cabinet so the div-level handler
-  // can distinguish "empty space" right-clicks (which should deselect).
+  // can distinguish "empty space" right-clicks (which should show the wall menu).
   const hitCabRef = useRef(false)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { setMenu(null); onDeselect() }
+      if (e.key === 'Escape') { setMenu(null); setWallMenu(null); onDeselect() }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onDeselect])
+
+  function toggleWallVisibility(id: string) {
+    setHiddenWallIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   return (
     <div
       className="flex-1 relative"
       onContextMenu={e => {
         e.preventDefault()
-        if (!hitCabRef.current) { setMenu(null); onDeselect() }
+        if (!hitCabRef.current) {
+          setMenu(null)
+          setWallMenu({ x: e.clientX, y: e.clientY })
+          onDeselect()
+        }
         hitCabRef.current = false
       }}
     >
@@ -469,9 +621,15 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
             <RoomScene
               walls={walls} cabinets={cabinets} room={room}
               selectedId={selectedId} onSelectCabinet={onSelectCabinet}
-              onCabContextMenu={(cabId, x, y) => { hitCabRef.current = true; setMenu({ cabId, x, y }) }}
+              onCabContextMenu={(cabId, x, y) => {
+                hitCabRef.current = true
+                setWallMenu(null)
+                setMenu({ cabId, x, y })
+              }}
               resolvedParts={resolvedParts}
               materialColours={materialColours}
+              hiddenWallIds={hiddenWallIds}
+              birdsEyeSignal={birdsEyeSignal}
             />
           )}
         </Suspense>
@@ -484,7 +642,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
       )}
 
       <div className="absolute bottom-2 left-3 text-[10px] text-gray-700 pointer-events-none select-none">
-        Left-drag rotate · scroll zoom · right-drag pan · right-click cabinet for options
+        Left-drag rotate · scroll zoom · right-drag pan · right-click for options
       </div>
 
       {menu && (
@@ -493,6 +651,18 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
           onEdit={() => onEditCabinet(menu.cabId)}
           onDelete={() => onDeleteCabinet(menu.cabId)}
           onClose={() => setMenu(null)}
+        />
+      )}
+
+      {wallMenu && (
+        <WallVisibilityMenu
+          x={wallMenu.x} y={wallMenu.y}
+          walls={walls}
+          hiddenWallIds={hiddenWallIds}
+          onToggle={toggleWallVisibility}
+          onShowAll={() => setHiddenWallIds(new Set())}
+          onBirdsEye={() => setBirdsEyeSignal(s => s + 1)}
+          onClose={() => setWallMenu(null)}
         />
       )}
     </div>

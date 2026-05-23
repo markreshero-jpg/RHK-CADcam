@@ -279,6 +279,47 @@ export async function dbDeleteCustomPart(id: string): Promise<void> {
   if (error) console.error(error)
 }
 
+// ── Part Labels ───────────────────────────────────────────────────────────────
+
+export type PartLabels = Record<string, string>
+
+export async function dbLoadPartLabels(cabinetId: string): Promise<PartLabels> {
+  const { data } = await supabase
+    .from('cabinet_instances').select('part_labels').eq('id', cabinetId).single()
+  return ((data as { part_labels?: unknown } | null)?.part_labels ?? {}) as PartLabels
+}
+
+export async function dbSavePartLabel(cabinetId: string, partId: string, label: string, current: PartLabels): Promise<PartLabels> {
+  const updated = { ...current, [partId]: label }
+  const { error } = await supabase.from('cabinet_instances').update({ part_labels: updated }).eq('id', cabinetId)
+  if (error) console.error('[part label save]', error)
+  return updated
+}
+
+export async function dbDeletePartLabel(cabinetId: string, partId: string, current: PartLabels): Promise<PartLabels> {
+  const { [partId]: _r, ...updated } = current
+  const { error } = await supabase.from('cabinet_instances').update({ part_labels: updated }).eq('id', cabinetId)
+  if (error) console.error('[part label delete]', error)
+  return updated
+}
+
+// ── Part Comments ─────────────────────────────────────────────────────────────
+
+export type PartComments = Record<string, string>
+
+export async function dbLoadPartComments(cabinetId: string): Promise<PartComments> {
+  const { data } = await supabase
+    .from('cabinet_instances').select('part_comments').eq('id', cabinetId).single()
+  return ((data as { part_comments?: unknown } | null)?.part_comments ?? {}) as PartComments
+}
+
+export async function dbSavePartComment(cabinetId: string, partId: string, comment: string, current: PartComments): Promise<PartComments> {
+  const updated = comment.trim() ? { ...current, [partId]: comment.trim() } : (() => { const { [partId]: _r, ...rest } = current; return rest })()
+  const { error } = await supabase.from('cabinet_instances').update({ part_comments: updated }).eq('id', cabinetId)
+  if (error) console.error('[part comment save]', error)
+  return updated
+}
+
 // ── Part Position Overrides ───────────────────────────────────────────────────
 
 export type PartPosOverrides = Record<string, { ox: number; oy: number; oz: number; oax?: number; oay?: number; oaz?: number }>

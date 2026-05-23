@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
-import { dbAddCustomPart, dbUpdateCustomPart, dbDeleteCustomPart, type CabinetCustomPart, type PartPosOverrides } from './canvasDB'
+import type { ResolvedCabinet, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
+import {
+  dbAddCustomPart, dbUpdateCustomPart, dbDeleteCustomPart,
+  type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments,
+} from './canvasDB'
 import { DB_PART_LABELS } from './cabinetEditSvgHelpers'
 
-// ── Parts list helpers ────────────────────────────────────────────────────────
+// ── Labels ────────────────────────────────────────────────────────────────────
 
 const PART_LABEL: Record<string, string> = {
   left_side:           'Left Side',
@@ -19,15 +22,15 @@ const PART_LABEL: Record<string, string> = {
   kick_front_face:     'Kick Front Face',
   kick_sub_front:      'Kick Sub Front',
   kick_back:           'Kick Back',
-  spreader_vertical:   'Spreader (Vertical)',
-  spreader_horizontal: 'Spreader (Horizontal)',
+  spreader_vertical:   'Spreader (Vert)',
+  spreader_horizontal: 'Spreader (Horiz)',
   adj_shelf:           'Adj. Shelf',
   fixed_shelf:         'Fixed Shelf',
   inner_drawer_bottom: 'Drawer Bottom',
   inner_drawer_back:   'Drawer Back',
 }
 
-const SECTION_COLOR: Record<string, string> = {
+const TYPE_COLOR: Record<string, string> = {
   carcass:   '#3b82f6',
   toekick:   '#f59e0b',
   internal:  '#818cf8',
@@ -35,58 +38,46 @@ const SECTION_COLOR: Record<string, string> = {
   drawerbox: '#22c55e',
   slide:     '#d97706',
   custom:    '#a78bfa',
+  override:  '#f97316',
 }
 
-function EBDots({ t, b, l, r }: { t: boolean; b: boolean; l: boolean; r: boolean }) {
-  const dot = (on: boolean, label: string) => (
-    <span
-      key={label}
-      title={`${label}: ${on ? 'banded' : 'no band'}`}
-      className={`inline-block w-4 h-4 rounded-sm text-[9px] leading-4 text-center font-bold ${
-        on ? 'bg-amber-500 text-gray-900' : 'bg-gray-700 text-gray-500'
-      }`}
-    >
-      {label}
-    </span>
-  )
-  return (
-    <span className="flex gap-0.5">
-      {dot(t, 'T')}{dot(b, 'B')}{dot(l, 'L')}{dot(r, 'R')}
-    </span>
-  )
+const TYPE_ORDER = ['carcass', 'toekick', 'internal', 'face', 'drawerbox', 'slide', 'custom', 'override']
+
+// ── Column definitions ────────────────────────────────────────────────────────
+
+const COLS = [
+  { key: 'type',     label: 'Type',     w: 100, sortable: true  },
+  { key: 'name',     label: 'Part',     w: 190, sortable: true  },
+  { key: 'material', label: 'Material', w: 150, sortable: true  },
+  { key: 'dy',       label: 'W (DY)',   w: 68,  sortable: true  },
+  { key: 'dx',       label: 'H (DX)',   w: 68,  sortable: true  },
+  { key: 'dz',       label: 'T (DZ)',   w: 58,  sortable: true  },
+  { key: 'edge',     label: 'Edge',     w: 90,  sortable: false },
+  { key: 'comment',  label: 'Comment',  w: 220, sortable: false },
+] as const
+
+type SortKey = 'type' | 'name' | 'material' | 'dy' | 'dx' | 'dz'
+
+// ── Flat row ──────────────────────────────────────────────────────────────────
+
+interface FlatRow {
+  id: string
+  typeKey: string
+  typeLabel: string
+  name: string
+  material: string
+  materialColor: string | null
+  dy: number; dx: number; dz: number
+  eb: { top: boolean; bottom: boolean; left: boolean; right: boolean } | null
+  comment: string
+  isCustom: boolean
+  isOverride: boolean
+  overridePartId?: string
+  visible?: boolean
+  customPartRef?: CabinetCustomPart
 }
 
-function SectionHeader({ color, title, count }: { color: string; title: string; count: number }) {
-  return (
-    <tr>
-      <td colSpan={6} className="pt-4 pb-1 px-3">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full flex-none" style={{ background: color }} />
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">{title}</span>
-          <span className="text-[10px] text-gray-600 ml-1">{count} part{count !== 1 ? 's' : ''}</span>
-        </div>
-      </td>
-    </tr>
-  )
-}
-
-function PartRow({ name, material, dy, dx, dz, eb }: {
-  name: string; material: string; dy: number; dx: number; dz: number
-  eb: { top: boolean; bottom: boolean; left: boolean; right: boolean }
-}) {
-  return (
-    <tr className="border-t border-gray-800/60 hover:bg-gray-800/30">
-      <td className="px-3 py-1.5 text-xs text-gray-300">{name}</td>
-      <td className="px-3 py-1.5 text-xs text-gray-400">{material}</td>
-      <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{dy.toFixed(1)}</td>
-      <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{dx.toFixed(1)}</td>
-      <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-400">{dz.toFixed(1)}</td>
-      <td className="px-3 py-1.5">
-        <EBDots t={eb.top} b={eb.bottom} l={eb.left} r={eb.right} />
-      </td>
-    </tr>
-  )
-}
+// ── Part ID label (for override rows) ────────────────────────────────────────
 
 function partIdLabel(id: string): string {
   if (id.startsWith('case_')) {
@@ -115,6 +106,92 @@ function partIdLabel(id: string): string {
     return `Slide (${parts[2]}) R${Number(parts[0]) + 1}C${Number(parts[1]) + 1}`
   }
   return id
+}
+
+// ── EBDots ────────────────────────────────────────────────────────────────────
+
+function EBDots({ t, b, l, r }: { t: boolean; b: boolean; l: boolean; r: boolean }) {
+  const dot = (on: boolean, label: string) => (
+    <span key={label} title={`${label}: ${on ? 'banded' : 'no band'}`}
+      className={`inline-block w-4 h-4 rounded-sm text-[9px] leading-4 text-center font-bold ${
+        on ? 'bg-amber-500 text-gray-900' : 'bg-gray-700 text-gray-500'
+      }`}>{label}</span>
+  )
+  return <span className="flex gap-0.5">{dot(t,'T')}{dot(b,'B')}{dot(l,'L')}{dot(r,'R')}</span>
+}
+
+// ── EditableName ──────────────────────────────────────────────────────────────
+
+function EditableName({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft,   setDraft]   = useState(value)
+
+  function commit() {
+    setEditing(false)
+    const v = draft.trim()
+    if (v && v !== value) onSave(v)
+    else setDraft(value)
+  }
+
+  if (editing) {
+    return (
+      <input autoFocus type="text" value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setDraft(value); setEditing(false) } }}
+        className="w-full bg-gray-800 border border-blue-500 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none"
+        onClick={e => e.stopPropagation()} />
+    )
+  }
+
+  return (
+    <button onClick={e => { e.stopPropagation(); setDraft(value); setEditing(true) }}
+      title="Click to rename"
+      className="text-left hover:text-blue-300 transition-colors truncate block w-full">
+      {value}
+    </button>
+  )
+}
+
+// ── EditableComment ───────────────────────────────────────────────────────────
+
+function EditableComment({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft,   setDraft]   = useState(value)
+
+  useEffect(() => { setDraft(value) }, [value])
+
+  function commit() {
+    setEditing(false)
+    if (draft.trim() !== value) onSave(draft.trim())
+  }
+
+  if (editing) {
+    return (
+      <input autoFocus type="text" value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setDraft(value); setEditing(false) } }}
+        className="w-full bg-gray-800 border border-blue-500 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none" />
+    )
+  }
+
+  if (value) {
+    return (
+      <button onClick={() => { setDraft(value); setEditing(true) }}
+        className="text-left text-amber-300/80 hover:text-amber-200 transition-colors text-xs truncate block w-full"
+        title={value}>
+        {value}
+      </button>
+    )
+  }
+
+  return (
+    <button onClick={() => { setDraft(''); setEditing(true) }}
+      className="text-gray-700 hover:text-gray-400 text-xs transition-colors">
+      + add
+    </button>
+  )
 }
 
 // ── Add Part Dialog ───────────────────────────────────────────────────────────
@@ -171,7 +248,7 @@ function AddPartDialog({ cabinetId, onAdd, onClose }: {
     setETop(p.edge_top); setEBot(p.edge_bottom); setELeft(p.edge_left); setERight(p.edge_right)
   }
 
-  const cats    = ['all', ...Array.from(new Set(libParts.map(p => p.category)))]
+  const cats     = ['all', ...Array.from(new Set(libParts.map(p => p.category)))]
   const visible2 = libParts.filter(p =>
     (catFilter === 'all' || p.category === catFilter) &&
     (!search || p.name.toLowerCase().includes(search.toLowerCase()))
@@ -207,7 +284,6 @@ function AddPartDialog({ cabinetId, onAdd, onClose }: {
           <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none">✕</button>
         </div>
         <div className="flex flex-1 overflow-hidden">
-          {/* Left: library browser */}
           <div className="w-56 flex-none border-r border-gray-700 flex flex-col">
             <div className="flex flex-wrap gap-0.5 p-2 border-b border-gray-700">
               {cats.map(c => (
@@ -237,7 +313,6 @@ function AddPartDialog({ cabinetId, onAdd, onClose }: {
               {visible2.length === 0 && <p className="px-3 py-4 text-xs text-gray-600">No parts found</p>}
             </div>
           </div>
-          {/* Right: form */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {!sel ? (
               <p className="text-xs text-gray-600 pt-6 text-center">Select a part from the list</p>
@@ -322,20 +397,33 @@ function AddPartDialog({ cabinetId, onAdd, onClose }: {
   )
 }
 
-// ── Parts View ────────────────────────────────────────────────────────────────
+// ── Parts View (spreadsheet) ──────────────────────────────────────────────────
 
-export default function PartsView({ rp, cabinetId, customParts, setCustomParts, partOverrides, onDeletePosOverride }: {
-  rp: ResolvedCabinet; cabinetId: string
+export default function PartsView({
+  rp, cabinetId, customParts, setCustomParts,
+  partOverrides, onDeletePosOverride,
+  partLabels, partComments, onLabelChange, onCommentChange,
+}: {
+  rp: ResolvedCabinet
+  cabinetId: string
   customParts: CabinetCustomPart[]
   setCustomParts: Dispatch<SetStateAction<CabinetCustomPart[]>>
   partOverrides?: PartPosOverrides
   onDeletePosOverride?: (partId: string) => void
+  partLabels?: PartLabels
+  partComments?: PartComments
+  onLabelChange?: (partId: string, label: string) => void
+  onCommentChange?: (partId: string, comment: string) => void
 }) {
-  const [matNames,    setMatNames]    = useState<Record<string, string>>({})
-  const [matColours,  setMatColours]  = useState<Record<string, string | null>>({})
-  const [libNames,    setLibNames]    = useState<Record<string, string>>({})
-  const [showAdd,     setShowAdd]     = useState(false)
+  const [matNames,   setMatNames]   = useState<Record<string, string>>({})
+  const [matColours, setMatColours] = useState<Record<string, string | null>>({})
+  const [libNames,   setLibNames]   = useState<Record<string, string>>({})
+  const [showAdd,    setShowAdd]    = useState(false)
+  const [search,     setSearch]     = useState('')
+  const [sortKey,    setSortKey]    = useState<SortKey>('type')
+  const [sortDir,    setSortDir]    = useState<'asc' | 'desc'>('asc')
 
+  // Load material names/colours for all resolved parts
   useEffect(() => {
     const ids = new Set<string>()
     rp.case_parts.forEach(p    => ids.add(p.material_id))
@@ -353,6 +441,7 @@ export default function PartsView({ rp, cabinetId, customParts, setCustomParts, 
     })
   }, [rp])
 
+  // Load lib names + materials for custom parts
   useEffect(() => {
     const libIds = [...new Set(customParts.map(p => p.part_library_id))]
     if (libIds.length > 0) {
@@ -370,10 +459,146 @@ export default function PartsView({ rp, cabinetId, customParts, setCustomParts, 
     }
   }, [customParts]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleToggleVisible(part: CabinetCustomPart) {
-    const next = !part.visible
-    await dbUpdateCustomPart(part.id, { visible: next })
-    setCustomParts(prev => prev.map(p => p.id === part.id ? { ...p, visible: next } : p))
+  const rows = useMemo((): FlatRow[] => {
+    const result: FlatRow[] = []
+
+    for (const p of rp.case_parts) {
+      const id = `case_${p.part_key}`
+      result.push({
+        id, typeKey: 'carcass', typeLabel: 'Carcass',
+        name: partLabels?.[id] ?? PART_LABEL[p.part_key] ?? p.part_key,
+        material: matNames[p.material_id] ?? '—', materialColor: matColours[p.material_id] ?? null,
+        dy: p.DY, dx: p.DX, dz: p.DZ, eb: p.edge_band,
+        comment: partComments?.[id] ?? '',
+        isCustom: false, isOverride: false,
+      })
+    }
+
+    for (const p of rp.toekick_parts) {
+      const id = `tk_${p.part_key}_${p.sort_order}`
+      result.push({
+        id, typeKey: 'toekick', typeLabel: 'Toekick',
+        name: partLabels?.[id] ?? PART_LABEL[p.part_key] ?? p.part_key,
+        material: matNames[p.material_id] ?? '—', materialColor: matColours[p.material_id] ?? null,
+        dy: p.DY, dx: p.DX, dz: p.DZ, eb: p.edge_band,
+        comment: partComments?.[id] ?? '',
+        isCustom: false, isOverride: false,
+      })
+    }
+
+    for (const p of rp.internal_parts) {
+      const id = `int_${p.part_type}_${p.sort_order}`
+      const base = PART_LABEL[p.part_type] ?? p.part_type
+      result.push({
+        id, typeKey: 'internal', typeLabel: 'Internal',
+        name: partLabels?.[id] ?? `${base} ${p.sort_order + 1}`,
+        material: matNames[p.material_id] ?? '—', materialColor: matColours[p.material_id] ?? null,
+        dy: p.DY, dx: p.DX, dz: p.DZ, eb: p.edge_band,
+        comment: partComments?.[id] ?? '',
+        isCustom: false, isOverride: false,
+      })
+    }
+
+    for (const z of rp.face_zones) {
+      if (z.face_type === 'open') continue
+      const id = `zone_${z.row_index}_${z.col_index}`
+      const typeName = z.face_type === 'door' ? 'Door' : z.face_type === 'drawer_face' ? 'Drawer Face' : 'False Panel'
+      result.push({
+        id, typeKey: 'face', typeLabel: 'Face',
+        name: partLabels?.[id] ?? `${typeName} R${z.row_index + 1}C${z.col_index + 1}`,
+        material: matNames[z.material_id] ?? '—', materialColor: matColours[z.material_id] ?? null,
+        dy: z.DY, dx: z.DX, dz: z.DZ, eb: z.edge_band,
+        comment: partComments?.[id] ?? '',
+        isCustom: false, isOverride: false,
+      })
+    }
+
+    for (const stack of (rp.drawer_stacks ?? [])) {
+      for (const p of stack.box_parts as ResolvedDrawerBoxPart[]) {
+        const id = `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`
+        result.push({
+          id, typeKey: 'drawerbox', typeLabel: 'Drawer Box',
+          name: partLabels?.[id] ?? `${DB_PART_LABELS[p.part_type] ?? p.part_type} R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`,
+          material: matNames[p.material_id] ?? '—', materialColor: matColours[p.material_id] ?? null,
+          dy: p.DY, dx: p.DX, dz: p.DZ, eb: p.edge_band,
+          comment: partComments?.[id] ?? '',
+          isCustom: false, isOverride: false,
+        })
+      }
+      for (const s of stack.slides as ResolvedDrawerSlide[]) {
+        const id = `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`
+        result.push({
+          id, typeKey: 'slide', typeLabel: 'Slide',
+          name: partLabels?.[id] ?? `Slide (${s.side}) R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`,
+          material: `${s.nominal_length}mm`, materialColor: null,
+          dy: s.DY, dx: s.DX, dz: s.DZ, eb: null,
+          comment: partComments?.[id] ?? '',
+          isCustom: false, isOverride: false,
+        })
+      }
+    }
+
+    for (const p of customParts) {
+      const id = `custom_${p.id}`
+      result.push({
+        id, typeKey: 'custom', typeLabel: 'Custom',
+        name: p.name ?? libNames[p.part_library_id] ?? '?',
+        material: matNames[p.material_id ?? ''] ?? '—', materialColor: matColours[p.material_id ?? ''] ?? null,
+        dy: Number(p.dy), dx: Number(p.dx), dz: Number(p.dz),
+        eb: { top: p.edge_top, bottom: p.edge_bottom, left: p.edge_left, right: p.edge_right },
+        comment: partComments?.[id] ?? '',
+        isCustom: true, isOverride: false,
+        visible: p.visible, customPartRef: p,
+      })
+    }
+
+    for (const [partId, ov] of Object.entries(partOverrides ?? {})) {
+      result.push({
+        id: `ov__${partId}`, typeKey: 'override', typeLabel: 'Override',
+        name: partIdLabel(partId),
+        material: `X${ov.ox >= 0 ? '+' : ''}${ov.ox} Y${ov.oy >= 0 ? '+' : ''}${ov.oy} Z${ov.oz >= 0 ? '+' : ''}${ov.oz}`,
+        materialColor: null,
+        dy: 0, dx: 0, dz: 0, eb: null,
+        comment: '',
+        isCustom: false, isOverride: true, overridePartId: partId,
+      })
+    }
+
+    return result
+  }, [rp, customParts, partOverrides, matNames, matColours, libNames, partLabels, partComments])
+
+  const filtered = useMemo(() => {
+    let r = rows
+    if (search) {
+      const q = search.toLowerCase()
+      r = r.filter(row => row.name.toLowerCase().includes(q) || row.typeLabel.toLowerCase().includes(q) || row.comment.toLowerCase().includes(q))
+    }
+    return [...r].sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1
+      switch (sortKey) {
+        case 'type': {
+          const ai = TYPE_ORDER.indexOf(a.typeKey), bi = TYPE_ORDER.indexOf(b.typeKey)
+          return (ai - bi) * dir
+        }
+        case 'dy': return (a.dy - b.dy) * dir
+        case 'dx': return (a.dx - b.dx) * dir
+        case 'dz': return (a.dz - b.dz) * dir
+        case 'name':     return a.name.localeCompare(b.name) * dir
+        case 'material': return a.material.localeCompare(b.material) * dir
+        default: return 0
+      }
+    })
+  }, [rows, search, sortKey, sortDir])
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
+  async function handleToggleVisible(p: CabinetCustomPart) {
+    const next = !p.visible
+    await dbUpdateCustomPart(p.id, { visible: next })
+    setCustomParts(prev => prev.map(q => q.id === p.id ? { ...q, visible: next } : q))
   }
 
   async function handleDeleteCustom(id: string) {
@@ -381,163 +606,167 @@ export default function PartsView({ rp, cabinetId, customParts, setCustomParts, 
     setCustomParts(prev => prev.filter(p => p.id !== id))
   }
 
-  const mat = (id: string) => matNames[id] ?? '—'
+  const totalResolved = rp.case_parts.length + rp.toekick_parts.length + rp.internal_parts.length +
+    rp.face_zones.filter(z => z.face_type !== 'open').length +
+    (rp.drawer_stacks ?? []).reduce((n, s) => n + s.box_parts.length + s.slides.length, 0)
 
-  const faceCount      = rp.face_zones.filter(z => z.face_type !== 'open').length
-  const drawerBoxCount = (rp.drawer_stacks ?? []).reduce((n, s) => n + s.box_parts.length, 0)
-  const slideCount     = (rp.drawer_stacks ?? []).reduce((n, s) => n + s.slides.length, 0)
-  const totalResolved  = rp.case_parts.length + rp.toekick_parts.length + rp.internal_parts.length + faceCount + drawerBoxCount + slideCount
+  const cellCls = 'flex-none border-r border-gray-800 px-2 py-1.5 text-xs overflow-hidden'
+  const hdCls   = 'flex-none border-r border-gray-800 px-2 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider select-none'
 
   return (
-    <div className="w-full h-full overflow-auto p-4">
-      <div className="text-[10px] text-gray-500 mb-3 flex items-center gap-3">
-        <span>{totalResolved} resolved · {customParts.length} custom</span>
-        {rp.errors.length > 0   && <span className="text-red-400">{rp.errors.length} error{rp.errors.length !== 1 ? 's' : ''}</span>}
-        {rp.warnings.length > 0 && <span className="text-amber-400">{rp.warnings.length} warning{rp.warnings.length !== 1 ? 's' : ''}</span>}
+    <div className="w-full h-full flex flex-col overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex-none flex items-center gap-3 px-3 py-2 border-b border-gray-800">
+        <span className="text-[10px] text-gray-500 flex-none">
+          {totalResolved} resolved · {customParts.length} custom
+          {rp.errors.length   > 0 && <span className="text-red-400 ml-2">{rp.errors.length} error{rp.errors.length !== 1 ? 's' : ''}</span>}
+          {rp.warnings.length > 0 && <span className="text-amber-400 ml-2">{rp.warnings.length} warning{rp.warnings.length !== 1 ? 's' : ''}</span>}
+        </span>
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Filter parts…"
+          className="flex-1 max-w-[180px] bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
         <button onClick={() => setShowAdd(true)}
-          className="ml-auto px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors">
+          className="ml-auto flex-none px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors">
           + Add Part
         </button>
       </div>
+
       {rp.errors.length > 0 && (
-        <div className="mb-3 rounded bg-red-950/60 border border-red-800 px-3 py-2 text-xs text-red-300 space-y-0.5">
+        <div className="flex-none mx-3 mt-2 rounded bg-red-950/60 border border-red-800 px-3 py-2 text-xs text-red-300 space-y-0.5">
           {rp.errors.map((e, i) => <div key={i}>{e.code}: {e.message}</div>)}
         </div>
       )}
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="border-b border-gray-700">
-            <th className="px-3 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">Part</th>
-            <th className="px-3 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">Material</th>
-            <th className="px-3 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider text-right">W (DY)</th>
-            <th className="px-3 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider text-right">H (DX)</th>
-            <th className="px-3 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider text-right">T (DZ)</th>
-            <th className="px-3 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider">Edge</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rp.case_parts.length > 0 && (
-            <>
-              <SectionHeader color={SECTION_COLOR.carcass} title="Carcass" count={rp.case_parts.length} />
-              {rp.case_parts.map((p: ResolvedCasePart, i: number) => (
-                <PartRow key={`cp-${i}`} name={PART_LABEL[p.part_key] ?? p.part_key}
-                  material={mat(p.material_id)} dy={p.DY} dx={p.DX} dz={p.DZ} eb={p.edge_band} />
-              ))}
-            </>
-          )}
-          {rp.toekick_parts.length > 0 && (
-            <>
-              <SectionHeader color={SECTION_COLOR.toekick} title="Toekick" count={rp.toekick_parts.length} />
-              {rp.toekick_parts.map((p: ResolvedToekickPart, i: number) => (
-                <PartRow key={`tk-${i}`} name={PART_LABEL[p.part_key] ?? p.part_key}
-                  material={mat(p.material_id)} dy={p.DY} dx={p.DX} dz={p.DZ} eb={p.edge_band} />
-              ))}
-            </>
-          )}
-          {rp.internal_parts.length > 0 && (
-            <>
-              <SectionHeader color={SECTION_COLOR.internal} title="Internal" count={rp.internal_parts.length} />
-              {rp.internal_parts.map((p: ResolvedInternalPart, i: number) => (
-                <PartRow key={`ip-${i}`} name={PART_LABEL[p.part_type] ?? p.part_type}
-                  material={mat(p.material_id)} dy={p.DY} dx={p.DX} dz={p.DZ} eb={p.edge_band} />
-              ))}
-            </>
-          )}
-          {faceCount > 0 && (
-            <>
-              <SectionHeader color={SECTION_COLOR.face} title="Face" count={faceCount} />
-              {rp.face_zones.filter((z: ResolvedFaceZone) => z.face_type !== 'open').map((z: ResolvedFaceZone, i: number) => (
-                <PartRow key={`fz-${i}`}
-                  name={`${z.face_type === 'door' ? 'Door' : z.face_type === 'drawer_face' ? 'Drawer Face' : 'False Panel'} R${z.row_index + 1}C${z.col_index + 1}`}
-                  material={mat(z.material_id)} dy={z.DY} dx={z.DX} dz={z.DZ} eb={z.edge_band} />
-              ))}
-            </>
-          )}
-          {drawerBoxCount > 0 && (
-            <>
-              <SectionHeader color={SECTION_COLOR.drawerbox} title="Drawer Boxes" count={drawerBoxCount} />
-              {(rp.drawer_stacks ?? []).flatMap((stack, si) =>
-                stack.box_parts.map((p: ResolvedDrawerBoxPart, pi: number) => (
-                  <PartRow key={`db-${si}-${pi}`}
-                    name={`${DB_PART_LABELS[p.part_type] ?? p.part_type} R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`}
-                    material={mat(p.material_id)} dy={p.DY} dx={p.DX} dz={p.DZ} eb={p.edge_band} />
-                ))
-              )}
-            </>
-          )}
-          {slideCount > 0 && (
-            <>
-              <SectionHeader color={SECTION_COLOR.slide} title="Drawer Slides" count={slideCount} />
-              {(rp.drawer_stacks ?? []).flatMap((stack, si) =>
-                stack.slides.map((s: ResolvedDrawerSlide, li: number) => (
-                  <PartRow key={`sl-${si}-${li}`}
-                    name={`Slide (${s.side}) R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`}
-                    material={`${s.nominal_length}mm NL`}
-                    dy={s.DY} dx={s.DX} dz={s.DZ}
-                    eb={{ top: false, bottom: false, left: false, right: false }} />
-                ))
-              )}
-            </>
-          )}
-          {customParts.length > 0 && (
-            <>
-              <SectionHeader color={SECTION_COLOR.custom} title="Custom Parts" count={customParts.length} />
-              {customParts.map(p => {
-                const displayName = p.name ?? libNames[p.part_library_id] ?? '?'
-                const dz = Number(p.dz)
-                const colour = matColours[p.material_id ?? '']
-                return (
-                  <tr key={p.id} className="border-t border-gray-800/60 hover:bg-gray-800/30">
-                    <td className="px-3 py-1.5 text-xs text-gray-300">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => handleToggleVisible(p)} title={p.visible ? 'Visible — click to hide' : 'Hidden — click to show'}
-                          className={`w-3.5 h-3.5 rounded-sm border flex-none transition-colors ${p.visible ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`} />
-                        {displayName}
-                      </div>
-                    </td>
-                    <td className="px-3 py-1.5 text-xs text-gray-400">
-                      <div className="flex items-center gap-1.5">
-                        {colour && <span className="w-3 h-3 rounded-sm flex-none border border-gray-600 inline-block" style={{ background: colour }} />}
-                        {mat(p.material_id ?? '')}
-                      </div>
-                    </td>
-                    <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{Number(p.dy).toFixed(1)}</td>
-                    <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{Number(p.dx).toFixed(1)}</td>
-                    <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-400">{dz.toFixed(1)}</td>
-                    <td className="px-3 py-1.5">
-                      <div className="flex items-center gap-1">
-                        <EBDots t={p.edge_top} b={p.edge_bottom} l={p.edge_left} r={p.edge_right} />
-                        <button onClick={() => handleDeleteCustom(p.id)}
-                          className="ml-2 text-gray-600 hover:text-red-400 text-xs leading-none transition-colors" title="Remove">✕</button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </>
-          )}
-          {Object.keys(partOverrides ?? {}).length > 0 && (
-            <>
-              <SectionHeader color="#f97316" title="Position Overrides" count={Object.keys(partOverrides!).length} />
-              {Object.entries(partOverrides!).map(([partId, ov]) => (
-                <tr key={partId} className="border-t border-gray-800/60 hover:bg-gray-800/30">
-                  <td className="px-3 py-1.5 text-xs text-gray-300">{partIdLabel(partId)}</td>
-                  <td className="px-3 py-1.5 text-xs font-mono text-gray-500" colSpan={4}>
-                    X{ov.ox >= 0 ? '+' : ''}{ov.ox} &nbsp;Y{ov.oy >= 0 ? '+' : ''}{ov.oy} &nbsp;Z{ov.oz >= 0 ? '+' : ''}{ov.oz}
-                  </td>
-                  <td className="px-3 py-1.5 text-right">
-                    <button onClick={() => onDeletePosOverride?.(partId)}
-                      className="text-gray-600 hover:text-red-400 text-xs leading-none transition-colors" title="Remove override">✕</button>
-                  </td>
-                </tr>
-              ))}
-            </>
-          )}
-        </tbody>
-      </table>
-      <p className="mt-4 text-[10px] text-gray-600">
-        W = DY (width) · H = DX (height/depth) · T = DZ (thickness) · all mm · blue square = visible toggle
-      </p>
+
+      {/* Spreadsheet */}
+      <div className="flex-1 overflow-auto">
+        <div className="min-w-max">
+          {/* Header */}
+          <div className="flex items-end border-b border-gray-700 bg-gray-900/80 sticky top-0 z-10 pt-2">
+            {COLS.map(col => (
+              <div key={col.key} className={hdCls} style={{ width: col.w }}>
+                {col.sortable ? (
+                  <button
+                    onClick={() => toggleSort(col.key as SortKey)}
+                    className={`flex items-center gap-1 hover:text-gray-300 transition-colors ${sortKey === col.key ? 'text-blue-400' : ''}`}>
+                    {col.label}
+                    {sortKey === col.key && (
+                      <span className="text-[8px]">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                    )}
+                  </button>
+                ) : col.label}
+              </div>
+            ))}
+            <div className="flex-none w-8" />
+          </div>
+
+          {/* Rows */}
+          {filtered.length === 0 ? (
+            <div className="px-4 py-10 text-xs text-gray-600 text-center">
+              {search ? 'No parts match the filter.' : 'No parts.'}
+            </div>
+          ) : filtered.map(row => (
+            <div key={row.id}
+              className={`flex items-center border-b border-gray-800/50 hover:bg-gray-800/20 group min-h-[30px] ${
+                row.isOverride ? 'opacity-70' : ''
+              }`}>
+
+              {/* Type */}
+              <div className={cellCls} style={{ width: COLS[0].w }}>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full flex-none" style={{ background: TYPE_COLOR[row.typeKey] ?? '#888' }} />
+                  <span className="text-gray-400 truncate">{row.typeLabel}</span>
+                </div>
+              </div>
+
+              {/* Part name */}
+              <div className={cellCls} style={{ width: COLS[1].w }}>
+                {row.isOverride ? (
+                  <span className="text-gray-400 truncate">{row.name}</span>
+                ) : row.isCustom && row.customPartRef ? (
+                  <div className="flex items-center gap-1.5 overflow-hidden">
+                    <button
+                      onClick={() => handleToggleVisible(row.customPartRef!)}
+                      title={row.visible ? 'Visible — click to hide' : 'Hidden — click to show'}
+                      className={`w-3 h-3 rounded-sm border flex-none transition-colors ${row.visible ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`} />
+                    <EditableName
+                      value={row.name}
+                      onSave={name => {
+                        const cp = row.customPartRef!
+                        setCustomParts(prev => prev.map(p => p.id === cp.id ? { ...p, name } : p))
+                        dbUpdateCustomPart(cp.id, { name }).catch(console.error)
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <EditableName
+                    value={row.name}
+                    onSave={name => onLabelChange?.(row.id, name)}
+                  />
+                )}
+              </div>
+
+              {/* Material */}
+              <div className={cellCls} style={{ width: COLS[2].w }}>
+                <div className="flex items-center gap-1.5 overflow-hidden">
+                  {row.materialColor && (
+                    <span className="w-3 h-3 rounded-sm flex-none border border-gray-600"
+                      style={{ background: row.materialColor }} />
+                  )}
+                  <span className="text-gray-400 truncate">{row.material}</span>
+                </div>
+              </div>
+
+              {/* W DY */}
+              <div className={`${cellCls} text-right font-mono text-gray-200`} style={{ width: COLS[3].w }}>
+                {row.dy > 0 ? row.dy.toFixed(1) : <span className="text-gray-700">—</span>}
+              </div>
+
+              {/* H DX */}
+              <div className={`${cellCls} text-right font-mono text-gray-200`} style={{ width: COLS[4].w }}>
+                {row.dx > 0 ? row.dx.toFixed(1) : <span className="text-gray-700">—</span>}
+              </div>
+
+              {/* T DZ */}
+              <div className={`${cellCls} text-right font-mono text-gray-400`} style={{ width: COLS[5].w }}>
+                {row.dz > 0 ? row.dz.toFixed(1) : <span className="text-gray-700">—</span>}
+              </div>
+
+              {/* Edge */}
+              <div className={cellCls} style={{ width: COLS[6].w }}>
+                {row.eb ? <EBDots t={row.eb.top} b={row.eb.bottom} l={row.eb.left} r={row.eb.right} /> : <span className="text-gray-700 text-[10px]">—</span>}
+              </div>
+
+              {/* Comment */}
+              <div className={cellCls} style={{ width: COLS[7].w }}>
+                {!row.isOverride && onCommentChange ? (
+                  <EditableComment
+                    value={row.comment}
+                    onSave={v => onCommentChange(row.id, v)}
+                  />
+                ) : (
+                  <span className="text-gray-600 text-xs">{row.comment}</span>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex-none w-8 px-1 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                {row.isCustom && row.customPartRef ? (
+                  <button onClick={() => handleDeleteCustom(row.customPartRef!.id)}
+                    className="text-gray-600 hover:text-red-400 transition-colors text-xs leading-none" title="Delete">✕</button>
+                ) : row.isOverride && row.overridePartId ? (
+                  <button onClick={() => onDeletePosOverride?.(row.overridePartId!)}
+                    className="text-gray-600 hover:text-red-400 transition-colors text-xs leading-none" title="Remove override">✕</button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-none px-3 py-1.5 text-[10px] text-gray-700 border-t border-gray-800">
+        W = DY · H = DX · T = DZ · all mm · click Part to rename · click Comment to edit
+      </div>
+
       {showAdd && (
         <AddPartDialog
           cabinetId={cabinetId}

@@ -63,7 +63,7 @@ export function useCabinetOps(p: CabinetOpsParams) {
       left_neighbour_type: 'wall', right_neighbour_type: 'wall',
       exposed_interior: false, rule_overrides: {}, material_overrides: {},
       toekick_overrides: {}, drawerbox_overrides: {}, hardware_overrides: {},
-      face_grid: null, carcase_joints: {}, schema_version: '0.4', notes: null,
+      face_grid: null, internal_grid: null, carcase_joints: {}, schema_version: '0.4', notes: null,
     }
     const cabinet = await dbInsertCabinet(data)
     if (cabinet) {

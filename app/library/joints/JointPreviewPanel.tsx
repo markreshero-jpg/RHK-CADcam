@@ -81,7 +81,7 @@ function evalExpr(expr: string, vars: Record<string, number>): number | null {
 
 function buildVars(
   targetPart: 'part_a' | 'part_b',
-  thick: number,
+  thickA: number, thickB: number,
   masterW: number, masterL: number, masterD: number,
   slaveW:  number, slaveL:  number, slaveD:  number,
 ): Record<string, number> {
@@ -90,7 +90,7 @@ function buildVars(
     W: isA ? masterW : slaveW,
     L: isA ? masterL : slaveL,
     D: isA ? masterD : slaveD,
-    T: thick,
+    T: isA ? thickA : thickB,  // thickness of the target part
     MW: masterW, ML: masterL, MD: masterD,
     SW: slaveW,  SL: slaveL,  SD: slaveD,
   }
@@ -493,7 +493,7 @@ export default function JointPreviewPanel({ ops, defaultThickness = 18, selOpId 
   // Evaluate expressions + expand spacing repetitions (Z axis)
   const evaledOps: JointOp3D[] = ops.flatMap(op => {
     const exprs = op.expressions
-    const vars  = buildVars(op.target_part, thick, masterW, masterL, partD, slaveW, slaveL, partD)
+    const vars  = buildVars(op.target_part, thick, thick, masterW, masterL, partD, slaveW, slaveL, partD)
     const ev    = (field: string, fallback: number) =>
       exprs?.[field] != null ? (evalExpr(exprs[field], vars) ?? fallback) : fallback
 

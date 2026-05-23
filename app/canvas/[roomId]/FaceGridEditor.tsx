@@ -1,9 +1,43 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { FaceGridInput, FaceZoneInput, DrawerType } from '@/src/lib/resolver/types'
+import { getUserPrefs } from '@/src/lib/userPrefs'
+
+function useSvgZoom(initW: number, initH: number) {
+  const initRef = useRef({ w: initW, h: initH })
+  const vbRef   = useRef({ x: 0, y: 0, w: initW, h: initH })
+  const [vb, setVb] = useState({ x: 0, y: 0, w: initW, h: initH })
+  const svgRef  = useRef<SVGSVGElement>(null)
+
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      if (!rect.width || !rect.height) return
+      const cx = e.clientX - rect.left
+      const cy = e.clientY - rect.top
+      const { x, y, w, h } = vbRef.current
+      const delta = getUserPrefs().invertScroll ? -e.deltaY : e.deltaY
+      const factor = delta > 0 ? 1.15 : 1 / 1.15
+      const vx = x + (cx / rect.width) * w
+      const vy = y + (cy / rect.height) * h
+      const newW = Math.max(initRef.current.w / 20, Math.min(initRef.current.w * 4, w * factor))
+      const newH = h * (newW / w)
+      const next = { x: vx - (cx / rect.width) * newW, y: vy - (cy / rect.height) * newH, w: newW, h: newH }
+      vbRef.current = next
+      setVb({ ...next })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  return { svgRef, viewBox: `${vb.x} ${vb.y} ${vb.w} ${vb.h}` }
+}
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -292,6 +326,7 @@ export default function FaceGridEditor({
   const vw = cabDX + PL + PR
   const vh = cabDY + PT + PB
   const ox = PL, oy = PT
+  const { svgRef, viewBox } = useSvgZoom(vw, vh)
 
   // Cabinet Y (bottom=0) → SVG Y (top=0)
   function svgY(cabY: number) { return oy + (cabDY - cabY) }
@@ -334,15 +369,16 @@ export default function FaceGridEditor({
       <div className="flex-1 flex overflow-hidden min-h-0">
 
         {/* SVG */}
-        <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
+        <div className="flex-1 overflow-hidden relative">
           <svg
-            viewBox={`0 0 ${vw} ${vh}`}
-            style={{ maxWidth: '100%', maxHeight: '100%' }}
+            ref={svgRef}
+            viewBox={viewBox}
+            width="100%" height="100%"
           >
             {/* Width dim above */}
             <text x={ox + cabDX / 2} y={PT / 2}
               textAnchor="middle" dominantBaseline="central"
-              fontSize={14} fill="#6b7280" fontFamily="system-ui,sans-serif"
+              fontSize={14} fill="#ffffff" fontFamily="system-ui,sans-serif"
             >{cabDX}mm</text>
 
             {/* Cabinet bg */}

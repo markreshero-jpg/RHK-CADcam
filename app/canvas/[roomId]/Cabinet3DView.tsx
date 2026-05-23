@@ -239,6 +239,134 @@ function DoorPanel({ b, hingeSide, doorsOpen, ...partProps }: PartProps & {
   )
 }
 
+// ── Drawer assembly with animated slide-out ───────────────────────────────────
+// Groups the drawer face zone, drawer box parts, and slides into one Three.js group.
+// targetTravel=0 means closed; any positive value is the Z distance to lerp toward.
+
+function DrawerAssembly({
+  faceZone, stack, targetTravel, selected, onSelect,
+  faceHighlighted, materialColours, ebByMatId, edgeOverrides, wire, partOverrides, dragRef,
+}: {
+  faceZone:          ResolvedFaceZone
+  stack:             ResolvedDrawerStack
+  targetTravel:      number
+  selected:          PartMeta | null
+  onSelect:          (info: PartMeta | null) => void
+  faceHighlighted:   boolean
+  materialColours?:  MatColMap
+  ebByMatId?:        Record<string, { thickness: number; color: string | null }>
+  edgeOverrides:     Map<string, PartEdge>
+  wire?:             boolean
+  partOverrides?:    PartPosOverrides
+  dragRef:           React.MutableRefObject<boolean>
+}) {
+  const groupRef        = useRef<THREE.Group>(null)
+  const curZ            = useRef(0)
+  const targetTravelRef = useRef(targetTravel)
+  targetTravelRef.current = targetTravel
+
+  useFrame(() => {
+    if (!groupRef.current) return
+    const target = targetTravelRef.current
+    if (Math.abs(curZ.current - target) < 0.5) {
+      curZ.current = target
+      groupRef.current.position.z = target
+      return
+    }
+    curZ.current = THREE.MathUtils.lerp(curZ.current, target, 0.1)
+    groupRef.current.position.z = curZ.current
+  })
+
+  function matSpec(matId: string, fallback: string) {
+    return unpackMatCol(materialColours?.[matId], fallback)
+  }
+  function ebFor(matId: string): EbSpec | undefined {
+    const spec = ebByMatId?.[matId]
+    if (!spec) return undefined
+    return { thick: spec.thickness, color: spec.color ?? '#c8b89a' }
+  }
+  function applyEdgeOv<T extends PartMeta>(info: T): T {
+    const ov = edgeOverrides.get(info.id)
+    return ov ? { ...info, edge: ov } : info
+  }
+
+  const zoneId      = `zone_${faceZone.row_index}_${faceZone.col_index}`
+  const pz          = applyPosOv(faceZone, zoneId, partOverrides)
+  const zb          = zoneBox(pz)
+  const zInfo       = applyEdgeOv(buildZoneInfo(faceZone, zb))
+  const zs          = matSpec(faceZone.material_id, '#e2d9c8')
+  const zFaceColors = panelFaceColors(zInfo.panelKind, faceZone.face_type, zs.face, zs.back, zs.edge)
+  const slideColor  = '#6b7280'
+
+  return (
+    <group ref={groupRef}>
+      <Part
+        b={zb}
+        faceColors={zFaceColors}
+        edgeLineColor="#b8a98e"
+        meta={zInfo}
+        selected={selected?.id === zInfo.id}
+        highlighted={faceHighlighted}
+        onSelect={onSelect}
+        contextMenuSelect
+        dragRef={dragRef}
+        ebSpec={ebFor(faceZone.material_id)}
+        wire={wire}
+        rotation={getRotOv(zoneId, partOverrides)}
+      />
+      {stack.box_parts.map((p, pi) => {
+        const id   = `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`
+        const pp   = applyPosOv(p, id, partOverrides)
+        const b    = dbBox(pp)
+        const info = buildDbPartInfo(p, b, stack)
+        const s    = matSpec(p.material_id, '#d4c8a8')
+        const fc   = panelFaceColors(info.panelKind as PanelKind, p.part_type, s.face, s.back, s.edge)
+        return (
+          <Part
+            key={`db_${pi}`}
+            b={b}
+            faceColors={fc}
+            edgeLineColor="#8a7a60"
+            meta={info}
+            selected={selected?.id === info.id}
+            highlighted={false}
+            onSelect={onSelect}
+            contextMenuSelect
+            dragRef={dragRef}
+            ebSpec={ebFor(p.material_id)}
+            wire={wire}
+            rotation={getRotOv(id, partOverrides)}
+          />
+        )
+      })}
+      {stack.slides.map((sl, li) => {
+        const id   = `slide_${stack.face_zone_row}_${stack.face_zone_col}_${sl.side}`
+        const ps   = applyPosOv(sl, id, partOverrides)
+        const b    = slideBox(ps)
+        const info = buildSlideInfo(sl, b, stack)
+        const sc   = sl.colour ?? slideColor
+        const fc   = panelFaceColors('side', `slide_${sl.side}`, sc, sc, sc)
+        return (
+          <Part
+            key={`sl_${li}`}
+            b={b}
+            faceColors={fc}
+            edgeLineColor="#4b5563"
+            meta={info}
+            selected={selected?.id === info.id}
+            highlighted={false}
+            onSelect={onSelect}
+            contextMenuSelect
+            dragRef={dragRef}
+            wire={wire}
+            rotation={getRotOv(id, partOverrides)}
+          />
+        )
+      })}
+    </group>
+  )
+}
+
 // ── Seam joint visualization ──────────────────────────────────────────────────
 // Shows Part A's touching face as a flat wireframe rectangle (Joint3DView green-zone
 // style) plus drill-op markers where operations are defined.
@@ -265,41 +393,46 @@ function evalExpr(expr: string, vars: Record<string, number>): number | null {
 
 // Resolve a JointTypeOp's numeric fields + qty/spacing against actual part dimensions.
 // Matches the same variable set as JointPreviewPanel.buildVars.
-// thickA = material thickness of Part A (varies by panel orientation in caseBox).
-function evalOp(op: JointTypeOp, boxA: Box, boxB: Box, thickA: number): {
+// thickA/thickB = material thickness of each part (varies by panel orientation in caseBox).
+// T resolves to the TARGET part's thickness so expressions like "T" mean "drill to my depth".
+// Returns null if any expression-bearing field fails to evaluate — callers must skip the op.
+function evalOp(op: JointTypeOp, boxA: Box, boxB: Box, thickA: number, thickB: number): {
   tool_diameter_mm: number; depth_mm: number
   offset_x_mm: number; offset_y_mm: number; offset_z_mm: number
   qty: number; spacing_mm: number | null
-} {
+} | null {
   const exprs = op.expressions ?? {}
   const isA   = op.target_part === 'part_a'
   const vars: Record<string, number> = {
-    // target-part dimensions
     W:  isA ? boxA.w : boxB.w,
     L:  isA ? boxA.h : boxB.h,
     D:  isA ? boxA.d : boxB.d,
-    T:  thickA,  // material thickness of Part A, caller-supplied
-    // master (Part A) dimensions
+    T:  isA ? thickA : thickB,
     MW: boxA.w, ML: boxA.h, MD: boxA.d,
-    // slave (Part B) dimensions
     SW: boxB.w, SL: boxB.h, SD: boxB.d,
   }
-  const ev = (field: string, fallback: number) =>
-    exprs[field] != null ? (evalExpr(exprs[field], vars) ?? fallback) : fallback
+  // If an expression exists for a field and fails, return null (skip the op entirely).
+  const ev = (field: string, fallback: number): number | null =>
+    exprs[field] != null ? evalExpr(exprs[field], vars) : fallback
 
-  const rawQty = exprs.qty != null
-    ? (evalExpr(exprs.qty, vars) ?? (op.qty ?? 1))
-    : (op.qty ?? 1)
-  const rawSpc = exprs.spacing_mm != null
-    ? (evalExpr(exprs.spacing_mm, vars) ?? op.spacing_mm)
-    : op.spacing_mm
+  const tool  = ev('tool_diameter_mm', op.tool_diameter_mm)
+  const depth = ev('depth_mm',         op.depth_mm)
+  const ox    = ev('offset_x_mm',      op.offset_x_mm)
+  const oy    = ev('offset_y_mm',      op.offset_y_mm)
+  const oz    = ev('offset_z_mm',      op.offset_z_mm)
+  if (tool === null || depth === null || ox === null || oy === null || oz === null) return null
+
+  const rawQty = exprs.qty != null ? evalExpr(exprs.qty, vars) : (op.qty ?? 1)
+  if (rawQty === null) return null
+  const rawSpc = exprs.spacing_mm != null ? evalExpr(exprs.spacing_mm, vars) : op.spacing_mm
+  if (exprs.spacing_mm != null && rawSpc === null) return null
 
   return {
-    tool_diameter_mm: ev('tool_diameter_mm', op.tool_diameter_mm),
-    depth_mm:         ev('depth_mm',         op.depth_mm),
-    offset_x_mm:      ev('offset_x_mm',      op.offset_x_mm),
-    offset_y_mm:      ev('offset_y_mm',      op.offset_y_mm),
-    offset_z_mm:      ev('offset_z_mm',      op.offset_z_mm),
+    tool_diameter_mm: tool,
+    depth_mm:         depth,
+    offset_x_mm:      ox,
+    offset_y_mm:      oy,
+    offset_z_mm:      oz,
     qty:              Math.max(1, Math.round(rawQty)),
     spacing_mm:       rawSpc,
   }
@@ -316,15 +449,22 @@ interface DrillOpPos {
   axis: DrillAxis
   radius: number
   depthLen: number
+  targetPartKey: string
 }
 
-function computeJointRefPlane(seamKey: string, boxA: Box): JointRefPlane | null {
+function computeJointRefPlane(seamKey: string, boxA: Box, boxB?: Box): JointRefPlane | null {
+  const partAKey = seamKey.slice(0, seamKey.indexOf(':'))
   const partBKey = seamKey.slice(seamKey.indexOf(':') + 1)
+  // For back:side seams, show the full gable Z-depth so the rect is visible from standard views.
+  // The gable box (boxB) spans the cabinet depth; the back panel edge at boxA.x/boxA.x+boxA.w
+  // would only be backT (6mm) deep without it.
+  const zMin = boxA.z
+  const zMax = (partAKey === 'back' && boxB) ? boxB.z + boxB.d : boxA.z + boxA.d
   if (partBKey === 'left_side') {
-    return { kind: 'yz', x: boxA.x, yMin: boxA.y, yMax: boxA.y + boxA.h, zMin: boxA.z, zMax: boxA.z + boxA.d }
+    return { kind: 'yz', x: boxA.x, yMin: boxA.y, yMax: boxA.y + boxA.h, zMin, zMax }
   }
   if (partBKey === 'right_side') {
-    return { kind: 'yz', x: boxA.x + boxA.w, yMin: boxA.y, yMax: boxA.y + boxA.h, zMin: boxA.z, zMax: boxA.z + boxA.d }
+    return { kind: 'yz', x: boxA.x + boxA.w, yMin: boxA.y, yMax: boxA.y + boxA.h, zMin, zMax }
   }
   if (partBKey === 'bottom') {
     return { kind: 'xz', y: boxA.y, xMin: boxA.x, xMax: boxA.x + boxA.w, zMin: boxA.z, zMax: boxA.z + boxA.d }
@@ -344,6 +484,8 @@ function seamDrillOps(seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[])
   const thickA = partAKey === 'back' ? boxA.d
                : isSide(partAKey)    ? boxA.w
                :                       boxA.h
+  // Part B is always a side panel in this function (left_side or right_side).
+  const thickB = boxB.w
 
   // For back:side seams Part A runs vertically — holes distribute along Y (height)
   // and sit at a fixed Z centred in the back panel thickness.
@@ -352,38 +494,35 @@ function seamDrillOps(seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[])
   const interfaceX = isLeft ? boxA.x : boxA.x + boxA.w
   const interfaceY = boxA.y + boxA.h
 
-  console.log('[seamDrillOps]', seamKey,
-    '\n  boxA:', JSON.stringify(boxA),
-    '\n  boxB:', JSON.stringify(boxB),
-    '\n  interfaceX:', interfaceX, 'interfaceY:', interfaceY, 'thickA:', thickA,
-    '\n  ops:', ops.length)
-
   const result: DrillOpPos[] = []
 
   for (const op of ops) {
     if (op.machine_operation !== 'drill') continue
-    const ev    = evalOp(op, boxA, boxB, thickA)
+    const ev    = evalOp(op, boxA, boxB, thickA, thickB)
+    if (!ev) continue
     const U     = (op.face === 'top' || op.face === 'bottom') ? ev.offset_x_mm : ev.offset_y_mm
     const qty   = ev.qty
     const spc   = ev.spacing_mm ?? 0
-
-    console.log('[evalOp]', op.face, 'target:', op.target_part,
-      '\n  ev:', JSON.stringify(ev),
-      '\n  U:', U, 'qty:', qty, 'spc:', spc)
 
     for (let i = 0; i < qty; i++) {
       let cabX = 0, cabY = 0, cabZ = 0, axis: DrillAxis = 'x-'
 
       if (isBackSeam) {
-        // Place the sphere at the inner face of the back panel (Z = thickA) so it
-        // protrudes into the cabinet interior and isn't fully occluded by the panel.
+        // Z: inner face of the back panel (fixed for all back:side holes)
         cabZ = boxA.z + thickA
-        cabY = boxA.y + ev.offset_z_mm + i * spc
+        // Holes span the full height of the back panel:
+        //   first hole = U (offset_y_mm) from the top edge
+        //   last  hole = V (offset_z_mm) from the bottom edge
+        //   qty holes evenly distributed between them
+        const topY = (boxA.y + boxA.h) - U
+        const botY = boxA.y + ev.offset_z_mm
+        const step = qty > 1 ? (topY - botY) / (qty - 1) : 0
+        cabY = topY - i * step
 
         if (op.target_part === 'part_b') {
           const bInner = isLeft ? boxB.x + boxB.w : boxB.x
           switch (op.face) {
-            case 'normal': cabX = bInner;                            axis = isLeft ? 'x-' : 'x+'; break
+            case 'normal': cabX = bInner;                             axis = isLeft ? 'x-' : 'x+'; break
             case 'end':    cabX = isLeft ? boxB.x : boxB.x + boxB.w; axis = isLeft ? 'x+' : 'x-'; break
             default: continue
           }
@@ -418,93 +557,170 @@ function seamDrillOps(seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[])
         }
       }
 
-      // Visual depth = full material thickness of the target part in the drill direction,
-      // so the cylinder always clears the material regardless of the actual depth_mm value.
+      // Visual cylinder length: normally the full material thickness in the drill direction,
+      // but for back panel edge drills (X into backW which is panel width not thickness)
+      // cap to the actual drill depth_mm.
       const targetBox = op.target_part === 'part_a' ? boxA : boxB
-      const throughDepth = (axis === 'x-' || axis === 'x+') ? targetBox.w : targetBox.h
-      result.push({ x: cabX, y: cabY, z: cabZ, axis, radius: ev.tool_diameter_mm / 2, depthLen: throughDepth })
+      const rawDepth = (axis === 'x-' || axis === 'x+') ? targetBox.w : targetBox.h
+      const throughDepth = (isBackSeam && op.target_part === 'part_a') ? ev.depth_mm : rawDepth
+      const targetPartKey = op.target_part === 'part_a' ? partAKey : partBKey
+      result.push({ x: cabX, y: cabY, z: cabZ, axis, radius: ev.tool_diameter_mm / 2, depthLen: throughDepth, targetPartKey })
     }
   }
 
   return result
 }
 
-function JointFaceRect({ plane, color }: { plane: JointRefPlane; color: string }) {
+function JointFaceRect({ plane, color, wire }: { plane: JointRefPlane; color: string; wire?: boolean }) {
   const geo = useMemo(() => {
-    return plane.kind === 'yz'
-      ? new THREE.BoxGeometry(0.1, plane.yMax - plane.yMin, plane.zMax - plane.zMin)
-      : new THREE.BoxGeometry(plane.xMax - plane.xMin, 0.1, plane.zMax - plane.zMin)
+    // Explicit rectangle: 8 points = 4 line segment pairs forming a closed loop.
+    // Avoids BoxGeometry's extraneous depth edges from the 0.1mm-thick approach.
+    const pts = plane.kind === 'yz'
+      ? [
+          new THREE.Vector3(plane.x, plane.yMin, plane.zMin),
+          new THREE.Vector3(plane.x, plane.yMax, plane.zMin),
+          new THREE.Vector3(plane.x, plane.yMax, plane.zMin),
+          new THREE.Vector3(plane.x, plane.yMax, plane.zMax),
+          new THREE.Vector3(plane.x, plane.yMax, plane.zMax),
+          new THREE.Vector3(plane.x, plane.yMin, plane.zMax),
+          new THREE.Vector3(plane.x, plane.yMin, plane.zMax),
+          new THREE.Vector3(plane.x, plane.yMin, plane.zMin),
+        ]
+      : [
+          new THREE.Vector3(plane.xMin, plane.y, plane.zMin),
+          new THREE.Vector3(plane.xMax, plane.y, plane.zMin),
+          new THREE.Vector3(plane.xMax, plane.y, plane.zMin),
+          new THREE.Vector3(plane.xMax, plane.y, plane.zMax),
+          new THREE.Vector3(plane.xMax, plane.y, plane.zMax),
+          new THREE.Vector3(plane.xMin, plane.y, plane.zMax),
+          new THREE.Vector3(plane.xMin, plane.y, plane.zMax),
+          new THREE.Vector3(plane.xMin, plane.y, plane.zMin),
+        ]
+    return new THREE.BufferGeometry().setFromPoints(pts)
   }, [plane])
 
-  const pos: [number, number, number] = plane.kind === 'yz'
-    ? [plane.x, (plane.yMin + plane.yMax) / 2, (plane.zMin + plane.zMax) / 2]
-    : [(plane.xMin + plane.xMax) / 2, plane.y, (plane.zMin + plane.zMax) / 2]
-
   return (
-    <lineSegments position={pos}>
-      <edgesGeometry args={[geo]} />
-      <lineBasicMaterial color={color} opacity={0.85} transparent />
+    <lineSegments geometry={geo} renderOrder={wire ? 10 : 0}>
+      <lineBasicMaterial color={color} depthTest={!wire} />
     </lineSegments>
   )
 }
 
-function DrillMarker({ x, y, z, axis, radius, depthLen }: DrillOpPos) {
-  const r   = Math.max(1.5, radius)
-  const len = Number.isFinite(depthLen) && depthLen > 0 ? depthLen : 10
 
-  // Offset the cylinder center so it starts at the entry face and drills inward.
-  const half = len / 2
-  const offset: [number, number, number] =
-    axis === 'x-' ? [-half, 0, 0] :
-    axis === 'x+' ? [ half, 0, 0] :
-    axis === 'y-' ? [0, -half, 0] :
-                    [0,  half, 0]
 
-  const rot: [number, number, number] =
-    (axis === 'x-' || axis === 'x+') ? [0, 0, Math.PI / 2] : [0, 0, 0]
-
+// PartWithHoles delegates all panel rendering to Part (correct per-face material
+// colours + edgebanding + click/hover handling) and overlays dark disc markers
+// on hole entry and exit faces. three-bvh-csg v0.0.16 collapses all box face
+// groups to a single materialIndex, so CSG cannot give us per-face colours;
+// the disc-marker approach keeps rendering correct while showing hole positions.
+function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, highlighted, onSelect, dragRef, wire, contextMenuSelect = false, ebSpec }: {
+  b:                  Box
+  drills:             DrillOpPos[]
+  faceColors:         [string, string, string, string, string, string]
+  edgeLineColor:      string
+  meta:               PartMeta
+  selected:           boolean
+  highlighted:        boolean
+  onSelect:           (info: PartMeta | null) => void
+  dragRef:            React.MutableRefObject<boolean>
+  wire?:              boolean
+  contextMenuSelect?: boolean
+  ebSpec?:            EbSpec
+}) {
+  const groupPos: [number, number, number] = [b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]
   return (
-    <group position={[x, y, z]}>
-      <mesh position={offset} rotation={rot}>
-        <cylinderGeometry args={[r, r, len + 2, 12]} />
-        <meshStandardMaterial color="#f59e0b" roughness={0.3} />
-      </mesh>
-    </group>
+    <>
+      <Part
+        b={b}
+        faceColors={faceColors}
+        edgeLineColor={edgeLineColor}
+        meta={meta}
+        selected={selected}
+        highlighted={highlighted}
+        onSelect={onSelect}
+        dragRef={dragRef}
+        wire={wire}
+        contextMenuSelect={contextMenuSelect}
+        ebSpec={ebSpec}
+      />
+      {/* Dark disc markers on each hole's entry and exit face. In wire mode,
+          depthTest=false + renderOrder=10 makes them show through panel edges. */}
+      <group position={groupPos}>
+        {drills.map((d, i) => {
+          const isX    = d.axis === 'x-' || d.axis === 'x+'
+          const localY = d.y - (b.y + b.h / 2)
+          const localZ = d.z - (b.z + b.d / 2)
+          const localX = d.x - (b.x + b.w / 2)
+          const eps    = 0.2
+          const ro     = wire ? 10 : 0
+          const dt     = !wire
+          if (isX) {
+            return (
+              <group key={i}>
+                {/* entry disc */}
+                <mesh position={[-b.w / 2 - eps, localY, localZ]} rotation={[0, Math.PI / 2, 0]} renderOrder={ro}>
+                  <circleGeometry args={[d.radius, 32]} />
+                  <meshBasicMaterial color="#0a0a0a" side={THREE.DoubleSide} depthTest={dt} />
+                </mesh>
+                {/* exit disc */}
+                <mesh position={[b.w / 2 + eps, localY, localZ]} rotation={[0, Math.PI / 2, 0]} renderOrder={ro}>
+                  <circleGeometry args={[d.radius, 32]} />
+                  <meshBasicMaterial color="#0a0a0a" side={THREE.DoubleSide} depthTest={dt} />
+                </mesh>
+                {/* bore cylinder — open-ended, BackSide shows inner wall */}
+                <mesh position={[0, localY, localZ]} rotation={[0, 0, Math.PI / 2]} renderOrder={ro}>
+                  <cylinderGeometry args={[d.radius, d.radius, b.w, 32, 1, true]} />
+                  <meshBasicMaterial color="#0a0a0a" side={THREE.BackSide} depthTest={dt} />
+                </mesh>
+              </group>
+            )
+          }
+          return (
+            <group key={i}>
+              {/* entry disc */}
+              <mesh position={[localX, -b.h / 2 - eps, localZ]} rotation={[Math.PI / 2, 0, 0]} renderOrder={ro}>
+                <circleGeometry args={[d.radius, 32]} />
+                <meshBasicMaterial color="#0a0a0a" side={THREE.DoubleSide} depthTest={dt} />
+              </mesh>
+              {/* exit disc */}
+              <mesh position={[localX, b.h / 2 + eps, localZ]} rotation={[Math.PI / 2, 0, 0]} renderOrder={ro}>
+                <circleGeometry args={[d.radius, 32]} />
+                <meshBasicMaterial color="#0a0a0a" side={THREE.DoubleSide} depthTest={dt} />
+              </mesh>
+              {/* bore cylinder — open-ended, BackSide shows inner wall */}
+              <mesh position={[localX, 0, localZ]} renderOrder={ro}>
+                <cylinderGeometry args={[d.radius, d.radius, b.h, 32, 1, true]} />
+                <meshBasicMaterial color="#0a0a0a" side={THREE.BackSide} depthTest={dt} />
+              </mesh>
+            </group>
+          )
+        })}
+      </group>
+    </>
   )
 }
 
-function SeamJointOverlay({ seamJoints, boxByKey }: {
+function SeamJointOverlay({ seamJoints, boxByKey, wire }: {
   seamJoints: ResolvedSeamJoint[]
-  boxByKey: Record<string, Box>
+  boxByKey:   Record<string, Box>
+  wire?:      boolean
 }) {
   const items = useMemo(() => {
     return seamJoints.flatMap(sj => {
       const boxA = boxByKey[sj.part_a_key]
+      if (!boxA) return []
       const boxB = boxByKey[sj.part_b_key]
-      if (!boxA || !boxB) return []
-      const plane = computeJointRefPlane(sj.seam_key, boxA)
+      const plane = computeJointRefPlane(sj.seam_key, boxA, boxB)
       if (!plane) return []
       const color = sj.source === 'cabinet' ? '#22c55e' : '#60a5fa'
-      const drills = seamDrillOps(sj.seam_key, boxA, boxB, sj.ops)
-      console.log('[SeamJoint]', sj.seam_key,
-        'id:', sj.joint_type_id,
-        'name:', sj.joint_type_name,
-        'source:', sj.source,
-        'raw ops:', sj.ops.length,
-        'drill markers:', drills.length)
-      return [{ key: sj.seam_key, plane, color, drills }]
+      return [{ key: sj.seam_key, plane, color }]
     })
   }, [seamJoints, boxByKey])
 
   return (
     <group>
       {items.map(item => (
-        <group key={item.key}>
-          <JointFaceRect plane={item.plane} color={item.color} />
-          {item.drills.map((d, i) => (
-            <DrillMarker key={i} {...d} />
-          ))}
-        </group>
+        <JointFaceRect key={item.key} plane={item.plane} color={item.color} wire={wire} />
       ))}
     </group>
   )
@@ -572,20 +788,21 @@ function getRotOv(id: string, overrides: PartPosOverrides | undefined): [number,
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
 
 function CabinetScene({
-  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, edgeOverrides, wire, customParts, partOverrides,
+  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, openDrawers, edgeOverrides, wire, customParts, partOverrides,
 }: {
-  cab:               CabinetInstance
-  rp:                ResolvedCabinet
-  selected:          PartMeta | null
-  onSelect:          (info: PartMeta | null) => void
-  highlightPartKeys?: string[] | null
-  materialColours?:  MatColMap
-  ebByMatId?:        Record<string, { thickness: number; color: string | null }>
-  doorsOpen:         boolean
-  edgeOverrides:     Map<string, PartEdge>
-  wire?:             boolean
-  customParts?:      CabinetCustomPart[]
-  partOverrides?:    PartPosOverrides
+  cab:                  CabinetInstance
+  rp:                   ResolvedCabinet
+  selected:             PartMeta | null
+  onSelect:             (info: PartMeta | null) => void
+  highlightPartKeys?:   string[] | null
+  materialColours?:     MatColMap
+  ebByMatId?:           Record<string, { thickness: number; color: string | null }>
+  doorsOpen:            boolean
+  openDrawers:          Map<string, number>
+  edgeOverrides:        Map<string, PartEdge>
+  wire?:                boolean
+  customParts?:         CabinetCustomPart[]
+  partOverrides?:       PartPosOverrides
 }) {
   const { dx, dy, dz } = cab
   const dragRef = useRef(false)
@@ -599,6 +816,30 @@ function CabinetScene({
     }
     return m
   }, [rp.case_parts, partOverrides])
+
+  const drawerStackByKey = useMemo(() => {
+    const m = new Map<string, ResolvedDrawerStack>()
+    for (const s of rp.drawer_stacks ?? []) {
+      m.set(`${s.face_zone_row}_${s.face_zone_col}`, s)
+    }
+    return m
+  }, [rp.drawer_stacks])
+
+  // Collect drill holes grouped by which case part they enter, for CSG subtraction.
+  const holesByPartKey = useMemo(() => {
+    const m = new Map<string, DrillOpPos[]>()
+    for (const sj of rp.seam_joints) {
+      const bA = boxByKey[sj.part_a_key]
+      const bB = boxByKey[sj.part_b_key]
+      if (!bA || !bB) continue
+      for (const d of seamDrillOps(sj.seam_key, bA, bB, sj.ops)) {
+        const arr = m.get(d.targetPartKey) ?? []
+        arr.push(d)
+        m.set(d.targetPartKey, arr)
+      }
+    }
+    return m
+  }, [rp.seam_joints, boxByKey])
 
   function applyEdge<T extends PartMeta>(info: T): T {
     const ov = edgeOverrides.get(info.id)
@@ -618,11 +859,33 @@ function CabinetScene({
   return (
     <group position={[-dx / 2, -dy / 2, -dz / 2]}>
       {rp.case_parts.map((p, i) => {
-        const id   = `case_${p.part_key}`
-        const pp   = applyPosOv(p, id, partOverrides)
-        const b    = caseBox(pp)
-        const info = applyEdge(buildCaseInfo(p, b))
-        const s    = matSpec(p.material_id, '#ddd3bb')
+        const id    = `case_${p.part_key}`
+        const pp    = applyPosOv(p, id, partOverrides)
+        const b     = caseBox(pp)
+        const info  = applyEdge(buildCaseInfo(p, b))
+        const s     = matSpec(p.material_id, '#ddd3bb')
+        const holes = holesByPartKey.get(p.part_key) ?? []
+
+        if (holes.length > 0) {
+          return (
+            <PartWithHoles
+              key={`c${i}`}
+              b={b}
+              drills={holes}
+              faceColors={panelFaceColors(info.panelKind, p.part_key, s.face, s.back, s.edge)}
+              edgeLineColor="#b8a98e"
+              meta={info}
+              selected={selected?.id === info.id}
+              highlighted={hlSet?.has(p.part_key) ?? false}
+              onSelect={onSelect}
+              dragRef={dragRef}
+              wire={wire}
+              contextMenuSelect
+              ebSpec={ebFor(p.material_id)}
+            />
+          )
+        }
+
         return (
           <Part
             key={`c${i}`}
@@ -689,80 +952,47 @@ function CabinetScene({
           />
         )
       })}
-      {(rp.drawer_stacks ?? []).flatMap((stack, si) => {
-        const slideColor = '#6b7280'
-
-        const boxParts = stack.box_parts.map((p, pi) => {
-          const id   = `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`
-          const pp   = applyPosOv(p, id, partOverrides)
-          const b    = dbBox(pp)
-          const info = buildDbPartInfo(p, b, stack)
-          const s    = matSpec(p.material_id, '#d4c8a8')
-          const faceColors = panelFaceColors(info.panelKind as PanelKind, p.part_type, s.face, s.back, s.edge)
-          return (
-            <Part
-              key={`db_${si}_${pi}`}
-              b={b}
-              faceColors={faceColors}
-              edgeLineColor="#8a7a60"
-              meta={info}
-              selected={selected?.id === info.id}
-              highlighted={false}
-              onSelect={onSelect}
-              contextMenuSelect
-              dragRef={dragRef}
-              ebSpec={ebFor(p.material_id)}
-              wire={wire}
-              rotation={getRotOv(id, partOverrides)}
-            />
-          )
-        })
-
-        const slideparts = stack.slides.map((s, li) => {
-          const id   = `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`
-          const ps   = applyPosOv(s, id, partOverrides)
-          const b    = slideBox(ps)
-          const info = buildSlideInfo(s, b, stack)
-          const sc   = s.colour ?? slideColor
-          const faceColors = panelFaceColors('side', `slide_${s.side}`, sc, sc, sc)
-          return (
-            <Part
-              key={`sl_${si}_${li}`}
-              b={b}
-              faceColors={faceColors}
-              edgeLineColor="#4b5563"
-              meta={info}
-              selected={selected?.id === info.id}
-              highlighted={false}
-              onSelect={onSelect}
-              contextMenuSelect
-              dragRef={dragRef}
-              wire={wire}
-              rotation={getRotOv(id, partOverrides)}
-            />
-          )
-        })
-
-        return [...boxParts, ...slideparts]
-      })}
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
-        const id   = `zone_${z.row_index}_${z.col_index}`
-        const pz   = applyPosOv(z, id, partOverrides)
-        const b    = zoneBox(pz)
-        const info = applyEdge(buildZoneInfo(z, b))
-        const isDoor = z.face_type !== 'drawer_face'
-        const s    = matSpec(z.material_id, isDoor ? '#f0ebe0' : '#e2d9c8')
+        const id = `zone_${z.row_index}_${z.col_index}`
+
+        if (z.face_type === 'drawer_face') {
+          const stack = drawerStackByKey.get(`${z.row_index}_${z.col_index}`)
+          if (stack) {
+            return (
+              <DrawerAssembly
+                key={`f${i}`}
+                faceZone={z}
+                stack={stack}
+                targetTravel={openDrawers.get(`${z.row_index}_${z.col_index}`) ?? 0}
+                selected={selected}
+                onSelect={onSelect}
+                faceHighlighted={hlSet?.has(z.face_type) ?? false}
+                materialColours={materialColours}
+                ebByMatId={ebByMatId}
+                edgeOverrides={edgeOverrides}
+                wire={wire}
+                partOverrides={partOverrides}
+                dragRef={dragRef}
+              />
+            )
+          }
+        }
+
+        const pz         = applyPosOv(z, id, partOverrides)
+        const b          = zoneBox(pz)
+        const info       = applyEdge(buildZoneInfo(z, b))
+        const s          = matSpec(z.material_id, '#f0ebe0')
         const faceColors = panelFaceColors(info.panelKind, z.face_type, s.face, s.back, s.edge)
         const partProps: PartProps = {
           faceColors,
-          edgeLineColor:    '#b8a98e',
-          meta:             info,
-          selected:         selected?.id === info.id,
-          highlighted:      hlSet?.has(z.face_type) ?? false,
+          edgeLineColor:     '#b8a98e',
+          meta:              info,
+          selected:          selected?.id === info.id,
+          highlighted:       hlSet?.has(z.face_type) ?? false,
           onSelect,
           contextMenuSelect: true,
           dragRef,
-          ebSpec:           ebFor(z.material_id),
+          ebSpec:            ebFor(z.material_id),
           wire,
         }
 
@@ -808,7 +1038,7 @@ function CabinetScene({
         )
       })}
       {rp.seam_joints.length > 0 && (
-        <SeamJointOverlay seamJoints={rp.seam_joints} boxByKey={boxByKey} />
+        <SeamJointOverlay seamJoints={rp.seam_joints} boxByKey={boxByKey} wire={wire} />
       )}
     </group>
   )
@@ -828,9 +1058,10 @@ export default function Cabinet3DView({
   customParts?:      CabinetCustomPart[]
   partOverrides?:    PartPosOverrides
 }) {
-  const [selectedPart, setSelectedPart]   = useState<PartMeta | null>(null)
-  const [doorsOpen, setDoorsOpen]         = useState(false)
-  const [edgeOverrides, setEdgeOverrides] = useState<Map<string, PartEdge>>(new Map())
+  const [selectedPart, setSelectedPart]       = useState<PartMeta | null>(null)
+  const [doorsOpen, setDoorsOpen]             = useState(false)
+  const [openDrawers, setOpenDrawers]         = useState<Map<string, number>>(new Map())
+  const [edgeOverrides, setEdgeOverrides]     = useState<Map<string, PartEdge>>(new Map())
   const { dx, dy, dz } = cab
 
   const didHitPartRef   = useRef(false)
@@ -876,7 +1107,58 @@ export default function Cabinet3DView({
     didHitPartRef.current = false
   }
 
-  const hasDoors = rp?.face_zones.some(z => z.face_type === 'door' && z.hinge_side) ?? false
+  function toggleSingleDrawer(row: number, col: number) {
+    const key   = `${row}_${col}`
+    const stack = rp?.drawer_stacks?.find(s => s.face_zone_row === row && s.face_zone_col === col)
+    const nl    = stack?.slides[0]?.nominal_length ?? 300
+    setOpenDrawers(prev => {
+      const n = new Map(prev)
+      n.set(key, (n.get(key) ?? 0) > 0 ? 0 : nl)
+      return n
+    })
+  }
+
+  function openAllCascade() {
+    if (!rp) return
+    // Sort stacks bottom-to-top: higher row_index = lower in the cabinet = more extension.
+    const stacks = [...(rp.drawer_stacks ?? [])].sort((a, b) => a.face_zone_row - b.face_zone_row)
+    const n = new Map<string, number>()
+    stacks.forEach((s, i) => {
+      const nl     = s.slides[0]?.nominal_length ?? 300
+      const travel = nl * Math.max(0.2, 1 - i * 0.2)
+      n.set(`${s.face_zone_row}_${s.face_zone_col}`, travel)
+    })
+    setOpenDrawers(n)
+  }
+
+  const hasDoors      = rp?.face_zones.some(z => z.face_type === 'door' && z.hinge_side) ?? false
+  const hasDrawers    = (rp?.drawer_stacks?.length ?? 0) > 0
+  const drawerZoneIds = new Set((rp?.drawer_stacks ?? []).map(s => `zone_${s.face_zone_row}_${s.face_zone_col}`))
+
+  const drawerActions = selectedPart && drawerZoneIds.has(selectedPart.id) ? (() => {
+    const [, rowStr, colStr] = selectedPart.id.split('_')
+    const row = parseInt(rowStr), col = parseInt(colStr)
+    const key = `${row}_${col}`
+    const isOpen = (openDrawers.get(key) ?? 0) > 0
+    return (
+      <>
+        <button
+          className="w-full text-left text-xs text-gray-300 hover:text-white py-0.5 transition-colors"
+          onClick={() => toggleSingleDrawer(row, col)}
+        >
+          {isOpen ? 'Close Drawer' : 'Open Drawer'}
+        </button>
+        {(rp?.drawer_stacks?.length ?? 0) > 1 && (
+          <button
+            className="w-full text-left text-xs text-gray-300 hover:text-white py-0.5 transition-colors"
+            onClick={openAllCascade}
+          >
+            Open all drawers
+          </button>
+        )}
+      </>
+    )
+  })() : undefined
 
   return (
     <PreviewCanvas
@@ -888,15 +1170,32 @@ export default function Cabinet3DView({
       hint="Left-drag rotate · scroll zoom · right-click part to inspect · click empty to deselect"
       overlay={
         <>
-          {selectedPart && <PartPropertiesPanel part={selectedPart} onClose={() => setSelectedPart(null)} onEdgeChange={handleEdgeChange} />}
-          {hasDoors && (
-            <button
-              onClick={() => setDoorsOpen(o => !o)}
-              className="absolute bottom-8 right-3 text-[11px] font-mono text-orange-700 hover:text-orange-600 bg-white/70 hover:bg-white/90 border border-orange-300 hover:border-orange-400 rounded px-2 py-1 transition-colors pointer-events-auto select-none"
-            >
-              {doorsOpen ? 'Close doors' : 'Open doors'}
-            </button>
+          {selectedPart && (
+            <PartPropertiesPanel
+              part={selectedPart}
+              onClose={() => setSelectedPart(null)}
+              onEdgeChange={handleEdgeChange}
+              actions={drawerActions}
+            />
           )}
+          <div className="absolute bottom-8 right-3 flex flex-col gap-1 items-end pointer-events-none">
+            {hasDoors && (
+              <button
+                onClick={() => setDoorsOpen(o => !o)}
+                className="text-[11px] font-mono text-orange-700 hover:text-orange-600 bg-white/70 hover:bg-white/90 border border-orange-300 hover:border-orange-400 rounded px-2 py-1 transition-colors pointer-events-auto select-none"
+              >
+                {doorsOpen ? 'Close doors' : 'Open doors'}
+              </button>
+            )}
+            {hasDrawers && openDrawers.size > 0 && (
+              <button
+                onClick={() => setOpenDrawers(new Map())}
+                className="text-[11px] font-mono text-orange-700 hover:text-orange-600 bg-white/70 hover:bg-white/90 border border-orange-300 hover:border-orange-400 rounded px-2 py-1 transition-colors pointer-events-auto select-none"
+              >
+                Close drawers
+              </button>
+            )}
+          </div>
         </>
       }
     >
@@ -908,6 +1207,7 @@ export default function Cabinet3DView({
           materialColours={materialColours}
           ebByMatId={ebByMatId}
           doorsOpen={doorsOpen}
+          openDrawers={openDrawers}
           edgeOverrides={edgeOverrides}
           wire={wire}
           customParts={customParts}

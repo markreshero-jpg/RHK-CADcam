@@ -4,13 +4,14 @@ import { useState } from 'react'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
 import { cabT, wallDir, findFreeSlot } from '@/src/lib/geometry'
 
-export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete }: {
+export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, hideWallPosition }: {
   cabinet: CabinetInstance
   wall: Wall | null
   wallCabinets: CabinetInstance[]
   room: Room | null
   onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
   onDelete: (id: string) => Promise<void>
+  hideWallPosition?: boolean
 }) {
   const [local, setLocal] = useState<Partial<CabinetInstance>>({})
   const [saving, setSaving] = useState(false)
@@ -74,7 +75,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
             className={inp + ' text-right'} />
         </div>
 
-        {meas && wall && (
+        {meas && wall && !hideWallPosition && (
           <div>
             <p className={lbl}>Wall position</p>
             <div className="grid grid-cols-2 gap-1">

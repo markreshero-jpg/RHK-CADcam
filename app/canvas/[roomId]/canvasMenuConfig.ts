@@ -35,6 +35,7 @@ export interface MenuActions {
   setJobModalTab:    (tab: JobPropertiesTab) => void
   setRoomModalTab:   (tab: RoomPropertiesTab) => void
   openReportModal:   (scope: ReportScope) => void
+  openObjectTree:    () => void
 }
 
 export function buildMenus(a: MenuActions): MenuGroup[] {
@@ -92,6 +93,8 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
       { label: 'Hardware',     action: () => a.setRoomModalTab('hardware') },
       null,
       { label: 'Overrides',    action: () => a.setRoomModalTab('overrides') },
+      null,
+      { label: 'Object Tree',  action: () => a.openObjectTree() },
     ]},
     { label: 'Reports', items: [
       { label: 'Job Reports…',  action: () => a.openReportModal('job') },

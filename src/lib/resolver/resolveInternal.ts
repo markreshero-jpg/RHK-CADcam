@@ -10,6 +10,7 @@ import {
   edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
 
+
 export function resolveInternalParts(
   cab: CabinetInput,
   r: ConstructionRules,
@@ -193,6 +194,40 @@ export function resolveInternalParts(
       edge_band:   edgeSidesToBanding(edging.inner_drawer_back, cab.interior_edgeband_id),
       y_locked:    false,
     })
+  }
+
+  // ── Vertical Dividers ─────────────────────────────────────────
+  const dividers = cab.dividers ?? []
+  if (dividers.length > 0) {
+    const divDX  = intD
+    const divDY  = intH
+    const divZ   = r.SCRBK + T
+    const divY   = TK + T + r.SCRBT
+    const ND     = dividers.length
+    const secW   = intW / (ND + 1)
+
+    for (let i = 0; i < ND; i++) {
+      const div = dividers[i]
+      const divX = div.x_locked && div.x_position !== undefined
+        ? T + r.SCRL + div.x_position
+        : T + r.SCRL + secW * (i + 1) - T / 2
+
+      parts.push({
+        part_type:   'divider',
+        sort_order:  div.sort_order,
+        DX: divDX,
+        DY: divDY,
+        DZ: T,
+        X:  divX,
+        Y:  divY,
+        Z:  divZ,
+        AX: 0, AY: 0, AZ: 0,
+        material_id: mid,
+        edge_band:   edgeSidesToBanding(edging.divider ?? ['top', 'left', 'right'], cab.interior_edgeband_id),
+        y_locked:    false,
+        x_locked:    div.x_locked,
+      })
+    }
   }
 
   return { parts, errors }

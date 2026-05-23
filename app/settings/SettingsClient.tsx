@@ -10,7 +10,6 @@ import DrawerBoxesClient from '@/app/library/drawer-boxes/DrawerBoxesClient'
 import JointsClient from '@/app/library/joints/JointsClient'
 import PartsLibraryClient from '@/app/library/parts/PartsLibraryClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
-import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
 import { getUserPrefs, setUserPrefs, type DrawingPreset } from '@/src/lib/userPrefs'
 import { DISPLAY_PRESETS } from '@/src/lib/displayConfig'
 
@@ -24,7 +23,6 @@ export interface ShopSettings {
   company_phone: string | null
   company_email: string | null
   company_website: string | null
-  default_rule_overrides: Record<string, unknown>
   default_base_dy: number
   default_base_dz: number
   default_wall_dy: number
@@ -49,60 +47,6 @@ export type SchedKey =
 
 export type SchedListMap = Record<SchedKey, { id: string; name: string }[]>
 
-// ── Construction rules ────────────────────────────────────────────────────────
-
-type Rules = typeof DEFAULT_CONSTRUCTION_METHOD.rules
-type RuleKey = keyof Rules
-const SYS = DEFAULT_CONSTRUCTION_METHOD.rules
-
-const RULE_LABELS: Record<RuleKey, string> = {
-  TOEH:    'Toe Height (mm)',
-  TOE_TYPE:'Toe Type',
-  TOESP:   'Toe Setback Panel (mm)',
-  TOESCF:  'Toe Scribe Front (mm)',
-  TOESCB:  'Toe Scribe Back (mm)',
-  TOESCL:  'Toe Scribe Left (mm)',
-  TOESCR:  'Toe Scribe Right (mm)',
-  SCRBK:   'Scribe Back (mm)',
-  SCRBT:   'Scribe Bottom (mm)',
-  SCRL:    'Scribe Left (mm)',
-  SCRR:    'Scribe Right (mm)',
-  SCRT:    'Scribe Top (mm)',
-  TOP_TYPE:'Top Type',
-  RD:      'Rail Depth (mm)',
-  ADJSB_F: 'Adj. Shelf Front Setback (mm)',
-  ADJSB_B: 'Adj. Shelf Back Setback (mm)',
-  ADJSL:   'Adj. Shelf Left Notch (mm)',
-  ADJSR:   'Adj. Shelf Right Notch (mm)',
-  FIXSB_F: 'Fixed Shelf Front Setback (mm)',
-  FIXSB_B: 'Fixed Shelf Back Setback (mm)',
-  IDCL:          'Drawer Box Clearance Left (mm)',
-  IDCR:          'Drawer Box Clearance Right (mm)',
-  IDFAO:         'Drawer Box Face Above Opening (mm)',
-  SLIDE_SETBACK: 'Min Depth Behind Slide (mm)',
-  REVT:    'Face Reveal Top (mm)',
-  REVB:    'Face Reveal Bottom (mm)',
-  REVL:    'Face Reveal Left (mm)',
-  REVR:    'Face Reveal Right (mm)',
-  REVENDL: 'End Reveal Left (mm)',
-  REVENDR: 'End Reveal Right (mm)',
-  GAPC:    'Centre Gap (mm)',
-  GAPR:    'Drawer Gap (mm)',
-  FACBUF:  'Face Buffer (mm)',
-  FACINS:  'Face Inset (mm)',
-}
-
-const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
-  { label: 'Toe Kick',           keys: ['TOEH', 'TOE_TYPE', 'TOESP', 'TOESCF', 'TOESCB', 'TOESCL', 'TOESCR'] },
-  { label: 'Case Scribes',       keys: ['SCRBK', 'SCRBT', 'SCRL', 'SCRR', 'SCRT'] },
-  { label: 'Top Rail',           keys: ['TOP_TYPE', 'RD'] },
-  { label: 'Adjustable Shelves', keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },
-  { label: 'Fixed Shelves',      keys: ['FIXSB_F', 'FIXSB_B'] },
-  { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
-  { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR'] },
-  { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
-]
-
 // ── Schedule config ───────────────────────────────────────────────────────────
 
 const SCHED_TYPES: { key: SchedKey; label: string; col: keyof ShopSettings }[] = [
@@ -121,7 +65,7 @@ const SCHED_TYPES: { key: SchedKey; label: string; col: keyof ShopSettings }[] =
 
 type SettingsTab =
   | 'user_preferences'
-  | 'company' | 'dimensions' | 'construction' | 'materials'
+  | 'company' | 'dimensions' | 'materials'
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'cnc_tool' | 'cnc_machine'
   | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library'
@@ -162,16 +106,6 @@ const TABS: TabDef[] = [
         <line x1="2" y1="2" x2="2" y2="13"/>
         <polyline points="5,2 2,2 2,5"/>
         <rect x="5" y="5" width="8" height="6" rx="0.6" fill="currentColor" fillOpacity="0.1"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'construction', label: 'Construction', group: 'Shop',
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 13L6.5 8.5M9 3l3 3-1.5 1.5-3-3z"/>
-        <path d="M6.5 8.5L5 10l-1.5-1.5L5 7z"/>
-        <line x1="9.5" y1="2.5" x2="12.5" y2="5.5"/>
       </svg>
     ),
   },
@@ -308,7 +242,6 @@ const EMPTY_SETTINGS: ShopSettings = {
   id: '',
   company_name: null, company_address: null, company_abn: null,
   company_phone: null, company_email: null, company_website: null,
-  default_rule_overrides: {},
   default_base_dy: DEFAULT_DIMS.base.dy, default_base_dz: DEFAULT_DIMS.base.dz,
   default_wall_dy: DEFAULT_DIMS.wall.dy, default_wall_dz: DEFAULT_DIMS.wall.dz,
   default_tall_dy: DEFAULT_DIMS.tall.dy, default_tall_dz: DEFAULT_DIMS.tall.dz,
@@ -346,18 +279,6 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
   const [tallDy, setTallDy] = useState(s.default_tall_dy)
   const [tallDz, setTallDz] = useState(s.default_tall_dz)
 
-  // Construction
-  const [rules, setRules] = useState<Rules>({
-    ...SYS,
-    ...(s.default_rule_overrides as Partial<Rules>),
-  })
-
-  function setRule<K extends RuleKey>(key: K, value: Rules[K]) {
-    setRules(prev => ({ ...prev, [key]: value }))
-  }
-
-  const overrideCount = (Object.keys(SYS) as RuleKey[]).filter(k => rules[k] !== SYS[k]).length
-
   // User preferences (localStorage)
   const [invertScroll, setInvertScroll] = useState(false)
   const [defaultDrawingPreset, setDefaultDrawingPreset] = useState<DrawingPreset>('full_parts')
@@ -394,18 +315,13 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
   async function handleSave() {
     setSaving(true)
     try {
-      const newOverrides: Partial<Rules> = {}
-      for (const k of Object.keys(SYS) as RuleKey[]) {
-        if (rules[k] !== SYS[k]) (newOverrides as Record<string, unknown>)[k] = rules[k]
-      }
       const payload = {
-        company_name:           companyName.trim()    || null,
-        company_address:        companyAddress.trim() || null,
-        company_abn:            companyAbn.trim()     || null,
-        company_phone:          companyPhone.trim()   || null,
-        company_email:          companyEmail.trim()   || null,
-        company_website:        companyWebsite.trim() || null,
-        default_rule_overrides: newOverrides as Record<string, unknown>,
+        company_name:    companyName.trim()    || null,
+        company_address: companyAddress.trim() || null,
+        company_abn:     companyAbn.trim()     || null,
+        company_phone:   companyPhone.trim()   || null,
+        company_email:   companyEmail.trim()   || null,
+        company_website: companyWebsite.trim() || null,
         default_base_dy: baseDy, default_base_dz: baseDz,
         default_wall_dy: wallDy, default_wall_dz: wallDz,
         default_tall_dy: tallDy, default_tall_dz: tallDz,
@@ -422,7 +338,7 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
     }
   }
 
-  const hasSaveFooter = ['company', 'dimensions', 'construction'].includes(tab)
+  const hasSaveFooter = ['company', 'dimensions'].includes(tab)
 
   const activeTabDef = TABS.find(t => t.id === tab)!
 
@@ -446,7 +362,6 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
               <p className="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-600 uppercase tracking-wider">{group}</p>
               {TABS.filter(t => t.group === group).map(t => {
                 const isActive = tab === t.id
-                const badge = t.id === 'construction' && overrideCount > 0 ? overrideCount : null
                 return (
                   <button
                     key={t.id}
@@ -461,11 +376,6 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
                       {t.icon}
                     </span>
                     <span className="flex-1 text-left">{t.label}</span>
-                    {badge && (
-                      <span className="text-[10px] bg-blue-600/40 text-blue-300 px-1.5 py-0.5 rounded-full leading-none">
-                        {badge}
-                      </span>
-                    )}
                   </button>
                 )
               })}
@@ -627,28 +537,6 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
               </div>
             )}
 
-            {/* ── Construction ── */}
-            {tab === 'construction' && (
-              <div className="space-y-5">
-                <div className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg text-xs">
-                  <span className="text-gray-400">Method</span>
-                  <span className="text-white font-medium">{DEFAULT_CONSTRUCTION_METHOD.name}</span>
-                  <span className="text-gray-600 ml-auto">Override per-job or per-cabinet</span>
-                </div>
-                {RULE_GROUPS.map(group => (
-                  <div key={group.label}>
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{group.label}</p>
-                    <div className="space-y-px">
-                      {group.keys.map(k => (
-                        <RuleRow key={k} ruleKey={k} value={rules[k]} baseline={SYS[k]}
-                          onChange={v => setRule(k, v as Rules[typeof k])} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* ── Materials ── */}
             {tab === 'materials' && (
               <div className="space-y-6">
@@ -734,67 +622,6 @@ function NumInput({ value, onChange, baseline }: {
         isOverridden ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
       }`}
     />
-  )
-}
-
-function RuleRow({ ruleKey, value, baseline, onChange }: {
-  ruleKey: RuleKey
-  value: Rules[RuleKey]
-  baseline: Rules[RuleKey]
-  onChange: (v: Rules[RuleKey]) => void
-}) {
-  const isOverridden = value !== baseline
-  const label = RULE_LABELS[ruleKey]
-  const rowCls = `flex items-center justify-between py-1.5 px-2 rounded ${isOverridden ? 'bg-blue-950/30' : 'hover:bg-gray-800/40'}`
-  const textCls = `text-xs ${isOverridden ? 'text-blue-300' : 'text-gray-400'}`
-  const inputCls = `bg-gray-800 border rounded px-2 py-0.5 text-xs font-mono focus:outline-none focus:border-blue-500 ${
-    isOverridden ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
-  }`
-
-  if (ruleKey === 'TOE_TYPE') {
-    return (
-      <div className={rowCls}>
-        <span className={textCls}>{label}</span>
-        <div className="flex items-center gap-2">
-          {isOverridden && <span className="text-gray-600 text-[10px]">system: {String(baseline)}</span>}
-          <select value={value as string} onChange={e => onChange(e.target.value as Rules[RuleKey])} className={inputCls}>
-            <option value="ladder">Ladder</option>
-            <option value="leg">Leg</option>
-            <option value="none">None</option>
-          </select>
-        </div>
-      </div>
-    )
-  }
-
-  if (ruleKey === 'TOP_TYPE') {
-    return (
-      <div className={rowCls}>
-        <span className={textCls}>{label}</span>
-        <div className="flex items-center gap-2">
-          {isOverridden && <span className="text-gray-600 text-[10px]">system: {String(baseline)}</span>}
-          <select value={value as string} onChange={e => onChange(e.target.value as Rules[RuleKey])} className={inputCls}>
-            <option value="full_top">Full Top</option>
-            <option value="front_rail">Front Rail</option>
-            <option value="double_rail">Double Rail</option>
-            <option value="none">None</option>
-          </select>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className={rowCls}>
-      <span className={textCls}>{label}</span>
-      <div className="flex items-center gap-2">
-        {isOverridden && <span className="text-gray-600 text-[10px]">system: {String(baseline)}</span>}
-        <input type="number" value={value as number}
-          onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v)) onChange(v as Rules[RuleKey]) }}
-          className={`w-20 text-right ${inputCls}`}
-        />
-      </div>
-    </div>
   )
 }
 

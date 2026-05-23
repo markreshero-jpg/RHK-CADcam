@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack } from '@/src/lib/resolver/types'
 import type { PartMeta } from '@/src/components/three/PartViewer'
-import type { CabinetCustomPart } from './canvasDB'
+import type { CabinetCustomPart, PartLabels, PartComments } from './canvasDB'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import type { PartPosOverrides } from './canvasDB'
 import {
@@ -93,6 +93,127 @@ export function PartPickerMenu({ parts, clientX, clientY, onPick, onClose }: {
   )
 }
 
+// ── Part context menu ─────────────────────────────────────────────────────────
+
+export type PartContextAction = 'rename' | 'comment' | 'delete'
+
+export function PartContextMenu({ part, clientX, clientY, isCustom, existingComment, onAction, onClose }: {
+  part: PartMeta
+  clientX: number
+  clientY: number
+  isCustom: boolean
+  existingComment?: string
+  onAction: (action: PartContextAction, value?: string) => void
+  onClose: () => void
+}) {
+  const [mode, setMode] = useState<null | 'rename' | 'comment'>(null)
+  const [draft, setDraft] = useState('')
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (mode) return
+      onClose()
+    }
+    const t = setTimeout(() => window.addEventListener('click', handler), 10)
+    return () => { clearTimeout(t); window.removeEventListener('click', handler) }
+  }, [mode, onClose])
+
+  function startRename() { setDraft(part.label); setMode('rename') }
+  function startComment() { setDraft(existingComment ?? ''); setMode('comment') }
+
+  function commitRename() {
+    const v = draft.trim()
+    if (v && v !== part.label) onAction('rename', v)
+    else onClose()
+  }
+
+  function commitComment() {
+    onAction('comment', draft)
+    onClose()
+  }
+
+  const menuW = 192
+  const menuH = mode ? 120 : (isCustom ? 126 : 96)
+  const top  = Math.min(clientY + 6, window.innerHeight - menuH - 8)
+  const left = Math.min(clientX + 6, window.innerWidth  - menuW - 8)
+
+  return (
+    <div
+      className="fixed z-[70] bg-gray-800 border border-gray-600 rounded-lg shadow-2xl overflow-hidden"
+      style={{ top, left, width: menuW }}
+      onClick={e => e.stopPropagation()}
+    >
+      <div className="px-3 py-2 border-b border-gray-700 bg-gray-900/60 flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full flex-none" style={{ background: partIdColor(part.id) }} />
+        <span className="text-[11px] text-gray-300 truncate font-medium">{part.label}</span>
+      </div>
+
+      {mode === 'rename' && (
+        <div className="px-3 py-2 space-y-1.5">
+          <span className="text-[10px] text-gray-500">New name</span>
+          <input
+            autoFocus
+            type="text"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') onClose() }}
+            className="w-full bg-gray-900 border border-blue-500 rounded px-2 py-1 text-xs text-white focus:outline-none"
+          />
+          <div className="flex gap-1.5 pt-0.5">
+            <button onClick={commitRename} className="flex-1 px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors">Save</button>
+            <button onClick={onClose} className="px-2 py-1 text-gray-400 hover:text-white text-xs transition-colors">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'comment' && (
+        <div className="px-3 py-2 space-y-1.5">
+          <span className="text-[10px] text-gray-500">Comment (blank to clear)</span>
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') onClose() }}
+            rows={3}
+            className="w-full bg-gray-900 border border-amber-500/60 rounded px-2 py-1 text-xs text-white focus:outline-none resize-none"
+          />
+          <div className="flex gap-1.5 pt-0.5">
+            <button onClick={commitComment} className="flex-1 px-2 py-1 bg-amber-600 hover:bg-amber-500 text-white text-xs rounded transition-colors">Save</button>
+            <button onClick={onClose} className="px-2 py-1 text-gray-400 hover:text-white text-xs transition-colors">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {!mode && (
+        <>
+          <button onClick={startRename}
+            className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2.5">
+            <span className="text-gray-500">✎</span> Rename part
+          </button>
+          <button onClick={startComment}
+            className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2.5">
+            <span className="text-gray-500">💬</span>
+            {existingComment ? 'Edit comment' : 'Add comment'}
+          </button>
+          {isCustom && (
+            <button
+              onClick={() => { onAction('delete'); onClose() }}
+              className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-900/40 hover:text-red-300 flex items-center gap-2.5 border-t border-gray-700"
+            >
+              <span>✕</span> Delete part
+            </button>
+          )}
+          {!isCustom && (
+            <div className="px-3 py-2 text-[10px] text-gray-600 border-t border-gray-700 italic">
+              Resolved parts cannot be deleted
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Origin marker ─────────────────────────────────────────────────────────────
 
 function OriginMarker({ sx, sy, hLabel, vLabel, vUp = true }: {
@@ -148,10 +269,12 @@ function useSvgZoom(initW: number, initH: number) {
 
 // ── Resolved views ────────────────────────────────────────────────────────────
 
-export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, customParts, partOverrides }: {
+export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
+  onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
+  partLabels?: PartLabels; partComments?: PartComments
 }) {
   const { dx, dy } = cab
   const pl = 80, pt = 50, pr = 40, pb = 40
@@ -191,6 +314,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
   ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
+  if (partLabels)   for (const [id, lbl]  of Object.entries(partLabels))   { const m = partMap.get(id); if (m) partMap.set(id, { ...m, label: lbl }) }
+  if (partComments) for (const [id, cmt]  of Object.entries(partComments)) { const m = partMap.get(id); if (m) partMap.set(id, { ...m, comment: cmt }) }
 
   const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
@@ -199,8 +324,14 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
     onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
   }
 
+  function handleContextMenu(e: React.MouseEvent<SVGSVGElement>) {
+    e.preventDefault(); e.stopPropagation()
+    const hits = svgHitParts(e, partMap)
+    if (hits.length > 0) onPartContextMenu?.(hits, e.clientX, e.clientY)
+  }
+
   return (
-    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick}>
+    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick} onContextMenu={handleContextMenu}>
       <rect x={ox} y={oy} width={dx} height={dy} fill={wireMode ? '#050a12' : C_INT} />
 
       {showInternals && (rp.drawer_stacks ?? []).flatMap((stack, si) => [
@@ -302,10 +433,12 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
   )
 }
 
-export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, customParts, partOverrides }: {
+export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
+  onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
+  partLabels?: PartLabels; partComments?: PartComments
 }) {
   const { dx, dz } = cab
   const wallH = 40
@@ -345,6 +478,8 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
   ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
+  if (partLabels)   for (const [id, lbl] of Object.entries(partLabels))   { const m = partMap.get(id); if (m) partMap.set(id, { ...m, label: lbl }) }
+  if (partComments) for (const [id, cmt] of Object.entries(partComments)) { const m = partMap.get(id); if (m) partMap.set(id, { ...m, comment: cmt }) }
 
   const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
@@ -353,8 +488,14 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
     onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
   }
 
+  function handleContextMenu(e: React.MouseEvent<SVGSVGElement>) {
+    e.preventDefault(); e.stopPropagation()
+    const hits = svgHitParts(e, partMap)
+    if (hits.length > 0) onPartContextMenu?.(hits, e.clientX, e.clientY)
+  }
+
   return (
-    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick}>
+    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick} onContextMenu={handleContextMenu}>
       <rect x={ox} y={oz - wallH} width={dx} height={wallH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} style={{ pointerEvents: 'none' }} />
       <text x={ox + dx/2} y={oz - wallH/2} textAnchor="middle" dominantBaseline="central"
         fontSize={18} fill="#475569" fontFamily="system-ui,sans-serif" letterSpacing={2}>WALL</text>
@@ -446,10 +587,12 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
   )
 }
 
-export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, customParts, partOverrides }: {
+export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
+  onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
+  partLabels?: PartLabels; partComments?: PartComments
 }) {
   const { dz, dy } = cab
   const wallW = 40
@@ -501,6 +644,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
   ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
+  if (partLabels)   for (const [id, lbl] of Object.entries(partLabels))   { const m = partMap.get(id); if (m) partMap.set(id, { ...m, label: lbl }) }
+  if (partComments) for (const [id, cmt] of Object.entries(partComments)) { const m = partMap.get(id); if (m) partMap.set(id, { ...m, comment: cmt }) }
 
   const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
@@ -509,8 +654,14 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
     onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
   }
 
+  function handleContextMenu(e: React.MouseEvent<SVGSVGElement>) {
+    e.preventDefault(); e.stopPropagation()
+    const hits = svgHitParts(e, partMap)
+    if (hits.length > 0) onPartContextMenu?.(hits, e.clientX, e.clientY)
+  }
+
   return (
-    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick}>
+    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick} onContextMenu={handleContextMenu}>
       <rect x={oz - wallW} y={oy} width={wallW} height={dy} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} style={{ pointerEvents: 'none' }} />
       <text x={oz - wallW/2} y={oy + dy/2} textAnchor="middle" dominantBaseline="central"
         fontSize={16} fill="#475569" fontFamily="system-ui,sans-serif"

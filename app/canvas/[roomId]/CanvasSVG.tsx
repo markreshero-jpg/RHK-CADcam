@@ -9,7 +9,7 @@ import {
   gridDots,
 } from '@/src/lib/geometry'
 import WallDimensionChain from './WallDimensionChain'
-import { Mode, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, modeAssemblyClass, DisplayConfig } from './canvasTypes'
+import { Mode, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, modeAssemblyClass, DisplayConfig, SectionCut } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
 
 function buildBenchtopPath(
@@ -99,6 +99,11 @@ interface CanvasSVGProps {
   // Cutout draw state
   btCutoutStart: Pt | null
   btCutoutCursor: Pt | null
+  // Section cut
+  sectionCut?: SectionCut | null
+  onSectionFlipLook?: () => void
+  onSectionClear?: () => void
+  onSectionLinePointerDown?: (e: React.PointerEvent) => void
 }
 
 export default function CanvasSVG({
@@ -114,6 +119,7 @@ export default function CanvasSVG({
   btLPoints, btLCursor,
   btUPoints, btUCursor,
   btCutoutStart, btCutoutCursor,
+  sectionCut, onSectionFlipLook, onSectionClear, onSectionLinePointerDown,
 }: CanvasSVGProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
@@ -1222,6 +1228,68 @@ export default function CanvasSVG({
             </>
           )
         })()}
+
+        {/* ── Section cut line ── */}
+        {sectionCut && (() => {
+          const { x1, y1, x2, y2, lookDir } = sectionCut
+          const dx = x2 - x1, dy = y2 - y1
+          const len = Math.sqrt(dx * dx + dy * dy)
+          if (len < 1) return null
+          const ux = dx / len, uy = dy / len
+          const nx = -uy, ny = ux
+          const aDir = { x: nx * lookDir, y: ny * lookDir }
+          const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+          const aLen = 50 / view.zoom
+          const tipX = mx + aDir.x * aLen, tipY = my + aDir.y * aLen
+          const aW = 10 / view.zoom
+          const tickLen = 14 / view.zoom
+          const delR = 8 / view.zoom
+          return (
+            <g>
+              {/* Wide invisible hit area for drag */}
+              <line x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke="transparent" strokeWidth={20 / view.zoom}
+                style={{ cursor: 'move' }}
+                onPointerDown={e => { e.stopPropagation(); onSectionLinePointerDown?.(e) }}
+              />
+              <line x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke="#f59e0b" strokeWidth={2 / view.zoom}
+                strokeDasharray={`${8 / view.zoom} ${4 / view.zoom}`}
+                style={{ pointerEvents: 'none' }} />
+              <line x1={x1 - nx * tickLen / 2} y1={y1 - ny * tickLen / 2} x2={x1 + nx * tickLen / 2} y2={y1 + ny * tickLen / 2}
+                stroke="#f59e0b" strokeWidth={2 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+              <line x1={x2 - nx * tickLen / 2} y1={y2 - ny * tickLen / 2} x2={x2 + nx * tickLen / 2} y2={y2 + ny * tickLen / 2}
+                stroke="#f59e0b" strokeWidth={2 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+              <g onClick={e => { e.stopPropagation(); onSectionFlipLook?.() }} style={{ cursor: 'pointer' }}>
+                <line x1={mx} y1={my} x2={tipX} y2={tipY}
+                  stroke="#f59e0b" strokeWidth={2 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                <polygon
+                  points={`${tipX},${tipY} ${tipX - aDir.x * aW - aDir.y * aW * 0.5},${tipY - aDir.y * aW + aDir.x * aW * 0.5} ${tipX - aDir.x * aW + aDir.y * aW * 0.5},${tipY - aDir.y * aW - aDir.x * aW * 0.5}`}
+                  fill="#f59e0b" style={{ pointerEvents: 'none' }} />
+                <circle cx={tipX} cy={tipY} r={16 / view.zoom} fill="transparent" />
+              </g>
+              <g onClick={e => { e.stopPropagation(); onSectionClear?.() }} style={{ cursor: 'pointer' }}>
+                <circle cx={x1} cy={y1} r={delR} fill="#111827" stroke="#f59e0b" strokeWidth={1.5 / view.zoom} />
+                <line x1={x1 - delR * 0.55} y1={y1 - delR * 0.55} x2={x1 + delR * 0.55} y2={y1 + delR * 0.55}
+                  stroke="#f59e0b" strokeWidth={1.5 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                <line x1={x1 + delR * 0.55} y1={y1 - delR * 0.55} x2={x1 - delR * 0.55} y2={y1 + delR * 0.55}
+                  stroke="#f59e0b" strokeWidth={1.5 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+              </g>
+            </g>
+          )
+        })()}
+
+        {/* ── Section cut draft line ── */}
+        {mode === 'draw_section' && drawStart && drawCursor && (
+          <>
+            <line x1={drawStart.x} y1={drawStart.y} x2={drawCursor.x} y2={drawCursor.y}
+              stroke="#f59e0b88" strokeWidth={2 / view.zoom}
+              strokeDasharray={`${8 / view.zoom} ${4 / view.zoom}`}
+              style={{ pointerEvents: 'none' }} />
+            <circle cx={drawStart.x} cy={drawStart.y} r={5 / view.zoom}
+              fill="#f59e0b" style={{ pointerEvents: 'none' }} />
+          </>
+        )}
 
         {/* ── Marquee selection rect ── */}
         {marquee && (

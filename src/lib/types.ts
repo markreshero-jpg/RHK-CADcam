@@ -139,6 +139,7 @@ export interface CabinetInstance {
   drawerbox_overrides: Record<string, unknown>
   hardware_overrides: Record<string, unknown>
   face_grid: Record<string, unknown> | null
+  internal_grid: Record<string, unknown> | null
   carcase_joints: Record<string, string | null>
   schema_version: string
   notes: string | null

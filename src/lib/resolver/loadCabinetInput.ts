@@ -1,6 +1,6 @@
 import { supabase } from '@/src/lib/supabase'
 import {
-  CabinetInput, ConstructionRules, FaceGridInput, Material, DEFAULT_RULES,
+  CabinetInput, ConstructionRules, FaceGridInput, InternalGridInput, Material, DEFAULT_RULES,
   SlideProduct, SlideScheduleEntry, DrawerBoxRules, DEFAULT_DB_RULES,
   JointTypeOp, JointTargetPart, JointMachineOp, JointFace,
 } from './types'
@@ -349,8 +349,14 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     joint_type_ops:   jointTypeOps,
     joint_type_names: jointTypeNames,
     face_grid:     (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID,
-    adj_shelves:   [],
-    fixed_shelves: [],
-    inner_drawers: [],
+    ...((): Pick<CabinetInput, 'adj_shelves' | 'fixed_shelves' | 'inner_drawers' | 'dividers'> => {
+      const ig = (cab.internal_grid as InternalGridInput | null) ?? null
+      return {
+        adj_shelves:   ig?.adj_shelves   ?? [],
+        fixed_shelves: ig?.fixed_shelves ?? [],
+        inner_drawers: [],
+        dividers:      ig?.dividers      ?? [],
+      }
+    })(),
   }
 }

@@ -8,10 +8,12 @@ import { DEFAULT_DISPLAY_CONFIG, applyPreset, toggleLayer, cycleLayerStyle, togg
 export type { DisplayConfig, PresetId, LayerId, AnnotationId }
 export { DEFAULT_DISPLAY_CONFIG, applyPreset, toggleLayer, cycleLayerStyle, toggleAnnotation }
 
-export type CanvasView = 'plan' | 'elevation' | '3d'
+export type CanvasView = 'plan' | 'elevation' | 'section' | '3d'
+
+export type SectionCut = { x1: number; y1: number; x2: number; y2: number; lookDir: 1 | -1 }
 
 export type Mode =
-  | 'select' | 'draw_wall' | 'draw_island'
+  | 'select' | 'draw_wall' | 'draw_island' | 'draw_section'
   | 'draw_benchtop' | 'draw_benchtop_rect' | 'draw_benchtop_l' | 'draw_benchtop_u'
   | 'draw_benchtop_cutout_rect' | 'draw_benchtop_cutout_circle'
   | 'place_base' | 'place_wall_unit' | 'place_tall' | 'place_end_panel'

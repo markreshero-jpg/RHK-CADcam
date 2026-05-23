@@ -5,30 +5,36 @@ import type { CabinetInstance, Wall } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { PartMeta, PartEdge, PartPropertiesPanel } from '@/src/components/three/PartViewer'
 import {
-  dbResolveAndPersistCabinet, dbLoadCustomParts, dbUpdateCustomPart,
+  dbResolveAndPersistCabinet, dbLoadCustomParts, dbUpdateCustomPart, dbDeleteCustomPart,
   dbLoadPartPosOverrides, dbSavePartPosOverride, dbDeletePartPosOverride,
-  type CabinetCustomPart, type PartPosOverrides,
+  dbLoadPartLabels, dbSavePartLabel,
+  dbLoadPartComments, dbSavePartComment,
+  type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments,
 } from './canvasDB'
 import CabinetPanel from './CabinetPanel'
 import Cabinet3DView from './Cabinet3DView'
 import FaceGridEditor from './FaceGridEditor'
+import InternalGridEditor from './InternalGridEditor'
 import { saveSVGEdge } from './cabinetEditSvgHelpers'
-import { ResolvedElevation, ResolvedTop, ResolvedSide, TopView, ElevationView, SideView, PartPickerMenu } from './ResolvedViews'
+import { ResolvedElevation, ResolvedTop, ResolvedSide, TopView, ElevationView, SideView, PartPickerMenu, PartContextMenu, type PartContextAction } from './ResolvedViews'
 import PartsView from './PartsView'
 import JointsPanel from './JointsPanel'
 import OverridesView from './OverridesView'
+import CabinetTreePanel from './CabinetTreePanel'
 
-type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'joints' | 'overrides'
+type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'interior' | 'joints' | 'overrides' | 'tree'
 
 const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'top',       label: 'Top' },
   { id: 'elevation', label: 'Elevation' },
   { id: 'side',      label: 'Side' },
   { id: 'face',      label: 'Face Grid' },
+  { id: 'interior',  label: 'Interior' },
   { id: '3d',        label: '3D' },
   { id: 'parts',     label: 'Parts' },
   { id: 'joints',    label: 'Joints' },
   { id: 'overrides', label: 'Overrides' },
+  { id: 'tree',      label: 'Tree' },
 ]
 
 function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onOverridesChange, setCustomParts }: {
@@ -185,11 +191,14 @@ export default function CabinetEditModal({
   const [resolving, setResolving]         = useState(false)
   const [customParts, setCustomParts]     = useState<CabinetCustomPart[]>([])
   const [partOverrides, setPartOverrides] = useState<PartPosOverrides>({})
+  const [partLabels, setPartLabels]       = useState<PartLabels>({})
+  const [partComments, setPartComments]   = useState<PartComments>({})
+  const [contextMenu, setContextMenu]     = useState<{ part: PartMeta; cx: number; cy: number } | null>(null)
 
   const prevPartRef     = useRef<PartMeta | null>(null)
   const originalEdgeRef = useRef<PartEdge | null>(null)
 
-  const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face' && activeView !== 'joints' && activeView !== 'overrides'
+  const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face' && activeView !== 'interior' && activeView !== 'joints' && activeView !== 'overrides'
 
   useEffect(() => {
     if (resolvedCabinet) return
@@ -202,6 +211,8 @@ export default function CabinetEditModal({
   useEffect(() => {
     dbLoadCustomParts(cabinet.id).then(setCustomParts)
     dbLoadPartPosOverrides(cabinet.id).then(setPartOverrides)
+    dbLoadPartLabels(cabinet.id).then(setPartLabels)
+    dbLoadPartComments(cabinet.id).then(setPartComments)
   }, [cabinet.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -225,6 +236,45 @@ export default function CabinetEditModal({
     }
     prevPartRef.current = selectedSVGPart
   }, [selectedSVGPart]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handlePartContextMenu(parts: PartMeta[], cx: number, cy: number) {
+    if (!selectedSVGPart) return
+    const hit = parts.find(p => p.id === selectedSVGPart.id)
+    if (hit) setContextMenu({ part: hit, cx, cy })
+  }
+
+  function handleContextAction(action: PartContextAction, value?: string) {
+    if (!contextMenu) return
+    const { part } = contextMenu
+    const isCustom = part.id.startsWith('custom_')
+    const customPartId = isCustom ? part.id.slice(7) : null
+
+    if (action === 'rename' && value) {
+      if (isCustom && customPartId) {
+        setCustomParts(prev => prev.map(p => p.id === customPartId ? { ...p, name: value } : p))
+        dbUpdateCustomPart(customPartId, { name: value }).catch(console.error)
+      } else {
+        const updated = { ...partLabels, [part.id]: value }
+        setPartLabels(updated)
+        dbSavePartLabel(cabinet.id, part.id, value, partLabels).catch(console.error)
+      }
+    }
+
+    if (action === 'comment') {
+      const updated = value?.trim()
+        ? { ...partComments, [part.id]: value.trim() }
+        : (() => { const { [part.id]: _r, ...rest } = partComments; return rest })()
+      setPartComments(updated)
+      dbSavePartComment(cabinet.id, part.id, value ?? '', partComments).catch(console.error)
+    }
+
+    if (action === 'delete' && isCustom && customPartId) {
+      setCustomParts(prev => prev.filter(p => p.id !== customPartId))
+      dbDeleteCustomPart(customPartId).catch(console.error)
+    }
+
+    setContextMenu(null)
+  }
 
   function handlePartsAtPoint(parts: PartMeta[], cx: number, cy: number) {
     setPicker(null)
@@ -280,7 +330,7 @@ export default function CabinetEditModal({
           {/* Tabs */}
           <div className="flex-none bg-gray-800/60 border-b border-gray-700 px-4 py-1.5 flex items-center gap-1">
             {VIEWS.map(v => {
-              const disabled = (v.id === 'parts' || v.id === '3d') && !rp
+              const disabled = (v.id === 'parts' || v.id === '3d' || v.id === 'tree') && !rp
               const overrideCount = v.id === 'overrides'
                 ? Object.keys(partOverrides).length + customParts.length
                 : 0
@@ -301,7 +351,7 @@ export default function CabinetEditModal({
                 </button>
               )
             })}
-            {(isOrthoView || activeView === 'face' || activeView === '3d') && rp && (
+            {(isOrthoView || activeView === 'face' || activeView === 'interior' || activeView === '3d') && rp && (
               <div className="ml-auto flex items-center gap-1.5">
                 <button
                   onClick={() => setWireMode(w => !w)}
@@ -334,6 +384,7 @@ export default function CabinetEditModal({
               activeView === 'parts'     ? 'bg-gray-900'
               : activeView === '3d'      ? 'bg-gray-950'
               : activeView === 'face'    ? 'bg-gray-950'
+              : activeView === 'interior'? 'bg-gray-950'
               : activeView === 'joints'  ? 'bg-gray-900'
               : activeView === 'overrides' ? 'bg-gray-900'
               : 'flex items-center justify-center bg-gray-950 p-6'
@@ -343,25 +394,53 @@ export default function CabinetEditModal({
             {activeView === 'top' && (
               rp ? <ResolvedTop cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
-                customParts={customParts} partOverrides={partOverrides} />
+                onPartContextMenu={handlePartContextMenu}
+                customParts={customParts} partOverrides={partOverrides}
+                partLabels={partLabels} partComments={partComments} />
               : <TopView cab={cabinet} />
             )}
             {activeView === 'elevation' && (
               rp ? <ResolvedElevation cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
-                customParts={customParts} partOverrides={partOverrides} />
+                onPartContextMenu={handlePartContextMenu}
+                customParts={customParts} partOverrides={partOverrides}
+                partLabels={partLabels} partComments={partComments} />
               : <ElevationView cab={cabinet} />
             )}
             {activeView === 'side' && (
               rp ? <ResolvedSide cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
-                customParts={customParts} partOverrides={partOverrides} />
+                onPartContextMenu={handlePartContextMenu}
+                customParts={customParts} partOverrides={partOverrides}
+                partLabels={partLabels} partComments={partComments} />
               : <SideView cab={cabinet} />
             )}
-            {activeView === 'face' && <FaceGridEditor cabinet={cabinet} rp={rp} showInternals={showInternals} onUpdate={onUpdate} />}
+            {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={rp} showInternals={showInternals} onUpdate={onUpdate} />}
+            {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
             {activeView === '3d'     && rp && <Cabinet3DView cab={cabinet} rp={rp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} />}
-            {activeView === 'parts'  && rp && <PartsView rp={rp} cabinetId={cabinet.id} customParts={customParts} setCustomParts={setCustomParts} partOverrides={partOverrides} onDeletePosOverride={async id => { const u = await dbDeletePartPosOverride(cabinet.id, id, partOverrides); setPartOverrides(u) }} />}
+            {activeView === 'parts'  && rp && (
+              <PartsView
+                rp={rp} cabinetId={cabinet.id}
+                customParts={customParts} setCustomParts={setCustomParts}
+                partOverrides={partOverrides}
+                onDeletePosOverride={async id => { const u = await dbDeletePartPosOverride(cabinet.id, id, partOverrides); setPartOverrides(u) }}
+                partLabels={partLabels} partComments={partComments}
+                onLabelChange={(partId, label) => {
+                  const updated = { ...partLabels, [partId]: label }
+                  setPartLabels(updated)
+                  dbSavePartLabel(cabinet.id, partId, label, partLabels).catch(console.error)
+                }}
+                onCommentChange={(partId, comment) => {
+                  const updated = comment.trim()
+                    ? { ...partComments, [partId]: comment.trim() }
+                    : (() => { const { [partId]: _r, ...rest } = partComments; return rest })()
+                  setPartComments(updated)
+                  dbSavePartComment(cabinet.id, partId, comment, partComments).catch(console.error)
+                }}
+              />
+            )}
             {activeView === 'joints' && <JointsPanel cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
+            {activeView === 'tree'   && rp && <CabinetTreePanel rp={rp} />}
             {activeView === 'overrides' && (
               <OverridesView
                 cabinetId={cabinet.id}
@@ -397,6 +476,17 @@ export default function CabinetEditModal({
                 onClose={() => setPicker(null)}
               />
             )}
+            {contextMenu && (
+              <PartContextMenu
+                part={contextMenu.part}
+                clientX={contextMenu.cx}
+                clientY={contextMenu.cy}
+                isCustom={contextMenu.part.id.startsWith('custom_')}
+                existingComment={partComments[contextMenu.part.id]}
+                onAction={handleContextAction}
+                onClose={() => setContextMenu(null)}
+              />
+            )}
           </div>
         </div>
 
@@ -409,6 +499,7 @@ export default function CabinetEditModal({
             room={null}
             onUpdate={onUpdate}
             onDelete={async id => { await onDelete(id); onClose() }}
+            hideWallPosition
           />
         </div>
       </div>

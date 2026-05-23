@@ -127,6 +127,42 @@ function OverrideRow({ partId, ov, cabinetId, partOverrides, onOverridesChange }
 
 // ── Custom part position row ──────────────────────────────────────────────────
 
+function EditableName({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft,   setDraft]   = useState(value)
+
+  function commit() {
+    setEditing(false)
+    const v = draft.trim()
+    if (v && v !== value) onSave(v)
+    else setDraft(value)
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="text"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setDraft(value); setEditing(false) } }}
+        className="bg-gray-800 border border-blue-500 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none w-36"
+      />
+    )
+  }
+
+  return (
+    <button
+      onClick={() => { setDraft(value); setEditing(true) }}
+      title="Click to rename"
+      className="text-left font-medium hover:text-blue-300 transition-colors"
+    >
+      {value}
+    </button>
+  )
+}
+
 function CustomPosRow({ part, setCustomParts }: {
   part: CabinetCustomPart
   setCustomParts: Dispatch<SetStateAction<CabinetCustomPart[]>>
@@ -164,7 +200,15 @@ function CustomPosRow({ part, setCustomParts }: {
 
   return (
     <tr className="border-t border-gray-800/60 hover:bg-gray-800/20">
-      <td className="px-3 py-2 text-xs text-gray-300 align-top pt-3">{part.name ?? 'Custom Part'}</td>
+      <td className="px-3 py-2 text-xs text-gray-300 align-top pt-3">
+        <EditableName
+          value={part.name ?? 'Custom Part'}
+          onSave={name => {
+            setCustomParts(prev => prev.map(p => p.id === part.id ? { ...p, name } : p))
+            dbUpdateCustomPart(part.id, { name }).catch(console.error)
+          }}
+        />
+      </td>
       <td className="px-2 py-2" colSpan={3}>
         <div className="space-y-1">
           <Field label="X" value={x} onChange={setX} onSave={v => save(v, y, z)} unit="mm" />

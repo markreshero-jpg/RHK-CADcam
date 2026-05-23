@@ -77,6 +77,7 @@ export const EDGING_LABELS: Record<EdgingKey, string> = {
   fixed_shelf:         'Fixed Shelf',
   inner_drawer_bottom: 'Drawer Bottom',
   inner_drawer_back:   'Drawer Back',
+  divider:             'Divider',
   door:                'Door',
   drawer_face:         'Drawer Face',
   false_panel:         'False Panel',
@@ -85,7 +86,7 @@ export const EDGING_LABELS: Record<EdgingKey, string> = {
 export const EDGING_GROUPS: { label: string; keys: EdgingKey[] }[] = [
   { label: 'Case',     keys: ['left_side','right_side','bottom','back','full_top','front_rail','back_rail'] },
   { label: 'Toe Kick', keys: ['kick_front_face','kick_sub_front','kick_back','spreader_vertical','spreader_horizontal'] },
-  { label: 'Internal', keys: ['adj_shelf','fixed_shelf','inner_drawer_bottom','inner_drawer_back'] },
+  { label: 'Internal', keys: ['adj_shelf','fixed_shelf','inner_drawer_bottom','inner_drawer_back','divider'] },
   { label: 'Face',     keys: ['door','drawer_face','false_panel'] },
 ]
 

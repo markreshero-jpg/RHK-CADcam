@@ -269,7 +269,11 @@ export default function ElevationSVG({
       svgRef.current?.setPointerCapture(e.pointerId)
       return
     }
-    if (e.button === 0 && mode === 'select') onDeselect()
+    if (e.button === 0 && mode === 'select') {
+      onDeselect()
+      panRef.current = { startX: e.clientX, startY: e.clientY, panX: view.panX, panY: view.panY }
+      svgRef.current?.setPointerCapture(e.pointerId)
+    }
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -573,6 +577,7 @@ export default function ElevationSVG({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onContextMenu={e => e.preventDefault()}
         onClick={onSVGClick}
       >
         {!wall ? (
@@ -595,7 +600,7 @@ export default function ElevationSVG({
             {/* Wall title */}
             <text x={wall.length / 2} y={-24 / z}
               textAnchor="middle" dominantBaseline="middle"
-              fontSize={labelFs} fill="#6b7280"
+              fontSize={labelFs} fill="#ffffff"
               style={{ userSelect: 'none', pointerEvents: 'none' }}>
               {wall.name} — {elevWallSide === 'face' ? 'Face' : 'Back'}
             </text>
@@ -1054,62 +1059,6 @@ export default function ElevationSVG({
                           style={{ cursor: isF ? 'crosshair' : 'move' }}
                           onPointerDown={ev => ev.stopPropagation()}
                           onClick={ev => onCabCrosshairClick(ev, cab)} />
-                      </g>
-                    )
-                  })()}
-
-                  {/* Seam joint markers — visual indicators; clickable when onSeamClick provided */}
-                  {mode === 'select' && (() => {
-                    const rp = resolvedParts?.get(cab.id)
-                    if (!rp) return null
-                    const seams = computeElevSeams(rp)
-                    if (!seams.length) return null
-                    return (
-                      <g>
-                        {seams.map(seam => {
-                          const pt = toSVGPt(seam.ex, seam.ey)
-
-                          // Resolved joint for this seam (includes inherited CM defaults)
-                          const resolvedJoint = rp.seam_joints.find(j => j.seam_key === seam.key)
-
-                          // Suppression is only stored in carcase_joints (null = explicit "no joint")
-                          const cabJoints = (cab.carcase_joints ?? {}) as Record<string, string | null>
-                          const isSuppressed = Object.prototype.hasOwnProperty.call(cabJoints, seam.key) && cabJoints[seam.key] === null
-
-                          // Fall back to raw carcase_joints when seam_joints is empty (pre-resolve DB data)
-                          const isActiveCabinet   = resolvedJoint?.source === 'cabinet'
-                            || (!resolvedJoint && typeof cabJoints[seam.key] === 'string')
-                          const isActiveInherited = resolvedJoint?.source === 'method'
-                          const hasAnyJoint = isActiveCabinet || isActiveInherited
-
-                          if (!isHover && !isSel && !hasAnyJoint && !isSuppressed) return null
-
-                          const col = isActiveCabinet   ? '#22c55e'
-                                    : isActiveInherited ? '#f59e0b'
-                                    : isSuppressed      ? '#ef4444'
-                                    : '#6b7280'
-                          const r  = 4.5 / z
-                          const hr = 8   / z
-                          const clickable = !!onSeamClick
-                          return (
-                            <g key={seam.key}
-                              style={{ cursor: clickable ? 'pointer' : 'default' }}
-                              onPointerDown={clickable ? e => e.stopPropagation() : undefined}
-                              onClick={clickable ? e => { e.stopPropagation(); onSeamClick!(cab.id, seam.key, seam.label) } : undefined}>
-                              <circle cx={pt.x} cy={pt.y} r={hr} fill="transparent" />
-                              <circle cx={pt.x} cy={pt.y} r={r}
-                                fill={hasAnyJoint || isSuppressed ? col : 'transparent'}
-                                fillOpacity={hasAnyJoint || isSuppressed ? 0.2 : 0}
-                                stroke={col} strokeWidth={1 / z}
-                                strokeDasharray={!hasAnyJoint && !isSuppressed ? `${2 / z} ${1.5 / z}` : undefined}
-                              />
-                              {isSuppressed && (<>
-                                <line x1={pt.x - r * 0.6} y1={pt.y - r * 0.6} x2={pt.x + r * 0.6} y2={pt.y + r * 0.6} stroke="#ef4444" strokeWidth={1.2 / z} />
-                                <line x1={pt.x + r * 0.6} y1={pt.y - r * 0.6} x2={pt.x - r * 0.6} y2={pt.y + r * 0.6} stroke="#ef4444" strokeWidth={1.2 / z} />
-                              </>)}
-                            </g>
-                          )
-                        })}
                       </g>
                     )
                   })()}

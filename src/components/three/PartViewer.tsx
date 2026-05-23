@@ -27,6 +27,7 @@ export interface PartMeta {
   edge:      PartEdge
   panelKind: PanelKind
   detail?:   string
+  comment?:  string
   // Cabinet-space position & rotation (optional — only set when viewing resolved parts)
   x?:  number
   y?:  number
@@ -114,6 +115,7 @@ export function Part({
   contextMenuSelect = false,
   wire = false,
   rotation,
+  onPartContextMenu,
 }: {
   b:                  Box
   faceColors:         [string, string, string, string, string, string]
@@ -127,6 +129,7 @@ export function Part({
   contextMenuSelect?: boolean
   wire?:              boolean
   rotation?:          [number, number, number]
+  onPartContextMenu?: (meta: PartMeta, clientX: number, clientY: number) => void
 }) {
   const [hovered, setHovered] = useState(false)
 
@@ -164,7 +167,14 @@ export function Part({
         onPointerDown={() => { dragRef.current = false }}
         onPointerMove={(e) => { if (e.buttons) dragRef.current = true }}
         onClick={contextMenuSelect ? undefined : (e) => { e.stopPropagation(); if (!dragRef.current) onSelect(selected ? null : meta) }}
-        onContextMenu={contextMenuSelect ? (e) => { e.stopPropagation(); onSelect(meta) } : undefined}
+        onContextMenu={(contextMenuSelect || onPartContextMenu) ? (e) => {
+          e.stopPropagation()
+          if (contextMenuSelect) onSelect(meta)
+          if (onPartContextMenu) {
+            const ne = e.nativeEvent as MouseEvent
+            onPartContextMenu(meta, ne.clientX, ne.clientY)
+          }
+        } : undefined}
         onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
         onPointerOut={() => setHovered(false)}
       >
@@ -194,11 +204,12 @@ export function Part({
 // ── Properties panel overlay ───────────────────────────────────────────────────
 
 export function PartPropertiesPanel({
-  part, onClose, onEdgeChange,
+  part, onClose, onEdgeChange, actions,
 }: {
   part: PartMeta
   onClose: () => void
   onEdgeChange?: (edge: PartEdge) => void
+  actions?: React.ReactNode
 }) {
   return (
     <div className="absolute top-3 right-3 w-56 bg-gray-900/95 border border-gray-700 rounded-lg shadow-xl pointer-events-auto select-none" onClick={e => e.stopPropagation()}>
@@ -258,7 +269,21 @@ export function PartPropertiesPanel({
             <span className="text-gray-200 text-right">{part.detail}</span>
           </>
         )}
+        {part.comment && (
+          <>
+            <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Comment</span>
+            <span className="text-amber-300 col-span-2 text-[11px] leading-snug whitespace-pre-wrap">{part.comment}</span>
+          </>
+        )}
       </div>
+      {actions && (
+        <div className="border-t border-gray-700 px-3 py-2">
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Actions</span>
+          <div className="mt-1.5 flex flex-col gap-1">
+            {actions}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

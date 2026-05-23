@@ -859,6 +859,7 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
       adj_shelves:   [{ sort_order: 0, y_locked: false }, { sort_order: 1, y_locked: false }],
       fixed_shelves: [],
       inner_drawers: [],
+      dividers:      [],
     }
     return resolveCabinet(input)
   }, [classTab, dx, dy, dz, isWall, rules, mat, jointDeltas, jointTypes])

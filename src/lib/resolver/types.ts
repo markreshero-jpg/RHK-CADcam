@@ -67,6 +67,7 @@ export interface EdgingDefaults {
   fixed_shelf?:        EdgeSides
   inner_drawer_bottom?:EdgeSides
   inner_drawer_back?:  EdgeSides
+  divider?:            EdgeSides
   // Face zones
   door?:               EdgeSides
   drawer_face?:        EdgeSides
@@ -104,6 +105,7 @@ export const DEFAULT_EDGING: Required<EdgingDefaults> = {
   fixed_shelf:         ['top'],
   inner_drawer_bottom: [],
   inner_drawer_back:   ['top'],
+  divider:             ['top', 'left', 'right'],              // front + both height edges
   door:                ['top', 'bottom', 'left', 'right'],
   drawer_face:         ['top', 'bottom', 'left', 'right'],
   false_panel:         ['top', 'bottom', 'left', 'right'],
@@ -420,10 +422,11 @@ export interface CabinetInput {
   // Face grid definition
   face_grid:       FaceGridInput
 
-  // Shelf configurations
+  // Internal parts
   adj_shelves:     AdjShelfInput[]
   fixed_shelves:   FixedShelfInput[]
   inner_drawers:   InnerDrawerInput[]
+  dividers?:       InternalDividerInput[]
 }
 
 // ── Face Grid Input ───────────────────────────────────────────
@@ -482,6 +485,19 @@ export interface InnerDrawerInput {
   runner_depth?: number   // override IDRUN
 }
 
+export interface InternalDividerInput {
+  sort_order:  number
+  x_locked:    boolean
+  x_position?: number   // mm from interior left face (after side + scribe), equalised if absent
+}
+
+// Stored as internal_grid JSONB on cabinet_instances — mirrors face_grid pattern
+export interface InternalGridInput {
+  adj_shelves:   AdjShelfInput[]
+  fixed_shelves: FixedShelfInput[]
+  dividers:      InternalDividerInput[]
+}
+
 // ── Resolved Output ───────────────────────────────────────────
 // What the resolver returns — ready to write to Supabase
 
@@ -519,9 +535,10 @@ export interface ResolvedToekickPart extends ResolvedPart {
 
 export interface ResolvedInternalPart extends ResolvedPart {
   part_type:  'adj_shelf' | 'fixed_shelf' |
-              'inner_drawer_bottom' | 'inner_drawer_back'
+              'inner_drawer_bottom' | 'inner_drawer_back' | 'divider'
   sort_order: number
   y_locked:   boolean
+  x_locked?:  boolean   // dividers only
 }
 
 export interface ResolvedFaceRow {
