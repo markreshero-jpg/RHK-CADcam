@@ -4,24 +4,24 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance, Wall } from '@/src/lib/types'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack } from '@/src/lib/resolver/types'
+import { computeElevSeams, toGenericSeamKey } from '@/src/lib/cabinetSeams'
 import { PartMeta, PartEdge, PartPropertiesPanel } from '@/src/components/three/PartViewer'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { dbResolveAndPersistCabinet } from './canvasDB'
+import { dbResolveAndPersistCabinet, dbLoadCustomParts, dbAddCustomPart, dbUpdateCustomPart, dbDeleteCustomPart, type CabinetCustomPart } from './canvasDB'
 import CabinetPanel from './CabinetPanel'
 import Cabinet3DView from './Cabinet3DView'
 import FaceGridEditor from './FaceGridEditor'
 
-type ViewId = 'top' | 'elevation' | 'side' | 'section-face' | 'section-interior' | 'parts' | '3d' | 'face'
+type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'joints'
 
 const VIEWS: { id: ViewId; label: string }[] = [
-  { id: 'top',              label: 'Top' },
-  { id: 'elevation',        label: 'Elevation' },
-  { id: 'side',             label: 'Side' },
-  { id: 'section-face',     label: 'Section Face' },
-  { id: 'section-interior', label: 'Section Interior' },
-  { id: 'face',             label: 'Face Grid' },
-  { id: '3d',               label: '3D' },
-  { id: 'parts',            label: 'Parts' },
+  { id: 'top',       label: 'Top' },
+  { id: 'elevation', label: 'Elevation' },
+  { id: 'side',      label: 'Side' },
+  { id: 'face',      label: 'Face Grid' },
+  { id: '3d',        label: '3D' },
+  { id: 'parts',     label: 'Parts' },
+  { id: 'joints',    label: 'Joints' },
 ]
 
 // ── Fallback approximation constants (used when resolver data not available) ──
@@ -58,14 +58,6 @@ const RC = {
   face:      { fill: '#0f2240', stroke: '#60a5fa' },
   drawerBox: { fill: '#052e16', stroke: '#22c55e' },
   slide:     { fill: '#1c1917', stroke: '#d97706' },
-}
-
-function Hatch({ id }: { id: string }) {
-  return (
-    <pattern id={id} width={10} height={10} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <line x1={0} y1={0} x2={0} y2={10} stroke={C_CUT} strokeWidth={3} />
-    </pattern>
-  )
 }
 
 function dimH(x1: number, x2: number, y: number, label: string, above = false) {
@@ -110,9 +102,10 @@ function isSidePanel(key: string) {
 // Elevation (X-Y plane, front face):  ey = TOP of part in cabinet Y coords
 function elevRect(p: { X: number; Y: number; DX: number; DY: number; DZ: number; part_key?: string }) {
   const isSide = p.part_key ? isSidePanel(p.part_key) : false
-  return isSide
-    ? { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
-    : { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
+  if (isSide) return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+  // Back panel: stored Y is offset so 3D bottom face = p.Y + p.DZ; height = p.DX
+  if (p.part_key === 'back') return { ex: p.X, ey: p.Y + p.DZ + p.DX, ew: p.DY, eh: p.DX }
+  return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
 }
 function tkElevRect(p: ResolvedToekickPart) {
   // spreader_horizontal lays flat: DX = X extent (100mm width), DY = Y extent (material thickness)
@@ -141,7 +134,7 @@ function zoneTopRect(z: ResolvedFaceZone)     { return { tx: z.X, tz: z.Z, tw: z
 // Side (Z-Y plane, looking left from right): cy_top = TOP of part in cabinet Y coords
 function sideRect(p: ResolvedCasePart): { sz: number; cy_top: number; sw: number; sh: number } | null {
   if (isSidePanel(p.part_key)) return { sz: p.Z, cy_top: p.Y + p.DY, sw: p.DX, sh: p.DY }
-  if (p.part_key === 'back')   return null  // Y extent not encoded; skip
+  if (p.part_key === 'back')   return { sz: p.Z, cy_top: p.Y + p.DZ + p.DX, sw: p.DZ, sh: p.DX }
   return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
 }
 function tkSideRect(p: ResolvedToekickPart) {
@@ -365,6 +358,22 @@ function PartPickerMenu({ parts, clientX, clientY, onPick, onClose }: {
 // Highlight stroke helper
 const SEL_STROKE = '#f59e0b'
 
+function OriginMarker({ sx, sy, hLabel, vLabel, vUp = true }: {
+  sx: number; sy: number; hLabel: string; vLabel: string; vUp?: boolean
+}) {
+  const arm = 28, r = 3.5, col = '#f59e0b', fs = 18
+  const vy = vUp ? -arm : arm
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      <line x1={sx} y1={sy} x2={sx + arm} y2={sy} stroke={col} strokeWidth={1.5} strokeLinecap="round" />
+      <line x1={sx} y1={sy} x2={sx} y2={sy + vy} stroke={col} strokeWidth={1.5} strokeLinecap="round" />
+      <circle cx={sx} cy={sy} r={r} fill={col} stroke="#0f172a" strokeWidth={1} />
+      <text x={sx + arm + 4} y={sy} dominantBaseline="central" fontSize={fs} fill={col} fontFamily="system-ui,sans-serif">{hLabel}</text>
+      <text x={sx} y={sy + vy + (vUp ? -4 : 4)} textAnchor="middle" dominantBaseline={vUp ? 'auto' : 'hanging'} fontSize={fs} fill={col} fontFamily="system-ui,sans-serif">{vLabel}</text>
+    </g>
+  )
+}
+
 // ── Resolved views ────────────────────────────────────────────────────────────
 
 function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint }: {
@@ -395,6 +404,8 @@ function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPartId, o
     stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
+
+  const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
     e.stopPropagation()
@@ -481,6 +492,9 @@ function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPartId, o
       <line x1={ox-20} y1={oy+dy} x2={ox+dx+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" style={{ pointerEvents: 'none' }} />
       {dimH(ox, ox+dx, oy-35, `${dx}mm`, true)}
       {dimV(ox-50, oy, oy+dy, `${dy}mm`)}
+      {selOrigin != null && selOrigin.x != null && selOrigin.y != null && (
+        <OriginMarker sx={ox + selOrigin.x} sy={oy + dy - selOrigin.y} hLabel="X" vLabel="Y" />
+      )}
       {viewLabel(ox+dx/2, vh-14, 'ELEVATION — WIDTH × HEIGHT')}
     </svg>
   )
@@ -514,6 +528,8 @@ function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, onParts
     stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
+
+  const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
     e.stopPropagation()
@@ -590,6 +606,9 @@ function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, onParts
         fontSize={18} fill="#374151" fontFamily="system-ui,sans-serif">ACCESS</text>
       {dimH(ox, ox + dx, oz + dz + 50, `${dx}mm`)}
       {dimV(ox - 50, oz, oz + dz, `${dz}mm`)}
+      {selOrigin != null && selOrigin.x != null && selOrigin.z != null && (
+        <OriginMarker sx={ox + selOrigin.x} sy={oz + selOrigin.z} hLabel="X" vLabel="Z" vUp={false} />
+      )}
       {viewLabel(ox + dx/2, vh - 14, 'TOP — WIDTH × DEPTH')}
     </svg>
   )
@@ -635,6 +654,8 @@ function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId, onPart
     stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
+
+  const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
     e.stopPropagation()
@@ -727,6 +748,9 @@ function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId, onPart
           </g>
         )
       })}
+      {selOrigin != null && selOrigin.z != null && selOrigin.y != null && (
+        <OriginMarker sx={oz + selOrigin.z} sy={oy + dy - selOrigin.y} hLabel="Z" vLabel="Y" />
+      )}
     </svg>
   )
 }
@@ -848,97 +872,6 @@ function SideView({ cab }: { cab: CabinetInstance }) {
   )
 }
 
-function SectionFaceView({ cab }: { cab: CabinetInstance }) {
-  const { dx, dy, has_carcass, has_face, has_toekick, assembly_class, top_type } = cab
-  const isBase = assembly_class === 'base' || assembly_class === 'base_corner'
-  const carcH = isBase ? dy - TKH : dy
-  const vw = dx + L + R
-  const vh = dy + T + B
-  const x0 = L, y0 = T
-  const hid = 'h-sf'
-
-  return (
-    <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
-      <defs><Hatch id={hid} /></defs>
-      <rect x={x0} y={y0} width={dx} height={carcH} fill={C_INT} />
-      {isBase && has_toekick && (
-        <rect x={x0} y={y0 + carcH} width={dx} height={TKH} fill="#080f1a" stroke={C_STROKE} strokeWidth={1} />
-      )}
-      {has_carcass && <>
-        <rect x={x0} y={y0} width={PT} height={carcH} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} />
-        <rect x={x0 + dx - PT} y={y0} width={PT} height={carcH} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} />
-        {top_type === 'full_top'
-          ? <rect x={x0} y={y0} width={dx} height={PT} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} />
-          : <>
-              <rect x={x0} y={y0} width={FFS} height={PT} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} />
-              <rect x={x0 + dx - FFS} y={y0} width={FFS} height={PT} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} />
-            </>
-        }
-        {isBase && <rect x={x0} y={y0 + carcH - PT} width={dx} height={PT} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} />}
-      </>}
-      {has_face && <>
-        <rect x={x0} y={y0} width={FFS} height={carcH} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={2} opacity={0.8} />
-        <rect x={x0 + dx - FFS} y={y0} width={FFS} height={carcH} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={2} opacity={0.8} />
-        <rect x={x0 + FFS} y={y0} width={dx - FFS*2} height={FFR} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} opacity={0.8} />
-        <rect x={x0 + FFS} y={y0 + carcH - FFR} width={dx - FFS*2} height={FFR} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} opacity={0.8} />
-      </>}
-      <rect x={x0} y={y0} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={2} />
-      <line x1={x0-20} y1={y0+dy} x2={x0+dx+20} y2={y0+dy} stroke="#334155" strokeWidth={2} strokeDasharray="10 5" />
-      <line x1={0} y1={y0-14} x2={vw} y2={y0-14} stroke="#3b82f6" strokeWidth={1} strokeDasharray="14 5" opacity={0.4} />
-      {dimH(x0, x0+dx, y0-60, `${dx}mm`, true)}
-      {dimV(x0-50, y0, y0+dy, `${dy}mm`)}
-      {viewLabel(x0+dx/2, vh-14, 'SECTION FACE — cut at face plane')}
-    </svg>
-  )
-}
-
-function SectionInteriorView({ cab }: { cab: CabinetInstance }) {
-  const { dz, dy, has_carcass, has_face, has_toekick, assembly_class, top_type } = cab
-  const isBase = assembly_class === 'base' || assembly_class === 'base_corner'
-  const carcH = isBase ? dy - TKH : dy
-  const vw = dz + L + R + 60
-  const vh = dy + T + B
-  const x0 = L, y0 = T
-  const hid = 'h-si'
-  const wallW = 50
-
-  return (
-    <svg viewBox={`0 0 ${vw} ${vh}`} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
-      <defs><Hatch id={hid} /></defs>
-      <rect x={x0 - wallW} y={y0} width={wallW} height={dy} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} />
-      <text x={x0 - wallW/2} y={y0 + dy/2} textAnchor="middle" dominantBaseline="central" fontSize={18} fill="#475569" fontFamily="system-ui,sans-serif"
-        transform={`rotate(-90,${x0 - wallW/2},${y0 + dy/2})`}>WALL</text>
-      <rect x={x0} y={y0} width={dz} height={carcH} fill={C_INT} />
-      {isBase && has_toekick && (
-        <rect x={x0} y={y0 + carcH} width={dz} height={TKH} fill="#080f1a" stroke={C_STROKE} strokeWidth={1} />
-      )}
-      {has_carcass && <>
-        <rect x={x0} y={y0} width={BT} height={dy} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} />
-        {top_type === 'full_top'
-          ? <rect x={x0} y={y0} width={dz} height={PT} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} />
-          : <>
-              <rect x={x0} y={y0} width={BT+PT} height={PT} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} />
-              <rect x={x0 + dz - FF - PT} y={y0} width={FF+PT} height={PT} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} />
-            </>
-        }
-        {isBase && <rect x={x0} y={y0 + carcH - PT} width={dz} height={PT} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={1.5} />}
-        {isBase && has_toekick && (
-          <rect x={x0 + dz - 60} y={y0 + carcH} width={60} height={TKH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} />
-        )}
-      </>}
-      {has_face && (
-        <rect x={x0 + dz - FF} y={y0} width={FF} height={carcH} fill={`url(#${hid})`} stroke={C_CUT} strokeWidth={2} opacity={0.8} />
-      )}
-      <rect x={x0} y={y0} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={2} />
-      <line x1={x0-20} y1={y0+dy} x2={x0+dz+20} y2={y0+dy} stroke="#334155" strokeWidth={2} strokeDasharray="10 5" />
-      <line x1={0} y1={y0-14} x2={vw} y2={y0-14} stroke="#3b82f6" strokeWidth={1} strokeDasharray="14 5" opacity={0.4} />
-      {dimH(x0, x0+dz, y0-60, `${dz}mm`, true)}
-      {dimV(x0+dz+55, y0, y0+dy, `${dy}mm`, true)}
-      {viewLabel(x0+dz/2, vh-14, 'SECTION INTERIOR — cut at mid-width')}
-    </svg>
-  )
-}
-
 // ── PARTS LIST ────────────────────────────────────────────────────────────────
 
 const PART_LABEL: Record<string, string> = {
@@ -967,6 +900,7 @@ const SECTION_COLOR: Record<string, string> = {
   face:      '#60a5fa',
   drawerbox: '#22c55e',
   slide:     '#d97706',
+  custom:    '#a78bfa',
 }
 
 function EBDots({ t, b, l, r }: { t: boolean; b: boolean; l: boolean; r: boolean }) {
@@ -1020,8 +954,205 @@ function PartRow({ name, material, dy, dx, dz, eb }: {
   )
 }
 
-function PartsView({ rp }: { rp: ResolvedCabinet }) {
-  const [matNames, setMatNames] = useState<Record<string, string>>({})
+// ── Add Part Dialog ───────────────────────────────────────────────────────────
+
+interface LibraryPart {
+  id: string; key: string; name: string; category: string
+  edge_top: boolean; edge_bottom: boolean; edge_left: boolean; edge_right: boolean
+}
+
+interface MatOption { id: string; name: string; dz: number; face_colour: string | null }
+
+const CAT_LABELS: Record<string, string> = {
+  all: 'All', assembly: 'Assembly', drawer_box: 'Drawer Box', benchtop: 'Benchtop',
+  doors: 'Doors', shelves: 'Shelves', toekick: 'Toekick',
+  slides: 'Slides', hinges: 'Hinges', misc: 'Misc', other: 'Other',
+}
+
+function AddPartDialog({ cabinetId, onAdd, onClose }: {
+  cabinetId: string
+  onAdd:     (part: CabinetCustomPart) => void
+  onClose:   () => void
+}) {
+  const [libParts,  setLibParts]  = useState<LibraryPart[]>([])
+  const [mats,      setMats]      = useState<MatOption[]>([])
+  const [catFilter, setCatFilter] = useState('all')
+  const [search,    setSearch]    = useState('')
+  const [sel,       setSel]       = useState<LibraryPart | null>(null)
+  const [nameOver,  setNameOver]  = useState('')
+  const [dy,        setDy]        = useState(0)
+  const [dx,        setDx]        = useState(0)
+  const [matId,     setMatId]     = useState('')
+  const [eTop,      setETop]      = useState(false)
+  const [eBot,      setEBot]      = useState(false)
+  const [eLeft,     setELeft]     = useState(false)
+  const [eRight,    setERight]    = useState(false)
+  const [visible,   setVisible]   = useState(true)
+  const [saving,    setSaving]    = useState(false)
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('parts_library').select('id,key,name,category,edge_top,edge_bottom,edge_left,edge_right').eq('active', true).order('name'),
+      supabase.from('materials').select('id,name,dz,face_colour').eq('active', true).order('name'),
+    ]).then(([{ data: p }, { data: m }]) => {
+      setLibParts((p ?? []) as LibraryPart[])
+      setMats((m ?? []) as MatOption[])
+    })
+  }, [])
+
+  function pickPart(p: LibraryPart) {
+    setSel(p); setNameOver('')
+    setETop(p.edge_top); setEBot(p.edge_bottom); setELeft(p.edge_left); setERight(p.edge_right)
+  }
+
+  const cats    = ['all', ...Array.from(new Set(libParts.map(p => p.category)))]
+  const visible2 = libParts.filter(p =>
+    (catFilter === 'all' || p.category === catFilter) &&
+    (!search || p.name.toLowerCase().includes(search.toLowerCase()))
+  )
+  const matDz = mats.find(m => m.id === matId)?.dz ?? 0
+
+  async function handleAdd() {
+    if (!sel) return
+    setSaving(true)
+    const { data: ex } = await supabase
+      .from('cabinet_custom_parts').select('sort_order')
+      .eq('cabinet_instance_id', cabinetId).order('sort_order', { ascending: false }).limit(1)
+    const nextOrder = ex && ex.length > 0 ? ex[0].sort_order + 1 : 0
+    const result = await dbAddCustomPart({
+      cabinet_instance_id: cabinetId, part_library_id: sel.id,
+      name: nameOver.trim() || null, dy, dx,
+      material_id: matId || null,
+      edge_top: eTop, edge_bottom: eBot, edge_left: eLeft, edge_right: eRight,
+      visible, sort_order: nextOrder,
+    })
+    if (result) onAdd(result)
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6"
+         onClick={onClose}>
+      <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh]"
+           onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+          <span className="text-sm font-semibold text-white">Add Part</span>
+          <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none">✕</button>
+        </div>
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left: library browser */}
+          <div className="w-56 flex-none border-r border-gray-700 flex flex-col">
+            <div className="flex flex-wrap gap-0.5 p-2 border-b border-gray-700">
+              {cats.map(c => (
+                <button key={c} onClick={() => setCatFilter(c)}
+                  className={`px-2 py-0.5 text-[10px] rounded transition-colors ${
+                    catFilter === c ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-200 hover:bg-gray-800'
+                  }`}>
+                  {CAT_LABELS[c] ?? c}
+                </button>
+              ))}
+            </div>
+            <div className="px-2 py-1.5 border-b border-gray-700">
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search…"
+                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {visible2.map(p => (
+                <button key={p.id} onClick={() => pickPart(p)}
+                  className={`w-full text-left px-3 py-2 text-xs border-b border-gray-800/50 transition-colors ${
+                    sel?.id === p.id ? 'bg-blue-600/20 text-blue-300' : 'text-gray-300 hover:bg-gray-800/60'
+                  }`}>
+                  {p.name}
+                  <span className="block text-[9px] text-gray-600 mt-0.5">{CAT_LABELS[p.category] ?? p.category}</span>
+                </button>
+              ))}
+              {visible2.length === 0 && <p className="px-3 py-4 text-xs text-gray-600">No parts found</p>}
+            </div>
+          </div>
+          {/* Right: form */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {!sel ? (
+              <p className="text-xs text-gray-600 pt-6 text-center">Select a part from the list</p>
+            ) : (<>
+              <div>
+                <p className="text-[10px] text-gray-500 mb-0.5">Selected</p>
+                <p className="text-sm font-medium text-white">{sel.name}</p>
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">Name override (optional)</label>
+                <input type="text" value={nameOver} onChange={e => setNameOver(e.target.value)}
+                  placeholder={sel.name}
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] text-gray-500 mb-1">Width DY (mm)</label>
+                  <input type="number" value={dy} step="0.5"
+                    onChange={e => setDy(parseFloat(e.target.value) || 0)}
+                    onFocus={e => e.target.select()}
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white font-mono text-right focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-gray-500 mb-1">Height DX (mm)</label>
+                  <input type="number" value={dx} step="0.5"
+                    onChange={e => setDx(parseFloat(e.target.value) || 0)}
+                    onFocus={e => e.target.select()}
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white font-mono text-right focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">Material</label>
+                <select value={matId} onChange={e => setMatId(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                  <option value="">— none —</option>
+                  {mats.map(m => (
+                    <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
+                  ))}
+                </select>
+                {matDz > 0 && (
+                  <p className="text-[10px] text-gray-600 mt-0.5">Thickness DZ: {matDz}mm (from material)</p>
+                )}
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 mb-1.5">Edge Band</p>
+                <div className="flex items-center gap-4">
+                  {([['Top', eTop, setETop], ['Bot', eBot, setEBot], ['Left', eLeft, setELeft], ['Right', eRight, setERight]] as [string, boolean, (v: boolean) => void][]).map(([lbl, val, set]) => (
+                    <label key={lbl} className="flex items-center gap-1 cursor-pointer">
+                      <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="accent-amber-500 w-3 h-3" />
+                      <span className="text-[10px] text-gray-400">{lbl}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={visible} onChange={e => setVisible(e.target.checked)} className="accent-blue-500 w-3.5 h-3.5" />
+                <span className="text-xs text-gray-300">Visible in 3D / elevation</span>
+              </label>
+            </>)}
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-700">
+          <button onClick={onClose} className="px-4 py-1.5 text-xs text-gray-400 hover:text-white transition-colors">Cancel</button>
+          <button onClick={handleAdd} disabled={!sel || saving}
+            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs rounded transition-colors">
+            {saving ? 'Adding…' : 'Add Part'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Parts View ────────────────────────────────────────────────────────────────
+
+function PartsView({ rp, cabinetId }: { rp: ResolvedCabinet; cabinetId: string }) {
+  const [matNames,    setMatNames]    = useState<Record<string, string>>({})
+  const [matDzMap,    setMatDzMap]    = useState<Record<string, number>>({})
+  const [matColours,  setMatColours]  = useState<Record<string, string | null>>({})
+  const [customParts, setCustomParts] = useState<CabinetCustomPart[]>([])
+  const [libNames,    setLibNames]    = useState<Record<string, string>>({})
+  const [showAdd,     setShowAdd]     = useState(false)
 
   useEffect(() => {
     const ids = new Set<string>()
@@ -1029,29 +1160,67 @@ function PartsView({ rp }: { rp: ResolvedCabinet }) {
     rp.toekick_parts.forEach(p => ids.add(p.material_id))
     rp.internal_parts.forEach(p => ids.add(p.material_id))
     rp.face_zones.forEach(z    => ids.add(z.material_id))
-    ;(rp.drawer_stacks ?? []).forEach(stack => stack.box_parts.forEach(p => ids.add(p.material_id)))
+    ;(rp.drawer_stacks ?? []).forEach(s => s.box_parts.forEach(p => ids.add(p.material_id)))
     if (ids.size === 0) return
-    supabase.from('materials').select('id,name').in('id', [...ids]).then(({ data }) => {
+    supabase.from('materials').select('id,name,dz,face_colour').in('id', [...ids]).then(({ data }) => {
       if (!data) return
-      const map: Record<string, string> = {}
-      for (const m of data) map[m.id] = m.name
-      setMatNames(map)
+      const names: Record<string, string>       = {}
+      const dzs:   Record<string, number>       = {}
+      const cols:  Record<string, string | null> = {}
+      for (const m of data) { names[m.id] = m.name; dzs[m.id] = m.dz; cols[m.id] = m.face_colour }
+      setMatNames(names); setMatDzMap(dzs); setMatColours(cols)
     })
   }, [rp])
+
+  useEffect(() => {
+    dbLoadCustomParts(cabinetId).then(parts => {
+      setCustomParts(parts)
+      const libIds = [...new Set(parts.map(p => p.part_library_id))]
+      if (libIds.length > 0) {
+        supabase.from('parts_library').select('id,name').in('id', libIds).then(({ data }) => {
+          if (data) setLibNames(Object.fromEntries(data.map(r => [r.id, r.name])))
+        })
+      }
+      const matIds = [...new Set(parts.map(p => p.material_id).filter(Boolean))] as string[]
+      if (matIds.length > 0) {
+        supabase.from('materials').select('id,name,dz,face_colour').in('id', matIds).then(({ data }) => {
+          if (!data) return
+          setMatNames(prev => { const n = { ...prev }; data.forEach(m => { n[m.id] = m.name }); return n })
+          setMatDzMap(prev => { const n = { ...prev }; data.forEach(m => { n[m.id] = m.dz }); return n })
+          setMatColours(prev => { const n = { ...prev }; data.forEach(m => { n[m.id] = m.face_colour }); return n })
+        })
+      }
+    })
+  }, [cabinetId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleToggleVisible(part: CabinetCustomPart) {
+    const next = !part.visible
+    await dbUpdateCustomPart(part.id, { visible: next })
+    setCustomParts(prev => prev.map(p => p.id === part.id ? { ...p, visible: next } : p))
+  }
+
+  async function handleDeleteCustom(id: string) {
+    await dbDeleteCustomPart(id)
+    setCustomParts(prev => prev.filter(p => p.id !== id))
+  }
 
   const mat = (id: string) => matNames[id] ?? '—'
 
   const faceCount      = rp.face_zones.filter(z => z.face_type !== 'open').length
   const drawerBoxCount = (rp.drawer_stacks ?? []).reduce((n, s) => n + s.box_parts.length, 0)
   const slideCount     = (rp.drawer_stacks ?? []).reduce((n, s) => n + s.slides.length, 0)
-  const totalParts     = rp.case_parts.length + rp.toekick_parts.length + rp.internal_parts.length + faceCount + drawerBoxCount + slideCount
+  const totalResolved  = rp.case_parts.length + rp.toekick_parts.length + rp.internal_parts.length + faceCount + drawerBoxCount + slideCount
 
   return (
     <div className="w-full h-full overflow-auto p-4">
       <div className="text-[10px] text-gray-500 mb-3 flex items-center gap-3">
-        <span>{totalParts} parts total</span>
-        {rp.errors.length > 0 && <span className="text-red-400">{rp.errors.length} resolver error{rp.errors.length !== 1 ? 's' : ''}</span>}
+        <span>{totalResolved} resolved · {customParts.length} custom</span>
+        {rp.errors.length > 0   && <span className="text-red-400">{rp.errors.length} error{rp.errors.length !== 1 ? 's' : ''}</span>}
         {rp.warnings.length > 0 && <span className="text-amber-400">{rp.warnings.length} warning{rp.warnings.length !== 1 ? 's' : ''}</span>}
+        <button onClick={() => setShowAdd(true)}
+          className="ml-auto px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors">
+          + Add Part
+        </button>
       </div>
       {rp.errors.length > 0 && (
         <div className="mb-3 rounded bg-red-950/60 border border-red-800 px-3 py-2 text-xs text-red-300 space-y-0.5">
@@ -1133,11 +1302,70 @@ function PartsView({ rp }: { rp: ResolvedCabinet }) {
               )}
             </>
           )}
+          {customParts.length > 0 && (
+            <>
+              <SectionHeader color={SECTION_COLOR.custom} title="Custom Parts" count={customParts.length} />
+              {customParts.map(p => {
+                const displayName = p.name ?? libNames[p.part_library_id] ?? '?'
+                const dz = matDzMap[p.material_id ?? ''] ?? 0
+                const colour = matColours[p.material_id ?? '']
+                return (
+                  <tr key={p.id} className="border-t border-gray-800/60 hover:bg-gray-800/30">
+                    <td className="px-3 py-1.5 text-xs text-gray-300">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => handleToggleVisible(p)} title={p.visible ? 'Visible — click to hide' : 'Hidden — click to show'}
+                          className={`w-3.5 h-3.5 rounded-sm border flex-none transition-colors ${p.visible ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`} />
+                        {displayName}
+                      </div>
+                    </td>
+                    <td className="px-3 py-1.5 text-xs text-gray-400">
+                      <div className="flex items-center gap-1.5">
+                        {colour && <span className="w-3 h-3 rounded-sm flex-none border border-gray-600 inline-block" style={{ background: colour }} />}
+                        {mat(p.material_id ?? '')}
+                      </div>
+                    </td>
+                    <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{Number(p.dy).toFixed(1)}</td>
+                    <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-200">{Number(p.dx).toFixed(1)}</td>
+                    <td className="px-3 py-1.5 text-xs font-mono text-right text-gray-400">{dz.toFixed(1)}</td>
+                    <td className="px-3 py-1.5">
+                      <div className="flex items-center gap-1">
+                        <EBDots t={p.edge_top} b={p.edge_bottom} l={p.edge_left} r={p.edge_right} />
+                        <button onClick={() => handleDeleteCustom(p.id)}
+                          className="ml-2 text-gray-600 hover:text-red-400 text-xs leading-none transition-colors" title="Remove">✕</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </>
+          )}
         </tbody>
       </table>
       <p className="mt-4 text-[10px] text-gray-600">
-        W = DY (width) · H = DX (height/depth) · T = DZ (thickness) · all mm
+        W = DY (width) · H = DX (height/depth) · T = DZ (thickness) · all mm · blue square = visible toggle
       </p>
+      {showAdd && (
+        <AddPartDialog
+          cabinetId={cabinetId}
+          onAdd={part => {
+            setCustomParts(prev => [...prev, part])
+            supabase.from('parts_library').select('id,name').eq('id', part.part_library_id).single()
+              .then(({ data }) => { if (data) setLibNames(prev => ({ ...prev, [data.id]: data.name })) })
+            if (part.material_id) {
+              supabase.from('materials').select('id,name,dz,face_colour').eq('id', part.material_id).single()
+                .then(({ data: m }) => {
+                  if (m) {
+                    setMatNames(prev => ({ ...prev, [m.id]: m.name }))
+                    setMatDzMap(prev => ({ ...prev, [m.id]: m.dz }))
+                    setMatColours(prev => ({ ...prev, [m.id]: m.face_colour }))
+                  }
+                })
+            }
+            setShowAdd(false)
+          }}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
     </div>
   )
 }
@@ -1150,7 +1378,7 @@ export default function CabinetEditModal({
   wall: Wall | null
   wallCabinets: CabinetInstance[]
   resolvedCabinet?: ResolvedCabinet
-  initialView?: ViewId
+  initialView?: ViewId | 'joints'
   onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onClose: () => void
@@ -1168,7 +1396,7 @@ export default function CabinetEditModal({
   const prevPartRef     = useRef<PartMeta | null>(null)
   const originalEdgeRef = useRef<PartEdge | null>(null)
 
-  const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face'
+  const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face' && activeView !== 'joints'
 
   // If parent didn't supply resolved data, resolve now so the interactive views work
   useEffect(() => {
@@ -1216,7 +1444,12 @@ export default function CabinetEditModal({
     setSelectedSVGPart(prev => prev ? { ...prev, edge } : null)
   }
 
-  const rp = resolvedCabinet ?? localRp ?? undefined
+  // Hold the last known-good resolved data so the 3D view never blanks while the
+  // parent re-resolves after a field edit (resolvedCabinet briefly becomes undefined).
+  const lastRpRef = useRef<ResolvedCabinet | undefined>(undefined)
+  const currentRp = resolvedCabinet ?? localRp ?? undefined
+  if (currentRp !== undefined) lastRpRef.current = currentRp
+  const rp = currentRp ?? lastRpRef.current
 
   return (
     <div
@@ -1268,7 +1501,7 @@ export default function CabinetEditModal({
                 </button>
               )
             })}
-            {isOrthoView && rp && (
+            {(isOrthoView || activeView === 'face') && rp && (
               <div className="ml-auto flex items-center gap-1.5">
                 <button
                   onClick={() => setWireMode(w => !w)}
@@ -1298,9 +1531,10 @@ export default function CabinetEditModal({
           {/* Content */}
           <div
             className={`flex-1 overflow-hidden relative ${
-              activeView === 'parts' ? 'bg-gray-900'
-              : activeView === '3d'  ? 'bg-gray-950'
-              : activeView === 'face' ? 'bg-gray-950'
+              activeView === 'parts'   ? 'bg-gray-900'
+              : activeView === '3d'    ? 'bg-gray-950'
+              : activeView === 'face'  ? 'bg-gray-950'
+              : activeView === 'joints' ? 'bg-gray-900'
               : 'flex items-center justify-center bg-gray-950 p-6'
             }`}
             onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null) } : undefined}
@@ -1320,11 +1554,10 @@ export default function CabinetEditModal({
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint} />
               : <SideView cab={cabinet} />
             )}
-            {activeView === 'section-face'     && <SectionFaceView     cab={cabinet} />}
-            {activeView === 'section-interior' && <SectionInteriorView cab={cabinet} />}
-            {activeView === 'face'             && <FaceGridEditor cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
+            {activeView === 'face' && <FaceGridEditor cabinet={cabinet} rp={rp} showInternals={showInternals} onUpdate={onUpdate} />}
             {activeView === '3d'               && rp && <Cabinet3DView cab={cabinet} rp={rp} materialColours={materialColours} ebByMatId={ebByMatId} />}
-            {activeView === 'parts'            && rp && <PartsView rp={rp} />}
+            {activeView === 'parts'            && rp && <PartsView rp={rp} cabinetId={cabinet.id} />}
+            {activeView === 'joints'           && <JointsPanel cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
             {/* Part info panel overlay */}
             {selectedSVGPart && isOrthoView && (
               <PartPropertiesPanel
@@ -1356,6 +1589,173 @@ export default function CabinetEditModal({
             onUpdate={onUpdate}
             onDelete={async id => { await onDelete(id); onClose() }}
           />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── JointsPanel ───────────────────────────────────────────────────────────────
+// Per-cabinet seam joint overrides. Inherits from construction method defaults;
+// individual seams can be overridden (specific joint type) or suppressed (null).
+
+function JointsPanel({ cabinet, rp, onUpdate }: {
+  cabinet:  CabinetInstance
+  rp:       ResolvedCabinet | undefined
+  onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
+}) {
+  const [jointTypes, setJointTypes] = useState<{ id: string; name: string }[]>([])
+  const [cmDefaults, setCmDefaults] = useState<Record<string, string>>({})
+  const [loading,    setLoading]    = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const [{ data: jt }, { data: shop }] = await Promise.all([
+        supabase.from('joint_types').select('id, name').order('name'),
+        supabase.from('shop_settings').select('construction_schedule_id').limit(1).maybeSingle(),
+      ])
+      setJointTypes(jt ?? [])
+      const schedId = shop?.construction_schedule_id
+      if (schedId) {
+        const rawCls = cabinet.assembly_class.replace('_corner', '')
+        const cls: 'base' | 'wall' | 'tall' =
+          rawCls === 'base' || rawCls === 'wall' || rawCls === 'tall' ? rawCls : 'base'
+        const { data: row } = await supabase
+          .from('construction_method_schedule_rows')
+          .select('joint_defaults')
+          .eq('schedule_id', schedId)
+          .eq('assembly_class', cls)
+          .maybeSingle()
+        setCmDefaults((row?.joint_defaults ?? {}) as Record<string, string>)
+      }
+      setLoading(false)
+    }
+    load()
+  }, [cabinet.assembly_class])
+
+  const carcaseJoints = (cabinet.carcase_joints ?? {}) as Record<string, string | null>
+  const seams = rp ? computeElevSeams(rp) : []
+
+  function getSeamState(seamKey: string): { status: 'cabinet' | 'method' | 'suppressed' | 'none'; jointId: string | null } {
+    const genericKey = toGenericSeamKey(seamKey)
+    if (Object.prototype.hasOwnProperty.call(carcaseJoints, seamKey)) {
+      const v = carcaseJoints[seamKey]
+      return v === null
+        ? { status: 'suppressed', jointId: null }
+        : { status: 'cabinet',   jointId: v }
+    }
+    const inherited = cmDefaults[genericKey] ?? cmDefaults[seamKey] ?? null
+    return inherited
+      ? { status: 'method', jointId: inherited }
+      : { status: 'none',   jointId: null }
+  }
+
+  function setSeamOverride(seamKey: string, value: string | null | 'clear') {
+    const next = { ...carcaseJoints }
+    if (value === 'clear') delete next[seamKey]
+    else next[seamKey] = value
+    void onUpdate(cabinet.id, { carcase_joints: next })
+  }
+
+  if (!rp) {
+    return (
+      <div className="p-6 text-xs text-gray-500 italic">
+        {loading ? 'Loading…' : 'Cabinet resolving — please wait a moment.'}
+      </div>
+    )
+  }
+  if (seams.length === 0) {
+    return <div className="p-6 text-xs text-gray-500 italic">No carcase seams found for this cabinet.</div>
+  }
+
+  return (
+    <div className="overflow-y-auto h-full">
+      <div className="px-5 py-4">
+        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Carcase Seam Joints</p>
+        <p className="text-[10px] text-gray-600 mb-4 leading-snug">
+          Override or suppress the joint type per seam. Unset seams inherit from the active construction method.
+        </p>
+
+        {jointTypes.length === 0 && !loading && (
+          <p className="text-xs text-gray-600 italic mb-4">No joint types in library — add them in Library → Joints first.</p>
+        )}
+
+        <div className="space-y-1.5">
+          {seams.map(seam => {
+            const state    = getSeamState(seam.key)
+            const jointName = state.jointId
+              ? (jointTypes.find(j => j.id === state.jointId)?.name ?? state.jointId)
+              : null
+            const isSet = state.status === 'cabinet' || state.status === 'suppressed'
+
+            const dotCls = state.status === 'cabinet'    ? 'bg-green-400'
+                         : state.status === 'method'     ? 'bg-amber-400'
+                         : state.status === 'suppressed' ? 'bg-red-400'
+                         : 'bg-gray-700'
+
+            return (
+              <div key={seam.key}
+                className={`rounded-lg px-3 py-2.5 transition-colors ${isSet ? 'bg-gray-800/70' : 'bg-gray-800/30 hover:bg-gray-800/50'}`}
+              >
+                {/* Row header */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-1.5 h-1.5 rounded-full flex-none ${dotCls}`} />
+                  <span className={`text-xs flex-1 ${isSet ? 'text-gray-200' : 'text-gray-400'}`}>
+                    {seam.label}
+                    {seam.isBack && <span className="ml-1 text-[10px] text-gray-600">(back)</span>}
+                  </span>
+                  {isSet && (
+                    <button
+                      onClick={() => setSeamOverride(seam.key, 'clear')}
+                      className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      Use default
+                    </button>
+                  )}
+                </div>
+
+                {/* Override picker + suppress button */}
+                <div className="flex gap-1.5">
+                  <select
+                    value={state.status === 'cabinet' ? (state.jointId ?? '') : ''}
+                    onChange={e => setSeamOverride(seam.key, e.target.value || null)}
+                    className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 min-w-0"
+                  >
+                    <option value="">
+                      {state.status === 'method'     ? `← ${jointName} (method default)`
+                       : state.status === 'suppressed' ? 'No joint (suppressed)'
+                       : '— Use method default —'}
+                    </option>
+                    {jointTypes.map(j => (
+                      <option key={j.id} value={j.id}>{j.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => setSeamOverride(seam.key, null)}
+                    title="Suppress — no joint on this seam"
+                    className={`px-2 py-1 text-xs rounded border transition-colors shrink-0 ${
+                      state.status === 'suppressed'
+                        ? 'border-red-700 bg-red-900/30 text-red-300'
+                        : 'border-gray-600 text-gray-500 hover:border-red-700 hover:bg-red-900/20 hover:text-red-300'
+                    }`}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Status line */}
+                {state.status === 'cabinet' && (
+                  <p className="text-[10px] mt-1.5 text-green-500">Override: {jointName}</p>
+                )}
+                {state.status === 'method' && (
+                  <p className="text-[10px] mt-1.5 text-amber-500">Inherited: {jointName}</p>
+                )}
+                {state.status === 'suppressed' && (
+                  <p className="text-[10px] mt-1.5 text-red-500">Suppressed — no joint on this seam</p>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>

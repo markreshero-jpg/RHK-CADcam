@@ -25,7 +25,7 @@ import { resolveDrawerBox } from './resolveDrawerBox'
 
 
 function findSlide(
-  depth: number,
+  availableDepth: number,
   openingHeight: number,
   products: SlideProduct[],
   schedule: SlideScheduleEntry[],
@@ -35,11 +35,11 @@ function findSlide(
     return products.find(p => p.id === productId) ?? null
   }
   if (schedule.length > 0) {
-    // Step 1: smallest depth_threshold >= drawer depth (NL selection)
-    const eligible = schedule.filter(e => e.depth_threshold >= depth)
+    // Step 1: largest depth_threshold <= available depth (longest NL that fits)
+    const eligible = schedule.filter(e => e.depth_threshold <= availableDepth)
     if (eligible.length > 0) {
-      const minDepth = Math.min(...eligible.map(e => e.depth_threshold))
-      const atDepth  = eligible.filter(e => e.depth_threshold === minDepth)
+      const maxDepth = Math.max(...eligible.map(e => e.depth_threshold))
+      const atDepth  = eligible.filter(e => e.depth_threshold === maxDepth)
       // Step 2: tallest height_threshold that still fits in the opening
       const fitting  = atDepth.filter(e => e.height_threshold <= openingHeight)
       const pool     = fitting.length > 0 ? fitting : atDepth  // best-effort if nothing fits
@@ -48,12 +48,13 @@ function findSlide(
       return products.find(p => p.id === entry.slide_id) ?? null
     }
   }
-  // Fallback: product whose depth range includes this depth
+  // Fallback: longest NL product that fits within available depth
   return (
-    products.find(p =>
-      (p.min_runner_depth == null || depth >= p.min_runner_depth) &&
-      (p.max_runner_depth == null || depth <= p.max_runner_depth)
-    ) ?? products[0] ?? null
+    products
+      .filter(p => p.nominal_length != null && p.nominal_length <= availableDepth)
+      .sort((a, b) => (b.nominal_length ?? 0) - (a.nominal_length ?? 0))[0]
+    ?? products[0]
+    ?? null
   )
 }
 
@@ -66,7 +67,9 @@ export function resolveDrawerStacks(
   if (drawerZones.length === 0) return []
 
   const T            = cab.material.DZ
-  const IDRUN        = r.IDRUN
+  // Internal depth: from back panel inner face to front edge of case
+  const internalDepth  = cab.DZ - T - r.SCRBK
+  const availableDepth = internalDepth - r.SLIDE_SETBACK
   const slideProducts = cab.slide_products ?? []
   const slideSchedule = cab.slide_schedule ?? []
   const drawerMat    = cab.drawer_material ?? cab.material
@@ -81,14 +84,14 @@ export function resolveDrawerStacks(
     const config = zoneInput?.drawer_type_config
     const drawerType: DrawerType = config?.type ?? cab.default_drawer_type ?? 'system'
 
-    const slide = findSlide(IDRUN, openingHeight, slideProducts, slideSchedule, config?.slide_product_id)
+    const openingHeight = zone.DX
+    const slide = findSlide(availableDepth, openingHeight, slideProducts, slideSchedule, config?.slide_product_id)
 
     const sideDeduction  = slide?.side_deduction   ?? cab.slide_side_deduction
     const runnerThick    = slide?.runner_thickness  ?? 0
-    const nominalLength  = slide?.nominal_length    ?? IDRUN
+    const nominalLength  = slide?.nominal_length    ?? availableDepth
 
     // Box height: system drawer uses slide.box_height; five_piece uses opening minus adjustment
-    const openingHeight = zone.DX
     let boxHeight: number
     if (drawerType === 'system') {
       boxHeight = slide?.box_height ?? 128
@@ -98,7 +101,7 @@ export function resolveDrawerStacks(
 
     // Box width: inner opening (between gables) minus clearances minus runner thickness on each side
     const boxWidth = Math.max(1, cab.DX - 2 * T - r.IDCL - r.IDCR - runnerThick * 2)
-    const boxDepth = IDRUN
+    const boxDepth = nominalLength
 
     // Cabinet-space origin of the box — offset past the left runner so the box sits between the two rails
     const boxX = T + r.IDCL + runnerThick

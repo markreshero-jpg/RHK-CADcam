@@ -33,10 +33,10 @@ const RULE_LABELS: Record<RuleKey, string> = {
   ADJSR:   'Adj. Shelf Right Notch (mm)',
   FIXSB_F: 'Fixed Shelf Front Setback (mm)',
   FIXSB_B: 'Fixed Shelf Back Setback (mm)',
-  IDCL:    'Drawer Box Clearance Left (mm)',
-  IDCR:    'Drawer Box Clearance Right (mm)',
-  IDFAO:   'Drawer Box Face Above Opening (mm)',
-  IDRUN:   'Drawer Box Runner Length (mm)',
+  IDCL:          'Drawer Box Clearance Left (mm)',
+  IDCR:          'Drawer Box Clearance Right (mm)',
+  IDFAO:         'Drawer Box Face Above Opening (mm)',
+  SLIDE_SETBACK: 'Min Depth Behind Slide (mm)',
   REVT:    'Face Reveal Top (mm)',
   REVB:    'Face Reveal Bottom (mm)',
   REVL:    'Face Reveal Left (mm)',
@@ -55,7 +55,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Top Rail',           keys: ['TOP_TYPE', 'RD'] },
   { label: 'Adjustable Shelves', keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },
   { label: 'Fixed Shelves',      keys: ['FIXSB_F', 'FIXSB_B'] },
-  { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'IDRUN'] },
+  { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
   { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR'] },
   { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
 ]
@@ -69,6 +69,21 @@ interface ClassDimDefaults {
 }
 
 type SchedItem = { id: string; name: string; is_default: boolean }
+
+type JobPreset = {
+  id: string
+  name: string
+  construction_schedule_id: string | null
+  drawer_box_method_id: string | null
+  base_assembly_schedule_id: string | null
+  wall_assembly_schedule_id: string | null
+  tall_assembly_schedule_id: string | null
+  drawerbox_schedule_id: string | null
+  inner_drawerbox_schedule_id: string | null
+  handle_schedule_id: string | null
+  slide_schedule_id: string | null
+  hinge_schedule_id: string | null
+}
 
 export default function JobPropertiesModal({ project, initialTab, onClose, onSave }: {
   project: Project
@@ -109,7 +124,6 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   // ── Construction method schedules ─────────────────────────────────────────
   const [constructionSched,   setConstructionSched]   = useState(project.construction_schedule_id ?? '')
   const [drawerBoxMethod,     setDrawerBoxMethod]     = useState(project.drawer_box_method_id ?? '')
-  const [defaultDrawerType,   setDefaultDrawerType]   = useState<'system' | 'five_piece' | ''>(project.default_drawer_type ?? '')
   const [constructionScheds,  setConstructionScheds]  = useState<SchedItem[]>([])
   const [drawerBoxMethods,    setDrawerBoxMethods]    = useState<SchedItem[]>([])
 
@@ -132,12 +146,18 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const [hingeScheds,  setHingeScheds]  = useState<SchedItem[]>([])
   const [schedLoading, setSchedLoading] = useState(false)
 
+  // ── Presets ───────────────────────────────────────────────────────────────
+  const [presets,         setPresets]         = useState<JobPreset[]>([])
+  const [savingDefaults,  setSavingDefaults]  = useState(false)
+  const [savePresetOpen,  setSavePresetOpen]  = useState(false)
+  const [newPresetName,   setNewPresetName]   = useState('')
+
   // ── Load all schedule/method lists on mount ───────────────────────────────
   useEffect(() => {
     let cancelled = false
     async function load() {
       setSchedLoading(true)
-      const [cmsR, dbmR, asmR, hdlR, slR, hiR, dbsR, idbsR] = await Promise.all([
+      const [cmsR, dbmR, asmR, hdlR, slR, hiR, dbsR, idbsR, presetsR] = await Promise.all([
         supabase.from('construction_method_schedules').select('id,name,is_default').order('name'),
         supabase.from('drawer_box_methods').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('assembly_schedules').select('id,name,is_default').eq('active', true).order('name'),
@@ -146,6 +166,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
         supabase.from('hinge_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('drawerbox_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('inner_drawerbox_schedules').select('id,name,is_default').eq('active', true).order('name'),
+        supabase.from('job_presets').select('*').order('name'),
       ])
       if (cancelled) return
       setConstructionScheds(    (cmsR.data  ?? []) as SchedItem[])
@@ -156,6 +177,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       setHingeScheds(           (hiR.data   ?? []) as SchedItem[])
       setDrawerBoxScheds(       (dbsR.data  ?? []) as SchedItem[])
       setInnerDrawerBoxScheds(  (idbsR.data ?? []) as SchedItem[])
+      setPresets(               (presetsR.data ?? []) as JobPreset[])
       setSchedLoading(false)
     }
     load()
@@ -197,7 +219,6 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       },
       construction_schedule_id: constructionSched || null,
       drawer_box_method_id:     drawerBoxMethod  || null,
-      default_drawer_type:      (defaultDrawerType || null) as 'system' | 'five_piece' | null,
       base_assembly_schedule_id:  baseAsmSched   || null,
       wall_assembly_schedule_id:  wallAsmSched   || null,
       tall_assembly_schedule_id:  tallAsmSched   || null,
@@ -208,6 +229,92 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       hinge_schedule_id:  hingeSched  || null,
     })
     onClose()
+  }
+
+  // ── Save as system defaults (per CS sub-tab) ──────────────────────────────
+  async function saveConstructionDefaults() {
+    setSavingDefaults(true)
+    try {
+      // shop_settings stores construction_schedule_id + drawer_box_method_id
+      const { data: ss } = await supabase.from('shop_settings').select('id').limit(1).maybeSingle()
+      if (ss?.id) {
+        await supabase.from('shop_settings').update({
+          construction_schedule_id: constructionSched || null,
+          drawer_box_method_id:     drawerBoxMethod   || null,
+        }).eq('id', ss.id)
+      }
+    } finally {
+      setSavingDefaults(false)
+    }
+  }
+
+  async function saveScheduleDefault(table: string, id: string | null) {
+    if (!id) return
+    await supabase.from(table).update({ is_default: false }).eq('is_default', true)
+    await supabase.from(table).update({ is_default: true }).eq('id', id)
+  }
+
+  async function saveMaterialDefaults() {
+    setSavingDefaults(true)
+    try {
+      // Use base assembly schedule as the shop-wide default (resolver uses a single default)
+      const effectiveAsm = baseAsmSched || wallAsmSched || tallAsmSched
+      await Promise.all([
+        saveScheduleDefault('assembly_schedules',        effectiveAsm),
+        saveScheduleDefault('drawerbox_schedules',       drawerBoxSched),
+        saveScheduleDefault('inner_drawerbox_schedules', innerDbSched),
+      ])
+    } finally {
+      setSavingDefaults(false)
+    }
+  }
+
+  async function saveHardwareDefaults() {
+    setSavingDefaults(true)
+    try {
+      await Promise.all([
+        saveScheduleDefault('handle_schedules', handleSched),
+        saveScheduleDefault('slide_schedules',  slideSched),
+        saveScheduleDefault('hinge_schedules',  hingeSched),
+      ])
+    } finally {
+      setSavingDefaults(false)
+    }
+  }
+
+  // ── Preset helpers ────────────────────────────────────────────────────────
+  function applyPreset(preset: JobPreset) {
+    if (preset.construction_schedule_id)    setConstructionSched(preset.construction_schedule_id)
+    if (preset.drawer_box_method_id)        setDrawerBoxMethod(preset.drawer_box_method_id)
+    if (preset.base_assembly_schedule_id)   setBaseAsmSched(preset.base_assembly_schedule_id)
+    if (preset.wall_assembly_schedule_id)   setWallAsmSched(preset.wall_assembly_schedule_id)
+    if (preset.tall_assembly_schedule_id)   setTallAsmSched(preset.tall_assembly_schedule_id)
+    if (preset.drawerbox_schedule_id)       setDrawerBoxSched(preset.drawerbox_schedule_id)
+    if (preset.inner_drawerbox_schedule_id) setInnerDbSched(preset.inner_drawerbox_schedule_id)
+    if (preset.handle_schedule_id)          setHandleSched(preset.handle_schedule_id)
+    if (preset.slide_schedule_id)           setSlideSched(preset.slide_schedule_id)
+    if (preset.hinge_schedule_id)           setHingeSched(preset.hinge_schedule_id)
+  }
+
+  async function savePreset() {
+    const trimmed = newPresetName.trim()
+    if (!trimmed) return
+    const { data } = await supabase.from('job_presets').insert({
+      name: trimmed,
+      construction_schedule_id:    constructionSched || null,
+      drawer_box_method_id:        drawerBoxMethod   || null,
+      base_assembly_schedule_id:   baseAsmSched      || null,
+      wall_assembly_schedule_id:   wallAsmSched      || null,
+      tall_assembly_schedule_id:   tallAsmSched      || null,
+      drawerbox_schedule_id:       drawerBoxSched    || null,
+      inner_drawerbox_schedule_id: innerDbSched      || null,
+      handle_schedule_id:          handleSched       || null,
+      slide_schedule_id:           slideSched        || null,
+      hinge_schedule_id:           hingeSched        || null,
+    }).select().single()
+    if (data) setPresets(prev => [...prev, data as JobPreset].sort((a, b) => a.name.localeCompare(b.name)))
+    setSavePresetOpen(false)
+    setNewPresetName('')
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -282,8 +389,45 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
           {/* ── Cabinet Standards ── */}
           {tab === 'cabinet_standards' && (
             <div className="flex flex-col h-full">
+              {/* Preset bar */}
+              <div className="flex items-center gap-2 -mt-1 mb-3 shrink-0">
+                <select
+                  defaultValue=""
+                  onChange={e => {
+                    const p = presets.find(x => x.id === e.target.value)
+                    if (p) applyPreset(p)
+                    e.target.value = ''
+                  }}
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="" disabled>Load preset…</option>
+                  {presets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                {savePresetOpen ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      autoFocus
+                      value={newPresetName}
+                      onChange={e => setNewPresetName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') savePreset(); if (e.key === 'Escape') { setSavePresetOpen(false); setNewPresetName('') } }}
+                      placeholder="Preset name…"
+                      className="bg-gray-800 border border-blue-600 rounded px-2 py-1.5 text-xs text-white focus:outline-none w-36"
+                    />
+                    <button onClick={savePreset}
+                      className="px-2 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-500 transition-colors">Save</button>
+                    <button onClick={() => { setSavePresetOpen(false); setNewPresetName('') }}
+                      className="px-2 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">✕</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setSavePresetOpen(true)}
+                    className="px-3 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition-colors whitespace-nowrap">
+                    Save as preset…
+                  </button>
+                )}
+              </div>
+
               {/* Inner tabs */}
-              <div className="flex border-b border-gray-800 -mt-1 mb-4 shrink-0">
+              <div className="flex border-b border-gray-800 mb-4 shrink-0">
                 {CS_TABS.map(t => (
                   <button key={t.id} onClick={() => setCsTab(t.id)}
                     className={`px-4 py-1.5 text-xs transition-colors border-b-2 -mb-px whitespace-nowrap ${
@@ -379,21 +523,6 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                     )}
                   </section>
 
-                  {/* Default drawer type */}
-                  <section>
-                    <SectionHead>Default Drawer Type</SectionHead>
-                    <p className="text-xs text-gray-500 mb-2">Applied to all drawer face zones unless overridden per-zone.</p>
-                    <select
-                      value={defaultDrawerType}
-                      onChange={e => setDefaultDrawerType(e.target.value as 'system' | 'five_piece' | '')}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="">System (default)</option>
-                      <option value="system">System (e.g. Blum Legrabox)</option>
-                      <option value="five_piece">5-Piece Timber Box</option>
-                    </select>
-                  </section>
-
                   {/* Cabinet method rule overrides */}
                   <section>
                     <SectionHead>Cabinet Method Overrides</SectionHead>
@@ -410,6 +539,8 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                       </div>
                     ))}
                   </section>
+
+                  <SaveDefaultsButton onClick={saveConstructionDefaults} saving={savingDefaults} />
 
                 </div>
               )}
@@ -457,6 +588,8 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                           <SchedPicker label="Inner Drawer Box" value={innerDbSched}   onChange={setInnerDbSched}   items={innerDrawerBoxScheds} />
                         </div>
                       </section>
+
+                      <SaveDefaultsButton onClick={saveMaterialDefaults} saving={savingDefaults} />
                     </>
                   )}
                 </div>
@@ -471,11 +604,14 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                   {schedLoading ? (
                     <p className="text-xs text-gray-500">Loading schedules…</p>
                   ) : (
-                    <div className="space-y-3">
-                      <SchedPicker label="Handles" value={handleSched} onChange={setHandleSched} items={handleScheds} />
-                      <SchedPicker label="Slides"  value={slideSched}  onChange={setSlideSched}  items={slideScheds}  />
-                      <SchedPicker label="Hinges"  value={hingeSched}  onChange={setHingeSched}  items={hingeScheds}  />
-                    </div>
+                    <>
+                      <div className="space-y-3">
+                        <SchedPicker label="Handles" value={handleSched} onChange={setHandleSched} items={handleScheds} />
+                        <SchedPicker label="Slides"  value={slideSched}  onChange={setSlideSched}  items={slideScheds}  />
+                        <SchedPicker label="Hinges"  value={hingeSched}  onChange={setHingeSched}  items={hingeScheds}  />
+                      </div>
+                      <SaveDefaultsButton onClick={saveHardwareDefaults} saving={savingDefaults} />
+                    </>
                   )}
                 </div>
               )}
@@ -653,6 +789,21 @@ function RuleRow({ ruleKey, value, baseline, baselineLabel, onChange }: {
           className={`w-20 text-right ${inputCls}`}
         />
       </div>
+    </div>
+  )
+}
+
+function SaveDefaultsButton({ onClick, saving }: { onClick: () => void; saving: boolean }) {
+  return (
+    <div className="pt-4 border-t border-gray-800 mt-2">
+      <button
+        onClick={onClick}
+        disabled={saving}
+        className="text-xs text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-40"
+      >
+        {saving ? 'Saving…' : 'Save as shop defaults'}
+      </button>
+      <p className="text-[10px] text-gray-600 mt-0.5">Updates shop-wide defaults for all future jobs.</p>
     </div>
   )
 }

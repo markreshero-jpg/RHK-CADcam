@@ -14,6 +14,7 @@ import { resolveToekickParts }   from './resolveToekick'
 import { resolveInternalParts }  from './resolveInternal'
 import { resolveFace }           from './resolveFace'
 import { resolveDrawerStacks }   from './resolveDrawerStack'
+import { resolveJoints }         from './resolveJoints'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -52,7 +53,12 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     ? resolveDrawerStacks(cab, r, zones)
     : []
 
-  // ── 6. Warnings ───────────────────────────────────────────────
+  // ── 6. Seam Joints ────────────────────────────────────────────
+  // For each case-part seam that has a joint assigned (per-cabinet or CM default),
+  // collect the joint type operations ready for display and eventual drilling export.
+  const seamJoints = resolveJoints(cab, caseParts)
+
+  // ── 7. Warnings ───────────────────────────────────────────────
   // Non-fatal checks
   if (cab.DX > 1200) {
     allWarnings.push({
@@ -76,6 +82,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     face_cols:      cols,
     face_zones:     zones,
     drawer_stacks:  drawerStacks,
+    seam_joints:    seamJoints,
     errors:         allErrors,
     warnings:       allWarnings,
   }

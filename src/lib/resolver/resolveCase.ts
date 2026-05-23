@@ -34,7 +34,7 @@ export function resolveCaseParts(
   const DX = cab.DX   // cabinet width
   const DY = cab.DY   // cabinet height
   const DZ = cab.DZ   // cabinet depth
-  const TK = r.TOEH   // toe kick height
+  const TK = cab.assembly_class === 'wall' ? 0 : r.TOEH   // toe kick height (wall cabinets have no kick)
 
   if (DX <= 2 * sideT) {
     errors.push({ code: 'CASE_TOO_NARROW', message: `Cabinet DX (${DX}mm) is too narrow for side material thickness (${sideT}mm)`, part: 'case' })
@@ -54,29 +54,41 @@ export function resolveCaseParts(
   const sideDepth  = backJoin === 'behind_sides' ? DZ - backT : DZ
   const sideZstart = backJoin === 'behind_sides' ? backT      : 0
 
-  // Side vertical extent: shifts up if bottom is outside; shrinks if rail is on top
-  const sideYstart = TK + (bottomJoin === 'bottom_outside' ? bottomT : 0)
-  const sideHeight = DY - sideYstart - (railJoin === 'on_top_of_sides' ? topT : 0)
+  // Side vertical extent.
+  // SCRBT shifts the bottom edge of the side panels up (positive) or down (negative).
+  // SCRT  shifts the top  edge of the side panels down (positive) or up  (negative).
+  // bottom_outside: sides must also clear the bottom panel thickness.
+  // on_top_of_sides: rail sits on top of the sides, so sides stop at rail bottom face.
+  const sideYstart = TK + r.SCRBT + (bottomJoin === 'bottom_outside' ? bottomT : 0)
+  const sideHeight = DY - r.SCRT - sideYstart - (railJoin === 'on_top_of_sides' ? topT : 0)
 
-  // Bottom: full-width or between sides (X/width)
-  const botX = bottomJoin === 'bottom_outside' ? 0  : sideT
-  const botW  = bottomJoin === 'bottom_outside' ? DX : DX - 2 * sideT
+  // Bottom: full-width or between sides (X/width).
+  // sides_outside: bottom fits between sides, so scribes narrow it on both ends.
+  const botX = bottomJoin === 'bottom_outside' ? 0  : sideT + r.SCRL
+  const botW  = bottomJoin === 'bottom_outside' ? DX : DX - 2 * sideT - r.SCRL - r.SCRR
 
   // Bottom: depth relationship with back panel (Z/depth)
   const botZstart = bottomBackJoin === 'butts_into_back' ? r.SCRBK + backT : 0
   const botDepth  = DZ - botZstart
 
-  // Back: between sides or wrapping full-width behind them
-  const backX = backJoin === 'behind_sides' ? 0      : sideT
-  const backW  = backJoin === 'behind_sides' ? DX     : DX - 2 * sideT
+  // Back: between sides or wrapping full-width behind them.
+  // between_sides: scribes narrow the back panel to match the bottom/shelves.
+  const backX = backJoin === 'behind_sides' ? 0      : sideT + r.SCRL
+  const backW  = backJoin === 'behind_sides' ? DX     : DX - 2 * sideT - r.SCRL - r.SCRR
 
-  // Rail / top: between sides or spanning full width on top of them
-  const railX = railJoin === 'on_top_of_sides' ? 0  : sideT
-  const railW  = railJoin === 'on_top_of_sides' ? DX : DX - 2 * sideT
+  // Rail / top: between sides or spanning full width on top of them.
+  // between_sides: scribes narrow the rail to match the bottom/shelves.
+  const railX = railJoin === 'on_top_of_sides' ? 0  : sideT + r.SCRL
+  const railW  = railJoin === 'on_top_of_sides' ? DX : DX - 2 * sideT - r.SCRL - r.SCRR
 
-  // Top / back relationship: where full_top and back_rail start in Z
-  const topZstart = topBackJoin === 'sits_over_back' ? r.SCRBK : backT + r.SCRBK
+  // Top / back relationship: where full_top and back_rail start in Z.
+  // SCRBK only moves the back panel's Z — it does NOT reduce the top panel depth.
+  const topZstart = topBackJoin === 'sits_over_back' ? 0 : backT
   const topDepth  = DZ - topZstart
+
+  // SCRT: extra material on side panels above the top rail for scribing to a soffit/ceiling.
+  // The rail/top drops by SCRT so that SCRT mm of the side panels protrude above it.
+  // SCRBT: extra material on side panels below the bottom panel for scribing to the floor.
 
   // ── Left Side ────────────────────────────────────────────────
   parts.push({
@@ -84,7 +96,7 @@ export function resolveCaseParts(
     DX: sideDepth,
     DY: sideHeight,
     DZ: sideT,
-    X:  0,
+    X:  r.SCRL,
     Y:  sideYstart,
     Z:  sideZstart,
     AX: 0, AY: 0, AZ: 0,
@@ -98,7 +110,7 @@ export function resolveCaseParts(
     DX: sideDepth,
     DY: sideHeight,
     DZ: sideT,
-    X:  DX - sideT,
+    X:  DX - sideT - r.SCRR,
     Y:  sideYstart,
     Z:  sideZstart,
     AX: 0, AY: 0, AZ: 0,
@@ -113,7 +125,7 @@ export function resolveCaseParts(
     DY: botW,
     DZ: bottomT,
     X:  botX,
-    Y:  TK,
+    Y:  TK + r.SCRBT,
     Z:  botZstart,
     AX: 0, AY: 0, AZ: 0,
     material_id: bottomMat.id,
@@ -122,14 +134,15 @@ export function resolveCaseParts(
 
   // ── Back ─────────────────────────────────────────────────────
   // Bottom joinery shifts the back's stored Y so its 3D bottom face (p.Y + p.DZ)
-  // lands at TK (butts_into_back) or TK + backT (back_on_bottom).
-  const backY = bottomBackJoin === 'butts_into_back' ? TK - backT : TK
+  // lands at TK+SCRBT (butts_into_back) or TK+SCRBT+backT (back_on_bottom).
+  const backY = bottomBackJoin === 'butts_into_back' ? TK + r.SCRBT - backT : TK + r.SCRBT
 
   // Top joinery trims the back's top face by topT when the top sits over it.
+  // SCRT: back panel stops at DY - SCRT (scribe material on sides above).
   // Cabinet3DView now uses p.DX directly as the rendered height of the back panel,
   // so compute it as (top face) − (bottom face in 3D).
-  const backBottom3D = backY + backT  // = TK (butts_into_back) or TK + backT
-  const backTop3D    = DY - (topBackJoin === 'sits_over_back' ? topT : 0)
+  const backBottom3D = backY + backT  // = TK + SCRBT
+  const backTop3D    = DY - r.SCRT - (topBackJoin === 'sits_over_back' ? topT : 0)
   const backDX       = backTop3D - backBottom3D
 
   parts.push({
@@ -155,7 +168,7 @@ export function resolveCaseParts(
       DY: railW,
       DZ: topT,
       X:  railX,
-      Y:  DY - topT,
+      Y:  DY - r.SCRT - topT,
       Z:  topZstart,
       AX: 0, AY: 0, AZ: 0,
       material_id: topMat.id,
@@ -172,7 +185,7 @@ export function resolveCaseParts(
         DY: railW,
         DZ: topT,
         X:  railX,
-        Y:  DY - topT,
+        Y:  DY - r.SCRT - topT,
         Z:  DZ - r.RD,
         AX: 0, AY: 0, AZ: 0,
         material_id: topMat.id,
@@ -188,7 +201,7 @@ export function resolveCaseParts(
       DY: railW,
       DZ: topT,
       X:  railX,
-      Y:  DY - topT,
+      Y:  DY - r.SCRT - topT,
       Z:  DZ - r.RD,
       AX: 0, AY: 0, AZ: 0,
       material_id: topMat.id,
@@ -201,7 +214,7 @@ export function resolveCaseParts(
       DY: railW,
       DZ: topT,
       X:  railX,
-      Y:  DY - topT,
+      Y:  DY - r.SCRT - topT,
       Z:  topZstart,
       AX: 0, AY: 0, AZ: 0,
       material_id: topMat.id,

@@ -32,8 +32,8 @@ export function resolveInternalParts(
   // ── Internal Opening Reference Dimensions ─────────────────────
   // Width: less sides and scribes
   const intW = DX - 2 * T - r.SCRL - r.SCRR
-  // Height: to underside of top rail (2 × material thickness — bottom + top/rail)
-  const intH = DY - TK - 2 * T
+  // Height: less bottom/top thickness and scribe allowances at top and bottom
+  const intH = DY - TK - 2 * T - r.SCRT - r.SCRBT
   // Depth: less back panel and scribe
   const intD = DZ - r.SCRBK - T
 
@@ -65,10 +65,9 @@ export function resolveInternalParts(
         if (shelf.y_locked && shelf.y_position !== undefined) {
           shY = shelf.y_position
         } else {
-          // Equalise: split intH into N+1 equal openings
-          // Shelf sits at bottom of the i-th opening
+          // Equalise: split intH into N+1 equal openings, starting above bottom scribe
           const openingH = intH / (N + 1)
-          shY = TK + T + openingH * (i + 1) - (i + 1) * TS / 2
+          shY = TK + T + r.SCRBT + openingH * (i + 1) - (i + 1) * TS / 2
         }
 
         parts.push({
@@ -93,13 +92,13 @@ export function resolveInternalParts(
   for (const shelf of cab.fixed_shelves) {
     const fsDX = intD - (r.FIXSB_F + r.FIXSB_B)
     const fsDY = intW   // full internal width — no pin clearance
-    const fsX  = T      // referenced from left side inner face
+    const fsX  = T + r.SCRL   // matches adj shelf: sits inside left scribe zone
     const fsZ  = r.SCRBK + T + r.FIXSB_B
 
     // Y: default mid internal height, overridable
     const fsY = shelf.y_locked && shelf.y_position !== undefined
       ? shelf.y_position
-      : TK + T + intH / 2 - TS / 2
+      : TK + T + r.SCRBT + intH / 2 - TS / 2
 
     if (fsDX <= 0) {
       errors.push({ code: 'FIXED_SHELF_DEPTH_INVALID', message: `Fixed shelf depth resolves to ${fsDX}mm`, part: 'fixed_shelf' })
@@ -124,7 +123,7 @@ export function resolveInternalParts(
 
   // ── Inner Drawers ─────────────────────────────────────────────
   for (const drawer of cab.inner_drawers) {
-    const runnerDepth = drawer.runner_depth ?? r.IDRUN
+    const runnerDepth = drawer.runner_depth ?? (intD - r.SLIDE_SETBACK)
 
     // Validate runner depth against cabinet internal depth
     if (runnerDepth > intD) {
@@ -146,7 +145,7 @@ export function resolveInternalParts(
     // (will be driven by drawer box builder when defined)
     const yStart = faceZone
       ? faceZone.Y + 10
-      : TK + T + 10   // fallback if no face zone
+      : TK + T + r.SCRBT + 10   // fallback if no face zone
 
     const slideDed  = cab.slide_side_deduction
     const idDY      = intW - 2 * slideDed - r.IDCL - r.IDCR

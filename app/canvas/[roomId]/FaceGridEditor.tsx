@@ -41,13 +41,14 @@ function computeDisplay(
   cabDX: number,
   cabDY: number,
   isBase: boolean,
+  toeKickH = 150,
 ): GridDisplay {
-  const TOEH = 150, REVT = 4, REVB = 0, REVL = 1, REVR = 1, GAPR = 2, GAPC = 2
+  const REVT = 4, REVB = 0, REVL = 1, REVR = 1, GAPR = 2, GAPC = 2
 
   const faceW = cabDX - REVL - REVR
-  const faceH = cabDY - (isBase ? TOEH : 0) - REVT - REVB
+  const faceH = cabDY - (isBase ? toeKickH : 0) - REVT - REVB
   const faceX0 = REVL
-  const faceY0 = (isBase ? TOEH : 0) + REVB
+  const faceY0 = (isBase ? toeKickH : 0) + REVB
 
   const nRows = grid.rows.length
   const nCols = grid.cols.length
@@ -84,10 +85,12 @@ function computeDisplay(
 export default function FaceGridEditor({
   cabinet,
   rp,
+  showInternals,
   onUpdate,
 }: {
   cabinet: CabinetInstance
   rp?: ResolvedCabinet
+  showInternals?: boolean
   onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
 }) {
   const [grid, setGrid] = useState<FaceGridInput>(() =>
@@ -96,7 +99,11 @@ export default function FaceGridEditor({
   const [selectedZone, setSelectedZone] = useState<{ row: number; col: number } | null>(null)
 
   const isBase = cabinet.assembly_class === 'base' || cabinet.assembly_class === 'base_corner'
-  const d = computeDisplay(grid, cabinet.dx, cabinet.dy, isBase)
+  const isTall = cabinet.assembly_class === 'tall' || cabinet.assembly_class === 'tall_corner'
+  const tkHeight = (isBase || isTall) && rp
+    ? rp.toekick_parts.filter(p => p.part_key !== 'spreader_horizontal').reduce((max, p) => Math.max(max, p.DX), 0) || 150
+    : 150
+  const d = computeDisplay(grid, cabinet.dx, cabinet.dy, isBase, tkHeight)
 
   async function save(next: FaceGridInput) {
     setGrid(next)
@@ -342,10 +349,54 @@ export default function FaceGridEditor({
             <rect x={ox} y={oy} width={cabDX} height={cabDY} fill="#0a111e" />
 
             {/* Toekick shading */}
-            {isBase && (
-              <rect x={ox} y={svgY(0) - 150} width={cabDX} height={150}
+            {(isBase || isTall) && tkHeight > 0 && (
+              <rect x={ox} y={svgY(tkHeight)} width={cabDX} height={tkHeight}
                 fill="#06090f" stroke="#1e293b" strokeWidth={0.5} />
             )}
+
+            {/* Shelves — always shown when internals toggle is on */}
+            {showInternals && rp && rp.internal_parts.map((p, i) => (
+              <rect key={`int-${i}`}
+                x={ox + p.X} y={svgY(p.Y + p.DZ)}
+                width={p.DY} height={p.DZ}
+                fill="#1e1b4b" fillOpacity={0.8}
+                stroke="#4338ca" strokeWidth={0.5}
+                style={{ pointerEvents: 'none' }}
+              />
+            ))}
+
+            {/* Drawer box parts */}
+            {showInternals && rp && rp.drawer_stacks.flatMap((stack, si) => [
+              ...stack.box_parts.map((p, pi) => {
+                let ex: number, ey: number, ew: number, eh: number
+                if (p.part_type === 'db_left_side' || p.part_type === 'db_right_side') {
+                  ex = p.X; ey = p.Y + p.DY; ew = p.DZ; eh = p.DY
+                } else if (p.part_type === 'db_bottom') {
+                  ex = p.X; ey = p.Y + p.DZ; ew = p.DY; eh = p.DZ
+                } else {
+                  ex = p.X; ey = p.Y + p.DX; ew = p.DY; eh = p.DX
+                }
+                return (
+                  <rect key={`db-${si}-${pi}`}
+                    x={ox + ex} y={svgY(ey)}
+                    width={ew} height={eh}
+                    fill="#052e16" fillOpacity={0.75}
+                    stroke="#22c55e" strokeWidth={0.5}
+                    style={{ pointerEvents: 'none' }}
+                  />
+                )
+              }),
+              ...stack.slides.map((s, li) => (
+                <rect key={`sl-${si}-${li}`}
+                  x={ox + s.X} y={svgY(s.Y + s.DY)}
+                  width={s.DZ} height={s.DY}
+                  fill="#1c1917" fillOpacity={0.75}
+                  stroke="#d97706" strokeWidth={0.5}
+                  strokeDasharray="3 2"
+                  style={{ pointerEvents: 'none' }}
+                />
+              )),
+            ])}
 
             {/* Face zones */}
             {grid.zones.map(gz => {
@@ -376,6 +427,7 @@ export default function FaceGridEditor({
                 >
                   <rect x={zx} y={zy} width={colW} height={rowH}
                     fill={s.fill}
+                    fillOpacity={showInternals ? 0.35 : 1}
                     stroke={isSel ? '#ffffff' : s.stroke}
                     strokeWidth={isSel ? 2 : 1} />
 

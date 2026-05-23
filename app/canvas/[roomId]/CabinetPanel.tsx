@@ -212,6 +212,36 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
           </div>
         </div>
         <div>
+          <p className={lbl}>Scribes (mm)</p>
+          <div className="grid grid-cols-3 gap-1">
+            {(['SCRL', 'SCRR', 'SCRT', 'SCRBT', 'SCRBK'] as const).map((key, i) => {
+              const label = ['Left', 'Right', 'Top', 'Bottom', 'Back'][i]
+              const cur = typeof (cabinet.rule_overrides ?? {})[key] === 'number'
+                ? cabinet.rule_overrides[key] as number : 0
+              return (
+                <div key={key}>
+                  <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
+                  <input
+                    type="number"
+                    key={`scr-${key}-${cur}`}
+                    defaultValue={cur}
+                    onFocus={e => e.target.select()}
+                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                    onBlur={e => {
+                      const v = Math.round(parseFloat(e.target.value) || 0)
+                      const next = { ...(cabinet.rule_overrides ?? {}) }
+                      if (v === 0) delete next[key]; else next[key] = v
+                      void onUpdate(cabinet.id, { rule_overrides: next })
+                    }}
+                    className={inp + ' text-right'}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div>
           <p className={lbl}>Modules</p>
           <div className="space-y-1">
             {([['has_carcass', 'Carcass'], ['has_internal', 'Internal'], ['has_face', 'Face / Doors'], ['has_toekick', 'Toe Kick']] as [keyof CabinetInstance, string][]).map(([k, label]) => (

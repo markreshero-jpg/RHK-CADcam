@@ -39,31 +39,35 @@ export interface JointOp3D {
   offset_z_mm:       number
 }
 
-// Returns the 3D entry point and drill axis for an operation based on its face.
+// Face-local coordinate system:
+//   U = position along the face's primary axis (offset_y_mm for X-drill faces, offset_x_mm for Y-drill faces)
+//   V = distance from front face (always offset_z_mm)
 // Part A: horizontal shelf, right end at X=0, top face at Y=0.
 // Part B: vertical side,  left face at X=0, bottom at Y=-slaveDy.
-// Offset interpretation:
-//   X-drill faces (normal/end): offset_y=Y on face, offset_z=from front; offset_x=X inset
-//   Y-drill faces (top/bottom): offset_x=X position, offset_z=from front; offset_y unused
+function faceU(op: JointOp3D): number {
+  return (op.face === 'top' || op.face === 'bottom') ? op.offset_x_mm : op.offset_y_mm
+}
+
 function opPlacement(
   op: JointOp3D,
   t: number, masterW: number, masterDx: number,
   slaveL: number, slaveDy: number, depth: number,
 ): { x: number; y: number; z: number; axis: DrillAxis } {
-  const oz = depth / 2 - op.offset_z_mm
+  const U  = faceU(op)
+  const oz = depth / 2 - op.offset_z_mm   // V = offset_z_mm
   if (op.target_part === 'part_a') {
     switch (op.face) {
-      case 'end':    return { x: -(masterW - masterDx),  y: -op.offset_y_mm, z: oz, axis: 'x+' }
-      case 'top':    return { x: -op.offset_x_mm,        y: 0,               z: oz, axis: 'y-' }
-      case 'bottom': return { x: -op.offset_x_mm,        y: -t,              z: oz, axis: 'y+' }
-      default:       return { x: -op.offset_x_mm,        y: -op.offset_y_mm, z: oz, axis: 'x-' }
+      case 'end':    return { x: -(masterW - masterDx), y: -U, z: oz, axis: 'x+' }
+      case 'top':    return { x: -U,                   y: 0,  z: oz, axis: 'y-' }
+      case 'bottom': return { x: -U,                   y: -t, z: oz, axis: 'y+' }
+      default:       return { x: 0,                    y: -U, z: oz, axis: 'x-' }
     }
   } else {
     switch (op.face) {
-      case 'end':    return { x: t,              y: -op.offset_y_mm,  z: oz, axis: 'x-' }
-      case 'top':    return { x: op.offset_x_mm, y: slaveL - slaveDy, z: oz, axis: 'y-' }
-      case 'bottom': return { x: op.offset_x_mm, y: -slaveDy,         z: oz, axis: 'y+' }
-      default:       return { x: op.offset_x_mm, y: -op.offset_y_mm,  z: oz, axis: 'x+' }
+      case 'end':    return { x: t, y: -U,              z: oz, axis: 'x-' }
+      case 'top':    return { x: U, y: slaveL - slaveDy, z: oz, axis: 'y-' }
+      case 'bottom': return { x: U, y: -slaveDy,         z: oz, axis: 'y+' }
+      default:       return { x: 0, y: -U,              z: oz, axis: 'x+' }
     }
   }
 }

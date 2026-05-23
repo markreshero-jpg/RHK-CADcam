@@ -40,7 +40,6 @@ import WallPanel from './WallPanel'
 import CabinetPanel from './CabinetPanel'
 import CabinetResizePanel from './CabinetResizePanel'
 import CabinetEditModal from './CabinetEditModal'
-import EdgeJointPicker from './EdgeJointPicker'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
 import RoomPropertiesModal, { type RoomPropertiesTab } from './RoomPropertiesModal'
 import ReportsModal, { type ReportScope } from './ReportsModal'
@@ -84,7 +83,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [mouseWorld, setMouseWorld] = useState<Pt>({ x: 0, y: 0 })
   const [canvasView, setCanvasView] = useState<CanvasView>('plan')
   const [elevWallId, setElevWallId] = useState<string | null>(null)
-  const [selectedSeam, setSelectedSeam] = useState<{ cabId: string; edgeKey: string; label: string } | null>(null)
   const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(() => {
     const preset = getUserPrefs().defaultDrawingPreset
     return applyPreset(preset)
@@ -93,7 +91,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [roomModalTab, setRoomModalTab] = useState<RoomPropertiesTab | null>(null)
   const [reportScope, setReportScope] = useState<ReportScope | null>(null)
   const [editCabId, setEditCabId] = useState<string | null>(null)
-  const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation'>('elevation')
+  const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation' | 'joints'>('elevation')
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
   const ctrlRef = useRef(false)
@@ -325,7 +323,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setCabinets(cs => cs.map(c => c.id === id ? { ...c, ...u } : c))
     // Drop stale resolved geometry immediately on dimension changes so the cabinet shows a
     // clean simple-rect at the new size rather than mismatched old panel coords while re-resolving.
-    if ('dx' in u || 'dy' in u || 'dz' in u) {
+    if ('dx' in u || 'dy' in u || 'dz' in u || 'rule_overrides' in u) {
       setResolvedParts(m => { const next = new Map(m); next.delete(id); return next })
     }
     const resolved = await dbUpdateCabinet(id, u)
@@ -878,7 +876,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (v !== 'plan') {
       setMode('select'); setDrawStart(null); setPlaceGhost(null); setContextMenu(null)
     }
-    if (v !== 'elevation') setSelectedSeam(null)
     setCanvasView(v)
   }
 
@@ -1121,29 +1118,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onCabResizeDone={() => setCabResize(null)}
             resolvedParts={resolvedParts}
             onDeselect={() => setSelected(null)}
-            onSeamClick={(cabId, edgeKey, label) => {
+            onSeamClick={(cabId) => {
               setSelected({ type: 'cabinet', id: cabId })
               setMultiSelect([])
-              setSelectedSeam({ cabId, edgeKey, label })
+              setEditCabInitialView('joints')
+              setEditCabId(cabId)
             }}
-            selectedSeam={selectedSeam}
           />
         )}
-
-        {canvasView === 'elevation' && selectedSeam && (() => {
-          const cab = cabinets.find(c => c.id === selectedSeam.cabId)
-          if (!cab) return null
-          return (
-            <EdgeJointPicker
-              cabId={selectedSeam.cabId}
-              edgeKey={selectedSeam.edgeKey}
-              edgeLabel={selectedSeam.label}
-              cabinet={cab}
-              onUpdate={handleUpdateCabinet}
-              onClose={() => setSelectedSeam(null)}
-            />
-          )
-        })()}
 
         {canvasView === '3d' && (
           <Room3DScene

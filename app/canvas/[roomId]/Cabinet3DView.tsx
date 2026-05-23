@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { supabase } from '@/src/lib/supabase'
@@ -10,6 +10,7 @@ import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
   ResolvedInternalPart, ResolvedFaceZone,
   ResolvedDrawerStack, ResolvedDrawerSlide, ResolvedDrawerBoxPart,
+  ResolvedSeamJoint, JointTypeOp,
 } from '@/src/lib/resolver/types'
 import {
   Box, PanelKind, PartMeta, PartEdge,
@@ -237,6 +238,269 @@ function DoorPanel({ b, hingeSide, doorsOpen, ...partProps }: PartProps & {
   )
 }
 
+// ── Seam joint visualization ──────────────────────────────────────────────────
+// Shows Part A's touching face as a flat wireframe rectangle (Joint3DView green-zone
+// style) plus drill-op markers where operations are defined.
+// Blue = CM method default, Green = cabinet override.
+//
+// Coordinate transform: JV = joint-view coords (X=0 at interface, Y=0 at Part A top).
+// Cabinet coords = actual 3D position derived from boxA/boxB.
+//
+// :left_side seams  — interface X = boxA.x.  JV and cabinet X are MIRRORED: Part A
+//   body goes +X in cabinet but -X in JV, so cabinet_X = interfaceX - jv_x.
+//   Axis X also flips: JV 'x+' ↔ cabinet 'x-'.
+// :right_side seams — interface X = boxA.x+boxA.w. No mirror; Part A body goes -X in
+//   both JV and cabinet: cabinet_X = interfaceX + jv_x, axis unchanged.
+
+// Expression evaluator: supports math globals + part-dimension variables.
+function evalExpr(expr: string, vars: Record<string, number>): number | null {
+  try {
+    // eslint-disable-next-line no-new-func
+    const fn = new Function(...Object.keys(vars), `'use strict'; return +(${expr})`)
+    const result = fn(...Object.values(vars))
+    return Number.isFinite(result) ? result : null
+  } catch { return null }
+}
+
+// Resolve a JointTypeOp's numeric fields + qty/spacing against actual part dimensions.
+// Matches the same variable set as JointPreviewPanel.buildVars.
+function evalOp(op: JointTypeOp, boxA: Box, boxB: Box): {
+  tool_diameter_mm: number; depth_mm: number
+  offset_x_mm: number; offset_y_mm: number; offset_z_mm: number
+  qty: number; spacing_mm: number | null
+} {
+  const exprs = op.expressions ?? {}
+  const isA   = op.target_part === 'part_a'
+  const vars: Record<string, number> = {
+    // target-part dimensions
+    W:  isA ? boxA.w : boxB.w,
+    L:  isA ? boxA.h : boxB.h,
+    D:  isA ? boxA.d : boxB.d,
+    T:  boxA.h,  // material thickness (Part A height = shelf/panel thickness)
+    // master (Part A) dimensions
+    MW: boxA.w, ML: boxA.h, MD: boxA.d,
+    // slave (Part B) dimensions
+    SW: boxB.w, SL: boxB.h, SD: boxB.d,
+  }
+  const ev = (field: string, fallback: number) =>
+    exprs[field] != null ? (evalExpr(exprs[field], vars) ?? fallback) : fallback
+
+  const rawQty = exprs.qty != null
+    ? (evalExpr(exprs.qty, vars) ?? (op.qty ?? 1))
+    : (op.qty ?? 1)
+  const rawSpc = exprs.spacing_mm != null
+    ? (evalExpr(exprs.spacing_mm, vars) ?? op.spacing_mm)
+    : op.spacing_mm
+
+  return {
+    tool_diameter_mm: ev('tool_diameter_mm', op.tool_diameter_mm),
+    depth_mm:         ev('depth_mm',         op.depth_mm),
+    offset_x_mm:      ev('offset_x_mm',      op.offset_x_mm),
+    offset_y_mm:      ev('offset_y_mm',      op.offset_y_mm),
+    offset_z_mm:      ev('offset_z_mm',      op.offset_z_mm),
+    qty:              Math.max(1, Math.round(rawQty)),
+    spacing_mm:       rawSpc,
+  }
+}
+
+type JointRefPlane =
+  | { kind: 'yz'; x: number; yMin: number; yMax: number; zMin: number; zMax: number }
+  | { kind: 'xz'; y: number; xMin: number; xMax: number; zMin: number; zMax: number }
+
+type DrillAxis = 'x-' | 'x+' | 'y-' | 'y+'
+
+interface DrillOpPos {
+  x: number; y: number; z: number
+  axis: DrillAxis
+  radius: number
+  depthLen: number
+}
+
+function computeJointRefPlane(seamKey: string, boxA: Box): JointRefPlane | null {
+  const partBKey = seamKey.slice(seamKey.indexOf(':') + 1)
+  if (partBKey === 'left_side') {
+    return { kind: 'yz', x: boxA.x, yMin: boxA.y, yMax: boxA.y + boxA.h, zMin: boxA.z, zMax: boxA.z + boxA.d }
+  }
+  if (partBKey === 'right_side') {
+    return { kind: 'yz', x: boxA.x + boxA.w, yMin: boxA.y, yMax: boxA.y + boxA.h, zMin: boxA.z, zMax: boxA.z + boxA.d }
+  }
+  if (partBKey === 'bottom') {
+    return { kind: 'xz', y: boxA.y, xMin: boxA.x, xMax: boxA.x + boxA.w, zMin: boxA.z, zMax: boxA.z + boxA.d }
+  }
+  return null
+}
+
+function seamDrillOps(seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[]): DrillOpPos[] {
+  const partBKey = seamKey.slice(seamKey.indexOf(':') + 1)
+  const isLeft  = partBKey === 'left_side'
+  const isRight = partBKey === 'right_side'
+  if (!isLeft && !isRight) return []
+
+  const interfaceX = isLeft ? boxA.x : boxA.x + boxA.w
+  const interfaceY = boxA.y + boxA.h  // JV Y=0
+
+  const result: DrillOpPos[] = []
+
+  for (const op of ops) {
+    if (op.machine_operation !== 'drill') continue
+    const ev    = evalOp(op, boxA, boxB)
+    const U     = (op.face === 'top' || op.face === 'bottom') ? ev.offset_x_mm : ev.offset_y_mm
+    const qty   = ev.qty
+    const spc   = ev.spacing_mm ?? 0
+
+    for (let i = 0; i < qty; i++) {
+      const targetBox = op.target_part === 'part_a' ? boxA : boxB
+      // Z: measured from front face of the target part, spacing steps toward back
+      const cabZ = (targetBox.z + targetBox.d) - ev.offset_z_mm - i * spc
+
+      let cabX: number, cabY: number, axis: DrillAxis
+
+      if (op.target_part === 'part_a') {
+        switch (op.face) {
+          case 'normal':
+            // Interface face — drill into Part A body
+            cabX = interfaceX
+            cabY = interfaceY - U
+            axis = isLeft ? 'x+' : 'x-'
+            break
+          case 'end':
+            // Far face of Part A (opposite the interface)
+            cabX = isLeft ? boxA.x + boxA.w : boxA.x
+            cabY = interfaceY - U
+            axis = isLeft ? 'x-' : 'x+'
+            break
+          case 'top':
+            cabY = interfaceY
+            cabX = isLeft ? interfaceX + U : interfaceX - U
+            axis = 'y-'
+            break
+          case 'bottom':
+            cabY = boxA.y
+            cabX = isLeft ? interfaceX + U : interfaceX - U
+            axis = 'y+'
+            break
+          default: continue
+        }
+      } else {
+        // Part B (gable): interface face is the inner face (touching Part A)
+        const bInner = isLeft ? boxB.x + boxB.w : boxB.x
+        switch (op.face) {
+          case 'normal':
+            // Inner face of gable — drill into gable body (away from Part A)
+            cabX = bInner
+            cabY = interfaceY - U
+            axis = isLeft ? 'x-' : 'x+'
+            break
+          case 'end':
+            // Outer face of gable
+            cabX = isLeft ? boxB.x : boxB.x + boxB.w
+            cabY = interfaceY - U
+            axis = isLeft ? 'x+' : 'x-'
+            break
+          case 'top':
+            cabY = boxB.y + boxB.h
+            cabX = isLeft ? bInner - U : bInner + U
+            axis = 'y-'
+            break
+          case 'bottom':
+            cabY = boxB.y
+            cabX = isLeft ? bInner - U : bInner + U
+            axis = 'y+'
+            break
+          default: continue
+        }
+      }
+
+      result.push({ x: cabX, y: cabY, z: cabZ, axis, radius: ev.tool_diameter_mm / 2, depthLen: ev.depth_mm })
+    }
+  }
+
+  return result
+}
+
+function JointFaceRect({ plane, color }: { plane: JointRefPlane; color: string }) {
+  const geo = useMemo(() => {
+    return plane.kind === 'yz'
+      ? new THREE.BoxGeometry(0.1, plane.yMax - plane.yMin, plane.zMax - plane.zMin)
+      : new THREE.BoxGeometry(plane.xMax - plane.xMin, 0.1, plane.zMax - plane.zMin)
+  }, [plane])
+
+  const pos: [number, number, number] = plane.kind === 'yz'
+    ? [plane.x, (plane.yMin + plane.yMax) / 2, (plane.zMin + plane.zMax) / 2]
+    : [(plane.xMin + plane.xMax) / 2, plane.y, (plane.zMin + plane.zMax) / 2]
+
+  return (
+    <lineSegments position={pos}>
+      <edgesGeometry args={[geo]} />
+      <lineBasicMaterial color={color} opacity={0.85} transparent />
+    </lineSegments>
+  )
+}
+
+function DrillMarker({ x, y, z, axis, radius, depthLen }: DrillOpPos) {
+  const r = Math.max(1.5, radius)
+  const len = Math.max(2, depthLen)
+
+  const cylQuat = useMemo(() => {
+    const q = new THREE.Quaternion()
+    if (axis === 'x-' || axis === 'x+') q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)
+    return q
+  }, [axis])
+
+  const offset: [number, number, number] =
+    axis === 'x-' ? [-(len / 2), 0, 0] :
+    axis === 'x+' ? [(len / 2), 0, 0]  :
+    axis === 'y-' ? [0, -(len / 2), 0] :
+                    [0, (len / 2), 0]
+
+  return (
+    <group position={[x, y, z]}>
+      <mesh>
+        <sphereGeometry args={[r, 8, 6]} />
+        <meshStandardMaterial color="#f59e0b" roughness={0.3} />
+      </mesh>
+      <mesh position={offset} quaternion={cylQuat}>
+        <cylinderGeometry args={[r * 0.6, r * 0.6, len, 8]} />
+        <meshStandardMaterial color="#f59e0b" roughness={0.4} transparent opacity={0.55} />
+      </mesh>
+    </group>
+  )
+}
+
+function SeamJointOverlay({ seamJoints, boxByKey }: {
+  seamJoints: ResolvedSeamJoint[]
+  boxByKey: Record<string, Box>
+}) {
+  const items = useMemo(() => {
+    return seamJoints.flatMap(sj => {
+      const boxA = boxByKey[sj.part_a_key]
+      const boxB = boxByKey[sj.part_b_key]
+      if (!boxA || !boxB) return []
+      const plane = computeJointRefPlane(sj.seam_key, boxA)
+      if (!plane) return []
+      const color = sj.source === 'cabinet' ? '#22c55e' : '#60a5fa'
+      const drills = seamDrillOps(sj.seam_key, boxA, boxB, sj.ops)
+      console.log('[SeamJoint]', sj.seam_key, 'joint:', sj.joint_type_name,
+        'raw ops:', sj.ops.length, 'drill markers:', drills.length,
+        sj.ops.map(o => ({ face: o.face, target: o.target_part, qty: o.qty, spc: o.spacing_mm, expr: o.expressions })))
+      return [{ key: sj.seam_key, plane, color, drills }]
+    })
+  }, [seamJoints, boxByKey])
+
+  return (
+    <group>
+      {items.map(item => (
+        <group key={item.key}>
+          <JointFaceRect plane={item.plane} color={item.color} />
+          {item.drills.map((d, i) => (
+            <DrillMarker key={i} {...d} />
+          ))}
+        </group>
+      ))}
+    </group>
+  )
+}
+
 // ── Edge band persistence ─────────────────────────────────────────────────────
 // Parses PartMeta.id to determine which table/row to update. Internal parts use
 // front/back column names instead of right/left due to their coordinate mapping.
@@ -301,6 +565,12 @@ function CabinetScene({
   const { dx, dy, dz } = cab
   const dragRef = useRef(false)
   const hlSet   = highlightPartKeys ? new Set(highlightPartKeys) : null
+
+  const boxByKey = useMemo(() => {
+    const m: Record<string, Box> = {}
+    for (const p of rp.case_parts) m[p.part_key] = caseBox(p)
+    return m
+  }, [rp.case_parts])
 
   function applyEdge<T extends PartMeta>(info: T): T {
     const ov = edgeOverrides.get(info.id)
@@ -465,6 +735,9 @@ function CabinetScene({
 
         return <Part key={`f${i}`} b={b} {...partProps} />
       })}
+      {rp.seam_joints.length > 0 && (
+        <SeamJointOverlay seamJoints={rp.seam_joints} boxByKey={boxByKey} />
+      )}
     </group>
   )
 }

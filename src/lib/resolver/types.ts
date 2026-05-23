@@ -144,10 +144,10 @@ export interface ConstructionRules {
   FIXSB_B:  number   // fixed shelf setback back
 
   // Internal — inner drawer
-  IDCL:     number   // inner drawer clearance left
-  IDCR:     number   // inner drawer clearance right
-  IDFAO:    number   // inner drawer face add-on height
-  IDRUN:    number   // inner drawer runner depth
+  IDCL:          number   // inner drawer clearance left
+  IDCR:          number   // inner drawer clearance right
+  IDFAO:         number   // inner drawer face add-on height
+  SLIDE_SETBACK: number   // min clearance between back of slide and back panel inner face
 
   // Face reveals
   REVT:     number   // reveal top
@@ -208,7 +208,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   TOP_TYPE: 'front_rail', RD: 100,
   ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1,
   FIXSB_F: 0, FIXSB_B: 0,
-  IDCL: 2, IDCR: 2, IDFAO: 0, IDRUN: 450,
+  IDCL: 2, IDCR: 2, IDFAO: 0, SLIDE_SETBACK: 20,
   REVT: 4, REVB: 0, REVL: 1, REVR: 1,
   REVENDL: 2, REVENDR: 2, GAPC: 2, GAPR: 2,
   FACBUF: 2, FACINS: 0,
@@ -249,7 +249,7 @@ export interface SlideProduct {
 export interface SlideScheduleEntry {
   id:               string
   schedule_id:      string
-  depth_threshold:  number   // smallest NL that satisfies this entry, e.g. 450
+  depth_threshold:  number   // NL of the slide (e.g. 450) — used as max available depth for selection
   height_threshold: number   // minimum opening height required, e.g. 104 (= box_height of that slide)
   slide_id:         string
 }
@@ -276,6 +276,7 @@ export interface DrawerBoxRules {
   DB_BACK_SETBACK:       number                         // bottom panel setback from back face (mm)
   DB_JOINT_TYPE:         'butt' | 'dado' | 'dovetail'  // how front/back connect to sides
   DB_BACK_HEIGHT_ADJUST: number                         // deducted from slide box_height to get back panel height (mm)
+  DB_BACK_WIDTH_ADJUST:  number                         // deducted from box width to get back panel width (mm)
   DB_BACK_Y_OFFSET:      number                         // raises back panel off box floor (mm), added to auto-calculated backY
   DB_EDGING?:            DbEdgingDefaults               // per-part edge sides (absent = use DEFAULT_DB_EDGING)
 }
@@ -289,7 +290,44 @@ export const DEFAULT_DB_RULES: DrawerBoxRules = {
   DB_BACK_SETBACK:       25,
   DB_JOINT_TYPE:         'butt',
   DB_BACK_HEIGHT_ADJUST: 0,
+  DB_BACK_WIDTH_ADJUST:  0,
   DB_BACK_Y_OFFSET:      0,
+}
+
+// ── Joint Types ───────────────────────────────────────────────
+
+export type JointTargetPart = 'part_a' | 'part_b'
+export type JointMachineOp  = 'drill' | 'route' | 'pocket' | 'saw'
+export type JointFace       = 'normal' | 'end' | 'top' | 'bottom'
+
+export interface JointTypeOp {
+  id:                string
+  joint_type_id:     string
+  operation_order:   number
+  target_part:       JointTargetPart
+  machine_operation: JointMachineOp
+  face:              JointFace
+  tool_diameter_mm:  number
+  depth_mm:          number
+  offset_x_mm:       number
+  offset_y_mm:       number
+  offset_z_mm:       number
+  qty:               number
+  spacing_mm:        number | null
+  tool:              string | null
+  notes:             string | null
+  expressions:       Record<string, string> | null
+}
+
+// A joint assignment resolved for one seam — ready for 3D display and eventual drilling spec export
+export interface ResolvedSeamJoint {
+  seam_key:        string         // e.g. "bottom:left_side"
+  joint_type_id:   string
+  joint_type_name: string
+  source:          'cabinet' | 'method'   // per-cabinet override vs CM default
+  part_a_key:      string         // first part in the seam key (e.g. "bottom")
+  part_b_key:      string         // second part (e.g. "left_side")
+  ops:             JointTypeOp[]
 }
 
 // ── Drawer Box Input ──────────────────────────────────────────
@@ -359,7 +397,7 @@ export interface CabinetInput {
   // Slide hardware (for inner drawers — legacy scalar, kept for fallback)
   slide_side_deduction: number
 
-  // Default drawer type for this job (project-level, overridable per face zone)
+  // Default drawer type — sourced from the drawer box method (project-level field removed)
   default_drawer_type?: DrawerType
 
   // Drawer box construction
@@ -372,6 +410,12 @@ export interface CabinetInput {
 
   // Construction rules (already merged from system → job → room → cabinet)
   rules:           ConstructionRules
+
+  // Joint assignments (resolved before passing to resolver)
+  carcase_joints?:   Record<string, string | null>   // per-cabinet overrides: seamKey → joint_type_id (null = suppressed)
+  joint_defaults?:   Record<string, string>           // from construction method schedule row: genericSeamKey → joint_type_id
+  joint_type_ops?:   Record<string, JointTypeOp[]>   // keyed by joint_type_id
+  joint_type_names?: Record<string, string>           // joint_type_id → name
 
   // Face grid definition
   face_grid:       FaceGridInput
@@ -450,6 +494,7 @@ export interface ResolvedCabinet {
   face_cols:     ResolvedFaceCol[]
   face_zones:    ResolvedFaceZone[]
   drawer_stacks: ResolvedDrawerStack[]
+  seam_joints:   ResolvedSeamJoint[]
   // Validation errors — non-empty means something is wrong
   errors:        ResolverError[]
   warnings:      ResolverError[]

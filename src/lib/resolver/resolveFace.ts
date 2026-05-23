@@ -26,7 +26,7 @@ export function resolveFace(
   const ebId = cab.door_edgeband_id
 
   const errors: ResolverError[] = []
-  const TK  = r.TOEH
+  const TK  = (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') ? 0 : r.TOEH
   const DX  = cab.DX
   const DY  = cab.DY
   const DZ  = cab.DZ

@@ -39,7 +39,6 @@ export interface Project {
   benchtop_build_method_id:    string | null
   construction_schedule_id:    string | null
   drawer_box_method_id:        string | null
-  default_drawer_type:         'system' | 'five_piece' | null
   created_at: string
   updated_at: string
 }

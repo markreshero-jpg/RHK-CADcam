@@ -5,7 +5,7 @@ import { cabT, wallDir, wallEnd, dist, findFreeSlot, cabBlocks, CAB_FILL, CAB_FI
 import { Selected, CabResize, viewReducer, DisplayConfig, Mode, modeAssemblyClass } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
 import { getUserPrefs } from '@/src/lib/userPrefs'
-import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone, ResolvedInternalPart } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone, ResolvedInternalPart, ResolvedDrawerStack, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
 import { computeElevSeams } from '@/src/lib/cabinetSeams'
 
 // ── Colour coding per spec ────────────────────────────────────
@@ -17,6 +17,9 @@ const PART_COLORS: Record<string, string> = {
   kick_sub_front: '#d97706', kick_back: '#ea580c',
   spreader_vertical: '#dc2626', spreader_horizontal: '#dc2626',
   adj_shelf: '#818cf8', fixed_shelf: '#a78bfa',
+  db_front: '#34d399', db_back: '#6ee7b7',
+  db_left_side: '#34d399', db_right_side: '#34d399', db_bottom: '#34d399',
+  db_slide: '#94a3b8',
   door: '#60a5fa', drawer_face: '#f472b6', false_panel: '#60a5fa',
 }
 
@@ -30,6 +33,9 @@ const LINE_DRAW_COLORS: Record<string, string> = {
   spreader_vertical: '#f97316', spreader_horizontal: '#f97316',
   adj_shelf: '#a78bfa', fixed_shelf: '#818cf8',
   inner_drawer_back: '#818cf8',
+  db_front: '#6ee7b7', db_back: '#6ee7b7',
+  db_left_side: '#6ee7b7', db_right_side: '#6ee7b7', db_bottom: '#6ee7b7',
+  db_slide: '#64748b',
   door: '#60a5fa', drawer_face: '#f472b6', false_panel: '#60a5fa',
 }
 
@@ -56,6 +62,27 @@ function shelfElevRect(p: ResolvedInternalPart) {
     return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
   }
   return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
+}
+
+function drawerBoxPartElevRect(p: ResolvedDrawerBoxPart) {
+  switch (p.part_type) {
+    case 'db_front':
+    case 'db_back':
+      // Face-on panels: DX = height, DY = width
+      return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
+    case 'db_left_side':
+    case 'db_right_side':
+      // Side panels, edge-on from front: DY = height, DZ = visible thickness
+      return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+    case 'db_bottom':
+      // Bottom panel, edge-on: DY = width, DZ = visible thickness
+      return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
+  }
+}
+
+function slideElevRect(s: ResolvedDrawerSlide) {
+  // Slide rail seen edge-on from front: DZ = visible thickness (runner), DY = height
+  return { ex: s.X, ey: s.Y + s.DY, ew: s.DZ, eh: s.DY }
 }
 
 
@@ -118,7 +145,6 @@ interface ElevationSVGProps {
   resolvedParts?: Map<string, ResolvedCabinet>
   onDeselect: () => void
   onSeamClick?: (cabId: string, edgeKey: string, label: string) => void
-  selectedSeam?: { cabId: string; edgeKey: string } | null
 }
 
 export default function ElevationSVG({
@@ -127,7 +153,7 @@ export default function ElevationSVG({
   onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu,
   onBlankWallContextMenu, onShiftSelectCabinet, onEqualizeWidths,
   cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
-  resolvedParts, onDeselect, onSeamClick, selectedSeam,
+  resolvedParts, onDeselect, onSeamClick,
 }: ElevationSVGProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [view, dispatchView] = useReducer(viewReducer, { panX: 80, panY: 60, zoom: 1 })
@@ -659,7 +685,9 @@ export default function ElevationSVG({
 
               const isBase = cab.assembly_class === 'base' || cab.assembly_class === 'base_corner'
               const isTall = cab.assembly_class === 'tall' || cab.assembly_class === 'tall_corner'
-              const tkH = (isBase || isTall) && cab.has_toekick ? 150 : 0
+              const tkH = (isBase || isTall) && cab.has_toekick
+                ? (resolvedParts?.get(cab.id)?.toekick_parts.find(p => p.part_key === 'kick_front_face')?.DX ?? 150)
+                : 0
 
               const baseColor = isSel ? CAB_FILL_SEL[cab.assembly_class] : CAB_FILL[cab.assembly_class]
               const isHover = hoveredCabId === cab.id && !isSel && !isMultiSel
@@ -677,9 +705,13 @@ export default function ElevationSVG({
               const faceP = layerSVGProps(faceL.style, z)
               const intP  = layerSVGProps(intL.style, z)
               const tkP   = layerSVGProps(tkL.style, z)
+              const showIntAnnot  = !intL.visible && displayConfig.annotations.elev_internal_parts
+              const intVisible    = intL.visible || showIntAnnot
+              const intEffP       = showIntAnnot ? layerSVGProps('ghost', z) : intP
+              const showDrawerBox = intVisible && displayConfig.annotations.elev_drawer_box
 
               const shelfYs: number[] = []
-              if (intL.visible && cab.has_internal) {
+              if (intVisible && cab.has_internal) {
                 const bottom = ry + displayDy - tkH
                 if (isTall) {
                   for (let offset = 300; offset < displayDy - tkH - 150; offset += 350)
@@ -729,12 +761,12 @@ export default function ElevationSVG({
                             strokeDasharray={isLineDrawing ? undefined : (tkP.strokeDasharray ?? `${4 / z} ${2 / z}`)}
                             opacity={tkP.opacity} />
                         )}
-                        {intL.visible && shelfYs.map((sy, i) => (
+                        {intVisible && shelfYs.map((sy, i) => (
                           <line key={i} x1={rx + 4 / z} y1={sy} x2={rx + displayDx - 4 / z} y2={sy}
                             stroke={isLineDrawing ? '#a78bfa' : (isSel ? '#cbd5e1' : '#4b5563')}
                             strokeWidth={1 / z}
-                            strokeDasharray={isLineDrawing || intL.style === 'solid' ? undefined : `${8 / z} ${4 / z}`}
-                            opacity={intP.opacity} />
+                            strokeDasharray={isLineDrawing || (intL.style === 'solid' && !showIntAnnot) ? undefined : `${8 / z} ${4 / z}`}
+                            opacity={intEffP.opacity} />
                         ))}
                         {faceL.visible && cab.has_face && (() => {
                           const ins = 15; const fw = displayDx - ins * 2; const fh = displayDy - tkH - ins * 2
@@ -795,7 +827,7 @@ export default function ElevationSVG({
                               stroke={isSel ? '#e2e8f0' : fill} strokeWidth={0.5 / z}
                               opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                       })}
-                      {intL.visible && rp.internal_parts.map((p, i) => {
+                      {intVisible && rp.internal_parts.map((p, i) => {
                         const { ex, ey, ew, eh } = shelfElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                         const fill = PART_COLORS[p.part_type] ?? '#818cf8'
@@ -806,9 +838,39 @@ export default function ElevationSVG({
                             fillOpacity={isLineDrawing ? 0 : 0.6}
                             stroke={isLineDrawing ? ldStroke : fill}
                             strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
-                            opacity={intP.opacity} style={{ pointerEvents: 'none' }} />
+                            opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
+                      {showDrawerBox && rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => [
+                        ...ds.box_parts.map((p: ResolvedDrawerBoxPart, j: number) => {
+                          const { ex, ey, ew, eh } = drawerBoxPartElevRect(p)
+                          const { x, y, w, h } = toSVG(ex, ey, ew, eh)
+                          const fill = PART_COLORS[p.part_type] ?? '#34d399'
+                          const ldStroke = LINE_DRAW_COLORS[p.part_type] ?? '#6ee7b7'
+                          return (
+                            <rect key={`ds-${i}-bp-${j}`} x={x} y={y} width={w} height={h}
+                              fill={isLineDrawing ? 'none' : fill}
+                              fillOpacity={isLineDrawing ? 0 : 0.6}
+                              stroke={isLineDrawing ? ldStroke : fill}
+                              strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
+                              opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
+                          )
+                        }),
+                        ...ds.slides.map((s: ResolvedDrawerSlide, j: number) => {
+                          const { ex, ey, ew, eh } = slideElevRect(s)
+                          const { x, y, w, h } = toSVG(ex, ey, ew, eh)
+                          const fill = PART_COLORS.db_slide
+                          const ldStroke = LINE_DRAW_COLORS.db_slide
+                          return (
+                            <rect key={`ds-${i}-sl-${j}`} x={x} y={y} width={w} height={h}
+                              fill={isLineDrawing ? 'none' : fill}
+                              fillOpacity={isLineDrawing ? 0 : 0.5}
+                              stroke={isLineDrawing ? ldStroke : fill}
+                              strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
+                              opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
+                          )
+                        }),
+                      ])}
                       {faceL.visible && rp.face_zones.map((fz, i) => {
                         const { ex, ey, ew, eh } = zoneElevRect(fz)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
@@ -918,8 +980,8 @@ export default function ElevationSVG({
                     )
                   })()}
 
-                  {/* Seam joint markers — show on hover/select or when a joint is assigned */}
-                  {onSeamClick && mode === 'select' && (() => {
+                  {/* Seam joint markers — visual indicators; clickable when onSeamClick provided */}
+                  {mode === 'select' && (() => {
                     const rp = resolvedParts?.get(cab.id)
                     if (!rp) return null
                     const seams = computeElevSeams(rp)
@@ -928,32 +990,45 @@ export default function ElevationSVG({
                       <g>
                         {seams.map(seam => {
                           const pt = toSVGPt(seam.ex, seam.ey)
-                          const isSel2 = selectedSeam?.cabId === cab.id && selectedSeam.edgeKey === seam.key
-                          const joints = cab.carcase_joints ?? {}
-                          const isKeySet = Object.prototype.hasOwnProperty.call(joints, seam.key)
-                          const val = isKeySet ? (joints as Record<string, string | null>)[seam.key] : undefined
-                          const hasJoint    = typeof val === 'string'
-                          const isSuppressed = val === null
-                          if (!isSel2 && !isHover && !isSel && !hasJoint && !isSuppressed) return null
-                          const col = isSel2 ? '#38bdf8' : hasJoint ? '#22c55e' : isSuppressed ? '#ef4444' : '#6b7280'
+
+                          // Resolved joint for this seam (includes inherited CM defaults)
+                          const resolvedJoint = rp.seam_joints.find(j => j.seam_key === seam.key)
+
+                          // Suppression is only stored in carcase_joints (null = explicit "no joint")
+                          const cabJoints = (cab.carcase_joints ?? {}) as Record<string, string | null>
+                          const isSuppressed = Object.prototype.hasOwnProperty.call(cabJoints, seam.key) && cabJoints[seam.key] === null
+
+                          // Fall back to raw carcase_joints when seam_joints is empty (pre-resolve DB data)
+                          const isActiveCabinet   = resolvedJoint?.source === 'cabinet'
+                            || (!resolvedJoint && typeof cabJoints[seam.key] === 'string')
+                          const isActiveInherited = resolvedJoint?.source === 'method'
+                          const hasAnyJoint = isActiveCabinet || isActiveInherited
+
+                          if (!isHover && !isSel && !hasAnyJoint && !isSuppressed) return null
+
+                          const col = isActiveCabinet   ? '#22c55e'
+                                    : isActiveInherited ? '#f59e0b'
+                                    : isSuppressed      ? '#ef4444'
+                                    : '#6b7280'
                           const r  = 4.5 / z
                           const hr = 8   / z
+                          const clickable = !!onSeamClick
                           return (
-                            <g key={seam.key} style={{ cursor: 'pointer' }}
-                              onPointerDown={e => e.stopPropagation()}
-                              onClick={e => { e.stopPropagation(); onSeamClick(cab.id, seam.key, seam.label) }}>
+                            <g key={seam.key}
+                              style={{ cursor: clickable ? 'pointer' : 'default' }}
+                              onPointerDown={clickable ? e => e.stopPropagation() : undefined}
+                              onClick={clickable ? e => { e.stopPropagation(); onSeamClick!(cab.id, seam.key, seam.label) } : undefined}>
                               <circle cx={pt.x} cy={pt.y} r={hr} fill="transparent" />
                               <circle cx={pt.x} cy={pt.y} r={r}
-                                fill={hasJoint || isSuppressed ? col : 'transparent'}
-                                fillOpacity={hasJoint || isSuppressed ? 0.2 : 0}
-                                stroke={col} strokeWidth={(isSel2 ? 1.5 : 1) / z}
-                                strokeDasharray={!hasJoint && !isSuppressed ? `${2 / z} ${1.5 / z}` : undefined}
+                                fill={hasAnyJoint || isSuppressed ? col : 'transparent'}
+                                fillOpacity={hasAnyJoint || isSuppressed ? 0.2 : 0}
+                                stroke={col} strokeWidth={1 / z}
+                                strokeDasharray={!hasAnyJoint && !isSuppressed ? `${2 / z} ${1.5 / z}` : undefined}
                               />
                               {isSuppressed && (<>
                                 <line x1={pt.x - r * 0.6} y1={pt.y - r * 0.6} x2={pt.x + r * 0.6} y2={pt.y + r * 0.6} stroke="#ef4444" strokeWidth={1.2 / z} />
                                 <line x1={pt.x + r * 0.6} y1={pt.y - r * 0.6} x2={pt.x - r * 0.6} y2={pt.y + r * 0.6} stroke="#ef4444" strokeWidth={1.2 / z} />
                               </>)}
-                              {isSel2 && <circle cx={pt.x} cy={pt.y} r={r * 1.8} fill="none" stroke="#38bdf8" strokeWidth={0.8 / z} opacity={0.6} />}
                             </g>
                           )
                         })}
@@ -1168,7 +1243,9 @@ export default function ElevationSVG({
             {displayConfig.layers.dim_elevation_y.visible && (() => {
               const baseCabEl = wallCabs.find(c => c.assembly_class === 'base' || c.assembly_class === 'base_corner') ?? null
               const overheadCabEl = wallCabs.find(c => c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') ?? null
-              const kickH = baseCabEl?.has_toekick ? 150 : 0
+              const kickH = baseCabEl?.has_toekick
+                ? (resolvedParts?.get(baseCabEl.id)?.toekick_parts.find(p => p.part_key === 'kick_front_face')?.DX ?? 150)
+                : 0
               const baseDy = baseCabEl?.dy ?? 0
               const wallCabTop = wallCabTopFor(wall, room)
               const overheadDy = overheadCabEl?.dy ?? 0

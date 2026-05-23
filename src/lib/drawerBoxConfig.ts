@@ -19,13 +19,14 @@ export const DB_RULE_LABELS: Record<DbRuleKey, string> = {
   DB_BACK_SETBACK:       'Bottom Setback from Back (mm)',
   DB_JOINT_TYPE:         'Front / Back Joint Type',
   DB_BACK_HEIGHT_ADJUST: 'Back Panel Height Adjust (mm)',
+  DB_BACK_WIDTH_ADJUST:  'Back Panel Width Adjust (mm)',
   DB_BACK_Y_OFFSET:      'Offset off Drawer Box Bottom (mm)',
 }
 
 export const DB_RULE_GROUPS: { label: string; keys: DbRuleKey[] }[] = [
   { label: 'Bottom',      keys: ['DB_BOTTOM_JOIN', 'DB_DADO_HEIGHT', 'DB_DADO_DEPTH', 'DB_BACK_SETBACK'] },
   { label: 'Joinery',     keys: ['DB_JOINT_TYPE'] },
-  { label: 'Back Panel',  keys: ['DB_BACK_HEIGHT_ADJUST', 'DB_BACK_Y_OFFSET'] },
+  { label: 'Back Panel',  keys: ['DB_BACK_HEIGHT_ADJUST', 'DB_BACK_WIDTH_ADJUST', 'DB_BACK_Y_OFFSET'] },
 ]
 
 export const DB_BOTTOM_JOIN_OPTIONS = [

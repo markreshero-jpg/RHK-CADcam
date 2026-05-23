@@ -475,53 +475,54 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                         </div>
                       </div>
 
-                      {/* Joint Defaults */}
-                      <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Joint Defaults</p>
-                        <p className="text-xs text-gray-600 mb-3">
-                          Default joint type for each carcase connection. Cabinets using this schedule inherit these automatically.
-                          Individual cabinets can override or suppress any edge in the elevation view.
-                        </p>
-                        {jointTypes.length === 0 ? (
-                          <p className="text-xs text-gray-600 italic">
-                            No joint types in library yet — add them in Library → Joints first.
-                          </p>
-                        ) : (
-                          <div className="space-y-px">
-                            {CARCASE_SEAM_DEFS.map(seam => {
-                              const val    = jointDeltas[classTab][seam.key] ?? ''
-                              const isOver = !!val
-                              return (
-                                <div key={seam.key}
-                                  className={`flex items-center gap-4 px-2 py-1.5 rounded ${isOver ? 'bg-blue-950/20' : 'hover:bg-gray-800/30'}`}>
-                                  <span className={`flex-1 text-xs ${isOver ? 'text-blue-300' : 'text-gray-400'}`}>
-                                    {seam.label}
-                                  </span>
-                                  <select
-                                    value={val}
-                                    onChange={e => setJointDefault(classTab, seam.key, e.target.value || null)}
-                                    className="w-56 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
-                                  >
-                                    <option value="">— No default —</option>
-                                    {jointTypes.map(j => (
-                                      <option key={j.id} value={j.id}>{j.name}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-
                     </div>
                   )}
+
+                  {/* Joint Defaults — always visible */}
+                  <div className="max-w-2xl mt-6 pt-6 border-t border-gray-800">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Joint Defaults</p>
+                    <p className="text-xs text-gray-600 mb-3">
+                      Default joint type for each carcase connection. Cabinets using this schedule inherit these automatically.
+                      Individual cabinets can override or suppress any seam in the cabinet edit modal (Joints tab).
+                    </p>
+                    {jointTypes.length === 0 ? (
+                      <p className="text-xs text-gray-600 italic">
+                        No joint types in library yet — add them in Library → Joints first.
+                      </p>
+                    ) : (
+                      <div className="space-y-px">
+                        {CARCASE_SEAM_DEFS.map(seam => {
+                          const val    = jointDeltas[classTab][seam.key] ?? ''
+                          const isOver = !!val
+                          return (
+                            <div key={seam.key}
+                              className={`flex items-center gap-4 px-2 py-1.5 rounded ${isOver ? 'bg-blue-950/20' : 'hover:bg-gray-800/30'}`}>
+                              <span className={`flex-1 text-xs ${isOver ? 'text-blue-300' : 'text-gray-400'}`}>
+                                {seam.label}
+                              </span>
+                              <select
+                                value={val}
+                                onChange={e => setJointDefault(classTab, seam.key, e.target.value || null)}
+                                className="w-56 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+                              >
+                                <option value="">— No default —</option>
+                                {jointTypes.map(j => (
+                                  <option key={j.id} value={j.id}>{j.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
                 </div>
 
               </div>
 
               {/* 3D Preview panel */}
-              <PreviewPanel classTab={classTab} delta={delta} highlightPartKeys={hoverParts} material={previewMats[classTab]} />
+              <PreviewPanel classTab={classTab} delta={delta} highlightPartKeys={hoverParts} material={previewMats[classTab]} jointDeltas={jointDeltas} jointTypes={jointTypes} />
 
             </div>
 
@@ -766,11 +767,13 @@ const PREVIEW_VIEWS: { id: PView; label: string }[] = [
   { id: '3d',    label: '3D'    },
 ]
 
-function PreviewPanel({ classTab, delta, highlightPartKeys, material }: {
+function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDeltas, jointTypes }: {
   classTab: AssClass
   delta: Partial<ConstructionRules>
   highlightPartKeys?: string[] | null
   material?: Material
+  jointDeltas: Record<AssClass, Record<string, string>>
+  jointTypes: { id: string; name: string }[]
 }) {
   const [panelW,       setPanelW]       = useState(380)
   const [activeView,   setActiveView]   = useState<PView>('3d')
@@ -824,6 +827,7 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material }: {
   )
 
   const resolvedCab = useMemo(() => {
+    const jointTypeNames = Object.fromEntries(jointTypes.map(j => [j.id, j.name]))
     const input: CabinetInput = {
       id: 'preview',
       assembly_class: classTab,
@@ -844,6 +848,9 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material }: {
       toekick_interior_material:   mat,
       slide_side_deduction: 13,
       rules,
+      joint_defaults:   jointDeltas[classTab],
+      joint_type_names: jointTypeNames,
+      joint_type_ops:   {},
       face_grid: {
         rows:  [{ row_index: 0, height_locked: false }],
         cols:  [{ col_index: 0, width_locked: false }],
@@ -854,17 +861,15 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material }: {
       inner_drawers: [],
     }
     return resolveCabinet(input)
-  }, [classTab, dx, dy, dz, isWall, rules, mat])
+  }, [classTab, dx, dy, dz, isWall, rules, mat, jointDeltas, jointTypes])
 
   const fakeDims: PrevDims = { dx, dy, dz }
   const toeh = rules.TOEH
   const materialColours = useMemo(() => ({
     [mat.id]: { face: mat.face_colour ?? undefined, back: mat.back_colour ?? undefined, edge: mat.edge_colour ?? undefined },
   }), [mat])
-  // ebByMatId drives edgeband STRIP colour — separate from the raw board edge.
-  // Use null here so the 3D view picks its neutral fallback (#c8b89a).
   const ebByMatId = useMemo(
-    () => ({ [mat.id]: { thickness: 1, color: null } }),
+    () => ({ [mat.id]: { thickness: 1, color: mat.edge_colour ?? null } }),
     [mat],
   )
 

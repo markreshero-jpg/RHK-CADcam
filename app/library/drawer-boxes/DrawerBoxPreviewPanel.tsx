@@ -507,16 +507,22 @@ const FALLBACK_COL: MatColour = { face: '#374151', back: '#1e293b', edge: '#4b55
 
 const SYSTEM_PART_TYPES = new Set(['db_back', 'db_bottom'])
 
-export default function DrawerBoxPreviewPanel({ delta, drawerType = 'five_piece' }: { delta: Partial<DrawerBoxRules>; drawerType?: DrawerType }) {
+export default function DrawerBoxPreviewPanel({
+  delta, drawerType = 'five_piece',
+  prevW, prevH, prevD, onPrevWChange, onPrevHChange, onPrevDChange,
+}: {
+  delta: Partial<DrawerBoxRules>; drawerType?: DrawerType
+  prevW: number; prevH: number; prevD: number
+  onPrevWChange: (v: number) => void
+  onPrevHChange: (v: number) => void
+  onPrevDChange: (v: number) => void
+}) {
   const [panelW,      setPanelW]      = useState(420)
   const [activeView,  setActiveView]  = useState<PView>('3d')
   const [dbScheds,    setDbScheds]    = useState<DbSched[]>([])
   const [selSchedId,  setSelSchedId]  = useState<string | null>(null)
   const [materials,   setMaterials]   = useState<MatRow[]>([])
   const [edgebands,   setEdgebands]   = useState<EbRow[]>([])
-  const [prevW,       setPrevW]       = useState(400)
-  const [prevH,       setPrevH]       = useState(200)
-  const [prevD,       setPrevD]       = useState(450)
   const [slides,      setSlides]      = useState<SlideRow[]>([])
   const [selSlideId,  setSelSlideId]  = useState<string | null>(null)
   const resizeRef = useRef<{ startX: number; startW: number } | null>(null)
@@ -809,43 +815,13 @@ export default function DrawerBoxPreviewPanel({ delta, drawerType = 'five_piece'
             })}
           </>
         )}
-        {/* Carcass / H / D inputs */}
+        {/* Box size display */}
         <div className="flex items-center gap-3 text-gray-600 pt-0.5 border-t border-gray-800/60">
-          {([['Carcass', prevW, setPrevW], ['D', prevD, setPrevD]] as const).map(([label, val, set]) => (
-            <label key={label} className="flex items-center gap-1">
-              <span>{label}</span>
-              <input
-                type="number"
-                min={50}
-                max={1200}
-                value={val}
-                onChange={e => set(Number(e.target.value))}
-                className="w-14 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-right text-gray-300 focus:outline-none focus:border-blue-500"
-              />
-              <span className="text-gray-700">mm</span>
-            </label>
-          ))}
-          {/* H input: editable for 5-piece; read-only from slide for system */}
-          <label className="flex items-center gap-1">
-            <span>H</span>
-            {drawerType === 'system' && selSlide?.box_height != null ? (
-              <span className="w-14 bg-gray-800/50 border border-gray-700/50 rounded px-1.5 py-0.5 text-[10px] text-right text-gray-500 font-mono select-none">{boxH}</span>
-            ) : (
-              <input
-                type="number"
-                min={50}
-                max={1200}
-                value={prevH}
-                onChange={e => setPrevH(Number(e.target.value))}
-                className="w-14 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-right text-gray-300 focus:outline-none focus:border-blue-500"
-              />
-            )}
-            <span className="text-gray-700">mm</span>
-          </label>
-          <span className="ml-auto text-right space-x-2">
-            <span><span className="text-gray-500">box W: </span><span className="text-gray-300 font-mono">{boxW}mm</span></span>
-            <span><span className="text-gray-500">box H: </span><span className="text-gray-300 font-mono">{boxH}mm</span></span>
-          </span>
+          <span className="text-[10px] text-gray-600">Box:</span>
+          <span><span className="text-gray-600">W </span><span className="text-gray-300 font-mono">{boxW}</span></span>
+          <span><span className="text-gray-600">H </span><span className="text-gray-300 font-mono">{boxH}</span></span>
+          <span><span className="text-gray-600">D </span><span className="text-gray-300 font-mono">{prevD}</span></span>
+          <span className="text-gray-700 text-[10px]">mm</span>
         </div>
       </div>
     </div>

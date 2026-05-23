@@ -259,6 +259,8 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
 
   const [showInactive, setShowInactive] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [sortKey, setSortKey] = useState<string>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   const tab       = TABS.find(t => t.id === activeTab)!
   const rows      = allRows[activeTab] ?? []
@@ -267,12 +269,42 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
 
   const visibleRows = showInactive ? rows : rows.filter(r => r.active !== false)
 
+  const sortField = tab.fields.find(f => f.key === sortKey)
+  const sortedRows = sortKey ? [...visibleRows].sort((a, b) => {
+    const av = a[sortKey], bv = b[sortKey]
+    let cmp = 0
+    if (sortField?.type === 'number') {
+      cmp = (Number(av) || 0) - (Number(bv) || 0)
+    } else if (sortField?.type === 'boolean') {
+      cmp = (av ? 1 : 0) - (bv ? 1 : 0)
+    } else {
+      cmp = String(av ?? '').localeCompare(String(bv ?? ''))
+    }
+    return sortDir === 'asc' ? cmp : -cmp
+  }) : visibleRows
+
+  function handleSortKey(key: string) {
+    if (key === sortKey) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
   function patchForm(updates: Record<string, FVal>) {
     setForms(prev => ({ ...prev, [activeTab]: { ...prev[activeTab], ...updates } }))
   }
 
   function handleNew() {
     setForms(prev => ({ ...prev, [activeTab]: mkForm(tab.defaults) }))
+    setEditingIds(prev => ({ ...prev, [activeTab]: null }))
+  }
+
+  function handleDuplicate() {
+    if (!editingId) return
+    const copy = { ...form, name: String(form['name'] ?? '') + ' (copy)' }
+    setForms(prev => ({ ...prev, [activeTab]: copy }))
     setEditingIds(prev => ({ ...prev, [activeTab]: null }))
   }
 
@@ -331,7 +363,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         {TABS.map(t => (
           <button
             key={t.id}
-            onClick={() => setActiveTab(t.id)}
+            onClick={() => { setActiveTab(t.id); setSortKey('name'); setSortDir('asc') }}
             className={`px-4 py-2.5 text-xs font-medium transition-colors ${
               t.id === activeTab
                 ? 'text-white border-b-2 border-blue-500'
@@ -342,6 +374,26 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
           </button>
         ))}
         <div className="flex-1" />
+        <div className="flex items-center gap-1.5 pb-2.5">
+          <span className="text-[10px] text-gray-600">Sort</span>
+          <select
+            value={sortKey}
+            onChange={e => handleSortKey(e.target.value)}
+            className="bg-gray-800 border border-gray-700 text-[10px] text-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-blue-500"
+          >
+            {tab.fields.filter(f => f.type !== 'colour' && f.type !== 'boolean').map(f => (
+              <option key={f.key} value={f.key} className="bg-gray-900">{f.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+            className="text-[11px] text-gray-400 hover:text-white w-5 text-center leading-none"
+            title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+          >
+            {sortDir === 'asc' ? '↑' : '↓'}
+          </button>
+        </div>
+        <span className="text-gray-700 text-xs pb-2.5">|</span>
         <label className="flex items-center gap-1.5 text-[10px] text-gray-500 pb-2.5 cursor-pointer select-none">
           <input
             type="checkbox"
@@ -438,6 +490,14 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
               >
                 {saving ? '…' : editingId ? 'Update' : 'Save'}
               </button>
+              {editingId && (
+                <button
+                  onClick={handleDuplicate}
+                  className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded transition-colors whitespace-nowrap"
+                >
+                  Dupe
+                </button>
+              )}
               <button
                 onClick={handleNew}
                 className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded transition-colors"
@@ -469,7 +529,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
 
           {/* Records */}
           <div className="min-w-max">
-            {visibleRows.length === 0 ? (
+            {sortedRows.length === 0 ? (
               <div className="px-4 py-10">
                 <p className="text-xs text-gray-600">
                   {rows.length === 0
@@ -478,7 +538,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                 </p>
               </div>
             ) : (
-              visibleRows.map(row => (
+              sortedRows.map(row => (
                 <div
                   key={String(row.id)}
                   onClick={() => handleRowClick(row)}
@@ -519,7 +579,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         {/* Footer */}
         <div className="flex-none border-t border-gray-800 px-4 py-1.5 flex items-center justify-between">
           <span className="text-[10px] text-gray-600">
-            {visibleRows.length} of {rows.length} record{rows.length !== 1 ? 's' : ''}
+            {sortedRows.length} of {rows.length} record{rows.length !== 1 ? 's' : ''}
             {!showInactive && rows.some(r => r.active === false) && (
               <span className="ml-1">
                 · {rows.filter(r => r.active === false).length} inactive hidden

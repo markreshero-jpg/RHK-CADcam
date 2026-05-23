@@ -8,6 +8,7 @@ import SchedulesClient from '@/app/library/schedules/SchedulesClient'
 import ConstructionMethodsClient from '@/app/library/construction-methods/ConstructionMethodsClient'
 import DrawerBoxesClient from '@/app/library/drawer-boxes/DrawerBoxesClient'
 import JointsClient from '@/app/library/joints/JointsClient'
+import PartsLibraryClient from '@/app/library/parts/PartsLibraryClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
 import { getUserPrefs, setUserPrefs, type DrawingPreset } from '@/src/lib/userPrefs'
@@ -75,10 +76,10 @@ const RULE_LABELS: Record<RuleKey, string> = {
   ADJSR:   'Adj. Shelf Right Notch (mm)',
   FIXSB_F: 'Fixed Shelf Front Setback (mm)',
   FIXSB_B: 'Fixed Shelf Back Setback (mm)',
-  IDCL:    'Drawer Box Clearance Left (mm)',
-  IDCR:    'Drawer Box Clearance Right (mm)',
-  IDFAO:   'Drawer Box Face Above Opening (mm)',
-  IDRUN:   'Drawer Box Runner Length (mm)',
+  IDCL:          'Drawer Box Clearance Left (mm)',
+  IDCR:          'Drawer Box Clearance Right (mm)',
+  IDFAO:         'Drawer Box Face Above Opening (mm)',
+  SLIDE_SETBACK: 'Min Depth Behind Slide (mm)',
   REVT:    'Face Reveal Top (mm)',
   REVB:    'Face Reveal Bottom (mm)',
   REVL:    'Face Reveal Left (mm)',
@@ -97,7 +98,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Top Rail',           keys: ['TOP_TYPE', 'RD'] },
   { label: 'Adjustable Shelves', keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },
   { label: 'Fixed Shelves',      keys: ['FIXSB_F', 'FIXSB_B'] },
-  { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'IDRUN'] },
+  { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
   { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR'] },
   { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
 ]
@@ -123,7 +124,7 @@ type SettingsTab =
   | 'company' | 'dimensions' | 'construction' | 'materials'
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'cnc_tool' | 'cnc_machine'
-  | 'materials_library' | 'materials_schedule' | 'joints_library'
+  | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library'
 
 interface TabDef {
   id: SettingsTab
@@ -283,6 +284,17 @@ const TABS: TabDef[] = [
         <line x1="6" y1="7.5" x2="9" y2="7.5"/>
         <circle cx="7.5" cy="7.5" r="1.2" fill="currentColor" fillOpacity="0.3"/>
         <circle cx="7.5" cy="7.5" r="1.2"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'parts_library', label: 'Parts Library', group: 'Library',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1.5" y="1.5" width="5" height="5" rx="0.6"/>
+        <rect x="8.5" y="1.5" width="5" height="5" rx="0.6"/>
+        <rect x="1.5" y="8.5" width="5" height="5" rx="0.6"/>
+        <rect x="8.5" y="8.5" width="5" height="5" rx="0.6"/>
       </svg>
     ),
   },
@@ -470,6 +482,8 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
             <SchedulesClient embedded />
           ) : tab === 'joints_library' ? (
             <JointsClient embedded />
+          ) : tab === 'parts_library' ? (
+            <PartsLibraryClient embedded />
           ) : tab === 'cabinet_builder' ? (
             <ConstructionMethodsClient embedded />
           ) : tab === 'drawer_builder' ? (

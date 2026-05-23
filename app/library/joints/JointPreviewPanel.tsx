@@ -21,54 +21,46 @@ const PAD = 18   // padding around the scene
 
 type DrillAxis = 'x-' | 'x+' | 'y-' | 'y+'
 
-// Returns drill axis for an op in the given part/face combination.
-function opAxis(op: JointOp3D): DrillAxis {
-  if (op.target_part === 'part_a') {
-    if (op.face === 'end')    return 'x+'
-    if (op.face === 'top')    return 'y-'
-    if (op.face === 'bottom') return 'y+'
-    return 'x-'
-  } else {
-    if (op.face === 'end')    return 'x-'
-    if (op.face === 'top')    return 'y-'
-    if (op.face === 'bottom') return 'y+'
-    return 'x+'
-  }
+// Face-local U: offset_y_mm for X-drill faces (normal/end), offset_x_mm for Y-drill faces (top/bottom).
+// V = offset_z_mm always (distance from front).
+function svgU(op: JointOp3D): number {
+  return (op.face === 'top' || op.face === 'bottom') ? op.offset_x_mm : op.offset_y_mm
 }
 
 // Section view (XY, looking along Z): returns entry (worldX, worldY) and drill axis.
 function sectionEntry(
   op: JointOp3D, t: number, masterW: number, masterDx: number, slaveL: number, slaveDy: number,
 ): { wx: number; wy: number; axis: DrillAxis } {
+  const U = svgU(op)
   if (op.target_part === 'part_a') {
     switch (op.face) {
-      case 'end':    return { wx: -(masterW - masterDx), wy: -op.offset_y_mm,  axis: 'x+' }
-      case 'top':    return { wx: -op.offset_x_mm,       wy: 0,                axis: 'y-' }
-      case 'bottom': return { wx: -op.offset_x_mm,       wy: -t,               axis: 'y+' }
-      default:       return { wx: -op.offset_x_mm,       wy: -op.offset_y_mm,  axis: 'x-' }
+      case 'end':    return { wx: -(masterW - masterDx), wy: -U, axis: 'x+' }
+      case 'top':    return { wx: -U,                   wy: 0,  axis: 'y-' }
+      case 'bottom': return { wx: -U,                   wy: -t, axis: 'y+' }
+      default:       return { wx: 0,                    wy: -U, axis: 'x-' }
     }
   } else {
     switch (op.face) {
-      case 'end':    return { wx: t,              wy: -op.offset_y_mm,  axis: 'x-' }
-      case 'top':    return { wx: op.offset_x_mm, wy: slaveL - slaveDy, axis: 'y-' }
-      case 'bottom': return { wx: op.offset_x_mm, wy: -slaveDy,         axis: 'y+' }
-      default:       return { wx: op.offset_x_mm, wy: -op.offset_y_mm,  axis: 'x+' }
+      case 'end':    return { wx: t, wy: -U,              axis: 'x-' }
+      case 'top':    return { wx: U, wy: slaveL - slaveDy, axis: 'y-' }
+      case 'bottom': return { wx: U, wy: -slaveDy,         axis: 'y+' }
+      default:       return { wx: 0, wy: -U,              axis: 'x+' }
     }
   }
 }
 
 // Depth rect for the section SVG view based on drill axis.
-// In SVG: y increases downward; world Y increases upward, so sy inverts Y.
-// y- drill (into shelf from top): world Y goes toward -t → SVG y increases → rect extends down.
-// y+ drill (into side from below): world Y goes toward 0 → SVG y decreases → rect extends up.
+// In SVG y increases downward; sy() inverts world Y.
+// y- drill (top face into shelf): world Y goes toward -t → SVG y increases → rect extends down.
+// y+ drill (bottom face upward): world Y goes toward 0 → SVG y decreases → rect extends up.
 function sectionDepthRect(
   axis: DrillAxis, cx: number, cy: number, depthPx: number, r: number,
 ): { x: number; y: number; w: number; h: number } {
   switch (axis) {
-    case 'x-': return { x: cx - depthPx, y: cy - r,        w: depthPx, h: r * 2 }
-    case 'x+': return { x: cx,           y: cy - r,        w: depthPx, h: r * 2 }
-    case 'y-': return { x: cx - r,       y: cy,            w: r * 2,   h: depthPx }
-    case 'y+': return { x: cx - r,       y: cy - depthPx,  w: r * 2,   h: depthPx }
+    case 'x-': return { x: cx - depthPx, y: cy - r,       w: depthPx, h: r * 2 }
+    case 'x+': return { x: cx,           y: cy - r,       w: depthPx, h: r * 2 }
+    case 'y-': return { x: cx - r,       y: cy,           w: r * 2,   h: depthPx }
+    case 'y+': return { x: cx - r,       y: cy - depthPx, w: r * 2,   h: depthPx }
   }
 }
 
@@ -309,24 +301,23 @@ function JointFaceViewSVG({ ops, thickness: t, masterW, masterDx, slaveL, slaveD
         const col = op.target_part === 'part_a'
           ? (sel ? '#fcd34d' : '#f59e0b')
           : (sel ? '#93c5fd' : '#60a5fa')
+        const U = svgU(op)
 
         let cx: number, cy: number
         if (op.target_part === 'part_a') {
-          // Part A: SVG origin at (aX, aY), X runs right (joint end at aX+aW-masterDx), Y runs down
           const jointEdgeX = aX + aW - masterDx
           switch (op.face) {
-            case 'end':    cx = aX;              cy = aY + op.offset_y_mm; break  // far end
-            case 'top':    cx = jointEdgeX - op.offset_x_mm; cy = aY;      break  // top edge
-            case 'bottom': cx = jointEdgeX - op.offset_x_mm; cy = aY + aH; break  // bottom edge
-            default:       cx = jointEdgeX;      cy = aY + op.offset_y_mm; break  // normal = joint end
+            case 'end':    cx = aX;             cy = aY + U; break
+            case 'top':    cx = jointEdgeX - U; cy = aY;     break
+            case 'bottom': cx = jointEdgeX - U; cy = aY + aH; break
+            default:       cx = jointEdgeX;     cy = aY + U; break
           }
         } else {
-          // Part B: SVG origin at (bX, bY), joint ref line at bY+slaveDy, X=left face
           switch (op.face) {
-            case 'end':    cx = bX + bW;         cy = bY + slaveDy + op.offset_y_mm; break  // right face
-            case 'top':    cx = bX + op.offset_x_mm; cy = bY;                        break  // top end
-            case 'bottom': cx = bX + op.offset_x_mm; cy = bY + bH;                  break  // bottom end
-            default:       cx = bX;              cy = bY + slaveDy + op.offset_y_mm; break  // normal = left face
+            case 'end':    cx = bX + bW; cy = bY + slaveDy + U; break
+            case 'top':    cx = bX + U;  cy = bY;               break
+            case 'bottom': cx = bX + U;  cy = bY + bH;          break
+            default:       cx = bX;      cy = bY + slaveDy + U;  break
           }
         }
 
@@ -410,35 +401,35 @@ function JointTopViewSVG({ ops, thickness: t, masterW, masterDx, depth, wire = f
 
       {/* Operations — projected onto XZ plane (top view looking down Y) */}
       {ops.map((op, i) => {
-        const sel  = op.id === selOpId
-        const r    = Math.max(2, op.tool_diameter_mm / 2)
-        const col  = op.target_part === 'part_a'
+        const sel     = op.id === selOpId
+        const r       = Math.max(2, op.tool_diameter_mm / 2)
+        const col     = op.target_part === 'part_a'
           ? (sel ? '#fcd34d' : '#f59e0b')
           : (sel ? '#93c5fd' : '#60a5fa')
-        const axis = opAxis(op)
+        const U       = svgU(op)
+        const isYDrill = op.face === 'top' || op.face === 'bottom'
 
-        // XZ projection: X is world X, Z = offset_z from front face
+        // XZ projection: X = world X, Z = V (offset_z from front)
         let cx: number
         if (op.target_part === 'part_a') {
           switch (op.face) {
-            case 'end':    cx = sx(-(masterW - masterDx)); break  // far end
+            case 'end':    cx = sx(-(masterW - masterDx)); break
             case 'top':
-            case 'bottom': cx = sx(-op.offset_x_mm);      break  // Y-drill: X position
-            default:       cx = sx(-op.offset_x_mm);      break  // normal: X inset
+            case 'bottom': cx = sx(-U);                    break
+            default:       cx = sx(0);                     break
           }
         } else {
           switch (op.face) {
-            case 'end':    cx = sx(t);             break  // right face
+            case 'end':    cx = sx(t); break
             case 'top':
-            case 'bottom': cx = sx(op.offset_x_mm); break  // Y-drill: X within thickness
-            default:       cx = sx(op.offset_x_mm); break  // normal: X inset
+            case 'bottom': cx = sx(U); break
+            default:       cx = sx(0); break
           }
         }
         const cy = sz(op.offset_z_mm)
 
-        // Y-direction drills enter from above/below — show as a filled circle (visible hole from top)
-        // X-direction drills appear as edge markers — show as crosshair on the panel edge
-        const isYDrill = axis === 'y-' || axis === 'y+'
+        // Y-drill (top/bottom face): hole visible from above → filled circle
+        // X-drill (normal/end face): edge entry → crosshair on panel outline
         return (
           <g key={i}>
             {isYDrill

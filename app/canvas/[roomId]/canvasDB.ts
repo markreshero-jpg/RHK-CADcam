@@ -78,6 +78,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         edge_band: { top: z.edge_band_top, bottom: z.edge_band_bottom, left: z.edge_band_left, right: z.edge_band_right },
       })),
       drawer_stacks: [],
+      seam_joints: [],
       errors: [],
       warnings: [],
     })
@@ -144,4 +145,57 @@ export async function dbUpdateCabinet(
 export async function dbDeleteCabinet(id: string) {
   const { error } = await supabase.from('cabinet_instances').delete().eq('id', id)
   if (error) console.error('dbDeleteCabinet', error)
+}
+
+// ── Custom Parts ──────────────────────────────────────────────────────────────
+
+export interface CabinetCustomPart {
+  id:                  string
+  cabinet_instance_id: string
+  part_library_id:     string
+  name:                string | null
+  dy:                  number
+  dx:                  number
+  dz:                  number
+  x:                   number
+  y:                   number
+  z:                   number
+  material_id:         string | null
+  edge_top:            boolean
+  edge_bottom:         boolean
+  edge_left:           boolean
+  edge_right:          boolean
+  visible:             boolean
+  sort_order:          number
+}
+
+export async function dbLoadCustomParts(cabinetId: string): Promise<CabinetCustomPart[]> {
+  const { data } = await supabase
+    .from('cabinet_custom_parts')
+    .select('*')
+    .eq('cabinet_instance_id', cabinetId)
+    .order('sort_order')
+  return (data ?? []) as CabinetCustomPart[]
+}
+
+export async function dbAddCustomPart(
+  part: Omit<CabinetCustomPart, 'id'>,
+): Promise<CabinetCustomPart | null> {
+  const { data, error } = await supabase
+    .from('cabinet_custom_parts')
+    .insert(part)
+    .select()
+    .single()
+  if (error) { console.error(error); return null }
+  return data as CabinetCustomPart
+}
+
+export async function dbUpdateCustomPart(id: string, u: Partial<CabinetCustomPart>): Promise<void> {
+  const { error } = await supabase.from('cabinet_custom_parts').update(u).eq('id', id)
+  if (error) console.error(error)
+}
+
+export async function dbDeleteCustomPart(id: string): Promise<void> {
+  const { error } = await supabase.from('cabinet_custom_parts').delete().eq('id', id)
+  if (error) console.error(error)
 }

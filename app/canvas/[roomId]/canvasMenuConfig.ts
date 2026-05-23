@@ -77,6 +77,8 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
       { label: 'Drawer lines (plan)',        checked: a.displayConfig.annotations.plan_drawer_lines,   action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'plan_drawer_lines')) },
       { label: 'Door chevrons (elevation)',  checked: a.displayConfig.annotations.elev_door_chevrons,  action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_door_chevrons')) },
       { label: 'Drawer labels (elevation)',  checked: a.displayConfig.annotations.elev_drawer_labels,  action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_drawer_labels')) },
+      { label: 'Internal parts (elevation)', checked: a.displayConfig.annotations.elev_internal_parts, action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_internal_parts')) },
+      { label: 'Drawer box (elevation)',     checked: a.displayConfig.annotations.elev_drawer_box,      action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_drawer_box')) },
     ]},
     { label: 'Job', items: [
       { label: 'Details',           action: () => a.setJobModalTab('details') },

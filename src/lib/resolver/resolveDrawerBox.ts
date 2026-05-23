@@ -108,12 +108,13 @@ export function resolveDrawerBox(input: DrawerBoxInput): ResolvedDrawerBoxPart[]
     const backY = (slide_box_height != null
       ? 0
       : (r.DB_BOTTOM_JOIN === 'dado' ? r.DB_DADO_HEIGHT + Tb : 0)) + r.DB_BACK_Y_OFFSET
+    const backWidthAdj = r.DB_BACK_WIDTH_ADJUST
     parts.push({
       part_type:   'db_back',
       DX: backH,
-      DY: W - 2 * Ts,
+      DY: W - 2 * Ts - backWidthAdj,
       DZ: panelT,
-      X: Ts, Y: backY, Z: D - r.DB_BACK_SETBACK,
+      X: Ts + backWidthAdj / 2, Y: backY, Z: D - r.DB_BACK_SETBACK,
       AX: 0, AY: 0, AZ: 0,
       material_id: mid,
       edge_band:   ebFromSides(getEdging('db_back', r), edgeband_id),

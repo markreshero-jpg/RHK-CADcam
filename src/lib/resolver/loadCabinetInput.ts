@@ -2,6 +2,7 @@ import { supabase } from '@/src/lib/supabase'
 import {
   CabinetInput, ConstructionRules, FaceGridInput, Material, DEFAULT_RULES,
   SlideProduct, SlideScheduleEntry, DrawerBoxRules, DEFAULT_DB_RULES,
+  JointTypeOp, JointTargetPart, JointMachineOp, JointFace,
 } from './types'
 import { mergeRules } from './mergeRules'
 
@@ -54,7 +55,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
 
   // ── 2. Load room + shop defaults in parallel ─────────────────────────────────
   const [roomRes, shopAsmRes, shopTkRes, shopFrontRes, shopSettingsRes, shopSlideRes] = await Promise.all([
-    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id').eq('id', cab.room_id).single(),
+    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, rule_overrides').eq('id', cab.room_id).single(),
     supabase.from('assembly_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('toekick_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('front_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
@@ -72,7 +73,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   if (projectId) {
     const { data } = await supabase
       .from('projects')
-      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, default_drawer_type, slide_schedule_id')
+      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, slide_schedule_id, rule_overrides')
       .eq('id', projectId)
       .single()
     projRow = data as Record<string, string | null> | null
@@ -137,7 +138,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
       : supabase.from('construction_methods').select('rules').eq('is_default', true).limit(1).maybeSingle(),
     // Construction method schedule row for this assembly class
     conStrSchedId
-      ? supabase.from('construction_method_schedule_rows').select('rules').eq('schedule_id', conStrSchedId).eq('assembly_class', cab.assembly_class).maybeSingle()
+      ? supabase.from('construction_method_schedule_rows').select('rules, joint_defaults').eq('schedule_id', conStrSchedId).eq('assembly_class', cab.assembly_class).maybeSingle()
       : Promise.resolve({ data: null }),
     slideSchedId
       ? supabase.from('slide_schedule_entries').select('id, schedule_id, depth_threshold, height_threshold, slide_id').eq('schedule_id', slideSchedId).order('depth_threshold').order('height_threshold')
@@ -199,10 +200,12 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   }
 
   // ── 7. Build construction rules ──────────────────────────────────────────────
-  // Cascade: system defaults → schedule row → cabinet method → cabinet overrides
+  // Cascade: system defaults → schedule row → cabinet method → project overrides → room overrides → cabinet overrides
   const scheduleRules = (conStrSchedRowRes.data?.rules ?? {}) as Partial<ConstructionRules>
   const methodRules   = (methodRes.data?.rules ?? {}) as Partial<ConstructionRules>
-  const rules = mergeRules(DEFAULT_RULES, scheduleRules, methodRules, (cab.rule_overrides ?? {}) as Partial<ConstructionRules>)
+  const projRules     = ((projRow as Record<string, unknown> | null)?.rule_overrides ?? {}) as Partial<ConstructionRules>
+  const roomRules     = ((room as Record<string, unknown> | null)?.rule_overrides   ?? {}) as Partial<ConstructionRules>
+  const rules = mergeRules(DEFAULT_RULES, scheduleRules, methodRules, projRules, roomRules, (cab.rule_overrides ?? {}) as Partial<ConstructionRules>)
 
   // ── 8. Resolve required materials ───────────────────────────────────────────
   const interior   = matMap.get('interior')
@@ -257,6 +260,54 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   // Fallback side_deduction from first slide product
   const fallbackDeduction = slideProducts[0]?.side_deduction ?? 13
 
+  // ── 10. Resolve joint type operations ───────────────────────────────────────
+  const cabJoints    = (cab.carcase_joints ?? {}) as Record<string, string | null>
+  const cmSchedRow   = conStrSchedRowRes.data as Record<string, unknown> | null
+  const jointDefaults = (cmSchedRow?.joint_defaults ?? {}) as Record<string, string>
+
+  // Collect all joint type IDs referenced in either map
+  const jointTypeIds = new Set<string>()
+  for (const v of Object.values(cabJoints))    if (v) jointTypeIds.add(v)
+  for (const v of Object.values(jointDefaults)) if (v) jointTypeIds.add(v)
+
+  let jointTypeOps:   Record<string, JointTypeOp[]> = {}
+  let jointTypeNames: Record<string, string>          = {}
+
+  if (jointTypeIds.size > 0) {
+    const ids = [...jointTypeIds]
+    const [opsRes, namesRes] = await Promise.all([
+      supabase.from('joint_type_operations').select('*').in('joint_type_id', ids).order('operation_order'),
+      supabase.from('joint_types').select('id, name').in('id', ids),
+    ])
+
+    for (const op of ((opsRes.data ?? []) as Record<string, unknown>[])) {
+      const jid = op.joint_type_id as string
+      if (!jointTypeOps[jid]) jointTypeOps[jid] = []
+      jointTypeOps[jid].push({
+        id:                op.id as string,
+        joint_type_id:     jid,
+        operation_order:   op.operation_order as number,
+        target_part:       op.target_part as JointTargetPart,
+        machine_operation: op.machine_operation as JointMachineOp,
+        face:              (op.face as JointFace) ?? 'normal',
+        tool_diameter_mm:  op.tool_diameter_mm as number,
+        depth_mm:          op.depth_mm as number,
+        offset_x_mm:       (op.offset_x_mm as number) ?? 0,
+        offset_y_mm:       (op.offset_y_mm as number) ?? 0,
+        offset_z_mm:       (op.offset_z_mm as number) ?? 0,
+        qty:               (op.qty as number) ?? 1,
+        spacing_mm:        (op.spacing_mm as number | null) ?? null,
+        tool:              (op.tool as string | null) ?? null,
+        notes:             (op.notes as string | null) ?? null,
+        expressions:       (op.expressions as Record<string, string> | null) ?? null,
+      })
+    }
+
+    for (const n of ((namesRes.data ?? []) as { id: string; name: string }[])) {
+      jointTypeNames[n.id] = n.name
+    }
+  }
+
   return {
     id:              cab.id,
     assembly_class:  cab.assembly_class,
@@ -284,14 +335,16 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     toekick_face_edgeband_id:     ebMap.get('tk_face'),
     toekick_interior_edgeband_id: ebMap.get('tk_interior'),
     slide_side_deduction:      fallbackDeduction,
-    default_drawer_type:       (projRow?.default_drawer_type as 'system' | 'five_piece' | null)
-                               ?? (dbMethodRes.data?.drawer_type as 'system' | 'five_piece' | null)
-                               ?? undefined,
+    default_drawer_type:       (dbMethodRes.data?.drawer_type as 'system' | 'five_piece' | null) ?? undefined,
     drawer_material:           drawerboxMat ?? interior,
     drawer_box_rules:          drawerBoxRules,
     slide_products:            slideProducts,
     slide_schedule:            slideSchedule,
     rules,
+    carcase_joints:   cabJoints,
+    joint_defaults:   jointDefaults,
+    joint_type_ops:   jointTypeOps,
+    joint_type_names: jointTypeNames,
     face_grid:     (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID,
     adj_shelves:   [],
     fixed_shelves: [],

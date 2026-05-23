@@ -560,9 +560,8 @@ function OpsTable({
               <th className={thCls} style={{ width: 100 }}>Tool</th>
               <th className={thCls} style={{ width: 60 }}>Ø dia</th>
               <th className={thCls} style={{ width: 58 }}>Depth</th>
-              <th className={thCls} style={{ width: 56 }}>X off</th>
-              <th className={thCls} style={{ width: 56 }}>Y off</th>
-              <th className={thCls} style={{ width: 56 }}>Z off</th>
+              <th className={thCls} style={{ width: 56 }} title="Position along the face (offset_y for end/normal, offset_x for top/bottom)">U</th>
+              <th className={thCls} style={{ width: 56 }} title="Distance from front face (offset_z)">V (front)</th>
               <th className={thCls} style={{ width: 28 }} />
             </tr>
           </thead>
@@ -643,20 +642,21 @@ function OpsTable({
                       onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
                       className={numCls} />
                   </td>
-                  <td className={tdCls}>
-                    <ExprCell value={op.offset_x_mm} fieldKey="offset_x_mm"
-                      expressions={op.expressions}
-                      onPatch={n => onPatch(op.id, 'offset_x_mm', n)}
-                      onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
-                      className={numCls} />
-                  </td>
-                  <td className={tdCls}>
-                    <ExprCell value={op.offset_y_mm} fieldKey="offset_y_mm"
-                      expressions={op.expressions}
-                      onPatch={n => onPatch(op.id, 'offset_y_mm', n)}
-                      onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
-                      className={numCls} />
-                  </td>
+                  {/* U = face-local: offset_y for X-drill faces, offset_x for Y-drill faces */}
+                  {(() => {
+                    const isYDrill = op.face === 'top' || op.face === 'bottom'
+                    const uField   = isYDrill ? 'offset_x_mm' : 'offset_y_mm' as const
+                    return (
+                      <td className={tdCls}>
+                        <ExprCell value={isYDrill ? op.offset_x_mm : op.offset_y_mm} fieldKey={uField}
+                          expressions={op.expressions}
+                          onPatch={n => onPatch(op.id, uField, n)}
+                          onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
+                          className={numCls} />
+                      </td>
+                    )
+                  })()}
+                  {/* V = always offset_z (distance from front) */}
                   <td className={tdCls}>
                     <ExprCell value={op.offset_z_mm} fieldKey="offset_z_mm"
                       expressions={op.expressions}
@@ -673,7 +673,7 @@ function OpsTable({
             })}
             {ops.length === 0 && (
               <tr>
-                <td colSpan={14} className="px-4 py-6 text-center text-xs text-gray-600">
+                <td colSpan={13} className="px-4 py-6 text-center text-xs text-gray-600">
                   No operations yet. Click + Add operation below.
                 </td>
               </tr>

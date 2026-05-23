@@ -28,7 +28,7 @@ export const DEFAULT_CONSTRUCTION_METHOD = {
     FIXSB_F: 0, FIXSB_B: 0,
 
     // Inner drawers
-    IDCL: 2, IDCR: 2, IDFAO: 0, IDRUN: 450,
+    IDCL: 2, IDCR: 2, IDFAO: 0, SLIDE_SETBACK: 20,
 
     // Face reveals
     REVT:    4,   // top reveal

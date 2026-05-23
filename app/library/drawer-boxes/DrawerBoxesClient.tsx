@@ -90,6 +90,9 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
   const [newName,     setNewName]     = useState('')
   const [creating,    setCreating]    = useState(false)
   const [shopDefault, setShopDefault] = useState<string | null>(null)
+  const [prevW,       setPrevW]       = useState(400)
+  const [prevH,       setPrevH]       = useState(200)
+  const [prevD,       setPrevD]       = useState(450)
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -375,6 +378,27 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                 </div>
               </div>
 
+              {/* Box size */}
+              <div className="flex-none px-6 py-3 border-b border-gray-800">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-gray-500 w-24 shrink-0">Box Size</span>
+                  <div className="flex items-center gap-4">
+                    {([['DX', prevW, setPrevW], ['DY', prevH, setPrevH], ['DZ', prevD, setPrevD]] as [string, number, (v: number) => void][]).map(([label, val, set]) => (
+                      <label key={label} className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-500">{label}</span>
+                        <input
+                          type="number" min={50} max={1200}
+                          value={val}
+                          onChange={e => set(Number(e.target.value))}
+                          className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-right text-gray-300 focus:outline-none focus:border-blue-500"
+                        />
+                        <span className="text-xs text-gray-600">mm</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               {/* Rules editor */}
               <div className="flex-1 overflow-y-auto px-6 py-4">
                 <div className="max-w-lg space-y-5">
@@ -443,7 +467,11 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
             </div>
 
             {/* ── Preview panel (self-contained) ──────────────────────────── */}
-            <DrawerBoxPreviewPanel delta={delta} drawerType={editType} />
+            <DrawerBoxPreviewPanel
+              delta={delta} drawerType={editType}
+              prevW={prevW} prevH={prevH} prevD={prevD}
+              onPrevWChange={setPrevW} onPrevHChange={setPrevH} onPrevDChange={setPrevD}
+            />
 
           </div>
         )}

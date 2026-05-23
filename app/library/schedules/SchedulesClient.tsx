@@ -743,112 +743,119 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
   }
 
   function renderSlideGrid() {
-    const depths = [...new Set(slideEntries.map(e => e.depth_threshold))].sort((a, b) => a - b)
     const slideLabel = (s: HwSlideItem) =>
       `${s.name}${s.brand ? ` — ${s.brand}` : ''}${s.box_height != null ? ` (H${s.box_height})` : ''}`
+    let prevDepth: number | null = null
 
     return (
-      <div className="space-y-3">
-        {depths.map(depth => {
-          const rows   = slideEntries.filter(e => e.depth_threshold === depth).sort((a, b) => a.height_threshold - b.height_threshold)
-          const adding = addingInDepth[depth] ?? { height: '', slideId: '' }
-          return (
-            <div key={depth} className="border border-gray-700 rounded overflow-hidden">
-              <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/60 border-b border-gray-700">
-                <span className="text-xs font-semibold text-gray-200">Depth ≥ {depth} mm</span>
-                <button
-                  onClick={() => deleteDepthTier(depth)}
-                  className="ml-auto text-gray-600 hover:text-red-400 text-base leading-none transition-colors"
-                  title="Delete depth tier"
-                >×</button>
-              </div>
-              {rows.map(entry => (
-                <div key={entry.id} className="flex items-center gap-3 px-3 py-2 border-b border-gray-800/50">
-                  <span className="text-xs text-gray-500 w-28 shrink-0">Height ≥ {entry.height_threshold} mm</span>
-                  <select
-                    value={entry.slide_id}
-                    onChange={e => updateSlideEntry(entry.id, e.target.value)}
-                    className={`flex-1 ${sel}`}
-                  >
-                    {slides.map(s => <option key={s.id} value={s.id}>{slideLabel(s)}</option>)}
-                  </select>
-                  <button
-                    onClick={() => deleteSlideEntry(entry.id)}
-                    className="text-gray-600 hover:text-red-400 text-base leading-none shrink-0 transition-colors"
-                  >×</button>
-                </div>
-              ))}
-              {/* Add height row within this depth */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-gray-900/20">
-                <span className="text-[10px] text-gray-600 w-28 shrink-0">+ height (mm)</span>
-                <input
-                  type="number"
-                  value={adding.height}
-                  onChange={e => setAddingInDepth(prev => ({ ...prev, [depth]: { ...adding, height: e.target.value } }))}
-                  placeholder="e.g. 104"
-                  className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
-                />
-                <select
-                  value={adding.slideId}
-                  onChange={e => setAddingInDepth(prev => ({ ...prev, [depth]: { ...adding, slideId: e.target.value } }))}
-                  className={`flex-1 ${sel}`}
-                >
-                  <option value="">— select slide —</option>
-                  {slides.map(s => <option key={s.id} value={s.id}>{slideLabel(s)}</option>)}
-                </select>
-                <button
-                  onClick={async () => {
-                    const h = parseInt(adding.height)
-                    if (!h || !adding.slideId) return
-                    await addSlideEntry(depth, h, adding.slideId)
-                    setAddingInDepth(prev => ({ ...prev, [depth]: { height: '', slideId: '' } }))
-                  }}
-                  disabled={!adding.height || !adding.slideId}
-                  className="text-xs px-2.5 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded shrink-0 transition-colors"
-                >Add</button>
-              </div>
-            </div>
-          )
-        })}
+      <div className="flex-1 flex flex-col overflow-hidden bg-gray-900">
 
-        {/* Add new depth tier (depth + first height + slide all at once) */}
-        <div className="flex items-center gap-2 pt-3 border-t border-gray-800/50">
-          <span className="text-[10px] text-gray-500 shrink-0">New tier</span>
-          <input
-            type="number"
-            value={newTierDepth}
-            onChange={e => setNewTierDepth(e.target.value)}
-            placeholder="depth (mm)"
-            className="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
-          />
-          <input
-            type="number"
-            value={newTierHeight}
-            onChange={e => setNewTierHeight(e.target.value)}
-            placeholder="height (mm)"
-            className="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
-          />
-          <select
-            value={newTierSlide}
-            onChange={e => setNewTierSlide(e.target.value)}
-            className={`flex-1 ${sel}`}
-          >
-            <option value="">— select slide —</option>
-            {slides.map(s => <option key={s.id} value={s.id}>{slideLabel(s)}</option>)}
-          </select>
-          <button
-            onClick={async () => {
-              const d = parseInt(newTierDepth)
-              const h = parseInt(newTierHeight)
-              if (!d || !h || !newTierSlide) return
-              await addSlideEntry(d, h, newTierSlide)
-              setNewTierDepth('')
-              setNewTierHeight('')
-              setNewTierSlide('')
-            }}
-            disabled={!newTierDepth || !newTierHeight || !newTierSlide}
-            className="text-xs px-2.5 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded shrink-0 transition-colors"
-          >Add</button>
+        {/* Add-entry form row — matches MaterialsClient input row style */}
+        <div className="flex-none border-b border-gray-700 overflow-x-auto bg-gray-900/80">
+          <div className="flex items-stretch min-w-max">
+            <div style={{ width: 110 }} className="flex flex-col justify-between py-2 px-2 border-r border-gray-700">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wide mb-1.5">Depth ≥ mm</span>
+              <input
+                type="number"
+                value={newTierDepth}
+                onChange={e => setNewTierDepth(e.target.value)}
+                placeholder="450"
+                onFocus={e => e.target.select()}
+                className="block w-full bg-transparent border-b border-gray-700 px-0.5 py-0.5 text-xs text-white text-right focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
+              />
+            </div>
+            <div style={{ width: 110 }} className="flex flex-col justify-between py-2 px-2 border-r border-gray-700">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wide mb-1.5">Height ≥ mm</span>
+              <input
+                type="number"
+                value={newTierHeight}
+                onChange={e => setNewTierHeight(e.target.value)}
+                placeholder="104"
+                onFocus={e => e.target.select()}
+                className="block w-full bg-transparent border-b border-gray-700 px-0.5 py-0.5 text-xs text-white text-right focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
+              />
+            </div>
+            <div className="flex flex-col justify-between py-2 px-2 flex-1 min-w-[220px]">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wide mb-1.5">Slide</span>
+              <select
+                value={newTierSlide}
+                onChange={e => setNewTierSlide(e.target.value)}
+                className="bg-transparent border-b border-gray-700 text-xs text-white focus:outline-none focus:border-blue-500 py-0.5 w-full"
+              >
+                <option value="" className="bg-gray-900">— select —</option>
+                {slides.map(s => <option key={s.id} value={s.id} className="bg-gray-900">{slideLabel(s)}</option>)}
+              </select>
+            </div>
+            <div className="flex-none flex items-center gap-1.5 px-3 border-l border-gray-700">
+              <button
+                onClick={async () => {
+                  const d = parseInt(newTierDepth)
+                  const h = parseInt(newTierHeight)
+                  if (!d || !h || !newTierSlide) return
+                  await addSlideEntry(d, h, newTierSlide)
+                  setNewTierDepth('')
+                  setNewTierHeight('')
+                  setNewTierSlide('')
+                }}
+                disabled={!newTierDepth || !newTierHeight || !newTierSlide}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs rounded transition-colors whitespace-nowrap"
+              >Add</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable table */}
+        <div className="flex-1 overflow-auto">
+
+          {/* Sticky column header */}
+          <div className="flex items-center bg-gray-800/60 border-b border-gray-700 sticky top-0 z-10 min-w-max">
+            <div style={{ width: 110 }} className="flex-none px-2 border-r border-gray-700/50 text-[9px] text-gray-500 uppercase tracking-wide py-1.5 text-right">Depth ≥</div>
+            <div style={{ width: 110 }} className="flex-none px-2 border-r border-gray-700/50 text-[9px] text-gray-500 uppercase tracking-wide py-1.5 text-right">Height ≥</div>
+            <div className="flex-1 min-w-[220px] px-2 text-[9px] text-gray-500 uppercase tracking-wide py-1.5">Slide</div>
+            <div style={{ width: 36 }} />
+          </div>
+
+          <div className="min-w-max">
+            {slideEntries.length === 0 ? (
+              <div className="px-4 py-10">
+                <p className="text-xs text-gray-600">No entries yet — fill in the form above and click Add.</p>
+              </div>
+            ) : slideEntries.map(entry => {
+              const isFirst = entry.depth_threshold !== prevDepth
+              prevDepth = entry.depth_threshold
+              return (
+                <div
+                  key={entry.id}
+                  className={`flex items-center border-b border-gray-800/60 hover:bg-gray-800/20 transition-colors ${isFirst ? 'border-t border-gray-700/40' : ''}`}
+                >
+                  <div style={{ width: 110 }} className={`flex-none px-2 py-1.5 text-xs text-right border-r border-gray-800/50 tabular-nums ${isFirst ? 'text-gray-200 font-medium' : 'text-gray-600'}`}>
+                    {entry.depth_threshold}
+                  </div>
+                  <div style={{ width: 110 }} className="flex-none px-2 py-1.5 text-xs text-right border-r border-gray-800/50 tabular-nums text-gray-300">
+                    {entry.height_threshold}
+                  </div>
+                  <div className="flex-1 min-w-[220px] px-2 py-1">
+                    <select
+                      value={entry.slide_id}
+                      onChange={e => updateSlideEntry(entry.id, e.target.value)}
+                      className="w-full bg-transparent border-b border-transparent hover:border-gray-600 focus:border-blue-500 text-xs text-gray-300 focus:outline-none py-0.5 focus:text-white transition-colors"
+                    >
+                      {slides.map(s => <option key={s.id} value={s.id} className="bg-gray-900">{slideLabel(s)}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ width: 36 }} className="flex items-center justify-center">
+                    <button onClick={() => deleteSlideEntry(entry.id)} className="text-gray-700 hover:text-red-400 text-base leading-none transition-colors">×</button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {slideEntries.length > 0 && (
+            <div className="border-t border-gray-800 px-4 py-1.5">
+              <span className="text-[10px] text-gray-600">{slideEntries.length} entr{slideEntries.length !== 1 ? 'ies' : 'y'}</span>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -866,6 +873,38 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     const tab   = TABS.find(t => t.key === activeTab)!
     const sched = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
     if (!sched) return null
+
+    // Slide grid gets its own full-height spreadsheet layout (name/desc inline, no outer scroll)
+    if (tab.type === 'slide_grid') {
+      return (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-none border-b border-gray-800 px-5 py-3 flex items-start gap-3">
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <input value={editName} onChange={e => setEditName(e.target.value)} onBlur={saveName} className={inp} />
+              <input value={editDesc} onChange={e => setEditDesc(e.target.value)} onBlur={saveDesc} placeholder="Optional description" className="block w-full bg-transparent text-[10px] text-gray-500 focus:outline-none placeholder:text-gray-700 focus:text-gray-400" />
+            </div>
+            <div className="flex flex-col gap-1.5 shrink-0">
+              <button
+                onClick={toggleActive}
+                className={`text-xs px-3 py-1 rounded border transition-colors ${
+                  sched.active
+                    ? 'border-green-700 text-green-400 hover:bg-green-900/30'
+                    : 'border-gray-700 text-gray-500 hover:border-gray-600'
+                }`}
+              >{sched.active ? 'Active' : 'Inactive'}</button>
+              {sched.is_default
+                ? <span className="text-[10px] text-center px-3 py-1 rounded bg-blue-900/40 border border-blue-800 text-blue-300">Shop Default</span>
+                : <button onClick={setAsDefault} className="text-xs px-3 py-1 rounded border border-gray-700 text-gray-500 hover:border-blue-700 hover:text-blue-400 transition-colors">Set Default</button>
+              }
+            </div>
+          </div>
+          {rowsLoading
+            ? <div className="flex-1 flex items-center justify-center"><p className="text-xs text-gray-500">Loading…</p></div>
+            : renderSlideGrid()
+          }
+        </div>
+      )
+    }
 
     return (
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
@@ -909,7 +948,6 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           {tab.type === 'mat_single'  && renderMatSingle(tab.valueCol as string, tab.ebCol)}
           {tab.type === 'bt_roles'    && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderBtRoles()}</>}
           {tab.type === 'hw_single'   && renderHwSingle()}
-          {tab.type === 'slide_grid'  && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderSlideGrid()}</>}
         </div>
 
         {/* Edging defaults hint for row-based tabs */}
