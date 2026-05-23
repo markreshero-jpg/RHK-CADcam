@@ -113,6 +113,7 @@ export function Part({
   b, faceColors, edgeLineColor, meta, selected, highlighted, onSelect, dragRef, ebSpec,
   contextMenuSelect = false,
   wire = false,
+  rotation,
 }: {
   b:                  Box
   faceColors:         [string, string, string, string, string, string]
@@ -125,12 +126,13 @@ export function Part({
   ebSpec?:            EbSpec
   contextMenuSelect?: boolean
   wire?:              boolean
+  rotation?:          [number, number, number]
 }) {
   const [hovered, setHovered] = useState(false)
 
   if (wire) {
     return (
-      <mesh position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]}>
+      <mesh position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]} rotation={rotation}>
         <boxGeometry args={[b.w, b.h, b.d]} />
         <meshStandardMaterial color="#9ca3af" transparent opacity={0.08} depthWrite={false} />
         <Edges threshold={10} color="#94a3b8" linewidth={1} />
@@ -158,6 +160,7 @@ export function Part({
     <>
       <mesh
         position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]}
+        rotation={rotation}
         onPointerDown={() => { dragRef.current = false }}
         onPointerMove={(e) => { if (e.buttons) dragRef.current = true }}
         onClick={contextMenuSelect ? undefined : (e) => { e.stopPropagation(); if (!dragRef.current) onSelect(selected ? null : meta) }}
@@ -198,7 +201,7 @@ export function PartPropertiesPanel({
   onEdgeChange?: (edge: PartEdge) => void
 }) {
   return (
-    <div className="absolute top-3 right-3 w-56 bg-gray-900/95 border border-gray-700 rounded-lg shadow-xl pointer-events-auto select-none">
+    <div className="absolute top-3 right-3 w-56 bg-gray-900/95 border border-gray-700 rounded-lg shadow-xl pointer-events-auto select-none" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-gray-700">
         <span className="text-sm font-semibold text-white">{part.label}</span>
         <button onClick={onClose} className="text-gray-500 hover:text-white text-base leading-none ml-2" aria-label="Close">✕</button>

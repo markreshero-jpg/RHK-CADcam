@@ -848,17 +848,31 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   // ── Project / Room save handlers ──────────────────────────────────────────
 
+  function reResolveAllCabinets() {
+    for (const cab of cabinets) {
+      dbResolveAndPersistCabinet(cab.id).then(resolved => {
+        if (resolved) {
+          setResolvedParts(m => new Map(m).set(cab.id, resolved))
+          applyInputColours(cab.id)
+          applyInputEdgebands(cab.id)
+        }
+      })
+    }
+  }
+
   async function handleUpdateProject(updates: Partial<Project>) {
     if (!project) return
     setProjectState(prev => prev ? { ...prev, ...updates } : prev)
     const { error } = await supabase.from('projects').update(updates).eq('id', project.id)
-    if (error) console.error('Failed to save project:', error)
+    if (error) { console.error('Failed to save project:', error); return }
+    reResolveAllCabinets()
   }
 
   async function handleUpdateRoom(updates: Partial<Room>) {
     setRoomState(prev => ({ ...prev, ...updates }))
     const { error } = await supabase.from('rooms').update(updates).eq('id', room.id)
-    if (error) console.error('Failed to save room:', error)
+    if (error) { console.error('Failed to save room:', error); return }
+    reResolveAllCabinets()
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────

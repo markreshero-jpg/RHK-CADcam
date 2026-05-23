@@ -6,6 +6,7 @@ import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedIn
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import type { CabinetCustomPart } from './canvasDB'
 import { getUserPrefs } from '@/src/lib/userPrefs'
+import type { PartPosOverrides } from './canvasDB'
 import {
   C_INT, C_WALL, C_STROKE, C_PANEL, C_FACE,
   RC,
@@ -32,6 +33,25 @@ const R = 80
 const B = 70
 
 const SEL_STROKE = '#f59e0b'
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function applyOv<T extends { X: number; Y: number; Z: number }>(p: T, id: string, overrides: PartPosOverrides | undefined): T {
+  const ov = overrides?.[id]
+  return ov ? { ...p, X: p.X + ov.ox, Y: p.Y + ov.oy, Z: p.Z + ov.oz } : p
+}
+
+function svgCustomMeta(p: CabinetCustomPart): PartMeta {
+  return {
+    id: `custom_${p.id}`,
+    label: p.name ?? 'Custom Part',
+    w: p.dy, h: p.dx, d: p.dz,
+    thickness: p.dz,
+    edge: { top: p.edge_top, bottom: p.edge_bottom, left: p.edge_left, right: p.edge_right },
+    panelKind: 'horizontal',
+    x: p.x, y: p.y, z: p.z,
+  }
+}
 
 // ── Part picker ───────────────────────────────────────────────────────────────
 
@@ -128,10 +148,10 @@ function useSvgZoom(initW: number, initH: number) {
 
 // ── Resolved views ────────────────────────────────────────────────────────────
 
-export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, customParts }: {
+export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, customParts, partOverrides }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
-  customParts?: CabinetCustomPart[]
+  customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
 }) {
   const { dx, dy } = cab
   const pl = 80, pt = 50, pr = 40, pb = 40
@@ -150,14 +170,27 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
   function faceColor(ft: string) { return ft === 'drawer_face' ? RC.drawer : RC.door }
 
   const partMap = new Map<string, PartMeta>()
-  rp.case_parts.forEach(p => { const m = svgCaseMeta(p); partMap.set(m.id, m) })
-  rp.toekick_parts.forEach(p => { const m = svgTkMeta(p); partMap.set(m.id, m) })
-  rp.internal_parts.forEach(p => { const m = svgIntMeta(p); partMap.set(m.id, m) })
-  rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const m = svgZoneMeta(z); partMap.set(m.id, m) })
+  rp.case_parts.forEach(p => {
+    const m = svgCaseMeta(p); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
+  rp.toekick_parts.forEach(p => {
+    const m = svgTkMeta(p); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
+  rp.internal_parts.forEach(p => {
+    const m = svgIntMeta(p); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
+  rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => {
+    const m = svgZoneMeta(z); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
   ;(rp.drawer_stacks ?? []).forEach(stack => {
     stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
+  ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
 
   const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
@@ -173,7 +206,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
       {showInternals && (rp.drawer_stacks ?? []).flatMap((stack, si) => [
         ...stack.box_parts.map((p, pi) => {
           const meta = svgDbMeta(p, stack)
-          const { ex, ey, ew, eh } = dbElevRect(p)
+          const pp = applyOv(p, meta.id, partOverrides)
+          const { ex, ey, ew, eh } = dbElevRect(pp as typeof p)
           const r = toSVG(ex, ey, ew, eh)
           return <rect key={`db${si}_${pi}`} x={r.x} y={r.y} width={r.w} height={r.h}
             fill={wireMode ? 'transparent' : RC.drawerBox.fill}
@@ -182,7 +216,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
         }),
         ...stack.slides.map((s, li) => {
           const meta = svgSlideMeta(s, stack)
-          const { ex, ey, ew, eh } = slideElevRect(s)
+          const pp = applyOv(s, meta.id, partOverrides)
+          const { ex, ey, ew, eh } = slideElevRect(pp as typeof s)
           const r = toSVG(ex, ey, ew, eh)
           return <rect key={`sl${si}_${li}`} x={r.x} y={r.y} width={r.w} height={r.h}
             fill={wireMode ? 'transparent' : RC.slide.fill}
@@ -194,7 +229,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
 
       {rp.toekick_parts.map((p, i) => {
         const meta = svgTkMeta(p)
-        const { ex, ey, ew, eh } = tkElevRect(p)
+        const pp = applyOv(p, meta.id, partOverrides)
+        const { ex, ey, ew, eh } = tkElevRect(pp as typeof p)
         const r = toSVG(ex, ey, ew, eh)
         const isSpreader = p.part_key === 'spreader_vertical' || p.part_key === 'spreader_horizontal'
         return <rect key={`tk${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
@@ -206,7 +242,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
 
       {rp.internal_parts.map((p, i) => {
         const meta = svgIntMeta(p)
-        const { ex, ey, ew, eh } = shelfElevRect(p)
+        const pp = applyOv(p, meta.id, partOverrides)
+        const { ex, ey, ew, eh } = shelfElevRect(pp as typeof p)
         const r = toSVG(ex, ey, ew, eh)
         return <rect key={`sh${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
           fill={wireMode ? 'transparent' : RC.shelf.fill}
@@ -216,7 +253,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
 
       {rp.case_parts.map((p, i) => {
         const meta = svgCaseMeta(p)
-        const { ex, ey, ew, eh } = elevRect({ ...p, part_key: p.part_key })
+        const pp = applyOv(p, meta.id, partOverrides)
+        const { ex, ey, ew, eh } = elevRect({ ...pp, part_key: p.part_key })
         const r = toSVG(ex, ey, ew, eh)
         return <rect key={`cp${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
           fill={wireMode ? 'transparent' : RC.carcass.fill}
@@ -226,7 +264,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
 
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
         const meta = svgZoneMeta(z)
-        const { ex, ey, ew, eh } = zoneElevRect(z)
+        const pp = applyOv(z, meta.id, partOverrides)
+        const { ex, ey, ew, eh } = zoneElevRect(pp as typeof z)
         const r = toSVG(ex, ey, ew, eh)
         const col = faceColor(z.face_type)
         return (
@@ -243,10 +282,13 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
       })}
 
       {(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0 && Number(p.dy) > 0).map((p, i) => {
+        const meta = svgCustomMeta(p)
         const r = toSVG(p.x, p.y + Number(p.dz), Number(p.dy), Number(p.dz))
         return <rect key={`cust${i}`} x={r.x} y={r.y} width={Math.max(r.w, 1)} height={Math.max(r.h, 1)}
-          fill="none" stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="5 3"
-          style={{ pointerEvents: 'none' }} />
+          fill={wireMode ? 'transparent' : '#2d1a4a'}
+          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)}
+          strokeDasharray={sel(meta.id) ? undefined : '5 3'}
+          data-part-id={meta.id} style={cp} />
       })}
       <rect x={ox} y={oy} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
       <line x1={ox-20} y1={oy+dy} x2={ox+dx+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" style={{ pointerEvents: 'none' }} />
@@ -260,10 +302,10 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
   )
 }
 
-export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, customParts }: {
+export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, customParts, partOverrides }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
-  customParts?: CabinetCustomPart[]
+  customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
 }) {
   const { dx, dz } = cab
   const wallH = 40
@@ -282,14 +324,27 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
   const cp: React.CSSProperties = { cursor: 'pointer' }
 
   const partMap = new Map<string, PartMeta>()
-  rp.case_parts.forEach(p => { const m = svgCaseMeta(p); partMap.set(m.id, m) })
-  rp.toekick_parts.forEach(p => { const m = svgTkMeta(p); partMap.set(m.id, m) })
-  rp.internal_parts.forEach(p => { const m = svgIntMeta(p); partMap.set(m.id, m) })
-  rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const m = svgZoneMeta(z); partMap.set(m.id, m) })
+  rp.case_parts.forEach(p => {
+    const m = svgCaseMeta(p); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
+  rp.toekick_parts.forEach(p => {
+    const m = svgTkMeta(p); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
+  rp.internal_parts.forEach(p => {
+    const m = svgIntMeta(p); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
+  rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => {
+    const m = svgZoneMeta(z); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
   ;(rp.drawer_stacks ?? []).forEach(stack => {
     stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
+  ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
 
   const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
@@ -308,7 +363,8 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
       {showInternals && (rp.drawer_stacks ?? []).flatMap((stack, si) => [
         ...stack.box_parts.map((p, pi) => {
           const meta = svgDbMeta(p, stack)
-          const r = dbTopRect(p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+          const pp = applyOv(p, meta.id, partOverrides)
+          const r = dbTopRect(pp as typeof p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
           return <rect key={`db${si}_${pi}`} x={s.x} y={s.y} width={s.w} height={s.h}
             fill={wireMode ? 'transparent' : RC.drawerBox.fill}
             stroke={stroke(meta.id, RC.drawerBox.stroke)} strokeWidth={sw(meta.id, 0.5)}
@@ -316,7 +372,8 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
         }),
         ...stack.slides.map((sl, li) => {
           const meta = svgSlideMeta(sl, stack)
-          const r = slideTopRect(sl); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+          const pp = applyOv(sl, meta.id, partOverrides)
+          const r = slideTopRect(pp as typeof sl); const s = toSVG(r.tx, r.tz, r.tw, r.td)
           return <rect key={`sl${si}_${li}`} x={s.x} y={s.y} width={s.w} height={s.h}
             fill={wireMode ? 'transparent' : RC.slide.fill}
             stroke={stroke(meta.id, RC.slide.stroke)} strokeWidth={sw(meta.id, 0.5)}
@@ -327,7 +384,8 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
 
       {rp.internal_parts.map((p, i) => {
         const meta = svgIntMeta(p)
-        const r = shelfTopRect(p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+        const pp = applyOv(p, meta.id, partOverrides)
+        const r = shelfTopRect(pp as typeof p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
         return <rect key={`sh${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
           fill={wireMode ? 'transparent' : RC.shelf.fill}
           stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
@@ -336,7 +394,8 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
 
       {rp.case_parts.map((p, i) => {
         const meta = svgCaseMeta(p)
-        const r = topRect(p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+        const pp = applyOv(p, meta.id, partOverrides)
+        const r = topRect(pp as typeof p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
         return <rect key={`cp${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
           fill={wireMode ? 'transparent' : RC.carcass.fill}
           stroke={stroke(meta.id, RC.carcass.stroke)} strokeWidth={sw(meta.id, 0.75)}
@@ -345,7 +404,8 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
 
       {rp.toekick_parts.map((p, i) => {
         const meta = svgTkMeta(p)
-        const r = tkTopRect(p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+        const pp = applyOv(p, meta.id, partOverrides)
+        const r = tkTopRect(pp as typeof p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
         return <rect key={`tk${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
           fill={wireMode ? 'transparent' : RC.toekick.fill}
           stroke={stroke(meta.id, RC.toekick.stroke)} strokeWidth={sw(meta.id, 0.75)}
@@ -354,7 +414,8 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
 
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
         const meta = svgZoneMeta(z)
-        const r = zoneTopRect(z); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+        const pp = applyOv(z, meta.id, partOverrides)
+        const r = zoneTopRect(pp as typeof z); const s = toSVG(r.tx, r.tz, r.tw, r.td)
         const col = z.face_type === 'drawer_face' ? RC.drawer : RC.door
         return <rect key={`fz${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
           fill={wireMode ? 'transparent' : col.fill}
@@ -364,10 +425,13 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
       })}
 
       {(customParts ?? []).filter(p => p.visible && Number(p.dy) > 0 && Number(p.dx) > 0).map((p, i) => {
+        const meta = svgCustomMeta(p)
         const s = toSVG(p.x, p.z, Number(p.dy), Number(p.dx))
         return <rect key={`cust${i}`} x={s.x} y={s.y} width={Math.max(s.w, 1)} height={Math.max(s.h, 1)}
-          fill="none" stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="5 3"
-          style={{ pointerEvents: 'none' }} />
+          fill={wireMode ? 'transparent' : '#2d1a4a'}
+          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)}
+          strokeDasharray={sel(meta.id) ? undefined : '5 3'}
+          data-part-id={meta.id} style={cp} />
       })}
       <rect x={ox} y={oz} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
       <text x={ox + dx/2} y={oz + dz + 22} textAnchor="middle" dominantBaseline="central"
@@ -382,10 +446,10 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
   )
 }
 
-export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, customParts }: {
+export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, customParts, partOverrides }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
-  customParts?: CabinetCustomPart[]
+  customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
 }) {
   const { dz, dy } = cab
   const wallW = 40
@@ -416,14 +480,27 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
   const cp: React.CSSProperties = { cursor: 'pointer' }
 
   const partMap = new Map<string, PartMeta>()
-  rp.case_parts.forEach(p => { const m = svgCaseMeta(p); partMap.set(m.id, m) })
-  rp.toekick_parts.forEach(p => { const m = svgTkMeta(p); partMap.set(m.id, m) })
-  rp.internal_parts.forEach(p => { const m = svgIntMeta(p); partMap.set(m.id, m) })
-  rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const m = svgZoneMeta(z); partMap.set(m.id, m) })
+  rp.case_parts.forEach(p => {
+    const m = svgCaseMeta(p); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
+  rp.toekick_parts.forEach(p => {
+    const m = svgTkMeta(p); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
+  rp.internal_parts.forEach(p => {
+    const m = svgIntMeta(p); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
+  rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => {
+    const m = svgZoneMeta(z); const ov = partOverrides?.[m.id]
+    partMap.set(m.id, ov ? { ...m, x: (m.x ?? 0) + ov.ox, y: (m.y ?? 0) + ov.oy, z: (m.z ?? 0) + ov.oz } : m)
+  })
   ;(rp.drawer_stacks ?? []).forEach(stack => {
     stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
+  ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
 
   const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
@@ -443,7 +520,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
       {showInternals && (rp.drawer_stacks ?? []).flatMap((stack, si) => [
         ...stack.box_parts.map((p, pi) => {
           const meta = svgDbMeta(p, stack)
-          const r = dbSideRect(p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+          const pp = applyOv(p, meta.id, partOverrides)
+          const r = dbSideRect(pp as typeof p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
           return <rect key={`db${si}_${pi}`} x={s.x} y={s.y} width={s.w} height={s.h}
             fill={wireMode ? 'transparent' : RC.drawerBox.fill}
             stroke={stroke(meta.id, RC.drawerBox.stroke)} strokeWidth={sw(meta.id, 0.5)}
@@ -451,7 +529,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
         }),
         ...stack.slides.map((sl, li) => {
           const meta = svgSlideMeta(sl, stack)
-          const r = slideSideRect(sl); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+          const pp = applyOv(sl, meta.id, partOverrides)
+          const r = slideSideRect(pp as typeof sl); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
           return <rect key={`sl${si}_${li}`} x={s.x} y={s.y} width={s.w} height={s.h}
             fill={wireMode ? 'transparent' : RC.slide.fill}
             stroke={stroke(meta.id, RC.slide.stroke)} strokeWidth={sw(meta.id, 0.5)}
@@ -462,7 +541,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
 
       {rp.internal_parts.map((p, i) => {
         const meta = svgIntMeta(p)
-        const r = shelfSideRect(p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+        const pp = applyOv(p, meta.id, partOverrides)
+        const r = shelfSideRect(pp as typeof p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
         return <rect key={`sh${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
           fill={wireMode ? 'transparent' : RC.shelf.fill}
           stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
@@ -471,7 +551,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
 
       {rp.case_parts.map((p, i) => {
         const meta = svgCaseMeta(p)
-        const r = sideRect(p); if (!r) return null
+        const pp = applyOv(p, meta.id, partOverrides)
+        const r = sideRect(pp as typeof p); if (!r) return null
         const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
         return <rect key={`cp${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
           fill={wireMode ? 'transparent' : RC.carcass.fill}
@@ -481,7 +562,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
 
       {rp.toekick_parts.map((p, i) => {
         const meta = svgTkMeta(p)
-        const r = tkSideRect(p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+        const pp = applyOv(p, meta.id, partOverrides)
+        const r = tkSideRect(pp as typeof p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
         return <rect key={`tk${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
           fill={wireMode ? 'transparent' : RC.toekick.fill}
           stroke={stroke(meta.id, RC.toekick.stroke)} strokeWidth={sw(meta.id, 0.75)}
@@ -490,7 +572,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
 
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
         const meta = svgZoneMeta(z)
-        const r = zoneSideRect(z); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+        const pp = applyOv(z, meta.id, partOverrides)
+        const r = zoneSideRect(pp as typeof z); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
         const col = z.face_type === 'drawer_face' ? RC.drawer : RC.door
         return <rect key={`fz${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
           fill={wireMode ? 'transparent' : col.fill}
@@ -500,10 +583,13 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
       })}
 
       {(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0 && Number(p.dx) > 0).map((p, i) => {
+        const meta = svgCustomMeta(p)
         const s = toSVG(p.z, p.y + Number(p.dz), Number(p.dx), Number(p.dz))
         return <rect key={`cust${i}`} x={s.x} y={s.y} width={Math.max(s.w, 1)} height={Math.max(s.h, 1)}
-          fill="none" stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="5 3"
-          style={{ pointerEvents: 'none' }} />
+          fill={wireMode ? 'transparent' : '#2d1a4a'}
+          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)}
+          strokeDasharray={sel(meta.id) ? undefined : '5 3'}
+          data-part-id={meta.id} style={cp} />
       })}
       <rect x={oz} y={oy} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
       <line x1={oz-20} y1={oy+dy} x2={oz+dz+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" style={{ pointerEvents: 'none' }} />

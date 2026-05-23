@@ -278,3 +278,53 @@ export async function dbDeleteCustomPart(id: string): Promise<void> {
   const { error } = await supabase.from('cabinet_custom_parts').delete().eq('id', id)
   if (error) console.error(error)
 }
+
+// ── Part Position Overrides ───────────────────────────────────────────────────
+
+export type PartPosOverrides = Record<string, { ox: number; oy: number; oz: number; oax?: number; oay?: number; oaz?: number }>
+
+export async function dbLoadPartPosOverrides(cabinetId: string): Promise<PartPosOverrides> {
+  const { data } = await supabase
+    .from('cabinet_instances')
+    .select('part_pos_overrides')
+    .eq('id', cabinetId)
+    .single()
+  return ((data as { part_pos_overrides?: unknown } | null)?.part_pos_overrides ?? {}) as PartPosOverrides
+}
+
+export async function dbSavePartPosOverride(
+  cabinetId: string,
+  partId: string,
+  ov: PartPosOverrides[string],
+  current: PartPosOverrides,
+): Promise<PartPosOverrides> {
+  const updated = { ...current, [partId]: ov }
+  const { error } = await supabase
+    .from('cabinet_instances')
+    .update({ part_pos_overrides: updated })
+    .eq('id', cabinetId)
+  if (error) console.error('[pos override save]', error)
+  return updated
+}
+
+export async function dbClearPartPosOverrides(cabinetId: string): Promise<void> {
+  const { error } = await supabase
+    .from('cabinet_instances')
+    .update({ part_pos_overrides: {} })
+    .eq('id', cabinetId)
+  if (error) console.error('[pos override clear]', error)
+}
+
+export async function dbDeletePartPosOverride(
+  cabinetId: string,
+  partId: string,
+  current: PartPosOverrides,
+): Promise<PartPosOverrides> {
+  const { [partId]: _removed, ...updated } = current
+  const { error } = await supabase
+    .from('cabinet_instances')
+    .update({ part_pos_overrides: updated })
+    .eq('id', cabinetId)
+  if (error) console.error('[pos override delete]', error)
+  return updated
+}

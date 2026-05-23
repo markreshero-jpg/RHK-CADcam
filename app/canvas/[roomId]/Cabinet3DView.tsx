@@ -6,7 +6,7 @@ import { useFrame } from '@react-three/fiber'
 import { supabase } from '@/src/lib/supabase'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
 import type { CabinetInstance } from '@/src/lib/types'
-import type { CabinetCustomPart } from './canvasDB'
+import type { CabinetCustomPart, PartPosOverrides } from './canvasDB'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
   ResolvedInternalPart, ResolvedFaceZone,
@@ -265,7 +265,8 @@ function evalExpr(expr: string, vars: Record<string, number>): number | null {
 
 // Resolve a JointTypeOp's numeric fields + qty/spacing against actual part dimensions.
 // Matches the same variable set as JointPreviewPanel.buildVars.
-function evalOp(op: JointTypeOp, boxA: Box, boxB: Box): {
+// thickA = material thickness of Part A (varies by panel orientation in caseBox).
+function evalOp(op: JointTypeOp, boxA: Box, boxB: Box, thickA: number): {
   tool_diameter_mm: number; depth_mm: number
   offset_x_mm: number; offset_y_mm: number; offset_z_mm: number
   qty: number; spacing_mm: number | null
@@ -277,7 +278,7 @@ function evalOp(op: JointTypeOp, boxA: Box, boxB: Box): {
     W:  isA ? boxA.w : boxB.w,
     L:  isA ? boxA.h : boxB.h,
     D:  isA ? boxA.d : boxB.d,
-    T:  boxA.h,  // material thickness (Part A height = shelf/panel thickness)
+    T:  thickA,  // material thickness of Part A, caller-supplied
     // master (Part A) dimensions
     MW: boxA.w, ML: boxA.h, MD: boxA.d,
     // slave (Part B) dimensions
@@ -332,87 +333,96 @@ function computeJointRefPlane(seamKey: string, boxA: Box): JointRefPlane | null 
 }
 
 function seamDrillOps(seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[]): DrillOpPos[] {
-  const partBKey = seamKey.slice(seamKey.indexOf(':') + 1)
+  const colonIdx = seamKey.indexOf(':')
+  const partAKey = seamKey.slice(0, colonIdx)
+  const partBKey = seamKey.slice(colonIdx + 1)
   const isLeft  = partBKey === 'left_side'
   const isRight = partBKey === 'right_side'
   if (!isLeft && !isRight) return []
 
+  // caseBox orients each panel differently; read thickness from the correct axis.
+  const thickA = partAKey === 'back' ? boxA.d
+               : isSide(partAKey)    ? boxA.w
+               :                       boxA.h
+
+  // For back:side seams Part A runs vertically — holes distribute along Y (height)
+  // and sit at a fixed Z centred in the back panel thickness.
+  const isBackSeam = partAKey === 'back'
+
   const interfaceX = isLeft ? boxA.x : boxA.x + boxA.w
-  const interfaceY = boxA.y + boxA.h  // JV Y=0
+  const interfaceY = boxA.y + boxA.h
+
+  console.log('[seamDrillOps]', seamKey,
+    '\n  boxA:', JSON.stringify(boxA),
+    '\n  boxB:', JSON.stringify(boxB),
+    '\n  interfaceX:', interfaceX, 'interfaceY:', interfaceY, 'thickA:', thickA,
+    '\n  ops:', ops.length)
 
   const result: DrillOpPos[] = []
 
   for (const op of ops) {
     if (op.machine_operation !== 'drill') continue
-    const ev    = evalOp(op, boxA, boxB)
+    const ev    = evalOp(op, boxA, boxB, thickA)
     const U     = (op.face === 'top' || op.face === 'bottom') ? ev.offset_x_mm : ev.offset_y_mm
     const qty   = ev.qty
     const spc   = ev.spacing_mm ?? 0
 
+    console.log('[evalOp]', op.face, 'target:', op.target_part,
+      '\n  ev:', JSON.stringify(ev),
+      '\n  U:', U, 'qty:', qty, 'spc:', spc)
+
     for (let i = 0; i < qty; i++) {
-      const targetBox = op.target_part === 'part_a' ? boxA : boxB
-      // Z: measured from front face of the target part, spacing steps toward back
-      const cabZ = (targetBox.z + targetBox.d) - ev.offset_z_mm - i * spc
+      let cabX = 0, cabY = 0, cabZ = 0, axis: DrillAxis = 'x-'
 
-      let cabX: number, cabY: number, axis: DrillAxis
+      if (isBackSeam) {
+        // Place the sphere at the inner face of the back panel (Z = thickA) so it
+        // protrudes into the cabinet interior and isn't fully occluded by the panel.
+        cabZ = boxA.z + thickA
+        cabY = boxA.y + ev.offset_z_mm + i * spc
 
-      if (op.target_part === 'part_a') {
-        switch (op.face) {
-          case 'normal':
-            // Interface face — drill into Part A body
-            cabX = interfaceX
-            cabY = interfaceY - U
-            axis = isLeft ? 'x+' : 'x-'
-            break
-          case 'end':
-            // Far face of Part A (opposite the interface)
-            cabX = isLeft ? boxA.x + boxA.w : boxA.x
-            cabY = interfaceY - U
-            axis = isLeft ? 'x-' : 'x+'
-            break
-          case 'top':
-            cabY = interfaceY
-            cabX = isLeft ? interfaceX + U : interfaceX - U
-            axis = 'y-'
-            break
-          case 'bottom':
-            cabY = boxA.y
-            cabX = isLeft ? interfaceX + U : interfaceX - U
-            axis = 'y+'
-            break
-          default: continue
+        if (op.target_part === 'part_b') {
+          const bInner = isLeft ? boxB.x + boxB.w : boxB.x
+          switch (op.face) {
+            case 'normal': cabX = bInner;                            axis = isLeft ? 'x-' : 'x+'; break
+            case 'end':    cabX = isLeft ? boxB.x : boxB.x + boxB.w; axis = isLeft ? 'x+' : 'x-'; break
+            default: continue
+          }
+        } else {
+          switch (op.face) {
+            case 'normal': cabX = interfaceX; axis = isLeft ? 'x+' : 'x-'; break
+            default: continue
+          }
         }
       } else {
-        // Part B (gable): interface face is the inner face (touching Part A)
-        const bInner = isLeft ? boxB.x + boxB.w : boxB.x
-        switch (op.face) {
-          case 'normal':
-            // Inner face of gable — drill into gable body (away from Part A)
-            cabX = bInner
-            cabY = interfaceY - U
-            axis = isLeft ? 'x-' : 'x+'
-            break
-          case 'end':
-            // Outer face of gable
-            cabX = isLeft ? boxB.x : boxB.x + boxB.w
-            cabY = interfaceY - U
-            axis = isLeft ? 'x+' : 'x-'
-            break
-          case 'top':
-            cabY = boxB.y + boxB.h
-            cabX = isLeft ? bInner - U : bInner + U
-            axis = 'y-'
-            break
-          case 'bottom':
-            cabY = boxB.y
-            cabX = isLeft ? bInner - U : bInner + U
-            axis = 'y+'
-            break
-          default: continue
+        const targetBox = op.target_part === 'part_a' ? boxA : boxB
+        // Z: measured from front face of target part, spacing steps toward back
+        cabZ = (targetBox.z + targetBox.d) - ev.offset_z_mm - i * spc
+
+        if (op.target_part === 'part_a') {
+          switch (op.face) {
+            case 'normal': cabX = interfaceX;                            cabY = interfaceY - U; axis = isLeft ? 'x+' : 'x-'; break
+            case 'end':    cabX = isLeft ? boxA.x + boxA.w : boxA.x;    cabY = interfaceY - U; axis = isLeft ? 'x-' : 'x+'; break
+            case 'top':    cabY = interfaceY;   cabX = isLeft ? interfaceX + U : interfaceX - U; axis = 'y-'; break
+            case 'bottom': cabY = boxA.y;       cabX = isLeft ? interfaceX + U : interfaceX - U; axis = 'y+'; break
+            default: continue
+          }
+        } else {
+          const bInner = isLeft ? boxB.x + boxB.w : boxB.x
+          switch (op.face) {
+            case 'normal': cabX = bInner;                             cabY = interfaceY - U; axis = isLeft ? 'x-' : 'x+'; break
+            case 'end':    cabX = isLeft ? boxB.x : boxB.x + boxB.w; cabY = interfaceY - U; axis = isLeft ? 'x+' : 'x-'; break
+            case 'top':    cabY = boxB.y + boxB.h; cabX = isLeft ? bInner - U : bInner + U; axis = 'y-'; break
+            case 'bottom': cabY = boxB.y;          cabX = isLeft ? bInner - U : bInner + U; axis = 'y+'; break
+            default: continue
+          }
         }
       }
 
-      result.push({ x: cabX, y: cabY, z: cabZ, axis, radius: ev.tool_diameter_mm / 2, depthLen: ev.depth_mm })
+      // Visual depth = full material thickness of the target part in the drill direction,
+      // so the cylinder always clears the material regardless of the actual depth_mm value.
+      const targetBox = op.target_part === 'part_a' ? boxA : boxB
+      const throughDepth = (axis === 'x-' || axis === 'x+') ? targetBox.w : targetBox.h
+      result.push({ x: cabX, y: cabY, z: cabZ, axis, radius: ev.tool_diameter_mm / 2, depthLen: throughDepth })
     }
   }
 
@@ -439,30 +449,25 @@ function JointFaceRect({ plane, color }: { plane: JointRefPlane; color: string }
 }
 
 function DrillMarker({ x, y, z, axis, radius, depthLen }: DrillOpPos) {
-  const r = Math.max(1.5, radius)
-  const len = Math.max(2, depthLen)
+  const r   = Math.max(1.5, radius)
+  const len = Number.isFinite(depthLen) && depthLen > 0 ? depthLen : 10
 
-  const cylQuat = useMemo(() => {
-    const q = new THREE.Quaternion()
-    if (axis === 'x-' || axis === 'x+') q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)
-    return q
-  }, [axis])
-
+  // Offset the cylinder center so it starts at the entry face and drills inward.
+  const half = len / 2
   const offset: [number, number, number] =
-    axis === 'x-' ? [-(len / 2), 0, 0] :
-    axis === 'x+' ? [(len / 2), 0, 0]  :
-    axis === 'y-' ? [0, -(len / 2), 0] :
-                    [0, (len / 2), 0]
+    axis === 'x-' ? [-half, 0, 0] :
+    axis === 'x+' ? [ half, 0, 0] :
+    axis === 'y-' ? [0, -half, 0] :
+                    [0,  half, 0]
+
+  const rot: [number, number, number] =
+    (axis === 'x-' || axis === 'x+') ? [0, 0, Math.PI / 2] : [0, 0, 0]
 
   return (
     <group position={[x, y, z]}>
-      <mesh>
-        <sphereGeometry args={[r, 8, 6]} />
+      <mesh position={offset} rotation={rot}>
+        <cylinderGeometry args={[r, r, len + 2, 12]} />
         <meshStandardMaterial color="#f59e0b" roughness={0.3} />
-      </mesh>
-      <mesh position={offset} quaternion={cylQuat}>
-        <cylinderGeometry args={[r * 0.6, r * 0.6, len, 8]} />
-        <meshStandardMaterial color="#f59e0b" roughness={0.4} transparent opacity={0.55} />
       </mesh>
     </group>
   )
@@ -550,10 +555,24 @@ async function saveEdge(cabId: string, part: PartMeta) {
   else patchEdgeOverrideCache(cabId, id, edge)
 }
 
+// ── Position override helper ──────────────────────────────────────────────────
+
+function applyPosOv<T extends { X: number; Y: number; Z: number }>(p: T, id: string, overrides: PartPosOverrides | undefined): T {
+  const ov = overrides?.[id]
+  return ov ? { ...p, X: p.X + ov.ox, Y: p.Y + ov.oy, Z: p.Z + ov.oz } : p
+}
+
+function getRotOv(id: string, overrides: PartPosOverrides | undefined): [number, number, number] | undefined {
+  const ov = overrides?.[id]
+  if (!ov || (!ov.oax && !ov.oay && !ov.oaz)) return undefined
+  const D = Math.PI / 180
+  return [(ov.oax ?? 0) * D, (ov.oay ?? 0) * D, (ov.oaz ?? 0) * D]
+}
+
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
 
 function CabinetScene({
-  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, edgeOverrides, wire, customParts,
+  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, edgeOverrides, wire, customParts, partOverrides,
 }: {
   cab:               CabinetInstance
   rp:                ResolvedCabinet
@@ -566,6 +585,7 @@ function CabinetScene({
   edgeOverrides:     Map<string, PartEdge>
   wire?:             boolean
   customParts?:      CabinetCustomPart[]
+  partOverrides?:    PartPosOverrides
 }) {
   const { dx, dy, dz } = cab
   const dragRef = useRef(false)
@@ -573,9 +593,12 @@ function CabinetScene({
 
   const boxByKey = useMemo(() => {
     const m: Record<string, Box> = {}
-    for (const p of rp.case_parts) m[p.part_key] = caseBox(p)
+    for (const p of rp.case_parts) {
+      const pp = applyPosOv(p, `case_${p.part_key}`, partOverrides)
+      m[p.part_key] = caseBox(pp)
+    }
     return m
-  }, [rp.case_parts])
+  }, [rp.case_parts, partOverrides])
 
   function applyEdge<T extends PartMeta>(info: T): T {
     const ov = edgeOverrides.get(info.id)
@@ -595,7 +618,9 @@ function CabinetScene({
   return (
     <group position={[-dx / 2, -dy / 2, -dz / 2]}>
       {rp.case_parts.map((p, i) => {
-        const b    = caseBox(p)
+        const id   = `case_${p.part_key}`
+        const pp   = applyPosOv(p, id, partOverrides)
+        const b    = caseBox(pp)
         const info = applyEdge(buildCaseInfo(p, b))
         const s    = matSpec(p.material_id, '#ddd3bb')
         return (
@@ -612,11 +637,14 @@ function CabinetScene({
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id)}
             wire={wire}
+            rotation={getRotOv(id, partOverrides)}
           />
         )
       })}
       {rp.toekick_parts.map((p, i) => {
-        const b    = tkBox(p)
+        const id   = `tk_${p.part_key}_${p.sort_order}`
+        const pp   = applyPosOv(p, id, partOverrides)
+        const b    = tkBox(pp)
         const info = applyEdge(buildTkInfo(p, b))
         const s    = matSpec(p.material_id, '#78716c')
         return (
@@ -633,11 +661,14 @@ function CabinetScene({
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id)}
             wire={wire}
+            rotation={getRotOv(id, partOverrides)}
           />
         )
       })}
       {rp.internal_parts.map((p, i) => {
-        const b    = intBox(p)
+        const id   = `int_${p.part_type}_${p.sort_order}`
+        const pp   = applyPosOv(p, id, partOverrides)
+        const b    = intBox(pp)
         const info = applyEdge(buildIntInfo(p, b))
         const s    = matSpec(p.material_id, '#e8dece')
         return (
@@ -654,6 +685,7 @@ function CabinetScene({
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id)}
             wire={wire}
+            rotation={getRotOv(id, partOverrides)}
           />
         )
       })}
@@ -661,7 +693,9 @@ function CabinetScene({
         const slideColor = '#6b7280'
 
         const boxParts = stack.box_parts.map((p, pi) => {
-          const b    = dbBox(p)
+          const id   = `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`
+          const pp   = applyPosOv(p, id, partOverrides)
+          const b    = dbBox(pp)
           const info = buildDbPartInfo(p, b, stack)
           const s    = matSpec(p.material_id, '#d4c8a8')
           const faceColors = panelFaceColors(info.panelKind as PanelKind, p.part_type, s.face, s.back, s.edge)
@@ -679,12 +713,15 @@ function CabinetScene({
               dragRef={dragRef}
               ebSpec={ebFor(p.material_id)}
               wire={wire}
+              rotation={getRotOv(id, partOverrides)}
             />
           )
         })
 
         const slideparts = stack.slides.map((s, li) => {
-          const b    = slideBox(s)
+          const id   = `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`
+          const ps   = applyPosOv(s, id, partOverrides)
+          const b    = slideBox(ps)
           const info = buildSlideInfo(s, b, stack)
           const sc   = s.colour ?? slideColor
           const faceColors = panelFaceColors('side', `slide_${s.side}`, sc, sc, sc)
@@ -701,6 +738,7 @@ function CabinetScene({
               contextMenuSelect
               dragRef={dragRef}
               wire={wire}
+              rotation={getRotOv(id, partOverrides)}
             />
           )
         })
@@ -708,7 +746,9 @@ function CabinetScene({
         return [...boxParts, ...slideparts]
       })}
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
-        const b    = zoneBox(z)
+        const id   = `zone_${z.row_index}_${z.col_index}`
+        const pz   = applyPosOv(z, id, partOverrides)
+        const b    = zoneBox(pz)
         const info = applyEdge(buildZoneInfo(z, b))
         const isDoor = z.face_type !== 'drawer_face'
         const s    = matSpec(z.material_id, isDoor ? '#f0ebe0' : '#e2d9c8')
@@ -738,7 +778,7 @@ function CabinetScene({
           )
         }
 
-        return <Part key={`f${i}`} b={b} {...partProps} />
+        return <Part key={`f${i}`} b={b} rotation={getRotOv(id, partOverrides)} {...partProps} />
       })}
       {(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0).map((p, i) => {
         const b: Box = { x: p.x, y: p.y, z: p.z, w: Number(p.dy), h: Number(p.dz), d: Number(p.dx) }
@@ -761,6 +801,7 @@ function CabinetScene({
             selected={selected?.id === info.id}
             highlighted={false}
             onSelect={onSelect}
+            contextMenuSelect
             dragRef={dragRef}
             wire={wire}
           />
@@ -776,7 +817,7 @@ function CabinetScene({
 // ── Public component ─────────────────────────────────────────────────────────
 
 export default function Cabinet3DView({
-  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts,
+  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
@@ -785,6 +826,7 @@ export default function Cabinet3DView({
   ebByMatId?:        Record<string, { thickness: number; color: string | null }>
   wire?:             boolean
   customParts?:      CabinetCustomPart[]
+  partOverrides?:    PartPosOverrides
 }) {
   const [selectedPart, setSelectedPart]   = useState<PartMeta | null>(null)
   const [doorsOpen, setDoorsOpen]         = useState(false)
@@ -869,6 +911,7 @@ export default function Cabinet3DView({
           edgeOverrides={edgeOverrides}
           wire={wire}
           customParts={customParts}
+          partOverrides={partOverrides}
         />
       ) : (
         <mesh>

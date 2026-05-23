@@ -3,7 +3,7 @@
 import { useState, useEffect, type Dispatch, type SetStateAction } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
-import { dbAddCustomPart, dbUpdateCustomPart, dbDeleteCustomPart, type CabinetCustomPart } from './canvasDB'
+import { dbAddCustomPart, dbUpdateCustomPart, dbDeleteCustomPart, type CabinetCustomPart, type PartPosOverrides } from './canvasDB'
 import { DB_PART_LABELS } from './cabinetEditSvgHelpers'
 
 // ── Parts list helpers ────────────────────────────────────────────────────────
@@ -88,6 +88,35 @@ function PartRow({ name, material, dy, dx, dz, eb }: {
   )
 }
 
+function partIdLabel(id: string): string {
+  if (id.startsWith('case_')) {
+    const key = id.slice(5)
+    return PART_LABEL[key] ?? key.replace(/_/g, ' ')
+  }
+  if (id.startsWith('tk_')) {
+    const rest = id.slice(3); const cut = rest.lastIndexOf('_')
+    return PART_LABEL[rest.slice(0, cut)] ?? rest.slice(0, cut).replace(/_/g, ' ')
+  }
+  if (id.startsWith('int_')) {
+    const rest = id.slice(4); const cut = rest.lastIndexOf('_')
+    const idx = parseInt(rest.slice(cut + 1))
+    return `${PART_LABEL[rest.slice(0, cut)] ?? rest.slice(0, cut).replace(/_/g, ' ')} ${idx + 1}`
+  }
+  if (id.startsWith('zone_')) {
+    const [row, col] = id.slice(5).split('_').map(Number)
+    return `Face R${row + 1}C${col + 1}`
+  }
+  if (id.startsWith('db_')) {
+    const parts = id.slice(3).split('_')
+    return `Drawer Box R${Number(parts[0]) + 1}C${Number(parts[1]) + 1}`
+  }
+  if (id.startsWith('slide_')) {
+    const parts = id.slice(6).split('_')
+    return `Slide (${parts[2]}) R${Number(parts[0]) + 1}C${Number(parts[1]) + 1}`
+  }
+  return id
+}
+
 // ── Add Part Dialog ───────────────────────────────────────────────────────────
 
 interface LibraryPart {
@@ -158,7 +187,7 @@ function AddPartDialog({ cabinetId, onAdd, onClose }: {
     const nextOrder = ex && ex.length > 0 ? ex[0].sort_order + 1 : 0
     const result = await dbAddCustomPart({
       cabinet_instance_id: cabinetId, part_library_id: sel.id,
-      name: nameOver.trim() || null, dy, dx, dz: matDz || 18,
+      name: nameOver.trim() || sel.name, dy, dx, dz: matDz || 18,
       x: posX, y: posY, z: posZ,
       material_id: matId || null,
       edge_top: eTop, edge_bottom: eBot, edge_left: eLeft, edge_right: eRight,
@@ -295,10 +324,12 @@ function AddPartDialog({ cabinetId, onAdd, onClose }: {
 
 // ── Parts View ────────────────────────────────────────────────────────────────
 
-export default function PartsView({ rp, cabinetId, customParts, setCustomParts }: {
+export default function PartsView({ rp, cabinetId, customParts, setCustomParts, partOverrides, onDeletePosOverride }: {
   rp: ResolvedCabinet; cabinetId: string
   customParts: CabinetCustomPart[]
   setCustomParts: Dispatch<SetStateAction<CabinetCustomPart[]>>
+  partOverrides?: PartPosOverrides
+  onDeletePosOverride?: (partId: string) => void
 }) {
   const [matNames,    setMatNames]    = useState<Record<string, string>>({})
   const [matColours,  setMatColours]  = useState<Record<string, string | null>>({})
@@ -483,6 +514,23 @@ export default function PartsView({ rp, cabinetId, customParts, setCustomParts }
                   </tr>
                 )
               })}
+            </>
+          )}
+          {Object.keys(partOverrides ?? {}).length > 0 && (
+            <>
+              <SectionHeader color="#f97316" title="Position Overrides" count={Object.keys(partOverrides!).length} />
+              {Object.entries(partOverrides!).map(([partId, ov]) => (
+                <tr key={partId} className="border-t border-gray-800/60 hover:bg-gray-800/30">
+                  <td className="px-3 py-1.5 text-xs text-gray-300">{partIdLabel(partId)}</td>
+                  <td className="px-3 py-1.5 text-xs font-mono text-gray-500" colSpan={4}>
+                    X{ov.ox >= 0 ? '+' : ''}{ov.ox} &nbsp;Y{ov.oy >= 0 ? '+' : ''}{ov.oy} &nbsp;Z{ov.oz >= 0 ? '+' : ''}{ov.oz}
+                  </td>
+                  <td className="px-3 py-1.5 text-right">
+                    <button onClick={() => onDeletePosOverride?.(partId)}
+                      className="text-gray-600 hover:text-red-400 text-xs leading-none transition-colors" title="Remove override">✕</button>
+                  </td>
+                </tr>
+              ))}
             </>
           )}
         </tbody>

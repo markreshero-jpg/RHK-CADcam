@@ -169,6 +169,8 @@ export default function ElevationSVG({
   const [elevCabFloat, setElevCabFloat] = useState<{ t: number; ht: number } | null>(null)
 
   const [hoveredCabId, setHoveredCabId] = useState<string | null>(null)
+  const [sectionMode, setSectionMode] = useState(false)
+  const [sectionDepth, setSectionDepth] = useState(0)
   const [placeGhost, setPlaceGhost] = useState<{ t: number; cls: string; dx: number; dy: number } | null>(null)
   const [elevResizeFollowing, setElevResizeFollowing] = useState<{
     cabId: string; dim: 'dx' | 'dy'; side: 'left' | 'right' | 'top'
@@ -190,7 +192,9 @@ export default function ElevationSVG({
 
   const wall = walls.find(w => w.id === elevWallId) ?? null
   const wallCabs = wall ? cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === elevWallSide) : []
-  const roomH = room.room_dy ?? 2400
+  const roomH = wall?.height ?? room.room_dy ?? 2400
+  const maxDz = wallCabs.length > 0 ? Math.max(300, ...wallCabs.map(c => c.dz)) : 600
+  const FACE_THICK = 20
   // Keep rfData current on every render (synchronous assignment, no useEffect needed).
   rfData.current = { elevResizeFollowing, view, cabinets, room }
 
@@ -515,12 +519,51 @@ export default function ElevationSVG({
             </button>
           </>
         )}
+        {wall && (
+          <>
+            <div className="mx-2 h-4 border-l border-gray-700" />
+            <button
+              onClick={() => {
+                const next = !sectionMode
+                setSectionMode(next)
+                if (next) setSectionDepth(Math.round(maxDz / 3))
+              }}
+              className={`px-2.5 py-0.5 text-[10px] rounded whitespace-nowrap transition-colors ${
+                sectionMode ? 'bg-violet-600 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+              }`}>
+              Section
+            </button>
+          </>
+        )}
         {multiSelect.length >= 2 && (
           <span className="ml-2 text-[10px] text-gray-500 whitespace-nowrap select-none">
             {multiSelect.length} selected · Shift+click to add/remove
           </span>
         )}
       </div>
+
+      {/* Section depth slider */}
+      {wall && sectionMode && (
+        <div className="flex-none flex items-center gap-3 px-4 py-1.5 bg-gray-950 border-b border-violet-900/40 shrink-0">
+          <span className="text-[10px] text-gray-400 whitespace-nowrap select-none">Cut depth:</span>
+          <input
+            type="range" min={0} max={maxDz} step={10}
+            value={Math.min(sectionDepth, maxDz)}
+            onChange={e => setSectionDepth(Number(e.target.value))}
+            className="w-48 accent-violet-500 cursor-pointer"
+          />
+          <input
+            type="number" min={0} max={maxDz} step={10}
+            value={sectionDepth}
+            onChange={e => {
+              const v = Number(e.target.value)
+              if (!isNaN(v)) setSectionDepth(Math.max(0, Math.min(maxDz, v)))
+            }}
+            className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-[10px] text-violet-300 font-mono text-right focus:outline-none focus:border-violet-500"
+          />
+          <span className="text-[10px] text-gray-500 whitespace-nowrap select-none">mm</span>
+        </div>
+      )}
 
       {/* SVG */}
       <svg
@@ -539,6 +582,15 @@ export default function ElevationSVG({
           </text>
         ) : (
           <g transform={`translate(${view.panX},${view.panY}) scale(${z})`}>
+
+            {/* Section cut hatch pattern — in local (mm) coordinate space so it scales with zoom */}
+            {sectionMode && (
+              <defs>
+                <pattern id="section-hatch" patternUnits="userSpaceOnUse" width="20" height="20">
+                  <line x1="0" y1="20" x2="20" y2="0" stroke="#4b5563" strokeWidth="1.5" />
+                </pattern>
+              </defs>
+            )}
 
             {/* Wall title */}
             <text x={wall.length / 2} y={-24 / z}
@@ -728,8 +780,13 @@ export default function ElevationSVG({
               const intEffP       = showIntAnnot ? layerSVGProps('ghost', z) : intP
               const showDrawerBox = intVisible && displayConfig.annotations.elev_drawer_box
 
+              const pastFace = sectionMode && sectionDepth > FACE_THICK
+              const faceOpacity = sectionMode ? Math.max(0, 1 - sectionDepth / FACE_THICK) : 1
+              const effectiveIntVisible = intVisible || pastFace
+              const effectiveShowDrawerBox = showDrawerBox || (pastFace && !!cab.has_internal)
+
               const shelfYs: number[] = []
-              if (intVisible && cab.has_internal) {
+              if (effectiveIntVisible && cab.has_internal) {
                 const bottom = ry + displayDy - tkH
                 if (isTall) {
                   for (let offset = 300; offset < displayDy - tkH - 150; offset += 350)
@@ -763,7 +820,7 @@ export default function ElevationSVG({
                       return (<>
                         {carcL.visible && (
                           <rect x={rx} y={ry} width={displayDx} height={displayDy}
-                            fill={isLineDrawing ? 'none' : baseColor}
+                            fill={isLineDrawing ? 'none' : (pastFace ? 'url(#section-hatch)' : baseColor)}
                             fillOpacity={isLineDrawing ? 0 : carcP.fillOpacity}
                             stroke={isLineDrawing ? (isSel ? '#e2e8f0' : '#94a3b8') : cabStroke}
                             strokeWidth={isLineDrawing ? 1 / z : cabStrokeW}
@@ -779,23 +836,23 @@ export default function ElevationSVG({
                             strokeDasharray={isLineDrawing ? undefined : (tkP.strokeDasharray ?? `${4 / z} ${2 / z}`)}
                             opacity={tkP.opacity} />
                         )}
-                        {intVisible && shelfYs.map((sy, i) => (
+                        {effectiveIntVisible && shelfYs.map((sy, i) => (
                           <line key={i} x1={rx + 4 / z} y1={sy} x2={rx + displayDx - 4 / z} y2={sy}
-                            stroke={isLineDrawing ? '#a78bfa' : (isSel ? '#cbd5e1' : '#4b5563')}
-                            strokeWidth={1 / z}
+                            stroke={isLineDrawing ? '#a78bfa' : (pastFace ? '#818cf8' : (isSel ? '#cbd5e1' : '#4b5563'))}
+                            strokeWidth={pastFace ? 1.5 / z : 1 / z}
                             strokeDasharray={isLineDrawing || (intL.style === 'solid' && !showIntAnnot) ? undefined : `${8 / z} ${4 / z}`}
                             opacity={intEffP.opacity} />
                         ))}
-                        {faceL.visible && cab.has_face && (() => {
+                        {faceOpacity > 0 && faceL.visible && cab.has_face && (() => {
                           const ins = 15; const fw = displayDx - ins * 2; const fh = displayDy - tkH - ins * 2
                           if (fw <= 0 || fh <= 0) return null
                           return <rect x={rx + ins} y={ry + ins} width={fw} height={fh}
                             fill={isLineDrawing ? 'none' : baseColor}
-                            fillOpacity={isLineDrawing ? 0 : faceP.fillOpacity * 0.45}
+                            fillOpacity={isLineDrawing ? 0 : faceP.fillOpacity * 0.45 * faceOpacity}
                             stroke={isLineDrawing ? '#60a5fa' : (isSel ? '#e2e8f0' : baseColor)}
                             strokeWidth={isLineDrawing ? 1 / z : 0.75 / z}
                             strokeDasharray={isLineDrawing ? undefined : faceP.strokeDasharray}
-                            opacity={faceP.opacity} />
+                            opacity={faceP.opacity * faceOpacity} />
                         })()}
                       </>)
                     }
@@ -812,10 +869,10 @@ export default function ElevationSVG({
                         const ldStroke = LINE_DRAW_COLORS[p.part_key] ?? '#94a3b8'
                         return (
                           <rect key={`cp-${i}`} x={x} y={y} width={w} height={h}
-                            fill={isLineDrawing ? 'none' : fill}
-                            fillOpacity={isLineDrawing ? 0 : 0.6}
-                            stroke={isLineDrawing ? ldStroke : (isSel ? '#e2e8f0' : fill)}
-                            strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
+                            fill={isLineDrawing ? 'none' : (pastFace ? 'url(#section-hatch)' : fill)}
+                            fillOpacity={isLineDrawing ? 0 : (pastFace ? 0.9 : 0.6)}
+                            stroke={isLineDrawing ? ldStroke : (pastFace ? '#8b9eb0' : (isSel ? '#e2e8f0' : fill))}
+                            strokeWidth={isLineDrawing ? 1 / z : (pastFace ? 1 / z : 0.5 / z)}
                             opacity={carcP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
@@ -845,7 +902,7 @@ export default function ElevationSVG({
                               stroke={isSel ? '#e2e8f0' : fill} strokeWidth={0.5 / z}
                               opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                       })}
-                      {intVisible && rp.internal_parts.map((p, i) => {
+                      {effectiveIntVisible && rp.internal_parts.map((p, i) => {
                         const { ex, ey, ew, eh } = shelfElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                         const fill = PART_COLORS[p.part_type] ?? '#818cf8'
@@ -859,7 +916,7 @@ export default function ElevationSVG({
                             opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
-                      {showDrawerBox && rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => [
+                      {effectiveShowDrawerBox && rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => [
                         ...ds.box_parts.map((p: ResolvedDrawerBoxPart, j: number) => {
                           const { ex, ey, ew, eh } = drawerBoxPartElevRect(p)
                           const { x, y, w, h } = toSVG(ex, ey, ew, eh)
@@ -889,7 +946,9 @@ export default function ElevationSVG({
                           )
                         }),
                       ])}
-                      {faceL.visible && rp.face_zones.map((fz, i) => {
+                      {faceOpacity > 0 && faceL.visible && (
+                      <g opacity={faceOpacity} style={{ pointerEvents: faceOpacity < 0.1 ? 'none' : undefined }}>
+                      {rp.face_zones.map((fz, i) => {
                         const { ex, ey, ew, eh } = zoneElevRect(fz)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                         const fill = PART_COLORS[fz.face_type] ?? '#60a5fa'
@@ -935,6 +994,7 @@ export default function ElevationSVG({
                           </g>
                         )
                       })}
+                      </g>)}
                     </>)
                   })()}
 
