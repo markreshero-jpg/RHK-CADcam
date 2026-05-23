@@ -184,7 +184,7 @@ function buildTree(
             DX: p.DX, DY: p.DY, DZ: p.DZ,
             AX: p.AX, AY: p.AY, AZ: p.AZ,
             materialId: p.material_id },
-          p.part_type, rp, cab,
+          p.part_type, rp,
         ))
 
         const drawerNodes: TreeNode[] = (rp.drawer_stacks ?? []).flatMap(stack => {
