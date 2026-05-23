@@ -257,6 +257,28 @@ export default function JointsClient({
     await reloadJoints()
   }
 
+  async function duplicateJointType(jt: JointType) {
+    const { data: newJt, error } = await supabase
+      .from('joint_types')
+      .insert({ name: `${jt.name} (copy)`, description: jt.description })
+      .select('*').single()
+    if (error || !newJt) return
+    const { data: srcOps } = await supabase
+      .from('joint_type_operations')
+      .select('*')
+      .eq('joint_type_id', jt.id)
+      .order('operation_order')
+    if (srcOps && srcOps.length > 0) {
+      const copies = srcOps.map(({ id: _id, joint_type_id: _jtid, ...rest }: Record<string, unknown>) => ({
+        ...rest,
+        joint_type_id: newJt.id,
+      }))
+      await supabase.from('joint_type_operations').insert(copies)
+    }
+    await reloadJoints()
+    selectJoint(newJt as JointType)
+  }
+
   // ── Operation CRUD ────────────────────────────────────────────────────────
 
   async function addOp() {
@@ -366,7 +388,13 @@ export default function JointsClient({
                   >
                     <span className="flex-1 text-xs truncate">{jt.name}</span>
                     <button
+                      onClick={e => { e.stopPropagation(); duplicateJointType(jt) }}
+                      title="Duplicate"
+                      className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-blue-400 transition-all text-xs px-1"
+                    >⧉</button>
+                    <button
                       onClick={e => { e.stopPropagation(); deleteJointType(jt.id) }}
+                      title="Delete"
                       className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all text-xs px-1"
                     >✕</button>
                   </div>

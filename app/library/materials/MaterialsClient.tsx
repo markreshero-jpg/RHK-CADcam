@@ -261,13 +261,22 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
   const [saving, setSaving] = useState(false)
   const [sortKey, setSortKey] = useState<string>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [filterName, setFilterName] = useState('')
+  const [filterBrand, setFilterBrand] = useState('')
 
   const tab       = TABS.find(t => t.id === activeTab)!
   const rows      = allRows[activeTab] ?? []
   const form      = forms[activeTab] ?? {}
   const editingId = editingIds[activeTab] ?? null
 
-  const visibleRows = showInactive ? rows : rows.filter(r => r.active !== false)
+  const hasBrandField = tab.fields.some(f => f.key === 'brand')
+
+  const visibleRows = rows.filter(r => {
+    if (!showInactive && r.active === false) return false
+    if (filterName && !String(r.name ?? '').toLowerCase().includes(filterName.toLowerCase())) return false
+    if (filterBrand && !String(r.brand ?? '').toLowerCase().includes(filterBrand.toLowerCase())) return false
+    return true
+  })
 
   const sortField = tab.fields.find(f => f.key === sortKey)
   const sortedRows = sortKey ? [...visibleRows].sort((a, b) => {
@@ -283,7 +292,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
     return sortDir === 'asc' ? cmp : -cmp
   }) : visibleRows
 
-  function handleSortKey(key: string) {
+  function handleSort(key: string) {
     if (key === sortKey) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     } else {
@@ -363,7 +372,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         {TABS.map(t => (
           <button
             key={t.id}
-            onClick={() => { setActiveTab(t.id); setSortKey('name'); setSortDir('asc') }}
+            onClick={() => { setActiveTab(t.id); setSortKey('name'); setSortDir('asc'); setFilterName(''); setFilterBrand('') }}
             className={`px-4 py-2.5 text-xs font-medium transition-colors ${
               t.id === activeTab
                 ? 'text-white border-b-2 border-blue-500'
@@ -375,23 +384,26 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         ))}
         <div className="flex-1" />
         <div className="flex items-center gap-1.5 pb-2.5">
-          <span className="text-[10px] text-gray-600">Sort</span>
-          <select
-            value={sortKey}
-            onChange={e => handleSortKey(e.target.value)}
-            className="bg-gray-800 border border-gray-700 text-[10px] text-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-blue-500"
-          >
-            {tab.fields.filter(f => f.type !== 'colour' && f.type !== 'boolean').map(f => (
-              <option key={f.key} value={f.key} className="bg-gray-900">{f.label}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-            className="text-[11px] text-gray-400 hover:text-white w-5 text-center leading-none"
-            title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
-          >
-            {sortDir === 'asc' ? '↑' : '↓'}
-          </button>
+          <span className="text-[10px] text-gray-600">Name</span>
+          <input
+            type="text"
+            value={filterName}
+            onChange={e => setFilterName(e.target.value)}
+            placeholder="filter…"
+            className="bg-gray-800 border border-gray-700 text-[10px] text-gray-300 rounded px-1.5 py-0.5 w-24 focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
+          />
+          {hasBrandField && (
+            <>
+              <span className="text-[10px] text-gray-600">Brand</span>
+              <input
+                type="text"
+                value={filterBrand}
+                onChange={e => setFilterBrand(e.target.value)}
+                placeholder="filter…"
+                className="bg-gray-800 border border-gray-700 text-[10px] text-gray-300 rounded px-1.5 py-0.5 w-20 focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
+              />
+            </>
+          )}
         </div>
         <span className="text-gray-700 text-xs pb-2.5">|</span>
         <label className="flex items-center gap-1.5 text-[10px] text-gray-500 pb-2.5 cursor-pointer select-none">
@@ -512,18 +524,29 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         <div className="flex-1 overflow-auto">
 
           {/* Column header */}
-          <div className="flex items-center bg-gray-800/60 border-b border-gray-700 sticky top-0 z-10 min-w-max">
+          <div className="flex items-center bg-gray-800/60 border-b border-gray-700 sticky top-0 z-10 min-w-max flex-none">
             {tab.fields.map((f, i) => (
-              <div
+              <button
                 key={f.key}
                 style={{ width: f.w }}
-                className={`${cellCls(f, i, tab.fields.length - 1)} border-gray-700/50 text-[9px] text-gray-500 uppercase tracking-wide py-1.5 ${
-                  f.type === 'number'  ? 'text-right'  :
-                  f.type === 'boolean' ? 'text-center' : ''
+                onClick={() => f.type !== 'boolean' && f.type !== 'colour' && handleSort(f.key)}
+                className={`flex-none px-2 py-1.5 text-[9px] text-gray-500 uppercase tracking-wide ${
+                  i < tab.fields.length - 1 ? 'border-r border-gray-700/50' : ''
+                } ${
+                  f.type === 'boolean' || f.type === 'colour'
+                    ? 'text-center cursor-default'
+                    : 'text-left hover:text-gray-300 cursor-pointer'
+                } ${
+                  f.type === 'number' ? 'text-right' : ''
+                } ${
+                  f.type !== 'boolean' && f.type !== 'colour' ? 'flex items-center gap-1' : ''
                 }`}
               >
                 {f.label}
-              </div>
+                {sortKey === f.key && f.type !== 'boolean' && f.type !== 'colour' && (
+                  <span className="text-blue-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
+                )}
+              </button>
             ))}
           </div>
 
@@ -580,6 +603,9 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         <div className="flex-none border-t border-gray-800 px-4 py-1.5 flex items-center justify-between">
           <span className="text-[10px] text-gray-600">
             {sortedRows.length} of {rows.length} record{rows.length !== 1 ? 's' : ''}
+            {(filterName || filterBrand) && (
+              <span className="ml-1">· filtered</span>
+            )}
             {!showInactive && rows.some(r => r.active === false) && (
               <span className="ml-1">
                 · {rows.filter(r => r.active === false).length} inactive hidden

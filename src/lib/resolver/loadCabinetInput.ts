@@ -280,6 +280,9 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
       supabase.from('joint_types').select('id, name').in('id', ids),
     ])
 
+    if (opsRes.error)   console.error('[loadCabinetInput] joint_type_operations query error:', opsRes.error)
+    if (namesRes.error) console.error('[loadCabinetInput] joint_types query error:', namesRes.error)
+
     for (const op of ((opsRes.data ?? []) as Record<string, unknown>[])) {
       const jid = op.joint_type_id as string
       if (!jointTypeOps[jid]) jointTypeOps[jid] = []

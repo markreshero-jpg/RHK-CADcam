@@ -3,7 +3,7 @@ import type { RefObject } from 'react'
 import type { Wall, CabinetInstance } from '@/src/lib/types'
 import {
   wallEnd, wallInwardNormal, wallMitrePolygon,
-  cabinetPolygon, cabinetCenterPt, centroid, islandCabPerp,
+  cabinetPolygon, cabinetCenterPt, centroid, cabWallPerp,
 } from '@/src/lib/geometry'
 
 export default function PlanDrawingSVG({ walls, cabinets, svgRef, scale = 20 }: {
@@ -86,7 +86,7 @@ export default function PlanDrawingSVG({ walls, cabinets, svgRef, scale = 20 }: 
         const wall = walls.find(w => w.id === cab.wall_id)
         if (!wall) return null
         const basePerp = wallInwardNormal(wall, cx.x, cx.y)
-        const perp     = islandCabPerp(cab, wall, basePerp)
+        const perp     = cabWallPerp(cab, wall, basePerp)
         const poly     = cabinetPolygon(cab, wall, perp)
         const center   = cabinetCenterPt(cab, wall, perp)
         return (

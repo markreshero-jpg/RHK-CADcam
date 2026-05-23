@@ -6,6 +6,7 @@ import { useFrame } from '@react-three/fiber'
 import { supabase } from '@/src/lib/supabase'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
 import type { CabinetInstance } from '@/src/lib/types'
+import type { CabinetCustomPart } from './canvasDB'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
   ResolvedInternalPart, ResolvedFaceZone,
@@ -480,9 +481,12 @@ function SeamJointOverlay({ seamJoints, boxByKey }: {
       if (!plane) return []
       const color = sj.source === 'cabinet' ? '#22c55e' : '#60a5fa'
       const drills = seamDrillOps(sj.seam_key, boxA, boxB, sj.ops)
-      console.log('[SeamJoint]', sj.seam_key, 'joint:', sj.joint_type_name,
-        'raw ops:', sj.ops.length, 'drill markers:', drills.length,
-        sj.ops.map(o => ({ face: o.face, target: o.target_part, qty: o.qty, spc: o.spacing_mm, expr: o.expressions })))
+      console.log('[SeamJoint]', sj.seam_key,
+        'id:', sj.joint_type_id,
+        'name:', sj.joint_type_name,
+        'source:', sj.source,
+        'raw ops:', sj.ops.length,
+        'drill markers:', drills.length)
       return [{ key: sj.seam_key, plane, color, drills }]
     })
   }, [seamJoints, boxByKey])
@@ -549,7 +553,7 @@ async function saveEdge(cabId: string, part: PartMeta) {
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
 
 function CabinetScene({
-  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, edgeOverrides, wire,
+  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, edgeOverrides, wire, customParts,
 }: {
   cab:               CabinetInstance
   rp:                ResolvedCabinet
@@ -561,6 +565,7 @@ function CabinetScene({
   doorsOpen:         boolean
   edgeOverrides:     Map<string, PartEdge>
   wire?:             boolean
+  customParts?:      CabinetCustomPart[]
 }) {
   const { dx, dy, dz } = cab
   const dragRef = useRef(false)
@@ -735,6 +740,32 @@ function CabinetScene({
 
         return <Part key={`f${i}`} b={b} {...partProps} />
       })}
+      {(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0).map((p, i) => {
+        const b: Box = { x: p.x, y: p.y, z: p.z, w: Number(p.dy), h: Number(p.dz), d: Number(p.dx) }
+        const s = matSpec(p.material_id ?? '', '#a78bfa')
+        const info: PartMeta = {
+          id: `custom_${p.id}`,
+          label: p.name ?? 'Custom Part',
+          w: b.w, h: b.h, d: b.d,
+          thickness: b.h,
+          edge: { top: p.edge_top, bottom: p.edge_bottom, left: p.edge_left, right: p.edge_right },
+          panelKind: 'horizontal',
+        }
+        return (
+          <Part
+            key={`cust${i}`}
+            b={b}
+            faceColors={panelFaceColors('horizontal', 'custom', s.face, s.back, s.edge)}
+            edgeLineColor="#7c3aed"
+            meta={info}
+            selected={selected?.id === info.id}
+            highlighted={false}
+            onSelect={onSelect}
+            dragRef={dragRef}
+            wire={wire}
+          />
+        )
+      })}
       {rp.seam_joints.length > 0 && (
         <SeamJointOverlay seamJoints={rp.seam_joints} boxByKey={boxByKey} />
       )}
@@ -745,7 +776,7 @@ function CabinetScene({
 // ── Public component ─────────────────────────────────────────────────────────
 
 export default function Cabinet3DView({
-  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false,
+  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
@@ -753,6 +784,7 @@ export default function Cabinet3DView({
   materialColours?:  MatColMap
   ebByMatId?:        Record<string, { thickness: number; color: string | null }>
   wire?:             boolean
+  customParts?:      CabinetCustomPart[]
 }) {
   const [selectedPart, setSelectedPart]   = useState<PartMeta | null>(null)
   const [doorsOpen, setDoorsOpen]         = useState(false)
@@ -836,6 +868,7 @@ export default function Cabinet3DView({
           doorsOpen={doorsOpen}
           edgeOverrides={edgeOverrides}
           wire={wire}
+          customParts={customParts}
         />
       ) : (
         <mesh>

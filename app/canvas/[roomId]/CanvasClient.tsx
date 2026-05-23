@@ -9,7 +9,7 @@ import {
   wallEnd, wallDir,
   snapEndpoint, snapAngle, ptToSeg,
   nearestWall, findFreeSlot, cabBlocks, cabT, nextLabel,
-  centroid, wallInwardNormal, islandCabPerp, cabinetCenterPt,
+  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCenterPt,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
 import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet } from './canvasDB'
@@ -83,6 +83,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [mouseWorld, setMouseWorld] = useState<Pt>({ x: 0, y: 0 })
   const [canvasView, setCanvasView] = useState<CanvasView>('plan')
   const [elevWallId, setElevWallId] = useState<string | null>(null)
+  const [elevWallSide, setElevWallSide] = useState<'face' | 'back'>('face')
   const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(() => {
     const preset = getUserPrefs().defaultDrawingPreset
     return applyPreset(preset)
@@ -190,6 +191,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setPlaceGhost(null)
     svgPointerDownRef.current = false
   }, [])
+
+  useEffect(() => { setElevWallSide('face') }, [elevWallId])
 
   useEffect(() => {
     const isInput = (t: EventTarget | null) => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement
@@ -372,12 +375,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }
 
-  async function pasteCabinet(wall: Wall, pos_x: number, pos_y: number) {
+  async function pasteCabinet(wall: Wall, pos_x: number, pos_y: number, sideFlip = false) {
     if (!clipboard) return
     captureSnapshot()
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, created_at, updated_at, ...rest } = clipboard
-    const cabinet = await dbInsertCabinet({ ...rest, room_id: room.id, wall_id: wall.id, label: nextLabel(cabinets, clipboard.assembly_class), pos_x, pos_y, rotation: wall.angle })
+    const cabinet = await dbInsertCabinet({ ...rest, room_id: room.id, wall_id: wall.id, label: nextLabel(cabinets, clipboard.assembly_class), pos_x, pos_y, rotation: sideFlip ? wall.angle + 180 : wall.angle })
     if (cabinet) {
       setCabinets(cs => [...cs, cabinet])
       setSelected({ type: 'cabinet', id: cabinet.id })
@@ -472,11 +475,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return
     }
 
-    function islandFlipFor(w: Wall): boolean {
-      if (w.wall_type !== 'island') return false
+    function wallFlipFor(w: Wall): boolean {
       const wd = wallDir(w)
-      const perp = { x: -wd.y, y: wd.x }
-      return (wp.x - w.pos_x) * perp.x + (wp.y - w.pos_y) * perp.y < 0
+      if (w.wall_type === 'island') {
+        const perp = { x: -wd.y, y: wd.x }
+        return (wp.x - w.pos_x) * perp.x + (wp.y - w.pos_y) * perp.y < 0
+      }
+      const cx = centroid(walls)
+      const inward = wallInwardNormal(w, cx.x, cx.y)
+      return (wp.x - w.pos_x) * inward.x + (wp.y - w.pos_y) * inward.y < 0
     }
 
     if (mode === 'paste' && clipboard) {
@@ -484,9 +491,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (!raw) { setPlaceGhost(null); return }
       const wd = wallDir(raw.wall)
       const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
-      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabBlocks(clipboard.assembly_class, c.assembly_class)).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+      const flip = wallFlipFor(raw.wall)
+      const side = flip ? 'back' : 'face'
+      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabBlocks(clipboard.assembly_class, c.assembly_class) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
       const t = findFreeSlot(desired, clipboard.dx, raw.wall.length, occupied)
-      setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: islandFlipFor(raw.wall) })
+      setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: flip })
       return
     }
 
@@ -497,9 +506,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (!raw) { setPlaceGhost(null); return }
       const wd = wallDir(raw.wall)
       const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
-      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabBlocks(clsInfo.cls, c.assembly_class)).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+      const flip = wallFlipFor(raw.wall)
+      const side = flip ? 'back' : 'face'
+      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabBlocks(clsInfo.cls, c.assembly_class) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
       const t = findFreeSlot(desired, dims.dx, raw.wall.length, occupied)
-      setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: islandFlipFor(raw.wall) })
+      setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: flip })
       return
     }
 
@@ -515,7 +526,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const wd = wallDir(wall)
         const cursorT = (wp.x - wall.pos_x) * wd.x + (wp.y - wall.pos_y) * wd.y
         const desired = Math.max(0, Math.min(wall.length - cabDX, cursorT - dragOffset))
-        const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && cabBlocks(assemblyClass, c.assembly_class)).map(c => ({ t: cabT(c, wall), dx: c.dx }))
+        const dragCab = cabinets.find(c => c.id === cabId)
+        const dragSide = dragCab ? cabWallSide(dragCab, wall) : 'face'
+        const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && cabBlocks(assemblyClass, c.assembly_class) && cabWallSide(c, wall) === dragSide).map(c => ({ t: cabT(c, wall), dx: c.dx }))
         const t = findFreeSlot(desired, cabDX, wall.length, occupied)
         setCabDrag({ id: cabId, pos_x: wall.pos_x + t * wd.x, pos_y: wall.pos_y + t * wd.y })
       }
@@ -530,9 +543,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         if (raw) {
           const wd = wallDir(raw.wall)
           const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
-          const occupied = cabinets.filter(c => c.id !== id && c.wall_id === raw.wall.id && cabBlocks(assemblyClass, c.assembly_class)).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+          const moveSide = cabWallSide(cab, raw.wall)
+          const occupied = cabinets.filter(c => c.id !== id && c.wall_id === raw.wall.id && cabBlocks(assemblyClass, c.assembly_class) && cabWallSide(c, raw.wall) === moveSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
           const t = findFreeSlot(desired, cab.dx, raw.wall.length, occupied)
-          setCabMoveDrag({ id, wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: islandFlipFor(raw.wall), freePos: wp })
+          setCabMoveDrag({ id, wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: wallFlipFor(raw.wall), freePos: wp })
         }
       }
     }
@@ -540,10 +554,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (cabResize && mode === 'select') {
       const { side, wall, perp, startCabT, startCabEndT, cabId } = cabResize
       const wd = wallDir(wall)
-      const resizingCls = cabinets.find(c => c.id === cabId)?.assembly_class ?? 'base'
-      // Neighbours on the same wall used for collision clamping
+      const resizingCab = cabinets.find(c => c.id === cabId)
+      const resizingCls = resizingCab?.assembly_class ?? 'base'
+      const resizingSide = resizingCab ? cabWallSide(resizingCab, wall) : 'face'
+      // Neighbours on the same wall side used for collision clamping
       const neighbours = cabinets
-        .filter(c => c.id !== cabId && c.wall_id === wall.id && cabBlocks(resizingCls, c.assembly_class))
+        .filter(c => c.id !== cabId && c.wall_id === wall.id && cabBlocks(resizingCls, c.assembly_class) && cabWallSide(c, wall) === resizingSide)
         .map(c => ({ t: cabT(c, wall), dx: c.dx }))
       if (side === 'right') {
         const cursorT = (wp.x - wall.pos_x) * wd.x + (wp.y - wall.pos_y) * wd.y
@@ -630,13 +646,24 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         if (raw) {
           const wd2 = wallDir(raw.wall)
           const desired = (raw.pos_x - raw.wall.pos_x) * wd2.x + (raw.pos_y - raw.wall.pos_y) * wd2.y
-          const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabBlocks(clipboard.assembly_class, c.assembly_class)).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+          const pasteFlip = (() => {
+            const d = wallDir(raw.wall)
+            if (raw.wall.wall_type === 'island') {
+              const p = { x: -d.y, y: d.x }
+              return (wp.x - raw.wall.pos_x) * p.x + (wp.y - raw.wall.pos_y) * p.y < 0
+            }
+            const cx2 = centroid(walls)
+            const inw = wallInwardNormal(raw.wall, cx2.x, cx2.y)
+            return (wp.x - raw.wall.pos_x) * inw.x + (wp.y - raw.wall.pos_y) * inw.y < 0
+          })()
+          const pasteSide = pasteFlip ? 'back' : 'face'
+          const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabBlocks(clipboard.assembly_class, c.assembly_class) && cabWallSide(c, raw.wall) === pasteSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
           const t = findFreeSlot(desired, clipboard.dx, raw.wall.length, occupied)
-          ghost = { wall: raw.wall, pos_x: raw.wall.pos_x + t * wd2.x, pos_y: raw.wall.pos_y + t * wd2.y, islandFlip: false }
+          ghost = { wall: raw.wall, pos_x: raw.wall.pos_x + t * wd2.x, pos_y: raw.wall.pos_y + t * wd2.y, islandFlip: pasteFlip }
         }
       }
       if (ghost && clipboard) {
-        await pasteCabinet(ghost.wall, ghost.pos_x, ghost.pos_y)
+        await pasteCabinet(ghost.wall, ghost.pos_x, ghost.pos_y, ghost.islandFlip)
         setMode('select'); setPlaceGhost(null)
       }
       return
@@ -683,7 +710,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return false
           const basePerp = wallInwardNormal(wall, cxpt.x, cxpt.y)
-          const perp = islandCabPerp(cab, wall, basePerp)
+          const perp = cabWallPerp(cab, wall, basePerp)
           const center = cabinetCenterPt(cab, wall, perp)
           return center.x >= minX && center.x <= maxX && center.y >= minY && center.y <= maxY
         }).map(c => c.id)
@@ -1091,13 +1118,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onSelectCabinet={id => { setSelected({ type: 'cabinet', id }); setMultiSelect([]); setCabResize(null) }}
             onSelectWall={id => setSelected({ type: 'wall', id })}
             onSetElevWall={setElevWallId}
+            elevWallSide={elevWallSide}
+            onSetElevWallSide={setElevWallSide}
             onUpdateCabinet={handleUpdateCabinet}
             onPlaceAtWall={async (wall, pos_x, pos_y) => {
               if (mode === 'paste' && clipboard) {
-                await pasteCabinet(wall, pos_x, pos_y)
+                await pasteCabinet(wall, pos_x, pos_y, elevWallSide === 'back')
               } else {
                 const clsInfo = modeAssemblyClass(mode)
-                if (clsInfo) await placeCabinet(wall, pos_x, pos_y, clsInfo.cls, clsInfo.ep)
+                if (clsInfo) await placeCabinet(wall, pos_x, pos_y, clsInfo.cls, clsInfo.ep, elevWallSide === 'back')
               }
               setMode('select')
               setPlaceGhost(null)
@@ -1265,14 +1294,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               if (raw) {
                 const wd = wallDir(raw.wall)
                 const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
+                const copyFlip = (() => {
+                  const d = wallDir(raw.wall)
+                  if (raw.wall.wall_type === 'island') {
+                    const p = { x: -d.y, y: d.x }
+                    return (mouseWorld.x - raw.wall.pos_x) * p.x + (mouseWorld.y - raw.wall.pos_y) * p.y < 0
+                  }
+                  const cx2 = centroid(walls)
+                  const inw = wallInwardNormal(raw.wall, cx2.x, cx2.y)
+                  return (mouseWorld.x - raw.wall.pos_x) * inw.x + (mouseWorld.y - raw.wall.pos_y) * inw.y < 0
+                })()
+                const copySide = copyFlip ? 'back' : 'face'
                 const occupied = cabinets
-                  .filter(c => c.wall_id === raw.wall.id && cabBlocks(cab.assembly_class, c.assembly_class))
+                  .filter(c => c.wall_id === raw.wall.id && cabBlocks(cab.assembly_class, c.assembly_class) && cabWallSide(c, raw.wall) === copySide)
                   .map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
                 const t = findFreeSlot(desired, cab.dx, raw.wall.length, occupied)
-                const perp = { x: -wd.y, y: wd.x }
-                const islandFlip = raw.wall.wall_type === 'island' &&
-                  (mouseWorld.x - raw.wall.pos_x) * perp.x + (mouseWorld.y - raw.wall.pos_y) * perp.y < 0
-                setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip })
+                setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: copyFlip })
               } else {
                 setPlaceGhost(null)
               }

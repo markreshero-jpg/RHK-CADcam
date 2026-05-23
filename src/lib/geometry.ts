@@ -192,11 +192,18 @@ export function cabT(cab: CabinetInstance, wall: Wall): number {
   return (cab.pos_x - wall.pos_x) * d.x + (cab.pos_y - wall.pos_y) * d.y
 }
 
-export function islandCabPerp(cab: CabinetInstance, wall: Wall, inwardPerp: Pt): Pt {
-  if (wall.wall_type !== 'island') return inwardPerp
+export function cabWallPerp(cab: CabinetInstance, wall: Wall, inwardPerp: Pt): Pt {
   const diff = ((cab.rotation - wall.angle) % 360 + 360) % 360
   return diff > 90 && diff < 270 ? { x: -inwardPerp.x, y: -inwardPerp.y } : inwardPerp
 }
+
+export function cabWallSide(cab: CabinetInstance, wall: Wall): 'face' | 'back' {
+  const diff = ((cab.rotation - wall.angle) % 360 + 360) % 360
+  return diff > 90 && diff < 270 ? 'back' : 'face'
+}
+
+/** @deprecated use cabWallPerp */
+export const islandCabPerp = cabWallPerp
 
 // pos_x/pos_y is now the inside face; cabinets start there with no perpendicular offset.
 export function cabinetPolygon(cab: CabinetInstance, wall: Wall, perp: Pt): string {

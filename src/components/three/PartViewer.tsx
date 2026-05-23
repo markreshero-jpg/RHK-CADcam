@@ -9,6 +9,7 @@
 import { Suspense, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges } from '@react-three/drei'
+import { getUserPrefs } from '@/src/lib/userPrefs'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -286,6 +287,7 @@ export function PreviewCanvas({
 }) {
   const maxDim  = Math.max(dx, dy, dz)
   const camDist = fitCamDist(dx, dy, dz)
+  const zoomSpeed = getUserPrefs().invertScroll ? -1 : 1
 
   return (
     <div className="w-full h-full relative">
@@ -309,6 +311,7 @@ export function PreviewCanvas({
           maxDistance={maxDim * 6}
           enablePan={enablePan}
           enableDamping={false}
+          zoomSpeed={zoomSpeed}
         />
         <ambientLight intensity={1.8} />
         <directionalLight position={[dx * 1.5, dy * 2, dz * 2]} intensity={1.6} />

@@ -5,7 +5,7 @@ import {
   Pt, MIN_WALL_LEN, SNAP_PX, CAB_FILL, CAB_FILL_SEL,
   toRad, toDeg, dist,
   wallEnd, wallDir, wallPolygon, wallMitrePolygon, wallInwardNormal, centroid,
-  islandCabPerp, cabinetPolygon, cabinetCenterPt,
+  cabWallPerp, cabinetPolygon, cabinetCenterPt,
   gridDots,
 } from '@/src/lib/geometry'
 import WallDimensionChain from './WallDimensionChain'
@@ -766,7 +766,7 @@ export default function CanvasSVG({
         }).map(cab => {
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return null
-          const perp = islandCabPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
+          const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
           const isSel = selected?.type === 'cabinet' && selected.id === cab.id
           const isMultiSel = multiSelect.includes(cab.id)
           const isHover = hoveredId === cab.id && !isSel && !isMultiSel
@@ -965,7 +965,7 @@ export default function CanvasSVG({
           if (!cab.has_face) return []
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return []
-          const perp = islandCabPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
+          const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
           const wd = wallDir(wall)
           const frontLeft = { x: cab.pos_x + cab.dz * perp.x, y: cab.pos_y + cab.dz * perp.y }
 

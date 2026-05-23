@@ -1,7 +1,7 @@
 ﻿'use client'
 import { useState, useReducer, useRef, useEffect } from 'react'
 import { Room, Wall, CabinetInstance, DEFAULT_DIMS } from '@/src/lib/types'
-import { cabT, wallDir, wallEnd, dist, findFreeSlot, cabBlocks, CAB_FILL, CAB_FILL_SEL } from '@/src/lib/geometry'
+import { cabT, wallDir, wallEnd, dist, findFreeSlot, cabBlocks, cabWallSide, CAB_FILL, CAB_FILL_SEL } from '@/src/lib/geometry'
 import { Selected, CabResize, viewReducer, DisplayConfig, Mode, modeAssemblyClass } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
 import { getUserPrefs } from '@/src/lib/userPrefs'
@@ -132,6 +132,8 @@ interface ElevationSVGProps {
   onSelectCabinet: (id: string) => void
   onSelectWall: (id: string) => void
   onSetElevWall: (id: string) => void
+  elevWallSide: 'face' | 'back'
+  onSetElevWallSide: (side: 'face' | 'back') => void
   onUpdateCabinet: (id: string, u: Partial<CabinetInstance>) => void
   onPlaceAtWall: (wall: Wall, pos_x: number, pos_y: number) => Promise<void>
   onCabinetContextMenu: (e: React.MouseEvent, cabId: string) => void
@@ -153,7 +155,7 @@ export default function ElevationSVG({
   onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu,
   onBlankWallContextMenu, onShiftSelectCabinet, onEqualizeWidths,
   cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
-  resolvedParts, onDeselect, onSeamClick,
+  resolvedParts, onDeselect, onSeamClick, elevWallSide, onSetElevWallSide,
 }: ElevationSVGProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [view, dispatchView] = useReducer(viewReducer, { panX: 80, panY: 60, zoom: 1 })
@@ -187,7 +189,7 @@ export default function ElevationSVG({
   })
 
   const wall = walls.find(w => w.id === elevWallId) ?? null
-  const wallCabs = wall ? cabinets.filter(c => c.wall_id === wall.id) : []
+  const wallCabs = wall ? cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === elevWallSide) : []
   const roomH = room.room_dy ?? 2400
   // Keep rfData current on every render (synchronous assignment, no useEffect needed).
   rfData.current = { elevResizeFollowing, view, cabinets, room }
@@ -335,8 +337,8 @@ export default function ElevationSVG({
         : clipboard ? { dx: clipboard.dx, dy: clipboard.dy, dz: clipboard.dz } : null
       if (dims) {
         const cls = clsInfo?.cls ?? clipboard!.assembly_class
-        const occ = cabinets
-          .filter(c => c.wall_id === wall.id && cabBlocks(cls, c.assembly_class))
+        const occ = wallCabs
+          .filter(c => cabBlocks(cls, c.assembly_class))
           .map(c => ({ t: cabT(c, wall), dx: c.dx }))
         const t = findFreeSlot(Math.max(0, Math.min(wall.length - dims.dx, cursorT)), dims.dx, wall.length, occ)
         setPlaceGhost({ t, cls, dx: dims.dx, dy: dims.dy })
@@ -393,8 +395,8 @@ export default function ElevationSVG({
     const wcTop = wallCabTopFor(wall, room)
     const snapBottomZ = isWallCab ? Math.max(0, wcTop - cab.dy) : 0
 
-    const occupied = cabinets
-      .filter(c => c.id !== id && c.wall_id === wall.id && cabBlocks(cab.assembly_class, c.assembly_class))
+    const occupied = wallCabs
+      .filter(c => c.id !== id && cabBlocks(cab.assembly_class, c.assembly_class))
       .map(c => ({ t: cabT(c, wall), dx: c.dx }))
     const snapT = findFreeSlot(
       Math.max(0, Math.min(wall.length - cab.dx, elevCabFloat.t - cab.dx / 2)),
@@ -449,8 +451,8 @@ export default function ElevationSVG({
     const wd = wallDir(wall)
     const perp = { x: -wd.y, y: wd.x }
     const dim: 'dx' | 'dy' = side === 'top' ? 'dy' : 'dx'
-    const neighbours = cabinets
-      .filter(c => c.id !== cab.id && c.wall_id === wall.id && cabBlocks(cab.assembly_class, c.assembly_class))
+    const neighbours = wallCabs
+      .filter(c => c.id !== cab.id && cabBlocks(cab.assembly_class, c.assembly_class))
       .map(c => ({ t: cabT(c, wall), dx: c.dx }))
     setElevResizeFollowing({ cabId: cab.id, dim, side, startCabT: t, startCabEndT: t + cab.dx, resWall: wall, neighbours })
     setElevResizeLive({ cabId: cab.id, dim, value: dim === 'dx' ? cab.dx : cab.dy })
@@ -472,7 +474,7 @@ export default function ElevationSVG({
   return (
     <div className="flex-1 flex flex-col bg-gray-950 overflow-hidden">
 
-      {/* Wall picker + equalize strip */}
+      {/* Wall picker + side toggle + equalize strip */}
       <div className="flex-none flex items-center gap-1 px-3 py-1.5 bg-gray-900 border-b border-gray-800 overflow-x-auto shrink-0">
         <span className="text-[10px] text-gray-500 mr-2 whitespace-nowrap select-none">Wall:</span>
         {walls.length === 0
@@ -488,6 +490,22 @@ export default function ElevationSVG({
             </button>
           ))
         }
+        {wall && (
+          <>
+            <div className="mx-2 h-4 border-l border-gray-700" />
+            <span className="text-[10px] text-gray-500 mr-1 whitespace-nowrap select-none">Side:</span>
+            {(['face', 'back'] as const).map(s => (
+              <button key={s} onClick={() => onSetElevWallSide(s)}
+                className={`px-2.5 py-0.5 text-[10px] rounded whitespace-nowrap transition-colors capitalize ${
+                  elevWallSide === s
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                }`}>
+                {s}
+              </button>
+            ))}
+          </>
+        )}
         {canEqualize && (
           <>
             <div className="mx-2 h-4 border-l border-gray-700" />
@@ -527,7 +545,7 @@ export default function ElevationSVG({
               textAnchor="middle" dominantBaseline="middle"
               fontSize={labelFs} fill="#6b7280"
               style={{ userSelect: 'none', pointerEvents: 'none' }}>
-              {wall.name} — Elevation
+              {wall.name} — {elevWallSide === 'face' ? 'Face' : 'Back'}
             </text>
 
             {/* Wall face */}
@@ -1094,8 +1112,8 @@ export default function ElevationSVG({
               const gy = roomH - elevCabFloat.ht - followingCab.dy / 2
 
               // Snap landing
-              const occupied = cabinets
-                .filter(c => c.id !== elevCabFollowing.id && c.wall_id === wall.id && cabBlocks(followingCab.assembly_class, c.assembly_class))
+              const occupied = wallCabs
+                .filter(c => c.id !== elevCabFollowing.id && cabBlocks(followingCab.assembly_class, c.assembly_class))
                 .map(c => ({ t: cabT(c, wall), dx: c.dx }))
               const snapT = findFreeSlot(
                 Math.max(0, Math.min(wall.length - followingCab.dx, elevCabFloat.t - followingCab.dx / 2)),

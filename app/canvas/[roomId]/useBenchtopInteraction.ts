@@ -6,7 +6,7 @@ import type { BenchtopInstance, BenchtopArcSegment, Room, Wall, CabinetInstance 
 import {
   type Pt,
   dist, wallEnd, wallDir, SNAP_PX, centroid,
-  wallInwardNormal, islandCabPerp, ptToSeg, snapAngle,
+  wallInwardNormal, cabWallPerp, ptToSeg, snapAngle,
 } from '@/src/lib/geometry'
 import type { Mode, Selected, ContextMenuState, BtMoveDrag, BtRotateDrag } from './canvasTypes'
 
@@ -186,7 +186,7 @@ export function useBenchtopInteraction(p: Params) {
       if (cls !== 'base' && cls !== 'tall' && cls !== 'base_corner' && cls !== 'tall_corner') continue
       const cwall = walls.find(w => w.id === cab.wall_id); if (!cwall) continue
       const wd = wallDir(cwall)
-      const perp = islandCabPerp(cab, cwall, wallInwardNormal(cwall, cx2.x, cx2.y))
+      const perp = cabWallPerp(cab, cwall, wallInwardNormal(cwall, cx2.x, cx2.y))
       const fl = { x: cab.pos_x + cab.dz * perp.x, y: cab.pos_y + cab.dz * perp.y }
       const fr = { x: fl.x + cab.dx * wd.x, y: fl.y + cab.dx * wd.y }
       for (const ep of [fl, fr]) { const d = dist(ep, wp); if (d < bestDist) { bestDist = d; best = ep } }

@@ -3,21 +3,67 @@ import type { Wall, CabinetInstance } from '@/src/lib/types'
 import { resolveCabinetFromDB, getCachedInput, setCachedInput, applyEdgeOverridesFromCache } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { persistResolved } from '@/src/lib/resolver/persistResolved'
-import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, ResolvedSeamJoint, JointTypeOp, JointTargetPart, JointMachineOp, JointFace } from '@/src/lib/resolver/types'
 
 const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 
 export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<string, ResolvedCabinet>> {
   if (cabinetIds.length === 0) return new Map()
 
-  const [cp, tp, ip, fr, fc, fz] = await Promise.all([
+  const [cp, tp, ip, fr, fc, fz, ci] = await Promise.all([
     supabase.from('case_parts').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('toekick_parts').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('internal_parts').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('face_rows').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('face_cols').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('face_zones').select('*').in('cabinet_instance_id', cabinetIds),
+    supabase.from('cabinet_instances').select('id, carcase_joints').in('id', cabinetIds),
   ])
+
+  // Collect joint type IDs from per-cabinet carcase_joints overrides
+  const carcaseJointsById = new Map<string, Record<string, string | null>>()
+  const jointTypeIds = new Set<string>()
+  for (const row of (ci.data ?? []) as { id: string; carcase_joints: Record<string, string | null> | null }[]) {
+    const joints = row.carcase_joints ?? {}
+    carcaseJointsById.set(row.id, joints)
+    for (const v of Object.values(joints)) if (v) jointTypeIds.add(v)
+  }
+
+  // Load joint operations and names for all referenced joint types in one batch
+  const jointOpsById: Record<string, JointTypeOp[]> = {}
+  const jointNamesById: Record<string, string> = {}
+  if (jointTypeIds.size > 0) {
+    const ids = [...jointTypeIds]
+    const [opsRes, namesRes] = await Promise.all([
+      supabase.from('joint_type_operations').select('*').in('joint_type_id', ids).order('operation_order'),
+      supabase.from('joint_types').select('id, name').in('id', ids),
+    ])
+    for (const op of (opsRes.data ?? []) as Record<string, unknown>[]) {
+      const jid = op.joint_type_id as string
+      if (!jointOpsById[jid]) jointOpsById[jid] = []
+      jointOpsById[jid].push({
+        id:                op.id as string,
+        joint_type_id:     jid,
+        operation_order:   op.operation_order as number,
+        target_part:       op.target_part as JointTargetPart,
+        machine_operation: op.machine_operation as JointMachineOp,
+        face:              (op.face as JointFace) ?? 'normal',
+        tool_diameter_mm:  op.tool_diameter_mm as number,
+        depth_mm:          op.depth_mm as number,
+        offset_x_mm:       (op.offset_x_mm as number) ?? 0,
+        offset_y_mm:       (op.offset_y_mm as number) ?? 0,
+        offset_z_mm:       (op.offset_z_mm as number) ?? 0,
+        qty:               (op.qty as number) ?? 1,
+        spacing_mm:        (op.spacing_mm as number | null) ?? null,
+        tool:              (op.tool as string | null) ?? null,
+        notes:             (op.notes as string | null) ?? null,
+        expressions:       (op.expressions as Record<string, string> | null) ?? null,
+      })
+    }
+    for (const n of (namesRes.data ?? []) as { id: string; name: string }[]) {
+      jointNamesById[n.id] = n.name
+    }
+  }
 
   const result = new Map<string, ResolvedCabinet>()
   for (const id of cabinetIds) {
@@ -29,6 +75,39 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
     const myZones = (fz.data ?? []).filter(z => z.cabinet_instance_id === id)
 
     if (myCase.length === 0 && myTk.length === 0 && myZones.length === 0) continue
+
+    // Reconstruct seam joints from persisted case parts + cabinet-level joint assignments
+    const carcaseJoints = carcaseJointsById.get(id) ?? {}
+    const partKeys = new Set(myCase.map(p => p.part_key as string))
+    const topKey = partKeys.has('full_top')   ? 'full_top'
+                 : partKeys.has('front_rail') ? 'front_rail'
+                 : partKeys.has('back_rail')  ? 'back_rail'
+                 : null
+
+    const candidateSeams: string[] = []
+    if (partKeys.has('bottom')   && partKeys.has('left_side'))  candidateSeams.push('bottom:left_side')
+    if (partKeys.has('bottom')   && partKeys.has('right_side')) candidateSeams.push('bottom:right_side')
+    if (topKey && partKeys.has('left_side'))                    candidateSeams.push(`${topKey}:left_side`)
+    if (topKey && partKeys.has('right_side'))                   candidateSeams.push(`${topKey}:right_side`)
+    if (partKeys.has('back')     && partKeys.has('left_side'))  candidateSeams.push('back:left_side')
+    if (partKeys.has('back')     && partKeys.has('right_side')) candidateSeams.push('back:right_side')
+    if (partKeys.has('back')     && partKeys.has('bottom'))     candidateSeams.push('back:bottom')
+
+    const seamJoints: ResolvedSeamJoint[] = []
+    for (const seamKey of candidateSeams) {
+      const jointTypeId = carcaseJoints[seamKey]
+      if (!jointTypeId) continue
+      const colonIdx = seamKey.indexOf(':')
+      seamJoints.push({
+        seam_key:        seamKey,
+        joint_type_id:   jointTypeId,
+        joint_type_name: jointNamesById[jointTypeId] ?? 'Unknown',
+        source:          'cabinet',
+        part_a_key:      seamKey.slice(0, colonIdx),
+        part_b_key:      seamKey.slice(colonIdx + 1),
+        ops:             jointOpsById[jointTypeId] ?? [],
+      })
+    }
 
     result.set(id, {
       cabinet_id: id,
@@ -78,7 +157,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         edge_band: { top: z.edge_band_top, bottom: z.edge_band_bottom, left: z.edge_band_left, right: z.edge_band_right },
       })),
       drawer_stacks: [],
-      seam_joints: [],
+      seam_joints: seamJoints,
       errors: [],
       warnings: [],
     })
