@@ -507,35 +507,15 @@ function seamDrillOps(seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[])
     for (let i = 0; i < qty; i++) {
       let cabX = 0, cabY = 0, cabZ = 0, axis: DrillAxis = 'x-'
 
-      if (isBackSeam) {
-        // Z: inner face of the back panel (fixed for all back:side holes)
-        cabZ = boxA.z + thickA
-        // Holes span the full height of the back panel:
-        //   first hole = U (offset_y_mm) from the top edge
-        //   last  hole = V (offset_z_mm) from the bottom edge
-        //   qty holes evenly distributed between them
-        const topY = (boxA.y + boxA.h) - U
-        const botY = boxA.y + ev.offset_z_mm
-        const step = qty > 1 ? (topY - botY) / (qty - 1) : 0
-        cabY = topY - i * step
-
-        if (op.target_part === 'part_b') {
-          const bInner = isLeft ? boxB.x + boxB.w : boxB.x
-          switch (op.face) {
-            case 'normal': cabX = bInner;                             axis = isLeft ? 'x-' : 'x+'; break
-            case 'end':    cabX = isLeft ? boxB.x : boxB.x + boxB.w; axis = isLeft ? 'x+' : 'x-'; break
-            default: continue
-          }
+      {
+        if (isBackSeam) {
+          // offset_z_mm is designed for full-depth panels — back panel is only backT thick.
+          // Pin Z at the mid-thickness of the back panel so holes land inside the cabinet.
+          cabZ = boxA.z + boxA.d / 2
         } else {
-          switch (op.face) {
-            case 'normal': cabX = interfaceX; axis = isLeft ? 'x+' : 'x-'; break
-            default: continue
-          }
+          const targetBox = op.target_part === 'part_a' ? boxA : boxB
+          cabZ = (targetBox.z + targetBox.d) - ev.offset_z_mm - i * spc
         }
-      } else {
-        const targetBox = op.target_part === 'part_a' ? boxA : boxB
-        // Z: measured from front face of target part, spacing steps toward back
-        cabZ = (targetBox.z + targetBox.d) - ev.offset_z_mm - i * spc
 
         if (op.target_part === 'part_a') {
           switch (op.face) {

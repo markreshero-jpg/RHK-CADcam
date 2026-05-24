@@ -705,18 +705,18 @@ export default function ElevationSVG({
                     )}
                     <text x={midX} y={midY}
                       textAnchor="middle" dominantBaseline="middle"
-                      fontSize={dimFs2} fill="#6b7280"
+                      fontSize={dimFs2} fill="#ffffff"
                       transform={`rotate(-90,${midX},${midY})`}
                       style={{ userSelect: 'none' }}>
                       {rw.name}
                     </text>
                     <line x1={x0} y1={slabY - tickH * 0.7} x2={x0 + t} y2={slabY - tickH * 0.7}
-                      stroke="#4b5563" strokeWidth={1 / z} />
-                    <line x1={x0}     y1={slabY - tickH * 0.3} x2={x0}     y2={slabY - tickH * 1.1} stroke="#4b5563" strokeWidth={1 / z} />
-                    <line x1={x0 + t} y1={slabY - tickH * 0.3} x2={x0 + t} y2={slabY - tickH * 1.1} stroke="#4b5563" strokeWidth={1 / z} />
+                      stroke="#6b7280" strokeWidth={1 / z} />
+                    <line x1={x0}     y1={slabY - tickH * 0.3} x2={x0}     y2={slabY - tickH * 1.1} stroke="#6b7280" strokeWidth={1 / z} />
+                    <line x1={x0 + t} y1={slabY - tickH * 0.3} x2={x0 + t} y2={slabY - tickH * 1.1} stroke="#6b7280" strokeWidth={1 / z} />
                     <text x={midX} y={slabY - tickH * 1.5}
                       textAnchor="middle" dominantBaseline="middle"
-                      fontSize={dimFs2} fill="#4b5563"
+                      fontSize={dimFs2} fill="#ffffff"
                       style={{ userSelect: 'none' }}>
                       {t}
                     </text>

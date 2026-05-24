@@ -185,7 +185,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
             <rect x={rX} y={y0} width={wid} height={wallH}
               fill="url(#sec-hatch)" stroke="#6b7280" strokeWidth={1.5 / z} />
             <text x={midU} y={midV} textAnchor="middle" dominantBaseline="middle"
-              fontSize={labelFs * 0.8} fill="#6b7280"
+              fontSize={labelFs * 0.8} fill="#ffffff"
               transform={`rotate(-90,${midU},${midV})`}
               style={{ userSelect: 'none' }}>
               {w.name}
@@ -267,7 +267,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
             {shelfLines}
             {cab.label && wid > 24 / z && (
               <text x={midU} y={cabTopY + cab.dy / 2} textAnchor="middle" dominantBaseline="middle"
-                fontSize={labelFs * 0.75} fill="#9ca3af"
+                fontSize={labelFs * 0.75} fill="#ffffff"
                 style={{ userSelect: 'none' }}>
                 {cab.label}
               </text>

@@ -88,48 +88,79 @@ function computeDisplay(
   isBase: boolean,
   toeH: number,
 ): { shelves: ShelfDisplay[]; dividers: DividerDisplay[] } {
-  const T   = MAT_T
-  const TS  = SHELF_T
-  const TK  = isBase ? toeH : 0
+  const T  = MAT_T
+  const TS = SHELF_T
+  const TK = isBase ? toeH : 0
 
-  const intW  = cabDX - 2 * T
-  const intH  = cabDY - TK - 2 * T
-  const intY0 = TK + T
+  const intX0 = T               // interior left X
+  const intW  = cabDX - 2 * T  // interior width
+  const intY0 = TK + T          // interior bottom Y
+  const intH  = cabDY - TK - 2 * T  // interior height
 
-  const shelves: ShelfDisplay[] = []
-
-  const N = grid.adj_shelves.length
-  if (N > 0 && intH > 0) {
-    const openH = intH / (N + 1)
-    grid.adj_shelves.forEach((s, i) => {
-      const yPos = s.y_locked && s.y_position !== undefined
-        ? s.y_position
-        : intY0 + openH * (i + 1) - TS / 2
-      shelves.push({ idx: i, kind: 'adj', yPos, xLeft: T + ADJ_CL, width: intW - ADJ_CL - ADJ_CR, thickness: TS })
-    })
-  }
-
-  grid.fixed_shelves.forEach((s, i) => {
-    const yPos = s.y_locked && s.y_position !== undefined
-      ? s.y_position
-      : intY0 + intH / 2 - TS / 2
-    shelves.push({ idx: i, kind: 'fixed', yPos, xLeft: T, width: intW, thickness: TS })
-  })
-
-  shelves.sort((a, b) => a.yPos - b.yPos)
-
+  // ── Dividers (resolved first — equal opening formula) ─────────
+  // openW = (intW - ND × T) / (ND + 1)  →  equal column widths
   const dividers: DividerDisplay[] = []
   const ND = grid.dividers.length
   if (ND > 0 && intW > 0) {
-    const secW = intW / (ND + 1)
-    grid.dividers.forEach((d, i) => {
-      const xPos = d.x_locked && d.x_position !== undefined
-        ? T + d.x_position
-        : T + secW * (i + 1) - T / 2
-      dividers.push({ idx: i, xPos, yBot: intY0, height: intH })
-    })
-    dividers.sort((a, b) => a.xPos - b.xPos)
+    const openW = (intW - ND * T) / (ND + 1)
+    if (openW > 0) {
+      // Sort by sort_order but preserve original array index for selection
+      const withIdx = grid.dividers.map((d, i) => ({ d, i })).sort((a, b) => a.d.sort_order - b.d.sort_order)
+      withIdx.forEach(({ d, i }, pos) => {
+        const xPos = (d.x_locked && d.x_position !== undefined)
+          ? intX0 + d.x_position
+          : intX0 + (pos + 1) * openW + pos * T
+        dividers.push({ idx: i, xPos, yBot: intY0, height: intH })
+      })
+      dividers.sort((a, b) => a.xPos - b.xPos)
+    }
   }
+
+  // ── Column boundaries (between sides / dividers) ───────────────
+  const columns: { xLeft: number; xRight: number }[] = []
+  {
+    let cursor = intX0
+    for (const dv of dividers) {
+      if (dv.xPos > cursor + 1) columns.push({ xLeft: cursor, xRight: dv.xPos })
+      cursor = dv.xPos + T
+    }
+    if (intX0 + intW > cursor + 1) columns.push({ xLeft: cursor, xRight: intX0 + intW })
+    if (columns.length === 0) columns.push({ xLeft: intX0, xRight: intX0 + intW })
+  }
+
+  // ── Adj shelves (per column, equal-opening Y formula) ─────────
+  // openH = (intH - N × TS) / (N + 1)  →  equal row heights
+  const shelves: ShelfDisplay[] = []
+  const N = grid.adj_shelves.length
+  if (N > 0 && intH > 0) {
+    const openH = (intH - N * TS) / (N + 1)
+    if (openH > 0) {
+      grid.adj_shelves.forEach((s, i) => {
+        const yPos = (s.y_locked && s.y_position !== undefined)
+          ? s.y_position
+          : intY0 + (i + 1) * openH + i * TS
+        for (const col of columns) {
+          const width = col.xRight - col.xLeft - ADJ_CL - ADJ_CR
+          if (width <= 0) continue
+          shelves.push({ idx: i, kind: 'adj', yPos, xLeft: col.xLeft + ADJ_CL, width, thickness: TS })
+        }
+      })
+    }
+  }
+
+  // ── Fixed shelves (per column, full column width) ──────────────
+  grid.fixed_shelves.forEach((s, i) => {
+    const yPos = (s.y_locked && s.y_position !== undefined)
+      ? s.y_position
+      : intY0 + (intH - TS) / 2
+    for (const col of columns) {
+      const width = col.xRight - col.xLeft
+      if (width <= 0) continue
+      shelves.push({ idx: i, kind: 'fixed', yPos, xLeft: col.xLeft, width, thickness: TS })
+    }
+  })
+
+  shelves.sort((a, b) => a.yPos - b.yPos)
 
   return { shelves, dividers }
 }
@@ -186,6 +217,13 @@ type ContextMenuState = {
   opening: OpeningCell
 } | null
 
+type PartMenuState = {
+  clientX: number
+  clientY: number
+  kind: 'adj' | 'fixed' | 'divider'
+  idx: number
+} | null
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function InternalGridEditor({
@@ -202,16 +240,17 @@ export default function InternalGridEditor({
   )
   const [selected, setSelected]       = useState<Selection | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
+  const [partMenu, setPartMenu]       = useState<PartMenuState>(null)
 
-  // Close context menu on Escape without letting the keydown bubble to the modal
+  // Close any open menu on Escape without letting the keydown bubble to the modal
   useEffect(() => {
-    if (!contextMenu) return
+    if (!contextMenu && !partMenu) return
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { e.stopImmediatePropagation(); setContextMenu(null) }
+      if (e.key === 'Escape') { e.stopImmediatePropagation(); setContextMenu(null); setPartMenu(null) }
     }
     window.addEventListener('keydown', onKey, { capture: true })
     return () => window.removeEventListener('keydown', onKey, { capture: true })
-  }, [contextMenu])
+  }, [contextMenu, partMenu])
 
   const isBase = cabinet.assembly_class === 'base' || cabinet.assembly_class === 'base_corner'
   const isTall = cabinet.assembly_class === 'tall' || cabinet.assembly_class === 'tall_corner'
@@ -306,6 +345,32 @@ export default function InternalGridEditor({
       fixed_shelves: grid.fixed_shelves.map(s => ({ ...s, y_locked: false, y_position: undefined })),
       dividers:      grid.dividers.map(dv => ({ ...dv, x_locked: false, x_position: undefined })),
     })
+  }
+
+  function replaceWith(kind: 'adj' | 'fixed' | 'divider', idx: number, newKind: 'adj' | 'fixed' | 'divider') {
+    let adj   = [...grid.adj_shelves]
+    let fixed = [...grid.fixed_shelves]
+    let divs  = [...grid.dividers]
+    let yPos: number | undefined, yLocked = false
+    let xPos: number | undefined, xLocked = false
+
+    if (kind === 'adj') {
+      yPos = adj[idx]?.y_position; yLocked = adj[idx]?.y_locked ?? false
+      adj = adj.filter((_, i) => i !== idx).map((s, i) => ({ ...s, sort_order: i }))
+    } else if (kind === 'fixed') {
+      yPos = fixed[idx]?.y_position; yLocked = fixed[idx]?.y_locked ?? false
+      fixed = fixed.filter((_, i) => i !== idx).map((s, i) => ({ ...s, sort_order: i }))
+    } else {
+      xPos = divs[idx]?.x_position; xLocked = divs[idx]?.x_locked ?? false
+      divs = divs.filter((_, i) => i !== idx).map((d, i) => ({ ...d, sort_order: i }))
+    }
+
+    if (newKind === 'adj')   adj   = [...adj,   { sort_order: adj.length,   y_locked: yLocked, y_position: yPos }]
+    if (newKind === 'fixed') fixed = [...fixed,  { sort_order: fixed.length, y_locked: yLocked, y_position: yPos }]
+    if (newKind === 'divider') divs = [...divs, { sort_order: divs.length,  x_locked: xLocked, x_position: xPos }]
+
+    setSelected(null); setPartMenu(null)
+    save({ adj_shelves: adj, fixed_shelves: fixed, dividers: divs })
   }
 
   const mixedShelves = grid.adj_shelves.length > 0 && grid.fixed_shelves.length > 0
@@ -469,6 +534,7 @@ export default function InternalGridEditor({
               return (
                 <g key={`dv-${dv.idx}`}
                   onClick={e => { e.stopPropagation(); setSelected(isSel ? null : { kind: 'divider', idx: dv.idx }) }}
+                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setPartMenu({ clientX: e.clientX, clientY: e.clientY, kind: 'divider', idx: dv.idx }); setSelected({ kind: 'divider', idx: dv.idx }) }}
                   style={{ cursor: 'pointer' }}
                 >
                   <rect
@@ -488,6 +554,7 @@ export default function InternalGridEditor({
               return (
                 <g key={`adj-${s.idx}`}
                   onClick={e => { e.stopPropagation(); setSelected(isSel ? null : { kind: 'adj', idx: s.idx }) }}
+                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setPartMenu({ clientX: e.clientX, clientY: e.clientY, kind: 'adj', idx: s.idx }); setSelected({ kind: 'adj', idx: s.idx }) }}
                   style={{ cursor: 'pointer' }}
                 >
                   <rect
@@ -516,6 +583,7 @@ export default function InternalGridEditor({
               return (
                 <g key={`fix-${s.idx}`}
                   onClick={e => { e.stopPropagation(); setSelected(isSel ? null : { kind: 'fixed', idx: s.idx }) }}
+                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setPartMenu({ clientX: e.clientX, clientY: e.clientY, kind: 'fixed', idx: s.idx }); setSelected({ kind: 'fixed', idx: s.idx }) }}
                   style={{ cursor: 'pointer' }}
                 >
                   <rect
@@ -727,7 +795,48 @@ export default function InternalGridEditor({
         </div>
       </div>
 
-      {/* Context menu */}
+      {/* Part right-click menu */}
+      {partMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-[100]"
+            onClick={() => setPartMenu(null)}
+            onContextMenu={e => { e.preventDefault(); setPartMenu(null) }}
+          />
+          <div
+            className="fixed z-[101] bg-gray-800 border border-gray-700 rounded shadow-xl py-1 min-w-[160px] text-[11px]"
+            style={{ left: partMenu.clientX, top: partMenu.clientY }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              className="w-full text-left px-3 py-1.5 hover:bg-red-900/40 text-red-400 transition-colors"
+              onClick={() => {
+                if (partMenu.kind === 'adj')     removeAdjShelf(partMenu.idx)
+                else if (partMenu.kind === 'fixed') removeFixedShelf(partMenu.idx)
+                else                               removeDivider(partMenu.idx)
+                setPartMenu(null)
+              }}
+            >Delete</button>
+            <div className="border-t border-gray-700 mt-1 pt-1">
+              <div className="px-3 py-0.5 text-gray-500">Replace with</div>
+              {partMenu.kind !== 'adj' && (
+                <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors"
+                  onClick={() => replaceWith(partMenu.kind, partMenu.idx, 'adj')}>Adj Shelf</button>
+              )}
+              {partMenu.kind !== 'fixed' && (
+                <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors"
+                  onClick={() => replaceWith(partMenu.kind, partMenu.idx, 'fixed')}>Fixed Shelf</button>
+              )}
+              {partMenu.kind !== 'divider' && (
+                <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors"
+                  onClick={() => replaceWith(partMenu.kind, partMenu.idx, 'divider')}>Divider</button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Opening context menu */}
       {contextMenu && (
         <>
           <div
