@@ -206,7 +206,7 @@ function buildTree(
             { cabinetId: cab.id, wall, ...cabPos, partId: `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`,
               localX: s.X, localY: s.Y, localZ: s.Z,
               DX: s.DX, DY: s.DY, DZ: s.DZ,
-              AX: s.AX, AY: s.AY, AZ: s.AZ,
+              AX: 0, AY: 0, AZ: 0,
               materialId: null },
             '', rp,
           ))
