@@ -1094,7 +1094,7 @@ function CabinetScene({
 // ── Public component ─────────────────────────────────────────────────────────
 
 export default function Cabinet3DView({
-  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides,
+  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, onPartSelect,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
@@ -1104,6 +1104,9 @@ export default function Cabinet3DView({
   wire?:             boolean
   customParts?:      CabinetCustomPart[]
   partOverrides?:    PartPosOverrides
+  // Fires with the carcase part_key when a case part is selected (null when a
+  // non-case part is picked). Lets callers drive an external panel from clicks.
+  onPartSelect?:     (partKey: string | null) => void
 }) {
   const [selectedPart, setSelectedPart]       = useState<PartMeta | null>(null)
   const [doorsOpen, setDoorsOpen]             = useState(false)
@@ -1138,6 +1141,9 @@ export default function Cabinet3DView({
   function handleSelect(info: PartMeta | null) {
     if (info !== null) didHitPartRef.current = true
     setSelectedPart(info)
+    if (onPartSelect && info) {
+      onPartSelect(info.id.startsWith('case_') ? info.id.slice(5) : null)
+    }
   }
 
   function handleEdgeChange(edge: PartEdge) {
