@@ -43,7 +43,9 @@ function tkBox(p: ResolvedToekickPart): Box {
 }
 
 function intBox(p: ResolvedInternalPart): Box {
-  return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+  return p.part_type === 'divider'
+    ? { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
+    : { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
 }
 
 function zoneBox(z: ResolvedFaceZone): Box {
@@ -143,7 +145,7 @@ function buildIntInfo(p: ResolvedInternalPart, b: Box): PartMeta {
     w: b.w, h: b.h, d: b.d,
     thickness: p.DZ,
     edge:      p.edge_band,
-    panelKind: 'horizontal',
+    panelKind: p.part_type === 'divider' ? 'side' : 'horizontal',
     detail:    p.y_locked ? 'Position locked' : undefined,
   }
 }
@@ -453,13 +455,10 @@ interface DrillOpPos {
 }
 
 function computeJointRefPlane(seamKey: string, boxA: Box, boxB?: Box): JointRefPlane | null {
-  const partAKey = seamKey.slice(0, seamKey.indexOf(':'))
-  const partBKey = seamKey.slice(seamKey.indexOf(':') + 1)
-  // For back:side seams, show the full gable Z-depth so the rect is visible from standard views.
-  // The gable box (boxB) spans the cabinet depth; the back panel edge at boxA.x/boxA.x+boxA.w
-  // would only be backT (6mm) deep without it.
+  const partBKey   = seamKey.slice(seamKey.indexOf(':') + 1)
+  const isVertical = boxA.h > boxA.d   // back panel: h ≈ 700, d ≈ 6 → vertical
   const zMin = boxA.z
-  const zMax = (partAKey === 'back' && boxB) ? boxB.z + boxB.d : boxA.z + boxA.d
+  const zMax = (isVertical && boxB) ? boxB.z + boxB.d : boxA.z + boxA.d
   if (partBKey === 'left_side') {
     return { kind: 'yz', x: boxA.x, yMin: boxA.y, yMax: boxA.y + boxA.h, zMin, zMax }
   }
@@ -472,79 +471,147 @@ function computeJointRefPlane(seamKey: string, boxA: Box, boxB?: Box): JointRefP
   return null
 }
 
+// ── SeamFrame — edge-local coordinate frame ───────────────────────────────────
+// Maps joint operation fields (offset_z_mm, offset_y_mm, spacing) to cabinet
+// coordinates without any per-part-type special-casing. Works identically for
+// horizontal panels (bottom, top, rail) and vertical panels (back).
+//
+// For :left_side / :right_side seams the drill axis is always X. The two remaining
+// axes are assigned by inspecting Part A's geometry:
+//   Horizontal Part A (boxA.d > boxA.h) — offset_z_mm → Z,  offset_y_mm → Y
+//   Vertical   Part A (boxA.h > boxA.d) — offset_z_mm → Y,  offset_y_mm → Z
+//
+// offset_z_mm = 0 is anchored at the "front" of the joint edge (front face for
+// horizontal panels, top face for vertical panels). offset_y_mm = 0 is anchored
+// at the inner face of Part A (the face that meets Part B's side of the joint).
+
+interface SeamFrame {
+  interfaceX:  number
+  drillIntoA:  'x+' | 'x-'
+  drillIntoB:  'x+' | 'x-'
+  alongAxis:   'z' | 'y'    // axis for offset_z_mm / spacing distribution
+  alongOrigin: number        // cabinet value at offset_z_mm = 0
+  insetAxis:   'y' | 'z'    // axis for offset_y_mm (within Part A thickness)
+  insetOrigin: number        // inner face of Part A (offset_y_mm = 0 here)
+  jointLength: number        // D variable for qty expressions
+  thickA:      number
+  thickB:      number
+}
+
+function buildSeamFrame(seamKey: string, boxA: Box, boxB: Box): SeamFrame | null {
+  const partAKey   = seamKey.slice(0, seamKey.indexOf(':'))
+  const partBKey   = seamKey.slice(seamKey.indexOf(':') + 1)
+  const isLeft     = partBKey === 'left_side'
+  if (!isLeft && partBKey !== 'right_side') return null
+
+  const interfaceX  = isLeft ? boxA.x : boxA.x + boxA.w
+  const drillIntoA: 'x+' | 'x-' = isLeft ? 'x+' : 'x-'
+  const drillIntoB: 'x+' | 'x-' = isLeft ? 'x-' : 'x+'
+  const isVertical  = boxA.h > boxA.d
+
+  const alongAxis:   'z' | 'y' = isVertical ? 'y' : 'z'
+  const alongOrigin: number    = isVertical ? boxA.y + boxA.h : boxA.z + boxA.d
+
+  const insetAxis:   'y' | 'z' = isVertical ? 'z' : 'y'
+  const insetOrigin: number    = isVertical ? boxA.z + boxA.d : boxA.y + boxA.h
+
+  const jointLength = isVertical ? boxA.h : boxA.d
+
+  const thickA = isSide(partAKey) ? boxA.w : isVertical ? boxA.d : boxA.h
+  const thickB = boxB.w
+
+  return { interfaceX, drillIntoA, drillIntoB, alongAxis, alongOrigin, insetAxis, insetOrigin, jointLength, thickA, thickB }
+}
+
 function seamDrillOps(seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[]): DrillOpPos[] {
   const colonIdx = seamKey.indexOf(':')
   const partAKey = seamKey.slice(0, colonIdx)
   const partBKey = seamKey.slice(colonIdx + 1)
-  const isLeft  = partBKey === 'left_side'
-  const isRight = partBKey === 'right_side'
-  if (!isLeft && !isRight) return []
+  const isLeft   = partBKey === 'left_side'
 
-  // caseBox orients each panel differently; read thickness from the correct axis.
-  const thickA = partAKey === 'back' ? boxA.d
-               : isSide(partAKey)    ? boxA.w
-               :                       boxA.h
-  // Part B is always a side panel in this function (left_side or right_side).
-  const thickB = boxB.w
+  const frame = buildSeamFrame(seamKey, boxA, boxB)
+  if (!frame) return []
 
-  // For back:side seams Part A runs vertically — holes distribute along Y (height)
-  // and sit at a fixed Z centred in the back panel thickness.
-  const isBackSeam = partAKey === 'back'
-
-  const interfaceX = isLeft ? boxA.x : boxA.x + boxA.w
-  const interfaceY = boxA.y + boxA.h
+  // Remap boxA/B .d to jointLength so D in expressions = joint edge length.
+  const evBoxA = { ...boxA, d: frame.jointLength }
+  const evBoxB = { ...boxB, d: frame.jointLength }
 
   const result: DrillOpPos[] = []
 
+  const setAlong = (pos: { x: number; y: number; z: number }, v: number) =>
+    { if (frame.alongAxis === 'z') pos.z = v; else pos.y = v }
+  const setInset = (pos: { x: number; y: number; z: number }, v: number) =>
+    { if (frame.insetAxis === 'z') pos.z = v; else pos.y = v }
+
   for (const op of ops) {
     if (op.machine_operation !== 'drill') continue
-    const ev    = evalOp(op, boxA, boxB, thickA, thickB)
+    const ev = evalOp(op, evBoxA, evBoxB, frame.thickA, frame.thickB)
     if (!ev) continue
-    const U     = (op.face === 'top' || op.face === 'bottom') ? ev.offset_x_mm : ev.offset_y_mm
-    const qty   = ev.qty
-    const spc   = ev.spacing_mm ?? 0
 
-    for (let i = 0; i < qty; i++) {
-      let cabX = 0, cabY = 0, cabZ = 0, axis: DrillAxis = 'x-'
+    const spc = ev.spacing_mm ?? 0
 
-      {
-        if (isBackSeam) {
-          // offset_z_mm is designed for full-depth panels — back panel is only backT thick.
-          // Pin Z at the mid-thickness of the back panel so holes land inside the cabinet.
-          cabZ = boxA.z + boxA.d / 2
-        } else {
-          const targetBox = op.target_part === 'part_a' ? boxA : boxB
-          cabZ = (targetBox.z + targetBox.d) - ev.offset_z_mm - i * spc
+    for (let i = 0; i < ev.qty; i++) {
+      const pos = { x: 0, y: 0, z: 0 }
+      let axis: DrillAxis = 'x-'
+
+      const alongCoord = frame.alongOrigin - ev.offset_z_mm - i * spc
+      const insetCoord = frame.insetOrigin - ev.offset_y_mm
+
+      if (op.target_part === 'part_a') {
+        switch (op.face) {
+          case 'normal':
+            pos.x = frame.interfaceX; setAlong(pos, alongCoord); setInset(pos, insetCoord)
+            axis = frame.drillIntoA
+            break
+          case 'end':
+            pos.x = isLeft ? boxA.x + boxA.w : boxA.x; setAlong(pos, alongCoord); setInset(pos, insetCoord)
+            axis = isLeft ? 'x-' : 'x+'
+            break
+          case 'top':
+            pos.x = isLeft ? frame.interfaceX + ev.offset_x_mm : frame.interfaceX - ev.offset_x_mm
+            pos.y = boxA.y + boxA.h; setAlong(pos, alongCoord)
+            axis = 'y-'
+            break
+          case 'bottom':
+            pos.x = isLeft ? frame.interfaceX + ev.offset_x_mm : frame.interfaceX - ev.offset_x_mm
+            pos.y = boxA.y; setAlong(pos, alongCoord)
+            axis = 'y+'
+            break
+          default: continue
         }
-
-        if (op.target_part === 'part_a') {
-          switch (op.face) {
-            case 'normal': cabX = interfaceX;                            cabY = interfaceY - U; axis = isLeft ? 'x+' : 'x-'; break
-            case 'end':    cabX = isLeft ? boxA.x + boxA.w : boxA.x;    cabY = interfaceY - U; axis = isLeft ? 'x-' : 'x+'; break
-            case 'top':    cabY = interfaceY;   cabX = isLeft ? interfaceX + U : interfaceX - U; axis = 'y-'; break
-            case 'bottom': cabY = boxA.y;       cabX = isLeft ? interfaceX + U : interfaceX - U; axis = 'y+'; break
-            default: continue
-          }
-        } else {
-          const bInner = isLeft ? boxB.x + boxB.w : boxB.x
-          switch (op.face) {
-            case 'normal': cabX = bInner;                             cabY = interfaceY - U; axis = isLeft ? 'x-' : 'x+'; break
-            case 'end':    cabX = isLeft ? boxB.x : boxB.x + boxB.w; cabY = interfaceY - U; axis = isLeft ? 'x+' : 'x-'; break
-            case 'top':    cabY = boxB.y + boxB.h; cabX = isLeft ? bInner - U : bInner + U; axis = 'y-'; break
-            case 'bottom': cabY = boxB.y;          cabX = isLeft ? bInner - U : bInner + U; axis = 'y+'; break
-            default: continue
-          }
+      } else {
+        const bInner = isLeft ? boxB.x + boxB.w : boxB.x
+        switch (op.face) {
+          case 'normal':
+            pos.x = bInner; setAlong(pos, alongCoord); setInset(pos, insetCoord)
+            axis = frame.drillIntoB
+            break
+          case 'end':
+            pos.x = isLeft ? boxB.x : boxB.x + boxB.w; setAlong(pos, alongCoord); setInset(pos, insetCoord)
+            axis = isLeft ? 'x+' : 'x-'
+            break
+          case 'top':
+            pos.x = isLeft ? bInner - ev.offset_x_mm : bInner + ev.offset_x_mm
+            pos.y = boxB.y + boxB.h; setAlong(pos, alongCoord)
+            axis = 'y-'
+            break
+          case 'bottom':
+            pos.x = isLeft ? bInner - ev.offset_x_mm : bInner + ev.offset_x_mm
+            pos.y = boxB.y; setAlong(pos, alongCoord)
+            axis = 'y+'
+            break
+          default: continue
         }
       }
 
-      // Visual cylinder length: normally the full material thickness in the drill direction,
-      // but for back panel edge drills (X into backW which is panel width not thickness)
-      // cap to the actual drill depth_mm.
-      const targetBox = op.target_part === 'part_a' ? boxA : boxB
-      const rawDepth = (axis === 'x-' || axis === 'x+') ? targetBox.w : targetBox.h
-      const throughDepth = (isBackSeam && op.target_part === 'part_a') ? ev.depth_mm : rawDepth
+      // Face drill into the side panel (Part B normal) → show full material width as bore.
+      // All other cases (edge drills, end drills, Y-axis drills) → actual drill depth.
+      const isFaceDrill = op.target_part === 'part_b' && op.face === 'normal'
+                       && (axis === 'x-' || axis === 'x+')
+      const depthLen    = isFaceDrill ? boxB.w : ev.depth_mm
+
       const targetPartKey = op.target_part === 'part_a' ? partAKey : partBKey
-      result.push({ x: cabX, y: cabY, z: cabZ, axis, radius: ev.tool_diameter_mm / 2, depthLen: throughDepth, targetPartKey })
+      result.push({ ...pos, axis, radius: ev.tool_diameter_mm / 2, depthLen, targetPartKey })
     }
   }
 
