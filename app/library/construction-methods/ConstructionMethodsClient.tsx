@@ -21,7 +21,7 @@ import {
   EDGING_LABELS, EDGING_GROUPS, EDGE_SIDES, EDGE_LABELS,
   effectiveRule, effectiveEdgeSides, sidesEqual, computeDelta,
 } from '@/src/lib/constructionRuleConfig'
-import { carcaseSeamParts } from '@/src/lib/cabinetSeams'
+import { carcaseSeamParts, toGenericSeamKey } from '@/src/lib/cabinetSeams'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -238,10 +238,14 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
   }
 
   function setJointDefault(cls: AssClass, key: string, jointTypeId: string | null) {
+    const generic = toGenericSeamKey(key)
     setJointDeltas(prev => {
       const d = { ...prev[cls] }
       if (!jointTypeId) delete d[key]
       else d[key] = jointTypeId
+      // Once a part-specific top key is touched, drop the legacy generic "top:…"
+      // entry so it can't linger as stale data.
+      if (generic !== key) delete d[generic]
       return { ...prev, [cls]: d }
     })
     setDirty(true)
@@ -513,7 +517,10 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                       <div className="space-y-1">
                         {carcaseSeamParts(effectiveRule(delta, 'TOP_TYPE') as string).map(part => {
                           const isOpen   = openJointPart === part.partKey
-                          const assigned = part.edges.filter(e => jointDeltas[classTab][e.seamKey]).length
+                          // Read the exact key, falling back to the legacy generic "top:…" key.
+                          const readJoint = (sk: string) =>
+                            jointDeltas[classTab][sk] ?? jointDeltas[classTab][toGenericSeamKey(sk)] ?? ''
+                          const assigned = part.edges.filter(e => readJoint(e.seamKey)).length
                           return (
                             <div key={part.partKey} className="rounded border border-gray-800 overflow-hidden">
                               <button
@@ -536,7 +543,7 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                               {isOpen && (
                                 <div className="px-3 py-2 space-y-px border-t border-gray-800 bg-gray-900/40">
                                   {part.edges.map(edge => {
-                                    const val = jointDeltas[classTab][edge.seamKey] ?? ''
+                                    const val = readJoint(edge.seamKey)
                                     return (
                                       <div key={edge.seamKey} className="flex items-center gap-3 py-1.5">
                                         <span className={`flex-1 text-xs ${val ? 'text-blue-300' : 'text-gray-400'}`}>

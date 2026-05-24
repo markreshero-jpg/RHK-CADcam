@@ -48,9 +48,9 @@ export default function EdgeJointPicker({ cabId, edgeKey, edgeLabel, cabinet, on
           .eq('assembly_class', validCls)
           .maybeSingle()
         const defaults = (row?.joint_defaults ?? {}) as Record<string, string>
-        // Check generic key first (e.g. "top:left_side"), then exact key
+        // Prefer the exact part-specific key (e.g. "full_top:left_side"), then generic
         const genericKey = toGenericSeamKey(edgeKey)
-        setInheritedId(defaults[genericKey] ?? defaults[edgeKey] ?? null)
+        setInheritedId(defaults[edgeKey] ?? defaults[genericKey] ?? null)
       }
 
       setLoading(false)

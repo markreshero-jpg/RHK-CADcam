@@ -330,6 +330,9 @@ export interface ResolvedSeamJoint {
   part_a_key:      string         // first part in the seam key (e.g. "bottom")
   part_b_key:      string         // second part (e.g. "left_side")
   ops:             JointTypeOp[]
+  // Only set for the back:bottom seam — selects the drill orientation:
+  // 'butts_into_back' → front-to-back (Z) holes, 'back_on_bottom' → vertical (Y) holes.
+  bottom_back_join?: 'back_on_bottom' | 'butts_into_back'
 }
 
 // ── Drawer Box Input ──────────────────────────────────────────

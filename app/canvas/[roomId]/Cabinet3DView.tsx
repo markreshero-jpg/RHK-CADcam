@@ -444,7 +444,7 @@ type JointRefPlane =
   | { kind: 'yz'; x: number; yMin: number; yMax: number; zMin: number; zMax: number }
   | { kind: 'xz'; y: number; xMin: number; xMax: number; zMin: number; zMax: number }
 
-type DrillAxis = 'x-' | 'x+' | 'y-' | 'y+'
+type DrillAxis = 'x-' | 'x+' | 'y-' | 'y+' | 'z-' | 'z+'
 
 interface DrillOpPos {
   x: number; y: number; z: number
@@ -523,11 +523,79 @@ function buildSeamFrame(seamKey: string, boxA: Box, boxB: Box): SeamFrame | null
   return { interfaceX, drillIntoA, drillIntoB, alongAxis, alongOrigin, insetAxis, insetOrigin, jointLength, thickA, thickB }
 }
 
-function seamDrillOps(seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[]): DrillOpPos[] {
+// back:bottom seam — the back panel (Part A, vertical) meets the bottom panel
+// (Part B, horizontal) along the cabinet width. Holes distribute along X. The
+// drill direction follows the BOTTOM_BACK_JOIN rule:
+//   back_on_bottom  → back sits on the bottom    → vertical (Y) holes
+//   butts_into_back → bottom butts the back face → front-to-back (Z) holes
+// offset_z_mm = position along the width from the back's left edge; offset_y_mm
+// = inset into the relevant thickness; D in qty expressions = the width.
+function backBottomDrillOps(
+  boxBack: Box, boxBottom: Box, ops: JointTypeOp[],
+  mode: 'back_on_bottom' | 'butts_into_back',
+): DrillOpPos[] {
+  const result: DrillOpPos[] = []
+  const jointLength = boxBack.w                  // distribute along width (X)
+  const evBack   = { ...boxBack,   d: jointLength }
+  const evBottom = { ...boxBottom, d: jointLength }
+  const thickBack   = boxBack.d                  // back panel thickness (Z)
+  const thickBottom = boxBottom.h                // bottom panel thickness (Y)
+
+  const vertical    = mode === 'back_on_bottom'  // back sits on bottom → drill in Y
+  const backFrontZ  = boxBack.z + boxBack.d      // back's front face
+  const bottomRearZ = boxBottom.z                // bottom's rear face
+  const backBottomY = boxBack.y                  // back's lower edge
+  const bottomTopY  = boxBottom.y + boxBottom.h  // bottom's top face
+
+  for (const op of ops) {
+    if (op.machine_operation !== 'drill') continue
+    const isBack = op.target_part === 'part_a'
+    const ev = evalOp(op, evBack, evBottom, thickBack, thickBottom)
+    if (!ev) continue
+    const spc = ev.spacing_mm ?? 0
+
+    for (let i = 0; i < ev.qty; i++) {
+      const x = boxBack.x + ev.offset_z_mm + i * spc
+      let y = 0, z = 0
+      let axis: DrillAxis
+
+      if (vertical) {
+        // offset_y_mm = inset within the back thickness, from its front face.
+        z = backFrontZ - ev.offset_y_mm
+        if (isBack) { y = backBottomY; axis = 'y+' }   // up into the back's lower edge
+        else        { y = bottomTopY;  axis = 'y-' }   // down into the bottom's top face
+      } else {
+        // offset_y_mm = depth within the bottom thickness, from its top face.
+        y = bottomTopY - ev.offset_y_mm
+        if (isBack) { z = backFrontZ;  axis = 'z-' }   // into the back's front face
+        else        { z = bottomRearZ; axis = 'z+' }   // into the bottom's rear edge
+      }
+
+      result.push({
+        x, y, z, axis,
+        radius: ev.tool_diameter_mm / 2,
+        depthLen: ev.depth_mm,
+        targetPartKey: isBack ? 'back' : 'bottom',
+      })
+    }
+  }
+  return result
+}
+
+function seamDrillOps(
+  seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[],
+  opts?: { bottomBackJoin?: 'back_on_bottom' | 'butts_into_back' },
+): DrillOpPos[] {
   const colonIdx = seamKey.indexOf(':')
   const partAKey = seamKey.slice(0, colonIdx)
   const partBKey = seamKey.slice(colonIdx + 1)
   const isLeft   = partBKey === 'left_side'
+
+  // back:bottom is a horizontal seam (back meets bottom across the cabinet width);
+  // it uses its own frame and drill direction, not the gable SeamFrame.
+  if (partBKey === 'bottom') {
+    return backBottomDrillOps(boxA, boxB, ops, opts?.bottomBackJoin ?? 'back_on_bottom')
+  }
 
   const frame = buildSeamFrame(seamKey, boxA, boxB)
   if (!frame) return []
@@ -695,6 +763,7 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
       <group position={groupPos}>
         {drills.map((d, i) => {
           const isX    = d.axis === 'x-' || d.axis === 'x+'
+          const isZ    = d.axis === 'z-' || d.axis === 'z+'
           const localY = d.y - (b.y + b.h / 2)
           const localZ = d.z - (b.z + b.d / 2)
           const localX = d.x - (b.x + b.w / 2)
@@ -717,6 +786,27 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
                 {/* bore cylinder — open-ended, BackSide shows inner wall */}
                 <mesh position={[0, localY, localZ]} rotation={[0, 0, Math.PI / 2]} renderOrder={ro}>
                   <cylinderGeometry args={[d.radius, d.radius, b.w, 32, 1, true]} />
+                  <meshBasicMaterial color="#0a0a0a" side={THREE.BackSide} depthTest={dt} />
+                </mesh>
+              </group>
+            )
+          }
+          if (isZ) {
+            return (
+              <group key={i}>
+                {/* entry disc — circleGeometry faces +Z by default, no rotation needed */}
+                <mesh position={[localX, localY, -b.d / 2 - eps]} renderOrder={ro}>
+                  <circleGeometry args={[d.radius, 32]} />
+                  <meshBasicMaterial color="#0a0a0a" side={THREE.DoubleSide} depthTest={dt} />
+                </mesh>
+                {/* exit disc */}
+                <mesh position={[localX, localY, b.d / 2 + eps]} renderOrder={ro}>
+                  <circleGeometry args={[d.radius, 32]} />
+                  <meshBasicMaterial color="#0a0a0a" side={THREE.DoubleSide} depthTest={dt} />
+                </mesh>
+                {/* bore cylinder along Z — rotate cylinder's Y axis onto Z */}
+                <mesh position={[localX, localY, 0]} rotation={[Math.PI / 2, 0, 0]} renderOrder={ro}>
+                  <cylinderGeometry args={[d.radius, d.radius, b.d, 32, 1, true]} />
                   <meshBasicMaterial color="#0a0a0a" side={THREE.BackSide} depthTest={dt} />
                 </mesh>
               </group>
@@ -879,7 +969,7 @@ function CabinetScene({
       const bA = boxByKey[sj.part_a_key]
       const bB = boxByKey[sj.part_b_key]
       if (!bA || !bB) continue
-      for (const d of seamDrillOps(sj.seam_key, bA, bB, sj.ops)) {
+      for (const d of seamDrillOps(sj.seam_key, bA, bB, sj.ops, { bottomBackJoin: sj.bottom_back_join })) {
         const arr = m.get(d.targetPartKey) ?? []
         arr.push(d)
         m.set(d.targetPartKey, arr)

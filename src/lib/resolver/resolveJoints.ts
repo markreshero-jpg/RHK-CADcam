@@ -43,7 +43,9 @@ export function resolveJoints(
       jointTypeId = carcaseJoints[seamKey]   // string = assigned, null = suppressed
       source = 'cabinet'
     } else {
-      const inherited = jointDefaults[genericKey] ?? jointDefaults[seamKey] ?? null
+      // Prefer the exact part-specific key (e.g. full_top:left_side); fall back
+      // to the generic top:… key for methods saved before the rail/top split.
+      const inherited = jointDefaults[seamKey] ?? jointDefaults[genericKey] ?? null
       jointTypeId = inherited
     }
 
@@ -63,6 +65,7 @@ export function resolveJoints(
       part_a_key:      partAKey,
       part_b_key:      partBKey,
       ops,
+      bottom_back_join: seamKey === 'back:bottom' ? cab.rules?.BOTTOM_BACK_JOIN : undefined,
     })
   }
 

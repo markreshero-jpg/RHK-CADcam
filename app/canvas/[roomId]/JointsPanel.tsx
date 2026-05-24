@@ -54,7 +54,7 @@ export default function JointsPanel({ cabinet, rp, onUpdate }: {
         ? { status: 'suppressed', jointId: null }
         : { status: 'cabinet',   jointId: v }
     }
-    const inherited = cmDefaults[genericKey] ?? cmDefaults[seamKey] ?? null
+    const inherited = cmDefaults[seamKey] ?? cmDefaults[genericKey] ?? null
     return inherited
       ? { status: 'method', jointId: inherited }
       : { status: 'none',   jointId: null }

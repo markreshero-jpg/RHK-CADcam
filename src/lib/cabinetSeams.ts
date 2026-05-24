@@ -15,10 +15,15 @@ export function toGenericSeamKey(key: string): string {
 }
 
 // ── Part-grouped edge model (CM builder joint UI) ────────────────────────────
-// Describes each carcase part by the edges that join another part. Each edge
-// maps to the GENERIC seam key stored in CM joint_defaults, so the same key may
-// appear under two parts (e.g. bottom:left_side under both Bottom and Left
-// Gable) — assigning it from either side stays in sync automatically.
+// Describes each carcase part by the edges that join another part. The same
+// seam key may appear under two parts (e.g. bottom:left_side under both Bottom
+// and Left Gable) — assigning it from either side stays in sync automatically.
+//
+// Top seams are PART-SPECIFIC (full_top:left_side, front_rail:left_side, …) so
+// each top variant carries its own joint/drilling and is remembered separately
+// when TOP_TYPE changes. Bottom/back seams have no variants, so they use their
+// plain keys. resolveJoints prefers the exact key and falls back to the generic
+// "top:…" key (via toGenericSeamKey) for methods saved before this split.
 
 export interface SeamPartEdge {
   edgeLabel:  string   // edge of this part, e.g. "Bottom edge"
@@ -51,7 +56,7 @@ export function carcaseSeamParts(topType: string): SeamPart[] {
       partKey: 'left_side', label: 'Left Gable',
       edges: [
         { edgeLabel: 'Bottom edge', seamKey: 'bottom:left_side', joinsLabel: 'Bottom Panel' },
-        ...(hasTop ? [{ edgeLabel: 'Top edge', seamKey: 'top:left_side', joinsLabel: topLabel }] : []),
+        ...(hasTop ? [{ edgeLabel: 'Top edge', seamKey: `${topPartKey}:left_side`, joinsLabel: topLabel }] : []),
         { edgeLabel: 'Back edge',   seamKey: 'back:left_side',   joinsLabel: 'Back Panel' },
       ],
     },
@@ -59,7 +64,7 @@ export function carcaseSeamParts(topType: string): SeamPart[] {
       partKey: 'right_side', label: 'Right Gable',
       edges: [
         { edgeLabel: 'Bottom edge', seamKey: 'bottom:right_side', joinsLabel: 'Bottom Panel' },
-        ...(hasTop ? [{ edgeLabel: 'Top edge', seamKey: 'top:right_side', joinsLabel: topLabel }] : []),
+        ...(hasTop ? [{ edgeLabel: 'Top edge', seamKey: `${topPartKey}:right_side`, joinsLabel: topLabel }] : []),
         { edgeLabel: 'Back edge',   seamKey: 'back:right_side',   joinsLabel: 'Back Panel' },
       ],
     },
@@ -85,8 +90,8 @@ export function carcaseSeamParts(topType: string): SeamPart[] {
     parts.push({
       partKey: topPartKey, label: topLabel,
       edges: [
-        { edgeLabel: 'Left edge',  seamKey: 'top:left_side',  joinsLabel: 'Left Gable' },
-        { edgeLabel: 'Right edge', seamKey: 'top:right_side', joinsLabel: 'Right Gable' },
+        { edgeLabel: 'Left edge',  seamKey: `${topPartKey}:left_side`,  joinsLabel: 'Left Gable' },
+        { edgeLabel: 'Right edge', seamKey: `${topPartKey}:right_side`, joinsLabel: 'Right Gable' },
       ],
     })
   }
