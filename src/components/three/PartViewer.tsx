@@ -204,12 +204,13 @@ export function Part({
 // ── Properties panel overlay ───────────────────────────────────────────────────
 
 export function PartPropertiesPanel({
-  part, onClose, onEdgeChange, actions,
+  part, onClose, onEdgeChange, actions, jointControls,
 }: {
   part: PartMeta
   onClose: () => void
   onEdgeChange?: (edge: PartEdge) => void
   actions?: React.ReactNode
+  jointControls?: React.ReactNode
 }) {
   return (
     <div className="absolute top-3 right-3 w-56 bg-gray-900/95 border border-gray-700 rounded-lg shadow-xl pointer-events-auto select-none" onClick={e => e.stopPropagation()}>
@@ -263,6 +264,12 @@ export function PartPropertiesPanel({
             ))}
           </div>
         </span>
+        {jointControls && (
+          <>
+            <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Edge joints (drilling)</span>
+            <span className="col-span-2">{jointControls}</span>
+          </>
+        )}
         {part.detail && (
           <>
             <span className="text-gray-500">Info</span>

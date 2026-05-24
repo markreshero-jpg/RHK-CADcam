@@ -425,11 +425,10 @@ export interface CabinetInput {
   // Face grid definition
   face_grid:       FaceGridInput
 
-  // Internal parts
-  adj_shelves:     AdjShelfInput[]
-  fixed_shelves:   FixedShelfInput[]
+  // Internal layout — recursive section tree (shelves + dividers + adj shelves)
+  internal_tree:   Section
+  // Inner drawers are face-zone driven and resolved separately from the tree
   inner_drawers:   InnerDrawerInput[]
-  dividers?:       InternalDividerInput[]
 }
 
 // ── Face Grid Input ───────────────────────────────────────────
@@ -466,6 +465,7 @@ export interface AdjShelfInput {
   sort_order:  number
   y_locked:    boolean
   y_position?: number   // only if locked
+  col_idx?:    number   // if set, shelf only spans this column (undefined = all columns)
   // Per-shelf overrides
   setback_front?: number
   setback_back?:  number
@@ -477,6 +477,7 @@ export interface FixedShelfInput {
   sort_order:  number
   y_position?: number   // null = mid height
   y_locked:    boolean
+  col_idx?:    number   // if set, shelf only spans this column (undefined = all columns)
   setback_front?: number
   setback_back?:  number
 }
@@ -492,14 +493,48 @@ export interface InternalDividerInput {
   sort_order:  number
   x_locked:    boolean
   x_position?: number   // mm from interior left face (after side + scribe), equalised if absent
+  row_idx?:    number   // opening row index (0 = bottom-most); undefined = full interior height
 }
 
-// Stored as internal_grid JSONB on cabinet_instances — mirrors face_grid pattern
+// Stored as internal_grid JSONB on cabinet_instances — legacy flat grid (superseded
+// by the recursive section tree below; kept for the resolver's inner-drawer inputs).
 export interface InternalGridInput {
   adj_shelves:   AdjShelfInput[]
   fixed_shelves: FixedShelfInput[]
   dividers:      InternalDividerInput[]
 }
+
+// ── Internal section tree (recursive internal layout) ─────────────────────────
+// The cabinet interior is one root Section. A Section is either an open compartment
+// (optionally holding movable adjustable shelves) or a split into child sections —
+// horizontally by fixed shelves (hsplit, children stacked bottom→top) or vertically
+// by dividers (vsplit, children left→right). This supports independent columns,
+// partial-height dividers, and unlimited nesting. Stored as internal_grid = { tree }.
+export type SectionSplitType = 'hsplit' | 'vsplit'
+
+export interface SectionChild {
+  size?:   number    // locked extent in mm (height for hsplit, width for vsplit); undefined = equalise to fill
+  section: Section
+}
+
+export interface OpenSection {
+  type:        'open'
+  adj_shelves: AdjShelfInput[]   // movable shelves on pins inside this compartment (do not subdivide it)
+}
+
+export interface SplitSection {
+  type:     SectionSplitType
+  children: SectionChild[]       // N children ⇒ N−1 separators between them
+}
+
+export type Section = OpenSection | SplitSection
+
+// New internal_grid JSONB shape.
+export interface InternalLayout {
+  tree: Section
+}
+
+export const EMPTY_SECTION: OpenSection = { type: 'open', adj_shelves: [] }
 
 // ── Resolved Output ───────────────────────────────────────────
 // What the resolver returns — ready to write to Supabase

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack } from '@/src/lib/resolver/types'
 import type { PartMeta } from '@/src/components/three/PartViewer'
@@ -11,14 +11,15 @@ import {
   C_INT, C_WALL, C_STROKE, C_PANEL, C_FACE,
   RC,
   dimH, dimV, viewLabel,
-  elevRect, tkElevRect, zoneElevRect, shelfElevRect,
-  topRect, tkTopRect, shelfTopRect, zoneTopRect,
-  sideRect, tkSideRect, shelfSideRect, zoneSideRect,
+  elevRect, tkElevRect, zoneElevRect, shelfElevRect, intElevRect,
+  topRect, tkTopRect, shelfTopRect, zoneTopRect, intTopRect,
+  sideRect, tkSideRect, shelfSideRect, zoneSideRect, intSideRect,
   dbElevRect, dbTopRect, dbSideRect,
   slideElevRect, slideTopRect, slideSideRect,
   svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta, svgDbMeta, svgSlideMeta,
-  svgHitParts, partIdColor,
+  svgHitParts, partIdColor, DrillOverlay,
 } from './cabinetEditSvgHelpers'
+import { cabinetSeamDrills, type DrillAxis } from '@/src/lib/jointDrilling'
 
 // Fallback approximation constants (used when resolver data not available)
 const PT   = 18
@@ -269,14 +270,16 @@ function useSvgZoom(initW: number, initH: number) {
 
 // ── Resolved views ────────────────────────────────────────────────────────────
 
-export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
+export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
+  showDrilling?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
 }) {
   const { dx, dy } = cab
+  const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
   const pl = 80, pt = 50, pr = 40, pb = 40
   const vw = dx + pl + pr
   const vh = dy + pt + pb
@@ -374,7 +377,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
       {rp.internal_parts.map((p, i) => {
         const meta = svgIntMeta(p)
         const pp = applyOv(p, meta.id, partOverrides)
-        const { ex, ey, ew, eh } = shelfElevRect(pp as typeof p)
+        const { ex, ey, ew, eh } = intElevRect(pp as typeof p)
         const r = toSVG(ex, ey, ew, eh)
         return <rect key={`sh${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
           fill={wireMode ? 'transparent' : RC.shelf.fill}
@@ -421,6 +424,9 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
           strokeDasharray={sel(meta.id) ? undefined : '5 3'}
           data-part-id={meta.id} style={cp} />
       })}
+      <DrillOverlay drills={drills} perp="z"
+        project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
+        dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
       <rect x={ox} y={oy} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
       <line x1={ox-20} y1={oy+dy} x2={ox+dx+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" style={{ pointerEvents: 'none' }} />
       {dimH(ox, ox+dx, oy-35, `${dx}mm`, true)}
@@ -433,14 +439,16 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, selectedPa
   )
 }
 
-export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
+export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
+  showDrilling?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
 }) {
   const { dx, dz } = cab
+  const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
   const wallH = 40
   const pl = 80, pt = 50 + wallH, pr = 40, pb = 50
   const vw = dx + pl + pr
@@ -526,7 +534,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
       {rp.internal_parts.map((p, i) => {
         const meta = svgIntMeta(p)
         const pp = applyOv(p, meta.id, partOverrides)
-        const r = shelfTopRect(pp as typeof p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+        const r = intTopRect(pp as typeof p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
         return <rect key={`sh${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
           fill={wireMode ? 'transparent' : RC.shelf.fill}
           stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
@@ -574,6 +582,9 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
           strokeDasharray={sel(meta.id) ? undefined : '5 3'}
           data-part-id={meta.id} style={cp} />
       })}
+      <DrillOverlay drills={drills} perp="y"
+        project={(x, _y, z) => ({ x: ox + x, y: oz + z })}
+        dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'z+' ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 }} />
       <rect x={ox} y={oz} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
       <text x={ox + dx/2} y={oz + dz + 22} textAnchor="middle" dominantBaseline="central"
         fontSize={18} fill="#374151" fontFamily="system-ui,sans-serif">ACCESS</text>
@@ -587,14 +598,16 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, selectedPartId, 
   )
 }
 
-export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
+export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
+  showDrilling?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
 }) {
   const { dz, dy } = cab
+  const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
   const wallW = 40
 
   const tkHeight = rp.toekick_parts
@@ -693,7 +706,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
       {rp.internal_parts.map((p, i) => {
         const meta = svgIntMeta(p)
         const pp = applyOv(p, meta.id, partOverrides)
-        const r = shelfSideRect(pp as typeof p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+        const r = intSideRect(pp as typeof p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
         return <rect key={`sh${i}`} x={s.x} y={s.y} width={s.w} height={s.h}
           fill={wireMode ? 'transparent' : RC.shelf.fill}
           stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
@@ -742,6 +755,9 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, selectedPartId,
           strokeDasharray={sel(meta.id) ? undefined : '5 3'}
           data-part-id={meta.id} style={cp} />
       })}
+      <DrillOverlay drills={drills} perp="x"
+        project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}
+        dirOf={(a: DrillAxis) => a === 'z+' ? { dx: 1, dy: 0 } : a === 'z-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
       <rect x={oz} y={oy} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
       <line x1={oz-20} y1={oy+dy} x2={oz+dz+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" style={{ pointerEvents: 'none' }} />
 

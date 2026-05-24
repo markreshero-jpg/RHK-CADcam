@@ -11,7 +11,7 @@ import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
   ResolvedInternalPart, ResolvedFaceZone,
   ResolvedDrawerStack, ResolvedDrawerSlide, ResolvedDrawerBoxPart,
-  ResolvedSeamJoint, JointTypeOp,
+  ResolvedSeamJoint,
 } from '@/src/lib/resolver/types'
 import {
   Box, PanelKind, PartMeta, PartEdge,
@@ -19,22 +19,14 @@ import {
   panelFaceColors, unpackMatCol,
   Part, PartPropertiesPanel, PreviewCanvas,
 } from '@/src/components/three/PartViewer'
+import { isSide, caseBox, seamDrillOps, type DrillOpPos } from '@/src/lib/jointDrilling'
+import PartEdgeJoints from './PartEdgeJoints'
 
 export type { MatColSpec, MatColMap }
 
 // ── Cabinet-specific coordinate helpers ───────────────────────────────────────
 // Cabinet origin = bottom-left-back corner (+X=right, +Y=up, +Z=front).
 // Each helper returns { x,y,z (part origin), w (X extent), h (Y extent), d (Z extent) }.
-
-function isSide(k: string) { return k === 'left_side' || k === 'right_side' }
-
-function caseBox(p: ResolvedCasePart): Box {
-  if (isSide(p.part_key))
-    return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
-  if (p.part_key === 'back')
-    return { x: p.X, y: p.Y + p.DZ, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
-  return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
-}
 
 function tkBox(p: ResolvedToekickPart): Box {
   return p.part_key === 'spreader_horizontal'
@@ -383,76 +375,9 @@ function DrawerAssembly({
 // :right_side seams — interface X = boxA.x+boxA.w. No mirror; Part A body goes -X in
 //   both JV and cabinet: cabinet_X = interfaceX + jv_x, axis unchanged.
 
-// Expression evaluator: supports math globals + part-dimension variables.
-function evalExpr(expr: string, vars: Record<string, number>): number | null {
-  try {
-    // eslint-disable-next-line no-new-func
-    const fn = new Function(...Object.keys(vars), `'use strict'; return +(${expr})`)
-    const result = fn(...Object.values(vars))
-    return Number.isFinite(result) ? result : null
-  } catch { return null }
-}
-
-// Resolve a JointTypeOp's numeric fields + qty/spacing against actual part dimensions.
-// Matches the same variable set as JointPreviewPanel.buildVars.
-// thickA/thickB = material thickness of each part (varies by panel orientation in caseBox).
-// T resolves to the TARGET part's thickness so expressions like "T" mean "drill to my depth".
-// Returns null if any expression-bearing field fails to evaluate — callers must skip the op.
-function evalOp(op: JointTypeOp, boxA: Box, boxB: Box, thickA: number, thickB: number): {
-  tool_diameter_mm: number; depth_mm: number
-  offset_x_mm: number; offset_y_mm: number; offset_z_mm: number
-  qty: number; spacing_mm: number | null
-} | null {
-  const exprs = op.expressions ?? {}
-  const isA   = op.target_part === 'part_a'
-  const vars: Record<string, number> = {
-    W:  isA ? boxA.w : boxB.w,
-    L:  isA ? boxA.h : boxB.h,
-    D:  isA ? boxA.d : boxB.d,
-    T:  isA ? thickA : thickB,
-    MW: boxA.w, ML: boxA.h, MD: boxA.d,
-    SW: boxB.w, SL: boxB.h, SD: boxB.d,
-  }
-  // If an expression exists for a field and fails, return null (skip the op entirely).
-  const ev = (field: string, fallback: number): number | null =>
-    exprs[field] != null ? evalExpr(exprs[field], vars) : fallback
-
-  const tool  = ev('tool_diameter_mm', op.tool_diameter_mm)
-  const depth = ev('depth_mm',         op.depth_mm)
-  const ox    = ev('offset_x_mm',      op.offset_x_mm)
-  const oy    = ev('offset_y_mm',      op.offset_y_mm)
-  const oz    = ev('offset_z_mm',      op.offset_z_mm)
-  if (tool === null || depth === null || ox === null || oy === null || oz === null) return null
-
-  const rawQty = exprs.qty != null ? evalExpr(exprs.qty, vars) : (op.qty ?? 1)
-  if (rawQty === null) return null
-  const rawSpc = exprs.spacing_mm != null ? evalExpr(exprs.spacing_mm, vars) : op.spacing_mm
-  if (exprs.spacing_mm != null && rawSpc === null) return null
-
-  return {
-    tool_diameter_mm: tool,
-    depth_mm:         depth,
-    offset_x_mm:      ox,
-    offset_y_mm:      oy,
-    offset_z_mm:      oz,
-    qty:              Math.max(1, Math.round(rawQty)),
-    spacing_mm:       rawSpc,
-  }
-}
-
 type JointRefPlane =
   | { kind: 'yz'; x: number; yMin: number; yMax: number; zMin: number; zMax: number }
   | { kind: 'xz'; y: number; xMin: number; xMax: number; zMin: number; zMax: number }
-
-type DrillAxis = 'x-' | 'x+' | 'y-' | 'y+' | 'z-' | 'z+'
-
-interface DrillOpPos {
-  x: number; y: number; z: number
-  axis: DrillAxis
-  radius: number
-  depthLen: number
-  targetPartKey: string
-}
 
 function computeJointRefPlane(seamKey: string, boxA: Box, boxB?: Box): JointRefPlane | null {
   const partBKey   = seamKey.slice(seamKey.indexOf(':') + 1)
@@ -469,221 +394,6 @@ function computeJointRefPlane(seamKey: string, boxA: Box, boxB?: Box): JointRefP
     return { kind: 'xz', y: boxA.y, xMin: boxA.x, xMax: boxA.x + boxA.w, zMin: boxA.z, zMax: boxA.z + boxA.d }
   }
   return null
-}
-
-// ── SeamFrame — edge-local coordinate frame ───────────────────────────────────
-// Maps joint operation fields (offset_z_mm, offset_y_mm, spacing) to cabinet
-// coordinates without any per-part-type special-casing. Works identically for
-// horizontal panels (bottom, top, rail) and vertical panels (back).
-//
-// For :left_side / :right_side seams the drill axis is always X. The two remaining
-// axes are assigned by inspecting Part A's geometry:
-//   Horizontal Part A (boxA.d > boxA.h) — offset_z_mm → Z,  offset_y_mm → Y
-//   Vertical   Part A (boxA.h > boxA.d) — offset_z_mm → Y,  offset_y_mm → Z
-//
-// offset_z_mm = 0 is anchored at the "front" of the joint edge (front face for
-// horizontal panels, top face for vertical panels). offset_y_mm = 0 is anchored
-// at the inner face of Part A (the face that meets Part B's side of the joint).
-
-interface SeamFrame {
-  interfaceX:  number
-  drillIntoA:  'x+' | 'x-'
-  drillIntoB:  'x+' | 'x-'
-  alongAxis:   'z' | 'y'    // axis for offset_z_mm / spacing distribution
-  alongOrigin: number        // cabinet value at offset_z_mm = 0
-  insetAxis:   'y' | 'z'    // axis for offset_y_mm (within Part A thickness)
-  insetOrigin: number        // inner face of Part A (offset_y_mm = 0 here)
-  jointLength: number        // D variable for qty expressions
-  thickA:      number
-  thickB:      number
-}
-
-function buildSeamFrame(seamKey: string, boxA: Box, boxB: Box): SeamFrame | null {
-  const partAKey   = seamKey.slice(0, seamKey.indexOf(':'))
-  const partBKey   = seamKey.slice(seamKey.indexOf(':') + 1)
-  const isLeft     = partBKey === 'left_side'
-  if (!isLeft && partBKey !== 'right_side') return null
-
-  const interfaceX  = isLeft ? boxA.x : boxA.x + boxA.w
-  const drillIntoA: 'x+' | 'x-' = isLeft ? 'x+' : 'x-'
-  const drillIntoB: 'x+' | 'x-' = isLeft ? 'x-' : 'x+'
-  const isVertical  = boxA.h > boxA.d
-
-  const alongAxis:   'z' | 'y' = isVertical ? 'y' : 'z'
-  const alongOrigin: number    = isVertical ? boxA.y + boxA.h : boxA.z + boxA.d
-
-  const insetAxis:   'y' | 'z' = isVertical ? 'z' : 'y'
-  const insetOrigin: number    = isVertical ? boxA.z + boxA.d : boxA.y + boxA.h
-
-  const jointLength = isVertical ? boxA.h : boxA.d
-
-  const thickA = isSide(partAKey) ? boxA.w : isVertical ? boxA.d : boxA.h
-  const thickB = boxB.w
-
-  return { interfaceX, drillIntoA, drillIntoB, alongAxis, alongOrigin, insetAxis, insetOrigin, jointLength, thickA, thickB }
-}
-
-// back:bottom seam — the back panel (Part A, vertical) meets the bottom panel
-// (Part B, horizontal) along the cabinet width. Holes distribute along X. The
-// drill direction follows the BOTTOM_BACK_JOIN rule:
-//   back_on_bottom  → back sits on the bottom    → vertical (Y) holes
-//   butts_into_back → bottom butts the back face → front-to-back (Z) holes
-// offset_z_mm = position along the width from the back's left edge; offset_y_mm
-// = inset into the relevant thickness; D in qty expressions = the width.
-function backBottomDrillOps(
-  boxBack: Box, boxBottom: Box, ops: JointTypeOp[],
-  mode: 'back_on_bottom' | 'butts_into_back',
-): DrillOpPos[] {
-  const result: DrillOpPos[] = []
-  const jointLength = boxBack.w                  // distribute along width (X)
-  const evBack   = { ...boxBack,   d: jointLength }
-  const evBottom = { ...boxBottom, d: jointLength }
-  const thickBack   = boxBack.d                  // back panel thickness (Z)
-  const thickBottom = boxBottom.h                // bottom panel thickness (Y)
-
-  const vertical    = mode === 'back_on_bottom'  // back sits on bottom → drill in Y
-  const backFrontZ  = boxBack.z + boxBack.d      // back's front face
-  const bottomRearZ = boxBottom.z                // bottom's rear face
-  const backBottomY = boxBack.y                  // back's lower edge
-  const bottomTopY  = boxBottom.y + boxBottom.h  // bottom's top face
-
-  for (const op of ops) {
-    if (op.machine_operation !== 'drill') continue
-    const isBack = op.target_part === 'part_a'
-    const ev = evalOp(op, evBack, evBottom, thickBack, thickBottom)
-    if (!ev) continue
-    const spc = ev.spacing_mm ?? 0
-
-    for (let i = 0; i < ev.qty; i++) {
-      const x = boxBack.x + ev.offset_z_mm + i * spc
-      let y = 0, z = 0
-      let axis: DrillAxis
-
-      if (vertical) {
-        // offset_y_mm = inset within the back thickness, from its front face.
-        z = backFrontZ - ev.offset_y_mm
-        if (isBack) { y = backBottomY; axis = 'y+' }   // up into the back's lower edge
-        else        { y = bottomTopY;  axis = 'y-' }   // down into the bottom's top face
-      } else {
-        // offset_y_mm = depth within the bottom thickness, from its top face.
-        y = bottomTopY - ev.offset_y_mm
-        if (isBack) { z = backFrontZ;  axis = 'z-' }   // into the back's front face
-        else        { z = bottomRearZ; axis = 'z+' }   // into the bottom's rear edge
-      }
-
-      result.push({
-        x, y, z, axis,
-        radius: ev.tool_diameter_mm / 2,
-        depthLen: ev.depth_mm,
-        targetPartKey: isBack ? 'back' : 'bottom',
-      })
-    }
-  }
-  return result
-}
-
-function seamDrillOps(
-  seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[],
-  opts?: { bottomBackJoin?: 'back_on_bottom' | 'butts_into_back' },
-): DrillOpPos[] {
-  const colonIdx = seamKey.indexOf(':')
-  const partAKey = seamKey.slice(0, colonIdx)
-  const partBKey = seamKey.slice(colonIdx + 1)
-  const isLeft   = partBKey === 'left_side'
-
-  // back:bottom is a horizontal seam (back meets bottom across the cabinet width);
-  // it uses its own frame and drill direction, not the gable SeamFrame.
-  if (partBKey === 'bottom') {
-    return backBottomDrillOps(boxA, boxB, ops, opts?.bottomBackJoin ?? 'back_on_bottom')
-  }
-
-  const frame = buildSeamFrame(seamKey, boxA, boxB)
-  if (!frame) return []
-
-  // Remap boxA/B .d to jointLength so D in expressions = joint edge length.
-  const evBoxA = { ...boxA, d: frame.jointLength }
-  const evBoxB = { ...boxB, d: frame.jointLength }
-
-  const result: DrillOpPos[] = []
-
-  const setAlong = (pos: { x: number; y: number; z: number }, v: number) =>
-    { if (frame.alongAxis === 'z') pos.z = v; else pos.y = v }
-  const setInset = (pos: { x: number; y: number; z: number }, v: number) =>
-    { if (frame.insetAxis === 'z') pos.z = v; else pos.y = v }
-
-  for (const op of ops) {
-    if (op.machine_operation !== 'drill') continue
-    const ev = evalOp(op, evBoxA, evBoxB, frame.thickA, frame.thickB)
-    if (!ev) continue
-
-    const spc = ev.spacing_mm ?? 0
-
-    for (let i = 0; i < ev.qty; i++) {
-      const pos = { x: 0, y: 0, z: 0 }
-      let axis: DrillAxis = 'x-'
-
-      const alongCoord = frame.alongOrigin - ev.offset_z_mm - i * spc
-      const insetCoord = frame.insetOrigin - ev.offset_y_mm
-
-      if (op.target_part === 'part_a') {
-        switch (op.face) {
-          case 'normal':
-            pos.x = frame.interfaceX; setAlong(pos, alongCoord); setInset(pos, insetCoord)
-            axis = frame.drillIntoA
-            break
-          case 'end':
-            pos.x = isLeft ? boxA.x + boxA.w : boxA.x; setAlong(pos, alongCoord); setInset(pos, insetCoord)
-            axis = isLeft ? 'x-' : 'x+'
-            break
-          case 'top':
-            pos.x = isLeft ? frame.interfaceX + ev.offset_x_mm : frame.interfaceX - ev.offset_x_mm
-            pos.y = boxA.y + boxA.h; setAlong(pos, alongCoord)
-            axis = 'y-'
-            break
-          case 'bottom':
-            pos.x = isLeft ? frame.interfaceX + ev.offset_x_mm : frame.interfaceX - ev.offset_x_mm
-            pos.y = boxA.y; setAlong(pos, alongCoord)
-            axis = 'y+'
-            break
-          default: continue
-        }
-      } else {
-        const bInner = isLeft ? boxB.x + boxB.w : boxB.x
-        switch (op.face) {
-          case 'normal':
-            pos.x = bInner; setAlong(pos, alongCoord); setInset(pos, insetCoord)
-            axis = frame.drillIntoB
-            break
-          case 'end':
-            pos.x = isLeft ? boxB.x : boxB.x + boxB.w; setAlong(pos, alongCoord); setInset(pos, insetCoord)
-            axis = isLeft ? 'x+' : 'x-'
-            break
-          case 'top':
-            pos.x = isLeft ? bInner - ev.offset_x_mm : bInner + ev.offset_x_mm
-            pos.y = boxB.y + boxB.h; setAlong(pos, alongCoord)
-            axis = 'y-'
-            break
-          case 'bottom':
-            pos.x = isLeft ? bInner - ev.offset_x_mm : bInner + ev.offset_x_mm
-            pos.y = boxB.y; setAlong(pos, alongCoord)
-            axis = 'y+'
-            break
-          default: continue
-        }
-      }
-
-      // Face drill into the side panel (Part B normal) → show full material width as bore.
-      // All other cases (edge drills, end drills, Y-axis drills) → actual drill depth.
-      const isFaceDrill = op.target_part === 'part_b' && op.face === 'normal'
-                       && (axis === 'x-' || axis === 'x+')
-      const depthLen    = isFaceDrill ? boxB.w : ev.depth_mm
-
-      const targetPartKey = op.target_part === 'part_a' ? partAKey : partBKey
-      result.push({ ...pos, axis, radius: ev.tool_diameter_mm / 2, depthLen, targetPartKey })
-    }
-  }
-
-  return result
 }
 
 function JointFaceRect({ plane, color, wire }: { plane: JointRefPlane; color: string; wire?: boolean }) {
@@ -925,7 +635,7 @@ function getRotOv(id: string, overrides: PartPosOverrides | undefined): [number,
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
 
 function CabinetScene({
-  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, openDrawers, edgeOverrides, wire, customParts, partOverrides,
+  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, openDrawers, edgeOverrides, wire, customParts, partOverrides, showDrilling = true,
 }: {
   cab:                  CabinetInstance
   rp:                   ResolvedCabinet
@@ -940,6 +650,7 @@ function CabinetScene({
   wire?:                boolean
   customParts?:         CabinetCustomPart[]
   partOverrides?:       PartPosOverrides
+  showDrilling?:        boolean
 }) {
   const { dx, dy, dz } = cab
   const dragRef = useRef(false)
@@ -965,6 +676,7 @@ function CabinetScene({
   // Collect drill holes grouped by which case part they enter, for CSG subtraction.
   const holesByPartKey = useMemo(() => {
     const m = new Map<string, DrillOpPos[]>()
+    if (!showDrilling) return m
     for (const sj of rp.seam_joints) {
       const bA = boxByKey[sj.part_a_key]
       const bB = boxByKey[sj.part_b_key]
@@ -976,7 +688,7 @@ function CabinetScene({
       }
     }
     return m
-  }, [rp.seam_joints, boxByKey])
+  }, [rp.seam_joints, boxByKey, showDrilling])
 
   function applyEdge<T extends PartMeta>(info: T): T {
     const ov = edgeOverrides.get(info.id)
@@ -1174,7 +886,7 @@ function CabinetScene({
           />
         )
       })}
-      {rp.seam_joints.length > 0 && (
+      {showDrilling && rp.seam_joints.length > 0 && (
         <SeamJointOverlay seamJoints={rp.seam_joints} boxByKey={boxByKey} wire={wire} />
       )}
     </group>
@@ -1184,7 +896,7 @@ function CabinetScene({
 // ── Public component ─────────────────────────────────────────────────────────
 
 export default function Cabinet3DView({
-  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, onPartSelect,
+  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, onPartSelect, showDrilling = true, onUpdate,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
@@ -1197,6 +909,11 @@ export default function Cabinet3DView({
   // Fires with the carcase part_key when a case part is selected (null when a
   // non-case part is picked). Lets callers drive an external panel from clicks.
   onPartSelect?:     (partKey: string | null) => void
+  // Show carcase joint drilling (holes + seam overlay). Default on.
+  showDrilling?:     boolean
+  // When provided, the part panel shows inline edge-joint (drilling) controls for
+  // the selected case part, persisting to cabinet.carcase_joints.
+  onUpdate?:         (id: string, u: Partial<CabinetInstance>) => void | Promise<void>
 }) {
   const [selectedPart, setSelectedPart]       = useState<PartMeta | null>(null)
   const [doorsOpen, setDoorsOpen]             = useState(false)
@@ -1319,6 +1036,9 @@ export default function Cabinet3DView({
               onClose={() => setSelectedPart(null)}
               onEdgeChange={handleEdgeChange}
               actions={drawerActions}
+              jointControls={onUpdate && rp && selectedPart.id.startsWith('case_')
+                ? <PartEdgeJoints cabinet={cab} rp={rp} partKey={selectedPart.id.slice(5)} onUpdate={onUpdate} />
+                : undefined}
             />
           )}
           <div className="absolute bottom-8 right-3 flex flex-col gap-1 items-end pointer-events-none">
@@ -1355,6 +1075,7 @@ export default function Cabinet3DView({
           wire={wire}
           customParts={customParts}
           partOverrides={partOverrides}
+          showDrilling={showDrilling}
         />
       ) : (
         <mesh>

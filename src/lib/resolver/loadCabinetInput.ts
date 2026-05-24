@@ -1,6 +1,6 @@
 import { supabase } from '@/src/lib/supabase'
 import {
-  CabinetInput, ConstructionRules, FaceGridInput, InternalGridInput, Material, DEFAULT_RULES,
+  CabinetInput, ConstructionRules, FaceGridInput, Section, EMPTY_SECTION, Material, DEFAULT_RULES,
   SlideProduct, SlideScheduleEntry, DrawerBoxRules, DEFAULT_DB_RULES,
   JointTypeOp, JointTargetPart, JointMachineOp, JointFace,
 } from './types'
@@ -349,14 +349,9 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     joint_type_ops:   jointTypeOps,
     joint_type_names: jointTypeNames,
     face_grid:     (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID,
-    ...((): Pick<CabinetInput, 'adj_shelves' | 'fixed_shelves' | 'inner_drawers' | 'dividers'> => {
-      const ig = (cab.internal_grid as InternalGridInput | null) ?? null
-      return {
-        adj_shelves:   ig?.adj_shelves   ?? [],
-        fixed_shelves: ig?.fixed_shelves ?? [],
-        inner_drawers: [],
-        dividers:      ig?.dividers      ?? [],
-      }
-    })(),
+    // Internal layout: recursive section tree stored as internal_grid = { tree }.
+    // Anything without a tree (e.g. legacy flat grids) resolves to an empty interior.
+    internal_tree: ((cab.internal_grid as { tree?: Section } | null)?.tree) ?? EMPTY_SECTION,
+    inner_drawers: [],
   }
 }

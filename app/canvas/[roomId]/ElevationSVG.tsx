@@ -171,7 +171,7 @@ export default function ElevationSVG({
   const [hoveredCabId, setHoveredCabId] = useState<string | null>(null)
   const [sectionMode, setSectionMode] = useState(false)
   const [sectionDepth, setSectionDepth] = useState(0)
-  const [placeGhost, setPlaceGhost] = useState<{ t: number; cls: string; dx: number; dy: number } | null>(null)
+  const [placeGhost, setPlaceGhost] = useState<{ t: number; cls: string; dx: number; dy: number; cursorT: number; cursorSY: number } | null>(null)
   const [elevResizeFollowing, setElevResizeFollowing] = useState<{
     cabId: string; dim: 'dx' | 'dy'; side: 'left' | 'right' | 'top'
     startCabT: number; startCabEndT: number
@@ -340,6 +340,7 @@ export default function ElevationSVG({
     if ((clsInfo || mode === 'paste') && wall) {
       const svgR = svgRef.current!.getBoundingClientRect()
       const cursorT = (e.clientX - svgR.left - view.panX) / view.zoom
+      const cursorSY = (e.clientY - svgR.top  - view.panY) / view.zoom
       const dims = clsInfo
         ? (DEFAULT_DIMS[clsInfo.cls] ?? DEFAULT_DIMS.base)
         : clipboard ? { dx: clipboard.dx, dy: clipboard.dy, dz: clipboard.dz } : null
@@ -349,7 +350,7 @@ export default function ElevationSVG({
           .filter(c => cabBlocks(cls, c.assembly_class))
           .map(c => ({ t: cabT(c, wall), dx: c.dx }))
         const t = findFreeSlot(Math.max(0, Math.min(wall.length - dims.dx, cursorT)), dims.dx, wall.length, occ)
-        setPlaceGhost({ t, cls, dx: dims.dx, dy: dims.dy })
+        setPlaceGhost({ t, cls, dx: dims.dx, dy: dims.dy, cursorT, cursorSY })
       }
       return
     }
@@ -573,7 +574,7 @@ export default function ElevationSVG({
       <svg
         ref={svgRef}
         className="flex-1 bg-gray-950 select-none"
-        style={{ cursor: elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
+        style={{ cursor: (modeAssemblyClass(mode) || mode === 'paste') ? 'crosshair' : elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -1090,21 +1091,63 @@ export default function ElevationSVG({
               )
             })}
 
-            {/* Placement ghost */}
+            {/* Placement ghost — floating at cursor + snap landing */}
             {placeGhost && (() => {
               const isWallCls = placeGhost.cls === 'wall' || placeGhost.cls === 'wall_corner'
               const wcTop = wallCabTopFor(wall, room)
               const ghostBZ = isWallCls ? Math.max(0, wcTop - placeGhost.dy) : 0
-              const gx = placeGhost.t
-              const gy = roomH - ghostBZ - placeGhost.dy
+
+              // Snap landing (snapped free slot, correct height)
+              const snapX = placeGhost.t
+              const snapY = roomH - ghostBZ - placeGhost.dy
+
+              // Floating ghost centred on cursor
+              const floatX = placeGhost.cursorT - placeGhost.dx / 2
+              const floatY = placeGhost.cursorSY - placeGhost.dy / 2
+
               const fill = CAB_FILL[placeGhost.cls] ?? CAB_FILL.base
               const sel  = CAB_FILL_SEL[placeGhost.cls] ?? CAB_FILL_SEL.base
-              return (
-                <rect x={gx} y={gy} width={placeGhost.dx} height={placeGhost.dy}
-                  fill={fill + '66'} stroke={sel}
+
+              // Arrow from float ghost face to snap surface
+              const arrowFromX = placeGhost.cursorT
+              const arrowFromY = isWallCls ? floatY : floatY + placeGhost.dy
+              const arrowToX   = placeGhost.t + placeGhost.dx / 2
+              const arrowToY   = isWallCls ? (roomH - wcTop) : roomH
+              const adx = arrowToX - arrowFromX
+              const ady = arrowToY - arrowFromY
+              const alen = Math.sqrt(adx * adx + ady * ady)
+              const arrowSize = 12 / z
+              const showArrow = alen > arrowSize * 1.5
+
+              return (<>
+                {/* Snap landing outline */}
+                <rect x={snapX} y={snapY} width={placeGhost.dx} height={placeGhost.dy}
+                  fill="none" stroke="#60a5fa" strokeWidth={1 / z}
+                  strokeDasharray={`${4 / z} ${4 / z}`} opacity={0.5}
+                  style={{ pointerEvents: 'none' }} />
+
+                {/* Arrow from ghost face to snap surface */}
+                {showArrow && (<>
+                  <line x1={arrowFromX} y1={arrowFromY} x2={arrowToX} y2={arrowToY}
+                    stroke="#60a5fa" strokeWidth={1.5 / z}
+                    strokeDasharray={`${8 / z} ${4 / z}`}
+                    style={{ pointerEvents: 'none' }} />
+                  <polygon
+                    points={[
+                      `${arrowToX},${arrowToY}`,
+                      `${arrowToX - (adx / alen) * arrowSize - (ady / alen) * arrowSize * 0.4},${arrowToY - (ady / alen) * arrowSize + (adx / alen) * arrowSize * 0.4}`,
+                      `${arrowToX - (adx / alen) * arrowSize + (ady / alen) * arrowSize * 0.4},${arrowToY - (ady / alen) * arrowSize - (adx / alen) * arrowSize * 0.4}`,
+                    ].join(' ')}
+                    fill="#60a5fa"
+                    style={{ pointerEvents: 'none' }} />
+                </>)}
+
+                {/* Floating ghost centred on cursor */}
+                <rect x={floatX} y={floatY} width={placeGhost.dx} height={placeGhost.dy}
+                  fill={fill + 'cc'} stroke={sel}
                   strokeWidth={2 / z} strokeDasharray={`${6 / z} ${3 / z}`}
                   style={{ pointerEvents: 'none' }} />
-              )
+              </>)
             })()}
 
             {/* Following ghost — free-float at cursor, shows snap landing + arrow */}

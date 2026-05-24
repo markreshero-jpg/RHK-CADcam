@@ -102,8 +102,11 @@ export function ptToSeg(p: Pt, a: Pt, b: Pt): { dist: number; proj: Pt } {
 // pos_x/pos_y is the inside face start; wall body extends in the -wallInwardNormal direction.
 // Miter: when two walls share an inside corner, intersect their outside face lines.
 
-export function wallMitrePolygon(w: Wall, walls: Wall[], cx: number, cy: number): string {
-  if (w.wall_type === 'island') return ''
+// Returns the 4 drawn footprint corners [insideStart, insideEnd, outsideEnd,
+// outsideStart], with the outside corners mitred where walls share a corner.
+// Empty for islands (zero thickness, no footprint).
+export function wallMitreCorners(w: Wall, walls: Wall[], cx: number, cy: number): Pt[] {
+  if (w.wall_type === 'island') return []
   const d = wallDir(w)
   const inward = wallInwardNormal(w, cx, cy)
   const thick = w.thickness
@@ -132,7 +135,11 @@ export function wallMitrePolygon(w: Wall, walls: Wall[], cx: number, cy: number)
     if (dist(e, oE) < JSNAP) pEO = lineIntersect(pEO, d, { x: oE.x + oOX, y: oE.y + oOY }, od) ?? pEO
   }
 
-  return [s, e, pEO, pSO].map(p => `${p.x},${p.y}`).join(' ')
+  return [s, e, pEO, pSO]
+}
+
+export function wallMitrePolygon(w: Wall, walls: Wall[], cx: number, cy: number): string {
+  return wallMitreCorners(w, walls, cx, cy).map(p => `${p.x},${p.y}`).join(' ')
 }
 
 // ── Snapping ──────────────────────────────────────────────────────────────────

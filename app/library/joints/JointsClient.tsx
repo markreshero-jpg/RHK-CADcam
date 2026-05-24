@@ -35,6 +35,8 @@ interface JointTypeOperation {
   offset_z_mm:       number
   qty:               number
   spacing_mm:        number | null
+  qty2:              number
+  spacing2_mm:       number | null
   tool:              string | null
   notes:             string | null
   expressions:       Record<string, string> | null
@@ -102,6 +104,8 @@ const OP_DEFAULTS: Omit<JointTypeOperation, 'id' | 'joint_type_id'> = {
   offset_z_mm:       0,
   qty:               1,
   spacing_mm:        null,
+  qty2:              1,
+  spacing2_mm:       null,
   tool:              null,
   notes:             null,
   expressions:       null,
@@ -128,6 +132,8 @@ function toOp(r: Record<string, unknown>): JointTypeOperation {
     offset_z_mm:       (r.offset_z_mm as number) ?? 0,
     qty:               (r.qty as number) ?? 1,
     spacing_mm:        (r.spacing_mm as number | null) ?? null,
+    qty2:              (r.qty2 as number) ?? 1,
+    spacing2_mm:       (r.spacing2_mm as number | null) ?? null,
     tool:              (r.tool as string | null) ?? null,
     notes:             (r.notes as string | null) ?? null,
     expressions:       (r.expressions as Record<string, string> | null) ?? null,
@@ -292,7 +298,7 @@ export default function JointsClient({
   }
 
   async function patchOp(id: string, key: keyof JointTypeOperation, raw: string | number) {
-    const numKeys: (keyof JointTypeOperation)[] = ['operation_order','tool_diameter_mm','depth_mm','offset_x_mm','offset_y_mm','offset_z_mm','qty','spacing_mm']
+    const numKeys: (keyof JointTypeOperation)[] = ['operation_order','tool_diameter_mm','depth_mm','offset_x_mm','offset_y_mm','offset_z_mm','qty','spacing_mm','qty2','spacing2_mm']
     const val = numKeys.includes(key) ? parseFloat(raw as string) : raw
     if (numKeys.includes(key) && isNaN(val as number)) return
     await supabase.from('joint_type_operations').update({ [key]: val }).eq('id', id)
@@ -486,6 +492,8 @@ export default function JointsClient({
                   expressions:       op.expressions ?? undefined,
                   qty:               op.qty,
                   spacing_mm:        op.spacing_mm,
+                  qty2:              op.qty2,
+                  spacing2_mm:       op.spacing2_mm,
                 }))}
               />
             )}
@@ -551,6 +559,16 @@ const EXPR_SUGGESTIONS: Record<string, { label: string; formula: string }[]> = {
     { label: 'Holes per 32 mm pitch',   formula: 'Math.floor(D / 32)' },
     { label: 'Holes per 64 mm pitch',   formula: 'Math.floor(D / 64)' },
   ],
+  qty2: [
+    { label: '1 (single row)',          formula: '1' },
+    { label: '3 positions',             formula: '3' },
+    { label: '5 positions',             formula: '5' },
+    { label: '7 positions',             formula: '7' },
+  ],
+  spacing2_mm: [
+    { label: '32 mm shelf pitch',       formula: '32' },
+    { label: '64 mm pitch',             formula: '64' },
+  ],
 }
 
 // ── Operations table ──────────────────────────────────────────────────────────
@@ -583,8 +601,10 @@ function OpsTable({
               <th className={thCls} style={{ width: 80 }}>Part</th>
               <th className={thCls} style={{ width: 76 }}>Op</th>
               <th className={thCls} style={{ width: 90 }}>Face</th>
-              <th className={thCls} style={{ width: 44 }}>Qty</th>
-              <th className={thCls} style={{ width: 76 }}>Space</th>
+              <th className={thCls} style={{ width: 44 }} title="1st axis: number of holes along the joint edge (distributed from the front, e.g. front/back rows)">Qty</th>
+              <th className={thCls} style={{ width: 76 }} title="1st axis: pitch between holes along the joint edge">Space</th>
+              <th className={thCls} style={{ width: 44 }} title="2nd axis: number of holes across the joint edge, centred on the joint line (e.g. the vertical adjustable-shelf cluster)">Qty²</th>
+              <th className={thCls} style={{ width: 76 }} title="2nd axis: pitch between holes across the joint edge (e.g. 32 mm)">Space²</th>
               <th className={thCls} style={{ width: 100 }}>Tool</th>
               <th className={thCls} style={{ width: 60 }}>Ø dia</th>
               <th className={thCls} style={{ width: 58 }}>Depth</th>
@@ -608,9 +628,8 @@ function OpsTable({
                       className={numCls} style={{ width: 28 }} />
                   </td>
                   <td className={tdCls}>
-                    <input type="text" value={op.notes ?? ''}
-                      onChange={e => onPatch(op.id, 'notes', e.target.value)}
-                      onFocus={e => e.target.select()}
+                    <TextCell value={op.notes ?? ''}
+                      onChange={v => onPatch(op.id, 'notes', v)}
                       placeholder="e.g. cam barrel hole"
                       className={celCls} />
                   </td>
@@ -650,9 +669,22 @@ function OpsTable({
                       placeholder="—" className={numCls} />
                   </td>
                   <td className={tdCls}>
-                    <input type="text" value={op.tool ?? ''}
-                      onChange={e => onPatch(op.id, 'tool', e.target.value)}
-                      onFocus={e => e.target.select()}
+                    <ExprCell value={op.qty2} fieldKey="qty2"
+                      expressions={op.expressions}
+                      onPatch={n => onPatch(op.id, 'qty2', Math.max(1, Math.round(n)))}
+                      onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
+                      className={numCls} style={{ width: 32 }} />
+                  </td>
+                  <td className={tdCls}>
+                    <ExprCell value={op.spacing2_mm ?? 0} fieldKey="spacing2_mm"
+                      expressions={op.expressions} nullable={op.spacing2_mm == null}
+                      onPatch={n => onPatch(op.id, 'spacing2_mm', n)}
+                      onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
+                      placeholder="—" className={numCls} />
+                  </td>
+                  <td className={tdCls}>
+                    <TextCell value={op.tool ?? ''}
+                      onChange={v => onPatch(op.id, 'tool', v)}
                       placeholder="e.g. T01"
                       className={celCls} />
                   </td>
@@ -701,7 +733,7 @@ function OpsTable({
             })}
             {ops.length === 0 && (
               <tr>
-                <td colSpan={13} className="px-4 py-6 text-center text-xs text-gray-600">
+                <td colSpan={15} className="px-4 py-6 text-center text-xs text-gray-600">
                   No operations yet. Click + Add operation below.
                 </td>
               </tr>
@@ -779,11 +811,10 @@ function FastenersTable({
                         {c.options!.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     ) : (
-                      <input
-                        type={c.type === 'number' ? 'number' : 'text'}
-                        value={(f[c.key] as string | number | null) ?? ''}
-                        onChange={e => onChange(f.id, c.key, e.target.value)}
-                        onFocus={e => e.target.select()}
+                      <TextCell
+                        value={f[c.key] == null ? '' : String(f[c.key])}
+                        onChange={v => onChange(f.id, c.key, v)}
+                        inputMode={c.type === 'number' ? 'decimal' : 'text'}
                         className={celCls}
                       />
                     )}
@@ -846,6 +877,39 @@ function NumCell({ value, onChange, className, style }: {
       onChange={e => setDraft(e.target.value)}
       onFocus={e => { setFocused(true); e.target.select() }}
       onBlur={e  => { setFocused(false); commit(e.target.value) }}
+      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+    />
+  )
+}
+
+// ── TextCell — local-draft text input, commits on blur / Enter ────────────────
+// Holds a string draft while focused so typing is never reverted by an in-flight
+// save (patchOp awaits the network before updating state). Commits once on blur.
+
+function TextCell({ value, onChange, placeholder, className, inputMode }: {
+  value:        string
+  onChange:     (s: string) => void
+  placeholder?: string
+  className?:   string
+  inputMode?:   'text' | 'decimal'
+}) {
+  const [draft,   setDraft]   = useState(value)
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (!focused) setDraft(value)
+  }, [value, focused])
+
+  return (
+    <input
+      type="text"
+      inputMode={inputMode}
+      value={draft}
+      placeholder={placeholder}
+      className={className}
+      onChange={e => setDraft(e.target.value)}
+      onFocus={e => { setFocused(true); e.target.select() }}
+      onBlur={e  => { setFocused(false); if (e.target.value !== value) onChange(e.target.value) }}
       onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
     />
   )

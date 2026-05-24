@@ -11,6 +11,7 @@ import {
 import WallDimensionChain from './WallDimensionChain'
 import { Mode, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, modeAssemblyClass, DisplayConfig, SectionCut } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
+import { SNAP_KIND_META, type SnapResult } from '@/src/lib/canvasSnap'
 
 function buildBenchtopPath(
   pts: Array<{ x: number; y: number }>,
@@ -104,6 +105,12 @@ interface CanvasSVGProps {
   onSectionFlipLook?: () => void
   onSectionClear?: () => void
   onSectionLinePointerDown?: (e: React.PointerEvent) => void
+  // Snapping + measure
+  snapResult: SnapResult | null
+  measureStart: Pt | null
+  measureEnd: Pt | null
+  measureCursor: Pt | null
+  onMeasureCancel?: () => void
 }
 
 export default function CanvasSVG({
@@ -120,6 +127,7 @@ export default function CanvasSVG({
   btUPoints, btUCursor,
   btCutoutStart, btCutoutCursor,
   sectionCut, onSectionFlipLook, onSectionClear, onSectionLinePointerDown,
+  snapResult, measureStart, measureEnd, measureCursor, onMeasureCancel,
 }: CanvasSVGProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
@@ -147,6 +155,7 @@ export default function CanvasSVG({
         e.preventDefault()
         if (mode === 'draw_wall' || mode === 'draw_island') onCancelDraw()
         if (mode === 'draw_benchtop') onBtUndoVertex()
+        if (mode === 'measure') onMeasureCancel?.()
       }}
     >
       <g transform={`translate(${view.panX},${view.panY}) scale(${view.zoom})`}>
@@ -1216,6 +1225,68 @@ export default function CanvasSVG({
           const ghostCab = { pos_x: placeGhost.pos_x, pos_y: placeGhost.pos_y, dx: dims.dx, dy: dims.dy, dz: dims.dz } as CabinetInstance
           const pts = cabinetPolygon(ghostCab, wall, perp)
           const center = cabinetCenterPt(ghostCab, wall, perp)
+
+          // Free-float placement (sidebar place modes): cabinet floats at the cursor with a
+          // dashed snap-landing outline + arrow, matching the elevation-view placement feel.
+          if (placeGhost.freePos) {
+            const wd = wallDir(wall)
+            const fp = placeGhost.freePos
+            const freeBackLeft = {
+              x: fp.x - (dims.dx / 2) * wd.x - (dims.dz / 2) * perp.x,
+              y: fp.y - (dims.dx / 2) * wd.y - (dims.dz / 2) * perp.y,
+            }
+            const floatCab = { pos_x: freeBackLeft.x, pos_y: freeBackLeft.y, dx: dims.dx, dy: dims.dy, dz: dims.dz } as CabinetInstance
+            const floatPts = cabinetPolygon(floatCab, wall, perp)
+            const floatCenter = cabinetCenterPt(floatCab, wall, perp)
+
+            // Arrow from floating ghost back-centre → snap landing back-centre
+            const ghostBackCx = freeBackLeft.x + (dims.dx / 2) * wd.x
+            const ghostBackCy = freeBackLeft.y + (dims.dx / 2) * wd.y
+            const snapBackCx = placeGhost.pos_x + (dims.dx / 2) * wd.x
+            const snapBackCy = placeGhost.pos_y + (dims.dx / 2) * wd.y
+            const adx = snapBackCx - ghostBackCx
+            const ady = snapBackCy - ghostBackCy
+            const alen = Math.sqrt(adx * adx + ady * ady)
+            const arrowSize = 10 / view.zoom
+
+            return (
+              <>
+                {/* Snap landing outline */}
+                <polygon points={pts} fill="none" stroke={CAB_FILL_SEL[cls]}
+                  strokeWidth={1 / view.zoom} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
+                  opacity={0.5} style={{ pointerEvents: 'none' }} />
+
+                {/* Snap arrow: dashed line + arrowhead from ghost back → snap landing */}
+                {alen > arrowSize * 1.5 && (() => {
+                  const ux = adx / alen, uy = ady / alen
+                  const px = -uy, py = ux
+                  const tipX = snapBackCx, tipY = snapBackCy
+                  const baseX = tipX - ux * arrowSize, baseY = tipY - uy * arrowSize
+                  return (
+                    <>
+                      <line x1={ghostBackCx} y1={ghostBackCy} x2={baseX} y2={baseY}
+                        stroke="#60a5fa" strokeWidth={1.5 / view.zoom}
+                        strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`} strokeLinecap="round"
+                        style={{ pointerEvents: 'none' }} />
+                      <polygon
+                        points={`${tipX},${tipY} ${baseX + px * arrowSize * 0.45},${baseY + py * arrowSize * 0.45} ${baseX - px * arrowSize * 0.45},${baseY - py * arrowSize * 0.45}`}
+                        fill="#60a5fa" style={{ pointerEvents: 'none' }} />
+                    </>
+                  )
+                })()}
+
+                {/* Floating ghost centred on cursor */}
+                <polygon points={floatPts} fill={CAB_FILL[cls] + 'cc'} stroke={CAB_FILL_SEL[cls]}
+                  strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+                  style={{ pointerEvents: 'none' }} />
+                <text x={floatCenter.x} y={floatCenter.y} textAnchor="middle" dominantBaseline="middle"
+                  fontSize={cabLabelFs} fill="#e2e8f0" style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                  {dims.dx}
+                </text>
+              </>
+            )
+          }
+
           return (
             <>
               <polygon points={pts} fill={CAB_FILL[cls] + 'aa'} stroke={CAB_FILL_SEL[cls]}
@@ -1301,6 +1372,59 @@ export default function CanvasSVG({
             style={{ pointerEvents: 'none' }}
           />
         )}
+
+        {/* ── Measure tool overlay ── */}
+        {(() => {
+          const a = measureStart
+          const b = measureEnd ?? measureCursor
+          if (!a) return null
+          const ep = 4 / view.zoom
+          if (!b) {
+            return <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom} style={{ pointerEvents: 'none' }} />
+          }
+          const d  = Math.round(dist(a, b))
+          const dx = Math.round(Math.abs(b.x - a.x))
+          const dy = Math.round(Math.abs(b.y - a.y))
+          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+          const fs = 11 / view.zoom, pad = 5 / view.zoom
+          const boxW = fs * 6.5, boxH = fs * 2.6 + pad
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                stroke="#f59e0b" strokeWidth={1.5 / view.zoom}
+                strokeDasharray={measureEnd ? undefined : `${6 / view.zoom} ${3 / view.zoom}`} />
+              <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom} />
+              <circle cx={b.x} cy={b.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom} />
+              <rect x={mx - boxW / 2} y={my - boxH - pad} width={boxW} height={boxH} rx={2 / view.zoom}
+                fill="rgba(17,24,39,0.9)" stroke="#f59e0b" strokeWidth={0.75 / view.zoom} />
+              <text x={mx} y={my - boxH + fs * 0.5} textAnchor="middle" dominantBaseline="middle"
+                fontSize={fs} fontWeight="600" fill="#fcd34d" style={{ userSelect: 'none' }}>
+                {d}mm
+              </text>
+              <text x={mx} y={my - boxH + fs * 1.7} textAnchor="middle" dominantBaseline="middle"
+                fontSize={fs * 0.8} fill="#9ca3af" style={{ userSelect: 'none' }}>
+                Δ{dx} × {dy}
+              </text>
+            </g>
+          )
+        })()}
+
+        {/* ── Snap indicator glyph (active snap point) ── */}
+        {snapResult?.kind && (() => {
+          const { pt, kind } = snapResult
+          const s = 5 / view.zoom
+          const color = SNAP_KIND_META[kind].color
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <rect x={pt.x - s} y={pt.y - s} width={s * 2} height={s * 2}
+                fill="none" stroke={color} strokeWidth={1.5 / view.zoom} />
+              <line x1={pt.x - s * 1.7} y1={pt.y} x2={pt.x + s * 1.7} y2={pt.y}
+                stroke={color} strokeWidth={0.75 / view.zoom} />
+              <line x1={pt.x} y1={pt.y - s * 1.7} x2={pt.x} y2={pt.y + s * 1.7}
+                stroke={color} strokeWidth={0.75 / view.zoom} />
+            </g>
+          )
+        })()}
 
       </g>
 

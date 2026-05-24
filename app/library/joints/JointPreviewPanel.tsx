@@ -10,12 +10,47 @@ export interface JointOpForPreview extends JointOp3D {
   expressions?: Record<string, string>
   qty?:         number
   spacing_mm?:  number | null
+  qty2?:        number
+  spacing2_mm?: number | null
 }
 
 const Joint3DView = dynamic(() => import('./Joint3DView'), { ssr: false })
 
 // Scene constants (mm) — must match Joint3DView
 const PAD = 18   // padding around the scene
+
+// ── Preview examples ──────────────────────────────────────────────────────────
+// Preset geometries that stage the same joint in different real-world contexts.
+// Master is always the horizontal piece, Slave the vertical piece; only where the
+// horizontal piece meets the vertical one changes (controlled by slaveDy — how far
+// the Slave extends below the joint). Operations are unchanged; this only re-stages
+// the two panels so the holes can be read in a meaningful context.
+
+type ExampleKey = 'side_bottom' | 'shelf_side' | 'side_top'
+
+interface ExamplePreset {
+  label:   string
+  masterW: number
+  slaveL:  number
+  partD:   number
+  // How far the Slave extends below the joint reference (Y=0). t = current thickness.
+  slaveDy: (slaveL: number, t: number) => number
+}
+
+const EXAMPLES: { key: ExampleKey; preset: ExamplePreset }[] = [
+  { key: 'side_bottom', preset: {
+      label:   'Side meets bottom panel (corner)',
+      masterW: 250, slaveL: 350, partD: 300, slaveDy: (_l, t) => t } },
+  { key: 'shelf_side', preset: {
+      label:   'Shelf meets side — mid-span (shelf holes)',
+      masterW: 250, slaveL: 500, partD: 300, slaveDy: l => Math.round(l / 2) } },
+  { key: 'side_top', preset: {
+      label:   'Side meets top panel (corner)',
+      masterW: 250, slaveL: 350, partD: 300, slaveDy: l => l } },
+]
+
+const DEFAULT_EXAMPLE_KEY: ExampleKey = 'side_bottom'
+const DEFAULT_EXAMPLE = EXAMPLES.find(e => e.key === DEFAULT_EXAMPLE_KEY)!.preset
 
 // ── Face-aware SVG helpers ────────────────────────────────────────────────────
 
@@ -455,8 +490,11 @@ export default function JointPreviewPanel({ ops, defaultThickness = 18, selOpId 
   const [wire,     setWire]     = useState(true)
   const [view2D,   setView2D]   = useState<'face' | 'side' | 'top'>('face')
 
+  // Which staging example is shown in the previewer
+  const [example,  setExample]  = useState<ExampleKey>(DEFAULT_EXAMPLE_KEY)
+
   // Master (Part A) dimensions + joint offset
-  const [masterW,  setMasterW]  = useState(120)
+  const [masterW,  setMasterW]  = useState(DEFAULT_EXAMPLE.masterW)
   const [masterL,  setMasterL]  = useState(250)
   const [masterDx, setMasterDx] = useState(0)
   const [masterDy, setMasterDy] = useState(0)
@@ -464,13 +502,13 @@ export default function JointPreviewPanel({ ops, defaultThickness = 18, selOpId 
 
   // Slave (Part B) dimensions + joint offset
   const [slaveW,   setSlaveW]   = useState(120)
-  const [slaveL,   setSlaveL]   = useState(250)
+  const [slaveL,   setSlaveL]   = useState(DEFAULT_EXAMPLE.slaveL)
   const [slaveDx,  setSlaveDx]  = useState(0)
-  const [slaveDy,  setSlaveDy]  = useState(defaultThickness)   // Part B passes through Part A by t
+  const [slaveDy,  setSlaveDy]  = useState(DEFAULT_EXAMPLE.slaveDy(DEFAULT_EXAMPLE.slaveL, defaultThickness))
   const [slaveDz,  setSlaveDz]  = useState(0)
 
   // Shared depth — both parts always have the same depth (= joint length)
-  const [partD,    setPartD]    = useState(250)
+  const [partD,    setPartD]    = useState(DEFAULT_EXAMPLE.partD)
 
   // Joint rotation (degrees, applied to the whole assembly in 3D)
   const [jointRx,  setJointRx]  = useState(0)
@@ -489,6 +527,18 @@ export default function JointPreviewPanel({ ops, defaultThickness = 18, selOpId 
     setPanelW(Math.max(280, Math.min(900, resizeRef.current.startW + diff)))
   }
   function onResizeUp() { resizeRef.current = null }
+
+  // Apply a staging example — re-stages the two panels (and resets the offset that
+  // moves the joint along the Slave). The operations themselves are untouched.
+  function applyExample(key: ExampleKey) {
+    const p = EXAMPLES.find(e => e.key === key)?.preset
+    if (!p) return
+    setExample(key)
+    setMasterW(p.masterW)
+    setSlaveL(p.slaveL)
+    setPartD(p.partD)
+    setSlaveDy(p.slaveDy(p.slaveL, thick))
+  }
 
   // Evaluate expressions + expand spacing repetitions (Z axis)
   const evaledOps: JointOp3D[] = ops.flatMap(op => {
@@ -510,6 +560,7 @@ export default function JointPreviewPanel({ ops, defaultThickness = 18, selOpId 
       offset_z_mm:       ev('offset_z_mm', op.offset_z_mm),
     }
 
+    // 1st axis (qty / spacing) — anchored, distributed along V (offset_z, front→back).
     const spacing = exprs?.spacing_mm != null
       ? (evalExpr(exprs.spacing_mm, vars) ?? op.spacing_mm)
       : op.spacing_mm
@@ -517,12 +568,37 @@ export default function JointPreviewPanel({ ops, defaultThickness = 18, selOpId 
       exprs?.qty != null ? (evalExpr(exprs.qty, vars) ?? op.qty ?? 1) : (op.qty ?? 1)
     ))
 
-    if (spacing != null && spacing > 0 && qty > 1) {
-      return Array.from({ length: qty }, (_, i) => ({
-        ...base, offset_z_mm: base.offset_z_mm + i * spacing,
-      }))
+    // 2nd axis (qty2 / spacing2) — centred on the joint line, distributed along the
+    // face-local U axis (offset_x for top/bottom faces, offset_y otherwise). This is
+    // the vertical adjustable-shelf cluster when drilling a gable's normal face.
+    const spacing2 = exprs?.spacing2_mm != null
+      ? (evalExpr(exprs.spacing2_mm, vars) ?? op.spacing2_mm)
+      : op.spacing2_mm
+    const qty2 = Math.max(1, Math.round(
+      exprs?.qty2 != null ? (evalExpr(exprs.qty2, vars) ?? op.qty2 ?? 1) : (op.qty2 ?? 1)
+    ))
+
+    const vSteps = (spacing != null && spacing > 0 && qty > 1)
+      ? Array.from({ length: qty }, (_, i) => i * spacing)                       // anchored
+      : [0]
+    const uSteps = (spacing2 != null && spacing2 > 0 && qty2 > 1)
+      ? Array.from({ length: qty2 }, (_, j) => (j - (qty2 - 1) / 2) * spacing2)  // centred
+      : [0]
+
+    const isYDrillFace = base.face === 'top' || base.face === 'bottom'
+    const grid: JointOp3D[] = []
+    for (const dv of vSteps) {
+      for (const du of uSteps) {
+        grid.push({
+          ...base,
+          offset_z_mm: base.offset_z_mm + dv,
+          ...(isYDrillFace
+            ? { offset_x_mm: base.offset_x_mm + du }
+            : { offset_y_mm: base.offset_y_mm + du }),
+        })
+      }
     }
-    return [base]
+    return grid
   })
 
   return (
@@ -601,6 +677,20 @@ export default function JointPreviewPanel({ ops, defaultThickness = 18, selOpId 
 
       {/* Controls bar */}
       <div className="flex-none border-b border-gray-800 px-4 py-1.5 flex items-center gap-3">
+        {/* Example selector */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[10px] text-gray-500 shrink-0">Example</span>
+          <select
+            value={example}
+            onChange={e => applyExample(e.target.value as ExampleKey)}
+            className="min-w-0 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[11px] text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+          >
+            {EXAMPLES.map(e => <option key={e.key} value={e.key}>{e.preset.label}</option>)}
+          </select>
+        </div>
+
+        <div className="flex-1" />
+
         <div className="flex gap-0">
           <button
             onClick={() => setWire(true)}

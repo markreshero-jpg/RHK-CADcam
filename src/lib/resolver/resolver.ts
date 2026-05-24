@@ -66,12 +66,6 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
       message: `Cabinet width ${cab.DX}mm exceeds 1200mm — consider a partition`,
     })
   }
-  if (cab.adj_shelves.length > 0 && cab.fixed_shelves.length > 0) {
-    allWarnings.push({
-      code: 'MIXED_SHELF_TYPES',
-      message: 'Cabinet has both adjustable and fixed shelves — verify this is intentional',
-    })
-  }
 
   return {
     cabinet_id:     cab.id,

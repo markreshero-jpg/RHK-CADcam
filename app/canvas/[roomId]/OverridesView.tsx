@@ -1,6 +1,10 @@
 'use client'
 
 import { useState, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { supabase } from '@/src/lib/supabase'
+import type { CabinetInstance } from '@/src/lib/types'
+import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import { computeElevSeams } from '@/src/lib/cabinetSeams'
 import type { CabinetCustomPart, PartPosOverrides } from './canvasDB'
 import { dbSavePartPosOverride, dbDeletePartPosOverride, dbClearPartPosOverrides, dbUpdateCustomPart } from './canvasDB'
 
@@ -221,6 +225,62 @@ function CustomPosRow({ part, setCustomParts }: {
   )
 }
 
+// ── Joint override rows ───────────────────────────────────────────────────────
+// Per-cabinet carcase_joints entries — an explicit deviation from the construction
+// method default: a joint-type override (green) or suppressed drilling (red).
+// Removing a row reverts that seam to the method default.
+
+function JointOverridesSection({ cabinet, rp, onUpdate }: {
+  cabinet:  CabinetInstance
+  rp:       ResolvedCabinet | undefined
+  onUpdate: (id: string, u: Partial<CabinetInstance>) => void | Promise<void>
+}) {
+  const [jointNames, setJointNames] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('joint_types').select('id, name').then(({ data }) => {
+      if (!cancelled) setJointNames(Object.fromEntries((data ?? []).map(j => [j.id, j.name])))
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  const carcaseJoints = (cabinet.carcase_joints ?? {}) as Record<string, string | null>
+  const entries = Object.entries(carcaseJoints)
+  if (entries.length === 0) return null
+
+  const labelByKey: Record<string, string> = {}
+  if (rp) for (const s of computeElevSeams(rp)) labelByKey[s.key] = s.label
+
+  function removeKey(key: string) {
+    const { [key]: _removed, ...next } = carcaseJoints
+    void onUpdate(cabinet.id, { carcase_joints: next })
+  }
+
+  return (
+    <>
+      <SectionHead color="#22c55e" title="Joint Overrides" count={entries.length} />
+      {entries.map(([key, val]) => (
+        <tr key={key} className="border-t border-gray-800/60 hover:bg-gray-800/20 group">
+          <td className="px-3 py-2 text-xs text-gray-300 font-medium align-top pt-2.5">
+            {labelByKey[key] ?? key.replace(/[:_]/g, ' ')}
+          </td>
+          <td className="px-2 py-2 text-xs align-top pt-2.5" colSpan={3}>
+            {val === null
+              ? <span className="text-red-400">Suppressed — no drilling</span>
+              : <span className="text-green-400">{jointNames[val] ?? 'Assigned'}</span>}
+          </td>
+          <td className="px-2 py-2 text-right align-top pt-2.5">
+            <button onClick={() => removeKey(key)}
+              className="text-gray-600 hover:text-red-400 text-sm leading-none transition-colors opacity-0 group-hover:opacity-100"
+              title="Revert to method default">✕</button>
+          </td>
+        </tr>
+      ))}
+    </>
+  )
+}
+
 // ── Section header ────────────────────────────────────────────────────────────
 
 function SectionHead({ color, title, count }: { color: string; title: string; count: number }) {
@@ -239,20 +299,26 @@ function SectionHead({ color, title, count }: { color: string; title: string; co
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-export default function OverridesView({ cabinetId, partOverrides, onOverridesChange, customParts, setCustomParts }: {
+export default function OverridesView({ cabinetId, partOverrides, onOverridesChange, customParts, setCustomParts, cabinet, rp, onUpdate }: {
   cabinetId: string
   partOverrides: PartPosOverrides
   onOverridesChange: (o: PartPosOverrides) => void
   customParts: CabinetCustomPart[]
   setCustomParts: Dispatch<SetStateAction<CabinetCustomPart[]>>
+  cabinet?: CabinetInstance
+  rp?: ResolvedCabinet
+  onUpdate?: (id: string, u: Partial<CabinetInstance>) => void | Promise<void>
 }) {
   const overrideEntries = Object.entries(partOverrides)
   const hasOverrides    = overrideEntries.length > 0
   const hasCustom       = customParts.length > 0
+  const jointCount      = Object.keys(cabinet?.carcase_joints ?? {}).length
+  const hasJoints       = jointCount > 0
 
   function clearAll() {
     onOverridesChange({})
     dbClearPartPosOverrides(cabinetId).catch(console.error)
+    if (hasJoints && cabinet && onUpdate) void onUpdate(cabinet.id, { carcase_joints: {} })
   }
 
   return (
@@ -260,9 +326,10 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
       <div className="flex items-center justify-between mb-3">
         <span className="text-[10px] text-gray-500">
           {overrideEntries.length} position override{overrideEntries.length !== 1 ? 's' : ''}
+          {hasJoints ? ` · ${jointCount} joint override${jointCount !== 1 ? 's' : ''}` : ''}
           {hasCustom ? ` · ${customParts.length} custom part${customParts.length !== 1 ? 's' : ''}` : ''}
         </span>
-        {hasOverrides && (
+        {(hasOverrides || hasJoints) && (
           <button onClick={clearAll}
             className="text-xs text-red-500 hover:text-red-300 transition-colors">
             Clear all overrides
@@ -270,9 +337,9 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
         )}
       </div>
 
-      {!hasOverrides && !hasCustom ? (
+      {!hasOverrides && !hasCustom && !hasJoints ? (
         <p className="text-xs text-gray-600 text-center pt-12">
-          No overrides yet. Select a part in Top / Elevation / Side and use the Offset panel.
+          No overrides yet. Select a part to offset its position or set its edge joints.
         </p>
       ) : (
         <table className="w-full border-collapse text-left">
@@ -298,6 +365,9 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
                   />
                 ))}
               </>
+            )}
+            {hasJoints && cabinet && onUpdate && (
+              <JointOverridesSection cabinet={cabinet} rp={rp} onUpdate={onUpdate} />
             )}
             {hasCustom && (
               <>

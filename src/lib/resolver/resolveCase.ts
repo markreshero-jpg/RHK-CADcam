@@ -34,7 +34,7 @@ export function resolveCaseParts(
   const DX = cab.DX   // cabinet width
   const DY = cab.DY   // cabinet height
   const DZ = cab.DZ   // cabinet depth
-  const TK = cab.assembly_class === 'wall' ? 0 : r.TOEH   // toe kick height (wall cabinets have no kick)
+  const TK = cab.has_toekick ? r.TOEH : 0
 
   if (DX <= 2 * sideT) {
     errors.push({ code: 'CASE_TOO_NARROW', message: `Cabinet DX (${DX}mm) is too narrow for side material thickness (${sideT}mm)`, part: 'case' })
@@ -82,8 +82,11 @@ export function resolveCaseParts(
   const railW  = railJoin === 'on_top_of_sides' ? DX : DX - 2 * sideT - r.SCRL - r.SCRR
 
   // Top / back relationship: where full_top and back_rail start in Z.
-  // SCRBK only moves the back panel's Z — it does NOT reduce the top panel depth.
-  const topZstart = topBackJoin === 'sits_over_back' ? 0 : backT
+  // SCRBK (scribe back) holds the top/rail forward off the rear edge so the sides
+  // can be scribed to the wall without cutting into the top. The back panel sits at
+  // Z = SCRBK; the top's rear edge aligns with the back's rear face (sits_over_back)
+  // or its front face (otherwise), so SCRBK reduces the top depth in both cases.
+  const topZstart = r.SCRBK + (topBackJoin === 'sits_over_back' ? 0 : backT)
   const topDepth  = DZ - topZstart
 
   // SCRT: extra material on side panels above the top rail for scribing to a soffit/ceiling.

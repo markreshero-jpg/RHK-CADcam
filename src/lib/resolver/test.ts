@@ -47,11 +47,13 @@ function make2DoorBase(overrides: Partial<CabinetInput> = {}): CabinetInput {
         { row_index: 0, col_index: 1, face_type: 'door', hinge_side: 'right' },
       ]
     },
-    adj_shelves: [
-      { sort_order: 0, y_locked: false },
-      { sort_order: 1, y_locked: false },
-    ],
-    fixed_shelves: [],
+    internal_tree: {
+      type: 'open',
+      adj_shelves: [
+        { sort_order: 0, y_locked: false },
+        { sort_order: 1, y_locked: false },
+      ],
+    },
     inner_drawers: [],
     ...overrides,
   }
@@ -223,11 +225,12 @@ test('two adj shelves equalised correctly', () => {
   expect(shelves).toHaveLength(2)
 
   // Internal height = 900 - 150 - 2*18 = 714mm
-  // N=2 shelves: opening = 714/3 = 238mm
-  // Shelf 0 Y = 150 + 18 + 238*1 - 1*18/2 = 168 + 238 - 9 = 397
-  const intH = 900 - 150 - 2 * 18  // 714
-  const openH = intH / 3
-  const shY0 = 150 + 18 + openH * 1 - 1 * 18 / 2
+  // Equal openings account for shelf thickness: openH = (714 - 2*18)/3 = 226mm
+  // Shelf 0 bottom Y = intBottom + openH = (150+18) + 226 = 394
+  const intH  = 900 - 150 - 2 * 18   // 714
+  const TS    = 18
+  const openH = (intH - 2 * TS) / 3  // 226
+  const shY0  = 150 + 18 + openH * 1  // i=0 → intBottom + 1*openH
   expect(shelves[0].Y).toBeCloseTo(shY0)
 })
 
@@ -249,8 +252,10 @@ test('adj shelf DY = internal width less clearances', () => {
 
 test('fixed shelf at mid height', () => {
   const result = resolveCabinet(make2DoorBase({
-    adj_shelves: [],
-    fixed_shelves: [{ sort_order: 0, y_locked: false }],
+    internal_tree: { type: 'hsplit', children: [
+      { section: { type: 'open', adj_shelves: [] } },
+      { section: { type: 'open', adj_shelves: [] } },
+    ] },
   }))
   const fs = result.internal_parts.find(p => p.part_type === 'fixed_shelf')!
   // intH = 714mm, mid = 150 + 18 + 714/2 - 18/2 = 168 + 357 - 9 = 516
@@ -261,8 +266,10 @@ test('fixed shelf at mid height', () => {
 
 test('fixed shelf full internal width (no pin clearance)', () => {
   const result = resolveCabinet(make2DoorBase({
-    adj_shelves: [],
-    fixed_shelves: [{ sort_order: 0, y_locked: false }],
+    internal_tree: { type: 'hsplit', children: [
+      { section: { type: 'open', adj_shelves: [] } },
+      { section: { type: 'open', adj_shelves: [] } },
+    ] },
   }))
   const fs = result.internal_parts.find(p => p.part_type === 'fixed_shelf')!
   // intW = 564mm (no ADJSL/ADJSR deduction for fixed shelf)

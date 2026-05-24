@@ -3,11 +3,8 @@
 import { useState, useRef } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { BenchtopInstance, BenchtopArcSegment, Room, Wall, CabinetInstance } from '@/src/lib/types'
-import {
-  type Pt,
-  dist, wallEnd, wallDir, SNAP_PX, centroid,
-  wallInwardNormal, cabWallPerp, ptToSeg, snapAngle,
-} from '@/src/lib/geometry'
+import { type Pt, dist, SNAP_PX } from '@/src/lib/geometry'
+import { computeSnap, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
 import type { Mode, Selected, ContextMenuState, BtMoveDrag, BtRotateDrag } from './canvasTypes'
 
 type Snapshot = { walls: Wall[]; cabinets: CabinetInstance[]; benchtops: BenchtopInstance[] }
@@ -33,6 +30,8 @@ interface Params {
   setMode: React.Dispatch<React.SetStateAction<Mode>>
   captureSnapshot: () => void
   pushSnapshot: (s: Snapshot) => void
+  snapSettings: SnapSettings
+  setSnapResult: (r: SnapResult | null) => void
 }
 
 // ── Polygon offset (inward/outward by amount mm) ──────────────────────────────
@@ -129,6 +128,7 @@ export function useBenchtopInteraction(p: Params) {
     selected,
     setSelected, setContextMenu, setMode,
     captureSnapshot, pushSnapshot,
+    snapSettings, setSnapResult,
   } = p
 
   // ── Draw state ────────────────────────────────────────────────────────────
@@ -168,35 +168,16 @@ export function useBenchtopInteraction(p: Params) {
   // ── Shared snap helper ────────────────────────────────────────────────────
 
   function snapWorld(wp: Pt, prevPt?: Pt | null): Pt {
-    const snapDist = SNAP_PX / zoom
-    let best: Pt = wp, bestDist = snapDist
-    for (const w of walls) {
-      for (const ep of [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)]) {
-        const d = dist(ep, wp); if (d < bestDist) { bestDist = d; best = ep }
-      }
-    }
-    for (const b of benchtops) {
-      for (const v of b.polygon) {
-        const d = dist(v, wp); if (d < bestDist) { bestDist = d; best = v }
-      }
-    }
-    const cx2 = centroid(walls)
-    for (const cab of cabinets) {
-      const cls = cab.assembly_class
-      if (cls !== 'base' && cls !== 'tall' && cls !== 'base_corner' && cls !== 'tall_corner') continue
-      const cwall = walls.find(w => w.id === cab.wall_id); if (!cwall) continue
-      const wd = wallDir(cwall)
-      const perp = cabWallPerp(cab, cwall, wallInwardNormal(cwall, cx2.x, cx2.y))
-      const fl = { x: cab.pos_x + cab.dz * perp.x, y: cab.pos_y + cab.dz * perp.y }
-      const fr = { x: fl.x + cab.dx * wd.x, y: fl.y + cab.dx * wd.y }
-      for (const ep of [fl, fr]) { const d = dist(ep, wp); if (d < bestDist) { bestDist = d; best = ep } }
-      const seg = ptToSeg(wp, fl, fr); if (seg.dist < bestDist) { bestDist = seg.dist; best = seg.proj }
-    }
-    if (prevPt) {
-      if (ctrlRef.current) best = snapAngle(prevPt, best, 90)
-      else if (shiftRef.current) best = snapAngle(prevPt, best, 45)
-    }
-    return best
+    const res = computeSnap(
+      wp,
+      { walls, cabinets, benchtops },
+      snapSettings,
+      SNAP_PX / zoom,
+      prevPt,
+      { ortho: ctrlRef.current, ortho45: shiftRef.current },
+    )
+    setSnapResult(res.kind ? res : null)
+    return res.pt
   }
 
   // ── CRUD ──────────────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ import {
   Pt, MIN_ZOOM, MAX_ZOOM, MIN_WALL_LEN, SNAP_PX, WALL_SNAP_PX,
   toDeg, dist,
   wallEnd, wallDir,
-  snapEndpoint, snapAngle, ptToSeg,
+  snapAngle,
   nearestWall, findFreeSlot, cabBlocks, cabT, nextLabel,
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCenterPt,
 } from '@/src/lib/geometry'
@@ -47,7 +47,9 @@ import ObjectTreeModal from './ObjectTreeModal'
 import ReportsModal, { type ReportScope } from './ReportsModal'
 import Room3DScene from './Room3DScene'
 import BenchtopPanel from './BenchtopPanel'
-import { getUserPrefs } from '@/src/lib/userPrefs'
+import SnapToolbar from './SnapToolbar'
+import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
+import { computeSnap, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
 
 export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops }: {
   project: Project | null
@@ -100,7 +102,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
   const [sectionCut, setSectionCut] = useState<SectionCut | null>(null)
   const [sectionDrag, setSectionDrag] = useState<{ offsetX: number; offsetY: number } | null>(null)
+  // Snapping (shared by wall/benchtop/measure tools). Persisted to localStorage.
+  const [snapSettings, setSnapSettingsState] = useState<SnapSettings>(() => getUserPrefs().snapSettings)
+  const [snapResult, setSnapResult] = useState<SnapResult | null>(null)
+  // Measure tool: click two snapped points to read off a distance.
+  const [measureStart, setMeasureStart] = useState<Pt | null>(null)
+  const [measureEnd, setMeasureEnd] = useState<Pt | null>(null)
+  const [measureCursor, setMeasureCursor] = useState<Pt | null>(null)
   const ctrlRef = useRef(false)
+
+  const updateSnapSettings = useCallback((next: SnapSettings) => {
+    setSnapSettingsState(next)
+    setUserPrefs({ snapSettings: next })
+  }, [])
 
   const { captureSnapshot, pushSnapshot, handleUndo, handleRedo, wallsRef, cabinetsRef, benchtopsRef, canUndo, canRedo } =
     useCanvasHistory(walls, cabinets, benchtops, setWalls, setCabinets, setBenchtops, setSelected)
@@ -136,6 +150,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     selected,
     setSelected, setContextMenu, setMode,
     captureSnapshot, pushSnapshot,
+    snapSettings, setSnapResult,
   })
 
   // ── Coordinate helpers ────────────────────────────────────────────────────
@@ -198,6 +213,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }, [])
 
   useEffect(() => { setElevWallSide('face') }, [elevWallId])
+
+  // Drop any in-progress measurement (and snap glyph) whenever the measure tool
+  // is exited — via Esc, view switch, or picking another tool.
+  useEffect(() => {
+    if (mode !== 'measure') {
+      setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null)
+      setSnapResult(null)
+    }
+  }, [mode])
 
   useEffect(() => {
     const isInput = (t: EventTarget | null) => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement
@@ -438,10 +462,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       e.preventDefault()
       return
     }
+    if (mode === 'measure') { e.preventDefault(); return }
     if (mode === 'draw_wall' || mode === 'draw_island') {
       e.preventDefault()
       if (!drawStart) {
-        const snapped = snapEndpoint(wp, walls, SNAP_PX / view.zoom)
+        const snapped = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom).pt
         setDrawStart(snapped); setDrawCursor(snapped)
         drawStartedThisDownRef.current = true
       }
@@ -467,6 +492,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const svgP = svgCoords(e)
     const wp = toWorld(svgP.x, svgP.y)
     setMouseWorld(wp)
+    // Snap glyph is recomputed by the snapping branches below; default to none.
+    // (No-op re-render when already null, so this is cheap on every move.)
+    setSnapResult(null)
 
     if (panRef.current) {
       dispatchView({ type: 'pan', dx: e.clientX - panRef.current.startX - (view.panX - panRef.current.panX), dy: e.clientY - panRef.current.startY - (view.panY - panRef.current.panY) })
@@ -485,13 +513,21 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
     if (bt.handlePointerMove(wp, e)) return
 
+    if (mode === 'measure') {
+      const snap = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom,
+        measureStart, { ortho: ctrlRef.current, ortho45: shiftRef.current })
+      setSnapResult(snap.kind ? snap : null)
+      setMeasureCursor(snap.pt)
+      return
+    }
+
     if (mode === 'draw_wall' || mode === 'draw_island') {
-      const cornerSnap = snapEndpoint(wp, walls, SNAP_PX / view.zoom)
-      const hitCorner = dist(cornerSnap, wp) > 0.5
-      let end = cornerSnap
-      if (drawStart && !hitCorner) {
+      const snap = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom)
+      let end = snap.pt
+      if (drawStart && snap.kind == null) {
         end = snapAngle(drawStart, end, shiftRef.current ? 5 : 22.5)
       }
+      setSnapResult(snap.kind ? snap : null)
       setDrawCursor(end)
       return
     }
@@ -529,7 +565,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const clsInfo = modeAssemblyClass(mode)
     if (clsInfo) {
       const dims = DEFAULT_DIMS[clsInfo.cls] ?? DEFAULT_DIMS.base
-      const raw = nearestWall(wp, walls, dims.dx, WALL_SNAP_PX / view.zoom)
+      // No distance limit — the ghost floats at the cursor and always snaps to the nearest
+      // wall, matching the elevation-view placement feel (carry-in-hand + snap landing).
+      const raw = nearestWall(wp, walls, dims.dx, Infinity)
       if (!raw) { setPlaceGhost(null); return }
       const wd = wallDir(raw.wall)
       const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
@@ -537,7 +575,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const side = flip ? 'back' : 'face'
       const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabBlocks(clsInfo.cls, c.assembly_class) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
       const t = findFreeSlot(desired, dims.dx, raw.wall.length, occupied)
-      setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: flip })
+      setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: flip, freePos: wp })
       return
     }
 
@@ -632,15 +670,26 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
     if (await bt.handlePointerUp(wp, e)) return
 
+    if (mode === 'measure') {
+      const snap = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom,
+        measureStart, { ortho: ctrlRef.current, ortho45: shiftRef.current })
+      if (!measureStart || measureEnd) {
+        // Begin a fresh measurement (first click, or click after one is complete).
+        setMeasureStart(snap.pt); setMeasureEnd(null); setMeasureCursor(snap.pt)
+      } else {
+        setMeasureEnd(snap.pt)
+      }
+      return
+    }
+
     if (mode === 'draw_wall' || mode === 'draw_island') {
       if (drawStartedThisDownRef.current) { drawStartedThisDownRef.current = false; return }
       const isIsland = mode === 'draw_island'
       if (drawStart && !placingRef.current) {
         placingRef.current = true
-        const cornerSnap = snapEndpoint(wp, walls, SNAP_PX / view.zoom)
-        const hitCorner = dist(cornerSnap, wp) > 0.5
-        let end = cornerSnap
-        if (!hitCorner) {
+        const snap = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom)
+        let end = snap.pt
+        if (snap.kind == null) {
           end = snapAngle(drawStart, end, shiftRef.current ? 5 : 22.5)
         }
         const adjStart = drawStart
@@ -942,7 +991,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const cursor = spaceRef.current ? 'grab'
     : bt.isDragging ? 'grabbing'
     : sectionDrag ? 'grabbing'
-    : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_section' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l') ? 'crosshair'
+    : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_section' || mode === 'measure' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l') ? 'crosshair'
     : (modeAssemblyClass(mode) || mode === 'paste') ? 'cell'
     : cabResize ? 'crosshair'
     : 'default'
@@ -987,6 +1036,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         : bt.btDrawPoly.length === 0 ? 'Click first vertex · Shift=45° · Ctrl=ortho · A=arc · Esc=cancel'
         : bt.btDrawPoly.length < 3 ? `${bt.btDrawPoly.length} ${bt.btDrawPoly.length === 1 ? 'vertex' : 'vertices'} · Backspace=undo · Shift=45° · Ctrl=ortho · A=arc`
         : `${bt.btDrawPoly.length} vertices · click near first vertex to close · Backspace=undo · A=arc`)
+    : mode === 'measure'         ? (!measureStart || measureEnd ? 'Measure: click first point · snaps to corners · Ctrl=ortho · Esc=exit' : 'Click second point · Ctrl=ortho · Shift=45° · right-click=clear')
     : mode === 'draw_section'     ? (!drawStart ? 'Click to set start of section cut · Esc=cancel' : 'Click to finish · Shift=45° snap · Esc=cancel')
     : mode === 'draw_wall'       ? (!drawStart ? 'Click to set start point · snap rings show existing endpoints' : 'Click to finish · Shift = 5° snap · or type in panel →')
     : mode === 'draw_island'     ? (!drawStart ? 'Click to set island start · Shift = 5° snap · Right-click = cancel' : 'Click to finish island · cabinets snap to either side')
@@ -1048,6 +1098,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         <div className="ml-auto flex items-center gap-2">
           {canvasView === 'plan' && (
             <button
+              onClick={() => onSelectMode('measure')}
+              className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                mode === 'measure'
+                  ? 'bg-amber-500 text-white'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700'
+              }`}
+            >
+              📏 Measure
+            </button>
+          )}
+          {canvasView === 'plan' && (
+            <button
               onClick={() => onSelectMode('draw_section')}
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
                 mode === 'draw_section'
@@ -1102,6 +1164,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
         {canvasView === 'plan' && (
           <>
+            <div className="relative flex-1 flex min-w-0">
             <CanvasSVG
               svgRef={svgRef}
               walls={walls}
@@ -1167,7 +1230,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               onSectionFlipLook={() => setSectionCut(c => c ? { ...c, lookDir: (-c.lookDir) as 1 | -1 } : null)}
               onSectionClear={() => setSectionCut(null)}
               onSectionLinePointerDown={onSectionLinePointerDown}
+              snapResult={snapResult}
+              measureStart={measureStart}
+              measureEnd={measureEnd}
+              measureCursor={measureCursor}
+              onMeasureCancel={() => { setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }}
             />
+              <SnapToolbar settings={snapSettings} onChange={updateSnapSettings} />
+            </div>
             {(mode === 'draw_wall' || mode === 'draw_island') && !drawStart && (
               <WallDrawPanel
                 mode={mode as 'draw_wall' | 'draw_island'}

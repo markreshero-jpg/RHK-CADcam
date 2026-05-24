@@ -13,7 +13,7 @@ export type CanvasView = 'plan' | 'elevation' | 'section' | '3d'
 export type SectionCut = { x1: number; y1: number; x2: number; y2: number; lookDir: 1 | -1 }
 
 export type Mode =
-  | 'select' | 'draw_wall' | 'draw_island' | 'draw_section'
+  | 'select' | 'draw_wall' | 'draw_island' | 'draw_section' | 'measure'
   | 'draw_benchtop' | 'draw_benchtop_rect' | 'draw_benchtop_l' | 'draw_benchtop_u'
   | 'draw_benchtop_cutout_rect' | 'draw_benchtop_cutout_circle'
   | 'place_base' | 'place_wall_unit' | 'place_tall' | 'place_end_panel'
@@ -24,7 +24,10 @@ export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: str
 
 export type ContextMenuState = { x: number; y: number; cabId?: string; wallId?: string; elevWallId?: string; elevWallT?: number; benchtopId?: string; vertexContext?: { btId: string; vi: number } }
 
-export type PlaceGhost = { wall: Wall; pos_x: number; pos_y: number; islandFlip?: boolean }
+// pos_x/pos_y = snapped back-left landing on the wall.
+// freePos = raw cursor world position so the ghost can float at the cursor (matches
+// elevation placement); absent = flat-snapped to wall (paste / copy-drag).
+export type PlaceGhost = { wall: Wall; pos_x: number; pos_y: number; islandFlip?: boolean; freePos?: { x: number; y: number } }
 
 export type CabDrag = { id: string; pos_x: number; pos_y: number }
 

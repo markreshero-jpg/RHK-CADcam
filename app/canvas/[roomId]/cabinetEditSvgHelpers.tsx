@@ -4,6 +4,7 @@ import React from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
+import type { SeamDrill, DrillAxis } from '@/src/lib/jointDrilling'
 import type {
   ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart,
   ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack,
@@ -42,6 +43,7 @@ const TK_LABELS: Record<string, string> = {
 const INT_LABELS: Record<string, string> = {
   adj_shelf: 'Adjustable Shelf', fixed_shelf: 'Fixed Shelf',
   inner_drawer_bottom: 'Inner Drawer Bottom', inner_drawer_back: 'Inner Drawer Back',
+  divider: 'Divider',
 }
 const FACE_LABELS_MAP: Record<string, string> = {
   door: 'Door', drawer_face: 'Drawer Face', false_panel: 'False Panel',
@@ -104,6 +106,11 @@ export function tkElevRect(p: ResolvedToekickPart) {
 }
 export function zoneElevRect(z: ResolvedFaceZone)     { return { ex: z.X, ey: z.Y + z.DX, ew: z.DY, eh: z.DX } }
 export function shelfElevRect(p: ResolvedInternalPart) { return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ } }
+export function intElevRect(p: ResolvedInternalPart) {
+  return p.part_type === 'divider'
+    ? { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+    : { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
+}
 
 // Top (X-Z plane, looking down)
 export function topRect(p: ResolvedCasePart) {
@@ -116,6 +123,11 @@ export function tkTopRect(p: ResolvedToekickPart) {
   return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DZ }
 }
 export function shelfTopRect(p: ResolvedInternalPart) { return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX } }
+export function intTopRect(p: ResolvedInternalPart) {
+  return p.part_type === 'divider'
+    ? { tx: p.X, tz: p.Z, tw: p.DZ, td: p.DX }
+    : { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX }
+}
 export function zoneTopRect(z: ResolvedFaceZone)      { return { tx: z.X, tz: z.Z, tw: z.DY, td: z.DZ } }
 
 // Side (Z-Y plane, looking left from right)
@@ -129,6 +141,11 @@ export function tkSideRect(p: ResolvedToekickPart) {
   return { sz: p.Z, cy_top: p.Y + p.DX, sw: p.DZ, sh: p.DX }
 }
 export function shelfSideRect(p: ResolvedInternalPart) { return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ } }
+export function intSideRect(p: ResolvedInternalPart) {
+  return p.part_type === 'divider'
+    ? { sz: p.Z, cy_top: p.Y + p.DY, sw: p.DX, sh: p.DY }
+    : { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
+}
 export function zoneSideRect(z: ResolvedFaceZone)      { return { sz: z.Z, cy_top: z.Y + z.DX, sw: z.DZ, sh: z.DX } }
 
 // Drawer box & slide rects
@@ -190,11 +207,15 @@ export function svgTkMeta(p: ResolvedToekickPart): PartMeta {
   }
 }
 export function svgIntMeta(p: ResolvedInternalPart): PartMeta {
+  const isDivider = p.part_type === 'divider'
   return {
     id: `int_${p.part_type}_${p.sort_order}`,
     label: `${INT_LABELS[p.part_type] ?? p.part_type} ${p.sort_order + 1}`,
-    w: p.DY, h: p.DZ, d: p.DX,
-    thickness: p.DZ, edge: p.edge_band, panelKind: 'horizontal',
+    w: isDivider ? p.DZ : p.DY,
+    h: isDivider ? p.DY : p.DZ,
+    d: p.DX,
+    thickness: p.DZ, edge: p.edge_band,
+    panelKind: isDivider ? 'side' : 'horizontal',
     detail: p.y_locked ? 'Position locked' : undefined,
     x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
   }
@@ -280,4 +301,52 @@ export function partIdColor(id: string): string {
   if (id.startsWith('db_'))    return RC.drawerBox.stroke
   if (id.startsWith('slide_')) return RC.slide.stroke
   return '#6b7280'
+}
+
+// ── Joint drilling overlay (2D ortho views) ─────────────────────────────────────
+// Projects the shared cabinet-space drill ops (jointDrilling.seamDrillOps) onto the
+// active view plane. A hole whose drill axis points at the viewer (perpendicular to
+// the plane) is shown as a circle = tool diameter — you're looking down the bore.
+// A hole whose axis lies in the plane is shown as a slot running from the entry
+// face into the panel by the drill depth = an edge bore seen side-on.
+// Colour follows the seam source: green = cabinet override, blue = method default.
+
+const DRILL_COL: Record<SeamDrill['source'], string> = { cabinet: '#22c55e', method: '#60a5fa' }
+
+export function DrillOverlay({ drills, project, perp, dirOf }: {
+  drills:  SeamDrill[]
+  project: (x: number, y: number, z: number) => { x: number; y: number }
+  perp:    'x' | 'y' | 'z'
+  dirOf:   (axis: DrillAxis) => { dx: number; dy: number }
+}) {
+  if (drills.length === 0) return null
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      {drills.map((d, i) => {
+        const { x: sx, y: sy } = project(d.x, d.y, d.z)
+        const col = DRILL_COL[d.source]
+        const r   = Math.max(d.radius, 0.75)
+
+        if (d.axis[0] === perp) {
+          // Looking down the bore → circle = tool diameter.
+          return (
+            <circle key={i} cx={sx} cy={sy} r={r}
+              fill={col} fillOpacity={0.4} stroke={col} strokeWidth={0.6} />
+          )
+        }
+
+        // In-plane axis → slot from the entry face into the panel by drill depth.
+        const dir = dirOf(d.axis)
+        const ex  = sx + dir.dx * d.depthLen
+        const ey  = sy + dir.dy * d.depthLen
+        return (
+          <g key={i}>
+            <line x1={sx} y1={sy} x2={ex} y2={ey}
+              stroke={col} strokeOpacity={0.35} strokeWidth={r * 2} strokeLinecap="butt" />
+            <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={col} strokeWidth={0.5} />
+          </g>
+        )
+      })}
+    </g>
+  )
 }

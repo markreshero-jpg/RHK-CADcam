@@ -19,6 +19,7 @@ import { saveSVGEdge } from './cabinetEditSvgHelpers'
 import { ResolvedElevation, ResolvedTop, ResolvedSide, TopView, ElevationView, SideView, PartPickerMenu, PartContextMenu, type PartContextAction } from './ResolvedViews'
 import PartsView from './PartsView'
 import JointsPanel from './JointsPanel'
+import PartEdgeJoints from './PartEdgeJoints'
 import OverridesView from './OverridesView'
 import CabinetTreePanel from './CabinetTreePanel'
 
@@ -185,6 +186,7 @@ export default function CabinetEditModal({
   const [activeView, setActiveView]       = useState<ViewId>(initialView ?? 'elevation')
   const [wireMode, setWireMode]           = useState(true)
   const [showInternals, setShowInternals] = useState(true)
+  const [showDrilling, setShowDrilling]   = useState(true)
   const [selectedSVGPart, setSelectedSVGPart] = useState<PartMeta | null>(null)
   const [picker, setPicker] = useState<{ parts: PartMeta[]; clientX: number; clientY: number } | null>(null)
   const [localRp, setLocalRp]             = useState<ResolvedCabinet | null>(null)
@@ -332,7 +334,7 @@ export default function CabinetEditModal({
             {VIEWS.map(v => {
               const disabled = (v.id === 'parts' || v.id === '3d' || v.id === 'tree') && !rp
               const overrideCount = v.id === 'overrides'
-                ? Object.keys(partOverrides).length + customParts.length
+                ? Object.keys(partOverrides).length + customParts.length + Object.keys(cabinet.carcase_joints ?? {}).length
                 : 0
               return (
                 <button
@@ -375,6 +377,19 @@ export default function CabinetEditModal({
                 >
                   Internals
                 </button>
+                {(isOrthoView || activeView === '3d') && (
+                  <button
+                    onClick={() => setShowDrilling(d => !d)}
+                    title="Toggle carcase joint drilling"
+                    className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                      showDrilling
+                        ? 'bg-amber-800/80 text-amber-300 hover:bg-amber-700/80'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'
+                    }`}
+                  >
+                    Drilling
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -392,7 +407,7 @@ export default function CabinetEditModal({
             onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null) } : undefined}
           >
             {activeView === 'top' && (
-              rp ? <ResolvedTop cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals}
+              rp ? <ResolvedTop cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 customParts={customParts} partOverrides={partOverrides}
@@ -400,7 +415,7 @@ export default function CabinetEditModal({
               : <TopView cab={cabinet} />
             )}
             {activeView === 'elevation' && (
-              rp ? <ResolvedElevation cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals}
+              rp ? <ResolvedElevation cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 customParts={customParts} partOverrides={partOverrides}
@@ -408,7 +423,7 @@ export default function CabinetEditModal({
               : <ElevationView cab={cabinet} />
             )}
             {activeView === 'side' && (
-              rp ? <ResolvedSide cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals}
+              rp ? <ResolvedSide cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 customParts={customParts} partOverrides={partOverrides}
@@ -417,7 +432,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={rp} showInternals={showInternals} onUpdate={onUpdate} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && rp && <Cabinet3DView cab={cabinet} rp={rp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} />}
+            {activeView === '3d'     && rp && <Cabinet3DView cab={cabinet} rp={rp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} />}
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}
@@ -448,6 +463,9 @@ export default function CabinetEditModal({
                 onOverridesChange={setPartOverrides}
                 customParts={customParts}
                 setCustomParts={setCustomParts}
+                cabinet={cabinet}
+                rp={rp}
+                onUpdate={onUpdate}
               />
             )}
             {selectedSVGPart && isOrthoView && (
@@ -455,6 +473,9 @@ export default function CabinetEditModal({
                 part={selectedSVGPart}
                 onClose={() => setSelectedSVGPart(null)}
                 onEdgeChange={handleSVGEdgeChange}
+                jointControls={rp && selectedSVGPart.id.startsWith('case_')
+                  ? <PartEdgeJoints cabinet={cabinet} rp={rp} partKey={selectedSVGPart.id.slice(5)} onUpdate={onUpdate} />
+                  : undefined}
               />
             )}
             {selectedSVGPart && isOrthoView && (

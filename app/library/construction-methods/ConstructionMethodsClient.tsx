@@ -914,10 +914,11 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
         cols:  [{ col_index: 0, width_locked: false }],
         zones: [{ row_index: 0, col_index: 0, face_type: 'open' }],
       },
-      adj_shelves:   [{ sort_order: 0, y_locked: false }, { sort_order: 1, y_locked: false }],
-      fixed_shelves: [],
+      internal_tree: {
+        type: 'open',
+        adj_shelves: [{ sort_order: 0, y_locked: false }, { sort_order: 1, y_locked: false }],
+      },
       inner_drawers: [],
-      dividers:      [],
     }
     return resolveCabinet(input)
   }, [classTab, dx, dy, dz, isWall, rules, mat, jointDeltas, jointTypes, jointTypeOps])
