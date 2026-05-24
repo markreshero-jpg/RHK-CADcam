@@ -446,6 +446,7 @@ function PropertiesPanel({
 
   // ── Part ─────────────────────────────────────────────────────────────────
   if (node.kind === 'part') {
+    const n = node
     const θ = node.wall.angle * Math.PI / 180
     const floorY = (node.cabClass === 'wall' || node.cabClass === 'wall_corner')
       ? (room.wall_cabinet_top ?? 2100) - node.cabDy : 0
@@ -459,14 +460,14 @@ function PropertiesPanel({
 
     function saveOv(ox: number, oy: number, oz: number, oax = ov?.oax ?? 0, oay = ov?.oay ?? 0, oaz = ov?.oaz ?? 0) {
       const entry = { ox, oy, oz, oax, oay, oaz }
-      setOverrideCache(prev => new Map(prev).set(node.cabinetId, { ...ovs, [node.partId]: entry }))
-      dbSavePartPosOverride(node.cabinetId, node.partId, entry, ovs).catch(console.error)
+      setOverrideCache(prev => new Map(prev).set(n.cabinetId, { ...ovs, [n.partId]: entry }))
+      dbSavePartPosOverride(n.cabinetId, n.partId, entry, ovs).catch(console.error)
     }
 
     function removeOv() {
-      const { [node.partId]: _r, ...rest } = ovs
-      setOverrideCache(prev => new Map(prev).set(node.cabinetId, rest))
-      dbDeletePartPosOverride(node.cabinetId, node.partId, ovs).catch(console.error)
+      const { [n.partId]: _r, ...rest } = ovs
+      setOverrideCache(prev => new Map(prev).set(n.cabinetId, rest))
+      dbDeletePartPosOverride(n.cabinetId, n.partId, ovs).catch(console.error)
     }
 
     return (
