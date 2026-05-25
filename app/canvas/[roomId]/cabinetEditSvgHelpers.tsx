@@ -4,7 +4,8 @@ import React from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
-import type { SeamDrill, DrillAxis } from '@/src/lib/jointDrilling'
+import { caseBox, type SeamDrill, type DrillAxis } from '@/src/lib/jointDrilling'
+import type { PartPosOverrides } from './canvasDB'
 import type {
   ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart,
   ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack,
@@ -349,4 +350,120 @@ export function DrillOverlay({ drills, project, perp, dirOf }: {
       })}
     </g>
   )
+}
+
+// ── Rotatable part shape ────────────────────────────────────────────────────────
+// A 2D ortho view normally draws each part as an axis-aligned rect. When the part
+// carries a rotation override (oax/oay/oaz) a flat rect can't show it, so we project
+// the rotated 3D box's silhouette onto the view plane and draw that polygon instead.
+// The cabinet-space AABB of each part type (below) matches Cabinet3DView's box
+// helpers so 2D and 3D agree.
+
+export type Box3 = { x: number; y: number; z: number; w: number; h: number; d: number }
+
+export { caseBox }
+export function tkBox3(p: ResolvedToekickPart): Box3 {
+  return p.part_key === 'spreader_horizontal'
+    ? { x: p.X, y: p.Y, z: p.Z, w: p.DX, h: p.DY, d: p.DZ }
+    : { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
+}
+export function intBox3(p: ResolvedInternalPart): Box3 {
+  return p.part_type === 'divider'
+    ? { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
+    : { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+}
+export function zoneBox3(z: ResolvedFaceZone): Box3 {
+  return { x: z.X, y: z.Y, z: z.Z, w: z.DY, h: z.DX, d: z.DZ }
+}
+export function dbBox3(p: ResolvedDrawerBoxPart): Box3 {
+  switch (p.part_type) {
+    case 'db_left_side':
+    case 'db_right_side': return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DZ, h: p.DY, d: p.DX }
+    case 'db_bottom':     return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DY, h: p.DZ, d: p.DX }
+    default:              return { x: p.X, y: p.Y, z: p.Z - p.DZ, w: p.DY, h: p.DX, d: p.DZ }
+  }
+}
+export function slideBox3(s: ResolvedDrawerSlide): Box3 {
+  return { x: s.X, y: s.Y, z: s.Z, w: s.DZ, h: s.DY, d: s.DX }
+}
+
+// Rotate a local offset by an Euler (degrees), matching three.js Matrix4
+// makeRotationFromEuler order 'XYZ' so the 2D silhouette equals the 3D rotation.
+function rotEulerXYZ(axDeg: number, ayDeg: number, azDeg: number, x: number, y: number, z: number): [number, number, number] {
+  const D = Math.PI / 180
+  const a = Math.cos(axDeg * D), b = Math.sin(axDeg * D)
+  const c = Math.cos(ayDeg * D), d = Math.sin(ayDeg * D)
+  const e = Math.cos(azDeg * D), f = Math.sin(azDeg * D)
+  const ae = a * e, af = a * f, be = b * e, bf = b * f
+  return [
+    (c * e) * x + (-c * f) * y + (d) * z,
+    (af + be * d) * x + (ae - bf * d) * y + (-b * c) * z,
+    (bf - ae * d) * x + (be + af * d) * y + (a * c) * z,
+  ]
+}
+
+type P2 = { x: number; y: number }
+
+function convexHull(points: P2[]): P2[] {
+  const pts = points.slice().sort((p, q) => p.x - q.x || p.y - q.y)
+  if (pts.length < 3) return pts
+  const cross = (o: P2, a: P2, b: P2) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+  const lower: P2[] = []
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop()
+    lower.push(p)
+  }
+  const upper: P2[] = []
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i]
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop()
+    upper.push(p)
+  }
+  lower.pop(); upper.pop()
+  return lower.concat(upper)
+}
+
+type PartOv = PartPosOverrides[string]
+
+// Returns the SVG polygon points for a rotated part, or null if there's no rotation
+// (caller then draws the plain rect). `project` maps cabinet (x,y,z) → svg (x,y).
+// Rotation pivots about the part's reference point (origin corner box.x/y/z + offset),
+// matching the 3D Part, so the corner stays put and the part swings around it.
+export function rotatedBoxPolygon(
+  box: Box3,
+  ov: PartOv | undefined,
+  project: (x: number, y: number, z: number) => P2,
+): string | null {
+  if (!ov || (!ov.oax && !ov.oay && !ov.oaz)) return null
+  const ox0 = box.x + (ov.ox ?? 0)
+  const oy0 = box.y + (ov.oy ?? 0)
+  const oz0 = box.z + (ov.oz ?? 0)
+  const pts: P2[] = []
+  for (const sx of [0, 1]) for (const sy of [0, 1]) for (const sz of [0, 1]) {
+    const [rx, ry, rz] = rotEulerXYZ(ov.oax ?? 0, ov.oay ?? 0, ov.oaz ?? 0, sx * box.w, sy * box.h, sz * box.d)
+    pts.push(project(ox0 + rx, oy0 + ry, oz0 + rz))
+  }
+  return convexHull(pts).map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
+}
+
+// Draws a part as an axis-aligned rect, or — when it has a rotation override — as the
+// projected silhouette of its rotated 3D box. Same fill/stroke/hit-test either way.
+export function PartShape({
+  x, y, w, h, box, ov, project, fill, stroke, strokeWidth, strokeDasharray, fillOpacity, dataPartId, style,
+}: {
+  x: number; y: number; w: number; h: number
+  box?: Box3
+  ov?: PartOv
+  project?: (x: number, y: number, z: number) => P2
+  fill: string; stroke: string; strokeWidth: number
+  strokeDasharray?: string; fillOpacity?: number
+  dataPartId: string; style?: React.CSSProperties
+}) {
+  const poly = box && project ? rotatedBoxPolygon(box, ov, project) : null
+  if (poly) {
+    return <polygon points={poly} fill={fill} stroke={stroke} strokeWidth={strokeWidth}
+      strokeDasharray={strokeDasharray} fillOpacity={fillOpacity} data-part-id={dataPartId} style={style} />
+  }
+  return <rect x={x} y={y} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={strokeWidth}
+    strokeDasharray={strokeDasharray} fillOpacity={fillOpacity} data-part-id={dataPartId} style={style} />
 }

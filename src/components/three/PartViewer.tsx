@@ -133,13 +133,19 @@ export function Part({
 }) {
   const [hovered, setHovered] = useState(false)
 
+  // Rotation pivots about the part's reference point (origin corner b.x/b.y/b.z):
+  // the group sits at that corner and carries the rotation, while children are
+  // positioned relative to it. With no rotation this is identical to placing the
+  // mesh at the box centre.
   if (wire) {
     return (
-      <mesh position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]} rotation={rotation}>
-        <boxGeometry args={[b.w, b.h, b.d]} />
-        <meshStandardMaterial color="#9ca3af" transparent opacity={0.08} depthWrite={false} />
-        <Edges threshold={10} color="#94a3b8" linewidth={1} />
-      </mesh>
+      <group position={[b.x, b.y, b.z]} rotation={rotation}>
+        <mesh position={[b.w / 2, b.h / 2, b.d / 2]}>
+          <boxGeometry args={[b.w, b.h, b.d]} />
+          <meshStandardMaterial color="#9ca3af" transparent opacity={0.08} depthWrite={false} />
+          <Edges threshold={10} color="#94a3b8" linewidth={1} />
+        </mesh>
+      </group>
     )
   }
 
@@ -160,10 +166,9 @@ export function Part({
     : []
 
   return (
-    <>
+    <group position={[b.x, b.y, b.z]} rotation={rotation}>
       <mesh
-        position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]}
-        rotation={rotation}
+        position={[b.w / 2, b.h / 2, b.d / 2]}
         onPointerDown={() => { dragRef.current = false }}
         onPointerMove={(e) => { if (e.buttons) dragRef.current = true }}
         onClick={contextMenuSelect ? undefined : (e) => { e.stopPropagation(); if (!dragRef.current) onSelect(selected ? null : meta) }}
@@ -185,7 +190,7 @@ export function Part({
         <Edges threshold={10} color={edgeLine} linewidth={lineWidth} />
       </mesh>
       {strips.map((s, i) => (
-        <mesh key={i} position={s.pos}>
+        <mesh key={i} position={[s.pos[0] - b.x, s.pos[1] - b.y, s.pos[2] - b.z]}>
           <boxGeometry args={s.args} />
           <meshStandardMaterial
             color={ebSpec!.color}
@@ -197,7 +202,7 @@ export function Part({
           />
         </mesh>
       ))}
-    </>
+    </group>
   )
 }
 

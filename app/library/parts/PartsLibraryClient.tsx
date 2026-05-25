@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
+import { ThemeToggle } from '../../ThemeToggle'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -217,27 +218,28 @@ export default function PartsLibraryClient({
   })
 
   return (
-    <div className={embedded ? 'flex-1 flex flex-col overflow-hidden' : 'h-screen bg-gray-950 text-white flex flex-col overflow-hidden'}>
+    <div className={embedded ? 'flex-1 flex flex-col overflow-hidden' : 'h-screen bg-canvas text-ink flex flex-col overflow-hidden'}>
 
       {/* Header */}
       {!embedded && (
-        <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
-          <Link href="/" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">← Projects</Link>
-          <span className="text-gray-700">|</span>
-          <span className="text-sm font-semibold text-white">Parts Library</span>
+        <div className="flex-none border-b border-edge px-6 py-3 flex items-center gap-3">
+          <ThemeToggle />
+          <Link href="/" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">← Projects</Link>
+          <span className="text-ink-subtle">|</span>
+          <span className="text-sm font-semibold text-ink">Parts Library</span>
         </div>
       )}
 
       {/* Category tabs + controls */}
-      <div className="flex-none border-b border-gray-800 flex items-end gap-0.5 px-4">
+      <div className="flex-none border-b border-edge flex items-end gap-0.5 px-4">
         {CAT_TABS.map(ct => (
           <button
             key={ct.value}
             onClick={() => setCatFilter(ct.value)}
             className={`px-3 py-2.5 text-xs font-medium transition-colors ${
               ct.value === catFilter
-                ? 'text-white border-b-2 border-blue-500'
-                : 'text-gray-500 hover:text-gray-300 border-b-2 border-transparent'
+                ? 'text-ink border-b-2 border-accent'
+                : 'text-ink-subtle hover:text-ink-muted border-b-2 border-transparent'
             }`}
           >
             {ct.label}
@@ -245,25 +247,25 @@ export default function PartsLibraryClient({
         ))}
         <div className="flex-1" />
         <div className="flex items-center gap-1.5 pb-2.5">
-          <span className="text-[10px] text-gray-600">Sort</span>
+          <span className="text-[10px] text-ink-subtle">Sort</span>
           <select
             value={sortKey}
             onChange={e => handleSort(e.target.value)}
-            className="bg-gray-800 border border-gray-700 text-[10px] text-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:border-blue-500"
+            className="bg-surface-2 border border-edge-strong text-[10px] text-ink-muted rounded px-1.5 py-0.5 focus:outline-none focus:border-accent"
           >
             {FIELDS.filter(f => f.type !== 'boolean').map(f => (
-              <option key={f.key} value={f.key} className="bg-gray-900">{f.label}</option>
+              <option key={f.key} value={f.key} className="bg-surface">{f.label}</option>
             ))}
           </select>
           <button
             onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-            className="text-[11px] text-gray-400 hover:text-white w-5 text-center leading-none"
+            className="text-[11px] text-ink-muted hover:text-ink w-5 text-center leading-none"
           >
             {sortDir === 'asc' ? '↑' : '↓'}
           </button>
         </div>
-        <span className="text-gray-700 text-xs pb-2.5">|</span>
-        <label className="flex items-center gap-1.5 text-[10px] text-gray-500 pb-2.5 cursor-pointer select-none">
+        <span className="text-ink-subtle text-xs pb-2.5">|</span>
+        <label className="flex items-center gap-1.5 text-[10px] text-ink-subtle pb-2.5 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={showInactive}
@@ -275,20 +277,20 @@ export default function PartsLibraryClient({
       </div>
 
       {/* Body */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-gray-900">
+      <div className="flex-1 flex flex-col overflow-hidden bg-surface">
 
         {/* Form row */}
-        <div className="flex-none border-b border-gray-700 overflow-x-auto bg-gray-900/80">
+        <div className="flex-none border-b border-edge-strong overflow-x-auto bg-surface/80">
           <div className="flex items-stretch min-w-max">
             {FIELDS.map((f, i) => (
               <div
                 key={f.key}
                 style={{ width: f.w }}
                 className={`flex-none flex flex-col justify-between py-2 px-2 ${
-                  i < FIELDS.length - 1 ? 'border-r border-gray-700' : ''
+                  i < FIELDS.length - 1 ? 'border-r border-edge-strong' : ''
                 }`}
               >
-                <span className="text-[9px] text-gray-500 uppercase tracking-wide leading-none mb-1.5">
+                <span className="text-[9px] text-ink-subtle uppercase tracking-wide leading-none mb-1.5">
                   {f.label}
                 </span>
                 {f.type === 'boolean' ? (
@@ -304,10 +306,10 @@ export default function PartsLibraryClient({
                   <select
                     value={String(form[f.key] ?? '')}
                     onChange={e => patchForm({ [f.key]: e.target.value })}
-                    className="bg-transparent border-b border-gray-700 text-xs text-white focus:outline-none focus:border-blue-500 py-0.5 w-full"
+                    className="bg-transparent border-b border-edge-strong text-xs text-ink focus:outline-none focus:border-accent py-0.5 w-full"
                   >
                     {f.options!.map(o => (
-                      <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
+                      <option key={o.value} value={o.value} className="bg-surface">{o.label}</option>
                     ))}
                   </select>
                 ) : (
@@ -316,32 +318,32 @@ export default function PartsLibraryClient({
                     value={String(form[f.key] ?? '')}
                     placeholder={f.placeholder}
                     onChange={e => patchForm({ [f.key]: e.target.value })}
-                    className="block w-full bg-transparent border-b border-gray-700 px-0.5 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
+                    className="block w-full bg-transparent border-b border-edge-strong px-0.5 py-0.5 text-xs text-ink focus:outline-none focus:border-accent placeholder:text-ink-subtle"
                   />
                 )}
               </div>
             ))}
 
             {/* Action buttons */}
-            <div className="flex-none flex items-center gap-1.5 px-3 border-l border-gray-700">
+            <div className="flex-none flex items-center gap-1.5 px-3 border-l border-edge-strong">
               <button
                 onClick={handleSave}
                 disabled={saving || !String(form.name ?? '').trim() || !String(form.key ?? '').trim()}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs rounded transition-colors whitespace-nowrap"
+                className="px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-40 text-white text-xs rounded transition-colors whitespace-nowrap"
               >
                 {saving ? '…' : editingId ? 'Update' : 'Save'}
               </button>
               {editingId && (
                 <button
                   onClick={handleDuplicate}
-                  className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded transition-colors"
+                  className="px-3 py-1.5 bg-surface-3 hover:bg-surface-3 text-ink-muted text-xs rounded transition-colors"
                 >
                   Dupe
                 </button>
               )}
               <button
                 onClick={handleNew}
-                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded transition-colors"
+                className="px-3 py-1.5 bg-surface-3 hover:bg-surface-3 text-ink-muted text-xs rounded transition-colors"
               >
                 New
               </button>
@@ -350,21 +352,21 @@ export default function PartsLibraryClient({
         </div>
 
         {/* Column headers */}
-        <div className="flex items-center bg-gray-800/60 border-b border-gray-700 sticky top-0 z-10 min-w-max flex-none">
+        <div className="flex items-center bg-surface-2/60 border-b border-edge-strong sticky top-0 z-10 min-w-max flex-none">
           {FIELDS.map((f, i) => (
             <button
               key={f.key}
               style={{ width: f.w }}
               onClick={() => f.type !== 'boolean' && handleSort(f.key)}
-              className={`flex-none px-2 py-1.5 text-[9px] text-gray-500 uppercase tracking-wide text-left ${
-                i < FIELDS.length - 1 ? 'border-r border-gray-700/50' : ''
-              } ${f.type === 'boolean' ? 'text-center cursor-default' : 'hover:text-gray-300 cursor-pointer'} ${
+              className={`flex-none px-2 py-1.5 text-[9px] text-ink-subtle uppercase tracking-wide text-left ${
+                i < FIELDS.length - 1 ? 'border-r border-edge-strong/50' : ''
+              } ${f.type === 'boolean' ? 'text-center cursor-default' : 'hover:text-ink-muted cursor-pointer'} ${
                 f.type === 'boolean' ? '' : 'flex items-center gap-1'
               }`}
             >
               {f.label}
               {sortKey === f.key && f.type !== 'boolean' && (
-                <span className="text-blue-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
+                <span className="text-accent-ink">{sortDir === 'asc' ? '↑' : '↓'}</span>
               )}
             </button>
           ))}
@@ -375,7 +377,7 @@ export default function PartsLibraryClient({
           <div className="min-w-max">
             {sorted.length === 0 ? (
               <div className="px-4 py-10">
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-ink-subtle">
                   {rows.length === 0
                     ? 'No parts yet — fill in the form above and click Save.'
                     : 'No parts in this category. Switch to All or add a new part.'}
@@ -385,8 +387,8 @@ export default function PartsLibraryClient({
               <div
                 key={row.id}
                 onClick={() => handleRowClick(row)}
-                className={`flex items-center border-b border-gray-800/60 cursor-pointer transition-colors hover:bg-gray-800/40 ${
-                  editingId === row.id ? 'bg-blue-950/40 hover:bg-blue-950/50' : ''
+                className={`flex items-center border-b border-edge/60 cursor-pointer transition-colors hover:bg-surface-2/40 ${
+                  editingId === row.id ? 'bg-accent/10 hover:bg-accent/10' : ''
                 } ${!row.active ? 'opacity-40' : ''}`}
               >
                 {FIELDS.map((f, i) => {
@@ -400,13 +402,13 @@ export default function PartsLibraryClient({
                       key={f.key}
                       style={{ width: f.w }}
                       className={`flex-none px-2 py-1.5 text-xs truncate ${
-                        i < FIELDS.length - 1 ? 'border-r border-gray-800/50' : ''
+                        i < FIELDS.length - 1 ? 'border-r border-edge/50' : ''
                       } ${
-                        f.type === 'boolean' ? 'text-center text-blue-400' : 'text-gray-300'
+                        f.type === 'boolean' ? 'text-center text-accent-ink' : 'text-ink-muted'
                       }`}
                     >
                       {isCategory ? (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-ink-muted">
                           {catLabel}
                         </span>
                       ) : fmtCell(val, f)}
@@ -419,15 +421,15 @@ export default function PartsLibraryClient({
         </div>
 
         {/* Footer */}
-        <div className="flex-none border-t border-gray-800 px-4 py-1.5 flex items-center justify-between">
-          <span className="text-[10px] text-gray-600">
+        <div className="flex-none border-t border-edge px-4 py-1.5 flex items-center justify-between">
+          <span className="text-[10px] text-ink-subtle">
             {sorted.length} of {rows.length} part{rows.length !== 1 ? 's' : ''}
             {!showInactive && rows.some(r => !r.active) && (
               <span className="ml-1">· {rows.filter(r => !r.active).length} inactive hidden</span>
             )}
           </span>
           {editingId && (
-            <span className="text-[10px] text-gray-700 font-mono">{editingId.slice(0, 8)}…</span>
+            <span className="text-[10px] text-ink-subtle font-mono">{editingId.slice(0, 8)}…</span>
           )}
         </div>
 

@@ -99,12 +99,15 @@ export function resolveDrawerStacks(
       boxHeight = openingHeight - (config?.height_adjustment ?? 25)
     }
 
-    // Box width: inner opening (between gables) minus clearances minus runner thickness on each side
-    const boxWidth = Math.max(1, cab.DX - 2 * T - r.IDCL - r.IDCR - runnerThick * 2)
+    // Box width: inner opening (between gables, narrowed by scribes) minus clearances
+    // minus runner thickness on each side. Scribes (SCRL/SCRR) shrink the opening just
+    // like they do in resolveInternal/resolveCase, so they must be subtracted here too.
+    const boxWidth = Math.max(1, cab.DX - 2 * T - r.SCRL - r.SCRR - r.IDCL - r.IDCR - runnerThick * 2)
     const boxDepth = nominalLength
 
-    // Cabinet-space origin of the box — offset past the left runner so the box sits between the two rails
-    const boxX = T + r.IDCL + runnerThick
+    // Cabinet-space origin of the box — interior left face (T + SCRL) plus clearance and
+    // the left runner, so the box sits between the two rails.
+    const boxX = T + r.SCRL + r.IDCL + runnerThick
     const boxY = zone.Y               // bottom aligns with bottom of face zone
     const boxZ = zone.Z - boxDepth    // cabinet Z of the back face of the box
 
@@ -152,8 +155,8 @@ export function resolveDrawerStacks(
     }
 
     const slides: ResolvedDrawerSlide[] = [
-      { ...slideBase, side: 'left',  X: T + r.IDCL },
-      { ...slideBase, side: 'right', X: cab.DX - T - r.IDCR - runnerThick },
+      { ...slideBase, side: 'left',  X: T + r.SCRL + r.IDCL },
+      { ...slideBase, side: 'right', X: cab.DX - T - r.SCRR - r.IDCR - runnerThick },
     ]
 
     stacks.push({

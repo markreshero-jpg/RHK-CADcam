@@ -12,6 +12,7 @@ import PartsLibraryClient from '@/app/library/parts/PartsLibraryClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
 import { getUserPrefs, setUserPrefs, type DrawingPreset } from '@/src/lib/userPrefs'
 import { DISPLAY_PRESETS } from '@/src/lib/displayConfig'
+import { ThemeToggle } from '../ThemeToggle'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -343,23 +344,24 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
   const activeTabDef = TABS.find(t => t.id === tab)!
 
   return (
-    <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-canvas text-ink flex flex-col overflow-hidden">
 
       {/* Header */}
-      <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
-        <Link href="/" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">← Projects</Link>
-        <span className="text-gray-700">|</span>
-        <span className="text-sm font-semibold text-white">Settings</span>
+      <div className="flex-none border-b border-edge px-6 py-3 flex items-center gap-3">
+        <ThemeToggle />
+        <Link href="/" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">← Projects</Link>
+        <span className="text-ink-subtle">|</span>
+        <span className="text-sm font-semibold text-ink">Settings</span>
       </div>
 
       {/* Body: sidebar + content */}
       <div className="flex flex-1 overflow-hidden">
 
         {/* Sidebar nav */}
-        <aside className="w-52 flex-none border-r border-gray-800 overflow-y-auto py-3">
+        <aside className="w-52 flex-none border-r border-edge overflow-y-auto py-3">
           {GROUPS.map(group => (
             <div key={group} className="mb-1">
-              <p className="px-4 pt-3 pb-1 text-[10px] font-semibold text-gray-600 uppercase tracking-wider">{group}</p>
+              <p className="px-4 pt-3 pb-1 text-[10px] font-semibold text-ink-subtle uppercase tracking-wider">{group}</p>
               {TABS.filter(t => t.group === group).map(t => {
                 const isActive = tab === t.id
                 return (
@@ -368,11 +370,11 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
                     onClick={() => setTab(t.id)}
                     className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-colors ${
                       isActive
-                        ? 'bg-blue-600/15 text-blue-300'
-                        : 'text-gray-400 hover:bg-gray-800/60 hover:text-gray-200'
+                        ? 'bg-accent/15 text-accent-ink'
+                        : 'text-ink-muted hover:bg-surface-2/60 hover:text-ink'
                     }`}
                   >
-                    <span className={isActive ? 'text-blue-400' : 'text-gray-500'}>
+                    <span className={isActive ? 'text-accent-ink' : 'text-ink-subtle'}>
                       {t.icon}
                     </span>
                     <span className="flex-1 text-left">{t.label}</span>
@@ -403,29 +405,29 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
 
             {/* Section heading */}
             <div className="flex items-center gap-2.5 mb-6">
-              <span className="text-gray-400">{activeTabDef.icon}</span>
-              <h2 className="text-sm font-semibold text-white">{activeTabDef.label}</h2>
+              <span className="text-ink-muted">{activeTabDef.icon}</span>
+              <h2 className="text-sm font-semibold text-ink">{activeTabDef.label}</h2>
             </div>
 
             {/* ── User Preferences ── */}
             {tab === 'user_preferences' && (
               <div className="space-y-6 max-w-md">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-ink-subtle">
                   Personal preferences stored locally in your browser. These apply to your account on this device only.
                 </p>
 
                 <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Viewport Controls</p>
-                  <div className="border border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-700/60">
-                    <div className="flex items-center justify-between px-4 py-3 bg-gray-900">
+                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">Viewport Controls</p>
+                  <div className="border border-edge-strong rounded-lg overflow-hidden divide-y divide-edge-strong/60">
+                    <div className="flex items-center justify-between px-4 py-3 bg-surface">
                       <div>
-                        <p className="text-xs font-medium text-gray-200">Reverse scroll wheel zoom</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">Applies to plan, elevation, and 3D views</p>
+                        <p className="text-xs font-medium text-ink">Reverse scroll wheel zoom</p>
+                        <p className="text-[11px] text-ink-subtle mt-0.5">Applies to plan, elevation, and 3D views</p>
                       </div>
                       <button
                         onClick={() => toggleInvertScroll(!invertScroll)}
                         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
-                          invertScroll ? 'bg-blue-600' : 'bg-gray-700'
+                          invertScroll ? 'bg-accent' : 'bg-surface-3'
                         }`}
                         role="switch"
                         aria-checked={invertScroll}
@@ -439,17 +441,17 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Drawing</p>
-                  <div className="border border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-700/60">
-                    <div className="flex items-center justify-between px-4 py-3 bg-gray-900">
+                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">Drawing</p>
+                  <div className="border border-edge-strong rounded-lg overflow-hidden divide-y divide-edge-strong/60">
+                    <div className="flex items-center justify-between px-4 py-3 bg-surface">
                       <div>
-                        <p className="text-xs font-medium text-gray-200">Default drawing layer</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">Starting detail level when opening a job</p>
+                        <p className="text-xs font-medium text-ink">Default drawing layer</p>
+                        <p className="text-[11px] text-ink-subtle mt-0.5">Starting detail level when opening a job</p>
                       </div>
                       <select
                         value={defaultDrawingPreset}
                         onChange={e => handleDrawingPreset(e.target.value as DrawingPreset)}
-                        className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+                        className="bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
                       >
                         {(Object.entries(DISPLAY_PRESETS) as [DrawingPreset, { label: string }][]).map(([id, { label }]) => (
                           <option key={id} value={id}>{label}</option>
@@ -500,25 +502,25 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
             {/* ── Dimensions ── */}
             {tab === 'dimensions' && (
               <div className="space-y-4">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-ink-subtle">
                   Shop-wide defaults applied when placing new cabinets. Can be overridden per-job or per-cabinet.
                 </p>
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-gray-500 text-left">
+                    <tr className="text-ink-subtle text-left">
                       <th className="pb-3 font-medium">Cabinet Class</th>
                       <th className="pb-3 font-medium text-right pr-6">Height dy (mm)</th>
                       <th className="pb-3 font-medium text-right">Depth dz (mm)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800">
+                  <tbody className="divide-y divide-edge">
                     {[
                       { label: 'Base', dy: baseDy, dz: baseDz, setDy: setBaseDy, setDz: setBaseDz, sysDy: DEFAULT_DIMS.base.dy, sysDz: DEFAULT_DIMS.base.dz },
                       { label: 'Wall', dy: wallDy, dz: wallDz, setDy: setWallDy, setDz: setWallDz, sysDy: DEFAULT_DIMS.wall.dy, sysDz: DEFAULT_DIMS.wall.dz },
                       { label: 'Tall', dy: tallDy, dz: tallDz, setDy: setTallDy, setDz: setTallDz, sysDy: DEFAULT_DIMS.tall.dy, sysDz: DEFAULT_DIMS.tall.dz },
                     ].map(row => (
                       <tr key={row.label}>
-                        <td className="py-3 text-gray-300 font-medium">{row.label}</td>
+                        <td className="py-3 text-ink-muted font-medium">{row.label}</td>
                         <td className="py-3 pr-6">
                           <div className="flex justify-end">
                             <NumInput value={row.dy} onChange={row.setDy} baseline={row.sysDy} />
@@ -533,7 +535,7 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
                     ))}
                   </tbody>
                 </table>
-                <p className="text-xs text-gray-600">Blue = overrides system default</p>
+                <p className="text-xs text-ink-subtle">Blue = overrides system default</p>
               </div>
             )}
 
@@ -541,17 +543,17 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
             {tab === 'materials' && (
               <div className="space-y-6">
                 <div>
-                  <p className="text-xs text-gray-500 mb-4">Applied to new jobs unless overridden at job or room level. Changes save immediately.</p>
-                  <div className="border border-gray-700 rounded overflow-hidden divide-y divide-gray-700/60">
+                  <p className="text-xs text-ink-subtle mb-4">Applied to new jobs unless overridden at job or room level. Changes save immediately.</p>
+                  <div className="border border-edge-strong rounded overflow-hidden divide-y divide-edge-strong/60">
                     {SCHED_TYPES.map(st => {
                       const val = schedIds[st.col] ?? ''
                       return (
-                        <div key={st.key} className="flex items-center gap-4 px-4 py-3 bg-gray-900">
-                          <div className="w-48 shrink-0 text-xs font-medium text-gray-200">{st.label}</div>
+                        <div key={st.key} className="flex items-center gap-4 px-4 py-3 bg-surface">
+                          <div className="w-48 shrink-0 text-xs font-medium text-ink">{st.label}</div>
                           <select
                             value={val ?? ''}
                             onChange={e => handleSaveSchedule(st.col, e.target.value || null)}
-                            className="flex-1 max-w-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+                            className="flex-1 max-w-xs bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
                           >
                             <option value="">— not set —</option>
                             {(schedLists[st.key] ?? []).map(sc => (
@@ -563,9 +565,9 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
                     })}
                   </div>
                 </div>
-                <div className="pt-2 border-t border-gray-800">
-                  <p className="text-xs text-gray-500 mb-2">Per-class material defaults (carcass, doors, shelves, etc.) are set in the Materials Library.</p>
-                  <Link href="/library/schedules" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                <div className="pt-2 border-t border-edge">
+                  <p className="text-xs text-ink-subtle mb-2">Per-class material defaults (carcass, doors, shelves, etc.) are set in the Materials Library.</p>
+                  <Link href="/library/schedules" className="text-xs text-accent-ink hover:text-accent-ink transition-colors">
                     Materials Library → Shop Defaults →
                   </Link>
                 </div>
@@ -581,10 +583,10 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
 
           {/* Footer */}
           {hasSaveFooter && (
-            <div className="flex-none border-t border-gray-800 px-8 py-3 flex items-center justify-end gap-3">
+            <div className="flex-none border-t border-edge px-8 py-3 flex items-center justify-end gap-3">
               {saved && <span className="text-xs text-green-400">Saved</span>}
               <button onClick={handleSave} disabled={saving}
-                className="px-4 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition-colors">
+                className="px-4 py-1.5 text-xs rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-colors">
                 {saving ? 'Saving…' : 'Save changes'}
               </button>
             </div>
@@ -598,12 +600,12 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-const INP = 'w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500'
+const INP = 'w-full bg-surface-2 border border-edge-strong rounded px-3 py-1.5 text-sm text-ink placeholder-ink-subtle focus:outline-none focus:border-accent'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs text-gray-400 mb-1">{label}</label>
+      <label className="block text-xs text-ink-muted mb-1">{label}</label>
       {children}
     </div>
   )
@@ -618,8 +620,8 @@ function NumInput({ value, onChange, baseline }: {
   return (
     <input type="number" value={value}
       onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) onChange(v) }}
-      className={`w-24 bg-gray-800 border rounded px-2 py-1 text-xs text-right font-mono focus:outline-none focus:border-blue-500 ${
-        isOverridden ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
+      className={`w-24 bg-surface-2 border rounded px-2 py-1 text-xs text-right font-mono focus:outline-none focus:border-accent ${
+        isOverridden ? 'border-accent text-accent-ink' : 'border-edge-strong text-ink'
       }`}
     />
   )
@@ -628,15 +630,15 @@ function NumInput({ value, onChange, baseline }: {
 function ComingSoon({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-      <div className="w-10 h-10 rounded-xl bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-600">
+      <div className="w-10 h-10 rounded-xl bg-surface-2 border border-edge-strong flex items-center justify-center text-ink-subtle">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="9" cy="9" r="7"/>
           <line x1="9" y1="5" x2="9" y2="9.5"/>
           <circle cx="9" cy="12.5" r="0.75" fill="currentColor" stroke="none"/>
         </svg>
       </div>
-      <p className="text-sm text-gray-500 font-medium">{label}</p>
-      <p className="text-xs text-gray-600 max-w-xs">Configuration for this section will be added as the feature is built out.</p>
+      <p className="text-sm text-ink-subtle font-medium">{label}</p>
+      <p className="text-xs text-ink-subtle max-w-xs">Configuration for this section will be added as the feature is built out.</p>
     </div>
   )
 }

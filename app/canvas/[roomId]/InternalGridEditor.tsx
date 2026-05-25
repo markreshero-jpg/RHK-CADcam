@@ -321,8 +321,12 @@ export default function InternalGridEditor({
 
   const intY0 = cabinet.has_toekick ? toeH + T : T
   const intH  = cabDY - intY0 - T
-  const intX0 = T
-  const intW  = cabDX - 2 * T
+  // Interior X bounds — prefer the resolved gable inner faces so scribes (which
+  // shift/narrow the opening) are reflected; fall back to the flat approximation.
+  const lsPanel = rp?.case_parts.find(p => p.part_key === 'left_side')
+  const rsPanel = rp?.case_parts.find(p => p.part_key === 'right_side')
+  const intX0 = lsPanel ? lsPanel.X + lsPanel.DZ : T
+  const intW  = lsPanel && rsPanel ? Math.max(0, rsPanel.X - (lsPanel.X + lsPanel.DZ)) : cabDX - 2 * T
   const tkH   = toeH
 
   const interior: Box = { x: intX0, y: intY0, w: intW, h: intH }
@@ -528,6 +532,32 @@ export default function InternalGridEditor({
                       fontSize={Math.min(13, sep.box.h * 0.72)} fill={isSel ? '#e9d5ff' : '#a78bfa'}
                       fontFamily="system-ui,sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}
                     >{sep.locked ? 'shelf ⚲' : 'shelf'}</text>
+                  )}
+                </g>
+              )
+            })}
+
+            {/* Drawer boxes (resolved) — non-interactive overlay so the interior view
+                reflects drawers, including scribe-corrected width/position. */}
+            {(rp?.drawer_stacks ?? []).map((stack, si) => {
+              const bx = ox + stack.box_X
+              const byTop = svgY(stack.box_Y + stack.box_height)
+              return (
+                <g key={`drawer-${si}`} style={{ pointerEvents: 'none' }}>
+                  {stack.slides.map((sl, li) => (
+                    <rect key={`dsl-${si}-${li}`}
+                      x={ox + sl.X} y={svgY(sl.Y + sl.DY)}
+                      width={Math.max(sl.DZ, 1)} height={sl.DY}
+                      fill="#1c1917" stroke="#d97706" strokeWidth={0.75} />
+                  ))}
+                  <rect x={bx} y={byTop} width={stack.box_width} height={stack.box_height}
+                    fill="rgba(34,197,94,0.06)" stroke="#22c55e" strokeWidth={1} strokeDasharray="4 2" />
+                  {stack.box_width > 60 && stack.box_height > 20 && (
+                    <text x={bx + stack.box_width / 2} y={byTop + 11}
+                      textAnchor="middle" dominantBaseline="central"
+                      fontSize={10} fill="#22c55e" fontFamily="system-ui,sans-serif"
+                      style={{ userSelect: 'none' }}
+                    >drawer {Math.round(stack.box_width)}mm</text>
                   )}
                 </g>
               )

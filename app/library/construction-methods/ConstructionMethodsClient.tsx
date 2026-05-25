@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import { ThemeToggle } from '../../ThemeToggle'
 
 const Cabinet3DView = dynamic(() => import('@/app/canvas/[roomId]/Cabinet3DView'), { ssr: false })
 import { supabase } from '@/src/lib/supabase'
@@ -283,41 +284,42 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
     + Object.keys(delta.EDGING ?? {}).length
 
   return (
-    <div className={embedded ? "flex-1 flex flex-col overflow-hidden" : "h-screen bg-gray-950 text-white flex flex-col overflow-hidden"}>
+    <div className={embedded ? "flex-1 flex flex-col overflow-hidden" : "h-screen bg-canvas text-ink flex flex-col overflow-hidden"}>
 
       {/* Header */}
       {!embedded && (
-      <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
-        <Link href="/settings" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">← Settings</Link>
-        <span className="text-gray-700">|</span>
-        <Link href="/library/schedules" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">Material Schedules</Link>
-        <span className="text-gray-700">|</span>
-        <Link href="/library/drawer-boxes" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">Drawer Box Methods</Link>
-        <span className="text-gray-700">|</span>
-        <span className="text-sm font-semibold text-white">Construction Methods</span>
+      <div className="flex-none border-b border-edge px-6 py-3 flex items-center gap-3">
+        <ThemeToggle />
+        <Link href="/settings" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">← Settings</Link>
+        <span className="text-ink-subtle">|</span>
+        <Link href="/library/schedules" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Material Schedules</Link>
+        <span className="text-ink-subtle">|</span>
+        <Link href="/library/drawer-boxes" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Drawer Box Methods</Link>
+        <span className="text-ink-subtle">|</span>
+        <span className="text-sm font-semibold text-ink">Construction Methods</span>
       </div>
       )}
 
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left: schedule list ─────────────────────────────────────────── */}
-        <aside className="w-60 flex-none border-r border-gray-800 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Schedules</span>
+        <aside className="w-60 flex-none border-r border-edge flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-edge">
+            <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Schedules</span>
             <button onClick={() => setCreating(true)}
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors">+ New</button>
+              className="text-xs text-accent-ink hover:text-accent-ink transition-colors">+ New</button>
           </div>
 
           {creating && (
-            <div className="px-3 py-2 border-b border-gray-800 flex gap-2">
+            <div className="px-3 py-2 border-b border-edge flex gap-2">
               <input
                 autoFocus value={newName} onChange={e => setNewName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') createSchedule(); if (e.key === 'Escape') setCreating(false) }}
                 placeholder="Schedule name…"
-                className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+                className="flex-1 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
               />
-              <button onClick={createSchedule} className="text-xs text-blue-400 hover:text-blue-300">✓</button>
-              <button onClick={() => setCreating(false)} className="text-xs text-gray-500 hover:text-gray-300">✕</button>
+              <button onClick={createSchedule} className="text-xs text-accent-ink hover:text-accent-ink">✓</button>
+              <button onClick={() => setCreating(false)} className="text-xs text-ink-subtle hover:text-ink-muted">✕</button>
             </div>
           )}
 
@@ -325,7 +327,7 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
             {schedules.map(s => (
               <div key={s.id}
                 className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-                  selId === s.id ? 'bg-blue-600/15 text-blue-300' : 'text-gray-300 hover:bg-gray-800/60'
+                  selId === s.id ? 'bg-accent/10 text-accent-ink' : 'text-ink-muted hover:bg-surface-2/60'
                 }`}
                 onClick={() => setSelId(s.id)}
               >
@@ -335,12 +337,12 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                 )}
                 <button
                   onClick={e => { e.stopPropagation(); deleteSchedule(s.id) }}
-                  className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all text-xs px-1"
+                  className="opacity-0 group-hover:opacity-100 text-ink-subtle hover:text-red-400 transition-all text-xs px-1"
                 >✕</button>
               </div>
             ))}
             {schedules.length === 0 && (
-              <p className="px-4 py-6 text-xs text-gray-600 text-center">No schedules yet.<br/>Click + New to create one.</p>
+              <p className="px-4 py-6 text-xs text-ink-subtle text-center">No schedules yet.<br/>Click + New to create one.</p>
             )}
           </div>
         </aside>
@@ -348,34 +350,34 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
         {/* ── Right: editor ───────────────────────────────────────────────── */}
         {!sel ? (
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm text-gray-600">Select or create a construction method schedule</p>
+            <p className="text-sm text-ink-subtle">Select or create a construction method schedule</p>
           </div>
         ) : (
           <div className="flex-1 flex flex-col overflow-hidden">
 
             {/* Editor header */}
-            <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-4">
+            <div className="flex-none border-b border-edge px-6 py-3 flex items-center gap-4">
               <input
                 value={schedName} onChange={e => { setSchedName(e.target.value); setDirty(true) }}
-                className="bg-transparent text-sm font-semibold text-white border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none px-0 py-0.5 w-64"
+                className="bg-transparent text-sm font-semibold text-ink border-b border-transparent hover:border-edge-strong focus:border-accent focus:outline-none px-0 py-0.5 w-64"
               />
               <div className="flex-1" />
               {shopSchedId !== sel.id ? (
                 <button onClick={() => setShopDefault(sel.id)}
-                  className="text-xs text-gray-400 hover:text-green-400 transition-colors border border-gray-700 hover:border-green-700 rounded px-3 py-1">
+                  className="text-xs text-ink-muted hover:text-green-400 transition-colors border border-edge-strong hover:border-green-700 rounded px-3 py-1">
                   Set as shop default
                 </button>
               ) : (
                 <span className="text-xs text-green-400 border border-green-900/50 rounded px-3 py-1">Shop default</span>
               )}
               <button onClick={saveSchedule} disabled={saving || !dirty}
-                className="px-4 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 transition-colors">
+                className="px-4 py-1.5 text-xs rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-40 transition-colors">
                 {saving ? 'Saving…' : 'Save'}
               </button>
             </div>
 
             {/* Class tabs */}
-            <div className="flex-none border-b border-gray-800 px-6 flex gap-1 pt-1">
+            <div className="flex-none border-b border-edge px-6 flex gap-1 pt-1">
               {(['base','wall','tall'] as AssClass[]).map(cls => {
                 const cnt = Object.keys(deltas[cls]).filter(k => k !== 'EDGING').length
                   + Object.keys(deltas[cls].EDGING ?? {}).length
@@ -383,12 +385,12 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                   <button key={cls} onClick={() => setClassTab(cls)}
                     className={`px-4 py-2 text-xs font-medium transition-colors border-b-2 -mb-px ${
                       classTab === cls
-                        ? 'border-blue-500 text-blue-300'
-                        : 'border-transparent text-gray-400 hover:text-gray-200'
+                        ? 'border-accent text-accent-ink'
+                        : 'border-transparent text-ink-muted hover:text-ink'
                     }`}>
                     {CLASS_LABELS[cls]}
                     {cnt > 0 && (
-                      <span className="ml-1.5 text-[10px] bg-blue-600/30 text-blue-300 px-1.5 py-0.5 rounded-full">{cnt}</span>
+                      <span className="ml-1.5 text-[10px] bg-accent/10 text-accent-ink px-1.5 py-0.5 rounded-full">{cnt}</span>
                     )}
                   </button>
                 )
@@ -402,17 +404,17 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
               <div className="flex-1 overflow-hidden flex flex-col">
 
                 {/* View mode toggle */}
-                <div className="flex-none border-b border-gray-800 px-6 py-2 flex items-center gap-1">
+                <div className="flex-none border-b border-edge px-6 py-2 flex items-center gap-1">
                   {(['questions','rules'] as const).map(mode => (
                     <button key={mode} onClick={() => setViewMode(mode)}
                       className={`px-3 py-1 text-xs rounded transition-colors ${
-                        viewMode === mode ? 'bg-gray-700 text-gray-100' : 'text-gray-500 hover:text-gray-300'
+                        viewMode === mode ? 'bg-surface-3 text-ink' : 'text-ink-subtle hover:text-ink-muted'
                       }`}>
                       {mode === 'questions' ? 'Questions' : 'All Rules'}
                     </button>
                   ))}
                   {overrideCount > 0 && (
-                    <span className="ml-2 text-[10px] text-gray-600">
+                    <span className="ml-2 text-[10px] text-ink-subtle">
                       {overrideCount} override{overrideCount !== 1 ? 's' : ''}
                     </span>
                   )}
@@ -433,7 +435,7 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                       {/* Rule groups */}
                       {RULE_GROUPS.filter(g => classTab !== 'wall' || g.label !== 'Toe Kick').map(group => (
                         <div key={group.label}>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{group.label}</p>
+                          <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wider mb-1">{group.label}</p>
                           <div className="space-y-px">
                             {group.keys.map(k => (
                               <RuleRow key={k} ruleKey={k} delta={delta}
@@ -445,21 +447,21 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
 
                       {/* Edging */}
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Edging Defaults</p>
-                        <p className="text-xs text-gray-600 mb-3">
+                        <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wider mb-2">Edging Defaults</p>
+                        <p className="text-xs text-ink-subtle mb-3">
                           Edges that get banded. T = top · B = bottom · L = left · R = right (sheet perspective).
                           Blue = overridden from system default.
                         </p>
                         <div className="space-y-4">
                           {EDGING_GROUPS.map(group => (
                             <div key={group.label}>
-                              <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-1">{group.label}</p>
+                              <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-1">{group.label}</p>
                               <table className="w-full text-xs">
                                 <thead>
-                                  <tr className="text-gray-600">
+                                  <tr className="text-ink-subtle">
                                     <th className="text-left py-1 pr-4 font-normal w-44">Part</th>
                                     {EDGE_SIDES.map(s => (
-                                      <th key={s} className="text-center py-1 w-10 font-medium text-gray-500">{EDGE_LABELS[s]}</th>
+                                      <th key={s} className="text-center py-1 w-10 font-medium text-ink-subtle">{EDGE_LABELS[s]}</th>
                                     ))}
                                   </tr>
                                 </thead>
@@ -469,8 +471,8 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                                     const defSides = DEFAULT_EDGING[part]
                                     const isOver   = !sidesEqual(sides, defSides)
                                     return (
-                                      <tr key={part} className={`${isOver ? 'bg-blue-950/20' : 'hover:bg-gray-800/30'} rounded`}>
-                                        <td className={`py-1 pr-4 ${isOver ? 'text-blue-300' : 'text-gray-400'}`}>
+                                      <tr key={part} className={`${isOver ? 'bg-accent/10' : 'hover:bg-surface-2/30'} rounded`}>
+                                        <td className={`py-1 pr-4 ${isOver ? 'text-accent-ink' : 'text-ink-muted'}`}>
                                           {EDGING_LABELS[part]}
                                         </td>
                                         {EDGE_SIDES.map(side => {
@@ -502,15 +504,15 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                   )}
 
                   {/* Joint Defaults — part-by-part edge assignment */}
-                  <div className="max-w-2xl mt-6 pt-6 border-t border-gray-800">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Joint Defaults</p>
-                    <p className="text-xs text-gray-600 mb-3">
+                  <div className="max-w-2xl mt-6 pt-6 border-t border-edge">
+                    <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wider mb-2">Joint Defaults</p>
+                    <p className="text-xs text-ink-subtle mb-3">
                       Click a part to highlight it in the preview, then set a joint type for each edge that meets
                       another part. An edge shown under two parts is the same joint — set it from either side.
                       Cabinets inherit these and can override per seam in the cabinet edit modal.
                     </p>
                     {jointTypes.length === 0 ? (
-                      <p className="text-xs text-gray-600 italic">
+                      <p className="text-xs text-ink-subtle italic">
                         No joint types in library yet — add them in Library → Joints first.
                       </p>
                     ) : (
@@ -522,7 +524,7 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                             jointDeltas[classTab][sk] ?? jointDeltas[classTab][toGenericSeamKey(sk)] ?? ''
                           const assigned = part.edges.filter(e => readJoint(e.seamKey)).length
                           return (
-                            <div key={part.partKey} className="rounded border border-gray-800 overflow-hidden">
+                            <div key={part.partKey} className="rounded border border-edge overflow-hidden">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -531,29 +533,29 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                                   setHoverParts(next ? [next] : null)
                                 }}
                                 className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
-                                  isOpen ? 'bg-blue-950/30' : 'hover:bg-gray-800/40'
+                                  isOpen ? 'bg-accent/10' : 'hover:bg-surface-2/40'
                                 }`}
                               >
-                                <span className={`text-[10px] text-gray-500 transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
-                                <span className={`text-xs flex-1 ${isOpen ? 'text-blue-200' : 'text-gray-300'}`}>{part.label}</span>
-                                <span className={`text-[10px] ${assigned ? 'text-blue-400' : 'text-gray-600'}`}>
+                                <span className={`text-[10px] text-ink-subtle transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                                <span className={`text-xs flex-1 ${isOpen ? 'text-accent-ink' : 'text-ink-muted'}`}>{part.label}</span>
+                                <span className={`text-[10px] ${assigned ? 'text-accent-ink' : 'text-ink-subtle'}`}>
                                   {assigned}/{part.edges.length} edges
                                 </span>
                               </button>
                               {isOpen && (
-                                <div className="px-3 py-2 space-y-px border-t border-gray-800 bg-gray-900/40">
+                                <div className="px-3 py-2 space-y-px border-t border-edge bg-surface/40">
                                   {part.edges.map(edge => {
                                     const val = readJoint(edge.seamKey)
                                     return (
                                       <div key={edge.seamKey} className="flex items-center gap-3 py-1.5">
-                                        <span className={`flex-1 text-xs ${val ? 'text-blue-300' : 'text-gray-400'}`}>
+                                        <span className={`flex-1 text-xs ${val ? 'text-accent-ink' : 'text-ink-muted'}`}>
                                           {edge.edgeLabel}
-                                          <span className="text-gray-600"> → {edge.joinsLabel}</span>
+                                          <span className="text-ink-subtle"> → {edge.joinsLabel}</span>
                                         </span>
                                         <select
                                           value={val}
                                           onChange={e => setJointDefault(classTab, edge.seamKey, e.target.value || null)}
-                                          className="w-52 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+                                          className="w-52 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
                                         >
                                           <option value="">— No joint —</option>
                                           {jointTypes.map(j => (
@@ -839,6 +841,7 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
   const [asmSchedules, setAsmSchedules] = useState<{ id: string; name: string }[]>([])
   const [selectedAsmId, setSelectedAsmId] = useState<string>('')
   const [overrideMat,  setOverrideMat]  = useState<Material | null>(null)
+  const [scheduleEb,   setScheduleEb]   = useState<{ thickness: number; color: string | null } | null>(null)
   const resizeRef = useRef<{ startX: number; startW: number } | null>(null)
 
   // Set initial width to half the available space (sidebar = 240px)
@@ -852,24 +855,36 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
       .then(({ data }) => setAsmSchedules(data ?? []))
   }, [])
 
-  // Reload interior material when schedule selection or class tab changes
+  // Reload interior material + its edgeband when schedule selection or class tab changes
   useEffect(() => {
-    if (!selectedAsmId) { setOverrideMat(null); return }
+    if (!selectedAsmId) { setOverrideMat(null); setScheduleEb(null); return }
     let cancelled = false
     ;(async () => {
       const { data: row } = await supabase
         .from('assembly_schedule_rows')
-        .select('material_id')
+        .select('material_id, edgeband_id')
         .eq('schedule_id', selectedAsmId)
         .eq('assembly_class', classTab)
         .eq('material_role', 'interior')
         .maybeSingle()
-      if (cancelled || !row?.material_id) { if (!cancelled) setOverrideMat(null); return }
+      if (cancelled || !row?.material_id) {
+        if (!cancelled) { setOverrideMat(null); setScheduleEb(null) }
+        return
+      }
       const { data: m } = await supabase
         .from('materials').select('id,name,dz,face_colour,back_colour,edge_colour')
         .eq('id', row.material_id).single()
       if (!cancelled && m) {
         setOverrideMat({ id: m.id, name: m.name, DZ: m.dz, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, face_colour: m.face_colour ?? undefined, back_colour: m.back_colour ?? undefined, edge_colour: m.edge_colour ?? undefined })
+      }
+      // Resolve the interior edgeband's real thickness + colour from the schedule.
+      if (row.edgeband_id) {
+        const { data: eb } = await supabase
+          .from('edge_banding').select('thickness, color')
+          .eq('id', row.edgeband_id).maybeSingle()
+        if (!cancelled) setScheduleEb(eb ? { thickness: eb.thickness, color: eb.color ?? null } : null)
+      } else if (!cancelled) {
+        setScheduleEb(null)
       }
     })()
     return () => { cancelled = true }
@@ -928,9 +943,11 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
   const materialColours = useMemo(() => ({
     [mat.id]: { face: mat.face_colour ?? undefined, back: mat.back_colour ?? undefined, edge: mat.edge_colour ?? undefined },
   }), [mat])
+  // Edge banding for the preview: use the selected schedule's interior edgeband
+  // (real thickness + colour) when available, else a thin strip in the material's edge colour.
   const ebByMatId = useMemo(
-    () => ({ [mat.id]: { thickness: 1, color: mat.edge_colour ?? null } }),
-    [mat],
+    () => ({ [mat.id]: scheduleEb ?? { thickness: 1, color: mat.edge_colour ?? null } }),
+    [mat, scheduleEb],
   )
 
   function onResizeDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -946,14 +963,14 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
   function onResizeUp() { resizeRef.current = null }
 
   const tabCls = (active: boolean) =>
-    `px-2.5 py-1 text-[10px] font-medium rounded transition-colors ${active ? 'bg-gray-700 text-gray-100' : 'text-gray-500 hover:text-gray-300'}`
+    `px-2.5 py-1 text-[10px] font-medium rounded transition-colors ${active ? 'bg-surface-3 text-ink' : 'text-ink-subtle hover:text-ink-muted'}`
 
   return (
-    <div style={{ width: panelW }} className="flex-none border-l border-gray-800 flex flex-col bg-gray-900/40 relative">
+    <div style={{ width: panelW }} className="flex-none border-l border-edge flex flex-col bg-surface/40 relative">
 
       {/* Drag-to-resize handle on left edge */}
       <div
-        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/60 active:bg-blue-500 transition-colors z-10"
+        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/60 active:bg-accent transition-colors z-10"
         style={{ touchAction: 'none' }}
         onPointerDown={onResizeDown}
         onPointerMove={onResizeMove}
@@ -961,8 +978,8 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
       />
 
       {/* Header: label + view tabs + dims */}
-      <div className="flex-none pl-3 pr-4 py-2 border-b border-gray-800 flex items-center gap-0.5">
-        <span className="text-[9px] text-gray-600 uppercase tracking-wider mr-2 select-none">Preview</span>
+      <div className="flex-none pl-3 pr-4 py-2 border-b border-edge flex items-center gap-0.5">
+        <span className="text-[9px] text-ink-subtle uppercase tracking-wider mr-2 select-none">Preview</span>
         {PREVIEW_VIEWS.map(v => (
           <button key={v.id} onClick={() => setActiveView(v.id)} className={tabCls(activeView === v.id)}>
             {v.label}
@@ -977,7 +994,7 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
             Wire
           </button>
         )}
-        <span className="ml-auto text-[9px] text-gray-600 font-mono whitespace-nowrap pl-2">{dx}×{dy}×{dz}</span>
+        <span className="ml-auto text-[9px] text-ink-subtle font-mono whitespace-nowrap pl-2">{dx}×{dy}×{dz}</span>
       </div>
 
       {/* View content */}
@@ -996,22 +1013,22 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
       </div>
 
       {/* Footer */}
-      <div className="flex-none px-4 py-2 border-t border-gray-800 space-y-1.5 text-[10px]">
+      <div className="flex-none px-4 py-2 border-t border-edge space-y-1.5 text-[10px]">
         <div className="flex items-center gap-2">
-          <span className="text-gray-600 shrink-0">Schedule</span>
+          <span className="text-ink-subtle shrink-0">Schedule</span>
           <select
             value={selectedAsmId}
             onChange={e => setSelectedAsmId(e.target.value)}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+            className="flex-1 bg-surface-2 border border-edge-strong rounded px-2 py-0.5 text-[10px] text-ink-muted focus:outline-none focus:border-accent cursor-pointer"
           >
             <option value="">Shop default</option>
             {asmSchedules.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
-        <div className="flex items-center gap-4 text-gray-600">
-          <span>Top: <span className="text-gray-300 font-mono capitalize">{rules.TOP_TYPE.replace(/_/g, ' ')}</span></span>
-          <span>Toe: <span className="text-gray-300 font-mono capitalize">{isWall || rules.TOE_TYPE === 'none' ? 'none' : `${rules.TOE_TYPE} · ${toeh}mm`}</span></span>
-          <span className="ml-auto">Board: <span className="text-gray-300 font-mono">{mat.name} ({mat.DZ}mm)</span></span>
+        <div className="flex items-center gap-4 text-ink-subtle">
+          <span>Top: <span className="text-ink-muted font-mono capitalize">{rules.TOP_TYPE.replace(/_/g, ' ')}</span></span>
+          <span>Toe: <span className="text-ink-muted font-mono capitalize">{isWall || rules.TOE_TYPE === 'none' ? 'none' : `${rules.TOE_TYPE} · ${toeh}mm`}</span></span>
+          <span className="ml-auto">Board: <span className="text-ink-muted font-mono">{mat.name} ({mat.DZ}mm)</span></span>
         </div>
       </div>
     </div>
@@ -1033,8 +1050,8 @@ function ChipSelect({ options, value, onChange }: {
           onClick={() => onChange(opt.value)}
           className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
             value === opt.value
-              ? 'border-blue-500 bg-blue-600/20 text-blue-300'
-              : 'border-gray-700 bg-gray-800/60 text-gray-400 hover:border-gray-600 hover:text-gray-300'
+              ? 'border-accent bg-accent/10 text-accent-ink'
+              : 'border-edge-strong bg-surface-2/60 text-ink-muted hover:border-edge-strong hover:text-ink-muted'
           }`}
         >
           {opt.label}
@@ -1054,12 +1071,12 @@ function QCard({ question, isOverride, partKeys, onHover, children }: {
   return (
     <div
       className={`p-4 rounded-lg border transition-colors ${
-        isOverride ? 'border-blue-800/50 bg-blue-950/20' : 'border-gray-800 bg-gray-900/30'
+        isOverride ? 'border-accent/50 bg-accent/10' : 'border-edge bg-surface/30'
       }`}
       onMouseEnter={() => partKeys && onHover?.(partKeys)}
       onMouseLeave={() => onHover?.(null)}
     >
-      <p className={`text-xs font-medium mb-3 ${isOverride ? 'text-blue-300' : 'text-gray-300'}`}>
+      <p className={`text-xs font-medium mb-3 ${isOverride ? 'text-accent-ink' : 'text-ink-muted'}`}>
         {question}
       </p>
       {children}
@@ -1074,9 +1091,9 @@ function MmInput({ value, onChange }: { value: number; onChange: (v: number) => 
         type="number" value={value}
         onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) onChange(v) }}
         onFocus={e => e.target.select()}
-        className="w-20 text-right bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs font-mono text-white focus:outline-none focus:border-blue-500"
+        className="w-20 text-right bg-surface-2 border border-edge-strong rounded px-2 py-0.5 text-xs font-mono text-ink focus:outline-none focus:border-accent"
       />
-      <span className="text-xs text-gray-600">mm</span>
+      <span className="text-xs text-ink-subtle">mm</span>
     </div>
   )
 }
@@ -1166,7 +1183,7 @@ function QuestionPanel({ classTab, delta, onChange, onHoverParts }: {
         />
         {facIns > 0 && (
           <div className="mt-3 flex items-center gap-2">
-            <span className="text-xs text-gray-500">Inset depth</span>
+            <span className="text-xs text-ink-subtle">Inset depth</span>
             <MmInput value={facIns} onChange={v => onChange('FACINS', v as ConstructionRules[RuleKey])} />
           </div>
         )}
@@ -1187,9 +1204,9 @@ function QuestionPanel({ classTab, delta, onChange, onHoverParts }: {
               }
             }}
             onFocus={e => e.target.select()}
-            className="w-20 text-right bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs font-mono text-white focus:outline-none focus:border-blue-500"
+            className="w-20 text-right bg-surface-2 border border-edge-strong rounded px-2 py-0.5 text-xs font-mono text-ink focus:outline-none focus:border-accent"
           />
-          <span className="text-xs text-gray-600">mm</span>
+          <span className="text-xs text-ink-subtle">mm</span>
           {asymAdj && <span className="text-[10px] text-amber-600">L≠R — use All Rules to edit individually</span>}
         </div>
       </QCard>
@@ -1208,15 +1225,15 @@ function QuestionPanel({ classTab, delta, onChange, onHoverParts }: {
               }
             }}
             onFocus={e => e.target.select()}
-            className="w-20 text-right bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs font-mono text-white focus:outline-none focus:border-blue-500"
+            className="w-20 text-right bg-surface-2 border border-edge-strong rounded px-2 py-0.5 text-xs font-mono text-ink focus:outline-none focus:border-accent"
           />
-          <span className="text-xs text-gray-600">mm</span>
+          <span className="text-xs text-ink-subtle">mm</span>
           {asymWall && <span className="text-[10px] text-amber-600">L≠R — use All Rules to edit individually</span>}
         </div>
       </QCard>
 
       {/* ── Joinery ── */}
-      <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider pt-2">Joinery</p>
+      <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider pt-2">Joinery</p>
 
       <QCard question="How does the bottom panel connect to the sides?" isOverride={'BOTTOM_JOIN' in delta}
         partKeys={['bottom','left_side','right_side']}
@@ -1299,10 +1316,10 @@ function RuleRow({ ruleKey, delta, onChange }: {
   const isOverride = ruleKey in delta
   const label      = RULE_LABELS[ruleKey]
 
-  const rowCls = `flex items-center justify-between py-1.5 px-2 rounded ${isOverride ? 'bg-blue-950/30' : 'hover:bg-gray-800/40'}`
-  const txtCls = `text-xs ${isOverride ? 'text-blue-300' : 'text-gray-400'}`
-  const inpCls = `bg-gray-800 border rounded px-2 py-0.5 text-xs font-mono focus:outline-none focus:border-blue-500 ${
-    isOverride ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
+  const rowCls = `flex items-center justify-between py-1.5 px-2 rounded ${isOverride ? 'bg-accent/10' : 'hover:bg-surface-2/40'}`
+  const txtCls = `text-xs ${isOverride ? 'text-accent-ink' : 'text-ink-muted'}`
+  const inpCls = `bg-surface-2 border rounded px-2 py-0.5 text-xs font-mono focus:outline-none focus:border-accent ${
+    isOverride ? 'border-accent text-accent-ink' : 'border-edge-strong text-ink'
   }`
 
   if (ruleKey === 'TOE_TYPE') {
@@ -1310,7 +1327,7 @@ function RuleRow({ ruleKey, delta, onChange }: {
       <div className={rowCls}>
         <span className={txtCls}>{label}</span>
         <div className="flex items-center gap-2">
-          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
           <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
             <option value="ladder">Ladder</option>
             <option value="leg">Leg</option>
@@ -1326,7 +1343,7 @@ function RuleRow({ ruleKey, delta, onChange }: {
       <div className={rowCls}>
         <span className={txtCls}>{label}</span>
         <div className="flex items-center gap-2">
-          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
           <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
             <option value="full_top">Full Top</option>
             <option value="front_rail">Front Rail</option>
@@ -1343,7 +1360,7 @@ function RuleRow({ ruleKey, delta, onChange }: {
       <div className={rowCls}>
         <span className={txtCls}>{label}</span>
         <div className="flex items-center gap-2">
-          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
           <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
             <option value="sides_outside">Sides outside</option>
             <option value="bottom_outside">Bottom outside</option>
@@ -1358,7 +1375,7 @@ function RuleRow({ ruleKey, delta, onChange }: {
       <div className={rowCls}>
         <span className={txtCls}>{label}</span>
         <div className="flex items-center gap-2">
-          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
           <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
             <option value="back_on_bottom">Back on bottom</option>
             <option value="butts_into_back">Butts into back</option>
@@ -1373,7 +1390,7 @@ function RuleRow({ ruleKey, delta, onChange }: {
       <div className={rowCls}>
         <span className={txtCls}>{label}</span>
         <div className="flex items-center gap-2">
-          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
           <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
             <option value="butts_into_back">Butts into back</option>
             <option value="sits_over_back">Sits over back</option>
@@ -1388,7 +1405,7 @@ function RuleRow({ ruleKey, delta, onChange }: {
       <div className={rowCls}>
         <span className={txtCls}>{label}</span>
         <div className="flex items-center gap-2">
-          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
           <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
             <option value="between_sides">Between sides</option>
             <option value="behind_sides">Behind sides</option>
@@ -1403,7 +1420,7 @@ function RuleRow({ ruleKey, delta, onChange }: {
       <div className={rowCls}>
         <span className={txtCls}>{label}</span>
         <div className="flex items-center gap-2">
-          {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
           <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
             <option value="between_sides">Between sides</option>
             <option value="on_top_of_sides">On top of sides</option>
@@ -1417,7 +1434,7 @@ function RuleRow({ ruleKey, delta, onChange }: {
     <div className={rowCls}>
       <span className={txtCls}>{label}</span>
       <div className="flex items-center gap-2">
-        {isOverride && <span className="text-gray-600 text-[10px]">default: {String(baseline)}</span>}
+        {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
         <input
           type="number" value={value as number}
           onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) onChange(v as ConstructionRules[RuleKey]) }}

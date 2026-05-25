@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
+import { ThemeToggle } from '../../ThemeToggle'
 
 // ── Tab config ────────────────────────────────────────────────────────────────
 
@@ -464,9 +465,9 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
 
   // ── CSS helpers ───────────────────────────────────────────────────────────
 
-  const sel    = 'w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500'
-  const selEb  = 'w-full bg-gray-800/60 border border-gray-700/60 rounded px-2 py-1 text-[10px] text-gray-400 focus:outline-none focus:border-purple-600 focus:text-purple-300'
-  const inp    = 'bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 w-full'
+  const sel    = 'w-full bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent'
+  const selEb  = 'w-full bg-surface-2/60 border border-edge-strong/60 rounded px-2 py-1 text-[10px] text-ink-muted focus:outline-none focus:border-purple-600 focus:text-purple-300'
+  const inp    = 'bg-surface-2 border border-edge-strong rounded px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-accent w-full'
 
   // ── MatCell: stacked material + edgeband dropdowns ────────────────────────
 
@@ -505,19 +506,19 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
 
   function renderAsmGrid() {
     return (
-      <div className="grid grid-cols-[120px_1fr_1fr_1fr] gap-px bg-gray-700/50 rounded overflow-hidden border border-gray-700 text-xs">
-        <div className="bg-gray-800 px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Role</div>
+      <div className="grid grid-cols-[120px_1fr_1fr_1fr] gap-px bg-surface-3/50 rounded overflow-hidden border border-edge-strong text-xs">
+        <div className="bg-surface-2 px-2 py-1.5 text-[10px] font-semibold text-ink-subtle uppercase tracking-wide">Role</div>
         {CLASSES.map(c => (
-          <div key={c} className="bg-gray-800 px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide capitalize">{c}</div>
+          <div key={c} className="bg-surface-2 px-2 py-1.5 text-[10px] font-semibold text-ink-subtle uppercase tracking-wide capitalize">{c}</div>
         ))}
         {ASM_ROLES.map(role => (
           <Fragment key={role.key}>
-            <div className="bg-gray-900 px-2 py-2.5 flex items-start pt-3 text-xs text-gray-300">{role.label}</div>
+            <div className="bg-surface px-2 py-2.5 flex items-start pt-3 text-xs text-ink-muted">{role.label}</div>
             {CLASSES.map(cls => {
               const mK = `${cls}|${role.key}`
               const eK = `${mK}|eb`
               return (
-                <div key={cls} className="bg-gray-900 px-2 py-2">
+                <div key={cls} className="bg-surface px-2 py-2">
                   <MatCell
                     matId={rowData[mK] ?? ''} ebId={rowData[eK] ?? ''}
                     matKey={mK} ebKey={eK}
@@ -542,8 +543,8 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           return (
             <div key={role.key} className="flex items-start gap-3">
               <div className="w-28 shrink-0 pt-1">
-                <p className="text-xs text-gray-300">{role.label}</p>
-                <p className="text-[9px] text-gray-600">{role.desc}</p>
+                <p className="text-xs text-ink-muted">{role.label}</p>
+                <p className="text-[9px] text-ink-subtle">{role.desc}</p>
               </div>
               <MatCell
                 matId={rowData[mK] ?? ''} ebId={rowData[eK] ?? ''}
@@ -564,8 +565,8 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
       <div className="space-y-3">
         <div className="flex items-center gap-3">
           <span className="w-12 shrink-0" />
-          <span className="flex-1 text-[10px] text-gray-600 pl-1">Board</span>
-          <span className="flex-1 text-[10px] text-gray-600 pl-1">Edgebanding</span>
+          <span className="flex-1 text-[10px] text-ink-subtle pl-1">Board</span>
+          <span className="flex-1 text-[10px] text-ink-subtle pl-1">Edgebanding</span>
         </div>
         {CLASSES.map(cls => {
           const mK = cls
@@ -575,7 +576,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           const opts  = ebOpts(matId)
           return (
             <div key={cls} className="flex items-center gap-3">
-              <span className="w-12 shrink-0 text-xs text-gray-400 capitalize">{cls}</span>
+              <span className="w-12 shrink-0 text-xs text-ink-muted capitalize">{cls}</span>
               <select value={matId} onChange={e => saveFrontMat(cls, e.target.value)} className={`flex-1 ${sel}`}>
                 {!matId && <option value="">— not set —</option>}
                 {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>)}
@@ -607,8 +608,8 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
       <div className="space-y-3">
         <div className="flex items-center gap-3 mb-1">
           <span className="w-28 shrink-0" />
-          <span className="flex-1 text-[10px] text-gray-600 pl-1">Board</span>
-          <span className="flex-1 text-[10px] text-gray-600 pl-1">Edgebanding</span>
+          <span className="flex-1 text-[10px] text-ink-subtle pl-1">Board</span>
+          <span className="flex-1 text-[10px] text-ink-subtle pl-1">Edgebanding</span>
         </div>
         {DB_ROLES.map(role => {
           const mId = (sched?.[role.matCol] as string) ?? ''
@@ -617,8 +618,8 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           return (
             <div key={role.key} className="flex items-center gap-3">
               <div className="w-28 shrink-0">
-                <p className="text-xs text-gray-300">{role.label}</p>
-                <p className="text-[9px] text-gray-600">{role.desc}</p>
+                <p className="text-xs text-ink-muted">{role.label}</p>
+                <p className="text-[9px] text-ink-subtle">{role.desc}</p>
               </div>
               <select
                 value={mId}
@@ -657,8 +658,8 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           return (
             <div key={role.key} className="flex items-start gap-3">
               <div className="w-36 shrink-0 pt-1">
-                <p className="text-xs text-gray-300">{role.label}</p>
-                <p className="text-[9px] text-gray-600">{role.desc}</p>
+                <p className="text-xs text-ink-muted">{role.label}</p>
+                <p className="text-[9px] text-ink-subtle">{role.desc}</p>
               </div>
               <div className="flex-1 space-y-1">
                 <select
@@ -698,7 +699,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-3">
-          <span className="w-24 shrink-0 text-xs text-gray-400">Board</span>
+          <span className="w-24 shrink-0 text-xs text-ink-muted">Board</span>
           <select value={matId} onChange={e => saveSingleValue(matCol, e.target.value)} className={`flex-1 max-w-sm ${sel}`}>
             {!matId && <option value="">— not set —</option>}
             {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>)}
@@ -706,7 +707,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         </div>
         {ebCol && (
           <div className="flex items-center gap-3">
-            <span className="w-24 shrink-0 text-xs text-gray-400">Edgebanding</span>
+            <span className="w-24 shrink-0 text-xs text-ink-muted">Edgebanding</span>
             <select
               value={ebId}
               onChange={e => saveSingleValue(ebCol, e.target.value)}
@@ -731,7 +732,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     const label   = activeTab === 'hinge' ? 'Hinge' : activeTab === 'slide' ? 'Slide' : 'Handle'
     return (
       <div className="flex items-center gap-3">
-        <span className="w-20 shrink-0 text-xs text-gray-400">{label}</span>
+        <span className="w-20 shrink-0 text-xs text-ink-muted">{label}</span>
         <select value={val} onChange={e => saveSingleValue(col, e.target.value)} className={`flex-1 max-w-sm ${sel}`}>
           {!val && <option value="">— not set —</option>}
           {catalog.map(item => (
@@ -748,45 +749,45 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     let prevDepth: number | null = null
 
     return (
-      <div className="flex-1 flex flex-col overflow-hidden bg-gray-900">
+      <div className="flex-1 flex flex-col overflow-hidden bg-surface">
 
         {/* Add-entry form row — matches MaterialsClient input row style */}
-        <div className="flex-none border-b border-gray-700 overflow-x-auto bg-gray-900/80">
+        <div className="flex-none border-b border-edge-strong overflow-x-auto bg-surface/80">
           <div className="flex items-stretch min-w-max">
-            <div style={{ width: 110 }} className="flex flex-col justify-between py-2 px-2 border-r border-gray-700">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wide mb-1.5">Depth ≥ mm</span>
+            <div style={{ width: 110 }} className="flex flex-col justify-between py-2 px-2 border-r border-edge-strong">
+              <span className="text-[9px] text-ink-subtle uppercase tracking-wide mb-1.5">Depth ≥ mm</span>
               <input
                 type="number"
                 value={newTierDepth}
                 onChange={e => setNewTierDepth(e.target.value)}
                 placeholder="450"
                 onFocus={e => e.target.select()}
-                className="block w-full bg-transparent border-b border-gray-700 px-0.5 py-0.5 text-xs text-white text-right focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
+                className="block w-full bg-transparent border-b border-edge-strong px-0.5 py-0.5 text-xs text-ink text-right focus:outline-none focus:border-accent placeholder:text-ink-subtle"
               />
             </div>
-            <div style={{ width: 110 }} className="flex flex-col justify-between py-2 px-2 border-r border-gray-700">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wide mb-1.5">Height ≥ mm</span>
+            <div style={{ width: 110 }} className="flex flex-col justify-between py-2 px-2 border-r border-edge-strong">
+              <span className="text-[9px] text-ink-subtle uppercase tracking-wide mb-1.5">Height ≥ mm</span>
               <input
                 type="number"
                 value={newTierHeight}
                 onChange={e => setNewTierHeight(e.target.value)}
                 placeholder="104"
                 onFocus={e => e.target.select()}
-                className="block w-full bg-transparent border-b border-gray-700 px-0.5 py-0.5 text-xs text-white text-right focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
+                className="block w-full bg-transparent border-b border-edge-strong px-0.5 py-0.5 text-xs text-ink text-right focus:outline-none focus:border-accent placeholder:text-ink-subtle"
               />
             </div>
             <div className="flex flex-col justify-between py-2 px-2 flex-1 min-w-[220px]">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wide mb-1.5">Slide</span>
+              <span className="text-[9px] text-ink-subtle uppercase tracking-wide mb-1.5">Slide</span>
               <select
                 value={newTierSlide}
                 onChange={e => setNewTierSlide(e.target.value)}
-                className="bg-transparent border-b border-gray-700 text-xs text-white focus:outline-none focus:border-blue-500 py-0.5 w-full"
+                className="bg-transparent border-b border-edge-strong text-xs text-ink focus:outline-none focus:border-accent py-0.5 w-full"
               >
-                <option value="" className="bg-gray-900">— select —</option>
-                {slides.map(s => <option key={s.id} value={s.id} className="bg-gray-900">{slideLabel(s)}</option>)}
+                <option value="" className="bg-surface">— select —</option>
+                {slides.map(s => <option key={s.id} value={s.id} className="bg-surface">{slideLabel(s)}</option>)}
               </select>
             </div>
-            <div className="flex-none flex items-center gap-1.5 px-3 border-l border-gray-700">
+            <div className="flex-none flex items-center gap-1.5 px-3 border-l border-edge-strong">
               <button
                 onClick={async () => {
                   const d = parseInt(newTierDepth)
@@ -798,7 +799,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
                   setNewTierSlide('')
                 }}
                 disabled={!newTierDepth || !newTierHeight || !newTierSlide}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs rounded transition-colors whitespace-nowrap"
+                className="px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-40 text-white text-xs rounded transition-colors whitespace-nowrap"
               >Add</button>
             </div>
           </div>
@@ -808,17 +809,17 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         <div className="flex-1 overflow-auto">
 
           {/* Sticky column header */}
-          <div className="flex items-center bg-gray-800/60 border-b border-gray-700 sticky top-0 z-10 min-w-max">
-            <div style={{ width: 110 }} className="flex-none px-2 border-r border-gray-700/50 text-[9px] text-gray-500 uppercase tracking-wide py-1.5 text-right">Depth ≥</div>
-            <div style={{ width: 110 }} className="flex-none px-2 border-r border-gray-700/50 text-[9px] text-gray-500 uppercase tracking-wide py-1.5 text-right">Height ≥</div>
-            <div className="flex-1 min-w-[220px] px-2 text-[9px] text-gray-500 uppercase tracking-wide py-1.5">Slide</div>
+          <div className="flex items-center bg-surface-2/60 border-b border-edge-strong sticky top-0 z-10 min-w-max">
+            <div style={{ width: 110 }} className="flex-none px-2 border-r border-edge-strong/50 text-[9px] text-ink-subtle uppercase tracking-wide py-1.5 text-right">Depth ≥</div>
+            <div style={{ width: 110 }} className="flex-none px-2 border-r border-edge-strong/50 text-[9px] text-ink-subtle uppercase tracking-wide py-1.5 text-right">Height ≥</div>
+            <div className="flex-1 min-w-[220px] px-2 text-[9px] text-ink-subtle uppercase tracking-wide py-1.5">Slide</div>
             <div style={{ width: 36 }} />
           </div>
 
           <div className="min-w-max">
             {slideEntries.length === 0 ? (
               <div className="px-4 py-10">
-                <p className="text-xs text-gray-600">No entries yet — fill in the form above and click Add.</p>
+                <p className="text-xs text-ink-subtle">No entries yet — fill in the form above and click Add.</p>
               </div>
             ) : slideEntries.map(entry => {
               const isFirst = entry.depth_threshold !== prevDepth
@@ -826,25 +827,25 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
               return (
                 <div
                   key={entry.id}
-                  className={`flex items-center border-b border-gray-800/60 hover:bg-gray-800/20 transition-colors ${isFirst ? 'border-t border-gray-700/40' : ''}`}
+                  className={`flex items-center border-b border-edge/60 hover:bg-surface-2/20 transition-colors ${isFirst ? 'border-t border-edge-strong/40' : ''}`}
                 >
-                  <div style={{ width: 110 }} className={`flex-none px-2 py-1.5 text-xs text-right border-r border-gray-800/50 tabular-nums ${isFirst ? 'text-gray-200 font-medium' : 'text-gray-600'}`}>
+                  <div style={{ width: 110 }} className={`flex-none px-2 py-1.5 text-xs text-right border-r border-edge/50 tabular-nums ${isFirst ? 'text-ink font-medium' : 'text-ink-subtle'}`}>
                     {entry.depth_threshold}
                   </div>
-                  <div style={{ width: 110 }} className="flex-none px-2 py-1.5 text-xs text-right border-r border-gray-800/50 tabular-nums text-gray-300">
+                  <div style={{ width: 110 }} className="flex-none px-2 py-1.5 text-xs text-right border-r border-edge/50 tabular-nums text-ink-muted">
                     {entry.height_threshold}
                   </div>
                   <div className="flex-1 min-w-[220px] px-2 py-1">
                     <select
                       value={entry.slide_id}
                       onChange={e => updateSlideEntry(entry.id, e.target.value)}
-                      className="w-full bg-transparent border-b border-transparent hover:border-gray-600 focus:border-blue-500 text-xs text-gray-300 focus:outline-none py-0.5 focus:text-white transition-colors"
+                      className="w-full bg-transparent border-b border-transparent hover:border-edge-strong focus:border-accent text-xs text-ink-muted focus:outline-none py-0.5 focus:text-ink transition-colors"
                     >
-                      {slides.map(s => <option key={s.id} value={s.id} className="bg-gray-900">{slideLabel(s)}</option>)}
+                      {slides.map(s => <option key={s.id} value={s.id} className="bg-surface">{slideLabel(s)}</option>)}
                     </select>
                   </div>
                   <div style={{ width: 36 }} className="flex items-center justify-center">
-                    <button onClick={() => deleteSlideEntry(entry.id)} className="text-gray-700 hover:text-red-400 text-base leading-none transition-colors">×</button>
+                    <button onClick={() => deleteSlideEntry(entry.id)} className="text-ink-subtle hover:text-red-400 text-base leading-none transition-colors">×</button>
                   </div>
                 </div>
               )
@@ -852,8 +853,8 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           </div>
 
           {slideEntries.length > 0 && (
-            <div className="border-t border-gray-800 px-4 py-1.5">
-              <span className="text-[10px] text-gray-600">{slideEntries.length} entr{slideEntries.length !== 1 ? 'ies' : 'y'}</span>
+            <div className="border-t border-edge px-4 py-1.5">
+              <span className="text-[10px] text-ink-subtle">{slideEntries.length} entr{slideEntries.length !== 1 ? 'ies' : 'y'}</span>
             </div>
           )}
         </div>
@@ -864,7 +865,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
   function renderEditor() {
     if (!selectedId) {
       return (
-        <div className="flex-1 flex items-center justify-center text-xs text-gray-600">
+        <div className="flex-1 flex items-center justify-center text-xs text-ink-subtle">
           Select a schedule to edit
         </div>
       )
@@ -878,10 +879,10 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     if (tab.type === 'slide_grid') {
       return (
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-none border-b border-gray-800 px-5 py-3 flex items-start gap-3">
+          <div className="flex-none border-b border-edge px-5 py-3 flex items-start gap-3">
             <div className="flex-1 min-w-0 space-y-1.5">
               <input value={editName} onChange={e => setEditName(e.target.value)} onBlur={saveName} className={inp} />
-              <input value={editDesc} onChange={e => setEditDesc(e.target.value)} onBlur={saveDesc} placeholder="Optional description" className="block w-full bg-transparent text-[10px] text-gray-500 focus:outline-none placeholder:text-gray-700 focus:text-gray-400" />
+              <input value={editDesc} onChange={e => setEditDesc(e.target.value)} onBlur={saveDesc} placeholder="Optional description" className="block w-full bg-transparent text-[10px] text-ink-subtle focus:outline-none placeholder:text-ink-subtle focus:text-ink-muted" />
             </div>
             <div className="flex flex-col gap-1.5 shrink-0">
               <button
@@ -889,17 +890,17 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
                 className={`text-xs px-3 py-1 rounded border transition-colors ${
                   sched.active
                     ? 'border-green-700 text-green-400 hover:bg-green-900/30'
-                    : 'border-gray-700 text-gray-500 hover:border-gray-600'
+                    : 'border-edge-strong text-ink-subtle hover:border-edge-strong'
                 }`}
               >{sched.active ? 'Active' : 'Inactive'}</button>
               {sched.is_default
-                ? <span className="text-[10px] text-center px-3 py-1 rounded bg-blue-900/40 border border-blue-800 text-blue-300">Shop Default</span>
-                : <button onClick={setAsDefault} className="text-xs px-3 py-1 rounded border border-gray-700 text-gray-500 hover:border-blue-700 hover:text-blue-400 transition-colors">Set Default</button>
+                ? <span className="text-[10px] text-center px-3 py-1 rounded bg-accent/10 border border-blue-800 text-accent-ink">Shop Default</span>
+                : <button onClick={setAsDefault} className="text-xs px-3 py-1 rounded border border-edge-strong text-ink-subtle hover:border-blue-700 hover:text-accent-ink transition-colors">Set Default</button>
               }
             </div>
           </div>
           {rowsLoading
-            ? <div className="flex-1 flex items-center justify-center"><p className="text-xs text-gray-500">Loading…</p></div>
+            ? <div className="flex-1 flex items-center justify-center"><p className="text-xs text-ink-subtle">Loading…</p></div>
             : renderSlideGrid()
           }
         </div>
@@ -912,7 +913,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         {/* Name + status controls */}
         <div className="flex items-start gap-3">
           <div className="flex-1">
-            <label className="text-[10px] text-gray-500 uppercase tracking-wide mb-1 block">Name</label>
+            <label className="text-[10px] text-ink-subtle uppercase tracking-wide mb-1 block">Name</label>
             <input value={editName} onChange={e => setEditName(e.target.value)} onBlur={saveName} className={inp} />
           </div>
           <div className="flex flex-col gap-1.5 pt-5">
@@ -921,38 +922,38 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
               className={`text-xs px-3 py-1 rounded border transition-colors ${
                 sched.active
                   ? 'border-green-700 text-green-400 hover:bg-green-900/30'
-                  : 'border-gray-700 text-gray-500 hover:border-gray-600'
+                  : 'border-edge-strong text-ink-subtle hover:border-edge-strong'
               }`}
             >
               {sched.active ? 'Active' : 'Inactive'}
             </button>
             {sched.is_default
-              ? <span className="text-[10px] text-center px-3 py-1 rounded bg-blue-900/40 border border-blue-800 text-blue-300">Shop Default</span>
-              : <button onClick={setAsDefault} className="text-xs px-3 py-1 rounded border border-gray-700 text-gray-500 hover:border-blue-700 hover:text-blue-400 transition-colors">Set Default</button>
+              ? <span className="text-[10px] text-center px-3 py-1 rounded bg-accent/10 border border-blue-800 text-accent-ink">Shop Default</span>
+              : <button onClick={setAsDefault} className="text-xs px-3 py-1 rounded border border-edge-strong text-ink-subtle hover:border-blue-700 hover:text-accent-ink transition-colors">Set Default</button>
             }
           </div>
         </div>
 
         {/* Description */}
         <div>
-          <label className="text-[10px] text-gray-500 uppercase tracking-wide mb-1 block">Description</label>
+          <label className="text-[10px] text-ink-subtle uppercase tracking-wide mb-1 block">Description</label>
           <input value={editDesc} onChange={e => setEditDesc(e.target.value)} onBlur={saveDesc} placeholder="Optional description" className={inp} />
         </div>
 
         {/* Content editor */}
-        <div className="border-t border-gray-800 pt-4">
-          {tab.type === 'asm_grid'    && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderAsmGrid()}</>}
-          {tab.type === 'tk_list'     && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderTkList()}</>}
-          {tab.type === 'front_list'  && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderFrontList()}</>}
+        <div className="border-t border-edge pt-4">
+          {tab.type === 'asm_grid'    && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderAsmGrid()}</>}
+          {tab.type === 'tk_list'     && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderTkList()}</>}
+          {tab.type === 'front_list'  && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderFrontList()}</>}
           {tab.type === 'db_list'     && renderDbList()}
           {tab.type === 'mat_single'  && renderMatSingle(tab.valueCol as string, tab.ebCol)}
-          {tab.type === 'bt_roles'    && <>{rowsLoading ? <p className="text-xs text-gray-500">Loading…</p> : renderBtRoles()}</>}
+          {tab.type === 'bt_roles'    && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderBtRoles()}</>}
           {tab.type === 'hw_single'   && renderHwSingle()}
         </div>
 
         {/* Edging defaults hint for row-based tabs */}
         {(tab.type === 'asm_grid' || tab.type === 'tk_list' || tab.type === 'front_list') && (
-          <p className="text-[10px] text-gray-600 border-t border-gray-800/50 pt-3">
+          <p className="text-[10px] text-ink-subtle border-t border-edge/50 pt-3">
             Which parts and edges receive banding is configured in the construction method settings.
           </p>
         )}
@@ -964,8 +965,8 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
 
   if (loading) {
     return (
-      <div className={embedded ? "flex-1 flex items-center justify-center" : "h-screen bg-gray-950 flex items-center justify-center"}>
-        <p className="text-xs text-gray-500">Loading schedules…</p>
+      <div className={embedded ? "flex-1 flex items-center justify-center" : "h-screen bg-canvas flex items-center justify-center"}>
+        <p className="text-xs text-ink-subtle">Loading schedules…</p>
       </div>
     )
   }
@@ -973,30 +974,31 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
   const activeList = schedLists[activeTab] ?? []
 
   return (
-    <div className={embedded ? "flex-1 flex flex-col overflow-hidden" : "h-screen bg-gray-950 text-white flex flex-col overflow-hidden"}>
+    <div className={embedded ? "flex-1 flex flex-col overflow-hidden" : "h-screen bg-canvas text-ink flex flex-col overflow-hidden"}>
 
       {/* Header */}
       {!embedded && (
-        <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
-          <Link href="/" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">← Projects</Link>
-          <span className="text-gray-700">|</span>
-          <span className="text-sm font-semibold text-white">Schedules</span>
-          <span className="text-xs text-gray-600 ml-1">· Named templates applied to jobs and rooms</span>
+        <div className="flex-none border-b border-edge px-6 py-3 flex items-center gap-3">
+          <ThemeToggle />
+          <Link href="/" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">← Projects</Link>
+          <span className="text-ink-subtle">|</span>
+          <span className="text-sm font-semibold text-ink">Schedules</span>
+          <span className="text-xs text-ink-subtle ml-1">· Named templates applied to jobs and rooms</span>
         </div>
       )}
 
       <div className="flex-1 flex overflow-hidden">
 
         {/* Vertical tab list */}
-        <div className="w-44 shrink-0 border-r border-gray-800 overflow-y-auto">
+        <div className="w-44 shrink-0 border-r border-edge overflow-y-auto">
           {TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => changeTab(tab.key)}
-              className={`w-full text-left px-4 py-2.5 text-xs transition-colors border-b border-gray-800/50 ${
+              className={`w-full text-left px-4 py-2.5 text-xs transition-colors border-b border-edge/50 ${
                 activeTab === tab.key
-                  ? 'bg-gray-800 text-white font-semibold'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-900'
+                  ? 'bg-surface-2 text-ink font-semibold'
+                  : 'text-ink-muted hover:text-ink hover:bg-surface'
               }`}
             >
               {tab.label}
@@ -1005,20 +1007,20 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         </div>
 
         {/* Schedule list */}
-        <div className="w-56 shrink-0 border-r border-gray-800 flex flex-col overflow-hidden">
-          <div className="flex-none border-b border-gray-800">
+        <div className="w-56 shrink-0 border-r border-edge flex flex-col overflow-hidden">
+          <div className="flex-none border-b border-edge">
             <div className="px-3 py-2.5 flex gap-2">
               <input
                 value={newName}
                 onChange={e => { setNewName(e.target.value); setCreateError(null) }}
                 onKeyDown={e => e.key === 'Enter' && createSchedule()}
                 placeholder="New schedule name…"
-                className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                className="flex-1 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink placeholder-ink-subtle focus:outline-none focus:border-accent"
               />
               <button
                 onClick={createSchedule}
                 disabled={creating || !newName.trim()}
-                className="text-xs px-2.5 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
+                className="text-xs px-2.5 py-1 bg-accent hover:bg-accent-hover disabled:bg-surface-3 disabled:text-ink-subtle text-white rounded transition-colors"
               >
                 {creating ? '…' : '+'}
               </button>
@@ -1028,29 +1030,29 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto divide-y divide-gray-800/50">
+          <div className="flex-1 overflow-y-auto divide-y divide-edge/50">
             {activeList.length === 0 && (
-              <p className="text-[10px] text-gray-600 px-3 py-4 text-center">No schedules yet</p>
+              <p className="text-[10px] text-ink-subtle px-3 py-4 text-center">No schedules yet</p>
             )}
             {activeList.map(s => (
               <button
                 key={s.id}
                 onClick={() => selectSchedule(s.id)}
                 className={`w-full text-left px-3 py-2.5 flex items-start justify-between gap-2 transition-colors group ${
-                  selectedId === s.id ? 'bg-gray-800' : 'hover:bg-gray-900'
+                  selectedId === s.id ? 'bg-surface-2' : 'hover:bg-surface'
                 }`}
               >
                 <div className="min-w-0 flex-1">
-                  <p className={`text-xs truncate ${selectedId === s.id ? 'text-white' : 'text-gray-300'}`}>{s.name}</p>
+                  <p className={`text-xs truncate ${selectedId === s.id ? 'text-ink' : 'text-ink-muted'}`}>{s.name}</p>
                   <div className="flex gap-1.5 mt-0.5">
-                    {s.is_default && <span className="text-[9px] text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded">default</span>}
-                    {!s.active   && <span className="text-[9px] text-gray-600">inactive</span>}
+                    {s.is_default && <span className="text-[9px] text-accent-ink bg-accent/10 px-1.5 py-0.5 rounded">default</span>}
+                    {!s.active   && <span className="text-[9px] text-ink-subtle">inactive</span>}
                   </div>
                 </div>
                 <span
                   role="button"
                   onClick={e => { e.stopPropagation(); deleteSchedule(s.id) }}
-                  className="text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5 text-base leading-none cursor-pointer"
+                  className="text-ink-subtle hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5 text-base leading-none cursor-pointer"
                 >
                   ×
                 </span>

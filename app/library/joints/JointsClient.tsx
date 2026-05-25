@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import JointPreviewPanel from './JointPreviewPanel'
 import type { JointOpForPreview } from './JointPreviewPanel'
+import { ThemeToggle } from '../../ThemeToggle'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -200,9 +201,10 @@ export default function JointsClient({
     if (embedded) { reloadJoints(); reloadFasteners() }
   }, [embedded, reloadJoints, reloadFasteners])
 
-  // When selection changes, load ops and clear selected op
+  // When selection changes, load ops and clear selected op + any stale save error
   useEffect(() => {
     setSelOpId(null)
+    setSaveError(null)
     if (isNew || !selId) { setOps([]); return }
     loadOps(selId)
   }, [selId, isNew, loadOps])
@@ -289,11 +291,13 @@ export default function JointsClient({
 
   async function addOp() {
     if (!selId) return
+    setSaveError(null)
     const nextOrder = ops.length > 0 ? Math.max(...ops.map(o => o.operation_order)) + 1 : 1
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('joint_type_operations')
       .insert({ ...OP_DEFAULTS, joint_type_id: selId, operation_order: nextOrder })
       .select('*').single()
+    if (error) { console.warn('addOp failed:', error.message, error); setSaveError(`Couldn't add operation: ${error.message}`); return }
     if (data) setOps(prev => [...prev, toOp(data as Record<string, unknown>)])
   }
 
@@ -301,7 +305,9 @@ export default function JointsClient({
     const numKeys: (keyof JointTypeOperation)[] = ['operation_order','tool_diameter_mm','depth_mm','offset_x_mm','offset_y_mm','offset_z_mm','qty','spacing_mm','qty2','spacing2_mm']
     const val = numKeys.includes(key) ? parseFloat(raw as string) : raw
     if (numKeys.includes(key) && isNaN(val as number)) return
-    await supabase.from('joint_type_operations').update({ [key]: val }).eq('id', id)
+    const { error } = await supabase.from('joint_type_operations').update({ [key]: val }).eq('id', id)
+    if (error) { console.warn('patchOp failed:', String(key), error.message, error); setSaveError(`Couldn't save ${String(key)}: ${error.message}`); return }
+    setSaveError(null)
     setOps(prev => prev.map(o => o.id === id ? { ...o, [key]: val } : o))
   }
 
@@ -312,12 +318,16 @@ export default function JointsClient({
     if (expr && expr.trim()) exprs[field] = expr.trim()
     else delete exprs[field]
     const expressions = Object.keys(exprs).length ? exprs : null
-    await supabase.from('joint_type_operations').update({ expressions }).eq('id', opId)
+    const { error } = await supabase.from('joint_type_operations').update({ expressions }).eq('id', opId)
+    if (error) { console.warn('patchExpr failed:', field, error.message, error); setSaveError(`Couldn't save formula for ${field}: ${error.message}`); return }
+    setSaveError(null)
     setOps(prev => prev.map(o => o.id === opId ? { ...o, expressions } : o))
   }
 
   async function deleteOp(id: string) {
-    await supabase.from('joint_type_operations').delete().eq('id', id)
+    const { error } = await supabase.from('joint_type_operations').delete().eq('id', id)
+    if (error) { console.warn('deleteOp failed:', error.message, error); setSaveError(`Couldn't delete operation: ${error.message}`); return }
+    setSaveError(null)
     setOps(prev => prev.filter(o => o.id !== id))
   }
 
@@ -346,28 +356,29 @@ export default function JointsClient({
   const selJoint = selId ? joints.find(j => j.id === selId) : null
 
   return (
-    <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-canvas text-ink flex flex-col overflow-hidden">
 
       {!embedded && (
-        <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
-          <Link href="/settings" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">← Settings</Link>
-          <span className="text-gray-700">|</span>
-          <Link href="/library/materials" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">Materials</Link>
-          <span className="text-gray-700">|</span>
-          <Link href="/library/schedules" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">Schedules</Link>
-          <span className="text-gray-700">|</span>
-          <Link href="/library/construction-methods" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">Construction Methods</Link>
-          <span className="text-gray-700">|</span>
-          <span className="text-sm font-semibold text-white">Joints</span>
+        <div className="flex-none border-b border-edge px-6 py-3 flex items-center gap-3">
+          <ThemeToggle />
+          <Link href="/settings" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">← Settings</Link>
+          <span className="text-ink-subtle">|</span>
+          <Link href="/library/materials" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Materials</Link>
+          <span className="text-ink-subtle">|</span>
+          <Link href="/library/schedules" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Schedules</Link>
+          <span className="text-ink-subtle">|</span>
+          <Link href="/library/construction-methods" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Construction Methods</Link>
+          <span className="text-ink-subtle">|</span>
+          <span className="text-sm font-semibold text-ink">Joints</span>
         </div>
       )}
 
       {/* Tab bar */}
-      <div className="flex-none border-b border-gray-800 px-6 flex gap-1 pt-1">
+      <div className="flex-none border-b border-edge px-6 flex gap-1 pt-1">
         {(['joints','fasteners'] as Tab[]).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 text-xs font-medium transition-colors border-b-2 -mb-px ${
-              tab === t ? 'border-blue-500 text-blue-300' : 'border-transparent text-gray-400 hover:text-gray-200'
+              tab === t ? 'border-accent text-accent-ink' : 'border-transparent text-ink-muted hover:text-ink'
             }`}>
             {t === 'joints' ? 'Joint Types' : 'Fasteners'}
           </button>
@@ -379,16 +390,16 @@ export default function JointsClient({
         {tab === 'joints' ? (
           <>
             {/* ── Left: joint type list ────────────────────────────────── */}
-            <aside className="w-60 flex-none border-r border-gray-800 flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Joint Types</span>
-                <button onClick={startNew} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">+ New</button>
+            <aside className="w-60 flex-none border-r border-edge flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-edge">
+                <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Joint Types</span>
+                <button onClick={startNew} className="text-xs text-accent-ink hover:text-accent-ink transition-colors">+ New</button>
               </div>
               <div className="flex-1 overflow-y-auto py-1">
                 {joints.map(jt => (
                   <div key={jt.id}
                     className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-                      selId === jt.id && !isNew ? 'bg-blue-600/15 text-blue-300' : 'text-gray-300 hover:bg-gray-800/60'
+                      selId === jt.id && !isNew ? 'bg-accent/10 text-accent-ink' : 'text-ink-muted hover:bg-surface-2/60'
                     }`}
                     onClick={() => selectJoint(jt)}
                   >
@@ -396,17 +407,17 @@ export default function JointsClient({
                     <button
                       onClick={e => { e.stopPropagation(); duplicateJointType(jt) }}
                       title="Duplicate"
-                      className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-blue-400 transition-all text-xs px-1"
+                      className="opacity-0 group-hover:opacity-100 text-ink-subtle hover:text-accent-ink transition-all text-xs px-1"
                     >⧉</button>
                     <button
                       onClick={e => { e.stopPropagation(); deleteJointType(jt.id) }}
                       title="Delete"
-                      className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all text-xs px-1"
+                      className="opacity-0 group-hover:opacity-100 text-ink-subtle hover:text-red-400 transition-all text-xs px-1"
                     >✕</button>
                   </div>
                 ))}
                 {joints.length === 0 && (
-                  <p className="px-4 py-6 text-xs text-gray-600 text-center">No joint types yet.<br/>Click + New to create one.</p>
+                  <p className="px-4 py-6 text-xs text-ink-subtle text-center">No joint types yet.<br/>Click + New to create one.</p>
                 )}
               </div>
             </aside>
@@ -414,7 +425,7 @@ export default function JointsClient({
             {/* ── Centre: editor ───────────────────────────────────────── */}
             {(!selId && !isNew) ? (
               <div className="flex-1 flex items-center justify-center">
-                <p className="text-sm text-gray-600">Select a joint type or click + New</p>
+                <p className="text-sm text-ink-subtle">Select a joint type or click + New</p>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto px-8 py-6 min-w-0">
@@ -422,13 +433,13 @@ export default function JointsClient({
 
                   {/* Header row */}
                   <div className="flex items-center gap-4">
-                    <h2 className="text-sm font-semibold text-gray-200 flex-1">
+                    <h2 className="text-sm font-semibold text-ink flex-1">
                       {isNew ? 'New joint type' : (selJoint?.name ?? '')}
                     </h2>
                     <button
                       onClick={saveNameDesc}
                       disabled={saving || (!isNew && !nameDirty) || !draftName.trim()}
-                      className="px-4 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 transition-colors"
+                      className="px-4 py-1.5 text-xs rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-40 transition-colors"
                     >
                       {saving ? 'Saving…' : isNew ? 'Create' : 'Save name'}
                     </button>
@@ -461,13 +472,16 @@ export default function JointsClient({
                   {/* Operations */}
                   {!isNew && (
                     <Section label="Operations" sublabel="The individual machine operations that make up this joint. Each operation targets either the Master or Slave part.">
+                      {saveError && (
+                        <p className="text-xs text-red-400 border border-red-500/40 bg-red-500/10 rounded px-2 py-1">{saveError}</p>
+                      )}
                       <OpsTable ops={ops} onPatch={patchOp} onPatchExpr={patchExpr} onDelete={deleteOp} onAdd={addOp}
                         selOpId={selOpId} onSelOpChange={setSelOpId} />
                     </Section>
                   )}
 
                   {isNew && (
-                    <p className="text-xs text-gray-600 italic">Create the joint type first, then add operations.</p>
+                    <p className="text-xs text-ink-subtle italic">Create the joint type first, then add operations.</p>
                   )}
 
                 </div>
@@ -585,17 +599,17 @@ function OpsTable({
   onSelOpChange:  (id: string | null) => void
 }) {
 
-  const thCls = 'text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-2 py-1 border border-gray-700 whitespace-nowrap'
-  const tdCls = 'border border-gray-700 p-0'
-  const celCls = 'bg-transparent px-1.5 py-0.5 text-[11px] text-white focus:outline-none focus:bg-blue-950/40 w-full'
+  const thCls = 'text-left text-[10px] font-semibold text-ink-muted uppercase tracking-wider px-2 py-1 border border-edge-strong whitespace-nowrap'
+  const tdCls = 'border border-edge-strong p-0'
+  const celCls = 'bg-transparent px-1.5 py-0.5 text-[11px] text-ink focus:outline-none focus:bg-accent/10 w-full'
   const numCls = celCls + ' text-right font-mono'
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-lg border border-gray-800">
+      <div className="overflow-x-auto rounded-lg border border-edge">
         <table className="w-full border-collapse text-xs">
           <thead>
-            <tr className="bg-gray-900/70">
+            <tr className="bg-surface/70">
               <th className={thCls} style={{ width: 32 }}>#</th>
               <th className={thCls} style={{ minWidth: 120 }}>Op name</th>
               <th className={thCls} style={{ width: 80 }}>Part</th>
@@ -617,8 +631,8 @@ function OpsTable({
             {ops.map((op, i) => {
               const selected = op.id === selOpId
               const rowCls = selected
-                ? 'bg-blue-900/20 ring-1 ring-inset ring-blue-600/30'
-                : 'bg-gray-950/30 hover:bg-gray-800/20'
+                ? 'bg-accent/10 ring-1 ring-inset ring-accent/30'
+                : 'bg-canvas/30 hover:bg-surface-2/20'
               return (
                 <tr key={op.id} className={`cursor-pointer transition-colors ${rowCls}`}
                   onClick={() => onSelOpChange(selOpId === op.id ? null : op.id)}>
@@ -724,16 +738,16 @@ function OpsTable({
                       onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
                       className={numCls} />
                   </td>
-                  <td className="border border-gray-700 px-1.5 text-center">
+                  <td className="border border-edge-strong px-1.5 text-center">
                     <button onClick={e => { e.stopPropagation(); onDelete(op.id) }}
-                      className="text-gray-600 hover:text-red-400 transition-colors">✕</button>
+                      className="text-ink-subtle hover:text-red-400 transition-colors">✕</button>
                   </td>
                 </tr>
               )
             })}
             {ops.length === 0 && (
               <tr>
-                <td colSpan={15} className="px-4 py-6 text-center text-xs text-gray-600">
+                <td colSpan={15} className="px-4 py-6 text-center text-xs text-ink-subtle">
                   No operations yet. Click + Add operation below.
                 </td>
               </tr>
@@ -742,7 +756,7 @@ function OpsTable({
         </table>
       </div>
       <button onClick={onAdd}
-        className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors">
+        className="mt-2 text-xs text-accent-ink hover:text-accent-ink transition-colors">
         + Add operation
       </button>
     </div>
@@ -775,30 +789,30 @@ function FastenersTable({
     { key: 'active',        label: 'Active',    w: 48,  type: 'boolean' },
   ]
 
-  const thCls  = 'text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-1.5 whitespace-nowrap'
+  const thCls  = 'text-left text-[10px] font-semibold text-ink-subtle uppercase tracking-wider px-2 py-1.5 whitespace-nowrap'
   const tdCls  = 'px-2 py-1'
-  const celCls = 'bg-gray-800/60 border border-transparent hover:border-gray-600 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500 w-full'
+  const celCls = 'bg-surface-2/60 border border-transparent hover:border-edge-strong rounded px-1.5 py-0.5 text-xs text-ink focus:outline-none focus:border-accent w-full'
 
   return (
     <div className="px-6 py-4">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Fasteners</p>
+        <p className="text-xs text-ink-subtle uppercase tracking-wider font-semibold">Fasteners</p>
         <button onClick={onAdd}
-          className="text-xs text-blue-400 hover:text-blue-300 transition-colors border border-gray-700 hover:border-blue-700 rounded px-3 py-1">
+          className="text-xs text-accent-ink hover:text-accent-ink transition-colors border border-edge-strong hover:border-accent rounded px-3 py-1">
           + Add fastener
         </button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b border-gray-800">
+            <tr className="border-b border-edge">
               {cols.map(c => <th key={c.key} className={thCls} style={{ width: c.w }}>{c.label}</th>)}
               <th className={thCls} style={{ width: 32 }} />
             </tr>
           </thead>
           <tbody>
             {fasteners.map(f => (
-              <tr key={f.id} className="border-b border-gray-800/40 hover:bg-gray-800/20">
+              <tr key={f.id} className="border-b border-edge/40 hover:bg-surface-2/20">
                 {cols.map(c => (
                   <td key={c.key} className={tdCls}>
                     {c.type === 'boolean' ? (
@@ -822,13 +836,13 @@ function FastenersTable({
                 ))}
                 <td className={tdCls}>
                   <button onClick={() => onDelete(f.id)}
-                    className="text-gray-600 hover:text-red-400 transition-colors text-xs px-1">✕</button>
+                    className="text-ink-subtle hover:text-red-400 transition-colors text-xs px-1">✕</button>
                 </td>
               </tr>
             ))}
             {fasteners.length === 0 && (
               <tr>
-                <td colSpan={cols.length + 1} className="px-4 py-8 text-center text-xs text-gray-600">
+                <td colSpan={cols.length + 1} className="px-4 py-8 text-center text-xs text-ink-subtle">
                   No fasteners yet. Click + Add fastener.
                 </td>
               </tr>
@@ -1029,11 +1043,11 @@ function ExprCell({
       />
       {focused && dropPos && suggestions.length > 0 && createPortal(
         <div
-          className="bg-gray-900 border border-gray-700 rounded-md shadow-2xl overflow-hidden py-0.5"
+          className="bg-surface border border-edge-strong rounded-md shadow-2xl overflow-hidden py-0.5"
           style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, minWidth: dropPos.width, zIndex: 9999 }}
         >
-          <div className="px-2 pt-0.5 pb-1 border-b border-gray-800">
-            <span className="text-[9px] text-gray-600 uppercase tracking-wider">Formulas  —  T=thickness  W/L/D=part  M=master  S=slave</span>
+          <div className="px-2 pt-0.5 pb-1 border-b border-edge">
+            <span className="text-[9px] text-ink-subtle uppercase tracking-wider">Formulas  —  T=thickness  W/L/D=part  M=master  S=slave</span>
           </div>
           {suggestions.map(s => (
             <button
@@ -1043,9 +1057,9 @@ function ExprCell({
                 setDraft(s.formula)
                 setTimeout(() => inputRef.current?.blur(), 0)
               }}
-              className="w-full text-left px-2.5 py-1 flex items-center justify-between gap-4 hover:bg-gray-800 transition-colors"
+              className="w-full text-left px-2.5 py-1 flex items-center justify-between gap-4 hover:bg-surface-2 transition-colors"
             >
-              <span className="text-[11px] text-gray-400">{s.label}</span>
+              <span className="text-[11px] text-ink-muted">{s.label}</span>
               <span className="text-[11px] text-cyan-400 font-mono shrink-0">{s.formula}</span>
             </button>
           ))}
@@ -1062,8 +1076,8 @@ function Section({ label, sublabel, children }: { label: string; sublabel?: stri
   return (
     <div className="space-y-3">
       <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</p>
-        {sublabel && <p className="text-[10px] text-gray-600 mt-0.5">{sublabel}</p>}
+        <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wider">{label}</p>
+        {sublabel && <p className="text-[10px] text-ink-subtle mt-0.5">{sublabel}</p>}
       </div>
       <div className="space-y-2">{children}</div>
     </div>
@@ -1073,10 +1087,10 @@ function Section({ label, sublabel, children }: { label: string; sublabel?: stri
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-4">
-      <span className="w-28 pt-1 text-xs text-gray-400 shrink-0">{label}</span>
+      <span className="w-28 pt-1 text-xs text-ink-muted shrink-0">{label}</span>
       <div className="flex-1">{children}</div>
     </div>
   )
 }
 
-const inpCls = 'bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500'
+const inpCls = 'bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent'

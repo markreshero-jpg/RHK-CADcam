@@ -7,14 +7,16 @@ import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { dbLoadResolvedParts } from './canvasDB'
 import PlanDrawingSVG from './PlanDrawingSVG'
+import PlanViewReport from './PlanViewReport'
 import ElevationReportSVG from './ElevationReportSVG'
 
 export type ReportScope = 'job' | 'room'
-type ReportId = 'parts_list_summary' | 'shop_drawing_plan' | 'elevation_view'
+type ReportId = 'parts_list_summary' | 'shop_drawing_plan' | 'plan_view_v2' | 'elevation_view'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'parts_list_summary', label: 'Parts List Summary',  desc: 'Parts by room · material · cabinet' },
   { id: 'shop_drawing_plan',  label: 'Plan View',           desc: 'B&W plan drawing for shop' },
+  { id: 'plan_view_v2',       label: 'Plan View (New)',     desc: 'Scaled PDF with toggleable layers' },
   { id: 'elevation_view',     label: 'Elevation Views',     desc: 'B&W wall elevations with dimensions' },
 ]
 
@@ -386,11 +388,11 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {(selectedReport === 'shop_drawing_plan' || selectedReport === 'elevation_view') && (
+                {(selectedReport === 'shop_drawing_plan' || selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view') && (
                   <>
                     <select value={printScale} onChange={e => setPrintScale(Number(e.target.value))}
                       className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1"
-                      title="Annotation scale — affects text and line sizes inside the drawing">
+                      title="Drawing scale — 1:N">
                       {SCALES.map(s => <option key={s} value={s}>1:{s}</option>)}
                     </select>
                     <select value={printPaper} onChange={e => setPrintPaper(e.target.value as keyof typeof PAPER)}
@@ -401,12 +403,15 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                     </select>
                   </>
                 )}
-                <button onClick={handlePrintActive}
-                  className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium">
-                  {selectedReport === 'shop_drawing_plan' ? 'Download SVG'
-                    : selectedReport === 'elevation_view' ? 'Download PDF'
-                    : 'Print / PDF'}
-                </button>
+                {/* The new plan view has its own download button in its layer toolbar. */}
+                {selectedReport !== 'plan_view_v2' && (
+                  <button onClick={handlePrintActive}
+                    className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium">
+                    {selectedReport === 'shop_drawing_plan' ? 'Download SVG'
+                      : selectedReport === 'elevation_view' ? 'Download PDF'
+                      : 'Print / PDF'}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -423,6 +428,15 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                     scale={printScale}
                   />
                 </div>
+              ) : selectedReport === 'plan_view_v2' ? (
+                <PlanViewReport
+                  project={project}
+                  room={room}
+                  walls={walls}
+                  cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
+                  scale={printScale}
+                  paperKey={printPaper}
+                />
               ) : selectedReport === 'elevation_view' ? (
                 <ElevationViewReport
                   walls={walls}

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createServerClient } from '@/src/lib/supabase-server'
 import { SignOutButton } from './SignOutButton'
+import { ThemeToggle } from './ThemeToggle'
 import { Project, Room } from '@/src/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -71,12 +72,12 @@ const ArrowRightIcon = () => (
 // ── Status config ─────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { badge: string; bar: string; dot: string }> = {
-  draft:         { badge: 'bg-gray-700/60 text-gray-400',           bar: 'bg-gray-600',    dot: 'bg-gray-500' },
+  draft:         { badge: 'bg-surface-3/60 text-ink-muted',          bar: 'bg-gray-600',    dot: 'bg-gray-500' },
   quoted:        { badge: 'bg-yellow-900/50 text-yellow-300',        bar: 'bg-yellow-600',  dot: 'bg-yellow-500' },
   approved:      { badge: 'bg-blue-900/50 text-blue-300',            bar: 'bg-blue-600',    dot: 'bg-blue-500' },
   in_production: { badge: 'bg-green-900/50 text-green-300',          bar: 'bg-green-600',   dot: 'bg-green-500' },
   completed:     { badge: 'bg-purple-900/50 text-purple-300',        bar: 'bg-purple-600',  dot: 'bg-purple-500' },
-  archived:      { badge: 'bg-gray-800/60 text-gray-600',            bar: 'bg-gray-700',    dot: 'bg-gray-600' },
+  archived:      { badge: 'bg-surface-2/60 text-ink-subtle',         bar: 'bg-gray-700',    dot: 'bg-gray-600' },
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -111,32 +112,33 @@ export default async function HomePage() {
   const projects = await getProjectsWithFirstRoom()
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-canvas text-ink">
 
       {/* Header */}
-      <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between">
+      <header className="border-b border-edge px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-blue-400">
+          <span className="text-accent-ink">
             <LogoIcon />
           </span>
           <div>
-            <h1 className="text-sm font-bold text-white tracking-tight leading-none">RHK CADcam</h1>
-            <p className="text-[10px] text-gray-500 mt-0.5">Cabinet Design & Manufacturing</p>
+            <h1 className="text-sm font-bold text-ink tracking-tight leading-none">RHK CADcam</h1>
+            <p className="text-[10px] text-ink-subtle mt-0.5">Cabinet Design & Manufacturing</p>
           </div>
+          <ThemeToggle className="ml-1" />
         </div>
 
         <nav className="flex items-center gap-1">
           <Link
             href="/settings"
-            className="flex items-center gap-2 text-gray-400 hover:text-gray-100 text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-2 text-ink-muted hover:text-ink text-sm px-3 py-2 rounded-lg hover:bg-surface-2 transition-colors"
           >
             <SettingsIcon />
             Settings
           </Link>
-          <div className="w-px h-5 bg-gray-800 mx-1" />
+          <div className="w-px h-5 bg-edge mx-1" />
           <Link
             href="/projects/new"
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
           >
             <PlusIcon />
             New Project
@@ -148,10 +150,10 @@ export default async function HomePage() {
       {/* Content */}
       <main className="px-6 py-6 max-w-5xl">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <h2 className="text-xs font-semibold text-ink-subtle uppercase tracking-wider">
             Projects
             {projects.length > 0 && (
-              <span className="ml-2 text-gray-600 normal-case font-normal tracking-normal">
+              <span className="ml-2 text-ink-subtle normal-case font-normal tracking-normal">
                 {projects.length} total
               </span>
             )}
@@ -159,15 +161,15 @@ export default async function HomePage() {
         </div>
 
         {projects.length === 0 ? (
-          <div className="border border-dashed border-gray-800 rounded-xl p-16 text-center">
-            <span className="inline-flex text-gray-700 mb-4">
+          <div className="border border-dashed border-edge rounded-xl p-16 text-center">
+            <span className="inline-flex text-ink-subtle mb-4">
               <FolderIcon />
             </span>
-            <p className="text-gray-500 text-sm mb-1">No projects yet</p>
-            <p className="text-gray-700 text-xs mb-5">Create your first cabinet design project to get started</p>
+            <p className="text-ink-subtle text-sm mb-1">No projects yet</p>
+            <p className="text-ink-subtle text-xs mb-5">Create your first cabinet design project to get started</p>
             <Link
               href="/projects/new"
-              className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+              className="inline-flex items-center gap-2 text-accent-ink hover:text-accent-hover text-sm font-medium transition-colors"
             >
               <PlusIcon />
               Create your first project
@@ -180,7 +182,7 @@ export default async function HomePage() {
               return (
                 <div
                   key={p.id}
-                  className="relative bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-lg overflow-hidden transition-all group"
+                  className="relative bg-surface border border-edge hover:border-edge-strong rounded-lg overflow-hidden transition-all group"
                 >
                   {/* Status bar */}
                   <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${cfg.bar}`} />
@@ -188,14 +190,14 @@ export default async function HomePage() {
                   <div className="flex items-center gap-4 px-5 py-3.5 pl-6">
 
                     {/* Folder icon */}
-                    <span className="flex-none text-gray-600 group-hover:text-gray-500 transition-colors">
+                    <span className="flex-none text-ink-subtle group-hover:text-ink-muted transition-colors">
                       <FolderIcon />
                     </span>
 
                     {/* Main info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2.5 flex-wrap">
-                        <span className="font-semibold text-white text-sm">{p.name}</span>
+                        <span className="font-semibold text-ink text-sm">{p.name}</span>
                         <span className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-full font-medium ${cfg.badge}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                           {p.status.replace('_', ' ')}
@@ -203,13 +205,13 @@ export default async function HomePage() {
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                         {p.client_name && (
-                          <span className="flex items-center gap-1 text-xs text-gray-400">
+                          <span className="flex items-center gap-1 text-xs text-ink-muted">
                             <ClientIcon />
                             {p.client_name}
                           </span>
                         )}
                         {p.client_address && (
-                          <span className="flex items-center gap-1 text-xs text-gray-600">
+                          <span className="flex items-center gap-1 text-xs text-ink-subtle">
                             <LocationIcon />
                             {p.client_address}
                           </span>
@@ -219,7 +221,7 @@ export default async function HomePage() {
 
                     {/* Right side */}
                     <div className="flex items-center gap-5 shrink-0">
-                      <span className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                      <span className="flex items-center gap-1.5 text-[11px] text-ink-subtle">
                         <CalendarIcon />
                         {new Date(p.created_at).toLocaleDateString('en-AU', {
                           day: 'numeric', month: 'short', year: 'numeric',
@@ -229,13 +231,13 @@ export default async function HomePage() {
                       {p.first_room_id ? (
                         <Link
                           href={`/canvas/${p.first_room_id}`}
-                          className="flex items-center gap-2 text-xs font-medium text-blue-400 hover:text-white bg-blue-900/30 hover:bg-blue-600 border border-blue-800/60 hover:border-blue-500 px-3 py-1.5 rounded-lg transition-all"
+                          className="flex items-center gap-2 text-xs font-medium text-accent-ink hover:text-white bg-accent/10 hover:bg-accent border border-accent/30 hover:border-accent px-3 py-1.5 rounded-lg transition-all"
                         >
                           Open Canvas
                           <ArrowRightIcon />
                         </Link>
                       ) : (
-                        <span className="text-xs text-gray-700 italic">No rooms</span>
+                        <span className="text-xs text-ink-subtle italic">No rooms</span>
                       )}
                     </div>
                   </div>

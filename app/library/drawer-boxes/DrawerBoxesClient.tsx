@@ -14,6 +14,7 @@ import {
 } from '@/src/lib/drawerBoxConfig'
 import type { DrawerType } from '@/src/lib/resolver/types'
 import DrawerBoxPreviewPanel from './DrawerBoxPreviewPanel'
+import { ThemeToggle } from '../../ThemeToggle'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,16 +43,16 @@ function RuleRow({
   const isOver = ruleKey in delta
   const label  = DB_RULE_LABELS[ruleKey]
 
-  const selectCls = `w-full bg-gray-800 border rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 ${
-    isOver ? 'border-blue-600' : 'border-gray-700'
+  const selectCls = `w-full bg-surface-2 border rounded px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-accent ${
+    isOver ? 'border-accent' : 'border-edge-strong'
   }`
-  const inputCls = `w-20 bg-gray-800 border rounded px-2 py-1.5 text-xs text-right text-white focus:outline-none focus:border-blue-500 ${
-    isOver ? 'border-blue-600 text-blue-300' : 'border-gray-700'
+  const inputCls = `w-20 bg-surface-2 border rounded px-2 py-1.5 text-xs text-right text-ink focus:outline-none focus:border-accent ${
+    isOver ? 'border-accent text-accent-ink' : 'border-edge-strong'
   }`
 
   return (
     <div className="flex items-center gap-3 py-1.5">
-      <span className={`flex-1 text-xs ${isOver ? 'text-blue-300' : 'text-gray-400'}`}>{label}</span>
+      <span className={`flex-1 text-xs ${isOver ? 'text-accent-ink' : 'text-ink-muted'}`}>{label}</span>
       {ruleKey === 'DB_BOTTOM_JOIN' ? (
         <select value={value as string} onChange={e => onChange(e.target.value as DrawerBoxRules['DB_BOTTOM_JOIN'])} className={selectCls}>
           {DB_BOTTOM_JOIN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -69,7 +70,7 @@ function RuleRow({
             onChange={e => onChange(Number(e.target.value))}
             className={inputCls}
           />
-          <span className="text-xs text-gray-600 w-6">mm</span>
+          <span className="text-xs text-ink-subtle w-6">mm</span>
         </>
       )}
     </div>
@@ -227,40 +228,41 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
     + Object.keys(delta.DB_EDGING ?? {}).length
 
   return (
-    <div className={embedded ? 'flex-1 flex flex-col overflow-hidden' : 'h-screen bg-gray-950 text-white flex flex-col overflow-hidden'}>
+    <div className={embedded ? 'flex-1 flex flex-col overflow-hidden' : 'h-screen bg-canvas text-ink flex flex-col overflow-hidden'}>
 
       {/* Header */}
       {!embedded && (
-        <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
-          <Link href="/settings" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">← Settings</Link>
-          <span className="text-gray-700">|</span>
-          <Link href="/library/construction-methods" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">Construction Methods</Link>
-          <span className="text-gray-700">|</span>
-          <span className="text-sm font-semibold text-white">Drawer Box Methods</span>
+        <div className="flex-none border-b border-edge px-6 py-3 flex items-center gap-3">
+          <ThemeToggle />
+          <Link href="/settings" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">← Settings</Link>
+          <span className="text-ink-subtle">|</span>
+          <Link href="/library/construction-methods" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Construction Methods</Link>
+          <span className="text-ink-subtle">|</span>
+          <span className="text-sm font-semibold text-ink">Drawer Box Methods</span>
         </div>
       )}
 
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left: method list ───────────────────────────────────────────── */}
-        <aside className="w-56 flex-none border-r border-gray-800 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Methods</span>
-            <button onClick={() => setCreating(true)} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">+ New</button>
+        <aside className="w-56 flex-none border-r border-edge flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-edge">
+            <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Methods</span>
+            <button onClick={() => setCreating(true)} className="text-xs text-accent-ink hover:text-accent-ink transition-colors">+ New</button>
           </div>
 
           {creating && (
-            <div className="px-3 py-2 border-b border-gray-800 flex gap-2">
+            <div className="px-3 py-2 border-b border-edge flex gap-2">
               <input
                 autoFocus
                 value={newName}
                 onChange={e => setNewName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') create(); if (e.key === 'Escape') setCreating(false) }}
                 placeholder="Method name…"
-                className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+                className="flex-1 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
               />
-              <button onClick={create} className="text-xs text-blue-400 hover:text-blue-300">✓</button>
-              <button onClick={() => setCreating(false)} className="text-xs text-gray-500 hover:text-gray-300">✕</button>
+              <button onClick={create} className="text-xs text-accent-ink hover:text-accent-ink">✓</button>
+              <button onClick={() => setCreating(false)} className="text-xs text-ink-subtle hover:text-ink-muted">✕</button>
             </div>
           )}
 
@@ -269,7 +271,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
               <div
                 key={m.id}
                 className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-                  selId === m.id ? 'bg-blue-600/15 text-blue-300' : 'text-gray-300 hover:bg-gray-800/60'
+                  selId === m.id ? 'bg-accent/10 text-accent-ink' : 'text-ink-muted hover:bg-surface-2/60'
                 } ${!m.active ? 'opacity-50' : ''}`}
                 onClick={() => setSelId(m.id)}
               >
@@ -279,12 +281,12 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                 )}
                 <button
                   onClick={e => { e.stopPropagation(); deleteMethod(m.id) }}
-                  className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all text-xs px-1"
+                  className="opacity-0 group-hover:opacity-100 text-ink-subtle hover:text-red-400 transition-all text-xs px-1"
                 >✕</button>
               </div>
             ))}
             {methods.length === 0 && (
-              <p className="px-4 py-6 text-xs text-gray-600 text-center">No methods yet.<br/>Click + New to create one.</p>
+              <p className="px-4 py-6 text-xs text-ink-subtle text-center">No methods yet.<br/>Click + New to create one.</p>
             )}
           </div>
         </aside>
@@ -292,7 +294,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
         {/* ── Main area ───────────────────────────────────────────────────── */}
         {!sel ? (
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm text-gray-600">Select or create a drawer box method</p>
+            <p className="text-sm text-ink-subtle">Select or create a drawer box method</p>
           </div>
         ) : (
           <div className="flex-1 flex overflow-hidden">
@@ -301,18 +303,18 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
             <div className="flex-1 flex flex-col overflow-hidden">
 
               {/* Editor header */}
-              <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-4">
+              <div className="flex-none border-b border-edge px-6 py-3 flex items-center gap-4">
                 <input
                   value={editName}
                   onChange={e => { setEditName(e.target.value); setDirty(true) }}
-                  className="bg-transparent text-sm font-semibold text-white border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:outline-none px-0 py-0.5 w-64"
+                  className="bg-transparent text-sm font-semibold text-ink border-b border-transparent hover:border-edge-strong focus:border-accent focus:outline-none px-0 py-0.5 w-64"
                 />
                 <div className="flex-1" />
                 <button
                   onClick={() => toggleActive(sel.id, sel.active)}
                   className={`text-xs border rounded px-3 py-1 transition-colors ${
                     sel.active
-                      ? 'text-gray-400 border-gray-700 hover:text-gray-200'
+                      ? 'text-ink-muted border-edge-strong hover:text-ink'
                       : 'text-yellow-400 border-yellow-900/50 hover:text-yellow-300'
                   }`}
                 >
@@ -321,7 +323,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                 {shopDefault !== sel.id ? (
                   <button
                     onClick={() => setAsShopDefault(sel.id)}
-                    className="text-xs text-gray-400 hover:text-green-400 transition-colors border border-gray-700 hover:border-green-700 rounded px-3 py-1"
+                    className="text-xs text-ink-muted hover:text-green-400 transition-colors border border-edge-strong hover:border-green-700 rounded px-3 py-1"
                   >
                     Set as shop default
                   </button>
@@ -331,26 +333,26 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                 <button
                   onClick={save}
                   disabled={saving || !dirty}
-                  className="px-4 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 transition-colors"
+                  className="px-4 py-1.5 text-xs rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-40 transition-colors"
                 >
                   {saving ? 'Saving…' : 'Save'}
                 </button>
               </div>
 
               {/* Description */}
-              <div className="flex-none px-6 py-3 border-b border-gray-800">
+              <div className="flex-none px-6 py-3 border-b border-edge">
                 <input
                   value={editDesc}
                   onChange={e => { setEditDesc(e.target.value); setDirty(true) }}
                   placeholder="Description (optional)"
-                  className="w-full bg-transparent text-xs text-gray-400 placeholder-gray-700 focus:outline-none focus:text-gray-200"
+                  className="w-full bg-transparent text-xs text-ink-muted placeholder-ink-subtle focus:outline-none focus:text-ink"
                 />
               </div>
 
               {/* Drawer type */}
-              <div className="flex-none px-6 py-3 border-b border-gray-800">
+              <div className="flex-none px-6 py-3 border-b border-edge">
                 <div className="flex items-center gap-4">
-                  <span className="text-xs text-gray-500 w-24 shrink-0">Drawer Type</span>
+                  <span className="text-xs text-ink-subtle w-24 shrink-0">Drawer Type</span>
                   <div className="flex gap-2">
                     {([
                       { value: 'system',     label: 'System',       hint: 'e.g. Blum Legrabox — metal sides, timber back + bottom only' },
@@ -363,14 +365,14 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                         className={`px-4 py-1.5 text-xs rounded-lg border transition-colors ${
                           editType === opt.value
                             ? 'bg-violet-700 border-violet-500 text-white'
-                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600'
+                            : 'bg-surface-2 border-edge-strong text-ink-muted hover:text-ink hover:border-edge-strong'
                         }`}
                       >
                         {opt.label}
                       </button>
                     ))}
                   </div>
-                  <span className="text-[10px] text-gray-600">
+                  <span className="text-[10px] text-ink-subtle">
                     {editType === 'system'
                       ? 'Metal sides supplied by slide — only back & bottom are cut'
                       : 'All 5 panels cut from sheet material'}
@@ -379,20 +381,20 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
               </div>
 
               {/* Box size */}
-              <div className="flex-none px-6 py-3 border-b border-gray-800">
+              <div className="flex-none px-6 py-3 border-b border-edge">
                 <div className="flex items-center gap-4">
-                  <span className="text-xs text-gray-500 w-24 shrink-0">Box Size</span>
+                  <span className="text-xs text-ink-subtle w-24 shrink-0">Box Size</span>
                   <div className="flex items-center gap-4">
                     {([['DX', prevW, setPrevW], ['DY', prevH, setPrevH], ['DZ', prevD, setPrevD]] as [string, number, (v: number) => void][]).map(([label, val, set]) => (
                       <label key={label} className="flex items-center gap-1.5">
-                        <span className="text-xs text-gray-500">{label}</span>
+                        <span className="text-xs text-ink-subtle">{label}</span>
                         <input
                           type="number" min={50} max={1200}
                           value={val}
                           onChange={e => set(Number(e.target.value))}
-                          className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-right text-gray-300 focus:outline-none focus:border-blue-500"
+                          className="w-16 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-right text-ink-muted focus:outline-none focus:border-accent"
                         />
-                        <span className="text-xs text-gray-600">mm</span>
+                        <span className="text-xs text-ink-subtle">mm</span>
                       </label>
                     ))}
                   </div>
@@ -404,7 +406,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                 <div className="max-w-lg space-y-5">
                   {DB_RULE_GROUPS.map(group => (
                     <div key={group.label}>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{group.label}</p>
+                      <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wider mb-1">{group.label}</p>
                       <div className="space-y-px">
                         {group.keys.map(k => (
                           <RuleRow key={k} ruleKey={k} delta={delta} onChange={v => setRule(k, v)} />
@@ -415,13 +417,13 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
 
                   {/* Edging */}
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Edging</p>
+                    <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wider mb-2">Edging</p>
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="text-gray-600">
+                        <tr className="text-ink-subtle">
                           <th className="text-left py-1 pr-4 font-normal w-36">Part</th>
                           {DB_EDGE_SIDES.map(s => (
-                            <th key={s} className="text-center py-1 w-9 font-medium text-gray-500">{DB_EDGE_LABELS[s]}</th>
+                            <th key={s} className="text-center py-1 w-9 font-medium text-ink-subtle">{DB_EDGE_LABELS[s]}</th>
                           ))}
                         </tr>
                       </thead>
@@ -431,8 +433,8 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                           const defSides = DEFAULT_DB_EDGING[part]
                           const isOver   = !dbSidesEqual(sides, defSides)
                           return (
-                            <tr key={part} className={`${isOver ? 'bg-blue-950/20' : 'hover:bg-gray-800/30'} rounded`}>
-                              <td className={`py-1 pr-4 ${isOver ? 'text-blue-300' : 'text-gray-400'}`}>
+                            <tr key={part} className={`${isOver ? 'bg-accent/10' : 'hover:bg-surface-2/30'} rounded`}>
+                              <td className={`py-1 pr-4 ${isOver ? 'text-accent-ink' : 'text-ink-muted'}`}>
                                 {DB_EDGING_LABELS[part]}
                               </td>
                               {DB_EDGE_SIDES.map(side => {
@@ -458,7 +460,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                   </div>
 
                   {overrideCount > 0 && (
-                    <p className="text-[11px] text-gray-600">
+                    <p className="text-[11px] text-ink-subtle">
                       {overrideCount} override{overrideCount !== 1 ? 's' : ''} from system defaults (highlighted in blue)
                     </p>
                   )}

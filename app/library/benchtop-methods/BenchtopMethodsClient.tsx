@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import type { BenchtopBuildMethod, BenchtopPartRole } from '@/src/lib/types'
 import BuildMethodWizard from './BuildMethodWizard'
+import { ThemeToggle } from '../../ThemeToggle'
 
 // ── Part role config ──────────────────────────────────────────────────────────
 
@@ -106,54 +107,55 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
 
   // ── CSS helpers ─────────────────────────────────────────────────────────────
 
-  const inp  = 'bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500'
+  const inp  = 'bg-surface-2 border border-edge-strong rounded px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-accent'
   const sel_ = `${inp} w-full`
   const mm   = `${inp} w-24 text-right font-mono`
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className={embedded ? 'flex-1 flex flex-col overflow-hidden' : 'h-screen bg-gray-950 text-white flex flex-col overflow-hidden'}>
+    <div className={embedded ? 'flex-1 flex flex-col overflow-hidden' : 'h-screen bg-canvas text-ink flex flex-col overflow-hidden'}>
 
       {/* Header nav */}
       {!embedded && (
-        <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3 text-sm">
-          <Link href="/settings" className="text-gray-500 hover:text-gray-300 transition-colors">← Settings</Link>
-          <span className="text-gray-700">|</span>
-          <Link href="/library/schedules" className="text-gray-500 hover:text-gray-300 transition-colors">Material Schedules</Link>
-          <span className="text-gray-700">|</span>
-          <Link href="/library/construction-methods" className="text-gray-500 hover:text-gray-300 transition-colors">Construction Methods</Link>
-          <span className="text-gray-700">|</span>
-          <Link href="/library/drawer-boxes" className="text-gray-500 hover:text-gray-300 transition-colors">Drawer Box Methods</Link>
-          <span className="text-gray-700">|</span>
-          <span className="font-semibold text-white">Benchtop Methods</span>
+        <div className="flex-none border-b border-edge px-6 py-3 flex items-center gap-3 text-sm">
+          <ThemeToggle />
+          <Link href="/settings" className="text-ink-subtle hover:text-ink-muted transition-colors">← Settings</Link>
+          <span className="text-ink-subtle">|</span>
+          <Link href="/library/schedules" className="text-ink-subtle hover:text-ink-muted transition-colors">Material Schedules</Link>
+          <span className="text-ink-subtle">|</span>
+          <Link href="/library/construction-methods" className="text-ink-subtle hover:text-ink-muted transition-colors">Construction Methods</Link>
+          <span className="text-ink-subtle">|</span>
+          <Link href="/library/drawer-boxes" className="text-ink-subtle hover:text-ink-muted transition-colors">Drawer Box Methods</Link>
+          <span className="text-ink-subtle">|</span>
+          <span className="font-semibold text-ink">Benchtop Methods</span>
         </div>
       )}
 
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left: method list ──────────────────────────────────────────── */}
-        <aside className="w-60 flex-none border-r border-gray-800 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Build Methods</span>
+        <aside className="w-60 flex-none border-r border-edge flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-edge">
+            <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Build Methods</span>
             <button
               onClick={() => setCreating(true)}
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+              className="text-xs text-accent-ink hover:text-accent-ink transition-colors"
             >+ New</button>
           </div>
 
           {creating && (
-            <div className="px-3 py-2 border-b border-gray-800 flex gap-2">
+            <div className="px-3 py-2 border-b border-edge flex gap-2">
               <input
                 autoFocus
                 value={newName}
                 onChange={e => setNewName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') create(); if (e.key === 'Escape') setCreating(false) }}
                 placeholder="Method name…"
-                className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
+                className="flex-1 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
               />
-              <button onClick={create}          className="text-xs text-blue-400 hover:text-blue-300">✓</button>
-              <button onClick={() => setCreating(false)} className="text-xs text-gray-500 hover:text-gray-300">✕</button>
+              <button onClick={create}          className="text-xs text-accent-ink hover:text-accent-ink">✓</button>
+              <button onClick={() => setCreating(false)} className="text-xs text-ink-subtle hover:text-ink-muted">✕</button>
             </div>
           )}
 
@@ -163,7 +165,7 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                 key={m.id}
                 onClick={() => setSelId(m.id)}
                 className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-                  selId === m.id ? 'bg-blue-600/15 text-blue-300' : 'text-gray-300 hover:bg-gray-800/60'
+                  selId === m.id ? 'bg-accent/10 text-accent-ink' : 'text-ink-muted hover:bg-surface-2/60'
                 }`}
               >
                 <span className="flex-1 text-xs truncate">{m.name}</span>
@@ -171,16 +173,16 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                   <span className="text-[9px] bg-green-900/40 text-green-400 px-1.5 py-0.5 rounded shrink-0">default</span>
                 )}
                 {!m.active && (
-                  <span className="text-[9px] text-gray-600 shrink-0">inactive</span>
+                  <span className="text-[9px] text-ink-subtle shrink-0">inactive</span>
                 )}
                 <button
                   onClick={e => { e.stopPropagation(); del(m.id) }}
-                  className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all text-xs px-1"
+                  className="opacity-0 group-hover:opacity-100 text-ink-subtle hover:text-red-400 transition-all text-xs px-1"
                 >✕</button>
               </div>
             ))}
             {methods.length === 0 && (
-              <p className="px-4 py-6 text-xs text-gray-600 text-center">
+              <p className="px-4 py-6 text-xs text-ink-subtle text-center">
                 No build methods yet.<br />Click + New to create one.
               </p>
             )}
@@ -190,7 +192,7 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
         {/* ── Right: editor ──────────────────────────────────────────────── */}
         {!sel ? (
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm text-gray-600">Select or create a build method</p>
+            <p className="text-sm text-ink-subtle">Select or create a build method</p>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 max-w-2xl">
@@ -198,7 +200,7 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
             {/* Name + status row */}
             <div className="flex items-start gap-4">
               <div className="flex-1">
-                <label className="text-[10px] text-gray-500 uppercase tracking-wide mb-1 block">Name</label>
+                <label className="text-[10px] text-ink-subtle uppercase tracking-wide mb-1 block">Name</label>
                 <input
                   defaultValue={sel.name}
                   key={sel.id + '_name'}
@@ -212,15 +214,15 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                   className={`text-xs px-3 py-1 rounded border transition-colors ${
                     sel.active
                       ? 'border-green-700 text-green-400 hover:bg-green-900/20'
-                      : 'border-gray-700 text-gray-500 hover:border-gray-600'
+                      : 'border-edge-strong text-ink-subtle hover:border-edge-strong'
                   }`}
                 >{sel.active ? 'Active' : 'Inactive'}</button>
                 <button
                   onClick={toggleDefault}
                   className={`text-xs px-3 py-1 rounded border transition-colors ${
                     sel.is_default
-                      ? 'border-blue-800 bg-blue-900/40 text-blue-300'
-                      : 'border-gray-700 text-gray-500 hover:border-blue-700 hover:text-blue-400'
+                      ? 'border-blue-800 bg-accent/10 text-accent-ink'
+                      : 'border-edge-strong text-ink-subtle hover:border-blue-700 hover:text-accent-ink'
                   }`}
                 >{sel.is_default ? 'Shop default' : 'Set default'}</button>
               </div>
@@ -228,7 +230,7 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
 
             {/* Description */}
             <div>
-              <label className="text-[10px] text-gray-500 uppercase tracking-wide mb-1 block">Description</label>
+              <label className="text-[10px] text-ink-subtle uppercase tracking-wide mb-1 block">Description</label>
               <input
                 defaultValue={sel.description ?? ''}
                 key={sel.id + '_desc'}
@@ -238,14 +240,14 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
               />
             </div>
 
-            <hr className="border-gray-800" />
+            <hr className="border-edge" />
 
             {/* Active part roles */}
             <div>
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wide mb-3">
                 Active Part Roles
               </p>
-              <p className="text-[10px] text-gray-600 mb-3">
+              <p className="text-[10px] text-ink-subtle mb-3">
                 Which parts does this method generate? The resolver only creates parts for active roles.
               </p>
               <div className="space-y-1.5">
@@ -256,8 +258,8 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                       key={role.key}
                       className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer border transition-colors ${
                         active
-                          ? 'border-blue-800/50 bg-blue-950/20'
-                          : 'border-gray-800 hover:border-gray-700'
+                          ? 'border-blue-800/50 bg-accent/10'
+                          : 'border-edge hover:border-edge-strong'
                       }`}
                     >
                       <input
@@ -267,8 +269,8 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                         className="accent-blue-500"
                       />
                       <div className="flex-1">
-                        <p className={`text-xs font-medium ${active ? 'text-blue-300' : 'text-gray-300'}`}>{role.label}</p>
-                        <p className="text-[10px] text-gray-600">{role.desc}</p>
+                        <p className={`text-xs font-medium ${active ? 'text-accent-ink' : 'text-ink-muted'}`}>{role.label}</p>
+                        <p className="text-[10px] text-ink-subtle">{role.desc}</p>
                       </div>
                     </label>
                   )
@@ -276,19 +278,19 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
               </div>
             </div>
 
-            <hr className="border-gray-800" />
+            <hr className="border-edge" />
 
             {/* Dimension settings */}
             <div>
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wide mb-3">
                 Dimensions
               </p>
               <div className="space-y-3">
                 {sel.active_part_roles.includes('buildup_rail') && (
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-gray-300">Build-up rail depth</p>
-                      <p className="text-[10px] text-gray-600">Height of perimeter framing rails</p>
+                      <p className="text-xs text-ink-muted">Build-up rail depth</p>
+                      <p className="text-[10px] text-ink-subtle">Height of perimeter framing rails</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <input
@@ -303,7 +305,7 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                         placeholder="—"
                         className={mm}
                       />
-                      <span className="text-xs text-gray-600">mm</span>
+                      <span className="text-xs text-ink-subtle">mm</span>
                     </div>
                   </div>
                 )}
@@ -313,8 +315,8 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                   sel.active_part_roles.includes('back_fascia')) && (
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-gray-300">Drop front / fascia height</p>
-                      <p className="text-[10px] text-gray-600">Height of vertical fascia parts (set 0 for none)</p>
+                      <p className="text-xs text-ink-muted">Drop front / fascia height</p>
+                      <p className="text-[10px] text-ink-subtle">Height of vertical fascia parts (set 0 for none)</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <input
@@ -329,26 +331,26 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                         placeholder="—"
                         className={mm}
                       />
-                      <span className="text-xs text-gray-600">mm</span>
+                      <span className="text-xs text-ink-subtle">mm</span>
                     </div>
                   </div>
                 )}
               </div>
             </div>
 
-            <hr className="border-gray-800" />
+            <hr className="border-edge" />
 
             {/* Join / grain settings */}
             <div>
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wide mb-3">
                 Defaults
               </p>
               <div className="space-y-3">
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-gray-300">Default join type between runs</p>
-                    <p className="text-[10px] text-gray-600">Overridable per join in the CAD tool</p>
+                    <p className="text-xs text-ink-muted">Default join type between runs</p>
+                    <p className="text-[10px] text-ink-subtle">Overridable per join in the CAD tool</p>
                   </div>
                   <select
                     value={sel.default_join_type}
@@ -362,8 +364,8 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-gray-300">Grain direction</p>
-                    <p className="text-[10px] text-gray-600">Default worktop panel grain orientation</p>
+                    <p className="text-xs text-ink-muted">Grain direction</p>
+                    <p className="text-[10px] text-ink-subtle">Default worktop panel grain orientation</p>
                   </div>
                   <select
                     value={sel.grain_direction}
@@ -378,8 +380,8 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                 {sel.active_part_roles.includes('buildup_rail') && (
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-gray-300">Build-up rail corner join</p>
-                      <p className="text-[10px] text-gray-600">How rails meet at internal corners</p>
+                      <p className="text-xs text-ink-muted">Build-up rail corner join</p>
+                      <p className="text-[10px] text-ink-subtle">How rails meet at internal corners</p>
                     </div>
                     <select
                       value={sel.corner_join_type}
@@ -398,16 +400,16 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
             {/* Wizard answers summary */}
             {Object.keys(sel.wizard_answers).length > 0 && (
               <>
-                <hr className="border-gray-800" />
+                <hr className="border-edge" />
                 <div>
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wide mb-2">
                     Wizard Answers
                   </p>
                   <div className="space-y-1">
                     {Object.entries(sel.wizard_answers).map(([k, v]) => (
                       <div key={k} className="flex items-center gap-2 text-[10px]">
-                        <span className="text-gray-600 font-mono w-40 shrink-0">{k}</span>
-                        <span className="text-gray-300">{String(v)}</span>
+                        <span className="text-ink-subtle font-mono w-40 shrink-0">{k}</span>
+                        <span className="text-ink-muted">{String(v)}</span>
                       </div>
                     ))}
                   </div>
@@ -419,12 +421,12 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
             <div className="flex items-center gap-3 pt-2 pb-8">
               <button
                 onClick={() => setWizardOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 text-xs text-gray-200 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-surface-2 hover:bg-surface-3 border border-edge-strong hover:border-edge-strong text-xs text-ink rounded-lg transition-colors"
               >
                 <span className="text-base leading-none">✦</span>
                 Open Setup Wizard
               </button>
-              {saving && <span className="text-[10px] text-gray-500">Saving…</span>}
+              {saving && <span className="text-[10px] text-ink-subtle">Saving…</span>}
             </div>
 
           </div>

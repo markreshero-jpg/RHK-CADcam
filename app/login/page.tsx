@@ -1,4 +1,5 @@
 import LoginForm from './LoginForm'
+import { ThemeToggle } from '../ThemeToggle'
 
 const LogoIcon = () => (
   <svg width="32" height="32" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -13,19 +14,22 @@ const LogoIcon = () => (
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-canvas flex items-center justify-center px-4 relative">
+      <div className="absolute top-4 left-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm">
 
         <div className="text-center mb-8">
-          <span className="inline-flex text-blue-400 mb-4">
+          <span className="inline-flex text-accent-ink mb-4">
             <LogoIcon />
           </span>
-          <h1 className="text-lg font-bold text-white tracking-tight">RHK CADcam</h1>
-          <p className="text-gray-500 text-sm mt-1">Cabinet Design & Manufacturing</p>
+          <h1 className="text-lg font-bold text-ink tracking-tight">RHK CADcam</h1>
+          <p className="text-ink-subtle text-sm mt-1">Cabinet Design & Manufacturing</p>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-white mb-5">Sign in to your account</h2>
+        <div className="bg-surface border border-edge rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-ink mb-5">Sign in to your account</h2>
           <LoginForm />
         </div>
 

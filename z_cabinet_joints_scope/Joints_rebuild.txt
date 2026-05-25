@@ -1,0 +1,418 @@
+● Yes, I understand it now. You're right.
+
+  In Joint3DView, Part A is always a horizontal shelf:
+  - V (offset_z_mm) = position along the depth axis (front-to-back, Z in cabinet for horizontal      
+  panels)
+  - U (offset_y_mm) = position into the panel from its top face (Y-depth in the panel)
+
+  For bottom:left_side — Part A is horizontal, so this maps directly: V → cabinet Z, U → Y.
+
+  For back:left_side — the back panel is vertical. The joint-view axes rotate 90°:
+  - V (offset_z_mm) maps to cabinet Y (down the height of the panel) — this controls hole
+  distribution
+  - U (offset_y_mm) maps to cabinet Z (within the 6mm thickness of the back panel)
+
+  So the current code has U and V swapped for back seams. The spacing (i * spc) should go on Y via V,   not on Y via U. Let me fix the whole back-seam branch properly:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(app\canvas\[roomId]\Cabinet3DView.tsx)
+  ⎿  Added 24 lines, removed 14 lines
+      513      for (let i = 0; i < qty; i++) {
+      514        let cabX = 0, cabY = 0, cabZ = 0, axis: DrillAxis = 'x-'
+      515  
+      516 -      {                                                                                   
+      517 -        if (isBackSeam) {                                                                 
+      518 -          // offset_z_mm is designed for full-depth panels — back panel is only bac       
+          -kT thick.                                                                                 
+      519 -          // Pin Z at the mid-thickness of the back panel so holes land inside the        
+          -cabinet.                                                                                  
+      520 -          cabZ = boxA.z + boxA.d / 2                                                      
+      516 +      if (isBackSeam) {                                                                   
+      517 +        // The back panel is vertical. Joint-view axes rotate 90° relative to a hor       
+          +izontal panel:                                                                            
+      518 +        //   V (offset_z_mm) → cabinet Y  — holes distribute down the panel height        
+          +with spacing                                                                              
+      519 +        //   U (offset_y_mm) → cabinet Z  — position within the 6mm panel thickness       
+      520 +        cabZ = boxA.z + ev.offset_y_mm                                                    
+      521 +        if (op.target_part === 'part_a') {                                                
+      522 +          switch (op.face) {                                                              
+      523 +            case 'normal': cabX = interfaceX;                         cabY = interf       
+          +aceY - ev.offset_z_mm - i * spc; axis = isLeft ? 'x+' : 'x-'; break                       
+      524 +            case 'end':    cabX = isLeft ? boxA.x + boxA.w : boxA.x; cabY = interfa       
+          +ceY - ev.offset_z_mm - i * spc; axis = isLeft ? 'x-' : 'x+'; break                        
+      525 +            default: continue                                                             
+      526 +          }                                                                               
+      527          } else {
+      522 -          const targetBox = op.target_part === 'part_a' ? boxA : boxB                     
+      523 -          cabZ = (targetBox.z + targetBox.d) - ev.offset_z_mm - i * spc                   
+      528 +          const bInner = isLeft ? boxB.x + boxB.w : boxB.x                                
+      529 +          switch (op.face) {                                                              
+      530 +            case 'normal': cabX = bInner;                             cabY = interf       
+          +aceY - ev.offset_z_mm - i * spc; axis = isLeft ? 'x-' : 'x+'; break                       
+      531 +            case 'end':    cabX = isLeft ? boxB.x : boxB.x + boxB.w; cabY = interfa       
+          +ceY - ev.offset_z_mm - i * spc; axis = isLeft ? 'x+' : 'x-'; break                        
+      532 +            default: continue                                                             
+      533 +          }                                                                               
+      534          }
+      525 -                                                                                          
+      526 -        // For back:side seams holes spread down the panel height (Y), not along de       
+          -pth (Z).                                                                                  
+      527 -        const yStep = isBackSeam ? i * spc : 0                                            
+      535 +      } else {                                                                            
+      536 +        const targetBox = op.target_part === 'part_a' ? boxA : boxB                       
+      537 +        cabZ = (targetBox.z + targetBox.d) - ev.offset_z_mm - i * spc                     
+      538          if (op.target_part === 'part_a') {
+      539            switch (op.face) {
+      530 -            case 'normal': cabX = interfaceX;                            cabY = int       
+          -erfaceY - U - yStep; axis = isLeft ? 'x+' : 'x-'; break                                   
+      531 -            case 'end':    cabX = isLeft ? boxA.x + boxA.w : boxA.x;    cabY = inte       
+          -rfaceY - U - yStep; axis = isLeft ? 'x-' : 'x+'; break                                    
+      540 +            case 'normal': cabX = interfaceX;                            cabY = int       
+          +erfaceY - U; axis = isLeft ? 'x+' : 'x-'; break                                           
+      541 +            case 'end':    cabX = isLeft ? boxA.x + boxA.w : boxA.x;    cabY = inte       
+          +rfaceY - U; axis = isLeft ? 'x-' : 'x+'; break                                            
+      542              case 'top':    cabY = interfaceY;   cabX = isLeft ? interfaceX + U : in       
+           terfaceX - U; axis = 'y-'; break
+      543              case 'bottom': cabY = boxA.y;       cabX = isLeft ? interfaceX + U : in       
+           terfaceX - U; axis = 'y+'; break
+      544              default: continue
+     ...
+      546          } else {
+      547            const bInner = isLeft ? boxB.x + boxB.w : boxB.x
+      548            switch (op.face) {
+      539 -            case 'normal': cabX = bInner;                             cabY = interf       
+          -aceY - U - yStep; axis = isLeft ? 'x-' : 'x+'; break                                      
+      540 -            case 'end':    cabX = isLeft ? boxB.x : boxB.x + boxB.w; cabY = interfa       
+          -ceY - U - yStep; axis = isLeft ? 'x+' : 'x-'; break                                       
+      549 +            case 'normal': cabX = bInner;                             cabY = interf       
+          +aceY - U; axis = isLeft ? 'x-' : 'x+'; break                                              
+      550 +            case 'end':    cabX = isLeft ? boxB.x : boxB.x + boxB.w; cabY = interfa       
+          +ceY - U; axis = isLeft ? 'x+' : 'x-'; break                                               
+      551              case 'top':    cabY = boxB.y + boxB.h; cabX = isLeft ? bInner - U : bIn       
+           ner + U; axis = 'y-'; break
+      552              case 'bottom': cabY = boxB.y;          cabX = isLeft ? bInner - U : bIn       
+           ner + U; axis = 'y+'; break
+      553              default: continue
+
+● Now the back seam mapping is correct end-to-end:
+
+  ┌────────────────┬───────────────────────┬─────────────────────────────────────────────────────┐   
+  │   Joint-view   │  Back panel cabinet   │                       Meaning                       │   
+  │                │         axis          │                                                     │   
+  ├────────────────┼───────────────────────┼─────────────────────────────────────────────────────┤   
+  │ V              │ Y (height)            │ First hole position from top, spacing distributes   │   
+  │ (offset_z_mm)  │                       │ downward                                            │   
+  ├────────────────┼───────────────────────┼─────────────────────────────────────────────────────┤   
+  │ U              │ Z (thickness)         │ How far into the 6mm panel from its outer face      │   
+  │ (offset_y_mm)  │                       │                                                     │   
+  └────────────────┴───────────────────────┴─────────────────────────────────────────────────────┘   
+
+  So if your "5mm Dynamic Joint" has offset_z_mm = 32, spacing_mm = 96, and a qty expression like    
+  floor(D / 96), you'll get holes starting 32mm from the top, every 96mm down the full height of the 
+  back panel — which is exactly what the joint operations define.
+
+✻ Cogitated for 3m 51s
+
+❯ what is the joint lenght calculation here? cabinet height or something else?
+
+● For back seams, D (the variable qty expressions like floor(D / 96) evaluate against) is:
+
+  - Part A ops → boxA.h = the resolved height of the back panel (p.DX from the resolver)
+  - Part B ops → boxB.h = the resolved height of the side panel (p.DY from the resolver)
+
+  These come from evBoxA = { ...boxA, d: boxA.h } — we remap d to h so the expression variable D gets   the height dimension instead of the 6mm thickness.
+
+  The back panel height and side panel height are usually close but not necessarily identical — the  
+  back panel sits between the bottom and top of the carcase at a position determined by the
+  construction method (butts into back, etc.), while the side panel runs its own full height. Let me 
+  check what they actually resolve to:
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+● So the joint length (D) for back seams is:
+
+  For Part A ops → backDX = back panel rendered height:
+  backBottom3D = TK + SCRBT
+  backTop3D    = DY − SCRT − (topT  if  sits_over_back)
+  backDX       = backTop3D − backBottom3D
+
+  For Part B ops → sideHeight = side panel rendered height:
+  sideYstart  = TK + SCRBT + (bottomT  if  bottom_outside)
+  sideHeight  = DY − SCRT − sideYstart − (topT  if  on_top_of_sides)
+
+  These two are not the same. The back panel starts at TK + SCRBT, the side panel starts at TK +     
+  SCRBT + bottomT (when bottom is outside). So backDX = sideHeight + bottomT in a typical frameless  
+  build — the back panel is taller by one bottom panel thickness because it reaches all the way down 
+  to where the bottom panel butts into it.
+
+  If your qty expression targets Part A, D = backDX ≈ inner carcase height. If it targets Part B, D =   sideHeight which is slightly shorter.
+
+  For a consistent hole count regardless of which part the op targets, the joint type expression     
+  should use the same variable — typically ML (master length = back panel height, always) rather than   L which switches based on target part.
+
+✻ Brewed for 57s
+
+❯ i feel like this whole joints set up is A mess, I think a much easier way to do. It would be if we 
+   could click on an individual part and apply a joint to the edge where it touches another part for 
+   instance if we were doing a bottom We could click on all four edges of the part and click what    
+  joint we wanted. 
+
+  The way we have set it up seems very hard to get you to change anything whereas the way I'm        
+  suggesting it's all manually driven by the user. I really would want this to start in the cabinet  
+  Builder stage rather than in the job. So we can see exactly what goes on in the cabinet Builder as 
+   we're laying out the different construction methods. For instance when we have a rail for the top 
+   instead of a full top the drilling is going to be different on a rail as it needs two small       
+  drillings quite close together and if the user switches to a full top in a cabinet, the drilling   
+  spreads out the way the full top drilling has been set up in the cabinet Builder. 
+
+  Have a think about this and let me know what you think
+
+● Your instinct is right. The current seam-key system is fundamentally backwards — it requires       
+  thinking about two parts simultaneously and then figuring out the abstract seam key, when what you 
+  actually care about is "this edge of this part, what joins it."
+
+  Here's what I think the right design looks like:
+
+  Part-edge joint assignment in the CM builder
+
+  In the CM 3D/SVG preview, clicking a part exposes its edges. Each edge that touches another part   
+  shows whether it has a joint assigned. You pick the edge, pick the joint type — done. Internally it   still maps to a seam key (bottom left-edge = bottom:left_side) but the user never sees that.      
+
+  The immediate win: a front_rail and a full_top both have a bottom-left and bottom-right edge, but  
+  they'd carry different joint assignments naturally because they're different parts. No
+  special-casing needed. Switching from full top to rail in the CM shows the rail's joints
+  immediately in the preview.
+
+  How the coordinate system gets simpler
+
+  Right now we fight the axis rotation because the joint operation coordinate system was designed for   horizontal panels, but back panels are vertical. With edge-local coordinates, every edge has the  
+  same frame:
+  - U = along the edge length (always the long direction, regardless of part orientation)
+  - V = into the part face (always thickness direction)
+  - Spacing always distributes along U
+
+  No remapping. No back-seam special cases in seamDrillOps.
+
+  What it requires
+
+  The joint ops data and joint type structure stay unchanged. What changes:
+  1. CM builder gets an edge-click UI showing the parts in their resolved layout
+  2. Storage key format changes (or we keep seam keys internally but generated from part+edge rather 
+  than hard-coded)
+  3. resolveJoints.ts derives seams from per-part edge assignments instead of hard-coded seam key    
+  combinations
+  4. seamDrillOps in Cabinet3DView.tsx simplifies because it always knows the edge direction from the   part geometry, no orientation guessing
+
+  My concern with the current state
+
+  The back panel coordinate fix we just did (offset_y_mm → Z, offset_z_mm → Y) is a symptom of the   
+  deeper problem — the system was designed for horizontal parts and then awkwardly extended. Rather  
+  than keep patching it, the edge-local approach is the right foundation.
+
+  Suggested starting point
+
+  Do it in the CM builder first (as you said), not the canvas. Show the resolved cabinet parts in the   CM, enable edge picking, and wire the joint picker to save per-edge assignments per CM. The canvas   3D view then inherits it. That gives you the feedback loop where changing from rail to full-top in   the CM immediately shows different hole patterns in the 3D preview.
+
+  Want me to sketch out the data model and component structure for this before you decide to go      
+  ahead?
+
+✻ Brewed for 59s
+
+❯ yes, go ahead and sketch out the data model.  when you say the system is designed for Horizontal   
+  parts, we can make it suit vertical parts too cant we?
+
+● Yes, vertical parts work fine — the whole point of the edge-local frame is that it adapts to       
+  whatever orientation the part actually has. The bug we've been chasing is entirely because the     
+  current code assumes Part A is always horizontal.
+
+  Here's the full sketch:
+
+  ---
+  Data model
+
+  What stays the same
+
+  The storage format doesn't need to change. joint_defaults in construction_methods (and
+  carcase_joints in cabinet_instances for per-cabinet overrides) stays as a JSONB object keyed by    
+  seam key:
+
+  {
+    "bottom:left_side":      "joint_type_id_abc",
+    "bottom:right_side":     "joint_type_id_abc",
+    "front_rail:left_side":  "joint_type_id_rail",
+    "full_top:left_side":    "joint_type_id_spread",
+    "back:left_side":        "joint_type_id_xyz",
+    "back:right_side":       "joint_type_id_xyz"
+  }
+
+  Rail and full top already get separate entries because they have different part keys — the current 
+  schema already handles that. The system just never exposed it clearly in the UI.
+
+  ---
+  New concept: SeamFrame
+
+  This is the key piece that eliminates all the axis-remapping bugs. For every seam at runtime,      
+  compute an edge-local coordinate frame from the actual part boxes:
+
+  interface SeamFrame {
+    // Which axis holes distribute along (the long axis of the edge)
+    alongAxis:   'x' | 'y' | 'z'
+    // Cabinet coordinate of the "origin" end (where offset_z_mm = 0 is referenced from)
+    alongOrigin: number
+    // Sign: +1 means offset adds to origin, -1 means it subtracts
+    alongSign:   1 | -1
+    // Where the joint interface sits on the drill axis
+    interfaceCoord: number
+    // Drill direction going INTO part A from the joining face
+    drillAxisA: 'x+' | 'x-' | 'y+' | 'y-'
+    // Drill direction going INTO part B from its face
+    drillAxisB: 'x+' | 'x-' | 'y+' | 'y-'
+  }
+
+  Computed automatically from the two part boxes — no hardcoding:
+
+  function seamFrame(seamKey: string, boxA: Box, boxB: Box): SeamFrame {
+    const partBKey = seamKey.slice(seamKey.indexOf(':') + 1)
+    const isLeft   = partBKey === 'left_side'
+    const isRight  = partBKey === 'right_side'
+
+    if (isLeft || isRight) {
+      // Interface is a YZ plane at a fixed X
+      const interfaceX = isLeft ? boxA.x : boxA.x + boxA.w
+
+      // The "along" axis is whichever dimension of Part A is longer — depth or height.
+      // Horizontal panels (bottom, top, rail): d >> h  →  along Z, origin = front face
+      // Vertical panels (back):               h >> d  →  along Y, origin = top face
+      const alongAxis   = boxA.d >= boxA.h ? 'z' : 'y'
+      const alongOrigin = alongAxis === 'z'
+        ? boxA.z + boxA.d   // front face of Part A
+        : boxA.y + boxA.h   // top face of Part A
+      const alongSign = -1  // offset subtracts from origin (front-to-back, top-to-bottom)
+
+      return {
+        alongAxis, alongOrigin, alongSign,
+        interfaceCoord: interfaceX,
+        drillAxisA: isLeft ? 'x+' : 'x-',
+        drillAxisB: isLeft ? 'x-' : 'x+',
+      }
+    }
+    // back:bottom and other seams follow similar logic for Y-interface planes...
+  }
+
+  That one rule (d >= h → horizontal, h > d → vertical) replaces all the isBackSeam special cases.   
+  Back panel: h = 700, d = 6 → vertical → along Y. Bottom panel: h = 18, d = 520 → horizontal → along   Z.
+
+  ---
+  Unified operation evaluation
+
+  With a SeamFrame, the drill position calculation becomes the same for every seam — no branching:   
+
+  function applyOp(op, ev, frame, boxA, boxB): { x, y, z, axis } {
+    // V (offset_z_mm) = position along the edge from the origin end
+    const alongPos = frame.alongOrigin + frame.alongSign * (ev.offset_z_mm + i * spacing)
+
+    // U (offset_y_mm) = position into Part A from its joining face (within its thickness)
+    const insetPos = frame.interfaceCoord + (intoPartA direction) * ev.offset_y_mm
+
+    // Assemble the 3D point based on which axis is which
+    const pos = { x: 0, y: 0, z: 0 }
+    pos[frame.alongAxis] = alongPos
+    pos[drillAxis === 'x' ? 'y' : 'x'] = insetPos  // simplified
+    pos.x = frame.interfaceCoord  // for left/right seams
+
+    return { ...pos, axis: frame.drillAxisA }
+  }
+
+  One function, works for bottom:left_side and back:left_side and front_rail:left_side identically.  
+  The face: 'normal' | 'end' | 'top' distinction on ops still controls the drill direction variant — 
+  but it resolves against the frame axes rather than assumed global axes.
+
+  ---
+  CM builder UI
+
+  The workflow becomes:
+
+  1. Part selection — click any case part in the CM 3D preview. Part highlights, its edges that touch   other parts become selectable (coloured outlines).
+
+  2. Edge list — a small panel shows the available edges for that part, with current joint
+  assignment:
+
+  Left Gable
+    ├─ Bottom edge    [5mm Dynamic Joint ▾]
+    ├─ Top edge       [5mm Dynamic Joint ▾]
+    └─ Back edge      [— unassigned —    ▾]
+
+  Back Panel
+    ├─ Left edge      [5mm Dynamic Joint ▾]
+    └─ Right edge     [5mm Dynamic Joint ▾]
+
+  3. Joint picker — click any row to open the joint type picker. The 3D preview immediately shows the   updated drill holes on both touching parts.
+
+  4. Switching top type — when the CM changes from full_top to front_rail + back_rail, the
+  top-related edges simply switch to the new part's edges. The rail's edge assignments are
+  independent from the full top's — they coexist in joint_defaults under different seam keys and you 
+  configure them separately in the CM builder.
+
+  ---
+  Per-part edge definitions
+
+  A static lookup drives which edges each part type exposes in the UI:
+
+  const PART_EDGES: Record<string, { label: string; seamKey: (topKey: string) => string }[]> = {     
+    bottom:      [{ label: 'Left edge',  seamKey: () => 'bottom:left_side' },
+                  { label: 'Right edge', seamKey: () => 'bottom:right_side' }],
+    back:        [{ label: 'Left edge',  seamKey: () => 'back:left_side' },
+                  { label: 'Right edge', seamKey: () => 'back:right_side' },
+                  { label: 'Bottom edge',seamKey: () => 'back:bottom' }],
+    left_side:   [{ label: 'Bottom edge',seamKey: () => 'bottom:left_side' },
+                  { label: 'Top edge',   seamKey: (top) => `${top}:left_side` },
+                  { label: 'Back edge',  seamKey: () => 'back:left_side' }],
+    front_rail:  [{ label: 'Left edge',  seamKey: () => 'front_rail:left_side' },
+                  { label: 'Right edge', seamKey: () => 'front_rail:right_side' }],
+    full_top:    [{ label: 'Left edge',  seamKey: () => 'full_top:left_side' },
+                  { label: 'Right edge', seamKey: () => 'full_top:right_side' }],
+  }
+
+  Clicking a gable's "back edge" and clicking the back panel's "left edge" both resolve to
+  back:left_side — the same seam, just approached from either side. The UI deduplicates so you don't 
+  assign it twice.
+
+  ---
+  Summary of what changes vs what stays
+
+  ┌────────────────────────────┬─────────────────────────────────────────────────────────────────┐   
+  │           Thing            │                             Change?                             │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ joint_defaults JSONB       │ None                                                            │   
+  │ schema                     │                                                                 │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ joint_type_ops table       │ None — ops reuse offset_z_mm/offset_y_mm field names            │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ Seam key format            │ None                                                            │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ resolveJoints.ts           │ Minor — reads same storage, same output                         │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ seamDrillOps in            │ Replace with seamFrame() + unified eval — all isBackSeam        │   
+  ┌────────────────────────────┬─────────────────────────────────────────────────────────────────┐   
+  │           Thing            │                             Change?                             │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ joint_defaults JSONB       │ None                                                            │   
+  │ schema                     │                                                                 │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ joint_type_ops table       │ None — ops reuse offset_z_mm/offset_y_mm field names            │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ Seam key format            │ None                                                            │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ resolveJoints.ts           │ Minor — reads same storage, same output                         │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ seamDrillOps in            │ Replace with seamFrame() + unified eval — all isBackSeam        │   
+  │ Cabinet3DView              │ branches go away                                                │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ CM builder UI              │ New: part-click → edge list → joint picker panel                │   
+  ├────────────────────────────┼─────────────────────────────────────────────────────────────────┤   
+  │ Cabinet edit modal joints  │ Can stay or simplify to show the same edge list                 │   
+  │ tab                        │                                                                 │   
+  └────────────────────────────┴─────────────────────────────────────────────────────────────────┘   
+
+  Want me to start on seamFrame() and the unified evaluator first, or the CM builder UI side?

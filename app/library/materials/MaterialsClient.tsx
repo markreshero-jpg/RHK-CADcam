@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
+import { ThemeToggle } from '../../ThemeToggle'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -354,29 +355,30 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
     `flex-none px-2 ${i < last ? 'border-r' : ''}`
 
   return (
-    <div className={embedded ? "flex-1 flex flex-col overflow-hidden" : "h-screen bg-gray-950 text-white flex flex-col overflow-hidden"}>
+    <div className={embedded ? "flex-1 flex flex-col overflow-hidden" : "h-screen bg-canvas text-ink flex flex-col overflow-hidden"}>
 
       {/* Header */}
       {!embedded && (
-        <div className="flex-none border-b border-gray-800 px-6 py-3 flex items-center gap-3">
-          <Link href="/" className="text-gray-500 hover:text-gray-300 text-sm transition-colors">
+        <div className="flex-none border-b border-edge px-6 py-3 flex items-center gap-3">
+          <ThemeToggle />
+          <Link href="/" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">
             ← Projects
           </Link>
-          <span className="text-gray-700">|</span>
-          <span className="text-sm font-semibold text-white">Materials Library</span>
+          <span className="text-ink-subtle">|</span>
+          <span className="text-sm font-semibold text-ink">Materials Library</span>
         </div>
       )}
 
       {/* Tabs + inactive toggle */}
-      <div className="flex-none border-b border-gray-800 flex items-end gap-0.5 px-4">
+      <div className="flex-none border-b border-edge flex items-end gap-0.5 px-4">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => { setActiveTab(t.id); setSortKey('name'); setSortDir('asc'); setFilterName(''); setFilterBrand('') }}
             className={`px-4 py-2.5 text-xs font-medium transition-colors ${
               t.id === activeTab
-                ? 'text-white border-b-2 border-blue-500'
-                : 'text-gray-500 hover:text-gray-300 border-b-2 border-transparent'
+                ? 'text-ink border-b-2 border-accent'
+                : 'text-ink-subtle hover:text-ink-muted border-b-2 border-transparent'
             }`}
           >
             {t.label}
@@ -384,29 +386,29 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         ))}
         <div className="flex-1" />
         <div className="flex items-center gap-1.5 pb-2.5">
-          <span className="text-[10px] text-gray-600">Name</span>
+          <span className="text-[10px] text-ink-subtle">Name</span>
           <input
             type="text"
             value={filterName}
             onChange={e => setFilterName(e.target.value)}
             placeholder="filter…"
-            className="bg-gray-800 border border-gray-700 text-[10px] text-gray-300 rounded px-1.5 py-0.5 w-24 focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
+            className="bg-surface-2 border border-edge-strong text-[10px] text-ink-muted rounded px-1.5 py-0.5 w-24 focus:outline-none focus:border-accent placeholder:text-ink-subtle"
           />
           {hasBrandField && (
             <>
-              <span className="text-[10px] text-gray-600">Brand</span>
+              <span className="text-[10px] text-ink-subtle">Brand</span>
               <input
                 type="text"
                 value={filterBrand}
                 onChange={e => setFilterBrand(e.target.value)}
                 placeholder="filter…"
-                className="bg-gray-800 border border-gray-700 text-[10px] text-gray-300 rounded px-1.5 py-0.5 w-20 focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
+                className="bg-surface-2 border border-edge-strong text-[10px] text-ink-muted rounded px-1.5 py-0.5 w-20 focus:outline-none focus:border-accent placeholder:text-ink-subtle"
               />
             </>
           )}
         </div>
-        <span className="text-gray-700 text-xs pb-2.5">|</span>
-        <label className="flex items-center gap-1.5 text-[10px] text-gray-500 pb-2.5 cursor-pointer select-none">
+        <span className="text-ink-subtle text-xs pb-2.5">|</span>
+        <label className="flex items-center gap-1.5 text-[10px] text-ink-subtle pb-2.5 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={showInactive}
@@ -418,20 +420,20 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
       </div>
 
       {/* Tab body */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-gray-900">
+      <div className="flex-1 flex flex-col overflow-hidden bg-surface">
 
         {/* ── Entry / edit form row ── */}
-        <div className="flex-none border-b border-gray-700 overflow-x-auto bg-gray-900/80">
+        <div className="flex-none border-b border-edge-strong overflow-x-auto bg-surface/80">
           <div className="flex items-stretch min-w-max">
             {tab.fields.map((f, i) => (
               <div
                 key={f.key}
                 style={{ width: f.w }}
                 className={`flex-none flex flex-col justify-between py-2 px-2 ${
-                  i < tab.fields.length - 1 ? 'border-r border-gray-700' : ''
+                  i < tab.fields.length - 1 ? 'border-r border-edge-strong' : ''
                 }`}
               >
-                <span className="text-[9px] text-gray-500 uppercase tracking-wide leading-none mb-1.5">
+                <span className="text-[9px] text-ink-subtle uppercase tracking-wide leading-none mb-1.5">
                   {f.label}
                 </span>
 
@@ -450,7 +452,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                       type="color"
                       value={String(form[f.key] || '#ffffff')}
                       onChange={e => patchForm({ [f.key]: e.target.value })}
-                      className="w-6 h-5 rounded cursor-pointer border border-gray-600 bg-transparent p-0 flex-none"
+                      className="w-6 h-5 rounded cursor-pointer border border-edge-strong bg-transparent p-0 flex-none"
                     />
                     <input
                       type="text"
@@ -458,12 +460,12 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                       placeholder="#——"
                       maxLength={7}
                       onChange={e => patchForm({ [f.key]: e.target.value })}
-                      className="min-w-0 flex-1 bg-transparent border-b border-gray-700 px-0.5 py-0.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
+                      className="min-w-0 flex-1 bg-transparent border-b border-edge-strong px-0.5 py-0.5 text-xs text-ink font-mono focus:outline-none focus:border-accent placeholder:text-ink-subtle"
                     />
                     {form[f.key] && (
                       <button
                         onClick={() => patchForm({ [f.key]: '' })}
-                        className="text-gray-600 hover:text-gray-400 text-[10px] flex-none"
+                        className="text-ink-subtle hover:text-ink-muted text-[10px] flex-none"
                       >✕</button>
                     )}
                   </div>
@@ -471,10 +473,10 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                   <select
                     value={String(form[f.key] ?? '')}
                     onChange={e => patchForm({ [f.key]: e.target.value })}
-                    className="bg-transparent border-b border-gray-700 text-xs text-white focus:outline-none focus:border-blue-500 py-0.5 w-full"
+                    className="bg-transparent border-b border-edge-strong text-xs text-ink focus:outline-none focus:border-accent py-0.5 w-full"
                   >
                     {f.options!.map(o => (
-                      <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
+                      <option key={o.value} value={o.value} className="bg-surface">{o.label}</option>
                     ))}
                   </select>
                 ) : (
@@ -485,7 +487,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                     step={f.step}
                     onChange={e => patchForm({ [f.key]: e.target.value })}
                     onFocus={f.type === 'number' ? e => e.target.select() : undefined}
-                    className={`block w-full bg-transparent border-b border-gray-700 px-0.5 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500 placeholder:text-gray-700 ${
+                    className={`block w-full bg-transparent border-b border-edge-strong px-0.5 py-0.5 text-xs text-ink focus:outline-none focus:border-accent placeholder:text-ink-subtle ${
                       f.type === 'number' ? 'text-right' : ''
                     }`}
                   />
@@ -494,25 +496,25 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
             ))}
 
             {/* Action buttons */}
-            <div className="flex-none flex items-center gap-1.5 px-3 border-l border-gray-700">
+            <div className="flex-none flex items-center gap-1.5 px-3 border-l border-edge-strong">
               <button
                 onClick={handleSave}
                 disabled={saving || !String(form['name'] ?? '').trim()}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs rounded transition-colors whitespace-nowrap"
+                className="px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-40 text-white text-xs rounded transition-colors whitespace-nowrap"
               >
                 {saving ? '…' : editingId ? 'Update' : 'Save'}
               </button>
               {editingId && (
                 <button
                   onClick={handleDuplicate}
-                  className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded transition-colors whitespace-nowrap"
+                  className="px-3 py-1.5 bg-surface-3 hover:bg-surface-3 text-ink-muted text-xs rounded transition-colors whitespace-nowrap"
                 >
                   Dupe
                 </button>
               )}
               <button
                 onClick={handleNew}
-                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded transition-colors"
+                className="px-3 py-1.5 bg-surface-3 hover:bg-surface-3 text-ink-muted text-xs rounded transition-colors"
               >
                 New
               </button>
@@ -524,18 +526,18 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         <div className="flex-1 overflow-auto">
 
           {/* Column header */}
-          <div className="flex items-center bg-gray-800/60 border-b border-gray-700 sticky top-0 z-10 min-w-max flex-none">
+          <div className="flex items-center bg-surface-2/60 border-b border-edge-strong sticky top-0 z-10 min-w-max flex-none">
             {tab.fields.map((f, i) => (
               <button
                 key={f.key}
                 style={{ width: f.w }}
                 onClick={() => f.type !== 'boolean' && f.type !== 'colour' && handleSort(f.key)}
-                className={`flex-none px-2 py-1.5 text-[9px] text-gray-500 uppercase tracking-wide ${
-                  i < tab.fields.length - 1 ? 'border-r border-gray-700/50' : ''
+                className={`flex-none px-2 py-1.5 text-[9px] text-ink-subtle uppercase tracking-wide ${
+                  i < tab.fields.length - 1 ? 'border-r border-edge-strong/50' : ''
                 } ${
                   f.type === 'boolean' || f.type === 'colour'
                     ? 'text-center cursor-default'
-                    : 'text-left hover:text-gray-300 cursor-pointer'
+                    : 'text-left hover:text-ink-muted cursor-pointer'
                 } ${
                   f.type === 'number' ? 'text-right' : ''
                 } ${
@@ -544,7 +546,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
               >
                 {f.label}
                 {sortKey === f.key && f.type !== 'boolean' && f.type !== 'colour' && (
-                  <span className="text-blue-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
+                  <span className="text-accent-ink">{sortDir === 'asc' ? '↑' : '↓'}</span>
                 )}
               </button>
             ))}
@@ -554,7 +556,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
           <div className="min-w-max">
             {sortedRows.length === 0 ? (
               <div className="px-4 py-10">
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-ink-subtle">
                   {rows.length === 0
                     ? 'No records yet — fill in the form above and click Save.'
                     : 'All records inactive. Enable "Show inactive" to see them.'}
@@ -565,28 +567,28 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                 <div
                   key={String(row.id)}
                   onClick={() => handleRowClick(row)}
-                  className={`flex items-center border-b border-gray-800/60 cursor-pointer transition-colors hover:bg-gray-800/40 ${
-                    editingId === row.id ? 'bg-blue-950/40 hover:bg-blue-950/50' : ''
+                  className={`flex items-center border-b border-edge/60 cursor-pointer transition-colors hover:bg-surface-2/40 ${
+                    editingId === row.id ? 'bg-accent/10 hover:bg-accent/10' : ''
                   } ${row.active === false ? 'opacity-40' : ''}`}
                 >
                   {tab.fields.map((f, i) => (
                     <div
                       key={f.key}
                       style={{ width: f.w }}
-                      className={`${cellCls(f, i, tab.fields.length - 1)} border-gray-800/50 py-1.5 text-xs truncate ${
-                        f.type === 'number'  ? 'text-right  text-gray-300 tabular-nums' :
-                        f.type === 'boolean' ? 'text-center text-blue-400' :
+                      className={`${cellCls(f, i, tab.fields.length - 1)} border-edge/50 py-1.5 text-xs truncate ${
+                        f.type === 'number'  ? 'text-right  text-ink-muted tabular-nums' :
+                        f.type === 'boolean' ? 'text-center text-accent-ink' :
                         f.type === 'colour'  ? 'flex items-center gap-1.5' :
-                        'text-gray-300'
+                        'text-ink-muted'
                       }`}
                     >
                       {f.type === 'colour' ? (
                         <>
                           {row[f.key]
-                            ? <span className="w-3.5 h-3.5 rounded-sm flex-none border border-gray-600" style={{ background: String(row[f.key]) }} />
-                            : <span className="w-3.5 h-3.5 rounded-sm flex-none border border-dashed border-gray-700" />
+                            ? <span className="w-3.5 h-3.5 rounded-sm flex-none border border-edge-strong" style={{ background: String(row[f.key]) }} />
+                            : <span className="w-3.5 h-3.5 rounded-sm flex-none border border-dashed border-edge-strong" />
                           }
-                          <span className={`font-mono text-[10px] ${row[f.key] ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <span className={`font-mono text-[10px] ${row[f.key] ? 'text-ink-muted' : 'text-ink-subtle'}`}>
                             {row[f.key] ? String(row[f.key]) : '—'}
                           </span>
                         </>
@@ -600,8 +602,8 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         </div>
 
         {/* Footer */}
-        <div className="flex-none border-t border-gray-800 px-4 py-1.5 flex items-center justify-between">
-          <span className="text-[10px] text-gray-600">
+        <div className="flex-none border-t border-edge px-4 py-1.5 flex items-center justify-between">
+          <span className="text-[10px] text-ink-subtle">
             {sortedRows.length} of {rows.length} record{rows.length !== 1 ? 's' : ''}
             {(filterName || filterBrand) && (
               <span className="ml-1">· filtered</span>
@@ -613,7 +615,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
             )}
           </span>
           {editingId && (
-            <span className="text-[10px] text-gray-700 font-mono">{editingId.slice(0, 8)}…</span>
+            <span className="text-[10px] text-ink-subtle font-mono">{editingId.slice(0, 8)}…</span>
           )}
         </div>
 
