@@ -24,7 +24,7 @@ import {
 import { resolveDrawerBox } from './resolveDrawerBox'
 
 
-function findSlide(
+export function findSlide(
   availableDepth: number,
   openingHeight: number,
   products: SlideProduct[],
@@ -152,6 +152,12 @@ export function resolveDrawerStacks(
       box_height:       slide?.box_height ?? boxHeight,
       runner_thickness: runnerThick,
       colour:           slide?.colour ?? null,
+      model_url:        slide?.model_url ?? null,
+      model_format:     slide?.model_format ?? null,
+      model_scale:      slide?.model_scale ?? 1,
+      model_anchor_x:   slide?.model_anchor_x ?? 0,
+      model_anchor_y:   slide?.model_anchor_y ?? 0,
+      model_anchor_z:   slide?.model_anchor_z ?? 0,
     }
 
     const slides: ResolvedDrawerSlide[] = [

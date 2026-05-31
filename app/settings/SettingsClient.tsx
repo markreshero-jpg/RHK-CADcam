@@ -9,8 +9,9 @@ import ConstructionMethodsClient from '@/app/library/construction-methods/Constr
 import DrawerBoxesClient from '@/app/library/drawer-boxes/DrawerBoxesClient'
 import JointsClient from '@/app/library/joints/JointsClient'
 import PartsLibraryClient from '@/app/library/parts/PartsLibraryClient'
+import DoorSystemClient from '@/app/library/doors/DoorSystemClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
-import { getUserPrefs, setUserPrefs, type DrawingPreset } from '@/src/lib/userPrefs'
+import { getUserPrefs, setUserPrefs, type DrawingPreset, type DrawingPresets, type CabinetViewStyles, type ViewStyle } from '@/src/lib/userPrefs'
 import { DISPLAY_PRESETS } from '@/src/lib/displayConfig'
 import { ThemeToggle } from '../ThemeToggle'
 
@@ -69,7 +70,7 @@ type SettingsTab =
   | 'company' | 'dimensions' | 'materials'
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'cnc_tool' | 'cnc_machine'
-  | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library'
+  | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library' | 'doors_library'
 
 interface TabDef {
   id: SettingsTab
@@ -233,6 +234,17 @@ const TABS: TabDef[] = [
       </svg>
     ),
   },
+  {
+    id: 'doors_library', label: 'Doors Library', group: 'Library',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="1.5" width="9" height="12" rx="0.8"/>
+        <line x1="3" y1="4" x2="12" y2="4"/>
+        <line x1="3" y1="11" x2="12" y2="11"/>
+        <circle cx="9.8" cy="7.5" r="0.7" fill="currentColor"/>
+      </svg>
+    ),
+  },
 ]
 
 const GROUPS = ['User', 'Shop', 'Builders', 'CNC', 'Library'] as const
@@ -282,11 +294,13 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
 
   // User preferences (localStorage)
   const [invertScroll, setInvertScroll] = useState(false)
-  const [defaultDrawingPreset, setDefaultDrawingPreset] = useState<DrawingPreset>('full_parts')
+  const [drawingPresets, setDrawingPresets] = useState<DrawingPresets>({ plan: 'full_parts', elevation: 'full_parts' })
+  const [cabinetViewStyles, setCabinetViewStyles] = useState<CabinetViewStyles>({ top: 'wire', elevation: 'wire', side: 'wire', '3d': 'wire' })
   useEffect(() => {
     const prefs = getUserPrefs()
     setInvertScroll(prefs.invertScroll)
-    setDefaultDrawingPreset(prefs.defaultDrawingPreset)
+    setDrawingPresets(prefs.drawingPresets)
+    setCabinetViewStyles(prefs.cabinetViewStyles)
   }, [])
 
   function toggleInvertScroll(val: boolean) {
@@ -294,9 +308,16 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
     setUserPrefs({ invertScroll: val })
   }
 
-  function handleDrawingPreset(val: DrawingPreset) {
-    setDefaultDrawingPreset(val)
-    setUserPrefs({ defaultDrawingPreset: val })
+  function handleDrawingPreset(view: keyof DrawingPresets, val: DrawingPreset) {
+    const next = { ...drawingPresets, [view]: val }
+    setDrawingPresets(next)
+    setUserPrefs({ drawingPresets: next })
+  }
+
+  function handleCabinetViewStyle(view: keyof CabinetViewStyles, val: ViewStyle) {
+    const next = { ...cabinetViewStyles, [view]: val }
+    setCabinetViewStyles(next)
+    setUserPrefs({ cabinetViewStyles: next })
   }
 
   // Materials (schedule IDs) — save immediately on change
@@ -396,6 +417,8 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
             <JointsClient embedded />
           ) : tab === 'parts_library' ? (
             <PartsLibraryClient embedded />
+          ) : tab === 'doors_library' ? (
+            <DoorSystemClient embedded />
           ) : tab === 'cabinet_builder' ? (
             <ConstructionMethodsClient embedded />
           ) : tab === 'drawer_builder' ? (
@@ -441,23 +464,61 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">Drawing</p>
+                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">Default Drawing Layer</p>
                   <div className="border border-edge-strong rounded-lg overflow-hidden divide-y divide-edge-strong/60">
-                    <div className="flex items-center justify-between px-4 py-3 bg-surface">
-                      <div>
-                        <p className="text-xs font-medium text-ink">Default drawing layer</p>
-                        <p className="text-[11px] text-ink-subtle mt-0.5">Starting detail level when opening a job</p>
+                    {([
+                      { view: 'plan' as const,      label: 'Plan view',      hint: 'Starting detail level in the plan canvas' },
+                      { view: 'elevation' as const, label: 'Elevation view', hint: 'Starting detail level in the elevation canvas' },
+                    ]).map(row => (
+                      <div key={row.view} className="flex items-center justify-between px-4 py-3 bg-surface">
+                        <div>
+                          <p className="text-xs font-medium text-ink">{row.label}</p>
+                          <p className="text-[11px] text-ink-subtle mt-0.5">{row.hint}</p>
+                        </div>
+                        <select
+                          value={drawingPresets[row.view]}
+                          onChange={e => handleDrawingPreset(row.view, e.target.value as DrawingPreset)}
+                          className="bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
+                        >
+                          {(Object.entries(DISPLAY_PRESETS) as [DrawingPreset, { label: string }][]).map(([id, { label }]) => (
+                            <option key={id} value={id}>{label}</option>
+                          ))}
+                        </select>
                       </div>
-                      <select
-                        value={defaultDrawingPreset}
-                        onChange={e => handleDrawingPreset(e.target.value as DrawingPreset)}
-                        className="bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
-                      >
-                        {(Object.entries(DISPLAY_PRESETS) as [DrawingPreset, { label: string }][]).map(([id, { label }]) => (
-                          <option key={id} value={id}>{label}</option>
-                        ))}
-                      </select>
-                    </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">Cabinet View Style</p>
+                  <p className="text-[11px] text-ink-subtle mb-3">Default wire / solid rendering for each view in the cabinet editor.</p>
+                  <div className="border border-edge-strong rounded-lg overflow-hidden divide-y divide-edge-strong/60">
+                    {([
+                      { view: 'top' as const,       label: 'Top' },
+                      { view: 'elevation' as const, label: 'Elevation' },
+                      { view: 'side' as const,      label: 'Side' },
+                      { view: '3d' as const,        label: '3D' },
+                    ]).map(row => (
+                      <div key={row.view} className="flex items-center justify-between px-4 py-3 bg-surface">
+                        <p className="text-xs font-medium text-ink">{row.label}</p>
+                        <div className="inline-flex rounded-md border border-edge-strong overflow-hidden">
+                          {(['wire', 'solid'] as ViewStyle[]).map(style => {
+                            const active = cabinetViewStyles[row.view] === style
+                            return (
+                              <button
+                                key={style}
+                                onClick={() => handleCabinetViewStyle(row.view, style)}
+                                className={`px-3 py-1 text-xs capitalize transition-colors ${
+                                  active ? 'bg-accent text-white' : 'bg-surface-2 text-ink-muted hover:text-ink'
+                                }`}
+                              >
+                                {style}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

@@ -1,12 +1,19 @@
 ﻿'use client'
 import { useState, useReducer, useRef, useEffect } from 'react'
 import { Room, Wall, CabinetInstance, DEFAULT_DIMS } from '@/src/lib/types'
-import { cabT, wallDir, wallEnd, dist, findFreeSlot, cabBlocks, cabWallSide, CAB_FILL, CAB_FILL_SEL } from '@/src/lib/geometry'
+import { cabT, wallDir, wallEnd, dist, findFreeSlot, cabBlocks, cabWallSide, CAB_FILL, CAB_FILL_SEL, SNAP_PX, type Pt } from '@/src/lib/geometry'
 import { Selected, CabResize, viewReducer, DisplayConfig, Mode, modeAssemblyClass } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone, ResolvedInternalPart, ResolvedDrawerStack, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
 import { computeElevSeams } from '@/src/lib/cabinetSeams'
+import {
+  computeElevSnap, ELEV_SNAP_KINDS, ELEV_SNAP_KIND_META,
+  type ElevSnapSettings, type ElevSnapResult,
+} from '@/src/lib/elevationSnap'
+import SnapToolbar from './SnapToolbar'
+import { SlideShape, slideBox3 } from './cabinetEditSvgHelpers'
+import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 
 // ── Colour coding per spec ────────────────────────────────────
 const PART_COLORS: Record<string, string> = {
@@ -17,6 +24,10 @@ const PART_COLORS: Record<string, string> = {
   kick_sub_front: '#d97706', kick_back: '#ea580c',
   spreader_vertical: '#dc2626', spreader_horizontal: '#dc2626',
   adj_shelf: '#818cf8', fixed_shelf: '#a78bfa',
+  inner_drawer_bottom: '#fb7185', inner_drawer_back: '#fb7185',
+  inner_drawer_side: '#fb7185',   inner_drawer_front: '#fb7185',
+  pull_out_bottom: '#f59e0b', pull_out_side: '#f59e0b', pull_out_back: '#f59e0b',
+  accessory: '#94a3b8',
   db_front: '#34d399', db_back: '#6ee7b7',
   db_left_side: '#34d399', db_right_side: '#34d399', db_bottom: '#34d399',
   db_slide: '#94a3b8',
@@ -32,7 +43,10 @@ const LINE_DRAW_COLORS: Record<string, string> = {
   kick_sub_front: '#f97316', kick_back: '#f97316',
   spreader_vertical: '#f97316', spreader_horizontal: '#f97316',
   adj_shelf: '#a78bfa', fixed_shelf: '#818cf8',
-  inner_drawer_back: '#818cf8',
+  inner_drawer_back: '#fda4af', inner_drawer_front: '#fda4af',
+  inner_drawer_side: '#fda4af', inner_drawer_bottom: '#fda4af',
+  pull_out_back: '#fcd34d', pull_out_side: '#fcd34d', pull_out_bottom: '#fcd34d',
+  accessory: '#cbd5e1',
   db_front: '#6ee7b7', db_back: '#6ee7b7',
   db_left_side: '#6ee7b7', db_right_side: '#6ee7b7', db_bottom: '#6ee7b7',
   db_slide: '#64748b',
@@ -58,10 +72,27 @@ function zoneElevRect(z: ResolvedFaceZone) {
 }
 
 function shelfElevRect(p: ResolvedInternalPart) {
-  if (p.part_type === 'inner_drawer_back') {
-    return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
+  switch (p.part_type) {
+    case 'inner_drawer_front':
+    case 'inner_drawer_back':
+    case 'pull_out_back':
+      // Face panel (drawer-box convention): DY = width (X), DX = height (Y)
+      return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
+    case 'inner_drawer_side':
+    case 'pull_out_side':
+      // Side panel edge-on: DZ = visible thickness (X), DY = height (Y)
+      return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+    case 'inner_drawer_bottom':
+    case 'pull_out_bottom':
+      // Bottom panel edge-on: DY = width (X), DZ = visible thickness (Y)
+      return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
+    case 'divider':
+      // Divider edge-on: DZ = thickness (X), DY = height (Y)
+      return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+    default:
+      // adj_shelf, fixed_shelf, accessory — shelf-like (Y = thickness DZ)
+      return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
   }
-  return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
 }
 
 function drawerBoxPartElevRect(p: ResolvedDrawerBoxPart) {
@@ -139,6 +170,7 @@ interface ElevationSVGProps {
   onCabinetContextMenu: (e: React.MouseEvent, cabId: string) => void
   onBlankWallContextMenu: (e: React.MouseEvent, wallId: string, wallT: number) => void
   onShiftSelectCabinet: (id: string) => void
+  onMarqueeSelect: (ids: string[]) => void
   onEqualizeWidths: () => void
   cabResize: CabResize | null
   onCabResizeStart: (r: CabResize) => void
@@ -147,21 +179,39 @@ interface ElevationSVGProps {
   resolvedParts?: Map<string, ResolvedCabinet>
   onDeselect: () => void
   onSeamClick?: (cabId: string, edgeKey: string, label: string) => void
+  // Measure-tool + snap state (parent-owned so view switches clear it cleanly)
+  elevSnapSettings:  ElevSnapSettings
+  onElevSnapSettingsChange: (s: ElevSnapSettings) => void
+  elevSnapResult:    ElevSnapResult | null
+  setElevSnapResult: (r: ElevSnapResult | null) => void
+  elevMeasureStart:  Pt | null
+  elevMeasureEnd:    Pt | null
+  elevMeasureCursor: Pt | null
+  setElevMeasureStart:  (p: Pt | null) => void
+  setElevMeasureEnd:    (p: Pt | null) => void
+  setElevMeasureCursor: (p: Pt | null) => void
 }
 
 export default function ElevationSVG({
   walls, cabinets, room, elevWallId, selected, displayConfig,
   multiSelect, canEqualize, mode, clipboard,
   onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu,
-  onBlankWallContextMenu, onShiftSelectCabinet, onEqualizeWidths,
+  onBlankWallContextMenu, onShiftSelectCabinet, onMarqueeSelect, onEqualizeWidths,
   cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
   resolvedParts, onDeselect, onSeamClick, elevWallSide, onSetElevWallSide,
+  elevSnapSettings, onElevSnapSettingsChange,
+  elevSnapResult, setElevSnapResult,
+  elevMeasureStart, elevMeasureEnd, elevMeasureCursor,
+  setElevMeasureStart, setElevMeasureEnd, setElevMeasureCursor,
 }: ElevationSVGProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [view, dispatchView] = useReducer(viewReducer, { panX: 80, panY: 60, zoom: 1 })
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
   const spaceRef = useRef(false)
   const shiftRef = useRef(false)
+  const ctrlRef  = useRef(false)
+  const marqueeStartRef = useRef<{ x: number; y: number } | null>(null)
+  const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
 
   // Click-to-grab following state
   const [elevCabFollowing, setElevCabFollowing] = useState<{ id: string } | null>(null)
@@ -192,6 +242,18 @@ export default function ElevationSVG({
 
   const wall = walls.find(w => w.id === elevWallId) ?? null
   const wallCabs = wall ? cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === elevWallSide) : []
+
+  // Drawer-slide model outlines: load every slide's uploaded 3D model across all
+  // cabinets on this wall (a hook, so it must run unconditionally at the top level).
+  // The elevation then draws each rail's TRUE projected silhouette instead of its
+  // bounding box — falling back to the box for slides with no model attached.
+  const allWallSlides: ResolvedDrawerSlide[] = []
+  for (const cab of wallCabs) {
+    const rp = resolvedParts?.get(cab.id)
+    if (rp) allWallSlides.push(...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? []))
+  }
+  const triMap = useSlideTriangles(allWallSlides)
+
   const roomH = wall?.height ?? room.room_dy ?? 2400
   const maxDz = wallCabs.length > 0 ? Math.max(300, ...wallCabs.map(c => c.dz)) : 600
   const FACE_THICK = 20
@@ -204,6 +266,8 @@ export default function ElevationSVG({
     setElevCabFloat(null)
     setElevResizeFollowing(null)
     setElevResizeLive(null)
+    marqueeStartRef.current = null
+    setMarquee(null)
   }, [mode])
 
   // Fit to wall on wall change; also clears any in-progress following
@@ -212,6 +276,8 @@ export default function ElevationSVG({
     setElevCabFloat(null)
     setElevResizeFollowing(null)
     setElevResizeLive(null)
+    marqueeStartRef.current = null
+    setMarquee(null)
     if (!svgRef.current || !wall) return
     const { width, height } = svgRef.current.getBoundingClientRect()
     const pad = 100
@@ -244,14 +310,19 @@ export default function ElevationSVG({
     const kd = (e: KeyboardEvent) => {
       if (e.key === ' ') { spaceRef.current = true; e.preventDefault() }
       if (e.key === 'Shift') shiftRef.current = true
+      if (e.key === 'Control') ctrlRef.current = true
       if (e.key === 'Escape') {
         setElevCabFollowing(null); setElevCabFloat(null)
         setElevResizeFollowing(null); setElevResizeLive(null); onCabResizeDone()
+        marqueeStartRef.current = null; setMarquee(null)
+        setElevMeasureStart(null); setElevMeasureEnd(null); setElevMeasureCursor(null)
+        setElevSnapResult(null)
       }
     }
     const ku = (e: KeyboardEvent) => {
       if (e.key === ' ') spaceRef.current = false
       if (e.key === 'Shift') shiftRef.current = false
+      if (e.key === 'Control') ctrlRef.current = false
     }
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku)
     return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku) }
@@ -265,13 +336,18 @@ export default function ElevationSVG({
       return
     }
     if (elevCabFollowing || elevResizeFollowing) return
+    // Measure tool — the click itself is handled in onPointerUp (plan-canvas pattern).
+    if (e.button === 0 && wall && mode === 'measure') { e.preventDefault(); return }
     if (e.button === 0 && wall && (modeAssemblyClass(mode) || mode === 'paste')) {
       svgRef.current?.setPointerCapture(e.pointerId)
       return
     }
-    if (e.button === 0 && mode === 'select') {
+    if (e.button === 0 && mode === 'select' && wall) {
       onDeselect()
-      panRef.current = { startX: e.clientX, startY: e.clientY, panX: view.panX, panY: view.panY }
+      const svgR = svgRef.current!.getBoundingClientRect()
+      const x = (e.clientX - svgR.left - view.panX) / view.zoom
+      const y = (e.clientY - svgR.top  - view.panY) / view.zoom
+      marqueeStartRef.current = { x, y }
       svgRef.current?.setPointerCapture(e.pointerId)
     }
   }
@@ -326,12 +402,35 @@ export default function ElevationSVG({
       return
     }
 
+    // Measure tool — track cursor with snap
+    if (mode === 'measure' && wall) {
+      const svgR = svgRef.current!.getBoundingClientRect()
+      const wp: Pt = {
+        x: (e.clientX - svgR.left - view.panX) / view.zoom,
+        y: (e.clientY - svgR.top  - view.panY) / view.zoom,
+      }
+      const snap = computeElevSnap(wp, { wallCabs, wall, room, roomH }, elevSnapSettings, SNAP_PX / view.zoom,
+        elevMeasureStart, { ortho: ctrlRef.current, ortho45: shiftRef.current })
+      setElevSnapResult(snap.kind ? snap : null)
+      setElevMeasureCursor(snap.pt)
+      return
+    }
+
     // Following mode — float ghost at cursor
     if (elevCabFollowing && wall && mode === 'select') {
       const svgR = svgRef.current!.getBoundingClientRect()
       const t  = (e.clientX - svgR.left - view.panX) / view.zoom
       const sy = (e.clientY - svgR.top  - view.panY) / view.zoom
       setElevCabFloat({ t, ht: roomH - sy })
+      return
+    }
+
+    // Marquee drag — selection rectangle in select mode
+    if (marqueeStartRef.current && mode === 'select') {
+      const svgR = svgRef.current!.getBoundingClientRect()
+      const x = (e.clientX - svgR.left - view.panX) / view.zoom
+      const y = (e.clientY - svgR.top  - view.panY) / view.zoom
+      setMarquee({ x1: marqueeStartRef.current.x, y1: marqueeStartRef.current.y, x2: x, y2: y })
       return
     }
 
@@ -357,12 +456,33 @@ export default function ElevationSVG({
     if (mode === 'select') setPlaceGhost(null)
   }
 
-  async function onPointerUp() {
+  async function onPointerUp(e: React.PointerEvent) {
     const wasPanning = panRef.current !== null
     panRef.current = null
-    if (wasPanning || elevCabFollowing) return
+    if (wasPanning || elevCabFollowing) {
+      marqueeStartRef.current = null
+      setMarquee(null)
+      return
+    }
 
     if (elevResizeFollowing) { await confirmResize(); return }
+
+    // Measure tool — first click sets start, second sets end; further clicks restart.
+    if (mode === 'measure' && wall) {
+      const svgR = svgRef.current!.getBoundingClientRect()
+      const wp: Pt = {
+        x: (e.clientX - svgR.left - view.panX) / view.zoom,
+        y: (e.clientY - svgR.top  - view.panY) / view.zoom,
+      }
+      const snap = computeElevSnap(wp, { wallCabs, wall, room, roomH }, elevSnapSettings, SNAP_PX / view.zoom,
+        elevMeasureStart, { ortho: ctrlRef.current, ortho45: shiftRef.current })
+      if (!elevMeasureStart || elevMeasureEnd) {
+        setElevMeasureStart(snap.pt); setElevMeasureEnd(null); setElevMeasureCursor(snap.pt)
+      } else {
+        setElevMeasureEnd(snap.pt)
+      }
+      return
+    }
 
     if ((modeAssemblyClass(mode) || mode === 'paste') && wall && placeGhost) {
       const wd = wallDir(wall)
@@ -373,6 +493,27 @@ export default function ElevationSVG({
       return
     }
 
+    // Marquee finalize — hit-test cabinets by centre point
+    if (marqueeStartRef.current && wall) {
+      const start = marqueeStartRef.current
+      marqueeStartRef.current = null
+      setMarquee(null)
+      const svgR = svgRef.current!.getBoundingClientRect()
+      const endX = (e.clientX - svgR.left - view.panX) / view.zoom
+      const endY = (e.clientY - svgR.top  - view.panY) / view.zoom
+      const widthPx  = Math.abs(endX - start.x) * view.zoom
+      const heightPx = Math.abs(endY - start.y) * view.zoom
+      if (widthPx > 5 || heightPx > 5) {
+        const minX = Math.min(start.x, endX), maxX = Math.max(start.x, endX)
+        const minY = Math.min(start.y, endY), maxY = Math.max(start.y, endY)
+        const ids = wallCabs.filter(cab => {
+          const cx = cabT(cab, wall) + cab.dx / 2
+          const cy = roomH - cabBottomZ(cab, room, wall) - cab.dy / 2
+          return cx >= minX && cx <= maxX && cy >= minY && cy <= maxY
+        }).map(c => c.id)
+        onMarqueeSelect(ids)
+      }
+    }
   }
 
   async function confirmResize() {
@@ -438,6 +579,7 @@ export default function ElevationSVG({
 
   function onCabPointerDown(e: React.PointerEvent, cab: CabinetInstance) {
     if (e.button !== 0 || !wall || spaceRef.current) return
+    if (mode === 'measure') return  // let measure clicks pass through to the svg
     e.stopPropagation()
     if (elevCabFollowing) {
       setElevCabFollowing(null)
@@ -481,7 +623,7 @@ export default function ElevationSVG({
   const mr      =  6 / z
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-950 overflow-hidden">
+    <div className="flex-1 flex flex-col bg-gray-950 overflow-hidden relative">
 
       {/* Wall picker + side toggle + equalize strip */}
       <div className="flex-none flex items-center gap-1 px-3 py-1.5 bg-gray-900 border-b border-gray-800 overflow-x-auto shrink-0">
@@ -499,6 +641,25 @@ export default function ElevationSVG({
             </button>
           ))
         }
+        {walls.length > 1 && wall && (() => {
+          const idx = walls.findIndex(w => w.id === wall.id)
+          const prev = walls[(idx - 1 + walls.length) % walls.length]
+          const next = walls[(idx + 1) % walls.length]
+          return (
+            <>
+              <button onClick={() => onSetElevWall(prev.id)}
+                title={`Previous wall (${prev.name})`}
+                className="ml-1 px-2 py-0.5 text-[10px] rounded text-gray-400 hover:text-gray-200 hover:bg-gray-800 whitespace-nowrap transition-colors">
+                ◀
+              </button>
+              <button onClick={() => onSetElevWall(next.id)}
+                title={`Next wall (${next.name})`}
+                className="px-2 py-0.5 text-[10px] rounded text-gray-400 hover:text-gray-200 hover:bg-gray-800 whitespace-nowrap transition-colors">
+                ▶
+              </button>
+            </>
+          )
+        })()}
         {wall && (
           <>
             <div className="mx-2 h-4 border-l border-gray-700" />
@@ -574,11 +735,16 @@ export default function ElevationSVG({
       <svg
         ref={svgRef}
         className="flex-1 bg-gray-950 select-none"
-        style={{ cursor: (modeAssemblyClass(mode) || mode === 'paste') ? 'crosshair' : elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
+        style={{ cursor: mode === 'measure' ? 'crosshair' : (modeAssemblyClass(mode) || mode === 'paste') ? 'crosshair' : elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onContextMenu={e => e.preventDefault()}
+        onContextMenu={e => {
+          e.preventDefault()
+          if (mode === 'measure') {
+            setElevMeasureStart(null); setElevMeasureEnd(null); setElevMeasureCursor(null); setElevSnapResult(null)
+          }
+        }}
         onClick={onSVGClick}
       >
         {!wall ? (
@@ -816,6 +982,14 @@ export default function ElevationSVG({
                   {/* Invisible hit area */}
                   <rect x={rx} y={ry} width={displayDx} height={displayDy} fill="transparent" stroke="none" />
 
+                  {/* Multi-select outline — drawn underneath so case parts render on top */}
+                  {isMultiSel && (
+                    <rect x={rx - 2 / z} y={ry - 2 / z}
+                      width={displayDx + 4 / z} height={displayDy + 4 / z}
+                      fill="none" stroke="#f59e0b" strokeWidth={2 / z}
+                      style={{ pointerEvents: 'none' }} />
+                  )}
+
                   {/* ── Resolved geometry — actual panels ── */}
                   {(() => {
                     // During live resize, resolved panel coords are stale (fixed at original dims).
@@ -942,6 +1116,23 @@ export default function ElevationSVG({
                           const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                           const fill = PART_COLORS.db_slide
                           const ldStroke = LINE_DRAW_COLORS.db_slide
+                          const tris = triMap.get(triKey(s) ?? '')
+                          // True projected model outline when the slide has an uploaded
+                          // 3D model; otherwise fall back to the original filled box.
+                          if (tris && tris.length > 0) {
+                            return (
+                              <g key={`ds-${i}-sl-${j}`} opacity={intEffP.opacity} style={{ pointerEvents: 'none' }}>
+                                <SlideShape
+                                  rectX={x} rectY={y} rectW={w} rectH={h}
+                                  box={slideBox3(s)} project={(px, py) => toSVGPt(px, py)}
+                                  slide={s} tris={tris} wireMode={false} selected={false}
+                                  fill={isLineDrawing ? 'none' : fill}
+                                  stroke={isLineDrawing ? ldStroke : fill}
+                                  strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
+                                  dataPartId={`elev-slide-${cab.id}-${i}-${j}`} />
+                              </g>
+                            )
+                          }
                           return (
                             <rect key={`ds-${i}-sl-${j}`} x={x} y={y} width={w} height={h}
                               fill={isLineDrawing ? 'none' : fill}
@@ -1388,9 +1579,81 @@ export default function ElevationSVG({
               )
             })()}
 
+            {/* ── Marquee selection rect ── */}
+            {marquee && (
+              <rect
+                x={Math.min(marquee.x1, marquee.x2)} y={Math.min(marquee.y1, marquee.y2)}
+                width={Math.abs(marquee.x2 - marquee.x1)} height={Math.abs(marquee.y2 - marquee.y1)}
+                fill="rgba(59,130,246,0.08)" stroke="#3b82f6"
+                strokeWidth={1 / z} strokeDasharray={`${4 / z} ${2 / z}`}
+                style={{ pointerEvents: 'none' }}
+              />
+            )}
+
+            {/* ── Measure tool overlay ── */}
+            {(() => {
+              const a = elevMeasureStart
+              const b = elevMeasureEnd ?? elevMeasureCursor
+              if (!a) return null
+              const ep = 4 / z
+              if (!b) {
+                return <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / z} style={{ pointerEvents: 'none' }} />
+              }
+              const d  = Math.round(dist(a, b))
+              const ddx = Math.round(Math.abs(b.x - a.x))
+              const ddy = Math.round(Math.abs(b.y - a.y))
+              const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+              const fs = 11 / z, pad = 5 / z
+              const boxW = fs * 6.5, boxH = fs * 2.6 + pad
+              return (
+                <g style={{ pointerEvents: 'none' }}>
+                  <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                    stroke="#f59e0b" strokeWidth={1.5 / z}
+                    strokeDasharray={elevMeasureEnd ? undefined : `${6 / z} ${3 / z}`} />
+                  <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / z} />
+                  <circle cx={b.x} cy={b.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / z} />
+                  <rect x={mx - boxW / 2} y={my - boxH - pad} width={boxW} height={boxH} rx={2 / z}
+                    fill="rgba(17,24,39,0.9)" stroke="#f59e0b" strokeWidth={0.75 / z} />
+                  <text x={mx} y={my - boxH + fs * 0.5} textAnchor="middle" dominantBaseline="middle"
+                    fontSize={fs} fontWeight="600" fill="#fcd34d" style={{ userSelect: 'none' }}>
+                    {d}mm
+                  </text>
+                  <text x={mx} y={my - boxH + fs * 1.7} textAnchor="middle" dominantBaseline="middle"
+                    fontSize={fs * 0.8} fill="#9ca3af" style={{ userSelect: 'none' }}>
+                    Δ{ddx} × {ddy}
+                  </text>
+                </g>
+              )
+            })()}
+
+            {/* ── Snap indicator glyph (active snap point) ── */}
+            {elevSnapResult?.kind && (() => {
+              const { pt, kind } = elevSnapResult
+              const s = 5 / z
+              const color = ELEV_SNAP_KIND_META[kind].color
+              return (
+                <g style={{ pointerEvents: 'none' }}>
+                  <rect x={pt.x - s} y={pt.y - s} width={s * 2} height={s * 2}
+                    fill="none" stroke={color} strokeWidth={1.5 / z} />
+                  <line x1={pt.x - s * 1.7} y1={pt.y} x2={pt.x + s * 1.7} y2={pt.y}
+                    stroke={color} strokeWidth={0.75 / z} />
+                  <line x1={pt.x} y1={pt.y - s * 1.7} x2={pt.x} y2={pt.y + s * 1.7}
+                    stroke={color} strokeWidth={0.75 / z} />
+                </g>
+              )
+            })()}
+
           </g>
         )}
       </svg>
+
+      {/* Floating snap-settings toolbar (top-right of the elevation pane). */}
+      <SnapToolbar
+        settings={elevSnapSettings}
+        onChange={onElevSnapSettingsChange}
+        kinds={ELEV_SNAP_KINDS}
+        meta={ELEV_SNAP_KIND_META}
+      />
     </div>
   )
 }

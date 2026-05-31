@@ -9,15 +9,19 @@ import { dbLoadResolvedParts } from './canvasDB'
 import PlanDrawingSVG from './PlanDrawingSVG'
 import PlanViewReport from './PlanViewReport'
 import ElevationReportSVG from './ElevationReportSVG'
+import ElevationPrintReport from './ElevationPrintReport'
+import CabinetSheetReport from './CabinetSheetReport'
 
 export type ReportScope = 'job' | 'room'
-type ReportId = 'parts_list_summary' | 'shop_drawing_plan' | 'plan_view_v2' | 'elevation_view'
+type ReportId = 'parts_list_summary' | 'shop_drawing_plan' | 'plan_view_v2' | 'elevation_view' | 'elevation_view_v2' | 'cabinet_sheets'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'parts_list_summary', label: 'Parts List Summary',  desc: 'Parts by room · material · cabinet' },
   { id: 'shop_drawing_plan',  label: 'Plan View',           desc: 'B&W plan drawing for shop' },
   { id: 'plan_view_v2',       label: 'Plan View (New)',     desc: 'Scaled PDF with toggleable layers' },
   { id: 'elevation_view',     label: 'Elevation Views',     desc: 'B&W wall elevations with dimensions' },
+  { id: 'elevation_view_v2',  label: 'Elevation Views (New)', desc: 'Scaled PDF, one wall per page, layers' },
+  { id: 'cabinet_sheets',     label: 'Cabinet Sheets',      desc: '1 page/cabinet — front, side, 3D + cut list' },
 ]
 
 const CASE_LABELS: Record<string, string> = {
@@ -30,7 +34,11 @@ const TK_LABELS: Record<string, string> = {
 }
 const INT_LABELS: Record<string, string> = {
   adj_shelf: 'Adjustable Shelf', fixed_shelf: 'Fixed Shelf',
-  inner_drawer_bottom: 'Drawer Box Bottom', inner_drawer_back: 'Drawer Box Back',
+  inner_drawer_bottom: 'Inner Drawer Bottom', inner_drawer_back: 'Inner Drawer Back',
+  inner_drawer_side:   'Inner Drawer Side',  inner_drawer_front: 'Inner Drawer Front',
+  pull_out_bottom:     'Pull-out Bottom',    pull_out_side:      'Pull-out Side',
+  pull_out_back:       'Pull-out Back',
+  accessory:           'Accessory',
 }
 const FACE_LABELS: Record<string, string> = {
   door: 'Door', drawer_face: 'Drawer Face', false_panel: 'False Panel',
@@ -140,7 +148,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
   // Paper size + scale for SVG output
   const [printPaper, setPrintPaper] = useState<keyof typeof PAPER>('A3L')
   const [printScale, setPrintScale] = useState(20)
-  const SCALES = [5, 10, 15, 20, 25, 50, 100]
+  const SCALES = [5, 10, 15, 20, 25, 30, 40, 50, 100]
   const paper = PAPER[printPaper]
 
   // Wall picker for elevation view
@@ -388,23 +396,23 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {(selectedReport === 'shop_drawing_plan' || selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view') && (
-                  <>
-                    <select value={printScale} onChange={e => setPrintScale(Number(e.target.value))}
-                      className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1"
-                      title="Drawing scale — 1:N">
-                      {SCALES.map(s => <option key={s} value={s}>1:{s}</option>)}
-                    </select>
-                    <select value={printPaper} onChange={e => setPrintPaper(e.target.value as keyof typeof PAPER)}
-                      className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1">
-                      {(Object.keys(PAPER) as (keyof typeof PAPER)[]).map(k => (
-                        <option key={k} value={k}>{PAPER[k].label}</option>
-                      ))}
-                    </select>
-                  </>
+                {(selectedReport === 'shop_drawing_plan' || selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view' || selectedReport === 'elevation_view_v2') && (
+                  <select value={printScale} onChange={e => setPrintScale(Number(e.target.value))}
+                    className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1"
+                    title="Drawing scale — 1:N">
+                    {SCALES.map(s => <option key={s} value={s}>1:{s}</option>)}
+                  </select>
                 )}
-                {/* The new plan view has its own download button in its layer toolbar. */}
-                {selectedReport !== 'plan_view_v2' && (
+                {(selectedReport === 'shop_drawing_plan' || selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view' || selectedReport === 'elevation_view_v2' || selectedReport === 'cabinet_sheets') && (
+                  <select value={printPaper} onChange={e => setPrintPaper(e.target.value as keyof typeof PAPER)}
+                    className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1">
+                    {(Object.keys(PAPER) as (keyof typeof PAPER)[]).map(k => (
+                      <option key={k} value={k}>{PAPER[k].label}</option>
+                    ))}
+                  </select>
+                )}
+                {/* The new plan/elevation/cabinet reports have their own download button in their toolbar. */}
+                {selectedReport !== 'plan_view_v2' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && (
                   <button onClick={handlePrintActive}
                     className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium">
                     {selectedReport === 'shop_drawing_plan' ? 'Download SVG'
@@ -449,6 +457,26 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                     if (el) elevSvgRefs.current.set(wallId, el)
                     else elevSvgRefs.current.delete(wallId)
                   }}
+                />
+              ) : selectedReport === 'elevation_view_v2' ? (
+                <ElevationPrintReport
+                  project={project}
+                  room={room}
+                  walls={walls}
+                  cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
+                  resolvedParts={allResolved}
+                  scale={printScale}
+                  paperKey={printPaper}
+                />
+              ) : selectedReport === 'cabinet_sheets' ? (
+                <CabinetSheetReport
+                  project={project}
+                  room={room}
+                  walls={walls}
+                  cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
+                  resolvedParts={allResolved}
+                  materialNames={materialNames}
+                  paperKey={printPaper}
                 />
               ) : (
                 <PartsListSummary data={reportData} />

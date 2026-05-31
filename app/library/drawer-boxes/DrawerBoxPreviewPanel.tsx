@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic'
 import { supabase } from '@/src/lib/supabase'
 import { DrawerBoxRules, DEFAULT_DB_RULES, Material, ResolvedDrawerBoxPart, DrawerType } from '@/src/lib/resolver/types'
 import { resolveDrawerBox, mergeDbRules } from '@/src/lib/resolver/resolveDrawerBox'
+import { effectiveDbEdgeSides } from '@/src/lib/drawerBoxConfig'
 import type { MatColour } from './DrawerBox3DView'
 
 const DrawerBox3DView = dynamic(() => import('./DrawerBox3DView'), { ssr: false })
@@ -37,6 +38,9 @@ interface DbSched {
   edgeband_id:        string | null
   bottom_material_id: string | null
   bottom_edgeband_id: string | null
+  // Inner-drawer schedules only — undefined on outer schedules.
+  front_material_id?: string | null
+  front_edgeband_id?: string | null
 }
 
 interface MatRow {
@@ -65,6 +69,13 @@ interface SlideRow {
   runner_thickness: number
   colour:           string | null
   side_deduction:   number
+  // 3D model fields (nullable — no model = box fallback)
+  model_url:        string | null
+  model_format:     'glb' | 'stl' | 'obj' | null
+  model_scale:      number
+  model_anchor_x:   number
+  model_anchor_y:   number
+  model_anchor_z:   number
 }
 
 type PView = 'front' | 'top' | 'side' | '3d'
@@ -340,7 +351,7 @@ function DbFrontView({ parts, W, H, mat, slide, casinetW, isSystem }: { parts: R
   )
 }
 
-function DbSideView({ parts, D, H, mat, isSystem, slide }: { parts: ResolvedDrawerBoxPart[]; D: number; H: number; mat: MatColour; isSystem?: boolean; slide?: SlideRow | null }) {
+function DbSideView({ parts, D, H, mat, isSystem, slide, slideSetback = 0 }: { parts: ResolvedDrawerBoxPart[]; D: number; H: number; mat: MatColour; isSystem?: boolean; slide?: SlideRow | null; slideSetback?: number }) {
   const pl = 80, pt = 60, pr = 80, pb = 40
   const vw = D + pl + pr
   const vh = H + pt + pb
@@ -360,7 +371,7 @@ function DbSideView({ parts, D, H, mat, isSystem, slide }: { parts: ResolvedDraw
       {slide && (() => {
         const runnerD = Math.min(slide.nominal_length ?? D, D)
         const sc = slide.colour ?? '#6b7280'
-        const r = toSVG({ z: 0, yBottom: 0, d: runnerD, h: SLIDE_H })
+        const r = toSVG({ z: slideSetback, yBottom: 0, d: runnerD, h: SLIDE_H })
         return (
           <g>
             <rect x={r.x} y={r.y} width={r.w} height={r.h} fill={sc} fillOpacity={0.85} rx={1} />
@@ -406,7 +417,7 @@ function DbSideView({ parts, D, H, mat, isSystem, slide }: { parts: ResolvedDraw
   )
 }
 
-function DbTopView({ parts, W, D, mat, slide, casinetW, isSystem }: { parts: ResolvedDrawerBoxPart[]; W: number; D: number; mat: MatColour; slide?: SlideRow | null; casinetW?: number; isSystem?: boolean }) {
+function DbTopView({ parts, W, D, mat, slide, casinetW, isSystem, slideSetback = 0 }: { parts: ResolvedDrawerBoxPart[]; W: number; D: number; mat: MatColour; slide?: SlideRow | null; casinetW?: number; isSystem?: boolean; slideSetback?: number }) {
   // Top view: X horizontal, Z vertical (front of box at bottom of SVG)
   const sw = slide?.runner_thickness ?? 0
   const showRunners = sw > 0 && (isSystem || !!slide)
@@ -444,8 +455,8 @@ function DbTopView({ parts, W, D, mat, slide, casinetW, isSystem }: { parts: Res
       {showRunners && (() => {
         // System: runner spans full depth; 5-piece: runner spans nominal_length
         const runnerD = isSystem ? D : Math.min(slide?.nominal_length ?? D, D)
-        const lr = toSVG({ x: -sw, z: 0, w: sw, d: runnerD })
-        const rr = toSVG({ x: W,   z: 0, w: sw, d: runnerD })
+        const lr = toSVG({ x: -sw, z: slideSetback, w: sw, d: runnerD })
+        const rr = toSVG({ x: W,   z: slideSetback, w: sw, d: runnerD })
         return (
           <g>
             <rect x={lr.x} y={lr.y} width={lr.w} height={lr.h} fill={sc} fillOpacity={0.85} rx={1} />
@@ -508,15 +519,17 @@ const FALLBACK_COL: MatColour = { face: '#374151', back: '#1e293b', edge: '#4b55
 const SYSTEM_PART_TYPES = new Set(['db_back', 'db_bottom'])
 
 export default function DrawerBoxPreviewPanel({
-  delta, drawerType = 'five_piece',
+  delta, drawerType = 'five_piece', kind = 'external',
   prevW, prevH, prevD, onPrevWChange, onPrevHChange, onPrevDChange,
 }: {
   delta: Partial<DrawerBoxRules>; drawerType?: DrawerType
+  kind?: 'external' | 'internal'
   prevW: number; prevH: number; prevD: number
   onPrevWChange: (v: number) => void
   onPrevHChange: (v: number) => void
   onPrevDChange: (v: number) => void
 }) {
+  const schedTable = kind === 'internal' ? 'inner_drawerbox_schedules' : 'drawerbox_schedules'
   const [panelW,      setPanelW]      = useState(420)
   const [activeView,  setActiveView]  = useState<PView>('3d')
   const [dbScheds,    setDbScheds]    = useState<DbSched[]>([])
@@ -532,12 +545,18 @@ export default function DrawerBoxPreviewPanel({
     setPanelW(Math.round((window.innerWidth - 240) / 2))
   }, [])
 
-  // Load drawer box material schedules, materials, and edgebands
+  // Load drawer box material schedules, materials, and edgebands.
+  // Schedules are re-fetched when `kind` changes so the dropdown reflects the right table.
   useEffect(() => {
+    const schedQuery = kind === 'internal'
+      ? supabase.from('inner_drawerbox_schedules')
+          .select('id,name,is_default,material_id,edgeband_id,bottom_material_id,bottom_edgeband_id,front_material_id,front_edgeband_id')
+          .eq('active', true).order('name')
+      : supabase.from('drawerbox_schedules')
+          .select('id,name,is_default,material_id,edgeband_id,bottom_material_id,bottom_edgeband_id')
+          .eq('active', true).order('name')
     Promise.all([
-      supabase.from('drawerbox_schedules')
-        .select('id,name,is_default,material_id,edgeband_id,bottom_material_id,bottom_edgeband_id')
-        .eq('active', true).order('name'),
+      schedQuery,
       supabase.from('materials')
         .select('id,name,dz,face_colour,back_colour,edge_colour')
         .eq('active', true).order('name'),
@@ -545,23 +564,24 @@ export default function DrawerBoxPreviewPanel({
         .select('id,name,thickness,color,material_match_id')
         .eq('active', true).order('name'),
       supabase.from('hardware_slides')
-        .select('id,name,brand,nominal_length,box_height,runner_thickness,colour,side_deduction')
+        .select('id,name,brand,nominal_length,box_height,runner_thickness,colour,side_deduction,model_url,model_format,model_scale,model_anchor_x,model_anchor_y,model_anchor_z')
         .eq('active', true).order('nominal_length'),
     ]).then(([schedRes, matsRes, ebRes, slideRes]) => {
-      const scheds = (schedRes.data ?? []) as DbSched[]
+      const scheds = ((schedRes.data ?? []) as unknown) as DbSched[]
       setDbScheds(scheds)
       setSelSchedId(scheds.find(s => s.is_default)?.id ?? scheds[0]?.id ?? null)
       setMaterials((matsRes.data ?? []) as MatRow[])
       setEdgebands((ebRes.data ?? []) as EbRow[])
       setSlides((slideRes.data ?? []) as SlideRow[])
     })
-  }, [])
+  }, [kind])
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
   const selSched    = dbScheds.find(s => s.id === selSchedId) ?? null
   const selMat      = materials.find(m => m.id === selSched?.material_id)        ?? null
   const selBotMat   = materials.find(m => m.id === selSched?.bottom_material_id) ?? null
+  const selFrontMat = materials.find(m => m.id === selSched?.front_material_id)  ?? null
   const selSlide    = slides.find(s => s.id === selSlideId) ?? null
   const selEb       = edgebands.find(e => e.id === selSched?.edgeband_id) ?? null
   const runnerThick = selSlide ? Number(selSlide.runner_thickness) : 0
@@ -595,6 +615,11 @@ export default function DrawerBoxPreviewPanel({
     [selBotMat],
   )
 
+  const frontMaterial: Material | undefined = useMemo(
+    () => selFrontMat ? toMaterial(selFrontMat) : undefined,
+    [selFrontMat],
+  )
+
   const matCol: MatColour = useMemo(() => ({
     face: selMat?.face_colour ?? FALLBACK_COL.face,
     back: selMat?.back_colour ?? FALLBACK_COL.back,
@@ -605,18 +630,47 @@ export default function DrawerBoxPreviewPanel({
     ? { thick: Number(selEb.thickness), color: selEb.color ?? matCol.edge }
     : undefined
 
+  // Per-id lookups so the 3D view can render each part with its own material/banding
+  // (inner-drawer front uses the schedule's Front material, etc.).
+  const matColById: Record<string, MatColour> = useMemo(() => {
+    const map: Record<string, MatColour> = {}
+    for (const m of materials) {
+      map[m.id] = {
+        face: m.face_colour ?? FALLBACK_COL.face,
+        back: m.back_colour ?? FALLBACK_COL.back,
+        edge: m.edge_colour ?? FALLBACK_COL.edge,
+      }
+    }
+    return map
+  }, [materials])
+
+  const ebSpecById: Record<string, { thick: number; color: string }> = useMemo(() => {
+    const map: Record<string, { thick: number; color: string }> = {}
+    for (const eb of edgebands) {
+      map[eb.id] = {
+        thick: Number(eb.thickness),
+        color: eb.color ?? FALLBACK_COL.edge,
+      }
+    }
+    return map
+  }, [edgebands])
+
   // Use material DZ as DB_SIDE_T so preview reflects real sheet thickness
   const effectiveRules = useMemo(() => {
     const merged = mergeDbRules(DEFAULT_DB_RULES, delta)
     return selMat ? { ...merged, DB_SIDE_T: selMat.dz } : merged
   }, [delta, selMat])
 
+  // Whole-drawer setback only applies to internal kind; surfaced here so both
+  // the parts builder and the slide rendering (3D + 2D side/top) share it.
+  const drawerSetback = kind === 'internal' ? (effectiveRules.IDB_DRAWER_Z_SETBACK ?? 0) : 0
+
   // ── Schedule field save ────────────────────────────────────────────────────
 
   async function saveSchedField(field: string, value: string) {
     if (!selSchedId) return
     const v = value || null
-    await supabase.from('drawerbox_schedules').update({ [field]: v }).eq('id', selSchedId)
+    await supabase.from(schedTable).update({ [field]: v }).eq('id', selSchedId)
     setDbScheds(prev => prev.map(s => s.id === selSchedId ? ({ ...s, [field]: v } as DbSched) : s))
   }
 
@@ -639,14 +693,69 @@ export default function DrawerBoxPreviewPanel({
         edgeband_id:        selSched?.edgeband_id        ?? undefined,
         bottom_material:    bottomMaterial,
         bottom_edgeband_id: selSched?.bottom_edgeband_id ?? undefined,
+        front_material:     frontMaterial,
+        front_edgeband_id:  selSched?.front_edgeband_id  ?? undefined,
         rules:              rulesForResolve,
         slide_box_height:   selSlide?.box_height != null ? Number(selSlide.box_height) : undefined,
       })
-      return drawerType === 'system'
+      const filtered = drawerType === 'system'
         ? all.filter(p => SYSTEM_PART_TYPES.has(p.part_type))
         : all
+      // For internal drawer methods, replace the structural db_front with a wider
+      // face that spans the runner gap minus IDB_FRONT_CLEAR per side. Mirrors what
+      // fittings.ts emits as inner_drawer_front for inner drawers in a cabinet.
+      if (kind === 'internal') {
+        const idbClear = rulesForResolve.IDB_FRONT_CLEAR ?? 2
+        const topAdj   = rulesForResolve.IDB_FRONT_TOP_ADJUST    ?? 0
+        const botAdj   = rulesForResolve.IDB_FRONT_BOTTOM_ADJUST ?? 0
+        const wAdj     = rulesForResolve.IDB_FRONT_WIDTH_ADJUST  ?? 0
+        const setbackZ = rulesForResolve.IDB_DRAWER_Z_SETBACK    ?? 0
+        const runnerThick = selSlide ? Number(selSlide.runner_thickness) : 0
+        const openingW = boxW + 2 * runnerThick
+        const faceDy = Math.max(1, openingW - 2 * idbClear + wAdj)
+        // Top adjust grows the face upward, bottom adjust grows it downward.
+        const faceDx = Math.max(1, boxH + topAdj + botAdj)
+        const faceDz = (frontMaterial ?? previewMaterial).DZ
+        const xOffset = -((faceDy - boxW) / 2)
+        const yOffset = -botAdj
+        // Read which sides to band from the db_front row of the Edging table —
+        // the user's ticks now drive the inner-drawer-front preview. Unticked
+        // sides fall through to the front material's edge colour on the geometry.
+        const frontSides = effectiveDbEdgeSides(delta, 'db_front')
+        const frontBanding: ResolvedDrawerBoxPart['edge_band'] = {
+          top:    frontSides.includes('top'),
+          bottom: frontSides.includes('bottom'),
+          left:   frontSides.includes('left'),
+          right:  frontSides.includes('right'),
+          id:     selSched?.front_edgeband_id ?? undefined,
+        }
+        const face: ResolvedDrawerBoxPart = {
+          part_type:   'db_front',
+          DX: faceDx,
+          DY: faceDy,
+          DZ: faceDz,
+          X:  xOffset,
+          Y:  yOffset,
+          // Push the inner drawer front forward by its own thickness so its
+          // back face lands on the slide fronts (which sit at the cabinet
+          // front plane).
+          Z:  -faceDz,
+          AX: 0, AY: 0, AZ: 0,
+          material_id: (frontMaterial ?? previewMaterial).id,
+          edge_band:   frontBanding,
+        }
+        // Apply the whole-drawer setback by shifting every part's Z (resolver
+        // coords: +Z = deeper into the cabinet). Slides stay put so the
+        // recession is visible in 3D as a gap between the slide front and the
+        // drawer assembly.
+        const assembly = [...filtered.filter(p => p.part_type !== 'db_front'), face]
+        return setbackZ === 0
+          ? assembly
+          : assembly.map(p => ({ ...p, Z: p.Z + setbackZ }))
+      }
+      return filtered
     } catch { return [] }
-  }, [boxW, boxH, prevD, previewMaterial, bottomMaterial, selSched, effectiveRules, drawerType, selSlide])
+  }, [boxW, boxH, prevD, previewMaterial, bottomMaterial, frontMaterial, selSched, effectiveRules, drawerType, selSlide, kind])
 
   // ── Resize ─────────────────────────────────────────────────────────────────
 
@@ -734,14 +843,29 @@ export default function DrawerBoxPreviewPanel({
                 boxDepth={prevD}
                 matCol={matCol}
                 ebSpec={ebSpec}
+                matColById={matColById}
+                ebSpecById={ebSpecById}
+                runner={selSlide ? {
+                  thickness:      Number(selSlide.runner_thickness),
+                  nominal_length: selSlide.nominal_length,
+                  colour:         selSlide.colour,
+                  modelUrl:       selSlide.model_url,
+                  modelFormat:    selSlide.model_format,
+                  modelScale:     Number(selSlide.model_scale ?? 1),
+                  anchorX:        Number(selSlide.model_anchor_x ?? 0),
+                  anchorY:        Number(selSlide.model_anchor_y ?? 0),
+                  anchorZ:        Number(selSlide.model_anchor_z ?? 0),
+                } : null}
+                isSystem={drawerType === 'system'}
+                slideSetback={drawerSetback}
               />
             </div>
           ) : (
             <ZoomableArea resetKey={`${activeView}-${prevW}-${boxH}-${prevD}`}>
               <div className="w-full h-full flex items-center justify-center p-4">
                 {activeView === 'front' && <DbFrontView parts={previewParts} W={boxW} H={boxH} mat={matCol} slide={selSlide} casinetW={prevW} isSystem={drawerType === 'system'} />}
-                {activeView === 'top'   && <DbTopView   parts={previewParts} W={boxW} D={prevD} mat={matCol} slide={selSlide} casinetW={prevW} isSystem={drawerType === 'system'} />}
-                {activeView === 'side'  && <DbSideView  parts={previewParts} D={prevD} H={boxH} mat={matCol} isSystem={drawerType === 'system'} slide={selSlide} />}
+                {activeView === 'top'   && <DbTopView   parts={previewParts} W={boxW} D={prevD} mat={matCol} slide={selSlide} casinetW={prevW} isSystem={drawerType === 'system'} slideSetback={drawerSetback} />}
+                {activeView === 'side'  && <DbSideView  parts={previewParts} D={prevD} H={boxH} mat={matCol} isSystem={drawerType === 'system'} slide={selSlide} slideSetback={drawerSetback} />}
               </div>
             </ZoomableArea>
           )}
@@ -786,6 +910,9 @@ export default function DrawerBoxPreviewPanel({
             {([
               { label: 'Box',    mField: 'material_id'        as keyof DbSched, ebField: 'edgeband_id'        as keyof DbSched },
               { label: 'Bottom', mField: 'bottom_material_id' as keyof DbSched, ebField: 'bottom_edgeband_id' as keyof DbSched },
+              ...(kind === 'internal' ? [
+                { label: 'Front', mField: 'front_material_id' as keyof DbSched, ebField: 'front_edgeband_id' as keyof DbSched },
+              ] : []),
             ]).map(({ label, mField, ebField }) => {
               const mId = (selSched[mField] as string | null) ?? ''
               const eId = (selSched[ebField] as string | null) ?? ''

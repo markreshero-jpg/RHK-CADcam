@@ -1,22 +1,33 @@
 'use client'
 
 import { useState } from 'react'
-import { SNAP_KINDS, SNAP_KIND_META, type SnapSettings } from '@/src/lib/canvasSnap'
 
-// Floating snap control, top-right of the plan canvas. The magnet button shows
-// master state and opens a popover of per-target toggles. Self-positioning —
-// the parent only needs to be `relative`.
-export default function SnapToolbar({
+// Generic floating snap-control button. Used by both the plan canvas and the
+// elevation canvas — each passes its own kinds + metadata + settings, so the
+// component itself is view-agnostic.
+//
+// `K` is the union of valid snap kinds for the caller's view. `settings` must
+// carry a master `enabled` flag plus a per-kind boolean map.
+export interface SnapToolbarSettings<K extends string> {
+  enabled: boolean
+  kinds:   Record<K, boolean>
+}
+
+export default function SnapToolbar<K extends string>({
   settings,
   onChange,
+  kinds,
+  meta,
 }: {
-  settings: SnapSettings
-  onChange: (s: SnapSettings) => void
+  settings: SnapToolbarSettings<K>
+  onChange: (s: SnapToolbarSettings<K>) => void
+  kinds:    readonly K[]
+  meta:     Record<K, { label: string; color: string }>
 }) {
   const [open, setOpen] = useState(false)
 
   const toggleMaster = () => onChange({ ...settings, enabled: !settings.enabled })
-  const toggleKind = (k: (typeof SNAP_KINDS)[number]) =>
+  const toggleKind = (k: K) =>
     onChange({ ...settings, kinds: { ...settings.kinds, [k]: !settings.kinds[k] } })
 
   return (
@@ -53,9 +64,9 @@ export default function SnapToolbar({
           </div>
 
           <div className={`flex flex-col gap-0.5 ${settings.enabled ? '' : 'opacity-40 pointer-events-none'}`}>
-            {SNAP_KINDS.map(k => {
+            {kinds.map(k => {
               const on = settings.kinds[k]
-              const { label, color } = SNAP_KIND_META[k]
+              const { label, color } = meta[k]
               return (
                 <button
                   key={k}

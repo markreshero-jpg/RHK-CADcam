@@ -157,6 +157,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         edge_band: { top: z.edge_band_top, bottom: z.edge_band_bottom, left: z.edge_band_left, right: z.edge_band_right },
       })),
       drawer_stacks: [],
+      internal_slides: [],
       seam_joints: seamJoints,
       errors: [],
       warnings: [],

@@ -1,6 +1,6 @@
 'use client'
 import { Wall, CabinetInstance } from '@/src/lib/types'
-import { toRad, wallDir, wallInwardNormal, cabT } from '@/src/lib/geometry'
+import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide } from '@/src/lib/geometry'
 import { LayerConfig } from '@/src/lib/displayConfig'
 
 interface Props {
@@ -48,7 +48,7 @@ function DimLine({
 }) {
   const z = zoom
   const wd = wallDir(wall)
-  const thick = wall.thickness
+  const thick = wall.wall_type === 'island' ? 0 : wall.thickness
   const sw = 1 / z
   const fs = 12 / z
   const tickH = 6 / z
@@ -149,66 +149,90 @@ export default function WallDimensionChain({
   const out = { x: -inward.x, y: -inward.y }
   const z = zoom
   const col = '#ffffff'
+  const isIsland = wall.wall_type === 'island'
 
-  const baseCabs = cabinets.filter(c =>
+  const allBase = cabinets.filter(c =>
     c.wall_id === wall.id &&
     (c.assembly_class === 'base' || c.assembly_class === 'base_corner')
   )
-  const wallCabs = cabinets.filter(c =>
+  const allWall = cabinets.filter(c =>
     c.wall_id === wall.id &&
     (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner')
   )
 
-  const baseSegs = computeChain(baseCabs, wall)
-  const wallCabSegs = computeChain(wallCabs, wall)
-  const overallSeg: Seg[] = [{ from: 0, to: wall.length, label: Math.round(wall.length) }]
+  const sideDepth = (cabs: CabinetInstance[]) =>
+    cabs.length ? Math.max(...cabs.map(c => c.dz)) : 0
 
-  const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
-  const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
-  // Only show wall depth separately if it differs meaningfully from base depth
-  const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
+  // Render the 3-row width chain + perpendicular depth dims for one side of a wall.
+  // `chainDir` is the outward perpendicular the width rows stack along; `depthDir`
+  // is the direction the depth dims point (toward the cabinet fronts on this side).
+  // `depthOffset` (model mm) pushes the width rows clear of cabinets sitting on
+  // this side — 0 for perimeter walls, the side's cabinet depth for islands.
+  function renderSide(
+    key: string,
+    chainDir: { x: number; y: number },
+    depthDir: { x: number; y: number },
+    baseCabs: CabinetInstance[],
+    wallCabs: CabinetInstance[],
+    depthOffset: number,
+  ) {
+    const baseSegs = computeChain(baseCabs, wall)
+    const wallCabSegs = computeChain(wallCabs, wall)
+    const overallSeg: Seg[] = [{ from: 0, to: wall.length, label: Math.round(wall.length) }]
+    const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
+    const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
+    // Only show wall depth separately if it differs meaningfully from base depth
+    const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
+
+    return (
+      <g key={key}>
+        {/* Wall-parallel chain lines */}
+        {layerWallCab.visible && wallCabs.length > 0 && (
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + 25 / z} segs={wallCabSegs} zoom={z} col={col} />
+        )}
+        {layerBase.visible && baseCabs.length > 0 && (
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + 50 / z} segs={baseSegs} zoom={z} col={col} />
+        )}
+        {layerOverall.visible && (
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + 75 / z} segs={overallSeg} zoom={z} col={col} />
+        )}
+
+        {/* Perpendicular depth dimensions at wall ends */}
+        {layerBase.visible && baseDz > 0 && (
+          <>
+            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={baseDz} zoom={z} col={col} sign={-1} />
+            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={baseDz} zoom={z} col={col} sign={1} />
+          </>
+        )}
+        {layerWallCab.visible && showWallDepthSeparate && (
+          <>
+            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={wallDz} zoom={z} col={col} sign={-1} />
+            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={wallDz} zoom={z} col={col} sign={1} />
+          </>
+        )}
+      </g>
+    )
+  }
+
+  // Perimeter wall: cabinets sit on the inward (room) side only, so the chain
+  // goes on the empty outward side and depth dims point inward — unchanged.
+  if (!isIsland) {
+    return renderSide('main', out, inward, allBase, allWall, 0)
+  }
+
+  // Island: cabinets can sit on both faces. Split by side and draw each side's
+  // chain on its own side, pushed clear of that side's cabinet fronts.
+  const inBase  = allBase.filter(c => cabWallSide(c, wall) === 'face')
+  const outBase = allBase.filter(c => cabWallSide(c, wall) === 'back')
+  const inWall  = allWall.filter(c => cabWallSide(c, wall) === 'face')
+  const outWall = allWall.filter(c => cabWallSide(c, wall) === 'back')
+  const hasIn  = inBase.length > 0 || inWall.length > 0
+  const hasOut = outBase.length > 0 || outWall.length > 0
 
   return (
     <g>
-      {/* Wall-parallel chain lines */}
-      {layerWallCab.visible && wallCabs.length > 0 && (
-        <DimLine
-          wall={wall} out={out}
-          dist={25 / z}
-          segs={wallCabSegs}
-          zoom={z} col={col}
-        />
-      )}
-      {layerBase.visible && baseCabs.length > 0 && (
-        <DimLine
-          wall={wall} out={out}
-          dist={50 / z}
-          segs={baseSegs}
-          zoom={z} col={col}
-        />
-      )}
-      {layerOverall.visible && (
-        <DimLine
-          wall={wall} out={out}
-          dist={75 / z}
-          segs={overallSeg}
-          zoom={z} col={col}
-        />
-      )}
-
-      {/* Perpendicular depth dimensions at wall ends */}
-      {layerBase.visible && baseDz > 0 && (
-        <>
-          <DepthDim wall={wall} inward={inward} tPos={0}           dz={baseDz} zoom={z} col={col} sign={-1} />
-          <DepthDim wall={wall} inward={inward} tPos={wall.length} dz={baseDz} zoom={z} col={col} sign={1} />
-        </>
-      )}
-      {layerWallCab.visible && showWallDepthSeparate && (
-        <>
-          <DepthDim wall={wall} inward={inward} tPos={0}           dz={wallDz} zoom={z} col={col} sign={-1} />
-          <DepthDim wall={wall} inward={inward} tPos={wall.length} dz={wallDz} zoom={z} col={col} sign={1} />
-        </>
-      )}
+      {hasIn && renderSide('in', inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]))}
+      {(hasOut || !hasIn) && renderSide('out', out, out, outBase, outWall, sideDepth([...outBase, ...outWall]))}
     </g>
   )
 }

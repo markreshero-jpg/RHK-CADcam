@@ -55,25 +55,26 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
 
   // ── 2. Load room + shop defaults in parallel ─────────────────────────────────
   const [roomRes, shopAsmRes, shopTkRes, shopFrontRes, shopSettingsRes, shopSlideRes] = await Promise.all([
-    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, rule_overrides').eq('id', cab.room_id).single(),
+    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, inner_drawerbox_schedule_id, inner_drawer_box_method_id, rule_overrides').eq('id', cab.room_id).single(),
     supabase.from('assembly_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('toekick_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('front_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
-    supabase.from('shop_settings').select('construction_schedule_id, drawer_box_method_id').limit(1).maybeSingle(),
+    supabase.from('shop_settings').select('construction_schedule_id, drawer_box_method_id, inner_drawerbox_schedule_id').limit(1).maybeSingle(),
     supabase.from('slide_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
   ])
 
   const room       = roomRes.data
   const projectId  = room?.project_id as string | undefined
-  const shopConStrSchedId  = shopSettingsRes.data?.construction_schedule_id as string | undefined
-  const shopDbMethodId     = shopSettingsRes.data?.drawer_box_method_id     as string | undefined
+  const shopConStrSchedId    = shopSettingsRes.data?.construction_schedule_id     as string | undefined
+  const shopDbMethodId       = shopSettingsRes.data?.drawer_box_method_id         as string | undefined
+  const shopInnerSchedId     = shopSettingsRes.data?.inner_drawerbox_schedule_id  as string | undefined
 
   // ── 3. Load project schedule IDs (if we have a project) ─────────────────────
   let projRow: Record<string, string | null> | null = null
   if (projectId) {
     const { data } = await supabase
       .from('projects')
-      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, slide_schedule_id, rule_overrides')
+      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, inner_drawerbox_schedule_id, slide_schedule_id, rule_overrides')
       .eq('id', projectId)
       .single()
     projRow = data as Record<string, string | null> | null
@@ -81,6 +82,33 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
 
   // Effective drawer box method: project overrides shop default
   const effectiveDbMethodId = projRow?.drawer_box_method_id ?? shopDbMethodId ?? null
+
+  // inner_drawer_box_method_id is a newer column — read it defensively (separate from
+  // the main config selects) so the resolver keeps working if the ALTER hasn't been
+  // applied yet: a missing column yields { error, data: null } here, not a throw, and
+  // we fall back to the face method below.
+  const [shopInnerMethodRes, projInnerMethodRes] = await Promise.all([
+    supabase.from('shop_settings').select('inner_drawer_box_method_id').limit(1).maybeSingle(),
+    projectId
+      ? supabase.from('projects').select('inner_drawer_box_method_id').eq('id', projectId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+  const shopInnerDbMethodId = (shopInnerMethodRes.data as { inner_drawer_box_method_id?: string | null } | null)?.inner_drawer_box_method_id ?? undefined
+  const projInnerDbMethodId = (projInnerMethodRes.data as { inner_drawer_box_method_id?: string | null } | null)?.inner_drawer_box_method_id ?? undefined
+
+  // Inner-drawer method: room → project → shop, falling back to the face method
+  // (so inner drawers still resolve sensibly before a dedicated inner method is
+  // configured). Per-fitting `drawer_box_method_id` overrides this in fittings.ts.
+  const roomInnerDbMethodId = (room as { inner_drawer_box_method_id?: string | null } | null)?.inner_drawer_box_method_id ?? undefined
+  const effectiveInnerDbMethodId =
+    roomInnerDbMethodId ?? projInnerDbMethodId ?? shopInnerDbMethodId ?? effectiveDbMethodId ?? null
+
+  // Inner-drawer material schedule: room → project → shop.
+  const effectiveInnerSchedId =
+    (room?.inner_drawerbox_schedule_id as string | null | undefined)
+    ?? (projRow?.inner_drawerbox_schedule_id as string | null | undefined)
+    ?? shopInnerSchedId
+    ?? null
 
   // Resolve effective construction method schedule: room → project → shop
   const conStrSchedId =
@@ -109,6 +137,8 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     conStrSchedRowRes,
     slideSchedEntryRes,
     dbMethodRes,
+    innerDbMethodRes,
+    innerSchedRes,
   ] = await Promise.all([
     asmSchedId
       ? supabase.from('assembly_schedule_rows').select('material_role, edgeband_id, materials(*)').eq('schedule_id', asmSchedId).eq('assembly_class', cab.assembly_class)
@@ -130,7 +160,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     // All active slide products (for resolver lookup)
     supabase
       .from('hardware_slides')
-      .select('id, name, brand, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair, colour')
+      .select('id, name, brand, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair, colour, model_url, model_format, model_scale, model_anchor_x, model_anchor_y, model_anchor_z')
       .eq('active', true)
       .order('nominal_length', { ascending: true }),
     cab.construction_method_id
@@ -146,6 +176,19 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     // Drawer box method rules (project → shop cascade, resolved above)
     effectiveDbMethodId
       ? supabase.from('drawer_box_methods').select('rules, drawer_type').eq('id', effectiveDbMethodId).single()
+      : Promise.resolve({ data: null }),
+    // Inner-drawer method rules (project → shop → face fallback)
+    effectiveInnerDbMethodId
+      ? supabase.from('drawer_box_methods').select('rules, drawer_type').eq('id', effectiveInnerDbMethodId).single()
+      : Promise.resolve({ data: null }),
+    // Inner-drawer material schedule (room → project → shop) with embedded materials
+    // for box / bottom / front roles.
+    effectiveInnerSchedId
+      ? supabase
+          .from('inner_drawerbox_schedules')
+          .select('material_id, edgeband_id, bottom_material_id, bottom_edgeband_id, front_material_id, front_edgeband_id, material:materials!inner_drawerbox_schedules_material_id_fkey(*), bottom_material:materials!inner_drawerbox_schedules_bottom_material_id_fkey(*), front_material:materials!inner_drawerbox_schedules_front_material_id_fkey(*)')
+          .eq('id', effectiveInnerSchedId)
+          .maybeSingle()
       : Promise.resolve({ data: null }),
   ])
 
@@ -238,6 +281,12 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     full_extension:   Boolean(r.full_extension),
     cost_per_pair:    r.cost_per_pair != null ? Number(r.cost_per_pair) : null,
     colour:           (r.colour as string | null) ?? null,
+    model_url:        (r.model_url as string | null) ?? null,
+    model_format:     (r.model_format as 'glb' | 'stl' | 'obj' | null) ?? null,
+    model_scale:      r.model_scale    != null ? Number(r.model_scale)    : 1,
+    model_anchor_x:   r.model_anchor_x != null ? Number(r.model_anchor_x) : 0,
+    model_anchor_y:   r.model_anchor_y != null ? Number(r.model_anchor_y) : 0,
+    model_anchor_z:   r.model_anchor_z != null ? Number(r.model_anchor_z) : 0,
   }))
 
   type SlideEntryRow = { id: string; schedule_id: string; depth_threshold: unknown; height_threshold: unknown; slide_id: string }
@@ -256,6 +305,42 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     ...dbMethodRules,
     ...((cab.drawerbox_overrides ?? {}) as Partial<DrawerBoxRules>),
   }
+
+  // Inner-drawer rules: system defaults → inner method (project/shop → face fallback).
+  const innerDbMethodRules = (innerDbMethodRes.data?.rules ?? {}) as Partial<DrawerBoxRules>
+  const innerDrawerBoxRules: DrawerBoxRules = {
+    ...DEFAULT_DB_RULES,
+    ...innerDbMethodRules,
+  }
+
+  // Inner-drawer material + edgeband (per role: box / bottom / front).
+  // Schedule → face drawerbox material → interior. Each role falls back independently
+  // so a partially-configured schedule still resolves sensibly.
+  const innerSchedRow = innerSchedRes.data as {
+    material_id?: string | null
+    edgeband_id?: string | null
+    bottom_material_id?: string | null
+    bottom_edgeband_id?: string | null
+    front_material_id?: string | null
+    front_edgeband_id?: string | null
+    material?: unknown
+    bottom_material?: unknown
+    front_material?: unknown
+  } | null
+  const innerDrawerMat  = innerSchedRow?.material
+    ? dbRowToMaterial(innerSchedRow.material as Record<string, unknown>)
+    : (drawerboxMat ?? interior)
+  const innerDrawerEbId = (innerSchedRow?.edgeband_id as string | null | undefined) ?? ebMap.get('interior')
+
+  const innerDrawerBottomMat  = innerSchedRow?.bottom_material
+    ? dbRowToMaterial(innerSchedRow.bottom_material as Record<string, unknown>)
+    : undefined
+  const innerDrawerBottomEbId = (innerSchedRow?.bottom_edgeband_id as string | null | undefined) ?? undefined
+
+  const innerDrawerFrontMat  = innerSchedRow?.front_material
+    ? dbRowToMaterial(innerSchedRow.front_material as Record<string, unknown>)
+    : undefined
+  const innerDrawerFrontEbId = (innerSchedRow?.front_edgeband_id as string | null | undefined) ?? undefined
 
   // Fallback side_deduction from first slide product
   const fallbackDeduction = slideProducts[0]?.side_deduction ?? 13
@@ -311,6 +396,41 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     }
   }
 
+  // ── 11. Resolve per-fitting drawer_box_method_id overrides ──────────────────
+  // Scan the internal tree for distinct drawer_box_method_id values on inner-drawer
+  // fittings; pre-fetch their rules so the resolver's fitting registry can pick
+  // per-fitting rules without async work inside the resolver itself.
+  const internalTree: Section = ((cab.internal_grid as { tree?: Section } | null)?.tree) ?? EMPTY_SECTION
+  const methodIdsInTree = new Set<string>()
+  const visit = (s: unknown): void => {
+    const sec = s as Record<string, unknown> | null
+    if (!sec || typeof sec !== 'object') return
+    if (sec.type === 'open' && Array.isArray(sec.fittings)) {
+      for (const f of sec.fittings as Record<string, unknown>[]) {
+        if (f?.type === 'inner_drawer' && typeof f.drawer_box_method_id === 'string') {
+          methodIdsInTree.add(f.drawer_box_method_id)
+        }
+      }
+    } else if ((sec.type === 'hsplit' || sec.type === 'vsplit') && Array.isArray(sec.children)) {
+      for (const c of sec.children as Record<string, unknown>[]) visit(c?.section)
+    }
+  }
+  visit(internalTree)
+
+  const methodRulesById: Record<string, DrawerBoxRules> = {}
+  if (methodIdsInTree.size > 0) {
+    const { data: rows } = await supabase
+      .from('drawer_box_methods')
+      .select('id, rules')
+      .in('id', [...methodIdsInTree])
+    for (const row of ((rows ?? []) as { id: string; rules: unknown }[])) {
+      methodRulesById[row.id] = {
+        ...DEFAULT_DB_RULES,
+        ...((row.rules ?? {}) as Partial<DrawerBoxRules>),
+      }
+    }
+  }
+
   return {
     id:              cab.id,
     assembly_class:  cab.assembly_class,
@@ -339,8 +459,18 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     toekick_interior_edgeband_id: ebMap.get('tk_interior'),
     slide_side_deduction:      fallbackDeduction,
     default_drawer_type:       (dbMethodRes.data?.drawer_type as 'system' | 'five_piece' | null) ?? undefined,
+    default_inner_drawer_type: (innerDbMethodRes.data?.drawer_type as 'system' | 'five_piece' | null)
+                               ?? (dbMethodRes.data?.drawer_type as 'system' | 'five_piece' | null)
+                               ?? undefined,
     drawer_material:           drawerboxMat ?? interior,
     drawer_box_rules:          drawerBoxRules,
+    inner_drawer_box_rules:           innerDrawerBoxRules,
+    inner_drawer_material:            innerDrawerMat,
+    inner_drawer_edgeband_id:         innerDrawerEbId,
+    inner_drawer_bottom_material:     innerDrawerBottomMat,
+    inner_drawer_bottom_edgeband_id:  innerDrawerBottomEbId,
+    inner_drawer_front_material:      innerDrawerFrontMat,
+    inner_drawer_front_edgeband_id:   innerDrawerFrontEbId,
     slide_products:            slideProducts,
     slide_schedule:            slideSchedule,
     rules,
@@ -351,7 +481,14 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     face_grid:     (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID,
     // Internal layout: recursive section tree stored as internal_grid = { tree }.
     // Anything without a tree (e.g. legacy flat grids) resolves to an empty interior.
-    internal_tree: ((cab.internal_grid as { tree?: Section } | null)?.tree) ?? EMPTY_SECTION,
-    inner_drawers: [],
+    internal_tree: internalTree,
+    // Per-cabinet override for the vertical gap between stacked fittings,
+    // stored alongside the tree as internal_grid.stack_gap. Unset → resolver
+    // default (DEFAULT_STACK_GAP = 3mm).
+    internal_stack_gap: (() => {
+      const g = (cab.internal_grid as { stack_gap?: unknown } | null)?.stack_gap
+      return typeof g === 'number' && g >= 0 ? g : undefined
+    })(),
+    drawer_box_method_rules: methodRulesById,
   }
 }

@@ -1,0 +1,2527 @@
+'use client';
+// ============================================================
+// RHK CADcam — Shape Editor
+// ============================================================
+// A fully-featured 2D shape editor for cabinet/part profiles.
+// All units in millimetres. Scale: 2px = 1mm.
+//
+// INTEGRATION (Next.js):
+//   import ShapeEditor from '@/components/ShapeEditor/ShapeEditor'
+//   <ShapeEditor />
+//
+// OPTIONAL PROPS (add as needed when integrating):
+//   onShapeChange(segments) — called whenever shape is updated
+//   initialSegments         — load an existing shape
+//   width / height          — override canvas size
+//
+// TOOLS:
+//   Draw:    Line (L), Polyline (P), Rectangle (R),
+//            Circle, Oval, Triangle
+//   Edit:    Select (S), Move Line, Move Vertex, Set Length
+//   Modify:  Bend, Fillet, Chamfer, Offset, Trim,
+//            Add Point, Delete
+//   Other:   Import SVG, Check Shape, Undo/Redo
+//
+// KEY INTERACTIONS:
+//   Tab while drawing  — lock angle, type exact length, Enter to place
+//   Tab on selected    — open length edit field
+//   Right-click line   — context menu with all modify tools
+//   Scroll wheel       — zoom toward cursor
+//   Shift while drawing — freehand (no angle snap)
+//   ESC                — cancel current operation
+//   Delete             — delete selected segment(s)
+//   Ctrl+Z / Ctrl+Y    — undo / redo
+// ============================================================
+
+import { useState, useRef, useCallback, useEffect } from "react";
+
+// -- Units: mm --------------------------------------------------------------
+const PX_PER_MM = 2;          // 2 screen pixels = 1mm
+const GRID_MM = 10;           // grid squares = 10mm
+const MAJOR_MM = 100;         // major grid = 100mm
+const GS = GRID_MM * PX_PER_MM;  // 20px grid
+const SNAP_D = 10;            // snap threshold in px
+
+// Canvas default size (real size set inside component via useEffect, so SSR doesn't crash)
+const W_DEFAULT = 1200;
+const H_DEFAULT = 800;
+
+// Convert px to mm for display
+const toMM = px => Math.round(px / PX_PER_MM);
+const toMMs = px => toMM(px) + 'mm';
+// Convert mm to px for input
+const fromMM = mm => Math.round(mm * PX_PER_MM);
+
+const snapGrid = v => Math.round(v / GS) * GS;
+const d2 = (a,b) => Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2);
+const midPt = (a,b) => ({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
+const segLen = s => Math.round(d2(s.p0,s.p1));
+const isHoriz = s => Math.abs(s.p0.y - s.p1.y) < 4;
+const isVert  = s => Math.abs(s.p0.x - s.p1.x) < 4;
+const clone   = v => JSON.parse(JSON.stringify(v));
+
+function buildD(segs, closed=false) {
+  if (!segs.length) return '';
+  const GAP = 2; // px -- if endpoints are further apart than this, use M not L
+  let d = `M ${segs[0].p0.x} ${segs[0].p0.y} `;
+  for (let i=0; i<segs.length; i++) {
+    const s = segs[i];
+    // If this segment's start doesn't connect to previous end, lift pen
+    if (i > 0) {
+      const prev = segs[i-1];
+      if (d2(prev.p1, s.p0) > GAP) {
+        d += `M ${s.p0.x} ${s.p0.y} `;
+      }
+    }
+    if (s.type==='line') d += `L ${s.p1.x} ${s.p1.y} `;
+    else if (s.type==='curve') d += `C ${s.cp1.x} ${s.cp1.y} ${s.cp2.x} ${s.cp2.y} ${s.p1.x} ${s.p1.y} `;
+    else if (s.type==='arc') {
+      const la=s.largeArc??0, sw=s.sweep??1;
+      d += `A ${s.rx||60} ${s.ry||60} 0 ${la} ${sw} ${s.p1.x} ${s.p1.y} `;
+    }
+  }
+  // Only add Z if last segment connects back to first
+  if (closed && segs.length > 0 && d2(segs[segs.length-1].p1, segs[0].p0) <= GAP) d += 'Z';
+  return d.trim();
+}
+
+function defCP(p0, p1) {
+  const mx=(p0.x+p1.x)/2, my=(p0.y+p1.y)/2, inset=40;
+  if (isHoriz({p0,p1})) return {cp1:{x:p0.x+(p1.x-p0.x)*0.25,y:my+inset},cp2:{x:p0.x+(p1.x-p0.x)*0.75,y:my+inset}};
+  return {cp1:{x:mx+inset,y:p0.y+(p1.y-p0.y)*0.25},cp2:{x:mx+inset,y:p0.y+(p1.y-p0.y)*0.75}};
+}
+
+function validateShape(segs) {
+  // Minimal validation -- just flag zero-length segments
+  // Full geometry check is done by checkGeometry() on demand
+  return segs.filter(s=>segLen(s)<2).map((_,i)=>`Segment ${i+1} has zero length`);
+}
+
+function checkGeometry(segs) {
+  // Full geometry analysis -- run on demand via Check Shape button
+  const issues = [];
+  const GAP = 8; // px tolerance for endpoint matching
+
+  if (segs.length < 3) {
+    issues.push({type:'error', msg:'Not enough segments to form a shape (need at least 3)'});
+    return {valid:false, issues, gaps:[], closed:false};
+  }
+
+  // Build list of all endpoints
+  const endpoints = [];
+  segs.forEach((s,i) => {
+    endpoints.push({pt:s.p0, segIdx:i, role:'p0'});
+    endpoints.push({pt:s.p1, segIdx:i, role:'p1'});
+  });
+
+  // Find unmatched endpoints (gaps)
+  const gaps = [];
+  const matched = new Set();
+  endpoints.forEach((a, ai) => {
+    if (matched.has(ai)) return;
+    let found = false;
+    endpoints.forEach((b, bi) => {
+      if (ai===bi||matched.has(bi)) return;
+      if (a.segIdx===b.segIdx) return; // same segment
+      if (d2(a.pt,b.pt) < GAP) {
+        matched.add(ai); matched.add(bi);
+        found = true;
+      }
+    });
+    if (!found) gaps.push(a);
+  });
+
+  if (gaps.length > 0) {
+    // Group nearby gaps into pairs to show as gap indicators
+    issues.push({type:'error', msg:`${gaps.length} unconnected endpoint${gaps.length>1?'s':''} found -- shape is not closed`});
+  }
+
+  // Check for duplicate/zero-length segments
+  segs.forEach((s,i) => {
+    if (segLen(s)<2) issues.push({type:'warning', msg:`Segment ${i+1} has zero length`});
+  });
+
+  // Check bounding box
+  if (segs.length > 0) {
+    const xs=segs.flatMap(s=>[s.p0.x,s.p1.x]);
+    const ys=segs.flatMap(s=>[s.p0.y,s.p1.y]);
+    const bw=Math.max(...xs)-Math.min(...xs);
+    const bh=Math.max(...ys)-Math.min(...ys);
+    if (bw<20) issues.push({type:'error', msg:'Shape width too small'});
+    if (bh<20) issues.push({type:'error', msg:'Shape height too small'});
+  }
+
+  const valid = issues.filter(i=>i.type==='error').length===0;
+  if (valid) issues.push({type:'success', msg:'Shape is closed and valid -- ready for cabinet resolver'});
+
+  return {valid, issues, gaps};
+}
+
+const PRESETS = {
+  rect:   {closed:true,label:'Rectangle',segs:[
+    {type:'line',p0:{x:160,y:150},p1:{x:440,y:150}},
+    {type:'line',p0:{x:440,y:150},p1:{x:440,y:370}},
+    {type:'line',p0:{x:440,y:370},p1:{x:160,y:370}},
+    {type:'line',p0:{x:160,y:370},p1:{x:160,y:150}},
+  ]},
+  angled: {closed:true,label:'Angled Top',segs:[
+    {type:'line',p0:{x:160,y:200},p1:{x:440,y:150}},
+    {type:'line',p0:{x:440,y:150},p1:{x:440,y:370}},
+    {type:'line',p0:{x:440,y:370},p1:{x:160,y:370}},
+    {type:'line',p0:{x:160,y:370},p1:{x:160,y:200}},
+  ]},
+  stair:  {closed:true,label:'Stair Step',segs:[
+    {type:'line',p0:{x:160,y:150},p1:{x:300,y:150}},
+    {type:'line',p0:{x:300,y:150},p1:{x:300,y:260}},
+    {type:'line',p0:{x:300,y:260},p1:{x:440,y:260}},
+    {type:'line',p0:{x:440,y:260},p1:{x:440,y:370}},
+    {type:'line',p0:{x:440,y:370},p1:{x:160,y:370}},
+    {type:'line',p0:{x:160,y:370},p1:{x:160,y:150}},
+  ]},
+  notch:  {closed:true,label:'Column Notch',segs:[
+    {type:'line',p0:{x:160,y:150},p1:{x:440,y:150}},
+    {type:'line',p0:{x:440,y:150},p1:{x:440,y:370}},
+    {type:'line',p0:{x:440,y:370},p1:{x:320,y:370}},
+    {type:'line',p0:{x:320,y:370},p1:{x:320,y:300}},
+    {type:'line',p0:{x:320,y:300},p1:{x:160,y:300}},
+    {type:'line',p0:{x:160,y:300},p1:{x:160,y:150}},
+  ]},
+  slope:  {closed:true,label:'Sloped Ceil.',segs:[
+    {type:'line',p0:{x:160,y:150},p1:{x:440,y:220}},
+    {type:'line',p0:{x:440,y:220},p1:{x:440,y:370}},
+    {type:'line',p0:{x:440,y:370},p1:{x:160,y:370}},
+    {type:'line',p0:{x:160,y:370},p1:{x:160,y:150}},
+  ]},
+};
+
+// ⚠ WIP (paused 2026-05-28) — the mode='room-outline' code path below is plan-view
+// wall editing (Option B). See src/lib/wallPolyline.ts for the full status. If the
+// plan-view feature is abandoned, delete this set + the `mode` prop + the
+// `mode==='room-outline'` checks in the toolbar / context menu / parameter panel.
+// The rest of this editor stays — it'll be mounted in mode='free' for elevation
+// shape editing.
+const ROOM_OUTLINE_HIDDEN_TOOLS = new Set(['curve','circle','oval','bend','fillet','chamfer']);
+
+const TOOLS = [
+  {id:'select',  icon:'↖',label:'Select',     group:'edit', key:'s'},
+  {id:'move',    icon:'✥',label:'Move Line',  group:'edit', key:'m'},
+  {id:'vertex',  icon:'◉',label:'Move Vertex',group:'edit', key:'v'},
+  {id:'curve',   icon:'◎',label:'Move Handle',group:'edit'},
+  {id:'line',    icon:'╱',label:'Draw Line',  group:'draw', key:'l'},
+  {id:'polyline',icon:'⌇',label:'Polyline',    group:'draw', key:'p'},
+  {id:'rect',    icon:'▭',label:'Rectangle',  group:'draw', key:'r'},
+  {id:'circle',  icon:'○',label:'Circle',      group:'draw'},
+  {id:'oval',    icon:'⬭',label:'Oval',         group:'draw'},
+  {id:'triangle',icon:'△',label:'Triangle',    group:'draw'},
+  {id:'addpt',   icon:'⊕',label:'Add Vertex', group:'draw'},
+  {id:'bend',    icon:'⌀',label:'Bend/Unbend',group:'modify'},
+  {id:'offset1', icon:'→',label:'Offset Line',group:'modify'},
+  {id:'fillet',  icon:'◡',label:'Fillet',     group:'modify'},
+  {id:'chamfer', icon:'◿',label:'Chamfer',    group:'modify'},
+  {id:'delpt',   icon:'⊖',label:'Del Segment',group:'modify'},
+  {id:'trim',    icon:'✂',label:'Trim',        group:'modify'},
+  {id:'dim',     icon:'⟷',label:'Set Length',  group:'modify'},
+];
+
+const HINTS = {
+  select:  'Click a segment to select it',
+  move:    'Click a line · move mouse · click to place',
+  vertex:  'Click a vertex · move mouse · click to place',
+  curve:   'Click a bezier handle · move mouse · click to place',
+  line:    'Click start · click end · snaps to 22.5° · Hold Shift = freehand · Right-click to cancel',
+  polyline:'Click to add points · snaps to 22.5° · Hold Shift = freehand · Right-click or ESC to finish',
+  rect:    'Click first corner · move mouse · click second corner to place',
+  circle:  'Click to set centre · drag to size · click again to place',
+  oval:    'Click to set corner · drag to size · click again to place',
+  triangle:'Click 3 points to place corners -- auto-closes',
+  addpt:   'Click a segment to split it at its midpoint',
+  bend:    'Click a line to curve it · click curve to straighten',
+  offset1: 'Click a line · move mouse · click to place new parallel line',
+  fillet:  'Click a corner vertex to apply a circular fillet (set radius in panel →)',
+  chamfer: 'Click a corner vertex to cut a 45° chamfer (set distance in panel →)',
+  delpt:   'Click a segment to delete it',
+  trim:    'Click a segment to trim it at its nearest intersection with another segment',
+  dim:     'Click any line to set its exact length in mm',
+};
+
+// --- Active edit -- unified click-move-click state -----------------------------
+// type: 'vertex' | 'move' | 'cp' | 'offset'
+// All share: { type, segIdx, ... } -- stored in a ref for always-fresh reads
+
+
+// --- SVG Import Parser --------------------------------------------------------
+
+function parseSVGFile(svgText, canvasW, canvasH) {
+  const segs = [];
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgText, 'image/svg+xml');
+  const svgEl = doc.querySelector('svg');
+  if (!svgEl) return segs;
+
+  // Get SVG viewBox to scale coordinates to canvas
+  const vb = svgEl.getAttribute('viewBox');
+  let scaleX=1, scaleY=1, offX=0, offY=0;
+  if (vb) {
+    const [vx,vy,vw,vh] = vb.split(/\s+|,/).map(Number);
+    scaleX = (canvasW * 0.6) / vw;
+    scaleY = (canvasH * 0.6) / vh;
+    const scale = Math.min(scaleX, scaleY);
+    scaleX = scale; scaleY = scale;
+    offX = (canvasW - vw*scale) / 2 - vx*scale;
+    offY = (canvasH - vh*scale) / 2 - vy*scale;
+  } else {
+    offX = canvasW * 0.2;
+    offY = canvasH * 0.2;
+  }
+
+  const tx = x => Math.round(x * scaleX + offX);
+  const ty = y => Math.round(y * scaleY + offY);
+  const pt = (x,y) => ({x:tx(x), y:ty(y)});
+
+  // Parse a transform attribute into a matrix [a,b,c,d,e,f]
+  function parseTransform(str) {
+    if (!str) return null;
+    const t = str.match(/translate\(([^)]+)\)/);
+    if (t) {
+      const [tx2,ty2] = t[1].split(/[,\s]+/).map(Number);
+      return [1,0,0,1,tx2||0,ty2||0];
+    }
+    const m = str.match(/matrix\(([^)]+)\)/);
+    if (m) return m[1].split(/[,\s]+/).map(Number);
+    return null;
+  }
+
+  function applyMatrix(mat, x, y) {
+    if (!mat) return {x,y};
+    return {x: mat[0]*x+mat[2]*y+mat[4], y: mat[1]*x+mat[3]*y+mat[5]};
+  }
+
+  // Convert SVG path d attribute to segments
+  function pathToSegs(d, mat) {
+    const result = [];
+    // Normalise: add spaces around commands
+    const tokens = d.replace(/([MmLlHhVvCcSsQqTtAaZz])/g,' $1 ')
+                     .trim().split(/\s+|,/).filter(Boolean);
+    let i=0, cx=0, cy=0, startX=0, startY=0;
+
+    function num() { return parseFloat(tokens[i++])||0; }
+    function applyT(x,y) {
+      const p2 = applyMatrix(mat,x,y);
+      return pt(p2.x, p2.y);
+    }
+
+    while (i < tokens.length) {
+      const cmd = tokens[i++];
+      switch(cmd) {
+        case 'M': cx=num(); cy=num(); startX=cx; startY=cy; break;
+        case 'm': cx+=num(); cy+=num(); startX=cx; startY=cy; break;
+        case 'L': {
+          const x1=cx,y1=cy; cx=num(); cy=num();
+          result.push({type:'line',p0:applyT(x1,y1),p1:applyT(cx,cy)});
+          break;
+        }
+        case 'l': {
+          const x1=cx,y1=cy; cx+=num(); cy+=num();
+          result.push({type:'line',p0:applyT(x1,y1),p1:applyT(cx,cy)});
+          break;
+        }
+        case 'H': {
+          const x1=cx,y1=cy; cx=num();
+          result.push({type:'line',p0:applyT(x1,y1),p1:applyT(cx,cy)});
+          break;
+        }
+        case 'h': {
+          const x1=cx,y1=cy; cx+=num();
+          result.push({type:'line',p0:applyT(x1,y1),p1:applyT(cx,cy)});
+          break;
+        }
+        case 'V': {
+          const x1=cx,y1=cy; cy=num();
+          result.push({type:'line',p0:applyT(x1,y1),p1:applyT(cx,cy)});
+          break;
+        }
+        case 'v': {
+          const x1=cx,y1=cy; cy+=num();
+          result.push({type:'line',p0:applyT(x1,y1),p1:applyT(cx,cy)});
+          break;
+        }
+        case 'C': {
+          const x1=cx,y1=cy;
+          const cp1x=num(),cp1y=num(),cp2x=num(),cp2y=num();
+          cx=num(); cy=num();
+          result.push({type:'curve',p0:applyT(x1,y1),p1:applyT(cx,cy),
+            cp1:applyT(cp1x,cp1y),cp2:applyT(cp2x,cp2y)});
+          break;
+        }
+        case 'c': {
+          const x1=cx,y1=cy;
+          const cp1x=cx+num(),cp1y=cy+num(),cp2x=cx+num(),cp2y=cy+num();
+          cx+=num(); cy+=num();
+          result.push({type:'curve',p0:applyT(x1,y1),p1:applyT(cx,cy),
+            cp1:applyT(cp1x,cp1y),cp2:applyT(cp2x,cp2y)});
+          break;
+        }
+        case 'A': case 'a': {
+          const rel = cmd==='a';
+          const x1=cx,y1=cy;
+          const rx2=Math.abs(num()), ry2=Math.abs(num());
+          num(); // x-rotation ignored
+          const la=num()>0?1:0, sw=num()>0?1:0;
+          if (rel){cx+=num();cy+=num();}else{cx=num();cy=num();}
+          result.push({type:'arc',p0:applyT(x1,y1),p1:applyT(cx,cy),
+            rx:Math.round(rx2*scaleX),ry:Math.round(ry2*scaleY),largeArc:la,sweep:sw});
+          break;
+        }
+        case 'Z': case 'z': {
+          if (Math.abs(cx-startX)>1||Math.abs(cy-startY)>1) {
+            result.push({type:'line',p0:applyT(cx,cy),p1:applyT(startX,startY)});
+          }
+          cx=startX; cy=startY; break;
+        }
+        default: break;
+      }
+    }
+    return result;
+  }
+
+  // Process all shape elements
+  function processEl(el, parentMat) {
+    const mat = parseTransform(el.getAttribute('transform')) || parentMat;
+    const tag = el.tagName.toLowerCase().replace(/^svg:/,'');
+
+    if (tag==='path') {
+      const d = el.getAttribute('d');
+      if (d) segs.push(...pathToSegs(d, mat));
+    }
+    else if (tag==='line') {
+      const x1=parseFloat(el.getAttribute('x1')||0), y1=parseFloat(el.getAttribute('y1')||0);
+      const x2=parseFloat(el.getAttribute('x2')||0), y2=parseFloat(el.getAttribute('y2')||0);
+      const p = v => applyMatrix(mat,v.x,v.y);
+      segs.push({type:'line',p0:pt(p({x:x1,y:y1}).x,p({x:x1,y:y1}).y),
+                              p1:pt(p({x:x2,y:y2}).x,p({x:x2,y:y2}).y)});
+    }
+    else if (tag==='rect') {
+      const x=parseFloat(el.getAttribute('x')||0), y=parseFloat(el.getAttribute('y')||0);
+      const w=parseFloat(el.getAttribute('width')||0), h=parseFloat(el.getAttribute('height')||0);
+      const corners = [{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}].map(c=>{
+        const p2=applyMatrix(mat,c.x,c.y); return pt(p2.x,p2.y);
+      });
+      for(let k=0;k<4;k++) segs.push({type:'line',p0:corners[k],p1:corners[(k+1)%4]});
+    }
+    else if (tag==='circle') {
+      const cx2=parseFloat(el.getAttribute('cx')||0), cy2=parseFloat(el.getAttribute('cy')||0);
+      const r=parseFloat(el.getAttribute('r')||0);
+      if (r>0) {
+        const top=pt(cx2,cy2-r),right=pt(cx2+r,cy2),bot=pt(cx2,cy2+r),left=pt(cx2-r,cy2);
+        const rr=Math.round(r*Math.min(scaleX,scaleY));
+        segs.push(
+          {type:'arc',p0:top,p1:right,rx:rr,ry:rr,largeArc:0,sweep:1},
+          {type:'arc',p0:right,p1:bot,rx:rr,ry:rr,largeArc:0,sweep:1},
+          {type:'arc',p0:bot,p1:left,rx:rr,ry:rr,largeArc:0,sweep:1},
+          {type:'arc',p0:left,p1:top,rx:rr,ry:rr,largeArc:0,sweep:1},
+        );
+      }
+    }
+    else if (tag==='ellipse') {
+      const cx2=parseFloat(el.getAttribute('cx')||0), cy2=parseFloat(el.getAttribute('cy')||0);
+      const rx2=parseFloat(el.getAttribute('rx')||0), ry2=parseFloat(el.getAttribute('ry')||0);
+      if (rx2>0&&ry2>0) {
+        const top=pt(cx2,cy2-ry2),right=pt(cx2+rx2,cy2),bot=pt(cx2,cy2+ry2),left=pt(cx2-rx2,cy2);
+        const rrx=Math.round(rx2*scaleX), rry=Math.round(ry2*scaleY);
+        segs.push(
+          {type:'arc',p0:top,p1:right,rx:rrx,ry:rry,largeArc:0,sweep:1},
+          {type:'arc',p0:right,p1:bot,rx:rrx,ry:rry,largeArc:0,sweep:1},
+          {type:'arc',p0:bot,p1:left,rx:rrx,ry:rry,largeArc:0,sweep:1},
+          {type:'arc',p0:left,p1:top,rx:rrx,ry:rry,largeArc:0,sweep:1},
+        );
+      }
+    }
+    else if (tag==='polyline'||tag==='polygon') {
+      const pts2 = (el.getAttribute('points')||'').trim().split(/\s+|,/).map(Number);
+      for (let k=0;k<pts2.length-3;k+=2) {
+        const p2a=applyMatrix(mat,pts2[k],pts2[k+1]);
+        const p2b=applyMatrix(mat,pts2[k+2],pts2[k+3]);
+        segs.push({type:'line',p0:pt(p2a.x,p2a.y),p1:pt(p2b.x,p2b.y)});
+      }
+      if (tag==='polygon'&&pts2.length>=4) {
+        const pa=applyMatrix(mat,pts2[pts2.length-2],pts2[pts2.length-1]);
+        const pb=applyMatrix(mat,pts2[0],pts2[1]);
+        segs.push({type:'line',p0:pt(pa.x,pa.y),p1:pt(pb.x,pb.y)});
+      }
+    }
+    else if (tag==='g'||tag==='svg') {
+      Array.from(el.children).forEach(child=>processEl(child,mat));
+    }
+  }
+
+  processEl(svgEl, null);
+  return segs.filter(s=>s&&s.p0&&s.p1);
+}
+
+// Find the centre of a circular arc -- verified against which side the arc bows
+function arcCentre(p0, p1, rx, ry, sweep, largeArc) {
+  const r = Math.max(rx, ry, 1);
+  const mx = (p0.x+p1.x)/2, my = (p0.y+p1.y)/2;
+  const dx2 = (p0.x-p1.x)/2, dy2 = (p0.y-p1.y)/2;
+  const d2 = dx2*dx2+dy2*dy2;
+  const r2 = r*r;
+  if (d2 === 0) return null;
+  if (r2 < d2) return null; // radius too small
+  const sq = Math.sqrt(Math.max(0, (r2-d2)/d2));
+  // Two candidate centres
+  const c1 = {x: mx + sq*dy2, y: my - sq*dx2};
+  const c2 = {x: mx - sq*dy2, y: my + sq*dx2};
+  // Verify: for sweep=1, centre should be to the LEFT of p0→p1 direction
+  // Use cross product to determine which candidate is correct
+  const crossZ = (p1.x-p0.x)*(c1.y-p0.y) - (p1.y-p0.y)*(c1.x-p0.x);
+  // sweep=1 = clockwise in SVG coords (y-down) = centre on right side of p0→p1
+  // sweep=0 = counterclockwise = centre on left side
+  if (sweep === 1) {
+    return crossZ < 0 ? c1 : c2;
+  } else {
+    return crossZ > 0 ? c1 : c2;
+  }
+}
+
+// Build a concentric offset arc -- same centre, radius + off
+// off > 0 = outward from arc surface (larger)
+// off < 0 = inward toward centre (smaller)
+function concentricArc(seg, off) {
+  const r = seg.rx||60;
+  const la = seg.largeArc??0;
+  const sw = seg.sweep??1;
+  const centre = arcCentre(seg.p0, seg.p1, r, r, sw, la);
+  const newR = Math.max(4, Math.round(r + off));
+  if (!centre) return {...seg, rx:newR, ry:newR};
+
+  // New endpoints at same angles from centre, at new radius
+  const a0 = Math.atan2(seg.p0.y-centre.y, seg.p0.x-centre.x);
+  const a1 = Math.atan2(seg.p1.y-centre.y, seg.p1.x-centre.x);
+  const np0 = {x:Math.round(centre.x+newR*Math.cos(a0)), y:Math.round(centre.y+newR*Math.sin(a0))};
+  const np1 = {x:Math.round(centre.x+newR*Math.cos(a1)), y:Math.round(centre.y+newR*Math.sin(a1))};
+  return {...seg, p0:np0, p1:np1, rx:newR, ry:newR};
+}
+
+/**
+ * @typedef {{x:number, y:number}} Pt
+ * @typedef {{type:'line', p0:Pt, p1:Pt} | {type:'arc', p0:Pt, p1:Pt, rx?:number, ry?:number, largeArc?:0|1, sweep?:0|1} | {type:'curve', p0:Pt, p1:Pt, cp1:Pt, cp2:Pt}} Segment
+ *
+ * @param {object} [props]
+ * @param {Segment[] | null} [props.initialSegments]   Existing shape to load; null/empty falls back to default rect preset.
+ * @param {((segs: Segment[]) => void) | null} [props.onShapeChange]  Fires on every shape change (draw/edit/undo/redo).
+ * @param {number | null} [props.width]                Pixel width override; defaults to window-fit.
+ * @param {number | null} [props.height]               Pixel height override; defaults to window-fit.
+ * @param {'free' | 'room-outline'} [props.mode]       'room-outline' hides curve/arc/fillet/chamfer tools.
+ */
+export default function CADEditor({
+  initialSegments = null,
+  onShapeChange = null,
+  width = null,
+  height = null,
+  mode = 'free',
+} = {}) {
+  // Canvas size: prop overrides everything; otherwise default → resize on mount via window (avoids SSR/hydration mismatch).
+  const [W, setW] = useState(width ?? W_DEFAULT);
+  const [H, setH] = useState(height ?? H_DEFAULT);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (width == null)  setW(Math.min(window.innerWidth - 260, 1800));
+    if (height == null) setH(Math.min(window.innerHeight - 120, 1200));
+  }, [width, height]);
+
+  const init = (initialSegments && initialSegments.length)
+    ? initialSegments.map(s => clone(s))
+    : PRESETS.rect.segs.map(s => clone(s));
+  const [history, setHistory] = useState([init]);
+  const [histIdx, setHistIdx] = useState(0);
+  const [closed, setClosed]   = useState(true);
+  const [tool, setTool]       = useState('select');
+  const [snapOn, setSnapOn]   = useState(true);
+  const [showHandles, setShowHandles] = useState(false);
+  const [zoom, setZoom]   = useState(1);
+  const [pan, setPan]     = useState({x:0, y:0});
+  const zoomRef = useRef(1);
+  const panRef  = useRef({x:0, y:0});
+  zoomRef.current = zoom;
+  panRef.current  = pan;
+  const [mouse, setMouse]     = useState({x:0,y:0});
+  const [hoverSeg, setHoverSeg]   = useState(null);
+  const [hoverVert, setHoverVert] = useState(null); // {si,role}
+  const [hoverCP, setHoverCP]     = useState(null);  // {si,role}
+  const [selSeg, setSelSeg]     = useState(null);
+  const setSelSegSynced = (v) => { selSegRef.current=v; setSelSeg(v); };   // single selected seg idx
+  const [selSegs, setSelSegs]   = useState(new Set()); // multi-selection
+  const [marquee, setMarquee]   = useState(null); // {x0,y0,x1,y1} drag box
+  const marqueeRef = useRef(null);
+  const shiftRef = useRef(false);
+  const [errors, setErrors]   = useState([]);
+  const [geoResult, setGeoResult] = useState(null);
+  const [importMsg, setImportMsg] = useState('');
+  const fileInputRef = useRef();
+  const [offsetInput, setOffsetInput] = useState('');
+  const offsetInputRef = useRef();
+  const [contextMenu, setContextMenu] = useState(null);
+  const [dimEdit, setDimEdit] = useState(null); // {segIdx, fixedEnd:'p0'|'p1', inputVal}
+  const dimInputRef = useRef();
+  const pendingDimRef = useRef(null);
+  const [drawLock, setDrawLock] = useState(null); // {fromPt, angle} -- locked when Tab pressed while drawing
+  const drawLockRef = useRef(null); drawLockRef.current = drawLock;
+  const [lockedLen, setLockedLen] = useState('');
+  const lockedLenRef = useRef(''); 
+  const [filletR, setFilletR] = useState(30);
+  const [chamferD, setChamferD] = useState(20);
+  const [drawing, setDrawing] = useState(false);
+  const [draftPts, setDraftPts] = useState([]);
+  const [rectStart, setRectStart] = useState(null);
+  const rectRef = useRef(null);
+  const [shapeStart, setShapeStart] = useState(null);
+  const shapeRef = useRef(null);
+  const [triPts, setTriPts] = useState([]);
+  const triRef = useRef([]);
+  const svgRef  = useRef();
+
+  // -- Active edit ref -- always fresh, no stale closures --
+  const editRef = useRef(null); // null | {type,segIdx,role,startPt,startSeg,offset,sourceSeg}
+  const [editTick, setEditTick] = useState(0); // just to trigger re-render
+  const setEdit = (val) => { editRef.current = val; setEditTick(t=>t+1); };
+
+  const segs = history[histIdx] || [];
+  const segsRef = useRef(segs);
+  segsRef.current = segs;
+  const mouseRef = useRef(mouse);
+  mouseRef.current = mouse;
+  const closedRef = useRef(closed);
+  closedRef.current = closed;
+  const toolRef = useRef(tool);
+  toolRef.current = tool;
+  const drawingRef = useRef(drawing);
+  drawingRef.current = drawing;
+  const draftPtsRef = useRef(draftPts);
+  draftPtsRef.current = draftPts;
+
+  function handleSVGImport(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const newSegs = parseSVGFile(ev.target.result, W, H);
+        if (newSegs.length === 0) {
+          setImportMsg('No geometry found in SVG');
+          setTimeout(()=>setImportMsg(''),3000);
+          return;
+        }
+        pushHistory([...segsRef.current, ...newSegs]);
+        setImportMsg(`Imported ${newSegs.length} segments`);
+        setTimeout(()=>setImportMsg(''),3000);
+      } catch(err) {
+        setImportMsg('Could not parse SVG');
+        setTimeout(()=>setImportMsg(''),3000);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // allow re-importing same file
+  }
+
+  function pushHistory(newSegs) {
+    const trimmed = history.slice(0,histIdx+1);
+    const copy = newSegs.map(s=>clone(s));
+    setHistory([...trimmed, copy]);
+    setHistIdx(trimmed.length);
+    setErrors(validateShape(copy));
+    if (onShapeChange) onShapeChange(copy);
+  }
+
+  function undo() { if(histIdx>0){ const i=histIdx-1; setHistIdx(i); setErrors(validateShape(history[i])); if (onShapeChange) onShapeChange(history[i]); } }
+  function redo() { if(histIdx<history.length-1){ const i=histIdx+1; setHistIdx(i); setErrors(validateShape(history[i])); if (onShapeChange) onShapeChange(history[i]); } }
+
+  const getSVG = e => {
+    const r = svgRef.current.getBoundingClientRect();
+    const px = e.clientX - r.left;
+    const py = e.clientY - r.top;
+    // Convert screen coords to world coords
+    return {
+      x: (px - panRef.current.x) / zoomRef.current,
+      y: (py - panRef.current.y) / zoomRef.current,
+    };
+  };
+
+  const ENDPOINT_SNAP = 18; // px -- how close cursor needs to be to snap to an endpoint
+
+  const getSnap = useCallback((raw, last=null, noPointSnap=true, freeAngle=false) => {
+    const s = segsRef.current;
+    if (!snapOn) return {x:snapGrid(raw.x),y:snapGrid(raw.y)};
+
+    // -- Endpoint snap -- always on, generous radius --
+    // Check all segment endpoints -- snap if cursor is within ENDPOINT_SNAP px
+    let closestPt = null, closestDist = ENDPOINT_SNAP / zoomRef.current;
+    for (const seg of s) {
+      const d0 = d2(raw, seg.p0);
+      const d1 = d2(raw, seg.p1);
+      if (d0 < closestDist) { closestDist=d0; closestPt=seg.p0; }
+      if (d1 < closestDist) { closestDist=d1; closestPt=seg.p1; }
+    }
+    if (closestPt) return {...closestPt, snapPt:true};
+
+    // -- Grid + angle snap --
+    let x=snapGrid(raw.x), y=snapGrid(raw.y);
+    if (last) {
+      if (shiftRef.current) {
+        // Shift held -- fully freehand, just grid snap
+        return {x, y};
+      }
+      // Default -- snap to 22.5 degree increments
+      const angle = Math.atan2(raw.y-last.y, raw.x-last.x) * 180/Math.PI;
+      const snapped = Math.round(angle/22.5)*22.5;
+      const len = d2(last, {x,y});
+      x = Math.round(last.x + len*Math.cos(snapped*Math.PI/180));
+      y = Math.round(last.y + len*Math.sin(snapped*Math.PI/180));
+      return {x, y, snapAngle:snapped};
+    }
+    return {x,y};
+  }, [snapOn]);
+
+  // -- Apply live edit to segs for preview --
+  function applyEdit(baseSegs, pt) {
+    const ed = editRef.current;
+    if (!ed) return baseSegs;
+    const next = baseSegs.map(s=>clone(s));
+
+    if (ed.type==='vertex') {
+      const {segIdx,role} = ed;
+      next[segIdx][role] = {x:pt.x,y:pt.y};
+      if (next[segIdx].type==='curve') {
+        const dx=pt.x-ed.startSeg[role].x, dy=pt.y-ed.startSeg[role].y;
+        if (role==='p0') next[segIdx].cp1={x:ed.startSeg.cp1.x+dx,y:ed.startSeg.cp1.y+dy};
+        if (role==='p1') next[segIdx].cp2={x:ed.startSeg.cp2.x+dx,y:ed.startSeg.cp2.y+dy};
+      }
+      // Stitch neighbours
+      if (role==='p1' && next[segIdx+1]) next[segIdx+1].p0={x:pt.x,y:pt.y};
+      if (role==='p0' && segIdx>0) next[segIdx-1].p1={x:pt.x,y:pt.y};
+      if (closedRef.current) {
+        if (role==='p0'&&segIdx===0) next[baseSegs.length-1].p1={x:pt.x,y:pt.y};
+        if (role==='p1'&&segIdx===baseSegs.length-1) next[0].p0={x:pt.x,y:pt.y};
+      }
+    }
+
+    if (ed.type==='move') {
+      const {segIdx,startSeg,axis} = ed;
+      // Pin the line directly to mouse position -- no delta drift
+      // Horizontal line: Y follows mouse, X endpoints unchanged
+      // Vertical line: X follows mouse, Y endpoints unchanged
+      const snappedPos = snapGrid(axis==='y' ? pt.y : pt.x);
+      const dy = axis==='y' ? snappedPos - startSeg.p0.y : 0;
+      const dx = axis==='x' ? snappedPos - startSeg.p0.x : 0;
+      next[segIdx].p0={x:startSeg.p0.x+dx, y:startSeg.p0.y+dy};
+      next[segIdx].p1={x:startSeg.p1.x+dx, y:startSeg.p1.y+dy};
+      if (startSeg.cp1) {
+        next[segIdx].cp1={x:startSeg.cp1.x+dx,y:startSeg.cp1.y+dy};
+        next[segIdx].cp2={x:startSeg.cp2.x+dx,y:startSeg.cp2.y+dy};
+      }
+      if (next[segIdx-1]) next[segIdx-1].p1=clone(next[segIdx].p0);
+      if (next[segIdx+1]) next[segIdx+1].p0=clone(next[segIdx].p1);
+      if (closedRef.current) {
+        if (segIdx===0) next[baseSegs.length-1].p1=clone(next[0].p0);
+        if (segIdx===baseSegs.length-1) next[0].p0=clone(next[baseSegs.length-1].p1);
+      }
+    }
+
+    if (ed.type==='cp') {
+      next[ed.segIdx][ed.role]={x:pt.x,y:pt.y};
+    }
+
+    return next;
+  }
+
+  // -- Mouse move -- just update mouse position --
+  const onMouseMove = e => {
+    // When draw is locked (Tab pressed while drawing), ignore mouse movement
+    if (drawLockRef.current) return;
+
+    const raw = getSVG(e);
+    const last = draftPts.length ? draftPts[draftPts.length-1] : null;
+    const snapped = getSnap(raw, last);
+    setMouse(snapped);
+
+    // Marquee drag
+    if (marqueeRef.current) {
+      marqueeRef.current = {...marqueeRef.current, x1:raw.x, y1:raw.y};
+      setMarquee({...marqueeRef.current});
+      return;
+    }
+
+    // For offset -- update offset distance
+    const ed = editRef.current;
+    if (ed?.type==='offset') {
+      const s = ed.sourceSeg;
+      const dx=s.p1.x-s.p0.x, dy=s.p1.y-s.p0.y;
+      const len=Math.sqrt(dx*dx+dy*dy)||1;
+      const px=-dy/len, py=dx/len;
+      const mx=(s.p0.x+s.p1.x)/2, my=(s.p0.y+s.p1.y)/2;
+      let rawDist;
+      if (s.type==='arc') {
+        // Measure signed distance from arc surface
+        // mouse further from centre than r = positive (outward)
+        // mouse closer to centre than r = negative (inward)
+        const centre = arcCentre(s.p0,s.p1,s.rx||60,s.ry||60,s.sweep??1,s.largeArc??0);
+        if (centre) {
+          const mouseToCentre = Math.sqrt((raw.x-centre.x)**2+(raw.y-centre.y)**2);
+          const currentR = s.rx||60;
+          // Positive = moving away from centre (outward = larger arc)
+          // Negative = moving toward centre (inward = smaller arc)
+          rawDist = mouseToCentre - currentR;
+        } else {
+          rawDist = (raw.x-mx)*px+(raw.y-my)*py;
+        }
+      } else {
+        rawDist = (raw.x-mx)*px+(raw.y-my)*py;
+      }
+      const step = shiftRef.current ? 1 : 10;
+      const dist = Math.round(rawDist/step)*step;
+      editRef.current = {...ed, offset:dist};
+      setEditTick(t=>t+1);
+    }
+
+    // For bend -- track perpendicular distance, snap to 10px (shift=1px)
+    if (ed?.type==='bend') {
+      const {p0, p1} = ed;
+      const cx=(p0.x+p1.x)/2, cy=(p0.y+p1.y)/2;
+      const ldx=p1.x-p0.x, ldy=p1.y-p0.y;
+      const ll=Math.sqrt(ldx*ldx+ldy*ldy)||1;
+      const perpX=-ldy/ll, perpY=ldx/ll;
+      const rawSag=(raw.x-cx)*perpX+(raw.y-cy)*perpY;
+      const step = shiftRef.current ? 1 : 10;
+      const sag = Math.round(rawSag/step)*step;
+      editRef.current = {...ed, sag};
+      setEditTick(t=>t+1);
+    }
+  };
+
+
+
+  // -- Wheel zoom -- zoom toward mouse position --
+  function onWheel(e) {
+    e.preventDefault();
+    const r = svgRef.current.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const my = e.clientY - r.top;
+    const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
+    const newZoom = Math.min(8, Math.max(0.15, zoomRef.current * factor));
+    // Zoom toward mouse: adjust pan so world point under mouse stays fixed
+    setPan(p => ({
+      x: mx - (mx - p.x) * (newZoom / zoomRef.current),
+      y: my - (my - p.y) * (newZoom / zoomRef.current),
+    }));
+    setZoom(newZoom);
+  }
+
+  // -- Click -- plain function, not useCallback, so always reads fresh state --
+  function onSVGClick(e) {
+    const raw = getSVG(e);
+    const dpts = draftPtsRef.current;
+    const last = dpts.length ? dpts[dpts.length-1] : null;
+    const pt = getSnap(raw, last);
+    const ed = editRef.current;
+    const currentSegs = segsRef.current;
+
+    // -- Place if active edit --
+    if (ed) {
+      if (ed.type==='offset') {
+        const off = ed.offset||0;
+        if (Math.abs(off) > 1) {
+          const s=ed.sourceSeg;
+          const dx=s.p1.x-s.p0.x, dy=s.p1.y-s.p0.y;
+          const len=Math.sqrt(dx*dx+dy*dy)||1;
+          const px=-dy/len, py=dx/len;
+          let newSeg;
+          if (s.type==='arc') {
+            const newArc = concentricArc(s, off);
+            pushHistory([...currentSegs, newArc]);
+            setEdit(null); setOffsetInput('');
+            return;
+          } else if (s.type==='curve') {
+            newSeg={...s,
+              p0:{x:Math.round(s.p0.x+px*off),y:Math.round(s.p0.y+py*off)},
+              p1:{x:Math.round(s.p1.x+px*off),y:Math.round(s.p1.y+py*off)},
+              cp1:{x:Math.round(s.cp1.x+px*off),y:Math.round(s.cp1.y+py*off)},
+              cp2:{x:Math.round(s.cp2.x+px*off),y:Math.round(s.cp2.y+py*off)},
+            };
+          } else {
+            newSeg={type:'line',
+              p0:{x:Math.round(s.p0.x+px*off),y:Math.round(s.p0.y+py*off)},
+              p1:{x:Math.round(s.p1.x+px*off),y:Math.round(s.p1.y+py*off)}
+            };
+          }
+          pushHistory([...currentSegs, newSeg]);
+          setEdit(null); setOffsetInput('');
+        }
+        return;
+      }
+      if (ed.type==='bend') {
+        const {segIdx, p0, p1, sag=0} = ed;
+        const absSag = Math.abs(sag);
+        if (absSag > 3) {
+          const chord = d2(p0,p1);
+          const r = Math.abs((sag*sag+(chord/2)*(chord/2))/(2*sag));
+          const sweep = sag > 0 ? 0 : 1;
+          const largeArc = absSag > r ? 1 : 0;
+          pushHistory(currentSegs.map((s,i)=>i===segIdx
+            ? {type:'arc',p0,p1,rx:Math.round(r),ry:Math.round(r),largeArc,sweep}
+            : s));
+        }
+        setEdit(null);
+        return;
+      }
+      // vertex / move / cp -- place at current mouse
+      const preview = applyEdit(currentSegs, pt);
+      pushHistory(preview);
+      setEdit(null);
+      return;
+    }
+
+    // -- Draw tools --
+    const t = toolRef.current;
+
+    if (t==='line') {
+      const last = draftPtsRef.current.length ? draftPtsRef.current[draftPtsRef.current.length-1] : null;
+      const freePt = getSnap(getSVG(e), last, true, true);
+      if (!drawingRef.current) { setDrawing(true); setDraftPts([freePt]); }
+      else {
+        const p0 = draftPtsRef.current[draftPtsRef.current.length-1];
+        const newIdx = currentSegs.length;
+        pushHistory([...currentSegs,{type:'line',p0,p1:freePt}]);
+        setDrawing(false); setDraftPts([]);
+
+      }
+      return;
+    }
+
+    if (t==='polyline') {
+      const polyPt = getSnap(getSVG(e), draftPtsRef.current.length?draftPtsRef.current[draftPtsRef.current.length-1]:null, true, true);
+      if (!drawingRef.current) {
+        setDrawing(true);
+        setDraftPts([polyPt]);
+      } else {
+        const prevPts = draftPtsRef.current;
+        const startPt = prevPts[0];
+        const lastPt = prevPts[prevPts.length-1];
+        if (prevPts.length >= 2 && d2(polyPt, startPt) < SNAP_D*2) {
+          pushHistory([...currentSegs, {type:'line', p0:lastPt, p1:startPt}]);
+          setClosed(true);
+          setDrawing(false); setDraftPts([]);
+        } else {
+          const newPolyIdx = currentSegs.length;
+          pushHistory([...currentSegs, {type:'line', p0:lastPt, p1:polyPt}]);
+          setDraftPts([polyPt]);
+
+        }
+      }
+      return;
+    }
+
+    if (t==='rect') {
+      if (!rectRef.current) {
+        rectRef.current=pt; setRectStart(pt); setDrawing(true);
+        return;
+      } else {
+        const rs=rectRef.current, re=pt;
+        if(Math.abs(re.x-rs.x)>4&&Math.abs(re.y-rs.y)>4){
+          pushHistory([...currentSegs,
+            {type:'line',p0:rs,p1:{x:re.x,y:rs.y}},
+            {type:'line',p0:{x:re.x,y:rs.y},p1:re},
+            {type:'line',p0:re,p1:{x:rs.x,y:re.y}},
+            {type:'line',p0:{x:rs.x,y:re.y},p1:rs},
+          ]);
+        }
+        rectRef.current=null; setRectStart(null); setDrawing(false);
+        return;
+      }
+    }
+    if (t==='circle') {
+      if (!shapeRef.current) {
+        // First click -- arm it
+        shapeRef.current=pt; setShapeStart(pt); setDrawing(true);
+        return;
+      }
+      const c=shapeRef.current, r=Math.round(d2(c,pt));
+      if(r>4){
+        const top={x:c.x,y:c.y-r},right={x:c.x+r,y:c.y},bot={x:c.x,y:c.y+r},left={x:c.x-r,y:c.y};
+        pushHistory([...currentSegs,
+          {type:'arc',p0:top,p1:right,rx:r,ry:r,largeArc:0,sweep:1},
+          {type:'arc',p0:right,p1:bot,rx:r,ry:r,largeArc:0,sweep:1},
+          {type:'arc',p0:bot,p1:left,rx:r,ry:r,largeArc:0,sweep:1},
+          {type:'arc',p0:left,p1:top,rx:r,ry:r,largeArc:0,sweep:1},
+        ]);
+      }
+      shapeRef.current=null; setShapeStart(null); setDrawing(false);
+      return;
+    }
+    if (t==='oval') {
+      if (!shapeRef.current) {
+        shapeRef.current=pt; setShapeStart(pt); setDrawing(true);
+        return;
+      }
+      const s=shapeRef.current, e2=pt;
+      const cx=(s.x+e2.x)/2, cy=(s.y+e2.y)/2;
+      const rx=Math.abs(e2.x-s.x)/2, ry=Math.abs(e2.y-s.y)/2;
+      if(rx>4&&ry>4){
+        const top={x:cx,y:cy-ry},right={x:cx+rx,y:cy},bot={x:cx,y:cy+ry},left={x:cx-rx,y:cy};
+        pushHistory([...currentSegs,
+          {type:'arc',p0:top,p1:right,rx,ry,largeArc:0,sweep:1},
+          {type:'arc',p0:right,p1:bot,rx,ry,largeArc:0,sweep:1},
+          {type:'arc',p0:bot,p1:left,rx,ry,largeArc:0,sweep:1},
+          {type:'arc',p0:left,p1:top,rx,ry,largeArc:0,sweep:1},
+        ]);
+      }
+      shapeRef.current=null; setShapeStart(null); setDrawing(false);
+      return;
+    }
+    if (t==='select') { setSelSegSynced(null); }
+  }
+
+  // Rect/circle/oval handled via onMouseDown/onMouseUp on SVG
+
+  // -- Segment click -- arms the edit or applies instant op --
+  const drawTools = ['line','polyline','rect','circle','oval','triangle'];
+  function onSegClick(i, e) {
+    // Draw tools -- let click fall through to SVG, don't intercept
+    if (drawTools.includes(toolRef.current)) return;
+    // If already editing, let click bubble to SVG to place
+    if (editRef.current) return;
+    e.stopPropagation();
+    const seg = segsRef.current[i];
+
+    if (tool==='select') { setSelSegSynced(i); setDimEdit(null); return; }
+    if (tool==='delpt')  { doDelSeg(i); return; }
+    if (tool==='trim') {
+      const clickPt = getSnap(getSVG(e), null, true);
+      doTrim(i, clickPt);
+      return;
+    }
+    if (tool==='dim') {
+      if (segsRef.current[i].type !== 'line') return;
+      const s = segsRef.current[i];
+      setDimEdit({segIdx:i, fixedEnd:'p0', inputVal:String(toMM(segLen(s)))});
+      setTimeout(()=>{ if(dimInputRef.current){ dimInputRef.current.focus(); dimInputRef.current.select(); }}, 50);
+      return;
+    }
+    if (tool==='addpt')  { doAddPt(i); return; }
+    if (tool==='bend')   { doBend(i); return; }    // fillet now handled by onVertClick
+    // chamfer now handled by onVertClick
+
+    if (tool==='move') {
+      const axis = isHoriz(seg)?'y':isVert(seg)?'x':'x';
+      setEdit({type:'move', segIdx:i, startSeg:clone(seg), axis});
+      return;
+    }
+    if (tool==='offset1') {
+      setEdit({type:'offset', segIdx:i, sourceSeg:clone(seg), offset:0});
+      setOffsetInput('');
+      setTimeout(()=>{ if(offsetInputRef.current){ offsetInputRef.current.focus(); offsetInputRef.current.select(); } }, 50);
+      return;
+    }
+  }
+
+  // -- Vertex click -- arms vertex edit or applies fillet/chamfer --
+  function onVertClick(si, role, e) {
+    if (drawTools.includes(toolRef.current)) return; // draw tools ignore vertex clicks
+    if (editRef.current) return; // let click bubble to place
+    e.stopPropagation();
+
+    if (tool==='fillet') {
+      const pt = segsRef.current[si][role];
+      doFilletCorner(pt);
+      return;
+    }
+
+    if (tool==='chamfer') {
+      const pt = segsRef.current[si][role];
+      doCornerChamfer(pt);
+      return;
+    }
+
+    if (tool!=='vertex' && tool!=='select') return;
+    setEdit({type:'vertex', segIdx:si, role, startSeg:clone(segsRef.current[si])});
+  }
+
+  // -- CP handle click -- arms CP edit --
+  function onCPClick(si, role, e) {
+    if (drawTools.includes(toolRef.current)) return;
+    if (editRef.current) return; // let click bubble to place
+    e.stopPropagation();
+    setEdit({type:'cp', segIdx:si, role});
+  }
+
+  // -- Instant ops --
+  function doBend(i) {
+    const s = segs[i];
+    if (s.type==='curve'||s.type==='arc') {
+      // Straighten instantly -- no need for interaction
+      pushHistory(segs.map((seg,idx)=>idx===i?{type:'line',p0:seg.p0,p1:seg.p1}:seg));
+    } else {
+      // Arm bend -- user moves mouse to control radius, clicks to place
+      setEdit({type:'bend', segIdx:i, p0:clone(s.p0), p1:clone(s.p1), sag:0});
+    }
+  }
+  function doAddPt(i) {
+    const s=segs[i],m=midPt(s.p0,s.p1),next=[...segs];
+    next.splice(i,1,{...s,p1:m},{...s,p0:m}); pushHistory(next);
+  }
+  function doDelSeg(i) {
+    if (segs.length<=3) { setErrors(['Shape must have at least 3 segments']); return; }
+    pushHistory(segs.filter((_,idx)=>idx!==i));
+    if(selSeg===i) setSelSegSynced(null);
+  }
+  // -- Segment intersection (line segments only) --
+  function segIntersect(a0, a1, b0, b1) {
+    const dx1=a1.x-a0.x, dy1=a1.y-a0.y;
+    const dx2=b1.x-b0.x, dy2=b1.y-b0.y;
+    const denom = dx1*dy2 - dy1*dx2;
+    if (Math.abs(denom)<0.001) return null;
+    const dx3=b0.x-a0.x, dy3=b0.y-a0.y;
+    const t = (dx3*dy2 - dy3*dx2)/denom;
+    const u = (dx3*dy1 - dy3*dx1)/denom;
+    if (t<0||t>1||u<0||u>1) return null;
+    return {x:a0.x+t*dx1, y:a0.y+t*dy1, t, u};
+  }
+
+  // Find intersections between a line segment and an arc
+  // Returns [{pt, tArc}] where tArc is 0..1 along the arc angle span
+  function lineArcIntersect(lineP0, lineP1, arc) {
+    const hits = [];
+    try {
+      const centre = arcCentre(arc.p0, arc.p1, arc.rx||60, arc.ry||60, arc.sweep??1, arc.largeArc??0);
+      if (!centre) return hits;
+      const r = arc.rx||60;
+      // Line parametric: P = lineP0 + t*(lineP1-lineP0)
+      const dx = lineP1.x-lineP0.x, dy = lineP1.y-lineP0.y;
+      const fx = lineP0.x-centre.x, fy = lineP0.y-centre.y;
+      const a = dx*dx+dy*dy;
+      const b = 2*(fx*dx+fy*dy);
+      const c = fx*fx+fy*fy-r*r;
+      const disc = b*b-4*a*c;
+      if (disc < 0) return hits;
+      const sq = Math.sqrt(disc);
+      [(-b-sq)/(2*a), (-b+sq)/(2*a)].forEach(t => {
+        if (t < 0.001 || t > 0.999) return;
+        const ix = lineP0.x+t*dx, iy = lineP0.y+t*dy;
+        // Check if intersection point is on the arc (within arc angle span)
+        const a0 = Math.atan2(arc.p0.y-centre.y, arc.p0.x-centre.x);
+        const a1 = Math.atan2(arc.p1.y-centre.y, arc.p1.x-centre.x);
+        const ai = Math.atan2(iy-centre.y, ix-centre.x);
+        // Normalise angles
+        const norm = (a, ref) => { let d = a-ref; while(d<0) d+=2*Math.PI; return d; };
+        const span = norm(a1, a0);
+        const dist = norm(ai, a0);
+        if (dist < 0.001 || dist > span-0.001) return;
+        const tArc = dist/span;
+        hits.push({pt:{x:Math.round(ix),y:Math.round(iy)}, tLine:t, tArc});
+      });
+    } catch(e) {}
+    return hits;
+  }
+
+  // Trim -- works on lines and arcs
+  function doTrim(segIdx, clickPt) {
+    try {
+      const cs = segsRef.current;
+      if (!cs || segIdx < 0 || segIdx >= cs.length) return;
+      const seg = cs[segIdx];
+      if (!seg) return;
+
+      if (seg.type === 'line') {
+        // -- Line trim --
+        const hits = [];
+        cs.forEach((other, i) => {
+          try {
+            if (i===segIdx || !other) return;
+            if (other.type==='line') {
+              const hit = segIntersect(seg.p0, seg.p1, other.p0, other.p1);
+              if (hit && isFinite(hit.t) && hit.t>0.001 && hit.t<0.999)
+                hits.push({t:hit.t, pt:{x:Math.round(hit.x),y:Math.round(hit.y)}});
+            } else if (other.type==='arc') {
+              // intersect line with arc
+              lineArcIntersect(seg.p0, seg.p1, other).forEach(h => {
+                hits.push({t:h.tLine, pt:h.pt});
+              });
+            }
+          } catch(e) {}
+        });
+        if (hits.length===0) return;
+        hits.sort((a,b)=>a.t-b.t);
+        const deduped=[hits[0]];
+        for(let i=1;i<hits.length;i++)
+          if(Math.abs(hits[i].t-deduped[deduped.length-1].t)>0.01) deduped.push(hits[i]);
+        const splits=[{t:0,pt:clone(seg.p0)},...deduped,{t:1,pt:clone(seg.p1)}];
+        const sdx=seg.p1.x-seg.p0.x, sdy=seg.p1.y-seg.p0.y;
+        const slen2=(sdx*sdx+sdy*sdy)||1;
+        const clickT=Math.max(0,Math.min(1,((clickPt.x-seg.p0.x)*sdx+(clickPt.y-seg.p0.y)*sdy)/slen2));
+        let removeIdx=0, bestDist=Infinity;
+        for(let i=0;i<splits.length-1;i++){
+          const mid=(splits[i].t+splits[i+1].t)/2;
+          const dist=Math.abs(clickT-mid);
+          if(dist<bestDist){bestDist=dist;removeIdx=i;}
+        }
+        const newPieces=[];
+        for(let i=0;i<splits.length-1;i++){
+          if(i===removeIdx) continue;
+          const p0=splits[i].pt, p1=splits[i+1].pt;
+          if(d2(p0,p1)>2) newPieces.push({type:'line',p0,p1});
+        }
+        const next=[...cs]; next.splice(segIdx,1,...newPieces); pushHistory(next);
+
+      } else if (seg.type==='arc') {
+        // -- Arc trim --
+        const centre = arcCentre(seg.p0,seg.p1,seg.rx||60,seg.ry||60,seg.sweep??1,seg.largeArc??0);
+        if (!centre) return;
+        const hits = [];
+        cs.forEach((other,i) => {
+          try {
+            if (i===segIdx||!other) return;
+            if (other.type==='line') {
+              lineArcIntersect(other.p0, other.p1, seg).forEach(h => {
+                hits.push({tArc:h.tArc, pt:h.pt});
+              });
+            }
+          } catch(e) {}
+        });
+        if (hits.length===0) return;
+        hits.sort((a,b)=>a.tArc-b.tArc);
+        const deduped=[hits[0]];
+        for(let i=1;i<hits.length;i++)
+          if(Math.abs(hits[i].tArc-deduped[deduped.length-1].tArc)>0.01) deduped.push(hits[i]);
+
+        // Find which piece the click is nearest to along the arc
+        const a0ang = Math.atan2(seg.p0.y-centre.y, seg.p0.x-centre.x);
+        const a1ang = Math.atan2(seg.p1.y-centre.y, seg.p1.x-centre.x);
+        const norm = (a,ref) => { let d=a-ref; while(d<0)d+=2*Math.PI; return d; };
+        const span = norm(a1ang, a0ang);
+        const clickAng = Math.atan2(clickPt.y-centre.y, clickPt.x-centre.x);
+        const clickT = norm(clickAng, a0ang)/span;
+        const splits = [{tArc:0,pt:clone(seg.p0)},...deduped,{tArc:1,pt:clone(seg.p1)}];
+        let removeIdx=0, bestDist=Infinity;
+        for(let i=0;i<splits.length-1;i++){
+          const mid=(splits[i].tArc+splits[i+1].tArc)/2;
+          if(Math.abs(clickT-mid)<bestDist){bestDist=Math.abs(clickT-mid);removeIdx=i;}
+        }
+        // Build arc pieces -- each piece is an arc with same centre but new endpoints
+        const newPieces=[];
+        for(let i=0;i<splits.length-1;i++){
+          if(i===removeIdx) continue;
+          const pp0=splits[i].pt, pp1=splits[i+1].pt;
+          if(d2(pp0,pp1)>2) newPieces.push({...seg,p0:pp0,p1:pp1});
+        }
+        const next=[...cs]; next.splice(segIdx,1,...newPieces); pushHistory(next);
+      }
+    } catch(err) {}
+  }
+
+  // Find the two line segments meeting at a corner point (by coordinate)
+  function findCornerSegs(pt, currentSegs) {
+    const EPS = 2;
+    let inIdx = -1, outIdx = -1;
+    currentSegs.forEach((s, i) => {
+      if (d2(s.p1, pt) < EPS) inIdx = i;   // segment ending at corner
+      if (d2(s.p0, pt) < EPS) outIdx = i;  // segment starting at corner
+    });
+    return { inIdx, outIdx };
+  }
+
+  function doFilletCorner(pt) {
+    const currentSegs = segsRef.current;
+    const { inIdx, outIdx } = findCornerSegs(pt, currentSegs);
+    if (inIdx === -1 || outIdx === -1) return;
+    const segA = currentSegs[inIdx];
+    const segB = currentSegs[outIdx];
+    if (segA.type !== 'line' || segB.type !== 'line') return;
+
+    const r = filletR;
+    const corner = pt;
+
+    const dA = d2(segA.p0, corner) || 1;
+    const uAx = (segA.p0.x - corner.x) / dA;
+    const uAy = (segA.p0.y - corner.y) / dA;
+
+    const dB = d2(segB.p1, corner) || 1;
+    const uBx = (segB.p1.x - corner.x) / dB;
+    const uBy = (segB.p1.y - corner.y) / dB;
+
+    if (dA < r + 2 || dB < r + 2) return;
+
+    const tA = { x: corner.x + uAx * r, y: corner.y + uAy * r };
+    const tB = { x: corner.x + uBx * r, y: corner.y + uBy * r };
+
+    const cross = uAx * uBy - uAy * uBx;
+    const sweep = cross < 0 ? 1 : 0;
+
+    const newA   = { ...segA, p1: tA };
+    const arcSeg = { type:'arc', p0:tA, p1:tB, rx:r, ry:r, largeArc:0, sweep };
+    const newB   = { ...segB, p0: tB };
+
+    // Replace both segments -- handle non-consecutive case safely
+    const next = currentSegs.map((s, i) => {
+      if (i === inIdx) return newA;
+      if (i === outIdx) return newB;
+      return s;
+    });
+    // Insert arc between them -- always after inIdx
+    const insertAt = inIdx + 1;
+    next.splice(insertAt, 0, arcSeg);
+    pushHistory(next);
+  }
+
+  function doCornerChamfer(pt) {
+    const currentSegs = segsRef.current;
+    const { inIdx, outIdx } = findCornerSegs(pt, currentSegs);
+    if (inIdx === -1 || outIdx === -1) return;
+    const segA = currentSegs[inIdx];
+    const segB = currentSegs[outIdx];
+    if (segA.type !== 'line' || segB.type !== 'line') return;
+
+    const dist = chamferD;
+    const corner = pt;
+
+    const dA = d2(segA.p0, corner) || 1;
+    const uAx = (segA.p0.x - corner.x) / dA;
+    const uAy = (segA.p0.y - corner.y) / dA;
+
+    const dB = d2(segB.p1, corner) || 1;
+    const uBx = (segB.p1.x - corner.x) / dB;
+    const uBy = (segB.p1.y - corner.y) / dB;
+
+    if (dA < dist + 2 || dB < dist + 2) return;
+
+    const tA = { x: corner.x + uAx * dist, y: corner.y + uAy * dist };
+    const tB = { x: corner.x + uBx * dist, y: corner.y + uBy * dist };
+
+    const newA   = { ...segA, p1: tA };
+    const cutSeg = { type:'line', p0:tA, p1:tB };
+    const newB   = { ...segB, p0: tB };
+
+    const next = currentSegs.map((s, i) => {
+      if (i === inIdx) return newA;
+      if (i === outIdx) return newB;
+      return s;
+    });
+    next.splice(inIdx + 1, 0, cutSeg);
+    pushHistory(next);
+  }
+  // Apply dimension edit -- move the free end, stretch adjacent connected lines
+  function applyDimEdit() {
+    if (!dimEdit) return;
+    const val = parseFloat(dimEdit.inputVal);
+    if (isNaN(val) || val <= 0) { setDimEdit(null); return; }
+    const newLenPx = fromMM(val);
+    const cs = segsRef.current;
+    const seg = cs[dimEdit.segIdx];
+    if (!seg || seg.type !== 'line') { setDimEdit(null); return; }
+
+    // Direction unit vector of the line
+    const dx = seg.p1.x-seg.p0.x, dy = seg.p1.y-seg.p0.y;
+    const curLen = Math.sqrt(dx*dx+dy*dy)||1;
+    const ux = dx/curLen, uy = dy/curLen;
+
+    let newP0, newP1;
+    if (dimEdit.fixedEnd === 'p0') {
+      // p0 stays, p1 moves along same direction
+      newP0 = clone(seg.p0);
+      newP1 = {x:Math.round(seg.p0.x+ux*newLenPx), y:Math.round(seg.p0.y+uy*newLenPx)};
+    } else {
+      // p1 stays, p0 moves backward along same direction
+      newP1 = clone(seg.p1);
+      newP0 = {x:Math.round(seg.p1.x-ux*newLenPx), y:Math.round(seg.p1.y-uy*newLenPx)};
+    }
+
+    const EPS = 6;
+    const next = cs.map((s,i) => {
+      if (i === dimEdit.segIdx) return {...seg, p0:newP0, p1:newP1};
+      // Stretch adjacent connected segments to stay joined
+      const s2 = {...s};
+      let changed = false;
+      // If this segment's p0 was connected to the moved end
+      if (d2(s.p0, seg.p1) < EPS && dimEdit.fixedEnd==='p0') {
+        s2.p0 = clone(newP1); changed=true;
+      }
+      if (d2(s.p0, seg.p0) < EPS && dimEdit.fixedEnd==='p1') {
+        s2.p0 = clone(newP0); changed=true;
+      }
+      // If this segment's p1 was connected to the moved end
+      if (d2(s.p1, seg.p1) < EPS && dimEdit.fixedEnd==='p0') {
+        s2.p1 = clone(newP1); changed=true;
+      }
+      if (d2(s.p1, seg.p0) < EPS && dimEdit.fixedEnd==='p1') {
+        s2.p1 = clone(newP0); changed=true;
+      }
+      return changed ? s2 : s;
+    });
+
+    pushHistory(next);
+    setDimEdit(null);
+  }
+
+  // -- Keyboard --
+  useEffect(()=>{
+    const h=e=>{
+      if(e.key==='='||e.key==='+'){setZoom(z=>Math.min(8,z*1.2));}
+      if(e.key==='-'||e.key==='_'){setZoom(z=>Math.max(0.15,z/1.2));}
+      if(e.key==='0'){setZoom(1);setPan({x:0,y:0});}
+      if(e.key==='Enter' && drawLockRef.current) {
+        e.preventDefault();
+        const lock = drawLockRef.current;
+        const val = parseFloat(lockedLenRef.current);
+        if(!isNaN(val) && val > 0) {
+          const lenPx = fromMM(val);
+          const p0 = lock.fromPt;
+          const p1 = {x:Math.round(p0.x+Math.cos(lock.angle)*lenPx),
+                      y:Math.round(p0.y+Math.sin(lock.angle)*lenPx)};
+          pushHistory([...segsRef.current, {type:'line',p0,p1}]);
+          setDrawing(false); setDraftPts([]); setDrawLock(null); setLockedLen(''); lockedLenRef.current='';
+        }
+        return;
+      }
+      if(e.key==='Tab') {
+        e.preventDefault();
+        // Offset input takes priority
+        if(editRef.current?.type==='offset'){
+          if(offsetInputRef.current){offsetInputRef.current.focus();offsetInputRef.current.select();}
+          return;
+        }
+        // -- While drawing a line -- lock the angle, focus length input --
+        if(drawingRef.current && draftPtsRef.current.length>=1 && (toolRef.current==='line'||toolRef.current==='polyline')) {
+          const last = draftPtsRef.current[draftPtsRef.current.length-1];
+          const m = mouseRef.current;
+          const angle = Math.atan2(m.y-last.y, m.x-last.x);
+          const curLen = toMM(Math.round(d2(last, m)));
+          setDrawLock({fromPt:last, angle});
+          setLockedLen(String(curLen));lockedLenRef.current=String(curLen);
+          setTimeout(()=>{
+            if(dimInputRef.current){ dimInputRef.current.focus(); dimInputRef.current.select(); }
+          }, 30);
+          return;
+        }
+        // -- Existing line selected -- open edit --
+        const targetIdx = hoverSegRef.current ?? selSegRef.current;
+        if(targetIdx!=null){
+          const s = segsRef.current[targetIdx];
+          if(s && s.type==='line'){
+            setDimEdit({segIdx:targetIdx, fixedEnd:'p0', inputVal:String(toMM(segLen(s)))});
+            setTimeout(()=>{ if(dimInputRef.current){ dimInputRef.current.focus(); dimInputRef.current.select(); }}, 50);
+          }
+        } else if(dimInputRef.current) {
+          dimInputRef.current.focus(); dimInputRef.current.select();
+        }
+        return;
+      }
+      if(e.key==='Escape'){setDimEdit(null);setDrawLock(null);setLockedLen('');setContextMenu(null);setSelSegs(new Set());marqueeRef.current=null;setMarquee(null);
+        setDrawing(false);setDraftPts([]);setRectStart(null);rectRef.current=null;shapeRef.current=null;setShapeStart(null);triRef.current=[];setTriPts([]);setEdit(null);
+      }
+      if(e.type==='keydown') shiftRef.current=e.shiftKey;
+      if(e.type==='keyup') shiftRef.current=e.shiftKey;
+      if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();undo();}
+      if((e.ctrlKey||e.metaKey)&&e.key==='y'){e.preventDefault();redo();}
+      if(e.key==='Delete'&&selSegs.size>0){
+        if(segs.length-selSegs.size>=3){
+          pushHistory(segs.filter((_,i)=>!selSegs.has(i)));
+          setSelSegs(new Set()); setSelSeg(null);
+        }
+      } else if(e.key==='Delete'&&selSeg!==null) doDelSeg(selSeg);
+      TOOLS.forEach(t=>{if(t.key&&e.key===t.key&&!e.ctrlKey){setTool(t.id);setEdit(null);setDrawing(false);setDraftPts([]); }});
+    };
+    window.addEventListener('keydown',h);
+    window.addEventListener('keyup',h);
+    return()=>{window.removeEventListener('keydown',h);window.removeEventListener('keyup',h);};
+  },[histIdx,selSeg,segs,lockedLen]);
+
+  // -- Compute preview segs (apply active edit to current segs) --
+  const ed = editRef.current;
+  const previewSegs = ed && ed.type!=='offset' ? applyEdit(segs, mouse) : segs;
+  const mainPath = buildD(previewSegs, closed);
+  const hasErrors = errors.length>0;
+  const shapeColor = hasErrors?'#cc2222':'#1a4488';
+  const fillColor  = hasErrors?'#cc222208':'#1a448808';
+
+  // Grid -- minor every 10mm, major every 100mm, labels on major
+  const MAJOR_PX = MAJOR_MM * PX_PER_MM;
+  const gridLines=[];
+  for(let x=0;x<=W;x+=GS) {
+    const isMajor = x%MAJOR_PX===0;
+    gridLines.push(<line key={`v${x}`} x1={x} y1={0} x2={x} y2={H}
+      stroke={isMajor?'#bbbbba':'#e4e4e0'} strokeWidth={isMajor?1:0.5}/>);
+    if(isMajor && x>0) gridLines.push(
+      <text key={`vl${x}`} x={x+2} y={10} fontSize={8} fill="#bbbbba"
+        fontFamily="IBM Plex Mono,monospace">{toMM(x)}mm</text>
+    );
+  }
+  for(let y=0;y<=H;y+=GS) {
+    const isMajor = y%MAJOR_PX===0;
+    gridLines.push(<line key={`h${y}`} x1={0} y1={y} x2={W} y2={y}
+      stroke={isMajor?'#bbbbba':'#e4e4e0'} strokeWidth={isMajor?1:0.5}/>);
+    if(isMajor && y>0) gridLines.push(
+      <text key={`hl${y}`} x={2} y={y-2} fontSize={8} fill="#bbbbba"
+        fontFamily="IBM Plex Mono,monospace">{toMM(y)}</text>
+    );
+  }
+
+  const isEditing = !!ed;
+  const cursorMap = {select:'default',move:'crosshair',vertex:'crosshair',
+    curve:'crosshair',line:'crosshair',polyline:'crosshair',rect:'crosshair',
+    addpt:'cell',bend:'cell',offset1:'crosshair',fillet:'cell',chamfer:'cell',delpt:'not-allowed',trim:'crosshair',dim:'crosshair',circle:'crosshair',oval:'crosshair',triangle:'crosshair'};
+
+  const selInfo = selSeg!=null&&segs[selSeg]?segs[selSeg]:null;
+
+  const Btn=({label,onClick,active,danger,disabled})=>(
+    <button onClick={onClick} disabled={disabled} style={{
+      background:active?'#1a448812':danger?'#cc222210':'transparent',
+      border:`1px solid ${active?'#1a4488':danger?'#cc222233':'#d0d0cc'}`,
+      color:disabled?'#ccccca':active?'#1a4488':danger?'#cc2222':'#555550',
+      borderRadius:3,padding:'3px 9px',cursor:disabled?'not-allowed':'pointer',
+      fontSize:10,fontFamily:'IBM Plex Mono,monospace',whiteSpace:'nowrap',
+    }}>{label}</button>
+  );
+
+  return (
+    <div style={{background:'#f0efea',fontFamily:'IBM Plex Mono,monospace',color:'#333330',
+      userSelect:'none',display:'flex',flexDirection:'column',height:'100vh'}}>
+
+      {/* Header */}
+      <div style={{padding:'6px 12px',borderBottom:'1px solid #d0d0cc',display:'flex',
+        alignItems:'center',gap:8,flexShrink:0,background:'#fafaf7'}}>
+        <div>
+          <div style={{fontSize:9,letterSpacing:3,color:'#999990',textTransform:'uppercase'}}>RHK CADcam</div>
+          <div style={{fontSize:13,fontWeight:700,color:'#1a1a18'}}>Shape Editor <span style={{fontSize:10,color:'#888880',fontWeight:400}}>mm</span></div>
+        </div>
+        <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+          <Btn label="↩ Undo" onClick={undo} disabled={histIdx<=0}/>
+          <Btn label="↪ Redo" onClick={redo} disabled={histIdx>=history.length-1}/>
+          <Btn label="✕ Clear" onClick={()=>{pushHistory([]);setClosed(false);setSelSegSynced(null);setEdit(null);}} danger/>
+          <Btn label={snapOn?'⊞ Snap ON':'⊟ Snap OFF'} onClick={()=>setSnapOn(s=>!s)} active={snapOn}/>
+          <Btn label={showHandles?'Handles ON':'Handles OFF'} onClick={()=>setShowHandles(s=>!s)} active={showHandles}/>
+          <Btn label={closed?'Open':'Close'} onClick={()=>setClosed(c=>!c)} active={closed}/>
+          <div style={{display:'flex',gap:3,alignItems:'center',marginLeft:4}}>
+            <button onClick={()=>{setZoom(z=>Math.min(8,z*1.25));}} style={zBtnStyle}>＋</button>
+            <button onClick={()=>{setZoom(z=>Math.max(0.15,z/1.25));}} style={zBtnStyle}>－</button>
+            <button onClick={()=>{setZoom(1);setPan({x:0,y:0});}} style={{...zBtnStyle,fontSize:9,padding:'2px 7px'}}>Reset</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Geometry check result */}
+      {geoResult&&(
+        <div style={{background:geoResult.valid?'#22882210':'#cc222210',
+          borderBottom:`2px solid ${geoResult.valid?'#228822':'#cc2222'}`,
+          padding:'6px 16px',fontSize:11,flexShrink:0}}>
+          {geoResult.issues.map((issue,i)=>(
+            <div key={i} style={{color:issue.type==='success'?'#228822':issue.type==='error'?'#cc2222':'#cc7700',
+              marginBottom:2,fontFamily:'IBM Plex Mono,monospace'}}>
+              {issue.type==='success'?'✓ ':issue.type==='error'?'✗ ':'⚠ '}{issue.msg}
+            </div>
+          ))}
+          {geoResult.gaps.length>0&&(
+            <div style={{color:'#cc2222',fontSize:10,marginTop:4}}>
+              Gap locations highlighted on canvas -- zoom in to fix
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Error bar */}
+      {hasErrors&&(
+        <div style={{background:'#cc222210',borderBottom:'2px solid #cc2222',padding:'5px 16px',
+          fontSize:11,color:'#cc2222',display:'flex',gap:16,alignItems:'center',flexShrink:0}}>
+          <span style={{fontWeight:700}}>⚠ Shape Error</span>
+          {errors.map((err,i)=><span key={i}>· {err}</span>)}
+          <span style={{marginLeft:'auto',color:'#cc222288',fontSize:10}}>Cannot be used as cabinet assembly</span>
+        </div>
+      )}
+
+      {/* Active edit banner */}
+      {isEditing&&(
+        <div style={{background:'#1a448810',borderBottom:'1px solid #1a448844',padding:'4px 16px',
+          fontSize:10,color:'#1a4488',display:'flex',gap:12,alignItems:'center',flexShrink:0}}>
+          <span style={{fontWeight:700}}>● EDITING</span>
+          <span>{ed.type==='offset'?`Offset: ${Math.abs(ed.offset||0)}px`:
+                 ed.type==='move'?'Move line -- click to place':
+                 ed.type==='vertex'?'Move vertex -- click to place':
+                 ed.type==='cp'?'Move curve handle -- click to place':''}</span>
+          <span style={{marginLeft:'auto',color:'#1a448888'}}>ESC to cancel</span>
+        </div>
+      )}
+
+      <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+
+        {/* Toolbar */}
+        <div style={{width:112,background:'#fafaf7',borderRight:'1px solid #d0d0cc',
+          padding:'8px 6px',overflowY:'auto',flexShrink:0}}>
+          {['edit','draw','modify'].map(group=>(
+            <div key={group}>
+              <div style={{fontSize:8,letterSpacing:3,color:'#999990',margin:'6px 3px 4px',textTransform:'uppercase'}}>{group}</div>
+              {TOOLS.filter(t=>t.group===group && (mode!=='room-outline' || !ROOM_OUTLINE_HIDDEN_TOOLS.has(t.id))).map(t=>(
+                <button key={t.id}
+                  onClick={()=>{setTool(t.id);setEdit(null);setDrawing(false);setDraftPts([]);setRectStart(null);rectRef.current=null;shapeRef.current=null;setShapeStart(null);triRef.current=[];setTriPts([]);setSelSegs(new Set());setMarquee(null);}}
+                  style={{
+                    background:tool===t.id?'#1a448812':'transparent',
+                    border:`1px solid ${tool===t.id?'#1a4488':'#d8d8d4'}`,
+                    color:tool===t.id?'#1a4488':'#555550',
+                    borderRadius:3,padding:'4px 6px',cursor:'pointer',fontSize:10,
+                    fontFamily:'IBM Plex Mono,monospace',display:'flex',gap:5,
+                    alignItems:'center',width:'100%',marginBottom:2,
+                  }}>
+                  <span style={{minWidth:14,textAlign:'center'}}>{t.icon}</span>
+                  <span style={{fontSize:9}}>{t.label}{t.key?` (${t.key})`:''}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+          <div style={{borderTop:'1px solid #d0d0cc',marginTop:8,paddingTop:8}}>
+            <div style={{fontSize:8,letterSpacing:3,color:'#999990',margin:'0 3px 4px',textTransform:'uppercase'}}>Presets</div>
+            {Object.entries(PRESETS).map(([k,p])=>(
+              <button key={k}
+                onClick={()=>{pushHistory(p.segs.map(s=>clone(s)));setClosed(p.closed);setSelSegSynced(null);setDrawing(false);setDraftPts([]);setTool('select');setEdit(null);}}
+                style={{background:'transparent',border:'1px solid #d8d8d4',color:'#555550',
+                  borderRadius:3,padding:'4px 6px',cursor:'pointer',fontSize:9,
+                  fontFamily:'IBM Plex Mono,monospace',width:'100%',marginBottom:2,textAlign:'left'}}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Canvas */}
+        <div style={{flex:1,position:'relative',overflow:'hidden'}}>
+          <svg ref={svgRef} width={W} height={H}
+            style={{display:'block',background:'#f7f7f3',cursor:cursorMap[tool]||'default',outline:'none'}}
+            onMouseMove={onMouseMove}
+            onClick={e=>{if(contextMenu){setContextMenu(null);return;}onSVGClick(e);}}
+            onContextMenu={e=>{e.preventDefault();if(contextMenu){setContextMenu(null);return;}setDrawing(false);setDraftPts([]);setRectStart(null);rectRef.current=null;shapeRef.current=null;setShapeStart(null);triRef.current=[];setTriPts([]);setEdit(null);}}
+            onDoubleClick={e=>{
+              if(toolRef.current==='polyline'&&drawingRef.current){
+                // Segments already committed -- just stop drawing
+                setDrawing(false);setDraftPts([]);
+              }
+            }}
+            onMouseDown={e=>{
+              const t=toolRef.current;
+              const raw=getSVG(e);
+              const pt=getSnap(raw);
+              // Drag-to-draw shapes -- start on mousedown
+              // rect starts on click, not mousedown
+              // circle/oval start on click, not mousedown
+              if(t==='triangle'){
+                const pts=[...triRef.current,pt];
+                triRef.current=pts; setTriPts([...pts]);
+                if(pts.length>=3){
+                  pushHistory([...segsRef.current,
+                    {type:'line',p0:pts[0],p1:pts[1]},
+                    {type:'line',p0:pts[1],p1:pts[2]},
+                    {type:'line',p0:pts[2],p1:pts[0]},
+                  ]);
+                  triRef.current=[]; setTriPts([]); setDrawing(false);
+                } else {
+                  setDrawing(true);
+                }
+                return;
+              }
+              // Marquee select -- only in select tool
+              if(t!=='select') return;
+              if(editRef.current) return;
+              marqueeRef.current={x0:raw.x,y0:raw.y,x1:raw.x,y1:raw.y};
+              setMarquee({...marqueeRef.current});
+            }}
+            onMouseUp={e=>{
+              const t=toolRef.current;
+              const raw=getSVG(e);
+              const pt=getSnap(raw);
+              // Place drag-to-draw shapes on mouseup
+              // rect placed on click, not mouseup
+              // circle/oval placed on second click, not mouseup
+              // Marquee select
+              if(!marqueeRef.current) return;
+              const m=marqueeRef.current;
+              const minX=Math.min(m.x0,m.x1),maxX=Math.max(m.x0,m.x1);
+              const minY=Math.min(m.y0,m.y1),maxY=Math.max(m.y0,m.y1);
+              if((maxX-minX)*(maxY-minY)>40){
+                const inBox = (pt) => pt.x>=minX&&pt.x<=maxX&&pt.y>=minY&&pt.y<=maxY;
+                const selected=new Set();
+                segsRef.current.forEach((s,i)=>{
+                  const mid={x:(s.p0.x+s.p1.x)/2, y:(s.p0.y+s.p1.y)/2};
+                  // Select if either endpoint OR midpoint is inside box
+                  if(inBox(s.p0)||inBox(s.p1)||inBox(mid)) selected.add(i);
+                });
+                setSelSegs(selected); setSelSeg(null);
+              }
+              marqueeRef.current=null; setMarquee(null);
+            }}
+            onWheel={onWheel}
+            tabIndex={0}
+            onKeyDown={e=>{
+              if(e.key==='Tab'){
+                e.preventDefault();
+                const idx=hoverSegRef.current??selSegRef.current;
+                if(idx!=null){
+                  const s=segsRef.current[idx];
+                  if(s&&s.type==='line'){
+                    setDimEdit({segIdx:idx,fixedEnd:'p0',inputVal:String(toMM(segLen(s)))});
+                    setTimeout(()=>{if(dimInputRef.current){dimInputRef.current.focus();dimInputRef.current.select();}},50);
+                  }
+                }
+              }
+            }}
+          >
+            <defs>
+              <marker id="arr" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto">
+                <path d="M0,0 L0,5 L5,2.5 Z" fill="#999990"/>
+              </marker>
+              <marker id="oarr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#cc5500"/>
+              </marker>
+            </defs>
+            <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
+
+            {/* Grid */}
+            {gridLines}
+
+            {/* Shape fill */}
+            {closed&&mainPath&&<path d={mainPath} fill={fillColor} stroke="none"/>}
+
+            {/* Shape shadow + stroke */}
+            {mainPath&&<>
+              <path d={mainPath} fill="none" stroke={hasErrors?'#cc222233':'#c8d4e0'} strokeWidth={5}/>
+              <path d={mainPath} fill="none" stroke={shapeColor} strokeWidth={2}/>
+            </>}
+
+            {/* DX / DY annotations */}
+            {previewSegs.length>0&&(()=>{
+              const xs=previewSegs.flatMap(s=>[s.p0.x,s.p1.x]);
+              const ys=previewSegs.flatMap(s=>[s.p0.y,s.p1.y]);
+              const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+              return (<g pointerEvents="none">
+                <line x1={minX} y1={maxY+28} x2={maxX} y2={maxY+28} stroke="#999990" strokeWidth={1} markerStart="url(#arr)" markerEnd="url(#arr)"/>
+                <text x={(minX+maxX)/2} y={maxY+22} fontSize={10} fill="#888880" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">DX: {toMM(maxX-minX)}mm</text>
+                <line x1={maxX+28} y1={minY} x2={maxX+28} y2={maxY} stroke="#999990" strokeWidth={1} markerStart="url(#arr)" markerEnd="url(#arr)"/>
+                <text x={maxX+36} y={(minY+maxY)/2} fontSize={10} fill="#888880" textAnchor="middle" fontFamily="IBM Plex Mono,monospace" transform={`rotate(90,${maxX+36},${(minY+maxY)/2})`}>DY: {toMM(maxY-minY)}mm</text>
+              </g>);
+            })()}
+
+            {/* Segments */}
+            {previewSegs.map((seg,i)=>{
+              const sd=buildD([seg],false);
+              const m=midPt(seg.p0,seg.p1);
+              const isH=isHoriz(seg),isV=isVert(seg);
+              const lo=isH?{x:0,y:-12}:{x:14,y:0};
+              const isArmed = ed?.segIdx===i;
+              return (
+                <g key={`s${i}`}>
+                  {hoverSeg===i&&!isEditing&&<path d={sd} fill="none" stroke="#1a448822" strokeWidth={12}/>}
+                  {(selSeg===i||isArmed)&&<path d={sd} fill="none" stroke="#1a4488" strokeWidth={3} strokeDasharray="5,3" opacity={0.5}/>}
+                  {selSegs.has(i)&&<path d={sd} fill="none" stroke="#1a4488" strokeWidth={3} opacity={0.8}/>}
+
+                  {/* Hit area */}
+                  <path d={sd} fill="none" stroke="transparent" strokeWidth={16}
+                    style={{cursor:cursorMap[tool]||'pointer'}}
+                    onMouseEnter={()=>{setHoverSeg(i);hoverSegRef.current=i;}}
+                    onMouseLeave={()=>{setHoverSeg(null);hoverSegRef.current=null;}}
+                    onClick={e=>onSegClick(i,e)}
+                    onDoubleClick={e=>{e.stopPropagation();doBend(i);}}
+                    onContextMenu={e=>{e.preventDefault();e.stopPropagation();const r=svgRef.current.getBoundingClientRect();setContextMenu({x:e.clientX-r.left,y:e.clientY-r.top,segIdx:i});}}
+                  />
+
+                  {/* Length label */}
+                  {seg.type==='line'&&(
+                    <text x={m.x+lo.x} y={m.y+lo.y} fontSize={9}
+                      fill={selSeg===i?'#1a4488':'#aaaaaa'}
+                      textAnchor="middle" dominantBaseline="middle"
+                      fontFamily="IBM Plex Mono,monospace" pointerEvents="none">
+                      {toMM(segLen(seg))}mm
+                    </text>
+                  )}
+
+                  {/* DX/DY axis label on hover */}
+                  {hoverSeg===i&&seg.type==='line'&&!isEditing&&(
+                    <text x={m.x+(isH?0:22)} y={m.y+(isH?-24:0)} fontSize={8}
+                      fill="#1a448877" textAnchor="middle"
+                      fontFamily="IBM Plex Mono,monospace" pointerEvents="none">
+                      {isH?'DX':isV?'DY':'diag'}
+                    </text>
+                  )}
+
+                  {/* Offset midpoint indicator */}
+                  {tool==='offset1'&&!ed&&(
+                    <g pointerEvents="none">
+                      <circle cx={m.x} cy={m.y} r={6} fill="#fafaf7" stroke="#1a4488" strokeWidth={1.5} opacity={0.85}/>
+                      <line x1={m.x} y1={m.y-3} x2={m.x} y2={m.y+3} stroke="#1a4488" strokeWidth={1.5}/>
+                      <line x1={m.x-3} y1={m.y} x2={m.x+3} y2={m.y} stroke="#1a4488" strokeWidth={1.5}/>
+                    </g>
+                  )}
+
+                  {/* Bend midpoint indicator */}
+                  {tool==='bend'&&(seg.type==='line'||seg.type==='arc')&&!ed&&(
+                    <g pointerEvents="none">
+                      <circle cx={m.x} cy={m.y} r={6} fill="#fafaf7" stroke="#cc5500" strokeWidth={1.5} opacity={0.85}/>
+                      <text x={m.x} y={m.y+3.5} fontSize={10} fill="#cc5500" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">⌀</text>
+                    </g>
+                  )}
+
+                  {/* Tab hint on hover */}
+                  {hoverSeg===i&&tool==='select'&&!dimEdit&&!ed&&(
+                    <text x={m.x} y={m.y-18} fontSize={8} fill="#1a448866"
+                      textAnchor="middle" fontFamily="IBM Plex Mono,monospace" pointerEvents="none">
+                      Tab → set length
+                    </text>
+                  )}
+
+                  {/* Dim tool indicator */}
+                  {tool==='dim'&&seg.type==='line'&&(
+                    <g pointerEvents="none">
+                      <rect x={m.x-18} y={m.y-9} width={36} height={16} rx={3}
+                        fill="#fafaf7" stroke="#1a4488" strokeWidth={1.5} opacity={0.9}/>
+                      <text x={m.x} y={m.y+3} fontSize={9} fill="#1a4488"
+                        textAnchor="middle" fontFamily="IBM Plex Mono,monospace">
+                        {toMM(segLen(seg))}mm
+                      </text>
+                    </g>
+                  )}
+
+                  {/* Move midpoint indicator */}
+                  {tool==='move'&&seg.type==='line'&&!ed&&(
+                    <g pointerEvents="none">
+                      <circle cx={m.x} cy={m.y} r={5} fill="#fafaf7" stroke="#1a4488" strokeWidth={1.5} opacity={0.7}/>
+                      <text x={m.x} y={m.y+4} fontSize={9} fill="#1a4488" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">✥</text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* Gap indicators from geometry check */}
+            {geoResult&&geoResult.gaps.map((gap,i)=>(
+              <g key={`gap${i}`} pointerEvents="none">
+                <circle cx={gap.pt.x} cy={gap.pt.y} r={8}
+                  fill="#cc222220" stroke="#cc2222" strokeWidth={2} strokeDasharray="3,2"/>
+                <line x1={gap.pt.x-6} y1={gap.pt.y} x2={gap.pt.x+6} y2={gap.pt.y} stroke="#cc2222" strokeWidth={2}/>
+                <line x1={gap.pt.x} y1={gap.pt.y-6} x2={gap.pt.x} y2={gap.pt.y+6} stroke="#cc2222" strokeWidth={2}/>
+              </g>
+            ))}
+
+            {/* Bend live preview */}
+            {ed?.type==='bend'&&(()=>{
+              const {p0,p1,sag=0}=ed;
+              const cx=(p0.x+p1.x)/2,cy=(p0.y+p1.y)/2;
+              const chord=d2(p0,p1);
+              const ldx=p1.x-p0.x,ldy=p1.y-p0.y,ll=Math.sqrt(ldx*ldx+ldy*ldy)||1;
+              const perpX=-ldy/ll,perpY=ldx/ll;
+              const absSag=Math.abs(sag);
+              let arcPath='';
+              if(absSag>3){
+                const r=Math.abs((sag*sag+(chord/2)*(chord/2))/(2*sag));
+                const sweep=sag>0?0:1;
+                const la=absSag>r?1:0;
+                arcPath=`M ${p0.x} ${p0.y} A ${Math.round(r)} ${Math.round(r)} 0 ${la} ${sweep} ${p1.x} ${p1.y}`;
+              }
+              const hx=cx+perpX*sag, hy=cy+perpY*sag;
+              return(<g pointerEvents="none">
+                <line x1={p0.x} y1={p0.y} x2={p1.x} y2={p1.y}
+                  stroke="#1a4488" strokeWidth={1} strokeDasharray="5,4" opacity={0.25}/>
+                {arcPath&&<path d={arcPath} fill="none" stroke="#1a4488" strokeWidth={2} strokeDasharray="6,3"/>}
+                <line x1={cx} y1={cy} x2={hx} y2={hy}
+                  stroke="#cc5500" strokeWidth={1.5} strokeDasharray="4,3" markerEnd="url(#oarr)"/>
+                <circle cx={hx} cy={hy} r={6} fill="#fafaf7" stroke="#cc5500" strokeWidth={2}/>
+                <circle cx={hx} cy={hy} r={3} fill="#cc5500"/>
+                {absSag>8&&(()=>{
+                  const r=Math.round(Math.abs((sag*sag+(chord/2)*(chord/2))/(2*sag)));
+                  return(<>
+                    <rect x={hx+10} y={hy-9} width={52} height={16} rx={3} fill="#fafaf7" stroke="#d0d0cc" strokeWidth={1}/>
+                    <text x={hx+36} y={hy+3} fontSize={10} fill="#cc5500" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">r:{r}px</text>
+                  </>);
+                })()}
+              </g>);
+            })()}
+
+            {/* Offset live preview */}
+            {ed?.type==='offset'&&(()=>{
+              try {
+                const {sourceSeg,offset=0}=ed;
+                if (!sourceSeg) return null;
+                const dx=sourceSeg.p1.x-sourceSeg.p0.x, dy=sourceSeg.p1.y-sourceSeg.p0.y;
+                const len=Math.sqrt(dx*dx+dy*dy)||1;
+                const px=-dy/len, py=dx/len;
+                const cx=(sourceSeg.p0.x+sourceSeg.p1.x)/2, cy=(sourceSeg.p0.y+sourceSeg.p1.y)/2;
+                const ax=cx+px*offset, ay=cy+py*offset;
+                const absDist=Math.abs(offset);
+
+                // Build preview path
+                let previewD='';
+                let dotP0={x:Math.round(sourceSeg.p0.x+px*offset),y:Math.round(sourceSeg.p0.y+py*offset)};
+                let dotP1={x:Math.round(sourceSeg.p1.x+px*offset),y:Math.round(sourceSeg.p1.y+py*offset)};
+
+                if(sourceSeg.type==='arc'){
+                  const offsetArc=concentricArc(sourceSeg, offset);
+                  const la=sourceSeg.largeArc??0;
+                  const sw=sourceSeg.sweep??1;
+                  previewD=`M ${offsetArc.p0.x} ${offsetArc.p0.y} A ${offsetArc.rx} ${offsetArc.ry} 0 ${la} ${sw} ${offsetArc.p1.x} ${offsetArc.p1.y}`;
+                  dotP0=offsetArc.p0;
+                  dotP1=offsetArc.p1;
+                } else if(sourceSeg.type==='curve'){
+                  const nx=px*offset,ny=py*offset;
+                  const cp1x=Math.round(sourceSeg.cp1.x+nx), cp1y=Math.round(sourceSeg.cp1.y+ny);
+                  const cp2x=Math.round(sourceSeg.cp2.x+nx), cp2y=Math.round(sourceSeg.cp2.y+ny);
+                  previewD=`M ${dotP0.x} ${dotP0.y} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${dotP1.x} ${dotP1.y}`;
+                } else {
+                  previewD=`M ${dotP0.x} ${dotP0.y} L ${dotP1.x} ${dotP1.y}`;
+                }
+
+                const srcD = buildD([sourceSeg],false);
+
+                return (<g pointerEvents="none">
+                  <path d={srcD} fill="none" stroke="#1a4488" strokeWidth={2} opacity={0.2}/>
+                  <path d={previewD} fill="none" stroke="#1a4488" strokeWidth={2} strokeDasharray="7,4"/>
+                  <line x1={cx} y1={cy} x2={ax} y2={ay}
+                    stroke="#cc5500" strokeWidth={1.5} strokeDasharray="4,3" markerEnd="url(#oarr)"/>
+                  {absDist>4&&<>
+                    <rect x={(cx+ax)/2-28} y={(cy+ay)/2-9} width={56} height={16} rx={3}
+                      fill="#fafaf7" stroke="#d0d0cc" strokeWidth={1}/>
+                    <text x={(cx+ax)/2} y={(cy+ay)/2+3} fontSize={10} fill="#cc5500"
+                      textAnchor="middle" fontFamily="IBM Plex Mono,monospace" fontWeight="600">
+                      {offset>0?'+':''}{toMM(absDist)}mm
+                    </text>
+                  </>}
+                  <circle cx={dotP0.x} cy={dotP0.y} r={3} fill="#1a4488" opacity={0.6}/>
+                  <circle cx={dotP1.x} cy={dotP1.y} r={3} fill="#1a4488" opacity={0.6}/>
+                </g>);
+              } catch(err) { return null; }
+            })()}
+
+            {/* Bezier handles */}
+            {showHandles&&previewSegs.map((seg,i)=>{
+              if(seg.type!=='curve')return null;
+              const isCP1armed=ed?.type==='cp'&&ed.segIdx===i&&ed.role==='cp1';
+              const isCP2armed=ed?.type==='cp'&&ed.segIdx===i&&ed.role==='cp2';
+              return (<g key={`cp${i}`}>
+                <line x1={seg.p0.x} y1={seg.p0.y} x2={seg.cp1.x} y2={seg.cp1.y} stroke="#cc550044" strokeWidth={1} strokeDasharray="3,3" pointerEvents="none"/>
+                <line x1={seg.p1.x} y1={seg.p1.y} x2={seg.cp2.x} y2={seg.cp2.y} stroke="#cc550044" strokeWidth={1} strokeDasharray="3,3" pointerEvents="none"/>
+                {[{r:'cp1',pt:seg.cp1,armed:isCP1armed},{r:'cp2',pt:seg.cp2,armed:isCP2armed}].map(({r,pt,armed})=>(
+                  <circle key={r} cx={pt.x} cy={pt.y} r={armed?7:5}
+                    fill={armed?'#1a4488':'#cc5500'}
+                    stroke={armed?'#1a448833':'#cc550033'} strokeWidth={6}
+                    style={{cursor:'crosshair'}}
+                    onMouseEnter={()=>setHoverCP({si:i,role:r})}
+                    onMouseLeave={()=>setHoverCP(null)}
+                    onClick={e=>onCPClick(i,r,e)}
+                  />
+                ))}
+              </g>);
+            })}
+
+            {/* Vertex dots -- hidden during draw tools */}
+            {!['line','polyline','rect'].includes(tool)&&(()=>{
+              const seen = new Set();
+              const dots = [];
+              previewSegs.forEach((seg,si)=>{
+                [{role:'p0',pt:seg.p0},{role:'p1',pt:seg.p1}].forEach(({role,pt})=>{
+                  const key = `${Math.round(pt.x)},${Math.round(pt.y)}`;
+                  if (seen.has(key)) return;
+                  seen.add(key);
+                  const armed=ed?.type==='vertex'&&ed.segIdx===si&&ed.role===role;
+                  const isFillet  = tool==='fillet';
+                  const isChamfer = tool==='chamfer';
+                  const isCornerTool = isFillet||isChamfer;
+                  const dotColor = isFillet?'#228822':isChamfer?'#cc5500':'#1a4488';
+                  dots.push(
+                    <g key={`v${key}`}>
+                      {armed&&<circle cx={pt.x} cy={pt.y} r={10} fill="none" stroke="#1a4488" strokeWidth={1} opacity={0.4}/>}
+                      {isCornerTool&&!ed&&(
+                        <g pointerEvents="none">
+                          <circle cx={pt.x} cy={pt.y} r={9} fill="#fafaf7"
+                            stroke={dotColor} strokeWidth={1.5} opacity={0.85}/>
+                          <text x={pt.x} y={pt.y+4} fontSize={10} fill={dotColor}
+                            textAnchor="middle" fontFamily="IBM Plex Mono,monospace">
+                            {isFillet?'◡':'◿'}
+                          </text>
+                        </g>
+                      )}
+                      <circle cx={pt.x} cy={pt.y} r={armed?7:5}
+                        fill={armed?'#cc5500':isCornerTool?dotColor:'#1a4488'}
+                        stroke="#f7f7f3" strokeWidth={2}
+                        style={{cursor:isCornerTool?'pointer':(tool==='vertex'||tool==='select')?'crosshair':'default'}}
+                        onMouseEnter={()=>setHoverVert({si,role})}
+                        onMouseLeave={()=>setHoverVert(null)}
+                        onClick={e=>onVertClick(si,role,e)}
+                      />
+                      <text x={pt.x+8} y={pt.y-7} fontSize={8} fill="#bbbbbb"
+                        fontFamily="IBM Plex Mono,monospace" pointerEvents="none">{pt.x},{pt.y}</text>
+                    </g>
+                  );
+                });
+              });
+              return dots;
+            })()}
+            {/* Draw line / polyline preview */}
+            {drawing&&(tool==='line'||tool==='polyline')&&draftPts.length>=1&&(()=>{
+              const last=draftPts[draftPts.length-1];
+              // lockedLen state drives re-renders; lockedLenRef used in callbacks
+              let lockedEndPt = null;
+              if(drawLock) {
+                const lenPx = fromMM(parseFloat(lockedLen)||0);
+                if(lenPx > 0) {
+                  lockedEndPt = {
+                    x: Math.round(drawLock.fromPt.x + Math.cos(drawLock.angle)*lenPx),
+                    y: Math.round(drawLock.fromPt.y + Math.sin(drawLock.angle)*lenPx)
+                  };
+                }
+              }
+              const endPt = lockedEndPt || mouse;
+              const segDist=Math.round(d2(last,endPt));
+              return (<g pointerEvents="none">
+                {/* Line to endpoint — solid blue when locked, dashed when free */}
+                <line x1={last.x} y1={last.y} x2={endPt.x} y2={endPt.y}
+                  stroke={lockedEndPt?"#1a4488":"#1a448888"}
+                  strokeWidth={lockedEndPt?2:1.5}
+                  strokeDasharray={lockedEndPt?"none":"6,4"}/>
+                {/* Close indicator -- green ring when near start */}
+                {tool==='polyline'&&d2(mouse,last)>10&&d2(mouse,draftPts[0])<SNAP_D*2.5&&(
+                  <circle cx={draftPts[0].x} cy={draftPts[0].y} r={9}
+                    fill="#22882218" stroke="#228822" strokeWidth={2}/>
+                )}
+                {/* Length label */}
+                {segDist>10&&<text x={(last.x+endPt.x)/2} y={(last.y+endPt.y)/2-10} fontSize={9}
+                  fill={lockedEndPt?"#1a4488":"#1a448888"} fontWeight={lockedEndPt?"700":"400"}
+                  textAnchor="middle" fontFamily="IBM Plex Mono,monospace">
+                  {toMM(segDist)}mm{lockedEndPt?" ✓":""}
+                </text>}
+              </g>);
+            })()}
+
+            {/* Rect preview */}
+            {tool==='rect'&&rectStart&&(
+              <rect x={Math.min(rectStart.x,mouse.x)} y={Math.min(rectStart.y,mouse.y)}
+                width={Math.abs(mouse.x-rectStart.x)} height={Math.abs(mouse.y-rectStart.y)}
+                fill="#1a448806" stroke="#1a4488" strokeWidth={1.5} strokeDasharray="6,4"
+                pointerEvents="none"/>
+            )}
+
+            {/* Circle preview */}
+            {tool==='circle'&&shapeStart&&(()=>{
+              const r=Math.round(d2(shapeStart,mouse));
+              if(r<2) return null;
+              return(<g pointerEvents="none">
+                <circle cx={shapeStart.x} cy={shapeStart.y} r={r}
+                  fill="#1a448806" stroke="#1a4488" strokeWidth={1.5} strokeDasharray="6,4"/>
+                <line x1={shapeStart.x} y1={shapeStart.y} x2={mouse.x} y2={mouse.y}
+                  stroke="#1a448844" strokeWidth={1} strokeDasharray="3,3"/>
+                <text x={shapeStart.x+r+6} y={shapeStart.y+4} fontSize={9}
+                  fill="#1a4488" fontFamily="IBM Plex Mono,monospace">r:{toMM(r)}mm</text>
+              </g>);
+            })()}
+
+            {/* Oval preview */}
+            {tool==='oval'&&shapeStart&&(()=>{
+              const cx=(shapeStart.x+mouse.x)/2, cy=(shapeStart.y+mouse.y)/2;
+              const rx=Math.abs(mouse.x-shapeStart.x)/2, ry=Math.abs(mouse.y-shapeStart.y)/2;
+              if(rx<2||ry<2) return null;
+              return(<g pointerEvents="none">
+                <ellipse cx={cx} cy={cy} rx={rx} ry={ry}
+                  fill="#1a448806" stroke="#1a4488" strokeWidth={1.5} strokeDasharray="6,4"/>
+                <text x={cx} y={cy+4} fontSize={9} fill="#1a4488"
+                  textAnchor="middle" fontFamily="IBM Plex Mono,monospace">
+                  {toMM(rx*2)}×{toMM(ry*2)}mm
+                </text>
+              </g>);
+            })()}
+
+            {/* Triangle preview -- shows lines as points are placed */}
+            {tool==='triangle'&&triPts.length>0&&(()=>{
+              const all=[...triPts, mouse];
+              return(<g pointerEvents="none">
+                {triPts.length>=1&&<line x1={triPts[0].x} y1={triPts[0].y}
+                  x2={all[1].x} y2={all[1].y}
+                  stroke="#1a448888" strokeWidth={1.5} strokeDasharray="6,4"/>}
+                {triPts.length>=2&&<>
+                  <line x1={triPts[1].x} y1={triPts[1].y}
+                    x2={mouse.x} y2={mouse.y}
+                    stroke="#1a448866" strokeWidth={1.5} strokeDasharray="6,4"/>
+                  <line x1={mouse.x} y1={mouse.y}
+                    x2={triPts[0].x} y2={triPts[0].y}
+                    stroke="#1a448844" strokeWidth={1} strokeDasharray="4,4"/>
+                </>}
+                {triPts.map((p,i)=>(
+                  <circle key={i} cx={p.x} cy={p.y} r={4}
+                    fill="#1a4488" stroke="#f7f7f3" strokeWidth={2}/>
+                ))}
+                <text x={mouse.x+10} y={mouse.y-4} fontSize={9}
+                  fill="#1a4488" fontFamily="IBM Plex Mono,monospace">
+                  {triPts.length+1}/3
+                </text>
+              </g>);
+            })()}
+
+            {/* Crosshair */}
+            {(isEditing||['line','polyline','rect','circle','oval','triangle','offset1','move','vertex','curve'].includes(tool))&&(()=>{
+              // When locked, show crosshair at the locked endpoint, not mouse
+              let cx = mouse.x, cy = mouse.y;
+              if(drawLock && lockedLen) {
+                const lenPx = fromMM(parseFloat(lockedLen)||0);
+                if(lenPx > 0) {
+                  cx = Math.round(drawLock.fromPt.x + Math.cos(drawLock.angle)*lenPx);
+                  cy = Math.round(drawLock.fromPt.y + Math.sin(drawLock.angle)*lenPx);
+                }
+              }
+              return (
+                <g pointerEvents="none">
+                  <line x1={cx-12} y1={cy} x2={cx+12} y2={cy} stroke={drawLock?"#1a4488":"#1a448855"} strokeWidth={drawLock?2:1}/>
+                  <line x1={cx} y1={cy-12} x2={cx} y2={cy+12} stroke={drawLock?"#1a4488":"#1a448855"} strokeWidth={drawLock?2:1}/>
+                  {drawLock&&<circle cx={cx} cy={cy} r={5} fill="none" stroke="#1a4488" strokeWidth={2}/>}
+                  {/* Endpoint snap indicator */}
+                  {mouse.snapPt&&!drawLock&&(
+                    <g>
+                      <circle cx={mouse.x} cy={mouse.y} r={10}
+                        fill="#22882218" stroke="#228822" strokeWidth={2}/>
+                      <circle cx={mouse.x} cy={mouse.y} r={3} fill="#228822"/>
+                      <text x={mouse.x+14} y={mouse.y-8} fontSize={9}
+                        fill="#228822" fontFamily="IBM Plex Mono,monospace">endpoint</text>
+                    </g>
+                  )}
+                </g>
+              );
+            })()}
+
+            </g>{/* end transform */}
+            {/* Coords in screen space -- outside transform */}
+            <text x={6} y={16} fontSize={9} fill="#ccccca" fontFamily="IBM Plex Mono,monospace">
+              {mouse.x}, {mouse.y} · {Math.round(zoom*100)}%
+            </text>
+          </svg>
+        {/* Right-click context menu -- HTML overlay, not SVG */}
+        {contextMenu&&(()=>{
+          const seg = segs[contextMenu.segIdx];
+          if (!seg) return null;
+          const isLine = seg.type==='line';
+          const isArc  = seg.type==='arc';
+          const isCurve= seg.type==='curve';
+          const isBent = isArc||isCurve;
+
+          const menuItem = (icon, label, onClick, danger=false) => (
+            <div
+              onClick={e=>{e.stopPropagation();onClick();setContextMenu(null);}}
+              style={{padding:'7px 14px',cursor:'pointer',display:'flex',gap:10,alignItems:'center',
+                color:danger?'#cc2222':'#333330',fontSize:11}}
+              onMouseEnter={e=>e.currentTarget.style.background=danger?'#cc222210':'#1a448810'}
+              onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+              <span style={{fontSize:13,minWidth:16,textAlign:'center'}}>{icon}</span>
+              {label}
+            </div>
+          );
+
+          const divider = <div style={{height:1,background:'#e8e8e4',margin:'3px 0'}}/>;
+
+          return (
+            <div style={{
+              position:'absolute',
+              left:Math.min(contextMenu.x, W-180),
+              top:Math.min(contextMenu.y, H-320),
+              background:'#fafaf7', border:'1px solid #d0d0cc', borderRadius:6,
+              boxShadow:'0 4px 20px rgba(0,0,0,0.15)',
+              fontFamily:'IBM Plex Mono,monospace',
+              zIndex:200, minWidth:180, overflow:'hidden',
+              pointerEvents:'all',
+            }}>
+              {/* Header */}
+              <div style={{padding:'7px 14px',color:'#999990',fontSize:10,
+                borderBottom:'1px solid #e8e8e4',background:'#f4f4f0',
+                fontWeight:700,letterSpacing:1,textTransform:'uppercase'}}>
+                {isLine?'Line':'Arc/Curve'} · seg {contextMenu.segIdx+1}
+                {isLine&&<span style={{marginLeft:8,fontWeight:400}}>{toMM(segLen(seg))}mm</span>}
+              </div>
+
+              {/* Edit */}
+              {menuItem('✥','Move line', ()=>{ const axis=isHoriz(seg)?'y':isVert(seg)?'x':'x'; setEdit({type:'move',segIdx:contextMenu.segIdx,startSeg:clone(seg),axis}); setTool('move'); })}
+              {menuItem('◉','Move vertices', ()=>setTool('vertex'))}
+              {divider}
+
+              {/* Modify */}
+              {mode!=='room-outline' && isLine && menuItem('⌀','Bend', ()=>doBend(contextMenu.segIdx))}
+              {mode!=='room-outline' && isBent && menuItem('╱','Straighten', ()=>doBend(contextMenu.segIdx))}
+              {mode!=='room-outline' && isLine && menuItem('◡','Fillet corner', ()=>{ setTool('fillet'); setContextMenu(null); })}
+              {mode!=='room-outline' && isLine && menuItem('◿','Chamfer corner', ()=>{ setTool('chamfer'); setContextMenu(null); })}
+              {menuItem('⊕','Add midpoint', ()=>doAddPt(contextMenu.segIdx))}
+              {divider}
+
+              {/* Offset */}
+              {menuItem('→','Offset line', ()=>{
+                setEdit({type:'offset',segIdx:contextMenu.segIdx,sourceSeg:clone(seg),offset:0});
+                setOffsetInput('');
+                setTool('offset1');
+                setTimeout(()=>{ if(offsetInputRef.current){ offsetInputRef.current.focus(); offsetInputRef.current.select(); }},50);
+              })}
+              {divider}
+
+              {/* Trim */}
+              {isLine && menuItem('⟷','Set length', ()=>{
+                const s=seg;
+                setDimEdit({segIdx:contextMenu.segIdx, fixedEnd:'p0', inputVal:String(toMM(segLen(s)))});
+                setTimeout(()=>{ if(dimInputRef.current){ dimInputRef.current.focus(); dimInputRef.current.select(); }}, 50);
+              })}
+              {isLine && menuItem('✂','Trim at intersections', ()=>{
+                doTrim(contextMenu.segIdx, {x:(seg.p0.x+seg.p1.x)/2, y:(seg.p0.y+seg.p1.y)/2});
+              })}
+              {divider}
+
+              {/* Delete */}
+              {menuItem('⊖','Delete segment', ()=>doDelSeg(contextMenu.segIdx), true)}
+            </div>
+          );
+        })()}
+
+        {/* Multi-select action bar */}
+        {selSegs.size>0&&(
+          <div style={{
+            position:'absolute', top:12, left:'50%', transform:'translateX(-50%)',
+            background:'#1a4488', borderRadius:6, padding:'6px 14px',
+            display:'flex', alignItems:'center', gap:12,
+            boxShadow:'0 4px 16px rgba(0,0,0,0.2)',
+            fontFamily:'IBM Plex Mono,monospace', fontSize:11, color:'#fff',
+            zIndex:150, pointerEvents:'all',
+          }}>
+            <span style={{opacity:0.8}}>{selSegs.size} segment{selSegs.size>1?'s':''} selected</span>
+            <button onClick={()=>{
+              if(segs.length-selSegs.size>=0){
+                pushHistory(segs.filter((_,i)=>!selSegs.has(i)));
+                setSelSegs(new Set()); setSelSeg(null);
+              }
+            }} style={{background:'#cc2222',border:'none',color:'#fff',borderRadius:4,
+              padding:'3px 10px',cursor:'pointer',fontSize:11,fontFamily:'inherit'}}>
+              ⊖ Delete selected
+            </button>
+            <button onClick={()=>setSelSegs(new Set())}
+              style={{background:'transparent',border:'1px solid rgba(255,255,255,0.4)',
+              color:'#fff',borderRadius:4,padding:'3px 10px',cursor:'pointer',
+              fontSize:11,fontFamily:'inherit'}}>
+              ✕ Deselect
+            </button>
+          </div>
+        )}
+
+        {/* Offset input panel */}
+        {ed?.type==='offset'&&(
+          <div style={{
+            position:'absolute', bottom:50, left:'50%', transform:'translateX(-50%)',
+            background:'#fafaf7', border:'1px solid #1a4488', borderRadius:6,
+            padding:'10px 16px', display:'flex', alignItems:'center', gap:10,
+            boxShadow:'0 4px 16px rgba(0,0,0,0.12)', zIndex:100,
+            fontFamily:'IBM Plex Mono,monospace', fontSize:11, color:'#1a4488',
+            pointerEvents:'all',
+          }}>
+            <span style={{fontWeight:700}}>Offset distance:</span>
+            <input
+              ref={offsetInputRef}
+              type="number"
+              value={offsetInput}
+              placeholder={Math.abs(ed.offset||0)||'0'}
+              onChange={e=>setOffsetInput(e.target.value)}
+              onFocus={e=>e.target.select()}
+              onKeyDown={e=>{
+                if(e.key==='Enter'){
+                  e.preventDefault();
+                  const val=parseFloat(offsetInput);
+                  if(!isNaN(val)&&Math.abs(val)>0){
+                    const s=ed.sourceSeg;
+                    const dx=s.p1.x-s.p0.x, dy=s.p1.y-s.p0.y;
+                    const len=Math.sqrt(dx*dx+dy*dy)||1;
+                    const px=-dy/len, py=dx/len;
+                    let newSeg;
+                    if(s.type==='arc'){
+                      newSeg=concentricArc(s,val);
+                    } else if(s.type==='curve'){
+                      newSeg={...s,p0:{x:Math.round(s.p0.x+px*val),y:Math.round(s.p0.y+py*val)},p1:{x:Math.round(s.p1.x+px*val),y:Math.round(s.p1.y+py*val)},cp1:{x:Math.round(s.cp1.x+px*val),y:Math.round(s.cp1.y+py*val)},cp2:{x:Math.round(s.cp2.x+px*val),y:Math.round(s.cp2.y+py*val)}};
+                    } else {
+                      newSeg={type:'line',p0:{x:Math.round(s.p0.x+px*val),y:Math.round(s.p0.y+py*val)},p1:{x:Math.round(s.p1.x+px*val),y:Math.round(s.p1.y+py*val)}};
+                    }
+                    pushHistory([...segsRef.current,newSeg]);
+                    setEdit(null); setOffsetInput('');
+                  }
+                }
+                if(e.key==='Escape'){setEdit(null);setOffsetInput('');}
+              }}
+              style={{
+                width:80, padding:'4px 8px', fontSize:13, fontWeight:700,
+                fontFamily:'IBM Plex Mono,monospace', color:'#1a4488',
+                border:'2px solid #1a4488', borderRadius:4,
+                background:'#f0f4ff', outline:'none', textAlign:'right',
+              }}
+            />
+            <span style={{color:'#888880'}}>mm</span>
+            <span style={{color:'#888880',fontSize:10}}>Enter to place · ESC to cancel · Tab to refocus</span>
+          </div>
+        )}
+
+        </div>
+
+        {/* Info panel -- live dimension sidebar */}
+        <div style={{width:190,background:'#fafaf7',borderLeft:'1px solid #d0d0cc',
+          padding:10,overflowY:'auto',flexShrink:0,fontSize:10,display:'flex',flexDirection:'column',gap:0}}>
+
+          {/* -- LIVE DIMENSION FIELDS -- */}
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:8,letterSpacing:3,
+              color:drawing?'#1a4488':'#999990',
+              marginBottom:8,textTransform:'uppercase',fontWeight:700}}>
+              {drawing?'▶ Drawing':'Dimensions'}
+            </div>
+
+            {(()=>{
+              const isDrawing = drawing && draftPts.length>=1;
+              const last = isDrawing ? draftPts[draftPts.length-1] : null;
+              const liveLen = last ? toMM(Math.round(d2(last,mouse))) : null;
+              const liveAngle = last ? Math.round(Math.atan2(mouse.y-last.y,mouse.x-last.x)*180/Math.PI) : null;
+              const liveDX = last ? toMM(Math.abs(mouse.x-last.x)) : null;
+              const liveDY = last ? toMM(Math.abs(mouse.y-last.y)) : null;
+              const hasLine = selInfo?.type==='line';
+              const selLen = hasLine ? toMM(segLen(selInfo)) : null;
+              const isEditing = !!dimEdit;
+
+              return(<>
+                {/* Live stats while drawing */}
+                {isDrawing&&<>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:3,alignItems:'center'}}>
+                    <span style={{color:'#888880',fontSize:9}}>Length</span>
+                    {!drawLock&&<span style={{color:'#1a4488',fontSize:11,fontWeight:700}}>{liveLen}mm</span>}
+                  </div>
+                  {/* Locked length input -- active when Tab pressed */}
+                  {drawLock&&<>
+                    <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:4}}>
+                      <input
+                        ref={dimInputRef}
+                        type="number"
+                        min="1"
+                        value={lockedLen}
+                        onChange={e=>{setLockedLen(e.target.value);lockedLenRef.current=e.target.value;}}
+                        onFocus={e=>e.target.select()}
+                        onKeyDown={e=>{
+                          if(e.key==='Tab'){
+                            e.preventDefault();
+                            // Blur input so user can see preview on canvas
+                            // Enter will still place the line
+                            dimInputRef.current?.blur();
+                            return;
+                          }
+                          if(e.key==='Enter'){
+                            e.preventDefault();
+                            const val=parseFloat(lockedLenRef.current);
+                            const lock=drawLockRef.current;
+                            if(!isNaN(val)&&val>0&&lock){
+                              const lenPx=fromMM(val);
+                              const p0=lock.fromPt;
+                              const p1={x:Math.round(p0.x+Math.cos(lock.angle)*lenPx),
+                                        y:Math.round(p0.y+Math.sin(lock.angle)*lenPx)};
+                              pushHistory([...segsRef.current,{type:'line',p0,p1}]);
+                              setDrawing(false);setDraftPts([]);setDrawLock(null);setLockedLen('');lockedLenRef.current='';
+                            }
+                          }
+                          if(e.key==='Escape'){e.preventDefault();setDrawLock(null);setLockedLen('');lockedLenRef.current='';}
+                        }}
+                        style={{flex:1,padding:'6px 8px',fontSize:15,fontWeight:700,
+                          fontFamily:'IBM Plex Mono,monospace',color:'#1a4488',
+                          border:'2px solid #1a4488',borderRadius:4,
+                          background:'#f0f4ff',outline:'none',textAlign:'right'}}
+                      />
+                      <span style={{color:'#888880',fontSize:11,fontWeight:600}}>mm</span>
+                    </div>
+                    <div style={{fontSize:8,color:'#1a4488',marginBottom:4}}>Tab to preview · Enter to place · ESC to unlock</div>
+                  </>}
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                    <span style={{color:'#888880',fontSize:9}}>Angle</span>
+                    <span style={{color:'#555550',fontSize:9,fontWeight:600}}>{liveAngle}°</span>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                    <span style={{color:'#888880',fontSize:9}}>DX</span>
+                    <span style={{color:'#555550',fontSize:9}}>{liveDX}mm</span>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+                    <span style={{color:'#888880',fontSize:9}}>DY</span>
+                    <span style={{color:'#555550',fontSize:9}}>{liveDY}mm</span>
+                  </div>
+
+                </>}
+
+                {/* Length edit field -- shown when a line is selected OR Tab has been pressed */}
+                {(hasLine||isEditing)&&!isDrawing&&<>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:3,alignItems:'center'}}>
+                    <span style={{color:'#888880',fontSize:9}}>Length</span>
+                    {isEditing&&<span style={{color:'#1a4488',fontSize:8,fontWeight:700}}>● editing</span>}
+                  </div>
+                  {/* Click the value to edit, or it auto-opens when isEditing */}
+                  {!isEditing?(
+                    <div
+                      onClick={()=>{
+                        const idx = selSegRef.current;
+                        if(idx!=null){
+                          const s=segsRef.current[idx];
+                          if(s&&s.type==='line'){
+                            setDimEdit({segIdx:idx,fixedEnd:'p0',inputVal:String(toMM(segLen(s)))});
+                            setTimeout(()=>{if(dimInputRef.current){dimInputRef.current.focus();dimInputRef.current.select();}},30);
+                          }
+                        }
+                      }}
+                      style={{display:'flex',alignItems:'center',gap:4,marginBottom:6,cursor:'pointer',
+                        padding:'6px 8px',borderRadius:4,border:'2px dashed #d0d0cc',
+                        background:'#f4f4f0',justifyContent:'space-between'}}
+                      title="Click to edit length">
+                      <span style={{fontSize:15,fontWeight:700,fontFamily:'IBM Plex Mono,monospace',color:'#888880'}}>
+                        {selLen}
+                      </span>
+                      <span style={{color:'#888880',fontSize:11,fontWeight:600}}>mm ✎</span>
+                    </div>
+                  ):(
+                    <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:6}}>
+                      <input
+                        ref={dimInputRef}
+                        type="number"
+                        min="1"
+                        defaultValue={dimEdit.inputVal}
+                        key={`edit-${dimEdit.segIdx}`}
+                        onFocus={e=>e.target.select()}
+                        onChange={e=>setDimEdit(d=>({...d,inputVal:e.target.value}))}
+                        onKeyDown={e=>{
+                          if(e.key==='Enter'){e.preventDefault();applyDimEdit();}
+                          if(e.key==='Escape'){e.preventDefault();setDimEdit(null);}
+                        }}
+                        style={{
+                          flex:1,padding:'6px 8px',fontSize:15,fontWeight:700,
+                          fontFamily:'IBM Plex Mono,monospace',color:'#1a4488',
+                          border:'2px solid #1a4488',borderRadius:4,
+                          background:'#f0f4ff',outline:'none',textAlign:'right',
+                        }}
+                      />
+                      <span style={{color:'#888880',fontSize:11,fontWeight:600,minWidth:20}}>mm</span>
+                    </div>
+                  )}
+                  {isEditing&&<>
+                    <div style={{fontSize:8,color:'#1a4488',marginBottom:8}}>Enter to apply · ESC to cancel</div>
+                    <div style={{color:'#888880',fontSize:9,marginBottom:4}}>Fixed end</div>
+                    <div style={{display:'flex',gap:4,marginBottom:8}}>
+                      {[{val:'p0',label:'Start'},{val:'p1',label:'End'}].map(({val,label})=>(
+                        <button key={val} onClick={()=>setDimEdit(d=>({...d,fixedEnd:val}))}
+                          style={{flex:1,padding:'4px',borderRadius:3,cursor:'pointer',
+                            fontSize:10,fontFamily:'inherit',
+                            border:`1.5px solid ${dimEdit.fixedEnd===val?'#1a4488':'#d0d0cc'}`,
+                            background:dimEdit.fixedEnd===val?'#1a4488':'transparent',
+                            color:dimEdit.fixedEnd===val?'#fff':'#555550'}}>
+                          {dimEdit.fixedEnd===val?'📌 ':''}{label}
+                        </button>
+                      ))}
+                    </div>
+                  </>}
+                  {!isEditing&&hasLine&&<div style={{fontSize:8,color:'#888880'}}>
+                    from {toMM(selInfo.p0.x)},{toMM(selInfo.p0.y)} → {toMM(selInfo.p1.x)},{toMM(selInfo.p1.y)}mm
+                  </div>}
+                </>}
+
+                {/* Idle */}
+                {!isDrawing&&!hasLine&&!isEditing&&(
+                  <div style={{color:'#ccccca',fontSize:9,lineHeight:1.6}}>
+                    Draw a line to see<br/>live dimensions.<br/><br/>
+                    Select a line then<br/>click the value to edit.
+                  </div>
+                )}
+              </>);
+            })()}
+
+            {/* Idle state */}
+            {!drawing&&!selInfo&&!dimEdit&&(
+              <div style={{color:'#ccccca',fontSize:9,lineHeight:1.6}}>
+                Draw a line to see<br/>live dimensions here.<br/><br/>
+                Click a line then<br/>click the value to edit.
+              </div>
+            )}
+          </div>
+
+          <div style={{borderTop:'1px solid #d0d0cc',paddingTop:8,marginBottom:8}}>
+            <div style={{fontSize:8,letterSpacing:3,color:'#999990',marginBottom:6,textTransform:'uppercase'}}>Selected</div>
+            {selInfo?(
+              <div>
+                <div style={{color:'#1a4488',marginBottom:4,fontWeight:700,fontSize:11}}>
+                  {selInfo.type} #{selSeg+1}
+                  <span style={{marginLeft:4,fontSize:8,color:'#999990',fontWeight:400}}>
+                    {isHoriz(selInfo)?'H':isVert(selInfo)?'V':'diag'}
+                  </span>
+                </div>
+                {[['from',`${toMM(selInfo.p0.x)},${toMM(selInfo.p0.y)}`],
+                  ['to',`${toMM(selInfo.p1.x)},${toMM(selInfo.p1.y)}`],
+                  ...(selInfo.type==='line'?[['len',toMM(segLen(selInfo))+'mm']]:
+                      selInfo.type==='arc'?[['r',(selInfo.rx||60)+'px']]:[])]
+                  .map(([k,v])=>(
+                  <div key={k} style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                    <span style={{color:'#999990'}}>{k}</span>
+                    <span style={{color:'#333330'}}>{v}</span>
+                  </div>
+                ))}
+                <div style={{marginTop:6,display:'flex',flexDirection:'column',gap:3}}>
+                  {selInfo.type==='line'&&<button onClick={()=>doBend(selSeg)} style={sBtn}>⌀ Bend</button>}
+                  {(selInfo.type==='arc'||selInfo.type==='curve')&&<button onClick={()=>doBend(selSeg)} style={sBtn}>╱ Straighten</button>}
+                  <button onClick={()=>doAddPt(selSeg)} style={sBtn}>⊕ Add midpoint</button>
+                  {selInfo.type==='line'&&<button onClick={()=>{setTool('offset1');setEdit({type:'offset',segIdx:selSeg,sourceSeg:clone(selInfo),offset:0});}} style={sBtn}>→ Offset</button>}
+                  <button onClick={()=>doDelSeg(selSeg)} style={{...sBtn,color:'#cc2222',borderColor:'#cc222233'}}>⊖ Delete</button>
+                </div>
+              </div>
+            ):(
+              <div style={{color:'#ccccca',fontSize:9}}>Click a segment</div>
+            )}
+          </div>
+
+          {mode!=='room-outline' && <div style={{borderTop:'1px solid #d0d0cc',paddingTop:8,marginBottom:8}}>
+            <div style={{fontSize:8,letterSpacing:3,color:'#999990',marginBottom:6,textTransform:'uppercase'}}>Parameters</div>
+            {[{label:'Fillet r',val:filletR,set:setFilletR},{label:'Chamfer',val:chamferD,set:setChamferD}].map(({label,val,set})=>(
+              <div key={label} style={{marginBottom:8}}>
+                <div style={{color:'#888880',marginBottom:2,fontSize:9}}>{label}</div>
+                <input type="number" value={val} min={5} max={300} onChange={e=>set(Number(e.target.value))}
+                  style={{background:'#f0efea',border:'1px solid #d0d0cc',color:'#333330',
+                    borderRadius:2,padding:'2px 6px',fontSize:10,fontFamily:'IBM Plex Mono,monospace',width:'100%'}}/>
+              </div>
+            ))}
+          </div>}
+
+          <div style={{borderTop:'1px solid #d0d0cc',paddingTop:8}}>
+            <div style={{fontSize:8,letterSpacing:3,color:'#999990',marginBottom:6,textTransform:'uppercase'}}>Segments</div>
+            <div style={{maxHeight:160,overflowY:'auto'}}>
+              {segs.map((s,i)=>(
+                <div key={i} onClick={()=>{setSelSegSynced(i);setTool('select');}}
+                  style={{padding:'3px 5px',border:`1px solid ${selSeg===i?'#1a4488':'#d8d8d4'}`,
+                    borderRadius:2,marginBottom:2,cursor:'pointer',fontSize:9,
+                    color:selSeg===i?'#1a4488':s.type==='curve'?'#cc5500':s.type==='arc'?'#cc7700':'#555550',
+                    background:selSeg===i?'#1a448808':'transparent'}}>
+                  {s.type==='curve'?'∿':s.type==='arc'?'◜':'╱'} {isHoriz(s)?'H':isVert(s)?'V':'D'} {i+1}
+                  {s.type==='line'&&<span style={{color:'#ccccca'}}> {toMM(segLen(s))}mm</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{borderTop:'1px solid #d0d0cc',marginTop:8,paddingTop:8,fontSize:8,color:'#ccccca',lineHeight:1.8}}>
+            Click value → edit length<br/>Enter → apply · ESC → cancel
+          </div>
+        </div>
+      </div>
+
+      {/* Status bar */}
+      <div style={{padding:'4px 12px',borderTop:'1px solid #d0d0cc',fontSize:9,color:'#999990',
+        display:'flex',gap:16,flexShrink:0,background:'#fafaf7'}}>
+        <span>TOOL: <span style={{color:'#1a4488'}}>{tool.toUpperCase()}</span></span>
+        <span>SEGS: <span style={{color:'#1a4488'}}>{segs.length}</span></span>
+        {selSegs.size>0&&<span>SELECTED: <span style={{color:'#1a4488'}}>{selSegs.size}</span></span>}
+        <span>CLOSED: <span style={{color:closed?'#228822':'#cc2222'}}>{closed?'YES':'NO'}</span></span>
+        <span style={{color:'#cc9900'}}>{isEditing?'Click to place · ESC to cancel':HINTS[tool]||''}</span>
+        {hasErrors&&<span style={{marginLeft:'auto',color:'#cc2222',fontWeight:700}}>⚠ Invalid shape</span>}
+      </div>
+    </div>
+  );
+}
+
+const zBtnStyle = {
+  background:'transparent',border:'1px solid #d0d0cc',color:'#555550',
+  borderRadius:3,padding:'2px 10px',cursor:'pointer',fontSize:13,
+  fontFamily:'IBM Plex Mono,monospace',lineHeight:1,
+};
+
+const sBtn = {
+  background:'transparent',border:'1px solid #d0d0cc',color:'#555550',
+  borderRadius:3,padding:'4px',cursor:'pointer',fontSize:9,
+  fontFamily:'IBM Plex Mono,monospace',width:'100%',textAlign:'left',marginBottom:2,
+};

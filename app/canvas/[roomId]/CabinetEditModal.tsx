@@ -22,6 +22,7 @@ import JointsPanel from './JointsPanel'
 import PartEdgeJoints from './PartEdgeJoints'
 import OverridesView from './OverridesView'
 import CabinetTreePanel from './CabinetTreePanel'
+import { getUserPrefs } from '@/src/lib/userPrefs'
 
 type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'interior' | 'joints' | 'overrides' | 'tree'
 
@@ -184,7 +185,20 @@ export default function CabinetEditModal({
   ebByMatId?: Record<string, { thickness: number; color: string | null }>
 }) {
   const [activeView, setActiveView]       = useState<ViewId>(initialView ?? 'elevation')
-  const [wireMode, setWireMode]           = useState(true)
+  // Wire/solid is tracked per-view (Top/Elevation/Side/3D each individual), seeded
+  // from the user's default view styles. Other views fall back to wire (no effect).
+  const [wireByView, setWireByView]       = useState<Record<ViewId, boolean>>(() => {
+    const s = getUserPrefs().cabinetViewStyles
+    return {
+      top:       s.top       === 'wire',
+      elevation: s.elevation === 'wire',
+      side:      s.side      === 'wire',
+      '3d':      s['3d']      === 'wire',
+      parts: true, face: true, interior: true, joints: true, overrides: true, tree: true,
+    }
+  })
+  const wireMode = wireByView[activeView]
+  const setWireMode = () => setWireByView(m => ({ ...m, [activeView]: !m[activeView] }))
   const [showInternals, setShowInternals] = useState(true)
   const [showDrilling, setShowDrilling]   = useState(true)
   const [selectedSVGPart, setSelectedSVGPart] = useState<PartMeta | null>(null)
@@ -334,7 +348,7 @@ export default function CabinetEditModal({
             {VIEWS.map(v => {
               const disabled = (v.id === 'parts' || v.id === '3d' || v.id === 'tree') && !rp
               const overrideCount = v.id === 'overrides'
-                ? Object.keys(partOverrides).length + customParts.length + Object.keys(cabinet.carcase_joints ?? {}).length
+                ? Object.keys(partOverrides).length + customParts.length
                 : 0
               return (
                 <button
@@ -356,7 +370,7 @@ export default function CabinetEditModal({
             {(isOrthoView || activeView === 'face' || activeView === 'interior' || activeView === '3d') && rp && (
               <div className="ml-auto flex items-center gap-1.5">
                 <button
-                  onClick={() => setWireMode(w => !w)}
+                  onClick={() => setWireMode()}
                   title="Toggle wire / solid view"
                   className={`px-2.5 py-1 text-xs rounded transition-colors ${
                     wireMode
@@ -463,9 +477,6 @@ export default function CabinetEditModal({
                 onOverridesChange={setPartOverrides}
                 customParts={customParts}
                 setCustomParts={setCustomParts}
-                cabinet={cabinet}
-                rp={rp}
-                onUpdate={onUpdate}
               />
             )}
             {selectedSVGPart && isOrthoView && (
@@ -473,9 +484,6 @@ export default function CabinetEditModal({
                 part={selectedSVGPart}
                 onClose={() => setSelectedSVGPart(null)}
                 onEdgeChange={handleSVGEdgeChange}
-                jointControls={rp && selectedSVGPart.id.startsWith('case_')
-                  ? <PartEdgeJoints cabinet={cabinet} rp={rp} partKey={selectedSVGPart.id.slice(5)} onUpdate={onUpdate} />
-                  : undefined}
               />
             )}
             {selectedSVGPart && isOrthoView && (

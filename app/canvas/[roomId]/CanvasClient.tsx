@@ -49,7 +49,8 @@ import Room3DScene from './Room3DScene'
 import BenchtopPanel from './BenchtopPanel'
 import SnapToolbar from './SnapToolbar'
 import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
-import { computeSnap, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
+import { computeSnap, SNAP_KINDS, SNAP_KIND_META, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
+import { type ElevSnapSettings, type ElevSnapResult } from '@/src/lib/elevationSnap'
 
 export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops }: {
   project: Project | null
@@ -89,9 +90,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [elevWallId, setElevWallId] = useState<string | null>(null)
   const [elevWallSide, setElevWallSide] = useState<'face' | 'back'>('face')
   const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(() => {
-    const preset = getUserPrefs().defaultDrawingPreset
+    // Canvas opens in plan view → seed from the plan default layer.
+    const preset = getUserPrefs().drawingPresets.plan
     return applyPreset(preset)
   })
+  // Once the user manually changes the Detail dropdown, stop auto-applying per-view
+  // defaults on switch — the dropdown then stays shared/sticky across views.
+  const presetTouchedRef = useRef(false)
   const [jobModalTab, setJobModalTab]   = useState<JobPropertiesTab | null>(null)
   const [roomModalTab, setRoomModalTab] = useState<RoomPropertiesTab | null>(null)
   const [showObjectTree, setShowObjectTree] = useState(false)
@@ -109,11 +114,21 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [measureStart, setMeasureStart] = useState<Pt | null>(null)
   const [measureEnd, setMeasureEnd] = useState<Pt | null>(null)
   const [measureCursor, setMeasureCursor] = useState<Pt | null>(null)
+  // Elevation-view measure + snap (parallel to plan; lives in elevation 2D space).
+  const [elevSnapSettings, setElevSnapSettingsState] = useState<ElevSnapSettings>(() => getUserPrefs().elevSnapSettings)
+  const [elevSnapResult, setElevSnapResult] = useState<ElevSnapResult | null>(null)
+  const [elevMeasureStart, setElevMeasureStart]   = useState<Pt | null>(null)
+  const [elevMeasureEnd, setElevMeasureEnd]       = useState<Pt | null>(null)
+  const [elevMeasureCursor, setElevMeasureCursor] = useState<Pt | null>(null)
   const ctrlRef = useRef(false)
 
   const updateSnapSettings = useCallback((next: SnapSettings) => {
     setSnapSettingsState(next)
     setUserPrefs({ snapSettings: next })
+  }, [])
+  const updateElevSnapSettings = useCallback((next: ElevSnapSettings) => {
+    setElevSnapSettingsState(next)
+    setUserPrefs({ elevSnapSettings: next })
   }, [])
 
   const { captureSnapshot, pushSnapshot, handleUndo, handleRedo, wallsRef, cabinetsRef, benchtopsRef, canUndo, canRedo } =
@@ -220,6 +235,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (mode !== 'measure') {
       setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null)
       setSnapResult(null)
+      setElevMeasureStart(null); setElevMeasureEnd(null); setElevMeasureCursor(null)
+      setElevSnapResult(null)
     }
   }, [mode])
 
@@ -1022,6 +1039,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (v !== 'plan') {
       setMode('select'); setDrawStart(null); setPlaceGhost(null); setContextMenu(null)
     }
+    // Apply the destination view's default layer until the user takes manual control
+    // of the Detail dropdown (plan/elevation are the only views with a layer system).
+    if (!presetTouchedRef.current && (v === 'plan' || v === 'elevation')) {
+      setDisplayConfig(applyPreset(getUserPrefs().drawingPresets[v]))
+    }
     setCanvasView(v)
   }
 
@@ -1036,7 +1058,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         : bt.btDrawPoly.length === 0 ? 'Click first vertex · Shift=45° · Ctrl=ortho · A=arc · Esc=cancel'
         : bt.btDrawPoly.length < 3 ? `${bt.btDrawPoly.length} ${bt.btDrawPoly.length === 1 ? 'vertex' : 'vertices'} · Backspace=undo · Shift=45° · Ctrl=ortho · A=arc`
         : `${bt.btDrawPoly.length} vertices · click near first vertex to close · Backspace=undo · A=arc`)
-    : mode === 'measure'         ? (!measureStart || measureEnd ? 'Measure: click first point · snaps to corners · Ctrl=ortho · Esc=exit' : 'Click second point · Ctrl=ortho · Shift=45° · right-click=clear')
+    : mode === 'measure'         ? (() => {
+        const start = canvasView === 'elevation' ? elevMeasureStart : measureStart
+        const end   = canvasView === 'elevation' ? elevMeasureEnd   : measureEnd
+        return !start || end ? 'Measure: click first point · snaps to corners · Ctrl=ortho · Esc=exit' : 'Click second point · Ctrl=ortho · Shift=45° · right-click=clear'
+      })()
     : mode === 'draw_section'     ? (!drawStart ? 'Click to set start of section cut · Esc=cancel' : 'Click to finish · Shift=45° snap · Esc=cancel')
     : mode === 'draw_wall'       ? (!drawStart ? 'Click to set start point · snap rings show existing endpoints' : 'Click to finish · Shift = 5° snap · or type in panel →')
     : mode === 'draw_island'     ? (!drawStart ? 'Click to set island start · Shift = 5° snap · Right-click = cancel' : 'Click to finish island · cabinets snap to either side')
@@ -1062,7 +1088,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     selected, cabinets, clipboard, setClipboard, setMode, setPlaceGhost,
     handleDeleteCabinet, handleDeleteWall,
     dispatchView, svgSize, fitToWalls, switchView,
-    displayConfig, setDisplayConfig,
+    displayConfig,
+    setDisplayConfig: (next => { presetTouchedRef.current = true; setDisplayConfig(next) }) as typeof setDisplayConfig,
     setJobModalTab, setRoomModalTab,
     openReportModal: setReportScope,
     openObjectTree: () => setShowObjectTree(true),
@@ -1096,7 +1123,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {canvasView === 'plan' && (
+          {(canvasView === 'plan' || canvasView === 'elevation') && (
             <button
               onClick={() => onSelectMode('measure')}
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
@@ -1125,6 +1152,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             value={displayConfig.activePreset}
             onChange={e => {
               const val = e.target.value as PresetId
+              presetTouchedRef.current = true
               if (val !== 'custom') setDisplayConfig(applyPreset(val))
             }}
             className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500 cursor-pointer"
@@ -1236,7 +1264,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               measureCursor={measureCursor}
               onMeasureCancel={() => { setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }}
             />
-              <SnapToolbar settings={snapSettings} onChange={updateSnapSettings} />
+              <SnapToolbar settings={snapSettings} onChange={updateSnapSettings} kinds={SNAP_KINDS} meta={SNAP_KIND_META} />
             </div>
             {(mode === 'draw_wall' || mode === 'draw_island') && !drawStart && (
               <WallDrawPanel
@@ -1298,12 +1326,31 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 return base.includes(id) ? base.filter(x => x !== id) : [...base, id]
               })
             }}
+            onMarqueeSelect={ids => {
+              if (ids.length >= 2) {
+                setMultiSelect(ids)
+                setSelected({ type: 'cabinet', id: ids[0] })
+              } else if (ids.length === 1) {
+                setSelected({ type: 'cabinet', id: ids[0] })
+                setMultiSelect([])
+              }
+            }}
             onEqualizeWidths={handleEqualizeWidths}
             cabResize={cabResize}
             onCabResizeStart={r => { setSelected({ type: 'cabinet', id: r.cabId }); setMultiSelect([]); setCabResize(r) }}
             onCabResizeUpdate={updates => setCabResize(r => r ? { ...r, ...updates } : r)}
             onCabResizeDone={() => setCabResize(null)}
             resolvedParts={resolvedParts}
+            elevSnapSettings={elevSnapSettings}
+            onElevSnapSettingsChange={updateElevSnapSettings}
+            elevSnapResult={elevSnapResult}
+            setElevSnapResult={setElevSnapResult}
+            elevMeasureStart={elevMeasureStart}
+            elevMeasureEnd={elevMeasureEnd}
+            elevMeasureCursor={elevMeasureCursor}
+            setElevMeasureStart={setElevMeasureStart}
+            setElevMeasureEnd={setElevMeasureEnd}
+            setElevMeasureCursor={setElevMeasureCursor}
             onDeselect={() => setSelected(null)}
             onSeamClick={(cabId) => {
               setSelected({ type: 'cabinet', id: cabId })

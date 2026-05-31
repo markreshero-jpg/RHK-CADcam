@@ -26,7 +26,10 @@ interface Method {
   active:      boolean
   rules:       Partial<DrawerBoxRules>
   drawer_type: 'system' | 'five_piece'
+  kind?:       'external' | 'internal' | null   // newer column; absent until the ALTER runs
 }
+
+type Kind = 'external' | 'internal'
 
 // ── Rule row component ────────────────────────────────────────────────────────
 
@@ -85,6 +88,8 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
   const [editName,    setEditName]    = useState('')
   const [editDesc,    setEditDesc]    = useState('')
   const [editType,    setEditType]    = useState<DrawerType>('five_piece')
+  const [editKind,    setEditKind]    = useState<Kind>('external')
+  const [kindAvailable, setKindAvailable] = useState(true)   // false if the `kind` column doesn't exist yet
   const [delta,       setDelta]       = useState<Partial<DrawerBoxRules>>({})
   const [dirty,       setDirty]       = useState(false)
   const [saving,      setSaving]      = useState(false)
@@ -98,11 +103,26 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
   // ── Load ────────────────────────────────────────────────────────────────────
 
   const load = useCallback(async () => {
-    const [methodsRes, shopRes] = await Promise.all([
-      supabase.from('drawer_box_methods').select('id,name,description,is_default,active,rules,drawer_type').order('name'),
-      supabase.from('shop_settings').select('drawer_box_method_id').limit(1).maybeSingle(),
-    ])
-    setMethods((methodsRes.data ?? []) as Method[])
+    // Try the kind-aware select first; fall back to the legacy select if the column
+    // hasn't been added yet. Keeps the library page working before the ALTER runs.
+    const withKind = await supabase
+      .from('drawer_box_methods')
+      .select('id,name,description,is_default,active,rules,drawer_type,kind')
+      .order('name')
+    let methodsRows: Method[]
+    if (withKind.error) {
+      const legacy = await supabase
+        .from('drawer_box_methods')
+        .select('id,name,description,is_default,active,rules,drawer_type')
+        .order('name')
+      methodsRows = (legacy.data ?? []) as Method[]
+      setKindAvailable(false)
+    } else {
+      methodsRows = (withKind.data ?? []) as Method[]
+      setKindAvailable(true)
+    }
+    const shopRes = await supabase.from('shop_settings').select('drawer_box_method_id').limit(1).maybeSingle()
+    setMethods(methodsRows)
     setShopDefault(shopRes.data?.drawer_box_method_id ?? null)
   }, [])
 
@@ -115,6 +135,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
       setEditName(m.name)
       setEditDesc(m.description ?? '')
       setEditType(m.drawer_type ?? 'five_piece')
+      setEditKind((m.kind as Kind | null | undefined) ?? 'external')
       setDelta(m.rules ?? {})
       setDirty(false)
     }
@@ -146,19 +167,41 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
     await load()
   }
 
+  async function duplicateMethod(m: Method) {
+    const payload: Record<string, unknown> = {
+      name:        `${m.name} (copy)`,
+      description: m.description,
+      drawer_type: m.drawer_type,
+      rules:       m.rules ?? {},
+      active:      m.active,
+    }
+    if (kindAvailable && m.kind) payload.kind = m.kind
+    const { data, error } = await supabase
+      .from('drawer_box_methods')
+      .insert(payload)
+      .select('id')
+      .single()
+    if (error) { console.error('duplicate drawer box method:', error); return }
+    await load()
+    if (data) setSelId(data.id)
+  }
+
   async function save() {
     if (!selId) return
     setSaving(true)
     try {
+      // Only send `kind` if the column exists, otherwise the whole UPDATE fails.
+      const payload: Record<string, unknown> = {
+        name:        editName.trim() || undefined,
+        description: editDesc.trim() || null,
+        drawer_type: editType,
+        rules:       delta,
+        updated_at:  new Date().toISOString(),
+      }
+      if (kindAvailable) payload.kind = editKind
       await supabase
         .from('drawer_box_methods')
-        .update({
-          name:        editName.trim() || undefined,
-          description: editDesc.trim() || null,
-          drawer_type: editType,
-          rules:       delta,
-          updated_at:  new Date().toISOString(),
-        })
+        .update(payload)
         .eq('id', selId)
       setDirty(false)
       await load()
@@ -280,6 +323,11 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                   <span className="text-[9px] bg-green-900/40 text-green-400 px-1.5 py-0.5 rounded shrink-0">default</span>
                 )}
                 <button
+                  onClick={e => { e.stopPropagation(); duplicateMethod(m) }}
+                  title="Duplicate"
+                  className="opacity-0 group-hover:opacity-100 text-ink-subtle hover:text-accent-ink transition-all text-xs px-1"
+                >⧉</button>
+                <button
                   onClick={e => { e.stopPropagation(); deleteMethod(m.id) }}
                   className="opacity-0 group-hover:opacity-100 text-ink-subtle hover:text-red-400 transition-all text-xs px-1"
                 >✕</button>
@@ -380,6 +428,40 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                 </div>
               </div>
 
+              {/* Kind — External (face zone) vs Internal (compartment-anchored) */}
+              <div className="flex-none px-6 py-3 border-b border-edge">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-ink-subtle w-24 shrink-0">Kind</span>
+                  <div className="flex gap-2">
+                    {([
+                      { value: 'external', label: 'External', hint: 'Face-zone drawer (sits behind a drawer front)' },
+                      { value: 'internal', label: 'Internal', hint: 'Inner drawer / pull-out — sits inside a compartment behind a door' },
+                    ] as { value: Kind; label: string; hint: string }[]).map(opt => (
+                      <button
+                        key={opt.value}
+                        title={opt.hint}
+                        onClick={() => { setEditKind(opt.value); setDirty(true) }}
+                        disabled={!kindAvailable}
+                        className={`px-4 py-1.5 text-xs rounded-lg border transition-colors ${
+                          editKind === opt.value
+                            ? 'bg-violet-700 border-violet-500 text-white'
+                            : 'bg-surface-2 border-edge-strong text-ink-muted hover:text-ink hover:border-edge-strong'
+                        } ${!kindAvailable ? 'opacity-40 cursor-not-allowed' : ''}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-ink-subtle">
+                    {!kindAvailable
+                      ? 'Run the ALTER to add drawer_box_methods.kind, then this toggle saves'
+                      : editKind === 'internal'
+                        ? 'Shown in the inner-drawer fitting picker'
+                        : 'Shown in the face-drawer cascade'}
+                  </span>
+                </div>
+              </div>
+
               {/* Box size */}
               <div className="flex-none px-6 py-3 border-b border-edge">
                 <div className="flex items-center gap-4">
@@ -404,7 +486,9 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
               {/* Rules editor */}
               <div className="flex-1 overflow-y-auto px-6 py-4">
                 <div className="max-w-lg space-y-5">
-                  {DB_RULE_GROUPS.map(group => (
+                  {DB_RULE_GROUPS
+                    .filter(g => g.label !== 'Inner Drawer Front' || editKind === 'internal')
+                    .map(group => (
                     <div key={group.label}>
                       <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wider mb-1">{group.label}</p>
                       <div className="space-y-px">
@@ -470,7 +554,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
 
             {/* ── Preview panel (self-contained) ──────────────────────────── */}
             <DrawerBoxPreviewPanel
-              delta={delta} drawerType={editType}
+              delta={delta} drawerType={editType} kind={editKind}
               prevW={prevW} prevH={prevH} prevD={prevD}
               onPrevWChange={setPrevW} onPrevHChange={setPrevH} onPrevDChange={setPrevD}
             />

@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
@@ -10,6 +10,7 @@ import type {
   ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart,
   ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack,
 } from '@/src/lib/resolver/types'
+import { slideSilhouettePath, slideSilhouetteOutline, type SlidePlacement } from '@/src/lib/slideSilhouette'
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 export const C_PANEL  = '#374151'
@@ -44,6 +45,10 @@ const TK_LABELS: Record<string, string> = {
 const INT_LABELS: Record<string, string> = {
   adj_shelf: 'Adjustable Shelf', fixed_shelf: 'Fixed Shelf',
   inner_drawer_bottom: 'Inner Drawer Bottom', inner_drawer_back: 'Inner Drawer Back',
+  inner_drawer_side:   'Inner Drawer Side',  inner_drawer_front: 'Inner Drawer Front',
+  pull_out_bottom:     'Pull-out Bottom',    pull_out_side:      'Pull-out Side',
+  pull_out_back:       'Pull-out Back',
+  accessory:           'Accessory',
   divider: 'Divider',
 }
 const FACE_LABELS_MAP: Record<string, string> = {
@@ -61,9 +66,9 @@ export function dimH(x1: number, x2: number, y: number, label: string, above = f
   const ty = above ? y - 28 : y + 28
   return (
     <g>
-      <line x1={x1} y1={y} x2={x2} y2={y} stroke={C_DIM} strokeWidth={1.5} strokeDasharray="5 3" />
-      <line x1={x1} y1={y - 8} x2={x1} y2={y + 8} stroke={C_DIM} strokeWidth={1.5} />
-      <line x1={x2} y1={y - 8} x2={x2} y2={y + 8} stroke={C_DIM} strokeWidth={1.5} />
+      <line x1={x1} y1={y} x2={x2} y2={y} stroke={C_DIM} strokeWidth={1.5} strokeDasharray="5 3" vectorEffect="non-scaling-stroke" />
+      <line x1={x1} y1={y - 8} x2={x1} y2={y + 8} stroke={C_DIM} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+      <line x1={x2} y1={y - 8} x2={x2} y2={y + 8} stroke={C_DIM} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       <text x={mid} y={ty} textAnchor="middle" dominantBaseline="central" fontSize={24} fill={C_LABEL} fontFamily="system-ui,sans-serif">{label}</text>
     </g>
   )
@@ -75,9 +80,9 @@ export function dimV(x: number, y1: number, y2: number, label: string, right = f
   const anchor = right ? 'start' : 'end'
   return (
     <g>
-      <line x1={x} y1={y1} x2={x} y2={y2} stroke={C_DIM} strokeWidth={1.5} strokeDasharray="5 3" />
-      <line x1={x - 8} y1={y1} x2={x + 8} y2={y1} stroke={C_DIM} strokeWidth={1.5} />
-      <line x1={x - 8} y1={y2} x2={x + 8} y2={y2} stroke={C_DIM} strokeWidth={1.5} />
+      <line x1={x} y1={y1} x2={x} y2={y2} stroke={C_DIM} strokeWidth={1.5} strokeDasharray="5 3" vectorEffect="non-scaling-stroke" />
+      <line x1={x - 8} y1={y1} x2={x + 8} y2={y1} stroke={C_DIM} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+      <line x1={x - 8} y1={y2} x2={x + 8} y2={y2} stroke={C_DIM} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       <text x={tx} y={mid} textAnchor={anchor} dominantBaseline="central" fontSize={24} fill={C_LABEL} fontFamily="system-ui,sans-serif">{label}</text>
     </g>
   )
@@ -108,9 +113,23 @@ export function tkElevRect(p: ResolvedToekickPart) {
 export function zoneElevRect(z: ResolvedFaceZone)     { return { ex: z.X, ey: z.Y + z.DX, ew: z.DY, eh: z.DX } }
 export function shelfElevRect(p: ResolvedInternalPart) { return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ } }
 export function intElevRect(p: ResolvedInternalPart) {
-  return p.part_type === 'divider'
-    ? { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
-    : { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
+  switch (p.part_type) {
+    case 'inner_drawer_front':
+    case 'inner_drawer_back':
+    case 'pull_out_back':
+      // Face panel (drawer-box convention): DY = width (X), DX = height (Y)
+      return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
+    case 'inner_drawer_side':
+    case 'pull_out_side':
+      // Side panel edge-on: DZ = visible thickness (X), DY = height (Y)
+      return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+    case 'divider':
+      // Divider edge-on: DZ = thickness (X), DY = height (Y)
+      return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+    default:
+      // adj_shelf, fixed_shelf, accessory, inner_drawer_bottom, pull_out_bottom
+      return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
+  }
 }
 
 // Top (X-Z plane, looking down)
@@ -125,9 +144,26 @@ export function tkTopRect(p: ResolvedToekickPart) {
 }
 export function shelfTopRect(p: ResolvedInternalPart) { return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX } }
 export function intTopRect(p: ResolvedInternalPart) {
-  return p.part_type === 'divider'
-    ? { tx: p.X, tz: p.Z, tw: p.DZ, td: p.DX }
-    : { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX }
+  // Drawer-box-derived parts store Z = front-most edge (cabinet front = larger Z),
+  // with the panel extending back. Subtract the depth/thickness to get the back
+  // edge for top-view rendering. Shelves/dividers anchor at the back edge instead.
+  switch (p.part_type) {
+    case 'inner_drawer_side':
+    case 'pull_out_side':
+      return { tx: p.X, tz: p.Z - p.DX, tw: p.DZ, td: p.DX }
+    case 'inner_drawer_bottom':
+    case 'pull_out_bottom':
+      return { tx: p.X, tz: p.Z - p.DX, tw: p.DY, td: p.DX }
+    case 'inner_drawer_front':
+    case 'inner_drawer_back':
+    case 'pull_out_back':
+      return { tx: p.X, tz: p.Z - p.DZ, tw: p.DY, td: p.DZ }
+    case 'divider':
+      return { tx: p.X, tz: p.Z, tw: p.DZ, td: p.DX }
+    default:
+      // adj_shelf, fixed_shelf, accessory — back-anchored
+      return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX }
+  }
 }
 export function zoneTopRect(z: ResolvedFaceZone)      { return { tx: z.X, tz: z.Z, tw: z.DY, td: z.DZ } }
 
@@ -143,9 +179,27 @@ export function tkSideRect(p: ResolvedToekickPart) {
 }
 export function shelfSideRect(p: ResolvedInternalPart) { return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ } }
 export function intSideRect(p: ResolvedInternalPart) {
-  return p.part_type === 'divider'
-    ? { sz: p.Z, cy_top: p.Y + p.DY, sw: p.DX, sh: p.DY }
-    : { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
+  // Same anchor logic as intTopRect: drawer-box-derived parts have Z =
+  // front edge and extend back; shelves/dividers have Z = back edge.
+  switch (p.part_type) {
+    case 'inner_drawer_side':
+    case 'pull_out_side':
+      // Side panel seen face-on from cabinet side: depth × height
+      return { sz: p.Z - p.DX, cy_top: p.Y + p.DY, sw: p.DX, sh: p.DY }
+    case 'inner_drawer_bottom':
+    case 'pull_out_bottom':
+      // Bottom panel edge-on from side: depth × thickness
+      return { sz: p.Z - p.DX, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
+    case 'inner_drawer_front':
+    case 'inner_drawer_back':
+    case 'pull_out_back':
+      // Face panel edge-on from side: thickness × height
+      return { sz: p.Z - p.DZ, cy_top: p.Y + p.DX, sw: p.DZ, sh: p.DX }
+    case 'divider':
+      return { sz: p.Z, cy_top: p.Y + p.DY, sw: p.DX, sh: p.DY }
+    default:
+      return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
+  }
 }
 export function zoneSideRect(z: ResolvedFaceZone)      { return { sz: z.Z, cy_top: z.Y + z.DX, sw: z.DZ, sh: z.DX } }
 
@@ -208,15 +262,29 @@ export function svgTkMeta(p: ResolvedToekickPart): PartMeta {
   }
 }
 export function svgIntMeta(p: ResolvedInternalPart): PartMeta {
-  const isDivider = p.part_type === 'divider'
+  // Pick W/H/D and panelKind from the part's drawer-box-style dimension role:
+  //   side  panels: DZ × DY × DX  (thin, tall, deep)
+  //   face  panels: DY × DX × DZ  (wide, tall, thin)
+  //   horiz panels: DY × DZ × DX  (wide, thin, deep) — also shelves/accessory
+  let w: number, h: number, d: number, panelKind: 'side' | 'face' | 'horizontal'
+  switch (p.part_type) {
+    case 'inner_drawer_side':
+    case 'pull_out_side':
+    case 'divider':
+      w = p.DZ; h = p.DY; d = p.DX; panelKind = 'side'; break
+    case 'inner_drawer_front':
+    case 'inner_drawer_back':
+    case 'pull_out_back':
+      w = p.DY; h = p.DX; d = p.DZ; panelKind = 'face'; break
+    default:
+      w = p.DY; h = p.DZ; d = p.DX; panelKind = 'horizontal'; break
+  }
   return {
     id: `int_${p.part_type}_${p.sort_order}`,
     label: `${INT_LABELS[p.part_type] ?? p.part_type} ${p.sort_order + 1}`,
-    w: isDivider ? p.DZ : p.DY,
-    h: isDivider ? p.DY : p.DZ,
-    d: p.DX,
+    w, h, d,
     thickness: p.DZ, edge: p.edge_band,
-    panelKind: isDivider ? 'side' : 'horizontal',
+    panelKind,
     detail: p.y_locked ? 'Position locked' : undefined,
     x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
   }
@@ -248,6 +316,20 @@ export function svgSlideMeta(s: ResolvedDrawerSlide, stack: ResolvedDrawerStack)
   return {
     id: `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`,
     label: `Drawer Slide (${s.side})`,
+    w: s.DZ, h: s.DY, d: s.DX, thickness: s.DZ,
+    edge: { top: false, bottom: false, left: false, right: false }, panelKind: 'side',
+    detail: `${s.nominal_length}mm NL · Box ht ${s.box_height}mm`,
+    x: s.X, y: s.Y, z: s.Z,
+  }
+}
+
+// Inner-drawer / pull-out slide — no parent stack, keyed by the slide's
+// inner_drawer_index so the id is stable across re-resolves.
+export function svgInternalSlideMeta(s: ResolvedDrawerSlide): PartMeta {
+  const idx = s.inner_drawer_index ?? 0
+  return {
+    id: `int_slide_${idx}_${s.side}`,
+    label: `Inner Drawer Slide (${s.side})`,
     w: s.DZ, h: s.DY, d: s.DX, thickness: s.DZ,
     edge: { top: false, bottom: false, left: false, right: false }, panelKind: 'side',
     detail: `${s.nominal_length}mm NL · Box ht ${s.box_height}mm`,
@@ -332,7 +414,7 @@ export function DrillOverlay({ drills, project, perp, dirOf }: {
           // Looking down the bore → circle = tool diameter.
           return (
             <circle key={i} cx={sx} cy={sy} r={r}
-              fill={col} fillOpacity={0.4} stroke={col} strokeWidth={0.6} />
+              fill={col} fillOpacity={0.4} stroke={col} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
           )
         }
 
@@ -344,7 +426,7 @@ export function DrillOverlay({ drills, project, perp, dirOf }: {
           <g key={i}>
             <line x1={sx} y1={sy} x2={ex} y2={ey}
               stroke={col} strokeOpacity={0.35} strokeWidth={r * 2} strokeLinecap="butt" />
-            <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={col} strokeWidth={0.5} />
+            <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={col} strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
           </g>
         )
       })}
@@ -368,9 +450,26 @@ export function tkBox3(p: ResolvedToekickPart): Box3 {
     : { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
 }
 export function intBox3(p: ResolvedInternalPart): Box3 {
-  return p.part_type === 'divider'
-    ? { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
-    : { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+  // AABB anchor must match cabinet coords: drawer-box-derived parts have
+  // Z = front edge and extend back by depth, so subtract to get the back-edge
+  // origin (`x,y,z` is the AABB minimum corner). Shelves/dividers anchor at back.
+  switch (p.part_type) {
+    case 'inner_drawer_side':
+    case 'pull_out_side':
+      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DZ, h: p.DY, d: p.DX }
+    case 'inner_drawer_bottom':
+    case 'pull_out_bottom':
+      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DY, h: p.DZ, d: p.DX }
+    case 'inner_drawer_front':
+    case 'inner_drawer_back':
+    case 'pull_out_back':
+      return { x: p.X, y: p.Y, z: p.Z - p.DZ, w: p.DY, h: p.DX, d: p.DZ }
+    case 'divider':
+      return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
+    default:
+      // adj_shelf, fixed_shelf, accessory
+      return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+  }
 }
 export function zoneBox3(z: ResolvedFaceZone): Box3 {
   return { x: z.X, y: z.Y, z: z.Z, w: z.DY, h: z.DX, d: z.DZ }
@@ -461,9 +560,66 @@ export function PartShape({
 }) {
   const poly = box && project ? rotatedBoxPolygon(box, ov, project) : null
   if (poly) {
-    return <polygon points={poly} fill={fill} stroke={stroke} strokeWidth={strokeWidth}
+    return <polygon points={poly} fill={fill} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke"
       strokeDasharray={strokeDasharray} fillOpacity={fillOpacity} data-part-id={dataPartId} style={style} />
   }
-  return <rect x={x} y={y} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={strokeWidth}
+  return <rect x={x} y={y} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke"
     strokeDasharray={strokeDasharray} fillOpacity={fillOpacity} data-part-id={dataPartId} style={style} />
+}
+
+// ── Slide silhouette ────────────────────────────────────────────────────────────
+// Draws a drawer slide as the TRUE projected shape of its uploaded 3D model when
+// the geometry is available, falling back to the box (PartShape) while the model
+// loads, on load failure, when no model is attached, or when a rotation override
+// is present (the box path already handles rotation, the silhouette doesn't).
+
+const SLIDE_SEL = '#f59e0b'
+
+export function SlideShape({
+  rectX, rectY, rectW, rectH, box, ov, project, slide, tris, selected,
+  stroke, strokeWidth, strokeDasharray, dataPartId, style,
+}: {
+  rectX: number; rectY: number; rectW: number; rectH: number
+  box: Box3
+  ov?: PartOv
+  project: (x: number, y: number, z: number) => { x: number; y: number }
+  slide: SlidePlacement
+  tris?: Float32Array
+  wireMode: boolean
+  selected: boolean
+  fill: string; stroke: string; strokeWidth: number
+  strokeDasharray?: string
+  dataPartId: string; style?: React.CSSProperties
+}) {
+  const rotated = !!ov && (!!ov.oax || !!ov.oay || !!ov.oaz)
+  const useModel = !!tris && tris.length > 0 && !rotated
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- project is a stable mapping for a given view; depend on the placement instead
+  const paths = useMemo(() => {
+    if (!useModel) return null
+    const fill = slideSilhouettePath(tris!, slide, project)
+    if (!fill) return null
+    return { fill, outline: slideSilhouetteOutline(tris!, slide, project) }
+  }, [useModel, tris, slide.X, slide.Y, slide.Z, slide.DX, slide.DY, slide.DZ, slide.side,
+      slide.model_scale, slide.model_anchor_x, slide.model_anchor_y, slide.model_anchor_z])
+
+  // Slides always render as an OUTLINE (never a solid fill). A transparent fill
+  // keeps the interior clickable (same trick the wire-mode parts use); the visible
+  // edge is the stroked outline / box border.
+  if (!paths) {
+    return <PartShape x={rectX} y={rectY} w={rectW} h={rectH} box={box} ov={ov} project={project}
+      fill="transparent" stroke={selected ? SLIDE_SEL : stroke} strokeWidth={strokeWidth}
+      strokeDasharray={selected ? undefined : strokeDasharray} dataPartId={dataPartId} style={style} />
+  }
+
+  return (
+    <g>
+      <path d={paths.fill} fill="transparent" stroke="none" data-part-id={dataPartId} style={style} />
+      {paths.outline && (
+        <path d={paths.outline} fill="none"
+          stroke={selected ? SLIDE_SEL : stroke} strokeWidth={selected ? 1.5 : strokeWidth}
+          strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
+          style={{ pointerEvents: 'none' }} />
+      )}
+    </g>
+  )
 }

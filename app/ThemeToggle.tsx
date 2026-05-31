@@ -29,8 +29,12 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
   }, [])
 
   function toggle() {
-    const next = theme === 'dark' ? 'light' : 'dark'
     const root = document.documentElement
+    // Decide direction from the LIVE class on <html>, not React state. The
+    // no-flash script sets the class before React mounts, so `theme` state can
+    // momentarily disagree with reality — reading the DOM makes the first click
+    // always go the right way.
+    const next: 'light' | 'dark' = root.classList.contains('light') ? 'dark' : 'light'
     root.classList.remove('light', 'dark')
     root.classList.add(next)
     try {

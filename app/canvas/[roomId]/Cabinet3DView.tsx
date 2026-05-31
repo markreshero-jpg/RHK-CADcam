@@ -21,6 +21,7 @@ import {
 } from '@/src/components/three/PartViewer'
 import { isSide, caseBox, seamDrillOps, type DrillOpPos } from '@/src/lib/jointDrilling'
 import PartEdgeJoints from './PartEdgeJoints'
+import { SlideModel } from '@/src/components/three/SlideModel'
 
 export type { MatColSpec, MatColMap }
 
@@ -35,9 +36,26 @@ function tkBox(p: ResolvedToekickPart): Box {
 }
 
 function intBox(p: ResolvedInternalPart): Box {
-  return p.part_type === 'divider'
-    ? { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
-    : { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+  // Inner-drawer / pull-out parts come from resolveDrawerBox (see fittings.ts) and
+  // carry the drawer-box dimension convention (per-part DX/DY/DZ semantics + Z =
+  // front face). They map to a cabinet Box the same way dbBox does for face drawers.
+  switch (p.part_type) {
+    case 'divider':
+      return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
+    case 'inner_drawer_side':
+    case 'pull_out_side':
+      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DZ, h: p.DY, d: p.DX }
+    case 'inner_drawer_front':
+    case 'inner_drawer_back':
+    case 'pull_out_back':
+      return { x: p.X, y: p.Y, z: p.Z - p.DZ, w: p.DY, h: p.DX, d: p.DZ }
+    case 'inner_drawer_bottom':
+    case 'pull_out_bottom':
+      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DY, h: p.DZ, d: p.DX }
+    // adj_shelf, fixed_shelf, accessory — horizontal shelf-like; Z stored is the back edge.
+    default:
+      return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+  }
 }
 
 function zoneBox(z: ResolvedFaceZone): Box {
@@ -89,6 +107,23 @@ const INT_LABELS: Record<string, string> = {
   fixed_shelf:         'Fixed Shelf',
   inner_drawer_bottom: 'Inner Drawer Bottom',
   inner_drawer_back:   'Inner Drawer Back',
+  inner_drawer_side:   'Inner Drawer Side',
+  inner_drawer_front:  'Inner Drawer Front',
+  pull_out_bottom:     'Pull-out Bottom',
+  pull_out_side:       'Pull-out Side',
+  pull_out_back:       'Pull-out Back',
+  accessory:           'Accessory',
+}
+
+// Panel kind dispatch for ResolvedInternalPart — drives panelFaceColors + edgeStrips orientation.
+const INT_PANEL_KIND: Record<string, 'side' | 'horizontal' | 'face'> = {
+  divider:             'side',
+  inner_drawer_side:   'side',
+  pull_out_side:       'side',
+  inner_drawer_front:  'face',
+  inner_drawer_back:   'face',
+  pull_out_back:       'face',
+  // adj_shelf, fixed_shelf, inner_drawer_bottom, pull_out_bottom, accessory → horizontal (default below)
 }
 
 const FACE_LABELS: Record<string, string> = {
@@ -137,7 +172,7 @@ function buildIntInfo(p: ResolvedInternalPart, b: Box): PartMeta {
     w: b.w, h: b.h, d: b.d,
     thickness: p.DZ,
     edge:      p.edge_band,
-    panelKind: p.part_type === 'divider' ? 'side' : 'horizontal',
+    panelKind: INT_PANEL_KIND[p.part_type] ?? 'horizontal',
     detail:    p.y_locked ? 'Position locked' : undefined,
   }
 }
@@ -159,6 +194,20 @@ function buildSlideInfo(s: ResolvedDrawerSlide, b: Box, stack: ResolvedDrawerSta
   return {
     id:        `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`,
     label:     `Drawer Slide (${s.side})`,
+    w: b.w, h: b.h, d: b.d,
+    thickness: s.DZ,
+    edge:      { top: false, bottom: false, left: false, right: false },
+    panelKind: 'side',
+    detail:    `${s.nominal_length}mm NL · Box ht ${s.box_height}mm`,
+  }
+}
+
+// Inner-drawer / pull-out slide: no parent face zone, so the id key is anchored
+// to the rail's position (Y + side) to keep selection stable across re-resolves.
+function buildInternalSlideInfo(s: ResolvedDrawerSlide, b: Box, index: number): PartMeta {
+  return {
+    id:        `int_slide_${index}_${s.side}`,
+    label:     `Inner Drawer Slide (${s.side})`,
     w: b.w, h: b.h, d: b.d,
     thickness: s.DZ,
     edge:      { top: false, bottom: false, left: false, right: false },
@@ -337,8 +386,27 @@ function DrawerAssembly({
         const id   = `slide_${stack.face_zone_row}_${stack.face_zone_col}_${sl.side}`
         const ps   = applyPosOv(sl, id, partOverrides)
         const b    = slideBox(ps)
-        const info = buildSlideInfo(sl, b, stack)
         const sc   = sl.colour ?? slideColor
+        if (ps.model_url && ps.model_format) {
+          // Front-top-outer corner of the rail (model convention origin).
+          const originX = ps.side === 'left' ? ps.X : ps.X + ps.DZ
+          const originY = ps.Y + ps.DY
+          const originZ = ps.Z + ps.DX
+          return (
+            <SlideModel
+              key={`sl_${li}`}
+              url={ps.model_url}
+              format={ps.model_format}
+              scale={ps.model_scale}
+              anchor={{ x: ps.model_anchor_x, y: ps.model_anchor_y, z: ps.model_anchor_z }}
+              position={[originX, originY, originZ]}
+              sideOrientation={ps.side}
+              color={sc}
+              fallbackBox={{ w: ps.DZ, h: ps.DY, d: ps.DX }}
+            />
+          )
+        }
+        const info = buildSlideInfo(sl, b, stack)
         const fc   = panelFaceColors('side', `slide_${sl.side}`, sc, sc, sc)
         return (
           <Part
@@ -632,10 +700,33 @@ function getRotOv(id: string, overrides: PartPosOverrides | undefined): [number,
   return [(ov.oax ?? 0) * D, (ov.oay ?? 0) * D, (ov.oaz ?? 0) * D]
 }
 
+// ── Animated group for inner-drawer slide-out ─────────────────────────────────
+// Lerps its position.z toward targetTravel each frame. Used to slide an inner-
+// drawer assembly (box parts + face + slide rails) forward together when the
+// user toggles it open in the 3D view's right-click menu.
+function AnimatedGroup({ targetTravel, children }: { targetTravel: number; children: React.ReactNode }) {
+  const groupRef        = useRef<THREE.Group>(null)
+  const curZ            = useRef(0)
+  const targetTravelRef = useRef(targetTravel)
+  targetTravelRef.current = targetTravel
+  useFrame(() => {
+    if (!groupRef.current) return
+    const target = targetTravelRef.current
+    if (Math.abs(curZ.current - target) < 0.5) {
+      curZ.current = target
+      groupRef.current.position.z = target
+      return
+    }
+    curZ.current = THREE.MathUtils.lerp(curZ.current, target, 0.1)
+    groupRef.current.position.z = curZ.current
+  })
+  return <group ref={groupRef}>{children}</group>
+}
+
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
 
 function CabinetScene({
-  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, openDrawers, edgeOverrides, wire, customParts, partOverrides, showDrilling = true,
+  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, openDrawers, openInnerDrawers, edgeOverrides, wire, customParts, partOverrides, showDrilling = true,
 }: {
   cab:                  CabinetInstance
   rp:                   ResolvedCabinet
@@ -646,6 +737,7 @@ function CabinetScene({
   ebByMatId?:           Record<string, { thickness: number; color: string | null }>
   doorsOpen:            boolean
   openDrawers:          Map<string, number>
+  openInnerDrawers:     Map<number, number>
   edgeOverrides:        Map<string, PartEdge>
   wire?:                boolean
   customParts?:         CabinetCustomPart[]
@@ -777,30 +869,113 @@ function CabinetScene({
           />
         )
       })}
-      {rp.internal_parts.map((p, i) => {
-        const id   = `int_${p.part_type}_${p.sort_order}`
-        const pp   = applyPosOv(p, id, partOverrides)
-        const b    = intBox(pp)
-        const info = applyEdge(buildIntInfo(p, b))
-        const s    = matSpec(p.material_id, '#e8dece')
+      {(() => {
+        // Inline helpers so the same JSX is reused for grouped (inner drawer,
+        // wrapped in AnimatedGroup) and ungrouped (shelves, dividers, accessories).
+        const renderIntPart = (p: ResolvedInternalPart, key: string) => {
+          const id   = `int_${p.part_type}_${p.sort_order}`
+          const pp   = applyPosOv(p, id, partOverrides)
+          const b    = intBox(pp)
+          const info = applyEdge(buildIntInfo(p, b))
+          const s    = matSpec(p.material_id, '#e8dece')
+          return (
+            <Part
+              key={key}
+              b={b}
+              faceColors={panelFaceColors(info.panelKind, p.part_type, s.face, s.back, s.edge)}
+              edgeLineColor="#c4b49c"
+              meta={info}
+              selected={selected?.id === info.id}
+              highlighted={hlSet?.has(p.part_type) ?? false}
+              onSelect={onSelect}
+              contextMenuSelect
+              dragRef={dragRef}
+              ebSpec={ebFor(p.material_id)}
+              wire={wire}
+              rotation={getRotOv(id, partOverrides)}
+            />
+          )
+        }
+        const renderIntSlide = (sl: ResolvedDrawerSlide, li: number, key: string) => {
+          const info0 = buildInternalSlideInfo(sl, slideBox(sl), li)
+          const ps    = applyPosOv(sl, info0.id, partOverrides)
+          const b     = slideBox(ps)
+          const sc    = sl.colour ?? '#6b7280'
+          if (ps.model_url && ps.model_format) {
+            const originX = ps.side === 'left' ? ps.X : ps.X + ps.DZ
+            const originY = ps.Y + ps.DY
+            const originZ = ps.Z + ps.DX
+            return (
+              <SlideModel
+                key={key}
+                url={ps.model_url}
+                format={ps.model_format}
+                scale={ps.model_scale}
+                anchor={{ x: ps.model_anchor_x, y: ps.model_anchor_y, z: ps.model_anchor_z }}
+                position={[originX, originY, originZ]}
+                sideOrientation={ps.side}
+                color={sc}
+                fallbackBox={{ w: ps.DZ, h: ps.DY, d: ps.DX }}
+              />
+            )
+          }
+          const info = buildInternalSlideInfo(sl, b, li)
+          const fc   = panelFaceColors('side', `slide_${sl.side}`, sc, sc, sc)
+          return (
+            <Part
+              key={key}
+              b={b}
+              faceColors={fc}
+              edgeLineColor="#4b5563"
+              meta={info}
+              selected={selected?.id === info.id}
+              highlighted={false}
+              onSelect={onSelect}
+              contextMenuSelect
+              dragRef={dragRef}
+              wire={wire}
+              rotation={getRotOv(info.id, partOverrides)}
+            />
+          )
+        }
+
+        // Group inner-drawer / pull-out parts + slides by inner_drawer_index so
+        // they animate together when the user opens a drawer in 3D.
+        const grouped = new Map<number, { parts: ResolvedInternalPart[]; slides: { sl: ResolvedDrawerSlide; li: number }[] }>()
+        const ungroupedParts: ResolvedInternalPart[] = []
+        for (const p of rp.internal_parts) {
+          if (p.inner_drawer_index != null) {
+            const g = grouped.get(p.inner_drawer_index) ?? { parts: [], slides: [] }
+            g.parts.push(p)
+            grouped.set(p.inner_drawer_index, g)
+          } else {
+            ungroupedParts.push(p)
+          }
+        }
+        const ungroupedSlides: { sl: ResolvedDrawerSlide; li: number }[] = [];
+        (rp.internal_slides ?? []).forEach((sl, li) => {
+          if (sl.inner_drawer_index != null) {
+            const g = grouped.get(sl.inner_drawer_index) ?? { parts: [], slides: [] }
+            g.slides.push({ sl, li })
+            grouped.set(sl.inner_drawer_index, g)
+          } else {
+            ungroupedSlides.push({ sl, li })
+          }
+        })
+
         return (
-          <Part
-            key={`s${i}`}
-            b={b}
-            faceColors={panelFaceColors(info.panelKind, p.part_type, s.face, s.back, s.edge)}
-            edgeLineColor="#c4b49c"
-            meta={info}
-            selected={selected?.id === info.id}
-            highlighted={hlSet?.has(p.part_type) ?? false}
-            onSelect={onSelect}
-            contextMenuSelect
-            dragRef={dragRef}
-            ebSpec={ebFor(p.material_id)}
-            wire={wire}
-            rotation={getRotOv(id, partOverrides)}
-          />
+          <>
+            {ungroupedParts.map((p, i) => renderIntPart(p, `s${i}`))}
+            {ungroupedSlides.map(({ sl, li }) => renderIntSlide(sl, li, `isl_${li}`))}
+            {[...grouped.entries()].map(([idx, g]) => (
+              <AnimatedGroup key={`idg_${idx}`} targetTravel={openInnerDrawers.get(idx) ?? 0}>
+                {g.parts.map((p, i) => renderIntPart(p, `gs_${idx}_${i}`))}
+                {g.slides.map(({ sl, li }) => renderIntSlide(sl, li, `gisl_${idx}_${li}`))}
+              </AnimatedGroup>
+            ))}
+          </>
         )
-      })}
+      })()}
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
         const id = `zone_${z.row_index}_${z.col_index}`
 
@@ -918,6 +1093,7 @@ export default function Cabinet3DView({
   const [selectedPart, setSelectedPart]       = useState<PartMeta | null>(null)
   const [doorsOpen, setDoorsOpen]             = useState(false)
   const [openDrawers, setOpenDrawers]         = useState<Map<string, number>>(new Map())
+  const [openInnerDrawers, setOpenInnerDrawers] = useState<Map<number, number>>(new Map())
   const [edgeOverrides, setEdgeOverrides]     = useState<Map<string, PartEdge>>(new Map())
   const { dx, dy, dz } = cab
 
@@ -978,6 +1154,29 @@ export default function Cabinet3DView({
     })
   }
 
+  // Find the inner-drawer instance index for the selected face. Inner-drawer
+  // faces are tagged in fittings.ts via `inner_drawer_index`; look up by part
+  // id (`int_inner_drawer_front_${sort_order}`).
+  function innerDrawerIndexForSelected(): number | null {
+    if (!selectedPart || !selectedPart.id.startsWith('int_inner_drawer_front_')) return null
+    const sortOrder = parseInt(selectedPart.id.slice('int_inner_drawer_front_'.length))
+    const part = rp?.internal_parts.find(p =>
+      p.part_type === 'inner_drawer_front' && p.sort_order === sortOrder
+    )
+    return part?.inner_drawer_index ?? null
+  }
+
+  function toggleSingleInnerDrawer(idx: number) {
+    if (!rp) return
+    const slide = (rp.internal_slides ?? []).find(s => s.inner_drawer_index === idx)
+    const nl    = slide?.nominal_length ?? 300
+    setOpenInnerDrawers(prev => {
+      const n = new Map(prev)
+      n.set(idx, (n.get(idx) ?? 0) > 0 ? 0 : nl)
+      return n
+    })
+  }
+
   function openAllCascade() {
     if (!rp) return
     // Sort stacks bottom-to-top: higher row_index = lower in the cabinet = more extension.
@@ -994,6 +1193,8 @@ export default function Cabinet3DView({
   const hasDoors      = rp?.face_zones.some(z => z.face_type === 'door' && z.hinge_side) ?? false
   const hasDrawers    = (rp?.drawer_stacks?.length ?? 0) > 0
   const drawerZoneIds = new Set((rp?.drawer_stacks ?? []).map(s => `zone_${s.face_zone_row}_${s.face_zone_col}`))
+
+  const innerDrawerIdx = innerDrawerIndexForSelected()
 
   const drawerActions = selectedPart && drawerZoneIds.has(selectedPart.id) ? (() => {
     const [, rowStr, colStr] = selectedPart.id.split('_')
@@ -1017,6 +1218,16 @@ export default function Cabinet3DView({
           </button>
         )}
       </>
+    )
+  })() : innerDrawerIdx != null ? (() => {
+    const isOpen = (openInnerDrawers.get(innerDrawerIdx) ?? 0) > 0
+    return (
+      <button
+        className="w-full text-left text-xs text-gray-300 hover:text-white py-0.5 transition-colors"
+        onClick={() => toggleSingleInnerDrawer(innerDrawerIdx)}
+      >
+        {isOpen ? 'Close Inner Drawer' : 'Open Inner Drawer'}
+      </button>
     )
   })() : undefined
 
@@ -1058,6 +1269,14 @@ export default function Cabinet3DView({
                 Close drawers
               </button>
             )}
+            {openInnerDrawers.size > 0 && (
+              <button
+                onClick={() => setOpenInnerDrawers(new Map())}
+                className="text-[11px] font-mono text-orange-700 hover:text-orange-600 bg-white/70 hover:bg-white/90 border border-orange-300 hover:border-orange-400 rounded px-2 py-1 transition-colors pointer-events-auto select-none"
+              >
+                Close inner drawers
+              </button>
+            )}
           </div>
         </>
       }
@@ -1071,6 +1290,7 @@ export default function Cabinet3DView({
           ebByMatId={ebByMatId}
           doorsOpen={doorsOpen}
           openDrawers={openDrawers}
+          openInnerDrawers={openInnerDrawers}
           edgeOverrides={edgeOverrides}
           wire={wire}
           customParts={customParts}

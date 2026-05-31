@@ -34,12 +34,15 @@ function getEdging(part: DbEdgingKey, rules: DrawerBoxRules): EdgeSides {
 }
 
 export function resolveDrawerBox(input: DrawerBoxInput): ResolvedDrawerBoxPart[] {
-  const { box_width: W, box_height: H, box_depth: D, material, edgeband_id, bottom_material, bottom_edgeband_id, rules: r, slide_box_height } = input
+  const { box_width: W, box_height: H, box_depth: D, material, edgeband_id, bottom_material, bottom_edgeband_id, front_material, front_edgeband_id, rules: r, slide_box_height } = input
   const Ts      = r.DB_SIDE_T                        // positional: side deduction for width/X calculations
   const panelT  = material.DZ                        // actual cut thickness for side/front/back panels
   const Tb      = (bottom_material ?? material).DZ   // bottom panel thickness
+  const Tf      = (front_material  ?? material).DZ   // front panel thickness
   const mid  = material.id
   const bmid = bottom_material?.id ?? mid
+  const fmid = front_material?.id ?? mid
+  const feb  = front_edgeband_id ?? edgeband_id
 
   const parts: ResolvedDrawerBoxPart[] = []
 
@@ -94,11 +97,11 @@ export function resolveDrawerBox(input: DrawerBoxInput): ResolvedDrawerBoxPart[]
       part_type:   'db_front',
       DX: frontH,
       DY: W - 2 * Ts,
-      DZ: panelT,
+      DZ: Tf,
       X: Ts, Y: frontY, Z: 0,
       AX: 0, AY: 0, AZ: 0,
-      material_id: mid,
-      edge_band:   ebFromSides(getEdging('db_front', r), edgeband_id),
+      material_id: fmid,
+      edge_band:   ebFromSides(getEdging('db_front', r), feb),
     })
 
     // Back panel — front face aligns with the bottom's back edge (Z = D - DB_BACK_SETBACK)

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '../../ThemeToggle'
+import SlideModelEditor, { type SlideModelRow } from './SlideModelEditor'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -521,6 +522,38 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
             </div>
           </div>
         </div>
+
+        {/* ── 3D-model panel (slides only, when editing) ── */}
+        {activeTab === 'slides' && editingId && (() => {
+          const r = rows.find(x => x.id === editingId)
+          if (!r) return null
+          const slideRow: SlideModelRow = {
+            id:               String(r.id),
+            name:             String(r.name ?? ''),
+            colour:           (r.colour as string | null) ?? null,
+            runner_thickness: Number(r.runner_thickness ?? 12),
+            box_height:       (r.box_height as number | null) ?? null,
+            nominal_length:   (r.nominal_length as number | null) ?? null,
+            model_url:        (r.model_url as string | null) ?? null,
+            model_format:     (r.model_format as 'glb' | 'stl' | 'obj' | null) ?? null,
+            model_scale:      Number(r.model_scale ?? 1),
+            model_anchor_x:   Number(r.model_anchor_x ?? 0),
+            model_anchor_y:   Number(r.model_anchor_y ?? 0),
+            model_anchor_z:   Number(r.model_anchor_z ?? 0),
+          }
+          return (
+            <SlideModelEditor
+              key={slideRow.id}
+              row={slideRow}
+              onSaved={patch => {
+                setAllRows(prev => ({
+                  ...prev,
+                  slides: prev.slides.map(x => x.id === slideRow.id ? { ...x, ...patch } : x),
+                }))
+              }}
+            />
+          )
+        })()}
 
         {/* ── Portal list ── */}
         <div className="flex-1 overflow-auto">

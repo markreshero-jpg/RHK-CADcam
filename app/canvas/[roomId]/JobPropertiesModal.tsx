@@ -68,7 +68,7 @@ interface ClassDimDefaults {
   tall?: { dy?: number; dz?: number }
 }
 
-type SchedItem = { id: string; name: string; is_default: boolean }
+type SchedItem = { id: string; name: string; is_default: boolean; kind?: 'external' | 'internal' | null }
 
 type JobPreset = {
   id: string
@@ -122,10 +122,11 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const overrideKeys = (Object.keys(SYS) as RuleKey[]).filter(k => rules[k] !== SYS[k])
 
   // ── Construction method schedules ─────────────────────────────────────────
-  const [constructionSched,   setConstructionSched]   = useState(project.construction_schedule_id ?? '')
-  const [drawerBoxMethod,     setDrawerBoxMethod]     = useState(project.drawer_box_method_id ?? '')
-  const [constructionScheds,  setConstructionScheds]  = useState<SchedItem[]>([])
-  const [drawerBoxMethods,    setDrawerBoxMethods]    = useState<SchedItem[]>([])
+  const [constructionSched,    setConstructionSched]    = useState(project.construction_schedule_id ?? '')
+  const [drawerBoxMethod,      setDrawerBoxMethod]      = useState(project.drawer_box_method_id ?? '')
+  const [innerDrawerBoxMethod, setInnerDrawerBoxMethod] = useState(project.inner_drawer_box_method_id ?? '')
+  const [constructionScheds,   setConstructionScheds]   = useState<SchedItem[]>([])
+  const [drawerBoxMethods,     setDrawerBoxMethods]     = useState<SchedItem[]>([])
 
   // ── Material schedules (per zone) ─────────────────────────────────────────
   const [baseAsmSched,      setBaseAsmSched]      = useState(project.base_assembly_schedule_id ?? '')
@@ -159,7 +160,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       setSchedLoading(true)
       const [cmsR, dbmR, asmR, hdlR, slR, hiR, dbsR, idbsR, presetsR] = await Promise.all([
         supabase.from('construction_method_schedules').select('id,name,is_default').order('name'),
-        supabase.from('drawer_box_methods').select('id,name,is_default').eq('active', true).order('name'),
+        supabase.from('drawer_box_methods').select('id,name,is_default,kind').eq('active', true).order('name'),
         supabase.from('assembly_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('handle_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('slide_schedules').select('id,name,is_default').eq('active', true).order('name'),
@@ -217,8 +218,9 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
         wall: { dy: wallDy, dz: wallDz },
         tall: { dy: tallDy, dz: tallDz },
       },
-      construction_schedule_id: constructionSched || null,
-      drawer_box_method_id:     drawerBoxMethod  || null,
+      construction_schedule_id:     constructionSched     || null,
+      drawer_box_method_id:         drawerBoxMethod       || null,
+      inner_drawer_box_method_id:   innerDrawerBoxMethod  || null,
       base_assembly_schedule_id:  baseAsmSched   || null,
       wall_assembly_schedule_id:  wallAsmSched   || null,
       tall_assembly_schedule_id:  tallAsmSched   || null,
@@ -239,8 +241,9 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       const { data: ss } = await supabase.from('shop_settings').select('id').limit(1).maybeSingle()
       if (ss?.id) {
         await supabase.from('shop_settings').update({
-          construction_schedule_id: constructionSched || null,
-          drawer_box_method_id:     drawerBoxMethod   || null,
+          construction_schedule_id:   constructionSched    || null,
+          drawer_box_method_id:       drawerBoxMethod      || null,
+          inner_drawer_box_method_id: innerDrawerBoxMethod || null,
         }).eq('id', ss.id)
       }
     } finally {
@@ -502,7 +505,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                     )}
                   </section>
 
-                  {/* Drawer box construction method */}
+                  {/* Drawer box construction method (face drawers) */}
                   <section>
                     <SectionHead>Drawer Box Construction Method</SectionHead>
                     {schedLoading ? (
@@ -521,6 +524,29 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                         ))}
                       </select>
                     )}
+                    <p className="text-[10px] text-gray-500 mt-1">Used for face drawers; also used for inner drawers when no inner-specific method is set below.</p>
+                  </section>
+
+                  {/* Inner drawer box construction method */}
+                  <section>
+                    <SectionHead>Inner Drawer Construction Method</SectionHead>
+                    {schedLoading ? (
+                      <p className="text-xs text-gray-500">Loading…</p>
+                    ) : (
+                      <select
+                        value={innerDrawerBoxMethod}
+                        onChange={e => setInnerDrawerBoxMethod(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="">— inherit from face method —</option>
+                        {drawerBoxMethods.filter(m => m.kind === 'internal').map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}{m.is_default ? ' (default)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <p className="text-[10px] text-gray-500 mt-1">Only methods tagged kind = &ldquo;internal&rdquo; in the drawer-boxes library appear here. Leave blank to use the face method above.</p>
                   </section>
 
                   {/* Cabinet method rule overrides */}

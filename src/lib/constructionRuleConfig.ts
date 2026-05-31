@@ -75,8 +75,14 @@ export const EDGING_LABELS: Record<EdgingKey, string> = {
   spreader_horizontal: 'Spreader Horizontal',
   adj_shelf:           'Adj Shelf',
   fixed_shelf:         'Fixed Shelf',
-  inner_drawer_bottom: 'Drawer Bottom',
-  inner_drawer_back:   'Drawer Back',
+  inner_drawer_bottom: 'Inner Drawer Bottom',
+  inner_drawer_back:   'Inner Drawer Back',
+  inner_drawer_side:   'Inner Drawer Side',
+  inner_drawer_front:  'Inner Drawer Front',
+  pull_out_bottom:     'Pull-out Bottom',
+  pull_out_side:       'Pull-out Side',
+  pull_out_back:       'Pull-out Back',
+  accessory:           'Accessory',
   divider:             'Divider',
   door:                'Door',
   drawer_face:         'Drawer Face',
@@ -86,7 +92,7 @@ export const EDGING_LABELS: Record<EdgingKey, string> = {
 export const EDGING_GROUPS: { label: string; keys: EdgingKey[] }[] = [
   { label: 'Case',     keys: ['left_side','right_side','bottom','back','full_top','front_rail','back_rail'] },
   { label: 'Toe Kick', keys: ['kick_front_face','kick_sub_front','kick_back','spreader_vertical','spreader_horizontal'] },
-  { label: 'Internal', keys: ['adj_shelf','fixed_shelf','inner_drawer_bottom','inner_drawer_back','divider'] },
+  { label: 'Internal', keys: ['adj_shelf','fixed_shelf','divider','inner_drawer_bottom','inner_drawer_back','inner_drawer_side','inner_drawer_front','pull_out_bottom','pull_out_side','pull_out_back','accessory'] },
   { label: 'Face',     keys: ['door','drawer_face','false_panel'] },
 ]
 

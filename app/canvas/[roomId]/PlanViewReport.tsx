@@ -3,7 +3,7 @@
 // via jsPDF + svg2pdf.js. The SVG viewBox stays in model mm; svg2pdf renders it
 // into a paper-mm box of size vbW/scale × vbH/scale, giving a true 1:scale plot.
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
 import type { Project, Room, Wall, CabinetInstance } from '@/src/lib/types'
@@ -15,15 +15,17 @@ const PAPER: Record<string, { w: number; h: number }> = {
   A2L: { w: 594, h: 420 },
   A1L: { w: 841, h: 594 },
 }
+const STANDARD_SCALES = [5, 10, 15, 20, 25, 30, 40, 50, 100]
 
-const MARGIN = 20   // mm — usable-area margin on all sides
+const MARGIN = 10   // mm, usable-area margin on all sides
 const LS_KEY = 'plan-view-layers'
 const DEFAULT_LAYERS: PlanViewLayers = {
-  labels: true, dimensions: true, doorSwings: true, drawers: true, hatch: true, titleBlock: true,
+  labels: true, wallNames: true, dimensions: true, doorSwings: true, drawers: true, hatch: true, titleBlock: true,
 }
 
 const TOGGLES: { key: keyof PlanViewLayers; label: string }[] = [
   { key: 'labels',     label: 'Labels' },
+  { key: 'wallNames',  label: 'Wall Names' },
   { key: 'dimensions', label: 'Dimensions' },
   { key: 'doorSwings', label: 'Door Swings' },
   { key: 'drawers',    label: 'Drawers' },
@@ -50,6 +52,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, scale, 
     return DEFAULT_LAYERS
   })
   const [busy, setBusy] = useState(false)
+  const [fitWarning, setFitWarning] = useState<string | null>(null)
 
   // Persist on every change.
   useEffect(() => {
@@ -58,31 +61,81 @@ export default function PlanViewReport({ project, room, walls, cabinets, scale, 
 
   const projectName = project?.name ?? 'Untitled Project'
 
+  function paperLabel(key: string) {
+    return `${key.replace(/L$/, '')} Landscape`
+  }
+
+  const getFitInfo = useCallback(() => {
+    const svgEl = svgRef.current
+    if (!svgEl) return null
+    const paper = PAPER[paperKey] ?? PAPER.A3L
+    const vbW = Number(svgEl.getAttribute('data-vb-w'))
+    const vbH = Number(svgEl.getAttribute('data-vb-h'))
+    if (!Number.isFinite(vbW) || !Number.isFinite(vbH)) return null
+
+    const targetW = vbW / scale
+    const targetH = vbH / scale
+    const usableW = paper.w - MARGIN * 2
+    const usableH = paper.h - MARGIN * 2
+    return { paper, targetW, targetH, usableW, usableH }
+  }, [paperKey, scale])
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      const fit = getFitInfo()
+      if (!fit) {
+        setFitWarning(null)
+        return
+      }
+      const overW = fit.targetW > fit.usableW
+      const overH = fit.targetH > fit.usableH
+      if (!overW && !overH) {
+        setFitWarning(null)
+        return
+      }
+
+      const paperSuggestion = Object.entries(PAPER).find(([, p]) => (
+        fit.targetW <= p.w - MARGIN * 2 && fit.targetH <= p.h - MARGIN * 2
+      ))
+      const requiredScale = scale * Math.max(fit.targetW / fit.usableW, fit.targetH / fit.usableH)
+      const scaleSuggestion = STANDARD_SCALES.find(s => s >= requiredScale)
+      const suggestions = [
+        paperSuggestion ? `${paperLabel(paperSuggestion[0])} at 1:${scale}` : null,
+        scaleSuggestion ? `${paperLabel(paperKey)} at 1:${scaleSuggestion}` : null,
+      ].filter(Boolean).join(' or ')
+
+      setFitWarning(
+        `At 1:${scale}, this drawing is ${Math.ceil(fit.targetW)} x ${Math.ceil(fit.targetH)}mm but ${paperLabel(paperKey)} has ${fit.usableW} x ${fit.usableH}mm usable area. Use ${suggestions || 'larger paper or a bigger scale number'} for a true-scale PDF that fits.`,
+      )
+    })
+    return () => cancelAnimationFrame(id)
+  }, [show, walls, cabinets, getFitInfo, paperKey, scale])
+
   async function handleDownload() {
     const svgEl = svgRef.current
     if (!svgEl) return
     setBusy(true)
     try {
-      const paper = PAPER[paperKey] ?? PAPER.A3L
-      const vbW = Number(svgEl.getAttribute('data-vb-w'))
-      const vbH = Number(svgEl.getAttribute('data-vb-h'))
+      const fit = getFitInfo()
+      if (!fit) return
+      const { paper, targetW, targetH, usableW, usableH } = fit
 
       // True scale: vbW model mm renders into vbW/scale paper mm → exactly 1:scale.
-      const targetW = vbW / scale
-      const targetH = vbH / scale
-
       // Centre within the usable area; clamp to the margin if it overflows.
-      const usableW = paper.w - MARGIN * 2
-      const usableH = paper.h - MARGIN * 2
       const x = MARGIN + Math.max(0, (usableW - targetW) / 2)
       const y = MARGIN + Math.max(0, (usableH - targetH) / 2)
+
+      const pdfSvg = svgEl.cloneNode(true) as SVGSVGElement
+      pdfSvg.setAttribute('width', `${targetW}mm`)
+      pdfSvg.setAttribute('height', `${targetH}mm`)
+      pdfSvg.setAttribute('preserveAspectRatio', 'xMinYMin meet')
 
       const doc = new jsPDF({
         unit: 'mm',
         format: [paper.w, paper.h],
         orientation: paper.w >= paper.h ? 'landscape' : 'portrait',
       })
-      await svg2pdf(svgEl, doc, { x, y, width: targetW, height: targetH })
+      await svg2pdf(pdfSvg, doc, { x, y, width: targetW, height: targetH })
 
       const safeRoom = room.name.replace(/[^\w-]/g, '_')
       doc.save(`plan-${safeRoom}-1-${scale}.pdf`)
@@ -111,6 +164,12 @@ export default function PlanViewReport({ project, room, walls, cabinets, scale, 
           {busy ? 'Generating…' : `Download PDF · 1:${scale}`}
         </button>
       </div>
+
+      {fitWarning && (
+        <div className="rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {fitWarning}
+        </div>
+      )}
 
       {/* Preview */}
       <div className="bg-white rounded overflow-hidden shadow-inner" style={{ minHeight: 300 }}>

@@ -42,9 +42,9 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   allErrors.push(...faceErrors)
 
   // ── 4. Internal Module ────────────────────────────────────────
-  const { parts: internalParts, errors: internalErrors } = cab.has_internal
-    ? resolveInternalParts(cab, r, zones)
-    : { parts: [], errors: [] }
+  const { parts: internalParts, slides: internalSlides, errors: internalErrors } = cab.has_internal
+    ? resolveInternalParts(cab, r)
+    : { parts: [], slides: [], errors: [] }
   allErrors.push(...internalErrors)
 
   // ── 5. Drawer Stacks ──────────────────────────────────────────
@@ -68,17 +68,18 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   }
 
   return {
-    cabinet_id:     cab.id,
-    case_parts:     caseParts,
-    toekick_parts:  toekickParts,
-    internal_parts: internalParts,
-    face_rows:      rows,
-    face_cols:      cols,
-    face_zones:     zones,
-    drawer_stacks:  drawerStacks,
-    seam_joints:    seamJoints,
-    errors:         allErrors,
-    warnings:       allWarnings,
+    cabinet_id:      cab.id,
+    case_parts:      caseParts,
+    toekick_parts:   toekickParts,
+    internal_parts:  internalParts,
+    internal_slides: internalSlides,
+    face_rows:       rows,
+    face_cols:       cols,
+    face_zones:      zones,
+    drawer_stacks:   drawerStacks,
+    seam_joints:     seamJoints,
+    errors:          allErrors,
+    warnings:        allWarnings,
   }
 }
 

@@ -1,64 +1,49 @@
 @import "tailwindcss";
 
 /* ── Semantic color tokens ──────────────────────────────────────────────────
-   Components use these (bg-surface, text-ink, border-edge, …) instead of raw
-   grays. The actual colors live in the :root / .light blocks below, so a global
-   theme change = edit one place. Dark is the default; .light overrides.
+   Components use these (bg-canvas, text-ink, border-edge, …) instead of raw
+   grays. Dark values live in @theme (the default). .light overrides them on
+   the .light class on <html>, so a global theme change = edit one place.
    The drawing canvas + 3D/preview panels intentionally keep raw dark colors. */
-@theme inline {
-  --color-canvas: var(--canvas);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-surface-3: var(--surface-3);
-  --color-edge: var(--edge);
-  --color-edge-strong: var(--edge-strong);
-  --color-ink: var(--ink);
-  --color-ink-muted: var(--ink-muted);
-  --color-ink-subtle: var(--ink-subtle);
-  --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-accent-ink: var(--accent-ink);
+@theme {
+  --color-canvas: #030712;        /* page background — was bg-gray-950 */
+  --color-surface: #111827;       /* panels — was bg-gray-900 */
+  --color-surface-2: #1f2937;     /* inputs / fields — was bg-gray-800 */
+  --color-surface-3: #374151;     /* controls / stronger hover — was bg-gray-700 */
+  --color-edge: #1f2937;          /* borders — was border-gray-800 */
+  --color-edge-strong: #374151;   /* stronger borders — was border-gray-700 */
+  --color-ink: #f9fafb;           /* primary text — was text-white / gray-100 */
+  --color-ink-muted: #9ca3af;     /* secondary text — was text-gray-300/400 */
+  --color-ink-subtle: #6b7280;    /* faint text — was text-gray-500/600 */
+  --color-accent: #2563eb;        /* blue-600 */
+  --color-accent-hover: #3b82f6;  /* blue-500 */
+  --color-accent-ink: #60a5fa;    /* blue-400 — links/icons on a surface */
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-/* Dark theme (default — matches the app's previous hard-coded grays exactly) */
-:root,
-.dark {
-  --canvas: #030712;        /* was bg-gray-950 */
-  --surface: #111827;       /* was bg-gray-900 */
-  --surface-2: #1f2937;     /* was bg-gray-800 */
-  --surface-3: #374151;     /* was bg-gray-700 */
-  --edge: #1f2937;          /* was border-gray-800 */
-  --edge-strong: #374151;   /* was border-gray-700 */
-  --ink: #f9fafb;           /* was text-white / gray-100/200 */
-  --ink-muted: #9ca3af;     /* was text-gray-300/400 */
-  --ink-subtle: #6b7280;    /* was text-gray-500/600/700 */
-  --accent: #2563eb;        /* blue-600 */
-  --accent-hover: #3b82f6;  /* blue-500 */
-  --accent-ink: #60a5fa;    /* blue-400 — links/icons on a surface */
-}
-
-/* Light theme */
+/* Light theme — overrides the @theme defaults on the .light class on <html>.
+   .light has the same (0,1,0) specificity as :root but comes later in source
+   order, so its values win when the class is present. */
 .light {
-  --canvas: #f1f5f9;        /* slate-100 — page background */
-  --surface: #ffffff;       /* cards / panels */
-  --surface-2: #e2e8f0;     /* slate-200 — inputs / fields / hover (darker for contrast) */
-  --surface-3: #cbd5e1;     /* slate-300 — controls / stronger hover */
-  --edge: #cbd5e1;          /* slate-300 — borders + row/grid dividers (one shade darker) */
-  --edge-strong: #94a3b8;   /* slate-400 — field outlines / stronger dividers */
-  --ink: #0f172a;           /* slate-900 — primary text */
-  --ink-muted: #334155;     /* slate-700 — secondary text (darker, more readable) */
-  --ink-subtle: #64748b;    /* slate-500 — faint text (darker, more readable) */
-  --accent: #2563eb;        /* blue-600 */
-  --accent-hover: #1d4ed8;  /* blue-700 */
-  --accent-ink: #2563eb;    /* blue-600 — links/icons read well on white */
+  --color-canvas: #f1f5f9;        /* slate-100 — page background */
+  --color-surface: #ffffff;       /* cards / panels */
+  --color-surface-2: #e2e8f0;     /* slate-200 — inputs / fields */
+  --color-surface-3: #cbd5e1;     /* slate-300 — controls / stronger hover */
+  --color-edge: #cbd5e1;          /* slate-300 — borders + dividers */
+  --color-edge-strong: #94a3b8;   /* slate-400 — field outlines */
+  --color-ink: #0f172a;           /* slate-900 — primary text */
+  --color-ink-muted: #334155;     /* slate-700 — secondary text */
+  --color-ink-subtle: #64748b;    /* slate-500 — faint text */
+  --color-accent: #2563eb;        /* blue-600 */
+  --color-accent-hover: #1d4ed8;  /* blue-700 */
+  --color-accent-ink: #2563eb;    /* blue-600 — links/icons on white */
 }
 
 body {
-  background: var(--canvas);
-  color: var(--ink);
+  background: var(--color-canvas);
+  color: var(--color-ink);
   font-family: Arial, Helvetica, sans-serif;
 }
 

@@ -49,12 +49,11 @@ function make2DoorBase(overrides: Partial<CabinetInput> = {}): CabinetInput {
     },
     internal_tree: {
       type: 'open',
-      adj_shelves: [
-        { sort_order: 0, y_locked: false },
-        { sort_order: 1, y_locked: false },
+      fittings: [
+        { type: 'adj_shelf', y_locked: false },
+        { type: 'adj_shelf', y_locked: false },
       ],
     },
-    inner_drawers: [],
     ...overrides,
   }
 }
@@ -253,8 +252,8 @@ test('adj shelf DY = internal width less clearances', () => {
 test('fixed shelf at mid height', () => {
   const result = resolveCabinet(make2DoorBase({
     internal_tree: { type: 'hsplit', children: [
-      { section: { type: 'open', adj_shelves: [] } },
-      { section: { type: 'open', adj_shelves: [] } },
+      { section: { type: 'open', fittings: [] } },
+      { section: { type: 'open', fittings: [] } },
     ] },
   }))
   const fs = result.internal_parts.find(p => p.part_type === 'fixed_shelf')!
@@ -267,8 +266,8 @@ test('fixed shelf at mid height', () => {
 test('fixed shelf full internal width (no pin clearance)', () => {
   const result = resolveCabinet(make2DoorBase({
     internal_tree: { type: 'hsplit', children: [
-      { section: { type: 'open', adj_shelves: [] } },
-      { section: { type: 'open', adj_shelves: [] } },
+      { section: { type: 'open', fittings: [] } },
+      { section: { type: 'open', fittings: [] } },
     ] },
   }))
   const fs = result.internal_parts.find(p => p.part_type === 'fixed_shelf')!

@@ -3,25 +3,24 @@
 // Walks the recursive section tree, emitting:
 //   • fixed shelves  — separators of a horizontal split (hsplit)
 //   • dividers       — separators of a vertical split (vsplit)
-//   • adjustable shelves — movable contents of an open compartment
-// Inner drawers are face-zone driven and resolved separately (Step 2).
+// Open compartments (leaves) hold *fittings* (adjustable shelves, inner drawers,
+// pull-outs, accessories…) which are resolved by the fitting registry against the
+// compartment box. See resolver/fittings.ts.
 // ============================================================
 
 import {
-  CabinetInput, ResolvedInternalPart, ConstructionRules,
-  ResolverError, Section, OpenSection, ResolvedFaceZone,
-  edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
+  CabinetInput, ResolvedInternalPart, ResolvedDrawerSlide, ConstructionRules,
+  ResolverError, Section,
+  edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults, DEFAULT_DB_RULES,
 } from './types'
-
-// Axis-aligned region in cabinet coordinates (x = left, y = bottom).
-interface Box { x: number; y: number; w: number; h: number }
+import { Box, FittingCtx, resolveFittings, DEFAULT_STACK_GAP } from './fittings'
 
 export function resolveInternalParts(
   cab: CabinetInput,
   r: ConstructionRules,
-  resolvedFaceZones: ResolvedFaceZone[]
-): { parts: ResolvedInternalPart[], errors: ResolverError[] } {
+): { parts: ResolvedInternalPart[], slides: ResolvedDrawerSlide[], errors: ResolverError[] } {
   const parts:  ResolvedInternalPart[] = []
+  const slides: ResolvedDrawerSlide[]  = []
   const errors: ResolverError[]        = []
 
   const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }
@@ -47,23 +46,49 @@ export function resolveInternalParts(
 
   if (intW <= 0) {
     errors.push({ code: 'INTERNAL_TOO_NARROW', message: `Internal opening width is ${intW}mm`, part: 'internal' })
-    return { parts, errors }
+    return { parts, slides, errors }
   }
   if (intH <= 0) {
     errors.push({ code: 'INTERNAL_TOO_SHORT', message: `Internal opening height is ${intH}mm`, part: 'internal' })
-    return { parts, errors }
+    return { parts, slides, errors }
   }
 
-  // Depth-related geometry (constant across the interior)
+  // Depth-related geometry for the structural separators (constant across interior)
   const fsDX  = intD - r.FIXSB_F - r.FIXSB_B   // fixed shelf depth
   const fsZ   = intBack + r.FIXSB_B
-  const adjDX = intD - r.ADJSB_F - r.ADJSB_B   // adj shelf depth
-  const adjZ  = intBack + r.ADJSB_B
 
-  // Per-type sort counters for stable downstream naming
-  const sort = { adj_shelf: 0, fixed_shelf: 0, divider: 0 }
+  // Per-type sort counters — shared between the separator emitters below and the
+  // fitting resolvers (via ctx.sort) for stable downstream naming.
+  const sort: Record<string, number> = {
+    adj_shelf: 0, fixed_shelf: 0, divider: 0, inner_drawer: 0, pull_out: 0, accessory: 0,
+  }
 
-  // ── Emitters ───────────────────────────────────────────────────────────────
+  // Context handed to the fitting registry (compartment contents).
+  const ctx: FittingCtx = {
+    r, T, TS, intD, intBack,
+    shelfMatId:   sid,
+    carcMatId:    mid,
+    shelfEbId:    cab.shelf_edgeband_id,
+    interiorEbId: cab.interior_edgeband_id,
+    edging,
+    innerDrawerRules:      cab.inner_drawer_box_rules ?? cab.drawer_box_rules ?? DEFAULT_DB_RULES,
+    defaultInnerDrawerType: cab.default_inner_drawer_type,
+    innerDrawerMat:        cab.inner_drawer_material  ?? cab.drawer_material   ?? cab.material,
+    innerDrawerEbId:       cab.inner_drawer_edgeband_id ?? cab.interior_edgeband_id,
+    innerDrawerBottomMat:  cab.inner_drawer_bottom_material,
+    innerDrawerBottomEbId: cab.inner_drawer_bottom_edgeband_id,
+    innerDrawerFrontMat:   cab.inner_drawer_front_material,
+    innerDrawerFrontEbId:  cab.inner_drawer_front_edgeband_id,
+    slideProducts:    cab.slide_products ?? [],
+    slideSchedule:    cab.slide_schedule ?? [],
+    methodRulesById:  cab.drawer_box_method_rules ?? {},
+    stackGap:         cab.internal_stack_gap ?? DEFAULT_STACK_GAP,
+    sort,
+    errors,
+    internalSlides: slides,
+  }
+
+  // ── Structural separator emitters (split children) ────────────────────────────
   function emitFixedShelf(box: Box, locked: boolean) {
     if (fsDX <= 0) {
       errors.push({ code: 'FIXED_SHELF_DEPTH_INVALID', message: `Fixed shelf depth resolves to ${fsDX}mm`, part: 'fixed_shelf' })
@@ -95,65 +120,55 @@ export function resolveInternalParts(
     })
   }
 
-  function emitAdjShelves(box: Box, section: OpenSection) {
-    const n = section.adj_shelves.length
-    if (n === 0) return
-    if (adjDX <= 0) {
-      errors.push({ code: 'ADJ_SHELF_DEPTH_INVALID', message: `Adj shelf depth resolves to ${adjDX}mm`, part: 'adj_shelf' })
-      return
-    }
-    const shDY = box.w - r.ADJSL - r.ADJSR
-    if (shDY <= 0) {
-      errors.push({ code: 'ADJ_SHELF_TOO_NARROW', message: `Adj shelf width resolves to ${shDY}mm`, part: 'adj_shelf' })
-      return
-    }
-    const openH = (box.h - n * TS) / (n + 1)
-    if (openH <= 0) {
-      errors.push({ code: 'TOO_MANY_ADJ_SHELVES', message: `${n} adj shelves exceed available height (${Math.round(box.h)}mm)`, part: 'adj_shelf' })
-      return
-    }
-    section.adj_shelves.forEach((s, i) => {
-      const shY = (s.y_locked && s.y_position !== undefined)
-        ? s.y_position
-        : box.y + (i + 1) * openH + i * TS
-      parts.push({
-        part_type:   'adj_shelf',
-        sort_order:  sort.adj_shelf++,
-        DX: adjDX, DY: shDY, DZ: TS,
-        X:  box.x + r.ADJSL, Y: shY, Z: adjZ,
-        AX: 0, AY: 0, AZ: 0,
-        material_id: sid,
-        edge_band:   edgeSidesToBanding(edging.adj_shelf, cab.shelf_edgeband_id),
-        y_locked:    s.y_locked,
-      })
-    })
-  }
+  // ── Equalise-group size precomputation ────────────────────────────────────────
+  // Two-pass solver: pass 1 walks the tree treating every unlocked child as free
+  // flex (no group distinction) and records each group's per-split natural fair
+  // share. The group's final size = min of those candidates, so the size always
+  // fits in every split the group appears in. Free flex children in larger splits
+  // absorb the surplus. Locked children are honoured verbatim.
+  const groupSizes = computeGroupSizes(cab.internal_tree, intW, intH, TS, T)
 
-  // ── Step 1: Walk the section tree ────────────────────────────────────────────
+  // ── Walk the section tree ─────────────────────────────────────────────────────
   // For a split, the available extent along the split axis is divided among the
-  // children (locked sizes honoured, the remainder shared equally), with a
-  // separator part (shelf or divider) emitted between consecutive children.
-  function walk(section: Section, box: Box) {
-    if (box.w <= 0 || box.h <= 0) return
+  // children: locked sizes honoured, equalise-group members fixed at the group's
+  // computed size, the remainder shared equally among free-flex children. A
+  // separator part (shelf or divider) is emitted between consecutive children.
+  // An open leaf delegates to the fitting registry against its compartment box.
+  function walk(section: Section | undefined | null, box: Box) {
+    // Defensive: a cabinet may carry no internal_tree, or a child may have a
+    // missing section (legacy / partial data). Bail rather than throwing — an
+    // uncaught error here propagates all the way up and crashes the whole page.
+    if (!section || box.w <= 0 || box.h <= 0) return
 
     if (section.type === 'open') {
-      emitAdjShelves(box, section)
+      parts.push(...resolveFittings(box, section.fittings ?? [], ctx))
       return
     }
 
     const horiz = section.type === 'hsplit'
     const sepT  = horiz ? TS : T
     const total = horiz ? box.h : box.w
-    const kids  = section.children
+    const kids  = section.children ?? []
     const N     = kids.length
     if (N === 0) return
 
-    const avail     = total - (N - 1) * sepT
-    const lockedSum = kids.reduce((a, c) => a + (c.size ?? 0), 0)
-    const flexCount = kids.filter(c => c.size === undefined).length
-    const flexSize  = flexCount > 0 ? (avail - lockedSum) / flexCount : 0
+    // Classify children: locked (size set), grouped (group id with resolved size),
+    // or free flex (everything else). Group members consume their group's size;
+    // remainder is divided among free flex children.
+    const childResolved: (number | null)[] = kids.map(c => {
+      if (c.size !== undefined) return c.size
+      if (c.equalise_group) {
+        const gs = groupSizes.get(c.equalise_group)
+        if (gs !== undefined && gs > 0) return gs
+      }
+      return null
+    })
+    const avail        = total - (N - 1) * sepT
+    const fixedSum     = childResolved.reduce<number>((a, s) => a + (s ?? 0), 0)
+    const freeFlexCount = childResolved.filter(s => s === null).length
+    const flexSize     = freeFlexCount > 0 ? (avail - fixedSum) / freeFlexCount : 0
 
-    if (avail <= 0 || (flexCount > 0 && flexSize <= 0)) {
+    if (avail <= 0 || fixedSum > avail + 0.5 || (freeFlexCount > 0 && flexSize <= 0)) {
       errors.push({
         code:    horiz ? 'TOO_MANY_SHELVES' : 'TOO_MANY_DIVIDERS',
         message: `Internal ${horiz ? 'shelves' : 'dividers'} don't fit in ${Math.round(total)}mm`,
@@ -164,7 +179,7 @@ export function resolveInternalParts(
 
     let cursor = horiz ? box.y : box.x
     kids.forEach((c, i) => {
-      const size = c.size ?? flexSize
+      const size = childResolved[i] ?? flexSize
       const childBox: Box = horiz
         ? { x: box.x, y: cursor, w: box.w, h: size }
         : { x: cursor, y: box.y, w: size, h: box.h }
@@ -172,7 +187,9 @@ export function resolveInternalParts(
       walk(c.section, childBox)
 
       if (i < N - 1) {
-        const locked = c.size !== undefined
+        // Group-constrained children are also "locked" from the consumer's
+        // perspective — the separator's downstream position is fixed.
+        const locked = childResolved[i] !== null
         if (horiz) emitFixedShelf({ x: box.x, y: cursor + size, w: box.w, h: sepT }, locked)
         else       emitDivider   ({ x: cursor + size, y: box.y, w: sepT, h: box.h }, locked)
       }
@@ -182,74 +199,59 @@ export function resolveInternalParts(
 
   walk(cab.internal_tree, { x: intLeft, y: intBottom, w: intW, h: intH })
 
-  // ── Step 2: Inner drawers ─────────────────────────────────────────────────────
-  // Inner drawers map to a specific face zone column — column splitting from the
-  // section tree does not apply here.
-  for (const drawer of cab.inner_drawers) {
-    const runnerDepth = drawer.runner_depth ?? (intD - r.SLIDE_SETBACK)
+  return { parts, slides, errors }
+}
 
-    if (runnerDepth > intD) {
-      errors.push({
-        code:    'RUNNER_TOO_DEEP',
-        message: `Runner depth ${runnerDepth}mm exceeds cabinet internal depth ${intD}mm`,
-        part:    'inner_drawer',
-      })
-      continue
+// Pass-1 walker: collect per-split natural fair-share for each group, then take
+// the min so the group fits in every split that contains its members. Splits
+// where every child is locked contribute nothing (no flex slots to size).
+function computeGroupSizes(
+  root:   Section | undefined | null,
+  rootW:  number,
+  rootH:  number,
+  shelfT: number,
+  matT:   number,
+): Map<string, number> {
+  const candidates = new Map<string, number[]>()
+  if (!root) return new Map()
+
+  function walk(s: Section | undefined | null, w: number, h: number) {
+    if (!s || s.type === 'open' || w <= 0 || h <= 0) return
+    const horiz = s.type === 'hsplit'
+    const sepT  = horiz ? shelfT : matT
+    const total = horiz ? h : w
+    const kids  = s.children ?? []
+    const N     = kids.length
+    if (N === 0) return
+    const avail        = total - (N - 1) * sepT
+    const lockedSum    = kids.reduce((a, c) => a + (c.size ?? 0), 0)
+    const unlockedCnt  = kids.filter(c => c.size === undefined).length
+    const naturalFlex  = unlockedCnt > 0 ? (avail - lockedSum) / unlockedCnt : 0
+    if (naturalFlex > 0) {
+      for (const c of kids) {
+        if (c.size === undefined && c.equalise_group) {
+          const arr = candidates.get(c.equalise_group) ?? []
+          arr.push(naturalFlex)
+          candidates.set(c.equalise_group, arr)
+        }
+      }
     }
-
-    const faceZone = resolvedFaceZones.find(
-      z => z.row_index === drawer.face_zone_row && z.col_index === drawer.face_zone_col
-    )
-    const yStart = faceZone
-      ? faceZone.Y + 10
-      : intBottom + 10
-
-    const slideDed = cab.slide_side_deduction
-    const idDY     = intW - 2 * slideDed - r.IDCL - r.IDCR
-    const idX      = intLeft + slideDed
-
-    if (idDY <= 0) {
-      errors.push({
-        code:    'INNER_DRAWER_TOO_NARROW',
-        message: `Inner drawer width resolves to ${idDY}mm after slide deductions`,
-        part:    'inner_drawer',
-      })
-      continue
-    }
-
-    // Drawer bottom
-    parts.push({
-      part_type:   'inner_drawer_bottom',
-      sort_order:  drawer.sort_order,
-      DX: runnerDepth,
-      DY: idDY,
-      DZ: T,
-      X:  idX,
-      Y:  yStart,
-      Z:  intBack,
-      AX: 0, AY: 0, AZ: 0,
-      material_id: mid,
-      edge_band:   edgeSidesToBanding(edging.inner_drawer_bottom, cab.interior_edgeband_id),
-      y_locked:    false,
-    })
-
-    // Drawer back
-    const backH = 100 - T   // placeholder — drawer box builder will set
-    parts.push({
-      part_type:   'inner_drawer_back',
-      sort_order:  drawer.sort_order,
-      DX: backH,
-      DY: idDY,
-      DZ: T,
-      X:  idX,
-      Y:  yStart,
-      Z:  intBack + runnerDepth - T,
-      AX: 0, AY: 0, AZ: 0,
-      material_id: mid,
-      edge_band:   edgeSidesToBanding(edging.inner_drawer_back, cab.interior_edgeband_id),
-      y_locked:    false,
+    // Recurse with the naive (pass-1) child box so nested groups see the right
+    // parent extent. For hsplit parents the child's height = size, width = w;
+    // for vsplit parents width = size, height = h.
+    kids.forEach(c => {
+      const size = c.size ?? Math.max(0, naturalFlex)
+      if (horiz) walk(c.section, w,    size)
+      else       walk(c.section, size, h   )
     })
   }
 
-  return { parts, errors }
+  walk(root, rootW, rootH)
+
+  const out = new Map<string, number>()
+  for (const [g, arr] of candidates) {
+    if (arr.length === 0) continue
+    out.set(g, Math.min(...arr))
+  }
+  return out
 }

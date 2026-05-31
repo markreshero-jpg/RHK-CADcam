@@ -16,11 +16,12 @@ import {
   sideRect, tkSideRect, shelfSideRect, zoneSideRect, intSideRect,
   dbElevRect, dbTopRect, dbSideRect,
   slideElevRect, slideTopRect, slideSideRect,
-  svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta, svgDbMeta, svgSlideMeta,
+  svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta, svgDbMeta, svgSlideMeta, svgInternalSlideMeta,
   svgHitParts, partIdColor, DrillOverlay,
-  PartShape, caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3,
+  PartShape, SlideShape, caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3,
 } from './cabinetEditSvgHelpers'
 import { cabinetSeamDrills, type DrillAxis } from '@/src/lib/jointDrilling'
+import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 
 // Fallback approximation constants (used when resolver data not available)
 const PT   = 18
@@ -225,9 +226,9 @@ function OriginMarker({ sx, sy, hLabel, vLabel, vUp = true }: {
   const vy = vUp ? -arm : arm
   return (
     <g style={{ pointerEvents: 'none' }}>
-      <line x1={sx} y1={sy} x2={sx + arm} y2={sy} stroke={col} strokeWidth={1.5} strokeLinecap="round" />
-      <line x1={sx} y1={sy} x2={sx} y2={sy + vy} stroke={col} strokeWidth={1.5} strokeLinecap="round" />
-      <circle cx={sx} cy={sy} r={r} fill={col} stroke="#0f172a" strokeWidth={1} />
+      <line x1={sx} y1={sy} x2={sx + arm} y2={sy} stroke={col} strokeWidth={1.5} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <line x1={sx} y1={sy} x2={sx} y2={sy + vy} stroke={col} strokeWidth={1.5} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={sx} cy={sy} r={r} fill={col} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />
       <text x={sx + arm + 4} y={sy} dominantBaseline="central" fontSize={fs} fill={col} fontFamily="system-ui,sans-serif">{hLabel}</text>
       <text x={sx} y={sy + vy + (vUp ? -4 : 4)} textAnchor="middle" dominantBaseline={vUp ? 'auto' : 'hanging'} fontSize={fs} fill={col} fontFamily="system-ui,sans-serif">{vLabel}</text>
     </g>
@@ -281,6 +282,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
 }) {
   const { dx, dy } = cab
   const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
+  const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
+  const triMap = useSlideTriangles(allSlides)
   const pl = 80, pt = 50, pr = 40, pb = 40
   const vw = dx + pl + pr
   const vh = dy + pt + pb
@@ -319,6 +322,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
     stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
+  ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); partMap.set(m.id, m) })
   ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
   if (partLabels)   for (const [id, lbl]  of Object.entries(partLabels))   { const m = partMap.get(id); if (m) partMap.set(id, { ...m, label: lbl }) }
   if (partComments) for (const [id, cmt]  of Object.entries(partComments)) { const m = partMap.get(id); if (m) partMap.set(id, { ...m, comment: cmt }) }
@@ -357,14 +361,25 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
           const pp = applyOv(s, meta.id, partOverrides)
           const { ex, ey, ew, eh } = slideElevRect(pp as typeof s)
           const r = toSVG(ex, ey, ew, eh)
-          return <PartShape key={`sl${si}_${li}`} x={r.x} y={r.y} w={r.w} h={r.h}
+          return <SlideShape key={`sl${si}_${li}`} rectX={r.x} rectY={r.y} rectW={r.w} rectH={r.h}
             box={slideBox3(s)} ov={partOverrides?.[meta.id]} project={proj}
-            fill={wireMode ? 'transparent' : RC.slide.fill}
-            stroke={stroke(meta.id, RC.slide.stroke)} strokeWidth={sw(meta.id, 0.5)}
-            strokeDasharray={sel(meta.id) ? undefined : '3 2'}
-            dataPartId={meta.id} style={cp} />
+            slide={pp} tris={triMap.get(triKey(s) ?? '')} wireMode={wireMode} selected={sel(meta.id)}
+            fill={RC.slide.fill} stroke={RC.slide.stroke} strokeWidth={sw(meta.id, 0.5)}
+            strokeDasharray="3 2" dataPartId={meta.id} style={cp} />
         }),
       ])}
+
+      {showInternals && (rp.internal_slides ?? []).map((s, li) => {
+        const meta = svgInternalSlideMeta(s)
+        const pp = applyOv(s, meta.id, partOverrides)
+        const { ex, ey, ew, eh } = slideElevRect(pp as typeof s)
+        const r = toSVG(ex, ey, ew, eh)
+        return <SlideShape key={`isl${li}`} rectX={r.x} rectY={r.y} rectW={r.w} rectH={r.h}
+          box={slideBox3(s)} ov={partOverrides?.[meta.id]} project={proj}
+          slide={pp} tris={triMap.get(triKey(s) ?? '')} wireMode={wireMode} selected={sel(meta.id)}
+          fill={RC.slide.fill} stroke={RC.slide.stroke} strokeWidth={sw(meta.id, 0.5)}
+          strokeDasharray="3 2" dataPartId={meta.id} style={cp} />
+      })}
 
       {rp.toekick_parts.map((p, i) => {
         const meta = svgTkMeta(p)
@@ -418,8 +433,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
               stroke={stroke(meta.id, col.stroke)} strokeWidth={sw(meta.id, wireMode ? 0.75 : 1)}
               fillOpacity={wireMode ? 1 : 0.85}
               dataPartId={meta.id} style={cp} />
-            {z.hinge_side === 'left'  && <line x1={r.x}     y1={r.y} x2={r.x}     y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} data-part-id={meta.id} style={cp} />}
-            {z.hinge_side === 'right' && <line x1={r.x+r.w} y1={r.y} x2={r.x+r.w} y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} data-part-id={meta.id} style={cp} />}
+            {z.hinge_side === 'left'  && <line x1={r.x}     y1={r.y} x2={r.x}     y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} vectorEffect="non-scaling-stroke" data-part-id={meta.id} style={cp} />}
+            {z.hinge_side === 'right' && <line x1={r.x+r.w} y1={r.y} x2={r.x+r.w} y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} vectorEffect="non-scaling-stroke" data-part-id={meta.id} style={cp} />}
           </g>
         )
       })}
@@ -429,15 +444,15 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         const r = toSVG(p.x, p.y + Number(p.dz), Number(p.dy), Number(p.dz))
         return <rect key={`cust${i}`} x={r.x} y={r.y} width={Math.max(r.w, 1)} height={Math.max(r.h, 1)}
           fill={wireMode ? 'transparent' : '#2d1a4a'}
-          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)}
+          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"
           strokeDasharray={sel(meta.id) ? undefined : '5 3'}
           data-part-id={meta.id} style={cp} />
       })}
       <DrillOverlay drills={drills} perp="z"
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
-      <rect x={ox} y={oy} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
-      <line x1={ox-20} y1={oy+dy} x2={ox+dx+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" style={{ pointerEvents: 'none' }} />
+      <rect x={ox} y={oy} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
+      <line x1={ox-20} y1={oy+dy} x2={ox+dx+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
       {dimH(ox, ox+dx, oy-35, `${dx}mm`, true)}
       {dimV(ox-50, oy, oy+dy, `${dy}mm`)}
       {selOrigin != null && selOrigin.x != null && selOrigin.y != null && (
@@ -458,6 +473,8 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
 }) {
   const { dx, dz } = cab
   const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
+  const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
+  const triMap = useSlideTriangles(allSlides)
   const wallH = 40
   const pl = 80, pt = 50 + wallH, pr = 40, pb = 50
   const vw = dx + pl + pr
@@ -496,6 +513,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
     stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
+  ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); partMap.set(m.id, m) })
   ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
   if (partLabels)   for (const [id, lbl] of Object.entries(partLabels))   { const m = partMap.get(id); if (m) partMap.set(id, { ...m, label: lbl }) }
   if (partComments) for (const [id, cmt] of Object.entries(partComments)) { const m = partMap.get(id); if (m) partMap.set(id, { ...m, comment: cmt }) }
@@ -515,7 +533,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
 
   return (
     <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick} onContextMenu={handleContextMenu}>
-      <rect x={ox} y={oz - wallH} width={dx} height={wallH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} style={{ pointerEvents: 'none' }} />
+      <rect x={ox} y={oz - wallH} width={dx} height={wallH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
       <text x={ox + dx/2} y={oz - wallH/2} textAnchor="middle" dominantBaseline="central"
         fontSize={18} fill="#475569" fontFamily="system-ui,sans-serif" letterSpacing={2}>WALL</text>
       <rect x={ox} y={oz} width={dx} height={dz} fill={wireMode ? '#050a12' : C_INT} />
@@ -535,14 +553,24 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
           const meta = svgSlideMeta(sl, stack)
           const pp = applyOv(sl, meta.id, partOverrides)
           const r = slideTopRect(pp as typeof sl); const s = toSVG(r.tx, r.tz, r.tw, r.td)
-          return <PartShape key={`sl${si}_${li}`} x={s.x} y={s.y} w={s.w} h={s.h}
+          return <SlideShape key={`sl${si}_${li}`} rectX={s.x} rectY={s.y} rectW={s.w} rectH={s.h}
             box={slideBox3(sl)} ov={partOverrides?.[meta.id]} project={proj}
-            fill={wireMode ? 'transparent' : RC.slide.fill}
-            stroke={stroke(meta.id, RC.slide.stroke)} strokeWidth={sw(meta.id, 0.5)}
-            strokeDasharray={sel(meta.id) ? undefined : '3 2'}
-            dataPartId={meta.id} style={cp} />
+            slide={pp} tris={triMap.get(triKey(sl) ?? '')} wireMode={wireMode} selected={sel(meta.id)}
+            fill={RC.slide.fill} stroke={RC.slide.stroke} strokeWidth={sw(meta.id, 0.5)}
+            strokeDasharray="3 2" dataPartId={meta.id} style={cp} />
         }),
       ])}
+
+      {showInternals && (rp.internal_slides ?? []).map((sl, li) => {
+        const meta = svgInternalSlideMeta(sl)
+        const pp = applyOv(sl, meta.id, partOverrides)
+        const r = slideTopRect(pp as typeof sl); const s = toSVG(r.tx, r.tz, r.tw, r.td)
+        return <SlideShape key={`isl${li}`} rectX={s.x} rectY={s.y} rectW={s.w} rectH={s.h}
+          box={slideBox3(sl)} ov={partOverrides?.[meta.id]} project={proj}
+          slide={pp} tris={triMap.get(triKey(sl) ?? '')} wireMode={wireMode} selected={sel(meta.id)}
+          fill={RC.slide.fill} stroke={RC.slide.stroke} strokeWidth={sw(meta.id, 0.5)}
+          strokeDasharray="3 2" dataPartId={meta.id} style={cp} />
+      })}
 
       {rp.internal_parts.map((p, i) => {
         const meta = svgIntMeta(p)
@@ -595,14 +623,14 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
         const s = toSVG(p.x, p.z, Number(p.dy), Number(p.dx))
         return <rect key={`cust${i}`} x={s.x} y={s.y} width={Math.max(s.w, 1)} height={Math.max(s.h, 1)}
           fill={wireMode ? 'transparent' : '#2d1a4a'}
-          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)}
+          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"
           strokeDasharray={sel(meta.id) ? undefined : '5 3'}
           data-part-id={meta.id} style={cp} />
       })}
       <DrillOverlay drills={drills} perp="y"
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'z+' ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 }} />
-      <rect x={ox} y={oz} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
+      <rect x={ox} y={oz} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
       <text x={ox + dx/2} y={oz + dz + 22} textAnchor="middle" dominantBaseline="central"
         fontSize={18} fill="#374151" fontFamily="system-ui,sans-serif">ACCESS</text>
       {dimH(ox, ox + dx, oz + dz + 50, `${dx}mm`)}
@@ -625,6 +653,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
 }) {
   const { dz, dy } = cab
   const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
+  const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
+  const triMap = useSlideTriangles(allSlides)
   const wallW = 40
 
   const tkHeight = rp.toekick_parts
@@ -675,6 +705,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
     stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); partMap.set(m.id, m) })
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
+  ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); partMap.set(m.id, m) })
   ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
   if (partLabels)   for (const [id, lbl] of Object.entries(partLabels))   { const m = partMap.get(id); if (m) partMap.set(id, { ...m, label: lbl }) }
   if (partComments) for (const [id, cmt] of Object.entries(partComments)) { const m = partMap.get(id); if (m) partMap.set(id, { ...m, comment: cmt }) }
@@ -694,7 +725,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
 
   return (
     <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick} onContextMenu={handleContextMenu}>
-      <rect x={oz - wallW} y={oy} width={wallW} height={dy} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} style={{ pointerEvents: 'none' }} />
+      <rect x={oz - wallW} y={oy} width={wallW} height={dy} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
       <text x={oz - wallW/2} y={oy + dy/2} textAnchor="middle" dominantBaseline="central"
         fontSize={16} fill="#475569" fontFamily="system-ui,sans-serif"
         transform={`rotate(-90,${oz - wallW/2},${oy + dy/2})`}>WALL</text>
@@ -715,14 +746,24 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
           const meta = svgSlideMeta(sl, stack)
           const pp = applyOv(sl, meta.id, partOverrides)
           const r = slideSideRect(pp as typeof sl); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
-          return <PartShape key={`sl${si}_${li}`} x={s.x} y={s.y} w={s.w} h={s.h}
+          return <SlideShape key={`sl${si}_${li}`} rectX={s.x} rectY={s.y} rectW={s.w} rectH={s.h}
             box={slideBox3(sl)} ov={partOverrides?.[meta.id]} project={proj}
-            fill={wireMode ? 'transparent' : RC.slide.fill}
-            stroke={stroke(meta.id, RC.slide.stroke)} strokeWidth={sw(meta.id, 0.5)}
-            strokeDasharray={sel(meta.id) ? undefined : '3 2'}
-            dataPartId={meta.id} style={cp} />
+            slide={pp} tris={triMap.get(triKey(sl) ?? '')} wireMode={wireMode} selected={sel(meta.id)}
+            fill={RC.slide.fill} stroke={RC.slide.stroke} strokeWidth={sw(meta.id, 0.5)}
+            strokeDasharray="3 2" dataPartId={meta.id} style={cp} />
         }),
       ])}
+
+      {showInternals && (rp.internal_slides ?? []).map((sl, li) => {
+        const meta = svgInternalSlideMeta(sl)
+        const pp = applyOv(sl, meta.id, partOverrides)
+        const r = slideSideRect(pp as typeof sl); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
+        return <SlideShape key={`isl${li}`} rectX={s.x} rectY={s.y} rectW={s.w} rectH={s.h}
+          box={slideBox3(sl)} ov={partOverrides?.[meta.id]} project={proj}
+          slide={pp} tris={triMap.get(triKey(sl) ?? '')} wireMode={wireMode} selected={sel(meta.id)}
+          fill={RC.slide.fill} stroke={RC.slide.stroke} strokeWidth={sw(meta.id, 0.5)}
+          strokeDasharray="3 2" dataPartId={meta.id} style={cp} />
+      })}
 
       {rp.internal_parts.map((p, i) => {
         const meta = svgIntMeta(p)
@@ -776,15 +817,15 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
         const s = toSVG(p.z, p.y + Number(p.dz), Number(p.dx), Number(p.dz))
         return <rect key={`cust${i}`} x={s.x} y={s.y} width={Math.max(s.w, 1)} height={Math.max(s.h, 1)}
           fill={wireMode ? 'transparent' : '#2d1a4a'}
-          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)}
+          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"
           strokeDasharray={sel(meta.id) ? undefined : '5 3'}
           data-part-id={meta.id} style={cp} />
       })}
       <DrillOverlay drills={drills} perp="x"
         project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'z+' ? { dx: 1, dy: 0 } : a === 'z-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
-      <rect x={oz} y={oy} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
-      <line x1={oz-20} y1={oy+dy} x2={oz+dz+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" style={{ pointerEvents: 'none' }} />
+      <rect x={oz} y={oy} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
+      <line x1={oz-20} y1={oy+dy} x2={oz+dz+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
 
       {dimH(oz, oz + dz, oy - 50, `${dz}mm`, false)}
       {kickZmin < Infinity && dimH(oz + kickZmin, oz + kickZmax, oy + dy + 30, `${Math.round(kickZmax - kickZmin)}mm`)}
@@ -821,18 +862,18 @@ export function TopView({ cab }: { cab: CabinetInstance }) {
 
   return (
     <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
-      <rect x={x0} y={T} width={dx} height={wallH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} />
+      <rect x={x0} y={T} width={dx} height={wallH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
       <text x={x0 + dx/2} y={T + wallH/2} textAnchor="middle" dominantBaseline="central" fontSize={20} fill="#475569" fontFamily="system-ui,sans-serif" letterSpacing={2}>WALL</text>
       <rect x={x0} y={y0} width={dx} height={dz} fill={C_INT} />
       {has_carcass && <>
-        <rect x={x0} y={y0} width={dx} height={BT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
-        <rect x={x0} y={y0} width={PT} height={dz} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
-        <rect x={x0 + dx - PT} y={y0} width={PT} height={dz} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
+        <rect x={x0} y={y0} width={dx} height={BT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <rect x={x0} y={y0} width={PT} height={dz} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <rect x={x0 + dx - PT} y={y0} width={PT} height={dz} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
       </>}
       {has_face && (
-        <rect x={x0} y={y0 + dz - FF} width={dx} height={FF} fill={C_FACE} stroke="#6b7280" strokeWidth={1.5} />
+        <rect x={x0} y={y0 + dz - FF} width={dx} height={FF} fill={C_FACE} stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       )}
-      <rect x={x0} y={y0} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={2} />
+      <rect x={x0} y={y0} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={2} vectorEffect="non-scaling-stroke" />
       <text x={x0 + dx/2} y={y0 + dz + 22} textAnchor="middle" dominantBaseline="central" fontSize={18} fill="#374151" fontFamily="system-ui,sans-serif">ACCESS</text>
       {dimH(x0, x0 + dx, y0 + dz + 50, `${dx}mm`)}
       {dimV(x0 - 50, y0, y0 + dz, `${dz}mm`)}
@@ -854,28 +895,28 @@ export function ElevationView({ cab }: { cab: CabinetInstance }) {
     <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
       <rect x={x0} y={y0} width={dx} height={carcH} fill={C_INT} />
       {isBase && has_toekick && (
-        <rect x={x0} y={y0 + carcH} width={dx} height={TKH} fill="#080f1a" stroke={C_STROKE} strokeWidth={1} />
+        <rect x={x0} y={y0 + carcH} width={dx} height={TKH} fill="#080f1a" stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
       )}
       {has_carcass && <>
-        <rect x={x0} y={y0} width={PT} height={carcH} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
-        <rect x={x0 + dx - PT} y={y0} width={PT} height={carcH} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
+        <rect x={x0} y={y0} width={PT} height={carcH} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <rect x={x0 + dx - PT} y={y0} width={PT} height={carcH} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
         {top_type === 'full_top'
-          ? <rect x={x0} y={y0} width={dx} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
+          ? <rect x={x0} y={y0} width={dx} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
           : <>
-              <rect x={x0} y={y0} width={FFS} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
-              <rect x={x0 + dx - FFS} y={y0} width={FFS} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
+              <rect x={x0} y={y0} width={FFS} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              <rect x={x0 + dx - FFS} y={y0} width={FFS} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
             </>
         }
-        {isBase && <rect x={x0} y={y0 + carcH - PT} width={dx} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />}
+        {isBase && <rect x={x0} y={y0 + carcH - PT} width={dx} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />}
       </>}
       {has_face && <>
-        <rect x={x0} y={y0} width={FFS} height={carcH} fill={C_FACE} stroke="#6b7280" strokeWidth={1} opacity={0.55} />
-        <rect x={x0 + dx - FFS} y={y0} width={FFS} height={carcH} fill={C_FACE} stroke="#6b7280" strokeWidth={1} opacity={0.55} />
-        <rect x={x0} y={y0} width={dx} height={FFR} fill={C_FACE} stroke="#6b7280" strokeWidth={1} opacity={0.55} />
-        <rect x={x0} y={y0 + carcH - FFR} width={dx} height={FFR} fill={C_FACE} stroke="#6b7280" strokeWidth={1} opacity={0.55} />
+        <rect x={x0} y={y0} width={FFS} height={carcH} fill={C_FACE} stroke="#6b7280" strokeWidth={1} opacity={0.55} vectorEffect="non-scaling-stroke" />
+        <rect x={x0 + dx - FFS} y={y0} width={FFS} height={carcH} fill={C_FACE} stroke="#6b7280" strokeWidth={1} opacity={0.55} vectorEffect="non-scaling-stroke" />
+        <rect x={x0} y={y0} width={dx} height={FFR} fill={C_FACE} stroke="#6b7280" strokeWidth={1} opacity={0.55} vectorEffect="non-scaling-stroke" />
+        <rect x={x0} y={y0 + carcH - FFR} width={dx} height={FFR} fill={C_FACE} stroke="#6b7280" strokeWidth={1} opacity={0.55} vectorEffect="non-scaling-stroke" />
       </>}
-      <rect x={x0} y={y0} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={2} />
-      <line x1={x0-20} y1={y0+dy} x2={x0+dx+20} y2={y0+dy} stroke="#334155" strokeWidth={2} strokeDasharray="10 5" />
+      <rect x={x0} y={y0} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+      <line x1={x0-20} y1={y0+dy} x2={x0+dx+20} y2={y0+dy} stroke="#334155" strokeWidth={2} strokeDasharray="10 5" vectorEffect="non-scaling-stroke" />
       {dimH(x0, x0+dx, y0-50, `${dx}mm`, true)}
       {dimV(x0-50, y0, y0+dy, `${dy}mm`)}
       {viewLabel(x0+dx/2, vh-14, 'ELEVATION — WIDTH × HEIGHT')}
@@ -895,32 +936,32 @@ export function SideView({ cab }: { cab: CabinetInstance }) {
 
   return (
     <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%' }}>
-      <rect x={x0 - wallW} y={y0} width={wallW} height={dy} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} />
+      <rect x={x0 - wallW} y={y0} width={wallW} height={dy} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
       <text x={x0 - wallW/2} y={y0 + dy/2} textAnchor="middle" dominantBaseline="central" fontSize={18} fill="#475569" fontFamily="system-ui,sans-serif"
         transform={`rotate(-90,${x0 - wallW/2},${y0 + dy/2})`}>WALL</text>
       <rect x={x0} y={y0} width={dz} height={carcH} fill={C_INT} />
       {isBase && has_toekick && (
-        <rect x={x0} y={y0 + carcH} width={dz} height={TKH} fill="#080f1a" stroke={C_STROKE} strokeWidth={1} />
+        <rect x={x0} y={y0 + carcH} width={dz} height={TKH} fill="#080f1a" stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
       )}
       {has_carcass && <>
-        <rect x={x0} y={y0} width={BT} height={dy} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
+        <rect x={x0} y={y0} width={BT} height={dy} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
         {top_type === 'full_top'
-          ? <rect x={x0} y={y0} width={dz} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
+          ? <rect x={x0} y={y0} width={dz} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
           : <>
-              <rect x={x0} y={y0} width={BT + PT} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
-              <rect x={x0 + dz - FF - PT} y={y0} width={FF + PT} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />
+              <rect x={x0} y={y0} width={BT + PT} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              <rect x={x0 + dz - FF - PT} y={y0} width={FF + PT} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
             </>
         }
-        {isBase && <rect x={x0} y={y0 + carcH - PT} width={dz} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} />}
+        {isBase && <rect x={x0} y={y0 + carcH - PT} width={dz} height={PT} fill={C_PANEL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />}
         {isBase && has_toekick && (
-          <rect x={x0 + dz - 60} y={y0 + carcH} width={60} height={TKH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} />
+          <rect x={x0 + dz - 60} y={y0 + carcH} width={60} height={TKH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" />
         )}
       </>}
       {has_face && (
-        <rect x={x0 + dz - FF} y={y0} width={FF} height={carcH} fill={C_FACE} stroke="#6b7280" strokeWidth={1.5} opacity={0.6} />
+        <rect x={x0 + dz - FF} y={y0} width={FF} height={carcH} fill={C_FACE} stroke="#6b7280" strokeWidth={1.5} opacity={0.6} vectorEffect="non-scaling-stroke" />
       )}
-      <rect x={x0} y={y0} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={2} />
-      <line x1={x0-20} y1={y0+dy} x2={x0+dz+20} y2={y0+dy} stroke="#334155" strokeWidth={2} strokeDasharray="10 5" />
+      <rect x={x0} y={y0} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+      <line x1={x0-20} y1={y0+dy} x2={x0+dz+20} y2={y0+dy} stroke="#334155" strokeWidth={2} strokeDasharray="10 5" vectorEffect="non-scaling-stroke" />
       {dimH(x0, x0+dz, y0-50, `${dz}mm`, true)}
       {dimV(x0+dz+55, y0, y0+dy, `${dy}mm`, true)}
       {isBase && has_toekick && dimV(x0+dz+90, y0+carcH, y0+dy, `${TKH}mm`, true)}

@@ -1,8 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Room, Project } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
+import { supabase } from '@/src/lib/supabase'
 import MaterialsScheduleTab from './MaterialsScheduleTab'
+
+type DrawerBoxMethodItem = { id: string; name: string; is_default: boolean; kind?: 'external' | 'internal' | null }
 
 export type RoomPropertiesTab = 'details' | 'construction' | 'materials' | 'hardware' | 'overrides'
 
@@ -90,6 +93,32 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
     ...(room.rule_overrides as Partial<Rules>),
   })
 
+  // Inner-drawer construction method — empty string = inherit from job
+  const [innerDrawerBoxMethod, setInnerDrawerBoxMethod] = useState(room.inner_drawer_box_method_id ?? '')
+  const [drawerBoxMethods, setDrawerBoxMethods] = useState<DrawerBoxMethodItem[]>([])
+  const [methodsLoading, setMethodsLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('drawer_box_methods')
+      .select('id,name,is_default,kind')
+      .eq('active', true)
+      .order('name')
+      .then(({ data }) => {
+        if (cancelled) return
+        setDrawerBoxMethods((data ?? []) as DrawerBoxMethodItem[])
+        setMethodsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const innerMethods = drawerBoxMethods.filter(m => m.kind === 'internal')
+  const jobInnerMethodName = project?.inner_drawer_box_method_id
+    ? drawerBoxMethods.find(m => m.id === project.inner_drawer_box_method_id)?.name
+    : project?.drawer_box_method_id
+      ? drawerBoxMethods.find(m => m.id === project.drawer_box_method_id)?.name
+      : null
+
   function setRule<K extends RuleKey>(key: K, value: Rules[K]) {
     setRules(prev => ({ ...prev, [key]: value }))
   }
@@ -120,6 +149,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
       wall_cabinet_top: wallCabTop === '' ? null : Number(wallCabTop),
       notes: notes.trim() || null,
       rule_overrides: newOverrides as Record<string, unknown>,
+      inner_drawer_box_method_id: innerDrawerBoxMethod || null,
     })
     onClose()
   }
@@ -195,6 +225,31 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
                 <span className="text-white font-medium">{project?.name ?? 'Job'}</span>
                 <span className="text-gray-600 ml-auto">Blue = room override</span>
               </div>
+
+              {/* Inner drawer construction method */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Inner Drawer Construction Method</p>
+                {methodsLoading ? (
+                  <p className="text-xs text-gray-500">Loading…</p>
+                ) : (
+                  <select
+                    value={innerDrawerBoxMethod}
+                    onChange={e => setInnerDrawerBoxMethod(e.target.value)}
+                    className={`w-full bg-gray-800 border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 ${
+                      innerDrawerBoxMethod ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
+                    }`}
+                  >
+                    <option value="">— inherit from job{jobInnerMethodName ? ` (${jobInnerMethodName})` : ''} —</option>
+                    {innerMethods.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}{m.is_default ? ' (default)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <p className="text-[10px] text-gray-500 mt-1">Overrides the job-level inner drawer method for cabinets in this room only.</p>
+              </div>
+
               {RULE_GROUPS.map(group => (
                 <div key={group.label}>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{group.label}</p>

@@ -12,7 +12,7 @@ const TABS = [
   { key: 'toekick',         label: 'Toe Kick',             table: 'toekick_schedules',         type: 'tk_list',    valueCol: null,          ebCol: null           },
   { key: 'front',           label: 'Door & Drawer Fronts', table: 'front_schedules',           type: 'front_list', valueCol: null,          ebCol: null           },
   { key: 'drawerbox',       label: 'Drawer Box',           table: 'drawerbox_schedules',       type: 'db_list',    valueCol: null,          ebCol: null           },
-  { key: 'inner_drawerbox', label: 'Inner Drawer Box',     table: 'inner_drawerbox_schedules', type: 'mat_single', valueCol: 'material_id', ebCol: 'edgeband_id'  },
+  { key: 'inner_drawerbox', label: 'Inner Drawer Box',     table: 'inner_drawerbox_schedules', type: 'idb_list',   valueCol: null,          ebCol: null           },
   { key: 'hinge',           label: 'Hinges',               table: 'hinge_schedules',           type: 'hw_single',  valueCol: 'hinge_id',   ebCol: null           },
   { key: 'slide',           label: 'Slides',               table: 'slide_schedules',           type: 'slide_grid', valueCol: null,         ebCol: null           },
   { key: 'handle',          label: 'Handles',              table: 'handle_schedules',          type: 'hw_single',  valueCol: 'handle_id',  ebCol: null           },
@@ -107,7 +107,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         supabase.from('toekick_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('front_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id,bottom_material_id,bottom_edgeband_id').order('name'),
-        supabase.from('inner_drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id').order('name'),
+        supabase.from('inner_drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id,bottom_material_id,bottom_edgeband_id,front_material_id,front_edgeband_id').order('name'),
         supabase.from('hinge_schedules').select('id,name,description,is_default,active,hinge_id').order('name'),
         supabase.from('slide_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('handle_schedules').select('id,name,description,is_default,active,handle_id').order('name'),
@@ -602,7 +602,13 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     { key: 'bottom', label: 'Bottom Panel', desc: 'Base / floor of box',  matCol: 'bottom_material_id', ebCol: 'bottom_edgeband_id'  },
   ] as const
 
-  function renderDbList() {
+  const IDB_ROLES = [
+    { key: 'box',    label: 'Box Panels',   desc: 'Sides & back',         matCol: 'material_id',        ebCol: 'edgeband_id'         },
+    { key: 'bottom', label: 'Bottom Panel', desc: 'Base / floor of box',  matCol: 'bottom_material_id', ebCol: 'bottom_edgeband_id'  },
+    { key: 'front',  label: 'Front Panel',  desc: 'Inner drawer front',   matCol: 'front_material_id',  ebCol: 'front_edgeband_id'   },
+  ] as const
+
+  function renderDbList(roles: readonly { readonly key: string; readonly label: string; readonly desc: string; readonly matCol: string; readonly ebCol: string }[] = DB_ROLES) {
     const sched = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
     return (
       <div className="space-y-3">
@@ -611,7 +617,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           <span className="flex-1 text-[10px] text-ink-subtle pl-1">Board</span>
           <span className="flex-1 text-[10px] text-ink-subtle pl-1">Edgebanding</span>
         </div>
-        {DB_ROLES.map(role => {
+        {roles.map(role => {
           const mId = (sched?.[role.matCol] as string) ?? ''
           const eId = (sched?.[role.ebCol]  as string) ?? ''
           const opts = ebOpts(mId)
@@ -687,38 +693,6 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
             </div>
           )
         })}
-      </div>
-    )
-  }
-
-  function renderMatSingle(matCol: string, ebCol: string | null) {
-    const sched  = (schedLists[activeTab] ?? []).find(s => s.id === selectedId)
-    const matId  = (sched?.[matCol] as string) ?? ''
-    const ebId   = ebCol ? ((sched?.[ebCol] as string) ?? '') : ''
-    const opts   = ebOpts(matId)
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <span className="w-24 shrink-0 text-xs text-ink-muted">Board</span>
-          <select value={matId} onChange={e => saveSingleValue(matCol, e.target.value)} className={`flex-1 max-w-sm ${sel}`}>
-            {!matId && <option value="">— not set —</option>}
-            {materials.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>)}
-          </select>
-        </div>
-        {ebCol && (
-          <div className="flex items-center gap-3">
-            <span className="w-24 shrink-0 text-xs text-ink-muted">Edgebanding</span>
-            <select
-              value={ebId}
-              onChange={e => saveSingleValue(ebCol, e.target.value)}
-              disabled={!matId}
-              className={`flex-1 max-w-sm ${selEb} ${matId ? '' : 'opacity-40'}`}
-            >
-              <option value="">{matId ? '— no banding —' : '—'}</option>
-              {opts.map(eb => <option key={eb.id} value={eb.id}>{eb.name} ({eb.thickness}mm)</option>)}
-            </select>
-          </div>
-        )}
       </div>
     )
   }
@@ -946,7 +920,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           {tab.type === 'tk_list'     && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderTkList()}</>}
           {tab.type === 'front_list'  && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderFrontList()}</>}
           {tab.type === 'db_list'     && renderDbList()}
-          {tab.type === 'mat_single'  && renderMatSingle(tab.valueCol as string, tab.ebCol)}
+          {tab.type === 'idb_list'    && renderDbList(IDB_ROLES)}
           {tab.type === 'bt_roles'    && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderBtRoles()}</>}
           {tab.type === 'hw_single'   && renderHwSingle()}
         </div>

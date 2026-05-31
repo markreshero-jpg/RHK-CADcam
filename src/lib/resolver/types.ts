@@ -67,6 +67,12 @@ export interface EdgingDefaults {
   fixed_shelf?:        EdgeSides
   inner_drawer_bottom?:EdgeSides
   inner_drawer_back?:  EdgeSides
+  inner_drawer_side?:  EdgeSides
+  inner_drawer_front?: EdgeSides
+  pull_out_bottom?:    EdgeSides
+  pull_out_side?:      EdgeSides
+  pull_out_back?:      EdgeSides
+  accessory?:          EdgeSides
   divider?:            EdgeSides
   // Face zones
   door?:               EdgeSides
@@ -105,6 +111,12 @@ export const DEFAULT_EDGING: Required<EdgingDefaults> = {
   fixed_shelf:         ['top'],
   inner_drawer_bottom: [],
   inner_drawer_back:   ['top'],
+  inner_drawer_side:   ['top'],
+  inner_drawer_front:  ['top'],
+  pull_out_bottom:     [],
+  pull_out_side:       ['top'],
+  pull_out_back:       ['top'],
+  accessory:           [],
   divider:             ['top', 'left', 'right'],              // front + both height edges
   door:                ['top', 'bottom', 'left', 'right'],
   drawer_face:         ['top', 'bottom', 'left', 'right'],
@@ -245,6 +257,13 @@ export interface SlideProduct {
   full_extension:   boolean
   cost_per_pair:    number | null
   colour:           string | null   // hex colour for 3D rendering
+  // 3D model (optional — null falls back to box rendering)
+  model_url:        string | null
+  model_format:     'glb' | 'stl' | 'obj' | null
+  model_scale:      number          // unit-correction multiplier (default 1.0)
+  model_anchor_x:   number          // nudge (mm) from convention origin
+  model_anchor_y:   number
+  model_anchor_z:   number
 }
 
 // Slide schedule entry: depth+height tier → specific slide product
@@ -280,6 +299,11 @@ export interface DrawerBoxRules {
   DB_BACK_HEIGHT_ADJUST: number                         // deducted from slide box_height to get back panel height (mm)
   DB_BACK_WIDTH_ADJUST:  number                         // deducted from box width to get back panel width (mm)
   DB_BACK_Y_OFFSET:      number                         // raises back panel off box floor (mm), added to auto-calculated backY
+  IDB_FRONT_CLEAR:         number                         // inner-drawer face per-side clearance from compartment opening (mm)
+  IDB_FRONT_TOP_ADJUST:    number                         // mm added above the box top (positive grows upward)
+  IDB_FRONT_BOTTOM_ADJUST: number                         // mm added below the box bottom (positive grows downward)
+  IDB_FRONT_WIDTH_ADJUST:  number                         // added to inner-drawer face width  (mm); 0 = opening minus 2×clearance. Centred.
+  IDB_DRAWER_Z_SETBACK:    number                         // mm the entire inner drawer (box + front) is recessed into the cabinet from the slide front
   DB_EDGING?:            DbEdgingDefaults               // per-part edge sides (absent = use DEFAULT_DB_EDGING)
 }
 
@@ -294,6 +318,11 @@ export const DEFAULT_DB_RULES: DrawerBoxRules = {
   DB_BACK_HEIGHT_ADJUST: 0,
   DB_BACK_WIDTH_ADJUST:  0,
   DB_BACK_Y_OFFSET:      0,
+  IDB_FRONT_CLEAR:         2,
+  IDB_FRONT_TOP_ADJUST:    0,
+  IDB_FRONT_BOTTOM_ADJUST: 0,
+  IDB_FRONT_WIDTH_ADJUST:  0,
+  IDB_DRAWER_Z_SETBACK:    0,
 }
 
 // ── Joint Types ───────────────────────────────────────────────
@@ -344,6 +373,8 @@ export interface DrawerBoxInput {
   edgeband_id?:      string
   bottom_material?:  Material  // if omitted, falls back to material
   bottom_edgeband_id?: string
+  front_material?:   Material  // if omitted, falls back to material (used by inner drawers)
+  front_edgeband_id?: string
   rules:             DrawerBoxRules
   slide_box_height?: number   // slide product box_height — when provided, drives back panel height
 }
@@ -405,9 +436,31 @@ export interface CabinetInput {
   // Default drawer type — sourced from the drawer box method (project-level field removed)
   default_drawer_type?: DrawerType
 
-  // Drawer box construction
+  // Default drawer type for inner drawers — sourced from the inner drawer method
+  // (cabinet → room → project → shop). Used as a fallback when an inner-drawer
+  // fitting has no explicit drawer_type set.
+  default_inner_drawer_type?: DrawerType
+
+  // Drawer box construction (face-zone drawers)
   drawer_material?:   Material          // drawer box panels (e.g. 12mm HMR)
   drawer_box_rules?:  DrawerBoxRules    // box joinery rules (defaults to DEFAULT_DB_RULES)
+
+  // Inner drawer construction — compartment-anchored, kept separate from the face
+  // drawers above. Falls back to the face drawer rules/material, then DEFAULT_DB_RULES.
+  inner_drawer_box_rules?:  DrawerBoxRules
+  inner_drawer_material?:   Material
+  inner_drawer_edgeband_id?: string
+  inner_drawer_bottom_material?:   Material
+  inner_drawer_bottom_edgeband_id?: string
+  inner_drawer_front_material?:    Material
+  inner_drawer_front_edgeband_id?: string
+
+  // Drawer-box methods referenced by per-fitting `drawer_box_method_id` overrides
+  // (keyed by drawer_box_methods.id). Pre-fetched by loadCabinetInput from the
+  // distinct ids that appear in InnerDrawerFittings in the tree. When a fitting
+  // references a method id present here, the resolver uses these rules instead of
+  // `inner_drawer_box_rules`.
+  drawer_box_method_rules?: Record<string, DrawerBoxRules>
 
   // Slide products + schedule (resolved before passing to resolver)
   slide_products?:  SlideProduct[]        // all active slide products available
@@ -425,10 +478,13 @@ export interface CabinetInput {
   // Face grid definition
   face_grid:       FaceGridInput
 
-  // Internal layout — recursive section tree (shelves + dividers + adj shelves)
+  // Internal layout — recursive section tree (structural splits + compartment fittings)
   internal_tree:   Section
-  // Inner drawers are face-zone driven and resolved separately from the tree
-  inner_drawers:   InnerDrawerInput[]
+  // Vertical gap (mm) between stacked fittings inside an open compartment.
+  // Drives both the resolver (emitBoxStack stacking) and the editor preview.
+  // Per-cabinet; falls back to a 3mm default when unset. Sourced from
+  // `internal_grid.stack_gap` in loadCabinetInput.
+  internal_stack_gap?: number
 }
 
 // ── Face Grid Input ───────────────────────────────────────────
@@ -513,13 +569,79 @@ export interface InternalGridInput {
 export type SectionSplitType = 'hsplit' | 'vsplit'
 
 export interface SectionChild {
-  size?:   number    // locked extent in mm (height for hsplit, width for vsplit); undefined = equalise to fill
-  section: Section
+  size?:           number    // locked extent in mm (height for hsplit, width for vsplit); undefined = equalise to fill
+  equalise_group?: string    // shared-size group id (e.g. "A"). Members across the tree share one size; computed as min per-split fair share so the group always fits.
+  section:         Section
 }
 
+// ── Internal fittings ─────────────────────────────────────────────────────────
+// A fitting is a non-structural component placed inside an *open* compartment. It
+// occupies the compartment's box; the resolver dispatches each fitting by `type`
+// to a resolver that emits ResolvedInternalPart[] (see resolver/fittings.ts).
+// Order in the array is bottom→top. Structural separators (fixed shelves as an
+// hsplit, dividers as a vsplit) are NOT fittings — they live in the tree as a
+// SplitSection. A fixed shelf can also be placed as a fitting (a single shelf in
+// a compartment without subdividing it).
+export type InternalFittingType =
+  | 'adj_shelf' | 'fixed_shelf' | 'inner_drawer' | 'pull_out' | 'accessory'
+
+export interface AdjShelfFitting {
+  type:           'adj_shelf'
+  y_locked:       boolean
+  y_position?:    number   // resolved/locked bottom-face Y; equalised among siblings when unlocked
+  setback_front?: number
+  setback_back?:  number
+  clearance_l?:   number
+  clearance_r?:   number
+}
+
+export interface FixedShelfFitting {
+  type:           'fixed_shelf'
+  y_locked:       boolean
+  y_position?:    number   // unlocked = compartment mid-height
+  setback_front?: number
+  setback_back?:  number
+}
+
+export interface InnerDrawerFitting {
+  type:                  'inner_drawer'
+  drawer_box_method_id?: string        // inner-drawer construction method (DrawerBoxRules source)
+  drawer_type?:          DrawerType
+  slide_product_id?:     string
+  height?:               number         // box height; defaults from slide / construction
+  y_position?:           number         // bottom of the box within the compartment
+  y_locked?:             boolean
+  clearance_l?:          number
+  clearance_r?:          number
+  runner_depth?:         number
+}
+
+export interface PullOutFitting {
+  type:              'pull_out'
+  height?:           number   // side/back height of the tray
+  y_position?:       number
+  y_locked?:         boolean
+  slide_product_id?: string
+  runner_depth?:     number
+  clearance_l?:      number
+  clearance_r?:      number
+}
+
+export interface AccessoryFitting {
+  type:        'accessory'
+  key?:        string    // references parts_library.key (e.g. WINE_RACK, FILE_RAIL) — geometry TBD
+  height?:     number
+  y_position?: number
+  y_locked?:   boolean
+  notes?:      string
+}
+
+export type InternalFitting =
+  | AdjShelfFitting | FixedShelfFitting | InnerDrawerFitting | PullOutFitting | AccessoryFitting
+
 export interface OpenSection {
-  type:        'open'
-  adj_shelves: AdjShelfInput[]   // movable shelves on pins inside this compartment (do not subdivide it)
+  type:     'open'
+  fittings: InternalFitting[]   // placed contents (do not subdivide the compartment)
 }
 
 export interface SplitSection {
@@ -534,7 +656,7 @@ export interface InternalLayout {
   tree: Section
 }
 
-export const EMPTY_SECTION: OpenSection = { type: 'open', adj_shelves: [] }
+export const EMPTY_SECTION: OpenSection = { type: 'open', fittings: [] }
 
 // ── Resolved Output ───────────────────────────────────────────
 // What the resolver returns — ready to write to Supabase
@@ -544,6 +666,10 @@ export interface ResolvedCabinet {
   case_parts:    ResolvedCasePart[]
   toekick_parts: ResolvedToekickPart[]
   internal_parts: ResolvedInternalPart[]
+  // Slide rails emitted by inner-drawer / pull-out fittings — rendered like the
+  // per-stack slides on face drawers, but anchored to the compartment box
+  // (no parent face zone).
+  internal_slides: ResolvedDrawerSlide[]
   face_rows:     ResolvedFaceRow[]
   face_cols:     ResolvedFaceCol[]
   face_zones:    ResolvedFaceZone[]
@@ -572,11 +698,18 @@ export interface ResolvedToekickPart extends ResolvedPart {
 }
 
 export interface ResolvedInternalPart extends ResolvedPart {
-  part_type:  'adj_shelf' | 'fixed_shelf' |
-              'inner_drawer_bottom' | 'inner_drawer_back' | 'divider'
+  part_type:  'adj_shelf' | 'fixed_shelf' | 'divider' |
+              'inner_drawer_bottom' | 'inner_drawer_back' |
+              'inner_drawer_side'   | 'inner_drawer_front' |
+              'pull_out_bottom' | 'pull_out_side' | 'pull_out_back' |
+              'accessory'
   sort_order: number
   y_locked:   boolean
   x_locked?:  boolean   // dividers only
+  // Groups parts belonging to the same inner-drawer / pull-out instance so the
+  // 3D view can animate them together (e.g. open-drawer cascade). Unique per
+  // emitted drawer; absent on shelves, dividers, accessories.
+  inner_drawer_index?: number
 }
 
 export interface ResolvedFaceRow {
@@ -618,6 +751,18 @@ export interface ResolvedDrawerSlide {
   box_height:       number
   runner_thickness: number
   colour:           string | null
+  // 3D model (optional)
+  model_url:        string | null
+  model_format:     'glb' | 'stl' | 'obj' | null
+  model_scale:      number
+  model_anchor_x:   number
+  model_anchor_y:   number
+  model_anchor_z:   number
+  // For slides emitted by inner-drawer / pull-out fittings, tags the rail pair
+  // with the drawer they belong to so the 3D view can animate them with the
+  // drawer's box + face. Absent on face-zone drawer slides (which live inside
+  // their own ResolvedDrawerStack).
+  inner_drawer_index?: number
 }
 
 export interface ResolvedDrawerStack {

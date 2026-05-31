@@ -26,8 +26,14 @@ const PART_LABEL: Record<string, string> = {
   spreader_horizontal: 'Spreader (Horiz)',
   adj_shelf:           'Adj. Shelf',
   fixed_shelf:         'Fixed Shelf',
-  inner_drawer_bottom: 'Drawer Bottom',
-  inner_drawer_back:   'Drawer Back',
+  inner_drawer_bottom: 'Inner Drawer Bottom',
+  inner_drawer_back:   'Inner Drawer Back',
+  inner_drawer_side:   'Inner Drawer Side',
+  inner_drawer_front:  'Inner Drawer Front',
+  pull_out_bottom:     'Pull-out Bottom',
+  pull_out_side:       'Pull-out Side',
+  pull_out_back:       'Pull-out Back',
+  accessory:           'Accessory',
 }
 
 const TYPE_COLOR: Record<string, string> = {

@@ -9,11 +9,12 @@ import type { ReactNode, RefObject } from 'react'
 import type { Wall, CabinetInstance } from '@/src/lib/types'
 import {
   toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon,
-  cabinetPolygon, cabinetCenterPt, centroid, cabWallPerp, cabT,
+  cabinetPolygon, cabinetCenterPt, centroid, cabWallPerp, cabWallSide, cabT,
 } from '@/src/lib/geometry'
 
 export interface PlanViewLayers {
   labels:     boolean
+  wallNames:  boolean
   dimensions: boolean
   doorSwings: boolean
   drawers:    boolean
@@ -36,6 +37,19 @@ function computeChain(cabs: CabinetInstance[], wall: Wall): Seg[] {
   }
   if (cursor < wall.length - 0.5) segs.push({ from: cursor, to: wall.length, label: Math.round(wall.length - cursor) })
   return segs
+}
+
+function cabinetTypeFill(cab: CabinetInstance): string {
+  switch (cab.assembly_class) {
+    case 'wall':
+    case 'wall_corner':
+      return '#ededed'
+    case 'tall':
+    case 'tall_corner':
+      return '#e3e3e3'
+    default:
+      return '#f7f7f7'
+  }
 }
 
 export default function PlanViewReportSVG({
@@ -80,35 +94,44 @@ export default function PlanViewReportSVG({
   const maxY = Math.max(...pts.map(p => p.y))
 
   // ── Scale-aware sizes (physical mm × scale = model mm) ─────────────────────
-  const sw       = 0.4 * P    // wall stroke
+  const sw       = 0.45 * P   // wall stroke
   const fontSize = 3.5 * P    // cabinet label
 
-  const dimSW = 0.25 * P      // dimension line stroke
+  const dimSW = 0.3 * P       // dimension line stroke
   const dimFS = 2.6 * P       // dimension text
-  const tickH = 1.4 * P       // dimension tick half-length
+  const tickH = 1.1 * P       // dimension tick half-length
   // Chain row offsets from outer wall face (innermost → outermost, like canvas 25/50/75)
-  const ROW_WALLCAB = 6 * P
-  const ROW_BASE    = 12 * P
-  const ROW_OVERALL = 18 * P
+  const ROW_WALLCAB = 4 * P
+  const ROW_BASE    = 8 * P
+  const ROW_OVERALL = 12 * P
 
-  const swingSW = 0.2 * P     // door swing arc
-  const drawSW  = 0.2 * P     // drawer indicator line
+  const swingSW = 0.25 * P    // door swing arc
+  const drawSW  = 0.25 * P    // drawer indicator line
+  const INK = '#000'
+  const INK2 = '#222'
+  const INK3 = '#333'
+  const CARCASE_LINE = '#777'
+  const HATCH_ID = 'plan-report-wall-hatch'
 
   // ── Title block dimensions ────────────────────────────────────────────────
-  const tbRowH = 4.6 * P
-  const tbPad  = 2 * P
+  const tbRowH = 4.2 * P
+  const tbPad  = 1.5 * P
   const tbRows = 5
   const tbH    = tbRowH * tbRows + tbPad * 2
   const tbW    = 66 * P
 
   // ── ViewBox padding — extend for dims / title block when shown ────────────
   const maxThick = Math.max(0, ...walls.filter(w => w.wall_type !== 'island').map(w => w.thickness))
-  const basePad  = 8 * P
-  const dimExtra = show.dimensions ? maxThick + ROW_OVERALL + dimFS * 2 + tickH : 0
+  // Island chains stack beyond their cabinets, so the viewBox must allow for the
+  // deepest cabinet sitting on any island wall.
+  const islandWallIds = new Set(walls.filter(w => w.wall_type === 'island').map(w => w.id))
+  const maxIslandDepth = Math.max(0, ...cabinets.filter(c => islandWallIds.has(c.wall_id ?? '')).map(c => c.dz))
+  const basePad  = 4 * P
+  const dimExtra = show.dimensions ? maxThick + maxIslandDepth + ROW_OVERALL + dimFS * 2 + tickH : 0
   const padL = basePad + dimExtra
   const padR = basePad + dimExtra
   const padT = basePad + dimExtra
-  const padB = basePad + dimExtra + (show.titleBlock ? tbH + 4 * P : 0)
+  const padB = basePad + dimExtra + (show.titleBlock ? tbH + 2 * P : 0)
 
   const vbX = minX - padL
   const vbY = minY - padT
@@ -137,14 +160,14 @@ export default function PlanViewReportSVG({
     const padX = dimFS * 1.7, padY = dimFS * 0.7
     return (
       <g key={key} pointerEvents="none">
-        <line x1={p0.x} y1={p0.y} x2={pL.x} y2={pL.y} stroke="#111" strokeWidth={dimSW} />
+        <line x1={p0.x} y1={p0.y} x2={pL.x} y2={pL.y} stroke={INK} strokeWidth={dimSW} />
         {boundaries.map((t, i) => {
           const p = pt(t)
           return (
             <line key={i}
               x1={p.x - out.x * tickH} y1={p.y - out.y * tickH}
               x2={p.x + out.x * tickH} y2={p.y + out.y * tickH}
-              stroke="#111" strokeWidth={dimSW}
+              stroke={INK} strokeWidth={dimSW}
             />
           )
         })}
@@ -155,7 +178,7 @@ export default function PlanViewReportSVG({
             <g key={`t${i}`} transform={`rotate(${textAngle}, ${p.x}, ${p.y})`}>
               <rect x={p.x - padX} y={p.y - padY} width={padX * 2} height={padY * 2} fill="white" />
               <text x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle"
-                fontSize={dimFS} fill="#111" fontFamily="Arial, Helvetica, sans-serif">
+                fontSize={dimFS} fill={INK} fontFamily="Arial, Helvetica, sans-serif">
                 {seg.label}
               </text>
             </g>
@@ -178,13 +201,13 @@ export default function PlanViewReportSVG({
     const padX = dimFS * 1.7, padY = dimFS * 0.7
     return (
       <g key={key} pointerEvents="none">
-        <line x1={sx} y1={sy} x2={ex} y2={ey} stroke="#111" strokeWidth={dimSW} />
-        <line x1={sx - wd.x * tickH} y1={sy - wd.y * tickH} x2={sx + wd.x * tickH} y2={sy + wd.y * tickH} stroke="#111" strokeWidth={dimSW} />
-        <line x1={ex - wd.x * tickH} y1={ey - wd.y * tickH} x2={ex + wd.x * tickH} y2={ey + wd.y * tickH} stroke="#111" strokeWidth={dimSW} />
+        <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={INK} strokeWidth={dimSW} />
+        <line x1={sx - wd.x * tickH} y1={sy - wd.y * tickH} x2={sx + wd.x * tickH} y2={sy + wd.y * tickH} stroke={INK} strokeWidth={dimSW} />
+        <line x1={ex - wd.x * tickH} y1={ey - wd.y * tickH} x2={ex + wd.x * tickH} y2={ey + wd.y * tickH} stroke={INK} strokeWidth={dimSW} />
         <g transform={`rotate(${textAngle}, ${midX}, ${midY})`}>
           <rect x={midX - padX} y={midY - padY} width={padX * 2} height={padY * 2} fill="white" />
           <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle"
-            fontSize={dimFS} fill="#111" fontFamily="Arial, Helvetica, sans-serif">
+            fontSize={dimFS} fill={INK} fontFamily="Arial, Helvetica, sans-serif">
             {Math.round(dz)}
           </text>
         </g>
@@ -198,8 +221,15 @@ export default function PlanViewReportSVG({
       viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
       xmlns="http://www.w3.org/2000/svg"
       data-vb-w={vbW} data-vb-h={vbH}
+      shapeRendering="geometricPrecision"
+      textRendering="geometricPrecision"
       style={{ width: '100%', height: 'auto', background: 'white', display: 'block' }}
     >
+      <defs>
+        <pattern id={HATCH_ID} patternUnits="userSpaceOnUse" width={6 * P} height={6 * P} patternTransform="rotate(45)">
+          <line x1={0} y1={0} x2={0} y2={6 * P} stroke={INK3} strokeWidth={0.12 * P} />
+        </pattern>
+      </defs>
       {/* ── Walls (always on) — hatch fill toggles ── */}
       {walls.map(w => {
         if (w.wall_type === 'island') {
@@ -207,7 +237,7 @@ export default function PlanViewReportSVG({
           return (
             <line key={w.id}
               x1={w.pos_x} y1={w.pos_y} x2={e.x} y2={e.y}
-              stroke="#111" strokeWidth={sw * 4} strokeLinecap="round"
+              stroke={INK} strokeWidth={sw * 4} strokeLinecap="round"
             />
           )
         }
@@ -216,9 +246,33 @@ export default function PlanViewReportSVG({
         return (
           <polygon key={w.id}
             points={poly}
-            fill={show.hatch ? '#d8d8d8' : 'white'}
-            stroke="#111" strokeWidth={sw} strokeLinejoin="miter"
+            fill={show.hatch ? `url(#${HATCH_ID})` : 'white'}
+            stroke={INK} strokeWidth={sw} strokeLinejoin="miter"
           />
+        )
+      })}
+
+      {/* ── Wall names (toggle) — centred over each wall, capped at thickness ── */}
+      {/* Matches the 3D room view WallLabel: wall midpoint shifted out by ½ thickness. */}
+      {show.wallNames && walls.map(w => {
+        if (w.wall_type === 'island' || !w.name) return null
+        const inward = wallInwardNormal(w, cx.x, cx.y)
+        const e = wallEnd(w)
+        const mx = (w.pos_x + e.x) / 2 - inward.x * w.thickness / 2
+        const my = (w.pos_y + e.y) / 2 - inward.y * w.thickness / 2
+        const fs = Math.min(w.thickness * 0.7, 5 * P)   // never larger than the wall band
+        if (fs < 1) return null
+        const textAngle = Math.cos(toRad(w.angle)) < -0.001 ? w.angle + 180 : w.angle
+        return (
+          <text key={`wn-${w.id}`}
+            x={mx} y={my}
+            transform={`rotate(${textAngle}, ${mx}, ${my})`}
+            textAnchor="middle" dominantBaseline="central"
+            fontSize={fs} fill={INK} fontFamily="Arial, Helvetica, sans-serif"
+            style={{ pointerEvents: 'none' }}
+          >
+            {w.name}
+          </text>
         )
       })}
 
@@ -230,14 +284,25 @@ export default function PlanViewReportSVG({
         const perp     = cabWallPerp(cab, wall, basePerp)
         const poly     = cabinetPolygon(cab, wall, perp)
         const center   = cabinetCenterPt(cab, wall, perp)
+        const wd       = wallDir(wall)
+        const inset    = Math.min(20, cab.dx * 0.08, cab.dz * 0.08)
+        const innerOk  = inset > 1 && cab.dx > inset * 2 && cab.dz > inset * 2
+        const ix = cab.pos_x + inset * wd.x + inset * perp.x
+        const iy = cab.pos_y + inset * wd.y + inset * perp.y
+        const iw = cab.dx - inset * 2
+        const id = cab.dz - inset * 2
+        const innerPoly = innerOk
+          ? `${ix},${iy} ${ix + iw * wd.x},${iy + iw * wd.y} ${ix + iw * wd.x + id * perp.x},${iy + iw * wd.y + id * perp.y} ${ix + id * perp.x},${iy + id * perp.y}`
+          : null
         return (
           <g key={cab.id}>
-            <polygon points={poly} fill="#f6f6f6" stroke="#333" strokeWidth={sw * 0.6} />
+            <polygon points={poly} fill={cabinetTypeFill(cab)} stroke={INK2} strokeWidth={sw * 0.7} />
+            {innerPoly && <polygon points={innerPoly} fill="none" stroke={CARCASE_LINE} strokeWidth={sw * 0.35} />}
             {show.labels && cab.label && (
               <text
                 x={center.x} y={center.y}
                 textAnchor="middle" dominantBaseline="central"
-                fontSize={fontSize} fill="#111"
+                fontSize={fontSize} fill={INK}
                 fontFamily="Arial, Helvetica, sans-serif"
               >
                 {cab.label}
@@ -291,14 +356,14 @@ export default function PlanViewReportSVG({
               const endY = colLeft.y + r * (c15 * wd.y + s15 * perp.y)
               nodes.push(<path key={`swing-${cab.id}-${col}`}
                 d={`M ${colLeft.x} ${colLeft.y} L ${colRight.x} ${colRight.y} A ${r} ${r} 0 0 ${leftSweep} ${endX} ${endY} Z`}
-                fill="none" stroke="#555" strokeWidth={swingSW}
+                fill="none" stroke={INK3} strokeWidth={swingSW}
                 strokeDasharray={`${1.2 * P} ${0.8 * P}`} style={{ pointerEvents: 'none' }} />)
             } else {
               const endX = colRight.x + r * (c15 * (-wd.x) + s15 * perp.x)
               const endY = colRight.y + r * (c15 * (-wd.y) + s15 * perp.y)
               nodes.push(<path key={`swing-${cab.id}-${col}`}
                 d={`M ${colRight.x} ${colRight.y} L ${colLeft.x} ${colLeft.y} A ${r} ${r} 0 0 ${rightSweep} ${endX} ${endY} Z`}
-                fill="none" stroke="#555" strokeWidth={swingSW}
+                fill="none" stroke={INK3} strokeWidth={swingSW}
                 strokeDasharray={`${1.2 * P} ${0.8 * P}`} style={{ pointerEvents: 'none' }} />)
             }
           }
@@ -318,14 +383,14 @@ export default function PlanViewReportSVG({
             const colLeft  = { x: frontLeft.x + col * colW * wd.x, y: frontLeft.y + col * colW * wd.y }
             const colRight = { x: colLeft.x + colW * wd.x, y: colLeft.y + colW * wd.y }
             for (let i = 0; i < rowIndices.length; i++) {
-              const perpOff    = (i + 1) * 3 * P
-              const widthInset = (i + 1) * 6 * P
+              const perpOff    = (i + 1) * 2 * P
+              const widthInset = (i + 1) * 4 * P
               nodes.push(<line key={`drawer-${cab.id}-${col}-${rowIndices[i]}`}
                 x1={colLeft.x  + perpOff * perp.x + widthInset * wd.x}
                 y1={colLeft.y  + perpOff * perp.y + widthInset * wd.y}
                 x2={colRight.x + perpOff * perp.x - widthInset * wd.x}
                 y2={colRight.y + perpOff * perp.y - widthInset * wd.y}
-                stroke="#555" strokeWidth={drawSW}
+                stroke={INK3} strokeWidth={drawSW}
                 strokeDasharray={`${1.5 * P} ${0.8 * P}`} strokeLinecap="round"
                 style={{ pointerEvents: 'none' }} />)
             }
@@ -339,42 +404,74 @@ export default function PlanViewReportSVG({
       {show.dimensions && walls.map(w => {
         const inward = wallInwardNormal(w, cx.x, cx.y)
         const out = { x: -inward.x, y: -inward.y }
-        const baseCabs = cabinets.filter(c => c.wall_id === w.id && (c.assembly_class === 'base' || c.assembly_class === 'base_corner'))
-        const wallCabs = cabinets.filter(c => c.wall_id === w.id && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'))
-        const baseSegs    = computeChain(baseCabs, w)
-        const wallCabSegs = computeChain(wallCabs, w)
-        const overallSeg: Seg[] = [{ from: 0, to: w.length, label: Math.round(w.length) }]
-        const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
-        const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
-        const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
+        const allBase = cabinets.filter(c => c.wall_id === w.id && (c.assembly_class === 'base' || c.assembly_class === 'base_corner'))
+        const allWall = cabinets.filter(c => c.wall_id === w.id && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'))
+        const sideDepth = (cabs: CabinetInstance[]) => cabs.length ? Math.max(...cabs.map(c => c.dz)) : 0
+
+        // One side's width chain (pushed out by depthOffset) + depth dims.
+        const renderSide = (
+          key: string,
+          chainDir: { x: number; y: number },
+          depthDir: { x: number; y: number },
+          baseCabs: CabinetInstance[],
+          wallCabs: CabinetInstance[],
+          depthOffset: number,
+        ) => {
+          const baseSegs    = computeChain(baseCabs, w)
+          const wallCabSegs = computeChain(wallCabs, w)
+          const overallSeg: Seg[] = [{ from: 0, to: w.length, label: Math.round(w.length) }]
+          const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
+          const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
+          const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
+          return (
+            <g key={key}>
+              {wallCabs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`)}
+              {baseCabs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_BASE, baseSegs, `bc-${key}`)}
+              {dimLine(w, chainDir, depthOffset + ROW_OVERALL, overallSeg, `ov-${key}`)}
+              {baseDz > 0 && (
+                <>
+                  {depthDim(w, depthDir, 0,        baseDz, -1, `dd0-${key}`)}
+                  {depthDim(w, depthDir, w.length, baseDz,  1, `dd1-${key}`)}
+                </>
+              )}
+              {showWallDepthSeparate && (
+                <>
+                  {depthDim(w, depthDir, 0,        wallDz, -1, `wdd0-${key}`)}
+                  {depthDim(w, depthDir, w.length, wallDz,  1, `wdd1-${key}`)}
+                </>
+              )}
+            </g>
+          )
+        }
+
+        // Perimeter wall: cabinets on the inward side only — chain on the empty
+        // outward side, depth dims point inward (unchanged behaviour).
+        if (w.wall_type !== 'island') {
+          return <g key={`dim-${w.id}`}>{renderSide(`m-${w.id}`, out, inward, allBase, allWall, 0)}</g>
+        }
+
+        // Island: split cabinets by face and dimension each side beyond its cabinets.
+        const inBase  = allBase.filter(c => cabWallSide(c, w) === 'face')
+        const outBase = allBase.filter(c => cabWallSide(c, w) === 'back')
+        const inWall  = allWall.filter(c => cabWallSide(c, w) === 'face')
+        const outWall = allWall.filter(c => cabWallSide(c, w) === 'back')
+        const hasIn  = inBase.length > 0 || inWall.length > 0
+        const hasOut = outBase.length > 0 || outWall.length > 0
         return (
           <g key={`dim-${w.id}`}>
-            {wallCabs.length > 0 && dimLine(w, out, ROW_WALLCAB, wallCabSegs, `wc-${w.id}`)}
-            {baseCabs.length > 0 && dimLine(w, out, ROW_BASE, baseSegs, `bc-${w.id}`)}
-            {dimLine(w, out, ROW_OVERALL, overallSeg, `ov-${w.id}`)}
-            {baseDz > 0 && (
-              <>
-                {depthDim(w, inward, 0,        baseDz, -1, `dd0-${w.id}`)}
-                {depthDim(w, inward, w.length, baseDz,  1, `dd1-${w.id}`)}
-              </>
-            )}
-            {showWallDepthSeparate && (
-              <>
-                {depthDim(w, inward, 0,        wallDz, -1, `wdd0-${w.id}`)}
-                {depthDim(w, inward, w.length, wallDz,  1, `wdd1-${w.id}`)}
-              </>
-            )}
+            {hasIn && renderSide(`in-${w.id}`, inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]))}
+            {(hasOut || !hasIn) && renderSide(`out-${w.id}`, out, out, outBase, outWall, sideDepth([...outBase, ...outWall]))}
           </g>
         )
       })}
 
       {/* ── Title block (toggle) ── */}
       {show.titleBlock && (
-        <g fontFamily="Arial, Helvetica, sans-serif" fill="#111">
-          <rect x={tbX} y={tbY} width={tbW} height={tbH} fill="white" stroke="#111" strokeWidth={sw} />
+        <g fontFamily="Arial, Helvetica, sans-serif" fill={INK}>
+          <rect x={tbX} y={tbY} width={tbW} height={tbH} fill="white" stroke={INK} strokeWidth={sw} />
           <line
             x1={tbX} y1={tbY + tbPad + tbRowH} x2={tbX + tbW} y2={tbY + tbPad + tbRowH}
-            stroke="#111" strokeWidth={sw * 0.6}
+            stroke={INK} strokeWidth={sw * 0.6}
           />
           {[
             { t: projectName || 'Untitled Project', bold: true,  fs: tbRowH * 0.6 },

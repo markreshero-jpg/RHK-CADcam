@@ -39,6 +39,7 @@ export interface Project {
   benchtop_build_method_id:    string | null
   construction_schedule_id:    string | null
   drawer_box_method_id:        string | null
+  inner_drawer_box_method_id:  string | null
   created_at: string
   updated_at: string
 }
@@ -69,6 +70,7 @@ export interface Room {
   benchtop_schedule_id:        string | null
   benchtop_build_method_id:    string | null
   construction_schedule_id:    string | null
+  inner_drawer_box_method_id:  string | null
   created_at: string
   updated_at: string
 }

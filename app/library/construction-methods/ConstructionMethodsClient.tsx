@@ -931,9 +931,8 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
       },
       internal_tree: {
         type: 'open',
-        adj_shelves: [{ sort_order: 0, y_locked: false }, { sort_order: 1, y_locked: false }],
+        fittings: [{ type: 'adj_shelf', y_locked: false }, { type: 'adj_shelf', y_locked: false }],
       },
-      inner_drawers: [],
     }
     return resolveCabinet(input)
   }, [classTab, dx, dy, dz, isWall, rules, mat, jointDeltas, jointTypes, jointTypeOps])
