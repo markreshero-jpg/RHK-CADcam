@@ -17,10 +17,12 @@ import {
   dbElevRect, dbTopRect, dbSideRect,
   slideElevRect, slideTopRect, slideSideRect,
   svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta, svgDbMeta, svgSlideMeta, svgInternalSlideMeta,
-  svgHitParts, partIdColor, DrillOverlay,
+  svgHitParts, partIdColor, DrillOverlay, SlideDrillOverlay,
   PartShape, SlideShape, caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3,
+  doorProfileSvg,
 } from './cabinetEditSvgHelpers'
 import { cabinetSeamDrills, type DrillAxis } from '@/src/lib/jointDrilling'
+import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
 import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 
 // Fallback approximation constants (used when resolver data not available)
@@ -282,6 +284,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
 }) {
   const { dx, dy } = cab
   const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
+  const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? []) : []), [rp, showDrilling])
   const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
   const triMap = useSlideTriangles(allSlides)
   const pl = 80, pt = 50, pr = 40, pb = 40
@@ -435,6 +438,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
               dataPartId={meta.id} style={cp} />
             {z.hinge_side === 'left'  && <line x1={r.x}     y1={r.y} x2={r.x}     y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} vectorEffect="non-scaling-stroke" data-part-id={meta.id} style={cp} />}
             {z.hinge_side === 'right' && <line x1={r.x+r.w} y1={r.y} x2={r.x+r.w} y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} vectorEffect="non-scaling-stroke" data-part-id={meta.id} style={cp} />}
+            {doorProfileSvg(z, { x: r.x, y: r.y, w: r.w, h: r.h }, col.stroke, 1, 0.85, true)}
           </g>
         )
       })}
@@ -449,6 +453,9 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
           data-part-id={meta.id} style={cp} />
       })}
       <DrillOverlay drills={drills} perp="z"
+        project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
+        dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
+      <SlideDrillOverlay drills={slideDrills} perp="z"
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
       <rect x={ox} y={oy} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
@@ -473,6 +480,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
 }) {
   const { dx, dz } = cab
   const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
+  const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? []) : []), [rp, showDrilling])
   const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
   const triMap = useSlideTriangles(allSlides)
   const wallH = 40
@@ -630,6 +638,9 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
       <DrillOverlay drills={drills} perp="y"
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'z+' ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 }} />
+      <SlideDrillOverlay drills={slideDrills} perp="y"
+        project={(x, _y, z) => ({ x: ox + x, y: oz + z })}
+        dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'z+' ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 }} />
       <rect x={ox} y={oz} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
       <text x={ox + dx/2} y={oz + dz + 22} textAnchor="middle" dominantBaseline="central"
         fontSize={18} fill="#374151" fontFamily="system-ui,sans-serif">ACCESS</text>
@@ -653,6 +664,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
 }) {
   const { dz, dy } = cab
   const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
+  const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? []) : []), [rp, showDrilling])
   const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
   const triMap = useSlideTriangles(allSlides)
   const wallW = 40
@@ -822,6 +834,9 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
           data-part-id={meta.id} style={cp} />
       })}
       <DrillOverlay drills={drills} perp="x"
+        project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}
+        dirOf={(a: DrillAxis) => a === 'z+' ? { dx: 1, dy: 0 } : a === 'z-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
+      <SlideDrillOverlay drills={slideDrills} perp="x"
         project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'z+' ? { dx: 1, dy: 0 } : a === 'z-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
       <rect x={oz} y={oy} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />

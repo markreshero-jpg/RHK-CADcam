@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { CabinetInstance, Wall } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { PartMeta, PartEdge, PartPropertiesPanel } from '@/src/components/three/PartViewer'
@@ -9,8 +9,10 @@ import {
   dbLoadPartPosOverrides, dbSavePartPosOverride, dbDeletePartPosOverride,
   dbLoadPartLabels, dbSavePartLabel,
   dbLoadPartComments, dbSavePartComment,
+  dbLoadHiddenParts, dbSaveHiddenParts,
   type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments,
 } from './canvasDB'
+import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import CabinetPanel from './CabinetPanel'
 import Cabinet3DView from './Cabinet3DView'
 import FaceGridEditor from './FaceGridEditor'
@@ -171,7 +173,7 @@ function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onO
 }
 
 export default function CabinetEditModal({
-  cabinet, wall, wallCabinets, resolvedCabinet, initialView, onUpdate, onDelete, onClose, materialColours, ebByMatId,
+  cabinet, wall, wallCabinets, resolvedCabinet, initialView, onUpdate, onDelete, onClose, materialColours, ebByMatId, onHiddenChange,
 }: {
   cabinet: CabinetInstance
   wall: Wall | null
@@ -183,6 +185,9 @@ export default function CabinetEditModal({
   onClose: () => void
   materialColours?: Record<string, string | { face?: string; back?: string; edge?: string }>
   ebByMatId?: Record<string, { thickness: number; color: string | null }>
+  // Lets the parent canvas reflect hide/show toggles live (updates the shared
+  // resolved map's hidden_parts so the on-canvas elevation / 3D update at once).
+  onHiddenChange?: (cabinetId: string, hidden: string[]) => void
 }) {
   const [activeView, setActiveView]       = useState<ViewId>(initialView ?? 'elevation')
   // Wire/solid is tracked per-view (Top/Elevation/Side/3D each individual), seeded
@@ -209,6 +214,7 @@ export default function CabinetEditModal({
   const [partOverrides, setPartOverrides] = useState<PartPosOverrides>({})
   const [partLabels, setPartLabels]       = useState<PartLabels>({})
   const [partComments, setPartComments]   = useState<PartComments>({})
+  const [hiddenParts, setHiddenParts]     = useState<string[]>([])
   const [contextMenu, setContextMenu]     = useState<{ part: PartMeta; cx: number; cy: number } | null>(null)
 
   const prevPartRef     = useRef<PartMeta | null>(null)
@@ -229,7 +235,17 @@ export default function CabinetEditModal({
     dbLoadPartPosOverrides(cabinet.id).then(setPartOverrides)
     dbLoadPartLabels(cabinet.id).then(setPartLabels)
     dbLoadPartComments(cabinet.id).then(setPartComments)
+    dbLoadHiddenParts(cabinet.id).then(setHiddenParts)
   }, [cabinet.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function toggleHidden(partId: string) {
+    setHiddenParts(prev => {
+      const next = prev.includes(partId) ? prev.filter(id => id !== partId) : [...prev, partId]
+      dbSaveHiddenParts(cabinet.id, next).catch(console.error)
+      onHiddenChange?.(cabinet.id, next)
+      return next
+    })
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
@@ -313,6 +329,10 @@ export default function CabinetEditModal({
   const currentRp = resolvedCabinet ?? localRp ?? undefined
   if (currentRp !== undefined) lastRpRef.current = currentRp
   const rp = currentRp ?? lastRpRef.current
+
+  // Geometry viewers (Top/Elevation/Side/3D/Face/Interior) render the cabinet with
+  // user-hidden parts removed; the Parts tab + inspector panels keep the full list.
+  const visibleRp = useMemo(() => (rp ? filterHiddenParts(rp, hiddenParts) : rp), [rp, hiddenParts])
 
   return (
     <div
@@ -421,7 +441,7 @@ export default function CabinetEditModal({
             onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null) } : undefined}
           >
             {activeView === 'top' && (
-              rp ? <ResolvedTop cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
+              visibleRp ? <ResolvedTop cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 customParts={customParts} partOverrides={partOverrides}
@@ -429,7 +449,7 @@ export default function CabinetEditModal({
               : <TopView cab={cabinet} />
             )}
             {activeView === 'elevation' && (
-              rp ? <ResolvedElevation cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
+              visibleRp ? <ResolvedElevation cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 customParts={customParts} partOverrides={partOverrides}
@@ -437,19 +457,20 @@ export default function CabinetEditModal({
               : <ElevationView cab={cabinet} />
             )}
             {activeView === 'side' && (
-              rp ? <ResolvedSide cab={cabinet} rp={rp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
+              visibleRp ? <ResolvedSide cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 customParts={customParts} partOverrides={partOverrides}
                 partLabels={partLabels} partComments={partComments} />
               : <SideView cab={cabinet} />
             )}
-            {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={rp} showInternals={showInternals} onUpdate={onUpdate} />}
-            {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && rp && <Cabinet3DView cab={cabinet} rp={rp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} />}
+            {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} />}
+            {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} />}
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}
+                hiddenParts={hiddenParts} onToggleHidden={toggleHidden}
                 customParts={customParts} setCustomParts={setCustomParts}
                 partOverrides={partOverrides}
                 onDeletePosOverride={async id => { const u = await dbDeletePartPosOverride(cabinet.id, id, partOverrides); setPartOverrides(u) }}

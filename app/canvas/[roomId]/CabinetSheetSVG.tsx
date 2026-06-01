@@ -15,6 +15,7 @@ import {
   elevRect, tkElevRect, zoneElevRect, intElevRect, dbElevRect, slideElevRect,
   sideRect, tkSideRect, intSideRect, zoneSideRect, dbSideRect, slideSideRect,
   caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3, type Box3,
+  doorProfileSvg,
 } from './cabinetEditSvgHelpers'
 
 export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean }
@@ -171,6 +172,8 @@ export default function CabinetSheetSVG({
         els.push(<rect key={`f${i}`} {...rc} fill={FACE_FILL} stroke={INK} strokeWidth={PART} />)
         if (z.hinge_side === 'left') els.push(<line key={`fh${i}`} x1={rc.x} y1={rc.y} x2={rc.x} y2={rc.y + rc.height} stroke={INK} strokeWidth={OUT} />)
         if (z.hinge_side === 'right') els.push(<line key={`fh${i}`} x1={rc.x + rc.width} y1={rc.y} x2={rc.x + rc.width} y2={rc.y + rc.height} stroke={INK} strokeWidth={OUT} />)
+        const fp = doorProfileSvg(z, { x: rc.x, y: rc.y, w: rc.width, h: rc.height }, INK, THIN, 0.9)
+        if (fp) els.push(<g key={`fp${i}`}>{fp}</g>)
       })
       // Internals (lighter grey, on top so visible through faces)
       if (show.internals) {

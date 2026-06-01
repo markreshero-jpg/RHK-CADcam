@@ -9,8 +9,10 @@ import type { PartPosOverrides } from './canvasDB'
 import type {
   ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart,
   ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack,
+  ResolvedSlideDrill,
 } from '@/src/lib/resolver/types'
 import { slideSilhouettePath, slideSilhouetteOutline, type SlidePlacement } from '@/src/lib/slideSilhouette'
+import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 export const C_PANEL  = '#374151'
@@ -111,6 +113,45 @@ export function tkElevRect(p: ResolvedToekickPart) {
   return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
 }
 export function zoneElevRect(z: ResolvedFaceZone)     { return { ex: z.X, ey: z.Y + z.DX, ew: z.DY, eh: z.DX } }
+
+// Door-profile overlay for a face zone, mapped into an already-computed SVG rect.
+// Returns inset-frame <rect>s + groove <line>s (face-local mm → rect, y flipped to
+// SVG top-down). `sw` = stroke width in the caller's units. Shared by every
+// elevation/sheet renderer so the profile geometry is computed in exactly one place.
+export function doorProfileSvg(
+  z: ResolvedFaceZone,
+  rect: { x: number; y: number; w: number; h: number },
+  stroke: string,
+  sw: number,
+  opacity = 0.85,
+  nonScaling = false,
+): React.ReactNode {
+  if (z.face_type !== 'door' || !z.door_profile) return null
+  const W = z.DY, H = z.DX
+  if (W <= 0 || H <= 0) return null
+  const prims = doorProfilePrimitives(z.door_profile, { w: W, h: H, thickness: z.DZ })
+  if (prims.insetRects.length === 0 && prims.grooveLines.length === 0) return null
+  const mapX = (lx: number) => rect.x + (lx / W) * rect.w
+  const mapY = (ly: number) => rect.y + rect.h - (ly / H) * rect.h   // flip: local +y up → SVG +y down
+  const ve = nonScaling ? ('non-scaling-stroke' as const) : undefined
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      {prims.insetRects.map((ir, i) => {
+        const x0 = mapX(ir.x), x1 = mapX(ir.x + ir.w)
+        const y0 = mapY(ir.y + ir.h), y1 = mapY(ir.y)
+        return (
+          <rect key={`pir${i}`} x={Math.min(x0, x1)} y={Math.min(y0, y1)}
+            width={Math.abs(x1 - x0)} height={Math.abs(y1 - y0)}
+            fill="none" stroke={stroke} strokeWidth={sw} strokeOpacity={opacity} vectorEffect={ve} />
+        )
+      })}
+      {prims.grooveLines.map((gl, i) => (
+        <line key={`pgl${i}`} x1={mapX(gl.x1)} y1={mapY(gl.y1)} x2={mapX(gl.x2)} y2={mapY(gl.y2)}
+          stroke={stroke} strokeWidth={sw} strokeOpacity={opacity} vectorEffect={ve} />
+      ))}
+    </g>
+  )
+}
 export function shelfElevRect(p: ResolvedInternalPart) { return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ } }
 export function intElevRect(p: ResolvedInternalPart) {
   switch (p.part_type) {
@@ -427,6 +468,49 @@ export function DrillOverlay({ drills, project, perp, dirOf }: {
             <line x1={sx} y1={sy} x2={ex} y2={ey}
               stroke={col} strokeOpacity={0.35} strokeWidth={r * 2} strokeLinecap="butt" />
             <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={col} strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
+// Slide drilling overlay — identical geometry to DrillOverlay but for the holes
+// a drawer slide imposes (ResolvedSlideDrill, no seam source). Drawn amber to
+// stand apart from the green/blue carcase-joint holes, matching the amber slide
+// markers in the 3D view.
+const SLIDE_DRILL_COL = '#d97706'   // amber-600
+
+export function SlideDrillOverlay({ drills, project, perp, dirOf }: {
+  drills:  ResolvedSlideDrill[]
+  project: (x: number, y: number, z: number) => { x: number; y: number }
+  perp:    'x' | 'y' | 'z'
+  dirOf:   (axis: DrillAxis) => { dx: number; dy: number }
+}) {
+  if (drills.length === 0) return null
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      {drills.map((d, i) => {
+        const { x: sx, y: sy } = project(d.x, d.y, d.z)
+        const r = Math.max(d.radius, 0.75)
+
+        if (d.axis[0] === perp) {
+          // Looking down the bore → circle = tool diameter.
+          return (
+            <circle key={i} cx={sx} cy={sy} r={r}
+              fill={SLIDE_DRILL_COL} fillOpacity={0.4} stroke={SLIDE_DRILL_COL} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+          )
+        }
+
+        // In-plane axis → slot from the entry face into the panel by drill depth.
+        const dir = dirOf(d.axis)
+        const ex  = sx + dir.dx * d.depthLen
+        const ey  = sy + dir.dy * d.depthLen
+        return (
+          <g key={i}>
+            <line x1={sx} y1={sy} x2={ex} y2={ey}
+              stroke={SLIDE_DRILL_COL} strokeOpacity={0.35} strokeWidth={r * 2} strokeLinecap="butt" />
+            <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={SLIDE_DRILL_COL} strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
           </g>
         )
       })}

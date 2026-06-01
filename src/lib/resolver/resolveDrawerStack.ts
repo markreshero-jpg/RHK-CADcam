@@ -22,6 +22,7 @@ import {
   DEFAULT_DB_RULES,
 } from './types'
 import { resolveDrawerBox } from './resolveDrawerBox'
+import { slideDrillOps } from '../slideDrilling'
 
 
 export function findSlide(
@@ -75,6 +76,17 @@ export function resolveDrawerStacks(
   const drawerMat    = cab.drawer_material ?? cab.material
   const dbRules      = cab.drawer_box_rules ?? DEFAULT_DB_RULES
 
+  // Interior floor = top face of the carcase bottom panel. Matches resolveCase
+  // (bottom panel Y = TK + SCRBT) + its thickness T, i.e. resolveInternal's
+  // intBottom. The drawer box must rest on this, not on the face-grid bottom
+  // (which for the lowest drawer sits one panel thickness lower, at the cabinet
+  // exterior). TK mirrors the case/internal resolvers exactly.
+  const TK = cab.has_toekick &&
+    (cab.assembly_class === 'base' || cab.assembly_class === 'tall' ||
+     cab.assembly_class === 'base_corner' || cab.assembly_class === 'tall_corner')
+    ? r.TOEH : 0
+  const internalFloorY = TK + T + r.SCRBT
+
   const stacks: ResolvedDrawerStack[] = []
 
   for (const zone of drawerZones) {
@@ -108,7 +120,10 @@ export function resolveDrawerStacks(
     // Cabinet-space origin of the box — interior left face (T + SCRL) plus clearance and
     // the left runner, so the box sits between the two rails.
     const boxX = T + r.SCRL + r.IDCL + runnerThick
-    const boxY = zone.Y               // bottom aligns with bottom of face zone
+    // Bottom aligns with the face zone, but never below the interior floor — the
+    // lowest drawer's zone.Y sits a panel thickness below it, which would drop the
+    // box through the carcase bottom panel.
+    const boxY = Math.max(zone.Y, internalFloorY)
     const boxZ = zone.Z - boxDepth    // cabinet Z of the back face of the box
 
     // Slide Z: back of slide rail. Front of slide aligns with the front face of the box sides
@@ -158,12 +173,25 @@ export function resolveDrawerStacks(
       model_anchor_x:   slide?.model_anchor_x ?? 0,
       model_anchor_y:   slide?.model_anchor_y ?? 0,
       model_anchor_z:   slide?.model_anchor_z ?? 0,
+      drills:           [],
     }
 
     const slides: ResolvedDrawerSlide[] = [
       { ...slideBase, side: 'left',  X: T + r.SCRL + r.IDCL },
       { ...slideBase, side: 'right', X: cab.DX - T - r.SCRR - r.IDCR - runnerThick },
     ]
+
+    // Resolve slide-imposed drilling against the REAL resolved parts (not the box
+    // envelope) so back setback, dado raise and face overhang land correctly.
+    const backPart   = boxParts.find(p => p.part_type === 'db_back')
+    const bottomPart = boxParts.find(p => p.part_type === 'db_bottom')
+    for (const sl of slides) {
+      const sidePart = boxParts.find(p =>
+        p.part_type === (sl.side === 'left' ? 'db_left_side' : 'db_right_side'))
+      sl.drills = slideDrillOps(sl, slide?.drill_ops ?? [], {
+        backPart, bottomPart, sidePart, face: zone,
+      })
+    }
 
     stacks.push({
       face_zone_row: zone.row_index,

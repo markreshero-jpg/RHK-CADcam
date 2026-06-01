@@ -264,6 +264,9 @@ export interface SlideProduct {
   model_anchor_x:   number          // nudge (mm) from convention origin
   model_anchor_y:   number
   model_anchor_z:   number
+  // Drilling this slide imposes on the surfaces it touches (cabinet member +
+  // drawer-box parts). Empty = no slide holes. Loaded from drawer_slide_operations.
+  drill_ops:        SlideDrillOp[]
 }
 
 // Slide schedule entry: depth+height tier → specific slide product
@@ -273,6 +276,56 @@ export interface SlideScheduleEntry {
   depth_threshold:  number   // NL of the slide (e.g. 450) — used as max available depth for selection
   height_threshold: number   // minimum opening height required, e.g. 104 (= box_height of that slide)
   slide_id:         string
+}
+
+// ── Slide Drilling ────────────────────────────────────────────────
+// A drilling/routing op a slide imposes on a surface it touches. Mirrors a row
+// in drawer_slide_operations (child of hardware_slides). Conceptually the slide
+// analogue of JointTypeOp, but keyed by a semantic target_surface instead of a
+// seam's part_a/part_b — one slide can drill into several surfaces (esp.
+// undermount: cabinet member + drawer bottom + back + front dowels).
+
+// Surfaces a slide can drill into. cabinet_member = the gable/divider the runner
+// mounts to; the rest are drawer-box parts (drawer_front = the visible face).
+export type SlideDrillSurface =
+  | 'cabinet_member' | 'drawer_side' | 'drawer_bottom' | 'drawer_back' | 'drawer_front'
+
+// Handedness. 'both' mirrors the op for the left+right rails (the common case
+// for symmetric fixings); 'left'/'right' pin it to one rail.
+export type SlideDrillSide = 'both' | 'left' | 'right'
+
+export interface SlideDrillOp {
+  id:                string
+  slide_id:          string
+  operation_order:   number
+  target_surface:    SlideDrillSurface
+  machine_operation: JointMachineOp     // 'drill' | 'route' | 'pocket' (shared with joints)
+  tool_diameter_mm:  number
+  depth_mm:          number
+  along_off_mm:      number   // position down the slide/box from its front datum
+  up_off_mm:         number   // height (or across, for bottom faces)
+  qty:               number
+  spacing_mm:        number | null      // gap between repeats (null = single hole)
+  repeat_axis:       'along' | 'up'     // direction repeated holes step (default 'up')
+  side:              SlideDrillSide
+  tool:              string | null
+  notes:             string | null
+  expressions:       Record<string, string> | null  // same evaluator as joints
+}
+
+// A slide drill op resolved to an absolute cabinet-space hole position. Same
+// shape as jointDrilling's DrillOpPos so the 3D/2D views render it identically;
+// kept here (not importing DrillOpPos) so the resolver stays free of view deps.
+export type SlideDrillAxis = 'x-' | 'x+' | 'y-' | 'y+' | 'z-' | 'z+'
+
+export interface ResolvedSlideDrill {
+  x: number; y: number; z: number   // entry point on the target surface (cabinet coords)
+  axis:     SlideDrillAxis           // direction the bore travels into the material
+  radius:   number                   // tool_diameter_mm / 2
+  depthLen: number                   // bore depth (capped for drawer_front)
+  surface:  SlideDrillSurface
+  side:     'left' | 'right'         // which rail produced it
+  machine_operation: JointMachineOp  // drill | route | pocket (for labelling)
 }
 
 // ── Drawer Box Edging ─────────────────────────────────────────
@@ -478,6 +531,13 @@ export interface CabinetInput {
   // Face grid definition
   face_grid:       FaceGridInput
 
+  // Resolved door styles per zone, keyed by `${row_index}_${col_index}`.
+  // Populated by loadCabinetInput after walking the cascade (zone → room → job)
+  // and loading the style's catalogue (thickness) + profile (+ operations).
+  // resolveFace consumes this to override the door panel thickness and evaluate
+  // the profile geometry. Absent key = no door style on that zone.
+  resolved_doors?: Record<string, ResolvedDoorStyleInput>
+
   // Internal layout — recursive section tree (structural splits + compartment fittings)
   internal_tree:   Section
   // Vertical gap (mm) between stacked fittings inside an open compartment.
@@ -492,6 +552,33 @@ export interface FaceGridInput {
   rows: FaceRowInput[]
   cols: FaceColInput[]
   zones: FaceZoneInput[]
+}
+
+// ── Door style input (loaded from the door library, pre-evaluation) ──
+// Raw door_profile_operations rows: fixed numeric columns + the expressions
+// jsonb (formula override per field, joints pattern). resolveFace evaluates
+// these against the resolved panel dimensions.
+export interface RawProfileOp {
+  operation_type:      'route' | 'drill' | 'pocket'
+  depth_mm:            number | null
+  width_mm:            number | null
+  offset_from_edge_mm: number | null
+  repeat_axis:         'none' | 'x' | 'y'
+  spacing_mm:          number | null
+  tool_diameter_mm:    number | null
+  face:                'front' | 'back'
+  expressions:         Record<string, string> | null
+  sort_order:          number
+}
+export interface ResolvedDoorStyleInput {
+  style_id:            string
+  profile_id:          string | null
+  thickness_mm:        number
+  profile_type:        ResolvedDoorProfile['profile_type'] | null
+  ops:                 RawProfileOp[]
+  // Linked board material id for the default colour, if the schedule colour
+  // points at a materials row — used for face colour in rendering. Optional.
+  colour_material_id?: string | null
 }
 
 export interface FaceRowInput {
@@ -514,6 +601,10 @@ export interface FaceZoneInput {
   face_ins?:  number   // per-zone inset override
   face_buf?:  number   // per-zone buffer override
   drawer_type_config?: DrawerTypeConfig  // only used when face_type === 'drawer_face'
+  // Per-zone door style assignment (lowest level of the door cascade:
+  // zone → room → job). null/undefined = inherit. Lives in the face_grid
+  // JSONB so it survives re-resolve (the face_zones table is rebuilt each persist).
+  door_style_id?: string | null
 }
 
 // ── Internal Part Inputs ──────────────────────────────────────
@@ -678,6 +769,9 @@ export interface ResolvedCabinet {
   // Validation errors — non-empty means something is wrong
   errors:        ResolverError[]
   warnings:      ResolverError[]
+  // Resolved-part IDs the user has hidden from viewers/reports/cut lists.
+  // Carried through resolution so any consumer can filter via filterHiddenParts().
+  hidden_parts?: string[]
 }
 
 export interface ResolvedPart extends PartTransform {
@@ -724,11 +818,36 @@ export interface ResolvedFaceCol {
   width_locked:  boolean
 }
 
+// ── Resolved Door Profile ─────────────────────────────────────
+// A door style's routing profile after formula evaluation against the
+// resolved door panel dimensions. Carried on the face zone and persisted
+// to face_zones.door_profile (jsonb) so every renderer can draw it without
+// re-querying the door library.
+export interface ResolvedProfileOp {
+  operation_type:      'route' | 'drill' | 'pocket'
+  depth_mm:            number | null
+  width_mm:            number | null
+  offset_from_edge_mm: number | null
+  repeat_axis:         'none' | 'x' | 'y'
+  spacing_mm:          number | null
+  face:                'front' | 'back'
+}
+export interface ResolvedDoorProfile {
+  profile_type: 'perimeter_route' | 'vj_lines' | 'panel_raise' | 'bead' | 'custom'
+  ops:          ResolvedProfileOp[]
+}
+
 export interface ResolvedFaceZone extends ResolvedPart {
   row_index:  number
   col_index:  number
   face_type:  'door' | 'drawer_face' | 'false_panel' | 'open'
   hinge_side?: 'left' | 'right'
+  // Door style results (only set on door zones that resolved to a style).
+  // DZ already carries the catalogue thickness. door_profile is the evaluated
+  // routing geometry; null when the style is a flat door.
+  door_style_id?:   string | null
+  door_profile_id?: string | null
+  door_profile?:    ResolvedDoorProfile | null
 }
 
 // ── Resolved Drawer Stack ─────────────────────────────────────
@@ -763,6 +882,9 @@ export interface ResolvedDrawerSlide {
   // drawer's box + face. Absent on face-zone drawer slides (which live inside
   // their own ResolvedDrawerStack).
   inner_drawer_index?: number
+  // Holes this rail drills into the cabinet member + drawer-box surfaces,
+  // resolved to absolute cabinet coords. Empty when the slide has no drill_ops.
+  drills: ResolvedSlideDrill[]
 }
 
 export interface ResolvedDrawerStack {

@@ -1,8 +1,9 @@
 import { supabase } from '@/src/lib/supabase'
 import {
   CabinetInput, ConstructionRules, FaceGridInput, Section, EMPTY_SECTION, Material, DEFAULT_RULES,
-  SlideProduct, SlideScheduleEntry, DrawerBoxRules, DEFAULT_DB_RULES,
+  SlideProduct, SlideScheduleEntry, SlideDrillOp, DrawerBoxRules, DEFAULT_DB_RULES,
   JointTypeOp, JointTargetPart, JointMachineOp, JointFace,
+  RawProfileOp, ResolvedDoorStyleInput,
 } from './types'
 import { mergeRules } from './mergeRules'
 
@@ -19,6 +20,88 @@ function dbRowToMaterial(row: Record<string, unknown>): Material {
     back_colour:     (row.back_colour as string | null) ?? undefined,
     edge_colour:     (row.edge_colour as string | null) ?? undefined,
   }
+}
+
+// Resolve the door-style cascade per zone (zone → room → job) and load each
+// distinct style's catalogue thickness + profile operations. Returns a map
+// keyed `${row}_${col}` for door zones that resolve to a style.
+async function resolveDoorStyles(
+  grid: FaceGridInput,
+  roomStyleId: string | null,
+  projStyleId: string | null,
+): Promise<Record<string, ResolvedDoorStyleInput>> {
+  // Effective style id per door zone (lowest set level wins).
+  const zoneStyle = new Map<string, string>()
+  for (const z of grid.zones) {
+    if (z.face_type !== 'door') continue
+    const styleId = z.door_style_id ?? roomStyleId ?? projStyleId ?? null
+    if (styleId) zoneStyle.set(`${z.row_index}_${z.col_index}`, styleId)
+  }
+  const distinctIds = [...new Set(zoneStyle.values())]
+  if (distinctIds.length === 0) return {}
+
+  // One nested query: style → catalogue(thickness) → profile(+ops).
+  const { data, error } = await supabase
+    .from('door_styles')
+    .select(`
+      id, default_material_id,
+      catalogue:door_catalogue ( thickness_mm ),
+      profile:door_profiles (
+        id, profile_type,
+        ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order )
+      )
+    `)
+    .in('id', distinctIds)
+  if (error) { console.error('[loadCabinetInput] door_styles query error:', error); return {} }
+
+  // Optional: resolve default colour → linked board material id (best effort).
+  const colourIds = ((data ?? []) as { default_material_id: string | null }[])
+    .map(r => r.default_material_id).filter((x): x is string => !!x)
+  const colourMatById = new Map<string, string | null>()
+  if (colourIds.length > 0) {
+    const { data: cols } = await supabase
+      .from('door_schedule_materials').select('id, material_id').in('id', colourIds)
+    for (const c of (cols ?? []) as { id: string; material_id: string | null }[]) {
+      colourMatById.set(c.id, c.material_id)
+    }
+  }
+
+  type StyleRow = {
+    id: string
+    default_material_id: string | null
+    catalogue: { thickness_mm: number } | null
+    profile: { id: string; profile_type: string; ops: Record<string, unknown>[] } | null
+  }
+  const styleById = new Map<string, ResolvedDoorStyleInput>()
+  for (const row of ((data ?? []) as unknown as StyleRow[])) {
+    const ops: RawProfileOp[] = (row.profile?.ops ?? []).map(o => ({
+      operation_type:      (o.operation_type as RawProfileOp['operation_type']) ?? 'route',
+      depth_mm:            o.depth_mm != null ? Number(o.depth_mm) : null,
+      width_mm:            o.width_mm != null ? Number(o.width_mm) : null,
+      offset_from_edge_mm: o.offset_from_edge_mm != null ? Number(o.offset_from_edge_mm) : null,
+      repeat_axis:         (o.repeat_axis as RawProfileOp['repeat_axis']) ?? 'none',
+      spacing_mm:          o.spacing_mm != null ? Number(o.spacing_mm) : null,
+      tool_diameter_mm:    o.tool_diameter_mm != null ? Number(o.tool_diameter_mm) : null,
+      face:                (o.face as RawProfileOp['face']) ?? 'front',
+      expressions:         (o.expressions as Record<string, string> | null) ?? null,
+      sort_order:          (o.sort_order as number) ?? 0,
+    }))
+    styleById.set(row.id, {
+      style_id:           row.id,
+      profile_id:         row.profile?.id ?? null,
+      thickness_mm:       row.catalogue?.thickness_mm != null ? Number(row.catalogue.thickness_mm) : 18,
+      profile_type:       (row.profile?.profile_type as ResolvedDoorStyleInput['profile_type']) ?? null,
+      ops,
+      colour_material_id: row.default_material_id ? (colourMatById.get(row.default_material_id) ?? null) : null,
+    })
+  }
+
+  const out: Record<string, ResolvedDoorStyleInput> = {}
+  for (const [zoneKey, styleId] of zoneStyle) {
+    const resolved = styleById.get(styleId)
+    if (resolved) out[zoneKey] = resolved
+  }
+  return out
 }
 
 const DEFAULT_FACE_GRID: FaceGridInput = {
@@ -55,7 +138,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
 
   // ── 2. Load room + shop defaults in parallel ─────────────────────────────────
   const [roomRes, shopAsmRes, shopTkRes, shopFrontRes, shopSettingsRes, shopSlideRes] = await Promise.all([
-    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, inner_drawerbox_schedule_id, inner_drawer_box_method_id, rule_overrides').eq('id', cab.room_id).single(),
+    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, inner_drawerbox_schedule_id, inner_drawer_box_method_id, door_style_override_id, rule_overrides').eq('id', cab.room_id).single(),
     supabase.from('assembly_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('toekick_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('front_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
@@ -74,7 +157,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   if (projectId) {
     const { data } = await supabase
       .from('projects')
-      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, inner_drawerbox_schedule_id, slide_schedule_id, rule_overrides')
+      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, inner_drawerbox_schedule_id, slide_schedule_id, default_door_style_id, rule_overrides')
       .eq('id', projectId)
       .single()
     projRow = data as Record<string, string | null> | null
@@ -133,6 +216,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     roomMatsRes,
     roomTkRes,
     slideRes,
+    slideOpsRes,
     methodRes,
     conStrSchedRowRes,
     slideSchedEntryRes,
@@ -163,6 +247,12 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
       .select('id, name, brand, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair, colour, model_url, model_format, model_scale, model_anchor_x, model_anchor_y, model_anchor_z')
       .eq('active', true)
       .order('nominal_length', { ascending: true }),
+    // Slide drilling operations (child rows of hardware_slides), grouped onto
+    // each slide product below.
+    supabase
+      .from('drawer_slide_operations')
+      .select('id, slide_id, operation_order, target_surface, machine_operation, tool_diameter_mm, depth_mm, along_off_mm, up_off_mm, qty, spacing_mm, repeat_axis, side, tool, notes, expressions')
+      .order('operation_order'),
     cab.construction_method_id
       ? supabase.from('construction_methods').select('rules').eq('id', cab.construction_method_id).single()
       : supabase.from('construction_methods').select('rules').eq('is_default', true).limit(1).maybeSingle(),
@@ -265,6 +355,32 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   if (!tkInt)    throw new Error(`No toekick interior material`)
 
   // ── 9. Build slide products list ────────────────────────────────────────────
+  // Group slide drilling ops by slide_id so each product carries its own holes.
+  const slideOpsBySlideId = new Map<string, SlideDrillOp[]>()
+  for (const o of (((slideOpsRes as { data: unknown[] | null }).data ?? []) as Record<string, unknown>[])) {
+    const sid = o.slide_id as string
+    const arr = slideOpsBySlideId.get(sid) ?? []
+    arr.push({
+      id:                o.id as string,
+      slide_id:          sid,
+      operation_order:   Number(o.operation_order ?? 0),
+      target_surface:    o.target_surface as SlideDrillOp['target_surface'],
+      machine_operation: o.machine_operation as SlideDrillOp['machine_operation'],
+      tool_diameter_mm:  Number(o.tool_diameter_mm ?? 5),
+      depth_mm:          Number(o.depth_mm ?? 12),
+      along_off_mm:      Number(o.along_off_mm ?? 0),
+      up_off_mm:         Number(o.up_off_mm ?? 0),
+      qty:               Number(o.qty ?? 1),
+      spacing_mm:        o.spacing_mm == null ? null : Number(o.spacing_mm),
+      repeat_axis:       (o.repeat_axis as 'along' | 'up') ?? 'up',
+      side:              (o.side as SlideDrillOp['side']) ?? 'both',
+      tool:              (o.tool as string | null) ?? null,
+      notes:             (o.notes as string | null) ?? null,
+      expressions:       (o.expressions as Record<string, string> | null) ?? null,
+    })
+    slideOpsBySlideId.set(sid, arr)
+  }
+
   type SlideRow = Record<string, unknown>
   const slideRows = ((slideRes as { data: unknown[] | null }).data ?? []) as SlideRow[]
   const slideProducts: SlideProduct[] = slideRows.map(r => ({
@@ -287,6 +403,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     model_anchor_x:   r.model_anchor_x != null ? Number(r.model_anchor_x) : 0,
     model_anchor_y:   r.model_anchor_y != null ? Number(r.model_anchor_y) : 0,
     model_anchor_z:   r.model_anchor_z != null ? Number(r.model_anchor_z) : 0,
+    drill_ops:        slideOpsBySlideId.get(r.id as string) ?? [],
   }))
 
   type SlideEntryRow = { id: string; schedule_id: string; depth_threshold: unknown; height_threshold: unknown; slide_id: string }
@@ -355,8 +472,8 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   for (const v of Object.values(cabJoints))    if (v) jointTypeIds.add(v)
   for (const v of Object.values(jointDefaults)) if (v) jointTypeIds.add(v)
 
-  let jointTypeOps:   Record<string, JointTypeOp[]> = {}
-  let jointTypeNames: Record<string, string>          = {}
+  const jointTypeOps:   Record<string, JointTypeOp[]> = {}
+  const jointTypeNames: Record<string, string>          = {}
 
   if (jointTypeIds.size > 0) {
     const ids = [...jointTypeIds]
@@ -431,6 +548,14 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     }
   }
 
+  // ── 12. Resolve door styles per zone (cascade: zone → room → job) ───────────
+  const faceGridInput = (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID
+  const resolvedDoors = await resolveDoorStyles(
+    faceGridInput,
+    (room?.door_style_override_id as string | null | undefined) ?? null,
+    (projRow?.default_door_style_id as string | null | undefined) ?? null,
+  )
+
   return {
     id:              cab.id,
     assembly_class:  cab.assembly_class,
@@ -478,7 +603,8 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     joint_defaults:   jointDefaults,
     joint_type_ops:   jointTypeOps,
     joint_type_names: jointTypeNames,
-    face_grid:     (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID,
+    face_grid:     faceGridInput,
+    resolved_doors: resolvedDoors,
     // Internal layout: recursive section tree stored as internal_grid = { tree }.
     // Anything without a tree (e.g. legacy flat grids) resolves to an empty interior.
     internal_tree: internalTree,

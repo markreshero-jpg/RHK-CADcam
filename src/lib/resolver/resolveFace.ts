@@ -5,11 +5,12 @@
 
 import {
   CabinetInput, ConstructionRules, ResolverError,
-  ResolvedFaceRow, ResolvedFaceCol, ResolvedFaceZone,
+  ResolvedFaceRow, ResolvedFaceCol, ResolvedFaceZone, ResolvedDoorProfile,
   FaceRowInput, FaceColInput, FaceZoneInput,
   edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
 import { resolveReveal, resolveFaceZ } from './mergeRules'
+import { evaluateProfileOps } from '../doorProfile'
 
 export interface FaceResolution {
   rows:   ResolvedFaceRow[]
@@ -154,8 +155,25 @@ export function resolveFace(
     const zoneX  = colOffsets[zone.col_index]
     const zoneY  = rowOffsets[zone.row_index]
 
+    // Door style (zone → room → job cascade resolved in loadCabinetInput).
+    // A door blank's catalogue thickness overrides the face material thickness.
+    const door = zone.face_type === 'door' ? cab.resolved_doors?.[`${zone.row_index}_${zone.col_index}`] : undefined
+    const ft   = door ? door.thickness_mm : FT
+
+    // Evaluate the routing profile against the resolved panel dimensions.
+    let doorProfile: ResolvedDoorProfile | null = null
+    if (door?.profile_type && door.ops.length > 0) {
+      doorProfile = {
+        profile_type: door.profile_type,
+        ops: evaluateProfileOps(door.ops, {
+          w: zoneW, h: zoneH, thickness: ft,
+          toolDiameter: door.ops[0]?.tool_diameter_mm ?? 0,
+        }),
+      }
+    }
+
     // Face Z position — per-zone override takes priority
-    const zoneZ = resolveFaceZ(DZ, FT, r, zone.face_ins, zone.face_buf)
+    const zoneZ = resolveFaceZ(DZ, ft, r, zone.face_ins, zone.face_buf)
 
     resolvedZones.push({
       row_index:   zone.row_index,
@@ -166,7 +184,7 @@ export function resolveFace(
       // Dimensions
       DX: zoneH,    // height of zone (Y extent becomes DX on sheet)
       DY: zoneW,    // width of zone
-      DZ: FT,       // face material thickness
+      DZ: ft,       // face/door material thickness (door catalogue overrides face material)
 
       // Position
       X:  zoneX,
@@ -177,6 +195,11 @@ export function resolveFace(
 
       material_id: fid,
       edge_band:   edgeSidesToBanding(edging[zone.face_type], ebId),
+
+      // Door style results (undefined/null on non-door or unstyled zones)
+      door_style_id:   door?.style_id ?? null,
+      door_profile_id: door?.profile_id ?? null,
+      door_profile:    doorProfile,
     })
   }
 

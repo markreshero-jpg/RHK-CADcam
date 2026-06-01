@@ -6,6 +6,7 @@ import type { Project, Room, Wall, CabinetInstance, BenchtopInstance } from '@/s
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { dbLoadResolvedParts } from './canvasDB'
+import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import PlanDrawingSVG from './PlanDrawingSVG'
 import PlanViewReport from './PlanViewReport'
 import ElevationReportSVG from './ElevationReportSVG'
@@ -177,7 +178,13 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
 
   const rooms          = scope === 'room' ? [room]        : jobRooms
   const allCabinets    = scope === 'room' ? cabinets      : jobCabinets
-  const allResolved    = scope === 'room' ? resolvedParts : jobResolved
+  // Strip user-hidden parts so every report and the cut list exclude them.
+  const allResolved    = useMemo(() => {
+    const src = scope === 'room' ? resolvedParts : jobResolved
+    const out = new Map<string, ResolvedCabinet>()
+    for (const [id, r] of src) out.set(id, filterHiddenParts(r))
+    return out
+  }, [scope, resolvedParts, jobResolved])
   const allBtInstances = scope === 'room' ? benchtops     : jobBtInstances
   const allBtParts     = scope === 'room' ? roomBtParts   : jobBtParts
 

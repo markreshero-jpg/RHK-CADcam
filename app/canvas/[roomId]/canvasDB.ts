@@ -1,6 +1,6 @@
 import { supabase } from '@/src/lib/supabase'
 import type { Wall, CabinetInstance } from '@/src/lib/types'
-import { resolveCabinetFromDB, getCachedInput, setCachedInput, applyEdgeOverridesFromCache } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { resolveCabinetFromDB, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { persistResolved } from '@/src/lib/resolver/persistResolved'
 import type { ResolvedCabinet, ResolvedSeamJoint, JointTypeOp, JointTargetPart, JointMachineOp, JointFace } from '@/src/lib/resolver/types'
@@ -17,15 +17,17 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
     supabase.from('face_rows').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('face_cols').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('face_zones').select('*').in('cabinet_instance_id', cabinetIds),
-    supabase.from('cabinet_instances').select('id, carcase_joints').in('id', cabinetIds),
+    supabase.from('cabinet_instances').select('id, carcase_joints, hidden_parts').in('id', cabinetIds),
   ])
 
   // Collect joint type IDs from per-cabinet carcase_joints overrides
   const carcaseJointsById = new Map<string, Record<string, string | null>>()
+  const hiddenById = new Map<string, string[]>()
   const jointTypeIds = new Set<string>()
-  for (const row of (ci.data ?? []) as { id: string; carcase_joints: Record<string, string | null> | null }[]) {
+  for (const row of (ci.data ?? []) as { id: string; carcase_joints: Record<string, string | null> | null; hidden_parts: string[] | null }[]) {
     const joints = row.carcase_joints ?? {}
     carcaseJointsById.set(row.id, joints)
+    hiddenById.set(row.id, row.hidden_parts ?? [])
     for (const v of Object.values(joints)) if (v) jointTypeIds.add(v)
   }
 
@@ -109,7 +111,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
       })
     }
 
-    result.set(id, {
+    const built: ResolvedCabinet = {
       cabinet_id: id,
       case_parts: myCase.map(p => ({
         part_key: p.part_key,
@@ -155,13 +157,21 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         AX: z.ax, AY: z.ay, AZ: z.az,
         material_id: z.material_id,
         edge_band: { top: z.edge_band_top, bottom: z.edge_band_bottom, left: z.edge_band_left, right: z.edge_band_right },
+        door_style_id: z.door_style_id ?? null,
+        door_profile_id: z.door_profile_id ?? null,
+        door_profile: z.door_profile ?? null,
       })),
       drawer_stacks: [],
       internal_slides: [],
       seam_joints: seamJoints,
       errors: [],
       warnings: [],
-    })
+      hidden_parts: hiddenById.get(id) ?? [],
+    }
+    // NB: left UNFILTERED — this map also feeds the edit modal, whose Parts tab
+    // needs the full list. Consumers (canvas elevation/plan, reports, cut lists)
+    // call filterHiddenParts() at render; the modal filters its own viewers.
+    result.set(id, built)
   }
   return result
 }
@@ -215,6 +225,7 @@ export async function dbUpdateCabinet(
     setCachedInput(id, updated)
     const resolved = resolveCabinet(updated)
     applyEdgeOverridesFromCache(resolved)
+    resolved.hidden_parts = getCachedHidden(id) ?? []
     persistResolved(resolved).catch(e => console.error('persist:', e))
     return resolved
   }
@@ -302,6 +313,23 @@ export async function dbDeletePartLabel(cabinetId: string, partId: string, curre
   const { error } = await supabase.from('cabinet_instances').update({ part_labels: updated }).eq('id', cabinetId)
   if (error) console.error('[part label delete]', error)
   return updated
+}
+
+// ── Hidden Parts ──────────────────────────────────────────────────────────────
+// Set of resolved-part IDs hidden from every viewer/report/cut list. Custom parts
+// use cabinet_custom_parts.visible instead (handled in PartsView).
+
+export type HiddenParts = string[]
+
+export async function dbLoadHiddenParts(cabinetId: string): Promise<HiddenParts> {
+  const { data } = await supabase
+    .from('cabinet_instances').select('hidden_parts').eq('id', cabinetId).single()
+  return ((data as { hidden_parts?: unknown } | null)?.hidden_parts ?? []) as HiddenParts
+}
+
+export async function dbSaveHiddenParts(cabinetId: string, hidden: HiddenParts): Promise<void> {
+  const { error } = await supabase.from('cabinet_instances').update({ hidden_parts: hidden }).eq('id', cabinetId)
+  if (error) console.error('[hidden parts save]', error)
 }
 
 // ── Part Comments ─────────────────────────────────────────────────────────────

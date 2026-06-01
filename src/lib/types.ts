@@ -40,6 +40,7 @@ export interface Project {
   construction_schedule_id:    string | null
   drawer_box_method_id:        string | null
   inner_drawer_box_method_id:  string | null
+  default_door_style_id:       string | null   // job-level default door style
   created_at: string
   updated_at: string
 }
@@ -71,6 +72,7 @@ export interface Room {
   benchtop_build_method_id:    string | null
   construction_schedule_id:    string | null
   inner_drawer_box_method_id:  string | null
+  door_style_override_id:      string | null   // room-level door style override
   created_at: string
   updated_at: string
 }

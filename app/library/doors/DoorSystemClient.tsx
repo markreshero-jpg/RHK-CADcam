@@ -466,7 +466,9 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
           </div>
           <p className="text-[10px] text-ink-subtle mb-3">
             Each row is one CNC pass. Fields take a fixed value; the small formula box overrides it at
-            resolve time (e.g. <span className="font-mono">@door.DX * 0.08</span>). Formula wiring is built in the resolver phase.
+            resolve time. Variables: <span className="font-mono">W</span> (panel width),
+            <span className="font-mono"> H</span> (height), <span className="font-mono">T</span> (thickness),
+            <span className="font-mono"> TD</span> (tool ⌀) — e.g. <span className="font-mono">W * 0.08</span>.
           </p>
 
           {profOps.length === 0

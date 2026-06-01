@@ -127,6 +127,8 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const [innerDrawerBoxMethod, setInnerDrawerBoxMethod] = useState(project.inner_drawer_box_method_id ?? '')
   const [constructionScheds,   setConstructionScheds]   = useState<SchedItem[]>([])
   const [drawerBoxMethods,     setDrawerBoxMethods]     = useState<SchedItem[]>([])
+  const [doorStyle,            setDoorStyle]            = useState(project.default_door_style_id ?? '')
+  const [doorStyles,           setDoorStyles]           = useState<SchedItem[]>([])
 
   // ── Material schedules (per zone) ─────────────────────────────────────────
   const [baseAsmSched,      setBaseAsmSched]      = useState(project.base_assembly_schedule_id ?? '')
@@ -158,7 +160,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
     let cancelled = false
     async function load() {
       setSchedLoading(true)
-      const [cmsR, dbmR, asmR, hdlR, slR, hiR, dbsR, idbsR, presetsR] = await Promise.all([
+      const [cmsR, dbmR, asmR, hdlR, slR, hiR, dbsR, idbsR, presetsR, dsR] = await Promise.all([
         supabase.from('construction_method_schedules').select('id,name,is_default').order('name'),
         supabase.from('drawer_box_methods').select('id,name,is_default,kind').eq('active', true).order('name'),
         supabase.from('assembly_schedules').select('id,name,is_default').eq('active', true).order('name'),
@@ -168,10 +170,12 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
         supabase.from('drawerbox_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('inner_drawerbox_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('job_presets').select('*').order('name'),
+        supabase.from('door_styles').select('id,name').eq('is_active', true).order('sort_order').order('name'),
       ])
       if (cancelled) return
       setConstructionScheds(    (cmsR.data  ?? []) as SchedItem[])
       setDrawerBoxMethods(      (dbmR.data  ?? []) as SchedItem[])
+      setDoorStyles(            ((dsR.data ?? []) as { id: string; name: string }[]).map(s => ({ ...s, is_default: false })))
       setAsmSchedules(          (asmR.data  ?? []) as SchedItem[])
       setHandleScheds(          (hdlR.data  ?? []) as SchedItem[])
       setSlideScheds(           (slR.data   ?? []) as SchedItem[])
@@ -221,6 +225,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       construction_schedule_id:     constructionSched     || null,
       drawer_box_method_id:         drawerBoxMethod       || null,
       inner_drawer_box_method_id:   innerDrawerBoxMethod  || null,
+      default_door_style_id:        doorStyle             || null,
       base_assembly_schedule_id:  baseAsmSched   || null,
       wall_assembly_schedule_id:  wallAsmSched   || null,
       tall_assembly_schedule_id:  tallAsmSched   || null,
@@ -644,9 +649,19 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
 
               {/* Doors */}
               {csTab === 'doors' && (
-                <EmptyState
-                  title="Door configuration"
-                  body="Door build type (shaker, flat panel, etc.), style, and material will be configured here." />
+                <div className="space-y-5">
+                  <p className="text-xs text-gray-500">
+                    Default door style for this job. Rooms and individual door zones can override it.
+                    Manage styles in the Doors Library.
+                  </p>
+                  {schedLoading ? (
+                    <p className="text-xs text-gray-500">Loading styles…</p>
+                  ) : (
+                    <div className="space-y-3">
+                      <SchedPicker label="Door Style" value={doorStyle} onChange={setDoorStyle} items={doorStyles} />
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}

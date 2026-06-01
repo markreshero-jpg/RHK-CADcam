@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { FaceGridInput, FaceZoneInput, DrawerType } from '@/src/lib/resolver/types'
 import { getUserPrefs } from '@/src/lib/userPrefs'
+
+type DoorStyleOpt = { id: string; name: string }
 
 function useSvgZoom(initW: number, initH: number) {
   const initRef = useRef({ w: initW, h: initH })
@@ -131,6 +134,14 @@ export default function FaceGridEditor({
     (cabinet.face_grid as FaceGridInput | null) ?? DEFAULT_GRID
   )
   const [selectedZone, setSelectedZone] = useState<{ row: number; col: number } | null>(null)
+  const [doorStyles, setDoorStyles] = useState<DoorStyleOpt[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('door_styles').select('id, name').eq('is_active', true).order('sort_order').order('name')
+      .then(({ data }) => { if (!cancelled) setDoorStyles((data ?? []) as DoorStyleOpt[]) })
+    return () => { cancelled = true }
+  }, [])
 
   const isBase = cabinet.assembly_class === 'base' || cabinet.assembly_class === 'base_corner'
   const isTall = cabinet.assembly_class === 'tall' || cabinet.assembly_class === 'tall_corner'
@@ -171,6 +182,15 @@ export default function FaceGridEditor({
         z.row_index === rowIdx && z.col_index === colIdx
           ? { ...z, hinge_side: z.hinge_side === 'left' ? 'right' : 'left' }
           : z
+      ),
+    })
+  }
+
+  function setZoneDoorStyle(rowIdx: number, colIdx: number, styleId: string | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z =>
+        z.row_index === rowIdx && z.col_index === colIdx ? { ...z, door_style_id: styleId } : z
       ),
     })
   }
@@ -606,6 +626,21 @@ export default function FaceGridEditor({
                     {ZONE_STYLE[gz.face_type]?.label ?? gz.face_type} → cycle
                   </button>
                 </div>
+
+                {/* Door style — only for door zones */}
+                {gz.face_type === 'door' && (
+                  <div>
+                    <p className="text-gray-600 mb-1">Door style</p>
+                    <select
+                      value={gz.door_style_id ?? ''}
+                      onChange={e => setZoneDoorStyle(gz.row_index, gz.col_index, e.target.value || null)}
+                      className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
+                    >
+                      <option value="">— inherit (room / job) —</option>
+                      {doorStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                )}
 
                 {/* Drawer type selector — only for drawer_face zones */}
                 {gz.face_type === 'drawer_face' && (

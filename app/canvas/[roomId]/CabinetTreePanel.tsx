@@ -1,7 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import type { ResolvedCabinet, ResolvedSeamJoint, JointTypeOp } from '@/src/lib/resolver/types'
+import type {
+  ResolvedCabinet, ResolvedSeamJoint, JointTypeOp,
+  ResolvedSlideDrill,
+} from '@/src/lib/resolver/types'
 
 // ── Expression evaluation ─────────────────────────────────────────────────────
 
@@ -104,7 +107,7 @@ const OP_LABELS: Record<string, string> = {
 
 // ── Tree node types ───────────────────────────────────────────────────────────
 
-type NodeKind = 'section' | 'part' | 'seam' | 'op'
+type NodeKind = 'section' | 'part' | 'seam' | 'op' | 'slideop'
 
 type PartPayload = {
   kind:       'part'
@@ -125,7 +128,12 @@ type TreeNode = {
   | PartPayload
   | { kind: 'seam'; seam: ResolvedSeamJoint }
   | { kind: 'op';   op: JointTypeOp; seam: ResolvedSeamJoint }
+  | { kind: 'slideop'; drill: ResolvedSlideDrill }
 )
+
+const SLIDE_OP_LABELS: Record<string, string> = {
+  drill: 'Bore', route: 'Route', pocket: 'Pocket',
+}
 
 // ── Tree builder ──────────────────────────────────────────────────────────────
 
@@ -169,23 +177,69 @@ function makeSeamNodes(partKey: string, rp: ResolvedCabinet): TreeNode[] {
   return out
 }
 
+// Maps every resolved slide drill to the tree part-id it should hang under, so a
+// part node can pick up the holes that actually land on it. Built once per tree.
+function buildSlideDrillIndex(rp: ResolvedCabinet): Map<string, ResolvedSlideDrill[]> {
+  const idx = new Map<string, ResolvedSlideDrill[]>()
+  const add = (partId: string, d: ResolvedSlideDrill) => {
+    const arr = idx.get(partId) ?? []
+    arr.push(d)
+    idx.set(partId, arr)
+  }
+  for (const stack of rp.drawer_stacks ?? []) {
+    const rc = `${stack.face_zone_row}_${stack.face_zone_col}`
+    for (const sl of stack.slides) {
+      for (const d of sl.drills) {
+        let partId: string | null = null
+        switch (d.surface) {
+          case 'cabinet_member': partId = `case_${d.side}_side`;        break
+          case 'drawer_bottom':  partId = `db_${rc}_db_bottom`;         break
+          case 'drawer_back':    partId = `db_${rc}_db_back`;           break
+          case 'drawer_front':   partId = `zone_${rc}`;                 break
+          case 'drawer_side':    partId = `db_${rc}_db_${d.side}_side`; break
+        }
+        if (partId) add(partId, d)
+      }
+    }
+  }
+  return idx
+}
+
+function makeSlideOpNode(d: ResolvedSlideDrill, i: number): TreeNode {
+  const dia = Math.round(d.radius * 2 * 100) / 100
+  const depth = Math.round(d.depthLen * 100) / 100
+  return {
+    id:         `slideop-${d.surface}-${d.side}-${i}-${Math.round(d.x)}-${Math.round(d.y)}-${Math.round(d.z)}`,
+    kind:       'slideop',
+    label:      `${SLIDE_OP_LABELS[d.machine_operation] ?? d.machine_operation} Ø${dia}×${depth}mm`,
+    detail:     `slide ${d.side === 'left' ? 'L' : 'R'}`,
+    children:   [],
+    expandable: false,
+    drill:      d,
+  }
+}
+
 function makePart(
   id: string, label: string, detail: string | undefined,
   X: number, Y: number, Z: number, DX: number, DY: number, DZ: number,
   materialId: string | null | undefined,
   partKey: string, rp: ResolvedCabinet,
+  slideDrillIdx?: Map<string, ResolvedSlideDrill[]>,
 ): TreeNode {
   const seams = makeSeamNodes(partKey, rp)
-  return { id, label, detail, kind: 'part', partId: id, X, Y, Z, DX, DY, DZ, materialId, children: seams, expandable: seams.length > 0 }
+  const slideOps = (slideDrillIdx?.get(id) ?? []).map((d, i) => makeSlideOpNode(d, i))
+  const children = [...seams, ...slideOps]
+  return { id, label, detail, kind: 'part', partId: id, X, Y, Z, DX, DY, DZ, materialId, children, expandable: children.length > 0 }
 }
 
 function buildSections(rp: ResolvedCabinet): TreeNode[] {
   const groups: TreeNode[] = []
+  const slideIdx = buildSlideDrillIndex(rp)
 
   if (rp.case_parts.length > 0) {
     const parts = rp.case_parts.map(p => makePart(
       `case_${p.part_key}`, CASE_LABELS[p.part_key] ?? p.part_key.replace(/_/g, ' '), undefined,
-      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_key, rp,
+      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_key, rp, slideIdx,
     ))
     groups.push({ id: 'sec-case', kind: 'section', label: 'Case', detail: `${parts.length}`, children: parts, expandable: true })
   }
@@ -193,7 +247,7 @@ function buildSections(rp: ResolvedCabinet): TreeNode[] {
   if (rp.toekick_parts.length > 0) {
     const parts = rp.toekick_parts.map(p => makePart(
       `tk_${p.part_key}_${p.sort_order}`, TK_LABELS[p.part_key] ?? p.part_key.replace(/_/g, ' '), undefined,
-      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_key, rp,
+      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_key, rp, slideIdx,
     ))
     groups.push({ id: 'sec-tk', kind: 'section', label: 'Toe Kick', detail: `${parts.length}`, children: parts, expandable: true })
   }
@@ -201,19 +255,19 @@ function buildSections(rp: ResolvedCabinet): TreeNode[] {
   const intParts = rp.internal_parts.map(p => makePart(
     `int_${p.part_type}_${p.sort_order}`,
     `${INT_LABELS[p.part_type] ?? p.part_type.replace(/_/g, ' ')} ${p.sort_order + 1}`,
-    undefined, p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_type, rp,
+    undefined, p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_type, rp, slideIdx,
   ))
   const drawerNodes = (rp.drawer_stacks ?? []).flatMap(stack => {
     const tag = `R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`
     const dbParts = stack.box_parts.map(p => makePart(
       `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`,
       DB_LABELS[p.part_type] ?? p.part_type, tag,
-      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_type, rp,
+      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_type, rp, slideIdx,
     ))
     const slideNodes = stack.slides.map(s => makePart(
       `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`,
       `Slide (${s.side})`, `${tag} · ${s.nominal_length}mm`,
-      s.X, s.Y, s.Z, s.DX, s.DY, s.DZ, null, '', rp,
+      s.X, s.Y, s.Z, s.DX, s.DY, s.DZ, null, '', rp, slideIdx,
     ))
     return [...dbParts, ...slideNodes]
   })
@@ -227,7 +281,7 @@ function buildSections(rp: ResolvedCabinet): TreeNode[] {
       `zone_${z.row_index}_${z.col_index}`,
       `${FACE_LABELS[z.face_type] ?? z.face_type} R${z.row_index + 1}C${z.col_index + 1}`,
       z.hinge_side ? `Hinge: ${z.hinge_side}` : undefined,
-      z.X, z.Y, z.Z, z.DX, z.DY, z.DZ, z.material_id, z.face_type, rp,
+      z.X, z.Y, z.Z, z.DX, z.DY, z.DZ, z.material_id, z.face_type, rp, slideIdx,
     ))
     groups.push({ id: 'sec-face', kind: 'section', label: 'Face', detail: `${parts.length}`, children: parts, expandable: true })
   }
@@ -237,9 +291,10 @@ function buildSections(rp: ResolvedCabinet): TreeNode[] {
 
 // ── Tree UI ───────────────────────────────────────────────────────────────────
 
-const KIND_ICON: Record<NodeKind, string> = { section: '▸', part: '▬', seam: '⟳', op: '•' }
+const KIND_ICON: Record<NodeKind, string> = { section: '▸', part: '▬', seam: '⟳', op: '•', slideop: '•' }
 const KIND_COLOR: Record<NodeKind, string> = {
   section: 'text-amber-400', part: 'text-gray-300', seam: 'text-violet-400', op: 'text-gray-500',
+  slideop: 'text-amber-500',
 }
 
 function TreeRow({ node, depth, expanded, selected, onToggle, onSelect }: {
@@ -413,6 +468,25 @@ function NodeProps({ node, rp }: { node: TreeNode | null; rp: ResolvedCabinet })
               {Object.entries(exprs).map(([k, v]) => <PR key={k} label={k} value={v} />)}
             </>
           )}
+        </dl>
+      </div>
+    )
+  }
+
+  if (node.kind === 'slideop') {
+    const d = node.drill
+    return (
+      <div className="p-4">
+        <h3 className="text-sm font-semibold text-gray-200 mb-1">{SLIDE_OP_LABELS[d.machine_operation] ?? d.machine_operation}</h3>
+        <p className="text-[10px] text-gray-500 mb-3">{d.surface.replace(/_/g, ' ')} · slide {d.side}</p>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 items-baseline">
+          <PR label="Tool Ø" value={Math.round(d.radius * 2 * 100) / 100} unit="mm" />
+          <PR label="Depth"  value={Math.round(d.depthLen * 100) / 100} unit="mm" />
+          <PR label="Axis"   value={d.axis} />
+          <Divider label="Position" />
+          <PR label="X" value={Math.round(d.x)} unit="mm" />
+          <PR label="Y" value={Math.round(d.y)} unit="mm" />
+          <PR label="Z" value={Math.round(d.z)} unit="mm" />
         </dl>
       </div>
     )

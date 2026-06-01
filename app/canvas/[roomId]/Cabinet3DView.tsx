@@ -20,6 +20,10 @@ import {
   Part, PartPropertiesPanel, PreviewCanvas,
 } from '@/src/components/three/PartViewer'
 import { isSide, caseBox, seamDrillOps, type DrillOpPos } from '@/src/lib/jointDrilling'
+import { doorProfilePrimitives } from '@/src/lib/doorProfile'
+import type { ResolvedDoorProfile } from '@/src/lib/resolver/types'
+import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
+import type { ResolvedSlideDrill } from '@/src/lib/resolver/types'
 import PartEdgeJoints from './PartEdgeJoints'
 import { SlideModel } from '@/src/components/three/SlideModel'
 
@@ -249,10 +253,43 @@ type PartProps = {
   wire?:              boolean
 }
 
-function DoorPanel({ b, hingeSide, doorsOpen, ...partProps }: PartProps & {
+// Routing-profile overlay drawn just proud of a door's front face, as line
+// segments (inset frame + grooves). Lives inside the door's animated group so
+// it swings with the door. Geometry from the shared doorProfilePrimitives.
+function DoorProfile3D({ profile, b, color = '#5a4a32' }: {
+  profile: ResolvedDoorProfile
+  b:       Box
+  color?:  string
+}) {
+  const geo = useMemo(() => {
+    const W = b.w, H = b.h
+    if (W <= 0 || H <= 0) return null
+    const prims = doorProfilePrimitives(profile, { w: W, h: H, thickness: b.d })
+    const zf = b.z + b.d + 0.3   // sit slightly proud of the front face
+    const pts: THREE.Vector3[] = []
+    const seg = (x1: number, y1: number, x2: number, y2: number) => {
+      pts.push(new THREE.Vector3(b.x + x1, b.y + y1, zf), new THREE.Vector3(b.x + x2, b.y + y2, zf))
+    }
+    for (const ir of prims.insetRects) {
+      const x0 = ir.x, y0 = ir.y, x1 = ir.x + ir.w, y1 = ir.y + ir.h
+      seg(x0, y0, x1, y0); seg(x1, y0, x1, y1); seg(x1, y1, x0, y1); seg(x0, y1, x0, y0)
+    }
+    for (const gl of prims.grooveLines) seg(gl.x1, gl.y1, gl.x2, gl.y2)
+    return pts.length ? new THREE.BufferGeometry().setFromPoints(pts) : null
+  }, [profile, b.x, b.y, b.z, b.w, b.h, b.d])
+  if (!geo) return null
+  return (
+    <lineSegments geometry={geo} renderOrder={1}>
+      <lineBasicMaterial color={color} />
+    </lineSegments>
+  )
+}
+
+function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, ...partProps }: PartProps & {
   b:          Box
   hingeSide:  'left' | 'right'
   doorsOpen:  boolean
+  doorProfile?: ResolvedDoorProfile | null
 }) {
   const groupRef     = useRef<THREE.Group>(null)
   const curAngle     = useRef(0)
@@ -278,6 +315,7 @@ function DoorPanel({ b, hingeSide, doorsOpen, ...partProps }: PartProps & {
   return (
     <group ref={groupRef} position={[hingeX, b.y, b.z]}>
       <Part b={localB} {...partProps} />
+      {doorProfile && <DoorProfile3D profile={doorProfile} b={localB} />}
     </group>
   )
 }
@@ -615,6 +653,58 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
   )
 }
 
+// Slide drilling markers — bore cylinders + entry discs at absolute cabinet
+// coords. Unlike PartWithHoles (which CSG-subtracts per part), these are an
+// overlay: each ResolvedSlideDrill already carries its cabinet-space entry point
+// and axis, so we just place a marker. Colour-coded amber to distinguish from
+// the dark carcase-joint holes. The scene group is pre-translated by the cabinet
+// half-extents, so absolute coords map directly to local space here.
+function SlideDrillMarkers({ drills, wire }: {
+  drills: ResolvedSlideDrill[]
+  wire?:  boolean
+}) {
+  const ro = wire ? 10 : 0
+  const dt = !wire
+  const color = '#d97706'   // amber-600
+  return (
+    <group>
+      {drills.map((d, i) => {
+        const isX = d.axis === 'x-' || d.axis === 'x+'
+        const isY = d.axis === 'y-' || d.axis === 'y+'
+        // Bore travels `depthLen` from the entry point along the axis sign.
+        const sign = d.axis.endsWith('+') ? 1 : -1
+        const len  = Math.max(2, d.depthLen)
+        // Cylinder is centred; offset its midpoint half the length along the bore.
+        const mid: [number, number, number] = [
+          d.x + (isX ? sign * len / 2 : 0),
+          d.y + (isY ? sign * len / 2 : 0),
+          d.z + (!isX && !isY ? sign * len / 2 : 0),
+        ]
+        // Cylinder default axis = Y; rotate onto the bore axis.
+        const rot: [number, number, number] = isX ? [0, 0, Math.PI / 2]
+                                            : isY ? [0, 0, 0]
+                                            :       [Math.PI / 2, 0, 0]
+        // Entry disc faces along the axis.
+        const discRot: [number, number, number] = isX ? [0, Math.PI / 2, 0]
+                                                : isY ? [Math.PI / 2, 0, 0]
+                                                :       [0, 0, 0]
+        return (
+          <group key={i}>
+            <mesh position={[d.x, d.y, d.z]} rotation={discRot} renderOrder={ro}>
+              <circleGeometry args={[d.radius, 24]} />
+              <meshBasicMaterial color={color} side={THREE.DoubleSide} depthTest={dt} />
+            </mesh>
+            <mesh position={mid} rotation={rot} renderOrder={ro}>
+              <cylinderGeometry args={[d.radius, d.radius, len, 24, 1, true]} />
+              <meshBasicMaterial color={color} side={THREE.DoubleSide} depthTest={dt} />
+            </mesh>
+          </group>
+        )
+      })}
+    </group>
+  )
+}
+
 function SeamJointOverlay({ seamJoints, boxByKey, wire }: {
   seamJoints: ResolvedSeamJoint[]
   boxByKey:   Record<string, Box>
@@ -781,6 +871,13 @@ function CabinetScene({
     }
     return m
   }, [rp.seam_joints, boxByKey, showDrilling])
+
+  // Slide-imposed drilling (cabinet member + drawer-box surfaces), already
+  // resolved to absolute cabinet coords on each slide. Rendered as an overlay.
+  const slideDrills = useMemo(
+    () => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? []) : []),
+    [rp.drawer_stacks, showDrilling],
+  )
 
   function applyEdge<T extends PartMeta>(info: T): T {
     const ov = edgeOverrides.get(info.id)
@@ -1027,8 +1124,18 @@ function CabinetScene({
               b={b}
               hingeSide={z.hinge_side}
               doorsOpen={doorsOpen}
+              doorProfile={z.door_profile}
               {...partProps}
             />
+          )
+        }
+
+        if (z.face_type === 'door' && z.door_profile) {
+          return (
+            <group key={`f${i}`}>
+              <Part b={b} rotation={getRotOv(id, partOverrides)} {...partProps} />
+              <DoorProfile3D profile={z.door_profile} b={b} />
+            </group>
           )
         }
 
@@ -1063,6 +1170,9 @@ function CabinetScene({
       })}
       {showDrilling && rp.seam_joints.length > 0 && (
         <SeamJointOverlay seamJoints={rp.seam_joints} boxByKey={boxByKey} wire={wire} />
+      )}
+      {slideDrills.length > 0 && (
+        <SlideDrillMarkers drills={slideDrills} wire={wire} />
       )}
     </group>
   )

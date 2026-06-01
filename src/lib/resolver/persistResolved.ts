@@ -138,6 +138,10 @@ export async function persistResolved(resolved: ResolvedCabinet): Promise<void> 
         drawerbox_overrides: {},
         rule_overrides:    {},
         output_to_cnc:     true,
+        // Resolved door style output (for rendering / reports)
+        door_style_id:     z.door_style_id ?? null,
+        door_profile_id:   z.door_profile_id ?? null,
+        door_profile:      z.door_profile ?? null,
       }))
     )
     if (error) console.error('persistResolved face_zones:', error)

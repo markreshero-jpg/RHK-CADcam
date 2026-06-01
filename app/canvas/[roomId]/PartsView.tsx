@@ -409,6 +409,7 @@ export default function PartsView({
   rp, cabinetId, customParts, setCustomParts,
   partOverrides, onDeletePosOverride,
   partLabels, partComments, onLabelChange, onCommentChange,
+  hiddenParts, onToggleHidden,
 }: {
   rp: ResolvedCabinet
   cabinetId: string
@@ -420,7 +421,10 @@ export default function PartsView({
   partComments?: PartComments
   onLabelChange?: (partId: string, label: string) => void
   onCommentChange?: (partId: string, comment: string) => void
+  hiddenParts?: string[]
+  onToggleHidden?: (partId: string) => void
 }) {
+  const hiddenSet = useMemo(() => new Set(hiddenParts ?? []), [hiddenParts])
   const [matNames,   setMatNames]   = useState<Record<string, string>>({})
   const [matColours, setMatColours] = useState<Record<string, string | null>>({})
   const [libNames,   setLibNames]   = useState<Record<string, string>>({})
@@ -648,6 +652,7 @@ export default function PartsView({
         <div className="min-w-max">
           {/* Header */}
           <div className="flex items-end border-b border-gray-700 bg-gray-900/80 sticky top-0 z-10 pt-2">
+            <div className={hdCls} style={{ width: 40 }} title="Show in viewers / reports">Show</div>
             {COLS.map(col => (
               <div key={col.key} className={hdCls} style={{ width: col.w }}>
                 {col.sortable ? (
@@ -670,11 +675,27 @@ export default function PartsView({
             <div className="px-4 py-10 text-xs text-gray-600 text-center">
               {search ? 'No parts match the filter.' : 'No parts.'}
             </div>
-          ) : filtered.map(row => (
+          ) : filtered.map(row => {
+            const isHidden = row.isOverride ? false : row.isCustom ? !row.visible : hiddenSet.has(row.id)
+            const toggleVis = row.isOverride
+              ? undefined
+              : row.isCustom && row.customPartRef
+              ? () => handleToggleVisible(row.customPartRef!)
+              : () => onToggleHidden?.(row.id)
+            return (
             <div key={row.id}
               className={`flex items-center border-b border-gray-800/50 hover:bg-gray-800/20 group min-h-[30px] ${
-                row.isOverride ? 'opacity-70' : ''
+                row.isOverride ? 'opacity-70' : isHidden ? 'opacity-40' : ''
               }`}>
+
+              {/* Show / hide */}
+              <div className="flex-none border-r border-gray-800 px-2 py-1.5 flex items-center justify-center" style={{ width: 40 }}>
+                {toggleVis && (
+                  <input type="checkbox" checked={!isHidden} onChange={toggleVis}
+                    title={isHidden ? 'Hidden — click to show' : 'Visible — click to hide'}
+                    className="accent-blue-500 w-3.5 h-3.5 cursor-pointer" />
+                )}
+              </div>
 
               {/* Type */}
               <div className={cellCls} style={{ width: COLS[0].w }}>
@@ -690,10 +711,6 @@ export default function PartsView({
                   <span className="text-gray-400 truncate">{row.name}</span>
                 ) : row.isCustom && row.customPartRef ? (
                   <div className="flex items-center gap-1.5 overflow-hidden">
-                    <button
-                      onClick={() => handleToggleVisible(row.customPartRef!)}
-                      title={row.visible ? 'Visible — click to hide' : 'Hidden — click to show'}
-                      className={`w-3 h-3 rounded-sm border flex-none transition-colors ${row.visible ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`} />
                     <EditableName
                       value={row.name}
                       onSave={name => {
@@ -765,7 +782,8 @@ export default function PartsView({
                 ) : null}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 

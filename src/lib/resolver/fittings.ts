@@ -303,6 +303,9 @@ function emitBoxStack(box: Box, items: BoxItem[], ctx: FittingCtx, cfg: BoxStack
         model_anchor_y:   slide.model_anchor_y ?? 0,
         model_anchor_z:   slide.model_anchor_z ?? 0,
         inner_drawer_index: drawerIdx,
+        // Inner-drawer slide drilling deferred to a later phase (Phase 2 targets
+        // face drawers first); emit no holes for now.
+        drills:           [],
       }
       ctx.internalSlides.push(
         { ...slideBase, side: 'left',  X: box.x + cl },

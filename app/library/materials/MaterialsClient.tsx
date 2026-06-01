@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '../../ThemeToggle'
 import SlideModelEditor, { type SlideModelRow } from './SlideModelEditor'
+import SlideDrillingEditor from './SlideDrillingEditor'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -542,16 +543,19 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
             model_anchor_z:   Number(r.model_anchor_z ?? 0),
           }
           return (
-            <SlideModelEditor
-              key={slideRow.id}
-              row={slideRow}
-              onSaved={patch => {
-                setAllRows(prev => ({
-                  ...prev,
-                  slides: prev.slides.map(x => x.id === slideRow.id ? { ...x, ...patch } : x),
-                }))
-              }}
-            />
+            <>
+              <SlideModelEditor
+                key={slideRow.id}
+                row={slideRow}
+                onSaved={patch => {
+                  setAllRows(prev => ({
+                    ...prev,
+                    slides: prev.slides.map(x => x.id === slideRow.id ? { ...x, ...patch } : x),
+                  }))
+                }}
+              />
+              <SlideDrillingEditor key={`drill-${slideRow.id}`} slideId={slideRow.id} />
+            </>
           )
         })()}
 

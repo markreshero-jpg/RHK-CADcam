@@ -11,6 +11,7 @@ import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone,
   ResolvedInternalPart, ResolvedDrawerStack, ResolvedDrawerBoxPart, ResolvedDrawerSlide,
 } from '@/src/lib/resolver/types'
+import { doorProfileSvg } from './cabinetEditSvgHelpers'
 
 export interface ElevationLayers {
   faces:       boolean
@@ -249,6 +250,7 @@ export default function ElevationPrintSVG({
                 <g key={`fz-${i}`}>
                   <rect x={x} y={y} width={w} height={h} fill={FACE_SHADE} stroke={INK} strokeWidth={partSW} />
                   {hinge}{chevron}{drawerLbl}
+                  {doorProfileSvg(fz, { x, y, w, h }, INK, thinSW, 0.9)}
                 </g>
               )
             })}

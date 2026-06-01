@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, useReducer } from 'react'
+import { useState, useRef, useEffect, useCallback, useReducer, useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { Project, Room, Wall, CabinetInstance, AssemblyClass, DEFAULT_DIMS, BenchtopInstance } from '@/src/lib/types'
 import {
@@ -14,6 +14,7 @@ import {
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
 import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
 import { useMaterialColours } from './useMaterialColours'
 import { useCabinetOps } from './useCabinetOps'
@@ -139,6 +140,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     matColours, ebByMatId,
     applyInputColours, applyInputEdgebands,
   } = useMaterialColours(initialCabinets)
+
+  // Hidden-part-filtered view of the resolved map for on-canvas drawings (elevation
+  // + 3D room). The raw map is kept for the edit modal, whose Parts tab needs the
+  // full list; the modal filters its own geometry viewers internally.
+  const visibleResolvedParts = useMemo(() => {
+    const out = new Map<string, ResolvedCabinet>()
+    for (const [id, r] of resolvedParts) out.set(id, filterHiddenParts(r))
+    return out
+  }, [resolvedParts])
 
   const svgRef = useRef<SVGSVGElement>(null)
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
@@ -1340,7 +1350,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onCabResizeStart={r => { setSelected({ type: 'cabinet', id: r.cabId }); setMultiSelect([]); setCabResize(r) }}
             onCabResizeUpdate={updates => setCabResize(r => r ? { ...r, ...updates } : r)}
             onCabResizeDone={() => setCabResize(null)}
-            resolvedParts={resolvedParts}
+            resolvedParts={visibleResolvedParts}
             elevSnapSettings={elevSnapSettings}
             onElevSnapSettingsChange={updateElevSnapSettings}
             elevSnapResult={elevSnapResult}
@@ -1382,7 +1392,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeselect={() => { setSelected(null); setMultiSelect([]) }}
             onEditCabinet={id => { setEditCabInitialView('3d'); setEditCabId(id) }}
             onDeleteCabinet={id => handleDeleteCabinet(id)}
-            resolvedParts={resolvedParts}
+            resolvedParts={visibleResolvedParts}
             materialColours={matColours}
           />
         )}
@@ -1557,6 +1567,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onClose={() => { setEditCabId(null); setEditCabInitialView('elevation') }}
             materialColours={matColours}
             ebByMatId={ebByMatId}
+            onHiddenChange={(cabinetId, hidden) => setResolvedParts(m => {
+              const r = m.get(cabinetId)
+              if (!r) return m
+              return new Map(m).set(cabinetId, { ...r, hidden_parts: hidden })
+            })}
           />
         )
       })()}

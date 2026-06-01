@@ -12,7 +12,7 @@ import {
   type ElevSnapSettings, type ElevSnapResult,
 } from '@/src/lib/elevationSnap'
 import SnapToolbar from './SnapToolbar'
-import { SlideShape, slideBox3 } from './cabinetEditSvgHelpers'
+import { SlideShape, slideBox3, doorProfileSvg } from './cabinetEditSvgHelpers'
 import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 
 // ── Colour coding per spec ────────────────────────────────────
@@ -1096,6 +1096,42 @@ export default function ElevationSVG({
                             opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
+                      {effectiveIntVisible && (rp.internal_slides ?? []).map((s: ResolvedDrawerSlide, j: number) => {
+                        const { ex, ey, ew, eh } = slideElevRect(s)
+                        const { x, y, w, h } = toSVG(ex, ey, ew, eh)
+                        const fill = PART_COLORS.db_slide
+                        const ldStroke = LINE_DRAW_COLORS.db_slide
+                        // Only use the detailed model silhouette while the rail is big enough
+                        // on screen to resolve it. The silhouette is a dense run of tiny
+                        // segments; on a thin rail seen edge-on they merge into a bulky blob
+                        // until the rail is clearly wide on screen, so until then fall back to
+                        // the plain box outline (which renders like every other cabinet line).
+                        const tris = Math.min(w, h) * z >= 12 ? triMap.get(triKey(s) ?? '') : undefined
+                        // Inner-drawer slide rail: true projected model outline when the
+                        // slide has an uploaded 3D model; otherwise the original box.
+                        if (tris && tris.length > 0) {
+                          return (
+                            <g key={`isl-${j}`} opacity={intEffP.opacity} style={{ pointerEvents: 'none' }}>
+                              <SlideShape
+                                rectX={x} rectY={y} rectW={w} rectH={h}
+                                box={slideBox3(s)} project={(px, py) => toSVGPt(px, py)}
+                                slide={s} tris={tris} wireMode={false} selected={false}
+                                fill={isLineDrawing ? 'none' : fill}
+                                stroke={isLineDrawing ? ldStroke : fill}
+                                strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
+                                dataPartId={`elev-islide-${cab.id}-${j}`} />
+                            </g>
+                          )
+                        }
+                        return (
+                          <rect key={`isl-${j}`} x={x} y={y} width={w} height={h}
+                            fill={isLineDrawing ? 'none' : fill}
+                            fillOpacity={isLineDrawing ? 0 : 0.5}
+                            stroke={isLineDrawing ? ldStroke : fill}
+                            strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
+                            opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
+                        )
+                      })}
                       {effectiveShowDrawerBox && rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => [
                         ...ds.box_parts.map((p: ResolvedDrawerBoxPart, j: number) => {
                           const { ex, ey, ew, eh } = drawerBoxPartElevRect(p)
@@ -1116,7 +1152,11 @@ export default function ElevationSVG({
                           const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                           const fill = PART_COLORS.db_slide
                           const ldStroke = LINE_DRAW_COLORS.db_slide
-                          const tris = triMap.get(triKey(s) ?? '')
+                          // Only use the detailed model silhouette while the rail is big enough
+                          // on screen to resolve it; when zoomed out the dense outline merges
+                          // into a bulky blob, so until the rail is clearly wide on screen fall
+                          // back to the plain box outline (renders like every other cabinet line).
+                          const tris = Math.min(w, h) * z >= 12 ? triMap.get(triKey(s) ?? '') : undefined
                           // True projected model outline when the slide has an uploaded
                           // 3D model; otherwise fall back to the original filled box.
                           if (tris && tris.length > 0) {
@@ -1188,10 +1228,52 @@ export default function ElevationSVG({
                             {hingeLine}
                             {chevron}
                             {drawerLabel}
+                            {doorProfileSvg(fz, { x, y, w, h }, faceStroke, (isLineDrawing ? 0.6 : 0.5) / z)}
                           </g>
                         )
                       })}
                       </g>)}
+
+                      {/* Inner-drawer labels — one per inner-drawer face, drawn last so
+                          they sit on top of the open-zone overlay. */}
+                      {effectiveIntVisible && displayConfig.annotations.elev_inner_drawer_labels &&
+                        rp.internal_parts.filter(p => p.part_type === 'inner_drawer_front').map((p, i) => {
+                          const { ex, ey, ew, eh } = shelfElevRect(p)
+                          const { x, y, w, h } = toSVG(ex, ey, ew, eh)
+                          if (w < 24 / z || h < 12 / z) return null
+                          const col = isLineDrawing
+                            ? (LINE_DRAW_COLORS.inner_drawer_front ?? '#fda4af')
+                            : (PART_COLORS.inner_drawer_front ?? '#fb7185')
+                          return (
+                            <text key={`idl-${i}`}
+                              x={x + w / 2} y={y + h - 4 / z}
+                              textAnchor="middle" dominantBaseline="auto"
+                              fontSize={11 / z} fill={col} fillOpacity={0.85}
+                              style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                              inner drawer
+                            </text>
+                          )
+                        })}
+
+                      {/* Shelf labels — "adj sh" / "fix sh" at each shelf's top-left corner. */}
+                      {effectiveIntVisible && displayConfig.annotations.elev_shelf_labels &&
+                        rp.internal_parts.filter(p => p.part_type === 'adj_shelf' || p.part_type === 'fixed_shelf').map((p, i) => {
+                          const { ex, ey, ew, eh } = shelfElevRect(p)
+                          const { x, y, w } = toSVG(ex, ey, ew, eh)
+                          if (w < 30 / z) return null
+                          const col = isLineDrawing
+                            ? (LINE_DRAW_COLORS[p.part_type] ?? '#a78bfa')
+                            : (PART_COLORS[p.part_type] ?? '#818cf8')
+                          return (
+                            <text key={`shl-${i}`}
+                              x={x + 3 / z} y={y - 2 / z}
+                              textAnchor="start" dominantBaseline="auto"
+                              fontSize={9 / z} fill={col} fillOpacity={0.9}
+                              style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                              {p.part_type === 'adj_shelf' ? 'adj sh' : 'fix sh'}
+                            </text>
+                          )
+                        })}
                     </>)
                   })()}
 

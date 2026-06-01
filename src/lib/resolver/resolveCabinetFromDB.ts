@@ -10,6 +10,13 @@ import { CabinetInput, ResolvedCabinet } from './types'
 // Module-level caches: populated after each full DB load.
 const _inputCache     = new Map<string, CabinetInput>()
 const _edgeOvCache    = new Map<string, Awaited<ReturnType<typeof loadEdgeOverrides>>>()
+const _hiddenCache    = new Map<string, string[]>()
+
+// Hidden-part set from the last full resolve — lets the fast resize path carry
+// hidden_parts without an extra round-trip.
+export function getCachedHidden(id: string): string[] | undefined {
+  return _hiddenCache.get(id)
+}
 
 export function getCachedInput(id: string): CabinetInput | undefined {
   return _inputCache.get(id)
@@ -33,6 +40,14 @@ async function loadEdgeOverrides(cabinetId: string) {
     internal: new Map((ip.data ?? []).map(p => [`${p.part_type}_${p.sort_order}`, { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_back, right: p.edge_band_front }])),
     zone:     new Map((fz.data ?? []).map(z => [`${z.row_index}_${z.col_index}`, { top: z.edge_band_top, bottom: z.edge_band_bottom, left: z.edge_band_left, right: z.edge_band_right }])),
   }
+}
+
+// Load the user's hidden-part ID set so it can be carried on the resolved cabinet
+// (consumers strip them via filterHiddenParts).
+export async function loadHiddenParts(cabinetId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from('cabinet_instances').select('hidden_parts').eq('id', cabinetId).single()
+  return ((data as { hidden_parts?: unknown } | null)?.hidden_parts ?? []) as string[]
 }
 
 // Merge saved edge bands back onto freshly-resolved parts (preserves manual edits through resolves).
@@ -80,17 +95,20 @@ export function patchEdgeOverrideCache(
 }
 
 export async function resolveCabinetFromDB(cabinetId: string): Promise<ResolvedCabinet> {
-  const [input, edgeOverrides] = await Promise.all([
+  const [input, edgeOverrides, hidden] = await Promise.all([
     loadCabinetInput(cabinetId),
     loadEdgeOverrides(cabinetId),
+    loadHiddenParts(cabinetId),
   ])
   _inputCache.set(cabinetId, input)
   _edgeOvCache.set(cabinetId, edgeOverrides)
+  _hiddenCache.set(cabinetId, hidden)
 
   const resolved = resolveCabinet(input)
   if (resolved.errors.length > 0) {
     console.error('Resolver errors for cabinet', cabinetId, resolved.errors)
   }
+  resolved.hidden_parts = hidden
 
   applyEdgeOverrides(resolved, edgeOverrides)
 
