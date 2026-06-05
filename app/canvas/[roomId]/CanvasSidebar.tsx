@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Mode, CabinetInstance, modeAssemblyClass } from './canvasTypes'
 import { Room } from '@/src/lib/types'
-import RoomSwitcher from './RoomSwitcher'
+import RoomSwitcher, { type RoomSwitcherHandle } from './RoomSwitcher'
 
 const CabinetPreview3D = dynamic(() => import('./CabinetPreview3D'), { ssr: false })
 
@@ -141,7 +141,7 @@ const PLACE_MODES   = ALL_CAB_ITEMS.map(c => c.mode)
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function CanvasSidebar({
-  room, onOpenRoomProperties,
+  room, onOpenRoomProperties, roomSwitcherRef,
   mode, onSelectMode,
   wallMenuOpen, setWallMenuOpen,
   cabMenuOpen, setCabMenuOpen,
@@ -150,6 +150,7 @@ export default function CanvasSidebar({
 }: {
   room: Room
   onOpenRoomProperties: () => void
+  roomSwitcherRef: React.Ref<RoomSwitcherHandle>
   mode: Mode
   onSelectMode: (m: Mode) => void
   wallMenuOpen: boolean
@@ -277,7 +278,7 @@ export default function CanvasSidebar({
       onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }) }}
     >
       {/* ── Room name header + switcher (always visible) ── */}
-      <RoomSwitcher room={room} onOpenRoomProperties={onOpenRoomProperties} />
+      <RoomSwitcher ref={roomSwitcherRef} room={room} onOpenRoomProperties={onOpenRoomProperties} />
 
       {/* ── Scrollable tool area ── */}
       <div className="flex-1 flex flex-col py-2 gap-0.5 overflow-y-auto px-2 min-h-0">

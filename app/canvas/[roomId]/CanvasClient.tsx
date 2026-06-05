@@ -44,6 +44,7 @@ import CabinetResizePanel from './CabinetResizePanel'
 import CabinetEditModal from './CabinetEditModal'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
 import RoomPropertiesModal, { type RoomPropertiesTab } from './RoomPropertiesModal'
+import { type RoomSwitcherHandle } from './RoomSwitcher'
 import ObjectTreeModal from './ObjectTreeModal'
 import ReportsModal, { type ReportScope } from './ReportsModal'
 import Room3DScene from './Room3DScene'
@@ -165,6 +166,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Set to true when pointerDown starts the draw (so the matching pointerUp doesn't finish it).
   const drawStartedThisDownRef = useRef(false)
   const drawingPanelRef = useRef<DrawingPanelHandle>(null)
+  const roomSwitcherRef = useRef<RoomSwitcherHandle>(null)
 
   const bt = useBenchtopInteraction({
     room, walls, cabinets,
@@ -1103,6 +1105,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setJobModalTab, setRoomModalTab,
     openReportModal: setReportScope,
     openObjectTree: () => setShowObjectTree(true),
+    openRoomSwitcher: () => roomSwitcherRef.current?.openSwitcher(),
+    openAddRoom: () => roomSwitcherRef.current?.openAdd(),
   })
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1182,6 +1186,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         <CanvasSidebar
           room={room}
           onOpenRoomProperties={() => setRoomModalTab('details')}
+          roomSwitcherRef={roomSwitcherRef}
           mode={mode}
           onSelectMode={onSelectMode}
           wallMenuOpen={wallMenuOpen}

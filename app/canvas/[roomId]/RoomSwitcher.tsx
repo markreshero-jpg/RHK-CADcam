@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import Link from 'next/link'
 import { Room } from '@/src/lib/types'
 import { supabase } from '@/src/lib/supabase'
@@ -9,12 +9,21 @@ import { supabase } from '@/src/lib/supabase'
 // The room list is loaded fresh from Supabase each time the dropdown opens, so
 // rooms created in other sessions show up (never relies on stale props).
 
-export default function RoomSwitcher({ room, onOpenRoomProperties }: {
+export interface RoomSwitcherHandle {
+  openSwitcher: () => void   // open the dropdown (menubar "Switch Room")
+  openAdd: () => void        // open the dropdown with the add form active (menubar "Add New Room")
+}
+
+interface Props {
   room: Room
   onOpenRoomProperties: () => void
-}) {
+}
+
+const RoomSwitcher = forwardRef<RoomSwitcherHandle, Props>(function RoomSwitcher(
+  { room, onOpenRoomProperties }, ref,
+) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   // Fresh-loaded room list (null = loading)
   const [rooms, setRooms] = useState<Room[] | null>(null)
@@ -31,7 +40,7 @@ export default function RoomSwitcher({ room, onOpenRoomProperties }: {
   useEffect(() => {
     if (!open) return
     function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) close()
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) close()
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
@@ -68,6 +77,12 @@ export default function RoomSwitcher({ room, onOpenRoomProperties }: {
     setAddError(null)
   }
 
+  // Imperative entry points for the menubar (Room ▸ Switch Room / Add New Room)
+  useImperativeHandle(ref, () => ({
+    openSwitcher: () => openMenu(),
+    openAdd: () => { openMenu(); setAdding(true) },
+  }))
+
   async function handleCreateRoom() {
     const name = newName.trim()
     if (!name || saving) return
@@ -95,7 +110,7 @@ export default function RoomSwitcher({ room, onOpenRoomProperties }: {
   }
 
   return (
-    <div ref={ref} className="flex-none border-b border-gray-800 p-2 relative">
+    <div ref={containerRef} className="flex-none border-b border-gray-800 p-2 relative">
       <button
         onClick={() => (open ? close() : openMenu())}
         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-800 transition-colors text-left"
@@ -226,4 +241,6 @@ export default function RoomSwitcher({ room, onOpenRoomProperties }: {
       )}
     </div>
   )
-}
+})
+
+export default RoomSwitcher

@@ -36,6 +36,8 @@ export interface MenuActions {
   setRoomModalTab:   (tab: RoomPropertiesTab) => void
   openReportModal:   (scope: ReportScope) => void
   openObjectTree:    () => void
+  openRoomSwitcher:  () => void
+  openAddRoom:       () => void
 }
 
 export function buildMenus(a: MenuActions): MenuGroup[] {
@@ -91,6 +93,9 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
     ]},
     { label: 'Room', items: [
       { label: 'Room Details', action: () => a.setRoomModalTab('details') },
+      { label: 'Switch Room',  action: () => a.openRoomSwitcher() },
+      { label: 'Add New Room', action: () => a.openAddRoom() },
+      null,
       { label: 'Construction', action: () => a.setRoomModalTab('construction') },
       { label: 'Hardware',     action: () => a.setRoomModalTab('hardware') },
       null,
