@@ -32,6 +32,7 @@ import {
 } from './types'
 import { resolveDrawerBox } from './resolveDrawerBox'
 import { findSlide } from './resolveDrawerStack'
+import { slideDrillOps, type DrillPart } from '../slideDrilling'
 
 // Axis-aligned compartment region in cabinet coordinates (x = left, y = bottom).
 export interface Box { x: number; y: number; w: number; h: number }
@@ -220,10 +221,14 @@ function emitBoxStack(box: Box, items: BoxItem[], ctx: FittingCtx, cfg: BoxStack
     // (consistent with how system face drawers already work).
     const boxHeight     = it.height ?? slide?.box_height ?? cfg.defaultHeight
 
-    const cl       = it.clearance_l ?? r.IDCL
-    const cr       = it.clearance_r ?? r.IDCR
-    const boxWidth = Math.max(1, box.w - cl - cr - runnerThick * 2)
-    const boxX     = box.x + cl + runnerThick
+    // IDCL/IDCR are inner-drawer FACE clearances (left/right), applied to the
+    // visible front below — NOT the box. The slide runners touch the compartment
+    // walls, so the box spans the opening minus a runner each side. Per-fitting
+    // clearance_l/r still override for the face.
+    const faceClearL = it.clearance_l ?? r.IDCL
+    const faceClearR = it.clearance_r ?? r.IDCR
+    const boxWidth = Math.max(1, box.w - runnerThick * 2)
+    const boxX     = box.x + runnerThick
     const boxY     = (it.y_locked && it.y_position !== undefined) ? it.y_position : cursorY
 
     if (boxY + boxHeight > box.y + box.h + 0.5) {
@@ -262,11 +267,15 @@ function emitBoxStack(box: Box, items: BoxItem[], ctx: FittingCtx, cfg: BoxStack
     // — FRONT_TOP/BOTTOM/WIDTH adjust grow the visible inner-drawer face beyond the box.
     const idbSetback = cfg.emitInnerFront ? (rulesForResolve.IDB_DRAWER_Z_SETBACK ?? 0) : 0
 
+    // Capture the cabinet-space back/bottom/side panels for slide-drill resolution
+    // below. Keyed by the structural db_* type (before typeMap renaming).
+    const drillParts: { back?: DrillPart; bottom?: DrillPart; left?: DrillPart; right?: DrillPart } = {}
+
     for (const p of localParts) {
       if (!cfg.keepFront && p.part_type === 'db_front') continue
       const mapped = cfg.typeMap[p.part_type]
       if (!mapped) continue
-      out.push({
+      const cabPart = {
         part_type:   mapped,
         sort_order:  ctx.sort[cfg.sortKey]++,
         DX: p.DX, DY: p.DY, DZ: p.DZ,
@@ -278,7 +287,13 @@ function emitBoxStack(box: Box, items: BoxItem[], ctx: FittingCtx, cfg: BoxStack
         edge_band:   p.edge_band,
         y_locked:    !!it.y_locked,
         inner_drawer_index: drawerIdx,
-      })
+      }
+      out.push(cabPart)
+      const dp: DrillPart = { X: cabPart.X, Y: cabPart.Y, Z: cabPart.Z, DX: cabPart.DX, DY: cabPart.DY, DZ: cabPart.DZ }
+      if (p.part_type === 'db_back')       drillParts.back   = dp
+      else if (p.part_type === 'db_bottom') drillParts.bottom = dp
+      else if (p.part_type === 'db_left_side')  drillParts.left  = dp
+      else if (p.part_type === 'db_right_side') drillParts.right = dp
     }
 
     // Slide rails — one on each compartment wall, mirroring resolveDrawerStack
@@ -303,29 +318,51 @@ function emitBoxStack(box: Box, items: BoxItem[], ctx: FittingCtx, cfg: BoxStack
         model_anchor_y:   slide.model_anchor_y ?? 0,
         model_anchor_z:   slide.model_anchor_z ?? 0,
         inner_drawer_index: drawerIdx,
-        // Inner-drawer slide drilling deferred to a later phase (Phase 2 targets
-        // face drawers first); emit no holes for now.
         drills:           [],
       }
-      ctx.internalSlides.push(
-        { ...slideBase, side: 'left',  X: box.x + cl },
-        { ...slideBase, side: 'right', X: box.x + box.w - cr - runnerThick },
-      )
+
+      // Face datum for drawer_front holes: only for fittings that emit a visible
+      // inner-drawer face. The resolver's `face` contract wants the BACK face Z;
+      // the inner front's back sits on the slide-front plane (frontZ - setback).
+      // Width/Y mirror the face emitted below so along/up datums line up.
+      let faceDatum: DrillPart | undefined
+      if (cfg.emitInnerFront) {
+        const botAdj   = rulesForResolve.IDB_FRONT_BOTTOM_ADJUST ?? 0
+        const topAdj   = rulesForResolve.IDB_FRONT_TOP_ADJUST    ?? 0
+        const wAdj     = rulesForResolve.IDB_FRONT_WIDTH_ADJUST  ?? 0
+        const frontMat = ctx.innerDrawerFrontMat ?? ctx.innerDrawerMat
+        // Face = opening minus the per-side inner-drawer FACE clearances (IDCL/IDCR).
+        faceDatum = {
+          X:  box.x + faceClearL - wAdj / 2,
+          Y:  boxY - botAdj,
+          Z:  frontZ - idbSetback,                       // back face of the visible front
+          DX: Math.max(1, boxHeight + topAdj + botAdj),
+          DY: Math.max(1, box.w - faceClearL - faceClearR + wAdj),
+          DZ: frontMat.DZ,
+        }
+      }
+
+      const slideOps = slide.drill_ops ?? []
+      // Runners touch the compartment walls (no inset); the box spans between them.
+      const left: ResolvedDrawerSlide  = { ...slideBase, side: 'left',  X: box.x }
+      const right: ResolvedDrawerSlide = { ...slideBase, side: 'right', X: box.x + box.w - runnerThick }
+      left.drills  = slideDrillOps(left,  slideOps, { backPart: drillParts.back, bottomPart: drillParts.bottom, sidePart: drillParts.left,  face: faceDatum, memberFaceX: box.x })
+      right.drills = slideDrillOps(right, slideOps, { backPart: drillParts.back, bottomPart: drillParts.bottom, sidePart: drillParts.right, face: faceDatum, memberFaceX: box.x + box.w })
+      ctx.internalSlides.push(left, right)
     }
 
-    // Inner drawer face — wider than the structural box, sized to the compartment
-    // opening minus IDB_FRONT_CLEAR per side, with optional top/bottom/width
-    // adjusts to extend past the box edges. Sits in front of the slides by
-    // default (back face on slide-front plane); the whole-drawer setback then
-    // pulls it (along with box + slides) deeper into the cabinet.
+    // Inner drawer face — sized to the compartment opening minus the per-side
+    // inner-drawer face clearances IDCL (left) / IDCR (right), with optional
+    // top/bottom/width adjusts. Sits in front of the slides by default (back face
+    // on slide-front plane); the whole-drawer setback then pulls it (along with
+    // box + slides) deeper into the cabinet.
     if (cfg.emitInnerFront) {
-      const idbClear = rulesForResolve.IDB_FRONT_CLEAR         ?? 2
       const topAdj   = rulesForResolve.IDB_FRONT_TOP_ADJUST    ?? 0
       const botAdj   = rulesForResolve.IDB_FRONT_BOTTOM_ADJUST ?? 0
       const wAdj     = rulesForResolve.IDB_FRONT_WIDTH_ADJUST  ?? 0
       const frontMat = ctx.innerDrawerFrontMat ?? ctx.innerDrawerMat
       const frontEb  = ctx.innerDrawerFrontEbId ?? ctx.innerDrawerEbId
-      const faceDy   = Math.max(1, box.w - cl - cr - 2 * idbClear + wAdj)
+      const faceDy   = Math.max(1, box.w - faceClearL - faceClearR + wAdj)
       const faceDx   = Math.max(1, boxHeight + topAdj + botAdj)
       out.push({
         part_type:   'inner_drawer_front',
@@ -333,7 +370,7 @@ function emitBoxStack(box: Box, items: BoxItem[], ctx: FittingCtx, cfg: BoxStack
         DX: faceDx,
         DY: faceDy,
         DZ: frontMat.DZ,
-        X:  box.x + cl + idbClear - wAdj / 2,
+        X:  box.x + faceClearL - wAdj / 2,
         Y:  boxY - botAdj,
         // Cabinet-coord Z = the face's FRONT face (Cabinet3DView / int*Rect all
         // anchor mesh extents as [Z - DZ, Z]). The slides' front face sits at

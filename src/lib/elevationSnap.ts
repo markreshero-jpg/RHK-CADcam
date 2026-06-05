@@ -7,13 +7,14 @@ import type { Pt } from './geometry'
 import { dist, snapAngle, cabT } from './geometry'
 import type { Wall, Room, CabinetInstance } from './types'
 
-export type ElevSnapKind = 'cabinet-corner' | 'wall-corner'
+export type ElevSnapKind = 'cabinet-corner' | 'part-corner' | 'wall-corner'
 
 // Order here drives the toolbar list order.
-export const ELEV_SNAP_KINDS: ElevSnapKind[] = ['cabinet-corner', 'wall-corner']
+export const ELEV_SNAP_KINDS: ElevSnapKind[] = ['cabinet-corner', 'part-corner', 'wall-corner']
 
 export const ELEV_SNAP_KIND_META: Record<ElevSnapKind, { label: string; color: string }> = {
   'cabinet-corner': { label: 'Cabinet corners', color: '#34d399' },
+  'part-corner':    { label: 'Part corners',    color: '#fbbf24' },
   'wall-corner':    { label: 'Wall corners',    color: '#60a5fa' },
 }
 
@@ -24,7 +25,7 @@ export interface ElevSnapSettings {
 
 export const DEFAULT_ELEV_SNAP_SETTINGS: ElevSnapSettings = {
   enabled: true,
-  kinds: { 'cabinet-corner': true, 'wall-corner': true },
+  kinds: { 'cabinet-corner': true, 'part-corner': true, 'wall-corner': true },
 }
 
 // Tolerates partial/legacy stored values.
@@ -77,6 +78,10 @@ export interface ElevSnapContext {
   wall:     Wall
   room:     Room
   roomH:    number
+  // Resolved part / runner / face corners in elevation coords, precomputed by the
+  // view (it owns the rect helpers + per-cabinet transform). Optional so non-measure
+  // callers needn't build them.
+  partPoints?: Pt[]
 }
 
 // Find the nearest enabled snap point within `radius` (world mm) of `wp`.
@@ -113,6 +118,9 @@ export function computeElevSnap(
           consider(c, 'cabinet-corner')
         }
       }
+    }
+    if (settings.kinds['part-corner'] && ctx.partPoints) {
+      for (const p of ctx.partPoints) consider(p, 'part-corner')
     }
   }
 

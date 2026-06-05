@@ -285,7 +285,73 @@ export function caseBoxByKey(rp: ResolvedCabinet): Record<string, Box> {
   return m
 }
 
+// Rotate a local offset by an Euler (degrees), matching three.js Matrix4
+// makeRotationFromEuler order 'XYZ'. Shared by the 2D silhouette projection
+// (cabinetEditSvgHelpers.rotatedBoxPolygon) and seam-drill orientation below so
+// holes and the part they sit in rotate identically.
+export function rotEulerXYZ(axDeg: number, ayDeg: number, azDeg: number, x: number, y: number, z: number): [number, number, number] {
+  const D = Math.PI / 180
+  const a = Math.cos(axDeg * D), b = Math.sin(axDeg * D)
+  const c = Math.cos(ayDeg * D), d = Math.sin(ayDeg * D)
+  const e = Math.cos(azDeg * D), f = Math.sin(azDeg * D)
+  const ae = a * e, af = a * f, be = b * e, bf = b * f
+  return [
+    (c * e) * x + (-c * f) * y + (d) * z,
+    (af + be * d) * x + (ae - bf * d) * y + (-b * c) * z,
+    (bf - ae * d) * x + (be + af * d) * y + (a * c) * z,
+  ]
+}
+
+const AXIS_VEC: Record<DrillAxis, [number, number, number]> = {
+  'x+': [1, 0, 0], 'x-': [-1, 0, 0],
+  'y+': [0, 1, 0], 'y-': [0, -1, 0],
+  'z+': [0, 0, 1], 'z-': [0, 0, -1],
+}
+
+// Minimal shape of a per-part position/rotation override (see canvasDB.PartPosOverrides).
+export interface PartPosOv { ox: number; oy: number; oz: number; oax?: number; oay?: number; oaz?: number }
+
 export type SeamDrill = DrillOpPos & { source: 'cabinet' | 'method'; seamKey: string }
+
+// A drill whose entry point and bore direction have been transformed by its owning
+// (master) part's edit-modal override, with the bore direction carried as an explicit
+// cabinet-space unit vector so 2D overlays can project a correctly-angled slot.
+export type OrientedDrill = SeamDrill & { dir: [number, number, number] }
+
+// A joint/operation is OWNED by its master part (part_a of the seam). The whole
+// operation — both the holes bored into the master AND the holes it bores into the
+// slave — moves and rotates rigidly with the master, pivoting about the master's
+// reference corner exactly like its silhouette (rotatedBoxPolygon). This mirrors how
+// operations will attach to a single part in the per-part operations module: the op
+// lives on the part and travels with it. (Slave-side holes stay glued to the master's
+// edge that touches the slave, rather than to the slave itself.)
+export function orientSeamDrills(
+  drills: SeamDrill[],
+  boxByKey: Record<string, Box>,
+  overrides: Record<string, PartPosOv> | undefined,
+): OrientedDrill[] {
+  return drills.map(d => {
+    const base = AXIS_VEC[d.axis]
+    // Master part = part_a, the left-hand side of the seam key (e.g. front_rail
+    // in "front_rail:left_side"). Every hole in the seam follows this part.
+    const masterKey = d.seamKey.slice(0, d.seamKey.indexOf(':'))
+    const ov   = overrides?.[`case_${masterKey}`]
+    const box  = boxByKey[masterKey]
+    if (!ov || !box) return { ...d, dir: base }
+
+    const rot = !!(ov.oax || ov.oay || ov.oaz)
+    const [lx, ly, lz] = [d.x - box.x, d.y - box.y, d.z - box.z]
+    const [rx, ry, rz] = rot ? rotEulerXYZ(ov.oax ?? 0, ov.oay ?? 0, ov.oaz ?? 0, lx, ly, lz) : [lx, ly, lz]
+    const dir = rot ? rotEulerXYZ(ov.oax ?? 0, ov.oay ?? 0, ov.oaz ?? 0, base[0], base[1], base[2]) : base
+    return {
+      ...d,
+      x: box.x + (ov.ox ?? 0) + rx,
+      y: box.y + (ov.oy ?? 0) + ry,
+      z: box.z + (ov.oz ?? 0) + rz,
+      dir,
+    }
+  })
+}
 
 // Flattens every seam joint into hole positions, tagged with the seam's source
 // (cabinet override vs method default) for colour-coding in 2D views.

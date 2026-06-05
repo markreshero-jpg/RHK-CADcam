@@ -158,8 +158,8 @@ export interface ConstructionRules {
   FIXSB_B:  number   // fixed shelf setback back
 
   // Internal — inner drawer
-  IDCL:          number   // inner drawer clearance left
-  IDCR:          number   // inner drawer clearance right
+  IDCL:          number   // inner-drawer FACE clearance left (gap from compartment opening to the visible inner-drawer face)
+  IDCR:          number   // inner-drawer FACE clearance right
   IDFAO:         number   // inner drawer face add-on height
   SLIDE_SETBACK: number   // min clearance between back of slide and back panel inner face
 
@@ -545,6 +545,111 @@ export interface CabinetInput {
   // Per-cabinet; falls back to a 3mm default when unset. Sourced from
   // `internal_grid.stack_gap` in loadCabinetInput.
   internal_stack_gap?: number
+
+  // ── Hinge inputs (schema v0.6) ──────────────────────────────────────────────
+  // Shop-level door-height → count rules, ordered ASC by max_height_mm.
+  hinge_count_rules?: HingeRuleInput[]
+  // Default hinge cup + plate resolved from the hinge schedule cascade
+  // (cabinet → room → job → shop). Null when no hinge schedule is assigned.
+  hinge_hardware?:    HingeHardwareInput | null
+  hinge_plate?:       HingePlateInput | null
+  // Existing persisted hinge_instances for this cabinet, pre-loaded so the
+  // resolver can preserve y_locked rows and per-hinge overrides across a
+  // re-resolve. Keyed in code by (row_index, col_index, sort_order).
+  existing_hinges?:   ExistingHingeInput[]
+}
+
+// ── Hinge resolver inputs ─────────────────────────────────────────────────────
+// Decoupled from the DB row shapes (mirrors how SlideProduct is defined locally).
+export interface HingeRuleInput {
+  max_height_mm:   number
+  hinge_count:     number
+  top_inset_mm:    number
+  bottom_inset_mm: number
+}
+export interface HingeBoreHole {
+  offset_x: number
+  offset_y: number
+  diameter: number
+  depth:    number
+}
+export interface HingeHardwareInput {
+  id:                 string
+  default_hinge_edge: 'left' | 'right' | 'top' | 'bottom'
+  cup_x_from_edge_mm: number
+  cup_diameter:       number | null
+  cup_depth_mm:       number | null
+  anchor_holes:       HingeBoreHole[]
+  // Combined two-part animated GLB (Section 13). Null when no model uploaded.
+  model_combined_url:          string | null
+  model_combined_scale:        number
+  bore_centre_to_door_face_mm: number | null
+  open_angle_deg:              number | null
+}
+export interface HingePlateInput {
+  id:                    string
+  plate_offset_mm:       number
+  mounting_hole_pattern: HingeBoreHole[]
+  compatible_surfaces:   ('side' | 'top' | 'bottom' | 'shelf')[]
+}
+export interface ExistingHingeInput {
+  row_index:               number
+  col_index:               number
+  sort_order:              number
+  y_position_mm:           number
+  y_locked:                boolean
+  hinge_edge:              'left' | 'right' | 'top' | 'bottom'
+  mounting_surface:        'auto' | 'side' | 'top' | 'bottom' | 'shelf'
+  shelf_snap_tolerance_mm: number
+  hinge_plate_id:          string | null
+}
+
+// ── Resolved hinge instance + drills ──────────────────────────────────────────
+// One physical hinge on a door. Carries the persisted identity, the resolved
+// mounting target (as a descriptor that persist maps to a freshly-inserted part
+// id), and the cup/plate drill positions in absolute cabinet coords.
+export interface ResolvedHingeDrill {
+  x: number
+  y: number
+  z: number
+  axis:    'x-' | 'x+' | 'y-' | 'y+' | 'z-' | 'z+'
+  radius:  number
+  depthLen: number
+  kind:    'cup' | 'anchor' | 'plate'
+}
+// Where the plate fires. part_key identifies a case part; internal_sort_order +
+// internal_part_type identify an internal shelf. persist resolves this to the
+// new DB row id after case/internal parts are inserted.
+export interface ResolvedHingeMountTarget {
+  table: 'case_parts' | 'internal_parts'
+  part_key?: ResolvedCasePart['part_key']
+  internal_part_type?: ResolvedInternalPart['part_type']
+  internal_sort_order?: number
+}
+export interface ResolvedHingeInstance {
+  row_index:  number
+  col_index:  number
+  sort_order: number
+  hinge_edge: 'left' | 'right' | 'top' | 'bottom'
+  y_position_mm: number
+  y_locked:      boolean
+  mounting_surface: 'auto' | 'side' | 'top' | 'bottom' | 'shelf'
+  shelf_snap_tolerance_mm: number
+  hinge_hardware_id: string
+  hinge_plate_id:    string | null
+  // Resolved mounting target (null when unresolved, e.g. no plate/edge match).
+  mount_target: ResolvedHingeMountTarget | null
+  // Drill ops in absolute cabinet coords.
+  cup_drills:   ResolvedHingeDrill[]   // fire on the door back face
+  plate_drills: ResolvedHingeDrill[]   // fire on the resolved mounting surface
+  // Combined-GLB model for the 3D viewer (null when no model uploaded). The
+  // viewer places the bore-centre origin on the door's hinge axis at this
+  // hinge's height (local y = y_position_mm inside the door's rotating group).
+  model_url:        string | null
+  model_scale:      number
+  bore_to_door_mm:  number | null   // HingeSpec.bore_centre_to_door_face_mm
+  open_angle_deg:   number | null   // HingeSpec.open_angle_deg (mechanical max)
+  cup_x_from_edge_mm: number        // door edge → cup bore centre (across width)
 }
 
 // ── Face Grid Input ───────────────────────────────────────────
@@ -579,6 +684,12 @@ export interface ResolvedDoorStyleInput {
   // Linked board material id for the default colour, if the schedule colour
   // points at a materials row — used for face colour in rendering. Optional.
   colour_material_id?: string | null
+  // Edge tape for the default colour (edge_banding id), colour-matched. Falls
+  // back to the carcass schedule's door_face edgeband when unset.
+  edgeband_id?: string | null
+  // Which edges of the door blank get banded (from door_catalogue). Falls back
+  // to the construction method's EDGING[door] rule when unset.
+  edge_band_sides?: EdgeSides | null
 }
 
 export interface FaceRowInput {
@@ -597,7 +708,7 @@ export interface FaceZoneInput {
   row_index:  number
   col_index:  number
   face_type:  'door' | 'drawer_face' | 'false_panel' | 'open'
-  hinge_side?: 'left' | 'right'
+  hinge_side?: 'left' | 'right' | 'top' | 'bottom'
   face_ins?:  number   // per-zone inset override
   face_buf?:  number   // per-zone buffer override
   drawer_type_config?: DrawerTypeConfig  // only used when face_type === 'drawer_face'
@@ -605,6 +716,11 @@ export interface FaceZoneInput {
   // zone → room → job). null/undefined = inherit. Lives in the face_grid
   // JSONB so it survives re-resolve (the face_zones table is rebuilt each persist).
   door_style_id?: string | null
+  // Manual hinge positions for a door (mm from the door BOTTOM, along the hinged
+  // edge). When set, the resolver uses these exact positions instead of the shop
+  // hinge_count_rules — letting the user add/move/remove hinges per door.
+  // Undefined = auto (rule-based). Lives in the face_grid JSONB.
+  hinges?: number[]
 }
 
 // ── Internal Part Inputs ──────────────────────────────────────
@@ -766,6 +882,9 @@ export interface ResolvedCabinet {
   face_zones:    ResolvedFaceZone[]
   drawer_stacks: ResolvedDrawerStack[]
   seam_joints:   ResolvedSeamJoint[]
+  // One per physical hinge on each door zone (schema v0.6). Empty when no hinge
+  // schedule is assigned or the cabinet has no door zones.
+  hinge_instances: ResolvedHingeInstance[]
   // Validation errors — non-empty means something is wrong
   errors:        ResolverError[]
   warnings:      ResolverError[]
@@ -841,7 +960,7 @@ export interface ResolvedFaceZone extends ResolvedPart {
   row_index:  number
   col_index:  number
   face_type:  'door' | 'drawer_face' | 'false_panel' | 'open'
-  hinge_side?: 'left' | 'right'
+  hinge_side?: 'left' | 'right' | 'top' | 'bottom'
   // Door style results (only set on door zones that resolved to a style).
   // DZ already carries the catalogue thickness. door_profile is the evaluated
   // routing geometry; null when the style is a flat door.

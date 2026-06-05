@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
 import { cabT, wallDir, findFreeSlot } from '@/src/lib/geometry'
+import CalcInput from '@/src/components/CalcInput'
 
 export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, hideWallPosition }: {
   cabinet: CabinetInstance
@@ -63,15 +64,10 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
 
         <div>
           <label className={lbl}>Elevation from floor (mm)</label>
-          <input type="number"
-            key={`elev-${elevFromFloor}`}
-            defaultValue={elevFromFloor}
-            onFocus={e => e.target.select()}
-            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-            onBlur={e => {
-              const v = parseFloat(e.target.value)
-              if (!isNaN(v)) onUpdate(cabinet.id, { pos_z: Math.round(v) })
-            }}
+          <CalcInput
+            value={elevFromFloor}
+            decimals={0}
+            onCommit={v => onUpdate(cabinet.id, { pos_z: v })}
             className={inp + ' text-right'} />
         </div>
 
@@ -81,78 +77,58 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
             <div className="grid grid-cols-2 gap-1">
               <div>
                 <p className="text-[9px] text-gray-500 mb-0.5">From left end</p>
-                <input type="number"
-                  key={`pl-${meas.posLeft}`}
-                  defaultValue={meas.posLeft}
-                  onFocus={e => e.target.select()}
-                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                  onBlur={e => {
-                    const v = parseFloat(e.target.value)
-                    if (!isNaN(v)) {
-                      const d = wallDir(wall)
-                      const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-                      const t = findFreeSlot(v, cabinet.dx, wall.length, occ)
-                      onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
-                    }
+                <CalcInput
+                  value={meas.posLeft}
+                  decimals={0}
+                  onCommit={v => {
+                    const d = wallDir(wall)
+                    const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
+                    const t = findFreeSlot(v, cabinet.dx, wall.length, occ)
+                    onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
                   }}
                   className={inp + ' text-right'} />
               </div>
               <div>
                 <p className="text-[9px] text-gray-500 mb-0.5">From right end</p>
-                <input type="number"
-                  key={`pr-${meas.posRight}`}
-                  defaultValue={meas.posRight}
-                  onFocus={e => e.target.select()}
-                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                  onBlur={e => {
-                    const v = parseFloat(e.target.value)
-                    if (!isNaN(v)) {
-                      const d = wallDir(wall)
-                      const newT = wall.length - v - cabinet.dx
-                      const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-                      const t = findFreeSlot(newT, cabinet.dx, wall.length, occ)
-                      onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
-                    }
+                <CalcInput
+                  value={meas.posRight}
+                  decimals={0}
+                  onCommit={v => {
+                    const d = wallDir(wall)
+                    const newT = wall.length - v - cabinet.dx
+                    const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
+                    const t = findFreeSlot(newT, cabinet.dx, wall.length, occ)
+                    onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
                   }}
                   className={inp + ' text-right'} />
               </div>
               <div>
                 <p className="text-[9px] text-gray-500 mb-0.5">Clear left</p>
-                <input type="number"
-                  key={`cl-${meas.clearLeft}`}
-                  defaultValue={meas.clearLeft}
-                  onFocus={e => e.target.select()}
-                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                  onBlur={e => {
-                    const v = parseFloat(e.target.value)
-                    if (!isNaN(v)) {
-                      const d = wallDir(wall)
-                      const lN = meas.leftN
-                      const desiredT = lN ? lN.t + lN.dx + v : v
-                      const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-                      const t = findFreeSlot(desiredT, cabinet.dx, wall.length, occ)
-                      onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
-                    }
+                <CalcInput
+                  value={meas.clearLeft}
+                  decimals={0}
+                  onCommit={v => {
+                    const d = wallDir(wall)
+                    const lN = meas.leftN
+                    const desiredT = lN ? lN.t + lN.dx + v : v
+                    const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
+                    const t = findFreeSlot(desiredT, cabinet.dx, wall.length, occ)
+                    onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
                   }}
                   className={`${inp} text-right ${meas.clearLeft < 0 ? 'text-red-400' : ''}`} />
               </div>
               <div>
                 <p className="text-[9px] text-gray-500 mb-0.5">Clear right</p>
-                <input type="number"
-                  key={`cr-${meas.clearRight}`}
-                  defaultValue={meas.clearRight}
-                  onFocus={e => e.target.select()}
-                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                  onBlur={e => {
-                    const v = parseFloat(e.target.value)
-                    if (!isNaN(v)) {
-                      const d = wallDir(wall)
-                      const rN = meas.rightN
-                      const desiredT = rN ? rN.t - v - cabinet.dx : wall.length - v - cabinet.dx
-                      const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-                      const t = findFreeSlot(desiredT, cabinet.dx, wall.length, occ)
-                      onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
-                    }
+                <CalcInput
+                  value={meas.clearRight}
+                  decimals={0}
+                  onCommit={v => {
+                    const d = wallDir(wall)
+                    const rN = meas.rightN
+                    const desiredT = rN ? rN.t - v - cabinet.dx : wall.length - v - cabinet.dx
+                    const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
+                    const t = findFreeSlot(desiredT, cabinet.dx, wall.length, occ)
+                    onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
                   }}
                   className={`${inp} text-right ${meas.clearRight < 0 ? 'text-red-400' : ''}`} />
               </div>
@@ -166,9 +142,9 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
             {(['dx', 'dy', 'dz'] as const).map(dim => (
               <div key={dim}>
                 <p className="text-[10px] text-gray-600 text-center mb-0.5 uppercase">{dim}</p>
-                <input type="number" value={f(dim) as number}
-                  onChange={e => set(dim, parseFloat(e.target.value) || 0)}
-                  onFocus={e => e.target.select()} onBlur={save} className={inp + ' text-right'} />
+                <CalcInput value={f(dim) as number}
+                  onCommit={v => onUpdate(cabinet.id, { [dim]: v })}
+                  className={inp + ' text-right'} />
               </div>
             ))}
           </div>
@@ -222,14 +198,10 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
               return (
                 <div key={key}>
                   <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
-                  <input
-                    type="number"
-                    key={`scr-${key}-${cur}`}
-                    defaultValue={cur}
-                    onFocus={e => e.target.select()}
-                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                    onBlur={e => {
-                      const v = Math.round(parseFloat(e.target.value) || 0)
+                  <CalcInput
+                    value={cur}
+                    decimals={0}
+                    onCommit={v => {
                       const next = { ...(cabinet.rule_overrides ?? {}) }
                       if (v === 0) delete next[key]; else next[key] = v
                       void onUpdate(cabinet.id, { rule_overrides: next })

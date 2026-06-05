@@ -15,6 +15,7 @@ import { resolveInternalParts }  from './resolveInternal'
 import { resolveFace }           from './resolveFace'
 import { resolveDrawerStacks }   from './resolveDrawerStack'
 import { resolveJoints }         from './resolveJoints'
+import { resolveHinges }         from './resolveHinges'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -58,6 +59,14 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // collect the joint type operations ready for display and eventual drilling export.
   const seamJoints = resolveJoints(cab, caseParts)
 
+  // ── 6b. Hinges ────────────────────────────────────────────────
+  // One instance per physical hinge on each door zone. Count is driven by the
+  // shop hinge_count_rules; mounting surface resolved against case/internal
+  // parts; cup + plate drill positions computed. y_locked instances preserved.
+  const hingeInstances = (cab.has_face && cab.hinge_hardware)
+    ? resolveHinges(cab, zones, caseParts, internalParts)
+    : []
+
   // ── 7. Warnings ───────────────────────────────────────────────
   // Non-fatal checks
   if (cab.DX > 1200) {
@@ -78,6 +87,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     face_zones:      zones,
     drawer_stacks:   drawerStacks,
     seam_joints:     seamJoints,
+    hinge_instances: hingeInstances,
     errors:          allErrors,
     warnings:        allWarnings,
   }

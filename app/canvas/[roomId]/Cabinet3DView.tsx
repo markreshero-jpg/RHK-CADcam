@@ -11,7 +11,7 @@ import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
   ResolvedInternalPart, ResolvedFaceZone,
   ResolvedDrawerStack, ResolvedDrawerSlide, ResolvedDrawerBoxPart,
-  ResolvedSeamJoint,
+  ResolvedSeamJoint, ResolvedHingeInstance,
 } from '@/src/lib/resolver/types'
 import {
   Box, PanelKind, PartMeta, PartEdge,
@@ -23,9 +23,12 @@ import { isSide, caseBox, seamDrillOps, type DrillOpPos } from '@/src/lib/jointD
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import type { ResolvedDoorProfile } from '@/src/lib/resolver/types'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
+import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
+import { seatNudge, cupAcrossOffset } from '@/src/lib/hingeSilhouette'
 import type { ResolvedSlideDrill } from '@/src/lib/resolver/types'
 import PartEdgeJoints from './PartEdgeJoints'
 import { SlideModel } from '@/src/components/three/SlideModel'
+import { HingeModel } from '@/src/components/three/HingeModel'
 
 export type { MatColSpec, MatColMap }
 
@@ -285,11 +288,43 @@ function DoorProfile3D({ profile, b, color = '#5a4a32' }: {
   )
 }
 
-function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, ...partProps }: PartProps & {
+// ── Hinge model placement ─────────────────────────────────────────────────────
+// Combined-GLB convention: origin = plate-face bore centre, +Y = hinge axis
+// (vertical), +Z = gable→door, mm units.
+//
+// Orientation knobs (3D-only; the depth/across placement is shared with the 2D
+// silhouette via hingeSilhouette.ts so both stay in sync):
+//   HINGE_FLIP_Z   — reverse the gable→door axis so the cup-arm points INTO the
+//                    cabinet instead of out the front.
+//   HINGE_BASE_YAW — constant yaw correction about the vertical axis, if needed.
+//   mirror flag    — left/right hand. A left and right hinge are X-mirror images;
+//                    `mirror` (passed in) marks which hand gets the X reflection.
+const HINGE_FLIP_Z   = false
+const HINGE_BASE_YAW = 0   // radians
+
+function HingeMeshPlaced({ url, mesh, position, mirror, scale, color }: {
+  url:      string
+  mesh:     'HingePlate' | 'HingeCupArm'
+  position: [number, number, number]
+  mirror:   boolean        // this hand gets the X reflection
+  scale:    number
+  color?:   string
+}) {
+  const s  = scale || 1
+  const sz = HINGE_FLIP_Z ? -s : s
+  return (
+    <group position={position} rotation={[0, HINGE_BASE_YAW, 0]} scale={[(mirror ? -s : s), s, sz]}>
+      <HingeModel url={url} mesh={mesh} color={color} />
+    </group>
+  )
+}
+
+function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, ...partProps }: PartProps & {
   b:          Box
   hingeSide:  'left' | 'right'
   doorsOpen:  boolean
   doorProfile?: ResolvedDoorProfile | null
+  hinges?:    ResolvedHingeInstance[]
 }) {
   const groupRef     = useRef<THREE.Group>(null)
   const curAngle     = useRef(0)
@@ -299,6 +334,7 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, ...partProps }: PartP
   const openAngle = hingeSide === 'left' ? -Math.PI / 2 : Math.PI / 2
   const hingeX    = hingeSide === 'left' ? b.x : b.x + b.w
   const localB: Box = { x: hingeSide === 'left' ? 0 : -b.w, y: 0, z: 0, w: b.w, h: b.h, d: b.d }
+  const mirror    = hingeSide === 'left'   // swapped: left hand gets the X reflection
 
   useFrame(() => {
     if (!groupRef.current) return
@@ -316,6 +352,25 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, ...partProps }: PartP
     <group ref={groupRef} position={[hingeX, b.y, b.z]}>
       <Part b={localB} {...partProps} />
       {doorProfile && <DoorProfile3D profile={doorProfile} b={localB} />}
+      {/* Cup-arms live inside the rotating group so they swing with the door.
+          Local origin sits on the hinge axis; y = hinge height from door bottom. */}
+      {(hinges ?? []).filter(h => h.model_url).map((h, hi) => (
+        <HingeMeshPlaced
+          key={`cup${hi}`}
+          url={h.model_url!}
+          mesh="HingeCupArm"
+          // X = offset so the cup bore lands cup_x_from_edge in from the edge.
+          // Z = bore-to-door + seating so the cup beds into the door from its back.
+          position={[
+            cupAcrossOffset(h.cup_x_from_edge_mm, mirror, h.model_scale),
+            h.y_position_mm,
+            -((h.bore_to_door_mm ?? 0) * h.model_scale + seatNudge(b.d)),
+          ]}
+          mirror={mirror}
+          scale={h.model_scale}
+          color="#c0c6d0"
+        />
+      ))}
     </group>
   )
 }
@@ -544,7 +599,7 @@ function JointFaceRect({ plane, color, wire }: { plane: JointRefPlane; color: st
 // on hole entry and exit faces. three-bvh-csg v0.0.16 collapses all box face
 // groups to a single materialIndex, so CSG cannot give us per-face colours;
 // the disc-marker approach keeps rendering correct while showing hole positions.
-function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, highlighted, onSelect, dragRef, wire, contextMenuSelect = false, ebSpec }: {
+function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, highlighted, onSelect, dragRef, wire, contextMenuSelect = false, ebSpec, rotation }: {
   b:                  Box
   drills:             DrillOpPos[]
   faceColors:         [string, string, string, string, string, string]
@@ -557,8 +612,8 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
   wire?:              boolean
   contextMenuSelect?: boolean
   ebSpec?:            EbSpec
+  rotation?:          [number, number, number]
 }) {
-  const groupPos: [number, number, number] = [b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]
   return (
     <>
       <Part
@@ -573,10 +628,17 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
         wire={wire}
         contextMenuSelect={contextMenuSelect}
         ebSpec={ebSpec}
+        rotation={rotation}
       />
       {/* Dark disc markers on each hole's entry and exit face. In wire mode,
-          depthTest=false + renderOrder=10 makes them show through panel edges. */}
-      <group position={groupPos}>
+          depthTest=false + renderOrder=10 makes them show through panel edges.
+          Nested so the markers share the part's pivot ([b.x,b.y,b.z]) and
+          rotation: outer group sits at the reference corner and carries the
+          rotation, the inner group offsets to the box centre — matching how
+          Part positions its mesh. With no rotation this is identical to placing
+          the markers at the absolute box centre. */}
+      <group position={[b.x, b.y, b.z]} rotation={rotation}>
+      <group position={[b.w / 2, b.h / 2, b.d / 2]}>
         {drills.map((d, i) => {
           const isX    = d.axis === 'x-' || d.axis === 'x+'
           const isZ    = d.axis === 'z-' || d.axis === 'z+'
@@ -649,6 +711,7 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
           )
         })}
       </group>
+      </group>
     </>
   )
 }
@@ -659,13 +722,13 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
 // and axis, so we just place a marker. Colour-coded amber to distinguish from
 // the dark carcase-joint holes. The scene group is pre-translated by the cabinet
 // half-extents, so absolute coords map directly to local space here.
-function SlideDrillMarkers({ drills, wire }: {
-  drills: ResolvedSlideDrill[]
+function SlideDrillMarkers({ drills, wire, color = '#d97706' }: {
+  drills: { x: number; y: number; z: number; axis: ResolvedSlideDrill['axis']; radius: number; depthLen: number }[]
   wire?:  boolean
+  color?: string
 }) {
   const ro = wire ? 10 : 0
   const dt = !wire
-  const color = '#d97706'   // amber-600
   return (
     <group>
       {drills.map((d, i) => {
@@ -875,9 +938,25 @@ function CabinetScene({
   // Slide-imposed drilling (cabinet member + drawer-box surfaces), already
   // resolved to absolute cabinet coords on each slide. Rendered as an overlay.
   const slideDrills = useMemo(
-    () => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? []) : []),
+    () => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? [], rp.internal_slides ?? []) : []),
     [rp.drawer_stacks, showDrilling],
   )
+  const hingeDrills = useMemo(
+    () => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []),
+    [rp.hinge_instances, showDrilling],
+  )
+  // Hinges grouped by door zone, keyed `${row}_${col}` — only those with a 3D model.
+  const hingesByZone = useMemo(() => {
+    const m = new Map<string, ResolvedHingeInstance[]>()
+    for (const h of rp.hinge_instances ?? []) {
+      if (!h.model_url) continue
+      const k = `${h.row_index}_${h.col_index}`
+      const arr = m.get(k) ?? []
+      arr.push(h)
+      m.set(k, arr)
+    }
+    return m
+  }, [rp.hinge_instances])
 
   function applyEdge<T extends PartMeta>(info: T): T {
     const ov = edgeOverrides.get(info.id)
@@ -920,6 +999,7 @@ function CabinetScene({
               wire={wire}
               contextMenuSelect
               ebSpec={ebFor(p.material_id)}
+              rotation={getRotOv(id, partOverrides)}
             />
           )
         }
@@ -1117,16 +1197,39 @@ function CabinetScene({
           wire,
         }
 
-        if (z.face_type === 'door' && z.hinge_side) {
+        if (z.face_type === 'door' && (z.hinge_side === 'left' || z.hinge_side === 'right')) {
+          const zoneHinges = hingesByZone.get(`${z.row_index}_${z.col_index}`) ?? []
+          const hingeX = z.hinge_side === 'left' ? b.x : b.x + b.w
+          const mirror = z.hinge_side === 'left'   // swapped to match DoorPanel
           return (
-            <DoorPanel
-              key={`f${i}`}
-              b={b}
-              hingeSide={z.hinge_side}
-              doorsOpen={doorsOpen}
-              doorProfile={z.door_profile}
-              {...partProps}
-            />
+            <group key={`f${i}`}>
+              <DoorPanel
+                b={b}
+                hingeSide={z.hinge_side}
+                doorsOpen={doorsOpen}
+                doorProfile={z.door_profile}
+                hinges={zoneHinges}
+                {...partProps}
+              />
+              {/* Plates stay fixed in world space at the bore-centre anchor. */}
+              {zoneHinges.map((h, hi) => (
+                <HingeMeshPlaced
+                  key={`plate${hi}`}
+                  url={h.model_url!}
+                  mesh="HingePlate"
+                  // Same across + depth offsets so the plate stays consistent
+                  // with the cup (plate ends up back at the gable).
+                  position={[
+                    hingeX + cupAcrossOffset(h.cup_x_from_edge_mm, mirror, h.model_scale),
+                    b.y + h.y_position_mm,
+                    b.z - ((h.bore_to_door_mm ?? 0) * h.model_scale + seatNudge(b.d)),
+                  ]}
+                  mirror={mirror}
+                  scale={h.model_scale}
+                  color="#8b919b"
+                />
+              ))}
+            </group>
           )
         }
 
@@ -1173,6 +1276,9 @@ function CabinetScene({
       )}
       {slideDrills.length > 0 && (
         <SlideDrillMarkers drills={slideDrills} wire={wire} />
+      )}
+      {hingeDrills.length > 0 && (
+        <SlideDrillMarkers drills={hingeDrills} wire={wire} color="#a855f7" />
       )}
     </group>
   )

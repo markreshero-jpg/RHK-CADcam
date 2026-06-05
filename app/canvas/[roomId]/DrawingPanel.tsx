@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { dist, toDeg } from '@/src/lib/geometry'
 import type { Pt } from '@/src/lib/geometry'
+import { evalCalc } from '@/src/lib/calc'
 
 interface Props {
   drawStart: Pt
@@ -44,9 +45,9 @@ const DrawingPanel = forwardRef<DrawingPanelHandle, Props>(function DrawingPanel
   useEffect(() => { if (!angFocused && !angDirty.current) setAngVal(String(liveAng)) }, [liveAng, angFocused])
 
   function place() {
-    const l = parseFloat(lenVal)
-    const a = parseFloat(angVal)
-    if (isNaN(l) || l < 10 || isNaN(a)) return
+    const l = evalCalc(lenVal)
+    const a = evalCalc(angVal)
+    if (l == null || l < 10 || a == null) return
     lenDirty.current = false
     angDirty.current = false
     onPlace(l, a)
@@ -56,8 +57,8 @@ const DrawingPanel = forwardRef<DrawingPanelHandle, Props>(function DrawingPanel
     if (e.key === 'Enter')  { e.preventDefault(); place() }
     if (e.key === 'Tab') {
       e.preventDefault()
-      const l = parseFloat(lenVal), a = parseFloat(angVal)
-      if (!isNaN(l) && !isNaN(a)) onUpdatePreview?.(l, a)
+      const l = evalCalc(lenVal), a = evalCalc(angVal)
+      if (l != null && a != null) onUpdatePreview?.(l, a)
       angRef.current?.focus(); angRef.current?.select()
     }
     if (e.key === 'Escape') { e.stopPropagation(); onCancel() }
@@ -67,8 +68,8 @@ const DrawingPanel = forwardRef<DrawingPanelHandle, Props>(function DrawingPanel
     if (e.key === 'Enter')  { e.preventDefault(); place() }
     if (e.key === 'Tab') {
       e.preventDefault()
-      const l = parseFloat(lenVal), a = parseFloat(angVal)
-      if (!isNaN(l) && !isNaN(a)) onUpdatePreview?.(l, a)
+      const l = evalCalc(lenVal), a = evalCalc(angVal)
+      if (l != null && a != null) onUpdatePreview?.(l, a)
       lenRef.current?.focus(); lenRef.current?.select()
     }
     if (e.key === 'Escape') { e.stopPropagation(); onCancel() }
@@ -87,9 +88,10 @@ const DrawingPanel = forwardRef<DrawingPanelHandle, Props>(function DrawingPanel
           <label className="text-xs text-gray-500 block mb-1">Length (mm)</label>
           <input
             ref={lenRef}
-            type="number"
-            min={10}
-            step={1}
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            spellCheck={false}
             value={lenVal}
             onChange={e => { setLenVal(e.target.value); lenDirty.current = true }}
             onFocus={() => { setLenFocused(true); lenRef.current?.select() }}
@@ -103,8 +105,10 @@ const DrawingPanel = forwardRef<DrawingPanelHandle, Props>(function DrawingPanel
           <label className="text-xs text-gray-500 block mb-1">Angle (°)</label>
           <input
             ref={angRef}
-            type="number"
-            step={22.5}
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            spellCheck={false}
             value={angVal}
             onChange={e => { setAngVal(e.target.value); angDirty.current = true }}
             onFocus={() => { setAngFocused(true); angRef.current?.select() }}

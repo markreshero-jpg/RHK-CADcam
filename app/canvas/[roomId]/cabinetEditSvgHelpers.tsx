@@ -4,7 +4,7 @@ import React, { useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { caseBox, type SeamDrill, type DrillAxis } from '@/src/lib/jointDrilling'
+import { caseBox, rotEulerXYZ, type SeamDrill, type OrientedDrill, type DrillAxis } from '@/src/lib/jointDrilling'
 import type { PartPosOverrides } from './canvasDB'
 import type {
   ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart,
@@ -437,11 +437,9 @@ export function partIdColor(id: string): string {
 
 const DRILL_COL: Record<SeamDrill['source'], string> = { cabinet: '#22c55e', method: '#60a5fa' }
 
-export function DrillOverlay({ drills, project, perp, dirOf }: {
-  drills:  SeamDrill[]
+export function DrillOverlay({ drills, project }: {
+  drills:  OrientedDrill[]
   project: (x: number, y: number, z: number) => { x: number; y: number }
-  perp:    'x' | 'y' | 'z'
-  dirOf:   (axis: DrillAxis) => { dx: number; dy: number }
 }) {
   if (drills.length === 0) return null
   return (
@@ -451,18 +449,22 @@ export function DrillOverlay({ drills, project, perp, dirOf }: {
         const col = DRILL_COL[d.source]
         const r   = Math.max(d.radius, 0.75)
 
-        if (d.axis[0] === perp) {
-          // Looking down the bore → circle = tool diameter.
+        // Project the bore exit (entry + direction × depth). The bore direction is
+        // the part's override applied, so a rotated part angles the slot correctly.
+        // When the bore points into/out of the view plane the two endpoints collapse
+        // → draw a circle (looking down the bore); otherwise a depth slot.
+        const { x: ex, y: ey } = project(
+          d.x + d.dir[0] * d.depthLen,
+          d.y + d.dir[1] * d.depthLen,
+          d.z + d.dir[2] * d.depthLen,
+        )
+        if (Math.hypot(ex - sx, ey - sy) <= r) {
           return (
             <circle key={i} cx={sx} cy={sy} r={r}
               fill={col} fillOpacity={0.4} stroke={col} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
           )
         }
 
-        // In-plane axis → slot from the entry face into the panel by drill depth.
-        const dir = dirOf(d.axis)
-        const ex  = sx + dir.dx * d.depthLen
-        const ey  = sy + dir.dy * d.depthLen
         return (
           <g key={i}>
             <line x1={sx} y1={sy} x2={ex} y2={ey}
@@ -481,11 +483,15 @@ export function DrillOverlay({ drills, project, perp, dirOf }: {
 // markers in the 3D view.
 const SLIDE_DRILL_COL = '#d97706'   // amber-600
 
-export function SlideDrillOverlay({ drills, project, perp, dirOf }: {
-  drills:  ResolvedSlideDrill[]
+// Minimal drill shape both slide drills and hinge drills satisfy.
+export type OverlayDrill = { x: number; y: number; z: number; axis: DrillAxis; radius: number; depthLen: number }
+
+export function SlideDrillOverlay({ drills, project, perp, dirOf, color = SLIDE_DRILL_COL }: {
+  drills:  OverlayDrill[]
   project: (x: number, y: number, z: number) => { x: number; y: number }
   perp:    'x' | 'y' | 'z'
   dirOf:   (axis: DrillAxis) => { dx: number; dy: number }
+  color?:  string
 }) {
   if (drills.length === 0) return null
   return (
@@ -498,7 +504,7 @@ export function SlideDrillOverlay({ drills, project, perp, dirOf }: {
           // Looking down the bore → circle = tool diameter.
           return (
             <circle key={i} cx={sx} cy={sy} r={r}
-              fill={SLIDE_DRILL_COL} fillOpacity={0.4} stroke={SLIDE_DRILL_COL} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+              fill={color} fillOpacity={0.4} stroke={color} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
           )
         }
 
@@ -509,8 +515,8 @@ export function SlideDrillOverlay({ drills, project, perp, dirOf }: {
         return (
           <g key={i}>
             <line x1={sx} y1={sy} x2={ex} y2={ey}
-              stroke={SLIDE_DRILL_COL} strokeOpacity={0.35} strokeWidth={r * 2} strokeLinecap="butt" />
-            <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={SLIDE_DRILL_COL} strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
+              stroke={color} strokeOpacity={0.35} strokeWidth={r * 2} strokeLinecap="butt" />
+            <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={color} strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
           </g>
         )
       })}
@@ -568,21 +574,6 @@ export function dbBox3(p: ResolvedDrawerBoxPart): Box3 {
 }
 export function slideBox3(s: ResolvedDrawerSlide): Box3 {
   return { x: s.X, y: s.Y, z: s.Z, w: s.DZ, h: s.DY, d: s.DX }
-}
-
-// Rotate a local offset by an Euler (degrees), matching three.js Matrix4
-// makeRotationFromEuler order 'XYZ' so the 2D silhouette equals the 3D rotation.
-function rotEulerXYZ(axDeg: number, ayDeg: number, azDeg: number, x: number, y: number, z: number): [number, number, number] {
-  const D = Math.PI / 180
-  const a = Math.cos(axDeg * D), b = Math.sin(axDeg * D)
-  const c = Math.cos(ayDeg * D), d = Math.sin(ayDeg * D)
-  const e = Math.cos(azDeg * D), f = Math.sin(azDeg * D)
-  const ae = a * e, af = a * f, be = b * e, bf = b * f
-  return [
-    (c * e) * x + (-c * f) * y + (d) * z,
-    (af + be * d) * x + (ae - bf * d) * y + (-b * c) * z,
-    (bf - ae * d) * x + (be + af * d) * y + (a * c) * z,
-  ]
 }
 
 type P2 = { x: number; y: number }

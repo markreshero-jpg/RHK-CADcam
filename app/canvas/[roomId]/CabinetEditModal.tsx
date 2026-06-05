@@ -206,6 +206,7 @@ export default function CabinetEditModal({
   const setWireMode = () => setWireByView(m => ({ ...m, [activeView]: !m[activeView] }))
   const [showInternals, setShowInternals] = useState(true)
   const [showDrilling, setShowDrilling]   = useState(true)
+  const [measureMode, setMeasureMode]     = useState(false)
   const [selectedSVGPart, setSelectedSVGPart] = useState<PartMeta | null>(null)
   const [picker, setPicker] = useState<{ parts: PartMeta[]; clientX: number; clientY: number } | null>(null)
   const [localRp, setLocalRp]             = useState<ResolvedCabinet | null>(null)
@@ -389,6 +390,19 @@ export default function CabinetEditModal({
             })}
             {(isOrthoView || activeView === 'face' || activeView === 'interior' || activeView === '3d') && rp && (
               <div className="ml-auto flex items-center gap-1.5">
+                {isOrthoView && (
+                  <button
+                    onClick={() => setMeasureMode(m => !m)}
+                    title="Measure between part / hardware corners"
+                    className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                      measureMode
+                        ? 'bg-amber-600 text-white hover:bg-amber-500'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'
+                    }`}
+                  >
+                    Measure
+                  </button>
+                )}
                 <button
                   onClick={() => setWireMode()}
                   title="Toggle wire / solid view"
@@ -441,7 +455,7 @@ export default function CabinetEditModal({
             onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null) } : undefined}
           >
             {activeView === 'top' && (
-              visibleRp ? <ResolvedTop cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
+              visibleRp ? <ResolvedTop cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 customParts={customParts} partOverrides={partOverrides}
@@ -449,7 +463,7 @@ export default function CabinetEditModal({
               : <TopView cab={cabinet} />
             )}
             {activeView === 'elevation' && (
-              visibleRp ? <ResolvedElevation cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
+              visibleRp ? <ResolvedElevation cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 customParts={customParts} partOverrides={partOverrides}
@@ -457,7 +471,7 @@ export default function CabinetEditModal({
               : <ElevationView cab={cabinet} />
             )}
             {activeView === 'side' && (
-              visibleRp ? <ResolvedSide cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling}
+              visibleRp ? <ResolvedSide cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 customParts={customParts} partOverrides={partOverrides}
@@ -490,7 +504,7 @@ export default function CabinetEditModal({
               />
             )}
             {activeView === 'joints' && <JointsPanel cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
-            {activeView === 'tree'   && rp && <CabinetTreePanel rp={rp} />}
+            {activeView === 'tree'   && rp && <CabinetTreePanel rp={rp} partOverrides={partOverrides} />}
             {activeView === 'overrides' && (
               <OverridesView
                 cabinetId={cabinet.id}

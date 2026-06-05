@@ -76,6 +76,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
   const [edgebands,    setEdgebands]    = useState<EbItem[]>([])
   const [benchtopMats, setBenchtopMats] = useState<BenchtopItem[]>([])
   const [hinges,        setHinges]        = useState<HwItem[]>([])
+  const [hingePlates,   setHingePlates]   = useState<{ id: string; name: string; hinge_id: string }[]>([])
   const [slides,        setSlides]        = useState<HwSlideItem[]>([])
   const [handles,       setHandles]       = useState<HwItem[]>([])
   const [schedLists,    setSchedLists]    = useState<Partial<Record<SchedKey, SchedRecord[]>>>({})
@@ -101,14 +102,14 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     async function load() {
       const [
         asmR, tkR, frR, dbR, idbR, hiR, slR, haR, btR,
-        matsR, ebR, btMatsR, hingesR, slidesR, handlesR,
+        matsR, ebR, btMatsR, hingesR, slidesR, handlesR, platesR,
       ] = await Promise.all([
         supabase.from('assembly_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('toekick_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('front_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id,bottom_material_id,bottom_edgeband_id').order('name'),
         supabase.from('inner_drawerbox_schedules').select('id,name,description,is_default,active,material_id,edgeband_id,bottom_material_id,bottom_edgeband_id,front_material_id,front_edgeband_id').order('name'),
-        supabase.from('hinge_schedules').select('id,name,description,is_default,active,hinge_id').order('name'),
+        supabase.from('hinge_schedules').select('id,name,description,is_default,active,hinge_id,hinge_plate_id').order('name'),
         supabase.from('slide_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('handle_schedules').select('id,name,description,is_default,active,handle_id').order('name'),
         supabase.from('benchtop_schedules').select('id,name,description,is_default,active,benchtop_id').order('name'),
@@ -118,6 +119,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         supabase.from('hardware_hinges').select('id,name,brand').eq('active', true).order('name'),
         supabase.from('hardware_slides').select('id,name,brand,nominal_length,box_height').eq('active', true).order('name'),
         supabase.from('hardware_handles').select('id,name,brand').eq('active', true).order('name'),
+        supabase.from('hardware_hinge_plates').select('id,name,hinge_id').eq('active', true).order('name'),
       ])
       if (cancelled) return
 
@@ -136,6 +138,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
       setEdgebands((ebR.data      ?? []) as EbItem[])
       setBenchtopMats((btMatsR.data ?? []) as BenchtopItem[])
       setHinges((hingesR.data  ?? []) as HwItem[])
+      setHingePlates((platesR.data ?? []) as { id: string; name: string; hinge_id: string }[])
       setSlides((slidesR.data  ?? []) as HwSlideItem[])
       setHandles((handlesR.data ?? []) as HwItem[])
       setLoading(false)
@@ -704,15 +707,38 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     const val     = (sched?.[col] as string) ?? ''
     const catalog = activeTab === 'hinge' ? hinges : activeTab === 'slide' ? slides : handles
     const label   = activeTab === 'hinge' ? 'Hinge' : activeTab === 'slide' ? 'Slide' : 'Handle'
+
+    // Hinge schedules also carry an optional plate; the list is filtered to the
+    // plates belonging to the chosen hinge. Leave unset to use the hinge's
+    // default plate at resolve time.
+    const plateVal     = activeTab === 'hinge' ? ((sched?.['hinge_plate_id'] as string) ?? '') : ''
+    const platesForSel = activeTab === 'hinge' ? hingePlates.filter(p => p.hinge_id === val) : []
+
     return (
-      <div className="flex items-center gap-3">
-        <span className="w-20 shrink-0 text-xs text-ink-muted">{label}</span>
-        <select value={val} onChange={e => saveSingleValue(col, e.target.value)} className={`flex-1 max-w-sm ${sel}`}>
-          {!val && <option value="">— not set —</option>}
-          {catalog.map(item => (
-            <option key={item.id} value={item.id}>{item.name}{item.brand ? ` — ${item.brand}` : ''}</option>
-          ))}
-        </select>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <span className="w-20 shrink-0 text-xs text-ink-muted">{label}</span>
+          <select value={val} onChange={e => saveSingleValue(col, e.target.value)} className={`flex-1 max-w-sm ${sel}`}>
+            {!val && <option value="">— not set —</option>}
+            {catalog.map(item => (
+              <option key={item.id} value={item.id}>{item.name}{item.brand ? ` — ${item.brand}` : ''}</option>
+            ))}
+          </select>
+        </div>
+        {activeTab === 'hinge' && (
+          <div className="flex items-center gap-3">
+            <span className="w-20 shrink-0 text-xs text-ink-muted">Plate</span>
+            <select
+              value={plateVal}
+              onChange={e => saveSingleValue('hinge_plate_id', e.target.value)}
+              disabled={!val}
+              className={`flex-1 max-w-sm ${sel} disabled:opacity-40`}
+            >
+              <option value="">— hinge default —</option>
+              {platesForSel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+        )}
       </div>
     )
   }

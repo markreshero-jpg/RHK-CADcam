@@ -599,6 +599,147 @@ Run in this exact order to avoid FK violations:
 
 ---
 
+## Section 13 — Combined Two-Part GLB Animation Support
+
+### Background
+
+The hinge 3D models in this system use a **single combined GLB file** containing two named meshes that animate relative to each other as the door swings open. This was established when the first model (`Blum_71B3590_split.glb`) was authored. All future hinge GLBs must follow the same convention.
+
+The Blum 71B3590 file confirms the full pattern — it contains a `HingeSpec` metadata block in the scene extras with all positioning data baked in. Do not change this convention.
+
+---
+
+### Mesh Naming Convention — MANDATORY
+
+Every combined hinge GLB **must** contain exactly two meshes with these exact names:
+
+| Mesh name | What it is | Behaviour in viewer |
+|-----------|-----------|---------------------|
+| `HingePlate` | The mounting plate — screws to carcass side/shelf/top/bottom | **Stays fixed.** Never moves. Positioned at the resolved mounting surface. |
+| `HingeCupArm` | The cup and arm assembly — bores into the door | **Rotates with the door.** Placed inside the door panel's transform group so it animates when the door opens/closes. |
+
+The viewer splits the GLB on load by these names. If a GLB arrives without these exact mesh names it will not animate correctly. Document this requirement for anyone authoring future hinge models.
+
+---
+
+### Origin Convention — MANDATORY
+
+The GLB coordinate origin (0, 0, 0) must be set to:
+
+> **The centre of the plate face at the bore centre point.**
+
+Specifically: Z=0 is the cabinet gable face at the bore centre. This is the physical pivot point of the hinge knuckle — both meshes share this origin so the cup arm rotates correctly around it when the door swings.
+
+This is confirmed in the Blum 71B3590 `HingeSpec` extras:
+```json
+"origin": "plate_face_bore_centre",
+"note": "Z=0 = cabinet gable face at bore centre. HingePlate stays fixed. HingeCupArm rotates with door (place inside DoorPanel group)."
+```
+
+Because the origin convention is fixed, **no separate pivot point columns are needed** on `hardware_hinges`. The viewer always rotates `HingeCupArm` around the model origin.
+
+---
+
+### Required HingeSpec Extras Block
+
+Every hinge GLB must include this metadata in `scenes[0].extras.HingeSpec`. The viewer reads these values at load time rather than relying on separate database columns for positioning:
+
+```json
+{
+  "HingeSpec": {
+    "model": "Human-readable model name",
+    "part_number": "Manufacturer part number",
+    "bore_diameter_mm": 35,
+    "bore_distance_mm": 5,
+    "overlay": "full_overlay | half_overlay | inset",
+    "open_angle_deg": 110,
+    "origin": "plate_face_bore_centre",
+    "bore_centre_to_door_face_mm": 51.3,
+    "note": "Z=0 = cabinet gable face at bore centre. HingePlate stays fixed. HingeCupArm rotates with door (place inside DoorPanel group)."
+  }
+}
+```
+
+`bore_centre_to_door_face_mm` is the critical positioning value — it tells the viewer how far the cup arm extends from the plate face to the door face. This varies between hinge models (arm length differences between brands/types).
+
+---
+
+### Database Changes for Combined Model Support
+
+Add the following columns to `hardware_hinges` as part of the Section 2 migration:
+
+```sql
+ALTER TABLE public.hardware_hinges
+  -- Combined two-part GLB (preferred over separate cup/plate URLs)
+  ADD COLUMN IF NOT EXISTS model_combined_url          text,
+  ADD COLUMN IF NOT EXISTS model_combined_format       text
+    CONSTRAINT hardware_hinges_model_combined_format_check
+    CHECK (model_combined_format = ANY (ARRAY['glb'::text])),
+    -- Only GLB is supported for combined animated models.
+    -- STL and OBJ do not support scene hierarchy or extras metadata.
+
+  ADD COLUMN IF NOT EXISTS model_combined_scale        numeric  NOT NULL DEFAULT 1.0,
+
+  -- Cached from HingeSpec extras so the viewer doesn't need to
+  -- parse the GLB binary to get this value at render time.
+  ADD COLUMN IF NOT EXISTS bore_centre_to_door_face_mm numeric;
+```
+
+**Model URL priority rule for the viewer:**
+If `model_combined_url` is set → use the combined GLB with two-mesh animation.
+If only `model_cup_url` is set → use static cup + static plate as separate props (fallback for simple/legacy hinges).
+Never use both simultaneously.
+
+---
+
+### Viewer Implementation — Animation Logic
+
+The viewer must implement the following when rendering a `hinge_instance` that has `model_combined_url` set:
+
+```
+1. Load the GLB from model_combined_url
+2. Split scene nodes by mesh name:
+     plateNode = scene.getObjectByName('HingePlate')
+     cupArmNode = scene.getObjectByName('HingeCupArm')
+3. Read HingeSpec from scene.userData (parsed from GLB extras):
+     boreOffset = HingeSpec.bore_centre_to_door_face_mm
+     maxAngle   = HingeSpec.open_angle_deg  (in degrees, convert to radians)
+4. Position plateNode:
+     - Place at the resolved_mounting_part face position
+     - Y = hinge_instance.y_position_mm from cabinet bottom
+     - The plate origin aligns to the gable face at bore centre
+     - plateNode stays in world space — never parented to the door
+5. Position and parent cupArmNode:
+     - Parent cupArmNode to the door panel's transform group
+     - Local position within door group:
+         x = hardware_hinges.cup_x_from_edge_mm from the hinge edge
+         y = hinge_instance.y_position_mm (in door-local space)
+         z = boreOffset inward from door back face
+     - cupArmNode.rotation = 0 when door is closed
+6. Door open animation:
+     - When door open angle changes (user interaction or animation):
+         cupArmNode.rotation.y = doorOpenAngle (radians)
+         Clamped to [0, maxAngle * π/180]
+     - plateNode does not move
+7. Repeat for each hinge_instance on this door
+```
+
+---
+
+### Testing the Combined Model
+
+After implementing, verify using `Blum_71B3590_split.glb`:
+
+- [ ] Both `HingePlate` and `HingeCupArm` meshes load and are visible
+- [ ] `HingeSpec` metadata is read correctly — `bore_centre_to_door_face_mm` = 51.3, `open_angle_deg` = 110
+- [ ] `HingePlate` does not move when door is opened
+- [ ] `HingeCupArm` rotates with the door, pivoting around the model origin
+- [ ] At 0° (closed) the cup arm sits flush against the plate — no gap or overlap
+- [ ] At 110° (fully open) the cup arm has rotated correctly and does not clip through the door panel
+- [ ] Multiple hinge instances on one door all animate together when door swings
+
+---
+
 ## Section 12 — Testing Checklist
 
 After migration, verify the following before marking complete:

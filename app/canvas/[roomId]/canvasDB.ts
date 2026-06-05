@@ -2,32 +2,53 @@ import { supabase } from '@/src/lib/supabase'
 import type { Wall, CabinetInstance } from '@/src/lib/types'
 import { resolveCabinetFromDB, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
+import { resolveHinges } from '@/src/lib/resolver/resolveHinges'
 import { persistResolved } from '@/src/lib/resolver/persistResolved'
-import type { ResolvedCabinet, ResolvedSeamJoint, JointTypeOp, JointTargetPart, JointMachineOp, JointFace } from '@/src/lib/resolver/types'
+import type {
+  ResolvedCabinet, ResolvedSeamJoint, JointTypeOp, JointTargetPart, JointMachineOp, JointFace,
+  CabinetInput, HingeHardwareInput, HingePlateInput, HingeRuleInput, ExistingHingeInput, HingeBoreHole,
+  FaceGridInput,
+} from '@/src/lib/resolver/types'
 
 const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 
 export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<string, ResolvedCabinet>> {
   if (cabinetIds.length === 0) return new Map()
 
-  const [cp, tp, ip, fr, fc, fz, ci] = await Promise.all([
+  const [cp, tp, ip, fr, fc, fz, ci, hin] = await Promise.all([
     supabase.from('case_parts').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('toekick_parts').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('internal_parts').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('face_rows').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('face_cols').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('face_zones').select('*').in('cabinet_instance_id', cabinetIds),
-    supabase.from('cabinet_instances').select('id, carcase_joints, hidden_parts').in('id', cabinetIds),
+    supabase.from('cabinet_instances').select('id, carcase_joints, hidden_parts, face_grid').in('id', cabinetIds),
+    supabase.from('hinge_instances').select('*').in('cabinet_instance_id', cabinetIds),
   ])
+
+  // Hinge reconstruction (DB-rebuild path): the resolver's hinge_instances aren't
+  // re-run here, so load the persisted rows + their hardware and re-run the pure
+  // hinge resolver per cabinet to recover drills + 3D model fields for rendering.
+  const hingeRows = (hin.data ?? []) as Record<string, unknown>[]
+  const instancesByCab = new Map<string, Record<string, unknown>[]>()
+  for (const r of hingeRows) {
+    const cid = r.cabinet_instance_id as string
+    const arr = instancesByCab.get(cid) ?? []
+    arr.push(r)
+    instancesByCab.set(cid, arr)
+  }
+  const { hardwareById, plateById, countRules } = await loadHingeHardware(hingeRows)
 
   // Collect joint type IDs from per-cabinet carcase_joints overrides
   const carcaseJointsById = new Map<string, Record<string, string | null>>()
   const hiddenById = new Map<string, string[]>()
+  const faceGridById = new Map<string, FaceGridInput | null>()
   const jointTypeIds = new Set<string>()
-  for (const row of (ci.data ?? []) as { id: string; carcase_joints: Record<string, string | null> | null; hidden_parts: string[] | null }[]) {
+  for (const row of (ci.data ?? []) as { id: string; carcase_joints: Record<string, string | null> | null; hidden_parts: string[] | null; face_grid: FaceGridInput | null }[]) {
     const joints = row.carcase_joints ?? {}
     carcaseJointsById.set(row.id, joints)
     hiddenById.set(row.id, row.hidden_parts ?? [])
+    faceGridById.set(row.id, row.face_grid ?? null)
     for (const v of Object.values(joints)) if (v) jointTypeIds.add(v)
   }
 
@@ -164,16 +185,121 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
       drawer_stacks: [],
       internal_slides: [],
       seam_joints: seamJoints,
+      hinge_instances: [],
       errors: [],
       warnings: [],
       hidden_parts: hiddenById.get(id) ?? [],
     }
+    // Recover hinges (drills + 3D model fields) from the persisted instances so
+    // they render in the canvas + edit modal without a live re-resolve.
+    built.hinge_instances = reconstructHinges(id, built, instancesByCab, hardwareById, plateById, countRules, faceGridById.get(id) ?? null)
     // NB: left UNFILTERED — this map also feeds the edit modal, whose Parts tab
     // needs the full list. Consumers (canvas elevation/plan, reports, cut lists)
     // call filterHiddenParts() at render; the modal filters its own viewers.
     result.set(id, built)
   }
   return result
+}
+
+// ── Hinge reconstruction helpers (DB-rebuild path) ────────────────────────────
+function toHingeHoles(v: unknown): HingeBoreHole[] {
+  if (!Array.isArray(v)) return []
+  return v.map(h => {
+    const o = (h ?? {}) as Record<string, unknown>
+    return {
+      offset_x: Number(o.offset_x ?? 0), offset_y: Number(o.offset_y ?? 0),
+      diameter: Number(o.diameter ?? 0), depth: Number(o.depth ?? 0),
+    }
+  })
+}
+
+// Batch-load the hinge cup/plate hardware + count rules referenced by a set of
+// persisted hinge_instances rows.
+async function loadHingeHardware(rows: Record<string, unknown>[]): Promise<{
+  hardwareById: Map<string, HingeHardwareInput>
+  plateById:    Map<string, HingePlateInput>
+  countRules:   HingeRuleInput[]
+}> {
+  const hwIds    = [...new Set(rows.map(r => r.hinge_hardware_id as string).filter(Boolean))]
+  const plateIds = [...new Set(rows.map(r => r.hinge_plate_id).filter(Boolean) as string[])]
+  if (hwIds.length === 0) return { hardwareById: new Map(), plateById: new Map(), countRules: [] }
+
+  const [hwRes, plRes, ruleRes] = await Promise.all([
+    supabase.from('hardware_hinges')
+      .select('id, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm')
+      .in('id', hwIds),
+    plateIds.length
+      ? supabase.from('hardware_hinge_plates').select('id, plate_offset_mm, mounting_hole_pattern, compatible_surfaces').in('id', plateIds)
+      : Promise.resolve({ data: [] as unknown[] }),
+    supabase.from('hinge_count_rules').select('max_height_mm, hinge_count, top_inset_mm, bottom_inset_mm').eq('active', true).order('max_height_mm', { ascending: true }),
+  ])
+
+  const hardwareById = new Map<string, HingeHardwareInput>()
+  for (const h of ((hwRes as { data: unknown[] | null }).data ?? []) as Record<string, unknown>[]) {
+    hardwareById.set(h.id as string, {
+      id:                 h.id as string,
+      default_hinge_edge: (h.default_hinge_edge as HingeHardwareInput['default_hinge_edge']) ?? 'left',
+      cup_x_from_edge_mm: Number(h.cup_x_from_edge_mm ?? 22),
+      cup_diameter:       h.cup_diameter != null ? Number(h.cup_diameter) : null,
+      cup_depth_mm:       h.cup_depth_mm != null ? Number(h.cup_depth_mm) : null,
+      anchor_holes:       toHingeHoles(h.anchor_holes),
+      model_combined_url:          (h.model_combined_url as string | null) ?? null,
+      model_combined_scale:        h.model_combined_scale != null ? Number(h.model_combined_scale) : 1,
+      bore_centre_to_door_face_mm: h.bore_centre_to_door_face_mm != null ? Number(h.bore_centre_to_door_face_mm) : null,
+      open_angle_deg:              h.opening_angle != null ? Number(h.opening_angle) : null,
+    })
+  }
+  const plateById = new Map<string, HingePlateInput>()
+  for (const p of ((plRes as { data: unknown[] | null }).data ?? []) as Record<string, unknown>[]) {
+    plateById.set(p.id as string, {
+      id:                    p.id as string,
+      plate_offset_mm:       Number(p.plate_offset_mm ?? 0),
+      mounting_hole_pattern: toHingeHoles(p.mounting_hole_pattern),
+      compatible_surfaces:   Array.isArray(p.compatible_surfaces) ? (p.compatible_surfaces as HingePlateInput['compatible_surfaces']) : ['side'],
+    })
+  }
+  const countRules: HingeRuleInput[] = (((ruleRes as { data: unknown[] | null }).data ?? []) as Record<string, unknown>[]).map(r => ({
+    max_height_mm:   Number(r.max_height_mm),
+    hinge_count:     Number(r.hinge_count),
+    top_inset_mm:    Number(r.top_inset_mm ?? 100),
+    bottom_inset_mm: Number(r.bottom_inset_mm ?? 100),
+  }))
+  return { hardwareById, plateById, countRules }
+}
+
+// Re-run the pure hinge resolver against a rebuilt cabinet using the loaded
+// hardware + persisted instances, recovering drills + 3D model fields.
+function reconstructHinges(
+  cabId: string,
+  built: ResolvedCabinet,
+  instancesByCab: Map<string, Record<string, unknown>[]>,
+  hardwareById:   Map<string, HingeHardwareInput>,
+  plateById:      Map<string, HingePlateInput>,
+  countRules:     HingeRuleInput[],
+  faceGrid:       FaceGridInput | null,
+): ResolvedCabinet['hinge_instances'] {
+  const instances = instancesByCab.get(cabId)
+  if (!instances || instances.length === 0) return []
+  const hw = hardwareById.get(instances[0].hinge_hardware_id as string)
+  if (!hw) return []
+  const plateId = (instances[0].hinge_plate_id as string | null) ?? null
+  const plate = plateId ? (plateById.get(plateId) ?? null) : null
+  const existing: ExistingHingeInput[] = instances.map(e => ({
+    row_index:               Number(e.row_index),
+    col_index:               Number(e.col_index),
+    sort_order:              Number(e.sort_order),
+    y_position_mm:           Number(e.y_position_mm),
+    y_locked:                Boolean(e.y_locked),
+    hinge_edge:              (e.hinge_edge as ExistingHingeInput['hinge_edge']) ?? 'left',
+    mounting_surface:        (e.mounting_surface as ExistingHingeInput['mounting_surface']) ?? 'auto',
+    shelf_snap_tolerance_mm: Number(e.shelf_snap_tolerance_mm ?? 3),
+    hinge_plate_id:          (e.hinge_plate_id as string | null) ?? null,
+  }))
+  const cab = {
+    hinge_hardware: hw, hinge_plate: plate, hinge_count_rules: countRules, existing_hinges: existing,
+    face_grid: faceGrid ?? undefined,
+  } as unknown as CabinetInput
+  return resolveHinges(cab, built.face_zones, built.case_parts, built.internal_parts)
 }
 
 export async function dbSaveWall(data: Omit<Wall, 'id' | 'created_at'>): Promise<Wall | null> {

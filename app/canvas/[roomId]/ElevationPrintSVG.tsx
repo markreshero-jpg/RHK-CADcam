@@ -255,6 +255,16 @@ export default function ElevationPrintSVG({
               )
             })}
 
+            {/* Hinge cup + plate bore positions (grouped with door-swing detail). */}
+            {show.doorSwings && (rp.hinge_instances ?? []).map((h, hi) => (
+              <g key={`hg-${hi}`}>
+                {[...h.cup_drills, ...h.plate_drills].map((dr, j) => {
+                  const c = toSVG(dr.x, dr.y, 0, 0)
+                  return <circle key={j} cx={c.x} cy={c.y} r={Math.max(dr.radius, 0.5)} fill="none" stroke={INK2} strokeWidth={thinSW} />
+                })}
+              </g>
+            ))}
+
             {/* Shelves — thin clean dashed (internal parts that aren't drawer-box parts) */}
             {show.shelves && rp.internal_parts.filter(p => !p.part_type.startsWith('inner_drawer')).map((p, i) => {
               const { ex, ey, ew, eh } = shelfElevRect(p)

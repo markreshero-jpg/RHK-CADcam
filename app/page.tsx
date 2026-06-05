@@ -3,6 +3,7 @@ import { createServerClient } from '@/src/lib/supabase-server'
 import { SignOutButton } from './SignOutButton'
 import { ThemeToggle } from './ThemeToggle'
 import { Project, Room } from '@/src/lib/types'
+import ProjectCard from './ProjectCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,50 +40,9 @@ const FolderIcon = () => (
   </svg>
 )
 
-const ClientIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="6" cy="4" r="2.2"/>
-    <path d="M1.5 10.5 C1.5 8.3 3.5 6.5 6 6.5 C8.5 6.5 10.5 8.3 10.5 10.5"/>
-  </svg>
-)
-
-const LocationIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M5.5 1 C3.6 1 2 2.6 2 4.5 C2 6.8 5.5 10.5 5.5 10.5 C5.5 10.5 9 6.8 9 4.5 C9 2.6 7.4 1 5.5 1 Z"/>
-    <circle cx="5.5" cy="4.5" r="1.2" fill="currentColor" fillOpacity="0.5"/>
-  </svg>
-)
-
-const CalendarIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="1" y="2" width="9" height="8.5" rx="0.8"/>
-    <line x1="1" y1="4.5" x2="10" y2="4.5"/>
-    <line x1="3.5" y1="1" x2="3.5" y2="3"/>
-    <line x1="7.5" y1="1" x2="7.5" y2="3"/>
-  </svg>
-)
-
-const ArrowRightIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="2" y1="6.5" x2="11" y2="6.5"/>
-    <polyline points="7,3 11,6.5 7,10"/>
-  </svg>
-)
-
-// ── Status config ─────────────────────────────────────────────────────────────
-
-const STATUS_CONFIG: Record<string, { badge: string; bar: string; dot: string }> = {
-  draft:         { badge: 'bg-surface-3/60 text-ink-muted',          bar: 'bg-gray-600',    dot: 'bg-gray-500' },
-  quoted:        { badge: 'bg-yellow-900/50 text-yellow-300',        bar: 'bg-yellow-600',  dot: 'bg-yellow-500' },
-  approved:      { badge: 'bg-blue-900/50 text-blue-300',            bar: 'bg-blue-600',    dot: 'bg-blue-500' },
-  in_production: { badge: 'bg-green-900/50 text-green-300',          bar: 'bg-green-600',   dot: 'bg-green-500' },
-  completed:     { badge: 'bg-purple-900/50 text-purple-300',        bar: 'bg-purple-600',  dot: 'bg-purple-500' },
-  archived:      { badge: 'bg-surface-2/60 text-ink-subtle',         bar: 'bg-gray-700',    dot: 'bg-gray-600' },
-}
-
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-async function getProjectsWithFirstRoom(): Promise<(Project & { first_room_id: string | null })[]> {
+async function getProjectsWithRooms(): Promise<(Project & { rooms: Room[] })[]> {
   const supabase = await createServerClient()
 
   const { data: projects } = await supabase
@@ -94,22 +54,25 @@ async function getProjectsWithFirstRoom(): Promise<(Project & { first_room_id: s
 
   const { data: rooms } = await supabase
     .from('rooms')
-    .select('id, project_id')
+    .select('*')
     .in('project_id', projects.map((p) => p.id))
-    .order('created_at', { ascending: true })
+    .order('sort_order', { ascending: true })
 
-  const firstRoom: Record<string, string> = {}
-  for (const r of (rooms ?? []) as Pick<Room, 'id' | 'project_id'>[]) {
-    if (!firstRoom[r.project_id]) firstRoom[r.project_id] = r.id
+  const roomsByProject: Record<string, Room[]> = {}
+  for (const r of (rooms ?? []) as Room[]) {
+    (roomsByProject[r.project_id] ??= []).push(r)
   }
 
-  return projects.map((p) => ({ ...p, first_room_id: firstRoom[p.id] ?? null }))
+  return projects.map((p) => ({ ...p, rooms: roomsByProject[p.id] ?? [] }))
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function HomePage() {
-  const projects = await getProjectsWithFirstRoom()
+export default async function HomePage({ searchParams }: {
+  searchParams: Promise<{ expand?: string }>
+}) {
+  const { expand } = await searchParams
+  const projects = await getProjectsWithRooms()
 
   return (
     <div className="min-h-screen bg-canvas text-ink">
@@ -177,73 +140,9 @@ export default async function HomePage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {projects.map((p) => {
-              const cfg = STATUS_CONFIG[p.status] ?? STATUS_CONFIG.draft
-              return (
-                <div
-                  key={p.id}
-                  className="relative bg-surface border border-edge hover:border-edge-strong rounded-lg overflow-hidden transition-all group"
-                >
-                  {/* Status bar */}
-                  <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${cfg.bar}`} />
-
-                  <div className="flex items-center gap-4 px-5 py-3.5 pl-6">
-
-                    {/* Folder icon */}
-                    <span className="flex-none text-ink-subtle group-hover:text-ink-muted transition-colors">
-                      <FolderIcon />
-                    </span>
-
-                    {/* Main info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <span className="font-semibold text-ink text-sm">{p.name}</span>
-                        <span className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-full font-medium ${cfg.badge}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                          {p.status.replace('_', ' ')}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                        {p.client_name && (
-                          <span className="flex items-center gap-1 text-xs text-ink-muted">
-                            <ClientIcon />
-                            {p.client_name}
-                          </span>
-                        )}
-                        {p.client_address && (
-                          <span className="flex items-center gap-1 text-xs text-ink-subtle">
-                            <LocationIcon />
-                            {p.client_address}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Right side */}
-                    <div className="flex items-center gap-5 shrink-0">
-                      <span className="flex items-center gap-1.5 text-[11px] text-ink-subtle">
-                        <CalendarIcon />
-                        {new Date(p.created_at).toLocaleDateString('en-AU', {
-                          day: 'numeric', month: 'short', year: 'numeric',
-                        })}
-                      </span>
-
-                      {p.first_room_id ? (
-                        <Link
-                          href={`/canvas/${p.first_room_id}`}
-                          className="flex items-center gap-2 text-xs font-medium text-accent-ink hover:text-white bg-accent/10 hover:bg-accent border border-accent/30 hover:border-accent px-3 py-1.5 rounded-lg transition-all"
-                        >
-                          Open Canvas
-                          <ArrowRightIcon />
-                        </Link>
-                      ) : (
-                        <span className="text-xs text-ink-subtle italic">No rooms</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+            {projects.map((p) => (
+              <ProjectCard key={p.id} project={p} initialRooms={p.rooms} defaultExpanded={p.id === expand} />
+            ))}
           </div>
         )}
       </main>

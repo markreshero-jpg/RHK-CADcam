@@ -10,6 +10,7 @@ import { Suspense, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges } from '@react-three/drei'
 import { getUserPrefs } from '@/src/lib/userPrefs'
+import { fmtMm } from '@/src/lib/format'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -226,22 +227,22 @@ export function PartPropertiesPanel({
       <div className="px-3 py-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pb-0.5">Size</span>
         <span className="text-gray-500">Width</span>
-        <span className="text-gray-200 text-right font-mono">{Math.round(part.w)} mm</span>
+        <span className="text-gray-200 text-right font-mono">{fmtMm(part.w)} mm</span>
         <span className="text-gray-500">Height</span>
-        <span className="text-gray-200 text-right font-mono">{Math.round(part.h)} mm</span>
+        <span className="text-gray-200 text-right font-mono">{fmtMm(part.h)} mm</span>
         <span className="text-gray-500">Depth</span>
-        <span className="text-gray-200 text-right font-mono">{Math.round(part.d)} mm</span>
+        <span className="text-gray-200 text-right font-mono">{fmtMm(part.d)} mm</span>
         <span className="text-gray-500">Thickness</span>
-        <span className="text-gray-200 text-right font-mono">{Math.round(part.thickness)} mm</span>
+        <span className="text-gray-200 text-right font-mono">{fmtMm(part.thickness)} mm</span>
         {(part.x != null || part.y != null || part.z != null) && (
           <>
             <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Position</span>
             <span className="text-gray-500">X</span>
-            <span className="text-gray-200 text-right font-mono">{Math.round(part.x ?? 0)} mm</span>
+            <span className="text-gray-200 text-right font-mono">{fmtMm(part.x ?? 0)} mm</span>
             <span className="text-gray-500">Y</span>
-            <span className="text-gray-200 text-right font-mono">{Math.round(part.y ?? 0)} mm</span>
+            <span className="text-gray-200 text-right font-mono">{fmtMm(part.y ?? 0)} mm</span>
             <span className="text-gray-500">Z</span>
-            <span className="text-gray-200 text-right font-mono">{Math.round(part.z ?? 0)} mm</span>
+            <span className="text-gray-200 text-right font-mono">{fmtMm(part.z ?? 0)} mm</span>
           </>
         )}
         {(part.ax != null || part.ay != null || part.az != null) && (

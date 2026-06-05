@@ -21,9 +21,15 @@ import {
   PartShape, SlideShape, caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3,
   doorProfileSvg,
 } from './cabinetEditSvgHelpers'
-import { cabinetSeamDrills, type DrillAxis } from '@/src/lib/jointDrilling'
+import { cabinetSeamDrills, orientSeamDrills, caseBoxByKey, type DrillAxis } from '@/src/lib/jointDrilling'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
+import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
 import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
+import { hingePlacement, hingeSilhouetteOutline } from '@/src/lib/hingeSilhouette'
+import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
+
+// Hinge cup/plate drill marker colour (distinct from amber slide drills).
+const HINGE_DRILL_COL = '#a855f7'   // violet-500
 
 // Fallback approximation constants (used when resolver data not available)
 const PT   = 18
@@ -269,29 +275,68 @@ function useSvgZoom(initW: number, initH: number) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  return { svgRef, viewBox: `${vb.x} ${vb.y} ${vb.w} ${vb.h}` }
+  return { svgRef, viewBox: `${vb.x} ${vb.y} ${vb.w} ${vb.h}`, vb, initW: initRef.current.w }
+}
+
+// ── Hinge silhouettes ──────────────────────────────────────────────────────────
+// Projects each door hinge's combined GLB onto the current view, exactly like the
+// drawer-slide silhouettes. Loads the model triangles on demand; renders nothing
+// (the cup/plate drill markers still show) until the model resolves.
+function HingeShapes({ rp, project }: {
+  rp: ResolvedCabinet
+  project: (x: number, y: number, z: number) => { x: number; y: number }
+}) {
+  const hinges = (rp.hinge_instances ?? []).filter(h => h.model_url)
+  const refs = useMemo(
+    () => hinges.map(h => ({ model_url: h.model_url, model_format: 'glb' as const })),
+    [hinges],
+  )
+  const triMap = useSlideTriangles(refs)
+  const zoneByKey = useMemo(() => {
+    const m = new Map<string, ResolvedFaceZone>()
+    for (const z of rp.face_zones) if (z.face_type === 'door') m.set(`${z.row_index}_${z.col_index}`, z)
+    return m
+  }, [rp.face_zones])
+
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      {hinges.map((h, i) => {
+        const z = zoneByKey.get(`${h.row_index}_${h.col_index}`)
+        if (!z || (z.hinge_side !== 'left' && z.hinge_side !== 'right')) return null
+        const tris = h.model_url ? triMap.get(`glb:${h.model_url}`) : undefined
+        if (!tris || !tris.length) return null
+        const pl = hingePlacement(h, { x: z.X, y: z.Y, z: z.Z, w: z.DY, d: z.DZ }, z.hinge_side)
+        // Outline only (boundary), not a filled fill — keeps the drawing clean.
+        const d = hingeSilhouetteOutline(tris, pl, project)
+        if (!d) return null
+        return <path key={i} d={d} fill="none" stroke="#8b919b" strokeWidth={0.5}
+          strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      })}
+    </g>
+  )
 }
 
 // ── Resolved views ────────────────────────────────────────────────────────────
 
-export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
+export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
-  showDrilling?: boolean
+  showDrilling?: boolean; measureMode?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
 }) {
   const { dx, dy } = cab
-  const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
-  const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? []) : []), [rp, showDrilling])
+  const drills = useMemo(() => (showDrilling ? orientSeamDrills(cabinetSeamDrills(rp), caseBoxByKey(rp), partOverrides) : []), [rp, showDrilling, partOverrides])
+  const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? [], rp.internal_slides ?? []) : []), [rp, showDrilling])
+  const hingeDrills = useMemo(() => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []), [rp, showDrilling])
   const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
   const triMap = useSlideTriangles(allSlides)
   const pl = 80, pt = 50, pr = 40, pb = 40
   const vw = dx + pl + pr
   const vh = dy + pt + pb
   const ox = pl, oy = pt
-  const { svgRef, viewBox } = useSvgZoom(vw, vh)
+  const { svgRef, viewBox, vb, initW } = useSvgZoom(vw, vh)
 
   function toSVG(ex: number, ey: number, ew: number, eh: number) {
     return { x: ox + ex, y: oy + dy - ey, w: ew, h: eh }
@@ -301,7 +346,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   function sel(id: string) { return selectedPartId === id }
   function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
   function sw(id: string, base: number) { return sel(id) ? 2 : base }
-  const cp: React.CSSProperties = { cursor: 'pointer' }
+  const cp: React.CSSProperties = { cursor: measureMode ? 'crosshair' : 'pointer' }
   function faceColor(ft: string) { return ft === 'drawer_face' ? RC.drawer : RC.door }
 
   const partMap = new Map<string, PartMeta>()
@@ -332,19 +377,44 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
 
   const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
+  // Snap corners: every drawn part / hardware rect corner (SVG-user space).
+  const measurePts: MPt[] = []
+  if (measureMode) {
+    const push = (r: { x: number; y: number; w: number; h: number }) => measurePts.push(...rectCorners(r))
+    rp.case_parts.forEach(p => { const m = svgCaseMeta(p); const pp = applyOv(p, m.id, partOverrides); const { ex, ey, ew, eh } = elevRect({ ...pp, part_key: p.part_key }); push(toSVG(ex, ey, ew, eh)) })
+    rp.toekick_parts.forEach(p => { const m = svgTkMeta(p); const pp = applyOv(p, m.id, partOverrides); const { ex, ey, ew, eh } = tkElevRect(pp as typeof p); push(toSVG(ex, ey, ew, eh)) })
+    rp.internal_parts.forEach(p => { const m = svgIntMeta(p); const pp = applyOv(p, m.id, partOverrides); const { ex, ey, ew, eh } = intElevRect(pp as typeof p); push(toSVG(ex, ey, ew, eh)) })
+    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const m = svgZoneMeta(z); const pp = applyOv(z, m.id, partOverrides); const { ex, ey, ew, eh } = zoneElevRect(pp as typeof z); push(toSVG(ex, ey, ew, eh)) })
+    if (showInternals) {
+      ;(rp.drawer_stacks ?? []).forEach(stack => {
+        stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); const pp = applyOv(p, m.id, partOverrides); const { ex, ey, ew, eh } = dbElevRect(pp as typeof p); push(toSVG(ex, ey, ew, eh)) })
+        stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); const pp = applyOv(s, m.id, partOverrides); const { ex, ey, ew, eh } = slideElevRect(pp as typeof s); push(toSVG(ex, ey, ew, eh)) })
+      })
+      ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); const pp = applyOv(s, m.id, partOverrides); const { ex, ey, ew, eh } = slideElevRect(pp as typeof s); push(toSVG(ex, ey, ew, eh)) })
+    }
+    ;(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0 && Number(p.dy) > 0).forEach(p => push(toSVG(p.x, p.y + Number(p.dz), Number(p.dy), Number(p.dz))))
+    // Drill-hole centres (carcase joints + slide-imposed), same projection as DrillOverlay.
+    drills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oy + dy - dr.y }))
+    slideDrills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oy + dy - dr.y }))
+    hingeDrills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oy + dy - dr.y }))
+  }
+  const measure = useMeasure(!!measureMode, svgRef, measurePts)
+
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
+    if (measureMode) { e.stopPropagation(); measure.onClick(e); return }
     e.stopPropagation()
     onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
   }
 
   function handleContextMenu(e: React.MouseEvent<SVGSVGElement>) {
     e.preventDefault(); e.stopPropagation()
+    if (measureMode) { measure.cancel(); return }
     const hits = svgHitParts(e, partMap)
     if (hits.length > 0) onPartContextMenu?.(hits, e.clientX, e.clientY)
   }
 
   return (
-    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick} onContextMenu={handleContextMenu}>
+    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick} onContextMenu={handleContextMenu} onPointerMove={measureMode ? measure.onMove : undefined}>
       <rect x={ox} y={oy} width={dx} height={dy} fill={wireMode ? '#050a12' : C_INT} />
 
       {showInternals && (rp.drawer_stacks ?? []).flatMap((stack, si) => [
@@ -452,10 +522,13 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
           strokeDasharray={sel(meta.id) ? undefined : '5 3'}
           data-part-id={meta.id} style={cp} />
       })}
-      <DrillOverlay drills={drills} perp="z"
+      <DrillOverlay drills={drills}
+        project={(x, y) => ({ x: ox + x, y: oy + dy - y })} />
+      <HingeShapes rp={rp} project={proj} />
+      <SlideDrillOverlay drills={slideDrills} perp="z"
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
-      <SlideDrillOverlay drills={slideDrills} perp="z"
+      <SlideDrillOverlay drills={hingeDrills} perp="z" color={HINGE_DRILL_COL}
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
       <rect x={ox} y={oy} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
@@ -466,21 +539,23 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         <OriginMarker sx={ox + selOrigin.x} sy={oy + dy - selOrigin.y} hLabel="X" vLabel="Y" />
       )}
       {viewLabel(ox+dx/2, vh-14, 'ELEVATION — WIDTH × HEIGHT')}
+      {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={vb.w / initW} vb={vb} pts={measurePts} />}
     </svg>
   )
 }
 
-export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
+export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
-  showDrilling?: boolean
+  showDrilling?: boolean; measureMode?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
 }) {
   const { dx, dz } = cab
-  const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
-  const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? []) : []), [rp, showDrilling])
+  const drills = useMemo(() => (showDrilling ? orientSeamDrills(cabinetSeamDrills(rp), caseBoxByKey(rp), partOverrides) : []), [rp, showDrilling, partOverrides])
+  const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? [], rp.internal_slides ?? []) : []), [rp, showDrilling])
+  const hingeDrills = useMemo(() => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []), [rp, showDrilling])
   const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
   const triMap = useSlideTriangles(allSlides)
   const wallH = 40
@@ -488,7 +563,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
   const vw = dx + pl + pr
   const vh = dz + pt + pb
   const ox = pl, oz = pt
-  const { svgRef, viewBox } = useSvgZoom(vw, vh)
+  const { svgRef, viewBox, vb, initW } = useSvgZoom(vw, vh)
 
   function toSVG(tx: number, tz: number, tw: number, td: number) {
     return { x: ox + tx, y: oz + tz, w: tw, h: td }
@@ -498,7 +573,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
   function sel(id: string) { return selectedPartId === id }
   function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
   function sw(id: string, base: number) { return sel(id) ? 2 : base }
-  const cp: React.CSSProperties = { cursor: 'pointer' }
+  const cp: React.CSSProperties = { cursor: measureMode ? 'crosshair' : 'pointer' }
 
   const partMap = new Map<string, PartMeta>()
   rp.case_parts.forEach(p => {
@@ -528,19 +603,44 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
 
   const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
+  // Snap corners: every drawn part / hardware rect corner (SVG-user space).
+  const measurePts: MPt[] = []
+  if (measureMode) {
+    const push = (r: { x: number; y: number; w: number; h: number }) => measurePts.push(...rectCorners(r))
+    rp.case_parts.forEach(p => { const m = svgCaseMeta(p); const pp = applyOv(p, m.id, partOverrides); const r = topRect(pp as typeof p); push(toSVG(r.tx, r.tz, r.tw, r.td)) })
+    rp.toekick_parts.forEach(p => { const m = svgTkMeta(p); const pp = applyOv(p, m.id, partOverrides); const r = tkTopRect(pp as typeof p); push(toSVG(r.tx, r.tz, r.tw, r.td)) })
+    rp.internal_parts.forEach(p => { const m = svgIntMeta(p); const pp = applyOv(p, m.id, partOverrides); const r = intTopRect(pp as typeof p); push(toSVG(r.tx, r.tz, r.tw, r.td)) })
+    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const m = svgZoneMeta(z); const pp = applyOv(z, m.id, partOverrides); const r = zoneTopRect(pp as typeof z); push(toSVG(r.tx, r.tz, r.tw, r.td)) })
+    if (showInternals) {
+      ;(rp.drawer_stacks ?? []).forEach(stack => {
+        stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); const pp = applyOv(p, m.id, partOverrides); const r = dbTopRect(pp as typeof p); push(toSVG(r.tx, r.tz, r.tw, r.td)) })
+        stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); const pp = applyOv(s, m.id, partOverrides); const r = slideTopRect(pp as typeof s); push(toSVG(r.tx, r.tz, r.tw, r.td)) })
+      })
+      ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); const pp = applyOv(s, m.id, partOverrides); const r = slideTopRect(pp as typeof s); push(toSVG(r.tx, r.tz, r.tw, r.td)) })
+    }
+    ;(customParts ?? []).filter(p => p.visible && Number(p.dy) > 0 && Number(p.dx) > 0).forEach(p => push(toSVG(p.x, p.z, Number(p.dy), Number(p.dx))))
+    // Drill-hole centres (carcase joints + slide-imposed), same projection as DrillOverlay.
+    drills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oz + dr.z }))
+    slideDrills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oz + dr.z }))
+    hingeDrills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oz + dr.z }))
+  }
+  const measure = useMeasure(!!measureMode, svgRef, measurePts)
+
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
+    if (measureMode) { e.stopPropagation(); measure.onClick(e); return }
     e.stopPropagation()
     onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
   }
 
   function handleContextMenu(e: React.MouseEvent<SVGSVGElement>) {
     e.preventDefault(); e.stopPropagation()
+    if (measureMode) { measure.cancel(); return }
     const hits = svgHitParts(e, partMap)
     if (hits.length > 0) onPartContextMenu?.(hits, e.clientX, e.clientY)
   }
 
   return (
-    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick} onContextMenu={handleContextMenu}>
+    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick} onContextMenu={handleContextMenu} onPointerMove={measureMode ? measure.onMove : undefined}>
       <rect x={ox} y={oz - wallH} width={dx} height={wallH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
       <text x={ox + dx/2} y={oz - wallH/2} textAnchor="middle" dominantBaseline="central"
         fontSize={18} fill="#475569" fontFamily="system-ui,sans-serif" letterSpacing={2}>WALL</text>
@@ -635,10 +735,13 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
           strokeDasharray={sel(meta.id) ? undefined : '5 3'}
           data-part-id={meta.id} style={cp} />
       })}
-      <DrillOverlay drills={drills} perp="y"
+      <DrillOverlay drills={drills}
+        project={(x, _y, z) => ({ x: ox + x, y: oz + z })} />
+      <HingeShapes rp={rp} project={proj} />
+      <SlideDrillOverlay drills={slideDrills} perp="y"
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'z+' ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 }} />
-      <SlideDrillOverlay drills={slideDrills} perp="y"
+      <SlideDrillOverlay drills={hingeDrills} perp="y" color={HINGE_DRILL_COL}
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'z+' ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 }} />
       <rect x={ox} y={oz} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
@@ -650,21 +753,23 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, se
         <OriginMarker sx={ox + selOrigin.x} sy={oz + selOrigin.z} hLabel="X" vLabel="Z" vUp={false} />
       )}
       {viewLabel(ox + dx/2, vh - 14, 'TOP — WIDTH × DEPTH')}
+      {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={vb.w / initW} vb={vb} pts={measurePts} />}
     </svg>
   )
 }
 
-export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
+export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
-  showDrilling?: boolean
+  showDrilling?: boolean; measureMode?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
 }) {
   const { dz, dy } = cab
-  const drills = useMemo(() => (showDrilling ? cabinetSeamDrills(rp) : []), [rp, showDrilling])
-  const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? []) : []), [rp, showDrilling])
+  const drills = useMemo(() => (showDrilling ? orientSeamDrills(cabinetSeamDrills(rp), caseBoxByKey(rp), partOverrides) : []), [rp, showDrilling, partOverrides])
+  const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? [], rp.internal_slides ?? []) : []), [rp, showDrilling])
+  const hingeDrills = useMemo(() => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []), [rp, showDrilling])
   const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
   const triMap = useSlideTriangles(allSlides)
   const wallW = 40
@@ -684,7 +789,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
   const vw = dz + pl + pr
   const vh = dy + pt + pb
   const oz = pl, oy = pt
-  const { svgRef, viewBox } = useSvgZoom(vw, vh)
+  const { svgRef, viewBox, vb, initW } = useSvgZoom(vw, vh)
 
   function toSVG(sz: number, cy_top: number, w: number, h: number) {
     return { x: oz + sz, y: oy + dy - cy_top, w, h }
@@ -694,7 +799,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
   function sel(id: string) { return selectedPartId === id }
   function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
   function sw(id: string, base: number) { return sel(id) ? 2 : base }
-  const cp: React.CSSProperties = { cursor: 'pointer' }
+  const cp: React.CSSProperties = { cursor: measureMode ? 'crosshair' : 'pointer' }
 
   const partMap = new Map<string, PartMeta>()
   rp.case_parts.forEach(p => {
@@ -724,19 +829,44 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
 
   const selOrigin = selectedPartId ? partMap.get(selectedPartId) ?? null : null
 
+  // Snap corners: every drawn part / hardware rect corner (SVG-user space).
+  const measurePts: MPt[] = []
+  if (measureMode) {
+    const push = (r: { x: number; y: number; w: number; h: number }) => measurePts.push(...rectCorners(r))
+    rp.case_parts.forEach(p => { const m = svgCaseMeta(p); const pp = applyOv(p, m.id, partOverrides); const r = sideRect(pp as typeof p); if (r) push(toSVG(r.sz, r.cy_top, r.sw, r.sh)) })
+    rp.toekick_parts.forEach(p => { const m = svgTkMeta(p); const pp = applyOv(p, m.id, partOverrides); const r = tkSideRect(pp as typeof p); push(toSVG(r.sz, r.cy_top, r.sw, r.sh)) })
+    rp.internal_parts.forEach(p => { const m = svgIntMeta(p); const pp = applyOv(p, m.id, partOverrides); const r = intSideRect(pp as typeof p); push(toSVG(r.sz, r.cy_top, r.sw, r.sh)) })
+    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const m = svgZoneMeta(z); const pp = applyOv(z, m.id, partOverrides); const r = zoneSideRect(pp as typeof z); push(toSVG(r.sz, r.cy_top, r.sw, r.sh)) })
+    if (showInternals) {
+      ;(rp.drawer_stacks ?? []).forEach(stack => {
+        stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); const pp = applyOv(p, m.id, partOverrides); const r = dbSideRect(pp as typeof p); push(toSVG(r.sz, r.cy_top, r.sw, r.sh)) })
+        stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); const pp = applyOv(s, m.id, partOverrides); const r = slideSideRect(pp as typeof s); push(toSVG(r.sz, r.cy_top, r.sw, r.sh)) })
+      })
+      ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); const pp = applyOv(s, m.id, partOverrides); const r = slideSideRect(pp as typeof s); push(toSVG(r.sz, r.cy_top, r.sw, r.sh)) })
+    }
+    ;(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0 && Number(p.dx) > 0).forEach(p => push(toSVG(p.z, p.y + Number(p.dz), Number(p.dx), Number(p.dz))))
+    // Drill-hole centres (carcase joints + slide-imposed), same projection as DrillOverlay.
+    drills.forEach(dr => measurePts.push({ x: oz + dr.z, y: oy + dy - dr.y }))
+    slideDrills.forEach(dr => measurePts.push({ x: oz + dr.z, y: oy + dy - dr.y }))
+    hingeDrills.forEach(dr => measurePts.push({ x: oz + dr.z, y: oy + dy - dr.y }))
+  }
+  const measure = useMeasure(!!measureMode, svgRef, measurePts)
+
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
+    if (measureMode) { e.stopPropagation(); measure.onClick(e); return }
     e.stopPropagation()
     onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
   }
 
   function handleContextMenu(e: React.MouseEvent<SVGSVGElement>) {
     e.preventDefault(); e.stopPropagation()
+    if (measureMode) { measure.cancel(); return }
     const hits = svgHitParts(e, partMap)
     if (hits.length > 0) onPartContextMenu?.(hits, e.clientX, e.clientY)
   }
 
   return (
-    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick} onContextMenu={handleContextMenu}>
+    <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%" style={{ maxHeight: '100%', maxWidth: '100%', cursor: 'crosshair' }} onClick={handleClick} onContextMenu={handleContextMenu} onPointerMove={measureMode ? measure.onMove : undefined}>
       <rect x={oz - wallW} y={oy} width={wallW} height={dy} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
       <text x={oz - wallW/2} y={oy + dy/2} textAnchor="middle" dominantBaseline="central"
         fontSize={16} fill="#475569" fontFamily="system-ui,sans-serif"
@@ -833,10 +963,13 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
           strokeDasharray={sel(meta.id) ? undefined : '5 3'}
           data-part-id={meta.id} style={cp} />
       })}
-      <DrillOverlay drills={drills} perp="x"
+      <DrillOverlay drills={drills}
+        project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })} />
+      <HingeShapes rp={rp} project={proj} />
+      <SlideDrillOverlay drills={slideDrills} perp="x"
         project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'z+' ? { dx: 1, dy: 0 } : a === 'z-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
-      <SlideDrillOverlay drills={slideDrills} perp="x"
+      <SlideDrillOverlay drills={hingeDrills} perp="x" color={HINGE_DRILL_COL}
         project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'z+' ? { dx: 1, dy: 0 } : a === 'z-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
       <rect x={oz} y={oy} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
@@ -861,6 +994,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, s
       {selOrigin != null && selOrigin.z != null && selOrigin.y != null && (
         <OriginMarker sx={oz + selOrigin.z} sy={oy + dy - selOrigin.y} hLabel="Z" vLabel="Y" />
       )}
+      {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={vb.w / initW} vb={vb} pts={measurePts} />}
     </svg>
   )
 }

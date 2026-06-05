@@ -35,8 +35,8 @@ const RULE_LABELS: Record<RuleKey, string> = {
   ADJSR:   'Adj. Shelf Right Notch (mm)',
   FIXSB_F: 'Fixed Shelf Front Setback (mm)',
   FIXSB_B: 'Fixed Shelf Back Setback (mm)',
-  IDCL:          'Drawer Box Clearance Left (mm)',
-  IDCR:          'Drawer Box Clearance Right (mm)',
+  IDCL:          'Inner Drawer Front Clearance Left (mm)',
+  IDCR:          'Inner Drawer Front Clearance Right (mm)',
   IDFAO:         'Drawer Box Face Above Opening (mm)',
   SLIDE_SETBACK: 'Min Depth Behind Slide (mm)',
   REVT:    'Face Reveal Top (mm)',
@@ -82,6 +82,8 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
   const [roomDx, setRoomDx] = useState(room.room_dx ?? '')
   const [roomDy, setRoomDy] = useState(room.room_dy ?? '')
   const [roomDz, setRoomDz] = useState(room.room_dz ?? '')
+  const [wallDy, setWallDy] = useState(room.wall_dy ?? '')
+  const [wallDz, setWallDz] = useState(room.wall_dz ?? '')
   const [soffitHeight, setSoffitHeight] = useState(room.soffit_height ?? '')
   const [wallCabTop, setWallCabTop] = useState(room.wall_cabinet_top ?? '')
   const [notes, setNotes] = useState(room.notes ?? '')
@@ -154,6 +156,8 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
       room_dx: roomDx === '' ? null : Number(roomDx),
       room_dy: roomDy === '' ? null : Number(roomDy),
       room_dz: roomDz === '' ? null : Number(roomDz),
+      wall_dy: wallDy === '' ? null : Number(wallDy),
+      wall_dz: wallDz === '' ? null : Number(wallDz),
       soffit_height: soffitHeight === '' ? null : Number(soffitHeight),
       wall_cabinet_top: wallCabTop === '' ? null : Number(wallCabTop),
       notes: notes.trim() || null,
@@ -211,6 +215,15 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
                   <DimField label="Ceiling Height (mm)" placeholder="not set" value={String(roomDy)} onChange={setRoomDy} />
                   <DimField label="Room Depth  (mm)" placeholder="not set" value={String(roomDz)} onChange={setRoomDz} />
                 </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Wall Parameters</p>
+                <div className="space-y-3">
+                  <DimField label="Default Wall Height (mm)" placeholder="not set" value={String(wallDy)} onChange={setWallDy} />
+                  <DimField label="Wall Thickness (mm)" placeholder="not set" value={String(wallDz)} onChange={setWallDz} />
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2">Inherited by new walls drawn on the canvas. Wall width is per-wall and set when drawing.</p>
               </div>
 
               <div className="border-t border-gray-800 pt-4">

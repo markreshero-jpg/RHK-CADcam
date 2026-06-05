@@ -3,7 +3,8 @@ import {
   CabinetInput, ConstructionRules, FaceGridInput, Section, EMPTY_SECTION, Material, DEFAULT_RULES,
   SlideProduct, SlideScheduleEntry, SlideDrillOp, DrawerBoxRules, DEFAULT_DB_RULES,
   JointTypeOp, JointTargetPart, JointMachineOp, JointFace,
-  RawProfileOp, ResolvedDoorStyleInput,
+  RawProfileOp, ResolvedDoorStyleInput, EdgeSides,
+  HingeRuleInput, HingeHardwareInput, HingePlateInput, ExistingHingeInput, HingeBoreHole,
 } from './types'
 import { mergeRules } from './mergeRules'
 
@@ -22,6 +23,20 @@ function dbRowToMaterial(row: Record<string, unknown>): Material {
   }
 }
 
+// Coerce a jsonb hole array (anchor_holes / mounting_hole_pattern) to typed holes.
+function toHoles(v: unknown): HingeBoreHole[] {
+  if (!Array.isArray(v)) return []
+  return v.map(h => {
+    const o = (h ?? {}) as Record<string, unknown>
+    return {
+      offset_x: Number(o.offset_x ?? 0),
+      offset_y: Number(o.offset_y ?? 0),
+      diameter: Number(o.diameter ?? 0),
+      depth:    Number(o.depth ?? 0),
+    }
+  })
+}
+
 // Resolve the door-style cascade per zone (zone → room → job) and load each
 // distinct style's catalogue thickness + profile operations. Returns a map
 // keyed `${row}_${col}` for door zones that resolve to a style.
@@ -29,6 +44,7 @@ async function resolveDoorStyles(
   grid: FaceGridInput,
   roomStyleId: string | null,
   projStyleId: string | null,
+  colourOverrideId: string | null = null,
 ): Promise<Record<string, ResolvedDoorStyleInput>> {
   // Effective style id per door zone (lowest set level wins).
   const zoneStyle = new Map<string, string>()
@@ -45,7 +61,7 @@ async function resolveDoorStyles(
     .from('door_styles')
     .select(`
       id, default_material_id,
-      catalogue:door_catalogue ( thickness_mm ),
+      catalogue:door_catalogue ( thickness_mm, edge_band_top, edge_band_bottom, edge_band_left, edge_band_right ),
       profile:door_profiles (
         id, profile_type,
         ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order )
@@ -54,22 +70,31 @@ async function resolveDoorStyles(
     .in('id', distinctIds)
   if (error) { console.error('[loadCabinetInput] door_styles query error:', error); return {} }
 
-  // Optional: resolve default colour → linked board material id (best effort).
-  const colourIds = ((data ?? []) as { default_material_id: string | null }[])
-    .map(r => r.default_material_id).filter((x): x is string => !!x)
+  // Optional: resolve colour → linked board material id + edge tape (best effort).
+  // The per-class override (when set) takes priority over each style's default.
+  const colourIds = [
+    ...((data ?? []) as { default_material_id: string | null }[]).map(r => r.default_material_id),
+    colourOverrideId,
+  ].filter((x): x is string => !!x)
   const colourMatById = new Map<string, string | null>()
+  const colourEbById  = new Map<string, string | null>()
   if (colourIds.length > 0) {
     const { data: cols } = await supabase
-      .from('door_schedule_materials').select('id, material_id').in('id', colourIds)
-    for (const c of (cols ?? []) as { id: string; material_id: string | null }[]) {
+      .from('door_schedule_materials').select('id, material_id, edgeband_id').in('id', colourIds)
+    for (const c of (cols ?? []) as { id: string; material_id: string | null; edgeband_id: string | null }[]) {
       colourMatById.set(c.id, c.material_id)
+      colourEbById.set(c.id, c.edgeband_id)
     }
   }
 
   type StyleRow = {
     id: string
     default_material_id: string | null
-    catalogue: { thickness_mm: number } | null
+    catalogue: {
+      thickness_mm: number
+      edge_band_top: boolean; edge_band_bottom: boolean
+      edge_band_left: boolean; edge_band_right: boolean
+    } | null
     profile: { id: string; profile_type: string; ops: Record<string, unknown>[] } | null
   }
   const styleById = new Map<string, ResolvedDoorStyleInput>()
@@ -86,13 +111,26 @@ async function resolveDoorStyles(
       expressions:         (o.expressions as Record<string, string> | null) ?? null,
       sort_order:          (o.sort_order as number) ?? 0,
     }))
+    const cat = row.catalogue
+    const edgeSides: EdgeSides | null = cat
+      ? ([
+          cat.edge_band_top    ? 'top'    : null,
+          cat.edge_band_bottom ? 'bottom' : null,
+          cat.edge_band_left   ? 'left'   : null,
+          cat.edge_band_right  ? 'right'  : null,
+        ].filter(Boolean) as EdgeSides)
+      : null
+    // Per-class colour override wins over the style's own default colour.
+    const effColourId = colourOverrideId ?? row.default_material_id
     styleById.set(row.id, {
       style_id:           row.id,
       profile_id:         row.profile?.id ?? null,
-      thickness_mm:       row.catalogue?.thickness_mm != null ? Number(row.catalogue.thickness_mm) : 18,
+      thickness_mm:       cat?.thickness_mm != null ? Number(cat.thickness_mm) : 18,
       profile_type:       (row.profile?.profile_type as ResolvedDoorStyleInput['profile_type']) ?? null,
       ops,
-      colour_material_id: row.default_material_id ? (colourMatById.get(row.default_material_id) ?? null) : null,
+      colour_material_id: effColourId ? (colourMatById.get(effColourId) ?? null) : null,
+      edgeband_id:        effColourId ? (colourEbById.get(effColourId) ?? null) : null,
+      edge_band_sides:    edgeSides,
     })
   }
 
@@ -157,7 +195,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   if (projectId) {
     const { data } = await supabase
       .from('projects')
-      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, inner_drawerbox_schedule_id, slide_schedule_id, default_door_style_id, rule_overrides')
+      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, inner_drawerbox_schedule_id, slide_schedule_id, default_door_style_id, base_door_style_id, wall_door_style_id, tall_door_style_id, base_door_colour_id, wall_door_colour_id, tall_door_colour_id, rule_overrides')
       .eq('id', projectId)
       .single()
     projRow = data as Record<string, string | null> | null
@@ -549,12 +587,41 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   }
 
   // ── 12. Resolve door styles per zone (cascade: zone → room → job) ───────────
+  // Job-level door style + colour overrides are per assembly-class group
+  // (base/wall/tall); corner variants share their base class.
+  const classGroup = cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner' ? 'wall'
+    : cab.assembly_class === 'tall' || cab.assembly_class === 'tall_corner' ? 'tall'
+    : 'base'
+  const classStyleOverride = (
+    classGroup === 'wall' ? projRow?.wall_door_style_id
+    : classGroup === 'tall' ? projRow?.tall_door_style_id
+    : projRow?.base_door_style_id
+  ) ?? null
+  const doorColourOverride = (
+    classGroup === 'wall' ? projRow?.wall_door_colour_id
+    : classGroup === 'tall' ? projRow?.tall_door_colour_id
+    : projRow?.base_door_colour_id
+  ) ?? null
+  // Effective job-level style for this cabinet's class: per-class override, else
+  // the job's parent default. Room/zone overrides still layer on top in resolveDoorStyles.
+  const effectiveJobStyleId = classStyleOverride
+    ?? (projRow?.default_door_style_id as string | null | undefined)
+    ?? null
+
   const faceGridInput = (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID
   const resolvedDoors = await resolveDoorStyles(
     faceGridInput,
     (room?.door_style_override_id as string | null | undefined) ?? null,
-    (projRow?.default_door_style_id as string | null | undefined) ?? null,
+    effectiveJobStyleId,
+    doorColourOverride,
   )
+
+  // ── 13. Resolve hinge hardware + count rules + existing instances ───────────
+  // All hinge queries are defensive (maybeSingle / tolerant of errors) so the
+  // resolver keeps working before the v0.6 migration is applied — a missing
+  // table just yields no hinge hardware and resolveCabinet skips hinges.
+  const { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges } =
+    await loadHingeInputs(cabinetId, cab.room_id as string, projectId)
 
   return {
     id:              cab.id,
@@ -616,5 +683,115 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
       return typeof g === 'number' && g >= 0 ? g : undefined
     })(),
     drawer_box_method_rules: methodRulesById,
+    hinge_hardware,
+    hinge_plate,
+    hinge_count_rules,
+    existing_hinges,
   }
+}
+
+// ── Hinge inputs loader ───────────────────────────────────────────────────────
+// Resolves the hinge schedule (room → project → shop → is_default), loads the
+// chosen cup + plate, the shop hinge_count_rules, and any persisted
+// hinge_instances for this cabinet (so the resolver can preserve y_locked rows).
+async function loadHingeInputs(
+  cabinetId: string,
+  roomId: string,
+  projectId: string | undefined,
+): Promise<{
+  hinge_hardware:   HingeHardwareInput | null
+  hinge_plate:      HingePlateInput | null
+  hinge_count_rules: HingeRuleInput[]
+  existing_hinges:  ExistingHingeInput[]
+}> {
+  const [roomSchedRes, projSchedRes, shopSchedRes, defaultSchedRes, rulesRes, existingRes] = await Promise.all([
+    supabase.from('rooms').select('hinge_schedule_id').eq('id', roomId).maybeSingle(),
+    projectId
+      ? supabase.from('projects').select('hinge_schedule_id').eq('id', projectId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase.from('shop_settings').select('hinge_schedule_id').limit(1).maybeSingle(),
+    supabase.from('hinge_schedules').select('id, hinge_id, hinge_plate_id').eq('is_default', true).limit(1).maybeSingle(),
+    supabase.from('hinge_count_rules').select('max_height_mm, hinge_count, top_inset_mm, bottom_inset_mm').eq('active', true).order('max_height_mm', { ascending: true }),
+    supabase.from('hinge_instances').select('row_index, col_index, sort_order, y_position_mm, y_locked, hinge_edge, mounting_surface, shelf_snap_tolerance_mm, hinge_plate_id').eq('cabinet_instance_id', cabinetId),
+  ])
+
+  const hinge_count_rules: HingeRuleInput[] = ((rulesRes.data ?? []) as Record<string, unknown>[]).map(r => ({
+    max_height_mm:   Number(r.max_height_mm),
+    hinge_count:     Number(r.hinge_count),
+    top_inset_mm:    Number(r.top_inset_mm ?? 100),
+    bottom_inset_mm: Number(r.bottom_inset_mm ?? 100),
+  }))
+
+  const existing_hinges: ExistingHingeInput[] = ((existingRes.data ?? []) as Record<string, unknown>[]).map(e => ({
+    row_index:               Number(e.row_index),
+    col_index:               Number(e.col_index),
+    sort_order:              Number(e.sort_order),
+    y_position_mm:           Number(e.y_position_mm),
+    y_locked:                Boolean(e.y_locked),
+    hinge_edge:              (e.hinge_edge as ExistingHingeInput['hinge_edge']) ?? 'left',
+    mounting_surface:        (e.mounting_surface as ExistingHingeInput['mounting_surface']) ?? 'auto',
+    shelf_snap_tolerance_mm: Number(e.shelf_snap_tolerance_mm ?? 3),
+    hinge_plate_id:          (e.hinge_plate_id as string | null) ?? null,
+  }))
+
+  // Effective hinge schedule: room → project → shop → is_default row.
+  const roomSchedId = (roomSchedRes.data as { hinge_schedule_id?: string | null } | null)?.hinge_schedule_id ?? null
+  const projSchedId = (projSchedRes.data as { hinge_schedule_id?: string | null } | null)?.hinge_schedule_id ?? null
+  const shopSchedId = (shopSchedRes.data as { hinge_schedule_id?: string | null } | null)?.hinge_schedule_id ?? null
+  const defaultSched = defaultSchedRes.data as { id: string; hinge_id: string | null; hinge_plate_id: string | null } | null
+  const effSchedId = roomSchedId ?? projSchedId ?? shopSchedId ?? defaultSched?.id ?? null
+
+  // Get the chosen schedule's hinge_id + hinge_plate_id.
+  let hingeId: string | null = null
+  let schedPlateId: string | null = null
+  if (effSchedId && effSchedId === defaultSched?.id) {
+    hingeId = defaultSched.hinge_id
+    schedPlateId = defaultSched.hinge_plate_id
+  } else if (effSchedId) {
+    const { data } = await supabase.from('hinge_schedules').select('hinge_id, hinge_plate_id').eq('id', effSchedId).maybeSingle()
+    hingeId = (data as { hinge_id: string | null } | null)?.hinge_id ?? null
+    schedPlateId = (data as { hinge_plate_id: string | null } | null)?.hinge_plate_id ?? null
+  }
+
+  if (!hingeId) return { hinge_hardware: null, hinge_plate: null, hinge_count_rules, existing_hinges }
+
+  // Load the cup, and the plate (scheduled plate, else the hinge's default plate).
+  const [hingeRes, plateRes] = await Promise.all([
+    supabase.from('hardware_hinges')
+      .select('id, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm')
+      .eq('id', hingeId).maybeSingle(),
+    schedPlateId
+      ? supabase.from('hardware_hinge_plates')
+          .select('id, plate_offset_mm, mounting_hole_pattern, compatible_surfaces')
+          .eq('id', schedPlateId).maybeSingle()
+      : supabase.from('hardware_hinge_plates')
+          .select('id, plate_offset_mm, mounting_hole_pattern, compatible_surfaces')
+          .eq('hinge_id', hingeId).eq('is_default', true).limit(1).maybeSingle(),
+  ])
+
+  const hRow = hingeRes.data as Record<string, unknown> | null
+  const hinge_hardware: HingeHardwareInput | null = hRow ? {
+    id:                 hRow.id as string,
+    default_hinge_edge: (hRow.default_hinge_edge as HingeHardwareInput['default_hinge_edge']) ?? 'left',
+    cup_x_from_edge_mm: Number(hRow.cup_x_from_edge_mm ?? 22),
+    cup_diameter:       hRow.cup_diameter != null ? Number(hRow.cup_diameter) : null,
+    cup_depth_mm:       hRow.cup_depth_mm != null ? Number(hRow.cup_depth_mm) : null,
+    anchor_holes:       toHoles(hRow.anchor_holes),
+    model_combined_url:          (hRow.model_combined_url as string | null) ?? null,
+    model_combined_scale:        hRow.model_combined_scale != null ? Number(hRow.model_combined_scale) : 1,
+    bore_centre_to_door_face_mm: hRow.bore_centre_to_door_face_mm != null ? Number(hRow.bore_centre_to_door_face_mm) : null,
+    open_angle_deg:              hRow.opening_angle != null ? Number(hRow.opening_angle) : null,
+  } : null
+
+  const pRow = plateRes.data as Record<string, unknown> | null
+  const hinge_plate: HingePlateInput | null = pRow ? {
+    id:                    pRow.id as string,
+    plate_offset_mm:       Number(pRow.plate_offset_mm ?? 0),
+    mounting_hole_pattern: toHoles(pRow.mounting_hole_pattern),
+    compatible_surfaces:   Array.isArray(pRow.compatible_surfaces)
+      ? (pRow.compatible_surfaces as HingePlateInput['compatible_surfaces'])
+      : ['side'],
+  } : null
+
+  return { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges }
 }

@@ -40,6 +40,8 @@ interface Catalogue {
   id: string; name: string; thickness_mm: number; construction: string
   substrate: string | null; description: string | null
   is_active: boolean; sort_order: number
+  edge_band_top: boolean; edge_band_bottom: boolean
+  edge_band_left: boolean; edge_band_right: boolean
 }
 interface Schedule {
   id: string; name: string; brand: string | null; description: string | null
@@ -52,6 +54,7 @@ interface SchedMaterial {
   id: string; schedule_id: string; colour_name: string; colour_code: string | null
   brand: string | null; finish: string | null; grain_direction: string
   grain_match_required: boolean; material_id: string | null
+  edgeband_id: string | null
   is_default: boolean; is_active: boolean; sort_order: number
 }
 interface Profile {
@@ -74,6 +77,7 @@ interface Style {
   is_active: boolean; sort_order: number
 }
 interface MatItem { id: string; name: string; dz: number }
+interface EdgeBand { id: string; name: string; thickness: number; color: string | null }
 
 const TABS = [
   { key: 'catalogue', label: 'Catalogue' },
@@ -110,12 +114,13 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
   const [ops, setOps]               = useState<ProfileOp[]>([])
   const [styles, setStyles]         = useState<Style[]>([])
   const [materials, setMaterials]   = useState<MatItem[]>([])
+  const [edgeBands, setEdgeBands]   = useState<EdgeBand[]>([])
 
   // ── Load everything (small tables) ─────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [catR, schR, lnkR, smR, prR, opR, stR, matR] = await Promise.all([
+      const [catR, schR, lnkR, smR, prR, opR, stR, matR, ebR] = await Promise.all([
         supabase.from('door_catalogue').select('*').order('sort_order').order('name'),
         supabase.from('door_material_schedules').select('*').order('sort_order').order('name'),
         supabase.from('door_catalogue_schedules').select('*'),
@@ -124,6 +129,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
         supabase.from('door_profile_operations').select('*').order('sort_order'),
         supabase.from('door_styles').select('*').order('sort_order').order('name'),
         supabase.from('materials').select('id,name,dz').eq('active', true).order('name'),
+        supabase.from('edge_banding').select('id,name,thickness,color').eq('active', true).order('name'),
       ])
       if (cancelled) return
       setCatalogue((catR.data ?? []) as Catalogue[])
@@ -134,6 +140,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
       setOps((opR.data ?? []) as ProfileOp[])
       setStyles((stR.data ?? []) as Style[])
       setMaterials((matR.data ?? []) as MatItem[])
+      setEdgeBands((ebR.data ?? []) as EdgeBand[])
       setLoading(false)
     }
     load()
@@ -200,6 +207,34 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
     if (activeTab === 'profiles')  { setProfiles(p => p.filter(x => x.id !== id)); setOps(p => p.filter(o => o.profile_id !== id)) }
     if (activeTab === 'styles')    setStyles(p => p.filter(x => x.id !== id))
     if (selectedId === id) setSelectedId(null)
+  }
+
+  // ── Duplicate a material schedule (+ all its colour rows) ────────────────────────
+  async function duplicateSchedule(id: string) {
+    const src = schedules.find(s => s.id === id)
+    if (!src) return
+    const { data: newSched, error } = await supabase.from('door_material_schedules')
+      .insert({ name: `${src.name} (copy)`, brand: src.brand, description: src.description, sort_order: src.sort_order })
+      .select().single()
+    if (error || !newSched) { alert(`Copy failed: ${error?.message}`); return }
+
+    let newMats: SchedMaterial[] = []
+    const mats = schedMats.filter(m => m.schedule_id === id)
+    if (mats.length) {
+      const payload = mats.map(m => ({
+        schedule_id: (newSched as Schedule).id,
+        colour_name: m.colour_name, colour_code: m.colour_code, brand: m.brand,
+        finish: m.finish, grain_direction: m.grain_direction, grain_match_required: m.grain_match_required,
+        material_id: m.material_id, edgeband_id: m.edgeband_id,
+        is_default: m.is_default, is_active: m.is_active, sort_order: m.sort_order,
+      }))
+      const { data: inserted, error: mErr } = await supabase.from('door_schedule_materials').insert(payload).select()
+      if (mErr) { alert(`Copied schedule but colours failed: ${mErr.message}`) }
+      newMats = (inserted ?? []) as SchedMaterial[]
+    }
+    setSchedules(p => [...p, newSched as Schedule])
+    setSchedMats(p => [...p, ...newMats])
+    setSelectedId((newSched as Schedule).id)
   }
 
   // ── Generic field patch (optimistic + persist) ──────────────────────────────────
@@ -275,6 +310,28 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
             <label className={lbl}>Description</label>
             <input className={inp} defaultValue={c.description ?? ''}
               onBlur={e => patch<Catalogue>('door_catalogue', c.id, { description: e.target.value.trim() || null }, setCatalogue)} />
+          </div>
+        </div>
+
+        {/* Edge banding — which edges of the door blank get taped */}
+        <div className="border-t border-edge pt-4">
+          <label className={lbl}>Banded edges</label>
+          <p className="text-[10px] text-ink-subtle mb-2">
+            Which edges get edge tape. The tape product is colour-matched per colour in the Material Schedule.
+          </p>
+          <div className="flex flex-wrap gap-4">
+            {([
+              ['Top',    'edge_band_top'],
+              ['Bottom', 'edge_band_bottom'],
+              ['Left',   'edge_band_left'],
+              ['Right',  'edge_band_right'],
+            ] as const).map(([label, field]) => (
+              <label key={field} className="flex items-center gap-1.5 cursor-pointer text-xs text-ink-muted">
+                <input type="checkbox" checked={c[field]} className="accent-[var(--accent,#2563eb)]"
+                  onChange={e => patch<Catalogue>('door_catalogue', c.id, { [field]: e.target.checked } as Partial<Catalogue>, setCatalogue)} />
+                {label}
+              </label>
+            ))}
           </div>
         </div>
 
@@ -389,6 +446,13 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
                           {materials.map(b => <option key={b.id} value={b.id}>{b.name} ({b.dz}mm)</option>)}
                         </select>
                       </div>
+                    </div>
+                    <div>
+                      <label className={lbl}>Edge band (colour-matched tape)</label>
+                      <select className={sInp} value={m.edgeband_id ?? ''} onChange={e => patchMat(m.id, { edgeband_id: e.target.value || null })}>
+                        <option value="">— none —</option>
+                        {edgeBands.map(b => <option key={b.id} value={b.id}>{b.name} ({b.thickness}mm){b.color ? ` · ${b.color}` : ''}</option>)}
+                      </select>
                     </div>
                     <div className="flex items-center gap-4 pt-0.5">
                       <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-ink-muted">
@@ -584,8 +648,14 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
     const item = activeList().find(x => x.id === selectedId)
     if (!item) return null
     return (
-      <div className="flex-1 overflow-y-auto">
+      <div key={selectedId} className="flex-1 overflow-y-auto">
         <div className="flex items-center justify-end gap-2 border-b border-edge px-6 py-2.5">
+          {activeTab === 'schedules' && (
+            <button onClick={() => duplicateSchedule(item.id)}
+              className="text-xs px-3 py-1 rounded border border-edge-strong text-ink-muted hover:text-ink hover:border-accent transition-colors">
+              Duplicate
+            </button>
+          )}
           <button onClick={() => toggleActive(item.id)}
             className={`text-xs px-3 py-1 rounded border transition-colors ${
               item.is_active ? 'border-green-700 text-green-400 hover:bg-green-900/30' : 'border-edge-strong text-ink-subtle'

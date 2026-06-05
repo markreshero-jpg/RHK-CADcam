@@ -33,8 +33,8 @@ const RULE_LABELS: Record<RuleKey, string> = {
   ADJSR:   'Adj. Shelf Right Notch (mm)',
   FIXSB_F: 'Fixed Shelf Front Setback (mm)',
   FIXSB_B: 'Fixed Shelf Back Setback (mm)',
-  IDCL:          'Drawer Box Clearance Left (mm)',
-  IDCR:          'Drawer Box Clearance Right (mm)',
+  IDCL:          'Inner Drawer Front Clearance Left (mm)',
+  IDCR:          'Inner Drawer Front Clearance Right (mm)',
   IDFAO:         'Drawer Box Face Above Opening (mm)',
   SLIDE_SETBACK: 'Min Depth Behind Slide (mm)',
   REVT:    'Face Reveal Top (mm)',
@@ -69,6 +69,7 @@ interface ClassDimDefaults {
 }
 
 type SchedItem = { id: string; name: string; is_default: boolean; kind?: 'external' | 'internal' | null }
+type ColourItem = { id: string; schedule_id: string; colour_name: string; colour_code: string | null }
 
 type JobPreset = {
   id: string
@@ -129,6 +130,16 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const [drawerBoxMethods,     setDrawerBoxMethods]     = useState<SchedItem[]>([])
   const [doorStyle,            setDoorStyle]            = useState(project.default_door_style_id ?? '')
   const [doorStyles,           setDoorStyles]           = useState<SchedItem[]>([])
+  // Per-class door style overrides (blank = inherit the job default style).
+  const [baseDoorStyle,        setBaseDoorStyle]        = useState(project.base_door_style_id ?? '')
+  const [wallDoorStyle,        setWallDoorStyle]        = useState(project.wall_door_style_id ?? '')
+  const [tallDoorStyle,        setTallDoorStyle]        = useState(project.tall_door_style_id ?? '')
+  // Per-class door colour overrides + the data to populate their pickers.
+  const [baseDoorColour,       setBaseDoorColour]       = useState(project.base_door_colour_id ?? '')
+  const [wallDoorColour,       setWallDoorColour]       = useState(project.wall_door_colour_id ?? '')
+  const [tallDoorColour,       setTallDoorColour]       = useState(project.tall_door_colour_id ?? '')
+  const [styleSchedMap,        setStyleSchedMap]        = useState<Record<string, string | null>>({})
+  const [doorColours,          setDoorColours]          = useState<ColourItem[]>([])
 
   // ── Material schedules (per zone) ─────────────────────────────────────────
   const [baseAsmSched,      setBaseAsmSched]      = useState(project.base_assembly_schedule_id ?? '')
@@ -160,7 +171,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
     let cancelled = false
     async function load() {
       setSchedLoading(true)
-      const [cmsR, dbmR, asmR, hdlR, slR, hiR, dbsR, idbsR, presetsR, dsR] = await Promise.all([
+      const [cmsR, dbmR, asmR, hdlR, slR, hiR, dbsR, idbsR, presetsR, dsR, dcR] = await Promise.all([
         supabase.from('construction_method_schedules').select('id,name,is_default').order('name'),
         supabase.from('drawer_box_methods').select('id,name,is_default,kind').eq('active', true).order('name'),
         supabase.from('assembly_schedules').select('id,name,is_default').eq('active', true).order('name'),
@@ -170,12 +181,16 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
         supabase.from('drawerbox_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('inner_drawerbox_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('job_presets').select('*').order('name'),
-        supabase.from('door_styles').select('id,name').eq('is_active', true).order('sort_order').order('name'),
+        supabase.from('door_styles').select('id,name,door_material_schedule_id').eq('is_active', true).order('sort_order').order('name'),
+        supabase.from('door_schedule_materials').select('id,schedule_id,colour_name,colour_code').eq('is_active', true).order('sort_order').order('colour_name'),
       ])
       if (cancelled) return
       setConstructionScheds(    (cmsR.data  ?? []) as SchedItem[])
       setDrawerBoxMethods(      (dbmR.data  ?? []) as SchedItem[])
-      setDoorStyles(            ((dsR.data ?? []) as { id: string; name: string }[]).map(s => ({ ...s, is_default: false })))
+      const dsRows = (dsR.data ?? []) as { id: string; name: string; door_material_schedule_id: string | null }[]
+      setDoorStyles(            dsRows.map(s => ({ id: s.id, name: s.name, is_default: false })))
+      setStyleSchedMap(         Object.fromEntries(dsRows.map(s => [s.id, s.door_material_schedule_id])))
+      setDoorColours(           (dcR.data ?? []) as ColourItem[])
       setAsmSchedules(          (asmR.data  ?? []) as SchedItem[])
       setHandleScheds(          (hdlR.data  ?? []) as SchedItem[])
       setSlideScheds(           (slR.data   ?? []) as SchedItem[])
@@ -226,6 +241,12 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       drawer_box_method_id:         drawerBoxMethod       || null,
       inner_drawer_box_method_id:   innerDrawerBoxMethod  || null,
       default_door_style_id:        doorStyle             || null,
+      base_door_style_id:           baseDoorStyle         || null,
+      wall_door_style_id:           wallDoorStyle         || null,
+      tall_door_style_id:           tallDoorStyle         || null,
+      base_door_colour_id:          baseDoorColour        || null,
+      wall_door_colour_id:          wallDoorColour        || null,
+      tall_door_colour_id:          tallDoorColour        || null,
       base_assembly_schedule_id:  baseAsmSched   || null,
       wall_assembly_schedule_id:  wallAsmSched   || null,
       tall_assembly_schedule_id:  tallAsmSched   || null,
@@ -324,6 +345,19 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
     setSavePresetOpen(false)
     setNewPresetName('')
   }
+
+  // Colours available for a given style's material schedule.
+  function coloursForStyle(styleId: string): ColourItem[] {
+    const schedId = styleId ? styleSchedMap[styleId] ?? null : null
+    return schedId ? doorColours.filter(c => c.schedule_id === schedId) : []
+  }
+  // Per-class door rows: each inherits the job default style unless overridden,
+  // and its colour is drawn from whichever style is effective for that class.
+  const doorClassRows = [
+    { key: 'base', label: 'Base', style: baseDoorStyle, setStyle: setBaseDoorStyle, colour: baseDoorColour, setColour: setBaseDoorColour },
+    { key: 'wall', label: 'Wall', style: wallDoorStyle, setStyle: setWallDoorStyle, colour: wallDoorColour, setColour: setWallDoorColour },
+    { key: 'tall', label: 'Tall', style: tallDoorStyle, setStyle: setTallDoorStyle, colour: tallDoorColour, setColour: setTallDoorColour },
+  ] as const
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -650,16 +684,71 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
               {/* Doors */}
               {csTab === 'doors' && (
                 <div className="space-y-5">
-                  <p className="text-xs text-gray-500">
-                    Default door style for this job. Rooms and individual door zones can override it.
-                    Manage styles in the Doors Library.
-                  </p>
                   {schedLoading ? (
                     <p className="text-xs text-gray-500">Loading styles…</p>
                   ) : (
-                    <div className="space-y-3">
-                      <SchedPicker label="Door Style" value={doorStyle} onChange={setDoorStyle} items={doorStyles} />
-                    </div>
+                    <>
+                      <section>
+                        <SectionHead>Default Door Style</SectionHead>
+                        <p className="text-xs text-gray-500 mb-3">
+                          The job&apos;s parent style. Each cabinet class below inherits it unless overridden.
+                          Rooms and individual door zones can still override per zone. Manage styles in the Doors Library.
+                        </p>
+                        <SchedPicker label="Door Style" value={doorStyle} onChange={setDoorStyle} items={doorStyles} />
+                      </section>
+
+                      <section>
+                        <SectionHead>Per Cabinet Class</SectionHead>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Override the style and/or colour for Base, Wall and Tall (e.g. Polytec on base &amp; wall,
+                          Shaker or raw MDF on tall). Leave a style on &ldquo;job default&rdquo; to inherit the parent above.
+                        </p>
+                        {!doorStyle ? (
+                          <p className="text-xs text-gray-500">Choose a default door style first.</p>
+                        ) : (
+                          <div className="space-y-4">
+                            {doorClassRows.map(row => {
+                              const effStyle  = row.style || doorStyle
+                              const colourOpts = coloursForStyle(effStyle)
+                              const effName    = doorStyles.find(s => s.id === effStyle)?.name ?? '—'
+                              return (
+                                <div key={row.key} className="border border-gray-800 rounded-lg p-3 space-y-2">
+                                  <div className="flex items-center gap-4">
+                                    <span className="w-10 shrink-0 text-xs font-semibold text-gray-200">{row.label}</span>
+                                    <select
+                                      value={row.style}
+                                      onChange={e => row.setStyle(e.target.value)}
+                                      className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                    >
+                                      <option value="">— job default ({effName}) —</option>
+                                      {doorStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                  </div>
+                                  <div className="flex items-center gap-4 pl-14">
+                                    {colourOpts.length === 0 ? (
+                                      <span className="text-[11px] text-gray-500">No colours in this style&apos;s schedule.</span>
+                                    ) : (
+                                      <select
+                                        value={row.colour}
+                                        onChange={e => row.setColour(e.target.value)}
+                                        className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                      >
+                                        <option value="">— style default colour —</option>
+                                        {colourOpts.map(c => (
+                                          <option key={c.id} value={c.id}>
+                                            {c.colour_name}{c.colour_code ? ` (${c.colour_code})` : ''}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </section>
+                    </>
                   )}
                 </div>
               )}

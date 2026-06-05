@@ -6,6 +6,7 @@ import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '../../ThemeToggle'
 import SlideModelEditor, { type SlideModelRow } from './SlideModelEditor'
 import SlideDrillingEditor from './SlideDrillingEditor'
+import HingeDetailEditor from './HingeDetailEditor'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -107,22 +108,39 @@ const TABS: TabConfig[] = [
   },
   {
     id: 'hinges', label: 'Hinges', table: 'hardware_hinges', initKey: 'hinges',
-    defaults: { name: '', brand: null, cup_diameter: 35, boring_depth: 13, overlay: 'half', opening_angle: 110, soft_close: true, cost_per_unit: null, active: true },
+    defaults: { name: '', brand: null, hinge_type: 'euro', default_hinge_edge: 'left', cup_diameter: 35, cup_depth_mm: 12, cup_x_from_edge_mm: 22, boring_depth: 13, overlay: 'half', opening_angle: 110, soft_close: true, supplier_code: null, cost_per_unit: null, active: true },
     fields: [
-      { key: 'name',          label: 'Name',     type: 'text',    w: 160 },
-      { key: 'brand',         label: 'Brand',    type: 'text',    w: 100 },
-      { key: 'cup_diameter',  label: 'Cup ⌀',    type: 'number',  w: 64 },
-      { key: 'boring_depth',  label: 'Bore dep', type: 'number',  w: 68 },
-      { key: 'overlay',       label: 'Overlay',  type: 'select',  w: 82,
+      { key: 'name',          label: 'Name',     type: 'text',    w: 150 },
+      { key: 'brand',         label: 'Brand',    type: 'text',    w: 90 },
+      { key: 'hinge_type',    label: 'Type',     type: 'select',  w: 70,
+        options: [
+          { value: 'euro',  label: 'Euro' },
+          { value: 'pivot', label: 'Pivot' },
+          { value: 'other', label: 'Other' },
+        ],
+      },
+      { key: 'default_hinge_edge', label: 'Edge', type: 'select', w: 70,
+        options: [
+          { value: 'left',   label: 'Left' },
+          { value: 'right',  label: 'Right' },
+          { value: 'top',    label: 'Top' },
+          { value: 'bottom', label: 'Bottom' },
+        ],
+      },
+      { key: 'cup_diameter',       label: 'Cup ⌀',    type: 'number',  w: 58 },
+      { key: 'cup_depth_mm',       label: 'Cup dep',  type: 'number',  w: 64 },
+      { key: 'cup_x_from_edge_mm', label: 'Cup X',    type: 'number',  w: 58 },
+      { key: 'overlay',       label: 'Overlay',  type: 'select',  w: 76,
         options: [
           { value: 'full',  label: 'Full' },
           { value: 'half',  label: 'Half' },
           { value: 'inset', label: 'Inset' },
         ],
       },
-      { key: 'opening_angle', label: 'Angle°',   type: 'number',  w: 60 },
+      { key: 'opening_angle', label: 'Angle°',   type: 'number',  w: 58 },
       { key: 'soft_close',    label: 'Soft-C',   type: 'boolean', w: 52 },
-      { key: 'cost_per_unit', label: '$/ea',     type: 'number',  w: 65,  step: '0.01' },
+      { key: 'supplier_code', label: 'Supplier', type: 'text',    w: 90 },
+      { key: 'cost_per_unit', label: '$/ea',     type: 'number',  w: 60,  step: '0.01' },
       { key: 'active',        label: 'Active',   type: 'boolean', w: 48 },
     ],
   },
@@ -556,6 +574,24 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
               />
               <SlideDrillingEditor key={`drill-${slideRow.id}`} slideId={slideRow.id} />
             </>
+          )
+        })()}
+
+        {/* ── Hinge detail panel (anchor holes + plates + model, when editing) ── */}
+        {activeTab === 'hinges' && editingId && (() => {
+          const r = rows.find(x => x.id === editingId)
+          if (!r) return null
+          return (
+            <HingeDetailEditor
+              key={`hinge-${editingId}`}
+              hinge={r}
+              onHingePatch={patch => {
+                setAllRows(prev => ({
+                  ...prev,
+                  hinges: prev.hinges.map(x => x.id === editingId ? { ...x, ...patch } : x),
+                }))
+              }}
+            />
           )
         })()}
 

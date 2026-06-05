@@ -6,6 +6,7 @@ import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { FaceGridInput, FaceZoneInput, DrawerType } from '@/src/lib/resolver/types'
 import { getUserPrefs } from '@/src/lib/userPrefs'
+import { intElevRect, dbElevRect, slideElevRect } from './cabinetEditSvgHelpers'
 
 type DoorStyleOpt = { id: string; name: string }
 
@@ -77,15 +78,15 @@ function computeDisplay(
   grid: FaceGridInput,
   cabDX: number,
   cabDY: number,
-  isBase: boolean,
+  hasToeKick: boolean,
   toeKickH = 150,
 ): GridDisplay {
   const REVT = 4, REVB = 0, REVL = 1, REVR = 1, GAPR = 2, GAPC = 2
 
   const faceW = cabDX - REVL - REVR
-  const faceH = cabDY - (isBase ? toeKickH : 0) - REVT - REVB
+  const faceH = cabDY - (hasToeKick ? toeKickH : 0) - REVT - REVB
   const faceX0 = REVL
-  const faceY0 = (isBase ? toeKickH : 0) + REVB
+  const faceY0 = (hasToeKick ? toeKickH : 0) + REVB
 
   const nRows = grid.rows.length
   const nCols = grid.cols.length
@@ -117,6 +118,24 @@ function computeDisplay(
   return { rowHeights, colWidths, rowYOffsets, colXOffsets }
 }
 
+// Approximate auto hinge layout for the preview — mirrors the resolver's
+// DEFAULT_RULES (resolveHinges.ts) so the face grid can show hinge positions even
+// when no hinge hardware is configured yet (the resolver emits none without it).
+// Returns mm from the door bottom, far→near (top-first).
+function defaultHingeYs(doorH: number): number[] {
+  const count = doorH <= 900 ? 2 : doorH <= 1800 ? 3 : doorH <= 2400 ? 4 : 5
+  const inset = 100
+  const far = doorH - inset, near = inset
+  if (count <= 1) return [near].map(Math.round)
+  if (count === 2) return [far, near].map(Math.round)
+  if (count === 3) return [far, doorH / 2, near].map(Math.round)
+  const out = [far]
+  const step = (near - far) / (count - 1)
+  for (let i = 1; i < count - 1; i++) out.push(far + step * i)
+  out.push(near)
+  return out.map(Math.round)
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function FaceGridEditor({
@@ -135,6 +154,7 @@ export default function FaceGridEditor({
   )
   const [selectedZone, setSelectedZone] = useState<{ row: number; col: number } | null>(null)
   const [doorStyles, setDoorStyles] = useState<DoorStyleOpt[]>([])
+  const [showChevrons, setShowChevrons] = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -148,7 +168,10 @@ export default function FaceGridEditor({
   const tkHeight = (isBase || isTall) && rp
     ? rp.toekick_parts.filter(p => p.part_key !== 'spreader_horizontal').reduce((max, p) => Math.max(max, p.DX), 0) || 150
     : 150
-  const d = computeDisplay(grid, cabinet.dx, cabinet.dy, isBase, tkHeight)
+  // Both base and tall cabinets carry a toe kick — the face opening starts above
+  // it, matching the resolved Elevation view. (Wall cabinets have no kick.)
+  const hasToeKick = isBase || isTall
+  const d = computeDisplay(grid, cabinet.dx, cabinet.dy, hasToeKick, tkHeight)
 
   async function save(next: FaceGridInput) {
     setGrid(next)
@@ -175,15 +198,65 @@ export default function FaceGridEditor({
     )
   }
 
-  function toggleHinge(rowIdx: number, colIdx: number) {
+  const HINGE_ORDER: NonNullable<FaceZoneInput['hinge_side']>[] = ['left', 'right', 'top', 'bottom']
+
+  // Click the hinge bar to cycle the hinged edge: left → right → top → bottom
+  function cycleHinge(rowIdx: number, colIdx: number) {
     save({
       ...grid,
       zones: grid.zones.map(z =>
         z.row_index === rowIdx && z.col_index === colIdx
-          ? { ...z, hinge_side: z.hinge_side === 'left' ? 'right' : 'left' }
+          ? { ...z, hinge_side: HINGE_ORDER[(HINGE_ORDER.indexOf(z.hinge_side ?? 'left') + 1) % HINGE_ORDER.length] }
           : z
       ),
     })
+  }
+
+  // Set the hinged edge directly (from the directional control in the side panel)
+  function setHinge(rowIdx: number, colIdx: number, side: NonNullable<FaceZoneInput['hinge_side']>) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z =>
+        z.row_index === rowIdx && z.col_index === colIdx ? { ...z, hinge_side: side } : z
+      ),
+    })
+  }
+
+  // ── Hinge positions (manual override stored in face_grid zone.hinges) ────────
+  // mm from the door BOTTOM, along the hinged edge. Undefined = auto (shop rules);
+  // a defined array (incl. empty) = manual.
+  function zoneDoorHeight(gz: FaceZoneInput): number {
+    const z = rp?.face_zones.find(z => z.row_index === gz.row_index && z.col_index === gz.col_index)
+    return Math.round(z?.DX ?? d.rowHeights[gz.row_index] ?? 600)
+  }
+  function zoneHingeYs(gz: FaceZoneInput): number[] {
+    if (Array.isArray(gz.hinges)) return [...gz.hinges].sort((a, b) => b - a)   // top-first (manual)
+    const hs = (rp?.hinge_instances ?? []).filter(h => h.row_index === gz.row_index && h.col_index === gz.col_index)
+    if (hs.length > 0) return hs.map(h => Math.round(h.y_position_mm)).sort((a, b) => b - a)
+    // No resolved hinges (e.g. hinge hardware not configured) — show an approximate
+    // auto layout so the face grid still previews hinge positions.
+    return defaultHingeYs(zoneDoorHeight(gz)).sort((a, b) => b - a)
+  }
+  function setZoneHinges(rowIdx: number, colIdx: number, ys: number[] | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        if (ys === null) { const next = { ...z }; delete next.hinges; return next }  // → auto
+        return { ...z, hinges: [...ys].sort((a, b) => a - b) }
+      }),
+    })
+  }
+  function addHinge(gz: FaceZoneInput) {
+    setZoneHinges(gz.row_index, gz.col_index, [...zoneHingeYs(gz), Math.round(zoneDoorHeight(gz) / 2)])
+  }
+  function moveHinge(gz: FaceZoneInput, idx: number, y: number) {
+    const cur = zoneHingeYs(gz); cur[idx] = y
+    setZoneHinges(gz.row_index, gz.col_index, cur)
+  }
+  function removeHinge(gz: FaceZoneInput, idx: number) {
+    const cur = zoneHingeYs(gz); cur.splice(idx, 1)
+    setZoneHinges(gz.row_index, gz.col_index, cur)  // empty array = zero hinges (still manual)
   }
 
   function setZoneDoorStyle(rowIdx: number, colIdx: number, styleId: string | null) {
@@ -376,7 +449,13 @@ export default function FaceGridEditor({
           <button className={addBtn} onClick={() => addCol('right')}>+ Right</button>
         </div>
         <span className="text-gray-600 hidden sm:inline">·</span>
-        <span className="text-gray-600 text-[10px] hidden sm:inline">click zone to select · double-click to cycle type · click hinge bar to flip side</span>
+        <button
+          className={`${addBtn} ${showChevrons ? 'ring-1 ring-blue-500/60 text-blue-300' : ''}`}
+          onClick={() => setShowChevrons(v => !v)}
+          title="Show / hide door-swing chevrons"
+        >Swings {showChevrons ? 'on' : 'off'}</button>
+        <span className="text-gray-600 hidden sm:inline">·</span>
+        <span className="text-gray-600 text-[10px] hidden sm:inline">click zone to select · double-click to cycle type · click hinge bar to cycle edge</span>
         {errors.length > 0 && (
           <span className="ml-auto text-[10px] text-red-400">{errors.length} error{errors.length !== 1 ? 's' : ''}</span>
         )}
@@ -410,49 +489,62 @@ export default function FaceGridEditor({
                 fill="#06090f" stroke="#1e293b" strokeWidth={0.5} />
             )}
 
-            {/* Shelves — always shown when internals toggle is on */}
-            {showInternals && rp && rp.internal_parts.map((p, i) => (
-              <rect key={`int-${i}`}
-                x={ox + p.X} y={svgY(p.Y + p.DZ)}
-                width={p.DY} height={p.DZ}
-                fill="#1e1b4b" fillOpacity={0.8}
-                stroke="#4338ca" strokeWidth={0.5}
-                style={{ pointerEvents: 'none' }}
-              />
-            ))}
+            {/* Internal parts — shelves, dividers, inner-drawer & pull-out panels.
+                Uses the same elevation projection helper as the Elevation view, so
+                each part_type projects correctly instead of all as flat shelves. */}
+            {showInternals && rp && rp.internal_parts.map((p, i) => {
+              const { ex, ey, ew, eh } = intElevRect(p)
+              return (
+                <rect key={`int-${i}`}
+                  x={ox + ex} y={svgY(ey)} width={ew} height={eh}
+                  fill="#1e1b4b" fillOpacity={0.8}
+                  stroke="#4338ca" strokeWidth={0.5}
+                  style={{ pointerEvents: 'none' }}
+                />
+              )
+            })}
 
-            {/* Drawer box parts */}
+            {/* Drawer-box parts + their slides */}
             {showInternals && rp && rp.drawer_stacks.flatMap((stack, si) => [
               ...stack.box_parts.map((p, pi) => {
-                let ex: number, ey: number, ew: number, eh: number
-                if (p.part_type === 'db_left_side' || p.part_type === 'db_right_side') {
-                  ex = p.X; ey = p.Y + p.DY; ew = p.DZ; eh = p.DY
-                } else if (p.part_type === 'db_bottom') {
-                  ex = p.X; ey = p.Y + p.DZ; ew = p.DY; eh = p.DZ
-                } else {
-                  ex = p.X; ey = p.Y + p.DX; ew = p.DY; eh = p.DX
-                }
+                const { ex, ey, ew, eh } = dbElevRect(p)
                 return (
                   <rect key={`db-${si}-${pi}`}
-                    x={ox + ex} y={svgY(ey)}
-                    width={ew} height={eh}
+                    x={ox + ex} y={svgY(ey)} width={ew} height={eh}
                     fill="#052e16" fillOpacity={0.75}
                     stroke="#22c55e" strokeWidth={0.5}
                     style={{ pointerEvents: 'none' }}
                   />
                 )
               }),
-              ...stack.slides.map((s, li) => (
-                <rect key={`sl-${si}-${li}`}
-                  x={ox + s.X} y={svgY(s.Y + s.DY)}
-                  width={s.DZ} height={s.DY}
+              ...stack.slides.map((s, li) => {
+                const { ex, ey, ew, eh } = slideElevRect(s)
+                return (
+                  <rect key={`sl-${si}-${li}`}
+                    x={ox + ex} y={svgY(ey)} width={ew} height={eh}
+                    fill="#1c1917" fillOpacity={0.75}
+                    stroke="#d97706" strokeWidth={0.5}
+                    strokeDasharray="3 2"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                )
+              }),
+            ])}
+
+            {/* Inner-drawer / pull-out slides — these live on internal_slides and
+                were previously not drawn, which is why inner drawers looked wrong. */}
+            {showInternals && rp && (rp.internal_slides ?? []).map((s, li) => {
+              const { ex, ey, ew, eh } = slideElevRect(s)
+              return (
+                <rect key={`isl-${li}`}
+                  x={ox + ex} y={svgY(ey)} width={ew} height={eh}
                   fill="#1c1917" fillOpacity={0.75}
                   stroke="#d97706" strokeWidth={0.5}
                   strokeDasharray="3 2"
                   style={{ pointerEvents: 'none' }}
                 />
-              )),
-            ])}
+              )
+            })}
 
             {/* Face zones */}
             {grid.zones.map(gz => {
@@ -465,12 +557,20 @@ export default function FaceGridEditor({
               const zx = ox + colX
               const zy = svgY(rowY + rowH)
               const s  = ZONE_STYLE[gz.face_type]
-              const hingeX  = gz.hinge_side === 'left' ? zx : zx + colW
+              const hinge   = gz.hinge_side ?? 'left'
               const labelFs = Math.max(8, Math.min(20, rowH * 0.14, colW * 0.12))
 
-              // Flip arrow on opposite side from hinge
-              const arrowX  = gz.hinge_side === 'left' ? zx + colW - 4 : zx + 4
-              const arrowAnchor = gz.hinge_side === 'left' ? 'end' : 'start'
+              // Hinge bar sits on the hinged edge; chevron apex points to the opening edge
+              const hingeBar =
+                hinge === 'left'   ? { x1: zx,        y1: zy,        x2: zx,        y2: zy + rowH } :
+                hinge === 'right'  ? { x1: zx + colW, y1: zy,        x2: zx + colW, y2: zy + rowH } :
+                hinge === 'top'    ? { x1: zx,        y1: zy,        x2: zx + colW, y2: zy } :
+                                     { x1: zx,        y1: zy + rowH, x2: zx + colW, y2: zy + rowH }
+              const chevronPts =
+                hinge === 'left'   ? `${zx},${zy} ${zx + colW},${zy + rowH / 2} ${zx},${zy + rowH}` :
+                hinge === 'right'  ? `${zx + colW},${zy} ${zx},${zy + rowH / 2} ${zx + colW},${zy + rowH}` :
+                hinge === 'top'    ? `${zx},${zy} ${zx + colW / 2},${zy + rowH} ${zx + colW},${zy}` :
+                                     `${zx},${zy + rowH} ${zx + colW / 2},${zy} ${zx + colW},${zy + rowH}`
 
               const isSel = selectedZone?.row === gz.row_index && selectedZone?.col === gz.col_index
 
@@ -495,27 +595,38 @@ export default function FaceGridEditor({
                     style={{ pointerEvents: 'none', userSelect: 'none' }}
                   >{s.label}</text>
 
-                  {/* Hinge bar — click to flip */}
-                  {gz.face_type === 'door' && (
-                    <line
-                      x1={hingeX} y1={zy} x2={hingeX} y2={zy + rowH}
-                      stroke={s.stroke} strokeWidth={3} strokeOpacity={0.7}
-                      style={{ cursor: 'pointer' }}
-                      onClick={e => { e.stopPropagation(); toggleHinge(gz.row_index, gz.col_index) }}
+                  {/* Door-swing chevron — dashed V; apex points to the opening edge
+                      (matches the elevation canvas annotation) */}
+                  {gz.face_type === 'door' && showChevrons && (
+                    <polyline
+                      points={chevronPts}
+                      fill="none" stroke={s.stroke}
+                      strokeWidth={1} strokeOpacity={0.7}
+                      strokeDasharray="6 3"
+                      strokeLinejoin="miter" strokeLinecap="butt"
+                      style={{ pointerEvents: 'none' }}
                     />
                   )}
 
-                  {/* Flip arrow hint */}
-                  {gz.face_type === 'door' && rowH > 50 && colW > 60 && (
-                    <text
-                      x={arrowX} y={zy + 13}
-                      textAnchor={arrowAnchor} dominantBaseline="central"
-                      fontSize={Math.min(11, rowH * 0.09)} fill={s.stroke} fillOpacity={0.45}
-                      fontFamily="system-ui,sans-serif"
-                      style={{ cursor: 'pointer', userSelect: 'none', pointerEvents: 'auto' }}
-                      onClick={e => { e.stopPropagation(); toggleHinge(gz.row_index, gz.col_index) }}
-                    >{gz.hinge_side === 'left' ? '→' : '←'}</text>
+                  {/* Hinge bar — click to cycle the hinged edge (L→R→T→B) */}
+                  {gz.face_type === 'door' && (
+                    <line
+                      x1={hingeBar.x1} y1={hingeBar.y1} x2={hingeBar.x2} y2={hingeBar.y2}
+                      stroke={s.stroke} strokeWidth={3} strokeOpacity={0.7}
+                      style={{ cursor: 'pointer' }}
+                      onClick={e => { e.stopPropagation(); cycleHinge(gz.row_index, gz.col_index) }}
+                    />
                   )}
+
+                  {/* Hinge position ticks — a stub on the hinged edge per hinge */}
+                  {gz.face_type === 'door' && (hinge === 'left' || hinge === 'right') &&
+                    zoneHingeYs(gz).map((hy, hi) => {
+                      const my = svgY(rowY + hy)
+                      const ex = hinge === 'right' ? zx + colW : zx
+                      const dir = hinge === 'right' ? -1 : 1
+                      return <line key={`hm-${hi}`} x1={ex} y1={my} x2={ex + dir * 9} y2={my}
+                        stroke="#a855f7" strokeWidth={2.5} style={{ pointerEvents: 'none' }} />
+                    })}
                 </g>
               )
             })}
@@ -626,6 +737,72 @@ export default function FaceGridEditor({
                     {ZONE_STYLE[gz.face_type]?.label ?? gz.face_type} → cycle
                   </button>
                 </div>
+
+                {/* Hinge edge — only for door zones; buttons laid out as a cross
+                    so each sits on the edge it represents */}
+                {gz.face_type === 'door' && (
+                  <div>
+                    <p className="text-gray-600 mb-1">Hinge edge</p>
+                    {(() => {
+                      const cur = gz.hinge_side ?? 'left'
+                      const cell = (side: NonNullable<FaceZoneInput['hinge_side']>, label: string, pos: string) => (
+                        <button
+                          onClick={() => setHinge(gz.row_index, gz.col_index, side)}
+                          title={`Hinge ${side}`}
+                          className={`${pos} w-7 h-6 rounded text-[12px] leading-none transition-colors border ${
+                            cur === side
+                              ? 'bg-blue-700 border-blue-500 text-white'
+                              : 'bg-gray-700 border-gray-600 text-gray-400 hover:bg-gray-600'
+                          }`}
+                        >{label}</button>
+                      )
+                      return (
+                        <div className="grid grid-cols-3 grid-rows-3 gap-0.5 w-fit mx-auto">
+                          {cell('top',    '↑', 'col-start-2 row-start-1')}
+                          {cell('left',   '←', 'col-start-1 row-start-2')}
+                          {cell('right',  '→', 'col-start-3 row-start-2')}
+                          {cell('bottom', '↓', 'col-start-2 row-start-3')}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
+
+                {/* Hinges — manual positions per door (auto = shop rules) */}
+                {gz.face_type === 'door' && (hinge => (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-gray-600">Hinges · {Array.isArray(gz.hinges) ? 'manual' : 'auto'}</p>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => addHinge(gz)} className="text-blue-400 hover:text-blue-300 text-[11px]">+ add</button>
+                        {Array.isArray(gz.hinges) && (
+                          <button onClick={() => setZoneHinges(gz.row_index, gz.col_index, null)} className="text-gray-500 hover:text-gray-300 text-[10px]">auto</button>
+                        )}
+                      </div>
+                    </div>
+                    {(hinge === 'left' || hinge === 'right') ? (
+                      <div className="flex flex-col gap-1">
+                        {zoneHingeYs(gz).map((y, i) => (
+                          <div key={`hy-${i}-${y}`} className="flex items-center gap-1">
+                            <span className="text-gray-600 shrink-0 w-3 text-[9px]">{i + 1}</span>
+                            <input
+                              type="number" step={5} defaultValue={y}
+                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                              onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) moveHinge(gz, i, Math.round(v)) }}
+                              className={inp}
+                            />
+                            <span className="text-gray-600 text-[9px] shrink-0">mm</span>
+                            <button onClick={() => removeHinge(gz, i)} className="text-gray-600 hover:text-red-400 shrink-0" title="Remove hinge">×</button>
+                          </div>
+                        ))}
+                        {zoneHingeYs(gz).length === 0 && <p className="text-gray-600 text-[10px] italic">No hinges</p>}
+                        <p className="text-gray-600 mt-0.5 text-[9px]">mm from door bottom</p>
+                      </div>
+                    ) : (
+                      <p className="text-gray-600 text-[10px] italic">Position editing is for left/right hinged doors.</p>
+                    )}
+                  </div>
+                ))(gz.hinge_side ?? 'left')}
 
                 {/* Door style — only for door zones */}
                 {gz.face_type === 'door' && (

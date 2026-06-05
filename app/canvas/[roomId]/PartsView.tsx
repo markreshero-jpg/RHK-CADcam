@@ -43,11 +43,13 @@ const TYPE_COLOR: Record<string, string> = {
   face:      '#60a5fa',
   drawerbox: '#22c55e',
   slide:     '#d97706',
+  hinge:       '#a855f7',
+  hinge_plate: '#c084fc',
   custom:    '#a78bfa',
   override:  '#f97316',
 }
 
-const TYPE_ORDER = ['carcass', 'toekick', 'internal', 'face', 'drawerbox', 'slide', 'custom', 'override']
+const TYPE_ORDER = ['carcass', 'toekick', 'internal', 'face', 'drawerbox', 'slide', 'hinge', 'hinge_plate', 'custom', 'override']
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -543,6 +545,31 @@ export default function PartsView({
           material: `${s.nominal_length}mm`, materialColor: null,
           dy: s.DY, dx: s.DX, dz: s.DZ, eb: null,
           comment: partComments?.[id] ?? '',
+          isCustom: false, isOverride: false,
+        })
+      }
+    }
+
+    // Hinges + plates — one row per physical hinge (qty = row count). No cut
+    // dimensions; material column shows the mounting edge / surface.
+    for (const h of (rp.hinge_instances ?? [])) {
+      const id = `hinge_${h.row_index}_${h.col_index}_${h.sort_order}`
+      result.push({
+        id, typeKey: 'hinge', typeLabel: 'Hinge',
+        name: partLabels?.[id] ?? `Hinge (${h.hinge_edge}) R${h.row_index + 1}C${h.col_index + 1} #${h.sort_order + 1}`,
+        material: h.mounting_surface === 'auto' ? 'auto' : h.mounting_surface, materialColor: null,
+        dy: 0, dx: 0, dz: 0, eb: null,
+        comment: partComments?.[id] ?? '',
+        isCustom: false, isOverride: false,
+      })
+      if (h.hinge_plate_id) {
+        const pid = `hplate_${h.row_index}_${h.col_index}_${h.sort_order}`
+        result.push({
+          id: pid, typeKey: 'hinge_plate', typeLabel: 'Hinge Plate',
+          name: partLabels?.[pid] ?? `Hinge plate R${h.row_index + 1}C${h.col_index + 1} #${h.sort_order + 1}`,
+          material: '—', materialColor: null,
+          dy: 0, dx: 0, dz: 0, eb: null,
+          comment: partComments?.[pid] ?? '',
           isCustom: false, isOverride: false,
         })
       }

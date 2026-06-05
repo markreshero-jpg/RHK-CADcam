@@ -194,7 +194,9 @@ export function resolveFace(
       AX: 0, AY: 0, AZ: 0,
 
       material_id: fid,
-      edge_band:   edgeSidesToBanding(edging[zone.face_type], ebId),
+      // Door style (when assigned) supplies colour-matched tape + which edges to
+      // band; otherwise fall back to the carcass schedule + construction EDGING.
+      edge_band:   edgeSidesToBanding(door?.edge_band_sides ?? edging[zone.face_type], door?.edgeband_id ?? ebId),
 
       // Door style results (undefined/null on non-door or unstyled zones)
       door_style_id:   door?.style_id ?? null,

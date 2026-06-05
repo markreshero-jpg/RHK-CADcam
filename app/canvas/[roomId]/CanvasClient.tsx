@@ -1180,6 +1180,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       <div className="flex flex-1 overflow-hidden">
 
         <CanvasSidebar
+          room={room}
+          onOpenRoomProperties={() => setRoomModalTab('details')}
           mode={mode}
           onSelectMode={onSelectMode}
           wallMenuOpen={wallMenuOpen}

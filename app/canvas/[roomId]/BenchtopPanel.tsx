@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import CalcInput from '@/src/components/CalcInput'
 import { BenchtopInstance, BenchtopBuildMethod } from '@/src/lib/types'
 import { resolveBenchtopFromDB, loadResolvedParts } from '@/src/lib/benchtop-resolver/resolveBenchtopFromDB'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
@@ -163,7 +164,7 @@ export default function BenchtopPanel({
           <div>
             <label className={lbl}>Rotate (°)</label>
             <div className="flex gap-1">
-              <input type="number" value={rotateAmt} onChange={e => setRotateAmt(Number(e.target.value))}
+              <CalcInput value={rotateAmt} onCommit={setRotateAmt}
                 className={inp + ' flex-1'} placeholder="0" />
               <button onClick={() => { onRotate(benchtop.id, rotateAmt); setRotateAmt(0) }}
                 className="px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white">
@@ -199,7 +200,7 @@ export default function BenchtopPanel({
           <div>
             <label className={lbl}>Offset shape (mm)</label>
             <div className="flex gap-1">
-              <input type="number" value={offsetAmt} onChange={e => setOffsetAmt(Number(e.target.value))}
+              <CalcInput value={offsetAmt} onCommit={setOffsetAmt}
                 className={inp + ' flex-1'} placeholder="0" />
               <button onClick={() => { if (offsetAmt !== 0) { onOffset(benchtop.id, offsetAmt); setOffsetAmt(0) } }}
                 className="px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white">
@@ -213,8 +214,8 @@ export default function BenchtopPanel({
           <div>
             <label className={lbl}>Corner radius (mm)</label>
             <div className="flex gap-1">
-              <input type="number" value={filletRadius} min={1} max={500}
-                onChange={e => setFilletRadius(Math.max(1, Number(e.target.value)))}
+              <CalcInput value={filletRadius} min={1} max={500}
+                onCommit={setFilletRadius}
                 className={inp + ' flex-1'} />
               <span className="text-[10px] text-gray-500 self-center pr-1">used by<br/>Round/Chamfer</span>
             </div>

@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import type {
   ResolvedCabinet, ResolvedSeamJoint, JointTypeOp,
-  ResolvedSlideDrill,
+  ResolvedSlideDrill, ResolvedHingeInstance, ResolvedHingeDrill,
 } from '@/src/lib/resolver/types'
+import { fmtMm } from '@/src/lib/format'
+import type { PartPosOverrides } from './canvasDB'
 
 // ── Expression evaluation ─────────────────────────────────────────────────────
 
@@ -107,13 +109,14 @@ const OP_LABELS: Record<string, string> = {
 
 // ── Tree node types ───────────────────────────────────────────────────────────
 
-type NodeKind = 'section' | 'part' | 'seam' | 'op' | 'slideop'
+type NodeKind = 'section' | 'part' | 'seam' | 'op' | 'slideop' | 'hinge' | 'hingeop'
 
 type PartPayload = {
   kind:       'part'
   partId:     string
   X: number; Y: number; Z: number
   DX: number; DY: number; DZ: number
+  AX: number; AY: number; AZ: number
   materialId: string | null | undefined
 }
 
@@ -127,8 +130,10 @@ type TreeNode = {
   | { kind: 'section' }
   | PartPayload
   | { kind: 'seam'; seam: ResolvedSeamJoint }
-  | { kind: 'op';   op: JointTypeOp; seam: ResolvedSeamJoint }
+  | { kind: 'op';   op: JointTypeOp; seam: ResolvedSeamJoint; ax: number; ay: number; az: number }
   | { kind: 'slideop'; drill: ResolvedSlideDrill }
+  | { kind: 'hinge'; hinge: ResolvedHingeInstance }
+  | { kind: 'hingeop'; drill: ResolvedHingeDrill }
 )
 
 const SLIDE_OP_LABELS: Record<string, string> = {
@@ -137,35 +142,36 @@ const SLIDE_OP_LABELS: Record<string, string> = {
 
 // ── Tree builder ──────────────────────────────────────────────────────────────
 
-function makeSeamNodes(partKey: string, rp: ResolvedCabinet): TreeNode[] {
+// Joints are owned by their MASTER part (part_a): the whole joint and all its ops —
+// including the holes bored into the slave — hang off the master, matching how the
+// operation travels with the master. Each op carries its owner's rotation so its
+// orientation (which equals the master's, since it is attached) can be shown.
+function makeSeamNodes(partKey: string, rp: ResolvedCabinet, owner: { ax: number; ay: number; az: number }): TreeNode[] {
   const out: TreeNode[] = []
   for (const seam of rp.seam_joints) {
-    let role: 'part_a' | 'part_b' | null = null
-    if (seam.part_a_key === partKey) role = 'part_a'
-    else if (seam.part_b_key === partKey) role = 'part_b'
-    if (!role) continue
+    if (seam.part_a_key !== partKey) continue
+    if (seam.ops.length === 0) continue
 
-    const matchOps = seam.ops.filter(op => op.target_part === role)
-    if (matchOps.length === 0) continue
-
-    const opNodes: TreeNode[] = matchOps.map(op => {
+    const opNodes: TreeNode[] = seam.ops.map(op => {
       const ev = evalOpFields(op, seam, rp)
+      const targetKey = op.target_part === 'part_a' ? seam.part_a_key : seam.part_b_key
       return {
         id:         `op-${seam.seam_key}-${op.id}`,
         kind:       'op' as const,
         label:      ev
           ? `${OP_LABELS[op.machine_operation] ?? op.machine_operation} Ø${ev.tool_diameter_mm}×${ev.depth_mm}mm`
           : `${OP_LABELS[op.machine_operation] ?? op.machine_operation} — invalid expression`,
-        detail:     ev ? ([op.face !== 'normal' ? op.face : null, ev.qty > 1 ? `×${ev.qty}` : null].filter(Boolean).join(' · ') || undefined) : undefined,
+        detail:     ev ? ([`→ ${CASE_LABELS[targetKey] ?? targetKey.replace(/_/g, ' ')}`, op.face !== 'normal' ? op.face : null, ev.qty > 1 ? `×${ev.qty}` : null].filter(Boolean).join(' · ') || undefined) : undefined,
         children:   [],
         expandable: false,
         op,
         seam,
+        ax: owner.ax, ay: owner.ay, az: owner.az,
       }
     })
 
     out.push({
-      id:         `seam-${seam.seam_key}-${role}`,
+      id:         `seam-${seam.seam_key}`,
       kind:       'seam' as const,
       label:      seam.joint_type_name,
       detail:     seam.seam_key.replace(':', ' → '),
@@ -219,27 +225,74 @@ function makeSlideOpNode(d: ResolvedSlideDrill, i: number): TreeNode {
   }
 }
 
+const HINGE_OP_LABELS: Record<string, string> = { cup: 'Cup bore', anchor: 'Anchor hole', plate: 'Plate hole' }
+
+function makeHingeOpNode(d: ResolvedHingeDrill, i: number): TreeNode {
+  const dia = Math.round(d.radius * 2 * 100) / 100
+  const depth = Math.round(d.depthLen * 100) / 100
+  return {
+    id:         `hingeop-${d.kind}-${i}-${Math.round(d.x)}-${Math.round(d.y)}-${Math.round(d.z)}`,
+    kind:       'hingeop',
+    label:      `${HINGE_OP_LABELS[d.kind] ?? d.kind} Ø${dia}×${depth}mm`,
+    detail:     d.kind === 'plate' ? 'hinge plate' : undefined,
+    children:   [],
+    expandable: false,
+    drill:      d,
+  }
+}
+
 function makePart(
   id: string, label: string, detail: string | undefined,
   X: number, Y: number, Z: number, DX: number, DY: number, DZ: number,
+  AX: number, AY: number, AZ: number,
   materialId: string | null | undefined,
   partKey: string, rp: ResolvedCabinet,
+  overrides: PartPosOverrides | undefined,
   slideDrillIdx?: Map<string, ResolvedSlideDrill[]>,
+  hingeDrillIdx?: Map<string, ResolvedHingeDrill[]>,
 ): TreeNode {
-  const seams = makeSeamNodes(partKey, rp)
+  // Resolved base angles are 0; the live rotation comes from the part's override.
+  // Show the effective angle so the tree matches the rotated part in the views.
+  const ov  = overrides?.[id]
+  const eAX = AX + (ov?.oax ?? 0)
+  const eAY = AY + (ov?.oay ?? 0)
+  const eAZ = AZ + (ov?.oaz ?? 0)
+  const seams = makeSeamNodes(partKey, rp, { ax: eAX, ay: eAY, az: eAZ })
   const slideOps = (slideDrillIdx?.get(id) ?? []).map((d, i) => makeSlideOpNode(d, i))
-  const children = [...seams, ...slideOps]
-  return { id, label, detail, kind: 'part', partId: id, X, Y, Z, DX, DY, DZ, materialId, children, expandable: children.length > 0 }
+  // Hinge PLATE bores land on the carcass part the plate touches (gable/shelf/
+  // top/bottom), so they sit under that part — not under the door.
+  const hingeOps = (hingeDrillIdx?.get(id) ?? []).map((d, i) => makeHingeOpNode(d, i))
+  const children = [...seams, ...slideOps, ...hingeOps]
+  return { id, label, detail, kind: 'part', partId: id, X, Y, Z, DX, DY, DZ, AX: eAX, AY: eAY, AZ: eAZ, materialId, children, expandable: children.length > 0 }
 }
 
-function buildSections(rp: ResolvedCabinet): TreeNode[] {
+// Maps each hinge PLATE bore to the carcass/internal part it drills into, via
+// the resolved mount_target. Part ids match the tree's (case_*/int_*) keys.
+function buildHingeDrillIndex(rp: ResolvedCabinet): Map<string, ResolvedHingeDrill[]> {
+  const idx = new Map<string, ResolvedHingeDrill[]>()
+  const add = (partId: string, d: ResolvedHingeDrill) => {
+    const arr = idx.get(partId) ?? []; arr.push(d); idx.set(partId, arr)
+  }
+  for (const h of rp.hinge_instances ?? []) {
+    const t = h.mount_target
+    if (!t) continue
+    let partId: string | null = null
+    if (t.table === 'case_parts' && t.part_key) partId = `case_${t.part_key}`
+    else if (t.table === 'internal_parts' && t.internal_part_type != null && t.internal_sort_order != null) partId = `int_${t.internal_part_type}_${t.internal_sort_order}`
+    if (partId) for (const d of h.plate_drills) add(partId, d)
+  }
+  return idx
+}
+
+function buildSections(rp: ResolvedCabinet, overrides: PartPosOverrides | undefined): TreeNode[] {
   const groups: TreeNode[] = []
   const slideIdx = buildSlideDrillIndex(rp)
+  const hingeIdx = buildHingeDrillIndex(rp)
 
   if (rp.case_parts.length > 0) {
     const parts = rp.case_parts.map(p => makePart(
       `case_${p.part_key}`, CASE_LABELS[p.part_key] ?? p.part_key.replace(/_/g, ' '), undefined,
-      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_key, rp, slideIdx,
+      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.AX, p.AY, p.AZ, p.material_id, p.part_key, rp, overrides, slideIdx, hingeIdx,
     ))
     groups.push({ id: 'sec-case', kind: 'section', label: 'Case', detail: `${parts.length}`, children: parts, expandable: true })
   }
@@ -247,7 +300,7 @@ function buildSections(rp: ResolvedCabinet): TreeNode[] {
   if (rp.toekick_parts.length > 0) {
     const parts = rp.toekick_parts.map(p => makePart(
       `tk_${p.part_key}_${p.sort_order}`, TK_LABELS[p.part_key] ?? p.part_key.replace(/_/g, ' '), undefined,
-      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_key, rp, slideIdx,
+      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.AX, p.AY, p.AZ, p.material_id, p.part_key, rp, overrides, slideIdx, hingeIdx,
     ))
     groups.push({ id: 'sec-tk', kind: 'section', label: 'Toe Kick', detail: `${parts.length}`, children: parts, expandable: true })
   }
@@ -255,19 +308,19 @@ function buildSections(rp: ResolvedCabinet): TreeNode[] {
   const intParts = rp.internal_parts.map(p => makePart(
     `int_${p.part_type}_${p.sort_order}`,
     `${INT_LABELS[p.part_type] ?? p.part_type.replace(/_/g, ' ')} ${p.sort_order + 1}`,
-    undefined, p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_type, rp, slideIdx,
+    undefined, p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.AX, p.AY, p.AZ, p.material_id, p.part_type, rp, overrides, slideIdx, hingeIdx,
   ))
   const drawerNodes = (rp.drawer_stacks ?? []).flatMap(stack => {
     const tag = `R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`
     const dbParts = stack.box_parts.map(p => makePart(
       `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`,
       DB_LABELS[p.part_type] ?? p.part_type, tag,
-      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.material_id, p.part_type, rp, slideIdx,
+      p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.AX, p.AY, p.AZ, p.material_id, p.part_type, rp, overrides, slideIdx, hingeIdx,
     ))
     const slideNodes = stack.slides.map(s => makePart(
       `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`,
       `Slide (${s.side})`, `${tag} · ${s.nominal_length}mm`,
-      s.X, s.Y, s.Z, s.DX, s.DY, s.DZ, null, '', rp, slideIdx,
+      s.X, s.Y, s.Z, s.DX, s.DY, s.DZ, 0, 0, 0, null, '', rp, overrides, slideIdx, hingeIdx,
     ))
     return [...dbParts, ...slideNodes]
   })
@@ -277,12 +330,36 @@ function buildSections(rp: ResolvedCabinet): TreeNode[] {
   }
 
   if (rp.face_zones.length > 0) {
-    const parts = rp.face_zones.map(z => makePart(
-      `zone_${z.row_index}_${z.col_index}`,
-      `${FACE_LABELS[z.face_type] ?? z.face_type} R${z.row_index + 1}C${z.col_index + 1}`,
-      z.hinge_side ? `Hinge: ${z.hinge_side}` : undefined,
-      z.X, z.Y, z.Z, z.DX, z.DY, z.DZ, z.material_id, z.face_type, rp, slideIdx,
-    ))
+    // Hinges grouped by door zone, so each door lists its hinges as children.
+    const hingesByZone = new Map<string, ResolvedHingeInstance[]>()
+    for (const h of (rp.hinge_instances ?? [])) {
+      const k = `${h.row_index}_${h.col_index}`
+      const arr = hingesByZone.get(k) ?? []
+      arr.push(h); hingesByZone.set(k, arr)
+    }
+    const parts = rp.face_zones.map(z => {
+      const node = makePart(
+        `zone_${z.row_index}_${z.col_index}`,
+        `${FACE_LABELS[z.face_type] ?? z.face_type} R${z.row_index + 1}C${z.col_index + 1}`,
+        z.hinge_side ? `Hinge: ${z.hinge_side}` : undefined,
+        z.X, z.Y, z.Z, z.DX, z.DY, z.DZ, z.AX, z.AY, z.AZ, z.material_id, z.face_type, rp, overrides, slideIdx, hingeIdx,
+      )
+      const hinges = hingesByZone.get(`${z.row_index}_${z.col_index}`) ?? []
+      for (const h of hinges) {
+        // Only the cup + anchor bores fire on the door; the plate bores live
+        // under the carcass part they drill into (see buildHingeDrillIndex).
+        const ops = h.cup_drills.map((d, di) => makeHingeOpNode(d, di))
+        node.children.push({
+          id: `hinge_${z.row_index}_${z.col_index}_${h.sort_order}`,
+          kind: 'hinge', hinge: h,
+          label: `Hinge #${h.sort_order + 1}`,
+          detail: `${h.hinge_edge} · ${Math.round(h.y_position_mm)}mm${h.hinge_plate_id ? ' · +plate' : ''}`,
+          children: ops, expandable: ops.length > 0,
+        })
+      }
+      if (hinges.length) node.expandable = true
+      return node
+    })
     groups.push({ id: 'sec-face', kind: 'section', label: 'Face', detail: `${parts.length}`, children: parts, expandable: true })
   }
 
@@ -291,16 +368,28 @@ function buildSections(rp: ResolvedCabinet): TreeNode[] {
 
 // ── Tree UI ───────────────────────────────────────────────────────────────────
 
-const KIND_ICON: Record<NodeKind, string> = { section: '▸', part: '▬', seam: '⟳', op: '•', slideop: '•' }
+const KIND_ICON: Record<NodeKind, string> = { section: '▸', part: '▬', seam: '⟳', op: '•', slideop: '•', hinge: '◈', hingeop: '•' }
 const KIND_COLOR: Record<NodeKind, string> = {
   section: 'text-amber-400', part: 'text-gray-300', seam: 'text-violet-400', op: 'text-gray-500',
-  slideop: 'text-amber-500',
+  slideop: 'text-amber-500', hinge: 'text-purple-400', hingeop: 'text-purple-300',
+}
+
+// Compact rotation tag (parts carry AX/AY/AZ, ops carry their owner's ax/ay/az).
+// Returned only when some axis is non-zero so unrotated rows stay clean.
+function angleTag(node: TreeNode): string | null {
+  let ax = 0, ay = 0, az = 0
+  if (node.kind === 'part')    { ax = node.AX; ay = node.AY; az = node.AZ }
+  else if (node.kind === 'op') { ax = node.ax; ay = node.ay; az = node.az }
+  else return null
+  if (!Math.round(ax) && !Math.round(ay) && !Math.round(az)) return null
+  return `∠ ${Math.round(ax)}/${Math.round(ay)}/${Math.round(az)}°`
 }
 
 function TreeRow({ node, depth, expanded, selected, onToggle, onSelect }: {
   node: TreeNode; depth: number; expanded: boolean; selected: boolean
   onToggle: (id: string) => void; onSelect: (n: TreeNode) => void
 }) {
+  const aTag = angleTag(node)
   return (
     <div
       className={`flex items-center gap-1 py-0.5 cursor-pointer select-none rounded-sm
@@ -314,6 +403,7 @@ function TreeRow({ node, depth, expanded, selected, onToggle, onSelect }: {
       <span className={`text-[10px] shrink-0 ${KIND_COLOR[node.kind]}`}>{KIND_ICON[node.kind]}</span>
       <span className="text-xs truncate">{node.label}</span>
       {node.detail && <span className="text-[10px] text-gray-600 shrink-0 ml-1">{node.detail}</span>}
+      {aTag && <span className="text-[10px] text-sky-400 font-mono shrink-0 ml-auto pl-1">{aTag}</span>}
     </div>
   )
 }
@@ -377,13 +467,17 @@ function NodeProps({ node, rp }: { node: TreeNode | null; rp: ResolvedCabinet })
         <h3 className="text-sm font-semibold text-gray-200 mb-3">{node.label}</h3>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 items-baseline">
           <Divider label="Position" />
-          <PR label="X" value={Math.round(node.X)} unit="mm" />
-          <PR label="Y" value={Math.round(node.Y)} unit="mm" />
-          <PR label="Z" value={Math.round(node.Z)} unit="mm" />
+          <PR label="X" value={fmtMm(node.X)} unit="mm" />
+          <PR label="Y" value={fmtMm(node.Y)} unit="mm" />
+          <PR label="Z" value={fmtMm(node.Z)} unit="mm" />
           <Divider label="Dimensions" />
-          <PR label="DX" value={Math.round(node.DX)} unit="mm" />
-          <PR label="DY" value={Math.round(node.DY)} unit="mm" />
-          <PR label="DZ" value={Math.round(node.DZ)} unit="mm" />
+          <PR label="DX" value={fmtMm(node.DX)} unit="mm" />
+          <PR label="DY" value={fmtMm(node.DY)} unit="mm" />
+          <PR label="DZ" value={fmtMm(node.DZ)} unit="mm" />
+          <Divider label="Orientation" />
+          <PR label="AX" value={Math.round(node.AX)} unit="°" />
+          <PR label="AY" value={Math.round(node.AY)} unit="°" />
+          <PR label="AZ" value={Math.round(node.AZ)} unit="°" />
           {node.materialId && (
             <>
               <Divider label="Material" />
@@ -412,7 +506,7 @@ function NodeProps({ node, rp }: { node: TreeNode | null; rp: ResolvedCabinet })
   }
 
   if (node.kind === 'op') {
-    const { op, seam } = node
+    const { op, seam, ax, ay, az } = node
     const ev = evalOpFields(op, seam, rp)
     const exprs = op.expressions ?? {}
     if (!ev) {
@@ -453,6 +547,11 @@ function NodeProps({ node, rp }: { node: TreeNode | null; rp: ResolvedCabinet })
         <h3 className="text-sm font-semibold text-gray-200 mb-1">{OP_LABELS[op.machine_operation] ?? op.machine_operation}</h3>
         <p className="text-[10px] text-gray-500 mb-3">{op.target_part.replace('_', ' ')} · face: {op.face}</p>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 items-baseline">
+          <Divider label="Orientation (owner part)" />
+          <PR label="AX" value={Math.round(ax)} unit="°" />
+          <PR label="AY" value={Math.round(ay)} unit="°" />
+          <PR label="AZ" value={Math.round(az)} unit="°" />
+          <Divider label="Tooling" />
           <EVR label="Tool Ø"   field="tool_diameter_mm" unit="mm" />
           <EVR label="Depth"    field="depth_mm"         unit="mm" />
           <EVR label="Offset X" field="offset_x_mm"      unit="mm" />
@@ -484,9 +583,9 @@ function NodeProps({ node, rp }: { node: TreeNode | null; rp: ResolvedCabinet })
           <PR label="Depth"  value={Math.round(d.depthLen * 100) / 100} unit="mm" />
           <PR label="Axis"   value={d.axis} />
           <Divider label="Position" />
-          <PR label="X" value={Math.round(d.x)} unit="mm" />
-          <PR label="Y" value={Math.round(d.y)} unit="mm" />
-          <PR label="Z" value={Math.round(d.z)} unit="mm" />
+          <PR label="X" value={fmtMm(d.x)} unit="mm" />
+          <PR label="Y" value={fmtMm(d.y)} unit="mm" />
+          <PR label="Z" value={fmtMm(d.z)} unit="mm" />
         </dl>
       </div>
     )
@@ -497,8 +596,8 @@ function NodeProps({ node, rp }: { node: TreeNode | null; rp: ResolvedCabinet })
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export default function CabinetTreePanel({ rp }: { rp: ResolvedCabinet }) {
-  const sections = buildSections(rp)
+export default function CabinetTreePanel({ rp, partOverrides }: { rp: ResolvedCabinet; partOverrides?: PartPosOverrides }) {
+  const sections = buildSections(rp, partOverrides)
 
   const [expandedIds, setExpandedIds]   = useState<Set<string>>(() => new Set(sections.map(s => s.id)))
   const [selectedId, setSelectedId]     = useState<string | null>(null)

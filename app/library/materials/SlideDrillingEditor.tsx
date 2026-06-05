@@ -142,9 +142,9 @@ export default function SlideDrillingEditor({ slideId }: Props) {
           .filter(o => o.target_surface === active.key)
           .sort((a, b) => a.operation_order - b.operation_order)
         return (
-          <div className="rounded border border-edge/60 bg-surface/50">
-            {/* tab strip — one per surface, with op count */}
-            <div className="flex flex-wrap items-center gap-1 px-1.5 pt-1.5 pb-1 border-b border-edge/50">
+          <div>
+            {/* tab strip — one per surface, with op count; active tab opens into the box below */}
+            <div className="flex flex-wrap items-end gap-1 px-0.5">
               {SURFACES.map(s => {
                 const count = ops.filter(o => o.target_surface === s.key).length
                 const isActive = s.key === activeSurface
@@ -152,10 +152,10 @@ export default function SlideDrillingEditor({ slideId }: Props) {
                   <button
                     key={s.key}
                     onClick={() => setActiveSurface(s.key)}
-                    className={`px-2 py-0.5 text-[10px] rounded-t border-b-2 ${
+                    className={`px-2.5 py-1 text-[10px] rounded-t border ${
                       isActive
-                        ? 'border-accent text-ink font-medium'
-                        : 'border-transparent text-ink-subtle hover:text-ink'
+                        ? 'relative z-10 -mb-px border-edge border-b-0 bg-surface text-ink font-medium'
+                        : 'border-transparent text-ink-subtle hover:text-ink hover:border-edge/50'
                     }`}
                   >
                     {s.tab}
@@ -169,6 +169,8 @@ export default function SlideDrillingEditor({ slideId }: Props) {
               })}
             </div>
 
+            {/* content box — outline wraps the table and connects up to the active tab */}
+            <div className="rounded-b rounded-tr border border-edge bg-surface">
             {/* active surface — datum hint + add button */}
             <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-edge/40">
               <span className="text-[9px] text-ink-subtle truncate">{active.hint}</span>
@@ -203,6 +205,7 @@ export default function SlideDrillingEditor({ slideId }: Props) {
                 ))}
               </div>
             )}
+            </div>
           </div>
         )
       })()}

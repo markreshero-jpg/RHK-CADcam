@@ -111,15 +111,16 @@ export function resolveDrawerStacks(
       boxHeight = openingHeight - (config?.height_adjustment ?? 25)
     }
 
-    // Box width: inner opening (between gables, narrowed by scribes) minus clearances
-    // minus runner thickness on each side. Scribes (SCRL/SCRR) shrink the opening just
-    // like they do in resolveInternal/resolveCase, so they must be subtracted here too.
-    const boxWidth = Math.max(1, cab.DX - 2 * T - r.SCRL - r.SCRR - r.IDCL - r.IDCR - runnerThick * 2)
+    // Box width: the slide runners sit HARD against the opening sides (gable inner
+    // faces), so the box spans the opening minus a runner on each side. No IDCL/IDCR
+    // here — those are now inner-drawer FACE clearances only (see fittings.ts).
+    // Scribes (SCRL/SCRR) shrink the opening like in resolveInternal/resolveCase.
+    const boxWidth = Math.max(1, cab.DX - 2 * T - r.SCRL - r.SCRR - runnerThick * 2)
     const boxDepth = nominalLength
 
-    // Cabinet-space origin of the box — interior left face (T + SCRL) plus clearance and
-    // the left runner, so the box sits between the two rails.
-    const boxX = T + r.SCRL + r.IDCL + runnerThick
+    // Cabinet-space origin of the box — interior left face (T + SCRL) plus the left
+    // runner, so the box sits between the two rails which touch the gables.
+    const boxX = T + r.SCRL + runnerThick
     // Bottom aligns with the face zone, but never below the interior floor — the
     // lowest drawer's zone.Y sits a panel thickness below it, which would drop the
     // box through the carcase bottom panel.
@@ -177,19 +178,23 @@ export function resolveDrawerStacks(
     }
 
     const slides: ResolvedDrawerSlide[] = [
-      { ...slideBase, side: 'left',  X: T + r.SCRL + r.IDCL },
-      { ...slideBase, side: 'right', X: cab.DX - T - r.SCRR - r.IDCR - runnerThick },
+      { ...slideBase, side: 'left',  X: T + r.SCRL },
+      { ...slideBase, side: 'right', X: cab.DX - T - r.SCRR - runnerThick },
     ]
 
     // Resolve slide-imposed drilling against the REAL resolved parts (not the box
     // envelope) so back setback, dado raise and face overhang land correctly.
     const backPart   = boxParts.find(p => p.part_type === 'db_back')
     const bottomPart = boxParts.find(p => p.part_type === 'db_bottom')
+    // Real gable inner faces (the runner sits IDCL/IDCR clearance inboard of these).
+    const leftMemberX  = T + r.SCRL
+    const rightMemberX = cab.DX - T - r.SCRR
     for (const sl of slides) {
       const sidePart = boxParts.find(p =>
         p.part_type === (sl.side === 'left' ? 'db_left_side' : 'db_right_side'))
       sl.drills = slideDrillOps(sl, slide?.drill_ops ?? [], {
         backPart, bottomPart, sidePart, face: zone,
+        memberFaceX: sl.side === 'left' ? leftMemberX : rightMemberX,
       })
     }
 

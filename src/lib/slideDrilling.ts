@@ -30,18 +30,32 @@
 
 import type {
   ResolvedDrawerSlide, ResolvedDrawerStack, ResolvedSlideDrill,
-  ResolvedDrawerBoxPart, ResolvedFaceZone,
   SlideDrillOp, SlideDrillAxis,
 } from './resolver/types'
+
+// Minimal cabinet-space geometry the drill math reads off a part. Both
+// ResolvedDrawerBoxPart (face drawers) and ResolvedInternalPart (inner drawers)
+// satisfy this, so the same resolver serves both.
+export interface DrillPart {
+  X: number; Y: number; Z: number
+  DX: number; DY: number; DZ: number
+}
 
 // The actual resolved geometry a slide's holes reference. Each op targets a real
 // part (the back/bottom panel or the visible face), NOT a box envelope — that's
 // the only way setbacks, dado heights, and face overhang land correctly.
+// `face.Z` is the BACK face of the visible front (the drill-entry plane); callers
+// with a front-face datum (inner drawers) must convert before passing it in.
 export interface SlideDrillContext {
-  backPart?:   ResolvedDrawerBoxPart   // db_back, cabinet space (absent on some boxes)
-  bottomPart?: ResolvedDrawerBoxPart   // db_bottom, cabinet space
-  sidePart?:   ResolvedDrawerBoxPart   // db side matching THIS rail (five-piece only)
-  face:        ResolvedFaceZone        // the visible drawer face, cabinet space
+  backPart?:   DrillPart   // db_back, cabinet space (absent on some boxes)
+  bottomPart?: DrillPart   // db_bottom, cabinet space
+  sidePart?:   DrillPart   // db side matching THIS rail (five-piece only)
+  face?:       DrillPart   // the visible drawer face (absent on pull-outs / faceless boxes)
+  // Cabinet X of the gable/divider inner face this rail mounts to. cabinet_member
+  // holes enter here (flush with the panel), NOT at the runner's outer edge — the
+  // runner sits IDCL/IDCR clearance inboard of the real face. Falls back to the
+  // runner edge if omitted.
+  memberFaceX?: number
 }
 
 // Expression evaluator — mirrors jointDrilling.evalExpr. Variables exposed:
@@ -118,7 +132,7 @@ export function slideDrillOps(
 
   const vars: Record<string, number> = {
     NL: slide.nominal_length, BH: slide.box_height, RT: slide.runner_thickness,
-    BW: back?.DY ?? face.DY, BHt: slide.box_height, BD: slide.nominal_length,
+    BW: back?.DY ?? face?.DY ?? 0, BHt: slide.box_height, BD: slide.nominal_length,
   }
 
   for (const op of ops) {
@@ -138,9 +152,11 @@ export function slideDrillOps(
 
       switch (op.target_surface) {
         case 'cabinet_member': {
-          // Into the gable inner face; along = back from cabinet front; up = from
-          // the drawer-box bottom line.
-          x = gableFaceX
+          // Into the gable/divider inner face, flush with the panel — use the real
+          // member face when supplied (the runner sits IDCL/IDCR clearance inboard,
+          // so its outer edge would float that gap proud of the panel). along =
+          // back from cabinet front; up = from the drawer-box bottom line.
+          x = ctx.memberFaceX ?? gableFaceX
           y = railBottomY + up
           z = railFrontZ - along
           axis = intoGable
@@ -177,6 +193,7 @@ export function slideDrillOps(
           // runner) — a real machining datum — not the face's own (overhanging)
           // edge. along moves inward from there; up = height. Depth capped so it
           // can't break through the face front.
+          if (!face) continue
           x = gableFaceX + inward * along
           y = face.Y + up
           z = face.Z                                         // back face of the visible front
@@ -213,13 +230,17 @@ export function slideDrillOps(
   return out
 }
 
-// All slide drills for a resolved cabinet's drawer stacks, flattened.
-export function cabinetSlideDrills(stacks: ResolvedDrawerStack[]): ResolvedSlideDrill[] {
+// All slide drills for a resolved cabinet, flattened — face-drawer stack slides
+// plus the inner-drawer / pull-out rails (rp.internal_slides), which carry their
+// own resolved drills the same way.
+export function cabinetSlideDrills(
+  stacks: ResolvedDrawerStack[],
+  internalSlides: ResolvedDrawerSlide[] = [],
+): ResolvedSlideDrill[] {
   const out: ResolvedSlideDrill[] = []
   for (const stack of stacks) {
-    for (const slide of stack.slides) {
-      out.push(...slide.drills)
-    }
+    for (const slide of stack.slides) out.push(...slide.drills)
   }
+  for (const slide of internalSlides) out.push(...slide.drills)
   return out
 }

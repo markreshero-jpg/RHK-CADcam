@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { evalCalc } from '@/src/lib/calc'
 
 interface Props {
   dim: 'dx' | 'dz' | 'dy'
@@ -25,15 +26,15 @@ export default function CabinetResizePanel({ dim, liveValue, onApply, onCancel, 
   }, [liveValue])
 
   function apply() {
-    const n = parseFloat(val)
-    if (!isNaN(n) && n >= 10) onApply(n)
+    const n = evalCalc(val)
+    if (n != null && n >= 10) onApply(n)
   }
 
   function onKey(e: React.KeyboardEvent) {
     if (e.key === 'Tab') {
       e.preventDefault()
-      const n = parseFloat(val)
-      if (!isNaN(n) && n >= 10) {
+      const n = evalCalc(val)
+      if (n != null && n >= 10) {
         dirty.current = false
         onTabApply(n)
         inputRef.current?.select()
@@ -56,9 +57,10 @@ export default function CabinetResizePanel({ dim, liveValue, onApply, onCancel, 
           <label className="text-xs text-gray-500 block mb-1">{label}</label>
           <input
             ref={inputRef}
-            type="number"
-            min={10}
-            step={1}
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            spellCheck={false}
             value={val}
             onChange={e => { setVal(e.target.value); dirty.current = true }}
             onFocus={() => inputRef.current?.select()}

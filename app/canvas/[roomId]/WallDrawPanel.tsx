@@ -1,5 +1,7 @@
 'use client'
 
+import CalcInput from '@/src/components/CalcInput'
+
 interface Props {
   mode: 'draw_wall' | 'draw_island'
   thickness: number
@@ -25,13 +27,11 @@ export default function WallDrawPanel({ mode, thickness, setThickness, height, s
         {!isIsland && (
           <div>
             <label className="text-xs text-gray-500 block mb-1">Thickness (mm)</label>
-            <input
-              type="number"
-              min={10}
-              step={1}
+            <CalcInput
               value={thickness}
-              onChange={e => setThickness(parseInt(e.target.value) || 90)}
-              onFocus={e => e.currentTarget.select()}
+              decimals={0}
+              min={10}
+              onCommit={setThickness}
               className={inputCls}
             />
           </div>
@@ -41,14 +41,12 @@ export default function WallDrawPanel({ mode, thickness, setThickness, height, s
           <label className="text-xs text-gray-500 block mb-1">
             Height (mm) <span className="text-gray-600">(optional)</span>
           </label>
-          <input
-            type="number"
-            min={100}
-            step={10}
-            value={height ?? ''}
+          <CalcInput
+            value={height}
+            decimals={0}
             placeholder="2400"
-            onChange={e => setHeight(e.target.value ? parseInt(e.target.value) : null)}
-            onFocus={e => e.currentTarget.select()}
+            onCommit={setHeight}
+            onClear={() => setHeight(null)}
             className={inputCls}
           />
         </div>

@@ -68,7 +68,7 @@ type TreeNode = {
   | { kind: 'section' }
   | PartPayload
   | { kind: 'seam';   cabinetId: string; seam: ResolvedSeamJoint }
-  | { kind: 'op';     cabinetId: string; op: JointTypeOp }
+  | { kind: 'op';     cabinetId: string; op: JointTypeOp; ownerPartId: string; ax: number; ay: number; az: number }
 )
 
 // ── Tree builder ──────────────────────────────────────────────────────────────
@@ -80,35 +80,46 @@ function makePartNode(
   payload: Omit<PartPayload, 'kind'>,
   partKey: string,
   rp: ResolvedCabinet,
+  cabOverrides: PartPosOverrides | undefined,
 ): TreeNode {
-  // Find seam joints where this part is part_a or part_b, then ops targeted at this part
+  // Resolved base angles are 0; live rotation comes from the part's override.
+  // Carry the effective angle so the tree matches the rotated part in the views.
+  const ov  = cabOverrides?.[payload.partId]
+  const eAX = payload.AX + (ov?.oax ?? 0)
+  const eAY = payload.AY + (ov?.oay ?? 0)
+  const eAZ = payload.AZ + (ov?.oaz ?? 0)
+  // Joints are owned by their MASTER part (part_a): the whole joint, with every
+  // operation — including the holes it bores into the slave — hangs off the master,
+  // matching how the operation moves/rotates with the master in the views. Each op
+  // carries its owner's rotation so its orientation can be shown (it travels with it).
   const seamNodes: TreeNode[] = []
   for (const seam of rp.seam_joints) {
-    let role: 'part_a' | 'part_b' | null = null
-    if (seam.part_a_key === partKey) role = 'part_a'
-    else if (seam.part_b_key === partKey) role = 'part_b'
-    if (!role) continue
+    if (seam.part_a_key !== partKey) continue
+    if (seam.ops.length === 0) continue
 
-    const matchOps = seam.ops.filter(op => op.target_part === role)
-    if (matchOps.length === 0) continue
-
-    const opNodes: TreeNode[] = matchOps.map(op => ({
-      id:   `op-${payload.cabinetId}-${seam.seam_key}-${op.id}`,
-      kind: 'op' as const,
-      label: `${OP_LABELS[op.machine_operation] ?? op.machine_operation} Ø${op.tool_diameter_mm}×${op.depth_mm}mm`,
-      detail: [
-        op.face !== 'normal' ? op.face : null,
-        op.qty > 1 ? `×${op.qty}` : null,
-        op.tool ?? null,
-      ].filter(Boolean).join(' · ') || undefined,
-      children: [],
-      expandable: false,
-      cabinetId: payload.cabinetId,
-      op,
-    }))
+    const opNodes: TreeNode[] = seam.ops.map(op => {
+      const targetKey = op.target_part === 'part_a' ? seam.part_a_key : seam.part_b_key
+      return {
+        id:   `op-${payload.cabinetId}-${seam.seam_key}-${op.id}`,
+        kind: 'op' as const,
+        label: `${OP_LABELS[op.machine_operation] ?? op.machine_operation} Ø${op.tool_diameter_mm}×${op.depth_mm}mm`,
+        detail: [
+          `→ ${CASE_LABELS[targetKey] ?? targetKey.replace(/_/g, ' ')}`,
+          op.face !== 'normal' ? op.face : null,
+          op.qty > 1 ? `×${op.qty}` : null,
+          op.tool ?? null,
+        ].filter(Boolean).join(' · ') || undefined,
+        children: [],
+        expandable: false,
+        cabinetId: payload.cabinetId,
+        op,
+        ownerPartId: payload.partId,
+        ax: eAX, ay: eAY, az: eAZ,
+      }
+    })
 
     seamNodes.push({
-      id:    `seam-${payload.cabinetId}-${seam.seam_key}-${role}`,
+      id:    `seam-${payload.cabinetId}-${seam.seam_key}`,
       kind:  'seam' as const,
       label: seam.joint_type_name,
       detail: seam.seam_key.replace(':', ' → '),
@@ -125,6 +136,7 @@ function makePartNode(
     expandable: seamNodes.length > 0,
     kind: 'part',
     ...payload,
+    AX: eAX, AY: eAY, AZ: eAZ,
   }
 }
 
@@ -133,6 +145,7 @@ function buildTree(
   walls: Wall[],
   cabinets: CabinetInstance[],
   resolvedParts: Map<string, ResolvedCabinet>,
+  overrides: Map<string, PartPosOverrides>,
 ): TreeNode {
   const wallNodes: TreeNode[] = walls.map(wall => {
     const wallCabs = cabinets.filter(c => c.wall_id === wall.id)
@@ -143,6 +156,7 @@ function buildTree(
 
       if (rp) {
         const cabPos = { cabPosX: cab.pos_x, cabPosY: cab.pos_y, cabPosZ: cab.pos_z, cabDy: cab.dy, cabClass: cab.assembly_class }
+        const cabOv = overrides.get(cab.id)
 
         // ── Case ──────────────────────────────────────────────────────────────
         if (rp.case_parts.length > 0) {
@@ -155,7 +169,7 @@ function buildTree(
               DX: p.DX, DY: p.DY, DZ: p.DZ,
               AX: p.AX, AY: p.AY, AZ: p.AZ,
               materialId: p.material_id },
-            p.part_key, rp,
+            p.part_key, rp, cabOv,
           ))
           groups.push({ id: `sec-${cab.id}-case`, kind: 'section', label: 'Case',
             children: parts, expandable: parts.length > 0, detail: `${parts.length}` })
@@ -172,7 +186,7 @@ function buildTree(
               DX: p.DX, DY: p.DY, DZ: p.DZ,
               AX: p.AX, AY: p.AY, AZ: p.AZ,
               materialId: p.material_id },
-            p.part_key, rp,
+            p.part_key, rp, cabOv,
           ))
           groups.push({ id: `sec-${cab.id}-tk`, kind: 'section', label: 'Toe Kick',
             children: parts, expandable: parts.length > 0, detail: `${parts.length}` })
@@ -188,7 +202,7 @@ function buildTree(
             DX: p.DX, DY: p.DY, DZ: p.DZ,
             AX: p.AX, AY: p.AY, AZ: p.AZ,
             materialId: p.material_id },
-          p.part_type, rp,
+          p.part_type, rp, cabOv,
         ))
 
         const drawerNodes: TreeNode[] = (rp.drawer_stacks ?? []).flatMap(stack => {
@@ -201,7 +215,7 @@ function buildTree(
               DX: p.DX, DY: p.DY, DZ: p.DZ,
               AX: p.AX, AY: p.AY, AZ: p.AZ,
               materialId: p.material_id },
-            p.part_type, rp,
+            p.part_type, rp, cabOv,
           ))
           const slideNodes: TreeNode[] = stack.slides.map(s => makePartNode(
             `part-${cab.id}-slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`,
@@ -212,7 +226,7 @@ function buildTree(
               DX: s.DX, DY: s.DY, DZ: s.DZ,
               AX: 0, AY: 0, AZ: 0,
               materialId: null },
-            '', rp,
+            '', rp, cabOv,
           ))
           return [...dbParts, ...slideNodes]
         })
@@ -234,7 +248,7 @@ function buildTree(
               DX: z.DX, DY: z.DY, DZ: z.DZ,
               AX: z.AX, AY: z.AY, AZ: z.AZ,
               materialId: z.material_id },
-            z.face_type, rp,
+            z.face_type, rp, cabOv,
           ))
           groups.push({ id: `sec-${cab.id}-face`, kind: 'section', label: 'Face',
             children: parts, expandable: parts.length > 0, detail: `${parts.length}` })
@@ -285,6 +299,18 @@ const KIND_COLOR: Record<NodeKind, string> = {
   section: 'text-gray-400', part: 'text-gray-300', seam: 'text-violet-400', op: 'text-gray-500',
 }
 
+// Compact rotation tag (parts carry AX/AY/AZ, ops carry their owner's ax/ay/az,
+// both already including any rotation override). Shown only when some axis is
+// non-zero so unrotated rows stay clean.
+function angleTag(node: TreeNode): string | null {
+  let ax = 0, ay = 0, az = 0
+  if (node.kind === 'part')    { ax = node.AX; ay = node.AY; az = node.AZ }
+  else if (node.kind === 'op') { ax = node.ax; ay = node.ay; az = node.az }
+  else return null
+  if (!Math.round(ax) && !Math.round(ay) && !Math.round(az)) return null
+  return `∠ ${Math.round(ax)}/${Math.round(ay)}/${Math.round(az)}°`
+}
+
 function TreeRow({
   node, depth, expanded, selected,
   onToggle, onSelect,
@@ -297,6 +323,7 @@ function TreeRow({
   onSelect: (node: TreeNode) => void
 }) {
   const hasChildren = node.expandable
+  const aTag = angleTag(node)
   return (
     <div
       className={`flex items-center gap-1 px-2 py-0.5 cursor-pointer select-none rounded-sm
@@ -312,6 +339,7 @@ function TreeRow({
       {node.detail && (
         <span className="text-[10px] text-gray-600 shrink-0 ml-1">{node.detail}</span>
       )}
+      {aTag && <span className="text-[10px] text-sky-400 font-mono shrink-0 ml-auto pl-1">{aTag}</span>}
     </div>
   )
 }
@@ -540,6 +568,12 @@ function PropertiesPanel({
   // ── Machining op ──────────────────────────────────────────────────────────
   if (node.kind === 'op') {
     const op = node.op
+    // Operation orientation = its owner (master) part's effective rotation (the op
+    // is attached to the master and rotates with it). node.ax/ay/az already fold in
+    // the owner's rotation override.
+    const ax = Math.round(node.ax)
+    const ay = Math.round(node.ay)
+    const az = Math.round(node.az)
     return (
       <div className="p-4">
         <h3 className="text-sm font-semibold text-gray-200 mb-1">
@@ -547,6 +581,11 @@ function PropertiesPanel({
         </h3>
         <p className="text-[10px] text-gray-500 mb-3">{op.target_part.replace('_', ' ')} · face: {op.face}</p>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 items-baseline">
+          <SectionDivider label="Orientation (owner part)" />
+          <PropRow label="AX" value={ax} unit="°" />
+          <PropRow label="AY" value={ay} unit="°" />
+          <PropRow label="AZ" value={az} unit="°" />
+          <SectionDivider label="Tooling" />
           <PropRow label="Tool Ø"   value={op.tool_diameter_mm} unit="mm" />
           <PropRow label="Depth"    value={op.depth_mm}         unit="mm" />
           <PropRow label="Offset X" value={op.offset_x_mm}     unit="mm" />
@@ -584,14 +623,26 @@ export default function ObjectTreeModal({
   onUpdateCabinet: (id: string, u: Partial<CabinetInstance>) => Promise<void>
   onClose: () => void
 }) {
-  const tree = buildTree(room, walls, cabinets, resolvedParts)
-
   // Expand room + all walls by default
   const defaultExpanded = new Set<string>(['room', ...walls.map(w => `wall-${w.id}`)])
   const [expandedIds, setExpandedIds]     = useState<Set<string>>(defaultExpanded)
   const [selectedId, setSelectedId]       = useState<string | null>(null)
   const [selectedNode, setSelectedNode]   = useState<TreeNode | null>(null)
   const [overrideCache, setOverrideCache] = useState<Map<string, PartPosOverrides>>(new Map())
+
+  const tree = buildTree(room, walls, cabinets, resolvedParts, overrideCache)
+
+  // Eager-load every cabinet's overrides once so the inline rotation tags are
+  // consistent across the whole tree without having to select each part first.
+  useEffect(() => {
+    let cancelled = false
+    Promise.all(cabinets.map(c =>
+      dbLoadPartPosOverrides(c.id).then(ovs => [c.id, ovs] as const).catch(() => [c.id, {}] as const),
+    )).then(entries => {
+      if (!cancelled) setOverrideCache(prev => { const next = new Map(prev); for (const [id, ovs] of entries) if (!next.has(id)) next.set(id, ovs); return next })
+    })
+    return () => { cancelled = true }
+  }, [cabinets])
 
   function toggleExpand(id: string) {
     setExpandedIds(prev => {
@@ -605,8 +656,9 @@ export default function ObjectTreeModal({
     setSelectedId(node.id)
     setSelectedNode(node)
 
-    // Load overrides for this cabinet if not yet cached
-    if (node.kind === 'part' && !overrideCache.has(node.cabinetId)) {
+    // Load overrides for this cabinet if not yet cached (parts edit them; ops read
+    // their owner's rotation override to show effective orientation).
+    if ((node.kind === 'part' || node.kind === 'op') && !overrideCache.has(node.cabinetId)) {
       dbLoadPartPosOverrides(node.cabinetId).then(ovs => {
         setOverrideCache(prev => new Map(prev).set(node.cabinetId, ovs))
       }).catch(console.error)

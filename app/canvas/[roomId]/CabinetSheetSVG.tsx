@@ -185,6 +185,12 @@ export default function CabinetSheetSVG({
           stk.box_parts.forEach((p, j) => { const r = dbElevRect(p); els.push(<rect key={`db${si}_${j}`} {...R(r.ex, r.ey, r.ew, r.eh)} fill={INT_FILL} fillOpacity={0.6} stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
           stk.slides.forEach((sl, j) => { const r = slideElevRect(sl); els.push(<rect key={`sl${si}_${j}`} {...R(r.ex, r.ey, r.ew, r.eh)} fill="none" stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
         })
+        // Hinge cup + plate bore positions (front projection).
+        ;(rp.hinge_instances ?? []).forEach((h, hi) => {
+          [...h.cup_drills, ...h.plate_drills].forEach((dr, j) => {
+            els.push(<circle key={`hg${hi}_${j}`} cx={tx + dr.x * s} cy={ty + (dy - dr.y) * s} r={Math.max(dr.radius * s, 0.4)} fill="none" stroke={INK2} strokeWidth={THIN} />)
+          })
+        })
       }
     } else if (cab.has_face) {
       const ins = 15, fw = dx - ins * 2, fh = dy - ins * 2
@@ -365,11 +371,20 @@ export default function CabinetSheetSVG({
         out.push({ item: 'Drawer runner (pair)', qty: drawerZones.length, note: '' })
       }
     }
-    // Door hinges — model from hinge schedule, qty by door height
+    // Door hinges — use resolved hinge_instances when present (exact), else an
+    // estimate by door height. Plates listed separately when assigned.
     if (doors.length) {
-      const hingeCount = (h: number) => h <= 900 ? 2 : h <= 1500 ? 3 : h <= 2000 ? 4 : 5
-      const qty = doors.reduce((sum, d) => sum + hingeCount(d.DX), 0)
-      out.push({ item: hardware?.hingeName ?? 'Door hinge', qty, note: `${doors.length} ${doors.length === 1 ? 'door' : 'doors'}` })
+      const hinges = rp.hinge_instances ?? []
+      const doorNote = `${doors.length} ${doors.length === 1 ? 'door' : 'doors'}`
+      if (hinges.length) {
+        out.push({ item: hardware?.hingeName ?? 'Door hinge', qty: hinges.length, note: doorNote })
+        const plateQty = hinges.filter(h => h.hinge_plate_id).length
+        if (plateQty) out.push({ item: 'Hinge plate', qty: plateQty, note: '' })
+      } else {
+        const hingeCount = (h: number) => h <= 900 ? 2 : h <= 1500 ? 3 : h <= 2000 ? 4 : 5
+        const qty = doors.reduce((sum, d) => sum + hingeCount(d.DX), 0)
+        out.push({ item: hardware?.hingeName ?? 'Door hinge', qty, note: doorNote })
+      }
     }
     // Handles — model from handle schedule, one per door + drawer
     const handleQty = doors.length + drawerZones.length

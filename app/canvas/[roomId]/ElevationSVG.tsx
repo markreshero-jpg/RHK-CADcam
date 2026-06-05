@@ -1,14 +1,15 @@
 ﻿'use client'
-import { useState, useReducer, useRef, useEffect } from 'react'
+import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { Room, Wall, CabinetInstance, DEFAULT_DIMS } from '@/src/lib/types'
 import { cabT, wallDir, wallEnd, dist, findFreeSlot, cabBlocks, cabWallSide, CAB_FILL, CAB_FILL_SEL, SNAP_PX, type Pt } from '@/src/lib/geometry'
 import { Selected, CabResize, viewReducer, DisplayConfig, Mode, modeAssemblyClass } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
+import { roundMm } from '@/src/lib/format'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone, ResolvedInternalPart, ResolvedDrawerStack, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
 import { computeElevSeams } from '@/src/lib/cabinetSeams'
 import {
-  computeElevSnap, ELEV_SNAP_KINDS, ELEV_SNAP_KIND_META,
+  computeElevSnap, cabinetElevCorners, ELEV_SNAP_KINDS, ELEV_SNAP_KIND_META,
   type ElevSnapSettings, type ElevSnapResult,
 } from '@/src/lib/elevationSnap'
 import SnapToolbar from './SnapToolbar'
@@ -257,6 +258,52 @@ export default function ElevationSVG({
   const roomH = wall?.height ?? room.room_dy ?? 2400
   const maxDz = wallCabs.length > 0 ? Math.max(300, ...wallCabs.map(c => c.dz)) : 600
   const FACE_THICK = 20
+
+  // Measure-tool snap points: the corners of every drawn resolved part / runner /
+  // face on this wall, in elevation coords. Mirrors the render's per-cabinet
+  // transform (rx = cabT, top y = roomH − bottomZ − dy; part rect ey is top-up) so
+  // each snap point sits exactly on a drawn corner. Drilling is intentionally
+  // excluded — it isn't drawn in this view.
+  const partSnapPoints = useMemo<Pt[]>(() => {
+    if (!wall) return []
+    const pts: Pt[] = []
+    for (const cab of wallCabs) {
+      const rp = resolvedParts?.get(cab.id)
+      if (!rp) continue
+      const rx = cabT(cab, wall)
+      const topY = roomH - cabBottomZ(cab, room, wall) - cab.dy
+      const push = (ex: number, ey: number, ew: number, eh: number) => {
+        const x0 = rx + ex, x1 = rx + ex + ew
+        const y0 = topY + cab.dy - ey, y1 = y0 + eh
+        pts.push({ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x0, y: y1 }, { x: x1, y: y1 })
+      }
+      rp.case_parts.filter(p => p.part_key !== 'back').forEach(p => { const r = caseElevRect(p); push(r.ex, r.ey, r.ew, r.eh) })
+      rp.toekick_parts.forEach(p => { const r = tkElevRect(p); push(r.ex, r.ey, r.ew, r.eh) })
+      rp.internal_parts.forEach(p => { const r = shelfElevRect(p); push(r.ex, r.ey, r.ew, r.eh) })
+      ;(rp.internal_slides ?? []).forEach(s => { const r = slideElevRect(s); push(r.ex, r.ey, r.ew, r.eh) })
+      rp.drawer_stacks.forEach(ds => {
+        ds.box_parts.forEach(p => { const r = drawerBoxPartElevRect(p); push(r.ex, r.ey, r.ew, r.eh) })
+        ds.slides.forEach(s => { const r = slideElevRect(s); push(r.ex, r.ey, r.ew, r.eh) })
+      })
+      rp.face_zones.forEach(fz => { const r = zoneElevRect(fz); push(r.ex, r.ey, r.ew, r.eh) })
+    }
+    return pts
+  }, [wallCabs, resolvedParts, wall, room, roomH])
+
+  // All enabled snap candidates, used to draw the faint white "near the cursor"
+  // dot hints (mirrors the modal). Same set computeElevSnap considers.
+  const snapHintPoints = useMemo<Pt[]>(() => {
+    if (!wall || !elevSnapSettings.enabled) return []
+    const pts: Pt[] = []
+    if (elevSnapSettings.kinds['wall-corner']) {
+      pts.push({ x: 0, y: 0 }, { x: wall.length, y: 0 }, { x: 0, y: roomH }, { x: wall.length, y: roomH })
+    }
+    if (elevSnapSettings.kinds['cabinet-corner']) {
+      for (const cab of wallCabs) for (const c of cabinetElevCorners(cab, wall, room, roomH)) pts.push(c)
+    }
+    if (elevSnapSettings.kinds['part-corner']) pts.push(...partSnapPoints)
+    return pts
+  }, [wall, elevSnapSettings, wallCabs, room, roomH, partSnapPoints])
   // Keep rfData current on every render (synchronous assignment, no useEffect needed).
   rfData.current = { elevResizeFollowing, view, cabinets, room }
 
@@ -409,7 +456,7 @@ export default function ElevationSVG({
         x: (e.clientX - svgR.left - view.panX) / view.zoom,
         y: (e.clientY - svgR.top  - view.panY) / view.zoom,
       }
-      const snap = computeElevSnap(wp, { wallCabs, wall, room, roomH }, elevSnapSettings, SNAP_PX / view.zoom,
+      const snap = computeElevSnap(wp, { wallCabs, wall, room, roomH, partPoints: partSnapPoints }, elevSnapSettings, SNAP_PX / view.zoom,
         elevMeasureStart, { ortho: ctrlRef.current, ortho45: shiftRef.current })
       setElevSnapResult(snap.kind ? snap : null)
       setElevMeasureCursor(snap.pt)
@@ -474,7 +521,7 @@ export default function ElevationSVG({
         x: (e.clientX - svgR.left - view.panX) / view.zoom,
         y: (e.clientY - svgR.top  - view.panY) / view.zoom,
       }
-      const snap = computeElevSnap(wp, { wallCabs, wall, room, roomH }, elevSnapSettings, SNAP_PX / view.zoom,
+      const snap = computeElevSnap(wp, { wallCabs, wall, room, roomH, partPoints: partSnapPoints }, elevSnapSettings, SNAP_PX / view.zoom,
         elevMeasureStart, { ortho: ctrlRef.current, ortho45: shiftRef.current })
       if (!elevMeasureStart || elevMeasureEnd) {
         setElevMeasureStart(snap.pt); setElevMeasureEnd(null); setElevMeasureCursor(snap.pt)
@@ -1132,6 +1179,19 @@ export default function ElevationSVG({
                             opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
+                      {/* Hinge cup + anchor bore markers (cheap circles — the full
+                          GLB silhouette was too heavy to re-project on every zoom). */}
+                      {effectiveIntVisible && (rp.hinge_instances ?? []).flatMap((h, hi: number) =>
+                        h.cup_drills.map((dr, j) => {
+                          const c = toSVGPt(dr.x, dr.y)
+                          return (
+                            <circle key={`hg-${hi}-${j}`} cx={c.x} cy={c.y} r={Math.max(dr.radius, 0.5)}
+                              fill="none" stroke={isLineDrawing ? '#475569' : '#a855f7'}
+                              strokeWidth={(isLineDrawing ? 1 : 0.6) / z}
+                              opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
+                          )
+                        }),
+                      )}
                       {effectiveShowDrawerBox && rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => [
                         ...ds.box_parts.map((p: ResolvedDrawerBoxPart, j: number) => {
                           const { ex, ey, ew, eh } = drawerBoxPartElevRect(p)
@@ -1672,6 +1732,23 @@ export default function ElevationSVG({
               />
             )}
 
+            {/* ── Snap-point hints (faint white dots near the cursor) ── */}
+            {mode === 'measure' && elevMeasureCursor && !elevMeasureEnd && (() => {
+              const cur = elevMeasureCursor
+              const r = 70 / z, r2 = r * r, dotR = 1.6 / z
+              const near: Pt[] = []
+              for (const p of snapHintPoints) {
+                const dx = p.x - cur.x, dy = p.y - cur.y
+                if (dx * dx + dy * dy <= r2) { near.push(p); if (near.length > 150) break }
+              }
+              if (near.length === 0) return null
+              return (
+                <g style={{ pointerEvents: 'none' }}>
+                  {near.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={dotR} fill="#e5e7eb" fillOpacity={0.55} />)}
+                </g>
+              )
+            })()}
+
             {/* ── Measure tool overlay ── */}
             {(() => {
               const a = elevMeasureStart
@@ -1681,9 +1758,9 @@ export default function ElevationSVG({
               if (!b) {
                 return <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / z} style={{ pointerEvents: 'none' }} />
               }
-              const d  = Math.round(dist(a, b))
-              const ddx = Math.round(Math.abs(b.x - a.x))
-              const ddy = Math.round(Math.abs(b.y - a.y))
+              const d  = roundMm(dist(a, b))
+              const ddx = roundMm(Math.abs(b.x - a.x))
+              const ddy = roundMm(Math.abs(b.y - a.y))
               const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
               const fs = 11 / z, pad = 5 / z
               const boxW = fs * 6.5, boxH = fs * 2.6 + pad

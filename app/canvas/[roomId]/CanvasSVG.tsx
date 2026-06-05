@@ -11,6 +11,7 @@ import {
 import WallDimensionChain from './WallDimensionChain'
 import { Mode, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, modeAssemblyClass, DisplayConfig, SectionCut } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
+import { roundMm } from '@/src/lib/format'
 import { SNAP_KIND_META, type SnapResult } from '@/src/lib/canvasSnap'
 
 function buildBenchtopPath(
@@ -1382,9 +1383,9 @@ export default function CanvasSVG({
           if (!b) {
             return <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom} style={{ pointerEvents: 'none' }} />
           }
-          const d  = Math.round(dist(a, b))
-          const dx = Math.round(Math.abs(b.x - a.x))
-          const dy = Math.round(Math.abs(b.y - a.y))
+          const d  = roundMm(dist(a, b))
+          const dx = roundMm(Math.abs(b.x - a.x))
+          const dy = roundMm(Math.abs(b.y - a.y))
           const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
           const fs = 11 / view.zoom, pad = 5 / view.zoom
           const boxW = fs * 6.5, boxH = fs * 2.6 + pad

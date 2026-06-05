@@ -40,7 +40,17 @@ export interface Project {
   construction_schedule_id:    string | null
   drawer_box_method_id:        string | null
   inner_drawer_box_method_id:  string | null
-  default_door_style_id:       string | null   // job-level default door style
+  default_door_style_id:       string | null   // job-level default (parent) door style
+  // Per assembly-class door style override (door_styles id).
+  // null = inherit default_door_style_id.
+  base_door_style_id:          string | null
+  wall_door_style_id:          string | null
+  tall_door_style_id:          string | null
+  // Per assembly-class door colour override (door_schedule_materials id).
+  // null = use the (effective) door style's default colour.
+  base_door_colour_id:         string | null
+  wall_door_colour_id:         string | null
+  tall_door_colour_id:         string | null
   created_at: string
   updated_at: string
 }
@@ -53,6 +63,8 @@ export interface Room {
   room_dx: number | null    // room width mm
   room_dy: number | null    // ceiling height mm
   room_dz: number | null    // room depth mm
+  wall_dy: number | null    // default wall height mm — inherited by new walls (null = not set)
+  wall_dz: number | null    // default wall thickness mm — inherited by new walls (null = not set)
   soffit_height: number | null
   wall_cabinet_top: number | null
   construction_method_id: string | null
@@ -277,6 +289,134 @@ export interface BenchtopScheduleRow {
   material_id:          string | null   // board stock (structural parts)
   benchtop_material_id: string | null   // surface material (worktop, stone)
   edgeband_id:          string | null
+}
+
+// ── Hinge hardware system (schema v0.6) ───────────────────────────────────────
+
+export type HingeEdge = 'left' | 'right' | 'top' | 'bottom'
+export type HingeType = 'euro' | 'pivot' | 'other'
+export type HingeMountingSurface = 'auto' | 'side' | 'top' | 'bottom' | 'shelf'
+export type HingePlateType =
+  | 'standard' | 'thick_door' | 'frame_mount' | 'zero_protrusion' | 'other'
+
+// A boring hole defined relative to a datum centre (cup centre for anchor holes,
+// plate centre for plate mounting holes). All values in mm.
+export interface HingeHole {
+  offset_x: number
+  offset_y: number
+  diameter: number
+  depth:    number
+}
+
+// hardware_hinges — the cup library record (one per hinge product).
+export interface HardwareHinge {
+  id:                  string
+  name:                string
+  brand:               string | null
+  hinge_type:          HingeType
+  default_hinge_edge:  HingeEdge
+  opening_angle:       number | null
+  overlay:             number | null
+  cup_diameter:        number | null   // mm — editable, never hardcoded
+  cup_depth_mm:        number | null
+  cup_x_from_edge_mm:  number          // mm from door edge to cup centre
+  boring_depth:        number | null   // legacy, kept for compatibility
+  anchor_holes:        HingeHole[]
+  min_door_thickness:  number | null
+  soft_close:          boolean | null
+  clip_type:           string | null
+  // separate cup model (legacy / simple fallback)
+  model_cup_url:       string | null
+  model_cup_format:    'glb' | 'stl' | 'obj' | null
+  model_cup_scale:     number
+  model_cup_anchor_x:  number
+  model_cup_anchor_y:  number
+  model_cup_anchor_z:  number
+  // combined two-part animated GLB (preferred)
+  model_combined_url:          string | null
+  model_combined_format:       'glb' | null
+  model_combined_scale:        number
+  bore_centre_to_door_face_mm: number | null
+  supplier_code:       string | null
+  cost_per_unit:       number | null
+  active:              boolean
+  notes:               string | null
+  created_at:          string
+  updated_at:          string
+}
+
+// hardware_hinge_plates — plate library, one hinge → many compatible plates.
+export interface HardwareHingePlate {
+  id:                    string
+  hinge_id:              string
+  name:                  string
+  brand:                 string | null
+  plate_type:            HingePlateType
+  plate_offset_mm:       number          // cup centre → plate mounting centre (mm)
+  mounting_hole_pattern: HingeHole[]
+  compatible_surfaces:   ('side' | 'top' | 'bottom' | 'shelf')[]
+  model_plate_url:       string | null
+  model_plate_format:    'glb' | 'stl' | 'obj' | null
+  model_plate_scale:     number
+  model_plate_anchor_x:  number
+  model_plate_anchor_y:  number
+  model_plate_anchor_z:  number
+  supplier_code:         string | null
+  cost_per_unit:         number | null
+  is_default:            boolean
+  active:                boolean
+  notes:                 string | null
+  created_at:            string
+  updated_at:            string
+}
+
+// hinge_count_rules — shop-level lookup: door height → number of hinges.
+export interface HingeCountRule {
+  id:              string
+  max_height_mm:   number
+  hinge_count:     number
+  top_inset_mm:    number
+  bottom_inset_mm: number
+  sort_order:      number
+  active:          boolean
+  notes:           string | null
+  created_at:      string
+  updated_at:      string
+}
+
+// hinge_instances — one physical hinge on a door. Re-keyed to a stable identity
+// (cabinet_instance_id + row_index + col_index + sort_order) so it survives the
+// resolver's delete+recreate of face_zones. face_zone_id is a refreshed pointer.
+export interface HingeInstance {
+  id:                           string
+  cabinet_instance_id:          string
+  row_index:                    number
+  col_index:                    number
+  face_zone_id:                 string | null
+  hinge_hardware_id:            string
+  hinge_plate_id:               string | null
+  hinge_edge:                   HingeEdge
+  y_position_mm:                number          // from door bottom
+  y_locked:                     boolean
+  mounting_surface:             HingeMountingSurface
+  shelf_snap_tolerance_mm:      number
+  resolved_mounting_part_table: 'case_parts' | 'internal_parts' | null
+  resolved_mounting_part_id:    string | null
+  sort_order:                   number
+  notes:                        string | null
+  created_at:                   string
+  updated_at:                   string
+}
+
+// hinge_schedules — existing table; v0.6 adds hinge_plate_id.
+export interface HingeSchedule {
+  id:             string
+  name:           string
+  description:    string | null
+  hinge_id:       string | null
+  hinge_plate_id: string | null
+  is_default:     boolean
+  active:         boolean
 }
 
 // ── Default dimensions by assembly class (mm) ─────────────────────────────────

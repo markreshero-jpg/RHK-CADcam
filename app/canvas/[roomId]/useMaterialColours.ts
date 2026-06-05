@@ -21,10 +21,18 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
       if (map.size === 0) return
       setResolvedParts(map)
 
-      // Re-resolve cabinets with drawer face zones so drawer_stacks are populated
-      const drawerCabIds = [...map.keys()].filter(id =>
-        (map.get(id)?.face_zones ?? []).some(z => z.face_type === 'drawer_face')
-      )
+      // Re-resolve cabinets whose drawer hardware is computed-only (never persisted):
+      // face drawers (drawer_face zones → drawer_stacks) AND inner drawers / pull-outs
+      // (internal_parts → internal_slides). dbLoadResolvedParts hardcodes both
+      // drawer_stacks and internal_slides to [], so without this re-resolve the slide
+      // rails + their drilling vanish on reopen.
+      const drawerCabIds = [...map.keys()].filter(id => {
+        const rp = map.get(id)
+        const hasDrawerFace = (rp?.face_zones ?? []).some(z => z.face_type === 'drawer_face')
+        const hasInnerDrawer = (rp?.internal_parts ?? []).some(p =>
+          p.part_type.startsWith('inner_drawer') || p.part_type.startsWith('pull_out'))
+        return hasDrawerFace || hasInnerDrawer
+      })
       if (drawerCabIds.length > 0) {
         Promise.allSettled(drawerCabIds.map(id => dbResolveAndPersistCabinet(id))).then(results => {
           setResolvedParts(prev => {
