@@ -17,6 +17,7 @@ import { materialGroupKey } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
 import SheetSVG from './SheetSVG'
 import Stage5Edit from './Stage5Edit'
+import Stage6Gcode from './Stage6Gcode'
 
 const STAGES: { n: Stage; label: string }[] = [
   { n: 1, label: 'Machine & Tool' },
@@ -91,7 +92,7 @@ export default function OptimiserClient({ snapshot }: { snapshot: OptiSnapshot }
         {stage === 3 && <Stage3Settings />}
         {stage === 4 && <Stage4Nesting />}
         {stage === 5 && <Stage5Edit />}
-        {stage === 6 && <StagePlaceholder n={6} title="G-code generation" note="Per-sheet export + snapshot save — built in the next step." />}
+        {stage === 6 && <Stage6Gcode />}
       </div>
 
       {/* Footer nav */}
@@ -520,12 +521,3 @@ function MiniNum({ label, value, onChange }: { label: string; value: number; onC
   )
 }
 
-function StagePlaceholder({ n, title, note }: { n: number; title: string; note: string }) {
-  return (
-    <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-8">
-      <span className="w-10 h-10 rounded-xl bg-surface-2 border border-edge-strong grid place-items-center text-ink-subtle text-sm font-semibold">{n}</span>
-      <p className="text-sm font-medium text-ink">{title}</p>
-      <p className="text-xs text-ink-subtle max-w-sm">{note}</p>
-    </div>
-  )
-}
