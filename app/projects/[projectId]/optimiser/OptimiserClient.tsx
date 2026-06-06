@@ -38,8 +38,10 @@ export default function OptimiserClient({ snapshot }: { snapshot: OptiSnapshot }
   const maxStageReached = useOptiStore(s => s.maxStageReached)
   const machineId = useOptiStore(s => s.machineId)
   const selectedUids = useOptiStore(s => s.selectedUids)
+  const storeSnap = useOptiStore(s => s.snapshot)
 
-  // Seed the store from the server snapshot once.
+  // Seed the store from the server snapshot (runs after first paint, and again
+  // if we navigate to a different project's optimiser).
   useEffect(() => { init(snapshot) }, [init, snapshot])
 
   const canAdvance = useMemo(() => {
@@ -47,6 +49,12 @@ export default function OptimiserClient({ snapshot }: { snapshot: OptiSnapshot }
     if (stage === 2) return selectedUids.size > 0
     return true
   }, [stage, machineId, selectedUids])
+
+  // Until the store mirrors this project's snapshot, the stage panels (which
+  // read the snapshot non-null) must not render.
+  if (!storeSnap || storeSnap.projectId !== snapshot.projectId) {
+    return <div className="h-screen bg-canvas text-ink flex items-center justify-center text-sm text-ink-subtle">Loading optimiser…</div>
+  }
 
   return (
     <div className="h-screen bg-canvas text-ink flex flex-col overflow-hidden">
