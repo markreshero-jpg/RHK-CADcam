@@ -144,8 +144,10 @@ export function resolveHinges(
       else if (hingeEdge === 'top')   { cupX = z.X + along;  cupY = z.Y + doorH - hw.cup_x_from_edge_mm }
       else                            { cupX = z.X + along;  cupY = z.Y + hw.cup_x_from_edge_mm } // bottom
 
-      // The door back face (toward cabinet interior) is the smaller-Z side.
-      const backZ = z.Z - z.DZ
+      // z.Z is already the door BACK (mounting) face — resolveFaceZ returns the
+      // back plane for both overlay (cabinetDZ + buf) and inset doors. The cup is
+      // bored into that face going forward (+Z) into the door.
+      const backZ = z.Z
 
       const cupDrills = buildCupDrills(hw, cupX, cupY, backZ, hingeEdge)
 
@@ -245,7 +247,7 @@ function resolveMount(
   plate: HingePlateInput | null,
 ): MountResult {
   const offset = plate?.plate_offset_mm ?? 0
-  const plateZ = z.Z - z.DZ - offset // inward from the door back face
+  const plateZ = z.Z - offset // behind the door back face (z.Z) by the plate offset
   const sideHung = edge === 'left' || edge === 'right'
 
   // Side-hung → carcass gable, always (no shelf-snap).
