@@ -11,6 +11,7 @@ import JointsClient from '@/app/library/joints/JointsClient'
 import PartsLibraryClient from '@/app/library/parts/PartsLibraryClient'
 import DoorSystemClient from '@/app/library/doors/DoorSystemClient'
 import HingeCountRulesEditor from '@/app/settings/HingeCountRulesEditor'
+import CncToolsClient from '@/app/settings/CncToolsClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
 import { getUserPrefs, setUserPrefs, type DrawingPreset, type DrawingPresets, type CabinetViewStyles, type ViewStyle } from '@/src/lib/userPrefs'
 import { DISPLAY_PRESETS } from '@/src/lib/displayConfig'
@@ -440,6 +441,8 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
             <DrawerBoxesClient embedded />
           ) : tab === 'hinge_rules' ? (
             <HingeCountRulesEditor embedded />
+          ) : tab === 'cnc_tool' ? (
+            <CncToolsClient />
           ) : (<>
           <div className="flex-1 overflow-y-auto px-8 py-6 max-w-3xl">
 
@@ -653,7 +656,7 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
             )}
 
             {/* ── Placeholder tabs ── */}
-            {['benchtop_builder', 'cnc_tool', 'cnc_machine'].includes(tab) && (
+            {['benchtop_builder', 'cnc_machine'].includes(tab) && (
               <ComingSoon label={activeTabDef.label} />
             )}
 
