@@ -13,6 +13,9 @@ import Link from 'next/link'
 import { ThemeToggle } from '@/app/ThemeToggle'
 import { useOptiStore, type Stage } from '@/src/lib/optimiser/store'
 import type { OptiSnapshot } from '@/src/lib/optimiser/types'
+import { materialGroupKey } from '@/src/lib/optimiser/types'
+import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
+import SheetSVG from './SheetSVG'
 
 const STAGES: { n: Stage; label: string }[] = [
   { n: 1, label: 'Machine & Tool' },
@@ -84,8 +87,8 @@ export default function OptimiserClient({ snapshot }: { snapshot: OptiSnapshot }
       <div className="flex-1 overflow-hidden">
         {stage === 1 && <Stage1Machine />}
         {stage === 2 && <Stage2Parts />}
-        {stage === 3 && <StagePlaceholder n={3} title="Pre-optimisation settings" note="Sheet stock, kerf, pad, rotation and quality — built in the next step." />}
-        {stage === 4 && <StagePlaceholder n={4} title="Auto-nesting" note="NFP + simulated-annealing nesting engine — built in the next step." />}
+        {stage === 3 && <Stage3Settings />}
+        {stage === 4 && <Stage4Nesting />}
         {stage === 5 && <StagePlaceholder n={5} title="Manual editing" note="Interactive SVG sheet canvas with drag/drop and clipboard — built in the next step." />}
         {stage === 6 && <StagePlaceholder n={6} title="G-code generation" note="Per-sheet export + snapshot save — built in the next step." />}
       </div>
@@ -272,6 +275,242 @@ function ChipFilter({ label, options, selected, onChange }: {
           </button>
         ))}
       </div>
+    </div>
+  )
+}
+
+// Material groups present in the current selection.
+function useSelectedGroups() {
+  const snap = useOptiStore(s => s.snapshot)!
+  const selectedUids = useOptiStore(s => s.selectedUids)
+  return useMemo(() => {
+    const matName = new Map(snap.materials.map(m => [m.id, m.name]))
+    const map = new Map<string, { key: string; materialId: string | null; thickness: number; name: string; count: number }>()
+    for (const p of snap.parts) {
+      if (!selectedUids.has(p.uid)) continue
+      const key = materialGroupKey(p.material_id, p.thickness)
+      const g = map.get(key)
+      if (g) g.count++
+      else map.set(key, {
+        key, materialId: p.material_id, thickness: p.thickness,
+        name: `${p.material_id ? (matName.get(p.material_id) ?? 'Material') : 'No material'} · ${p.thickness}mm`,
+        count: 1,
+      })
+    }
+    return [...map.values()]
+  }, [snap, selectedUids])
+}
+
+function seedStock(snap: OptiSnapshot, materialId: string | null): SheetStock {
+  const m = materialId ? snap.materials.find(x => x.id === materialId) : null
+  return {
+    w: m?.sheet_dx ?? 2400, h: m?.sheet_dy ?? 1200,
+    trimTop: m?.trim_top ?? 0, trimBottom: m?.trim_bottom ?? 0,
+    trimLeft: m?.trim_left ?? 0, trimRight: m?.trim_right ?? 0,
+    isOffcut: false, label: null,
+  }
+}
+
+// ── Stage 3 — Pre-optimisation settings ───────────────────────────────────────────
+function Stage3Settings() {
+  const snap = useOptiStore(s => s.snapshot)!
+  const settings = useOptiStore(s => s.settings)
+  const setSettings = useOptiStore(s => s.setSettings)
+  const stock = useOptiStore(s => s.stock)
+  const ensureStock = useOptiStore(s => s.ensureStock)
+  const setStock = useOptiStore(s => s.setStock)
+  const addOffcut = useOptiStore(s => s.addOffcut)
+  const removeOffcut = useOptiStore(s => s.removeOffcut)
+  const groups = useSelectedGroups()
+
+  useEffect(() => { for (const g of groups) ensureStock(g.key, seedStock(snap, g.materialId)) }, [groups, ensureStock, snap])
+
+  return (
+    <div className="h-full overflow-y-auto px-8 py-6 max-w-4xl space-y-7">
+      {/* Global settings */}
+      <div>
+        <h2 className="text-sm font-semibold text-ink mb-3">Optimisation Settings</h2>
+        <div className="grid grid-cols-2 gap-x-8 gap-y-4 max-w-xl">
+          <NumSetting label="Kerf (mm)" value={settings.kerf} onChange={v => setSettings({ kerf: v })} />
+          <NumSetting label="Pad / gap (mm)" value={settings.pad} onChange={v => setSettings({ pad: v })} />
+          <div className="col-span-2 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-ink">Allow rotation</p>
+              <p className="text-[11px] text-ink-subtle">Test 90° turns for non-grained materials. Grained sheets stay grain-locked.</p>
+            </div>
+            <button onClick={() => setSettings({ allowRotation: !settings.allowRotation })}
+              className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${settings.allowRotation ? 'bg-accent' : 'bg-surface-3'}`}>
+              <span className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white transition-transform ${settings.allowRotation ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+          <div className="col-span-2">
+            <p className="text-xs font-medium text-ink mb-1.5">Quality</p>
+            <div className="inline-flex rounded-lg border border-edge-strong overflow-hidden">
+              {(['fast', 'balanced', 'best'] as const).map(q => (
+                <button key={q} onClick={() => setSettings({ quality: q })}
+                  className={`px-4 py-1.5 text-xs capitalize transition-colors ${settings.quality === q ? 'bg-accent text-white' : 'bg-surface-2 text-ink-muted hover:text-ink'}`}>
+                  {q}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-ink-subtle mt-1">
+              {settings.quality === 'fast' ? 'Single pass — fastest.' : settings.quality === 'balanced' ? 'Light annealing (~8 passes).' : 'Full annealing (~40 passes).'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Sheet stock per material group */}
+      <div>
+        <h3 className="text-sm font-semibold text-ink mb-3">Sheet Stock</h3>
+        {groups.length === 0 ? (
+          <p className="text-xs text-ink-subtle">No parts selected.</p>
+        ) : (
+          <div className="space-y-3">
+            {groups.map(g => {
+              const gs = stock[g.key]
+              if (!gs) return null
+              return (
+                <div key={g.key} className="border border-edge-strong rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-medium text-ink">{g.name} <span className="text-ink-subtle">· {g.count} parts</span></p>
+                    <button onClick={() => addOffcut(g.key, { ...seedStock(snap, g.materialId), w: 1200, h: 600, isOffcut: true, label: `Offcut ${gs.offcuts.length + 1}` })}
+                      className="text-[11px] px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">+ Offcut</button>
+                  </div>
+                  <div className="grid grid-cols-6 gap-3">
+                    <MiniNum label="Sheet W" value={gs.standard.w} onChange={v => setStock(g.key, { w: v })} />
+                    <MiniNum label="Sheet H" value={gs.standard.h} onChange={v => setStock(g.key, { h: v })} />
+                    <MiniNum label="Trim T" value={gs.standard.trimTop} onChange={v => setStock(g.key, { trimTop: v })} />
+                    <MiniNum label="Trim B" value={gs.standard.trimBottom} onChange={v => setStock(g.key, { trimBottom: v })} />
+                    <MiniNum label="Trim L" value={gs.standard.trimLeft} onChange={v => setStock(g.key, { trimLeft: v })} />
+                    <MiniNum label="Trim R" value={gs.standard.trimRight} onChange={v => setStock(g.key, { trimRight: v })} />
+                  </div>
+                  {gs.offcuts.length > 0 && (
+                    <div className="mt-3 space-y-1.5">
+                      {gs.offcuts.map((o, i) => (
+                        <div key={i} className="flex items-center gap-2 text-[11px]">
+                          <span className="text-ink-subtle w-16">{o.label}</span>
+                          <span className="font-mono text-ink-muted">{o.w}×{o.h}mm</span>
+                          <button onClick={() => removeOffcut(g.key, i)} className="text-ink-subtle hover:text-red-400 ml-2">remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Stage 4 — Auto-nesting ────────────────────────────────────────────────────────
+function Stage4Nesting() {
+  const snap = useOptiStore(s => s.snapshot)!
+  const selectedUids = useOptiStore(s => s.selectedUids)
+  const cutQty = useOptiStore(s => s.cutQty)
+  const settings = useOptiStore(s => s.settings)
+  const stock = useOptiStore(s => s.stock)
+  const nestResult = useOptiStore(s => s.nestResult)
+  const nesting = useOptiStore(s => s.nesting)
+  const setNestResult = useOptiStore(s => s.setNestResult)
+  const setNesting = useOptiStore(s => s.setNesting)
+
+  const matById = useMemo(() => new Map(snap.materials.map(m => [m.id, m])), [snap.materials])
+
+  function run() {
+    setNesting(true)
+    // Defer so the button can repaint to "Nesting…" before a long "best" pass.
+    setTimeout(() => {
+      const parts: NestPartInput[] = []
+      for (const p of snap.parts) {
+        if (!selectedUids.has(p.uid)) continue
+        const qty = cutQty[p.uid] ?? 1
+        const grainLock = !!(p.material_id && matById.get(p.material_id)?.has_grain)
+        for (let i = 0; i < qty; i++) {
+          parts.push({ uid: `${p.uid}#${i}`, baseUid: p.uid, label: p.label, w: p.w, h: p.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority })
+        }
+      }
+      setNestResult(nest(parts, stock as Record<string, GroupStock>, settings))
+      setNesting(false)
+    }, 20)
+  }
+
+  const overall = useMemo(() => {
+    if (!nestResult) return null
+    let placed = 0, area = 0
+    for (const s of nestResult.sheets) {
+      const u = (s.stock.w - s.stock.trimLeft - s.stock.trimRight) * (s.stock.h - s.stock.trimTop - s.stock.trimBottom)
+      area += u
+      placed += s.placements.reduce((a, p) => a + p.w * p.h, 0)
+    }
+    return { sheets: nestResult.sheets.length, eff: area ? placed / area : 0, unplaced: nestResult.unplaced.length }
+  }, [nestResult])
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex-none px-8 py-3 flex items-center gap-4 border-b border-edge">
+        <button onClick={run} disabled={nesting || selectedUids.size === 0}
+          className="px-4 py-1.5 text-xs rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-colors">
+          {nesting ? 'Nesting…' : nestResult ? 'Re-nest' : 'Run nesting'}
+        </button>
+        {overall && (
+          <span className="text-xs text-ink-muted">
+            {overall.sheets} sheet{overall.sheets === 1 ? '' : 's'} · {(overall.eff * 100).toFixed(1)}% efficiency
+            {overall.unplaced > 0 && <span className="text-amber-500"> · {overall.unplaced} unplaced</span>}
+          </span>
+        )}
+        <span className="ml-auto text-[11px] text-ink-subtle capitalize">{settings.quality} quality</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-8 py-5">
+        {!nestResult ? (
+          <p className="text-xs text-ink-subtle text-center py-12">Run nesting to lay parts out on sheets.</p>
+        ) : (
+          <>
+            {nestResult.unplaced.length > 0 && (
+              <p className="text-[11px] text-amber-500 mb-4">
+                {nestResult.unplaced.length} part(s) too large for any configured sheet/offcut: {[...new Set(nestResult.unplaced.map(u => u.label))].slice(0, 6).join(', ')}{nestResult.unplaced.length > 6 ? '…' : ''}
+              </p>
+            )}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-5">
+              {nestResult.sheets.map(s => (
+                <div key={s.index} className="space-y-1.5">
+                  <SheetSVG sheet={s} pxWidth={230} />
+                  <p className="text-[11px] text-ink-muted flex justify-between">
+                    <span>Sheet {s.index + 1}{s.stock.isOffcut ? ` · ${s.stock.label ?? 'offcut'}` : ''}</span>
+                    <span className="font-mono">{(s.efficiency * 100).toFixed(0)}% · {s.placements.length}</span>
+                  </p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function NumSetting({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div>
+      <label className="block text-xs text-ink-muted mb-1">{label}</label>
+      <input type="number" step="any" defaultValue={value} key={value}
+        onBlur={e => { const n = parseFloat(e.target.value); if (Number.isFinite(n)) onChange(n) }}
+        className={`${sel} w-full`} />
+    </div>
+  )
+}
+
+function MiniNum({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div>
+      <label className="block text-[10px] text-ink-subtle uppercase tracking-wide mb-1">{label}</label>
+      <input type="number" step="any" defaultValue={value} key={value}
+        onBlur={e => { const n = parseFloat(e.target.value); if (Number.isFinite(n)) onChange(n) }}
+        className="w-full bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink font-mono focus:outline-none focus:border-accent" />
     </div>
   )
 }

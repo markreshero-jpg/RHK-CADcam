@@ -8,6 +8,7 @@
 
 import { create } from 'zustand'
 import type { OptiSnapshot } from './types'
+import type { GroupStock, SheetStock, NestResult } from './nest'
 
 export type Stage = 1 | 2 | 3 | 4 | 5 | 6
 
@@ -17,6 +18,9 @@ export interface PreOptSettings {
   quality: 'fast' | 'balanced' | 'best'
   allowRotation: boolean  // test 90°/180°/270° for non-grain materials
 }
+
+let offcutSeq = 0
+export const nextOffcutId = () => `offcut_${++offcutSeq}`
 
 interface OptiState {
   // Snapshot (set once at mount from server props)
@@ -36,8 +40,13 @@ interface OptiState {
   selectedUids: Set<string>    // parts included in the run
   cutQty: Record<string, number>  // per-part cut quantity override (optimiser-only)
 
-  // Stage 3
+  // Stage 3 — settings + per-material-group stock (keyed by materialGroupKey)
   settings: PreOptSettings
+  stock: Record<string, GroupStock>
+
+  // Stage 4 — nesting result (in-memory workspace; persisted only at G-code time)
+  nestResult: NestResult | null
+  nesting: boolean
 
   // Actions
   init: (snap: OptiSnapshot) => void
@@ -51,6 +60,12 @@ interface OptiState {
   setSelected: (uids: string[]) => void
   setCutQty: (uid: string, qty: number) => void
   setSettings: (patch: Partial<PreOptSettings>) => void
+  ensureStock: (key: string, seed: SheetStock) => void
+  setStock: (key: string, patch: Partial<SheetStock>) => void
+  addOffcut: (key: string, offcut: SheetStock) => void
+  removeOffcut: (key: string, index: number) => void
+  setNestResult: (r: NestResult | null) => void
+  setNesting: (b: boolean) => void
 }
 
 export const DEFAULT_SETTINGS: PreOptSettings = {
@@ -72,6 +87,9 @@ export const useOptiStore = create<OptiState>((set) => ({
   selectedUids: new Set(),
   cutQty: {},
   settings: { ...DEFAULT_SETTINGS },
+  stock: {},
+  nestResult: null,
+  nesting: false,
 
   init: (snap) => set(() => {
     // Default machine/profile to the marked defaults; pre-select parts flagged
@@ -107,4 +125,21 @@ export const useOptiStore = create<OptiState>((set) => ({
   setSelected: (uids) => set({ selectedUids: new Set(uids) }),
   setCutQty: (uid, qty) => set(st => ({ cutQty: { ...st.cutQty, [uid]: Math.max(0, qty) } })),
   setSettings: (patch) => set(st => ({ settings: { ...st.settings, ...patch } })),
+  ensureStock: (key, seed) => set(st => st.stock[key]
+    ? {}
+    : { stock: { ...st.stock, [key]: { standard: seed, offcuts: [] } } }),
+  setStock: (key, patch) => set(st => {
+    const g = st.stock[key]; if (!g) return {}
+    return { stock: { ...st.stock, [key]: { ...g, standard: { ...g.standard, ...patch } } } }
+  }),
+  addOffcut: (key, offcut) => set(st => {
+    const g = st.stock[key]; if (!g) return {}
+    return { stock: { ...st.stock, [key]: { ...g, offcuts: [...g.offcuts, offcut] } } }
+  }),
+  removeOffcut: (key, index) => set(st => {
+    const g = st.stock[key]; if (!g) return {}
+    return { stock: { ...st.stock, [key]: { ...g, offcuts: g.offcuts.filter((_, i) => i !== index) } } }
+  }),
+  setNestResult: (r) => set({ nestResult: r }),
+  setNesting: (b) => set({ nesting: b }),
 }))
