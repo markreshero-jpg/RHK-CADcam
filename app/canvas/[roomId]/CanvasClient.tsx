@@ -47,7 +47,7 @@ import RoomPropertiesModal, { type RoomPropertiesTab } from './RoomPropertiesMod
 import { type RoomSwitcherHandle } from './RoomSwitcher'
 import ObjectTreeModal from './ObjectTreeModal'
 import ReportsModal, { type ReportScope } from './ReportsModal'
-import Room3DScene from './Room3DScene'
+import Room3DScene, { type Camera3DState } from './Room3DScene'
 import BenchtopPanel from './BenchtopPanel'
 import SnapToolbar from './SnapToolbar'
 import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
@@ -152,6 +152,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }, [resolvedParts])
 
   const svgRef = useRef<SVGSVGElement>(null)
+  // Retained 3D camera state — survives the Room3DScene unmount when switching to
+  // elevation/plan, so returning to 3D restores the last view instead of resetting.
+  const camera3DStateRef = useRef<Camera3DState | null>(null)
+  // Incrementing signal drives the "Reset view" button — snaps 3D back to default.
+  const [reset3DSignal, setReset3DSignal] = useState(0)
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
   const cabDragRef = useRef<{ cabId: string; assemblyClass: AssemblyClass; wall: Wall; cabDX: number; dragOffset: number } | null>(null)
   const cabDragOriginRef = useRef<Pt | null>(null)
@@ -1135,6 +1140,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               {v === 'plan' ? 'Plan' : v === 'elevation' ? 'Elevation' : v === 'section' ? 'Section' : '3D'}
             </button>
           ))}
+          {canvasView === '3d' && (
+            <button
+              onClick={() => setReset3DSignal(s => s + 1)}
+              title="Reset 3D view"
+              className="ml-2 px-2 py-1 text-xs rounded transition-colors bg-gray-700 text-gray-100 hover:bg-gray-600 border border-gray-500"
+            >
+              ⟲ Reset view
+            </button>
+          )}
         </div>
         <div className="ml-auto flex items-center gap-2">
           {(canvasView === 'plan' || canvasView === 'elevation') && (
@@ -1401,6 +1415,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeleteCabinet={id => handleDeleteCabinet(id)}
             resolvedParts={visibleResolvedParts}
             materialColours={matColours}
+            cameraStateRef={camera3DStateRef}
+            resetSignal={reset3DSignal}
           />
         )}
 

@@ -26,8 +26,10 @@ export type HingeMeshName = 'HingePlate' | 'HingeCupArm'
 function HingeMeshInner({ url, mesh, color }: { url: string; mesh: HingeMeshName; color: string }) {
   const gltf = useGLTF(url)
   const obj = useMemo(() => {
-    const src = gltf.scene.getObjectByName(mesh)
-    if (!src) return null
+    // Combined GLBs name their meshes (HingePlate / HingeCupArm); single-part
+    // files (a plate-free hinge, or a standalone plate) have no such name — render
+    // the whole scene in that case.
+    const src = gltf.scene.getObjectByName(mesh) ?? gltf.scene
     const c = src.clone(true)
     const mat = new THREE.MeshStandardMaterial({
       color, metalness: 0.7, roughness: 0.35, side: THREE.DoubleSide,

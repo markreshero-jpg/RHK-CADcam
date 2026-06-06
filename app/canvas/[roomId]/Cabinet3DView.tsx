@@ -945,11 +945,12 @@ function CabinetScene({
     () => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []),
     [rp.hinge_instances, showDrilling],
   )
-  // Hinges grouped by door zone, keyed `${row}_${col}` — only those with a 3D model.
+  // Hinges grouped by door zone, keyed `${row}_${col}` — only those with a 3D
+  // model (hinge model and/or a separate plate model).
   const hingesByZone = useMemo(() => {
     const m = new Map<string, ResolvedHingeInstance[]>()
     for (const h of rp.hinge_instances ?? []) {
-      if (!h.model_url) continue
+      if (!h.model_url && !h.plate_model_url) continue
       const k = `${h.row_index}_${h.col_index}`
       const arr = m.get(k) ?? []
       arr.push(h)
@@ -1211,24 +1212,31 @@ function CabinetScene({
                 hinges={zoneHinges}
                 {...partProps}
               />
-              {/* Plates stay fixed in world space at the bore-centre anchor. */}
-              {zoneHinges.map((h, hi) => (
+              {/* Plates stay fixed in world space at the bore-centre anchor.
+                  Source: the plate's own GLB when uploaded (for hinge models that
+                  ship without a plate), else the combined GLB's HingePlate mesh.
+                  Either way it sits at the hinge Y, so it tracks the hinge. */}
+              {zoneHinges.map((h, hi) => {
+                const plateUrl   = h.plate_model_url ?? h.model_url
+                const plateScale = h.plate_model_url ? h.plate_model_scale : h.model_scale
+                if (!plateUrl) return null
+                return (
                 <HingeMeshPlaced
                   key={`plate${hi}`}
-                  url={h.model_url!}
+                  url={plateUrl}
                   mesh="HingePlate"
                   // Same across + depth offsets so the plate stays consistent
                   // with the cup (plate ends up back at the gable).
                   position={[
-                    hingeX + cupAcrossOffset(h.cup_x_from_edge_mm, mirror, h.model_scale),
-                    b.y + h.y_position_mm,
-                    b.z - ((h.bore_to_door_mm ?? 0) * h.model_scale + seatNudge(b.d)),
+                    hingeX + cupAcrossOffset(h.cup_x_from_edge_mm, mirror, h.model_scale) + h.plate_anchor_x,
+                    b.y + h.y_position_mm + h.plate_anchor_y,
+                    b.z - ((h.bore_to_door_mm ?? 0) * h.model_scale + seatNudge(b.d)) + h.plate_anchor_z,
                   ]}
                   mirror={mirror}
-                  scale={h.model_scale}
+                  scale={plateScale}
                   color="#8b919b"
                 />
-              ))}
+                )})}
             </group>
           )
         }

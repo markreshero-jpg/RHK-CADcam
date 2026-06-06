@@ -32,6 +32,11 @@ interface PlateRow {
   active: boolean
   supplier_code: string | null
   cost_per_unit: number | null
+  model_plate_url: string | null
+  model_plate_scale: number
+  model_plate_anchor_x: number
+  model_plate_anchor_y: number
+  model_plate_anchor_z: number
 }
 
 const SURFACES = ['side', 'top', 'bottom', 'shelf'] as const
@@ -242,6 +247,11 @@ function PlatesSection({ hingeId }: { hingeId: string }) {
       active: r.active !== false,
       supplier_code: (r.supplier_code as string | null) ?? null,
       cost_per_unit: r.cost_per_unit != null ? Number(r.cost_per_unit) : null,
+      model_plate_url: (r.model_plate_url as string | null) ?? null,
+      model_plate_scale: r.model_plate_scale != null ? Number(r.model_plate_scale) : 1,
+      model_plate_anchor_x: r.model_plate_anchor_x != null ? Number(r.model_plate_anchor_x) : 0,
+      model_plate_anchor_y: r.model_plate_anchor_y != null ? Number(r.model_plate_anchor_y) : 0,
+      model_plate_anchor_z: r.model_plate_anchor_z != null ? Number(r.model_plate_anchor_z) : 0,
     }
   }
 
@@ -287,6 +297,33 @@ function PlatesSection({ hingeId }: { hingeId: string }) {
     if (error) { console.error('delete plate:', error); setErr(`Delete failed: ${error.message}`); return }
     setPlates(prev => prev.filter(p => p.id !== id))
     if (selId === id) setSelId(null)
+  }
+
+  // ── Per-plate 3D model (for hinge GLBs that don't include a plate) ──────────
+  const [plateUploading, setPlateUploading] = useState(false)
+  async function uploadPlateModel(plate: PlateRow, file: File) {
+    setErr(null)
+    if (!formatFromName(file.name)) { setErr('Plate model must be .glb'); return }
+    setPlateUploading(true)
+    if (plate.model_plate_url) { const prior = objectPathFromUrl(plate.model_plate_url); if (prior) await supabase.storage.from(MODEL_BUCKET).remove([prior]) }
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const path = `plate-${plate.id}/${Date.now()}-${safe}`
+    const { error: upErr } = await supabase.storage.from(MODEL_BUCKET).upload(path, file, { upsert: true, cacheControl: '3600' })
+    if (upErr) { setErr(`Upload failed: ${upErr.message} (does the "${MODEL_BUCKET}" bucket exist?)`); setPlateUploading(false); return }
+    const { data: pub } = supabase.storage.from(MODEL_BUCKET).getPublicUrl(path)
+    const { error } = await supabase.from('hardware_hinge_plates').update({ model_plate_url: pub.publicUrl, model_plate_format: 'glb' }).eq('id', plate.id)
+    if (error) setErr(`Save failed: ${error.message}`)
+    else setPlates(prev => prev.map(p => p.id === plate.id ? { ...p, model_plate_url: pub.publicUrl } : p))
+    setPlateUploading(false)
+  }
+  async function removePlateModel(plate: PlateRow) {
+    if (!plate.model_plate_url) return
+    setPlateUploading(true)
+    const path = objectPathFromUrl(plate.model_plate_url)
+    if (path) await supabase.storage.from(MODEL_BUCKET).remove([path])
+    await supabase.from('hardware_hinge_plates').update({ model_plate_url: null, model_plate_format: null }).eq('id', plate.id)
+    setPlates(prev => prev.map(p => p.id === plate.id ? { ...p, model_plate_url: null } : p))
+    setPlateUploading(false)
   }
 
   const sel = plates.find(p => p.id === selId) ?? null
@@ -344,6 +381,35 @@ function PlatesSection({ hingeId }: { hingeId: string }) {
               <input type="checkbox" checked={sel.active} onChange={e => patchPlate(sel.id, { active: e.target.checked })} className="accent-blue-500" />
               Active
             </label>
+          </div>
+
+          {/* Separate plate 3D model — for hinge GLBs with no plate mesh. The
+              plate renders at the hinge position, so it tracks the hinge. */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[9px] uppercase tracking-wide text-ink-subtle">Plate 3D model</span>
+            <label className="px-2 py-0.5 bg-accent hover:bg-accent-hover text-white text-[11px] rounded cursor-pointer">
+              {plateUploading ? '…' : sel.model_plate_url ? 'Replace' : 'Upload .glb'}
+              <input type="file" accept=".glb,.gltf" className="hidden" disabled={plateUploading}
+                onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadPlateModel(sel, f) }} />
+            </label>
+            {sel.model_plate_url && (
+              <>
+                <button onClick={() => removePlateModel(sel)} disabled={plateUploading} className="px-2 py-0.5 bg-surface-3 hover:bg-surface-3 text-ink-muted text-[11px] rounded">Remove</button>
+                <LabeledCalc label="Scale" value={sel.model_plate_scale} onCommit={v => patchPlate(sel.id, { model_plate_scale: v })} />
+              </>
+            )}
+            <span className="text-[10px] text-ink-subtle">{sel.model_plate_url ? 'GLB' : 'uses hinge GLB plate'}</span>
+          </div>
+
+          {/* Plate model position nudge (mm, cabinet axes). Applies to the plate
+              whether it comes from a separate GLB or the combined hinge GLB.
+              X = across · Y = up/down · Z = in/out (toward/away from the door). */}
+          <div className="flex items-end gap-3 flex-wrap">
+            <span className="text-[9px] uppercase tracking-wide text-ink-subtle pb-1">Plate position</span>
+            <LabeledCalc label="Nudge X" value={sel.model_plate_anchor_x} onCommit={v => patchPlate(sel.id, { model_plate_anchor_x: v })} />
+            <LabeledCalc label="Nudge Y" value={sel.model_plate_anchor_y} onCommit={v => patchPlate(sel.id, { model_plate_anchor_y: v })} />
+            <LabeledCalc label="Nudge Z (in/out)" value={sel.model_plate_anchor_z} onCommit={v => patchPlate(sel.id, { model_plate_anchor_z: v })} />
+            <span className="text-[9px] text-ink-subtle pb-1">X across · Y up/down · Z in/out</span>
           </div>
 
           <div>

@@ -762,10 +762,10 @@ async function loadHingeInputs(
       .eq('id', hingeId).maybeSingle(),
     schedPlateId
       ? supabase.from('hardware_hinge_plates')
-          .select('id, plate_offset_mm, mounting_hole_pattern, compatible_surfaces')
+          .select('id, plate_offset_mm, mounting_hole_pattern, compatible_surfaces, model_plate_url, model_plate_scale, model_plate_anchor_x, model_plate_anchor_y, model_plate_anchor_z')
           .eq('id', schedPlateId).maybeSingle()
       : supabase.from('hardware_hinge_plates')
-          .select('id, plate_offset_mm, mounting_hole_pattern, compatible_surfaces')
+          .select('id, plate_offset_mm, mounting_hole_pattern, compatible_surfaces, model_plate_url, model_plate_scale, model_plate_anchor_x, model_plate_anchor_y, model_plate_anchor_z')
           .eq('hinge_id', hingeId).eq('is_default', true).limit(1).maybeSingle(),
   ])
 
@@ -791,6 +791,11 @@ async function loadHingeInputs(
     compatible_surfaces:   Array.isArray(pRow.compatible_surfaces)
       ? (pRow.compatible_surfaces as HingePlateInput['compatible_surfaces'])
       : ['side'],
+    model_plate_url:       (pRow.model_plate_url as string | null) ?? null,
+    model_plate_scale:     pRow.model_plate_scale != null ? Number(pRow.model_plate_scale) : 1,
+    model_plate_anchor_x:  pRow.model_plate_anchor_x != null ? Number(pRow.model_plate_anchor_x) : 0,
+    model_plate_anchor_y:  pRow.model_plate_anchor_y != null ? Number(pRow.model_plate_anchor_y) : 0,
+    model_plate_anchor_z:  pRow.model_plate_anchor_z != null ? Number(pRow.model_plate_anchor_z) : 0,
   } : null
 
   return { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges }

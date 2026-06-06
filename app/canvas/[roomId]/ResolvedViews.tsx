@@ -286,11 +286,13 @@ function HingeShapes({ rp, project }: {
   rp: ResolvedCabinet
   project: (x: number, y: number, z: number) => { x: number; y: number }
 }) {
-  const hinges = (rp.hinge_instances ?? []).filter(h => h.model_url)
-  const refs = useMemo(
-    () => hinges.map(h => ({ model_url: h.model_url, model_format: 'glb' as const })),
-    [hinges],
-  )
+  const hinges = (rp.hinge_instances ?? []).filter(h => h.model_url || h.plate_model_url)
+  // Load every distinct hinge + plate GLB used on this cabinet.
+  const refs = useMemo(() => {
+    const urls = new Set<string>()
+    for (const h of hinges) { if (h.model_url) urls.add(h.model_url); if (h.plate_model_url) urls.add(h.plate_model_url) }
+    return [...urls].map(u => ({ model_url: u, model_format: 'glb' as const }))
+  }, [hinges])
   const triMap = useSlideTriangles(refs)
   const zoneByKey = useMemo(() => {
     const m = new Map<string, ResolvedFaceZone>()
@@ -300,17 +302,23 @@ function HingeShapes({ rp, project }: {
 
   return (
     <g style={{ pointerEvents: 'none' }}>
-      {hinges.map((h, i) => {
+      {hinges.flatMap((h, i) => {
         const z = zoneByKey.get(`${h.row_index}_${h.col_index}`)
-        if (!z || (z.hinge_side !== 'left' && z.hinge_side !== 'right')) return null
-        const tris = h.model_url ? triMap.get(`glb:${h.model_url}`) : undefined
-        if (!tris || !tris.length) return null
+        if (!z || (z.hinge_side !== 'left' && z.hinge_side !== 'right')) return []
         const pl = hingePlacement(h, { x: z.X, y: z.Y, z: z.Z, w: z.DY, d: z.DZ }, z.hinge_side)
-        // Outline only (boundary), not a filled fill — keeps the drawing clean.
-        const d = hingeSilhouetteOutline(tris, pl, project)
-        if (!d) return null
-        return <path key={i} d={d} fill="none" stroke="#8b919b" strokeWidth={0.5}
-          strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        // The plate gets its nudge offset (matches the 3D placement).
+        const platePl = { ...pl, oX: pl.oX + h.plate_anchor_x, oY: pl.oY + h.plate_anchor_y, oZ: pl.oZ + h.plate_anchor_z }
+        // Outline the hinge body AND its plate (separate GLB or combined), both
+        // at the same bore-centre anchor so they sit together.
+        return [h.model_url, h.plate_model_url].flatMap((url, k) => {
+          if (!url) return []
+          const tris = triMap.get(`glb:${url}`)
+          if (!tris || !tris.length) return []
+          const d = hingeSilhouetteOutline(tris, k === 1 ? platePl : pl, project)
+          if (!d) return []
+          return [<path key={`${i}-${k}`} d={d} fill="none" stroke="#8b919b" strokeWidth={0.5}
+            strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />]
+        })
       })}
     </g>
   )

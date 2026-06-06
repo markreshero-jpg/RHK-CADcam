@@ -495,7 +495,10 @@ export default function ElevationSVG({
         const occ = wallCabs
           .filter(c => cabBlocks(cls, c.assembly_class))
           .map(c => ({ t: cabT(c, wall), dx: c.dx }))
-        const t = findFreeSlot(Math.max(0, Math.min(wall.length - dims.dx, cursorT)), dims.dx, wall.length, occ)
+        // Centre the snap landing on the cursor (subtract dx/2), matching the floating
+        // ghost (floatX = cursorT - dx/2) and the move/following path — otherwise the
+        // cursor sits on the outline's edge instead of in the middle of the cabinet.
+        const t = findFreeSlot(Math.max(0, Math.min(wall.length - dims.dx, cursorT - dims.dx / 2)), dims.dx, wall.length, occ)
         setPlaceGhost({ t, cls, dx: dims.dx, dy: dims.dy, cursorT, cursorSY })
       }
       return

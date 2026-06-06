@@ -56,6 +56,17 @@ const DEFAULT_GRID: FaceGridInput = {
 
 const CYCLE_TYPES: FaceZoneInput['face_type'][] = ['door', 'drawer_face', 'false_panel', 'open']
 
+// Hinge cup drilling preview — mirrors the resolver's buildCupDrills geometry so
+// the fallback matches the Elevation view: a 35mm cup bore cup_x_from_edge in from
+// the hinged edge, plus two cup-fixing screw holes offset toward the door interior
+// (anchor offset_x) and ±along the hinge axis (anchor offset_y). Used when the
+// resolver hasn't supplied actual cup_drills (no hinge hardware resolved).
+const HINGE_CUP_DIA    = 35
+const HINGE_CUP_INSET  = 22     // cup centre in from the hinged edge (cup_x_from_edge_mm)
+const HINGE_ANCHOR_DIA = 8      // cup-fixing screw hole diameter
+const HINGE_ANCHOR_DX  = 9.5    // screw offset toward the door interior (anchor offset_x)
+const HINGE_ANCHOR_DY  = 22.5   // screw offset along the hinge axis (anchor offset_y)
+
 const ZONE_STYLE: Record<string, { fill: string; stroke: string; label: string }> = {
   door:        { fill: '#1e3a5f', stroke: '#3b82f6', label: 'Door' },
   drawer_face: { fill: '#3b1f5f', stroke: '#8b5cf6', label: 'Drawer' },
@@ -236,6 +247,38 @@ export default function FaceGridEditor({
     // No resolved hinges (e.g. hinge hardware not configured) — show an approximate
     // auto layout so the face grid still previews hinge positions.
     return defaultHingeYs(zoneDoorHeight(gz)).sort((a, b) => b - a)
+  }
+
+  // Cup + anchor drill circles for a door zone, in absolute cabinet coords
+  // (project with ox + x, svgY(y) — same as the Elevation view). Prefers the
+  // resolver's actual cup_drills so positions match the elevation exactly; falls
+  // back to an approximate cup + two screw holes when no hardware is resolved.
+  function zoneCupDrills(gz: FaceZoneInput): { x: number; y: number; r: number; kind: 'cup' | 'anchor' }[] {
+    const side = gz.hinge_side ?? 'left'
+    if (side !== 'left' && side !== 'right') return []
+    if (!Array.isArray(gz.hinges)) {
+      const hs = (rp?.hinge_instances ?? []).filter(h => h.row_index === gz.row_index && h.col_index === gz.col_index)
+      if (hs.length > 0) {
+        return hs.flatMap(h => h.cup_drills
+          .filter(dr => dr.kind === 'cup' || dr.kind === 'anchor')
+          .map(dr => ({ x: dr.x, y: dr.y, r: Math.max(dr.radius, 1), kind: dr.kind as 'cup' | 'anchor' })))
+      }
+    }
+    // Approximate fallback (manual positions, or no hardware configured).
+    const rowY = d.rowYOffsets[gz.row_index]
+    const colX = d.colXOffsets[gz.col_index]
+    const colW = d.colWidths[gz.col_index]
+    if (rowY == null || colX == null || !colW) return []
+    const cupX    = side === 'right' ? colX + colW - HINGE_CUP_INSET : colX + HINGE_CUP_INSET
+    const anchorX = side === 'right' ? cupX - HINGE_ANCHOR_DX : cupX + HINGE_ANCHOR_DX
+    return zoneHingeYs(gz).flatMap(hy => {
+      const cupY = rowY + hy
+      return [
+        { x: cupX,    y: cupY,                   r: HINGE_CUP_DIA / 2,    kind: 'cup' as const },
+        { x: anchorX, y: cupY - HINGE_ANCHOR_DY, r: HINGE_ANCHOR_DIA / 2, kind: 'anchor' as const },
+        { x: anchorX, y: cupY + HINGE_ANCHOR_DY, r: HINGE_ANCHOR_DIA / 2, kind: 'anchor' as const },
+      ]
+    })
   }
   function setZoneHinges(rowIdx: number, colIdx: number, ys: number[] | null) {
     save({
@@ -618,15 +661,26 @@ export default function FaceGridEditor({
                     />
                   )}
 
-                  {/* Hinge position ticks — a stub on the hinged edge per hinge */}
-                  {gz.face_type === 'door' && (hinge === 'left' || hinge === 'right') &&
-                    zoneHingeYs(gz).map((hy, hi) => {
-                      const my = svgY(rowY + hy)
-                      const ex = hinge === 'right' ? zx + colW : zx
-                      const dir = hinge === 'right' ? -1 : 1
-                      return <line key={`hm-${hi}`} x1={ex} y1={my} x2={ex + dir * 9} y2={my}
-                        stroke="#a855f7" strokeWidth={2.5} style={{ pointerEvents: 'none' }} />
-                    })}
+                  {/* Hinge cup drilling — cup bore + anchor screw holes, positioned
+                      exactly as the resolved Elevation view (absolute cabinet coords).
+                      Falls back to an approximate pattern when no hardware is resolved. */}
+                  {gz.face_type === 'door' && zoneCupDrills(gz).map((dr, di) => {
+                    const cx = ox + dr.x
+                    const cy = svgY(dr.y)
+                    if (dr.kind === 'cup') {
+                      return (
+                        <g key={`hc-${di}`} style={{ pointerEvents: 'none' }}>
+                          <circle cx={cx} cy={cy} r={dr.r}
+                            fill="#a855f7" fillOpacity={0.22} stroke="#a855f7" strokeWidth={1} />
+                          <line x1={cx - 4} y1={cy} x2={cx + 4} y2={cy} stroke="#a855f7" strokeWidth={0.75} />
+                          <line x1={cx} y1={cy - 4} x2={cx} y2={cy + 4} stroke="#a855f7" strokeWidth={0.75} />
+                        </g>
+                      )
+                    }
+                    return <circle key={`hc-${di}`} cx={cx} cy={cy} r={dr.r}
+                      fill="#a855f7" fillOpacity={0.5} stroke="#a855f7" strokeWidth={0.75}
+                      style={{ pointerEvents: 'none' }} />
+                  })}
                 </g>
               )
             })}

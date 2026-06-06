@@ -229,7 +229,7 @@ async function loadHingeHardware(rows: Record<string, unknown>[]): Promise<{
       .select('id, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm')
       .in('id', hwIds),
     plateIds.length
-      ? supabase.from('hardware_hinge_plates').select('id, plate_offset_mm, mounting_hole_pattern, compatible_surfaces').in('id', plateIds)
+      ? supabase.from('hardware_hinge_plates').select('id, plate_offset_mm, mounting_hole_pattern, compatible_surfaces, model_plate_url, model_plate_scale, model_plate_anchor_x, model_plate_anchor_y, model_plate_anchor_z').in('id', plateIds)
       : Promise.resolve({ data: [] as unknown[] }),
     supabase.from('hinge_count_rules').select('max_height_mm, hinge_count, top_inset_mm, bottom_inset_mm').eq('active', true).order('max_height_mm', { ascending: true }),
   ])
@@ -256,6 +256,11 @@ async function loadHingeHardware(rows: Record<string, unknown>[]): Promise<{
       plate_offset_mm:       Number(p.plate_offset_mm ?? 0),
       mounting_hole_pattern: toHingeHoles(p.mounting_hole_pattern),
       compatible_surfaces:   Array.isArray(p.compatible_surfaces) ? (p.compatible_surfaces as HingePlateInput['compatible_surfaces']) : ['side'],
+      model_plate_url:       (p.model_plate_url as string | null) ?? null,
+      model_plate_scale:     p.model_plate_scale != null ? Number(p.model_plate_scale) : 1,
+      model_plate_anchor_x:  p.model_plate_anchor_x != null ? Number(p.model_plate_anchor_x) : 0,
+      model_plate_anchor_y:  p.model_plate_anchor_y != null ? Number(p.model_plate_anchor_y) : 0,
+      model_plate_anchor_z:  p.model_plate_anchor_z != null ? Number(p.model_plate_anchor_z) : 0,
     })
   }
   const countRules: HingeRuleInput[] = (((ruleRes as { data: unknown[] | null }).data ?? []) as Record<string, unknown>[]).map(r => ({

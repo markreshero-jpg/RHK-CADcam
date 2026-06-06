@@ -444,6 +444,53 @@ function CustomZoom({ controlsRef }: { controlsRef: React.RefObject<any> }) {
   return null
 }
 
+// ── Camera persistence ─────────────────────────────────────────────────────────
+// Saves the camera position + orbit target into a parent-held ref so the view is
+// retained when the 3D Canvas unmounts (switching to elevation/plan) and restored
+// when it remounts. Without this, returning to 3D resets to the default view.
+
+export type Camera3DState = { pos: [number, number, number]; target: [number, number, number] }
+
+function CameraPersistence({ controlsRef, stateRef }: {
+  controlsRef: React.RefObject<any>
+  stateRef?: React.MutableRefObject<Camera3DState | null>
+}) {
+  // Subscribe to the *active default* camera. On first render the default is still
+  // R3F's throwaway camera — drei's <PerspectiveCamera makeDefault> only swaps it in
+  // via an effect. Depending on `camera` re-runs this once that swap settles, so we
+  // read/write the camera OrbitControls actually drives (its `.object`), not the
+  // stale one. Without this we'd persist/restore the wrong camera and 3D would still
+  // appear to reset.
+  const camera = useThree(s => s.camera)
+
+  useEffect(() => {
+    const ctrl = controlsRef.current
+    if (!ctrl) return
+
+    // Restore the saved view (e.g. returning from elevation/plan).
+    const saved = stateRef?.current
+    if (saved) {
+      camera.position.set(saved.pos[0], saved.pos[1], saved.pos[2])
+      ctrl.target.set(saved.target[0], saved.target[1], saved.target[2])
+      ctrl.update()
+    }
+
+    // Persist on every camera change (orbit, pan, and CustomZoom — which calls
+    // controls.update(), firing OrbitControls' 'change' event).
+    if (!stateRef) return
+    const save = () => {
+      stateRef.current = {
+        pos: [camera.position.x, camera.position.y, camera.position.z],
+        target: [ctrl.target.x, ctrl.target.y, ctrl.target.z],
+      }
+    }
+    ctrl.addEventListener('change', save)
+    return () => ctrl.removeEventListener('change', save)
+  }, [camera, controlsRef, stateRef])
+
+  return null
+}
+
 // ── Camera controller ─────────────────────────────────────────────────────────
 // Reacts to an incrementing signal to programmatically reposition the camera.
 
@@ -465,9 +512,30 @@ function CameraController({ signal, controlsRef, midX, midZ, camHeight, targetY 
   return null
 }
 
+// Reacts to an incrementing signal to snap the camera back to the default 3D view
+// (the angled position computed from room bounds). Drives the "Reset view" button.
+
+function ResetView({ signal, controlsRef, position, target }: {
+  signal: number
+  controlsRef: React.RefObject<any>
+  position: [number, number, number]
+  target: [number, number, number]
+}) {
+  const { camera } = useThree()
+
+  useEffect(() => {
+    if (signal === 0 || !controlsRef.current) return
+    camera.position.set(position[0], position[1], position[2])
+    controlsRef.current.target.set(target[0], target[1], target[2])
+    controlsRef.current.update()
+  }, [signal]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null
+}
+
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, hiddenWallIds, birdsEyeSignal }: {
+function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -478,6 +546,8 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
   materialColours?: Record<string, MatColEntry>
   hiddenWallIds: Set<string>
   birdsEyeSignal: number
+  resetSignal: number
+  cameraStateRef?: React.MutableRefObject<Camera3DState | null>
 }) {
   const controlsRef = useRef<any>(null)
   const { x: cx, y: cy } = useMemo(() => centroid(walls), [walls])
@@ -496,22 +566,38 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
   const midX    = (bounds.minX + bounds.maxX) / 2
   const midZ    = (bounds.minZ + bounds.maxZ) / 2
 
+  // Memoise the default camera position + orbit target so their array identity is
+  // stable across re-renders. Inline literals are fresh every render, which makes
+  // react-three-fiber re-apply them — snapping the camera back to default on any
+  // re-render (selection, async part loads) and clobbering both the retained view
+  // and live orbiting. Stable arrays apply only on mount / genuine geometry change.
+  const camPosition = useMemo<[number, number, number]>(
+    () => [midX + camDist * 0.55, camDist * 0.65, midZ + camDist * 0.85],
+    [midX, midZ, camDist],
+  )
+  const camTarget = useMemo<[number, number, number]>(
+    () => [midX, roomH * 0.3, midZ],
+    [midX, midZ, roomH],
+  )
+
   return (
     <>
       <PerspectiveCamera
         makeDefault fov={FOV}
-        position={[midX + camDist * 0.55, camDist * 0.65, midZ + camDist * 0.85]}
+        position={camPosition}
         near={10} far={500000}
       />
       <OrbitControls
         ref={controlsRef}
-        target={[midX, roomH * 0.3, midZ]}
+        target={camTarget}
         minDistance={span * 0.1}
         maxDistance={span * 8}
         enablePan enableDamping={false}
         enableZoom={false}
       />
       <CustomZoom controlsRef={controlsRef} />
+      <CameraPersistence controlsRef={controlsRef} stateRef={cameraStateRef} />
+      <ResetView signal={resetSignal} controlsRef={controlsRef} position={camPosition} target={camTarget} />
       <CameraController
         signal={birdsEyeSignal}
         controlsRef={controlsRef}
@@ -565,7 +651,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
 type MenuState     = { x: number; y: number; cabId: string }
 type WallMenuState = { x: number; y: number }
 
-export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, resolvedParts, materialColours }: {
+export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, resolvedParts, materialColours, cameraStateRef, resetSignal = 0 }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -576,6 +662,8 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   onDeleteCabinet: (id: string) => void
   resolvedParts: Map<string, ResolvedCabinet>
   materialColours?: Record<string, MatColEntry>
+  cameraStateRef?: React.MutableRefObject<Camera3DState | null>
+  resetSignal?: number
 }) {
   const [menu, setMenu]               = useState<MenuState | null>(null)
   const [wallMenu, setWallMenu]       = useState<WallMenuState | null>(null)
@@ -630,6 +718,8 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
               materialColours={materialColours}
               hiddenWallIds={hiddenWallIds}
               birdsEyeSignal={birdsEyeSignal}
+              resetSignal={resetSignal}
+              cameraStateRef={cameraStateRef}
             />
           )}
         </Suspense>

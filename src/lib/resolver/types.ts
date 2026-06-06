@@ -591,6 +591,13 @@ export interface HingePlateInput {
   plate_offset_mm:       number
   mounting_hole_pattern: HingeBoreHole[]
   compatible_surfaces:   ('side' | 'top' | 'bottom' | 'shelf')[]
+  // Separate plate GLB (for hinge models that ship without a plate mesh).
+  model_plate_url:       string | null
+  model_plate_scale:     number
+  // Nudge (mm, cabinet axes) to line the plate model up on the bore.
+  model_plate_anchor_x:  number
+  model_plate_anchor_y:  number
+  model_plate_anchor_z:  number
 }
 export interface ExistingHingeInput {
   row_index:               number
@@ -650,6 +657,12 @@ export interface ResolvedHingeInstance {
   bore_to_door_mm:  number | null   // HingeSpec.bore_centre_to_door_face_mm
   open_angle_deg:   number | null   // HingeSpec.open_angle_deg (mechanical max)
   cup_x_from_edge_mm: number        // door edge → cup bore centre (across width)
+  // Separate plate GLB (overrides the combined GLB's HingePlate mesh when set).
+  plate_model_url:   string | null
+  plate_model_scale: number
+  plate_anchor_x:    number
+  plate_anchor_y:    number
+  plate_anchor_z:    number
 }
 
 // ── Face Grid Input ───────────────────────────────────────────
