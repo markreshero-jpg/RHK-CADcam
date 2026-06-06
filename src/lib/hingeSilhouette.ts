@@ -85,6 +85,31 @@ export function hingeSilhouettePath(
   return d
 }
 
+// Snap targets for the measure tool: the projected bounding-box corners,
+// edge midpoints and centre of a hinge (or plate) silhouette. Cheap — one pass
+// over the vertices tracking projected min/max. Lets you measure to the hinge /
+// plate body, not just its bore centres.
+export function hingeSilhouetteSnapPoints(
+  tris: Float32Array,
+  pl: HingePlacement,
+  project: (x: number, y: number, z: number) => P2,
+): P2[] {
+  const sx = pl.mirror ? -1 : 1
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (let i = 0; i < tris.length; i += 3) {
+    const p = project(pl.oX + sx * pl.scale * tris[i], pl.oY + pl.scale * tris[i + 1], pl.oZ + pl.scale * tris[i + 2])
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x
+    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
+  }
+  if (!isFinite(minX)) return []
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+  return [
+    { x: minX, y: minY }, { x: maxX, y: minY }, { x: minX, y: maxY }, { x: maxX, y: maxY },
+    { x: cx, y: minY }, { x: cx, y: maxY }, { x: minX, y: cy }, { x: maxX, y: cy },
+    { x: cx, y: cy },
+  ]
+}
+
 // TRUE silhouette OUTLINE (boundary only — follows concavities/holes). The
 // projected triangle union is rasterised into a boolean grid, then marching
 // squares extracts the filled/empty boundary as short line segments. Mirrors

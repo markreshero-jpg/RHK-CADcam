@@ -1404,7 +1404,7 @@ export default function CanvasSVG({
               </text>
               <text x={mx} y={my - boxH + fs * 1.7} textAnchor="middle" dominantBaseline="middle"
                 fontSize={fs * 0.8} fill="#9ca3af" style={{ userSelect: 'none' }}>
-                Δ{dx} × {dy}
+                x {dx}  y {dy}
               </text>
             </g>
           )

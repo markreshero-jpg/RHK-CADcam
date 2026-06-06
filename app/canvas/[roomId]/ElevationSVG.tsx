@@ -1782,7 +1782,7 @@ export default function ElevationSVG({
                   </text>
                   <text x={mx} y={my - boxH + fs * 1.7} textAnchor="middle" dominantBaseline="middle"
                     fontSize={fs * 0.8} fill="#9ca3af" style={{ userSelect: 'none' }}>
-                    Δ{ddx} × {ddy}
+                    x {ddx}  y {ddy}
                   </text>
                 </g>
               )

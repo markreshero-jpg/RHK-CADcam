@@ -11,7 +11,7 @@ import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
   ResolvedInternalPart, ResolvedFaceZone,
   ResolvedDrawerStack, ResolvedDrawerSlide, ResolvedDrawerBoxPart,
-  ResolvedSeamJoint, ResolvedHingeInstance,
+  ResolvedSeamJoint, ResolvedHingeInstance, ResolvedHingeDrill,
 } from '@/src/lib/resolver/types'
 import {
   Box, PanelKind, PartMeta, PartEdge,
@@ -319,12 +319,14 @@ function HingeMeshPlaced({ url, mesh, position, mirror, scale, color }: {
   )
 }
 
-function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, ...partProps }: PartProps & {
+function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, showDrilling, ...partProps }: PartProps & {
   b:          Box
   hingeSide:  'left' | 'right'
   doorsOpen:  boolean
   doorProfile?: ResolvedDoorProfile | null
   hinges?:    ResolvedHingeInstance[]
+  cupDrills?: ResolvedHingeDrill[]   // world coords; converted to local below
+  showDrilling?: boolean
 }) {
   const groupRef     = useRef<THREE.Group>(null)
   const curAngle     = useRef(0)
@@ -371,6 +373,15 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, ...partProps 
           color="#c0c6d0"
         />
       ))}
+      {/* Cup + anchor bore markers — inside the group, so they swing with the
+          door. Convert from world to door-group-local coords. */}
+      {showDrilling && (cupDrills?.length ?? 0) > 0 && (
+        <SlideDrillMarkers
+          drills={cupDrills!.map(dr => ({ ...dr, x: dr.x - hingeX, y: dr.y - b.y, z: dr.z - b.z }))}
+          wire={partProps.wire}
+          color="#a855f7"
+        />
+      )}
     </group>
   )
 }
@@ -941,10 +952,36 @@ function CabinetScene({
     () => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? [], rp.internal_slides ?? []) : []),
     [rp.drawer_stacks, showDrilling],
   )
-  const hingeDrills = useMemo(
-    () => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []),
-    [rp.hinge_instances, showDrilling],
-  )
+  // Door hinge_side per zone — decides which doors animate (left/right swing).
+  const zoneEdge = useMemo(() => {
+    const m = new Map<string, string | undefined>()
+    for (const z of rp.face_zones) if (z.face_type === 'door') m.set(`${z.row_index}_${z.col_index}`, z.hinge_side)
+    return m
+  }, [rp.face_zones])
+  // Cup + anchor bores grouped by door zone (world coords) — these ride inside the
+  // door's rotating group for animated doors so they swing with the door.
+  const cupDrillsByZone = useMemo(() => {
+    const m = new Map<string, ResolvedHingeDrill[]>()
+    for (const h of rp.hinge_instances ?? []) {
+      const k = `${h.row_index}_${h.col_index}`
+      const arr = m.get(k) ?? []
+      arr.push(...h.cup_drills)
+      m.set(k, arr)
+    }
+    return m
+  }, [rp.hinge_instances])
+  // World-fixed hinge markers: plate bores always; cup/anchor bores only for
+  // non-animated (top/bottom) doors — left/right doors render theirs in DoorPanel.
+  const hingeDrills = useMemo(() => {
+    if (!showDrilling) return []
+    const out: ResolvedHingeDrill[] = []
+    for (const h of rp.hinge_instances ?? []) {
+      const edge = zoneEdge.get(`${h.row_index}_${h.col_index}`)
+      if (edge !== 'left' && edge !== 'right') out.push(...h.cup_drills)
+      out.push(...h.plate_drills)
+    }
+    return out
+  }, [rp.hinge_instances, zoneEdge, showDrilling])
   // Hinges grouped by door zone, keyed `${row}_${col}` — only those with a 3D
   // model (hinge model and/or a separate plate model).
   const hingesByZone = useMemo(() => {
@@ -1210,6 +1247,8 @@ function CabinetScene({
                 doorsOpen={doorsOpen}
                 doorProfile={z.door_profile}
                 hinges={zoneHinges}
+                cupDrills={cupDrillsByZone.get(`${z.row_index}_${z.col_index}`)}
+                showDrilling={showDrilling}
                 {...partProps}
               />
               {/* Plates stay fixed in world space at the bore-centre anchor.

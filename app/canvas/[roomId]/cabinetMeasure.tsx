@@ -145,7 +145,7 @@ export function MeasureOverlay({ start, end, cursor, snapped, unit, vb, pts = []
   const ddy = roundMm(Math.abs(b.y - a.y))
 
   const distLabel  = `${d}mm`
-  const deltaLabel = `Δ${ddx} × ${ddy}`
+  const deltaLabel = `x ${ddx}  y ${ddy}`
   const fs  = 22 * unit          // distance readout
   const dfs = fs * 0.7           // delta line
   const pad = 10 * unit

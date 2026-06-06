@@ -25,7 +25,7 @@ import { cabinetSeamDrills, orientSeamDrills, caseBoxByKey, type DrillAxis } fro
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
 import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
 import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
-import { hingePlacement, hingeSilhouetteOutline } from '@/src/lib/hingeSilhouette'
+import { hingePlacement, hingeSilhouetteOutline, hingeSilhouetteSnapPoints } from '@/src/lib/hingeSilhouette'
 import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
 
 // Hinge cup/plate drill marker colour (distinct from amber slide drills).
@@ -324,6 +324,40 @@ function HingeShapes({ rp, project }: {
   )
 }
 
+// Distinct hinge + plate GLB refs used on a cabinet — for loading their tris in
+// the parent view (so the measure tool can snap to the hinge / plate bodies).
+function hingeModelRefs(rp: ResolvedCabinet) {
+  const urls = new Set<string>()
+  for (const h of rp.hinge_instances ?? []) { if (h.model_url) urls.add(h.model_url); if (h.plate_model_url) urls.add(h.plate_model_url) }
+  return [...urls].map(u => ({ model_url: u, model_format: 'glb' as const }))
+}
+
+// Measure snap points for every door hinge + its plate, projected into the
+// current view. Mirrors HingeShapes' placement so the snaps land on the drawn
+// outline. Returns nothing for a hinge whose GLB hasn't loaded yet.
+function hingeSnapPts(
+  rp: ResolvedCabinet,
+  triMap: Map<string, Float32Array>,
+  project: (x: number, y: number, z: number) => { x: number; y: number },
+): MPt[] {
+  const zoneByKey = new Map<string, ResolvedFaceZone>()
+  for (const z of rp.face_zones) if (z.face_type === 'door') zoneByKey.set(`${z.row_index}_${z.col_index}`, z)
+  const out: MPt[] = []
+  for (const h of rp.hinge_instances ?? []) {
+    const z = zoneByKey.get(`${h.row_index}_${h.col_index}`)
+    if (!z || (z.hinge_side !== 'left' && z.hinge_side !== 'right')) continue
+    const pl = hingePlacement(h, { x: z.X, y: z.Y, z: z.Z, w: z.DY, d: z.DZ }, z.hinge_side)
+    const platePl = { ...pl, oX: pl.oX + h.plate_anchor_x, oY: pl.oY + h.plate_anchor_y, oZ: pl.oZ + h.plate_anchor_z }
+    for (const [url, p] of [[h.model_url, pl], [h.plate_model_url, platePl]] as const) {
+      if (!url) continue
+      const tris = triMap.get(`glb:${url}`)
+      if (!tris || !tris.length) continue
+      out.push(...hingeSilhouetteSnapPoints(tris, p, project))
+    }
+  }
+  return out
+}
+
 // ── Resolved views ────────────────────────────────────────────────────────────
 
 export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
@@ -340,6 +374,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   const hingeDrills = useMemo(() => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []), [rp, showDrilling])
   const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
   const triMap = useSlideTriangles(allSlides)
+  const hingeRefs = useMemo(() => hingeModelRefs(rp), [rp])
+  const hingeTri = useSlideTriangles(hingeRefs)
   const pl = 80, pt = 50, pr = 40, pb = 40
   const vw = dx + pl + pr
   const vh = dy + pt + pb
@@ -405,6 +441,9 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
     drills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oy + dy - dr.y }))
     slideDrills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oy + dy - dr.y }))
     hingeDrills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oy + dy - dr.y }))
+    // Hinge + plate body corners/centre (always available — the outline is drawn
+    // regardless of showDrilling).
+    measurePts.push(...hingeSnapPts(rp, hingeTri, proj))
   }
   const measure = useMeasure(!!measureMode, svgRef, measurePts)
 
@@ -566,6 +605,8 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
   const hingeDrills = useMemo(() => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []), [rp, showDrilling])
   const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
   const triMap = useSlideTriangles(allSlides)
+  const hingeRefs = useMemo(() => hingeModelRefs(rp), [rp])
+  const hingeTri = useSlideTriangles(hingeRefs)
   const wallH = 40
   const pl = 80, pt = 50 + wallH, pr = 40, pb = 50
   const vw = dx + pl + pr
@@ -631,6 +672,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
     drills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oz + dr.z }))
     slideDrills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oz + dr.z }))
     hingeDrills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oz + dr.z }))
+    measurePts.push(...hingeSnapPts(rp, hingeTri, proj))
   }
   const measure = useMeasure(!!measureMode, svgRef, measurePts)
 
@@ -780,6 +822,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
   const hingeDrills = useMemo(() => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []), [rp, showDrilling])
   const allSlides = useMemo(() => [...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? [])], [rp])
   const triMap = useSlideTriangles(allSlides)
+  const hingeRefs = useMemo(() => hingeModelRefs(rp), [rp])
+  const hingeTri = useSlideTriangles(hingeRefs)
   const wallW = 40
 
   const tkHeight = rp.toekick_parts
@@ -857,6 +901,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
     drills.forEach(dr => measurePts.push({ x: oz + dr.z, y: oy + dy - dr.y }))
     slideDrills.forEach(dr => measurePts.push({ x: oz + dr.z, y: oy + dy - dr.y }))
     hingeDrills.forEach(dr => measurePts.push({ x: oz + dr.z, y: oy + dy - dr.y }))
+    measurePts.push(...hingeSnapPts(rp, hingeTri, proj))
   }
   const measure = useMeasure(!!measureMode, svgRef, measurePts)
 

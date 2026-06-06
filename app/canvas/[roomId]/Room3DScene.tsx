@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useEffect, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei'
-import { Shape, ExtrudeGeometry, Vector3 } from 'three'
+import { Shape, ExtrudeGeometry, Vector3, DoubleSide } from 'three'
 import type { Wall, CabinetInstance, Room } from '@/src/lib/types'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
@@ -232,8 +232,16 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
 
   // Resolved parts: render each panel in cabinet-local coordinates.
   // Group origin = bottom-back-left corner of cabinet in world space.
+  // Pointer handlers live on the outer group so a click on ANY descendant part
+  // bubbles up and selects the cabinet — the transparent overlay alone is unreliable
+  // (when scaleZ === -1 its front faces flip inward and the raycaster culls them).
   return (
-    <group position={[cab.pos_x, floorY, cab.pos_y]} rotation={[0, rotY, 0]}>
+    <group
+      position={[cab.pos_x, floorY, cab.pos_y]}
+      rotation={[0, rotY, 0]}
+      onClick={e => { e.stopPropagation(); onSelect() }}
+      onContextMenu={e => { e.stopPropagation(); onContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY) }}
+    >
       <group scale={[1, 1, scaleZ]}>
 
         {/* ── Carcass ── */}
@@ -272,14 +280,12 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
           />
         ))}
 
-        {/* Transparent click-capture overlay for the whole cabinet bounding box */}
-        <mesh
-          position={[cab.dx / 2, cab.dy / 2, cab.dz / 2]}
-          onClick={e => { e.stopPropagation(); onSelect() }}
-          onContextMenu={e => { e.stopPropagation(); onContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY) }}
-        >
+        {/* Transparent click-capture overlay for the whole cabinet bounding box.
+            DoubleSide so the raycaster still hits it when scaleZ === -1 flips the
+            winding. The click bubbles to the outer group (which carries the handlers). */}
+        <mesh position={[cab.dx / 2, cab.dy / 2, cab.dz / 2]}>
           <boxGeometry args={[cab.dx, cab.dy, cab.dz]} />
-          <meshStandardMaterial transparent opacity={0} depthWrite={false} />
+          <meshStandardMaterial transparent opacity={0} depthWrite={false} side={DoubleSide} />
         </mesh>
 
       </group>
@@ -692,7 +698,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
 
   return (
     <div
-      className="flex-1 relative"
+      className="flex-1 relative min-w-0"
       onContextMenu={e => {
         e.preventDefault()
         if (!hitCabRef.current) {
