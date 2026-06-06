@@ -24,9 +24,10 @@ import JointsPanel from './JointsPanel'
 import PartEdgeJoints from './PartEdgeJoints'
 import OverridesView from './OverridesView'
 import CabinetTreePanel from './CabinetTreePanel'
+import CabinetRoutesPanel from './CabinetRoutesPanel'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 
-type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'interior' | 'joints' | 'overrides' | 'tree'
+type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'interior' | 'joints' | 'overrides' | 'tree' | 'routes'
 
 const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'top',       label: 'Top' },
@@ -39,6 +40,7 @@ const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'joints',    label: 'Joints' },
   { id: 'overrides', label: 'Overrides' },
   { id: 'tree',      label: 'Tree' },
+  { id: 'routes',    label: 'Routes' },
 ]
 
 function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onOverridesChange, setCustomParts }: {
@@ -199,7 +201,7 @@ export default function CabinetEditModal({
       elevation: s.elevation === 'wire',
       side:      s.side      === 'wire',
       '3d':      s['3d']      === 'wire',
-      parts: true, face: true, interior: true, joints: true, overrides: true, tree: true,
+      parts: true, face: true, interior: true, joints: true, overrides: true, tree: true, routes: true,
     }
   })
   const wireMode = wireByView[activeView]
@@ -207,6 +209,7 @@ export default function CabinetEditModal({
   const [showInternals, setShowInternals] = useState(true)
   const [showDrilling, setShowDrilling]   = useState(true)
   const [measureMode, setMeasureMode]     = useState(false)
+  const measureModeRef = useRef(measureMode); measureModeRef.current = measureMode
   const [selectedSVGPart, setSelectedSVGPart] = useState<PartMeta | null>(null)
   const [picker, setPicker] = useState<{ parts: PartMeta[]; clientX: number; clientY: number } | null>(null)
   const [localRp, setLocalRp]             = useState<ResolvedCabinet | null>(null)
@@ -221,7 +224,7 @@ export default function CabinetEditModal({
   const prevPartRef     = useRef<PartMeta | null>(null)
   const originalEdgeRef = useRef<PartEdge | null>(null)
 
-  const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face' && activeView !== 'interior' && activeView !== 'joints' && activeView !== 'overrides'
+  const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face' && activeView !== 'interior' && activeView !== 'joints' && activeView !== 'overrides' && activeView !== 'routes'
 
   useEffect(() => {
     if (resolvedCabinet) return
@@ -249,9 +252,23 @@ export default function CabinetEditModal({
   }
 
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      // Let inputs (e.g. inline rename) handle their own Esc-to-cancel.
+      const t = e.target
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return
+      // The modal owns Escape while open: stop the canvas's global Escape handler
+      // behind it from also firing. Esc first exits the measure tool; only when
+      // not measuring does it close the modal. Read measureMode from a ref so the
+      // capture-phase listener always sees the live value.
+      e.stopImmediatePropagation()
+      e.preventDefault()
+      if (measureModeRef.current) { setMeasureMode(false); return }
+      onClose()
+    }
+    // Capture phase → fires before the canvas's bubble-phase window listener.
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose])
 
   // Auto-save edge changes when selection moves to another part
@@ -367,7 +384,7 @@ export default function CabinetEditModal({
           {/* Tabs */}
           <div className="flex-none bg-gray-800/60 border-b border-gray-700 px-4 py-1.5 flex items-center gap-1">
             {VIEWS.map(v => {
-              const disabled = (v.id === 'parts' || v.id === '3d' || v.id === 'tree') && !rp
+              const disabled = (v.id === 'parts' || v.id === '3d' || v.id === 'tree' || v.id === 'routes') && !rp
               const overrideCount = v.id === 'overrides'
                 ? Object.keys(partOverrides).length + customParts.length
                 : 0
@@ -450,6 +467,7 @@ export default function CabinetEditModal({
               : activeView === 'interior'? 'bg-gray-950'
               : activeView === 'joints'  ? 'bg-gray-900'
               : activeView === 'overrides' ? 'bg-gray-900'
+              : activeView === 'routes'  ? 'bg-gray-900'
               : 'flex items-center justify-center bg-gray-950 p-6'
             }`}
             onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null) } : undefined}
@@ -505,6 +523,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'joints' && <JointsPanel cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
             {activeView === 'tree'   && rp && <CabinetTreePanel rp={rp} partOverrides={partOverrides} />}
+            {activeView === 'routes' && rp && <CabinetRoutesPanel cabinet={cabinet} rp={rp} />}
             {activeView === 'overrides' && (
               <OverridesView
                 cabinetId={cabinet.id}
