@@ -29,10 +29,14 @@ const PROFILE_TYPES = [
   { value: 'custom',          label: 'Custom' },
 ] as const
 
-const OP_TYPES    = ['route', 'drill', 'pocket'] as const
+const OP_TYPES    = ['route', 'drill', 'pocket', 'outline', 'square_off', 'profile', 'groove', 'raster'] as const
 const REPEAT_AXES = ['none', 'x', 'y'] as const
 const FACES       = ['front', 'back'] as const
 const GRAINS      = ['none', 'vertical', 'horizontal'] as const
+const FILL_STRATEGIES = ['raster', 'spiral_in', 'spiral_out'] as const
+// Per-side offsets + fill apply to area ops; fill/raster params apply to pocket+raster.
+const AREA_OPS = ['pocket', 'outline', 'square_off'] as const
+const FILL_OPS = ['pocket', 'raster'] as const
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 
@@ -69,7 +73,14 @@ interface ProfileOp {
   lead_in_mm: number | null; lead_out_mm: number | null; pass_depth_mm: number | null
   feed_rate: number | null; spindle_speed: number | null
   expressions: Record<string, string> | null; sort_order: number
+  // CNC routing extensions (migration routing_part_and_door_op_extensions)
+  tool_id: string | null; tool_set_id: string | null
+  offset_top_mm: number | null; offset_bottom_mm: number | null
+  offset_left_mm: number | null; offset_right_mm: number | null
+  fill_strategy: string | null; raster_angle_deg: number | null; raster_stepover_pct: number | null
 }
+interface CncToolItem { id: string; name: string; tool_number: string | null }
+interface ToolSetItem { id: string; name: string }
 interface Style {
   id: string; name: string; door_catalogue_id: string
   door_material_schedule_id: string | null; default_material_id: string | null
@@ -115,12 +126,14 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
   const [styles, setStyles]         = useState<Style[]>([])
   const [materials, setMaterials]   = useState<MatItem[]>([])
   const [edgeBands, setEdgeBands]   = useState<EdgeBand[]>([])
+  const [cncTools, setCncTools]     = useState<CncToolItem[]>([])
+  const [toolSets, setToolSets]     = useState<ToolSetItem[]>([])
 
   // ── Load everything (small tables) ─────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [catR, schR, lnkR, smR, prR, opR, stR, matR, ebR] = await Promise.all([
+      const [catR, schR, lnkR, smR, prR, opR, stR, matR, ebR, toolR, tsR] = await Promise.all([
         supabase.from('door_catalogue').select('*').order('sort_order').order('name'),
         supabase.from('door_material_schedules').select('*').order('sort_order').order('name'),
         supabase.from('door_catalogue_schedules').select('*'),
@@ -130,6 +143,8 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
         supabase.from('door_styles').select('*').order('sort_order').order('name'),
         supabase.from('materials').select('id,name,dz').eq('active', true).order('name'),
         supabase.from('edge_banding').select('id,name,thickness,color').eq('active', true).order('name'),
+        supabase.from('cnc_tools').select('id,name,tool_number').eq('active', true).order('tool_number', { nullsFirst: false }),
+        supabase.from('cnc_tool_sets').select('id,name').eq('is_active', true).order('sort_order').order('name'),
       ])
       if (cancelled) return
       setCatalogue((catR.data ?? []) as Catalogue[])
@@ -141,6 +156,8 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
       setStyles((stR.data ?? []) as Style[])
       setMaterials((matR.data ?? []) as MatItem[])
       setEdgeBands((ebR.data ?? []) as EdgeBand[])
+      setCncTools((toolR.data ?? []) as CncToolItem[])
+      setToolSets((tsR.data ?? []) as ToolSetItem[])
       setLoading(false)
     }
     load()
@@ -563,6 +580,48 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
                       <OpNumPlain label="Feed"     value={o.feed_rate}     onChange={v => patchOp(o.id, { feed_rate: v })} />
                       <OpNumPlain label="RPM"      value={o.spindle_speed} onChange={v => patchOp(o.id, { spindle_speed: v })} integer />
                     </div>
+
+                    {/* Tool set / tool selection. A tool set runs its full sequence and
+                        supersedes the individual tool, so the tool picker hides when set. */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={lbl}>Tool set</label>
+                        <select className={sInp} value={o.tool_set_id ?? ''} onChange={e => patchOp(o.id, { tool_set_id: e.target.value || null })}>
+                          <option value="">— none —</option>
+                          {toolSets.map(ts => <option key={ts.id} value={ts.id}>{ts.name}</option>)}
+                        </select>
+                      </div>
+                      {!o.tool_set_id && (
+                        <div>
+                          <label className={lbl}>Tool</label>
+                          <select className={sInp} value={o.tool_id ?? ''} onChange={e => patchOp(o.id, { tool_id: e.target.value || null })}>
+                            <option value="">— by ⌀ —</option>
+                            {cncTools.map(t => <option key={t.id} value={t.id}>{t.tool_number ? `${t.tool_number} · ` : ''}{t.name}</option>)}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Per-side offsets for area ops. Blank fields fall back to the
+                        single Edge offset above (square inset). */}
+                    {(AREA_OPS as readonly string[]).includes(o.operation_type) && (
+                      <div className="grid grid-cols-4 gap-2">
+                        <OpNumPlain label="Off top"    value={o.offset_top_mm    ?? o.offset_from_edge_mm} onChange={v => patchOp(o.id, { offset_top_mm: v })} />
+                        <OpNumPlain label="Off bottom" value={o.offset_bottom_mm ?? o.offset_from_edge_mm} onChange={v => patchOp(o.id, { offset_bottom_mm: v })} />
+                        <OpNumPlain label="Off left"   value={o.offset_left_mm   ?? o.offset_from_edge_mm} onChange={v => patchOp(o.id, { offset_left_mm: v })} />
+                        <OpNumPlain label="Off right"  value={o.offset_right_mm  ?? o.offset_from_edge_mm} onChange={v => patchOp(o.id, { offset_right_mm: v })} />
+                      </div>
+                    )}
+
+                    {/* Fill strategy + raster params for pocket / raster ops. */}
+                    {(FILL_OPS as readonly string[]).includes(o.operation_type) && (
+                      <div className="grid grid-cols-3 gap-2">
+                        <OpSelect label="Fill" value={o.fill_strategy ?? ''} opts={['', ...FILL_STRATEGIES] as readonly string[]} onChange={v => patchOp(o.id, { fill_strategy: v || null })} />
+                        <OpNumPlain label="Raster°"  value={o.raster_angle_deg}    onChange={v => patchOp(o.id, { raster_angle_deg: v })} />
+                        <OpNumPlain label="Step %"   value={o.raster_stepover_pct} onChange={v => patchOp(o.id, { raster_stepover_pct: v })} />
+                      </div>
+                    )}
+
                     <div>
                       <label className={lbl}>Description</label>
                       <input className={sInp} defaultValue={o.description ?? ''}
