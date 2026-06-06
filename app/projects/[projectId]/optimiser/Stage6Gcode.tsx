@@ -34,6 +34,8 @@ export default function Stage6Gcode() {
   const profileId = useOptiStore(s => s.profileId)
   const settings = useOptiStore(s => s.settings)
   const stock = useOptiStore(s => s.stock)
+  const includedProjectIds = useOptiStore(s => s.includedProjectIds)
+  const isBatch = includedProjectIds.length > 1
 
   const [files, setFiles] = useState<GenFile[]>([])
   const [preview, setPreview] = useState<number | null>(null)
@@ -52,7 +54,7 @@ export default function Stage6Gcode() {
         : { data: null }
       const post: PostProfile = postFromProfile(profileRow as Record<string, unknown> | null)
       const ds = dateStamp()
-      const batch = false   // single-project for now; batch naming arrives in Step 15
+      const batch = isBatch
 
       const gen: GenFile[] = nestResult.sheets.map((sheet, i) => {
         const drills: SheetDrill[] = []   // TODO: source drill ops from part_operations
@@ -74,7 +76,7 @@ export default function Stage6Gcode() {
     try {
       const snapshot = { nestResult, settings, stock, machineId, profileId, savedAt: new Date().toISOString() }
       const { data: job, error: jErr } = await supabase.from('nest_jobs').insert({
-        project_id: snap.projectId, project_ids: [snap.projectId], cnc_machine_id: machineId,
+        project_id: snap.projectId, project_ids: includedProjectIds, cnc_machine_id: machineId,
         status: 'generated', snapshot, generated_at: new Date().toISOString(),
         name: `${snap.projectName} optimise ${dateStamp()}`,
       }).select().single()
@@ -90,6 +92,7 @@ export default function Stage6Gcode() {
         if (sErr || !ns) throw new Error(sErr?.message ?? 'sheet insert failed')
 
         if (sheet.placements.length) {
+          const partProject = new Map(snap.parts.map(p => [p.uid, p.project_id]))
           const rows = sheet.placements.map(pl => {
             const [stbl, ...rest] = pl.baseUid.split(':')
             return {
@@ -97,7 +100,7 @@ export default function Stage6Gcode() {
               source_table: stbl, source_part_id: rest.join(':') || null,
               sheet_x: pl.x, sheet_y: pl.y, rotation: pl.rotated ? 90 : 0,
               cut_dx: pl.w, cut_dy: pl.h,
-              part_label: pl.label, project_id: snap.projectId, cut_quantity: 1, shape_polygon: null,
+              part_label: pl.label, project_id: partProject.get(pl.baseUid) ?? snap.projectId, cut_quantity: 1, shape_polygon: null,
             }
           })
           const { error: pErr } = await supabase.from('nest_placements').insert(rows)

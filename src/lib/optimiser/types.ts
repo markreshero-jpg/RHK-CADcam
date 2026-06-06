@@ -76,6 +76,7 @@ export interface OptiSnapshot {
   materials: OptiMaterial[]
   machines: OptiMachine[]
   profiles: OptiProfile[]
+  allProjects: { id: string; name: string; job_number: string | null }[]
 }
 
 // Material+thickness grouping key used throughout nesting.

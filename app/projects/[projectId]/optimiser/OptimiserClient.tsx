@@ -8,13 +8,14 @@
 // 3-6 are filled in by later build steps.
 // ============================================================
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ThemeToggle } from '@/app/ThemeToggle'
 import { useOptiStore, type Stage } from '@/src/lib/optimiser/store'
 import type { OptiSnapshot } from '@/src/lib/optimiser/types'
 import { materialGroupKey } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
+import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import SheetSVG from './SheetSVG'
 import Stage5Edit from './Stage5Edit'
 import Stage6Gcode from './Stage6Gcode'
@@ -173,6 +174,18 @@ function Stage2Parts() {
   const setSelected = useOptiStore(s => s.setSelected)
   const cutQty = useOptiStore(s => s.cutQty)
   const setCutQty = useOptiStore(s => s.setCutQty)
+  const includedProjectIds = useOptiStore(s => s.includedProjectIds)
+  const mergeProjectData = useOptiStore(s => s.mergeProjectData)
+  const removeProjectData = useOptiStore(s => s.removeProjectData)
+  const [addingProject, setAddingProject] = useState(false)
+  const isBatch = includedProjectIds.length > 1
+
+  async function addProject(id: string) {
+    if (!id || includedProjectIds.includes(id)) return
+    setAddingProject(true)
+    try { mergeProjectData(id, await loadProjectParts(id)) }
+    finally { setAddingProject(false) }
+  }
 
   const matName = useMemo(() => new Map(snap.materials.map(m => [m.id, m.name])), [snap.materials])
   // Cabinet filter options reflect the room filter.
@@ -198,9 +211,31 @@ function Stage2Parts() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      {/* Batch projects */}
+      <div className="flex-none px-8 pt-4 pb-2 flex items-center gap-2 flex-wrap border-b border-edge">
+        <span className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider w-16 shrink-0">Projects</span>
+        {includedProjectIds.map(id => {
+          const pr = snap.allProjects.find(p => p.id === id)
+          const isInitiating = id === snap.projectId
+          return (
+            <span key={id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/15 text-accent-ink text-[11px]">
+              {pr?.job_number ? `${pr.job_number} · ` : ''}{pr?.name ?? 'Project'}
+              {!isInitiating && <button onClick={() => removeProjectData(id)} className="hover:text-red-400">✕</button>}
+            </span>
+          )
+        })}
+        <select disabled={addingProject} value="" onChange={e => addProject(e.target.value)}
+          className="bg-surface-2 border border-edge-strong rounded px-2 py-1 text-[11px] text-ink-muted focus:outline-none focus:border-accent">
+          <option value="">{addingProject ? 'Loading…' : '+ Add project to batch'}</option>
+          {snap.allProjects.filter(p => !includedProjectIds.includes(p.id)).map(p => (
+            <option key={p.id} value={p.id}>{p.job_number ? `${p.job_number} · ` : ''}{p.name}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Filters */}
-      <div className="flex-none px-8 pt-5 pb-3 space-y-3 border-b border-edge">
-        <ChipFilter label="Rooms" options={snap.rooms.map(r => ({ id: r.id, label: r.name }))} selected={filterRoomIds} onChange={setFilterRooms} />
+      <div className="flex-none px-8 pt-3 pb-3 space-y-3 border-b border-edge">
+        <ChipFilter label="Rooms" options={snap.rooms.map(r => ({ id: r.id, label: isBatch ? `${snap.parts.find(p => p.room_id === r.id)?.job_number ?? ''} ${r.name}`.trim() : r.name }))} selected={filterRoomIds} onChange={setFilterRooms} />
         <ChipFilter label="Cabinets" options={cabOptions.map(c => ({ id: c.id, label: c.label }))} selected={filterCabinetIds} onChange={setFilterCabinets} />
         <ChipFilter label="Materials" options={snap.materials.map(m => ({ id: m.id, label: m.name }))} selected={filterMaterialIds} onChange={setFilterMaterials} />
       </div>
@@ -238,7 +273,7 @@ function Stage2Parts() {
                   <td className="py-1.5"><input type="checkbox" checked={on} onChange={() => togglePart(p.uid)} /></td>
                   <td className="py-1.5 text-ink">{p.label}</td>
                   <td className="py-1.5 text-ink-muted">{p.cabinet_label}</td>
-                  <td className="py-1.5 text-ink-muted">{p.room_name}</td>
+                  <td className="py-1.5 text-ink-muted">{isBatch && p.job_number ? <span className="text-ink-subtle">{p.job_number} · </span> : null}{p.room_name}</td>
                   <td className="py-1.5 text-right font-mono text-ink-muted">{Math.round(p.w)}×{Math.round(p.h)}</td>
                   <td className="py-1.5 text-right font-mono text-ink-muted">{p.thickness}</td>
                   <td className="py-1.5 text-ink-muted">{p.material_id ? (matName.get(p.material_id) ?? '—') : <span className="text-amber-600">none</span>}</td>
@@ -420,10 +455,12 @@ function Stage4Nesting() {
   const setNestResult = useOptiStore(s => s.setNestResult)
   const setNesting = useOptiStore(s => s.setNesting)
   const setPartIndex = useOptiStore(s => s.setPartIndex)
+  const includedProjectIds = useOptiStore(s => s.includedProjectIds)
 
   const matById = useMemo(() => new Map(snap.materials.map(m => [m.id, m])), [snap.materials])
 
   function run() {
+    const isBatch = includedProjectIds.length > 1
     setNesting(true)
     // Defer so the button can repaint to "Nesting…" before a long "best" pass.
     setTimeout(() => {
@@ -433,8 +470,9 @@ function Stage4Nesting() {
         if (!selectedUids.has(p.uid)) continue
         const qty = cutQty[p.uid] ?? 1
         const grainLock = !!(p.material_id && matById.get(p.material_id)?.has_grain)
+        const label = isBatch && p.job_number ? `${p.job_number} ${p.label}` : p.label
         for (let i = 0; i < qty; i++) {
-          const inst: NestPartInput = { uid: `${p.uid}#${i}`, baseUid: p.uid, label: p.label, w: p.w, h: p.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority }
+          const inst: NestPartInput = { uid: `${p.uid}#${i}`, baseUid: p.uid, label, w: p.w, h: p.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority }
           parts.push(inst); index[inst.uid] = inst
         }
       }

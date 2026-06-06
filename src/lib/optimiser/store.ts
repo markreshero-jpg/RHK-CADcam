@@ -8,6 +8,7 @@
 
 import { create } from 'zustand'
 import { materialGroupKey, type OptiSnapshot } from './types'
+import type { NormalizedProject } from './normalize'
 import type { GroupStock, SheetStock, NestResult, NestPartInput, Placement } from './nest'
 import { findBestPlacement, sheetEfficiency } from './edit'
 
@@ -37,6 +38,9 @@ interface OptiState {
   machineId: string | null
   profileId: string | null
 
+  // Stage 2 — batch projects in scope (initiating project + any added)
+  includedProjectIds: string[]
+
   // Stage 2 — filters (selection aids) + the actual selection
   filterRoomIds: string[]      // empty = all
   filterCabinetIds: string[]   // empty = all
@@ -63,6 +67,8 @@ interface OptiState {
 
   // Actions
   init: (snap: OptiSnapshot) => void
+  mergeProjectData: (projectId: string, data: NormalizedProject) => void
+  removeProjectData: (projectId: string) => void
   setStage: (s: Stage) => void
   setMachine: (id: string | null) => void
   setProfile: (id: string | null) => void
@@ -110,6 +116,7 @@ export const useOptiStore = create<OptiState>((set) => ({
   maxStageReached: 1,
   machineId: null,
   profileId: null,
+  includedProjectIds: [],
   filterRoomIds: [],
   filterCabinetIds: [],
   filterMaterialIds: [],
@@ -139,7 +146,39 @@ export const useOptiStore = create<OptiState>((set) => ({
       machineId: machine?.id ?? null,
       profileId: profile?.id ?? null,
       selectedUids: selected,
+      includedProjectIds: [snap.projectId],
     }
+  }),
+
+  mergeProjectData: (projectId, data) => set(st => {
+    if (!st.snapshot || st.includedProjectIds.includes(projectId)) return {}
+    const existingRoom = new Set(st.snapshot.rooms.map(r => r.id))
+    const existingCab = new Set(st.snapshot.cabinets.map(c => c.id))
+    const existingPart = new Set(st.snapshot.parts.map(p => p.uid))
+    const snapshot: OptiSnapshot = {
+      ...st.snapshot,
+      rooms: [...st.snapshot.rooms, ...data.rooms.filter(r => !existingRoom.has(r.id))],
+      cabinets: [...st.snapshot.cabinets, ...data.cabinets.filter(c => !existingCab.has(c.id))],
+      parts: [...st.snapshot.parts, ...data.parts.filter(p => !existingPart.has(p.uid))],
+    }
+    const selected = new Set(st.selectedUids)
+    for (const p of data.parts) if (p.output_to_cnc) selected.add(p.uid)
+    return { snapshot, selectedUids: selected, includedProjectIds: [...st.includedProjectIds, projectId] }
+  }),
+
+  removeProjectData: (projectId) => set(st => {
+    if (!st.snapshot || projectId === st.snapshot.projectId) return {}   // can't remove the initiating project
+    const dropPart = new Set(st.snapshot.parts.filter(p => p.project_id === projectId).map(p => p.uid))
+    const dropRoom = new Set(st.snapshot.parts.filter(p => p.project_id === projectId).map(p => p.room_id))
+    const dropCab = new Set(st.snapshot.parts.filter(p => p.project_id === projectId).map(p => p.cabinet_instance_id))
+    const snapshot: OptiSnapshot = {
+      ...st.snapshot,
+      parts: st.snapshot.parts.filter(p => p.project_id !== projectId),
+      rooms: st.snapshot.rooms.filter(r => !dropRoom.has(r.id)),
+      cabinets: st.snapshot.cabinets.filter(c => !dropCab.has(c.id)),
+    }
+    const selected = new Set([...st.selectedUids].filter(u => !dropPart.has(u)))
+    return { snapshot, selectedUids: selected, includedProjectIds: st.includedProjectIds.filter(id => id !== projectId) }
   }),
 
   setStage: (s) => set(st => ({ stage: s, maxStageReached: Math.max(st.maxStageReached, s) as Stage })),
