@@ -13,9 +13,15 @@ import DoorSystemClient from '@/app/library/doors/DoorSystemClient'
 import HingeCountRulesEditor from '@/app/settings/HingeCountRulesEditor'
 import CncToolsClient from '@/app/settings/CncToolsClient'
 import CncToolSetsClient from '@/app/settings/CncToolSetsClient'
+import CncMachinesClient from '@/app/settings/CncMachinesClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
 import { getUserPrefs, setUserPrefs, type DrawingPreset, type DrawingPresets, type CabinetViewStyles, type ViewStyle } from '@/src/lib/userPrefs'
 import { DISPLAY_PRESETS } from '@/src/lib/displayConfig'
+import {
+  getPalette, setUserPaletteOverride, DEFAULT_PALETTE,
+  PALETTE_CATEGORY_ORDER, PALETTE_CATEGORY_LABELS,
+  type PartPalette, type PaletteCategory,
+} from '@/src/lib/partPalette'
 import { ThemeToggle } from '../ThemeToggle'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -326,12 +332,27 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
   const [invertScroll, setInvertScroll] = useState(false)
   const [drawingPresets, setDrawingPresets] = useState<DrawingPresets>({ plan: 'full_parts', elevation: 'full_parts' })
   const [cabinetViewStyles, setCabinetViewStyles] = useState<CabinetViewStyles>({ top: 'wire', elevation: 'wire', side: 'wire', '3d': 'wire' })
+  const [palette, setPalette] = useState<PartPalette>(DEFAULT_PALETTE)
   useEffect(() => {
     const prefs = getUserPrefs()
     setInvertScroll(prefs.invertScroll)
     setDrawingPresets(prefs.drawingPresets)
     setCabinetViewStyles(prefs.cabinetViewStyles)
+    setPalette(getPalette())
   }, [])
+
+  function handlePaletteColor(cat: PaletteCategory, val: string) {
+    const next = { ...palette, [cat]: val }
+    setPalette(next)
+    setUserPaletteOverride(next)
+  }
+  function resetPaletteColor(cat: PaletteCategory) {
+    handlePaletteColor(cat, DEFAULT_PALETTE[cat])
+  }
+  function resetAllPalette() {
+    setPalette(DEFAULT_PALETTE)
+    setUserPaletteOverride({})
+  }
 
   function toggleInvertScroll(val: boolean) {
     setInvertScroll(val)
@@ -459,6 +480,8 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
             <CncToolsClient />
           ) : tab === 'cnc_tool_set' ? (
             <CncToolSetsClient />
+          ) : tab === 'cnc_machine' ? (
+            <CncMachinesClient />
           ) : (<>
           <div className="flex-1 overflow-y-auto px-8 py-6 max-w-3xl">
 
@@ -555,6 +578,52 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Part Line Colours</p>
+                    <button
+                      onClick={resetAllPalette}
+                      className="text-[11px] text-ink-subtle hover:text-ink transition-colors"
+                    >
+                      Reset all
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-ink-subtle mb-3">
+                    Colour for each part type&apos;s lines in the plan, elevation, and 3D views.
+                  </p>
+                  <div className="border border-edge-strong rounded-lg overflow-hidden divide-y divide-edge-strong/60">
+                    {PALETTE_CATEGORY_ORDER.map(cat => {
+                      const isDefault = palette[cat].toLowerCase() === DEFAULT_PALETTE[cat].toLowerCase()
+                      return (
+                        <div key={cat} className="flex items-center justify-between px-4 py-2.5 bg-surface">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="color"
+                              value={palette[cat]}
+                              onChange={e => handlePaletteColor(cat, e.target.value)}
+                              className="h-6 w-9 rounded border border-edge-strong bg-surface-2 cursor-pointer p-0"
+                              title={`${PALETTE_CATEGORY_LABELS[cat]} colour`}
+                            />
+                            <span className="text-xs font-medium text-ink">{PALETTE_CATEGORY_LABELS[cat]}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-mono text-ink-subtle uppercase">{palette[cat]}</span>
+                            {!isDefault && (
+                              <button
+                                onClick={() => resetPaletteColor(cat)}
+                                className="text-[11px] text-ink-subtle hover:text-ink transition-colors"
+                                title="Reset to default"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
@@ -672,7 +741,7 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
             )}
 
             {/* ── Placeholder tabs ── */}
-            {['benchtop_builder', 'cnc_machine'].includes(tab) && (
+            {['benchtop_builder'].includes(tab) && (
               <ComingSoon label={activeTabDef.label} />
             )}
 
