@@ -1112,6 +1112,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     openObjectTree: () => setShowObjectTree(true),
     openRoomSwitcher: () => roomSwitcherRef.current?.openSwitcher(),
     openAddRoom: () => roomSwitcherRef.current?.openAdd(),
+    projectId: project?.id ?? null,
   })
 
   // ── Render ────────────────────────────────────────────────────────────────

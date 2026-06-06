@@ -92,6 +92,15 @@ const PlusIcon = () => (
   </svg>
 )
 
+const CncIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1.5" y="2" width="12" height="11" rx="1" />
+    <line x1="1.5" y1="5.5" x2="13.5" y2="5.5" />
+    <line x1="6" y1="5.5" x2="6" y2="13" />
+    <rect x="8" y="7.5" width="3.5" height="3.5" rx="0.4" fill="currentColor" fillOpacity="0.25" />
+  </svg>
+)
+
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
 function dimSummary(r: Room): { text: string; set: boolean } {
@@ -397,6 +406,19 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
                 </ul>
               </SortableContext>
             </DndContext>
+          )}
+
+          {/* ── Optimise / CNC ── */}
+          {rooms.length > 0 && (
+            <div className="mt-1.5 pt-1.5 border-t border-edge/60">
+              <Link
+                href={`/projects/${project.id}/optimiser`}
+                className="flex items-center gap-1.5 text-xs font-medium text-accent-ink hover:text-accent-hover px-2 py-2 rounded-md transition-colors"
+              >
+                <CncIcon />
+                Optimise / CNC
+              </Link>
+            </div>
           )}
 
           {/* ── Add Room ── */}

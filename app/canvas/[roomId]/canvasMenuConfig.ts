@@ -38,6 +38,8 @@ export interface MenuActions {
   openObjectTree:    () => void
   openRoomSwitcher:  () => void
   openAddRoom:       () => void
+  // Current project (for the Panel Optimiser entry point)
+  projectId:         string | null
 }
 
 export function buildMenus(a: MenuActions): MenuGroup[] {
@@ -112,7 +114,8 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
       { label: 'Material Schedule…', disabled: true },
       { label: 'Shop Drawings…',     disabled: true },
       null,
-      { label: 'Generate CNC…',      disabled: true },
+      { label: 'Generate CNC…',      disabled: !a.projectId,
+        action: () => { if (a.projectId) window.location.href = `/projects/${a.projectId}/optimiser` } },
     ]},
     { label: 'Help', items: [
       { label: 'Documentation',    disabled: true },
