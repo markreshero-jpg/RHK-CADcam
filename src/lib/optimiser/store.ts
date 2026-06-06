@@ -7,10 +7,14 @@
 // ============================================================
 
 import { create } from 'zustand'
-import type { OptiSnapshot } from './types'
-import type { GroupStock, SheetStock, NestResult } from './nest'
+import { materialGroupKey, type OptiSnapshot } from './types'
+import type { GroupStock, SheetStock, NestResult, NestPartInput, Placement } from './nest'
+import { findBestPlacement, sheetEfficiency } from './edit'
 
 export type Stage = 1 | 2 | 3 | 4 | 5 | 6
+
+const clone = <T,>(v: T): T => structuredClone(v)
+let pasteSeq = 0
 
 export interface PreOptSettings {
   kerf: number            // saw/router kerf allowance (mm)
@@ -48,6 +52,15 @@ interface OptiState {
   nestResult: NestResult | null
   nesting: boolean
 
+  // Stage 5 — manual editing
+  partIndex: Record<string, NestPartInput>   // every expanded instance by uid
+  currentSheet: number
+  selectedUid: string | null
+  clipboard: NestPartInput[]
+  editPast: NestResult[]
+  editFuture: NestResult[]
+  editError: string | null
+
   // Actions
   init: (snap: OptiSnapshot) => void
   setStage: (s: Stage) => void
@@ -66,6 +79,22 @@ interface OptiState {
   removeOffcut: (key: string, index: number) => void
   setNestResult: (r: NestResult | null) => void
   setNesting: (b: boolean) => void
+  setPartIndex: (idx: Record<string, NestPartInput>) => void
+  setCurrentSheet: (i: number) => void
+  selectPlacement: (uid: string | null) => void
+  setEditError: (m: string | null) => void
+  movePartWithin: (uid: string, x: number, y: number) => void
+  relocatePart: (uid: string, targetSheetIndex: number, x: number, y: number) => void
+  removeToUnplaced: (uid: string) => void
+  placeFromUnplaced: (uid: string, sheetIndex: number, x: number, y: number) => void
+  copyToClipboard: (uid: string) => void
+  cutToClipboard: (uid: string) => void
+  pasteClipboard: (sheetIndex: number) => void
+  addSheet: (stock: SheetStock, materialId: string | null, thickness: number) => void
+  deleteSheet: (index: number) => void
+  resizeSheet: (index: number, w: number, h: number) => void
+  undo: () => void
+  redo: () => void
 }
 
 export const DEFAULT_SETTINGS: PreOptSettings = {
@@ -90,6 +119,13 @@ export const useOptiStore = create<OptiState>((set) => ({
   stock: {},
   nestResult: null,
   nesting: false,
+  partIndex: {},
+  currentSheet: 0,
+  selectedUid: null,
+  clipboard: [],
+  editPast: [],
+  editFuture: [],
+  editError: null,
 
   init: (snap) => set(() => {
     // Default machine/profile to the marked defaults; pre-select parts flagged
@@ -140,6 +176,130 @@ export const useOptiStore = create<OptiState>((set) => ({
     const g = st.stock[key]; if (!g) return {}
     return { stock: { ...st.stock, [key]: { ...g, offcuts: g.offcuts.filter((_, i) => i !== index) } } }
   }),
-  setNestResult: (r) => set({ nestResult: r }),
+  setNestResult: (r) => set({ nestResult: r, editPast: [], editFuture: [], selectedUid: null, currentSheet: 0 }),
   setNesting: (b) => set({ nesting: b }),
+  setPartIndex: (idx) => set({ partIndex: idx }),
+  setCurrentSheet: (i) => set({ currentSheet: i, selectedUid: null }),
+  selectPlacement: (uid) => set({ selectedUid: uid }),
+  setEditError: (m) => set({ editError: m }),
+
+  movePartWithin: (uid, x, y) => set(st => {
+    if (!st.nestResult) return {}
+    const next = clone(st.nestResult)
+    for (const s of next.sheets) { const p = s.placements.find(p => p.uid === uid); if (p) { p.x = x; p.y = y; break } }
+    return commit(st, next)
+  }),
+
+  relocatePart: (uid, targetIndex, x, y) => set(st => {
+    if (!st.nestResult) return {}
+    const next = clone(st.nestResult)
+    let moved: Placement | undefined
+    for (const s of next.sheets) { const i = s.placements.findIndex(p => p.uid === uid); if (i >= 0) { moved = s.placements.splice(i, 1)[0]; break } }
+    const target = next.sheets.find(s => s.index === targetIndex)
+    if (moved && target) { moved.x = x; moved.y = y; target.placements.push(moved) }
+    return commit(st, next)
+  }),
+
+  removeToUnplaced: (uid) => set(st => {
+    if (!st.nestResult) return {}
+    const next = clone(st.nestResult)
+    for (const s of next.sheets) { const i = s.placements.findIndex(p => p.uid === uid); if (i >= 0) { s.placements.splice(i, 1); break } }
+    const def = st.partIndex[uid]
+    if (def) next.unplaced.push(clone(def))
+    return { ...commit(st, next), selectedUid: null }
+  }),
+
+  placeFromUnplaced: (uid, sheetIndex, x, y) => set(st => {
+    if (!st.nestResult) return {}
+    const def = st.partIndex[uid]
+    const next = clone(st.nestResult)
+    const sheet = next.sheets.find(s => s.index === sheetIndex)
+    if (!def || !sheet) return {}
+    if (materialGroupKey(def.materialId, def.thickness) !== materialGroupKey(sheet.materialId, sheet.thickness)) {
+      return { editError: 'Part material/thickness does not match this sheet.' }
+    }
+    next.unplaced = next.unplaced.filter(p => p.uid !== uid)
+    sheet.placements.push({ uid, baseUid: def.baseUid, label: def.label, x, y, w: def.w, h: def.h, rotated: false })
+    return commit(st, next)
+  }),
+
+  copyToClipboard: (uid) => set(st => { const def = st.partIndex[uid]; return def ? { clipboard: [clone(def)] } : {} }),
+
+  cutToClipboard: (uid) => set(st => {
+    if (!st.nestResult) return {}
+    const def = st.partIndex[uid]
+    const next = clone(st.nestResult)
+    for (const s of next.sheets) { const i = s.placements.findIndex(p => p.uid === uid); if (i >= 0) { s.placements.splice(i, 1); break } }
+    next.unplaced = next.unplaced.filter(p => p.uid !== uid)
+    return { ...commit(st, next), clipboard: def ? [clone(def)] : [], selectedUid: null }
+  }),
+
+  pasteClipboard: (sheetIndex) => set(st => {
+    if (!st.nestResult || !st.clipboard.length) return {}
+    const next = clone(st.nestResult)
+    const sheet = next.sheets.find(s => s.index === sheetIndex)
+    if (!sheet) return {}
+    const gap = st.settings.kerf + st.settings.pad
+    const addedIdx: Record<string, NestPartInput> = {}
+    for (const def of st.clipboard) {
+      if (materialGroupKey(def.materialId, def.thickness) !== materialGroupKey(sheet.materialId, sheet.thickness)) continue
+      const nu = `${def.baseUid}#paste${++pasteSeq}`
+      const np: NestPartInput = { ...def, uid: nu }
+      addedIdx[nu] = np
+      const pos = findBestPlacement(sheet, def.w, def.h, gap)
+      if (pos) sheet.placements.push({ uid: nu, baseUid: def.baseUid, label: def.label, x: pos.x, y: pos.y, w: def.w, h: def.h, rotated: false })
+      else next.unplaced.push(np)
+    }
+    return { ...commit(st, next), partIndex: { ...st.partIndex, ...addedIdx } }
+  }),
+
+  addSheet: (stock, materialId, thickness) => set(st => {
+    const cur = st.nestResult ?? { sheets: [], unplaced: [] }
+    const next = clone(cur)
+    const index = next.sheets.length ? Math.max(...next.sheets.map(s => s.index)) + 1 : 0
+    next.sheets.push({ index, materialId, thickness, stock, placements: [], efficiency: 0 })
+    return commit(st, next)
+  }),
+
+  deleteSheet: (index) => set(st => {
+    if (!st.nestResult) return {}
+    const next = clone(st.nestResult)
+    const si = next.sheets.findIndex(s => s.index === index)
+    if (si < 0) return {}
+    for (const p of next.sheets[si].placements) { const def = st.partIndex[p.uid]; if (def) next.unplaced.push(clone(def)) }
+    next.sheets.splice(si, 1)
+    return { ...commit(st, next), currentSheet: 0 }
+  }),
+
+  resizeSheet: (index, w, h) => set(st => {
+    if (!st.nestResult) return {}
+    const next = clone(st.nestResult)
+    const sheet = next.sheets.find(s => s.index === index)
+    if (!sheet) return {}
+    sheet.stock = { ...sheet.stock, w, h }
+    return commit(st, next)
+  }),
+
+  undo: () => set(st => {
+    if (!st.editPast.length || !st.nestResult) return {}
+    const prev = st.editPast[st.editPast.length - 1]
+    return { nestResult: prev, editPast: st.editPast.slice(0, -1), editFuture: [st.nestResult, ...st.editFuture].slice(0, 50), selectedUid: null }
+  }),
+
+  redo: () => set(st => {
+    if (!st.editFuture.length) return {}
+    const nextR = st.editFuture[0]
+    return { nestResult: nextR, editFuture: st.editFuture.slice(1), editPast: st.nestResult ? [...st.editPast, st.nestResult].slice(-50) : st.editPast, selectedUid: null }
+  }),
 }))
+
+// History-wrapping commit: snapshot the prior layout, recompute efficiencies.
+function commit(st: OptiState, next: NestResult): Partial<OptiState> {
+  for (const s of next.sheets) s.efficiency = sheetEfficiency(s)
+  return {
+    nestResult: next,
+    editPast: st.nestResult ? [...st.editPast, st.nestResult].slice(-50) : st.editPast,
+    editFuture: [],
+    editError: null,
+  }
+}

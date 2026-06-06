@@ -16,6 +16,7 @@ import type { OptiSnapshot } from '@/src/lib/optimiser/types'
 import { materialGroupKey } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
 import SheetSVG from './SheetSVG'
+import Stage5Edit from './Stage5Edit'
 
 const STAGES: { n: Stage; label: string }[] = [
   { n: 1, label: 'Machine & Tool' },
@@ -89,7 +90,7 @@ export default function OptimiserClient({ snapshot }: { snapshot: OptiSnapshot }
         {stage === 2 && <Stage2Parts />}
         {stage === 3 && <Stage3Settings />}
         {stage === 4 && <Stage4Nesting />}
-        {stage === 5 && <StagePlaceholder n={5} title="Manual editing" note="Interactive SVG sheet canvas with drag/drop and clipboard — built in the next step." />}
+        {stage === 5 && <Stage5Edit />}
         {stage === 6 && <StagePlaceholder n={6} title="G-code generation" note="Per-sheet export + snapshot save — built in the next step." />}
       </div>
 
@@ -417,6 +418,7 @@ function Stage4Nesting() {
   const nesting = useOptiStore(s => s.nesting)
   const setNestResult = useOptiStore(s => s.setNestResult)
   const setNesting = useOptiStore(s => s.setNesting)
+  const setPartIndex = useOptiStore(s => s.setPartIndex)
 
   const matById = useMemo(() => new Map(snap.materials.map(m => [m.id, m])), [snap.materials])
 
@@ -425,14 +427,17 @@ function Stage4Nesting() {
     // Defer so the button can repaint to "Nesting…" before a long "best" pass.
     setTimeout(() => {
       const parts: NestPartInput[] = []
+      const index: Record<string, NestPartInput> = {}
       for (const p of snap.parts) {
         if (!selectedUids.has(p.uid)) continue
         const qty = cutQty[p.uid] ?? 1
         const grainLock = !!(p.material_id && matById.get(p.material_id)?.has_grain)
         for (let i = 0; i < qty; i++) {
-          parts.push({ uid: `${p.uid}#${i}`, baseUid: p.uid, label: p.label, w: p.w, h: p.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority })
+          const inst: NestPartInput = { uid: `${p.uid}#${i}`, baseUid: p.uid, label: p.label, w: p.w, h: p.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority }
+          parts.push(inst); index[inst.uid] = inst
         }
       }
+      setPartIndex(index)
       setNestResult(nest(parts, stock as Record<string, GroupStock>, settings))
       setNesting(false)
     }, 20)
