@@ -37,11 +37,12 @@ export function normalizeProject(
     const room = cab ? roomById.get(cab.room_id) : undefined
     return { cabinet_label: cab?.label ?? '—', room_id: cab?.room_id ?? '', room_name: room?.name ?? '—' }
   }
-  const push = (table: SourceTable, row: Row, label: string, grain: string | null, nestPriority: number) => {
+  const push = (table: SourceTable, row: Row, partKey: string, label: string, grain: string | null, nestPriority: number) => {
     const m = meta(row.cabinet_instance_id as string)
     parts.push({
       uid: `${table}:${row.id as string}`,
       source_table: table, source_part_id: row.id as string,
+      source_part_key: partKey,
       cabinet_instance_id: row.cabinet_instance_id as string,
       cabinet_label: m.cabinet_label, room_id: m.room_id, room_name: m.room_name,
       project_id: project.id, job_number: project.job_number,
@@ -53,10 +54,11 @@ export function normalizeProject(
     })
   }
 
-  for (const r of cp) push('case_parts', r, humanize(String(r.part_key)), (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0))
-  for (const r of ip) push('internal_parts', r, `${humanize(String(r.part_type))} ${Number(r.sort_order) + 1}`, null, 0)
-  for (const r of tp) push('toekick_parts', r, humanize(String(r.part_key)), null, 0)
-  for (const r of fz) push('face_zones', r, `${humanize(String(r.face_type))} (R${Number(r.row_index) + 1}C${Number(r.col_index) + 1})`, (r.grain_direction as string) ?? null, 0)
+  // partKey mirrors the svg*Meta synthetic ids so it matches part_operations.source_part_key.
+  for (const r of cp) push('case_parts', r, `case_${r.part_key}`, humanize(String(r.part_key)), (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0))
+  for (const r of ip) push('internal_parts', r, `int_${r.part_type}_${r.sort_order}`, `${humanize(String(r.part_type))} ${Number(r.sort_order) + 1}`, null, 0)
+  for (const r of tp) push('toekick_parts', r, `tk_${r.part_key}_${r.sort_order}`, humanize(String(r.part_key)), null, 0)
+  for (const r of fz) push('face_zones', r, `zone_${r.row_index}_${r.col_index}`, `${humanize(String(r.face_type))} (R${Number(r.row_index) + 1}C${Number(r.col_index) + 1})`, (r.grain_direction as string) ?? null, 0)
 
   return { rooms, cabinets, parts }
 }

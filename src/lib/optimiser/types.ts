@@ -13,6 +13,7 @@ export interface OptiPart {
   uid: string                 // stable within this workspace (source-row id based)
   source_table: SourceTable
   source_part_id: string      // the part row id (snapshot — may be regenerated later)
+  source_part_key: string     // synthetic resolver key (case_left_side, int_divider_0…) — matches part_operations
   cabinet_instance_id: string
   cabinet_label: string
   room_id: string

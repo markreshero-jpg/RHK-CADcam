@@ -11,7 +11,8 @@
 import { useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { useOptiStore } from '@/src/lib/optimiser/store'
-import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile, type SheetDrill } from '@/src/lib/optimiser/gcode'
+import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
+import { buildSheetDrills, groupDrillOps, type DrillOpRaw, type PartRef } from '@/src/lib/optimiser/drills'
 
 interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number }
 
@@ -56,8 +57,21 @@ export default function Stage6Gcode() {
       const ds = dateStamp()
       const batch = isBatch
 
+      // Source drilling ops from part_operations (keyed by stable cabinet+part_key).
+      const cabIds = [...new Set(snap.parts.map(p => p.cabinet_instance_id))]
+      const { data: opRows } = cabIds.length
+        ? await supabase.from('part_operations')
+            .select('source_table,source_cabinet_id,source_part_key,pos_x,pos_y,diameter,depth,repeat_count,repeat_spacing,repeat_axis,output_to_cnc,operation_type')
+            .in('source_cabinet_id', cabIds).eq('operation_type', 'drill')
+        : { data: [] }
+      const drillOps = ((opRows ?? []) as (DrillOpRaw & { output_to_cnc: boolean | null })[]).filter(o => o.output_to_cnc !== false)
+      const opsByKey = groupDrillOps(drillOps)
+      const partByUid = new Map<string, PartRef>(snap.parts.map(p => [p.uid, {
+        source_table: p.source_table, cabinet_instance_id: p.cabinet_instance_id, source_part_key: p.source_part_key, w: p.w, h: p.h,
+      }]))
+
       const gen: GenFile[] = nestResult.sheets.map((sheet, i) => {
-        const drills: SheetDrill[] = []   // TODO: source drill ops from part_operations
+        const drills = buildSheetDrills(sheet, partByUid, opsByKey, sheet.thickness)
         const gcode = generateSheetGcode({ sheet, thickness: sheet.thickness, profile: post, drills, toolNumber: 1, drillToolNumber: 2 })
         return {
           sheetIndex: sheet.index,
