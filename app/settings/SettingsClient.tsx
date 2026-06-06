@@ -12,6 +12,7 @@ import PartsLibraryClient from '@/app/library/parts/PartsLibraryClient'
 import DoorSystemClient from '@/app/library/doors/DoorSystemClient'
 import HingeCountRulesEditor from '@/app/settings/HingeCountRulesEditor'
 import CncToolsClient from '@/app/settings/CncToolsClient'
+import CncToolSetsClient from '@/app/settings/CncToolSetsClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
 import { getUserPrefs, setUserPrefs, type DrawingPreset, type DrawingPresets, type CabinetViewStyles, type ViewStyle } from '@/src/lib/userPrefs'
 import { DISPLAY_PRESETS } from '@/src/lib/displayConfig'
@@ -72,7 +73,7 @@ type SettingsTab =
   | 'company' | 'dimensions' | 'materials'
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'hinge_rules'
-  | 'cnc_tool' | 'cnc_machine'
+  | 'cnc_tool' | 'cnc_tool_set' | 'cnc_machine'
   | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library' | 'doors_library'
 
 interface TabDef {
@@ -201,6 +202,19 @@ const TABS: TabDef[] = [
         <line x1="3" y1="4" x2="3" y2="2.5"/>
         <line x1="12" y1="4" x2="12" y2="2.5"/>
         <line x1="2.5" y1="2.5" x2="12.5" y2="2.5"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'cnc_tool_set', label: 'Tool Sets', group: 'CNC',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="2" y1="3.5" x2="13" y2="3.5"/>
+        <line x1="2" y1="7.5" x2="13" y2="7.5"/>
+        <line x1="2" y1="11.5" x2="13" y2="11.5"/>
+        <circle cx="4.5" cy="3.5" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="9" cy="7.5" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="6" cy="11.5" r="1.2" fill="currentColor" stroke="none"/>
       </svg>
     ),
   },
@@ -443,6 +457,8 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
             <HingeCountRulesEditor embedded />
           ) : tab === 'cnc_tool' ? (
             <CncToolsClient />
+          ) : tab === 'cnc_tool_set' ? (
+            <CncToolSetsClient />
           ) : (<>
           <div className="flex-1 overflow-y-auto px-8 py-6 max-w-3xl">
 
