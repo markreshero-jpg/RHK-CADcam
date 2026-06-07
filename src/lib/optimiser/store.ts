@@ -17,6 +17,11 @@ export type Stage = 1 | 2 | 3 | 4 | 5 | 6
 const clone = <T,>(v: T): T => structuredClone(v)
 let pasteSeq = 0
 
+// Any change to what gets nested (selection, qty, settings, stock) invalidates a
+// prior nest layout — otherwise a stale full-run layout would carry into Stages
+// 4/5. Clearing forces an explicit re-nest that respects the current inputs.
+const INVALIDATE_NEST: Partial<OptiState> = { nestResult: null, partIndex: {}, editPast: [], editFuture: [], selectedUid: null }
+
 export interface PreOptSettings {
   kerf: number            // saw/router kerf allowance (mm)
   pad: number             // gap padding between parts (mm)
@@ -163,7 +168,7 @@ export const useOptiStore = create<OptiState>((set) => ({
     }
     const selected = new Set(st.selectedUids)
     for (const p of data.parts) if (p.output_to_cnc) selected.add(p.uid)
-    return { snapshot, selectedUids: selected, includedProjectIds: [...st.includedProjectIds, projectId] }
+    return { snapshot, selectedUids: selected, includedProjectIds: [...st.includedProjectIds, projectId], ...INVALIDATE_NEST }
   }),
 
   removeProjectData: (projectId) => set(st => {
@@ -178,7 +183,7 @@ export const useOptiStore = create<OptiState>((set) => ({
       cabinets: st.snapshot.cabinets.filter(c => !dropCab.has(c.id)),
     }
     const selected = new Set([...st.selectedUids].filter(u => !dropPart.has(u)))
-    return { snapshot, selectedUids: selected, includedProjectIds: st.includedProjectIds.filter(id => id !== projectId) }
+    return { snapshot, selectedUids: selected, includedProjectIds: st.includedProjectIds.filter(id => id !== projectId), ...INVALIDATE_NEST }
   }),
 
   setStage: (s) => set(st => ({ stage: s, maxStageReached: Math.max(st.maxStageReached, s) as Stage })),
@@ -195,25 +200,25 @@ export const useOptiStore = create<OptiState>((set) => ({
   togglePart: (uid) => set(st => {
     const next = new Set(st.selectedUids)
     if (next.has(uid)) next.delete(uid); else next.add(uid)
-    return { selectedUids: next }
+    return { selectedUids: next, ...INVALIDATE_NEST }
   }),
-  setSelected: (uids) => set({ selectedUids: new Set(uids) }),
-  setCutQty: (uid, qty) => set(st => ({ cutQty: { ...st.cutQty, [uid]: Math.max(0, qty) } })),
-  setSettings: (patch) => set(st => ({ settings: { ...st.settings, ...patch } })),
+  setSelected: (uids) => set({ selectedUids: new Set(uids), ...INVALIDATE_NEST }),
+  setCutQty: (uid, qty) => set(st => ({ cutQty: { ...st.cutQty, [uid]: Math.max(0, qty) }, ...INVALIDATE_NEST })),
+  setSettings: (patch) => set(st => ({ settings: { ...st.settings, ...patch }, ...INVALIDATE_NEST })),
   ensureStock: (key, seed) => set(st => st.stock[key]
     ? {}
     : { stock: { ...st.stock, [key]: { standard: seed, offcuts: [] } } }),
   setStock: (key, patch) => set(st => {
     const g = st.stock[key]; if (!g) return {}
-    return { stock: { ...st.stock, [key]: { ...g, standard: { ...g.standard, ...patch } } } }
+    return { stock: { ...st.stock, [key]: { ...g, standard: { ...g.standard, ...patch } } }, ...INVALIDATE_NEST }
   }),
   addOffcut: (key, offcut) => set(st => {
     const g = st.stock[key]; if (!g) return {}
-    return { stock: { ...st.stock, [key]: { ...g, offcuts: [...g.offcuts, offcut] } } }
+    return { stock: { ...st.stock, [key]: { ...g, offcuts: [...g.offcuts, offcut] } }, ...INVALIDATE_NEST }
   }),
   removeOffcut: (key, index) => set(st => {
     const g = st.stock[key]; if (!g) return {}
-    return { stock: { ...st.stock, [key]: { ...g, offcuts: g.offcuts.filter((_, i) => i !== index) } } }
+    return { stock: { ...st.stock, [key]: { ...g, offcuts: g.offcuts.filter((_, i) => i !== index) } }, ...INVALIDATE_NEST }
   }),
   setNestResult: (r) => set({ nestResult: r, editPast: [], editFuture: [], selectedUid: null, currentSheet: 0 }),
   setNesting: (b) => set({ nesting: b }),
