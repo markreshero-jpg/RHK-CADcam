@@ -18,10 +18,11 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
   const roomIds = rooms.map(r => r.id)
 
   const { data: cabsRaw } = roomIds.length
-    ? await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id').in('room_id', roomIds)
+    ? await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id,part_comments').in('room_id', roomIds)
     : { data: [] }
-  const cabs = (cabsRaw ?? []) as RawCabinet[]
+  const cabs = (cabsRaw ?? []) as (RawCabinet & { part_comments?: Record<string, string> | null })[]
   const cabIds = cabs.map(c => c.id)
+  const commentsByCab = new Map<string, Record<string, string>>(cabs.map(c => [c.id, c.part_comments ?? {}]))
 
   const empty = { data: [] as Record<string, unknown>[] }
   const [cpR, ipR, tpR, fzR] = cabIds.length ? await Promise.all([
@@ -40,7 +41,7 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
 
   const norm = normalizeProject(project, rooms, cabs,
     (cpR.data ?? []) as Record<string, unknown>[], (ipR.data ?? []) as Record<string, unknown>[],
-    (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[])
+    (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[], commentsByCab)
 
   const snapshot: OptiSnapshot = {
     projectId,

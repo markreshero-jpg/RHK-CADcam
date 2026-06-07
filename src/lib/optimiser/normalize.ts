@@ -25,6 +25,7 @@ export function normalizeProject(
   roomsRaw: RawRoom[],
   cabsRaw: RawCabinet[],
   cp: Row[], ip: Row[], tp: Row[], fz: Row[],
+  commentsByCab: Map<string, Record<string, string>> = new Map(),
 ): NormalizedProject {
   const rooms: OptiRoom[] = roomsRaw.map(r => ({ id: r.id, name: r.name }))
   const roomById = new Map(rooms.map(r => [r.id, r]))
@@ -51,6 +52,7 @@ export function normalizeProject(
       material_id: (row.material_id as string) ?? null,
       grain_direction: grain, nest_priority: nestPriority,
       output_to_cnc: (row.output_to_cnc as boolean) ?? true,
+      comment: commentsByCab.get(row.cabinet_instance_id as string)?.[partKey] ?? null,
     })
   }
 

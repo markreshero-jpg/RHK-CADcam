@@ -10,9 +10,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '@/app/ThemeToggle'
 import { useOptiStore, type Stage } from '@/src/lib/optimiser/store'
-import type { OptiSnapshot } from '@/src/lib/optimiser/types'
+import type { OptiSnapshot, OptiPart } from '@/src/lib/optimiser/types'
 import { materialGroupKey } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
@@ -182,7 +186,32 @@ function Stage2Parts() {
   const setSelected = useOptiStore(s => s.setSelected)
   const cutQty = useOptiStore(s => s.cutQty)
   const setCutQty = useOptiStore(s => s.setCutQty)
+  const partColOrder = useOptiStore(s => s.partColOrder)
+  const setPartColOrder = useOptiStore(s => s.setPartColOrder)
+  const setPartComment = useOptiStore(s => s.setPartComment)
   const includedProjectIds = useOptiStore(s => s.includedProjectIds)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+
+  function onColDragEnd(e: DragEndEvent) {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const from = partColOrder.indexOf(active.id as string)
+    const to = partColOrder.indexOf(over.id as string)
+    if (from >= 0 && to >= 0) setPartColOrder(arrayMove(partColOrder, from, to))
+  }
+
+  // Persist a part comment to cabinet_instances.part_comments (keyed by part_key).
+  function saveComment(part: OptiPart, value: string) {
+    setPartComment(part.uid, value)
+    const comments: Record<string, string> = {}
+    for (const x of snap.parts) {
+      if (x.cabinet_instance_id !== part.cabinet_instance_id) continue
+      const c = (x.uid === part.uid ? value : (x.comment ?? '')).trim()
+      if (c) comments[x.source_part_key] = c
+    }
+    supabase.from('cabinet_instances').update({ part_comments: comments }).eq('id', part.cabinet_instance_id)
+      .then(({ error }) => { if (error) console.error('[part comment save]', error) })
+  }
   const mergeProjectData = useOptiStore(s => s.mergeProjectData)
   const removeProjectData = useOptiStore(s => s.removeProjectData)
   const [addingProject, setAddingProject] = useState(false)
@@ -257,41 +286,30 @@ function Stage2Parts() {
         </span>
       </div>
 
-      {/* Part table — spreadsheet style */}
+      {/* Part table — spreadsheet style, draggable columns */}
       <div className="flex-1 overflow-auto px-8 py-3">
-        <table className="w-full text-xs border-collapse border border-edge-strong [&_td]:border [&_td]:border-edge/70 [&_th]:border [&_th]:border-edge-strong">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-surface-2 text-ink-muted text-left">
-              <th className="px-2 py-2 w-8 text-center"></th>
-              <th className="px-2 py-2 font-semibold">Part</th>
-              <th className="px-2 py-2 font-semibold">Cabinet</th>
-              <th className="px-2 py-2 font-semibold">Room</th>
-              <th className="px-2 py-2 font-semibold text-right w-20">Width</th>
-              <th className="px-2 py-2 font-semibold text-right w-20">Height</th>
-              <th className="px-2 py-2 font-semibold text-right w-16">Thk</th>
-              <th className="px-2 py-2 font-semibold">Material</th>
-              <th className="px-2 py-2 font-semibold text-right w-16">Qty</th>
-            </tr>
-          </thead>
+        <p className="text-[10px] text-ink-subtle mb-1.5">Drag column headers to reorder. Comments save to the part.</p>
+        <table className="w-full text-xs border-collapse border border-edge-strong">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onColDragEnd}>
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-surface-2 text-ink-muted">
+                <SortableContext items={partColOrder} strategy={horizontalListSortingStrategy}>
+                  {partColOrder.map(key => <SortableTh key={key} id={key} />)}
+                </SortableContext>
+              </tr>
+            </thead>
+          </DndContext>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={9} className="px-2 py-8 text-center text-ink-subtle">No parts match the current filters.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={partColOrder.length} className="border border-edge/70 px-2 py-8 text-center text-ink-subtle">No parts match the current filters.</td></tr>}
             {filtered.map((p, i) => {
               const on = selectedUids.has(p.uid)
               return (
                 <tr key={p.uid} className={`${i % 2 ? 'bg-surface/40' : ''} hover:bg-surface ${on ? '' : 'opacity-55'}`}>
-                  <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={on} onChange={() => togglePart(p.uid)} /></td>
-                  <td className="px-2 py-1.5 text-ink">{p.label}</td>
-                  <td className="px-2 py-1.5 text-ink-muted">{p.cabinet_label}</td>
-                  <td className="px-2 py-1.5 text-ink-muted">{isBatch && p.job_number ? <span className="text-ink-subtle">{p.job_number} · </span> : null}{p.room_name}</td>
-                  <td className="px-2 py-1.5 text-right font-mono text-ink-muted tabular-nums">{Math.round(p.w)}</td>
-                  <td className="px-2 py-1.5 text-right font-mono text-ink-muted tabular-nums">{Math.round(p.h)}</td>
-                  <td className="px-2 py-1.5 text-right font-mono text-ink-muted tabular-nums">{p.thickness}</td>
-                  <td className="px-2 py-1.5 text-ink-muted">{p.material_id ? (matName.get(p.material_id) ?? '—') : <span className="text-amber-600">none</span>}</td>
-                  <td className="px-1 py-1 text-right">
-                    <input type="number" min={0} value={cutQty[p.uid] ?? 1} disabled={!on}
-                      onChange={e => setCutQty(p.uid, parseInt(e.target.value) || 0)}
-                      className="w-14 bg-surface-2 border border-edge-strong rounded px-1.5 py-0.5 text-right font-mono text-ink disabled:opacity-40 focus:outline-none focus:border-accent" />
-                  </td>
+                  {partColOrder.map(key => (
+                    <td key={key} className={`border border-edge/70 ${key === 'comment' || key === 'qty' ? 'px-1 py-1' : 'px-2 py-1.5'} ${COL_DEFS[key].align === 'right' ? 'text-right' : COL_DEFS[key].align === 'center' ? 'text-center' : ''}`}>
+                      {renderCell(key, p, on)}
+                    </td>
+                  ))}
                 </tr>
               )
             })}
@@ -299,6 +317,58 @@ function Stage2Parts() {
         </table>
       </div>
     </div>
+  )
+
+  function renderCell(key: string, p: OptiPart, on: boolean) {
+    switch (key) {
+      case 'check':    return <input type="checkbox" checked={on} onChange={() => togglePart(p.uid)} />
+      case 'part':     return <span className="text-ink">{p.label}</span>
+      case 'cabinet':  return <span className="text-ink-muted">{p.cabinet_label}</span>
+      case 'room':     return <span className="text-ink-muted">{isBatch && p.job_number ? <span className="text-ink-subtle">{p.job_number} · </span> : null}{p.room_name}</span>
+      case 'width':    return <span className="font-mono text-ink-muted tabular-nums">{Math.round(p.w)}</span>
+      case 'height':   return <span className="font-mono text-ink-muted tabular-nums">{Math.round(p.h)}</span>
+      case 'thk':      return <span className="font-mono text-ink-muted tabular-nums">{p.thickness}</span>
+      case 'material': return p.material_id ? <span className="text-ink-muted">{matName.get(p.material_id) ?? '—'}</span> : <span className="text-amber-600">none</span>
+      case 'comment':  return (
+        <input defaultValue={p.comment ?? ''} key={p.comment ?? ''} placeholder="—"
+          onBlur={e => { if (e.target.value.trim() !== (p.comment ?? '')) saveComment(p, e.target.value) }}
+          className="w-full bg-transparent border border-transparent hover:border-edge-strong focus:border-accent rounded px-1.5 py-0.5 text-ink focus:outline-none focus:bg-surface-2" />
+      )
+      case 'qty':      return (
+        <input type="number" min={0} value={cutQty[p.uid] ?? 1} disabled={!on}
+          onChange={e => setCutQty(p.uid, parseInt(e.target.value) || 0)}
+          className="w-14 bg-surface-2 border border-edge-strong rounded px-1.5 py-0.5 text-right font-mono text-ink disabled:opacity-40 focus:outline-none focus:border-accent" />
+      )
+      default: return null
+    }
+  }
+}
+
+// Stage 2 part-table columns. Order is user-draggable (stored in the optimiser store).
+const COL_DEFS: Record<string, { label: string; align?: 'right' | 'center'; width?: string }> = {
+  check:    { label: '', align: 'center', width: 'w-8' },
+  part:     { label: 'Part' },
+  cabinet:  { label: 'Cabinet' },
+  room:     { label: 'Room' },
+  width:    { label: 'Width', align: 'right', width: 'w-20' },
+  height:   { label: 'Height', align: 'right', width: 'w-20' },
+  thk:      { label: 'Thk', align: 'right', width: 'w-16' },
+  material: { label: 'Material' },
+  comment:  { label: 'Comment', width: 'w-48' },
+  qty:      { label: 'Qty', align: 'right', width: 'w-16' },
+}
+
+// Draggable column header.
+function SortableTh({ id }: { id: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const def = COL_DEFS[id]
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
+  return (
+    <th ref={setNodeRef} style={style} {...attributes} {...listeners}
+      className={`border border-edge-strong px-2 py-2 font-semibold select-none cursor-grab active:cursor-grabbing ${def.width ?? ''} ${def.align === 'right' ? 'text-right' : def.align === 'center' ? 'text-center' : 'text-left'}`}
+      title="Drag to reorder">
+      {def.label}
+    </th>
   )
 }
 

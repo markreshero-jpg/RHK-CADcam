@@ -46,7 +46,8 @@ interface OptiState {
   // Stage 2 — batch projects in scope (initiating project + any added)
   includedProjectIds: string[]
 
-  // Stage 2 — filters (selection aids) + the actual selection
+  // Stage 2 — column order (session-persistent; no localStorage) + filters + selection
+  partColOrder: string[]
   filterRoomIds: string[]      // empty = all
   filterCabinetIds: string[]   // empty = all
   filterMaterialIds: string[]  // empty = all
@@ -83,6 +84,8 @@ interface OptiState {
   togglePart: (uid: string) => void
   setSelected: (uids: string[]) => void
   setCutQty: (uid: string, qty: number) => void
+  setPartColOrder: (order: string[]) => void
+  setPartComment: (uid: string, comment: string) => void
   setSettings: (patch: Partial<PreOptSettings>) => void
   ensureStock: (key: string, seed: SheetStock) => void
   setStock: (key: string, patch: Partial<SheetStock>) => void
@@ -122,6 +125,7 @@ export const useOptiStore = create<OptiState>((set) => ({
   machineId: null,
   profileId: null,
   includedProjectIds: [],
+  partColOrder: ['check', 'part', 'cabinet', 'room', 'width', 'height', 'thk', 'material', 'comment', 'qty'],
   filterRoomIds: [],
   filterCabinetIds: [],
   filterMaterialIds: [],
@@ -204,6 +208,13 @@ export const useOptiStore = create<OptiState>((set) => ({
   }),
   setSelected: (uids) => set({ selectedUids: new Set(uids), ...INVALIDATE_NEST }),
   setCutQty: (uid, qty) => set(st => ({ cutQty: { ...st.cutQty, [uid]: Math.max(0, qty) }, ...INVALIDATE_NEST })),
+  setPartColOrder: (order) => set({ partColOrder: order }),
+  // Comment is part metadata, not a nest input — does NOT invalidate the layout.
+  setPartComment: (uid, comment) => set(st => {
+    if (!st.snapshot) return {}
+    const c = comment.trim() || null
+    return { snapshot: { ...st.snapshot, parts: st.snapshot.parts.map(p => p.uid === uid ? { ...p, comment: c } : p) } }
+  }),
   setSettings: (patch) => set(st => ({ settings: { ...st.settings, ...patch }, ...INVALIDATE_NEST })),
   ensureStock: (key, seed) => set(st => st.stock[key]
     ? {}

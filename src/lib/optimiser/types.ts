@@ -28,6 +28,7 @@ export interface OptiPart {
   grain_direction: string | null
   nest_priority: number
   output_to_cnc: boolean
+  comment: string | null      // from cabinet_instances.part_comments[part_key]
 }
 
 export interface OptiMaterial {
