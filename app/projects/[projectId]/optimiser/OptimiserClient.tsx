@@ -320,16 +320,17 @@ function Stage2Parts() {
       {/* Part table — spreadsheet style, draggable columns */}
       <div className="flex-1 overflow-auto px-8 py-3">
         <p className="text-[10px] text-ink-subtle mb-1.5">Drag column headers to reorder. Comments save to the part.</p>
+        {/* DndContext wraps the table from OUTSIDE — it injects an a11y <div> at
+            its mount point, which is invalid directly inside <table>. */}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onColDragEnd}>
         <table className="w-full text-xs border-separate border-spacing-0 border-l border-edge-strong">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onColDragEnd}>
-            <thead>
-              <tr className="text-ink-muted">
-                <SortableContext items={partColOrder} strategy={horizontalListSortingStrategy}>
-                  {partColOrder.map(key => <SortableTh key={key} id={key} sortKey={sort.key} sortDir={sort.dir} onSort={toggleSort} />)}
-                </SortableContext>
-              </tr>
-            </thead>
-          </DndContext>
+          <thead>
+            <tr className="text-ink-muted">
+              <SortableContext items={partColOrder} strategy={horizontalListSortingStrategy}>
+                {partColOrder.map(key => <SortableTh key={key} id={key} sortKey={sort.key} sortDir={sort.dir} onSort={toggleSort} />)}
+              </SortableContext>
+            </tr>
+          </thead>
           <tbody>
             {sortedFiltered.length === 0 && <tr><td colSpan={partColOrder.length} className="border-b border-r border-edge/70 px-2 py-8 text-center text-ink-subtle">No parts match the current filters.</td></tr>}
             {sortedFiltered.map((p, i) => {
@@ -346,6 +347,7 @@ function Stage2Parts() {
             })}
           </tbody>
         </table>
+        </DndContext>
       </div>
     </div>
   )
