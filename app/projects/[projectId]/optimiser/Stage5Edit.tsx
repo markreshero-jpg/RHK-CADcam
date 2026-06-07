@@ -212,7 +212,6 @@ export default function Stage5Edit() {
                   className={`w-full text-left px-3 py-1 flex items-center gap-2 text-[11px] transition-colors ${on ? 'bg-accent/20 text-accent-ink' : 'text-ink-muted hover:bg-surface-2'}`}>
                   <span className="font-mono w-5 shrink-0 text-right text-ink-subtle">{idx + 1}</span>
                   <span className="truncate flex-1">{part?.label ?? pl.label}</span>
-                  <span className="font-mono text-ink-subtle shrink-0">{Math.round(pl.w)}×{Math.round(pl.h)}</span>
                 </button>
               )
             })}
