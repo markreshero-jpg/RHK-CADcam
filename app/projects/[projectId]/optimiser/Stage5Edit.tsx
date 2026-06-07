@@ -8,7 +8,7 @@
 // live efficiency, full undo/redo. No react-konva, no localStorage.
 // ============================================================
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/optimiser/edit'
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
@@ -36,16 +36,6 @@ export default function Stage5Edit() {
   const resizeSheet = useOptiStore(s => s.resizeSheet)
   const undo = useOptiStore(s => s.undo)
   const redo = useOptiStore(s => s.redo)
-  const partIndex = useOptiStore(s => s.partIndex)
-
-  // Stable per-instance part number (from creation order), independent of where a
-  // part currently sits — so a part keeps its number when dragged/moved.
-  const numByUid = useMemo(() => {
-    const m = new Map<string, number>()
-    let i = 1
-    for (const uid of Object.keys(partIndex)) m.set(uid, i++)
-    return m
-  }, [partIndex])
 
   const [ctxMenu, setCtxMenu] = useState<{ uid: string; x: number; y: number } | null>(null)
 
@@ -100,14 +90,19 @@ export default function Stage5Edit() {
 
         {/* Canvas */}
         <div className="flex-1 overflow-auto grid place-items-center p-6 bg-canvas">
-          <InteractiveSheet
-            sheet={sheet}
-            selectedUid={selectedUid}
-            numByUid={numByUid}
-            onSelect={selectPlacement}
-            onMove={(uid, x, y) => movePartWithin(uid, x, y)}
-            onContext={(uid, x, y) => { selectPlacement(uid); setCtxMenu({ uid, x, y }) }}
-          />
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-lg font-semibold text-ink">
+              Sheet {sheet.index + 1}
+              <span className="text-ink-subtle text-sm font-normal"> of {nestResult.sheets.length} · {sheet.stock.w}×{sheet.stock.h}mm{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
+            </div>
+            <InteractiveSheet
+              sheet={sheet}
+              selectedUid={selectedUid}
+              onSelect={selectPlacement}
+              onMove={(uid, x, y) => movePartWithin(uid, x, y)}
+              onContext={(uid, x, y) => { selectPlacement(uid); setCtxMenu({ uid, x, y }) }}
+            />
+          </div>
         </div>
 
         {/* Unplaced pool */}
@@ -126,8 +121,7 @@ export default function Stage5Edit() {
                   else setEditError('No room on this sheet for this part.')
                 }}
                 className="px-2 py-1 rounded border border-edge-strong text-[11px] text-ink-muted hover:bg-surface-2 hover:text-ink transition-colors"
-                title={`#${numByUid.get(p.uid) ?? '?'} · ${Math.round(p.w)}×${Math.round(p.h)}mm`}>
-                {numByUid.get(p.uid) != null && <span className="font-mono text-accent-ink mr-1">{numByUid.get(p.uid)}</span>}
+                title={`${Math.round(p.w)}×${Math.round(p.h)}mm`}>
                 {p.label} <span className="text-ink-subtle font-mono">{Math.round(p.w)}×{Math.round(p.h)}</span>
               </button>
             ))}
@@ -149,7 +143,7 @@ export default function Stage5Edit() {
                 <span className="text-[11px] text-ink">Sheet {s.index + 1}{s.stock.isOffcut ? ' (offcut)' : ''}</span>
                 <span className="text-[10px] font-mono text-ink-subtle">{(s.efficiency * 100).toFixed(0)}%</span>
               </div>
-              <ThumbSheet sheet={s} numByUid={numByUid} />
+              <ThumbSheet sheet={s} />
             </button>
           ))}
         </div>
@@ -187,10 +181,9 @@ export default function Stage5Edit() {
 }
 
 // ── Interactive sheet (pointer drag with live snap preview) ────────────────────────
-function InteractiveSheet({ sheet, selectedUid, numByUid, onSelect, onMove, onContext }: {
+function InteractiveSheet({ sheet, selectedUid, onSelect, onMove, onContext }: {
   sheet: NestedSheet
   selectedUid: string | null
-  numByUid: Map<string, number>
   onSelect: (uid: string | null) => void
   onMove: (uid: string, x: number, y: number) => void
   onContext: (uid: string, clientX: number, clientY: number) => void
@@ -238,11 +231,12 @@ function InteractiveSheet({ sheet, selectedUid, numByUid, onSelect, onMove, onCo
         <rect x={u.x0 * scale} y={(H - u.y1) * scale} width={(u.x1 - u.x0) * scale} height={(u.y1 - u.y0) * scale}
           fill="none" stroke="#334155" strokeWidth={1} strokeDasharray="3 3" />
       ) })()}
-      {sheet.placements.map(p => {
+      {sheet.placements.map((p, idx) => {
         const isDrag = drag?.uid === p.uid
         const x = isDrag ? drag!.gx : p.x
         const y = isDrag ? drag!.gy : p.y
         const on = selectedUid === p.uid
+        const num = idx + 1   // per-sheet part number
         return (
           <g key={p.uid}
             onPointerDown={e => onPointerDown(e, p.uid)}
@@ -254,12 +248,11 @@ function InteractiveSheet({ sheet, selectedUid, numByUid, onSelect, onMove, onCo
             {(() => {
               const cx = (x + p.w / 2) * scale
               const cyc = fy(y, p.h) + (p.h * scale) / 2
-              const num = numByUid.get(p.uid)
               const showNum = p.w * scale > 16 && p.h * scale > 12
               const showLabel = p.w * scale > 44 && p.h * scale > 28
               return (
                 <g style={{ pointerEvents: 'none' }}>
-                  {showNum && num != null && (
+                  {showNum && (
                     <text x={cx} y={showLabel ? cyc - 5 : cyc} textAnchor="middle" dominantBaseline="middle"
                       fill="#e2e8f0" fontSize={Math.min(13, Math.max(8, p.h * scale / 3.5))} fontWeight={600} fontFamily="monospace">
                       {num}
@@ -281,14 +274,14 @@ function InteractiveSheet({ sheet, selectedUid, numByUid, onSelect, onMove, onCo
   )
 }
 
-function ThumbSheet({ sheet, numByUid }: { sheet: NestedSheet; numByUid: Map<string, number> }) {
+function ThumbSheet({ sheet }: { sheet: NestedSheet }) {
   const { w: W, h: H } = sheet.stock
   const tw = 200, scale = tw / W, th = H * scale
   return (
     <svg width="100%" viewBox={`0 0 ${tw} ${th}`} className="block">
       <rect x={0} y={0} width={tw} height={th} fill="#0f172a" stroke="#475569" strokeWidth={0.5} />
-      {sheet.placements.map(p => {
-        const num = numByUid.get(p.uid)
+      {sheet.placements.map((p, idx) => {
+        const num = idx + 1
         return (
           <g key={p.uid}>
             <rect x={p.x * scale} y={(H - p.y - p.h) * scale} width={p.w * scale} height={p.h * scale}
