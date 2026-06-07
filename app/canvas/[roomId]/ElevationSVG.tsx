@@ -1,11 +1,12 @@
 ﻿'use client'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { Room, Wall, CabinetInstance, DEFAULT_DIMS } from '@/src/lib/types'
-import { cabT, wallDir, wallEnd, dist, findFreeSlot, cabBlocks, cabWallSide, CAB_FILL, CAB_FILL_SEL, SNAP_PX, type Pt } from '@/src/lib/geometry'
+import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, cabBlocks, cabWallSide, CAB_FILL, CAB_FILL_SEL, SNAP_PX, type Pt } from '@/src/lib/geometry'
 import { Selected, CabResize, viewReducer, DisplayConfig, Mode, modeAssemblyClass } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
 import { roundMm } from '@/src/lib/format'
 import { getUserPrefs } from '@/src/lib/userPrefs'
+import { getPalette, paletteToPartColors } from '@/src/lib/partPalette'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone, ResolvedInternalPart, ResolvedDrawerStack, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
 import { computeElevSeams } from '@/src/lib/cabinetSeams'
 import {
@@ -16,43 +17,10 @@ import SnapToolbar from './SnapToolbar'
 import { SlideShape, slideBox3, doorProfileSvg } from './cabinetEditSvgHelpers'
 import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 
-// ── Colour coding per spec ────────────────────────────────────
-const PART_COLORS: Record<string, string> = {
-  left_side: '#b8c8dc', right_side: '#b8c8dc',
-  bottom: '#b8c8dc', back: '#b8c8dc',
-  full_top: '#b8c8dc', front_rail: '#b8c8dc', back_rail: '#b8c8dc',
-  kick_front_face: '#f59e0b',
-  kick_sub_front: '#d97706', kick_back: '#ea580c',
-  spreader_vertical: '#dc2626', spreader_horizontal: '#dc2626',
-  adj_shelf: '#818cf8', fixed_shelf: '#a78bfa',
-  inner_drawer_bottom: '#fb7185', inner_drawer_back: '#fb7185',
-  inner_drawer_side: '#fb7185',   inner_drawer_front: '#fb7185',
-  pull_out_bottom: '#f59e0b', pull_out_side: '#f59e0b', pull_out_back: '#f59e0b',
-  accessory: '#94a3b8',
-  db_front: '#34d399', db_back: '#6ee7b7',
-  db_left_side: '#34d399', db_right_side: '#34d399', db_bottom: '#34d399',
-  db_slide: '#94a3b8',
-  door: '#60a5fa', drawer_face: '#f472b6', false_panel: '#60a5fa',
-}
-
-// ── Line-drawing mode colours ─────────────────────────────────
-const LINE_DRAW_COLORS: Record<string, string> = {
-  left_side: '#94a3b8', right_side: '#94a3b8',
-  bottom: '#94a3b8', back: '#475569',
-  full_top: '#94a3b8', front_rail: '#94a3b8', back_rail: '#94a3b8',
-  kick_front_face: '#fbbf24',
-  kick_sub_front: '#f97316', kick_back: '#f97316',
-  spreader_vertical: '#f97316', spreader_horizontal: '#f97316',
-  adj_shelf: '#a78bfa', fixed_shelf: '#818cf8',
-  inner_drawer_back: '#fda4af', inner_drawer_front: '#fda4af',
-  inner_drawer_side: '#fda4af', inner_drawer_bottom: '#fda4af',
-  pull_out_back: '#fcd34d', pull_out_side: '#fcd34d', pull_out_bottom: '#fcd34d',
-  accessory: '#cbd5e1',
-  db_front: '#6ee7b7', db_back: '#6ee7b7',
-  db_left_side: '#6ee7b7', db_right_side: '#6ee7b7', db_bottom: '#6ee7b7',
-  db_slide: '#64748b',
-  door: '#60a5fa', drawer_face: '#f472b6', false_panel: '#60a5fa',
-}
+// Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
+// resolved per render below. PART_COLORS / LINE_DRAW_COLORS keep their `MAP[key]`
+// shape so the call sites are unchanged; both now follow the same palette so a
+// category's colour is consistent across normal and line-drawing presets.
 
 function caseElevRect(p: ResolvedCasePart) {
   if (p.part_key === 'left_side' || p.part_key === 'right_side') {
@@ -584,8 +552,11 @@ export default function ElevationSVG({
   }
 
   // Click on blank SVG area → confirm resize if active, or place/move a cabinet
-  function onSVGClick() {
-    if (elevResizeFollowing) { void confirmResize(); return }
+  // Commit the cabinet currently being moved (following mode) at the float
+  // position. Called from both onSVGClick (drop on empty wall) and the cabinet
+  // click handler (drop directly onto/next to another cabinet) so the drop lands
+  // wherever you release — not only on empty space.
+  function dropFollowingCab() {
     if (!elevCabFollowing || !elevCabFloat || !wall) return
     const { id } = elevCabFollowing
     const cab = cabinets.find(c => c.id === id)
@@ -598,9 +569,9 @@ export default function ElevationSVG({
     const occupied = wallCabs
       .filter(c => c.id !== id && cabBlocks(cab.assembly_class, c.assembly_class))
       .map(c => ({ t: cabT(c, wall), dx: c.dx }))
-    const snapT = findFreeSlot(
+    const snapT = slideToFreeSlot(
       Math.max(0, Math.min(wall.length - cab.dx, elevCabFloat.t - cab.dx / 2)),
-      cab.dx, wall.length, occupied
+      cab.dx, wall.length, occupied, cabT(cab, wall)
     )
     const wd = wallDir(wall)
     const pos_x = wall.pos_x + snapT * wd.x
@@ -609,6 +580,11 @@ export default function ElevationSVG({
     setElevCabFollowing(null)
     setElevCabFloat(null)
     onUpdateCabinet(id, { wall_id: wall.id, pos_x, pos_y, pos_z: snapBottomZ, rotation: wall.angle })
+  }
+
+  function onSVGClick() {
+    if (elevResizeFollowing) { void confirmResize(); return }
+    dropFollowingCab()
   }
 
   function onCabCrosshairClick(e: React.MouseEvent, cab: CabinetInstance) {
@@ -632,8 +608,8 @@ export default function ElevationSVG({
     if (mode === 'measure') return  // let measure clicks pass through to the svg
     e.stopPropagation()
     if (elevCabFollowing) {
-      setElevCabFollowing(null)
-      setElevCabFloat(null)
+      // Mid-move: don't cancel on pointer-down over a cabinet — let the click
+      // event drop it here (handled in the cabinet's onClick / onSVGClick).
       return
     }
     if (shiftRef.current) {
@@ -665,6 +641,12 @@ export default function ElevationSVG({
   }
 
   const isLineDrawing = displayConfig.activePreset === 'line_drawing'
+
+  // Editable part-line palette → per-key colour map (see src/lib/partPalette.ts).
+  // Read once on mount; the Settings editor persists to localStorage and the
+  // canvas re-reads on remount when you navigate back.
+  const PART_COLORS = useMemo(() => paletteToPartColors(getPalette()), [])
+  const LINE_DRAW_COLORS = PART_COLORS
 
   const z = view.zoom
   const labelFs = 11 / z
@@ -1026,7 +1008,11 @@ export default function ElevationSVG({
                   onPointerDown={e => onCabPointerDown(e, cab)}
                   onPointerEnter={() => setHoveredCabId(cab.id)}
                   onPointerLeave={() => setHoveredCabId(null)}
-                  onClick={e => { e.stopPropagation(); if (!shiftRef.current) onSelectCabinet(cab.id) }}
+                  onClick={e => {
+                    e.stopPropagation()
+                    if (elevCabFollowing) { dropFollowingCab(); return }
+                    if (!shiftRef.current) onSelectCabinet(cab.id)
+                  }}
                   onContextMenu={e => onCabinetContextMenu(e, cab.id)}
                 >
                   {/* Invisible hit area */}
@@ -1503,9 +1489,9 @@ export default function ElevationSVG({
               const occupied = wallCabs
                 .filter(c => c.id !== elevCabFollowing.id && cabBlocks(followingCab.assembly_class, c.assembly_class))
                 .map(c => ({ t: cabT(c, wall), dx: c.dx }))
-              const snapT = findFreeSlot(
+              const snapT = slideToFreeSlot(
                 Math.max(0, Math.min(wall.length - followingCab.dx, elevCabFloat.t - followingCab.dx / 2)),
-                followingCab.dx, wall.length, occupied
+                followingCab.dx, wall.length, occupied, cabT(followingCab, wall)
               )
               const snapX = snapT
               const snapY = roomH - snapBottomZ - followingCab.dy

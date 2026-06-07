@@ -14,6 +14,7 @@ import {
 } from '@/src/lib/geometry'
 import type { Pt } from '@/src/lib/geometry'
 import { getUserPrefs } from '@/src/lib/userPrefs'
+import { getPalette } from '@/src/lib/partPalette'
 
 const TO_RAD = Math.PI / 180
 const FOV    = 40
@@ -210,6 +211,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
 
   const SEL  = '#d97706'
   const SELE = '#fbbf24'
+  const palette = useMemo(() => getPalette(), [])
 
   if (!rp) {
     // Fallback box when resolver data isn't loaded yet
@@ -249,7 +251,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
           <Part key={`c${i}`}
             b={caseBox(p, cab.dy)}
             color={selected ? SEL : matFace(materialColours?.[p.material_id], '#ddd3bb')}
-            edgeColor={selected ? SELE : '#b8a98e'}
+            edgeColor={selected ? SELE : palette.carcase}
           />
         ))}
 
@@ -258,7 +260,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
           <Part key={`t${i}`}
             b={tkBox(p)}
             color={selected ? SEL : matFace(materialColours?.[p.material_id], '#78716c')}
-            edgeColor={selected ? SELE : '#57534e'}
+            edgeColor={selected ? SELE : palette.toekick}
           />
         ))}
 
@@ -267,7 +269,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
           <Part key={`s${i}`}
             b={intBox(p)}
             color={selected ? SEL : matFace(materialColours?.[p.material_id], '#e8dece')}
-            edgeColor={selected ? SELE : '#c4b49c'}
+            edgeColor={selected ? SELE : palette.internal}
           />
         ))}
 
@@ -276,7 +278,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
           <Part key={`f${i}`}
             b={zoneBox(z)}
             color={selected ? SEL : matFace(materialColours?.[z.material_id], z.face_type === 'drawer_face' ? '#e2d9c8' : '#f0ebe0')}
-            edgeColor={selected ? SELE : '#b8a98e'}
+            edgeColor={selected ? SELE : (z.face_type === 'drawer_face' ? palette.drawer_face : palette.door)}
           />
         ))}
 

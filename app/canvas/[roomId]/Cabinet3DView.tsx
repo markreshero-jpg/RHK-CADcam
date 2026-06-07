@@ -29,6 +29,7 @@ import type { ResolvedSlideDrill } from '@/src/lib/resolver/types'
 import PartEdgeJoints from './PartEdgeJoints'
 import { SlideModel } from '@/src/components/three/SlideModel'
 import { HingeModel } from '@/src/components/three/HingeModel'
+import { getPalette } from '@/src/lib/partPalette'
 
 export type { MatColSpec, MatColMap }
 
@@ -411,6 +412,7 @@ function DrawerAssembly({
   const curZ            = useRef(0)
   const targetTravelRef = useRef(targetTravel)
   targetTravelRef.current = targetTravel
+  const palette = useMemo(() => getPalette(), [])
 
   useFrame(() => {
     if (!groupRef.current) return
@@ -450,7 +452,7 @@ function DrawerAssembly({
       <Part
         b={zb}
         faceColors={zFaceColors}
-        edgeLineColor="#b8a98e"
+        edgeLineColor={faceZone.face_type === 'drawer_face' ? palette.drawer_face : palette.door}
         meta={zInfo}
         selected={selected?.id === zInfo.id}
         highlighted={faceHighlighted}
@@ -473,7 +475,7 @@ function DrawerAssembly({
             key={`db_${pi}`}
             b={b}
             faceColors={fc}
-            edgeLineColor="#8a7a60"
+            edgeLineColor={palette.drawer_box}
             meta={info}
             selected={selected?.id === info.id}
             highlighted={false}
@@ -517,7 +519,7 @@ function DrawerAssembly({
             key={`sl_${li}`}
             b={b}
             faceColors={fc}
-            edgeLineColor="#4b5563"
+            edgeLineColor={palette.slides}
             meta={info}
             selected={selected?.id === info.id}
             highlighted={false}
@@ -911,6 +913,7 @@ function CabinetScene({
   const { dx, dy, dz } = cab
   const dragRef = useRef(false)
   const hlSet   = highlightPartKeys ? new Set(highlightPartKeys) : null
+  const palette = useMemo(() => getPalette(), [])
 
   const boxByKey = useMemo(() => {
     const m: Record<string, Box> = {}
@@ -1028,7 +1031,7 @@ function CabinetScene({
               b={b}
               drills={holes}
               faceColors={panelFaceColors(info.panelKind, p.part_key, s.face, s.back, s.edge)}
-              edgeLineColor="#b8a98e"
+              edgeLineColor={palette.carcase}
               meta={info}
               selected={selected?.id === info.id}
               highlighted={hlSet?.has(p.part_key) ?? false}
@@ -1047,7 +1050,7 @@ function CabinetScene({
             key={`c${i}`}
             b={b}
             faceColors={panelFaceColors(info.panelKind, p.part_key, s.face, s.back, s.edge)}
-            edgeLineColor="#b8a98e"
+            edgeLineColor={palette.carcase}
             meta={info}
             selected={selected?.id === info.id}
             highlighted={hlSet?.has(p.part_key) ?? false}
@@ -1071,7 +1074,7 @@ function CabinetScene({
             key={`t${i}`}
             b={b}
             faceColors={panelFaceColors(info.panelKind, p.part_key, s.face, s.back, s.edge)}
-            edgeLineColor="#57534e"
+            edgeLineColor={palette.toekick}
             meta={info}
             selected={selected?.id === info.id}
             highlighted={hlSet?.has(p.part_key) ?? false}
@@ -1098,7 +1101,7 @@ function CabinetScene({
               key={key}
               b={b}
               faceColors={panelFaceColors(info.panelKind, p.part_type, s.face, s.back, s.edge)}
-              edgeLineColor="#c4b49c"
+              edgeLineColor={palette.internal}
               meta={info}
               selected={selected?.id === info.id}
               highlighted={hlSet?.has(p.part_type) ?? false}
@@ -1141,7 +1144,7 @@ function CabinetScene({
               key={key}
               b={b}
               faceColors={fc}
-              edgeLineColor="#4b5563"
+              edgeLineColor={palette.slides}
               meta={info}
               selected={selected?.id === info.id}
               highlighted={false}
@@ -1267,7 +1270,10 @@ function CabinetScene({
                   // Same across + depth offsets so the plate stays consistent
                   // with the cup (plate ends up back at the gable).
                   position={[
-                    hingeX + cupAcrossOffset(h.cup_x_from_edge_mm, mirror, h.model_scale) + h.plate_anchor_x,
+                    // The plate model is mirrored for left hinges, so the across
+                    // (X) nudge must flip with the mirror to move the same way on
+                    // both hands. Y/Z are not mirrored.
+                    hingeX + cupAcrossOffset(h.cup_x_from_edge_mm, mirror, h.model_scale) + (mirror ? 1 : -1) * h.plate_anchor_x,
                     b.y + h.y_position_mm + h.plate_anchor_y,
                     b.z - ((h.bore_to_door_mm ?? 0) * h.model_scale + seatNudge(b.d)) + h.plate_anchor_z,
                   ]}
@@ -1325,7 +1331,7 @@ function CabinetScene({
         <SlideDrillMarkers drills={slideDrills} wire={wire} />
       )}
       {hingeDrills.length > 0 && (
-        <SlideDrillMarkers drills={hingeDrills} wire={wire} color="#a855f7" />
+        <SlideDrillMarkers drills={hingeDrills} wire={wire} color={palette.hinges} />
       )}
     </group>
   )

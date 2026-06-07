@@ -194,6 +194,39 @@ export function findFreeSlot(desired: number, dx: number, wallLen: number, occup
   return Math.abs(leftT - desired) <= Math.abs(rightT - desired) ? leftT : rightT
 }
 
+/**
+ * Like findFreeSlot, but for MOVING an existing cabinet along its own wall.
+ * Resolves an overlap by snapping to the nearest gap *in the direction the
+ * cabinet is being dragged* (relative to its original slot `originalT`), so it
+ * never bounces back to the starting slot. If there is no room on the drag side
+ * it stays put. `occupied` must exclude the cabinet itself. When `originalT` is
+ * undefined (placement / move to a different wall) it falls back to findFreeSlot.
+ */
+export function slideToFreeSlot(
+  desired: number, dx: number, wallLen: number,
+  occupied: { t: number; dx: number }[], originalT?: number,
+): number {
+  const clamped = Math.max(0, Math.min(wallLen - dx, desired))
+  const overlaps = (t: number) => occupied.some(o => t < o.t + o.dx && t + dx > o.t)
+  // No overlap → drop exactly where the cursor put it (free movement within gaps).
+  if (!overlaps(clamped)) return clamped
+  if (originalT === undefined) return findFreeSlot(desired, dx, wallLen, occupied)
+
+  const draggingLeft = desired < originalT
+  // Candidate landings: hard against each neighbour's near edge, plus the wall ends.
+  const cands = [0, wallLen - dx]
+  for (const o of occupied) { cands.push(o.t - dx); cands.push(o.t + o.dx) }
+  // Keep only valid slots on the drag side (never the original side → no bounce-back).
+  const valid = cands.filter(t =>
+    t >= 0 && t <= wallLen - dx && !overlaps(t) &&
+    (draggingLeft ? t < originalT : t > originalT),
+  )
+  if (!valid.length) return originalT
+  // Snap to the gap closest to where the cursor wants it.
+  valid.sort((a, b) => Math.abs(a - desired) - Math.abs(b - desired))
+  return valid[0]
+}
+
 export function cabT(cab: CabinetInstance, wall: Wall): number {
   const d = wallDir(wall)
   return (cab.pos_x - wall.pos_x) * d.x + (cab.pos_y - wall.pos_y) * d.y

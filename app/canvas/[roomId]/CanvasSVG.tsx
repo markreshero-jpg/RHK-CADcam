@@ -1,5 +1,5 @@
 'use client'
-import React, { Fragment, useState } from 'react'
+import React, { Fragment, useState, useMemo } from 'react'
 import { Wall, CabinetInstance, DEFAULT_DIMS, BenchtopInstance, BenchtopArcSegment } from '@/src/lib/types'
 import {
   Pt, MIN_WALL_LEN, SNAP_PX, CAB_FILL, CAB_FILL_SEL,
@@ -13,6 +13,7 @@ import { Mode, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize,
 import { layerSVGProps } from '@/src/lib/displayConfig'
 import { roundMm } from '@/src/lib/format'
 import { SNAP_KIND_META, type SnapResult } from '@/src/lib/canvasSnap'
+import { getPalette } from '@/src/lib/partPalette'
 
 function buildBenchtopPath(
   pts: Array<{ x: number; y: number }>,
@@ -131,6 +132,8 @@ export default function CanvasSVG({
   snapResult, measureStart, measureEnd, measureCursor, onMeasureCancel,
 }: CanvasSVGProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  // Editable part-line palette (src/lib/partPalette.ts); read once on mount.
+  const palette = useMemo(() => getPalette(), [])
 
   const cx = centroid(walls)
   const dots = gridDots(view.panX, view.panY, view.zoom, svgSize.w, svgSize.h)
@@ -862,7 +865,7 @@ export default function CanvasSVG({
                 return (
                   <polygon points={intPts}
                     fill="none"
-                    stroke={isSel ? '#cbd5e1' : '#4b5563'}
+                    stroke={isSel ? '#cbd5e1' : palette.internal}
                     strokeWidth={0.75 / view.zoom}
                     strokeDasharray={intL.style === 'solid' ? undefined : `${8 / view.zoom} ${4 / view.zoom}`}
                     opacity={intP.opacity}
@@ -876,7 +879,7 @@ export default function CanvasSVG({
                 <line
                   x1={frontLeft.x} y1={frontLeft.y}
                   x2={frontRight.x} y2={frontRight.y}
-                  stroke={isSel ? '#e2e8f0' : baseColor}
+                  stroke={isSel ? '#e2e8f0' : palette.door}
                   strokeWidth={(isSel ? 2.5 : 2) / view.zoom}
                   strokeDasharray={faceP.strokeDasharray}
                   opacity={faceP.opacity}

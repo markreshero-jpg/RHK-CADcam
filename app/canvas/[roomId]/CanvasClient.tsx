@@ -8,7 +8,7 @@ import {
   toDeg, dist,
   wallEnd, wallDir,
   snapAngle,
-  nearestWall, findFreeSlot, cabBlocks, cabT, nextLabel,
+  nearestWall, findFreeSlot, slideToFreeSlot, cabBlocks, cabT, nextLabel,
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCenterPt,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
@@ -628,7 +628,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const dragCab = cabinets.find(c => c.id === cabId)
         const dragSide = dragCab ? cabWallSide(dragCab, wall) : 'face'
         const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && cabBlocks(assemblyClass, c.assembly_class) && cabWallSide(c, wall) === dragSide).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-        const t = findFreeSlot(desired, cabDX, wall.length, occupied)
+        const t = slideToFreeSlot(desired, cabDX, wall.length, occupied, dragCab ? cabT(dragCab, wall) : undefined)
         setCabDrag({ id: cabId, pos_x: wall.pos_x + t * wd.x, pos_y: wall.pos_y + t * wd.y })
       }
     }
@@ -644,7 +644,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
           const moveSide = cabWallSide(cab, raw.wall)
           const occupied = cabinets.filter(c => c.id !== id && c.wall_id === raw.wall.id && cabBlocks(assemblyClass, c.assembly_class) && cabWallSide(c, raw.wall) === moveSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
-          const t = findFreeSlot(desired, cab.dx, raw.wall.length, occupied)
+          // Same-wall move → keep it on the drag side (no bounce-back); cross-wall → free slot.
+          const origT = raw.wall.id === cab.wall_id ? cabT(cab, raw.wall) : undefined
+          const t = slideToFreeSlot(desired, cab.dx, raw.wall.length, occupied, origT)
           setCabMoveDrag({ id, wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: wallFlipFor(raw.wall), freePos: wp })
         }
       }
