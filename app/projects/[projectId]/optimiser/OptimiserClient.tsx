@@ -215,7 +215,12 @@ function Stage2Parts() {
   const mergeProjectData = useOptiStore(s => s.mergeProjectData)
   const removeProjectData = useOptiStore(s => s.removeProjectData)
   const [addingProject, setAddingProject] = useState(false)
+  const [sort, setSort] = useState<{ key: string | null; dir: 'asc' | 'desc' }>({ key: null, dir: 'asc' })
   const isBatch = includedProjectIds.length > 1
+
+  function toggleSort(k: string) {
+    setSort(s => s.key === k ? { key: k, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: k, dir: 'asc' })
+  }
 
   async function addProject(id: string) {
     if (!id || includedProjectIds.includes(id)) return
@@ -236,6 +241,32 @@ function Stage2Parts() {
     (filterCabinetIds.length === 0 || filterCabinetIds.includes(p.cabinet_instance_id)) &&
     (filterMaterialIds.length === 0 || (p.material_id != null && filterMaterialIds.includes(p.material_id))),
   ), [snap.parts, filterRoomIds, filterCabinetIds, filterMaterialIds])
+
+  const sortVal = (key: string, p: OptiPart): string | number => {
+    switch (key) {
+      case 'part': return p.label
+      case 'cabinet': return p.cabinet_label
+      case 'room': return p.room_name
+      case 'width': return p.w
+      case 'height': return p.h
+      case 'thk': return p.thickness
+      case 'material': return p.material_id ? (matName.get(p.material_id) ?? '') : ''
+      case 'comment': return p.comment ?? ''
+      case 'qty': return cutQty[p.uid] ?? 1
+      default: return ''
+    }
+  }
+  const sortedFiltered = useMemo(() => {
+    if (!sort.key) return filtered
+    const arr = [...filtered]
+    arr.sort((a, b) => {
+      const va = sortVal(sort.key!, a), vb = sortVal(sort.key!, b)
+      const c = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb))
+      return sort.dir === 'asc' ? c : -c
+    })
+    return arr
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, sort, cutQty, matName])
 
   const selectedParts = snap.parts.filter(p => selectedUids.has(p.uid))
   const totalArea = selectedParts.reduce((a, p) => a + (p.w * p.h * (cutQty[p.uid] ?? 1)) / 1e6, 0)
@@ -294,14 +325,14 @@ function Stage2Parts() {
             <thead className="sticky top-0 z-10">
               <tr className="bg-surface-2 text-ink-muted">
                 <SortableContext items={partColOrder} strategy={horizontalListSortingStrategy}>
-                  {partColOrder.map(key => <SortableTh key={key} id={key} />)}
+                  {partColOrder.map(key => <SortableTh key={key} id={key} sortKey={sort.key} sortDir={sort.dir} onSort={toggleSort} />)}
                 </SortableContext>
               </tr>
             </thead>
           </DndContext>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={partColOrder.length} className="border border-edge/70 px-2 py-8 text-center text-ink-subtle">No parts match the current filters.</td></tr>}
-            {filtered.map((p, i) => {
+            {sortedFiltered.length === 0 && <tr><td colSpan={partColOrder.length} className="border border-edge/70 px-2 py-8 text-center text-ink-subtle">No parts match the current filters.</td></tr>}
+            {sortedFiltered.map((p, i) => {
               const on = selectedUids.has(p.uid)
               return (
                 <tr key={p.uid} className={`${i % 2 ? 'bg-surface/40' : ''} hover:bg-surface ${on ? '' : 'opacity-55'}`}>
@@ -358,16 +389,25 @@ const COL_DEFS: Record<string, { label: string; align?: 'right' | 'center'; widt
   qty:      { label: 'Qty', align: 'right', width: 'w-16' },
 }
 
-// Draggable column header.
-function SortableTh({ id }: { id: string }) {
+// Draggable + click-to-sort column header. Drag activates only after 4px of
+// movement, so a stationary click sorts instead of dragging.
+function SortableTh({ id, sortKey, sortDir, onSort }: {
+  id: string; sortKey: string | null; sortDir: 'asc' | 'desc'; onSort: (k: string) => void
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   const def = COL_DEFS[id]
+  const sortable = id !== 'check'
+  const active = sortKey === id
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
   return (
     <th ref={setNodeRef} style={style} {...attributes} {...listeners}
+      onClick={() => sortable && onSort(id)}
       className={`border border-edge-strong px-2 py-2 font-semibold select-none cursor-grab active:cursor-grabbing ${def.width ?? ''} ${def.align === 'right' ? 'text-right' : def.align === 'center' ? 'text-center' : 'text-left'}`}
-      title="Drag to reorder">
-      {def.label}
+      title={sortable ? 'Click to sort · drag to reorder' : 'Drag to reorder'}>
+      <span className={`inline-flex items-center gap-1 ${def.align === 'right' ? 'flex-row-reverse' : ''}`}>
+        {def.label}
+        {active && <span className="text-accent-ink text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+      </span>
     </th>
   )
 }
