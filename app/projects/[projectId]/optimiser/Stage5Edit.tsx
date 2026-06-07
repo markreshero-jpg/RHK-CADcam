@@ -40,7 +40,9 @@ export default function Stage5Edit() {
   const snap = useOptiStore(s => s.snapshot)
 
   const [ctxMenu, setCtxMenu] = useState<{ uid: string; x: number; y: number } | null>(null)
-  const [collapsedMat, setCollapsedMat] = useState<Record<string, boolean>>({})
+  // Accordion: one material group open at a time. null = follow current sheet's
+  // group; '' = all collapsed; otherwise the explicitly-opened group key.
+  const [expandedMat, setExpandedMat] = useState<string | null>(null)
 
   // Keyboard shortcuts (read live state via getState to avoid stale closures).
   useEffect(() => {
@@ -94,6 +96,8 @@ export default function Stage5Edit() {
     }
     return [...m.values()]
   })()
+  const currentGroupKey = `${sheet.materialId ?? 'none'}__${sheet.thickness}`
+  const openGroupKey = expandedMat === null ? currentGroupKey : expandedMat
 
   return (
     <div className="h-full flex overflow-hidden" onClick={() => setCtxMenu(null)}>
@@ -105,22 +109,26 @@ export default function Stage5Edit() {
         </div>
         <div className="flex-1 overflow-y-auto py-1">
           {sheetGroups.map(g => {
-            const collapsed = collapsedMat[g.key]
+            const isOpen = openGroupKey === g.key
             const avgEff = g.sheets.reduce((a, s) => a + s.efficiency, 0) / g.sheets.length
             const parts = g.sheets.reduce((a, s) => a + s.placements.length, 0)
             return (
               <div key={g.key} className="mb-0.5 divide-y divide-edge/40 border-b border-edge/40">
-                <button onClick={() => setCollapsedMat(c => ({ ...c, [g.key]: !collapsed }))}
-                  className="w-full px-3 py-1.5 hover:bg-surface-2 transition-colors">
+                <button
+                  onClick={() => setExpandedMat(prev => {
+                    const cur = prev === null ? currentGroupKey : prev
+                    return cur === g.key ? '' : g.key   // toggle this one; opening it collapses the rest
+                  })}
+                  className={`w-full px-3 py-1.5 transition-colors border-l-2 ${isOpen ? 'bg-accent/15 border-accent' : 'border-transparent hover:bg-surface-2'}`}>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[11px] font-semibold text-ink truncate">{g.label}</span>
-                    <span className="text-ink-subtle shrink-0 text-[11px]">{collapsed ? '▸' : '▾'}</span>
+                    <span className={`text-[11px] font-semibold truncate ${isOpen ? 'text-accent-ink' : 'text-ink'}`}>{g.label}</span>
+                    <span className="text-ink-subtle shrink-0 text-[11px]">{isOpen ? '▾' : '▸'}</span>
                   </div>
                   <div className="text-[10px] text-ink-subtle text-left font-mono">
                     {g.sheets.length} sheet{g.sheets.length === 1 ? '' : 's'} · {(avgEff * 100).toFixed(0)}% avg · {parts} parts
                   </div>
                 </button>
-                {!collapsed && g.sheets.map(s => (
+                {isOpen && g.sheets.map(s => (
                   <button key={s.index} onClick={() => setCurrentSheet(s.index)}
                     className={`w-full text-left pl-5 pr-3 py-1.5 flex items-center justify-between gap-2 text-[11px] transition-colors ${s.index === sheet.index ? 'bg-accent/15 text-accent-ink' : 'text-ink-muted hover:bg-surface-2'}`}>
                     <span className="truncate">Sheet {s.index + 1}{s.stock.isOffcut ? ' (offcut)' : ''}</span>
