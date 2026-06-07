@@ -28,6 +28,7 @@ export default function Stage5Edit() {
   const removeToUnplaced = useOptiStore(s => s.removeToUnplaced)
   const placeFromUnplaced = useOptiStore(s => s.placeFromUnplaced)
   const relocatePart = useOptiStore(s => s.relocatePart)
+  const rotatePart = useOptiStore(s => s.rotatePart)
   const copyToClipboard = useOptiStore(s => s.copyToClipboard)
   const cutToClipboard = useOptiStore(s => s.cutToClipboard)
   const pasteClipboard = useOptiStore(s => s.pasteClipboard)
@@ -166,6 +167,33 @@ export default function Stage5Edit() {
               <InfoRow label="Material" value={matName(selectedInfo.part?.material_id ?? null)} />
               <InfoRow label="On sheet" value={`${selectedInfo.sheetIndex + 1}${selectedInfo.pl.rotated ? ' · rotated 90°' : ''}`} />
               {selectedInfo.part?.comment && <InfoRow label="Comment" value={selectedInfo.part.comment} />}
+
+              {/* Actions */}
+              <div className="flex items-center gap-1.5 pt-2">
+                <button onClick={() => rotatePart(selectedInfo.pl.uid)}
+                  className="px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">⟳ Rotate</button>
+                <button onClick={() => removeToUnplaced(selectedInfo.pl.uid)}
+                  className="px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-red-900/30 hover:text-red-300 transition-colors">Delete</button>
+              </div>
+              <div className="pt-1">
+                <select value="" onChange={e => {
+                  const target = Number(e.target.value)
+                  if (Number.isNaN(target)) return
+                  const st = useOptiStore.getState()
+                  const gap = st.settings.kerf + st.settings.pad
+                  const sh = st.nestResult?.sheets.find(s => s.index === target)
+                  if (!sh) return
+                  const pos = findBestPlacement(sh, selectedInfo.pl.w, selectedInfo.pl.h, gap)
+                  if (pos) relocatePart(selectedInfo.pl.uid, target, pos.x, pos.y)
+                  else setEditError('No room on that sheet for this part.')
+                }}
+                  className="w-full bg-surface-2 border border-edge-strong rounded px-2 py-1 text-[11px] text-ink-muted focus:outline-none focus:border-accent">
+                  <option value="">Move to sheet…</option>
+                  {nestResult.sheets.filter(s => s.index !== selectedInfo.sheetIndex).map(s => (
+                    <option key={s.index} value={s.index}>Sheet {s.index + 1}{s.stock.isOffcut ? ' (offcut)' : ''}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
         </div>

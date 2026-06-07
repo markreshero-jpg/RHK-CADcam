@@ -10,7 +10,7 @@ import { create } from 'zustand'
 import { materialGroupKey, type OptiSnapshot } from './types'
 import type { NormalizedProject } from './normalize'
 import type { GroupStock, SheetStock, NestResult, NestPartInput, Placement } from './nest'
-import { findBestPlacement, sheetEfficiency } from './edit'
+import { findBestPlacement, findNearestValid, sheetEfficiency } from './edit'
 import { getUserPrefs, setUserPrefs } from '../userPrefs'
 
 export type Stage = 1 | 2 | 3 | 4 | 5 | 6
@@ -110,6 +110,7 @@ interface OptiState {
   selectPlacement: (uid: string | null) => void
   setEditError: (m: string | null) => void
   movePartWithin: (uid: string, x: number, y: number) => void
+  rotatePart: (uid: string) => void
   relocatePart: (uid: string, targetSheetIndex: number, x: number, y: number) => void
   removeToUnplaced: (uid: string) => void
   placeFromUnplaced: (uid: string, sheetIndex: number, x: number, y: number) => void
@@ -259,6 +260,22 @@ export const useOptiStore = create<OptiState>((set) => ({
     const next = clone(st.nestResult)
     for (const s of next.sheets) { const p = s.placements.find(p => p.uid === uid); if (p) { p.x = x; p.y = y; break } }
     return commit(st, next)
+  }),
+
+  rotatePart: (uid) => set(st => {
+    if (!st.nestResult) return {}
+    const next = clone(st.nestResult)
+    const gap = st.settings.kerf + st.settings.pad
+    for (const s of next.sheets) {
+      const pl = s.placements.find(p => p.uid === uid)
+      if (!pl) continue
+      const nw = pl.h, nh = pl.w
+      const pos = findNearestValid(s, uid, nw, nh, pl.x, pl.y, gap)
+      if (!pos) return { editError: 'No room to rotate this part here.' }
+      pl.w = nw; pl.h = nh; pl.rotated = !pl.rotated; pl.x = pos.x; pl.y = pos.y
+      return commit(st, next)
+    }
+    return {}
   }),
 
   relocatePart: (uid, targetIndex, x, y) => set(st => {
