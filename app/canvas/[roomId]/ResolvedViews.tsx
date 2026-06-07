@@ -251,6 +251,24 @@ function useSvgZoom(initW: number, initH: number) {
   const [vb, setVb] = useState({ x: 0, y: 0, w: initW, h: initH })
   const svgRef  = useRef<SVGSVGElement>(null)
 
+  // Track the SVG's on-screen size so overlay glyphs (measure readout etc.) can be
+  // sized in real screen pixels regardless of the cabinet's aspect ratio. A tall
+  // cupboard letterboxes to fit height, shrinking the on-screen scale; without this
+  // the measure text/line — sized from vb.w alone — would render far too small.
+  const [boxPx, setBoxPx] = useState({ w: initW, h: initH })
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const update = () => {
+      const r = el.getBoundingClientRect()
+      if (r.width && r.height) setBoxPx({ w: r.width, h: r.height })
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   useEffect(() => {
     const el = svgRef.current
     if (!el) return
@@ -275,7 +293,12 @@ function useSvgZoom(initW: number, initH: number) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  return { svgRef, viewBox: `${vb.x} ${vb.y} ${vb.w} ${vb.h}`, vb, initW: initRef.current.w }
+  // px-per-mm of the rendered content (preserveAspectRatio="meet" → min of the two).
+  // `unit` = mm per ~1 screen-px, so MeasureOverlay's `n * unit` constants come out
+  // at a constant on-screen size whatever the cabinet's proportions or zoom level.
+  const pxPerUnit = Math.min(boxPx.w / vb.w, boxPx.h / vb.h) || 1
+  const unit = 1 / pxPerUnit
+  return { svgRef, viewBox: `${vb.x} ${vb.y} ${vb.w} ${vb.h}`, vb, initW: initRef.current.w, unit }
 }
 
 // ── Hinge silhouettes ──────────────────────────────────────────────────────────
@@ -307,7 +330,8 @@ function HingeShapes({ rp, project }: {
         if (!z || (z.hinge_side !== 'left' && z.hinge_side !== 'right')) return []
         const pl = hingePlacement(h, { x: z.X, y: z.Y, z: z.Z, w: z.DY, d: z.DZ }, z.hinge_side)
         // The plate gets its nudge offset (matches the 3D placement).
-        const platePl = { ...pl, oX: pl.oX + h.plate_anchor_x, oY: pl.oY + h.plate_anchor_y, oZ: pl.oZ + h.plate_anchor_z }
+        // Plate nudge: X flips with the mirror (matches the 3D placement); Y/Z don't.
+        const platePl = { ...pl, oX: pl.oX + (pl.mirror ? 1 : -1) * h.plate_anchor_x, oY: pl.oY + h.plate_anchor_y, oZ: pl.oZ + h.plate_anchor_z }
         // Outline the hinge body AND its plate (separate GLB or combined), both
         // at the same bore-centre anchor so they sit together.
         return [h.model_url, h.plate_model_url].flatMap((url, k) => {
@@ -380,7 +404,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   const vw = dx + pl + pr
   const vh = dy + pt + pb
   const ox = pl, oy = pt
-  const { svgRef, viewBox, vb, initW } = useSvgZoom(vw, vh)
+  const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh)
 
   function toSVG(ex: number, ey: number, ew: number, eh: number) {
     return { x: ox + ex, y: oy + dy - ey, w: ew, h: eh }
@@ -586,7 +610,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         <OriginMarker sx={ox + selOrigin.x} sy={oy + dy - selOrigin.y} hLabel="X" vLabel="Y" />
       )}
       {viewLabel(ox+dx/2, vh-14, 'ELEVATION — WIDTH × HEIGHT')}
-      {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={vb.w / initW} vb={vb} pts={measurePts} />}
+      {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={unit} vb={vb} pts={measurePts} />}
     </svg>
   )
 }
@@ -612,7 +636,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
   const vw = dx + pl + pr
   const vh = dz + pt + pb
   const ox = pl, oz = pt
-  const { svgRef, viewBox, vb, initW } = useSvgZoom(vw, vh)
+  const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh)
 
   function toSVG(tx: number, tz: number, tw: number, td: number) {
     return { x: ox + tx, y: oz + tz, w: tw, h: td }
@@ -803,7 +827,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
         <OriginMarker sx={ox + selOrigin.x} sy={oz + selOrigin.z} hLabel="X" vLabel="Z" vUp={false} />
       )}
       {viewLabel(ox + dx/2, vh - 14, 'TOP — WIDTH × DEPTH')}
-      {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={vb.w / initW} vb={vb} pts={measurePts} />}
+      {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={unit} vb={vb} pts={measurePts} />}
     </svg>
   )
 }
@@ -841,7 +865,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
   const vw = dz + pl + pr
   const vh = dy + pt + pb
   const oz = pl, oy = pt
-  const { svgRef, viewBox, vb, initW } = useSvgZoom(vw, vh)
+  const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh)
 
   function toSVG(sz: number, cy_top: number, w: number, h: number) {
     return { x: oz + sz, y: oy + dy - cy_top, w, h }
@@ -1047,7 +1071,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
       {selOrigin != null && selOrigin.z != null && selOrigin.y != null && (
         <OriginMarker sx={oz + selOrigin.z} sy={oy + dy - selOrigin.y} hLabel="Z" vLabel="Y" />
       )}
-      {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={vb.w / initW} vb={vb} pts={measurePts} />}
+      {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={unit} vb={vb} pts={measurePts} />}
     </svg>
   )
 }

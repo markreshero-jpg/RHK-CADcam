@@ -351,13 +351,20 @@ function InteractiveSheet({ sheet, selectedUid, onSelect, onMove, onContext }: {
               const wpx = p.w * scale, hpx = p.h * scale
               const cx = (x + p.w / 2) * scale
               const cyc = fy(y, p.h) + hpx / 2
-              const vertical = hpx > wpx                 // taller than wide → run text along the height
-              const longPx = Math.max(wpx, hpx), shortPx = Math.min(wpx, hpx)
-              const showNum = shortPx > 11 && longPx > 16
-              const showLabel = shortPx > 22 && longPx > 46
-              const numFont = Math.min(13, Math.max(8, shortPx / 2.2))
-              const labelFont = Math.min(9, Math.max(6, shortPx / 4))
-              const maxChars = Math.max(3, Math.floor(longPx / (labelFont * 0.62)))
+              // Orientation is chosen by FIT, not by the part's nest rotation:
+              // keep text horizontal whenever the part is wide enough to show
+              // it, and only rotate when the width is too narrow but the height
+              // gives room. (A tall-but-wide-enough part stays horizontal.)
+              const horizOK = hpx > 22 && wpx > 46
+              const vertOK = wpx > 22 && hpx > 46
+              const vertical = !horizOK && vertOK
+              const along = vertical ? hpx : wpx         // text runs along this
+              const across = vertical ? wpx : hpx        // text height sits across this
+              const showNum = across > 11 && along > 16
+              const showLabel = across > 22 && along > 46
+              const numFont = Math.min(13, Math.max(8, across / 2.2))
+              const labelFont = Math.min(9, Math.max(6, across / 4))
+              const maxChars = Math.max(3, Math.floor(along / (labelFont * 0.62)))
               const label = p.label.length > maxChars ? p.label.slice(0, maxChars - 1) + '…' : p.label
               return (
                 <g style={{ pointerEvents: 'none' }} transform={vertical ? `rotate(-90 ${cx} ${cyc})` : undefined}>

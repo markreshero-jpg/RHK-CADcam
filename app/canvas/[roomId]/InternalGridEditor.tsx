@@ -101,7 +101,8 @@ interface SepDisplay {
   childStart: number          // start coord of children[index] along the split axis
   splitEnd:   number          // far edge of the split box along the axis
   sepT:       number
-  locked:     boolean
+  locked:     boolean         // children[index] has a fixed size OR is group-sized
+  equalised:  boolean         // children[index] is in an equalise group (drag would break it)
 }
 
 interface LeafDisplay {
@@ -142,17 +143,31 @@ const DEFAULT_STACK_GAP_DISP = 3   // mirrors DEFAULT_STACK_GAP in resolver/fitt
 const FITTING_LABEL: Record<InternalFittingType, string> = {
   adj_shelf:    'Adjustable shelf',
   inner_drawer: 'Inner drawer',
-  pull_out:     'Pull-out shelf',
+  pull_out:     'Rollout shelf',
   fixed_shelf:  'Fixed shelf',
   accessory:    'Accessory',
 }
+
+// Single source of truth for "add a horizontal element to an opening", shared by
+// the side panel and the right-click menu so they never drift apart. A FIXED
+// SHELF is the one and only way to make a horizontal division — it splits the
+// opening into structural bays, each independently lockable / equalisable.
+// Everything else is a fitting placed inside the opening.
+type AddKind = 'fixed_shelf' | 'adj_shelf' | 'pull_out' | 'inner_drawer' | 'accessory'
+const ADD_ELEMENTS: { kind: AddKind; label: string; title: string }[] = [
+  { kind: 'fixed_shelf',  label: 'Fixed shelf',      title: 'A fixed shelf — splits this opening into bays you can lock or equalise.' },
+  { kind: 'adj_shelf',    label: 'Adjustable shelf', title: 'A movable shelf inside this opening.' },
+  { kind: 'pull_out',     label: 'Rollout shelf',    title: 'A pull-out / rollout shelf on slides.' },
+  { kind: 'inner_drawer', label: 'Inner drawer',     title: 'An inner drawer on slides.' },
+  { kind: 'accessory',    label: 'Accessory',        title: 'An accessory (wine rack, etc.).' },
+]
 
 // Visual styling per fitting type for the SVG preview + legend.
 const FITTING_STYLE: Record<FittingDisplay['type'], {
   title: string; fill: string; fillSel: string; stroke: string; label: string; dash?: string
 }> = {
   inner_drawer: { title: 'Drawer',   fill: 'rgba(34,197,94,0.06)',  fillSel: 'rgba(59,130,246,0.16)', stroke: '#22c55e', label: '#22c55e', dash: '4 2' },
-  pull_out:     { title: 'Pull-out', fill: 'rgba(245,158,11,0.08)', fillSel: 'rgba(59,130,246,0.16)', stroke: '#f59e0b', label: '#f59e0b', dash: '4 2' },
+  pull_out:     { title: 'Rollout', fill: 'rgba(245,158,11,0.08)', fillSel: 'rgba(59,130,246,0.16)', stroke: '#f59e0b', label: '#f59e0b', dash: '4 2' },
   fixed_shelf:  { title: 'Shelf',    fill: '#2e1065',                fillSel: '#4a1d96',                stroke: '#7c3aed', label: '#a78bfa' },
   accessory:    { title: 'Accy',     fill: 'rgba(156,163,175,0.06)', fillSel: 'rgba(59,130,246,0.16)', stroke: '#9ca3af', label: '#9ca3af', dash: '4 2' },
 }
@@ -423,14 +438,15 @@ function computeLayout(
         }
       })
 
-      // 3. Sub-compartments — gaps between every horizontal occupant (adj
-      //    shelves + non-adj fittings). Lets the preview look like top/bottom
-      //    bays instead of a single open block when a shelf or drawer is
-      //    placed inside. Movable adj shelves are included; their preview Y
-      //    moves if the user adds more, which is the same behaviour the user
-      //    already sees for the adj-shelf overlays.
+      // 3. Sub-compartments — the openings created by DIVIDERS only. A shelf
+      //    (fixed or adjustable) genuinely splits the opening into a usable space
+      //    above and below, so those read as separate openings you can click and
+      //    fill. Drawers, rollouts and accessories are OCCUPANTS — they sit in
+      //    the opening without carving it, so they don't create sub-compartments
+      //    (you just stack another one). The parent opening's Lock / Equalise
+      //    stays reachable from the sub-compartment panel.
       const spans: { y: number; h: number }[] = [
-        ...fittings.map(f => ({ y: f.y, h: f.h })),
+        ...fittings.filter(f => f.type === 'fixed_shelf').map(f => ({ y: f.y, h: f.h })),
         ...adjShelves.map(a => ({ y: a.y, h: SHELF_T })),
       ]
       const subCompartments = computeSubCompartments(box, spans)
@@ -475,7 +491,8 @@ function computeLayout(
           path, index: i, axis: horiz ? 'h' : 'v',
           box: horiz ? { x: box.x, y: cursor + size, w: box.w, h: sepT }
                      : { x: cursor + size, y: box.y, w: sepT, h: box.h },
-          childStart: cursor, splitEnd, sepT, locked: childResolved[i] !== null,
+          childStart: cursor, splitEnd, sepT,
+          locked: childResolved[i] !== null, equalised: !!c.equalise_group,
         })
       }
       cursor += size + (i < N - 1 ? sepT : 0)
@@ -528,6 +545,10 @@ function addSeparator(root: Section, path: Path, type: SplitSection['type']): Se
   }
   return updateAtPath(root, path, s => {
     if (s.type !== 'open') return s
+    // Preserve any existing contents: they move into the first bay and a new
+    // empty bay is added after. Splitting an empty opening just makes two empty
+    // bays. This stops a split from wiping drawers/shelves already placed here.
+    if (s.fittings.length > 0) return { type, children: [{ section: s }, newOpen()] }
     return { type, children: [newOpen(), newOpen()] }
   })
 }
@@ -1216,6 +1237,140 @@ export default function InternalGridEditor({
     setLeafGroup(path, nextGroupId(ids))
   }
 
+  // ── Per-box size controls ─────────────────────────────────────────────────────
+  // A box's extent inside its parent split has three states, mutually exclusive:
+  //   • Locked    — fixed mm (child.size set)
+  //   • Equalised — shares one computed size with every box in the same group
+  //                 (child.equalise_group set), even across splits/columns
+  //   • Free      — neither; fills the remainder, split equally with other free
+  //                 boxes in the same split (the resolver default)
+  // Lock and Equalise each clear the other so the box is only ever in one state.
+
+  // Toggle the lock. Turning it on freezes the box at its current extent.
+  function setLeafLock(path: Path, on: boolean, currentExtent: number) {
+    const parentPath = path.slice(0, -1)
+    const idx        = path[path.length - 1]
+    let next = setLeafEqualiseGroup(tree, path, undefined)   // lock wins over equalise
+    next = setChildSize(next, parentPath, idx, on ? Math.max(1, Math.round(currentExtent)) : undefined)
+    save(next)
+  }
+
+  // Commit a typed lock size (implies locked; empty/invalid clears the lock).
+  function setLeafLockSize(path: Path, raw: string) {
+    const parentPath = path.slice(0, -1)
+    const idx        = path[path.length - 1]
+    const v          = parseFloat(raw)
+    if (raw.trim() === '' || isNaN(v) || v <= 0) {
+      save(setChildSize(tree, parentPath, idx, undefined))
+      return
+    }
+    let next = setLeafEqualiseGroup(tree, path, undefined)
+    next = setChildSize(next, parentPath, idx, v)
+    save(next)
+  }
+
+  // Simple per-box Equalise tick. Joins the single equalise group already in use
+  // (the common case — "equalise this box with that one"); if none or several
+  // exist, falls back to the canonical group 'A'. Advanced multi-group control
+  // stays in the inline group picker + the right-click menu.
+  function setLeafEqualise(path: Path, on: boolean) {
+    if (!on) { save(setLeafEqualiseGroup(tree, path, undefined)); return }
+    const ids    = [...collectGroups(tree).keys()]
+    const target = ids.length === 1 ? ids[0] : 'A'
+    save(setLeafEqualiseGroup(tree, path, target))
+  }
+
+  // An open compartment is "shelf-divided" when every fitting it holds is a
+  // fixed shelf — i.e. the shelves are being used to carve the space into bands,
+  // not to add a shelf inside a populated bay. Those bands have no identity, so
+  // their height can't be locked per-band (locking one pins shelves shared with
+  // the neighbours). Converting them to a structural hsplit gives each opening a
+  // real, independently lockable / equalisable bay.
+  const isShelfDivided = (s: Section | null): boolean =>
+    s?.type === 'open' && s.fittings.length > 0 && s.fittings.every(f => f.type === 'fixed_shelf')
+
+  function convertShelvesToBays(path: Path) {
+    const s = getSection(tree, path)
+    if (!isShelfDivided(s) || s?.type !== 'open') return
+    const n = s.fittings.filter(f => f.type === 'fixed_shelf').length   // shelves ⇒ n+1 bays
+    const children: SectionChild[] = Array.from({ length: n + 1 }, () => newOpen())
+    save(updateAtPath(tree, path, () => ({ type: 'hsplit', children })))
+    setSelected({ kind: 'leaf', path: [...path, 0] })
+  }
+
+  // Lock / Equalise controls for an opening, reused by the Compartment panel and
+  // the Sub-compartment panel — so an opening keeps these controls even when an
+  // adjustable shelf or drawer divides it into bands. Returns null for the root
+  // opening, which has no parent split to size against.
+  function renderSizeControls(path: Path, box: Box) {
+    const axis  = getParentSplitAxis(tree, path)
+    const child = getLeafChild(tree, path)
+    if (!axis || !child) return null
+    const locked    = child.size !== undefined
+    const equalised = child.equalise_group !== undefined
+    const dimLabel  = axis === 'v' ? 'width' : 'height'
+    const curExtent = axis === 'v' ? box.w : box.h
+    const groups    = collectGroups(tree)
+    const myGroup   = child.equalise_group
+    return (
+      <div className="mt-3 border-t border-gray-800 pt-2">
+        <p className="uppercase tracking-wider text-gray-500 mb-1.5">Opening size</p>
+
+        {/* Lock */}
+        <label className="flex items-center gap-1.5 mb-1 cursor-pointer">
+          <input type="checkbox" className="accent-blue-500 w-3.5 h-3.5"
+            checked={locked}
+            onChange={e => setLeafLock(path, e.target.checked, curExtent)} />
+          <span className="text-gray-400">Lock {dimLabel}</span>
+        </label>
+        {locked && (
+          <div className="flex items-center gap-1 mb-2 pl-5">
+            <input type="number" min={1} step={1}
+              key={`leaf-size-${path.join('.')}-${child.size}`}
+              defaultValue={child.size}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+              onBlur={e => setLeafLockSize(path, e.target.value)}
+              className={inp} />
+            <span className="text-gray-500">mm</span>
+          </div>
+        )}
+
+        {/* Equalise */}
+        <label className="flex items-center gap-1.5 mb-1 cursor-pointer">
+          <input type="checkbox" className="accent-blue-500 w-3.5 h-3.5"
+            checked={equalised}
+            onChange={e => setLeafEqualise(path, e.target.checked)} />
+          <span className="text-gray-400">Equalise {dimLabel}</span>
+          {equalised && myGroup && (
+            <span className="inline-block w-3 h-3 rounded-full ml-auto"
+              style={{ background: groupColor(myGroup) }} title={`Group ${myGroup}`} />
+          )}
+        </label>
+        {equalised && myGroup && (
+          <div className="flex items-center gap-1 mb-1 pl-5">
+            <span className="text-gray-500">Group</span>
+            <select
+              value={myGroup}
+              onChange={e => setLeafGroup(path, e.target.value)}
+              className={inp + ' text-left flex-1'}
+            >
+              {!groups.has(myGroup) && <option value={myGroup}>Group {myGroup}</option>}
+              {[...groups.keys()].map(id => (
+                <option key={id} value={id}>Group {id} ({groups.get(id)!.count})</option>
+              ))}
+            </select>
+            <button className={addBtn} title="New equalise group"
+              onClick={() => newGroupForLeaf(path)}>+</button>
+          </div>
+        )}
+
+        {!locked && !equalised && (
+          <p className="text-[9px] text-gray-600">Fills the remaining space, shared equally with other unlocked bays.</p>
+        )}
+      </div>
+    )
+  }
+
   function handleAddFitting(path: Path, type: InternalFittingType) {
     const s = getSection(tree, path)
     if (s?.type !== 'open') return
@@ -1223,6 +1378,24 @@ export default function InternalGridEditor({
     save(addFitting(tree, path, newFitting(type)))
     setSelected({ kind: 'fitting', path, fittingIndex: idx })
     setMenu(null)
+  }
+
+  // Dispatch an "add element" choice for a whole opening: a fixed shelf splits it
+  // structurally; everything else is added as a fitting. (addShelf / bumpAdj /
+  // handleAddFitting each close the menu.)
+  function runAdd(path: Path, kind: AddKind) {
+    if (kind === 'fixed_shelf')    addShelf(path)
+    else if (kind === 'adj_shelf') bumpAdj(path, +1)
+    else                           handleAddFitting(path, kind)
+  }
+
+  // Same, but targeting a specific sub-compartment band: fittings land in the
+  // band; a fixed shelf still splits the whole opening structurally (the single
+  // horizontal-division mechanism).
+  function runAddInSub(leafPath: Path, sub: { y: number; h: number }, kind: AddKind) {
+    if (kind === 'fixed_shelf')    { addShelf(leafPath); return }
+    if (kind === 'adj_shelf')      { bumpAdj(leafPath, +1); return }
+    handleAddFittingInSub(leafPath, kind, sub)
   }
 
   // Add a fitting INTO a specific sub-compartment band of an open leaf. The
@@ -1270,14 +1443,6 @@ export default function InternalGridEditor({
     setMenu(null)
   }
 
-  // "Split → shelves" from a sub-comp selection — insert a fixed_shelf into
-  // the band. Refuses when the band is locked so the lock's promise holds
-  // ("doesn't change unless its unlocked"). The toolbar route lands here too.
-  function splitSubIntoShelves() {
-    if (!selSub) return
-    if (isSubCompLocked(selSub.leaf, selSub.sub)) return
-    handleAddFittingInSub(selSub.leaf.path, 'fixed_shelf', selSub.sub)
-  }
   function handleRemoveFitting(path: Path, idx: number) {
     setSelected({ kind: 'leaf', path })
     save(removeFittingAt(tree, path, idx))
@@ -1335,6 +1500,13 @@ export default function InternalGridEditor({
   }
 
   function startDrag(e: React.MouseEvent, sep: SepDisplay) {
+    // A locked or equalised bay's extent is fixed — by its size, or by its
+    // group — not by dragging. Dragging here would overwrite the locked size /
+    // silently break the equalise relationship, so bail out (no preventDefault)
+    // and let the click select the separator instead. To change a locked bay,
+    // edit its Lock field or unlock it; to resize an equalised bay, untick
+    // Equalise first. (sep.locked is true for both locked and group-sized bays.)
+    if (sep.locked) return
     e.preventDefault()
     setMenu(null)
     const data = dragDataRef.current
@@ -1361,8 +1533,9 @@ export default function InternalGridEditor({
   const warnings = rp?.warnings ?? []
   const isEmpty  = tree.type === 'open' && tree.fittings.length === 0
 
-  const inp    = 'bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full text-right'
-  const addBtn = 'px-2 py-0.5 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-gray-700'
+  const inp     = 'bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full text-right'
+  const addBtn  = 'px-2 py-0.5 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-gray-700'
+  const menuBtn = 'w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors'
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden bg-gray-950">
@@ -1376,12 +1549,12 @@ export default function InternalGridEditor({
             : tree.type === 'open' ? 'Interior:' : 'Select a compartment:'}
         </span>
         <button className={addBtn} disabled={!targetPath}
-          onClick={() => selSub ? splitSubIntoShelves() : addShelf(targetPath)}
-          title={selSub ? 'Add a fixed shelf locked at the middle of this sub-compartment' : undefined}
-        >Split → shelves</button>
-        <button className={addBtn} disabled={!targetPath || !!selSub}
+          onClick={() => addShelf(targetPath)}
+          title="Add a fixed shelf — splits the opening into bays you can lock or equalise."
+        >+ Fixed shelf</button>
+        <button className={addBtn} disabled={!targetPath}
           onClick={() => addDivider(targetPath)}
-          title={selSub ? 'Select the whole compartment to split into columns' : undefined}
+          title="Split the opening into side-by-side columns."
         >Split → columns</button>
         <div className="flex items-center gap-1">
           <span className="text-gray-500">Adj:</span>
@@ -1458,6 +1631,7 @@ export default function InternalGridEditor({
               const key = `leaf-${leaf.path.join('.') || 'root'}`
               const leafChild = getLeafChild(layoutTree, leaf.path)
               const groupId   = leafChild?.equalise_group
+              const lockedBay = leafChild?.size !== undefined && !groupId
               return (
                 <g key={key}>
                   {/* Sub-compartments — gaps between horizontal elements. Each is
@@ -1519,6 +1693,18 @@ export default function InternalGridEditor({
                       >{groupId}</text>
                     </g>
                   )}
+                  {/* Lock badge — top-right corner of a fixed-size bay */}
+                  {lockedBay && leaf.box.w > 24 && leaf.box.h > 24 && (
+                    <g style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                      <circle cx={ox + leaf.box.x + leaf.box.w - 10} cy={svgY(leaf.box.y + leaf.box.h) + 10}
+                        r={7} fill="#1f2937" stroke="#fbbf24" strokeWidth={1} />
+                      <text x={ox + leaf.box.x + leaf.box.w - 10} y={svgY(leaf.box.y + leaf.box.h) + 10}
+                        textAnchor="middle" dominantBaseline="central"
+                        fontSize={10} fontWeight={700} fill="#fbbf24"
+                        fontFamily="system-ui,sans-serif"
+                      >⚲</text>
+                    </g>
+                  )}
                   {/* adjustable shelves inside this compartment — click to select, drag to lock at Y */}
                   {leaf.adjShelves.map(adj => {
                     const isSelA  = selected?.kind === 'fitting' && pathEq(selected.path, leaf.path) && selected.fittingIndex === adj.fittingIdx
@@ -1527,14 +1713,7 @@ export default function InternalGridEditor({
                       && fittingDragLive.fittingIndex === adj.fittingIdx
                     const w = Math.max(0, leaf.box.w - 2 * ADJ_INSET)
                     return (
-                      <rect key={`adj-${key}-${adj.fittingIdx}`}
-                        x={ox + leaf.box.x + ADJ_INSET} y={svgY(adj.y + SHELF_T)}
-                        width={w} height={SHELF_T}
-                        fill={isSelA ? '#312e81' : '#1e1b4b'}
-                        stroke={isSelA ? '#818cf8' : '#4338ca'}
-                        strokeWidth={isSelA ? 1.5 : 1}
-                        strokeDasharray="4 2"
-                        style={{ cursor: adj.yLocked ? 'not-allowed' : (isDragA ? 'grabbing' : 'grab') }}
+                      <g key={`adj-${key}-${adj.fittingIdx}`}
                         onMouseDown={e => startFittingDrag(e, leaf, { idx: adj.fittingIdx, y: adj.y, h: SHELF_T, yLocked: adj.yLocked })}
                         onClick={e => {
                           e.stopPropagation()
@@ -1542,7 +1721,25 @@ export default function InternalGridEditor({
                           setMenu(null)
                           setSelected({ kind: 'fitting', path: leaf.path, fittingIndex: adj.fittingIdx })
                         }}
-                      />
+                        style={{ cursor: adj.yLocked ? 'not-allowed' : (isDragA ? 'grabbing' : 'grab') }}
+                      >
+                        <rect
+                          x={ox + leaf.box.x + ADJ_INSET} y={svgY(adj.y + SHELF_T)}
+                          width={w} height={SHELF_T}
+                          fill={isSelA ? '#312e81' : '#1e1b4b'}
+                          stroke={isSelA ? '#818cf8' : '#4338ca'}
+                          strokeWidth={isSelA ? 1.5 : 1}
+                          strokeDasharray="4 2"
+                        />
+                        {w > 60 && (
+                          <text x={ox + leaf.box.x + leaf.box.w / 2} y={svgY(adj.y + SHELF_T / 2)}
+                            textAnchor="middle" dominantBaseline="central"
+                            fontSize={10} fill={isSelA ? '#c7d2fe' : '#a5b4fc'}
+                            fontFamily="system-ui,sans-serif"
+                            style={{ pointerEvents: 'none', userSelect: 'none' }}
+                          >Adj shelf{adj.yLocked ? ' ⚲' : ''}</text>
+                        )}
+                      </g>
                     )
                   })}
                   {/* placed fittings — drawers, pull-outs, fixed shelves, accessories */}
@@ -1583,31 +1780,6 @@ export default function InternalGridEditor({
                       </g>
                     )
                   })}
-                  {/* Per-sub-compartment size labels — only shown when the
-                      sub-compartment is large enough to fit text comfortably.
-                      Highlighted when the leaf or the matching sub-comp is
-                      selected. The "⚲" suffix appears when the band's height
-                      is pinned (both bounding edges locked or coincident with
-                      the leaf edge), so the user can see the lock took effect. */}
-                  {leaf.box.w > 46 && leaf.subCompartments.map((sub, si) => {
-                    if (sub.h <= 22) return null
-                    const isSelS = leaf.subCompartments.length > 1
-                      && selected?.kind === 'subcomp'
-                      && pathEq(selected.path, leaf.path)
-                      && selected.subIdx === si
-                    const lit    = isSel || isSelS
-                    const locked = isSubCompLocked(leaf, sub)
-                    return (
-                      <text key={`sublbl-${si}`}
-                        x={ox + leaf.box.x + leaf.box.w / 2}
-                        y={svgY(sub.y + sub.h / 2)}
-                        textAnchor="middle" dominantBaseline="central"
-                        fontSize={11} fill={lit ? '#93c5fd' : (locked ? '#fbbf24' : '#475569')}
-                        fontFamily="system-ui,sans-serif"
-                        style={{ pointerEvents: 'none', userSelect: 'none' }}
-                      >{Math.round(leaf.box.w)} × {Math.round(sub.h)}{locked ? ' ⚲' : ''}</text>
-                    )
-                  })}
                 </g>
               )
             })}
@@ -1627,20 +1799,26 @@ export default function InternalGridEditor({
                 <g key={key}
                   onClick={e => { e.stopPropagation(); if (wasDragging.current) { wasDragging.current = false; return }; setMenu(null); setSelected(isSel ? null : { kind: 'sep', path: sep.path, index: sep.index }) }}
                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setSelected({ kind: 'sep', path: sep.path, index: sep.index }); setMenu({ kind: 'sep', clientX: e.clientX, clientY: e.clientY, path: sep.path, index: sep.index, axis: sep.axis }) }}
-                  style={{ cursor: sep.axis === 'h' ? 'ns-resize' : 'ew-resize' }}
+                  style={{ cursor: sep.locked ? 'pointer' : (sep.axis === 'h' ? 'ns-resize' : 'ew-resize') }}
                 >
                   <rect
                     x={ox + sep.box.x} y={svgY(sep.box.y + sep.box.h)}
                     width={sep.box.w} height={sep.box.h}
                     fill={fill} stroke={stroke} strokeWidth={isSel || live ? 1.5 : 1}
                     onMouseDown={e => startDrag(e, sep)}
-                  />
+                  >
+                    {sep.equalised
+                      ? <title>Equalised bay — resize via the box’s Lock field, or untick Equalise to drag.</title>
+                      : sep.locked
+                        ? <title>Locked bay — change its size in the box’s Lock field, or unlock it to drag.</title>
+                        : null}
+                  </rect>
                   {sep.axis === 'h' && sep.box.w > 80 && (
                     <text x={ox + sep.box.x + sep.box.w / 2} y={svgY(sep.box.y + sep.box.h / 2)}
                       textAnchor="middle" dominantBaseline="central"
                       fontSize={Math.min(13, sep.box.h * 0.72)} fill={isSel ? '#e9d5ff' : '#a78bfa'}
                       fontFamily="system-ui,sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}
-                    >{sep.locked ? 'shelf ⚲' : 'shelf'}</text>
+                    >{sep.equalised ? 'shelf =' : sep.locked ? 'shelf ⚲' : 'shelf'}</text>
                   )}
                 </g>
               )
@@ -1697,6 +1875,7 @@ export default function InternalGridEditor({
             // promise: "doesn't change height unless its unlocked."
             const subLocked  = isSubCompLocked(selSub.leaf, selSub.sub)
             const lockedTip  = 'This sub-compartment is locked. Right-click it → Unlock height first.'
+            const canConvert = isShelfDivided(getSection(tree, selSub.leaf.path))
             return (
             <div>
               <p className="uppercase tracking-wider text-blue-400 mb-2">
@@ -1705,7 +1884,28 @@ export default function InternalGridEditor({
               <p className="text-gray-500 mb-2">
                 W {Math.round(selSub.leaf.box.w)} mm{subLocked ? ' · locked' : ''}
               </p>
-              <label className="block mb-2">
+
+              {/* Recommended path: turn shelf-divided bands into real bays so each
+                  opening gets its own Lock / Equalise (locking a band can't be
+                  per-band — it pins shelves shared with the neighbours). */}
+              {canConvert && (
+                <div className="mb-2 p-1.5 rounded bg-amber-950/40 border border-amber-900/60">
+                  <button className={addBtn + ' w-full text-left'}
+                    onClick={() => convertShelvesToBays(selSub.leaf.path)}
+                    title="Turn these fixed shelves into structural bays. Each opening then becomes its own area with a Lock / Equalise control — and locking one no longer affects the others."
+                  >Convert shelves → bays ⭢</button>
+                  <p className="text-[9px] text-amber-300/70 mt-1">
+                    Bands can’t lock individually. Convert to bays to lock/equalise each opening.
+                  </p>
+                </div>
+              )}
+
+              {/* The whole opening's Lock / Equalise (its slot in the parent
+                  split) — shown here too so dividing it with a shelf/drawer
+                  doesn't hide these controls. */}
+              {renderSizeControls(selSub.leaf.path, selSub.leaf.box)}
+
+              <label className="block mb-2 mt-3">
                 <span className="block text-gray-500 mb-1">
                   Height (mm){subLocked ? ' — locked' : ''}
                 </span>
@@ -1727,34 +1927,18 @@ export default function InternalGridEditor({
                   title={subLocked ? lockedTip : 'Resize this band by locking the bounding shelf/drawer. Empty restores the default by editing the bounding fitting directly.'}
                 />
               </label>
-              <div className="flex flex-col gap-1">
-                <button className={addBtn + ' text-left'}
-                  disabled={subLocked}
-                  onClick={splitSubIntoShelves}
-                  title={subLocked ? lockedTip : undefined}
-                >Split into shelves</button>
-              </div>
-
+              {/* Add element here — same unified menu as a whole opening. A fixed
+                  shelf splits the opening structurally; the rest land in this band. */}
               <p className="uppercase tracking-wider text-gray-500 mt-3 mb-1">
-                Add fitting here{subLocked ? ' — locked' : ''}
+                Add element here{subLocked ? ' — locked' : ''}
               </p>
               <div className="grid grid-cols-2 gap-1">
-                <button className={addBtn + ' text-left'}
-                  disabled={subLocked} title={subLocked ? lockedTip : undefined}
-                  onClick={() => handleAddFittingInSub(selSub.leaf.path, 'inner_drawer', selSub.sub)}
-                >+ Inner drawer</button>
-                <button className={addBtn + ' text-left'}
-                  disabled={subLocked} title={subLocked ? lockedTip : undefined}
-                  onClick={() => handleAddFittingInSub(selSub.leaf.path, 'pull_out', selSub.sub)}
-                >+ Pull-out</button>
-                <button className={addBtn + ' text-left'}
-                  disabled={subLocked} title={subLocked ? lockedTip : undefined}
-                  onClick={() => handleAddFittingInSub(selSub.leaf.path, 'fixed_shelf', selSub.sub)}
-                >+ Fixed shelf</button>
-                <button className={addBtn + ' text-left'}
-                  disabled={subLocked} title={subLocked ? lockedTip : undefined}
-                  onClick={() => handleAddFittingInSub(selSub.leaf.path, 'accessory', selSub.sub)}
-                >+ Accessory</button>
+                {ADD_ELEMENTS.map(el => (
+                  <button key={el.kind} className={addBtn + ' text-left'}
+                    disabled={subLocked} title={subLocked ? lockedTip : el.title}
+                    onClick={() => runAddInSub(selSub.leaf.path, selSub.sub, el.kind)}
+                  >+ {el.label}</button>
+                ))}
               </div>
 
               <button className={addBtn + ' mt-3 w-full text-left'}
@@ -1770,27 +1954,46 @@ export default function InternalGridEditor({
             <div>
               <p className="uppercase tracking-wider text-blue-400 mb-2">Compartment</p>
               <p className="text-gray-500 mb-2">{Math.round(selLeaf.box.w)} × {Math.round(selLeaf.box.h)} mm</p>
-              <div className="flex flex-col gap-1">
-                <button className={addBtn + ' text-left'} onClick={() => addShelf(selLeaf.path)}>Split into shelves</button>
-                <button className={addBtn + ' text-left'} onClick={() => addDivider(selLeaf.path)}>Split into columns</button>
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-indigo-400">Adjustable shelves</span>
-                <div className="ml-auto flex items-center gap-1">
-                  <button className={addBtn} onClick={() => bumpAdj(selLeaf.path, -1)}>−</button>
-                  <span className="w-4 text-center font-mono text-gray-300">{adjOf(selLeafOpen.fittings).length}</span>
-                  <button className={addBtn} onClick={() => bumpAdj(selLeaf.path, +1)}>+</button>
+
+              {/* Offer the structural conversion here too when this compartment is
+                  divided only by fixed shelves. */}
+              {isShelfDivided(selLeafOpen) && (
+                <div className="mb-2 p-1.5 rounded bg-amber-950/40 border border-amber-900/60">
+                  <button className={addBtn + ' w-full text-left'}
+                    onClick={() => convertShelvesToBays(selLeaf.path)}
+                    title="Turn these fixed shelves into structural bays so each opening can be locked / equalised independently."
+                  >Convert shelves → bays ⭢</button>
                 </div>
+              )}
+
+              <button className={addBtn + ' text-left w-full'} onClick={() => addDivider(selLeaf.path)}
+                title="Split this opening into side-by-side columns.">Split into columns ⇆</button>
+
+              {/* Lock / Equalise this opening within its parent split */}
+              {renderSizeControls(selLeaf.path, selLeaf.box)}
+
+              {/* Add element — one menu for every horizontal element. Fixed shelf
+                  splits the opening into bays; the rest are fittings placed here.
+                  (Also available by right-clicking the opening.) */}
+              <p className="uppercase tracking-wider text-gray-500 mt-3 mb-1">Add element</p>
+              <div className="grid grid-cols-2 gap-1">
+                {ADD_ELEMENTS.map(el => (
+                  <button key={el.kind} className={addBtn + ' text-left'} title={el.title}
+                    onClick={() => runAdd(selLeaf.path, el.kind)}>+ {el.label}</button>
+                ))}
               </div>
 
-              {/* Add fitting */}
-              <p className="uppercase tracking-wider text-gray-500 mt-3 mb-1">Add fitting</p>
-              <div className="grid grid-cols-2 gap-1">
-                <button className={addBtn + ' text-left'} onClick={() => handleAddFitting(selLeaf.path, 'inner_drawer')}>+ Inner drawer</button>
-                <button className={addBtn + ' text-left'} onClick={() => handleAddFitting(selLeaf.path, 'pull_out')}>+ Pull-out</button>
-                <button className={addBtn + ' text-left'} onClick={() => handleAddFitting(selLeaf.path, 'fixed_shelf')}>+ Fixed shelf</button>
-                <button className={addBtn + ' text-left'} onClick={() => handleAddFitting(selLeaf.path, 'accessory')}>+ Accessory</button>
-              </div>
+              {/* Adjustable-shelf count — only when some exist, for quick +/- */}
+              {adjOf(selLeafOpen.fittings).length > 0 && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-indigo-400">Adjustable shelves</span>
+                  <div className="ml-auto flex items-center gap-1">
+                    <button className={addBtn} onClick={() => bumpAdj(selLeaf.path, -1)}>−</button>
+                    <span className="w-4 text-center font-mono text-gray-300">{adjOf(selLeafOpen.fittings).length}</span>
+                    <button className={addBtn} onClick={() => bumpAdj(selLeaf.path, +1)}>+</button>
+                  </div>
+                </div>
+              )}
 
               {/* Fitting list (non-adj fittings shown bottom→top) */}
               {selLeafOpen.fittings.some(f => f.type !== 'adj_shelf') && (
@@ -2024,7 +2227,16 @@ export default function InternalGridEditor({
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: 'rgba(245,158,11,0.08)', border: '1px dashed #f59e0b' }} />
-                  <span className="text-gray-500">Pull-out</span>
+                  <span className="text-gray-500">Rollout</span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-gray-800/60">
+                  <div className="w-3 h-3 rounded-full shrink-0 flex items-center justify-center text-[8px] font-bold"
+                    style={{ background: '#1f2937', border: '1px solid #fbbf24', color: '#fbbf24' }}>⚲</div>
+                  <span className="text-gray-500">Locked bay (fixed size)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ background: groupColor('A') }} />
+                  <span className="text-gray-500">Equalised bay (group)</span>
                 </div>
               </div>
             </div>
@@ -2034,7 +2246,7 @@ export default function InternalGridEditor({
           <div className="text-gray-700 space-y-0.5 mt-auto pt-2 border-t border-gray-800">
             <p>W {Math.round(intW)}mm (approx)</p>
             <p>H {Math.round(intH)}mm</p>
-            <p className="text-[9px] text-gray-800">Type mm to lock a bay · clear to re-equalise</p>
+            <p className="text-[9px] text-gray-800">Click a bay → Lock or Equalise it in the Size panel</p>
           </div>
         </div>
       </div>
@@ -2052,15 +2264,14 @@ export default function InternalGridEditor({
           >
             {menu.kind === 'leaf' ? (
               <>
-                <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors"
-                  onClick={() => addShelf(menu.path)}>Split into shelves</button>
-                <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors"
-                  onClick={() => addDivider(menu.path)}>Split into columns</button>
+                <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-gray-500">Add element</div>
+                {ADD_ELEMENTS.map(el => (
+                  <button key={el.kind} className={menuBtn} title={el.title}
+                    onClick={() => runAdd(menu.path, el.kind)}>+ {el.label}</button>
+                ))}
                 <div className="border-t border-gray-700 mt-1 pt-1">
-                  <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors"
-                    onClick={() => bumpAdj(menu.path, +1)}>+ Adjustable shelf</button>
-                  <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors"
-                    onClick={() => bumpAdj(menu.path, -1)}>− Adjustable shelf</button>
+                  <button className={menuBtn} onClick={() => addDivider(menu.path)}>Split into columns ⇆</button>
+                  <button className={menuBtn + ' text-gray-400'} onClick={() => bumpAdj(menu.path, -1)}>− Adjustable shelf</button>
                 </div>
                 {(() => {
                   const axis = getParentSplitAxis(tree, menu.path)
@@ -2104,26 +2315,47 @@ export default function InternalGridEditor({
               const locked = isSubCompLocked(leaf, sub)
               const { topBound, botBound } = findSubBounds(leaf, sub)
               const canLock = !!(topBound || botBound)
+              const canConvertHere = isShelfDivided(getSection(tree, leaf.path))
               return (
                 <>
                   <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-gray-500">
-                    Sub-compartment · {Math.round(sub.h)} mm{locked ? ' · locked' : ''}
+                    Add element here
                   </div>
-                  {!locked && (
-                    <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      disabled={!canLock}
-                      onClick={() => { lockSubCompHeight(leaf, sub); setMenu(null) }}
-                      title={canLock
-                        ? 'Pin this band’s height by locking the shelf/drawer on each side. The band stays the same when anything else in the compartment changes.'
-                        : 'No bounding shelf/drawer to lock — this band already fills the whole compartment.'}
-                    >Lock height ⚲</button>
+                  {ADD_ELEMENTS.map(el => (
+                    <button key={el.kind}
+                      className={menuBtn + (locked ? ' opacity-40 cursor-not-allowed' : '')}
+                      disabled={locked} title={locked ? undefined : el.title}
+                      onClick={() => runAddInSub(leaf.path, sub, el.kind)}
+                    >+ {el.label}</button>
+                  ))}
+                  {canConvertHere && (
+                    <div className="border-t border-gray-700 mt-1 pt-1">
+                      <button className={menuBtn}
+                        onClick={() => { convertShelvesToBays(leaf.path); setMenu(null) }}
+                        title="Turn these fixed shelves into structural bays so each opening can be locked / equalised independently."
+                      >Convert shelves → bays ⭢</button>
+                    </div>
                   )}
-                  {locked && (
-                    <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors"
-                      onClick={() => { unlockSubCompHeight(leaf, sub); setMenu(null) }}
-                      title="Unlock both bounding fittings so this band re-flows with the rest of the stack."
-                    >Unlock height</button>
-                  )}
+                  <div className="border-t border-gray-700 mt-1 pt-1">
+                    <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-gray-500">
+                      Band · {Math.round(sub.h)} mm{locked ? ' · locked' : ''}
+                    </div>
+                    {!locked && (
+                      <button className={menuBtn + ' disabled:opacity-40 disabled:cursor-not-allowed'}
+                        disabled={!canLock}
+                        onClick={() => { lockSubCompHeight(leaf, sub); setMenu(null) }}
+                        title={canLock
+                          ? 'Pin this band’s height. Note: this can also pin a shelf shared with the neighbour — convert to bays for clean per-opening locking.'
+                          : 'No bounding shelf/drawer to lock — this band already fills the whole compartment.'}
+                      >Lock height ⚲</button>
+                    )}
+                    {locked && (
+                      <button className={menuBtn}
+                        onClick={() => { unlockSubCompHeight(leaf, sub); setMenu(null) }}
+                        title="Unlock both bounding fittings so this band re-flows with the rest of the stack."
+                      >Unlock height</button>
+                    )}
+                  </div>
                 </>
               )
             })() : (

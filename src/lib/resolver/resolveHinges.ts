@@ -250,13 +250,21 @@ function resolveMount(
   const plateZ = z.Z - offset // behind the door back face (z.Z) by the plate offset
   const sideHung = edge === 'left' || edge === 'right'
 
-  // Side-hung → carcass gable, always (no shelf-snap).
+  // Side-hung → carcass gable, always (no shelf-snap). The plate seats on the
+  // gable's INNER face (toward the cabinet interior), NOT the door edge. A side
+  // gable's cabinet-X extent is its thickness (caseBox width = part.DZ), so:
+  //   left gable  inner face = part.X + part.DZ  (max-X face, faces +X)
+  //   right gable inner face = part.X            (min-X face, faces −X)
+  // Fall back to the door edge only when the gable part is missing.
   if (sideHung && (surface === 'auto' || surface === 'side')) {
     const key = edge === 'left' ? 'left_side' : 'right_side'
     const part = caseParts.find(p => p.part_key === key)
+    const innerX = part
+      ? (edge === 'left' ? part.X + part.DZ : part.X)
+      : (edge === 'left' ? z.X : z.X + z.DY)
     return {
       target: part ? { table: 'case_parts', part_key: key } : null,
-      mountX: edge === 'left' ? z.X : z.X + z.DY,
+      mountX: innerX,
       mountY: cupY,
       mountZ: plateZ,
       mountAxis: edge === 'left' ? 'x-' : 'x+',
@@ -266,9 +274,10 @@ function resolveMount(
   // Explicit side override on a pivot door (unusual) — treat like side-hung.
   if (surface === 'side') {
     const part = caseParts.find(p => p.part_key === 'left_side')
+    const innerX = part ? part.X + part.DZ : z.X
     return {
       target: part ? { table: 'case_parts', part_key: 'left_side' } : null,
-      mountX: z.X, mountY: cupY, mountZ: plateZ, mountAxis: 'x-',
+      mountX: innerX, mountY: cupY, mountZ: plateZ, mountAxis: 'x-',
     }
   }
 

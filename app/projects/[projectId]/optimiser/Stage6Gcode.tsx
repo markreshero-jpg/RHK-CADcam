@@ -13,6 +13,7 @@ import { supabase } from '@/src/lib/supabase'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
 import { buildSheetDrills, groupDrillOps, type DrillOpRaw, type PartRef } from '@/src/lib/optimiser/drills'
+import Simulator from './Simulator'
 
 interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number }
 
@@ -43,6 +44,7 @@ export default function Stage6Gcode() {
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [simulating, setSimulating] = useState(false)
 
   const matCode = (id: string | null) => id ? (snap.materials.find(m => m.id === id)?.name ?? 'MAT') : 'MAT'
 
@@ -139,6 +141,8 @@ export default function Stage6Gcode() {
             {busy ? 'Working…' : files.length ? 'Regenerate' : 'Generate G-code'}
           </button>
           {files.length > 0 && <>
+            <button onClick={() => setSimulating(true)}
+              className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">▶ Simulate</button>
             <button onClick={() => files.forEach(f => download(f.fileName, f.gcode))}
               className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">Download all</button>
             <button onClick={save} disabled={busy}
@@ -174,6 +178,13 @@ export default function Stage6Gcode() {
           <div className="flex-none px-4 py-2 border-b border-edge text-[11px] font-mono text-ink-muted">{previewFile.fileName}</div>
           <pre className="flex-1 overflow-auto px-4 py-3 text-[10.5px] leading-snug font-mono text-ink-muted whitespace-pre">{previewFile.gcode}</pre>
         </div>
+      )}
+
+      {simulating && nestResult && (
+        <Simulator
+          files={files.map(f => ({ sheetIndex: f.sheetIndex, fileName: f.fileName, gcode: f.gcode }))}
+          sheets={nestResult.sheets}
+          onClose={() => setSimulating(false)} />
       )}
     </div>
   )
