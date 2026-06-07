@@ -320,10 +320,10 @@ function Stage2Parts() {
       {/* Part table — spreadsheet style, draggable columns */}
       <div className="flex-1 overflow-auto px-8 py-3">
         <p className="text-[10px] text-ink-subtle mb-1.5">Drag column headers to reorder. Comments save to the part.</p>
-        <table className="w-full text-xs border-collapse border border-edge-strong">
+        <table className="w-full text-xs border-separate border-spacing-0 border-l border-edge-strong">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onColDragEnd}>
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-surface-2 text-ink-muted">
+            <thead>
+              <tr className="text-ink-muted">
                 <SortableContext items={partColOrder} strategy={horizontalListSortingStrategy}>
                   {partColOrder.map(key => <SortableTh key={key} id={key} sortKey={sort.key} sortDir={sort.dir} onSort={toggleSort} />)}
                 </SortableContext>
@@ -331,13 +331,13 @@ function Stage2Parts() {
             </thead>
           </DndContext>
           <tbody>
-            {sortedFiltered.length === 0 && <tr><td colSpan={partColOrder.length} className="border border-edge/70 px-2 py-8 text-center text-ink-subtle">No parts match the current filters.</td></tr>}
+            {sortedFiltered.length === 0 && <tr><td colSpan={partColOrder.length} className="border-b border-r border-edge/70 px-2 py-8 text-center text-ink-subtle">No parts match the current filters.</td></tr>}
             {sortedFiltered.map((p, i) => {
               const on = selectedUids.has(p.uid)
               return (
                 <tr key={p.uid} className={`${i % 2 ? 'bg-surface/40' : ''} hover:bg-surface ${on ? '' : 'opacity-55'}`}>
                   {partColOrder.map(key => (
-                    <td key={key} className={`border border-edge/70 ${key === 'comment' || key === 'qty' ? 'px-1 py-1' : 'px-2 py-1.5'} ${COL_DEFS[key].align === 'right' ? 'text-right' : COL_DEFS[key].align === 'center' ? 'text-center' : ''}`}>
+                    <td key={key} className={`border-b border-r border-edge/70 ${key === 'comment' || key === 'qty' ? 'px-1 py-1' : 'px-2 py-1.5'} ${COL_DEFS[key].align === 'right' ? 'text-right' : COL_DEFS[key].align === 'center' ? 'text-center' : ''}`}>
                       {renderCell(key, p, on)}
                     </td>
                   ))}
@@ -376,14 +376,14 @@ function Stage2Parts() {
 }
 
 // Stage 2 part-table columns. Order is user-draggable (stored in the optimiser store).
-const COL_DEFS: Record<string, { label: string; align?: 'right' | 'center'; width?: string }> = {
+const COL_DEFS: Record<string, { label: string; sub?: string; align?: 'right' | 'center'; width?: string }> = {
   check:    { label: '', align: 'center', width: 'w-8' },
   part:     { label: 'Part' },
   cabinet:  { label: 'Cabinet' },
   room:     { label: 'Room' },
-  width:    { label: 'Width', align: 'right', width: 'w-20' },
-  height:   { label: 'Height', align: 'right', width: 'w-20' },
-  thk:      { label: 'Thk', align: 'right', width: 'w-16' },
+  width:    { label: 'Width', sub: 'DX', align: 'right', width: 'w-20' },
+  height:   { label: 'Height', sub: 'DY', align: 'right', width: 'w-20' },
+  thk:      { label: 'Thk', sub: 'DZ', align: 'right', width: 'w-16' },
   material: { label: 'Material' },
   comment:  { label: 'Comment', width: 'w-48' },
   qty:      { label: 'Qty', align: 'right', width: 'w-16' },
@@ -402,10 +402,11 @@ function SortableTh({ id, sortKey, sortDir, onSort }: {
   return (
     <th ref={setNodeRef} style={style} {...attributes} {...listeners}
       onClick={() => sortable && onSort(id)}
-      className={`border border-edge-strong px-2 py-2 font-semibold select-none cursor-grab active:cursor-grabbing ${def.width ?? ''} ${def.align === 'right' ? 'text-right' : def.align === 'center' ? 'text-center' : 'text-left'}`}
+      className={`sticky top-0 z-20 bg-surface-2 border-t border-b border-r border-edge-strong px-2 py-2 font-semibold select-none cursor-grab active:cursor-grabbing ${def.width ?? ''} ${def.align === 'right' ? 'text-right' : def.align === 'center' ? 'text-center' : 'text-left'}`}
       title={sortable ? 'Click to sort · drag to reorder' : 'Drag to reorder'}>
-      <span className={`inline-flex items-center gap-1 ${def.align === 'right' ? 'flex-row-reverse' : ''}`}>
+      <span className={`inline-flex items-baseline gap-1 ${def.align === 'right' ? 'flex-row-reverse' : ''}`}>
         {def.label}
+        {def.sub && <span className="text-ink-subtle font-normal text-[9px]">{def.sub}</span>}
         {active && <span className="text-accent-ink text-[9px]">{sortDir === 'asc' ? '▲' : '▼'}</span>}
       </span>
     </th>
