@@ -257,35 +257,37 @@ function Stage2Parts() {
         </span>
       </div>
 
-      {/* Part table */}
-      <div className="flex-1 overflow-y-auto px-8 py-2">
-        <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-canvas">
-            <tr className="text-ink-subtle text-left">
-              <th className="py-2 w-8"></th>
-              <th className="py-2 font-medium">Part</th>
-              <th className="py-2 font-medium">Cabinet</th>
-              <th className="py-2 font-medium">Room</th>
-              <th className="py-2 font-medium text-right">W×H (mm)</th>
-              <th className="py-2 font-medium text-right">Thk</th>
-              <th className="py-2 font-medium">Material</th>
-              <th className="py-2 font-medium text-right pr-2">Qty</th>
+      {/* Part table — spreadsheet style */}
+      <div className="flex-1 overflow-auto px-8 py-3">
+        <table className="w-full text-xs border-collapse border border-edge-strong [&_td]:border [&_td]:border-edge/70 [&_th]:border [&_th]:border-edge-strong">
+          <thead className="sticky top-0 z-10">
+            <tr className="bg-surface-2 text-ink-muted text-left">
+              <th className="px-2 py-2 w-8 text-center"></th>
+              <th className="px-2 py-2 font-semibold">Part</th>
+              <th className="px-2 py-2 font-semibold">Cabinet</th>
+              <th className="px-2 py-2 font-semibold">Room</th>
+              <th className="px-2 py-2 font-semibold text-right w-20">Width</th>
+              <th className="px-2 py-2 font-semibold text-right w-20">Height</th>
+              <th className="px-2 py-2 font-semibold text-right w-16">Thk</th>
+              <th className="px-2 py-2 font-semibold">Material</th>
+              <th className="px-2 py-2 font-semibold text-right w-16">Qty</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-edge/60">
-            {filtered.length === 0 && <tr><td colSpan={8} className="py-8 text-center text-ink-subtle">No parts match the current filters.</td></tr>}
-            {filtered.map(p => {
+          <tbody>
+            {filtered.length === 0 && <tr><td colSpan={9} className="px-2 py-8 text-center text-ink-subtle">No parts match the current filters.</td></tr>}
+            {filtered.map((p, i) => {
               const on = selectedUids.has(p.uid)
               return (
-                <tr key={p.uid} className={`hover:bg-surface/60 ${on ? '' : 'opacity-55'}`}>
-                  <td className="py-1.5"><input type="checkbox" checked={on} onChange={() => togglePart(p.uid)} /></td>
-                  <td className="py-1.5 text-ink">{p.label}</td>
-                  <td className="py-1.5 text-ink-muted">{p.cabinet_label}</td>
-                  <td className="py-1.5 text-ink-muted">{isBatch && p.job_number ? <span className="text-ink-subtle">{p.job_number} · </span> : null}{p.room_name}</td>
-                  <td className="py-1.5 text-right font-mono text-ink-muted">{Math.round(p.w)}×{Math.round(p.h)}</td>
-                  <td className="py-1.5 text-right font-mono text-ink-muted">{p.thickness}</td>
-                  <td className="py-1.5 text-ink-muted">{p.material_id ? (matName.get(p.material_id) ?? '—') : <span className="text-amber-600">none</span>}</td>
-                  <td className="py-1.5 text-right pr-2">
+                <tr key={p.uid} className={`${i % 2 ? 'bg-surface/40' : ''} hover:bg-surface ${on ? '' : 'opacity-55'}`}>
+                  <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={on} onChange={() => togglePart(p.uid)} /></td>
+                  <td className="px-2 py-1.5 text-ink">{p.label}</td>
+                  <td className="px-2 py-1.5 text-ink-muted">{p.cabinet_label}</td>
+                  <td className="px-2 py-1.5 text-ink-muted">{isBatch && p.job_number ? <span className="text-ink-subtle">{p.job_number} · </span> : null}{p.room_name}</td>
+                  <td className="px-2 py-1.5 text-right font-mono text-ink-muted tabular-nums">{Math.round(p.w)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono text-ink-muted tabular-nums">{Math.round(p.h)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono text-ink-muted tabular-nums">{p.thickness}</td>
+                  <td className="px-2 py-1.5 text-ink-muted">{p.material_id ? (matName.get(p.material_id) ?? '—') : <span className="text-amber-600">none</span>}</td>
+                  <td className="px-1 py-1 text-right">
                     <input type="number" min={0} value={cutQty[p.uid] ?? 1} disabled={!on}
                       onChange={e => setCutQty(p.uid, parseInt(e.target.value) || 0)}
                       className="w-14 bg-surface-2 border border-edge-strong rounded px-1.5 py-0.5 text-right font-mono text-ink disabled:opacity-40 focus:outline-none focus:border-accent" />
