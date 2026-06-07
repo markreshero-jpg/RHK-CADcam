@@ -25,6 +25,8 @@ export interface UserPrefs {
   cabinetViewStyles:  CabinetViewStyles
   snapSettings:     SnapSettings
   elevSnapSettings: ElevSnapSettings
+  /** Panel Optimiser Stage 2 part-table column order (persisted layout). */
+  optimiserPartCols: string[] | null
 }
 
 const KEY = 'rhk_user_prefs'
@@ -47,6 +49,7 @@ const DEFAULTS: UserPrefs = {
   cabinetViewStyles: DEFAULT_CABINET_VIEW_STYLES,
   snapSettings:     DEFAULT_SNAP_SETTINGS,
   elevSnapSettings: DEFAULT_ELEV_SNAP_SETTINGS,
+  optimiserPartCols: null,
 }
 
 function normaliseDrawingPresets(raw: unknown, legacy: unknown): DrawingPresets {

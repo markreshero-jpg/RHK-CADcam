@@ -11,8 +11,19 @@ import { materialGroupKey, type OptiSnapshot } from './types'
 import type { NormalizedProject } from './normalize'
 import type { GroupStock, SheetStock, NestResult, NestPartInput, Placement } from './nest'
 import { findBestPlacement, sheetEfficiency } from './edit'
+import { getUserPrefs, setUserPrefs } from '../userPrefs'
 
 export type Stage = 1 | 2 | 3 | 4 | 5 | 6
+
+// Canonical Stage 2 column set. A persisted order is reconciled against this so
+// columns added/removed in code never corrupt a saved layout.
+export const DEFAULT_PART_COLS = ['check', 'part', 'cabinet', 'room', 'width', 'height', 'thk', 'material', 'comment', 'qty']
+function reconcilePartCols(stored: string[] | null | undefined): string[] {
+  if (!Array.isArray(stored)) return [...DEFAULT_PART_COLS]
+  const kept = stored.filter(c => DEFAULT_PART_COLS.includes(c))
+  const missing = DEFAULT_PART_COLS.filter(c => !kept.includes(c))
+  return [...kept, ...missing]
+}
 
 const clone = <T,>(v: T): T => structuredClone(v)
 let pasteSeq = 0
@@ -126,7 +137,7 @@ export const useOptiStore = create<OptiState>((set) => ({
   machineId: null,
   profileId: null,
   includedProjectIds: [],
-  partColOrder: ['check', 'part', 'cabinet', 'room', 'width', 'height', 'thk', 'material', 'comment', 'qty'],
+  partColOrder: [...DEFAULT_PART_COLS],
   filterRoomIds: [],
   filterCabinetIds: [],
   filterMaterialIds: [],
@@ -158,6 +169,7 @@ export const useOptiStore = create<OptiState>((set) => ({
       profileId: profile?.id ?? null,
       selectedUids: selected,
       includedProjectIds: [snap.projectId],
+      partColOrder: reconcilePartCols(getUserPrefs().optimiserPartCols),
     }
   }),
 
@@ -210,7 +222,7 @@ export const useOptiStore = create<OptiState>((set) => ({
   }),
   setSelected: (uids) => set({ selectedUids: new Set(uids), ...INVALIDATE_NEST }),
   setCutQty: (uid, qty) => set(st => ({ cutQty: { ...st.cutQty, [uid]: Math.max(0, qty) }, ...INVALIDATE_NEST })),
-  setPartColOrder: (order) => set({ partColOrder: order }),
+  setPartColOrder: (order) => { setUserPrefs({ optimiserPartCols: order }); set({ partColOrder: order }) },
   // Comment is part metadata, not a nest input — does NOT invalidate the layout.
   setPartComment: (uid, comment) => set(st => {
     if (!st.snapshot) return {}
