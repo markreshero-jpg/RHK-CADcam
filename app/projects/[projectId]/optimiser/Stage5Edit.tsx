@@ -314,22 +314,29 @@ function InteractiveSheet({ sheet, selectedUid, onSelect, onMove, onContext }: {
               fill={on ? '#2563eb' : '#1e3a5f'} fillOpacity={on ? 0.6 : 0.42}
               stroke={on ? '#60a5fa' : '#3b82f6'} strokeWidth={on ? 1.8 : 0.9} />
             {(() => {
+              const wpx = p.w * scale, hpx = p.h * scale
               const cx = (x + p.w / 2) * scale
-              const cyc = fy(y, p.h) + (p.h * scale) / 2
-              const showNum = p.w * scale > 16 && p.h * scale > 12
-              const showLabel = p.w * scale > 44 && p.h * scale > 28
+              const cyc = fy(y, p.h) + hpx / 2
+              const vertical = hpx > wpx                 // taller than wide → run text along the height
+              const longPx = Math.max(wpx, hpx), shortPx = Math.min(wpx, hpx)
+              const showNum = shortPx > 11 && longPx > 16
+              const showLabel = shortPx > 22 && longPx > 46
+              const numFont = Math.min(13, Math.max(8, shortPx / 2.2))
+              const labelFont = Math.min(9, Math.max(6, shortPx / 4))
+              const maxChars = Math.max(3, Math.floor(longPx / (labelFont * 0.62)))
+              const label = p.label.length > maxChars ? p.label.slice(0, maxChars - 1) + '…' : p.label
               return (
-                <g style={{ pointerEvents: 'none' }}>
+                <g style={{ pointerEvents: 'none' }} transform={vertical ? `rotate(-90 ${cx} ${cyc})` : undefined}>
                   {showNum && (
-                    <text x={cx} y={showLabel ? cyc - 5 : cyc} textAnchor="middle" dominantBaseline="middle"
-                      fill="#e2e8f0" fontSize={Math.min(13, Math.max(8, p.h * scale / 3.5))} fontWeight={600} fontFamily="monospace">
+                    <text x={cx} y={cyc + (showLabel ? -5 : 0)} textAnchor="middle" dominantBaseline="middle"
+                      fill="#e2e8f0" fontSize={numFont} fontWeight={600} fontFamily="monospace">
                       {num}
                     </text>
                   )}
                   {showLabel && (
                     <text x={cx} y={cyc + 8} textAnchor="middle" dominantBaseline="middle"
-                      fill="#94a3b8" fontSize={Math.min(9, Math.max(6, p.h * scale / 6))} fontFamily="monospace">
-                      {p.label.length > 16 ? p.label.slice(0, 15) + '…' : p.label}
+                      fill="#94a3b8" fontSize={labelFont} fontFamily="monospace">
+                      {label}
                     </text>
                   )}
                 </g>
