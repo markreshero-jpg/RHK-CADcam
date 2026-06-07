@@ -109,7 +109,7 @@ export default function Stage5Edit() {
             const avgEff = g.sheets.reduce((a, s) => a + s.efficiency, 0) / g.sheets.length
             const parts = g.sheets.reduce((a, s) => a + s.placements.length, 0)
             return (
-              <div key={g.key} className="mb-0.5">
+              <div key={g.key} className="mb-0.5 divide-y divide-edge/40 border-b border-edge/40">
                 <button onClick={() => setCollapsedMat(c => ({ ...c, [g.key]: !collapsed }))}
                   className="w-full px-3 py-1.5 hover:bg-surface-2 transition-colors">
                   <div className="flex items-center justify-between gap-1">
@@ -202,7 +202,7 @@ export default function Stage5Edit() {
           <div className="flex-none px-3 py-2 border-b border-edge">
             <span className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider">Parts on sheet {sheet.index + 1} ({sheet.placements.length})</span>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto divide-y divide-edge/50">
             {sheet.placements.length === 0 && <p className="text-[11px] text-ink-subtle px-3 py-3">No parts on this sheet.</p>}
             {sheet.placements.map((pl, idx) => {
               const on = selectedUid === pl.uid
