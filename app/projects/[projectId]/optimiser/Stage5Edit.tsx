@@ -40,6 +40,7 @@ export default function Stage5Edit() {
   const snap = useOptiStore(s => s.snapshot)
 
   const [ctxMenu, setCtxMenu] = useState<{ uid: string; x: number; y: number } | null>(null)
+  const [collapsedMat, setCollapsedMat] = useState<Record<string, boolean>>({})
 
   // Keyboard shortcuts (read live state via getState to avoid stale closures).
   useEffect(() => {
@@ -81,9 +82,50 @@ export default function Stage5Edit() {
     return null
   })()
   const matName = (id: string | null) => id ? (snap?.materials.find(m => m.id === id)?.name ?? '—') : '—'
+  const matLabel = (s: NestedSheet) => `${s.materialId ? matName(s.materialId) : 'No material'} ${s.thickness}mm`
+
+  // Sheets grouped by material+thickness for the left list.
+  const sheetGroups = (() => {
+    const m = new Map<string, { key: string; label: string; sheets: NestedSheet[] }>()
+    for (const s of nestResult.sheets) {
+      const key = `${s.materialId ?? 'none'}__${s.thickness}`
+      const g = m.get(key) ?? { key, label: matLabel(s), sheets: [] }
+      g.sheets.push(s); m.set(key, g)
+    }
+    return [...m.values()]
+  })()
 
   return (
     <div className="h-full flex overflow-hidden" onClick={() => setCtxMenu(null)}>
+      {/* Left: sheets summary grouped by material */}
+      <div className="flex-none w-56 border-r border-edge flex flex-col overflow-hidden">
+        <div className="flex-none px-3 py-2 border-b border-edge flex items-center justify-between">
+          <span className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider">Sheets ({nestResult.sheets.length})</span>
+          <AddSheetButton onAdd={addSheet} />
+        </div>
+        <div className="flex-1 overflow-y-auto py-1">
+          {sheetGroups.map(g => {
+            const collapsed = collapsedMat[g.key]
+            return (
+              <div key={g.key} className="mb-0.5">
+                <button onClick={() => setCollapsedMat(c => ({ ...c, [g.key]: !collapsed }))}
+                  className="w-full flex items-center justify-between gap-1 px-3 py-1.5 text-[11px] font-semibold text-ink hover:bg-surface-2 transition-colors">
+                  <span className="truncate">{g.label}</span>
+                  <span className="text-ink-subtle shrink-0">{g.sheets.length} · {collapsed ? '▸' : '▾'}</span>
+                </button>
+                {!collapsed && g.sheets.map(s => (
+                  <button key={s.index} onClick={() => setCurrentSheet(s.index)}
+                    className={`w-full text-left pl-5 pr-3 py-1.5 flex items-center justify-between gap-2 text-[11px] transition-colors ${s.index === sheet.index ? 'bg-accent/15 text-accent-ink' : 'text-ink-muted hover:bg-surface-2'}`}>
+                    <span className="truncate">Sheet {s.index + 1}{s.stock.isOffcut ? ' (offcut)' : ''}</span>
+                    <span className="font-mono text-ink-subtle shrink-0">{(s.efficiency * 100).toFixed(0)}% · {s.placements.length}</span>
+                  </button>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
       {/* Main canvas + unplaced pool */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
@@ -110,7 +152,7 @@ export default function Stage5Edit() {
           <div className="flex flex-col items-center gap-2">
             <div className="text-lg font-semibold text-ink">
               Sheet {sheet.index + 1}
-              <span className="text-ink-subtle text-sm font-normal"> of {nestResult.sheets.length} · {sheet.stock.w}×{sheet.stock.h}mm{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
+              <span className="text-ink-subtle text-sm font-normal"> of {nestResult.sheets.length} · {matLabel(sheet)} · {sheet.stock.w}×{sheet.stock.h}mm{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
             </div>
             <InteractiveSheet
               sheet={sheet}
@@ -197,22 +239,7 @@ export default function Stage5Edit() {
             </div>
           )}
         </div>
-        <div className="flex-none px-3 py-2 border-b border-edge flex items-center justify-between">
-          <span className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider">Sheets ({nestResult.sheets.length})</span>
-          <AddSheetButton onAdd={addSheet} />
-        </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-2">
-          {nestResult.sheets.map(s => (
-            <button key={s.index} onClick={() => setCurrentSheet(s.index)}
-              className={`w-full text-left rounded-lg border p-2 transition-colors ${s.index === sheet.index ? 'border-accent bg-accent/10' : 'border-edge-strong hover:bg-surface-2'}`}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] text-ink">Sheet {s.index + 1}{s.stock.isOffcut ? ' (offcut)' : ''}</span>
-                <span className="text-[10px] font-mono text-ink-subtle">{(s.efficiency * 100).toFixed(0)}%</span>
-              </div>
-              <ThumbSheet sheet={s} />
-            </button>
-          ))}
-        </div>
+        <div className="flex-1" />
         <SheetManagePanel sheet={sheet} onDelete={() => deleteSheet(sheet.index)} onResize={(w, h) => resizeSheet(sheet.index, w, h)} />
       </div>
 
@@ -358,28 +385,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ThumbSheet({ sheet }: { sheet: NestedSheet }) {
-  const { w: W, h: H } = sheet.stock
-  const tw = 200, scale = tw / W, th = H * scale
-  return (
-    <svg width="100%" viewBox={`0 0 ${tw} ${th}`} className="block">
-      <rect x={0} y={0} width={tw} height={th} fill="#0f172a" stroke="#475569" strokeWidth={0.5} />
-      {sheet.placements.map((p, idx) => {
-        const num = idx + 1
-        return (
-          <g key={p.uid}>
-            <rect x={p.x * scale} y={(H - p.y - p.h) * scale} width={p.w * scale} height={p.h * scale}
-              fill="#1e3a5f" fillOpacity={0.5} stroke="#3b82f6" strokeWidth={0.4} />
-            {num != null && p.w * scale > 12 && p.h * scale > 9 && (
-              <text x={(p.x + p.w / 2) * scale} y={(H - p.y - p.h / 2) * scale} textAnchor="middle" dominantBaseline="middle"
-                fill="#cbd5e1" fontSize={7} fontFamily="monospace">{num}</text>
-            )}
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
 
 function AddSheetButton({ onAdd }: { onAdd: (stock: { w: number; h: number; trimTop: number; trimBottom: number; trimLeft: number; trimRight: number; isOffcut: boolean; label: string | null }, materialId: string | null, thickness: number) => void }) {
   // Adds a blank standard-ish sheet for the first selected material group.
