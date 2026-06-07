@@ -212,9 +212,11 @@ export const useOptiStore = create<OptiState>((set) => ({
     return { machineId: id, profileId: profile?.id ?? null }
   }),
   setProfile: (id) => set({ profileId: id }),
-  setFilterRooms: (ids) => set({ filterRoomIds: ids }),
-  setFilterCabinets: (ids) => set({ filterCabinetIds: ids }),
-  setFilterMaterials: (ids) => set({ filterMaterialIds: ids }),
+  // Filters now constrain what gets nested, so a filter change invalidates a
+  // prior layout (forces a fresh, filter-respecting re-nest).
+  setFilterRooms: (ids) => set({ filterRoomIds: ids, ...INVALIDATE_NEST }),
+  setFilterCabinets: (ids) => set({ filterCabinetIds: ids, ...INVALIDATE_NEST }),
+  setFilterMaterials: (ids) => set({ filterMaterialIds: ids, ...INVALIDATE_NEST }),
   togglePart: (uid) => set(st => {
     const next = new Set(st.selectedUids)
     if (next.has(uid)) next.delete(uid); else next.add(uid)

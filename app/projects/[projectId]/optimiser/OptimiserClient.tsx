@@ -577,8 +577,19 @@ function Stage4Nesting() {
   const setNesting = useOptiStore(s => s.setNesting)
   const setPartIndex = useOptiStore(s => s.setPartIndex)
   const includedProjectIds = useOptiStore(s => s.includedProjectIds)
+  const filterRoomIds = useOptiStore(s => s.filterRoomIds)
+  const filterCabinetIds = useOptiStore(s => s.filterCabinetIds)
+  const filterMaterialIds = useOptiStore(s => s.filterMaterialIds)
 
   const matById = useMemo(() => new Map(snap.materials.map(m => [m.id, m])), [snap.materials])
+  const filtersActive = filterRoomIds.length > 0 || filterCabinetIds.length > 0 || filterMaterialIds.length > 0
+  const passesFilter = (p: OptiPart) =>
+    (filterRoomIds.length === 0 || filterRoomIds.includes(p.room_id)) &&
+    (filterCabinetIds.length === 0 || filterCabinetIds.includes(p.cabinet_instance_id)) &&
+    (filterMaterialIds.length === 0 || (p.material_id != null && filterMaterialIds.includes(p.material_id)))
+
+  // Parts that will actually be nested = selected AND passing the Stage 2 filters.
+  const runParts = snap.parts.filter(p => selectedUids.has(p.uid) && passesFilter(p))
 
   function run() {
     const isBatch = includedProjectIds.length > 1
@@ -587,18 +598,23 @@ function Stage4Nesting() {
     setTimeout(() => {
       const parts: NestPartInput[] = []
       const index: Record<string, NestPartInput> = {}
-      for (const p of snap.parts) {
-        if (!selectedUids.has(p.uid)) continue
+      // Always provide stock for every group in the run (default from the
+      // material) so selected parts never silently fall to unplaced when a
+      // group's stock wasn't configured in Stage 3.
+      const stockForRun: Record<string, GroupStock> = { ...(stock as Record<string, GroupStock>) }
+      for (const p of runParts) {
         const qty = cutQty[p.uid] ?? 1
         const grainLock = !!(p.material_id && matById.get(p.material_id)?.has_grain)
         const label = isBatch && p.job_number ? `${p.job_number} ${p.label}` : p.label
+        const gk = materialGroupKey(p.material_id, p.thickness)
+        if (!stockForRun[gk]) stockForRun[gk] = { standard: seedStock(snap, p.material_id), offcuts: [] }
         for (let i = 0; i < qty; i++) {
           const inst: NestPartInput = { uid: `${p.uid}#${i}`, baseUid: p.uid, label, w: p.w, h: p.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority }
           parts.push(inst); index[inst.uid] = inst
         }
       }
       setPartIndex(index)
-      setNestResult(nest(parts, stock as Record<string, GroupStock>, settings))
+      setNestResult(nest(parts, stockForRun, settings))
       setNesting(false)
     }, 20)
   }
@@ -617,10 +633,13 @@ function Stage4Nesting() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-none px-8 py-3 flex items-center gap-4 border-b border-edge">
-        <button onClick={run} disabled={nesting || selectedUids.size === 0}
+        <button onClick={run} disabled={nesting || runParts.length === 0}
           className="px-4 py-1.5 text-xs rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-colors">
           {nesting ? 'Nesting…' : nestResult ? 'Re-nest' : 'Run nesting'}
         </button>
+        <span className="text-[11px] text-ink-subtle">
+          {runParts.length} part{runParts.length === 1 ? '' : 's'} to nest{filtersActive ? ' (Stage 2 filters applied)' : ''}
+        </span>
         {overall && (
           <span className="text-xs text-ink-muted">
             {overall.sheets} sheet{overall.sheets === 1 ? '' : 's'} · {(overall.eff * 100).toFixed(1)}% efficiency
