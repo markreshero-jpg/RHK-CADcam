@@ -106,12 +106,19 @@ export default function Stage5Edit() {
         <div className="flex-1 overflow-y-auto py-1">
           {sheetGroups.map(g => {
             const collapsed = collapsedMat[g.key]
+            const avgEff = g.sheets.reduce((a, s) => a + s.efficiency, 0) / g.sheets.length
+            const parts = g.sheets.reduce((a, s) => a + s.placements.length, 0)
             return (
               <div key={g.key} className="mb-0.5">
                 <button onClick={() => setCollapsedMat(c => ({ ...c, [g.key]: !collapsed }))}
-                  className="w-full flex items-center justify-between gap-1 px-3 py-1.5 text-[11px] font-semibold text-ink hover:bg-surface-2 transition-colors">
-                  <span className="truncate">{g.label}</span>
-                  <span className="text-ink-subtle shrink-0">{g.sheets.length} · {collapsed ? '▸' : '▾'}</span>
+                  className="w-full px-3 py-1.5 hover:bg-surface-2 transition-colors">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] font-semibold text-ink truncate">{g.label}</span>
+                    <span className="text-ink-subtle shrink-0 text-[11px]">{collapsed ? '▸' : '▾'}</span>
+                  </div>
+                  <div className="text-[10px] text-ink-subtle text-left font-mono">
+                    {g.sheets.length} sheet{g.sheets.length === 1 ? '' : 's'} · {(avgEff * 100).toFixed(0)}% avg · {parts} parts
+                  </div>
                 </button>
                 {!collapsed && g.sheets.map(s => (
                   <button key={s.index} onClick={() => setCurrentSheet(s.index)}
