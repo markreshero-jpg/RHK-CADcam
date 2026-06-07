@@ -195,10 +195,32 @@ export default function Stage5Edit() {
         </div>
       </div>
 
-      {/* Sheet navigator */}
+      {/* Right: parts-on-sheet list + selected-part inspector */}
       <div className="flex-none w-64 border-l border-edge flex flex-col overflow-hidden">
+        {/* Parts on the current sheet */}
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+          <div className="flex-none px-3 py-2 border-b border-edge">
+            <span className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider">Parts on sheet {sheet.index + 1} ({sheet.placements.length})</span>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {sheet.placements.length === 0 && <p className="text-[11px] text-ink-subtle px-3 py-3">No parts on this sheet.</p>}
+            {sheet.placements.map((pl, idx) => {
+              const on = selectedUid === pl.uid
+              const part = snap?.parts.find(p => p.uid === pl.baseUid)
+              return (
+                <button key={pl.uid} onClick={() => selectPlacement(pl.uid)}
+                  className={`w-full text-left px-3 py-1 flex items-center gap-2 text-[11px] transition-colors ${on ? 'bg-accent/20 text-accent-ink' : 'text-ink-muted hover:bg-surface-2'}`}>
+                  <span className="font-mono w-5 shrink-0 text-right text-ink-subtle">{idx + 1}</span>
+                  <span className="truncate flex-1">{part?.label ?? pl.label}</span>
+                  <span className="font-mono text-ink-subtle shrink-0">{Math.round(pl.w)}×{Math.round(pl.h)}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Selected part inspector */}
-        <div className="flex-none border-b border-edge px-3 py-2.5">
+        <div className="flex-none border-t border-edge px-3 py-2.5">
           <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-1.5">Selected part</p>
           {!selectedInfo ? (
             <p className="text-[11px] text-ink-subtle">Click a part on the sheet to inspect it.</p>
@@ -246,7 +268,6 @@ export default function Stage5Edit() {
             </div>
           )}
         </div>
-        <div className="flex-1" />
         <SheetManagePanel sheet={sheet} onDelete={() => deleteSheet(sheet.index)} onResize={(w, h) => resizeSheet(sheet.index, w, h)} />
       </div>
 
