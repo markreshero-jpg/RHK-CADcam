@@ -67,6 +67,7 @@ interface OptiState {
   currentSheet: number
   selectedUid: string | null
   clipboard: NestPartInput[]
+  clipboardMode: 'cut' | 'copy'              // cut → relocate from unplaced; copy → duplicate
   editPast: NestResult[]
   editFuture: NestResult[]
   editError: string | null
@@ -139,6 +140,7 @@ export const useOptiStore = create<OptiState>((set) => ({
   currentSheet: 0,
   selectedUid: null,
   clipboard: [],
+  clipboardMode: 'copy',
   editPast: [],
   editFuture: [],
   editError: null,
@@ -275,18 +277,22 @@ export const useOptiStore = create<OptiState>((set) => ({
     }
     next.unplaced = next.unplaced.filter(p => p.uid !== uid)
     sheet.placements.push({ uid, baseUid: def.baseUid, label: def.label, x, y, w: def.w, h: def.h, rotated: false })
-    return commit(st, next)
+    // If this was the cut part, the clipboard is now consumed.
+    const clip = st.clipboardMode === 'cut' && st.clipboard.some(c => c.uid === uid) ? { clipboard: [] } : {}
+    return { ...commit(st, next), ...clip }
   }),
 
-  copyToClipboard: (uid) => set(st => { const def = st.partIndex[uid]; return def ? { clipboard: [clone(def)] } : {} }),
+  copyToClipboard: (uid) => set(st => { const def = st.partIndex[uid]; return def ? { clipboard: [clone(def)], clipboardMode: 'copy' } : {} }),
 
+  // Cut → move the part to the unplaced pool (visible) and remember it so Paste
+  // can relocate it. No duplicate is created on paste (unlike copy).
   cutToClipboard: (uid) => set(st => {
     if (!st.nestResult) return {}
     const def = st.partIndex[uid]
     const next = clone(st.nestResult)
     for (const s of next.sheets) { const i = s.placements.findIndex(p => p.uid === uid); if (i >= 0) { s.placements.splice(i, 1); break } }
-    next.unplaced = next.unplaced.filter(p => p.uid !== uid)
-    return { ...commit(st, next), clipboard: def ? [clone(def)] : [], selectedUid: null }
+    if (def && !next.unplaced.some(u => u.uid === uid)) next.unplaced.push(clone(def))
+    return { ...commit(st, next), clipboard: def ? [clone(def)] : [], clipboardMode: 'cut', selectedUid: null }
   }),
 
   pasteClipboard: (sheetIndex) => set(st => {
@@ -295,9 +301,29 @@ export const useOptiStore = create<OptiState>((set) => ({
     const sheet = next.sheets.find(s => s.index === sheetIndex)
     if (!sheet) return {}
     const gap = st.settings.kerf + st.settings.pad
+    const sameGroup = (def: NestPartInput) => materialGroupKey(def.materialId, def.thickness) === materialGroupKey(sheet.materialId, sheet.thickness)
+
+    if (st.clipboardMode === 'cut') {
+      // Relocate the cut part(s) from the unplaced pool onto this sheet (no copy).
+      let moved = false
+      for (const def of st.clipboard) {
+        if (!sameGroup(def)) continue
+        const idx = next.unplaced.findIndex(u => u.uid === def.uid)
+        if (idx < 0) continue                       // already placed elsewhere
+        const pos = findBestPlacement(sheet, def.w, def.h, gap)
+        if (!pos) continue
+        next.unplaced.splice(idx, 1)
+        sheet.placements.push({ uid: def.uid, baseUid: def.baseUid, label: def.label, x: pos.x, y: pos.y, w: def.w, h: def.h, rotated: false })
+        moved = true
+      }
+      if (!moved) return { editError: 'No room on this sheet for the cut part.' }
+      return { ...commit(st, next), clipboard: [] }   // cut consumed
+    }
+
+    // Copy → duplicate as new instances.
     const addedIdx: Record<string, NestPartInput> = {}
     for (const def of st.clipboard) {
-      if (materialGroupKey(def.materialId, def.thickness) !== materialGroupKey(sheet.materialId, sheet.thickness)) continue
+      if (!sameGroup(def)) continue
       const nu = `${def.baseUid}#paste${++pasteSeq}`
       const np: NestPartInput = { ...def, uid: nu }
       addedIdx[nu] = np
