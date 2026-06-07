@@ -219,6 +219,7 @@ export default function Stage5Edit() {
       {/* Context menu */}
       {ctxMenu && (
         <div className="fixed z-50 w-40 bg-surface border border-edge-strong rounded-lg shadow-xl py-1" style={{ left: ctxMenu.x, top: ctxMenu.y }} onClick={e => e.stopPropagation()}>
+          <CtxItem label="Rotate 90°" onClick={() => { rotatePart(ctxMenu.uid); setCtxMenu(null) }} />
           <CtxItem label="Copy" onClick={() => { copyToClipboard(ctxMenu.uid); setCtxMenu(null) }} />
           <CtxItem label="Cut" onClick={() => { cutToClipboard(ctxMenu.uid); setCtxMenu(null) }} />
           <CtxItem label="Delete from run" onClick={() => { removeToUnplaced(ctxMenu.uid); setCtxMenu(null) }} danger />
