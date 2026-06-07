@@ -36,6 +36,7 @@ export default function Stage5Edit() {
   const resizeSheet = useOptiStore(s => s.resizeSheet)
   const undo = useOptiStore(s => s.undo)
   const redo = useOptiStore(s => s.redo)
+  const snap = useOptiStore(s => s.snapshot)
 
   const [ctxMenu, setCtxMenu] = useState<{ uid: string; x: number; y: number } | null>(null)
 
@@ -64,6 +65,21 @@ export default function Stage5Edit() {
 
   const sheet = nestResult.sheets.find(s => s.index === currentSheet) ?? nestResult.sheets[0]
   const unplaced = nestResult.unplaced
+
+  // Details of the selected part for the inspector panel.
+  const selectedInfo = (() => {
+    if (!selectedUid) return null
+    for (const s of nestResult.sheets) {
+      const idx = s.placements.findIndex(pl => pl.uid === selectedUid)
+      if (idx >= 0) {
+        const pl = s.placements[idx]
+        const part = snap?.parts.find(p => p.uid === pl.baseUid) ?? null
+        return { pl, part, sheetIndex: s.index, num: idx + 1 }
+      }
+    }
+    return null
+  })()
+  const matName = (id: string | null) => id ? (snap?.materials.find(m => m.id === id)?.name ?? '—') : '—'
 
   return (
     <div className="h-full flex overflow-hidden" onClick={() => setCtxMenu(null)}>
@@ -130,7 +146,29 @@ export default function Stage5Edit() {
       </div>
 
       {/* Sheet navigator */}
-      <div className="flex-none w-56 border-l border-edge flex flex-col overflow-hidden">
+      <div className="flex-none w-64 border-l border-edge flex flex-col overflow-hidden">
+        {/* Selected part inspector */}
+        <div className="flex-none border-b border-edge px-3 py-2.5">
+          <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-1.5">Selected part</p>
+          {!selectedInfo ? (
+            <p className="text-[11px] text-ink-subtle">Click a part on the sheet to inspect it.</p>
+          ) : (
+            <div className="space-y-1 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="inline-grid place-items-center w-5 h-5 rounded bg-accent/20 text-accent-ink font-mono font-semibold">{selectedInfo.num}</span>
+                <span className="text-ink font-medium truncate">{selectedInfo.part?.label ?? selectedInfo.pl.label}</span>
+              </div>
+              <InfoRow label="Cabinet" value={selectedInfo.part?.cabinet_label ?? '—'} />
+              <InfoRow label="Room" value={selectedInfo.part ? `${selectedInfo.part.job_number ? selectedInfo.part.job_number + ' · ' : ''}${selectedInfo.part.room_name}` : '—'} />
+              <InfoRow label="Width (DX)" value={`${Math.round(selectedInfo.pl.w)} mm`} />
+              <InfoRow label="Height (DY)" value={`${Math.round(selectedInfo.pl.h)} mm`} />
+              <InfoRow label="Thk (DZ)" value={selectedInfo.part ? `${selectedInfo.part.thickness} mm` : '—'} />
+              <InfoRow label="Material" value={matName(selectedInfo.part?.material_id ?? null)} />
+              <InfoRow label="On sheet" value={`${selectedInfo.sheetIndex + 1}${selectedInfo.pl.rotated ? ' · rotated 90°' : ''}`} />
+              {selectedInfo.part?.comment && <InfoRow label="Comment" value={selectedInfo.part.comment} />}
+            </div>
+          )}
+        </div>
         <div className="flex-none px-3 py-2 border-b border-edge flex items-center justify-between">
           <span className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider">Sheets ({nestResult.sheets.length})</span>
           <AddSheetButton onAdd={addSheet} />
@@ -240,6 +278,7 @@ function InteractiveSheet({ sheet, selectedUid, onSelect, onMove, onContext }: {
         return (
           <g key={p.uid}
             onPointerDown={e => onPointerDown(e, p.uid)}
+            onClick={e => e.stopPropagation()}
             onContextMenu={e => { e.preventDefault(); onContext(p.uid, e.clientX, e.clientY) }}
             style={{ cursor: 'move' }}>
             <rect x={x * scale} y={fy(y, p.h)} width={p.w * scale} height={p.h * scale}
@@ -271,6 +310,15 @@ function InteractiveSheet({ sheet, selectedUid, onSelect, onMove, onContext }: {
         )
       })}
     </svg>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-2">
+      <span className="text-ink-subtle shrink-0">{label}</span>
+      <span className="text-ink-muted text-right truncate" title={value}>{value}</span>
+    </div>
   )
 }
 
