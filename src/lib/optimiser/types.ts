@@ -44,6 +44,8 @@ export interface OptiMaterial {
   trim_left: number | null
   trim_right: number | null
   pad: number | null
+  cnc_tool_id: string | null   // routing tool used for this material (FK cnc_tools.id)
+  feed_rate_pct: number | null // material-level feed override (% of tool base feed)
 }
 
 export interface OptiMachine {

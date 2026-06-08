@@ -289,7 +289,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     // each slide product below.
     supabase
       .from('drawer_slide_operations')
-      .select('id, slide_id, operation_order, target_surface, machine_operation, tool_diameter_mm, depth_mm, along_off_mm, up_off_mm, qty, spacing_mm, repeat_axis, side, tool, notes, expressions')
+      .select('id, slide_id, operation_order, target_surface, machine_operation, tool_diameter_mm, depth_mm, along_off_mm, up_off_mm, qty, spacing_mm, repeat_axis, side, router_tool_id, drill_id, auto_tool, notes, expressions')
       .order('operation_order'),
     cab.construction_method_id
       ? supabase.from('construction_methods').select('rules').eq('id', cab.construction_method_id).single()
@@ -412,7 +412,9 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
       spacing_mm:        o.spacing_mm == null ? null : Number(o.spacing_mm),
       repeat_axis:       (o.repeat_axis as 'along' | 'up') ?? 'up',
       side:              (o.side as SlideDrillOp['side']) ?? 'both',
-      tool:              (o.tool as string | null) ?? null,
+      router_tool_id:    (o.router_tool_id as string | null) ?? null,
+      drill_id:          (o.drill_id as string | null) ?? null,
+      auto_tool:         (o.auto_tool as boolean) ?? false,
       notes:             (o.notes as string | null) ?? null,
       expressions:       (o.expressions as Record<string, string> | null) ?? null,
     })
@@ -540,7 +542,9 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
         offset_z_mm:       (op.offset_z_mm as number) ?? 0,
         qty:               (op.qty as number) ?? 1,
         spacing_mm:        (op.spacing_mm as number | null) ?? null,
-        tool:              (op.tool as string | null) ?? null,
+        router_tool_id:    (op.router_tool_id as string | null) ?? null,
+        drill_id:          (op.drill_id as string | null) ?? null,
+        auto_tool:         (op.auto_tool as boolean) ?? false,
         notes:             (op.notes as string | null) ?? null,
         expressions:       (op.expressions as Record<string, string> | null) ?? null,
       })
@@ -758,7 +762,7 @@ async function loadHingeInputs(
   // Load the cup, and the plate (scheduled plate, else the hinge's default plate).
   const [hingeRes, plateRes] = await Promise.all([
     supabase.from('hardware_hinges')
-      .select('id, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm')
+      .select('id, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm, model_arm_fold_fraction')
       .eq('id', hingeId).maybeSingle(),
     schedPlateId
       ? supabase.from('hardware_hinge_plates')
@@ -781,6 +785,7 @@ async function loadHingeInputs(
     model_combined_scale:        hRow.model_combined_scale != null ? Number(hRow.model_combined_scale) : 1,
     bore_centre_to_door_face_mm: hRow.bore_centre_to_door_face_mm != null ? Number(hRow.bore_centre_to_door_face_mm) : null,
     open_angle_deg:              hRow.opening_angle != null ? Number(hRow.opening_angle) : null,
+    model_arm_fold_fraction:     hRow.model_arm_fold_fraction != null ? Number(hRow.model_arm_fold_fraction) : 0.5,
   } : null
 
   const pRow = plateRes.data as Record<string, unknown> | null

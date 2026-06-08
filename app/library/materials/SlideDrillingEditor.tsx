@@ -55,7 +55,9 @@ function rowToOp(r: Record<string, unknown>): SlideDrillOp {
     spacing_mm:        r.spacing_mm == null ? null : Number(r.spacing_mm),
     repeat_axis:       (r.repeat_axis as 'along' | 'up') ?? 'up',
     side:              (r.side as SlideDrillSide) ?? 'both',
-    tool:              (r.tool as string | null) ?? null,
+    router_tool_id:    (r.router_tool_id as string | null) ?? null,
+    drill_id:          (r.drill_id as string | null) ?? null,
+    auto_tool:         (r.auto_tool as boolean) ?? false,
     notes:             (r.notes as string | null) ?? null,
     expressions:       (r.expressions as Record<string, string> | null) ?? null,
   }
@@ -104,6 +106,7 @@ export default function SlideDrillingEditor({ slideId }: Props) {
       spacing_mm: null,
       repeat_axis: 'up',
       side: 'both',
+      auto_tool: true,
     }
     const { data, error: e } = await supabase.from(TABLE).insert(payload).select().single()
     if (e) { setError(e.message); return }

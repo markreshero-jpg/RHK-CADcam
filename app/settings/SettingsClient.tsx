@@ -12,6 +12,7 @@ import PartsLibraryClient from '@/app/library/parts/PartsLibraryClient'
 import DoorSystemClient from '@/app/library/doors/DoorSystemClient'
 import HingeCountRulesEditor from '@/app/settings/HingeCountRulesEditor'
 import CncToolsClient from '@/app/settings/CncToolsClient'
+import DrillLibraryClient from '@/app/settings/DrillLibraryClient'
 import CncToolSetsClient from '@/app/settings/CncToolSetsClient'
 import CncMachinesClient from '@/app/settings/CncMachinesClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
@@ -79,7 +80,7 @@ type SettingsTab =
   | 'company' | 'dimensions' | 'materials'
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'hinge_rules'
-  | 'cnc_tool' | 'cnc_tool_set' | 'cnc_machine'
+  | 'cnc_tool' | 'drill_library' | 'cnc_tool_set' | 'cnc_machine'
   | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library' | 'doors_library'
 
 interface TabDef {
@@ -194,6 +195,17 @@ const TABS: TabDef[] = [
         <line x1="5.5" y1="9" x2="9.5" y2="9"/>
         <line x1="5" y1="3" x2="10" y2="3" strokeOpacity="0.5"/>
         <line x1="5.5" y1="5" x2="9.5" y2="5" strokeOpacity="0.5"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'drill_library', label: 'Drill Library', group: 'CNC',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="7.5" y1="1.5" x2="7.5" y2="10"/>
+        <path d="M6 10 L7.5 13.5 L9 10 Z" fill="currentColor" fillOpacity="0.15"/>
+        <line x1="6" y1="4" x2="9" y2="4" strokeOpacity="0.5"/>
+        <line x1="6" y1="6.5" x2="9" y2="6.5" strokeOpacity="0.5"/>
       </svg>
     ),
   },
@@ -478,6 +490,8 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
             <HingeCountRulesEditor embedded />
           ) : tab === 'cnc_tool' ? (
             <CncToolsClient />
+          ) : tab === 'drill_library' ? (
+            <DrillLibraryClient />
           ) : tab === 'cnc_tool_set' ? (
             <CncToolSetsClient />
           ) : tab === 'cnc_machine' ? (

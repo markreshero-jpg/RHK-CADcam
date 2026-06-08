@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import DrillBlockSetup from '@/app/settings/DrillBlockSetup'
 
 interface Machine {
   id: string; name: string; brand: string | null; model: string | null
@@ -39,7 +40,7 @@ const GROUPS: FieldGroup[] = [
   { title: 'Z Heights', fields: [
     { key: 'safe_z_clearance', label: 'Safe Z (mm)', kind: 'num' },
     { key: 'onion_skin_z', label: 'Onion skin Z (mm)', kind: 'num' },
-    { key: 'through_cut_z', label: 'Through-cut Z (mm)', kind: 'num' },
+    { key: 'through_cut_z', label: 'Thru-cut (mm)', kind: 'num' },
     { key: 'material_surface_z', label: 'Z zero ref', kind: 'select', opts: ['top_of_material', 'spoilboard'] },
     { key: 'spoilboard_thickness', label: 'Spoilboard thk (mm)', kind: 'num' },
     { key: 'drill_rapid_z', label: 'Drill rapid Z (mm)', kind: 'num' },
@@ -53,6 +54,10 @@ const GROUPS: FieldGroup[] = [
     { key: 'helical_feed_pct', label: 'Helical feed %', kind: 'num' },
     { key: 'helical_passes', label: 'Helical passes', kind: 'int' },
     { key: 'pre_drill_tool_id', label: 'Pre-drill tool', kind: 'tool' },
+    { key: 'tool_entry_offset', label: 'Tool entry offset (mm)', kind: 'num' },
+  ]},
+  { title: 'Nesting Margin', fields: [
+    { key: 'nest_pad', label: 'Nest pad (mm)', kind: 'num' },
   ]},
   { title: 'Lead-in & Lead-out', fields: [
     { key: 'lead_in_type', label: 'Lead-in', kind: 'select', opts: ['straight', 'arc_tangent', 'perpendicular', 'none'] },
@@ -298,6 +303,12 @@ export default function CncMachinesClient() {
                 })}
               </div>
             )}
+          </div>
+
+          {/* Drill block */}
+          <div className="border-t border-edge pt-4 mt-5">
+            <span className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider">Drill block</span>
+            <DrillBlockSetup machineId={machine.id} />
           </div>
         </div>
       )}

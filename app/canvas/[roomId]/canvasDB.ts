@@ -78,7 +78,9 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         offset_z_mm:       (op.offset_z_mm as number) ?? 0,
         qty:               (op.qty as number) ?? 1,
         spacing_mm:        (op.spacing_mm as number | null) ?? null,
-        tool:              (op.tool as string | null) ?? null,
+        router_tool_id:    (op.router_tool_id as string | null) ?? null,
+        drill_id:          (op.drill_id as string | null) ?? null,
+        auto_tool:         (op.auto_tool as boolean) ?? false,
         notes:             (op.notes as string | null) ?? null,
         expressions:       (op.expressions as Record<string, string> | null) ?? null,
       })
@@ -226,7 +228,7 @@ async function loadHingeHardware(rows: Record<string, unknown>[]): Promise<{
 
   const [hwRes, plRes, ruleRes] = await Promise.all([
     supabase.from('hardware_hinges')
-      .select('id, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm')
+      .select('id, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm, model_arm_fold_fraction')
       .in('id', hwIds),
     plateIds.length
       ? supabase.from('hardware_hinge_plates').select('id, plate_offset_mm, mounting_hole_pattern, compatible_surfaces, model_plate_url, model_plate_scale, model_plate_anchor_x, model_plate_anchor_y, model_plate_anchor_z').in('id', plateIds)
@@ -247,6 +249,7 @@ async function loadHingeHardware(rows: Record<string, unknown>[]): Promise<{
       model_combined_scale:        h.model_combined_scale != null ? Number(h.model_combined_scale) : 1,
       bore_centre_to_door_face_mm: h.bore_centre_to_door_face_mm != null ? Number(h.bore_centre_to_door_face_mm) : null,
       open_angle_deg:              h.opening_angle != null ? Number(h.opening_angle) : null,
+      model_arm_fold_fraction:     h.model_arm_fold_fraction != null ? Number(h.model_arm_fold_fraction) : 0.5,
     })
   }
   const plateById = new Map<string, HingePlateInput>()

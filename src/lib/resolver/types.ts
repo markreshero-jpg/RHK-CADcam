@@ -308,7 +308,11 @@ export interface SlideDrillOp {
   spacing_mm:        number | null      // gap between repeats (null = single hole)
   repeat_axis:       'along' | 'up'     // direction repeated holes step (default 'up')
   side:              SlideDrillSide
-  tool:              string | null
+  // Three-column tool pattern (drill_block_3_tool_assignment_refactor):
+  // exactly one of router_tool_id / drill_id is set, or auto_tool picks at G-code time.
+  router_tool_id:    string | null
+  drill_id:          string | null
+  auto_tool:         boolean
   notes:             string | null
   expressions:       Record<string, string> | null  // same evaluator as joints
 }
@@ -398,7 +402,10 @@ export interface JointTypeOp {
   offset_z_mm:       number
   qty:               number
   spacing_mm:        number | null
-  tool:              string | null
+  // Three-column tool pattern (drill_block_3_tool_assignment_refactor).
+  router_tool_id:    string | null
+  drill_id:          string | null
+  auto_tool:         boolean
   notes:             string | null
   expressions:       Record<string, string> | null
 }
@@ -585,6 +592,10 @@ export interface HingeHardwareInput {
   model_combined_scale:        number
   bore_centre_to_door_face_mm: number | null
   open_angle_deg:              number | null
+  // Split hinge body: how far the gable-side HingeArm mesh folds, as a fraction
+  // of the door's open angle (0 = arm stays put, 0.5 = folds half, 1 = matches
+  // the door). Ignored when the body GLB has no HingeArm mesh.
+  model_arm_fold_fraction:     number
 }
 export interface HingePlateInput {
   id:                    string
@@ -656,6 +667,7 @@ export interface ResolvedHingeInstance {
   model_scale:      number
   bore_to_door_mm:  number | null   // HingeSpec.bore_centre_to_door_face_mm
   open_angle_deg:   number | null   // HingeSpec.open_angle_deg (mechanical max)
+  arm_fold_fraction: number         // split-body HingeArm fold vs door angle
   cup_x_from_edge_mm: number        // door edge → cup bore centre (across width)
   // Separate plate GLB (overrides the combined GLB's HingePlate mesh when set).
   plate_model_url:   string | null
@@ -788,9 +800,19 @@ export interface InternalGridInput {
 // partial-height dividers, and unlimited nesting. Stored as internal_grid = { tree }.
 export type SectionSplitType = 'hsplit' | 'vsplit'
 
+// The divider that sits AFTER a child within a horizontal split (between this
+// child and the next, bottom→top). Ignored for the last child and for vsplits
+// (whose separators are always vertical dividers). 'fixed_shelf' (default) emits
+// a fixed shelf; 'adj_shelf' emits an adjustable shelf on pins; 'none' emits no
+// part and consumes no thickness — used so a drawer/rollout bay can have an open
+// compartment directly above/below it with no shelf between.
+export type SectionSeparator = 'fixed_shelf' | 'adj_shelf' | 'none'
+
 export interface SectionChild {
   size?:           number    // locked extent in mm (height for hsplit, width for vsplit); undefined = equalise to fill
   equalise_group?: string    // shared-size group id (e.g. "A"). Members across the tree share one size; computed as min per-split fair share so the group always fits.
+  separator?:      SectionSeparator   // hsplit divider after this child; default 'fixed_shelf'
+  auto_height?:    boolean    // size this bay to its content's real height (a drawer/rollout bay) rather than a fixed/flex size; the rest of the split fills around it
   section:         Section
 }
 

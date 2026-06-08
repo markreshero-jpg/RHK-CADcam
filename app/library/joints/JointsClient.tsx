@@ -7,6 +7,7 @@ import { supabase } from '@/src/lib/supabase'
 import JointPreviewPanel from './JointPreviewPanel'
 import type { JointOpForPreview } from './JointPreviewPanel'
 import { ThemeToggle } from '../../ThemeToggle'
+import OperationToolSelect, { useToolLibraries, type ToolLite, type DrillLite, type OpToolValue } from '@/src/components/cnc/OperationToolSelect'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,7 +39,9 @@ interface JointTypeOperation {
   spacing_mm:        number | null
   qty2:              number
   spacing2_mm:       number | null
-  tool:              string | null
+  router_tool_id:    string | null
+  drill_id:          string | null
+  auto_tool:         boolean
   notes:             string | null
   expressions:       Record<string, string> | null
 }
@@ -107,7 +110,9 @@ const OP_DEFAULTS: Omit<JointTypeOperation, 'id' | 'joint_type_id'> = {
   spacing_mm:        null,
   qty2:              1,
   spacing2_mm:       null,
-  tool:              null,
+  router_tool_id:    null,
+  drill_id:          null,
+  auto_tool:         true,
   notes:             null,
   expressions:       null,
 }
@@ -135,7 +140,9 @@ function toOp(r: Record<string, unknown>): JointTypeOperation {
     spacing_mm:        (r.spacing_mm as number | null) ?? null,
     qty2:              (r.qty2 as number) ?? 1,
     spacing2_mm:       (r.spacing2_mm as number | null) ?? null,
-    tool:              (r.tool as string | null) ?? null,
+    router_tool_id:    (r.router_tool_id as string | null) ?? null,
+    drill_id:          (r.drill_id as string | null) ?? null,
+    auto_tool:         (r.auto_tool as boolean) ?? false,
     notes:             (r.notes as string | null) ?? null,
     expressions:       (r.expressions as Record<string, string> | null) ?? null,
   }
@@ -163,6 +170,7 @@ export default function JointsClient({
   initialFasteners?: Record<string, unknown>[]
   embedded?:         boolean
 }) {
+  const { tools: cncTools, drills: cncDrills } = useToolLibraries()
   const [tab,       setTab]       = useState<Tab>('joints')
   const [joints,    setJoints]    = useState<JointType[]>(initialJoints.map(toJointType))
   const [fasteners, setFasteners] = useState<Fastener[]>(initialFasteners.map(toFastener))
@@ -309,6 +317,14 @@ export default function JointsClient({
     if (error) { console.warn('patchOp failed:', String(key), error.message, error); setSaveError(`Couldn't save ${String(key)}: ${error.message}`); return }
     setSaveError(null)
     setOps(prev => prev.map(o => o.id === id ? { ...o, [key]: val } : o))
+  }
+
+  // Three-column tool assignment changes as one update (router_tool_id / drill_id / auto_tool).
+  async function patchOpTool(id: string, v: OpToolValue) {
+    const { error } = await supabase.from('joint_type_operations').update(v).eq('id', id)
+    if (error) { console.warn('patchOpTool failed:', error.message, error); setSaveError(`Couldn't save tool: ${error.message}`); return }
+    setSaveError(null)
+    setOps(prev => prev.map(o => o.id === id ? { ...o, ...v } : o))
   }
 
   async function patchExpr(opId: string, field: string, expr: string | null) {
@@ -475,7 +491,8 @@ export default function JointsClient({
                       {saveError && (
                         <p className="text-xs text-red-400 border border-red-500/40 bg-red-500/10 rounded px-2 py-1">{saveError}</p>
                       )}
-                      <OpsTable ops={ops} onPatch={patchOp} onPatchExpr={patchExpr} onDelete={deleteOp} onAdd={addOp}
+                      <OpsTable ops={ops} onPatch={patchOp} onPatchExpr={patchExpr} onPatchTool={patchOpTool} onDelete={deleteOp} onAdd={addOp}
+                        tools={cncTools} drills={cncDrills}
                         selOpId={selOpId} onSelOpChange={setSelOpId} />
                     </Section>
                   )}
@@ -588,13 +605,16 @@ const EXPR_SUGGESTIONS: Record<string, { label: string; formula: string }[]> = {
 // ── Operations table ──────────────────────────────────────────────────────────
 
 function OpsTable({
-  ops, onPatch, onPatchExpr, onDelete, onAdd, selOpId, onSelOpChange,
+  ops, onPatch, onPatchExpr, onPatchTool, onDelete, onAdd, tools, drills, selOpId, onSelOpChange,
 }: {
   ops:            JointTypeOperation[]
   onPatch:        (id: string, key: keyof JointTypeOperation, val: string | number) => void
   onPatchExpr:    (opId: string, field: string, expr: string | null) => void
+  onPatchTool:    (id: string, v: OpToolValue) => void
   onDelete:       (id: string) => void
   onAdd:          () => void
+  tools:          ToolLite[]
+  drills:         DrillLite[]
   selOpId:        string | null
   onSelOpChange:  (id: string | null) => void
 }) {
@@ -696,11 +716,13 @@ function OpsTable({
                       onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
                       placeholder="—" className={numCls} />
                   </td>
-                  <td className={tdCls}>
-                    <TextCell value={op.tool ?? ''}
-                      onChange={v => onPatch(op.id, 'tool', v)}
-                      placeholder="e.g. T01"
-                      className={celCls} />
+                  <td className={tdCls} onClick={e => e.stopPropagation()}>
+                    <OperationToolSelect
+                      operationType={op.machine_operation}
+                      value={{ router_tool_id: op.router_tool_id, drill_id: op.drill_id, auto_tool: op.auto_tool }}
+                      tools={tools} drills={drills}
+                      onChange={v => onPatchTool(op.id, v)}
+                      className={`${celCls} cursor-pointer`} />
                   </td>
                   <td className={tdCls}>
                     <ExprCell value={op.tool_diameter_mm} fieldKey="tool_diameter_mm"

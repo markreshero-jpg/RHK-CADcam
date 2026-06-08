@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '../../ThemeToggle'
+import OperationToolSelect from '@/src/components/cnc/OperationToolSelect'
 
 // ── Option sets (mirror the DB CHECK constraints) ───────────────────────────────
 
@@ -74,12 +75,15 @@ interface ProfileOp {
   feed_rate: number | null; spindle_speed: number | null
   expressions: Record<string, string> | null; sort_order: number
   // CNC routing extensions (migration routing_part_and_door_op_extensions)
-  tool_id: string | null; tool_set_id: string | null
+  // Three-column tool pattern (drill_block_3_tool_assignment_refactor)
+  router_tool_id: string | null; drill_id: string | null; auto_tool: boolean
+  tool_set_id: string | null
   offset_top_mm: number | null; offset_bottom_mm: number | null
   offset_left_mm: number | null; offset_right_mm: number | null
   fill_strategy: string | null; raster_angle_deg: number | null; raster_stepover_pct: number | null
 }
 interface CncToolItem { id: string; name: string; tool_number: string | null }
+interface CncDrillItem { id: string; name: string; diameter: number | null }
 interface ToolSetItem { id: string; name: string }
 interface Style {
   id: string; name: string; door_catalogue_id: string
@@ -127,13 +131,14 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
   const [materials, setMaterials]   = useState<MatItem[]>([])
   const [edgeBands, setEdgeBands]   = useState<EdgeBand[]>([])
   const [cncTools, setCncTools]     = useState<CncToolItem[]>([])
+  const [cncDrills, setCncDrills]   = useState<CncDrillItem[]>([])
   const [toolSets, setToolSets]     = useState<ToolSetItem[]>([])
 
   // ── Load everything (small tables) ─────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [catR, schR, lnkR, smR, prR, opR, stR, matR, ebR, toolR, tsR] = await Promise.all([
+      const [catR, schR, lnkR, smR, prR, opR, stR, matR, ebR, toolR, drillR, tsR] = await Promise.all([
         supabase.from('door_catalogue').select('*').order('sort_order').order('name'),
         supabase.from('door_material_schedules').select('*').order('sort_order').order('name'),
         supabase.from('door_catalogue_schedules').select('*'),
@@ -144,6 +149,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
         supabase.from('materials').select('id,name,dz').eq('active', true).order('name'),
         supabase.from('edge_banding').select('id,name,thickness,color').eq('active', true).order('name'),
         supabase.from('cnc_tools').select('id,name,tool_number').eq('active', true).order('tool_number', { nullsFirst: false }),
+        supabase.from('cnc_drills').select('id,name,diameter').eq('is_active', true).order('diameter'),
         supabase.from('cnc_tool_sets').select('id,name').eq('is_active', true).order('sort_order').order('name'),
       ])
       if (cancelled) return
@@ -157,6 +163,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
       setMaterials((matR.data ?? []) as MatItem[])
       setEdgeBands((ebR.data ?? []) as EdgeBand[])
       setCncTools((toolR.data ?? []) as CncToolItem[])
+      setCncDrills((drillR.data ?? []) as CncDrillItem[])
       setToolSets((tsR.data ?? []) as ToolSetItem[])
       setLoading(false)
     }
@@ -498,7 +505,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
     async function addOp() {
       const nextOrder = profOps.length ? Math.max(...profOps.map(o => o.sort_order)) + 1 : 1
       const { data, error } = await supabase.from('door_profile_operations')
-        .insert({ profile_id: p.id, operation_type: 'route', face: 'front', repeat_axis: 'none', sort_order: nextOrder })
+        .insert({ profile_id: p.id, operation_type: 'route', face: 'front', repeat_axis: 'none', auto_tool: true, sort_order: nextOrder })
         .select().single()
       if (error || !data) { alert(`Add failed: ${error?.message}`); return }
       setOps(prev => [...prev, data as ProfileOp])
@@ -594,10 +601,12 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
                       {!o.tool_set_id && (
                         <div>
                           <label className={lbl}>Tool</label>
-                          <select className={sInp} value={o.tool_id ?? ''} onChange={e => patchOp(o.id, { tool_id: e.target.value || null })}>
-                            <option value="">— by ⌀ —</option>
-                            {cncTools.map(t => <option key={t.id} value={t.id}>{t.tool_number ? `${t.tool_number} · ` : ''}{t.name}</option>)}
-                          </select>
+                          <OperationToolSelect
+                            operationType={o.operation_type}
+                            value={{ router_tool_id: o.router_tool_id, drill_id: o.drill_id, auto_tool: o.auto_tool }}
+                            tools={cncTools} drills={cncDrills}
+                            onChange={v => patchOp(o.id, v)}
+                            className={sInp} />
                         </div>
                       )}
                     </div>

@@ -33,7 +33,7 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
   ]) : [empty, empty, empty, empty]
 
   const [matR, machR, profR, projR] = await Promise.all([
-    supabase.from('materials').select('id,name,dz,sheet_dx,sheet_dy,has_grain,grain_direction,trim_top,trim_bottom,trim_left,trim_right,pad').eq('active', true).order('name'),
+    supabase.from('materials').select('id,name,dz,sheet_dx,sheet_dy,has_grain,grain_direction,trim_top,trim_bottom,trim_left,trim_right,pad,cnc_tool_id,feed_rate_pct').eq('active', true).order('name'),
     supabase.from('cnc_machines').select('id,name,brand,model,table_dx,table_dy,gcode_dialect,is_default').eq('active', true).order('name'),
     supabase.from('cnc_machine_profiles').select('id,cnc_machine_id,name,is_default'),
     supabase.from('projects').select('id,name,job_number').order('created_at', { ascending: false }),

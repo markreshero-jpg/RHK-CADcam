@@ -131,7 +131,9 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
             offset_z_mm:       (op.offset_z_mm as number) ?? 0,
             qty:               (op.qty as number) ?? 1,
             spacing_mm:        (op.spacing_mm as number | null) ?? null,
-            tool:              (op.tool as string | null) ?? null,
+            router_tool_id:    (op.router_tool_id as string | null) ?? null,
+            drill_id:          (op.drill_id as string | null) ?? null,
+            auto_tool:         (op.auto_tool as boolean) ?? false,
             notes:             (op.notes as string | null) ?? null,
             expressions:       (op.expressions as Record<string, string> | null) ?? null,
           })

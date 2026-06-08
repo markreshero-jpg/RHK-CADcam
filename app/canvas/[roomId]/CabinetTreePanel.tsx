@@ -559,7 +559,9 @@ function NodeProps({ node, rp }: { node: TreeNode | null; rp: ResolvedCabinet })
           <EVR label="Offset Z" field="offset_z_mm"      unit="mm" />
           <EVR label="Qty"      field="qty" />
           {(op.spacing_mm !== null || exprs.spacing_mm) && <EVR label="Spacing" field="spacing_mm" unit="mm" />}
-          {op.tool  && <PR label="Tool"  value={op.tool} />}
+          {(op.auto_tool || op.router_tool_id || op.drill_id) && (
+            <PR label="Tool" value={op.auto_tool ? 'Auto-select' : op.drill_id ? 'Drill' : 'Router bit'} />
+          )}
           {op.notes && <PR label="Notes" value={op.notes} />}
           {Object.keys(exprs).length > 0 && (
             <>

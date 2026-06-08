@@ -178,6 +178,7 @@ export function resolveHinges(
         model_scale:     hw.model_combined_scale,
         bore_to_door_mm: hw.bore_centre_to_door_face_mm,
         open_angle_deg:  hw.open_angle_deg,
+        arm_fold_fraction: hw.model_arm_fold_fraction,
         cup_x_from_edge_mm: hw.cup_x_from_edge_mm,
         plate_model_url:   plate?.model_plate_url ?? null,
         plate_model_scale: plate?.model_plate_scale ?? 1,

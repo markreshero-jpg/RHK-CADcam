@@ -15,6 +15,7 @@ import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta } from './cabinetEditSvgHelpers'
+import OperationToolSelect, { type DrillLite } from '@/src/components/cnc/OperationToolSelect'
 
 const OP_TYPES = ['route', 'drill', 'pocket', 'saw', 'outline', 'square_off', 'profile', 'groove', 'raster'] as const
 const FILL_STRATEGIES = ['raster', 'spiral_in', 'spiral_out'] as const
@@ -27,7 +28,8 @@ interface PartOp {
   id: string
   source_table: string; source_cabinet_id: string | null; source_part_key: string | null
   operation_type: string
-  tool_id: string | null; tool_set_id: string | null
+  router_tool_id: string | null; drill_id: string | null; auto_tool: boolean
+  tool_set_id: string | null
   depth: number | null; diameter: number | null; width: number | null; length: number | null
   pos_x: number | null; pos_y: number | null
   repeat_count: number | null; repeat_spacing: number | null
@@ -56,6 +58,7 @@ export default function CabinetRoutesPanel({ cabinet, rp }: { cabinet: CabinetIn
 
   const [ops, setOps] = useState<PartOp[]>([])
   const [tools, setTools] = useState<ToolItem[]>([])
+  const [drills, setDrills] = useState<DrillLite[]>([])
   const [toolSets, setToolSets] = useState<ToolSetItem[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedKey, setSelectedKey] = useState<string | null>(parts[0]?.key ?? null)
@@ -65,14 +68,16 @@ export default function CabinetRoutesPanel({ cabinet, rp }: { cabinet: CabinetIn
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [opR, toolR, tsR] = await Promise.all([
+      const [opR, toolR, drillR, tsR] = await Promise.all([
         supabase.from('part_operations').select('*').eq('source_cabinet_id', cabinet.id),
         supabase.from('cnc_tools').select('id,name,tool_number').eq('active', true).order('tool_number', { nullsFirst: false }),
+        supabase.from('cnc_drills').select('id,name,diameter').eq('is_active', true).order('diameter'),
         supabase.from('cnc_tool_sets').select('id,name').eq('is_active', true).order('sort_order').order('name'),
       ])
       if (cancelled) return
       setOps((opR.data ?? []) as PartOp[])
       setTools((toolR.data ?? []) as ToolItem[])
+      setDrills((drillR.data ?? []) as DrillLite[])
       setToolSets((tsR.data ?? []) as ToolSetItem[])
       setLoading(false)
     }
@@ -110,10 +115,10 @@ export default function CabinetRoutesPanel({ cabinet, rp }: { cabinet: CabinetIn
     }
     let extra: Record<string, unknown>
     switch (kind) {
-      case 'single':  extra = { operation_type: 'pocket' }; break
+      case 'single':  extra = { operation_type: 'pocket', auto_tool: true }; break
       case 'toolset': extra = { operation_type: 'pocket', tool_set_id: toolSets[0]?.id ?? null }; break
-      case 'drill':   extra = { operation_type: 'drill', repeat_count: 1, repeat_spacing: 32, diameter: 5, depth: 10, pos_x: 0, pos_y: 0 }; break
-      case 'groove':  extra = { operation_type: 'groove', width: 8, depth: 6, pos_x: 0, pos_y: 0 }; break
+      case 'drill':   extra = { operation_type: 'drill', auto_tool: true, repeat_count: 1, repeat_spacing: 32, diameter: 5, depth: 10, pos_x: 0, pos_y: 0 }; break
+      case 'groove':  extra = { operation_type: 'groove', auto_tool: true, width: 8, depth: 6, pos_x: 0, pos_y: 0 }; break
     }
     const { data, error } = await supabase.from('part_operations').insert({ ...base, ...extra }).select().single()
     if (error || !data) { alert(`Add operation failed: ${error?.message}`); return }
@@ -188,7 +193,9 @@ export default function CabinetRoutesPanel({ cabinet, rp }: { cabinet: CabinetIn
                     </select>
                     <span className="flex-1 text-[11px] text-gray-400 truncate">
                       {op.tool_set_id ? `set: ${toolSets.find(s => s.id === op.tool_set_id)?.name ?? '—'}`
-                        : op.tool_id ? (tools.find(t => t.id === op.tool_id)?.name ?? 'tool')
+                        : op.auto_tool ? 'auto tool'
+                        : op.drill_id ? (drills.find(d => d.id === op.drill_id)?.name ?? 'drill')
+                        : op.router_tool_id ? (tools.find(t => t.id === op.router_tool_id)?.name ?? 'tool')
                         : op.depth != null ? `${op.depth}mm deep` : ''}
                     </span>
                     <button onClick={() => patchOp(op.id, { output_to_cnc: !op.output_to_cnc })}
@@ -214,10 +221,12 @@ export default function CabinetRoutesPanel({ cabinet, rp }: { cabinet: CabinetIn
                       {!op.tool_set_id && (
                         <div>
                           <label className={dLbl}>Tool</label>
-                          <select className={dInp} value={op.tool_id ?? ''} onChange={e => patchOp(op.id, { tool_id: e.target.value || null })}>
-                            <option value="">— by ⌀ —</option>
-                            {tools.map(t => <option key={t.id} value={t.id}>{t.tool_number ? `${t.tool_number} · ` : ''}{t.name}</option>)}
-                          </select>
+                          <OperationToolSelect
+                            operationType={op.operation_type}
+                            value={{ router_tool_id: op.router_tool_id, drill_id: op.drill_id, auto_tool: op.auto_tool }}
+                            tools={tools} drills={drills}
+                            onChange={v => patchOp(op.id, v)}
+                            className={dInp} />
                         </div>
                       )}
                       <Num label="Depth (mm)" value={op.depth} onSave={v => patchOp(op.id, { depth: v })} />

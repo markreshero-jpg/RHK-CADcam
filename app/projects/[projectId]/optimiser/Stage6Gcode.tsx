@@ -13,6 +13,7 @@ import { supabase } from '@/src/lib/supabase'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
 import { buildSheetDrills, groupDrillOps, type DrillOpRaw, type PartRef } from '@/src/lib/optimiser/drills'
+import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import Simulator from './Simulator'
 
 interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number }
@@ -55,9 +56,50 @@ export default function Stage6Gcode() {
       const { data: profileRow } = profileId
         ? await supabase.from('cnc_machine_profiles').select('*').eq('id', profileId).single()
         : { data: null }
-      const post: PostProfile = postFromProfile(profileRow as Record<string, unknown> | null)
+      const profile = profileRow as Record<string, unknown> | null
+
+      // Routing tool per material: materials.cnc_tool_id → cnc_tools (depth/feed/speed).
+      const { data: toolRows } = await supabase.from('cnc_tools')
+        .select('id,tool_number,max_depth_per_pass,base_feed_rate,base_spindle_speed,plunge_feed_pct').eq('active', true)
+      const toolById = new Map((toolRows ?? []).map(t => [t.id as string, t]))
+      const matById = new Map(snap.materials.map(m => [m.id, m]))
+      const toolNum = (tn: unknown) => { const d = String(tn ?? '').replace(/\D/g, ''); return d ? Number(d) : 1 }
+
       const ds = dateStamp()
       const batch = isBatch
+
+      // Drill block for Anderson gang drilling (per machine). Only activates the
+      // M88/M89 path once ≥1 spindle has a bit fitted; otherwise the generic
+      // single-spindle drilling is used so output is never silently dropped.
+      let drillBlock: DrillBlockConfig | undefined
+      if (machineId) {
+        const { data: blkRow } = await supabase.from('cnc_drill_blocks')
+          .select('*').eq('cnc_machine_id', machineId).eq('is_active', true).order('created_at').limit(1).maybeSingle()
+        if (blkRow) {
+          const blk = blkRow as Record<string, unknown>
+          const { data: spRows } = await supabase.from('cnc_drill_block_spindles')
+            .select('bank,position,drill_id').eq('drill_block_id', blk.id as string)
+          const spindles = (spRows ?? []) as { bank: string; position: number; drill_id: string | null }[]
+          if (spindles.some(s => s.drill_id)) {
+            const { data: drillRows } = await supabase.from('cnc_drills').select('id,diameter')
+            const diaById = new Map((drillRows ?? []).map(d => [d.id as string, (d.diameter as number | null) ?? null]))
+            const xCount = Number(blk.bank_x_count ?? 12), yCount = Number(blk.bank_y_count ?? 8)
+            const xDiameters: (number | null)[] = Array(xCount).fill(null)
+            const yDiameters: (number | null)[] = Array(yCount).fill(null)
+            for (const s of spindles) {
+              const arr = s.bank === 'x' ? xDiameters : yDiameters
+              if (s.position >= 1 && s.position <= arr.length) arr[s.position - 1] = s.drill_id ? diaById.get(s.drill_id) ?? null : null
+            }
+            drillBlock = {
+              bankXCount: xCount, bankYCount: yCount, spacingMm: Number(blk.spacing_mm ?? 32),
+              xBankMcode: String(blk.x_bank_mcode ?? 'M88'), yBankMcode: String(blk.y_bank_mcode ?? 'M89'),
+              sharedCorner: Boolean(blk.shared_corner ?? true),
+              headOffsetXMm: Number(blk.head_offset_x_mm ?? 0), headOffsetYMm: Number(blk.head_offset_y_mm ?? -128),
+              workOffsetCode: String(blk.work_offset_code ?? 'G54'), xDiameters, yDiameters,
+            }
+          }
+        }
+      }
 
       // Source drilling ops from part_operations (keyed by stable cabinet+part_key).
       const cabIds = [...new Set(snap.parts.map(p => p.cabinet_instance_id))]
@@ -74,7 +116,19 @@ export default function Stage6Gcode() {
 
       const gen: GenFile[] = nestResult.sheets.map((sheet, i) => {
         const drills = buildSheetDrills(sheet, partByUid, opsByKey, sheet.thickness)
-        const gcode = generateSheetGcode({ sheet, thickness: sheet.thickness, profile: post, drills, toolNumber: 1, drillToolNumber: 2 })
+        const mat = sheet.materialId ? matById.get(sheet.materialId) : undefined
+        const tool = mat?.cnc_tool_id ? toolById.get(mat.cnc_tool_id) : undefined
+        const post: PostProfile = postFromProfile(profile, tool
+          ? { base_feed_rate: tool.base_feed_rate as number | null, base_spindle_speed: tool.base_spindle_speed as number | null, plunge_feed_pct: tool.plunge_feed_pct as number | null }
+          : undefined)
+        // Material-level feed override (% of the tool/profile base feed).
+        if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100)
+        const gcode = generateSheetGcode({
+          sheet, thickness: sheet.thickness, profile: post, drills,
+          toolNumber: toolNum(tool?.tool_number), drillToolNumber: 2,
+          maxDepthPerPass: tool?.max_depth_per_pass != null ? Number(tool.max_depth_per_pass) : undefined,
+          drillBlock,
+        })
         return {
           sheetIndex: sheet.index,
           fileName: gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: i + 1 }),

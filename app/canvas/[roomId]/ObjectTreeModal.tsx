@@ -107,7 +107,7 @@ function makePartNode(
           `→ ${CASE_LABELS[targetKey] ?? targetKey.replace(/_/g, ' ')}`,
           op.face !== 'normal' ? op.face : null,
           op.qty > 1 ? `×${op.qty}` : null,
-          op.tool ?? null,
+          op.auto_tool ? 'auto' : null,
         ].filter(Boolean).join(' · ') || undefined,
         children: [],
         expandable: false,
@@ -593,7 +593,9 @@ function PropertiesPanel({
           <PropRow label="Offset Z" value={op.offset_z_mm}     unit="mm" />
           <PropRow label="Qty"      value={op.qty} />
           {op.spacing_mm !== null && <PropRow label="Spacing" value={op.spacing_mm} unit="mm" />}
-          {op.tool  && <PropRow label="Tool"  value={op.tool} />}
+          {(op.auto_tool || op.router_tool_id || op.drill_id) && (
+            <PropRow label="Tool" value={op.auto_tool ? 'Auto-select' : op.drill_id ? 'Drill' : 'Router bit'} />
+          )}
           {op.notes && <PropRow label="Notes" value={op.notes} />}
           {op.expressions && Object.keys(op.expressions).length > 0 && (
             <>
