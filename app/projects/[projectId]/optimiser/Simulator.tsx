@@ -18,21 +18,52 @@ import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import { parseGcode, frameAtTime, fmtClock, type ParsedProgram, type SimMove } from '@/src/lib/optimiser/gcodeParser'
 import { shapeTypeFor, type ToolShape } from '@/src/lib/cnc/toolProfile'
 import ToolProfilePreview from '@/src/components/ToolProfilePreview'
+import SimCanvas3D from './SimCanvas3D'
 
 export interface SimFile { sheetIndex: number; fileName: string; gcode: string }
+// The output datum the G-code was posted with, so the simulator can map the
+// machine coordinates BACK to the canonical internal frame it renders in
+// (bottom-left origin, Y up, top-of-material Z = 0 with cuts negative).
+export interface SimCoord { originCorner: string; xDir: string; yDir: string; surfaceZ: string; zUp: boolean }
 interface ToolRow { tool_number: number | null; name: string | null; diameter: number | null; tool_type: string | null; cutting_length: number | null; shape_profile: { type: string; params: Record<string, number> } | null }
 
 const SPEEDS = [1, 5, 20, 100] as const
 
+// Invert the post-processor datum transform so the toolpath lines up with the
+// nested panels again (machine X/Y/Z → internal sheet X/Y/Z).
+function toInternal(prog: ParsedProgram, sheet: NestedSheet, c: SimCoord): ParsedProgram {
+  const W = sheet.stock.w, H = sheet.stock.h, th = sheet.thickness
+  const oX = (c.originCorner === 'top_right' || c.originCorner === 'bottom_right') ? W : 0
+  const oY = (c.originCorner === 'top_left' || c.originCorner === 'top_right') ? H : 0
+  const sX = c.xDir === 'positive_left' ? -1 : 1
+  const sY = c.yDir === 'positive_down' ? -1 : 1
+  const zOff = c.surfaceZ === 'spoilboard' ? th : 0
+  const zSign = c.zUp === false ? -1 : 1
+  const ix = (x: number) => sX * x + oX
+  const iy = (y: number) => sY * y + oY
+  const iz = (z: number) => z * zSign - zOff
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  const moves = prog.moves.map(m => {
+    const x0 = ix(m.x0), y0 = iy(m.y0), x1 = ix(m.x1), y1 = iy(m.y1)
+    minX = Math.min(minX, x0, x1); maxX = Math.max(maxX, x0, x1)
+    minY = Math.min(minY, y0, y1); maxY = Math.max(maxY, y0, y1)
+    return { ...m, x0, y0, z0: iz(m.z0), x1, y1, z1: iz(m.z1) }
+  })
+  if (!Number.isFinite(minX)) { minX = 0; maxX = 0; minY = 0; maxY = 0 }
+  return { ...prog, moves, bounds: { minX, minY, maxX, maxY } }
+}
+
 export default function Simulator({
-  files, sheets, onClose,
+  files, sheets, onClose, coord,
 }: {
   files: SimFile[]
   sheets: NestedSheet[]
   onClose: () => void
+  coord?: SimCoord
 }) {
   const [tools, setTools] = useState<Map<number, ToolRow>>(new Map())
   const [sel, setSel] = useState(0)                 // index into files
+  const [view, setView] = useState<'2d' | '3d'>('2d')
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState<number>(20)
   const [elapsed, setElapsed] = useState(0)         // program time (ms)
@@ -52,7 +83,10 @@ export default function Simulator({
 
   const file = files[sel]
   const sheet = useMemo(() => sheets.find(s => s.index === file?.sheetIndex), [sheets, file])
-  const prog = useMemo<ParsedProgram>(() => parseGcode(file?.gcode ?? ''), [file])
+  const prog = useMemo<ParsedProgram>(() => {
+    const raw = parseGcode(file?.gcode ?? '')
+    return sheet && coord ? toInternal(raw, sheet, coord) : raw
+  }, [file, sheet, coord])
   const total = prog.totalTime
 
   // Reset playback when switching sheets (render-time state adjustment — the
@@ -129,6 +163,12 @@ export default function Simulator({
         <span className="text-sm font-semibold">Toolpath Simulator</span>
         <span className="text-xs text-ink-subtle">Replaying posted G-code · {prog.moves.length} moves</span>
         <div className="ml-auto flex items-center gap-2">
+          <div className="inline-flex rounded-lg border border-edge-strong overflow-hidden">
+            {(['2d', '3d'] as const).map(v => (
+              <button key={v} onClick={() => setView(v)}
+                className={`px-2.5 py-1 text-[11px] uppercase transition-colors ${view === v ? 'bg-accent text-white' : 'bg-surface-2 text-ink-muted hover:text-ink'}`}>{v}</button>
+            ))}
+          </div>
           <label className="text-[11px] text-ink-subtle">Sheet</label>
           <select value={sel} onChange={e => setSel(Number(e.target.value))}
             className="bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent">
@@ -140,9 +180,11 @@ export default function Simulator({
 
       {/* Body: canvas + info */}
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 grid place-items-center overflow-hidden p-4">
-          {sheet ? <Canvas sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} />
-            : <p className="text-xs text-ink-subtle">No sheet geometry for this file.</p>}
+        <div className={`flex-1 overflow-hidden p-4 ${view === '3d' ? '' : 'grid place-items-center'}`}>
+          {!sheet ? <p className="text-xs text-ink-subtle">No sheet geometry for this file.</p>
+            : view === '3d'
+              ? <SimCanvas3D sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} activeShape={activeShape} />
+              : <Canvas sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} />}
         </div>
 
         {/* Right info column */}
@@ -298,6 +340,13 @@ function Canvas({
         <line x1={X(partialCut.m.x0)} y1={Y(partialCut.m.y0)} x2={X(partialCut.px)} y2={Y(partialCut.py)}
           stroke="#f59e0b" strokeWidth={Math.max(1, kerf)} strokeOpacity={0.85} strokeLinecap="round" />
       )}
+
+      {/* All holes (the full plan) — faint ghost rings, always visible so you can
+          see every hole on every piece even before/while the sim runs. */}
+      {prog.moves.map((m, i) => m.kind === 'drill' ? (
+        <circle key={`gh${i}`} cx={X(m.x1)} cy={Y(m.y1)} r={Math.max(1.5, (toolDia(m.tool, 5) / 2) * scale)}
+          fill="none" stroke="#f59e0b" strokeWidth={0.7} strokeOpacity={0.35} />
+      ) : null)}
 
       {/* Drill hits */}
       {drills.map((m, i) => {

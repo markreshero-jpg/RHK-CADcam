@@ -12,9 +12,7 @@ import { useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
-import { buildSheetDrills, groupDrillOps, type DrillOpRaw, type PartRef } from '@/src/lib/optimiser/drills'
-import { syncSeamDrillOperationsForCabinets } from '@/src/lib/optimiser/seamDrillSync'
-import { resolveDrillTool, type DrillLibItem } from '@/src/lib/optimiser/resolveDrillTools'
+import { loadSheetDrills } from '@/src/lib/optimiser/sheetDrills'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import Simulator, { type SimCoord } from './Simulator'
 
@@ -111,51 +109,21 @@ export default function Stage6Gcode() {
         }
       }
 
-      // Source drilling ops from part_operations (keyed by stable cabinet+part_key).
-      const cabIds = [...new Set(snap.parts.map(p => p.cabinet_instance_id))]
-      // Bridge: regenerate joint-drilling rows from each cabinet's resolved
-      // seam joints so they're fresh in the read below. Best-effort — a sync
-      // failure must not block G-code generation.
-      if (cabIds.length) await syncSeamDrillOperationsForCabinets(cabIds)
-      const { data: opRows } = cabIds.length
-        ? await supabase.from('part_operations')
-            .select('source_table,source_cabinet_id,source_part_key,pos_x,pos_y,diameter,depth,repeat_count,repeat_spacing,repeat_axis,output_to_cnc,operation_type,drill_id,auto_tool')
-            .in('source_cabinet_id', cabIds).eq('operation_type', 'drill')
-        : { data: [] }
-      const drillOps = ((opRows ?? []) as (DrillOpRaw & { output_to_cnc: boolean | null })[]).filter(o => o.output_to_cnc !== false)
-
-      // Resolve auto_tool / drill_id → a concrete bit, snapping each hole to a
-      // real diameter (and clamping depth) so the gang block fires the right
-      // spindle. Mutates op.diameter/op.depth in place before nesting.
-      const { data: drillLibRows } = await supabase.from('cnc_drills')
-        .select('id,name,diameter,max_depth,rotation,drill_type').eq('is_active', true)
-      const drillLib = (drillLibRows ?? []) as DrillLibItem[]
+      // Joint-sync + read part_operations + resolve auto_tool/drill_id, projected
+      // to sheet space. Shared with Stage 5 so the holes match exactly.
       const blockDiameters = drillBlock
         ? [...drillBlock.xDiameters, ...drillBlock.yDiameters].filter((d): d is number => d != null)
         : undefined
-      const drillWarnings = new Set<string>()
-      for (const op of drillOps) {
-        const r = resolveDrillTool(
-          { diameter: op.diameter, depth: op.depth, drill_id: op.drill_id ?? null, auto_tool: op.auto_tool ?? false },
-          drillLib, { blockDiameters },
-        )
-        op.diameter = r.diameter
-        op.depth = r.depth
-        r.warnings.forEach(w => drillWarnings.add(w))
-      }
-      setDrillNotes([...drillWarnings])
-
-      const opsByKey = groupDrillOps(drillOps)
-      const partByUid = new Map<string, PartRef>(snap.parts.map(p => [p.uid, {
-        source_table: p.source_table, cabinet_instance_id: p.cabinet_instance_id, source_part_key: p.source_part_key, w: p.w, h: p.h,
-      }]))
+      const { bySheet: sheetDrills, warnings: drillWarnings } =
+        await loadSheetDrills(snap.parts, nestResult.sheets, { sync: true, blockDiameters })
+      setDrillNotes(drillWarnings)
 
       // Program number (O-word) derived from the job number, unique per sheet.
       const jobInt = parseInt((snap.jobNumber ?? '').match(/\d+/)?.[0] ?? '', 10)
       const oBase = Number.isFinite(jobInt) ? jobInt : 0
 
       const gen: GenFile[] = nestResult.sheets.map((sheet, i) => {
-        const drills = buildSheetDrills(sheet, partByUid, opsByKey, sheet.thickness)
+        const drills = sheetDrills.get(sheet.index) ?? []
         const mat = sheet.materialId ? matById.get(sheet.materialId) : undefined
         const tool = mat?.cnc_tool_id ? toolById.get(mat.cnc_tool_id) : undefined
         const post: PostProfile = postFromProfile(profile, tool

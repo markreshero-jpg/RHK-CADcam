@@ -8,12 +8,22 @@
 // live efficiency, full undo/redo. No react-konva, no localStorage.
 // ============================================================
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/optimiser/edit'
+import { buildMargins } from '@/src/lib/optimiser/types'
+import { loadResolvedDrillOps, projectSheetDrills, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
+import type { SheetDrill } from '@/src/lib/optimiser/gcode'
 
 const MAX_W = 860, MAX_H = 470
+
+// Per-material nesting margin for a sheet (routing tool Ø + nest pad + tool-entry offset).
+function gapForSheet(sh: NestedSheet): number {
+  const st = useOptiStore.getState()
+  const margins = st.snapshot ? buildMargins(st.snapshot, st.profileId) : { byMaterial: {} as Record<string, number>, fallback: 4 }
+  return (sh.materialId != null ? margins.byMaterial[sh.materialId] : undefined) ?? margins.fallback
+}
 
 export default function Stage5Edit() {
   const nestResult = useOptiStore(s => s.nestResult)
@@ -43,6 +53,27 @@ export default function Stage5Edit() {
   // Accordion: one material group open at a time. null = follow current sheet's
   // group; '' = all collapsed; otherwise the explicitly-opened group key.
   const [expandedMat, setExpandedMat] = useState<string | null>(null)
+
+  // Drilling overlay — same source as Stage 6, so what you see here is what's
+  // drilled. The expensive load (joint-sync + read + tool resolve) runs once per
+  // snapshot; the cheap per-sheet projection re-runs as parts move.
+  const [showDrills, setShowDrills] = useState(true)
+  const [drillOps, setDrillOps] = useState<ResolvedDrillOps | null>(null)
+  const [drillsLoading, setDrillsLoading] = useState(false)
+  useEffect(() => {
+    if (!snap) return
+    let cancelled = false
+    setDrillsLoading(true)
+    loadResolvedDrillOps(snap.parts, { sync: true })
+      .then(r => { if (!cancelled) setDrillOps(r) })
+      .catch(e => console.error('[Stage5] loadResolvedDrillOps', e))
+      .finally(() => { if (!cancelled) setDrillsLoading(false) })
+    return () => { cancelled = true }
+  }, [snap])
+  const drillsBySheet = useMemo(
+    () => (drillOps && nestResult ? projectSheetDrills(nestResult.sheets, drillOps) : new Map<number, SheetDrill[]>()),
+    [drillOps, nestResult],
+  )
 
   // Keyboard shortcuts (read live state via getState to avoid stale closures).
   useEffect(() => {
@@ -165,13 +196,19 @@ export default function Stage5Edit() {
         {/* Canvas */}
         <div className="flex-1 overflow-auto grid place-items-center p-6 bg-canvas">
           <div className="flex flex-col items-center gap-2">
-            <div className="text-lg font-semibold text-ink">
-              Sheet {sheet.index + 1}
-              <span className="text-ink-subtle text-sm font-normal"> of {nestResult.sheets.length} · {matLabel(sheet)} · {sheet.stock.w}×{sheet.stock.h}mm{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
+            <div className="text-lg font-semibold text-ink flex items-center gap-3">
+              <span>Sheet {sheet.index + 1}
+                <span className="text-ink-subtle text-sm font-normal"> of {nestResult.sheets.length} · {matLabel(sheet)} · {sheet.stock.w}×{sheet.stock.h}mm{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
+              </span>
+              <button onClick={() => setShowDrills(s => !s)}
+                className={`text-[11px] px-2 py-0.5 rounded border font-normal transition-colors ${showDrills ? 'border-amber-600/60 text-amber-400 bg-amber-900/15' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
+                {drillsLoading ? 'Drilling…' : `Drilling${showDrills ? ' ✓' : ''}`}
+              </button>
             </div>
             <InteractiveSheet
               sheet={sheet}
               selectedUid={selectedUid}
+              drills={showDrills ? (drillsBySheet.get(sheet.index) ?? []) : []}
               onSelect={selectPlacement}
               onMove={(uid, x, y) => movePartWithin(uid, x, y)}
               onContext={(uid, x, y) => { selectPlacement(uid); setCtxMenu({ uid, x, y }) }}
@@ -189,7 +226,7 @@ export default function Stage5Edit() {
             {unplaced.map(p => (
               <button key={p.uid}
                 onClick={() => {
-                  const gap = useOptiStore.getState().settings.kerf + useOptiStore.getState().settings.pad
+                  const gap = gapForSheet(sheet)
                   const pos = findBestPlacement(sheet, p.w, p.h, gap)
                   if (pos) placeFromUnplaced(p.uid, sheet.index, pos.x, pos.y)
                   else setEditError('No room on this sheet for this part.')
@@ -258,10 +295,9 @@ export default function Stage5Edit() {
                   const target = Number(e.target.value)
                   if (Number.isNaN(target)) return
                   const st = useOptiStore.getState()
-                  const gap = st.settings.kerf + st.settings.pad
                   const sh = st.nestResult?.sheets.find(s => s.index === target)
                   if (!sh) return
-                  const pos = findBestPlacement(sh, selectedInfo.pl.w, selectedInfo.pl.h, gap)
+                  const pos = findBestPlacement(sh, selectedInfo.pl.w, selectedInfo.pl.h, gapForSheet(sh))
                   if (pos) relocatePart(selectedInfo.pl.uid, target, pos.x, pos.y)
                   else setEditError('No room on that sheet for this part.')
                 }}
@@ -291,11 +327,10 @@ export default function Stage5Edit() {
             {nestResult.sheets.filter(s => s.index !== sheet.index).map(s => (
               <CtxItem key={s.index} label={`Sheet ${s.index + 1}`} onClick={() => {
                 const st = useOptiStore.getState()
-                const gap = st.settings.kerf + st.settings.pad
                 const part = st.partIndex[ctxMenu.uid]
                 const target = st.nestResult?.sheets.find(x => x.index === s.index)
                 if (part && target) {
-                  const p = findBestPlacement(target, part.w, part.h, gap)
+                  const p = findBestPlacement(target, part.w, part.h, gapForSheet(target))
                   if (p) relocatePart(ctxMenu.uid, s.index, p.x, p.y)
                   else setEditError('No room on that sheet for this part.')
                 }
@@ -310,9 +345,10 @@ export default function Stage5Edit() {
 }
 
 // ── Interactive sheet (pointer drag with live snap preview) ────────────────────────
-function InteractiveSheet({ sheet, selectedUid, onSelect, onMove, onContext }: {
+function InteractiveSheet({ sheet, selectedUid, drills, onSelect, onMove, onContext }: {
   sheet: NestedSheet
   selectedUid: string | null
+  drills: SheetDrill[]
   onSelect: (uid: string | null) => void
   onMove: (uid: string, x: number, y: number) => void
   onContext: (uid: string, clientX: number, clientY: number) => void
@@ -341,7 +377,7 @@ function InteractiveSheet({ sheet, selectedUid, onSelect, onMove, onContext }: {
     if (!drag) return
     const { mx, my } = toMm(e.clientX, e.clientY)
     const part = sheet.placements.find(p => p.uid === drag.uid)!
-    const gap = useOptiStore.getState().settings.kerf + useOptiStore.getState().settings.pad
+    const gap = gapForSheet(sheet)
     const pos = findNearestValid(sheet, drag.uid, part.w, part.h, mx - drag.offX, my - drag.offY, gap)
     if (pos) setDrag({ ...drag, gx: pos.x, gy: pos.y })
   }
@@ -414,6 +450,15 @@ function InteractiveSheet({ sheet, selectedUid, onSelect, onMove, onContext }: {
           </g>
         )
       })}
+      {/* Drill holes (sheet space, BL origin) — same source as Stage 6 G-code. */}
+      {drills.length > 0 && (
+        <g style={{ pointerEvents: 'none' }}>
+          {drills.map((d, i) => (
+            <circle key={i} cx={d.x * scale} cy={(H - d.y) * scale} r={Math.max(1, (d.diameter / 2) * scale)}
+              fill="#0f172a" stroke="#f59e0b" strokeWidth={1} />
+          ))}
+        </g>
+      )}
     </svg>
   )
 }
