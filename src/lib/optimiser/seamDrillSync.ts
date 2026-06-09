@@ -100,7 +100,9 @@ export interface SeamDrillSyncResult { written: number; skipped: number }
 
 // Regenerate the seam-joint drilling rows for ONE cabinet.
 export async function syncSeamDrillOperations(cabinetId: string): Promise<SeamDrillSyncResult> {
-  const rp = await resolveCabinetFromDB(cabinetId)
+  // Quiet: a project may contain a half-built cabinet; its resolver errors must
+  // not surface as a hard error while we generate drilling for the whole nest.
+  const rp = await resolveCabinetFromDB(cabinetId, { quiet: true })
   const partByKey = new Map<string, ResolvedCasePart>(rp.case_parts.map(p => [p.part_key, p]))
 
   const rows: GeneratedDrill[] = []

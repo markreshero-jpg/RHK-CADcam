@@ -94,7 +94,10 @@ export function patchEdgeOverrideCache(
   else if (partId.startsWith('zone_'))  ov.zone.set(partId.slice(5), edge)
 }
 
-export async function resolveCabinetFromDB(cabinetId: string): Promise<ResolvedCabinet> {
+export async function resolveCabinetFromDB(
+  cabinetId: string,
+  opts: { quiet?: boolean } = {},
+): Promise<ResolvedCabinet> {
   const [input, edgeOverrides, hidden] = await Promise.all([
     loadCabinetInput(cabinetId),
     loadEdgeOverrides(cabinetId),
@@ -106,7 +109,11 @@ export async function resolveCabinetFromDB(cabinetId: string): Promise<ResolvedC
 
   const resolved = resolveCabinet(input)
   if (resolved.errors.length > 0) {
-    console.error('Resolver errors for cabinet', cabinetId, resolved.errors)
+    // quiet: callers that resolve many cabinets at once (e.g. the optimiser drill
+    // sync) downgrade handled errors to a warning so a single broken cabinet does
+    // not trip the dev error overlay.
+    const log = opts.quiet ? console.warn : console.error
+    log('Resolver errors for cabinet', cabinetId, resolved.errors)
   }
   resolved.hidden_parts = hidden
 
