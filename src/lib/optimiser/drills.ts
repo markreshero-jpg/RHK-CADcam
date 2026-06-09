@@ -16,6 +16,9 @@ export interface DrillOpRaw {
   pos_x: number | null; pos_y: number | null
   diameter: number | null; depth: number | null
   repeat_count: number | null; repeat_spacing: number | null; repeat_axis: string | null
+  // Tool assignment — resolved to a concrete bit (and an effective diameter/depth)
+  // by resolveDrillTools before nesting. Optional so legacy callers still type-check.
+  drill_id?: string | null; auto_tool?: boolean | null
 }
 
 export interface PartRef {

@@ -16,6 +16,7 @@ import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta } from './cabinetEditSvgHelpers'
 import OperationToolSelect, { type DrillLite } from '@/src/components/cnc/OperationToolSelect'
+import { syncSeamDrillOperations } from '@/src/lib/optimiser/seamDrillSync'
 
 const OP_TYPES = ['route', 'drill', 'pocket', 'saw', 'outline', 'square_off', 'profile', 'groove', 'raster'] as const
 const FILL_STRATEGIES = ['raster', 'spiral_in', 'spiral_out'] as const
@@ -64,6 +65,8 @@ export default function CabinetRoutesPanel({ cabinet, rp }: { cabinet: CabinetIn
   const [selectedKey, setSelectedKey] = useState<string | null>(parts[0]?.key ?? null)
   const [expandedOp, setExpandedOp] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -133,6 +136,20 @@ export default function CabinetRoutesPanel({ cabinet, rp }: { cabinet: CabinetIn
     if (expandedOp === id) setExpandedOp(null)
   }
 
+  // Trigger A: regenerate this cabinet's seam-joint drilling rows, then reload.
+  // Only the generated rows are replaced — hand-added operations are untouched.
+  async function regenJointDrills() {
+    setSyncing(true); setSyncMsg(null)
+    try {
+      const { written, skipped } = await syncSeamDrillOperations(cabinet.id)
+      const { data } = await supabase.from('part_operations').select('*').eq('source_cabinet_id', cabinet.id)
+      setOps((data ?? []) as PartOp[])
+      setSyncMsg(`${written} hole${written === 1 ? '' : 's'} generated${skipped ? ` · ${skipped} edge holes skipped` : ''}`)
+    } catch {
+      setSyncMsg('Regenerate failed — see console')
+    } finally { setSyncing(false) }
+  }
+
   if (loading) {
     return <div className="h-full flex items-center justify-center text-xs text-gray-500">Loading operations…</div>
   }
@@ -140,6 +157,17 @@ export default function CabinetRoutesPanel({ cabinet, rp }: { cabinet: CabinetIn
   return (
     <div className="h-full overflow-y-auto p-5 text-gray-200">
       <div className="max-w-3xl space-y-4">
+        {/* Joint drilling bridge */}
+        <div className="flex items-center gap-3 pb-3 border-b border-gray-800">
+          <button onClick={regenJointDrills} disabled={syncing}
+            className="text-xs px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-gray-200 rounded transition-colors whitespace-nowrap">
+            {syncing ? 'Regenerating…' : '↻ Regenerate joint drilling'}
+          </button>
+          <span className="text-[11px] text-gray-500">
+            {syncMsg ?? 'Generates drill holes from this cabinet’s assigned joints.'}
+          </span>
+        </div>
+
         {/* Part selector */}
         <div className="flex items-end gap-3">
           <div className="flex-1">

@@ -28,6 +28,12 @@ export interface DrillOpPos {
   radius: number
   depthLen: number
   targetPartKey: string
+  // Tool assignment copied from the owning JointTypeOp so downstream
+  // consumers (e.g. the optimiser seam-drill sync) can carry it onto the
+  // generated part_operations row. Optional — views ignore them.
+  router_tool_id?: string | null
+  drill_id?:       string | null
+  auto_tool?:      boolean
 }
 
 // Expression evaluator: supports math globals + part-dimension variables.
@@ -172,6 +178,7 @@ function backBottomDrillOps(
         radius: ev.tool_diameter_mm / 2,
         depthLen: ev.depth_mm,
         targetPartKey: isBack ? 'back' : 'bottom',
+        router_tool_id: op.router_tool_id, drill_id: op.drill_id, auto_tool: op.auto_tool,
       })
     }
   }
@@ -270,7 +277,10 @@ export function seamDrillOps(
       const depthLen    = isFaceDrill ? boxB.w : ev.depth_mm
 
       const targetPartKey = op.target_part === 'part_a' ? partAKey : partBKey
-      result.push({ ...pos, axis, radius: ev.tool_diameter_mm / 2, depthLen, targetPartKey })
+      result.push({
+        ...pos, axis, radius: ev.tool_diameter_mm / 2, depthLen, targetPartKey,
+        router_tool_id: op.router_tool_id, drill_id: op.drill_id, auto_tool: op.auto_tool,
+      })
     }
   }
 

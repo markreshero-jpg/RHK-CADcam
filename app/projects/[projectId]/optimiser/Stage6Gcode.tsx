@@ -13,8 +13,10 @@ import { supabase } from '@/src/lib/supabase'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
 import { buildSheetDrills, groupDrillOps, type DrillOpRaw, type PartRef } from '@/src/lib/optimiser/drills'
+import { syncSeamDrillOperationsForCabinets } from '@/src/lib/optimiser/seamDrillSync'
+import { resolveDrillTool, type DrillLibItem } from '@/src/lib/optimiser/resolveDrillTools'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
-import Simulator from './Simulator'
+import Simulator, { type SimCoord } from './Simulator'
 
 interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number }
 
@@ -45,22 +47,30 @@ export default function Stage6Gcode() {
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [drillNotes, setDrillNotes] = useState<string[]>([])
   const [simulating, setSimulating] = useState(false)
+  const [coord, setCoord] = useState<SimCoord | null>(null)
 
   const matCode = (id: string | null) => id ? (snap.materials.find(m => m.id === id)?.name ?? 'MAT') : 'MAT'
 
   async function generate() {
     if (!nestResult || nestResult.sheets.length === 0) { setError('Nothing nested — run Stage 4 first.'); return }
-    setBusy(true); setError(null); setSaved(null)
+    setBusy(true); setError(null); setSaved(null); setDrillNotes([])
     try {
       const { data: profileRow } = profileId
         ? await supabase.from('cnc_machine_profiles').select('*').eq('id', profileId).single()
         : { data: null }
       const profile = profileRow as Record<string, unknown> | null
+      // Capture the output datum so the simulator can invert it back to sheet space.
+      const post0 = postFromProfile(profile)
+      setCoord({
+        originCorner: post0.origin_corner, xDir: post0.x_axis_direction, yDir: post0.y_axis_direction,
+        surfaceZ: post0.material_surface_z, zUp: post0.z_axis_up,
+      })
 
       // Routing tool per material: materials.cnc_tool_id → cnc_tools (depth/feed/speed).
       const { data: toolRows } = await supabase.from('cnc_tools')
-        .select('id,tool_number,max_depth_per_pass,base_feed_rate,base_spindle_speed,plunge_feed_pct').eq('active', true)
+        .select('id,tool_number,diameter,max_depth_per_pass,base_feed_rate,base_spindle_speed,plunge_feed_pct').eq('active', true)
       const toolById = new Map((toolRows ?? []).map(t => [t.id as string, t]))
       const matById = new Map(snap.materials.map(m => [m.id, m]))
       const toolNum = (tn: unknown) => { const d = String(tn ?? '').replace(/\D/g, ''); return d ? Number(d) : 1 }
@@ -103,16 +113,46 @@ export default function Stage6Gcode() {
 
       // Source drilling ops from part_operations (keyed by stable cabinet+part_key).
       const cabIds = [...new Set(snap.parts.map(p => p.cabinet_instance_id))]
+      // Bridge: regenerate joint-drilling rows from each cabinet's resolved
+      // seam joints so they're fresh in the read below. Best-effort — a sync
+      // failure must not block G-code generation.
+      if (cabIds.length) await syncSeamDrillOperationsForCabinets(cabIds)
       const { data: opRows } = cabIds.length
         ? await supabase.from('part_operations')
-            .select('source_table,source_cabinet_id,source_part_key,pos_x,pos_y,diameter,depth,repeat_count,repeat_spacing,repeat_axis,output_to_cnc,operation_type')
+            .select('source_table,source_cabinet_id,source_part_key,pos_x,pos_y,diameter,depth,repeat_count,repeat_spacing,repeat_axis,output_to_cnc,operation_type,drill_id,auto_tool')
             .in('source_cabinet_id', cabIds).eq('operation_type', 'drill')
         : { data: [] }
       const drillOps = ((opRows ?? []) as (DrillOpRaw & { output_to_cnc: boolean | null })[]).filter(o => o.output_to_cnc !== false)
+
+      // Resolve auto_tool / drill_id → a concrete bit, snapping each hole to a
+      // real diameter (and clamping depth) so the gang block fires the right
+      // spindle. Mutates op.diameter/op.depth in place before nesting.
+      const { data: drillLibRows } = await supabase.from('cnc_drills')
+        .select('id,name,diameter,max_depth,rotation,drill_type').eq('is_active', true)
+      const drillLib = (drillLibRows ?? []) as DrillLibItem[]
+      const blockDiameters = drillBlock
+        ? [...drillBlock.xDiameters, ...drillBlock.yDiameters].filter((d): d is number => d != null)
+        : undefined
+      const drillWarnings = new Set<string>()
+      for (const op of drillOps) {
+        const r = resolveDrillTool(
+          { diameter: op.diameter, depth: op.depth, drill_id: op.drill_id ?? null, auto_tool: op.auto_tool ?? false },
+          drillLib, { blockDiameters },
+        )
+        op.diameter = r.diameter
+        op.depth = r.depth
+        r.warnings.forEach(w => drillWarnings.add(w))
+      }
+      setDrillNotes([...drillWarnings])
+
       const opsByKey = groupDrillOps(drillOps)
       const partByUid = new Map<string, PartRef>(snap.parts.map(p => [p.uid, {
         source_table: p.source_table, cabinet_instance_id: p.cabinet_instance_id, source_part_key: p.source_part_key, w: p.w, h: p.h,
       }]))
+
+      // Program number (O-word) derived from the job number, unique per sheet.
+      const jobInt = parseInt((snap.jobNumber ?? '').match(/\d+/)?.[0] ?? '', 10)
+      const oBase = Number.isFinite(jobInt) ? jobInt : 0
 
       const gen: GenFile[] = nestResult.sheets.map((sheet, i) => {
         const drills = buildSheetDrills(sheet, partByUid, opsByKey, sheet.thickness)
@@ -126,7 +166,10 @@ export default function Stage6Gcode() {
         const gcode = generateSheetGcode({
           sheet, thickness: sheet.thickness, profile: post, drills,
           toolNumber: toolNum(tool?.tool_number), drillToolNumber: 2,
+          toolDiameter: tool?.diameter != null ? Number(tool.diameter) : undefined,
           maxDepthPerPass: tool?.max_depth_per_pass != null ? Number(tool.max_depth_per_pass) : undefined,
+          jobNumber: snap.jobNumber, materialName: mat?.name ?? null,
+          programNumber: `O${String(oBase + i).padStart(4, '0')}`,
           drillBlock,
         })
         return {
@@ -206,6 +249,15 @@ export default function Stage6Gcode() {
           {error && <span className="text-xs text-red-400">{error}</span>}
         </div>
 
+        {drillNotes.length > 0 && (
+          <div className="mx-8 mt-2 rounded-lg border border-amber-700/50 bg-amber-900/15 px-3 py-2">
+            <p className="text-[11px] font-medium text-amber-400 mb-0.5">Drill tool resolution ({drillNotes.length})</p>
+            <ul className="text-[11px] text-amber-300/90 list-disc list-inside space-y-0.5">
+              {drillNotes.map((n, i) => <li key={i}>{n}</li>)}
+            </ul>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto px-8 py-4">
           {files.length === 0 ? (
             <p className="text-xs text-ink-subtle text-center py-12">Generate per-sheet G-code. Drilling is sequenced before routing; routing is inside-out.</p>
@@ -238,6 +290,7 @@ export default function Stage6Gcode() {
         <Simulator
           files={files.map(f => ({ sheetIndex: f.sheetIndex, fileName: f.fileName, gcode: f.gcode }))}
           sheets={nestResult.sheets}
+          coord={coord ?? undefined}
           onClose={() => setSimulating(false)} />
       )}
     </div>
