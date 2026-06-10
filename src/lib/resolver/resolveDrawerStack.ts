@@ -97,7 +97,9 @@ export function resolveDrawerStacks(
     const drawerType: DrawerType = config?.type ?? cab.default_drawer_type ?? 'system'
 
     const openingHeight = zone.DX
-    const slide = findSlide(availableDepth, openingHeight, slideProducts, slideSchedule, config?.slide_product_id)
+    // Per-zone slide_product_id wins; else a cabinet-level preserved slide override; else schedule.
+    const slideOverride = config?.slide_product_id ?? (cab.hardware_overrides?.slide_id as string | undefined)
+    const slide = findSlide(availableDepth, openingHeight, slideProducts, slideSchedule, slideOverride)
 
     const sideDeduction  = slide?.side_deduction   ?? cab.slide_side_deduction
     const runnerThick    = slide?.runner_thickness  ?? 0

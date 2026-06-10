@@ -526,6 +526,12 @@ export interface CabinetInput {
   slide_products?:  SlideProduct[]        // all active slide products available
   slide_schedule?:  SlideScheduleEntry[]  // depth-range → slide_id mapping
 
+  // Cabinet-level hardware overrides (highest-priority cascade layer). Currently
+  // honoured: `slide_id` (forces the drawer slide product, bypassing the schedule).
+  // Hinge overrides (`hinge_hardware_id`, `hinge_plate_id`) are applied during
+  // hinge input loading, not read here.
+  hardware_overrides?: Record<string, unknown>
+
   // Construction rules (already merged from system → job → room → cabinet)
   rules:           ConstructionRules
 

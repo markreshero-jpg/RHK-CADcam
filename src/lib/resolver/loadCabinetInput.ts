@@ -370,6 +370,19 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     }
   }
 
+  // Cabinet-level toekick_overrides JSONB: { part_role: material_id } (e.g. face / interior).
+  // Mirrors material_overrides but targets the toekick material map (tkMap).
+  const tkOverrides = (cab.toekick_overrides ?? {}) as Record<string, string>
+  if (Object.keys(tkOverrides).length > 0) {
+    const overrideIds = Object.values(tkOverrides)
+    const { data: overrideMats } = await supabase.from('materials').select('*').in('id', overrideIds)
+    const byId = new Map((overrideMats ?? []).map(m => [m.id, dbRowToMaterial(m as Record<string, unknown>)]))
+    for (const [part_role, matId] of Object.entries(tkOverrides)) {
+      const mat = byId.get(matId)
+      if (mat) tkMap.set(part_role, mat)
+    }
+  }
+
   // ── 7. Build construction rules ──────────────────────────────────────────────
   // Cascade: system defaults → schedule row → cabinet method → project overrides → room overrides → cabinet overrides
   const scheduleRules = (conStrSchedRowRes.data?.rules ?? {}) as Partial<ConstructionRules>
@@ -625,7 +638,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   // resolver keeps working before the v0.6 migration is applied — a missing
   // table just yields no hinge hardware and resolveCabinet skips hinges.
   const { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges } =
-    await loadHingeInputs(cabinetId, cab.room_id as string, projectId)
+    await loadHingeInputs(cabinetId, cab.room_id as string, projectId, (cab.hardware_overrides ?? {}) as Record<string, unknown>)
 
   return {
     id:              cab.id,
@@ -669,6 +682,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     inner_drawer_front_edgeband_id:   innerDrawerFrontEbId,
     slide_products:            slideProducts,
     slide_schedule:            slideSchedule,
+    hardware_overrides:        (cab.hardware_overrides ?? {}) as Record<string, unknown>,
     rules,
     carcase_joints:   cabJoints,
     joint_defaults:   jointDefaults,
@@ -702,6 +716,7 @@ async function loadHingeInputs(
   cabinetId: string,
   roomId: string,
   projectId: string | undefined,
+  hardwareOverrides: Record<string, unknown> = {},
 ): Promise<{
   hinge_hardware:   HingeHardwareInput | null
   hinge_plate:      HingePlateInput | null
@@ -756,6 +771,12 @@ async function loadHingeInputs(
     hingeId = (data as { hinge_id: string | null } | null)?.hinge_id ?? null
     schedPlateId = (data as { hinge_plate_id: string | null } | null)?.hinge_plate_id ?? null
   }
+
+  // Cabinet-level hardware overrides win over the schedule (preserved library hinge).
+  const ovHingeId = hardwareOverrides.hinge_hardware_id as string | undefined
+  const ovPlateId = hardwareOverrides.hinge_plate_id as string | undefined
+  if (ovHingeId) hingeId = ovHingeId
+  if (ovPlateId) schedPlateId = ovPlateId
 
   if (!hingeId) return { hinge_hardware: null, hinge_plate: null, hinge_count_rules, existing_hinges }
 
