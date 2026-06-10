@@ -75,6 +75,12 @@ export default function Stage5Edit() {
     [drillOps, nestResult],
   )
 
+  // Canvas zoom (multiplier on the fit-to-view scale). Container is overflow-auto,
+  // so panning is just scrolling once zoomed past the viewport.
+  const ZMIN = 0.25, ZMAX = 6
+  const [zoom, setZoom] = useState(1)
+  const zoomBy = (f: number) => setZoom(z => Math.min(ZMAX, Math.max(ZMIN, z * f)))
+
   // Keyboard shortcuts (read live state via getState to avoid stale closures).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -204,11 +210,24 @@ export default function Stage5Edit() {
                 className={`text-[11px] px-2 py-0.5 rounded border font-normal transition-colors ${showDrills ? 'border-amber-600/60 text-amber-400 bg-amber-900/15' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
                 {drillsLoading ? 'Drilling…' : `Drilling${showDrills ? ' ✓' : ''} (${drillsBySheet.get(sheet.index)?.length ?? 0})`}
               </button>
+              {/* Zoom controls */}
+              <div className="flex items-center gap-px text-sm font-normal">
+                <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out (Ctrl+scroll)"
+                  className="w-6 h-6 grid place-items-center rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">−</button>
+                <button onClick={() => setZoom(1)} title="Reset zoom to fit"
+                  className="px-2 h-6 grid place-items-center rounded border border-edge-strong text-[11px] tabular-nums text-ink-muted hover:bg-surface-2 transition-colors min-w-[3rem]">
+                  {Math.round(zoom * 100)}%
+                </button>
+                <button onClick={() => zoomBy(1.25)} title="Zoom in (Ctrl+scroll)"
+                  className="w-6 h-6 grid place-items-center rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">+</button>
+              </div>
             </div>
             <InteractiveSheet
               sheet={sheet}
               selectedUid={selectedUid}
               drills={showDrills ? (drillsBySheet.get(sheet.index) ?? []) : []}
+              zoom={zoom}
+              onZoom={zoomBy}
               onSelect={selectPlacement}
               onMove={(uid, x, y) => movePartWithin(uid, x, y)}
               onContext={(uid, x, y) => { selectPlacement(uid); setCtxMenu({ uid, x, y }) }}
@@ -345,19 +364,35 @@ export default function Stage5Edit() {
 }
 
 // ── Interactive sheet (pointer drag with live snap preview) ────────────────────────
-function InteractiveSheet({ sheet, selectedUid, drills, onSelect, onMove, onContext }: {
+function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, onSelect, onMove, onContext }: {
   sheet: NestedSheet
   selectedUid: string | null
   drills: SheetDrill[]
+  zoom: number
+  onZoom: (factor: number) => void
   onSelect: (uid: string | null) => void
   onMove: (uid: string, x: number, y: number) => void
   onContext: (uid: string, clientX: number, clientY: number) => void
 }) {
   const { w: W, h: H } = sheet.stock
-  const scale = Math.min(MAX_W / W, MAX_H / H)
+  const scale = Math.min(MAX_W / W, MAX_H / H) * zoom
   const pxW = W * scale, pxH = H * scale
   const svgRef = useRef<SVGSVGElement>(null)
   const [drag, setDrag] = useState<{ uid: string; offX: number; offY: number; gx: number; gy: number } | null>(null)
+
+  // Ctrl/⌘+wheel zoom. Native non-passive listener so preventDefault actually
+  // suppresses the page scroll (React's synthetic onWheel can be passive).
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      e.preventDefault()
+      onZoom(e.deltaY < 0 ? 1.1 : 1 / 1.1)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [onZoom])
 
   // client → sheet mm (bottom-left origin)
   function toMm(clientX: number, clientY: number) {
