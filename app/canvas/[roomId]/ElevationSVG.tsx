@@ -1,8 +1,8 @@
 ﻿'use client'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
-import { Room, Wall, CabinetInstance, DEFAULT_DIMS } from '@/src/lib/types'
+import { Room, Wall, CabinetInstance } from '@/src/lib/types'
 import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, CAB_FILL, CAB_FILL_SEL, SNAP_PX, type Pt } from '@/src/lib/geometry'
-import { Selected, CabResize, viewReducer, DisplayConfig, Mode, modeAssemblyClass } from './canvasTypes'
+import { Selected, CabResize, viewReducer, DisplayConfig, Mode, ArmedDefinition, placeInfoFor } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
 import { roundMm } from '@/src/lib/format'
 import { getUserPrefs } from '@/src/lib/userPrefs'
@@ -128,6 +128,7 @@ interface ElevationSVGProps {
   multiSelect: string[]
   canEqualize: boolean
   mode: Mode
+  armedDef: ArmedDefinition | null
   clipboard: CabinetInstance | null
   clipboardGroup: CabinetInstance[]
   onSelectCabinet: (id: string) => void
@@ -164,7 +165,7 @@ interface ElevationSVGProps {
 
 export default function ElevationSVG({
   walls, cabinets, room, elevWallId, selected, displayConfig,
-  multiSelect, canEqualize, mode, clipboard, clipboardGroup,
+  multiSelect, canEqualize, mode, armedDef, clipboard, clipboardGroup,
   onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu,
   onBlankWallContextMenu, onShiftSelectCabinet, onMarqueeSelect, onEqualizeWidths,
   cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
@@ -354,7 +355,7 @@ export default function ElevationSVG({
     if (elevCabFollowing || elevResizeFollowing) return
     // Measure tool — the click itself is handled in onPointerUp (plan-canvas pattern).
     if (e.button === 0 && wall && mode === 'measure') { e.preventDefault(); return }
-    if (e.button === 0 && wall && (modeAssemblyClass(mode) || mode === 'paste')) {
+    if (e.button === 0 && wall && (placeInfoFor(mode, armedDef) || mode === 'paste')) {
       svgRef.current?.setPointerCapture(e.pointerId)
       return
     }
@@ -451,13 +452,13 @@ export default function ElevationSVG({
     }
 
     // Placement ghost — track cursor when in a place mode
-    const clsInfo = modeAssemblyClass(mode)
+    const clsInfo = placeInfoFor(mode, armedDef)
     if ((clsInfo || mode === 'paste') && wall) {
       const svgR = svgRef.current!.getBoundingClientRect()
       const cursorT = (e.clientX - svgR.left - view.panX) / view.zoom
       const cursorSY = (e.clientY - svgR.top  - view.panY) / view.zoom
       const dims = clsInfo
-        ? (DEFAULT_DIMS[clsInfo.cls] ?? DEFAULT_DIMS.base)
+        ? { dx: clsInfo.dx, dy: clsInfo.dy, dz: clsInfo.dz }
         : clipboard ? { dx: clipboard.dx, dy: clipboard.dy, dz: clipboard.dz } : null
       if (dims) {
         const cls = clsInfo?.cls ?? clipboard!.assembly_class
@@ -508,11 +509,11 @@ export default function ElevationSVG({
       return
     }
 
-    if ((modeAssemblyClass(mode) || mode === 'paste') && wall && placeGhost) {
+    if ((placeInfoFor(mode, armedDef) || mode === 'paste') && wall && placeGhost) {
       const wd = wallDir(wall)
       const pos_x = wall.pos_x + placeGhost.t * wd.x
       const pos_y = wall.pos_y + placeGhost.t * wd.y
-      const fitDx = modeAssemblyClass(mode) ? placeGhost.dx : undefined
+      const fitDx = placeInfoFor(mode, armedDef) ? placeGhost.dx : undefined
       setPlaceGhost(null)
       await onPlaceAtWall(wall, pos_x, pos_y, fitDx)
       return
@@ -775,7 +776,7 @@ export default function ElevationSVG({
       <svg
         ref={svgRef}
         className="flex-1 bg-gray-950 select-none"
-        style={{ cursor: mode === 'measure' ? 'crosshair' : (modeAssemblyClass(mode) || mode === 'paste') ? 'crosshair' : elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
+        style={{ cursor: mode === 'measure' ? 'crosshair' : (placeInfoFor(mode, armedDef) || mode === 'paste') ? 'crosshair' : elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

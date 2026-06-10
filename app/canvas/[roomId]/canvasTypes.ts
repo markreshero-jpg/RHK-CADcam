@@ -1,4 +1,4 @@
-import { AssemblyClass } from '@/src/lib/types'
+import { AssemblyClass, DEFAULT_DIMS } from '@/src/lib/types'
 import { MIN_ZOOM, MAX_ZOOM } from '@/src/lib/geometry'
 import type { Wall, CabinetInstance, BenchtopArcSegment } from '@/src/lib/types'
 import type { Pt } from '@/src/lib/geometry'
@@ -96,6 +96,26 @@ export function modeAssemblyClass(m: Mode): { cls: AssemblyClass; ep: boolean } 
   if (m === 'place_wall_corner') return { cls: 'wall_corner', ep: false }
   if (m === 'place_tall_corner') return { cls: 'tall_corner', ep: false }
   return null
+}
+
+// Unified placement descriptor for the current mode: the armed library definition
+// when mode === 'place_definition', otherwise the legacy class-based modes. dx/dy/dz
+// give the ghost footprint; definitionId routes placement to the library path.
+// Used by CanvasClient, CanvasSVG (plan ghost), and ElevationSVG so all three agree
+// on "are we placing, and with what size/class".
+export function placeInfoFor(
+  m: Mode,
+  armedDef: ArmedDefinition | null,
+): { cls: AssemblyClass; ep: boolean; dx: number; dy: number; dz: number; definitionId?: string } | null {
+  if (m === 'place_definition') {
+    return armedDef
+      ? { cls: armedDef.assembly_class, ep: false, dx: armedDef.dx, dy: armedDef.dy, dz: armedDef.dz, definitionId: armedDef.id }
+      : null
+  }
+  const ci = modeAssemblyClass(m)
+  if (!ci) return null
+  const d = DEFAULT_DIMS[ci.cls] ?? DEFAULT_DIMS.base
+  return { cls: ci.cls, ep: ci.ep, dx: d.dx, dy: d.dy, dz: d.dz }
 }
 
 // Re-export types used across canvas files so imports stay short

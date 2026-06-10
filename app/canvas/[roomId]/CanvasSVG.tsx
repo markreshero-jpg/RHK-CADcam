@@ -1,6 +1,6 @@
 'use client'
 import React, { Fragment, useState, useMemo } from 'react'
-import { Wall, CabinetInstance, DEFAULT_DIMS, BenchtopInstance, BenchtopArcSegment } from '@/src/lib/types'
+import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment } from '@/src/lib/types'
 import {
   Pt, MIN_WALL_LEN, SNAP_PX, CAB_FILL, CAB_FILL_SEL,
   toRad, toDeg, dist,
@@ -9,7 +9,7 @@ import {
   gridDots,
 } from '@/src/lib/geometry'
 import WallDimensionChain from './WallDimensionChain'
-import { Mode, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, modeAssemblyClass, DisplayConfig, SectionCut } from './canvasTypes'
+import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, DisplayConfig, SectionCut } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
 import { roundMm } from '@/src/lib/format'
 import { SNAP_KIND_META, type SnapResult } from '@/src/lib/canvasSnap'
@@ -47,6 +47,7 @@ interface CanvasSVGProps {
   svgSize: { w: number; h: number }
   selected: Selected
   mode: Mode
+  armedDef: ArmedDefinition | null
   drawStart: Pt | null
   drawCursor: Pt | null
   drawThickness: number
@@ -117,7 +118,7 @@ interface CanvasSVGProps {
 }
 
 export default function CanvasSVG({
-  svgRef, walls, cabinets, view, svgSize, selected, mode, displayConfig,
+  svgRef, walls, cabinets, view, svgSize, selected, mode, armedDef, displayConfig,
   drawStart, drawCursor, drawThickness, placeGhost, clipboard, clipboardGroup, cabDrag, cabMoveDrag, cabResize, multiSelect, marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
   setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
@@ -710,7 +711,7 @@ export default function CanvasSVG({
           const e = wallEnd(w)
           const midX = w.pos_x + w.length * 0.5 * wd.x
           const midY = w.pos_y + w.length * 0.5 * wd.y
-          const clickable = mode !== 'draw_wall' && mode !== 'draw_island' && mode !== 'paste' && !modeAssemblyClass(mode)
+          const clickable = mode !== 'draw_wall' && mode !== 'draw_island' && mode !== 'paste' && !placeInfoFor(mode, armedDef)
           const onCtx = (ev: React.MouseEvent) => { ev.preventDefault(); ev.stopPropagation(); setSelected({ type: 'wall', id: w.id }); setContextMenu({ x: ev.clientX, y: ev.clientY, wallId: w.id }) }
           const onClick = (ev: React.MouseEvent) => { if (clickable) { ev.stopPropagation(); setSelected({ type: 'wall', id: w.id }) } }
 
@@ -1218,9 +1219,9 @@ export default function CanvasSVG({
             dims = { dx: clipboard.dx, dy: clipboard.dy, dz: clipboard.dz }
             cls = clipboard.assembly_class
           } else {
-            const m = modeAssemblyClass(mode)
+            const m = placeInfoFor(mode, armedDef)
             if (!m) return null
-            dims = DEFAULT_DIMS[m.cls] ?? DEFAULT_DIMS.base
+            dims = { dx: m.dx, dy: m.dy, dz: m.dz }
             cls = m.cls
           }
           const wall = placeGhost.wall

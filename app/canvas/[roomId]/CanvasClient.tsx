@@ -22,7 +22,7 @@ import { useMultiSelectOps } from './useMultiSelectOps'
 import { buildMenus } from './canvasMenuConfig'
 import {
   Mode, ArmedDefinition, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, SectionCut,
-  viewReducer, modeAssemblyClass, DisplayConfig, PresetId,
+  viewReducer, placeInfoFor, DisplayConfig, PresetId,
   DEFAULT_DISPLAY_CONFIG, applyPreset, toggleAnnotation,
 } from './canvasTypes'
 import { useBenchtopInteraction } from './useBenchtopInteraction'
@@ -492,14 +492,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Unified placement descriptor for the current mode: the armed definition when
   // mode === 'place_definition', otherwise the legacy class-based modes. dx/dy are the
   // ghost footprint; definitionId routes the placement to the library path.
-  function currentPlaceInfo(): { cls: AssemblyClass; ep: boolean; dx: number; dy: number; definitionId?: string } | null {
-    if (mode === 'place_definition') {
-      return armedDef ? { cls: armedDef.assembly_class, ep: false, dx: armedDef.dx, dy: armedDef.dy, definitionId: armedDef.id } : null
-    }
-    const ci = modeAssemblyClass(mode)
-    if (!ci) return null
-    const dims = DEFAULT_DIMS[ci.cls] ?? DEFAULT_DIMS.base
-    return { cls: ci.cls, ep: ci.ep, dx: dims.dx, dy: dims.dy }
+  function currentPlaceInfo() {
+    return placeInfoFor(mode, armedDef)
   }
 
   async function pasteCabinet(wall: Wall, pos_x: number, pos_y: number, sideFlip = false) {
@@ -1403,6 +1397,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               svgSize={svgSize}
               selected={selected}
               mode={mode}
+              armedDef={armedDef}
               displayConfig={displayConfig}
               drawStart={drawStart}
               drawCursor={drawCursor}
@@ -1501,6 +1496,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             selected={selected}
             displayConfig={displayConfig}
             multiSelect={multiSelect}
+            armedDef={armedDef}
             canEqualize={canEqualize}
             mode={mode}
             clipboard={clipboard}
