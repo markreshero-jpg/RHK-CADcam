@@ -18,7 +18,20 @@ export type Mode =
   | 'draw_benchtop_cutout_rect' | 'draw_benchtop_cutout_circle'
   | 'place_base' | 'place_wall_unit' | 'place_tall' | 'place_end_panel'
   | 'place_base_corner' | 'place_wall_corner' | 'place_tall_corner'
+  | 'place_definition'
   | 'paste'
+
+// A library definition armed for placement. Carries the geometry the ghost needs
+// (assembly_class for collision/blocking, default dims for the footprint) plus the
+// definition id, which placeCabinetFromDefinition copies into the new instance.
+export type ArmedDefinition = {
+  id:             string
+  assembly_class: AssemblyClass
+  dx:             number
+  dy:             number
+  dz:             number
+  name:           string
+}
 
 export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: string } | { type: 'benchtop'; id: string } | null
 

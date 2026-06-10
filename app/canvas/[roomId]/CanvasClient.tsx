@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useReducer, useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import { Project, Room, Wall, CabinetInstance, AssemblyClass, DEFAULT_DIMS, BenchtopInstance } from '@/src/lib/types'
+import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance } from '@/src/lib/types'
 import {
   Pt, MIN_ZOOM, MAX_ZOOM, MIN_WALL_LEN, SNAP_PX, WALL_SNAP_PX,
   toDeg, dist,
@@ -12,7 +12,7 @@ import {
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCenterPt,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbPlaceCabinetFromDefinition } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
@@ -21,7 +21,7 @@ import { useCabinetOps } from './useCabinetOps'
 import { useMultiSelectOps } from './useMultiSelectOps'
 import { buildMenus } from './canvasMenuConfig'
 import {
-  Mode, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, SectionCut,
+  Mode, ArmedDefinition, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, SectionCut,
   viewReducer, modeAssemblyClass, DisplayConfig, PresetId,
   DEFAULT_DISPLAY_CONFIG, applyPreset, toggleAnnotation,
 } from './canvasTypes'
@@ -66,6 +66,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [walls, setWalls] = useState<Wall[]>(initWalls)
   const [cabinets, setCabinets] = useState<CabinetInstance[]>(initialCabinets)
   const [mode, setMode] = useState<Mode>('select')
+  // Library definition armed for placement (mode === 'place_definition').
+  const [armedDef, setArmedDef] = useState<ArmedDefinition | null>(null)
   const [selected, setSelected] = useState<Selected>(null)
   const [view, dispatchView] = useReducer(viewReducer, { panX: 200, panY: 200, zoom: 0.15 })
   const [svgSize, setSvgSize] = useState({ w: 1200, h: 800 })
@@ -294,7 +296,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !isInput(e.target)) { e.preventDefault(); void handleUndo() }
       if (((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey) && !isInput(e.target)) || ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && e.shiftKey && !isInput(e.target))) { e.preventDefault(); void handleRedo() }
-      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode('select'); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
+      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode('select'); setArmedDef(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput(e.target)) {
         if (mode === 'draw_benchtop' && e.key === 'Backspace') { bt.undoVertex(); return }
         if (selected?.type === 'cabinet') handleDeleteCabinet(selected.id)
@@ -466,6 +468,38 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }
 
+  // Library placement — snapshots a definition into a new instance via the service
+  // layer. Position/label/neighbour logic mirrors placeCabinet exactly; dxOverride
+  // applies the gap-fit width like the legacy path.
+  async function placeFromDefinition(wall: Wall, pos_x: number, pos_y: number, definitionId: string, cls: AssemblyClass, islandFlip = false, dxOverride?: number) {
+    captureSnapshot()
+    const res = await dbPlaceCabinetFromDefinition(definitionId, {
+      room_id: room.id, wall_id: wall.id,
+      label: nextLabel(cabinets, cls),
+      pos_x, pos_y, rotation: islandFlip ? wall.angle + 180 : wall.angle,
+      dx: dxOverride,
+    })
+    if (res) {
+      const { cabinet, resolved } = res
+      setCabinets(cs => [...cs, cabinet])
+      setSelected({ type: 'cabinet', id: cabinet.id })
+      if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
+    }
+  }
+
+  // Unified placement descriptor for the current mode: the armed definition when
+  // mode === 'place_definition', otherwise the legacy class-based modes. dx/dy are the
+  // ghost footprint; definitionId routes the placement to the library path.
+  function currentPlaceInfo(): { cls: AssemblyClass; ep: boolean; dx: number; dy: number; definitionId?: string } | null {
+    if (mode === 'place_definition') {
+      return armedDef ? { cls: armedDef.assembly_class, ep: false, dx: armedDef.dx, dy: armedDef.dy, definitionId: armedDef.id } : null
+    }
+    const ci = modeAssemblyClass(mode)
+    if (!ci) return null
+    const dims = DEFAULT_DIMS[ci.cls] ?? DEFAULT_DIMS.base
+    return { cls: ci.cls, ep: ci.ep, dx: dims.dx, dy: dims.dy }
+  }
+
   async function pasteCabinet(wall: Wall, pos_x: number, pos_y: number, sideFlip = false) {
     if (!clipboard) return
     captureSnapshot()
@@ -624,7 +658,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       return
     }
-    if (modeAssemblyClass(mode) || mode === 'paste') { svgRef.current.setPointerCapture(e.pointerId); return }
+    if (currentPlaceInfo() || mode === 'paste') { svgRef.current.setPointerCapture(e.pointerId); return }
     commitResize()
     setSelected(null)
     setMultiSelect([])
@@ -706,21 +740,20 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return
     }
 
-    const clsInfo = modeAssemblyClass(mode)
+    const clsInfo = currentPlaceInfo()
     if (clsInfo) {
-      const dims = DEFAULT_DIMS[clsInfo.cls] ?? DEFAULT_DIMS.base
       // No distance limit — the ghost floats at the cursor and always snaps to the nearest
       // wall, matching the elevation-view placement feel (carry-in-hand + snap landing).
-      const raw = nearestWall(wp, walls, dims.dx, Infinity)
+      const raw = nearestWall(wp, walls, clsInfo.dx, Infinity)
       if (!raw) { setPlaceGhost(null); return }
       const wd = wallDir(raw.wall)
       const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
       const flip = wallFlipFor(raw.wall)
       const side = flip ? 'back' : 'face'
-      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabsBlock({ assembly_class: clsInfo.cls, dy: dims.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabsBlock({ assembly_class: clsInfo.cls, dy: clsInfo.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
       // Fit into the available gap: shrink the new cabinet's width if the gap is
       // narrower than the default, rather than overlapping the neighbour.
-      const fit = fitFreeSlot(desired, dims.dx, raw.wall.length, occupied)
+      const fit = fitFreeSlot(desired, clsInfo.dx, raw.wall.length, occupied)
       setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + fit.t * wd.x, pos_y: raw.wall.pos_y + fit.t * wd.y, islandFlip: flip, freePos: wp, fitDx: fit.dx })
       return
     }
@@ -912,12 +945,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return
     }
 
-    const clsInfo = modeAssemblyClass(mode)
+    const clsInfo = currentPlaceInfo()
     if (clsInfo) {
       if (placeGhost && !placingRef.current) {
         placingRef.current = true
-        await placeCabinet(placeGhost.wall, placeGhost.pos_x, placeGhost.pos_y, clsInfo.cls, clsInfo.ep, placeGhost.islandFlip, placeGhost.fitDx)
-        setPlaceGhost(null); setMode('select')
+        if (clsInfo.definitionId) {
+          await placeFromDefinition(placeGhost.wall, placeGhost.pos_x, placeGhost.pos_y, clsInfo.definitionId, clsInfo.cls, placeGhost.islandFlip, placeGhost.fitDx)
+        } else {
+          await placeCabinet(placeGhost.wall, placeGhost.pos_x, placeGhost.pos_y, clsInfo.cls, clsInfo.ep, placeGhost.islandFlip, placeGhost.fitDx)
+        }
+        setPlaceGhost(null); setMode('select'); setArmedDef(null)
         placingRef.current = false
       }
       return
@@ -969,7 +1006,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }
 
   function onWallPointerDown(e: React.PointerEvent, wallId: string) {
-    const clickable = mode !== 'draw_wall' && mode !== 'draw_island' && mode !== 'paste' && !modeAssemblyClass(mode)
+    const clickable = mode !== 'draw_wall' && mode !== 'draw_island' && mode !== 'paste' && !currentPlaceInfo()
     if (!clickable || e.button !== 0 || spaceRef.current) return
     e.stopPropagation()
     svgPointerDownRef.current = true
@@ -1141,7 +1178,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     : bt.isDragging ? 'grabbing'
     : sectionDrag ? 'grabbing'
     : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_section' || mode === 'measure' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l') ? 'crosshair'
-    : (modeAssemblyClass(mode) || mode === 'paste') ? 'cell'
+    : (currentPlaceInfo() || mode === 'paste') ? 'cell'
     : cabResize ? 'crosshair'
     : 'default'
 
@@ -1161,6 +1198,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   function onSelectMode(m: Mode) {
     setMode(prev => prev === m ? 'select' : m)
+    setArmedDef(null)
+    setDrawStart(null); setPlaceGhost(null)
+  }
+
+  // Arm a library definition for placement (click in the sidebar). Re-clicking the
+  // armed definition cancels. Replaces arming a class-based Mode.
+  function armDefinition(def: CabinetDefinition) {
+    if (mode === 'place_definition' && armedDef?.id === def.id) {
+      setArmedDef(null); setMode('select')
+    } else {
+      setArmedDef({ id: def.id, assembly_class: def.assembly_class, dx: def.default_dx, dy: def.default_dy, dz: def.default_dz, name: def.name })
+      setMode('place_definition')
+    }
     setDrawStart(null); setPlaceGhost(null)
   }
 
@@ -1205,6 +1255,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     : mode === 'place_base_corner' ? 'Click near a wall to place base corner cabinet · Esc = cancel'
     : mode === 'place_wall_corner' ? 'Click near a wall to place wall corner unit · Esc = cancel'
     : mode === 'place_tall_corner' ? 'Click near a wall to place tall corner cabinet · Esc = cancel'
+    : mode === 'place_definition'  ? `Click near a wall to place ${armedDef?.name ?? 'cabinet'} · Esc = cancel`
     : mode === 'paste'             ? `Click near a wall to paste ${clipboard?.label ?? 'cabinet'} · Esc = cancel`
     : null
 
@@ -1319,6 +1370,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           roomSwitcherRef={roomSwitcherRef}
           mode={mode}
           onSelectMode={onSelectMode}
+          armedDefinitionId={armedDef?.id ?? null}
+          onArmDefinition={armDefinition}
           wallMenuOpen={wallMenuOpen}
           setWallMenuOpen={setWallMenuOpen}
           cabMenuOpen={cabMenuOpen}
@@ -1461,10 +1514,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 if (clipboardGroup.length > 1) await pasteGroupAt(wall, pos_x, pos_y, elevWallSide === 'back')
                 else await pasteCabinet(wall, pos_x, pos_y, elevWallSide === 'back')
               } else {
-                const clsInfo = modeAssemblyClass(mode)
-                if (clsInfo) await placeCabinet(wall, pos_x, pos_y, clsInfo.cls, clsInfo.ep, elevWallSide === 'back', dx)
+                const clsInfo = currentPlaceInfo()
+                if (clsInfo?.definitionId) await placeFromDefinition(wall, pos_x, pos_y, clsInfo.definitionId, clsInfo.cls, elevWallSide === 'back', dx)
+                else if (clsInfo) await placeCabinet(wall, pos_x, pos_y, clsInfo.cls, clsInfo.ep, elevWallSide === 'back', dx)
               }
-              setMode('select')
+              setMode('select'); setArmedDef(null)
               setPlaceGhost(null)
             }}
             onCabinetContextMenu={onCabinetContextMenu}
