@@ -1,5 +1,5 @@
 import { supabase } from '@/src/lib/supabase'
-import type { Wall, CabinetInstance } from '@/src/lib/types'
+import type { Wall, CabinetInstance, CabinetDefinition, NeighbourType } from '@/src/lib/types'
 import { resolveCabinetFromDB, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { resolveHinges } from '@/src/lib/resolver/resolveHinges'
@@ -336,6 +336,83 @@ export async function dbInsertCabinet(
 
 export async function dbResolveAndPersistCabinet(id: string): Promise<ResolvedCabinet | null> {
   try { return await resolveCabinetFromDB(id) } catch (e) { console.error('resolve after save:', e); return null }
+}
+
+// ── Definition-driven placement (Cabinet Library) ─────────────────────────────
+// Copy-not-link: a library definition is a placement-time template. We snapshot
+// its frozen-geometry + composition fields into a fresh, fully-independent
+// cabinet_instances row. Materials/hardware/door-style still resolve through the
+// Job → Room → Assembly cascade, except for any preserved assembly-level overrides
+// the definition carries. cabinet_definition_id is an audit/origin pointer only.
+
+export async function dbLoadCabinetDefinition(id: string): Promise<CabinetDefinition | null> {
+  const { data, error } = await supabase.from('cabinet_definitions').select('*').eq('id', id).single()
+  if (error) { console.error('dbLoadCabinetDefinition', error); return null }
+  return data as CabinetDefinition
+}
+
+// Caller-supplied placement context. Position/neighbour/label are computed exactly
+// as the non-library placeCabinet path does (nextLabel, slotting, wall angle).
+export interface DefinitionPlacement {
+  room_id:               string
+  wall_id:               string
+  label:                 string
+  pos_x:                 number
+  pos_y:                 number
+  rotation:              number
+  dx?:                   number   // gap-fit width override; falls back to default_dx
+  left_neighbour_type?:  NeighbourType
+  right_neighbour_type?: NeighbourType
+}
+
+// Build the instance row from a definition. Pure mapping — no DB writes — so it is
+// callable/testable in isolation (agent-readiness invariant).
+export function buildInstanceFromDefinition(
+  def: CabinetDefinition,
+  p: DefinitionPlacement,
+): Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'> {
+  // An empty face_grid object behaves like "no face grid" — normalise to null so
+  // the resolver falls back to its default face, matching the legacy null path.
+  const faceGrid = def.face_grid && Object.keys(def.face_grid).length > 0 ? def.face_grid : null
+  const internalGrid = def.internal_grid && Object.keys(def.internal_grid).length > 0 ? def.internal_grid : null
+  return {
+    room_id: p.room_id, wall_id: p.wall_id,
+    cabinet_definition_id: def.id,                 // audit / origin pointer only
+    label: p.label, assembly_class: def.assembly_class,
+    pos_x: p.pos_x, pos_y: p.pos_y, pos_z: 0, rotation: p.rotation,
+    dx: p.dx != null && p.dx > 0 ? Math.round(p.dx) : def.default_dx,
+    dy: def.default_dy, dz: def.default_dz,
+    has_carcass: def.has_carcass, has_internal: def.has_internal,
+    has_face: def.has_face, has_toekick: def.has_toekick,
+    construction_method_id: def.construction_method_id,
+    top_type: def.top_type, toe_type: def.toe_type,
+    left_neighbour_type: p.left_neighbour_type ?? 'wall',
+    right_neighbour_type: p.right_neighbour_type ?? 'wall',
+    exposed_interior: def.exposed_interior,
+    rule_overrides: def.rule_overrides,
+    material_overrides: def.material_overrides,
+    toekick_overrides: def.toekick_overrides,
+    drawerbox_overrides: def.drawerbox_overrides,
+    hardware_overrides: def.hardware_overrides,
+    face_grid: faceGrid,
+    internal_grid: internalGrid,
+    carcase_joints: def.carcase_joints,
+    schema_version: '0.4', notes: null,
+  }
+}
+
+// Load → build → insert → resolve. Returns the new instance plus its resolved
+// parts (resolution is persisted to the DB by dbResolveAndPersistCabinet).
+export async function dbPlaceCabinetFromDefinition(
+  definitionId: string,
+  placement: DefinitionPlacement,
+): Promise<{ cabinet: CabinetInstance; resolved: ResolvedCabinet | null } | null> {
+  const def = await dbLoadCabinetDefinition(definitionId)
+  if (!def) return null
+  const cabinet = await dbInsertCabinet(buildInstanceFromDefinition(def, placement))
+  if (!cabinet) return null
+  const resolved = await dbResolveAndPersistCabinet(cabinet.id)
+  return { cabinet, resolved }
 }
 
 export async function dbUpdateCabinet(

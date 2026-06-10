@@ -196,6 +196,8 @@ export interface CabinetDefinition {
   id: string
   name: string
   assembly_class: AssemblyClass
+  category_id: string | null
+  subcategory_id: string | null
   construction_method_id: string | null
   default_dx: number
   default_dy: number
@@ -206,8 +208,21 @@ export interface CabinetDefinition {
   has_toekick: boolean
   top_type: TopType
   toe_type: ToeType
-  face_grid: Record<string, unknown>
+  // Frozen geometry / composition
+  face_grid: Record<string, unknown> | null
+  internal_grid: Record<string, unknown> | null
+  carcase_joints: Record<string, string | null>
   rule_overrides: Record<string, unknown>
+  // Preservation targets — assembly-level overrides copied into the instance at placement
+  material_overrides: Record<string, unknown>
+  hardware_overrides: Record<string, unknown>
+  toekick_overrides: Record<string, unknown>
+  drawerbox_overrides: Record<string, unknown>
+  exposed_interior: boolean
+  // UI metadata
+  description: string | null
+  thumbnail_svg: string | null
+  sort_order: number
   is_library_item: boolean
   active: boolean
   created_at: string
