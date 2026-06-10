@@ -341,17 +341,18 @@ function Canvas({
           stroke="#f59e0b" strokeWidth={Math.max(1, kerf)} strokeOpacity={0.85} strokeLinecap="round" />
       )}
 
-      {/* All holes (the full plan) — faint ghost rings, always visible so you can
-          see every hole on every piece even before/while the sim runs. */}
+      {/* All holes (the full plan) — ghost rings, always visible so you can see
+          every hole on every piece even before/while the sim runs. A real ⌀5 hole
+          is ~2px at sheet scale, so clamp to a visible marker. */}
       {prog.moves.map((m, i) => m.kind === 'drill' ? (
-        <circle key={`gh${i}`} cx={X(m.x1)} cy={Y(m.y1)} r={Math.max(1.5, (toolDia(m.tool, 5) / 2) * scale)}
-          fill="none" stroke="#f59e0b" strokeWidth={0.7} strokeOpacity={0.35} />
+        <circle key={`gh${i}`} cx={X(m.x1)} cy={Y(m.y1)} r={Math.max(2.5, (toolDia(m.tool, 5) / 2) * scale)}
+          fill="#f59e0b" fillOpacity={0.12} stroke="#f59e0b" strokeWidth={0.9} strokeOpacity={0.55} />
       ) : null)}
 
-      {/* Drill hits */}
+      {/* Drill hits (already plunged) — solid amber */}
       {drills.map((m, i) => {
-        const r = Math.max(1.5, (toolDia(m.tool, 5) / 2) * scale)
-        return <circle key={`d${i}`} cx={X(m.x1)} cy={Y(m.y1)} r={r} fill="#0f172a" stroke="#f59e0b" strokeWidth={1.2} />
+        const r = Math.max(2.5, (toolDia(m.tool, 5) / 2) * scale)
+        return <circle key={`d${i}`} cx={X(m.x1)} cy={Y(m.y1)} r={r} fill="#f59e0b" fillOpacity={0.9} stroke="#0f172a" strokeWidth={0.75} />
       })}
       {newestDrill && (
         <circle cx={X(newestDrill.x1)} cy={Y(newestDrill.y1)} r={Math.max(1.5, (toolDia(newestDrill.tool, 5) / 2) * scale)}

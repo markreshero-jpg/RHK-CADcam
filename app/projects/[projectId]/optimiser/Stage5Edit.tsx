@@ -202,7 +202,7 @@ export default function Stage5Edit() {
               </span>
               <button onClick={() => setShowDrills(s => !s)}
                 className={`text-[11px] px-2 py-0.5 rounded border font-normal transition-colors ${showDrills ? 'border-amber-600/60 text-amber-400 bg-amber-900/15' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
-                {drillsLoading ? 'Drilling…' : `Drilling${showDrills ? ' ✓' : ''}`}
+                {drillsLoading ? 'Drilling…' : `Drilling${showDrills ? ' ✓' : ''} (${drillsBySheet.get(sheet.index)?.length ?? 0})`}
               </button>
             </div>
             <InteractiveSheet
@@ -450,12 +450,14 @@ function InteractiveSheet({ sheet, selectedUid, drills, onSelect, onMove, onCont
           </g>
         )
       })}
-      {/* Drill holes (sheet space, BL origin) — same source as Stage 6 G-code. */}
+      {/* Drill holes (sheet space, BL origin) — same source as Stage 6 G-code.
+          A real hole (e.g. ⌀5 on a 2400mm sheet) is ~1px at this scale, so clamp
+          to a visible marker size and draw it solid amber with a dark rim. */}
       {drills.length > 0 && (
         <g style={{ pointerEvents: 'none' }}>
           {drills.map((d, i) => (
-            <circle key={i} cx={d.x * scale} cy={(H - d.y) * scale} r={Math.max(1, (d.diameter / 2) * scale)}
-              fill="#0f172a" stroke="#f59e0b" strokeWidth={1} />
+            <circle key={i} cx={d.x * scale} cy={(H - d.y) * scale} r={Math.max(2.5, (d.diameter / 2) * scale)}
+              fill="#f59e0b" fillOpacity={0.95} stroke="#0f172a" strokeWidth={0.75} />
           ))}
         </g>
       )}
