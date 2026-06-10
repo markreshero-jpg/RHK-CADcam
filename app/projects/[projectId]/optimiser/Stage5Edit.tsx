@@ -54,22 +54,44 @@ export default function Stage5Edit() {
   // group; '' = all collapsed; otherwise the explicitly-opened group key.
   const [expandedMat, setExpandedMat] = useState<string | null>(null)
 
-  // Drilling overlay — same source as Stage 6, so what you see here is what's
-  // drilled. The expensive load (joint-sync + read + tool resolve) runs once per
-  // snapshot; the cheap per-sheet projection re-runs as parts move.
+  // Drilling overlay — same source as Stage 6. The materialised holes are read
+  // INSTANTLY (no sync); regenerating from joints (slow) only happens on first
+  // load if nothing exists yet, or when the user hits ↻ after changing joints.
   const [showDrills, setShowDrills] = useState(true)
   const [drillOps, setDrillOps] = useState<ResolvedDrillOps | null>(null)
   const [drillsLoading, setDrillsLoading] = useState(false)
+  // Projects we've already auto-generated for this session, so a project with no
+  // joint drilling doesn't re-run the slow sync on every Stage 5 visit.
+  const autoSyncedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!snap) return
     let cancelled = false
     setDrillsLoading(true)
-    loadResolvedDrillOps(snap.parts, { sync: true })
-      .then(r => { if (!cancelled) setDrillOps(r) })
-      .catch(e => console.error('[Stage5] loadResolvedDrillOps', e))
-      .finally(() => { if (!cancelled) setDrillsLoading(false) })
+    // Fast path: read already-generated rows.
+    loadResolvedDrillOps(snap.parts, { sync: false })
+      .then(r => {
+        if (cancelled) return
+        setDrillOps(r)
+        const hasAny = [...r.opsByKey.values()].some(a => a.length > 0)
+        if (hasAny || autoSyncedRef.current === snap.projectId) { setDrillsLoading(false); return }
+        // Nothing materialised yet — generate once in the background (per project).
+        autoSyncedRef.current = snap.projectId
+        loadResolvedDrillOps(snap.parts, { sync: true })
+          .then(r2 => { if (!cancelled) setDrillOps(r2) })
+          .catch(e => console.error('[Stage5] background drill sync', e))
+          .finally(() => { if (!cancelled) setDrillsLoading(false) })
+      })
+      .catch(e => { console.error('[Stage5] loadResolvedDrillOps', e); if (!cancelled) setDrillsLoading(false) })
     return () => { cancelled = true }
   }, [snap])
+  // Manual regenerate (after editing joints) — runs the slow sync on demand.
+  async function regenerateDrills() {
+    if (!snap || drillsLoading) return
+    setDrillsLoading(true)
+    try { setDrillOps(await loadResolvedDrillOps(snap.parts, { sync: true })) }
+    catch (e) { console.error('[Stage5] regenerate drills', e) }
+    finally { setDrillsLoading(false) }
+  }
   const drillsBySheet = useMemo(
     () => (drillOps && nestResult ? projectSheetDrills(nestResult.sheets, drillOps) : new Map<number, SheetDrill[]>()),
     [drillOps, nestResult],
@@ -209,6 +231,11 @@ export default function Stage5Edit() {
               <button onClick={() => setShowDrills(s => !s)}
                 className={`text-[11px] px-2 py-0.5 rounded border font-normal transition-colors ${showDrills ? 'border-amber-600/60 text-amber-400 bg-amber-900/15' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
                 {drillsLoading ? 'Drilling…' : `Drilling${showDrills ? ' ✓' : ''} (${drillsBySheet.get(sheet.index)?.length ?? 0})`}
+              </button>
+              <button onClick={regenerateDrills} disabled={drillsLoading}
+                title="Regenerate joint drilling from the current joints (use after editing joints)"
+                className="text-[11px] px-1.5 py-0.5 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-40 font-normal transition-colors">
+                ↻
               </button>
               {/* Zoom controls */}
               <div className="flex items-center gap-px text-sm font-normal">

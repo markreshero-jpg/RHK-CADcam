@@ -149,19 +149,29 @@ export async function syncSeamDrillOperations(cabinetId: string): Promise<SeamDr
   return { written: rows.length, skipped }
 }
 
-// Regenerate for many cabinets (e.g. every cabinet in a nest). Sequential to
-// keep the resolver caches coherent and avoid hammering the DB.
-export async function syncSeamDrillOperationsForCabinets(cabinetIds: string[]): Promise<SeamDrillSyncResult> {
+// Regenerate for many cabinets (e.g. every cabinet in a nest), with bounded
+// concurrency so a project of 20+ cabinets doesn't take a minute. The resolver
+// caches are keyed by cabinetId, so concurrent distinct cabinets don't collide.
+export async function syncSeamDrillOperationsForCabinets(
+  cabinetIds: string[],
+  opts: { concurrency?: number } = {},
+): Promise<SeamDrillSyncResult> {
   const total: SeamDrillSyncResult = { written: 0, skipped: 0 }
-  for (const id of cabinetIds) {
-    try {
-      const r = await syncSeamDrillOperations(id)
-      total.written += r.written
-      total.skipped += r.skipped
-    } catch (e) {
-      console.error('[seamDrillSync] cabinet failed, continuing:', id, e)
+  const concurrency = Math.max(1, opts.concurrency ?? 6)
+  let next = 0
+  async function worker() {
+    while (next < cabinetIds.length) {
+      const id = cabinetIds[next++]
+      try {
+        const r = await syncSeamDrillOperations(id)
+        total.written += r.written
+        total.skipped += r.skipped
+      } catch (e) {
+        console.error('[seamDrillSync] cabinet failed, continuing:', id, e)
+      }
     }
   }
+  await Promise.all(Array.from({ length: Math.min(concurrency, cabinetIds.length) }, worker))
   return total
 }
 
