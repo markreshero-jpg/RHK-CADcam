@@ -6,7 +6,7 @@ import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei
 import { Shape, ExtrudeGeometry, Vector3, DoubleSide } from 'three'
 import type { Wall, CabinetInstance, Room } from '@/src/lib/types'
 import type {
-  ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
+  ResolvedCabinet, ResolvedToekickPart,
   ResolvedInternalPart, ResolvedFaceZone,
 } from '@/src/lib/resolver/types'
 import {
@@ -15,6 +15,7 @@ import {
 import type { Pt } from '@/src/lib/geometry'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import { getPalette } from '@/src/lib/partPalette'
+import { caseBox } from '@/src/lib/jointDrilling'
 
 const TO_RAD = Math.PI / 180
 const FOV    = 40
@@ -56,22 +57,34 @@ function mitreCorners(w: Wall, walls: Wall[], cx: number, cy: number): [Pt, Pt, 
 
 type Box = { x: number; y: number; z: number; w: number; h: number; d: number }
 
-function isSide(k: string) { return k === 'left_side' || k === 'right_side' }
-
-function caseBox(p: ResolvedCasePart, dy: number): Box {
-  if (isSide(p.part_key))
-    return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
-  if (p.part_key === 'back')
-    return { x: p.X, y: p.Y + p.DZ, z: p.Z, w: p.DY, h: dy - p.Y - p.DZ, d: p.DZ }
-  return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
-}
+// Box helpers below MUST stay identical to Cabinet3DView so room view and the
+// cabinet editor place every part the same way. caseBox is the shared canonical
+// helper from jointDrilling (imported above).
 function tkBox(p: ResolvedToekickPart): Box {
   return p.part_key === 'spreader_horizontal'
     ? { x: p.X, y: p.Y, z: p.Z, w: p.DX, h: p.DY, d: p.DZ }
     : { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
 }
 function intBox(p: ResolvedInternalPart): Box {
-  return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+  // Inner-drawer / pull-out parts carry the drawer-box dimension convention
+  // (per-part DX/DY/DZ semantics + Z = front face); shelves/dividers differ.
+  switch (p.part_type) {
+    case 'divider':
+      return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
+    case 'inner_drawer_side':
+    case 'pull_out_side':
+      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DZ, h: p.DY, d: p.DX }
+    case 'inner_drawer_front':
+    case 'inner_drawer_back':
+    case 'pull_out_back':
+      return { x: p.X, y: p.Y, z: p.Z - p.DZ, w: p.DY, h: p.DX, d: p.DZ }
+    case 'inner_drawer_bottom':
+    case 'pull_out_bottom':
+      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DY, h: p.DZ, d: p.DX }
+    // adj_shelf, fixed_shelf, accessory — horizontal shelf-like; Z stored is the back edge.
+    default:
+      return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+  }
 }
 function zoneBox(z: ResolvedFaceZone): Box {
   return { x: z.X, y: z.Y, z: z.Z, w: z.DY, h: z.DX, d: z.DZ }
@@ -249,7 +262,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
         {/* ── Carcass ── */}
         {rp.case_parts.map((p, i) => (
           <Part key={`c${i}`}
-            b={caseBox(p, cab.dy)}
+            b={caseBox(p)}
             color={selected ? SEL : matFace(materialColours?.[p.material_id], '#ddd3bb')}
             edgeColor={selected ? SELE : palette.carcase}
           />
@@ -264,7 +277,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
           />
         ))}
 
-        {/* ── Shelves / internal ── */}
+        {/* ── Shelves / internal (incl. inner-drawer / pull-out boxes) ── */}
         {rp.internal_parts.map((p, i) => (
           <Part key={`s${i}`}
             b={intBox(p)}
@@ -297,13 +310,14 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
 
 // ── Wall visibility menu (DOM overlay) ───────────────────────────────────────
 
-function WallVisibilityMenu({ x, y, walls, hiddenWallIds, onToggle, onShowAll, onBirdsEye, onClose }: {
+function WallVisibilityMenu({ x, y, walls, hiddenWallIds, onToggle, onShowAll, onBirdsEye, onReset, onClose }: {
   x: number; y: number
   walls: Wall[]
   hiddenWallIds: Set<string>
   onToggle: (id: string) => void
   onShowAll: () => void
   onBirdsEye: () => void
+  onReset: () => void
   onClose: () => void
 }) {
   useEffect(() => {
@@ -361,6 +375,12 @@ function WallVisibilityMenu({ x, y, walls, hiddenWallIds, onToggle, onShowAll, o
         onClick={() => { onBirdsEye(); onClose() }}
       >
         Bird's Eye
+      </button>
+      <button
+        className="w-full text-left px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700"
+        onClick={() => { onReset(); onClose() }}
+      >
+        Reset view
       </button>
     </div>
   )
@@ -677,6 +697,9 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   const [wallMenu, setWallMenu]       = useState<WallMenuState | null>(null)
   const [hiddenWallIds, setHiddenWallIds] = useState<Set<string>>(new Set())
   const [birdsEyeSignal, setBirdsEyeSignal] = useState(0)
+  // Local reset trigger (from the right-click menu), combined with the parent's
+  // resetSignal prop so either source snaps the camera back to the default view.
+  const [resetViewSignal, setResetViewSignal] = useState(0)
   // Tracks whether the right-click landed on a cabinet so the div-level handler
   // can distinguish "empty space" right-clicks (which should show the wall menu).
   const hitCabRef = useRef(false)
@@ -726,7 +749,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
               materialColours={materialColours}
               hiddenWallIds={hiddenWallIds}
               birdsEyeSignal={birdsEyeSignal}
-              resetSignal={resetSignal}
+              resetSignal={resetSignal + resetViewSignal}
               cameraStateRef={cameraStateRef}
             />
           )}
@@ -760,6 +783,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
           onToggle={toggleWallVisibility}
           onShowAll={() => setHiddenWallIds(new Set())}
           onBirdsEye={() => setBirdsEyeSignal(s => s + 1)}
+          onReset={() => setResetViewSignal(s => s + 1)}
           onClose={() => setWallMenu(null)}
         />
       )}

@@ -32,10 +32,11 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
     supabase.from('face_zones').select(PART_SELECTS.face_zones).in('cabinet_instance_id', cabIds),
   ]) : [empty, empty, empty, empty]
 
-  const [matR, machR, profR, projR] = await Promise.all([
+  const [matR, machR, profR, toolR, projR] = await Promise.all([
     supabase.from('materials').select('id,name,dz,sheet_dx,sheet_dy,has_grain,grain_direction,trim_top,trim_bottom,trim_left,trim_right,pad,cnc_tool_id,feed_rate_pct').eq('active', true).order('name'),
     supabase.from('cnc_machines').select('id,name,brand,model,table_dx,table_dy,gcode_dialect,is_default').eq('active', true).order('name'),
-    supabase.from('cnc_machine_profiles').select('id,cnc_machine_id,name,is_default'),
+    supabase.from('cnc_machine_profiles').select('id,cnc_machine_id,name,is_default,nest_pad,tool_entry_offset,margin_use_tool_dia,margin_use_entry_offset'),
+    supabase.from('cnc_tools').select('id,diameter').eq('active', true),
     supabase.from('projects').select('id,name,job_number').order('created_at', { ascending: false }),
   ])
 
@@ -53,6 +54,7 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
     materials: (matR.data ?? []) as OptiMaterial[],
     machines: (machR.data ?? []) as OptiMachine[],
     profiles: (profR.data ?? []) as OptiProfile[],
+    tools: (toolR.data ?? []) as OptiSnapshot['tools'],
     allProjects: (projR.data ?? []) as { id: string; name: string; job_number: string | null }[],
   }
 

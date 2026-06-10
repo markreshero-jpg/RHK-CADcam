@@ -25,9 +25,10 @@ import PartEdgeJoints from './PartEdgeJoints'
 import OverridesView from './OverridesView'
 import CabinetTreePanel from './CabinetTreePanel'
 import CabinetRoutesPanel from './CabinetRoutesPanel'
+import CabinetErrorsPanel from './CabinetErrorsPanel'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 
-type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'interior' | 'joints' | 'overrides' | 'tree' | 'routes'
+type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'interior' | 'joints' | 'overrides' | 'tree' | 'routes' | 'errors'
 
 const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'top',       label: 'Top' },
@@ -41,6 +42,7 @@ const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'overrides', label: 'Overrides' },
   { id: 'tree',      label: 'Tree' },
   { id: 'routes',    label: 'Routes' },
+  { id: 'errors',    label: 'Errors' },
 ]
 
 function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onOverridesChange, setCustomParts }: {
@@ -201,7 +203,7 @@ export default function CabinetEditModal({
       elevation: s.elevation === 'wire',
       side:      s.side      === 'wire',
       '3d':      s['3d']      === 'wire',
-      parts: true, face: true, interior: true, joints: true, overrides: true, tree: true, routes: true,
+      parts: true, face: true, interior: true, joints: true, overrides: true, tree: true, routes: true, errors: true,
     }
   })
   const wireMode = wireByView[activeView]
@@ -224,7 +226,7 @@ export default function CabinetEditModal({
   const prevPartRef     = useRef<PartMeta | null>(null)
   const originalEdgeRef = useRef<PartEdge | null>(null)
 
-  const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face' && activeView !== 'interior' && activeView !== 'joints' && activeView !== 'overrides' && activeView !== 'routes'
+  const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face' && activeView !== 'interior' && activeView !== 'joints' && activeView !== 'overrides' && activeView !== 'routes' && activeView !== 'errors'
 
   useEffect(() => {
     if (resolvedCabinet) return
@@ -270,6 +272,55 @@ export default function CabinetEditModal({
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose])
+
+  // Delete a part by id: a custom part is truly removed; a resolver-generated
+  // part can only be hidden (it would otherwise regenerate), so Delete hides it.
+  // Shared by the ortho views, the 3D view, and the Parts view.
+  function deletePartById(partId: string) {
+    if (partId.startsWith('custom_')) {
+      const cid = partId.slice(7)
+      setCustomParts(prev => prev.filter(p => p.id !== cid))
+      dbDeleteCustomPart(cid).catch(console.error)
+    } else {
+      toggleHidden(partId)   // resolved part → hide (closest to "delete")
+    }
+  }
+
+  function deleteSelectedSVGPart(): boolean {
+    if (!selectedSVGPart) return false
+    deletePartById(selectedSVGPart.id)
+    setSelectedSVGPart(null)
+    return true
+  }
+
+  // Keyboard delete + shield. Delete/Backspace removes the selected part in the
+  // ortho views; the Interior tab handles its own delete via its capture listener
+  // (isOrthoView is false there). Either way the canvas behind the modal must
+  // never see these keys (it would delete the whole cabinet / undo the room), so
+  // Ctrl+Z / Ctrl+Y and any unhandled Delete are stopped from propagating.
+  // Inputs are left alone so the key reaches the field for normal text editing.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return
+      const mod = e.ctrlKey || e.metaKey
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (isOrthoView && selectedSVGPart) {
+          e.preventDefault(); e.stopImmediatePropagation()
+          deleteSelectedSVGPart()
+          return
+        }
+        e.stopPropagation()   // shield the canvas; let the Interior tab handle its own
+        return
+      }
+      if (mod && (e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y')) {
+        e.stopPropagation()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOrthoView, selectedSVGPart])
 
   // Auto-save edge changes when selection moves to another part
   useEffect(() => {
@@ -388,6 +439,9 @@ export default function CabinetEditModal({
               const overrideCount = v.id === 'overrides'
                 ? Object.keys(partOverrides).length + customParts.length
                 : 0
+              const errorCount = v.id === 'errors' ? (rp?.errors?.length ?? 0) : 0
+              const badge = overrideCount || errorCount
+              const isErr = v.id === 'errors' && errorCount > 0
               return (
                 <button
                   key={v.id}
@@ -395,13 +449,15 @@ export default function CabinetEditModal({
                   disabled={disabled}
                   className={`px-3 py-1 text-xs rounded transition-colors ${
                     activeView === v.id
-                      ? 'bg-blue-600 text-white'
+                      ? (isErr ? 'bg-red-600 text-white' : 'bg-blue-600 text-white')
                       : disabled
                       ? 'text-gray-600 cursor-not-allowed'
+                      : isErr
+                      ? 'text-red-400 hover:text-red-300 hover:bg-gray-700'
                       : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'
                   }`}
                 >
-                  {v.label}{overrideCount > 0 ? ` (${overrideCount})` : ''}
+                  {v.label}{badge > 0 ? ` (${badge})` : ''}
                 </button>
               )
             })}
@@ -468,6 +524,7 @@ export default function CabinetEditModal({
               : activeView === 'joints'  ? 'bg-gray-900'
               : activeView === 'overrides' ? 'bg-gray-900'
               : activeView === 'routes'  ? 'bg-gray-900'
+              : activeView === 'errors'  ? 'bg-gray-900'
               : 'flex items-center justify-center bg-gray-950 p-6'
             }`}
             onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null) } : undefined}
@@ -498,7 +555,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} />}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} />}
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}
@@ -524,6 +581,7 @@ export default function CabinetEditModal({
             {activeView === 'joints' && <JointsPanel cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
             {activeView === 'tree'   && rp && <CabinetTreePanel rp={rp} partOverrides={partOverrides} />}
             {activeView === 'routes' && rp && <CabinetRoutesPanel cabinet={cabinet} rp={rp} />}
+            {activeView === 'errors' && <CabinetErrorsPanel rp={rp} onGoToView={setActiveView} />}
             {activeView === 'overrides' && (
               <OverridesView
                 cabinetId={cabinet.id}
@@ -583,6 +641,7 @@ export default function CabinetEditModal({
             onUpdate={onUpdate}
             onDelete={async id => { await onDelete(id); onClose() }}
             hideWallPosition
+            hideDelete
           />
         </div>
       </div>

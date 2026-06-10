@@ -53,8 +53,11 @@ export interface NestResult {
 }
 
 export interface NestSettings {
-  kerf: number
-  pad: number
+  // Gap between nested parts, per material = routing tool Ø + nest pad + tool-entry
+  // offset (see buildMargins in types.ts). defaultMargin is used when a material has
+  // no entry (e.g. no assigned tool).
+  marginByMaterial: Record<string, number>
+  defaultMargin: number
   quality: 'fast' | 'balanced' | 'best'
   allowRotation: boolean
 }
@@ -145,8 +148,8 @@ function makeOpen(stock: SheetStock, index: number, materialId: string | null, t
 
 // Pack one ordered list of same-group parts. Offcuts are opened first.
 function packGroup(parts: NestPartInput[], stock: GroupStock, settings: NestSettings): { sheets: NestedSheet[]; unplaced: NestPartInput[] } {
-  const gap = settings.kerf + settings.pad
   const matId = parts[0]?.materialId ?? null
+  const gap = (matId != null ? settings.marginByMaterial[matId] : undefined) ?? settings.defaultMargin
   const thickness = parts[0]?.thickness ?? 0
   const offcutQueue = [...stock.offcuts]
   const open: OpenSheet[] = []

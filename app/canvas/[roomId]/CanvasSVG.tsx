@@ -5,7 +5,7 @@ import {
   Pt, MIN_WALL_LEN, SNAP_PX, CAB_FILL, CAB_FILL_SEL,
   toRad, toDeg, dist,
   wallEnd, wallDir, wallPolygon, wallMitrePolygon, wallInwardNormal, centroid,
-  cabWallPerp, cabinetPolygon, cabinetCenterPt,
+  cabWallPerp, cabinetPolygon, cabinetCenterPt, cabT,
   gridDots,
 } from '@/src/lib/geometry'
 import WallDimensionChain from './WallDimensionChain'
@@ -52,6 +52,7 @@ interface CanvasSVGProps {
   drawThickness: number
   placeGhost: PlaceGhost | null
   clipboard: CabinetInstance | null
+  clipboardGroup: CabinetInstance[]
   cabDrag: CabDrag | null
   cabMoveDrag: CabMoveDrag | null
   cabResize: CabResize | null
@@ -117,7 +118,7 @@ interface CanvasSVGProps {
 
 export default function CanvasSVG({
   svgRef, walls, cabinets, view, svgSize, selected, mode, displayConfig,
-  drawStart, drawCursor, drawThickness, placeGhost, clipboard, cabDrag, cabMoveDrag, cabResize, multiSelect, marquee, cursor,
+  drawStart, drawCursor, drawThickness, placeGhost, clipboard, clipboardGroup, cabDrag, cabMoveDrag, cabResize, multiSelect, marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
   setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
   onCabMarkerClick, cabFollowing, onSVGClick,
@@ -1226,7 +1227,10 @@ export default function CanvasSVG({
           const basePerp = wallInwardNormal(wall, cx.x, cx.y)
           const perp = wall.wall_type === 'island' && placeGhost.islandFlip
             ? { x: -basePerp.x, y: -basePerp.y } : basePerp
-          const ghostCab = { pos_x: placeGhost.pos_x, pos_y: placeGhost.pos_y, dx: dims.dx, dy: dims.dy, dz: dims.dz } as CabinetInstance
+          // Snap-landing width honours the fit-to-gap shrink; the floating in-hand
+          // ghost below stays at the full default width.
+          const landDx = placeGhost.fitDx ?? dims.dx
+          const ghostCab = { pos_x: placeGhost.pos_x, pos_y: placeGhost.pos_y, dx: landDx, dy: dims.dy, dz: dims.dz } as CabinetInstance
           const pts = cabinetPolygon(ghostCab, wall, perp)
           const center = cabinetCenterPt(ghostCab, wall, perp)
 
@@ -1246,12 +1250,24 @@ export default function CanvasSVG({
             // Arrow from floating ghost back-centre → snap landing back-centre
             const ghostBackCx = freeBackLeft.x + (dims.dx / 2) * wd.x
             const ghostBackCy = freeBackLeft.y + (dims.dx / 2) * wd.y
-            const snapBackCx = placeGhost.pos_x + (dims.dx / 2) * wd.x
-            const snapBackCy = placeGhost.pos_y + (dims.dx / 2) * wd.y
+            const snapBackCx = placeGhost.pos_x + (landDx / 2) * wd.x
+            const snapBackCy = placeGhost.pos_y + (landDx / 2) * wd.y
             const adx = snapBackCx - ghostBackCx
             const ady = snapBackCy - ghostBackCy
             const alen = Math.sqrt(adx * adx + ady * ady)
             const arrowSize = 10 / view.zoom
+
+            // Multi-paste: outline the rest of the copied group at their spacing
+            // relative to the lead cabinet, both floating and at the snap landing.
+            const tOf = (c: CabinetInstance) => { const w = walls.find(x => x.id === c.wall_id); return w ? cabT(c, w) : 0 }
+            const groupExtras = (mode === 'paste' && clipboardGroup.length > 1)
+              ? clipboardGroup.slice(1).map(gc => {
+                  const o = tOf(gc) - tOf(clipboardGroup[0])
+                  const landBL  = { pos_x: placeGhost.pos_x + o * wd.x, pos_y: placeGhost.pos_y + o * wd.y, dx: gc.dx, dy: gc.dy, dz: gc.dz } as CabinetInstance
+                  const floatBL = { pos_x: freeBackLeft.x + o * wd.x, pos_y: freeBackLeft.y + o * wd.y, dx: gc.dx, dy: gc.dy, dz: gc.dz } as CabinetInstance
+                  return { cls: gc.assembly_class, landPts: cabinetPolygon(landBL, wall, perp), floatPts: cabinetPolygon(floatBL, wall, perp) }
+                })
+              : []
 
             return (
               <>
@@ -1287,6 +1303,18 @@ export default function CanvasSVG({
                   fontSize={cabLabelFs} fill="#e2e8f0" style={{ userSelect: 'none', pointerEvents: 'none' }}>
                   {dims.dx}
                 </text>
+
+                {/* Rest of the multi-paste group */}
+                {groupExtras.map((ex, i) => (
+                  <Fragment key={`gx${i}`}>
+                    <polygon points={ex.landPts} fill="none" stroke={CAB_FILL_SEL[ex.cls]}
+                      strokeWidth={1 / view.zoom} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
+                      opacity={0.5} style={{ pointerEvents: 'none' }} />
+                    <polygon points={ex.floatPts} fill={CAB_FILL[ex.cls] + 'cc'} stroke={CAB_FILL_SEL[ex.cls]}
+                      strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+                      style={{ pointerEvents: 'none' }} />
+                  </Fragment>
+                ))}
               </>
             )
           }

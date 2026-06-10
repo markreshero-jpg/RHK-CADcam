@@ -17,7 +17,7 @@ import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '@/app/ThemeToggle'
 import { useOptiStore, type Stage } from '@/src/lib/optimiser/store'
 import type { OptiSnapshot, OptiPart } from '@/src/lib/optimiser/types'
-import { materialGroupKey } from '@/src/lib/optimiser/types'
+import { materialGroupKey, buildMargins } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import SheetSVG from './SheetSVG'
@@ -491,8 +491,10 @@ function Stage3Settings() {
       <div>
         <h2 className="text-sm font-semibold text-ink mb-3">Optimisation Settings</h2>
         <div className="grid grid-cols-2 gap-x-8 gap-y-4 max-w-xl">
-          <NumSetting label="Kerf (mm)" value={settings.kerf} onChange={v => setSettings({ kerf: v })} />
-          <NumSetting label="Pad / gap (mm)" value={settings.pad} onChange={v => setSettings({ pad: v })} />
+          <p className="col-span-2 text-[11px] text-ink-subtle">
+            Part-to-part margin is set per material from the machine profile (nest pad + tool-entry offset) plus each
+            material&apos;s routing tool diameter — configure it in CNC Machine Setup and the Materials library.
+          </p>
           <div className="col-span-2 flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-ink">Allow rotation</p>
@@ -575,6 +577,7 @@ function Stage4Nesting() {
   const stock = useOptiStore(s => s.stock)
   const nestResult = useOptiStore(s => s.nestResult)
   const nesting = useOptiStore(s => s.nesting)
+  const profileId = useOptiStore(s => s.profileId)
   const setNestResult = useOptiStore(s => s.setNestResult)
   const setNesting = useOptiStore(s => s.setNesting)
   const setPartIndex = useOptiStore(s => s.setPartIndex)
@@ -616,7 +619,14 @@ function Stage4Nesting() {
         }
       }
       setPartIndex(index)
-      setNestResult(nest(parts, stockForRun, settings))
+      // Per-material margin = routing tool Ø + nest pad + tool-entry offset (machine profile).
+      const margins = buildMargins(snap, profileId)
+      setNestResult(nest(parts, stockForRun, {
+        quality: settings.quality,
+        allowRotation: settings.allowRotation,
+        marginByMaterial: margins.byMaterial,
+        defaultMargin: margins.fallback,
+      }))
       setNesting(false)
     }, 20)
   }
@@ -675,17 +685,6 @@ function Stage4Nesting() {
           </>
         )}
       </div>
-    </div>
-  )
-}
-
-function NumSetting({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  return (
-    <div>
-      <label className="block text-xs text-ink-muted mb-1">{label}</label>
-      <input type="number" step="any" defaultValue={value} key={value}
-        onBlur={e => { const n = parseFloat(e.target.value); if (Number.isFinite(n)) onChange(n) }}
-        className={`${sel} w-full`} />
     </div>
   )
 }

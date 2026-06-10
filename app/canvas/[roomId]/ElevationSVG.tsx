@@ -1,7 +1,7 @@
 ﻿'use client'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { Room, Wall, CabinetInstance, DEFAULT_DIMS } from '@/src/lib/types'
-import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, cabBlocks, cabWallSide, CAB_FILL, CAB_FILL_SEL, SNAP_PX, type Pt } from '@/src/lib/geometry'
+import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, CAB_FILL, CAB_FILL_SEL, SNAP_PX, type Pt } from '@/src/lib/geometry'
 import { Selected, CabResize, viewReducer, DisplayConfig, Mode, modeAssemblyClass } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
 import { roundMm } from '@/src/lib/format'
@@ -129,18 +129,19 @@ interface ElevationSVGProps {
   canEqualize: boolean
   mode: Mode
   clipboard: CabinetInstance | null
+  clipboardGroup: CabinetInstance[]
   onSelectCabinet: (id: string) => void
   onSelectWall: (id: string) => void
   onSetElevWall: (id: string) => void
   elevWallSide: 'face' | 'back'
   onSetElevWallSide: (side: 'face' | 'back') => void
   onUpdateCabinet: (id: string, u: Partial<CabinetInstance>) => void
-  onPlaceAtWall: (wall: Wall, pos_x: number, pos_y: number) => Promise<void>
+  onPlaceAtWall: (wall: Wall, pos_x: number, pos_y: number, dx?: number) => Promise<void>
   onCabinetContextMenu: (e: React.MouseEvent, cabId: string) => void
   onBlankWallContextMenu: (e: React.MouseEvent, wallId: string, wallT: number) => void
   onShiftSelectCabinet: (id: string) => void
   onMarqueeSelect: (ids: string[]) => void
-  onEqualizeWidths: () => void
+  onEqualizeWidths: (targetDx?: number) => void
   cabResize: CabResize | null
   onCabResizeStart: (r: CabResize) => void
   onCabResizeUpdate: (updates: { liveValue: number; livePosX?: number; livePosY?: number }) => void
@@ -163,7 +164,7 @@ interface ElevationSVGProps {
 
 export default function ElevationSVG({
   walls, cabinets, room, elevWallId, selected, displayConfig,
-  multiSelect, canEqualize, mode, clipboard,
+  multiSelect, canEqualize, mode, clipboard, clipboardGroup,
   onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu,
   onBlankWallContextMenu, onShiftSelectCabinet, onMarqueeSelect, onEqualizeWidths,
   cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
@@ -461,13 +462,18 @@ export default function ElevationSVG({
       if (dims) {
         const cls = clsInfo?.cls ?? clipboard!.assembly_class
         const occ = wallCabs
-          .filter(c => cabBlocks(cls, c.assembly_class))
+          .filter(c => cabsBlock({ assembly_class: cls, dy: dims.dy }, c, wall, room))
           .map(c => ({ t: cabT(c, wall), dx: c.dx }))
-        // Centre the snap landing on the cursor (subtract dx/2), matching the floating
-        // ghost (floatX = cursorT - dx/2) and the move/following path — otherwise the
-        // cursor sits on the outline's edge instead of in the middle of the cabinet.
-        const t = findFreeSlot(Math.max(0, Math.min(wall.length - dims.dx, cursorT - dims.dx / 2)), dims.dx, wall.length, occ)
-        setPlaceGhost({ t, cls, dx: dims.dx, dy: dims.dy, cursorT, cursorSY })
+        if (clsInfo) {
+          // Placing a new cabinet from the library: fit it into the available gap,
+          // shrinking the width when the gap is narrower than the default.
+          const fit = fitFreeSlot(cursorT, dims.dx, wall.length, occ)
+          setPlaceGhost({ t: fit.t, cls, dx: fit.dx, dy: dims.dy, cursorT, cursorSY })
+        } else {
+          // Paste keeps the copied cabinet's size; just centre + slot it.
+          const t = findFreeSlot(Math.max(0, Math.min(wall.length - dims.dx, cursorT - dims.dx / 2)), dims.dx, wall.length, occ)
+          setPlaceGhost({ t, cls, dx: dims.dx, dy: dims.dy, cursorT, cursorSY })
+        }
       }
       return
     }
@@ -506,8 +512,9 @@ export default function ElevationSVG({
       const wd = wallDir(wall)
       const pos_x = wall.pos_x + placeGhost.t * wd.x
       const pos_y = wall.pos_y + placeGhost.t * wd.y
+      const fitDx = modeAssemblyClass(mode) ? placeGhost.dx : undefined
       setPlaceGhost(null)
-      await onPlaceAtWall(wall, pos_x, pos_y)
+      await onPlaceAtWall(wall, pos_x, pos_y, fitDx)
       return
     }
 
@@ -567,7 +574,7 @@ export default function ElevationSVG({
     const snapBottomZ = isWallCab ? Math.max(0, wcTop - cab.dy) : 0
 
     const occupied = wallCabs
-      .filter(c => c.id !== id && cabBlocks(cab.assembly_class, c.assembly_class))
+      .filter(c => c.id !== id && cabsBlock(cab, c, wall, room))
       .map(c => ({ t: cabT(c, wall), dx: c.dx }))
     const snapT = slideToFreeSlot(
       Math.max(0, Math.min(wall.length - cab.dx, elevCabFloat.t - cab.dx / 2)),
@@ -629,7 +636,7 @@ export default function ElevationSVG({
     const perp = { x: -wd.y, y: wd.x }
     const dim: 'dx' | 'dy' = side === 'top' ? 'dy' : 'dx'
     const neighbours = wallCabs
-      .filter(c => c.id !== cab.id && cabBlocks(cab.assembly_class, c.assembly_class))
+      .filter(c => c.id !== cab.id && cabsBlock(cab, c, wall, room))
       .map(c => ({ t: cabT(c, wall), dx: c.dx }))
     setElevResizeFollowing({ cabId: cab.id, dim, side, startCabT: t, startCabEndT: t + cab.dx, resWall: wall, neighbours })
     setElevResizeLive({ cabId: cab.id, dim, value: dim === 'dx' ? cab.dx : cab.dy })
@@ -711,7 +718,8 @@ export default function ElevationSVG({
         {canEqualize && (
           <>
             <div className="mx-2 h-4 border-l border-gray-700" />
-            <button onClick={onEqualizeWidths}
+            <button onClick={() => onEqualizeWidths()}
+              title="Equalise to the average width (right-click a cabinet for smallest / largest / custom)"
               className="px-2.5 py-0.5 text-[10px] rounded bg-amber-700/40 text-amber-300 hover:bg-amber-700/60 whitespace-nowrap transition-colors">
               Equalise Widths
             </button>
@@ -1441,6 +1449,18 @@ export default function ElevationSVG({
               const arrowSize = 12 / z
               const showArrow = alen > arrowSize * 1.5
 
+              // Multi-paste: the rest of the copied group, at their spacing + height
+              // relative to the lead cabinet (which is the placeGhost above).
+              const baseCab = clipboardGroup[0]
+              const gwd = wallDir(wall)
+              const groupExtras = (mode === 'paste' && clipboardGroup.length > 1 && baseCab)
+                ? clipboardGroup.slice(1).map(gc => {
+                    const o    = (gc.pos_x - baseCab.pos_x) * gwd.x + (gc.pos_y - baseCab.pos_y) * gwd.y
+                    const topY = roomH - cabBottomZ(gc, room, wall) - gc.dy
+                    return { cls: gc.assembly_class, o, topY, dx: gc.dx, dy: gc.dy }
+                  })
+                : []
+
               return (<>
                 {/* Snap landing outline */}
                 <rect x={snapX} y={snapY} width={placeGhost.dx} height={placeGhost.dy}
@@ -1469,6 +1489,18 @@ export default function ElevationSVG({
                   fill={fill + 'cc'} stroke={sel}
                   strokeWidth={2 / z} strokeDasharray={`${6 / z} ${3 / z}`}
                   style={{ pointerEvents: 'none' }} />
+
+                {/* Rest of the multi-paste group */}
+                {groupExtras.map((ex, i) => (
+                  <g key={`gx${i}`}>
+                    <rect x={placeGhost.t + ex.o} y={ex.topY} width={ex.dx} height={ex.dy}
+                      fill="none" stroke="#60a5fa" strokeWidth={1 / z}
+                      strokeDasharray={`${4 / z} ${4 / z}`} opacity={0.5} style={{ pointerEvents: 'none' }} />
+                    <rect x={floatX + ex.o} y={floatY + (ex.topY - snapY)} width={ex.dx} height={ex.dy}
+                      fill={(CAB_FILL[ex.cls] ?? CAB_FILL.base) + 'cc'} stroke={CAB_FILL_SEL[ex.cls] ?? CAB_FILL_SEL.base}
+                      strokeWidth={2 / z} strokeDasharray={`${6 / z} ${3 / z}`} style={{ pointerEvents: 'none' }} />
+                  </g>
+                ))}
               </>)
             })()}
 
@@ -1487,7 +1519,7 @@ export default function ElevationSVG({
 
               // Snap landing
               const occupied = wallCabs
-                .filter(c => c.id !== elevCabFollowing.id && cabBlocks(followingCab.assembly_class, c.assembly_class))
+                .filter(c => c.id !== elevCabFollowing.id && cabsBlock(followingCab, c, wall, room))
                 .map(c => ({ t: cabT(c, wall), dx: c.dx }))
               const snapT = slideToFreeSlot(
                 Math.max(0, Math.min(wall.length - followingCab.dx, elevCabFloat.t - followingCab.dx / 2)),

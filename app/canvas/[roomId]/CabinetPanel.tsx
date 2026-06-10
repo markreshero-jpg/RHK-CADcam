@@ -2,10 +2,10 @@
 
 import { useState } from 'react'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
-import { cabT, wallDir, findFreeSlot } from '@/src/lib/geometry'
+import { cabT, wallDir, findFreeSlot, cabsBlock } from '@/src/lib/geometry'
 import CalcInput from '@/src/components/CalcInput'
 
-export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, hideWallPosition }: {
+export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, hideWallPosition, hideDelete }: {
   cabinet: CabinetInstance
   wall: Wall | null
   wallCabinets: CabinetInstance[]
@@ -13,6 +13,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
   onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
   onDelete: (id: string) => Promise<void>
   hideWallPosition?: boolean
+  hideDelete?: boolean
 }) {
   const [local, setLocal] = useState<Partial<CabinetInstance>>({})
   const [saving, setSaving] = useState(false)
@@ -27,8 +28,10 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
 
   const meas = wall ? (() => {
     const t = cabT(cabinet, wall)
+    // Only cabinets that actually overlap this one vertically count as left/right
+    // neighbours — a wall unit's clearances ignore base units below it, and vice versa.
     const others = wallCabinets
-      .filter(c => c.id !== cabinet.id)
+      .filter(c => c.id !== cabinet.id && (room ? cabsBlock(cabinet, c, wall, room) : true))
       .map(c => ({ t: cabT(c, wall), dx: c.dx }))
     const leftN  = others.filter(o => o.t + o.dx <= t + 1).sort((a, b) => b.t - a.t)[0]
     const rightN = others.filter(o => o.t >= t + cabinet.dx - 1).sort((a, b) => a.t - b.t)[0]
@@ -53,7 +56,9 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
           <p className="text-xs font-mono font-medium text-gray-300">{cabinet.label ?? '—'}</p>
           <p className="text-[10px] text-gray-500 capitalize">{cabinet.assembly_class.replace('_', ' ')}</p>
         </div>
-        <button onClick={() => onDelete(cabinet.id)} className="text-gray-600 hover:text-red-400 text-xs">✕</button>
+        {!hideDelete && (
+          <button onClick={() => onDelete(cabinet.id)} className="text-gray-600 hover:text-red-400 text-xs">✕</button>
+        )}
       </div>
       <div className="p-4 space-y-3">
         <div>

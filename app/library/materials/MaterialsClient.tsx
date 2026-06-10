@@ -45,7 +45,7 @@ interface InitialData {
 const TABS: TabConfig[] = [
   {
     id: 'board', label: 'Board Stock', table: 'materials', initKey: 'board',
-    defaults: { name: '', brand: null, finish: null, dz: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, face_colour: null, back_colour: null, edge_colour: null, cost_per_sheet: null, active: true },
+    defaults: { name: '', brand: null, finish: null, dz: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, face_colour: null, back_colour: null, edge_colour: null, cost_per_sheet: null, cnc_tool_id: null, feed_rate_pct: null, active: true },
     fields: [
       { key: 'name',           label: 'Name',     type: 'text',    w: 180 },
       { key: 'brand',          label: 'Brand',    type: 'text',    w: 110, placeholder: 'Laminex' },
@@ -57,6 +57,8 @@ const TABS: TabConfig[] = [
       { key: 'face_colour',    label: 'Face',     type: 'colour',  w: 90 },
       { key: 'back_colour',    label: 'Back',     type: 'colour',  w: 90 },
       { key: 'edge_colour',    label: 'Edge',     type: 'colour',  w: 90 },
+      { key: 'cnc_tool_id',    label: 'Route tool', type: 'select', w: 150, options: [] },
+      { key: 'feed_rate_pct',  label: 'Feed %',   type: 'number',  w: 60,  step: '1' },
       { key: 'cost_per_sheet', label: '$/sht',    type: 'number',  w: 72,  step: '0.01' },
       { key: 'active',         label: 'Active',   type: 'boolean', w: 48 },
     ],
@@ -269,6 +271,18 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
     load()
     return () => { cancelled = true }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Routing tools for the Board "Route tool" dropdown.
+  const [tools, setTools] = useState<{ id: string; name: string; tool_number: string | null }[]>([])
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('cnc_tools').select('id,name,tool_number').eq('active', true).order('tool_number').then(({ data }) => {
+      if (!cancelled) setTools((data ?? []) as { id: string; name: string; tool_number: string | null }[])
+    })
+    return () => { cancelled = true }
+  }, [])
+  const toolOptions = [{ value: '', label: '— none —' }, ...tools.map(t => ({ value: t.id, label: t.tool_number ? `${t.tool_number} · ${t.name}` : t.name }))]
+  const toolLabel = (id: unknown) => { const t = tools.find(x => x.id === id); return t ? (t.tool_number ? `${t.tool_number} · ${t.name}` : t.name) : '—' }
 
   const [forms, setForms] = useState<Record<string, Record<string, FVal>>>(() =>
     Object.fromEntries(TABS.map(t => [t.id, mkForm(t.defaults)]))
@@ -495,7 +509,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                     onChange={e => patchForm({ [f.key]: e.target.value })}
                     className="bg-transparent border-b border-edge-strong text-xs text-ink focus:outline-none focus:border-accent py-0.5 w-full"
                   >
-                    {f.options!.map(o => (
+                    {(f.key === 'cnc_tool_id' ? toolOptions : f.options!).map(o => (
                       <option key={o.value} value={o.value} className="bg-surface">{o.label}</option>
                     ))}
                   </select>
@@ -665,7 +679,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                             {row[f.key] ? String(row[f.key]) : '—'}
                           </span>
                         </>
-                      ) : fmtCell(row[f.key], f)}
+                      ) : f.key === 'cnc_tool_id' ? toolLabel(row[f.key]) : fmtCell(row[f.key], f)}
                     </div>
                   ))}
                 </div>

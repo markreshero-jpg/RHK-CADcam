@@ -7,7 +7,7 @@
 // ============================================================
 
 import { create } from 'zustand'
-import { materialGroupKey, type OptiSnapshot } from './types'
+import { materialGroupKey, buildMargins, type OptiSnapshot } from './types'
 import type { NormalizedProject } from './normalize'
 import type { GroupStock, SheetStock, NestResult, NestPartInput, Placement } from './nest'
 import { findBestPlacement, findNearestValid, sheetEfficiency } from './edit'
@@ -34,8 +34,8 @@ let pasteSeq = 0
 const INVALIDATE_NEST: Partial<OptiState> = { nestResult: null, partIndex: {}, editPast: [], editFuture: [], selectedUid: null }
 
 export interface PreOptSettings {
-  kerf: number            // saw/router kerf allowance (mm)
-  pad: number             // gap padding between parts (mm)
+  // Part-to-part margin is no longer set here — it's derived per material from the
+  // machine profile (nest pad + tool-entry offset) + the material's routing tool Ø.
   quality: 'fast' | 'balanced' | 'best'
   allowRotation: boolean  // test 90°/180°/270° for non-grain materials
 }
@@ -125,8 +125,6 @@ interface OptiState {
 }
 
 export const DEFAULT_SETTINGS: PreOptSettings = {
-  kerf: 3,
-  pad: 2,
   quality: 'balanced',
   allowRotation: true,
 }
@@ -265,10 +263,11 @@ export const useOptiStore = create<OptiState>((set) => ({
   rotatePart: (uid) => set(st => {
     if (!st.nestResult) return {}
     const next = clone(st.nestResult)
-    const gap = st.settings.kerf + st.settings.pad
+    const margins = st.snapshot ? buildMargins(st.snapshot, st.profileId) : { byMaterial: {}, fallback: 4 }
     for (const s of next.sheets) {
       const pl = s.placements.find(p => p.uid === uid)
       if (!pl) continue
+      const gap = (s.materialId != null ? margins.byMaterial[s.materialId] : undefined) ?? margins.fallback
       const nw = pl.h, nh = pl.w
       const pos = findNearestValid(s, uid, nw, nh, pl.x, pl.y, gap)
       if (!pos) return { editError: 'No room to rotate this part here.' }
@@ -331,7 +330,8 @@ export const useOptiStore = create<OptiState>((set) => ({
     const next = clone(st.nestResult)
     const sheet = next.sheets.find(s => s.index === sheetIndex)
     if (!sheet) return {}
-    const gap = st.settings.kerf + st.settings.pad
+    const margins = st.snapshot ? buildMargins(st.snapshot, st.profileId) : { byMaterial: {}, fallback: 4 }
+    const gap = (sheet.materialId != null ? margins.byMaterial[sheet.materialId] : undefined) ?? margins.fallback
     const sameGroup = (def: NestPartInput) => materialGroupKey(def.materialId, def.thickness) === materialGroupKey(sheet.materialId, sheet.thickness)
 
     if (st.clipboardMode === 'cut') {

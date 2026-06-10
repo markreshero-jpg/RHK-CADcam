@@ -27,7 +27,7 @@ export function buildContextMenuGroups({
   onCopy: (cab: CabinetInstance) => void
   onPaste: () => void
   onEdit: (id: string) => void
-  onEqualizeWidths: () => void
+  onEqualizeWidths: (targetDx?: number) => void
   onInsertCabinet?: (wallId: string, wallT: number, cls: AssemblyClass) => void
   onInsertAdjacent?: (cabId: string, type: 'panel' | 'filler', side: 'left' | 'right') => void
   onSplit?: (cabId: string) => void
@@ -73,7 +73,27 @@ export function buildContextMenuGroups({
   const groups: ContextMenuItem[][] = []
 
   if (canEqualize) {
-    groups.push([{ label: 'Equalise Widths', onClick: onEqualizeWidths, color: 'amber' }])
+    const selWidths = (multiSelect ?? [])
+      .map(id => cabinets.find(c => c.id === id))
+      .filter((c): c is CabinetInstance => !!c)
+      .map(c => c.dx)
+    const smallest = Math.min(...selWidths)
+    const largest  = Math.max(...selWidths)
+    const average  = Math.round(selWidths.reduce((s, w) => s + w, 0) / selWidths.length)
+    groups.push([{
+      label: 'Equalise Widths',
+      color: 'amber',
+      children: [
+        { label: `Smallest — ${smallest}mm`, onClick: () => onEqualizeWidths(smallest) },
+        { label: `Largest — ${largest}mm`,   onClick: () => onEqualizeWidths(largest) },
+        { label: `Average — ${average}mm`,   onClick: () => onEqualizeWidths(average) },
+        { label: 'Other…', onClick: () => {
+          const v = typeof window !== 'undefined' ? window.prompt('Equalise all selected widths to (mm):', String(average)) : null
+          const n = v ? parseFloat(v) : NaN
+          if (n > 0) onEqualizeWidths(n)
+        } },
+      ],
+    }])
     if (onAlignLeft && onAlignRight) {
       groups.push([
         { label: 'Align Left',  onClick: onAlignLeft,  color: 'amber' },

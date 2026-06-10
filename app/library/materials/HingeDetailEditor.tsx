@@ -8,7 +8,8 @@
 //   3. Plate library — child hardware_hinge_plates rows for this hinge, each with
 //      its own mounting-hole pattern, compatible surfaces, offset and default.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useGLTF } from '@react-three/drei'
 import { supabase } from '@/src/lib/supabase'
 import type { HingeHole, HingePlateType } from '@/src/lib/types'
 import CalcInput from '@/src/components/CalcInput'
@@ -151,12 +152,50 @@ function objectPathFromUrl(url: string): string | null {
   return idx < 0 ? null : url.slice(idx + marker.length)
 }
 
+// Reads the uploaded GLB and reports which named nodes it contains, so you can
+// confirm the mesh names the renderer looks for (HingeCupArm swings, optional
+// HingeArm folds, HingePlate is the fallback plate). A green chip = present.
+const HINGE_MESH_NAMES = ['HingeCupArm', 'HingeArm', 'HingePlate'] as const
+function MeshInspectorInner({ url }: { url: string }) {
+  const gltf = useGLTF(url)
+  const present = new Set<string>()
+  gltf.scene.traverse(o => { if (o.name) present.add(o.name) })
+  const extras = [...present].filter(n => !HINGE_MESH_NAMES.includes(n as typeof HINGE_MESH_NAMES[number]))
+  return (
+    <div className="mt-1.5 text-[9px]">
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-ink-subtle">Meshes:</span>
+        {HINGE_MESH_NAMES.map(n => {
+          const ok = present.has(n)
+          return (
+            <span key={n} className={`px-1 py-0.5 rounded ${ok ? 'bg-green-700/40 text-green-300' : 'bg-surface-3 text-ink-subtle'}`}>
+              {ok ? '✓' : '—'} {n}
+            </span>
+          )
+        })}
+      </div>
+      {extras.length > 0 && <div className="text-ink-subtle mt-1">Other nodes: {extras.join(', ')}</div>}
+      {!present.has('HingeArm') && (
+        <div className="text-amber-400 mt-1 leading-snug">No <code>HingeArm</code> mesh → the body swings as one piece; “Arm fold ×” has no effect until you split the body and name the back arm <code>HingeArm</code>.</div>
+      )}
+    </div>
+  )
+}
+function MeshInspector({ url }: { url: string }) {
+  return (
+    <Suspense fallback={<div className="mt-1.5 text-[9px] text-ink-subtle">Reading model…</div>}>
+      <MeshInspectorInner url={url} />
+    </Suspense>
+  )
+}
+
 function ModelSection({ hingeId, hinge, onHingePatch }: { hingeId: string; hinge: Record<string, unknown>; onHingePatch: (p: Record<string, unknown>) => void }) {
   const modelUrl = (hinge.model_combined_url as string | null) ?? null
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const scaleVal = Number(hinge.model_combined_scale ?? 1)
   const boreVal  = hinge.bore_centre_to_door_face_mm != null ? Number(hinge.bore_centre_to_door_face_mm) : null
+  const foldVal  = hinge.model_arm_fold_fraction != null ? Number(hinge.model_arm_fold_fraction) : 0.5
 
   async function commit(patch: Record<string, unknown>) {
     const { error: e } = await supabase.from('hardware_hinges').update(patch).eq('id', hingeId)
@@ -206,10 +245,12 @@ function ModelSection({ hingeId, hinge, onHingePatch }: { hingeId: string; hinge
       <div className="grid grid-cols-2 gap-2 mt-2">
         <LabeledCalc label="Scale" value={scaleVal} onCommit={v => commit({ model_combined_scale: v })} />
         <LabeledCalc label="Bore→face mm" value={boreVal} onCommit={v => commit({ bore_centre_to_door_face_mm: v })} onClear={() => commit({ bore_centre_to_door_face_mm: null })} />
+        <LabeledCalc label="Arm fold ×" value={foldVal} onCommit={v => commit({ model_arm_fold_fraction: v })} />
       </div>
       <p className="text-[9px] text-ink-subtle mt-1.5 leading-snug">
-        Meshes must be named <code className="text-ink-muted">HingePlate</code> + <code className="text-ink-muted">HingeCupArm</code>; origin = plate-face bore centre. Animation viewer is a later pass.
+        Body mesh <code className="text-ink-muted">HingeCupArm</code> swings with the door; optional <code className="text-ink-muted">HingeArm</code> (gable-side back arm) folds at the knuckle by <em>Arm fold ×</em> of the door angle (0 = static, 0.5 = half, 1 = matches door). Plate is a separate model below. Origin = plate-face bore centre.
       </p>
+      {modelUrl && <MeshInspector url={modelUrl} />}
     </div>
   )
 }

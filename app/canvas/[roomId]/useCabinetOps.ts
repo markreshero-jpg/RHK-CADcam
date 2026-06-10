@@ -1,6 +1,6 @@
 import type { CabinetInstance, Wall, Room, AssemblyClass } from '@/src/lib/types'
 import { DEFAULT_DIMS } from '@/src/lib/types'
-import { wallDir, findFreeSlot, cabT, cabBlocks, nextLabel } from '@/src/lib/geometry'
+import { wallDir, findFreeSlot, cabT, cabsBlock, nextLabel } from '@/src/lib/geometry'
 import { dbInsertCabinet, dbResolveAndPersistCabinet } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { Selected } from './canvasTypes'
@@ -42,7 +42,7 @@ export function useCabinetOps(p: CabinetOpsParams) {
     const dx = type === 'panel' ? 18 : 50
     const t = cabT(cab, wall)
     const occ = cabinets
-      .filter(c => c.id !== cab.id && c.wall_id === wall.id && cabBlocks('base', c.assembly_class))
+      .filter(c => c.id !== cab.id && c.wall_id === wall.id && cabsBlock(cab, c, wall, room))
       .map(c => ({ t: cabT(c, wall), dx: c.dx }))
     const desired = side === 'right'
       ? Math.min(wall.length - dx, t + cab.dx)
@@ -109,7 +109,7 @@ export function useCabinetOps(p: CabinetOpsParams) {
     if (!wall) return
     const dims = DEFAULT_DIMS[cls] ?? DEFAULT_DIMS.base
     const occ = cabinets
-      .filter(c => c.wall_id === wallId && cabBlocks(cls, c.assembly_class))
+      .filter(c => c.wall_id === wallId && cabsBlock({ assembly_class: cls, dy: dims.dy }, c, wall, room))
       .map(c => ({ t: cabT(c, wall), dx: c.dx }))
     const t = findFreeSlot(Math.max(0, Math.min(wall.length - dims.dx, wallT)), dims.dx, wall.length, occ)
     const wd = wallDir(wall)

@@ -1,0 +1,1036 @@
+
+
+
+
+
+
+RHK-CADcam
+Complete Build Specification — Version 2.1
+
+
+Panel Optimiser · Tool Library · Tool Sets · Routing System · Door Builder Integration
+
+Resident Hero Kitchen &amp; Cabinetry  ·  June 2026
+
+v2.1 — Updated after Room Management implementation audit
+
+
+For Claude Code handoff. Read AGENTS.md and existing codebase before writing any code.
+
+
+
+
+
+
+
+
+1. Codebase Context — Current State
+This document is the complete build specification for the CNC and routing system modules of RHK-CADcam. All changes are additive — nothing requires rebuilding existing code.
+v2.1 reflects a post-implementation audit of the codebase after Room Management was completed. Two corrections were made from v2.0: the Panel Optimiser entry point, and the part operations table.
+
+1.1  What Is Already Built
+Canvas (F2/F3/F4)
+Sidebar with Wall (F2), Cabinet (F3), Benchtop (F4) modes. Raw SVG rendering. Zustand state management.
+Cabinet resolver
+Full five-level hierarchy resolver. Parametric part generation, material resolution, joint system.
+Benchtop Builder
+Standalone module. Three-level hierarchy, polygon drawing, cutout system.
+Door Builder
+Built — app/library/doors/DoorSystemClient.tsx (737 lines). DO NOT REBUILD.
+Room Management
+Fully built. ProjectCard.tsx with expandable rooms, drag-to-sort (@dnd-kit), add/delete. RoomSwitcher.tsx in canvas sidebar. wall_dy and wall_dz on rooms table. expand param on projects page.
+Settings
+CNC Tool Setup and CNC Machine Setup tabs exist as &quot;Coming Soon&quot; placeholders — replace these.
+part_operations table
+Already exists with source_table, source_part_id, operation_type, tool_id, pos_x/y/z, diameter, depth, repeat_count, repeat_spacing, output_face, output_to_cnc, parameters JSONB. Read this table carefully before creating any new operations table.
+nest_jobs / nest_sheets / nest_placements
+All exist with RLS enabled. nest_jobs has project_id and cnc_machine_id. nest_sheets has sheet_number, efficiency, gcode. nest_placements has source_table, source_part_id, sheet_x/y, rotation, cut_dx/cut_dy.
+cnc_machines / cnc_tools / cnc_machine_profiles
+All exist with RLS enabled. cnc_tools has 2 rows. cnc_machine_profiles has onion_skin_z, through_cut_z, ramp_in_distance, ramp_in_feed_pct, safe_z_clearance, vacuum_zone_1-4, push_off fields.
+All RLS
+All 10 previously-flagged tables now have RLS enabled. No RLS migration required.
+
+1.2  F-Key Registry
+F2
+Wall — draw_wall mode
+F3
+Cabinet — cabinet placement modes
+F4
+Benchtop — draw_benchtop modes
+F5
+Panel Optimiser — navigate to /projects/[projectId]/optimiser (not a canvas sidebar mode)
+
+1.3  Panel Optimiser — Confirmed Entry Points
+Two entry points confirmed from the codebase audit:
+
+Production menu → Generate CNC…
+The canvas menubar already has a Production menu with a disabled &quot;Generate CNC…&quot; item (canvasMenuConfig.ts). This is the primary entry point. Replace the disabled placeholder with a live action that navigates to /projects/[projectId]/optimiser. The projectId is available via the project prop in CanvasClient.tsx.
+Projects page → project card
+A secondary &quot;Optimise / CNC&quot; button or link on the project card in app/page.tsx. Navigates to /projects/[projectId]/optimiser. Placement: alongside or below the room list in the expanded card.
+⚑  The Panel Optimiser route is /projects/[projectId]/optimiser — a standalone Next.js page, not a canvas sidebar panel. It is NOT registered as F5 in the canvas sidebar. F5 is reserved for future use.
+
+1.4  part_operations vs part_routes — Important
+The spec v2.0 described a new part_routes table. Before creating this table, Claude Code must read the existing part_operations table which already has significant overlap. The audit found:
+
+part_operations.source_table
+text — case_parts | toekick_parts | internal_parts | face_zones. Exactly the source routing needed.
+part_operations.source_part_id
+uuid — FK to the part in its source table.
+part_operations.operation_type
+text — already has drill, route, pocket, saw types.
+part_operations.tool_id
+text — tool reference (currently text, not FK to cnc_tools).
+part_operations.pos_x/y/z
+numeric — operation position on the part.
+part_operations.diameter
+numeric — tool diameter for this operation.
+part_operations.depth
+numeric — operation depth.
+part_operations.repeat_count / repeat_spacing
+For drill patterns and repeated operations.
+part_operations.output_face
+top | bottom | front | back | left | right — which face the operation is on.
+part_operations.output_to_cnc
+boolean — already present.
+part_operations.parameters
+jsonb — flexible overflow for any additional parameters.
+✖  Do NOT create a new part_routes table. Extend part_operations additively instead. Add: tool_id FK constraint to cnc_tools (currently text), operation_type expansion to include outline/square_off/profile/groove/raster, tool_set_id FK to cnc_tool_sets, fill_strategy, raster_angle_deg, raster_stepover_pct, offset_top/bottom/left/right_mm columns.
+
+1.5  Build Order — Dependency Chain
+Step 1
+CNC Tool Library — replace Coming Soon in Settings with real tool library + shape editor
+Step 2
+Tool Sets — new cnc_tool_sets and cnc_tool_set_operations tables + UI in Settings
+Step 3
+Routing System — extend part_operations and door_profile_operations additively; CabinetEditModal route section
+Step 4
+Panel Optimiser — standalone /projects/[projectId]/optimiser page
+
+
+2. Step 1 — CNC Tool Library
+The CNC Tool Setup tab in Settings (app/settings/SettingsClient.tsx) currently renders a Coming Soon placeholder. Replace this with a full tool library and parametric shape editor.
+
+2.1  cnc_tools Table — New Columns
+The cnc_tools table already exists with id, name, tool_number, diameter, flutes, tool_type, material_notes, active, base_feed_rate, base_spindle_speed. Add the following via migration:
+
+Field
+Type
+Default
+Description
+max_depth_per_pass
+numeric (mm)
+null
+Maximum cut depth per Z pass. If total route depth exceeds this the system auto-steps. E.g. 4mm max with 12mm deep route = 3 passes automatically.
+cutting_length
+numeric (mm)
+null
+Usable flute cutting length. Determines maximum single-pass depth when max_depth_per_pass is null.
+shank_diameter
+numeric (mm)
+null
+Shank diameter for reference only — not used in toolpath calculation.
+shape_profile
+jsonb
+null
+Parametric shape profile. See section 2.2.
+⚑  The existing tool_type check constraint currently allows: compression | upcut | downcut | vbit | drill | other. Expand to also include: roundover | cove | rebate | chamfer | t_slot.
+
+2.2  Parametric Shape Profile
+The shape_profile JSONB stores tool cross-section parameters by type:
+
+straight (compression/upcut/downcut)
+&quot;type&quot;:&quot;straight&quot;,&quot;params&quot;:{&quot;diameter&quot;:8,&quot;cutting_length&quot;:32}
+vbit / chamfer
+&quot;type&quot;:&quot;vbit&quot;,&quot;params&quot;:{&quot;diameter&quot;:12,&quot;angle_deg&quot;:90,&quot;tip_diameter&quot;:0.2}
+roundover
+&quot;type&quot;:&quot;roundover&quot;,&quot;params&quot;:{&quot;diameter&quot;:12,&quot;radius&quot;:4}
+cove
+&quot;type&quot;:&quot;cove&quot;,&quot;params&quot;:{&quot;diameter&quot;:12,&quot;radius&quot;:5}
+rebate
+&quot;type&quot;:&quot;rebate&quot;,&quot;params&quot;:{&quot;diameter&quot;:12,&quot;rebate_depth&quot;:6,&quot;rebate_width&quot;:8}
+t_slot
+&quot;type&quot;:&quot;t_slot&quot;,&quot;params&quot;:{&quot;shank_diameter&quot;:6,&quot;slot_diameter&quot;:12,&quot;slot_height&quot;:4}
+drill
+&quot;type&quot;:&quot;drill&quot;,&quot;params&quot;:{&quot;diameter&quot;:5,&quot;point_angle_deg&quot;:118}
+
+2.3  Shape Editor UI
+In CNC Tool Setup tab — alongside each tool record, a shape preview panel renders a live SVG cross-section based on shape_profile params
+Operator selects tool_type — shape editor updates to show relevant parameter inputs for that type
+Each parameter has a labelled numeric input field
+Live SVG preview renders the tool cross-section at scale, updating as values change
+SVG shows tool centreline, cutting edge profile, and shank outline
+This same SVG profile is used in Phase 2 simulator to render the tool head during animation
+
+2.4  CNC Tool Setup UI
+Tool list — table showing all active tools: tool_number, name, type, diameter, max_depth_per_pass, base_feed_rate
+Add tool button — inline form or slide-out panel
+Each row expandable to show full detail including shape editor
+Inline edit — all fields editable in place, saved on blur (match existing DoorSystemClient.tsx pattern)
+Active toggle — soft delete, inactive tools hidden from selection lists
+
+
+3. Step 2 — Tool Sets
+A Tool Set is a named, ordered sequence of machining operations using specific tools, designed to achieve a defined result (e.g. &quot;Shaker Route&quot;, &quot;VJ Board Lines&quot;, &quot;Beaded Profile&quot;). Tool sets are global shop-level entities referenced by door profiles and part operations.
+
+3.1  New Tables
+
+3.1.1  cnc_tool_sets
+Field
+Type
+Default
+Description
+id
+uuid
+gen_random_uuid()
+Primary key
+name
+text
+—
+Display name, e.g. &quot;Shaker Route&quot;
+description
+text
+null
+Optional description
+is_active
+boolean
+true
+Soft delete
+sort_order
+integer
+0
+Display order in selection lists
+created_at
+timestamptz
+now()
+—
+updated_at
+timestamptz
+now()
+—
+
+3.1.2  cnc_tool_set_operations
+Each row is one step in the sequence. Executed in ascending sort_order.
+
+Field
+Type
+Default
+Description
+id
+uuid
+gen_random_uuid()
+Primary key
+tool_set_id
+uuid (FK)
+—
+FK → cnc_tool_sets.id ON DELETE CASCADE
+sort_order
+integer
+—
+Execution sequence. User-editable — changing it reorders the step.
+operation_type
+text
+—
+pocket | outline | square_off | profile | drill | groove | raster
+tool_id
+uuid (FK)
+null
+FK → cnc_tools.id
+description
+text
+null
+Step label, e.g. &quot;40mm roughing pass&quot;
+depth_mm
+numeric
+null
+Fixed depth in mm. Overridden by depth_eq if set.
+depth_eq
+text
+null
+Formula for depth, e.g. &quot;@part.DZ * 0.4&quot;
+width_mm
+numeric
+null
+Cut width in mm (pocket, groove)
+offset_top_mm
+numeric
+null
+Inset from top edge of route boundary (mm)
+offset_bottom_mm
+numeric
+null
+Inset from bottom edge
+offset_left_mm
+numeric
+null
+Inset from left edge
+offset_right_mm
+numeric
+null
+Inset from right edge
+fill_strategy
+text
+null
+raster | spiral_in | spiral_out — for pocket and raster operations
+raster_angle_deg
+numeric
+0
+Raster pass angle. 0 = horizontal, 90 = vertical.
+raster_stepover_pct
+numeric
+40
+Stepover between raster passes as % of tool diameter
+feed_rate_override
+numeric
+null
+Feed rate override mm/min. Null = use tool base_feed_rate × material feed_rate_pct.
+spindle_speed_override
+numeric
+null
+Spindle speed override RPM. Null = use tool base_spindle_speed.
+created_at
+timestamptz
+now()
+—
+
+3.2  Operation Types
+pocket
+Area clearance. Removes all material within the route boundary down to depth. If depth exceeds tool max_depth_per_pass, auto-steps down in increments. Fill strategy: raster or spiral.
+outline
+Single perimeter pass following the exact route boundary at the specified depth. Used for finishing passes or shallow decorative grooves.
+square_off
+Corner cleanup using a small diameter tool to reach internal corners that the larger finishing bit left radiused. System calculates which corners need treatment.
+profile
+Shaped edge pass using a profiled bit (VJ, roundover, cove, chamfer, rebate). Tool follows the perimeter. Tool shape_profile determines the resulting edge geometry.
+drill
+Single point or pattern drilling. Position defined by coordinates relative to part. Supports repeat patterns (rows, grids).
+groove
+Straight line route from point A to point B. Defined by start/end coordinates relative to the part, or by edge references. Supports multi-segment paths.
+raster
+Parallel line passes across the part or defined area. Direction set by raster_angle_deg. Used for surface texturing, fluting, VJ board effects.
+
+3.3  Tool Set Builder UI
+Add a &quot;Tool Sets&quot; tab to the CNC group in SettingsClient.tsx, placed after CNC Machine Setup:
+Tool set list on the left — name, description, active toggle, add/delete buttons
+Selected tool set detail on the right — name field, description, and the operations list
+Operations list: each step as a row with sort_order (editable number), operation_type dropdown, tool dropdown, key parameters inline
+Changing sort_order number immediately reorders the list — list always renders in ascending sort_order
+Add Operation button — appends new row with next sort_order, defaults to pocket
+Each operation row is expandable to show all parameters including fill_strategy, per-side offsets, overrides
+Delete button on each operation row
+
+
+4. Step 3 — Routing System
+
+4.1  part_operations Table — Extensions
+Do NOT create a new table. Extend the existing part_operations table additively:
+
+Field
+Type
+Default
+Description
+tool_set_id
+uuid (FK)
+null
+NEW — FK → cnc_tool_sets.id. When set, executes the full tool set sequence. Takes precedence over tool_id for this operation.
+offset_top_mm
+numeric
+null
+NEW — Inset from top edge of part (mm). Supplements existing pos_x/pos_y for boundary-based operations.
+offset_bottom_mm
+numeric
+null
+NEW — Inset from bottom edge
+offset_left_mm
+numeric
+null
+NEW — Inset from left edge
+offset_right_mm
+numeric
+null
+NEW — Inset from right edge
+fill_strategy
+text
+null
+NEW — raster | spiral_in | spiral_out
+raster_angle_deg
+numeric
+0
+NEW — Raster angle in degrees
+raster_stepover_pct
+numeric
+40
+NEW — Raster stepover as % of tool diameter
+operation_type (expand)
+text
+—
+EXPAND check constraint to include all types: drill | route | pocket | saw | outline | square_off | profile | groove | raster. Existing values remain valid.
+tool_id (add FK)
+uuid (FK)
+null
+ADD FK constraint to cnc_tools.id. Currently stored as text — migrate to proper FK while preserving existing data.
+⚑  part_operations already has: source_table, source_part_id, operation_type, pos_x/y/z, diameter, depth, repeat_count, repeat_spacing, output_face, output_to_cnc, parameters JSONB, is_master/master_operation_id for paired operations. All of this is retained as-is.
+
+4.2  door_profile_operations Table — Extensions
+The door_profile_operations table already has: profile_id, operation_type (route|drill|pocket), tool_diameter_mm, depth_mm, width_mm, offset_from_edge_mm, pass_depth_mm, feed_rate, spindle_speed, sort_order, expressions. Add:
+
+Field
+Type
+Default
+Description
+tool_id
+uuid (FK)
+null
+NEW — FK → cnc_tools.id. Replaces the raw tool_diameter_mm for ATC-aware tool selection.
+tool_set_id
+uuid (FK)
+null
+NEW — FK → cnc_tool_sets.id. When set, executes the full tool set sequence for this door profile operation.
+offset_top_mm
+numeric
+null
+NEW — Per-side inset. When set, overrides offset_from_edge_mm for this edge.
+offset_bottom_mm
+numeric
+null
+NEW — Per-side inset from bottom edge
+offset_left_mm
+numeric
+null
+NEW — Per-side inset from left edge
+offset_right_mm
+numeric
+null
+NEW — Per-side inset from right edge
+fill_strategy
+text
+null
+NEW — raster | spiral_in | spiral_out
+raster_angle_deg
+numeric
+0
+NEW — Raster angle in degrees
+raster_stepover_pct
+numeric
+40
+NEW — Raster stepover %
+operation_type (expand)
+text
+—
+EXPAND check constraint: route | drill | pocket | outline | square_off | profile | groove | raster. Existing values retained.
+⚑  offset_from_edge_mm is retained. When per-side offsets are all null, offset_from_edge_mm applies to all four sides (square inset). Existing Shaker profile data continues to work without migration.
+
+4.3  DoorSystemClient.tsx Extensions
+Extend the existing profile operations editor in DoorSystemClient.tsx. Additive only — no existing functionality removed:
+Expand OP_TYPES constant to include the full operation type list
+Add tool_set_id selector alongside existing tool selector — when a tool set is selected, the individual tool_id field is hidden
+Add per-side offset inputs (top/bottom/left/right) for pocket, outline, square_off operations — default to showing the single offset_from_edge_mm value in all four fields for existing operations
+Add fill_strategy selector and raster parameters when operation type is pocket or raster
+
+4.4  CabinetEditModal — Part Operations Section
+Add a Routes / Operations section to CabinetEditModal (app/canvas/[roomId]/CabinetEditModal.tsx). Uses the extended part_operations table.
+
+Part selector — dropdown showing all parts of the selected cabinet
+Operations list for the selected part — each operation as a row with name, operation_type or tool_set name, depth
+Add Operation button — presents type selector: Single Operation, Tool Set, Drill Pattern, Groove
+Single Operation — operation_type dropdown, tool selector, depth, per-side offsets, fill strategy
+Tool Set — tool_set selector, depth, per-side offsets for the route boundary
+Drill Pattern — grid editor: holes count, spacing, start offset, diameter, depth
+Groove — start/end point inputs (X/Y relative to part), width, depth, tool
+Sort order input and delete button per operation row
+output_to_cnc toggle per operation
+
+
+5. Step 4 — Panel Optimiser
+The Panel Optimiser is a standalone Next.js page at /projects/[projectId]/optimiser. Not a canvas sidebar panel. Entry points: Production menu → Generate CNC… in the canvas, and a button on the project card in app/page.tsx.
+
+5.1  Entry Points — Implementation Detail
+
+5.1.1  Canvas Production Menu
+In canvasMenuConfig.ts, the Production menu already has { label: &quot;Generate CNC…&quot;, disabled: true }. Change this to:
+Remove disabled: true
+Add action: () =&gt; { window.location.href = `/projects/${project.id}/optimiser` }
+The project prop is already available in CanvasClient.tsx — pass projectId through MenuActions if not already there
+
+5.1.2  Projects Page
+In app/page.tsx / ProjectCard.tsx, add an &quot;Optimise&quot; or &quot;CNC&quot; link within the expanded room list area — positioned below the room list and above the Add Room button. Navigates to /projects/[project.id]/optimiser.
+
+5.2  Core Principles
+Temporary workspace — no writes to job tables. Parts are read as a snapshot at load time.
+Non-destructive — quantity changes and exclusions have no BOM effect
+Batch support — multiple projects share sheets for optimal material yield
+Snapshot fidelity — G-code generation saves a complete reloadable snapshot
+
+5.3  Batch Project Support
+Parts from batched projects are pooled per material group and nested on shared sheets. No job separation on sheets — a sheet may contain panels from multiple projects. Each part retains its job label so cut sheets identify which job each part belongs to.
+
+5.3.1  nest_jobs Schema Additions
+Field
+Type
+Default
+Description
+project_ids
+uuid[]
+null
+NEW — Array of all project IDs in this batch. The existing project_id retains the initiating project.
+snapshot
+jsonb
+{}
+NEW — Complete reloadable layout snapshot saved at G-code generation time.
+generated_at
+timestamptz
+null
+NEW — Timestamp when G-code was generated.
+
+5.4  Six-Stage Workflow
+Stage 1
+Machine &amp; Tool Setup — select CNC machine and cutting profile
+Stage 2
+Project &amp; Part Selection — batch project selection, filter by Room/Cabinet/Material, select parts
+Stage 3
+Pre-Optimisation Settings — sheet stock (including offcuts), kerf, pad, rotation, quality slider
+Stage 4
+Auto-Nesting — NFP + simulated annealing. Parts grouped by material+thickness.
+Stage 5
+Manual Editing — interactive SVG canvas, drag/drop, clipboard, sheet management, undo/redo
+Stage 6
+G-code Generation — per-sheet files, snapshot save, send to machine
+
+5.5  Filter System
+Filters work as intersections. Available within Stage 2:
+
+Field
+Type
+Default
+Description
+Project filter
+multi-select
+All
+Which batched projects to filter within
+Room filter
+multi-select
+All rooms
+Rooms from all selected projects. Prefixed with job number when multiple projects in scope.
+Cabinet filter
+multi-select
+All cabinets
+Updates to reflect cabinets within selected rooms
+Material filter
+multi-select
+All materials
+Filter to specific materials
+⚑  Filtering highlights candidates — it is a selection aid, not a hard exclude. After filtering, the operator can individually check/uncheck parts. Cut quantity can be adjusted per part (optimiser-only, no BOM effect).
+
+5.6  Nesting Algorithm
+No-Fit Polygon (NFP) nesting with simulated annealing optimisation. Parts grouped by material+thickness before nesting. Within each group sorted by descending area, largest placed first.
+NFP handles rectangles and arbitrary polygons (L-shapes, future curves)
+Quality slider: Fast (nearest-fit only) | Balanced (light annealing, ~5-15s) | Best (full annealing, ~30-120s)
+Rotation: 0°/90°/180°/270° tested for non-grain materials. Grain-locked materials only test grain-preserving rotations.
+New sheets opened automatically when current sheet is full
+Parts with higher nest_priority (from source part table) placed before lower-priority parts within their material group
+
+5.7  Manual Editing Canvas
+5.7.1  Layout
+Sheet canvas (main)
+Current sheet — boundary, margin zones, placed parts with grain indicators and part labels. SVG rendering matching existing canvas pattern.
+Sheet navigator (right sidebar)
+All sheets listed: page number, material, efficiency %, thumbnail. Click to navigate.
+Parts detail panel (right sidebar)
+Full detail of all parts on current sheet
+Unplaced / clipboard (bottom)
+Unplaced parts and clipboard items. Quantity input for pasting multiples. Job label prefix shown for batch runs.
+
+5.7.2  Interaction
+Drag and drop — on overlap, snaps to closest valid position (no grid). Respects kerf, pad, margins, grain.
+No valid position on sheet → error: &quot;No room on this sheet for this part.&quot;
+Copy (Ctrl+C) — copies to clipboard, original stays on sheet
+Cut (Ctrl+X) — removes to clipboard / unplaced pool
+Paste (Ctrl+V) — places at best available position near sheet centre
+Drag from unplaced pool directly onto sheet canvas
+Paste multiples — set quantity in unplaced panel, paste places N copies in sequence
+Right-click context menu: Cut, Copy, Move to Sheet N, Delete from run
+Full undo/redo — Ctrl+Z / Ctrl+Y — every action recorded
+
+5.7.3  Sheet Management
+Add blank sheet — prompts: material, dimensions, optional label
+Change sheet dimensions — modal: &quot;Re-nest this sheet? Yes / No&quot;
+Delete sheet — all parts return to unplaced pool
+Live efficiency % per sheet, real-time
+
+5.8  G-code Generation
+
+✖  Drilling and boring always execute before routing. Non-negotiable.
+✖  Inside-out sequencing always enforced — internal features before outer profiles. Non-negotiable.
+
+5.8.1  Cut Sequence per Sheet
+1
+Program header — machine init, work offset, units, safe Z
+2
+Sheet load pause — M00 if sheet_load_pause = true
+3
+Dust extraction on
+4
+ALL drilling/boring across ALL parts — sequenced by drill_sequence_strategy (stripe default)
+5
+Tool change to routing bit
+6
+ALL routing — inside-out order, travel-optimised between parts
+7
+Dust extraction off
+8
+Spindle off
+9
+Push-off if enabled
+10
+Program footer — home, M30
+
+5.8.2  Drill Sequencing Strategies
+stripe (default)
+Horizontal bands across sheet, left-to-right odd bands, right-to-left even (boustrophedon). Predictable.
+nearest_neighbour
+Always move to closest unvisited hole. 80-90% optimal, fast.
+tsp
+Full TSP optimisation. Best result, higher compute. Recommended for 200+ holes.
+
+5.8.3  File Naming
+One G-code file per sheet:
+Single project: {JobNumber}_{MaterialCode}_{SheetNumber}.nc
+Batch run: BATCH_{Date}_{MaterialCode}_{SheetNumber}.nc
+File extension configurable per machine profile. Default .nc
+
+5.9  nest_sheets Schema Additions
+Field
+Type
+Default
+Description
+sheet_dx
+numeric (mm)
+—
+NEW — Actual sheet width (may differ from material default for offcuts)
+sheet_dy
+numeric (mm)
+—
+NEW — Actual sheet height
+is_offcut
+boolean
+false
+NEW — True for non-standard or offcut sheets
+sheet_label
+text
+null
+NEW — Operator label, e.g. &quot;Workshop offcut A&quot;
+
+5.10  nest_placements Schema Additions
+Field
+Type
+Default
+Description
+part_label
+text
+—
+NEW — Snapshot of part label including job prefix for batch runs
+project_id
+uuid
+null
+NEW — Which project this part belongs to
+cut_quantity
+integer
+1
+NEW — Optimiser-only cut quantity
+shape_polygon
+jsonb
+null
+NEW — Polygon vertices snapshot for non-rectangular parts
+
+
+6. Machine Profile — cnc_machine_profiles Additions
+The cnc_machine_profiles table already has: safe_z_clearance, onion_skin_z, through_cut_z, ramp_in_distance, ramp_in_feed_pct, vacuum_zone_1-4, push_off_enabled, push_off_distance, notes, active. All retained. Add the following via migration:
+
+6.1  Identity &amp; Axis
+Field
+Type
+Default
+Description
+origin_corner
+text
+bottom_left
+Sheet datum: bottom_left | bottom_right | top_left | top_right
+x_axis_direction
+text
+positive_right
+positive_right | positive_left
+y_axis_direction
+text
+positive_up
+positive_up | positive_down
+z_axis_up
+boolean
+true
+True if positive Z is up (standard)
+max_feed_rate
+numeric
+null
+Machine max feed rate mm/min — safety cap
+max_spindle_speed
+numeric
+null
+Machine max RPM — safety cap
+units_code
+text
+G21
+G21 (mm) always for this system
+
+6.2  Z Heights
+Field
+Type
+Default
+Description
+material_surface_z
+text
+top_of_material
+Z zero reference: top_of_material | spoilboard
+spoilboard_thickness
+numeric (mm)
+null
+Reference spoilboard thickness for Z offset calculations
+drill_rapid_z
+numeric (mm)
+5
+Z height between drill hits — lower than safe_z for speed
+
+6.3  Tool Entry Strategy
+Field
+Type
+Default
+Description
+entry_strategy
+text
+ramp
+ramp | helical | pre_drill | straight_plunge
+ramp_in_angle
+numeric (°)
+3
+Ramp descent angle. Typical 1-5°. (ramp_in_distance already exists)
+helical_radius
+numeric (mm)
+8
+Helical entry circle radius. Used when entry_strategy = helical.
+helical_feed_pct
+numeric (%)
+40
+Feed rate % during helical entry
+helical_passes
+integer
+1
+Full helical loops before reaching cut depth
+pre_drill_tool_id
+uuid (FK)
+null
+FK → cnc_tools.id for pre-drill entry tool
+
+6.4  Lead-in &amp; Lead-out
+Field
+Type
+Default
+Description
+lead_in_type
+text
+arc_tangent
+straight | arc_tangent | perpendicular | none
+lead_in_length
+numeric (mm)
+8
+Length or arc radius of lead-in
+lead_in_feed_pct
+numeric (%)
+60
+Feed rate % during lead-in
+lead_out_type
+text
+arc_tangent
+straight | arc_tangent | perpendicular | none
+lead_out_length
+numeric (mm)
+8
+Length or arc radius of lead-out
+lead_out_feed_pct
+numeric (%)
+100
+Feed rate % during lead-out
+
+6.5  Milling Direction
+Field
+Type
+Default
+Description
+milling_direction
+text
+climb
+climb | conventional | auto
+milling_direction_override_by_material
+boolean
+true
+Allow materials table to override per material
+
+6.6  Pass Strategy
+Field
+Type
+Default
+Description
+pass_strategy
+text
+onion_skin
+single | onion_skin | roughing_finishing | multi_depth
+rough_pass_z_step
+numeric (mm)
+8
+Max depth per roughing pass
+finish_pass_allowance
+numeric (mm)
+0.5
+Material left for finish pass
+finish_pass_feed_pct
+numeric (%)
+80
+Feed rate % for finish pass
+
+6.7  Corner Strategy
+Field
+Type
+Default
+Description
+corner_loop_enabled
+boolean
+true
+Small loop at external corners to maintain speed and avoid dwell marks
+corner_loop_radius
+numeric (mm)
+3
+Corner loop radius
+dogbone_enabled
+boolean
+true
+Dog-bone relief at internal corners for joinery
+dogbone_radius
+numeric (mm)
+auto
+Typically tool_diameter/2 + 0.1mm. Auto-calculated but overridable.
+corner_dwell_ms
+integer (ms)
+0
+Dwell at sharp corners when loops disabled. Default zero.
+
+6.8  Tabs
+Field
+Type
+Default
+Description
+tabs_enabled
+boolean
+false
+Master tab switch
+tab_width
+numeric (mm)
+6
+Tab width along cut path
+tab_height
+numeric (mm)
+4
+Tab height above spoilboard
+tab_min_part_area
+numeric (mm²)
+10000
+Min part area before tabs added (100×100mm)
+tabs_per_side_min
+integer
+1
+Minimum tabs per side
+tabs_per_side_max
+integer
+2
+Maximum tabs per side
+
+6.9  Cut Sequencing
+Field
+Type
+Default
+Description
+drill_sequence_strategy
+text
+stripe
+nearest_neighbour | stripe | tsp
+stripe_direction
+text
+horizontal
+horizontal | vertical
+stripe_width
+numeric (mm)
+50
+Stripe band height/width
+group_by_vacuum_zone
+boolean
+false
+Group routing cuts by vacuum zone
+optimise_travel_path
+boolean
+true
+Nearest-neighbour TSP between routing operations
+vacuum_zone_layout
+jsonb
+{}
+Zone boundary coordinates for zone-aware sequencing
+
+6.10  Sheet Handling &amp; G-code Structure
+Field
+Type
+Default
+Description
+sheet_load_pause
+boolean
+true
+M00 pause at program start for sheet loading
+dust_extraction_enabled
+boolean
+true
+Output M-codes for dust extraction on/off
+program_header
+text
+null
+Custom G-code lines at file start
+program_footer
+text
+null
+Custom G-code lines at file end (home + M30)
+spindle_on_code
+text
+M03
+Spindle start command
+spindle_off_code
+text
+M05
+Spindle stop command
+coolant_on_code
+text
+M08
+Coolant/air blast on
+coolant_off_code
+text
+M09
+Coolant/air blast off
+tool_change_code
+text
+T{n} M06
+Tool change template. {n} = tool number.
+work_offset_code
+text
+G54
+Work coordinate system offset
+decimal_places
+integer
+3
+Coordinate output decimal places
+line_numbers_enabled
+boolean
+false
+Prefix lines with N sequence numbers
+line_number_increment
+integer
+10
+Line number increment
+
+
+7. Phase 2 — Toolpath Simulator
+Phase 2 — built after the Panel Optimiser is complete and verified. Specified here so Phase 1 architecture accommodates it.
+
+7.1  What It Shows
+Sheet flat in viewport at scale
+Spindle head as a scaled circle (tool diameter) with the tool cross-section SVG profile from the tool library
+Rapid moves — blue dashed line, no material removal
+Drill hits — pulsing circles at each position as they execute
+Routing moves — solid cutting line, material rendered removed behind tool
+Lead-in and lead-out arcs in a distinct colour
+Corner loops and dog-bones at correct scale
+Tabs shown as small uncut sections
+
+7.2  Playback Controls
+Play / Pause, Speed (1×, 5×, 20×, 100×), Scrub timeline
+Step forward / back one G-code line
+Jump to start / end
+Sheet selector for multi-sheet runs
+
+7.3  Technical Approach
+Parses stored G-code text from nest_sheets.gcode into a sequence of 2D moves with metadata. Animates using SVG or canvas rendering at the requested playback speed. No re-calculation — purely replays the stored record.
+
+
+8. Implementation Notes for Claude Code
+
+8.1  Read First — Mandatory
+AGENTS.md — Next.js 16.2.6 has breaking changes. Read node_modules/next/dist/docs/ before any routing or page code.
+app/canvas/[roomId]/canvasMenuConfig.ts — Production menu already has disabled Generate CNC… item. This is the optimiser entry point.
+app/canvas/[roomId]/CanvasClient.tsx — understand how project prop is available and how to pass projectId to the menu action
+app/page.tsx and app/ProjectCard.tsx — room management already implemented. Add the Optimise button here.
+app/library/doors/DoorSystemClient.tsx — existing door builder. Extend only, never rebuild.
+app/settings/SettingsClient.tsx — CNC group structure and Coming Soon placeholders.
+src/lib/types.ts — Room, Wall, Project types. Understand existing shapes before adding.
+Database table part_operations — read carefully before writing any operations-related migration. It is already substantially built.
+
+8.2  Critical Constraints
+✖  Panel Optimiser is at /projects/[projectId]/optimiser — NOT a canvas sidebar panel
+✖  Entry point is Production menu → Generate CNC… (already exists as disabled placeholder)
+✖  Do NOT create part_routes table — extend part_operations instead
+✖  Do NOT rebuild the door builder — additive extension only
+✖  All new tables get RLS enabled with authenticated-only policies
+✖  No localStorage or sessionStorage — use Zustand state
+✖  Canvas rendering uses raw SVG — do NOT introduce react-konva
+
+8.3  Build Sequence with Check-in Points
+Step 1
+cnc_tools migration — add max_depth_per_pass, cutting_length, shank_diameter, shape_profile, expand tool_type check constraint. CHECK IN.
+Step 2
+CNC Tool Setup UI in Settings — replace Coming Soon with real tool library. CHECK IN.
+Step 3
+Tool shape editor SVG preview within tool setup. CHECK IN.
+Step 4
+cnc_tool_sets and cnc_tool_set_operations tables — migration only. CHECK IN.
+Step 5
+Tool Sets UI in Settings — new tab in CNC group. CHECK IN.
+Step 6
+part_operations extensions — migration: tool_set_id, offset columns, fill_strategy, raster fields, operation_type expansion, tool_id FK. CHECK IN.
+Step 7
+door_profile_operations extensions — migration: tool_id FK, tool_set_id, per-side offsets, fill_strategy, raster fields, operation_type expansion. CHECK IN.
+Step 8
+DoorSystemClient.tsx extensions — new operation types, tool set selector, per-side offsets, fill strategy. CHECK IN.
+Step 9
+CabinetEditModal Part Operations section. CHECK IN.
+Step 10
+Panel Optimiser page route /projects/[projectId]/optimiser and Stage 1+2 UI. CHECK IN.
+Step 11
+Stage 3 pre-optimisation settings and Stage 4 NFP nesting engine. CHECK IN.
+Step 12
+Stage 5 manual editing SVG canvas. CHECK IN.
+Step 13
+Stage 6 G-code generation, export, snapshot save. CHECK IN.
+Step 14
+Enable Production menu Generate CNC… entry point and add Optimise button to ProjectCard. CHECK IN.
+Step 15
+Batch project support — project_ids on nest_jobs, job prefix labels, batch canvas identification. CHECK IN.
+Step 16
+Integration testing across a real job with multiple rooms and materials. CHECK IN.
+Phase 2
+Toolpath simulator — separate sprint after Step 16 verified.
+
+8.4  Technology Stack
+Frontend
+React 19, Next.js 16.2.6, Tailwind CSS v4
+State
+Zustand v5
+Canvas rendering
+Raw SVG — matching existing CanvasSVG.tsx pattern. Do NOT use react-konva.
+Backend
+Supabase (xivrjteialwqmleahkfq), @supabase/ssr
+Drag and sort
+@dnd-kit — already installed and used in ProjectCard.tsx
+3D
+Three.js via @react-three/fiber — existing 3D components only
+
+
+End of Specification  ·  RHK-CADcam v2.1  ·  June 2026

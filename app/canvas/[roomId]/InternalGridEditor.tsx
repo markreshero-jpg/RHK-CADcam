@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { CabinetInstance } from '@/src/lib/types'
 import type {
-  ResolvedCabinet, ResolvedInternalPart, Section, SplitSection, SectionChild,
+  ResolvedCabinet, ResolvedInternalPart, Section, SplitSection, SectionChild, SectionSeparator,
   InternalFitting, InternalFittingType,
   AdjShelfFitting, FixedShelfFitting, InnerDrawerFitting, PullOutFitting, AccessoryFitting,
   DrawerType,
@@ -46,9 +46,9 @@ function useSvgZoom(initW: number, initH: number) {
 }
 
 // ── Display constants ────────────────────────────────────────────────────────
-// Approximate — mirrors resolveInternal.ts using construction-rule defaults.
-const MAT_T   = 18   // carcass / divider thickness
-const SHELF_T = 18   // shelf thickness
+// MAT_T is only a fallback before the cabinet resolves; once resolved the editor
+// uses the cabinet's real carcass / shelf material thicknesses (matT / shelfT).
+const MAT_T   = 18   // fallback carcass / divider / shelf thickness (pre-resolve)
 const ADJ_INSET = 1  // adj shelf pin clearance (display)
 const DEF_TOE = 150  // default toe kick height
 const MIN_BAY = 10   // minimum bay extent when dragging a separator
@@ -86,6 +86,8 @@ function normalizeSection(raw: unknown): Section {
       children: children.map(c => ({
         ...(typeof c.size === 'number' ? { size: c.size } : {}),
         ...(typeof c.equalise_group === 'string' && c.equalise_group ? { equalise_group: c.equalise_group } : {}),
+        ...(c.separator === 'none' || c.separator === 'adj_shelf' || c.separator === 'fixed_shelf' ? { separator: c.separator } : {}),
+        ...(c.auto_height === true ? { auto_height: true } : {}),
         section: normalizeSection(c.section),
       })),
     }
@@ -97,6 +99,7 @@ interface SepDisplay {
   path:       Path
   index:      number          // separator sits after children[index]
   axis:       'h' | 'v'       // h = horizontal shelf, v = vertical divider
+  kind:       'fixed_shelf' | 'adj_shelf' | 'divider'   // what this separator is
   box:        Box             // separator rect (y = bottom)
   childStart: number          // start coord of children[index] along the split axis
   splitEnd:   number          // far edge of the split box along the axis
@@ -111,14 +114,6 @@ interface LeafDisplay {
   adjShelves: { y: number; fittingIdx: number; yLocked: boolean }[]  // adj shelf bottom-face Y + index into section.fittings + lock state
   adjCount:   number
   fittings:   FittingDisplay[]                      // non-adj fittings placed in this compartment
-  // Sub-compartments — vertical gaps inside this leaf not covered by any
-  // horizontal element (adj shelf, fixed shelf, inner drawer, pull-out,
-  // accessory). Always ≥1 entry: a leaf with no horizontal parts yields one
-  // sub-compartment equal to the whole leaf. Each is drawn as its own clickable
-  // rect so the user sees the "above shelf / below shelf" division visually,
-  // mirroring the way structural hsplit produces top + bottom bays. Selection
-  // still resolves to the parent leaf — sub-compartments have no data identity.
-  subCompartments: { y: number; h: number }[]
 }
 
 // One non-adjustable fitting laid out inside an open compartment (preview only).
@@ -172,27 +167,72 @@ const FITTING_STYLE: Record<FittingDisplay['type'], {
   accessory:    { title: 'Accy',     fill: 'rgba(156,163,175,0.06)', fillSel: 'rgba(59,130,246,0.16)', stroke: '#9ca3af', label: '#9ca3af', dash: '4 2' },
 }
 
+// A drawer/rollout bay — an open compartment holding a drawer/rollout. Such bays
+// have OPEN gaps around them; detecting it self-heals data where 'none' was lost.
+const isDrawerBaySectionEd = (section: Section): boolean =>
+  section.type === 'open' && section.fittings.some(f => f.type === 'inner_drawer' || f.type === 'pull_out')
+
+// Thickness of the divider between child i and i+1 of a split (editor mirror of
+// the resolver's gapThickness): vertical = divider (matT); horizontal = shelf
+// (shelfT) unless the gap is 'none' or borders a drawer/rollout bay with no
+// explicit separator set. matT/shelfT are the cabinet's real material thicknesses.
+const edGapT = (kids: SectionChild[], i: number, horiz: boolean, shelfT: number, matT: number): number => {
+  if (i >= kids.length - 1) return 0
+  if (!horiz) return matT
+  const c = kids[i]
+  if (c.separator === 'none') return 0
+  if (c.separator === undefined && (isDrawerBaySectionEd(c.section) || (!!kids[i + 1] && isDrawerBaySectionEd(kids[i + 1].section)))) return 0
+  return shelfT
+}
+
+type SlideLite = { id: string; box_height: number | null }
+
+// Editor mirror of resolveInternal.autoBayHeight — a drawer/rollout bay's height
+// from the explicit fitting height or the chosen slide's box_height, else the
+// type default (used until a slide/height is set; auto-pick can't be sized here).
+function autoBayHeightEd(section: Section, slides: SlideLite[]): number | null {
+  if (section.type !== 'open') return null
+  const f = section.fittings.find(g => g.type === 'inner_drawer' || g.type === 'pull_out') as
+    | { type: string; height?: number; slide_product_id?: string } | undefined
+  if (!f) return null
+  if (f.height != null && f.height > 0) return f.height
+  if (f.slide_product_id) {
+    const sp = slides.find(s => s.id === f.slide_product_id)
+    if (sp?.box_height != null && sp.box_height > 0) return sp.box_height
+  }
+  return f.type === 'inner_drawer' ? DEF_INNER_H : DEF_PULL_OUT_H
+}
+
+// A child's fixed extent for layout: explicit size, or an auto-height drawer
+// bay's height. null = free/flex.
+const childFixed = (c: SectionChild, slides: SlideLite[]): number | null =>
+  c.size !== undefined ? c.size
+  : c.auto_height ? autoBayHeightEd(c.section, slides)
+  : null
+
 // Pass-1 walker (editor-side mirror of resolveInternal.computeGroupSizes).
 // Records each equalise group's per-split natural fair share; the group's
 // resolved size is min(candidates) so it always fits.
-function computeGroupSizes(root: Section, interior: Box): Map<string, number> {
+function computeGroupSizes(root: Section, interior: Box, slides: SlideLite[], shelfT: number, matT: number): Map<string, number> {
   const candidates = new Map<string, number[]>()
 
   function walk(s: Section, box: Box) {
     if (s.type === 'open' || box.w <= 0 || box.h <= 0) return
     const horiz = s.type === 'hsplit'
-    const sepT  = horiz ? SHELF_T : MAT_T
     const total = horiz ? box.h : box.w
     const kids  = s.children
     const N     = kids.length
     if (N === 0) return
-    const avail        = total - (N - 1) * sepT
-    const lockedSum    = kids.reduce((a, c) => a + (c.size ?? 0), 0)
-    const unlockedCnt  = kids.filter(c => c.size === undefined).length
+    const sepThick = (i: number) => edGapT(kids, i, horiz, shelfT, matT)
+    const fixedOf      = (c: SectionChild) => childFixed(c, slides)
+    const sumSep       = kids.reduce<number>((a, _c, i) => a + sepThick(i), 0)
+    const avail        = total - sumSep
+    const lockedSum    = kids.reduce((a, c) => a + (fixedOf(c) ?? 0), 0)
+    const unlockedCnt  = kids.filter(c => fixedOf(c) === null).length
     const naturalFlex  = unlockedCnt > 0 ? (avail - lockedSum) / unlockedCnt : 0
     if (naturalFlex > 0) {
       for (const c of kids) {
-        if (c.size === undefined && c.equalise_group) {
+        if (fixedOf(c) === null && c.equalise_group) {
           const arr = candidates.get(c.equalise_group) ?? []
           arr.push(naturalFlex)
           candidates.set(c.equalise_group, arr)
@@ -200,13 +240,13 @@ function computeGroupSizes(root: Section, interior: Box): Map<string, number> {
       }
     }
     let cursor = horiz ? box.y : box.x
-    kids.forEach(c => {
-      const size = c.size ?? Math.max(0, naturalFlex)
+    kids.forEach((c, i) => {
+      const size = fixedOf(c) ?? Math.max(0, naturalFlex)
       const childBox: Box = horiz
         ? { x: box.x, y: cursor, w: box.w, h: size }
         : { x: cursor, y: box.y, w: size, h: box.h }
       walk(c.section, childBox)
-      cursor += size + sepT
+      cursor += size + sepThick(i)
     })
   }
 
@@ -217,30 +257,6 @@ function computeGroupSizes(root: Section, interior: Box): Map<string, number> {
     if (arr.length === 0) continue
     out.set(g, Math.min(...arr))
   }
-  return out
-}
-
-// Compute the open sub-compartments of a leaf: the leaf's vertical extent minus
-// every horizontal-element y-span. Returns sorted bottom→top. Always returns at
-// least one entry — an empty leaf yields one sub-compartment equal to the whole
-// leaf — so the renderer can iterate uniformly.
-function computeSubCompartments(leaf: Box, spans: { y: number; h: number }[]): { y: number; h: number }[] {
-  if (spans.length === 0) return [{ y: leaf.y, h: leaf.h }]
-  const sorted = [...spans].sort((a, b) => a.y - b.y)
-  const out: { y: number; h: number }[] = []
-  let cursor = leaf.y
-  const leafTop = leaf.y + leaf.h
-  for (const s of sorted) {
-    const sStart = Math.max(leaf.y, s.y)
-    const sEnd   = Math.min(leafTop, s.y + s.h)
-    if (sEnd <= cursor) continue          // already past it (overlap / out of leaf)
-    if (sStart > cursor + 0.5) out.push({ y: cursor, h: sStart - cursor })
-    cursor = Math.max(cursor, sEnd)
-  }
-  if (leafTop > cursor + 0.5) out.push({ y: cursor, h: leafTop - cursor })
-  // If every span covers the leaf (degenerate), still yield a zero-area entry so
-  // callers can rely on length ≥ 1.
-  if (out.length === 0) out.push({ y: leaf.y, h: 0 })
   return out
 }
 
@@ -349,10 +365,13 @@ function computeLayout(
   interior: Box,
   resolved: ResolvedInternalPart[] | undefined,
   stackGap: number,
+  slides:   SlideLite[],
+  shelfT:   number,
+  matT:     number,
 ): { seps: SepDisplay[]; leaves: LeafDisplay[]; groupSizes: Map<string, number> } {
   const seps:   SepDisplay[]  = []
   const leaves: LeafDisplay[] = []
-  const groupSizes = computeGroupSizes(root, interior)
+  const groupSizes = computeGroupSizes(root, interior, slides, shelfT, matT)
 
   function walk(section: Section, box: Box, path: Path) {
     if (box.w <= 0 || box.h <= 0) return
@@ -368,11 +387,11 @@ function computeLayout(
       const n = adjEntries.length
       const adjShelves: { y: number; fittingIdx: number; yLocked: boolean }[] = []
       if (n > 0) {
-        const openH = (box.h - n * SHELF_T) / (n + 1)
+        const openH = (box.h - n * shelfT) / (n + 1)
         if (openH > 0) adjEntries.forEach((e, i) => {
           const y = (e.f.y_locked && e.f.y_position !== undefined)
             ? e.f.y_position
-            : box.y + (i + 1) * openH + i * SHELF_T
+            : box.y + (i + 1) * openH + i * shelfT
           adjShelves.push({ y, fittingIdx: e.origIdx, yLocked: !!e.f.y_locked })
         })
       }
@@ -432,46 +451,43 @@ function computeLayout(
           const loneUnlockedShelf = stackableCount === 1 && !f.y_locked
           const y = (f.y_locked && f.y_position !== undefined)
             ? f.y_position
-            : (loneUnlockedShelf ? box.y + box.h / 2 - SHELF_T / 2 : cursor)
-          fittings.push({ type: 'fixed_shelf', idx, y, h: SHELF_T, labelH: SHELF_T, yLocked: !!f.y_locked })
-          cursor = Math.max(cursor, y + SHELF_T + stackGap)
+            : (loneUnlockedShelf ? box.y + box.h / 2 - shelfT / 2 : cursor)
+          fittings.push({ type: 'fixed_shelf', idx, y, h: shelfT, labelH: shelfT, yLocked: !!f.y_locked })
+          cursor = Math.max(cursor, y + shelfT + stackGap)
         }
       })
 
-      // 3. Sub-compartments — the openings created by DIVIDERS only. A shelf
-      //    (fixed or adjustable) genuinely splits the opening into a usable space
-      //    above and below, so those read as separate openings you can click and
-      //    fill. Drawers, rollouts and accessories are OCCUPANTS — they sit in
-      //    the opening without carving it, so they don't create sub-compartments
-      //    (you just stack another one). The parent opening's Lock / Equalise
-      //    stays reachable from the sub-compartment panel.
-      const spans: { y: number; h: number }[] = [
-        ...fittings.filter(f => f.type === 'fixed_shelf').map(f => ({ y: f.y, h: f.h })),
-        ...adjShelves.map(a => ({ y: a.y, h: SHELF_T })),
-      ]
-      const subCompartments = computeSubCompartments(box, spans)
-
-      leaves.push({ path, box, adjShelves, adjCount: n, fittings, subCompartments })
+      leaves.push({ path, box, adjShelves, adjCount: n, fittings })
       return
     }
 
     const horiz = section.type === 'hsplit'
-    const sepT  = horiz ? SHELF_T : MAT_T
     const total = horiz ? box.h : box.w
     const kids  = section.children
     const N     = kids.length
     if (N === 0) return
 
-    // Classify: locked (size set), grouped (resolved group size), or free flex.
+    // Per-separator thickness: horizontal honours each child's separator type
+    // ('none' = open gap = 0, and inferred 'none' around drawer bays); vertical
+    // separators are always dividers.
+    const sepThick = (i: number) => edGapT(kids, i, horiz, shelfT, matT)
+
+    // Classify: locked (size set), auto-height drawer bay, grouped (resolved
+    // group size), or free flex.
     const childResolved: (number | null)[] = kids.map(c => {
       if (c.size !== undefined) return c.size
+      if (c.auto_height) {
+        const h = autoBayHeightEd(c.section, slides)
+        if (h != null && h > 0) return h
+      }
       if (c.equalise_group) {
         const gs = groupSizes.get(c.equalise_group)
         if (gs !== undefined && gs > 0) return gs
       }
       return null
     })
-    const avail        = total - (N - 1) * sepT
+    const sumSep       = kids.reduce<number>((a, _c, i) => a + sepThick(i), 0)
+    const avail        = total - sumSep
     const fixedSum     = childResolved.reduce<number>((a, s) => a + (s ?? 0), 0)
     const flexCount    = childResolved.filter(s => s === null).length
     const flexSize     = flexCount > 0 ? (avail - fixedSum) / flexCount : 0
@@ -486,16 +502,20 @@ function computeLayout(
 
       walk(c.section, childBox, [...path, i])
 
-      if (i < N - 1) {
+      const st = sepThick(i)
+      // 'none' separators (st === 0) carve no shelf and aren't draggable, so we
+      // emit no SepDisplay — the two bays simply abut (e.g. above/below a drawer).
+      if (i < N - 1 && st > 0) {
         seps.push({
           path, index: i, axis: horiz ? 'h' : 'v',
-          box: horiz ? { x: box.x, y: cursor + size, w: box.w, h: sepT }
-                     : { x: cursor + size, y: box.y, w: sepT, h: box.h },
-          childStart: cursor, splitEnd, sepT,
+          kind: horiz ? (c.separator === 'adj_shelf' ? 'adj_shelf' : 'fixed_shelf') : 'divider',
+          box: horiz ? { x: box.x, y: cursor + size, w: box.w, h: st }
+                     : { x: cursor + size, y: box.y, w: st, h: box.h },
+          childStart: cursor, splitEnd, sepT: st,
           locked: childResolved[i] !== null, equalised: !!c.equalise_group,
         })
       }
-      cursor += size + (i < N - 1 ? sepT : 0)
+      cursor += size + st
     })
   }
 
@@ -529,8 +549,9 @@ const newOpen = (): SectionChild => ({ section: { type: 'open', fittings: [] } }
 
 // Add a separator at a leaf. If the leaf's parent is already a split of the same
 // orientation, insert a sibling bay (more bays in the same split). Otherwise split
-// the leaf itself into two bays.
-function addSeparator(root: Section, path: Path, type: SplitSection['type']): Section {
+// the leaf itself into two bays. `sep` is the divider placed between the two new
+// bays (hsplit only): 'fixed_shelf' (default) or 'adj_shelf'.
+function addSeparator(root: Section, path: Path, type: SplitSection['type'], sep?: SectionSeparator): Section {
   const parentPath = path.slice(0, -1)
   const idx        = path[path.length - 1]
   const parent     = path.length > 0 ? getSection(root, parentPath) : null
@@ -539,7 +560,12 @@ function addSeparator(root: Section, path: Path, type: SplitSection['type']): Se
     return updateAtPath(root, parentPath, s => {
       if (s.type !== type) return s
       const children = [...s.children]
-      children.splice(idx + 1, 0, newOpen())
+      const orig = children[idx]
+      // The new bay goes after `orig`. `orig`'s divider becomes `sep`; the new
+      // bay inherits orig's old divider so the chain to the next bay is intact.
+      const newChild: SectionChild = { ...newOpen(), ...(orig.separator ? { separator: orig.separator } : {}) }
+      children[idx] = { ...orig, ...(sep ? { separator: sep } : { separator: undefined }) }
+      children.splice(idx + 1, 0, newChild)
       return { ...s, children }
     })
   }
@@ -548,8 +574,23 @@ function addSeparator(root: Section, path: Path, type: SplitSection['type']): Se
     // Preserve any existing contents: they move into the first bay and a new
     // empty bay is added after. Splitting an empty opening just makes two empty
     // bays. This stops a split from wiping drawers/shelves already placed here.
-    if (s.fittings.length > 0) return { type, children: [{ section: s }, newOpen()] }
-    return { type, children: [newOpen(), newOpen()] }
+    const first: SectionChild = { section: s.fittings.length > 0 ? s : { type: 'open', fittings: [] }, ...(sep ? { separator: sep } : {}) }
+    return { type, children: [first, newOpen()] }
+  })
+}
+
+// Add a drawer / rollout as its own bay with an OPEN compartment above and below
+// it (no shelves between — 'none' separators). The drawer bay is locked to a
+// default height; the open bays fill the rest and can hold more.
+function addDrawerBay(root: Section, path: Path, type: 'inner_drawer' | 'pull_out'): Section {
+  return updateAtPath(root, path, s => {
+    if (s.type !== 'open') return s
+    // The drawer bay auto-sizes to the drawer's REAL height (explicit height or
+    // chosen slide's box_height); the open bays above/below fill the rest.
+    const below: SectionChild = { section: s.fittings.length > 0 ? s : { type: 'open', fittings: [] }, separator: 'none' }
+    const drawerBay: SectionChild = { section: { type: 'open', fittings: [newFitting(type)] }, auto_height: true, separator: 'none' }
+    const above: SectionChild = newOpen()
+    return { type: 'hsplit', children: [below, drawerBay, above] }
   })
 }
 
@@ -712,18 +753,32 @@ function deleteSep(root: Section, path: Path, index: number): Section {
   })
 }
 
+// Delete the compartment at `path` from its parent split. The remaining bays
+// close up; a split left with one child collapses to it; the root compartment
+// just clears to empty.
+function deleteCompartment(root: Section, path: Path): Section {
+  if (path.length === 0) return EMPTY_SECTION
+  const parentPath = path.slice(0, -1)
+  const idx        = path[path.length - 1]
+  return updateAtPath(root, parentPath, s => {
+    if (s.type === 'open') return s
+    const children = s.children.filter((_, i) => i !== idx)
+    if (children.length === 0) return EMPTY_SECTION
+    if (children.length === 1) return children[0].section
+    return { ...s, children }
+  })
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type Selection =
   | { kind: 'leaf';    path: Path }
-  | { kind: 'subcomp'; path: Path; subIdx: number }   // a vertical band inside an open leaf
   | { kind: 'sep';     path: Path; index: number }
   | { kind: 'fitting'; path: Path; fittingIndex: number }
   | null
 
 type Menu =
   | { kind: 'leaf';    clientX: number; clientY: number; path: Path }
-  | { kind: 'subcomp'; clientX: number; clientY: number; path: Path; subIdx: number }
   | { kind: 'sep';     clientX: number; clientY: number; path: Path; index: number; axis: 'h' | 'v' }
   | null
 
@@ -825,6 +880,10 @@ export default function InternalGridEditor({
   const [menu, setMenu]         = useState<Menu>(null)
   const [dragLive, setDragLive] = useState<DragLive>(null)
   const [fittingDragLive, setFittingDragLive] = useState<FittingDragLive>(null)
+  // Undo / redo history of interior edits. Each entry snapshots the whole tree +
+  // stack gap; commit() pushes the pre-change state. Capped to bound memory.
+  const [undoStack, setUndoStack] = useState<{ tree: Section; stackGap: number }[]>([])
+  const [redoStack, setRedoStack] = useState<{ tree: Section; stackGap: number }[]>([])
 
   // Picker data for the inner-drawer/pull-out inspectors — lazy-loaded once.
   // `kind` is a newer column on drawer_box_methods; read defensively so the editor
@@ -944,23 +1003,65 @@ export default function InternalGridEditor({
       ? rp.toekick_parts.filter(p => p.part_key !== 'spreader_horizontal').reduce((max, p) => Math.max(max, p.DX), 0) || DEF_TOE
       : DEF_TOE
 
+  const persist = (t: Section, g: number) =>
+    onUpdate(cabinet.id, { internal_grid: { tree: t, stack_gap: g } as unknown as Record<string, unknown> })
+
+  // Record the current state on the undo stack and clear redo. Called before any
+  // tree / stack-gap change so it can be undone.
+  function pushHistory() {
+    setUndoStack(s => [...s, { tree, stackGap }].slice(-100))
+    setRedoStack([])
+  }
+
   async function save(next: Section) {
+    pushHistory()
     setTree(next)
-    await onUpdate(cabinet.id, { internal_grid: { tree: next, stack_gap: stackGap } as unknown as Record<string, unknown> })
+    await persist(next, stackGap)
   }
 
   // Persist a new stack gap. Same write shape as `save` so the JSONB blob keeps
   // both fields. Default (3mm) is stored explicitly so the resolver default and
   // the user's value are interchangeable; an empty input falls back to default.
   async function saveStackGap(next: number) {
+    pushHistory()
     setStackGap(next)
-    await onUpdate(cabinet.id, { internal_grid: { tree, stack_gap: next } as unknown as Record<string, unknown> })
+    await persist(tree, next)
+  }
+
+  function undo() {
+    if (undoStack.length === 0) return
+    const prev = undoStack[undoStack.length - 1]
+    setUndoStack(undoStack.slice(0, -1))
+    setRedoStack(r => [...r, { tree, stackGap }].slice(-100))
+    setTree(prev.tree); setStackGap(prev.stackGap)
+    setSelected(null); setMenu(null)
+    persist(prev.tree, prev.stackGap)
+  }
+
+  function redo() {
+    if (redoStack.length === 0) return
+    const nxt = redoStack[redoStack.length - 1]
+    setRedoStack(redoStack.slice(0, -1))
+    setUndoStack(u => [...u, { tree, stackGap }].slice(-100))
+    setTree(nxt.tree); setStackGap(nxt.stackGap)
+    setSelected(null); setMenu(null)
+    persist(nxt.tree, nxt.stackGap)
   }
 
   // ── SVG geometry ─────────────────────────────────────────────────────────────
   const cabDX = cabinet.dx
   const cabDY = cabinet.dy
-  const T = MAT_T
+  // Real material thicknesses from the resolved cabinet so the preview matches
+  // the built parts: carcass/divider thickness (matT) from a case panel, shelf
+  // thickness (shelfT) from a resolved shelf. Fall back to 18mm before resolve.
+  const lsPanel = rp?.case_parts.find(p => p.part_key === 'left_side')
+  const rsPanel = rp?.case_parts.find(p => p.part_key === 'right_side')
+  const matT = lsPanel?.DZ
+    ?? rp?.case_parts.find(p => p.part_key === 'bottom')?.DZ
+    ?? MAT_T
+  const shelfT = rp?.internal_parts?.find(p => p.part_type === 'fixed_shelf' || p.part_type === 'adj_shelf')?.DZ
+    ?? matT
+  const T = matT
   const PL = 12, PT = 28, PR = 50, PB = 12
   const vw = cabDX + PL + PR
   const vh = cabDY + PT + PB
@@ -972,8 +1073,6 @@ export default function InternalGridEditor({
   const intH  = cabDY - intY0 - T
   // Interior X bounds — prefer the resolved gable inner faces so scribes (which
   // shift/narrow the opening) are reflected; fall back to the flat approximation.
-  const lsPanel = rp?.case_parts.find(p => p.part_key === 'left_side')
-  const rsPanel = rp?.case_parts.find(p => p.part_key === 'right_side')
   const intX0 = lsPanel ? lsPanel.X + lsPanel.DZ : T
   const intW  = lsPanel && rsPanel ? Math.max(0, rsPanel.X - (lsPanel.X + lsPanel.DZ)) : cabDX - 2 * T
   const tkH   = toeH
@@ -983,7 +1082,7 @@ export default function InternalGridEditor({
   if (dragLive) layoutTree = setChildSize(layoutTree, dragLive.path, dragLive.index, dragLive.size)
   if (fittingDragLive) layoutTree = patchFitting(layoutTree, fittingDragLive.path, fittingDragLive.fittingIndex,
     { y_locked: true, y_position: fittingDragLive.y } as Partial<InternalFitting>)
-  const { seps, leaves } = computeLayout(layoutTree, interior, rp?.internal_parts, stackGap)
+  const { seps, leaves } = computeLayout(layoutTree, interior, rp?.internal_parts, stackGap, slideProds, shelfT, matT)
 
   dragDataRef.current = { svg: svgRef.current, ox, oy, cabDY, save, tree }
 
@@ -1033,26 +1132,11 @@ export default function InternalGridEditor({
   const selLeafSection = selLeaf ? getSection(tree, selLeaf.path) : null
   const selLeafOpen = selLeafSection?.type === 'open' ? selLeafSection : null
 
-  // Target leaf for toolbar actions: the selected leaf or sub-comp, else the
-  // root if it's open. A sub-comp selection still targets its parent leaf for
-  // mutations (sub-comps have no data identity); the band itself is carried
-  // separately in `selSub` so positional actions can clamp into the band.
+  // Target compartment for toolbar actions: the selected compartment, else the
+  // root if it's open.
   const targetPath: Path | null =
-    selected?.kind === 'leaf'     ? selected.path
-    : selected?.kind === 'subcomp' ? selected.path
+    selected?.kind === 'leaf' ? selected.path
     : (tree.type === 'open' ? [] : null)
-
-  // Selected sub-compartment band (a vertical region inside an open leaf).
-  // Used by "Split → shelves" + "+ Add fitting" to lock the new fitting's Y
-  // into the clicked band, instead of stacking from the leaf bottom.
-  const selSub: { leaf: LeafDisplay; sub: { y: number; h: number } } | null =
-    selected?.kind === 'subcomp'
-      ? (() => {
-          const leaf = leaves.find(l => pathEq(l.path, selected.path))
-          const sub  = leaf?.subCompartments[selected.subIdx]
-          return leaf && sub ? { leaf, sub } : null
-        })()
-      : null
 
   // Selected fitting (a placed component inside an open compartment).
   const selFittingPath  = selected?.kind === 'fitting' ? selected.path : null
@@ -1067,7 +1151,7 @@ export default function InternalGridEditor({
     const inFittings = selFittingLeaf.fittings.find(f => f.idx === selFittingIndex)
     if (inFittings) return inFittings
     const inAdj = selFittingLeaf.adjShelves.find(a => a.fittingIdx === selFittingIndex)
-    if (inAdj) return { y: inAdj.y, h: SHELF_T, labelH: SHELF_T }
+    if (inAdj) return { y: inAdj.y, h: shelfT, labelH: shelfT }
     return null
   })()
 
@@ -1088,143 +1172,48 @@ export default function InternalGridEditor({
   function equaliseThis(path: Path) { save(equaliseSplit(tree, path)); setMenu(null) }
   function resetAll() { setSelected(null); setMenu(null); save(EMPTY_SECTION) }
 
-  // Bounding fittings of a sub-compartment band — the fitting whose y matches
-  // the band's top edge ("topBound"), and the fitting whose y+h matches the
-  // band's bottom edge ("botBound"). Either can be missing when the band
-  // borders the leaf top/bottom directly. Returns indices into section.fittings
-  // so callers can patch the fitting itself.
-  type SubBound = { idx: number; y: number; h: number }
-  function findSubBounds(leaf: LeafDisplay, sub: { y: number; h: number }): { topBound: SubBound | null; botBound: SubBound | null } {
-    const TOL = 0.5
-    const topEdge = sub.y + sub.h
-    const botEdge = sub.y
-    const all: SubBound[] = [
-      ...leaf.fittings.map(f => ({ idx: f.idx, y: f.y, h: f.h })),
-      ...leaf.adjShelves.map(a => ({ idx: a.fittingIdx, y: a.y, h: SHELF_T })),
-    ]
-    const topBound = all.find(b => Math.abs(b.y - topEdge) < TOL) ?? null
-    const botBound = all.find(b => Math.abs(b.y + b.h - botEdge) < TOL) ?? null
-    return { topBound, botBound }
+  // Delete whatever is selected: a fitting → remove it; a shelf/divider → merge
+  // its bays; a compartment → remove that bay from its split (root → clear).
+  function deleteSelected() {
+    if (!selected) return
+    setMenu(null)
+    if (selected.kind === 'fitting') {
+      save(removeFittingAt(tree, selected.path, selected.fittingIndex))
+      setSelected({ kind: 'leaf', path: selected.path })
+    } else if (selected.kind === 'sep') {
+      setSelected(null)
+      save(deleteSep(tree, selected.path, selected.index))
+    } else if (selected.kind === 'leaf') {
+      setSelected(null)
+      save(deleteCompartment(tree, selected.path))
+    }
   }
 
-  // A band's height is pinned when both its edges are immovable. An edge is
-  // immovable when it coincides with the leaf edge (intrinsically fixed) OR
-  // when the bounding fitting on that side has y_locked=true.
-  //
-  // Special case: a band with NO bounding fittings on either side fills the
-  // whole leaf. Its edges are both leaf edges, so naïvely it'd register as
-  // "locked" — but there's nothing to actually pin (no fittings exist). Empty
-  // compartments would then show the ⚲ badge with no way to unlock, which is
-  // the false-positive the user kept seeing. Treat this case as not locked.
-  function isSubCompLocked(leaf: LeafDisplay, sub: { y: number; h: number }): boolean {
-    const TOL = 0.5
-    const topEdge = sub.y + sub.h
-    const botEdge = sub.y
-    const leafTop = leaf.box.y + leaf.box.h
-    const leafBot = leaf.box.y
-    const section = getSection(tree, leaf.path)
-    if (section?.type !== 'open') return false
-    const { topBound, botBound } = findSubBounds(leaf, sub)
-    if (!topBound && !botBound) return false   // empty-leaf band — no fittings to lock
-    const isLocked = (b: SubBound) =>
-      (section.fittings[b.idx] as { y_locked?: boolean } | undefined)?.y_locked === true
-    const topPinned = Math.abs(topEdge - leafTop) < TOL || (topBound ? isLocked(topBound) : false)
-    const botPinned = Math.abs(botEdge - leafBot) < TOL || (botBound ? isLocked(botBound) : false)
-    return topPinned && botPinned
-  }
-
-  // "Lock height" — pins the band's current height by locking BOTH bounding
-  // fittings at their current y_position in a single save. Leaf edges are
-  // already intrinsically fixed so we only need to lock fittings on whichever
-  // side(s) actually have one. After this, the band's height is invariant
-  // against anything happening elsewhere in the compartment because every
-  // fitting that defines its edges is pinned.
-  function lockSubCompHeight(leaf: LeafDisplay, sub: { y: number; h: number }) {
-    const { topBound, botBound } = findSubBounds(leaf, sub)
-    if (!topBound && !botBound) return
-    let next = tree
-    if (topBound) {
-      next = patchFitting(next, leaf.path, topBound.idx,
-        { y_locked: true, y_position: Math.round(topBound.y) } as Partial<InternalFitting>)
+  // Keyboard: Delete/Backspace removes the selection; Ctrl/Cmd+Z undoes,
+  // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redoes. A ref keeps the listener bound once
+  // while always calling the latest handlers (which read current state).
+  const keyActionsRef = useRef({ deleteSelected, undo, redo })
+  useEffect(() => { keyActionsRef.current = { deleteSelected, undo, redo } })
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
+      const mod = e.ctrlKey || e.metaKey
+      // Capture phase + stopImmediatePropagation so these take priority over the
+      // canvas behind the modal (which has its own window-level undo/redo/delete
+      // that would otherwise also act on the room / whole cabinet).
+      if (mod && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault(); e.stopImmediatePropagation()
+        if (e.shiftKey) keyActionsRef.current.redo(); else keyActionsRef.current.undo()
+      } else if (mod && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault(); e.stopImmediatePropagation(); keyActionsRef.current.redo()
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault(); e.stopImmediatePropagation(); keyActionsRef.current.deleteSelected()
+      }
     }
-    if (botBound) {
-      // y_position of any fitting is its bottom edge — that's the same axis
-      // y_locked uses elsewhere, so just freeze it at its current Y.
-      next = patchFitting(next, leaf.path, botBound.idx,
-        { y_locked: true, y_position: Math.round(botBound.y) } as Partial<InternalFitting>)
-    }
-    if (next !== tree) save(next)
-  }
-
-  // "Unlock height" — frees both bounding fittings so the band returns to
-  // auto-stacking. We clear y_locked but keep y_position for reference (the
-  // resolver ignores it when y_locked is false).
-  function unlockSubCompHeight(leaf: LeafDisplay, sub: { y: number; h: number }) {
-    const { topBound, botBound } = findSubBounds(leaf, sub)
-    let next = tree
-    if (topBound) {
-      next = patchFitting(next, leaf.path, topBound.idx,
-        { y_locked: false } as Partial<InternalFitting>)
-    }
-    if (botBound) {
-      next = patchFitting(next, leaf.path, botBound.idx,
-        { y_locked: false } as Partial<InternalFitting>)
-    }
-    if (next !== tree) save(next)
-  }
-
-  // Resize a sub-compartment to the given height by moving its bounding
-  // fitting. A sub-comp isn't a stored entity — it's a gap between horizontal
-  // occupants — so to "make this band 100mm" we lock the nearest fitting at
-  // a new y_position. Preference:
-  //   • If the band has a fitting ABOVE it (= a top-bounding shelf/drawer),
-  //     move that fitting so the band beneath it is newH tall.
-  //   • Else if there's a fitting BELOW (band is the topmost sub-comp), move
-  //     the fitting down so the band above is newH tall.
-  //   • Else the band fills the whole leaf — nothing to anchor against.
-  // Locked fittings keep their explicit Y but bump the stacking cursor in
-  // positionFittings, so the new locked Y can leave unintended slack against
-  // earlier unlocked items (visible to the user, easily corrected by dragging
-  // them or locking them too).
-  function commitSubCompHeight(leaf: LeafDisplay, sub: { y: number; h: number }, newH: number) {
-    if (!Number.isFinite(newH) || newH <= 0) return
-    const TOL = 0.5
-    const topEdge = sub.y + sub.h     // band's top edge = y_position of fitting above
-    const botEdge = sub.y             // band's bottom edge = (y_position + h) of fitting below
-
-    type Bound = { idx: number; y: number; h: number }
-    const collect = (): { topBound: Bound | null; botBound: Bound | null } => {
-      const all: Bound[] = [
-        ...leaf.fittings.map(f => ({ idx: f.idx, y: f.y, h: f.h })),
-        ...leaf.adjShelves.map(a => ({ idx: a.fittingIdx, y: a.y, h: SHELF_T })),
-      ]
-      const topBound = all.find(b => Math.abs(b.y - topEdge) < TOL) ?? null
-      const botBound = all.find(b => Math.abs(b.y + b.h - botEdge) < TOL) ?? null
-      return { topBound, botBound }
-    }
-    const { topBound, botBound } = collect()
-
-    if (topBound) {
-      // Move the fitting above so the band beneath it has the new height.
-      // y_position of a fitting is its bottom edge in cabinet coords — for
-      // inner_drawer / pull_out that's the box bottom (same axis the drag /
-      // y_locked code uses), so this stays consistent with the rest of the UI.
-      save(patchFitting(tree, leaf.path, topBound.idx,
-        { y_locked: true, y_position: Math.round(sub.y + newH) } as Partial<InternalFitting>))
-      return
-    }
-    if (botBound) {
-      // Topmost band — move the fitting below down so the band above grows /
-      // shrinks to newH. botBound's top edge must land at (leaf.top - newH),
-      // so its y_position = leaf.top - newH - botBound.h.
-      const leafTop = leaf.box.y + leaf.box.h
-      save(patchFitting(tree, leaf.path, botBound.idx,
-        { y_locked: true, y_position: Math.round(leafTop - newH - botBound.h) } as Partial<InternalFitting>))
-      return
-    }
-    // No bounding fittings — band = whole leaf. Can't resize without changing
-    // the leaf itself (which is the parent split's job).
-  }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
 
   // Tag the leaf at `path` into an equalise group. `null` removes it from any
   // group it belongs to. New groups are auto-named A, B, C…
@@ -1246,16 +1235,8 @@ export default function InternalGridEditor({
   //                 boxes in the same split (the resolver default)
   // Lock and Equalise each clear the other so the box is only ever in one state.
 
-  // Toggle the lock. Turning it on freezes the box at its current extent.
-  function setLeafLock(path: Path, on: boolean, currentExtent: number) {
-    const parentPath = path.slice(0, -1)
-    const idx        = path[path.length - 1]
-    let next = setLeafEqualiseGroup(tree, path, undefined)   // lock wins over equalise
-    next = setChildSize(next, parentPath, idx, on ? Math.max(1, Math.round(currentExtent)) : undefined)
-    save(next)
-  }
-
-  // Commit a typed lock size (implies locked; empty/invalid clears the lock).
+  // Commit a typed size (a value fixes/locks the opening; empty/invalid clears
+  // the lock so it fills the remaining space). Clears any equalise membership.
   function setLeafLockSize(path: Path, raw: string) {
     const parentPath = path.slice(0, -1)
     const idx        = path[path.length - 1]
@@ -1312,28 +1293,44 @@ export default function InternalGridEditor({
     const curExtent = axis === 'v' ? box.w : box.h
     const groups    = collectGroups(tree)
     const myGroup   = child.equalise_group
+
+    // An auto-height drawer/rollout bay is sized by its drawer — show the value
+    // read-only; you change it by editing the drawer's height/slide.
+    if (child.auto_height) {
+      return (
+        <div className="mt-3 border-t border-gray-800 pt-2">
+          <p className="uppercase tracking-wider text-gray-500 mb-1.5">Opening size</p>
+          <p className="text-gray-400">Height {Math.round(curExtent)} mm</p>
+          <p className="text-[9px] text-gray-600 mt-0.5">Auto — matches the drawer’s height. Change it on the drawer (height / slide).</p>
+        </div>
+      )
+    }
     return (
       <div className="mt-3 border-t border-gray-800 pt-2">
         <p className="uppercase tracking-wider text-gray-500 mb-1.5">Opening size</p>
 
-        {/* Lock */}
-        <label className="flex items-center gap-1.5 mb-1 cursor-pointer">
-          <input type="checkbox" className="accent-blue-500 w-3.5 h-3.5"
-            checked={locked}
-            onChange={e => setLeafLock(path, e.target.checked, curExtent)} />
-          <span className="text-gray-400">Lock {dimLabel}</span>
-        </label>
-        {locked && (
-          <div className="flex items-center gap-1 mb-2 pl-5">
+        {/* Size field — type a fixed mm value (locks the opening) or clear it to
+            let the opening fill the remaining space. Disabled while equalised
+            (the group governs the size). */}
+        <label className="block mb-1.5">
+          <span className="block text-gray-500 mb-1">{axis === 'v' ? 'Width' : 'Height'} (mm)</span>
+          <div className="flex items-center gap-1">
             <input type="number" min={1} step={1}
-              key={`leaf-size-${path.join('.')}-${child.size}`}
-              defaultValue={child.size}
+              key={`leaf-size-${path.join('.')}-${child.size ?? ''}-${equalised ? 'eq' : ''}`}
+              defaultValue={child.size ?? ''}
+              disabled={equalised}
+              placeholder={`${Math.round(curExtent)}${equalised ? '' : ' · fills'}`}
               onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
               onBlur={e => setLeafLockSize(path, e.target.value)}
-              className={inp} />
+              className={inp + (equalised ? ' opacity-40 cursor-not-allowed' : '')}
+              title={equalised
+                ? 'Size is set by the equalise group — untick Equalise to type a fixed size.'
+                : 'Type a fixed size in mm, or clear to let this opening fill the remaining space.'}
+            />
             <span className="text-gray-500">mm</span>
+            {locked && <span className="text-amber-400" title="Fixed size">⚲</span>}
           </div>
-        )}
+        </label>
 
         {/* Equalise */}
         <label className="flex items-center gap-1.5 mb-1 cursor-pointer">
@@ -1380,67 +1377,16 @@ export default function InternalGridEditor({
     setMenu(null)
   }
 
-  // Dispatch an "add element" choice for a whole opening: a fixed shelf splits it
-  // structurally; everything else is added as a fitting. (addShelf / bumpAdj /
-  // handleAddFitting each close the menu.)
+  // Dispatch an "add element" choice for an opening. Every horizontal element
+  // splits the opening into real compartments:
+  //   • fixed / adjustable shelf → top + bottom bays, the shelf as the divider
+  //   • inner drawer / rollout   → open bay, drawer bay, open bay (no shelves)
+  //   • accessory                → an occupant placed in the opening (no split)
   function runAdd(path: Path, kind: AddKind) {
-    if (kind === 'fixed_shelf')    addShelf(path)
-    else if (kind === 'adj_shelf') bumpAdj(path, +1)
-    else                           handleAddFitting(path, kind)
-  }
-
-  // Same, but targeting a specific sub-compartment band: fittings land in the
-  // band; a fixed shelf still splits the whole opening structurally (the single
-  // horizontal-division mechanism).
-  function runAddInSub(leafPath: Path, sub: { y: number; h: number }, kind: AddKind) {
-    if (kind === 'fixed_shelf')    { addShelf(leafPath); return }
-    if (kind === 'adj_shelf')      { bumpAdj(leafPath, +1); return }
-    handleAddFittingInSub(leafPath, kind, sub)
-  }
-
-  // Add a fitting INTO a specific sub-compartment band of an open leaf. The
-  // new fitting is inserted at the correct INDEX in section.fittings so the
-  // cursor-based stacking in positionFittings places it between the band's
-  // bounding fittings — without setting y_locked. That avoids auto-locking
-  // adjacent bands (isSubCompLocked treats any neighbouring y_locked fitting
-  // as a pin) and lets the user drag the new fitting freely. If the user
-  // wants to pin the band, they explicitly right-click → Lock height.
-  function handleAddFittingInSub(path: Path, type: InternalFittingType, sub: { y: number; h: number }) {
-    const s = getSection(tree, path)
-    if (s?.type !== 'open') return
-    const leaf = leaves.find(l => pathEq(l.path, path))
-    if (!leaf) return
-    // Refuse to add into a locked band — it'd squeeze the band by re-flowing
-    // the stacking cursor. Mirrors the inspector's disabled buttons; keeps
-    // any future call site (toolbar, right-click) from sneaking past the gate.
-    if (isSubCompLocked(leaf, sub)) return
-
-    // Only non-adj fittings define ordering in the cursor stack — adj_shelves
-    // are equalised independently and don't carry a fixed array position.
-    const TOL = 0.5
-    const topEdge = sub.y + sub.h
-    const botEdge = sub.y
-    const topBound = leaf.fittings.find(d => Math.abs(d.y - topEdge) < TOL) ?? null
-    const botBound = leaf.fittings.find(d => Math.abs(d.y + d.h - botEdge) < TOL) ?? null
-
-    // Insertion index in fittings[]:
-    //   • both bounds   → right after botBound (= between the two)
-    //   • only botBound → right after botBound (band is at the top of the leaf)
-    //   • only topBound → at topBound's index (band is at the bottom)
-    //   • neither       → append (band fills the leaf)
-    let insertIdx: number
-    if (botBound)      insertIdx = botBound.idx + 1
-    else if (topBound) insertIdx = topBound.idx
-    else               insertIdx = s.fittings.length
-
-    const base = newFitting(type)
-    const next = updateAtPath(tree, path, sec => {
-      if (sec.type !== 'open') return sec
-      return { ...sec, fittings: [...sec.fittings.slice(0, insertIdx), base, ...sec.fittings.slice(insertIdx)] }
-    })
-    save(next)
-    setSelected({ kind: 'fitting', path, fittingIndex: insertIdx })
-    setMenu(null)
+    if (kind === 'fixed_shelf')      { save(addSeparator(tree, path, 'hsplit', 'fixed_shelf')); setMenu(null) }
+    else if (kind === 'adj_shelf')   { save(addSeparator(tree, path, 'hsplit', 'adj_shelf'));  setMenu(null) }
+    else if (kind === 'inner_drawer' || kind === 'pull_out') { save(addDrawerBay(tree, path, kind)); setMenu(null) }
+    else                             handleAddFitting(path, kind)   // accessory
   }
 
   function handleRemoveFitting(path: Path, idx: number) {
@@ -1543,8 +1489,7 @@ export default function InternalGridEditor({
       {/* Toolbar */}
       <div className="flex-none flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 border-b border-gray-700 flex-wrap text-[11px]">
         <span className="text-gray-500">
-          {selected?.kind === 'subcomp' ? 'Selected sub-compartment:'
-            : selected?.kind === 'leaf' ? 'Selected compartment:'
+          {selected?.kind === 'leaf' ? 'Selected compartment:'
             : selected?.kind === 'fitting' ? 'Selected fitting:'
             : tree.type === 'open' ? 'Interior:' : 'Select a compartment:'}
         </span>
@@ -1556,11 +1501,9 @@ export default function InternalGridEditor({
           onClick={() => addDivider(targetPath)}
           title="Split the opening into side-by-side columns."
         >Split → columns</button>
-        <div className="flex items-center gap-1">
-          <span className="text-gray-500">Adj:</span>
-          <button className={addBtn} disabled={!targetPath} onClick={() => bumpAdj(targetPath, -1)}>−</button>
-          <button className={addBtn} disabled={!targetPath} onClick={() => bumpAdj(targetPath, +1)}>+</button>
-        </div>
+        <button className={addBtn} disabled={!targetPath}
+          onClick={() => targetPath && runAdd(targetPath, 'adj_shelf')}
+          title="Add an adjustable shelf — splits the opening into a top and bottom compartment.">+ Adj shelf</button>
         <div className="ml-1 flex items-center gap-1">
           <span className="text-gray-500">Gap:</span>
           <input
@@ -1579,6 +1522,18 @@ export default function InternalGridEditor({
             title="Vertical gap (mm) between stacked drawers / pull-outs inside a compartment. Empty resets to default (3mm)."
           />
           <span className="text-gray-500">mm</span>
+        </div>
+        <div className="ml-1 flex items-center gap-1">
+          <button className={addBtn} disabled={undoStack.length === 0} onClick={undo}
+            title="Undo (Ctrl/Cmd+Z)">↶ Undo</button>
+          <button className={addBtn} disabled={redoStack.length === 0} onClick={redo}
+            title="Redo (Ctrl/Cmd+Shift+Z)">↷ Redo</button>
+          <button
+            className={'px-2 py-0.5 rounded text-[10px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ' +
+              (selected ? 'bg-red-900/50 hover:bg-red-900/70 text-red-300' : 'bg-gray-700 text-gray-300')}
+            disabled={!selected}
+            onClick={deleteSelected}
+            title="Delete the selected compartment / shelf / fitting (Delete)">🗑 Delete</button>
         </div>
         <div className="ml-1 flex items-center gap-1">
           <button className={addBtn} onClick={() => save(equaliseAll(tree))}>= Equalise all</button>
@@ -1634,53 +1589,27 @@ export default function InternalGridEditor({
               const lockedBay = leafChild?.size !== undefined && !groupId
               return (
                 <g key={key}>
-                  {/* Sub-compartments — gaps between horizontal elements. Each is
-                      its own clickable rect. A click selects the sub-compartment
-                      itself when the leaf has 2+ sub-comps (so subsequent splits /
-                      added fittings target only that band); when there's just one
-                      sub-comp it's identical to the whole leaf, so click selects
-                      the leaf. Sub-comp selections have no data identity — the
-                      tree is untouched. */}
-                  {leaf.subCompartments.map((sub, si) => {
-                    const multi  = leaf.subCompartments.length > 1
-                    const isSelS = multi
-                      && selected?.kind === 'subcomp'
-                      && pathEq(selected.path, leaf.path)
-                      && selected.subIdx === si
-                    // The leaf reads as "selected" when EITHER the leaf is selected
-                    // (highlight all sub-rects) OR any of its sub-comps is selected
-                    // (highlight only that one). Group viz applies to all sub-rects.
-                    const isSelHere = isSel || isSelS
-                    return (
-                      <rect key={`sub-${si}`}
-                        x={ox + leaf.box.x} y={svgY(sub.y + sub.h)}
-                        width={leaf.box.w} height={sub.h}
-                        fill={isSelHere ? 'rgba(59,130,246,0.10)' : (groupId ? `${groupColor(groupId)}14` : 'transparent')}
-                        stroke={isSelHere ? '#3b82f6' : (groupId ? groupColor(groupId) : 'none')}
-                        strokeWidth={isSelHere ? 1.5 : (groupId ? 1 : 0)}
-                        strokeDasharray={!isSelHere && groupId ? '3 3' : undefined}
-                        style={{ cursor: 'pointer' }}
-                        onClick={e => {
-                          e.stopPropagation(); setMenu(null)
-                          if (!multi) {
-                            setSelected(isSel ? null : { kind: 'leaf', path: leaf.path })
-                          } else {
-                            setSelected(isSelS ? null : { kind: 'subcomp', path: leaf.path, subIdx: si })
-                          }
-                        }}
-                        onContextMenu={e => {
-                          e.preventDefault(); e.stopPropagation()
-                          if (!multi) {
-                            setSelected({ kind: 'leaf', path: leaf.path })
-                            setMenu({ kind: 'leaf', clientX: e.clientX, clientY: e.clientY, path: leaf.path })
-                          } else {
-                            setSelected({ kind: 'subcomp', path: leaf.path, subIdx: si })
-                            setMenu({ kind: 'subcomp', clientX: e.clientX, clientY: e.clientY, path: leaf.path, subIdx: si })
-                          }
-                        }}
-                      />
-                    )
-                  })}
+                  {/* The compartment — one clickable rect. Click selects it (so
+                      its Lock / Equalise + Add-element controls show); right-click
+                      opens its menu. Shelves and content are drawn on top. */}
+                  <rect
+                    x={ox + leaf.box.x} y={svgY(leaf.box.y + leaf.box.h)}
+                    width={leaf.box.w} height={leaf.box.h}
+                    fill={isSel ? 'rgba(59,130,246,0.10)' : (groupId ? `${groupColor(groupId)}14` : 'transparent')}
+                    stroke={isSel ? '#3b82f6' : (groupId ? groupColor(groupId) : 'none')}
+                    strokeWidth={isSel ? 1.5 : (groupId ? 1 : 0)}
+                    strokeDasharray={!isSel && groupId ? '3 3' : undefined}
+                    style={{ cursor: 'pointer' }}
+                    onClick={e => {
+                      e.stopPropagation(); setMenu(null)
+                      setSelected(isSel ? null : { kind: 'leaf', path: leaf.path })
+                    }}
+                    onContextMenu={e => {
+                      e.preventDefault(); e.stopPropagation()
+                      setSelected({ kind: 'leaf', path: leaf.path })
+                      setMenu({ kind: 'leaf', clientX: e.clientX, clientY: e.clientY, path: leaf.path })
+                    }}
+                  />
                   {/* Equalise-group badge — top-left corner of the leaf */}
                   {groupId && leaf.box.w > 24 && leaf.box.h > 24 && (
                     <g style={{ pointerEvents: 'none', userSelect: 'none' }}>
@@ -1714,7 +1643,7 @@ export default function InternalGridEditor({
                     const w = Math.max(0, leaf.box.w - 2 * ADJ_INSET)
                     return (
                       <g key={`adj-${key}-${adj.fittingIdx}`}
-                        onMouseDown={e => startFittingDrag(e, leaf, { idx: adj.fittingIdx, y: adj.y, h: SHELF_T, yLocked: adj.yLocked })}
+                        onMouseDown={e => startFittingDrag(e, leaf, { idx: adj.fittingIdx, y: adj.y, h: shelfT, yLocked: adj.yLocked })}
                         onClick={e => {
                           e.stopPropagation()
                           if (wasDragging.current) { wasDragging.current = false; return }
@@ -1724,15 +1653,15 @@ export default function InternalGridEditor({
                         style={{ cursor: adj.yLocked ? 'not-allowed' : (isDragA ? 'grabbing' : 'grab') }}
                       >
                         <rect
-                          x={ox + leaf.box.x + ADJ_INSET} y={svgY(adj.y + SHELF_T)}
-                          width={w} height={SHELF_T}
+                          x={ox + leaf.box.x + ADJ_INSET} y={svgY(adj.y + shelfT)}
+                          width={w} height={shelfT}
                           fill={isSelA ? '#312e81' : '#1e1b4b'}
                           stroke={isSelA ? '#818cf8' : '#4338ca'}
                           strokeWidth={isSelA ? 1.5 : 1}
                           strokeDasharray="4 2"
                         />
                         {w > 60 && (
-                          <text x={ox + leaf.box.x + leaf.box.w / 2} y={svgY(adj.y + SHELF_T / 2)}
+                          <text x={ox + leaf.box.x + leaf.box.w / 2} y={svgY(adj.y + shelfT / 2)}
                             textAnchor="middle" dominantBaseline="central"
                             fontSize={10} fill={isSelA ? '#c7d2fe' : '#a5b4fc'}
                             fontFamily="system-ui,sans-serif"
@@ -1784,16 +1713,22 @@ export default function InternalGridEditor({
               )
             })}
 
-            {/* Separators — fixed shelves (h) and dividers (v) */}
+            {/* Separators — fixed shelves, adjustable shelves (h) and dividers (v) */}
             {seps.map(sep => {
               const isSel = selected?.kind === 'sep' && pathEq(selected.path, sep.path) && selected.index === sep.index
               const live  = dragLive && pathEq(dragLive.path, sep.path) && dragLive.index === sep.index
-              const fill  = sep.axis === 'h'
-                ? (isSel ? '#4a1d96' : '#2e1065')
+              // Colour by separator kind: fixed shelf = purple, adjustable shelf =
+              // indigo dashed, divider = grey.
+              const fill =
+                sep.kind === 'adj_shelf'   ? (isSel ? '#312e81' : '#1e1b4b')
+                : sep.kind === 'fixed_shelf' ? (isSel ? '#4a1d96' : '#2e1065')
                 : (isSel ? '#1c1917' : '#111827')
-              const stroke = sep.axis === 'h'
-                ? (isSel ? '#c084fc' : '#7c3aed')
+              const stroke =
+                sep.kind === 'adj_shelf'   ? (isSel ? '#818cf8' : '#4338ca')
+                : sep.kind === 'fixed_shelf' ? (isSel ? '#c084fc' : '#7c3aed')
                 : (isSel ? '#a8a29e' : '#4b5563')
+              const labelFill = sep.kind === 'adj_shelf' ? '#a5b4fc' : '#a78bfa'
+              const baseLabel = sep.kind === 'adj_shelf' ? 'adj shelf' : 'shelf'
               const key = `sep-${sep.path.join('.') || 'r'}-${sep.index}`
               return (
                 <g key={key}
@@ -1805,6 +1740,7 @@ export default function InternalGridEditor({
                     x={ox + sep.box.x} y={svgY(sep.box.y + sep.box.h)}
                     width={sep.box.w} height={sep.box.h}
                     fill={fill} stroke={stroke} strokeWidth={isSel || live ? 1.5 : 1}
+                    strokeDasharray={sep.kind === 'adj_shelf' ? '4 2' : undefined}
                     onMouseDown={e => startDrag(e, sep)}
                   >
                     {sep.equalised
@@ -1816,9 +1752,9 @@ export default function InternalGridEditor({
                   {sep.axis === 'h' && sep.box.w > 80 && (
                     <text x={ox + sep.box.x + sep.box.w / 2} y={svgY(sep.box.y + sep.box.h / 2)}
                       textAnchor="middle" dominantBaseline="central"
-                      fontSize={Math.min(13, sep.box.h * 0.72)} fill={isSel ? '#e9d5ff' : '#a78bfa'}
+                      fontSize={Math.min(13, sep.box.h * 0.72)} fill={isSel ? '#e9d5ff' : labelFill}
                       fontFamily="system-ui,sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}
-                    >{sep.equalised ? 'shelf =' : sep.locked ? 'shelf ⚲' : 'shelf'}</text>
+                    >{sep.equalised ? `${baseLabel} =` : sep.locked ? `${baseLabel} ⚲` : baseLabel}</text>
                   )}
                 </g>
               )
@@ -1864,90 +1800,6 @@ export default function InternalGridEditor({
               <p>Click the interior, then split it into shelves or columns.</p>
             </div>
           )}
-
-          {/* Selected sub-compartment — a vertical band inside an open leaf.
-              Actions add fittings with y_locked into this band; Split into
-              shelves inserts a fixed-shelf fitting at the band midpoint. */}
-          {selSub && (() => {
-            // Locked bands refuse all height-changing actions in the inspector
-            // (resize input, Split into shelves, Add fitting). The user has to
-            // explicitly unlock via right-click first. This matches the lock's
-            // promise: "doesn't change height unless its unlocked."
-            const subLocked  = isSubCompLocked(selSub.leaf, selSub.sub)
-            const lockedTip  = 'This sub-compartment is locked. Right-click it → Unlock height first.'
-            const canConvert = isShelfDivided(getSection(tree, selSub.leaf.path))
-            return (
-            <div>
-              <p className="uppercase tracking-wider text-blue-400 mb-2">
-                Sub-compartment{subLocked ? ' ⚲' : ''}
-              </p>
-              <p className="text-gray-500 mb-2">
-                W {Math.round(selSub.leaf.box.w)} mm{subLocked ? ' · locked' : ''}
-              </p>
-
-              {/* Recommended path: turn shelf-divided bands into real bays so each
-                  opening gets its own Lock / Equalise (locking a band can't be
-                  per-band — it pins shelves shared with the neighbours). */}
-              {canConvert && (
-                <div className="mb-2 p-1.5 rounded bg-amber-950/40 border border-amber-900/60">
-                  <button className={addBtn + ' w-full text-left'}
-                    onClick={() => convertShelvesToBays(selSub.leaf.path)}
-                    title="Turn these fixed shelves into structural bays. Each opening then becomes its own area with a Lock / Equalise control — and locking one no longer affects the others."
-                  >Convert shelves → bays ⭢</button>
-                  <p className="text-[9px] text-amber-300/70 mt-1">
-                    Bands can’t lock individually. Convert to bays to lock/equalise each opening.
-                  </p>
-                </div>
-              )}
-
-              {/* The whole opening's Lock / Equalise (its slot in the parent
-                  split) — shown here too so dividing it with a shelf/drawer
-                  doesn't hide these controls. */}
-              {renderSizeControls(selSub.leaf.path, selSub.leaf.box)}
-
-              <label className="block mb-2 mt-3">
-                <span className="block text-gray-500 mb-1">
-                  Height (mm){subLocked ? ' — locked' : ''}
-                </span>
-                <input type="number"
-                  min={1}
-                  step={1}
-                  key={`sub-h-${selSub.leaf.path.join('.') || 'r'}-${selSub.sub.y}-${Math.round(selSub.sub.h)}`}
-                  defaultValue={Math.round(selSub.sub.h)}
-                  disabled={subLocked}
-                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                  onBlur={e => {
-                    const v = e.target.value.trim()
-                    const n = v === '' ? NaN : Number(v)
-                    if (Number.isFinite(n) && n > 0 && Math.abs(n - selSub.sub.h) > 0.5) {
-                      commitSubCompHeight(selSub.leaf, selSub.sub, n)
-                    }
-                  }}
-                  className={inp + (subLocked ? ' opacity-40 cursor-not-allowed' : '')}
-                  title={subLocked ? lockedTip : 'Resize this band by locking the bounding shelf/drawer. Empty restores the default by editing the bounding fitting directly.'}
-                />
-              </label>
-              {/* Add element here — same unified menu as a whole opening. A fixed
-                  shelf splits the opening structurally; the rest land in this band. */}
-              <p className="uppercase tracking-wider text-gray-500 mt-3 mb-1">
-                Add element here{subLocked ? ' — locked' : ''}
-              </p>
-              <div className="grid grid-cols-2 gap-1">
-                {ADD_ELEMENTS.map(el => (
-                  <button key={el.kind} className={addBtn + ' text-left'}
-                    disabled={subLocked} title={subLocked ? lockedTip : el.title}
-                    onClick={() => runAddInSub(selSub.leaf.path, selSub.sub, el.kind)}
-                  >+ {el.label}</button>
-                ))}
-              </div>
-
-              <button className={addBtn + ' mt-3 w-full text-left'}
-                onClick={() => setSelected({ kind: 'leaf', path: selSub.leaf.path })}
-                title="Switch selection to the whole compartment"
-              >Select whole compartment</button>
-            </div>
-            )
-          })()}
 
           {/* Selected compartment */}
           {selLeaf && selLeafOpen && (
@@ -2177,8 +2029,8 @@ export default function InternalGridEditor({
           {/* Selected separator */}
           {selSep && (
             <div>
-              <p className={`uppercase tracking-wider mb-2 ${selSep.axis === 'h' ? 'text-violet-400' : 'text-gray-300'}`}>
-                {selSep.axis === 'h' ? 'Fixed shelf' : 'Divider'}
+              <p className={`uppercase tracking-wider mb-2 ${selSep.kind === 'adj_shelf' ? 'text-indigo-400' : selSep.axis === 'h' ? 'text-violet-400' : 'text-gray-300'}`}>
+                {selSep.kind === 'adj_shelf' ? 'Adjustable shelf' : selSep.axis === 'h' ? 'Fixed shelf' : 'Divider'}
               </p>
               <label className="block text-gray-500 mb-1">
                 {selSep.axis === 'h' ? 'Bay height below (mm)' : 'Bay width left (mm)'}
@@ -2200,8 +2052,8 @@ export default function InternalGridEditor({
             </div>
           )}
 
-          {!isEmpty && !selLeaf && !selSep && !selFittingData && !selSub && (
-            <p className="text-gray-600">Click a compartment (or one of its sub-bands above/below a shelf) to split it or add fittings, or a shelf/divider/fitting to edit it.</p>
+          {!isEmpty && !selLeaf && !selSep && !selFittingData && (
+            <p className="text-gray-600">Click a compartment to add elements or lock/equalise it, or click a shelf/divider/fitting to edit it.</p>
           )}
 
           {/* Legend */}
@@ -2304,61 +2156,7 @@ export default function InternalGridEditor({
                   )
                 })()}
               </>
-            ) : menu.kind === 'subcomp' ? (() => {
-              // Resolve the band the user right-clicked. If the leaf re-rendered
-              // and the indices shifted (rare — e.g. concurrent save), fall back
-              // gracefully by closing the menu.
-              const m = menu
-              const leaf = leaves.find(l => pathEq(l.path, m.path))
-              const sub  = leaf?.subCompartments[m.subIdx]
-              if (!leaf || !sub) return null
-              const locked = isSubCompLocked(leaf, sub)
-              const { topBound, botBound } = findSubBounds(leaf, sub)
-              const canLock = !!(topBound || botBound)
-              const canConvertHere = isShelfDivided(getSection(tree, leaf.path))
-              return (
-                <>
-                  <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-gray-500">
-                    Add element here
-                  </div>
-                  {ADD_ELEMENTS.map(el => (
-                    <button key={el.kind}
-                      className={menuBtn + (locked ? ' opacity-40 cursor-not-allowed' : '')}
-                      disabled={locked} title={locked ? undefined : el.title}
-                      onClick={() => runAddInSub(leaf.path, sub, el.kind)}
-                    >+ {el.label}</button>
-                  ))}
-                  {canConvertHere && (
-                    <div className="border-t border-gray-700 mt-1 pt-1">
-                      <button className={menuBtn}
-                        onClick={() => { convertShelvesToBays(leaf.path); setMenu(null) }}
-                        title="Turn these fixed shelves into structural bays so each opening can be locked / equalised independently."
-                      >Convert shelves → bays ⭢</button>
-                    </div>
-                  )}
-                  <div className="border-t border-gray-700 mt-1 pt-1">
-                    <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-gray-500">
-                      Band · {Math.round(sub.h)} mm{locked ? ' · locked' : ''}
-                    </div>
-                    {!locked && (
-                      <button className={menuBtn + ' disabled:opacity-40 disabled:cursor-not-allowed'}
-                        disabled={!canLock}
-                        onClick={() => { lockSubCompHeight(leaf, sub); setMenu(null) }}
-                        title={canLock
-                          ? 'Pin this band’s height. Note: this can also pin a shelf shared with the neighbour — convert to bays for clean per-opening locking.'
-                          : 'No bounding shelf/drawer to lock — this band already fills the whole compartment.'}
-                      >Lock height ⚲</button>
-                    )}
-                    {locked && (
-                      <button className={menuBtn}
-                        onClick={() => { unlockSubCompHeight(leaf, sub); setMenu(null) }}
-                        title="Unlock both bounding fittings so this band re-flows with the rest of the stack."
-                      >Unlock height</button>
-                    )}
-                  </div>
-                </>
-              )
-            })() : (
+            ) : (
               <>
                 <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors"
                   onClick={() => equaliseThis(menu.path)}>= Equalise this split</button>

@@ -20,7 +20,7 @@ interface Machine {
   is_default: boolean; active: boolean
 }
 interface Profile { id: string; cnc_machine_id: string; name: string; is_default: boolean; active: boolean; [k: string]: unknown }
-interface ToolItem { id: string; name: string; tool_number: string | null }
+interface ToolItem { id: string; name: string; tool_number: string | null; diameter: number | null }
 
 type FieldKind = 'num' | 'int' | 'text' | 'bool' | 'select' | 'tool' | 'textarea'
 interface FieldSpec { key: string; label: string; kind: FieldKind; opts?: string[] }
@@ -70,6 +70,7 @@ const GROUPS: FieldGroup[] = [
   { title: 'Milling Direction', fields: [
     { key: 'milling_direction', label: 'Direction', kind: 'select', opts: ['climb', 'conventional', 'auto'] },
     { key: 'milling_direction_override_by_material', label: 'Material can override', kind: 'bool' },
+    { key: 'cutter_compensation', label: 'Tool comp', kind: 'select', opts: ['computer', 'control', 'off'] },
   ]},
   { title: 'Pass Strategy', fields: [
     { key: 'pass_strategy', label: 'Strategy', kind: 'select', opts: ['single', 'onion_skin', 'roughing_finishing', 'multi_depth'] },
@@ -133,7 +134,7 @@ export default function CncMachinesClient() {
   const [selMachine, setSelMachine] = useState<string | null>(null)
   const [selProfile, setSelProfile] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ 'Identity & Axis': true, 'Z Heights': true })
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ 'Identity & Axis': true, 'Z Heights': true, 'Nesting Margin': true })
 
   useEffect(() => {
     let cancelled = false
@@ -141,7 +142,7 @@ export default function CncMachinesClient() {
       const [mR, pR, tR] = await Promise.all([
         supabase.from('cnc_machines').select('id,name,brand,model,table_dx,table_dy,gcode_dialect,is_default,active').order('name'),
         supabase.from('cnc_machine_profiles').select('*').order('name'),
-        supabase.from('cnc_tools').select('id,name,tool_number').eq('active', true).order('tool_number', { nullsFirst: false }),
+        supabase.from('cnc_tools').select('id,name,tool_number,diameter').eq('active', true).order('tool_number', { nullsFirst: false }),
       ])
       if (cancelled) return
       setMachines((mR.data ?? []) as Machine[])
@@ -290,14 +291,16 @@ export default function CncMachinesClient() {
                         <span className="text-[11px] font-semibold text-ink">{g.title}</span>
                         <span className="text-ink-subtle text-xs">{open ? '▾' : '▸'}</span>
                       </button>
-                      {open && (
+                      {open && (g.title === 'Nesting Margin' ? (
+                        <NestingMarginPanel profile={profile} tools={tools} onPatch={c => patchProfile(profile.id, c)} />
+                      ) : (
                         <div className="grid grid-cols-3 gap-x-4 gap-y-3 px-3 py-3">
                           {g.fields.map(fld => (
                             <Field key={fld.key} spec={fld} value={profile[fld.key]} tools={tools}
                               onSave={v => patchProfile(profile.id, { [fld.key]: v })} />
                           ))}
                         </div>
-                      )}
+                      ))}
                     </div>
                   )
                 })}
@@ -355,6 +358,54 @@ function Field({ spec, value, tools, onSave }: { spec: FieldSpec; value: unknown
           const n = spec.kind === 'int' ? parseInt(raw) : parseFloat(raw)
           onSave(Number.isFinite(n) ? n : null)
         }} />
+    </div>
+  )
+}
+
+// Custom panel for the nesting-margin "builder": each part is opt-in, with a live
+// per-tool preview so it's obvious what gap each material will actually get.
+function NestingMarginPanel({ profile, tools, onPatch }: { profile: Profile; tools: ToolItem[]; onPatch: (changes: Record<string, unknown>) => void }) {
+  const useDia = profile.margin_use_tool_dia !== false
+  const useOff = profile.margin_use_entry_offset !== false
+  const pad = (profile.nest_pad as number | null) ?? 0
+  const off = (profile.tool_entry_offset as number | null) ?? 0
+  const base = pad + (useOff ? off : 0)
+  const fmt = (n: number) => Number.isInteger(n) ? String(n) : n.toFixed(1)
+  return (
+    <div className="px-3 py-3 space-y-3">
+      <p className="text-[11px] text-ink-subtle">
+        Gap left between nested parts. Build it from the parts below — the result is computed per material from its routing tool.
+      </p>
+      <div className="space-y-2.5 max-w-md">
+        <Toggle label="Include routing tool diameter (per material)" on={useDia} onChange={() => onPatch({ margin_use_tool_dia: !useDia })} />
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-ink-muted w-44 shrink-0">+ Pad (mm)</span>
+          <input type="number" step="any" className={`${inp} max-w-28`} defaultValue={profile.nest_pad == null ? '' : String(profile.nest_pad)} key={String(profile.nest_pad)}
+            onBlur={e => { const r = e.target.value.trim(); onPatch({ nest_pad: r === '' ? null : (Number.isFinite(parseFloat(r)) ? parseFloat(r) : null) }) }} />
+        </div>
+        <Toggle label={`+ Approach offset (${fmt(off)}mm — set in Tool Entry)`} on={useOff} onChange={() => onPatch({ margin_use_entry_offset: !useOff })} />
+      </div>
+      <div className="border-t border-edge pt-2.5">
+        <p className="text-[10px] uppercase tracking-wider text-ink-subtle mb-1.5">Resulting gap per tool</p>
+        <div className="space-y-0.5 font-mono text-[11px]">
+          {tools.length === 0 && <p className="text-ink-subtle">No active tools — add bits in the CNC Tool Library.</p>}
+          {tools.map(t => {
+            const dia = t.diameter ?? 0
+            const margin = (useDia ? dia : 0) + base
+            return (
+              <div key={t.id} className="flex gap-2 text-ink-muted">
+                <span className="w-32 shrink-0 truncate">{t.tool_number ? `${t.tool_number} · ` : ''}Ø{fmt(dia)}</span>
+                <span className="text-ink-subtle">{useDia ? `${fmt(dia)} + ` : ''}{fmt(base)}{useDia ? '' : ' (Ø excluded)'}</span>
+                <span className="text-ink ml-auto">= {fmt(margin)} mm</span>
+              </div>
+            )
+          })}
+          <div className="flex gap-2 text-ink-subtle pt-0.5">
+            <span className="w-32 shrink-0">no tool assigned</span>
+            <span className="ml-auto">= {fmt(base)} mm</span>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

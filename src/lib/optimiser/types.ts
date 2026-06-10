@@ -64,6 +64,15 @@ export interface OptiProfile {
   cnc_machine_id: string
   name: string
   is_default: boolean
+  nest_pad: number | null          // user pad added to the nesting margin
+  tool_entry_offset: number | null // ramp approach offset; also reserved in the margin
+  margin_use_tool_dia: boolean | null     // include routing tool Ø in the margin
+  margin_use_entry_offset: boolean | null // include the approach offset in the margin
+}
+
+export interface OptiTool {
+  id: string
+  diameter: number | null
 }
 
 export interface OptiRoom { id: string; name: string }
@@ -80,7 +89,31 @@ export interface OptiSnapshot {
   materials: OptiMaterial[]
   machines: OptiMachine[]
   profiles: OptiProfile[]
+  tools: OptiTool[]
   allProjects: { id: string; name: string; job_number: string | null }[]
+}
+
+// Per-material nesting margin (gap between parts) = routing tool diameter
+// + nest pad + tool-entry offset. Pad/offset come from the selected machine
+// profile; tool diameter from the material's assigned routing tool. Nulls fall
+// back to a small default so parts never end up touching when unconfigured.
+export function buildMargins(
+  snapshot: { materials: OptiMaterial[]; profiles: OptiProfile[]; tools: OptiTool[] },
+  profileId: string | null,
+): { byMaterial: Record<string, number>; fallback: number } {
+  const prof = profileId ? snapshot.profiles.find(p => p.id === profileId) : null
+  const useDia = prof?.margin_use_tool_dia !== false        // default on
+  const useOffset = prof?.margin_use_entry_offset !== false  // default on
+  const pad = prof?.nest_pad ?? 2
+  const offset = useOffset ? (prof?.tool_entry_offset ?? 2) : 0
+  const base = pad + offset                                  // everything except the (per-material) tool Ø
+  const diaByTool = new Map(snapshot.tools.map(t => [t.id, t.diameter ?? 0]))
+  const byMaterial: Record<string, number> = {}
+  for (const m of snapshot.materials) {
+    const dia = useDia && m.cnc_tool_id ? (diaByTool.get(m.cnc_tool_id) ?? 0) : 0
+    byMaterial[m.id] = dia + base
+  }
+  return { byMaterial, fallback: base }
 }
 
 // Material+thickness grouping key used throughout nesting.

@@ -320,6 +320,43 @@ function HingeMeshPlaced({ url, mesh, position, mirror, scale, color }: {
   )
 }
 
+// Gable-side back arm (HingeArm mesh) of a split hinge body. Folds about its
+// plate-end pivot (the model origin on the gable) by `foldFraction` of the
+// door's open angle — a simple knuckle-fold approximation. Lerps in step with
+// the door (same factor as DoorPanel). Renders nothing when the GLB has no
+// HingeArm mesh. `foldFraction` is the per-hinge value from the materials library.
+function HingeArmFold({ url, pivot, openAngle, doorsOpen, mirror, scale, color, foldFraction }: {
+  url:          string
+  pivot:        [number, number, number]
+  openAngle:    number
+  doorsOpen:    boolean
+  mirror:       boolean
+  scale:        number
+  color?:       string
+  foldFraction: number
+}) {
+  const groupRef = useRef<THREE.Group>(null)
+  const cur      = useRef(0)
+  const openRef  = useRef(doorsOpen)
+  openRef.current = doorsOpen
+  useFrame(() => {
+    if (!groupRef.current) return
+    const target = openRef.current ? openAngle * foldFraction : 0
+    if (Math.abs(cur.current - target) < 0.001) { cur.current = target; groupRef.current.rotation.y = target; return }
+    cur.current = THREE.MathUtils.lerp(cur.current, target, 0.12)
+    groupRef.current.rotation.y = cur.current
+  })
+  const s  = scale || 1
+  const sz = HINGE_FLIP_Z ? -s : s
+  return (
+    <group ref={groupRef} position={pivot}>
+      <group rotation={[0, HINGE_BASE_YAW, 0]} scale={[(mirror ? -s : s), s, sz]}>
+        <HingeModel url={url} mesh="HingeArm" color={color} requireName />
+      </group>
+    </group>
+  )
+}
+
 function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, showDrilling, ...partProps }: PartProps & {
   b:          Box
   hingeSide:  'left' | 'right'
@@ -355,8 +392,10 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, sh
     <group ref={groupRef} position={[hingeX, b.y, b.z]}>
       <Part b={localB} {...partProps} />
       {doorProfile && <DoorProfile3D profile={doorProfile} b={localB} />}
-      {/* Cup-arms live inside the rotating group so they swing with the door.
-          Local origin sits on the hinge axis; y = hinge height from door bottom. */}
+      {/* Door-side hinge body (HingeCupArm = cup + front arm to the knuckle) lives
+          inside the rotating group so it swings with the door. The gable-side back
+          arm (HingeArm) folds separately near the plate (see below). Local origin
+          sits on the hinge axis; y = hinge height from door bottom. */}
       {(hinges ?? []).filter(h => h.model_url).map((h, hi) => (
         <HingeMeshPlaced
           key={`cup${hi}`}
@@ -1282,6 +1321,28 @@ function CabinetScene({
                   color="#8b919b"
                 />
                 )})}
+              {/* Gable-side back arm (HingeArm) of a SPLIT hinge body. Sits at the
+                  model origin on the gable and folds about that plate-end pivot by
+                  a fraction of the door angle, so the body articulates at the
+                  knuckle. Renders nothing if the body GLB has no HingeArm mesh
+                  (one-piece bodies just swing with the door inside DoorPanel). */}
+              {zoneHinges.filter(h => h.model_url).map((h, hi) => (
+                <HingeArmFold
+                  key={`arm${hi}`}
+                  url={h.model_url!}
+                  pivot={[
+                    hingeX + cupAcrossOffset(h.cup_x_from_edge_mm, mirror, h.model_scale),
+                    b.y + h.y_position_mm,
+                    b.z - ((h.bore_to_door_mm ?? 0) * h.model_scale + seatNudge(b.d)),
+                  ]}
+                  openAngle={z.hinge_side === 'left' ? -Math.PI / 2 : Math.PI / 2}
+                  doorsOpen={doorsOpen}
+                  mirror={mirror}
+                  scale={h.model_scale}
+                  color="#c0c6d0"
+                  foldFraction={h.arm_fold_fraction}
+                />
+              ))}
             </group>
           )
         }
@@ -1340,7 +1401,7 @@ function CabinetScene({
 // ── Public component ─────────────────────────────────────────────────────────
 
 export default function Cabinet3DView({
-  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, onPartSelect, showDrilling = true, onUpdate,
+  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, onPartSelect, showDrilling = true, onUpdate, onDeletePart,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
@@ -1358,6 +1419,8 @@ export default function Cabinet3DView({
   // When provided, the part panel shows inline edge-joint (drilling) controls for
   // the selected case part, persisting to cabinet.carcase_joints.
   onUpdate?:         (id: string, u: Partial<CabinetInstance>) => void | Promise<void>
+  // Delete/hide a part by id (custom part → deleted; resolved part → hidden).
+  onDeletePart?:     (partId: string) => void
 }) {
   const [selectedPart, setSelectedPart]       = useState<PartMeta | null>(null)
   const [doorsOpen, setDoorsOpen]             = useState(false)
@@ -1389,6 +1452,31 @@ export default function Cabinet3DView({
     }
     prevPartRef.current = selectedPart
   }, [selectedPart]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Delete/Backspace removes the selected part (custom → deleted, resolved →
+  // hidden). Capture phase + stopImmediatePropagation so the canvas behind the
+  // modal never sees it (it would delete the whole cabinet). A ref keeps the
+  // listener bound once while always seeing the current selection.
+  const deleteSelRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    deleteSelRef.current = () => {
+      if (!selectedPart || !onDeletePart) return
+      onDeletePart(selectedPart.id)
+      setSelectedPart(null)
+    }
+  })
+  useEffect(() => {
+    if (!onDeletePart) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
+      e.preventDefault(); e.stopImmediatePropagation()
+      deleteSelRef.current()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onDeletePart])
 
   function handleSelect(info: PartMeta | null) {
     if (info !== null) didHitPartRef.current = true

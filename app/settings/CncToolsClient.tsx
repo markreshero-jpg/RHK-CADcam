@@ -34,6 +34,7 @@ interface Tool {
   active: boolean
   base_feed_rate: number | null
   base_spindle_speed: number | null
+  plunge_feed_pct: number | null
   max_depth_per_pass: number | null
   cutting_length: number | null
   shank_diameter: number | null
@@ -206,6 +207,7 @@ export default function CncToolsClient() {
                             <NumField label="Shank dia (mm)" value={t.shank_diameter} onSave={v => patch(t.id, { shank_diameter: v })} />
                             <NumField label="Base feed (mm/min)" value={t.base_feed_rate} onSave={v => patch(t.id, { base_feed_rate: v })} />
                             <NumField label="Base spindle (RPM)" value={t.base_spindle_speed} integer onSave={v => patch(t.id, { base_spindle_speed: v })} />
+                            <NumField label="Plunge feed (% of feed)" value={t.plunge_feed_pct} onSave={v => patch(t.id, { plunge_feed_pct: v })} />
                             <div className="col-span-2">
                               <label className={lbl}>Material notes</label>
                               <input className={inp} defaultValue={t.material_notes ?? ''}

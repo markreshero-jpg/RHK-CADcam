@@ -27,7 +27,7 @@ export type ContextMenuState = { x: number; y: number; cabId?: string; wallId?: 
 // pos_x/pos_y = snapped back-left landing on the wall.
 // freePos = raw cursor world position so the ghost can float at the cursor (matches
 // elevation placement); absent = flat-snapped to wall (paste / copy-drag).
-export type PlaceGhost = { wall: Wall; pos_x: number; pos_y: number; islandFlip?: boolean; freePos?: { x: number; y: number } }
+export type PlaceGhost = { wall: Wall; pos_x: number; pos_y: number; islandFlip?: boolean; freePos?: { x: number; y: number }; fitDx?: number }
 
 export type CabDrag = { id: string; pos_x: number; pos_y: number }
 

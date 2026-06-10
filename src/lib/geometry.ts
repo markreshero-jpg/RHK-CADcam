@@ -1,4 +1,4 @@
-import { Wall, CabinetInstance } from './types'
+import { Wall, CabinetInstance, Room } from './types'
 
 export interface Pt { x: number; y: number }
 
@@ -20,16 +20,41 @@ export const CAB_FILL_SEL: Record<string, string> = {
 }
 
 // ── Cabinet collision rules ───────────────────────────────────────────────────
-// Base and wall units sit at different heights so they never physically conflict.
-// Tall units run full height and block both. Everything else blocks same-class.
-function cabTypeGroup(cls: string): 'base' | 'wall' | 'tall' {
-  if (cls === 'base' || cls === 'base_corner') return 'base'
-  if (cls === 'wall' || cls === 'wall_corner') return 'wall'
-  return 'tall'
+// Two cabinets block each other only when they physically overlap — i.e. their
+// along-wall (X) ranges AND their vertical (Y) ranges both overlap. The X check
+// is done by findFreeSlot / slideToFreeSlot via the `occupied` t/dx ranges; this
+// module supplies the Y (vertical-extent) test, so e.g. a wall unit can slide
+// over a base unit (different heights) but a tall unit blocks everything.
+
+// Height (mm from floor) of the wall-cabinet top line — soffit if set, else the
+// room's wall-cabinet-top. Matches the elevation renderer's wallCabTopFor.
+export function wallCabTop(wall: Wall | null | undefined, room: Room): number {
+  if (wall?.soffit_height != null) {
+    const wallH = wall.height ?? room.room_dy ?? 2400
+    return wallH - wall.soffit_height
+  }
+  return room.soffit_height ?? room.wall_cabinet_top ?? 2100
 }
-export function cabBlocks(mover: string, obstacle: string): boolean {
-  const m = cabTypeGroup(mover), o = cabTypeGroup(obstacle)
-  return !((m === 'base' && o === 'wall') || (m === 'wall' && o === 'base'))
+
+// Vertical extent [bottomZ, topZ] of a cabinet given its class + height. Base and
+// tall units sit on the floor; wall units hang down from the wall-cabinet-top line.
+export function cabVExtent(cls: string, dy: number, wall: Wall | null | undefined, room: Room): [number, number] {
+  const bottom = (cls === 'wall' || cls === 'wall_corner') ? wallCabTop(wall, room) - dy : 0
+  return [bottom, bottom + dy]
+}
+
+// Do two cabinets overlap vertically? `eps` keeps a flush top/bottom touch from
+// counting as an overlap.
+export function cabsBlock(
+  mover: { assembly_class: string; dy: number },
+  obstacle: { assembly_class: string; dy: number },
+  wall: Wall | null | undefined,
+  room: Room,
+  eps = 1,
+): boolean {
+  const [aB, aT] = cabVExtent(mover.assembly_class, mover.dy, wall, room)
+  const [bB, bT] = cabVExtent(obstacle.assembly_class, obstacle.dy, wall, room)
+  return aB < bT - eps && bB < aT - eps
 }
 
 // ── Basic math ────────────────────────────────────────────────────────────────
@@ -177,6 +202,42 @@ export function nearestWall(p: Pt, walls: Wall[], cabDX: number, maxDistMm: numb
     if (dd < maxDistMm && (!best || dd < best.d)) best = { wall: w, pos_x: nx, pos_y: ny, d: dd }
   }
   return best
+}
+
+/**
+ * Placement helper: fit a NEW cabinet of width `defaultDx` into the free gap that
+ * contains `point` (along-wall position of the cursor). If the gap is narrower than
+ * defaultDx, the returned `dx` is shrunk to exactly fill the gap so the cabinet
+ * butts against both neighbours instead of overlapping. Wider gap → full width,
+ * positioned near the cursor. `occupied` must already be filtered to the blocking
+ * cabinets (same wall side + vertical overlap). Falls back to full width + findFreeSlot
+ * when the cursor is over a cabinet or the gap is too small to be useful.
+ */
+const MIN_FIT_WIDTH = 50  // mm — below this, don't bother shrinking
+export function fitFreeSlot(
+  point: number, defaultDx: number, wallLen: number, occupied: { t: number; dx: number }[],
+): { t: number; dx: number } {
+  const p = Math.max(0, Math.min(wallLen, point))
+  // Cursor over an existing cabinet → no gap here; keep full width, let findFreeSlot place it.
+  if (occupied.some(o => p > o.t + 0.5 && p < o.t + o.dx - 0.5)) {
+    return { t: findFreeSlot(p - defaultDx / 2, defaultDx, wallLen, occupied), dx: defaultDx }
+  }
+  let gapStart = 0, gapEnd = wallLen
+  for (const o of occupied) {
+    const oEnd = o.t + o.dx
+    if (oEnd <= p && oEnd > gapStart) gapStart = oEnd
+    if (o.t >= p && o.t < gapEnd) gapEnd = o.t
+  }
+  const gapWidth = gapEnd - gapStart
+  if (gapWidth < MIN_FIT_WIDTH) {
+    return { t: findFreeSlot(p - defaultDx / 2, defaultDx, wallLen, occupied), dx: defaultDx }
+  }
+  if (gapWidth >= defaultDx) {
+    const t = Math.max(gapStart, Math.min(gapEnd - defaultDx, p - defaultDx / 2))
+    return { t, dx: defaultDx }
+  }
+  // Gap narrower than the default → shrink to fill it exactly.
+  return { t: gapStart, dx: gapWidth }
 }
 
 export function findFreeSlot(desired: number, dx: number, wallLen: number, occupied: { t: number; dx: number }[]): number {
