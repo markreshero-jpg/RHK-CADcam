@@ -36,6 +36,7 @@ import CanvasContextMenu from './CanvasContextMenu'
 import { buildContextMenuGroups } from './canvasContextItems'
 import DeleteWallModal from './DeleteWallModal'
 import SplitCabinetModal from './SplitCabinetModal'
+import SaveToLibraryModal from './SaveToLibraryModal'
 import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
 import WallDrawPanel from './WallDrawPanel'
 import WallPanel from './WallPanel'
@@ -83,6 +84,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [deleteWallPending, setDeleteWallPending] = useState<string | null>(null)
   const [splitCabId, setSplitCabId] = useState<string | null>(null)
+  const [saveLibCabId, setSaveLibCabId] = useState<string | null>(null)
   const [clipboard, setClipboard] = useState<CabinetInstance | null>(null)
   // Keyboard copy/cut buffer — holds one or many cabinets (separate from the
   // context-menu `clipboard`, which drives the click-to-place ghost paste).
@@ -1743,6 +1745,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onAlignLeft: handleAlignLeft,
             onAlignRight: handleAlignRight,
             onSplit: id => { setContextMenu(null); setSplitCabId(id) },
+            onSaveToLibrary: id => { setContextMenu(null); setSaveLibCabId(id) },
           })}
           onClose={() => setContextMenu(null)}
         />
@@ -1788,6 +1791,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             width={cab.dx}
             onSplit={count => void handleSplitCabinet(splitCabId, count)}
             onCancel={() => setSplitCabId(null)}
+          />
+        )
+      })()}
+
+      {saveLibCabId && (() => {
+        const cab = cabinets.find(c => c.id === saveLibCabId)
+        if (!cab) return null
+        return (
+          <SaveToLibraryModal
+            cab={cab}
+            onClose={() => setSaveLibCabId(null)}
+            onSaved={() => setSaveLibCabId(null)}
           />
         )
       })()}

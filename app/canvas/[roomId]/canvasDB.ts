@@ -2,6 +2,7 @@ import { supabase } from '@/src/lib/supabase'
 import type { Wall, CabinetInstance, CabinetDefinition, NeighbourType } from '@/src/lib/types'
 import { resolveCabinetFromDB, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
+import { loadCabinetInput } from '@/src/lib/resolver/loadCabinetInput'
 import { resolveHinges } from '@/src/lib/resolver/resolveHinges'
 import { persistResolved } from '@/src/lib/resolver/persistResolved'
 import type {
@@ -413,6 +414,86 @@ export async function dbPlaceCabinetFromDefinition(
   if (!cabinet) return null
   const resolved = await dbResolveAndPersistCabinet(cabinet.id)
   return { cabinet, resolved }
+}
+
+// ── Save a configured cabinet to the library (Save-As) ────────────────────────
+// Snapshots the instance's frozen geometry/composition into a new definition.
+// Materials/hardware otherwise resolve via the cascade at placement; ticked
+// preservation items capture the *resolved* value into the matching override
+// channel so it travels with the definition as a clearable assembly-level override.
+
+// Each flag maps to an override channel the resolver reads (see Stage 4b/1).
+export interface PreserveOptions {
+  carcase_material?: boolean   // → material_overrides.interior
+  toekick_material?: boolean   // → toekick_overrides.face/.interior
+  hinge?:            boolean   // → hardware_overrides.hinge_hardware_id (+ hinge_plate_id)
+  slide?:            boolean   // → hardware_overrides.slide_id
+  exposed_interior?: boolean   // → exposed_interior flag
+}
+
+export async function saveCabinetToLibrary(
+  cabinetInstanceId: string,
+  opts: { name: string; categoryId: string | null; subcategoryId: string | null; description?: string | null; preserve: PreserveOptions },
+): Promise<string | null> {
+  const { data: inst, error } = await supabase.from('cabinet_instances').select('*').eq('id', cabinetInstanceId).single()
+  if (error || !inst) { console.error('saveCabinetToLibrary load', error); return null }
+  const p = opts.preserve
+
+  const material_overrides: Record<string, string> = {}
+  const toekick_overrides:  Record<string, string> = {}
+  const hardware_overrides: Record<string, string> = {}
+
+  // Capture resolved cascade values for any ticked preservation item.
+  if (p.carcase_material || p.toekick_material || p.hinge || p.slide) {
+    try {
+      const input = await loadCabinetInput(cabinetInstanceId)
+      if (p.carcase_material && input.material?.id) material_overrides.interior = input.material.id
+      if (p.toekick_material) {
+        if (input.toekick_face_material?.id)     toekick_overrides.face     = input.toekick_face_material.id
+        if (input.toekick_interior_material?.id) toekick_overrides.interior = input.toekick_interior_material.id
+      }
+      if (p.hinge && input.hinge_hardware?.id) {
+        hardware_overrides.hinge_hardware_id = input.hinge_hardware.id
+        if (input.hinge_plate?.id) hardware_overrides.hinge_plate_id = input.hinge_plate.id
+      }
+      if (p.slide) {
+        const resolved = resolveCabinet(input)
+        const slideId =
+          resolved.drawer_stacks.flatMap(s => s.slides).find(Boolean)?.slide_id ??
+          resolved.internal_slides.find(Boolean)?.slide_id
+        if (slideId) hardware_overrides.slide_id = slideId
+      }
+    } catch (e) {
+      console.error('saveCabinetToLibrary resolve', e)   // capture is best-effort; still save geometry
+    }
+  }
+
+  // Append after the last definition in the chosen subcategory.
+  let sort_order = 0
+  if (opts.subcategoryId) {
+    const { data: sibs } = await supabase.from('cabinet_definitions').select('sort_order').eq('subcategory_id', opts.subcategoryId)
+    sort_order = (sibs ?? []).reduce((m, r) => Math.max(m, (r.sort_order as number) ?? 0), -1) + 1
+  }
+
+  const row = {
+    name: opts.name,
+    assembly_class: inst.assembly_class,
+    category_id: opts.categoryId,
+    subcategory_id: opts.subcategoryId,
+    default_dx: inst.dx, default_dy: inst.dy, default_dz: inst.dz,
+    has_carcass: inst.has_carcass, has_internal: inst.has_internal, has_face: inst.has_face, has_toekick: inst.has_toekick,
+    top_type: inst.top_type, toe_type: inst.toe_type,
+    construction_method_id: inst.construction_method_id,
+    face_grid: inst.face_grid, internal_grid: inst.internal_grid, carcase_joints: inst.carcase_joints ?? {},
+    rule_overrides: {},
+    material_overrides, hardware_overrides, toekick_overrides, drawerbox_overrides: {},
+    exposed_interior: p.exposed_interior ? !!inst.exposed_interior : false,
+    description: opts.description ?? null,
+    is_library_item: true, active: true, sort_order,
+  }
+  const { data: created, error: insErr } = await supabase.from('cabinet_definitions').insert(row).select('id').single()
+  if (insErr || !created) { console.error('saveCabinetToLibrary insert', insErr); return null }
+  return created.id as string
 }
 
 export async function dbUpdateCabinet(

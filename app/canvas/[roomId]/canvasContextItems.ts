@@ -5,7 +5,7 @@ export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, canEqualize, clipboard, cabinets, multiSelect,
   onDeleteWall, onDeleteCabinet, onDeleteMultiple, onDeleteBenchtop, onDeleteBenchtopVertex, onRoundCorner, onChamfer,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
-  onAlignLeft, onAlignRight,
+  onAlignLeft, onAlignRight, onSaveToLibrary,
 }: {
   cabId?: string
   wallId?: string
@@ -33,6 +33,7 @@ export function buildContextMenuGroups({
   onSplit?: (cabId: string) => void
   onAlignLeft?: () => void
   onAlignRight?: () => void
+  onSaveToLibrary?: (cabId: string) => void
 }): ContextMenuItem[][] {
   if (vertexContext && onDeleteBenchtopVertex) {
     const { btId, vi } = vertexContext
@@ -103,6 +104,8 @@ export function buildContextMenuGroups({
   }
 
   groups.push([{ label: 'Edit…', onClick: () => onEdit(cabId), color: 'blue' }])
+
+  if (onSaveToLibrary) groups.push([{ label: 'Save to library…', onClick: () => onSaveToLibrary(cabId) }])
 
   if (onSplit) groups.push([{ label: 'Split…', onClick: () => onSplit(cabId) }])
 
