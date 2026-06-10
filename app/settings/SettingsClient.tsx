@@ -10,6 +10,7 @@ import DrawerBoxesClient from '@/app/library/drawer-boxes/DrawerBoxesClient'
 import JointsClient from '@/app/library/joints/JointsClient'
 import PartsLibraryClient from '@/app/library/parts/PartsLibraryClient'
 import DoorSystemClient from '@/app/library/doors/DoorSystemClient'
+import CabinetsLibraryClient from '@/app/library/cabinets/CabinetsLibraryClient'
 import HingeCountRulesEditor from '@/app/settings/HingeCountRulesEditor'
 import CncToolsClient from '@/app/settings/CncToolsClient'
 import DrillLibraryClient from '@/app/settings/DrillLibraryClient'
@@ -81,7 +82,7 @@ type SettingsTab =
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'hinge_rules'
   | 'cnc_tool' | 'drill_library' | 'cnc_tool_set' | 'cnc_machine'
-  | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library' | 'doors_library'
+  | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library' | 'doors_library' | 'cabinets_library'
 
 interface TabDef {
   id: SettingsTab
@@ -293,6 +294,17 @@ const TABS: TabDef[] = [
       </svg>
     ),
   },
+  {
+    id: 'cabinets_library', label: 'Cabinets Library', group: 'Library',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1.5" y="2" width="12" height="11" rx="0.8"/>
+        <line x1="7.5" y1="2" x2="7.5" y2="13"/>
+        <line x1="5" y1="7.5" x2="6" y2="7.5" strokeWidth="1.8"/>
+        <line x1="9" y1="7.5" x2="10" y2="7.5" strokeWidth="1.8"/>
+      </svg>
+    ),
+  },
 ]
 
 const GROUPS = ['User', 'Shop', 'Builders', 'CNC', 'Library'] as const
@@ -482,6 +494,8 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
             <PartsLibraryClient embedded />
           ) : tab === 'doors_library' ? (
             <DoorSystemClient embedded />
+          ) : tab === 'cabinets_library' ? (
+            <CabinetsLibraryClient embedded />
           ) : tab === 'cabinet_builder' ? (
             <ConstructionMethodsClient embedded />
           ) : tab === 'drawer_builder' ? (
