@@ -41,6 +41,7 @@ import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
 import WallDrawPanel from './WallDrawPanel'
 import WallPanel from './WallPanel'
 import CabinetPanel from './CabinetPanel'
+import DefinitionInfoPanel from './DefinitionInfoPanel'
 import CabinetResizePanel from './CabinetResizePanel'
 import CabinetEditModal from './CabinetEditModal'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
@@ -1639,7 +1640,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             }}
           />
         )}
-        {selectedCab && (!cabResize || cabResize.cabId !== selectedCab.id) && (
+        {/* Armed library definition → read-only properties panel (takes precedence) */}
+        {mode === 'place_definition' && armedDef && (
+          <DefinitionInfoPanel definitionId={armedDef.id} />
+        )}
+        {mode !== 'place_definition' && selectedCab && (!cabResize || cabResize.cabId !== selectedCab.id) && (
           <CabinetPanel
             cabinet={selectedCab}
             wall={walls.find(w => w.id === selectedCab.wall_id) ?? null}
@@ -1649,7 +1654,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDelete={handleDeleteCabinet}
           />
         )}
-        {selectedBenchtop && (
+        {mode !== 'place_definition' && selectedBenchtop && (
           <BenchtopPanel
             benchtop={selectedBenchtop}
             onUpdate={bt.handleUpdateBenchtop}
