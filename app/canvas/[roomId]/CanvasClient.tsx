@@ -12,7 +12,7 @@ import {
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCenterPt,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbPlaceCabinetFromDefinition } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
@@ -475,17 +475,24 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // applies the gap-fit width like the legacy path.
   async function placeFromDefinition(wall: Wall, pos_x: number, pos_y: number, definitionId: string, cls: AssemblyClass, islandFlip = false, dxOverride?: number) {
     captureSnapshot()
-    const res = await dbPlaceCabinetFromDefinition(definitionId, {
+    const def = await dbLoadCabinetDefinition(definitionId)
+    if (!def) return
+    // Build the instance from the definition (service-layer mapping), then follow the
+    // exact insert → setCabinets → async-resolve pattern the other placement paths use
+    // so the cabinet renders immediately instead of only after the resolve completes.
+    const data = buildInstanceFromDefinition(def, {
       room_id: room.id, wall_id: wall.id,
       label: nextLabel(cabinets, cls),
       pos_x, pos_y, rotation: islandFlip ? wall.angle + 180 : wall.angle,
       dx: dxOverride,
     })
-    if (res) {
-      const { cabinet, resolved } = res
+    const cabinet = await dbInsertCabinet(data)
+    if (cabinet) {
       setCabinets(cs => [...cs, cabinet])
       setSelected({ type: 'cabinet', id: cabinet.id })
-      if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
+      dbResolveAndPersistCabinet(cabinet.id).then(resolved => {
+        if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
+      })
     }
   }
 
