@@ -10,7 +10,7 @@
 
 import { supabase } from '@/src/lib/supabase'
 import { buildSheetDrills, groupDrillOps, type DrillOpRaw, type PartRef } from './drills'
-import { resolveDrillTool, type DrillLibItem } from './resolveDrillTools'
+import { resolveDrillTool, type DrillLibItem, type RouterToolItem } from './resolveDrillTools'
 import { syncSeamDrillOperationsForCabinets } from './seamDrillSync'
 import type { NestedSheet } from './nest'
 import type { SheetDrill } from './gcode'
@@ -33,7 +33,7 @@ export interface ResolvedDrillOps {
 
 export async function loadResolvedDrillOps(
   parts: OptiPart[],
-  opts: { sync?: boolean; blockDiameters?: number[] } = {},
+  opts: { sync?: boolean; blockDiameters?: number[]; routerTools?: RouterToolItem[] } = {},
 ): Promise<ResolvedDrillOps> {
   const cabIds = [...new Set(parts.map(p => p.cabinet_instance_id))]
   // Regenerate joint-drilling rows so the read below is current (best-effort).
@@ -54,10 +54,13 @@ export async function loadResolvedDrillOps(
   for (const op of drillOps) {
     const r = resolveDrillTool(
       { diameter: op.diameter, depth: op.depth, drill_id: op.drill_id ?? null, auto_tool: op.auto_tool ?? false },
-      drillLib, { blockDiameters: opts.blockDiameters },
+      drillLib, { blockDiameters: opts.blockDiameters, routerTools: opts.routerTools },
     )
     op.diameter = r.diameter
     op.depth = r.depth
+    op.pocket = r.mode === 'pocket' && r.router_tool_number != null && r.router_diameter != null
+      ? { toolNumber: r.router_tool_number, toolDiameter: r.router_diameter }
+      : null
     r.warnings.forEach(w => warnings.add(w))
   }
 
@@ -79,7 +82,7 @@ export function projectSheetDrills(sheets: NestedSheet[], ops: ResolvedDrillOps)
 export async function loadSheetDrills(
   parts: OptiPart[],
   sheets: NestedSheet[],
-  opts: { sync?: boolean; blockDiameters?: number[] } = {},
+  opts: { sync?: boolean; blockDiameters?: number[]; routerTools?: RouterToolItem[] } = {},
 ): Promise<SheetDrillsResult> {
   const ops = await loadResolvedDrillOps(parts, opts)
   return { bySheet: projectSheetDrills(sheets, ops), warnings: ops.warnings }

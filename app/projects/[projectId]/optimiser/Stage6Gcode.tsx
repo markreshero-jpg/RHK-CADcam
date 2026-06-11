@@ -114,8 +114,12 @@ export default function Stage6Gcode() {
       const blockDiameters = drillBlock
         ? [...drillBlock.xDiameters, ...drillBlock.yDiameters].filter((d): d is number => d != null)
         : undefined
+      // Router bits available to pocket holes no drill can match.
+      const routerTools = (toolRows ?? [])
+        .filter(t => t.diameter != null && Number(t.diameter) > 0)
+        .map(t => ({ id: t.id as string, diameter: Number(t.diameter), tool_number: toolNum(t.tool_number) }))
       const { bySheet: sheetDrills, warnings: drillWarnings } =
-        await loadSheetDrills(snap.parts, nestResult.sheets, { sync: true, blockDiameters })
+        await loadSheetDrills(snap.parts, nestResult.sheets, { sync: true, blockDiameters, routerTools })
       setDrillNotes(drillWarnings)
 
       // Program number (O-word) derived from the job number, unique per sheet.

@@ -133,7 +133,12 @@ export const DEFAULT_POST: PostProfile = {
   tool_h_offset_delta: 0, header_template: null, footer_template: null,
 }
 
-export interface SheetDrill { x: number; y: number; diameter: number; depth: number }
+export interface SheetDrill {
+  x: number; y: number; diameter: number; depth: number
+  // When set, this hole can't be drilled (no matching bit) and is routed as a
+  // circular pocket with the given router bit (helical ram-in).
+  pocket?: { toolNumber: number; toolDiameter: number }
+}
 
 export interface GcodeInput {
   sheet: NestedSheet
@@ -198,6 +203,9 @@ function modalize(lines: string[]): string[] {
 
 export function generateSheetGcode(input: GcodeInput): string {
   const { sheet, thickness, profile: p, drills } = input
+  // Holes a drill can make vs. odd-sized holes routed as circular pockets.
+  const realDrills = drills.filter(d => !d.pocket)
+  const pocketHoles = drills.filter(d => d.pocket)
   const dp = p.decimal_places
   const lines: string[] = []
   let lineNo = p.line_number_increment
@@ -284,15 +292,15 @@ export function generateSheetGcode(input: GcodeInput): string {
   }
 
   // ── 4. ALL drilling (before routing — non-negotiable) ────────────────────────
-  if (drills.length) {
+  if (realDrills.length) {
     if (input.drillBlock) {
       // Anderson gang drilling — detect 32mm-grid runs and emit M88/M89 bitmasks.
-      emitGangDrilling(emit, c, f, drills, input.drillBlock, p, sheet.stock.h)
+      emitGangDrilling(emit, c, f, realDrills, input.drillBlock, p, sheet.stock.h)
     } else {
-      c(`Drilling ${drills.length} holes (${p.drill_sequence_strategy})`)
+      c(`Drilling ${realDrills.length} holes (${p.drill_sequence_strategy})`)
       emit(p.tool_change_code.replace('{n}', String(input.drillToolNumber ?? input.toolNumber)))
       emit(`${p.spindle_on_code} S${fInt(p.base_spindle_speed)}`)
-      for (const d of sequenceDrills(drills, p)) {
+      for (const d of sequenceDrills(realDrills, p)) {
         emit(`G0 X${f(mapX(d.x))} Y${f(mapY(d.y))} Z${fz(p.drill_rapid_z)}`)
         emit(`G1 Z${fz(-Math.abs(d.depth))} F${plungeFeed}`)
         emit(`G0 Z${fz(p.drill_rapid_z)}`)
@@ -301,6 +309,10 @@ export function generateSheetGcode(input: GcodeInput): string {
       emit(p.spindle_off_code)
     }
   }
+
+  // ── 4b. Circular pockets for un-drillable holes (before routing) ─────────────
+  // Each is helically ramped in with a router bit and cleared to the hole wall.
+  if (pocketHoles.length) emitCircularPockets(emit, c, f, fz, fInt, pocketHoles, p, mapX, mapY, safeZ, stepDown)
 
   // ── 5. Tool change to routing bit ────────────────────────────────────────────
   c('Tool change to routing bit')
@@ -375,6 +387,65 @@ function sequenceDrills(drills: SheetDrill[], p: PostProfile): SheetDrill[] {
     i = j
   }
   return out
+}
+
+// Circular pockets for holes no drill bit can make. Grouped by router tool;
+// each hole is helically ramped from the clearance plane down to depth (the
+// "slow ram-in" instead of a straight plunge), then concentric finishing
+// circles clear out to the hole wall. Pure motion in sheet→machine coords.
+function emitCircularPockets(
+  emit: (s: string) => void, c: (s: string) => void,
+  f: (v: number) => string, fz: (v: number) => string, fInt: (v: number) => string,
+  holes: SheetDrill[], p: PostProfile,
+  mapX: (x: number) => number, mapY: (y: number) => number, safeZ: number, stepDown: number,
+) {
+  const helicalFeed = f(Math.round(p.base_feed_rate * (p.helical_feed_pct > 0 ? p.helical_feed_pct : 40) / 100))
+  const cutFeed = f(p.base_feed_rate)
+  const clearZ = p.clearance_z
+
+  // Group by router tool so one tool change covers all its pockets.
+  const byTool = new Map<number, SheetDrill[]>()
+  for (const h of holes) { const t = h.pocket!.toolNumber; (byTool.get(t) ?? byTool.set(t, []).get(t)!).push(h) }
+
+  for (const [toolN, hs] of byTool) {
+    c(`Pocket-route ${hs.length} hole(s) — no drill match, tool ${toolN}`)
+    emit(p.tool_change_code.replace('{n}', String(toolN)))
+    if (p.emit_tool_length_offset) emit(`G43 H${fInt(toolN + p.tool_h_offset_delta)} Z${fz(safeZ)}`)
+    emit(`${p.spindle_on_code} S${fInt(p.base_spindle_speed)}`)
+
+    for (const h of hs) {
+      const holeR = h.diameter / 2
+      const routerR = h.pocket!.toolDiameter / 2
+      const sweep = Math.max(0, holeR - routerR)        // bit-centre radius to reach the wall
+      if (sweep <= 0.05) continue                        // bit ≥ hole: nothing to pocket
+      const stepover = Math.max(0.5, h.pocket!.toolDiameter * 0.45)
+      const entryR = Math.min(sweep, Math.max(0.5, routerR * 0.8))   // helix radius
+      const depth = Math.abs(h.depth)
+
+      const off = (r: number) => ({ sx: mapX(h.x + r), sy: mapY(h.y) })  // orbit point at radius r
+      const cmx = mapX(h.x), cmy = mapY(h.y)
+      const arc = (sx: number, sy: number, z: number | null, feed: string) =>
+        emit(`G3 X${f(sx)} Y${f(sy)}${z != null ? ` Z${fz(z)}` : ''} I${f(cmx - sx)} J${f(cmy - sy)} F${feed}`)
+
+      // Helical ram-in at entryR down to depth.
+      const e = off(entryR)
+      emit(`G0 X${f(e.sx)} Y${f(e.sy)} Z${fz(clearZ)}`)
+      const passes = Math.max(1, Math.ceil(depth / Math.max(0.5, stepDown)))
+      for (let i = 1; i <= passes; i++) arc(e.sx, e.sy, -Math.min(depth, i * stepDown), helicalFeed)
+      arc(e.sx, e.sy, null, cutFeed)                     // flat finishing circle at entryR
+
+      // Spiral outward to the wall with concentric circles at depth.
+      let r = entryR
+      while (r < sweep - 1e-3) {
+        r = Math.min(sweep, r + stepover)
+        const o = off(r)
+        emit(`G1 X${f(o.sx)} Y${f(o.sy)} F${cutFeed}`)
+        arc(o.sx, o.sy, null, cutFeed)
+      }
+      emit(`G0 Z${fz(safeZ)}`)
+    }
+    emit(p.spindle_off_code)
+  }
 }
 
 // Anderson gang-drilling section (spec §3, §7). Detects gangable runs, then for
