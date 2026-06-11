@@ -1,45 +1,27 @@
 // ============================================================
-// Joint-ops → drills bridge.
-// Materialises a cabinet's resolved seam-joint drilling into
-// part_operations rows so the optimiser's existing pipeline
-// (buildSheetDrills → generateSheetGcode) drills them with no
-// further changes. One generated row per hole.
+// Resolver → drills bridge.
+// Materialises every machine-drilled hole the resolver computes —
+// carcase seam joints, hinge cup/plate holes, and slide-imposed
+// holes — into part_operations rows, so the optimiser's existing
+// pipeline (buildSheetDrills → generateSheetGcode) drills them with
+// no further changes. One generated row per hole.
 //
 // Generated rows are tagged parameters.generated = 'seam_joint'
-// and deleted/re-inserted on every sync, so hand-added rows from
+// (kept for backward-compatible cleanup) plus a `kind` for clarity,
+// and are deleted/re-inserted on every sync, so hand-added rows from
 // CabinetRoutesPanel are never touched.
 // ============================================================
 
 import { supabase } from '@/src/lib/supabase'
 import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { cabinetSeamDrills, caseBox } from '@/src/lib/jointDrilling'
-import type { ResolvedCasePart } from '@/src/lib/resolver/types'
+import { cabinetSeamDrills } from '@/src/lib/jointDrilling'
+import { caseFrame, zoneFrame, boxFrame, projectToFrame, type FootprintFrame } from './partFootprint'
+import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 
 const GENERATED_MARK = 'seam_joint'
 
-type Axis = 'x' | 'y' | 'z'
-// For each flat-nestable case part: which cabinet axis is the panel's
-// face-normal (the only direction we can drill on a flat sheet) and which
-// two axes form the DX×DY footprint the nester lays the part out in.
-//   pos_x runs along the part's DX (the `u` axis), pos_y along DY (`v`).
-// Derived directly from caseBox() so it stays consistent with the geometry
-// that produced the holes.
-interface FaceMap { normal: Axis; u: Axis; v: Axis }
-function faceMapFor(partKey: string): FaceMap | null {
-  switch (partKey) {
-    case 'left_side':
-    case 'right_side': return { normal: 'x', u: 'z', v: 'y' }   // footprint = depth × height
-    case 'back':       return { normal: 'z', u: 'y', v: 'x' }   // footprint = height × width
-    case 'bottom':
-    case 'full_top':
-    case 'front_rail':
-    case 'back_rail':  return { normal: 'y', u: 'z', v: 'x' }   // footprint = depth × width
-    default:           return null                              // not a flat-nest CNC face
-  }
-}
-
 interface GeneratedDrill {
-  source_table: 'case_parts'
+  source_table: string
   source_cabinet_id: string
   source_part_key: string
   operation_type: 'drill'
@@ -57,80 +39,128 @@ interface GeneratedDrill {
   parameters: Record<string, unknown>
 }
 
-// Project one cabinet-space seam drill onto its target part's flat footprint.
-// Returns null for edge/dowel holes (axis not along the panel's face-normal) —
-// those aren't drillable on the flat nest and are deferred to edge machining.
-export function projectToFootprint(
-  drill: { x: number; y: number; z: number; axis: string },
-  part: ResolvedCasePart,
-): { pos_x: number; pos_y: number; output_face: string } | null {
-  const fm = faceMapFor(part.part_key)
-  if (!fm) return null
-  if ((drill.axis[0] as Axis) !== fm.normal) return null   // not a face-normal bore
+// Hardware holes (hinge/slide) carry no tool assignment from the resolver, so
+// they auto-select a bit by diameter at G-code time.
+const AUTO_TOOL = { router_tool_id: null as string | null, drill_id: null as string | null, auto_tool: true }
 
-  const cb = caseBox(part)                                  // cabinet-space AABB: min corner + extents
-  const coord = (axis: Axis) => (axis === 'x' ? drill.x : axis === 'y' ? drill.y : drill.z)
-  const origin = (axis: Axis) => (axis === 'x' ? cb.x : axis === 'y' ? cb.y : cb.z)
+const round = (n: number) => Math.round(n * 100) / 100
 
-  // Face-flip / mirror. Each panel is machined with its hole-bearing (interior)
-  // face up. The raw projection is read from the +normal viewpoint, so a bore
-  // that ENTERS the −normal face (axis sign '+') is on the opposite face — turning
-  // the panel over to present it mirrors the u/DX axis (pos_x → DX − pos_x). This
-  // also makes mirror-twin parts (left vs right side) come out as proper mirror
-  // images in the nest instead of identical coordinates.
-  const entersNegativeFace = drill.axis[1] === '+'
-  let pos_x = coord(fm.u) - origin(fm.u)
-  if (entersNegativeFace) pos_x = part.DX - pos_x
+// Collect every resolver-computed hole, projected onto its target part's flat
+// footprint and keyed so the optimiser's buildSheetDrills can find it.
+function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: GeneratedDrill[]; skipped: number } {
+  const rows: GeneratedDrill[] = []
+  let skipped = 0
 
-  return {
-    pos_x,
-    pos_y: coord(fm.v) - origin(fm.v),
-    output_face: FACE_FOR_AXIS[drill.axis] ?? 'top',        // which face the bore enters
+  const caseByKey = new Map(rp.case_parts.map(p => [p.part_key, p]))
+  const zoneByKey = new Map(rp.face_zones.map(z => [`${z.row_index}:${z.col_index}`, z]))
+
+  const add = (
+    sourceTable: string, sourcePartKey: string, frame: FootprintFrame | null | undefined,
+    drill: { x: number; y: number; z: number; axis: string; radius: number; depthLen: number },
+    kind: string, operationKey: string,
+    tool: { router_tool_id: string | null; drill_id: string | null; auto_tool: boolean },
+  ) => {
+    if (!frame) { skipped++; return }
+    const proj = projectToFrame(drill, frame)
+    if (!proj) { skipped++; return }
+    rows.push({
+      source_table: sourceTable,
+      source_cabinet_id: cabinetId,
+      source_part_key: sourcePartKey,
+      operation_type: 'drill',
+      operation_key: operationKey,
+      pos_x: round(proj.pos_x),
+      pos_y: round(proj.pos_y),
+      diameter: round(drill.radius * 2),
+      depth: round(drill.depthLen),
+      output_face: proj.output_face,
+      repeat_count: 1,
+      output_to_cnc: true,
+      ...tool,
+      parameters: { generated: GENERATED_MARK, kind },
+    })
   }
-}
 
-// Cabinet axes → part_operations.output_face vocabulary (+X=right, +Y=top, +Z=front).
-const FACE_FOR_AXIS: Record<string, string> = {
-  'x+': 'right', 'x-': 'left',
-  'y+': 'top',   'y-': 'bottom',
-  'z+': 'front', 'z-': 'back',
+  // 1. Carcase seam joints → case parts.
+  for (const d of cabinetSeamDrills(rp)) {
+    const part = caseByKey.get(d.targetPartKey as never)
+    add('case_parts', `case_${d.targetPartKey}`, part ? caseFrame(part) : null, d, 'joint', d.seamKey,
+      { router_tool_id: d.router_tool_id ?? null, drill_id: d.drill_id ?? null, auto_tool: d.auto_tool ?? false })
+  }
+
+  // 2. Hinges → cup holes on the door, plate holes on the mounting gable.
+  for (const h of rp.hinge_instances) {
+    const opKey = `hinge_${h.row_index}_${h.col_index}_${h.sort_order}`
+    const zone = zoneByKey.get(`${h.row_index}:${h.col_index}`)
+    for (const cd of h.cup_drills) {
+      add('face_zones', `zone_${h.row_index}_${h.col_index}`, zone ? zoneFrame(zone) : null, cd, 'hinge_cup', opKey, AUTO_TOOL)
+    }
+    const mt = h.mount_target
+    if (mt?.table === 'case_parts' && mt.part_key) {
+      const cp = caseByKey.get(mt.part_key)
+      for (const pd of h.plate_drills) {
+        add('case_parts', `case_${mt.part_key}`, cp ? caseFrame(cp) : null, pd, 'hinge_plate', opKey, AUTO_TOOL)
+      }
+    } else {
+      // Internal-shelf-mounted plates not bridged yet.
+      skipped += h.plate_drills.length
+    }
+  }
+
+  // 3. Slides → cabinet member (gable), drawer front (face), and box panels.
+  for (const stack of rp.drawer_stacks) {
+    const opKey = `slide_${stack.face_zone_row}_${stack.face_zone_col}`
+    const zone = zoneByKey.get(`${stack.face_zone_row}:${stack.face_zone_col}`)
+    const boxByType = new Map(stack.box_parts.map(p => [p.part_type, p]))
+    const dboxKey = (t: string) => `dbox_${stack.face_zone_row}_${stack.face_zone_col}_${t}`
+
+    for (const sl of stack.slides) {
+      for (const sd of sl.drills) {
+        if (sd.machine_operation !== 'drill') { skipped++; continue }
+        switch (sd.surface) {
+          case 'cabinet_member': {
+            const key = sd.side === 'left' ? 'left_side' : 'right_side'
+            const cp = caseByKey.get(key)
+            add('case_parts', `case_${key}`, cp ? caseFrame(cp) : null, sd, 'slide', opKey, AUTO_TOOL)
+            break
+          }
+          case 'drawer_front':
+            add('face_zones', `zone_${stack.face_zone_row}_${stack.face_zone_col}`, zone ? zoneFrame(zone) : null, sd, 'slide', opKey, AUTO_TOOL)
+            break
+          case 'drawer_side': {
+            const t = sd.side === 'left' ? 'db_left_side' : 'db_right_side'
+            const bp = boxByType.get(t)
+            add('drawer_box_parts', dboxKey(t), bp ? boxFrame(bp) : null, sd, 'slide', opKey, AUTO_TOOL)
+            break
+          }
+          case 'drawer_bottom': {
+            const bp = boxByType.get('db_bottom')
+            add('drawer_box_parts', dboxKey('db_bottom'), bp ? boxFrame(bp) : null, sd, 'slide', opKey, AUTO_TOOL)
+            break
+          }
+          case 'drawer_back': {
+            const bp = boxByType.get('db_back')
+            add('drawer_box_parts', dboxKey('db_back'), bp ? boxFrame(bp) : null, sd, 'slide', opKey, AUTO_TOOL)
+            break
+          }
+          default:
+            skipped++
+        }
+      }
+    }
+  }
+
+  return { rows, skipped }
 }
 
 export interface SeamDrillSyncResult { written: number; skipped: number }
 
-// Regenerate the seam-joint drilling rows for ONE cabinet.
+// Regenerate ALL resolver-computed drilling rows for ONE cabinet.
 export async function syncSeamDrillOperations(cabinetId: string): Promise<SeamDrillSyncResult> {
   // Quiet: a project may contain a half-built cabinet; its resolver errors must
   // not surface as a hard error while we generate drilling for the whole nest.
   const rp = await resolveCabinetFromDB(cabinetId, { quiet: true })
-  const partByKey = new Map<string, ResolvedCasePart>(rp.case_parts.map(p => [p.part_key, p]))
-
-  const rows: GeneratedDrill[] = []
-  let skipped = 0
-  for (const d of cabinetSeamDrills(rp)) {
-    const part = partByKey.get(d.targetPartKey)
-    if (!part) { skipped++; continue }
-    const proj = projectToFootprint(d, part)
-    if (!proj) { skipped++; continue }
-    rows.push({
-      source_table: 'case_parts',
-      source_cabinet_id: cabinetId,
-      source_part_key: `case_${d.targetPartKey}`,           // matches normalize.ts / svgCaseMeta
-      operation_type: 'drill',
-      operation_key: d.seamKey,
-      pos_x: round(proj.pos_x),
-      pos_y: round(proj.pos_y),
-      diameter: round(d.radius * 2),
-      depth: round(d.depthLen),
-      output_face: proj.output_face,
-      repeat_count: 1,                                       // cabinetSeamDrills already expands qty/spacing
-      output_to_cnc: true,
-      router_tool_id: d.router_tool_id ?? null,
-      drill_id: d.drill_id ?? null,
-      auto_tool: d.auto_tool ?? false,
-      parameters: { generated: GENERATED_MARK, seam_key: d.seamKey },
-    })
-  }
+  const { rows, skipped } = collectDrillRows(rp, cabinetId)
 
   // Replace this cabinet's generated drill rows wholesale. Hand-added rows
   // (no parameters.generated marker) are left untouched.
@@ -174,5 +204,3 @@ export async function syncSeamDrillOperationsForCabinets(
   await Promise.all(Array.from({ length: Math.min(concurrency, cabinetIds.length) }, worker))
   return total
 }
-
-const round = (n: number) => Math.round(n * 100) / 100

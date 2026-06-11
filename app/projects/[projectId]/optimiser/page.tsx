@@ -25,12 +25,13 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
   const commentsByCab = new Map<string, Record<string, string>>(cabs.map(c => [c.id, c.part_comments ?? {}]))
 
   const empty = { data: [] as Record<string, unknown>[] }
-  const [cpR, ipR, tpR, fzR] = cabIds.length ? await Promise.all([
+  const [cpR, ipR, tpR, fzR, dbR] = cabIds.length ? await Promise.all([
     supabase.from('case_parts').select(PART_SELECTS.case_parts).in('cabinet_instance_id', cabIds),
     supabase.from('internal_parts').select(PART_SELECTS.internal_parts).in('cabinet_instance_id', cabIds),
     supabase.from('toekick_parts').select(PART_SELECTS.toekick_parts).in('cabinet_instance_id', cabIds),
     supabase.from('face_zones').select(PART_SELECTS.face_zones).in('cabinet_instance_id', cabIds),
-  ]) : [empty, empty, empty, empty]
+    supabase.from('drawer_box_parts').select(PART_SELECTS.drawer_box_parts).in('cabinet_instance_id', cabIds),
+  ]) : [empty, empty, empty, empty, empty]
 
   const [matR, machR, profR, toolR, projR] = await Promise.all([
     supabase.from('materials').select('id,name,dz,sheet_dx,sheet_dy,has_grain,grain_direction,trim_top,trim_bottom,trim_left,trim_right,pad,cnc_tool_id,feed_rate_pct').eq('active', true).order('name'),
@@ -42,7 +43,8 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
 
   const norm = normalizeProject(project, rooms, cabs,
     (cpR.data ?? []) as Record<string, unknown>[], (ipR.data ?? []) as Record<string, unknown>[],
-    (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[], commentsByCab)
+    (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[],
+    (dbR.data ?? []) as Record<string, unknown>[], commentsByCab)
 
   const snapshot: OptiSnapshot = {
     projectId,

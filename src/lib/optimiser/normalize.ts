@@ -25,6 +25,7 @@ export function normalizeProject(
   roomsRaw: RawRoom[],
   cabsRaw: RawCabinet[],
   cp: Row[], ip: Row[], tp: Row[], fz: Row[],
+  dbp: Row[] = [],
   commentsByCab: Map<string, Record<string, string>> = new Map(),
 ): NormalizedProject {
   const rooms: OptiRoom[] = roomsRaw.map(r => ({ id: r.id, name: r.name }))
@@ -61,6 +62,9 @@ export function normalizeProject(
   for (const r of ip) push('internal_parts', r, `int_${r.part_type}_${r.sort_order}`, `${humanize(String(r.part_type))} ${Number(r.sort_order) + 1}`, null, 0)
   for (const r of tp) push('toekick_parts', r, `tk_${r.part_key}_${r.sort_order}`, humanize(String(r.part_key)), null, 0)
   for (const r of fz) push('face_zones', r, `zone_${r.row_index}_${r.col_index}`, `${humanize(String(r.face_type))} (R${Number(r.row_index) + 1}C${Number(r.col_index) + 1})`, (r.grain_direction as string) ?? null, 0)
+  // Drawer box panels — key mirrors svgDbMeta (dbox_<row>_<col>_<part_type>).
+  for (const r of dbp) push('drawer_box_parts', r, `dbox_${r.face_zone_row}_${r.face_zone_col}_${r.part_type}`,
+    `${humanize(String(r.part_type).replace(/^db_/, ''))} (R${Number(r.face_zone_row) + 1}C${Number(r.face_zone_col) + 1})`, (r.grain_direction as string) ?? null, 0)
 
   return { rooms, cabinets, parts }
 }
@@ -71,4 +75,5 @@ export const PART_SELECTS = {
   internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,material_id,output_to_cnc',
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,material_id,output_to_cnc',
   face_zones: 'id,cabinet_instance_id,row_index,col_index,face_type,dx,dy,dz,material_id,grain_direction,output_to_cnc',
+  drawer_box_parts: 'id,cabinet_instance_id,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc',
 } as const

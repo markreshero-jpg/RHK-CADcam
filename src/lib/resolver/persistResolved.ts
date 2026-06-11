@@ -33,6 +33,7 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
     supabase.from('case_parts').delete().eq('cabinet_instance_id', cabId),
     supabase.from('toekick_parts').delete().eq('cabinet_instance_id', cabId),
     supabase.from('internal_parts').delete().eq('cabinet_instance_id', cabId),
+    supabase.from('drawer_box_parts').delete().eq('cabinet_instance_id', cabId),
     supabase.from('face_rows').delete().eq('cabinet_instance_id', cabId),
     supabase.from('face_cols').delete().eq('cabinet_instance_id', cabId),
   ])
@@ -109,6 +110,29 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
     for (const p of (insertedInternal ?? []) as { id: string; part_type: string; sort_order: number }[]) {
       internalIdByKey.set(`${p.part_type}:${p.sort_order}`, p.id)
     }
+  }
+
+  // Insert drawer box parts — cuttable box panels, one row per panel per stack,
+  // keyed by (face_zone row/col, part_type) so part_operations can attach.
+  const boxRows = resolved.drawer_stacks.flatMap(stack =>
+    stack.box_parts.map(p => ({
+      cabinet_instance_id: cabId,
+      face_zone_row: stack.face_zone_row,
+      face_zone_col: stack.face_zone_col,
+      part_type:     p.part_type,
+      dx: p.DX, dy: p.DY, dz: p.DZ,
+      x:  p.X,  y:  p.Y,  z:  p.Z,
+      ax: p.AX, ay: p.AY, az: p.AZ,
+      material_id:      p.material_id,
+      edge_band_top:    p.edge_band.top,
+      edge_band_bottom: p.edge_band.bottom,
+      edge_band_left:   p.edge_band.left,
+      edge_band_right:  p.edge_band.right,
+      output_to_cnc:    true,
+    })))
+  if (boxRows.length > 0) {
+    const { error } = await supabase.from('drawer_box_parts').insert(boxRows)
+    if (error) console.error('persistResolved drawer_box_parts:', error)
   }
 
   // Insert face rows — collect returned IDs for zone FK
