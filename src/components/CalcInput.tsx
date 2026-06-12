@@ -26,6 +26,8 @@ interface CalcInputProps {
   max?: number
   /** Select all on focus (default true). */
   selectOnFocus?: boolean
+  /** Focus this field on mount (e.g. first dimension field when a panel opens). */
+  autoFocus?: boolean
   /** If given, clearing the field to empty calls this instead of reverting. */
   onClear?: () => void
 }
@@ -38,7 +40,7 @@ function fmt(value: number | null | undefined): string {
 
 export default function CalcInput({
   value, onCommit, className, placeholder, title, disabled,
-  decimals, min, max, selectOnFocus = true, onClear,
+  decimals, min, max, selectOnFocus = true, autoFocus, onClear,
 }: CalcInputProps) {
   // null = not editing → mirror `value`; string = in-progress draft
   const [draft, setDraft] = useState<string | null>(null)
@@ -71,6 +73,8 @@ export default function CalcInput({
       type="text"
       inputMode="decimal"
       autoComplete="off"
+      // eslint-disable-next-line jsx-a11y/no-autofocus
+      autoFocus={autoFocus}
       spellCheck={false}
       value={shown}
       title={title}

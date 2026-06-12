@@ -1673,6 +1673,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             apply to the cabinet that will be placed; no wall yet, so wall-position is hidden. */}
         {mode === 'place_definition' && armedDraft && (
           <CabinetPanel
+            key={armedDraft.cabinet_definition_id ?? armedDraft.id}
             cabinet={armedDraft}
             wall={null}
             wallCabinets={[]}
@@ -1680,16 +1681,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onUpdate={patchDraft}
             onDelete={async () => cancelArm()}
             hideWallPosition
+            autoFocusWidth
           />
         )}
         {mode !== 'place_definition' && selectedCab && (!cabResize || cabResize.cabId !== selectedCab.id) && (
           <CabinetPanel
+            key={selectedCab.id}
             cabinet={selectedCab}
             wall={walls.find(w => w.id === selectedCab.wall_id) ?? null}
             wallCabinets={cabinets.filter(c => c.wall_id === selectedCab.wall_id)}
             room={room}
             onUpdate={handleUpdateCabinet}
             onDelete={handleDeleteCabinet}
+            autoFocusWidth
           />
         )}
         {mode !== 'place_definition' && selectedBenchtop && (

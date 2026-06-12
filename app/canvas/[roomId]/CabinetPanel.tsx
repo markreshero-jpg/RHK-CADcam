@@ -5,7 +5,7 @@ import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/
 import { cabT, wallDir, findFreeSlot, cabsBlock } from '@/src/lib/geometry'
 import CalcInput from '@/src/components/CalcInput'
 
-export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, hideWallPosition, hideDelete }: {
+export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, hideWallPosition, hideDelete, autoFocusWidth }: {
   cabinet: CabinetInstance
   wall: Wall | null
   wallCabinets: CabinetInstance[]
@@ -14,6 +14,8 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
   onDelete: (id: string) => Promise<void>
   hideWallPosition?: boolean
   hideDelete?: boolean
+  /** Focus the width field when the panel opens, so Tab flows width → height → depth. */
+  autoFocusWidth?: boolean
 }) {
   const [local, setLocal] = useState<Partial<CabinetInstance>>({})
   const [saving, setSaving] = useState(false)
@@ -148,6 +150,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
               <div key={dim}>
                 <p className="text-[10px] text-gray-600 text-center mb-0.5 uppercase">{dim}</p>
                 <CalcInput value={f(dim) as number}
+                  autoFocus={autoFocusWidth && dim === 'dx'}
                   onCommit={v => onUpdate(cabinet.id, { [dim]: v })}
                   className={inp + ' text-right'} />
               </div>
