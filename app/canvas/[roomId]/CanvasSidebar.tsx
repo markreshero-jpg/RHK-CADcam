@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/src/lib/supabase'
 import { Mode, CabinetInstance } from './canvasTypes'
@@ -103,8 +103,9 @@ const WALL_MODES = WALL_ITEMS.map(w => w.mode)
 
 // ── DB-backed library types ─────────────────────────────────────────────────────
 
-type Category = { id: string; name: string; sort_order: number; accent_color: string | null }
+type Category = { id: string; name: string; sort_order: number; accent_color: string | null; parent_id: string | null }
 type Scope    = 'all' | 'job'
+type CabCtxMenu = { x: number; y: number; categoryId: string | null }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -165,26 +166,31 @@ export default function CanvasSidebar({
   const [search, setSearch]   = useState('')
   const [scope, setScope]     = useState<Scope>('all')
   const [openCats, setOpenCats] = useState<Set<string>>(new Set())
+  const [ctxMenu, setCtxMenu] = useState<CabCtxMenu | null>(null)
+
+  const reloadCategories = useCallback(async () => {
+    const { data } = await supabase.from('cabinet_categories')
+      .select('id,name,sort_order,accent_color,parent_id').eq('active', true).order('sort_order')
+    const rows = (data ?? []) as Category[]
+    setCategories(rows)
+    return rows
+  }, [])
 
   // Load taxonomy + definitions once.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const [cat, def] = await Promise.all([
-        supabase.from('cabinet_categories').select('id,name,sort_order,accent_color').eq('active', true).order('sort_order'),
+      const [cats, def] = await Promise.all([
+        reloadCategories(),
         supabase.from('cabinet_definitions').select('*').eq('is_library_item', true).eq('active', true).order('sort_order'),
       ])
       if (cancelled) return
-      if (cat.error || def.error) {
-        setLibError(cat.error?.message ?? def.error?.message ?? 'Failed to load library')
-        return
-      }
-      setCategories((cat.data ?? []) as Category[])
+      if (def.error) { setLibError(def.error.message); return }
       setDefinitions((def.data ?? []) as CabinetDefinition[])
-      setOpenCats(new Set((cat.data ?? []).map(c => c.id)))   // expand all by default
+      setOpenCats(new Set(cats.map(c => c.id)))   // expand all by default
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [reloadCategories])
 
   // Definitions placed somewhere in the current job → drives the "This Job" scope.
   useEffect(() => {
@@ -200,6 +206,14 @@ export default function CanvasSidebar({
     })()
     return () => { cancelled = true }
   }, [room.project_id])
+
+  // Close the right-click menu on any outside interaction.
+  useEffect(() => {
+    if (!ctxMenu) return
+    const close = () => setCtxMenu(null)
+    window.addEventListener('mousedown', close)
+    return () => window.removeEventListener('mousedown', close)
+  }, [ctxMenu])
 
   function toggleCat(id: string) {
     setOpenCats(prev => {
@@ -223,16 +237,88 @@ export default function CanvasSidebar({
   const visibleCount = definitions.filter(matches).length
   const armedDef = definitions.find(d => d.id === armedDefinitionId) ?? null
 
-  // Accordion groups = categories (Base / Wall / Tall …) + a fallback for any
-  // definition whose category is missing.
-  const groups: Category[] = [
-    ...categories,
-    ...(definitions.some(d => !categories.some(c => c.id === d.category_id))
-      ? [{ id: '__orphan', name: 'Uncategorised', sort_order: 9999, accent_color: null }]
-      : []),
-  ]
-  const defsOf = (catId: string) => definitions.filter(d =>
-    (catId === '__orphan' ? !categories.some(c => c.id === d.category_id) : d.category_id === catId) && matches(d))
+  // ── Category tree ──
+  const childrenOf = (parentId: string | null) =>
+    categories.filter(c => c.parent_id === parentId).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name))
+  const defsOf = (catId: string) => definitions.filter(d => d.category_id === catId && matches(d))
+  const orphanDefs = definitions.filter(d => matches(d) && !categories.some(c => c.id === d.category_id))
+  // Does this node, or any descendant, have a visible definition? (search auto-expand)
+  function nodeHasVisible(catId: string): boolean {
+    return defsOf(catId).length > 0 || childrenOf(catId).some(c => nodeHasVisible(c.id))
+  }
+
+  async function createCategory(parentId: string | null) {
+    const name = typeof window !== 'undefined' ? window.prompt(parentId ? 'New sub-category name' : 'New category name') : null
+    if (!name?.trim()) { setCtxMenu(null); return }
+    const sort_order = childrenOf(parentId).reduce((m, c) => Math.max(m, c.sort_order), -1) + 1
+    const { data, error } = await supabase.from('cabinet_categories')
+      .insert({ name: name.trim(), parent_id: parentId, sort_order }).select('id').single()
+    if (error) { setLibError(error.message); setCtxMenu(null); return }
+    await reloadCategories()
+    setOpenCats(prev => { const n = new Set(prev); if (parentId) n.add(parentId); if (data) n.add(data.id as string); return n })
+    setCtxMenu(null)
+  }
+  async function renameCategory(cat: Category) {
+    const name = typeof window !== 'undefined' ? window.prompt('Rename category', cat.name) : null
+    setCtxMenu(null)
+    if (!name?.trim() || name.trim() === cat.name) return
+    const { error } = await supabase.from('cabinet_categories').update({ name: name.trim() }).eq('id', cat.id)
+    if (error) setLibError(error.message); else await reloadCategories()
+  }
+  async function deleteCategory(cat: Category) {
+    setCtxMenu(null)
+    const hasKids = childrenOf(cat.id).length > 0
+    const hasDefs = definitions.some(d => d.category_id === cat.id)
+    if (hasKids || hasDefs) { window.alert(`“${cat.name}” isn’t empty — move its ${hasKids ? 'sub-categories' : 'cabinets'} out first.`); return }
+    if (!window.confirm(`Delete category “${cat.name}”?`)) return
+    const { error } = await supabase.from('cabinet_categories').delete().eq('id', cat.id)
+    if (error) setLibError(error.message); else await reloadCategories()
+  }
+
+  // Recursive accordion node: child categories then this node's definitions.
+  function renderNode(cat: Category, depth: number): React.ReactNode {
+    if (q && !nodeHasVisible(cat.id)) return null
+    const defs = defsOf(cat.id)
+    const kids = childrenOf(cat.id)
+    const open = openCats.has(cat.id) || (!!q && nodeHasVisible(cat.id))
+    const hasContent = kids.length > 0 || defs.length > 0
+    return (
+      <div key={cat.id}>
+        <button
+          onClick={() => toggleCat(cat.id)}
+          onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, categoryId: cat.id }) }}
+          className="w-full flex items-center gap-1.5 pr-2 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
+          style={{ paddingLeft: 8 + depth * 12 }}
+        >
+          <span className="w-3 text-[9px] opacity-60">{hasContent ? (open ? '▾' : '▸') : '·'}</span>
+          <span className="flex-1 text-left truncate" style={cat.accent_color ? { color: cat.accent_color } : undefined}>{cat.name}</span>
+          {defs.length > 0 && <span className="text-[10px] text-gray-600 normal-case">{defs.length}</span>}
+        </button>
+        {open && (
+          <div className="flex flex-col gap-px">
+            {kids.map(k => renderNode(k, depth + 1))}
+            {defs.map(def => {
+              const sel = armedDefinitionId === def.id
+              return (
+                <button
+                  key={def.id}
+                  onClick={() => onArmDefinition(def)}
+                  title={`${def.name} · ${def.default_dx}×${def.default_dy}×${def.default_dz}`}
+                  className={`w-full flex items-center gap-2 pr-2 py-1.5 rounded-md text-sm transition-colors
+                    ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
+                  style={{ paddingLeft: 8 + (depth + 1) * 12 + 6 }}
+                >
+                  <span className="flex-1 text-left truncate">{def.name}</span>
+                  <span className="shrink-0 text-[9px] font-mono text-gray-500">{def.default_dx}×{def.default_dy}</span>
+                  <span className={`shrink-0 ${sel ? 'text-blue-300' : 'text-gray-500'}`}>{classThumb(def.assembly_class)}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <aside
@@ -326,48 +412,37 @@ export default function CanvasSidebar({
               </div>
             </div>
 
-            {/* Category drop-downs → list rows (name left, small type icon right) */}
-            <div className="flex flex-col gap-0.5">
-              {groups.map(cat => {
-                const defs = defsOf(cat.id)
-                const open = openCats.has(cat.id) || (!!q && defs.length > 0)
-                if (q && defs.length === 0) return null
-                return (
-                  <div key={cat.id}>
-                    <button
-                      onClick={() => toggleCat(cat.id)}
-                      className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
-                    >
-                      <span className="w-3 text-[9px] opacity-60">{open ? '▾' : '▸'}</span>
-                      <span className="flex-1 text-left" style={cat.accent_color ? { color: cat.accent_color } : undefined}>{cat.name}</span>
-                      <span className="text-[10px] text-gray-600 normal-case">{defs.length}</span>
-                    </button>
-                    {open && (
-                      <div className="flex flex-col gap-px pb-1">
-                        {defs.map(def => {
-                          const sel = armedDefinitionId === def.id
-                          return (
-                            <button
-                              key={def.id}
-                              onClick={() => onArmDefinition(def)}
-                              title={`${def.name} · ${def.default_dx}×${def.default_dy}×${def.default_dz}`}
-                              className={`w-full flex items-center gap-2 pl-6 pr-2 py-1.5 rounded-md text-sm transition-colors
-                                ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
-                            >
-                              <span className="flex-1 text-left truncate">{def.name}</span>
-                              <span className="shrink-0 text-[9px] font-mono text-gray-500">{def.default_dx}×{def.default_dy}</span>
-                              <span className={`shrink-0 ${sel ? 'text-blue-300' : 'text-gray-500'}`}>{classThumb(def.assembly_class)}</span>
-                            </button>
-                          )
-                        })}
-                        {defs.length === 0 && <p className="pl-6 pr-2 py-1 text-xs text-gray-600 italic">None</p>}
-                      </div>
-                    )}
+            {/* Nested category tree → list rows. Right-click for New category / Rename / Delete. */}
+            <div
+              className="flex flex-col gap-0.5 min-h-[40px]"
+              onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, categoryId: null }) }}
+            >
+              {childrenOf(null).map(cat => renderNode(cat, 0))}
+
+              {/* Definitions whose category was removed */}
+              {orphanDefs.length > 0 && (
+                <div>
+                  <div className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">Uncategorised</div>
+                  <div className="flex flex-col gap-px">
+                    {orphanDefs.map(def => {
+                      const sel = armedDefinitionId === def.id
+                      return (
+                        <button key={def.id} onClick={() => onArmDefinition(def)}
+                          title={`${def.name} · ${def.default_dx}×${def.default_dy}×${def.default_dz}`}
+                          className={`w-full flex items-center gap-2 pl-4 pr-2 py-1.5 rounded-md text-sm transition-colors
+                            ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
+                          <span className="flex-1 text-left truncate">{def.name}</span>
+                          <span className="shrink-0 text-[9px] font-mono text-gray-500">{def.default_dx}×{def.default_dy}</span>
+                          <span className={`shrink-0 ${sel ? 'text-blue-300' : 'text-gray-500'}`}>{classThumb(def.assembly_class)}</span>
+                        </button>
+                      )
+                    })}
                   </div>
-                )
-              })}
-              {!libError && definitions.length === 0 && (
-                <p className="px-2 py-2 text-xs text-gray-600 italic">No library cabinets yet.</p>
+                </div>
+              )}
+
+              {categories.length === 0 && definitions.length === 0 && (
+                <p className="px-2 py-2 text-xs text-gray-600 italic">Right-click to add a category.</p>
               )}
               {scope === 'job' && visibleCount === 0 && definitions.length > 0 && (
                 <p className="px-2 py-2 text-xs text-gray-600 italic">No library cabinets placed in this job yet.</p>
@@ -496,6 +571,30 @@ export default function CanvasSidebar({
           />
         </div>
       )}
+
+      {/* ── Right-click category menu ── */}
+      {ctxMenu && (() => {
+        const cat = ctxMenu.categoryId ? categories.find(c => c.id === ctxMenu.categoryId) ?? null : null
+        const item = 'w-full text-left px-3 py-1.5 text-sm hover:bg-gray-700 transition-colors'
+        return (
+          <div
+            className="fixed z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[180px]"
+            style={{ left: ctxMenu.x, top: ctxMenu.y }}
+            onMouseDown={e => e.stopPropagation()}
+            onContextMenu={e => e.preventDefault()}
+          >
+            <button className={`${item} text-gray-200`} onClick={() => createCategory(ctxMenu.categoryId)}>
+              {cat ? <>New category inside <span className="text-gray-400">“{cat.name}”</span></> : 'New category'}
+            </button>
+            {cat && (
+              <>
+                <button className={`${item} text-gray-200`} onClick={() => renameCategory(cat)}>Rename…</button>
+                <button className={`${item} text-red-400`} onClick={() => deleteCategory(cat)}>Delete</button>
+              </>
+            )}
+          </div>
+        )
+      })()}
     </aside>
   )
 }
