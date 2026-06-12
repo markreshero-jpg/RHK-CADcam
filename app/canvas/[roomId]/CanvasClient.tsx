@@ -87,6 +87,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [deleteWallPending, setDeleteWallPending] = useState<string | null>(null)
   const [splitCabId, setSplitCabId] = useState<string | null>(null)
   const [saveLibCabId, setSaveLibCabId] = useState<string | null>(null)
+  const [libRefresh, setLibRefresh] = useState(0)   // bump to reload the library palette
   const [clipboard, setClipboard] = useState<CabinetInstance | null>(null)
   // Keyboard copy/cut buffer — holds one or many cabinets (separate from the
   // context-menu `clipboard`, which drives the click-to-place ghost paste).
@@ -1405,6 +1406,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           onSelectMode={onSelectMode}
           armedDefinitionId={armedDef?.id ?? null}
           onArmDefinition={armDefinition}
+          libRefresh={libRefresh}
           wallMenuOpen={wallMenuOpen}
           setWallMenuOpen={setWallMenuOpen}
           cabMenuOpen={cabMenuOpen}
@@ -1852,7 +1854,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           <SaveToLibraryModal
             cab={cab}
             onClose={() => setSaveLibCabId(null)}
-            onSaved={() => setSaveLibCabId(null)}
+            onSaved={() => { setSaveLibCabId(null); setLibRefresh(v => v + 1) }}
           />
         )
       })()}

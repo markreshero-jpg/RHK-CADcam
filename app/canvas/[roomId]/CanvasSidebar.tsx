@@ -116,7 +116,7 @@ export default function CanvasSidebar({
   wallMenuOpen, setWallMenuOpen,
   cabMenuOpen, setCabMenuOpen,
   benchtopMenuOpen, setBenchtopMenuOpen,
-  clipboard, sidebarW,
+  clipboard, sidebarW, libRefresh = 0,
 }: {
   room: Room
   onOpenRoomProperties: () => void
@@ -133,6 +133,8 @@ export default function CanvasSidebar({
   setBenchtopMenuOpen: (v: boolean) => void
   clipboard: CabinetInstance | null
   sidebarW: number
+  /** Bumped by the parent after a Save-to-library so the palette reloads. */
+  libRefresh?: number
 }) {
   function Btn({ target, icon, label, shortcut, activeClass = 'bg-blue-600 text-white' }: {
     target: Mode; icon: React.ReactNode; label: string; shortcut?: string; activeClass?: string
@@ -176,7 +178,8 @@ export default function CanvasSidebar({
     return rows
   }, [])
 
-  // Load taxonomy + definitions once.
+  // Load taxonomy + definitions on mount and whenever the parent bumps libRefresh
+  // (e.g. after a Save-to-library), so newly saved cabinets/categories show up.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -187,10 +190,11 @@ export default function CanvasSidebar({
       if (cancelled) return
       if (def.error) { setLibError(def.error.message); return }
       setDefinitions((def.data ?? []) as CabinetDefinition[])
-      setOpenCats(new Set(cats.map(c => c.id)))   // expand all by default
+      // Expand all known categories (keep any the user already opened).
+      setOpenCats(prev => { const n = new Set(prev); cats.forEach(c => n.add(c.id)); return n })
     })()
     return () => { cancelled = true }
-  }, [reloadCategories])
+  }, [reloadCategories, libRefresh])
 
   // Definitions placed somewhere in the current job → drives the "This Job" scope.
   useEffect(() => {
