@@ -68,7 +68,7 @@ export default function Stage6Gcode() {
 
       // Routing tool per material: materials.cnc_tool_id → cnc_tools (depth/feed/speed).
       const { data: toolRows } = await supabase.from('cnc_tools')
-        .select('id,tool_number,diameter,max_depth_per_pass,base_feed_rate,base_spindle_speed,plunge_feed_pct').eq('active', true)
+        .select('id,name,tool_number,diameter,max_depth_per_pass,base_feed_rate,base_spindle_speed,plunge_feed_pct').eq('active', true)
       const toolById = new Map((toolRows ?? []).map(t => [t.id as string, t]))
       const matById = new Map(snap.materials.map(m => [m.id, m]))
       const toolNum = (tn: unknown) => { const d = String(tn ?? '').replace(/\D/g, ''); return d ? Number(d) : 1 }
@@ -114,12 +114,14 @@ export default function Stage6Gcode() {
       const blockDiameters = drillBlock
         ? [...drillBlock.xDiameters, ...drillBlock.yDiameters].filter((d): d is number => d != null)
         : undefined
-      // Router bits available to pocket holes no drill can match.
+      // Router bits available to pocket holes no drill can match, plus the
+      // machine's preferred pocket tool (e.g. T102).
       const routerTools = (toolRows ?? [])
         .filter(t => t.diameter != null && Number(t.diameter) > 0)
-        .map(t => ({ id: t.id as string, diameter: Number(t.diameter), tool_number: toolNum(t.tool_number) }))
+        .map(t => ({ id: t.id as string, diameter: Number(t.diameter), tool_number: toolNum(t.tool_number), name: (t.name as string | null) ?? null }))
+      const preferredPocketToolNumber = profile?.pocket_router_tool_number != null ? Number(profile.pocket_router_tool_number) : null
       const { bySheet: sheetDrills, warnings: drillWarnings } =
-        await loadSheetDrills(snap.parts, nestResult.sheets, { sync: true, blockDiameters, routerTools })
+        await loadSheetDrills(snap.parts, nestResult.sheets, { sync: true, blockDiameters, routerTools, preferredPocketToolNumber })
       setDrillNotes(drillWarnings)
 
       // Program number (O-word) derived from the job number, unique per sheet.

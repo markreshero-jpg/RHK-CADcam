@@ -57,11 +57,13 @@ export interface ResolveDrillOpts {
   // given, auto-select prefers a bit the block can actually fire, and a chosen
   // bit absent from the block raises a warning.
   blockDiameters?: number[]
-  // Router bits available to pocket holes that no drill can match. When given,
-  // an unmatched hole falls back to the LARGEST router bit at least
-  // pocketClearanceMm smaller than the hole (room to helix in).
+  // Router bits available to pocket holes that no drill can make (or that match a
+  // drill not fitted on the gang head). The preferred tool is used when it fits;
+  // otherwise the LARGEST router bit at least pocketClearanceMm smaller than the
+  // hole (room to helix in).
   routerTools?: RouterToolItem[]
-  pocketClearanceMm?: number   // default 2
+  pocketClearanceMm?: number             // default 2
+  preferredPocketToolNumber?: number | null
 }
 
 const DIA_TOL = 0.1     // mm — treat as the same nominal diameter
@@ -103,13 +105,21 @@ function pickByDiameter(
   return null
 }
 
-// Largest router bit at least `clearance` mm smaller than the hole, so it has
-// room to helix in and clear the circle. null when none qualifies.
-function pickRouterForPocket(holeDia: number, clearance: number, tools?: RouterToolItem[]): RouterToolItem | null {
+// Router bit to pocket a hole: the preferred tool when it fits, else the largest
+// bit at least `clearance` mm smaller than the hole (room to helix in). null when
+// none qualifies.
+function pickRouterForPocket(
+  holeDia: number, clearance: number, tools?: RouterToolItem[], preferredToolNumber?: number | null,
+): RouterToolItem | null {
   if (!tools?.length) return null
   const max = holeDia - clearance
-  return tools.filter(t => t.diameter > 0 && t.diameter <= max + 1e-6)
-    .sort((a, b) => b.diameter - a.diameter)[0] ?? null
+  const eligible = tools.filter(t => t.diameter > 0 && t.diameter <= max + 1e-6)
+  if (!eligible.length) return null
+  if (preferredToolNumber != null) {
+    const pref = eligible.find(t => t.tool_number === preferredToolNumber)
+    if (pref) return pref
+  }
+  return eligible.sort((a, b) => b.diameter - a.diameter)[0]
 }
 
 const drillResult = (diameter: number, depth: number, drill_id: string | null, drill_name: string | null, warnings: string[]): ResolvedDrillTool =>
@@ -141,22 +151,34 @@ export function resolveDrillTool(
     warnings.push('Drill op has no diameter and no assigned bit — left unresolved')
     return drillResult(typedDia, typedDepth, null, null, warnings)
   }
+  const clearance = opts.pocketClearanceMm ?? 2
+  const pocketWith = (router: RouterToolItem): ResolvedDrillTool => ({
+    mode: 'pocket', diameter: typedDia, depth: typedDepth, drill_id: null, drill_name: null,
+    router_tool_id: router.id, router_tool_number: router.tool_number, router_diameter: router.diameter, warnings,
+  })
+
   const pick = pickByDiameter(typedDia, typedDepth, lib, block)
   if (pick) {
     if (pick.snapped) warnings.push(`⌀${round(typedDia)} snapped to nearest bit ${pick.bit.name} (⌀${pick.bit.diameter})`)
-    if (!fitsBlock(pick.bit.diameter, block)) warnings.push(`⌀${pick.bit.diameter} has no matching spindle on the drill block`)
+    // A matching drill that's actually fitted on the gang head → drill it.
+    if (fitsBlock(pick.bit.diameter, block)) {
+      return drillResult(pick.bit.diameter, clampDepth(typedDepth, pick.bit, warnings), pick.bit.id, pick.bit.name, warnings)
+    }
+    // 3a. Matched a drill the head can't fire — pocket-route instead of dropping it.
+    const router = pickRouterForPocket(typedDia, clearance, opts.routerTools, opts.preferredPocketToolNumber)
+    if (router) {
+      warnings.push(`⌀${round(typedDia)} (${pick.bit.name}) isn't on the drill head — pocket-routed with ${router.name ?? `⌀${router.diameter}`}`)
+      return pocketWith(router)
+    }
+    warnings.push(`⌀${pick.bit.diameter} has no matching spindle on the drill block`)
     return drillResult(pick.bit.diameter, clampDepth(typedDepth, pick.bit, warnings), pick.bit.id, pick.bit.name, warnings)
   }
 
-  // 3. No drill matches — fall back to pocket-routing with a router bit.
-  const clearance = opts.pocketClearanceMm ?? 2
-  const router = pickRouterForPocket(typedDia, clearance, opts.routerTools)
+  // 3b. No drill matches at all — pocket-route with a router bit.
+  const router = pickRouterForPocket(typedDia, clearance, opts.routerTools, opts.preferredPocketToolNumber)
   if (router) {
     warnings.push(`⌀${round(typedDia)} pocket-routed with ${router.name ?? `⌀${router.diameter}`} bit (no matching drill)`)
-    return {
-      mode: 'pocket', diameter: typedDia, depth: typedDepth, drill_id: null, drill_name: null,
-      router_tool_id: router.id, router_tool_number: router.tool_number, router_diameter: router.diameter, warnings,
-    }
+    return pocketWith(router)
   }
   warnings.push(`No drill or router bit can make ⌀${round(typedDia)} — left as typed`)
   return drillResult(typedDia, typedDepth, null, null, warnings)

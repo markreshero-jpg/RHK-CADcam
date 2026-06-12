@@ -33,7 +33,7 @@ export interface ResolvedDrillOps {
 
 export async function loadResolvedDrillOps(
   parts: OptiPart[],
-  opts: { sync?: boolean; blockDiameters?: number[]; routerTools?: RouterToolItem[] } = {},
+  opts: { sync?: boolean; blockDiameters?: number[]; routerTools?: RouterToolItem[]; preferredPocketToolNumber?: number | null } = {},
 ): Promise<ResolvedDrillOps> {
   const cabIds = [...new Set(parts.map(p => p.cabinet_instance_id))]
   // Regenerate joint-drilling rows so the read below is current (best-effort).
@@ -54,7 +54,7 @@ export async function loadResolvedDrillOps(
   for (const op of drillOps) {
     const r = resolveDrillTool(
       { diameter: op.diameter, depth: op.depth, drill_id: op.drill_id ?? null, auto_tool: op.auto_tool ?? false },
-      drillLib, { blockDiameters: opts.blockDiameters, routerTools: opts.routerTools },
+      drillLib, { blockDiameters: opts.blockDiameters, routerTools: opts.routerTools, preferredPocketToolNumber: opts.preferredPocketToolNumber },
     )
     op.diameter = r.diameter
     op.depth = r.depth
@@ -82,7 +82,7 @@ export function projectSheetDrills(sheets: NestedSheet[], ops: ResolvedDrillOps)
 export async function loadSheetDrills(
   parts: OptiPart[],
   sheets: NestedSheet[],
-  opts: { sync?: boolean; blockDiameters?: number[]; routerTools?: RouterToolItem[] } = {},
+  opts: { sync?: boolean; blockDiameters?: number[]; routerTools?: RouterToolItem[]; preferredPocketToolNumber?: number | null } = {},
 ): Promise<SheetDrillsResult> {
   const ops = await loadResolvedDrillOps(parts, opts)
   return { bySheet: projectSheetDrills(sheets, ops), warnings: ops.warnings }
