@@ -23,15 +23,21 @@ interface Profile { id: string; cnc_machine_id: string; name: string; is_default
 interface ToolItem { id: string; name: string; tool_number: string | null; diameter: number | null }
 
 type FieldKind = 'num' | 'int' | 'text' | 'bool' | 'select' | 'tool' | 'textarea'
-interface FieldSpec { key: string; label: string; kind: FieldKind; opts?: string[] }
+interface FieldSpec { key: string; label: string; kind: FieldKind; opts?: string[]; optLabels?: string[] }
 interface FieldGroup { title: string; fields: FieldSpec[] }
 
 // Spec §6 post-processor fields, grouped.
 const GROUPS: FieldGroup[] = [
   { title: 'Identity & Axis', fields: [
-    { key: 'origin_corner', label: 'Origin corner', kind: 'select', opts: ['bottom_left', 'bottom_right', 'top_left', 'top_right'] },
-    { key: 'x_axis_direction', label: 'X axis', kind: 'select', opts: ['positive_right', 'positive_left'] },
-    { key: 'y_axis_direction', label: 'Y axis', kind: 'select', opts: ['positive_up', 'positive_down'] },
+    { key: 'origin_corner', label: 'Machine 0 / origin corner', kind: 'select',
+      opts: ['bottom_left', 'bottom_right', 'top_left', 'top_right'],
+      optLabels: ['Bottom-left', 'Bottom-right', 'Top-left', 'Top-right'] },
+    { key: 'x_axis_direction', label: 'X axis runs', kind: 'select',
+      opts: ['positive_right', 'positive_left'],
+      optLabels: ['Right → positive (+X)', 'Left → negative (−X)'] },
+    { key: 'y_axis_direction', label: 'Y axis runs', kind: 'select',
+      opts: ['positive_up', 'positive_down'],
+      optLabels: ['Up → positive (+Y)', 'Down → negative (−Y)'] },
     { key: 'z_axis_up', label: 'Z up positive', kind: 'bool' },
     { key: 'max_feed_rate', label: 'Max feed (mm/min)', kind: 'num' },
     { key: 'max_spindle_speed', label: 'Max spindle (RPM)', kind: 'num' },
@@ -326,7 +332,7 @@ function Field({ spec, value, tools, onSave }: { spec: FieldSpec; value: unknown
     <div>
       <label className={lbl}>{spec.label}</label>
       <select className={inp} value={(value as string) ?? spec.opts![0]} onChange={e => onSave(e.target.value)}>
-        {spec.opts!.map(o => <option key={o} value={o}>{o}</option>)}
+        {spec.opts!.map((o, i) => <option key={o} value={o}>{spec.optLabels?.[i] ?? o}</option>)}
       </select>
     </div>
   )

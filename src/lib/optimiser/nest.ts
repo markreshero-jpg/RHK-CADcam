@@ -1,9 +1,11 @@
 // ============================================================
 // Panel nesting engine.
 // Groups parts by material+thickness, then packs each group onto
-// sheets with a bottom-left skyline placer (rectangles, with
-// rotation when grain allows). Quality tiers add random-restart
-// repacking ("light annealing") and keep the best layout.
+// sheets with a skyline placer (rectangles, with rotation when grain
+// allows). The skyline packs bottom-up internally but the final layout
+// is mirrored to fill from the TOP-left (see tryPlace), so leftover
+// space falls to the bottom of a part sheet. Quality tiers add
+// random-restart repacking ("light annealing") and keep the best layout.
 //
 // Pure & framework-free — callable from the optimiser client and
 // re-usable/testable on its own. Arbitrary-polygon NFP packing is
@@ -128,9 +130,15 @@ function tryPlace(open: OpenSheet, part: NestPartInput, gap: number, allowRot: b
   if (!chosen) return false
 
   const { ox, oy } = usable(open.sheet.stock)
+  // The skyline packs bottom-up internally (lowest-first), but we want the layout
+  // to fill from the TOP-left: mirror the placement vertically within the usable
+  // area so the dense cluster lands against the top trim and any leftover space
+  // sits at the bottom. Only the output Y flips — the part itself (orientation,
+  // grain, hole positions) is unchanged, and the skyline below stays bottom-up.
+  const yTop = open.uH - (chosen.y + chosen.h)
   open.sheet.placements.push({
     uid: part.uid, baseUid: part.baseUid, label: part.label,
-    x: ox + chosen.x, y: oy + chosen.y, w: chosen.w, h: chosen.h, rotated: chosen.rotated,
+    x: ox + chosen.x, y: oy + yTop, w: chosen.w, h: chosen.h, rotated: chosen.rotated,
   })
   open.sky = raise(open.sky, chosen.x, chosen.w + gap, chosen.y + chosen.h + gap)
   open.placedArea += chosen.w * chosen.h

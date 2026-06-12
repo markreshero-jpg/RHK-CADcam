@@ -48,6 +48,7 @@ export default function Stage6Gcode() {
   const [drillNotes, setDrillNotes] = useState<string[]>([])
   const [simulating, setSimulating] = useState(false)
   const [coord, setCoord] = useState<SimCoord | null>(null)
+  const [simDrillBlock, setSimDrillBlock] = useState<DrillBlockConfig | null>(null)
 
   const matCode = (id: string | null) => id ? (snap.materials.find(m => m.id === id)?.name ?? 'MAT') : 'MAT'
 
@@ -108,6 +109,8 @@ export default function Stage6Gcode() {
           }
         }
       }
+
+      setSimDrillBlock(drillBlock ?? null)   // hand the block layout to the simulator overlay
 
       // Joint-sync + read part_operations + resolve auto_tool/drill_id, projected
       // to sheet space. Shared with Stage 5 so the holes match exactly.
@@ -265,6 +268,7 @@ export default function Stage6Gcode() {
           files={files.map(f => ({ sheetIndex: f.sheetIndex, fileName: f.fileName, gcode: f.gcode }))}
           sheets={nestResult.sheets}
           coord={coord ?? undefined}
+          drillBlock={simDrillBlock ?? undefined}
           onClose={() => setSimulating(false)} />
       )}
     </div>

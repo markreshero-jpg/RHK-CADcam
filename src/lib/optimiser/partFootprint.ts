@@ -21,7 +21,11 @@ export type Axis = 'x' | 'y' | 'z'
 
 // pos = dir * (hole[axis] − origin), constrained to [0, extent].
 interface AxisMap { axis: Axis; dir: 1 | -1; origin: number; extent: number }
-export interface FootprintFrame { normal: Axis; u: AxisMap; v: AxisMap }
+// upSign = which normal-face sits UP on the machine (drilled as-is, no mirror).
+// The OTHER face is reached by flipping the part, so its bores mirror the height
+// axis. Default '-' (front/interior face up) suits carcase + box panels; doors
+// nest cup-side (back, +normal) up, so they set '+'. See projectToFrame.
+export interface FootprintFrame { normal: Axis; u: AxisMap; v: AxisMap; upSign?: '+' | '-' }
 
 const coord = (d: { x: number; y: number; z: number }, a: Axis) => (a === 'x' ? d.x : a === 'y' ? d.y : d.z)
 
@@ -47,9 +51,11 @@ export function caseFrame(p: ResolvedCasePart): FootprintFrame {
 
 // Door / drawer-front face: a vertical panel at the front. Like the carcase back,
 // DX is the HEIGHT (→cabinet Y) and DY the WIDTH (→cabinet X); thickness→cabinet Z.
-// X/Y are the left/bottom corner.
+// X/Y are the left/bottom corner. Nested cup-side (back, +Z) UP and drilled as-is,
+// so +normal bores are NOT mirrored (upSign '+') — otherwise the hinge cluster
+// flips end-for-end down the door.
 export function zoneFrame(z: ResolvedFaceZone): FootprintFrame {
-  return { normal: 'z', u: { axis: 'y', dir: 1, origin: z.Y, extent: z.DX }, v: { axis: 'x', dir: 1, origin: z.X, extent: z.DY } }
+  return { normal: 'z', upSign: '+', u: { axis: 'y', dir: 1, origin: z.Y, extent: z.DX }, v: { axis: 'x', dir: 1, origin: z.X, extent: z.DY } }
 }
 
 // Drawer-box panel in cabinet space. resolveDrawerStack maps box-local → cabinet
@@ -84,6 +90,8 @@ export function projectToFrame(
   if ((drill.axis[0] as Axis) !== frame.normal) return null
   let pos_x = frame.u.dir * (coord(drill, frame.u.axis) - frame.u.origin)
   const pos_y = frame.v.dir * (coord(drill, frame.v.axis) - frame.v.origin)
-  if (drill.axis[1] === '+') pos_x = frame.u.extent - pos_x
+  // Bores entering the DOWN face (opposite upSign) are reached by flipping the
+  // part, which mirrors the height axis. Bores on the UP face drill as-is.
+  if (drill.axis[1] !== (frame.upSign ?? '-')) pos_x = frame.u.extent - pos_x
   return { pos_x, pos_y, output_face: FACE_FOR_AXIS[drill.axis] ?? 'top' }
 }

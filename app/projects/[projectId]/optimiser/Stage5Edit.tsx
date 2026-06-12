@@ -8,7 +8,7 @@
 // live efficiency, full undo/redo. No react-konva, no localStorage.
 // ============================================================
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/optimiser/edit'
 import { buildMargins } from '@/src/lib/optimiser/types'
@@ -98,10 +98,12 @@ export default function Stage5Edit() {
   )
 
   // Canvas zoom (multiplier on the fit-to-view scale). Container is overflow-auto,
-  // so panning is just scrolling once zoomed past the viewport.
-  const ZMIN = 0.25, ZMAX = 6
+  // so panning is just scrolling once zoomed past the viewport. The wheel zooms
+  // toward the cursor (see InteractiveSheet), so we hand it the scroll container.
+  const ZMIN = 0.25, ZMAX = 16
   const [zoom, setZoom] = useState(1)
   const zoomBy = (f: number) => setZoom(z => Math.min(ZMAX, Math.max(ZMIN, z * f)))
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   // Keyboard shortcuts (read live state via getState to avoid stale closures).
   useEffect(() => {
@@ -221,9 +223,11 @@ export default function Stage5Edit() {
           </div>
         )}
 
-        {/* Canvas */}
-        <div className="flex-1 overflow-auto grid place-items-center p-6 bg-canvas">
-          <div className="flex flex-col items-center gap-2">
+        {/* Canvas — overflow-auto for pan; child centres via mx-auto when it fits
+            and stays fully scrollable to the edges when zoomed past the viewport
+            (grid place-items-center would clip the overflow and block panning). */}
+        <div ref={scrollRef} className="flex-1 overflow-auto p-6 bg-canvas">
+          <div className="mx-auto w-fit flex flex-col items-center gap-2">
             <div className="text-lg font-semibold text-ink flex items-center gap-3">
               <span>Sheet {sheet.index + 1}
                 <span className="text-ink-subtle text-sm font-normal"> of {nestResult.sheets.length} · {matLabel(sheet)} · {sheet.stock.w}×{sheet.stock.h}mm{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
@@ -239,13 +243,13 @@ export default function Stage5Edit() {
               </button>
               {/* Zoom controls */}
               <div className="flex items-center gap-px text-sm font-normal">
-                <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out (Ctrl+scroll)"
+                <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out (scroll)"
                   className="w-6 h-6 grid place-items-center rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">−</button>
                 <button onClick={() => setZoom(1)} title="Reset zoom to fit"
                   className="px-2 h-6 grid place-items-center rounded border border-edge-strong text-[11px] tabular-nums text-ink-muted hover:bg-surface-2 transition-colors min-w-[3rem]">
                   {Math.round(zoom * 100)}%
                 </button>
-                <button onClick={() => zoomBy(1.25)} title="Zoom in (Ctrl+scroll)"
+                <button onClick={() => zoomBy(1.25)} title="Zoom in (scroll)"
                   className="w-6 h-6 grid place-items-center rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">+</button>
               </div>
             </div>
@@ -255,6 +259,7 @@ export default function Stage5Edit() {
               drills={showDrills ? (drillsBySheet.get(sheet.index) ?? []) : []}
               zoom={zoom}
               onZoom={zoomBy}
+              scrollRef={scrollRef}
               onSelect={selectPlacement}
               onMove={(uid, x, y) => movePartWithin(uid, x, y)}
               onContext={(uid, x, y) => { selectPlacement(uid); setCtxMenu({ uid, x, y }) }}
@@ -391,12 +396,13 @@ export default function Stage5Edit() {
 }
 
 // ── Interactive sheet (pointer drag with live snap preview) ────────────────────────
-function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, onSelect, onMove, onContext }: {
+function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef, onSelect, onMove, onContext }: {
   sheet: NestedSheet
   selectedUid: string | null
   drills: SheetDrill[]
   zoom: number
   onZoom: (factor: number) => void
+  scrollRef: React.RefObject<HTMLDivElement | null>
   onSelect: (uid: string | null) => void
   onMove: (uid: string, x: number, y: number) => void
   onContext: (uid: string, clientX: number, clientY: number) => void
@@ -406,20 +412,41 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, onSelect, 
   const pxW = W * scale, pxH = H * scale
   const svgRef = useRef<SVGSVGElement>(null)
   const [drag, setDrag] = useState<{ uid: string; offX: number; offY: number; gx: number; gy: number } | null>(null)
+  // Cursor anchor captured on wheel, consumed after the zoom re-renders to keep
+  // the point under the cursor fixed (zoom-to-cursor). Fraction within the SVG +
+  // the client point it must stay at.
+  const anchor = useRef<{ fx: number; fy: number; cx: number; cy: number } | null>(null)
 
-  // Ctrl/⌘+wheel zoom. Native non-passive listener so preventDefault actually
-  // suppresses the page scroll (React's synthetic onWheel can be passive).
+  // Plain mouse-wheel zoom toward the cursor. Native non-passive listener so
+  // preventDefault actually suppresses the page/container scroll (React's
+  // synthetic onWheel can be passive). Pan is via the scrollbars once zoomed in.
   useEffect(() => {
     const el = svgRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return
       e.preventDefault()
-      onZoom(e.deltaY < 0 ? 1.1 : 1 / 1.1)
+      const r = el.getBoundingClientRect()
+      anchor.current = {
+        fx: (e.clientX - r.left) / r.width,
+        fy: (e.clientY - r.top) / r.height,
+        cx: e.clientX, cy: e.clientY,
+      }
+      onZoom(e.deltaY < 0 ? 1.15 : 1 / 1.15)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [onZoom])
+
+  // After a wheel-zoom re-renders at the new scale, nudge the scroll container so
+  // the anchored fraction lands back under the original cursor point.
+  useLayoutEffect(() => {
+    const a = anchor.current; anchor.current = null
+    const el = svgRef.current, sc = scrollRef.current
+    if (!a || !el || !sc) return
+    const r = el.getBoundingClientRect()
+    sc.scrollLeft += r.left + a.fx * r.width - a.cx
+    sc.scrollTop += r.top + a.fy * r.height - a.cy
+  }, [scale, scrollRef])
 
   // client → sheet mm (bottom-left origin)
   function toMm(clientX: number, clientY: number) {
@@ -513,14 +540,24 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, onSelect, 
         )
       })}
       {/* Drill holes (sheet space, BL origin) — same source as Stage 6 G-code.
-          A real hole (e.g. ⌀5 on a 2400mm sheet) is ~1px at this scale, so clamp
-          to a visible marker size and draw it solid amber with a dark rim. */}
+          Drawn at EXACT diameter (so ⌀5 vs ⌀8 vs ⌀35 read true-to-scale — zoom in
+          to inspect). A real ⌀5 on a 2400mm sheet is ~1px when zoomed out, so a
+          faint locator ring marks tiny holes; it disappears once the true size
+          exceeds it as you zoom in. */}
       {drills.length > 0 && (
         <g style={{ pointerEvents: 'none' }}>
-          {drills.map((d, i) => (
-            <circle key={i} cx={d.x * scale} cy={(H - d.y) * scale} r={Math.max(2.5, (d.diameter / 2) * scale)}
-              fill="#f59e0b" fillOpacity={0.95} stroke="#0f172a" strokeWidth={0.75} />
-          ))}
+          {drills.map((d, i) => {
+            const cx = d.x * scale, cy = (H - d.y) * scale
+            const tr = Math.max(0.4, (d.diameter / 2) * scale)   // exact radius (px)
+            const mr = Math.max(2.2, tr)                          // locator floor
+            const inner = tr < mr - 0.5
+            return (
+              <g key={i}>
+                {inner && <circle cx={cx} cy={cy} r={mr} fill="none" stroke="#f59e0b" strokeOpacity={0.4} strokeWidth={0.8} />}
+                <circle cx={cx} cy={cy} r={tr} fill="#f59e0b" fillOpacity={0.95} stroke="#0f172a" strokeWidth={Math.min(0.7, tr * 0.4)} />
+              </g>
+            )
+          })}
         </g>
       )}
     </svg>

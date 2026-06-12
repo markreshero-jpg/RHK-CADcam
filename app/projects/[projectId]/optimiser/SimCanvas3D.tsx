@@ -26,7 +26,8 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Line, Text, Environment, Lightformer, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
-import type { ParsedProgram, SimMove } from '@/src/lib/optimiser/gcodeParser'
+import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
+import { holesOf, type ParsedProgram, type SimMove } from '@/src/lib/optimiser/gcodeParser'
 import { buildProfile, type ToolShape } from '@/src/lib/cnc/toolProfile'
 
 const BOARD_COLOR = '#d8c8a4'   // finished panel face
@@ -217,6 +218,48 @@ function CarvedBoard({ W, H, thickness, placements, prog, elapsedRef, toolDia }:
   )
 }
 
+// ── Drilled holes (appear in sequence) ────────────────────────────────────────
+// Gang drilling fires through the Anderson block in a separate block-Z datum, so
+// the height-field carve (which keys off routing Z) can't show it. Instead we pop
+// a recessed bore at each hole the moment the program reaches its drill move —
+// appearance only, which is all the gang pass needs to read here. Every hole
+// (master + reconstructed slaves) is placed via the shared holesOf().
+function DrillPits({ hits, W, H, thickness, elapsedRef }: {
+  hits: { x: number; y: number; dia: number; t: number }[]
+  W: number; H: number; thickness: number
+  elapsedRef: React.MutableRefObject<number>
+}) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const geo = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, 18), [])
+  const dummy = useMemo(() => new THREE.Object3D(), [])
+  useEffect(() => () => geo.dispose(), [geo])
+  const depth = Math.min(Math.max(4, thickness - 1), thickness)
+
+  useFrame(() => {
+    const mesh = ref.current
+    if (!mesh || !hits.length) return
+    const t = elapsedRef.current
+    for (let i = 0; i < hits.length; i++) {
+      const h = hits[i]
+      const shown = h.t <= t
+      const rad = Math.max(1.5, (h.dia || 6) / 2)
+      // Recess the bore just below the face; hide unreached holes by zero-scaling.
+      dummy.position.set(h.x - W / 2, shown ? -depth / 2 + 0.3 : 1e6, H / 2 - h.y)
+      dummy.scale.set(shown ? rad : 1e-4, depth, shown ? rad : 1e-4)
+      dummy.updateMatrix()
+      mesh.setMatrixAt(i, dummy.matrix)
+    }
+    mesh.instanceMatrix.needsUpdate = true
+  })
+
+  if (!hits.length) return null
+  return (
+    <instancedMesh ref={ref} args={[geo, undefined, hits.length]}>
+      <meshStandardMaterial color="#140d04" roughness={0.95} metalness={0.04} />
+    </instancedMesh>
+  )
+}
+
 // ── The bit ───────────────────────────────────────────────────────────────────
 function Tool({ shape, cx, cz, tipY, cutting, span }: {
   shape: ToolShape; cx: number; cz: number; tipY: number; cutting: boolean; span: number
@@ -264,7 +307,7 @@ function Tool({ shape, cx, cz, tipY, cutting, span }: {
 }
 
 // ── Scene ──────────────────────────────────────────────────────────────────────
-function Scene({ sheet, prog, elapsed, toolDia, activeShape }: Props) {
+function Scene({ sheet, prog, elapsed, toolDia, activeShape, drillBlock }: Props) {
   const { w: W, h: H } = sheet.stock
   const thickness = sheet.thickness || 18
   const span = Math.max(W, H)
@@ -274,6 +317,15 @@ function Scene({ sheet, prog, elapsed, toolDia, activeShape }: Props) {
   // The carve runs in useFrame off a ref so it isn't tied to React's render cadence.
   const elapsedRef = useRef(elapsed)
   elapsedRef.current = elapsed
+
+  // Gang-drilled holes (masters + reconstructed slaves) with the time each lands.
+  // Only gang moves need pits — plain single-spindle drilling has real routing-Z
+  // and is already carved into the height-field by CarvedBoard.
+  const drillHits = useMemo(() => {
+    const out: { x: number; y: number; dia: number; t: number }[] = []
+    for (const m of prog.moves) if (m.kind === 'drill' && m.bitmask) for (const h of holesOf(m, drillBlock)) out.push({ ...h, t: m.t1 })
+    return out
+  }, [prog, drillBlock])
 
   const rapids = useMemo(() => {
     const out: SimMove[] = []
@@ -305,6 +357,9 @@ function Scene({ sheet, prog, elapsed, toolDia, activeShape }: Props) {
 
       <CarvedBoard W={W} H={H} thickness={thickness} placements={sheet.placements}
         prog={prog} elapsedRef={elapsedRef} toolDia={toolDia} />
+
+      {/* Drilled holes popping in sequence (gang block has no routing-Z carve) */}
+      <DrillPits hits={drillHits} W={W} H={H} thickness={thickness} elapsedRef={elapsedRef} />
 
       {/* Crisp, grid-independent part outlines */}
       {sheet.placements.map(p => {
@@ -351,6 +406,7 @@ interface Props {
   activeTool: number | null
   toolDia: (n: number | null, fallback?: number) => number
   activeShape: ToolShape
+  drillBlock?: DrillBlockConfig
 }
 
 export default function SimCanvas3D(props: Props) {

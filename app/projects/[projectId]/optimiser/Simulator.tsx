@@ -15,7 +15,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
-import { parseGcode, frameAtTime, fmtClock, type ParsedProgram, type SimMove } from '@/src/lib/optimiser/gcodeParser'
+import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
+import { parseGcode, frameAtTime, fmtClock, holesOf, type ParsedProgram, type SimMove } from '@/src/lib/optimiser/gcodeParser'
 import { shapeTypeFor, type ToolShape } from '@/src/lib/cnc/toolProfile'
 import ToolProfilePreview from '@/src/components/ToolProfilePreview'
 import SimCanvas3D from './SimCanvas3D'
@@ -54,12 +55,13 @@ function toInternal(prog: ParsedProgram, sheet: NestedSheet, c: SimCoord): Parse
 }
 
 export default function Simulator({
-  files, sheets, onClose, coord,
+  files, sheets, onClose, coord, drillBlock,
 }: {
   files: SimFile[]
   sheets: NestedSheet[]
   onClose: () => void
   coord?: SimCoord
+  drillBlock?: DrillBlockConfig
 }) {
   const [tools, setTools] = useState<Map<number, ToolRow>>(new Map())
   const [sel, setSel] = useState(0)                 // index into files
@@ -84,9 +86,10 @@ export default function Simulator({
   const file = files[sel]
   const sheet = useMemo(() => sheets.find(s => s.index === file?.sheetIndex), [sheets, file])
   const prog = useMemo<ParsedProgram>(() => {
-    const raw = parseGcode(file?.gcode ?? '')
+    const raw = parseGcode(file?.gcode ?? '', drillBlock
+      ? { drillBank: { xMcode: drillBlock.xBankMcode, yMcode: drillBlock.yBankMcode } } : undefined)
     return sheet && coord ? toInternal(raw, sheet, coord) : raw
-  }, [file, sheet, coord])
+  }, [file, sheet, coord, drillBlock])
   const total = prog.totalTime
 
   // Reset playback when switching sheets (render-time state adjustment — the
@@ -183,8 +186,8 @@ export default function Simulator({
         <div className={`flex-1 overflow-hidden p-4 ${view === '3d' ? '' : 'grid place-items-center'}`}>
           {!sheet ? <p className="text-xs text-ink-subtle">No sheet geometry for this file.</p>
             : view === '3d'
-              ? <SimCanvas3D sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} activeShape={activeShape} />
-              : <Canvas sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} />}
+              ? <SimCanvas3D sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} activeShape={activeShape} drillBlock={drillBlock} />
+              : <Canvas sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} drillBlock={drillBlock} />}
         </div>
 
         {/* Right info column */}
@@ -257,13 +260,14 @@ function Legend() {
       {item('#3b82f6', 'Rapid', true)}
       {item('#f59e0b', 'Cut')}
       <span className="inline-flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-full border-2 border-amber-500" /><span className="text-ink-subtle">Drill</span></span>
+      <span className="inline-flex items-center gap-1.5"><span className="inline-block w-2.5 h-2.5 rounded-sm border border-dashed" style={{ borderColor: '#38bdf8' }} /><span className="text-ink-subtle">Drill block</span></span>
     </div>
   )
 }
 
 // ── Sheet canvas ──────────────────────────────────────────────────────────────
 function Canvas({
-  sheet, prog, elapsed, toolDia, headPos, cutting, activeTool,
+  sheet, prog, elapsed, toolDia, headPos, cutting, activeTool, drillBlock,
 }: {
   sheet: NestedSheet
   prog: ParsedProgram
@@ -272,6 +276,7 @@ function Canvas({
   headPos: { x: number; y: number; z: number }
   cutting: boolean
   activeTool: number | null
+  drillBlock?: DrillBlockConfig
 }) {
   const { w: W, h: H, trimTop, trimBottom, trimLeft, trimRight } = sheet.stock
   const scale = Math.min(940 / W, 560 / H)
@@ -280,26 +285,37 @@ function Canvas({
   const Y = (mm: number) => (H - mm) * scale          // BL origin → SVG top-down
 
   // Split completed work up to `elapsed`. Partial current move included.
-  const { rapids, cuts, drills, partialCut } = useMemo(() => {
+  const { rapids, cuts, drills, partialCut, current } = useMemo(() => {
     const rapids: SimMove[] = [], cuts: SimMove[] = [], drills: SimMove[] = []
     let partialCut: { m: SimMove; px: number; py: number } | null = null
+    let current: SimMove | null = null
     for (const m of prog.moves) {
       if (m.t1 <= elapsed) {
         if (m.kind === 'rapid') rapids.push(m)
         else if (m.kind === 'cut') cuts.push(m)
         else if (m.kind === 'drill') drills.push(m)
       } else if (m.t0 <= elapsed) {
+        current = m
         const frac = (elapsed - m.t0) / Math.max(1e-6, m.t1 - m.t0)
         if (m.kind === 'cut') partialCut = { m, px: m.x0 + (m.x1 - m.x0) * frac, py: m.y0 + (m.y1 - m.y0) * frac }
         else if (m.kind === 'drill' && frac > 0.5) drills.push(m)   // pop the hole mid-plunge
         break
       } else break
     }
-    return { rapids, cuts, drills, partialCut }
+    return { rapids, cuts, drills, partialCut, current }
   }, [prog, elapsed])
 
   const kerf = toolDia(activeTool) * scale
   const newestDrill = drills[drills.length - 1]
+
+  // Active drill-block firing: the in-progress move when it's a gang plunge.
+  const firing = current && current.kind === 'drill' && current.bitmask && drillBlock
+    ? blockView(current, drillBlock) : null
+  // True hole radius (mm → px, drawn to actual size) and a clamped locator radius
+  // so a sub-pixel ⌀5 hole on the full-sheet view is still findable. The true-size
+  // ring sits inside the locator so each hole reads at its real diameter.
+  const trueR = (m: SimMove) => Math.max(0.6, ((m.dia || toolDia(m.tool, 5)) / 2) * scale)
+  const holeR = (m: SimMove) => Math.max(2.5, trueR(m))
 
   return (
     <svg width={pxW} height={pxH} viewBox={`0 0 ${pxW} ${pxH}`} className="block rounded-lg shadow-2xl">
@@ -342,36 +358,125 @@ function Canvas({
       )}
 
       {/* All holes (the full plan) — ghost rings, always visible so you can see
-          every hole on every piece even before/while the sim runs. A real ⌀5 hole
-          is ~2px at sheet scale, so clamp to a visible marker. */}
-      {prog.moves.map((m, i) => m.kind === 'drill' ? (
-        <circle key={`gh${i}`} cx={X(m.x1)} cy={Y(m.y1)} r={Math.max(2.5, (toolDia(m.tool, 5) / 2) * scale)}
-          fill="#f59e0b" fillOpacity={0.12} stroke="#f59e0b" strokeWidth={0.9} strokeOpacity={0.55} />
-      ) : null)}
+          every hole on every piece even before/while the sim runs. Gang moves
+          expand to every spindle hole they fire. A real ⌀5 hole is ~2px at sheet
+          scale, so clamp to a visible marker. */}
+      {prog.moves.flatMap((m, i) => m.kind === 'drill'
+        ? holesOf(m, drillBlock).map((h, k) => {
+            const tr = trueR(m), mr = holeR(m), cx = X(h.x), cy = Y(h.y)
+            return (
+              <g key={`gh${i}_${k}`}>
+                <circle cx={cx} cy={cy} r={mr} fill="#f59e0b" fillOpacity={0.10} stroke="#f59e0b" strokeWidth={0.8} strokeOpacity={0.4} />
+                {tr < mr - 0.4 && <circle cx={cx} cy={cy} r={tr} fill="none" stroke="#f59e0b" strokeWidth={0.8} strokeOpacity={0.75} />}
+              </g>
+            )
+          })
+        : [])}
 
-      {/* Drill hits (already plunged) — solid amber */}
-      {drills.map((m, i) => {
-        const r = Math.max(2.5, (toolDia(m.tool, 5) / 2) * scale)
-        return <circle key={`d${i}`} cx={X(m.x1)} cy={Y(m.y1)} r={r} fill="#f59e0b" fillOpacity={0.9} stroke="#0f172a" strokeWidth={0.75} />
-      })}
-      {newestDrill && (
-        <circle cx={X(newestDrill.x1)} cy={Y(newestDrill.y1)} r={Math.max(1.5, (toolDia(newestDrill.tool, 5) / 2) * scale)}
+      {/* Drill hits (already plunged) — true-size bore inside a locator halo */}
+      {drills.flatMap((m, i) => holesOf(m, drillBlock).map((h, k) => {
+        const tr = trueR(m), mr = holeR(m), cx = X(h.x), cy = Y(h.y), inner = tr < mr - 0.4
+        return (
+          <g key={`d${i}_${k}`}>
+            <circle cx={cx} cy={cy} r={mr} fill="#f59e0b" fillOpacity={inner ? 0.25 : 0.9} stroke="#f59e0b" strokeWidth={0.6} strokeOpacity={0.7} />
+            {inner && <circle cx={cx} cy={cy} r={tr} fill="#f59e0b" fillOpacity={0.95} stroke="#0f172a" strokeWidth={0.5} />}
+          </g>
+        )
+      }))}
+      {/* Plunge ping — only for plain single-spindle drilling; gang firing is shown
+          by the block overlay's lit spindles instead. */}
+      {newestDrill && !newestDrill.bitmask && (
+        <circle cx={X(newestDrill.x1)} cy={Y(newestDrill.y1)} r={holeR(newestDrill)}
           fill="none" stroke="#fbbf24" strokeWidth={1.5}>
-          <animate attributeName="r" from={Math.max(1.5, (toolDia(newestDrill.tool, 5) / 2) * scale)}
-            to={Math.max(1.5, (toolDia(newestDrill.tool, 5) / 2) * scale) + 8} dur="0.8s" repeatCount="indefinite" />
+          <animate attributeName="r" from={holeR(newestDrill)} to={holeR(newestDrill) + 8} dur="0.8s" repeatCount="indefinite" />
           <animate attributeName="opacity" from="0.9" to="0" dur="0.8s" repeatCount="indefinite" />
         </circle>
       )}
 
-      {/* Tool head */}
-      <g>
-        <circle cx={X(headPos.x)} cy={Y(headPos.y)} r={Math.max(2, kerf / 2)}
-          fill={cutting ? 'rgba(245,158,11,0.25)' : 'rgba(96,165,250,0.2)'}
-          stroke={cutting ? '#f59e0b' : '#60a5fa'} strokeWidth={1.5} />
-        <line x1={X(headPos.x) - kerf / 2 - 3} y1={Y(headPos.y)} x2={X(headPos.x) + kerf / 2 + 3} y2={Y(headPos.y)} stroke={cutting ? '#f59e0b' : '#60a5fa'} strokeWidth={0.6} opacity={0.7} />
-        <line x1={X(headPos.x)} y1={Y(headPos.y) - kerf / 2 - 3} x2={X(headPos.x)} y2={Y(headPos.y) + kerf / 2 + 3} stroke={cutting ? '#f59e0b' : '#60a5fa'} strokeWidth={0.6} opacity={0.7} />
-      </g>
+      {/* Drill-block head overlay — the gang layout at 50% with firing spindles lit. */}
+      {firing && <DrillBlock view={firing} X={X} Y={Y} scale={scale} />}
+
+      {/* Tool head (the routing bit) — hidden while the drill block is firing. */}
+      {!firing && (
+        <g>
+          <circle cx={X(headPos.x)} cy={Y(headPos.y)} r={Math.max(2, kerf / 2)}
+            fill={cutting ? 'rgba(245,158,11,0.25)' : 'rgba(96,165,250,0.2)'}
+            stroke={cutting ? '#f59e0b' : '#60a5fa'} strokeWidth={1.5} />
+          <line x1={X(headPos.x) - kerf / 2 - 3} y1={Y(headPos.y)} x2={X(headPos.x) + kerf / 2 + 3} y2={Y(headPos.y)} stroke={cutting ? '#f59e0b' : '#60a5fa'} strokeWidth={0.6} opacity={0.7} />
+          <line x1={X(headPos.x)} y1={Y(headPos.y) - kerf / 2 - 3} x2={X(headPos.x)} y2={Y(headPos.y) + kerf / 2 + 3} stroke={cutting ? '#f59e0b' : '#60a5fa'} strokeWidth={0.6} opacity={0.7} />
+        </g>
+      )}
     </svg>
+  )
+}
+
+// ── Drill-block geometry + overlay ─────────────────────────────────────────────
+// Lay the gang head out in sheet space so the firing master spindle sits on the
+// move's master hole, with both banks meeting at the shared corner (spindle 1).
+interface BlockView {
+  mcode: string
+  dia: number
+  fired: number[]                              // firing spindle positions on the active bank
+  xSpindles: { x: number; y: number; lit: boolean }[]
+  ySpindles: { x: number; y: number; lit: boolean }[]
+}
+function blockView(m: SimMove, block: DrillBlockConfig): BlockView {
+  const sp = block.spacingMm || 32
+  const bank = m.bank!
+  const count = bank === 'x' ? block.bankXCount : block.bankYCount
+  const bits = m.bitmask ?? 0
+  const fired: number[] = []
+  for (let p = 1; p <= count; p++) if (bits & (1 << (p - 1))) fired.push(p)
+  const master = fired[0] ?? 1
+  // Corner = spindle-1 centre; placed so the master spindle lands on the master hole.
+  const cornerX = bank === 'x' ? m.x1 - (master - 1) * sp : m.x1
+  const cornerY = bank === 'y' ? m.y1 - (master - 1) * sp : m.y1
+  const xSpindles = Array.from({ length: block.bankXCount }, (_, k) => ({
+    x: cornerX + k * sp, y: cornerY, lit: bank === 'x' && fired.includes(k + 1),
+  }))
+  const ySpindles = Array.from({ length: block.bankYCount }, (_, k) => ({
+    x: cornerX, y: cornerY + k * sp, lit: bank === 'y' && fired.includes(k + 1),
+  }))
+  return { mcode: bank === 'x' ? block.xBankMcode : block.yBankMcode, dia: m.dia || 5, fired, xSpindles, ySpindles }
+}
+
+function DrillBlock({ view, X, Y, scale }: {
+  view: BlockView
+  X: (mm: number) => number
+  Y: (mm: number) => number
+  scale: number
+}) {
+  const r = Math.max(3, (view.dia / 2) * scale)
+  const all = [...view.xSpindles, ...view.ySpindles]
+  const xs = all.map(s => X(s.x)), ys = all.map(s => Y(s.y))
+  const pad = r + 6
+  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad
+  const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad
+  const lit = all.filter(s => s.lit)
+  return (
+    <g>
+      {/* The block layout at 50% — head plate + every spindle bore. */}
+      <g opacity={0.5}>
+        <rect x={minX} y={minY} width={maxX - minX} height={maxY - minY} rx={8}
+          fill="#0ea5e9" fillOpacity={0.08} stroke="#38bdf8" strokeWidth={1.2} strokeDasharray="5 3" />
+        {all.map((s, i) => (
+          <circle key={`s${i}`} cx={X(s.x)} cy={Y(s.y)} r={r} fill="none" stroke="#38bdf8" strokeWidth={0.9} strokeOpacity={0.6} />
+        ))}
+        <text x={minX} y={minY - 5} fill="#7dd3fc" fontSize={11} fontFamily="monospace">
+          {view.mcode} · ⌀{view.dia} · spindle {view.fired.join(',')}
+        </text>
+      </g>
+      {/* Firing spindles — bright over the dim layout so "which drills" is obvious. */}
+      {lit.map((s, i) => (
+        <g key={`lit${i}`}>
+          <circle cx={X(s.x)} cy={Y(s.y)} r={r} fill="#f59e0b" fillOpacity={0.85} stroke="#fbbf24" strokeWidth={1.6} />
+          <circle cx={X(s.x)} cy={Y(s.y)} r={r} fill="none" stroke="#fde68a" strokeWidth={1.5}>
+            <animate attributeName="r" from={r} to={r + 7} dur="0.6s" repeatCount="indefinite" />
+            <animate attributeName="opacity" from="0.9" to="0" dur="0.6s" repeatCount="indefinite" />
+          </circle>
+        </g>
+      ))}
+    </g>
   )
 }
 
