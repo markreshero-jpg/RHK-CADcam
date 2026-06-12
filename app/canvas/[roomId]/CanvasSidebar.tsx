@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/src/lib/supabase'
 import { Mode, CabinetInstance } from './canvasTypes'
@@ -57,7 +57,7 @@ const PasteIcon = () => (
 )
 
 const BaseCabIcon   = () => (
-  <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
     <rect x="1.5" y="4" width="13" height="10" rx="0.8"/>
     <line x1="8" y1="4" x2="8" y2="14"/>
     <line x1="5.5" y1="9.5" x2="6.5" y2="9.5" strokeWidth="1.8"/>
@@ -67,7 +67,7 @@ const BaseCabIcon   = () => (
 )
 
 const WallUnitIcon  = () => (
-  <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
     <rect x="1.5" y="2" width="13" height="9" rx="0.8"/>
     <line x1="8" y1="2" x2="8" y2="11"/>
     <line x1="5.5" y1="7" x2="6.5" y2="7" strokeWidth="1.8"/>
@@ -76,7 +76,7 @@ const WallUnitIcon  = () => (
 )
 
 const TallCabIcon   = () => (
-  <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
     <rect x="3.5" y="1" width="9" height="14" rx="0.8"/>
     <line x1="8" y1="1" x2="8" y2="15"/>
     <line x1="5.5" y1="5" x2="6.5" y2="5" strokeWidth="1.8"/>
@@ -103,9 +103,8 @@ const WALL_MODES = WALL_ITEMS.map(w => w.mode)
 
 // ── DB-backed library types ─────────────────────────────────────────────────────
 
-type Category    = { id: string; name: string; sort_order: number; accent_color: string | null }
-type Subcategory = { id: string; name: string; sort_order: number }
-type Scope       = 'all' | 'job'
+type Category = { id: string; name: string; sort_order: number; accent_color: string | null }
+type Scope    = 'all' | 'job'
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -157,37 +156,32 @@ export default function CanvasSidebar({
     )
   }
 
-  // ── Library data (categories / subcategories / definitions) ──
-  const [categories, setCategories]       = useState<Category[]>([])
-  const [subcategories, setSubcategories] = useState<Subcategory[]>([])
-  const [definitions, setDefinitions]     = useState<CabinetDefinition[]>([])
-  const [placedDefIds, setPlacedDefIds]   = useState<Set<string>>(new Set())
-  const [libError, setLibError]           = useState<string | null>(null)
+  // ── Library data (categories + definitions) ──
+  const [categories, setCategories]     = useState<Category[]>([])
+  const [definitions, setDefinitions]   = useState<CabinetDefinition[]>([])
+  const [placedDefIds, setPlacedDefIds] = useState<Set<string>>(new Set())
+  const [libError, setLibError]         = useState<string | null>(null)
 
-  const [activeCat, setActiveCat]   = useState<string | null>(null)
-  const [search, setSearch]         = useState('')
-  const [scope, setScope]           = useState<Scope>('all')
-  const [openSubs, setOpenSubs]     = useState<Set<string>>(new Set())
+  const [search, setSearch]   = useState('')
+  const [scope, setScope]     = useState<Scope>('all')
+  const [openCats, setOpenCats] = useState<Set<string>>(new Set())
 
   // Load taxonomy + definitions once.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const [cat, sub, def] = await Promise.all([
+      const [cat, def] = await Promise.all([
         supabase.from('cabinet_categories').select('id,name,sort_order,accent_color').eq('active', true).order('sort_order'),
-        supabase.from('cabinet_subcategories').select('id,name,sort_order').eq('active', true).order('sort_order'),
         supabase.from('cabinet_definitions').select('*').eq('is_library_item', true).eq('active', true).order('sort_order'),
       ])
       if (cancelled) return
-      if (cat.error || sub.error || def.error) {
-        setLibError(cat.error?.message ?? sub.error?.message ?? def.error?.message ?? 'Failed to load library')
+      if (cat.error || def.error) {
+        setLibError(cat.error?.message ?? def.error?.message ?? 'Failed to load library')
         return
       }
       setCategories((cat.data ?? []) as Category[])
-      setSubcategories((sub.data ?? []) as Subcategory[])
       setDefinitions((def.data ?? []) as CabinetDefinition[])
-      setOpenSubs(new Set((sub.data ?? []).map(s => s.id)))   // expand all by default
-      setActiveCat(prev => prev ?? (cat.data?.[0]?.id ?? null))
+      setOpenCats(new Set((cat.data ?? []).map(c => c.id)))   // expand all by default
     })()
     return () => { cancelled = true }
   }, [])
@@ -207,8 +201,8 @@ export default function CanvasSidebar({
     return () => { cancelled = true }
   }, [room.project_id])
 
-  function toggleSub(id: string) {
-    setOpenSubs(prev => {
+  function toggleCat(id: string) {
+    setOpenCats(prev => {
       const n = new Set(prev)
       if (n.has(id)) n.delete(id); else n.add(id)
       return n
@@ -219,15 +213,26 @@ export default function CanvasSidebar({
   const wallActive     = WALL_MODES.includes(mode)
   const benchtopActive = mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u' || mode === 'draw_benchtop_cutout_rect' || mode === 'draw_benchtop_cutout_circle'
 
-  // When searching, drop the category constraint so matches surface from any category.
+  // A definition is visible if it passes the scope + search filters.
   const q = search.trim().toLowerCase()
-  const visibleDefs = useMemo(() => definitions.filter(d => {
+  const matches = (d: CabinetDefinition) => {
     if (scope === 'job' && !placedDefIds.has(d.id)) return false
     if (q) return d.name.toLowerCase().includes(q)
-    return d.category_id === activeCat
-  }), [definitions, scope, placedDefIds, q, activeCat])
-
+    return true
+  }
+  const visibleCount = definitions.filter(matches).length
   const armedDef = definitions.find(d => d.id === armedDefinitionId) ?? null
+
+  // Accordion groups = categories (Base / Wall / Tall …) + a fallback for any
+  // definition whose category is missing.
+  const groups: Category[] = [
+    ...categories,
+    ...(definitions.some(d => !categories.some(c => c.id === d.category_id))
+      ? [{ id: '__orphan', name: 'Uncategorised', sort_order: 9999, accent_color: null }]
+      : []),
+  ]
+  const defsOf = (catId: string) => definitions.filter(d =>
+    (catId === '__orphan' ? !categories.some(c => c.id === d.category_id) : d.category_id === catId) && matches(d))
 
   return (
     <aside
@@ -321,41 +326,24 @@ export default function CanvasSidebar({
               </div>
             </div>
 
-            {/* Category pills (hidden while searching — search spans all categories) */}
-            {!q && categories.length > 0 && (
-              <div className="px-1 flex flex-wrap gap-1">
-                {categories.map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => setActiveCat(c.id)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors
-                      ${activeCat === c.id ? 'bg-gray-700 border-gray-500 text-white' : 'border-gray-700 text-gray-400 hover:text-gray-200'}`}
-                    style={activeCat === c.id && c.accent_color ? { color: c.accent_color, borderColor: c.accent_color } : undefined}
-                  >
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Subcategory accordions with definition thumbnails */}
-            <div className="flex flex-col gap-px">
-              {subcategories.map(sub => {
-                const defs = visibleDefs.filter(d => d.subcategory_id === sub.id)
-                const open = openSubs.has(sub.id) || (!!q && defs.length > 0)
+            {/* Category drop-downs → list rows (name left, small type icon right) */}
+            <div className="flex flex-col gap-0.5">
+              {groups.map(cat => {
+                const defs = defsOf(cat.id)
+                const open = openCats.has(cat.id) || (!!q && defs.length > 0)
                 if (q && defs.length === 0) return null
                 return (
-                  <div key={sub.id}>
+                  <div key={cat.id}>
                     <button
-                      onClick={() => toggleSub(sub.id)}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-300 transition-colors"
+                      onClick={() => toggleCat(cat.id)}
+                      className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
                     >
-                      <span className="flex-1 text-left">{sub.name}</span>
-                      <span className="text-[10px] text-gray-600">{defs.length}</span>
-                      <span className="opacity-40 text-[10px]">{open ? '▴' : '▾'}</span>
+                      <span className="w-3 text-[9px] opacity-60">{open ? '▾' : '▸'}</span>
+                      <span className="flex-1 text-left" style={cat.accent_color ? { color: cat.accent_color } : undefined}>{cat.name}</span>
+                      <span className="text-[10px] text-gray-600 normal-case">{defs.length}</span>
                     </button>
                     {open && (
-                      <div className="grid grid-cols-2 gap-1 px-1 pb-1.5">
+                      <div className="flex flex-col gap-px pb-1">
                         {defs.map(def => {
                           const sel = armedDefinitionId === def.id
                           return (
@@ -363,15 +351,16 @@ export default function CanvasSidebar({
                               key={def.id}
                               onClick={() => onArmDefinition(def)}
                               title={`${def.name} · ${def.default_dx}×${def.default_dy}×${def.default_dz}`}
-                              className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-center transition-colors
-                                ${sel ? 'bg-blue-600/20 border-blue-500 text-white' : 'bg-gray-800/60 border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white'}`}
+                              className={`w-full flex items-center gap-2 pl-6 pr-2 py-1.5 rounded-md text-sm transition-colors
+                                ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
                             >
-                              <span className={sel ? 'text-blue-300' : 'text-gray-400'}>{classThumb(def.assembly_class)}</span>
-                              <span className="text-[11px] leading-tight font-medium line-clamp-2">{def.name}</span>
-                              <span className="text-[9px] text-gray-500">{def.default_dx}×{def.default_dy}</span>
+                              <span className="flex-1 text-left truncate">{def.name}</span>
+                              <span className="shrink-0 text-[9px] font-mono text-gray-500">{def.default_dx}×{def.default_dy}</span>
+                              <span className={`shrink-0 ${sel ? 'text-blue-300' : 'text-gray-500'}`}>{classThumb(def.assembly_class)}</span>
                             </button>
                           )
                         })}
+                        {defs.length === 0 && <p className="pl-6 pr-2 py-1 text-xs text-gray-600 italic">None</p>}
                       </div>
                     )}
                   </div>
@@ -380,7 +369,7 @@ export default function CanvasSidebar({
               {!libError && definitions.length === 0 && (
                 <p className="px-2 py-2 text-xs text-gray-600 italic">No library cabinets yet.</p>
               )}
-              {scope === 'job' && visibleDefs.length === 0 && definitions.length > 0 && (
+              {scope === 'job' && visibleCount === 0 && definitions.length > 0 && (
                 <p className="px-2 py-2 text-xs text-gray-600 italic">No library cabinets placed in this job yet.</p>
               )}
             </div>
