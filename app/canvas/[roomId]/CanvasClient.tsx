@@ -12,7 +12,7 @@ import {
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCenterPt,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, buildInstanceFromDefinition } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
@@ -41,7 +41,6 @@ import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
 import WallDrawPanel from './WallDrawPanel'
 import WallPanel from './WallPanel'
 import CabinetPanel from './CabinetPanel'
-import DefinitionInfoPanel from './DefinitionInfoPanel'
 import CabinetResizePanel from './CabinetResizePanel'
 import CabinetEditModal from './CabinetEditModal'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
@@ -70,6 +69,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [mode, setMode] = useState<Mode>('select')
   // Library definition armed for placement (mode === 'place_definition').
   const [armedDef, setArmedDef] = useState<ArmedDefinition | null>(null)
+  // Editable draft of the armed cabinet (drives the right-hand panel + what gets placed).
+  const [armedDraft, setArmedDraft] = useState<CabinetInstance | null>(null)
   const [selected, setSelected] = useState<Selected>(null)
   const [view, dispatchView] = useReducer(viewReducer, { panX: 200, panY: 200, zoom: 0.15 })
   const [svgSize, setSvgSize] = useState({ w: 1200, h: 800 })
@@ -299,7 +300,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !isInput(e.target)) { e.preventDefault(); void handleUndo() }
       if (((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey) && !isInput(e.target)) || ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && e.shiftKey && !isInput(e.target))) { e.preventDefault(); void handleRedo() }
-      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode('select'); setArmedDef(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
+      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode('select'); setArmedDef(null); setArmedDraft(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput(e.target)) {
         if (mode === 'draw_benchtop' && e.key === 'Backspace') { bt.undoVertex(); return }
         if (selected?.type === 'cabinet') handleDeleteCabinet(selected.id)
@@ -474,19 +475,28 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Library placement — snapshots a definition into a new instance via the service
   // layer. Position/label/neighbour logic mirrors placeCabinet exactly; dxOverride
   // applies the gap-fit width like the legacy path.
-  async function placeFromDefinition(wall: Wall, pos_x: number, pos_y: number, definitionId: string, cls: AssemblyClass, islandFlip = false, dxOverride?: number) {
-    captureSnapshot()
-    const def = await dbLoadCabinetDefinition(definitionId)
-    if (!def) return
-    // Build the instance from the definition (service-layer mapping), then follow the
-    // exact insert → setCabinets → async-resolve pattern the other placement paths use
-    // so the cabinet renders immediately instead of only after the resolve completes.
+  // Build an editable draft instance from a library definition (id '__draft', not in
+  // the DB). The right-hand CabinetPanel edits this; placement inserts it.
+  function buildDraftFromDefinition(def: CabinetDefinition): CabinetInstance {
     const data = buildInstanceFromDefinition(def, {
-      room_id: room.id, wall_id: wall.id,
-      label: nextLabel(cabinets, cls),
-      pos_x, pos_y, rotation: islandFlip ? wall.angle + 180 : wall.angle,
-      dx: dxOverride,
+      room_id: room.id, wall_id: '', label: def.name, pos_x: 0, pos_y: 0, rotation: 0,
     })
+    return { ...data, id: '__draft', created_at: '', updated_at: '' }
+  }
+
+  // Place the (possibly edited) armed draft. Follows the insert → setCabinets →
+  // async-resolve pattern so the cabinet renders immediately.
+  async function placeFromDraft(draft: CabinetInstance, wall: Wall, pos_x: number, pos_y: number, islandFlip = false, dxOverride?: number) {
+    captureSnapshot()
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, created_at, updated_at, ...rest } = draft
+    const data: Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'> = {
+      ...rest,
+      room_id: room.id, wall_id: wall.id,
+      label: nextLabel(cabinets, draft.assembly_class),
+      pos_x, pos_y, rotation: islandFlip ? wall.angle + 180 : wall.angle,
+      dx: dxOverride != null && dxOverride > 0 ? Math.round(dxOverride) : draft.dx,
+    }
     const cabinet = await dbInsertCabinet(data)
     if (cabinet) {
       setCabinets(cs => [...cs, cabinet])
@@ -953,12 +963,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (clsInfo) {
       if (placeGhost && !placingRef.current) {
         placingRef.current = true
-        if (clsInfo.definitionId) {
-          await placeFromDefinition(placeGhost.wall, placeGhost.pos_x, placeGhost.pos_y, clsInfo.definitionId, clsInfo.cls, placeGhost.islandFlip, placeGhost.fitDx)
+        if (clsInfo.definitionId && armedDraft) {
+          await placeFromDraft(armedDraft, placeGhost.wall, placeGhost.pos_x, placeGhost.pos_y, placeGhost.islandFlip, placeGhost.fitDx)
         } else {
           await placeCabinet(placeGhost.wall, placeGhost.pos_x, placeGhost.pos_y, clsInfo.cls, clsInfo.ep, placeGhost.islandFlip, placeGhost.fitDx)
         }
-        setPlaceGhost(null); setMode('select'); setArmedDef(null)
+        setPlaceGhost(null); setMode('select'); setArmedDef(null); setArmedDraft(null)
         placingRef.current = false
       }
       return
@@ -1202,7 +1212,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   function onSelectMode(m: Mode) {
     setMode(prev => prev === m ? 'select' : m)
-    setArmedDef(null)
+    setArmedDef(null); setArmedDraft(null)
     setDrawStart(null); setPlaceGhost(null)
   }
 
@@ -1210,12 +1220,31 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // armed definition cancels. Replaces arming a class-based Mode.
   function armDefinition(def: CabinetDefinition) {
     if (mode === 'place_definition' && armedDef?.id === def.id) {
-      setArmedDef(null); setMode('select')
+      setArmedDef(null); setArmedDraft(null); setMode('select')
     } else {
       setArmedDef({ id: def.id, assembly_class: def.assembly_class, dx: def.default_dx, dy: def.default_dy, dz: def.default_dz, name: def.name })
+      setArmedDraft(buildDraftFromDefinition(def))
       setMode('place_definition')
     }
     setDrawStart(null); setPlaceGhost(null)
+  }
+
+  // Edits from the right-hand CabinetPanel patch the draft. Dimension changes also
+  // sync the lightweight armedDef so the placement ghost reflects the new size.
+  async function patchDraft(_id: string, patch: Partial<CabinetInstance>) {
+    setArmedDraft(d => d ? { ...d, ...patch } : d)
+    setArmedDef(a => {
+      if (!a) return a
+      const next = { ...a }
+      if (typeof patch.dx === 'number') next.dx = patch.dx
+      if (typeof patch.dy === 'number') next.dy = patch.dy
+      if (typeof patch.dz === 'number') next.dz = patch.dz
+      return next
+    })
+  }
+
+  function cancelArm() {
+    setArmedDef(null); setArmedDraft(null); setMode('select'); setPlaceGhost(null)
   }
 
   function switchView(v: CanvasView) {
@@ -1521,10 +1550,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 else await pasteCabinet(wall, pos_x, pos_y, elevWallSide === 'back')
               } else {
                 const clsInfo = currentPlaceInfo()
-                if (clsInfo?.definitionId) await placeFromDefinition(wall, pos_x, pos_y, clsInfo.definitionId, clsInfo.cls, elevWallSide === 'back', dx)
+                if (clsInfo?.definitionId && armedDraft) await placeFromDraft(armedDraft, wall, pos_x, pos_y, elevWallSide === 'back', dx)
                 else if (clsInfo) await placeCabinet(wall, pos_x, pos_y, clsInfo.cls, clsInfo.ep, elevWallSide === 'back', dx)
               }
-              setMode('select'); setArmedDef(null)
+              setMode('select'); setArmedDef(null); setArmedDraft(null)
               setPlaceGhost(null)
             }}
             onCabinetContextMenu={onCabinetContextMenu}
@@ -1640,9 +1669,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             }}
           />
         )}
-        {/* Armed library definition → read-only properties panel (takes precedence) */}
-        {mode === 'place_definition' && armedDef && (
-          <DefinitionInfoPanel definitionId={armedDef.id} />
+        {/* Armed library definition → editable draft panel (takes precedence). Edits
+            apply to the cabinet that will be placed; no wall yet, so wall-position is hidden. */}
+        {mode === 'place_definition' && armedDraft && (
+          <CabinetPanel
+            cabinet={armedDraft}
+            wall={null}
+            wallCabinets={[]}
+            room={room}
+            onUpdate={patchDraft}
+            onDelete={async () => cancelArm()}
+            hideWallPosition
+          />
         )}
         {mode !== 'place_definition' && selectedCab && (!cabResize || cabResize.cabId !== selectedCab.id) && (
           <CabinetPanel
