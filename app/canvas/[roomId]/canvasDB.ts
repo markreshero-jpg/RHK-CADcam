@@ -484,7 +484,7 @@ export async function saveCabinetToLibrary(
     has_carcass: inst.has_carcass, has_internal: inst.has_internal, has_face: inst.has_face, has_toekick: inst.has_toekick,
     top_type: inst.top_type, toe_type: inst.toe_type,
     construction_method_id: inst.construction_method_id,
-    face_grid: inst.face_grid, internal_grid: inst.internal_grid, carcase_joints: inst.carcase_joints ?? {},
+    face_grid: inst.face_grid ?? {}, internal_grid: inst.internal_grid, carcase_joints: inst.carcase_joints ?? {},
     rule_overrides: {},
     material_overrides, hardware_overrides, toekick_overrides, drawerbox_overrides: {},
     exposed_interior: p.exposed_interior ? !!inst.exposed_interior : false,
