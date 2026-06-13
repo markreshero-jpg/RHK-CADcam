@@ -159,7 +159,20 @@ export interface SeamDrillSyncResult { written: number; skipped: number }
 export async function syncSeamDrillOperations(cabinetId: string): Promise<SeamDrillSyncResult> {
   // Quiet: a project may contain a half-built cabinet; its resolver errors must
   // not surface as a hard error while we generate drilling for the whole nest.
-  const rp = await resolveCabinetFromDB(cabinetId, { quiet: true })
+  let rp: ResolvedCabinet
+  try {
+    rp = await resolveCabinetFromDB(cabinetId, { quiet: true })
+  } catch (e) {
+    // The cabinet was deleted after this nest was built. Its parts keep whatever
+    // part_operations they already have — there are no live joints to regenerate.
+    // Expected/recoverable, so skip it quietly (a warning, not an error, so the
+    // dev overlay doesn't trip). Re-throw anything that isn't a missing cabinet.
+    if (e instanceof Error && /not found/i.test(e.message)) {
+      console.warn('[seamDrillSync] cabinet missing (deleted after nesting), skipping:', cabinetId)
+      return { written: 0, skipped: 0 }
+    }
+    throw e
+  }
   const { rows, skipped } = collectDrillRows(rp, cabinetId)
 
   // Replace this cabinet's generated drill rows wholesale. Hand-added rows
