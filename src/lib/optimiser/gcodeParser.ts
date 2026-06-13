@@ -30,6 +30,11 @@ export interface SimMove {
   bank?: 'x' | 'y'
   bitmask?: number
   dia?: number                          // drill Ø from the (DIAMETER/DRILL TOOL) comment
+  // True while the Anderson drill block is engaged (a bank bitmask is live). These
+  // moves are posted in the BLOCK's own work-offset frame (G54 + head offsets +
+  // Y sign/mirror), which differs from the routing datum — the simulator must
+  // invert them with the block datum, not the routing one.
+  blockFrame?: boolean
 }
 
 // Minimal drill-block geometry holesOf needs (DrillBlockConfig is a superset).
@@ -173,6 +178,7 @@ export function parseGcode(text: string, opts?: ParseOpts): ParsedProgram {
       kind, x0: x, y0: y, z0: z, x1: nx, y1: ny, z1: nz, feed: f, tool, phase, context, lineIndex: i, t0, t1,
       ...(kind === 'drill' && activeBank ? { bank: activeBank, bitmask: activeBank === 'x' ? bankX : bankY } : {}),
       ...(kind === 'drill' && drillDia ? { dia: drillDia } : {}),
+      ...(activeBank ? { blockFrame: true } : {}),   // posted in the block's G54 datum
     })
     t = t1
 

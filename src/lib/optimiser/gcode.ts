@@ -22,7 +22,7 @@
 // ============================================================
 
 import type { NestedSheet } from './nest'
-import { computeGangs, type DrillBlockConfig } from './gangDrill'
+import { computeGangs, type DrillBlockConfig, type GangGroup } from './gangDrill'
 
 export interface PostProfile {
   material_surface_z: string       // top_of_material | spoilboard (Z zero reference)
@@ -92,6 +92,11 @@ export interface PostProfile {
   sign_y: number                   // Y axis sign (-1 → output Y negative)
   mirror_y: boolean                // material loaded face down → Y mirrored about the sheet
   drill_bank_prep_codes: string    // machine prep lines before bank selection (newline-separated)
+  drill_band_height_mm: number     // gang drilling is emitted band-by-band (horizontal
+                                   // strips of this height) so singles + gangs that are
+                                   // near each other drill together, instead of sweeping
+                                   // the whole sheet once per diameter/bitmask. ~400 = a
+                                   // few big bands. Bank re-selects are cheap on the EVO49.
   // ── Output dialect (Anderson .anc style) ────────────────────────────────────
   // The datum (origin_corner + axis directions, above) drives the XY transform;
   // these control the rest of the Anderson-style output.
@@ -127,7 +132,7 @@ export const DEFAULT_POST: PostProfile = {
   base_feed_rate: 6000, base_spindle_speed: 18000, plunge_feed_pct: 25,
   drill_block_work_offset: 'G54', router_work_offset: 'G59',
   drill_cycle_code: 'G81', drill_return_code: 'G98',
-  sign_y: -1, mirror_y: true, drill_bank_prep_codes: 'M23\nM21',
+  sign_y: -1, mirror_y: true, drill_bank_prep_codes: 'M23\nM21', drill_band_height_mm: 400,
   keep_decimal_point: false, modal_output: false,
   emit_tool_length_offset: false, emit_router_work_offset: false,
   tool_h_offset_delta: 0, header_template: null, footer_template: null,
@@ -477,8 +482,10 @@ function emitGangDrilling(
   const drillFeed = f(Math.round(p.base_feed_rate * (p.plunge_feed_pct > 0 ? p.plunge_feed_pct : 25) / 100))
   const prep = (p.drill_bank_prep_codes || '').split('\n').map(s => s.trim()).filter(Boolean)
 
-  c(`Drilling — ${groups.length} gang group(s), Anderson M88/M89`)
-  for (const g of groups) {
+  // Emit one bank firing: select the gang's bitmask, then plunge at each master
+  // in `masters` (step-and-repeat). Slaves fire automatically at fixed offsets.
+  const emitFiring = (g: GangGroup, masters: { x: number; y: number }[]) => {
+    if (!masters.length) return
     const mcode = g.bank === 'x' ? block.xBankMcode : block.yBankMcode
     c(`DRILL TOOL: V ${f(g.diameter)}MM`)
     c(`DRILL MASTER: ${g.masterSpindle}, SLAVE: ${g.slaveSpindles.join(',') || '-'}`)
@@ -487,16 +494,43 @@ function emitGangDrilling(
     emit(`${block.yBankMcode} B0`)
     prep.forEach(l => emit(l))
     emit(`${mcode} B${g.bitmask}`)
-    const m0 = g.masters[0]
+    const m0 = masters[0]
     emit(`G90 G0 ${block.workOffsetCode} G43 H1 X${f(tx(m0.x))} Y${f(ty(m0.y))} Z${f(rapidZ)}`)
     emit(`${p.drill_return_code} ${p.drill_cycle_code} Z${f(depthZ(g.depth))} R${f(rapidZ)} F${drillFeed}`)
-    for (const m of g.masters.slice(1)) emit(`X${f(tx(m.x))} Y${f(ty(m.y))} Z${f(depthZ(g.depth))}`)
+    for (const m of masters.slice(1)) emit(`X${f(tx(m.x))} Y${f(ty(m.y))} Z${f(depthZ(g.depth))}`)
     emit('G80')   // cancel canned cycle
     emit('G17 G91 G28 Z0 M95')
     emit(`${block.xBankMcode} B0`)
     emit(`${block.yBankMcode} B0`)
     emit('M22')
   }
+
+  // Gang detection ran across the whole sheet (so gangs stay maximal), but we
+  // EMIT band-by-band: split the sheet into horizontal strips of drill_band_height_mm
+  // and, within each strip, fire every group that has masters there. This keeps
+  // singles + nearby gangs drilling together and turns "one full-sheet sweep per
+  // bitmask" into a single progression up the sheet. A group spanning two bands is
+  // simply fired once per band (cheap re-select). Strips serpentine, and the masters
+  // within each firing alternate direction too, so the head flows instead of
+  // snapping back to X0.
+  const bandH = Math.max(1, p.drill_band_height_mm)
+  const bandOf = (y: number) => Math.floor(y / bandH)
+  const minX = (ms: { x: number }[]) => Math.min(...ms.map(m => m.x))
+  const bandList = [...new Set(groups.flatMap(g => g.masters.map(m => bandOf(m.y))))].sort((a, b) => a - b)
+
+  c(`Drilling — ${groups.length} gang group(s) over ${bandList.length} band(s) of ${f(bandH)}mm, Anderson M88/M89`)
+  bandList.forEach((band, bi) => {
+    const dir = bi % 2 === 0 ? 1 : -1   // serpentine the strips
+    const firings = groups
+      .map(g => ({ g, ms: g.masters.filter(m => bandOf(m.y) === band) }))
+      .filter(fr => fr.ms.length > 0)
+      .sort((a, b) => dir * (minX(a.ms) - minX(b.ms)))
+    firings.forEach((fr, fi) => {
+      const mdir = fi % 2 === 0 ? dir : -dir   // alternate each firing so the head keeps flowing
+      const ordered = [...fr.ms].sort((a, b) => mdir * (a.x - b.x) || (a.y - b.y))
+      emitFiring(fr.g, ordered)
+    })
+  })
 }
 
 // Nearest-neighbour travel order between part start corners (origin_corner=BL).
@@ -795,6 +829,7 @@ export function postFromProfile(row: Record<string, unknown> | null, tool?: { ba
     sign_y: n(row.sign_y, D.sign_y),
     mirror_y: b(row.mirror_y, D.mirror_y),
     drill_bank_prep_codes: s(row.drill_bank_prep_codes, D.drill_bank_prep_codes),
+    drill_band_height_mm: n(row.drill_band_height_mm, D.drill_band_height_mm),
     keep_decimal_point: b(row.keep_decimal_point, D.keep_decimal_point),
     modal_output: b(row.modal_output, D.modal_output),
     emit_tool_length_offset: b(row.emit_tool_length_offset, D.emit_tool_length_offset),

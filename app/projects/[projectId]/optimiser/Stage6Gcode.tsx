@@ -14,7 +14,7 @@ import { useOptiStore } from '@/src/lib/optimiser/store'
 import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
 import { loadSheetDrills } from '@/src/lib/optimiser/sheetDrills'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
-import Simulator, { type SimCoord } from './Simulator'
+import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
 
 interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number }
 
@@ -49,6 +49,7 @@ export default function Stage6Gcode() {
   const [simulating, setSimulating] = useState(false)
   const [coord, setCoord] = useState<SimCoord | null>(null)
   const [simDrillBlock, setSimDrillBlock] = useState<DrillBlockConfig | null>(null)
+  const [simDrillCoord, setSimDrillCoord] = useState<SimDrillCoord | null>(null)
 
   const matCode = (id: string | null) => id ? (snap.materials.find(m => m.id === id)?.name ?? 'MAT') : 'MAT'
 
@@ -111,6 +112,11 @@ export default function Stage6Gcode() {
       }
 
       setSimDrillBlock(drillBlock ?? null)   // hand the block layout to the simulator overlay
+      // Block datum so the simulator inverts gang-drilled holes from the block's
+      // own G54 frame (not the routing datum) back onto the sheet.
+      setSimDrillCoord(drillBlock
+        ? { headOffsetX: drillBlock.headOffsetXMm, headOffsetY: drillBlock.headOffsetYMm, signY: post0.sign_y, mirrorY: post0.mirror_y }
+        : null)
 
       // Joint-sync + read part_operations + resolve auto_tool/drill_id, projected
       // to sheet space. Shared with Stage 5 so the holes match exactly.
@@ -269,6 +275,7 @@ export default function Stage6Gcode() {
           sheets={nestResult.sheets}
           coord={coord ?? undefined}
           drillBlock={simDrillBlock ?? undefined}
+          drillCoord={simDrillCoord ?? undefined}
           onClose={() => setSimulating(false)} />
       )}
     </div>

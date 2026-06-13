@@ -26,13 +26,16 @@ export interface SimFile { sheetIndex: number; fileName: string; gcode: string }
 // machine coordinates BACK to the canonical internal frame it renders in
 // (bottom-left origin, Y up, top-of-material Z = 0 with cuts negative).
 export interface SimCoord { originCorner: string; xDir: string; yDir: string; surfaceZ: string; zUp: boolean }
+// The drill block's own datum (G54 + head offsets + Y sign/mirror) — gang drilling
+// is posted in this frame, not the routing one, so block-frame moves invert with it.
+export interface SimDrillCoord { headOffsetX: number; headOffsetY: number; signY: number; mirrorY: boolean }
 interface ToolRow { tool_number: number | null; name: string | null; diameter: number | null; tool_type: string | null; cutting_length: number | null; shape_profile: { type: string; params: Record<string, number> } | null }
 
 const SPEEDS = [1, 5, 20, 100] as const
 
 // Invert the post-processor datum transform so the toolpath lines up with the
 // nested panels again (machine X/Y/Z → internal sheet X/Y/Z).
-function toInternal(prog: ParsedProgram, sheet: NestedSheet, c: SimCoord): ParsedProgram {
+function toInternal(prog: ParsedProgram, sheet: NestedSheet, c: SimCoord, dc?: SimDrillCoord): ParsedProgram {
   const W = sheet.stock.w, H = sheet.stock.h, th = sheet.thickness
   const oX = (c.originCorner === 'top_right' || c.originCorner === 'bottom_right') ? W : 0
   const oY = (c.originCorner === 'top_left' || c.originCorner === 'top_right') ? H : 0
@@ -43,9 +46,22 @@ function toInternal(prog: ParsedProgram, sheet: NestedSheet, c: SimCoord): Parse
   const ix = (x: number) => sX * x + oX
   const iy = (y: number) => sY * y + oY
   const iz = (z: number) => z * zSign - zOff
+  // Inverse of the drill block's tx/ty (gcode.ts emitGangDrilling): machine → sheet.
+  //   tx(x) = x + headOffsetX            → x = X − headOffsetX
+  //   ty(y) = signY·(mirrorY? H−y : y) + headOffsetY
+  const bx = (x: number) => dc ? x - dc.headOffsetX : ix(x)
+  const by = (y: number) => {
+    if (!dc) return iy(y)
+    const t = (y - dc.headOffsetY) / dc.signY
+    return dc.mirrorY ? H - t : t
+  }
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   const moves = prog.moves.map(m => {
-    const x0 = ix(m.x0), y0 = iy(m.y0), x1 = ix(m.x1), y1 = iy(m.y1)
+    const block = m.blockFrame && dc
+    const x0 = block ? bx(m.x0) : ix(m.x0)
+    const y0 = block ? by(m.y0) : iy(m.y0)
+    const x1 = block ? bx(m.x1) : ix(m.x1)
+    const y1 = block ? by(m.y1) : iy(m.y1)
     minX = Math.min(minX, x0, x1); maxX = Math.max(maxX, x0, x1)
     minY = Math.min(minY, y0, y1); maxY = Math.max(maxY, y0, y1)
     return { ...m, x0, y0, z0: iz(m.z0), x1, y1, z1: iz(m.z1) }
@@ -55,13 +71,14 @@ function toInternal(prog: ParsedProgram, sheet: NestedSheet, c: SimCoord): Parse
 }
 
 export default function Simulator({
-  files, sheets, onClose, coord, drillBlock,
+  files, sheets, onClose, coord, drillBlock, drillCoord,
 }: {
   files: SimFile[]
   sheets: NestedSheet[]
   onClose: () => void
   coord?: SimCoord
   drillBlock?: DrillBlockConfig
+  drillCoord?: SimDrillCoord
 }) {
   const [tools, setTools] = useState<Map<number, ToolRow>>(new Map())
   const [sel, setSel] = useState(0)                 // index into files
@@ -88,8 +105,8 @@ export default function Simulator({
   const prog = useMemo<ParsedProgram>(() => {
     const raw = parseGcode(file?.gcode ?? '', drillBlock
       ? { drillBank: { xMcode: drillBlock.xBankMcode, yMcode: drillBlock.yBankMcode } } : undefined)
-    return sheet && coord ? toInternal(raw, sheet, coord) : raw
-  }, [file, sheet, coord, drillBlock])
+    return sheet && coord ? toInternal(raw, sheet, coord, drillCoord) : raw
+  }, [file, sheet, coord, drillBlock, drillCoord])
   const total = prog.totalTime
 
   // Reset playback when switching sheets (render-time state adjustment — the
