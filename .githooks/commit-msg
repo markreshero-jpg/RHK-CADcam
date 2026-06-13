@@ -1,0 +1,33 @@
+#!/bin/sh
+# commit-msg hook — reject commit messages mangled by passing a PowerShell
+# here-string (@'...'@) to a POSIX shell. In bash, `git commit -m @'...'@`
+# leaves the subject line as a lone "@", which then becomes the (useless)
+# Vercel deployment description. See .githooks/README.md.
+#
+# Shared via: git config core.hooksPath .githooks  (set up once per clone).
+
+msg_file="$1"
+
+# Subject = first line that is not blank and not a git comment (#...).
+subject=$(sed -e '/^#/d' "$msg_file" | sed -e '/./,$!d' | sed -n '1p')
+
+fail() {
+  printf '\n\033[31mcommit-msg rejected:\033[0m %s\n' "$1" >&2
+  printf 'Subject line was: %s\n' "${subject:-<empty>}" >&2
+  printf '\nThis is the PowerShell-here-string-in-bash trap.\n' >&2
+  printf 'Use repeated -m flags instead:\n' >&2
+  printf '  git commit -m "Subject line" -m "Body paragraph"\n' >&2
+  printf '\n(To bypass deliberately: git commit --no-verify)\n\n' >&2
+  exit 1
+}
+
+case "$subject" in
+  '@')        fail 'subject is a lone "@" (here-string leaked into the message).' ;;
+  "@'"*)      fail 'subject starts with @'"'"' (here-string opener leaked).' ;;
+  *"'@")      fail 'subject ends with '"'"'@ (here-string closer leaked).' ;;
+esac
+
+# A completely empty subject is always a mistake.
+[ -z "$subject" ] && fail 'commit message has no subject line.'
+
+exit 0
