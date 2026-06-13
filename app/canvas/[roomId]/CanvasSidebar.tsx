@@ -105,7 +105,7 @@ const WALL_MODES = WALL_ITEMS.map(w => w.mode)
 
 type Category = { id: string; name: string; sort_order: number; accent_color: string | null; parent_id: string | null }
 type Scope    = 'all' | 'job'
-type CabCtxMenu = { x: number; y: number; categoryId: string | null }
+type CabCtxMenu = { x: number; y: number; categoryId?: string | null; definitionId?: string }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -279,6 +279,14 @@ export default function CanvasSidebar({
     if (error) setLibError(error.message); else await reloadCategories()
   }
 
+  async function deleteDefinition(def: CabinetDefinition) {
+    setCtxMenu(null)
+    if (!window.confirm(`Delete “${def.name}” from the library?\nPlaced cabinets are unaffected.`)) return
+    const { error } = await supabase.from('cabinet_definitions').delete().eq('id', def.id)
+    if (error) { setLibError(error.message); return }
+    setDefinitions(ds => ds.filter(d => d.id !== def.id))
+  }
+
   // Recursive accordion node: child categories then this node's definitions.
   function renderNode(cat: Category, depth: number): React.ReactNode {
     if (q && !nodeHasVisible(cat.id)) return null
@@ -307,6 +315,7 @@ export default function CanvasSidebar({
                 <button
                   key={def.id}
                   onClick={() => onArmDefinition(def)}
+                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, definitionId: def.id }) }}
                   title={`${def.name} · ${def.default_dx}×${def.default_dy}×${def.default_dz}`}
                   className={`w-full flex items-center gap-2 pr-2 py-1.5 rounded-md text-sm transition-colors
                     ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
@@ -432,6 +441,7 @@ export default function CanvasSidebar({
                       const sel = armedDefinitionId === def.id
                       return (
                         <button key={def.id} onClick={() => onArmDefinition(def)}
+                          onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, definitionId: def.id }) }}
                           title={`${def.name} · ${def.default_dx}×${def.default_dy}×${def.default_dz}`}
                           className={`w-full flex items-center gap-2 pl-4 pr-2 py-1.5 rounded-md text-sm transition-colors
                             ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
@@ -576,10 +586,11 @@ export default function CanvasSidebar({
         </div>
       )}
 
-      {/* ── Right-click category menu ── */}
+      {/* ── Right-click menu (cabinet or category) ── */}
       {ctxMenu && (() => {
-        const cat = ctxMenu.categoryId ? categories.find(c => c.id === ctxMenu.categoryId) ?? null : null
         const item = 'w-full text-left px-3 py-1.5 text-sm hover:bg-gray-700 transition-colors'
+        const def = ctxMenu.definitionId ? definitions.find(d => d.id === ctxMenu.definitionId) ?? null : null
+        const cat = ctxMenu.categoryId ? categories.find(c => c.id === ctxMenu.categoryId) ?? null : null
         return (
           <div
             className="fixed z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[180px]"
@@ -587,13 +598,19 @@ export default function CanvasSidebar({
             onMouseDown={e => e.stopPropagation()}
             onContextMenu={e => e.preventDefault()}
           >
-            <button className={`${item} text-gray-200`} onClick={() => createCategory(ctxMenu.categoryId)}>
-              {cat ? <>New category inside <span className="text-gray-400">“{cat.name}”</span></> : 'New category'}
-            </button>
-            {cat && (
+            {def ? (
+              <button className={`${item} text-red-400`} onClick={() => deleteDefinition(def)}>Delete “{def.name}”</button>
+            ) : (
               <>
-                <button className={`${item} text-gray-200`} onClick={() => renameCategory(cat)}>Rename…</button>
-                <button className={`${item} text-red-400`} onClick={() => deleteCategory(cat)}>Delete</button>
+                <button className={`${item} text-gray-200`} onClick={() => createCategory(ctxMenu.categoryId ?? null)}>
+                  {cat ? <>New category inside <span className="text-gray-400">“{cat.name}”</span></> : 'New category'}
+                </button>
+                {cat && (
+                  <>
+                    <button className={`${item} text-gray-200`} onClick={() => renameCategory(cat)}>Rename…</button>
+                    <button className={`${item} text-red-400`} onClick={() => deleteCategory(cat)}>Delete</button>
+                  </>
+                )}
               </>
             )}
           </div>
