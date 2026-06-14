@@ -169,6 +169,8 @@ export default function CanvasSidebar({
   const [scope, setScope]     = useState<Scope>('all')
   const [openCats, setOpenCats] = useState<Set<string>>(new Set())
   const [ctxMenu, setCtxMenu] = useState<CabCtxMenu | null>(null)
+  const [movingDef, setMovingDef] = useState<CabinetDefinition | null>(null)
+  const [moveTarget, setMoveTarget] = useState<string | null>(null)
 
   const reloadCategories = useCallback(async () => {
     const { data } = await supabase.from('cabinet_categories')
@@ -287,6 +289,20 @@ export default function CanvasSidebar({
     setDefinitions(ds => ds.filter(d => d.id !== def.id))
   }
 
+  function startMove(def: CabinetDefinition) {
+    setCtxMenu(null)
+    setMoveTarget(def.category_id ?? null)
+    setMovingDef(def)
+  }
+  async function confirmMove() {
+    if (!movingDef) return
+    const { error } = await supabase.from('cabinet_definitions').update({ category_id: moveTarget }).eq('id', movingDef.id)
+    if (error) { setLibError(error.message); return }
+    setDefinitions(ds => ds.map(d => d.id === movingDef.id ? { ...d, category_id: moveTarget } : d))
+    if (moveTarget) setOpenCats(prev => new Set(prev).add(moveTarget))
+    setMovingDef(null)
+  }
+
   // Recursive accordion node: child categories then this node's definitions.
   function renderNode(cat: Category, depth: number): React.ReactNode {
     if (q && !nodeHasVisible(cat.id)) return null
@@ -329,6 +345,27 @@ export default function CanvasSidebar({
             })}
           </div>
         )}
+      </div>
+    )
+  }
+
+  // Selectable category tree for the Move dialog.
+  function renderMoveNode(cat: Category, depth: number): React.ReactNode {
+    const kids = childrenOf(cat.id)
+    const open = openCats.has(cat.id)
+    const sel = moveTarget === cat.id
+    return (
+      <div key={cat.id}>
+        <div
+          onClick={() => setMoveTarget(cat.id)}
+          className={`flex items-center gap-1 pr-2 py-1 rounded cursor-pointer text-sm transition-colors
+            ${sel ? 'bg-blue-600/25 text-white' : 'text-gray-300 hover:bg-gray-800'}`}
+          style={{ paddingLeft: 6 + depth * 14 }}
+        >
+          <span onClick={e => { e.stopPropagation(); if (kids.length) toggleCat(cat.id) }} className="w-3 text-[9px] opacity-60 shrink-0">{kids.length ? (open ? '▾' : '▸') : '·'}</span>
+          <span className="flex-1 truncate">{cat.name}</span>
+        </div>
+        {open && kids.map(k => renderMoveNode(k, depth + 1))}
       </div>
     )
   }
@@ -599,7 +636,10 @@ export default function CanvasSidebar({
             onContextMenu={e => e.preventDefault()}
           >
             {def ? (
-              <button className={`${item} text-red-400`} onClick={() => deleteDefinition(def)}>Delete “{def.name}”</button>
+              <>
+                <button className={`${item} text-gray-200`} onClick={() => startMove(def)}>Move to…</button>
+                <button className={`${item} text-red-400`} onClick={() => deleteDefinition(def)}>Delete “{def.name}”</button>
+              </>
             ) : (
               <>
                 <button className={`${item} text-gray-200`} onClick={() => createCategory(ctxMenu.categoryId ?? null)}>
@@ -616,6 +656,30 @@ export default function CanvasSidebar({
           </div>
         )
       })()}
+
+      {/* ── Move cabinet dialog ── */}
+      {movingDef && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onMouseDown={() => setMovingDef(null)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-80 p-5 flex flex-col gap-3" onMouseDown={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-white">Move <span className="text-gray-300">“{movingDef.name}”</span></p>
+            <div className="max-h-56 overflow-y-auto bg-gray-800/40 border border-gray-700 rounded-md p-1">
+              <div
+                onClick={() => setMoveTarget(null)}
+                className={`flex items-center gap-1 pr-2 py-1 rounded cursor-pointer text-sm ${moveTarget === null ? 'bg-blue-600/25 text-white' : 'text-gray-400 hover:bg-gray-800'}`}
+                style={{ paddingLeft: 6 }}
+              >
+                <span className="w-3 text-[9px] opacity-60 shrink-0">·</span>
+                <span className="flex-1 truncate italic">Uncategorised</span>
+              </div>
+              {childrenOf(null).map(c => renderMoveNode(c, 0))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setMovingDef(null)} className="px-4 py-1.5 text-xs rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition-colors">Cancel</button>
+              <button onClick={confirmMove} className="px-4 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors">Move</button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   )
 }
