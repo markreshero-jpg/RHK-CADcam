@@ -12,7 +12,7 @@ import {
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCenterPt,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, buildInstanceFromDefinition } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
@@ -512,6 +512,37 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
       })
     }
+  }
+
+  // Drop a library definition onto the plan canvas at the drop point (drag-and-drop
+  // placement). Self-contained: converts the screen point to world coords, snaps to
+  // the nearest wall + gap, and places via the same draft path as click placement.
+  async function dropDefinitionAt(definitionId: string, clientX: number, clientY: number) {
+    const rect = svgRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const wp = toWorld(clientX - rect.left, clientY - rect.top)
+    const def = await dbLoadCabinetDefinition(definitionId)
+    if (!def) return
+    const draft = buildDraftFromDefinition(def)
+    const raw = nearestWall(wp, walls, draft.dx, Infinity)
+    if (!raw) return
+    const wd = wallDir(raw.wall)
+    const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
+    let flip: boolean
+    if (raw.wall.wall_type === 'island') {
+      const perp = { x: -wd.y, y: wd.x }
+      flip = (wp.x - raw.wall.pos_x) * perp.x + (wp.y - raw.wall.pos_y) * perp.y < 0
+    } else {
+      const cxp = centroid(walls)
+      const inward = wallInwardNormal(raw.wall, cxp.x, cxp.y)
+      flip = (wp.x - raw.wall.pos_x) * inward.x + (wp.y - raw.wall.pos_y) * inward.y < 0
+    }
+    const side = flip ? 'back' : 'face'
+    const occupied = cabinets
+      .filter(c => c.wall_id === raw.wall.id && cabsBlock({ assembly_class: draft.assembly_class, dy: draft.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side)
+      .map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+    const fit = fitFreeSlot(desired, draft.dx, raw.wall.length, occupied)
+    await placeFromDraft(draft, raw.wall, raw.wall.pos_x + fit.t * wd.x, raw.wall.pos_y + fit.t * wd.y, flip, fit.dx)
   }
 
   // Unified placement descriptor for the current mode: the armed definition when
@@ -1443,6 +1474,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               selected={selected}
               mode={mode}
               armedDef={armedDef}
+              onCanvasDrop={dropDefinitionAt}
               displayConfig={displayConfig}
               drawStart={drawStart}
               drawCursor={drawCursor}

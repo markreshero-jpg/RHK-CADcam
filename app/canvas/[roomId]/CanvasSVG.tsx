@@ -48,6 +48,7 @@ interface CanvasSVGProps {
   selected: Selected
   mode: Mode
   armedDef: ArmedDefinition | null
+  onCanvasDrop?: (defId: string, clientX: number, clientY: number) => void
   drawStart: Pt | null
   drawCursor: Pt | null
   drawThickness: number
@@ -118,7 +119,7 @@ interface CanvasSVGProps {
 }
 
 export default function CanvasSVG({
-  svgRef, walls, cabinets, view, svgSize, selected, mode, armedDef, displayConfig,
+  svgRef, walls, cabinets, view, svgSize, selected, mode, armedDef, onCanvasDrop, displayConfig,
   drawStart, drawCursor, drawThickness, placeGhost, clipboard, clipboardGroup, cabDrag, cabMoveDrag, cabResize, multiSelect, marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
   setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
@@ -157,6 +158,12 @@ export default function CanvasSVG({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onClick={onSVGClick}
+      onDragOver={onCanvasDrop ? (e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }) : undefined}
+      onDrop={onCanvasDrop ? (e => {
+        e.preventDefault()
+        const id = e.dataTransfer.getData('application/x-rhk-cab-def')
+        if (id) onCanvasDrop(id, e.clientX, e.clientY)
+      }) : undefined}
       onContextMenu={e => {
         e.preventDefault()
         if (mode === 'draw_wall' || mode === 'draw_island') onCancelDraw()

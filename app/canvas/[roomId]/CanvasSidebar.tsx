@@ -316,6 +316,8 @@ export default function CanvasSidebar({
                       key={def.id}
                       onClick={() => onArmDefinition(def)}
                       onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, definitionId: def.id }) }}
+                      draggable
+                      onDragStart={e => { e.dataTransfer.setData('application/x-rhk-cab-def', def.id); e.dataTransfer.effectAllowed = 'copy' }}
                       title={def.name}
                       className={`w-full flex items-center py-1.5 pr-2 text-sm transition-colors
                         ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
@@ -463,6 +465,8 @@ export default function CanvasSidebar({
                       return (
                         <button key={def.id} onClick={() => onArmDefinition(def)}
                           onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, definitionId: def.id }) }}
+                          draggable
+                          onDragStart={e => { e.dataTransfer.setData('application/x-rhk-cab-def', def.id); e.dataTransfer.effectAllowed = 'copy' }}
                           title={def.name}
                           className={`w-full flex items-center pl-4 pr-2 py-1.5 text-sm transition-colors
                             ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
