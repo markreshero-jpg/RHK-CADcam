@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { SlideDrillOp, SlideDrillSurface, SlideDrillSide } from '@/src/lib/resolver/types'
+import OperationToolSelect, { useToolLibraries, type ToolLite, type DrillLite } from '@/src/components/cnc/OperationToolSelect'
 
 const TABLE = 'drawer_slide_operations'
 
@@ -68,6 +69,7 @@ interface Props {
 }
 
 export default function SlideDrillingEditor({ slideId }: Props) {
+  const { tools, drills } = useToolLibraries()
   const [ops, setOps] = useState<SlideDrillOp[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -200,11 +202,12 @@ export default function SlideDrillingEditor({ slideId }: Props) {
                   <span className="w-[60px] text-right">Spacing</span>
                   <span className="w-[64px]">Repeat</span>
                   <span className="w-[64px]">Side</span>
+                  <span className="w-[120px]">Tool</span>
                   <span className="flex-1">Notes</span>
                   <span className="w-[20px]" />
                 </div>
                 {surfaceOps.map(op => (
-                  <OpRow key={op.id} op={op} onPatch={patchOp} onDelete={deleteOp} />
+                  <OpRow key={op.id} op={op} tools={tools} drills={drills} onPatch={patchOp} onDelete={deleteOp} />
                 ))}
               </div>
             )}
@@ -219,9 +222,11 @@ export default function SlideDrillingEditor({ slideId }: Props) {
 // ── One editable operation row ────────────────────────────────────────────────
 
 function OpRow({
-  op, onPatch, onDelete,
+  op, tools, drills, onPatch, onDelete,
 }: {
   op: SlideDrillOp
+  tools: ToolLite[]
+  drills: DrillLite[]
   onPatch: (id: string, patch: Partial<SlideDrillOp>) => void
   onDelete: (id: string) => void
 }) {
@@ -257,6 +262,12 @@ function OpRow({
       >
         {SIDES.map(s => <option key={s.value} value={s.value} className="bg-surface">{s.label}</option>)}
       </select>
+      <OperationToolSelect
+        operationType={op.machine_operation}
+        value={{ router_tool_id: op.router_tool_id, drill_id: op.drill_id, auto_tool: op.auto_tool }}
+        tools={tools} drills={drills}
+        onChange={v => onPatch(op.id, v)}
+        className="w-[120px] bg-transparent border-b border-edge-strong text-xs text-ink py-0.5 focus:outline-none focus:border-accent" />
       <TextCell value={op.notes} onCommit={v => onPatch(op.id, { notes: v })} />
       <button
         onClick={() => onDelete(op.id)}
