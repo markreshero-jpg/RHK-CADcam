@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/src/lib/supabase'
 import { Mode, CabinetInstance } from './canvasTypes'
-import { Room, CabinetDefinition, AssemblyClass } from '@/src/lib/types'
+import { Room, CabinetDefinition } from '@/src/lib/types'
 import RoomSwitcher, { type RoomSwitcherHandle } from './RoomSwitcher'
 
 const CabinetPreview3D = dynamic(() => import('./CabinetPreview3D'), { ssr: false })
@@ -55,43 +55,6 @@ const PasteIcon = () => (
     <line x1="8" y1="13" x2="12" y2="13"/>
   </svg>
 )
-
-const BaseCabIcon   = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-    <rect x="1.5" y="4" width="13" height="10" rx="0.8"/>
-    <line x1="8" y1="4" x2="8" y2="14"/>
-    <line x1="5.5" y1="9.5" x2="6.5" y2="9.5" strokeWidth="1.8"/>
-    <line x1="9.5" y1="9.5" x2="10.5" y2="9.5" strokeWidth="1.8"/>
-    <rect x="1.5" y="13" width="13" height="2.5" rx="0.5" fill="currentColor" fillOpacity="0.3"/>
-  </svg>
-)
-
-const WallUnitIcon  = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-    <rect x="1.5" y="2" width="13" height="9" rx="0.8"/>
-    <line x1="8" y1="2" x2="8" y2="11"/>
-    <line x1="5.5" y1="7" x2="6.5" y2="7" strokeWidth="1.8"/>
-    <line x1="9.5" y1="7" x2="10.5" y2="7" strokeWidth="1.8"/>
-  </svg>
-)
-
-const TallCabIcon   = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-    <rect x="3.5" y="1" width="9" height="14" rx="0.8"/>
-    <line x1="8" y1="1" x2="8" y2="15"/>
-    <line x1="5.5" y1="5" x2="6.5" y2="5" strokeWidth="1.8"/>
-    <line x1="9.5" y1="5" x2="10.5" y2="5" strokeWidth="1.8"/>
-    <line x1="5.5" y1="11" x2="6.5" y2="11" strokeWidth="1.8"/>
-    <line x1="9.5" y1="11" x2="10.5" y2="11" strokeWidth="1.8"/>
-  </svg>
-)
-
-// Default thumbnail keyed by assembly class (until a definition carries thumbnail_svg).
-function classThumb(cls: AssemblyClass): React.ReactNode {
-  if (cls.startsWith('wall')) return <WallUnitIcon />
-  if (cls.startsWith('tall')) return <TallCabIcon />
-  return <BaseCabIcon />
-}
 
 // ── Wall tools (unchanged) ──────────────────────────────────────────────────────
 
@@ -311,11 +274,11 @@ export default function CanvasSidebar({
     const open = openCats.has(cat.id) || (!!q && nodeHasVisible(cat.id))
     const hasContent = kids.length > 0 || defs.length > 0
     return (
-      <div key={cat.id}>
+      <div key={cat.id} className="border-t border-gray-800">
         <button
           onClick={() => toggleCat(cat.id)}
           onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, categoryId: cat.id }) }}
-          className="w-full flex items-center gap-1.5 pr-2 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
+          className="w-full flex items-center gap-1.5 pr-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
           style={{ paddingLeft: 8 + depth * 12 }}
         >
           <span className="w-3 text-[9px] opacity-60">{hasContent ? (open ? '▾' : '▸') : '·'}</span>
@@ -323,26 +286,28 @@ export default function CanvasSidebar({
           {defs.length > 0 && <span className="text-[10px] text-gray-600 normal-case">{defs.length}</span>}
         </button>
         {open && (
-          <div className="flex flex-col gap-px">
+          <div className="flex flex-col">
             {kids.map(k => renderNode(k, depth + 1))}
-            {defs.map(def => {
-              const sel = armedDefinitionId === def.id
-              return (
-                <button
-                  key={def.id}
-                  onClick={() => onArmDefinition(def)}
-                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, definitionId: def.id }) }}
-                  title={`${def.name} · ${def.default_dx}×${def.default_dy}×${def.default_dz}`}
-                  className={`w-full flex items-center gap-2 pr-2 py-1.5 rounded-md text-sm transition-colors
-                    ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
-                  style={{ paddingLeft: 8 + (depth + 1) * 12 + 6 }}
-                >
-                  <span className="flex-1 text-left truncate">{def.name}</span>
-                  <span className="shrink-0 text-[9px] font-mono text-gray-500">{def.default_dx}×{def.default_dy}</span>
-                  <span className={`shrink-0 ${sel ? 'text-blue-300' : 'text-gray-500'}`}>{classThumb(def.assembly_class)}</span>
-                </button>
-              )
-            })}
+            {defs.length > 0 && (
+              <div className="divide-y divide-gray-800/60 border-t border-gray-800/60">
+                {defs.map(def => {
+                  const sel = armedDefinitionId === def.id
+                  return (
+                    <button
+                      key={def.id}
+                      onClick={() => onArmDefinition(def)}
+                      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, definitionId: def.id }) }}
+                      title={def.name}
+                      className={`w-full flex items-center py-1.5 pr-2 text-sm transition-colors
+                        ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
+                      style={{ paddingLeft: 8 + (depth + 1) * 12 + 6 }}
+                    >
+                      <span className="flex-1 text-left truncate">{def.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -464,27 +429,25 @@ export default function CanvasSidebar({
 
             {/* Nested category tree → list rows. Right-click for New category / Rename / Delete. */}
             <div
-              className="flex flex-col gap-0.5 min-h-[40px]"
+              className="flex flex-col border-b border-gray-800 min-h-[40px]"
               onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, categoryId: null }) }}
             >
               {childrenOf(null).map(cat => renderNode(cat, 0))}
 
               {/* Definitions whose category was removed */}
               {orphanDefs.length > 0 && (
-                <div>
+                <div className="border-t border-gray-800">
                   <div className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">Uncategorised</div>
-                  <div className="flex flex-col gap-px">
+                  <div className="flex flex-col divide-y divide-gray-800/60 border-t border-gray-800/60">
                     {orphanDefs.map(def => {
                       const sel = armedDefinitionId === def.id
                       return (
                         <button key={def.id} onClick={() => onArmDefinition(def)}
                           onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, definitionId: def.id }) }}
-                          title={`${def.name} · ${def.default_dx}×${def.default_dy}×${def.default_dz}`}
-                          className={`w-full flex items-center gap-2 pl-4 pr-2 py-1.5 rounded-md text-sm transition-colors
+                          title={def.name}
+                          className={`w-full flex items-center pl-4 pr-2 py-1.5 text-sm transition-colors
                             ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
                           <span className="flex-1 text-left truncate">{def.name}</span>
-                          <span className="shrink-0 text-[9px] font-mono text-gray-500">{def.default_dx}×{def.default_dy}</span>
-                          <span className={`shrink-0 ${sel ? 'text-blue-300' : 'text-gray-500'}`}>{classThumb(def.assembly_class)}</span>
                         </button>
                       )
                     })}
