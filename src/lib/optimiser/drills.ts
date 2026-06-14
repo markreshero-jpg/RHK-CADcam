@@ -19,6 +19,8 @@ export interface DrillOpRaw {
   // Tool assignment — resolved to a concrete bit (and an effective diameter/depth)
   // by resolveDrillTools before nesting. Optional so legacy callers still type-check.
   drill_id?: string | null; auto_tool?: boolean | null
+  // Plunges per hole from the resolved bit (2 = "drill twice" for hard board).
+  passes?: number | null
   // Set by the resolver when a hole can't be drilled and is pocket-routed instead.
   pocket?: { toolNumber: number; toolDiameter: number } | null
 }
@@ -45,14 +47,15 @@ export function groupDrillOps(ops: DrillOpRaw[]): Map<string, DrillOpRaw[]> {
 
 // Expand a drill op's repeat pattern into individual part-local holes.
 // repeat_axis defaults to x when a multi-hole pattern has no axis set.
-function expand(op: DrillOpRaw): { ox: number; oy: number; d: number; depth: number | null; pocket?: { toolNumber: number; toolDiameter: number } | null }[] {
+function expand(op: DrillOpRaw): { ox: number; oy: number; d: number; depth: number | null; passes: number; pocket?: { toolNumber: number; toolDiameter: number } | null }[] {
   const n = Math.max(1, op.repeat_count ?? 1)
   const s = op.repeat_spacing ?? 0
   const ax = op.repeat_axis === 'y' ? 'y' : 'x'
   const bx = op.pos_x ?? 0, by = op.pos_y ?? 0
   const d = op.diameter ?? 6
-  const out: { ox: number; oy: number; d: number; depth: number | null; pocket?: { toolNumber: number; toolDiameter: number } | null }[] = []
-  for (let i = 0; i < n; i++) out.push({ ox: bx + (ax === 'x' ? i * s : 0), oy: by + (ax === 'y' ? i * s : 0), d, depth: op.depth, pocket: op.pocket ?? null })
+  const passes = Math.max(1, Math.round(op.passes ?? 1))
+  const out: { ox: number; oy: number; d: number; depth: number | null; passes: number; pocket?: { toolNumber: number; toolDiameter: number } | null }[] = []
+  for (let i = 0; i < n; i++) out.push({ ox: bx + (ax === 'x' ? i * s : 0), oy: by + (ax === 'y' ? i * s : 0), d, depth: op.depth, passes, pocket: op.pocket ?? null })
   return out
 }
 
@@ -77,7 +80,7 @@ export function buildSheetDrills(
     if (!ops?.length) continue
     for (const op of ops) for (const hole of expand(op)) {
       const p = toSheet(hole.ox, hole.oy, pl)
-      drills.push({ x: p.x, y: p.y, diameter: hole.d, depth: hole.depth ?? defaultDepth, pocket: hole.pocket ?? undefined })
+      drills.push({ x: p.x, y: p.y, diameter: hole.d, depth: hole.depth ?? defaultDepth, passes: hole.passes, pocket: hole.pocket ?? undefined })
     }
   }
   return drills

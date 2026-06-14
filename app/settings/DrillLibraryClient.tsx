@@ -28,6 +28,7 @@ interface Drill {
   rotation: string
   supplier_code: string | null
   notes: string | null
+  passes: number
   is_active: boolean
 }
 
@@ -118,7 +119,7 @@ export default function DrillLibraryClient() {
                   <tr className={`group cursor-pointer transition-colors ${isOpen ? 'bg-surface-2' : 'hover:bg-surface'} ${!d.is_active ? 'opacity-50' : ''}`}
                     onClick={() => setExpanded(isOpen ? null : d.id)}>
                     <td className="px-3 py-2 text-ink-subtle">{isOpen ? '▾' : '▸'}</td>
-                    <td className="px-3 py-2 text-ink">{d.name}</td>
+                    <td className="px-3 py-2 text-ink">{d.name}{d.passes > 1 && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-amber-900/30 text-amber-400 align-middle">drill ×{d.passes}</span>}</td>
                     <td className="px-3 py-2 text-right font-mono text-ink-muted">{d.diameter ?? '—'}</td>
                     <td className="px-3 py-2 text-ink-muted">{d.drill_type}</td>
                     <td className="px-3 py-2 text-right font-mono text-ink-muted">{d.point_angle ?? '—'}</td>
@@ -151,6 +152,12 @@ export default function DrillLibraryClient() {
                           <NumField label="Point angle (°)" value={d.point_angle} onSave={v => patch(d.id, { point_angle: v })} />
                           <NumField label="Max depth (mm)" value={d.max_depth} onSave={v => patch(d.id, { max_depth: v })} />
                           <NumField label="Total length (mm)" value={d.total_length} onSave={v => patch(d.id, { total_length: v })} />
+                          <div>
+                            <label className={lbl}>Drill passes</label>
+                            <input type="number" min={1} max={5} step={1} className={inp} defaultValue={d.passes ?? 1} key={`passes${d.passes}`}
+                              onBlur={e => { const v = Math.round(parseFloat(e.target.value)); patch(d.id, { passes: Number.isFinite(v) ? Math.max(1, Math.min(5, v)) : 1 }) }} />
+                            <p className="text-[10px] text-ink-subtle mt-1">Plunges per hole — set 2 to drill twice in hard board.</p>
+                          </div>
                           <div>
                             <label className={lbl}>Rotation</label>
                             <select className={inp} value={d.rotation} onChange={e => patch(d.id, { rotation: e.target.value })}>

@@ -48,7 +48,7 @@ export async function loadResolvedDrillOps(
 
   // Resolve auto_tool / drill_id → a concrete bit (mutates diameter/depth in place).
   const { data: drillLibRows } = await supabase.from('cnc_drills')
-    .select('id,name,diameter,max_depth,rotation,drill_type').eq('is_active', true)
+    .select('id,name,diameter,max_depth,rotation,drill_type,passes').eq('is_active', true)
   const drillLib = (drillLibRows ?? []) as DrillLibItem[]
   const warnings = new Set<string>()
   for (const op of drillOps) {
@@ -58,6 +58,7 @@ export async function loadResolvedDrillOps(
     )
     op.diameter = r.diameter
     op.depth = r.depth
+    op.passes = r.passes
     op.pocket = r.mode === 'pocket' && r.router_tool_number != null && r.router_diameter != null
       ? { toolNumber: r.router_tool_number, toolDiameter: r.router_diameter }
       : null

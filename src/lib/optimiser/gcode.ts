@@ -140,6 +140,7 @@ export const DEFAULT_POST: PostProfile = {
 
 export interface SheetDrill {
   x: number; y: number; diameter: number; depth: number
+  passes?: number   // plunges at this hole (2 = "drill twice" for hard board); default 1
   // When set, this hole can't be drilled (no matching bit) and is routed as a
   // circular pocket with the given router bit (helical ram-in).
   pocket?: { toolNumber: number; toolDiameter: number }
@@ -307,8 +308,12 @@ export function generateSheetGcode(input: GcodeInput): string {
       emit(`${p.spindle_on_code} S${fInt(p.base_spindle_speed)}`)
       for (const d of sequenceDrills(realDrills, p)) {
         emit(`G0 X${f(mapX(d.x))} Y${f(mapY(d.y))} Z${fz(p.drill_rapid_z)}`)
-        emit(`G1 Z${fz(-Math.abs(d.depth))} F${plungeFeed}`)
-        emit(`G0 Z${fz(p.drill_rapid_z)}`)
+        // "Drill twice": plunge → retract, repeated `passes` times in hard board.
+        const passes = Math.max(1, Math.round(d.passes ?? 1))
+        for (let i = 0; i < passes; i++) {
+          emit(`G1 Z${fz(-Math.abs(d.depth))} F${plungeFeed}`)
+          emit(`G0 Z${fz(p.drill_rapid_z)}`)
+        }
       }
       emit(`G0 Z${fz(safeZ)}`)
       emit(p.spindle_off_code)
@@ -481,23 +486,36 @@ function emitGangDrilling(
   const depthZ = (depth: number) => rapidZ - Math.abs(depth)
   const drillFeed = f(Math.round(p.base_feed_rate * (p.plunge_feed_pct > 0 ? p.plunge_feed_pct : 25) / 100))
   const prep = (p.drill_bank_prep_codes || '').split('\n').map(s => s.trim()).filter(Boolean)
+  // "Drill twice": plunges per hole come from the bit (via the resolved drills),
+  // keyed by diameter — every hole of a given Ø shares the same bit/pass count.
+  const diaKey = (dia: number) => Math.round(dia * 10) / 10
+  const passesByDia = new Map<number, number>()
+  for (const d of drills) {
+    const k = diaKey(d.diameter)
+    passesByDia.set(k, Math.max(passesByDia.get(k) ?? 1, Math.max(1, Math.round(d.passes ?? 1))))
+  }
 
   // Emit one bank firing: select the gang's bitmask, then plunge at each master
   // in `masters` (step-and-repeat). Slaves fire automatically at fixed offsets.
+  // When the bit is set to drill twice, each master's XY is re-issued inside the
+  // canned cycle so the controller re-plunges at the same spot.
   const emitFiring = (g: GangGroup, masters: { x: number; y: number }[]) => {
     if (!masters.length) return
     const mcode = g.bank === 'x' ? block.xBankMcode : block.yBankMcode
+    const passes = passesByDia.get(diaKey(g.diameter)) ?? 1
+    const dz = f(depthZ(g.depth))
     c(`DRILL TOOL: V ${f(g.diameter)}MM`)
     c(`DRILL MASTER: ${g.masterSpindle}, SLAVE: ${g.slaveSpindles.join(',') || '-'}`)
-    c(`DIAMETER: ${f(g.diameter)}.`)
+    c(`DIAMETER: ${f(g.diameter)}.${passes > 1 ? `  (x${passes} passes)` : ''}`)
     emit(`${block.xBankMcode} B0`)
     emit(`${block.yBankMcode} B0`)
     prep.forEach(l => emit(l))
     emit(`${mcode} B${g.bitmask}`)
     const m0 = masters[0]
     emit(`G90 G0 ${block.workOffsetCode} G43 H1 X${f(tx(m0.x))} Y${f(ty(m0.y))} Z${f(rapidZ)}`)
-    emit(`${p.drill_return_code} ${p.drill_cycle_code} Z${f(depthZ(g.depth))} R${f(rapidZ)} F${drillFeed}`)
-    for (const m of masters.slice(1)) emit(`X${f(tx(m.x))} Y${f(ty(m.y))} Z${f(depthZ(g.depth))}`)
+    emit(`${p.drill_return_code} ${p.drill_cycle_code} Z${dz} R${f(rapidZ)} F${drillFeed}`)
+    for (let k = 1; k < passes; k++) emit(`X${f(tx(m0.x))} Y${f(ty(m0.y))} Z${dz}`)   // re-plunge master 0
+    for (const m of masters.slice(1)) for (let k = 0; k < passes; k++) emit(`X${f(tx(m.x))} Y${f(ty(m.y))} Z${dz}`)
     emit('G80')   // cancel canned cycle
     emit('G17 G91 G28 Z0 M95')
     emit(`${block.xBankMcode} B0`)

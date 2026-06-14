@@ -20,6 +20,7 @@ export interface DrillLibItem {
   max_depth: number | null
   rotation?: string | null
   drill_type?: string | null
+  passes?: number | null     // plunges per hole (2 = "drill twice" for hard board)
 }
 
 export interface DrillOpToolInput {
@@ -44,6 +45,7 @@ export interface ResolvedDrillTool {
   mode: 'drill' | 'pocket'
   diameter: number            // the hole's nominal diameter (pocket target for routed holes)
   depth: number
+  passes: number              // plunges per hole from the chosen bit (1 = normal, 2 = drill twice)
   drill_id: string | null     // the bit actually chosen (null = unresolved or pocket-routed)
   drill_name: string | null
   router_tool_id: string | null     // set when mode = 'pocket'
@@ -122,8 +124,8 @@ function pickRouterForPocket(
   return eligible.sort((a, b) => b.diameter - a.diameter)[0]
 }
 
-const drillResult = (diameter: number, depth: number, drill_id: string | null, drill_name: string | null, warnings: string[]): ResolvedDrillTool =>
-  ({ mode: 'drill', diameter, depth, drill_id, drill_name, router_tool_id: null, router_tool_number: null, router_diameter: null, warnings })
+const drillResult = (diameter: number, depth: number, drill_id: string | null, drill_name: string | null, warnings: string[], passes = 1): ResolvedDrillTool =>
+  ({ mode: 'drill', diameter, depth, passes: Math.max(1, Math.round(passes)), drill_id, drill_name, router_tool_id: null, router_tool_number: null, router_diameter: null, warnings })
 
 // Resolve ONE drilling op to a concrete bit + effective diameter/depth, or a
 // router-pocket fallback when no drill matches.
@@ -140,7 +142,7 @@ export function resolveDrillTool(
     const bit = lib.find(d => d.id === op.drill_id)
     if (bit) {
       if (!fitsBlock(bit.diameter, block)) warnings.push(`${bit.name} (⌀${bit.diameter}) is not loaded on the drill block`)
-      return drillResult(bit.diameter, clampDepth(typedDepth, bit, warnings), bit.id, bit.name, warnings)
+      return drillResult(bit.diameter, clampDepth(typedDepth, bit, warnings), bit.id, bit.name, warnings, bit.passes ?? 1)
     }
     warnings.push('Assigned drill not found / inactive — auto-selecting by diameter')
     // fall through to auto
@@ -153,7 +155,7 @@ export function resolveDrillTool(
   }
   const clearance = opts.pocketClearanceMm ?? 2
   const pocketWith = (router: RouterToolItem): ResolvedDrillTool => ({
-    mode: 'pocket', diameter: typedDia, depth: typedDepth, drill_id: null, drill_name: null,
+    mode: 'pocket', diameter: typedDia, depth: typedDepth, passes: 1, drill_id: null, drill_name: null,
     router_tool_id: router.id, router_tool_number: router.tool_number, router_diameter: router.diameter, warnings,
   })
 
@@ -162,7 +164,7 @@ export function resolveDrillTool(
     if (pick.snapped) warnings.push(`⌀${round(typedDia)} snapped to nearest bit ${pick.bit.name} (⌀${pick.bit.diameter})`)
     // A matching drill that's actually fitted on the gang head → drill it.
     if (fitsBlock(pick.bit.diameter, block)) {
-      return drillResult(pick.bit.diameter, clampDepth(typedDepth, pick.bit, warnings), pick.bit.id, pick.bit.name, warnings)
+      return drillResult(pick.bit.diameter, clampDepth(typedDepth, pick.bit, warnings), pick.bit.id, pick.bit.name, warnings, pick.bit.passes ?? 1)
     }
     // 3a. Matched a drill the head can't fire — pocket-route instead of dropping it.
     const router = pickRouterForPocket(typedDia, clearance, opts.routerTools, opts.preferredPocketToolNumber)
@@ -171,7 +173,7 @@ export function resolveDrillTool(
       return pocketWith(router)
     }
     warnings.push(`⌀${pick.bit.diameter} has no matching spindle on the drill block`)
-    return drillResult(pick.bit.diameter, clampDepth(typedDepth, pick.bit, warnings), pick.bit.id, pick.bit.name, warnings)
+    return drillResult(pick.bit.diameter, clampDepth(typedDepth, pick.bit, warnings), pick.bit.id, pick.bit.name, warnings, pick.bit.passes ?? 1)
   }
 
   // 3b. No drill matches at all — pocket-route with a router bit.
