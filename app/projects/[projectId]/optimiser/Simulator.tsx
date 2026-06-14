@@ -325,6 +325,20 @@ function Canvas({
   const kerf = toolDia(activeTool) * scale
   const newestDrill = drills[drills.length - 1]
 
+  // Control cutter comp (G41/G42): the programmed path is the part outline; the
+  // machine offsets the tool to one side by the radius. Shift a point on a comp
+  // move by that radius (left/right of travel) so the drawn kerf shows the TRUE
+  // cut size, matching what the machine produces. (computer-comp paths are already
+  // offset in the G-code, so they carry no `comp` flag and pass through unchanged.)
+  const compShift = (m: SimMove, mx: number, my: number): [number, number] => {
+    if (!m.comp) return [mx, my]
+    const r = toolDia(m.tool ?? activeTool) / 2
+    const dx = m.x1 - m.x0, dy = m.y1 - m.y0, L = Math.hypot(dx, dy)
+    if (r <= 0 || L < 1e-6) return [mx, my]
+    const s = m.comp === 'left' ? 1 : -1   // left normal (y-up) = (-dy, dx)/L
+    return [mx + (-dy / L) * s * r, my + (dx / L) * s * r]
+  }
+
   // Active drill-block firing: the in-progress move when it's a gang plunge.
   const firing = current && current.kind === 'drill' && current.bitmask && drillBlock
     ? blockView(current, drillBlock) : null
@@ -364,15 +378,24 @@ function Canvas({
           stroke="#3b82f6" strokeWidth={1} strokeDasharray="4 3" opacity={0.3} />
       ))}
 
-      {/* Cut paths — material removed behind the tool (kerf-width amber) */}
-      {cuts.map((m, i) => (
-        <line key={`c${i}`} x1={X(m.x0)} y1={Y(m.y0)} x2={X(m.x1)} y2={Y(m.y1)}
-          stroke="#f59e0b" strokeWidth={Math.max(1, kerf)} strokeOpacity={0.85} strokeLinecap="round" />
-      ))}
-      {partialCut && (
-        <line x1={X(partialCut.m.x0)} y1={Y(partialCut.m.y0)} x2={X(partialCut.px)} y2={Y(partialCut.py)}
-          stroke="#f59e0b" strokeWidth={Math.max(1, kerf)} strokeOpacity={0.85} strokeLinecap="round" />
-      )}
+      {/* Cut paths — material removed behind the tool (kerf-width amber).
+          Comp moves are shifted to the offset side so the kerf shows true size. */}
+      {cuts.map((m, i) => {
+        const [ax, ay] = compShift(m, m.x0, m.y0)
+        const [bx, by] = compShift(m, m.x1, m.y1)
+        return (
+          <line key={`c${i}`} x1={X(ax)} y1={Y(ay)} x2={X(bx)} y2={Y(by)}
+            stroke="#f59e0b" strokeWidth={Math.max(1, kerf)} strokeOpacity={0.85} strokeLinecap="round" />
+        )
+      })}
+      {partialCut && (() => {
+        const [ax, ay] = compShift(partialCut.m, partialCut.m.x0, partialCut.m.y0)
+        const [bx, by] = compShift(partialCut.m, partialCut.px, partialCut.py)
+        return (
+          <line x1={X(ax)} y1={Y(ay)} x2={X(bx)} y2={Y(by)}
+            stroke="#f59e0b" strokeWidth={Math.max(1, kerf)} strokeOpacity={0.85} strokeLinecap="round" />
+        )
+      })()}
 
       {/* All holes (the full plan) — ghost rings, always visible so you can see
           every hole on every piece even before/while the sim runs. Gang moves

@@ -30,6 +30,10 @@ export interface SimMove {
   bank?: 'x' | 'y'
   bitmask?: number
   dia?: number                          // drill Ø from the (DIAMETER/DRILL TOOL) comment
+  // Control cutter compensation (G41 left / G42 right) active on this move. The
+  // programmed path is the part outline; the MACHINE shifts the tool to one side
+  // by the radius, so the simulator offsets these moves to show the true cut size.
+  comp?: 'left' | 'right'
   // True while the Anderson drill block is engaged (a bank bitmask is live). These
   // moves are posted in the BLOCK's own work-offset frame (G54 + head offsets +
   // Y sign/mirror), which differs from the routing datum — the simulator must
@@ -91,6 +95,7 @@ export function parseGcode(text: string, opts?: ParseOpts): ParsedProgram {
   let bankX = 0, bankY = 0        // live gang bitmask per bank (M88/M89 B<n>); 0 = off
   let cycle = false               // inside a G81-89 canned drill cycle
   let drillDia = 0                // Ø carried by the latest drill comment
+  let comp: 'left' | 'right' | undefined  // active control cutter comp (G41/G42), cleared by G40
 
   const moves: SimMove[] = []
   const pauses: number[] = []
@@ -141,6 +146,9 @@ export function parseGcode(text: string, opts?: ParseOpts): ParsedProgram {
           else if (v >= 81 && v <= 89) { cycle = true; motion = 1 }   // canned drill cycle (G81…)
           else if (v === 80) { cycle = false; motion = 0 }            // cancel cycle → back to rapid
           else if (v === 28) motion = 0                               // return-to-home is a rapid
+          else if (v === 41) comp = 'left'                            // cutter comp left (G41)
+          else if (v === 42) comp = 'right'                           // cutter comp right (G42)
+          else if (v === 40) comp = undefined                         // cancel cutter comp (G40)
           break
         case 'X': nx = v; hasCoord = true; break
         case 'Y': ny = v; hasCoord = true; break
@@ -179,6 +187,7 @@ export function parseGcode(text: string, opts?: ParseOpts): ParsedProgram {
       ...(kind === 'drill' && activeBank ? { bank: activeBank, bitmask: activeBank === 'x' ? bankX : bankY } : {}),
       ...(kind === 'drill' && drillDia ? { dia: drillDia } : {}),
       ...(activeBank ? { blockFrame: true } : {}),   // posted in the block's G54 datum
+      ...(comp && (kind === 'cut' || kind === 'plunge') ? { comp } : {}),
     })
     t = t1
 
