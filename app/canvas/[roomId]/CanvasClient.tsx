@@ -88,6 +88,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [splitCabId, setSplitCabId] = useState<string | null>(null)
   const [saveLibCabId, setSaveLibCabId] = useState<string | null>(null)
   const [libRefresh, setLibRefresh] = useState(0)   // bump to reload the library palette
+  const [toast, setToast] = useState<string | null>(null)
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 2800)
+    return () => clearTimeout(t)
+  }, [toast])
   const [clipboard, setClipboard] = useState<CabinetInstance | null>(null)
   // Keyboard copy/cut buffer — holds one or many cabinets (separate from the
   // context-menu `clipboard`, which drives the click-to-place ghost paste).
@@ -1854,10 +1860,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           <SaveToLibraryModal
             cab={cab}
             onClose={() => setSaveLibCabId(null)}
-            onSaved={() => { setSaveLibCabId(null); setLibRefresh(v => v + 1) }}
+            onSaved={(_id, savedName) => { setSaveLibCabId(null); setLibRefresh(v => v + 1); setToast(`Saved “${savedName}” to library`) }}
           />
         )
       })()}
+
+      {toast && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[60] bg-gray-800 border border-gray-700 text-gray-100 text-sm px-4 py-2 rounded-lg shadow-xl pointer-events-none">
+          {toast}
+        </div>
+      )}
 
       {jobModalTab && project && (
         <JobPropertiesModal

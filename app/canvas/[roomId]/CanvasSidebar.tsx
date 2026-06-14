@@ -252,6 +252,25 @@ export default function CanvasSidebar({
     setDefinitions(ds => ds.filter(d => d.id !== def.id))
   }
 
+  async function renameDefinition(def: CabinetDefinition) {
+    setCtxMenu(null)
+    const name = typeof window !== 'undefined' ? window.prompt('Rename cabinet', def.name) : null
+    if (!name?.trim() || name.trim() === def.name) return
+    const { error } = await supabase.from('cabinet_definitions').update({ name: name.trim() }).eq('id', def.id)
+    if (error) { setLibError(error.message); return }
+    setDefinitions(ds => ds.map(d => d.id === def.id ? { ...d, name: name.trim() } : d))
+  }
+  async function duplicateDefinition(def: CabinetDefinition) {
+    setCtxMenu(null)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, created_at, updated_at, ...rest } = def
+    const sort_order = definitions.filter(d => d.category_id === def.category_id).reduce((m, d) => Math.max(m, d.sort_order), -1) + 1
+    const { data, error } = await supabase.from('cabinet_definitions')
+      .insert({ ...rest, name: `${def.name} copy`, sort_order }).select('*').single()
+    if (error) { setLibError(error.message); return }
+    if (data) setDefinitions(ds => [...ds, data as CabinetDefinition])
+  }
+
   function startMove(def: CabinetDefinition) {
     setCtxMenu(null)
     setMoveTarget(def.category_id ?? null)
@@ -600,6 +619,8 @@ export default function CanvasSidebar({
           >
             {def ? (
               <>
+                <button className={`${item} text-gray-200`} onClick={() => renameDefinition(def)}>Rename…</button>
+                <button className={`${item} text-gray-200`} onClick={() => duplicateDefinition(def)}>Duplicate</button>
                 <button className={`${item} text-gray-200`} onClick={() => startMove(def)}>Move to…</button>
                 <button className={`${item} text-red-400`} onClick={() => deleteDefinition(def)}>Delete “{def.name}”</button>
               </>
