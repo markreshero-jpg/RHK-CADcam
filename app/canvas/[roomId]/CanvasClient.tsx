@@ -12,7 +12,7 @@ import {
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCenterPt,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
@@ -508,7 +508,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (cabinet) {
       setCabinets(cs => [...cs, cabinet])
       setSelected({ type: 'cabinet', id: cabinet.id })
-      dbResolveAndPersistCabinet(cabinet.id).then(resolved => {
+      // Copy the definition's custom parts first, then resolve (so their formulas evaluate).
+      const parts = cabinet.cabinet_definition_id
+        ? dbInsertDefinitionParts(cabinet.cabinet_definition_id, cabinet.id)
+        : Promise.resolve()
+      parts.then(() => dbResolveAndPersistCabinet(cabinet.id)).then(resolved => {
         if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
       })
     }

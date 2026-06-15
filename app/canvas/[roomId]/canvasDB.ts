@@ -398,8 +398,35 @@ export function buildInstanceFromDefinition(
     face_grid: faceGrid,
     internal_grid: internalGrid,
     carcase_joints: def.carcase_joints,
+    no_cnc: def.no_cnc ?? false,
     schema_version: '0.4', notes: null,
   }
+}
+
+// Insert a snapshot of custom parts (from a definition) as rows for a new cabinet.
+export async function dbInsertCustomPartsSnapshot(cabinetId: string, snapshot: Record<string, unknown>[]) {
+  if (!snapshot || snapshot.length === 0) return
+  const rows = snapshot.map((p, i) => ({
+    cabinet_instance_id: cabinetId,
+    part_library_id: p.part_library_id,
+    name: (p.name as string | null) ?? null,
+    dx: (p.dx as number) ?? 0, dy: (p.dy as number) ?? 0, dz: (p.dz as number) ?? 18,
+    x: (p.x as number) ?? 0, y: (p.y as number) ?? 0, z: (p.z as number) ?? 0,
+    expressions: p.expressions ?? {},
+    material_id: (p.material_id as string | null) ?? null,
+    edge_top: !!p.edge_top, edge_bottom: !!p.edge_bottom, edge_left: !!p.edge_left, edge_right: !!p.edge_right,
+    visible: p.visible !== false,
+    no_cnc: !!p.no_cnc,
+    sort_order: (p.sort_order as number) ?? i,
+  }))
+  const { error } = await supabase.from('cabinet_custom_parts').insert(rows)
+  if (error) console.error('dbInsertCustomPartsSnapshot', error)
+}
+
+// Copy a definition's stored custom parts onto a newly-placed cabinet.
+export async function dbInsertDefinitionParts(definitionId: string, cabinetId: string) {
+  const { data } = await supabase.from('cabinet_definitions').select('custom_parts').eq('id', definitionId).single()
+  await dbInsertCustomPartsSnapshot(cabinetId, ((data?.custom_parts ?? []) as Record<string, unknown>[]))
 }
 
 // Load → build → insert → resolve. Returns the new instance plus its resolved
@@ -412,6 +439,7 @@ export async function dbPlaceCabinetFromDefinition(
   if (!def) return null
   const cabinet = await dbInsertCabinet(buildInstanceFromDefinition(def, placement))
   if (!cabinet) return null
+  await dbInsertCustomPartsSnapshot(cabinet.id, (def.custom_parts ?? []) as Record<string, unknown>[])
   const resolved = await dbResolveAndPersistCabinet(cabinet.id)
   return { cabinet, resolved }
 }
@@ -475,6 +503,11 @@ export async function saveCabinetToLibrary(
     sort_order = (sibs ?? []).reduce((m, r) => Math.max(m, (r.sort_order as number) ?? 0), -1) + 1
   }
 
+  // Snapshot the instance's custom parts so the definition carries them.
+  const { data: cps } = await supabase.from('cabinet_custom_parts')
+    .select('part_library_id,name,dx,dy,dz,x,y,z,expressions,material_id,edge_top,edge_bottom,edge_left,edge_right,visible,no_cnc,sort_order')
+    .eq('cabinet_instance_id', cabinetInstanceId).order('sort_order')
+
   const row = {
     name: opts.name,
     assembly_class: inst.assembly_class,
@@ -488,6 +521,8 @@ export async function saveCabinetToLibrary(
     rule_overrides: {},
     material_overrides, hardware_overrides, toekick_overrides, drawerbox_overrides: {},
     exposed_interior: p.exposed_interior ? !!inst.exposed_interior : false,
+    no_cnc: !!inst.no_cnc,
+    custom_parts: cps ?? [],
     description: opts.description ?? null,
     is_library_item: true, active: true, sort_order,
   }

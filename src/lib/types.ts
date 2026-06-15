@@ -157,6 +157,7 @@ export interface CabinetInstance {
   face_grid: Record<string, unknown> | null
   internal_grid: Record<string, unknown> | null
   carcase_joints: Record<string, string | null>
+  no_cnc?: boolean
   schema_version: string
   notes: string | null
   created_at: string
@@ -219,6 +220,9 @@ export interface CabinetDefinition {
   toekick_overrides: Record<string, unknown>
   drawerbox_overrides: Record<string, unknown>
   exposed_interior: boolean
+  no_cnc?: boolean
+  // Snapshot of the assembly's custom parts (copy-not-link); re-inserted at placement.
+  custom_parts?: Record<string, unknown>[]
   // UI metadata
   description: string | null
   thumbnail_svg: string | null

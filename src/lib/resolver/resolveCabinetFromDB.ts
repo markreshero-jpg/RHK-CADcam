@@ -6,6 +6,28 @@ import { loadCabinetInput } from './loadCabinetInput'
 import { resolveCabinet } from './resolver'
 import { persistResolved } from './persistResolved'
 import { CabinetInput, ResolvedCabinet } from './types'
+import { buildPartContext, evalPartFields } from '../partFormula'
+
+// Evaluate parametric custom-part formulas against the resolved assembly and write
+// the computed dims/positions back to cabinet_custom_parts (the literal columns are
+// the cache every view/report/cut-list reads). No-op when no part has formulas.
+async function resolveCustomParts(cabinetId: string, resolved: ResolvedCabinet, input: CabinetInput) {
+  const { data: parts } = await supabase
+    .from('cabinet_custom_parts')
+    .select('id, dx, dy, dz, x, y, z, expressions')
+    .eq('cabinet_instance_id', cabinetId)
+  if (!parts || parts.length === 0) return
+  if (!parts.some(p => p.expressions && Object.keys(p.expressions).length > 0)) return
+  const ctx = buildPartContext(resolved, input)
+  for (const p of parts) {
+    const literal = { dx: Number(p.dx), dy: Number(p.dy), dz: Number(p.dz), x: Number(p.x), y: Number(p.y), z: Number(p.z) }
+    const patch = evalPartFields(literal, p.expressions as Record<string, string> | null, ctx)
+    if (Object.keys(patch).length > 0) {
+      const { error } = await supabase.from('cabinet_custom_parts').update(patch).eq('id', p.id)
+      if (error) console.error('resolveCustomParts update', error)
+    }
+  }
+}
 
 // Module-level caches: populated after each full DB load.
 const _inputCache     = new Map<string, CabinetInput>()
@@ -121,5 +143,7 @@ export async function resolveCabinetFromDB(
 
   // Persist in background so callers can return resolved data immediately.
   persistResolved(resolved).catch(e => console.error('persistResolved:', e))
+  // Re-evaluate any parametric custom parts against the fresh geometry (background).
+  resolveCustomParts(cabinetId, resolved, input).catch(e => console.error('resolveCustomParts:', e))
   return resolved
 }
