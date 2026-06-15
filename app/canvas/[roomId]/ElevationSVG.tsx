@@ -519,7 +519,7 @@ export default function ElevationSVG({
       return
     }
 
-    // Marquee finalize — hit-test cabinets by centre point
+    // Marquee finalize — select cabinets the box fully encloses
     if (marqueeStartRef.current && wall) {
       const start = marqueeStartRef.current
       marqueeStartRef.current = null
@@ -533,9 +533,9 @@ export default function ElevationSVG({
         const minX = Math.min(start.x, endX), maxX = Math.max(start.x, endX)
         const minY = Math.min(start.y, endY), maxY = Math.max(start.y, endY)
         const ids = wallCabs.filter(cab => {
-          const cx = cabT(cab, wall) + cab.dx / 2
-          const cy = roomH - cabBottomZ(cab, room, wall) - cab.dy / 2
-          return cx >= minX && cx <= maxX && cy >= minY && cy <= maxY
+          const left = cabT(cab, wall), right = left + cab.dx
+          const top  = roomH - cabBottomZ(cab, room, wall) - cab.dy, bottom = top + cab.dy
+          return left >= minX && right <= maxX && top >= minY && bottom <= maxY
         }).map(c => c.id)
         onMarqueeSelect(ids)
       }
@@ -1291,6 +1291,19 @@ export default function ElevationSVG({
                         )
                       })}
                       </g>)}
+
+                      {/* Custom parts (panels / fillers / end panels) — room-visible only */}
+                      {(rp.custom_parts ?? []).filter(p => p.show_in_room && Number(p.dz) > 0 && Number(p.dy) > 0).map((p, i) => {
+                        const { x, y, w, h } = toSVG(p.x, p.y + Number(p.dz), Number(p.dy), Number(p.dz))
+                        return (
+                          <rect key={`cust-${i}`} x={x} y={y} width={w} height={h}
+                            fill={isLineDrawing ? 'none' : '#a78bfa'}
+                            fillOpacity={isLineDrawing ? 0 : 0.4}
+                            stroke={isLineDrawing ? '#a78bfa' : (isSel ? '#e2e8f0' : '#7c3aed')}
+                            strokeWidth={isLineDrawing ? 1 / z : 0.6 / z}
+                            opacity={carcP.opacity} style={{ pointerEvents: 'none' }} />
+                        )
+                      })}
 
                       {/* Inner-drawer labels — one per inner-drawer face, drawn last so
                           they sit on top of the open-zone overlay. */}
