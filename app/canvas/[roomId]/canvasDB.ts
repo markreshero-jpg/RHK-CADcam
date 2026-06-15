@@ -418,6 +418,7 @@ export async function dbInsertCustomPartsSnapshot(cabinetId: string, snapshot: R
     material_override_id: (p.material_override_id as string | null) ?? null,
     edge_top: !!p.edge_top, edge_bottom: !!p.edge_bottom, edge_left: !!p.edge_left, edge_right: !!p.edge_right,
     visible: p.visible !== false,
+    show_in_room: p.show_in_room !== false,
     no_cnc: !!p.no_cnc,
     sort_order: (p.sort_order as number) ?? i,
   }))
@@ -507,7 +508,7 @@ export async function saveCabinetToLibrary(
 
   // Snapshot the instance's custom parts so the definition carries them.
   const { data: cps } = await supabase.from('cabinet_custom_parts')
-    .select('part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,no_cnc,sort_order')
+    .select('part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,no_cnc,sort_order')
     .eq('cabinet_instance_id', cabinetInstanceId).order('sort_order')
 
   const row = {
@@ -586,7 +587,8 @@ export interface CabinetCustomPart {
   edge_bottom:         boolean
   edge_left:           boolean
   edge_right:          boolean
-  visible:             boolean
+  visible:             boolean   // visibility inside the cabinet editor (3D / elevation)
+  show_in_room:        boolean   // drawn in room plan / elevation / 3D when true
   // Parametric formula per field (dx/dy/dz/x/y/z). Present key = that column is a
   // computed cache of the formula, re-evaluated on resolve. Absent = plain literal.
   expressions?:        Record<string, string>

@@ -15,7 +15,12 @@ import {
 import type { Pt } from '@/src/lib/geometry'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import { getPalette } from '@/src/lib/partPalette'
-import { caseBox } from '@/src/lib/jointDrilling'
+import { caseBox, isSide } from '@/src/lib/jointDrilling'
+import {
+  panelFaceColors, edgeStrips, unpackMatCol,
+  type PanelKind, type PartEdge, type EbSpec,
+} from '@/src/components/three/PartViewer'
+import type { EbByMatId } from './useMaterialColours'
 
 const TO_RAD = Math.PI / 180
 const FOV    = 40
@@ -90,14 +95,53 @@ function zoneBox(z: ResolvedFaceZone): Box {
   return { x: z.X, y: z.Y, z: z.Z, w: z.DY, h: z.DX, d: z.DZ }
 }
 
-// Single part mesh (no pointer events — click captured by whole-cabinet overlay)
-function Part({ b, color, edgeColor }: { b: Box; color: string; edgeColor: string }) {
+// Panel-kind dispatch for ResolvedInternalPart — drives panelFaceColors + edgeStrips
+// orientation. Mirrors INT_PANEL_KIND in Cabinet3DView. Anything not listed → horizontal.
+const INT_PANEL_KIND: Record<string, PanelKind> = {
+  divider:            'side',
+  inner_drawer_side:  'side',
+  pull_out_side:      'side',
+  inner_drawer_front: 'face',
+  inner_drawer_back:  'face',
+  pull_out_back:      'face',
+}
+
+// Single part mesh (no pointer events — click captured by whole-cabinet overlay).
+// Renders per-face colours (interior / exposed / raw edge) and overlays edge-tape
+// strips on the banded edges, so raw (unedged) edges stay the bare substrate colour
+// while edged ones show the tape colour — matching Cabinet3DView exactly.
+function Part({ b, faceColors, edgeColor, edge, panelKind, ebSpec }: {
+  b:          Box
+  faceColors: [string, string, string, string, string, string]
+  edgeColor:  string
+  edge:       PartEdge
+  panelKind:  PanelKind
+  ebSpec?:    EbSpec
+}) {
+  const strips = ebSpec ? edgeStrips(b, edge, panelKind, Math.max(1, ebSpec.thick)) : []
   return (
-    <mesh position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]}>
-      <boxGeometry args={[b.w, b.h, b.d]} />
-      <meshStandardMaterial color={color} roughness={0.7} metalness={0.05} />
-      <Edges threshold={10} color={edgeColor} />
-    </mesh>
+    <>
+      <mesh position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]}>
+        <boxGeometry args={[b.w, b.h, b.d]} />
+        {faceColors.map((c, i) => (
+          <meshStandardMaterial key={i} attach={`material-${i}`} color={c} roughness={0.7} metalness={0.05} />
+        ))}
+        <Edges threshold={10} color={edgeColor} />
+      </mesh>
+      {strips.map((s, i) => (
+        <mesh key={i} position={s.pos}>
+          <boxGeometry args={s.args} />
+          <meshStandardMaterial
+            color={ebSpec!.color}
+            roughness={0.35}
+            metalness={0}
+            polygonOffset
+            polygonOffsetFactor={-2}
+            polygonOffsetUnits={-2}
+          />
+        </mesh>
+      ))}
+    </>
   )
 }
 
@@ -191,13 +235,8 @@ function WallLabel({ wall, room, cx, cy }: { wall: Wall; room: Room; cx: number;
 //   net: needFlip = (isNaturalPerp === isFlipped)
 
 type MatColEntry = string | { face?: string; back?: string; edge?: string }
-function matFace(spec: MatColEntry | undefined, fallback: string) {
-  if (!spec) return fallback
-  if (typeof spec === 'string') return spec
-  return spec.face ?? fallback
-}
 
-function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMenu, rp, materialColours }: {
+function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMenu, rp, materialColours, ebByMatId }: {
   cab: CabinetInstance
   wall: Wall
   cx: number; cy: number
@@ -207,6 +246,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
   onContextMenu: (x: number, y: number) => void
   rp?: ResolvedCabinet
   materialColours?: Record<string, MatColEntry>
+  ebByMatId?: EbByMatId
 }) {
   const angleRad = wall.angle * TO_RAD
   const perp     = wallInwardNormal(wall, cx, cy)
@@ -224,7 +264,19 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
 
   const SEL  = '#d97706'
   const SELE = '#fbbf24'
+  const SEL6: [string, string, string, string, string, string] = [SEL, SEL, SEL, SEL, SEL, SEL]
   const palette = useMemo(() => getPalette(), [])
+
+  // Per-material face/back/edge colours and edge-tape spec. Mirrors Cabinet3DView so
+  // the room view paints exposed/interior/raw surfaces and edge-banding identically.
+  function matSpec(matId: string, fallback: string) {
+    return unpackMatCol(materialColours?.[matId], fallback)
+  }
+  function ebFor(matId: string): EbSpec | undefined {
+    const spec = ebByMatId?.[matId]
+    if (!spec) return undefined
+    return { thick: spec.thickness, color: spec.color ?? '#c8b89a' }
+  }
 
   if (!rp) {
     // Fallback box when resolver data isn't loaded yet
@@ -260,40 +312,83 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
       <group scale={[1, 1, scaleZ]}>
 
         {/* ── Carcass ── */}
-        {rp.case_parts.map((p, i) => (
-          <Part key={`c${i}`}
-            b={caseBox(p)}
-            color={selected ? SEL : matFace(materialColours?.[p.material_id], '#ddd3bb')}
-            edgeColor={selected ? SELE : palette.carcase}
-          />
-        ))}
+        {rp.case_parts.map((p, i) => {
+          const kind: PanelKind = isSide(p.part_key) ? 'side' : p.part_key === 'back' ? 'face' : 'horizontal'
+          const s = matSpec(p.material_id, '#ddd3bb')
+          return (
+            <Part key={`c${i}`}
+              b={caseBox(p)}
+              faceColors={selected ? SEL6 : panelFaceColors(kind, p.part_key, s.face, s.back, s.edge)}
+              edgeColor={selected ? SELE : palette.carcase}
+              edge={p.edge_band}
+              panelKind={kind}
+              ebSpec={selected ? undefined : ebFor(p.material_id)}
+            />
+          )
+        })}
 
         {/* ── Toe kick ── */}
-        {rp.toekick_parts.map((p, i) => (
-          <Part key={`t${i}`}
-            b={tkBox(p)}
-            color={selected ? SEL : matFace(materialColours?.[p.material_id], '#78716c')}
-            edgeColor={selected ? SELE : palette.toekick}
-          />
-        ))}
+        {rp.toekick_parts.map((p, i) => {
+          const kind: PanelKind = p.part_key === 'spreader_horizontal' ? 'horizontal' : 'face'
+          const s = matSpec(p.material_id, '#78716c')
+          return (
+            <Part key={`t${i}`}
+              b={tkBox(p)}
+              faceColors={selected ? SEL6 : panelFaceColors(kind, p.part_key, s.face, s.back, s.edge)}
+              edgeColor={selected ? SELE : palette.toekick}
+              edge={p.edge_band}
+              panelKind={kind}
+              ebSpec={selected ? undefined : ebFor(p.material_id)}
+            />
+          )
+        })}
 
         {/* ── Shelves / internal (incl. inner-drawer / pull-out boxes) ── */}
-        {rp.internal_parts.map((p, i) => (
-          <Part key={`s${i}`}
-            b={intBox(p)}
-            color={selected ? SEL : matFace(materialColours?.[p.material_id], '#e8dece')}
-            edgeColor={selected ? SELE : palette.internal}
-          />
-        ))}
+        {rp.internal_parts.map((p, i) => {
+          const kind: PanelKind = INT_PANEL_KIND[p.part_type] ?? 'horizontal'
+          const s = matSpec(p.material_id, '#e8dece')
+          return (
+            <Part key={`s${i}`}
+              b={intBox(p)}
+              faceColors={selected ? SEL6 : panelFaceColors(kind, p.part_type, s.face, s.back, s.edge)}
+              edgeColor={selected ? SELE : palette.internal}
+              edge={p.edge_band}
+              panelKind={kind}
+              ebSpec={selected ? undefined : ebFor(p.material_id)}
+            />
+          )
+        })}
 
         {/* ── Face zones ── */}
-        {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => (
-          <Part key={`f${i}`}
-            b={zoneBox(z)}
-            color={selected ? SEL : matFace(materialColours?.[z.material_id], z.face_type === 'drawer_face' ? '#e2d9c8' : '#f0ebe0')}
-            edgeColor={selected ? SELE : (z.face_type === 'drawer_face' ? palette.drawer_face : palette.door)}
-          />
-        ))}
+        {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
+          const s = matSpec(z.material_id, z.face_type === 'drawer_face' ? '#e2d9c8' : '#f0ebe0')
+          return (
+            <Part key={`f${i}`}
+              b={zoneBox(z)}
+              faceColors={selected ? SEL6 : panelFaceColors('face', z.face_type, s.face, s.back, s.edge)}
+              edgeColor={selected ? SELE : (z.face_type === 'drawer_face' ? palette.drawer_face : palette.door)}
+              edge={z.edge_band}
+              panelKind="face"
+              ebSpec={selected ? undefined : ebFor(z.material_id)}
+            />
+          )
+        })}
+
+        {/* ── Custom parts (panels / fillers / end panels) — room-visible only ── */}
+        {(rp.custom_parts ?? []).filter(p => p.show_in_room && Number(p.dz) > 0).map((p, i) => {
+          const s = matSpec(p.material_id ?? '', '#a78bfa')
+          const b: Box = { x: p.x, y: p.y, z: p.z, w: Number(p.dy), h: Number(p.dz), d: Number(p.dx) }
+          return (
+            <Part key={`cust${i}`}
+              b={b}
+              faceColors={selected ? SEL6 : panelFaceColors('horizontal', 'custom', s.face, s.back, s.edge)}
+              edgeColor={selected ? SELE : palette.carcase}
+              edge={{ top: p.edge_top, bottom: p.edge_bottom, left: p.edge_left, right: p.edge_right }}
+              panelKind="horizontal"
+              ebSpec={selected ? undefined : ebFor(p.material_id ?? '')}
+            />
+          )
+        })}
 
         {/* Transparent click-capture overlay for the whole cabinet bounding box.
             DoubleSide so the raycaster still hits it when scaleZ === -1 flips the
@@ -563,7 +658,7 @@ function ResetView({ signal, controlsRef, position, target }: {
 
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef }: {
+function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -572,6 +667,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
   onCabContextMenu: (cabId: string, x: number, y: number) => void
   resolvedParts: Map<string, ResolvedCabinet>
   materialColours?: Record<string, MatColEntry>
+  ebByMatId?: EbByMatId
   hiddenWallIds: Set<string>
   birdsEyeSignal: number
   resetSignal: number
@@ -667,6 +763,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
             onContextMenu={(x, y) => onCabContextMenu(cab.id, x, y)}
             rp={resolvedParts.get(cab.id)}
             materialColours={materialColours}
+            ebByMatId={ebByMatId}
           />
         )
       })}
@@ -679,7 +776,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
 type MenuState     = { x: number; y: number; cabId: string }
 type WallMenuState = { x: number; y: number }
 
-export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, resolvedParts, materialColours, cameraStateRef, resetSignal = 0 }: {
+export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0 }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -690,6 +787,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   onDeleteCabinet: (id: string) => void
   resolvedParts: Map<string, ResolvedCabinet>
   materialColours?: Record<string, MatColEntry>
+  ebByMatId?: EbByMatId
   cameraStateRef?: React.MutableRefObject<Camera3DState | null>
   resetSignal?: number
 }) {
@@ -747,6 +845,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
               }}
               resolvedParts={resolvedParts}
               materialColours={materialColours}
+              ebByMatId={ebByMatId}
               hiddenWallIds={hiddenWallIds}
               birdsEyeSignal={birdsEyeSignal}
               resetSignal={resetSignal + resetViewSignal}

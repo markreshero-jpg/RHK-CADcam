@@ -284,6 +284,7 @@ export function PartDialog({ cabinetId, ctx, editPart, initialPos, onSaved, onCl
   const [eLeft,     setELeft]     = useState(editPart?.edge_left ?? false)
   const [eRight,    setERight]    = useState(editPart?.edge_right ?? false)
   const [visible,   setVisible]   = useState(editPart?.visible ?? true)
+  const [showRoom,  setShowRoom]  = useState(editPart?.show_in_room ?? true)
   const [noCnc,     setNoCnc]     = useState(editPart?.no_cnc ?? false)
   const [saving,    setSaving]    = useState(false)
 
@@ -336,7 +337,7 @@ export function PartDialog({ cabinetId, ctx, editPart, initialPos, onSaved, onCl
       material_override_id: matId || null,
       ...(matId ? { material_id: matId } : {}),
       edge_top: eTop, edge_bottom: eBot, edge_left: eLeft, edge_right: eRight,
-      visible, no_cnc: noCnc, expressions,
+      visible, show_in_room: showRoom, no_cnc: noCnc, expressions,
     }
     if (editing && editPart) {
       await dbUpdateCustomPart(editPart.id, fields)
@@ -440,14 +441,20 @@ export function PartDialog({ cabinetId, ctx, editPart, initialPos, onSaved, onCl
                   ))}
                 </div>
               </div>
-              <div className="flex items-center gap-5">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={visible} onChange={e => setVisible(e.target.checked)} className="accent-blue-500 w-3.5 h-3.5" />
+                    <span className="text-xs text-gray-300">Visible in 3D / elevation</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={noCnc} onChange={e => setNoCnc(e.target.checked)} className="accent-red-500 w-3.5 h-3.5" />
+                    <span className="text-xs text-gray-300">No CNC (don&apos;t cut)</span>
+                  </label>
+                </div>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={visible} onChange={e => setVisible(e.target.checked)} className="accent-blue-500 w-3.5 h-3.5" />
-                  <span className="text-xs text-gray-300">Visible in 3D / elevation</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={noCnc} onChange={e => setNoCnc(e.target.checked)} className="accent-red-500 w-3.5 h-3.5" />
-                  <span className="text-xs text-gray-300">No CNC (don&apos;t cut)</span>
+                  <input type="checkbox" checked={showRoom} onChange={e => setShowRoom(e.target.checked)} className="accent-green-500 w-3.5 h-3.5" />
+                  <span className="text-xs text-gray-300">Show in room views (plan / elevation / 3D)</span>
                 </label>
               </div>
             </>)}

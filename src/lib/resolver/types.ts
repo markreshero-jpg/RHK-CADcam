@@ -909,8 +909,25 @@ export const EMPTY_SECTION: OpenSection = { type: 'open', fittings: [] }
 // ── Resolved Output ───────────────────────────────────────────
 // What the resolver returns — ready to write to Supabase
 
+// Custom part as carried on a resolved cabinet for room-level rendering. A
+// structural subset of the UI's CabinetCustomPart (canvasDB) — kept here to avoid
+// a resolver→UI import. Box mapping (room views): w=dy, h=dz, d=dx.
+export interface ResolvedCustomPart {
+  id:           string
+  name:         string | null
+  material_id:  string | null
+  dx: number; dy: number; dz: number
+  x: number;  y: number;  z: number
+  edge_top: boolean; edge_bottom: boolean; edge_left: boolean; edge_right: boolean
+  visible:       boolean
+  show_in_room:  boolean
+}
+
 export interface ResolvedCabinet {
   cabinet_id:    string
+  // Standalone custom parts (fillers/panels/end panels). Optional — only populated
+  // by the room-canvas loader; the cabinet editor reads cabinet_custom_parts directly.
+  custom_parts?: ResolvedCustomPart[]
   case_parts:    ResolvedCasePart[]
   toekick_parts: ResolvedToekickPart[]
   internal_parts: ResolvedInternalPart[]

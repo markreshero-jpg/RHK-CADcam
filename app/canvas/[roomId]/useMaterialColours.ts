@@ -1,12 +1,42 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance } from '@/src/lib/types'
-import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, ResolvedCustomPart } from '@/src/lib/resolver/types'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { dbLoadResolvedParts, dbResolveAndPersistCabinet } from './canvasDB'
 
 export type MatColours  = Record<string, { face?: string; back?: string; edge?: string }>
 export type EbByMatId   = Record<string, { thickness: number; color: string | null }>
+
+const CUSTOM_PART_COLS = 'id,cabinet_instance_id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room'
+
+// Minimal resolved cabinet carrying only custom parts — for standalone panels /
+// fillers / end panels that have no carcass, so they still render in room views.
+function emptyResolved(cabinet_id: string, custom_parts: ResolvedCustomPart[]): ResolvedCabinet {
+  return {
+    cabinet_id, custom_parts,
+    case_parts: [], toekick_parts: [], internal_parts: [], internal_slides: [],
+    face_rows: [], face_cols: [], face_zones: [], drawer_stacks: [],
+    seam_joints: [], hinge_instances: [], errors: [], warnings: [], hidden_parts: [],
+  }
+}
+
+// Group custom-part rows by cabinet and attach to the resolved map, creating
+// skeleton entries for cabinets that have only custom parts.
+function attachCustomParts(map: Map<string, ResolvedCabinet>, rows: Record<string, unknown>[]) {
+  const byCab = new Map<string, ResolvedCustomPart[]>()
+  for (const r of rows) {
+    const cabId = r.cabinet_instance_id as string
+    const arr = byCab.get(cabId) ?? []
+    arr.push(r as unknown as ResolvedCustomPart)
+    byCab.set(cabId, arr)
+  }
+  for (const [cabId, parts] of byCab) {
+    const existing = map.get(cabId)
+    if (existing) existing.custom_parts = parts
+    else map.set(cabId, emptyResolved(cabId, parts))
+  }
+}
 
 export function useMaterialColours(initialCabinets: CabinetInstance[]) {
   const [resolvedParts, setResolvedParts] = useState<Map<string, ResolvedCabinet>>(new Map())
@@ -18,6 +48,10 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
     const ids = initialCabinets.map(c => c.id)
     if (ids.length === 0) return
     dbLoadResolvedParts(ids).then(async map => {
+      // Attach standalone custom parts (panels/fillers/end panels) so room views
+      // can draw them; this also creates entries for custom-only cabinets.
+      const { data: cps } = await supabase.from('cabinet_custom_parts').select(CUSTOM_PART_COLS).in('cabinet_instance_id', ids)
+      if (cps && cps.length) attachCustomParts(map, cps as Record<string, unknown>[])
       if (map.size === 0) return
       setResolvedParts(map)
 
@@ -38,7 +72,8 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
           setResolvedParts(prev => {
             const next = new Map(prev)
             results.forEach((r, i) => {
-              if (r.status === 'fulfilled' && r.value) next.set(drawerCabIds[i], r.value)
+              if (r.status === 'fulfilled' && r.value)
+                next.set(drawerCabIds[i], { ...r.value, custom_parts: prev.get(drawerCabIds[i])?.custom_parts })
             })
             return next
           })
