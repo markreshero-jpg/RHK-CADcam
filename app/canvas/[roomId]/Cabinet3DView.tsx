@@ -1389,6 +1389,7 @@ function CabinetScene({
             onSelect={onSelect}
             contextMenuSelect
             dragRef={dragRef}
+            ebSpec={ebFor(p.material_id ?? '')}
             wire={wire}
           />
         )
