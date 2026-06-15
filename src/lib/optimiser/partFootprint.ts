@@ -14,7 +14,7 @@
 
 import { caseBox } from '@/src/lib/jointDrilling'
 import type {
-  ResolvedCasePart, ResolvedFaceZone, ResolvedDrawerBoxPart,
+  ResolvedCasePart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedInternalPart,
 } from '@/src/lib/resolver/types'
 
 export type Axis = 'x' | 'y' | 'z'
@@ -71,6 +71,25 @@ export function boxFrame(p: ResolvedDrawerBoxPart): FootprintFrame | null {
     case 'db_front':
     case 'db_back':          // DX=height(Y), DY=width(X), thickness→Z
       return { normal: 'z', u: { axis: 'y', dir: 1, origin: p.Y, extent: p.DX }, v: { axis: 'x', dir: 1, origin: p.X, extent: p.DY } }
+    default:
+      return null
+  }
+}
+
+// Internal shelf / divider as a drilled (e.g. hinge-mounting) surface. A divider
+// is a vertical panel — face-normal = cabinet X, like a carcase side; a shelf is
+// horizontal — face-normal = cabinet Y, like the carcase bottom. DX = depth
+// (cabinet Z); DY is the in-plane length (height for a divider, width for a
+// shelf); DZ = thickness. Internal anchor (X,Y,Z) is the AABB min corner for
+// dividers/shelves (matches intBox3). Other internal parts (drawer / pull-out
+// panels, accessories) aren't mounting surfaces here → null.
+export function intFrame(p: ResolvedInternalPart): FootprintFrame | null {
+  switch (p.part_type) {
+    case 'divider':
+      return { normal: 'x', u: { axis: 'z', dir: 1, origin: p.Z, extent: p.DX }, v: { axis: 'y', dir: 1, origin: p.Y, extent: p.DY } }
+    case 'adj_shelf':
+    case 'fixed_shelf':
+      return { normal: 'y', u: { axis: 'z', dir: 1, origin: p.Z, extent: p.DX }, v: { axis: 'x', dir: 1, origin: p.X, extent: p.DY } }
     default:
       return null
   }

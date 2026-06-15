@@ -15,7 +15,7 @@
 import { supabase } from '@/src/lib/supabase'
 import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { cabinetSeamDrills } from '@/src/lib/jointDrilling'
-import { caseFrame, zoneFrame, boxFrame, projectToFrame, type FootprintFrame } from './partFootprint'
+import { caseFrame, zoneFrame, boxFrame, intFrame, projectToFrame, type FootprintFrame } from './partFootprint'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 
 const GENERATED_MARK = 'seam_joint'
@@ -53,6 +53,7 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
 
   const caseByKey = new Map(rp.case_parts.map(p => [p.part_key, p]))
   const zoneByKey = new Map(rp.face_zones.map(z => [`${z.row_index}:${z.col_index}`, z]))
+  const intByKey = new Map(rp.internal_parts.map(p => [`${p.part_type}_${p.sort_order}`, p]))
 
   const add = (
     sourceTable: string, sourcePartKey: string, frame: FootprintFrame | null | undefined,
@@ -101,8 +102,14 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
       for (const pd of h.plate_drills) {
         add('case_parts', `case_${mt.part_key}`, cp ? caseFrame(cp) : null, pd, 'hinge_plate', opKey, AUTO_TOOL)
       }
+    } else if (mt?.table === 'internal_parts' && mt.internal_part_type != null && mt.internal_sort_order != null) {
+      // Plate mounted on an internal divider (vertical) or shelf (horizontal).
+      const ip = intByKey.get(`${mt.internal_part_type}_${mt.internal_sort_order}`)
+      const partKey = `int_${mt.internal_part_type}_${mt.internal_sort_order}`   // matches normalize's key
+      for (const pd of h.plate_drills) {
+        add('internal_parts', partKey, ip ? intFrame(ip) : null, pd, 'hinge_plate', opKey, AUTO_TOOL)
+      }
     } else {
-      // Internal-shelf-mounted plates not bridged yet.
       skipped += h.plate_drills.length
     }
   }
