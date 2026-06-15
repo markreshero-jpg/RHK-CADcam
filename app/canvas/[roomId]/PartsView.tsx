@@ -252,16 +252,20 @@ const CAT_LABELS: Record<string, string> = {
   slides: 'Slides', hinges: 'Hinges', misc: 'Misc', other: 'Other',
 }
 
-function PartDialog({ cabinetId, ctx, editPart, onSaved, onClose }: {
+export function PartDialog({ cabinetId, ctx, editPart, initialPos, onSaved, onClose }: {
   cabinetId: string
   ctx:       FormulaCtx | null
   editPart?: CabinetCustomPart | null
+  /** Seed x/y/z for a NEW part (e.g. from a right-click point in an ortho view). */
+  initialPos?: { x: number; y: number; z: number }
   onSaved:   (part: CabinetCustomPart) => void
   onClose:   () => void
 }) {
   const editing = !!editPart
   const rawField = (f: 'dx' | 'dy' | 'dz' | 'x' | 'y' | 'z') =>
-    editPart ? (editPart.expressions?.[f] ?? String(editPart[f] ?? '')) : ''
+    editPart
+      ? (editPart.expressions?.[f] ?? String(editPart[f] ?? ''))
+      : (initialPos && (f === 'x' || f === 'y' || f === 'z') ? String(Math.round(initialPos[f])) : '')
   const [libParts,  setLibParts]  = useState<LibraryPart[]>([])
   const [mats,      setMats]      = useState<MatOption[]>([])
   const [catFilter, setCatFilter] = useState('all')
@@ -351,7 +355,7 @@ function PartDialog({ cabinetId, ctx, editPart, onSaved, onClose }: {
   return (
     <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6"
          onClick={onClose}>
-      <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh]"
+      <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-2xl w-full max-w-2xl flex flex-col h-[80vh]"
            onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
           <span className="text-sm font-semibold text-white">{editing ? 'Edit Part' : 'Add Part'}</span>
