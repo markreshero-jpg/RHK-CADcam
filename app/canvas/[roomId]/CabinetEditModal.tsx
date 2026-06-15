@@ -19,7 +19,9 @@ import FaceGridEditor from './FaceGridEditor'
 import InternalGridEditor from './InternalGridEditor'
 import { saveSVGEdge } from './cabinetEditSvgHelpers'
 import { ResolvedElevation, ResolvedTop, ResolvedSide, TopView, ElevationView, SideView, PartPickerMenu, PartContextMenu, type PartContextAction } from './ResolvedViews'
-import PartsView from './PartsView'
+import PartsView, { PartDialog } from './PartsView'
+import { buildPartContext, type FormulaCtx } from '@/src/lib/partFormula'
+import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import JointsPanel from './JointsPanel'
 import PartEdgeJoints from './PartEdgeJoints'
 import OverridesView from './OverridesView'
@@ -222,6 +224,10 @@ export default function CabinetEditModal({
   const [partComments, setPartComments]   = useState<PartComments>({})
   const [hiddenParts, setHiddenParts]     = useState<string[]>([])
   const [contextMenu, setContextMenu]     = useState<{ part: PartMeta; cx: number; cy: number } | null>(null)
+  // Right-click on empty space in an ortho view → a small "Add part here" menu,
+  // then the Add-Part dialog seeded with that cabinet-space point.
+  const [addMenu, setAddMenu]             = useState<{ x: number; y: number; z: number; cx: number; cy: number } | null>(null)
+  const [addAt, setAddAt]                 = useState<{ x: number; y: number; z: number } | null>(null)
 
   const prevPartRef     = useRef<PartMeta | null>(null)
   const originalEdgeRef = useRef<PartEdge | null>(null)
@@ -403,6 +409,12 @@ export default function CabinetEditModal({
   // user-hidden parts removed; the Parts tab + inspector panels keep the full list.
   const visibleRp = useMemo(() => (rp ? filterHiddenParts(rp, hiddenParts) : rp), [rp, hiddenParts])
 
+  // Formula context for the Add-Part dialog (lets sizes/positions use formulas).
+  const formulaCtx = useMemo<FormulaCtx | null>(() => {
+    const input = getCachedInput(cabinet.id)
+    return rp && input ? buildPartContext(rp, input) : null
+  }, [rp, cabinet.id])
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
@@ -533,6 +545,7 @@ export default function CabinetEditModal({
               visibleRp ? <ResolvedTop cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
+                onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
                 customParts={customParts} partOverrides={partOverrides}
                 partLabels={partLabels} partComments={partComments} />
               : <TopView cab={cabinet} />
@@ -541,6 +554,7 @@ export default function CabinetEditModal({
               visibleRp ? <ResolvedElevation cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
+                onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
                 customParts={customParts} partOverrides={partOverrides}
                 partLabels={partLabels} partComments={partComments} />
               : <ElevationView cab={cabinet} />
@@ -549,13 +563,14 @@ export default function CabinetEditModal({
               visibleRp ? <ResolvedSide cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
+                onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
                 customParts={customParts} partOverrides={partOverrides}
                 partLabels={partLabels} partComments={partComments} />
               : <SideView cab={cabinet} />
             )}
             {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} />}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} />}
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}
@@ -626,6 +641,33 @@ export default function CabinetEditModal({
                 existingComment={partComments[contextMenu.part.id]}
                 onAction={handleContextAction}
                 onClose={() => setContextMenu(null)}
+              />
+            )}
+            {addMenu && (
+              <>
+                <div className="fixed inset-0 z-[100]"
+                  onClick={() => setAddMenu(null)}
+                  onContextMenu={e => { e.preventDefault(); setAddMenu(null) }} />
+                <div className="fixed z-[101] bg-gray-800 border border-gray-700 rounded shadow-xl py-1 text-[11px]"
+                  style={{ left: addMenu.cx, top: addMenu.cy }}
+                  onClick={e => e.stopPropagation()}>
+                  <button className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-200 transition-colors whitespace-nowrap"
+                    onClick={() => { setAddAt({ x: addMenu.x, y: addMenu.y, z: addMenu.z }); setAddMenu(null) }}>
+                    + Add part here
+                  </button>
+                  <div className="px-3 pt-0.5 text-[9px] text-gray-500 whitespace-nowrap">
+                    x {addMenu.x} · y {addMenu.y} · z {addMenu.z} mm
+                  </div>
+                </div>
+              </>
+            )}
+            {addAt && (
+              <PartDialog
+                cabinetId={cabinet.id}
+                ctx={formulaCtx}
+                initialPos={addAt}
+                onSaved={part => { setCustomParts(prev => [...prev, part]); setAddAt(null) }}
+                onClose={() => setAddAt(null)}
               />
             )}
           </div>

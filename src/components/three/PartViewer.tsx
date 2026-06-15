@@ -6,11 +6,11 @@
 //   panelFaceColors, edgeStrips, unpackMatCol, fitCamDist     (geometry helpers)
 //   Part, PartPropertiesPanel, PreviewCanvas                  (components)
 
-import { Suspense, useRef, useState } from 'react'
+import { Suspense, useRef, useState, useEffect } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges } from '@react-three/drei'
 import { getUserPrefs } from '@/src/lib/userPrefs'
-import { fmtMm } from '@/src/lib/format'
+import { fmtMm, roundMm } from '@/src/lib/format'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -209,12 +209,34 @@ export function Part({
 
 // ── Properties panel overlay ───────────────────────────────────────────────────
 
+// One editable size cell — commits on Enter / blur, reverts on Escape.
+function SizeField({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+  const [draft, setDraft] = useState(String(roundMm(value)))
+  useEffect(() => { setDraft(String(roundMm(value))) }, [value])
+  function commit() {
+    const v = Number(draft)
+    if (Number.isFinite(v) && v > 0 && Math.abs(v - value) > 1e-6) onCommit(v)
+    else setDraft(String(roundMm(value)))
+  }
+  return (
+    <input
+      type="text" inputMode="decimal" value={draft}
+      onChange={e => setDraft(e.target.value)}
+      onFocus={e => e.target.select()}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setDraft(String(roundMm(value))); e.currentTarget.blur() } }}
+      className="w-16 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-right font-mono text-gray-100 focus:outline-none focus:border-blue-500"
+    />
+  )
+}
+
 export function PartPropertiesPanel({
-  part, onClose, onEdgeChange, actions, jointControls,
+  part, onClose, onEdgeChange, onSizeChange, actions, jointControls,
 }: {
   part: PartMeta
   onClose: () => void
   onEdgeChange?: (edge: PartEdge) => void
+  onSizeChange?: (dim: 'w' | 'h' | 'd', value: number) => void
   actions?: React.ReactNode
   jointControls?: React.ReactNode
 }) {
@@ -225,13 +247,19 @@ export function PartPropertiesPanel({
         <button onClick={onClose} className="text-gray-500 hover:text-white text-base leading-none ml-2" aria-label="Close">✕</button>
       </div>
       <div className="px-3 py-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-        <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pb-0.5">Size</span>
-        <span className="text-gray-500">Width</span>
-        <span className="text-gray-200 text-right font-mono">{fmtMm(part.w)} mm</span>
-        <span className="text-gray-500">Height</span>
-        <span className="text-gray-200 text-right font-mono">{fmtMm(part.h)} mm</span>
-        <span className="text-gray-500">Depth</span>
-        <span className="text-gray-200 text-right font-mono">{fmtMm(part.d)} mm</span>
+        <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pb-0.5">Size{onSizeChange ? <span className="text-gray-700 normal-case tracking-normal"> · editable</span> : null}</span>
+        <span className="text-gray-500 self-center">Width</span>
+        {onSizeChange
+          ? <span className="text-right"><SizeField value={part.w} onCommit={v => onSizeChange('w', v)} /> <span className="text-gray-600 text-[10px]">mm</span></span>
+          : <span className="text-gray-200 text-right font-mono">{fmtMm(part.w)} mm</span>}
+        <span className="text-gray-500 self-center">Height</span>
+        {onSizeChange
+          ? <span className="text-right"><SizeField value={part.h} onCommit={v => onSizeChange('h', v)} /> <span className="text-gray-600 text-[10px]">mm</span></span>
+          : <span className="text-gray-200 text-right font-mono">{fmtMm(part.h)} mm</span>}
+        <span className="text-gray-500 self-center">Depth</span>
+        {onSizeChange
+          ? <span className="text-right"><SizeField value={part.d} onCommit={v => onSizeChange('d', v)} /> <span className="text-gray-600 text-[10px]">mm</span></span>
+          : <span className="text-gray-200 text-right font-mono">{fmtMm(part.d)} mm</span>}
         <span className="text-gray-500">Thickness</span>
         <span className="text-gray-200 text-right font-mono">{fmtMm(part.thickness)} mm</span>
         {(part.x != null || part.y != null || part.z != null) && (

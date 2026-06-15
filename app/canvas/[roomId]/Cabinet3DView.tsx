@@ -1,12 +1,12 @@
 'use client'
 
-import { useRef, useState, useEffect, useMemo } from 'react'
+import { useRef, useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { supabase } from '@/src/lib/supabase'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
 import type { CabinetInstance } from '@/src/lib/types'
-import type { CabinetCustomPart, PartPosOverrides } from './canvasDB'
+import { dbUpdateCustomPart, dbSavePartPosOverride, type CabinetCustomPart, type PartPosOverrides } from './canvasDB'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
   ResolvedInternalPart, ResolvedFaceZone,
@@ -898,6 +898,14 @@ function applyPosOv<T extends { X: number; Y: number; Z: number }>(p: T, id: str
   return ov ? { ...p, X: p.X + ov.ox, Y: p.Y + ov.oy, Z: p.Z + ov.oz } : p
 }
 
+// Apply an absolute size override (sw/sh/sd) to a freshly-built box. Used so the
+// right-click panel can resize a resolved part in the 3D preview.
+function applySizeOv(b: Box, id: string, overrides: PartPosOverrides | undefined): Box {
+  const ov = overrides?.[id]
+  if (!ov || (ov.sw == null && ov.sh == null && ov.sd == null)) return b
+  return { ...b, w: ov.sw ?? b.w, h: ov.sh ?? b.h, d: ov.sd ?? b.d }
+}
+
 function getRotOv(id: string, overrides: PartPosOverrides | undefined): [number, number, number] | undefined {
   const ov = overrides?.[id]
   if (!ov || (!ov.oax && !ov.oay && !ov.oaz)) return undefined
@@ -1058,7 +1066,7 @@ function CabinetScene({
       {rp.case_parts.map((p, i) => {
         const id    = `case_${p.part_key}`
         const pp    = applyPosOv(p, id, partOverrides)
-        const b     = caseBox(pp)
+        const b     = applySizeOv(caseBox(pp), id, partOverrides)
         const info  = applyEdge(buildCaseInfo(p, b))
         const s     = matSpec(p.material_id, '#ddd3bb')
         const holes = holesByPartKey.get(p.part_key) ?? []
@@ -1105,7 +1113,7 @@ function CabinetScene({
       {rp.toekick_parts.map((p, i) => {
         const id   = `tk_${p.part_key}_${p.sort_order}`
         const pp   = applyPosOv(p, id, partOverrides)
-        const b    = tkBox(pp)
+        const b    = applySizeOv(tkBox(pp), id, partOverrides)
         const info = applyEdge(buildTkInfo(p, b))
         const s    = matSpec(p.material_id, '#78716c')
         return (
@@ -1132,7 +1140,7 @@ function CabinetScene({
         const renderIntPart = (p: ResolvedInternalPart, key: string) => {
           const id   = `int_${p.part_type}_${p.sort_order}`
           const pp   = applyPosOv(p, id, partOverrides)
-          const b    = intBox(pp)
+          const b    = applySizeOv(intBox(pp), id, partOverrides)
           const info = applyEdge(buildIntInfo(p, b))
           const s    = matSpec(p.material_id, '#e8dece')
           return (
@@ -1260,7 +1268,7 @@ function CabinetScene({
         }
 
         const pz         = applyPosOv(z, id, partOverrides)
-        const b          = zoneBox(pz)
+        const b          = applySizeOv(zoneBox(pz), id, partOverrides)
         const info       = applyEdge(buildZoneInfo(z, b))
         const s          = matSpec(z.material_id, '#f0ebe0')
         const faceColors = panelFaceColors(info.panelKind, z.face_type, s.face, s.back, s.edge)
@@ -1402,6 +1410,7 @@ function CabinetScene({
 
 export default function Cabinet3DView({
   cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, onPartSelect, showDrilling = true, onUpdate, onDeletePart,
+  setCustomParts, onOverridesChange,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
@@ -1421,6 +1430,10 @@ export default function Cabinet3DView({
   onUpdate?:         (id: string, u: Partial<CabinetInstance>) => void | Promise<void>
   // Delete/hide a part by id (custom part → deleted; resolved part → hidden).
   onDeletePart?:     (partId: string) => void
+  // Editing custom-part dims live from the inspector panel.
+  setCustomParts?:   Dispatch<SetStateAction<CabinetCustomPart[]>>
+  // Persist a resolved part's size override; receives the merged override map.
+  onOverridesChange?: (o: PartPosOverrides) => void
 }) {
   const [selectedPart, setSelectedPart]       = useState<PartMeta | null>(null)
   const [doorsOpen, setDoorsOpen]             = useState(false)
@@ -1492,6 +1505,32 @@ export default function Cabinet3DView({
       setEdgeOverrides(m => { const n = new Map(m); n.set(prev.id, edge); return n })
       return { ...prev, edge }
     })
+  }
+
+  // Resize the selected part from the inspector. The panel edits the visible 3D
+  // box (w/h/d). Custom parts are authoritative (real dims → cut list); resolved
+  // parts store an absolute size override applied to the preview box.
+  function handleSizeChange(dim: 'w' | 'h' | 'd', value: number) {
+    if (!selectedPart) return
+    const id = selectedPart.id
+    setSelectedPart(prev => prev ? { ...prev, [dim]: value } : prev)   // instant panel feedback
+    if (id.startsWith('custom_')) {
+      const cpId = id.slice('custom_'.length)
+      const cp = customParts?.find(p => p.id === cpId)
+      if (!cp) return
+      // custom-part box mapping: w=dy, h=dz, d=dx
+      const field: 'dx' | 'dy' | 'dz' = dim === 'w' ? 'dy' : dim === 'h' ? 'dz' : 'dx'
+      const expressions = { ...(cp.expressions ?? {}) }
+      delete expressions[field]   // a manual size clears that field's formula
+      setCustomParts?.(prev => prev.map(p => p.id === cpId ? { ...p, [field]: value, expressions } : p))
+      dbUpdateCustomPart(cpId, { [field]: value, expressions }).catch(console.error)
+    } else {
+      const cur = partOverrides?.[id] ?? { ox: 0, oy: 0, oz: 0 }
+      const key: 'sw' | 'sh' | 'sd' = dim === 'w' ? 'sw' : dim === 'h' ? 'sh' : 'sd'
+      dbSavePartPosOverride(cab.id, id, { ...cur, [key]: value }, partOverrides ?? {})
+        .then(u => onOverridesChange?.(u))
+        .catch(console.error)
+    }
   }
 
   function handleCanvasContextMenu(e: React.MouseEvent) {
@@ -1603,6 +1642,7 @@ export default function Cabinet3DView({
               part={selectedPart}
               onClose={() => setSelectedPart(null)}
               onEdgeChange={handleEdgeChange}
+              onSizeChange={/^(case_|tk_|int_|zone_|custom_)/.test(selectedPart.id) ? handleSizeChange : undefined}
               actions={drawerActions}
               jointControls={onUpdate && rp && selectedPart.id.startsWith('case_')
                 ? <PartEdgeJoints cabinet={cab} rp={rp} partKey={selectedPart.id.slice(5)} onUpdate={onUpdate} />

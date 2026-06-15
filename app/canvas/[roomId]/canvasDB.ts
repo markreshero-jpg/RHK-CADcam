@@ -685,7 +685,10 @@ export async function dbSavePartComment(cabinetId: string, partId: string, comme
 
 // ── Part Position Overrides ───────────────────────────────────────────────────
 
-export type PartPosOverrides = Record<string, { ox: number; oy: number; oz: number; oax?: number; oay?: number; oaz?: number }>
+// Per-part overrides keyed by part id. ox/oy/oz = position nudge; oa* = rotation.
+// sw/sh/sd = absolute size override (box width/height/depth in mm); omitted = use
+// the resolved size. Size overrides are applied in the 3D/preview box build.
+export type PartPosOverrides = Record<string, { ox: number; oy: number; oz: number; oax?: number; oay?: number; oaz?: number; sw?: number; sh?: number; sd?: number }>
 
 export async function dbLoadPartPosOverrides(cabinetId: string): Promise<PartPosOverrides> {
   const { data } = await supabase
