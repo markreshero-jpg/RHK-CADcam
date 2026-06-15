@@ -8,6 +8,41 @@ import {
   type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments,
 } from './canvasDB'
 import { DB_PART_LABELS } from './cabinetEditSvgHelpers'
+import { buildPartContext, evalPartExpr, type FormulaCtx } from '@/src/lib/partFormula'
+import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
+
+// One dimension/position field: accepts a plain number (fixed) OR a formula
+// (cab.* / t.* / math). Shows a live evaluated readout.
+function FormulaField({ label, value, onChange, ctx }: {
+  label: string; value: string; onChange: (v: string) => void; ctx: FormulaCtx | null
+}) {
+  const trimmed = value.trim()
+  const isNum = trimmed !== '' && Number.isFinite(Number(trimmed))
+  const isFormula = trimmed !== '' && !isNum
+  const evaluated = trimmed === '' ? null : isNum ? Number(trimmed) : (ctx ? evalPartExpr(trimmed, ctx) : null)
+  return (
+    <div>
+      <label className="block text-[10px] text-gray-500 mb-1">{label}</label>
+      <input type="text" value={value} onChange={e => onChange(e.target.value)} onFocus={e => e.target.select()}
+        placeholder="0 or cab.d + t.door + 2"
+        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500" />
+      <p className={`text-[9px] mt-0.5 ${isFormula && evaluated == null ? 'text-red-400' : 'text-gray-600'}`}>
+        {isFormula
+          ? (evaluated != null ? `ƒ = ${Math.round(evaluated * 10) / 10} mm` : 'invalid formula')
+          : isNum ? 'fixed' : ' '}
+      </p>
+    </div>
+  )
+}
+
+// Parse a field's raw text into a literal value + (optional) formula string.
+function parseField(raw: string, ctx: FormulaCtx | null, fallback: number): { value: number; expr?: string } {
+  const t = raw.trim()
+  if (t === '') return { value: 0 }
+  if (Number.isFinite(Number(t))) return { value: Number(t) }
+  const v = ctx ? evalPartExpr(t, ctx) : null
+  return { value: v ?? fallback, expr: t }
+}
 
 // ── Labels ────────────────────────────────────────────────────────────────────
 
@@ -217,28 +252,35 @@ const CAT_LABELS: Record<string, string> = {
   slides: 'Slides', hinges: 'Hinges', misc: 'Misc', other: 'Other',
 }
 
-function AddPartDialog({ cabinetId, onAdd, onClose }: {
+function PartDialog({ cabinetId, ctx, editPart, onSaved, onClose }: {
   cabinetId: string
-  onAdd:     (part: CabinetCustomPart) => void
+  ctx:       FormulaCtx | null
+  editPart?: CabinetCustomPart | null
+  onSaved:   (part: CabinetCustomPart) => void
   onClose:   () => void
 }) {
+  const editing = !!editPart
+  const rawField = (f: 'dx' | 'dy' | 'dz' | 'x' | 'y' | 'z') =>
+    editPart ? (editPart.expressions?.[f] ?? String(editPart[f] ?? '')) : ''
   const [libParts,  setLibParts]  = useState<LibraryPart[]>([])
   const [mats,      setMats]      = useState<MatOption[]>([])
   const [catFilter, setCatFilter] = useState('all')
   const [search,    setSearch]    = useState('')
   const [sel,       setSel]       = useState<LibraryPart | null>(null)
-  const [nameOver,  setNameOver]  = useState('')
-  const [dy,        setDy]        = useState(0)
-  const [dx,        setDx]        = useState(0)
-  const [matId,     setMatId]     = useState('')
-  const [eTop,      setETop]      = useState(false)
-  const [eBot,      setEBot]      = useState(false)
-  const [eLeft,     setELeft]     = useState(false)
-  const [eRight,    setERight]    = useState(false)
-  const [visible,   setVisible]   = useState(true)
-  const [posX,      setPosX]      = useState(0)
-  const [posY,      setPosY]      = useState(0)
-  const [posZ,      setPosZ]      = useState(0)
+  const [nameOver,  setNameOver]  = useState(editPart?.name ?? '')
+  const [fDy,       setFDy]       = useState(rawField('dy'))
+  const [fDx,       setFDx]       = useState(rawField('dx'))
+  const [fDz,       setFDz]       = useState(rawField('dz'))
+  const [fX,        setFX]        = useState(rawField('x'))
+  const [fY,        setFY]        = useState(rawField('y'))
+  const [fZ,        setFZ]        = useState(rawField('z'))
+  const [matId,     setMatId]     = useState(editPart?.material_id ?? '')
+  const [eTop,      setETop]      = useState(editPart?.edge_top ?? false)
+  const [eBot,      setEBot]      = useState(editPart?.edge_bottom ?? false)
+  const [eLeft,     setELeft]     = useState(editPart?.edge_left ?? false)
+  const [eRight,    setERight]    = useState(editPart?.edge_right ?? false)
+  const [visible,   setVisible]   = useState(editPart?.visible ?? true)
+  const [noCnc,     setNoCnc]     = useState(editPart?.no_cnc ?? false)
   const [saving,    setSaving]    = useState(false)
 
   useEffect(() => {
@@ -262,23 +304,44 @@ function AddPartDialog({ cabinetId, onAdd, onClose }: {
     (!search || p.name.toLowerCase().includes(search.toLowerCase()))
   )
   const matDz = mats.find(m => m.id === matId)?.dz ?? 0
+  const ready = editing || !!sel
 
-  async function handleAdd() {
-    if (!sel) return
+  async function handleSave() {
+    const partLibId = editPart?.part_library_id ?? sel?.id
+    if (!partLibId) return
     setSaving(true)
-    const { data: ex } = await supabase
-      .from('cabinet_custom_parts').select('sort_order')
-      .eq('cabinet_instance_id', cabinetId).order('sort_order', { ascending: false }).limit(1)
-    const nextOrder = ex && ex.length > 0 ? ex[0].sort_order + 1 : 0
-    const result = await dbAddCustomPart({
-      cabinet_instance_id: cabinetId, part_library_id: sel.id,
-      name: nameOver.trim() || sel.name, dy, dx, dz: matDz || 18,
-      x: posX, y: posY, z: posZ,
+    const dy  = parseField(fDy, ctx, Number(editPart?.dy ?? 0))
+    const dx  = parseField(fDx, ctx, Number(editPart?.dx ?? 0))
+    const dzF = parseField(fDz, ctx, Number(editPart?.dz ?? (matDz || 18)))
+    const px  = parseField(fX, ctx, Number(editPart?.x ?? 0))
+    const py  = parseField(fY, ctx, Number(editPart?.y ?? 0))
+    const pz  = parseField(fZ, ctx, Number(editPart?.z ?? 0))
+    const expressions: Record<string, string> = {}
+    if (dy.expr)  expressions.dy = dy.expr
+    if (dx.expr)  expressions.dx = dx.expr
+    if (dzF.expr) expressions.dz = dzF.expr
+    if (px.expr)  expressions.x  = px.expr
+    if (py.expr)  expressions.y  = py.expr
+    if (pz.expr)  expressions.z  = pz.expr
+    const fields = {
+      name: nameOver.trim() || sel?.name || editPart?.name || null,
+      dy: dy.value, dx: dx.value, dz: dzF.value || matDz || 18,
+      x: px.value, y: py.value, z: pz.value,
       material_id: matId || null,
       edge_top: eTop, edge_bottom: eBot, edge_left: eLeft, edge_right: eRight,
-      visible, sort_order: nextOrder,
-    })
-    if (result) onAdd(result)
+      visible, no_cnc: noCnc, expressions,
+    }
+    if (editing && editPart) {
+      await dbUpdateCustomPart(editPart.id, fields)
+      onSaved({ ...editPart, ...fields })
+    } else {
+      const { data: ex } = await supabase
+        .from('cabinet_custom_parts').select('sort_order')
+        .eq('cabinet_instance_id', cabinetId).order('sort_order', { ascending: false }).limit(1)
+      const nextOrder = ex && ex.length > 0 ? ex[0].sort_order + 1 : 0
+      const result = await dbAddCustomPart({ cabinet_instance_id: cabinetId, part_library_id: partLibId, ...fields, sort_order: nextOrder })
+      if (result) onSaved(result)
+    }
     setSaving(false)
   }
 
@@ -288,7 +351,7 @@ function AddPartDialog({ cabinetId, onAdd, onClose }: {
       <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh]"
            onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-          <span className="text-sm font-semibold text-white">Add Part</span>
+          <span className="text-sm font-semibold text-white">{editing ? 'Edit Part' : 'Add Part'}</span>
           <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none">✕</button>
         </div>
         <div className="flex flex-1 overflow-hidden">
@@ -322,57 +385,41 @@ function AddPartDialog({ cabinetId, onAdd, onClose }: {
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {!sel ? (
+            {!ready ? (
               <p className="text-xs text-gray-600 pt-6 text-center">Select a part from the list</p>
             ) : (<>
               <div>
-                <p className="text-[10px] text-gray-500 mb-0.5">Selected</p>
-                <p className="text-sm font-medium text-white">{sel.name}</p>
+                <p className="text-[10px] text-gray-500 mb-0.5">{editing ? 'Editing' : 'Selected'}</p>
+                <p className="text-sm font-medium text-white">{sel?.name ?? editPart?.name ?? '—'}</p>
               </div>
               <div>
                 <label className="block text-[10px] text-gray-500 mb-1">Name override (optional)</label>
                 <input type="text" value={nameOver} onChange={e => setNameOver(e.target.value)}
-                  placeholder={sel.name}
+                  placeholder={sel?.name ?? editPart?.name ?? ''}
                   className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] text-gray-500 mb-1">Width DY (mm)</label>
-                  <input type="number" value={dy} step="0.5"
-                    onChange={e => setDy(parseFloat(e.target.value) || 0)}
-                    onFocus={e => e.target.select()}
-                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white font-mono text-right focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-gray-500 mb-1">Height DX (mm)</label>
-                  <input type="number" value={dx} step="0.5"
-                    onChange={e => setDx(parseFloat(e.target.value) || 0)}
-                    onFocus={e => e.target.select()}
-                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white font-mono text-right focus:outline-none focus:border-blue-500" />
-                </div>
+              <p className="text-[10px] text-gray-500">Each size is a fixed number <span className="text-gray-600">or</span> a formula — e.g. <span className="font-mono text-gray-400">cab.d + t.door + 2</span>.</p>
+              <div className="grid grid-cols-3 gap-3">
+                <FormulaField label="Width (DY)"  value={fDy} onChange={setFDy} ctx={ctx} />
+                <FormulaField label="Height (DX)" value={fDx} onChange={setFDx} ctx={ctx} />
+                <FormulaField label="Thick (DZ)"  value={fDz} onChange={setFDz} ctx={ctx} />
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {([['X pos', posX, setPosX], ['Y pos', posY, setPosY], ['Z pos', posZ, setPosZ]] as [string, number, (v: number) => void][]).map(([lbl, val, set]) => (
-                  <div key={lbl}>
-                    <label className="block text-[10px] text-gray-500 mb-1">{lbl} (mm)</label>
-                    <input type="number" value={val} step="1"
-                      onChange={e => set(parseFloat(e.target.value) || 0)}
-                      onFocus={e => e.target.select()}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white font-mono text-right focus:outline-none focus:border-blue-500" />
-                  </div>
-                ))}
+              <div className="grid grid-cols-3 gap-3">
+                <FormulaField label="X pos" value={fX} onChange={setFX} ctx={ctx} />
+                <FormulaField label="Y pos" value={fY} onChange={setFY} ctx={ctx} />
+                <FormulaField label="Z pos" value={fZ} onChange={setFZ} ctx={ctx} />
               </div>
               <div>
-                <label className="block text-[10px] text-gray-500 mb-1">Material</label>
-                <select value={matId} onChange={e => setMatId(e.target.value)}
+                <label className="block text-[10px] text-gray-500 mb-1">Material override (role default otherwise)</label>
+                <select value={matId} onChange={e => { setMatId(e.target.value); const d = mats.find(m => m.id === e.target.value)?.dz; if (d && !fDz.trim()) setFDz(String(d)) }}
                   className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
-                  <option value="">— none —</option>
+                  <option value="">— by part role —</option>
                   {mats.map(m => (
                     <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
                   ))}
                 </select>
-                {matDz > 0 && (
-                  <p className="text-[10px] text-gray-600 mt-0.5">Thickness DZ: {matDz}mm (from material)</p>
+                {matDz > 0 && !fDz.trim() && (
+                  <p className="text-[10px] text-gray-600 mt-0.5">Thickness defaults to {matDz}mm</p>
                 )}
               </div>
               <div>
@@ -386,18 +433,24 @@ function AddPartDialog({ cabinetId, onAdd, onClose }: {
                   ))}
                 </div>
               </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={visible} onChange={e => setVisible(e.target.checked)} className="accent-blue-500 w-3.5 h-3.5" />
-                <span className="text-xs text-gray-300">Visible in 3D / elevation</span>
-              </label>
+              <div className="flex items-center gap-5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={visible} onChange={e => setVisible(e.target.checked)} className="accent-blue-500 w-3.5 h-3.5" />
+                  <span className="text-xs text-gray-300">Visible in 3D / elevation</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={noCnc} onChange={e => setNoCnc(e.target.checked)} className="accent-red-500 w-3.5 h-3.5" />
+                  <span className="text-xs text-gray-300">No CNC (don&apos;t cut)</span>
+                </label>
+              </div>
             </>)}
           </div>
         </div>
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-700">
           <button onClick={onClose} className="px-4 py-1.5 text-xs text-gray-400 hover:text-white transition-colors">Cancel</button>
-          <button onClick={handleAdd} disabled={!sel || saving}
+          <button onClick={handleSave} disabled={!ready || saving}
             className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs rounded transition-colors">
-            {saving ? 'Adding…' : 'Add Part'}
+            {saving ? 'Saving…' : editing ? 'Save' : 'Add Part'}
           </button>
         </div>
       </div>
@@ -427,10 +480,15 @@ export default function PartsView({
   onToggleHidden?: (partId: string) => void
 }) {
   const hiddenSet = useMemo(() => new Set(hiddenParts ?? []), [hiddenParts])
+  // Formula context for live readouts + dialog editing (needs the cached resolver input).
+  const formulaCtx = useMemo<FormulaCtx | null>(() => {
+    const input = getCachedInput(cabinetId)
+    return input ? buildPartContext(rp, input) : null
+  }, [rp, cabinetId])
   const [matNames,   setMatNames]   = useState<Record<string, string>>({})
   const [matColours, setMatColours] = useState<Record<string, string | null>>({})
   const [libNames,   setLibNames]   = useState<Record<string, string>>({})
-  const [showAdd,    setShowAdd]    = useState(false)
+  const [dialog,     setDialog]     = useState<CabinetCustomPart | 'new' | null>(null)
   const [search,     setSearch]     = useState('')
   const [sortKey,    setSortKey]    = useState<SortKey>('type')
   const [sortDir,    setSortDir]    = useState<'asc' | 'desc'>('asc')
@@ -662,7 +720,7 @@ export default function PartsView({
         <input type="text" value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Filter parts…"
           className="flex-1 max-w-[180px] bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
-        <button onClick={() => setShowAdd(true)}
+        <button onClick={() => setDialog('new')}
           className="ml-auto flex-none px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors">
           + Add Part
         </button>
@@ -801,8 +859,12 @@ export default function PartsView({
               {/* Actions */}
               <div className="flex-none w-8 px-1 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 {row.isCustom && row.customPartRef ? (
-                  <button onClick={() => handleDeleteCustom(row.customPartRef!.id)}
-                    className="text-gray-600 hover:text-red-400 transition-colors text-xs leading-none" title="Delete">✕</button>
+                  <span className="flex items-center gap-1.5">
+                    <button onClick={() => setDialog(row.customPartRef!)}
+                      className="text-gray-600 hover:text-blue-300 transition-colors text-xs leading-none" title="Edit part">✎</button>
+                    <button onClick={() => handleDeleteCustom(row.customPartRef!.id)}
+                      className="text-gray-600 hover:text-red-400 transition-colors text-xs leading-none" title="Delete">✕</button>
+                  </span>
                 ) : row.isOverride && row.overridePartId ? (
                   <button onClick={() => onDeletePosOverride?.(row.overridePartId!)}
                     className="text-gray-600 hover:text-red-400 transition-colors text-xs leading-none" title="Remove override">✕</button>
@@ -815,14 +877,16 @@ export default function PartsView({
       </div>
 
       <div className="flex-none px-3 py-1.5 text-[10px] text-gray-700 border-t border-gray-800">
-        W = DY · H = DX · T = DZ · all mm · click Part to rename · click Comment to edit
+        W = DY · H = DX · T = DZ · all mm · click Part to rename · ✎ to edit sizes/formulas · sizes accept formulas like cab.d + t.door + 2
       </div>
 
-      {showAdd && (
-        <AddPartDialog
+      {dialog && (
+        <PartDialog
           cabinetId={cabinetId}
-          onAdd={part => {
-            setCustomParts(prev => [...prev, part])
+          ctx={formulaCtx}
+          editPart={dialog === 'new' ? null : dialog}
+          onSaved={part => {
+            setCustomParts(prev => prev.some(p => p.id === part.id) ? prev.map(p => p.id === part.id ? part : p) : [...prev, part])
             supabase.from('parts_library').select('id,name').eq('id', part.part_library_id).single()
               .then(({ data }) => { if (data) setLibNames(prev => ({ ...prev, [data.id]: data.name })) })
             if (part.material_id) {
@@ -834,9 +898,9 @@ export default function PartsView({
                   }
                 })
             }
-            setShowAdd(false)
+            setDialog(null)
           }}
-          onClose={() => setShowAdd(false)}
+          onClose={() => setDialog(null)}
         />
       )}
     </div>

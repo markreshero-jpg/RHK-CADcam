@@ -584,6 +584,10 @@ export interface CabinetCustomPart {
   edge_left:           boolean
   edge_right:          boolean
   visible:             boolean
+  // Parametric formula per field (dx/dy/dz/x/y/z). Present key = that column is a
+  // computed cache of the formula, re-evaluated on resolve. Absent = plain literal.
+  expressions?:        Record<string, string>
+  no_cnc?:             boolean
   sort_order:          number
 }
 
