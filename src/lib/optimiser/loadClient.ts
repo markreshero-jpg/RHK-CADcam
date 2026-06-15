@@ -18,22 +18,24 @@ export async function loadProjectParts(projectId: string): Promise<NormalizedPro
   const roomIds = rooms.map(r => r.id)
   if (!roomIds.length) return normalizeProject(project, rooms, [], [], [], [], [], [])
 
-  const { data: cabsRaw } = await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id,part_comments').in('room_id', roomIds)
+  const { data: cabsRaw } = await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id,part_comments,no_cnc').in('room_id', roomIds)
   const cabs = (cabsRaw ?? []) as (RawCabinet & { part_comments?: Record<string, string> | null })[]
   const cabIds = cabs.map(c => c.id)
   const commentsByCab = new Map<string, Record<string, string>>(cabs.map(c => [c.id, c.part_comments ?? {}]))
   if (!cabIds.length) return normalizeProject(project, rooms, cabs, [], [], [], [], [], commentsByCab)
 
-  const [cpR, ipR, tpR, fzR, dbR] = await Promise.all([
+  const [cpR, ipR, tpR, fzR, dbR, ccR] = await Promise.all([
     supabase.from('case_parts').select(PART_SELECTS.case_parts).in('cabinet_instance_id', cabIds),
     supabase.from('internal_parts').select(PART_SELECTS.internal_parts).in('cabinet_instance_id', cabIds),
     supabase.from('toekick_parts').select(PART_SELECTS.toekick_parts).in('cabinet_instance_id', cabIds),
     supabase.from('face_zones').select(PART_SELECTS.face_zones).in('cabinet_instance_id', cabIds),
     supabase.from('drawer_box_parts').select(PART_SELECTS.drawer_box_parts).in('cabinet_instance_id', cabIds),
+    supabase.from('cabinet_custom_parts').select(PART_SELECTS.custom_parts).in('cabinet_instance_id', cabIds),
   ])
 
   return normalizeProject(project, rooms, cabs,
     (cpR.data ?? []) as Record<string, unknown>[], (ipR.data ?? []) as Record<string, unknown>[],
     (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[],
-    (dbR.data ?? []) as Record<string, unknown>[], commentsByCab)
+    (dbR.data ?? []) as Record<string, unknown>[], commentsByCab,
+    (ccR.data ?? []) as Record<string, unknown>[])
 }

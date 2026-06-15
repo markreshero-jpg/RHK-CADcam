@@ -52,6 +52,24 @@ export function buildPartContext(resolved: ResolvedCabinet, input: CabinetInput)
   return { cab, t }
 }
 
+// Map a part's role (parts_library.material_role) to the assembly's scheduled
+// material id for that role. Used to auto-assign a custom part's material when the
+// user hasn't set an explicit override. Falls back to the carcass material.
+export function roleMaterialId(role: string | null | undefined, input: CabinetInput): string | null {
+  switch (role) {
+    case 'door': case 'door_face':
+      return input.door_material?.id ?? input.material?.id ?? null
+    case 'shelf':
+      return input.shelf_material?.id ?? input.material?.id ?? null
+    case 'toekick': case 'toekick_face':
+      return input.toekick_face_material?.id ?? input.material?.id ?? null
+    case 'drawerbox': case 'drawer':
+      return input.drawer_material?.id ?? input.material?.id ?? null
+    default: // interior / exposed / exposed_interior / end_panel / unknown
+      return input.material?.id ?? null
+  }
+}
+
 // Evaluate one formula. Returns null on any error / non-finite result.
 export function evalPartExpr(expr: string, ctx: FormulaCtx): number | null {
   try {

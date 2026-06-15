@@ -6,22 +6,27 @@ import { loadCabinetInput } from './loadCabinetInput'
 import { resolveCabinet } from './resolver'
 import { persistResolved } from './persistResolved'
 import { CabinetInput, ResolvedCabinet } from './types'
-import { buildPartContext, evalPartFields } from '../partFormula'
+import { buildPartContext, evalPartFields, roleMaterialId } from '../partFormula'
 
-// Evaluate parametric custom-part formulas against the resolved assembly and write
-// the computed dims/positions back to cabinet_custom_parts (the literal columns are
-// the cache every view/report/cut-list reads). No-op when no part has formulas.
+// Resolve each custom part against its assembly: (1) evaluate parametric formulas
+// and write the computed dims/positions back, and (2) resolve its effective material
+// — an explicit material_override_id wins, otherwise the part role's scheduled
+// material. Both land in the literal columns (material_id / dx…z) that every
+// view/report/cut-list reads. No-op when there are no custom parts.
 async function resolveCustomParts(cabinetId: string, resolved: ResolvedCabinet, input: CabinetInput) {
   const { data: parts } = await supabase
     .from('cabinet_custom_parts')
-    .select('id, dx, dy, dz, x, y, z, expressions')
+    .select('id, dx, dy, dz, x, y, z, expressions, material_id, material_override_id, parts_library(material_role)')
     .eq('cabinet_instance_id', cabinetId)
   if (!parts || parts.length === 0) return
-  if (!parts.some(p => p.expressions && Object.keys(p.expressions).length > 0)) return
   const ctx = buildPartContext(resolved, input)
   for (const p of parts) {
     const literal = { dx: Number(p.dx), dy: Number(p.dy), dz: Number(p.dz), x: Number(p.x), y: Number(p.y), z: Number(p.z) }
-    const patch = evalPartFields(literal, p.expressions as Record<string, string> | null, ctx)
+    const patch: Record<string, unknown> = evalPartFields(literal, p.expressions as Record<string, string> | null, ctx)
+    // Effective material: explicit override, else role default from the schedule.
+    const role = (p.parts_library as { material_role?: string | null } | null)?.material_role ?? null
+    const eff = (p.material_override_id as string | null) ?? roleMaterialId(role, input)
+    if (eff && eff !== p.material_id) patch.material_id = eff
     if (Object.keys(patch).length > 0) {
       const { error } = await supabase.from('cabinet_custom_parts').update(patch).eq('id', p.id)
       if (error) console.error('resolveCustomParts update', error)

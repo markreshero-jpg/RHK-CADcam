@@ -274,7 +274,7 @@ function PartDialog({ cabinetId, ctx, editPart, onSaved, onClose }: {
   const [fX,        setFX]        = useState(rawField('x'))
   const [fY,        setFY]        = useState(rawField('y'))
   const [fZ,        setFZ]        = useState(rawField('z'))
-  const [matId,     setMatId]     = useState(editPart?.material_id ?? '')
+  const [matId,     setMatId]     = useState(editPart?.material_override_id ?? '')
   const [eTop,      setETop]      = useState(editPart?.edge_top ?? false)
   const [eBot,      setEBot]      = useState(editPart?.edge_bottom ?? false)
   const [eLeft,     setELeft]     = useState(editPart?.edge_left ?? false)
@@ -327,7 +327,10 @@ function PartDialog({ cabinetId, ctx, editPart, onSaved, onClose }: {
       name: nameOver.trim() || sel?.name || editPart?.name || null,
       dy: dy.value, dx: dx.value, dz: dzF.value || matDz || 18,
       x: px.value, y: py.value, z: pz.value,
-      material_id: matId || null,
+      // Explicit pick wins; blank = auto from the part role (resolver fills material_id).
+      // When a pick is made, also seed material_id so the UI updates before the next resolve.
+      material_override_id: matId || null,
+      ...(matId ? { material_id: matId } : {}),
       edge_top: eTop, edge_bottom: eBot, edge_left: eLeft, edge_right: eRight,
       visible, no_cnc: noCnc, expressions,
     }
@@ -339,7 +342,7 @@ function PartDialog({ cabinetId, ctx, editPart, onSaved, onClose }: {
         .from('cabinet_custom_parts').select('sort_order')
         .eq('cabinet_instance_id', cabinetId).order('sort_order', { ascending: false }).limit(1)
       const nextOrder = ex && ex.length > 0 ? ex[0].sort_order + 1 : 0
-      const result = await dbAddCustomPart({ cabinet_instance_id: cabinetId, part_library_id: partLibId, ...fields, sort_order: nextOrder })
+      const result = await dbAddCustomPart({ cabinet_instance_id: cabinetId, part_library_id: partLibId, material_id: matId || null, ...fields, sort_order: nextOrder })
       if (result) onSaved(result)
     }
     setSaving(false)

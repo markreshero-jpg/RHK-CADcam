@@ -413,7 +413,9 @@ export async function dbInsertCustomPartsSnapshot(cabinetId: string, snapshot: R
     dx: (p.dx as number) ?? 0, dy: (p.dy as number) ?? 0, dz: (p.dz as number) ?? 18,
     x: (p.x as number) ?? 0, y: (p.y as number) ?? 0, z: (p.z as number) ?? 0,
     expressions: p.expressions ?? {},
-    material_id: (p.material_id as string | null) ?? null,
+    // Carry only the explicit override; material_id is left null so the resolver
+    // re-derives the effective material (override ?? role) for THIS job's schedule.
+    material_override_id: (p.material_override_id as string | null) ?? null,
     edge_top: !!p.edge_top, edge_bottom: !!p.edge_bottom, edge_left: !!p.edge_left, edge_right: !!p.edge_right,
     visible: p.visible !== false,
     no_cnc: !!p.no_cnc,
@@ -505,7 +507,7 @@ export async function saveCabinetToLibrary(
 
   // Snapshot the instance's custom parts so the definition carries them.
   const { data: cps } = await supabase.from('cabinet_custom_parts')
-    .select('part_library_id,name,dx,dy,dz,x,y,z,expressions,material_id,edge_top,edge_bottom,edge_left,edge_right,visible,no_cnc,sort_order')
+    .select('part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,no_cnc,sort_order')
     .eq('cabinet_instance_id', cabinetInstanceId).order('sort_order')
 
   const row = {
@@ -578,7 +580,8 @@ export interface CabinetCustomPart {
   x:                   number
   y:                   number
   z:                   number
-  material_id:         string | null
+  material_id:         string | null   // resolved cache (override ?? role material); written by the resolver
+  material_override_id: string | null  // explicit user pick; wins over the role default
   edge_top:            boolean
   edge_bottom:         boolean
   edge_left:           boolean

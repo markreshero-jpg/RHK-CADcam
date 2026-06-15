@@ -6,7 +6,7 @@
 // working set.
 // ============================================================
 
-export type SourceTable = 'case_parts' | 'internal_parts' | 'toekick_parts' | 'face_zones' | 'drawer_box_parts'
+export type SourceTable = 'case_parts' | 'internal_parts' | 'toekick_parts' | 'face_zones' | 'drawer_box_parts' | 'custom_parts'
 
 // One physical panel instance pulled from a part table at load time.
 export interface OptiPart {

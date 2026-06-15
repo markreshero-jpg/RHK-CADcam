@@ -11,7 +11,7 @@ export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c =
 
 export interface RawProject { id: string; name: string; job_number: string | null }
 export interface RawRoom { id: string; name: string }
-export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string }
+export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; no_cnc?: boolean | null }
 type Row = Record<string, unknown>
 
 export interface NormalizedProject {
@@ -27,11 +27,14 @@ export function normalizeProject(
   cp: Row[], ip: Row[], tp: Row[], fz: Row[],
   dbp: Row[] = [],
   commentsByCab: Map<string, Record<string, string>> = new Map(),
+  ccp: Row[] = [],
 ): NormalizedProject {
   const rooms: OptiRoom[] = roomsRaw.map(r => ({ id: r.id, name: r.name }))
   const roomById = new Map(rooms.map(r => [r.id, r]))
   const cabinets: OptiCabinet[] = cabsRaw.map(c => ({ id: c.id, label: c.label ?? humanize(c.assembly_class), room_id: c.room_id }))
   const cabById = new Map(cabinets.map(c => [c.id, c]))
+  // Assembly-level no_cnc cascades to ALL of a cabinet's parts (standard + custom).
+  const cabNoCnc = new Set(cabsRaw.filter(c => c.no_cnc).map(c => c.id))
 
   const parts: OptiPart[] = []
   const meta = (cabId: string) => {
@@ -40,7 +43,11 @@ export function normalizeProject(
     return { cabinet_label: cab?.label ?? '—', room_id: cab?.room_id ?? '', room_name: room?.name ?? '—' }
   }
   const push = (table: SourceTable, row: Row, partKey: string, label: string, grain: string | null, nestPriority: number) => {
-    const m = meta(row.cabinet_instance_id as string)
+    const cabId = row.cabinet_instance_id as string
+    const m = meta(cabId)
+    // custom_parts carry no_cnc (true = skip CNC); everything else carries output_to_cnc.
+    // Either is overridden to false when the whole assembly is flagged no_cnc.
+    const partCut = table === 'custom_parts' ? !(row.no_cnc as boolean) : ((row.output_to_cnc as boolean) ?? true)
     parts.push({
       uid: `${table}:${row.id as string}`,
       source_table: table, source_part_id: row.id as string,
@@ -52,8 +59,8 @@ export function normalizeProject(
       w: Number(row.dx), h: Number(row.dy), thickness: Number(row.dz),
       material_id: (row.material_id as string) ?? null,
       grain_direction: grain, nest_priority: nestPriority,
-      output_to_cnc: (row.output_to_cnc as boolean) ?? true,
-      comment: commentsByCab.get(row.cabinet_instance_id as string)?.[partKey] ?? null,
+      output_to_cnc: partCut && !cabNoCnc.has(cabId),
+      comment: commentsByCab.get(cabId)?.[partKey] ?? null,
     })
   }
 
@@ -65,6 +72,8 @@ export function normalizeProject(
   // Drawer box panels — key mirrors svgDbMeta (dbox_<row>_<col>_<part_type>).
   for (const r of dbp) push('drawer_box_parts', r, `dbox_${r.face_zone_row}_${r.face_zone_col}_${r.part_type}`,
     `${humanize(String(r.part_type).replace(/^db_/, ''))} (R${Number(r.face_zone_row) + 1}C${Number(r.face_zone_col) + 1})`, (r.grain_direction as string) ?? null, 0)
+  // Custom parts (fillers / applied panels / end panels). Key mirrors PartsView (custom_<id>).
+  for (const r of ccp) push('custom_parts', r, `custom_${r.id}`, String(r.name ?? 'Custom'), null, 0)
 
   return { rooms, cabinets, parts }
 }
@@ -76,4 +85,5 @@ export const PART_SELECTS = {
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,material_id,output_to_cnc',
   face_zones: 'id,cabinet_instance_id,row_index,col_index,face_type,dx,dy,dz,material_id,grain_direction,output_to_cnc',
   drawer_box_parts: 'id,cabinet_instance_id,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc',
+  custom_parts: 'id,cabinet_instance_id,name,dx,dy,dz,material_id,no_cnc',
 } as const
