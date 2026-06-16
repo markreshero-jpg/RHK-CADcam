@@ -8,7 +8,7 @@ import { dbLoadResolvedParts, dbResolveAndPersistCabinet } from './canvasDB'
 export type MatColours  = Record<string, { face?: string; back?: string; edge?: string }>
 export type EbByMatId   = Record<string, { thickness: number; color: string | null }>
 
-const CUSTOM_PART_COLS = 'id,cabinet_instance_id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room'
+const CUSTOM_PART_COLS = 'id,cabinet_instance_id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,orientation'
 
 // Minimal resolved cabinet carrying only custom parts — for standalone panels /
 // fillers / end panels that have no carcass, so they still render in room views.

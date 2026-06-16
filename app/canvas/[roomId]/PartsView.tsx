@@ -9,26 +9,37 @@ import {
 } from './canvasDB'
 import { DB_PART_LABELS } from './cabinetEditSvgHelpers'
 import { buildPartContext, evalPartExpr, type FormulaCtx } from '@/src/lib/partFormula'
+import { CUSTOM_ORIENT_LABELS, type CustomOrient } from '@/src/lib/customPartBox'
+import { evalCalc } from '@/src/lib/calc'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 
-// One dimension/position field: accepts a plain number (fixed) OR a formula
-// (cab.* / t.* / math). Shows a live evaluated readout.
+// One dimension/position field: accepts a plain number (fixed), a plain
+// arithmetic calc (e.g. "100+100" → 200, evaluated and stored as the value), OR
+// a formula using cab.* / t.* variables (re-evaluated on resolve). Shows a live
+// readout.
 function FormulaField({ label, value, onChange, ctx }: {
   label: string; value: string; onChange: (v: string) => void; ctx: FormulaCtx | null
 }) {
   const trimmed = value.trim()
   const isNum = trimmed !== '' && Number.isFinite(Number(trimmed))
-  const isFormula = trimmed !== '' && !isNum
-  const evaluated = trimmed === '' ? null : isNum ? Number(trimmed) : (ctx ? evalPartExpr(trimmed, ctx) : null)
+  // Pure arithmetic (no variables) resolves with evalCalc even without a context.
+  const calc = trimmed !== '' && !isNum ? evalCalc(trimmed) : null
+  const isArith = calc != null
+  const isFormula = trimmed !== '' && !isNum && !isArith
+  const evaluated = trimmed === '' ? null
+    : isNum ? Number(trimmed)
+    : isArith ? calc
+    : (ctx ? evalPartExpr(trimmed, ctx) : null)
   return (
     <div>
       <label className="block text-[10px] text-gray-500 mb-1">{label}</label>
       <input type="text" value={value} onChange={e => onChange(e.target.value)} onFocus={e => e.target.select()}
-        placeholder="0 or cab.d + t.door + 2"
+        placeholder="0 · 100+100 · cab.d + t.door + 2"
         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500" />
       <p className={`text-[9px] mt-0.5 ${isFormula && evaluated == null ? 'text-red-400' : 'text-gray-600'}`}>
         {isFormula
           ? (evaluated != null ? `ƒ = ${Math.round(evaluated * 10) / 10} mm` : 'invalid formula')
+          : isArith ? `= ${Math.round((evaluated ?? 0) * 10) / 10} mm`
           : isNum ? 'fixed' : ' '}
       </p>
     </div>
@@ -36,10 +47,14 @@ function FormulaField({ label, value, onChange, ctx }: {
 }
 
 // Parse a field's raw text into a literal value + (optional) formula string.
+// Plain numbers and plain arithmetic ("100+100") resolve to a fixed value (no
+// formula stored); only expressions with variables are kept as a formula.
 function parseField(raw: string, ctx: FormulaCtx | null, fallback: number): { value: number; expr?: string } {
   const t = raw.trim()
   if (t === '') return { value: 0 }
   if (Number.isFinite(Number(t))) return { value: Number(t) }
+  const calc = evalCalc(t)
+  if (calc != null) return { value: calc }
   const v = ctx ? evalPartExpr(t, ctx) : null
   return { value: v ?? fallback, expr: t }
 }
@@ -285,6 +300,7 @@ export function PartDialog({ cabinetId, ctx, editPart, initialPos, onSaved, onCl
   const [eRight,    setERight]    = useState(editPart?.edge_right ?? false)
   const [visible,   setVisible]   = useState(editPart?.visible ?? true)
   const [showRoom,  setShowRoom]  = useState(editPart?.show_in_room ?? true)
+  const [orient,    setOrient]    = useState<CustomOrient>(editPart?.orientation ?? 'flat')
   const [noCnc,     setNoCnc]     = useState(editPart?.no_cnc ?? false)
   const [saving,    setSaving]    = useState(false)
 
@@ -337,7 +353,7 @@ export function PartDialog({ cabinetId, ctx, editPart, initialPos, onSaved, onCl
       material_override_id: matId || null,
       ...(matId ? { material_id: matId } : {}),
       edge_top: eTop, edge_bottom: eBot, edge_left: eLeft, edge_right: eRight,
-      visible, show_in_room: showRoom, no_cnc: noCnc, expressions,
+      visible, show_in_room: showRoom, orientation: orient, no_cnc: noCnc, expressions,
     }
     if (editing && editPart) {
       await dbUpdateCustomPart(editPart.id, fields)
@@ -429,6 +445,15 @@ export function PartDialog({ cabinetId, ctx, editPart, initialPos, onSaved, onCl
                 {matDz > 0 && !fDz.trim() && (
                   <p className="text-[10px] text-gray-600 mt-0.5">Thickness defaults to {matDz}mm</p>
                 )}
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-500 mb-1">Orientation</label>
+                <select value={orient} onChange={e => setOrient(e.target.value as CustomOrient)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                  {(Object.keys(CUSTOM_ORIENT_LABELS) as CustomOrient[]).map(o => (
+                    <option key={o} value={o}>{CUSTOM_ORIENT_LABELS[o]}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <p className="text-[10px] text-gray-500 mb-1.5">Edge Band</p>
@@ -662,12 +687,20 @@ export default function PartsView({
     }
 
     for (const [partId, ov] of Object.entries(partOverrides ?? {})) {
+      const sgn = (n: number) => `${n >= 0 ? '+' : ''}${n}`
+      const desc: string[] = []
+      if (ov.ox || ov.oy || ov.oz) desc.push(`pos X${sgn(ov.ox)} Y${sgn(ov.oy)} Z${sgn(ov.oz)}`)
+      if (ov.sw != null || ov.sh != null || ov.sd != null) {
+        desc.push(`size ${ov.sw ?? '·'}×${ov.sh ?? '·'}×${ov.sd ?? '·'}`)
+      }
+      if (ov.oax || ov.oay || ov.oaz) desc.push(`rot ${ov.oax ?? 0}/${ov.oay ?? 0}/${ov.oaz ?? 0}°`)
       result.push({
         id: `ov__${partId}`, typeKey: 'override', typeLabel: 'Override',
         name: partIdLabel(partId),
-        material: `X${ov.ox >= 0 ? '+' : ''}${ov.ox} Y${ov.oy >= 0 ? '+' : ''}${ov.oy} Z${ov.oz >= 0 ? '+' : ''}${ov.oz}`,
+        material: desc.join('   ') || 'override',
         materialColor: null,
-        dy: 0, dx: 0, dz: 0, eb: null,
+        // Show the overridden size in the W/H/T columns when present (sw=W, sh=H, sd=T).
+        dy: ov.sw ?? 0, dx: ov.sh ?? 0, dz: ov.sd ?? 0, eb: null,
         comment: '',
         isCustom: false, isOverride: true, overridePartId: partId,
       })

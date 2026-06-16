@@ -16,6 +16,7 @@ import type { Pt } from '@/src/lib/geometry'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import { getPalette } from '@/src/lib/partPalette'
 import { caseBox, isSide } from '@/src/lib/jointDrilling'
+import { customExtents, customPanelKind } from '@/src/lib/customPartBox'
 import {
   panelFaceColors, edgeStrips, unpackMatCol,
   type PanelKind, type PartEdge, type EbSpec,
@@ -377,14 +378,16 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
         {/* ── Custom parts (panels / fillers / end panels) — room-visible only ── */}
         {(rp.custom_parts ?? []).filter(p => p.show_in_room && Number(p.dz) > 0).map((p, i) => {
           const s = matSpec(p.material_id ?? '', '#a78bfa')
-          const b: Box = { x: p.x, y: p.y, z: p.z, w: Number(p.dy), h: Number(p.dz), d: Number(p.dx) }
+          const { ex, ey, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+          const b: Box = { x: p.x, y: p.y, z: p.z, w: ex, h: ey, d: ez }
+          const kind = customPanelKind(p.orientation)
           return (
             <Part key={`cust${i}`}
               b={b}
-              faceColors={selected ? SEL6 : panelFaceColors('horizontal', 'custom', s.face, s.back, s.edge)}
+              faceColors={selected ? SEL6 : panelFaceColors(kind, 'custom', s.face, s.back, s.edge)}
               edgeColor={selected ? SELE : palette.carcase}
               edge={{ top: p.edge_top, bottom: p.edge_bottom, left: p.edge_left, right: p.edge_right }}
-              panelKind="horizontal"
+              panelKind={kind}
               ebSpec={selected ? undefined : ebFor(p.material_id ?? '')}
             />
           )

@@ -5,6 +5,7 @@ import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlo
 import { Selected, CabResize, viewReducer, DisplayConfig, Mode, ArmedDefinition, placeInfoFor } from './canvasTypes'
 import { layerSVGProps } from '@/src/lib/displayConfig'
 import { roundMm } from '@/src/lib/format'
+import { customExtents } from '@/src/lib/customPartBox'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import { getPalette, paletteToPartColors } from '@/src/lib/partPalette'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone, ResolvedInternalPart, ResolvedDrawerStack, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
@@ -1293,8 +1294,10 @@ export default function ElevationSVG({
                       </g>)}
 
                       {/* Custom parts (panels / fillers / end panels) — room-visible only */}
-                      {(rp.custom_parts ?? []).filter(p => p.show_in_room && Number(p.dz) > 0 && Number(p.dy) > 0).map((p, i) => {
-                        const { x, y, w, h } = toSVG(p.x, p.y + Number(p.dz), Number(p.dy), Number(p.dz))
+                      {(rp.custom_parts ?? []).filter(p => p.show_in_room).map((p, i) => {
+                        const { ex, ey } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+                        if (ex <= 0 || ey <= 0) return null
+                        const { x, y, w, h } = toSVG(p.x, p.y + ey, ex, ey)
                         return (
                           <rect key={`cust-${i}`} x={x} y={y} width={w} height={h}
                             fill={isLineDrawing ? 'none' : '#a78bfa'}

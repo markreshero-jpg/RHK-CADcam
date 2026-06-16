@@ -446,6 +446,29 @@ export interface ResolvedDrawerBoxPart extends ResolvedPart {
   part_type: DrawerBoxPartType
 }
 
+// ── Kick run (joined toe kicks across a straight run) ─────────────────────────
+// When contiguous floor cabinets are joined into a kick run, the leftmost member
+// ("lead") resolves ONE continuous toe kick spanning the whole run; every other
+// member resolves zero kick parts (resolveToekick short-circuits). Attached to
+// CabinetInput by loadCabinetInput when the cabinet has a kick_run_id.
+// Mirrors the kick_runs table. See z_kick_join/KICK-JOIN-PLAN.md.
+export type KickSplitMode = 'equal' | 'exact'
+
+export interface KickRunMember {
+  id:    string   // cabinet_instance id
+  order: number   // position along the wall (0 = leftmost/lead), ascending by cabT
+  DX:    number   // member width (mm) — its contribution to the run length
+  DZ:    number   // member depth (mm) — the run builds its kick to the deepest member
+}
+
+export interface KickRunInput {
+  run_id:             string
+  is_lead:            boolean            // true only for the leftmost member
+  members:            KickRunMember[]    // all members ascending by order (includes self)
+  max_segment_length: number | null      // null = use sheet-length default
+  split_mode:         KickSplitMode
+}
+
 // ── Cabinet Input ─────────────────────────────────────────────
 // Everything the resolver needs to know about a cabinet
 export interface CabinetInput {
@@ -468,6 +491,11 @@ export interface CabinetInput {
   // Top / toe overrides
   top_type?:      ConstructionRules['TOP_TYPE']
   toe_type?:      ConstructionRules['TOE_TYPE']
+
+  // Kick-run membership — present only when this cabinet is joined into a kick
+  // run. The lead member resolves the whole run's continuous toe kick; the rest
+  // resolve none. Populated by loadCabinetInput. See z_kick_join/KICK-JOIN-PLAN.md.
+  kick_run?:      KickRunInput
 
   // Neighbour context
   left_neighbour:  'cabinet' | 'end_panel' | 'wall' | 'freestanding'
@@ -911,7 +939,7 @@ export const EMPTY_SECTION: OpenSection = { type: 'open', fittings: [] }
 
 // Custom part as carried on a resolved cabinet for room-level rendering. A
 // structural subset of the UI's CabinetCustomPart (canvasDB) — kept here to avoid
-// a resolver→UI import. Box mapping (room views): w=dy, h=dz, d=dx.
+// a resolver→UI import. Cabinet-space extents come from customExtents(orientation).
 export interface ResolvedCustomPart {
   id:           string
   name:         string | null
@@ -921,6 +949,7 @@ export interface ResolvedCustomPart {
   edge_top: boolean; edge_bottom: boolean; edge_left: boolean; edge_right: boolean
   visible:       boolean
   show_in_room:  boolean
+  orientation:   'flat' | 'side' | 'front'
 }
 
 export interface ResolvedCabinet {

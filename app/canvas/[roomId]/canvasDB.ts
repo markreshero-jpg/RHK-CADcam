@@ -1,5 +1,6 @@
 import { supabase } from '@/src/lib/supabase'
 import type { Wall, CabinetInstance, CabinetDefinition, NeighbourType } from '@/src/lib/types'
+import type { CustomOrient } from '@/src/lib/customPartBox'
 import { resolveCabinetFromDB, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { loadCabinetInput } from '@/src/lib/resolver/loadCabinetInput'
@@ -419,6 +420,7 @@ export async function dbInsertCustomPartsSnapshot(cabinetId: string, snapshot: R
     edge_top: !!p.edge_top, edge_bottom: !!p.edge_bottom, edge_left: !!p.edge_left, edge_right: !!p.edge_right,
     visible: p.visible !== false,
     show_in_room: p.show_in_room !== false,
+    orientation: (p.orientation as string) ?? 'flat',
     no_cnc: !!p.no_cnc,
     sort_order: (p.sort_order as number) ?? i,
   }))
@@ -508,7 +510,7 @@ export async function saveCabinetToLibrary(
 
   // Snapshot the instance's custom parts so the definition carries them.
   const { data: cps } = await supabase.from('cabinet_custom_parts')
-    .select('part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,no_cnc,sort_order')
+    .select('part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,orientation,no_cnc,sort_order')
     .eq('cabinet_instance_id', cabinetInstanceId).order('sort_order')
 
   const row = {
@@ -543,9 +545,12 @@ export async function dbUpdateCabinet(
 
   // Fast path: dimension-only change + cached input → resolve synchronously,
   // persist in background. Eliminates ~17 Supabase round-trips per resize.
+  // Kick-run members are excluded: their width change reshapes the run's merged
+  // kick (owned by the lead), which the single-cabinet fast path can't see — they
+  // fall through to a full resolve, and the caller fans the run out (resolveKickRun).
   const keys = Object.keys(u)
   const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k)) ? getCachedInput(id) : undefined
-  if (cached) {
+  if (cached && !cached.kick_run) {
     const updated = {
       ...cached,
       ...(u.dx !== undefined && { DX: Number(u.dx) }),
@@ -563,9 +568,55 @@ export async function dbUpdateCabinet(
   try { return await resolveCabinetFromDB(id) } catch (e) { console.error('resolve after update:', e); return null }
 }
 
-export async function dbDeleteCabinet(id: string) {
+// ── Kick-run orchestration ────────────────────────────────────────────────────
+// The leftmost member ("lead") owns the whole run's continuous toe kick; the
+// others own none. So a change to ANY member — width, position, or which member
+// is the lead — requires re-resolving them ALL: this lets the old lead shed its
+// kick and the new lead build it. Self-correcting. Returns each member's fresh
+// geometry so the canvas can update every affected cabinet at once.
+export async function resolveKickRun(runId: string): Promise<Map<string, ResolvedCabinet>> {
+  const { data, error } = await supabase.from('cabinet_instances').select('id').eq('kick_run_id', runId)
+  if (error) { console.error('resolveKickRun members', error); return new Map() }
+  const ids = (data ?? []).map(r => r.id as string)
+  const out = new Map<string, ResolvedCabinet>()
+  await Promise.all(ids.map(async cid => {
+    const r = await resolveCabinetFromDB(cid).catch(e => { console.error('resolveKickRun member', cid, e); return null })
+    if (r) out.set(cid, r)
+  }))
+  return out
+}
+
+// Keep a run consistent after a membership change (delete / leave): a run with
+// fewer than 2 members is dissolved — the survivor's kick_run_id is cleared and
+// the kick_runs row removed — then every (former) member is re-resolved so its
+// kick reflects the new reality (smaller run, or standalone again).
+export async function reconcileKickRun(runId: string): Promise<Map<string, ResolvedCabinet>> {
+  const { data } = await supabase.from('cabinet_instances').select('id').eq('kick_run_id', runId)
+  const ids = (data ?? []).map(r => r.id as string)
+  if (ids.length < 2) {
+    if (ids.length > 0) await supabase.from('cabinet_instances').update({ kick_run_id: null }).eq('kick_run_id', runId)
+    await supabase.from('kick_runs').delete().eq('id', runId)
+  }
+  const out = new Map<string, ResolvedCabinet>()
+  await Promise.all(ids.map(async cid => {
+    const r = await resolveCabinetFromDB(cid).catch(e => { console.error('reconcileKickRun member', cid, e); return null })
+    if (r) out.set(cid, r)
+  }))
+  return out
+}
+
+// Returns the re-resolved geometry of any kick-run siblings affected by the
+// delete (empty when the cabinet was standalone) so the caller can refresh them.
+export async function dbDeleteCabinet(id: string): Promise<Map<string, ResolvedCabinet>> {
+  // Capture kick-run membership before deleting so the run can be reconciled
+  // (the FK clears this cabinet's link on delete; siblings keep theirs).
+  const { data: row } = await supabase.from('cabinet_instances').select('kick_run_id').eq('id', id).maybeSingle()
+  const runId = (row as { kick_run_id?: string | null } | null)?.kick_run_id ?? null
+
   const { error } = await supabase.from('cabinet_instances').delete().eq('id', id)
-  if (error) console.error('dbDeleteCabinet', error)
+  if (error) { console.error('dbDeleteCabinet', error); return new Map() }
+
+  return runId ? await reconcileKickRun(runId) : new Map()
 }
 
 // ── Custom Parts ──────────────────────────────────────────────────────────────
@@ -589,6 +640,7 @@ export interface CabinetCustomPart {
   edge_right:          boolean
   visible:             boolean   // visibility inside the cabinet editor (3D / elevation)
   show_in_room:        boolean   // drawn in room plan / elevation / 3D when true
+  orientation:         CustomOrient  // how the flat panel sits in cabinet space
   // Parametric formula per field (dx/dy/dz/x/y/z). Present key = that column is a
   // computed cache of the formula, re-evaluated on resolve. Absent = plain literal.
   expressions?:        Record<string, string>

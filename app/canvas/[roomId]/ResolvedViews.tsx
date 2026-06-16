@@ -5,6 +5,7 @@ import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack } from '@/src/lib/resolver/types'
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import type { CabinetCustomPart, PartLabels, PartComments } from './canvasDB'
+import { customExtents, customPanelKind } from '@/src/lib/customPartBox'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import type { PartPosOverrides } from './canvasDB'
 import {
@@ -53,13 +54,14 @@ function applyOv<T extends { X: number; Y: number; Z: number }>(p: T, id: string
 }
 
 function svgCustomMeta(p: CabinetCustomPart): PartMeta {
+  const { ex, ey, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
   return {
     id: `custom_${p.id}`,
     label: p.name ?? 'Custom Part',
-    w: p.dy, h: p.dx, d: p.dz,
+    w: ex, h: ey, d: ez,
     thickness: p.dz,
     edge: { top: p.edge_top, bottom: p.edge_bottom, left: p.edge_left, right: p.edge_right },
-    panelKind: 'horizontal',
+    panelKind: customPanelKind(p.orientation),
     x: p.x, y: p.y, z: p.z,
   }
 }
@@ -384,11 +386,27 @@ function hingeSnapPts(
 
 // ── Resolved views ────────────────────────────────────────────────────────────
 
-export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
+// Client (screen) coords → SVG user-space coords for the given <svg>, honouring
+// the current zoom/pan. Used to turn a right-click on empty space into a cabinet
+// position for "Add part here".
+function clientToSvgUser(svg: SVGSVGElement | null, clientX: number, clientY: number): { x: number; y: number } | null {
+  if (!svg) return null
+  const pt = svg.createSVGPoint(); pt.x = clientX; pt.y = clientY
+  const m = svg.getScreenCTM(); if (!m) return null
+  const u = pt.matrixTransform(m.inverse())
+  return { x: u.x, y: u.y }
+}
+
+// A right-click on empty space (no part hit) reports a cabinet-space point so the
+// caller can offer "Add part here". Each ortho view maps two of the three axes.
+export type EmptyContextMenu = (pos: { x: number; y: number; z: number }, clientX: number, clientY: number) => void
+
+export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
+  onEmptyContextMenu?: EmptyContextMenu
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
 }) {
@@ -460,7 +478,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
       })
       ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); const pp = applyOv(s, m.id, partOverrides); const { ex, ey, ew, eh } = slideElevRect(pp as typeof s); push(toSVG(ex, ey, ew, eh)) })
     }
-    ;(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0 && Number(p.dy) > 0).forEach(p => push(toSVG(p.x, p.y + Number(p.dz), Number(p.dy), Number(p.dz))))
+    ;(customParts ?? []).filter(p => p.visible).forEach(p => { const e = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz)); if (e.ex > 0 && e.ey > 0) push(toSVG(p.x, p.y + e.ey, e.ex, e.ey)) })
     // Drill-hole centres (carcase joints + slide-imposed), same projection as DrillOverlay.
     drills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oy + dy - dr.y }))
     slideDrills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oy + dy - dr.y }))
@@ -481,7 +499,12 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
     e.preventDefault(); e.stopPropagation()
     if (measureMode) { measure.cancel(); return }
     const hits = svgHitParts(e, partMap)
-    if (hits.length > 0) onPartContextMenu?.(hits, e.clientX, e.clientY)
+    // Right-clicking the already-selected part → its part menu. Anywhere else
+    // (incl. over a door/face zone or other unselected part) → "Add part here".
+    if (selectedPartId && hits.some(h => h.id === selectedPartId)) { onPartContextMenu?.(hits, e.clientX, e.clientY); return }
+    // Elevation = X/Y plane, Z at front.
+    const u = clientToSvgUser(svgRef.current, e.clientX, e.clientY)
+    if (u && onEmptyContextMenu) onEmptyContextMenu({ x: Math.round(u.x - ox), y: Math.round((oy + dy) - u.y), z: 0 }, e.clientX, e.clientY)
   }
 
   return (
@@ -584,9 +607,11 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         )
       })}
 
-      {(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0 && Number(p.dy) > 0).map((p, i) => {
+      {(customParts ?? []).filter(p => p.visible).map((p, i) => {
         const meta = svgCustomMeta(p)
-        const r = toSVG(p.x, p.y + Number(p.dz), Number(p.dy), Number(p.dz))
+        const e = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+        if (e.ex <= 0 || e.ey <= 0) return null
+        const r = toSVG(p.x, p.y + e.ey, e.ex, e.ey)
         return <rect key={`cust${i}`} x={r.x} y={r.y} width={Math.max(r.w, 1)} height={Math.max(r.h, 1)}
           fill={wireMode ? 'transparent' : '#2d1a4a'}
           stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"
@@ -615,11 +640,12 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   )
 }
 
-export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
+export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
+  onEmptyContextMenu?: EmptyContextMenu
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
 }) {
@@ -691,7 +717,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
       })
       ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); const pp = applyOv(s, m.id, partOverrides); const r = slideTopRect(pp as typeof s); push(toSVG(r.tx, r.tz, r.tw, r.td)) })
     }
-    ;(customParts ?? []).filter(p => p.visible && Number(p.dy) > 0 && Number(p.dx) > 0).forEach(p => push(toSVG(p.x, p.z, Number(p.dy), Number(p.dx))))
+    ;(customParts ?? []).filter(p => p.visible).forEach(p => { const e = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz)); if (e.ex > 0 && e.ez > 0) push(toSVG(p.x, p.z, e.ex, e.ez)) })
     // Drill-hole centres (carcase joints + slide-imposed), same projection as DrillOverlay.
     drills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oz + dr.z }))
     slideDrills.forEach(dr => measurePts.push({ x: ox + dr.x, y: oz + dr.z }))
@@ -710,7 +736,10 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
     e.preventDefault(); e.stopPropagation()
     if (measureMode) { measure.cancel(); return }
     const hits = svgHitParts(e, partMap)
-    if (hits.length > 0) onPartContextMenu?.(hits, e.clientX, e.clientY)
+    if (selectedPartId && hits.some(h => h.id === selectedPartId)) { onPartContextMenu?.(hits, e.clientX, e.clientY); return }
+    // Top/plan = X/Z plane, Y at floor.
+    const u = clientToSvgUser(svgRef.current, e.clientX, e.clientY)
+    if (u && onEmptyContextMenu) onEmptyContextMenu({ x: Math.round(u.x - ox), y: 0, z: Math.round(u.y - oz) }, e.clientX, e.clientY)
   }
 
   return (
@@ -800,9 +829,11 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
           dataPartId={meta.id} style={cp} />
       })}
 
-      {(customParts ?? []).filter(p => p.visible && Number(p.dy) > 0 && Number(p.dx) > 0).map((p, i) => {
+      {(customParts ?? []).filter(p => p.visible).map((p, i) => {
         const meta = svgCustomMeta(p)
-        const s = toSVG(p.x, p.z, Number(p.dy), Number(p.dx))
+        const e = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+        if (e.ex <= 0 || e.ez <= 0) return null
+        const s = toSVG(p.x, p.z, e.ex, e.ez)
         return <rect key={`cust${i}`} x={s.x} y={s.y} width={Math.max(s.w, 1)} height={Math.max(s.h, 1)}
           fill={wireMode ? 'transparent' : '#2d1a4a'}
           stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"
@@ -832,11 +863,12 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
   )
 }
 
-export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, customParts, partOverrides, partLabels, partComments }: {
+export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
+  onEmptyContextMenu?: EmptyContextMenu
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
 }) {
@@ -920,7 +952,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
       })
       ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); const pp = applyOv(s, m.id, partOverrides); const r = slideSideRect(pp as typeof s); push(toSVG(r.sz, r.cy_top, r.sw, r.sh)) })
     }
-    ;(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0 && Number(p.dx) > 0).forEach(p => push(toSVG(p.z, p.y + Number(p.dz), Number(p.dx), Number(p.dz))))
+    ;(customParts ?? []).filter(p => p.visible).forEach(p => { const e = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz)); if (e.ez > 0 && e.ey > 0) push(toSVG(p.z, p.y + e.ey, e.ez, e.ey)) })
     // Drill-hole centres (carcase joints + slide-imposed), same projection as DrillOverlay.
     drills.forEach(dr => measurePts.push({ x: oz + dr.z, y: oy + dy - dr.y }))
     slideDrills.forEach(dr => measurePts.push({ x: oz + dr.z, y: oy + dy - dr.y }))
@@ -939,7 +971,10 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
     e.preventDefault(); e.stopPropagation()
     if (measureMode) { measure.cancel(); return }
     const hits = svgHitParts(e, partMap)
-    if (hits.length > 0) onPartContextMenu?.(hits, e.clientX, e.clientY)
+    if (selectedPartId && hits.some(h => h.id === selectedPartId)) { onPartContextMenu?.(hits, e.clientX, e.clientY); return }
+    // Side = Z/Y plane, X across the cabinet.
+    const u = clientToSvgUser(svgRef.current, e.clientX, e.clientY)
+    if (u && onEmptyContextMenu) onEmptyContextMenu({ x: 0, y: Math.round((oy + dy) - u.y), z: Math.round(u.x - oz) }, e.clientX, e.clientY)
   }
 
   return (
@@ -1031,9 +1066,11 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
           dataPartId={meta.id} style={cp} />
       })}
 
-      {(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0 && Number(p.dx) > 0).map((p, i) => {
+      {(customParts ?? []).filter(p => p.visible).map((p, i) => {
         const meta = svgCustomMeta(p)
-        const s = toSVG(p.z, p.y + Number(p.dz), Number(p.dx), Number(p.dz))
+        const e = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+        if (e.ez <= 0 || e.ey <= 0) return null
+        const s = toSVG(p.z, p.y + e.ey, e.ez, e.ey)
         return <rect key={`cust${i}`} x={s.x} y={s.y} width={Math.max(s.w, 1)} height={Math.max(s.h, 1)}
           fill={wireMode ? 'transparent' : '#2d1a4a'}
           stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"

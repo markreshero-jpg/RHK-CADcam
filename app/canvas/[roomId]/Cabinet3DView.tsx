@@ -7,6 +7,7 @@ import { supabase } from '@/src/lib/supabase'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
 import type { CabinetInstance } from '@/src/lib/types'
 import { dbUpdateCustomPart, dbSavePartPosOverride, type CabinetCustomPart, type PartPosOverrides } from './canvasDB'
+import { customExtents, customFieldForExtent, customPanelKind, type CustomOrient } from '@/src/lib/customPartBox'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
   ResolvedInternalPart, ResolvedFaceZone,
@@ -1367,21 +1368,24 @@ function CabinetScene({
         return <Part key={`f${i}`} b={b} rotation={getRotOv(id, partOverrides)} {...partProps} />
       })}
       {(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0).map((p, i) => {
-        const b: Box = { x: p.x, y: p.y, z: p.z, w: Number(p.dy), h: Number(p.dz), d: Number(p.dx) }
+        const orient = (p.orientation ?? 'flat') as CustomOrient
+        const { ex, ey, ez } = customExtents(orient, Number(p.dx), Number(p.dy), Number(p.dz))
+        const b: Box = { x: p.x, y: p.y, z: p.z, w: ex, h: ey, d: ez }
+        const kind = customPanelKind(orient)
         const s = matSpec(p.material_id ?? '', '#a78bfa')
         const info: PartMeta = {
           id: `custom_${p.id}`,
           label: p.name ?? 'Custom Part',
           w: b.w, h: b.h, d: b.d,
-          thickness: b.h,
+          thickness: Number(p.dz),
           edge: { top: p.edge_top, bottom: p.edge_bottom, left: p.edge_left, right: p.edge_right },
-          panelKind: 'horizontal',
+          panelKind: kind,
         }
         return (
           <Part
             key={`cust${i}`}
             b={b}
-            faceColors={panelFaceColors('horizontal', 'custom', s.face, s.back, s.edge)}
+            faceColors={panelFaceColors(kind, 'custom', s.face, s.back, s.edge)}
             edgeLineColor="#7c3aed"
             meta={info}
             selected={selected?.id === info.id}
@@ -1519,8 +1523,8 @@ export default function Cabinet3DView({
       const cpId = id.slice('custom_'.length)
       const cp = customParts?.find(p => p.id === cpId)
       if (!cp) return
-      // custom-part box mapping: w=dy, h=dz, d=dx
-      const field: 'dx' | 'dy' | 'dz' = dim === 'w' ? 'dy' : dim === 'h' ? 'dz' : 'dx'
+      // Map the edited box extent back to the intrinsic field for this orientation.
+      const field = customFieldForExtent((cp.orientation ?? 'flat') as CustomOrient, dim)
       const expressions = { ...(cp.expressions ?? {}) }
       delete expressions[field]   // a manual size clears that field's formula
       setCustomParts?.(prev => prev.map(p => p.id === cpId ? { ...p, [field]: value, expressions } : p))
