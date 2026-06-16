@@ -9,10 +9,10 @@ import {
   wallEnd, wallDir,
   snapAngle,
   nearestWall, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabT, nextLabel,
-  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCenterPt,
+  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, resolveKickRun } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
@@ -407,12 +407,20 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     await Promise.all(propagated.map(({ id: pid, update }) => dbUpdateWall(pid, update)))
   }, [room])
 
+  // Merge re-resolved kick-run siblings (from resolveKickRun / dbDeleteCabinet)
+  // into the canvas so the lead and other members redraw after a run change.
+  const applyKickSiblings = useCallback((byId: Map<string, ResolvedCabinet>) => {
+    if (byId.size === 0) return
+    setResolvedParts(m => { const next = new Map(m); for (const [cid, rc] of byId) next.set(cid, rc); return next })
+    for (const cid of byId.keys()) { applyInputColours(cid); applyInputEdgebands(cid) }
+  }, [applyInputColours, applyInputEdgebands])
+
   async function handleDeleteCabinet(id: string) {
     if (!confirm('Delete this cabinet?')) return
     captureSnapshot()
     setCabinets(cs => cs.filter(c => c.id !== id))
     setSelected(null)
-    await dbDeleteCabinet(id)
+    applyKickSiblings(await dbDeleteCabinet(id))
   }
 
   async function handleDeleteMultipleCabinets(ids: string[]) {
@@ -422,7 +430,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setSelected(null)
     setMultiSelect([])
     setContextMenu(null)
-    await Promise.all(ids.map(id => dbDeleteCabinet(id)))
+    // Sequential so concurrent reconciles of the same run don't race.
+    for (const id of ids) {
+      const siblings = await dbDeleteCabinet(id)
+      for (const did of ids) siblings.delete(did)   // drop any still-pending deletes
+      applyKickSiblings(siblings)
+    }
   }
 
   const handleUpdateCabinet = useCallback(async (id: string, u: Partial<CabinetInstance>) => {
@@ -434,7 +447,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     const resolved = await dbUpdateCabinet(id, u)
     if (resolved) { setResolvedParts(m => new Map(m).set(id, resolved)); applyInputColours(id); applyInputEdgebands(id) }
-  }, [])
+    // Kick-run member: a width/position change reshapes the run's continuous kick
+    // (owned by the lead). Re-resolve the whole run and merge every member so the
+    // lead — and any cabinet that just became/ceased to be the lead — redraw live.
+    const runId = cabinetsRef.current.find(c => c.id === id)?.kick_run_id
+    if (runId) applyKickSiblings(await resolveKickRun(runId))
+  }, [applyKickSiblings])
 
   function commitResize() {
     if (!cabResize) return
@@ -595,7 +613,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const ids = cabs.map(c => c.id)
     setCabinets(cs => cs.filter(c => !ids.includes(c.id)))
     setSelected(null); setMultiSelect([])
-    await Promise.all(ids.map(id => dbDeleteCabinet(id)))
+    // Sequential so concurrent reconciles of the same kick run don't race.
+    for (const id of ids) {
+      const siblings = await dbDeleteCabinet(id)
+      for (const did of ids) siblings.delete(did)
+      applyKickSiblings(siblings)
+    }
   }
 
   const cabWallT = (c: CabinetInstance) => {
@@ -1047,8 +1070,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           if (!wall) return false
           const basePerp = wallInwardNormal(wall, cxpt.x, cxpt.y)
           const perp = cabWallPerp(cab, wall, basePerp)
-          const center = cabinetCenterPt(cab, wall, perp)
-          return center.x >= minX && center.x <= maxX && center.y >= minY && center.y <= maxY
+          // Full enclosure: every corner of the cabinet must be inside the box.
+          return cabinetCornerPts(cab, wall, perp).every(p =>
+            p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY)
         }).map(c => c.id)
         if (ids.length >= 2) {
           setMultiSelect(ids)
@@ -1478,6 +1502,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               selected={selected}
               mode={mode}
               armedDef={armedDef}
+              resolvedParts={visibleResolvedParts}
               onCanvasDrop={dropDefinitionAt}
               displayConfig={displayConfig}
               drawStart={drawStart}
@@ -1667,6 +1692,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeleteCabinet={id => handleDeleteCabinet(id)}
             resolvedParts={visibleResolvedParts}
             materialColours={matColours}
+            ebByMatId={ebByMatId}
             cameraStateRef={camera3DStateRef}
             resetSignal={reset3DSignal}
           />

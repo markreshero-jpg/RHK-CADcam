@@ -1,6 +1,8 @@
 'use client'
 import React, { Fragment, useState, useMemo } from 'react'
 import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment } from '@/src/lib/types'
+import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import { customExtents } from '@/src/lib/customPartBox'
 import {
   Pt, MIN_WALL_LEN, SNAP_PX, CAB_FILL, CAB_FILL_SEL,
   toRad, toDeg, dist,
@@ -48,6 +50,7 @@ interface CanvasSVGProps {
   selected: Selected
   mode: Mode
   armedDef: ArmedDefinition | null
+  resolvedParts?: Map<string, ResolvedCabinet>
   onCanvasDrop?: (defId: string, clientX: number, clientY: number) => void
   drawStart: Pt | null
   drawCursor: Pt | null
@@ -133,6 +136,7 @@ export default function CanvasSVG({
   btCutoutStart, btCutoutCursor,
   sectionCut, onSectionFlipLook, onSectionClear, onSectionLinePointerDown,
   snapResult, measureStart, measureEnd, measureCursor, onMeasureCancel,
+  resolvedParts,
 }: CanvasSVGProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   // Editable part-line palette (src/lib/partPalette.ts); read once on mount.
@@ -859,6 +863,20 @@ export default function CanvasSVG({
                   style={{ pointerEvents: 'none' }}
                 />
               )}
+
+              {/* Custom parts (panels / fillers) — plan footprint, room-visible only */}
+              {carcL.visible && (resolvedParts?.get(cab.id)?.custom_parts ?? []).filter(p => p.show_in_room).map((p, i) => {
+                const { ex, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+                if (ex <= 0 || ez <= 0) return null
+                const c = (lx: number, lz: number) => `${displayCab.pos_x + lx * wd.x + lz * perp.x},${displayCab.pos_y + lx * wd.y + lz * perp.y}`
+                const poly = `${c(p.x, p.z)} ${c(p.x + ex, p.z)} ${c(p.x + ex, p.z + ez)} ${c(p.x, p.z + ez)}`
+                return (
+                  <polygon key={`cust-${i}`} points={poly}
+                    fill="#a78bfa" fillOpacity={0.35}
+                    stroke={isSel ? '#e2e8f0' : '#7c3aed'} strokeWidth={1 / view.zoom}
+                    opacity={carcP.opacity} style={{ pointerEvents: 'none' }} />
+                )
+              })}
 
               {/* Internal — dashed inset polygon showing interior cavity */}
               {intL.visible && cab.has_internal && (() => {
