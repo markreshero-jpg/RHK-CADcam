@@ -12,13 +12,14 @@ import {
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, resolveKickRun } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, resolveKickRun, dbSeparateKickRun } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
 import { useMaterialColours } from './useMaterialColours'
 import { useCabinetOps } from './useCabinetOps'
 import { useMultiSelectOps } from './useMultiSelectOps'
+import { useKickRunOps, runIsContiguous } from './useKickRunOps'
 import { buildMenus } from './canvasMenuConfig'
 import {
   Mode, ArmedDefinition, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, SectionCut,
@@ -41,6 +42,7 @@ import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
 import WallDrawPanel from './WallDrawPanel'
 import WallPanel from './WallPanel'
 import CabinetPanel from './CabinetPanel'
+import CabinetGroupPanel from './CabinetGroupPanel'
 import CabinetResizePanel from './CabinetResizePanel'
 import CabinetEditModal from './CabinetEditModal'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
@@ -415,6 +417,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     for (const cid of byId.keys()) { applyInputColours(cid); applyInputEdgebands(cid) }
   }, [applyInputColours, applyInputEdgebands])
 
+  const { handleJoinKicks, handleSeparateKicks } = useKickRunOps({
+    cabinets, walls, room, setCabinets, applyKickSiblings, setContextMenu,
+  })
+
   async function handleDeleteCabinet(id: string) {
     if (!confirm('Delete this cabinet?')) return
     captureSnapshot()
@@ -448,10 +454,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const resolved = await dbUpdateCabinet(id, u)
     if (resolved) { setResolvedParts(m => new Map(m).set(id, resolved)); applyInputColours(id); applyInputEdgebands(id) }
     // Kick-run member: a width/position change reshapes the run's continuous kick
-    // (owned by the lead). Re-resolve the whole run and merge every member so the
-    // lead — and any cabinet that just became/ceased to be the lead — redraw live.
-    const runId = cabinetsRef.current.find(c => c.id === id)?.kick_run_id
-    if (runId) applyKickSiblings(await resolveKickRun(runId))
+    // (owned by the lead). A move that breaks the run's contiguity dissolves it
+    // (members go back to standalone kicks); otherwise re-resolve the whole run so
+    // the lead — and any cabinet that just became/ceased to be the lead — redraw.
+    const moved = cabinetsRef.current.find(c => c.id === id)
+    const runId = moved?.kick_run_id
+    if (runId) {
+      const isMove = 'pos_x' in u || 'pos_y' in u || 'wall_id' in u
+      const wall = wallsRef.current.find(w => w.id === moved!.wall_id)
+      const members = cabinetsRef.current.filter(c => c.kick_run_id === runId)
+      if (isMove && (!wall || !runIsContiguous(members, wall))) {
+        setCabinets(cs => cs.map(c => c.kick_run_id === runId ? { ...c, kick_run_id: null } : c))
+        applyKickSiblings(await dbSeparateKickRun(runId))
+      } else {
+        applyKickSiblings(await resolveKickRun(runId))
+      }
+    }
   }, [applyKickSiblings])
 
   function commitResize() {
@@ -1754,7 +1772,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             autoFocusWidth
           />
         )}
-        {mode !== 'place_definition' && selectedCab && (!cabResize || cabResize.cabId !== selectedCab.id) && (
+        {mode !== 'place_definition' && multiSelectCabs.length >= 2 && (
+          <CabinetGroupPanel
+            cabinets={multiSelectCabs}
+            walls={walls}
+            room={room}
+            onUpdateMany={u => { multiSelect.forEach(id => void handleUpdateCabinet(id, u)) }}
+            onDeleteMany={() => void handleDeleteMultipleCabinets(multiSelect)}
+          />
+        )}
+        {mode !== 'place_definition' && multiSelectCabs.length < 2 && selectedCab && (!cabResize || cabResize.cabId !== selectedCab.id) && (
           <CabinetPanel
             key={selectedCab.id}
             cabinet={selectedCab}
@@ -1866,6 +1893,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onAlignRight: handleAlignRight,
             onSplit: id => { setContextMenu(null); setSplitCabId(id) },
             onSaveToLibrary: id => { setContextMenu(null); setSaveLibCabId(id) },
+            onJoinKicks: id => { void handleJoinKicks(id) },
+            onSeparateKicks: id => { void handleSeparateKicks(id) },
           })}
           onClose={() => setContextMenu(null)}
         />
@@ -1891,6 +1920,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               const r = m.get(cabinetId)
               if (!r) return m
               return new Map(m).set(cabinetId, { ...r, hidden_parts: hidden })
+            })}
+            onCustomPartsChange={(cabinetId, parts) => setResolvedParts(m => {
+              const r = m.get(cabinetId)
+              if (!r) return m
+              return new Map(m).set(cabinetId, { ...r, custom_parts: parts as unknown as typeof r.custom_parts })
             })}
           />
         )

@@ -13,6 +13,7 @@ import {
   type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments,
 } from './canvasDB'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
+import CalcInput from '@/src/components/CalcInput'
 import CabinetPanel from './CabinetPanel'
 import Cabinet3DView from './Cabinet3DView'
 import FaceGridEditor from './FaceGridEditor'
@@ -110,32 +111,20 @@ function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onO
       <div className="px-3 py-2 space-y-1.5">
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500 w-4 shrink-0">X</span>
-          <input type="number" value={ox} step="1"
-            onChange={e => setOx(parseFloat(e.target.value) || 0)}
-            onBlur={e => { const v = parseFloat(e.target.value) || 0; setOx(v); save(v, oy, oz) }}
-            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-            onFocus={e => e.target.select()}
-            className={inputCls} />
+          <CalcInput value={ox} decimals={1} className={inputCls}
+            onCommit={v => { setOx(v); save(v, oy, oz) }} />
           <span className="text-[10px] text-gray-600 shrink-0">mm</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500 w-4 shrink-0">Y</span>
-          <input type="number" value={oy} step="1"
-            onChange={e => setOy(parseFloat(e.target.value) || 0)}
-            onBlur={e => { const v = parseFloat(e.target.value) || 0; setOy(v); save(ox, v, oz) }}
-            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-            onFocus={e => e.target.select()}
-            className={inputCls} />
+          <CalcInput value={oy} decimals={1} className={inputCls}
+            onCommit={v => { setOy(v); save(ox, v, oz) }} />
           <span className="text-[10px] text-gray-600 shrink-0">mm</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500 w-4 shrink-0">Z</span>
-          <input type="number" value={oz} step="1"
-            onChange={e => setOz(parseFloat(e.target.value) || 0)}
-            onBlur={e => { const v = parseFloat(e.target.value) || 0; setOz(v); save(ox, oy, v) }}
-            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-            onFocus={e => e.target.select()}
-            className={inputCls} />
+          <CalcInput value={oz} decimals={1} className={inputCls}
+            onCommit={v => { setOz(v); save(ox, oy, v) }} />
           <span className="text-[10px] text-gray-600 shrink-0">mm</span>
         </div>
         {!isCustom && (
@@ -143,32 +132,20 @@ function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onO
             <div className="border-t border-gray-800 pt-1.5" />
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500 w-4 shrink-0">AX</span>
-              <input type="number" value={oax} step="1"
-                onChange={e => setOax(parseFloat(e.target.value) || 0)}
-                onBlur={e => { const v = parseFloat(e.target.value) || 0; setOax(v); save(ox, oy, oz, v, oay, oaz) }}
-                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                onFocus={e => e.target.select()}
-                className={inputCls} />
+              <CalcInput value={oax} decimals={1} className={inputCls}
+                onCommit={v => { setOax(v); save(ox, oy, oz, v, oay, oaz) }} />
               <span className="text-[10px] text-gray-600 shrink-0">°</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500 w-4 shrink-0">AY</span>
-              <input type="number" value={oay} step="1"
-                onChange={e => setOay(parseFloat(e.target.value) || 0)}
-                onBlur={e => { const v = parseFloat(e.target.value) || 0; setOay(v); save(ox, oy, oz, oax, v, oaz) }}
-                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                onFocus={e => e.target.select()}
-                className={inputCls} />
+              <CalcInput value={oay} decimals={1} className={inputCls}
+                onCommit={v => { setOay(v); save(ox, oy, oz, oax, v, oaz) }} />
               <span className="text-[10px] text-gray-600 shrink-0">°</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500 w-4 shrink-0">AZ</span>
-              <input type="number" value={oaz} step="1"
-                onChange={e => setOaz(parseFloat(e.target.value) || 0)}
-                onBlur={e => { const v = parseFloat(e.target.value) || 0; setOaz(v); save(ox, oy, oz, oax, oay, v) }}
-                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                onFocus={e => e.target.select()}
-                className={inputCls} />
+              <CalcInput value={oaz} decimals={1} className={inputCls}
+                onCommit={v => { setOaz(v); save(ox, oy, oz, oax, oay, v) }} />
               <span className="text-[10px] text-gray-600 shrink-0">°</span>
             </div>
           </>
@@ -179,7 +156,7 @@ function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onO
 }
 
 export default function CabinetEditModal({
-  cabinet, wall, wallCabinets, resolvedCabinet, initialView, onUpdate, onDelete, onClose, materialColours, ebByMatId, onHiddenChange,
+  cabinet, wall, wallCabinets, resolvedCabinet, initialView, onUpdate, onDelete, onClose, materialColours, ebByMatId, onHiddenChange, onCustomPartsChange,
 }: {
   cabinet: CabinetInstance
   wall: Wall | null
@@ -194,6 +171,9 @@ export default function CabinetEditModal({
   // Lets the parent canvas reflect hide/show toggles live (updates the shared
   // resolved map's hidden_parts so the on-canvas elevation / 3D update at once).
   onHiddenChange?: (cabinetId: string, hidden: string[]) => void
+  // Lets the parent canvas reflect custom-part add/edit/delete live (updates the
+  // shared resolved map's custom_parts so the room plan/elevation/3D update at once).
+  onCustomPartsChange?: (cabinetId: string, parts: CabinetCustomPart[]) => void
 }) {
   const [activeView, setActiveView]       = useState<ViewId>(initialView ?? 'elevation')
   // Wire/solid is tracked per-view (Top/Elevation/Side/3D each individual), seeded
@@ -249,6 +229,15 @@ export default function CabinetEditModal({
     dbLoadPartComments(cabinet.id).then(setPartComments)
     dbLoadHiddenParts(cabinet.id).then(setHiddenParts)
   }, [cabinet.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Push custom-part changes (add/edit/delete/visibility) up to the parent so the
+  // room plan/elevation/3D refresh without a page reload. Skip the initial mount —
+  // the parent already has the on-load state.
+  const customSyncRef = useRef(false)
+  useEffect(() => {
+    if (!customSyncRef.current) { customSyncRef.current = true; return }
+    onCustomPartsChange?.(cabinet.id, customParts)
+  }, [customParts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleHidden(partId: string) {
     setHiddenParts(prev => {
@@ -604,6 +593,9 @@ export default function CabinetEditModal({
                 onOverridesChange={setPartOverrides}
                 customParts={customParts}
                 setCustomParts={setCustomParts}
+                cabinet={cabinet}
+                rp={rp}
+                onUpdate={onUpdate}
               />
             )}
             {selectedSVGPart && isOrthoView && (

@@ -337,7 +337,16 @@ export async function dbInsertCabinet(
 }
 
 export async function dbResolveAndPersistCabinet(id: string): Promise<ResolvedCabinet | null> {
-  try { return await resolveCabinetFromDB(id) } catch (e) { console.error('resolve after save:', e); return null }
+  try {
+    const resolved = await resolveCabinetFromDB(id)
+    // Attach custom parts so room views (which read resolved.custom_parts) stay in
+    // sync after a re-resolve instead of dropping them until a page reload.
+    const { data } = await supabase.from('cabinet_custom_parts')
+      .select('id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,orientation')
+      .eq('cabinet_instance_id', id)
+    resolved.custom_parts = (data ?? []) as unknown as ResolvedCabinet['custom_parts']
+    return resolved
+  } catch (e) { console.error('resolve after save:', e); return null }
 }
 
 // ── Definition-driven placement (Cabinet Library) ─────────────────────────────
@@ -600,6 +609,41 @@ export async function reconcileKickRun(runId: string): Promise<Map<string, Resol
   const out = new Map<string, ResolvedCabinet>()
   await Promise.all(ids.map(async cid => {
     const r = await resolveCabinetFromDB(cid).catch(e => { console.error('reconcileKickRun member', cid, e); return null })
+    if (r) out.set(cid, r)
+  }))
+  return out
+}
+
+// Join a set of cabinets into a new kick run: create the run row, stamp every
+// member's kick_run_id, then resolve so the lead builds the continuous kick and
+// the others drop theirs. Returns the new run id + each member's fresh geometry.
+export async function dbJoinKickRun(
+  roomId: string,
+  memberIds: string[],
+  buildToDepth: number,
+): Promise<{ runId: string | null; resolved: Map<string, ResolvedCabinet> }> {
+  const { data, error } = await supabase
+    .from('kick_runs')
+    .insert({ room_id: roomId, build_to_depth: buildToDepth, split_mode: 'equal' })
+    .select('id').single()
+  if (error || !data) { console.error('dbJoinKickRun create', error); return { runId: null, resolved: new Map() } }
+  const runId = data.id as string
+  const { error: upErr } = await supabase.from('cabinet_instances').update({ kick_run_id: runId }).in('id', memberIds)
+  if (upErr) { console.error('dbJoinKickRun assign', upErr); return { runId: null, resolved: new Map() } }
+  return { runId, resolved: await resolveKickRun(runId) }
+}
+
+// Dissolve a run outright (explicit Separate, or a run broken by a drag): clear
+// every member's kick_run_id, delete the run row, and re-resolve each former
+// member back to a standalone per-cabinet kick. Returns their fresh geometry.
+export async function dbSeparateKickRun(runId: string): Promise<Map<string, ResolvedCabinet>> {
+  const { data } = await supabase.from('cabinet_instances').select('id').eq('kick_run_id', runId)
+  const ids = (data ?? []).map(r => r.id as string)
+  await supabase.from('cabinet_instances').update({ kick_run_id: null }).eq('kick_run_id', runId)
+  await supabase.from('kick_runs').delete().eq('id', runId)
+  const out = new Map<string, ResolvedCabinet>()
+  await Promise.all(ids.map(async cid => {
+    const r = await resolveCabinetFromDB(cid).catch(e => { console.error('dbSeparateKickRun member', cid, e); return null })
     if (r) out.set(cid, r)
   }))
   return out
