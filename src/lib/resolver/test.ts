@@ -214,6 +214,91 @@ test('leg kick produces only front face', () => {
   expect(result.toekick_parts[0].part_key).toBe('kick_front_face')
 })
 
+test('left/right scribes inset the kick face', () => {
+  const result = resolveCabinet(make2DoorBase({
+    rules: mergeRules(DEFAULT_RULES, { TOESCL: 20, TOESCR: 30 }),
+  }))
+  const front = result.toekick_parts.find(p => p.part_key === 'kick_front_face')!
+  // x0 = TOESCL = 20; W = 600 - 20 - 30 = 550
+  expect(front.X).toBe(20)
+  expect(front.DY).toBe(550)
+})
+
+// ══════════════════════════════════════════════════════════════
+console.log('\n🔗 KICK RUN MODULE')
+// ══════════════════════════════════════════════════════════════
+// The joined kick is owned by a synthetic "kick assembly" cabinet whose DX = run
+// length and DZ = deepest member depth (set by the orchestration layer). The
+// resolver builds the continuous kick straight from those dimensions.
+
+function kickRun(opts: { role?: 'assembly' | 'member'; maxSeg?: number | null; mode?: 'equal' | 'exact' } = {}) {
+  return {
+    run_id: 'run-1',
+    role: opts.role ?? ('assembly' as const),
+    max_segment_length: opts.maxSeg ?? null,
+    split_mode: opts.mode ?? ('equal' as const),
+  }
+}
+
+test('kick assembly resolves one continuous kick across its width (no split)', () => {
+  const result = resolveCabinet(make2DoorBase({ id: 'k', DX: 1800, kick_run: kickRun() }))
+  const front = result.toekick_parts.filter(p => p.part_key === 'kick_front_face')
+  expect(front).toHaveLength(1)
+  expect(front[0].DY).toBe(1800)   // full run width
+  expect(front[0].X).toBe(0)
+})
+
+test('run member resolves no kick parts', () => {
+  const result = resolveCabinet(make2DoorBase({ id: 'b', kick_run: kickRun({ role: 'member' }) }))
+  expect(result.toekick_parts).toHaveLength(0)
+})
+
+test('run kick built to the assembly depth (deepest member)', () => {
+  const result = resolveCabinet(make2DoorBase({ id: 'k', DX: 1200, DZ: 600, kick_run: kickRun() }))
+  const front = result.toekick_parts.find(p => p.part_key === 'kick_front_face')!
+  // kickFrontZ = DZ - TOESCF - TF = 600 - 40 - 18 = 542
+  expect(front.Z).toBe(542)
+})
+
+test('oversized run splits into equal segments', () => {
+  const result = resolveCabinet(make2DoorBase({ id: 'k', DX: 1800, kick_run: kickRun({ maxSeg: 800 }) }))
+  const front = result.toekick_parts.filter(p => p.part_key === 'kick_front_face')
+  // ceil(1800/800) = 3 equal pieces of 600
+  expect(front).toHaveLength(3)
+  expect(front[0].DY).toBeCloseTo(600)
+  expect(front.reduce((s, p) => s + p.DY, 0)).toBeCloseTo(1800)
+})
+
+test('respaced spreaders span the whole run', () => {
+  const result = resolveCabinet(make2DoorBase({ id: 'k', DX: 1800, kick_run: kickRun() }))
+  const vSpr = result.toekick_parts.filter(p => p.part_key === 'spreader_vertical')
+  // L=1800 / TOESP=450 → floor(1800/450)-1 = 3 internal + 2 ends = 5
+  expect(vSpr).toHaveLength(5)
+  const maxX = Math.max(...vSpr.map(p => p.X))
+  expect(maxX).toBe(1800 - 18)   // right end at L - TI
+})
+
+test('split seam forces a spreader at the seam', () => {
+  const result = resolveCabinet(make2DoorBase({ id: 'k', DX: 1800, kick_run: kickRun({ maxSeg: 800 }) }))
+  const xs = result.toekick_parts
+    .filter(p => p.part_key === 'spreader_vertical')
+    .map(p => Math.round(p.X))
+  // seams at 600 and 1200 → spreaders centred at 600-9=591 and 1200-9=1191
+  expect(xs.includes(591)).toBe(true)
+  expect(xs.includes(1191)).toBe(true)
+})
+
+test('run kick applies L/R scribes at the run ends', () => {
+  const result = resolveCabinet(make2DoorBase({
+    id: 'k', DX: 1800, kick_run: kickRun(),
+    rules: mergeRules(DEFAULT_RULES, { TOESCL: 25, TOESCR: 25 }),
+  }))
+  const front = result.toekick_parts.filter(p => p.part_key === 'kick_front_face')
+  expect(front).toHaveLength(1)
+  expect(front[0].X).toBe(25)         // inset off the left end
+  expect(front[0].DY).toBe(1750)      // 1800 - 25 - 25
+})
+
 // ══════════════════════════════════════════════════════════════
 console.log('\n📚 INTERNAL MODULE')
 // ══════════════════════════════════════════════════════════════

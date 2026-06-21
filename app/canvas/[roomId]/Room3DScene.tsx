@@ -31,7 +31,9 @@ const FOV    = 40
 function cabFloorY(cab: CabinetInstance, room: Room): number {
   if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner')
     return (room.wall_cabinet_top ?? 2100) - cab.dy
-  return 0
+  // Floor units sit at pos_z (0 unless raised — a kick-detached member is lifted by
+  // the kick height so its carcase stays put while the kick assembly fills below).
+  return cab.pos_z ?? 0
 }
 
 // Same logic as wallMitrePolygon; returns [startInside, endInside, endOutside, startOutside]

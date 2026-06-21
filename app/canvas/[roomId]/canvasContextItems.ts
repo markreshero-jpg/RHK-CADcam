@@ -5,7 +5,7 @@ export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, canEqualize, clipboard, cabinets, multiSelect,
   onDeleteWall, onDeleteCabinet, onDeleteMultiple, onDeleteBenchtop, onDeleteBenchtopVertex, onRoundCorner, onChamfer,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
-  onAlignLeft, onAlignRight, onSaveToLibrary,
+  onAlignLeft, onAlignRight, onSaveToLibrary, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
 }: {
   cabId?: string
   wallId?: string
@@ -34,6 +34,10 @@ export function buildContextMenuGroups({
   onAlignLeft?: () => void
   onAlignRight?: () => void
   onSaveToLibrary?: (cabId: string) => void
+  onJoinKicks?: (cabId: string) => void
+  onDetachKick?: (cabId: string) => void
+  onSeparateKicks?: (cabId: string) => void
+  onKickSettings?: (cabId: string) => void
 }): ContextMenuItem[][] {
   if (vertexContext && onDeleteBenchtopVertex) {
     const { btId, vi } = vertexContext
@@ -71,6 +75,18 @@ export function buildContextMenuGroups({
   if (!cabId) return []
 
   const cab = cabinets.find(c => c.id === cabId)
+
+  // Kick assembly: a standalone toe-kick-only object — only split settings,
+  // Separate + Delete (it has no carcass/face/internal, so Edit/Split don't apply).
+  if (cab?.is_kick_assembly) {
+    const g: ContextMenuItem[][] = []
+    g.push([{ label: 'Edit…', onClick: () => onEdit(cabId), color: 'blue' }])
+    if (onKickSettings) g.push([{ label: 'Kick split…', onClick: () => onKickSettings(cabId) }])
+    if (onSeparateKicks) g.push([{ label: 'Separate kicks', onClick: () => onSeparateKicks(cabId) }])
+    g.push([{ label: 'Delete', onClick: () => onDeleteCabinet(cabId), color: 'red' }])
+    return g
+  }
+
   const groups: ContextMenuItem[][] = []
 
   if (canEqualize) {
@@ -108,6 +124,25 @@ export function buildContextMenuGroups({
   if (onSaveToLibrary) groups.push([{ label: 'Save to library…', onClick: () => onSaveToLibrary(cabId) }])
 
   if (onSplit) groups.push([{ label: 'Split…', onClick: () => onSplit(cabId) }])
+
+  // Detach toe kick(s) into a standalone kick assembly. A cabinet already in a run
+  // (its kick is detached) only offers Separate; an un-detached floor unit with a
+  // ladder kick offers single Detach + Join-the-whole-run. (Run detection + depth
+  // warning happen in the handlers.)
+  if (cab && !cab.is_kick_assembly) {
+    if (cab.kick_run_id) {
+      if (onSeparateKicks) groups.push([{ label: 'Separate kicks', onClick: () => onSeparateKicks(cabId) }])
+    } else {
+      const kickEligible = (cab.assembly_class === 'base' || cab.assembly_class === 'tall')
+        && cab.has_toekick && cab.toe_type !== 'leg' && cab.toe_type !== 'none'
+      if (kickEligible) {
+        const items: ContextMenuItem[] = []
+        if (onDetachKick) items.push({ label: 'Detach kick', onClick: () => onDetachKick(cabId) })
+        if (onJoinKicks)  items.push({ label: 'Join kicks in run', onClick: () => onJoinKicks(cabId) })
+        if (items.length) groups.push(items)
+      }
+    }
+  }
 
   if (onInsertAdjacent) {
     groups.push([{

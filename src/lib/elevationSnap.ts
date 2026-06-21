@@ -56,7 +56,7 @@ function cabBottomZ(cab: CabinetInstance, room: Room, wall: Wall): number {
   if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') {
     return wallCabTopFor(wall, room) - cab.dy
   }
-  return 0
+  return cab.pos_z ?? 0   // floor units sit at pos_z (raised when kick-detached)
 }
 
 // 4 cabinet corners in elevation coords (top-left, top-right, bottom-left, bottom-right).

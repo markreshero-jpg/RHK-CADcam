@@ -316,6 +316,17 @@ export function cabinetPolygon(cab: CabinetInstance, wall: Wall, perp: Pt): stri
   return `${ax},${ay} ${bx},${by} ${cx},${cy} ${ex},${ey}`
 }
 
+// The four plan-view corner points of a cabinet's footprint (same order as
+// cabinetPolygon). Used for marquee hit-testing (cabinet fully inside the box).
+export function cabinetCornerPts(cab: CabinetInstance, wall: Wall, perp: Pt): Pt[] {
+  const d = wallDir(wall)
+  const ax = cab.pos_x, ay = cab.pos_y
+  const bx = ax + cab.dx * d.x,    by = ay + cab.dx * d.y
+  const cx = bx + cab.dz * perp.x, cy = by + cab.dz * perp.y
+  const ex = ax + cab.dz * perp.x, ey = ay + cab.dz * perp.y
+  return [{ x: ax, y: ay }, { x: bx, y: by }, { x: cx, y: cy }, { x: ex, y: ey }]
+}
+
 export function cabinetCenterPt(cab: CabinetInstance, wall: Wall, perp: Pt): Pt {
   const d = wallDir(wall)
   return {

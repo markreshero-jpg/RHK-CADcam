@@ -80,7 +80,7 @@ function wallCabTopFor(w: Wall | null, room: Room): number {
 function cabBottomZ(cab: CabinetInstance, room: Room, elevWall: Wall | null): number {
   if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner')
     return wallCabTopFor(elevWall, room) - cab.dy
-  return 0
+  return cab.pos_z ?? 0   // floor units sit at pos_z (raised when kick-detached)
 }
 
 type Seg = { from: number; to: number; label: number }

@@ -1,12 +1,28 @@
 'use client'
 
-import { useState, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { computeElevSeams } from '@/src/lib/cabinetSeams'
 import type { CabinetCustomPart, PartPosOverrides } from './canvasDB'
 import { dbSavePartPosOverride, dbDeletePartPosOverride, dbClearPartPosOverrides, dbUpdateCustomPart } from './canvasDB'
+import CalcInput from '@/src/components/CalcInput'
+
+// Resolved base size (W=DY, H=DX, D=DZ) of every part that can carry an override,
+// keyed by the same part id used in partOverrides. Lets the override row show what
+// the size was before the override (as a placeholder) so it's clear what changed.
+function buildBaseDims(rp?: ResolvedCabinet): Map<string, { w: number; h: number; d: number }> {
+  const m = new Map<string, { w: number; h: number; d: number }>()
+  if (!rp) return m
+  rp.case_parts.forEach(p    => m.set(`case_${p.part_key}`,                 { w: p.DY, h: p.DX, d: p.DZ }))
+  rp.toekick_parts.forEach(p => m.set(`tk_${p.part_key}_${p.sort_order}`,   { w: p.DY, h: p.DX, d: p.DZ }))
+  rp.internal_parts.forEach(p => m.set(`int_${p.part_type}_${p.sort_order}`, { w: p.DY, h: p.DX, d: p.DZ }))
+  rp.face_zones.forEach(z => { if (z.face_type !== 'open') m.set(`zone_${z.row_index}_${z.col_index}`, { w: z.DY, h: z.DX, d: z.DZ }) })
+  ;(rp.drawer_stacks ?? []).forEach(s => s.box_parts.forEach(p =>
+    m.set(`db_${s.face_zone_row}_${s.face_zone_col}_${p.part_type}`, { w: p.DY, h: p.DX, d: p.DZ })))
+  return m
+}
 
 // ── Part label helper ─────────────────────────────────────────────────────────
 
@@ -58,31 +74,21 @@ function partIdLabel(id: string): string {
 
 // ── Resolved override row ─────────────────────────────────────────────────────
 
-function OverrideRow({ partId, ov, cabinetId, partOverrides, onOverridesChange }: {
+function OverrideRow({ partId, ov, base, cabinetId, partOverrides, onOverridesChange }: {
   partId: string
   ov: PartPosOverrides[string]
+  base?: { w: number; h: number; d: number }
   cabinetId: string
   partOverrides: PartPosOverrides
   onOverridesChange: (o: PartPosOverrides) => void
 }) {
-  const [ox, setOx] = useState(ov.ox)
-  const [oy, setOy] = useState(ov.oy)
-  const [oz, setOz] = useState(ov.oz)
-  const [oax, setOax] = useState(ov.oax ?? 0)
-  const [oay, setOay] = useState(ov.oay ?? 0)
-  const [oaz, setOaz] = useState(ov.oaz ?? 0)
-
-  useEffect(() => {
-    setOx(ov.ox); setOy(ov.oy); setOz(ov.oz)
-    setOax(ov.oax ?? 0); setOay(ov.oay ?? 0); setOaz(ov.oaz ?? 0)
-  }, [ov.ox, ov.oy, ov.oz, ov.oax, ov.oay, ov.oaz])
-
-  function save(nx: number, ny: number, nz: number, nax = oax, nay = oay, naz = oaz) {
-    const entry = { ox: nx, oy: ny, oz: nz, oax: nax, oay: nay, oaz: naz }
-    const updated = { ...partOverrides, [partId]: entry }
-    onOverridesChange(updated)
-    dbSavePartPosOverride(cabinetId, partId, entry, partOverrides).catch(console.error)
+  type OvEntry = PartPosOverrides[string]
+  function setEntry(next: OvEntry) {
+    onOverridesChange({ ...partOverrides, [partId]: next })
+    dbSavePartPosOverride(cabinetId, partId, next, partOverrides).catch(console.error)
   }
+  const setF   = (k: keyof OvEntry, v: number) => setEntry({ ...ov, [k]: v })
+  const clearF = (k: keyof OvEntry) => { const n = { ...ov }; delete n[k]; setEntry(n) }
 
   function remove() {
     const { [partId]: _removed, ...updated } = partOverrides
@@ -91,37 +97,54 @@ function OverrideRow({ partId, ov, cabinetId, partOverrides, onOverridesChange }
   }
 
   const inputCls = 'w-16 bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-xs font-mono text-right text-white focus:outline-none focus:border-blue-500'
+  const hasSize = ov.sw != null || ov.sh != null || ov.sd != null
 
-  function Field({ label, value, onChange, onSave, unit }: {
-    label: string; value: number
-    onChange: (v: number) => void; onSave: (v: number) => void; unit: string
-  }) {
-    return (
-      <div className="flex items-center gap-1">
-        <span className="text-[10px] text-gray-600 w-5">{label}</span>
-        <input type="number" value={value} step="1"
-          onChange={e => onChange(parseFloat(e.target.value) || 0)}
-          onBlur={e => { const v = parseFloat(e.target.value) || 0; onChange(v); onSave(v) }}
-          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-          onFocus={e => e.target.select()}
-          className={inputCls} />
-        <span className="text-[10px] text-gray-600">{unit}</span>
-      </div>
-    )
-  }
+  // Absolute size override (W/H/D) — blank means "use the resolved size", shown as
+  // the greyed placeholder. Entering a value overrides; clearing reverts.
+  const sizeField = (label: string, k: 'sw' | 'sh' | 'sd', baseVal?: number) => (
+    <div className="flex items-center gap-1">
+      <span className="text-[10px] text-gray-600 w-5">{label}</span>
+      <CalcInput value={ov[k] ?? null} decimals={1} className={inputCls}
+        placeholder={baseVal != null ? String(Math.round(baseVal)) : '—'}
+        onCommit={v => setF(k, v)} onClear={() => clearF(k)} />
+      <span className="text-[10px] text-gray-600">mm</span>
+    </div>
+  )
+  const offField = (label: string, k: keyof OvEntry, unit: string) => (
+    <div className="flex items-center gap-1">
+      <span className="text-[10px] text-gray-600 w-5">{label}</span>
+      <CalcInput value={(ov[k] as number | undefined) ?? 0} decimals={1} className={inputCls}
+        onCommit={v => setF(k, v)} />
+      <span className="text-[10px] text-gray-600">{unit}</span>
+    </div>
+  )
 
   return (
     <tr className="border-t border-gray-800/60 hover:bg-gray-800/20 group">
-      <td className="px-3 py-2 text-xs text-gray-300 font-medium align-top pt-3">{partIdLabel(partId)}</td>
+      <td className="px-3 py-2 text-xs text-gray-300 font-medium align-top pt-3">
+        {partIdLabel(partId)}
+        {base && (
+          <div className="text-[9px] text-gray-600 font-mono mt-0.5">
+            base {Math.round(base.w)}×{Math.round(base.h)}×{Math.round(base.d)}
+          </div>
+        )}
+      </td>
       <td className="px-2 py-2" colSpan={3}>
         <div className="space-y-1">
-          <Field label="X"  value={ox}  onChange={setOx}  onSave={v => save(v, oy, oz)}            unit="mm" />
-          <Field label="Y"  value={oy}  onChange={setOy}  onSave={v => save(ox, v, oz)}            unit="mm" />
-          <Field label="Z"  value={oz}  onChange={setOz}  onSave={v => save(ox, oy, v)}            unit="mm" />
+          <div className={`text-[9px] uppercase tracking-wider ${hasSize ? 'text-orange-400' : 'text-gray-600'}`}>Size override (W/H/D)</div>
+          {sizeField('W', 'sw', base?.w)}
+          {sizeField('H', 'sh', base?.h)}
+          {sizeField('D', 'sd', base?.d)}
           <div className="border-t border-gray-800/60 pt-1" />
-          <Field label="AX" value={oax} onChange={setOax} onSave={v => save(ox, oy, oz, v, oay, oaz)} unit="°" />
-          <Field label="AY" value={oay} onChange={setOay} onSave={v => save(ox, oy, oz, oax, v, oaz)} unit="°" />
-          <Field label="AZ" value={oaz} onChange={setOaz} onSave={v => save(ox, oy, oz, oax, oay, v)} unit="°" />
+          <div className="text-[9px] uppercase tracking-wider text-gray-600">Position offset</div>
+          {offField('X', 'ox', 'mm')}
+          {offField('Y', 'oy', 'mm')}
+          {offField('Z', 'oz', 'mm')}
+          <div className="border-t border-gray-800/60 pt-1" />
+          <div className="text-[9px] uppercase tracking-wider text-gray-600">Rotation</div>
+          {offField('AX', 'oax', '°')}
+          {offField('AY', 'oay', '°')}
+          {offField('AZ', 'oaz', '°')}
         </div>
       </td>
       <td className="px-2 py-2 text-right align-top pt-3">
@@ -313,6 +336,7 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
   rp?: ResolvedCabinet
   onUpdate?: (id: string, u: Partial<CabinetInstance>) => void | Promise<void>
 }) {
+  const baseDims        = useMemo(() => buildBaseDims(rp), [rp])
   const overrideEntries = Object.entries(partOverrides)
   const hasOverrides    = overrideEntries.length > 0
   const hasCustom       = customParts.length > 0
@@ -363,6 +387,7 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
                     key={partId}
                     partId={partId}
                     ov={ov}
+                    base={baseDims.get(partId)}
                     cabinetId={cabinetId}
                     partOverrides={partOverrides}
                     onOverridesChange={onOverridesChange}

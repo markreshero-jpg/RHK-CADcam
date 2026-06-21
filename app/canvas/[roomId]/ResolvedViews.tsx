@@ -247,10 +247,14 @@ function OriginMarker({ sx, sy, hLabel, vLabel, vUp = true }: {
 
 // ── Wheel-zoom hook ───────────────────────────────────────────────────────────
 
-function useSvgZoom(initW: number, initH: number) {
-  const initRef = useRef({ w: initW, h: initH })
-  const vbRef   = useRef({ x: 0, y: 0, w: initW, h: initH })
-  const [vb, setVb] = useState({ x: 0, y: 0, w: initW, h: initH })
+// `zoomOut` (default 1 = fit exactly) starts the view a little more zoomed out so
+// edge dimension chains aren't clipped — e.g. 1.2 leaves ~10% margin each side.
+function useSvgZoom(initW: number, initH: number, zoomOut = 1) {
+  const w0 = initW * zoomOut, h0 = initH * zoomOut
+  const x0 = -(w0 - initW) / 2, y0 = -(h0 - initH) / 2
+  const initRef = useRef({ w: w0, h: h0 })
+  const vbRef   = useRef({ x: x0, y: y0, w: w0, h: h0 })
+  const [vb, setVb] = useState({ x: x0, y: y0, w: w0, h: h0 })
   const svgRef  = useRef<SVGSVGElement>(null)
 
   // Track the SVG's on-screen size so overlay glyphs (measure readout etc.) can be
@@ -422,7 +426,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   const vw = dx + pl + pr
   const vh = dy + pt + pb
   const ox = pl, oy = pt
-  const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh)
+  const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh, 1.2)
 
   function toSVG(ex: number, ey: number, ew: number, eh: number) {
     return { x: ox + ex, y: oy + dy - ey, w: ew, h: eh }
@@ -662,7 +666,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
   const vw = dx + pl + pr
   const vh = dz + pt + pb
   const ox = pl, oz = pt
-  const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh)
+  const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh, 1.2)
 
   function toSVG(tx: number, tz: number, tw: number, td: number) {
     return { x: ox + tx, y: oz + tz, w: tw, h: td }
@@ -893,11 +897,11 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
     .filter(z => z.face_type !== 'open')
     .sort((a, b) => a.Y - b.Y)
 
-  const pl = 80 + wallW, pt = 80, pr = visibleZones.length > 0 ? 275 : 110, pb = 80
+  const pl = 80 + wallW, pt = 80, pr = visibleZones.length > 0 ? 390 : 290, pb = 80
   const vw = dz + pl + pr
   const vh = dy + pt + pb
   const oz = pl, oy = pt
-  const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh)
+  const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh, 1.2)
 
   function toSVG(sz: number, cy_top: number, w: number, h: number) {
     return { x: oz + sz, y: oy + dy - cy_top, w, h }
@@ -1091,7 +1095,10 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
 
       {dimH(oz, oz + dz, oy - 50, `${dz}mm`, false)}
       {kickZmin < Infinity && dimH(oz + kickZmin, oz + kickZmax, oy + dy + 30, `${Math.round(kickZmax - kickZmin)}mm`)}
-      {dimV(visibleZones.length > 0 ? oz + dz + 250 : oz + dz + 55, oy, oy + dy, `${dy}mm`, true)}
+      {/* Three vertical (height) dimension columns, spaced so the white labels
+          don't collide: inner = breakdown (face heights + toe kick), middle =
+          gaps/reveals, outer = overall height. */}
+      {dimV(visibleZones.length > 0 ? oz + dz + 290 : oz + dz + 185, oy, oy + dy, `${dy}mm`, true)}
       {tkHeight > 0 && dimV(oz + dz + 90, oy + dy - tkHeight, oy + dy, `${Math.round(tkHeight)}mm`, true)}
       {visibleZones.map((z, i) => {
         const y1 = oy + dy - (z.Y + z.DX)
@@ -1101,7 +1108,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
         return (
           <g key={`fd${i}`}>
             {dimV(oz + dz + 90, y1, y2, `${Math.round(z.DX)}mm`, true)}
-            {gap > 1 && dimV(oz + dz + 125, oy + dy - next.Y, y1, `${Math.round(gap)}mm`, true)}
+            {gap > 1 && dimV(oz + dz + 185, oy + dy - next.Y, y1, `${Math.round(gap)}mm`, true)}
           </g>
         )
       })}

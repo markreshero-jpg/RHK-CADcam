@@ -48,6 +48,10 @@ const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'errors',    label: 'Errors' },
 ]
 
+// A kick assembly is toe-kick-only — hide the cabinet-structure tabs that assume
+// a carcass / face grid / internal tree.
+const KICK_HIDDEN_VIEWS = new Set<ViewId>(['face', 'interior', 'joints', 'tree'])
+
 function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onOverridesChange, setCustomParts }: {
   part: PartMeta
   cabinetId: string
@@ -435,7 +439,7 @@ export default function CabinetEditModal({
           </div>
           {/* Tabs */}
           <div className="flex-none bg-gray-800/60 border-b border-gray-700 px-4 py-1.5 flex items-center gap-1">
-            {VIEWS.map(v => {
+            {(cabinet.is_kick_assembly ? VIEWS.filter(v => !KICK_HIDDEN_VIEWS.has(v.id)) : VIEWS).map(v => {
               const disabled = (v.id === 'parts' || v.id === '3d' || v.id === 'tree' || v.id === 'routes') && !rp
               const overrideCount = v.id === 'overrides'
                 ? Object.keys(partOverrides).length + customParts.length

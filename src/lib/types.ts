@@ -158,6 +158,11 @@ export interface CabinetInstance {
   internal_grid: Record<string, unknown> | null
   carcase_joints: Record<string, string | null>
   no_cnc?: boolean
+  // Joined toe-kick run this cabinet belongs to (null = standalone kick). Member
+  // cabinets drop their own kick; the run's kick is owned by a synthetic kick
+  // assembly (is_kick_assembly = true). See z_kick_join/.
+  kick_run_id?: string | null
+  is_kick_assembly?: boolean
   schema_version: string
   notes: string | null
   created_at: string

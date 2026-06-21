@@ -19,8 +19,8 @@ export const C_PANEL  = '#374151'
 export const C_STROKE = '#4b5563'
 export const C_FACE   = '#4b5563'
 export const C_INT    = '#0f172a'
-export const C_DIM    = '#6b7280'
-export const C_LABEL  = '#9ca3af'
+export const C_DIM    = '#ffffff'   // dimension lines — white (matches canvas elevation/plan)
+export const C_LABEL  = '#ffffff'   // dimension text — white
 export const C_WALL   = '#1e293b'
 export const C_CUT    = '#475569'
 

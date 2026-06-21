@@ -27,7 +27,10 @@ export function resolveFace(
   const ebId = cab.door_edgeband_id
 
   const errors: ResolverError[] = []
-  const TK  = (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') ? 0 : r.TOEH
+  // Faces sit above the toe kick — but only when this cabinet actually has its own
+  // kick. A kick-detached member (has_toekick=false) carries no kick, so its faces
+  // run flush to the carcase bottom (its kick lives in the standalone kick assembly).
+  const TK  = (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner' || !cab.has_toekick) ? 0 : r.TOEH
   const DX  = cab.DX
   const DY  = cab.DY
   const DZ  = cab.DZ

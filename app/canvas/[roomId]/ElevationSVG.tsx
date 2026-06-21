@@ -102,7 +102,10 @@ function cabBottomZ(cab: CabinetInstance, room: Room, elevWall?: Wall | null): n
   if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') {
     return wallCabTopFor(elevWall ?? null, room) - cab.dy
   }
-  return 0
+  // Floor units sit on the floor (pos_z = 0) unless raised — a kick-detached member
+  // is lifted by the kick height (pos_z) so its carcase stays where it was while the
+  // standalone kick assembly fills the floor band beneath it.
+  return cab.pos_z ?? 0
 }
 
 function computeElevChain(cabs: CabinetInstance[], wall: Wall) {
@@ -464,7 +467,7 @@ export default function ElevationSVG({
       if (dims) {
         const cls = clsInfo?.cls ?? clipboard!.assembly_class
         const occ = wallCabs
-          .filter(c => cabsBlock({ assembly_class: cls, dy: dims.dy }, c, wall, room))
+          .filter(c => !c.is_kick_assembly && cabsBlock({ assembly_class: cls, dy: dims.dy }, c, wall, room))
           .map(c => ({ t: cabT(c, wall), dx: c.dx }))
         if (clsInfo) {
           // Placing a new cabinet from the library: fit it into the available gap,
@@ -573,11 +576,19 @@ export default function ElevationSVG({
 
     const isWallCab = cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner'
     const wcTop = wallCabTopFor(wall, room)
-    const snapBottomZ = isWallCab ? Math.max(0, wcTop - cab.dy) : 0
+    // Floor units keep their current vertical position (pos_z) on a move — normally 0,
+    // but a kick-detached member is raised by the kick height and must stay raised,
+    // otherwise it drops back onto its kick assembly and looks re-attached.
+    const snapBottomZ = isWallCab ? Math.max(0, wcTop - cab.dy) : (cab.pos_z ?? 0)
 
-    const occupied = wallCabs
-      .filter(c => c.id !== id && cabsBlock(cab, c, wall, room))
-      .map(c => ({ t: cabT(c, wall), dx: c.dx }))
+    // A kick assembly spans its OWN run members freely (they no longer carry a
+    // kick) but clamps against everything else that blocks it — other cabinets,
+    // panels, and other kick runs — so two kicks can't overlap. It's never an
+    // obstacle for normal units (a plinth sits in front of the carcass).
+    const occupied = (cab.is_kick_assembly
+      ? wallCabs.filter(c => c.id !== id && c.kick_run_id !== cab.kick_run_id && cabsBlock(cab, c, wall, room))
+      : wallCabs.filter(c => c.id !== id && !c.is_kick_assembly && cabsBlock(cab, c, wall, room))
+    ).map(c => ({ t: cabT(c, wall), dx: c.dx }))
     const snapT = slideToFreeSlot(
       Math.max(0, Math.min(wall.length - cab.dx, elevCabFloat.t - cab.dx / 2)),
       cab.dx, wall.length, occupied, cabT(cab, wall)
@@ -637,9 +648,14 @@ export default function ElevationSVG({
     const wd = wallDir(wall)
     const perp = { x: -wd.y, y: wd.x }
     const dim: 'dx' | 'dy' = side === 'top' ? 'dy' : 'dx'
-    const neighbours = wallCabs
-      .filter(c => c.id !== cab.id && cabsBlock(cab, c, wall, room))
-      .map(c => ({ t: cabT(c, wall), dx: c.dx }))
+    // A kick assembly spans its OWN run members freely (no kick of their own) but
+    // clamps against everything else that blocks it (other cabinets/panels/kick
+    // runs), so it can't stretch into a cabinet that already has its own kick.
+    // It's never an obstacle for normal units (a plinth sits in front of them).
+    const neighbours = (cab.is_kick_assembly
+      ? wallCabs.filter(c => c.id !== cab.id && c.kick_run_id !== cab.kick_run_id && cabsBlock(cab, c, wall, room))
+      : wallCabs.filter(c => c.id !== cab.id && !c.is_kick_assembly && cabsBlock(cab, c, wall, room))
+    ).map(c => ({ t: cabT(c, wall), dx: c.dx }))
     setElevResizeFollowing({ cabId: cab.id, dim, side, startCabT: t, startCabEndT: t + cab.dx, resWall: wall, neighbours })
     setElevResizeLive({ cabId: cab.id, dim, value: dim === 'dx' ? cab.dx : cab.dy })
     onCabResizeStart({
@@ -1053,7 +1069,7 @@ export default function ElevationSVG({
                             strokeDasharray={isLineDrawing ? undefined : carcP.strokeDasharray}
                             opacity={carcP.opacity} />
                         )}
-                        {tkL.visible && cab.has_toekick && tkH > 0 && (
+                        {tkL.visible && cab.has_toekick && tkH > 0 && !(cab.kick_run_id && !cab.is_kick_assembly) && (
                           <rect x={rx} y={ry + displayDy - tkH} width={displayDx} height={tkH}
                             fill={isLineDrawing ? 'none' : baseColor}
                             fillOpacity={isLineDrawing ? 0 : (tkP.fillOpacity * 0.5) || 0}
@@ -1628,8 +1644,10 @@ export default function ElevationSVG({
             {/* Bottom horizontal chain — floor-touching cabs (base + tall), closest to the elevation */}
             {displayConfig.layers.dim_elev_floor_chain.visible && (() => {
               const floorCabs = wallCabs.filter(c =>
-                c.assembly_class === 'base' || c.assembly_class === 'base_corner' ||
-                c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'
+                !c.is_kick_assembly && (
+                  c.assembly_class === 'base' || c.assembly_class === 'base_corner' ||
+                  c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'
+                )
               )
               if (floorCabs.length === 0) return null
               const segs = computeElevChain(floorCabs, wall)
@@ -1682,12 +1700,27 @@ export default function ElevationSVG({
 
             {/* Left dimension — Y-axis height chain */}
             {displayConfig.layers.dim_elevation_y.visible && (() => {
-              const baseCabEl = wallCabs.find(c => c.assembly_class === 'base' || c.assembly_class === 'base_corner') ?? null
+              const baseCabEl = wallCabs.find(c => !c.is_kick_assembly && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')) ?? null
               const overheadCabEl = wallCabs.find(c => c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') ?? null
-              const kickH = baseCabEl?.has_toekick
-                ? (resolvedParts?.get(baseCabEl.id)?.toekick_parts.find(p => p.part_key === 'kick_front_face')?.DX ?? 150)
-                : 0
+
+              // A kick-detached member carries no kick of its own (has_toekick false): its
+              // dy IS the carcase height and it's raised by pos_z. The kick height comes from
+              // its run's standalone kick assembly, and any gap between the kick top and the
+              // raised carcase bottom is dimensioned separately. Normal base cabinets keep the
+              // old behaviour (own kick + carcase = dy − kick, no gap).
+              const isDetachedMemberBase = !!baseCabEl?.kick_run_id && !baseCabEl?.is_kick_assembly && baseCabEl?.has_toekick === false
+              const kickAsm = isDetachedMemberBase
+                ? wallCabs.find(c => c.is_kick_assembly && c.kick_run_id === baseCabEl!.kick_run_id)
+                : undefined
+              const kickH = isDetachedMemberBase
+                ? (kickAsm?.dy ?? 0)
+                : (baseCabEl?.has_toekick
+                    ? (resolvedParts?.get(baseCabEl.id)?.toekick_parts.find(p => p.part_key === 'kick_front_face')?.DX ?? 150)
+                    : 0)
               const baseDy = baseCabEl?.dy ?? 0
+              // Carcase bottom above the floor + carcase height.
+              const carcBottom = isDetachedMemberBase ? (baseCabEl!.pos_z ?? 0) : kickH
+              const carcDy     = isDetachedMemberBase ? baseDy : (baseDy - kickH)
               const wallCabTop = wallCabTopFor(wall, room)
               const overheadDy = overheadCabEl?.dy ?? 0
 
@@ -1695,14 +1728,21 @@ export default function ElevationSVG({
               let cursorY = roomH
 
               if (baseDy > 0) {
+                // Kick band at the floor.
                 if (kickH > 0) {
-                  const kickTopY = roomH - kickH
-                  segs.push({ fromY: kickTopY, toY: cursorY, label: `${kickH}` })
-                  cursorY = kickTopY
+                  segs.push({ fromY: roomH - kickH, toY: cursorY, label: `${Math.round(kickH)}` })
+                  cursorY = roomH - kickH
                 }
-                const baseCarcTopY = roomH - baseDy
-                segs.push({ fromY: baseCarcTopY, toY: cursorY, label: `${baseDy - kickH}` })
-                cursorY = baseCarcTopY
+                // Gap between the kick top and the (raised) carcase bottom.
+                const gap = carcBottom - kickH
+                if (gap > 0.5) {
+                  segs.push({ fromY: roomH - carcBottom, toY: cursorY, label: `${Math.round(gap)}` })
+                  cursorY = roomH - carcBottom
+                }
+                // Carcase.
+                const carcTopY = roomH - (carcBottom + carcDy)
+                segs.push({ fromY: carcTopY, toY: cursorY, label: `${Math.round(carcDy)}` })
+                cursorY = carcTopY
               }
 
               if (overheadDy > 0) {

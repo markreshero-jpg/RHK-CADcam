@@ -578,89 +578,294 @@ export async function dbUpdateCabinet(
 }
 
 // ── Kick-run orchestration ────────────────────────────────────────────────────
-// The leftmost member ("lead") owns the whole run's continuous toe kick; the
-// others own none. So a change to ANY member — width, position, or which member
-// is the lead — requires re-resolving them ALL: this lets the old lead shed its
-// kick and the new lead build it. Self-correcting. Returns each member's fresh
-// geometry so the canvas can update every affected cabinet at once.
+// A joined kick run is owned by a synthetic "kick assembly" cabinet (toe-kick
+// only, is_kick_assembly = true) whose width = run length and depth = deepest
+// member; the member cabinets resolve no kick. Mutations return a KickRunMutation
+// describing how the canvas should update its cabinet list + resolved geometry.
+
+// Fallback kick height (mm) if a member's own kick height can't be read.
+const KICK_ASSEMBLY_DY = 150
+
+// A member's current toe-kick height = its persisted kick_front_face DX (TOEH).
+async function memberKickHeight(cabId: string): Promise<number> {
+  const { data } = await supabase.from('toekick_parts')
+    .select('dx').eq('cabinet_instance_id', cabId).eq('part_key', 'kick_front_face').limit(1).maybeSingle()
+  const dx = (data as { dx?: number } | null)?.dx
+  return dx != null && Number(dx) > 0 ? Number(dx) : KICK_ASSEMBLY_DY
+}
+
+// Detach a member's kick into the run assembly: it becomes a kick-less carcase, so
+// its dy shrinks to the carcase height and it's raised by the kick height (pos_z) to
+// stay put. Returns the kick height moved out. (See z_kick_join — option "B".)
+async function applyDetachTransform(cabId: string): Promise<number> {
+  const kickH = await memberKickHeight(cabId)
+  const { data } = await supabase.from('cabinet_instances').select('dy, pos_z').eq('id', cabId).maybeSingle()
+  const c = data as { dy: number; pos_z: number } | null
+  if (!c) return kickH
+  await supabase.from('cabinet_instances').update({
+    dy:          Math.max(1, Number(c.dy) - kickH),
+    pos_z:       Number(c.pos_z ?? 0) + kickH,
+    has_toekick: false,
+  }).eq('id', cabId)
+  return kickH
+}
+
+// Reverse of applyDetachTransform: give a member back a kick of height kickH (the
+// assembly's current height), lowering it to the floor and re-enabling its own kick.
+async function applyReattachTransform(cabId: string, kickH: number): Promise<void> {
+  const { data } = await supabase.from('cabinet_instances').select('dy, pos_z, rule_overrides').eq('id', cabId).maybeSingle()
+  const c = data as { dy: number; pos_z: number; rule_overrides: Record<string, unknown> | null } | null
+  if (!c) return
+  await supabase.from('cabinet_instances').update({
+    dy:             Number(c.dy) + kickH,
+    pos_z:          Math.max(0, Number(c.pos_z ?? 0) - kickH),
+    has_toekick:    true,
+    rule_overrides: { ...(c.rule_overrides ?? {}), TOEH: kickH },
+  }).eq('id', cabId)
+}
+
+export interface KickRunMutation {
+  addedAssembly?:    CabinetInstance                       // new kick assembly to add to state
+  assemblyPatch?:    { id: string; u: Partial<CabinetInstance> }  // geometry update to an existing assembly
+  memberPatches?:    { id: string; u: Partial<CabinetInstance> }[]  // member field changes (dy/pos_z/has_toekick/kick_run_id)
+  removedCabinetIds: string[]                              // cabinet rows to drop from state
+  resolved:          Map<string, ResolvedCabinet>          // fresh geometry to merge
+}
+
+// Read members' current detach-relevant fields so the canvas state mirrors the DB
+// after a join/separate transform.
+async function readMemberPatches(memberIds: string[]): Promise<{ id: string; u: Partial<CabinetInstance> }[]> {
+  if (memberIds.length === 0) return []
+  const { data } = await supabase.from('cabinet_instances')
+    .select('id, dy, pos_z, has_toekick, kick_run_id').in('id', memberIds)
+  return ((data ?? []) as Record<string, unknown>[]).map(r => ({
+    id: r.id as string,
+    u: {
+      dy:          Number(r.dy),
+      pos_z:       Number(r.pos_z),
+      has_toekick: Boolean(r.has_toekick),
+      kick_run_id: (r.kick_run_id as string | null) ?? null,
+    },
+  }))
+}
+
+const EMPTY_MUTATION = (): KickRunMutation => ({ removedCabinetIds: [], resolved: new Map() })
+
+// Re-resolve every cabinet linked to a run (members + assembly) and return their
+// fresh geometry — the assembly builds the kick, members drop theirs.
 export async function resolveKickRun(runId: string): Promise<Map<string, ResolvedCabinet>> {
   const { data, error } = await supabase.from('cabinet_instances').select('id').eq('kick_run_id', runId)
   if (error) { console.error('resolveKickRun members', error); return new Map() }
-  const ids = (data ?? []).map(r => r.id as string)
   const out = new Map<string, ResolvedCabinet>()
-  await Promise.all(ids.map(async cid => {
-    const r = await resolveCabinetFromDB(cid).catch(e => { console.error('resolveKickRun member', cid, e); return null })
-    if (r) out.set(cid, r)
+  await Promise.all((data ?? []).map(async ({ id }) => {
+    const r = await resolveCabinetFromDB(id as string).catch(e => { console.error('resolveKickRun member', id, e); return null })
+    if (r) out.set(id as string, r)
   }))
   return out
 }
 
-// Keep a run consistent after a membership change (delete / leave): a run with
-// fewer than 2 members is dissolved — the survivor's kick_run_id is cleared and
-// the kick_runs row removed — then every (former) member is re-resolved so its
-// kick reflects the new reality (smaller run, or standalone again).
-export async function reconcileKickRun(runId: string): Promise<Map<string, ResolvedCabinet>> {
-  const { data } = await supabase.from('cabinet_instances').select('id').eq('kick_run_id', runId)
-  const ids = (data ?? []).map(r => r.id as string)
-  if (ids.length < 2) {
-    if (ids.length > 0) await supabase.from('cabinet_instances').update({ kick_run_id: null }).eq('kick_run_id', runId)
-    await supabase.from('kick_runs').delete().eq('id', runId)
+// Geometry the kick assembly should take from its current member cabinets:
+// positioned at the leftmost member's left edge, width = Σ member widths, depth =
+// deepest member. Null when fewer than 2 real members remain (run should dissolve).
+async function computeKickAssemblyGeom(runId: string): Promise<
+  { pos_x: number; pos_y: number; rotation: number; wall_id: string | null; dx: number; dz: number } | null
+> {
+  const { data: linked } = await supabase
+    .from('cabinet_instances')
+    .select('id, dx, dz, pos_x, pos_y, rotation, wall_id, is_kick_assembly')
+    .eq('kick_run_id', runId)
+  const members = ((linked ?? []) as Record<string, unknown>[]).filter(m => !m.is_kick_assembly)
+  if (members.length < 1) return null   // single-cabinet detach is valid (1 member)
+
+  const wallId = (members[0].wall_id as string | null) ?? null
+  let dirx = 1, diry = 0, wpx = 0, wpy = 0
+  if (wallId) {
+    const { data: wall } = await supabase.from('walls').select('pos_x, pos_y, angle').eq('id', wallId).maybeSingle()
+    if (wall) {
+      const ang = (Number(wall.angle) * Math.PI) / 180
+      dirx = Math.cos(ang); diry = Math.sin(ang)
+      wpx = Number(wall.pos_x); wpy = Number(wall.pos_y)
+    }
   }
-  const out = new Map<string, ResolvedCabinet>()
-  await Promise.all(ids.map(async cid => {
-    const r = await resolveCabinetFromDB(cid).catch(e => { console.error('reconcileKickRun member', cid, e); return null })
-    if (r) out.set(cid, r)
-  }))
-  return out
+  const t = (m: Record<string, unknown>) => (Number(m.pos_x) - wpx) * dirx + (Number(m.pos_y) - wpy) * diry
+  const sorted = [...members].sort((a, b) => t(a) - t(b))
+  const left = sorted[0]
+  // Span from the leftmost member's left edge to the rightmost member's right edge
+  // (not Σ widths) — so the kick still covers the run if a move opens a gap.
+  const leftT  = t(left)
+  const rightT = Math.max(...sorted.map(m => t(m) + Number(m.dx)))
+  return {
+    pos_x:    Number(left.pos_x),
+    pos_y:    Number(left.pos_y),
+    rotation: Number(left.rotation),
+    wall_id:  wallId,
+    dx:       rightT - leftT,
+    dz:       Math.max(...sorted.map(m => Number(m.dz))),
+  }
 }
 
-// Join a set of cabinets into a new kick run: create the run row, stamp every
-// member's kick_run_id, then resolve so the lead builds the continuous kick and
-// the others drop theirs. Returns the new run id + each member's fresh geometry.
-export async function dbJoinKickRun(
-  roomId: string,
-  memberIds: string[],
-  buildToDepth: number,
-): Promise<{ runId: string | null; resolved: Map<string, ResolvedCabinet> }> {
-  const { data, error } = await supabase
-    .from('kick_runs')
-    .insert({ room_id: roomId, build_to_depth: buildToDepth, split_mode: 'equal' })
-    .select('id').single()
-  if (error || !data) { console.error('dbJoinKickRun create', error); return { runId: null, resolved: new Map() } }
-  const runId = data.id as string
+// Detach kicks into a new run: create the run row, stamp the member(s), move each
+// member's kick into the run (option B — member becomes a kick-less carcase, raised
+// by its kick height), then create the standalone kick assembly sized to the run
+// and link it. Works for a single cabinet (memberIds length 1) or a whole run.
+export async function dbJoinKickRun(roomId: string, memberIds: string[], label: string): Promise<KickRunMutation> {
+  const { data: runRow, error } = await supabase
+    .from('kick_runs').insert({ room_id: roomId, split_mode: 'equal' }).select('id').single()
+  if (error || !runRow) { console.error('dbJoinKickRun create', error); return EMPTY_MUTATION() }
+  const runId = runRow.id as string
+
   const { error: upErr } = await supabase.from('cabinet_instances').update({ kick_run_id: runId }).in('id', memberIds)
-  if (upErr) { console.error('dbJoinKickRun assign', upErr); return { runId: null, resolved: new Map() } }
-  return { runId, resolved: await resolveKickRun(runId) }
+  if (upErr) { console.error('dbJoinKickRun assign', upErr); return EMPTY_MUTATION() }
+
+  // Move each member's kick into the run; the assembly takes the (representative)
+  // kick height of the first member as its own height (DY drives the kick geometry).
+  const kickHeights: number[] = []
+  for (const mid of memberIds) kickHeights.push(await applyDetachTransform(mid))
+  const assemblyKickH = kickHeights[0] ?? KICK_ASSEMBLY_DY
+
+  const geom = await computeKickAssemblyGeom(runId)
+  if (!geom) { console.error('dbJoinKickRun: no members'); return EMPTY_MUTATION() }
+  await supabase.from('kick_runs').update({ build_to_depth: geom.dz }).eq('id', runId)
+
+  const { data: asm, error: aerr } = await supabase.from('cabinet_instances').insert({
+    room_id: roomId, wall_id: geom.wall_id, assembly_class: 'base', label,
+    pos_x: geom.pos_x, pos_y: geom.pos_y, pos_z: 0, rotation: geom.rotation,
+    dx: geom.dx, dy: assemblyKickH, dz: geom.dz,
+    has_carcass: false, has_internal: false, has_face: false, has_toekick: true,
+    is_kick_assembly: true, kick_run_id: runId,
+  }).select('*').single()
+  if (aerr || !asm) { console.error('dbJoinKickRun assembly', aerr); return EMPTY_MUTATION() }
+
+  await supabase.from('kick_runs').update({ kick_cabinet_id: asm.id }).eq('id', runId)
+  return {
+    addedAssembly: asm as CabinetInstance,
+    memberPatches: await readMemberPatches(memberIds),
+    removedCabinetIds: [],
+    resolved: await resolveKickRun(runId),
+  }
 }
 
-// Dissolve a run outright (explicit Separate, or a run broken by a drag): clear
-// every member's kick_run_id, delete the run row, and re-resolve each former
-// member back to a standalone per-cabinet kick. Returns their fresh geometry.
-export async function dbSeparateKickRun(runId: string): Promise<Map<string, ResolvedCabinet>> {
-  const { data } = await supabase.from('cabinet_instances').select('id').eq('kick_run_id', runId)
-  const ids = (data ?? []).map(r => r.id as string)
+// Re-fit the kick assembly to its (changed) members — new width/position/depth —
+// then re-resolve the run. Dissolves the run when fewer than 2 members remain.
+export async function syncKickAssembly(runId: string): Promise<KickRunMutation> {
+  const geom = await computeKickAssemblyGeom(runId)
+  if (!geom) return dissolveKickRun(runId)
+
+  const { data: run } = await supabase.from('kick_runs').select('kick_cabinet_id').eq('id', runId).maybeSingle()
+  const assemblyId = (run as { kick_cabinet_id?: string | null } | null)?.kick_cabinet_id ?? null
+  let assemblyPatch: KickRunMutation['assemblyPatch']
+  if (assemblyId) {
+    const u: Partial<CabinetInstance> = {
+      pos_x: geom.pos_x, pos_y: geom.pos_y, rotation: geom.rotation, wall_id: geom.wall_id, dx: geom.dx, dz: geom.dz,
+    }
+    await supabase.from('cabinet_instances').update(u).eq('id', assemblyId)
+    await supabase.from('kick_runs').update({ build_to_depth: geom.dz }).eq('id', runId)
+    assemblyPatch = { id: assemblyId, u }
+  }
+  return { assemblyPatch, removedCabinetIds: [], resolved: await resolveKickRun(runId) }
+}
+
+// Dissolve a run: give each member its kick back (reverse of the detach transform —
+// re-enable has_toekick, restore dy and lower it to the floor), delete the kick
+// assembly, drop the run row, and re-resolve members. The reattached kick height is
+// the assembly's current height (so "Separate" returns exactly what's on screen);
+// pass `kickH` when the assembly row is already gone (deleted by the caller).
+async function dissolveKickRun(
+  runId: string,
+  opts?: { kickH?: number; assemblyAlreadyDeletedId?: string },
+): Promise<KickRunMutation> {
+  const assemblyAlreadyDeletedId = opts?.assemblyAlreadyDeletedId
+  const { data: run } = await supabase.from('kick_runs').select('kick_cabinet_id').eq('id', runId).maybeSingle()
+  const assemblyId = (run as { kick_cabinet_id?: string | null } | null)?.kick_cabinet_id ?? assemblyAlreadyDeletedId ?? null
+
+  // Kick height to give back = the assembly's current height (read it while it lives).
+  let kickH = opts?.kickH
+  if (kickH == null && assemblyId) {
+    const { data: asm } = await supabase.from('cabinet_instances').select('dy').eq('id', assemblyId).maybeSingle()
+    kickH = (asm as { dy?: number } | null)?.dy != null ? Number((asm as { dy: number }).dy) : undefined
+  }
+  if (kickH == null) kickH = KICK_ASSEMBLY_DY
+
+  const { data: linked } = await supabase.from('cabinet_instances').select('id, is_kick_assembly').eq('kick_run_id', runId)
+  const memberIds = ((linked ?? []) as { id: string; is_kick_assembly: boolean }[])
+    .filter(c => !c.is_kick_assembly).map(c => c.id)
+
+  for (const cid of memberIds) await applyReattachTransform(cid, kickH)
+
   await supabase.from('cabinet_instances').update({ kick_run_id: null }).eq('kick_run_id', runId)
   await supabase.from('kick_runs').delete().eq('id', runId)
-  const out = new Map<string, ResolvedCabinet>()
-  await Promise.all(ids.map(async cid => {
-    const r = await resolveCabinetFromDB(cid).catch(e => { console.error('dbSeparateKickRun member', cid, e); return null })
-    if (r) out.set(cid, r)
+  if (assemblyId && assemblyId !== assemblyAlreadyDeletedId) {
+    await supabase.from('cabinet_instances').delete().eq('id', assemblyId)
+  }
+
+  const memberPatches = await readMemberPatches(memberIds)
+  const resolved = new Map<string, ResolvedCabinet>()
+  await Promise.all(memberIds.map(async cid => {
+    const r = await resolveCabinetFromDB(cid).catch(e => { console.error('dissolveKickRun member', cid, e); return null })
+    if (r) resolved.set(cid, r)
   }))
-  return out
+  return { memberPatches, removedCabinetIds: assemblyId ? [assemblyId] : [], resolved }
 }
 
-// Returns the re-resolved geometry of any kick-run siblings affected by the
-// delete (empty when the cabinet was standalone) so the caller can refresh them.
-export async function dbDeleteCabinet(id: string): Promise<Map<string, ResolvedCabinet>> {
-  // Capture kick-run membership before deleting so the run can be reconciled
-  // (the FK clears this cabinet's link on delete; siblings keep theirs).
-  const { data: row } = await supabase.from('cabinet_instances').select('kick_run_id').eq('id', id).maybeSingle()
-  const runId = (row as { kick_run_id?: string | null } | null)?.kick_run_id ?? null
+// Explicit "Separate kicks" — reattaches each member's kick at the assembly's height.
+export async function dbSeparateKickRun(runId: string): Promise<KickRunMutation> {
+  return dissolveKickRun(runId)
+}
+
+// Split-to-size settings for a run's kick assembly.
+export async function dbLoadKickRunSettings(
+  runId: string,
+): Promise<{ max_segment_length: number | null; split_mode: 'equal' | 'exact' }> {
+  const { data } = await supabase.from('kick_runs').select('max_segment_length, split_mode').eq('id', runId).maybeSingle()
+  const r = data as { max_segment_length: number | null; split_mode: string } | null
+  return {
+    max_segment_length: r?.max_segment_length != null ? Number(r.max_segment_length) : null,
+    split_mode:         (r?.split_mode as 'equal' | 'exact') ?? 'equal',
+  }
+}
+
+// Write split settings and re-resolve the run so the assembly re-segments live.
+export async function dbUpdateKickRunSettings(
+  runId: string,
+  settings: { max_segment_length: number | null; split_mode: 'equal' | 'exact' },
+): Promise<KickRunMutation> {
+  const { error } = await supabase.from('kick_runs')
+    .update({ max_segment_length: settings.max_segment_length, split_mode: settings.split_mode })
+    .eq('id', runId)
+  if (error) { console.error('dbUpdateKickRunSettings', error); return EMPTY_MUTATION() }
+  return { removedCabinetIds: [], resolved: await resolveKickRun(runId) }
+}
+
+// Delete a cabinet, reconciling any kick run it belonged to:
+//  • deleting the kick assembly → reattach each member's kick (reverse the detach);
+//  • deleting a member → it just goes; the standalone assembly is left untouched
+//    (kicks are independent once detached), unless no members remain, in which case
+//    the orphaned assembly + run row are cleaned up.
+export async function dbDeleteCabinet(id: string): Promise<KickRunMutation> {
+  const { data: row } = await supabase
+    .from('cabinet_instances').select('kick_run_id, is_kick_assembly, dy').eq('id', id).maybeSingle()
+  const info = row as { kick_run_id?: string | null; is_kick_assembly?: boolean; dy?: number } | null
+  const runId = info?.kick_run_id ?? null
+  const wasAssembly = !!info?.is_kick_assembly
+  const assemblyKickH = info?.dy != null ? Number(info.dy) : undefined
 
   const { error } = await supabase.from('cabinet_instances').delete().eq('id', id)
-  if (error) { console.error('dbDeleteCabinet', error); return new Map() }
+  if (error) { console.error('dbDeleteCabinet', error); return EMPTY_MUTATION() }
 
-  return runId ? await reconcileKickRun(runId) : new Map()
+  if (!runId) return EMPTY_MUTATION()
+  if (wasAssembly) return dissolveKickRun(runId, { kickH: assemblyKickH, assemblyAlreadyDeletedId: id })
+
+  // A member was deleted. If others remain, leave the assembly alone (independent).
+  const { data: linked } = await supabase.from('cabinet_instances').select('id, is_kick_assembly').eq('kick_run_id', runId)
+  const live = ((linked ?? []) as { id: string; is_kick_assembly: boolean }[])
+  const members = live.filter(c => !c.is_kick_assembly)
+  if (members.length > 0) return EMPTY_MUTATION()
+
+  // No members left — drop the orphaned assembly + run row.
+  const assemblyId = live.find(c => c.is_kick_assembly)?.id ?? null
+  if (assemblyId) await supabase.from('cabinet_instances').delete().eq('id', assemblyId)
+  await supabase.from('kick_runs').delete().eq('id', runId)
+  return { removedCabinetIds: assemblyId ? [assemblyId] : [], resolved: new Map() }
 }
 
 // ── Custom Parts ──────────────────────────────────────────────────────────────

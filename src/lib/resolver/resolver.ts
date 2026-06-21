@@ -16,6 +16,7 @@ import { resolveFace }           from './resolveFace'
 import { resolveDrawerStacks }   from './resolveDrawerStack'
 import { resolveJoints }         from './resolveJoints'
 import { resolveHinges }         from './resolveHinges'
+import { checkHingeInnerDrawerClash } from './hingeClash'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -66,6 +67,11 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const hingeInstances = (cab.has_face && cab.hinge_hardware)
     ? resolveHinges(cab, zones, caseParts, internalParts)
     : []
+
+  // ── 6c. Hinge ↔ inner-drawer clash ────────────────────────────
+  // A hinge body protruding into the front of the interior can foul an inner
+  // drawer at the same height. Reported as a warning (approximate geometry).
+  allWarnings.push(...checkHingeInnerDrawerClash(hingeInstances, internalParts))
 
   // ── 7. Warnings ───────────────────────────────────────────────
   // Non-fatal checks

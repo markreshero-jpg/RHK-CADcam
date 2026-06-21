@@ -6,6 +6,7 @@ import {
   CabinetInput, ResolvedToekickPart, ConstructionRules,
   ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
+import { resolveKickRunParts } from './resolveKickRun'
 
 export function resolveToekickParts(
   cab: CabinetInput,
@@ -13,6 +14,13 @@ export function resolveToekickParts(
 ): { parts: ResolvedToekickPart[], errors: ResolverError[] } {
   const parts: ResolvedToekickPart[] = []
   const errors: ResolverError[] = []
+
+  // Joined kick run: the synthetic kick assembly owns the whole run's continuous
+  // toe kick; member cabinets resolve nothing. See resolveKickRun.ts.
+  if (cab.kick_run) {
+    if (cab.kick_run.role === 'member') return { parts, errors }
+    return resolveKickRunParts(cab, r)
+  }
 
   const toeType = cab.toe_type ?? r.TOE_TYPE
 
@@ -39,15 +47,20 @@ export function resolveToekickParts(
   const kickSubZ    = kickFrontZ - TI        // kick sub front back face
   const kickBackZ   = r.TOESCB              // kick back back face
 
+  // Left/right scribes inset the kick from the cabinet ends: it starts at x0 and
+  // spans W along the width (TOESCL off the left, TOESCR off the right).
+  const x0 = r.TOESCL
+  const W  = DX - r.TOESCL - r.TOESCR
+
   // ── Leg Kick ─────────────────────────────────────────────────
   if (toeType === 'leg') {
     parts.push({
       part_key: 'kick_front_face',
       sort_order: 0,
       DX: TK,
-      DY: DX,
+      DY: W,
       DZ: TF,
-      X: 0, Y: 0, Z: kickFrontZ,
+      X: x0, Y: 0, Z: kickFrontZ,
       AX: 0, AY: 0, AZ: 0,
       material_id: fid,
       edge_band: edgeSidesToBanding(edging.kick_front_face, cab.toekick_face_edgeband_id),
@@ -58,14 +71,14 @@ export function resolveToekickParts(
 
   // ── Ladder Frame ──────────────────────────────────────────────
 
-  // Kick Front Face — full height TK, full width, face material
+  // Kick Front Face — full height TK, inset width W, face material
   parts.push({
     part_key: 'kick_front_face',
     sort_order: 0,
     DX: TK,
-    DY: DX,
+    DY: W,
     DZ: TF,
-    X: 0, Y: 0, Z: kickFrontZ,
+    X: x0, Y: 0, Z: kickFrontZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: fid,
     edge_band: edgeSidesToBanding(edging.kick_front_face, cab.toekick_face_edgeband_id),
@@ -78,9 +91,9 @@ export function resolveToekickParts(
     part_key: 'kick_sub_front',
     sort_order: 1,
     DX: TK - TF,
-    DY: DX,
+    DY: W,
     DZ: TI,
-    X: 0, Y: TI, Z: kickSubZ,
+    X: x0, Y: TI, Z: kickSubZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: iid,
     edge_band: edgeSidesToBanding(edging.kick_sub_front, cab.toekick_interior_edgeband_id),
@@ -92,9 +105,9 @@ export function resolveToekickParts(
     part_key: 'kick_back',
     sort_order: 2,
     DX: TK - TF,
-    DY: DX,
+    DY: W,
     DZ: TI,
-    X: 0, Y: TI, Z: kickBackZ,
+    X: x0, Y: TI, Z: kickBackZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: iid,
     edge_band: edgeSidesToBanding(edging.kick_back, cab.toekick_interior_edgeband_id),
@@ -120,10 +133,10 @@ export function resolveToekickParts(
   const sprH    = TK - TF                // vertical spreader height
   const sprBW   = 100                    // horizontal brace width (fixed 100mm)
 
-  // End spreaders — one at each end of the cabinet
+  // End spreaders — one at each end of the (inset) kick
   const endPositions: Array<{ x: number; isRight: boolean }> = [
-    { x: 0,          isRight: false },
-    { x: DX - TI,    isRight: true  },
+    { x: x0,            isRight: false },
+    { x: x0 + W - TI,   isRight: true  },
   ]
 
   for (const { x, isRight } of endPositions) {
@@ -156,12 +169,12 @@ export function resolveToekickParts(
     })
   }
 
-  // Internal spreaders at TOESP centres
-  const qty     = Math.max(0, Math.floor(DX / r.TOESP) - 1)
-  const spacing = DX / (qty + 1)
+  // Internal spreaders at TOESP centres across the inset width
+  const qty     = Math.max(0, Math.floor(W / r.TOESP) - 1)
+  const spacing = W / (qty + 1)
 
   for (let i = 1; i <= qty; i++) {
-    const sx = spacing * i - TI / 2
+    const sx = x0 + spacing * i - TI / 2
 
     // Vertical spreader
     parts.push({

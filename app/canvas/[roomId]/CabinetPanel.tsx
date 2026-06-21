@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
 import { cabT, wallDir, findFreeSlot, cabsBlock } from '@/src/lib/geometry'
+import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import CalcInput from '@/src/components/CalcInput'
 
 export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, hideWallPosition, hideDelete, autoFocusWidth }: {
@@ -221,6 +222,43 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
             })}
           </div>
         </div>
+        {cabinet.has_toekick && (() => {
+          const rules = getCachedInput(cabinet.id)?.rules
+          const ov = (cabinet.rule_overrides ?? {}) as Record<string, number>
+          return (
+            <div>
+              <p className={lbl}>Kick Scribes (mm)</p>
+              <div className="grid grid-cols-4 gap-1">
+                {(['TOESCF', 'TOESCB', 'TOESCL', 'TOESCR'] as const).map((key, i) => {
+                  const label = ['Front', 'Back', 'Left', 'Right'][i]
+                  return (
+                    <div key={key}>
+                      <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
+                      <CalcInput
+                        value={ov[key] ?? null}
+                        decimals={0}
+                        min={0}
+                        placeholder={rules ? String(Math.round(rules[key])) : ''}
+                        onCommit={v => {
+                          const next = { ...(cabinet.rule_overrides ?? {}) }
+                          next[key] = v
+                          void onUpdate(cabinet.id, { rule_overrides: next })
+                        }}
+                        onClear={() => {
+                          const next = { ...(cabinet.rule_overrides ?? {}) }
+                          delete next[key]
+                          void onUpdate(cabinet.id, { rule_overrides: next })
+                        }}
+                        className={inp + ' text-right'}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-[10px] text-gray-600 mt-1">Blank = inherited from the construction method.</p>
+            </div>
+          )
+        })()}
 
         <div>
           <p className={lbl}>Modules</p>

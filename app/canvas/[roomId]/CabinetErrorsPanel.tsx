@@ -46,6 +46,12 @@ function guidanceFor(err: ResolverError): { title: string; hint: string; fix?: F
       return { title: 'Locked column widths overflow', hint: 'The locked column widths exceed the available face width. Adjust them in the Face Grid tab.', fix: 'face' }
     case 'CASE_TOO_NARROW':
       return { title: 'Cabinet too narrow', hint: 'The cabinet is narrower than its two side panels. Increase the width in the right-hand panel.' }
+    case 'HINGE_INNER_DRAWER_CLASH':
+      return {
+        title: 'Hinge clashes with an inner drawer',
+        hint: 'A hinge sits at the same height as an inner drawer, so the hinge body will foul the drawer. Move the hinge height, raise/lower the drawer in the Interior tab, or add side clearance to the drawer.',
+        fix: 'interior',
+      }
     default:
       return {
         title: err.code.replace(/_/g, ' ').toLowerCase().replace(/^\w/, c => c.toUpperCase()),

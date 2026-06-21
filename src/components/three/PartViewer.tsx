@@ -11,6 +11,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges } from '@react-three/drei'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import { fmtMm, roundMm } from '@/src/lib/format'
+import { evalCalc } from '@/src/lib/calc'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -209,13 +210,14 @@ export function Part({
 
 // ── Properties panel overlay ───────────────────────────────────────────────────
 
-// One editable size cell — commits on Enter / blur, reverts on Escape.
+// One editable size cell — accepts a number or a calc ("100+100" → 200);
+// commits on Enter / blur, reverts on Escape or invalid input.
 function SizeField({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
   const [draft, setDraft] = useState(String(roundMm(value)))
   useEffect(() => { setDraft(String(roundMm(value))) }, [value])
   function commit() {
-    const v = Number(draft)
-    if (Number.isFinite(v) && v > 0 && Math.abs(v - value) > 1e-6) onCommit(v)
+    const v = evalCalc(draft)
+    if (v != null && v > 0 && Math.abs(v - value) > 1e-6) onCommit(v)
     else setDraft(String(roundMm(value)))
   }
   return (

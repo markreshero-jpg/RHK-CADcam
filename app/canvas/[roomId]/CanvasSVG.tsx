@@ -798,6 +798,10 @@ export default function CanvasSVG({
         }).map(cab => {
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return null
+          // Kick assemblies (joined toe kicks) aren't shown in plan — plan never
+          // draws toe kicks, and their full-depth box would overlay the run.
+          // They're selectable/movable in elevation + 3D instead.
+          if (cab.is_kick_assembly) return null
           const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
           const isSel = selected?.type === 'cabinet' && selected.id === cab.id
           const isMultiSel = multiSelect.includes(cab.id)

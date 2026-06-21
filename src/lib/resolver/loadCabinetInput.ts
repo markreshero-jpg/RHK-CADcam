@@ -5,6 +5,7 @@ import {
   JointTypeOp, JointTargetPart, JointMachineOp, JointFace,
   RawProfileOp, ResolvedDoorStyleInput, EdgeSides,
   HingeRuleInput, HingeHardwareInput, HingePlateInput, ExistingHingeInput, HingeBoreHole,
+  KickRunInput, KickSplitMode,
 } from './types'
 import { mergeRules } from './mergeRules'
 
@@ -640,6 +641,12 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   const { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges } =
     await loadHingeInputs(cabinetId, cab.room_id as string, projectId, (cab.hardware_overrides ?? {}) as Record<string, unknown>)
 
+  // ── 14. Kick-run context ────────────────────────────────────────────────────
+  // When this cabinet is linked to a kick run, load its role + split settings so
+  // the resolver builds the continuous kick (assembly) or skips it (member).
+  // See z_kick_join/KICK-JOIN-PLAN.md.
+  const kick_run = await loadKickRunInput(cabinetId, cab.kick_run_id as string | null)
+
   return {
     id:              cab.id,
     assembly_class:  cab.assembly_class,
@@ -705,6 +712,33 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     hinge_plate,
     hinge_count_rules,
     existing_hinges,
+    kick_run,
+  }
+}
+
+// ── Kick-run input loader ─────────────────────────────────────────────────────
+// Returns the KickRunInput for a cabinet linked to a kick run (undefined when
+// not in one). The synthetic kick-assembly cabinet (kick_runs.kick_cabinet_id)
+// gets role 'assembly' and builds the continuous kick from its own DX/DZ; every
+// other linked cabinet is a 'member' and resolves no kick.
+async function loadKickRunInput(
+  cabinetId: string,
+  kickRunId: string | null,
+): Promise<KickRunInput | undefined> {
+  if (!kickRunId) return undefined
+
+  const { data: run } = await supabase
+    .from('kick_runs')
+    .select('id, kick_cabinet_id, max_segment_length, split_mode')
+    .eq('id', kickRunId).maybeSingle()
+  const r = run as { id: string; kick_cabinet_id: string | null; max_segment_length: number | null; split_mode: string } | null
+  if (!r) return undefined
+
+  return {
+    run_id:             r.id,
+    role:               r.kick_cabinet_id === cabinetId ? 'assembly' : 'member',
+    max_segment_length: r.max_segment_length != null ? Number(r.max_segment_length) : null,
+    split_mode:         (r.split_mode as KickSplitMode) ?? 'equal',
   }
 }
 

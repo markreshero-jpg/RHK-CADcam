@@ -447,24 +447,18 @@ export interface ResolvedDrawerBoxPart extends ResolvedPart {
 }
 
 // ── Kick run (joined toe kicks across a straight run) ─────────────────────────
-// When contiguous floor cabinets are joined into a kick run, the leftmost member
-// ("lead") resolves ONE continuous toe kick spanning the whole run; every other
-// member resolves zero kick parts (resolveToekick short-circuits). Attached to
-// CabinetInput by loadCabinetInput when the cabinet has a kick_run_id.
+// A joined kick run is owned by a synthetic "kick assembly" cabinet (toe-kick
+// only) sized to the whole run; the member cabinets stop drawing their own kicks.
+// loadCabinetInput attaches this to any cabinet linked to a run:
+//   • role 'assembly' → resolveToekick builds the continuous kick from the
+//     assembly's own DX (run length) and DZ (deepest member depth), with split.
+//   • role 'member'   → resolveToekick resolves nothing.
 // Mirrors the kick_runs table. See z_kick_join/KICK-JOIN-PLAN.md.
 export type KickSplitMode = 'equal' | 'exact'
 
-export interface KickRunMember {
-  id:    string   // cabinet_instance id
-  order: number   // position along the wall (0 = leftmost/lead), ascending by cabT
-  DX:    number   // member width (mm) — its contribution to the run length
-  DZ:    number   // member depth (mm) — the run builds its kick to the deepest member
-}
-
 export interface KickRunInput {
   run_id:             string
-  is_lead:            boolean            // true only for the leftmost member
-  members:            KickRunMember[]    // all members ascending by order (includes self)
+  role:               'assembly' | 'member'
   max_segment_length: number | null      // null = use sheet-length default
   split_mode:         KickSplitMode
 }

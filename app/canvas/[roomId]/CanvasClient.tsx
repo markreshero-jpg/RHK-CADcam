@@ -12,14 +12,14 @@ import {
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, resolveKickRun, dbSeparateKickRun } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, type KickRunMutation } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
 import { useMaterialColours } from './useMaterialColours'
 import { useCabinetOps } from './useCabinetOps'
 import { useMultiSelectOps } from './useMultiSelectOps'
-import { useKickRunOps, runIsContiguous } from './useKickRunOps'
+import { useKickRunOps } from './useKickRunOps'
 import { buildMenus } from './canvasMenuConfig'
 import {
   Mode, ArmedDefinition, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, SectionCut,
@@ -38,6 +38,7 @@ import { buildContextMenuGroups } from './canvasContextItems'
 import DeleteWallModal from './DeleteWallModal'
 import SplitCabinetModal from './SplitCabinetModal'
 import SaveToLibraryModal from './SaveToLibraryModal'
+import KickRunSettingsModal from './KickRunSettingsModal'
 import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
 import WallDrawPanel from './WallDrawPanel'
 import WallPanel from './WallPanel'
@@ -89,6 +90,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [deleteWallPending, setDeleteWallPending] = useState<string | null>(null)
   const [splitCabId, setSplitCabId] = useState<string | null>(null)
   const [saveLibCabId, setSaveLibCabId] = useState<string | null>(null)
+  const [kickSettingsRunId, setKickSettingsRunId] = useState<string | null>(null)
   const [libRefresh, setLibRefresh] = useState(0)   // bump to reload the library palette
   const [toast, setToast] = useState<string | null>(null)
   useEffect(() => {
@@ -409,16 +411,33 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     await Promise.all(propagated.map(({ id: pid, update }) => dbUpdateWall(pid, update)))
   }, [room])
 
-  // Merge re-resolved kick-run siblings (from resolveKickRun / dbDeleteCabinet)
-  // into the canvas so the lead and other members redraw after a run change.
-  const applyKickSiblings = useCallback((byId: Map<string, ResolvedCabinet>) => {
-    if (byId.size === 0) return
-    setResolvedParts(m => { const next = new Map(m); for (const [cid, rc] of byId) next.set(cid, rc); return next })
-    for (const cid of byId.keys()) { applyInputColours(cid); applyInputEdgebands(cid) }
+  // Apply a kick-run mutation to the canvas: add/remove the standalone kick
+  // assembly cabinet, patch its geometry, and merge re-resolved members.
+  const applyKickMutation = useCallback((m: KickRunMutation) => {
+    if (m.addedAssembly) {
+      const asm = m.addedAssembly
+      setCabinets(cs => cs.some(c => c.id === asm.id) ? cs : [...cs, asm])
+    }
+    if (m.assemblyPatch) {
+      const { id, u } = m.assemblyPatch
+      setCabinets(cs => cs.map(c => c.id === id ? { ...c, ...u } : c))
+    }
+    if (m.memberPatches && m.memberPatches.length > 0) {
+      const byId = new Map(m.memberPatches.map(p => [p.id, p.u]))
+      setCabinets(cs => cs.map(c => byId.has(c.id) ? { ...c, ...byId.get(c.id)! } : c))
+    }
+    if (m.removedCabinetIds.length > 0) {
+      setCabinets(cs => cs.filter(c => !m.removedCabinetIds.includes(c.id)))
+      setResolvedParts(rp => { const next = new Map(rp); for (const rid of m.removedCabinetIds) next.delete(rid); return next })
+    }
+    if (m.resolved.size > 0) {
+      setResolvedParts(rp => { const next = new Map(rp); for (const [cid, rc] of m.resolved) next.set(cid, rc); return next })
+      for (const cid of m.resolved.keys()) { applyInputColours(cid); applyInputEdgebands(cid) }
+    }
   }, [applyInputColours, applyInputEdgebands])
 
-  const { handleJoinKicks, handleSeparateKicks } = useKickRunOps({
-    cabinets, walls, room, setCabinets, applyKickSiblings, setContextMenu,
+  const { handleJoinKicks, handleDetachKickSingle, handleSeparateKicks } = useKickRunOps({
+    cabinets, walls, room, setCabinets, applyKickMutation, setContextMenu,
   })
 
   async function handleDeleteCabinet(id: string) {
@@ -426,7 +445,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     captureSnapshot()
     setCabinets(cs => cs.filter(c => c.id !== id))
     setSelected(null)
-    applyKickSiblings(await dbDeleteCabinet(id))
+    applyKickMutation(await dbDeleteCabinet(id))
   }
 
   async function handleDeleteMultipleCabinets(ids: string[]) {
@@ -438,9 +457,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setContextMenu(null)
     // Sequential so concurrent reconciles of the same run don't race.
     for (const id of ids) {
-      const siblings = await dbDeleteCabinet(id)
-      for (const did of ids) siblings.delete(did)   // drop any still-pending deletes
-      applyKickSiblings(siblings)
+      const mut = await dbDeleteCabinet(id)
+      for (const did of ids) mut.resolved.delete(did)   // drop any still-pending deletes
+      applyKickMutation(mut)
     }
   }
 
@@ -453,24 +472,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     const resolved = await dbUpdateCabinet(id, u)
     if (resolved) { setResolvedParts(m => new Map(m).set(id, resolved)); applyInputColours(id); applyInputEdgebands(id) }
-    // Kick-run member: a width/position change reshapes the run's continuous kick
-    // (owned by the lead). A move that breaks the run's contiguity dissolves it
-    // (members go back to standalone kicks); otherwise re-resolve the whole run so
-    // the lead — and any cabinet that just became/ceased to be the lead — redraw.
-    const moved = cabinetsRef.current.find(c => c.id === id)
-    const runId = moved?.kick_run_id
-    if (runId) {
-      const isMove = 'pos_x' in u || 'pos_y' in u || 'wall_id' in u
-      const wall = wallsRef.current.find(w => w.id === moved!.wall_id)
-      const members = cabinetsRef.current.filter(c => c.kick_run_id === runId)
-      if (isMove && (!wall || !runIsContiguous(members, wall))) {
-        setCabinets(cs => cs.map(c => c.kick_run_id === runId ? { ...c, kick_run_id: null } : c))
-        applyKickSiblings(await dbSeparateKickRun(runId))
-      } else {
-        applyKickSiblings(await resolveKickRun(runId))
-      }
-    }
-  }, [applyKickSiblings])
+    // NB: once a kick run is joined, the standalone kick assembly is fully
+    // independent — moving or resizing a member cabinet does NOT re-fit it. The
+    // assembly only changes when you move/resize it directly, or when the run is
+    // dissolved (explicit Separate, or a delete dropping it below 2 members).
+  }, [])
 
   function commitResize() {
     if (!cabResize) return
@@ -579,7 +585,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     const side = flip ? 'back' : 'face'
     const occupied = cabinets
-      .filter(c => c.wall_id === raw.wall.id && cabsBlock({ assembly_class: draft.assembly_class, dy: draft.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side)
+      .filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: draft.assembly_class, dy: draft.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side)
       .map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
     const fit = fitFreeSlot(desired, draft.dx, raw.wall.length, occupied)
     await placeFromDraft(draft, raw.wall, raw.wall.pos_x + fit.t * wd.x, raw.wall.pos_y + fit.t * wd.y, flip, fit.dx)
@@ -633,9 +639,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setSelected(null); setMultiSelect([])
     // Sequential so concurrent reconciles of the same kick run don't race.
     for (const id of ids) {
-      const siblings = await dbDeleteCabinet(id)
-      for (const did of ids) siblings.delete(did)
-      applyKickSiblings(siblings)
+      const mut = await dbDeleteCabinet(id)
+      for (const did of ids) mut.resolved.delete(did)
+      applyKickMutation(mut)
     }
   }
 
@@ -671,7 +677,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     for (const src of clipboardGroup) {
       const desired = anchorT + (cabWallT(src) - baseT)
       const occupied = working
-        .filter(c => c.wall_id === wall.id && cabsBlock(src, c, wall, room) && cabWallSide(c, wall) === side)
+        .filter(c => c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(src, c, wall, room) && cabWallSide(c, wall) === side)
         .map(c => ({ t: cabT(c, wall), dx: c.dx }))
       const t = findFreeSlot(desired, src.dx, wall.length, occupied)
       const pos_x = wall.pos_x + t * wd.x
@@ -831,7 +837,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
       const flip = wallFlipFor(raw.wall)
       const side = flip ? 'back' : 'face'
-      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabsBlock(clipboard, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(clipboard, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
       const t = findFreeSlot(desired, clipboard.dx, raw.wall.length, occupied)
       setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: flip, freePos: wp })
       return
@@ -847,7 +853,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
       const flip = wallFlipFor(raw.wall)
       const side = flip ? 'back' : 'face'
-      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabsBlock({ assembly_class: clsInfo.cls, dy: clsInfo.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: clsInfo.cls, dy: clsInfo.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
       // Fit into the available gap: shrink the new cabinet's width if the gap is
       // narrower than the default, rather than overlapping the neighbour.
       const fit = fitFreeSlot(desired, clsInfo.dx, raw.wall.length, occupied)
@@ -869,7 +875,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const desired = Math.max(0, Math.min(wall.length - cabDX, cursorT - dragOffset))
         const dragCab = cabinets.find(c => c.id === cabId)
         const dragSide = dragCab ? cabWallSide(dragCab, wall) : 'face'
-        const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && cabsBlock(dragCab ?? { assembly_class: assemblyClass, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === dragSide).map(c => ({ t: cabT(c, wall), dx: c.dx }))
+        const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(dragCab ?? { assembly_class: assemblyClass, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === dragSide).map(c => ({ t: cabT(c, wall), dx: c.dx }))
         const t = slideToFreeSlot(desired, cabDX, wall.length, occupied, dragCab ? cabT(dragCab, wall) : undefined)
         setCabDrag({ id: cabId, pos_x: wall.pos_x + t * wd.x, pos_y: wall.pos_y + t * wd.y })
       }
@@ -885,7 +891,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           const wd = wallDir(raw.wall)
           const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
           const moveSide = cabWallSide(cab, raw.wall)
-          const occupied = cabinets.filter(c => c.id !== id && c.wall_id === raw.wall.id && cabsBlock(cab, c, raw.wall, room) && cabWallSide(c, raw.wall) === moveSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+          const occupied = cabinets.filter(c => c.id !== id && c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(cab, c, raw.wall, room) && cabWallSide(c, raw.wall) === moveSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
           // Same-wall move → keep it on the drag side (no bounce-back); cross-wall → free slot.
           const origT = raw.wall.id === cab.wall_id ? cabT(cab, raw.wall) : undefined
           const t = slideToFreeSlot(desired, cab.dx, raw.wall.length, occupied, origT)
@@ -900,9 +906,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const resizingCab = cabinets.find(c => c.id === cabId)
       const resizingCls = resizingCab?.assembly_class ?? 'base'
       const resizingSide = resizingCab ? cabWallSide(resizingCab, wall) : 'face'
-      // Neighbours on the same wall side used for collision clamping
-      const neighbours = cabinets
-        .filter(c => c.id !== cabId && c.wall_id === wall.id && cabsBlock(resizingCab ?? { assembly_class: resizingCls, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === resizingSide)
+      // Neighbours on the same wall side used for collision clamping. A kick
+      // assembly is a plinth that sits in front of the cabinets it spans, so it
+      // resizes freely (clamped only by the wall) — never by the units it overlaps.
+      const neighbours = resizingCab?.is_kick_assembly ? [] : cabinets
+        .filter(c => c.id !== cabId && c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(resizingCab ?? { assembly_class: resizingCls, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === resizingSide)
         .map(c => ({ t: cabT(c, wall), dx: c.dx }))
       if (side === 'right') {
         const cursorT = (wp.x - wall.pos_x) * wd.x + (wp.y - wall.pos_y) * wd.y
@@ -1029,7 +1037,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             return (wp.x - raw.wall.pos_x) * inw.x + (wp.y - raw.wall.pos_y) * inw.y < 0
           })()
           const pasteSide = pasteFlip ? 'back' : 'face'
-          const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && cabsBlock(clipboard, c, raw.wall, room) && cabWallSide(c, raw.wall) === pasteSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+          const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(clipboard, c, raw.wall, room) && cabWallSide(c, raw.wall) === pasteSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
           const t = findFreeSlot(desired, clipboard.dx, raw.wall.length, occupied)
           ghost = { wall: raw.wall, pos_x: raw.wall.pos_x + t * wd2.x, pos_y: raw.wall.pos_y + t * wd2.y, islandFlip: pasteFlip }
         }
@@ -1775,9 +1783,21 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         {mode !== 'place_definition' && multiSelectCabs.length >= 2 && (
           <CabinetGroupPanel
             cabinets={multiSelectCabs}
+            wallCabinets={new Set(multiSelectCabs.map(c => c.wall_id)).size === 1
+              ? cabinets.filter(c => c.wall_id === multiSelectCabs[0].wall_id)
+              : []}
             walls={walls}
             room={room}
             onUpdateMany={u => { multiSelect.forEach(id => void handleUpdateCabinet(id, u)) }}
+            onMoveAlongWall={deltaT => {
+              const w = walls.find(wl => wl.id === multiSelectCabs[0]?.wall_id)
+              if (!w || !deltaT) return
+              const wd = wallDir(w)
+              multiSelectCabs.forEach(c => void handleUpdateCabinet(c.id, {
+                pos_x: c.pos_x + deltaT * wd.x,
+                pos_y: c.pos_y + deltaT * wd.y,
+              }))
+            }}
             onDeleteMany={() => void handleDeleteMultipleCabinets(multiSelect)}
           />
         )}
@@ -1878,7 +1898,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 })()
                 const copySide = copyFlip ? 'back' : 'face'
                 const occupied = cabinets
-                  .filter(c => c.wall_id === raw.wall.id && cabsBlock(cab, c, raw.wall, room) && cabWallSide(c, raw.wall) === copySide)
+                  .filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(cab, c, raw.wall, room) && cabWallSide(c, raw.wall) === copySide)
                   .map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
                 const t = findFreeSlot(desired, cab.dx, raw.wall.length, occupied)
                 setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: copyFlip, freePos: mouseWorld })
@@ -1894,7 +1914,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onSplit: id => { setContextMenu(null); setSplitCabId(id) },
             onSaveToLibrary: id => { setContextMenu(null); setSaveLibCabId(id) },
             onJoinKicks: id => { void handleJoinKicks(id) },
+            onDetachKick: id => { void handleDetachKickSingle(id) },
             onSeparateKicks: id => { void handleSeparateKicks(id) },
+            onKickSettings: id => {
+              setContextMenu(null)
+              const rid = cabinets.find(c => c.id === id)?.kick_run_id
+              if (rid) setKickSettingsRunId(rid)
+            },
           })}
           onClose={() => setContextMenu(null)}
         />
@@ -1957,6 +1983,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             cab={cab}
             onClose={() => setSaveLibCabId(null)}
             onSaved={(_id, savedName) => { setSaveLibCabId(null); setLibRefresh(v => v + 1); setToast(`Saved “${savedName}” to library`) }}
+          />
+        )
+      })()}
+
+      {kickSettingsRunId && (() => {
+        const asm = cabinets.find(c => c.kick_run_id === kickSettingsRunId && c.is_kick_assembly)
+        if (!asm) return null
+        return (
+          <KickRunSettingsModal
+            runId={kickSettingsRunId}
+            runLength={asm.dx}
+            onClose={() => setKickSettingsRunId(null)}
+            onSaved={applyKickMutation}
           />
         )
       })()}
