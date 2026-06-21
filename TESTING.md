@@ -84,10 +84,9 @@ toe-kick only) — not attached to a cabinet.
 | Kick assembly is selectable / movable / deletable on its own | 2026-06-16 | 🔲 To test | In **elevation + 3D** (hidden in plan). Right-click → only Separate + Delete |
 | Right-click "Separate kicks" → back to per-cabinet | 2026-06-16 | 🔲 To test | From the assembly OR any member; deletes the assembly, members regain kicks |
 | Mixed-depth run → warning, build kick to deepest | 2026-06-16 | 🔲 To test | OK/Cancel `confirm`; on OK kick spans to the deepest member's front line |
-| Resize/move a member → kick assembly re-fits live | 2026-06-16 | 🔲 To test | Assembly re-sizes/re-positions; check 3D + elevation update without refresh |
-| Moving a member never dissolves the run | 2026-06-20 | 🔲 To test | Kick re-fits to span the members (incl. any gap opened by the move); join persists. Run only dissolves via Separate or delete |
-| Delete the kick assembly → members regain kicks | 2026-06-16 | 🔲 To test | |
-| Delete a member → run shrinks (dissolves if <2 left) | 2026-06-16 | 🔲 To test | |
+| Kick assembly is fully independent once detached | 2026-06-21 | 🔲 To test | Moving/resizing a member does NOT re-fit the assembly; it only changes when you move/resize it directly |
+| Delete the kick assembly → kick GONE, members stay kick-less | 2026-06-21 | ✅ Pass | Detached, deleted, stretched — kick stays gone. Members remain raised carcases (no reattach). Confirmed by hand |
+| Delete a member → assembly left alone (cleaned up if none left) | 2026-06-21 | 🔲 To test | |
 | Kick assembly doesn't block dragging cabinets in the run | 2026-06-16 | 🔲 To test | Excluded from collision/slotting |
 | Shows as its own labelled line in reports / cut-list | 2026-06-16 | 🔲 To test | "KICK n" assembly with toe-kick parts |
 | Oversized run splits into equal segments | 2026-06-16 | 🔲 To test | Default = whole run unless a max segment length is set |
@@ -95,6 +94,12 @@ toe-kick only) — not attached to a cabinet.
 | Kick assembly resizes / moves freely over its own run | 2026-06-20 | 🔲 To test | Spans its run members; clamps against other cabinets/panels/kick runs in the way (can't overrun a cabinet that has its own kick) |
 | Right-click kick assembly → Edit… opens the edit modal | 2026-06-20 | 🔲 To test | Structure tabs (Face/Interior/Joints/Tree) hidden; Parts/3D/Top/Elev/Side/Overrides shown |
 | Kick scribes | 2026-06-20 | ✅ Pass | Confirmed working by hand |
+| Detach a SINGLE cabinet's kick | 2026-06-21 | 🔲 To test | Right-click a floor cabinet → "Detach kick" (own assembly); "Join kicks in run" still does the whole run |
+| Detached cabinet = carcase-only ("B" model) | 2026-06-21 | 🔲 To test | Member becomes kick-less: dy = carcase height, raised by kick height (pos_z), has_toekick=false. Carcase parts identical → cut-list unchanged |
+| Editable DY of a detached cabinet = carcase height | 2026-06-21 | 🔲 To test | Panel DY field is the carcase height; adjust cabinet heights directly |
+| Kick assembly height (DY) drives the kick height | 2026-06-21 | 🔲 To test | Resize the KICK assembly taller/shorter → toe height follows (face/ladder/spreaders) |
+| Elevation Y-chain shows kick + gap + carcase | 2026-06-21 | 🔲 To test | Detached member: kick (assembly height) + gap (if kick shorter than the raise) + carcase. Kick excluded from the X chain |
+| Legacy detached runs auto-migrate to "B" on load | 2026-06-21 | 🔲 To test | Old runs (kick still on cabinet) self-heal once when the room loads |
 | Top/Elevation/Side views default ~20% more zoomed out | 2026-06-20 | 🔲 To test | Dimension chains no longer clipped at edges |
 
 ## Toe-kick scribes

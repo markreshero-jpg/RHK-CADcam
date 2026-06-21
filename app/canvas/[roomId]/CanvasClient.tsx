@@ -12,7 +12,7 @@ import {
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, type KickRunMutation } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
@@ -439,6 +439,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const { handleJoinKicks, handleDetachKickSingle, handleSeparateKicks } = useKickRunOps({
     cabinets, walls, room, setCabinets, applyKickMutation, setContextMenu,
   })
+
+  // One-time self-heal: migrate any kick-run members detached under the old model
+  // (kick still on the cabinet) to the current kick-less-carcase model.
+  const migratedLegacyKicksRef = useRef(false)
+  useEffect(() => {
+    if (migratedLegacyKicksRef.current) return
+    migratedLegacyKicksRef.current = true
+    dbMigrateLegacyKickMembers(room.id).then(m => { if (m) applyKickMutation(m) }).catch(e => console.error('legacy kick migrate', e))
+  }, [room.id, applyKickMutation])
 
   async function handleDeleteCabinet(id: string) {
     if (!confirm('Delete this cabinet?')) return
