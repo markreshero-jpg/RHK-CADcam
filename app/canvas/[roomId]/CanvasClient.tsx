@@ -14,6 +14,7 @@ import {
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
 import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
 import { useMaterialColours } from './useMaterialColours'
@@ -67,6 +68,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 }) {
   const [project, setProjectState] = useState<Project | null>(initProject)
   const [room, setRoomState] = useState<Room>(initRoom)
+  // Shop-level cabinet size defaults (lowest cascade level above the system
+  // constant). Loaded once; null until fetched / when no shop_settings row.
+  const [shopDims, setShopDims] = useState<ShopDimDefaults | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('shop_settings')
+      .select('default_base_dy, default_base_dz, default_wall_dy, default_wall_dz, default_tall_dy, default_tall_dz')
+      .limit(1).maybeSingle()
+      .then(({ data }) => { if (!cancelled) setShopDims(shopDimsFromSettings(data)) })
+    return () => { cancelled = true }
+  }, [])
   const [walls, setWalls] = useState<Wall[]>(initWalls)
   const [cabinets, setCabinets] = useState<CabinetInstance[]>(initialCabinets)
   const [mode, setMode] = useState<Mode>('select')
@@ -503,15 +515,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   async function placeCabinet(wall: Wall, pos_x: number, pos_y: number, cls: AssemblyClass, isEP = false, islandFlip = false, dxOverride?: number) {
     captureSnapshot()
     const dims = DEFAULT_DIMS[cls] ?? DEFAULT_DIMS.base
-    // Map corner variants back to their base class key to look up job dimension defaults
-    const baseKey = cls.replace('_corner', '') as 'base' | 'wall' | 'tall'
-    const jobDims = (project?.class_dimension_defaults as Record<string, { dy?: number; dz?: number }> | null)?.[baseKey]
+    // Height/depth cascade room → job → shop → system constant; width stays intrinsic.
+    const { dy, dz } = resolveClassDims(cls, { room, project, shop: shopDims })
     const data: Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'> = {
       room_id: room.id, wall_id: wall.id, cabinet_definition_id: null,
       label: nextLabel(cabinets, isEP ? 'ep' : cls), assembly_class: cls,
       pos_x, pos_y, pos_z: 0, rotation: islandFlip ? wall.angle + 180 : wall.angle,
       dx: dxOverride != null && dxOverride > 0 ? Math.round(dxOverride) : dims.dx,
-      dy: jobDims?.dy ?? dims.dy, dz: jobDims?.dz ?? dims.dz,
+      dy, dz,
       has_carcass: !isEP, has_internal: !isEP, has_face: true,
       has_toekick: cls === 'base' || cls === 'tall' || cls === 'base_corner' || cls === 'tall_corner',
       construction_method_id: null, top_type: 'front_rail', toe_type: 'ladder',
@@ -536,8 +547,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Build an editable draft instance from a library definition (id '__draft', not in
   // the DB). The right-hand CabinetPanel edits this; placement inserts it.
   function buildDraftFromDefinition(def: CabinetDefinition): CabinetInstance {
+    // Resolve the class's cascade height/depth so an unpreserved definition adopts
+    // this room/job's standards; preserved axes keep the definition's frozen size.
+    const { dy, dz } = resolveClassDims(def.assembly_class, { room, project, shop: shopDims })
     const data = buildInstanceFromDefinition(def, {
       room_id: room.id, wall_id: '', label: def.name, pos_x: 0, pos_y: 0, rotation: 0,
+      cascade_dy: dy, cascade_dz: dz,
     })
     return { ...data, id: '__draft', created_at: '', updated_at: '' }
   }

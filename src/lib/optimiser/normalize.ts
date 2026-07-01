@@ -9,6 +9,16 @@ import type { OptiPart, OptiRoom, OptiCabinet, SourceTable } from './types'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
+// Reduce a part's 3D placement bounding box to sheet-good nesting dims: the
+// thinnest axis is the board thickness, the two larger dims are the cut face
+// (w = larger, h = smaller). Only safe for parts without a grain direction,
+// since it may swap w/h. Used for on-edge toe-kick spreaders whose thickness
+// would otherwise be read off the wrong axis.
+export function canonicalPanelDims(dx: number, dy: number, dz: number): { w: number; h: number; thickness: number } {
+  const [w, h, thickness] = [dx, dy, dz].sort((a, b) => b - a)
+  return { w, h, thickness }
+}
+
 export interface RawProject { id: string; name: string; job_number: string | null }
 export interface RawRoom { id: string; name: string }
 export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; no_cnc?: boolean | null }
@@ -42,7 +52,11 @@ export function normalizeProject(
     const room = cab ? roomById.get(cab.room_id) : undefined
     return { cabinet_label: cab?.label ?? '—', room_id: cab?.room_id ?? '', room_name: room?.name ?? '—' }
   }
-  const push = (table: SourceTable, row: Row, partKey: string, label: string, grain: string | null, nestPriority: number) => {
+  const push = (
+    table: SourceTable, row: Row, partKey: string, label: string,
+    grain: string | null, nestPriority: number,
+    dims?: { w: number; h: number; thickness: number },
+  ) => {
     const cabId = row.cabinet_instance_id as string
     const m = meta(cabId)
     // custom_parts carry no_cnc (true = skip CNC); everything else carries output_to_cnc.
@@ -56,7 +70,7 @@ export function normalizeProject(
       cabinet_label: m.cabinet_label, room_id: m.room_id, room_name: m.room_name,
       project_id: project.id, job_number: project.job_number,
       label,
-      w: Number(row.dx), h: Number(row.dy), thickness: Number(row.dz),
+      w: dims?.w ?? Number(row.dx), h: dims?.h ?? Number(row.dy), thickness: dims?.thickness ?? Number(row.dz),
       material_id: (row.material_id as string) ?? null,
       grain_direction: grain, nest_priority: nestPriority,
       output_to_cnc: partCut && !cabNoCnc.has(cabId),
@@ -67,7 +81,15 @@ export function normalizeProject(
   // partKey mirrors the svg*Meta synthetic ids so it matches part_operations.source_part_key.
   for (const r of cp) push('case_parts', r, `case_${r.part_key}`, humanize(String(r.part_key)), (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0))
   for (const r of ip) push('internal_parts', r, `int_${r.part_type}_${r.sort_order}`, `${humanize(String(r.part_type))} ${Number(r.sort_order) + 1}`, null, 0)
-  for (const r of tp) push('toekick_parts', r, `tk_${r.part_key}_${r.sort_order}`, humanize(String(r.part_key)), null, 0)
+  // Toe-kick parts store their placement bounding box in cabinet space, so the
+  // board thickness isn't always on the DZ axis: spreaders are modelled on-edge
+  // (thickness on DY, DZ spanning the kick depth ~489mm). Canonicalise to the real
+  // sheet-good orientation — thinnest axis = board thickness, the two larger dims =
+  // the cut face — so spreaders nest in the same material+thickness group as the
+  // sub-front/back and cut the correct rectangle (toe-kick parts carry no grain, so
+  // swapping w/h is safe). See resolveToekick.ts for the on-edge geometry.
+  for (const r of tp) push('toekick_parts', r, `tk_${r.part_key}_${r.sort_order}`, humanize(String(r.part_key)), null, 0,
+    canonicalPanelDims(Number(r.dx), Number(r.dy), Number(r.dz)))
   for (const r of fz) push('face_zones', r, `zone_${r.row_index}_${r.col_index}`, `${humanize(String(r.face_type))} (R${Number(r.row_index) + 1}C${Number(r.col_index) + 1})`, (r.grain_direction as string) ?? null, 0)
   // Drawer box panels — key mirrors svgDbMeta (dbox_<row>_<col>_<part_type>).
   for (const r of dbp) push('drawer_box_parts', r, `dbox_${r.face_zone_row}_${r.face_zone_col}_${r.part_type}`,

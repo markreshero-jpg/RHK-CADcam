@@ -65,6 +65,9 @@ export interface Room {
   room_dz: number | null    // room depth mm
   wall_dy: number | null    // default wall height mm — inherited by new walls (null = not set)
   wall_dz: number | null    // default wall thickness mm — inherited by new walls (null = not set)
+  // Per-class cabinet Height(dy)/Depth(dz) defaults { base|wall|tall: {dy,dz} }.
+  // Highest cascade level; missing class/axis inherits the job. {} = inherit all.
+  class_dimension_defaults: Record<string, unknown>
   soffit_height: number | null
   wall_cabinet_top: number | null
   construction_method_id: string | null
@@ -208,6 +211,12 @@ export interface CabinetDefinition {
   default_dx: number
   default_dy: number
   default_dz: number
+  // When true, the frozen default_d* wins over the placement cascade for that axis
+  // (room → job → shop → system). False → the axis cascades. Width has no cascade
+  // source yet, so default_dx is used regardless of preserve_dx.
+  preserve_dx: boolean
+  preserve_dy: boolean
+  preserve_dz: boolean
   has_carcass: boolean
   has_internal: boolean
   has_face: boolean

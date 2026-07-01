@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Room, Project } from '@/src/lib/types'
+import { Room, Project, DEFAULT_DIMS } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
 import { supabase } from '@/src/lib/supabase'
 import MaterialsScheduleTab from './MaterialsScheduleTab'
@@ -11,6 +11,15 @@ export type RoomPropertiesTab = 'details' | 'construction' | 'materials' | 'hard
 
 type Rules = typeof DEFAULT_CONSTRUCTION_METHOD.rules
 type RuleKey = keyof Rules
+
+// Room-level cabinet size defaults: same shape as the job, but every axis is
+// optional — a blank field inherits the job (projects.class_dimension_defaults).
+type ClassDimDefaults = {
+  base?: { dy?: number; dz?: number }
+  wall?: { dy?: number; dz?: number }
+  tall?: { dy?: number; dz?: number }
+}
+const CAB_CLASSES: ('base' | 'wall' | 'tall')[] = ['base', 'wall', 'tall']
 
 const SYS = DEFAULT_CONSTRUCTION_METHOD.rules
 
@@ -88,6 +97,21 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
   const [wallCabTop, setWallCabTop] = useState(room.wall_cabinet_top ?? '')
   const [notes, setNotes] = useState(room.notes ?? '')
 
+  // Room-level cabinet size defaults (blank = inherit job). Stored as strings for
+  // the inputs; serialised back to class_dimension_defaults on save.
+  const roomCd = (room.class_dimension_defaults ?? {}) as ClassDimDefaults
+  const [cabDims, setCabDims] = useState<Record<string, { dy: string; dz: string }>>(() =>
+    Object.fromEntries(CAB_CLASSES.map(c => [c, {
+      dy: roomCd[c]?.dy != null ? String(roomCd[c]!.dy) : '',
+      dz: roomCd[c]?.dz != null ? String(roomCd[c]!.dz) : '',
+    }])))
+  const setCabDim = (cls: string, axis: 'dy' | 'dz', v: string) =>
+    setCabDims(prev => ({ ...prev, [cls]: { ...prev[cls], [axis]: v } }))
+  // Value the room would inherit if left blank: job default ?? system constant.
+  const jobCd = (project?.class_dimension_defaults ?? {}) as ClassDimDefaults
+  const inheritedDim = (cls: 'base' | 'wall' | 'tall', axis: 'dy' | 'dz') =>
+    jobCd[cls]?.[axis] ?? DEFAULT_DIMS[cls][axis]
+
   // Construction — baseline is job-effective rules; room can override per-key
   const jobRules = jobEffective(project)
   const [rules, setRules] = useState<Rules>({
@@ -151,8 +175,21 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
     for (const k of Object.keys(SYS) as RuleKey[]) {
       if (rules[k] !== jobRules[k]) (newOverrides as Record<string, unknown>)[k] = rules[k]
     }
+    // Serialise cabinet size defaults: keep only axes the user actually set, drop
+    // empty classes entirely so blank fields cleanly inherit the job.
+    const classDims: ClassDimDefaults = {}
+    for (const cls of CAB_CLASSES) {
+      const dy = cabDims[cls].dy.trim()
+      const dz = cabDims[cls].dz.trim()
+      const entry: { dy?: number; dz?: number } = {}
+      if (dy !== '' && !isNaN(Number(dy))) entry.dy = Number(dy)
+      if (dz !== '' && !isNaN(Number(dz))) entry.dz = Number(dz)
+      if (entry.dy != null || entry.dz != null) classDims[cls] = entry
+    }
+
     await onSave({
       name: name.trim() || room.name,
+      class_dimension_defaults: classDims as Record<string, unknown>,
       room_dx: roomDx === '' ? null : Number(roomDx),
       room_dy: roomDy === '' ? null : Number(roomDy),
       room_dz: roomDz === '' ? null : Number(roomDz),
@@ -232,6 +269,42 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
                   <DimField label="Soffit Height (mm)" placeholder="not set" value={String(soffitHeight)} onChange={setSoffitHeight} />
                   <DimField label="Wall Cabinet Top (mm)" placeholder="not set" value={String(wallCabTop)} onChange={setWallCabTop} />
                 </div>
+              </div>
+
+              <div className="border-t border-gray-800 pt-4">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cabinet Size Defaults</p>
+                <p className="text-[10px] text-gray-500 mb-3">Applied to cabinets placed in this room. Blank = inherit the job. Overrides the job; per-cabinet edits still win.</p>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-500 text-left">
+                      <th className="pb-2 font-medium">Class</th>
+                      <th className="pb-2 font-medium text-right pr-4">Height dy (mm)</th>
+                      <th className="pb-2 font-medium text-right">Depth dz (mm)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800">
+                    {CAB_CLASSES.map(cls => (
+                      <tr key={cls}>
+                        <td className="py-2 text-gray-300 capitalize">{cls}</td>
+                        <td className="py-2 pr-4">
+                          <div className="flex justify-end">
+                            <input type="number" value={cabDims[cls].dy} placeholder={`job ${inheritedDim(cls, 'dy')}`}
+                              onChange={e => setCabDim(cls, 'dy', e.target.value)}
+                              className={`w-24 bg-gray-800 border rounded px-2 py-1 text-xs text-right font-mono placeholder-gray-600 focus:outline-none focus:border-blue-500 ${cabDims[cls].dy !== '' ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'}`} />
+                          </div>
+                        </td>
+                        <td className="py-2">
+                          <div className="flex justify-end">
+                            <input type="number" value={cabDims[cls].dz} placeholder={`job ${inheritedDim(cls, 'dz')}`}
+                              onChange={e => setCabDim(cls, 'dz', e.target.value)}
+                              className={`w-24 bg-gray-800 border rounded px-2 py-1 text-xs text-right font-mono placeholder-gray-600 focus:outline-none focus:border-blue-500 ${cabDims[cls].dz !== '' ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'}`} />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[10px] text-gray-500 mt-1">Blue = room override</p>
               </div>
 
               <Field label="Notes">

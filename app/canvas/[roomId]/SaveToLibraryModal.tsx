@@ -17,6 +17,15 @@ const PRESERVABLES: { key: keyof PreserveOptions; label: string; hint: string }[
   { key: 'exposed_interior', label: 'Exposed interior',  hint: 'finished-end flag' },
 ]
 
+// Size axes preserved independently. Unticked → that axis cascades (room→job→
+// shop→system) at placement. Height/depth cascade; width has no cascade source so
+// it always uses this saved width regardless.
+const SIZE_AXES: { key: keyof PreserveOptions; label: string; hint: string }[] = [
+  { key: 'width',  label: 'Width',  hint: 'dx' },
+  { key: 'height', label: 'Height', hint: 'dy' },
+  { key: 'depth',  label: 'Depth',  hint: 'dz' },
+]
+
 export default function SaveToLibraryModal({ cab, onClose, onSaved }: {
   cab: CabinetInstance
   onClose: () => void
@@ -169,6 +178,21 @@ export default function SaveToLibraryModal({ cab, onClose, onSaved }: {
             ))}
           </div>
           <p className="text-[11px] text-gray-500 mt-1.5">Door style travels automatically with the face layout.</p>
+        </div>
+
+        {/* Size preservation */}
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Preserve size (otherwise cascades per job/room):</p>
+          <div className="flex gap-2">
+            {SIZE_AXES.map(({ key, label, hint }) => (
+              <label key={key} className="flex-1 flex items-center gap-2 px-2 py-1 rounded border border-gray-700 hover:bg-gray-800 cursor-pointer">
+                <input type="checkbox" checked={!!preserve[key]} onChange={() => toggle(key)} className="accent-blue-500" />
+                <span className="text-sm text-gray-200">{label}</span>
+                <span className="text-xs text-gray-500">{hint}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-[11px] text-gray-500 mt-1.5">Unticked Height/Depth adopt this job&apos;s cabinet size defaults when placed.</p>
         </div>
 
         {err && <p className="text-xs text-red-400">{err}</p>}

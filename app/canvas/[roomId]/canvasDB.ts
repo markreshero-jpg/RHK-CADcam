@@ -372,6 +372,10 @@ export interface DefinitionPlacement {
   pos_y:                 number
   rotation:              number
   dx?:                   number   // gap-fit width override; falls back to default_dx
+  // Cascade-resolved Height/Depth for the definition's class (room→job→shop→system).
+  // Used unless the definition preserves that axis. Omit → fall back to default_d*.
+  cascade_dy?:           number
+  cascade_dz?:           number
   left_neighbour_type?:  NeighbourType
   right_neighbour_type?: NeighbourType
 }
@@ -392,7 +396,10 @@ export function buildInstanceFromDefinition(
     label: p.label, assembly_class: def.assembly_class,
     pos_x: p.pos_x, pos_y: p.pos_y, pos_z: 0, rotation: p.rotation,
     dx: p.dx != null && p.dx > 0 ? Math.round(p.dx) : def.default_dx,
-    dy: def.default_dy, dz: def.default_dz,
+    // Height/depth cascade unless the definition preserves that axis. A missing
+    // cascade value (older callers) also falls back to the frozen default.
+    dy: def.preserve_dy || p.cascade_dy == null ? def.default_dy : p.cascade_dy,
+    dz: def.preserve_dz || p.cascade_dz == null ? def.default_dz : p.cascade_dz,
     has_carcass: def.has_carcass, has_internal: def.has_internal,
     has_face: def.has_face, has_toekick: def.has_toekick,
     construction_method_id: def.construction_method_id,
@@ -471,6 +478,11 @@ export interface PreserveOptions {
   hinge?:            boolean   // → hardware_overrides.hinge_hardware_id (+ hinge_plate_id)
   slide?:            boolean   // → hardware_overrides.slide_id
   exposed_interior?: boolean   // → exposed_interior flag
+  // Per-axis size freeze. Unticked → that axis cascades (room→job→shop→system) at
+  // placement. dy/dz cascade; dx has no cascade source so it always uses default_dx.
+  width?:            boolean   // → preserve_dx
+  height?:           boolean   // → preserve_dy
+  depth?:            boolean   // → preserve_dz
 }
 
 export async function saveCabinetToLibrary(
@@ -528,6 +540,7 @@ export async function saveCabinetToLibrary(
     category_id: opts.categoryId,
     subcategory_id: opts.subcategoryId,
     default_dx: inst.dx, default_dy: inst.dy, default_dz: inst.dz,
+    preserve_dx: !!p.width, preserve_dy: !!p.height, preserve_dz: !!p.depth,
     has_carcass: inst.has_carcass, has_internal: inst.has_internal, has_face: inst.has_face, has_toekick: inst.has_toekick,
     top_type: inst.top_type, toe_type: inst.toe_type,
     construction_method_id: inst.construction_method_id,
