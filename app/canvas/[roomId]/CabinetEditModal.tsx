@@ -29,6 +29,7 @@ import OverridesView from './OverridesView'
 import CabinetTreePanel from './CabinetTreePanel'
 import CabinetRoutesPanel from './CabinetRoutesPanel'
 import CabinetErrorsPanel from './CabinetErrorsPanel'
+import PartEditor from './PartEditor'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 
 type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'interior' | 'joints' | 'overrides' | 'tree' | 'routes' | 'errors'
@@ -212,6 +213,9 @@ export default function CabinetEditModal({
   // then the Add-Part dialog seeded with that cabinet-space point.
   const [addMenu, setAddMenu]             = useState<{ x: number; y: number; z: number; cx: number; cy: number } | null>(null)
   const [addAt, setAddAt]                 = useState<{ x: number; y: number; z: number } | null>(null)
+  // Single-part operation editor (opened from the 3D view's right-click → Edit Part).
+  // Rendered as a modal-level overlay so the cabinet context stays mounted underneath.
+  const [editingPart, setEditingPart]     = useState<PartMeta | null>(null)
 
   const prevPartRef     = useRef<PartMeta | null>(null)
   const originalEdgeRef = useRef<PartEdge | null>(null)
@@ -563,7 +567,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} />}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={setEditingPart} />}
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}
@@ -683,6 +687,15 @@ export default function CabinetEditModal({
           />
         </div>
       </div>
+
+      {/* Single-part operation editor — overlays the whole modal, cabinet kept underneath. */}
+      {editingPart && (
+        <PartEditor
+          cabinetId={cabinet.id}
+          part={editingPart}
+          onClose={() => setEditingPart(null)}
+        />
+      )}
     </div>
   )
 }

@@ -6,9 +6,9 @@
 //   panelFaceColors, edgeStrips, unpackMatCol, fitCamDist     (geometry helpers)
 //   Part, PartPropertiesPanel, PreviewCanvas                  (components)
 
-import { Suspense, useRef, useState, useEffect } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { OrbitControls, PerspectiveCamera, Edges } from '@react-three/drei'
+import { Suspense, useState, useEffect, useMemo } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
+import { OrbitControls, PerspectiveCamera, OrthographicCamera, Edges, Line } from '@react-three/drei'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import { fmtMm, roundMm } from '@/src/lib/format'
 import { evalCalc } from '@/src/lib/calc'
@@ -331,6 +331,120 @@ export function PartPropertiesPanel({
   )
 }
 
+// ── View modes (3D + orthographic) ──────────────────────────────────────────────
+// The scene is centred on the origin by callers (geometry translated by
+// −extent/2), and OrbitControls targets [0,0,0]. So each ortho camera simply
+// looks down one axis toward the origin. NET NEW for the Part Editor (ortho
+// Top/Front/Side); the legacy perspective path is unchanged.
+
+export type ViewMode = '3d' | 'top' | 'front' | 'side'
+
+export const VIEW_MODES: { id: ViewMode; label: string }[] = [
+  { id: '3d',    label: '3D'    },
+  { id: 'top',   label: 'Top'   },
+  { id: 'front', label: 'Front' },
+  { id: 'side',  label: 'Side'  },
+]
+
+// Orthographic camera that fits the dx×dy×dz bounding box for the chosen view.
+// drei derives the frustum from the canvas pixel size, so fit = pixels / world.
+function OrthoCam({ view, dx, dy, dz }: { view: Exclude<ViewMode, '3d'>; dx: number; dy: number; dz: number }) {
+  const size = useThree(s => s.size)
+  const far  = Math.max(dx, dy, dz) * 10 + 1000
+  // position (along the view axis), screen up-vector, and the two in-plane world extents.
+  let position: [number, number, number]
+  let up: [number, number, number] = [0, 1, 0]
+  let worldW: number, worldH: number
+  if (view === 'top') {            // look down −Y; screen = X(width) × Z(depth), front of part at bottom
+    position = [0, far * 0.5, 0]; up = [0, 0, -1]; worldW = dx; worldH = dz
+  } else if (view === 'front') {   // look along −Z; screen = X(width) × Y(height)
+    position = [0, 0, far * 0.5]; worldW = dx; worldH = dy
+  } else {                         // 'side' — look along −X; screen = Z(depth) × Y(height)
+    position = [far * 0.5, 0, 0]; worldW = dz; worldH = dy
+  }
+  const zoom = Math.min(size.width / Math.max(worldW, 1), size.height / Math.max(worldH, 1)) * 0.85
+  return <OrthographicCamera makeDefault position={position} up={up} zoom={zoom} near={0.1} far={far * 2} />
+}
+
+function SceneCamera({ view, dx, dy, dz }: { view: ViewMode; dx: number; dy: number; dz: number }) {
+  if (view === '3d') {
+    const camDist = fitCamDist(dx, dy, dz)
+    return (
+      <PerspectiveCamera
+        makeDefault
+        fov={FOV}
+        position={[camDist * 0.5, camDist * 0.35, camDist * 0.8]}
+        near={1}
+        far={camDist * 10}
+      />
+    )
+  }
+  return <OrthoCam view={view} dx={dx} dy={dy} dz={dz} />
+}
+
+// A mm grid in the plane of the current ortho view, pushed to the far side of the
+// part so it doesn't z-fight. gridHelper sits in the XZ plane by default.
+function ViewGrid({ view, dx, dy, dz, cell }: { view: Exclude<ViewMode, '3d'>; dx: number; dy: number; dz: number; cell: number }) {
+  const span = view === 'top' ? Math.max(dx, dz) : view === 'front' ? Math.max(dx, dy) : Math.max(dz, dy)
+  const div  = Math.max(2, Math.round(span / Math.max(cell, 1)))
+  const helper = <gridHelper args={[div * cell, div, '#3b4252', '#272b36']} />
+  if (view === 'top')   return <group position={[0, -dy / 2, 0]}>{helper}</group>
+  if (view === 'front') return <group position={[0, 0, -dz / 2]} rotation={[Math.PI / 2, 0, 0]}>{helper}</group>
+  return <group position={[-dx / 2, 0, 0]} rotation={[0, 0, Math.PI / 2]}>{helper}</group>   // side
+}
+
+// Measure tool: renders a clickable snap sphere at every snap point, highlights
+// the two picked points, and draws a line between them. The numeric distance is
+// shown in the DOM toolbar (see PreviewCanvas), not in-scene.
+function MeasureLayer({
+  points, picked, onPick, snapR,
+}: {
+  points: [number, number, number][]
+  picked: [number, number, number][]
+  onPick: (p: [number, number, number]) => void
+  snapR: number
+}) {
+  const [hover, setHover] = useState<number | null>(null)
+  return (
+    <group>
+      {points.map((p, i) => (
+        <mesh
+          key={i}
+          position={p}
+          onClick={(e) => { e.stopPropagation(); onPick(p) }}
+          onPointerOver={(e) => { e.stopPropagation(); setHover(i) }}
+          onPointerOut={() => setHover(h => (h === i ? null : h))}
+        >
+          <sphereGeometry args={[hover === i ? snapR * 1.6 : snapR, 12, 12]} />
+          <meshBasicMaterial color={hover === i ? '#67e8f9' : '#22d3ee'} transparent opacity={0.55} depthTest={false} />
+        </mesh>
+      ))}
+      {picked.map((p, i) => (
+        <mesh key={`pk${i}`} position={p} renderOrder={2}>
+          <sphereGeometry args={[snapR * 1.4, 16, 16]} />
+          <meshBasicMaterial color="#f59e0b" depthTest={false} />
+        </mesh>
+      ))}
+      {picked.length === 2 && (
+        <Line points={picked} color="#f59e0b" lineWidth={2} depthTest={false} renderOrder={2} />
+      )}
+    </group>
+  )
+}
+
+// Default measure snap points when the caller supplies none: the 8 bounding-box
+// corners, 6 face centres, and the centroid — all in the origin-centred frame.
+function defaultSnapPoints(dx: number, dy: number, dz: number): [number, number, number][] {
+  const xs = [-dx / 2, 0, dx / 2], ys = [-dy / 2, 0, dy / 2], zs = [-dz / 2, 0, dz / 2]
+  const out: [number, number, number][] = []
+  for (const x of xs) for (const y of ys) for (const z of zs) {
+    // keep corners, face centres and centroid (i.e. at most one zero per... ) — take all 27 grid nodes;
+    // it's a small fixed set and gives corners + edge mids + face centres + centre for free.
+    out.push([x, y, z])
+  }
+  return out
+}
+
 // ── PreviewCanvas ──────────────────────────────────────────────────────────────
 // Standard Canvas + camera + lighting + OrbitControls.
 // Pass scene geometry as children; overlays (panels, tooltips) via overlay prop.
@@ -344,6 +458,13 @@ export function PreviewCanvas({
   overlay,
   hint,
   children,
+  // ── M2 additions — all opt-in; defaults keep the legacy perspective behaviour ──
+  viewModes = false,                 // show the 3D/Top/Front/Side selector + ortho cameras
+  initialView = '3d',
+  grid = true,                       // mm grid in ortho views (only when viewModes)
+  gridCell = 50,                     // mm per minor grid cell
+  measure = false,                   // enable the measure tool toggle (only when viewModes)
+  snapPoints,                        // world-space snap targets; default = derived bbox nodes
 }: {
   dx:             number
   dy:             number
@@ -355,10 +476,44 @@ export function PreviewCanvas({
   overlay?:       React.ReactNode
   hint?:          string
   children?:      React.ReactNode
+  viewModes?:     boolean
+  initialView?:   ViewMode
+  grid?:          boolean
+  gridCell?:      number
+  measure?:       boolean
+  snapPoints?:    [number, number, number][]
 }) {
   const maxDim  = Math.max(dx, dy, dz)
   const camDist = fitCamDist(dx, dy, dz)
   const zoomSpeed = getUserPrefs().invertScroll ? -1 : 1
+
+  // View + measure state (only meaningful when viewModes is on).
+  const [view, setView] = useState<ViewMode>(initialView)
+  const [measuring, setMeasuring] = useState(false)
+  const [picked, setPicked] = useState<[number, number, number][]>([])
+
+  const snaps = useMemo<[number, number, number][]>(
+    () => snapPoints ?? defaultSnapPoints(dx, dy, dz),
+    [snapPoints, dx, dy, dz],
+  )
+  const dist = picked.length === 2
+    ? Math.hypot(picked[0][0] - picked[1][0], picked[0][1] - picked[1][1], picked[0][2] - picked[1][2])
+    : null
+  const onPick = (p: [number, number, number]) =>
+    setPicked(prev => (prev.length >= 2 ? [p] : [...prev, p]))
+
+  const legacy = !viewModes
+  const enableRotate = legacy || view === '3d'
+  const showGrid = viewModes && grid && view !== '3d'
+  const showMeasure = viewModes && measure && measuring
+  // Ortho needs pan to be useful; the selector also implies a CAD-style viewer.
+  const panEnabled = legacy ? enablePan : (enablePan || view !== '3d')
+
+  const hintText = hint ?? (
+    legacy || view === '3d'
+      ? `Left-drag rotate · scroll zoom${panEnabled ? ' · right-drag pan' : ''} · click part to inspect · click empty to deselect`
+      : `${VIEW_MODES.find(v => v.id === view)?.label} view · scroll zoom · drag pan`
+  )
 
   return (
     <div className="w-full h-full relative">
@@ -369,31 +524,83 @@ export function PreviewCanvas({
         onPointerMissed={onDeselect}
         onContextMenu={onContextMenu ?? (e => { e.preventDefault(); onDeselect?.() })}
       >
-        <PerspectiveCamera
-          makeDefault
-          fov={FOV}
-          position={[camDist * 0.5, camDist * 0.35, camDist * 0.8]}
-          near={1}
-          far={camDist * 10}
-        />
+        {legacy ? (
+          <PerspectiveCamera
+            makeDefault
+            fov={FOV}
+            position={[camDist * 0.5, camDist * 0.35, camDist * 0.8]}
+            near={1}
+            far={camDist * 10}
+          />
+        ) : (
+          <SceneCamera view={view} dx={dx} dy={dy} dz={dz} />
+        )}
+        {/* Keyed by view so the controls rebind to the freshly-made-default camera on switch. */}
         <OrbitControls
+          key={legacy ? 'legacy' : view}
           target={[0, 0, 0]}
           minDistance={maxDim * 0.4}
           maxDistance={maxDim * 6}
-          enablePan={enablePan}
+          enablePan={panEnabled}
+          enableRotate={enableRotate}
           enableDamping={false}
           zoomSpeed={zoomSpeed}
         />
         <ambientLight intensity={1.8} />
         <directionalLight position={[dx * 1.5, dy * 2, dz * 2]} intensity={1.6} />
         <directionalLight position={[-dx, dy * 0.5, -dz * 0.5]} intensity={0.6} color="#e8f0ff" />
+        {showGrid && <ViewGrid view={view as Exclude<ViewMode, '3d'>} dx={dx} dy={dy} dz={dz} cell={gridCell} />}
         <Suspense fallback={null}>
           {children}
         </Suspense>
+        {showMeasure && <MeasureLayer points={snaps} picked={picked} onPick={onPick} snapR={Math.max(maxDim * 0.012, 1.5)} />}
       </Canvas>
+
+      {viewModes && (
+        <div className="absolute top-2 left-2 flex items-center gap-2 select-none">
+          <div className="flex rounded-md overflow-hidden border border-gray-700 bg-gray-900/90">
+            {VIEW_MODES.map(v => (
+              <button
+                key={v.id}
+                onClick={() => setView(v.id)}
+                className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  view === v.id ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          {measure && (
+            <button
+              onClick={() => { setMeasuring(m => !m); setPicked([]) }}
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                measuring
+                  ? 'bg-cyan-600 border-cyan-500 text-white'
+                  : 'bg-gray-900/90 border-gray-700 text-gray-300 hover:bg-gray-700'
+              }`}
+              title="Measure: click two snap points"
+            >
+              📏 Measure
+            </button>
+          )}
+          {measuring && (
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-gray-900/90 border border-gray-700 text-[11px]">
+              <span className="text-gray-400">
+                {dist != null ? <span className="text-cyan-300 font-mono">{fmtMm(dist)} mm</span>
+                  : <span className="text-gray-500">{picked.length === 1 ? 'pick 2nd point…' : 'pick 1st point…'}</span>}
+              </span>
+              {picked.length > 0 && (
+                <button onClick={() => setPicked([])} className="text-gray-500 hover:text-white" aria-label="Clear measurement">✕</button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {overlay}
       <div className="absolute bottom-2 left-3 text-[10px] text-gray-600 pointer-events-none select-none">
-        {hint ?? `Left-drag rotate · scroll zoom${enablePan ? ' · right-drag pan' : ''} · click part to inspect · click empty to deselect`}
+        {hintText}
       </div>
     </div>
   )

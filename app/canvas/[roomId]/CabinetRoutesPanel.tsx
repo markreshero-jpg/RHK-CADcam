@@ -25,20 +25,37 @@ const FILL_OPS = ['pocket', 'raster']
 
 type AddKind = 'single' | 'toolset' | 'drill' | 'groove'
 
-interface PartOp {
+export interface PartOp {
   id: string
-  source_table: string; source_cabinet_id: string | null; source_part_key: string | null
+  // Stable part identity (case_parts rows are regenerated on every resolve).
+  source_table: string; source_part_id: string | null
+  source_cabinet_id: string | null; source_part_key: string | null
   operation_type: string
+  operation_action: string | null   // P1 (§4.2): strategy distinct from the verb (operation_type)
+  operation_key: string | null      // keys generated rows for wipe-and-reinsert (seamDrillSync)
   router_tool_id: string | null; drill_id: string | null; auto_tool: boolean
   tool_set_id: string | null
   depth: number | null; diameter: number | null; width: number | null; length: number | null
-  pos_x: number | null; pos_y: number | null
-  repeat_count: number | null; repeat_spacing: number | null
+  // Position: pos_x/pos_y are part-local in-plane (partFootprint projection);
+  // pos_z is depth along the part-local normal (n). pos_z was unused pre-Part-Editor.
+  pos_x: number | null; pos_y: number | null; pos_z: number | null
+  // Operation bounding size + rotation in part-local axes (Part Editor, §4.1).
+  size_dx: number | null; size_dy: number | null; size_dz: number | null
+  angle_ax: number; angle_ay: number; angle_az: number
+  repeat_count: number | null; repeat_spacing: number | null; repeat_axis: string | null
   offset_top_mm: number | null; offset_bottom_mm: number | null
   offset_left_mm: number | null; offset_right_mm: number | null
   fill_strategy: string | null; raster_angle_deg: number | null; raster_stepover_pct: number | null
+  // output_face = cabinet-axis vocabulary (left/right/top/bottom/front/back), read by the
+  // optimiser/G-code path. plane_kind/plane_edge_index = part-local plane (Part Editor §2.3).
+  output_face: string | null
+  plane_kind: string | null; plane_edge_index: number | null
+  // Master/slave (firing engine is P2; columns exist, currently unused).
+  is_master: boolean; master_operation_id: string | null
+  slave_table: string | null; slave_part_id: string | null
   output_to_cnc: boolean; sort_order: number
   parameters: Record<string, unknown> | null
+  created_at: string; updated_at: string
 }
 interface ToolItem { id: string; name: string; tool_number: string | null }
 interface ToolSetItem { id: string; name: string }

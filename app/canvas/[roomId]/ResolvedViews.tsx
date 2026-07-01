@@ -28,6 +28,7 @@ import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
 import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 import { hingePlacement, hingeSilhouetteOutline, hingeSilhouetteSnapPoints } from '@/src/lib/hingeSilhouette'
 import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
+import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
 
 // Hinge cup/plate drill marker colour (distinct from amber slide drills).
 const HINGE_DRILL_COL = '#a855f7'   // violet-500
@@ -249,7 +250,7 @@ function OriginMarker({ sx, sy, hLabel, vLabel, vUp = true }: {
 
 // `zoomOut` (default 1 = fit exactly) starts the view a little more zoomed out so
 // edge dimension chains aren't clipped — e.g. 1.2 leaves ~10% margin each side.
-function useSvgZoom(initW: number, initH: number, zoomOut = 1) {
+export function useSvgZoom(initW: number, initH: number, zoomOut = 1) {
   const w0 = initW * zoomOut, h0 = initH * zoomOut
   const x0 = -(w0 - initW) / 2, y0 = -(h0 - initH) / 2
   const initRef = useRef({ w: w0, h: h0 })
@@ -433,6 +434,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   }
   // Cabinet (x,y) → svg, for rotated-part silhouettes (Z ignored in elevation).
   const proj = (px: number, py: number) => ({ x: ox + px, y: oy + dy - py })
+  const handMarkers = useHandOpMarkers(cab.id, rp)
   function sel(id: string) { return selectedPartId === id }
   function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
   function sw(id: string, base: number) { return sel(id) ? 2 : base }
@@ -624,6 +626,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
       })}
       <DrillOverlay drills={drills}
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })} />
+      {showDrilling && <HandOpMarkersSVG markers={handMarkers} project={proj} />}
       <HingeShapes rp={rp} project={proj} />
       <SlideDrillOverlay drills={slideDrills} perp="z"
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
@@ -673,6 +676,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
   }
   // Cabinet (x,y,z) → svg, for rotated-part silhouettes (Y ignored in top view).
   const proj = (px: number, _py: number, pz: number) => ({ x: ox + px, y: oz + pz })
+  const handMarkers = useHandOpMarkers(cab.id, rp)
   function sel(id: string) { return selectedPartId === id }
   function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
   function sw(id: string, base: number) { return sel(id) ? 2 : base }
@@ -846,6 +850,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
       })}
       <DrillOverlay drills={drills}
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })} />
+      {showDrilling && <HandOpMarkersSVG markers={handMarkers} project={proj} />}
       <HingeShapes rp={rp} project={proj} />
       <SlideDrillOverlay drills={slideDrills} perp="y"
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })}
@@ -908,6 +913,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
   }
   // Cabinet (x,y,z) → svg, for rotated-part silhouettes (X ignored in side view).
   const proj = (_px: number, py: number, pz: number) => ({ x: oz + pz, y: oy + dy - py })
+  const handMarkers = useHandOpMarkers(cab.id, rp)
   function sel(id: string) { return selectedPartId === id }
   function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
   function sw(id: string, base: number) { return sel(id) ? 2 : base }
@@ -1083,6 +1089,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
       })}
       <DrillOverlay drills={drills}
         project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })} />
+      {showDrilling && <HandOpMarkersSVG markers={handMarkers} project={proj} />}
       <HingeShapes rp={rp} project={proj} />
       <SlideDrillOverlay drills={slideDrills} perp="x"
         project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}

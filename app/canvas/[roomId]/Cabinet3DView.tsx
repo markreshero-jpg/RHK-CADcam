@@ -31,6 +31,8 @@ import PartEdgeJoints from './PartEdgeJoints'
 import { SlideModel } from '@/src/components/three/SlideModel'
 import { HingeModel } from '@/src/components/three/HingeModel'
 import { getPalette } from '@/src/lib/partPalette'
+import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
+import type { CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 
 export type { MatColSpec, MatColMap }
 
@@ -940,7 +942,7 @@ function AnimatedGroup({ targetTravel, children }: { targetTravel: number; child
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
 
 function CabinetScene({
-  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, openDrawers, openInnerDrawers, edgeOverrides, wire, customParts, partOverrides, showDrilling = true,
+  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, openDrawers, openInnerDrawers, edgeOverrides, wire, customParts, partOverrides, showDrilling = true, handMarkers = [],
 }: {
   cab:                  CabinetInstance
   rp:                   ResolvedCabinet
@@ -957,6 +959,7 @@ function CabinetScene({
   customParts?:         CabinetCustomPart[]
   partOverrides?:       PartPosOverrides
   showDrilling?:        boolean
+  handMarkers?:         CabinetOpMarker[]
 }) {
   const { dx, dy, dz } = cab
   const dragRef = useRef(false)
@@ -1064,6 +1067,7 @@ function CabinetScene({
 
   return (
     <group position={[-dx / 2, -dy / 2, -dz / 2]}>
+      {showDrilling && handMarkers.length > 0 && <HandOpMarkers3D markers={handMarkers} />}
       {rp.case_parts.map((p, i) => {
         const id    = `case_${p.part_key}`
         const pp    = applyPosOv(p, id, partOverrides)
@@ -1415,7 +1419,7 @@ function CabinetScene({
 
 export default function Cabinet3DView({
   cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, onPartSelect, showDrilling = true, onUpdate, onDeletePart,
-  setCustomParts, onOverridesChange,
+  setCustomParts, onOverridesChange, onEditPart,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
@@ -1439,13 +1443,20 @@ export default function Cabinet3DView({
   setCustomParts?:   Dispatch<SetStateAction<CabinetCustomPart[]>>
   // Persist a resolved part's size override; receives the merged override map.
   onOverridesChange?: (o: PartPosOverrides) => void
+  // Right-click → "Edit Part" opens the single-part operation editor (Part Editor).
+  // The host renders the editor as a modal-level overlay so cabinet context is kept.
+  onEditPart?:       (part: PartMeta) => void
 }) {
   const [selectedPart, setSelectedPart]       = useState<PartMeta | null>(null)
+  const [editMenu, setEditMenu]               = useState<{ cx: number; cy: number } | null>(null)
   const [doorsOpen, setDoorsOpen]             = useState(false)
   const [openDrawers, setOpenDrawers]         = useState<Map<string, number>>(new Map())
   const [openInnerDrawers, setOpenInnerDrawers] = useState<Map<number, number>>(new Map())
   const [edgeOverrides, setEdgeOverrides]     = useState<Map<string, PartEdge>>(new Map())
   const { dx, dy, dz } = cab
+  // Hand-added part_operations, projected to cabinet space (generated rows excluded
+  // — the resolver already draws those). Shown with the carcase-drilling toggle.
+  const handMarkers = useHandOpMarkers(cab.id, rp)
 
   const didHitPartRef   = useRef(false)
   const prevPartRef     = useRef<PartMeta | null>(null)
@@ -1540,7 +1551,14 @@ export default function Cabinet3DView({
 
   function handleCanvasContextMenu(e: React.MouseEvent) {
     e.preventDefault()
-    if (!didHitPartRef.current) setSelectedPart(null)
+    if (didHitPartRef.current) {
+      // A part was right-clicked (and just selected via contextMenuSelect). Offer
+      // the Part Editor at the cursor when the host supports it.
+      if (onEditPart) setEditMenu({ cx: e.clientX, cy: e.clientY })
+    } else {
+      setSelectedPart(null)
+      setEditMenu(null)
+    }
     didHitPartRef.current = false
   }
 
@@ -1654,6 +1672,22 @@ export default function Cabinet3DView({
                 : undefined}
             />
           )}
+          {editMenu && selectedPart && onEditPart && (
+            <>
+              <div className="fixed inset-0 z-[55]"
+                onClick={() => setEditMenu(null)}
+                onContextMenu={e => { e.preventDefault(); setEditMenu(null) }} />
+              <div className="fixed z-[56] bg-gray-800 border border-gray-700 rounded shadow-xl py-1 text-[11px] pointer-events-auto"
+                style={{ left: editMenu.cx, top: editMenu.cy }}
+                onClick={e => e.stopPropagation()}>
+                <button
+                  className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-200 transition-colors whitespace-nowrap"
+                  onClick={() => { onEditPart(selectedPart); setEditMenu(null) }}>
+                  ✎ Edit Part
+                </button>
+              </div>
+            </>
+          )}
           <div className="absolute bottom-8 right-3 flex flex-col gap-1 items-end pointer-events-none">
             {hasDoors && (
               <button
@@ -1698,6 +1732,7 @@ export default function Cabinet3DView({
           customParts={customParts}
           partOverrides={partOverrides}
           showDrilling={showDrilling}
+          handMarkers={handMarkers}
         />
       ) : (
         <mesh>

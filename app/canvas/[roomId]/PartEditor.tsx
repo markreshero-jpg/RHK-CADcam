@@ -1,0 +1,906 @@
+'use client'
+
+// ============================================================
+// Part Editor — Phase 1 (single-part CNC operation editor).
+// Opens as a modal-level overlay from the 3D view's right-click
+// "Edit Part" action, isolating one part. Three-zone CAD/CAM
+// layout: left = ordered operations list (generated + hand-added,
+// origin-classified); centre = the part in 3D + ortho views with a
+// measure tool; right = contextual properties.
+//
+// M3 scope (this file): editor shell + single-part scene + the left
+// list with origin classification. The properties panel is a
+// read-only stub here; editable fields, live operation markers and
+// validation arrive in M4, and add/edit/delete + generated lock in
+// M5. See z_part_view/RHK-PartEditor-Phase1-Spec.docx §5–§7.
+//
+// Operations load with the SAME query CabinetRoutesPanel runs
+// (source_cabinet_id + source_part_key). A 3D PartMeta.id is exactly
+// the source_part_key (e.g. case_left_side / zone_0_0 / int_…_N).
+// ============================================================
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { supabase } from '@/src/lib/supabase'
+import { Part, PreviewCanvas, type PartMeta } from '@/src/components/three/PartViewer'
+import { fmtMm, roundMm } from '@/src/lib/format'
+import { evalCalc } from '@/src/lib/calc'
+import OperationToolSelect, { useToolLibraries } from '@/src/components/cnc/OperationToolSelect'
+import type { PartOp } from './CabinetRoutesPanel'
+import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
+import { useSvgZoom } from './ResolvedViews'
+
+type OrthoView = 'top' | 'front' | 'side'
+type EditorView = '3d' | OrthoView
+
+// ── Origin classification (spec §3) ──────────────────────────────────────────────
+// Generated rows are tagged parameters.generated; hand-added rows carry no marker.
+// NB: actual kind values in the DB are {hinge_cup, hinge_plate, joint, slide, null}.
+type Origin = { generated: boolean; kind?: string; label: string }
+function classify(op: PartOp): Origin {
+  const gen  = op.parameters?.generated as string | undefined
+  const kind = op.parameters?.kind as string | undefined
+  if (gen === 'master_slave') return { generated: true, kind: 'slave', label: 'SLAVE' }
+  if (gen)                    return { generated: true, kind, label: (kind ?? 'auto').toUpperCase() }
+  return { generated: false, label: 'HAND' }
+}
+
+// Coarse tool summary for the list. M4 reuses OperationToolSelect for the real picker.
+function toolLabel(op: PartOp): string {
+  if (op.tool_set_id)    return 'Tool set'
+  if (op.auto_tool)      return 'Auto tool'
+  if (op.router_tool_id) return 'Router bit'
+  if (op.drill_id)       return 'Drill'
+  return '—'
+}
+
+// Lay the part flat (spec §2.2): n = material thickness; u/v are the in-plane axes.
+// We deliberately align u = part DX, v = part DY, n = DZ — the SAME footprint frame
+// partFootprint.ts uses to project generated holes (pos_x ∈ [0,DX], pos_y ∈ [0,DY]),
+// so M4 operation markers land where the resolver placed them. PartMeta's w/h/d are
+// remapped per panelKind (see cabinetEditSvgHelpers), so recover DX/DY from that:
+//   side:       w=DZ h=DY d=DX  → u=d, v=h
+//   horizontal: w=DY h=DZ d=DX  → u=d, v=w
+//   face/back:  w=DY h=DX d=DZ  → u=h, v=w
+function flatDims(m: PartMeta): { u: number; v: number; n: number } {
+  if (m.panelKind === 'side')       return { u: m.d, v: m.h, n: m.thickness }
+  if (m.panelKind === 'horizontal') return { u: m.d, v: m.w, n: m.thickness }
+  return { u: m.h, v: m.w, n: m.thickness }
+}
+
+// ── Precision (spec §6.1) ─────────────────────────────────────────────────────────
+// Display rounds to 0.1mm (fmtMm). Store rounds once to 0.01mm at the write boundary
+// so repeated read/edit/write cycles don't drift. Angles: near-zero (<0.05°) → 0.
+const roundStore = (v: number) => Math.round(v * 100) / 100
+const roundAngle = (v: number) => (Math.abs(v) < 0.05 ? 0 : Math.round(v * 100) / 100)
+const ANGLE_FIELDS = new Set(['angle_ax', 'angle_ay', 'angle_az'])
+
+const TYPE_OPTIONS   = ['route', 'drill', 'saw', 'groove'] as const
+const ACTION_OPTIONS = ['', 'outline', 'pocket', 'square_off', 'profile', 'through', 'stopped'] as const
+
+type AddKind = 'single' | 'toolset' | 'drill' | 'groove'
+
+// Map a part-key prefix back to its source table (mirrors seamDrillSync / the
+// svg*Meta id scheme) so a hand-added op is keyed to the same identity.
+function sourceTableFor(id: string): string {
+  if (id.startsWith('case_'))   return 'case_parts'
+  if (id.startsWith('tk_'))     return 'toekick_parts'
+  if (id.startsWith('int_'))    return 'internal_parts'
+  if (id.startsWith('zone_'))   return 'face_zones'
+  if (id.startsWith('db_'))     return 'drawer_box_parts'
+  if (id.startsWith('custom_')) return 'cabinet_custom_parts'
+  return 'case_parts'
+}
+
+// ── Validation (spec §6.2) — flag, never block ────────────────────────────────────
+type Issue = { level: 'error' | 'warn'; msg: string }
+function validateOp(op: PartOp, u: number, v: number, n: number): Issue[] {
+  const issues: Issue[] = []
+  const px = op.pos_x ?? 0, py = op.pos_y ?? 0
+  const eps = 0.01
+
+  if (op.operation_type === 'drill') {
+    if ((op.diameter ?? 0) <= 0) issues.push({ level: 'error', msg: 'Drill diameter ≤ 0' })
+    const r = (op.diameter ?? 0) / 2
+    const count = Math.max(1, op.repeat_count ?? 1)
+    const step = op.repeat_spacing ?? 0
+    const along = op.repeat_axis === 'along'
+    let off = false
+    for (let i = 0; i < count; i++) {
+      const cx = px + (along ? step * i : 0), cy = py + (along ? 0 : step * i)
+      if (cx - r < -eps || cy - r < -eps || cx + r > u + eps || cy + r > v + eps) off = true
+    }
+    if (off) issues.push({ level: 'error', msg: count > 1 ? 'Repeat pattern runs off the part' : 'Hole lies off the part' })
+  } else if (op.operation_type === 'groove') {
+    const len = op.length ?? 0, w = op.width ?? 0
+    if (len <= 0 || w <= 0) issues.push({ level: 'error', msg: 'Groove length / width ≤ 0' })
+    else if (px < -eps || py < -eps || px + len > u + eps) issues.push({ level: 'error', msg: 'Groove runs off the part' })
+  } else {
+    let x = px, y = py, w = op.size_dx ?? 0, h = op.size_dy ?? 0
+    if (op.size_dx != null && op.size_dy != null) { x = px - w / 2; y = py - h / 2 }
+    else if (op.offset_left_mm != null || op.offset_right_mm != null || op.offset_top_mm != null || op.offset_bottom_mm != null) {
+      const l = op.offset_left_mm ?? 0, rt = op.offset_right_mm ?? 0, t = op.offset_top_mm ?? 0, b = op.offset_bottom_mm ?? 0
+      x = l; y = b; w = u - l - rt; h = v - t - b
+    }
+    if (w <= 0 || h <= 0) issues.push({ level: 'error', msg: 'Operation size ≤ 0' })
+    else if (x < -eps || y < -eps || x + w > u + eps || y + h > v + eps) issues.push({ level: 'error', msg: 'Operation extends beyond the part' })
+  }
+
+  // Depth vs thickness.
+  const depth = op.depth ?? op.size_dz
+  const start = op.pos_z ?? 0
+  if (depth != null) {
+    if (op.operation_action !== 'through' && start + depth > n + eps) issues.push({ level: 'error', msg: 'Depth exceeds panel thickness' })
+    else if (op.operation_action !== 'through' && depth >= n - eps) issues.push({ level: 'warn', msg: 'Reaches through but not flagged "through"' })
+  }
+  if (!op.auto_tool && !op.tool_set_id && !op.router_tool_id && !op.drill_id) issues.push({ level: 'warn', msg: 'No tool / tool-set assigned' })
+  if (op.plane_kind === 'edge' && op.plane_edge_index == null) issues.push({ level: 'error', msg: 'Edge operation has no edge index' })
+  return issues
+}
+const worst = (issues: Issue[] | undefined): 'error' | 'warn' | undefined =>
+  !issues ? undefined : issues.some(i => i.level === 'error') ? 'error' : issues.some(i => i.level === 'warn') ? 'warn' : undefined
+
+function PropRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <>
+      <span className="text-gray-500 self-center">{label}</span>
+      <span className="text-gray-200 text-right font-mono">{value}</span>
+    </>
+  )
+}
+
+// ── Operation marker glyphs (spec §5.5) ──────────────────────────────────────────
+// One glyph map, used in BOTH the SVG ortho views and the 3D scene. Geometry is
+// computed in part-local FACE coords (origin bottom-left; x → DX/u right, y → DY/v
+// up); each view maps it into its own space. All current data are face drills.
+type FaceGlyph = {
+  circles: { cx: number; cy: number; r: number }[]
+  rects:   { x: number; y: number; w: number; h: number }[]
+  slots:   { x1: number; y1: number; x2: number; y2: number; w: number }[]
+}
+
+function opFaceGlyph(op: PartOp, u: number, v: number): FaceGlyph {
+  const g: FaceGlyph = { circles: [], rects: [], slots: [] }
+  const px = op.pos_x ?? 0, py = op.pos_y ?? 0
+
+  if (op.operation_type === 'drill') {
+    const r = Math.max((op.diameter ?? 5) / 2, 0.5)
+    const count = Math.max(1, op.repeat_count ?? 1)
+    const step  = op.repeat_spacing ?? 0
+    const along = op.repeat_axis === 'along'   // 'along' = u, else step up v
+    for (let i = 0; i < count; i++) {
+      g.circles.push({ cx: px + (along ? step * i : 0), cy: py + (along ? 0 : step * i), r })
+    }
+  } else if (op.operation_type === 'groove') {
+    const len = op.length ?? 0, w = Math.max(op.width ?? 4, 0.5)
+    g.slots.push({ x1: px, y1: py, x2: px + len, y2: py, w })
+  } else {
+    // Area op (pocket / outline / square_off / profile / route).
+    if (op.size_dx != null && op.size_dy != null) {
+      g.rects.push({ x: px - op.size_dx / 2, y: py - op.size_dy / 2, w: op.size_dx, h: op.size_dy })
+    } else if (op.offset_left_mm != null || op.offset_right_mm != null || op.offset_top_mm != null || op.offset_bottom_mm != null) {
+      const l = op.offset_left_mm ?? 0, rt = op.offset_right_mm ?? 0, t = op.offset_top_mm ?? 0, b = op.offset_bottom_mm ?? 0
+      g.rects.push({ x: l, y: b, w: Math.max(0, u - l - rt), h: Math.max(0, v - t - b) })
+    } else {
+      g.circles.push({ cx: px, cy: py, r: 3 })   // positionless fallback dot
+    }
+  }
+  return g
+}
+
+// Colour priority: validation error/warn (spec §6.2) → selection → generated/hand.
+function glyphColours(op: PartOp, selected: boolean, level?: 'error' | 'warn') {
+  if (level === 'error')        return { stroke: '#ef4444', fill: 'rgba(239,68,68,0.22)' }
+  if (level === 'warn')         return { stroke: '#f59e0b', fill: 'rgba(245,158,11,0.20)' }
+  if (selected)                 return { stroke: '#c4b5fd', fill: 'rgba(196,181,253,0.28)' }
+  if (op.parameters?.generated) return { stroke: '#38bdf8', fill: 'rgba(56,189,248,0.16)' }
+  return { stroke: '#34d399', fill: 'rgba(52,211,153,0.16)' }
+}
+
+// Face-plane op centres (for measure snapping + 3D). Front view only — every stored
+// generated op is a face bore (partFootprint drops edge bores).
+function opCentres(ops: PartOp[]): { x: number; y: number }[] {
+  return ops.map(o => ({ x: o.pos_x ?? 0, y: o.pos_y ?? 0 }))
+}
+
+// SVG marker layer for the FRONT (face) view. y is flipped (SVG top-down → v-up).
+function OpMarkersSVG({ ops, u, v, selectedId, onSelect, interactive, levels }: {
+  ops: PartOp[]; u: number; v: number; selectedId: string | null
+  onSelect: (id: string) => void; interactive: boolean
+  levels: Record<string, 'error' | 'warn' | undefined>
+}) {
+  return (
+    <g>
+      {ops.map(op => {
+        const g = opFaceGlyph(op, u, v)
+        const sel = op.id === selectedId
+        const c = glyphColours(op, sel, levels[op.id])
+        const sw = sel ? 2 : 1.25
+        return (
+          <g key={op.id}
+            style={{ cursor: interactive ? 'pointer' : 'default', pointerEvents: interactive ? 'auto' : 'none' }}
+            onClick={interactive ? (e => { e.stopPropagation(); onSelect(op.id) }) : undefined}>
+            {g.circles.map((cir, i) => (
+              <circle key={`c${i}`} cx={cir.cx} cy={v - cir.cy} r={cir.r}
+                fill={c.fill} stroke={c.stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+            ))}
+            {g.rects.map((r, i) => (
+              <rect key={`r${i}`} x={r.x} y={v - r.y - r.h} width={r.w} height={r.h}
+                fill={c.fill} stroke={c.stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+            ))}
+            {g.slots.map((s, i) => (
+              <line key={`s${i}`} x1={s.x1} y1={v - s.y1} x2={s.x2} y2={v - s.y2}
+                stroke={c.stroke} strokeWidth={s.w} strokeLinecap="round" opacity={0.7} />
+            ))}
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
+// 3D marker layer — drill discs / area outlines on the part's front face (z = n).
+// Lives inside the same group the Part is centred in, so local coords match.
+function OpMarkers3D({ ops, u, v, n, selectedId, onSelect, levels }: {
+  ops: PartOp[]; u: number; v: number; n: number; selectedId: string | null; onSelect: (id: string) => void
+  levels: Record<string, 'error' | 'warn' | undefined>
+}) {
+  return (
+    <group>
+      {ops.flatMap(op => {
+        const g = opFaceGlyph(op, u, v)
+        const c = glyphColours(op, op.id === selectedId, levels[op.id]).stroke
+        const z = n + 0.4
+        return [
+          ...g.circles.map((cir, i) => (
+            <mesh key={`${op.id}-c${i}`} position={[cir.cx, cir.cy, z]} rotation={[Math.PI / 2, 0, 0]}
+              onClick={e => { e.stopPropagation(); onSelect(op.id) }}>
+              <cylinderGeometry args={[cir.r, cir.r, 0.8, 20]} />
+              <meshBasicMaterial color={c} />
+            </mesh>
+          )),
+          ...g.rects.map((r, i) => (
+            <mesh key={`${op.id}-r${i}`} position={[r.x + r.w / 2, r.y + r.h / 2, z]}
+              onClick={e => { e.stopPropagation(); onSelect(op.id) }}>
+              <boxGeometry args={[r.w, r.h, 0.8]} />
+              <meshBasicMaterial color={c} transparent opacity={0.4} />
+            </mesh>
+          )),
+        ]
+      })}
+    </group>
+  )
+}
+
+// Orthographic Top / Front / Side as a true-mm SVG (1 user-unit = 1 mm), so it
+// reuses the cabinet modal's measure tool verbatim (useMeasure + MeasureOverlay,
+// corner snapping, x/y delta readout). The part laid flat is u(width) × v(height)
+// × n(thickness); each ortho view is the matching rectangle:
+//   front = u × v   ·   top = u × n   ·   side = n × v
+function PartOrthoView({ u, v, n, view, measuring, ops, selectedId, onSelect, levels }: {
+  u: number; v: number; n: number; view: OrthoView; measuring: boolean
+  ops: PartOp[]; selectedId: string | null; onSelect: (id: string) => void
+  levels: Record<string, 'error' | 'warn' | undefined>
+}) {
+  const [vw, vh] = view === 'front' ? [u, v] : view === 'top' ? [u, n] : [n, v]
+  const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh, 1.15)
+
+  // Snap candidates = part rectangle corners + edge midpoints + (front view) op
+  // centres — matching the cabinet modal's "corners, edge midpoints, op centres".
+  const measurePts: MPt[] = []
+  if (measuring) {
+    measurePts.push(...rectCorners({ x: 0, y: 0, w: vw, h: vh }))
+    measurePts.push({ x: vw / 2, y: 0 }, { x: vw / 2, y: vh }, { x: 0, y: vh / 2 }, { x: vw, y: vh / 2 })
+    if (view === 'front') for (const c of opCentres(ops)) measurePts.push({ x: c.x, y: vh - c.y })
+  }
+  const measure = useMeasure(measuring, svgRef, measurePts)
+
+  function handleContextMenu(e: React.MouseEvent<SVGSVGElement>) {
+    e.preventDefault()
+    if (measuring) measure.cancel()
+  }
+
+  // Faint mm grid (every 50 mm) inside the part bounds.
+  const cell = 50
+  const grid: React.ReactNode[] = []
+  for (let x = cell; x < vw; x += cell) grid.push(<line key={`gx${x}`} x1={x} y1={0} x2={x} y2={vh} stroke="#1e2636" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />)
+  for (let y = cell; y < vh; y += cell) grid.push(<line key={`gy${y}`} x1={0} y1={y} x2={vw} y2={y} stroke="#1e2636" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />)
+
+  return (
+    <svg
+      ref={svgRef}
+      viewBox={viewBox}
+      width="100%" height="100%"
+      style={{ maxHeight: '100%', maxWidth: '100%', cursor: measuring ? 'crosshair' : 'default' }}
+      onClick={measuring ? measure.onClick : undefined}
+      onPointerMove={measuring ? measure.onMove : undefined}
+      onContextMenu={handleContextMenu}
+    >
+      <rect x={0} y={0} width={vw} height={vh} fill="#243045" stroke="#5b6373" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+      <g style={{ pointerEvents: 'none' }}>{grid}</g>
+      {/* Operation markers live on the face → shown in the Front view (edge ops are P2). */}
+      {view === 'front' && <OpMarkersSVG ops={ops} u={vw} v={vh} selectedId={selectedId} onSelect={onSelect} interactive={!measuring} levels={levels} />}
+      {measuring && (
+        <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor}
+          snapped={measure.snapped} unit={unit} vb={vb} pts={measurePts} />
+      )}
+    </svg>
+  )
+}
+
+// Calc-aware numeric field ("100+12" → 112). Reseeds by remounting (key on op
+// change) rather than a setState-in-effect. Commits on blur / Enter, reverts on Esc.
+function NumField({ value, onCommit, disabled }: {
+  value: number | null; onCommit: (v: number) => void; disabled?: boolean
+}) {
+  const init = value == null ? '' : String(roundMm(value))
+  const [draft, setDraft] = useState(init)
+  function commit() {
+    const x = evalCalc(draft)
+    if (x != null && Number.isFinite(x)) onCommit(x)
+    else setDraft(init)
+  }
+  return (
+    <input
+      type="text" inputMode="decimal" value={draft} disabled={disabled}
+      onChange={e => setDraft(e.target.value)}
+      onFocus={e => e.target.select()}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setDraft(init); e.currentTarget.blur() } }}
+      className="w-20 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-right font-mono text-gray-100 disabled:text-gray-500 disabled:bg-gray-900/60 disabled:cursor-not-allowed focus:outline-none focus:border-blue-500"
+    />
+  )
+}
+
+export default function PartEditor({ cabinetId, part, onClose }: {
+  cabinetId: string
+  part:      PartMeta
+  onClose:   () => void
+}) {
+  const [ops, setOps]               = useState<PartOp[]>([])
+  const [loadedKey, setLoadedKey]   = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [view, setView] = useState<EditorView>('front')
+  const [measuring, setMeasuring] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  const dragRef = useRef(false)
+  // Tool libraries (router bits + drills) + tool sets, for the tool picker / add.
+  const { tools, drills } = useToolLibraries()
+  const [toolSets, setToolSets] = useState<{ id: string; name: string }[]>([])
+  // Session undo stack (§6.3) — closures that revert local + DB. Capped ~20.
+  const undoRef = useRef<(() => Promise<void>)[]>([])
+  const [undoDepth, setUndoDepth] = useState(0)
+  // Derived (not effect-set) so we never call setState synchronously in an effect.
+  const loading = loadedKey !== part.id
+
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('cnc_tool_sets').select('id,name').eq('is_active', true).order('sort_order').order('name')
+      .then(({ data }) => { if (!cancelled) setToolSets((data ?? []) as { id: string; name: string }[]) })
+    return () => { cancelled = true }
+  }, [])
+
+  // Same load query as CabinetRoutesPanel, scoped to the one part.
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('part_operations').select('*')
+      .eq('source_cabinet_id', cabinetId)
+      .eq('source_part_key', part.id)
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) console.error('[PartEditor] load operations', error)
+        setOps(((data ?? []) as PartOp[]).slice().sort((a, b) => a.sort_order - b.sort_order))
+        setLoadedKey(part.id)
+      })
+    return () => { cancelled = true }
+  }, [cabinetId, part.id])
+
+  // Escape closes the editor. Capture phase + stopImmediatePropagation so the
+  // cabinet modal's own Escape handler behind it doesn't also fire.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      const t = e.target
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return
+      e.stopImmediatePropagation(); e.preventDefault()
+      // Esc exits the measure tool first (mirrors the cabinet modal); only when
+      // not measuring does it close the editor.
+      if (measuring) { setMeasuring(false); return }
+      onClose()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose, measuring])
+
+  const { u, v, n } = useMemo(() => flatDims(part), [part])
+  const selected = ops.find(o => o.id === selectedId) ?? null
+  const sel = selected ? classify(selected) : null
+
+  // Validation (§6.2) — flag, never block. Recomputed from ops + part dims.
+  const issuesById = useMemo(() => {
+    const m: Record<string, Issue[]> = {}
+    for (const op of ops) m[op.id] = validateOp(op, u, v, n)
+    return m
+  }, [ops, u, v, n])
+  const levels = useMemo(() => {
+    const m: Record<string, 'error' | 'warn' | undefined> = {}
+    for (const op of ops) m[op.id] = worst(issuesById[op.id])
+    return m
+  }, [ops, issuesById])
+  const errorCount = Object.values(levels).filter(l => l === 'error').length
+  const warnCount  = Object.values(levels).filter(l => l === 'warn').length
+  const selIssues  = selected ? (issuesById[selected.id] ?? []) : []
+  const selLocked  = !!sel?.generated   // generated rows are read-only (spec §3.1)
+
+  // ── Data layer (reuses CabinetRoutesPanel's insert/patch/delete shape) ──────────
+  const roundChanges = (changes: Partial<PartOp>) => {
+    const r: Record<string, unknown> = {}
+    for (const [k, val] of Object.entries(changes)) {
+      r[k] = typeof val === 'number' ? (ANGLE_FIELDS.has(k) ? roundAngle(val) : roundStore(val)) : val
+    }
+    return r
+  }
+  const applyLocal = (id: string, changes: Record<string, unknown>) =>
+    setOps(prev => prev.map(o => (o.id === id ? { ...o, ...(changes as Partial<PartOp>) } : o)))
+  async function dbUpdate(id: string, changes: Record<string, unknown>) {
+    const { error } = await supabase.from('part_operations').update(changes).eq('id', id)
+    if (error) console.error('[PartEditor] update', error)
+  }
+  function pushUndo(fn: () => Promise<void>) {
+    undoRef.current = [...undoRef.current.slice(-19), fn]
+    setUndoDepth(undoRef.current.length)
+  }
+  async function undo() {
+    const fn = undoRef.current.pop()
+    setUndoDepth(undoRef.current.length)
+    if (fn) await fn()
+  }
+
+  // Edit a field. Numbers round at the boundary: 0.01mm, angles near-zero → 0 (§6.1).
+  // Optimistic local update (markers re-render live) + immediate DB write. On-blur
+  // commit already coalesces per-keystroke edits (§6.3). Generated rows never patch.
+  async function patchOp(changes: Partial<PartOp>) {
+    if (!selected || selLocked) return
+    const id = selected.id
+    const rounded = roundChanges(changes)
+    const prev: Record<string, unknown> = {}
+    for (const k of Object.keys(rounded)) prev[k] = (selected as unknown as Record<string, unknown>)[k]
+    applyLocal(id, rounded)
+    pushUndo(async () => { applyLocal(id, prev); await dbUpdate(id, prev) })
+    await dbUpdate(id, rounded)
+  }
+
+  // Add a hand operation (spec §5.3 kinds). New ops default plane_kind='face_front'
+  // and are placed near the part centre so they're visible immediately.
+  async function addOp(kind: AddKind) {
+    setAddOpen(false)
+    const nextOrder = ops.length ? Math.max(...ops.map(o => o.sort_order)) + 1 : 0
+    const cx = roundStore(u / 2), cy = roundStore(v / 2)
+    const base = {
+      source_table: sourceTableFor(part.id),
+      source_cabinet_id: cabinetId,
+      source_part_key: part.id,
+      output_to_cnc: true,
+      sort_order: nextOrder,
+      plane_kind: 'face_front',
+    }
+    const extra: Record<string, unknown> =
+      kind === 'single'  ? { operation_type: 'route', operation_action: 'pocket', auto_tool: true, pos_x: cx, pos_y: cy, size_dx: 50, size_dy: 50 }
+    : kind === 'toolset' ? { operation_type: 'route', operation_action: 'pocket', tool_set_id: toolSets[0]?.id ?? null, pos_x: cx, pos_y: cy, size_dx: 50, size_dy: 50 }
+    : kind === 'drill'   ? { operation_type: 'drill', auto_tool: true, repeat_count: 1, repeat_spacing: 32, diameter: 5, depth: 10, pos_x: cx, pos_y: cy }
+    :                      { operation_type: 'groove', auto_tool: true, width: 8, depth: 6, pos_x: roundStore(Math.max(10, u * 0.1)), pos_y: cy, length: roundStore(Math.max(10, u * 0.8)) }
+
+    const { data, error } = await supabase.from('part_operations').insert({ ...base, ...extra }).select().single()
+    if (error || !data) { console.error('[PartEditor] add operation', error); return }
+    const row = data as PartOp
+    setOps(prev => [...prev, row])
+    setSelectedId(row.id)
+    pushUndo(async () => {
+      setOps(prev => prev.filter(o => o.id !== row.id))
+      await supabase.from('part_operations').delete().eq('id', row.id)
+    })
+  }
+
+  // Delete the selected hand op. No confirm — undo covers it (§6.3).
+  async function deleteSelected() {
+    if (!selected || selLocked) return
+    const row = selected
+    setOps(prev => prev.filter(o => o.id !== row.id))
+    setSelectedId(null)
+    pushUndo(async () => {
+      const { data } = await supabase.from('part_operations').insert(row as unknown as Record<string, unknown>).select().single()
+      if (data) setOps(prev => [...prev, data as PartOp].sort((a, b) => a.sort_order - b.sort_order))
+    })
+    await supabase.from('part_operations').delete().eq('id', row.id)
+  }
+
+  // Convert a generated op into a hand-owned one by stripping parameters.generated
+  // (spec §3.1). It then survives the next sync (which only wipes generated rows).
+  async function convertToManual() {
+    if (!selected || !sel?.generated) return
+    const id = selected.id
+    const oldParams = selected.parameters
+    const newParams: Record<string, unknown> = { ...(selected.parameters ?? {}) }
+    delete newParams.generated
+    applyLocal(id, { parameters: newParams })
+    pushUndo(async () => { applyLocal(id, { parameters: oldParams }); await dbUpdate(id, { parameters: oldParams }) })
+    await dbUpdate(id, { parameters: newParams })
+  }
+
+  // Drag-reorder the list → renumber sort_order (= execution order). Only changed
+  // rows are written. Undoable.
+  async function persistOrder(next: PartOp[], prev: PartOp[]) {
+    const prevById = new Map(prev.map(o => [o.id, o.sort_order]))
+    const changed = next.filter(o => prevById.get(o.id) !== o.sort_order)
+    await Promise.all(changed.map(o => supabase.from('part_operations').update({ sort_order: o.sort_order }).eq('id', o.id)))
+  }
+  function reorder(fromId: string, toId: string) {
+    if (fromId === toId) return
+    const from = ops.findIndex(o => o.id === fromId)
+    const to   = ops.findIndex(o => o.id === toId)
+    if (from < 0 || to < 0) return
+    const prev = ops
+    const next = ops.slice()
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    const renumbered = next.map((o, i) => ({ ...o, sort_order: i }))
+    setOps(renumbered)
+    pushUndo(async () => { setOps(prev); await persistOrder(prev, renumbered) })
+    void persistOrder(renumbered, prev)
+  }
+
+  // Arrow ↑/↓ move the list selection (ignored while typing). Delete is intentionally
+  // NOT bound — the 3D view behind captures it (would hide the whole part); use the
+  // panel's Delete button + undo instead.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+      const t = e.target
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return
+      if (ops.length === 0) return
+      e.preventDefault(); e.stopImmediatePropagation()
+      const idx = ops.findIndex(o => o.id === selectedId)
+      const nextIdx = e.key === 'ArrowDown'
+        ? Math.min(ops.length - 1, idx + 1)
+        : Math.max(0, (idx < 0 ? 0 : idx - 1))
+      setSelectedId(ops[nextIdx]?.id ?? null)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [ops, selectedId])
+
+  // Ctrl/Cmd+Z → session undo (ignored while typing in a field).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return
+      const t = e.target
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return
+      e.preventDefault(); e.stopImmediatePropagation()
+      void undo()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [])
+
+  const allGenerated = ops.length > 0 && ops.every(o => !!o.parameters?.generated)
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-black/85 flex flex-col"
+      onPointerDown={e => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div className="flex-none bg-gray-900 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
+        <div className="flex items-baseline gap-3 min-w-0">
+          <span className="text-sm font-semibold text-white">Part Editor</span>
+          <span className="text-xs text-gray-300 truncate">{part.label}</span>
+          <span className="text-[11px] text-gray-500 font-mono whitespace-nowrap">{fmtMm(u)} × {fmtMm(v)} × {fmtMm(n)} mm</span>
+          {(errorCount > 0 || warnCount > 0) && (
+            <span className="flex items-center gap-1.5 text-[10px]">
+              {errorCount > 0 && <span title="Operations with errors" className="px-1.5 py-0.5 rounded bg-red-900/60 text-red-300 font-medium">{errorCount} error{errorCount > 1 ? 's' : ''}</span>}
+              {warnCount > 0 && <span title="Operations with warnings" className="px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-300 font-medium">{warnCount} warning{warnCount > 1 ? 's' : ''}</span>}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => void undo()} disabled={undoDepth === 0}
+            title="Undo (Ctrl+Z)"
+            className="text-[11px] px-2 py-0.5 rounded border border-gray-700 text-gray-300 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
+            ↺ Undo{undoDepth > 0 ? ` (${undoDepth})` : ''}
+          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-lg leading-none px-1" aria-label="Close">✕</button>
+        </div>
+      </div>
+
+      {/* Body — three zones */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left — operations list */}
+        <div className="flex-none w-72 bg-gray-900 border-r border-gray-800 flex flex-col">
+          <div className="flex-none px-3 py-2 border-b border-gray-800 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
+              Operations{ops.length ? ` (${ops.length})` : ''}
+            </span>
+            <div className="relative">
+              <button onClick={() => setAddOpen(o => !o)}
+                className="text-[11px] px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors">+ Add ▾</button>
+              {addOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setAddOpen(false)} />
+                  <div className="absolute right-0 mt-1 z-20 w-40 bg-gray-800 border border-gray-700 rounded shadow-xl py-1">
+                    {([['single', 'Single operation'], ['toolset', 'Tool set'], ['drill', 'Drill pattern'], ['groove', 'Groove']] as [AddKind, string][]).map(([k, lbl]) => (
+                      <button key={k} onClick={() => addOp(k)}
+                        className="w-full text-left px-3 py-1.5 text-[11px] text-gray-300 hover:bg-gray-700 transition-colors">{lbl}</button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+          {ops.length > 0 && (
+            <div className="flex-none px-3 py-1 text-[9px] text-gray-600 border-b border-gray-800/60">
+              Order = execution (drill before route) · drag ⠿ to reorder
+            </div>
+          )}
+          {!loading && allGenerated && (
+            <div className="flex-none px-3 py-1.5 text-[10px] text-amber-400/80 bg-amber-950/20 border-b border-gray-800 leading-snug">
+              All operations are generated (locked). Add a hand operation, or select one and “Convert to manual override” to edit.
+            </div>
+          )}
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="p-4 text-xs text-gray-500">Loading…</div>
+            ) : ops.length === 0 ? (
+              <div className="p-4 text-xs text-gray-500">
+                No operations on this part yet.
+                <div className="mt-1 text-gray-600">Use <span className="text-blue-400">+ Add</span> to place one.</div>
+              </div>
+            ) : ops.map((op, i) => {
+              const o = classify(op)
+              const isSel = op.id === selectedId
+              return (
+                <button
+                  key={op.id}
+                  draggable
+                  onDragStart={() => setDragId(op.id)}
+                  onDragOver={e => { e.preventDefault(); if (overId !== op.id) setOverId(op.id) }}
+                  onDrop={e => { e.preventDefault(); if (dragId) reorder(dragId, op.id); setDragId(null); setOverId(null) }}
+                  onDragEnd={() => { setDragId(null); setOverId(null) }}
+                  onClick={() => setSelectedId(op.id)}
+                  className={`w-full text-left px-3 py-2 border-b border-gray-800/60 transition-colors ${
+                    dragId && overId === op.id && dragId !== op.id ? 'border-t-2 border-t-blue-500' : ''
+                  } ${dragId === op.id ? 'opacity-40' : ''} ${isSel ? 'bg-blue-600/20' : 'hover:bg-gray-800/60'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-600 shrink-0 cursor-grab select-none" title="Drag to reorder">⠿</span>
+                    <span className="text-[10px] font-mono text-gray-600 w-4 shrink-0">{i + 1}</span>
+                    <span className="text-xs text-gray-200 flex-1 truncate">
+                      {op.operation_type}
+                      {op.operation_action ? <span className="text-gray-400"> · {op.operation_action}</span> : null}
+                    </span>
+                    {levels[op.id] && (
+                      <span title={(issuesById[op.id] ?? []).map(is => is.msg).join('\n')}
+                        className={`text-[11px] leading-none ${levels[op.id] === 'error' ? 'text-red-400' : 'text-amber-400'}`}>⚠</span>
+                    )}
+                    {!op.output_to_cnc && <span title="Excluded from CNC output" className="text-[10px] text-gray-600">⊘</span>}
+                    <span className={`text-[8px] px-1 py-0.5 rounded font-bold tracking-wide ${
+                      o.generated ? 'bg-amber-900/60 text-amber-300' : 'bg-emerald-900/50 text-emerald-300'
+                    }`}>{o.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2 pl-6 mt-0.5">
+                    <span className="text-[10px] text-gray-500">{toolLabel(op)}</span>
+                    {op.diameter != null && <span className="text-[10px] text-gray-600 font-mono">⌀{fmtMm(op.diameter)}</span>}
+                    {op.output_face && <span className="text-[10px] text-gray-600">{op.output_face}</span>}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Centre — single-part scene: 3D (R3F) + ortho Top/Front/Side (SVG, true mm). */}
+        <div className="flex-1 relative bg-gray-950 min-w-0">
+          <div className="absolute top-2 left-2 z-10 flex items-center gap-2 select-none">
+            <div className="flex rounded-md overflow-hidden border border-gray-700 bg-gray-900/90">
+              {(['3d', 'top', 'front', 'side'] as const).map(vm => (
+                <button
+                  key={vm}
+                  onClick={() => { setView(vm); if (vm === '3d') setMeasuring(false) }}
+                  className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                    view === vm ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {vm === '3d' ? '3D' : vm[0].toUpperCase() + vm.slice(1)}
+                </button>
+              ))}
+            </div>
+            {view !== '3d' && (
+              <button
+                onClick={() => setMeasuring(m => !m)}
+                title="Measure between part corners — click two points"
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                  measuring
+                    ? 'bg-amber-600 border-amber-500 text-white'
+                    : 'bg-gray-900/90 border-gray-700 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                Measure
+              </button>
+            )}
+          </div>
+
+          {view === '3d' ? (
+            <PreviewCanvas dx={u} dy={v} dz={n} bgColor="#0b1220">
+              <group position={[-u / 2, -v / 2, -n / 2]}>
+                <Part
+                  b={{ x: 0, y: 0, z: 0, w: u, h: v, d: n }}
+                  // face kind colours: [edge×4, +Z face, −Z back]
+                  faceColors={['#5b6373', '#5b6373', '#5b6373', '#5b6373', '#c9ccd4', '#9aa0ad']}
+                  edgeLineColor="#475569"
+                  meta={part}
+                  selected={false}
+                  highlighted={false}
+                  onSelect={() => {}}
+                  dragRef={dragRef}
+                />
+                <OpMarkers3D ops={ops} u={u} v={v} n={n} selectedId={selectedId} onSelect={setSelectedId} levels={levels} />
+              </group>
+            </PreviewCanvas>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center p-6">
+              <PartOrthoView u={u} v={v} n={n} view={view} measuring={measuring}
+                ops={ops} selectedId={selectedId} onSelect={setSelectedId} levels={levels} />
+            </div>
+          )}
+        </div>
+
+        {/* Right — contextual properties (read-only stub; editable in M4) */}
+        <div className="flex-none w-72 bg-gray-900 border-l border-gray-800 overflow-y-auto">
+          <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Properties</span>
+            {sel && (
+              <span className={`text-[8px] px-1 py-0.5 rounded font-bold tracking-wide ${
+                sel.generated ? 'bg-amber-900/60 text-amber-300' : 'bg-emerald-900/50 text-emerald-300'
+              }`}>{sel.label}</span>
+            )}
+          </div>
+          {selected ? (
+            <div className="px-3 py-2 text-xs">
+              {/* Validation banner (§6.2) */}
+              {selIssues.length > 0 && (
+                <div className="mb-2 rounded border border-gray-700 overflow-hidden">
+                  {selIssues.map((is, i) => (
+                    <div key={i} className={`px-2 py-1 text-[11px] flex items-start gap-1.5 ${
+                      is.level === 'error' ? 'bg-red-950/50 text-red-300' : 'bg-amber-950/40 text-amber-300'
+                    }`}>
+                      <span>{is.level === 'error' ? '⛔' : '⚠'}</span><span>{is.msg}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selLocked && (
+                <div className="mb-2 text-[10px] text-amber-400/80 leading-snug">
+                  Generated operation — read-only (it’s re-created on every sync).
+                  “Convert to manual override” arrives in M5.
+                </div>
+              )}
+
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 items-center">
+                <span className="text-gray-500">Type</span>
+                <select value={selected.operation_type} disabled={selLocked}
+                  onChange={e => patchOp({ operation_type: e.target.value })}
+                  className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-gray-100 disabled:text-gray-500 disabled:bg-gray-900/60 focus:outline-none focus:border-blue-500">
+                  {/* keep any legacy value selectable */}
+                  {!(TYPE_OPTIONS as readonly string[]).includes(selected.operation_type) && <option value={selected.operation_type}>{selected.operation_type}</option>}
+                  {TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+
+                <span className="text-gray-500">Action</span>
+                <select value={selected.operation_action ?? ''} disabled={selLocked}
+                  onChange={e => patchOp({ operation_action: e.target.value || null })}
+                  className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-gray-100 disabled:text-gray-500 disabled:bg-gray-900/60 focus:outline-none focus:border-blue-500">
+                  {ACTION_OPTIONS.map(a => <option key={a} value={a}>{a === '' ? '—' : a}</option>)}
+                </select>
+
+                <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-1">Position (part-local)</span>
+                <span className="text-gray-500">X</span>
+                <NumField key={`${selected.id}-px`} value={selected.pos_x} disabled={selLocked} onCommit={x => patchOp({ pos_x: x })} />
+                <span className="text-gray-500">Y</span>
+                <NumField key={`${selected.id}-py`} value={selected.pos_y} disabled={selLocked} onCommit={x => patchOp({ pos_y: x })} />
+                <span className="text-gray-500">Z (depth)</span>
+                <NumField key={`${selected.id}-pz`} value={selected.pos_z} disabled={selLocked} onCommit={x => patchOp({ pos_z: x })} />
+
+                {selected.operation_type === 'drill' ? (
+                  <>
+                    <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-1">Drill</span>
+                    <span className="text-gray-500">⌀ Diameter</span>
+                    <NumField key={`${selected.id}-dia`} value={selected.diameter} disabled={selLocked} onCommit={x => patchOp({ diameter: x })} />
+                    <span className="text-gray-500">Depth</span>
+                    <NumField key={`${selected.id}-dep`} value={selected.depth} disabled={selLocked} onCommit={x => patchOp({ depth: x })} />
+                    <span className="text-gray-500">Repeat ×</span>
+                    <NumField key={`${selected.id}-rc`} value={selected.repeat_count} disabled={selLocked} onCommit={x => patchOp({ repeat_count: Math.max(1, Math.round(x)) })} />
+                    <span className="text-gray-500">Spacing</span>
+                    <NumField key={`${selected.id}-rs`} value={selected.repeat_spacing} disabled={selLocked} onCommit={x => patchOp({ repeat_spacing: x })} />
+                  </>
+                ) : (
+                  <>
+                    <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-1">Size</span>
+                    <span className="text-gray-500">dx</span>
+                    <NumField key={`${selected.id}-sx`} value={selected.size_dx} disabled={selLocked} onCommit={x => patchOp({ size_dx: x })} />
+                    <span className="text-gray-500">dy</span>
+                    <NumField key={`${selected.id}-sy`} value={selected.size_dy} disabled={selLocked} onCommit={x => patchOp({ size_dy: x })} />
+                    <span className="text-gray-500">dz (depth)</span>
+                    <NumField key={`${selected.id}-sz`} value={selected.size_dz} disabled={selLocked} onCommit={x => patchOp({ size_dz: x })} />
+                  </>
+                )}
+
+                <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-1">Angle</span>
+                <span className="text-gray-500">ax</span>
+                <NumField key={`${selected.id}-ax`} value={selected.angle_ax} disabled={selLocked} onCommit={x => patchOp({ angle_ax: x })} />
+                <span className="text-gray-500">ay</span>
+                <NumField key={`${selected.id}-ay`} value={selected.angle_ay} disabled={selLocked} onCommit={x => patchOp({ angle_ay: x })} />
+                <span className="text-gray-500">az</span>
+                <NumField key={`${selected.id}-az`} value={selected.angle_az} disabled={selLocked} onCommit={x => patchOp({ angle_az: x })} />
+
+                <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-1">Plane / output</span>
+                <PropRow label="Plane"    value={selected.plane_kind ?? 'face_front'} />
+                <PropRow label="Edge idx" value={selected.plane_edge_index ?? '—'} />
+                <PropRow label="Out face" value={selected.output_face ?? '—'} />
+
+                <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-1">Tool</span>
+                <span className="text-gray-500 self-center">Tool set</span>
+                <select value={selected.tool_set_id ?? ''} disabled={selLocked}
+                  onChange={e => patchOp({ tool_set_id: e.target.value || null })}
+                  className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-gray-100 disabled:text-gray-500 disabled:bg-gray-900/60 focus:outline-none focus:border-blue-500">
+                  <option value="">— none —</option>
+                  {toolSets.map(ts => <option key={ts.id} value={ts.id}>{ts.name}</option>)}
+                </select>
+                {!selected.tool_set_id && (
+                  <>
+                    <span className="text-gray-500 self-center">Bit</span>
+                    <OperationToolSelect
+                      operationType={selected.operation_type}
+                      value={{ router_tool_id: selected.router_tool_id, drill_id: selected.drill_id, auto_tool: selected.auto_tool }}
+                      tools={tools} drills={drills} disabled={selLocked}
+                      onChange={val => patchOp({ router_tool_id: val.router_tool_id, drill_id: val.drill_id, auto_tool: val.auto_tool })}
+                      className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-gray-100 disabled:text-gray-500 disabled:bg-gray-900/60 focus:outline-none focus:border-blue-500"
+                    />
+                  </>
+                )}
+
+                <span className="text-gray-500 self-center">CNC output</span>
+                <label className="flex items-center gap-1.5 justify-end">
+                  <input type="checkbox" checked={selected.output_to_cnc} disabled={selLocked}
+                    onChange={e => patchOp({ output_to_cnc: e.target.checked })}
+                    className="accent-blue-500 w-3.5 h-3.5 disabled:opacity-50" />
+                  <span className="text-gray-400 text-[10px]">{selected.output_to_cnc ? 'included' : 'excluded'}</span>
+                </label>
+              </div>
+
+              <div className="mt-3 flex flex-col gap-1.5">
+                {selLocked ? (
+                  <button onClick={() => void convertToManual()}
+                    className="w-full text-[11px] px-2 py-1 rounded border border-amber-700/60 text-amber-300 hover:bg-amber-900/30 transition-colors">
+                    Convert to manual override
+                  </button>
+                ) : (
+                  <button onClick={() => void deleteSelected()}
+                    className="w-full text-[11px] px-2 py-1 rounded border border-red-800/60 text-red-300 hover:bg-red-900/30 transition-colors">
+                    Delete operation
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 text-[10px] text-gray-600 leading-snug">
+                Plane picker &amp; drag-to-place are Phase 2. Undo with ↺ / Ctrl+Z.
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 text-xs text-gray-500">
+              Select an operation to see and edit its properties.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

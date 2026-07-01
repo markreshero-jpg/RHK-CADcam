@@ -17,6 +17,7 @@ import {
 import SnapToolbar from './SnapToolbar'
 import { SlideShape, slideBox3, doorProfileSvg } from './cabinetEditSvgHelpers'
 import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
+import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
 // resolved per render below. PART_COLORS / LINE_DRAW_COLORS keep their `MAP[key]`
@@ -217,6 +218,8 @@ export default function ElevationSVG({
 
   const wall = walls.find(w => w.id === elevWallId) ?? null
   const wallCabs = wall ? cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === elevWallSide) : []
+  // Hand-added part_operations for every cabinet on this wall → cabinet-space markers.
+  const handMarkersByCab = useHandOpMarkersMulti(wallCabs.map(c => c.id), resolvedParts)
 
   // Drawer-slide model outlines: load every slide's uploaded 3D model across all
   // cabinets on this wall (a hook, so it must run unconditionally at the top level).
@@ -1323,6 +1326,12 @@ export default function ElevationSVG({
                             opacity={carcP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
+
+                      {/* Hand-added part operations (Part Editor) — projected to this
+                          cabinet's elevation. Generated holes are excluded (not drawn here). */}
+                      {(handMarkersByCab.get(cab.id)?.length ?? 0) > 0 && (
+                        <HandOpMarkersSVG markers={handMarkersByCab.get(cab.id)!} project={(px, py) => toSVGPt(px, py)} />
+                      )}
 
                       {/* Inner-drawer labels — one per inner-drawer face, drawn last so
                           they sit on top of the open-zone overlay. */}
