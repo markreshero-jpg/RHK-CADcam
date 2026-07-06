@@ -82,6 +82,25 @@ const ACTION_OPTIONS: readonly string[] = ['', ...ROUTE_ACTIONS]
 
 type AddKind = 'single' | 'toolset' | 'drill' | 'groove'
 
+// ── Plane picker (spec §4) ────────────────────────────────────────────────────────
+const PLANE_KINDS = ['face_front', 'face_back', 'edge'] as const
+const PLANE_KIND_LABEL: Record<string, string> = { face_front: 'Front face', face_back: 'Back face', edge: 'Edge' }
+// Canonical rectangle-edge ordering for plane_edge_index (0..3). Face coords have
+// origin bottom-left, x → u (DX) right, y → v (DY) up; edges run CCW from the bottom.
+// This is the ordering every consumer (picker, highlight, firing) must share — no
+// prior deriveOutline existed, so it is established here.
+const PLANE_EDGES = ['bottom', 'right', 'top', 'left'] as const
+// Edge i as an SVG line [x1,y1,x2,y2] in the Front view (SVG y is flipped: face
+// y=0 → SVG y=vh). vw=u, vh=v.
+function edgeLineSVG(i: number, vw: number, vh: number): [number, number, number, number] {
+  switch (i) {
+    case 0: return [0, vh, vw, vh]  // bottom (face y=0)
+    case 1: return [vw, 0, vw, vh]  // right  (face x=u)
+    case 2: return [0, 0, vw, 0]    // top    (face y=v)
+    default: return [0, 0, 0, vh]   // left   (face x=0)
+  }
+}
+
 // Map a part-key prefix back to its source table (mirrors seamDrillSync / the
 // svg*Meta id scheme) so a hand-added op is keyed to the same identity.
 function sourceTableFor(id: string): string {
@@ -279,13 +298,21 @@ function OpMarkers3D({ ops, u, v, n, selectedId, onSelect, levels }: {
 // corner snapping, x/y delta readout). The part laid flat is u(width) × v(height)
 // × n(thickness); each ortho view is the matching rectangle:
 //   front = u × v   ·   top = u × n   ·   side = n × v
-function PartOrthoView({ u, v, n, view, measuring, ops, selectedId, onSelect, levels }: {
+function PartOrthoView({ u, v, n, view, measuring, ops, selectedId, onSelect, levels, planePick, onPickPlane }: {
   u: number; v: number; n: number; view: OrthoView; measuring: boolean
   ops: PartOp[]; selectedId: string | null; onSelect: (id: string) => void
   levels: Record<string, 'error' | 'warn' | undefined>
+  planePick?: boolean
+  onPickPlane?: (patch: { plane_kind: string; plane_edge_index: number | null }) => void
 }) {
   const [vw, vh] = view === 'front' ? [u, v] : view === 'top' ? [u, n] : [n, v]
   const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh, 1.15)
+  const [hoverEdge, setHoverEdge] = useState<number | null>(null)
+
+  // The selected op's current plane, so its edge is highlighted (front view only).
+  const selOp = ops.find(o => o.id === selectedId)
+  const selEdge = selOp?.plane_kind === 'edge' ? selOp.plane_edge_index ?? null : null
+  const pick = !!planePick && view === 'front' && !measuring
 
   // Snap candidates = part rectangle corners + edge midpoints + (front view) op
   // centres — matching the cabinet modal's "corners, edge midpoints, op centres".
@@ -320,8 +347,36 @@ function PartOrthoView({ u, v, n, view, measuring, ops, selectedId, onSelect, le
     >
       <rect x={0} y={0} width={vw} height={vh} fill="#243045" stroke="#5b6373" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       <g style={{ pointerEvents: 'none' }}>{grid}</g>
-      {/* Operation markers live on the face → shown in the Front view (edge ops are P2). */}
-      {view === 'front' && <OpMarkersSVG ops={ops} u={vw} v={vh} selectedId={selectedId} onSelect={onSelect} interactive={!measuring} levels={levels} />}
+      {/* Operation markers live on the face → shown in the Front view. */}
+      {view === 'front' && <OpMarkersSVG ops={ops} u={vw} v={vh} selectedId={selectedId} onSelect={onSelect} interactive={!measuring && !pick} levels={levels} />}
+
+      {/* Selected op's current edge, highlighted (§7.2 "the marker moves live"). */}
+      {view === 'front' && selEdge != null && (() => {
+        const [x1, y1, x2, y2] = edgeLineSVG(selEdge, vw, vh)
+        return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#a78bfa" strokeWidth={3} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
+      })()}
+
+      {/* Plane-pick mode (§7.2): click a highlighted edge, or the interior for the front face. */}
+      {pick && onPickPlane && (
+        <g>
+          <rect x={vw * 0.12} y={vh * 0.12} width={vw * 0.76} height={vh * 0.76}
+            fill="#a78bfa" fillOpacity={0.06} stroke="#a78bfa" strokeDasharray="4 4"
+            strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ cursor: 'pointer' }}
+            onClick={() => onPickPlane({ plane_kind: 'face_front', plane_edge_index: null })} />
+          {[0, 1, 2, 3].map(i => {
+            const [x1, y1, x2, y2] = edgeLineSVG(i, vw, vh)
+            return (
+              <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke={hoverEdge === i ? '#c4b5fd' : '#7c3aed'}
+                strokeWidth={hoverEdge === i ? 14 : 9} strokeLinecap="round"
+                vectorEffect="non-scaling-stroke" strokeOpacity={hoverEdge === i ? 0.9 : 0.55}
+                style={{ cursor: 'pointer' }}
+                onPointerEnter={() => setHoverEdge(i)} onPointerLeave={() => setHoverEdge(null)}
+                onClick={() => onPickPlane({ plane_kind: 'edge', plane_edge_index: i })} />
+            )
+          })}
+        </g>
+      )}
       {measuring && (
         <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor}
           snapped={measure.snapped} unit={unit} vb={vb} pts={measurePts} />
@@ -364,6 +419,8 @@ export default function PartEditor({ cabinetId, part, onClose }: {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [view, setView] = useState<EditorView>('front')
   const [measuring, setMeasuring] = useState(false)
+  // Plane-pick mode (§7.2): the Front view exposes clickable edges/face.
+  const [planePick, setPlanePick] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
@@ -753,7 +810,9 @@ export default function PartEditor({ cabinetId, part, onClose }: {
           ) : (
             <div className="w-full h-full flex items-center justify-center p-6">
               <PartOrthoView u={u} v={v} n={n} view={view} measuring={measuring}
-                ops={ops} selectedId={selectedId} onSelect={setSelectedId} levels={levels} />
+                ops={ops} selectedId={selectedId} onSelect={setSelectedId} levels={levels}
+                planePick={planePick && !selLocked}
+                onPickPlane={patch => { patchOp(patch); setPlanePick(false) }} />
             </div>
           )}
         </div>
@@ -864,8 +923,41 @@ export default function PartEditor({ cabinetId, part, onClose }: {
                 <NumField key={`${selected.id}-az`} value={selected.angle_az} disabled={selLocked} onCommit={x => patchOp({ angle_az: x })} />
 
                 <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-1">Plane / output</span>
-                <PropRow label="Plane"    value={selected.plane_kind ?? 'face_front'} />
-                <PropRow label="Edge idx" value={selected.plane_edge_index ?? '—'} />
+                {selLocked ? (
+                  <>
+                    <PropRow label="Plane" value={PLANE_KIND_LABEL[selected.plane_kind ?? 'face_front'] ?? selected.plane_kind} />
+                    {selected.plane_kind === 'edge' && (
+                      <PropRow label="Edge" value={selected.plane_edge_index != null ? `${selected.plane_edge_index} · ${PLANE_EDGES[selected.plane_edge_index] ?? '?'}` : '—'} />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="text-gray-500 self-center">Plane</span>
+                    <select value={selected.plane_kind ?? 'face_front'}
+                      onChange={e => { const pk = e.target.value; patchOp(pk === 'edge' ? { plane_kind: pk } : { plane_kind: pk, plane_edge_index: null }); if (pk !== 'edge') setPlanePick(false) }}
+                      className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-gray-100 focus:outline-none focus:border-blue-500">
+                      {PLANE_KINDS.map(pk => <option key={pk} value={pk}>{PLANE_KIND_LABEL[pk]}</option>)}
+                    </select>
+                    {selected.plane_kind === 'edge' && (
+                      <>
+                        <span className="text-gray-500 self-center">Edge</span>
+                        <div className="flex gap-1 justify-end items-center">
+                          <select value={selected.plane_edge_index ?? ''}
+                            onChange={e => patchOp({ plane_edge_index: e.target.value === '' ? null : Number(e.target.value) })}
+                            className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-gray-100 focus:outline-none focus:border-blue-500">
+                            <option value="">—</option>
+                            {PLANE_EDGES.map((lbl, i) => <option key={i} value={i}>{i} · {lbl}</option>)}
+                          </select>
+                          <button type="button"
+                            onClick={() => { setView('front'); setMeasuring(false); setPlanePick(p => !p) }}
+                            className={`px-1.5 py-0.5 rounded text-[10px] border ${planePick ? 'bg-violet-600 border-violet-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-violet-500'}`}>
+                            {planePick ? 'Picking…' : 'Pick in view'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
                 <PropRow label="Out face" value={selected.output_face ?? '—'} />
 
                 <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-1">Tool</span>
