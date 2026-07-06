@@ -284,10 +284,11 @@ function opCentres(ops: PartOp[]): { x: number; y: number }[] {
 }
 
 // SVG marker layer for the FRONT (face) view. y is flipped (SVG top-down → v-up).
-function OpMarkersSVG({ ops, u, v, selectedId, onSelect, interactive, levels }: {
+function OpMarkersSVG({ ops, u, v, selectedId, onSelect, interactive, levels, onStartDrag }: {
   ops: PartOp[]; u: number; v: number; selectedId: string | null
   onSelect: (id: string) => void; interactive: boolean
   levels: Record<string, 'error' | 'warn' | undefined>
+  onStartDrag?: (op: PartOp, e: React.PointerEvent) => void
 }) {
   return (
     <g>
@@ -296,9 +297,12 @@ function OpMarkersSVG({ ops, u, v, selectedId, onSelect, interactive, levels }: 
         const sel = op.id === selectedId
         const c = glyphColours(op, sel, levels[op.id])
         const sw = sel ? 2 : 1.25
+        // Generated (slave / auto) rows are locked — not draggable (§8).
+        const draggable = interactive && !!onStartDrag && !op.parameters?.generated
         return (
           <g key={op.id}
-            style={{ cursor: interactive ? 'pointer' : 'default', pointerEvents: interactive ? 'auto' : 'none' }}
+            style={{ cursor: draggable ? 'grab' : interactive ? 'pointer' : 'default', pointerEvents: interactive ? 'auto' : 'none' }}
+            onPointerDown={draggable ? (e => onStartDrag!(op, e)) : undefined}
             onClick={interactive ? (e => { e.stopPropagation(); onSelect(op.id) }) : undefined}>
             {g.circles.map((cir, i) => (
               <circle key={`c${i}`} cx={cir.cx} cy={v - cir.cy} r={cir.r}
@@ -357,21 +361,75 @@ function OpMarkers3D({ ops, u, v, n, selectedId, onSelect, levels }: {
 // corner snapping, x/y delta readout). The part laid flat is u(width) × v(height)
 // × n(thickness); each ortho view is the matching rectangle:
 //   front = u × v   ·   top = u × n   ·   side = n × v
-function PartOrthoView({ u, v, n, view, measuring, ops, selectedId, onSelect, levels, planePick, onPickPlane }: {
+function PartOrthoView({ u, v, n, view, measuring, ops, selectedId, onSelect, levels, planePick, onPickPlane, snapOn, onDragMove, onDragEnd }: {
   u: number; v: number; n: number; view: OrthoView; measuring: boolean
   ops: PartOp[]; selectedId: string | null; onSelect: (id: string) => void
   levels: Record<string, 'error' | 'warn' | undefined>
   planePick?: boolean
   onPickPlane?: (patch: { plane_kind: string; plane_edge_index: number | null }) => void
+  snapOn?: boolean
+  onDragMove?: (id: string, px: number, py: number) => void
+  onDragEnd?: (id: string, px: number, py: number) => void
 }) {
   const [vw, vh] = view === 'front' ? [u, v] : view === 'top' ? [u, n] : [n, v]
   const { svgRef, viewBox, vb, unit } = useSvgZoom(vw, vh, 1.15)
   const [hoverEdge, setHoverEdge] = useState<number | null>(null)
+  const [drag, setDrag] = useState<{ id: string; edge: number | null; px: number; py: number } | null>(null)
 
   // The selected op's current plane, so its edge is highlighted (front view only).
   const selOp = ops.find(o => o.id === selectedId)
   const selEdge = selOp?.plane_kind === 'edge' ? selOp.plane_edge_index ?? null : null
   const pick = !!planePick && view === 'front' && !measuring
+
+  // ── Drag-to-place (§8) ──────────────────────────────────────────────────────
+  // Pointer (client) → part-local face coords (x→u right, y→v up).
+  function clientToUV(e: React.PointerEvent): { x: number; y: number } | null {
+    const svg = svgRef.current; if (!svg) return null
+    const ctm = svg.getScreenCTM(); if (!ctm) return null
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse())
+    return { x: p.x, y: vh - p.y }
+  }
+  // Clamp to the part; hold an edge op on its edge (slide along it); and (snap on)
+  // pull the free axis to the nearest grid line / part edge / other op centre.
+  function constrain(px: number, py: number, edge: number | null): { px: number; py: number } {
+    px = Math.max(0, Math.min(vw, px)); py = Math.max(0, Math.min(vh, py))
+    const xFixed = edge === 1 || edge === 3, yFixed = edge === 0 || edge === 2
+    if (edge === 0) py = 0; else if (edge === 2) py = vh; else if (edge === 3) px = 0; else if (edge === 1) px = vw
+    if (snapOn) {
+      const STEP = 10, TOL = 4
+      const others = ops.filter(o => o.id !== drag?.id)
+      const snapAxis = (val: number, ext: number, centres: number[], fixed: boolean) => {
+        if (fixed) return val
+        let best = val, bestD = TOL
+        for (const t of [0, ext, ...centres]) { const d = Math.abs(t - val); if (d < bestD) { bestD = d; best = t } }
+        return bestD < TOL ? best : Math.round(val / STEP) * STEP
+      }
+      px = snapAxis(px, vw, others.map(o => o.pos_x ?? 0), xFixed)
+      py = snapAxis(py, vh, others.map(o => o.pos_y ?? 0), yFixed)
+    }
+    return { px, py }
+  }
+  function startDrag(op: PartOp, e: React.PointerEvent) {
+    if (measuring || pick || !onDragMove) return
+    e.stopPropagation()
+    onSelect(op.id)
+    const edge = op.plane_kind === 'edge' ? (op.plane_edge_index ?? null) : null
+    setDrag({ id: op.id, edge, px: op.pos_x ?? 0, py: op.pos_y ?? 0 })
+    try { (e.currentTarget as Element).setPointerCapture(e.pointerId) } catch { /* ignore */ }
+  }
+  function svgPointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (drag) {
+      const uv = clientToUV(e); if (!uv) return
+      const { px, py } = constrain(uv.x, uv.y, drag.edge)
+      setDrag(d => (d ? { ...d, px, py } : d))
+      onDragMove?.(drag.id, px, py)
+      return
+    }
+    if (measuring) measure.onMove(e)
+  }
+  function svgPointerUp() {
+    if (drag) { onDragEnd?.(drag.id, drag.px, drag.py); setDrag(null) }
+  }
 
   // Snap candidates = part rectangle corners + edge midpoints + (front view) op
   // centres — matching the cabinet modal's "corners, edge midpoints, op centres".
@@ -399,15 +457,18 @@ function PartOrthoView({ u, v, n, view, measuring, ops, selectedId, onSelect, le
       ref={svgRef}
       viewBox={viewBox}
       width="100%" height="100%"
-      style={{ maxHeight: '100%', maxWidth: '100%', cursor: measuring ? 'crosshair' : 'default' }}
+      style={{ maxHeight: '100%', maxWidth: '100%', touchAction: 'none', cursor: measuring ? 'crosshair' : drag ? 'grabbing' : 'default' }}
       onClick={measuring ? measure.onClick : undefined}
-      onPointerMove={measuring ? measure.onMove : undefined}
+      onPointerMove={svgPointerMove}
+      onPointerUp={svgPointerUp}
+      onPointerCancel={svgPointerUp}
       onContextMenu={handleContextMenu}
     >
       <rect x={0} y={0} width={vw} height={vh} fill="#243045" stroke="#5b6373" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       <g style={{ pointerEvents: 'none' }}>{grid}</g>
-      {/* Operation markers live on the face → shown in the Front view. */}
-      {view === 'front' && <OpMarkersSVG ops={ops} u={vw} v={vh} selectedId={selectedId} onSelect={onSelect} interactive={!measuring && !pick} levels={levels} />}
+      {/* Operation markers live on the face → shown in the Front view. Draggable
+          when not measuring/plane-picking (§8); OpMarkersSVG excludes generated rows. */}
+      {view === 'front' && <OpMarkersSVG ops={ops} u={vw} v={vh} selectedId={selectedId} onSelect={onSelect} interactive={!measuring && !pick} levels={levels} onStartDrag={!measuring && !pick ? startDrag : undefined} />}
 
       {/* Selected op's current edge, highlighted (§7.2 "the marker moves live"). */}
       {view === 'front' && selEdge != null && (() => {
@@ -440,6 +501,20 @@ function PartOrthoView({ u, v, n, view, measuring, ops, selectedId, onSelect, le
         <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor}
           snapped={measure.snapped} unit={unit} vb={vb} pts={measurePts} />
       )}
+
+      {/* Live part-local coordinate readout following the dragged marker (§8). */}
+      {drag && (() => {
+        const fs = Math.max(vw, vh) / 45
+        const label = `${Math.round(drag.px)}, ${Math.round(drag.py)}`
+        const bx = drag.px + fs, by = (vh - drag.py) - fs * 2.2
+        return (
+          <g style={{ pointerEvents: 'none' }}>
+            <rect x={bx} y={by} width={fs * (label.length * 0.62 + 0.8)} height={fs * 1.6}
+              fill="#0b1220" stroke="#38bdf8" strokeWidth={0.5} vectorEffect="non-scaling-stroke" rx={fs * 0.25} />
+            <text x={bx + fs * 0.4} y={by + fs * 1.1} fontSize={fs} fill="#7dd3fc" fontFamily="monospace">{label}</text>
+          </g>
+        )
+      })()}
     </svg>
   )
 }
@@ -485,6 +560,14 @@ export default function PartEditor({ cabinetId, part, onClose }: {
   // Joint library (§6): types + their ops, for the enforced-first joint picker.
   const [jointTypes, setJointTypes] = useState<JointType[]>([])
   const [jointQuery, setJointQuery] = useState('')
+  // Drag-to-place snap (§8), persisted. Lazy init (no set-state-in-effect).
+  const [snapOn, setSnapOn] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    try { return localStorage.getItem('partEditor.snap') === '1' } catch { return false }
+  })
+  function toggleSnap() {
+    setSnapOn(s => { const n = !s; try { localStorage.setItem('partEditor.snap', n ? '1' : '0') } catch { /* ignore */ } return n })
+  }
   const [addOpen, setAddOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
@@ -542,6 +625,23 @@ export default function PartEditor({ cabinetId, part, onClose }: {
     try { await syncMasterSlaves(cabinetId); await reloadOps() }
     catch (e) { console.error('[PartEditor] refire', e) }
     finally { setFiring(false) }
+  }
+
+  // Drag-to-place (§8). Live move = local-only (no DB, no re-fire) so dragging is
+  // smooth; commit on release persists + (for masters) re-fires — never per move.
+  function dragMoveOp(id: string, px: number, py: number) {
+    applyLocal(id, { pos_x: px, pos_y: py })
+  }
+  async function commitDragOp(id: string, px: number, py: number) {
+    const op = ops.find(o => o.id === id)
+    if (!op) return
+    const rounded = { pos_x: roundStore(px), pos_y: roundStore(py) }
+    if (roundStore(op.pos_x ?? 0) === rounded.pos_x && roundStore(op.pos_y ?? 0) === rounded.pos_y) { applyLocal(id, rounded); return }
+    const prev = { pos_x: op.pos_x, pos_y: op.pos_y }
+    applyLocal(id, rounded)
+    pushUndo(async () => { applyLocal(id, prev); await dbUpdate(id, prev); if (isFiringRole(op.operation_role)) await refire() })
+    await dbUpdate(id, rounded)
+    if (isFiringRole(op.operation_role)) await refire()
   }
 
   // Snapshot a library joint onto the selected op (§6). patchOp carries the undo +
@@ -918,6 +1018,19 @@ export default function PartEditor({ cabinetId, part, onClose }: {
                 Measure
               </button>
             )}
+            {view === 'front' && (
+              <button
+                onClick={toggleSnap}
+                title="Snap dragged operations to a grid, part edges and other op centres (§8)"
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors ${
+                  snapOn
+                    ? 'bg-sky-600 border-sky-500 text-white'
+                    : 'bg-gray-900/90 border-gray-700 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                Snap
+              </button>
+            )}
           </div>
 
           {view === '3d' ? (
@@ -942,7 +1055,8 @@ export default function PartEditor({ cabinetId, part, onClose }: {
               <PartOrthoView u={u} v={v} n={n} view={view} measuring={measuring}
                 ops={ops} selectedId={selectedId} onSelect={setSelectedId} levels={levels}
                 planePick={planePick && !selLocked}
-                onPickPlane={patch => { patchOp(patch); setPlanePick(false) }} />
+                onPickPlane={patch => { patchOp(patch); setPlanePick(false) }}
+                snapOn={snapOn} onDragMove={dragMoveOp} onDragEnd={commitDragOp} />
             </div>
           )}
         </div>
