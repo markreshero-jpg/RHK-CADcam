@@ -306,7 +306,23 @@ export function cabWallSide(cab: CabinetInstance, wall: Wall): 'face' | 'back' {
 /** @deprecated use cabWallPerp */
 export const islandCabPerp = cabWallPerp
 
-// pos_x/pos_y is now the inside face; cabinets start there with no perpendicular offset.
+// Landing point (back-left corner) for a cabinet anchored at along-wall distance `t`.
+// Face-side cabinets sit on the wall's inside face. Back-side cabinets are pushed out
+// by the wall thickness so their back is flush with the wall's OUTER face rather than
+// overlapping the wall body. Islands (thickness 0) get no offset. cx/cy = room centroid,
+// the same reference wallInwardNormal uses everywhere else.
+export function wallAnchorPoint(wall: Wall, t: number, back: boolean, cx: number, cy: number): Pt {
+  const d = wallDir(wall)
+  const px = wall.pos_x + t * d.x
+  const py = wall.pos_y + t * d.y
+  if (!back || wall.thickness <= 0) return { x: px, y: py }
+  const inward = wallInwardNormal(wall, cx, cy)
+  return { x: px - inward.x * wall.thickness, y: py - inward.y * wall.thickness }
+}
+
+// pos_x/pos_y is the cabinet's back-left corner: the wall's inside face for face-side
+// cabinets, or the outer face (shifted out by wall thickness) for back-side cabinets.
+// See wallAnchorPoint. The footprint extrudes dz along perp from there.
 export function cabinetPolygon(cab: CabinetInstance, wall: Wall, perp: Pt): string {
   const d = wallDir(wall)
   const ax = cab.pos_x, ay = cab.pos_y

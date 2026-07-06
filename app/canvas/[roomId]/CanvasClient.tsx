@@ -9,7 +9,7 @@ import {
   wallEnd, wallDir,
   snapAngle,
   nearestWall, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabT, nextLabel,
-  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts,
+  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint,
 } from '@/src/lib/geometry'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
 import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
@@ -612,7 +612,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       .filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: draft.assembly_class, dy: draft.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side)
       .map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
     const fit = fitFreeSlot(desired, draft.dx, raw.wall.length, occupied)
-    await placeFromDraft(draft, raw.wall, raw.wall.pos_x + fit.t * wd.x, raw.wall.pos_y + fit.t * wd.y, flip, fit.dx)
+    const gc = centroid(walls)
+    const a = wallAnchorPoint(raw.wall, fit.t, flip, gc.x, gc.y)
+    await placeFromDraft(draft, raw.wall, a.x, a.y, flip, fit.dx)
   }
 
   // Unified placement descriptor for the current mode: the armed definition when
@@ -696,6 +698,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const anchorT = (anchorPosX - wall.pos_x) * wd.x + (anchorPosY - wall.pos_y) * wd.y
     const baseT = cabWallT(clipboardGroup[0])
     const side = flip ? 'back' : 'face'
+    const cxp = centroid(walls)
     const added: CabinetInstance[] = []
     let working = [...cabinets]
     for (const src of clipboardGroup) {
@@ -704,8 +707,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         .filter(c => c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(src, c, wall, room) && cabWallSide(c, wall) === side)
         .map(c => ({ t: cabT(c, wall), dx: c.dx }))
       const t = findFreeSlot(desired, src.dx, wall.length, occupied)
-      const pos_x = wall.pos_x + t * wd.x
-      const pos_y = wall.pos_y + t * wd.y
+      const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, flip, cxp.x, cxp.y)
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, created_at, updated_at, ...rest } = src
       const cab = await dbInsertCabinet({ ...rest, room_id: room.id, wall_id: wall.id, label: nextLabel(working, src.assembly_class), pos_x, pos_y, rotation: flip ? wall.angle + 180 : wall.angle })
@@ -863,7 +865,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const side = flip ? 'back' : 'face'
       const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(clipboard, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
       const t = findFreeSlot(desired, clipboard.dx, raw.wall.length, occupied)
-      setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: flip, freePos: wp })
+      const cxp = centroid(walls)
+      const a = wallAnchorPoint(raw.wall, t, flip, cxp.x, cxp.y)
+      setPlaceGhost({ wall: raw.wall, pos_x: a.x, pos_y: a.y, islandFlip: flip, freePos: wp })
       return
     }
 
@@ -881,7 +885,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       // Fit into the available gap: shrink the new cabinet's width if the gap is
       // narrower than the default, rather than overlapping the neighbour.
       const fit = fitFreeSlot(desired, clsInfo.dx, raw.wall.length, occupied)
-      setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + fit.t * wd.x, pos_y: raw.wall.pos_y + fit.t * wd.y, islandFlip: flip, freePos: wp, fitDx: fit.dx })
+      const cxp = centroid(walls)
+      const a = wallAnchorPoint(raw.wall, fit.t, flip, cxp.x, cxp.y)
+      setPlaceGhost({ wall: raw.wall, pos_x: a.x, pos_y: a.y, islandFlip: flip, freePos: wp, fitDx: fit.dx })
       return
     }
 
@@ -901,7 +907,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const dragSide = dragCab ? cabWallSide(dragCab, wall) : 'face'
         const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(dragCab ?? { assembly_class: assemblyClass, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === dragSide).map(c => ({ t: cabT(c, wall), dx: c.dx }))
         const t = slideToFreeSlot(desired, cabDX, wall.length, occupied, dragCab ? cabT(dragCab, wall) : undefined)
-        setCabDrag({ id: cabId, pos_x: wall.pos_x + t * wd.x, pos_y: wall.pos_y + t * wd.y })
+        const cxp = centroid(walls)
+        const a = wallAnchorPoint(wall, t, dragSide === 'back', cxp.x, cxp.y)
+        setCabDrag({ id: cabId, pos_x: a.x, pos_y: a.y })
       }
     }
 
@@ -919,7 +927,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           // Same-wall move → keep it on the drag side (no bounce-back); cross-wall → free slot.
           const origT = raw.wall.id === cab.wall_id ? cabT(cab, raw.wall) : undefined
           const t = slideToFreeSlot(desired, cab.dx, raw.wall.length, occupied, origT)
-          setCabMoveDrag({ id, wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: wallFlipFor(raw.wall), freePos: wp })
+          const flip = wallFlipFor(raw.wall)
+          const cxp = centroid(walls)
+          const a = wallAnchorPoint(raw.wall, t, flip, cxp.x, cxp.y)
+          setCabMoveDrag({ id, wall: raw.wall, pos_x: a.x, pos_y: a.y, islandFlip: flip, freePos: wp })
         }
       }
     }
@@ -1177,11 +1188,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     } else {
       setCabResize(null); setMultiSelect([])
       setSelected({ type: 'cabinet', id: cab.id })
-      // Seed ghost immediately at cabinet's current position so it's visible before any cursor movement
+      // Seed ghost immediately at cabinet's current position so it's visible before any cursor movement.
+      // islandFlip carries the back-side flag (for both islands and standard walls) so a seeded
+      // back cabinet keeps its orientation if committed before the cursor moves.
       const wall = walls.find(w => w.id === cab.wall_id)
       if (wall) {
-        const islandFlip = wall.wall_type === 'island' &&
-          (((cab.rotation - wall.angle) % 360 + 360) % 360) > 90
+        const islandFlip = cabWallSide(cab, wall) === 'back'
         setCabMoveDrag({ id: cab.id, wall, pos_x: cab.pos_x, pos_y: cab.pos_y, islandFlip })
       }
       setCabFollowing({ id: cab.id, assemblyClass: cab.assembly_class })
@@ -1663,7 +1675,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             elevWallSide={elevWallSide}
             onSetElevWallSide={setElevWallSide}
             onUpdateCabinet={handleUpdateCabinet}
-            onPlaceAtWall={async (wall, pos_x, pos_y, dx) => {
+            onPlaceAtWall={async (wall, rawX, rawY, dx) => {
+              // Re-anchor to the canonical landing: back-side cabinets sit on the wall's
+              // outer face (shifted by thickness). Idempotent — uses only the along-wall
+              // component, so any perpendicular in the incoming point is discarded.
+              const wd = wallDir(wall)
+              const t = (rawX - wall.pos_x) * wd.x + (rawY - wall.pos_y) * wd.y
+              const gc = centroid(walls)
+              const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, elevWallSide === 'back', gc.x, gc.y)
               if (mode === 'paste' && clipboard) {
                 if (clipboardGroup.length > 1) await pasteGroupAt(wall, pos_x, pos_y, elevWallSide === 'back')
                 else await pasteCabinet(wall, pos_x, pos_y, elevWallSide === 'back')

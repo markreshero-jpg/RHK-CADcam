@@ -93,9 +93,12 @@ function DimLine({
   )
 }
 
-// Perpendicular depth dimension at a wall end — runs from wall face to cabinet front face
+// Perpendicular depth dimension at a wall end — runs from the cabinet's back face to
+// its front face. backOffset shifts the start off the wall line to the cabinet back
+// (0 for front/inside-face cabinets; the wall thickness for back-side cabinets, whose
+// back sits on the outer face).
 function DepthDim({
-  wall, inward, tPos, dz, zoom, col, sign,
+  wall, inward, tPos, dz, zoom, col, sign, backOffset = 0,
 }: {
   wall: Wall
   inward: { x: number; y: number }
@@ -104,6 +107,7 @@ function DepthDim({
   zoom: number
   col: string
   sign: 1 | -1
+  backOffset?: number
 }) {
   const wd = wallDir(wall)
   const z = zoom
@@ -114,8 +118,8 @@ function DepthDim({
   const offX = wd.x * sign * 20 / z
   const offY = wd.y * sign * 20 / z
 
-  const sx = wall.pos_x + tPos * wd.x + offX
-  const sy = wall.pos_y + tPos * wd.y + offY
+  const sx = wall.pos_x + tPos * wd.x + offX + inward.x * backOffset
+  const sy = wall.pos_y + tPos * wd.y + offY + inward.y * backOffset
   const ex = sx + inward.x * dz
   const ey = sy + inward.y * dz
   const midX = (sx + ex) / 2
@@ -175,6 +179,7 @@ export default function WallDimensionChain({
     baseCabs: CabinetInstance[],
     wallCabs: CabinetInstance[],
     depthOffset: number,
+    backOffset = 0,
   ) {
     const baseSegs = computeChain(baseCabs, wall)
     const wallCabSegs = computeChain(wallCabs, wall)
@@ -200,28 +205,22 @@ export default function WallDimensionChain({
         {/* Perpendicular depth dimensions at wall ends */}
         {layerBase.visible && baseDz > 0 && (
           <>
-            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={baseDz} zoom={z} col={col} sign={-1} />
-            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={baseDz} zoom={z} col={col} sign={1} />
+            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={baseDz} zoom={z} col={col} sign={-1} backOffset={backOffset} />
+            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={baseDz} zoom={z} col={col} sign={1} backOffset={backOffset} />
           </>
         )}
         {layerWallCab.visible && showWallDepthSeparate && (
           <>
-            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={wallDz} zoom={z} col={col} sign={-1} />
-            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={wallDz} zoom={z} col={col} sign={1} />
+            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={wallDz} zoom={z} col={col} sign={-1} backOffset={backOffset} />
+            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={wallDz} zoom={z} col={col} sign={1} backOffset={backOffset} />
           </>
         )}
       </g>
     )
   }
 
-  // Perimeter wall: cabinets sit on the inward (room) side only, so the chain
-  // goes on the empty outward side and depth dims point inward — unchanged.
-  if (!isIsland) {
-    return renderSide('main', out, inward, allBase, allWall, 0)
-  }
-
-  // Island: cabinets can sit on both faces. Split by side and draw each side's
-  // chain on its own side, pushed clear of that side's cabinet fronts.
+  // Split cabinets by which wall face they sit on (back-side cabinets are placed on
+  // the outer face — see wallAnchorPoint).
   const inBase  = allBase.filter(c => cabWallSide(c, wall) === 'face')
   const outBase = allBase.filter(c => cabWallSide(c, wall) === 'back')
   const inWall  = allWall.filter(c => cabWallSide(c, wall) === 'face')
@@ -229,10 +228,21 @@ export default function WallDimensionChain({
   const hasIn  = inBase.length > 0 || inWall.length > 0
   const hasOut = outBase.length > 0 || outWall.length > 0
 
+  // Perimeter wall with cabinets only on the room side (the common case): keep the
+  // historic single chain on the empty outward side, depth dims pointing inward.
+  if (!isIsland && !hasOut) {
+    return renderSide('main', out, inward, allBase, allWall, 0)
+  }
+
+  // Island, or a perimeter wall that now has back-side cabinets: draw each occupied
+  // face on its own side, each chain pushed clear of that side's deepest cabinet so
+  // the cabinets no longer overlap the dimension chain. Back-side cabinets sit on the
+  // outer face, so their depth dims start a wall thickness out (islands are flush).
+  const outBackOffset = isIsland ? 0 : wall.thickness
   return (
     <g>
       {hasIn && renderSide('in', inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]))}
-      {(hasOut || !hasIn) && renderSide('out', out, out, outBase, outWall, sideDepth([...outBase, ...outWall]))}
+      {(hasOut || !hasIn) && renderSide('out', out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset)}
     </g>
   )
 }

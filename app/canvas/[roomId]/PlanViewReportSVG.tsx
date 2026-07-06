@@ -122,12 +122,19 @@ export default function PlanViewReportSVG({
 
   // ── ViewBox padding — extend for dims / title block when shown ────────────
   const maxThick = Math.max(0, ...walls.filter(w => w.wall_type !== 'island').map(w => w.thickness))
-  // Island chains stack beyond their cabinets, so the viewBox must allow for the
-  // deepest cabinet sitting on any island wall.
-  const islandWallIds = new Set(walls.filter(w => w.wall_type === 'island').map(w => w.id))
-  const maxIslandDepth = Math.max(0, ...cabinets.filter(c => islandWallIds.has(c.wall_id ?? '')).map(c => c.dz))
+  // Chains stack beyond their cabinets, so the viewBox must reserve room for the
+  // deepest cabinet a chain must clear: any island cabinet, plus back-side cabinets
+  // on a perimeter wall (whose outer chain is pushed past them).
+  const wallById = new Map(walls.map(w => [w.id, w]))
+  const chainClearDepth = Math.max(0, ...cabinets
+    .filter(c => {
+      const w = c.wall_id ? wallById.get(c.wall_id) : undefined
+      if (!w) return false
+      return w.wall_type === 'island' || cabWallSide(c, w) === 'back'
+    })
+    .map(c => c.dz))
   const basePad  = 4 * P
-  const dimExtra = show.dimensions ? maxThick + maxIslandDepth + ROW_OVERALL + dimFS * 2 + tickH : 0
+  const dimExtra = show.dimensions ? maxThick + chainClearDepth + ROW_OVERALL + dimFS * 2 + tickH : 0
   const padL = basePad + dimExtra
   const padR = basePad + dimExtra
   const padT = basePad + dimExtra
@@ -189,11 +196,14 @@ export default function PlanViewReportSVG({
   }
 
   // ── Perpendicular depth dimension at a wall end ───────────────────────────
-  function depthDim(wall: Wall, inward: { x: number; y: number }, tPos: number, dz: number, sign: 1 | -1, key: string) {
+  // Runs from the cabinet's back face to its front. backOffset shifts the start off
+  // the wall line to the cabinet back (0 for front cabinets; wall thickness for
+  // back-side cabinets, whose back sits on the outer face).
+  function depthDim(wall: Wall, inward: { x: number; y: number }, tPos: number, dz: number, sign: 1 | -1, key: string, backOffset = 0) {
     const wd = wallDir(wall)
     const offX = wd.x * sign * 5 * P, offY = wd.y * sign * 5 * P
-    const sx = wall.pos_x + tPos * wd.x + offX
-    const sy = wall.pos_y + tPos * wd.y + offY
+    const sx = wall.pos_x + tPos * wd.x + offX + inward.x * backOffset
+    const sy = wall.pos_y + tPos * wd.y + offY + inward.y * backOffset
     const ex = sx + inward.x * dz, ey = sy + inward.y * dz
     const midX = (sx + ex) / 2, midY = (sy + ey) / 2
     const rawAngle = Math.atan2(inward.y, inward.x) * 180 / Math.PI
@@ -416,6 +426,7 @@ export default function PlanViewReportSVG({
           baseCabs: CabinetInstance[],
           wallCabs: CabinetInstance[],
           depthOffset: number,
+          backOffset = 0,
         ) => {
           const baseSegs    = computeChain(baseCabs, w)
           const wallCabSegs = computeChain(wallCabs, w)
@@ -430,37 +441,43 @@ export default function PlanViewReportSVG({
               {dimLine(w, chainDir, depthOffset + ROW_OVERALL, overallSeg, `ov-${key}`)}
               {baseDz > 0 && (
                 <>
-                  {depthDim(w, depthDir, 0,        baseDz, -1, `dd0-${key}`)}
-                  {depthDim(w, depthDir, w.length, baseDz,  1, `dd1-${key}`)}
+                  {depthDim(w, depthDir, 0,        baseDz, -1, `dd0-${key}`, backOffset)}
+                  {depthDim(w, depthDir, w.length, baseDz,  1, `dd1-${key}`, backOffset)}
                 </>
               )}
               {showWallDepthSeparate && (
                 <>
-                  {depthDim(w, depthDir, 0,        wallDz, -1, `wdd0-${key}`)}
-                  {depthDim(w, depthDir, w.length, wallDz,  1, `wdd1-${key}`)}
+                  {depthDim(w, depthDir, 0,        wallDz, -1, `wdd0-${key}`, backOffset)}
+                  {depthDim(w, depthDir, w.length, wallDz,  1, `wdd1-${key}`, backOffset)}
                 </>
               )}
             </g>
           )
         }
 
-        // Perimeter wall: cabinets on the inward side only — chain on the empty
-        // outward side, depth dims point inward (unchanged behaviour).
-        if (w.wall_type !== 'island') {
-          return <g key={`dim-${w.id}`}>{renderSide(`m-${w.id}`, out, inward, allBase, allWall, 0)}</g>
-        }
-
-        // Island: split cabinets by face and dimension each side beyond its cabinets.
+        // Split cabinets by which wall face they sit on (back-side cabinets sit on
+        // the outer face — see wallAnchorPoint).
         const inBase  = allBase.filter(c => cabWallSide(c, w) === 'face')
         const outBase = allBase.filter(c => cabWallSide(c, w) === 'back')
         const inWall  = allWall.filter(c => cabWallSide(c, w) === 'face')
         const outWall = allWall.filter(c => cabWallSide(c, w) === 'back')
         const hasIn  = inBase.length > 0 || inWall.length > 0
         const hasOut = outBase.length > 0 || outWall.length > 0
+
+        // Perimeter wall with cabinets only on the room side (the common case): keep
+        // the historic single chain on the empty outward side, depth dims inward.
+        if (w.wall_type !== 'island' && !hasOut) {
+          return <g key={`dim-${w.id}`}>{renderSide(`m-${w.id}`, out, inward, allBase, allWall, 0)}</g>
+        }
+
+        // Island, or a perimeter wall with back-side cabinets: dimension each occupied
+        // face on its own side, beyond that side's deepest cabinet. Back-side cabinets
+        // sit on the outer face, so their depth dims start a wall thickness out.
+        const outBackOffset = w.wall_type === 'island' ? 0 : w.thickness
         return (
           <g key={`dim-${w.id}`}>
             {hasIn && renderSide(`in-${w.id}`, inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]))}
-            {(hasOut || !hasIn) && renderSide(`out-${w.id}`, out, out, outBase, outWall, sideDepth([...outBase, ...outWall]))}
+            {(hasOut || !hasIn) && renderSide(`out-${w.id}`, out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset)}
           </g>
         )
       })}

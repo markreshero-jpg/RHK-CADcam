@@ -1112,7 +1112,9 @@ export default function CanvasSVG({
           if (!movingCab) return null
           const moveWall = cabMoveDrag.wall
           const basePerp = wallInwardNormal(moveWall, cx.x, cx.y)
-          const perp = moveWall.wall_type === 'island' && cabMoveDrag.islandFlip
+          // islandFlip carries the back-side flag for any wall; flip perp outward so the
+          // preview matches the committed cabinet (which flips via cabWallPerp).
+          const perp = cabMoveDrag.islandFlip
             ? { x: -basePerp.x, y: -basePerp.y } : basePerp
           const wd = wallDir(moveWall)
 
@@ -1255,7 +1257,9 @@ export default function CanvasSVG({
           }
           const wall = placeGhost.wall
           const basePerp = wallInwardNormal(wall, cx.x, cx.y)
-          const perp = wall.wall_type === 'island' && placeGhost.islandFlip
+          // islandFlip carries the back-side flag for any wall; flip perp outward so the
+          // preview matches the committed cabinet (which flips via cabWallPerp).
+          const perp = placeGhost.islandFlip
             ? { x: -basePerp.x, y: -basePerp.y } : basePerp
           // Snap-landing width honours the fit-to-gap shrink; the floating in-hand
           // ghost below stays at the full default width.
