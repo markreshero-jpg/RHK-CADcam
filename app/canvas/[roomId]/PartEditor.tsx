@@ -25,7 +25,8 @@ import { Part, PreviewCanvas, type PartMeta } from '@/src/components/three/PartV
 import { fmtMm, roundMm } from '@/src/lib/format'
 import { evalCalc } from '@/src/lib/calc'
 import OperationToolSelect, { useToolLibraries } from '@/src/components/cnc/OperationToolSelect'
-import { OPERATION_TYPES, ROUTE_ACTIONS } from '@/src/lib/partOps/enums'
+import { OPERATION_TYPES, ROUTE_ACTIONS, isFiringRole } from '@/src/lib/partOps/enums'
+import { syncMasterSlaves } from '@/src/lib/optimiser/masterSlaveSync'
 import type { PartOp } from './CabinetRoutesPanel'
 import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
 import { useSvgZoom } from './ResolvedViews'
@@ -421,6 +422,8 @@ export default function PartEditor({ cabinetId, part, onClose }: {
   const [measuring, setMeasuring] = useState(false)
   // Plane-pick mode (§7.2): the Front view exposes clickable edges/face.
   const [planePick, setPlanePick] = useState(false)
+  // Live firing (§6.2): true while syncMasterSlaves regenerates this cabinet's slaves.
+  const [firing, setFiring] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
@@ -455,6 +458,24 @@ export default function PartEditor({ cabinetId, part, onClose }: {
       })
     return () => { cancelled = true }
   }, [cabinetId, part.id])
+
+  // Reload this part's ops from the DB (after live firing materialises slaves).
+  async function reloadOps() {
+    const { data, error } = await supabase.from('part_operations').select('*')
+      .eq('source_cabinet_id', cabinetId).eq('source_part_key', part.id)
+    if (error) { console.error('[PartEditor] reload operations', error); return }
+    setOps(((data ?? []) as PartOp[]).slice().sort((a, b) => a.sort_order - b.sort_order))
+  }
+
+  // Live firing (§6.2): regenerate the cabinet's master/joint slave rows, then
+  // reload so any slave that landed on THIS part appears immediately (locked +
+  // SLAVE-badged). The optimise pass re-runs this authoritatively (M6).
+  async function refire() {
+    setFiring(true)
+    try { await syncMasterSlaves(cabinetId); await reloadOps() }
+    catch (e) { console.error('[PartEditor] refire', e) }
+    finally { setFiring(false) }
+  }
 
   // Escape closes the editor. Capture phase + stopImmediatePropagation so the
   // cabinet modal's own Escape handler behind it doesn't also fire.
@@ -529,6 +550,9 @@ export default function PartEditor({ cabinetId, part, onClose }: {
     applyLocal(id, rounded)
     pushUndo(async () => { applyLocal(id, prev); await dbUpdate(id, prev) })
     await dbUpdate(id, rounded)
+    // Re-fire when a master/joint op's geometry/role changed, or a role toggled
+    // (either direction — turning a master back to local must drop its slaves).
+    if ('operation_role' in rounded || isFiringRole(selected.operation_role)) await refire()
   }
 
   // Add a hand operation (spec §5.3 kinds). New ops default plane_kind='face_front'
@@ -572,8 +596,12 @@ export default function PartEditor({ cabinetId, part, onClose }: {
     pushUndo(async () => {
       const { data } = await supabase.from('part_operations').insert(row as unknown as Record<string, unknown>).select().single()
       if (data) setOps(prev => [...prev, data as PartOp].sort((a, b) => a.sort_order - b.sort_order))
+      await refire()
     })
     await supabase.from('part_operations').delete().eq('id', row.id)
+    // Deleting a master drops its slaves; deleting a local op that was blocking a
+    // slave lets it fire (§2.1). Either way, re-fire the cabinet.
+    await refire()
   }
 
   // Convert a generated op into a hand-owned one by stripping parameters.generated
@@ -845,6 +873,41 @@ export default function PartEditor({ cabinetId, part, onClose }: {
                 <div className="mb-2 text-[10px] text-amber-400/80 leading-snug">
                   Generated operation — read-only (it’s re-created on every sync).
                   “Convert to manual override” arrives in M5.
+                </div>
+              )}
+
+              {/* Slave pointer (§5.5): edit it on the source part, not here. */}
+              {sel?.kind === 'slave' && (
+                <div className="mb-2 text-[10px] text-sky-300/80 leading-snug">
+                  Slave hole — fired by a master on{' '}
+                  <span className="font-mono text-sky-200">{String(selected.parameters?.master_source_part_key ?? '?')}</span>.
+                  Edit it on that part.
+                </div>
+              )}
+
+              {/* Role (§2, §7.1) — hand ops only. Master fires a slave onto the
+                  coincident part; Joint (library-driven) arrives in M5. */}
+              {!selLocked && (
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-gray-500 text-[10px] uppercase tracking-wider">Role</span>
+                  <div className="flex rounded overflow-hidden border border-gray-700">
+                    {(['local', 'master'] as const).map(r => {
+                      const active = (selected.operation_role ?? 'local') === r
+                      return (
+                        <button key={r} type="button"
+                          onClick={() => { if (!active) patchOp({ operation_role: r, is_master: isFiringRole(r) }) }}
+                          className={`px-2 py-0.5 text-[11px] ${active ? 'bg-violet-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>
+                          {r === 'local' ? 'Local' : 'Master'}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {firing && <span className="text-[9px] text-violet-300">firing…</span>}
+                </div>
+              )}
+              {!selLocked && isFiringRole(selected.operation_role) && (
+                <div className="mb-2 text-[10px] text-violet-300/80 leading-snug">
+                  Master — fires a matching hole onto whatever part its plane/edge touches at this position.
                 </div>
               )}
 

@@ -240,7 +240,7 @@ export function fireMasters(rp: ResolvedCabinet, ops: FireOpRow[], cabinetId: st
         auto_tool: op.auto_tool,
         tool_set_id: op.tool_set_id,
         output_to_cnc: op.output_to_cnc,
-        parameters: { generated: GENERATED_MARK, master_operation_id: op.id },
+        parameters: { generated: GENERATED_MARK, master_operation_id: op.id, master_source_part_key: op.source_part_key },
       })
     }
     if (!touched) noTouch++
