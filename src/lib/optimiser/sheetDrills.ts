@@ -12,6 +12,7 @@ import { supabase } from '@/src/lib/supabase'
 import { buildSheetDrills, groupDrillOps, type DrillOpRaw, type PartRef } from './drills'
 import { resolveDrillTool, type DrillLibItem, type RouterToolItem } from './resolveDrillTools'
 import { syncSeamDrillOperationsForCabinets } from './seamDrillSync'
+import { syncMasterSlavesForCabinets } from './masterSlaveSync'
 import type { NestedSheet } from './nest'
 import type { SheetDrill } from './gcode'
 import type { OptiPart } from './types'
@@ -36,8 +37,16 @@ export async function loadResolvedDrillOps(
   opts: { sync?: boolean; blockDiameters?: number[]; routerTools?: RouterToolItem[]; preferredPocketToolNumber?: number | null } = {},
 ): Promise<ResolvedDrillOps> {
   const cabIds = [...new Set(parts.map(p => p.cabinet_instance_id))]
-  // Regenerate joint-drilling rows so the read below is current (best-effort).
-  if (opts.sync && cabIds.length) await syncSeamDrillOperationsForCabinets(cabIds)
+  // Regenerate generated part_operations against FINAL geometry so the read below is
+  // current (§6.2 — authoritative pass). Two independent generators tagged with
+  // different parameters.generated markers ('seam_joint' vs 'master_slave'); neither
+  // reads the other's rows, so order is immaterial for correctness. Run sequentially
+  // (seam first, then master/joint slaves) to avoid concurrent delete+insert on the
+  // same cabinet's part_operations. Best-effort — each swallows per-cabinet errors.
+  if (opts.sync && cabIds.length) {
+    await syncSeamDrillOperationsForCabinets(cabIds)
+    await syncMasterSlavesForCabinets(cabIds)
+  }
 
   const { data: opRows } = cabIds.length
     ? await supabase.from('part_operations')
