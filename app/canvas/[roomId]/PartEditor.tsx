@@ -25,6 +25,7 @@ import { Part, PreviewCanvas, type PartMeta } from '@/src/components/three/PartV
 import { fmtMm, roundMm } from '@/src/lib/format'
 import { evalCalc } from '@/src/lib/calc'
 import OperationToolSelect, { useToolLibraries } from '@/src/components/cnc/OperationToolSelect'
+import { OPERATION_TYPES, ROUTE_ACTIONS } from '@/src/lib/partOps/enums'
 import type { PartOp } from './CabinetRoutesPanel'
 import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
 import { useSvgZoom } from './ResolvedViews'
@@ -74,8 +75,10 @@ const roundStore = (v: number) => Math.round(v * 100) / 100
 const roundAngle = (v: number) => (Math.abs(v) < 0.05 ? 0 : Math.round(v * 100) / 100)
 const ANGLE_FIELDS = new Set(['angle_ax', 'angle_ay', 'angle_az'])
 
-const TYPE_OPTIONS   = ['route', 'drill', 'saw', 'groove'] as const
-const ACTION_OPTIONS = ['', 'outline', 'pocket', 'square_off', 'profile', 'through', 'stopped'] as const
+// Enums come from the central module (§3). 'saw' and the through/stopped depth
+// qualifiers are intentionally gone from these lists — see src/lib/partOps/enums.ts.
+const TYPE_OPTIONS: readonly string[]   = OPERATION_TYPES
+const ACTION_OPTIONS: readonly string[] = ['', ...ROUTE_ACTIONS]
 
 type AddKind = 'single' | 'toolset' | 'drill' | 'groove'
 
@@ -484,6 +487,7 @@ export default function PartEditor({ cabinetId, part, onClose }: {
       output_to_cnc: true,
       sort_order: nextOrder,
       plane_kind: 'face_front',
+      operation_role: 'local',   // §2 — every op is local until roles land in M4
     }
     const extra: Record<string, unknown> =
       kind === 'single'  ? { operation_type: 'route', operation_action: 'pocket', auto_tool: true, pos_x: cx, pos_y: cy, size_dx: 50, size_dy: 50 }
@@ -821,6 +825,23 @@ export default function PartEditor({ cabinetId, part, onClose }: {
                     <NumField key={`${selected.id}-rc`} value={selected.repeat_count} disabled={selLocked} onCommit={x => patchOp({ repeat_count: Math.max(1, Math.round(x)) })} />
                     <span className="text-gray-500">Spacing</span>
                     <NumField key={`${selected.id}-rs`} value={selected.repeat_spacing} disabled={selLocked} onCommit={x => patchOp({ repeat_spacing: x })} />
+                  </>
+                ) : selected.operation_type === 'groove' ? (
+                  <>
+                    {/* Groove = straight slot; the tool drives the profile (§3.3). Length/width/
+                        depth are its own columns. Repeat + spacing turn one groove into a
+                        slatted/fluted run — no N hand-placed slots. */}
+                    <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-1">Groove</span>
+                    <span className="text-gray-500">Length</span>
+                    <NumField key={`${selected.id}-glen`} value={selected.length} disabled={selLocked} onCommit={x => patchOp({ length: x })} />
+                    <span className="text-gray-500">Width</span>
+                    <NumField key={`${selected.id}-gw`} value={selected.width} disabled={selLocked} onCommit={x => patchOp({ width: x })} />
+                    <span className="text-gray-500">Depth</span>
+                    <NumField key={`${selected.id}-gd`} value={selected.depth} disabled={selLocked} onCommit={x => patchOp({ depth: x })} />
+                    <span className="text-gray-500">Repeat ×</span>
+                    <NumField key={`${selected.id}-grc`} value={selected.repeat_count} disabled={selLocked} onCommit={x => patchOp({ repeat_count: Math.max(1, Math.round(x)) })} />
+                    <span className="text-gray-500">Spacing</span>
+                    <NumField key={`${selected.id}-grs`} value={selected.repeat_spacing} disabled={selLocked} onCommit={x => patchOp({ repeat_spacing: x })} />
                   </>
                 ) : (
                   <>

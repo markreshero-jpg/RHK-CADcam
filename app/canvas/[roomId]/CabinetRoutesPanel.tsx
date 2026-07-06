@@ -32,6 +32,7 @@ export interface PartOp {
   source_cabinet_id: string | null; source_part_key: string | null
   operation_type: string
   operation_action: string | null   // P1 (§4.2): strategy distinct from the verb (operation_type)
+  operation_role: string | null     // P2 (§2): 'local' | 'master' | 'joint'. Default 'local'.
   operation_key: string | null      // keys generated rows for wipe-and-reinsert (seamDrillSync)
   router_tool_id: string | null; drill_id: string | null; auto_tool: boolean
   tool_set_id: string | null
@@ -135,8 +136,9 @@ export default function CabinetRoutesPanel({ cabinet, rp }: { cabinet: CabinetIn
     }
     let extra: Record<string, unknown>
     switch (kind) {
-      case 'single':  extra = { operation_type: 'pocket', auto_tool: true }; break
-      case 'toolset': extra = { operation_type: 'pocket', tool_set_id: toolSets[0]?.id ?? null }; break
+      // pocket is an ACTION, not a type (§3): route + action=pocket. Never operation_type='pocket'.
+      case 'single':  extra = { operation_type: 'route', operation_action: 'pocket', auto_tool: true }; break
+      case 'toolset': extra = { operation_type: 'route', operation_action: 'pocket', tool_set_id: toolSets[0]?.id ?? null }; break
       case 'drill':   extra = { operation_type: 'drill', auto_tool: true, repeat_count: 1, repeat_spacing: 32, diameter: 5, depth: 10, pos_x: 0, pos_y: 0 }; break
       case 'groove':  extra = { operation_type: 'groove', auto_tool: true, width: 8, depth: 6, pos_x: 0, pos_y: 0 }; break
     }
