@@ -114,6 +114,63 @@ function sourceTableFor(id: string): string {
   return 'case_parts'
 }
 
+// ── Joint role (spec §6) ──────────────────────────────────────────────────────────
+// A joint op snapshots a library joint's machining params (copy-not-link) and is
+// tagged joint_type_id for the explicit "Update joints from library" re-sync.
+interface JointOp {
+  target_part: string; machine_operation: string; face: string | null
+  tool_diameter_mm: number | null; depth_mm: number | null
+  qty: number | null; spacing_mm: number | null
+  router_tool_id: string | null; drill_id: string | null; auto_tool: boolean | null
+  operation_order: number | null
+}
+interface JointType { id: string; name: string; description: string | null; ops: JointOp[] }
+
+// The library op that lands on the part the user placed the joint on. Every library
+// joint has ≤1 op per side; prefer part_a (the near/placed-on side, the A/B default),
+// else fall back to part_b (joints whose only op is the far hole, e.g. shelf pins).
+function localJointOp(jt: JointType): JointOp | null {
+  return jt.ops.find(o => o.target_part === 'part_a') ?? jt.ops.find(o => o.target_part === 'part_b') ?? jt.ops[0] ?? null
+}
+
+// machine_operation → operation_type verb (+ action). pocket is an action, not a
+// type (§3): route + action=pocket.
+function jointOpTypeAction(m: string): { operation_type: string; operation_action: string | null } {
+  if (m === 'pocket') return { operation_type: 'route', operation_action: 'pocket' }
+  if (m === 'route')  return { operation_type: 'route', operation_action: null }
+  return { operation_type: 'drill', operation_action: null }
+}
+
+// Field snapshot: joint library op → part_operations patch. NB only per-op machining
+// FIELDS are snapshotted; the seam-relative offsets (offset_x/y/z) need the two-part
+// seam frame to place and are NOT applied here — the op keeps its current plane/pos,
+// which the user positions. Asymmetric far-side (part_b) geometry is handled by the
+// §5 firing engine (currently a mirror — faithful distinct-part_b geometry deferred).
+function jointSnapshotPatch(jt: JointType): Partial<PartOp> {
+  const base: Partial<PartOp> = { operation_role: 'joint', is_master: true, joint_type_id: jt.id }
+  const op = localJointOp(jt)
+  if (!op) return base
+  const { operation_type, operation_action } = jointOpTypeAction(op.machine_operation)
+  return {
+    ...base, operation_type, operation_action,
+    diameter: op.tool_diameter_mm, depth: op.depth_mm,
+    repeat_count: op.qty && op.qty > 1 ? op.qty : 1,
+    repeat_spacing: op.spacing_mm,
+    router_tool_id: op.router_tool_id, drill_id: op.drill_id, auto_tool: op.auto_tool ?? false,
+  }
+}
+
+async function loadJointTypes(): Promise<JointType[]> {
+  const { data, error } = await supabase.from('joint_types')
+    .select('id, name, description, joint_type_operations(target_part, machine_operation, face, tool_diameter_mm, depth_mm, qty, spacing_mm, router_tool_id, drill_id, auto_tool, operation_order)')
+    .order('name')
+  if (error) { console.error('[PartEditor] load joint types', error); return [] }
+  return (data ?? []).map(r => {
+    const rr = r as unknown as JointType & { joint_type_operations?: JointOp[] }
+    return { id: rr.id, name: rr.name, description: rr.description, ops: (rr.joint_type_operations ?? []).slice().sort((a, b) => (a.operation_order ?? 0) - (b.operation_order ?? 0)) }
+  })
+}
+
 // ── Validation (spec §6.2) — flag, never block ────────────────────────────────────
 type Issue = { level: 'error' | 'warn'; msg: string }
 function validateOp(op: PartOp, u: number, v: number, n: number): Issue[] {
@@ -157,6 +214,7 @@ function validateOp(op: PartOp, u: number, v: number, n: number): Issue[] {
   }
   if (!op.auto_tool && !op.tool_set_id && !op.router_tool_id && !op.drill_id) issues.push({ level: 'warn', msg: 'No tool / tool-set assigned' })
   if (op.plane_kind === 'edge' && op.plane_edge_index == null) issues.push({ level: 'error', msg: 'Edge operation has no edge index' })
+  if (op.operation_role === 'joint' && !op.joint_type_id) issues.push({ level: 'error', msg: 'Pick a joint type' })
   return issues
 }
 const worst = (issues: Issue[] | undefined): 'error' | 'warn' | undefined =>
@@ -424,6 +482,9 @@ export default function PartEditor({ cabinetId, part, onClose }: {
   const [planePick, setPlanePick] = useState(false)
   // Live firing (§6.2): true while syncMasterSlaves regenerates this cabinet's slaves.
   const [firing, setFiring] = useState(false)
+  // Joint library (§6): types + their ops, for the enforced-first joint picker.
+  const [jointTypes, setJointTypes] = useState<JointType[]>([])
+  const [jointQuery, setJointQuery] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
@@ -441,6 +502,12 @@ export default function PartEditor({ cabinetId, part, onClose }: {
     let cancelled = false
     supabase.from('cnc_tool_sets').select('id,name').eq('is_active', true).order('sort_order').order('name')
       .then(({ data }) => { if (!cancelled) setToolSets((data ?? []) as { id: string; name: string }[]) })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    loadJointTypes().then(jt => { if (!cancelled) setJointTypes(jt) })
     return () => { cancelled = true }
   }, [])
 
@@ -474,6 +541,36 @@ export default function PartEditor({ cabinetId, part, onClose }: {
     setFiring(true)
     try { await syncMasterSlaves(cabinetId); await reloadOps() }
     catch (e) { console.error('[PartEditor] refire', e) }
+    finally { setFiring(false) }
+  }
+
+  // Snapshot a library joint onto the selected op (§6). patchOp carries the undo +
+  // (role=joint → firing) re-fire. Copy-not-link: the op keeps these values until an
+  // explicit re-sync.
+  async function pickJoint(jt: JointType) {
+    setJointQuery('')
+    await patchOp(jointSnapshotPatch(jt))
+  }
+
+  // "Update joints from library" (§6) — re-read the library and re-materialise every
+  // joint-tagged op in THIS cabinet. Explicit/user-triggered (never automatic), so it
+  // respects the hierarchy. Job/room-wide broadening is a follow-up.
+  async function resyncJointsFromLibrary() {
+    setFiring(true)
+    try {
+      const fresh = await loadJointTypes()
+      setJointTypes(fresh)
+      const byId = new Map(fresh.map(j => [j.id, j]))
+      const { data, error } = await supabase.from('part_operations')
+        .select('id, joint_type_id').eq('source_cabinet_id', cabinetId).not('joint_type_id', 'is', null)
+      if (error) { console.error('[PartEditor] resync joints', error); return }
+      for (const row of (data ?? []) as { id: string; joint_type_id: string }[]) {
+        const jt = byId.get(row.joint_type_id)
+        if (jt) await supabase.from('part_operations').update(jointSnapshotPatch(jt)).eq('id', row.id)
+      }
+      await syncMasterSlaves(cabinetId)
+      await reloadOps()
+    } catch (e) { console.error('[PartEditor] resync joints', e) }
     finally { setFiring(false) }
   }
 
@@ -513,6 +610,11 @@ export default function PartEditor({ cabinetId, part, onClose }: {
   const warnCount  = Object.values(levels).filter(l => l === 'warn').length
   const selIssues  = selected ? (issuesById[selected.id] ?? []) : []
   const selLocked  = !!sel?.generated   // generated rows are read-only (spec §3.1)
+  // Enforced-first joint pick (§7.1): a joint op with no type collapses the inspector
+  // to just the picker until a joint is chosen.
+  const jointPicking = !!selected && !selLocked && selected.operation_role === 'joint' && !selected.joint_type_id
+  const jointName = selected?.joint_type_id ? (jointTypes.find(j => j.id === selected.joint_type_id)?.name ?? 'joint') : null
+  const jointHits = jointTypes.filter(j => j.name.toLowerCase().includes(jointQuery.trim().toLowerCase()))
 
   // ── Data layer (reuses CabinetRoutesPanel's insert/patch/delete shape) ──────────
   const roundChanges = (changes: Partial<PartOp>) => {
@@ -886,18 +988,18 @@ export default function PartEditor({ cabinetId, part, onClose }: {
               )}
 
               {/* Role (§2, §7.1) — hand ops only. Master fires a slave onto the
-                  coincident part; Joint (library-driven) arrives in M5. */}
+                  coincident part; Joint snapshots a library joint (§6). */}
               {!selLocked && (
                 <div className="mb-2 flex items-center gap-2">
                   <span className="text-gray-500 text-[10px] uppercase tracking-wider">Role</span>
                   <div className="flex rounded overflow-hidden border border-gray-700">
-                    {(['local', 'master'] as const).map(r => {
+                    {(['local', 'master', 'joint'] as const).map(r => {
                       const active = (selected.operation_role ?? 'local') === r
                       return (
                         <button key={r} type="button"
-                          onClick={() => { if (!active) patchOp({ operation_role: r, is_master: isFiringRole(r) }) }}
-                          className={`px-2 py-0.5 text-[11px] ${active ? 'bg-violet-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>
-                          {r === 'local' ? 'Local' : 'Master'}
+                          onClick={() => { if (!active) patchOp({ operation_role: r, is_master: isFiringRole(r), ...(r !== 'joint' ? { joint_type_id: null } : {}) }) }}
+                          className={`px-2 py-0.5 text-[11px] capitalize ${active ? 'bg-violet-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>
+                          {r}
                         </button>
                       )
                     })}
@@ -905,9 +1007,50 @@ export default function PartEditor({ cabinetId, part, onClose }: {
                   {firing && <span className="text-[9px] text-violet-300">firing…</span>}
                 </div>
               )}
-              {!selLocked && isFiringRole(selected.operation_role) && (
+              {!selLocked && selected.operation_role === 'master' && (
                 <div className="mb-2 text-[10px] text-violet-300/80 leading-snug">
                   Master — fires a matching hole onto whatever part its plane/edge touches at this position.
+                </div>
+              )}
+              {/* Double-fire advisory (§6.1) — non-blocking. */}
+              {!selLocked && isFiringRole(selected.operation_role) && selected.plane_kind === 'edge' && (
+                <div className="mb-2 text-[10px] text-amber-300/80 leading-snug">
+                  ⚠ If this edge also has an automatic construction-method joint, both will fire (possible double-drill).
+                </div>
+              )}
+
+              {jointPicking ? (
+                /* Enforced-first joint picker (§7.1) — the one "you must pick this" case. */
+                <div className="mb-2">
+                  <div className="text-[10px] text-violet-300 mb-1">Pick a joint from the library:</div>
+                  <input autoFocus type="text" value={jointQuery} onChange={e => setJointQuery(e.target.value)}
+                    placeholder="Search joints…"
+                    className="w-full mb-1.5 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-100 focus:outline-none focus:border-violet-500" />
+                  <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto">
+                    {jointHits.length === 0 && <div className="text-[10px] text-gray-500 px-1 py-2">No matching joints.</div>}
+                    {jointHits.map(j => (
+                      <button key={j.id} type="button" onClick={() => pickJoint(j)}
+                        className="text-left px-2 py-1 rounded bg-gray-800 hover:bg-violet-900/40 border border-gray-700 hover:border-violet-600">
+                        <div className="text-gray-100 text-[11px]">{j.name}</div>
+                        <div className="text-gray-500 text-[9px]">{j.ops.map(o => `${o.target_part === 'part_a' ? 'A' : 'B'}:${o.machine_operation}`).join(' · ') || 'no ops'}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => patchOp({ operation_role: 'local', is_master: false })}
+                    className="mt-1.5 text-[10px] text-gray-400 hover:text-gray-200">Cancel — back to Local</button>
+                </div>
+              ) : (
+              <>
+              {/* Joint header (§6): chosen joint + re-sync, once picked. */}
+              {!selLocked && selected.operation_role === 'joint' && selected.joint_type_id && (
+                <div className="mb-2 flex items-center justify-between gap-2 rounded border border-violet-800/60 bg-violet-950/30 px-2 py-1">
+                  <span className="text-[11px] text-violet-200">Joint: <span className="font-medium">{jointName}</span></span>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={resyncJointsFromLibrary} title="Re-read the library and re-materialise every joint op in this cabinet"
+                      className="text-[9px] px-1.5 py-0.5 rounded border border-violet-700 text-violet-200 hover:bg-violet-800/40">Re-sync</button>
+                    <button type="button" onClick={() => patchOp({ joint_type_id: null })}
+                      className="text-[9px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-300 hover:bg-gray-800">Change</button>
+                  </div>
                 </div>
               )}
 
@@ -1067,8 +1210,10 @@ export default function PartEditor({ cabinetId, part, onClose }: {
                 )}
               </div>
               <div className="mt-2 text-[10px] text-gray-600 leading-snug">
-                Plane picker &amp; drag-to-place are Phase 2. Undo with ↺ / Ctrl+Z.
+                Drag-to-place arrives later in Phase 2. Undo with ↺ / Ctrl+Z.
               </div>
+              </>
+              )}
             </div>
           ) : (
             <div className="p-4 text-xs text-gray-500">

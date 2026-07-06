@@ -33,6 +33,7 @@ export interface PartOp {
   operation_type: string
   operation_action: string | null   // P1 (§4.2): strategy distinct from the verb (operation_type)
   operation_role: string | null     // P2 (§2): 'local' | 'master' | 'joint'. Default 'local'.
+  joint_type_id: string | null       // P2 (§6): audit FK when operation_role='joint' (snapshot source).
   operation_key: string | null      // keys generated rows for wipe-and-reinsert (seamDrillSync)
   router_tool_id: string | null; drill_id: string | null; auto_tool: boolean
   tool_set_id: string | null
