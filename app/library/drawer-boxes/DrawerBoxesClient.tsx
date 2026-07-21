@@ -488,6 +488,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                 <div className="max-w-lg space-y-5">
                   {DB_RULE_GROUPS
                     .filter(g => g.label !== 'Inner Drawer Front' || editKind === 'internal')
+                    .filter(g => g.label !== 'Opening Fit' || editType === 'system')
                     .map(group => (
                     <div key={group.label}>
                       <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wider mb-1">{group.label}</p>

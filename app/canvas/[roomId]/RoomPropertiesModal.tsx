@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { Room, Project, DEFAULT_DIMS } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
 import { supabase } from '@/src/lib/supabase'
+import { DoorStylePreview, useDoorStylePreviews } from '@/src/components/DoorStylePreview'
 import MaterialsScheduleTab from './MaterialsScheduleTab'
 
 type DrawerBoxMethodItem = { id: string; name: string; is_default: boolean; kind?: 'external' | 'internal' | null }
@@ -125,6 +126,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
   const [methodsLoading, setMethodsLoading] = useState(true)
   const [doorStyleOverride, setDoorStyleOverride] = useState(room.door_style_override_id ?? '')
   const [doorStyles, setDoorStyles] = useState<{ id: string; name: string }[]>([])
+  const doorPreviews = useDoorStylePreviews()
 
   useEffect(() => {
     let cancelled = false
@@ -377,17 +379,30 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
                       : 'shop default'}
                   </span>
                 </div>
-                <select
-                  value={doorStyleOverride}
-                  onChange={e => setDoorStyleOverride(e.target.value)}
-                  className={`w-full bg-gray-800 border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 ${
-                    doorStyleOverride ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
-                  }`}
-                >
-                  <option value="">— inherit from job —</option>
-                  {doorStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-                <p className="text-[10px] text-gray-500 mt-1">Overrides the job door style for every door in this room (individual zones can still override).</p>
+                <div className="flex items-start gap-4">
+                  <div className="flex-1">
+                    <select
+                      value={doorStyleOverride}
+                      onChange={e => setDoorStyleOverride(e.target.value)}
+                      className={`w-full bg-gray-800 border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 ${
+                        doorStyleOverride ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
+                      }`}
+                    >
+                      <option value="">— inherit from job —</option>
+                      {doorStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                    <p className="text-[10px] text-gray-500 mt-1">Overrides the job door style for every door in this room (individual zones can still override).</p>
+                  </div>
+                  {/* Preview of the effective style (override, else the job's default) */}
+                  {(() => {
+                    const effStyleId = doorStyleOverride || project?.default_door_style_id || null
+                    const pv = doorPreviews.forStyle(effStyleId)
+                    return pv ? (
+                      <DoorStylePreview {...pv} className="h-28"
+                        caption={doorStyles.find(s => s.id === effStyleId)?.name ?? null} />
+                    ) : null
+                  })()}
+                </div>
               </div>
               <p className="text-[11px] text-gray-600 border-t border-gray-800 pt-3">Room-level hardware overrides (hinges, runners) will be added here.</p>
             </div>

@@ -15,6 +15,7 @@ import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import type { SheetDrill } from '@/src/lib/optimiser/gcode'
+import { getUserPrefs } from '@/src/lib/userPrefs'
 
 const MAX_W = 860, MAX_H = 470
 
@@ -48,6 +49,10 @@ export default function Stage5Edit() {
   const undo = useOptiStore(s => s.undo)
   const redo = useOptiStore(s => s.redo)
   const snap = useOptiStore(s => s.snapshot)
+  const profileId = useOptiStore(s => s.profileId)
+  // Nest was laid out at cut size when the profile deducts edgebanding — the
+  // drill overlay must shift holes onto the deducted blanks the same way Stage 6 does.
+  const deductEb = snap?.profiles.find(pr => pr.id === profileId)?.deduct_edgeband === true
 
   const [ctxMenu, setCtxMenu] = useState<{ uid: string; x: number; y: number } | null>(null)
   // Accordion: one material group open at a time. null = follow current sheet's
@@ -68,7 +73,7 @@ export default function Stage5Edit() {
     let cancelled = false
     setDrillsLoading(true)
     // Fast path: read already-generated rows.
-    loadResolvedDrillOps(snap.parts, { sync: false })
+    loadResolvedDrillOps(snap.parts, { sync: false, deductEdgeband: deductEb })
       .then(r => {
         if (cancelled) return
         setDrillOps(r)
@@ -76,19 +81,19 @@ export default function Stage5Edit() {
         if (hasAny || autoSyncedRef.current === snap.projectId) { setDrillsLoading(false); return }
         // Nothing materialised yet — generate once in the background (per project).
         autoSyncedRef.current = snap.projectId
-        loadResolvedDrillOps(snap.parts, { sync: true })
+        loadResolvedDrillOps(snap.parts, { sync: true, deductEdgeband: deductEb })
           .then(r2 => { if (!cancelled) setDrillOps(r2) })
           .catch(e => console.error('[Stage5] background drill sync', e))
           .finally(() => { if (!cancelled) setDrillsLoading(false) })
       })
       .catch(e => { console.error('[Stage5] loadResolvedDrillOps', e); if (!cancelled) setDrillsLoading(false) })
     return () => { cancelled = true }
-  }, [snap])
+  }, [snap, deductEb])
   // Manual regenerate (after editing joints) — runs the slow sync on demand.
   async function regenerateDrills() {
     if (!snap || drillsLoading) return
     setDrillsLoading(true)
-    try { setDrillOps(await loadResolvedDrillOps(snap.parts, { sync: true })) }
+    try { setDrillOps(await loadResolvedDrillOps(snap.parts, { sync: true, deductEdgeband: deductEb })) }
     catch (e) { console.error('[Stage5] regenerate drills', e) }
     finally { setDrillsLoading(false) }
   }
@@ -431,7 +436,8 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
         fy: (e.clientY - r.top) / r.height,
         cx: e.clientX, cy: e.clientY,
       }
-      onZoom(e.deltaY < 0 ? 1.15 : 1 / 1.15)
+      const delta = getUserPrefs().invertScroll ? -e.deltaY : e.deltaY
+      onZoom(delta < 0 ? 1.15 : 1 / 1.15)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)

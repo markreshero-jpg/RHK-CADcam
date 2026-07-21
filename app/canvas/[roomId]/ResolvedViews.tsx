@@ -19,9 +19,10 @@ import {
   slideElevRect, slideTopRect, slideSideRect,
   svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta, svgDbMeta, svgSlideMeta, svgInternalSlideMeta,
   svgHitParts, partIdColor, DrillOverlay, SlideDrillOverlay,
-  PartShape, SlideShape, caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3,
+  PartShape, SlideShape, EdgeTapeSVG, caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3,
   doorProfileSvg,
 } from './cabinetEditSvgHelpers'
+import type { EbByMatId } from './useMaterialColours'
 import { cabinetSeamDrills, orientSeamDrills, caseBoxByKey, type DrillAxis } from '@/src/lib/jointDrilling'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
 import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
@@ -46,6 +47,15 @@ const R = 80
 const B = 70
 
 const SEL_STROKE = '#f59e0b'
+
+// Edge-tape display spec (colour + thickness in mm) for a part material: null
+// (no tape drawn) when no edgeband spec is known — mirrors the 3D view's ebFor(),
+// including its colour fallback and 1mm thickness floor.
+const EB_FALLBACK = '#c8b89a'
+function ebColor(ebByMatId: EbByMatId | undefined, matId: string): { color: string; t: number } | null {
+  const spec = ebByMatId?.[matId]
+  return spec ? { color: spec.color ?? EB_FALLBACK, t: Math.max(spec.thickness ?? 1, 1) } : null
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -250,8 +260,11 @@ function OriginMarker({ sx, sy, hLabel, vLabel, vUp = true }: {
 
 // `zoomOut` (default 1 = fit exactly) starts the view a little more zoomed out so
 // edge dimension chains aren't clipped — e.g. 1.2 leaves ~10% margin each side.
-export function useSvgZoom(initW: number, initH: number, zoomOut = 1) {
-  const w0 = initW * zoomOut, h0 = initH * zoomOut
+export function useSvgZoom(initW: number, initH: number, zoomOut = 1, pad = 0) {
+  // `zoomOut` scales the framing proportionally; `pad` adds an absolute margin (in
+  // user units) on top — used by the Part Editor so overall-dimension annotations
+  // have room even in the thin Top/Side views where one extent is just thickness.
+  const w0 = initW * zoomOut + pad * 2, h0 = initH * zoomOut + pad * 2
   const x0 = -(w0 - initW) / 2, y0 = -(h0 - initH) / 2
   const initRef = useRef({ w: w0, h: h0 })
   const vbRef   = useRef({ x: x0, y: y0, w: w0, h: h0 })
@@ -281,18 +294,21 @@ export function useSvgZoom(initW: number, initH: number, zoomOut = 1) {
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      const rect = el.getBoundingClientRect()
-      if (!rect.width || !rect.height) return
-      const cx = e.clientX - rect.left
-      const cy = e.clientY - rect.top
+      // Convert through the SVG's actual screen transform rather than treating the
+      // whole element as content. preserveAspectRatio="meet" can letterbox the
+      // viewBox, so element-relative fractions make the zoom drift away from the
+      // cursor for tall/wide drawings (including Part Editor ortho views).
+      const ctm = el.getScreenCTM()
+      if (!ctm) return
+      const cursor = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse())
       const { x, y, w, h } = vbRef.current
       const delta = getUserPrefs().invertScroll ? -e.deltaY : e.deltaY
       const factor = delta > 0 ? 1.15 : 1 / 1.15
-      const vx = x + (cx / rect.width) * w
-      const vy = y + (cy / rect.height) * h
-      const newW = Math.max(initRef.current.w / 20, Math.min(initRef.current.w * 4, w * factor))
+      const fx = (cursor.x - x) / w
+      const fy = (cursor.y - y) / h
+      const newW = Math.max(initRef.current.w / 30, Math.min(initRef.current.w * 4, w * factor))
       const newH = h * (newW / w)
-      const next = { x: vx - (cx / rect.width) * newW, y: vy - (cy / rect.height) * newH, w: newW, h: newH }
+      const next = { x: cursor.x - fx * newW, y: cursor.y - fy * newH, w: newW, h: newH }
       vbRef.current = next
       setVb({ ...next })
     }
@@ -335,7 +351,7 @@ function HingeShapes({ rp, project }: {
       {hinges.flatMap((h, i) => {
         const z = zoneByKey.get(`${h.row_index}_${h.col_index}`)
         if (!z || (z.hinge_side !== 'left' && z.hinge_side !== 'right')) return []
-        const pl = hingePlacement(h, { x: z.X, y: z.Y, z: z.Z, w: z.DY, d: z.DZ }, z.hinge_side)
+        const pl = hingePlacement(h, { x: z.X, y: z.Y, z: z.Z, w: z.DX, d: z.DZ }, z.hinge_side)
         // The plate gets its nudge offset (matches the 3D placement).
         // Plate nudge: X flips with the mirror (matches the 3D placement); Y/Z don't.
         const platePl = { ...pl, oX: pl.oX + (pl.mirror ? 1 : -1) * h.plate_anchor_x, oY: pl.oY + h.plate_anchor_y, oZ: pl.oZ + h.plate_anchor_z }
@@ -377,7 +393,7 @@ function hingeSnapPts(
   for (const h of rp.hinge_instances ?? []) {
     const z = zoneByKey.get(`${h.row_index}_${h.col_index}`)
     if (!z || (z.hinge_side !== 'left' && z.hinge_side !== 'right')) continue
-    const pl = hingePlacement(h, { x: z.X, y: z.Y, z: z.Z, w: z.DY, d: z.DZ }, z.hinge_side)
+    const pl = hingePlacement(h, { x: z.X, y: z.Y, z: z.Z, w: z.DX, d: z.DZ }, z.hinge_side)
     const platePl = { ...pl, oX: pl.oX + h.plate_anchor_x, oY: pl.oY + h.plate_anchor_y, oZ: pl.oZ + h.plate_anchor_z }
     for (const [url, p] of [[h.model_url, pl], [h.plate_model_url, platePl]] as const) {
       if (!url) continue
@@ -406,7 +422,7 @@ function clientToSvgUser(svg: SVGSVGElement | null, clientX: number, clientY: nu
 // caller can offer "Add part here". Each ortho view maps two of the three axes.
 export type EmptyContextMenu = (pos: { x: number; y: number; z: number }, clientX: number, clientY: number) => void
 
-export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments }: {
+export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments, ebByMatId }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
@@ -414,6 +430,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   onEmptyContextMenu?: EmptyContextMenu
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
+  ebByMatId?: EbByMatId
 }) {
   const { dx, dy } = cab
   const drills = useMemo(() => (showDrilling ? orientSeamDrills(cabinetSeamDrills(rp), caseBoxByKey(rp), partOverrides) : []), [rp, showDrilling, partOverrides])
@@ -471,12 +488,38 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
 
   // Snap corners: every drawn part / hardware rect corner (SVG-user space).
   const measurePts: MPt[] = []
+  const rawPanelPts: MPt[] = []
   if (measureMode) {
     const push = (r: { x: number; y: number; w: number; h: number }) => measurePts.push(...rectCorners(r))
     rp.case_parts.forEach(p => { const m = svgCaseMeta(p); const pp = applyOv(p, m.id, partOverrides); const { ex, ey, ew, eh } = elevRect({ ...pp, part_key: p.part_key }); push(toSVG(ex, ey, ew, eh)) })
     rp.toekick_parts.forEach(p => { const m = svgTkMeta(p); const pp = applyOv(p, m.id, partOverrides); const { ex, ey, ew, eh } = tkElevRect(pp as typeof p); push(toSVG(ex, ey, ew, eh)) })
     rp.internal_parts.forEach(p => { const m = svgIntMeta(p); const pp = applyOv(p, m.id, partOverrides); const { ex, ey, ew, eh } = intElevRect(pp as typeof p); push(toSVG(ex, ey, ew, eh)) })
-    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const m = svgZoneMeta(z); const pp = applyOv(z, m.id, partOverrides); const { ex, ey, ew, eh } = zoneElevRect(pp as typeof z); push(toSVG(ex, ey, ew, eh)) })
+    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => {
+      const m = svgZoneMeta(z)
+      const pp = applyOv(z, m.id, partOverrides)
+      const { ex, ey, ew, eh } = zoneElevRect(pp as typeof z)
+      const finished = toSVG(ex, ey, ew, eh)
+      push(finished)
+
+      // Face-zone dimensions are the finished size, including edge tape. Register
+      // the deducted board-core corners separately and give them snap priority;
+      // at normal zoom a 1 mm inset otherwise overlaps the finished corner's hit
+      // radius and is practically impossible to acquire.
+      const eb = ebColor(ebByMatId, z.material_id)
+      if (eb && eb.t > 0) {
+        const left = m.edge.left ? eb.t : 0
+        const right = m.edge.right ? eb.t : 0
+        const top = m.edge.top ? eb.t : 0
+        const bottom = m.edge.bottom ? eb.t : 0
+        const core = {
+          x: finished.x + left,
+          y: finished.y + top,
+          w: Math.max(0, finished.w - left - right),
+          h: Math.max(0, finished.h - top - bottom),
+        }
+        rawPanelPts.push(...rectCorners(core))
+      }
+    })
     if (showInternals) {
       ;(rp.drawer_stacks ?? []).forEach(stack => {
         stack.box_parts.forEach(p => { const m = svgDbMeta(p, stack); const pp = applyOv(p, m.id, partOverrides); const { ex, ey, ew, eh } = dbElevRect(pp as typeof p); push(toSVG(ex, ey, ew, eh)) })
@@ -493,7 +536,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
     // regardless of showDrilling).
     measurePts.push(...hingeSnapPts(rp, hingeTri, proj))
   }
-  const measure = useMeasure(!!measureMode, svgRef, measurePts)
+  const measure = useMeasure(!!measureMode, svgRef, measurePts, [], rawPanelPts)
 
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
     if (measureMode) { e.stopPropagation(); measure.onClick(e); return }
@@ -523,11 +566,15 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
           const pp = applyOv(p, meta.id, partOverrides)
           const { ex, ey, ew, eh } = dbElevRect(pp as typeof p)
           const r = toSVG(ex, ey, ew, eh)
-          return <PartShape key={`db${si}_${pi}`} x={r.x} y={r.y} w={r.w} h={r.h}
-            box={dbBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
-            fill={wireMode ? 'transparent' : RC.drawerBox.fill}
-            stroke={stroke(meta.id, RC.drawerBox.stroke)} strokeWidth={sw(meta.id, 0.5)}
-            dataPartId={meta.id} style={cp} />
+          const ec = ebColor(ebByMatId, p.material_id)
+          return <g key={`db${si}_${pi}`}>
+            <PartShape x={r.x} y={r.y} w={r.w} h={r.h}
+              box={dbBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
+              fill={wireMode ? 'transparent' : RC.drawerBox.fill}
+              stroke={stroke(meta.id, RC.drawerBox.stroke)} strokeWidth={sw(meta.id, 0.5)}
+              dataPartId={meta.id} style={cp} />
+            {ec && <EdgeTapeSVG box={dbBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="z" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+          </g>
         }),
         ...stack.slides.map((s, li) => {
           const meta = svgSlideMeta(s, stack)
@@ -560,12 +607,16 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         const { ex, ey, ew, eh } = tkElevRect(pp as typeof p)
         const r = toSVG(ex, ey, ew, eh)
         const isSpreader = p.part_key === 'spreader_vertical' || p.part_key === 'spreader_horizontal'
-        return <PartShape key={`tk${i}`} x={r.x} y={r.y} w={r.w} h={r.h}
-          box={tkBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
-          fill={isSpreader || wireMode ? 'transparent' : RC.toekick.fill}
-          stroke={stroke(meta.id, RC.toekick.stroke)} strokeWidth={sw(meta.id, isSpreader ? 1 : 0.75)}
-          strokeDasharray={isSpreader && !sel(meta.id) ? '4 3' : undefined}
-          dataPartId={meta.id} style={cp} />
+        const ec = ebColor(ebByMatId, p.material_id)
+        return <g key={`tk${i}`}>
+          <PartShape x={r.x} y={r.y} w={r.w} h={r.h}
+            box={tkBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
+            fill={isSpreader || wireMode ? 'transparent' : RC.toekick.fill}
+            stroke={stroke(meta.id, RC.toekick.stroke)} strokeWidth={sw(meta.id, isSpreader ? 1 : 0.75)}
+            strokeDasharray={isSpreader && !sel(meta.id) ? '4 3' : undefined}
+            dataPartId={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={tkBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="z" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+        </g>
       })}
 
       {rp.internal_parts.map((p, i) => {
@@ -573,11 +624,15 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         const pp = applyOv(p, meta.id, partOverrides)
         const { ex, ey, ew, eh } = intElevRect(pp as typeof p)
         const r = toSVG(ex, ey, ew, eh)
-        return <PartShape key={`sh${i}`} x={r.x} y={r.y} w={r.w} h={r.h}
-          box={intBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
-          fill={wireMode ? 'transparent' : RC.shelf.fill}
-          stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
-          dataPartId={meta.id} style={cp} />
+        const ec = ebColor(ebByMatId, p.material_id)
+        return <g key={`sh${i}`}>
+          <PartShape x={r.x} y={r.y} w={r.w} h={r.h}
+            box={intBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
+            fill={wireMode ? 'transparent' : RC.shelf.fill}
+            stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
+            dataPartId={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={intBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="z" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+        </g>
       })}
 
       {rp.case_parts.map((p, i) => {
@@ -585,11 +640,15 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         const pp = applyOv(p, meta.id, partOverrides)
         const { ex, ey, ew, eh } = elevRect({ ...pp, part_key: p.part_key })
         const r = toSVG(ex, ey, ew, eh)
-        return <PartShape key={`cp${i}`} x={r.x} y={r.y} w={r.w} h={r.h}
-          box={caseBox(p)} ov={partOverrides?.[meta.id]} project={proj}
-          fill={wireMode ? 'transparent' : RC.carcass.fill}
-          stroke={stroke(meta.id, RC.carcass.stroke)} strokeWidth={sw(meta.id, 0.75)}
-          dataPartId={meta.id} style={cp} />
+        const ec = ebColor(ebByMatId, p.material_id)
+        return <g key={`cp${i}`}>
+          <PartShape x={r.x} y={r.y} w={r.w} h={r.h}
+            box={caseBox(p)} ov={partOverrides?.[meta.id]} project={proj}
+            fill={wireMode ? 'transparent' : RC.carcass.fill}
+            stroke={stroke(meta.id, RC.carcass.stroke)} strokeWidth={sw(meta.id, 0.75)}
+            dataPartId={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={caseBox(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="z" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+        </g>
       })}
 
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
@@ -609,6 +668,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
             {z.hinge_side === 'left'  && <line x1={r.x}     y1={r.y} x2={r.x}     y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} vectorEffect="non-scaling-stroke" data-part-id={meta.id} style={cp} />}
             {z.hinge_side === 'right' && <line x1={r.x+r.w} y1={r.y} x2={r.x+r.w} y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} vectorEffect="non-scaling-stroke" data-part-id={meta.id} style={cp} />}
             {doorProfileSvg(z, { x: r.x, y: r.y, w: r.w, h: r.h }, col.stroke, 1, 0.85, true)}
+            {(() => { const ec = ebColor(ebByMatId, z.material_id); return ec && <EdgeTapeSVG box={zoneBox3(z)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="z" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} /> })()}
           </g>
         )
       })}
@@ -618,11 +678,15 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         const e = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
         if (e.ex <= 0 || e.ey <= 0) return null
         const r = toSVG(p.x, p.y + e.ey, e.ex, e.ey)
-        return <rect key={`cust${i}`} x={r.x} y={r.y} width={Math.max(r.w, 1)} height={Math.max(r.h, 1)}
-          fill={wireMode ? 'transparent' : '#2d1a4a'}
-          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"
-          strokeDasharray={sel(meta.id) ? undefined : '5 3'}
-          data-part-id={meta.id} style={cp} />
+        const ec = p.material_id ? ebColor(ebByMatId, p.material_id) : null
+        return <g key={`cust${i}`}>
+          <rect x={r.x} y={r.y} width={Math.max(r.w, 1)} height={Math.max(r.h, 1)}
+            fill={wireMode ? 'transparent' : '#2d1a4a'}
+            stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"
+            strokeDasharray={sel(meta.id) ? undefined : '5 3'}
+            data-part-id={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={{ x: p.x, y: p.y, z: p.z, w: e.ex, h: e.ey, d: e.ez }} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="z" wire={wireMode} project={proj} />}
+        </g>
       })}
       <DrillOverlay drills={drills}
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })} />
@@ -642,12 +706,12 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         <OriginMarker sx={ox + selOrigin.x} sy={oy + dy - selOrigin.y} hLabel="X" vLabel="Y" />
       )}
       {viewLabel(ox+dx/2, vh-14, 'ELEVATION — WIDTH × HEIGHT')}
-      {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={unit} vb={vb} pts={measurePts} />}
+      {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={unit} vb={vb} pts={[...measurePts, ...rawPanelPts]} />}
     </svg>
   )
 }
 
-export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments }: {
+export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments, ebByMatId }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
@@ -655,6 +719,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
   onEmptyContextMenu?: EmptyContextMenu
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
+  ebByMatId?: EbByMatId
 }) {
   const { dx, dz } = cab
   const drills = useMemo(() => (showDrilling ? orientSeamDrills(cabinetSeamDrills(rp), caseBoxByKey(rp), partOverrides) : []), [rp, showDrilling, partOverrides])
@@ -762,11 +827,15 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
           const meta = svgDbMeta(p, stack)
           const pp = applyOv(p, meta.id, partOverrides)
           const r = dbTopRect(pp as typeof p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
-          return <PartShape key={`db${si}_${pi}`} x={s.x} y={s.y} w={s.w} h={s.h}
-            box={dbBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
-            fill={wireMode ? 'transparent' : RC.drawerBox.fill}
-            stroke={stroke(meta.id, RC.drawerBox.stroke)} strokeWidth={sw(meta.id, 0.5)}
-            dataPartId={meta.id} style={cp} />
+          const ec = ebColor(ebByMatId, p.material_id)
+          return <g key={`db${si}_${pi}`}>
+            <PartShape x={s.x} y={s.y} w={s.w} h={s.h}
+              box={dbBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
+              fill={wireMode ? 'transparent' : RC.drawerBox.fill}
+              stroke={stroke(meta.id, RC.drawerBox.stroke)} strokeWidth={sw(meta.id, 0.5)}
+              dataPartId={meta.id} style={cp} />
+            {ec && <EdgeTapeSVG box={dbBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="y" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+          </g>
         }),
         ...stack.slides.map((sl, li) => {
           const meta = svgSlideMeta(sl, stack)
@@ -795,33 +864,45 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
         const meta = svgIntMeta(p)
         const pp = applyOv(p, meta.id, partOverrides)
         const r = intTopRect(pp as typeof p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
-        return <PartShape key={`sh${i}`} x={s.x} y={s.y} w={s.w} h={s.h}
-          box={intBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
-          fill={wireMode ? 'transparent' : RC.shelf.fill}
-          stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
-          dataPartId={meta.id} style={cp} />
+        const ec = ebColor(ebByMatId, p.material_id)
+        return <g key={`sh${i}`}>
+          <PartShape x={s.x} y={s.y} w={s.w} h={s.h}
+            box={intBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
+            fill={wireMode ? 'transparent' : RC.shelf.fill}
+            stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
+            dataPartId={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={intBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="y" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+        </g>
       })}
 
       {rp.case_parts.map((p, i) => {
         const meta = svgCaseMeta(p)
         const pp = applyOv(p, meta.id, partOverrides)
         const r = topRect(pp as typeof p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
-        return <PartShape key={`cp${i}`} x={s.x} y={s.y} w={s.w} h={s.h}
-          box={caseBox(p)} ov={partOverrides?.[meta.id]} project={proj}
-          fill={wireMode ? 'transparent' : RC.carcass.fill}
-          stroke={stroke(meta.id, RC.carcass.stroke)} strokeWidth={sw(meta.id, 0.75)}
-          dataPartId={meta.id} style={cp} />
+        const ec = ebColor(ebByMatId, p.material_id)
+        return <g key={`cp${i}`}>
+          <PartShape x={s.x} y={s.y} w={s.w} h={s.h}
+            box={caseBox(p)} ov={partOverrides?.[meta.id]} project={proj}
+            fill={wireMode ? 'transparent' : RC.carcass.fill}
+            stroke={stroke(meta.id, RC.carcass.stroke)} strokeWidth={sw(meta.id, 0.75)}
+            dataPartId={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={caseBox(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="y" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+        </g>
       })}
 
       {rp.toekick_parts.map((p, i) => {
         const meta = svgTkMeta(p)
         const pp = applyOv(p, meta.id, partOverrides)
         const r = tkTopRect(pp as typeof p); const s = toSVG(r.tx, r.tz, r.tw, r.td)
-        return <PartShape key={`tk${i}`} x={s.x} y={s.y} w={s.w} h={s.h}
-          box={tkBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
-          fill={wireMode ? 'transparent' : RC.toekick.fill}
-          stroke={stroke(meta.id, RC.toekick.stroke)} strokeWidth={sw(meta.id, 0.75)}
-          dataPartId={meta.id} style={cp} />
+        const ec = ebColor(ebByMatId, p.material_id)
+        return <g key={`tk${i}`}>
+          <PartShape x={s.x} y={s.y} w={s.w} h={s.h}
+            box={tkBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
+            fill={wireMode ? 'transparent' : RC.toekick.fill}
+            stroke={stroke(meta.id, RC.toekick.stroke)} strokeWidth={sw(meta.id, 0.75)}
+            dataPartId={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={tkBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="y" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+        </g>
       })}
 
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
@@ -829,12 +910,16 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
         const pp = applyOv(z, meta.id, partOverrides)
         const r = zoneTopRect(pp as typeof z); const s = toSVG(r.tx, r.tz, r.tw, r.td)
         const col = z.face_type === 'drawer_face' ? RC.drawer : RC.door
-        return <PartShape key={`fz${i}`} x={s.x} y={s.y} w={s.w} h={s.h}
-          box={zoneBox3(z)} ov={partOverrides?.[meta.id]} project={proj}
-          fill={wireMode ? 'transparent' : col.fill}
-          stroke={stroke(meta.id, col.stroke)} strokeWidth={sw(meta.id, wireMode ? 0.75 : 1)}
-          fillOpacity={wireMode ? 1 : 0.85}
-          dataPartId={meta.id} style={cp} />
+        const ec = ebColor(ebByMatId, z.material_id)
+        return <g key={`fz${i}`}>
+          <PartShape x={s.x} y={s.y} w={s.w} h={s.h}
+            box={zoneBox3(z)} ov={partOverrides?.[meta.id]} project={proj}
+            fill={wireMode ? 'transparent' : col.fill}
+            stroke={stroke(meta.id, col.stroke)} strokeWidth={sw(meta.id, wireMode ? 0.75 : 1)}
+            fillOpacity={wireMode ? 1 : 0.85}
+            dataPartId={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={zoneBox3(z)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="y" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+        </g>
       })}
 
       {(customParts ?? []).filter(p => p.visible).map((p, i) => {
@@ -842,11 +927,15 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
         const e = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
         if (e.ex <= 0 || e.ez <= 0) return null
         const s = toSVG(p.x, p.z, e.ex, e.ez)
-        return <rect key={`cust${i}`} x={s.x} y={s.y} width={Math.max(s.w, 1)} height={Math.max(s.h, 1)}
-          fill={wireMode ? 'transparent' : '#2d1a4a'}
-          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"
-          strokeDasharray={sel(meta.id) ? undefined : '5 3'}
-          data-part-id={meta.id} style={cp} />
+        const ec = p.material_id ? ebColor(ebByMatId, p.material_id) : null
+        return <g key={`cust${i}`}>
+          <rect x={s.x} y={s.y} width={Math.max(s.w, 1)} height={Math.max(s.h, 1)}
+            fill={wireMode ? 'transparent' : '#2d1a4a'}
+            stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"
+            strokeDasharray={sel(meta.id) ? undefined : '5 3'}
+            data-part-id={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={{ x: p.x, y: p.y, z: p.z, w: e.ex, h: e.ey, d: e.ez }} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="y" wire={wireMode} project={proj} />}
+        </g>
       })}
       <DrillOverlay drills={drills}
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })} />
@@ -872,7 +961,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
   )
 }
 
-export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments }: {
+export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments, ebByMatId }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
@@ -880,6 +969,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
   onEmptyContextMenu?: EmptyContextMenu
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides
   partLabels?: PartLabels; partComments?: PartComments
+  ebByMatId?: EbByMatId
 }) {
   const { dz, dy } = cab
   const drills = useMemo(() => (showDrilling ? orientSeamDrills(cabinetSeamDrills(rp), caseBoxByKey(rp), partOverrides) : []), [rp, showDrilling, partOverrides])
@@ -1000,11 +1090,15 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
           const meta = svgDbMeta(p, stack)
           const pp = applyOv(p, meta.id, partOverrides)
           const r = dbSideRect(pp as typeof p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
-          return <PartShape key={`db${si}_${pi}`} x={s.x} y={s.y} w={s.w} h={s.h}
-            box={dbBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
-            fill={wireMode ? 'transparent' : RC.drawerBox.fill}
-            stroke={stroke(meta.id, RC.drawerBox.stroke)} strokeWidth={sw(meta.id, 0.5)}
-            dataPartId={meta.id} style={cp} />
+          const ec = ebColor(ebByMatId, p.material_id)
+          return <g key={`db${si}_${pi}`}>
+            <PartShape x={s.x} y={s.y} w={s.w} h={s.h}
+              box={dbBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
+              fill={wireMode ? 'transparent' : RC.drawerBox.fill}
+              stroke={stroke(meta.id, RC.drawerBox.stroke)} strokeWidth={sw(meta.id, 0.5)}
+              dataPartId={meta.id} style={cp} />
+            {ec && <EdgeTapeSVG box={dbBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="x" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+          </g>
         }),
         ...stack.slides.map((sl, li) => {
           const meta = svgSlideMeta(sl, stack)
@@ -1033,11 +1127,15 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
         const meta = svgIntMeta(p)
         const pp = applyOv(p, meta.id, partOverrides)
         const r = intSideRect(pp as typeof p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
-        return <PartShape key={`sh${i}`} x={s.x} y={s.y} w={s.w} h={s.h}
-          box={intBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
-          fill={wireMode ? 'transparent' : RC.shelf.fill}
-          stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
-          dataPartId={meta.id} style={cp} />
+        const ec = ebColor(ebByMatId, p.material_id)
+        return <g key={`sh${i}`}>
+          <PartShape x={s.x} y={s.y} w={s.w} h={s.h}
+            box={intBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
+            fill={wireMode ? 'transparent' : RC.shelf.fill}
+            stroke={stroke(meta.id, RC.shelf.stroke)} strokeWidth={sw(meta.id, 0.5)}
+            dataPartId={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={intBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="x" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+        </g>
       })}
 
       {rp.case_parts.map((p, i) => {
@@ -1045,22 +1143,30 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
         const pp = applyOv(p, meta.id, partOverrides)
         const r = sideRect(pp as typeof p); if (!r) return null
         const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
-        return <PartShape key={`cp${i}`} x={s.x} y={s.y} w={s.w} h={s.h}
-          box={caseBox(p)} ov={partOverrides?.[meta.id]} project={proj}
-          fill={wireMode ? 'transparent' : RC.carcass.fill}
-          stroke={stroke(meta.id, RC.carcass.stroke)} strokeWidth={sw(meta.id, 0.75)}
-          dataPartId={meta.id} style={cp} />
+        const ec = ebColor(ebByMatId, p.material_id)
+        return <g key={`cp${i}`}>
+          <PartShape x={s.x} y={s.y} w={s.w} h={s.h}
+            box={caseBox(p)} ov={partOverrides?.[meta.id]} project={proj}
+            fill={wireMode ? 'transparent' : RC.carcass.fill}
+            stroke={stroke(meta.id, RC.carcass.stroke)} strokeWidth={sw(meta.id, 0.75)}
+            dataPartId={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={caseBox(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="x" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+        </g>
       })}
 
       {rp.toekick_parts.map((p, i) => {
         const meta = svgTkMeta(p)
         const pp = applyOv(p, meta.id, partOverrides)
         const r = tkSideRect(pp as typeof p); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
-        return <PartShape key={`tk${i}`} x={s.x} y={s.y} w={s.w} h={s.h}
-          box={tkBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
-          fill={wireMode ? 'transparent' : RC.toekick.fill}
-          stroke={stroke(meta.id, RC.toekick.stroke)} strokeWidth={sw(meta.id, 0.75)}
-          dataPartId={meta.id} style={cp} />
+        const ec = ebColor(ebByMatId, p.material_id)
+        return <g key={`tk${i}`}>
+          <PartShape x={s.x} y={s.y} w={s.w} h={s.h}
+            box={tkBox3(p)} ov={partOverrides?.[meta.id]} project={proj}
+            fill={wireMode ? 'transparent' : RC.toekick.fill}
+            stroke={stroke(meta.id, RC.toekick.stroke)} strokeWidth={sw(meta.id, 0.75)}
+            dataPartId={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={tkBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="x" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+        </g>
       })}
 
       {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
@@ -1068,12 +1174,16 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
         const pp = applyOv(z, meta.id, partOverrides)
         const r = zoneSideRect(pp as typeof z); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
         const col = z.face_type === 'drawer_face' ? RC.drawer : RC.door
-        return <PartShape key={`fz${i}`} x={s.x} y={s.y} w={s.w} h={s.h}
-          box={zoneBox3(z)} ov={partOverrides?.[meta.id]} project={proj}
-          fill={wireMode ? 'transparent' : col.fill}
-          stroke={stroke(meta.id, col.stroke)} strokeWidth={sw(meta.id, wireMode ? 0.75 : 1)}
-          fillOpacity={wireMode ? 1 : 0.85}
-          dataPartId={meta.id} style={cp} />
+        const ec = ebColor(ebByMatId, z.material_id)
+        return <g key={`fz${i}`}>
+          <PartShape x={s.x} y={s.y} w={s.w} h={s.h}
+            box={zoneBox3(z)} ov={partOverrides?.[meta.id]} project={proj}
+            fill={wireMode ? 'transparent' : col.fill}
+            stroke={stroke(meta.id, col.stroke)} strokeWidth={sw(meta.id, wireMode ? 0.75 : 1)}
+            fillOpacity={wireMode ? 1 : 0.85}
+            dataPartId={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={zoneBox3(z)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="x" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+        </g>
       })}
 
       {(customParts ?? []).filter(p => p.visible).map((p, i) => {
@@ -1081,11 +1191,15 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
         const e = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
         if (e.ez <= 0 || e.ey <= 0) return null
         const s = toSVG(p.z, p.y + e.ey, e.ez, e.ey)
-        return <rect key={`cust${i}`} x={s.x} y={s.y} width={Math.max(s.w, 1)} height={Math.max(s.h, 1)}
-          fill={wireMode ? 'transparent' : '#2d1a4a'}
-          stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"
-          strokeDasharray={sel(meta.id) ? undefined : '5 3'}
-          data-part-id={meta.id} style={cp} />
+        const ec = p.material_id ? ebColor(ebByMatId, p.material_id) : null
+        return <g key={`cust${i}`}>
+          <rect x={s.x} y={s.y} width={Math.max(s.w, 1)} height={Math.max(s.h, 1)}
+            fill={wireMode ? 'transparent' : '#2d1a4a'}
+            stroke={stroke(meta.id, '#a78bfa')} strokeWidth={sw(meta.id, 1.5)} vectorEffect="non-scaling-stroke"
+            strokeDasharray={sel(meta.id) ? undefined : '5 3'}
+            data-part-id={meta.id} style={cp} />
+          {ec && <EdgeTapeSVG box={{ x: p.x, y: p.y, z: p.z, w: e.ex, h: e.ey, d: e.ez }} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="x" wire={wireMode} project={proj} />}
+        </g>
       })}
       <DrillOverlay drills={drills}
         project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })} />
@@ -1108,13 +1222,13 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
       {dimV(visibleZones.length > 0 ? oz + dz + 290 : oz + dz + 185, oy, oy + dy, `${dy}mm`, true)}
       {tkHeight > 0 && dimV(oz + dz + 90, oy + dy - tkHeight, oy + dy, `${Math.round(tkHeight)}mm`, true)}
       {visibleZones.map((z, i) => {
-        const y1 = oy + dy - (z.Y + z.DX)
+        const y1 = oy + dy - (z.Y + z.DY)
         const y2 = oy + dy - z.Y
         const next = visibleZones[i + 1]
-        const gap = next ? next.Y - (z.Y + z.DX) : 0
+        const gap = next ? next.Y - (z.Y + z.DY) : 0
         return (
           <g key={`fd${i}`}>
-            {dimV(oz + dz + 90, y1, y2, `${Math.round(z.DX)}mm`, true)}
+            {dimV(oz + dz + 90, y1, y2, `${Math.round(z.DY)}mm`, true)}
             {gap > 1 && dimV(oz + dz + 185, oy + dy - next.Y, y1, `${Math.round(gap)}mm`, true)}
           </g>
         )

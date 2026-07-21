@@ -412,6 +412,15 @@ function NestingMarginPanel({ profile, tools, onPatch }: { profile: Profile; too
           </div>
         </div>
       </div>
+      <div className="border-t border-edge pt-2.5 space-y-1">
+        <Toggle label="Deduct edgebanding thickness off optimised parts"
+          on={profile.deduct_edgeband === true}
+          onChange={() => onPatch({ deduct_edgeband: profile.deduct_edgeband !== true })} />
+        <p className="text-[11px] text-ink-subtle">
+          Parts nest and cut at board size — finished size minus the tape thickness on each banded
+          edge (kept fractional to 0.1mm) — and drilling positions shift to match the cut blank.
+        </p>
+      </div>
     </div>
   )
 }

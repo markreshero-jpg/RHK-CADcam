@@ -42,6 +42,16 @@ function guidanceFor(err: ResolverError): { title: string; hint: string; fix?: F
       return { title: 'Face grid is empty', hint: 'Add at least one row and column in the Face Grid tab.', fix: 'face' }
     case 'FACE_ROWS_OVERFLOW':
       return { title: 'Locked row heights overflow', hint: 'The locked row heights exceed the available face height. Adjust them in the Face Grid tab.', fix: 'face' }
+    case 'DRAWER_OPENING_INVALID':
+      return { title: 'Drawer opening has no height', hint: 'This drawer row resolves to zero or negative height. Unlock the row or reduce the other locked row heights in the Face Grid tab.', fix: 'face' }
+    case 'DRAWER_BOX_HEIGHT_INVALID':
+      return { title: 'Drawer box height invalid', hint: 'The height adjustment is larger than the opening, so the box has no height. Lower the drawer height adjustment, or give the drawer a taller row in the Face Grid tab.', fix: 'face' }
+    case 'DRAWER_BOX_TOO_TALL':
+      return { title: 'Drawer box taller than its opening', hint: 'The forced slide is too tall for this opening once the clearance above the box is reserved. Pick a shorter slide, reduce the clearance, or give the drawer a taller row in the Face Grid tab.', fix: 'face' }
+    case 'SLIDE_SELECTION_AMBIGUOUS':
+      return { title: 'Slide brand picked arbitrarily', hint: 'Two brands offer the same slide height and this job has no slide schedule, so the resolver guessed. Set a slide schedule for the shop or job so the right brand is chosen.' }
+    case 'NO_SLIDE_FITS':
+      return { title: 'No slide fits this drawer', hint: 'Every slide is too tall for the opening once the clearance above the box is reserved. Give the drawer a taller row, reduce its clearance in the Face Grid tab, or add a shorter slide to the schedule.', fix: 'face' }
     case 'FACE_COLS_OVERFLOW':
       return { title: 'Locked column widths overflow', hint: 'The locked column widths exceed the available face width. Adjust them in the Face Grid tab.', fix: 'face' }
     case 'CASE_TOO_NARROW':

@@ -21,6 +21,7 @@ import {
   Part, PartPropertiesPanel, PreviewCanvas,
 } from '@/src/components/three/PartViewer'
 import { isSide, caseBox, seamDrillOps, type DrillOpPos } from '@/src/lib/jointDrilling'
+import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import type { ResolvedDoorProfile } from '@/src/lib/resolver/types'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
@@ -32,9 +33,13 @@ import { SlideModel } from '@/src/components/three/SlideModel'
 import { HingeModel } from '@/src/components/three/HingeModel'
 import { getPalette } from '@/src/lib/partPalette'
 import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
-import type { CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
+import { areaSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 
 export type { MatColSpec, MatColMap }
+
+// Faint black outline drawn around every panel (and, via Part, every edge-tape
+// strip) so parts and their edging read clearly against the material colours.
+const PANEL_OUTLINE = '#1a1a1a'
 
 // ── Cabinet-specific coordinate helpers ───────────────────────────────────────
 // Cabinet origin = bottom-left-back corner (+X=right, +Y=up, +Z=front).
@@ -70,7 +75,7 @@ function intBox(p: ResolvedInternalPart): Box {
 }
 
 function zoneBox(z: ResolvedFaceZone): Box {
-  return { x: z.X, y: z.Y, z: z.Z, w: z.DY, h: z.DX, d: z.DZ }
+  return { x: z.X, y: z.Y, z: z.Z, w: z.DX, h: z.DY, d: z.DZ }   // face: DX=width, DY=height
 }
 
 function dbBox(p: ResolvedDrawerBoxPart): Box {
@@ -143,14 +148,6 @@ const FACE_LABELS: Record<string, string> = {
   false_panel: 'False Panel',
 }
 
-const DB_PART_LABELS: Record<string, string> = {
-  db_left_side:  'Drawer Box Left Side',
-  db_right_side: 'Drawer Box Right Side',
-  db_bottom:     'Drawer Box Bottom',
-  db_front:      'Drawer Box Front',
-  db_back:       'Drawer Box Back',
-}
-
 // ── PartMeta builders ─────────────────────────────────────────────────────────
 
 function buildCaseInfo(p: ResolvedCasePart, b: Box): PartMeta {
@@ -161,6 +158,7 @@ function buildCaseInfo(p: ResolvedCasePart, b: Box): PartMeta {
     thickness: p.DZ,
     edge:      p.edge_band,
     panelKind: isSide(p.part_key) ? 'side' : p.part_key === 'back' ? 'face' : 'horizontal',
+    materialId: p.material_id,
   }
 }
 
@@ -171,8 +169,13 @@ function buildTkInfo(p: ResolvedToekickPart, b: Box): PartMeta {
     w: b.w, h: b.h, d: b.d,
     thickness: p.DZ,
     edge:      p.edge_band,
-    panelKind: p.part_key === 'spreader_horizontal' ? 'horizontal' : 'face',
+    panelKind: p.part_key === 'spreader_horizontal'
+      ? 'horizontal'
+      : p.part_key === 'spreader_vertical'
+      ? 'side'
+      : 'face',
     detail:    p.sort_order > 0 ? `#${p.sort_order}` : undefined,
+    materialId: p.material_id,
   }
 }
 
@@ -185,6 +188,7 @@ function buildIntInfo(p: ResolvedInternalPart, b: Box): PartMeta {
     edge:      p.edge_band,
     panelKind: INT_PANEL_KIND[p.part_type] ?? 'horizontal',
     detail:    p.y_locked ? 'Position locked' : undefined,
+    materialId: p.material_id,
   }
 }
 
@@ -198,6 +202,7 @@ function buildDbPartInfo(p: ResolvedDrawerBoxPart, b: Box, stack: ResolvedDrawer
     panelKind: (p.part_type === 'db_left_side' || p.part_type === 'db_right_side') ? 'side'
                : (p.part_type === 'db_bottom') ? 'horizontal' : 'face',
     detail:    `Row ${stack.face_zone_row + 1}, Col ${stack.face_zone_col + 1} · ${stack.drawer_type}`,
+    materialId: p.material_id,
   }
 }
 
@@ -235,10 +240,12 @@ function buildZoneInfo(z: ResolvedFaceZone, b: Box): PartMeta {
     thickness: z.DZ,
     edge:      z.edge_band,
     panelKind: 'face',
+    dxIsWidth: true,   // face zone: DX=width, DY=height (already upright)
     detail:    [
       `Row ${z.row_index + 1}, Col ${z.col_index + 1}`,
       z.hinge_side ? `Hinge: ${z.hinge_side}` : null,
     ].filter(Boolean).join(' · '),
+    materialId: z.material_id,
   }
 }
 
@@ -474,7 +481,9 @@ function DrawerAssembly({
   function ebFor(matId: string): EbSpec | undefined {
     const spec = ebByMatId?.[matId]
     if (!spec) return undefined
-    return { thick: spec.thickness, color: spec.color ?? '#c8b89a' }
+    // Tape with no colour on record reads as the part's material face colour —
+    // one colour for every strip, matched to the face.
+    return { thick: spec.thickness, color: spec.color ?? unpackMatCol(materialColours?.[matId], '#c8b89a').face }
   }
   function applyEdgeOv<T extends PartMeta>(info: T): T {
     const ov = edgeOverrides.get(info.id)
@@ -494,7 +503,7 @@ function DrawerAssembly({
       <Part
         b={zb}
         faceColors={zFaceColors}
-        edgeLineColor={faceZone.face_type === 'drawer_face' ? palette.drawer_face : palette.door}
+        edgeLineColor={PANEL_OUTLINE}
         meta={zInfo}
         selected={selected?.id === zInfo.id}
         highlighted={faceHighlighted}
@@ -517,7 +526,7 @@ function DrawerAssembly({
             key={`db_${pi}`}
             b={b}
             faceColors={fc}
-            edgeLineColor={palette.drawer_box}
+            edgeLineColor={PANEL_OUTLINE}
             meta={info}
             selected={selected?.id === info.id}
             highlighted={false}
@@ -654,7 +663,7 @@ function JointFaceRect({ plane, color, wire }: { plane: JointRefPlane; color: st
 // on hole entry and exit faces. three-bvh-csg v0.0.16 collapses all box face
 // groups to a single materialIndex, so CSG cannot give us per-face colours;
 // the disc-marker approach keeps rendering correct while showing hole positions.
-function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, highlighted, onSelect, dragRef, wire, contextMenuSelect = false, ebSpec, rotation }: {
+function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, highlighted, onSelect, dragRef, wire, contextMenuSelect = false, ebSpec, rotation, subtractions }: {
   b:                  Box
   drills:             DrillOpPos[]
   faceColors:         [string, string, string, string, string, string]
@@ -668,6 +677,7 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
   contextMenuSelect?: boolean
   ebSpec?:            EbSpec
   rotation?:          [number, number, number]
+  subtractions?:      { center: [number, number, number]; size: [number, number, number] }[]
 }) {
   return (
     <>
@@ -684,6 +694,7 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
         contextMenuSelect={contextMenuSelect}
         ebSpec={ebSpec}
         rotation={rotation}
+        subtractions={subtractions}
       />
       {/* Dark disc markers on each hole's entry and exit face. In wire mode,
           depthTest=false + renderOrder=10 makes them show through panel edges.
@@ -1062,12 +1073,29 @@ function CabinetScene({
   function ebFor(matId: string): EbSpec | undefined {
     const spec = ebByMatId?.[matId]
     if (!spec) return undefined
-    return { thick: spec.thickness, color: spec.color ?? '#c8b89a' }
+    // Tape with no colour on record reads as the part's material face colour —
+    // one colour for every strip, matched to the face.
+    return { thick: spec.thickness, color: spec.color ?? unpackMatCol(materialColours?.[matId], '#c8b89a').face }
   }
+
+  // Pocket/route (area) ops → real CSG recesses per part (keyed by source_part_key).
+  // Drills/grooves stay as HandOpMarkers3D overlays.
+  const pocketsByPart = useMemo(() => {
+    const m = new Map<string, { center: [number, number, number]; size: [number, number, number] }[]>()
+    for (const mk of handMarkers) {
+      if (mk.kind !== 'area') continue
+      const arr = m.get(mk.partKey) ?? []
+      arr.push(areaSubtraction(mk))
+      m.set(mk.partKey, arr)
+    }
+    return m
+  }, [handMarkers])
 
   return (
     <group position={[-dx / 2, -dy / 2, -dz / 2]}>
-      {showDrilling && handMarkers.length > 0 && <HandOpMarkers3D markers={handMarkers} />}
+      {showDrilling && handMarkers.length > 0 && (
+        <HandOpMarkers3D markers={handMarkers} csgPartKeys={new Set([...pocketsByPart.keys()].filter(k => k.startsWith('case_')))} />
+      )}
       {rp.case_parts.map((p, i) => {
         const id    = `case_${p.part_key}`
         const pp    = applyPosOv(p, id, partOverrides)
@@ -1075,6 +1103,7 @@ function CabinetScene({
         const info  = applyEdge(buildCaseInfo(p, b))
         const s     = matSpec(p.material_id, '#ddd3bb')
         const holes = holesByPartKey.get(p.part_key) ?? []
+        const pockets = pocketsByPart.get(id)
 
         if (holes.length > 0) {
           return (
@@ -1083,7 +1112,7 @@ function CabinetScene({
               b={b}
               drills={holes}
               faceColors={panelFaceColors(info.panelKind, p.part_key, s.face, s.back, s.edge)}
-              edgeLineColor={palette.carcase}
+              edgeLineColor={PANEL_OUTLINE}
               meta={info}
               selected={selected?.id === info.id}
               highlighted={hlSet?.has(p.part_key) ?? false}
@@ -1093,6 +1122,7 @@ function CabinetScene({
               contextMenuSelect
               ebSpec={ebFor(p.material_id)}
               rotation={getRotOv(id, partOverrides)}
+              subtractions={pockets}
             />
           )
         }
@@ -1102,7 +1132,7 @@ function CabinetScene({
             key={`c${i}`}
             b={b}
             faceColors={panelFaceColors(info.panelKind, p.part_key, s.face, s.back, s.edge)}
-            edgeLineColor={palette.carcase}
+            edgeLineColor={PANEL_OUTLINE}
             meta={info}
             selected={selected?.id === info.id}
             highlighted={hlSet?.has(p.part_key) ?? false}
@@ -1112,6 +1142,7 @@ function CabinetScene({
             ebSpec={ebFor(p.material_id)}
             wire={wire}
             rotation={getRotOv(id, partOverrides)}
+            subtractions={pockets}
           />
         )
       })}
@@ -1126,7 +1157,7 @@ function CabinetScene({
             key={`t${i}`}
             b={b}
             faceColors={panelFaceColors(info.panelKind, p.part_key, s.face, s.back, s.edge)}
-            edgeLineColor={palette.toekick}
+            edgeLineColor={PANEL_OUTLINE}
             meta={info}
             selected={selected?.id === info.id}
             highlighted={hlSet?.has(p.part_key) ?? false}
@@ -1153,7 +1184,7 @@ function CabinetScene({
               key={key}
               b={b}
               faceColors={panelFaceColors(info.panelKind, p.part_type, s.face, s.back, s.edge)}
-              edgeLineColor={palette.internal}
+              edgeLineColor={PANEL_OUTLINE}
               meta={info}
               selected={selected?.id === info.id}
               highlighted={hlSet?.has(p.part_type) ?? false}
@@ -1279,7 +1310,7 @@ function CabinetScene({
         const faceColors = panelFaceColors(info.panelKind, z.face_type, s.face, s.back, s.edge)
         const partProps: PartProps = {
           faceColors,
-          edgeLineColor:     '#b8a98e',
+          edgeLineColor:     PANEL_OUTLINE,
           meta:              info,
           selected:          selected?.id === info.id,
           highlighted:       hlSet?.has(z.face_type) ?? false,
@@ -1384,13 +1415,14 @@ function CabinetScene({
           thickness: Number(p.dz),
           edge: { top: p.edge_top, bottom: p.edge_bottom, left: p.edge_left, right: p.edge_right },
           panelKind: kind,
+          materialId: p.material_id ?? undefined,
         }
         return (
           <Part
             key={`cust${i}`}
             b={b}
             faceColors={panelFaceColors(kind, 'custom', s.face, s.back, s.edge)}
-            edgeLineColor="#7c3aed"
+            edgeLineColor={PANEL_OUTLINE}
             meta={info}
             selected={selected?.id === info.id}
             highlighted={false}
@@ -1655,9 +1687,11 @@ export default function Cabinet3DView({
       dx={dx} dy={dy} dz={dz}
       bgColor="#e8e4de"
       enablePan
+      zoomSpeedMultiplier={1.3}
+      modifierZoom
       onDeselect={() => setSelectedPart(null)}
       onContextMenu={handleCanvasContextMenu}
-      hint="Left-drag rotate · scroll zoom · right-click part to inspect · click empty to deselect"
+      hint="Left-drag rotate · scroll zoom · Ctrl fast · Shift fine · right-click part to inspect"
       overlay={
         <>
           {selectedPart && (
@@ -1665,6 +1699,7 @@ export default function Cabinet3DView({
               part={selectedPart}
               onClose={() => setSelectedPart(null)}
               onEdgeChange={handleEdgeChange}
+              ebThickness={selectedPart.materialId ? ebByMatId?.[selectedPart.materialId]?.thickness : undefined}
               onSizeChange={/^(case_|tk_|int_|zone_|custom_)/.test(selectedPart.id) ? handleSizeChange : undefined}
               actions={drawerActions}
               jointControls={onUpdate && rp && selectedPart.id.startsWith('case_')

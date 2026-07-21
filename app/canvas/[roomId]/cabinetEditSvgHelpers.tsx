@@ -13,6 +13,7 @@ import type {
 } from '@/src/lib/resolver/types'
 import { slideSilhouettePath, slideSilhouetteOutline, type SlidePlacement } from '@/src/lib/slideSilhouette'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
+import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 export const C_PANEL  = '#374151'
@@ -56,10 +57,9 @@ const INT_LABELS: Record<string, string> = {
 const FACE_LABELS_MAP: Record<string, string> = {
   door: 'Door', drawer_face: 'Drawer Face', false_panel: 'False Panel',
 }
-export const DB_PART_LABELS: Record<string, string> = {
-  db_left_side: 'Drawer Box Left Side', db_right_side: 'Drawer Box Right Side',
-  db_bottom: 'Drawer Box Bottom', db_front: 'Drawer Box Front', db_back: 'Drawer Box Back',
-}
+// Re-exported from the canonical source; kept here so existing importers
+// (PartsView, CabinetSheetSVG) don't need to change their import path.
+export { DB_PART_LABELS }
 
 // ── SVG dimension helpers ──────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ export function tkElevRect(p: ResolvedToekickPart) {
   if (p.part_key === 'spreader_horizontal') return { ex: p.X, ey: p.Y + p.DY, ew: p.DX, eh: p.DY }
   return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
 }
-export function zoneElevRect(z: ResolvedFaceZone)     { return { ex: z.X, ey: z.Y + z.DX, ew: z.DY, eh: z.DX } }
+export function zoneElevRect(z: ResolvedFaceZone)     { return { ex: z.X, ey: z.Y + z.DY, ew: z.DX, eh: z.DY } }
 
 // Door-profile overlay for a face zone, mapped into an already-computed SVG rect.
 // Returns inset-frame <rect>s + groove <line>s (face-local mm → rect, y flipped to
@@ -127,7 +127,7 @@ export function doorProfileSvg(
   nonScaling = false,
 ): React.ReactNode {
   if (z.face_type !== 'door' || !z.door_profile) return null
-  const W = z.DY, H = z.DX
+  const W = z.DX, H = z.DY   // face: DX=width, DY=height
   if (W <= 0 || H <= 0) return null
   const prims = doorProfilePrimitives(z.door_profile, { w: W, h: H, thickness: z.DZ })
   if (prims.insetRects.length === 0 && prims.grooveLines.length === 0) return null
@@ -206,7 +206,7 @@ export function intTopRect(p: ResolvedInternalPart) {
       return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX }
   }
 }
-export function zoneTopRect(z: ResolvedFaceZone)      { return { tx: z.X, tz: z.Z, tw: z.DY, td: z.DZ } }
+export function zoneTopRect(z: ResolvedFaceZone)      { return { tx: z.X, tz: z.Z, tw: z.DX, td: z.DZ } }
 
 // Side (Z-Y plane, looking left from right)
 export function sideRect(p: ResolvedCasePart): { sz: number; cy_top: number; sw: number; sh: number } | null {
@@ -242,7 +242,7 @@ export function intSideRect(p: ResolvedInternalPart) {
       return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
   }
 }
-export function zoneSideRect(z: ResolvedFaceZone)      { return { sz: z.Z, cy_top: z.Y + z.DX, sw: z.DZ, sh: z.DX } }
+export function zoneSideRect(z: ResolvedFaceZone)      { return { sz: z.Z, cy_top: z.Y + z.DY, sw: z.DZ, sh: z.DY } }
 
 // Drawer box & slide rects
 export function dbElevRect(p: ResolvedDrawerBoxPart) {
@@ -286,7 +286,7 @@ export function svgCaseMeta(p: ResolvedCasePart): PartMeta {
   return {
     id: `case_${p.part_key}`, label: CASE_LABELS[p.part_key] ?? p.part_key,
     w: isS ? p.DZ : p.DY, h: isS ? p.DY : isB ? p.DX : p.DZ, d: isS ? p.DX : isB ? p.DZ : p.DX,
-    thickness: p.DZ, edge: p.edge_band,
+    thickness: p.DZ, edge: p.edge_band, materialId: p.material_id,
     panelKind: isS ? 'side' : isB ? 'face' : 'horizontal',
     x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
   }
@@ -296,8 +296,8 @@ export function svgTkMeta(p: ResolvedToekickPart): PartMeta {
   return {
     id: `tk_${p.part_key}_${p.sort_order}`, label: TK_LABELS[p.part_key] ?? p.part_key,
     w: isH ? p.DX : p.DY, h: isH ? p.DY : p.DX, d: p.DZ,
-    thickness: p.DZ, edge: p.edge_band,
-    panelKind: isH ? 'horizontal' : 'face',
+    thickness: p.DZ, edge: p.edge_band, materialId: p.material_id,
+    panelKind: isH ? 'horizontal' : p.part_key === 'spreader_vertical' ? 'side' : 'face',
     detail: p.sort_order > 0 ? `#${p.sort_order}` : undefined,
     x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
   }
@@ -324,7 +324,7 @@ export function svgIntMeta(p: ResolvedInternalPart): PartMeta {
     id: `int_${p.part_type}_${p.sort_order}`,
     label: `${INT_LABELS[p.part_type] ?? p.part_type} ${p.sort_order + 1}`,
     w, h, d,
-    thickness: p.DZ, edge: p.edge_band,
+    thickness: p.DZ, edge: p.edge_band, materialId: p.material_id,
     panelKind,
     detail: p.y_locked ? 'Position locked' : undefined,
     x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
@@ -334,8 +334,8 @@ export function svgZoneMeta(z: ResolvedFaceZone): PartMeta {
   return {
     id: `zone_${z.row_index}_${z.col_index}`,
     label: FACE_LABELS_MAP[z.face_type] ?? z.face_type,
-    w: z.DY, h: z.DX, d: z.DZ,
-    thickness: z.DZ, edge: z.edge_band, panelKind: 'face',
+    w: z.DX, h: z.DY, d: z.DZ,
+    thickness: z.DZ, edge: z.edge_band, materialId: z.material_id, panelKind: 'face', dxIsWidth: true,
     detail: [`Row ${z.row_index + 1}, Col ${z.col_index + 1}`, z.hinge_side ? `Hinge: ${z.hinge_side}` : null].filter(Boolean).join(' · '),
     x: z.X, y: z.Y, z: z.Z, ax: z.AX, ay: z.AY, az: z.AZ,
   }
@@ -347,7 +347,7 @@ export function svgDbMeta(p: ResolvedDrawerBoxPart, stack: ResolvedDrawerStack):
   return {
     id: `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`,
     label: DB_PART_LABELS[p.part_type] ?? p.part_type,
-    w, h, d, thickness: p.DZ, edge: p.edge_band,
+    w, h, d, thickness: p.DZ, edge: p.edge_band, materialId: p.material_id,
     panelKind: isS ? 'side' : isH ? 'horizontal' : 'face',
     detail: `Row ${stack.face_zone_row + 1}, Col ${stack.face_zone_col + 1} · ${stack.drawer_type}`,
     x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
@@ -562,7 +562,7 @@ export function intBox3(p: ResolvedInternalPart): Box3 {
   }
 }
 export function zoneBox3(z: ResolvedFaceZone): Box3 {
-  return { x: z.X, y: z.Y, z: z.Z, w: z.DY, h: z.DX, d: z.DZ }
+  return { x: z.X, y: z.Y, z: z.Z, w: z.DX, h: z.DY, d: z.DZ }   // face: DX=width, DY=height
 }
 export function dbBox3(p: ResolvedDrawerBoxPart): Box3 {
   switch (p.part_type) {
@@ -640,6 +640,106 @@ export function PartShape({
   }
   return <rect x={x} y={y} width={w} height={h} fill={fill} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke"
     strokeDasharray={strokeDasharray} fillOpacity={fillOpacity} data-part-id={dataPartId} style={style} />
+}
+
+// ── Edge tape (2D ortho views) ──────────────────────────────────────────────────
+// Draws each banded edge inside the part's FINISHED overall outline. The visible
+// board core therefore shrinks by one tape thickness on each banded edge, and
+// grows back when that edge is unticked. Adjacent tapes meet at a 45° mitre.
+// The SVG counterpart of the 3D
+// edgeStrips(); the edge→cabinet-axis mapping per panelKind matches it exactly:
+//   side:       top/bottom → ±Y, left → back (−Z), right → front (+Z)
+//   face:       top/bottom → ±Y, left → −X, right → +X
+//   horizontal: top → front (+Z), bottom → back (−Z), left → −X, right → +X
+// An edge whose tape faces the viewer (normal = the view's collapsed axis) is
+// skipped — it would cover the whole part face; the other two views show it.
+
+type TapeSides = { top: boolean; bottom: boolean; left: boolean; right: boolean }
+
+// Mitred tape outlines around a screen-space rect: one polygon (points string)
+// per taped side, `t` thick, mitred at 45° where two taped sides meet.
+export function tapePolygons(
+  r: { x: number; y: number; w: number; h: number },
+  s: TapeSides,
+  t: number,
+): string[] {
+  const P = (pts: [number, number][]) => pts.map(p => `${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(' ')
+  const lt = s.left ? t : 0, rt = s.right ? t : 0, tt = s.top ? t : 0, bt = s.bottom ? t : 0
+  const out: string[] = []
+  if (s.top)    out.push(P([[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w - rt, r.y + t], [r.x + lt, r.y + t]]))
+  if (s.bottom) out.push(P([[r.x, r.y + r.h], [r.x + r.w, r.y + r.h], [r.x + r.w - rt, r.y + r.h - t], [r.x + lt, r.y + r.h - t]]))
+  if (s.left)   out.push(P([[r.x, r.y], [r.x + t, r.y + tt], [r.x + t, r.y + r.h - bt], [r.x, r.y + r.h]]))
+  if (s.right)  out.push(P([[r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x + r.w - t, r.y + r.h - bt], [r.x + r.w - t, r.y + tt]]))
+  return out
+}
+
+export function TapePolys({ r, s, t, color, wire = false }: {
+  r: { x: number; y: number; w: number; h: number }
+  s: TapeSides
+  t: number
+  color: string
+  // Wire mode: see-through like every other part — outline only, in the tape colour.
+  wire?: boolean
+}) {
+  const polys = tapePolygons(r, s, t)
+  if (polys.length === 0) return null
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      {polys.map((pts, i) => (
+        <polygon key={i} points={pts}
+          fill={wire ? 'transparent' : color}
+          stroke={wire ? color : '#1a1a1a'} strokeWidth={0.75} vectorEffect="non-scaling-stroke" />
+      ))}
+    </g>
+  )
+}
+
+export function EdgeTapeSVG({ box, edge, kind, eb, viewAxis, project, ov, wire = false }: {
+  box:      Box3
+  edge:     TapeSides
+  kind:     'side' | 'face' | 'horizontal'
+  eb:       { color: string; t: number }
+  viewAxis: 'x' | 'y' | 'z'   // axis collapsed by this view (elevation z, top y, side x)
+  project:  (x: number, y: number, z: number) => P2
+  ov?:      PartOv
+  wire?:    boolean           // see-through (outline-only) tape, matching wire-mode parts
+}) {
+  // Rotated parts draw as projected silhouettes; an axis-aligned tape box would
+  // land in the wrong place, so skip (matches SlideShape falling back on rotation).
+  if (ov && (ov.oax || ov.oay || ov.oaz)) return null
+  const x1 = box.x + (ov?.ox ?? 0), y1 = box.y + (ov?.oy ?? 0), z1 = box.z + (ov?.oz ?? 0)
+  const x2 = x1 + box.w, y2 = y1 + box.h, z2 = z1 + box.d
+  const lo = { x: x1, y: y1, z: z1 }, hi = { x: x2, y: y2, z: z2 }
+  const map: Record<'top' | 'bottom' | 'left' | 'right', { n: 'x' | 'y' | 'z'; at: number }> =
+    kind === 'side'
+      ? { top: { n: 'y', at: y2 }, bottom: { n: 'y', at: y1 }, left: { n: 'z', at: z1 }, right: { n: 'z', at: z2 } }
+      : kind === 'face'
+      ? { top: { n: 'y', at: y2 }, bottom: { n: 'y', at: y1 }, left: { n: 'x', at: x1 }, right: { n: 'x', at: x2 } }
+      : { top: { n: 'z', at: z2 }, bottom: { n: 'z', at: z1 }, left: { n: 'x', at: x1 }, right: { n: 'x', at: x2 } }
+
+  // Part's screen-space rect (projections may flip an axis, so normalise).
+  const pA = project(x1, y1, z1), pB = project(x2, y2, z2)
+  const r = {
+    x: Math.min(pA.x, pB.x), y: Math.min(pA.y, pB.y),
+    w: Math.abs(pB.x - pA.x), h: Math.abs(pB.y - pA.y),
+  }
+
+  // Map each banded, viewer-visible edge onto the screen-space side it lands on.
+  const sides: TapeSides = { top: false, bottom: false, left: false, right: false }
+  const mid = { x: (x1 + x2) / 2, y: (y1 + y2) / 2, z: (z1 + z2) / 2 }
+  let any = false
+  for (const e of ['top', 'bottom', 'left', 'right'] as const) {
+    if (!edge[e]) continue
+    const { n, at } = map[e]
+    if (n === viewAxis) continue
+    const pAt  = project(...(['x', 'y', 'z'] as const).map(a => (a === n ? at : mid[a])) as [number, number, number])
+    const pOpp = project(...(['x', 'y', 'z'] as const).map(a => (a === n ? (at === lo[n] ? hi[n] : lo[n]) : mid[a])) as [number, number, number])
+    if (Math.abs(pAt.x - pOpp.x) > Math.abs(pAt.y - pOpp.y)) sides[pAt.x < pOpp.x ? 'left' : 'right'] = true
+    else sides[pAt.y < pOpp.y ? 'top' : 'bottom'] = true
+    any = true
+  }
+  if (!any) return null
+  return <TapePolys r={r} s={sides} t={Math.max(eb.t, 0)} color={C_STROKE} wire={wire} />
 }
 
 // ── Slide silhouette ────────────────────────────────────────────────────────────

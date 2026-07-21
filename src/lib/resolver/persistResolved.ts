@@ -53,6 +53,7 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
         edge_band_bottom:  p.edge_band.bottom,
         edge_band_left:    p.edge_band.left,
         edge_band_right:   p.edge_band.right,
+        edge_band_id:      p.edge_band.id ?? null,
         rule_overrides:    {},
         nest_priority:     0,
         output_to_cnc:     true,
@@ -77,6 +78,7 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
         edge_band_bottom:  p.edge_band.bottom,
         edge_band_left:    p.edge_band.left,
         edge_band_right:   p.edge_band.right,
+        edge_band_id:      p.edge_band.id ?? null,
         rule_overrides:    {},
         output_to_cnc:     true,
         is_detached:       p.is_detached,
@@ -102,6 +104,7 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
         edge_band_top:     p.edge_band.top,
         edge_band_bottom:  p.edge_band.bottom,
         edge_band_back:    p.edge_band.left,
+        edge_band_id:      p.edge_band.id ?? null,
         rule_overrides:    {},
         output_to_cnc:     true,
       }))
@@ -128,6 +131,7 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
       edge_band_bottom: p.edge_band.bottom,
       edge_band_left:   p.edge_band.left,
       edge_band_right:  p.edge_band.right,
+      edge_band_id:     p.edge_band.id ?? null,
       output_to_cnc:    true,
     })))
   if (boxRows.length > 0) {
@@ -186,6 +190,7 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
         edge_band_bottom:  z.edge_band.bottom,
         edge_band_left:    z.edge_band.left,
         edge_band_right:   z.edge_band.right,
+        edge_band_id:      z.edge_band.id ?? null,
         drawerbox_overrides: {},
         rule_overrides:    {},
         output_to_cnc:     true,

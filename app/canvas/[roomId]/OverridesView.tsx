@@ -18,7 +18,7 @@ function buildBaseDims(rp?: ResolvedCabinet): Map<string, { w: number; h: number
   rp.case_parts.forEach(p    => m.set(`case_${p.part_key}`,                 { w: p.DY, h: p.DX, d: p.DZ }))
   rp.toekick_parts.forEach(p => m.set(`tk_${p.part_key}_${p.sort_order}`,   { w: p.DY, h: p.DX, d: p.DZ }))
   rp.internal_parts.forEach(p => m.set(`int_${p.part_type}_${p.sort_order}`, { w: p.DY, h: p.DX, d: p.DZ }))
-  rp.face_zones.forEach(z => { if (z.face_type !== 'open') m.set(`zone_${z.row_index}_${z.col_index}`, { w: z.DY, h: z.DX, d: z.DZ }) })
+  rp.face_zones.forEach(z => { if (z.face_type !== 'open') m.set(`zone_${z.row_index}_${z.col_index}`, { w: z.DX, h: z.DY, d: z.DZ }) })
   ;(rp.drawer_stacks ?? []).forEach(s => s.box_parts.forEach(p =>
     m.set(`db_${s.face_zone_row}_${s.face_zone_col}_${p.part_type}`, { w: p.DY, h: p.DX, d: p.DZ })))
   return m

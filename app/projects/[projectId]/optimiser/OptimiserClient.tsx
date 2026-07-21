@@ -17,7 +17,7 @@ import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '@/app/ThemeToggle'
 import { useOptiStore, type Stage } from '@/src/lib/optimiser/store'
 import type { OptiSnapshot, OptiPart } from '@/src/lib/optimiser/types'
-import { materialGroupKey, buildMargins } from '@/src/lib/optimiser/types'
+import { materialGroupKey, buildMargins, cutSize } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import SheetSVG from './SheetSVG'
@@ -189,6 +189,7 @@ function Stage2Parts() {
   const partColOrder = useOptiStore(s => s.partColOrder)
   const setPartColOrder = useOptiStore(s => s.setPartColOrder)
   const setPartComment = useOptiStore(s => s.setPartComment)
+  const setPartLabel = useOptiStore(s => s.setPartLabel)
   const includedProjectIds = useOptiStore(s => s.includedProjectIds)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
@@ -212,11 +213,34 @@ function Stage2Parts() {
     supabase.from('cabinet_instances').update({ part_comments: comments }).eq('id', part.cabinet_instance_id)
       .then(({ error }) => { if (error) console.error('[part comment save]', error) })
   }
+
+  // Persist a per-part display name to cabinet_instances.part_names (keyed by
+  // source_part_key, same as comments). A name equal to the default is treated as
+  // "no override" and dropped, so clearing the field reverts to the default label.
+  function savePartLabel(part: OptiPart, value: string) {
+    const next = value.trim() || part.default_label
+    setPartLabel(part.uid, next)
+    const names: Record<string, string> = {}
+    for (const x of snap.parts) {
+      if (x.cabinet_instance_id !== part.cabinet_instance_id) continue
+      const name = x.uid === part.uid ? next : x.label
+      if (name && name !== x.default_label) names[x.source_part_key] = name
+    }
+    supabase.from('cabinet_instances').update({ part_names: names }).eq('id', part.cabinet_instance_id)
+      .then(({ error }) => { if (error) console.error('[part name save]', error) })
+  }
   const mergeProjectData = useOptiStore(s => s.mergeProjectData)
   const removeProjectData = useOptiStore(s => s.removeProjectData)
   const [addingProject, setAddingProject] = useState(false)
   const [sort, setSort] = useState<{ key: string | null; dir: 'asc' | 'desc' }>({ key: null, dir: 'asc' })
   const isBatch = includedProjectIds.length > 1
+
+  // Machine-profile option: show/nest CUT sizes (finished − edgeband per banded
+  // edge, fractional to 0.1mm) instead of finished sizes.
+  const profileId = useOptiStore(s => s.profileId)
+  const deductEb = snap.profiles.find(pr => pr.id === profileId)?.deduct_edgeband === true
+  const fmtMm = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1))
+  const dispDims = (p: OptiPart) => (deductEb ? cutSize(p) : { w: Math.round(p.w), h: Math.round(p.h) })
 
   function toggleSort(k: string) {
     setSort(s => s.key === k ? { key: k, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: k, dir: 'asc' })
@@ -355,11 +379,15 @@ function Stage2Parts() {
   function renderCell(key: string, p: OptiPart, on: boolean) {
     switch (key) {
       case 'check':    return <input type="checkbox" checked={on} onChange={() => togglePart(p.uid)} />
-      case 'part':     return <span className="text-ink">{p.label}</span>
+      case 'part':     return (
+        <input defaultValue={p.label} key={p.label} placeholder={p.default_label} title="Click to rename this part"
+          onBlur={e => { if (e.target.value.trim() !== p.label) savePartLabel(p, e.target.value) }}
+          className={`w-full bg-transparent border border-transparent hover:border-edge-strong focus:border-accent rounded px-1.5 py-0.5 focus:outline-none focus:bg-surface-2 ${p.label !== p.default_label ? 'text-accent font-medium' : 'text-ink'}`} />
+      )
       case 'cabinet':  return <span className="text-ink-muted">{p.cabinet_label}</span>
       case 'room':     return <span className="text-ink-muted">{isBatch && p.job_number ? <span className="text-ink-subtle">{p.job_number} · </span> : null}{p.room_name}</span>
-      case 'width':    return <span className="font-mono text-ink-muted tabular-nums">{Math.round(p.w)}</span>
-      case 'height':   return <span className="font-mono text-ink-muted tabular-nums">{Math.round(p.h)}</span>
+      case 'width':    return <span className="font-mono text-ink-muted tabular-nums">{fmtMm(dispDims(p).w)}</span>
+      case 'height':   return <span className="font-mono text-ink-muted tabular-nums">{fmtMm(dispDims(p).h)}</span>
       case 'thk':      return <span className="font-mono text-ink-muted tabular-nums">{p.thickness}</span>
       case 'material': return p.material_id ? <span className="text-ink-muted">{matName.get(p.material_id) ?? '—'}</span> : <span className="text-amber-600">none</span>
       case 'comment':  return (
@@ -596,6 +624,10 @@ function Stage4Nesting() {
   // Parts that will actually be nested = selected AND passing the Stage 2 filters.
   const runParts = snap.parts.filter(p => selectedUids.has(p.uid) && passesFilter(p))
 
+  // Machine-profile option: nest at cut size (finished − edgeband per banded edge).
+  const deductEb = snap.profiles.find(pr => pr.id === profileId)?.deduct_edgeband === true
+  const ebMissing = deductEb ? runParts.filter(p => p.eb_missing) : []
+
   function run() {
     const isBatch = includedProjectIds.length > 1
     setNesting(true)
@@ -613,8 +645,9 @@ function Stage4Nesting() {
         const label = isBatch && p.job_number ? `${p.job_number} ${p.label}` : p.label
         const gk = materialGroupKey(p.material_id, p.thickness)
         if (!stockForRun[gk]) stockForRun[gk] = { standard: seedStock(snap, p.material_id), offcuts: [] }
+        const dims = deductEb ? cutSize(p) : { w: p.w, h: p.h }
         for (let i = 0; i < qty; i++) {
-          const inst: NestPartInput = { uid: `${p.uid}#${i}`, baseUid: p.uid, label, w: p.w, h: p.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority }
+          const inst: NestPartInput = { uid: `${p.uid}#${i}`, baseUid: p.uid, label, w: dims.w, h: dims.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority }
           parts.push(inst); index[inst.uid] = inst
         }
       }
@@ -662,6 +695,12 @@ function Stage4Nesting() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-8 py-5">
+        {ebMissing.length > 0 && (
+          <p className="text-[11px] text-amber-500 mb-4">
+            Edgeband deduction is on, but {ebMissing.length} part(s) have banded edges with no edgeband
+            thickness on record (they nest undeducted): {[...new Set(ebMissing.map(p => p.label))].slice(0, 6).join(', ')}{ebMissing.length > 6 ? '…' : ''}
+          </p>
+        )}
         {!nestResult ? (
           <p className="text-xs text-ink-subtle text-center py-12">Run nesting to lay parts out on sheets.</p>
         ) : (

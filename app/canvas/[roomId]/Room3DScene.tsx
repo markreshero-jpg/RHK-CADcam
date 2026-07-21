@@ -18,7 +18,7 @@ import { getPalette } from '@/src/lib/partPalette'
 import { caseBox, isSide } from '@/src/lib/jointDrilling'
 import { customExtents, customPanelKind } from '@/src/lib/customPartBox'
 import {
-  panelFaceColors, edgeStrips, unpackMatCol,
+  panelFaceColors, edgeCoreBox, edgeStrips, unpackMatCol,
   type PanelKind, type PartEdge, type EbSpec,
 } from '@/src/components/three/PartViewer'
 import type { EbByMatId } from './useMaterialColours'
@@ -95,7 +95,7 @@ function intBox(p: ResolvedInternalPart): Box {
   }
 }
 function zoneBox(z: ResolvedFaceZone): Box {
-  return { x: z.X, y: z.Y, z: z.Z, w: z.DY, h: z.DX, d: z.DZ }
+  return { x: z.X, y: z.Y, z: z.Z, w: z.DX, h: z.DY, d: z.DZ }   // face: DX=width, DY=height
 }
 
 // Panel-kind dispatch for ResolvedInternalPart — drives panelFaceColors + edgeStrips
@@ -121,11 +121,13 @@ function Part({ b, faceColors, edgeColor, edge, panelKind, ebSpec }: {
   panelKind:  PanelKind
   ebSpec?:    EbSpec
 }) {
-  const strips = ebSpec ? edgeStrips(b, edge, panelKind, Math.max(1, ebSpec.thick)) : []
+  const tapeT = ebSpec ? Math.max(0, ebSpec.thick) : 0
+  const strips = ebSpec ? edgeStrips(b, edge, panelKind, tapeT) : []
+  const core = ebSpec ? edgeCoreBox(b, edge, panelKind, tapeT) : b
   return (
     <>
-      <mesh position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]}>
-        <boxGeometry args={[b.w, b.h, b.d]} />
+      <mesh position={[core.x + core.w / 2, core.y + core.h / 2, core.z + core.d / 2]}>
+        <boxGeometry args={[core.w, core.h, core.d]} />
         {faceColors.map((c, i) => (
           <meshStandardMaterial key={i} attach={`material-${i}`} color={c} roughness={0.7} metalness={0.05} />
         ))}
@@ -278,7 +280,9 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
   function ebFor(matId: string): EbSpec | undefined {
     const spec = ebByMatId?.[matId]
     if (!spec) return undefined
-    return { thick: spec.thickness, color: spec.color ?? '#c8b89a' }
+    // Tape with no colour on record reads as the part's material face colour —
+    // one colour for every strip, matched to the face.
+    return { thick: spec.thickness, color: spec.color ?? unpackMatCol(materialColours?.[matId], '#c8b89a').face }
   }
 
   if (!rp) {
@@ -332,7 +336,11 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
 
         {/* ── Toe kick ── */}
         {rp.toekick_parts.map((p, i) => {
-          const kind: PanelKind = p.part_key === 'spreader_horizontal' ? 'horizontal' : 'face'
+          const kind: PanelKind = p.part_key === 'spreader_horizontal'
+            ? 'horizontal'
+            : p.part_key === 'spreader_vertical'
+            ? 'side'
+            : 'face'
           const s = matSpec(p.material_id, '#78716c')
           return (
             <Part key={`t${i}`}

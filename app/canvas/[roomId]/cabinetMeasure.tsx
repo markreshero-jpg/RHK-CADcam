@@ -10,10 +10,11 @@
 // plan / elevation canvas ruler: first click sets the start, second sets the end,
 // a further click restarts; right-click (or toggling the tool off) clears it.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { roundMm } from '@/src/lib/format'
 
 export type MPt = { x: number; y: number }
+export type MSeg = { a: MPt; b: MPt }
 
 export function rectCorners(r: { x: number; y: number; w: number; h: number }): MPt[] {
   return [
@@ -24,7 +25,32 @@ export function rectCorners(r: { x: number; y: number; w: number; h: number }): 
   ]
 }
 
-export function snapNearest(raw: MPt, pts: MPt[], threshold: number): { pt: MPt; snapped: boolean } {
+// The rect's four sides, as snappable segments (top, right, bottom, left).
+export function rectSegs(r: { x: number; y: number; w: number; h: number }): MSeg[] {
+  const x1 = r.x + r.w, y1 = r.y + r.h
+  return [
+    { a: { x: r.x, y: r.y }, b: { x: x1,  y: r.y } },
+    { a: { x: x1,  y: r.y }, b: { x: x1,  y: y1  } },
+    { a: { x: x1,  y: y1  }, b: { x: r.x, y: y1  } },
+    { a: { x: r.x, y: y1  }, b: { x: r.x, y: r.y } },
+  ]
+}
+
+// Nearest point on segment `s` to `p` (clamped to the segment, so it never runs
+// off the end of a tape strip).
+function projectOnSeg(p: MPt, s: MSeg): MPt {
+  const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y
+  const len2 = dx * dx + dy * dy
+  if (len2 === 0) return s.a
+  const t = Math.max(0, Math.min(1, ((p.x - s.a.x) * dx + (p.y - s.a.y) * dy) / len2))
+  return { x: s.a.x + t * dx, y: s.a.y + t * dy }
+}
+
+// Pick the nearest candidate across both points and segments. Points only win an
+// exact tie (for example, at a corner shared by two tape sides). Checking all
+// points first and returning immediately lets a farther corner steal the cursor
+// from a closer tape side whenever both happen to fall inside the snap radius.
+export function snapNearest(raw: MPt, pts: MPt[], threshold: number, segs: MSeg[] = []): { pt: MPt; snapped: boolean } {
   let best: MPt | null = null
   let bestD = threshold * threshold
   for (const p of pts) {
@@ -32,26 +58,37 @@ export function snapNearest(raw: MPt, pts: MPt[], threshold: number): { pt: MPt;
     const d = dx * dx + dy * dy
     if (d <= bestD) { bestD = d; best = p }
   }
+  for (const s of segs) {
+    const q = projectOnSeg(raw, s)
+    const dx = q.x - raw.x, dy = q.y - raw.y
+    const d = dx * dx + dy * dy
+    // Strictly closer only: a point keeps precedence when it lies exactly on the
+    // segment projection, preserving precise corner snaps.
+    if (d < bestD || (best === null && d <= bestD)) { bestD = d; best = q }
+  }
   return best ? { pt: best, snapped: true } : { pt: raw, snapped: false }
 }
 
 // Measure interaction hook. Client coords are mapped to SVG-user space with the
 // element's screen CTM, so it stays correct under viewBox zoom + preserveAspectRatio
-// letterboxing. `pts` are the snap corners for the current view (SVG-user space).
+// letterboxing. `pts` are the snap corners for the current view (SVG-user space);
+// `segs` are optional snappable lines (anywhere along them), e.g. edge-band sides.
 export function useMeasure(
   active: boolean,
   svgRef: React.RefObject<SVGSVGElement | null>,
   pts: MPt[],
+  segs: MSeg[] = [],
+  priorityPts: MPt[] = [],
 ) {
   const [start, setStart]   = useState<MPt | null>(null)
   const [end, setEnd]       = useState<MPt | null>(null)
   const [cursor, setCursor] = useState<MPt | null>(null)
   const [snapped, setSnapped] = useState(false)
 
-  const ptsRef = useRef(pts); ptsRef.current = pts
-
   // Clear any in-progress measurement when the tool is switched off.
   useEffect(() => {
+    // This effect deliberately resets transient interaction state at the tool boundary.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!active) { setStart(null); setEnd(null); setCursor(null); setSnapped(false) }
   }, [active])
 
@@ -66,7 +103,13 @@ export function useMeasure(
     const raw: MPt = { x: loc.x, y: loc.y }
     const scale = Math.abs(ctm.a) || 1   // screen-px per SVG-user-unit
     const thr = 11 / scale               // ~11px snap radius, in SVG-user units
-    return snapNearest(raw, ptsRef.current, thr)
+    // Some construction points are intentionally very close to the finished
+    // outline (for example, a raw panel corner behind sub-millimetre edge tape).
+    // Give those explicit targets first refusal so the outer corner cannot make
+    // them practically impossible to acquire at normal zoom levels.
+    const priority = snapNearest(raw, priorityPts, thr)
+    if (priority.snapped) return priority
+    return snapNearest(raw, pts, thr, segs)
   }
 
   function onMove(e: React.PointerEvent<SVGSVGElement>) {

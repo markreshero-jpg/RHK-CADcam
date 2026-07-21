@@ -19,6 +19,11 @@ export interface FaceResolution {
   errors: ResolverError[]
 }
 
+// Locked sizes arrive as user-entered mm but reveals/gaps can be fractional,
+// so compare fit with a tolerance rather than exactly.
+const EPS = 1e-6
+const round1 = (n: number) => Math.round(n * 10) / 10
+
 export function resolveFace(
   cab: CabinetInput,
   r: ConstructionRules
@@ -81,8 +86,15 @@ export function resolveFace(
     ? (availableH - lockedH) / unlockedRowCount
     : 0
 
-  if (equalRowH < 0) {
-    errors.push({ code: 'FACE_ROWS_OVERFLOW', message: 'Locked row heights exceed available face height', part: 'face_rows' })
+  // Test the locked total directly rather than the derived equal share: when every
+  // row is locked there is no share to go negative, so `equalRowH < 0` would never
+  // fire and the rows would stack straight past the top of the cabinet.
+  if (lockedH > availableH + EPS) {
+    errors.push({
+      code: 'FACE_ROWS_OVERFLOW',
+      message: `Locked row heights (${round1(lockedH)}mm) exceed the ${round1(availableH)}mm available face height`,
+      part: 'face_rows',
+    })
     return { rows: [], cols: [], zones: [], errors }
   }
 
@@ -106,8 +118,14 @@ export function resolveFace(
     ? (availableW - lockedW) / unlockedColCount
     : 0
 
-  if (equalColW < 0) {
-    errors.push({ code: 'FACE_COLS_OVERFLOW', message: 'Locked column widths exceed available face width', part: 'face_cols' })
+  // Same reasoning as the row guard above — an all-locked grid never produces a
+  // negative equal share, so test the locked total against what's available.
+  if (lockedW > availableW + EPS) {
+    errors.push({
+      code: 'FACE_COLS_OVERFLOW',
+      message: `Locked column widths (${round1(lockedW)}mm) exceed the ${round1(availableW)}mm available face width`,
+      part: 'face_cols',
+    })
     return { rows: [], cols: [], zones: [], errors }
   }
 
@@ -159,8 +177,9 @@ export function resolveFace(
     const zoneY  = rowOffsets[zone.row_index]
 
     // Door style (zone → room → job cascade resolved in loadCabinetInput).
-    // A door blank's catalogue thickness overrides the face material thickness.
-    const door = zone.face_type === 'door' ? cab.resolved_doors?.[`${zone.row_index}_${zone.col_index}`] : undefined
+    // Applies to doors, drawer fronts and false panels alike; a blank's
+    // catalogue thickness overrides the face material thickness.
+    const door = cab.resolved_doors?.[`${zone.row_index}_${zone.col_index}`]
     const ft   = door ? door.thickness_mm : FT
 
     // Evaluate the routing profile against the resolved panel dimensions.
@@ -184,9 +203,11 @@ export function resolveFace(
       face_type:   zone.face_type,
       hinge_side:  zone.hinge_side,
 
-      // Dimensions
-      DX: zoneH,    // height of zone (Y extent becomes DX on sheet)
-      DY: zoneW,    // width of zone
+      // Dimensions — a front panel reads naturally: DX = width (left↔right,
+      // cabinet X), DY = height (up↕down, cabinet Y), DZ = thickness. Every
+      // face-zone consumer follows this (see partFootprint.zoneFrame).
+      DX: zoneW,    // width of zone (X extent)
+      DY: zoneH,    // height of zone (Y extent)
       DZ: ft,       // face/door material thickness (door catalogue overrides face material)
 
       // Position
@@ -196,7 +217,9 @@ export function resolveFace(
 
       AX: 0, AY: 0, AZ: 0,
 
-      material_id: fid,
+      // Door colour's linked board wins over the carcass schedule's door_face
+      // material; colours without a board link fall back to the schedule.
+      material_id: door?.colour_material_id ?? fid,
       // Door style (when assigned) supplies colour-matched tape + which edges to
       // band; otherwise fall back to the carcass schedule + construction EDGING.
       edge_band:   edgeSidesToBanding(door?.edge_band_sides ?? edging[zone.face_type], door?.edgeband_id ?? ebId),

@@ -6,7 +6,8 @@ import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { FaceGridInput, FaceZoneInput, DrawerType } from '@/src/lib/resolver/types'
 import { getUserPrefs } from '@/src/lib/userPrefs'
-import { intElevRect, dbElevRect, slideElevRect } from './cabinetEditSvgHelpers'
+import { intElevRect, dbElevRect, slideElevRect, TapePolys } from './cabinetEditSvgHelpers'
+import type { EbByMatId } from './useMaterialColours'
 
 type DoorStyleOpt = { id: string; name: string }
 
@@ -154,11 +155,13 @@ export default function FaceGridEditor({
   rp,
   showInternals,
   onUpdate,
+  ebByMatId,
 }: {
   cabinet: CabinetInstance
   rp?: ResolvedCabinet
   showInternals?: boolean
   onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
+  ebByMatId?: EbByMatId
 }) {
   const [grid, setGrid] = useState<FaceGridInput>(() =>
     (cabinet.face_grid as FaceGridInput | null) ?? DEFAULT_GRID
@@ -334,6 +337,25 @@ export default function FaceGridEditor({
         return { ...z, drawer_type_config: { ...cfg, height_adjustment: adj ?? undefined } }
       }),
     })
+  }
+
+  // Clearance above a system drawer box. null clears the zone override so the
+  // drawer box method's DB_TOP_CLEAR applies again.
+  function setTopClearance(rowIdx: number, colIdx: number, clear: number | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        const cfg = z.drawer_type_config ?? { type: 'system' as DrawerType }
+        return { ...z, drawer_type_config: { ...cfg, top_clearance: clear ?? undefined } }
+      }),
+    })
+  }
+
+  // The resolved stack for a zone — carries the effective drawer type and the box
+  // height the resolver actually settled on (i.e. the tallest slide that fits).
+  function zoneStack(rowIdx: number, colIdx: number) {
+    return rp?.drawer_stacks?.find(s => s.face_zone_row === rowIdx && s.face_zone_col === colIdx)
   }
 
   // ── Grid structure mutations ───────────────────────────────────────────────
@@ -617,6 +639,14 @@ export default function FaceGridEditor({
 
               const isSel = selectedZone?.row === gz.row_index && selectedZone?.col === gz.col_index
 
+              // Edge tape: banded edges of the matching resolved zone, drawn in
+              // the edgeband colour (same lookup as the 3D view / ortho views).
+              const rz = gz.face_type !== 'open'
+                ? rp?.face_zones.find(z => z.row_index === gz.row_index && z.col_index === gz.col_index)
+                : undefined
+              const ebSpec = rz ? ebByMatId?.[rz.material_id] : undefined
+              const ebCol  = ebSpec ? (ebSpec.color ?? '#c8b89a') : null
+
               return (
                 <g
                   key={`${gz.row_index}-${gz.col_index}`}
@@ -629,6 +659,15 @@ export default function FaceGridEditor({
                     fillOpacity={showInternals ? 0.35 : 1}
                     stroke={isSel ? '#ffffff' : s.stroke}
                     strokeWidth={isSel ? 2 : 1} />
+
+                  {ebCol && rz && (
+                    <TapePolys
+                      r={{ x: zx, y: zy, w: colW, h: rowH }}
+                      s={rz.edge_band}
+                      t={Math.max(ebSpec?.thickness ?? 1, 1)}
+                      color={s.stroke}
+                    />
+                  )}
 
                   <text
                     x={zx + colW / 2} y={zy + rowH / 2}
@@ -918,6 +957,41 @@ export default function FaceGridEditor({
                         />
                       </div>
                     )}
+
+                    {/* Clearance above the box — system drawers only. Drives which
+                        slide the resolver can pick, so the readout below moves with it. */}
+                    {(() => {
+                      const stack   = zoneStack(gz.row_index, gz.col_index)
+                      const effType = stack?.drawer_type ?? gz.drawer_type_config?.type
+                      if (effType !== 'system') return null
+                      const opening = zoneDoorHeight(gz)
+                      return (
+                        <div className="mt-1.5">
+                          <p className="text-gray-600 mb-0.5">Clearance above box (mm)</p>
+                          <input
+                            type="number"
+                            defaultValue={gz.drawer_type_config?.top_clearance ?? ''}
+                            placeholder="method default"
+                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                            onBlur={e => {
+                              const v = parseFloat(e.target.value)
+                              setTopClearance(gz.row_index, gz.col_index, isNaN(v) ? null : v)
+                            }}
+                            className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-500 w-full text-right"
+                          />
+                          {stack ? (
+                            <p className="text-gray-600 mt-1 text-[9px] leading-snug">
+                              Opening {opening}mm → tallest box that fits{' '}
+                              <span className="text-violet-300">{Math.round(stack.box_height)}mm</span>
+                            </p>
+                          ) : (
+                            <p className="text-red-400 mt-1 text-[9px] leading-snug">
+                              No slide fits this opening — see the Errors tab.
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 )}
               </div>

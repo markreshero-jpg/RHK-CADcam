@@ -31,6 +31,7 @@ interface GeneratedDrill {
   diameter: number
   depth: number
   output_face: string
+  plane_kind: string | null
   repeat_count: number
   output_to_cnc: boolean
   router_tool_id: string | null
@@ -60,6 +61,11 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
     drill: { x: number; y: number; z: number; axis: string; radius: number; depthLen: number },
     kind: string, operationKey: string,
     tool: { router_tool_id: string | null; drill_id: string | null; auto_tool: boolean },
+    // Which face of a front panel this bore drills into. Hinge cups & drawer-front
+    // fixings machine on the BACK (interior) face, so the Part Editor shows them on
+    // the back. Non-face parts (gables, box panels) pass null — front/back is
+    // meaningless there and the editor's face toggle isn't shown for them.
+    planeKind: string | null = null,
   ) => {
     if (!frame) { skipped++; return }
     const proj = projectToFrame(drill, frame)
@@ -75,6 +81,7 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
       diameter: round(drill.radius * 2),
       depth: round(drill.depthLen),
       output_face: proj.output_face,
+      plane_kind: planeKind,
       repeat_count: 1,
       output_to_cnc: true,
       ...tool,
@@ -94,7 +101,7 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
     const opKey = `hinge_${h.row_index}_${h.col_index}_${h.sort_order}`
     const zone = zoneByKey.get(`${h.row_index}:${h.col_index}`)
     for (const cd of h.cup_drills) {
-      add('face_zones', `zone_${h.row_index}_${h.col_index}`, zone ? zoneFrame(zone) : null, cd, 'hinge_cup', opKey, AUTO_TOOL)
+      add('face_zones', `zone_${h.row_index}_${h.col_index}`, zone ? zoneFrame(zone) : null, cd, 'hinge_cup', opKey, AUTO_TOOL, 'face_back')
     }
     const mt = h.mount_target
     if (mt?.table === 'case_parts' && mt.part_key) {
@@ -119,7 +126,9 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
     const opKey = `slide_${stack.face_zone_row}_${stack.face_zone_col}`
     const zone = zoneByKey.get(`${stack.face_zone_row}:${stack.face_zone_col}`)
     const boxByType = new Map(stack.box_parts.map(p => [p.part_type, p]))
-    const dboxKey = (t: string) => `dbox_${stack.face_zone_row}_${stack.face_zone_col}_${t}`
+    // Must match svgDbMeta / normalize's key (db_<row>_<col>_<part_type>) so generated
+    // slide drills land on the same part identity the nest/editor use.
+    const dboxKey = (t: string) => `db_${stack.face_zone_row}_${stack.face_zone_col}_${t}`
 
     for (const sl of stack.slides) {
       for (const sd of sl.drills) {
@@ -132,7 +141,7 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
             break
           }
           case 'drawer_front':
-            add('face_zones', `zone_${stack.face_zone_row}_${stack.face_zone_col}`, zone ? zoneFrame(zone) : null, sd, 'slide', opKey, AUTO_TOOL)
+            add('face_zones', `zone_${stack.face_zone_row}_${stack.face_zone_col}`, zone ? zoneFrame(zone) : null, sd, 'slide', opKey, AUTO_TOOL, 'face_back')
             break
           case 'drawer_side': {
             const t = sd.side === 'left' ? 'db_left_side' : 'db_right_side'

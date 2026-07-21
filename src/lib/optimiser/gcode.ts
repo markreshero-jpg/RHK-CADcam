@@ -23,6 +23,7 @@
 
 import type { NestedSheet } from './nest'
 import { computeGangs, type DrillBlockConfig, type GangGroup } from './gangDrill'
+import { clearPath, outlinePath, type Pt2 } from './routePatterns'
 
 export interface PostProfile {
   material_surface_z: string       // top_of_material | spoilboard (Z zero reference)
@@ -146,11 +147,27 @@ export interface SheetDrill {
   pocket?: { toolNumber: number; toolDiameter: number }
 }
 
+// An internal routing feature projected into sheet space (bottom-left origin),
+// carrying its own resolved router bit. `groove` = a straight slot along a line;
+// `area` = a rectangle either boundary-cut (clear=false → outline/profile) or
+// cleared (clear=true → pocket). Emitted BEFORE the part perimeter so the part is
+// still fully held. Face/flip is deliberately ignored for now — every route runs
+// on the back / material-up pass (Phase B §3c without the two-sided flip).
+export type SheetRoute =
+  | { kind: 'groove'; label: string; x1: number; y1: number; x2: number; y2: number
+      width: number; depth: number; toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null }
+  | { kind: 'area'; label: string; x: number; y: number; w: number; h: number
+      depth: number; clear: boolean
+      // Clear strategy (clear=true): 'raster' | 'spiral_in' | 'spiral_out' (null → raster).
+      fillStrategy: string | null; rasterAngleDeg: number; stepoverPct: number
+      toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null }
+
 export interface GcodeInput {
   sheet: NestedSheet
   thickness: number
   profile: PostProfile
   drills: SheetDrill[]
+  routes?: SheetRoute[]   // internal route/groove features (Phase B §3c)
   toolNumber: number       // routing bit tool number
   toolDiameter?: number    // routing bit diameter (mm) — needed for cutter compensation
   drillToolNumber?: number
@@ -324,6 +341,12 @@ export function generateSheetGcode(input: GcodeInput): string {
   // Each is helically ramped in with a router bit and cleared to the hole wall.
   if (pocketHoles.length) emitCircularPockets(emit, c, f, fz, fInt, pocketHoles, p, mapX, mapY, safeZ, stepDown)
 
+  // ── 4c. Internal routing features (grooves / routes / pockets) ───────────────
+  // Cut BEFORE the part perimeter so the part is still fully held. Each carries its
+  // own router bit (grouped → one tool change). All run on the back/material-up pass
+  // for now — plane_kind/front-face flip is Phase B §3a/b/d, not yet built.
+  if (input.routes?.length) emitRoutes(emit, c, f, fz, fInt, input.routes, p, mapX, mapY, safeZ, thickness)
+
   // ── 5. Tool change to routing bit ────────────────────────────────────────────
   c('Tool change to routing bit')
   emit(p.tool_change_code.replace('{n}', String(input.toolNumber)))
@@ -453,6 +476,111 @@ function emitCircularPockets(
         arc(o.sx, o.sy, null, cutFeed)
       }
       emit(`G0 Z${fz(safeZ)}`)
+    }
+    emit(p.spindle_off_code)
+  }
+}
+
+// Internal routing features (Phase B §3c): grooves + rectangular routes/pockets,
+// cut on the back/material-up pass with each op's own router bit. Grouped by tool so
+// one change covers all its features. Depth is reached in stepdown passes (the op's
+// tool max-depth-per-pass, else the profile's rough Z step); entry is a straight
+// plunge at the plunge feed (v1 — no ramp). Geometry is centreline (no cutter
+// compensation): a groove is one or more lanes across its width; a cleared pocket is
+// rastered a tool-radius inside its rectangle; an outline traces that inset rectangle.
+function emitRoutes(
+  emit: (s: string) => void, c: (s: string) => void,
+  f: (v: number) => string, fz: (v: number) => string, fInt: (v: number) => string,
+  routes: SheetRoute[], p: PostProfile,
+  mapX: (x: number) => number, mapY: (y: number) => number, safeZ: number, thickness: number,
+) {
+  const cutFeed = f(p.base_feed_rate)
+  const plungeFeed = f(Math.round(p.base_feed_rate * (p.plunge_feed_pct > 0 ? p.plunge_feed_pct : 100) / 100))
+  const helicalFeed = f(Math.round(p.base_feed_rate * (p.helical_feed_pct > 0 ? p.helical_feed_pct : 40) / 100))
+  const clearZ = p.clearance_z
+  // Walk a tool-centre polyline at a fixed depth (first point is where the tool
+  // already sits after entry). Coords are datum-mapped here.
+  const runPath = (pts: Pt2[], z: number, from = 1) => {
+    for (let i = from; i < pts.length; i++) emit(`G1 X${f(mapX(pts[i].x))} Y${f(mapY(pts[i].y))} Z${fz(z)} F${cutFeed}`)
+  }
+  // Helical ram-in at (cx,cy) radius rr from the clearance plane down to zTarget,
+  // then a flat finishing circle — reuses the circular-pocket entry style.
+  const helixDown = (cx: number, cy: number, rr: number, zTarget: number) => {
+    const sx = mapX(cx + rr), sy = mapY(cy), cmx = mapX(cx), cmy = mapY(cy)
+    emit(`G0 X${f(sx)} Y${f(sy)} Z${fz(clearZ)}`)
+    const arcs = Math.max(1, Math.ceil((clearZ - zTarget) / Math.max(0.5, p.rough_pass_z_step)))
+    for (let a = 1; a <= arcs; a++) {
+      const z = clearZ + (zTarget - clearZ) * (a / arcs)
+      emit(`G3 X${f(sx)} Y${f(sy)} Z${fz(z)} I${f(cmx - sx)} J${f(cmy - sy)} F${helicalFeed}`)
+    }
+    emit(`X${f(sx)} Y${f(sy)} I${f(cmx - sx)} J${f(cmy - sy)} F${cutFeed}`)   // flat circle at depth
+    return { x: cx + rr, y: cy }   // tool-centre position after the helix
+  }
+
+  const byTool = new Map<number, SheetRoute[]>()
+  for (const r of routes) (byTool.get(r.toolNumber) ?? byTool.set(r.toolNumber, []).get(r.toolNumber)!).push(r)
+
+  for (const [toolN, rs] of byTool) {
+    c(`Routing ${rs.length} internal feature(s) — tool ${toolN}`)
+    emit(p.tool_change_code.replace('{n}', String(toolN)))
+    if (p.emit_tool_length_offset) emit(`G43 H${fInt(toolN + p.tool_h_offset_delta)} Z${fz(safeZ)}`)
+    emit(`${p.spindle_on_code} S${fInt(p.base_spindle_speed)}`)
+
+    for (const r of rs) {
+      const depth = Math.min(r.depth, thickness)   // never past the panel back
+      const step = r.maxDepthPerPass && r.maxDepthPerPass > 0 ? r.maxDepthPerPass : p.rough_pass_z_step
+      const passes = Math.max(1, Math.ceil(depth / Math.max(0.5, step)))
+      const toolR = r.toolDiameter / 2
+
+      if (r.kind === 'groove') {
+        // Lanes across the slot width, centred on the line (≥1). A single-tool-wide
+        // groove is one centreline pass; a wider slot fills with parallel lanes.
+        const dx = r.x2 - r.x1, dy = r.y2 - r.y1
+        const L = Math.hypot(dx, dy) || 1
+        const nx = -dy / L, ny = dx / L                          // unit perpendicular
+        const span = Math.max(0, r.width - r.toolDiameter)
+        const lanes = span <= 0.01 ? 1 : Math.max(2, Math.ceil(span / Math.max(0.5, r.toolDiameter * 0.9)) + 1)
+        for (let i = 1; i <= passes; i++) {
+          const z = -Math.min(depth, i * step)
+          for (let l = 0; l < lanes; l++) {
+            const off = lanes === 1 ? 0 : (-span / 2 + (span * l) / (lanes - 1))
+            const serp = l % 2 === 1                              // serpentine to cut travel
+            const s0x = (serp ? r.x2 : r.x1) + nx * off, s0y = (serp ? r.y2 : r.y1) + ny * off
+            const s1x = (serp ? r.x1 : r.x2) + nx * off, s1y = (serp ? r.y1 : r.y2) + ny * off
+            emit(`G0 X${f(mapX(s0x))} Y${f(mapY(s0y))} Z${fz(safeZ)}`)
+            emit(`G1 Z${fz(z)} F${plungeFeed}`)
+            emit(`G1 X${f(mapX(s1x))} Y${f(mapY(s1y))} F${cutFeed}`)
+          }
+        }
+        emit(`G0 Z${fz(safeZ)}`)
+        continue
+      }
+
+      // Area op — tool-centre path stays inside the nominal rectangle (inset by the
+      // tool radius). Clear = pocket (raster / spiral by fillStrategy); else outline.
+      const x0 = r.x + toolR, y0 = r.y + toolR, x1 = r.x + r.w - toolR, y1 = r.y + r.h - toolR
+      if (!(x1 > x0) || !(y1 > y0)) { c('WARN: route feature smaller than its tool — skipped'); continue }
+      const stepover = Math.max(0.5, r.toolDiameter * (r.stepoverPct > 0 ? r.stepoverPct : 70) / 100)
+      const pts = r.clear ? clearPath(r.fillStrategy, x0, y0, x1, y1, stepover, r.rasterAngleDeg) : outlinePath(x0, y0, x1, y1)
+      if (pts.length < 2) continue
+      // Helical entry at the rect centre (max interior room); fall back to a straight
+      // plunge at the path start when the pocket is too small to corkscrew.
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
+      const helixR = Math.min(r.toolDiameter * 0.8, (x1 - x0) / 2, (y1 - y0) / 2)
+      const canHelix = r.clear && helixR >= 0.6
+      for (let i = 1; i <= passes; i++) {
+        const z = -Math.min(depth, i * step)
+        if (canHelix) {
+          helixDown(cx, cy, helixR, z)                     // corkscrew down at the centre
+          emit(`G1 X${f(mapX(pts[0].x))} Y${f(mapY(pts[0].y))} Z${fz(z)} F${cutFeed}`)   // to path start
+          runPath(pts, z, 1)
+        } else {
+          emit(`G0 X${f(mapX(pts[0].x))} Y${f(mapY(pts[0].y))} Z${fz(safeZ)}`)
+          emit(`G1 Z${fz(z)} F${plungeFeed}`)
+          runPath(pts, z, 1)
+        }
+        emit(`G0 Z${fz(safeZ)}`)
+      }
     }
     emit(p.spindle_off_code)
   }

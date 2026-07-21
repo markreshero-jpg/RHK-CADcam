@@ -16,7 +16,7 @@
 // ============================================================
 
 import {
-  CabinetInput, ConstructionRules, ResolvedFaceZone,
+  CabinetInput, ConstructionRules, ResolvedFaceZone, ResolverError,
   ResolvedDrawerStack, ResolvedDrawerSlide,
   DrawerType, SlideProduct, SlideScheduleEntry,
   DEFAULT_DB_RULES,
@@ -24,48 +24,91 @@ import {
 import { resolveDrawerBox } from './resolveDrawerBox'
 import { slideDrillOps } from '../slideDrilling'
 
+const EPS = 1e-6
+const round1 = (n: number) => Math.round(n * 10) / 10
 
+export interface DrawerStackResolution {
+  stacks:   ResolvedDrawerStack[]
+  errors:   ResolverError[]
+  warnings: ResolverError[]
+}
+
+
+export interface FindSlideOpts {
+  // mm that must stay clear above the box inside the opening (DB_TOP_CLEAR, or a
+  // per-zone override). A slide qualifies only if its height + clearance fits.
+  clearance?: number
+}
+
+// Selects the tallest slide that genuinely fits the opening (and the depth).
+//
+// There is NO substitution. When a slide schedule is configured it is the only
+// source of candidates: if nothing in it fits, the answer is null, never a slide
+// from outside the schedule and never an over-tall "best effort" tier. Callers
+// surface that as NO_SLIDE_FITS. Only when no schedule is configured at all does
+// selection fall back to the raw product list.
 export function findSlide(
   availableDepth: number,
   openingHeight: number,
   products: SlideProduct[],
   schedule: SlideScheduleEntry[],
   productId?: string,
+  opts?: FindSlideOpts,
 ): SlideProduct | null {
   if (productId) {
     return products.find(p => p.id === productId) ?? null
   }
+  const clearance = opts?.clearance ?? 0
+  // A null height means the product/tier declares no height requirement, so it
+  // cannot be ruled out — treat it as fitting rather than silently excluding it.
+  const fits = (h: number | null | undefined) =>
+    h == null || h + clearance <= openingHeight + EPS
+
   if (schedule.length > 0) {
     // Step 1: largest depth_threshold <= available depth (longest NL that fits)
     const eligible = schedule.filter(e => e.depth_threshold <= availableDepth)
-    if (eligible.length > 0) {
-      const maxDepth = Math.max(...eligible.map(e => e.depth_threshold))
-      const atDepth  = eligible.filter(e => e.depth_threshold === maxDepth)
-      // Step 2: tallest height_threshold that still fits in the opening
-      const fitting  = atDepth.filter(e => e.height_threshold <= openingHeight)
-      const pool     = fitting.length > 0 ? fitting : atDepth  // best-effort if nothing fits
-      const maxH     = Math.max(...pool.map(e => e.height_threshold))
-      const entry    = pool.find(e => e.height_threshold === maxH)!
-      return products.find(p => p.id === entry.slide_id) ?? null
-    }
+    if (eligible.length === 0) return null   // no tier fits the cabinet depth
+    const maxDepth = Math.max(...eligible.map(e => e.depth_threshold))
+    const atDepth  = eligible.filter(e => e.depth_threshold === maxDepth)
+    // Step 2: tallest height_threshold that still fits once the clearance above
+    // the box is reserved. Nothing fitting means nothing fits — full stop.
+    const fitting  = atDepth.filter(e => fits(e.height_threshold))
+    if (fitting.length === 0) return null
+    const maxH  = Math.max(...fitting.map(e => e.height_threshold))
+    const entry = fitting.find(e => e.height_threshold === maxH)!
+    return products.find(p => p.id === entry.slide_id) ?? null
   }
-  // Fallback: longest NL product that fits within available depth
-  return (
-    products
-      .filter(p => p.nominal_length != null && p.nominal_length <= availableDepth)
-      .sort((a, b) => (b.nominal_length ?? 0) - (a.nominal_length ?? 0))[0]
-    ?? products[0]
-    ?? null
-  )
+
+  // No schedule configured: the whole product list is the candidate pool.
+  const byDepth = products.filter(p => p.nominal_length != null && p.nominal_length <= availableDepth)
+  const fitting = byDepth.filter(p => fits(p.box_height))
+  if (fitting.length === 0) return null
+  // Tallest box that fits, tie-broken by longest nominal length, then by id so the
+  // choice is stable across loads (the product query only orders by nominal_length,
+  // so equal-height products from different brands would otherwise flip order).
+  return [...fitting].sort((a, b) =>
+    (b.box_height ?? 0) - (a.box_height ?? 0) ||
+    (b.nominal_length ?? 0) - (a.nominal_length ?? 0) ||
+    a.id.localeCompare(b.id),
+  )[0] ?? null
+}
+
+// Products that tie with the chosen slide on box height in the no-schedule fallback.
+// Distinct brands here mean the pick was effectively arbitrary — worth surfacing.
+export function tiedSlideBrands(chosen: SlideProduct, products: SlideProduct[]): string[] {
+  const tied = products.filter(p => p.box_height === chosen.box_height)
+  return [...new Set(tied.map(p => p.brand).filter((b): b is string => !!b))]
 }
 
 export function resolveDrawerStacks(
   cab: CabinetInput,
   r: ConstructionRules,
   resolvedZones: ResolvedFaceZone[],
-): ResolvedDrawerStack[] {
+): DrawerStackResolution {
+  const errors:   ResolverError[] = []
+  const warnings: ResolverError[] = []
   const drawerZones = resolvedZones.filter(z => z.face_type === 'drawer_face')
-  if (drawerZones.length === 0) return []
+  if (drawerZones.length === 0) return { stacks: [], errors, warnings }
 
   const T            = cab.material.DZ
   // Internal depth: from back panel inner face to front edge of case
@@ -96,10 +139,57 @@ export function resolveDrawerStacks(
     const config = zoneInput?.drawer_type_config
     const drawerType: DrawerType = config?.type ?? cab.default_drawer_type ?? 'system'
 
-    const openingHeight = zone.DX
+    const openingHeight = zone.DY   // face zone: DY = height (DX = width)
+    const zoneRef = `[${zone.row_index},${zone.col_index}]`
+
+    if (openingHeight <= 0) {
+      errors.push({
+        code: 'DRAWER_OPENING_INVALID',
+        message: `Drawer zone ${zoneRef} has a ${round1(openingHeight)}mm opening height`,
+        part: 'drawer_face',
+      })
+      continue
+    }
+
+    // Clearance above the box: per-zone override wins over the drawer box method's
+    // DB_TOP_CLEAR. Five-piece boxes are sized from height_adjustment instead, so
+    // applying the clearance there as well would double-count it.
+    const clearance = drawerType === 'system'
+      ? (config?.top_clearance ?? dbRules.DB_TOP_CLEAR ?? 0)
+      : 0
+
     // Per-zone slide_product_id wins; else a cabinet-level preserved slide override; else schedule.
     const slideOverride = config?.slide_product_id ?? (cab.hardware_overrides?.slide_id as string | undefined)
-    const slide = findSlide(availableDepth, openingHeight, slideProducts, slideSchedule, slideOverride)
+    // A cabinet resolved without any slide data at all must still produce geometry
+    // (fixtures, previews); only complain when there was hardware to choose from.
+    const hasHardware = slideProducts.length > 0 || slideSchedule.length > 0
+    const slide = findSlide(availableDepth, openingHeight, slideProducts, slideSchedule, slideOverride, { clearance })
+
+    if (!slide && hasHardware && !slideOverride) {
+      const source = slideSchedule.length > 0 ? 'the slide schedule' : 'the slide list'
+      errors.push({
+        code: 'NO_SLIDE_FITS',
+        message: `Drawer ${zoneRef}: nothing in ${source} fits a ${round1(openingHeight)}mm opening` +
+          (clearance > 0 ? ` with ${round1(clearance)}mm clearance above the box` : '') +
+          ` at ${round1(availableDepth)}mm available depth`,
+        part: 'drawer_box',
+      })
+      continue
+    }
+
+    // With no slide schedule, selection falls back to the raw product list, which
+    // spans every brand. If several products tie on the winning box height the pick
+    // is arbitrary — the shop almost certainly meant one brand.
+    if (slide && !slideOverride && slideSchedule.length === 0) {
+      const brands = tiedSlideBrands(slide, slideProducts)
+      if (brands.length > 1) {
+        warnings.push({
+          code: 'SLIDE_SELECTION_AMBIGUOUS',
+          message: `Drawer ${zoneRef}: ${brands.join(' and ')} both offer a ${round1(slide.box_height ?? 0)}mm slide and no slide schedule is set — picked "${slide.name}"`,
+          part: 'drawer_box',
+        })
+      }
+    }
 
     const sideDeduction  = slide?.side_deduction   ?? cab.slide_side_deduction
     const runnerThick    = slide?.runner_thickness  ?? 0
@@ -111,6 +201,32 @@ export function resolveDrawerStacks(
       boxHeight = slide?.box_height ?? 128
     } else {
       boxHeight = openingHeight - (config?.height_adjustment ?? 25)
+    }
+
+    // A non-positive box height produces inverted panels downstream (resolveDrawerBox
+    // does no clamping), so drop the stack rather than emit nonsense geometry.
+    if (boxHeight <= 0) {
+      errors.push({
+        code: 'DRAWER_BOX_HEIGHT_INVALID',
+        message: drawerType === 'five_piece'
+          ? `Drawer ${zoneRef}: height adjustment ${config?.height_adjustment ?? 25}mm leaves a ${round1(boxHeight)}mm box in a ${round1(openingHeight)}mm opening`
+          : `Drawer ${zoneRef}: slide box height resolves to ${round1(boxHeight)}mm`,
+        part: 'drawer_box',
+      })
+      continue
+    }
+
+    // A forced slide (per-zone or cabinet override) bypasses the fitting search, so an
+    // over-tall box can still reach here. Emit the geometry so the clash is visible.
+    if (boxHeight + clearance > openingHeight + EPS) {
+      warnings.push({
+        code: 'DRAWER_BOX_TOO_TALL',
+        message: `Drawer ${zoneRef}: ${round1(boxHeight)}mm box` +
+          (clearance > 0 ? ` + ${round1(clearance)}mm clearance` : '') +
+          ` does not fit the ${round1(openingHeight)}mm opening` +
+          (slide ? ` (slide "${slide.name}")` : ''),
+        part: 'drawer_box',
+      })
     }
 
     // Box width: the slide runners sit HARD against the opening sides (gable inner
@@ -215,5 +331,5 @@ export function resolveDrawerStacks(
     })
   }
 
-  return stacks
+  return { stacks, errors, warnings }
 }

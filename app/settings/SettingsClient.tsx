@@ -354,12 +354,14 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
 
   // User preferences (localStorage)
   const [invertScroll, setInvertScroll] = useState(false)
+  const [includeBanding, setIncludeBanding] = useState(true)
   const [drawingPresets, setDrawingPresets] = useState<DrawingPresets>({ plan: 'full_parts', elevation: 'full_parts' })
   const [cabinetViewStyles, setCabinetViewStyles] = useState<CabinetViewStyles>({ top: 'wire', elevation: 'wire', side: 'wire', '3d': 'wire' })
   const [palette, setPalette] = useState<PartPalette>(DEFAULT_PALETTE)
   useEffect(() => {
     const prefs = getUserPrefs()
     setInvertScroll(prefs.invertScroll)
+    setIncludeBanding(prefs.includeBandingInPartSize)
     setDrawingPresets(prefs.drawingPresets)
     setCabinetViewStyles(prefs.cabinetViewStyles)
     setPalette(getPalette())
@@ -381,6 +383,11 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
   function toggleInvertScroll(val: boolean) {
     setInvertScroll(val)
     setUserPrefs({ invertScroll: val })
+  }
+
+  function toggleIncludeBanding(val: boolean) {
+    setIncludeBanding(val)
+    setUserPrefs({ includeBandingInPartSize: val })
   }
 
   function handleDrawingPreset(view: keyof DrawingPresets, val: DrawingPreset) {
@@ -544,6 +551,24 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
                       >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
                           invertScroll ? 'translate-x-4' : 'translate-x-0'
+                        }`} />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3 bg-surface">
+                      <div>
+                        <p className="text-xs font-medium text-ink">Include edge banding in overall part size</p>
+                        <p className="text-[11px] text-ink-subtle mt-0.5">Part dimensions in the cabinet editor show the finished size (with tape). Off = cut (board) size</p>
+                      </div>
+                      <button
+                        onClick={() => toggleIncludeBanding(!includeBanding)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                          includeBanding ? 'bg-accent' : 'bg-surface-3'
+                        }`}
+                        role="switch"
+                        aria-checked={includeBanding}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                          includeBanding ? 'translate-x-4' : 'translate-x-0'
                         }`} />
                       </button>
                     </div>
