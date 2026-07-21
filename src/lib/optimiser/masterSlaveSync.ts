@@ -16,6 +16,7 @@
 import { supabase } from '@/src/lib/supabase'
 import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { fireMasters, GENERATED_MARK, type FireOpRow } from './fireMasters'
+import { coalesceByKey } from './coalesce'
 
 // Columns fireMasters reads. Kept explicit (not select('*')) so the shape matches
 // FireOpRow and the query is stable.
@@ -27,8 +28,16 @@ const OP_COLS =
 
 export interface MasterSlaveSyncResult { written: number; skipped: number; noTouch: number }
 
+// Coalesce concurrent syncs for the SAME cabinet — the delete+insert below is not
+// atomic, so overlapping runs would double every slave row (mirrors seamDrillSync).
+const inFlight = new Map<string, Promise<MasterSlaveSyncResult>>()
+
 // Regenerate ALL master/joint slave rows for ONE cabinet.
-export async function syncMasterSlaves(cabinetId: string): Promise<MasterSlaveSyncResult> {
+export function syncMasterSlaves(cabinetId: string): Promise<MasterSlaveSyncResult> {
+  return coalesceByKey(inFlight, cabinetId, () => runMasterSlaveSync(cabinetId))
+}
+
+async function runMasterSlaveSync(cabinetId: string): Promise<MasterSlaveSyncResult> {
   // Quiet resolve — a half-built or just-deleted cabinet must not hard-error while
   // the whole nest regenerates (same policy as seamDrillSync).
   let rp

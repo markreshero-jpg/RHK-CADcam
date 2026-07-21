@@ -16,6 +16,7 @@ import { supabase } from '@/src/lib/supabase'
 import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { cabinetSeamDrills } from '@/src/lib/jointDrilling'
 import { caseFrame, zoneFrame, boxFrame, intFrame, projectToFrame, type FootprintFrame } from './partFootprint'
+import { coalesceByKey } from './coalesce'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 
 const GENERATED_MARK = 'seam_joint'
@@ -162,8 +163,18 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
 
 export interface SeamDrillSyncResult { written: number; skipped: number }
 
+// Coalesce concurrent syncs for the SAME cabinet onto one in-flight promise. The
+// delete+insert below is not atomic, so two overlapping runs (StrictMode double
+// mount, manual regen racing an optimise pass) would each delete then each insert,
+// doubling every generated hole. See coalesce.ts.
+const inFlight = new Map<string, Promise<SeamDrillSyncResult>>()
+
 // Regenerate ALL resolver-computed drilling rows for ONE cabinet.
-export async function syncSeamDrillOperations(cabinetId: string): Promise<SeamDrillSyncResult> {
+export function syncSeamDrillOperations(cabinetId: string): Promise<SeamDrillSyncResult> {
+  return coalesceByKey(inFlight, cabinetId, () => runSeamDrillSync(cabinetId))
+}
+
+async function runSeamDrillSync(cabinetId: string): Promise<SeamDrillSyncResult> {
   // Quiet: a project may contain a half-built cabinet; its resolver errors must
   // not surface as a hard error while we generate drilling for the whole nest.
   let rp: ResolvedCabinet
