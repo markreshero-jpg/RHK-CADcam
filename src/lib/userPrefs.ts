@@ -27,6 +27,9 @@ export interface UserPrefs {
   elevSnapSettings: ElevSnapSettings
   /** Panel Optimiser Stage 2 part-table column order (persisted layout). */
   optimiserPartCols: string[] | null
+  /** Part dimensions shown in the cabinet editor include edgebanding (finished
+   *  size, the default). Off = show the cut (board) size, tape deducted. */
+  includeBandingInPartSize: boolean
 }
 
 const KEY = 'rhk_user_prefs'
@@ -50,6 +53,7 @@ const DEFAULTS: UserPrefs = {
   snapSettings:     DEFAULT_SNAP_SETTINGS,
   elevSnapSettings: DEFAULT_ELEV_SNAP_SETTINGS,
   optimiserPartCols: null,
+  includeBandingInPartSize: true,
 }
 
 function normaliseDrawingPresets(raw: unknown, legacy: unknown): DrawingPresets {

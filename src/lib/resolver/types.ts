@@ -239,6 +239,8 @@ export interface DrawerTypeConfig {
   slide_product_id?: string
   // five_piece / inner: box_height = face_opening_height − height_adjustment
   height_adjustment?: number
+  // system drawer: overrides the method's DB_TOP_CLEAR for this zone only (mm).
+  top_clearance?: number
 }
 
 // ── Slide Product ─────────────────────────────────────────────
@@ -356,6 +358,9 @@ export interface DrawerBoxRules {
   DB_BACK_HEIGHT_ADJUST: number                         // deducted from slide box_height to get back panel height (mm)
   DB_BACK_WIDTH_ADJUST:  number                         // deducted from box width to get back panel width (mm)
   DB_BACK_Y_OFFSET:      number                         // raises back panel off box floor (mm), added to auto-calculated backY
+  DB_TOP_CLEAR:          number                         // system drawers: mm that must stay clear above the box inside the
+                                                        // face opening. Gates slide selection (box_height + DB_TOP_CLEAR must
+                                                        // fit the opening). Five-piece uses height_adjustment instead.
   IDB_FRONT_CLEAR:         number                         // inner-drawer face per-side clearance from compartment opening (mm)
   IDB_FRONT_TOP_ADJUST:    number                         // mm added above the box top (positive grows upward)
   IDB_FRONT_BOTTOM_ADJUST: number                         // mm added below the box bottom (positive grows downward)
@@ -375,6 +380,7 @@ export const DEFAULT_DB_RULES: DrawerBoxRules = {
   DB_BACK_HEIGHT_ADJUST: 0,
   DB_BACK_WIDTH_ADJUST:  0,
   DB_BACK_Y_OFFSET:      0,
+  DB_TOP_CLEAR:          0,
   IDB_FRONT_CLEAR:         2,
   IDB_FRONT_TOP_ADJUST:    0,
   IDB_FRONT_BOTTOM_ADJUST: 0,

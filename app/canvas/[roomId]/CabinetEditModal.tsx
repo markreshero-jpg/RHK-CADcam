@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import type { CabinetInstance, Wall } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
-import { PartMeta, PartEdge, PartPropertiesPanel } from '@/src/components/three/PartViewer'
+import { PartMeta, PartEdge, PartPropertiesPanel, unpackMatCol } from '@/src/components/three/PartViewer'
 import {
   dbResolveAndPersistCabinet, dbLoadCustomParts, dbUpdateCustomPart, dbDeleteCustomPart,
   dbLoadPartPosOverrides, dbSavePartPosOverride, dbDeletePartPosOverride,
@@ -248,12 +248,15 @@ export default function CabinetEditModal({
   }, [customParts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleHidden(partId: string) {
-    setHiddenParts(prev => {
-      const next = prev.includes(partId) ? prev.filter(id => id !== partId) : [...prev, partId]
-      dbSaveHiddenParts(cabinet.id, next).catch(console.error)
-      onHiddenChange?.(cabinet.id, next)
-      return next
-    })
+    // Compute next outside the updater so the DB write + parent sync are real
+    // event-handler side effects, not run inside a (pure) setState updater — the
+    // latter can fire during render and setState the parent mid-render.
+    const next = hiddenParts.includes(partId)
+      ? hiddenParts.filter(id => id !== partId)
+      : [...hiddenParts, partId]
+    setHiddenParts(next)
+    dbSaveHiddenParts(cabinet.id, next).catch(console.error)
+    onHiddenChange?.(cabinet.id, next)
   }
 
   useEffect(() => {
@@ -544,7 +547,7 @@ export default function CabinetEditModal({
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
                 customParts={customParts} partOverrides={partOverrides}
-                partLabels={partLabels} partComments={partComments} />
+                partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId} />
               : <TopView cab={cabinet} />
             )}
             {activeView === 'elevation' && (
@@ -553,7 +556,7 @@ export default function CabinetEditModal({
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
                 customParts={customParts} partOverrides={partOverrides}
-                partLabels={partLabels} partComments={partComments} />
+                partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId} />
               : <ElevationView cab={cabinet} />
             )}
             {activeView === 'side' && (
@@ -562,10 +565,10 @@ export default function CabinetEditModal({
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
                 customParts={customParts} partOverrides={partOverrides}
-                partLabels={partLabels} partComments={partComments} />
+                partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId} />
               : <SideView cab={cabinet} />
             )}
-            {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} />}
+            {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
             {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={setEditingPart} />}
             {activeView === 'parts'  && rp && (
@@ -611,6 +614,7 @@ export default function CabinetEditModal({
                 part={selectedSVGPart}
                 onClose={() => setSelectedSVGPart(null)}
                 onEdgeChange={handleSVGEdgeChange}
+                ebThickness={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId]?.thickness : undefined}
               />
             )}
             {selectedSVGPart && isOrthoView && (
@@ -693,6 +697,11 @@ export default function CabinetEditModal({
         <PartEditor
           cabinetId={cabinet.id}
           part={editingPart}
+          ebSpec={(() => {
+            const eb = editingPart.materialId ? ebByMatId?.[editingPart.materialId] : undefined
+            // Colourless tape reads as the part's material face colour (matches ebFor).
+            return eb ? { thick: eb.thickness, color: eb.color ?? unpackMatCol(editingPart.materialId ? materialColours?.[editingPart.materialId] : undefined, '#c8b89a').face } : undefined
+          })()}
           onClose={() => setEditingPart(null)}
         />
       )}

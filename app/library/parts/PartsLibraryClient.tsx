@@ -23,6 +23,10 @@ export interface PartLibraryRow {
   optimize_grain: boolean
   cnc:            boolean
   active:         boolean
+  // Key is a resolver part identity (case/drawer-box/toekick/internal/face).
+  // The optimiser reads `name` live as the shop-wide display name for that
+  // type, so the key is locked in the UI; the name is freely editable.
+  is_system:      boolean
 }
 
 interface FieldConfig {
@@ -199,6 +203,9 @@ export default function PartsLibraryClient({
 
   const catField   = FIELDS.find(f => f.key === 'category')!
   const sortField  = FIELDS.find(f => f.key === sortKey)
+  // System rows: key IS the resolver identity the optimiser looks names up by —
+  // editing it would silently orphan the lookup, so it's locked.
+  const editingSystem = editingId != null && (rows.find(r => r.id === editingId)?.is_system ?? false)
 
   const filtered = rows.filter(r =>
     (catFilter === 'all' || r.category === catFilter) &&
@@ -317,8 +324,10 @@ export default function PartsLibraryClient({
                     type="text"
                     value={String(form[f.key] ?? '')}
                     placeholder={f.placeholder}
+                    disabled={f.key === 'key' && editingSystem}
+                    title={f.key === 'key' && editingSystem ? 'System part — the key is its resolver identity and cannot change. Rename via the Name field.' : undefined}
                     onChange={e => patchForm({ [f.key]: e.target.value })}
-                    className="block w-full bg-transparent border-b border-edge-strong px-0.5 py-0.5 text-xs text-ink focus:outline-none focus:border-accent placeholder:text-ink-subtle"
+                    className="block w-full bg-transparent border-b border-edge-strong px-0.5 py-0.5 text-xs text-ink focus:outline-none focus:border-accent placeholder:text-ink-subtle disabled:opacity-40 disabled:cursor-not-allowed"
                   />
                 )}
               </div>
@@ -410,6 +419,11 @@ export default function PartsLibraryClient({
                       {isCategory ? (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-ink-muted">
                           {catLabel}
+                        </span>
+                      ) : f.key === 'name' && row.is_system ? (
+                        <span title="System part — its name is the shop-wide display name for this generated part type">
+                          {fmtCell(val, f)}
+                          <span className="ml-1.5 text-[9px] px-1 py-px rounded bg-accent/15 text-accent-ink align-middle">SYS</span>
                         </span>
                       ) : fmtCell(val, f)}
                     </div>

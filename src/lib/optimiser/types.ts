@@ -20,16 +20,33 @@ export interface OptiPart {
   room_name: string
   project_id: string
   job_number: string | null   // job/label prefix for batch runs
-  label: string
-  w: number                   // footprint width (mm) = dx
-  h: number                   // footprint height (mm) = dy
+  label: string               // display name — cabinet_instances.part_names[part_key] if set, else default_label
+  default_label: string       // system default + positional suffix — the placeholder / "reset to" value
+  part_type_key: string       // raw resolver key matching parts_library.key (bottom, db_bottom…); '' for custom parts
+  w: number                   // footprint width (mm) = dx — FINISHED size (incl. edgebanding)
+  h: number                   // footprint height (mm) = dy — FINISHED size (incl. edgebanding)
   thickness: number           // dz (mm)
+  // Edgeband thickness (mm) applied to each cut-face side, in the CNC footprint
+  // frame (partFootprint.ts): w1/w2 = the pos_x=0 / pos_x=w edges, h1/h2 = the
+  // pos_y=0 / pos_y=h edges. 0 = not banded (or thickness unknown — see
+  // eb_missing). Cut size = w − eb_w1 − eb_w2 × h − eb_h1 − eb_h2 (see cutSize).
+  eb_w1: number
+  eb_w2: number
+  eb_h1: number
+  eb_h2: number
+  // True when a banded edge's tape thickness couldn't be resolved — the optimiser
+  // flags these parts when "deduct edgebanding" is on (deduction would be short).
+  eb_missing: boolean
   material_id: string | null
   grain_direction: string | null
   nest_priority: number
   output_to_cnc: boolean
   comment: string | null      // from cabinet_instances.part_comments[part_key]
 }
+
+// Cabinet-level maps of user-authored, regen-surviving content keyed by
+// source_part_key. cabinet_instances.part_names / .part_comments.
+export type PartKeyMap = Record<string, string>
 
 export interface OptiMaterial {
   id: string
@@ -68,6 +85,14 @@ export interface OptiProfile {
   tool_entry_offset: number | null // ramp approach offset; also reserved in the margin
   margin_use_tool_dia: boolean | null     // include routing tool Ø in the margin
   margin_use_entry_offset: boolean | null // include the approach offset in the margin
+  deduct_edgeband: boolean | null  // nest parts at cut size (finished − tape per banded edge)
+}
+
+// Cut (unfinished) size of a part = finished size minus the edgeband thickness on
+// each banded edge, kept fractional at 0.1mm (never rounded to whole mm).
+export const round1 = (v: number) => Math.round(v * 10) / 10
+export function cutSize(p: Pick<OptiPart, 'w' | 'h' | 'eb_w1' | 'eb_w2' | 'eb_h1' | 'eb_h2'>): { w: number; h: number } {
+  return { w: round1(p.w - p.eb_w1 - p.eb_w2), h: round1(p.h - p.eb_h1 - p.eb_h2) }
 }
 
 export interface OptiTool {

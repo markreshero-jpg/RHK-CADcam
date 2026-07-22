@@ -49,13 +49,14 @@ export function caseFrame(p: ResolvedCasePart): FootprintFrame {
   }
 }
 
-// Door / drawer-front face: a vertical panel at the front. Like the carcase back,
-// DX is the HEIGHT (→cabinet Y) and DY the WIDTH (→cabinet X); thickness→cabinet Z.
-// X/Y are the left/bottom corner. Nested cup-side (back, +Z) UP and drilled as-is,
-// so +normal bores are NOT mirrored (upSign '+') — otherwise the hinge cluster
-// flips end-for-end down the door.
+// Door / drawer-front face: a vertical panel at the front. DX is the WIDTH
+// (→cabinet X) and DY the HEIGHT (→cabinet Y); thickness→cabinet Z. X/Y are the
+// left/bottom corner. u = DX so pos_x runs left→right (width), v = DY so pos_y
+// runs bottom→top (height) — the panel's own upright orientation, no display
+// swap needed. Nested cup-side (back, +Z) UP and drilled as-is, so +normal bores
+// are NOT mirrored (upSign '+') — otherwise the hinge cluster flips across the door.
 export function zoneFrame(z: ResolvedFaceZone): FootprintFrame {
-  return { normal: 'z', upSign: '+', u: { axis: 'y', dir: 1, origin: z.Y, extent: z.DX }, v: { axis: 'x', dir: 1, origin: z.X, extent: z.DY } }
+  return { normal: 'z', upSign: '+', u: { axis: 'x', dir: 1, origin: z.X, extent: z.DX }, v: { axis: 'y', dir: 1, origin: z.Y, extent: z.DY } }
 }
 
 // Drawer-box panel in cabinet space. resolveDrawerStack maps box-local → cabinet

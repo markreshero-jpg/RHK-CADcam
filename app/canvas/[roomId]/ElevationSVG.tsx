@@ -39,7 +39,7 @@ function tkElevRect(p: ResolvedToekickPart) {
 }
 
 function zoneElevRect(z: ResolvedFaceZone) {
-  return { ex: z.X, ey: z.Y + z.DX, ew: z.DY, eh: z.DX }
+  return { ex: z.X, ey: z.Y + z.DY, ew: z.DX, eh: z.DY }   // face: DX=width, DY=height
 }
 
 function shelfElevRect(p: ResolvedInternalPart) {

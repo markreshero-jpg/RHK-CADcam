@@ -101,8 +101,8 @@ export function resolveHinges(
   for (const z of zones) {
     if (z.face_type !== 'door') continue
 
-    const doorH = z.DX   // cabinet-Y extent (height)
-    const doorW = z.DY   // cabinet-X extent (width)
+    const doorH = z.DY   // cabinet-Y extent (height)
+    const doorW = z.DX   // cabinet-X extent (width)
     const edge: 'left' | 'right' | 'top' | 'bottom' =
       (z.hinge_side as 'left' | 'right' | 'top' | 'bottom' | undefined) ?? hw.default_hinge_edge
 
@@ -262,7 +262,7 @@ function resolveMount(
     const part = caseParts.find(p => p.part_key === key)
     const innerX = part
       ? (edge === 'left' ? part.X + part.DZ : part.X)
-      : (edge === 'left' ? z.X : z.X + z.DY)
+      : (edge === 'left' ? z.X : z.X + z.DX)
     return {
       target: part ? { table: 'case_parts', part_key: key } : null,
       mountX: innerX,
@@ -297,7 +297,7 @@ function resolveMount(
       const sCentreY = best.Y + best.DZ / 2
       return {
         target: { table: 'internal_parts', internal_part_type: best.part_type, internal_sort_order: best.sort_order },
-        mountX: z.X + z.DY / 2,
+        mountX: z.X + z.DX / 2,
         mountY: sCentreY,
         mountZ: plateZ,
         // Plate fires on the shelf face toward the door (downward for a top hinge
@@ -313,8 +313,8 @@ function resolveMount(
             ?? caseParts.find(p => p.part_key === 'front_rail')
     return {
       target: part ? { table: 'case_parts', part_key: part.part_key } : null,
-      mountX: z.X + z.DY / 2,
-      mountY: z.Y + z.DX,
+      mountX: z.X + z.DX / 2,
+      mountY: z.Y + z.DY,
       mountZ: plateZ,
       mountAxis: 'y-',
     }
@@ -323,7 +323,7 @@ function resolveMount(
   const part = caseParts.find(p => p.part_key === 'bottom')
   return {
     target: part ? { table: 'case_parts', part_key: 'bottom' } : null,
-    mountX: z.X + z.DY / 2,
+    mountX: z.X + z.DX / 2,
     mountY: z.Y,
     mountZ: plateZ,
     mountAxis: 'y+',

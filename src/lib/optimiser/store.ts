@@ -98,6 +98,7 @@ interface OptiState {
   setCutQty: (uid: string, qty: number) => void
   setPartColOrder: (order: string[]) => void
   setPartComment: (uid: string, comment: string) => void
+  setPartLabel: (uid: string, label: string) => void
   setSettings: (patch: Partial<PreOptSettings>) => void
   ensureStock: (key: string, seed: SheetStock) => void
   setStock: (key: string, patch: Partial<SheetStock>) => void
@@ -229,6 +230,13 @@ export const useOptiStore = create<OptiState>((set) => ({
     if (!st.snapshot) return {}
     const c = comment.trim() || null
     return { snapshot: { ...st.snapshot, parts: st.snapshot.parts.map(p => p.uid === uid ? { ...p, comment: c } : p) } }
+  }),
+  // Display name is part metadata, not a nest input — does NOT invalidate the
+  // layout. An empty name falls back to the part's default_label.
+  setPartLabel: (uid, label) => set(st => {
+    if (!st.snapshot) return {}
+    return { snapshot: { ...st.snapshot, parts: st.snapshot.parts.map(p =>
+      p.uid === uid ? { ...p, label: label.trim() || p.default_label } : p) } }
   }),
   setSettings: (patch) => set(st => ({ settings: { ...st.settings, ...patch }, ...INVALIDATE_NEST })),
   ensureStock: (key, seed) => set(st => st.stock[key]

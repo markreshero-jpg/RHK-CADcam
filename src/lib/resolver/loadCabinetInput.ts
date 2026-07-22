@@ -40,17 +40,20 @@ function toHoles(v: unknown): HingeBoreHole[] {
 
 // Resolve the door-style cascade per zone (zone → room → job) and load each
 // distinct style's catalogue thickness + profile operations. Returns a map
-// keyed `${row}_${col}` for door zones that resolve to a style.
+// keyed `${row}_${col}` for front zones (door / drawer_face / false_panel)
+// that resolve to a style.
 async function resolveDoorStyles(
   grid: FaceGridInput,
   roomStyleId: string | null,
   projStyleId: string | null,
   colourOverrideId: string | null = null,
 ): Promise<Record<string, ResolvedDoorStyleInput>> {
-  // Effective style id per door zone (lowest set level wins).
+  // Effective style id per front zone (lowest set level wins). Drawer fronts
+  // and false panels take the same style as doors so the whole face matches
+  // in material, thickness, profile and edging.
   const zoneStyle = new Map<string, string>()
   for (const z of grid.zones) {
-    if (z.face_type !== 'door') continue
+    if (z.face_type === 'open') continue
     const styleId = z.door_style_id ?? roomStyleId ?? projStyleId ?? null
     if (styleId) zoneStyle.set(`${z.row_index}_${z.col_index}`, styleId)
   }

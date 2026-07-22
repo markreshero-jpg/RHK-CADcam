@@ -144,7 +144,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         X: p.x, Y: p.y, Z: p.z,
         AX: p.ax, AY: p.ay, AZ: p.az,
         material_id: p.material_id,
-        edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right },
+        edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right, id: p.edge_band_id ?? undefined },
       })),
       toekick_parts: myTk.map(p => ({
         part_key: p.part_key,
@@ -154,7 +154,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         X: p.x, Y: p.y, Z: p.z,
         AX: p.ax, AY: p.ay, AZ: p.az,
         material_id: p.material_id,
-        edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right },
+        edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right, id: p.edge_band_id ?? undefined },
       })),
       internal_parts: myInt.map(p => ({
         part_type: p.part_type,
@@ -166,7 +166,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         material_id: p.material_id,
         // edge_band_front (DB) = right in resolver space (front DY edge)
         // edge_band_back  (DB) = left in resolver space
-        edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_back, right: p.edge_band_front },
+        edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_back, right: p.edge_band_front, id: p.edge_band_id ?? undefined },
       })),
       face_rows: myRows.map(r => ({
         row_index: r.row_index, height: r.height, height_locked: r.height_locked,
@@ -181,7 +181,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         X: z.x, Y: z.y, Z: z.z,
         AX: z.ax, AY: z.ay, AZ: z.az,
         material_id: z.material_id,
-        edge_band: { top: z.edge_band_top, bottom: z.edge_band_bottom, left: z.edge_band_left, right: z.edge_band_right },
+        edge_band: { top: z.edge_band_top, bottom: z.edge_band_bottom, left: z.edge_band_left, right: z.edge_band_right, id: z.edge_band_id ?? undefined },
         door_style_id: z.door_style_id ?? null,
         door_profile_id: z.door_profile_id ?? null,
         door_profile: z.door_profile ?? null,
@@ -1043,6 +1043,29 @@ export async function dbSavePartComment(cabinetId: string, partId: string, comme
   const updated = comment.trim() ? { ...current, [partId]: comment.trim() } : (() => { const { [partId]: _r, ...rest } = current; return rest })()
   const { error } = await supabase.from('cabinet_instances').update({ part_comments: updated }).eq('id', cabinetId)
   if (error) console.error('[part comment save]', error)
+  return updated
+}
+
+// ── Part Names ────────────────────────────────────────────────────────────────
+// User-authored display names, keyed by the same synthetic source_part_key as
+// part_comments (case_left_side, db_0_1_db_bottom…). Lives on cabinet_instances
+// so it survives persistResolved's delete-then-insert of the part rows. The
+// part's part_type / part_key stays the hard-coded machine identity.
+
+export type PartNames = Record<string, string>
+
+export async function dbLoadPartNames(cabinetId: string): Promise<PartNames> {
+  const { data } = await supabase
+    .from('cabinet_instances').select('part_names').eq('id', cabinetId).single()
+  return ((data as { part_names?: unknown } | null)?.part_names ?? {}) as PartNames
+}
+
+// Saving an empty name (or one equal to the generated default) clears the
+// override, so the part falls back to the default label.
+export async function dbSavePartName(cabinetId: string, partId: string, name: string, current: PartNames): Promise<PartNames> {
+  const updated = name.trim() ? { ...current, [partId]: name.trim() } : (() => { const { [partId]: _r, ...rest } = current; return rest })()
+  const { error } = await supabase.from('cabinet_instances').update({ part_names: updated }).eq('id', cabinetId)
+  if (error) console.error('[part name save]', error)
   return updated
 }
 

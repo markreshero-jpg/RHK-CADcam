@@ -51,9 +51,15 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
 
   // ── 5. Drawer Stacks ──────────────────────────────────────────
   // Resolves one drawer box + two slides per drawer_face zone
-  const drawerStacks = cab.has_face
+  const {
+    stacks: drawerStacks,
+    errors: drawerErrors,
+    warnings: drawerWarnings,
+  } = cab.has_face
     ? resolveDrawerStacks(cab, r, zones)
-    : []
+    : { stacks: [], errors: [], warnings: [] }
+  allErrors.push(...drawerErrors)
+  allWarnings.push(...drawerWarnings)
 
   // ── 6. Seam Joints ────────────────────────────────────────────
   // For each case-part seam that has a joint assigned (per-cabinet or CM default),

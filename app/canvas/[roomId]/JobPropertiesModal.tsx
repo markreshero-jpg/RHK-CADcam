@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { Project, ProjectStatus, DEFAULT_DIMS } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
 import { supabase } from '@/src/lib/supabase'
+import { DoorStylePreview, useDoorStylePreviews } from '@/src/components/DoorStylePreview'
 
 export type JobPropertiesTab = 'details' | 'cabinet_standards' | 'overrides'
 type CabinetStandardsTab = 'construction' | 'materials' | 'hardware' | 'doors'
@@ -69,7 +70,11 @@ interface ClassDimDefaults {
 }
 
 type SchedItem = { id: string; name: string; is_default: boolean; kind?: 'external' | 'internal' | null }
-type ColourItem = { id: string; schedule_id: string; colour_name: string; colour_code: string | null }
+type ColourItem = {
+  id: string; schedule_id: string; colour_name: string; colour_code: string | null
+  material_id: string | null
+  material: { name: string; dz: number } | null   // linked board (what the parts cut from)
+}
 
 type JobPreset = {
   id: string
@@ -139,6 +144,8 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const [wallDoorColour,       setWallDoorColour]       = useState(project.wall_door_colour_id ?? '')
   const [tallDoorColour,       setTallDoorColour]       = useState(project.tall_door_colour_id ?? '')
   const [styleSchedMap,        setStyleSchedMap]        = useState<Record<string, string | null>>({})
+  // Style → its default colour id (used when a class leaves colour on "style default").
+  const [styleDefaultColour,   setStyleDefaultColour]   = useState<Record<string, string | null>>({})
   const [doorColours,          setDoorColours]          = useState<ColourItem[]>([])
 
   // ── Material schedules (per zone) ─────────────────────────────────────────
@@ -181,16 +188,17 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
         supabase.from('drawerbox_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('inner_drawerbox_schedules').select('id,name,is_default').eq('active', true).order('name'),
         supabase.from('job_presets').select('*').order('name'),
-        supabase.from('door_styles').select('id,name,door_material_schedule_id').eq('is_active', true).order('sort_order').order('name'),
-        supabase.from('door_schedule_materials').select('id,schedule_id,colour_name,colour_code').eq('is_active', true).order('sort_order').order('colour_name'),
+        supabase.from('door_styles').select('id,name,door_material_schedule_id,default_material_id').eq('is_active', true).order('sort_order').order('name'),
+        supabase.from('door_schedule_materials').select('id,schedule_id,colour_name,colour_code,material_id,material:materials(name,dz)').eq('is_active', true).order('sort_order').order('colour_name'),
       ])
       if (cancelled) return
       setConstructionScheds(    (cmsR.data  ?? []) as SchedItem[])
       setDrawerBoxMethods(      (dbmR.data  ?? []) as SchedItem[])
-      const dsRows = (dsR.data ?? []) as { id: string; name: string; door_material_schedule_id: string | null }[]
+      const dsRows = (dsR.data ?? []) as { id: string; name: string; door_material_schedule_id: string | null; default_material_id: string | null }[]
       setDoorStyles(            dsRows.map(s => ({ id: s.id, name: s.name, is_default: false })))
       setStyleSchedMap(         Object.fromEntries(dsRows.map(s => [s.id, s.door_material_schedule_id])))
-      setDoorColours(           (dcR.data ?? []) as ColourItem[])
+      setStyleDefaultColour(    Object.fromEntries(dsRows.map(s => [s.id, s.default_material_id])))
+      setDoorColours(           (dcR.data ?? []) as unknown as ColourItem[])
       setAsmSchedules(          (asmR.data  ?? []) as SchedItem[])
       setHandleScheds(          (hdlR.data  ?? []) as SchedItem[])
       setSlideScheds(           (slR.data   ?? []) as SchedItem[])
@@ -345,6 +353,9 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
     setSavePresetOpen(false)
     setNewPresetName('')
   }
+
+  // Live door previews for the per-class pickers (style + colour → SVG props).
+  const doorPreviews = useDoorStylePreviews()
 
   // Colours available for a given style's material schedule.
   function coloursForStyle(styleId: string): ColourItem[] {
@@ -694,7 +705,15 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                           The job&apos;s parent style. Each cabinet class below inherits it unless overridden.
                           Rooms and individual door zones can still override per zone. Manage styles in the Doors Library.
                         </p>
-                        <SchedPicker label="Door Style" value={doorStyle} onChange={setDoorStyle} items={doorStyles} />
+                        <div className="flex items-start gap-4">
+                          <div className="flex-1">
+                            <SchedPicker label="Door Style" value={doorStyle} onChange={setDoorStyle} items={doorStyles} />
+                          </div>
+                          {(() => {
+                            const pv = doorPreviews.forStyle(doorStyle || null)
+                            return pv ? <DoorStylePreview {...pv} className="h-28" /> : null
+                          })()}
+                        </div>
                       </section>
 
                       <section>
@@ -711,8 +730,19 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                               const effStyle  = row.style || doorStyle
                               const colourOpts = coloursForStyle(effStyle)
                               const effName    = doorStyles.find(s => s.id === effStyle)?.name ?? '—'
+                              // Resolved outcome: explicit class colour, else the style's default.
+                              const effColourId = row.colour || (effStyle ? styleDefaultColour[effStyle] ?? null : null)
+                              const effColour   = effColourId ? doorColours.find(c => c.id === effColourId) ?? null : null
+                              const hasRange    = !!(effStyle && styleSchedMap[effStyle])
+                              const preview     = doorPreviews.forStyle(effStyle, row.colour || null)
                               return (
-                                <div key={row.key} className="border border-gray-800 rounded-lg p-3 space-y-2">
+                                <div key={row.key} className="border border-gray-800 rounded-lg p-3 flex gap-3">
+                                  {preview && (
+                                    <div className="shrink-0 self-center">
+                                      <DoorStylePreview {...preview} className="h-24" />
+                                    </div>
+                                  )}
+                                  <div className="flex-1 space-y-2">
                                   <div className="flex items-center gap-4">
                                     <span className="w-10 shrink-0 text-xs font-semibold text-gray-200">{row.label}</span>
                                     <select
@@ -726,7 +756,11 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                                   </div>
                                   <div className="flex items-center gap-4 pl-14">
                                     {colourOpts.length === 0 ? (
-                                      <span className="text-[11px] text-gray-500">No colours in this style&apos;s schedule.</span>
+                                      <span className="text-[11px] text-gray-500">
+                                        {hasRange
+                                          ? 'No colours in this style’s colour range.'
+                                          : 'No colour range on this style (paint on site).'}
+                                      </span>
                                     ) : (
                                       <select
                                         value={row.colour}
@@ -741,6 +775,25 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                                         ))}
                                       </select>
                                     )}
+                                  </div>
+                                  {/* Resolved outcome — what these fronts will actually cut from */}
+                                  <div className="pl-14">
+                                    {effColour?.material ? (
+                                      <p className="text-[11px] text-gray-400">
+                                        → {effName} · {effColour.colour_name} · cuts from{' '}
+                                        <span className="text-gray-200">{effColour.material.name} ({effColour.material.dz}mm)</span>
+                                      </p>
+                                    ) : effColour ? (
+                                      <p className="text-[11px] text-amber-400">
+                                        ⚠ &ldquo;{effColour.colour_name}&rdquo; isn&apos;t linked to a board — fronts will cut from the
+                                        carcass door material. Link it in the Doors Library.
+                                      </p>
+                                    ) : hasRange ? (
+                                      <p className="text-[11px] text-amber-400">
+                                        ⚠ No colour selected and the style has no default — fronts will cut from the carcass door material.
+                                      </p>
+                                    ) : null}
+                                  </div>
                                   </div>
                                 </div>
                               )

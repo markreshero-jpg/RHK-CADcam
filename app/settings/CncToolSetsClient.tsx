@@ -181,11 +181,18 @@ export default function CncToolSetsClient() {
           </div>
 
           {/* Operations */}
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1">
             <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">Operations (run in order)</p>
             <button onClick={() => addOp(selected.id)}
               className="text-xs px-2.5 py-1 bg-accent hover:bg-accent-hover text-white rounded transition-colors">+ Add operation</button>
           </div>
+          {/* How the recipe maps to routing (see optimiser routing emit). */}
+          <p className="text-[10px] text-ink-subtle mb-2 leading-relaxed max-w-2xl">
+            Each step runs in order over the op’s area. <b>pocket</b>/<b>raster</b> clear the area (raster or spiral by Fill strategy);
+            <b> outline</b>/<b>profile</b>/<b>square_off</b> cut the boundary; <b>groove</b> cuts a slot (uses Width).
+            <b> Offsets</b> inset that step from the op’s edges — use them to leave stock for a later finish pass.
+            Depth defaults to the op’s depth. <b>drill</b> steps are ignored by routing.
+          </p>
 
           <div className="border border-edge-strong rounded-lg overflow-hidden">
             {selectedOps.length === 0 && <p className="text-[11px] text-ink-subtle px-3 py-5 text-center">No operations — add the first step.</p>}

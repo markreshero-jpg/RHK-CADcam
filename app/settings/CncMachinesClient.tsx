@@ -12,6 +12,8 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import EntryMethodPreview from './EntryMethodPreview'
+import PerimeterEntryPreview from './PerimeterEntryPreview'
 import DrillBlockSetup from '@/app/settings/DrillBlockSetup'
 
 interface Machine {
@@ -23,7 +25,9 @@ interface Profile { id: string; cnc_machine_id: string; name: string; is_default
 interface ToolItem { id: string; name: string; tool_number: string | null; diameter: number | null }
 
 type FieldKind = 'num' | 'int' | 'text' | 'bool' | 'select' | 'tool' | 'textarea'
-interface FieldSpec { key: string; label: string; kind: FieldKind; opts?: string[]; optLabels?: string[] }
+// showIf hides a field unless another field's value is one of the listed values
+// (e.g. helical params only when the entry strategy is helical).
+interface FieldSpec { key: string; label: string; kind: FieldKind; opts?: string[]; optLabels?: string[]; showIf?: { key: string; in: string[] } }
 interface FieldGroup { title: string; fields: FieldSpec[] }
 
 // Spec §6 post-processor fields, grouped.
@@ -51,28 +55,41 @@ const GROUPS: FieldGroup[] = [
     { key: 'spoilboard_thickness', label: 'Spoilboard thk (mm)', kind: 'num' },
     { key: 'drill_rapid_z', label: 'Drill rapid Z (mm)', kind: 'num' },
   ]},
-  { title: 'Tool Entry', fields: [
-    { key: 'entry_strategy', label: 'Entry strategy', kind: 'select', opts: ['ramp', 'helical', 'pre_drill', 'straight_plunge'] },
+  { title: 'Perimeter Entry', fields: [
+    // Perimeters ramp in from the waste — never helical. The approach is either
+    // straight onto the edge, or offset into the waste (within the nesting margin) so
+    // the entry scar sits off the finished edge. Offset field shows only when 'offset'.
+    { key: 'perimeter_approach_type', label: 'Approach', kind: 'select', opts: ['straight', 'offset'], optLabels: ['Straight approach', 'Offset approach'] },
     { key: 'ramp_in_distance', label: 'Ramp distance (mm)', kind: 'num' },
     { key: 'ramp_in_angle', label: 'Ramp angle (°)', kind: 'num' },
     { key: 'ramp_in_feed_pct', label: 'Ramp feed %', kind: 'num' },
-    { key: 'helical_radius', label: 'Helical radius (mm)', kind: 'num' },
-    { key: 'helical_feed_pct', label: 'Helical feed %', kind: 'num' },
-    { key: 'helical_passes', label: 'Helical passes', kind: 'int' },
-    { key: 'pre_drill_tool_id', label: 'Pre-drill tool', kind: 'tool' },
-    { key: 'tool_entry_offset', label: 'Tool entry offset (mm)', kind: 'num' },
+    { key: 'tool_entry_offset', label: 'Approach offset (mm)', kind: 'num', showIf: { key: 'perimeter_approach_type', in: ['offset'] } },
+  ]},
+  { title: 'Pocket & Hole Entry', fields: [
+    // Pockets & bored/circular holes plunge into solid material at an interior point,
+    // so helical (or ramp) belongs here — separate from the perimeter entry above.
+    { key: 'pocket_entry_strategy', label: 'Entry strategy', kind: 'select', opts: ['helical', 'ramp', 'pre_drill', 'straight_plunge'] },
+    { key: 'helical_radius', label: 'Helical radius (mm)', kind: 'num', showIf: { key: 'pocket_entry_strategy', in: ['helical'] } },
+    { key: 'helical_feed_pct', label: 'Helical feed %', kind: 'num', showIf: { key: 'pocket_entry_strategy', in: ['helical'] } },
+    { key: 'helical_passes', label: 'Helical passes', kind: 'int', showIf: { key: 'pocket_entry_strategy', in: ['helical'] } },
+    { key: 'pre_drill_tool_id', label: 'Pre-drill tool', kind: 'tool', showIf: { key: 'pocket_entry_strategy', in: ['pre_drill'] } },
   ]},
   { title: 'Nesting Margin', fields: [
     { key: 'nest_pad', label: 'Nest pad (mm)', kind: 'num' },
   ]},
-  { title: 'Lead-in & Lead-out', fields: [
-    { key: 'lead_in_type', label: 'Lead-in', kind: 'select', opts: ['straight', 'arc_tangent', 'perpendicular', 'none'] },
-    { key: 'lead_in_length', label: 'Lead-in len (mm)', kind: 'num' },
-    { key: 'lead_in_feed_pct', label: 'Lead-in feed %', kind: 'num' },
-    { key: 'lead_out_type', label: 'Lead-out', kind: 'select', opts: ['straight', 'arc_tangent', 'perpendicular', 'none'] },
-    { key: 'lead_out_length', label: 'Lead-out len (mm)', kind: 'num' },
-    { key: 'lead_out_feed_pct', label: 'Lead-out feed %', kind: 'num' },
-  ]},
+  // Lead-in & Lead-out — HIDDEN from the UI on purpose. The perimeter always ramps in
+  // now (entry_strategy='ramp'), and the ramp/ramp-out IS the lead-in/lead-out, so
+  // gcode.ts never reaches leadIn()/leadOut() (they only run for non-ramp entries).
+  // The lead_in_*/lead_out_* columns + post-processor logic are kept intact; re-add
+  // this group to expose them again if a non-ramp entry or arc lead-in/out is wired in.
+  // { title: 'Lead-in & Lead-out', fields: [
+  //   { key: 'lead_in_type', label: 'Lead-in', kind: 'select', opts: ['straight', 'arc_tangent', 'perpendicular', 'none'] },
+  //   { key: 'lead_in_length', label: 'Lead-in len (mm)', kind: 'num' },
+  //   { key: 'lead_in_feed_pct', label: 'Lead-in feed %', kind: 'num' },
+  //   { key: 'lead_out_type', label: 'Lead-out', kind: 'select', opts: ['straight', 'arc_tangent', 'perpendicular', 'none'] },
+  //   { key: 'lead_out_length', label: 'Lead-out len (mm)', kind: 'num' },
+  //   { key: 'lead_out_feed_pct', label: 'Lead-out feed %', kind: 'num' },
+  // ]},
   { title: 'Milling Direction', fields: [
     { key: 'milling_direction', label: 'Direction', kind: 'select', opts: ['climb', 'conventional', 'auto'] },
     { key: 'milling_direction_override_by_material', label: 'Material can override', kind: 'bool' },
@@ -300,11 +317,32 @@ export default function CncMachinesClient() {
                       {open && (g.title === 'Nesting Margin' ? (
                         <NestingMarginPanel profile={profile} tools={tools} onPatch={c => patchProfile(profile.id, c)} />
                       ) : (
-                        <div className="grid grid-cols-3 gap-x-4 gap-y-3 px-3 py-3">
-                          {g.fields.map(fld => (
-                            <Field key={fld.key} spec={fld} value={profile[fld.key]} tools={tools}
-                              onSave={v => patchProfile(profile.id, { [fld.key]: v })} />
-                          ))}
+                        <div className="px-3 py-3 space-y-3">
+                          {g.title === 'Pocket & Hole Entry' && (
+                            <EntryMethodPreview
+                              method={String(profile.pocket_entry_strategy ?? 'helical')}
+                              helicalRadius={Number(profile.helical_radius) || null}
+                              rampAngle={Number(profile.ramp_in_angle) || null}
+                              rampDistance={Number(profile.ramp_in_distance) || null}
+                            />
+                          )}
+                          {g.title === 'Perimeter Entry' && (
+                            <PerimeterEntryPreview
+                              approachType={String(profile.perimeter_approach_type ?? 'offset')}
+                              rampAngle={Number(profile.ramp_in_angle) || null}
+                              rampDistance={Number(profile.ramp_in_distance) || null}
+                              approachOffset={Number(profile.tool_entry_offset) || null}
+                              nestPad={Number(profile.nest_pad) || null}
+                            />
+                          )}
+                          <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+                            {g.fields
+                              .filter(fld => !fld.showIf || fld.showIf.in.includes(String(profile[fld.showIf.key] ?? '')))
+                              .map(fld => (
+                                <Field key={fld.key} spec={fld} value={profile[fld.key]} tools={tools}
+                                  onSave={v => patchProfile(profile.id, { [fld.key]: v })} />
+                              ))}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -411,6 +449,15 @@ function NestingMarginPanel({ profile, tools, onPatch }: { profile: Profile; too
             <span className="ml-auto">= {fmt(base)} mm</span>
           </div>
         </div>
+      </div>
+      <div className="border-t border-edge pt-2.5 space-y-1">
+        <Toggle label="Deduct edgebanding thickness off optimised parts"
+          on={profile.deduct_edgeband === true}
+          onChange={() => onPatch({ deduct_edgeband: profile.deduct_edgeband !== true })} />
+        <p className="text-[11px] text-ink-subtle">
+          Parts nest and cut at board size — finished size minus the tape thickness on each banded
+          edge (kept fractional to 0.1mm) — and drilling positions shift to match the cut blank.
+        </p>
       </div>
     </div>
   )

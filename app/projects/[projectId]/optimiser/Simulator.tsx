@@ -18,6 +18,7 @@ import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import { parseGcode, frameAtTime, fmtClock, holesOf, type ParsedProgram, type SimMove } from '@/src/lib/optimiser/gcodeParser'
 import { shapeTypeFor, type ToolShape } from '@/src/lib/cnc/toolProfile'
+import { getUserPrefs } from '@/src/lib/userPrefs'
 import ToolProfilePreview from '@/src/components/ToolProfilePreview'
 import SimCanvas3D from './SimCanvas3D'
 
@@ -282,6 +283,54 @@ function Legend() {
   )
 }
 
+// ── Cursor-anchored wheel zoom ────────────────────────────────────────────────
+// The sheet SVG's viewBox is 1:1 with its pixel size, so zoom is just a sub-rect
+// of `0 0 pxW pxH` — no drawing code needs to know about it. Same behaviour as
+// the canvas/Part Editor views (ResolvedViews): 1.15× per notch, cursor stays
+// put, honours the "Reverse scroll wheel zoom" setting. Double-click resets.
+function useWheelZoom(pxW: number, pxH: number) {
+  const svgRef = useRef<SVGSVGElement>(null)
+  const base = useMemo(() => ({ x: 0, y: 0, w: pxW, h: pxH }), [pxW, pxH])
+  const baseRef = useRef(base)
+  const [vb, setVb] = useState(base)
+  const vbRef = useRef(base)
+
+  // Refit whenever the sheet (and so the fitted pixel box) changes.
+  useEffect(() => { baseRef.current = base; vbRef.current = base; setVb(base) }, [base])
+
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      // Map the cursor through the SVG's real screen transform rather than using
+      // element-relative fractions, so the anchor holds even when the element is
+      // letterboxed by preserveAspectRatio.
+      const ctm = el.getScreenCTM()
+      if (!ctm) return
+      const cursor = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse())
+      const { x, y, w, h } = vbRef.current
+      const b = baseRef.current
+      // getUserPrefs() is read per-event (it isn't reactive) so toggling the
+      // setting takes effect without remounting the simulator.
+      const delta = getUserPrefs().invertScroll ? -e.deltaY : e.deltaY
+      const factor = delta > 0 ? 1.15 : 1 / 1.15
+      const fx = (cursor.x - x) / w
+      const fy = (cursor.y - y) / h
+      const newW = Math.max(b.w / 30, Math.min(b.w * 4, w * factor))
+      const newH = h * (newW / w)
+      const next = { x: cursor.x - fx * newW, y: cursor.y - fy * newH, w: newW, h: newH }
+      vbRef.current = next
+      setVb(next)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  const resetView = () => { vbRef.current = baseRef.current; setVb(baseRef.current) }
+  return { svgRef, viewBox: `${vb.x} ${vb.y} ${vb.w} ${vb.h}`, resetView }
+}
+
 // ── Sheet canvas ──────────────────────────────────────────────────────────────
 function Canvas({
   sheet, prog, elapsed, toolDia, headPos, cutting, activeTool, drillBlock,
@@ -348,8 +397,11 @@ function Canvas({
   const trueR = (m: SimMove) => Math.max(0.6, ((m.dia || toolDia(m.tool, 5)) / 2) * scale)
   const holeR = (m: SimMove) => Math.max(2.5, trueR(m))
 
+  const { svgRef, viewBox, resetView } = useWheelZoom(pxW, pxH)
+
   return (
-    <svg width={pxW} height={pxH} viewBox={`0 0 ${pxW} ${pxH}`} className="block rounded-lg shadow-2xl">
+    <svg ref={svgRef} width={pxW} height={pxH} viewBox={viewBox} onDoubleClick={resetView}
+      className="block rounded-lg shadow-2xl">
       {/* Stock */}
       <rect x={0} y={0} width={pxW} height={pxH} fill="#0f172a" stroke="#475569" strokeWidth={1} />
       {(trimTop || trimBottom || trimLeft || trimRight) > 0 && (

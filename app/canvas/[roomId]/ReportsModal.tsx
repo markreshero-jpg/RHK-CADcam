@@ -70,7 +70,7 @@ function collectParts(cabinets: CabinetInstance[], resolved: Map<string, Resolve
       rows.push({ sourceLabel: lbl, partDesc: INT_LABELS[p.part_type] ?? p.part_type, width: p.DY, depth: p.DX, thickness: p.DZ, quantity: 1, materialId: p.material_id })
     for (const z of r.face_zones) {
       if (z.face_type === 'open') continue
-      rows.push({ sourceLabel: lbl, partDesc: FACE_LABELS[z.face_type] ?? z.face_type, width: z.DY, depth: z.DX, thickness: z.DZ, quantity: 1, materialId: z.material_id })
+      rows.push({ sourceLabel: lbl, partDesc: FACE_LABELS[z.face_type] ?? z.face_type, width: z.DX, depth: z.DY, thickness: z.DZ, quantity: 1, materialId: z.material_id })
     }
   }
   return rows

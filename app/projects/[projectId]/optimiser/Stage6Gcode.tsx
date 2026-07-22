@@ -129,8 +129,11 @@ export default function Stage6Gcode() {
         .filter(t => t.diameter != null && Number(t.diameter) > 0)
         .map(t => ({ id: t.id as string, diameter: Number(t.diameter), tool_number: toolNum(t.tool_number), name: (t.name as string | null) ?? null }))
       const preferredPocketToolNumber = profile?.pocket_router_tool_number != null ? Number(profile.pocket_router_tool_number) : null
-      const { bySheet: sheetDrills, warnings: drillWarnings } =
-        await loadSheetDrills(snap.parts, nestResult.sheets, { sync: true, blockDiameters, routerTools, preferredPocketToolNumber })
+      // Nest was laid out at cut size when the profile deducts edgebanding —
+      // holes must shift onto the deducted blanks to match.
+      const deductEb = snap.profiles.find(p => p.id === profileId)?.deduct_edgeband === true
+      const { bySheet: sheetDrills, routesBySheet: sheetRoutes, warnings: drillWarnings } =
+        await loadSheetDrills(snap.parts, nestResult.sheets, { sync: true, blockDiameters, routerTools, preferredPocketToolNumber, deductEdgeband: deductEb })
       setDrillNotes(drillWarnings)
 
       // Program number (O-word) derived from the job number, unique per sheet.
@@ -139,6 +142,7 @@ export default function Stage6Gcode() {
 
       const gen: GenFile[] = nestResult.sheets.map((sheet, i) => {
         const drills = sheetDrills.get(sheet.index) ?? []
+        const routes = sheetRoutes.get(sheet.index) ?? []
         const mat = sheet.materialId ? matById.get(sheet.materialId) : undefined
         const tool = mat?.cnc_tool_id ? toolById.get(mat.cnc_tool_id) : undefined
         const post: PostProfile = postFromProfile(profile, tool
@@ -147,7 +151,7 @@ export default function Stage6Gcode() {
         // Material-level feed override (% of the tool/profile base feed).
         if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100)
         const gcode = generateSheetGcode({
-          sheet, thickness: sheet.thickness, profile: post, drills,
+          sheet, thickness: sheet.thickness, profile: post, drills, routes,
           toolNumber: toolNum(tool?.tool_number), drillToolNumber: 2,
           toolDiameter: tool?.diameter != null ? Number(tool.diameter) : undefined,
           maxDepthPerPass: tool?.max_depth_per_pass != null ? Number(tool.max_depth_per_pass) : undefined,

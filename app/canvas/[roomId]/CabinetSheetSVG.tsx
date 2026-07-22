@@ -360,7 +360,7 @@ export default function CabinetSheetSVG({
         const avail = dz - 40   // ≈ internal depth minus slide setback
         const byKey = new Map<string, { name: string; nl: number; qty: number }>()
         for (const z of drawerZones) {
-          const slide = findSlide(avail, z.DX, hardware.slideProducts, hardware.slideEntries)
+          const slide = findSlide(avail, z.DY, hardware.slideProducts, hardware.slideEntries)   // DY = opening height
           const name = slide?.name ?? 'Drawer runner'
           const nl = slide?.nominal_length ?? 0
           const k = `${name}|${nl}`
