@@ -77,14 +77,19 @@ const GROUPS: FieldGroup[] = [
   { title: 'Nesting Margin', fields: [
     { key: 'nest_pad', label: 'Nest pad (mm)', kind: 'num' },
   ]},
-  { title: 'Lead-in & Lead-out', fields: [
-    { key: 'lead_in_type', label: 'Lead-in', kind: 'select', opts: ['straight', 'arc_tangent', 'perpendicular', 'none'] },
-    { key: 'lead_in_length', label: 'Lead-in len (mm)', kind: 'num' },
-    { key: 'lead_in_feed_pct', label: 'Lead-in feed %', kind: 'num' },
-    { key: 'lead_out_type', label: 'Lead-out', kind: 'select', opts: ['straight', 'arc_tangent', 'perpendicular', 'none'] },
-    { key: 'lead_out_length', label: 'Lead-out len (mm)', kind: 'num' },
-    { key: 'lead_out_feed_pct', label: 'Lead-out feed %', kind: 'num' },
-  ]},
+  // Lead-in & Lead-out — HIDDEN from the UI on purpose. The perimeter always ramps in
+  // now (entry_strategy='ramp'), and the ramp/ramp-out IS the lead-in/lead-out, so
+  // gcode.ts never reaches leadIn()/leadOut() (they only run for non-ramp entries).
+  // The lead_in_*/lead_out_* columns + post-processor logic are kept intact; re-add
+  // this group to expose them again if a non-ramp entry or arc lead-in/out is wired in.
+  // { title: 'Lead-in & Lead-out', fields: [
+  //   { key: 'lead_in_type', label: 'Lead-in', kind: 'select', opts: ['straight', 'arc_tangent', 'perpendicular', 'none'] },
+  //   { key: 'lead_in_length', label: 'Lead-in len (mm)', kind: 'num' },
+  //   { key: 'lead_in_feed_pct', label: 'Lead-in feed %', kind: 'num' },
+  //   { key: 'lead_out_type', label: 'Lead-out', kind: 'select', opts: ['straight', 'arc_tangent', 'perpendicular', 'none'] },
+  //   { key: 'lead_out_length', label: 'Lead-out len (mm)', kind: 'num' },
+  //   { key: 'lead_out_feed_pct', label: 'Lead-out feed %', kind: 'num' },
+  // ]},
   { title: 'Milling Direction', fields: [
     { key: 'milling_direction', label: 'Direction', kind: 'select', opts: ['climb', 'conventional', 'auto'] },
     { key: 'milling_direction_override_by_material', label: 'Material can override', kind: 'bool' },
