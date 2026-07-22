@@ -44,7 +44,9 @@ export interface PostProfile {
   pass_strategy: string            // single | onion_skin | roughing_finishing | multi_depth
   milling_direction: string        // climb | conventional | auto
   cutter_compensation: string      // off | computer (offset path by tool radius) | control (G41/G42)
-  entry_strategy: string           // ramp | helical | pre_drill | straight_plunge
+  entry_strategy: string           // PERIMETER entry: ramp | helical | pre_drill | straight_plunge (realistically ramp)
+  perimeter_approach_type: string  // PERIMETER lead-in: 'straight' (on the edge) | 'offset' (into the waste by tool_entry_offset)
+  pocket_entry_strategy: string    // POCKET/hole entry: helical | ramp | pre_drill | straight_plunge
   ramp_in_distance: number
   ramp_in_angle: number
   ramp_in_feed_pct: number
@@ -118,7 +120,7 @@ export const DEFAULT_POST: PostProfile = {
   origin_corner: 'bottom_left', x_axis_direction: 'positive_right', y_axis_direction: 'positive_up',
   safe_z_clearance: 15, clearance_z: 3, onion_skin_z: 0.4, through_cut_z: -0.5, drill_rapid_z: 5,
   rough_pass_z_step: 8, pass_strategy: 'onion_skin', milling_direction: 'climb', cutter_compensation: 'computer',
-  entry_strategy: 'ramp', ramp_in_distance: 20, ramp_in_angle: 3, ramp_in_feed_pct: 50, tool_entry_offset: 2,
+  entry_strategy: 'ramp', perimeter_approach_type: 'offset', pocket_entry_strategy: 'helical', ramp_in_distance: 20, ramp_in_angle: 3, ramp_in_feed_pct: 50, tool_entry_offset: 2,
   helical_radius: 8, helical_feed_pct: 40, helical_passes: 1,
   lead_in_type: 'arc_tangent', lead_in_length: 8, lead_in_feed_pct: 60,
   lead_out_type: 'arc_tangent', lead_out_length: 8, lead_out_feed_pct: 100,
@@ -484,10 +486,12 @@ function emitCircularPockets(
 // Internal routing features (Phase B §3c): grooves + rectangular routes/pockets,
 // cut on the back/material-up pass with each op's own router bit. Grouped by tool so
 // one change covers all its features. Depth is reached in stepdown passes (the op's
-// tool max-depth-per-pass, else the profile's rough Z step); entry is a straight
-// plunge at the plunge feed (v1 — no ramp). Geometry is centreline (no cutter
-// compensation): a groove is one or more lanes across its width; a cleared pocket is
-// rastered a tool-radius inside its rectangle; an outline traces that inset rectangle.
+// tool max-depth-per-pass, else the profile's rough Z step). Pocket ENTRY is at the
+// pocket centre and its METHOD comes from the machine profile (entry_strategy +
+// helical_/ramp_ params) — helical corkscrew, zig-zag ramp, or straight/pre-drill
+// plunge. Geometry is centreline (no cutter compensation): a groove is one or more
+// lanes across its width; a cleared pocket is rastered/spiralled a tool-radius inside
+// its rectangle (fillStrategy); an outline traces that inset rectangle.
 function emitRoutes(
   emit: (s: string) => void, c: (s: string) => void,
   f: (v: number) => string, fz: (v: number) => string, fInt: (v: number) => string,
@@ -503,18 +507,41 @@ function emitRoutes(
   const runPath = (pts: Pt2[], z: number, from = 1) => {
     for (let i = from; i < pts.length; i++) emit(`G1 X${f(mapX(pts[i].x))} Y${f(mapY(pts[i].y))} Z${fz(z)} F${cutFeed}`)
   }
-  // Helical ram-in at (cx,cy) radius rr from the clearance plane down to zTarget,
-  // then a flat finishing circle — reuses the circular-pocket entry style.
-  const helixDown = (cx: number, cy: number, rr: number, zTarget: number) => {
-    const sx = mapX(cx + rr), sy = mapY(cy), cmx = mapX(cx), cmy = mapY(cy)
-    emit(`G0 X${f(sx)} Y${f(sy)} Z${fz(clearZ)}`)
-    const arcs = Math.max(1, Math.ceil((clearZ - zTarget) / Math.max(0.5, p.rough_pass_z_step)))
-    for (let a = 1; a <= arcs; a++) {
-      const z = clearZ + (zTarget - clearZ) * (a / arcs)
-      emit(`G3 X${f(sx)} Y${f(sy)} Z${fz(z)} I${f(cmx - sx)} J${f(cmy - sy)} F${helicalFeed}`)
+  const rampFeed = f(Math.round(p.base_feed_rate * (p.ramp_in_feed_pct > 0 ? p.ramp_in_feed_pct : 50) / 100))
+  // Enter a pocket AT ITS CENTRE down to zTarget, per the machine profile's POCKET
+  // entry strategy (cnc_machine_profiles.pocket_entry_strategy + helical_/ramp_ params;
+  // separate from the perimeter's entry_strategy so a helical pocket entry doesn't
+  // force the perimeter to helix). Location
+  // is always the centre (max interior room); only the METHOD comes from the profile.
+  // `roomR` = the largest radius that fits inside the pocket. Returns the tool-centre
+  // XY after entry, which the caller joins to the clearing path.
+  const enterPocket = (cx: number, cy: number, roomR: number, zTarget: number, step: number): Pt2 => {
+    const cmx = mapX(cx), cmy = mapY(cy)
+    const strat = p.pocket_entry_strategy || 'helical'
+    if (strat === 'helical' && roomR >= 0.6) {
+      const rr = Math.min(p.helical_radius > 0 ? p.helical_radius : roomR, roomR)
+      const sx = mapX(cx + rr), sy = mapY(cy)
+      emit(`G0 X${f(sx)} Y${f(sy)} Z${fz(clearZ)}`)
+      const arcs = Math.max(1, Math.ceil((clearZ - zTarget) / Math.max(0.5, step)))
+      for (let a = 1; a <= arcs; a++) emit(`G3 X${f(sx)} Y${f(sy)} Z${fz(clearZ + (zTarget - clearZ) * (a / arcs))} I${f(cmx - sx)} J${f(cmy - sy)} F${helicalFeed}`)
+      for (let k = 0; k < Math.max(1, p.helical_passes); k++) emit(`G3 X${f(sx)} Y${f(sy)} I${f(cmx - sx)} J${f(cmy - sy)} F${cutFeed}`)   // flat finishing turn(s)
+      return { x: cx + rr, y: cy }
     }
-    emit(`X${f(sx)} Y${f(sy)} I${f(cmx - sx)} J${f(cmy - sy)} F${cutFeed}`)   // flat circle at depth
-    return { x: cx + rr, y: cy }   // tool-centre position after the helix
+    if (strat === 'ramp' && roomR >= 0.6) {
+      // Zig-zag ramp along X, centred, bounded to the pocket; laps until at depth.
+      const half = Math.min(roomR, Math.max(1, (p.ramp_in_distance > 0 ? p.ramp_in_distance : 20) / 2))
+      const drop = clearZ - zTarget
+      const run = drop / Math.max(1e-3, Math.tan((p.ramp_in_angle > 0 ? p.ramp_in_angle : 3) * Math.PI / 180))
+      const laps = Math.max(1, Math.ceil(run / (2 * half)))
+      emit(`G0 X${f(mapX(cx - half))} Y${f(cmy)} Z${fz(clearZ)}`)
+      for (let l = 1; l <= laps; l++) emit(`G1 X${f(mapX(l % 2 === 1 ? cx + half : cx - half))} Y${f(cmy)} Z${fz(clearZ + (zTarget - clearZ) * (l / laps))} F${rampFeed}`)
+      return { x: laps % 2 === 1 ? cx + half : cx - half, y: cy }
+    }
+    // straight_plunge / pre_drill / too-small fallback: plunge at the centre.
+    if (strat === 'pre_drill') c('PRE-DRILL pocket entry (drill the entry hole first)')
+    emit(`G0 X${f(cmx)} Y${f(cmy)} Z${fz(safeZ)}`)
+    emit(`G1 Z${fz(zTarget)} F${plungeFeed}`)
+    return { x: cx, y: cy }
   }
 
   const byTool = new Map<number, SheetRoute[]>()
@@ -563,18 +590,17 @@ function emitRoutes(
       const stepover = Math.max(0.5, r.toolDiameter * (r.stepoverPct > 0 ? r.stepoverPct : 70) / 100)
       const pts = r.clear ? clearPath(r.fillStrategy, x0, y0, x1, y1, stepover, r.rasterAngleDeg) : outlinePath(x0, y0, x1, y1)
       if (pts.length < 2) continue
-      // Helical entry at the rect centre (max interior room); fall back to a straight
-      // plunge at the path start when the pocket is too small to corkscrew.
       const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
-      const helixR = Math.min(r.toolDiameter * 0.8, (x1 - x0) / 2, (y1 - y0) / 2)
-      const canHelix = r.clear && helixR >= 0.6
+      const roomR = Math.min((x1 - x0) / 2, (y1 - y0) / 2)
       for (let i = 1; i <= passes; i++) {
         const z = -Math.min(depth, i * step)
-        if (canHelix) {
-          helixDown(cx, cy, helixR, z)                     // corkscrew down at the centre
-          emit(`G1 X${f(mapX(pts[0].x))} Y${f(mapY(pts[0].y))} Z${fz(z)} F${cutFeed}`)   // to path start
+        if (r.clear) {
+          // Enter at the centre by the machine profile's strategy, then join the path.
+          enterPocket(cx, cy, roomR, z, step)
+          emit(`G1 X${f(mapX(pts[0].x))} Y${f(mapY(pts[0].y))} Z${fz(z)} F${cutFeed}`)
           runPath(pts, z, 1)
         } else {
+          // Boundary outline: plunge at the path start (no interior to helix into).
           emit(`G0 X${f(mapX(pts[0].x))} Y${f(mapY(pts[0].y))} Z${fz(safeZ)}`)
           emit(`G1 Z${fz(z)} F${plungeFeed}`)
           runPath(pts, z, 1)
@@ -779,7 +805,9 @@ function routePerimeter(
   // The exit mirrors it past a tool-diameter overshoot, lifting back to clearance.
   const firstDir = unit(S, path[1])
   const nrmS = outward(S, firstDir)
-  const offIn = Math.max(0, p.tool_entry_offset)
+  // 'straight' approach ramps on the edge line (no lateral offset); 'offset' starts
+  // tool_entry_offset into the waste so the entry scar sits off the finished edge.
+  const offIn = p.perimeter_approach_type === 'straight' ? 0 : Math.max(0, p.tool_entry_offset)
   const toolDia = toolRadius * 2
   const rampRun = (d: number) => (clearZ - d) / Math.max(1e-3, Math.tan((p.ramp_in_angle > 0 ? p.ramp_in_angle : 3) * Math.PI / 180))
   const straightRampIn = (d: number) => {
@@ -928,6 +956,8 @@ export function postFromProfile(row: Record<string, unknown> | null, tool?: { ba
     milling_direction: s(row.milling_direction, D.milling_direction),
     cutter_compensation: s(row.cutter_compensation, D.cutter_compensation),
     entry_strategy: s(row.entry_strategy, D.entry_strategy),
+    perimeter_approach_type: s(row.perimeter_approach_type, D.perimeter_approach_type),
+    pocket_entry_strategy: s(row.pocket_entry_strategy, D.pocket_entry_strategy),
     ramp_in_distance: n(row.ramp_in_distance, D.ramp_in_distance),
     ramp_in_angle: n(row.ramp_in_angle, D.ramp_in_angle),
     ramp_in_feed_pct: n(row.ramp_in_feed_pct, D.ramp_in_feed_pct),

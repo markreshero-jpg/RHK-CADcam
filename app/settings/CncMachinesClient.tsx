@@ -12,6 +12,8 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import EntryMethodPreview from './EntryMethodPreview'
+import PerimeterEntryPreview from './PerimeterEntryPreview'
 import DrillBlockSetup from '@/app/settings/DrillBlockSetup'
 
 interface Machine {
@@ -23,7 +25,9 @@ interface Profile { id: string; cnc_machine_id: string; name: string; is_default
 interface ToolItem { id: string; name: string; tool_number: string | null; diameter: number | null }
 
 type FieldKind = 'num' | 'int' | 'text' | 'bool' | 'select' | 'tool' | 'textarea'
-interface FieldSpec { key: string; label: string; kind: FieldKind; opts?: string[]; optLabels?: string[] }
+// showIf hides a field unless another field's value is one of the listed values
+// (e.g. helical params only when the entry strategy is helical).
+interface FieldSpec { key: string; label: string; kind: FieldKind; opts?: string[]; optLabels?: string[]; showIf?: { key: string; in: string[] } }
 interface FieldGroup { title: string; fields: FieldSpec[] }
 
 // Spec §6 post-processor fields, grouped.
@@ -51,16 +55,24 @@ const GROUPS: FieldGroup[] = [
     { key: 'spoilboard_thickness', label: 'Spoilboard thk (mm)', kind: 'num' },
     { key: 'drill_rapid_z', label: 'Drill rapid Z (mm)', kind: 'num' },
   ]},
-  { title: 'Tool Entry', fields: [
-    { key: 'entry_strategy', label: 'Entry strategy', kind: 'select', opts: ['ramp', 'helical', 'pre_drill', 'straight_plunge'] },
+  { title: 'Perimeter Entry', fields: [
+    // Perimeters ramp in from the waste — never helical. The approach is either
+    // straight onto the edge, or offset into the waste (within the nesting margin) so
+    // the entry scar sits off the finished edge. Offset field shows only when 'offset'.
+    { key: 'perimeter_approach_type', label: 'Approach', kind: 'select', opts: ['straight', 'offset'], optLabels: ['Straight approach', 'Offset approach'] },
     { key: 'ramp_in_distance', label: 'Ramp distance (mm)', kind: 'num' },
     { key: 'ramp_in_angle', label: 'Ramp angle (°)', kind: 'num' },
     { key: 'ramp_in_feed_pct', label: 'Ramp feed %', kind: 'num' },
-    { key: 'helical_radius', label: 'Helical radius (mm)', kind: 'num' },
-    { key: 'helical_feed_pct', label: 'Helical feed %', kind: 'num' },
-    { key: 'helical_passes', label: 'Helical passes', kind: 'int' },
-    { key: 'pre_drill_tool_id', label: 'Pre-drill tool', kind: 'tool' },
-    { key: 'tool_entry_offset', label: 'Tool entry offset (mm)', kind: 'num' },
+    { key: 'tool_entry_offset', label: 'Approach offset (mm)', kind: 'num', showIf: { key: 'perimeter_approach_type', in: ['offset'] } },
+  ]},
+  { title: 'Pocket & Hole Entry', fields: [
+    // Pockets & bored/circular holes plunge into solid material at an interior point,
+    // so helical (or ramp) belongs here — separate from the perimeter entry above.
+    { key: 'pocket_entry_strategy', label: 'Entry strategy', kind: 'select', opts: ['helical', 'ramp', 'pre_drill', 'straight_plunge'] },
+    { key: 'helical_radius', label: 'Helical radius (mm)', kind: 'num', showIf: { key: 'pocket_entry_strategy', in: ['helical'] } },
+    { key: 'helical_feed_pct', label: 'Helical feed %', kind: 'num', showIf: { key: 'pocket_entry_strategy', in: ['helical'] } },
+    { key: 'helical_passes', label: 'Helical passes', kind: 'int', showIf: { key: 'pocket_entry_strategy', in: ['helical'] } },
+    { key: 'pre_drill_tool_id', label: 'Pre-drill tool', kind: 'tool', showIf: { key: 'pocket_entry_strategy', in: ['pre_drill'] } },
   ]},
   { title: 'Nesting Margin', fields: [
     { key: 'nest_pad', label: 'Nest pad (mm)', kind: 'num' },
@@ -300,11 +312,32 @@ export default function CncMachinesClient() {
                       {open && (g.title === 'Nesting Margin' ? (
                         <NestingMarginPanel profile={profile} tools={tools} onPatch={c => patchProfile(profile.id, c)} />
                       ) : (
-                        <div className="grid grid-cols-3 gap-x-4 gap-y-3 px-3 py-3">
-                          {g.fields.map(fld => (
-                            <Field key={fld.key} spec={fld} value={profile[fld.key]} tools={tools}
-                              onSave={v => patchProfile(profile.id, { [fld.key]: v })} />
-                          ))}
+                        <div className="px-3 py-3 space-y-3">
+                          {g.title === 'Pocket & Hole Entry' && (
+                            <EntryMethodPreview
+                              method={String(profile.pocket_entry_strategy ?? 'helical')}
+                              helicalRadius={Number(profile.helical_radius) || null}
+                              rampAngle={Number(profile.ramp_in_angle) || null}
+                              rampDistance={Number(profile.ramp_in_distance) || null}
+                            />
+                          )}
+                          {g.title === 'Perimeter Entry' && (
+                            <PerimeterEntryPreview
+                              approachType={String(profile.perimeter_approach_type ?? 'offset')}
+                              rampAngle={Number(profile.ramp_in_angle) || null}
+                              rampDistance={Number(profile.ramp_in_distance) || null}
+                              approachOffset={Number(profile.tool_entry_offset) || null}
+                              nestPad={Number(profile.nest_pad) || null}
+                            />
+                          )}
+                          <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+                            {g.fields
+                              .filter(fld => !fld.showIf || fld.showIf.in.includes(String(profile[fld.showIf.key] ?? '')))
+                              .map(fld => (
+                                <Field key={fld.key} spec={fld} value={profile[fld.key]} tools={tools}
+                                  onSave={v => patchProfile(profile.id, { [fld.key]: v })} />
+                              ))}
+                          </div>
                         </div>
                       ))}
                     </div>
