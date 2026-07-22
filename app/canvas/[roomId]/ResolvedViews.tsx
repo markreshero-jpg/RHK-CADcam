@@ -109,7 +109,7 @@ export function PartPickerMenu({ parts, clientX, clientY, onPick, onClose }: {
 
 // ── Part context menu ─────────────────────────────────────────────────────────
 
-export type PartContextAction = 'rename' | 'comment' | 'delete'
+export type PartContextAction = 'edit' | 'rename' | 'comment' | 'delete'
 
 export function PartContextMenu({ part, clientX, clientY, isCustom, existingComment, onAction, onClose }: {
   part: PartMeta
@@ -147,7 +147,7 @@ export function PartContextMenu({ part, clientX, clientY, isCustom, existingComm
   }
 
   const menuW = 192
-  const menuH = mode ? 120 : (isCustom ? 126 : 96)
+  const menuH = mode ? 120 : (isCustom ? 163 : 133)
   const top  = Math.min(clientY + 6, window.innerHeight - menuH - 8)
   const left = Math.min(clientX + 6, window.innerWidth  - menuW - 8)
 
@@ -200,6 +200,10 @@ export function PartContextMenu({ part, clientX, clientY, isCustom, existingComm
 
       {!mode && (
         <>
+          <button onClick={() => { onAction('edit'); onClose() }}
+            className="w-full text-left px-3 py-2 text-xs text-blue-300 hover:bg-gray-700 hover:text-blue-200 flex items-center gap-2.5 border-b border-gray-700">
+            <span>🔧</span> Edit part
+          </button>
           <button onClick={startRename}
             className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-2.5">
             <span className="text-gray-500">✎</span> Rename part

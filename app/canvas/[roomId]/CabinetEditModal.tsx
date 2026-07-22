@@ -353,6 +353,12 @@ export default function CabinetEditModal({
     const isCustom = part.id.startsWith('custom_')
     const customPartId = isCustom ? part.id.slice(7) : null
 
+    if (action === 'edit') {
+      setEditingPart(part)   // same as right-click → Edit in the 3D view
+      setContextMenu(null)
+      return
+    }
+
     if (action === 'rename' && value) {
       if (isCustom && customPartId) {
         setCustomParts(prev => prev.map(p => p.id === customPartId ? { ...p, name: value } : p))
