@@ -1,0 +1,43 @@
+{
+  "_source": "z_sample_planscabinet_vision/RHK6456 - Suzie and Jeff Morris - Kitchen Shop Drawings.pdf",
+  "projectName": "RHK6456 Jeff and Suzie Morris",
+  "createProject": true,
+  "jobNumber": "RHK6456",
+  "clientName": "Jeff and Suzie Morris",
+  "clientAddress": "3/5 Tingira Cres Sunrise Beach",
+  "roomName": "Kitchen",
+  "roomHeight": 2445,
+  "walls": [
+    { "x": 0, "y": 0, "length": 3330, "angle": 0, "soffit": 595, "_": "Elev 1 wall, west->east; soffit 595 puts overhead top line at 1850" },
+    { "x": 3330, "y": 0, "length": 3109, "angle": 90, "soffit": 145, "_": "Elev 2 wall, corner->south; 145 bulkhead -> overhead top 2300" },
+    { "x": 875, "y": 1300, "length": 1680, "angle": 90, "type": "island", "detached": true, "height": 900, "_": "island centreline, drawers face east (default side), doors flipped west" }
+  ],
+  "cabinets": [
+    { "def": "B2", "wall": 3, "offset": 0, "dx": 819.5, "dy": 880, "flip": true, "note": "#25 island back doors", "_": "island west face" },
+    { "def": "B2", "wall": 3, "offset": 819.5, "dx": 819.5, "dy": 880, "flip": true, "note": "#26 island back doors" },
+    { "def": "End Panel", "wall": 3, "offset": 1639, "dx": 18, "dy": 880, "flip": true, "note": "#27" },
+
+    { "def": "End Panel", "wall": 1, "offset": 0, "dx": 18, "dy": 880, "note": "#1" },
+    { "def": "D3-1S2Pot", "wall": 1, "offset": 18, "dx": 650, "dy": 880, "note": "#2 3-drawer bank" },
+    { "def": "D3-1S2Pot", "wall": 1, "offset": 668, "dx": 650, "dy": 880, "note": "#3 3-drawer bank" },
+    { "def": "End Panel", "wall": 1, "offset": 1318, "dx": 18, "dy": 880, "note": "#4" },
+    { "def": "End Panel", "wall": 1, "offset": 1941, "dx": 18, "dy": 880, "note": "#5 (D/W space 605 to the left)" },
+    { "def": "B2", "wall": 1, "offset": 1959, "dx": 1371, "dy": 880, "note": "#6 sink cabinet, false front at sink" },
+    { "def": "Wall Unit", "wall": 1, "offset": 18, "dx": 1300, "dy": 950, "note": "#7 bench-mounted appliance cupboard, 4-leaf bi-fold, sits 900-1850" },
+
+    { "def": "Wall End Panel", "wall": 2, "offset": 0, "dx": 30, "dy": 1400, "note": "corner panel at overhead level" },
+    { "def": "Wall Unit", "wall": 2, "offset": 30, "dx": 546, "dy": 1400, "dz": 165, "note": "#16/#17 165mm deep cupboard, 900-2300" },
+    { "def": "Wall Unit", "wall": 2, "offset": 576, "dx": 1085, "dy": 750, "note": "#15/#18 overhead, rangehood under" },
+    { "def": "End Panel", "wall": 2, "offset": 595, "dx": 40, "dy": 880, "note": "40 panel at cooktop run start (20 stone waterfall beside, not modelled)" },
+    { "def": "D3-1S2Pot", "wall": 2, "offset": 635, "dx": 1026, "dy": 880, "note": "#10 cooktop drawers, 2x inner drw" },
+    { "def": "Tall End Panel", "wall": 2, "offset": 1661, "dx": 18, "dy": 2300, "note": "panel between cooktop run and fridge tower" },
+    { "def": "Tall Cabinet", "wall": 2, "offset": 1679, "dx": 1400, "dy": 2300, "note": "#19 integrated fridge + HWU cupboard over, doors #11-#13" },
+    { "def": "Tall End Panel", "wall": 2, "offset": 3079, "dx": 30, "dy": 2300, "note": "#14 end panel" },
+
+    { "def": "End Panel", "wall": 3, "offset": 0, "dx": 18, "dy": 880, "note": "#20", "_": "island east face (drawers)" },
+    { "def": "B2", "wall": 3, "offset": 18, "dx": 400, "dy": 880, "note": "#21 pull-out bin 2x31L" },
+    { "def": "D3-1S2Pot", "wall": 3, "offset": 418, "dx": 619.5, "dy": 880, "note": "#22" },
+    { "def": "D3-1S2Pot", "wall": 3, "offset": 1037.5, "dx": 619.5, "dy": 880, "note": "#23" },
+    { "def": "End Panel", "wall": 3, "offset": 1657, "dx": 18, "dy": 880, "note": "#24" }
+  ]
+}

@@ -1,0 +1,50 @@
+Code,Description,Class,Fronts,Status,Notes
+B1D,Base cabinet - single door,Base,1 door,proposed,/L or /R hinge side at placement
+B2D,Base cabinet - pair of doors,Base,2 doors,proposed,
+BOPN,Base cabinet - open (no fronts),Base,none,proposed,
+BSK,Base sink cabinet,Base,2 doors,open decision,dedicated code vs modifier on B2D - false front at sink
+BBIN,Base bin unit (pull-out),Base,1 door,proposed,e.g. 2x31L pull-out
+BCNR,Base blind corner,Base,doors,proposed,/L or /R = blind side
+BCNL,Base diagonal corner,Base,door,proposed,
+BOV,Base oven housing,Base,varies,open decision,dedicated code vs modifier
+D2-SL,Drawer base - shallow over large,Base,2 drawers,proposed,S=170 M=230 L=residual (job-level table)
+D2-ML,Drawer base - medium over large,Base,2 drawers,proposed,
+D2-LL,Drawer base - two equal larges,Base,2 drawers,proposed,replaces old D2E intent
+D3-SLL,Drawer base - shallow over two equal larges,Base,3 drawers,proposed,replaces old D3-1S2Pot
+D3-SML,Drawer base - shallow / medium / large,Base,3 drawers,proposed,
+D3-MLL,Drawer base - medium over two equal larges,Base,3 drawers,proposed,
+D3-LLL,Drawer base - three equal larges,Base,3 drawers,proposed,
+D4-SLLL,Drawer base - shallow over three equal larges,Base,4 drawers,proposed,
+D4-SMLL,Drawer base - shallow / medium / two equal larges,Base,4 drawers,proposed,
+W1D,Wall cabinet - single door,Wall,1 door,proposed,/L or /R hinge side
+W2D,Wall cabinet - pair of doors,Wall,2 doors,proposed,
+WOPN,Wall cabinet - open (no fronts),Wall,none,proposed,
+WCNR,Wall blind corner,Wall,doors,proposed,
+WCNL,Wall diagonal corner,Wall,door,proposed,
+WMIC,Wall microwave cabinet,Wall,open + trim,proposed,
+WRH,Wall rangehood cabinet,Wall,varies,proposed,
+T1D,Tall cabinet - single door,Tall,1 door,proposed,
+T2D,Tall cabinet - pair of doors,Tall,2 doors,proposed,
+TP,Tall pantry,Tall,2 doors,proposed,composition vs T2D to define (shelf pack?)
+TOPN,Tall cabinet - open,Tall,none,proposed,
+TOV,Tall oven housing,Tall,varies,open decision,
+TFR,Tall fridge housing,Tall,varies,proposed,flanking panels are TEPF/TEPK
+TBR,Tall broom unit,Tall,doors,proposed,
+B1D+I1,Base single door - 1 inner drawer behind,Base,1 door + 1 inner,proposed,+I codes are per-cabinet library entries
+B1D+I2,Base single door - 2 equal inner drawers,Base,1 door + 2 inner,proposed,
+B2D+I2,Base pair doors - 2 equal inner drawers,Base,2 doors + 2 inner,proposed,inner drawer hardware = separate schedule line
+BEPF,Base end panel - runs to floor,Panel,-,confirmed,the ~95% default (current lib: End Panel)
+BEPK,Base end panel - sits on kick,Panel,-,confirmed,
+TEPF,Tall end panel - runs to floor,Panel,-,confirmed,(current lib: Tall End Panel) also fridge flanking
+TEPK,Tall end panel - sits on kick,Panel,-,confirmed,
+WEP,Wall (overhead) end panel,Panel,-,confirmed,(current lib: Wall End Panel)
+IBP,Island back / servery panel,Panel,-,open decision,code not confirmed
+BFK,Base filler - at kick height,Filler,-,confirmed,30mm or material thickness - ASK per job
+BFF,Base filler - runs to floor,Filler,-,confirmed,
+BFKW,Base filler - kick height - wide,Filler,-,confirmed,corner default 40 face (+mate thickness on return)
+BFFW,Base filler - floor - wide,Filler,-,confirmed,
+WF,Wall (overhead) filler,Filler,-,unconfirmed,extrapolated from base pattern - confirm
+TFK,Tall filler - at kick height,Filler,-,unconfirmed,extrapolated - confirm
+TFF,Tall filler - runs to floor,Filler,-,unconfirmed,extrapolated - confirm
+KB,Kickboard,Kick,-,proposed,class exists in scheme - configs to define
+BH,Bulkhead / infill,Bulkhead,-,proposed,class exists in scheme - configs to define

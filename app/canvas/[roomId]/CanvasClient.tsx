@@ -598,21 +598,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (!raw) return
     const wd = wallDir(raw.wall)
     const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
-    let flip: boolean
-    if (raw.wall.wall_type === 'island') {
-      const perp = { x: -wd.y, y: wd.x }
-      flip = (wp.x - raw.wall.pos_x) * perp.x + (wp.y - raw.wall.pos_y) * perp.y < 0
-    } else {
-      const cxp = centroid(walls)
-      const inward = wallInwardNormal(raw.wall, cxp.x, cxp.y)
-      flip = (wp.x - raw.wall.pos_x) * inward.x + (wp.y - raw.wall.pos_y) * inward.y < 0
-    }
+    const gc = centroid(walls)
+    const inward = wallInwardNormal(raw.wall, gc.x, gc.y)
+    const flip = (wp.x - raw.wall.pos_x) * inward.x + (wp.y - raw.wall.pos_y) * inward.y < 0
     const side = flip ? 'back' : 'face'
     const occupied = cabinets
       .filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: draft.assembly_class, dy: draft.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side)
       .map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
     const fit = fitFreeSlot(desired, draft.dx, raw.wall.length, occupied)
-    const gc = centroid(walls)
     const a = wallAnchorPoint(raw.wall, fit.t, flip, gc.x, gc.y)
     await placeFromDraft(draft, raw.wall, a.x, a.y, flip, fit.dx)
   }
@@ -749,6 +742,102 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setDrawStart(null); setDrawCursor(null)
   }
 
+  // ── Dev automation bridge ─────────────────────────────────────────────────
+  // Dev-only scripting surface for browser automation (window.__canvasApi).
+  // Routes through the same handlers as the UI so labels, cascades, snapshots
+  // and resolution behave identically to hand placement. Offsets are mm from
+  // the wall's start point along its angle ("from left end").
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production') {
+      const findWall = (ref: string) => {
+        const w = walls.find(x => x.id === ref || x.name.toLowerCase() === ref.toLowerCase())
+        if (!w) throw new Error(`Wall not found: ${ref} (have: ${walls.map(x => x.name).join(', ') || 'none'})`)
+        return w
+      }
+      const wallOffsetPos = (w: Wall, offset: number) => {
+        const rad = (w.angle * Math.PI) / 180
+        return { pos_x: w.pos_x + offset * Math.cos(rad), pos_y: w.pos_y + offset * Math.sin(rad) }
+      }
+      const api = {
+        async drawWall(opts: { x: number; y: number; length: number; angle?: number; thickness?: number; height?: number | null }) {
+          captureSnapshot()
+          const data: Omit<Wall, 'id' | 'created_at'> = {
+            room_id: room.id,
+            name: `Wall ${walls.length + 1}`,
+            sort_order: walls.length, length: opts.length, angle: opts.angle ?? 0,
+            pos_x: opts.x, pos_y: opts.y,
+            thickness: opts.thickness ?? drawThickness, height: opts.height ?? drawHeight,
+            soffit_height: null,
+            wall_type: 'standard',
+          }
+          const saved = await dbSaveWall(data)
+          if (!saved) throw new Error('drawWall: insert failed')
+          setWalls(ws => [...ws, saved])
+          return { id: saved.id, name: saved.name, length: saved.length, angle: saved.angle }
+        },
+        async placeCabinet(opts: { def: string; wall: string; offset: number; dx?: number }) {
+          const w = findWall(opts.wall)
+          const { data: defRow } = await supabase.from('cabinet_definitions').select('*').ilike('name', opts.def).limit(1).maybeSingle()
+          if (!defRow) throw new Error(`Definition not found: ${opts.def}`)
+          const draft = buildDraftFromDefinition(defRow as CabinetDefinition)
+          const { pos_x, pos_y } = wallOffsetPos(w, opts.offset)
+          await placeFromDraft(draft, w, pos_x, pos_y, false, opts.dx)
+          return { placed: opts.def, wall: w.name, offset: opts.offset, dx: opts.dx ?? draft.dx }
+        },
+        async updateCabinet(ref: string, patch: { dx?: number; dy?: number; dz?: number; offset?: number }) {
+          const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
+          if (!cab) throw new Error(`Cabinet not found: ${ref}`)
+          const u: Partial<CabinetInstance> = {}
+          if (patch.dx != null) u.dx = patch.dx
+          if (patch.dy != null) u.dy = patch.dy
+          if (patch.dz != null) u.dz = patch.dz
+          if (patch.offset != null) {
+            const w = walls.find(x => x.id === cab.wall_id)
+            if (!w) throw new Error(`Cabinet ${cab.label} is not on a wall`)
+            Object.assign(u, wallOffsetPos(w, patch.offset))
+          }
+          await handleUpdateCabinet(cab.id, u)
+          return { updated: cab.label, ...u }
+        },
+        // Open the cabinet edit modal — same path as double-clicking the cabinet
+        // in the plan (lets headless tests reach the Part/Shape editors).
+        openCabinet(ref: string) {
+          const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
+          if (!cab) throw new Error(`Cabinet not found: ${ref}`)
+          setEditCabId(cab.id)
+          return { opened: cab.label, id: cab.id }
+        },
+        async getIssues() {
+          const out = []
+          for (const c of cabinets) {
+            // awaitPersist: headless callers close the page right after this
+            // returns — a background persist would be killed mid delete+insert.
+            const resolved = await dbResolveAndPersistCabinet(c.id, { awaitPersist: true })
+            out.push({
+              id: c.id, label: c.label, class: c.assembly_class,
+              dims: `${c.dx}x${c.dy}x${c.dz}`,
+              errors: resolved?.errors ?? [], warnings: resolved?.warnings ?? [],
+            })
+          }
+          return out
+        },
+        getState() {
+          return {
+            room: { id: room.id, name: room.name },
+            walls: walls.map(w => ({ id: w.id, name: w.name, length: w.length, angle: w.angle, x: w.pos_x, y: w.pos_y })),
+            cabinets: cabinets.map(c => {
+              const w = walls.find(x => x.id === c.wall_id)
+              const rad = w ? (w.angle * Math.PI) / 180 : 0
+              const offset = w ? Math.round((c.pos_x - w.pos_x) * Math.cos(rad) + (c.pos_y - w.pos_y) * Math.sin(rad)) : null
+              return { id: c.id, label: c.label, wall: w?.name ?? null, offset, dx: c.dx, dy: c.dy, dz: c.dz, class: c.assembly_class }
+            }),
+          }
+        },
+      }
+      ;(window as unknown as { __canvasApi?: typeof api }).__canvasApi = api
+    }
+  })
+
   // ── Pointer handlers ──────────────────────────────────────────────────────
 
   function onPointerDown(e: React.PointerEvent) {
@@ -846,11 +935,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
 
     function wallFlipFor(w: Wall): boolean {
-      const wd = wallDir(w)
-      if (w.wall_type === 'island') {
-        const perp = { x: -wd.y, y: wd.x }
-        return (wp.x - w.pos_x) * perp.x + (wp.y - w.pos_y) * perp.y < 0
-      }
       const cx = centroid(walls)
       const inward = wallInwardNormal(w, cx.x, cx.y)
       return (wp.x - w.pos_x) * inward.x + (wp.y - w.pos_y) * inward.y < 0
@@ -1062,11 +1146,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           const wd2 = wallDir(raw.wall)
           const desired = (raw.pos_x - raw.wall.pos_x) * wd2.x + (raw.pos_y - raw.wall.pos_y) * wd2.y
           const pasteFlip = (() => {
-            const d = wallDir(raw.wall)
-            if (raw.wall.wall_type === 'island') {
-              const p = { x: -d.y, y: d.x }
-              return (wp.x - raw.wall.pos_x) * p.x + (wp.y - raw.wall.pos_y) * p.y < 0
-            }
             const cx2 = centroid(walls)
             const inw = wallInwardNormal(raw.wall, cx2.x, cx2.y)
             return (wp.x - raw.wall.pos_x) * inw.x + (wp.y - raw.wall.pos_y) * inw.y < 0
@@ -1930,11 +2009,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 const wd = wallDir(raw.wall)
                 const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
                 const copyFlip = (() => {
-                  const d = wallDir(raw.wall)
-                  if (raw.wall.wall_type === 'island') {
-                    const p = { x: -d.y, y: d.x }
-                    return (mouseWorld.x - raw.wall.pos_x) * p.x + (mouseWorld.y - raw.wall.pos_y) * p.y < 0
-                  }
                   const cx2 = centroid(walls)
                   const inw = wallInwardNormal(raw.wall, cx2.x, cx2.y)
                   return (mouseWorld.x - raw.wall.pos_x) * inw.x + (mouseWorld.y - raw.wall.pos_y) * inw.y < 0

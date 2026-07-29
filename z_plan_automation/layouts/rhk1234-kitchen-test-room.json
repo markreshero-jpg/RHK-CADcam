@@ -1,0 +1,20 @@
+{
+  "_source": "z_sample_plans/RHK1234 - John Smith - Test Kitchen2.pdf",
+  "projectName": "RHK1234 John Smith",
+  "roomName": "Kitchen Test Room",
+  "roomHeight": 2400,
+  "walls": [
+    { "x": 0, "y": 2000, "length": 2000, "angle": 270, "_": "left wall, south end up to corner (clockwise)" },
+    { "x": 0, "y": 0, "length": 3216.5, "angle": 0, "_": "top wall, corner east (clockwise)" }
+  ],
+  "cabinets": [
+    { "def": "B2", "wall": 1, "offset": 0, "dx": 600, "dy": 880, "_": "#1" },
+    { "def": "B2", "wall": 1, "offset": 600, "dx": 800, "dy": 880, "_": "#2 beside corner" },
+    { "def": "Wall Unit", "wall": 1, "offset": 0, "dx": 700, "dy": 600, "_": "#3" },
+    { "def": "Wall Unit", "wall": 1, "offset": 700, "dx": 700, "dy": 600, "_": "#4" },
+    { "def": "D2", "wall": 2, "offset": 600, "dx": 600, "dy": 880, "_": "#5" },
+    { "def": "D2", "wall": 2, "offset": 1200, "dx": 600, "dy": 880, "_": "#6" },
+    { "def": "B2", "wall": 2, "offset": 1800, "dx": 700, "dy": 880, "_": "#7" },
+    { "def": "Tall Cabinet", "wall": 2, "offset": 2516.5, "dx": 700, "_": "#8 after 16.5 panel gap" }
+  ]
+}

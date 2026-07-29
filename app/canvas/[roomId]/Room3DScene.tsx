@@ -438,7 +438,12 @@ function WallVisibilityMenu({ x, y, walls, hiddenWallIds, onToggle, onShowAll, o
     }
   }, [onClose])
 
-  const standardWalls = walls.filter(w => w.wall_type !== 'island')
+  // Islands have no wall mesh in 3D, but toggling one still hides/shows the
+  // cabinets placed on it — list them after the standard walls.
+  const menuWalls = [
+    ...walls.filter(w => w.wall_type !== 'island'),
+    ...walls.filter(w => w.wall_type === 'island'),
+  ]
 
   return (
     <div
@@ -449,7 +454,7 @@ function WallVisibilityMenu({ x, y, walls, hiddenWallIds, onToggle, onShowAll, o
       <div className="px-3 py-1.5 text-xs text-gray-400 font-medium uppercase tracking-wider border-b border-gray-700">
         Wall Visibility
       </div>
-      {standardWalls.map(w => (
+      {menuWalls.map(w => (
         <label
           key={w.id}
           className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700 cursor-pointer"

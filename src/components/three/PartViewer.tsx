@@ -180,6 +180,9 @@ export function Part({
   hoverHighlight?:    boolean
 }) {
   const [hovered, setHovered] = useState(false)
+  // Edges widths are in CSS pixels, so on a scaled display 1 renders as 1.5–2
+  // physical pixels; 1/dpr keeps the resting outline an exact 1-device-px hairline.
+  const hairline = 1 / useThree(s => s.viewport.dpr)
 
   // Rotation pivots about the part's reference point (origin corner b.x/b.y/b.z):
   // the group sits at that corner and carries the rotation, while children are
@@ -208,7 +211,7 @@ export function Part({
                  : highlighted ? '#0284c7'
                  : hov         ? '#ff6200'
                  : edgeLineColor
-  const lineWidth = selected || highlighted ? 1.5 : hov ? 2.5 : 1
+  const lineWidth = selected || highlighted ? 1.5 : hov ? 2.5 : hairline
 
   const tapeT = ebSpec ? Math.max(0, ebSpec.thick) : 0
   const strips = ebSpec ? edgeStrips(b, meta.edge, meta.panelKind, tapeT) : []
@@ -265,7 +268,7 @@ export function Part({
           <boxGeometry args={s.args} />
           <meshStandardMaterial color={ebSpec!.color} roughness={0.35} metalness={0.0} />
           {/* Faint black outline so the tape reads as a separate strip on the panel */}
-          <Edges threshold={10} color="#1a1a1a" linewidth={1} />
+          <Edges threshold={10} color="#1a1a1a" linewidth={hairline} />
         </mesh>
       ))}
     </group>

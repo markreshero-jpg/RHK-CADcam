@@ -1,0 +1,49 @@
+{
+  "_source": "z_sample_planscabinet_vision/RHK6539 - Mark Johnson - Paul (brothers house) sketch.pdf + user Q&A 2026-07-29",
+  "_notes": [
+    "Heights: bench 880+20=900, splash tiled, OH 750H top line 2295 (soffit 100), bulkhead ~95-100 raw MDF painted by others, talls 2300, CH 2395, kick 140 default.",
+    "Corner: 900 CNR space on right wall + 600 return space on top wall LEFT EMPTY — corner cabinet lesson next time.",
+    "WOT: 16.5 panel + 600 oven void + 16.5 panel = 633 (placed 17/16 to keep whole mm). Oven tower internals (2 drw under, 2 doors over) deferred.",
+    "Peninsula: attached to right wall, cabinets face north; back panel + 200 overhang on servery (south) side; bench 800 wide by stone (not drawn); 252 west overhang not drawn.",
+    "B1D at wall end faces south toward servery via second island line + flip.",
+    "Fronts: base/tall timber grain, overheads white. Tops 20mm S/S Essential. Handles TBC std range. Splashback tiled by others."
+  ],
+  "projectName": "RHK6539 Mark Johnson",
+  "createProject": true,
+  "jobNumber": "RHK6539",
+  "clientName": "Mark Johnson",
+  "clientAddress": "13/58 Furness Drive (Paul's house - brother)",
+  "roomName": "Kitchen",
+  "roomHeight": 2395,
+  "walls": [
+    { "x": 0, "y": 580, "length": 580, "angle": 270, "_": "short left wall, south->north to corner" },
+    { "x": 0, "y": 0, "length": 3586, "angle": 0, "soffit": 100, "_": "top wall 3586 F/P; soffit 100 -> OH top line 2295" },
+    { "x": 3586, "y": 0, "length": 2722, "angle": 90, "soffit": 100, "_": "right wall; 0-900 corner space, 900-1500 cooktop, 1822-2722 servery OHs" },
+    { "x": 3586, "y": 2506, "length": 2880, "angle": 180, "type": "island", "detached": true, "height": 900, "_": "peninsula carcase back line, drawn east->west so face (left-perp of draw dir) is north; offsets read from the right wall" },
+    { "x": 3586, "y": 1946, "length": 580, "angle": 180, "type": "island", "detached": true, "height": 900, "_": "B1D line at row front face, east->west; flipped cabinet occupies the row footprint facing south (servery)" }
+  ],
+  "cabinets": [
+    { "def": "Wall End Panel", "wall": 2, "offset": 0, "dx": 30, "dy": 475, "note": "30 filler at left wall, overhead level (fridge zone)" },
+    { "def": "Wall Unit", "wall": 2, "offset": 30, "dx": 870, "dy": 475, "dz": 330, "note": "overhead above fridge, white; underside 1820 fridge clearance" },
+    { "def": "Tall Cabinet", "wall": 2, "offset": 900, "dx": 400, "dy": 2300, "note": "pantry T1D single door, 5 adj shelves, timber grain" },
+    { "def": "Tall End Panel", "wall": 2, "offset": 1300, "dx": 17, "dy": 2300, "note": "WOT side panel (16.5 nominal), full tall height" },
+    { "def": "Tall End Panel", "wall": 2, "offset": 1917, "dx": 16, "dy": 2300, "note": "WOT side panel (16.5 nominal); 600 WOT oven void between panels - oven, 2 drw under, 2 doors over, internals next time" },
+    { "def": "D2", "wall": 2, "offset": 1933, "dx": 1053, "dy": 880, "dz": 560, "note": "D2-LL two equal larges, timber grain; zone 1632+21 less 600 corner space" },
+    { "def": "Wall Unit", "wall": 2, "offset": 1933, "dx": 526, "dy": 750, "dz": 330, "note": "white OH 1 of 2 over D2-LL" },
+    { "def": "Wall Unit", "wall": 2, "offset": 2459, "dx": 527, "dy": 750, "dz": 330, "note": "white OH 2 of 2 over D2-LL; corner OH space beyond left empty" },
+
+    { "def": "D3-1S2Pot", "wall": 3, "offset": 900, "dx": 600, "dy": 880, "dz": 560, "note": "D3-SLL under gas cooktop; 600 rangehood over (appliance, no cabinet); 0-900 corner space left empty" },
+    { "def": "Wall Unit", "wall": 3, "offset": 1822, "dx": 450, "dy": 750, "dz": 330, "note": "servery OH 1 of 2, white" },
+    { "def": "Wall Unit", "wall": 3, "offset": 2272, "dx": 450, "dy": 750, "dz": 330, "note": "servery OH 2 of 2, white" },
+
+    { "def": "Filler", "wall": 4, "offset": 580, "dx": 50, "dy": 880, "note": "50 filler beside B1D (580 off the wall)" },
+    { "def": "End Panel", "wall": 4, "offset": 630, "dx": 16, "dy": 880, "note": "D/W end panel, wall side of gap" },
+    { "def": "End Panel", "wall": 4, "offset": 1251, "dx": 16, "dy": 880, "note": "D/W end panel, sink side; 605 freestanding D/W between" },
+    { "def": "B2", "wall": 4, "offset": 1267, "dx": 945, "dy": 880, "dz": 560, "note": "sink cabinet" },
+    { "def": "B2", "wall": 4, "offset": 2212, "dx": 400, "dy": 880, "dz": 560, "note": "bin cab, 1 drawer over pull-out bin" },
+    { "def": "End Panel", "wall": 4, "offset": 2612, "dx": 16, "dy": 880, "note": "peninsula west end panel; 252 bench overhang beyond (benchtop by stone, not drawn)" },
+    { "def": "End Panel", "wall": 4, "offset": 580, "dx": 2048, "dy": 880, "flip": true, "note": "island back/servery panel, screwed through cabinet backs; 200 bench overhang on servery side" },
+
+    { "def": "B2", "wall": 5, "offset": 0, "dx": 580, "dy": 880, "dz": 560, "flip": true, "note": "B1D single door (B2 def, no B1 yet), opens south toward servery" }
+  ]
+}

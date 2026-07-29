@@ -2,6 +2,15 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function proxy(request: NextRequest) {
+  // Dev-only bypass for local automation scripts (headless Chrome sends this
+  // header). Inert in production builds.
+  if (
+    process.env.NODE_ENV === 'development' &&
+    request.headers.get('x-dev-automation') === '1'
+  ) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

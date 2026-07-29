@@ -94,6 +94,10 @@ export function wallPolygon(w: Wall): string {
 
 export function wallInwardNormal(w: Wall, cx: number, cy: number): Pt {
   const d = wallDir(w)
+  // Islands have no room side, so the face direction is fixed to the left-perp of
+  // the draw direction rather than derived from the centroid — otherwise placement,
+  // plan render and elevation can disagree depending on where the island was drawn.
+  if (w.wall_type === 'island') return { x: -d.y, y: d.x }
   const mid = { x: w.pos_x + w.length * 0.5 * d.x, y: w.pos_y + w.length * 0.5 * d.y }
   const p1 = { x: -d.y, y: d.x }
   return (p1.x * (cx - mid.x) + p1.y * (cy - mid.y)) >= 0 ? p1 : { x: d.y, y: -d.x }

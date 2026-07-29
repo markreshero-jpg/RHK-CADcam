@@ -616,7 +616,9 @@ export default function PartsView({
         id, typeKey: 'face', typeLabel: 'Face',
         name: partLabels?.[id] ?? `${typeName} R${z.row_index + 1}C${z.col_index + 1}`,
         material: matNames[z.material_id] ?? '—', materialColor: matColours[z.material_id] ?? null,
-        dy: z.DY, dx: z.DX, dz: z.DZ, eb: z.edge_band,
+        // Face zones resolve DX=width, DY=height (post-migration) — cross them so
+        // width lands in the W (DY) column and height in H (DX) like every other row.
+        dy: z.DX, dx: z.DY, dz: z.DZ, eb: z.edge_band,
         comment: partComments?.[id] ?? '',
         isCustom: false, isOverride: false,
       })

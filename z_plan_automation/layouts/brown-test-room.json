@@ -1,0 +1,21 @@
+{
+  "_source": "z_sample_planscabinet_vision/Brown Test Room - Sketch.pdf (hand sketch, cabinet-codes markup)",
+  "projectName": "Brown Test Room",
+  "createProject": true,
+  "clientName": "Brown",
+  "roomName": "Brown Test Room",
+  "roomHeight": 2400,
+  "walls": [
+    { "x": 0, "y": 600, "length": 600, "angle": 270, "_": "600 wall, south->north up to corner" },
+    { "x": 0, "y": 0, "length": 3500, "angle": 0, "_": "3500 wall, west->east" },
+    { "x": 3500, "y": 0, "length": 2000, "angle": 90, "_": "2000 return, north->south; last 640 of wall 2 + first 640 here = corner void" }
+  ],
+  "cabinets": [
+    { "def": "Filler", "wall": 2, "offset": 0, "dx": 30, "dy": 880, "note": "30 filler at 600-wall end (user choice)" },
+    { "def": "B2", "wall": 2, "offset": 30, "dx": 943, "dy": 880, "note": "B2D pair of doors, eq width" },
+    { "def": "D2", "wall": 2, "offset": 973, "dx": 943, "dy": 880, "note": "D2-LL: two equal large drawers, eq width" },
+    { "def": "D3-1S2Pot", "wall": 2, "offset": 1916, "dx": 944, "dy": 880, "note": "D3-SML: shallow/medium/large stack, eq width (absorbs rounding mm); 640 VOID to corner after this" },
+    { "def": "B2", "wall": 3, "offset": 640, "dx": 500, "dy": 880, "note": "B1D single door (no single-door def; B2 used)" },
+    { "def": "D3-1S2Pot", "wall": 3, "offset": 1140, "dx": 860, "dy": 880, "note": "D3-SLL: shallow over two equal larges" }
+  ]
+}

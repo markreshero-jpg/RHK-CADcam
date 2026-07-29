@@ -123,7 +123,7 @@ export function patchEdgeOverrideCache(
 
 export async function resolveCabinetFromDB(
   cabinetId: string,
-  opts: { quiet?: boolean } = {},
+  opts: { quiet?: boolean; awaitPersist?: boolean } = {},
 ): Promise<ResolvedCabinet> {
   const [input, edgeOverrides, hidden] = await Promise.all([
     loadCabinetInput(cabinetId),
@@ -147,8 +147,12 @@ export async function resolveCabinetFromDB(
   applyEdgeOverrides(resolved, edgeOverrides)
 
   // Persist in background so callers can return resolved data immediately.
-  persistResolved(resolved).catch(e => console.error('persistResolved:', e))
+  // awaitPersist: batch callers that tear down right after (e.g. the headless
+  // getIssues sweep) must wait, or closing the page aborts the delete+insert
+  // mid-cycle and the cabinet loses its persisted parts.
+  const persisted = persistResolved(resolved).catch(e => console.error('persistResolved:', e))
   // Re-evaluate any parametric custom parts against the fresh geometry (background).
-  resolveCustomParts(cabinetId, resolved, input).catch(e => console.error('resolveCustomParts:', e))
+  const customed = resolveCustomParts(cabinetId, resolved, input).catch(e => console.error('resolveCustomParts:', e))
+  if (opts.awaitPersist) await Promise.all([persisted, customed])
   return resolved
 }
