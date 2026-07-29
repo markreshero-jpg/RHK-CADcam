@@ -55,6 +55,20 @@ export function flatDims(m: PartMeta): { u: number; v: number; n: number } {
   return { u: m.h, v: m.w, n: m.thickness }
 }
 
+// Inverse of flatDims for the shape-save size write: which cabinet-space box
+// extent (w/h/d — the fields ov.sw/sh/sd override and customFieldForExtent maps)
+// the editor's display axes land in. The display frame's across-axis (sw) and
+// up-axis (sh) are always the part's two in-plane dims; the third extent is the
+// thickness and must never be written by a shape save:
+//   side       → across = d (depth),  up = h (height)   (w is the thickness)
+//   horizontal → across = w (width),  up = d (depth)    (h is the thickness)
+//   face kinds → across = w (width),  up = h (height)   (d is the thickness)
+export function displayExtents(m: PartMeta): { swExt: 'w' | 'h' | 'd'; shExt: 'w' | 'h' | 'd' } {
+  if (m.panelKind === 'side')       return { swExt: 'd', shExt: 'h' }
+  if (m.panelKind === 'horizontal') return { swExt: 'w', shExt: 'd' }
+  return { swExt: 'w', shExt: 'h' }
+}
+
 // ── Precision (spec §6.1) ─────────────────────────────────────────────────────────
 // Display rounds to 0.1mm (fmtMm). Store rounds once to 0.01mm at the write boundary
 // so repeated read/edit/write cycles don't drift. Angles: near-zero (<0.05°) → 0.

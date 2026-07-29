@@ -336,9 +336,9 @@ export async function dbInsertCabinet(
   return row as CabinetInstance
 }
 
-export async function dbResolveAndPersistCabinet(id: string): Promise<ResolvedCabinet | null> {
+export async function dbResolveAndPersistCabinet(id: string, opts: { awaitPersist?: boolean } = {}): Promise<ResolvedCabinet | null> {
   try {
-    const resolved = await resolveCabinetFromDB(id)
+    const resolved = await resolveCabinetFromDB(id, opts)
     // Attach custom parts so room views (which read resolved.custom_parts) stay in
     // sync after a re-resolve instead of dropping them until a page reload.
     const { data } = await supabase.from('cabinet_custom_parts')
@@ -1120,4 +1120,135 @@ export async function dbDeletePartPosOverride(
     .eq('id', cabinetId)
   if (error) console.error('[pos override delete]', error)
   return updated
+}
+
+// ── Part shape overrides (Shape Editor) ───────────────────────────────────────
+// A drawn part outline is a per-cabinet override in part_shape_overrides,
+// keyed by the same stable part id as part_pos_overrides / part_operations
+// (case_left_side, zone_0_0, int_adj_shelf_2, custom_<uuid>, …). History is
+// append-only: every save inserts revision = max+1; the highest revision per
+// (cabinet_id, part_key) is the live shape. See
+// z_part_shape_editor/INTEGRATION-PLAN.md.
+
+// One outline segment in part-relative mm (ShapeEditor emit format). `edge`
+// is the banding display tag block — opaque here, passed through untouched.
+export type ShapeSegment = {
+  type: 'line' | 'arc' | 'curve'
+  p0: { x: number; y: number }
+  p1: { x: number; y: number }
+  cp1?: { x: number; y: number }
+  cp2?: { x: number; y: number }
+  rx?: number
+  ry?: number
+  largeArc?: 0 | 1
+  sweep?: 0 | 1
+  edge?: { band?: boolean; profile?: string }
+}
+
+// ShapeEditor's onSave meta, stored verbatim alongside the segments.
+export type ShapeMeta = {
+  closed: boolean
+  segmentCount: number
+  bounds?: { minX: number; minY: number; maxX: number; maxY: number } | null
+  originShift?: { dx: number; dy: number }
+  bandedEdges?: number
+  tapeLengthMM?: number
+}
+
+export type ShapeOverride = {
+  revision: number
+  segments: ShapeSegment[]
+  meta: ShapeMeta | null
+  created_at: string
+}
+
+// Latest shape per part id for one cabinet (mirrors PartPosOverrides shape).
+export type ShapeOverrides = Record<string, ShapeOverride>
+
+type ShapeRow = { part_key: string; revision: number; segments: ShapeSegment[]; meta: ShapeMeta | null; created_at: string }
+
+export async function dbLoadShapeOverrides(cabinetId: string): Promise<ShapeOverrides> {
+  const { data, error } = await supabase
+    .from('part_shape_overrides')
+    .select('part_key, revision, segments, meta, created_at')
+    .eq('cabinet_id', cabinetId)
+    .order('revision', { ascending: false })
+  if (error) { console.error('[shape override load]', error); return {} }
+  // Rows arrive revision-desc — first row seen per part_key is the live head.
+  const out: ShapeOverrides = {}
+  for (const r of (data ?? []) as ShapeRow[]) {
+    if (!(r.part_key in out)) out[r.part_key] = { revision: r.revision, segments: r.segments, meta: r.meta, created_at: r.created_at }
+  }
+  return out
+}
+
+export async function dbSaveShapeOverride(
+  cabinetId: string,
+  partKey: string,
+  segments: ShapeSegment[],
+  meta: ShapeMeta | null,
+): Promise<ShapeOverride | null> {
+  const { data: head, error: headErr } = await supabase
+    .from('part_shape_overrides')
+    .select('revision')
+    .eq('cabinet_id', cabinetId)
+    .eq('part_key', partKey)
+    .order('revision', { ascending: false })
+    .limit(1)
+  if (headErr) { console.error('[shape override save]', headErr); return null }
+  const revision = ((head?.[0] as { revision: number } | undefined)?.revision ?? 0) + 1
+  const { data, error } = await supabase
+    .from('part_shape_overrides')
+    .insert({ cabinet_id: cabinetId, part_key: partKey, revision, segments, meta })
+    .select('revision, segments, meta, created_at')
+    .single()
+  if (error) { console.error('[shape override save]', error); return null }
+  const r = data as Omit<ShapeRow, 'part_key'>
+  return { revision: r.revision, segments: r.segments, meta: r.meta, created_at: r.created_at }
+}
+
+// Revision list for the "restore previous" picker — no segments payload.
+export async function dbListShapeRevisions(
+  cabinetId: string,
+  partKey: string,
+): Promise<{ revision: number; created_at: string; meta: ShapeMeta | null }[]> {
+  const { data, error } = await supabase
+    .from('part_shape_overrides')
+    .select('revision, created_at, meta')
+    .eq('cabinet_id', cabinetId)
+    .eq('part_key', partKey)
+    .order('revision', { ascending: false })
+  if (error) { console.error('[shape revisions list]', error); return [] }
+  return (data ?? []) as { revision: number; created_at: string; meta: ShapeMeta | null }[]
+}
+
+// Restore = re-insert the old revision's segments as a NEW head revision, so
+// history stays append-only and the restore itself can be rolled back.
+export async function dbRestoreShapeRevision(
+  cabinetId: string,
+  partKey: string,
+  revision: number,
+): Promise<ShapeOverride | null> {
+  const { data, error } = await supabase
+    .from('part_shape_overrides')
+    .select('segments, meta')
+    .eq('cabinet_id', cabinetId)
+    .eq('part_key', partKey)
+    .eq('revision', revision)
+    .single()
+  if (error || !data) { console.error('[shape revision restore]', error); return null }
+  const r = data as { segments: ShapeSegment[]; meta: ShapeMeta | null }
+  return dbSaveShapeOverride(cabinetId, partKey, r.segments, r.meta)
+}
+
+// Remove the override entirely (all revisions) — the part reverts to its
+// plain resolved rectangle. Callers are responsible for also clearing any
+// sw/sh + ox/oy pos-override entries the shape save wrote.
+export async function dbDeleteShapeOverride(cabinetId: string, partKey: string): Promise<void> {
+  const { error } = await supabase
+    .from('part_shape_overrides')
+    .delete()
+    .eq('cabinet_id', cabinetId)
+    .eq('part_key', partKey)
+  if (error) console.error('[shape override delete]', error)
 }

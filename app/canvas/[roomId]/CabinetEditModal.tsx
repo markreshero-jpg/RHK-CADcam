@@ -703,6 +703,14 @@ export default function CabinetEditModal({
             return eb ? { thick: eb.thickness, color: eb.color ?? unpackMatCol(editingPart.materialId ? materialColours?.[editingPart.materialId] : undefined, '#c8b89a').face } : undefined
           })()}
           onClose={() => setEditingPart(null)}
+          // Shape Editor save flow (M3): bbox→size writes go through the same
+          // state the 3D view renders from; onPartMetaChange keeps the open
+          // editor's dims in step with the size it just wrote.
+          partOverrides={partOverrides}
+          onOverridesChange={setPartOverrides}
+          customParts={customParts}
+          setCustomParts={setCustomParts}
+          onPartMetaChange={setEditingPart}
         />
       )}
     </div>

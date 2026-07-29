@@ -1,39 +1,26 @@
 'use client';
-// ============================================================
-// RHK CADcam — Shape Editor
-// ============================================================
-// A fully-featured 2D shape editor for cabinet/part profiles.
-// All units in millimetres. Scale: 2px = 1mm.
+// ============================================================================
+// RHK CADcam - Shape Editor
+// ----------------------------------------------------------------------------
+// 2D profile editor for cabinet parts. All external coordinates are in
+// millimetres, relative to the part datum (X0 Y0).
 //
-// INTEGRATION (Next.js):
-//   import ShapeEditor from '@/components/ShapeEditor/ShapeEditor'
-//   <ShapeEditor />
+//   <ShapeEditor
+//     partWidth={600} partHeight={720} partLabel="Left Gable"
+//     initialSegments={part.shape_segments}
+//     onSave={(segsMM, meta) => save(segsMM, meta)}
+//     onCancel={() => close()}
+//   />
 //
-// OPTIONAL PROPS (add as needed when integrating):
-//   onShapeChange(segments) — called whenever shape is updated
-//   initialSegments         — load an existing shape
-//   width / height          — override canvas size
+// A shape cannot be saved unless it forms an exactly closed loop.
 //
-// TOOLS:
-//   Draw:    Line (L), Polyline (P), Rectangle (R),
-//            Circle, Oval, Triangle
-//   Edit:    Select (S), Move Line, Move Vertex, Set Length
-//   Modify:  Bend, Fillet, Chamfer, Offset, Trim,
-//            Add Point, Delete
-//   Other:   Import SVG, Check Shape, Undo/Redo
+// Edge banding is DISPLAYED here but authored in PartEditor. The `edge`
+// property on each segment is passed through untouched.
 //
-// KEY INTERACTIONS:
-//   Tab while drawing  — lock angle, type exact length, Enter to place
-//   Tab on selected    — open length edit field
-//   Right-click line   — context menu with all modify tools
-//   Scroll wheel       — zoom toward cursor
-//   Shift while drawing — freehand (no angle snap)
-//   ESC                — cancel current operation
-//   Delete             — delete selected segment(s)
-//   Ctrl+Z / Ctrl+Y    — undo / redo
-// ============================================================
+// See SHAPE_EDITOR_README.md for the full contract.
+// ============================================================================
+import { useState, useRef, useCallback, useEffect } from 'react';
 
-import { useState, useRef, useCallback, useEffect } from "react";
 
 // -- Units: mm --------------------------------------------------------------
 const PX_PER_MM = 2;          // 2 screen pixels = 1mm
@@ -42,9 +29,64 @@ const MAJOR_MM = 100;         // major grid = 100mm
 const GS = GRID_MM * PX_PER_MM;  // 20px grid
 const SNAP_D = 10;            // snap threshold in px
 
-// Canvas default size (real size set inside component via useEffect, so SSR doesn't crash)
-const W_DEFAULT = 1200;
-const H_DEFAULT = 800;
+// Canvas fills the window
+const W = Math.min(window.innerWidth - 260, 1800);
+const H = Math.min(window.innerHeight - 120, 1200);
+
+// ---- Part context -------------------------------------------------------
+// The part's origin (its 0,0 corner) in canvas pixel space.
+// All shape coordinates are stored in canvas px internally but are
+// converted to part-relative mm when emitted via onShapeChange().
+const PART_ORIGIN = { x: 120, y: 120 };
+
+// Canvas px -> part-relative mm
+const pxToPartMM = (px, axis) =>
+  Math.round((px - PART_ORIGIN[axis]) / PX_PER_MM);
+// Part-relative mm -> canvas px
+const partMMToPx = (mm, axis) =>
+  Math.round(mm * PX_PER_MM + PART_ORIGIN[axis]);
+
+// Convert a whole segment between coordinate spaces
+function segToPartMM(s) {
+  const p = pt => ({ x: pxToPartMM(pt.x,'x'), y: pxToPartMM(pt.y,'y') });
+  const out = { ...s, p0: p(s.p0), p1: p(s.p1) };
+  if (s.cp1) out.cp1 = p(s.cp1);
+  if (s.cp2) out.cp2 = p(s.cp2);
+  if (s.rx != null) out.rx = Math.round(s.rx / PX_PER_MM);
+  if (s.ry != null) out.ry = Math.round(s.ry / PX_PER_MM);
+  return out;
+}
+function segFromPartMM(s) {
+  const p = pt => ({ x: partMMToPx(pt.x,'x'), y: partMMToPx(pt.y,'y') });
+  const out = { ...s, p0: p(s.p0), p1: p(s.p1) };
+  if (s.cp1) out.cp1 = p(s.cp1);
+  if (s.cp2) out.cp2 = p(s.cp2);
+  if (s.rx != null) out.rx = Math.round(s.rx * PX_PER_MM);
+  if (s.ry != null) out.ry = Math.round(s.ry * PX_PER_MM);
+  return out;
+}
+
+// ---- Edge tagging -------------------------------------------------------
+// Every segment may carry an `edge` block describing how that edge is
+// finished. This rides along with the segment into the resolver.
+const EDGE_DEFAULT = { band: false, profile: 'square' };
+
+// Bounding box of a shape in part-relative mm
+function shapeBoundsMM(segs) {
+  if (!segs || !segs.length) return null;
+  const xs = segs.flatMap(s => [s.p0.x, s.p1.x]);
+  const ys = segs.flatMap(s => [s.p0.y, s.p1.y]);
+  return {
+    minX: pxToPartMM(Math.min(...xs),'x'), maxX: pxToPartMM(Math.max(...xs),'x'),
+    minY: pxToPartMM(Math.min(...ys),'y'), maxY: pxToPartMM(Math.max(...ys),'y'),
+  };
+}
+const EDGE_PROFILES = ['square', 'bullnose', 'chamfer', 'ogee', 'pencil'];
+const EDGE_COLOURS = {
+  square:'#cc7700', bullnose:'#1a8888', chamfer:'#8844cc',
+  ogee:'#cc2277', pencil:'#448822',
+};
+const getEdge = s => ({ ...EDGE_DEFAULT, ...(s.edge || {}) });
 
 // Convert px to mm for display
 const toMM = px => Math.round(px / PX_PER_MM);
@@ -97,7 +139,7 @@ function validateShape(segs) {
   return segs.filter(s=>segLen(s)<2).map((_,i)=>`Segment ${i+1} has zero length`);
 }
 
-function checkGeometry(segs) {
+function checkGeometry(segs, partW = null, partH = null) {
   // Full geometry analysis -- run on demand via Check Shape button
   const issues = [];
   const GAP = 8; // px tolerance for endpoint matching
@@ -151,10 +193,156 @@ function checkGeometry(segs) {
     if (bh<20) issues.push({type:'error', msg:'Shape height too small'});
   }
 
+  // Part bounds check -- shape must fit inside the part it belongs to
+  if (partW && partH && segs.length) {
+    const xs = segs.flatMap(s=>[s.p0.x,s.p1.x]);
+    const ys = segs.flatMap(s=>[s.p0.y,s.p1.y]);
+    const minX = pxToPartMM(Math.min(...xs),'x');
+    const maxX = pxToPartMM(Math.max(...xs),'x');
+    const minY = pxToPartMM(Math.min(...ys),'y');
+    const maxY = pxToPartMM(Math.max(...ys),'y');
+    if (minX < -1 || minY < -1)
+      issues.push({type:'error', msg:`Shape extends outside the part origin (${minX}, ${minY}mm)`});
+    if (maxX > partW + 1)
+      issues.push({type:'error', msg:`Shape is ${maxX-partW}mm wider than the part (${partW}mm)`});
+    if (maxY > partH + 1)
+      issues.push({type:'error', msg:`Shape is ${maxY-partH}mm taller than the part (${partH}mm)`});
+  }
+
   const valid = issues.filter(i=>i.type==='error').length===0;
   if (valid) issues.push({type:'success', msg:'Shape is closed and valid -- ready for cabinet resolver'});
 
   return {valid, issues, gaps};
+}
+
+// ---- Heal & Close -------------------------------------------------------
+// Bridges the gap between "what the user drew" (freehand, unordered,
+// possibly with small gaps) and "what the resolver can consume"
+// (an ordered, closed loop with a known winding direction).
+//
+//   1. Weld  - snap near-coincident endpoints together
+//   2. Order - walk the segments into one continuous chain
+//   3. Wind  - normalise direction to counter-clockwise
+//
+// Returns { segs, closed, welded, reordered, reversed, error }
+function healAndClose(input, tolerance = 8) {
+  if (!input || input.length < 2)
+    return { segs: input || [], closed:false, welded:0, reordered:false,
+             reversed:false, error:'Need at least 2 segments' };
+
+  let segs = input.map(s => clone(s));
+  let welded = 0;
+
+  // -- 1. Weld: collect all endpoints, cluster ones within tolerance,
+  //       move every member of a cluster to the cluster average.
+  const pts = [];
+  segs.forEach((s,i) => {
+    pts.push({ i, role:'p0', pt:s.p0 });
+    pts.push({ i, role:'p1', pt:s.p1 });
+  });
+  const used = new Set();
+  pts.forEach((a, ai) => {
+    if (used.has(ai)) return;
+    const cluster = [ai];
+    pts.forEach((b, bi) => {
+      if (bi <= ai || used.has(bi)) return;
+      if (a.i === b.i) return;                 // ignore same segment
+      if (d2(a.pt, b.pt) < tolerance) cluster.push(bi);
+    });
+    if (cluster.length > 1) {
+      // Deterministic target -- never average, because averaging shifts
+      // geometry on every heal and quietly destroys typed dimensions.
+      // Preference order: a grid-aligned point, else the lowest-indexed point.
+      const onGrid = p => (p.x % GS === 0) && (p.y % GS === 0);
+      let target = null;
+      for (const k of cluster) { if (onGrid(pts[k].pt)) { target = pts[k].pt; break; } }
+      if (!target) target = pts[cluster[0]].pt;
+      const anchor = { x: target.x, y: target.y };
+      cluster.forEach(k => {
+        used.add(k);
+        const moved = d2(pts[k].pt, anchor) > 0.01;
+        // Assign the identical value so connected endpoints are exactly equal
+        segs[pts[k].i][pts[k].role] = { x: anchor.x, y: anchor.y };
+        if (moved) welded++;
+      });
+    }
+  });
+
+  // -- 2. Order: walk from the first segment, always taking whichever
+  //       unused segment starts where the previous one ended.
+  const remaining = segs.map((s,i) => i);
+  const chain = [segs[remaining.shift()]];
+  let reordered = false;
+  let guard = 0;
+  while (remaining.length && guard++ < 10000) {
+    const tail = chain[chain.length - 1].p1;
+    let found = -1, flip = false;
+    for (let k = 0; k < remaining.length; k++) {
+      const s = segs[remaining[k]];
+      if (d2(s.p0, tail) < tolerance) { found = k; flip = false; break; }
+      if (d2(s.p1, tail) < tolerance) { found = k; flip = true;  break; }
+    }
+    if (found === -1) break;                  // chain is broken here
+    if (found !== 0) reordered = true;
+    const seg = segs[remaining.splice(found,1)[0]];
+    chain.push(flip ? reverseSeg(seg) : seg);
+    if (flip) reordered = true;
+  }
+
+  // Anything we could not reach stays on the end untouched
+  const orphans = remaining.map(i => segs[i]);
+  const ordered = [...chain, ...orphans];
+
+  // -- 3. Wind: closed loops are normalised to counter-clockwise so the
+  //       resolver always knows which side is "outside" the profile.
+  let isClosed = orphans.length === 0 && ordered.length >= 3 &&
+                 d2(ordered[ordered.length-1].p1, ordered[0].p0) < tolerance;
+  if (isClosed) {
+    // Force exact coincidence -- "close enough" is not closed.
+    ordered[ordered.length-1].p1 = { x: ordered[0].p0.x, y: ordered[0].p0.y };
+  }
+  let reversed = false;
+  if (isClosed && signedArea(ordered) < 0) {
+    ordered.reverse();
+    for (let i = 0; i < ordered.length; i++) ordered[i] = reverseSeg(ordered[i]);
+    reversed = true;
+  }
+
+  return {
+    segs: ordered,
+    closed: isClosed,
+    welded, reordered, reversed,
+    error: orphans.length
+      ? `${orphans.length} segment(s) could not be connected`
+      : null,
+  };
+}
+
+// Reverse a segment's direction, preserving its geometry
+function reverseSeg(s) {
+  const out = { ...s, p0: { ...s.p1 }, p1: { ...s.p0 } };
+  if (s.cp1 && s.cp2) { out.cp1 = { ...s.cp2 }; out.cp2 = { ...s.cp1 }; }
+  if (s.sweep != null) out.sweep = s.sweep ? 0 : 1;   // arc flips handedness
+  return out;
+}
+
+// Shoelace area of the segment chain (chord approximation for arcs).
+// Positive = counter-clockwise in screen coords (y-down).
+function signedArea(segs) {
+  let a = 0;
+  segs.forEach(s => { a += (s.p0.x * s.p1.y) - (s.p1.x * s.p0.y); });
+  return a / 2;
+}
+
+// Strict closure test: every segment must join the next at an *exact*
+// coordinate, and the chain must return to its start. No tolerance.
+function isExactlyClosed(segs) {
+  if (!segs || segs.length < 3) return false;
+  const same = (a,b) => a.x === b.x && a.y === b.y;
+  for (let i = 0; i < segs.length - 1; i++) {
+    if (!same(segs[i].p1, segs[i+1].p0)) return false;
+  }
+  return same(segs[segs.length-1].p1, segs[0].p0);
 }
 
 const PRESETS = {
@@ -193,14 +381,6 @@ const PRESETS = {
     {type:'line',p0:{x:160,y:370},p1:{x:160,y:150}},
   ]},
 };
-
-// ⚠ WIP (paused 2026-05-28) — the mode='room-outline' code path below is plan-view
-// wall editing (Option B). See src/lib/wallPolyline.ts for the full status. If the
-// plan-view feature is abandoned, delete this set + the `mode` prop + the
-// `mode==='room-outline'` checks in the toolbar / context menu / parameter panel.
-// The rest of this editor stays — it'll be mounted in mode='free' for elevation
-// shape editing.
-const ROOM_OUTLINE_HIDDEN_TOOLS = new Set(['curve','circle','oval','bend','fillet','chamfer']);
 
 const TOOLS = [
   {id:'select',  icon:'↖',label:'Select',     group:'edit', key:'s'},
@@ -502,36 +682,37 @@ function concentricArc(seg, off) {
   return {...seg, p0:np0, p1:np1, rx:newR, ry:newR};
 }
 
-/**
- * @typedef {{x:number, y:number}} Pt
- * @typedef {{type:'line', p0:Pt, p1:Pt} | {type:'arc', p0:Pt, p1:Pt, rx?:number, ry?:number, largeArc?:0|1, sweep?:0|1} | {type:'curve', p0:Pt, p1:Pt, cp1:Pt, cp2:Pt}} Segment
- *
- * @param {object} [props]
- * @param {Segment[] | null} [props.initialSegments]   Existing shape to load; null/empty falls back to default rect preset.
- * @param {((segs: Segment[]) => void) | null} [props.onShapeChange]  Fires on every shape change (draw/edit/undo/redo).
- * @param {number | null} [props.width]                Pixel width override; defaults to window-fit.
- * @param {number | null} [props.height]               Pixel height override; defaults to window-fit.
- * @param {'free' | 'room-outline'} [props.mode]       'room-outline' hides curve/arc/fillet/chamfer tools.
- */
-export default function CADEditor({
-  initialSegments = null,
-  onShapeChange = null,
-  width = null,
-  height = null,
-  mode = 'free',
+export default function ShapeEditor({
+  // ---- Part context ----
+  partWidth  = 600,          // part DX in mm
+  partHeight = 720,          // part DY in mm
+  partLabel  = 'Part',       // shown in the header
+  // ---- Data in / out ----
+  initialSegments = null,    // array of segments in part-relative mm
+  onShapeChange   = null,    // (segmentsMM, meta) called on every edit
+  onShapeConfirmed= null,    // (segmentsMM, meta) called when Check Shape passes
+  onSave    = null,          // (segmentsMM, meta) called when the user saves
+  onCancel  = null,          // called when the user exits without saving
+  readOnly = false,
 } = {}) {
-  // Canvas size: prop overrides everything; otherwise default → resize on mount via window (avoids SSR/hydration mismatch).
-  const [W, setW] = useState(width ?? W_DEFAULT);
-  const [H, setH] = useState(height ?? H_DEFAULT);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (width == null)  setW(Math.min(window.innerWidth - 260, 1800));
-    if (height == null) setH(Math.min(window.innerHeight - 120, 1200));
-  }, [width, height]);
+  // Default shape is the part's own rectangle
+  const partRect = () => {
+    const w = partWidth * PX_PER_MM, h = partHeight * PX_PER_MM;
+    const o = PART_ORIGIN;
+    const c = [
+      {x:o.x,     y:o.y},
+      {x:o.x + w, y:o.y},
+      {x:o.x + w, y:o.y + h},
+      {x:o.x,     y:o.y + h},
+    ];
+    return c.map((p,i) => ({
+      type:'line', p0:{...p}, p1:{...c[(i+1)%4]}, edge:{...EDGE_DEFAULT}
+    }));
+  };
 
-  const init = (initialSegments && initialSegments.length)
-    ? initialSegments.map(s => clone(s))
-    : PRESETS.rect.segs.map(s => clone(s));
+  const init = initialSegments && initialSegments.length
+    ? initialSegments.map(segFromPartMM)
+    : partRect();
   const [history, setHistory] = useState([init]);
   const [histIdx, setHistIdx] = useState(0);
   const [closed, setClosed]   = useState(true);
@@ -556,6 +737,12 @@ export default function CADEditor({
   const shiftRef = useRef(false);
   const [errors, setErrors]   = useState([]);
   const [geoResult, setGeoResult] = useState(null);
+  const [healMsg, setHealMsg] = useState(null);
+  // Cumulative datum shift applied during this editing session, in mm.
+  // Reported to the parent so the part's placement can be compensated.
+  const [originShift, setOriginShift] = useState({ dx: 0, dy: 0 });
+  // Edge brush -- set the finish you want, then click edges to apply it
+  const [saveGate, setSaveGate] = useState(null); // null | 'open-shape'
   const [importMsg, setImportMsg] = useState('');
   const fileInputRef = useRef();
   const [offsetInput, setOffsetInput] = useState('');
@@ -623,17 +810,159 @@ export default function CADEditor({
     e.target.value = ''; // allow re-importing same file
   }
 
+  // ---- Emit shape changes to the parent -------------------------------
+  // Coordinates are converted to part-relative mm on the way out, so what
+  // gets persisted is resolver-ready and independent of canvas position.
+  const emitRef = useRef(false);
+  useEffect(() => {
+    if (!onShapeChange) return;
+    if (!emitRef.current) { emitRef.current = true; return; }  // skip mount
+    const mm = segs.map(segToPartMM);
+    onShapeChange(mm, { closed, segmentCount: segs.length });
+  }, [segs]);
+
+  // ---- Fit the view to the part on first mount -------------------------
+  useEffect(() => {
+    const pw = partWidth * PX_PER_MM, ph = partHeight * PX_PER_MM;
+    const pad = 80;
+    const z = Math.min((W - pad*2) / (pw + PART_ORIGIN.x),
+                       (H - pad*2) / (ph + PART_ORIGIN.y), 1);
+    if (z > 0 && z < 1) setZoom(Number(z.toFixed(2)));
+  }, []);
+
   function pushHistory(newSegs) {
     const trimmed = history.slice(0,histIdx+1);
     const copy = newSegs.map(s=>clone(s));
     setHistory([...trimmed, copy]);
     setHistIdx(trimmed.length);
     setErrors(validateShape(copy));
-    if (onShapeChange) onShapeChange(copy);
   }
 
-  function undo() { if(histIdx>0){ const i=histIdx-1; setHistIdx(i); setErrors(validateShape(history[i])); if (onShapeChange) onShapeChange(history[i]); } }
-  function redo() { if(histIdx<history.length-1){ const i=histIdx+1; setHistIdx(i); setErrors(validateShape(history[i])); if (onShapeChange) onShapeChange(history[i]); } }
+  // ---- Save gate -------------------------------------------------------
+  // A shape that is not exactly closed cannot be saved. The user either
+  // heals it, or leaves without saving.
+  function buildMeta() {
+    const b = shapeBoundsMM(segsRef.current);
+    return {
+      closed: isExactlyClosed(segsRef.current),
+      segmentCount: segsRef.current.length,
+      bounds: b,
+      originShift,
+      bandedEdges: segsRef.current.filter(s=>getEdge(s).band).length,
+      tapeLengthMM: toMM(segsRef.current.filter(s=>getEdge(s).band)
+                                        .reduce((t,s)=>t+segLen(s),0)),
+    };
+  }
+
+  function attemptSave() {
+    if (!isExactlyClosed(segsRef.current)) { setSaveGate('open-shape'); return; }
+    const res = checkGeometry(segsRef.current, partWidth, partHeight);
+    setGeoResult(res);
+    if (!res.valid) { setSaveGate('open-shape'); return; }
+    if (onSave) onSave(segsRef.current.map(segToPartMM), buildMeta());
+    setSaveGate(null);
+  }
+
+  function healThenSave() {
+    const r = healAndClose(segsRef.current, 8);
+    if (r.segs && r.segs.length) pushHistory(r.segs);
+    if (r.closed) {
+      setClosed(true);
+      setSaveGate(null);
+      const res = checkGeometry(r.segs, partWidth, partHeight);
+      setGeoResult(res);
+      if (res.valid && onSave) onSave(r.segs.map(segToPartMM), {
+        ...buildMeta(), closed:true, segmentCount:r.segs.length,
+      });
+    } else {
+      setHealMsg({ ok:false, text: r.error || 'Could not close the shape automatically' });
+      setTimeout(()=>setHealMsg(null), 6000);
+    }
+  }
+
+  // ---- Edge display (read-only) ----------------------------------------
+  // Edge banding is authored in PartEditor, not here. The shape editor only
+  // displays it, and must pass the `edge` property through untouched.
+
+  // Shape centroid, used to work out which side of an edge faces outward
+  const shapeCentroid = (() => {
+    if (!segs.length) return { x:0, y:0 };
+    let sx=0, sy=0, n=0;
+    segs.forEach(s => { sx+=s.p0.x+s.p1.x; sy+=s.p0.y+s.p1.y; n+=2; });
+    return { x: sx/n, y: sy/n };
+  })();
+
+  // Offset a segment outward from the shape centre, for the banding stripe
+  function outwardOffset(seg, dist) {
+    const dx = seg.p1.x-seg.p0.x, dy = seg.p1.y-seg.p0.y;
+    const len = Math.sqrt(dx*dx+dy*dy) || 1;
+    let px = -dy/len, py = dx/len;
+    const mx = (seg.p0.x+seg.p1.x)/2, my = (seg.p0.y+seg.p1.y)/2;
+    if (px*(mx-shapeCentroid.x) + py*(my-shapeCentroid.y) < 0) { px=-px; py=-py; }
+    return { p0:{x:seg.p0.x+px*dist, y:seg.p0.y+py*dist},
+             p1:{x:seg.p1.x+px*dist, y:seg.p1.y+py*dist} };
+  }
+
+  // ---- Origin / datum --------------------------------------------------
+  // Translate the whole shape so its minimum corner sits on 0,0 and record
+  // how far the datum moved. The parent must shift the part's position by
+  // the inverse of this to keep the geometry in the same place in the world.
+  function reReferenceOrigin() {
+    const b = shapeBoundsMM(segsRef.current);
+    if (!b) return;
+    if (b.minX === 0 && b.minY === 0) {
+      setHealMsg({ ok:true, text:'Datum already at 0,0 - nothing to re-reference' });
+      setTimeout(()=>setHealMsg(null), 4000);
+      return;
+    }
+    const dxPx = -b.minX * PX_PER_MM;
+    const dyPx = -b.minY * PX_PER_MM;
+    const moved = segsRef.current.map(s => {
+      const t = p => ({ x: p.x + dxPx, y: p.y + dyPx });
+      const o = { ...s, p0: t(s.p0), p1: t(s.p1) };
+      if (s.cp1) o.cp1 = t(s.cp1);
+      if (s.cp2) o.cp2 = t(s.cp2);
+      return o;
+    });
+    pushHistory(moved);
+    setOriginShift(o => ({ dx: o.dx - b.minX, dy: o.dy - b.minY }));
+    setHealMsg({ ok:true,
+      text:`Datum re-referenced by ${-b.minX}, ${-b.minY}mm - shift the part by ${b.minX}, ${b.minY}mm to keep world position` });
+    setTimeout(()=>setHealMsg(null), 8000);
+  }
+
+  // ---- Heal & Close ----------------------------------------------------
+  function doHealAndClose() {
+    const r = healAndClose(segsRef.current, 8);
+    if (r.segs && r.segs.length) pushHistory(r.segs);
+    if (r.closed) setClosed(true);
+    const parts = [];
+    if (r.welded)    parts.push(`welded ${r.welded} endpoint(s)`);
+    if (r.reordered) parts.push('reordered segments');
+    if (r.reversed)  parts.push('normalised winding to CCW');
+    if (r.closed)    parts.push('shape is closed');
+    setHealMsg({
+      ok: !r.error,
+      text: r.error ? r.error
+           : parts.length ? parts.join(' - ')
+           : 'Nothing to fix - shape was already clean',
+    });
+    setTimeout(()=>setHealMsg(null), 5000);
+    // Re-run validation so the result panel reflects the healed shape
+    setGeoResult(checkGeometry(r.segs, partWidth, partHeight));
+  }
+
+  function runCheckShape() {
+    const res = checkGeometry(segsRef.current, partWidth, partHeight);
+    setGeoResult(res);
+    if (res.valid && onShapeConfirmed) {
+      onShapeConfirmed(segsRef.current.map(segToPartMM),
+                       { closed, segmentCount: segsRef.current.length });
+    }
+  }
+
+  function undo() { if(histIdx>0){ const i=histIdx-1; setHistIdx(i); setErrors(validateShape(history[i])); } }
+  function redo() { if(histIdx<history.length-1){ const i=histIdx+1; setHistIdx(i); setErrors(validateShape(history[i])); } }
 
   const getSVG = e => {
     const r = svgRef.current.getBoundingClientRect();
@@ -1488,7 +1817,12 @@ export default function CADEditor({
         alignItems:'center',gap:8,flexShrink:0,background:'#fafaf7'}}>
         <div>
           <div style={{fontSize:9,letterSpacing:3,color:'#999990',textTransform:'uppercase'}}>RHK CADcam</div>
-          <div style={{fontSize:13,fontWeight:700,color:'#1a1a18'}}>Shape Editor <span style={{fontSize:10,color:'#888880',fontWeight:400}}>mm</span></div>
+          <div style={{fontSize:13,fontWeight:700,color:'#1a1a18'}}>
+            Shape Editor
+            <span style={{fontSize:10,color:'#888880',fontWeight:400,marginLeft:6}}>
+              {partLabel} - {partWidth} x {partHeight}mm
+            </span>
+          </div>
         </div>
         <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
           <Btn label="↩ Undo" onClick={undo} disabled={histIdx<=0}/>
@@ -1497,6 +1831,41 @@ export default function CADEditor({
           <Btn label={snapOn?'⊞ Snap ON':'⊟ Snap OFF'} onClick={()=>setSnapOn(s=>!s)} active={snapOn}/>
           <Btn label={showHandles?'Handles ON':'Handles OFF'} onClick={()=>setShowHandles(s=>!s)} active={showHandles}/>
           <Btn label={closed?'Open':'Close'} onClick={()=>setClosed(c=>!c)} active={closed}/>
+
+          <input ref={fileInputRef} type="file" accept=".svg" style={{display:'none'}}
+            onChange={handleSVGImport}/>
+          <Btn label="⬆ Import SVG" onClick={()=>fileInputRef.current&&fileInputRef.current.click()}/>
+
+          <button onClick={doHealAndClose} title="Weld gaps, order segments, normalise winding"
+            style={{background:'#cc770012',border:'1px solid #cc7700',color:'#cc7700',
+              borderRadius:3,padding:'3px 9px',cursor:'pointer',fontSize:10,
+              fontFamily:'IBM Plex Mono,monospace',fontWeight:700,whiteSpace:'nowrap'}}>
+            ⚕ Heal &amp; Close
+          </button>
+
+          {onSave&&(
+            <button onClick={attemptSave}
+              style={{background:'#1a4488',border:'1px solid #1a4488',color:'#fff',
+                borderRadius:3,padding:'3px 12px',cursor:'pointer',fontSize:10,
+                fontFamily:'IBM Plex Mono,monospace',fontWeight:700,whiteSpace:'nowrap'}}>
+              Save Shape
+            </button>
+          )}
+          {onCancel&&(
+            <Btn label="Exit" onClick={()=>{
+              if(onCancel) onCancel();
+            }}/>
+          )}
+          <button onClick={runCheckShape}
+            style={{background:'#228822',border:'1px solid #228822',color:'#fff',
+              borderRadius:3,padding:'3px 10px',cursor:'pointer',fontSize:10,
+              fontFamily:'IBM Plex Mono,monospace',fontWeight:700,whiteSpace:'nowrap'}}>
+            ✓ Check Shape
+          </button>
+          {geoResult&&<button onClick={()=>setGeoResult(null)} style={{
+            background:'transparent',border:'1px solid #d0d0cc',color:'#888',
+            borderRadius:3,padding:'3px 8px',cursor:'pointer',fontSize:10,
+            fontFamily:'IBM Plex Mono,monospace'}}>✕</button>}
           <div style={{display:'flex',gap:3,alignItems:'center',marginLeft:4}}>
             <button onClick={()=>{setZoom(z=>Math.min(8,z*1.25));}} style={zBtnStyle}>＋</button>
             <button onClick={()=>{setZoom(z=>Math.max(0.15,z/1.25));}} style={zBtnStyle}>－</button>
@@ -1504,6 +1873,61 @@ export default function CADEditor({
           </div>
         </div>
       </div>
+
+      {/* Save gate -- shape must be closed */}
+      {saveGate&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(30,30,28,0.45)',
+          zIndex:500,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{background:'#fafaf7',border:'2px solid #cc2222',borderRadius:8,
+            width:440,boxShadow:'0 10px 40px rgba(0,0,0,0.25)',
+            fontFamily:'IBM Plex Mono,monospace'}}>
+            <div style={{padding:'10px 16px',background:'#cc2222',color:'#fff',
+              borderRadius:'5px 5px 0 0',fontWeight:700,fontSize:12}}>
+              Shape is not closed
+            </div>
+            <div style={{padding:'14px 16px',fontSize:11,color:'#333330',lineHeight:1.7}}>
+              A part profile must form a single closed loop before it can be
+              saved. Open or broken outlines cannot be resolved into toolpaths.
+              {geoResult&&geoResult.issues&&geoResult.issues.filter(i=>i.type==='error').length>0&&(
+                <div style={{marginTop:8,padding:8,background:'#cc222210',borderRadius:4}}>
+                  {geoResult.issues.filter(i=>i.type==='error').map((iss,k)=>(
+                    <div key={k} style={{color:'#cc2222',fontSize:10}}>- {iss.msg}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{padding:'0 16px 14px',display:'flex',gap:8}}>
+              <button onClick={healThenSave} style={{flex:1,padding:'9px',
+                background:'#cc7700',color:'#fff',border:'none',borderRadius:4,
+                cursor:'pointer',fontSize:11,fontFamily:'inherit',fontWeight:700}}>
+                Heal &amp; Close, then save
+              </button>
+              <button onClick={()=>setSaveGate(null)} style={{padding:'9px 14px',
+                background:'transparent',color:'#555550',border:'1px solid #d0d0cc',
+                borderRadius:4,cursor:'pointer',fontSize:11,fontFamily:'inherit'}}>
+                Keep editing
+              </button>
+              <button onClick={()=>{ setSaveGate(null); if(onCancel) onCancel(); }}
+                style={{padding:'9px 14px',background:'transparent',color:'#cc2222',
+                border:'1px solid #cc222244',borderRadius:4,cursor:'pointer',
+                fontSize:11,fontFamily:'inherit'}}>
+                Exit without saving
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Heal result */}
+      {healMsg&&(
+        <div style={{background:healMsg.ok?'#cc770010':'#cc222210',
+          borderBottom:`2px solid ${healMsg.ok?'#cc7700':'#cc2222'}`,
+          padding:'5px 16px',fontSize:11,flexShrink:0,
+          color:healMsg.ok?'#cc7700':'#cc2222',
+          fontFamily:'IBM Plex Mono,monospace'}}>
+          ⚕ {healMsg.text}
+        </div>
+      )}
 
       {/* Geometry check result */}
       {geoResult&&(
@@ -1555,7 +1979,7 @@ export default function CADEditor({
           {['edit','draw','modify'].map(group=>(
             <div key={group}>
               <div style={{fontSize:8,letterSpacing:3,color:'#999990',margin:'6px 3px 4px',textTransform:'uppercase'}}>{group}</div>
-              {TOOLS.filter(t=>t.group===group && (mode!=='room-outline' || !ROOM_OUTLINE_HIDDEN_TOOLS.has(t.id))).map(t=>(
+              {TOOLS.filter(t=>t.group===group).map(t=>(
                 <button key={t.id}
                   onClick={()=>{setTool(t.id);setEdit(null);setDrawing(false);setDraftPts([]);setRectStart(null);rectRef.current=null;shapeRef.current=null;setShapeStart(null);triRef.current=[];setTriPts([]);setSelSegs(new Set());setMarquee(null);}}
                   style={{
@@ -1588,6 +2012,11 @@ export default function CADEditor({
 
         {/* Canvas */}
         <div style={{flex:1,position:'relative',overflow:'hidden'}}>
+          {/* NOTE (integration fix, 2026-07-22): the handed-over file declared
+              tabIndex + onKeyDown TWICE on this <svg> (React uses the later, TS
+              rejects the duplicate — TS17001). The earlier, shadowed pair was
+              removed; the active pair below is byte-identical to the original.
+              Apply the same dedup to the master copy in the design chat. */}
           <svg ref={svgRef} width={W} height={H}
             style={{display:'block',background:'#f7f7f3',cursor:cursorMap[tool]||'default',outline:'none'}}
             onMouseMove={onMouseMove}
@@ -1680,6 +2109,41 @@ export default function CADEditor({
             {/* Grid */}
             {gridLines}
 
+            {/* ---- Part boundary reference ------------------------------ */}
+            {(()=>{
+              const o = PART_ORIGIN;
+              const w = partWidth * PX_PER_MM, h = partHeight * PX_PER_MM;
+              return (
+                <g pointerEvents="none">
+                  {/* part face */}
+                  <rect x={o.x} y={o.y} width={w} height={h}
+                    fill="#1a44880a" stroke="#1a448855" strokeWidth={1.5}
+                    strokeDasharray="10,6"/>
+                  {/* origin marker */}
+                  <g>
+                    <line x1={o.x-14} y1={o.y} x2={o.x+22} y2={o.y}
+                      stroke="#cc5500" strokeWidth={1.5}/>
+                    <line x1={o.x} y1={o.y-14} x2={o.x} y2={o.y+22}
+                      stroke="#cc5500" strokeWidth={1.5}/>
+                    <circle cx={o.x} cy={o.y} r={3.5} fill="#fafaf7"
+                      stroke="#cc5500" strokeWidth={1.5}/>
+                    <text x={o.x+8} y={o.y-6} fontSize={8} fill="#cc5500"
+                      fontFamily="IBM Plex Mono,monospace">0,0</text>
+                  </g>
+                  {/* size labels */}
+                  <text x={o.x+w/2} y={o.y-8} fontSize={9} fill="#1a448899"
+                    textAnchor="middle" fontFamily="IBM Plex Mono,monospace">
+                    PART DX {partWidth}mm
+                  </text>
+                  <text x={o.x-8} y={o.y+h/2} fontSize={9} fill="#1a448899"
+                    textAnchor="middle" fontFamily="IBM Plex Mono,monospace"
+                    transform={`rotate(-90,${o.x-8},${o.y+h/2})`}>
+                    PART DY {partHeight}mm
+                  </text>
+                </g>
+              );
+            })()}
+
             {/* Shape fill */}
             {closed&&mainPath&&<path d={mainPath} fill={fillColor} stroke="none"/>}
 
@@ -1714,6 +2178,22 @@ export default function CADEditor({
                   {hoverSeg===i&&!isEditing&&<path d={sd} fill="none" stroke="#1a448822" strokeWidth={12}/>}
                   {(selSeg===i||isArmed)&&<path d={sd} fill="none" stroke="#1a4488" strokeWidth={3} strokeDasharray="5,3" opacity={0.5}/>}
                   {selSegs.has(i)&&<path d={sd} fill="none" stroke="#1a4488" strokeWidth={3} opacity={0.8}/>}
+
+                  {/* Edge banding -- drawn as tape sitting on the outside face */}
+                  {getEdge(seg).band&&(()=>{
+                    const o = outwardOffset(seg, 5);
+                    const prof = getEdge(seg).profile;
+                    const col = EDGE_COLOURS[prof] || '#cc7700';
+                    return (
+                      <g pointerEvents="none">
+                        <line x1={o.p0.x} y1={o.p0.y} x2={o.p1.x} y2={o.p1.y}
+                          stroke={col} strokeWidth={5} strokeLinecap="butt" opacity={0.9}/>
+                        <line x1={o.p0.x} y1={o.p0.y} x2={o.p1.x} y2={o.p1.y}
+                          stroke="#fff" strokeWidth={1} opacity={0.25}/>
+                      </g>
+                    );
+                  })()}
+
 
                   {/* Hit area */}
                   <path d={sd} fill="none" stroke="transparent" strokeWidth={16}
@@ -2137,10 +2617,10 @@ export default function CADEditor({
               {divider}
 
               {/* Modify */}
-              {mode!=='room-outline' && isLine && menuItem('⌀','Bend', ()=>doBend(contextMenu.segIdx))}
-              {mode!=='room-outline' && isBent && menuItem('╱','Straighten', ()=>doBend(contextMenu.segIdx))}
-              {mode!=='room-outline' && isLine && menuItem('◡','Fillet corner', ()=>{ setTool('fillet'); setContextMenu(null); })}
-              {mode!=='room-outline' && isLine && menuItem('◿','Chamfer corner', ()=>{ setTool('chamfer'); setContextMenu(null); })}
+              {isLine && menuItem('⌀','Bend', ()=>doBend(contextMenu.segIdx))}
+              {isBent && menuItem('╱','Straighten', ()=>doBend(contextMenu.segIdx))}
+              {isLine && menuItem('◡','Fillet corner', ()=>{ setTool('fillet'); setContextMenu(null); })}
+              {isLine && menuItem('◿','Chamfer corner', ()=>{ setTool('chamfer'); setContextMenu(null); })}
               {menuItem('⊕','Add midpoint', ()=>doAddPt(contextMenu.segIdx))}
               {divider}
 
@@ -2257,6 +2737,38 @@ export default function CADEditor({
         {/* Info panel -- live dimension sidebar */}
         <div style={{width:190,background:'#fafaf7',borderLeft:'1px solid #d0d0cc',
           padding:10,overflowY:'auto',flexShrink:0,fontSize:10,display:'flex',flexDirection:'column',gap:0}}>
+
+          {/* ---- ORIGIN / DATUM ---- */}
+          {(()=>{
+            const b = shapeBoundsMM(segs);
+            if (!b) return null;
+            const off = b.minX !== 0 || b.minY !== 0;
+            const neg = b.minX < 0 || b.minY < 0;
+            return (
+              <div style={{marginBottom:10,padding:7,borderRadius:4,
+                background: neg ? '#cc222210' : off ? '#cc770010' : '#22882208',
+                border:`1px solid ${neg?'#cc2222':off?'#cc7700':'#22882233'}`}}>
+                <div style={{fontSize:8,letterSpacing:2,marginBottom:5,
+                  textTransform:'uppercase',fontWeight:700,
+                  color: neg?'#cc2222':off?'#cc7700':'#228822'}}>Datum X0 Y0</div>
+                <div style={{fontSize:9,color:'#555550',lineHeight:1.6}}>
+                  Shape starts at <span style={{fontWeight:700,color:neg?'#cc2222':'#333330'}}>{b.minX}, {b.minY}mm</span>
+                  <br/>Extent {b.maxX-b.minX} x {b.maxY-b.minY}mm
+                </div>
+                {(originShift.dx||originShift.dy)?(
+                  <div style={{marginTop:5,fontSize:8,color:'#cc7700'}}>
+                    Datum moved {originShift.dx}, {originShift.dy}mm this session
+                  </div>):null}
+                {neg&&<div style={{marginTop:5,fontSize:8,color:'#cc2222'}}>
+                  Geometry sits outside the part datum</div>}
+                {off&&<button onClick={reReferenceOrigin}
+                  style={{...sBtn,marginTop:6,width:'100%',
+                    color:neg?'#cc2222':'#cc7700',
+                    borderColor:neg?'#cc222244':'#cc770044'}}>
+                  Re-reference datum to 0,0</button>}
+              </div>
+            );
+          })()}
 
           {/* -- LIVE DIMENSION FIELDS -- */}
           <div style={{marginBottom:10}}>
@@ -2443,8 +2955,8 @@ export default function CADEditor({
                     {isHoriz(selInfo)?'H':isVert(selInfo)?'V':'diag'}
                   </span>
                 </div>
-                {[['from',`${toMM(selInfo.p0.x)},${toMM(selInfo.p0.y)}`],
-                  ['to',`${toMM(selInfo.p1.x)},${toMM(selInfo.p1.y)}`],
+                {[['from',`${pxToPartMM(selInfo.p0.x,'x')},${pxToPartMM(selInfo.p0.y,'y')}`],
+                  ['to',`${pxToPartMM(selInfo.p1.x,'x')},${pxToPartMM(selInfo.p1.y,'y')}`],
                   ...(selInfo.type==='line'?[['len',toMM(segLen(selInfo))+'mm']]:
                       selInfo.type==='arc'?[['r',(selInfo.rx||60)+'px']]:[])]
                   .map(([k,v])=>(
@@ -2453,6 +2965,30 @@ export default function CADEditor({
                     <span style={{color:'#333330'}}>{v}</span>
                   </div>
                 ))}
+                {/* ---- Edge (read-only) ----
+                    Banding is authored in PartEditor. Shown here for context
+                    only; the shape editor passes `edge` through untouched. */}
+                {(()=>{
+                  const e = getEdge(selInfo);
+                  return (
+                    <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #d8d8d4'}}>
+                      <div style={{fontSize:8,letterSpacing:2,color:'#999990',
+                        marginBottom:5,textTransform:'uppercase',fontWeight:700}}>Edge</div>
+                      <div style={{display:'flex',alignItems:'center',gap:6,fontSize:10}}>
+                        <span style={{width:12,height:12,borderRadius:2,flexShrink:0,
+                          background:e.band?(EDGE_COLOURS[e.profile]||'#cc7700'):'transparent',
+                          border:e.band?'none':'1px dashed #ccccca'}}/>
+                        <span style={{color:e.band?'#333330':'#999990'}}>
+                          {e.band ? e.profile : 'not banded'}
+                        </span>
+                      </div>
+                      <div style={{fontSize:8,color:'#bbbbb8',marginTop:4}}>
+                        Set banding in Part Editor
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div style={{marginTop:6,display:'flex',flexDirection:'column',gap:3}}>
                   {selInfo.type==='line'&&<button onClick={()=>doBend(selSeg)} style={sBtn}>⌀ Bend</button>}
                   {(selInfo.type==='arc'||selInfo.type==='curve')&&<button onClick={()=>doBend(selSeg)} style={sBtn}>╱ Straighten</button>}
@@ -2466,7 +3002,7 @@ export default function CADEditor({
             )}
           </div>
 
-          {mode!=='room-outline' && <div style={{borderTop:'1px solid #d0d0cc',paddingTop:8,marginBottom:8}}>
+          <div style={{borderTop:'1px solid #d0d0cc',paddingTop:8,marginBottom:8}}>
             <div style={{fontSize:8,letterSpacing:3,color:'#999990',marginBottom:6,textTransform:'uppercase'}}>Parameters</div>
             {[{label:'Fillet r',val:filletR,set:setFilletR},{label:'Chamfer',val:chamferD,set:setChamferD}].map(({label,val,set})=>(
               <div key={label} style={{marginBottom:8}}>
@@ -2476,7 +3012,7 @@ export default function CADEditor({
                     borderRadius:2,padding:'2px 6px',fontSize:10,fontFamily:'IBM Plex Mono,monospace',width:'100%'}}/>
               </div>
             ))}
-          </div>}
+          </div>
 
           <div style={{borderTop:'1px solid #d0d0cc',paddingTop:8}}>
             <div style={{fontSize:8,letterSpacing:3,color:'#999990',marginBottom:6,textTransform:'uppercase'}}>Segments</div>
@@ -2489,6 +3025,7 @@ export default function CADEditor({
                     background:selSeg===i?'#1a448808':'transparent'}}>
                   {s.type==='curve'?'∿':s.type==='arc'?'◜':'╱'} {isHoriz(s)?'H':isVert(s)?'V':'D'} {i+1}
                   {s.type==='line'&&<span style={{color:'#ccccca'}}> {toMM(segLen(s))}mm</span>}
+                  {getEdge(s).band&&<span style={{color:'#cc7700',marginLeft:3}}>●</span>}
                 </div>
               ))}
             </div>

@@ -17,15 +17,19 @@
 // the source_part_key (e.g. case_left_side / zone_0_0 / int_…_N).
 // ============================================================
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { Part, PreviewCanvas, type PartMeta, type EbSpec } from '@/src/components/three/PartViewer'
 import { fmtMm } from '@/src/lib/format'
-import { type EditorView } from './partEditor/partEditorCore'
+import { type EditorView, displayExtents, roundStore } from './partEditor/partEditorCore'
 import { usePartOps } from './partEditor/usePartOps'
 import { OpMarkers3D, buildOpSubtractions } from './partEditor/partOpGlyphs'
 import PartOrthoView from './partEditor/PartOrthoView'
 import PartOpsList from './partEditor/PartOpsList'
 import PartPropertiesPanel from './partEditor/PartPropertiesPanel'
+import ShapeEditorOverlay from './partEditor/ShapeEditorOverlay'
+import { dbLoadShapeOverrides, dbSaveShapeOverride, dbSavePartPosOverride, dbUpdateCustomPart } from './canvasDB'
+import type { ShapeMeta, ShapeSegment, ShapeOverride, PartPosOverrides, CabinetCustomPart } from './canvasDB'
+import { customFieldForExtent } from '@/src/lib/customPartBox'
 
 // Thin vertical divider that reports drag deltas (px) so a parent can resize an
 // adjacent panel. Uses pointer capture so the drag survives leaving the 1.5px bar.
@@ -42,11 +46,24 @@ function ResizeHandle({ onDelta }: { onDelta: (dx: number) => void }) {
   )
 }
 
-export default function PartEditor({ cabinetId, part, ebSpec, onClose }: {
+export default function PartEditor({
+  cabinetId, part, ebSpec, onClose,
+  partOverrides, onOverridesChange, customParts, setCustomParts, onPartMetaChange,
+}: {
   cabinetId: string
   part:      PartMeta
   ebSpec?:   EbSpec
   onClose:   () => void
+  // Shape-save plumbing (M3) — all owned by CabinetEditModal. Optional so a bare
+  // mount still works; without them a shape save persists revisions but skips
+  // the bbox→size write for resolved parts.
+  partOverrides?:     PartPosOverrides
+  onOverridesChange?: (o: PartPosOverrides) => void
+  customParts?:       CabinetCustomPart[]
+  setCustomParts?:    Dispatch<SetStateAction<CabinetCustomPart[]>>
+  // Fires with the size-patched meta after a shape save so the host keeps this
+  // editor's dims (and any part it re-renders) in step with what was written.
+  onPartMetaChange?:  (m: PartMeta) => void
 }) {
   const [view, setView] = useState<EditorView>('front')
   // Active working face. Only a front panel (door / drawer front — resolves upright,
@@ -70,6 +87,22 @@ export default function PartEditor({ cabinetId, part, ebSpec, onClose }: {
     setSnapOn(s => { const n = !s; try { localStorage.setItem('partEditor.snap', n ? '1' : '0') } catch { /* ignore */ } return n })
   }
   const dragRef = useRef(false)
+  // Shape Editor overlay (2D profile editor, z-[70] above this editor).
+  // While open, this editor's own keyboard handling goes inert — ShapeEditor
+  // has its own Escape/undo/tool keys on window.
+  const [shapeOpen, setShapeOpen] = useState(false)
+  // Latest saved shape override for this part (null = plain rectangle). The
+  // whole-cabinet load is one indexed query; save swaps in the new head
+  // revision so reopening the overlay shows what was just drawn.
+  const [shapeOv, setShapeOv] = useState<ShapeOverride | null>(null)
+  const [shapeLoaded, setShapeLoaded] = useState(false)
+  useEffect(() => {
+    let live = true
+    dbLoadShapeOverrides(cabinetId)
+      .then(m => { if (live) { setShapeOv(m[part.id] ?? null); setShapeLoaded(true) } })
+      .catch(e => { console.error('[shape load]', e); if (live) setShapeLoaded(true) })
+    return () => { live = false }
+  }, [cabinetId, part.id])
   // Draggable side-panel widths (px). Clamped so neither panel can crowd out the scene.
   const [leftW, setLeftW]   = useState(288)   // 72 * 4 (was w-72)
   const [rightW, setRightW] = useState(288)
@@ -97,6 +130,7 @@ export default function PartEditor({ cabinetId, part, ebSpec, onClose }: {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return
+      if (shapeOpen) return   // ShapeEditor owns Escape (cancels its active tool)
       const t = e.target
       if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return
       e.stopImmediatePropagation(); e.preventDefault()
@@ -107,7 +141,7 @@ export default function PartEditor({ cabinetId, part, ebSpec, onClose }: {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [onClose, measuring])
+  }, [onClose, measuring, shapeOpen])
 
   // Arrow ↑/↓ move the list selection (ignored while typing). Delete is intentionally
   // NOT bound — the 3D view behind captures it (would hide the whole part); use the
@@ -115,6 +149,7 @@ export default function PartEditor({ cabinetId, part, ebSpec, onClose }: {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+      if (shapeOpen) return
       const t = e.target
       if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return
       if (ops.length === 0) return
@@ -127,12 +162,13 @@ export default function PartEditor({ cabinetId, part, ebSpec, onClose }: {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [ops, selectedId, setSelectedId])
+  }, [ops, selectedId, setSelectedId, shapeOpen])
 
   // Ctrl/Cmd+Z → session undo (ignored while typing in a field).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return
+      if (shapeOpen) return   // ShapeEditor has its own Ctrl+Z history
       const t = e.target
       if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return
       e.preventDefault(); e.stopImmediatePropagation()
@@ -140,7 +176,7 @@ export default function PartEditor({ cabinetId, part, ebSpec, onClose }: {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [undo])
+  }, [undo, shapeOpen])
 
   // Display frame (see PartOrthoView): stand every part upright — width across the
   // screen, height up. Non-'side' panels store their height as part-local DX, so
@@ -163,6 +199,81 @@ export default function PartEditor({ cabinetId, part, ebSpec, onClose }: {
   // are none, Part keeps its normal multi-face colouring.
   const subtractions = useMemo(() => buildOpSubtractions(ops, u, v, n, swap, mirror), [ops, u, v, n, swap, mirror])
 
+  // Shape save (M3): persist the revision, then make the part's size the shape's
+  // bounding box (locked decision #6). The shape frame is y-DOWN from the visual
+  // top-left, but the part's op/CNC datum is the BOTTOM-left corner — so sizing
+  // must preserve op-frame coordinates (opY = height − shapeY), not shape-frame
+  // ones: new height = sh − minY with segments shifted up by minY, new width =
+  // maxX (x axes agree, datum at the left edge, nothing moves). A shape drawn
+  // inboard of an edge therefore keeps every op and drill exactly where it was.
+  async function handleShapeSave(segments: ShapeSegment[], meta: ShapeMeta) {
+    // Datum re-reference compensation (README originShift) is a Phase-1 cut:
+    // ShapeEditor's bounds check blocks negative-coordinate saves, so geometry
+    // always arrives datum-anchored. The shift is kept in the stored meta for a
+    // later phase; no ox/oy is written.
+    if (meta.originShift && (meta.originShift.dx !== 0 || meta.originShift.dy !== 0)) {
+      console.warn('[shape save] originShift recorded but not compensated (Phase 1):', meta.originShift)
+    }
+
+    // Re-anchor to the op datum before storing, so stored segments always fill
+    // [0..W]×[0..H] of the (possibly resized) part and reopen cleanly.
+    const bnd = meta.bounds
+    let segsOut = segments
+    let metaOut = meta
+    const shiftY = bnd ? roundStore(bnd.minY) : 0
+    if (bnd && shiftY !== 0) {
+      const mv = (p?: { x: number; y: number }) => (p ? { x: p.x, y: roundStore(p.y - shiftY) } : p)
+      segsOut = segments.map(s => ({ ...s, p0: mv(s.p0)!, p1: mv(s.p1)!, cp1: mv(s.cp1), cp2: mv(s.cp2) }))
+      metaOut = { ...meta, bounds: { minX: bnd.minX, maxX: bnd.maxX, minY: 0, maxY: roundStore(bnd.maxY - shiftY) } }
+    }
+
+    const saved = await dbSaveShapeOverride(cabinetId, part.id, segsOut, metaOut)
+    if (!saved) {
+      // Keep the overlay open — closing would discard the drawn shape.
+      alert('Shape save failed — see console. The editor stays open so the drawing is not lost.')
+      return
+    }
+    setShapeOv(saved)
+
+    if (bnd) {
+      const { swExt, shExt } = displayExtents(part)
+      const changes: Partial<Record<'w' | 'h' | 'd', number>> = {}
+      const newSW = roundStore(bnd.maxX)
+      const newSH = roundStore(sh - bnd.minY)
+      if (Math.abs(newSW - sw) > 0.05) changes[swExt] = newSW
+      if (Math.abs(newSH - sh) > 0.05) changes[shExt] = newSH
+      if (changes.w != null || changes.h != null || changes.d != null) {
+        if (part.id.startsWith('custom_')) {
+          // Custom parts: dims are authoritative on the row (mirrors the 3D
+          // inspector's handleSizeChange — a manual size clears that field's formula).
+          const cpId = part.id.slice('custom_'.length)
+          const cp = customParts?.find(p => p.id === cpId)
+          if (cp) {
+            const expressions = { ...(cp.expressions ?? {}) }
+            const patch: Partial<CabinetCustomPart> = { expressions }
+            for (const [ext, val] of Object.entries(changes) as ['w' | 'h' | 'd', number][]) {
+              const field = customFieldForExtent(cp.orientation ?? 'flat', ext)
+              patch[field] = val
+              delete expressions[field]
+            }
+            setCustomParts?.(prev => prev.map(p => (p.id === cpId ? { ...p, ...patch } : p)))
+            dbUpdateCustomPart(cpId, patch).catch(console.error)
+          }
+        } else {
+          const cur = partOverrides?.[part.id] ?? { ox: 0, oy: 0, oz: 0 }
+          const ov = { ...cur }
+          if (changes.w != null) ov.sw = changes.w
+          if (changes.h != null) ov.sh = changes.h
+          if (changes.d != null) ov.sd = changes.d
+          const updated = await dbSavePartPosOverride(cabinetId, part.id, ov, partOverrides ?? {})
+          onOverridesChange?.(updated)
+        }
+        onPartMetaChange?.({ ...part, w: changes.w ?? part.w, h: changes.h ?? part.h, d: changes.d ?? part.d })
+      }
+    }
+    setShapeOpen(false)
+  }
+
   return (
     <div
       className="fixed inset-0 z-[60] bg-black/85 flex flex-col"
@@ -182,6 +293,13 @@ export default function PartEditor({ cabinetId, part, ebSpec, onClose }: {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShapeOpen(true)} disabled={!shapeLoaded}
+            title={shapeLoaded ? "Edit the part's outline shape (2D profile editor)" : 'Loading saved shape…'}
+            className={`text-[11px] px-2 py-0.5 rounded border border-gray-700 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed ${
+              shapeOv ? 'text-emerald-300' : 'text-gray-300'
+            }`}>
+            ⬠ Edit Shape{shapeOv ? ` (r${shapeOv.revision})` : ''}
+          </button>
           <button onClick={() => void undo()} disabled={undoDepth === 0}
             title="Undo (Ctrl+Z)"
             className="text-[11px] px-2 py-0.5 rounded border border-gray-700 text-gray-300 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
@@ -328,6 +446,21 @@ export default function PartEditor({ cabinetId, part, ebSpec, onClose }: {
           convertToManual={() => void convertToManual()}
         />
       </div>
+
+      {/* Shape Editor overlay — 2D outline editor in the upright display frame
+          (sw × sh, same frame as the 3D box / PartEdge sides). displayEdge seeds
+          the banding tape on a fresh rectangle; a saved shape reopens verbatim. */}
+      {shapeOpen && (
+        <ShapeEditorOverlay
+          partLabel={part.label}
+          partWidth={sw}
+          partHeight={sh}
+          edge={displayEdge}
+          initialSegments={shapeOv?.segments ?? null}
+          onSave={(segments: ShapeSegment[], meta: ShapeMeta) => void handleShapeSave(segments, meta)}
+          onCancel={() => setShapeOpen(false)}
+        />
+      )}
     </div>
   )
 }
