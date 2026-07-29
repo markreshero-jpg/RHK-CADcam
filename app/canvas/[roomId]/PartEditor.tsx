@@ -48,7 +48,7 @@ function ResizeHandle({ onDelta }: { onDelta: (dx: number) => void }) {
 
 export default function PartEditor({
   cabinetId, part, ebSpec, onClose,
-  partOverrides, onOverridesChange, customParts, setCustomParts, onPartMetaChange,
+  partOverrides, onOverridesChange, customParts, setCustomParts, onPartMetaChange, partBase,
 }: {
   cabinetId: string
   part:      PartMeta
@@ -64,6 +64,9 @@ export default function PartEditor({
   // Fires with the size-patched meta after a shape save so the host keeps this
   // editor's dims (and any part it re-renders) in step with what was written.
   onPartMetaChange?:  (m: PartMeta) => void
+  // Base resolved dims (buildBaseDims convention: w/h in-plane, d thickness) —
+  // recorded into shape meta at save so the Overrides tab can flag staleness.
+  partBase?:          { w: number; h: number; d: number }
 }) {
   const [view, setView] = useState<EditorView>('front')
   // Active working face. Only a front panel (door / drawer front — resolves upright,
@@ -219,12 +222,41 @@ export default function PartEditor({
     // [0..W]×[0..H] of the (possibly resized) part and reopen cleanly.
     const bnd = meta.bounds
     let segsOut = segments
-    let metaOut = meta
+    let metaOut = { ...meta }
     const shiftY = bnd ? roundStore(bnd.minY) : 0
     if (bnd && shiftY !== 0) {
       const mv = (p?: { x: number; y: number }) => (p ? { x: p.x, y: roundStore(p.y - shiftY) } : p)
       segsOut = segments.map(s => ({ ...s, p0: mv(s.p0)!, p1: mv(s.p1)!, cp1: mv(s.cp1), cp2: mv(s.cp2) }))
-      metaOut = { ...meta, bounds: { minX: bnd.minX, maxX: bnd.maxX, minY: 0, maxY: roundStore(bnd.maxY - shiftY) } }
+      metaOut.bounds = { minX: bnd.minX, maxX: bnd.maxX, minY: 0, maxY: roundStore(bnd.maxY - shiftY) }
+    }
+
+    // Plan the bbox→size write up front so the stored meta carries the replay
+    // info the Overrides tab needs (sizeSlots for restore/remove, baseAtSave
+    // for the stale flag).
+    const isCustom = part.id.startsWith('custom_')
+    const cpId = isCustom ? part.id.slice('custom_'.length) : null
+    const cp = cpId ? customParts?.find(p => p.id === cpId) : undefined
+    const { swExt, shExt } = displayExtents(part)
+    const changes: Partial<Record<'w' | 'h' | 'd', number>> = {}
+    const newSW = bnd ? roundStore(bnd.maxX) : sw
+    const newSH = bnd ? roundStore(sh - bnd.minY) : sh
+    if (bnd) {
+      if (Math.abs(newSW - sw) > 0.05) changes[swExt] = newSW
+      if (Math.abs(newSH - sh) > 0.05) changes[shExt] = newSH
+    }
+    if (isCustom && cp) {
+      const across = customFieldForExtent(cp.orientation ?? 'flat', swExt)
+      const up     = customFieldForExtent(cp.orientation ?? 'flat', shExt)
+      metaOut.sizeSlots = { across, up, custom: true }
+      // Custom dims are authoritative and just became the bbox — record the
+      // post-save pair so only a LATER manual resize reads as stale.
+      metaOut.baseAtSave = {
+        w: across === 'dy' ? newSW : up === 'dy' ? newSH : cp.dy,
+        h: across === 'dx' ? newSW : up === 'dx' ? newSH : cp.dx,
+      }
+    } else if (!isCustom) {
+      metaOut.sizeSlots = { across: `s${swExt}` as 'sw' | 'sh' | 'sd', up: `s${shExt}` as 'sw' | 'sh' | 'sd' }
+      if (partBase) metaOut.baseAtSave = { w: partBase.w, h: partBase.h }
     }
 
     const saved = await dbSaveShapeOverride(cabinetId, part.id, segsOut, metaOut)
@@ -235,41 +267,31 @@ export default function PartEditor({
     }
     setShapeOv(saved)
 
-    if (bnd) {
-      const { swExt, shExt } = displayExtents(part)
-      const changes: Partial<Record<'w' | 'h' | 'd', number>> = {}
-      const newSW = roundStore(bnd.maxX)
-      const newSH = roundStore(sh - bnd.minY)
-      if (Math.abs(newSW - sw) > 0.05) changes[swExt] = newSW
-      if (Math.abs(newSH - sh) > 0.05) changes[shExt] = newSH
-      if (changes.w != null || changes.h != null || changes.d != null) {
-        if (part.id.startsWith('custom_')) {
-          // Custom parts: dims are authoritative on the row (mirrors the 3D
-          // inspector's handleSizeChange — a manual size clears that field's formula).
-          const cpId = part.id.slice('custom_'.length)
-          const cp = customParts?.find(p => p.id === cpId)
-          if (cp) {
-            const expressions = { ...(cp.expressions ?? {}) }
-            const patch: Partial<CabinetCustomPart> = { expressions }
-            for (const [ext, val] of Object.entries(changes) as ['w' | 'h' | 'd', number][]) {
-              const field = customFieldForExtent(cp.orientation ?? 'flat', ext)
-              patch[field] = val
-              delete expressions[field]
-            }
-            setCustomParts?.(prev => prev.map(p => (p.id === cpId ? { ...p, ...patch } : p)))
-            dbUpdateCustomPart(cpId, patch).catch(console.error)
+    if (changes.w != null || changes.h != null || changes.d != null) {
+      if (isCustom) {
+        // Custom parts: dims are authoritative on the row (mirrors the 3D
+        // inspector's handleSizeChange — a manual size clears that field's formula).
+        if (cp && cpId) {
+          const expressions = { ...(cp.expressions ?? {}) }
+          const patch: Partial<CabinetCustomPart> = { expressions }
+          for (const [ext, val] of Object.entries(changes) as ['w' | 'h' | 'd', number][]) {
+            const field = customFieldForExtent(cp.orientation ?? 'flat', ext)
+            patch[field] = val
+            delete expressions[field]
           }
-        } else {
-          const cur = partOverrides?.[part.id] ?? { ox: 0, oy: 0, oz: 0 }
-          const ov = { ...cur }
-          if (changes.w != null) ov.sw = changes.w
-          if (changes.h != null) ov.sh = changes.h
-          if (changes.d != null) ov.sd = changes.d
-          const updated = await dbSavePartPosOverride(cabinetId, part.id, ov, partOverrides ?? {})
-          onOverridesChange?.(updated)
+          setCustomParts?.(prev => prev.map(p => (p.id === cpId ? { ...p, ...patch } : p)))
+          dbUpdateCustomPart(cpId, patch).catch(console.error)
         }
-        onPartMetaChange?.({ ...part, w: changes.w ?? part.w, h: changes.h ?? part.h, d: changes.d ?? part.d })
+      } else {
+        const cur = partOverrides?.[part.id] ?? { ox: 0, oy: 0, oz: 0 }
+        const ov = { ...cur }
+        if (changes.w != null) ov.sw = changes.w
+        if (changes.h != null) ov.sh = changes.h
+        if (changes.d != null) ov.sd = changes.d
+        const updated = await dbSavePartPosOverride(cabinetId, part.id, ov, partOverrides ?? {})
+        onOverridesChange?.(updated)
       }
+      onPartMetaChange?.({ ...part, w: changes.w ?? part.w, h: changes.h ?? part.h, d: changes.d ?? part.d })
     }
     setShapeOpen(false)
   }

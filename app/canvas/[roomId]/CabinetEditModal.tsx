@@ -25,7 +25,7 @@ import { buildPartContext, type FormulaCtx } from '@/src/lib/partFormula'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import JointsPanel from './JointsPanel'
 import PartEdgeJoints from './PartEdgeJoints'
-import OverridesView from './OverridesView'
+import OverridesView, { buildBaseDims } from './OverridesView'
 import CabinetTreePanel from './CabinetTreePanel'
 import CabinetRoutesPanel from './CabinetRoutesPanel'
 import CabinetErrorsPanel from './CabinetErrorsPanel'
@@ -711,6 +711,7 @@ export default function CabinetEditModal({
           customParts={customParts}
           setCustomParts={setCustomParts}
           onPartMetaChange={setEditingPart}
+          partBase={rp ? buildBaseDims(rp).get(editingPart.id) : undefined}
         />
       )}
     </div>

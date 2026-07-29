@@ -1145,7 +1145,14 @@ export type ShapeSegment = {
   edge?: { band?: boolean; profile?: string }
 }
 
-// ShapeEditor's onSave meta, stored verbatim alongside the segments.
+// Which storage field a shape-frame axis writes its bbox dimension into:
+// part_pos_overrides slots for resolved parts, intrinsic dims for custom parts.
+export type ShapeSizeSlot = 'sw' | 'sh' | 'sd' | 'dx' | 'dy' | 'dz'
+
+// ShapeEditor's onSave meta, stored verbatim alongside the segments — plus
+// fields the Part Editor adds at save time so the Overrides tab can replay
+// the bbox→size write (restore), clear it (remove) and flag staleness without
+// re-deriving the part's frame.
 export type ShapeMeta = {
   closed: boolean
   segmentCount: number
@@ -1153,6 +1160,12 @@ export type ShapeMeta = {
   originShift?: { dx: number; dy: number }
   bandedEdges?: number
   tapeLengthMM?: number
+  // across = the slot the shape's x/width lands in, up = its y/height slot.
+  sizeSlots?: { across: ShapeSizeSlot; up: ShapeSizeSlot; custom?: boolean }
+  // The part's BASE resolved in-plane dims when the shape was saved (custom
+  // parts: dims after the save). Compared order-insensitively against the
+  // current base to flag "part size changed since shape was drawn".
+  baseAtSave?: { w: number; h: number }
 }
 
 export type ShapeOverride = {
@@ -1160,6 +1173,8 @@ export type ShapeOverride = {
   segments: ShapeSegment[]
   meta: ShapeMeta | null
   created_at: string
+  // Total stored revisions for this part (populated by dbLoadShapeOverrides).
+  revisions?: number
 }
 
 // Latest shape per part id for one cabinet (mirrors PartPosOverrides shape).
@@ -1177,7 +1192,8 @@ export async function dbLoadShapeOverrides(cabinetId: string): Promise<ShapeOver
   // Rows arrive revision-desc — first row seen per part_key is the live head.
   const out: ShapeOverrides = {}
   for (const r of (data ?? []) as ShapeRow[]) {
-    if (!(r.part_key in out)) out[r.part_key] = { revision: r.revision, segments: r.segments, meta: r.meta, created_at: r.created_at }
+    if (!(r.part_key in out)) out[r.part_key] = { revision: r.revision, segments: r.segments, meta: r.meta, created_at: r.created_at, revisions: 1 }
+    else out[r.part_key].revisions = (out[r.part_key].revisions ?? 1) + 1
   }
   return out
 }
@@ -1251,4 +1267,14 @@ export async function dbDeleteShapeOverride(cabinetId: string, partKey: string):
     .eq('cabinet_id', cabinetId)
     .eq('part_key', partKey)
   if (error) console.error('[shape override delete]', error)
+}
+
+// Wipe every shape (all parts, all revisions) for a cabinet — the shape half
+// of "Clear all overrides". Callers clear the pos-override map separately.
+export async function dbClearShapeOverrides(cabinetId: string): Promise<void> {
+  const { error } = await supabase
+    .from('part_shape_overrides')
+    .delete()
+    .eq('cabinet_id', cabinetId)
+  if (error) console.error('[shape override clear]', error)
 }

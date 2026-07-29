@@ -5,14 +5,19 @@ import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { computeElevSeams } from '@/src/lib/cabinetSeams'
-import type { CabinetCustomPart, PartPosOverrides } from './canvasDB'
-import { dbSavePartPosOverride, dbDeletePartPosOverride, dbClearPartPosOverrides, dbUpdateCustomPart } from './canvasDB'
+import type { CabinetCustomPart, PartPosOverrides, ShapeOverride, ShapeOverrides } from './canvasDB'
+import {
+  dbSavePartPosOverride, dbDeletePartPosOverride, dbClearPartPosOverrides, dbUpdateCustomPart,
+  dbLoadShapeOverrides, dbRestoreShapeRevision, dbDeleteShapeOverride, dbClearShapeOverrides,
+} from './canvasDB'
 import CalcInput from '@/src/components/CalcInput'
 
 // Resolved base size (W=DY, H=DX, D=DZ) of every part that can carry an override,
 // keyed by the same part id used in partOverrides. Lets the override row show what
 // the size was before the override (as a placeholder) so it's clear what changed.
-function buildBaseDims(rp?: ResolvedCabinet): Map<string, { w: number; h: number; d: number }> {
+// Exported: CabinetEditModal feeds the same base dims into PartEditor so shape
+// saves can record baseAtSave (the stale-flag reference).
+export function buildBaseDims(rp?: ResolvedCabinet): Map<string, { w: number; h: number; d: number }> {
   const m = new Map<string, { w: number; h: number; d: number }>()
   if (!rp) return m
   rp.case_parts.forEach(p    => m.set(`case_${p.part_key}`,                 { w: p.DY, h: p.DX, d: p.DZ }))
@@ -308,6 +313,151 @@ function JointOverridesSection({ cabinet, rp, onUpdate }: {
   )
 }
 
+// ── Part shape rows ───────────────────────────────────────────────────────────
+// One row per shaped part (part_shape_overrides head revision). Restore replays
+// the previous revision as a new head AND re-syncs the part size to its bbox
+// (via meta.sizeSlots, written by the Part Editor at save time). Remove deletes
+// every revision and clears the size slots the shape wrote. Stale = the part's
+// base resolved size no longer matches meta.baseAtSave (cabinet was resized
+// after the shape was drawn) — compared as an unordered pair so it's frame-proof.
+
+function ShapeOverridesSection({ cabinetId, shapes, setShapes, baseDims, partOverrides, onOverridesChange, customParts, setCustomParts }: {
+  cabinetId: string
+  shapes: ShapeOverrides
+  setShapes: Dispatch<SetStateAction<ShapeOverrides>>
+  baseDims: Map<string, { w: number; h: number; d: number }>
+  partOverrides: PartPosOverrides
+  onOverridesChange: (o: PartPosOverrides) => void
+  customParts: CabinetCustomPart[]
+  setCustomParts: Dispatch<SetStateAction<CabinetCustomPart[]>>
+}) {
+  const entries = Object.entries(shapes)
+
+  function labelFor(partId: string): string {
+    if (partId.startsWith('custom_')) {
+      const cp = customParts.find(p => `custom_${p.id}` === partId)
+      return cp?.name ?? 'Custom Part'
+    }
+    return partIdLabel(partId)
+  }
+
+  function isStale(partId: string, ov: ShapeOverride): boolean {
+    const saved = ov.meta?.baseAtSave
+    if (!saved) return false   // pre-M4 save — no reference recorded
+    let cur: { w: number; h: number } | undefined
+    if (partId.startsWith('custom_')) {
+      const cp = customParts.find(p => `custom_${p.id}` === partId)
+      if (cp) cur = { w: cp.dy, h: cp.dx }
+    } else {
+      cur = baseDims.get(partId)
+    }
+    if (!cur) return false
+    const a = [cur.w, cur.h].sort((x, y) => x - y)
+    const b = [saved.w, saved.h].sort((x, y) => x - y)
+    return Math.abs(a[0] - b[0]) > 0.5 || Math.abs(a[1] - b[1]) > 0.5
+  }
+
+  // Re-apply a shape's bbox to the part size — used after restore so the part
+  // matches the shape that just became head. Mirrors PartEditor's save write.
+  function syncSizeFromShape(partId: string, ov: ShapeOverride) {
+    const slots = ov.meta?.sizeSlots
+    const b = ov.meta?.bounds
+    if (!slots || !b) return   // pre-M4 revision — size stays; user can re-edit
+    const w = b.maxX, h = b.maxY   // stored shapes are datum-normalised (minX/minY ≥ 0 → size = max corner)
+    if (slots.custom) {
+      const cpId = partId.slice('custom_'.length)
+      const cp = customParts.find(p => p.id === cpId)
+      if (!cp) return
+      const expressions = { ...(cp.expressions ?? {}) }
+      const patch: Partial<CabinetCustomPart> = { expressions }
+      for (const [slot, val] of [[slots.across, w], [slots.up, h]] as ['dx' | 'dy' | 'dz', number][]) {
+        patch[slot] = val
+        delete expressions[slot]
+      }
+      setCustomParts(prev => prev.map(p => (p.id === cpId ? { ...p, ...patch } : p)))
+      dbUpdateCustomPart(cpId, patch).catch(console.error)
+    } else {
+      const cur = partOverrides[partId] ?? { ox: 0, oy: 0, oz: 0 }
+      const next = { ...cur, [slots.across]: w, [slots.up]: h }
+      onOverridesChange({ ...partOverrides, [partId]: next })
+      dbSavePartPosOverride(cabinetId, partId, next, partOverrides).catch(console.error)
+    }
+  }
+
+  async function restorePrevious(partId: string, ov: ShapeOverride) {
+    const restored = await dbRestoreShapeRevision(cabinetId, partId, ov.revision - 1)
+    if (!restored) return
+    setShapes(s => ({ ...s, [partId]: { ...restored, revisions: (ov.revisions ?? 1) + 1 } }))
+    syncSizeFromShape(partId, restored)
+  }
+
+  async function removeShape(partId: string, ov: ShapeOverride) {
+    if (!confirm(`Remove the drawn shape for ${labelFor(partId)}? All ${ov.revisions ?? 1} revision${(ov.revisions ?? 1) !== 1 ? 's' : ''} are deleted and the part reverts to a plain rectangle.`)) return
+    await dbDeleteShapeOverride(cabinetId, partId)
+    setShapes(s => { const n = { ...s }; delete n[partId]; return n })
+    // Clear the size slots the shape wrote (resolved parts — custom dims are
+    // authoritative on the row and stay at their last value).
+    const slots = ov.meta?.sizeSlots
+    const cur = partOverrides[partId]
+    if (slots && !slots.custom && cur) {
+      const next = { ...cur }
+      delete next[slots.across as 'sw' | 'sh' | 'sd']
+      delete next[slots.up as 'sw' | 'sh' | 'sd']
+      const meaningful = next.ox || next.oy || next.oz || next.oax || next.oay || next.oaz
+        || next.sw != null || next.sh != null || next.sd != null
+      if (meaningful) {
+        onOverridesChange({ ...partOverrides, [partId]: next })
+        dbSavePartPosOverride(cabinetId, partId, next, partOverrides).catch(console.error)
+      } else {
+        const { [partId]: _removed, ...updated } = partOverrides
+        onOverridesChange(updated)
+        dbDeletePartPosOverride(cabinetId, partId, partOverrides).catch(console.error)
+      }
+    }
+  }
+
+  return (
+    <>
+      <SectionHead color="#38bdf8" title="Part Shapes" count={entries.length} />
+      {entries.map(([partId, ov]) => {
+        const b = ov.meta?.bounds
+        const stale = isStale(partId, ov)
+        return (
+          <tr key={partId} className="border-t border-gray-800/60 hover:bg-gray-800/20 group">
+            <td className="px-3 py-2 text-xs text-gray-300 font-medium align-top pt-2.5">
+              {labelFor(partId)}
+            </td>
+            <td className="px-2 py-2 text-xs align-top pt-2.5" colSpan={3}>
+              <span className="text-sky-300 font-mono text-[11px]">
+                {ov.segments.length} segment{ov.segments.length !== 1 ? 's' : ''}
+                {b ? ` · ${Math.round(b.maxX)} × ${Math.round(b.maxY)} mm` : ''}
+                {` · r${ov.revision}`}
+                {(ov.revisions ?? 1) > 1 ? ` of ${ov.revisions}` : ''}
+                {` · ${new Date(ov.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}
+              </span>
+              {stale && (
+                <div className="mt-1 text-[10px] text-amber-400">
+                  ⚠ part size changed since this shape was drawn — re-edit the shape
+                </div>
+              )}
+            </td>
+            <td className="px-2 py-2 text-right align-top pt-2.5 whitespace-nowrap">
+              {(ov.revisions ?? 1) > 1 && ov.revision > 1 && (
+                <button onClick={() => void restorePrevious(partId, ov)}
+                  className="text-gray-600 hover:text-sky-300 text-sm leading-none transition-colors opacity-0 group-hover:opacity-100 mr-2"
+                  title={`Restore revision ${ov.revision - 1} (becomes a new revision — nothing is lost)`}>↺</button>
+              )}
+              <button onClick={() => void removeShape(partId, ov)}
+                className="text-gray-600 hover:text-red-400 text-sm leading-none transition-colors opacity-0 group-hover:opacity-100"
+                title="Remove shape — part reverts to a plain rectangle">✕</button>
+            </td>
+          </tr>
+        )
+      })}
+    </>
+  )
+}
+
 // ── Section header ────────────────────────────────────────────────────────────
 
 function SectionHead({ color, title, count }: { color: string; title: string; count: number }) {
@@ -343,10 +493,26 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
   const jointCount      = Object.keys(cabinet?.carcase_joints ?? {}).length
   const hasJoints       = jointCount > 0
 
+  // Part shapes (head revision per shaped part). Loaded here rather than lifted
+  // to the modal — this view remounts on tab switch, so it's always fresh even
+  // after Part Editor saves.
+  const [shapes, setShapes] = useState<ShapeOverrides>({})
+  useEffect(() => {
+    let live = true
+    dbLoadShapeOverrides(cabinetId).then(m => { if (live) setShapes(m) })
+    return () => { live = false }
+  }, [cabinetId])
+  const shapeCount = Object.keys(shapes).length
+  const hasShapes  = shapeCount > 0
+
   function clearAll() {
     onOverridesChange({})
     dbClearPartPosOverrides(cabinetId).catch(console.error)
     if (hasJoints && cabinet && onUpdate) void onUpdate(cabinet.id, { carcase_joints: {} })
+    if (hasShapes) {
+      setShapes({})
+      dbClearShapeOverrides(cabinetId).catch(console.error)
+    }
   }
 
   return (
@@ -355,9 +521,10 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
         <span className="text-[10px] text-gray-500">
           {overrideEntries.length} position override{overrideEntries.length !== 1 ? 's' : ''}
           {hasJoints ? ` · ${jointCount} joint override${jointCount !== 1 ? 's' : ''}` : ''}
+          {hasShapes ? ` · ${shapeCount} part shape${shapeCount !== 1 ? 's' : ''}` : ''}
           {hasCustom ? ` · ${customParts.length} custom part${customParts.length !== 1 ? 's' : ''}` : ''}
         </span>
-        {(hasOverrides || hasJoints) && (
+        {(hasOverrides || hasJoints || hasShapes) && (
           <button onClick={clearAll}
             className="text-xs text-red-500 hover:text-red-300 transition-colors">
             Clear all overrides
@@ -365,7 +532,7 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
         )}
       </div>
 
-      {!hasOverrides && !hasCustom && !hasJoints ? (
+      {!hasOverrides && !hasCustom && !hasJoints && !hasShapes ? (
         <p className="text-xs text-gray-600 text-center pt-12">
           No overrides yet. Select a part to offset its position or set its edge joints.
         </p>
@@ -397,6 +564,18 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
             )}
             {hasJoints && cabinet && onUpdate && (
               <JointOverridesSection cabinet={cabinet} rp={rp} onUpdate={onUpdate} />
+            )}
+            {hasShapes && (
+              <ShapeOverridesSection
+                cabinetId={cabinetId}
+                shapes={shapes}
+                setShapes={setShapes}
+                baseDims={baseDims}
+                partOverrides={partOverrides}
+                onOverridesChange={onOverridesChange}
+                customParts={customParts}
+                setCustomParts={setCustomParts}
+              />
             )}
             {hasCustom && (
               <>
