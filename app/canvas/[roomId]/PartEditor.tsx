@@ -18,8 +18,10 @@
 // ============================================================
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import * as THREE from 'three'
 import { Part, PreviewCanvas, type PartMeta, type EbSpec } from '@/src/components/three/PartViewer'
 import { fmtMm } from '@/src/lib/format'
+import { sampleShapeOutline, type ShapePt } from '@/src/lib/shapePath'
 import { type EditorView, displayExtents, roundStore } from './partEditor/partEditorCore'
 import { usePartOps } from './partEditor/usePartOps'
 import { OpMarkers3D, buildOpSubtractions } from './partEditor/partOpGlyphs'
@@ -106,6 +108,12 @@ export default function PartEditor({
       .catch(e => { console.error('[shape load]', e); if (live) setShapeLoaded(true) })
     return () => { live = false }
   }, [cabinetId, part.id])
+  // Sampled outline polygon (shape frame, mm) — drives the 3D face overlay and
+  // the ops-outside-outline validation inside usePartOps.
+  const shapePoly = useMemo(
+    () => (shapeOv && shapeOv.segments.length > 2 ? sampleShapeOutline(shapeOv.segments) : null),
+    [shapeOv],
+  )
   // Draggable side-panel widths (px). Clamped so neither panel can crowd out the scene.
   const [leftW, setLeftW]   = useState(288)   // 72 * 4 (was w-72)
   const [rightW, setRightW] = useState(288)
@@ -120,7 +128,7 @@ export default function PartEditor({
     patchOp, addOp, deleteSelected, convertToManual, reorder,
     dragMoveOp, commitDragOp, pickJoint, resyncJointsFromLibrary,
     toolSets,
-  } = usePartOps(cabinetId, part)
+  } = usePartOps(cabinetId, part, shapePoly)
 
   // Turning plane-pick ON forces the Front view (where the pickable edges live).
   function onPlanePickChange(on: boolean) {
@@ -439,12 +447,13 @@ export default function PartEditor({
                   ebSpec={ebSpec}
                 />
                 <OpMarkers3D ops={ops} pu={u} pv={v} n={n} swap={swap} mirror={mirror} activeFace={hasTwoFaces ? face : undefined} selectedId={selectedId} onSelect={setSelectedId} levels={levels} panelColor="#c9ccd4" />
+                {shapePoly && <ShapeOutline3D pts={shapePoly} sh={sh} n={n} />}
               </group>
             </PreviewCanvas>
           ) : (
             <div className="w-full h-full flex items-center justify-center p-6">
               <PartOrthoView u={u} v={v} n={n} swap={swap} mirror={mirror} face={hasTwoFaces ? face : undefined} view={view} measuring={measuring} wire={wire}
-                edge={part.edge} ebSpec={ebSpec}
+                edge={part.edge} ebSpec={ebSpec} shape={shapeOv?.segments ?? null}
                 ops={ops} selectedId={selectedId} onSelect={setSelectedId} levels={levels}
                 planePick={planePick && !selLocked}
                 onPickPlane={patch => { void patchOp(patch); setPlanePick(false) }}
@@ -474,6 +483,7 @@ export default function PartEditor({
           the banding tape on a fresh rectangle; a saved shape reopens verbatim. */}
       {shapeOpen && (
         <ShapeEditorOverlay
+          key={shapeOv?.revision ?? 0}
           partLabel={part.label}
           partWidth={sw}
           partHeight={sh}
@@ -484,5 +494,26 @@ export default function PartEditor({
         />
       )}
     </div>
+  )
+}
+
+// Saved shape outline drawn on both faces of the 3D box (shape frame is y-down
+// from the part's visual top; three.js y is up → y3d = sh − shapeY). A hairline
+// loop floats 0.4mm off each face so it never z-fights the panel material.
+function ShapeOutline3D({ pts, sh, n }: { pts: ShapePt[]; sh: number; n: number }) {
+  const geoms = useMemo(() => [n + 0.4, -0.4].map(z => {
+    const g = new THREE.BufferGeometry()
+    g.setFromPoints(pts.map(p => new THREE.Vector3(p.x, sh - p.y, z)))
+    return g
+  }), [pts, sh, n])
+  useEffect(() => () => { geoms.forEach(g => g.dispose()) }, [geoms])
+  return (
+    <>
+      {geoms.map((g, i) => (
+        <lineLoop key={i} geometry={g}>
+          <lineBasicMaterial color="#38bdf8" />
+        </lineLoop>
+      ))}
+    </>
   )
 }

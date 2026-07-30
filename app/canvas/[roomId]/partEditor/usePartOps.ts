@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import { isFiringRole } from '@/src/lib/partOps/enums'
+import { pointInShape, type ShapePt } from '@/src/lib/shapePath'
 import { syncMasterSlaves } from '@/src/lib/optimiser/masterSlaveSync'
 import { syncSeamDrillOperations } from '@/src/lib/optimiser/seamDrillSync'
 import type { PartOp } from '../CabinetRoutesPanel'
@@ -21,7 +22,10 @@ import {
   type AddKind, type Issue, type JointType,
 } from './partEditorCore'
 
-export function usePartOps(cabinetId: string, part: PartMeta) {
+// shapePoly: the part's saved outline, sampled, in the shape/display frame
+// (mm, y-down, authored face-front) — adds an "outside the outline" warning
+// per op on top of validateOp. null/omitted = plain rectangle, no check.
+export function usePartOps(cabinetId: string, part: PartMeta, shapePoly?: ShapePt[] | null) {
   const [ops, setOps]               = useState<PartOp[]>([])
   const [loadedKey, setLoadedKey]   = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -145,11 +149,30 @@ export function usePartOps(cabinetId: string, part: PartMeta) {
   const selLocked = !!sel?.generated   // generated rows are read-only (spec §3.1)
 
   // Validation (§6.2) — flag, never block. Recomputed from ops + part dims.
+  // With a shape override, an op positioned outside the drawn outline gets an
+  // extra warning: its material is cut away. Op pos is part-local (origin
+  // bottom-left, x→u, y→v); the shape frame is the front display view (y-down,
+  // mirror applied for right-hand twins) — same mapping the ortho glyphs use.
+  // Boundary ops (edge planes) count as inside via a 1mm tolerance.
   const issuesById = useMemo(() => {
     const m: Record<string, Issue[]> = {}
-    for (const op of ops) m[op.id] = validateOp(op, u, v, n)
+    const swap = part.panelKind !== 'side' && !part.dxIsWidth
+    const mirror = part.panelKind === 'side' && part.id.includes('right_side')
+    const sh = swap ? u : v
+    for (const op of ops) {
+      const issues = validateOp(op, u, v, n)
+      if (shapePoly && shapePoly.length > 2) {
+        const px = op.pos_x ?? 0, py = op.pos_y ?? 0
+        const sx = swap ? py : mirror ? u - px : px
+        const syUp = swap ? px : py
+        if (!pointInShape({ x: sx, y: sh - syUp }, shapePoly, 1)) {
+          issues.push({ level: 'warn', msg: 'Outside the shaped outline — this area is cut away' })
+        }
+      }
+      m[op.id] = issues
+    }
     return m
-  }, [ops, u, v, n])
+  }, [ops, u, v, n, part, shapePoly])
   const levels = useMemo(() => {
     const m: Record<string, 'error' | 'warn' | undefined> = {}
     for (const op of ops) m[op.id] = worst(issuesById[op.id])

@@ -16,15 +16,20 @@ import { useState } from 'react'
 import { fmtMm } from '@/src/lib/format'
 import type { PartEdge, EbSpec } from '@/src/components/three/PartViewer'
 import type { PartOp } from '../CabinetRoutesPanel'
+import type { ShapeSegment } from '../canvasDB'
+import { shapeToSvgPath } from '@/src/lib/shapePath'
 import { useMeasure, MeasureOverlay, rectCorners, rectSegs, type MPt, type MSeg } from '../cabinetMeasure'
 import { useSvgZoom } from '../ResolvedViews'
 import { PLANE_EDGE_ENDS, type OrthoView } from './partEditorCore'
 import { OpMarkersSVG, OpMarkersDepthSVG } from './partOpGlyphs'
 
-export default function PartOrthoView({ u, v, n, swap, mirror, face, view, measuring, wire, edge, ebSpec, ops, selectedId, onSelect, levels, planePick, onPickPlane, snapOn, onDragMove, onDragEnd }: {
+export default function PartOrthoView({ u, v, n, swap, mirror, face, view, measuring, wire, edge, ebSpec, shape, ops, selectedId, onSelect, levels, planePick, onPickPlane, snapOn, onDragMove, onDragEnd }: {
   u: number; v: number; n: number; swap: boolean; mirror?: boolean; face?: 'front' | 'back'; view: OrthoView; measuring: boolean
   wire?: boolean
   edge?: PartEdge; ebSpec?: EbSpec
+  // Saved shape outline (shape frame = this front view's SVG space: mm, y-down,
+  // authored face-front) — drawn over the part rectangle; null = plain rectangle.
+  shape?: ShapeSegment[] | null
   ops: PartOp[]; selectedId: string | null; onSelect: (id: string) => void
   levels: Record<string, 'error' | 'warn' | undefined>
   planePick?: boolean
@@ -218,6 +223,20 @@ export default function PartOrthoView({ u, v, n, swap, mirror, face, view, measu
             <rect key={s.key} x={s.x} y={s.y} width={s.w} height={s.h}
               fill={ebSpec.color} stroke={ebSpec.color} strokeWidth={1} vectorEffect="non-scaling-stroke" />
           ))}
+        </g>
+      )}
+
+      {/* Saved shape outline (front view only). Stored coordinates ARE this
+          view's front-face SVG space, so the path renders verbatim; the Back
+          face flips the whole elevation left↔right, so the shape flips with it.
+          Drawn under the op glyphs — ops stay clickable, datum unchanged. */}
+      {view === 'front' && shape && shape.length > 0 && (
+        <g style={{ pointerEvents: 'none' }}
+          transform={face === 'back' ? `translate(${vw} 0) scale(-1 1)` : undefined}>
+          <path d={shapeToSvgPath(shape)}
+            fill="#38bdf8" fillOpacity={0.07}
+            stroke="#38bdf8" strokeWidth={1.75} strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke" />
         </g>
       )}
 
