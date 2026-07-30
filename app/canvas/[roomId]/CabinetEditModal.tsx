@@ -10,7 +10,8 @@ import {
   dbLoadPartLabels, dbSavePartLabel,
   dbLoadPartComments, dbSavePartComment,
   dbLoadHiddenParts, dbSaveHiddenParts,
-  type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments,
+  dbLoadShapeOverrides,
+  type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments, type ShapeOverrides,
 } from './canvasDB'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import CalcInput from '@/src/components/CalcInput'
@@ -205,6 +206,10 @@ export default function CabinetEditModal({
   const [resolving, setResolving]         = useState(false)
   const [customParts, setCustomParts]     = useState<CabinetCustomPart[]>([])
   const [partOverrides, setPartOverrides] = useState<PartPosOverrides>({})
+  // Shape Editor overrides (latest revision per part) — single source for the
+  // 3D view, the Part Editor and the Overrides tab, so a save/restore/remove in
+  // any of them updates the others without a reload.
+  const [shapeOverrides, setShapeOverrides] = useState<ShapeOverrides>({})
   const [partLabels, setPartLabels]       = useState<PartLabels>({})
   const [partComments, setPartComments]   = useState<PartComments>({})
   const [hiddenParts, setHiddenParts]     = useState<string[]>([])
@@ -233,6 +238,7 @@ export default function CabinetEditModal({
   useEffect(() => {
     dbLoadCustomParts(cabinet.id).then(setCustomParts)
     dbLoadPartPosOverrides(cabinet.id).then(setPartOverrides)
+    dbLoadShapeOverrides(cabinet.id).then(setShapeOverrides)
     dbLoadPartLabels(cabinet.id).then(setPartLabels)
     dbLoadPartComments(cabinet.id).then(setPartComments)
     dbLoadHiddenParts(cabinet.id).then(setHiddenParts)
@@ -570,7 +576,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={setEditingPart} />}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={setEditingPart} />}
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}
@@ -607,6 +613,8 @@ export default function CabinetEditModal({
                 cabinet={cabinet}
                 rp={rp}
                 onUpdate={onUpdate}
+                shapes={shapeOverrides}
+                onShapesChange={setShapeOverrides}
               />
             )}
             {selectedSVGPart && isOrthoView && (
@@ -712,6 +720,8 @@ export default function CabinetEditModal({
           setCustomParts={setCustomParts}
           onPartMetaChange={setEditingPart}
           partBase={rp ? buildBaseDims(rp).get(editingPart.id) : undefined}
+          shapeOverrides={shapeOverrides}
+          onShapeOverridesChange={setShapeOverrides}
         />
       )}
     </div>

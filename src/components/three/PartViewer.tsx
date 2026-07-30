@@ -7,6 +7,7 @@
 //   Part, PartPropertiesPanel, PreviewCanvas                  (components)
 
 import { Suspense, useState, useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, OrthographicCamera, Edges, Line } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
@@ -14,6 +15,7 @@ import { Geometry, Base, Subtraction } from '@react-three/csg'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import { fmtMm, roundMm } from '@/src/lib/format'
 import { evalCalc } from '@/src/lib/calc'
+import type { ShapePt } from '@/src/lib/shapePath'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -138,6 +140,37 @@ export function edgeStrips(
   return out
 }
 
+// ── Shaped parts (Shape Editor overrides) ──────────────────────────────────────
+// A part's drawn outline, sampled (shapePath.sampleShapeOutline), in the shape
+// frame: mm, x across [0..across-dim], y DOWN from the part's visual top,
+// authored face-front in the Part Editor. `mirror` = right-hand side twins
+// (case_right_side): the outline was authored on the mirrored display frame.
+export type PartShape = { pts: ShapePt[]; mirror?: boolean }
+
+// Extruded silhouette in box-local coords ([0..w]×[0..h]×[0..d] off the box
+// origin corner — mount inside the Part group at position [0,0,0]). The 2D
+// profile plane + extrusion axis per panel kind follow the SAME frame
+// conventions as edgeStrips above (that placement is the display-frame ground
+// truth the Part Editor was verified against):
+//   face       — profile XY (across, up),      extrude +Z (thickness)
+//   side       — display-x → Z (left = back),  extrude X; mirror flips Z
+//   horizontal — display-top → +Z (front),     extrude Y
+export function buildShapedGeometry(shape: PartShape, b: Box, kind: PanelKind): THREE.ExtrudeGeometry {
+  const up    = kind === 'horizontal' ? b.d : b.h
+  const thick = kind === 'side' ? b.w : kind === 'horizontal' ? b.h : b.d
+  const s = new THREE.Shape()
+  shape.pts.forEach((p, i) => { if (i === 0) s.moveTo(p.x, up - p.y); else s.lineTo(p.x, up - p.y) })
+  s.closePath()
+  const g = new THREE.ExtrudeGeometry(s, { depth: thick, bevelEnabled: false })
+  if (kind === 'side') {
+    if (shape.mirror) { g.rotateY(Math.PI / 2);  g.translate(0, 0, b.d) }
+    else              { g.rotateY(-Math.PI / 2); g.translate(b.w, 0, 0) }
+  } else if (kind === 'horizontal') {
+    g.rotateX(Math.PI / 2); g.translate(0, b.h, 0)
+  }
+  return g
+}
+
 // ── Camera ─────────────────────────────────────────────────────────────────────
 
 const FOV = 32
@@ -157,6 +190,7 @@ export function Part({
   onPartContextMenu,
   subtractions,
   hoverHighlight = true,
+  shape,
 }: {
   b:                  Box
   faceColors:         [string, string, string, string, string, string]
@@ -178,21 +212,35 @@ export function Part({
   // When false, the panel shows no hover edge highlight (used by the Part Editor,
   // where the single part is the whole scene and the orange hover line is noise).
   hoverHighlight?:    boolean
+  // Shape Editor override: sampled outline → the panel renders as an extruded
+  // silhouette instead of a box. Edge-band tape strips are suppressed on shaped
+  // parts (rectangle-based tape would float over cut-away regions).
+  shape?:             PartShape | null
 }) {
   const [hovered, setHovered] = useState(false)
   // Edges widths are in CSS pixels, so on a scaled display 1 renders as 1.5–2
   // physical pixels; 1/dpr keeps the resting outline an exact 1-device-px hairline.
   const hairline = 1 / useThree(s => s.viewport.dpr)
 
+  // Extruded silhouette for shaped parts. Keyed on the dims, not the b object
+  // (callers rebuild b every render); pts identity is stable via the callers'
+  // shape cache, so re-tessellation only happens on a real change.
+  const shapeGeom = useMemo(
+    () => (shape && shape.pts.length > 2 ? buildShapedGeometry(shape, b, meta.panelKind) : null),
+    [shape, b.w, b.h, b.d, meta.panelKind],  // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  useEffect(() => () => { shapeGeom?.dispose() }, [shapeGeom])
+
   // Rotation pivots about the part's reference point (origin corner b.x/b.y/b.z):
   // the group sits at that corner and carries the rotation, while children are
   // positioned relative to it. With no rotation this is identical to placing the
-  // mesh at the box centre.
+  // mesh at the box centre. (Shaped geometry is built corner-origin, so its mesh
+  // sits at [0,0,0] inside the group instead of the centred box.)
   if (wire) {
     return (
       <group position={[b.x, b.y, b.z]} rotation={rotation}>
-        <mesh position={[b.w / 2, b.h / 2, b.d / 2]}>
-          <boxGeometry args={[b.w, b.h, b.d]} />
+        <mesh position={shapeGeom ? [0, 0, 0] : [b.w / 2, b.h / 2, b.d / 2]} geometry={shapeGeom ?? undefined}>
+          {!shapeGeom && <boxGeometry args={[b.w, b.h, b.d]} />}
           <meshStandardMaterial color="#9ca3af" transparent opacity={0.08} depthWrite={false} />
           <Edges threshold={10} color="#94a3b8" linewidth={1} />
         </mesh>
@@ -214,13 +262,14 @@ export function Part({
   const lineWidth = selected || highlighted ? 1.5 : hov ? 2.5 : hairline
 
   const tapeT = ebSpec ? Math.max(0, ebSpec.thick) : 0
-  const strips = ebSpec ? edgeStrips(b, meta.edge, meta.panelKind, tapeT) : []
-  const core = ebSpec ? edgeCoreBox(b, meta.edge, meta.panelKind, tapeT) : b
+  const strips = ebSpec && !shapeGeom ? edgeStrips(b, meta.edge, meta.panelKind, tapeT) : []
+  const core = ebSpec && !shapeGeom ? edgeCoreBox(b, meta.edge, meta.panelKind, tapeT) : b
 
   return (
     <group position={[b.x, b.y, b.z]} rotation={rotation}>
       <mesh
-        position={[core.x - b.x + core.w / 2, core.y - b.y + core.h / 2, core.z - b.z + core.d / 2]}
+        position={shapeGeom ? [0, 0, 0] : [core.x - b.x + core.w / 2, core.y - b.y + core.h / 2, core.z - b.z + core.d / 2]}
+        geometry={shapeGeom && !(subtractions && subtractions.length > 0) ? shapeGeom : undefined}
         onPointerDown={() => { dragRef.current = false }}
         onPointerMove={(e) => { if (e.buttons) dragRef.current = true }}
         onClick={contextMenuSelect ? undefined : (e) => { e.stopPropagation(); if (!dragRef.current) onSelect(selected ? null : meta) }}
@@ -238,14 +287,18 @@ export function Part({
         {subtractions && subtractions.length > 0 ? (
           // Real recesses cut into the panel. Single material (CSG can't keep the
           // 6 face colours); the mesh sits at the box centre, so localise each
-          // pocket by the box centre in cabinet space.
+          // pocket by the box centre in cabinet space. Shaped parts feed the
+          // extruded silhouette in as the CSG base (corner-origin mesh) — pockets
+          // keep cutting correctly on shaped panels.
           <>
             <Geometry>
-              <Base>
-                <boxGeometry args={[core.w, core.h, core.d]} />
+              <Base geometry={shapeGeom ?? undefined}>
+                {!shapeGeom && <boxGeometry args={[core.w, core.h, core.d]} />}
               </Base>
               {subtractions.map((s, i) => (
-                <Subtraction key={i} position={[s.center[0] - (core.x + core.w / 2), s.center[1] - (core.y + core.h / 2), s.center[2] - (core.z + core.d / 2)]}>
+                <Subtraction key={i} position={shapeGeom
+                  ? [s.center[0] - b.x, s.center[1] - b.y, s.center[2] - b.z]
+                  : [s.center[0] - (core.x + core.w / 2), s.center[1] - (core.y + core.h / 2), s.center[2] - (core.z + core.d / 2)]}>
                   <boxGeometry args={s.size} />
                 </Subtraction>
               ))}
@@ -253,6 +306,24 @@ export function Part({
             <meshStandardMaterial color={mats[0]} roughness={0.7} metalness={0.05} />
             <Edges threshold={10} color={edgeLine} linewidth={lineWidth} />
           </>
+        ) : shapeGeom ? (
+          // ExtrudeGeometry material groups: 0 = the two caps (faces), 1 = the
+          // extruded side walls. faceColors is ordered by BOX face direction
+          // (+X,−X,+Y,−Y,+Z,−Z), so where the face colour lives depends on the
+          // panel kind: side → ±X (mirror twins carry face on −X = slot 1),
+          // horizontal → ±Y, face → ±Z. Walls take an edge slot for the kind.
+          (() => {
+            const kind = meta.panelKind
+            const cap  = kind === 'side' ? mats[shape?.mirror ? 1 : 0] : kind === 'horizontal' ? mats[2] : mats[4]
+            const wall = kind === 'side' ? mats[2] : mats[0]
+            return (
+              <>
+                <meshStandardMaterial attach="material-0" color={cap}  roughness={0.7} metalness={0.05} />
+                <meshStandardMaterial attach="material-1" color={wall} roughness={0.7} metalness={0.05} />
+                <Edges threshold={10} color={edgeLine} linewidth={lineWidth} />
+              </>
+            )
+          })()
         ) : (
           <>
             <boxGeometry args={[core.w, core.h, core.d]} />

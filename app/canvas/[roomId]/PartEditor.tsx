@@ -30,7 +30,7 @@ import PartOpsList from './partEditor/PartOpsList'
 import PartPropertiesPanel from './partEditor/PartPropertiesPanel'
 import ShapeEditorOverlay from './partEditor/ShapeEditorOverlay'
 import { dbLoadShapeOverrides, dbSaveShapeOverride, dbSavePartPosOverride, dbUpdateCustomPart } from './canvasDB'
-import type { ShapeMeta, ShapeSegment, ShapeOverride, PartPosOverrides, CabinetCustomPart } from './canvasDB'
+import type { ShapeMeta, ShapeSegment, ShapeOverride, ShapeOverrides, PartPosOverrides, CabinetCustomPart } from './canvasDB'
 import { customFieldForExtent } from '@/src/lib/customPartBox'
 
 // Thin vertical divider that reports drag deltas (px) so a parent can resize an
@@ -51,6 +51,7 @@ function ResizeHandle({ onDelta }: { onDelta: (dx: number) => void }) {
 export default function PartEditor({
   cabinetId, part, ebSpec, onClose,
   partOverrides, onOverridesChange, customParts, setCustomParts, onPartMetaChange, partBase,
+  shapeOverrides, onShapeOverridesChange,
 }: {
   cabinetId: string
   part:      PartMeta
@@ -69,6 +70,11 @@ export default function PartEditor({
   // Base resolved dims (buildBaseDims convention: w/h in-plane, d thickness) —
   // recorded into shape meta at save so the Overrides tab can flag staleness.
   partBase?:          { w: number; h: number; d: number }
+  // Lifted shape state (CabinetEditModal): when provided, this editor reads the
+  // part's shape from the map and pushes saves back up — no self-load, and the
+  // cabinet 3D view / Overrides tab see the new shape immediately.
+  shapeOverrides?:        ShapeOverrides
+  onShapeOverridesChange?: (o: ShapeOverrides) => void
 }) {
   const [view, setView] = useState<EditorView>('front')
   // Active working face. Only a front panel (door / drawer front — resolves upright,
@@ -96,18 +102,22 @@ export default function PartEditor({
   // While open, this editor's own keyboard handling goes inert — ShapeEditor
   // has its own Escape/undo/tool keys on window.
   const [shapeOpen, setShapeOpen] = useState(false)
-  // Latest saved shape override for this part (null = plain rectangle). The
-  // whole-cabinet load is one indexed query; save swaps in the new head
-  // revision so reopening the overlay shows what was just drawn.
-  const [shapeOv, setShapeOv] = useState<ShapeOverride | null>(null)
-  const [shapeLoaded, setShapeLoaded] = useState(false)
+  // Latest saved shape override for this part (null = plain rectangle).
+  // Controlled when the host passes shapeOverrides (the modal's lifted map);
+  // otherwise self-loads — one indexed query for the whole cabinet.
+  const shapesControlled = shapeOverrides !== undefined
+  const [ownShapeOv, setOwnShapeOv] = useState<ShapeOverride | null>(null)
+  const [ownShapeLoaded, setOwnShapeLoaded] = useState(false)
   useEffect(() => {
+    if (shapesControlled) return
     let live = true
     dbLoadShapeOverrides(cabinetId)
-      .then(m => { if (live) { setShapeOv(m[part.id] ?? null); setShapeLoaded(true) } })
-      .catch(e => { console.error('[shape load]', e); if (live) setShapeLoaded(true) })
+      .then(m => { if (live) { setOwnShapeOv(m[part.id] ?? null); setOwnShapeLoaded(true) } })
+      .catch(e => { console.error('[shape load]', e); if (live) setOwnShapeLoaded(true) })
     return () => { live = false }
-  }, [cabinetId, part.id])
+  }, [cabinetId, part.id, shapesControlled])
+  const shapeOv = shapesControlled ? (shapeOverrides?.[part.id] ?? null) : ownShapeOv
+  const shapeLoaded = shapesControlled || ownShapeLoaded
   // Sampled outline polygon (shape frame, mm) — drives the 3D face overlay and
   // the ops-outside-outline validation inside usePartOps.
   const shapePoly = useMemo(
@@ -273,7 +283,9 @@ export default function PartEditor({
       alert('Shape save failed — see console. The editor stays open so the drawing is not lost.')
       return
     }
-    setShapeOv(saved)
+    const savedWithCount = { ...saved, revisions: (shapeOv?.revisions ?? 0) + 1 }
+    if (shapesControlled) onShapeOverridesChange?.({ ...shapeOverrides, [part.id]: savedWithCount })
+    else setOwnShapeOv(savedWithCount)
 
     if (changes.w != null || changes.h != null || changes.d != null) {
       if (isCustom) {

@@ -476,7 +476,7 @@ function SectionHead({ color, title, count }: { color: string; title: string; co
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-export default function OverridesView({ cabinetId, partOverrides, onOverridesChange, customParts, setCustomParts, cabinet, rp, onUpdate }: {
+export default function OverridesView({ cabinetId, partOverrides, onOverridesChange, customParts, setCustomParts, cabinet, rp, onUpdate, shapes: shapesProp, onShapesChange }: {
   cabinetId: string
   partOverrides: PartPosOverrides
   onOverridesChange: (o: PartPosOverrides) => void
@@ -485,6 +485,10 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
   cabinet?: CabinetInstance
   rp?: ResolvedCabinet
   onUpdate?: (id: string, u: Partial<CabinetInstance>) => void | Promise<void>
+  // Lifted shape state (CabinetEditModal) — when provided, restore/remove here
+  // update the shared map (3D view refreshes live); otherwise self-loads.
+  shapes?: ShapeOverrides
+  onShapesChange?: (o: ShapeOverrides) => void
 }) {
   const baseDims        = useMemo(() => buildBaseDims(rp), [rp])
   const overrideEntries = Object.entries(partOverrides)
@@ -493,15 +497,23 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
   const jointCount      = Object.keys(cabinet?.carcase_joints ?? {}).length
   const hasJoints       = jointCount > 0
 
-  // Part shapes (head revision per shaped part). Loaded here rather than lifted
-  // to the modal — this view remounts on tab switch, so it's always fresh even
-  // after Part Editor saves.
-  const [shapes, setShapes] = useState<ShapeOverrides>({})
+  // Part shapes (head revision per shaped part). Controlled when the modal
+  // passes its lifted map (keeps the 3D view in sync live); self-loads when
+  // mounted standalone.
+  const shapesControlled = shapesProp !== undefined
+  const [ownShapes, setOwnShapes] = useState<ShapeOverrides>({})
   useEffect(() => {
+    if (shapesControlled) return
     let live = true
-    dbLoadShapeOverrides(cabinetId).then(m => { if (live) setShapes(m) })
+    dbLoadShapeOverrides(cabinetId).then(m => { if (live) setOwnShapes(m) })
     return () => { live = false }
-  }, [cabinetId])
+  }, [cabinetId, shapesControlled])
+  const shapes = shapesControlled ? (shapesProp as ShapeOverrides) : ownShapes
+  const setShapes: Dispatch<SetStateAction<ShapeOverrides>> = next => {
+    const resolved = typeof next === 'function' ? next(shapes) : next
+    if (shapesControlled) onShapesChange?.(resolved)
+    else setOwnShapes(resolved)
+  }
   const shapeCount = Object.keys(shapes).length
   const hasShapes  = shapeCount > 0
 

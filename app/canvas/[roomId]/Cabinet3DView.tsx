@@ -6,7 +6,8 @@ import { useFrame } from '@react-three/fiber'
 import { supabase } from '@/src/lib/supabase'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
 import type { CabinetInstance } from '@/src/lib/types'
-import { dbUpdateCustomPart, dbSavePartPosOverride, type CabinetCustomPart, type PartPosOverrides } from './canvasDB'
+import { dbUpdateCustomPart, dbSavePartPosOverride, type CabinetCustomPart, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
+import { sampleShapeOutline } from '@/src/lib/shapePath'
 import { customExtents, customFieldForExtent, customPanelKind, type CustomOrient } from '@/src/lib/customPartBox'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
@@ -16,7 +17,7 @@ import type {
 } from '@/src/lib/resolver/types'
 import {
   Box, PanelKind, PartMeta, PartEdge,
-  MatColSpec, MatColMap, EbSpec,
+  MatColSpec, MatColMap, EbSpec, PartShape,
   panelFaceColors, unpackMatCol,
   Part, PartPropertiesPanel, PreviewCanvas,
 } from '@/src/components/three/PartViewer'
@@ -442,11 +443,14 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, sh
 
 function DrawerAssembly({
   faceZone, stack, targetTravel, selected, onSelect,
-  faceHighlighted, materialColours, ebByMatId, edgeOverrides, wire, partOverrides, dragRef,
+  faceHighlighted, materialColours, ebByMatId, edgeOverrides, wire, partOverrides, dragRef, shapes3D,
 }: {
   faceZone:          ResolvedFaceZone
   stack:             ResolvedDrawerStack
   targetTravel:      number
+  // Sampled shape overrides by part id — front zone + drawer-box parts (slides
+  // are hardware, never shaped).
+  shapes3D?:         Map<string, PartShape>
   selected:          PartMeta | null
   onSelect:          (info: PartMeta | null) => void
   faceHighlighted:   boolean
@@ -513,6 +517,7 @@ function DrawerAssembly({
         ebSpec={ebFor(faceZone.material_id)}
         wire={wire}
         rotation={getRotOv(zoneId, partOverrides)}
+        shape={shapes3D?.get(zoneId)}
       />
       {stack.box_parts.map((p, pi) => {
         const id   = `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`
@@ -536,6 +541,7 @@ function DrawerAssembly({
             ebSpec={ebFor(p.material_id)}
             wire={wire}
             rotation={getRotOv(id, partOverrides)}
+            shape={shapes3D?.get(id)}
           />
         )
       })}
@@ -663,7 +669,7 @@ function JointFaceRect({ plane, color, wire }: { plane: JointRefPlane; color: st
 // on hole entry and exit faces. three-bvh-csg v0.0.16 collapses all box face
 // groups to a single materialIndex, so CSG cannot give us per-face colours;
 // the disc-marker approach keeps rendering correct while showing hole positions.
-function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, highlighted, onSelect, dragRef, wire, contextMenuSelect = false, ebSpec, rotation, subtractions }: {
+function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, highlighted, onSelect, dragRef, wire, contextMenuSelect = false, ebSpec, rotation, subtractions, shape }: {
   b:                  Box
   drills:             DrillOpPos[]
   faceColors:         [string, string, string, string, string, string]
@@ -678,6 +684,7 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
   ebSpec?:            EbSpec
   rotation?:          [number, number, number]
   subtractions?:      { center: [number, number, number]; size: [number, number, number] }[]
+  shape?:             PartShape | null
 }) {
   return (
     <>
@@ -695,6 +702,7 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
         ebSpec={ebSpec}
         rotation={rotation}
         subtractions={subtractions}
+        shape={shape}
       />
       {/* Dark disc markers on each hole's entry and exit face. In wire mode,
           depthTest=false + renderOrder=10 makes them show through panel edges.
@@ -953,7 +961,7 @@ function AnimatedGroup({ targetTravel, children }: { targetTravel: number; child
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
 
 function CabinetScene({
-  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, openDrawers, openInnerDrawers, edgeOverrides, wire, customParts, partOverrides, showDrilling = true, handMarkers = [],
+  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, openDrawers, openInnerDrawers, edgeOverrides, wire, customParts, partOverrides, shapeOverrides, showDrilling = true, handMarkers = [],
 }: {
   cab:                  CabinetInstance
   rp:                   ResolvedCabinet
@@ -969,6 +977,7 @@ function CabinetScene({
   wire?:                boolean
   customParts?:         CabinetCustomPart[]
   partOverrides?:       PartPosOverrides
+  shapeOverrides?:      ShapeOverrides
   showDrilling?:        boolean
   handMarkers?:         CabinetOpMarker[]
 }) {
@@ -976,6 +985,20 @@ function CabinetScene({
   const dragRef = useRef(false)
   const hlSet   = highlightPartKeys ? new Set(highlightPartKeys) : null
   const palette = useMemo(() => getPalette(), [])
+
+  // Shape Editor overrides → sampled outlines, cached per part so Part's
+  // geometry memo only re-tessellates when a shape actually changes. Mirror
+  // matches the Part Editor's display rule (right-hand side twins — case or
+  // drawer-box — were authored on the mirrored frame). Slides are hardware,
+  // not panels: never shaped.
+  const shapes3D = useMemo(() => {
+    const m = new Map<string, PartShape>()
+    for (const [pid, ov] of Object.entries(shapeOverrides ?? {})) {
+      if (pid.startsWith('slide_')) continue
+      if ((ov.segments?.length ?? 0) > 2) m.set(pid, { pts: sampleShapeOutline(ov.segments), mirror: pid.includes('right_side') })
+    }
+    return m
+  }, [shapeOverrides])
 
   const boxByKey = useMemo(() => {
     const m: Record<string, Box> = {}
@@ -1123,6 +1146,7 @@ function CabinetScene({
               ebSpec={ebFor(p.material_id)}
               rotation={getRotOv(id, partOverrides)}
               subtractions={pockets}
+              shape={shapes3D.get(id)}
             />
           )
         }
@@ -1143,6 +1167,7 @@ function CabinetScene({
             wire={wire}
             rotation={getRotOv(id, partOverrides)}
             subtractions={pockets}
+            shape={shapes3D.get(id)}
           />
         )
       })}
@@ -1167,6 +1192,7 @@ function CabinetScene({
             ebSpec={ebFor(p.material_id)}
             wire={wire}
             rotation={getRotOv(id, partOverrides)}
+            shape={shapes3D.get(id)}
           />
         )
       })}
@@ -1194,6 +1220,7 @@ function CabinetScene({
               ebSpec={ebFor(p.material_id)}
               wire={wire}
               rotation={getRotOv(id, partOverrides)}
+              shape={shapes3D.get(id)}
             />
           )
         }
@@ -1298,6 +1325,7 @@ function CabinetScene({
                 wire={wire}
                 partOverrides={partOverrides}
                 dragRef={dragRef}
+                shapes3D={shapes3D}
               />
             )
           }
@@ -1394,13 +1422,13 @@ function CabinetScene({
         if (z.face_type === 'door' && z.door_profile) {
           return (
             <group key={`f${i}`}>
-              <Part b={b} rotation={getRotOv(id, partOverrides)} {...partProps} />
+              <Part b={b} rotation={getRotOv(id, partOverrides)} shape={shapes3D.get(id)} {...partProps} />
               <DoorProfile3D profile={z.door_profile} b={b} />
             </group>
           )
         }
 
-        return <Part key={`f${i}`} b={b} rotation={getRotOv(id, partOverrides)} {...partProps} />
+        return <Part key={`f${i}`} b={b} rotation={getRotOv(id, partOverrides)} shape={shapes3D.get(id)} {...partProps} />
       })}
       {(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0).map((p, i) => {
         const orient = (p.orientation ?? 'flat') as CustomOrient
@@ -1431,6 +1459,7 @@ function CabinetScene({
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id ?? '')}
             wire={wire}
+            shape={shapes3D.get(`custom_${p.id}`)}
           />
         )
       })}
@@ -1450,7 +1479,7 @@ function CabinetScene({
 // ── Public component ─────────────────────────────────────────────────────────
 
 export default function Cabinet3DView({
-  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, onPartSelect, showDrilling = true, onUpdate, onDeletePart,
+  cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, shapeOverrides, onPartSelect, showDrilling = true, onUpdate, onDeletePart,
   setCustomParts, onOverridesChange, onEditPart,
 }: {
   cab:               CabinetInstance
@@ -1461,6 +1490,9 @@ export default function Cabinet3DView({
   wire?:             boolean
   customParts?:      CabinetCustomPart[]
   partOverrides?:    PartPosOverrides
+  // Shape Editor overrides (latest revision per part) — shaped parts render as
+  // extruded silhouettes instead of boxes.
+  shapeOverrides?:   ShapeOverrides
   // Fires with the carcase part_key when a case part is selected (null when a
   // non-case part is picked). Lets callers drive an external panel from clicks.
   onPartSelect?:     (partKey: string | null) => void
@@ -1766,6 +1798,7 @@ export default function Cabinet3DView({
           wire={wire}
           customParts={customParts}
           partOverrides={partOverrides}
+          shapeOverrides={shapeOverrides}
           showDrilling={showDrilling}
           handMarkers={handMarkers}
         />
