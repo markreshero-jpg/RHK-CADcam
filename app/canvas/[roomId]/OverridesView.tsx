@@ -321,7 +321,43 @@ function JointOverridesSection({ cabinet, rp, onUpdate }: {
 // base resolved size no longer matches meta.baseAtSave (cabinet was resized
 // after the shape was drawn) — compared as an unordered pair so it's frame-proof.
 
-function ShapeOverridesSection({ cabinetId, shapes, setShapes, baseDims, partOverrides, onOverridesChange, customParts, setCustomParts }: {
+// Display label for a shaped part row (custom parts carry their own name).
+// Exported for the cabinet errors panel.
+export function shapePartLabel(partId: string, customParts: CabinetCustomPart[]): string {
+  if (partId.startsWith('custom_')) {
+    const cp = customParts.find(p => `custom_${p.id}` === partId)
+    return cp?.name ?? 'Custom Part'
+  }
+  return partIdLabel(partId)
+}
+
+// Stale = the part's base resolved in-plane size no longer matches what it was
+// when the shape was saved (meta.baseAtSave) — i.e. the cabinet was resized
+// after drawing. Compared as an unordered pair (frame-proof), 0.5mm tolerance.
+// Pre-M4 saves have no reference recorded → never stale. Exported for the
+// cabinet errors panel (M6).
+export function shapeIsStale(
+  partId: string,
+  ov: ShapeOverride,
+  baseDims: Map<string, { w: number; h: number; d: number }>,
+  customParts: CabinetCustomPart[],
+): boolean {
+  const saved = ov.meta?.baseAtSave
+  if (!saved) return false
+  let cur: { w: number; h: number } | undefined
+  if (partId.startsWith('custom_')) {
+    const cp = customParts.find(p => `custom_${p.id}` === partId)
+    if (cp) cur = { w: cp.dy, h: cp.dx }
+  } else {
+    cur = baseDims.get(partId)
+  }
+  if (!cur) return false
+  const a = [cur.w, cur.h].sort((x, y) => x - y)
+  const b = [saved.w, saved.h].sort((x, y) => x - y)
+  return Math.abs(a[0] - b[0]) > 0.5 || Math.abs(a[1] - b[1]) > 0.5
+}
+
+function ShapeOverridesSection({ cabinetId, shapes, setShapes, baseDims, partOverrides, onOverridesChange, customParts, setCustomParts, onEditShape }: {
   cabinetId: string
   shapes: ShapeOverrides
   setShapes: Dispatch<SetStateAction<ShapeOverrides>>
@@ -330,32 +366,12 @@ function ShapeOverridesSection({ cabinetId, shapes, setShapes, baseDims, partOve
   onOverridesChange: (o: PartPosOverrides) => void
   customParts: CabinetCustomPart[]
   setCustomParts: Dispatch<SetStateAction<CabinetCustomPart[]>>
+  // Open the Part Editor with the shape overlay on top for this part (M6).
+  onEditShape?: (partId: string) => void
 }) {
   const entries = Object.entries(shapes)
-
-  function labelFor(partId: string): string {
-    if (partId.startsWith('custom_')) {
-      const cp = customParts.find(p => `custom_${p.id}` === partId)
-      return cp?.name ?? 'Custom Part'
-    }
-    return partIdLabel(partId)
-  }
-
-  function isStale(partId: string, ov: ShapeOverride): boolean {
-    const saved = ov.meta?.baseAtSave
-    if (!saved) return false   // pre-M4 save — no reference recorded
-    let cur: { w: number; h: number } | undefined
-    if (partId.startsWith('custom_')) {
-      const cp = customParts.find(p => `custom_${p.id}` === partId)
-      if (cp) cur = { w: cp.dy, h: cp.dx }
-    } else {
-      cur = baseDims.get(partId)
-    }
-    if (!cur) return false
-    const a = [cur.w, cur.h].sort((x, y) => x - y)
-    const b = [saved.w, saved.h].sort((x, y) => x - y)
-    return Math.abs(a[0] - b[0]) > 0.5 || Math.abs(a[1] - b[1]) > 0.5
-  }
+  const labelFor = (partId: string) => shapePartLabel(partId, customParts)
+  const isStale = (partId: string, ov: ShapeOverride) => shapeIsStale(partId, ov, baseDims, customParts)
 
   // Re-apply a shape's bbox to the part size — used after restore so the part
   // matches the shape that just became head. Mirrors PartEditor's save write.
@@ -442,6 +458,11 @@ function ShapeOverridesSection({ cabinetId, shapes, setShapes, baseDims, partOve
               )}
             </td>
             <td className="px-2 py-2 text-right align-top pt-2.5 whitespace-nowrap">
+              {onEditShape && (
+                <button onClick={() => onEditShape(partId)}
+                  className="text-gray-600 hover:text-emerald-300 text-sm leading-none transition-colors opacity-0 group-hover:opacity-100 mr-2"
+                  title="Edit shape (opens the Part Editor with the shape overlay)">✎</button>
+              )}
               {(ov.revisions ?? 1) > 1 && ov.revision > 1 && (
                 <button onClick={() => void restorePrevious(partId, ov)}
                   className="text-gray-600 hover:text-sky-300 text-sm leading-none transition-colors opacity-0 group-hover:opacity-100 mr-2"
@@ -489,6 +510,8 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
   // update the shared map (3D view refreshes live); otherwise self-loads.
   shapes?: ShapeOverrides
   onShapesChange?: (o: ShapeOverrides) => void
+  // Open the Part Editor with the shape overlay for a shaped part's row (M6).
+  onEditShape?: (partId: string) => void
 }) {
   const baseDims        = useMemo(() => buildBaseDims(rp), [rp])
   const overrideEntries = Object.entries(partOverrides)

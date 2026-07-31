@@ -16,7 +16,7 @@ import {
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetPanel from './CabinetPanel'
-import Cabinet3DView from './Cabinet3DView'
+import Cabinet3DView, { buildPartMetaById } from './Cabinet3DView'
 import FaceGridEditor from './FaceGridEditor'
 import InternalGridEditor from './InternalGridEditor'
 import { saveSVGEdge } from './cabinetEditSvgHelpers'
@@ -26,7 +26,7 @@ import { buildPartContext, type FormulaCtx } from '@/src/lib/partFormula'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import JointsPanel from './JointsPanel'
 import PartEdgeJoints from './PartEdgeJoints'
-import OverridesView, { buildBaseDims } from './OverridesView'
+import OverridesView, { buildBaseDims, shapeIsStale, shapePartLabel } from './OverridesView'
 import CabinetTreePanel from './CabinetTreePanel'
 import CabinetRoutesPanel from './CabinetRoutesPanel'
 import CabinetErrorsPanel from './CabinetErrorsPanel'
@@ -221,6 +221,9 @@ export default function CabinetEditModal({
   // Single-part operation editor (opened from the 3D view's right-click → Edit Part).
   // Rendered as a modal-level overlay so the cabinet context stays mounted underneath.
   const [editingPart, setEditingPart]     = useState<PartMeta | null>(null)
+  // "⬠ Edit Shape" entry points (3D right-click, Overrides row ✎) open the Part
+  // Editor with the shape overlay already on top.
+  const [editShapeOnOpen, setEditShapeOnOpen] = useState(false)
 
   const prevPartRef     = useRef<PartMeta | null>(null)
   const originalEdgeRef = useRef<PartEdge | null>(null)
@@ -415,6 +418,16 @@ export default function CabinetEditModal({
   // user-hidden parts removed; the Parts tab + inspector panels keep the full list.
   const visibleRp = useMemo(() => (rp ? filterHiddenParts(rp, hiddenParts) : rp), [rp, hiddenParts])
 
+  // Base resolved dims by part id — Shape Editor plumbing (stale flags + the
+  // baseAtSave reference PartEditor stamps into shape meta on save).
+  const baseDimsMap = useMemo(() => buildBaseDims(rp ?? undefined), [rp])
+  const staleShapes = useMemo(
+    () => Object.entries(shapeOverrides)
+      .filter(([id, ov]) => shapeIsStale(id, ov, baseDimsMap, customParts))
+      .map(([id]) => ({ id, label: shapePartLabel(id, customParts) })),
+    [shapeOverrides, baseDimsMap, customParts],
+  )
+
   // Formula context for the Add-Part dialog (lets sizes/positions use formulas).
   const formulaCtx = useMemo<FormulaCtx | null>(() => {
     const input = getCachedInput(cabinet.id)
@@ -576,7 +589,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={setEditingPart} />}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} />}
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}
@@ -602,7 +615,7 @@ export default function CabinetEditModal({
             {activeView === 'joints' && <JointsPanel cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
             {activeView === 'tree'   && rp && <CabinetTreePanel rp={rp} partOverrides={partOverrides} />}
             {activeView === 'routes' && rp && <CabinetRoutesPanel cabinet={cabinet} rp={rp} />}
-            {activeView === 'errors' && <CabinetErrorsPanel rp={rp} onGoToView={setActiveView} />}
+            {activeView === 'errors' && <CabinetErrorsPanel rp={rp} onGoToView={setActiveView} staleShapes={staleShapes} />}
             {activeView === 'overrides' && (
               <OverridesView
                 cabinetId={cabinet.id}
@@ -615,6 +628,11 @@ export default function CabinetEditModal({
                 onUpdate={onUpdate}
                 shapes={shapeOverrides}
                 onShapesChange={setShapeOverrides}
+                onEditShape={id => {
+                  if (!rp) return
+                  const m = buildPartMetaById(rp, id, customParts, partOverrides)
+                  if (m) { setEditShapeOnOpen(true); setEditingPart(m) }
+                }}
               />
             )}
             {selectedSVGPart && isOrthoView && (
@@ -710,7 +728,7 @@ export default function CabinetEditModal({
             // Colourless tape reads as the part's material face colour (matches ebFor).
             return eb ? { thick: eb.thickness, color: eb.color ?? unpackMatCol(editingPart.materialId ? materialColours?.[editingPart.materialId] : undefined, '#c8b89a').face } : undefined
           })()}
-          onClose={() => setEditingPart(null)}
+          onClose={() => { setEditingPart(null); setEditShapeOnOpen(false) }}
           // Shape Editor save flow (M3): bbox→size writes go through the same
           // state the 3D view renders from; onPartMetaChange keeps the open
           // editor's dims in step with the size it just wrote.
@@ -719,9 +737,10 @@ export default function CabinetEditModal({
           customParts={customParts}
           setCustomParts={setCustomParts}
           onPartMetaChange={setEditingPart}
-          partBase={rp ? buildBaseDims(rp).get(editingPart.id) : undefined}
+          partBase={baseDimsMap.get(editingPart.id)}
           shapeOverrides={shapeOverrides}
           onShapeOverridesChange={setShapeOverrides}
+          initialShapeOpen={editShapeOnOpen}
         />
       )}
     </div>

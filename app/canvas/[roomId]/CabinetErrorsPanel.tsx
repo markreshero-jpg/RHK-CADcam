@@ -2,7 +2,7 @@
 
 import type { ResolvedCabinet, ResolverError } from '@/src/lib/resolver/types'
 
-type FixView = 'interior' | 'face'
+type FixView = 'interior' | 'face' | 'overrides'
 
 // Friendly guidance + a suggested editor to jump to, per resolver error code.
 // Unknown codes fall back to a humanised code + best-guess editor from the part.
@@ -109,9 +109,12 @@ function ErrorCard({ err, severity, onGoToView }: {
   )
 }
 
-export default function CabinetErrorsPanel({ rp, onGoToView }: {
+export default function CabinetErrorsPanel({ rp, onGoToView, staleShapes = [] }: {
   rp: ResolvedCabinet | undefined
   onGoToView: (v: FixView) => void
+  // Shaped parts whose base resolved size changed after the shape was drawn
+  // (Shape Editor M6) — surfaced here at cabinet level; managed in Overrides.
+  staleShapes?: { id: string; label: string }[]
 }) {
   if (!rp) {
     return (
@@ -124,7 +127,7 @@ export default function CabinetErrorsPanel({ rp, onGoToView }: {
   const errors = rp.errors ?? []
   const warnings = rp.warnings ?? []
 
-  if (errors.length === 0 && warnings.length === 0) {
+  if (errors.length === 0 && warnings.length === 0 && staleShapes.length === 0) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-2 text-center p-6">
         <div className="h-9 w-9 rounded-full bg-emerald-900/50 border border-emerald-700/60 flex items-center justify-center text-emerald-400 text-lg">✓</div>
@@ -135,6 +138,32 @@ export default function CabinetErrorsPanel({ rp, onGoToView }: {
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-4">
+      {staleShapes.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[11px] uppercase tracking-wider text-amber-400 font-semibold">
+            {staleShapes.length} stale part {staleShapes.length === 1 ? 'shape' : 'shapes'}
+          </p>
+          {staleShapes.map(s => (
+            <div key={s.id} className="rounded-lg border px-3.5 py-3 border-amber-700/60 bg-amber-950/30">
+              <div className="flex items-start gap-2.5">
+                <span className="mt-1 h-2 w-2 rounded-full shrink-0 bg-amber-500" />
+                <div className="min-w-0 flex-1">
+                  <span className="text-sm font-medium text-gray-100">{s.label} — part size changed since its shape was drawn</span>
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    The drawn outline was saved against a different resolved size (resize policy: shapes are kept, never auto-scaled). Re-edit the shape to fit the new size, or remove it to revert the part to a plain rectangle.
+                  </p>
+                  <button
+                    onClick={() => onGoToView('overrides')}
+                    className="mt-2 text-[11px] font-medium text-blue-300 hover:text-blue-200 bg-blue-900/40 hover:bg-blue-900/60 border border-blue-800/60 rounded px-2.5 py-1 transition-colors"
+                  >
+                    Review in Overrides →
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {errors.length > 0 && (
         <div className="space-y-2">
           <p className="text-[11px] uppercase tracking-wider text-red-400 font-semibold">

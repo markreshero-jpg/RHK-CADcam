@@ -51,7 +51,7 @@ function ResizeHandle({ onDelta }: { onDelta: (dx: number) => void }) {
 export default function PartEditor({
   cabinetId, part, ebSpec, onClose,
   partOverrides, onOverridesChange, customParts, setCustomParts, onPartMetaChange, partBase,
-  shapeOverrides, onShapeOverridesChange,
+  shapeOverrides, onShapeOverridesChange, initialShapeOpen,
 }: {
   cabinetId: string
   part:      PartMeta
@@ -75,6 +75,9 @@ export default function PartEditor({
   // cabinet 3D view / Overrides tab see the new shape immediately.
   shapeOverrides?:        ShapeOverrides
   onShapeOverridesChange?: (o: ShapeOverrides) => void
+  // Open with the shape overlay already on top (3D right-click "⬠ Edit Shape",
+  // Overrides tab row Edit).
+  initialShapeOpen?:      boolean
 }) {
   const [view, setView] = useState<EditorView>('front')
   // Active working face. Only a front panel (door / drawer front — resolves upright,
@@ -101,7 +104,9 @@ export default function PartEditor({
   // Shape Editor overlay (2D profile editor, z-[70] above this editor).
   // While open, this editor's own keyboard handling goes inert — ShapeEditor
   // has its own Escape/undo/tool keys on window.
-  const [shapeOpen, setShapeOpen] = useState(false)
+  // Slides are hardware, not panels — never shapeable.
+  const shapeable = !part.id.startsWith('slide_')
+  const [shapeOpen, setShapeOpen] = useState(!!initialShapeOpen && shapeable)
   // Latest saved shape override for this part (null = plain rectangle).
   // Controlled when the host passes shapeOverrides (the modal's lifted map);
   // otherwise self-loads — one indexed query for the whole cabinet.
@@ -335,13 +340,15 @@ export default function PartEditor({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShapeOpen(true)} disabled={!shapeLoaded}
-            title={shapeLoaded ? "Edit the part's outline shape (2D profile editor)" : 'Loading saved shape…'}
-            className={`text-[11px] px-2 py-0.5 rounded border border-gray-700 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed ${
-              shapeOv ? 'text-emerald-300' : 'text-gray-300'
-            }`}>
-            ⬠ Edit Shape{shapeOv ? ` (r${shapeOv.revision})` : ''}
-          </button>
+          {shapeable && (
+            <button onClick={() => setShapeOpen(true)} disabled={!shapeLoaded}
+              title={shapeLoaded ? "Edit the part's outline shape (2D profile editor)" : 'Loading saved shape…'}
+              className={`text-[11px] px-2 py-0.5 rounded border border-gray-700 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed ${
+                shapeOv ? 'text-emerald-300' : 'text-gray-300'
+              }`}>
+              ⬠ Edit Shape{shapeOv ? ` (r${shapeOv.revision})` : ''}
+            </button>
+          )}
           <button onClick={() => void undo()} disabled={undoDepth === 0}
             title="Undo (Ctrl+Z)"
             className="text-[11px] px-2 py-0.5 rounded border border-gray-700 text-gray-300 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
@@ -493,7 +500,7 @@ export default function PartEditor({
       {/* Shape Editor overlay — 2D outline editor in the upright display frame
           (sw × sh, same frame as the 3D box / PartEdge sides). displayEdge seeds
           the banding tape on a fresh rectangle; a saved shape reopens verbatim. */}
-      {shapeOpen && (
+      {shapeOpen && shapeLoaded && (
         <ShapeEditorOverlay
           key={shapeOv?.revision ?? 0}
           partLabel={part.label}

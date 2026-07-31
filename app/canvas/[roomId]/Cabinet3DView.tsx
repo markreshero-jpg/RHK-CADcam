@@ -913,6 +913,60 @@ async function saveEdge(cabId: string, part: PartMeta) {
   else patchEdgeOverrideCache(cabId, id, edge)
 }
 
+// ── PartMeta by stable id ──────────────────────────────────────────────────────
+// Rebuild the same PartMeta the 3D render produces for a part id, without going
+// through the scene — used by hosts that open the Part Editor from non-3D entry
+// points (e.g. the Overrides tab's shape rows). Pos/size overrides are applied;
+// per-part edge overrides are NOT (they load async in the 3D view — banding
+// display seed only, acceptable for this path).
+export function buildPartMetaById(
+  rp: ResolvedCabinet,
+  partId: string,
+  customParts?: CabinetCustomPart[],
+  partOverrides?: PartPosOverrides,
+): PartMeta | null {
+  const sz = (b: Box) => applySizeOv(b, partId, partOverrides)
+  if (partId.startsWith('case_')) {
+    const p = rp.case_parts.find(x => `case_${x.part_key}` === partId)
+    return p ? buildCaseInfo(p, sz(caseBox(applyPosOv(p, partId, partOverrides)))) : null
+  }
+  if (partId.startsWith('tk_')) {
+    const p = rp.toekick_parts.find(x => `tk_${x.part_key}_${x.sort_order}` === partId)
+    return p ? buildTkInfo(p, sz(tkBox(applyPosOv(p, partId, partOverrides)))) : null
+  }
+  if (partId.startsWith('int_')) {
+    const p = rp.internal_parts.find(x => `int_${x.part_type}_${x.sort_order}` === partId)
+    return p ? buildIntInfo(p, sz(intBox(applyPosOv(p, partId, partOverrides)))) : null
+  }
+  if (partId.startsWith('zone_')) {
+    const z = rp.face_zones.find(x => `zone_${x.row_index}_${x.col_index}` === partId)
+    return z ? buildZoneInfo(z, sz(zoneBox(applyPosOv(z, partId, partOverrides)))) : null
+  }
+  if (partId.startsWith('db_')) {
+    for (const s of rp.drawer_stacks ?? []) {
+      const p = s.box_parts.find(x => `db_${s.face_zone_row}_${s.face_zone_col}_${x.part_type}` === partId)
+      if (p) return buildDbPartInfo(p, sz(dbBox(applyPosOv(p, partId, partOverrides))), s)
+    }
+    return null
+  }
+  if (partId.startsWith('custom_')) {
+    const cp = customParts?.find(x => `custom_${x.id}` === partId)
+    if (!cp) return null
+    const orient = (cp.orientation ?? 'flat') as CustomOrient
+    const { ex, ey, ez } = customExtents(orient, Number(cp.dx), Number(cp.dy), Number(cp.dz))
+    return {
+      id: partId,
+      label: cp.name ?? 'Custom Part',
+      w: ex, h: ey, d: ez,
+      thickness: Number(cp.dz),
+      edge: { top: cp.edge_top, bottom: cp.edge_bottom, left: cp.edge_left, right: cp.edge_right },
+      panelKind: customPanelKind(orient),
+      materialId: cp.material_id ?? undefined,
+    }
+  }
+  return null
+}
+
 // ── Position override helper ──────────────────────────────────────────────────
 
 function applyPosOv<T extends { X: number; Y: number; Z: number }>(p: T, id: string, overrides: PartPosOverrides | undefined): T {
@@ -1509,7 +1563,9 @@ export default function Cabinet3DView({
   onOverridesChange?: (o: PartPosOverrides) => void
   // Right-click → "Edit Part" opens the single-part operation editor (Part Editor).
   // The host renders the editor as a modal-level overlay so cabinet context is kept.
-  onEditPart?:       (part: PartMeta) => void
+  // openShape=true ("⬠ Edit Shape") asks the host to open it with the shape
+  // overlay already on top.
+  onEditPart?:       (part: PartMeta, openShape?: boolean) => void
 }) {
   const [selectedPart, setSelectedPart]       = useState<PartMeta | null>(null)
   const [editMenu, setEditMenu]               = useState<{ cx: number; cy: number } | null>(null)
@@ -1752,6 +1808,15 @@ export default function Cabinet3DView({
                   onClick={() => { onEditPart(selectedPart); setEditMenu(null) }}>
                   ✎ Edit Part
                 </button>
+                {/* Slides are hardware — every panel part is shapeable (scope
+                    amendment 2026-07-30). */}
+                {!selectedPart.id.startsWith('slide_') && (
+                  <button
+                    className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-200 transition-colors whitespace-nowrap"
+                    onClick={() => { onEditPart(selectedPart, true); setEditMenu(null) }}>
+                    ⬠ Edit Shape
+                  </button>
+                )}
               </div>
             </>
           )}
