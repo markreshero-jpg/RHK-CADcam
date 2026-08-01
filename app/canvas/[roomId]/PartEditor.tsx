@@ -29,8 +29,10 @@ import PartOrthoView from './partEditor/PartOrthoView'
 import PartOpsList from './partEditor/PartOpsList'
 import PartPropertiesPanel from './partEditor/PartPropertiesPanel'
 import ShapeEditorOverlay from './partEditor/ShapeEditorOverlay'
-import { dbLoadShapeOverrides, dbSaveShapeOverride, dbSavePartPosOverride, dbUpdateCustomPart } from './canvasDB'
-import type { ShapeMeta, ShapeSegment, ShapeOverride, ShapeOverrides, PartPosOverrides, CabinetCustomPart } from './canvasDB'
+import PartOverridesPanel from './partEditor/PartOverridesPanel'
+import { dbLoadShapeOverrides, dbSaveShapeOverride, dbSavePartPosOverride, dbUpdateCustomPart, dbRestoreShapeRevision, dbDeleteShapeOverride } from './canvasDB'
+import type { ShapeMeta, ShapeSegment, ShapeOverride, ShapeOverrides, ShapeRevisionEntry, PartPosOverrides, CabinetCustomPart } from './canvasDB'
+import { applyShapeSizeSync, clearShapeWrittenSlots, type ShapeSyncCtx } from './OverridesView'
 import { customFieldForExtent } from '@/src/lib/customPartBox'
 
 // Thin vertical divider that reports drag deltas (px) so a parent can resize an
@@ -80,6 +82,10 @@ export default function PartEditor({
   initialShapeOpen?:      boolean
 }) {
   const [view, setView] = useState<EditorView>('front')
+  // Right sidebar tab: op properties (contextual) or this part's overrides —
+  // the overrides live on the sidebar so revision restores preview LIVE in the
+  // centre 3D/ortho views.
+  const [rightTab, setRightTab] = useState<'op' | 'overrides'>('op')
   // Active working face. Only a front panel (door / drawer front — resolves upright,
   // dxIsWidth) has a distinct decorative front vs machined back; everything else has
   // one working face and stays on 'front'. face_back ops (hinges, fixings) show on
@@ -123,11 +129,16 @@ export default function PartEditor({
   }, [cabinetId, part.id, shapesControlled])
   const shapeOv = shapesControlled ? (shapeOverrides?.[part.id] ?? null) : ownShapeOv
   const shapeLoaded = shapesControlled || ownShapeLoaded
+  // Live revision preview (Overrides sidebar history): display-only — the
+  // centre views show the previewed revision while the saved head stays put.
+  const [shapePreview, setShapePreview] = useState<ShapeRevisionEntry | null>(null)
+  useEffect(() => { setShapePreview(null) }, [part.id])
+  const displaySegs = shapePreview?.segments ?? shapeOv?.segments ?? null
   // Sampled outline polygon (shape frame, mm) — drives the 3D face overlay and
   // the ops-outside-outline validation inside usePartOps.
   const shapePoly = useMemo(
-    () => (shapeOv && shapeOv.segments.length > 2 ? sampleShapeOutline(shapeOv.segments) : null),
-    [shapeOv],
+    () => (displaySegs && displaySegs.length > 2 ? sampleShapeOutline(displaySegs) : null),
+    [displaySegs],
   )
   // Draggable side-panel widths (px). Clamped so neither panel can crowd out the scene.
   const [leftW, setLeftW]   = useState(288)   // 72 * 4 (was w-72)
@@ -203,6 +214,11 @@ export default function PartEditor({
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [undo, shapeOpen])
+
+  // Selecting an operation (list or glyph) pulls the sidebar back to its
+  // properties — the natural expectation mid-edit; the Overrides tab is a
+  // deliberate detour.
+  useEffect(() => { if (selectedId) setRightTab('op') }, [selectedId])
 
   // Display frame (see PartOrthoView): stand every part upright — width across the
   // screen, height up. Non-'side' panels store their height as part-local DX, so
@@ -318,7 +334,59 @@ export default function PartEditor({
       }
       onPartMetaChange?.({ ...part, w: changes.w ?? part.w, h: changes.h ?? part.h, d: changes.d ?? part.d })
     }
+    setShapePreview(null)
     setShapeOpen(false)
+  }
+
+  // Restore/remove from the per-part Overrides view — same shared helpers as
+  // the cabinet Overrides tab, plus a meta patch so this open editor's frame
+  // follows the size the action wrote.
+  const shapeSyncCtx: ShapeSyncCtx = { partOverrides, onOverridesChange, customParts, setCustomParts }
+
+  function setShapeForPart(next: ShapeOverride | null) {
+    if (shapesControlled) {
+      const map = { ...shapeOverrides }
+      if (next) map[part.id] = next
+      else delete map[part.id]
+      onShapeOverridesChange?.(map)
+    } else {
+      setOwnShapeOv(next)
+    }
+  }
+
+  async function handleShapeRestore(revision: number) {
+    const restored = await dbRestoreShapeRevision(cabinetId, part.id, revision)
+    if (!restored) return
+    setShapePreview(null)
+    setShapeForPart({ ...restored, revisions: (shapeOv?.revisions ?? 1) + 1 })
+    applyShapeSizeSync(cabinetId, part.id, restored, shapeSyncCtx)
+    const b = restored.meta?.bounds
+    if (b && restored.meta?.sizeSlots) {
+      const { swExt, shExt } = displayExtents(part)
+      const next = { ...part }
+      next[swExt] = b.maxX
+      next[shExt] = b.maxY
+      onPartMetaChange?.(next)
+    }
+  }
+
+  async function handleShapeRemove() {
+    if (!shapeOv) return
+    const n = shapeOv.revisions ?? 1
+    if (!confirm(`Remove the drawn shape for ${part.label}? All ${n} revision${n !== 1 ? 's' : ''} are deleted and the part reverts to a plain rectangle.`)) return
+    await dbDeleteShapeOverride(cabinetId, part.id)
+    clearShapeWrittenSlots(cabinetId, part.id, shapeOv, shapeSyncCtx)
+    setShapePreview(null)
+    setShapeForPart(null)
+    // Revert the two in-plane display extents to base (thickness — and any
+    // manual thickness override — untouched; custom dims stay authoritative).
+    if (!part.id.startsWith('custom_') && partBase) {
+      const next = { ...part }
+      if (part.panelKind === 'side')            { next.h = partBase.w; next.d = partBase.h }
+      else if (part.panelKind === 'horizontal') { next.w = partBase.w; next.d = partBase.h }
+      else                                      { next.w = partBase.w; next.h = partBase.h }
+      onPartMetaChange?.(next)
+    }
   }
 
   return (
@@ -341,7 +409,7 @@ export default function PartEditor({
         </div>
         <div className="flex items-center gap-2">
           {shapeable && (
-            <button onClick={() => setShapeOpen(true)} disabled={!shapeLoaded}
+            <button onClick={() => { setShapePreview(null); setShapeOpen(true) }} disabled={!shapeLoaded}
               title={shapeLoaded ? "Edit the part's outline shape (2D profile editor)" : 'Loading saved shape…'}
               className={`text-[11px] px-2 py-0.5 rounded border border-gray-700 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed ${
                 shapeOv ? 'text-emerald-300' : 'text-gray-300'
@@ -472,7 +540,7 @@ export default function PartEditor({
           ) : (
             <div className="w-full h-full flex items-center justify-center p-6">
               <PartOrthoView u={u} v={v} n={n} swap={swap} mirror={mirror} face={hasTwoFaces ? face : undefined} view={view} measuring={measuring} wire={wire}
-                edge={part.edge} ebSpec={ebSpec} shape={shapeOv?.segments ?? null}
+                edge={part.edge} ebSpec={ebSpec} shape={displaySegs}
                 ops={ops} selectedId={selectedId} onSelect={setSelectedId} levels={levels}
                 planePick={planePick && !selLocked}
                 onPickPlane={patch => { void patchOp(patch); setPlanePick(false) }}
@@ -481,20 +549,56 @@ export default function PartEditor({
           )}
         </div>
 
-        {/* Right — contextual properties */}
+        {/* Right — contextual op properties / per-part overrides. Overrides sit
+            here (not a centre view) so shape revision restores preview LIVE in
+            the centre 3D/ortho views as they're clicked. */}
         <ResizeHandle onDelta={dx => setRightW(w => clampPanel(w - dx))} />
-        <PartPropertiesPanel
-          width={rightW}
-          selected={selected} sel={sel} selLocked={selLocked} selIssues={selIssues}
-          swap={swap} firing={firing}
-          jointTypes={jointTypes} slavesByMaster={slavesByMaster} toolSets={toolSets}
-          planePick={planePick} onPlanePickChange={onPlanePickChange}
-          patchOp={changes => void patchOp(changes)}
-          pickJoint={jt => void pickJoint(jt)}
-          resyncJointsFromLibrary={() => void resyncJointsFromLibrary()}
-          deleteSelected={() => void deleteSelected()}
-          convertToManual={() => void convertToManual()}
-        />
+        <div className="flex-none h-full flex flex-col" style={{ width: rightW }}>
+          <div className="flex-none flex bg-gray-900 border-l border-gray-800 border-b border-gray-700">
+            {(['op', 'overrides'] as const).map(t => (
+              <button key={t}
+                onClick={() => setRightTab(t)}
+                className={`flex-1 px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                  rightTab === t ? 'bg-gray-800 text-white' : 'text-gray-400 hover:bg-gray-800/60'
+                }`}>
+                {t === 'op' ? 'Operation' : 'Overrides'}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 min-h-0 flex">
+            {rightTab === 'op' ? (
+              <PartPropertiesPanel
+                width={rightW}
+                selected={selected} sel={sel} selLocked={selLocked} selIssues={selIssues}
+                swap={swap} firing={firing}
+                jointTypes={jointTypes} slavesByMaster={slavesByMaster} toolSets={toolSets}
+                planePick={planePick} onPlanePickChange={onPlanePickChange}
+                patchOp={changes => void patchOp(changes)}
+                pickJoint={jt => void pickJoint(jt)}
+                resyncJointsFromLibrary={() => void resyncJointsFromLibrary()}
+                deleteSelected={() => void deleteSelected()}
+                convertToManual={() => void convertToManual()}
+              />
+            ) : (
+              <PartOverridesPanel
+                width={rightW}
+                cabinetId={cabinetId}
+                part={part}
+                partBase={partBase}
+                partOverrides={partOverrides}
+                onOverridesChange={onOverridesChange}
+                customParts={customParts}
+                setCustomParts={setCustomParts}
+                shapeOv={shapeOv}
+                onEditShape={() => { setShapePreview(null); setShapeOpen(true) }}
+                onRestoreRevision={r => void handleShapeRestore(r)}
+                onRemoveShape={() => void handleShapeRemove()}
+                previewRevision={shapePreview?.revision ?? null}
+                onPreviewRevision={setShapePreview}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Shape Editor overlay — 2D outline editor in the upright display frame

@@ -1223,19 +1223,22 @@ export async function dbSaveShapeOverride(
   return { revision: r.revision, segments: r.segments, meta: r.meta, created_at: r.created_at }
 }
 
-// Revision list for the "restore previous" picker — no segments payload.
+// Revision history entry — includes segments so pickers can render thumbnails
+// and preview a revision live without committing anything.
+export type ShapeRevisionEntry = { revision: number; created_at: string; meta: ShapeMeta | null; segments: ShapeSegment[] }
+
 export async function dbListShapeRevisions(
   cabinetId: string,
   partKey: string,
-): Promise<{ revision: number; created_at: string; meta: ShapeMeta | null }[]> {
+): Promise<ShapeRevisionEntry[]> {
   const { data, error } = await supabase
     .from('part_shape_overrides')
-    .select('revision, created_at, meta')
+    .select('revision, created_at, meta, segments')
     .eq('cabinet_id', cabinetId)
     .eq('part_key', partKey)
     .order('revision', { ascending: false })
   if (error) { console.error('[shape revisions list]', error); return [] }
-  return (data ?? []) as { revision: number; created_at: string; meta: ShapeMeta | null }[]
+  return (data ?? []) as ShapeRevisionEntry[]
 }
 
 // Restore = re-insert the old revision's segments as a NEW head revision, so

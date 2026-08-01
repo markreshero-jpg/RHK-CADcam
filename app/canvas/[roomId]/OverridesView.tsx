@@ -5,10 +5,10 @@ import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { computeElevSeams } from '@/src/lib/cabinetSeams'
-import type { CabinetCustomPart, PartPosOverrides, ShapeOverride, ShapeOverrides } from './canvasDB'
+import type { CabinetCustomPart, PartPosOverrides, ShapeMeta, ShapeOverride, ShapeOverrides } from './canvasDB'
 import {
   dbSavePartPosOverride, dbDeletePartPosOverride, dbClearPartPosOverrides, dbUpdateCustomPart,
-  dbLoadShapeOverrides, dbRestoreShapeRevision, dbDeleteShapeOverride, dbClearShapeOverrides,
+  dbLoadShapeOverrides, dbListShapeRevisions, dbRestoreShapeRevision, dbDeleteShapeOverride, dbClearShapeOverrides,
 } from './canvasDB'
 import CalcInput from '@/src/components/CalcInput'
 
@@ -321,6 +321,70 @@ function JointOverridesSection({ cabinet, rp, onUpdate }: {
 // base resolved size no longer matches meta.baseAtSave (cabinet was resized
 // after the shape was drawn) — compared as an unordered pair so it's frame-proof.
 
+// ── Shared shape-override actions ─────────────────────────────────────────────
+// Used by the Part Shapes section below AND the Part Editor's per-part
+// Overrides view, so restore/remove behave identically everywhere.
+
+export type ShapeSyncCtx = {
+  partOverrides?: PartPosOverrides
+  onOverridesChange?: (o: PartPosOverrides) => void
+  customParts?: CabinetCustomPart[]
+  setCustomParts?: Dispatch<SetStateAction<CabinetCustomPart[]>>
+}
+
+// Re-apply a shape's bbox to the part size via the slots recorded at save time
+// (meta.sizeSlots) — after a restore, so the part matches the head shape.
+// Pre-M4 revisions (no sizeSlots) are a no-op: size stays, user can re-edit.
+export function applyShapeSizeSync(cabinetId: string, partId: string, ov: ShapeOverride, ctx: ShapeSyncCtx): void {
+  const slots = ov.meta?.sizeSlots
+  const b = ov.meta?.bounds
+  if (!slots || !b) return
+  const w = b.maxX, h = b.maxY   // stored shapes are datum-normalised → size = max corner
+  if (slots.custom) {
+    const cpId = partId.slice('custom_'.length)
+    const cp = ctx.customParts?.find(p => p.id === cpId)
+    if (!cp) return
+    const expressions = { ...(cp.expressions ?? {}) }
+    const patch: Partial<CabinetCustomPart> = { expressions }
+    for (const [slot, val] of [[slots.across, w], [slots.up, h]] as ['dx' | 'dy' | 'dz', number][]) {
+      patch[slot] = val
+      delete expressions[slot]
+    }
+    ctx.setCustomParts?.(prev => prev.map(p => (p.id === cpId ? { ...p, ...patch } : p)))
+    dbUpdateCustomPart(cpId, patch).catch(console.error)
+  } else {
+    if (!ctx.partOverrides || !ctx.onOverridesChange) return
+    const cur = ctx.partOverrides[partId] ?? { ox: 0, oy: 0, oz: 0 }
+    const next = { ...cur, [slots.across]: w, [slots.up]: h }
+    ctx.onOverridesChange({ ...ctx.partOverrides, [partId]: next })
+    dbSavePartPosOverride(cabinetId, partId, next, ctx.partOverrides).catch(console.error)
+  }
+}
+
+// Clear the size slots a (just-deleted) shape wrote. Resolved parts only —
+// custom dims are authoritative on the row and stay at their last value. Drops
+// the whole override entry when nothing else remains in it.
+export function clearShapeWrittenSlots(cabinetId: string, partId: string, ov: ShapeOverride, ctx: ShapeSyncCtx): void {
+  const slots = ov.meta?.sizeSlots
+  if (!slots || slots.custom) return
+  if (!ctx.partOverrides || !ctx.onOverridesChange) return
+  const cur = ctx.partOverrides[partId]
+  if (!cur) return
+  const next = { ...cur }
+  delete next[slots.across as 'sw' | 'sh' | 'sd']
+  delete next[slots.up as 'sw' | 'sh' | 'sd']
+  const meaningful = next.ox || next.oy || next.oz || next.oax || next.oay || next.oaz
+    || next.sw != null || next.sh != null || next.sd != null
+  if (meaningful) {
+    ctx.onOverridesChange({ ...ctx.partOverrides, [partId]: next })
+    dbSavePartPosOverride(cabinetId, partId, next, ctx.partOverrides).catch(console.error)
+  } else {
+    const { [partId]: _removed, ...updated } = ctx.partOverrides
+    ctx.onOverridesChange(updated)
+    dbDeletePartPosOverride(cabinetId, partId, ctx.partOverrides).catch(console.error)
+  }
+}
+
 // Display label for a shaped part row (custom parts carry their own name).
 // Exported for the cabinet errors panel.
 export function shapePartLabel(partId: string, customParts: CabinetCustomPart[]): string {
@@ -373,63 +437,35 @@ function ShapeOverridesSection({ cabinetId, shapes, setShapes, baseDims, partOve
   const labelFor = (partId: string) => shapePartLabel(partId, customParts)
   const isStale = (partId: string, ov: ShapeOverride) => shapeIsStale(partId, ov, baseDims, customParts)
 
-  // Re-apply a shape's bbox to the part size — used after restore so the part
-  // matches the shape that just became head. Mirrors PartEditor's save write.
-  function syncSizeFromShape(partId: string, ov: ShapeOverride) {
-    const slots = ov.meta?.sizeSlots
-    const b = ov.meta?.bounds
-    if (!slots || !b) return   // pre-M4 revision — size stays; user can re-edit
-    const w = b.maxX, h = b.maxY   // stored shapes are datum-normalised (minX/minY ≥ 0 → size = max corner)
-    if (slots.custom) {
-      const cpId = partId.slice('custom_'.length)
-      const cp = customParts.find(p => p.id === cpId)
-      if (!cp) return
-      const expressions = { ...(cp.expressions ?? {}) }
-      const patch: Partial<CabinetCustomPart> = { expressions }
-      for (const [slot, val] of [[slots.across, w], [slots.up, h]] as ['dx' | 'dy' | 'dz', number][]) {
-        patch[slot] = val
-        delete expressions[slot]
-      }
-      setCustomParts(prev => prev.map(p => (p.id === cpId ? { ...p, ...patch } : p)))
-      dbUpdateCustomPart(cpId, patch).catch(console.error)
-    } else {
-      const cur = partOverrides[partId] ?? { ox: 0, oy: 0, oz: 0 }
-      const next = { ...cur, [slots.across]: w, [slots.up]: h }
-      onOverridesChange({ ...partOverrides, [partId]: next })
-      dbSavePartPosOverride(cabinetId, partId, next, partOverrides).catch(console.error)
-    }
+  const syncCtx: ShapeSyncCtx = { partOverrides, onOverridesChange, customParts, setCustomParts }
+
+  // Revision picker — every save/restore is an append-only revision, so this
+  // lists the FULL history (newest first) and restores any entry as a new head.
+  // The restore itself becomes a revision, so it's always un-doable.
+  const [picker, setPicker] = useState<{
+    partId: string
+    revs: { revision: number; created_at: string; meta: ShapeMeta | null }[]
+  } | null>(null)
+
+  async function openPicker(partId: string) {
+    if (picker?.partId === partId) { setPicker(null); return }
+    const revs = await dbListShapeRevisions(cabinetId, partId)
+    setPicker({ partId, revs })
   }
 
-  async function restorePrevious(partId: string, ov: ShapeOverride) {
-    const restored = await dbRestoreShapeRevision(cabinetId, partId, ov.revision - 1)
+  async function restoreRevision(partId: string, revision: number, ov: ShapeOverride) {
+    setPicker(null)
+    const restored = await dbRestoreShapeRevision(cabinetId, partId, revision)
     if (!restored) return
     setShapes(s => ({ ...s, [partId]: { ...restored, revisions: (ov.revisions ?? 1) + 1 } }))
-    syncSizeFromShape(partId, restored)
+    applyShapeSizeSync(cabinetId, partId, restored, syncCtx)
   }
 
   async function removeShape(partId: string, ov: ShapeOverride) {
     if (!confirm(`Remove the drawn shape for ${labelFor(partId)}? All ${ov.revisions ?? 1} revision${(ov.revisions ?? 1) !== 1 ? 's' : ''} are deleted and the part reverts to a plain rectangle.`)) return
     await dbDeleteShapeOverride(cabinetId, partId)
     setShapes(s => { const n = { ...s }; delete n[partId]; return n })
-    // Clear the size slots the shape wrote (resolved parts — custom dims are
-    // authoritative on the row and stay at their last value).
-    const slots = ov.meta?.sizeSlots
-    const cur = partOverrides[partId]
-    if (slots && !slots.custom && cur) {
-      const next = { ...cur }
-      delete next[slots.across as 'sw' | 'sh' | 'sd']
-      delete next[slots.up as 'sw' | 'sh' | 'sd']
-      const meaningful = next.ox || next.oy || next.oz || next.oax || next.oay || next.oaz
-        || next.sw != null || next.sh != null || next.sd != null
-      if (meaningful) {
-        onOverridesChange({ ...partOverrides, [partId]: next })
-        dbSavePartPosOverride(cabinetId, partId, next, partOverrides).catch(console.error)
-      } else {
-        const { [partId]: _removed, ...updated } = partOverrides
-        onOverridesChange(updated)
-        dbDeletePartPosOverride(cabinetId, partId, partOverrides).catch(console.error)
-      }
-    }
+    clearShapeWrittenSlots(cabinetId, partId, ov, syncCtx)
   }
 
   return (
@@ -457,20 +493,50 @@ function ShapeOverridesSection({ cabinetId, shapes, setShapes, baseDims, partOve
                 </div>
               )}
             </td>
-            <td className="px-2 py-2 text-right align-top pt-2.5 whitespace-nowrap">
+            <td className="px-2 py-2 text-right align-top pt-2.5 whitespace-nowrap relative">
               {onEditShape && (
                 <button onClick={() => onEditShape(partId)}
                   className="text-gray-600 hover:text-emerald-300 text-sm leading-none transition-colors opacity-0 group-hover:opacity-100 mr-2"
                   title="Edit shape (opens the Part Editor with the shape overlay)">✎</button>
               )}
-              {(ov.revisions ?? 1) > 1 && ov.revision > 1 && (
-                <button onClick={() => void restorePrevious(partId, ov)}
-                  className="text-gray-600 hover:text-sky-300 text-sm leading-none transition-colors opacity-0 group-hover:opacity-100 mr-2"
-                  title={`Restore revision ${ov.revision - 1} (becomes a new revision — nothing is lost)`}>↺</button>
+              {(ov.revisions ?? 1) > 1 && (
+                <button onClick={() => void openPicker(partId)}
+                  className={`text-sm leading-none transition-colors mr-2 ${
+                    picker?.partId === partId
+                      ? 'text-sky-300'
+                      : 'text-gray-600 hover:text-sky-300 opacity-0 group-hover:opacity-100'
+                  }`}
+                  title="Revision history — restore any earlier shape (restores append, nothing is lost)">↺</button>
               )}
               <button onClick={() => void removeShape(partId, ov)}
                 className="text-gray-600 hover:text-red-400 text-sm leading-none transition-colors opacity-0 group-hover:opacity-100"
                 title="Remove shape — part reverts to a plain rectangle">✕</button>
+
+              {/* Revision history dropdown (newest first; head disabled). The
+                  fixed backdrop closes it on any outside click, editMenu-style. */}
+              {picker?.partId === partId && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setPicker(null)} />
+                  <div className="absolute right-0 top-7 z-50 bg-gray-800 border border-gray-700 rounded shadow-xl py-1 text-left max-h-56 overflow-y-auto min-w-[180px]">
+                    {picker.revs.map(r => {
+                      const isHead = r.revision === ov.revision
+                      const b = r.meta?.bounds
+                      return (
+                        <button key={r.revision} disabled={isHead}
+                          onClick={() => void restoreRevision(partId, r.revision, ov)}
+                          className={`w-full text-left px-3 py-1.5 text-[11px] whitespace-nowrap transition-colors ${
+                            isHead ? 'text-sky-300 cursor-default' : 'text-gray-200 hover:bg-gray-700'
+                          }`}>
+                          <span className="font-mono">r{r.revision}</span>
+                          {b ? <span className="text-gray-400"> · {Math.round(b.maxX)}×{Math.round(b.maxY)}</span> : ''}
+                          <span className="text-gray-500"> · {new Date(r.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>
+                          {isHead ? <span className="text-[9px] uppercase tracking-wider ml-1.5">current</span> : ''}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </td>
           </tr>
         )
