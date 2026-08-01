@@ -1,7 +1,8 @@
-// Hand-written declarations for the handed-over ShapeEditor.jsx (whose
-// internals are off-limits — see z_part_shape_editor/SHAPE_EDITOR_README.md).
-// Without this file TS infers each prop's type from its JS default value
-// (e.g. `initialSegments = null` → type null), rejecting every real call site.
+// Hand-written declarations for ShapeEditor.jsx. (Ownership note: originally
+// the internals were design-chat-only; as of M7 (2026-08-01, Mark's call) the
+// component is maintained in-repo.) Without this file TS infers each prop's
+// type from its JS default value (e.g. `initialSegments = null` → type null),
+// rejecting every real call site.
 //
 // The segment/meta shapes mirror ShapeSegment / ShapeMeta in
 // app/canvas/[roomId]/canvasDB.ts structurally (kept separate so src/ never
@@ -30,6 +31,13 @@ export interface ShapeEditorMeta {
   tapeLengthMM?: number
 }
 
+// A ghost outline of a neighbouring part, in the same part-relative mm frame
+// as the shape. Display-only inside the editor.
+export interface ShapeEditorReferenceOutline {
+  label?: string
+  segments: ShapeEditorSegment[]
+}
+
 export interface ShapeEditorProps {
   partWidth?: number
   partHeight?: number
@@ -40,7 +48,20 @@ export interface ShapeEditorProps {
   onSave?: ((segmentsMM: ShapeEditorSegment[], meta: ShapeEditorMeta) => void) | null
   onCancel?: (() => void) | null
   readOnly?: boolean
+  // Embedding (M7): hide branding + Save/Exit (host owns them via the ref
+  // handle); the utility strip and tool rail stay.
+  hideChrome?: boolean
+  referenceOutlines?: ShapeEditorReferenceOutline[] | null
 }
 
-declare function ShapeEditor(props?: ShapeEditorProps): JSX.Element
+// Imperative handle (forwardRef): host-owned Save/Exit run the same flows as
+// the header buttons (closed-shape gate + heal dialog included).
+export interface ShapeEditorHandle {
+  requestSave: () => void
+  requestExit: () => void
+}
+
+declare const ShapeEditor: React.ForwardRefExoticComponent<
+  ShapeEditorProps & React.RefAttributes<ShapeEditorHandle>
+>
 export default ShapeEditor

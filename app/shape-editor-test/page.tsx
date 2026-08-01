@@ -15,8 +15,8 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 
-// ShapeEditor.jsx reads window dims at module scope — ssr:false is mandatory
-// (same mounting rule as partEditor/ShapeEditorOverlay.tsx).
+// Since M7 the editor is container-sized and SSR-safe (no module-scope window
+// reads) — dynamic() kept only to skip SSR work for a dev-only harness page.
 const ShapeEditor = dynamic(() => import('@/src/components/ShapeEditor/ShapeEditor'), { ssr: false })
 
 export default function ShapeEditorTestPage() {

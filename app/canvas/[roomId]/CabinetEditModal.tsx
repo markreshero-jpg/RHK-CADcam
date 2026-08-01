@@ -31,6 +31,7 @@ import CabinetTreePanel from './CabinetTreePanel'
 import CabinetRoutesPanel from './CabinetRoutesPanel'
 import CabinetErrorsPanel from './CabinetErrorsPanel'
 import PartEditor from './PartEditor'
+import { buildReferenceOutlines } from './partEditor/referenceOutlines'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 
 type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'interior' | 'joints' | 'overrides' | 'tree' | 'routes' | 'errors'
@@ -421,6 +422,12 @@ export default function CabinetEditModal({
   // Base resolved dims by part id — Shape Editor plumbing (stale flags + the
   // baseAtSave reference PartEditor stamps into shape meta on save).
   const baseDimsMap = useMemo(() => buildBaseDims(rp ?? undefined), [rp])
+  // Ghost outlines of the edited part's neighbours for the in-pane shape
+  // editor (M7c) — parts intersecting its plane slab, projected into its frame.
+  const editShapeRefOutlines = useMemo(
+    () => (editingPart && rp ? buildReferenceOutlines(rp, editingPart.id, editingPart.panelKind, customParts, partOverrides) : undefined),
+    [editingPart, rp, customParts, partOverrides],
+  )
   const staleShapes = useMemo(
     () => Object.entries(shapeOverrides)
       .filter(([id, ov]) => shapeIsStale(id, ov, baseDimsMap, customParts))
@@ -741,6 +748,7 @@ export default function CabinetEditModal({
           shapeOverrides={shapeOverrides}
           onShapeOverridesChange={setShapeOverrides}
           initialShapeOpen={editShapeOnOpen}
+          referenceOutlines={editShapeRefOutlines}
         />
       )}
     </div>

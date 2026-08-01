@@ -1,41 +1,28 @@
 'use client'
 
 // ============================================================
-// Shape Editor overlay — mounts the handed-over 2D profile editor
-// (src/components/ShapeEditor/ShapeEditor.jsx) full-screen above the
-// Part Editor (z-[70] over its z-[60]). The .jsx component's internals
-// are off-limits (geometry routines are hand-verified — replacement
-// files come from the design chat); this wrapper owns mounting,
-// frame mapping, and banding seed. Contract + locked decisions:
-// z_part_shape_editor/SHAPE_EDITOR_README.md + INTEGRATION-PLAN.md.
+// Shape Editor pane — mounts the 2D profile editor INSIDE the
+// Part Editor's centre pane (M7: native embed; replaces the old
+// full-screen ShapeEditorOverlay). hideChrome drops the editor's
+// branding + Save/Exit — the Part Editor header owns those via
+// the forwarded imperative handle (requestSave/requestExit run
+// the same closed-shape gate + heal dialog as the buttons did).
 //
 // FRAME: the editor works in the part's UPRIGHT DISPLAY frame —
-// partWidth = sw (across), partHeight = sh (up) — the same frame as
-// the 3D box and PartEdge top/bottom/left/right semantics, so the
-// bounding box maps 1:1 onto sw/sh size overrides and banding seeds
-// straight from displayEdge. ShapeEditor's y grows DOWNWARD from the
-// visual top-left; segments are persisted EXACTLY as it emits them
-// (mm, y-down, CCW). SVG is y-down too, so stored paths render
-// directly; op-frame consumers flip y at draw time (opY = sh − shapeY,
-// plus the swap/mirror mapping ops already use).
-//
-// ShapeEditor.jsx reads window dims at module scope → ssr:false is
-// mandatory, and it sizes itself to the viewport (100vh) → this
-// overlay is always full-screen.
+// partWidth = sw (across), partHeight = sh (up) — the same frame
+// as the 3D box and PartEdge top/bottom/left/right semantics, so
+// the bounding box maps 1:1 onto size overrides and banding seeds
+// straight from displayEdge. ShapeEditor's y grows DOWNWARD from
+// the visual top-left; segments are persisted EXACTLY as emitted
+// (mm, y-down, CCW). referenceOutlines are ghosts of neighbouring
+// parts in this same frame (partEditor/referenceOutlines.ts).
 // ============================================================
 
-import dynamic from 'next/dynamic'
+import { forwardRef } from 'react'
+import ShapeEditor, { type ShapeEditorHandle } from '@/src/components/ShapeEditor/ShapeEditor'
 import type { PartEdge } from '@/src/components/three/PartViewer'
 import type { ShapeMeta, ShapeSegment } from '../canvasDB'
-
-const ShapeEditor = dynamic(() => import('@/src/components/ShapeEditor/ShapeEditor'), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
-      Loading shape editor…
-    </div>
-  ),
-})
+import type { RefOutline } from './referenceOutlines'
 
 // Seed a fresh part as its plain rectangle with banding tags mapped from the
 // resolved EdgeBanding (display frame: y=0 is the visual top, so top ↔ y=0).
@@ -52,30 +39,35 @@ export function seedRectSegments(w: number, h: number, edge?: PartEdge): ShapeSe
   ]
 }
 
-export default function ShapeEditorOverlay({ partLabel, partWidth, partHeight, edge, initialSegments, onSave, onCancel }: {
+const ShapeEditorPane = forwardRef<ShapeEditorHandle, {
   partLabel:  string
   partWidth:  number   // sw — upright display frame, across (mm)
   partHeight: number   // sh — upright display frame, up (mm)
   edge?:      PartEdge // displayEdge (mirror-adjusted) — seeds banding tape on a fresh rectangle
-  // Latest saved shape (ShapeEditor emit format), or null/undefined for a fresh part.
   initialSegments?: ShapeSegment[] | null
+  referenceOutlines?: RefOutline[] | null
   onSave:   (segments: ShapeSegment[], meta: ShapeMeta) => void
   onCancel: () => void
-}) {
+}>(function ShapeEditorPane({ partLabel, partWidth, partHeight, edge, initialSegments, referenceOutlines, onSave, onCancel }, ref) {
   const seeded = initialSegments && initialSegments.length > 0
     ? initialSegments
     : seedRectSegments(partWidth, partHeight, edge)
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/85">
+    <div className="w-full h-full min-h-0">
       <ShapeEditor
+        ref={ref}
+        hideChrome
         partWidth={partWidth}
         partHeight={partHeight}
         partLabel={partLabel}
         initialSegments={seeded}
+        referenceOutlines={referenceOutlines ?? undefined}
         onSave={onSave}
         onCancel={onCancel}
       />
     </div>
   )
-}
+})
+
+export default ShapeEditorPane

@@ -1,5 +1,9 @@
 # Shape Editor — Master Copy Change Request (batch 1)
 
+> **SUPERSEDED 2026-08-01** — never sent. Mark moved `ShapeEditor.jsx` ownership
+> in-repo (M7), and all six items below were implemented directly there
+> (see INTEGRATION-PLAN.md M7). Kept for the record of what changed and why.
+
 > **How to use this doc**: paste it into the design chat that owns `ShapeEditor.jsx`.
 > Deliverable is **one replacement `ShapeEditor.jsx`** with the changes below.
 > Everything else about the component contract (props, segment format, `meta`,

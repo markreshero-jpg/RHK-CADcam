@@ -28,7 +28,9 @@ import { OpMarkers3D, buildOpSubtractions } from './partEditor/partOpGlyphs'
 import PartOrthoView from './partEditor/PartOrthoView'
 import PartOpsList from './partEditor/PartOpsList'
 import PartPropertiesPanel from './partEditor/PartPropertiesPanel'
-import ShapeEditorOverlay from './partEditor/ShapeEditorOverlay'
+import ShapeEditorPane from './partEditor/ShapeEditorPane'
+import type { ShapeEditorHandle } from '@/src/components/ShapeEditor/ShapeEditor'
+import type { RefOutline } from './partEditor/referenceOutlines'
 import PartOverridesPanel from './partEditor/PartOverridesPanel'
 import { dbLoadShapeOverrides, dbSaveShapeOverride, dbSavePartPosOverride, dbUpdateCustomPart, dbRestoreShapeRevision, dbDeleteShapeOverride } from './canvasDB'
 import type { ShapeMeta, ShapeSegment, ShapeOverride, ShapeOverrides, ShapeRevisionEntry, PartPosOverrides, CabinetCustomPart } from './canvasDB'
@@ -53,7 +55,7 @@ function ResizeHandle({ onDelta }: { onDelta: (dx: number) => void }) {
 export default function PartEditor({
   cabinetId, part, ebSpec, onClose,
   partOverrides, onOverridesChange, customParts, setCustomParts, onPartMetaChange, partBase,
-  shapeOverrides, onShapeOverridesChange, initialShapeOpen,
+  shapeOverrides, onShapeOverridesChange, initialShapeOpen, referenceOutlines,
 }: {
   cabinetId: string
   part:      PartMeta
@@ -77,9 +79,12 @@ export default function PartEditor({
   // cabinet 3D view / Overrides tab see the new shape immediately.
   shapeOverrides?:        ShapeOverrides
   onShapeOverridesChange?: (o: ShapeOverrides) => void
-  // Open with the shape overlay already on top (3D right-click "⬠ Edit Shape",
+  // Open with the shape editor already active (3D right-click "⬠ Edit Shape",
   // Overrides tab row Edit).
   initialShapeOpen?:      boolean
+  // Ghost outlines of neighbouring parts for the shape editor (M7c) —
+  // computed by the modal from the resolved cabinet.
+  referenceOutlines?:     RefOutline[]
 }) {
   const [view, setView] = useState<EditorView>('front')
   // Right sidebar tab: op properties (contextual) or this part's overrides —
@@ -107,12 +112,14 @@ export default function PartEditor({
     setSnapOn(s => { const n = !s; try { localStorage.setItem('partEditor.snap', n ? '1' : '0') } catch { /* ignore */ } return n })
   }
   const dragRef = useRef(false)
-  // Shape Editor overlay (2D profile editor, z-[70] above this editor).
-  // While open, this editor's own keyboard handling goes inert — ShapeEditor
-  // has its own Escape/undo/tool keys on window.
+  // Shape editing mode (M7: in-pane — the centre pane becomes the 2D profile
+  // editor; Save/Cancel live in this header via the imperative handle). While
+  // active, this editor's own keyboard handling goes inert — ShapeEditor has
+  // its own Escape/undo/tool keys.
   // Slides are hardware, not panels — never shapeable.
   const shapeable = !part.id.startsWith('slide_')
   const [shapeOpen, setShapeOpen] = useState(!!initialShapeOpen && shapeable)
+  const shapeEditorRef = useRef<ShapeEditorHandle | null>(null)
   // Latest saved shape override for this part (null = plain rectangle).
   // Controlled when the host passes shapeOverrides (the modal's lifted map);
   // otherwise self-loads — one indexed query for the whole cabinet.
@@ -408,20 +415,38 @@ export default function PartEditor({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {shapeable && (
-            <button onClick={() => { setShapePreview(null); setShapeOpen(true) }} disabled={!shapeLoaded}
-              title={shapeLoaded ? "Edit the part's outline shape (2D profile editor)" : 'Loading saved shape…'}
-              className={`text-[11px] px-2 py-0.5 rounded border border-gray-700 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed ${
-                shapeOv ? 'text-emerald-300' : 'text-gray-300'
-              }`}>
-              ⬠ Edit Shape{shapeOv ? ` (r${shapeOv.revision})` : ''}
-            </button>
+          {shapeOpen ? (
+            <>
+              <span className="text-[11px] text-sky-300 font-medium mr-1">⬠ Shaping</span>
+              <button onClick={() => shapeEditorRef.current?.requestSave()}
+                title="Save the drawn shape (must be a closed loop — you'll be offered Heal & Close if it isn't)"
+                className="text-[11px] px-2.5 py-0.5 rounded bg-blue-600 text-white hover:bg-blue-500 font-medium">
+                Save Shape
+              </button>
+              <button onClick={() => setShapeOpen(false)}
+                title="Leave shape editing without saving"
+                className="text-[11px] px-2 py-0.5 rounded border border-gray-700 text-gray-300 hover:bg-gray-700">
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              {shapeable && (
+                <button onClick={() => { setShapePreview(null); setShapeOpen(true) }} disabled={!shapeLoaded}
+                  title={shapeLoaded ? "Edit the part's outline shape (2D profile editor)" : 'Loading saved shape…'}
+                  className={`text-[11px] px-2 py-0.5 rounded border border-gray-700 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed ${
+                    shapeOv ? 'text-emerald-300' : 'text-gray-300'
+                  }`}>
+                  ⬠ Edit Shape{shapeOv ? ` (r${shapeOv.revision})` : ''}
+                </button>
+              )}
+              <button onClick={() => void undo()} disabled={undoDepth === 0}
+                title="Undo (Ctrl+Z)"
+                className="text-[11px] px-2 py-0.5 rounded border border-gray-700 text-gray-300 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                ↺ Undo{undoDepth > 0 ? ` (${undoDepth})` : ''}
+              </button>
+            </>
           )}
-          <button onClick={() => void undo()} disabled={undoDepth === 0}
-            title="Undo (Ctrl+Z)"
-            className="text-[11px] px-2 py-0.5 rounded border border-gray-700 text-gray-300 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
-            ↺ Undo{undoDepth > 0 ? ` (${undoDepth})` : ''}
-          </button>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-lg leading-none px-1" aria-label="Close">✕</button>
         </div>
       </div>
@@ -437,8 +462,24 @@ export default function PartEditor({
         />
         <ResizeHandle onDelta={dx => setLeftW(w => clampPanel(w + dx))} />
 
-        {/* Centre — single-part scene: 3D (R3F) + ortho Top/Front/Side (SVG, true mm). */}
+        {/* Centre — single-part scene: 3D (R3F) + ortho Top/Front/Side (SVG, true
+            mm) — or, in shaping mode, the in-pane 2D profile editor. */}
         <div className="flex-1 relative bg-gray-950 min-w-0">
+          {shapeOpen && shapeLoaded && (
+            <ShapeEditorPane
+              ref={shapeEditorRef}
+              key={shapeOv?.revision ?? 0}
+              partLabel={part.label}
+              partWidth={sw}
+              partHeight={sh}
+              edge={displayEdge}
+              initialSegments={shapeOv?.segments ?? null}
+              referenceOutlines={referenceOutlines}
+              onSave={(segments: ShapeSegment[], meta: ShapeMeta) => void handleShapeSave(segments, meta)}
+              onCancel={() => setShapeOpen(false)}
+            />
+          )}
+          {!shapeOpen && <>
           <div className="absolute top-2 left-2 z-10 flex items-center gap-2 select-none">
             <div className="flex rounded-md overflow-hidden border border-gray-700 bg-gray-900/90">
               {(['3d', 'top', 'front', 'side'] as const).map(vm => (
@@ -547,6 +588,7 @@ export default function PartEditor({
                 snapOn={snapOn} onDragMove={dragMoveOp} onDragEnd={commitDragOp} />
             </div>
           )}
+          </>}
         </div>
 
         {/* Right — contextual op properties / per-part overrides. Overrides sit
@@ -601,21 +643,6 @@ export default function PartEditor({
         </div>
       </div>
 
-      {/* Shape Editor overlay — 2D outline editor in the upright display frame
-          (sw × sh, same frame as the 3D box / PartEdge sides). displayEdge seeds
-          the banding tape on a fresh rectangle; a saved shape reopens verbatim. */}
-      {shapeOpen && shapeLoaded && (
-        <ShapeEditorOverlay
-          key={shapeOv?.revision ?? 0}
-          partLabel={part.label}
-          partWidth={sw}
-          partHeight={sh}
-          edge={displayEdge}
-          initialSegments={shapeOv?.segments ?? null}
-          onSave={(segments: ShapeSegment[], meta: ShapeMeta) => void handleShapeSave(segments, meta)}
-          onCancel={() => setShapeOpen(false)}
-        />
-      )}
     </div>
   )
 }

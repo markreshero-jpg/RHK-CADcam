@@ -19,7 +19,7 @@
 //
 // See SHAPE_EDITOR_README.md for the full contract.
 // ============================================================================
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 
 
 // -- Units: mm --------------------------------------------------------------
@@ -29,9 +29,9 @@ const MAJOR_MM = 100;         // major grid = 100mm
 const GS = GRID_MM * PX_PER_MM;  // 20px grid
 const SNAP_D = 10;            // snap threshold in px
 
-// Canvas fills the window
-const W = Math.min(window.innerWidth - 260, 1800);
-const H = Math.min(window.innerHeight - 120, 1200);
+// Canvas size is CONTAINER-driven (M7): a ResizeObserver on the canvas
+// wrapper feeds W/H state inside the component — no window reads at module
+// scope (SSR-safe, embeds in any pane) and no 100vh root.
 
 // ---- Part context -------------------------------------------------------
 // The part's origin (its 0,0 corner) in canvas pixel space.
@@ -83,8 +83,8 @@ function shapeBoundsMM(segs) {
 }
 const EDGE_PROFILES = ['square', 'bullnose', 'chamfer', 'ogee', 'pencil'];
 const EDGE_COLOURS = {
-  square:'#cc7700', bullnose:'#1a8888', chamfer:'#8844cc',
-  ogee:'#cc2277', pencil:'#448822',
+  square:'#f59e0b', bullnose:'#2dd4bf', chamfer:'#a78bfa',
+  ogee:'#f472b6', pencil:'#4ade80',
 };
 const getEdge = s => ({ ...EDGE_DEFAULT, ...(s.edge || {}) });
 
@@ -201,12 +201,16 @@ function checkGeometry(segs, partW = null, partH = null) {
     const maxX = pxToPartMM(Math.max(...xs),'x');
     const minY = pxToPartMM(Math.min(...ys),'y');
     const maxY = pxToPartMM(Math.max(...ys),'y');
+    // Below/left of the datum stays a hard error — the datum is the part's
+    // CNC origin; use "Re-reference datum to 0,0" to translate the geometry.
     if (minX < -1 || minY < -1)
       issues.push({type:'error', msg:`Shape extends outside the part origin (${minX}, ${minY}mm)`});
+    // Bigger than the part is allowed (M7, locked decision #6: the part's
+    // size becomes the shape's bounding box on save) — warn, never block.
     if (maxX > partW + 1)
-      issues.push({type:'error', msg:`Shape is ${maxX-partW}mm wider than the part (${partW}mm)`});
+      issues.push({type:'warn', msg:`Shape is wider than the current part - part becomes ${maxX}mm wide on save`});
     if (maxY > partH + 1)
-      issues.push({type:'error', msg:`Shape is ${maxY-partH}mm taller than the part (${partH}mm)`});
+      issues.push({type:'warn', msg:`Shape is taller than the current part (${partH}mm) - growing downward needs a datum re-reference first`});
   }
 
   const valid = issues.filter(i=>i.type==='error').length===0;
@@ -682,7 +686,7 @@ function concentricArc(seg, off) {
   return {...seg, p0:np0, p1:np1, rx:newR, ry:newR};
 }
 
-export default function ShapeEditor({
+const ShapeEditor = forwardRef(function ShapeEditor({
   // ---- Part context ----
   partWidth  = 600,          // part DX in mm
   partHeight = 720,          // part DY in mm
@@ -694,7 +698,32 @@ export default function ShapeEditor({
   onSave    = null,          // (segmentsMM, meta) called when the user saves
   onCancel  = null,          // called when the user exits without saving
   readOnly = false,
-} = {}) {
+  // ---- Embedding (M7) ----
+  // hideChrome: suppress the branding block and the Save/Exit buttons — the
+  // host owns those (via the imperative ref handle below). The utility strip
+  // (undo/snap/heal/zoom/…) and the tool rail stay.
+  hideChrome = false,
+  // Read-only ghost outlines of neighbouring parts, in the SAME part-relative
+  // mm frame as the shape: [{ label, segments }]. Not selectable, not snap
+  // targets, ignored by heal/validation, never emitted.
+  referenceOutlines = null,
+} = {}, ref) {
+  // Canvas fills its wrapper — measured live so the editor embeds in any pane.
+  const wrapRef = useRef(null);
+  const [cvs, setCvs] = useState({ w: 0, h: 0 });   // 0 until the wrapper is measured
+  useEffect(() => {
+    const el = wrapRef.current; if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect();
+      setCvs(c => {
+        const w = Math.max(200, Math.round(r.width)), h = Math.max(200, Math.round(r.height));
+        return (c.w === w && c.h === h) ? c : { w, h };
+      });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const W = cvs.w, H = cvs.h;
   // Default shape is the part's own rectangle
   const partRect = () => {
     const w = partWidth * PX_PER_MM, h = partHeight * PX_PER_MM;
@@ -821,14 +850,17 @@ export default function ShapeEditor({
     onShapeChange(mm, { closed, segmentCount: segs.length });
   }, [segs]);
 
-  // ---- Fit the view to the part on first mount -------------------------
+  // ---- Fit the view to the part once the canvas has a real size ---------
+  const fittedRef = useRef(false);
   useEffect(() => {
+    if (fittedRef.current || W === 0 || H === 0) return;
+    fittedRef.current = true;
     const pw = partWidth * PX_PER_MM, ph = partHeight * PX_PER_MM;
     const pad = 80;
     const z = Math.min((W - pad*2) / (pw + PART_ORIGIN.x),
                        (H - pad*2) / (ph + PART_ORIGIN.y), 1);
     if (z > 0 && z < 1) setZoom(Number(z.toFixed(2)));
-  }, []);
+  }, [W, H]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function pushHistory(newSegs) {
     const trimmed = history.slice(0,histIdx+1);
@@ -862,6 +894,14 @@ export default function ShapeEditor({
     if (onSave) onSave(segsRef.current.map(segToPartMM), buildMeta());
     setSaveGate(null);
   }
+
+  // Host-owned Save/Exit (hideChrome embeds): identical code paths to the
+  // header buttons — requestSave runs the closed-shape gate + heal dialog, so
+  // onSave still only ever fires with a valid closed shape.
+  useImperativeHandle(ref, () => ({
+    requestSave: () => attemptSave(),
+    requestExit: () => { if (onCancel) onCancel(); },
+  }));
 
   function healThenSave() {
     const r = healAndClose(segsRef.current, 8);
@@ -1766,8 +1806,8 @@ export default function ShapeEditor({
   const previewSegs = ed && ed.type!=='offset' ? applyEdit(segs, mouse) : segs;
   const mainPath = buildD(previewSegs, closed);
   const hasErrors = errors.length>0;
-  const shapeColor = hasErrors?'#cc2222':'#1a4488';
-  const fillColor  = hasErrors?'#cc222208':'#1a448808';
+  const shapeColor = hasErrors?'#ef4444':'#3b82f6';
+  const fillColor  = hasErrors?'#ef444408':'#3b82f608';
 
   // Grid -- minor every 10mm, major every 100mm, labels on major
   const MAJOR_PX = MAJOR_MM * PX_PER_MM;
@@ -1775,18 +1815,18 @@ export default function ShapeEditor({
   for(let x=0;x<=W;x+=GS) {
     const isMajor = x%MAJOR_PX===0;
     gridLines.push(<line key={`v${x}`} x1={x} y1={0} x2={x} y2={H}
-      stroke={isMajor?'#bbbbba':'#e4e4e0'} strokeWidth={isMajor?1:0.5}/>);
+      stroke={isMajor?'#6b7280':'#2b3648'} strokeWidth={isMajor?1:0.5}/>);
     if(isMajor && x>0) gridLines.push(
-      <text key={`vl${x}`} x={x+2} y={10} fontSize={8} fill="#bbbbba"
+      <text key={`vl${x}`} x={x+2} y={10} fontSize={8} fill="#6b7280"
         fontFamily="IBM Plex Mono,monospace">{toMM(x)}mm</text>
     );
   }
   for(let y=0;y<=H;y+=GS) {
     const isMajor = y%MAJOR_PX===0;
     gridLines.push(<line key={`h${y}`} x1={0} y1={y} x2={W} y2={y}
-      stroke={isMajor?'#bbbbba':'#e4e4e0'} strokeWidth={isMajor?1:0.5}/>);
+      stroke={isMajor?'#6b7280':'#2b3648'} strokeWidth={isMajor?1:0.5}/>);
     if(isMajor && y>0) gridLines.push(
-      <text key={`hl${y}`} x={2} y={y-2} fontSize={8} fill="#bbbbba"
+      <text key={`hl${y}`} x={2} y={y-2} fontSize={8} fill="#6b7280"
         fontFamily="IBM Plex Mono,monospace">{toMM(y)}</text>
     );
   }
@@ -1800,30 +1840,32 @@ export default function ShapeEditor({
 
   const Btn=({label,onClick,active,danger,disabled})=>(
     <button onClick={onClick} disabled={disabled} style={{
-      background:active?'#1a448812':danger?'#cc222210':'transparent',
-      border:`1px solid ${active?'#1a4488':danger?'#cc222233':'#d0d0cc'}`,
-      color:disabled?'#ccccca':active?'#1a4488':danger?'#cc2222':'#555550',
+      background:active?'#3b82f612':danger?'#ef444410':'transparent',
+      border:`1px solid ${active?'#3b82f6':danger?'#ef444433':'#374151'}`,
+      color:disabled?'#4b5563':active?'#3b82f6':danger?'#ef4444':'#9ca3af',
       borderRadius:3,padding:'3px 9px',cursor:disabled?'not-allowed':'pointer',
       fontSize:10,fontFamily:'IBM Plex Mono,monospace',whiteSpace:'nowrap',
     }}>{label}</button>
   );
 
   return (
-    <div style={{background:'#f0efea',fontFamily:'IBM Plex Mono,monospace',color:'#333330',
-      userSelect:'none',display:'flex',flexDirection:'column',height:'100vh'}}>
+    <div style={{background:'#111827',fontFamily:'IBM Plex Mono,monospace',color:'#d1d5db',
+      userSelect:'none',display:'flex',flexDirection:'column',height:'100%',minHeight:0}}>
 
       {/* Header */}
-      <div style={{padding:'6px 12px',borderBottom:'1px solid #d0d0cc',display:'flex',
-        alignItems:'center',gap:8,flexShrink:0,background:'#fafaf7'}}>
-        <div>
-          <div style={{fontSize:9,letterSpacing:3,color:'#999990',textTransform:'uppercase'}}>RHK CADcam</div>
-          <div style={{fontSize:13,fontWeight:700,color:'#1a1a18'}}>
-            Shape Editor
-            <span style={{fontSize:10,color:'#888880',fontWeight:400,marginLeft:6}}>
-              {partLabel} - {partWidth} x {partHeight}mm
-            </span>
+      <div style={{padding:'6px 12px',borderBottom:'1px solid #374151',display:'flex',
+        alignItems:'center',gap:8,flexShrink:0,background:'#1f2937'}}>
+        {!hideChrome && (
+          <div>
+            <div style={{fontSize:9,letterSpacing:3,color:'#6b7280',textTransform:'uppercase'}}>RHK CADcam</div>
+            <div style={{fontSize:13,fontWeight:700,color:'#e5e7eb'}}>
+              Shape Editor
+              <span style={{fontSize:10,color:'#9ca3af',fontWeight:400,marginLeft:6}}>
+                {partLabel} - {partWidth} x {partHeight}mm
+              </span>
+            </div>
           </div>
-        </div>
+        )}
         <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
           <Btn label="↩ Undo" onClick={undo} disabled={histIdx<=0}/>
           <Btn label="↪ Redo" onClick={redo} disabled={histIdx>=history.length-1}/>
@@ -1837,33 +1879,33 @@ export default function ShapeEditor({
           <Btn label="⬆ Import SVG" onClick={()=>fileInputRef.current&&fileInputRef.current.click()}/>
 
           <button onClick={doHealAndClose} title="Weld gaps, order segments, normalise winding"
-            style={{background:'#cc770012',border:'1px solid #cc7700',color:'#cc7700',
+            style={{background:'#f59e0b12',border:'1px solid #f59e0b',color:'#f59e0b',
               borderRadius:3,padding:'3px 9px',cursor:'pointer',fontSize:10,
               fontFamily:'IBM Plex Mono,monospace',fontWeight:700,whiteSpace:'nowrap'}}>
             ⚕ Heal &amp; Close
           </button>
 
-          {onSave&&(
+          {onSave&&!hideChrome&&(
             <button onClick={attemptSave}
-              style={{background:'#1a4488',border:'1px solid #1a4488',color:'#fff',
+              style={{background:'#3b82f6',border:'1px solid #3b82f6',color:'#fff',
                 borderRadius:3,padding:'3px 12px',cursor:'pointer',fontSize:10,
                 fontFamily:'IBM Plex Mono,monospace',fontWeight:700,whiteSpace:'nowrap'}}>
               Save Shape
             </button>
           )}
-          {onCancel&&(
+          {onCancel&&!hideChrome&&(
             <Btn label="Exit" onClick={()=>{
               if(onCancel) onCancel();
             }}/>
           )}
           <button onClick={runCheckShape}
-            style={{background:'#228822',border:'1px solid #228822',color:'#fff',
+            style={{background:'#22c55e',border:'1px solid #22c55e',color:'#fff',
               borderRadius:3,padding:'3px 10px',cursor:'pointer',fontSize:10,
               fontFamily:'IBM Plex Mono,monospace',fontWeight:700,whiteSpace:'nowrap'}}>
             ✓ Check Shape
           </button>
           {geoResult&&<button onClick={()=>setGeoResult(null)} style={{
-            background:'transparent',border:'1px solid #d0d0cc',color:'#888',
+            background:'transparent',border:'1px solid #374151',color:'#9ca3af',
             borderRadius:3,padding:'3px 8px',cursor:'pointer',fontSize:10,
             fontFamily:'IBM Plex Mono,monospace'}}>✕</button>}
           <div style={{display:'flex',gap:3,alignItems:'center',marginLeft:4}}>
@@ -1876,40 +1918,40 @@ export default function ShapeEditor({
 
       {/* Save gate -- shape must be closed */}
       {saveGate&&(
-        <div style={{position:'fixed',inset:0,background:'rgba(30,30,28,0.45)',
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',
           zIndex:500,display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <div style={{background:'#fafaf7',border:'2px solid #cc2222',borderRadius:8,
+          <div style={{background:'#1f2937',border:'2px solid #ef4444',borderRadius:8,
             width:440,boxShadow:'0 10px 40px rgba(0,0,0,0.25)',
             fontFamily:'IBM Plex Mono,monospace'}}>
-            <div style={{padding:'10px 16px',background:'#cc2222',color:'#fff',
+            <div style={{padding:'10px 16px',background:'#ef4444',color:'#fff',
               borderRadius:'5px 5px 0 0',fontWeight:700,fontSize:12}}>
               Shape is not closed
             </div>
-            <div style={{padding:'14px 16px',fontSize:11,color:'#333330',lineHeight:1.7}}>
+            <div style={{padding:'14px 16px',fontSize:11,color:'#d1d5db',lineHeight:1.7}}>
               A part profile must form a single closed loop before it can be
               saved. Open or broken outlines cannot be resolved into toolpaths.
               {geoResult&&geoResult.issues&&geoResult.issues.filter(i=>i.type==='error').length>0&&(
-                <div style={{marginTop:8,padding:8,background:'#cc222210',borderRadius:4}}>
+                <div style={{marginTop:8,padding:8,background:'#ef444410',borderRadius:4}}>
                   {geoResult.issues.filter(i=>i.type==='error').map((iss,k)=>(
-                    <div key={k} style={{color:'#cc2222',fontSize:10}}>- {iss.msg}</div>
+                    <div key={k} style={{color:'#ef4444',fontSize:10}}>- {iss.msg}</div>
                   ))}
                 </div>
               )}
             </div>
             <div style={{padding:'0 16px 14px',display:'flex',gap:8}}>
               <button onClick={healThenSave} style={{flex:1,padding:'9px',
-                background:'#cc7700',color:'#fff',border:'none',borderRadius:4,
+                background:'#f59e0b',color:'#fff',border:'none',borderRadius:4,
                 cursor:'pointer',fontSize:11,fontFamily:'inherit',fontWeight:700}}>
                 Heal &amp; Close, then save
               </button>
               <button onClick={()=>setSaveGate(null)} style={{padding:'9px 14px',
-                background:'transparent',color:'#555550',border:'1px solid #d0d0cc',
+                background:'transparent',color:'#9ca3af',border:'1px solid #374151',
                 borderRadius:4,cursor:'pointer',fontSize:11,fontFamily:'inherit'}}>
                 Keep editing
               </button>
               <button onClick={()=>{ setSaveGate(null); if(onCancel) onCancel(); }}
-                style={{padding:'9px 14px',background:'transparent',color:'#cc2222',
-                border:'1px solid #cc222244',borderRadius:4,cursor:'pointer',
+                style={{padding:'9px 14px',background:'transparent',color:'#ef4444',
+                border:'1px solid #ef444444',borderRadius:4,cursor:'pointer',
                 fontSize:11,fontFamily:'inherit'}}>
                 Exit without saving
               </button>
@@ -1920,10 +1962,10 @@ export default function ShapeEditor({
 
       {/* Heal result */}
       {healMsg&&(
-        <div style={{background:healMsg.ok?'#cc770010':'#cc222210',
-          borderBottom:`2px solid ${healMsg.ok?'#cc7700':'#cc2222'}`,
+        <div style={{background:healMsg.ok?'#f59e0b10':'#ef444410',
+          borderBottom:`2px solid ${healMsg.ok?'#f59e0b':'#ef4444'}`,
           padding:'5px 16px',fontSize:11,flexShrink:0,
-          color:healMsg.ok?'#cc7700':'#cc2222',
+          color:healMsg.ok?'#f59e0b':'#ef4444',
           fontFamily:'IBM Plex Mono,monospace'}}>
           ⚕ {healMsg.text}
         </div>
@@ -1931,17 +1973,17 @@ export default function ShapeEditor({
 
       {/* Geometry check result */}
       {geoResult&&(
-        <div style={{background:geoResult.valid?'#22882210':'#cc222210',
-          borderBottom:`2px solid ${geoResult.valid?'#228822':'#cc2222'}`,
+        <div style={{background:geoResult.valid?'#22c55e10':'#ef444410',
+          borderBottom:`2px solid ${geoResult.valid?'#22c55e':'#ef4444'}`,
           padding:'6px 16px',fontSize:11,flexShrink:0}}>
           {geoResult.issues.map((issue,i)=>(
-            <div key={i} style={{color:issue.type==='success'?'#228822':issue.type==='error'?'#cc2222':'#cc7700',
+            <div key={i} style={{color:issue.type==='success'?'#22c55e':issue.type==='error'?'#ef4444':'#f59e0b',
               marginBottom:2,fontFamily:'IBM Plex Mono,monospace'}}>
               {issue.type==='success'?'✓ ':issue.type==='error'?'✗ ':'⚠ '}{issue.msg}
             </div>
           ))}
           {geoResult.gaps.length>0&&(
-            <div style={{color:'#cc2222',fontSize:10,marginTop:4}}>
+            <div style={{color:'#ef4444',fontSize:10,marginTop:4}}>
               Gap locations highlighted on canvas -- zoom in to fix
             </div>
           )}
@@ -1950,42 +1992,42 @@ export default function ShapeEditor({
 
       {/* Error bar */}
       {hasErrors&&(
-        <div style={{background:'#cc222210',borderBottom:'2px solid #cc2222',padding:'5px 16px',
-          fontSize:11,color:'#cc2222',display:'flex',gap:16,alignItems:'center',flexShrink:0}}>
+        <div style={{background:'#ef444410',borderBottom:'2px solid #ef4444',padding:'5px 16px',
+          fontSize:11,color:'#ef4444',display:'flex',gap:16,alignItems:'center',flexShrink:0}}>
           <span style={{fontWeight:700}}>⚠ Shape Error</span>
           {errors.map((err,i)=><span key={i}>· {err}</span>)}
-          <span style={{marginLeft:'auto',color:'#cc222288',fontSize:10}}>Cannot be used as cabinet assembly</span>
+          <span style={{marginLeft:'auto',color:'#ef444488',fontSize:10}}>Cannot be used as cabinet assembly</span>
         </div>
       )}
 
       {/* Active edit banner */}
       {isEditing&&(
-        <div style={{background:'#1a448810',borderBottom:'1px solid #1a448844',padding:'4px 16px',
-          fontSize:10,color:'#1a4488',display:'flex',gap:12,alignItems:'center',flexShrink:0}}>
+        <div style={{background:'#3b82f610',borderBottom:'1px solid #3b82f644',padding:'4px 16px',
+          fontSize:10,color:'#3b82f6',display:'flex',gap:12,alignItems:'center',flexShrink:0}}>
           <span style={{fontWeight:700}}>● EDITING</span>
           <span>{ed.type==='offset'?`Offset: ${Math.abs(ed.offset||0)}px`:
                  ed.type==='move'?'Move line -- click to place':
                  ed.type==='vertex'?'Move vertex -- click to place':
                  ed.type==='cp'?'Move curve handle -- click to place':''}</span>
-          <span style={{marginLeft:'auto',color:'#1a448888'}}>ESC to cancel</span>
+          <span style={{marginLeft:'auto',color:'#3b82f688'}}>ESC to cancel</span>
         </div>
       )}
 
       <div style={{display:'flex',flex:1,overflow:'hidden'}}>
 
         {/* Toolbar */}
-        <div style={{width:112,background:'#fafaf7',borderRight:'1px solid #d0d0cc',
+        <div style={{width:112,background:'#1f2937',borderRight:'1px solid #374151',
           padding:'8px 6px',overflowY:'auto',flexShrink:0}}>
           {['edit','draw','modify'].map(group=>(
             <div key={group}>
-              <div style={{fontSize:8,letterSpacing:3,color:'#999990',margin:'6px 3px 4px',textTransform:'uppercase'}}>{group}</div>
+              <div style={{fontSize:8,letterSpacing:3,color:'#6b7280',margin:'6px 3px 4px',textTransform:'uppercase'}}>{group}</div>
               {TOOLS.filter(t=>t.group===group).map(t=>(
                 <button key={t.id}
                   onClick={()=>{setTool(t.id);setEdit(null);setDrawing(false);setDraftPts([]);setRectStart(null);rectRef.current=null;shapeRef.current=null;setShapeStart(null);triRef.current=[];setTriPts([]);setSelSegs(new Set());setMarquee(null);}}
                   style={{
-                    background:tool===t.id?'#1a448812':'transparent',
-                    border:`1px solid ${tool===t.id?'#1a4488':'#d8d8d4'}`,
-                    color:tool===t.id?'#1a4488':'#555550',
+                    background:tool===t.id?'#3b82f612':'transparent',
+                    border:`1px solid ${tool===t.id?'#3b82f6':'#374151'}`,
+                    color:tool===t.id?'#3b82f6':'#9ca3af',
                     borderRadius:3,padding:'4px 6px',cursor:'pointer',fontSize:10,
                     fontFamily:'IBM Plex Mono,monospace',display:'flex',gap:5,
                     alignItems:'center',width:'100%',marginBottom:2,
@@ -1996,12 +2038,12 @@ export default function ShapeEditor({
               ))}
             </div>
           ))}
-          <div style={{borderTop:'1px solid #d0d0cc',marginTop:8,paddingTop:8}}>
-            <div style={{fontSize:8,letterSpacing:3,color:'#999990',margin:'0 3px 4px',textTransform:'uppercase'}}>Presets</div>
+          <div style={{borderTop:'1px solid #374151',marginTop:8,paddingTop:8}}>
+            <div style={{fontSize:8,letterSpacing:3,color:'#6b7280',margin:'0 3px 4px',textTransform:'uppercase'}}>Presets</div>
             {Object.entries(PRESETS).map(([k,p])=>(
               <button key={k}
                 onClick={()=>{pushHistory(p.segs.map(s=>clone(s)));setClosed(p.closed);setSelSegSynced(null);setDrawing(false);setDraftPts([]);setTool('select');setEdit(null);}}
-                style={{background:'transparent',border:'1px solid #d8d8d4',color:'#555550',
+                style={{background:'transparent',border:'1px solid #374151',color:'#9ca3af',
                   borderRadius:3,padding:'4px 6px',cursor:'pointer',fontSize:9,
                   fontFamily:'IBM Plex Mono,monospace',width:'100%',marginBottom:2,textAlign:'left'}}>
                 {p.label}
@@ -2010,15 +2052,15 @@ export default function ShapeEditor({
           </div>
         </div>
 
-        {/* Canvas */}
-        <div style={{flex:1,position:'relative',overflow:'hidden'}}>
+        {/* Canvas — wrapper is the ResizeObserver target that drives W/H */}
+        <div ref={wrapRef} style={{flex:1,position:'relative',overflow:'hidden'}}>
           {/* NOTE (integration fix, 2026-07-22): the handed-over file declared
               tabIndex + onKeyDown TWICE on this <svg> (React uses the later, TS
               rejects the duplicate — TS17001). The earlier, shadowed pair was
               removed; the active pair below is byte-identical to the original.
               Apply the same dedup to the master copy in the design chat. */}
           <svg ref={svgRef} width={W} height={H}
-            style={{display:'block',background:'#f7f7f3',cursor:cursorMap[tool]||'default',outline:'none'}}
+            style={{display:'block',background:'#0f172a',cursor:cursorMap[tool]||'default',outline:'none'}}
             onMouseMove={onMouseMove}
             onClick={e=>{if(contextMenu){setContextMenu(null);return;}onSVGClick(e);}}
             onContextMenu={e=>{e.preventDefault();if(contextMenu){setContextMenu(null);return;}setDrawing(false);setDraftPts([]);setRectStart(null);rectRef.current=null;shapeRef.current=null;setShapeStart(null);triRef.current=[];setTriPts([]);setEdit(null);}}
@@ -2098,16 +2140,36 @@ export default function ShapeEditor({
           >
             <defs>
               <marker id="arr" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto">
-                <path d="M0,0 L0,5 L5,2.5 Z" fill="#999990"/>
+                <path d="M0,0 L0,5 L5,2.5 Z" fill="#6b7280"/>
               </marker>
               <marker id="oarr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                <path d="M0,0 L6,3 L0,6 Z" fill="#cc5500"/>
+                <path d="M0,0 L6,3 L0,6 Z" fill="#f97316"/>
               </marker>
             </defs>
             <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
 
             {/* Grid */}
             {gridLines}
+
+            {/* ---- Reference outlines (M7) ------------------------------ */}
+            {/* Ghosts of neighbouring parts, projected by the host into this
+                part's frame. Strictly display: no hit-testing, no snapping,
+                ignored by heal/validation, never emitted. */}
+            {referenceOutlines && referenceOutlines.map((r, i) => {
+              if (!r || !r.segments || !r.segments.length) return null;
+              const px = r.segments.map(segFromPartMM);
+              const lp = px[0].p0;
+              return (
+                <g key={`ref${i}`} pointerEvents="none" opacity={0.55}>
+                  <path d={buildD(px, true)} fill="none" stroke="#64748b"
+                    strokeWidth={1.25} strokeDasharray="5,4"/>
+                  {r.label && (
+                    <text x={lp.x + 5} y={lp.y + 12} fontSize={8} fill="#64748b"
+                      fontFamily="IBM Plex Mono,monospace">{r.label}</text>
+                  )}
+                </g>
+              );
+            })}
 
             {/* ---- Part boundary reference ------------------------------ */}
             {(()=>{
@@ -2117,25 +2179,25 @@ export default function ShapeEditor({
                 <g pointerEvents="none">
                   {/* part face */}
                   <rect x={o.x} y={o.y} width={w} height={h}
-                    fill="#1a44880a" stroke="#1a448855" strokeWidth={1.5}
+                    fill="#3b82f60a" stroke="#3b82f655" strokeWidth={1.5}
                     strokeDasharray="10,6"/>
                   {/* origin marker */}
                   <g>
                     <line x1={o.x-14} y1={o.y} x2={o.x+22} y2={o.y}
-                      stroke="#cc5500" strokeWidth={1.5}/>
+                      stroke="#f97316" strokeWidth={1.5}/>
                     <line x1={o.x} y1={o.y-14} x2={o.x} y2={o.y+22}
-                      stroke="#cc5500" strokeWidth={1.5}/>
-                    <circle cx={o.x} cy={o.y} r={3.5} fill="#fafaf7"
-                      stroke="#cc5500" strokeWidth={1.5}/>
-                    <text x={o.x+8} y={o.y-6} fontSize={8} fill="#cc5500"
+                      stroke="#f97316" strokeWidth={1.5}/>
+                    <circle cx={o.x} cy={o.y} r={3.5} fill="#1f2937"
+                      stroke="#f97316" strokeWidth={1.5}/>
+                    <text x={o.x+8} y={o.y-6} fontSize={8} fill="#f97316"
                       fontFamily="IBM Plex Mono,monospace">0,0</text>
                   </g>
                   {/* size labels */}
-                  <text x={o.x+w/2} y={o.y-8} fontSize={9} fill="#1a448899"
+                  <text x={o.x+w/2} y={o.y-8} fontSize={9} fill="#3b82f699"
                     textAnchor="middle" fontFamily="IBM Plex Mono,monospace">
                     PART DX {partWidth}mm
                   </text>
-                  <text x={o.x-8} y={o.y+h/2} fontSize={9} fill="#1a448899"
+                  <text x={o.x-8} y={o.y+h/2} fontSize={9} fill="#3b82f699"
                     textAnchor="middle" fontFamily="IBM Plex Mono,monospace"
                     transform={`rotate(-90,${o.x-8},${o.y+h/2})`}>
                     PART DY {partHeight}mm
@@ -2149,7 +2211,7 @@ export default function ShapeEditor({
 
             {/* Shape shadow + stroke */}
             {mainPath&&<>
-              <path d={mainPath} fill="none" stroke={hasErrors?'#cc222233':'#c8d4e0'} strokeWidth={5}/>
+              <path d={mainPath} fill="none" stroke={hasErrors?'#ef444433':'#334155'} strokeWidth={5}/>
               <path d={mainPath} fill="none" stroke={shapeColor} strokeWidth={2}/>
             </>}
 
@@ -2159,10 +2221,10 @@ export default function ShapeEditor({
               const ys=previewSegs.flatMap(s=>[s.p0.y,s.p1.y]);
               const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
               return (<g pointerEvents="none">
-                <line x1={minX} y1={maxY+28} x2={maxX} y2={maxY+28} stroke="#999990" strokeWidth={1} markerStart="url(#arr)" markerEnd="url(#arr)"/>
-                <text x={(minX+maxX)/2} y={maxY+22} fontSize={10} fill="#888880" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">DX: {toMM(maxX-minX)}mm</text>
-                <line x1={maxX+28} y1={minY} x2={maxX+28} y2={maxY} stroke="#999990" strokeWidth={1} markerStart="url(#arr)" markerEnd="url(#arr)"/>
-                <text x={maxX+36} y={(minY+maxY)/2} fontSize={10} fill="#888880" textAnchor="middle" fontFamily="IBM Plex Mono,monospace" transform={`rotate(90,${maxX+36},${(minY+maxY)/2})`}>DY: {toMM(maxY-minY)}mm</text>
+                <line x1={minX} y1={maxY+28} x2={maxX} y2={maxY+28} stroke="#6b7280" strokeWidth={1} markerStart="url(#arr)" markerEnd="url(#arr)"/>
+                <text x={(minX+maxX)/2} y={maxY+22} fontSize={10} fill="#9ca3af" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">DX: {toMM(maxX-minX)}mm</text>
+                <line x1={maxX+28} y1={minY} x2={maxX+28} y2={maxY} stroke="#6b7280" strokeWidth={1} markerStart="url(#arr)" markerEnd="url(#arr)"/>
+                <text x={maxX+36} y={(minY+maxY)/2} fontSize={10} fill="#9ca3af" textAnchor="middle" fontFamily="IBM Plex Mono,monospace" transform={`rotate(90,${maxX+36},${(minY+maxY)/2})`}>DY: {toMM(maxY-minY)}mm</text>
               </g>);
             })()}
 
@@ -2175,15 +2237,15 @@ export default function ShapeEditor({
               const isArmed = ed?.segIdx===i;
               return (
                 <g key={`s${i}`}>
-                  {hoverSeg===i&&!isEditing&&<path d={sd} fill="none" stroke="#1a448822" strokeWidth={12}/>}
-                  {(selSeg===i||isArmed)&&<path d={sd} fill="none" stroke="#1a4488" strokeWidth={3} strokeDasharray="5,3" opacity={0.5}/>}
-                  {selSegs.has(i)&&<path d={sd} fill="none" stroke="#1a4488" strokeWidth={3} opacity={0.8}/>}
+                  {hoverSeg===i&&!isEditing&&<path d={sd} fill="none" stroke="#3b82f622" strokeWidth={12}/>}
+                  {(selSeg===i||isArmed)&&<path d={sd} fill="none" stroke="#3b82f6" strokeWidth={3} strokeDasharray="5,3" opacity={0.5}/>}
+                  {selSegs.has(i)&&<path d={sd} fill="none" stroke="#3b82f6" strokeWidth={3} opacity={0.8}/>}
 
                   {/* Edge banding -- drawn as tape sitting on the outside face */}
                   {getEdge(seg).band&&(()=>{
                     const o = outwardOffset(seg, 5);
                     const prof = getEdge(seg).profile;
-                    const col = EDGE_COLOURS[prof] || '#cc7700';
+                    const col = EDGE_COLOURS[prof] || '#f59e0b';
                     return (
                       <g pointerEvents="none">
                         <line x1={o.p0.x} y1={o.p0.y} x2={o.p1.x} y2={o.p1.y}
@@ -2208,7 +2270,7 @@ export default function ShapeEditor({
                   {/* Length label */}
                   {seg.type==='line'&&(
                     <text x={m.x+lo.x} y={m.y+lo.y} fontSize={9}
-                      fill={selSeg===i?'#1a4488':'#aaaaaa'}
+                      fill={selSeg===i?'#3b82f6':'#6b7280'}
                       textAnchor="middle" dominantBaseline="middle"
                       fontFamily="IBM Plex Mono,monospace" pointerEvents="none">
                       {toMM(segLen(seg))}mm
@@ -2218,7 +2280,7 @@ export default function ShapeEditor({
                   {/* DX/DY axis label on hover */}
                   {hoverSeg===i&&seg.type==='line'&&!isEditing&&(
                     <text x={m.x+(isH?0:22)} y={m.y+(isH?-24:0)} fontSize={8}
-                      fill="#1a448877" textAnchor="middle"
+                      fill="#3b82f677" textAnchor="middle"
                       fontFamily="IBM Plex Mono,monospace" pointerEvents="none">
                       {isH?'DX':isV?'DY':'diag'}
                     </text>
@@ -2227,23 +2289,23 @@ export default function ShapeEditor({
                   {/* Offset midpoint indicator */}
                   {tool==='offset1'&&!ed&&(
                     <g pointerEvents="none">
-                      <circle cx={m.x} cy={m.y} r={6} fill="#fafaf7" stroke="#1a4488" strokeWidth={1.5} opacity={0.85}/>
-                      <line x1={m.x} y1={m.y-3} x2={m.x} y2={m.y+3} stroke="#1a4488" strokeWidth={1.5}/>
-                      <line x1={m.x-3} y1={m.y} x2={m.x+3} y2={m.y} stroke="#1a4488" strokeWidth={1.5}/>
+                      <circle cx={m.x} cy={m.y} r={6} fill="#1f2937" stroke="#3b82f6" strokeWidth={1.5} opacity={0.85}/>
+                      <line x1={m.x} y1={m.y-3} x2={m.x} y2={m.y+3} stroke="#3b82f6" strokeWidth={1.5}/>
+                      <line x1={m.x-3} y1={m.y} x2={m.x+3} y2={m.y} stroke="#3b82f6" strokeWidth={1.5}/>
                     </g>
                   )}
 
                   {/* Bend midpoint indicator */}
                   {tool==='bend'&&(seg.type==='line'||seg.type==='arc')&&!ed&&(
                     <g pointerEvents="none">
-                      <circle cx={m.x} cy={m.y} r={6} fill="#fafaf7" stroke="#cc5500" strokeWidth={1.5} opacity={0.85}/>
-                      <text x={m.x} y={m.y+3.5} fontSize={10} fill="#cc5500" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">⌀</text>
+                      <circle cx={m.x} cy={m.y} r={6} fill="#1f2937" stroke="#f97316" strokeWidth={1.5} opacity={0.85}/>
+                      <text x={m.x} y={m.y+3.5} fontSize={10} fill="#f97316" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">⌀</text>
                     </g>
                   )}
 
                   {/* Tab hint on hover */}
                   {hoverSeg===i&&tool==='select'&&!dimEdit&&!ed&&(
-                    <text x={m.x} y={m.y-18} fontSize={8} fill="#1a448866"
+                    <text x={m.x} y={m.y-18} fontSize={8} fill="#3b82f666"
                       textAnchor="middle" fontFamily="IBM Plex Mono,monospace" pointerEvents="none">
                       Tab → set length
                     </text>
@@ -2253,8 +2315,8 @@ export default function ShapeEditor({
                   {tool==='dim'&&seg.type==='line'&&(
                     <g pointerEvents="none">
                       <rect x={m.x-18} y={m.y-9} width={36} height={16} rx={3}
-                        fill="#fafaf7" stroke="#1a4488" strokeWidth={1.5} opacity={0.9}/>
-                      <text x={m.x} y={m.y+3} fontSize={9} fill="#1a4488"
+                        fill="#1f2937" stroke="#3b82f6" strokeWidth={1.5} opacity={0.9}/>
+                      <text x={m.x} y={m.y+3} fontSize={9} fill="#3b82f6"
                         textAnchor="middle" fontFamily="IBM Plex Mono,monospace">
                         {toMM(segLen(seg))}mm
                       </text>
@@ -2264,8 +2326,8 @@ export default function ShapeEditor({
                   {/* Move midpoint indicator */}
                   {tool==='move'&&seg.type==='line'&&!ed&&(
                     <g pointerEvents="none">
-                      <circle cx={m.x} cy={m.y} r={5} fill="#fafaf7" stroke="#1a4488" strokeWidth={1.5} opacity={0.7}/>
-                      <text x={m.x} y={m.y+4} fontSize={9} fill="#1a4488" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">✥</text>
+                      <circle cx={m.x} cy={m.y} r={5} fill="#1f2937" stroke="#3b82f6" strokeWidth={1.5} opacity={0.7}/>
+                      <text x={m.x} y={m.y+4} fontSize={9} fill="#3b82f6" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">✥</text>
                     </g>
                   )}
                 </g>
@@ -2276,9 +2338,9 @@ export default function ShapeEditor({
             {geoResult&&geoResult.gaps.map((gap,i)=>(
               <g key={`gap${i}`} pointerEvents="none">
                 <circle cx={gap.pt.x} cy={gap.pt.y} r={8}
-                  fill="#cc222220" stroke="#cc2222" strokeWidth={2} strokeDasharray="3,2"/>
-                <line x1={gap.pt.x-6} y1={gap.pt.y} x2={gap.pt.x+6} y2={gap.pt.y} stroke="#cc2222" strokeWidth={2}/>
-                <line x1={gap.pt.x} y1={gap.pt.y-6} x2={gap.pt.x} y2={gap.pt.y+6} stroke="#cc2222" strokeWidth={2}/>
+                  fill="#ef444420" stroke="#ef4444" strokeWidth={2} strokeDasharray="3,2"/>
+                <line x1={gap.pt.x-6} y1={gap.pt.y} x2={gap.pt.x+6} y2={gap.pt.y} stroke="#ef4444" strokeWidth={2}/>
+                <line x1={gap.pt.x} y1={gap.pt.y-6} x2={gap.pt.x} y2={gap.pt.y+6} stroke="#ef4444" strokeWidth={2}/>
               </g>
             ))}
 
@@ -2300,17 +2362,17 @@ export default function ShapeEditor({
               const hx=cx+perpX*sag, hy=cy+perpY*sag;
               return(<g pointerEvents="none">
                 <line x1={p0.x} y1={p0.y} x2={p1.x} y2={p1.y}
-                  stroke="#1a4488" strokeWidth={1} strokeDasharray="5,4" opacity={0.25}/>
-                {arcPath&&<path d={arcPath} fill="none" stroke="#1a4488" strokeWidth={2} strokeDasharray="6,3"/>}
+                  stroke="#3b82f6" strokeWidth={1} strokeDasharray="5,4" opacity={0.25}/>
+                {arcPath&&<path d={arcPath} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6,3"/>}
                 <line x1={cx} y1={cy} x2={hx} y2={hy}
-                  stroke="#cc5500" strokeWidth={1.5} strokeDasharray="4,3" markerEnd="url(#oarr)"/>
-                <circle cx={hx} cy={hy} r={6} fill="#fafaf7" stroke="#cc5500" strokeWidth={2}/>
-                <circle cx={hx} cy={hy} r={3} fill="#cc5500"/>
+                  stroke="#f97316" strokeWidth={1.5} strokeDasharray="4,3" markerEnd="url(#oarr)"/>
+                <circle cx={hx} cy={hy} r={6} fill="#1f2937" stroke="#f97316" strokeWidth={2}/>
+                <circle cx={hx} cy={hy} r={3} fill="#f97316"/>
                 {absSag>8&&(()=>{
                   const r=Math.round(Math.abs((sag*sag+(chord/2)*(chord/2))/(2*sag)));
                   return(<>
-                    <rect x={hx+10} y={hy-9} width={52} height={16} rx={3} fill="#fafaf7" stroke="#d0d0cc" strokeWidth={1}/>
-                    <text x={hx+36} y={hy+3} fontSize={10} fill="#cc5500" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">r:{r}px</text>
+                    <rect x={hx+10} y={hy-9} width={52} height={16} rx={3} fill="#1f2937" stroke="#374151" strokeWidth={1}/>
+                    <text x={hx+36} y={hy+3} fontSize={10} fill="#f97316" textAnchor="middle" fontFamily="IBM Plex Mono,monospace">r:{r}px</text>
                   </>);
                 })()}
               </g>);
@@ -2352,20 +2414,20 @@ export default function ShapeEditor({
                 const srcD = buildD([sourceSeg],false);
 
                 return (<g pointerEvents="none">
-                  <path d={srcD} fill="none" stroke="#1a4488" strokeWidth={2} opacity={0.2}/>
-                  <path d={previewD} fill="none" stroke="#1a4488" strokeWidth={2} strokeDasharray="7,4"/>
+                  <path d={srcD} fill="none" stroke="#3b82f6" strokeWidth={2} opacity={0.2}/>
+                  <path d={previewD} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="7,4"/>
                   <line x1={cx} y1={cy} x2={ax} y2={ay}
-                    stroke="#cc5500" strokeWidth={1.5} strokeDasharray="4,3" markerEnd="url(#oarr)"/>
+                    stroke="#f97316" strokeWidth={1.5} strokeDasharray="4,3" markerEnd="url(#oarr)"/>
                   {absDist>4&&<>
                     <rect x={(cx+ax)/2-28} y={(cy+ay)/2-9} width={56} height={16} rx={3}
-                      fill="#fafaf7" stroke="#d0d0cc" strokeWidth={1}/>
-                    <text x={(cx+ax)/2} y={(cy+ay)/2+3} fontSize={10} fill="#cc5500"
+                      fill="#1f2937" stroke="#374151" strokeWidth={1}/>
+                    <text x={(cx+ax)/2} y={(cy+ay)/2+3} fontSize={10} fill="#f97316"
                       textAnchor="middle" fontFamily="IBM Plex Mono,monospace" fontWeight="600">
                       {offset>0?'+':''}{toMM(absDist)}mm
                     </text>
                   </>}
-                  <circle cx={dotP0.x} cy={dotP0.y} r={3} fill="#1a4488" opacity={0.6}/>
-                  <circle cx={dotP1.x} cy={dotP1.y} r={3} fill="#1a4488" opacity={0.6}/>
+                  <circle cx={dotP0.x} cy={dotP0.y} r={3} fill="#3b82f6" opacity={0.6}/>
+                  <circle cx={dotP1.x} cy={dotP1.y} r={3} fill="#3b82f6" opacity={0.6}/>
                 </g>);
               } catch(err) { return null; }
             })()}
@@ -2376,12 +2438,12 @@ export default function ShapeEditor({
               const isCP1armed=ed?.type==='cp'&&ed.segIdx===i&&ed.role==='cp1';
               const isCP2armed=ed?.type==='cp'&&ed.segIdx===i&&ed.role==='cp2';
               return (<g key={`cp${i}`}>
-                <line x1={seg.p0.x} y1={seg.p0.y} x2={seg.cp1.x} y2={seg.cp1.y} stroke="#cc550044" strokeWidth={1} strokeDasharray="3,3" pointerEvents="none"/>
-                <line x1={seg.p1.x} y1={seg.p1.y} x2={seg.cp2.x} y2={seg.cp2.y} stroke="#cc550044" strokeWidth={1} strokeDasharray="3,3" pointerEvents="none"/>
+                <line x1={seg.p0.x} y1={seg.p0.y} x2={seg.cp1.x} y2={seg.cp1.y} stroke="#f9731644" strokeWidth={1} strokeDasharray="3,3" pointerEvents="none"/>
+                <line x1={seg.p1.x} y1={seg.p1.y} x2={seg.cp2.x} y2={seg.cp2.y} stroke="#f9731644" strokeWidth={1} strokeDasharray="3,3" pointerEvents="none"/>
                 {[{r:'cp1',pt:seg.cp1,armed:isCP1armed},{r:'cp2',pt:seg.cp2,armed:isCP2armed}].map(({r,pt,armed})=>(
                   <circle key={r} cx={pt.x} cy={pt.y} r={armed?7:5}
-                    fill={armed?'#1a4488':'#cc5500'}
-                    stroke={armed?'#1a448833':'#cc550033'} strokeWidth={6}
+                    fill={armed?'#3b82f6':'#f97316'}
+                    stroke={armed?'#3b82f633':'#f9731633'} strokeWidth={6}
                     style={{cursor:'crosshair'}}
                     onMouseEnter={()=>setHoverCP({si:i,role:r})}
                     onMouseLeave={()=>setHoverCP(null)}
@@ -2404,13 +2466,13 @@ export default function ShapeEditor({
                   const isFillet  = tool==='fillet';
                   const isChamfer = tool==='chamfer';
                   const isCornerTool = isFillet||isChamfer;
-                  const dotColor = isFillet?'#228822':isChamfer?'#cc5500':'#1a4488';
+                  const dotColor = isFillet?'#22c55e':isChamfer?'#f97316':'#3b82f6';
                   dots.push(
                     <g key={`v${key}`}>
-                      {armed&&<circle cx={pt.x} cy={pt.y} r={10} fill="none" stroke="#1a4488" strokeWidth={1} opacity={0.4}/>}
+                      {armed&&<circle cx={pt.x} cy={pt.y} r={10} fill="none" stroke="#3b82f6" strokeWidth={1} opacity={0.4}/>}
                       {isCornerTool&&!ed&&(
                         <g pointerEvents="none">
-                          <circle cx={pt.x} cy={pt.y} r={9} fill="#fafaf7"
+                          <circle cx={pt.x} cy={pt.y} r={9} fill="#1f2937"
                             stroke={dotColor} strokeWidth={1.5} opacity={0.85}/>
                           <text x={pt.x} y={pt.y+4} fontSize={10} fill={dotColor}
                             textAnchor="middle" fontFamily="IBM Plex Mono,monospace">
@@ -2419,14 +2481,14 @@ export default function ShapeEditor({
                         </g>
                       )}
                       <circle cx={pt.x} cy={pt.y} r={armed?7:5}
-                        fill={armed?'#cc5500':isCornerTool?dotColor:'#1a4488'}
-                        stroke="#f7f7f3" strokeWidth={2}
+                        fill={armed?'#f97316':isCornerTool?dotColor:'#3b82f6'}
+                        stroke="#0f172a" strokeWidth={2}
                         style={{cursor:isCornerTool?'pointer':(tool==='vertex'||tool==='select')?'crosshair':'default'}}
                         onMouseEnter={()=>setHoverVert({si,role})}
                         onMouseLeave={()=>setHoverVert(null)}
                         onClick={e=>onVertClick(si,role,e)}
                       />
-                      <text x={pt.x+8} y={pt.y-7} fontSize={8} fill="#bbbbbb"
+                      <text x={pt.x+8} y={pt.y-7} fontSize={8} fill="#6b7280"
                         fontFamily="IBM Plex Mono,monospace" pointerEvents="none">{pt.x},{pt.y}</text>
                     </g>
                   );
@@ -2453,17 +2515,17 @@ export default function ShapeEditor({
               return (<g pointerEvents="none">
                 {/* Line to endpoint — solid blue when locked, dashed when free */}
                 <line x1={last.x} y1={last.y} x2={endPt.x} y2={endPt.y}
-                  stroke={lockedEndPt?"#1a4488":"#1a448888"}
+                  stroke={lockedEndPt?"#3b82f6":"#3b82f688"}
                   strokeWidth={lockedEndPt?2:1.5}
                   strokeDasharray={lockedEndPt?"none":"6,4"}/>
                 {/* Close indicator -- green ring when near start */}
                 {tool==='polyline'&&d2(mouse,last)>10&&d2(mouse,draftPts[0])<SNAP_D*2.5&&(
                   <circle cx={draftPts[0].x} cy={draftPts[0].y} r={9}
-                    fill="#22882218" stroke="#228822" strokeWidth={2}/>
+                    fill="#22c55e18" stroke="#22c55e" strokeWidth={2}/>
                 )}
                 {/* Length label */}
                 {segDist>10&&<text x={(last.x+endPt.x)/2} y={(last.y+endPt.y)/2-10} fontSize={9}
-                  fill={lockedEndPt?"#1a4488":"#1a448888"} fontWeight={lockedEndPt?"700":"400"}
+                  fill={lockedEndPt?"#3b82f6":"#3b82f688"} fontWeight={lockedEndPt?"700":"400"}
                   textAnchor="middle" fontFamily="IBM Plex Mono,monospace">
                   {toMM(segDist)}mm{lockedEndPt?" ✓":""}
                 </text>}
@@ -2474,7 +2536,7 @@ export default function ShapeEditor({
             {tool==='rect'&&rectStart&&(
               <rect x={Math.min(rectStart.x,mouse.x)} y={Math.min(rectStart.y,mouse.y)}
                 width={Math.abs(mouse.x-rectStart.x)} height={Math.abs(mouse.y-rectStart.y)}
-                fill="#1a448806" stroke="#1a4488" strokeWidth={1.5} strokeDasharray="6,4"
+                fill="#3b82f606" stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="6,4"
                 pointerEvents="none"/>
             )}
 
@@ -2484,11 +2546,11 @@ export default function ShapeEditor({
               if(r<2) return null;
               return(<g pointerEvents="none">
                 <circle cx={shapeStart.x} cy={shapeStart.y} r={r}
-                  fill="#1a448806" stroke="#1a4488" strokeWidth={1.5} strokeDasharray="6,4"/>
+                  fill="#3b82f606" stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="6,4"/>
                 <line x1={shapeStart.x} y1={shapeStart.y} x2={mouse.x} y2={mouse.y}
-                  stroke="#1a448844" strokeWidth={1} strokeDasharray="3,3"/>
+                  stroke="#3b82f644" strokeWidth={1} strokeDasharray="3,3"/>
                 <text x={shapeStart.x+r+6} y={shapeStart.y+4} fontSize={9}
-                  fill="#1a4488" fontFamily="IBM Plex Mono,monospace">r:{toMM(r)}mm</text>
+                  fill="#3b82f6" fontFamily="IBM Plex Mono,monospace">r:{toMM(r)}mm</text>
               </g>);
             })()}
 
@@ -2499,8 +2561,8 @@ export default function ShapeEditor({
               if(rx<2||ry<2) return null;
               return(<g pointerEvents="none">
                 <ellipse cx={cx} cy={cy} rx={rx} ry={ry}
-                  fill="#1a448806" stroke="#1a4488" strokeWidth={1.5} strokeDasharray="6,4"/>
-                <text x={cx} y={cy+4} fontSize={9} fill="#1a4488"
+                  fill="#3b82f606" stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="6,4"/>
+                <text x={cx} y={cy+4} fontSize={9} fill="#3b82f6"
                   textAnchor="middle" fontFamily="IBM Plex Mono,monospace">
                   {toMM(rx*2)}×{toMM(ry*2)}mm
                 </text>
@@ -2513,21 +2575,21 @@ export default function ShapeEditor({
               return(<g pointerEvents="none">
                 {triPts.length>=1&&<line x1={triPts[0].x} y1={triPts[0].y}
                   x2={all[1].x} y2={all[1].y}
-                  stroke="#1a448888" strokeWidth={1.5} strokeDasharray="6,4"/>}
+                  stroke="#3b82f688" strokeWidth={1.5} strokeDasharray="6,4"/>}
                 {triPts.length>=2&&<>
                   <line x1={triPts[1].x} y1={triPts[1].y}
                     x2={mouse.x} y2={mouse.y}
-                    stroke="#1a448866" strokeWidth={1.5} strokeDasharray="6,4"/>
+                    stroke="#3b82f666" strokeWidth={1.5} strokeDasharray="6,4"/>
                   <line x1={mouse.x} y1={mouse.y}
                     x2={triPts[0].x} y2={triPts[0].y}
-                    stroke="#1a448844" strokeWidth={1} strokeDasharray="4,4"/>
+                    stroke="#3b82f644" strokeWidth={1} strokeDasharray="4,4"/>
                 </>}
                 {triPts.map((p,i)=>(
                   <circle key={i} cx={p.x} cy={p.y} r={4}
-                    fill="#1a4488" stroke="#f7f7f3" strokeWidth={2}/>
+                    fill="#3b82f6" stroke="#0f172a" strokeWidth={2}/>
                 ))}
                 <text x={mouse.x+10} y={mouse.y-4} fontSize={9}
-                  fill="#1a4488" fontFamily="IBM Plex Mono,monospace">
+                  fill="#3b82f6" fontFamily="IBM Plex Mono,monospace">
                   {triPts.length+1}/3
                 </text>
               </g>);
@@ -2546,17 +2608,17 @@ export default function ShapeEditor({
               }
               return (
                 <g pointerEvents="none">
-                  <line x1={cx-12} y1={cy} x2={cx+12} y2={cy} stroke={drawLock?"#1a4488":"#1a448855"} strokeWidth={drawLock?2:1}/>
-                  <line x1={cx} y1={cy-12} x2={cx} y2={cy+12} stroke={drawLock?"#1a4488":"#1a448855"} strokeWidth={drawLock?2:1}/>
-                  {drawLock&&<circle cx={cx} cy={cy} r={5} fill="none" stroke="#1a4488" strokeWidth={2}/>}
+                  <line x1={cx-12} y1={cy} x2={cx+12} y2={cy} stroke={drawLock?"#3b82f6":"#3b82f655"} strokeWidth={drawLock?2:1}/>
+                  <line x1={cx} y1={cy-12} x2={cx} y2={cy+12} stroke={drawLock?"#3b82f6":"#3b82f655"} strokeWidth={drawLock?2:1}/>
+                  {drawLock&&<circle cx={cx} cy={cy} r={5} fill="none" stroke="#3b82f6" strokeWidth={2}/>}
                   {/* Endpoint snap indicator */}
                   {mouse.snapPt&&!drawLock&&(
                     <g>
                       <circle cx={mouse.x} cy={mouse.y} r={10}
-                        fill="#22882218" stroke="#228822" strokeWidth={2}/>
-                      <circle cx={mouse.x} cy={mouse.y} r={3} fill="#228822"/>
+                        fill="#22c55e18" stroke="#22c55e" strokeWidth={2}/>
+                      <circle cx={mouse.x} cy={mouse.y} r={3} fill="#22c55e"/>
                       <text x={mouse.x+14} y={mouse.y-8} fontSize={9}
-                        fill="#228822" fontFamily="IBM Plex Mono,monospace">endpoint</text>
+                        fill="#22c55e" fontFamily="IBM Plex Mono,monospace">endpoint</text>
                     </g>
                   )}
                 </g>
@@ -2565,7 +2627,7 @@ export default function ShapeEditor({
 
             </g>{/* end transform */}
             {/* Coords in screen space -- outside transform */}
-            <text x={6} y={16} fontSize={9} fill="#ccccca" fontFamily="IBM Plex Mono,monospace">
+            <text x={6} y={16} fontSize={9} fill="#4b5563" fontFamily="IBM Plex Mono,monospace">
               {mouse.x}, {mouse.y} · {Math.round(zoom*100)}%
             </text>
           </svg>
@@ -2582,30 +2644,30 @@ export default function ShapeEditor({
             <div
               onClick={e=>{e.stopPropagation();onClick();setContextMenu(null);}}
               style={{padding:'7px 14px',cursor:'pointer',display:'flex',gap:10,alignItems:'center',
-                color:danger?'#cc2222':'#333330',fontSize:11}}
-              onMouseEnter={e=>e.currentTarget.style.background=danger?'#cc222210':'#1a448810'}
+                color:danger?'#ef4444':'#d1d5db',fontSize:11}}
+              onMouseEnter={e=>e.currentTarget.style.background=danger?'#ef444410':'#3b82f610'}
               onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
               <span style={{fontSize:13,minWidth:16,textAlign:'center'}}>{icon}</span>
               {label}
             </div>
           );
 
-          const divider = <div style={{height:1,background:'#e8e8e4',margin:'3px 0'}}/>;
+          const divider = <div style={{height:1,background:'#273244',margin:'3px 0'}}/>;
 
           return (
             <div style={{
               position:'absolute',
               left:Math.min(contextMenu.x, W-180),
               top:Math.min(contextMenu.y, H-320),
-              background:'#fafaf7', border:'1px solid #d0d0cc', borderRadius:6,
+              background:'#1f2937', border:'1px solid #374151', borderRadius:6,
               boxShadow:'0 4px 20px rgba(0,0,0,0.15)',
               fontFamily:'IBM Plex Mono,monospace',
               zIndex:200, minWidth:180, overflow:'hidden',
               pointerEvents:'all',
             }}>
               {/* Header */}
-              <div style={{padding:'7px 14px',color:'#999990',fontSize:10,
-                borderBottom:'1px solid #e8e8e4',background:'#f4f4f0',
+              <div style={{padding:'7px 14px',color:'#6b7280',fontSize:10,
+                borderBottom:'1px solid #273244',background:'#1f2937',
                 fontWeight:700,letterSpacing:1,textTransform:'uppercase'}}>
                 {isLine?'Line':'Arc/Curve'} · seg {contextMenu.segIdx+1}
                 {isLine&&<span style={{marginLeft:8,fontWeight:400}}>{toMM(segLen(seg))}mm</span>}
@@ -2654,7 +2716,7 @@ export default function ShapeEditor({
         {selSegs.size>0&&(
           <div style={{
             position:'absolute', top:12, left:'50%', transform:'translateX(-50%)',
-            background:'#1a4488', borderRadius:6, padding:'6px 14px',
+            background:'#3b82f6', borderRadius:6, padding:'6px 14px',
             display:'flex', alignItems:'center', gap:12,
             boxShadow:'0 4px 16px rgba(0,0,0,0.2)',
             fontFamily:'IBM Plex Mono,monospace', fontSize:11, color:'#fff',
@@ -2666,7 +2728,7 @@ export default function ShapeEditor({
                 pushHistory(segs.filter((_,i)=>!selSegs.has(i)));
                 setSelSegs(new Set()); setSelSeg(null);
               }
-            }} style={{background:'#cc2222',border:'none',color:'#fff',borderRadius:4,
+            }} style={{background:'#ef4444',border:'none',color:'#fff',borderRadius:4,
               padding:'3px 10px',cursor:'pointer',fontSize:11,fontFamily:'inherit'}}>
               ⊖ Delete selected
             </button>
@@ -2683,10 +2745,10 @@ export default function ShapeEditor({
         {ed?.type==='offset'&&(
           <div style={{
             position:'absolute', bottom:50, left:'50%', transform:'translateX(-50%)',
-            background:'#fafaf7', border:'1px solid #1a4488', borderRadius:6,
+            background:'#1f2937', border:'1px solid #3b82f6', borderRadius:6,
             padding:'10px 16px', display:'flex', alignItems:'center', gap:10,
             boxShadow:'0 4px 16px rgba(0,0,0,0.12)', zIndex:100,
-            fontFamily:'IBM Plex Mono,monospace', fontSize:11, color:'#1a4488',
+            fontFamily:'IBM Plex Mono,monospace', fontSize:11, color:'#3b82f6',
             pointerEvents:'all',
           }}>
             <span style={{fontWeight:700}}>Offset distance:</span>
@@ -2722,20 +2784,20 @@ export default function ShapeEditor({
               }}
               style={{
                 width:80, padding:'4px 8px', fontSize:13, fontWeight:700,
-                fontFamily:'IBM Plex Mono,monospace', color:'#1a4488',
-                border:'2px solid #1a4488', borderRadius:4,
-                background:'#f0f4ff', outline:'none', textAlign:'right',
+                fontFamily:'IBM Plex Mono,monospace', color:'#3b82f6',
+                border:'2px solid #3b82f6', borderRadius:4,
+                background:'#1e293b', outline:'none', textAlign:'right',
               }}
             />
-            <span style={{color:'#888880'}}>mm</span>
-            <span style={{color:'#888880',fontSize:10}}>Enter to place · ESC to cancel · Tab to refocus</span>
+            <span style={{color:'#9ca3af'}}>mm</span>
+            <span style={{color:'#9ca3af',fontSize:10}}>Enter to place · ESC to cancel · Tab to refocus</span>
           </div>
         )}
 
         </div>
 
         {/* Info panel -- live dimension sidebar */}
-        <div style={{width:190,background:'#fafaf7',borderLeft:'1px solid #d0d0cc',
+        <div style={{width:190,background:'#1f2937',borderLeft:'1px solid #374151',
           padding:10,overflowY:'auto',flexShrink:0,fontSize:10,display:'flex',flexDirection:'column',gap:0}}>
 
           {/* ---- ORIGIN / DATUM ---- */}
@@ -2746,25 +2808,25 @@ export default function ShapeEditor({
             const neg = b.minX < 0 || b.minY < 0;
             return (
               <div style={{marginBottom:10,padding:7,borderRadius:4,
-                background: neg ? '#cc222210' : off ? '#cc770010' : '#22882208',
-                border:`1px solid ${neg?'#cc2222':off?'#cc7700':'#22882233'}`}}>
+                background: neg ? '#ef444410' : off ? '#f59e0b10' : '#22c55e08',
+                border:`1px solid ${neg?'#ef4444':off?'#f59e0b':'#22c55e33'}`}}>
                 <div style={{fontSize:8,letterSpacing:2,marginBottom:5,
                   textTransform:'uppercase',fontWeight:700,
-                  color: neg?'#cc2222':off?'#cc7700':'#228822'}}>Datum X0 Y0</div>
-                <div style={{fontSize:9,color:'#555550',lineHeight:1.6}}>
-                  Shape starts at <span style={{fontWeight:700,color:neg?'#cc2222':'#333330'}}>{b.minX}, {b.minY}mm</span>
+                  color: neg?'#ef4444':off?'#f59e0b':'#22c55e'}}>Datum X0 Y0</div>
+                <div style={{fontSize:9,color:'#9ca3af',lineHeight:1.6}}>
+                  Shape starts at <span style={{fontWeight:700,color:neg?'#ef4444':'#d1d5db'}}>{b.minX}, {b.minY}mm</span>
                   <br/>Extent {b.maxX-b.minX} x {b.maxY-b.minY}mm
                 </div>
                 {(originShift.dx||originShift.dy)?(
-                  <div style={{marginTop:5,fontSize:8,color:'#cc7700'}}>
+                  <div style={{marginTop:5,fontSize:8,color:'#f59e0b'}}>
                     Datum moved {originShift.dx}, {originShift.dy}mm this session
                   </div>):null}
-                {neg&&<div style={{marginTop:5,fontSize:8,color:'#cc2222'}}>
+                {neg&&<div style={{marginTop:5,fontSize:8,color:'#ef4444'}}>
                   Geometry sits outside the part datum</div>}
                 {off&&<button onClick={reReferenceOrigin}
                   style={{...sBtn,marginTop:6,width:'100%',
-                    color:neg?'#cc2222':'#cc7700',
-                    borderColor:neg?'#cc222244':'#cc770044'}}>
+                    color:neg?'#ef4444':'#f59e0b',
+                    borderColor:neg?'#ef444444':'#f59e0b44'}}>
                   Re-reference datum to 0,0</button>}
               </div>
             );
@@ -2773,7 +2835,7 @@ export default function ShapeEditor({
           {/* -- LIVE DIMENSION FIELDS -- */}
           <div style={{marginBottom:10}}>
             <div style={{fontSize:8,letterSpacing:3,
-              color:drawing?'#1a4488':'#999990',
+              color:drawing?'#3b82f6':'#6b7280',
               marginBottom:8,textTransform:'uppercase',fontWeight:700}}>
               {drawing?'▶ Drawing':'Dimensions'}
             </div>
@@ -2793,8 +2855,8 @@ export default function ShapeEditor({
                 {/* Live stats while drawing */}
                 {isDrawing&&<>
                   <div style={{display:'flex',justifyContent:'space-between',marginBottom:3,alignItems:'center'}}>
-                    <span style={{color:'#888880',fontSize:9}}>Length</span>
-                    {!drawLock&&<span style={{color:'#1a4488',fontSize:11,fontWeight:700}}>{liveLen}mm</span>}
+                    <span style={{color:'#9ca3af',fontSize:9}}>Length</span>
+                    {!drawLock&&<span style={{color:'#3b82f6',fontSize:11,fontWeight:700}}>{liveLen}mm</span>}
                   </div>
                   {/* Locked length input -- active when Tab pressed */}
                   {drawLock&&<>
@@ -2830,25 +2892,25 @@ export default function ShapeEditor({
                           if(e.key==='Escape'){e.preventDefault();setDrawLock(null);setLockedLen('');lockedLenRef.current='';}
                         }}
                         style={{flex:1,padding:'6px 8px',fontSize:15,fontWeight:700,
-                          fontFamily:'IBM Plex Mono,monospace',color:'#1a4488',
-                          border:'2px solid #1a4488',borderRadius:4,
-                          background:'#f0f4ff',outline:'none',textAlign:'right'}}
+                          fontFamily:'IBM Plex Mono,monospace',color:'#3b82f6',
+                          border:'2px solid #3b82f6',borderRadius:4,
+                          background:'#1e293b',outline:'none',textAlign:'right'}}
                       />
-                      <span style={{color:'#888880',fontSize:11,fontWeight:600}}>mm</span>
+                      <span style={{color:'#9ca3af',fontSize:11,fontWeight:600}}>mm</span>
                     </div>
-                    <div style={{fontSize:8,color:'#1a4488',marginBottom:4}}>Tab to preview · Enter to place · ESC to unlock</div>
+                    <div style={{fontSize:8,color:'#3b82f6',marginBottom:4}}>Tab to preview · Enter to place · ESC to unlock</div>
                   </>}
                   <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
-                    <span style={{color:'#888880',fontSize:9}}>Angle</span>
-                    <span style={{color:'#555550',fontSize:9,fontWeight:600}}>{liveAngle}°</span>
+                    <span style={{color:'#9ca3af',fontSize:9}}>Angle</span>
+                    <span style={{color:'#9ca3af',fontSize:9,fontWeight:600}}>{liveAngle}°</span>
                   </div>
                   <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
-                    <span style={{color:'#888880',fontSize:9}}>DX</span>
-                    <span style={{color:'#555550',fontSize:9}}>{liveDX}mm</span>
+                    <span style={{color:'#9ca3af',fontSize:9}}>DX</span>
+                    <span style={{color:'#9ca3af',fontSize:9}}>{liveDX}mm</span>
                   </div>
                   <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
-                    <span style={{color:'#888880',fontSize:9}}>DY</span>
-                    <span style={{color:'#555550',fontSize:9}}>{liveDY}mm</span>
+                    <span style={{color:'#9ca3af',fontSize:9}}>DY</span>
+                    <span style={{color:'#9ca3af',fontSize:9}}>{liveDY}mm</span>
                   </div>
 
                 </>}
@@ -2856,8 +2918,8 @@ export default function ShapeEditor({
                 {/* Length edit field -- shown when a line is selected OR Tab has been pressed */}
                 {(hasLine||isEditing)&&!isDrawing&&<>
                   <div style={{display:'flex',justifyContent:'space-between',marginBottom:3,alignItems:'center'}}>
-                    <span style={{color:'#888880',fontSize:9}}>Length</span>
-                    {isEditing&&<span style={{color:'#1a4488',fontSize:8,fontWeight:700}}>● editing</span>}
+                    <span style={{color:'#9ca3af',fontSize:9}}>Length</span>
+                    {isEditing&&<span style={{color:'#3b82f6',fontSize:8,fontWeight:700}}>● editing</span>}
                   </div>
                   {/* Click the value to edit, or it auto-opens when isEditing */}
                   {!isEditing?(
@@ -2873,13 +2935,13 @@ export default function ShapeEditor({
                         }
                       }}
                       style={{display:'flex',alignItems:'center',gap:4,marginBottom:6,cursor:'pointer',
-                        padding:'6px 8px',borderRadius:4,border:'2px dashed #d0d0cc',
-                        background:'#f4f4f0',justifyContent:'space-between'}}
+                        padding:'6px 8px',borderRadius:4,border:'2px dashed #374151',
+                        background:'#1f2937',justifyContent:'space-between'}}
                       title="Click to edit length">
-                      <span style={{fontSize:15,fontWeight:700,fontFamily:'IBM Plex Mono,monospace',color:'#888880'}}>
+                      <span style={{fontSize:15,fontWeight:700,fontFamily:'IBM Plex Mono,monospace',color:'#9ca3af'}}>
                         {selLen}
                       </span>
-                      <span style={{color:'#888880',fontSize:11,fontWeight:600}}>mm ✎</span>
+                      <span style={{color:'#9ca3af',fontSize:11,fontWeight:600}}>mm ✎</span>
                     </div>
                   ):(
                     <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:6}}>
@@ -2897,38 +2959,38 @@ export default function ShapeEditor({
                         }}
                         style={{
                           flex:1,padding:'6px 8px',fontSize:15,fontWeight:700,
-                          fontFamily:'IBM Plex Mono,monospace',color:'#1a4488',
-                          border:'2px solid #1a4488',borderRadius:4,
-                          background:'#f0f4ff',outline:'none',textAlign:'right',
+                          fontFamily:'IBM Plex Mono,monospace',color:'#3b82f6',
+                          border:'2px solid #3b82f6',borderRadius:4,
+                          background:'#1e293b',outline:'none',textAlign:'right',
                         }}
                       />
-                      <span style={{color:'#888880',fontSize:11,fontWeight:600,minWidth:20}}>mm</span>
+                      <span style={{color:'#9ca3af',fontSize:11,fontWeight:600,minWidth:20}}>mm</span>
                     </div>
                   )}
                   {isEditing&&<>
-                    <div style={{fontSize:8,color:'#1a4488',marginBottom:8}}>Enter to apply · ESC to cancel</div>
-                    <div style={{color:'#888880',fontSize:9,marginBottom:4}}>Fixed end</div>
+                    <div style={{fontSize:8,color:'#3b82f6',marginBottom:8}}>Enter to apply · ESC to cancel</div>
+                    <div style={{color:'#9ca3af',fontSize:9,marginBottom:4}}>Fixed end</div>
                     <div style={{display:'flex',gap:4,marginBottom:8}}>
                       {[{val:'p0',label:'Start'},{val:'p1',label:'End'}].map(({val,label})=>(
                         <button key={val} onClick={()=>setDimEdit(d=>({...d,fixedEnd:val}))}
                           style={{flex:1,padding:'4px',borderRadius:3,cursor:'pointer',
                             fontSize:10,fontFamily:'inherit',
-                            border:`1.5px solid ${dimEdit.fixedEnd===val?'#1a4488':'#d0d0cc'}`,
-                            background:dimEdit.fixedEnd===val?'#1a4488':'transparent',
-                            color:dimEdit.fixedEnd===val?'#fff':'#555550'}}>
+                            border:`1.5px solid ${dimEdit.fixedEnd===val?'#3b82f6':'#374151'}`,
+                            background:dimEdit.fixedEnd===val?'#3b82f6':'transparent',
+                            color:dimEdit.fixedEnd===val?'#fff':'#9ca3af'}}>
                           {dimEdit.fixedEnd===val?'📌 ':''}{label}
                         </button>
                       ))}
                     </div>
                   </>}
-                  {!isEditing&&hasLine&&<div style={{fontSize:8,color:'#888880'}}>
+                  {!isEditing&&hasLine&&<div style={{fontSize:8,color:'#9ca3af'}}>
                     from {toMM(selInfo.p0.x)},{toMM(selInfo.p0.y)} → {toMM(selInfo.p1.x)},{toMM(selInfo.p1.y)}mm
                   </div>}
                 </>}
 
                 {/* Idle */}
                 {!isDrawing&&!hasLine&&!isEditing&&(
-                  <div style={{color:'#ccccca',fontSize:9,lineHeight:1.6}}>
+                  <div style={{color:'#4b5563',fontSize:9,lineHeight:1.6}}>
                     Draw a line to see<br/>live dimensions.<br/><br/>
                     Select a line then<br/>click the value to edit.
                   </div>
@@ -2938,20 +3000,20 @@ export default function ShapeEditor({
 
             {/* Idle state */}
             {!drawing&&!selInfo&&!dimEdit&&(
-              <div style={{color:'#ccccca',fontSize:9,lineHeight:1.6}}>
+              <div style={{color:'#4b5563',fontSize:9,lineHeight:1.6}}>
                 Draw a line to see<br/>live dimensions here.<br/><br/>
                 Click a line then<br/>click the value to edit.
               </div>
             )}
           </div>
 
-          <div style={{borderTop:'1px solid #d0d0cc',paddingTop:8,marginBottom:8}}>
-            <div style={{fontSize:8,letterSpacing:3,color:'#999990',marginBottom:6,textTransform:'uppercase'}}>Selected</div>
+          <div style={{borderTop:'1px solid #374151',paddingTop:8,marginBottom:8}}>
+            <div style={{fontSize:8,letterSpacing:3,color:'#6b7280',marginBottom:6,textTransform:'uppercase'}}>Selected</div>
             {selInfo?(
               <div>
-                <div style={{color:'#1a4488',marginBottom:4,fontWeight:700,fontSize:11}}>
+                <div style={{color:'#3b82f6',marginBottom:4,fontWeight:700,fontSize:11}}>
                   {selInfo.type} #{selSeg+1}
-                  <span style={{marginLeft:4,fontSize:8,color:'#999990',fontWeight:400}}>
+                  <span style={{marginLeft:4,fontSize:8,color:'#6b7280',fontWeight:400}}>
                     {isHoriz(selInfo)?'H':isVert(selInfo)?'V':'diag'}
                   </span>
                 </div>
@@ -2961,8 +3023,8 @@ export default function ShapeEditor({
                       selInfo.type==='arc'?[['r',(selInfo.rx||60)+'px']]:[])]
                   .map(([k,v])=>(
                   <div key={k} style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
-                    <span style={{color:'#999990'}}>{k}</span>
-                    <span style={{color:'#333330'}}>{v}</span>
+                    <span style={{color:'#6b7280'}}>{k}</span>
+                    <span style={{color:'#d1d5db'}}>{v}</span>
                   </div>
                 ))}
                 {/* ---- Edge (read-only) ----
@@ -2971,18 +3033,18 @@ export default function ShapeEditor({
                 {(()=>{
                   const e = getEdge(selInfo);
                   return (
-                    <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #d8d8d4'}}>
-                      <div style={{fontSize:8,letterSpacing:2,color:'#999990',
+                    <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #374151'}}>
+                      <div style={{fontSize:8,letterSpacing:2,color:'#6b7280',
                         marginBottom:5,textTransform:'uppercase',fontWeight:700}}>Edge</div>
                       <div style={{display:'flex',alignItems:'center',gap:6,fontSize:10}}>
                         <span style={{width:12,height:12,borderRadius:2,flexShrink:0,
-                          background:e.band?(EDGE_COLOURS[e.profile]||'#cc7700'):'transparent',
-                          border:e.band?'none':'1px dashed #ccccca'}}/>
-                        <span style={{color:e.band?'#333330':'#999990'}}>
+                          background:e.band?(EDGE_COLOURS[e.profile]||'#f59e0b'):'transparent',
+                          border:e.band?'none':'1px dashed #4b5563'}}/>
+                        <span style={{color:e.band?'#d1d5db':'#6b7280'}}>
                           {e.band ? e.profile : 'not banded'}
                         </span>
                       </div>
-                      <div style={{fontSize:8,color:'#bbbbb8',marginTop:4}}>
+                      <div style={{fontSize:8,color:'#6b7280',marginTop:4}}>
                         Set banding in Part Editor
                       </div>
                     </div>
@@ -2994,71 +3056,73 @@ export default function ShapeEditor({
                   {(selInfo.type==='arc'||selInfo.type==='curve')&&<button onClick={()=>doBend(selSeg)} style={sBtn}>╱ Straighten</button>}
                   <button onClick={()=>doAddPt(selSeg)} style={sBtn}>⊕ Add midpoint</button>
                   {selInfo.type==='line'&&<button onClick={()=>{setTool('offset1');setEdit({type:'offset',segIdx:selSeg,sourceSeg:clone(selInfo),offset:0});}} style={sBtn}>→ Offset</button>}
-                  <button onClick={()=>doDelSeg(selSeg)} style={{...sBtn,color:'#cc2222',borderColor:'#cc222233'}}>⊖ Delete</button>
+                  <button onClick={()=>doDelSeg(selSeg)} style={{...sBtn,color:'#ef4444',borderColor:'#ef444433'}}>⊖ Delete</button>
                 </div>
               </div>
             ):(
-              <div style={{color:'#ccccca',fontSize:9}}>Click a segment</div>
+              <div style={{color:'#4b5563',fontSize:9}}>Click a segment</div>
             )}
           </div>
 
-          <div style={{borderTop:'1px solid #d0d0cc',paddingTop:8,marginBottom:8}}>
-            <div style={{fontSize:8,letterSpacing:3,color:'#999990',marginBottom:6,textTransform:'uppercase'}}>Parameters</div>
+          <div style={{borderTop:'1px solid #374151',paddingTop:8,marginBottom:8}}>
+            <div style={{fontSize:8,letterSpacing:3,color:'#6b7280',marginBottom:6,textTransform:'uppercase'}}>Parameters</div>
             {[{label:'Fillet r',val:filletR,set:setFilletR},{label:'Chamfer',val:chamferD,set:setChamferD}].map(({label,val,set})=>(
               <div key={label} style={{marginBottom:8}}>
-                <div style={{color:'#888880',marginBottom:2,fontSize:9}}>{label}</div>
+                <div style={{color:'#9ca3af',marginBottom:2,fontSize:9}}>{label}</div>
                 <input type="number" value={val} min={5} max={300} onChange={e=>set(Number(e.target.value))}
-                  style={{background:'#f0efea',border:'1px solid #d0d0cc',color:'#333330',
+                  style={{background:'#111827',border:'1px solid #374151',color:'#d1d5db',
                     borderRadius:2,padding:'2px 6px',fontSize:10,fontFamily:'IBM Plex Mono,monospace',width:'100%'}}/>
               </div>
             ))}
           </div>
 
-          <div style={{borderTop:'1px solid #d0d0cc',paddingTop:8}}>
-            <div style={{fontSize:8,letterSpacing:3,color:'#999990',marginBottom:6,textTransform:'uppercase'}}>Segments</div>
+          <div style={{borderTop:'1px solid #374151',paddingTop:8}}>
+            <div style={{fontSize:8,letterSpacing:3,color:'#6b7280',marginBottom:6,textTransform:'uppercase'}}>Segments</div>
             <div style={{maxHeight:160,overflowY:'auto'}}>
               {segs.map((s,i)=>(
                 <div key={i} onClick={()=>{setSelSegSynced(i);setTool('select');}}
-                  style={{padding:'3px 5px',border:`1px solid ${selSeg===i?'#1a4488':'#d8d8d4'}`,
+                  style={{padding:'3px 5px',border:`1px solid ${selSeg===i?'#3b82f6':'#374151'}`,
                     borderRadius:2,marginBottom:2,cursor:'pointer',fontSize:9,
-                    color:selSeg===i?'#1a4488':s.type==='curve'?'#cc5500':s.type==='arc'?'#cc7700':'#555550',
-                    background:selSeg===i?'#1a448808':'transparent'}}>
+                    color:selSeg===i?'#3b82f6':s.type==='curve'?'#f97316':s.type==='arc'?'#f59e0b':'#9ca3af',
+                    background:selSeg===i?'#3b82f608':'transparent'}}>
                   {s.type==='curve'?'∿':s.type==='arc'?'◜':'╱'} {isHoriz(s)?'H':isVert(s)?'V':'D'} {i+1}
-                  {s.type==='line'&&<span style={{color:'#ccccca'}}> {toMM(segLen(s))}mm</span>}
-                  {getEdge(s).band&&<span style={{color:'#cc7700',marginLeft:3}}>●</span>}
+                  {s.type==='line'&&<span style={{color:'#4b5563'}}> {toMM(segLen(s))}mm</span>}
+                  {getEdge(s).band&&<span style={{color:'#f59e0b',marginLeft:3}}>●</span>}
                 </div>
               ))}
             </div>
           </div>
 
-          <div style={{borderTop:'1px solid #d0d0cc',marginTop:8,paddingTop:8,fontSize:8,color:'#ccccca',lineHeight:1.8}}>
+          <div style={{borderTop:'1px solid #374151',marginTop:8,paddingTop:8,fontSize:8,color:'#4b5563',lineHeight:1.8}}>
             Click value → edit length<br/>Enter → apply · ESC → cancel
           </div>
         </div>
       </div>
 
       {/* Status bar */}
-      <div style={{padding:'4px 12px',borderTop:'1px solid #d0d0cc',fontSize:9,color:'#999990',
-        display:'flex',gap:16,flexShrink:0,background:'#fafaf7'}}>
-        <span>TOOL: <span style={{color:'#1a4488'}}>{tool.toUpperCase()}</span></span>
-        <span>SEGS: <span style={{color:'#1a4488'}}>{segs.length}</span></span>
-        {selSegs.size>0&&<span>SELECTED: <span style={{color:'#1a4488'}}>{selSegs.size}</span></span>}
-        <span>CLOSED: <span style={{color:closed?'#228822':'#cc2222'}}>{closed?'YES':'NO'}</span></span>
-        <span style={{color:'#cc9900'}}>{isEditing?'Click to place · ESC to cancel':HINTS[tool]||''}</span>
-        {hasErrors&&<span style={{marginLeft:'auto',color:'#cc2222',fontWeight:700}}>⚠ Invalid shape</span>}
+      <div style={{padding:'4px 12px',borderTop:'1px solid #374151',fontSize:9,color:'#6b7280',
+        display:'flex',gap:16,flexShrink:0,background:'#1f2937'}}>
+        <span>TOOL: <span style={{color:'#3b82f6'}}>{tool.toUpperCase()}</span></span>
+        <span>SEGS: <span style={{color:'#3b82f6'}}>{segs.length}</span></span>
+        {selSegs.size>0&&<span>SELECTED: <span style={{color:'#3b82f6'}}>{selSegs.size}</span></span>}
+        <span>CLOSED: <span style={{color:closed?'#22c55e':'#ef4444'}}>{closed?'YES':'NO'}</span></span>
+        <span style={{color:'#eab308'}}>{isEditing?'Click to place · ESC to cancel':HINTS[tool]||''}</span>
+        {hasErrors&&<span style={{marginLeft:'auto',color:'#ef4444',fontWeight:700}}>⚠ Invalid shape</span>}
       </div>
     </div>
   );
-}
+});
+
+export default ShapeEditor;
 
 const zBtnStyle = {
-  background:'transparent',border:'1px solid #d0d0cc',color:'#555550',
+  background:'transparent',border:'1px solid #374151',color:'#9ca3af',
   borderRadius:3,padding:'2px 10px',cursor:'pointer',fontSize:13,
   fontFamily:'IBM Plex Mono,monospace',lineHeight:1,
 };
 
 const sBtn = {
-  background:'transparent',border:'1px solid #d0d0cc',color:'#555550',
+  background:'transparent',border:'1px solid #374151',color:'#9ca3af',
   borderRadius:3,padding:'4px',cursor:'pointer',fontSize:9,
   fontFamily:'IBM Plex Mono,monospace',width:'100%',textAlign:'left',marginBottom:2,
 };
