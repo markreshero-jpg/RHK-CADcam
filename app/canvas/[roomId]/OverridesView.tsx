@@ -563,7 +563,7 @@ function SectionHead({ color, title, count }: { color: string; title: string; co
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-export default function OverridesView({ cabinetId, partOverrides, onOverridesChange, customParts, setCustomParts, cabinet, rp, onUpdate, shapes: shapesProp, onShapesChange }: {
+export default function OverridesView({ cabinetId, partOverrides, onOverridesChange, customParts, setCustomParts, cabinet, rp, onUpdate, shapes: shapesProp, onShapesChange, onEditShape }: {
   cabinetId: string
   partOverrides: PartPosOverrides
   onOverridesChange: (o: PartPosOverrides) => void
@@ -676,6 +676,7 @@ export default function OverridesView({ cabinetId, partOverrides, onOverridesCha
                 onOverridesChange={onOverridesChange}
                 customParts={customParts}
                 setCustomParts={setCustomParts}
+                onEditShape={onEditShape}
               />
             )}
             {hasCustom && (

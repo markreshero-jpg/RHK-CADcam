@@ -143,10 +143,10 @@ On **open**: load latest revision → `initialSegments`; none → `null` (compon
 - **Accept / verify (pending)**: Edit Shape never leaves the Part Editor window and matches the app theme; canvas resizes with the panels; Save Shape in the header runs the heal gate; gable shows ghosts of bottom/back/kick/rails to draw against; right-gable ghosts mirror correctly; drawing wider than the part warns amber and saves with the part growing; smoke page /shape-editor-test still works.
 
 ### M8 — Shaping-mode canvas maximisation *(added 2026-08-02 from M7 verify feedback)*
-**Status: [~] in progress.** M7's embed keeps the Part Editor's ops list + right sidebar visible while shaping, so the ShapeEditor canvas ends up quite small. Goal: shaping mode gives the drawing canvas as much of the window as possible.
+**Status: [x] done (2026-08-02) — verified headlessly (z_plan_automation/verify-m8.mjs: shaping-mode svg spans to the window's right edge at 1524px of 1720, panels restore on Cancel; screenshots reviewed).** Both Part Editor side panels (ops list + Operation/Overrides sidebar, ~590px combined incl. resize handles) now unmount while `shapeOpen`; the centre pane — and the ShapeEditor via its ResizeObserver — takes the full window width. Panels restore on Save/Cancel. Remaining chrome while shaping is just the Part Editor header (owns Save Shape/Cancel) and the ShapeEditor's own tool rail + utility strip (wanted — that's the CAD-native feel). No further padding found: PartEditor is `fixed inset-0`, the pane wrapper is w-full/h-full.
 
-- Hide (or collapse) the ops list and the right sidebar while shaping mode is active; restore them on Save/Cancel.
-- Audit remaining chrome: modal padding, header height, any nested scroll containers stealing space.
+- ~~Hide (or collapse) the ops list and the right sidebar while shaping mode is active; restore them on Save/Cancel.~~ done
+- ~~Audit remaining chrome: modal padding, header height, any nested scroll containers stealing space.~~ done — nothing else to reclaim
 - **Accept**: entering shaping mode visibly expands the canvas to near the full Part Editor width; exiting restores the normal three-pane layout; nothing else regresses.
 
 ---
@@ -160,6 +160,7 @@ On **open**: load latest revision → `initialSegments`; none → `null` (compon
 - Revision pruning policy.
 
 ## Session log
+- **2026-08-02 (2)** — M8 done, verified headlessly (Mark asked for an automated check). En route found + fixed an M6 REGRESSION: `OverridesView` stopped forwarding `onEditShape` into `ShapeOverridesSection` (lost in the 2026-08-01 shared-actions refactor), so the Overrides-tab ✎ Edit entry point silently rendered nothing. New reusable verifier `z_plan_automation/verify-m8.mjs` (finds a shaped cabinet via part_shape_overrides → openCabinet bridge → DOM-clicks Overrides tab → ✎ → asserts full-width shaping layout + restore on Cancel + screenshots).
 - **2026-08-02** — M7 verified by Mark ("it all still works") and committed. Feedback from the verify: the in-pane embed leaves the shape canvas too small (ops list + sidebar + chrome crowd it) → M8 added (shaping-mode canvas maximisation), started same session.
 - **2026-07-22** — Handoff reviewed; contradictions identified; all design questions answered by Mark; this plan written. Nothing coded yet.
 - **2026-07-22 (2)** — M1 + M2 done and verified (migration live, helpers in canvasDB, component mounted + browser-verified end-to-end via Test Kitchen/BC-01/Right Gable). Three notices logged under M2 — most important: ShapeEditor blocks saving shapes larger than the part, so Mark's "any size" bounds rule needs a master-copy change in the design chat before grow-cases work. Next: M3 (save/load flow). M3 notes: PartEditor is mounted only by CabinetEditModal, which already holds `partOverrides` + `setPartOverrides` + `customParts` + `setCustomParts` — pass them through as props. The editor frame = display frame, so bbox→sw/sh is a direct map (no axis swap needed). originShift→ox/oy needs the part-local→cabinet axis mapping (see partFootprint.projectToFrame) — only matters when the datum was re-referenced; consider requiring datum-at-0,0 as the Phase-1 cut.

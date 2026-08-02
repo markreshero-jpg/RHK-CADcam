@@ -453,14 +453,17 @@ export default function PartEditor({
 
       {/* Body — three zones */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left — operations list */}
-        <PartOpsList
-          width={leftW}
-          ops={ops} loading={loading} selectedId={selectedId} onSelect={setSelectedId}
-          levels={levels} issuesById={issuesById} allGenerated={allGenerated}
-          onAdd={kind => void addOp(kind, hasTwoFaces && face === 'back' ? 'face_back' : 'face_front')} onReorder={reorder}
-        />
-        <ResizeHandle onDelta={dx => setLeftW(w => clampPanel(w + dx))} />
+        {/* Left — operations list (hidden while shaping: the drawing canvas
+            gets the full window width, M8) */}
+        {!shapeOpen && <>
+          <PartOpsList
+            width={leftW}
+            ops={ops} loading={loading} selectedId={selectedId} onSelect={setSelectedId}
+            levels={levels} issuesById={issuesById} allGenerated={allGenerated}
+            onAdd={kind => void addOp(kind, hasTwoFaces && face === 'back' ? 'face_back' : 'face_front')} onReorder={reorder}
+          />
+          <ResizeHandle onDelta={dx => setLeftW(w => clampPanel(w + dx))} />
+        </>}
 
         {/* Centre — single-part scene: 3D (R3F) + ortho Top/Front/Side (SVG, true
             mm) — or, in shaping mode, the in-pane 2D profile editor. */}
@@ -593,7 +596,9 @@ export default function PartEditor({
 
         {/* Right — contextual op properties / per-part overrides. Overrides sit
             here (not a centre view) so shape revision restores preview LIVE in
-            the centre 3D/ortho views as they're clicked. */}
+            the centre 3D/ortho views as they're clicked. Hidden while shaping
+            (M8) — the canvas takes the full width. */}
+        {!shapeOpen && <>
         <ResizeHandle onDelta={dx => setRightW(w => clampPanel(w - dx))} />
         <div className="flex-none h-full flex flex-col" style={{ width: rightW }}>
           <div className="flex-none flex bg-gray-900 border-l border-gray-800 border-b border-gray-700">
@@ -641,6 +646,7 @@ export default function PartEditor({
             )}
           </div>
         </div>
+        </>}
       </div>
 
     </div>
