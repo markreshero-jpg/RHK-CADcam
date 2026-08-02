@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createServerClient } from '@/src/lib/supabase-server'
 import type { OptiSnapshot, OptiMaterial, OptiMachine, OptiProfile, PartKeyMap } from '@/src/lib/optimiser/types'
 import { normalizeProject, collectEbIds, PART_SELECTS, type RawRoom, type RawCabinet } from '@/src/lib/optimiser/normalize'
+import { buildSizeOvByCab, type SizeOv } from '@/src/lib/optimiser/sizeOverrides'
 import OptimiserClient from './OptimiserClient'
 
 export const dynamic = 'force-dynamic'
@@ -18,12 +19,13 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
   const roomIds = rooms.map(r => r.id)
 
   const { data: cabsRaw } = roomIds.length
-    ? await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id,part_comments,part_names,no_cnc').in('room_id', roomIds)
+    ? await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id,part_comments,part_names,no_cnc,part_pos_overrides').in('room_id', roomIds)
     : { data: [] }
-  const cabs = (cabsRaw ?? []) as (RawCabinet & { part_comments?: PartKeyMap | null; part_names?: PartKeyMap | null })[]
+  const cabs = (cabsRaw ?? []) as (RawCabinet & { part_comments?: PartKeyMap | null; part_names?: PartKeyMap | null; part_pos_overrides?: Record<string, SizeOv> | null })[]
   const cabIds = cabs.map(c => c.id)
   const commentsByCab = new Map<string, PartKeyMap>(cabs.map(c => [c.id, c.part_comments ?? {}]))
   const namesByCab = new Map<string, PartKeyMap>(cabs.map(c => [c.id, c.part_names ?? {}]))
+  const sizeOvByCab = buildSizeOvByCab(cabs)
 
   const empty = { data: [] as Record<string, unknown>[] }
   const [cpR, ipR, tpR, fzR, dbR, ccR] = cabIds.length ? await Promise.all([
@@ -64,7 +66,7 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
     (cpR.data ?? []) as Record<string, unknown>[], (ipR.data ?? []) as Record<string, unknown>[],
     (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[],
     (dbR.data ?? []) as Record<string, unknown>[], commentsByCab,
-    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames)
+    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab)
 
   const snapshot: OptiSnapshot = {
     projectId,

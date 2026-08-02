@@ -42,6 +42,13 @@ export interface OptiPart {
   nest_priority: number
   output_to_cnc: boolean
   comment: string | null      // from cabinet_instances.part_comments[part_key]
+  // Set when part_pos_overrides sw/sh/sd changed this part's dims at snapshot
+  // time (hand resize or shape-driven bbox — sizeOverrides.ts). base_* keep the
+  // resolver's original footprint for display ("base → effective").
+  size_overridden?: boolean
+  base_w?: number
+  base_h?: number
+  base_thickness?: number
 }
 
 // Cabinet-level maps of user-authored, regen-surviving content keyed by

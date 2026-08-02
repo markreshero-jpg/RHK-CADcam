@@ -9,6 +9,7 @@ import { supabase } from '@/src/lib/supabase'
 import { normalizeProject, collectEbIds, PART_SELECTS, type RawRoom, type RawCabinet } from './normalize'
 import type { NormalizedProject } from './normalize'
 import type { PartKeyMap } from './types'
+import { buildSizeOvByCab, type SizeOv } from './sizeOverrides'
 
 export async function loadProjectParts(projectId: string): Promise<NormalizedProject> {
   const { data: project } = await supabase.from('projects').select('id,name,job_number').eq('id', projectId).single()
@@ -19,11 +20,12 @@ export async function loadProjectParts(projectId: string): Promise<NormalizedPro
   const roomIds = rooms.map(r => r.id)
   if (!roomIds.length) return normalizeProject(project, rooms, [], [], [], [], [], [])
 
-  const { data: cabsRaw } = await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id,part_comments,part_names,no_cnc').in('room_id', roomIds)
-  const cabs = (cabsRaw ?? []) as (RawCabinet & { part_comments?: PartKeyMap | null; part_names?: PartKeyMap | null })[]
+  const { data: cabsRaw } = await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id,part_comments,part_names,no_cnc,part_pos_overrides').in('room_id', roomIds)
+  const cabs = (cabsRaw ?? []) as (RawCabinet & { part_comments?: PartKeyMap | null; part_names?: PartKeyMap | null; part_pos_overrides?: Record<string, SizeOv> | null })[]
   const cabIds = cabs.map(c => c.id)
   const commentsByCab = new Map<string, PartKeyMap>(cabs.map(c => [c.id, c.part_comments ?? {}]))
   const namesByCab = new Map<string, PartKeyMap>(cabs.map(c => [c.id, c.part_names ?? {}]))
+  const sizeOvByCab = buildSizeOvByCab(cabs)
   if (!cabIds.length) return normalizeProject(project, rooms, cabs, [], [], [], [], [], commentsByCab)
 
   const [cpR, ipR, tpR, fzR, dbR, ccR] = await Promise.all([
@@ -54,5 +56,5 @@ export async function loadProjectParts(projectId: string): Promise<NormalizedPro
     (cpR.data ?? []) as Record<string, unknown>[], (ipR.data ?? []) as Record<string, unknown>[],
     (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[],
     (dbR.data ?? []) as Record<string, unknown>[], commentsByCab,
-    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames)
+    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab)
 }

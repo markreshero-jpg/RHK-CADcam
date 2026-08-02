@@ -69,7 +69,7 @@
 ## Milestones
 
 ### O1 — Effective part sizes in the snapshot (the override gap)
-**Status: [ ] not started**
+**Status: [x] done (2026-08-02) — verified headlessly (z_plan_automation/verify-o1.mjs: BC-13 front_rail sw=927 override → Stage 2 row shows 927 with the ● marker; PASS).** New `src/lib/optimiser/sizeOverrides.ts`: `boxAxes()` inverts the svg*Meta box→row mapping per part kind (case side/back/horiz, tk spreader_horizontal split, int side/face/horiz kinds, db side/bottom/face, face_zones direct); `applySizeOverride` folds sw/sh/sd into a row COPY's dx/dy/dz. normalize.ts applies it per-loop BEFORE EB fields + tk canonicalisation (so deductions/canonical sort see effective dims); OptiPart gains `size_overridden` + `base_w/h/thickness`. Both loaders select `part_pos_overrides`. Stage 2 dims cells: sky ● on changed axes with "base → effective" tooltip. Thickness overrides shift the material group automatically (group key already uses thickness).
 - New shared module `src/lib/optimiser/effectiveSize.ts` (or in `normalize.ts`): reconstruct the
   stable part id per row, look up `part_pos_overrides[cabinet].sizeSlots`, map per-kind slots →
   the row's dx/dy/dz axes (reuse/mirror `displayExtents` logic — do NOT re-derive), produce
@@ -164,6 +164,12 @@
 - Snapshot-uid instability / reload-a-saved-run / `output_to_cnc` reset on resolve (pre-existing).
 
 ## Session log
+- **2026-08-02 (2)** — O1 done + verified headlessly. Notes: BC-09's shaped gable stored NO size
+  override (bbox equalled base size — no-op writes are skipped by design), so the verifier hunts
+  for any cabinet with a real sw/sh/sd override (found BC-13 front_rail). Optimiser stage
+  stepper only navigates to visited stages — headless scripts must click "Next →", not "2Parts".
+  Stage 2 shows CUT sizes when the profile deducts EB — assertions must match the overridden
+  axis only. Next: O2 (shapes into the snapshot).
 - **2026-08-02** — Phase opened. Pipeline explored end-to-end (optimiser = snapshot reader of
   the six part tables; nester rect-only; routePerimeter 4-corner; EB deduction rect-only; no
   metres reporting anywhere). All four scope decisions locked with Mark (optimiser-side

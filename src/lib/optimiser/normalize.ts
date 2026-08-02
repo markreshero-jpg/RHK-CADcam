@@ -7,6 +7,7 @@
 
 import type { OptiPart, OptiRoom, OptiCabinet, SourceTable } from './types'
 import { PART_TYPE_LABELS } from '@/src/lib/partDisplayNames'
+import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -67,6 +68,7 @@ export function normalizeProject(
   ebThickness: Map<string, number> = new Map(),   // edge_band_id → tape thickness (mm)
   namesByCab: Map<string, Record<string, string>> = new Map(),  // cabinet → part_names
   systemNames: Record<string, string> = {},       // parts_library: key → name (active rows)
+  sizeOvByCab: SizeOvByCab = new Map(),           // cabinet → part_pos_overrides (sw/sh/sd → effective dims, O1)
 ): NormalizedProject {
   const rooms: OptiRoom[] = roomsRaw.map(r => ({ id: r.id, name: r.name }))
   const roomById = new Map(rooms.map(r => [r.id, r]))
@@ -96,6 +98,7 @@ export function normalizeProject(
     grain: string | null, nestPriority: number,
     dims?: { w: number; h: number; thickness: number },
     eb: EbFields = NO_EB,
+    baseDims?: { w: number; h: number; thickness: number },   // set when sw/sh/sd overrides changed the row (O1)
   ) => {
     const cabId = row.cabinet_instance_id as string
     const m = meta(cabId)
@@ -124,7 +127,23 @@ export function normalizeProject(
       grain_direction: grain, nest_priority: nestPriority,
       output_to_cnc: partCut && !cabNoCnc.has(cabId),
       comment: commentsByCab.get(cabId)?.[partKey] ?? null,
+      ...(baseDims ? {
+        size_overridden: true,
+        base_w: baseDims.w, base_h: baseDims.h, base_thickness: baseDims.thickness,
+      } : {}),
     })
+  }
+  // Fold sw/sh/sd size overrides into the row's dx/dy/dz BEFORE any downstream
+  // math (EB fields, toe-kick canonicalisation) so everything sees the
+  // effective size. Returns the original row's footprint when changed, for the
+  // "base → effective" display.
+  const sized = (table: SourceTable, r: Row, partKey: string): { r: Row; base?: { w: number; h: number; thickness: number } } => {
+    const { row, overridden } = applySizeOverride(table, r, partKey, sizeOvByCab)
+    if (!overridden) return { r }
+    const base = table === 'toekick_parts'
+      ? canonicalPanelDims(Number(r.dx), Number(r.dy), Number(r.dz))
+      : { w: Number(r.dx), h: Number(r.dy), thickness: Number(r.dz) }
+    return { r: row, base }
   }
 
   // Tape thickness for a part row (via its persisted edge_band_id), plus a
@@ -145,8 +164,9 @@ export function normalizeProject(
   })
 
   // partKey mirrors the svg*Meta synthetic ids so it matches part_operations.source_part_key.
-  for (const r of cp) {
-    const key = String(r.part_key)
+  for (const r0 of cp) {
+    const key = String(r0.part_key)
+    const { r, base } = sized('case_parts', r0, `case_${key}`)
     const isSide = key === 'left_side' || key === 'right_side'
     // Sides: footprint u = depth (banded back/front = left/right flags), v = height.
     // Back + horizontals: u runs bottom→top (back panels) / back→front where the
@@ -155,10 +175,11 @@ export function normalizeProject(
       isSide ? ['left', 'right'] : ['bottom', 'top'],
       isSide ? ['bottom', 'top'] : ['left', 'right'])
     push('case_parts', r, `case_${key}`, { typeKey: key, base: humanize(key) },
-      (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), undefined, eb)
+      (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), undefined, eb, base)
   }
-  for (const r of ip) {
-    const type = String(r.part_type)
+  for (const r0 of ip) {
+    const type = String(r0.part_type)
+    const { r, base } = sized('internal_parts', r0, `int_${type}_${r0.sort_order}`)
     // DB columns: edge_band_back → resolver 'left', edge_band_front → 'right'.
     const flags: EdgeFlags = {
       top: !!r.edge_band_top, bottom: !!r.edge_band_bottom,
@@ -170,7 +191,7 @@ export function normalizeProject(
       isSideKind ? ['bottom', 'top'] : ['left', 'right'])
     push('internal_parts', r, `int_${type}_${r.sort_order}`,
       { typeKey: type, base: humanize(type), suffix: ` ${Number(r.sort_order) + 1}` },
-      null, 0, undefined, eb)
+      null, 0, undefined, eb, base)
   }
   // Toe-kick parts store their placement bounding box in cabinet space, so the
   // board thickness isn't always on the DZ axis: spreaders are modelled on-edge
@@ -182,7 +203,8 @@ export function normalizeProject(
   // Edgeband deductions ride along through the same sort: top/bottom band the
   // height axis (dx), left/right the width axis (dy); the thickness axis is never
   // banded.
-  for (const r of tp) {
+  for (const r0 of tp) {
+    const { r, base } = sized('toekick_parts', r0, `tk_${r0.part_key}_${r0.sort_order}`)
     const t = tFor(r)
     const flags = flagsOf(r)
     const banded = flags.top || flags.bottom || flags.left || flags.right
@@ -195,21 +217,24 @@ export function normalizeProject(
     push('toekick_parts', r, `tk_${r.part_key}_${r.sort_order}`,
       { typeKey: String(r.part_key), base: humanize(String(r.part_key)) }, null, 0,
       { w: trip[0].v, h: trip[1].v, thickness: trip[2].v },
-      { eb_w1: trip[0].d1, eb_w2: trip[0].d2, eb_h1: trip[1].d1, eb_h2: trip[1].d2, eb_missing: banded && t == null })
+      { eb_w1: trip[0].d1, eb_w2: trip[0].d2, eb_h1: trip[1].d1, eb_h2: trip[1].d2, eb_missing: banded && t == null },
+      base)
   }
-  for (const r of fz) {
+  for (const r0 of fz) {
+    const { r, base } = sized('face_zones', r0, `zone_${r0.row_index}_${r0.col_index}`)
     // Face zones: dx = width (w, banded left/right), dy = height (h, banded bottom/top).
     const eb = ebFields(flagsOf(r), tFor(r), ['left', 'right'], ['bottom', 'top'])
     push('face_zones', r, `zone_${r.row_index}_${r.col_index}`,
       { typeKey: String(r.face_type), base: humanize(String(r.face_type)),
         suffix: ` (R${Number(r.row_index) + 1}C${Number(r.col_index) + 1})` },
-      (r.grain_direction as string) ?? null, 0, undefined, eb)
+      (r.grain_direction as string) ?? null, 0, undefined, eb, base)
   }
   // Drawer box panels — key mirrors svgDbMeta / Cabinet3DView (db_<row>_<col>_<part_type>),
   // the same identity the PartEditor writes to part_operations.source_part_key and that
   // part_comments are keyed by. Must match exactly or hand ops / comments are dropped here.
-  for (const r of dbp) {
-    const type = String(r.part_type)
+  for (const r0 of dbp) {
+    const type = String(r0.part_type)
+    const { r, base } = sized('drawer_box_parts', r0, `db_${r0.face_zone_row}_${r0.face_zone_col}_${type}`)
     // Box sides/bottom run pos_x front→back (boxFrame dir −1): pos_x=0 is the
     // FRONT edge — 'right' flag for sides, 'top' flag for the bottom panel.
     const pairs: [EdgePair, EdgePair] =
@@ -220,7 +245,7 @@ export function normalizeProject(
     push('drawer_box_parts', r, `db_${r.face_zone_row}_${r.face_zone_col}_${type}`,
       { typeKey: type, base: humanize(type.replace(/^db_/, '')),
         suffix: ` (R${Number(r.face_zone_row) + 1}C${Number(r.face_zone_col) + 1})` },
-      (r.grain_direction as string) ?? null, 0, undefined, eb)
+      (r.grain_direction as string) ?? null, 0, undefined, eb, base)
   }
   // Custom parts (fillers / applied panels / end panels). Key mirrors PartsView (custom_<id>).
   // No edgeband id of their own — fall back to the tape used with the same material.

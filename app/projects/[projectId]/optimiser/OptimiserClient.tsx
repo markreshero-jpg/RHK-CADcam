@@ -241,6 +241,17 @@ function Stage2Parts() {
   const deductEb = snap.profiles.find(pr => pr.id === profileId)?.deduct_edgeband === true
   const fmtMm = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1))
   const dispDims = (p: OptiPart) => (deductEb ? cutSize(p) : { w: Math.round(p.w), h: Math.round(p.h) })
+  // Sky dot on dims changed by a part size override (hand resize or shape save)
+  // — shown only on the axes that actually differ from the resolver's base size.
+  const sizeOvMark = (p: OptiPart, axis: 'w' | 'h' | 't') => {
+    if (!p.size_overridden) return null
+    const base = axis === 'w' ? p.base_w : axis === 'h' ? p.base_h : p.base_thickness
+    const eff  = axis === 'w' ? p.w : axis === 'h' ? p.h : p.thickness
+    if (base == null || Math.abs(base - eff) < 0.05) return null
+    return (
+      <span className="text-sky-400 cursor-help select-none" title={`Part size override: base ${fmtMm(base)}mm → ${fmtMm(eff)}mm (resized in the cabinet editor or by a saved shape)`}> ●</span>
+    )
+  }
 
   function toggleSort(k: string) {
     setSort(s => s.key === k ? { key: k, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: k, dir: 'asc' })
@@ -386,9 +397,9 @@ function Stage2Parts() {
       )
       case 'cabinet':  return <span className="text-ink-muted">{p.cabinet_label}</span>
       case 'room':     return <span className="text-ink-muted">{isBatch && p.job_number ? <span className="text-ink-subtle">{p.job_number} · </span> : null}{p.room_name}</span>
-      case 'width':    return <span className="font-mono text-ink-muted tabular-nums">{fmtMm(dispDims(p).w)}</span>
-      case 'height':   return <span className="font-mono text-ink-muted tabular-nums">{fmtMm(dispDims(p).h)}</span>
-      case 'thk':      return <span className="font-mono text-ink-muted tabular-nums">{p.thickness}</span>
+      case 'width':    return <span className="font-mono text-ink-muted tabular-nums">{fmtMm(dispDims(p).w)}{sizeOvMark(p, 'w')}</span>
+      case 'height':   return <span className="font-mono text-ink-muted tabular-nums">{fmtMm(dispDims(p).h)}{sizeOvMark(p, 'h')}</span>
+      case 'thk':      return <span className="font-mono text-ink-muted tabular-nums">{p.thickness}{sizeOvMark(p, 't')}</span>
       case 'material': return p.material_id ? <span className="text-ink-muted">{matName.get(p.material_id) ?? '—'}</span> : <span className="text-amber-600">none</span>
       case 'comment':  return (
         <input defaultValue={p.comment ?? ''} key={p.comment ?? ''} placeholder="—"
