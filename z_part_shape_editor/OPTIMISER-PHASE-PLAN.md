@@ -1,0 +1,171 @@
+# Shapes → Optimiser Phase — Plan & Milestone Tracker
+
+> **Purpose**: survives chat wipes — update status lines as work lands (same convention as
+> `INTEGRATION-PLAN.md`, which covered the authoring phase M1–M8, closed 2026-08-02).
+> Goal (Mark's locked end goal, 2026-07-30): **shaped and resized parts actually get cut** —
+> the optimiser, G-code and paper all stop pretending every part is its base rectangle.
+>
+> **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
+
+---
+
+## Locked decisions (agreed with Mark, 2026-08-02)
+
+1. **Override application is OPTIMISER-SIDE**: `normalize.ts` (and the cut-list report) load
+   `part_pos_overrides` + `part_shape_overrides` and adjust part sizes at snapshot time.
+   `persistResolved` and the resolved part tables stay pure resolver output — nothing is baked
+   into the DB. (Resolver-side baking rejected: double-apply risk in every view-layer consumer.)
+2. **Nesting footprint = bounding box** this phase. Shaped parts occupy their bbox rect in the
+   skyline packer; the contour is still CUT. True polygon/NFP nesting stays deferred.
+3. **Edgeband deduction applies to shaped parts too** (Mark: "if the shaped edge has edgebanding
+   applied to it then it needs to be deducted off the part"). Banded segments of a shaped outline
+   are offset inward by tape thickness when the machine profile deducts — NOT skipped. This is
+   the hard-geometry milestone (O5).
+4. **Phase scope beyond nest+contour**: cut-list report fix, optimiser shape preview
+   (Stage 4/5 outlines + `nest_placements.shape_polygon`), edgeband length/metres report. All in.
+
+## Verified pipeline facts (explored 2026-08-02)
+
+- **Optimiser is a one-way snapshot**: `/projects/[projectId]/optimiser` server loader
+  (`page.tsx:29-36`) + client batch loader (`loadClient.ts:29-36`) SELECT the six part tables
+  (`case_parts, internal_parts, toekick_parts, face_zones, drawer_box_parts, cabinet_custom_parts`);
+  `normalize.ts:121` takes `w=dx, h=dy, thk=dz` raw. Never calls the resolver, never reads
+  `part_pos_overrides` (confirmed: zero references under `src/lib/optimiser` or the optimiser route)
+  or `part_shape_overrides` (zero references outside canvas UI).
+- **Nester**: hand-written skyline rect packer, `src/lib/optimiser/nest.ts` (random-restart,
+  offcut pool, grain lock, top-left mirror). "Arbitrary-polygon NFP packing is a future
+  extension" — `nest.ts:11-13`.
+- **G-code**: `src/lib/optimiser/gcode.ts` — order: drills → circular pockets → routes/grooves →
+  perimeter. The perimeter cut IS the sizing cut; `routePerimeter` (`gcode.ts:725`) hard-codes
+  4 corners from `pl.x/y/w/h`. Onion-skin two-phase, cutter comp, ramp/lead arcs, tabs.
+- **EB deduction today**: per-part `eb_w1/w2/h1/h2` computed in `normalize.ts` (`ebFields:26-36`,
+  per-table mappings :148-234), applied by `cutSize()` (`types.ts:93-96`) when profile
+  `deduct_edgeband` — nest dims (`OptimiserClient.tsx:648`) AND op re-registration
+  (`drills.ts:82-93 ebShift`, shifts ops when left/bottom edges shrink).
+- **Stage 6 write-back**: `nest_jobs/nest_sheets/nest_placements` (`Stage6Gcode.tsx:178-208`);
+  `nest_placements.shape_polygon` exists in schema, hard-coded `null` (`:203`).
+- **Stable part ids** (what overrides/shapes key by): `case_<part_key>` /
+  `tk_<part_key>_<sort_order>` / `int_<part_type>_<sort_order>` / `zone_<row>_<col>` /
+  `custom_<uuid>` — reconstructable from the selected row columns; MUST match
+  `Cabinet3DView.tsx` id building exactly (~155–237).
+- **Override slots are per-kind box extents**, not raw dx/dy: side→`sd/sh`, horizontal→`sw/sd`,
+  face→`sw/sh` (`displayExtents` in `partEditorCore.ts`; custom parts write `dx/dy` directly on
+  their row so they're ALREADY correct in the optimiser). Shape saves stamp `meta.sizeSlots` +
+  `meta.baseAtSave` — reuse, don't re-derive.
+- **Stale-shape machinery exists**: `shapeIsStale` (OverridesView) compares base pair vs
+  `baseAtSave` (0.5mm tol, unordered).
+- **Edgeband metres reporting doesn't exist anywhere**; `edge_banding.cost_per_metre` is an
+  unconsumed library column. Shape meta stores `tapeLengthMM` at save.
+- **Mirror/two-sided**: everything emits on the single existing pass; `plane_kind` loaded but
+  unused (two-sided machining is Phase B of the door-faces track, separate). Shaped contours
+  must go through the SAME part→sheet transform as drills so mirrored parts (right gables) cut
+  on the correct physical edge.
+- **Known pre-existing fragilities (NOT this phase)**: `OptiPart.uid = table:row.id` dangles
+  after every re-resolve (saved `nest_placements` point at dead rows); `output_to_cnc` /
+  `nest_priority` reset to defaults on every resolve; no reload-a-saved-run path.
+
+---
+
+## Milestones
+
+### O1 — Effective part sizes in the snapshot (the override gap)
+**Status: [ ] not started**
+- New shared module `src/lib/optimiser/effectiveSize.ts` (or in `normalize.ts`): reconstruct the
+  stable part id per row, look up `part_pos_overrides[cabinet].sizeSlots`, map per-kind slots →
+  the row's dx/dy/dz axes (reuse/mirror `displayExtents` logic — do NOT re-derive), produce
+  effective `w/h/thickness`. Custom parts: dims already authoritative on the row — no change.
+- Load `part_pos_overrides` in BOTH loaders (`page.tsx` already selects `cabinet_instances` —
+  add the column; `loadClient.ts` same).
+- Stage 2 parts table: overridden sizes shown with a marker (tooltip: base → effective).
+- Thickness overrides (`sd` on faces etc.) change the material-group key — let them (a 25mm
+  gable override should NOT nest with 16mm stock).
+- **Accept**: hand-resized gable (sh=700) nests and lists at 700; unoverridden projects
+  byte-identical snapshot; both load paths agree.
+
+### O2 — Shapes into the snapshot
+**Status: [ ] not started**
+- Load `part_shape_overrides` (latest revision per part — same query shape as
+  `dbLoadShapeOverrides`) in both loaders; attach to `OptiPart`: `shape?: { segments, polygon
+  (sampled via src/lib/shapePath.ts), bbox, tapeLengthMM }`.
+- Nest footprint = shape bbox (locked decision #2) — should equal the O1 effective size; if they
+  disagree beyond tolerance → the shape is STALE: amber warning on the part in Stage 2 and
+  exclude-from-nest with an explicit reason (never silently cut a stale shape — matches the
+  authoring phase's "keep shape, flag error" policy).
+- **Accept**: shaped gable appears in Stage 2 flagged as shaped, nests at bbox; stale shape
+  blocks that part with a visible reason; rect-only projects unchanged.
+
+### O3 — Shape preview on the sheet + persisted polygon
+**Status: [ ] not started**
+- Stage 4/5 sheet SVGs (`SheetSVG.tsx`, `Stage5Edit.tsx`): draw the sampled outline inside the
+  placement rect for shaped parts (rotation-aware; reuse shapePath sampling, don't re-tessellate
+  per frame).
+- Stage 6 save: write `nest_placements.shape_polygon` (sampled polygon, part-local mm,
+  y-down, pre-rotation) instead of `null`.
+- **Accept**: shaped part visibly shaped in Stages 4/5 incl. after 90° rotation and manual move;
+  saved run rows carry the polygon.
+
+### O4 — Contour G-code
+**Status: [ ] not started**
+- `routePerimeter` (or a sibling `routeContour`) takes the shape outline for shaped parts:
+  segments → toolpath (lines + arcs as G2/G3 where the post supports them, sampled polyline
+  fallback; beziers always sampled), cutter compensation side from loop winding, ramp/lead-in
+  per existing profile settings, tabs distributed along the contour, onion-skin two-phase kept.
+- Same part→sheet transform as drills (rotation + the mirror convention) — a right gable's
+  notch must land on the same physical edge the Part Editor shows.
+- Drills/routes on shaped parts: op coords are already op-frame-preserved (M3 re-anchoring) —
+  verify against a shaped+drilled part rather than assuming.
+- Simulator: contour renders in the toolpath sim (gcodeParser may need arc handling checked).
+- **Accept**: generated program for a shaped gable cuts the drawn profile (verified in the
+  simulator + coordinate spot-checks against the stored segments); rect parts emit identical
+  G-code to before (regression-diff a saved program).
+
+### O5 — Edgeband deduction on shaped contours (locked decision #3)
+**Status: [ ] not started**
+- When profile `deduct_edgeband` is on: offset each BANDED segment of the outline inward by its
+  tape thickness (per-segment `edge.band` flags; tape thickness resolution reuses the
+  `normalize.ts` matEb fallback chain). Adjacent-segment reconciliation: re-intersect
+  neighbouring offset segments (line/line, line/arc, arc/arc); where no intersection exists
+  (tangent/short segments) fall back to trimming + amber warning on the part.
+- Bbox shrink from the offset feeds the nest dims; ops shift like `ebShift` does for rects —
+  derive the shift from the offset of the datum-adjacent (left/bottom) banded segments.
+- Unbanded segments untouched. Parts whose offset geometry fails: cut at drawn size + loud
+  warning (never emit silently-wrong geometry).
+- **Accept**: shaped part with a banded straight edge cuts smaller by exactly the tape
+  thickness on that edge; banded arc offsets concentrically; rect parts' deduction output
+  unchanged; failure cases warn visibly.
+
+### O6 — Cut-list report fix
+**Status: [ ] not started**
+- `CabinetSheetSVG.tsx` cut rows (`:304-349`) + `ReportsModal.tsx` parts list (`collectParts
+  :59-77`): apply the SAME effective-size module as O1 (shared import, not a copy); shaped
+  parts marked (⬠ + bbox) and sw/sh/sd overrides finally listed in the OVERRIDES note block
+  (today only ox/oy/oz/rot print).
+- **Accept**: paper cut list matches Stage 2 effective sizes exactly for resized + shaped parts.
+
+### O7 — Edgeband length report (metres + cost)
+**Status: [ ] not started**
+- Per-part banded length: rects = sum of banded edge finished lengths (stored dims are finished
+  size — edgeband-size-conventions); shaped parts = `meta.tapeLengthMM` (recompute from
+  segments if meta missing).
+- Rollup by edgeband product → total metres (+ waste factor, settable, default ~10%) × 
+  `cost_per_metre` (first consumer of that column). Surface: new report in ReportsModal +
+  a summary line in optimiser Stage 2. Exact placement/format = Mark's call at implementation.
+- **Accept**: metres match hand-calc on a known cabinet (incl. one shaped part); report prints.
+
+**Order**: O1 → O2 → O3 → O4 → O5, then O6/O7 in either order (both depend only on O1/O2).
+
+---
+
+## Deferred (explicitly out of this phase)
+- True polygon/NFP nesting (shaped offcut reuse).
+- Shape display in elevations.
+- Banding authoring UI on shape segments (segment flags still seed from the rect part's banding).
+- Two-sided machining (door-faces Phase B — separate track).
+- Snapshot-uid instability / reload-a-saved-run / `output_to_cnc` reset on resolve (pre-existing).
+
+## Session log
+- **2026-08-02** — Phase opened. Pipeline explored end-to-end (optimiser = snapshot reader of
+  the six part tables; nester rect-only; routePerimeter 4-corner; EB deduction rect-only; no
+  metres reporting anywhere). All four scope decisions locked with Mark (optimiser-side
+  overrides, bbox nesting, EB deduction ON shaped edges, all three extras in). Plan written.
+  Nothing coded yet.

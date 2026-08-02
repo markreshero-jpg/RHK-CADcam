@@ -159,6 +159,9 @@ On **open**: load latest revision → `initialSegments`; none → `null` (compon
 - Benchtop shapes, cabinet-level shape editing, annotation layers.
 - Revision pruning policy.
 
+> **PHASE CLOSED 2026-08-02** (M1–M8 all done & verified). The next phase — shapes/overrides
+> into the optimiser, contour G-code, EB metres — is tracked in `OPTIMISER-PHASE-PLAN.md`.
+
 ## Session log
 - **2026-08-02 (2)** — M8 done, verified headlessly (Mark asked for an automated check). En route found + fixed an M6 REGRESSION: `OverridesView` stopped forwarding `onEditShape` into `ShapeOverridesSection` (lost in the 2026-08-01 shared-actions refactor), so the Overrides-tab ✎ Edit entry point silently rendered nothing. New reusable verifier `z_plan_automation/verify-m8.mjs` (finds a shaped cabinet via part_shape_overrides → openCabinet bridge → DOM-clicks Overrides tab → ✎ → asserts full-width shaping layout + restore on Cancel + screenshots).
 - **2026-08-02** — M7 verified by Mark ("it all still works") and committed. Feedback from the verify: the in-pane embed leaves the shape canvas too small (ops list + sidebar + chrome crowd it) → M8 added (shaping-mode canvas maximisation), started same session.
