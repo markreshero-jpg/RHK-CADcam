@@ -83,7 +83,8 @@
   byte-identical snapshot; both load paths agree.
 
 ### O2 — Shapes into the snapshot
-**Status: [ ] not started**
+**Status: [x] done (2026-08-03) — verified headlessly (verify-o2.mjs PASS: fresh ⬠ r3 on BC-09's gable, nestable; the STALE path also observed live — amber ⬠ with both sizes + excluded-from-nest banner — before the data was healed).** New `src/lib/optimiser/shapes.ts`: SHAPE_SELECT/buildShapesByCab (latest revision per part, both loaders query it) + `attachShape` (samples the polygon via shapePath, bbox from TRUE geometry, stale = unordered pair vs effective in-plane dims, 0.5mm tol). OptiPart gains `shape` (segments/polygon/bbox/tape_mm/revision) + `shape_stale`. Stage 2: ⬠ marker (sky fresh w/ revision, amber stale w/ both sizes). Stage 4: stale shapes excluded with reason; **interim safety: shaped parts nest at FULL bbox even when the profile deducts EB** (deducted rect < contour would let the packer overlap material — lifted by O5), amber note lists shaped+banded parts. Known cosmetic gap for O5: Stage 2 dims display still shows cutSize for shaped parts when deduct is on (724 vs the 725 it nests/cuts at).
+**Bug found & fixed en route (ShapeEditor.jsx)**: `shapeBoundsMM` + `checkGeometry` computed bounds from segment ENDPOINTS only — an arc bulging past its chord (BC-09's grow-wider gable, drawn during the M7 verify) reported maxX=560 while the true outline reached 725: the "wider than part" warning stayed silent and the bbox→size write was skipped, leaving shape/part inconsistent (exactly what O2's stale flag caught). New `segSamplePoints` (W3C arc sampling ~10° + 12-step cubics) feeds all three consumers (save meta.bounds, datum panel, re-reference). Save-flow re-verified end-to-end (verify-o2b.mjs: r3 + `sd:725` override written).
 - Load `part_shape_overrides` (latest revision per part — same query shape as
   `dbLoadShapeOverrides`) in both loaders; attach to `OptiPart`: `shape?: { segments, polygon
   (sampled via src/lib/shapePath.ts), bbox, tapeLengthMM }`.
@@ -164,6 +165,11 @@
 - Snapshot-uid instability / reload-a-saved-run / `output_to_cnc` reset on resolve (pre-existing).
 
 ## Session log
+- **2026-08-03** — O2 done + verified headlessly. Found + fixed the ShapeEditor endpoint-only
+  bounds bug (see O2 status block). DATA NOTE for Mark: BC-09's Right Gable now has r2 (no-op
+  re-save) + r3 revisions and the part grew to 725mm deep — that's the drawn grow-wider arc
+  finally applied by the fixed save path; restore r1 / Remove shape if unwanted. Next: O3
+  (sheet preview + shape_polygon).
 - **2026-08-02 (2)** — O1 done + verified headlessly. Notes: BC-09's shaped gable stored NO size
   override (bbox equalled base size — no-op writes are skipped by design), so the verifier hunts
   for any cabinet with a real sw/sh/sd override (found BC-13 front_rail). Optimiser stage

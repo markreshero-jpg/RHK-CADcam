@@ -10,6 +10,7 @@ import { normalizeProject, collectEbIds, PART_SELECTS, type RawRoom, type RawCab
 import type { NormalizedProject } from './normalize'
 import type { PartKeyMap } from './types'
 import { buildSizeOvByCab, type SizeOv } from './sizeOverrides'
+import { buildShapesByCab, SHAPE_SELECT, type ShapeRow } from './shapes'
 
 export async function loadProjectParts(projectId: string): Promise<NormalizedProject> {
   const { data: project } = await supabase.from('projects').select('id,name,job_number').eq('id', projectId).single()
@@ -28,14 +29,16 @@ export async function loadProjectParts(projectId: string): Promise<NormalizedPro
   const sizeOvByCab = buildSizeOvByCab(cabs)
   if (!cabIds.length) return normalizeProject(project, rooms, cabs, [], [], [], [], [], commentsByCab)
 
-  const [cpR, ipR, tpR, fzR, dbR, ccR] = await Promise.all([
+  const [cpR, ipR, tpR, fzR, dbR, ccR, shR] = await Promise.all([
     supabase.from('case_parts').select(PART_SELECTS.case_parts).in('cabinet_instance_id', cabIds),
     supabase.from('internal_parts').select(PART_SELECTS.internal_parts).in('cabinet_instance_id', cabIds),
     supabase.from('toekick_parts').select(PART_SELECTS.toekick_parts).in('cabinet_instance_id', cabIds),
     supabase.from('face_zones').select(PART_SELECTS.face_zones).in('cabinet_instance_id', cabIds),
     supabase.from('drawer_box_parts').select(PART_SELECTS.drawer_box_parts).in('cabinet_instance_id', cabIds),
     supabase.from('cabinet_custom_parts').select(PART_SELECTS.custom_parts).in('cabinet_instance_id', cabIds),
+    supabase.from('part_shape_overrides').select(SHAPE_SELECT).in('cabinet_id', cabIds).order('revision', { ascending: false }),
   ])
+  const shapesByCab = buildShapesByCab((shR.data ?? []) as ShapeRow[])
 
   // Edgeband thicknesses referenced by the part rows (for cut-size deduction).
   const ebIds = collectEbIds(
@@ -56,5 +59,5 @@ export async function loadProjectParts(projectId: string): Promise<NormalizedPro
     (cpR.data ?? []) as Record<string, unknown>[], (ipR.data ?? []) as Record<string, unknown>[],
     (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[],
     (dbR.data ?? []) as Record<string, unknown>[], commentsByCab,
-    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab)
+    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab, shapesByCab)
 }

@@ -3,6 +3,7 @@ import { createServerClient } from '@/src/lib/supabase-server'
 import type { OptiSnapshot, OptiMaterial, OptiMachine, OptiProfile, PartKeyMap } from '@/src/lib/optimiser/types'
 import { normalizeProject, collectEbIds, PART_SELECTS, type RawRoom, type RawCabinet } from '@/src/lib/optimiser/normalize'
 import { buildSizeOvByCab, type SizeOv } from '@/src/lib/optimiser/sizeOverrides'
+import { buildShapesByCab, SHAPE_SELECT, type ShapeRow } from '@/src/lib/optimiser/shapes'
 import OptimiserClient from './OptimiserClient'
 
 export const dynamic = 'force-dynamic'
@@ -28,14 +29,16 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
   const sizeOvByCab = buildSizeOvByCab(cabs)
 
   const empty = { data: [] as Record<string, unknown>[] }
-  const [cpR, ipR, tpR, fzR, dbR, ccR] = cabIds.length ? await Promise.all([
+  const [cpR, ipR, tpR, fzR, dbR, ccR, shR] = cabIds.length ? await Promise.all([
     supabase.from('case_parts').select(PART_SELECTS.case_parts).in('cabinet_instance_id', cabIds),
     supabase.from('internal_parts').select(PART_SELECTS.internal_parts).in('cabinet_instance_id', cabIds),
     supabase.from('toekick_parts').select(PART_SELECTS.toekick_parts).in('cabinet_instance_id', cabIds),
     supabase.from('face_zones').select(PART_SELECTS.face_zones).in('cabinet_instance_id', cabIds),
     supabase.from('drawer_box_parts').select(PART_SELECTS.drawer_box_parts).in('cabinet_instance_id', cabIds),
     supabase.from('cabinet_custom_parts').select(PART_SELECTS.custom_parts).in('cabinet_instance_id', cabIds),
-  ]) : [empty, empty, empty, empty, empty, empty]
+    supabase.from('part_shape_overrides').select(SHAPE_SELECT).in('cabinet_id', cabIds).order('revision', { ascending: false }),
+  ]) : [empty, empty, empty, empty, empty, empty, empty]
+  const shapesByCab = buildShapesByCab((shR.data ?? []) as ShapeRow[])
 
   const [matR, machR, profR, toolR, projR, sysNamesR] = await Promise.all([
     supabase.from('materials').select('id,name,dz,sheet_dx,sheet_dy,has_grain,grain_direction,trim_top,trim_bottom,trim_left,trim_right,pad,cnc_tool_id,feed_rate_pct').eq('active', true).order('name'),
@@ -66,7 +69,7 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
     (cpR.data ?? []) as Record<string, unknown>[], (ipR.data ?? []) as Record<string, unknown>[],
     (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[],
     (dbR.data ?? []) as Record<string, unknown>[], commentsByCab,
-    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab)
+    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab, shapesByCab)
 
   const snapshot: OptiSnapshot = {
     projectId,

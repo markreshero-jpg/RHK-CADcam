@@ -49,6 +49,11 @@ export interface OptiPart {
   base_w?: number
   base_h?: number
   base_thickness?: number
+  // Drawn outline (part_shape_overrides latest revision — shapes.ts). Nest
+  // footprint stays w×h (= the shape bbox when fresh); shape_stale means the
+  // part size changed after the shape was drawn → excluded from nesting.
+  shape?: import('./shapes').OptiShape
+  shape_stale?: boolean
 }
 
 // Cabinet-level maps of user-authored, regen-surviving content keyed by

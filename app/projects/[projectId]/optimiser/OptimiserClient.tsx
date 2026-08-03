@@ -391,9 +391,17 @@ function Stage2Parts() {
     switch (key) {
       case 'check':    return <input type="checkbox" checked={on} onChange={() => togglePart(p.uid)} />
       case 'part':     return (
-        <input defaultValue={p.label} key={p.label} placeholder={p.default_label} title="Click to rename this part"
-          onBlur={e => { if (e.target.value.trim() !== p.label) savePartLabel(p, e.target.value) }}
-          className={`w-full bg-transparent border border-transparent hover:border-edge-strong focus:border-accent rounded px-1.5 py-0.5 focus:outline-none focus:bg-surface-2 ${p.label !== p.default_label ? 'text-accent font-medium' : 'text-ink'}`} />
+        <span className="flex items-center gap-1 min-w-0">
+          {p.shape && (
+            <span className={`shrink-0 cursor-help select-none ${p.shape_stale ? 'text-amber-500' : 'text-sky-400'}`}
+              title={p.shape_stale
+                ? `Shaped part — STALE: the part is now ${fmtMm(p.w)}×${fmtMm(p.h)}mm but the shape was drawn at ${fmtMm(p.shape.bbox.w)}×${fmtMm(p.shape.bbox.h)}mm. Re-edit the shape in the cabinet; excluded from nesting until then.`
+                : `Shaped part (r${p.shape.revision}) — nests at its bounding box, cuts its drawn outline`}>⬠</span>
+          )}
+          <input defaultValue={p.label} key={p.label} placeholder={p.default_label} title="Click to rename this part"
+            onBlur={e => { if (e.target.value.trim() !== p.label) savePartLabel(p, e.target.value) }}
+            className={`w-full bg-transparent border border-transparent hover:border-edge-strong focus:border-accent rounded px-1.5 py-0.5 focus:outline-none focus:bg-surface-2 ${p.label !== p.default_label ? 'text-accent font-medium' : 'text-ink'}`} />
+        </span>
       )
       case 'cabinet':  return <span className="text-ink-muted">{p.cabinet_label}</span>
       case 'room':     return <span className="text-ink-muted">{isBatch && p.job_number ? <span className="text-ink-subtle">{p.job_number} · </span> : null}{p.room_name}</span>
@@ -638,6 +646,16 @@ function Stage4Nesting() {
   // Machine-profile option: nest at cut size (finished − edgeband per banded edge).
   const deductEb = snap.profiles.find(pr => pr.id === profileId)?.deduct_edgeband === true
   const ebMissing = deductEb ? runParts.filter(p => p.eb_missing) : []
+  // Stale shapes never nest — the drawn outline no longer matches the part size
+  // (locked policy: keep shape, flag error; re-edit in the cabinet to clear).
+  const staleShapes = runParts.filter(p => p.shape_stale)
+  const nestableParts = runParts.filter(p => !p.shape_stale)
+  // Until contour EB offsetting lands (phase plan O5), shaped parts nest and
+  // cut at FULL drawn size even when the profile deducts — a deducted rect
+  // smaller than the contour would let the packer overlap real material.
+  const shapedBanded = deductEb
+    ? nestableParts.filter(p => p.shape && (p.eb_w1 || p.eb_w2 || p.eb_h1 || p.eb_h2))
+    : []
 
   function run() {
     const isBatch = includedProjectIds.length > 1
@@ -650,13 +668,14 @@ function Stage4Nesting() {
       // material) so selected parts never silently fall to unplaced when a
       // group's stock wasn't configured in Stage 3.
       const stockForRun: Record<string, GroupStock> = { ...(stock as Record<string, GroupStock>) }
-      for (const p of runParts) {
+      for (const p of nestableParts) {
         const qty = cutQty[p.uid] ?? 1
         const grainLock = !!(p.material_id && matById.get(p.material_id)?.has_grain)
         const label = isBatch && p.job_number ? `${p.job_number} ${p.label}` : p.label
         const gk = materialGroupKey(p.material_id, p.thickness)
         if (!stockForRun[gk]) stockForRun[gk] = { standard: seedStock(snap, p.material_id), offcuts: [] }
-        const dims = deductEb ? cutSize(p) : { w: p.w, h: p.h }
+        // Shaped parts always occupy their full bbox (no EB deduction until O5).
+        const dims = deductEb && !p.shape ? cutSize(p) : { w: p.w, h: p.h }
         for (let i = 0; i < qty; i++) {
           const inst: NestPartInput = { uid: `${p.uid}#${i}`, baseUid: p.uid, label, w: dims.w, h: dims.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority }
           parts.push(inst); index[inst.uid] = inst
@@ -689,12 +708,12 @@ function Stage4Nesting() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-none px-8 py-3 flex items-center gap-4 border-b border-edge">
-        <button onClick={run} disabled={nesting || runParts.length === 0}
+        <button onClick={run} disabled={nesting || nestableParts.length === 0}
           className="px-4 py-1.5 text-xs rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-50 transition-colors">
           {nesting ? 'Nesting…' : nestResult ? 'Re-nest' : 'Run nesting'}
         </button>
         <span className="text-[11px] text-ink-subtle">
-          {runParts.length} part{runParts.length === 1 ? '' : 's'} to nest{filtersActive ? ' (Stage 2 filters applied)' : ''}
+          {nestableParts.length} part{nestableParts.length === 1 ? '' : 's'} to nest{filtersActive ? ' (Stage 2 filters applied)' : ''}
         </span>
         {overall && (
           <span className="text-xs text-ink-muted">
@@ -706,6 +725,18 @@ function Stage4Nesting() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-8 py-5">
+        {staleShapes.length > 0 && (
+          <p className="text-[11px] text-amber-500 mb-4">
+            ⬠ {staleShapes.length} shaped part(s) EXCLUDED — the part size changed after the shape was drawn;
+            re-edit the shape in the cabinet: {[...new Set(staleShapes.map(p => `${p.cabinet_label} ${p.label}`))].slice(0, 6).join(', ')}{staleShapes.length > 6 ? '…' : ''}
+          </p>
+        )}
+        {shapedBanded.length > 0 && (
+          <p className="text-[11px] text-amber-500 mb-4">
+            ⬠ {shapedBanded.length} shaped part(s) have edgebanding but nest/cut at full drawn size —
+            contour edgeband deduction is not built yet: {[...new Set(shapedBanded.map(p => p.label))].slice(0, 6).join(', ')}{shapedBanded.length > 6 ? '…' : ''}
+          </p>
+        )}
         {ebMissing.length > 0 && (
           <p className="text-[11px] text-amber-500 mb-4">
             Edgeband deduction is on, but {ebMissing.length} part(s) have banded edges with no edgeband

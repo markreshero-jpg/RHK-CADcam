@@ -8,6 +8,7 @@
 import type { OptiPart, OptiRoom, OptiCabinet, SourceTable } from './types'
 import { PART_TYPE_LABELS } from '@/src/lib/partDisplayNames'
 import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
+import { attachShape, type ShapesByCab } from './shapes'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -69,6 +70,7 @@ export function normalizeProject(
   namesByCab: Map<string, Record<string, string>> = new Map(),  // cabinet → part_names
   systemNames: Record<string, string> = {},       // parts_library: key → name (active rows)
   sizeOvByCab: SizeOvByCab = new Map(),           // cabinet → part_pos_overrides (sw/sh/sd → effective dims, O1)
+  shapesByCab: ShapesByCab = new Map(),           // cabinet → latest shape revision per part (O2)
 ): NormalizedProject {
   const rooms: OptiRoom[] = roomsRaw.map(r => ({ id: r.id, name: r.name }))
   const roomById = new Map(rooms.map(r => [r.id, r]))
@@ -111,6 +113,10 @@ export function normalizeProject(
     // custom_parts carry no_cnc (true = skip CNC); everything else carries output_to_cnc.
     // Either is overridden to false when the whole assembly is flagged no_cnc.
     const partCut = table === 'custom_parts' ? !(row.no_cnc as boolean) : ((row.output_to_cnc as boolean) ?? true)
+    // Drawn outline for this part (O2) — stale-checked against the effective
+    // in-plane dims this row is about to nest with.
+    const effW = dims?.w ?? Number(row.dx), effH = dims?.h ?? Number(row.dy)
+    const { shape, stale } = attachShape(shapesByCab.get(cabId)?.[partKey], effW, effH)
     parts.push({
       uid: `${table}:${row.id as string}`,
       source_table: table, source_part_id: row.id as string,
@@ -131,6 +137,7 @@ export function normalizeProject(
         size_overridden: true,
         base_w: baseDims.w, base_h: baseDims.h, base_thickness: baseDims.thickness,
       } : {}),
+      ...(shape ? { shape, shape_stale: stale } : {}),
     })
   }
   // Fold sw/sh/sd size overrides into the row's dx/dy/dz BEFORE any downstream

@@ -71,11 +71,52 @@ function segFromPartMM(s) {
 // finished. This rides along with the segment into the resolver.
 const EDGE_DEFAULT = { band: false, profile: 'square' };
 
-// Bounding box of a shape in part-relative mm
+// True per-segment sample points (px): endpoints PLUS arc/curve interiors.
+// Endpoint-only bounds miss an arc bulging past its chord — that understated
+// meta.bounds, silently skipped the bbox→size write on save, and let the
+// "wider than part" warning stay quiet (grow-wider save bug, 2026-08-03).
+function segSamplePoints(s) {
+  const pts = [s.p0, s.p1];
+  if (s.type === 'arc' && s.rx && s.ry) {
+    // W3C SVG F.6.5 endpoint→centre conversion (φ=0), sampled at ~10°.
+    let rx = Math.abs(s.rx), ry = Math.abs(s.ry);
+    const x1p = (s.p0.x - s.p1.x) / 2, y1p = (s.p0.y - s.p1.y) / 2;
+    const lam = (x1p*x1p)/(rx*rx) + (y1p*y1p)/(ry*ry);
+    if (lam > 1) { const k = Math.sqrt(lam); rx *= k; ry *= k; }
+    const large = s.largeArc ?? 0, sweep = s.sweep ?? 0;
+    const sign = large !== sweep ? 1 : -1;
+    const num = rx*rx*ry*ry - rx*rx*y1p*y1p - ry*ry*x1p*x1p;
+    const den = rx*rx*y1p*y1p + ry*ry*x1p*x1p;
+    const co = den === 0 ? 0 : sign * Math.sqrt(Math.max(0, num / den));
+    const cx = co * (rx*y1p)/ry + (s.p0.x + s.p1.x)/2;
+    const cy = co * -(ry*x1p)/rx + (s.p0.y + s.p1.y)/2;
+    const a0 = Math.atan2((y1p - co*-(ry*x1p)/rx)/ry, (x1p - co*(rx*y1p)/ry)/rx);
+    const a1 = Math.atan2((-y1p - co*-(ry*x1p)/rx)/ry, (-x1p - co*(rx*y1p)/ry)/rx);
+    let da = a1 - a0;
+    if (!sweep && da > 0) da -= 2*Math.PI;
+    if (sweep && da < 0) da += 2*Math.PI;
+    const steps = Math.max(2, Math.ceil(Math.abs(da) / (Math.PI/18)));
+    for (let i = 1; i < steps; i++) {
+      const t = a0 + (da*i)/steps;
+      pts.push({ x: cx + rx*Math.cos(t), y: cy + ry*Math.sin(t) });
+    }
+  } else if (s.type === 'curve' && s.cp1 && s.cp2) {
+    for (let i = 1; i < 12; i++) {
+      const t = i/12, m = 1 - t;
+      pts.push({
+        x: m*m*m*s.p0.x + 3*m*m*t*s.cp1.x + 3*m*t*t*s.cp2.x + t*t*t*s.p1.x,
+        y: m*m*m*s.p0.y + 3*m*m*t*s.cp1.y + 3*m*t*t*s.cp2.y + t*t*t*s.p1.y,
+      });
+    }
+  }
+  return pts;
+}
+
+// Bounding box of a shape in part-relative mm (true geometry, not endpoints)
 function shapeBoundsMM(segs) {
   if (!segs || !segs.length) return null;
-  const xs = segs.flatMap(s => [s.p0.x, s.p1.x]);
-  const ys = segs.flatMap(s => [s.p0.y, s.p1.y]);
+  const pts = segs.flatMap(segSamplePoints);
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
   return {
     minX: pxToPartMM(Math.min(...xs),'x'), maxX: pxToPartMM(Math.max(...xs),'x'),
     minY: pxToPartMM(Math.min(...ys),'y'), maxY: pxToPartMM(Math.max(...ys),'y'),
@@ -183,10 +224,10 @@ function checkGeometry(segs, partW = null, partH = null) {
     if (segLen(s)<2) issues.push({type:'warning', msg:`Segment ${i+1} has zero length`});
   });
 
-  // Check bounding box
+  // Check bounding box (true geometry — arcs/curves count, not just endpoints)
   if (segs.length > 0) {
-    const xs=segs.flatMap(s=>[s.p0.x,s.p1.x]);
-    const ys=segs.flatMap(s=>[s.p0.y,s.p1.y]);
+    const pts=segs.flatMap(segSamplePoints);
+    const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
     const bw=Math.max(...xs)-Math.min(...xs);
     const bh=Math.max(...ys)-Math.min(...ys);
     if (bw<20) issues.push({type:'error', msg:'Shape width too small'});
@@ -195,8 +236,8 @@ function checkGeometry(segs, partW = null, partH = null) {
 
   // Part bounds check -- shape must fit inside the part it belongs to
   if (partW && partH && segs.length) {
-    const xs = segs.flatMap(s=>[s.p0.x,s.p1.x]);
-    const ys = segs.flatMap(s=>[s.p0.y,s.p1.y]);
+    const pts = segs.flatMap(segSamplePoints);
+    const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
     const minX = pxToPartMM(Math.min(...xs),'x');
     const maxX = pxToPartMM(Math.max(...xs),'x');
     const minY = pxToPartMM(Math.min(...ys),'y');
