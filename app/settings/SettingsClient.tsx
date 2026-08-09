@@ -327,12 +327,15 @@ const EMPTY_SETTINGS: ShopSettings = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function SettingsClient({ settings: initSettings, schedLists }: {
+export default function SettingsClient({ settings: initSettings, schedLists, initialTab }: {
   settings: ShopSettings | null
   schedLists: SchedListMap
+  initialTab?: string
 }) {
   const s = initSettings ?? EMPTY_SETTINGS
-  const [tab, setTab] = useState<SettingsTab>('company')
+  const [tab, setTab] = useState<SettingsTab>(
+    TABS.some(t => t.id === initialTab) ? (initialTab as SettingsTab) : 'company'
+  )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -786,9 +789,12 @@ export default function SettingsClient({ settings: initSettings, schedLists }: {
                 </div>
                 <div className="pt-2 border-t border-edge">
                   <p className="text-xs text-ink-subtle mb-2">Per-class material defaults (carcass, doors, shelves, etc.) are set in the Materials Library.</p>
-                  <Link href="/library/schedules" className="text-xs text-accent-ink hover:text-accent-ink transition-colors">
+                  <button
+                    onClick={() => setTab('materials_schedule')}
+                    className="text-xs text-accent-ink hover:text-accent-hover transition-colors"
+                  >
                     Materials Library → Shop Defaults →
-                  </Link>
+                  </button>
                 </div>
               </div>
             )}

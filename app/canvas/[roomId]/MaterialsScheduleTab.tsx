@@ -23,17 +23,18 @@ const ALL_SCHED_COLS = SCHED_TYPES.map(t => t.col).join(', ')
 
 // ── Per-role override config ──────────────────────────────────────────────────
 
+// door_face is deliberately absent: door material is owned by the Doors tab
+// (style + colour → linked board). The front schedule remains the silent
+// fallback for zones with no door style assigned.
 const ASM_ROLES = [
-  { key: 'interior',         label: 'Interior',        desc: 'Carcass panels' },
-  { key: 'exposed_interior', label: 'Exposed Interior', desc: 'End panels' },
-  { key: 'door_face',        label: 'Door Face',        desc: 'Doors & drawer faces' },
-  { key: 'shelf',            label: 'Shelf',            desc: 'Shelves' },
-  { key: 'end_panel',        label: 'End Panel',        desc: 'Decorative ends' },
+  { key: 'interior',  label: 'Interior',  desc: 'Carcass panels' },
+  { key: 'exposed',   label: 'Exposed',   desc: 'End panels, fillers, open interiors' },
+  { key: 'shelf',     label: 'Shelf',     desc: 'Shelves' },
 ]
 
 const TK_ROLES = [
-  { key: 'face',     label: 'Face',     desc: 'Visible front face' },
-  { key: 'interior', label: 'Interior', desc: 'Structural members' },
+  { key: 'face',     label: 'Face',          desc: 'Visible front face' },
+  { key: 'interior', label: 'Kick Interior', desc: 'Structural members' },
 ]
 
 const CLASSES = ['base', 'wall', 'tall'] as const
@@ -61,11 +62,20 @@ interface Props {
   mode: 'job' | 'room'
   projectId: string
   roomId?: string
+  // Hide the schedule-assignment section (used when the host UI has its own
+  // schedule pickers, e.g. Job Properties → Material Schedules).
+  showSchedules?: boolean
+  // 'primary' renders ONLY the Interior/Exposed × class grid (the job's main
+  // material picks — mounted at the top of Job Properties in place of the old
+  // per-class assembly-schedule pickers). 'secondary' renders everything else
+  // (door face/shelf, toekick, benchtops) without duplicating those two roles.
+  // Omit for the full tab (Room Properties).
+  roleFilter?: 'primary' | 'secondary'
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props) {
+export default function MaterialsScheduleTab({ mode, projectId, roomId, showSchedules = true, roleFilter }: Props) {
   const [loading,   setLoading]   = useState(true)
   const [allMats,    setAllMats]    = useState<{ id: string; name: string; dz: number }[]>([])
   const [allBtMats,  setAllBtMats]  = useState<{ id: string; name: string; dz: number; material_type: string | null }[]>([])
@@ -344,14 +354,74 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props)
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const asmRoles =
+    roleFilter === 'primary'   ? ASM_ROLES.filter(r => r.key === 'interior' || r.key === 'exposed')
+    : roleFilter === 'secondary' ? ASM_ROLES.filter(r => r.key !== 'interior' && r.key !== 'exposed')
+    : ASM_ROLES
+
+  function renderAsmGrid() {
+    return (
+      <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-px bg-gray-700/50 rounded overflow-hidden border border-gray-700 text-xs mb-4">
+        <div className="bg-gray-800 px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Role</div>
+        {CLASSES.map(c => (
+          <div key={c} className="bg-gray-800 px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide capitalize">{c}</div>
+        ))}
+        {asmRoles.map(role => (
+          <Fragment key={role.key}>
+            <div className="bg-gray-900 px-2 py-2 flex flex-col justify-center">
+              <span className="text-gray-300 font-medium text-xs">{role.label}</span>
+              <span className="text-[9px] text-gray-600 mt-0.5">{role.desc}</span>
+            </div>
+            {CLASSES.map(cls => {
+              const k   = `${cls}|${role.key}`
+              const cur = matOvr[k] ?? ''
+              const inh = schedMat[k] ?? ''
+              return (
+                <div key={cls} className="bg-gray-900 px-2 py-2">
+                  <select
+                    value={cur}
+                    onChange={e => saveMatOverride(cls, role.key, e.target.value)}
+                    className={selCls(!!cur)}
+                  >
+                    <option value="">
+                      {inh ? matName(inh) : `— no schedule value —`}
+                    </option>
+                    {allMats.map(m => (
+                      <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
+                    ))}
+                  </select>
+                </div>
+              )
+            })}
+          </Fragment>
+        ))}
+      </div>
+    )
+  }
+
   if (loading) return <p className="text-xs text-gray-500 py-8 text-center">Loading…</p>
 
   const inheritLabel = mode === 'room' ? 'job' : 'shop'
+
+  // Primary view: just the Interior/Exposed picks — the job's main material
+  // decisions, sitting where the per-class assembly-schedule pickers used to be.
+  if (roleFilter === 'primary') {
+    return (
+      <div>
+        <p className="text-[10px] text-gray-600 mb-3">
+          Blue = set for this job. Blank inherits the shop default schedule (value shown).
+          Changes save immediately.
+        </p>
+        {renderAsmGrid()}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
 
       {/* ── Section 1: Schedule Assignments ─────────────────────────────── */}
+      {showSchedules && (
       <div>
         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
           Schedule Assignments
@@ -360,7 +430,9 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props)
           Blue = overriding {inheritLabel} assignment. Select blank to clear and inherit.
         </p>
         <div className="border border-gray-700 rounded overflow-hidden divide-y divide-gray-700/60">
-          {SCHED_TYPES.map(st => {
+          {/* 'front' is hidden: door material is owned by the Doors tab; the shop
+              front schedule stays as the silent fallback for styleless zones. */}
+          {SCHED_TYPES.filter(st => st.key !== 'front').map(st => {
             const cur  = ownIds[st.key] ?? ''
             const list = schedLists[st.key] ?? []
             return (
@@ -385,6 +457,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props)
           })}
         </div>
       </div>
+      )}
 
       {/* ── Section 2: Per-Role Overrides ──────────────────────────────── */}
       <div>
@@ -397,41 +470,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId }: Props)
         </p>
 
         {/* Assembly + door_face roles × class grid */}
-        <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-px bg-gray-700/50 rounded overflow-hidden border border-gray-700 text-xs mb-4">
-          <div className="bg-gray-800 px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Role</div>
-          {CLASSES.map(c => (
-            <div key={c} className="bg-gray-800 px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide capitalize">{c}</div>
-          ))}
-          {ASM_ROLES.map(role => (
-            <Fragment key={role.key}>
-              <div className="bg-gray-900 px-2 py-2 flex flex-col justify-center">
-                <span className="text-gray-300 font-medium text-xs">{role.label}</span>
-                <span className="text-[9px] text-gray-600 mt-0.5">{role.desc}</span>
-              </div>
-              {CLASSES.map(cls => {
-                const k   = `${cls}|${role.key}`
-                const cur = matOvr[k] ?? ''
-                const inh = schedMat[k] ?? ''
-                return (
-                  <div key={cls} className="bg-gray-900 px-2 py-2">
-                    <select
-                      value={cur}
-                      onChange={e => saveMatOverride(cls, role.key, e.target.value)}
-                      className={selCls(!!cur)}
-                    >
-                      <option value="">
-                        {inh ? matName(inh) : `— no schedule value —`}
-                      </option>
-                      {allMats.map(m => (
-                        <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
-                      ))}
-                    </select>
-                  </div>
-                )
-              })}
-            </Fragment>
-          ))}
-        </div>
+        {renderAsmGrid()}
 
         {/* Toe kick overrides */}
         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Toe Kick</p>

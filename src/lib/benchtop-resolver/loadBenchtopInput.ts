@@ -55,11 +55,24 @@ export async function loadBenchtopInput(benchtopId: string): Promise<BenchtopRes
   if (!method) return null  // Cannot resolve without a build method
 
   // ── Resolve Schedule through hierarchy ──────────────────────────────────
-  const scheduleId =
+  let scheduleId =
     bt.benchtop_schedule_id ??
     rm?.benchtop_schedule_id ??
     prj?.benchtop_schedule_id ??
     null
+
+  // Shop default fallback — mirrors the build method fallback above, so an
+  // unconfigured job resolves against the flagged default instead of silently
+  // producing material-less parts.
+  if (!scheduleId) {
+    const { data: def } = await supabase
+      .from('benchtop_schedules')
+      .select('id')
+      .eq('is_default', true)
+      .limit(1)
+      .maybeSingle()
+    scheduleId = (def as { id: string } | null)?.id ?? null
+  }
 
   let scheduleRows: BenchtopScheduleRow[] = []
   if (scheduleId) {
@@ -69,6 +82,34 @@ export async function loadBenchtopInput(benchtopId: string): Promise<BenchtopRes
       .eq('schedule_id', scheduleId)
     scheduleRows = (rows ?? []) as BenchtopScheduleRow[]
   }
+
+  // ── Per-role material overrides: job → room (room wins) ─────────────────
+  // Overlay onto the schedule rows so the resolver sees one effective set.
+  const projectId = (rm as { project_id?: string } | null)?.project_id ?? null
+  const [jobOvrRes, roomOvrRes] = await Promise.all([
+    projectId
+      ? supabase.from('job_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('project_id', projectId)
+      : Promise.resolve({ data: [] }),
+    supabase.from('room_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('room_id', bt.room_id),
+  ])
+  type BtOverride = { part_role: BenchtopScheduleRow['part_role']; material_id: string | null; benchtop_material_id: string | null }
+  const byRole = new Map(scheduleRows.map(r => [r.part_role, r]))
+  for (const ovr of [
+    ...((jobOvrRes.data ?? []) as BtOverride[]),
+    ...((roomOvrRes.data ?? []) as BtOverride[]),
+  ]) {
+    if (!ovr.material_id && !ovr.benchtop_material_id) continue
+    const existing = byRole.get(ovr.part_role)
+    byRole.set(ovr.part_role, {
+      id:                   existing?.id ?? `override-${ovr.part_role}`,
+      schedule_id:          existing?.schedule_id ?? scheduleId ?? '',
+      part_role:            ovr.part_role,
+      material_id:          ovr.material_id ?? existing?.material_id ?? null,
+      benchtop_material_id: ovr.benchtop_material_id ?? existing?.benchtop_material_id ?? null,
+      edgeband_id:          existing?.edgeband_id ?? null,
+    })
+  }
+  scheduleRows = [...byRole.values()]
 
   // ── Load materials for thickness/name lookup ────────────────────────────
   const [{ data: boards }, { data: surfaces }] = await Promise.all([

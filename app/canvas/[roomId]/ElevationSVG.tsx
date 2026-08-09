@@ -88,15 +88,16 @@ function slideElevRect(s: ResolvedDrawerSlide) {
 }
 
 
-// wall.soffit_height is stored as depth FROM THE TOP (e.g. 300 = soffit drops 300mm from ceiling).
-// Convert to height-from-floor: wallHeight - soffit_height.
-// room.soffit_height and room.wall_cabinet_top are stored as height-from-floor.
+// soffit_height (wall AND room level) is stored as depth FROM THE TOP
+// (e.g. 300 = soffit drops 300mm from ceiling). Convert to height-from-floor:
+// wallHeight - soffit_height. room.wall_cabinet_top is height-from-floor.
 function wallCabTopFor(w: Wall | null, room: Room): number {
-  if (w?.soffit_height != null) {
-    const wallH = w.height ?? room.room_dy ?? 2400
-    return wallH - w.soffit_height
+  const soffit = w?.soffit_height ?? room.soffit_height
+  if (soffit != null) {
+    const wallH = w?.height ?? room.room_dy ?? 2400
+    return wallH - soffit
   }
-  return room.soffit_height ?? room.wall_cabinet_top ?? 2100
+  return room.wall_cabinet_top ?? 2100
 }
 
 function cabBottomZ(cab: CabinetInstance, room: Room, elevWall?: Wall | null): number {
@@ -866,10 +867,11 @@ export default function ElevationSVG({
 
             {/* Ceiling / soffit / wall-cabinet-top — not applicable to islands */}
             {wall.wall_type !== 'island' && (() => {
-              // soffitH = height from floor; wall.soffit_height stored as depth-from-top
-              const soffitH = wall.soffit_height != null
-                ? (wall.height ?? roomH) - wall.soffit_height
-                : room.soffit_height ?? null
+              // soffitH = height from floor; soffit_height (wall/room) stored as depth-from-top
+              const soffitDrop = wall.soffit_height ?? room.soffit_height
+              const soffitH = soffitDrop != null
+                ? (wall.height ?? roomH) - soffitDrop
+                : null
               const wcTop   = room.wall_cabinet_top ?? null
               return (<>
                 <line x1={0} y1={0} x2={wall.length} y2={0}

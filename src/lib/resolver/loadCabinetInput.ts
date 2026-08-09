@@ -179,19 +179,21 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   if (cabErr || !cab) throw new Error(`Cabinet not found: ${cabinetId}`)
 
   // ── 2. Load room + shop defaults in parallel ─────────────────────────────────
-  const [roomRes, shopAsmRes, shopTkRes, shopFrontRes, shopSettingsRes, shopSlideRes] = await Promise.all([
-    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, inner_drawerbox_schedule_id, inner_drawer_box_method_id, door_style_override_id, rule_overrides').eq('id', cab.room_id).single(),
+  const [roomRes, shopAsmRes, shopTkRes, shopFrontRes, shopSettingsRes, shopSlideRes, shopDbSchedRes] = await Promise.all([
+    supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, drawerbox_schedule_id, inner_drawerbox_schedule_id, inner_drawer_box_method_id, door_style_override_id, rule_overrides').eq('id', cab.room_id).single(),
     supabase.from('assembly_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('toekick_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
     supabase.from('front_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
-    supabase.from('shop_settings').select('construction_schedule_id, drawer_box_method_id, inner_drawerbox_schedule_id').limit(1).maybeSingle(),
+    supabase.from('shop_settings').select('construction_schedule_id, drawer_box_method_id, drawerbox_schedule_id, inner_drawerbox_schedule_id').limit(1).maybeSingle(),
     supabase.from('slide_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
+    supabase.from('drawerbox_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
   ])
 
   const room       = roomRes.data
   const projectId  = room?.project_id as string | undefined
   const shopConStrSchedId    = shopSettingsRes.data?.construction_schedule_id     as string | undefined
   const shopDbMethodId       = shopSettingsRes.data?.drawer_box_method_id         as string | undefined
+  const shopDbSchedId        = shopSettingsRes.data?.drawerbox_schedule_id        as string | undefined
   const shopInnerSchedId     = shopSettingsRes.data?.inner_drawerbox_schedule_id  as string | undefined
 
   // ── 3. Load project schedule IDs (if we have a project) ─────────────────────
@@ -199,7 +201,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   if (projectId) {
     const { data } = await supabase
       .from('projects')
-      .select('assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, inner_drawerbox_schedule_id, slide_schedule_id, default_door_style_id, base_door_style_id, wall_door_style_id, tall_door_style_id, base_door_colour_id, wall_door_colour_id, tall_door_colour_id, rule_overrides')
+      .select('assembly_schedule_id, base_assembly_schedule_id, wall_assembly_schedule_id, tall_assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, drawerbox_schedule_id, inner_drawerbox_schedule_id, slide_schedule_id, default_door_style_id, base_door_style_id, wall_door_style_id, tall_door_style_id, base_door_colour_id, wall_door_colour_id, tall_door_colour_id, rule_overrides')
       .eq('id', projectId)
       .single()
     projRow = data as Record<string, string | null> | null
@@ -228,6 +230,14 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   const effectiveInnerDbMethodId =
     roomInnerDbMethodId ?? projInnerDbMethodId ?? shopInnerDbMethodId ?? effectiveDbMethodId ?? null
 
+  // Outer drawer box material schedule: room → project → shop settings → default flag.
+  const effectiveDbSchedId =
+    ((room as { drawerbox_schedule_id?: string | null } | null)?.drawerbox_schedule_id)
+    ?? (projRow?.drawerbox_schedule_id as string | null | undefined)
+    ?? shopDbSchedId
+    ?? shopDbSchedRes.data?.id
+    ?? null
+
   // Inner-drawer material schedule: room → project → shop.
   const effectiveInnerSchedId =
     (room?.inner_drawerbox_schedule_id as string | null | undefined)
@@ -242,8 +252,22 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     ?? shopConStrSchedId
     ?? null
 
+  // Schedules and per-role material tables only carry base/wall/tall rows —
+  // corner variants share their base class (same folding the door styles use).
+  const classGroup: 'base' | 'wall' | 'tall' =
+    cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner' ? 'wall'
+    : cab.assembly_class === 'tall' || cab.assembly_class === 'tall_corner' ? 'tall'
+    : 'base'
+
   // ── 4. Resolve effective schedule IDs: room → project → shop default ─────────
-  const asmSchedId   = room?.assembly_schedule_id   ?? projRow?.assembly_schedule_id   ?? shopAsmRes.data?.id   ?? null
+  // Assembly honours the job's per-class pick (base/wall/tall) ahead of its flat
+  // assembly_schedule_id, so e.g. poly bases + MR MDF walls resolve per class.
+  const projClassAsmId = (
+    classGroup === 'wall' ? projRow?.wall_assembly_schedule_id
+    : classGroup === 'tall' ? projRow?.tall_assembly_schedule_id
+    : projRow?.base_assembly_schedule_id
+  ) as string | null | undefined
+  const asmSchedId   = room?.assembly_schedule_id   ?? projClassAsmId ?? projRow?.assembly_schedule_id ?? shopAsmRes.data?.id ?? null
   const tkSchedId    = room?.toekick_schedule_id     ?? projRow?.toekick_schedule_id     ?? shopTkRes.data?.id    ?? null
   const frontSchedId = room?.front_schedule_id       ?? projRow?.front_schedule_id       ?? shopFrontRes.data?.id ?? null
   const slideSchedId = (room?.slide_schedule_id as string | null) ?? (projRow?.slide_schedule_id as string | null) ?? shopSlideRes.data?.id ?? null
@@ -265,23 +289,24 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     dbMethodRes,
     innerDbMethodRes,
     innerSchedRes,
+    dbSchedRes,
   ] = await Promise.all([
     asmSchedId
-      ? supabase.from('assembly_schedule_rows').select('material_role, edgeband_id, materials(*)').eq('schedule_id', asmSchedId).eq('assembly_class', cab.assembly_class)
+      ? supabase.from('assembly_schedule_rows').select('material_role, edgeband_id, materials(*)').eq('schedule_id', asmSchedId).eq('assembly_class', classGroup)
       : Promise.resolve({ data: [] as unknown[] }),
     frontSchedId
-      ? supabase.from('front_schedule_rows').select('edgeband_id, materials(*)').eq('schedule_id', frontSchedId).eq('assembly_class', cab.assembly_class).maybeSingle()
+      ? supabase.from('front_schedule_rows').select('edgeband_id, materials(*)').eq('schedule_id', frontSchedId).eq('assembly_class', classGroup).maybeSingle()
       : Promise.resolve({ data: null }),
     tkSchedId
       ? supabase.from('toekick_schedule_rows').select('part_role, edgeband_id, materials(*)').eq('schedule_id', tkSchedId)
       : Promise.resolve({ data: [] as unknown[] }),
     projectId
-      ? supabase.from('job_materials').select('material_role, materials(*)').eq('project_id', projectId).eq('assembly_class', cab.assembly_class)
+      ? supabase.from('job_materials').select('material_role, materials(*)').eq('project_id', projectId).eq('assembly_class', classGroup)
       : Promise.resolve({ data: [] as unknown[] }),
     projectId
       ? supabase.from('job_toekick_materials').select('part_role, materials(*)').eq('project_id', projectId)
       : Promise.resolve({ data: [] as unknown[] }),
-    supabase.from('room_materials').select('material_role, materials(*)').eq('room_id', cab.room_id).eq('assembly_class', cab.assembly_class),
+    supabase.from('room_materials').select('material_role, materials(*)').eq('room_id', cab.room_id).eq('assembly_class', classGroup),
     supabase.from('room_toekick_materials').select('part_role, materials(*)').eq('room_id', cab.room_id),
     // All active slide products (for resolver lookup)
     supabase
@@ -300,7 +325,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
       : supabase.from('construction_methods').select('rules').eq('is_default', true).limit(1).maybeSingle(),
     // Construction method schedule row for this assembly class
     conStrSchedId
-      ? supabase.from('construction_method_schedule_rows').select('rules, joint_defaults').eq('schedule_id', conStrSchedId).eq('assembly_class', cab.assembly_class).maybeSingle()
+      ? supabase.from('construction_method_schedule_rows').select('rules, joint_defaults').eq('schedule_id', conStrSchedId).eq('assembly_class', classGroup).maybeSingle()
       : Promise.resolve({ data: null }),
     slideSchedId
       ? supabase.from('slide_schedule_entries').select('id, schedule_id, depth_threshold, height_threshold, slide_id').eq('schedule_id', slideSchedId).order('depth_threshold').order('height_threshold')
@@ -320,6 +345,15 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
           .from('inner_drawerbox_schedules')
           .select('material_id, edgeband_id, bottom_material_id, bottom_edgeband_id, front_material_id, front_edgeband_id, material:materials!inner_drawerbox_schedules_material_id_fkey(*), bottom_material:materials!inner_drawerbox_schedules_bottom_material_id_fkey(*), front_material:materials!inner_drawerbox_schedules_front_material_id_fkey(*)')
           .eq('id', effectiveInnerSchedId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    // Outer drawer box material schedule (room → project → shop) with embedded
+    // materials for box / bottom roles.
+    effectiveDbSchedId
+      ? supabase
+          .from('drawerbox_schedules')
+          .select('material_id, edgeband_id, bottom_material_id, bottom_edgeband_id, material:materials!drawerbox_schedules_material_id_fkey(*), bottom_material:materials!drawerbox_schedules_bottom_material_id_fkey(*)')
+          .eq('id', effectiveDbSchedId)
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ])
@@ -399,6 +433,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   const interior   = matMap.get('interior')
   const doorFace   = matMap.get('door_face')
   const shelf      = matMap.get('shelf') ?? matMap.get('interior')
+  const exposed    = matMap.get('exposed')
   const tkFace     = tkMap.get('face')
   const tkInt      = tkMap.get('interior')
   const drawerboxMat = matMap.get('drawerbox') ?? matMap.get('interior')
@@ -406,8 +441,16 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   if (!interior) throw new Error(`No interior material for assembly_class: ${cab.assembly_class}`)
   if (!doorFace) throw new Error(`No door_face material for assembly_class: ${cab.assembly_class}`)
   if (!shelf)    throw new Error(`No shelf material`)
+  if (!exposed)  throw new Error(`No exposed material for assembly_class: ${cab.assembly_class} — set the Exposed row on the material schedule`)
   if (!tkFace)   throw new Error(`No toekick face material`)
   if (!tkInt)    throw new Error(`No toekick interior material`)
+
+  // Exposed-interior cabinets build the whole visible box — carcass and
+  // shelves — from the exposed material instead of interior board.
+  const carcassMat  = cab.exposed_interior ? exposed : interior
+  const shelfMat    = cab.exposed_interior ? exposed : shelf
+  const carcassEb   = cab.exposed_interior ? ebMap.get('exposed') : ebMap.get('interior')
+  const shelfEb     = cab.exposed_interior ? ebMap.get('exposed') : (ebMap.get('shelf') ?? ebMap.get('interior'))
 
   // ── 9. Build slide products list ────────────────────────────────────────────
   // Group slide drilling ops by slide_id so each product carries its own holes.
@@ -487,8 +530,27 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     ...innerDbMethodRules,
   }
 
+  // Outer drawer box material + edgebands (box / bottom roles).
+  // Drawerbox schedule → assembly 'drawerbox' role → interior.
+  const dbSchedRow = dbSchedRes.data as {
+    material_id?: string | null
+    edgeband_id?: string | null
+    bottom_material_id?: string | null
+    bottom_edgeband_id?: string | null
+    material?: unknown
+    bottom_material?: unknown
+  } | null
+  const outerDrawerMat = dbSchedRow?.material
+    ? dbRowToMaterial(dbSchedRow.material as Record<string, unknown>)
+    : (drawerboxMat ?? interior)
+  const outerDrawerEbId      = (dbSchedRow?.edgeband_id as string | null | undefined) ?? undefined
+  const outerDrawerBottomMat = dbSchedRow?.bottom_material
+    ? dbRowToMaterial(dbSchedRow.bottom_material as Record<string, unknown>)
+    : undefined
+  const outerDrawerBottomEbId = (dbSchedRow?.bottom_edgeband_id as string | null | undefined) ?? undefined
+
   // Inner-drawer material + edgeband (per role: box / bottom / front).
-  // Schedule → face drawerbox material → interior. Each role falls back independently
+  // Schedule → outer drawerbox material → interior. Each role falls back independently
   // so a partially-configured schedule still resolves sensibly.
   const innerSchedRow = innerSchedRes.data as {
     material_id?: string | null
@@ -503,7 +565,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   } | null
   const innerDrawerMat  = innerSchedRow?.material
     ? dbRowToMaterial(innerSchedRow.material as Record<string, unknown>)
-    : (drawerboxMat ?? interior)
+    : outerDrawerMat
   const innerDrawerEbId = (innerSchedRow?.edgeband_id as string | null | undefined) ?? ebMap.get('interior')
 
   const innerDrawerBottomMat  = innerSchedRow?.bottom_material
@@ -608,11 +670,8 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   }
 
   // ── 12. Resolve door styles per zone (cascade: zone → room → job) ───────────
-  // Job-level door style + colour overrides are per assembly-class group
-  // (base/wall/tall); corner variants share their base class.
-  const classGroup = cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner' ? 'wall'
-    : cab.assembly_class === 'tall' || cab.assembly_class === 'tall_corner' ? 'tall'
-    : 'base'
+  // Job-level door style + colour overrides use the same base/wall/tall
+  // classGroup folding as the schedule queries above.
   const classStyleOverride = (
     classGroup === 'wall' ? projRow?.wall_door_style_id
     : classGroup === 'tall' ? projRow?.tall_door_style_id
@@ -666,14 +725,16 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     left_neighbour:  (cab.left_neighbour_type  ?? 'wall') as CabinetInput['left_neighbour'],
     right_neighbour: (cab.right_neighbour_type ?? 'wall') as CabinetInput['right_neighbour'],
     exposed_interior: cab.exposed_interior,
-    material:                  interior,
+    material:                  carcassMat,
     door_material:             doorFace,
-    shelf_material:            shelf,
+    shelf_material:            shelfMat,
+    exposed_material:          exposed,
     toekick_face_material:     tkFace,
     toekick_interior_material: tkInt,
-    interior_edgeband_id:         ebMap.get('interior'),
+    interior_edgeband_id:         carcassEb,
     door_edgeband_id:             ebMap.get('door_face'),
-    shelf_edgeband_id:            ebMap.get('shelf') ?? ebMap.get('interior'),
+    shelf_edgeband_id:            shelfEb,
+    exposed_edgeband_id:          ebMap.get('exposed'),
     toekick_face_edgeband_id:     ebMap.get('tk_face'),
     toekick_interior_edgeband_id: ebMap.get('tk_interior'),
     slide_side_deduction:      fallbackDeduction,
@@ -681,7 +742,10 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     default_inner_drawer_type: (innerDbMethodRes.data?.drawer_type as 'system' | 'five_piece' | null)
                                ?? (dbMethodRes.data?.drawer_type as 'system' | 'five_piece' | null)
                                ?? undefined,
-    drawer_material:           drawerboxMat ?? interior,
+    drawer_material:           outerDrawerMat,
+    drawer_edgeband_id:        outerDrawerEbId,
+    drawer_bottom_material:    outerDrawerBottomMat,
+    drawer_bottom_edgeband_id: outerDrawerBottomEbId,
     drawer_box_rules:          drawerBoxRules,
     inner_drawer_box_rules:           innerDrawerBoxRules,
     inner_drawer_material:            innerDrawerMat,

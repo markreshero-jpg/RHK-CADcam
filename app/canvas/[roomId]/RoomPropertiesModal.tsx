@@ -268,7 +268,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
               <div className="border-t border-gray-800 pt-4">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Cabinet Heights</p>
                 <div className="space-y-3">
-                  <DimField label="Soffit Height (mm)" placeholder="not set" value={String(soffitHeight)} onChange={setSoffitHeight} />
+                  <DimField label="Soffit Depth from top (mm)" placeholder="not set" value={String(soffitHeight)} onChange={setSoffitHeight} />
                   <DimField label="Wall Cabinet Top (mm)" placeholder="not set" value={String(wallCabTop)} onChange={setWallCabTop} />
                 </div>
               </div>

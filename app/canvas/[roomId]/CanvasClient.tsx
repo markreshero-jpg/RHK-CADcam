@@ -403,9 +403,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if ('soffit_height' in u && old) {
       const updatedWall = { ...old, ...u } as Wall
       const wallH = updatedWall.height ?? room.room_dy ?? 2400
-      const wcTop = updatedWall.soffit_height != null
-        ? wallH - updatedWall.soffit_height
-        : room.soffit_height ?? room.wall_cabinet_top ?? 2100
+      const soffit = updatedWall.soffit_height ?? room.soffit_height
+      const wcTop = soffit != null
+        ? wallH - soffit
+        : room.wall_cabinet_top ?? 2100
       const affected = cabinetsRef.current.filter(c =>
         c.wall_id === id && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner')
       )

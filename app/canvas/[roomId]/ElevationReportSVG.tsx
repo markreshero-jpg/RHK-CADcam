@@ -7,8 +7,9 @@ import type { Wall, Room, CabinetInstance } from '@/src/lib/types'
 import { cabT } from '@/src/lib/geometry'
 
 function wallCabTopH(wall: Wall, room: Room): number {
-  if (wall.soffit_height != null) return (wall.height ?? room.room_dy ?? 2400) - wall.soffit_height
-  return room.soffit_height ?? room.wall_cabinet_top ?? 2100
+  const soffit = wall.soffit_height ?? room.soffit_height
+  if (soffit != null) return (wall.height ?? room.room_dy ?? 2400) - soffit
+  return room.wall_cabinet_top ?? 2100
 }
 
 function cabFloorH(cab: CabinetInstance, wall: Wall, room: Room): number {

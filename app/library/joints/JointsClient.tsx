@@ -381,7 +381,7 @@ export default function JointsClient({
           <span className="text-ink-subtle">|</span>
           <Link href="/library/materials" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Materials</Link>
           <span className="text-ink-subtle">|</span>
-          <Link href="/library/schedules" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Schedules</Link>
+          <Link href="/settings?tab=materials_schedule" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Schedules</Link>
           <span className="text-ink-subtle">|</span>
           <Link href="/library/construction-methods" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Construction Methods</Link>
           <span className="text-ink-subtle">|</span>

@@ -725,6 +725,7 @@ export function PreviewCanvas({
         gl={{ antialias: true, preserveDrawingBuffer: false }}
         dpr={[1, 2]}
         style={{ width: '100%', height: '100%', background: bgColor }}
+        onCreated={s => { (window as any).__debugScene = s.scene }} // TEMP DEBUG — remove
         onPointerMissed={onDeselect}
         onContextMenu={onContextMenu ?? (e => { e.preventDefault(); onDeselect?.() })}
       >

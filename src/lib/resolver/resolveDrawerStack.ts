@@ -259,12 +259,15 @@ export function resolveDrawerStacks(
       ? { ...dbRules, DB_SIDE_T: 0 }
       : { ...dbRules, DB_SIDE_T: drawerMat.DZ }
     const localParts = resolveDrawerBox({
-      box_width:        boxWidth,
-      box_height:       boxHeight,
-      box_depth:        boxDepth,
-      material:         drawerMat,
-      rules:            rulesForResolve,
-      slide_box_height: slide?.box_height ?? undefined,
+      box_width:           boxWidth,
+      box_height:          boxHeight,
+      box_depth:           boxDepth,
+      material:            drawerMat,
+      edgeband_id:         cab.drawer_edgeband_id,
+      bottom_material:     cab.drawer_bottom_material,
+      bottom_edgeband_id:  cab.drawer_bottom_edgeband_id,
+      rules:               rulesForResolve,
+      slide_box_height:    slide?.box_height ?? undefined,
     }).filter(p => drawerType === 'five_piece' || SYSTEM_PARTS.has(p.part_type))
 
     const boxParts = localParts.map(p => ({

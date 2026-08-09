@@ -9,12 +9,14 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Project, Room } from '@/src/lib/types'
+import { Project, ProjectStatus, Room } from '@/src/lib/types'
 import { supabase } from '@/src/lib/supabase'
 import RoomPropertiesModal from './canvas/[roomId]/RoomPropertiesModal'
 import DeleteRoomModal from './DeleteRoomModal'
+import DeleteProjectModal from './DeleteProjectModal'
 
 type RoomCounts = { cabinets: number; walls: number; benchtops: number }
+type ProjectCounts = { rooms: number; cabinets: number }
 
 // ── Status config (shared shape with the projects page) ─────────────────────────
 
@@ -76,6 +78,22 @@ const DragHandleIcon = () => (
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9.5 2.5 L11.5 4.5 L5 11 L2.5 11.5 L3 9 Z"/>
+  </svg>
+)
+
+const ArchiveIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1.5" y="2.5" width="11" height="3" rx="0.5"/>
+    <path d="M2.5 5.5 V11 C2.5 11.5 2.9 12 3.5 12 H10.5 C11.1 12 11.5 11.5 11.5 11 V5.5"/>
+    <line x1="5.5" y1="8" x2="8.5" y2="8"/>
+  </svg>
+)
+
+const UnarchiveIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1.5" y="2.5" width="11" height="3" rx="0.5"/>
+    <path d="M2.5 5.5 V11 C2.5 11.5 2.9 12 3.5 12 H10.5 C11.1 12 11.5 11.5 11.5 11 V5.5"/>
+    <path d="M5.5 9 L7 7.5 L8.5 9 M7 7.5 V10.5"/>
   </svg>
 )
 
@@ -180,10 +198,11 @@ function SortableRoomRow({ room, removing, onEdit, onDelete }: {
 
 // ── Component ─────────────────────────────────────────────────────────────────────
 
-export default function ProjectCard({ project, initialRooms, defaultExpanded = false }: {
+export default function ProjectCard({ project, initialRooms, defaultExpanded = false, onStatusChange }: {
   project: Project
   initialRooms: Room[]
   defaultExpanded?: boolean
+  onStatusChange?: (status: ProjectStatus) => void
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [rooms, setRooms] = useState<Room[]>(initialRooms)
@@ -204,6 +223,13 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
+
+  // Delete Project flow
+  const [deleteProjectOpen, setDeleteProjectOpen] = useState(false)
+  const [projectCounts, setProjectCounts] = useState<ProjectCounts | null>(null)
+  const [deletingProject, setDeletingProject] = useState(false)
+  const [deleteProjectError, setDeleteProjectError] = useState<string | null>(null)
+  const [projectRemoved, setProjectRemoved] = useState<'fading' | 'gone' | null>(null)
 
   const cfg = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.draft
 
@@ -327,8 +353,73 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
     }
   }
 
+  const [archiving, setArchiving] = useState(false)
+
+  async function toggleArchive() {
+    if (archiving) return
+    setArchiving(true)
+    // Unarchive restores to draft — the operator can set the real status
+    // afterwards via Job Properties in the canvas.
+    const next: ProjectStatus = project.status === 'archived' ? 'draft' : 'archived'
+    const { error } = await supabase.from('projects').update({ status: next }).eq('id', project.id)
+    setArchiving(false)
+    if (error) {
+      console.error('Failed to update project status:', error)
+      return
+    }
+    onStatusChange?.(next)
+  }
+
+  function openDeleteProject() {
+    setDeleteProjectOpen(true)
+    setDeleteProjectError(null)
+    setProjectCounts(null)
+    // Fetch cascade counts before showing the confirmation
+    void (async () => {
+      const roomIds = rooms.map(r => r.id)
+      let cabinets = 0
+      if (roomIds.length) {
+        const { count } = await supabase
+          .from('cabinet_instances')
+          .select('*', { count: 'exact', head: true })
+          .in('room_id', roomIds)
+        cabinets = count ?? 0
+      }
+      setProjectCounts({ rooms: roomIds.length, cabinets })
+    })()
+  }
+
+  function closeDeleteProject() {
+    setDeleteProjectOpen(false)
+    setProjectCounts(null)
+    setDeleteProjectError(null)
+  }
+
+  async function confirmDeleteProject() {
+    if (deletingProject) return
+    setDeletingProject(true)
+    setDeleteProjectError(null)
+    // All FKs referencing projects (rooms, job materials, nest jobs) are
+    // ON DELETE CASCADE, and rooms cascade to their contents in turn.
+    const { error } = await supabase.from('projects').delete().eq('id', project.id)
+    setDeletingProject(false)
+    if (error) {
+      console.error('Failed to delete project:', error)
+      setDeleteProjectError('Could not delete project. Please try again.')
+      return
+    }
+    setDeleteProjectOpen(false)
+    // Fade the card out, then drop it entirely (server list catches up on next load)
+    setProjectRemoved('fading')
+    window.setTimeout(() => setProjectRemoved('gone'), 200)
+  }
+
+  if (projectRemoved === 'gone') return null
+
   return (
-    <div className="relative bg-surface border border-edge hover:border-edge-strong rounded-lg overflow-hidden transition-all group">
+    <div className={`relative bg-surface border border-edge hover:border-edge-strong rounded-lg overflow-hidden transition-all duration-200 group ${
+      projectRemoved === 'fading' ? 'opacity-0 scale-95' : 'opacity-100'
+    }`}>
       {/* Status bar */}
       <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${cfg.bar}`} />
 
@@ -380,6 +471,23 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
           >
             <span>{rooms.length} {rooms.length === 1 ? 'room' : 'rooms'}</span>
             <ChevronIcon expanded={expanded} />
+          </button>
+
+          <button
+            onClick={toggleArchive}
+            disabled={archiving}
+            className="flex-none text-ink-subtle hover:text-ink disabled:opacity-40 p-1.5 rounded hover:bg-surface-2 transition-colors"
+            title={project.status === 'archived' ? 'Unarchive project' : 'Archive project'}
+          >
+            {project.status === 'archived' ? <UnarchiveIcon /> : <ArchiveIcon />}
+          </button>
+
+          <button
+            onClick={openDeleteProject}
+            className="flex-none text-ink-subtle hover:text-red-400 p-1.5 rounded hover:bg-surface-2 transition-colors"
+            title="Delete project"
+          >
+            <TrashIcon />
           </button>
         </div>
       </div>
@@ -471,6 +579,18 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
             )}
           </div>
         </div>
+      )}
+
+      {/* Delete project confirmation modal */}
+      {deleteProjectOpen && (
+        <DeleteProjectModal
+          project={project}
+          counts={projectCounts}
+          busy={deletingProject}
+          error={deleteProjectError}
+          onCancel={closeDeleteProject}
+          onConfirm={confirmDeleteProject}
+        />
       )}
 
       {/* Delete confirmation modal */}

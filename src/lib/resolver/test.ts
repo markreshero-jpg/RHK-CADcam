@@ -32,6 +32,7 @@ function make2DoorBase(overrides: Partial<CabinetInput> = {}): CabinetInput {
     material:                  whiteboard18,
     door_material:             lxMoleskin18,
     shelf_material:            whiteboard18,
+    exposed_material:          lxMoleskin18,
     toekick_face_material:     lxMoleskin18,
     toekick_interior_material: whiteboard18,
     slide_side_deduction: 13,
@@ -136,7 +137,7 @@ test('bottom panel sits between sides', () => {
 test('back panel full height between sides', () => {
   const result = resolveCabinet(make2DoorBase())
   const back = result.case_parts.find(p => p.part_key === 'back')!
-  expect(back.DX).toBe(580)           // Cabinet.DZ - SCRBK
+  expect(back.DX).toBe(732)          // panel height: (900 - SCRT - topT 18) - (TOEH 150 + SCRBT)
   expect(back.DY).toBe(600 - 2 * 18) // 564mm
   expect(back.Z).toBe(0)             // SCRBK = 0
 })
@@ -376,14 +377,14 @@ test('door width = half face opening less half centre gap', () => {
   // faceW = 600 - 1 - 1 = 598mm (REVL=1, REVR=1)
   // col gap = GAPC/2 = 1mm (gap between cols)
   // equalColW = (598 - 1) / 2 = 298.5mm
-  expect(leftDoor.DY).toBeCloseTo(298.5)
+  expect(leftDoor.DX).toBeCloseTo(298.5)  // face zones: DX = width
 })
 
 test('door height = face opening height', () => {
   const result = resolveCabinet(make2DoorBase())
   const door = result.face_zones[0]
   // faceH = 900 - 150 - 4 - 0 = 746mm
-  expect(door.DX).toBeCloseTo(746)
+  expect(door.DY).toBeCloseTo(746)  // face zones: DY = height
 })
 
 test('door Z sits proud of carcass front by FACBUF', () => {

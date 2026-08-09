@@ -15,7 +15,10 @@ const SCHED_TABLES: { key: SchedKey; table: string }[] = [
   { key: 'benchtop',        table: 'benchtop_schedules'        },
 ]
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: {
+  searchParams: Promise<{ tab?: string }>
+}) {
+  const { tab } = await searchParams
   const supabase = await createServerClient()
 
   const settingsRes = await supabase.from('shop_settings').select('*').single()
@@ -32,6 +35,7 @@ export default async function SettingsPage() {
     <SettingsClient
       settings={(settingsRes.data ?? null) as ShopSettings | null}
       schedLists={schedLists}
+      initialTab={tab}
     />
   )
 }

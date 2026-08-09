@@ -3,7 +3,7 @@ import { createServerClient } from '@/src/lib/supabase-server'
 import { SignOutButton } from './SignOutButton'
 import { ThemeToggle } from './ThemeToggle'
 import { Project, Room } from '@/src/lib/types'
-import ProjectCard from './ProjectCard'
+import ProjectList from './ProjectList'
 
 export const dynamic = 'force-dynamic'
 
@@ -112,38 +112,28 @@ export default async function HomePage({ searchParams }: {
 
       {/* Content */}
       <main className="px-6 py-6 max-w-5xl">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-semibold text-ink-subtle uppercase tracking-wider">
-            Projects
-            {projects.length > 0 && (
-              <span className="ml-2 text-ink-subtle normal-case font-normal tracking-normal">
-                {projects.length} total
-              </span>
-            )}
-          </h2>
-        </div>
-
         {projects.length === 0 ? (
-          <div className="border border-dashed border-edge rounded-xl p-16 text-center">
-            <span className="inline-flex text-ink-subtle mb-4">
-              <FolderIcon />
-            </span>
-            <p className="text-ink-subtle text-sm mb-1">No projects yet</p>
-            <p className="text-ink-subtle text-xs mb-5">Create your first cabinet design project to get started</p>
-            <Link
-              href="/projects/new"
-              className="inline-flex items-center gap-2 text-accent-ink hover:text-accent-hover text-sm font-medium transition-colors"
-            >
-              <PlusIcon />
-              Create your first project
-            </Link>
-          </div>
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-semibold text-ink-subtle uppercase tracking-wider">Projects</h2>
+            </div>
+            <div className="border border-dashed border-edge rounded-xl p-16 text-center">
+              <span className="inline-flex text-ink-subtle mb-4">
+                <FolderIcon />
+              </span>
+              <p className="text-ink-subtle text-sm mb-1">No projects yet</p>
+              <p className="text-ink-subtle text-xs mb-5">Create your first cabinet design project to get started</p>
+              <Link
+                href="/projects/new"
+                className="inline-flex items-center gap-2 text-accent-ink hover:text-accent-hover text-sm font-medium transition-colors"
+              >
+                <PlusIcon />
+                Create your first project
+              </Link>
+            </div>
+          </>
         ) : (
-          <div className="space-y-2">
-            {projects.map((p) => (
-              <ProjectCard key={p.id} project={p} initialRooms={p.rooms} defaultExpanded={p.id === expand} />
-            ))}
-          </div>
+          <ProjectList initialProjects={projects} expand={expand} />
         )}
       </main>
     </div>

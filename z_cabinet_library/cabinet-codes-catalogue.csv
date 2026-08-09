@@ -2,11 +2,11 @@ Code,Description,Class,Fronts,Status,Notes
 B1D,Base cabinet - single door,Base,1 door,proposed,/L or /R hinge side at placement
 B2D,Base cabinet - pair of doors,Base,2 doors,proposed,
 BOPN,Base cabinet - open (no fronts),Base,none,proposed,
-BSK,Base sink cabinet,Base,2 doors,open decision,dedicated code vs modifier on B2D - false front at sink
+BSK,Base sink cabinet,Base,2 doors,confirmed,dedicated code (decided 2026-08-06) - false front at sink
 BBIN,Base bin unit (pull-out),Base,1 door,proposed,e.g. 2x31L pull-out
 BCNR,Base blind corner,Base,doors,proposed,/L or /R = blind side
 BCNL,Base diagonal corner,Base,door,proposed,
-BOV,Base oven housing,Base,varies,open decision,dedicated code vs modifier
+UBO,Under-bench oven housing,Base,varies,confirmed,shop vocab (was BOV - retired) - class=Base despite prefix
 D2-SL,Drawer base - shallow over large,Base,2 drawers,proposed,S=170 M=230 L=residual (job-level table)
 D2-ML,Drawer base - medium over large,Base,2 drawers,proposed,
 D2-LL,Drawer base - two equal larges,Base,2 drawers,proposed,replaces old D2E intent
@@ -25,9 +25,11 @@ WMIC,Wall microwave cabinet,Wall,open + trim,proposed,
 WRH,Wall rangehood cabinet,Wall,varies,proposed,
 T1D,Tall cabinet - single door,Tall,1 door,proposed,
 T2D,Tall cabinet - pair of doors,Tall,2 doors,proposed,
-TP,Tall pantry,Tall,2 doors,proposed,composition vs T2D to define (shelf pack?)
+T2D2D,Tall - pair over pair (four doors split),Tall,4 doors,confirmed,bank notation top-to-bottom - split height from room/job default
+T1D1D,Tall - single over single,Tall,2 doors,confirmed,bank notation top-to-bottom
+TP,RETIRED - read as T2D,Tall,2 doors,retired,carcass-identical to T2D (decided 2026-08-06) - never reuse
 TOPN,Tall cabinet - open,Tall,none,proposed,
-TOV,Tall oven housing,Tall,varies,open decision,
+WOT,Wall oven tower,Tall,varies,confirmed,shop vocab (was TOV - retired) - class=Tall despite W prefix
 TFR,Tall fridge housing,Tall,varies,proposed,flanking panels are TEPF/TEPK
 TBR,Tall broom unit,Tall,doors,proposed,
 B1D+I1,Base single door - 1 inner drawer behind,Base,1 door + 1 inner,proposed,+I codes are per-cabinet library entries
@@ -38,13 +40,15 @@ BEPK,Base end panel - sits on kick,Panel,-,confirmed,
 TEPF,Tall end panel - runs to floor,Panel,-,confirmed,(current lib: Tall End Panel) also fridge flanking
 TEPK,Tall end panel - sits on kick,Panel,-,confirmed,
 WEP,Wall (overhead) end panel,Panel,-,confirmed,(current lib: Wall End Panel)
-IBP,Island back / servery panel,Panel,-,open decision,code not confirmed
+IBPF,Island bench back panel - runs to floor,Panel,-,confirmed,screwed through island cabinet backs - assume present if plan silent (99% default)
+IBPK,Island bench back panel - to kick height,Panel,-,confirmed,kick exposed below - kick gets finished back face
 BFK,Base filler - at kick height,Filler,-,confirmed,30mm or material thickness - ASK per job
 BFF,Base filler - runs to floor,Filler,-,confirmed,
 BFKW,Base filler - kick height - wide,Filler,-,confirmed,corner default 40 face (+mate thickness on return)
 BFFW,Base filler - floor - wide,Filler,-,confirmed,
-WF,Wall (overhead) filler,Filler,-,unconfirmed,extrapolated from base pattern - confirm
+WF,Wall (overhead) filler,Filler,-,confirmed,hangs - no K/F variant
+WFW,Wall (overhead) filler - wide,Filler,-,confirmed,decided 2026-08-06
 TFK,Tall filler - at kick height,Filler,-,unconfirmed,extrapolated - confirm
 TFF,Tall filler - runs to floor,Filler,-,unconfirmed,extrapolated - confirm
-KB,Kickboard,Kick,-,proposed,class exists in scheme - configs to define
-BH,Bulkhead / infill,Bulkhead,-,proposed,class exists in scheme - configs to define
+KB,Kickboard,Kick,-,confirmed,height from job properties (normally 140mm) - never in code
+BH,Bulkhead / infill,Bulkhead,-,proposed,sized off soffit height (room/job) - app soffit behaviour reported buggy 2026-08-06

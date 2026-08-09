@@ -28,12 +28,14 @@ export const CAB_FILL_SEL: Record<string, string> = {
 
 // Height (mm from floor) of the wall-cabinet top line — soffit if set, else the
 // room's wall-cabinet-top. Matches the elevation renderer's wallCabTopFor.
+// soffit_height (wall AND room level) = drop from ceiling, not height-from-floor.
 export function wallCabTop(wall: Wall | null | undefined, room: Room): number {
-  if (wall?.soffit_height != null) {
-    const wallH = wall.height ?? room.room_dy ?? 2400
-    return wallH - wall.soffit_height
+  const soffit = wall?.soffit_height ?? room.soffit_height
+  if (soffit != null) {
+    const wallH = wall?.height ?? room.room_dy ?? 2400
+    return wallH - soffit
   }
-  return room.soffit_height ?? room.wall_cabinet_top ?? 2100
+  return room.wall_cabinet_top ?? 2100
 }
 
 // Vertical extent [bottomZ, topZ] of a cabinet given its class + height. Base and

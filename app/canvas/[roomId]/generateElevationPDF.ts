@@ -28,9 +28,10 @@ const STANDARD_SCALES = [5, 10, 15, 20, 25, 50, 100]
 const MM_PER_PT = 1 / 2.835
 
 function wallCabTopH(wall: Wall, room: Room): number {
-  if (wall.soffit_height != null)
-    return (wall.height ?? room.room_dy ?? 2400) - wall.soffit_height
-  return room.soffit_height ?? room.wall_cabinet_top ?? 2100
+  const soffit = wall.soffit_height ?? room.soffit_height
+  if (soffit != null)
+    return (wall.height ?? room.room_dy ?? 2400) - soffit
+  return room.wall_cabinet_top ?? 2100
 }
 
 function cabFloorH(cab: CabinetInstance, wall: Wall, room: Room): number {

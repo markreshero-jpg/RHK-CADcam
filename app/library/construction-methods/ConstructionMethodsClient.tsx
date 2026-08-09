@@ -294,7 +294,7 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
         <ThemeToggle />
         <Link href="/settings" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">← Settings</Link>
         <span className="text-ink-subtle">|</span>
-        <Link href="/library/schedules" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Material Schedules</Link>
+        <Link href="/settings?tab=materials_schedule" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Material Schedules</Link>
         <span className="text-ink-subtle">|</span>
         <Link href="/library/drawer-boxes" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">Drawer Box Methods</Link>
         <span className="text-ink-subtle">|</span>
@@ -919,6 +919,7 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
       material:                    mat,
       door_material:               mat,
       shelf_material:              mat,
+      exposed_material:            mat,
       toekick_face_material:       mat,
       toekick_interior_material:   mat,
       slide_side_deduction: 13,

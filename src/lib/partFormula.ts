@@ -65,7 +65,9 @@ export function roleMaterialId(role: string | null | undefined, input: CabinetIn
       return input.toekick_face_material?.id ?? input.material?.id ?? null
     case 'drawerbox': case 'drawer':
       return input.drawer_material?.id ?? input.material?.id ?? null
-    default: // interior / exposed / exposed_interior / end_panel / unknown
+    case 'exposed': case 'exposed_interior': case 'end_panel': // legacy aliases fold into exposed
+      return input.exposed_material?.id ?? input.material?.id ?? null
+    default: // interior / unknown
       return input.material?.id ?? null
   }
 }

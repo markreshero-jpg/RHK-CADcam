@@ -1,0 +1,15 @@
+{
+  "projectName": "Test Kitchen",
+  "roomName": "Void Corner Demo",
+  "roomHeight": 2400,
+  "walls": [
+    { "x": 0, "y": 2000, "angle": 270, "length": 2000 },
+    { "x": 0, "y": 0, "angle": 0, "length": 3000 }
+  ],
+  "cabinets": [
+    { "def": "B2", "wall": 1, "offset": 782, "dx": 600, "dz": 560, "note": "First-wall run; ends hard against void-corner filler at 618 from corner" },
+    { "def": "Filler", "wall": 1, "offset": 1382, "dx": 40, "dz": 560, "note": "Void corner, first-wall filler: cut 40 (face only), offset from corner = return dz 560 + 16 door + 2 buffer = 578. dz = carcase depth; 16mm panel sits proud with 2mm buffer like a door front. Material = door material (Flat Grain Polytec 16mm, checked on job)" },
+    { "def": "Filler", "wall": 2, "offset": 560, "dx": 56, "dz": 560, "note": "Void corner, return-wall filler: offset from corner = first run dz 560, cut = 40 face + 16 door panel = 56 (buffer NOT in the cut; small return screwed on, sits 2mm proud so face is inline with fronts). Material = door material (Flat Grain Polytec 16mm, checked on job)" },
+    { "def": "B2", "wall": 2, "offset": 616, "dx": 600, "dz": 560, "note": "Return run; starts at 616 from corner (560 + 56). 2mm asymmetry vs first wall (618) is correct" }
+  ]
+}

@@ -64,8 +64,9 @@ function cabWorldCorners(cab: CabinetInstance, wall: Wall, perp: Pt): Pt[] {
 }
 
 function wallCabTopFor(w: Wall | null, room: Room): number {
-  if (w?.soffit_height != null) return (w.height ?? room.room_dy ?? 2400) - w.soffit_height
-  return room.soffit_height ?? room.wall_cabinet_top ?? 2100
+  const soffit = w?.soffit_height ?? room.soffit_height
+  if (soffit != null) return (w?.height ?? room.room_dy ?? 2400) - soffit
+  return room.wall_cabinet_top ?? 2100
 }
 
 function cabBottomZ(cab: CabinetInstance, room: Room, wall: Wall | null): number {

@@ -122,7 +122,7 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
           <ThemeToggle />
           <Link href="/settings" className="text-ink-subtle hover:text-ink-muted transition-colors">← Settings</Link>
           <span className="text-ink-subtle">|</span>
-          <Link href="/library/schedules" className="text-ink-subtle hover:text-ink-muted transition-colors">Material Schedules</Link>
+          <Link href="/settings?tab=materials_schedule" className="text-ink-subtle hover:text-ink-muted transition-colors">Material Schedules</Link>
           <span className="text-ink-subtle">|</span>
           <Link href="/library/construction-methods" className="text-ink-subtle hover:text-ink-muted transition-colors">Construction Methods</Link>
           <span className="text-ink-subtle">|</span>

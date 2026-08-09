@@ -43,13 +43,14 @@ export interface ElevSnapResult {
 
 export interface ElevSnapModifiers { ortho?: boolean; ortho45?: boolean }
 
-// wall.soffit_height stored as depth-from-top; convert to height-from-floor when present.
+// soffit_height (wall and room level) stored as depth-from-top; convert to height-from-floor.
 function wallCabTopFor(wall: Wall, room: Room): number {
-  if (wall.soffit_height != null) {
+  const soffit = wall.soffit_height ?? room.soffit_height
+  if (soffit != null) {
     const wallH = wall.height ?? room.room_dy ?? 2400
-    return wallH - wall.soffit_height
+    return wallH - soffit
   }
-  return room.soffit_height ?? room.wall_cabinet_top ?? 2100
+  return room.wall_cabinet_top ?? 2100
 }
 
 function cabBottomZ(cab: CabinetInstance, room: Room, wall: Wall): number {

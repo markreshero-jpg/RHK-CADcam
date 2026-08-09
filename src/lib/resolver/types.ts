@@ -508,6 +508,11 @@ export interface CabinetInput {
   material:        Material   // primary carcass material
   door_material:   Material   // face material
   shelf_material:  Material   // shelf material
+  // Exposed material — every visible non-door part resolves here: end panels,
+  // fillers, island back panels, open shelves, and the whole carcass when
+  // exposed_interior is set (loadCabinetInput swaps material/shelf_material).
+  // Required: schedules must carry an 'exposed' row (no fallback by design).
+  exposed_material: Material
   toekick_face_material:     Material
   toekick_interior_material: Material
 
@@ -515,6 +520,7 @@ export interface CabinetInput {
   interior_edgeband_id?:         string
   door_edgeband_id?:             string
   shelf_edgeband_id?:            string
+  exposed_edgeband_id?:          string
   toekick_face_edgeband_id?:     string
   toekick_interior_edgeband_id?: string
 
@@ -529,8 +535,13 @@ export interface CabinetInput {
   // fitting has no explicit drawer_type set.
   default_inner_drawer_type?: DrawerType
 
-  // Drawer box construction (face-zone drawers)
+  // Drawer box construction (face-zone drawers) — material/edgebands come from
+  // the drawerbox schedule (room → project → shop), falling back to the assembly
+  // schedule's 'drawerbox' role, then interior.
   drawer_material?:   Material          // drawer box panels (e.g. 12mm HMR)
+  drawer_edgeband_id?: string
+  drawer_bottom_material?:   Material
+  drawer_bottom_edgeband_id?: string
   drawer_box_rules?:  DrawerBoxRules    // box joinery rules (defaults to DEFAULT_DB_RULES)
 
   // Inner drawer construction — compartment-anchored, kept separate from the face

@@ -739,7 +739,7 @@ export function EdgeTapeSVG({ box, edge, kind, eb, viewAxis, project, ov, wire =
     any = true
   }
   if (!any) return null
-  return <TapePolys r={r} s={sides} t={Math.max(eb.t, 0)} color={C_STROKE} wire={wire} />
+  return <TapePolys r={r} s={sides} t={Math.max(eb.t, 0)} color={eb.color} wire={wire} />
 }
 
 // ── Slide silhouette ────────────────────────────────────────────────────────────

@@ -72,10 +72,11 @@ function slideElevRect(s: ResolvedDrawerSlide) {
   return { ex: s.X, ey: s.Y + s.DY, ew: s.DZ, eh: s.DY }
 }
 
-// wall.soffit_height = depth from top; room values = height from floor.
+// soffit_height (wall and room) = depth from top; wall_cabinet_top = height from floor.
 function wallCabTopFor(w: Wall | null, room: Room): number {
-  if (w?.soffit_height != null) return (w.height ?? room.room_dy ?? 2400) - w.soffit_height
-  return room.soffit_height ?? room.wall_cabinet_top ?? 2100
+  const soffit = w?.soffit_height ?? room.soffit_height
+  if (soffit != null) return (w?.height ?? room.room_dy ?? 2400) - soffit
+  return room.wall_cabinet_top ?? 2100
 }
 function cabBottomZ(cab: CabinetInstance, room: Room, elevWall: Wall | null): number {
   if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner')
@@ -364,7 +365,8 @@ export default function ElevationPrintSVG({
 
   // ── Reference lines (ceiling / soffit / wall-cab top) ─────────────────────
   function refs() {
-    const soffitH = wall.soffit_height != null ? (wall.height ?? roomH) - wall.soffit_height : room.soffit_height ?? null
+    const soffitDrop = wall.soffit_height ?? room.soffit_height
+    const soffitH = soffitDrop != null ? (wall.height ?? roomH) - soffitDrop : null
     const wcTop = room.wall_cabinet_top ?? null
     return (
       <g pointerEvents="none">

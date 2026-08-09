@@ -665,7 +665,7 @@ export default function FaceGridEditor({
                       r={{ x: zx, y: zy, w: colW, h: rowH }}
                       s={rz.edge_band}
                       t={Math.max(ebSpec?.thickness ?? 1, 1)}
-                      color={s.stroke}
+                      color={ebCol}
                     />
                   )}
 

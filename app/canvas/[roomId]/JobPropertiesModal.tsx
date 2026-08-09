@@ -4,6 +4,7 @@ import { Project, ProjectStatus, DEFAULT_DIMS } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
 import { supabase } from '@/src/lib/supabase'
 import { DoorStylePreview, useDoorStylePreviews } from '@/src/components/DoorStylePreview'
+import MaterialsScheduleTab from './MaterialsScheduleTab'
 
 export type JobPropertiesTab = 'details' | 'cabinet_standards' | 'overrides'
 type CabinetStandardsTab = 'construction' | 'materials' | 'hardware' | 'doors'
@@ -154,9 +155,13 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const [tallAsmSched,      setTallAsmSched]      = useState(project.tall_assembly_schedule_id ?? '')
   const [drawerBoxSched,    setDrawerBoxSched]    = useState(project.drawerbox_schedule_id ?? '')
   const [innerDbSched,      setInnerDbSched]      = useState(project.inner_drawerbox_schedule_id ?? '')
+  const [toekickSched,      setToekickSched]      = useState(project.toekick_schedule_id ?? '')
+  const [frontSched,        setFrontSched]        = useState(project.front_schedule_id ?? '')
   const [asmSchedules,        setAsmSchedules]        = useState<SchedItem[]>([])
   const [drawerBoxScheds,     setDrawerBoxScheds]     = useState<SchedItem[]>([])
   const [innerDrawerBoxScheds, setInnerDrawerBoxScheds] = useState<SchedItem[]>([])
+  const [toekickScheds,       setToekickScheds]       = useState<SchedItem[]>([])
+  const [frontScheds,         setFrontScheds]         = useState<SchedItem[]>([])
 
   // ── Hardware schedules ────────────────────────────────────────────────────
   const [handleSched, setHandleSched] = useState(project.handle_schedule_id ?? '')
@@ -178,7 +183,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
     let cancelled = false
     async function load() {
       setSchedLoading(true)
-      const [cmsR, dbmR, asmR, hdlR, slR, hiR, dbsR, idbsR, presetsR, dsR, dcR] = await Promise.all([
+      const [cmsR, dbmR, asmR, hdlR, slR, hiR, dbsR, idbsR, presetsR, dsR, dcR, tkR, frR] = await Promise.all([
         supabase.from('construction_method_schedules').select('id,name,is_default').order('name'),
         supabase.from('drawer_box_methods').select('id,name,is_default,kind').eq('active', true).order('name'),
         supabase.from('assembly_schedules').select('id,name,is_default').eq('active', true).order('name'),
@@ -190,6 +195,8 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
         supabase.from('job_presets').select('*').order('name'),
         supabase.from('door_styles').select('id,name,door_material_schedule_id,default_material_id').eq('is_active', true).order('sort_order').order('name'),
         supabase.from('door_schedule_materials').select('id,schedule_id,colour_name,colour_code,material_id,material:materials(name,dz)').eq('is_active', true).order('sort_order').order('colour_name'),
+        supabase.from('toekick_schedules').select('id,name,is_default').eq('active', true).order('name'),
+        supabase.from('front_schedules').select('id,name,is_default').eq('active', true).order('name'),
       ])
       if (cancelled) return
       setConstructionScheds(    (cmsR.data  ?? []) as SchedItem[])
@@ -205,6 +212,8 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       setHingeScheds(           (hiR.data   ?? []) as SchedItem[])
       setDrawerBoxScheds(       (dbsR.data  ?? []) as SchedItem[])
       setInnerDrawerBoxScheds(  (idbsR.data ?? []) as SchedItem[])
+      setToekickScheds(         (tkR.data   ?? []) as SchedItem[])
+      setFrontScheds(           (frR.data   ?? []) as SchedItem[])
       setPresets(               (presetsR.data ?? []) as JobPreset[])
       setSchedLoading(false)
     }
@@ -260,6 +269,8 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       tall_assembly_schedule_id:  tallAsmSched   || null,
       drawerbox_schedule_id:      drawerBoxSched || null,
       inner_drawerbox_schedule_id: innerDbSched  || null,
+      toekick_schedule_id:        toekickSched   || null,
+      front_schedule_id:          frontSched     || null,
       handle_schedule_id: handleSched || null,
       slide_schedule_id:  slideSched  || null,
       hinge_schedule_id:  hingeSched  || null,
@@ -294,7 +305,8 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   async function saveMaterialDefaults() {
     setSavingDefaults(true)
     try {
-      // Use base assembly schedule as the shop-wide default (resolver uses a single default)
+      // The shop-wide default is a single flat schedule (per-class picks stay
+      // job-level); use the base pick as the most representative one.
       const effectiveAsm = baseAsmSched || wallAsmSched || tallAsmSched
       await Promise.all([
         saveScheduleDefault('assembly_schedules',        effectiveAsm),
@@ -629,31 +641,11 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                   ) : (
                     <>
                       <section>
-                        <SectionHead>Assembly Schedules</SectionHead>
-                        <p className="text-xs text-gray-500 mb-3">Per cabinet class. Leave blank to inherit the shop default.</p>
-                        <div className="space-y-3">
-                          {([
-                            { label: 'Base', value: baseAsmSched, set: setBaseAsmSched },
-                            { label: 'Wall', value: wallAsmSched, set: setWallAsmSched },
-                            { label: 'Tall', value: tallAsmSched, set: setTallAsmSched },
-                          ] as const).map(zone => (
-                            <div key={zone.label} className="flex items-center gap-4">
-                              <span className="w-10 shrink-0 text-xs font-medium text-gray-300">{zone.label}</span>
-                              <select
-                                value={zone.value}
-                                onChange={e => zone.set(e.target.value)}
-                                className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                              >
-                                <option value="">— shop default —</option>
-                                {asmSchedules.map(s => (
-                                  <option key={s.id} value={s.id}>
-                                    {s.name}{s.is_default ? ' (default)' : ''}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          ))}
-                        </div>
+                        <SectionHead>Materials</SectionHead>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Interior &amp; exposed material per cabinet class — the job&apos;s main material picks.
+                        </p>
+                        <MaterialsScheduleTab mode="job" projectId={project.id} showSchedules={false} roleFilter="primary" />
                       </section>
 
                       <section>
@@ -665,7 +657,24 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                         </div>
                       </section>
 
+                      <section>
+                        <SectionHead>Toe Kick</SectionHead>
+                        <p className="text-xs text-gray-500 mb-3">Leave blank to inherit the shop default.</p>
+                        <div className="space-y-3">
+                          <SchedPicker label="Toe Kick" value={toekickSched} onChange={setToekickSched} items={toekickScheds} />
+                        </div>
+                      </section>
+
                       <SaveDefaultsButton onClick={saveMaterialDefaults} saving={savingDefaults} />
+
+                      <section className="pt-2 border-t border-gray-800">
+                        <SectionHead>Per-Role Material Overrides</SectionHead>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Override the remaining material roles (door face, shelf, toe kick, benchtops) for this job.
+                          These save immediately (no Save button needed) and apply to every room unless a room overrides them again.
+                        </p>
+                        <MaterialsScheduleTab mode="job" projectId={project.id} showSchedules={false} roleFilter="secondary" />
+                      </section>
                     </>
                   )}
                 </div>

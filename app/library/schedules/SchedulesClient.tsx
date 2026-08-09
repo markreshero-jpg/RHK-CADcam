@@ -23,15 +23,17 @@ type SchedKey = typeof TABS[number]['key']
 
 // ── Row editor config ─────────────────────────────────────────────────────────
 
+// 'exposed' covers every visible non-door part: end panels, fillers, island
+// back panels, open shelves, and exposed-interior cabinets. Required — the
+// resolver hard-errors without it (no fallback by design).
 const ASM_ROLES = [
-  { key: 'interior',         label: 'Interior' },
-  { key: 'exposed_interior', label: 'Exp. Interior' },
-  { key: 'shelf',            label: 'Shelf' },
-  { key: 'end_panel',        label: 'End Panel' },
+  { key: 'interior', label: 'Interior', required: true },
+  { key: 'exposed',  label: 'Exposed',  required: true },
+  { key: 'shelf',    label: 'Shelf',    required: false },
 ]
 const TK_ROLES = [
-  { key: 'face',     label: 'Face',     desc: 'Visible front face' },
-  { key: 'interior', label: 'Interior', desc: 'Structural members' },
+  { key: 'face',     label: 'Face',          desc: 'Visible front face' },
+  { key: 'interior', label: 'Kick Interior', desc: 'Structural members' },
 ]
 const BT_ROLES = [
   { key: 'worktop_panel',        label: 'Worktop Panel',     desc: 'Main surface',               source: 'benchtop', hasEb: false },
@@ -516,12 +518,14 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         ))}
         {ASM_ROLES.map(role => (
           <Fragment key={role.key}>
-            <div className="bg-surface px-2 py-2.5 flex items-start pt-3 text-xs text-ink-muted">{role.label}</div>
+            <div className="bg-surface px-2 py-2.5 flex items-start pt-3 text-xs text-ink-muted">
+              {role.label}{role.required && <span className="text-red-400 ml-0.5">*</span>}
+            </div>
             {CLASSES.map(cls => {
               const mK = `${cls}|${role.key}`
               const eK = `${mK}|eb`
               return (
-                <div key={cls} className="bg-surface px-2 py-2">
+                <div key={cls} className={`bg-surface px-2 py-2${role.required && !rowData[mK] ? ' ring-1 ring-inset ring-red-500/60' : ''}`}>
                   <MatCell
                     matId={rowData[mK] ?? ''} ebId={rowData[eK] ?? ''}
                     matKey={mK} ebKey={eK}

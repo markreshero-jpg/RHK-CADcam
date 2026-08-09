@@ -1,7 +1,7 @@
-import SchedulesClient from './SchedulesClient'
+import { redirect } from 'next/navigation'
 
-export const dynamic = 'force-dynamic'
-
+// The schedules editor lives in Settings (with the sidebar nav) as the
+// Material Schedules tab — this bare route only exists for old links.
 export default function SchedulesPage() {
-  return <SchedulesClient />
+  redirect('/settings?tab=materials_schedule')
 }
