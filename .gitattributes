@@ -1,0 +1,6 @@
+# G-code post-processor fixtures are byte-exact machine files. Their line
+# endings ARE the thing under test (the EVO49 needs CRLF; the known-broken
+# fixture is deliberately LF-only), so git must never normalise them.
+# Without this, core.autocrlf=true rewrites them on commit/checkout and the
+# encoding tests pass or fail for the wrong reason.
+src/lib/optimiser/__tests__/fixtures/gcode/** -text

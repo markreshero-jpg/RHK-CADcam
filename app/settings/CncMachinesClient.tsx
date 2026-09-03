@@ -53,7 +53,20 @@ const GROUPS: FieldGroup[] = [
     { key: 'through_cut_z', label: 'Thru-cut (mm)', kind: 'num' },
     { key: 'material_surface_z', label: 'Z zero ref', kind: 'select', opts: ['top_of_material', 'spoilboard'] },
     { key: 'spoilboard_thickness', label: 'Spoilboard thk (mm)', kind: 'num' },
-    { key: 'drill_rapid_z', label: 'Drill rapid Z (mm)', kind: 'num' },
+    { key: 'drill_rapid_z', label: 'Drill rapid Z (mm)', kind: 'num', showIf: { key: 'drill_retract_mode', in: ['absolute'] } },
+  ]},
+  { title: 'Drilling', fields: [
+    // Retract plane: derive it from the material (thickness + clearance, which
+    // is what the machine's own posted programs do) or pin it to an absolute Z.
+    { key: 'drill_retract_mode', label: 'Retract plane', kind: 'select',
+      opts: ['above_material', 'absolute'],
+      optLabels: ['Above material (thickness + clearance)', 'Absolute Z'] },
+    { key: 'drill_clearance_z', label: 'Drill clearance (mm)', kind: 'num', showIf: { key: 'drill_retract_mode', in: ['above_material'] } },
+    // Added ONLY to holes that go the full thickness, so the slug releases.
+    // Blind holes (dowel, hinge, shelf pin) keep their exact depth.
+    { key: 'drill_through_overshoot', label: 'Add to thru cut (mm)', kind: 'num' },
+    { key: 'drill_feed_rate', label: 'Drill feed (mm/min)', kind: 'num' },
+    { key: 'drill_band_height_mm', label: 'Drill band height (mm)', kind: 'num' },
   ]},
   { title: 'Perimeter Entry', fields: [
     // Perimeters ramp in from the waste — never helical. The approach is either
@@ -137,6 +150,8 @@ const GROUPS: FieldGroup[] = [
     { key: 'coolant_on_code', label: 'Coolant/air on', kind: 'text' },
     { key: 'coolant_off_code', label: 'Coolant/air off', kind: 'text' },
     { key: 'tool_change_code', label: 'Tool change ({n})', kind: 'text' },
+    { key: 'file_extension', label: 'File extension', kind: 'text' },
+    { key: 'max_comment_length', label: 'Max comment length', kind: 'int' },
     { key: 'work_offset_code', label: 'Work offset', kind: 'text' },
     { key: 'decimal_places', label: 'Decimal places', kind: 'int' },
     { key: 'line_numbers_enabled', label: 'Line numbers', kind: 'bool' },

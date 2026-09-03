@@ -12,11 +12,12 @@ import { useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
+import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from '@/src/lib/optimiser/gcodeValidate'
 import { loadSheetDrills } from '@/src/lib/optimiser/sheetDrills'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
 
-interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number }
+interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number; findings: Finding[] }
 
 function dateStamp() {
   const d = new Date()
@@ -24,7 +25,13 @@ function dateStamp() {
 }
 
 function download(name: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
+  // The controller reads raw bytes, so write one byte per character — a Blob
+  // built from a JS string encodes UTF-8, which turns any stray non-ASCII into
+  // multiple illegal bytes. generateSheetGcode has already folded the program
+  // to 7-bit ASCII; this keeps it that way on the wire. No BOM.
+  const bytes = new Uint8Array(text.length)
+  for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0x7f
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }))
   const a = document.createElement('a')
   a.href = url; a.download = name; a.click()
   URL.revokeObjectURL(url)
@@ -46,6 +53,7 @@ export default function Stage6Gcode() {
   const [saved, setSaved] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [drillNotes, setDrillNotes] = useState<string[]>([])
+  const [postWarnings, setPostWarnings] = useState<string[]>([])
   const [simulating, setSimulating] = useState(false)
   const [coord, setCoord] = useState<SimCoord | null>(null)
   const [simDrillBlock, setSimDrillBlock] = useState<DrillBlockConfig | null>(null)
@@ -55,7 +63,7 @@ export default function Stage6Gcode() {
 
   async function generate() {
     if (!nestResult || nestResult.sheets.length === 0) { setError('Nothing nested — run Stage 4 first.'); return }
-    setBusy(true); setError(null); setSaved(null); setDrillNotes([])
+    setBusy(true); setError(null); setSaved(null); setDrillNotes([]); setPostWarnings([])
     try {
       const { data: profileRow } = profileId
         ? await supabase.from('cnc_machine_profiles').select('*').eq('id', profileId).single()
@@ -70,7 +78,7 @@ export default function Stage6Gcode() {
 
       // Routing tool per material: materials.cnc_tool_id → cnc_tools (depth/feed/speed).
       const { data: toolRows } = await supabase.from('cnc_tools')
-        .select('id,name,tool_number,diameter,max_depth_per_pass,base_feed_rate,base_spindle_speed,plunge_feed_pct').eq('active', true)
+        .select('id,name,tool_number,diameter,max_depth_per_pass,base_feed_rate,base_spindle_speed,plunge_feed_rate').eq('active', true)
       const toolById = new Map((toolRows ?? []).map(t => [t.id as string, t]))
       const matById = new Map(snap.materials.map(m => [m.id, m]))
       const toolNum = (tn: unknown) => { const d = String(tn ?? '').replace(/\D/g, ''); return d ? Number(d) : 1 }
@@ -146,7 +154,7 @@ export default function Stage6Gcode() {
         const mat = sheet.materialId ? matById.get(sheet.materialId) : undefined
         const tool = mat?.cnc_tool_id ? toolById.get(mat.cnc_tool_id) : undefined
         const post: PostProfile = postFromProfile(profile, tool
-          ? { base_feed_rate: tool.base_feed_rate as number | null, base_spindle_speed: tool.base_spindle_speed as number | null, plunge_feed_pct: tool.plunge_feed_pct as number | null }
+          ? { base_feed_rate: tool.base_feed_rate as number | null, base_spindle_speed: tool.base_spindle_speed as number | null, plunge_feed_rate: tool.plunge_feed_rate as number | null }
           : undefined)
         // Material-level feed override (% of the tool/profile base feed).
         if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100)
@@ -156,17 +164,40 @@ export default function Stage6Gcode() {
           toolDiameter: tool?.diameter != null ? Number(tool.diameter) : undefined,
           maxDepthPerPass: tool?.max_depth_per_pass != null ? Number(tool.max_depth_per_pass) : undefined,
           jobNumber: snap.jobNumber, materialName: mat?.name ?? null,
+          toolName: (tool?.name as string | null) ?? null,
           programNumber: `O${String(oBase + i).padStart(4, '0')}`,
           drillBlock,
         })
+        const fileName = gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: i + 1, ext: post.file_extension })
         return {
-          sheetIndex: sheet.index,
-          fileName: gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: i + 1 }),
+          sheetIndex: sheet.index, fileName,
           gcode, lines: gcode.split('\n').length,
+          findings: validateGcode(gcode, { maxCommentLength: post.max_comment_length }),
         }
       })
+
+      // Hard gate: a program with errors is never offered for download, and is
+      // checked here rather than at the download button so that a bad program
+      // cannot reach nest_sheets.gcode through "Save run" either. Warnings
+      // surface but do not block.
+      const blocking = gen.flatMap(g => errorsOf(g.findings).map(f => `${g.fileName}  ${formatFinding(f)}`))
+      const warned = gen.flatMap(g => warningsOf(g.findings).map(f => `${g.fileName}  ${formatFinding(f)}`))
+      if (blocking.length) {
+        setFiles([]); setPreview(null)
+        setPostWarnings([...blocking, ...warned])
+        setError(`Export blocked: ${blocking.length} validation error(s) — the program would not load or would crash the machine.`)
+        return
+      }
+      setPostWarnings(warned)
+
       setFiles(gen)
       setPreview(gen[0]?.sheetIndex ?? null)
+    } catch (e) {
+      // The post-processor hard-fails rather than emit a program that would
+      // crash the machine (e.g. group-01 motion inside an open canned cycle).
+      // Surface it instead of leaving the stage blank, and emit nothing.
+      setFiles([]); setPreview(null)
+      setError(`G-code generation failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally { setBusy(false) }
   }
 
@@ -241,6 +272,17 @@ export default function Stage6Gcode() {
             <p className="text-[11px] font-medium text-amber-400 mb-0.5">Drill tool resolution ({drillNotes.length})</p>
             <ul className="text-[11px] text-amber-300/90 list-disc list-inside space-y-0.5">
               {drillNotes.map((n, i) => <li key={i}>{n}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {postWarnings.length > 0 && (
+          <div className={`mx-8 mt-2 rounded-lg border px-3 py-2 ${files.length === 0 ? 'border-red-700/50 bg-red-900/15' : 'border-amber-700/50 bg-amber-900/15'}`}>
+            <p className={`text-[11px] font-medium mb-0.5 ${files.length === 0 ? 'text-red-400' : 'text-amber-400'}`}>
+              Post-processor validation ({postWarnings.length})
+            </p>
+            <ul className={`text-[11px] list-disc list-inside space-y-0.5 font-mono ${files.length === 0 ? 'text-red-300/90' : 'text-amber-300/90'}`}>
+              {postWarnings.map((n, i) => <li key={i}>{n}</li>)}
             </ul>
           </div>
         )}
