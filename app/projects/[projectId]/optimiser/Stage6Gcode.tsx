@@ -83,6 +83,14 @@ export default function Stage6Gcode() {
       const matById = new Map(snap.materials.map(m => [m.id, m]))
       const toolNum = (tn: unknown) => { const d = String(tn ?? '').replace(/\D/g, ''); return d ? Number(d) : 1 }
 
+      // Tool name per tool number, so every tool change — pocket bits and
+      // internal-feature bits included — can name its tool in the program.
+      const toolNames: Record<number, string | null> = {}
+      for (const t of toolRows ?? []) {
+        const n = toolNum(t.tool_number)
+        if (n) toolNames[n] = (t.name as string | null) ?? null
+      }
+
       const ds = dateStamp()
       const batch = isBatch
 
@@ -164,7 +172,7 @@ export default function Stage6Gcode() {
           toolDiameter: tool?.diameter != null ? Number(tool.diameter) : undefined,
           maxDepthPerPass: tool?.max_depth_per_pass != null ? Number(tool.max_depth_per_pass) : undefined,
           jobNumber: snap.jobNumber, materialName: mat?.name ?? null,
-          toolName: (tool?.name as string | null) ?? null,
+          toolName: (tool?.name as string | null) ?? null, toolNames,
           programNumber: `O${String(oBase + i).padStart(4, '0')}`,
           drillBlock,
         })

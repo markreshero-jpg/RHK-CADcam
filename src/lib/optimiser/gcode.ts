@@ -211,6 +211,8 @@ export interface GcodeInput {
   jobNumber?: string | null
   materialName?: string | null
   toolName?: string | null   // routing bit name, for the tool comment block
+  // Name per tool number, so pocket and internal-feature tools get named too.
+  toolNames?: Record<number, string | null>
   programNumber?: string | null
   // When present, the drilling pass uses Anderson gang detection + M88/M89
   // bitmask output instead of the generic single-spindle plunge loop.
@@ -401,13 +403,15 @@ export function generateSheetGcode(input: GcodeInput): string {
   const c = (s: string) => emit(sanitiseComment(s, p.max_comment_length))
   // Blank separator. Pushed directly so a line number is never prefixed to it.
   const blank = () => { lines.push('') }
-  // Where the head was left by the last operation, in sheet coordinates. The
-  // tool-change block restates this in the incoming tool's work offset — the
-  // reference programs do exactly that, and for a router-to-router change it is
-  // a zero-distance move whose only job is to establish G59/G90 before the
-  // T-word. Sheet coords (not machine coords) because the drill block and the
-  // router read the same physical point in different frames.
-  let headAt: { x: number; y: number } | null = null
+  // Where the head was left by the last operation, as already-formatted machine
+  // coordinates in the ROUTER's frame. The tool-change block restates this
+  // before the T-word — the reference programs do exactly that, and for a
+  // router-to-router change it is a zero-distance move whose only job is to
+  // establish the work offset, G90 and rapid mode ahead of the tool call.
+  let headAt: { x: string; y: string } | null = null
+  // True once a routing section is open, so the next tool change knows to close
+  // it first (G80 / home Z / M22, as the reference does between router tools).
+  let routerOpen = false
 
   const safeZ = p.safe_z_clearance
   // Z datum transform. Internally every Z is computed in the "top-of-material,
@@ -446,6 +450,87 @@ export function generateSheetGcode(input: GcodeInput): string {
   // Step-down per pass comes from the routing tool's max depth per pass; if no tool
   // value is supplied, fall back to the machine profile's rough Z step.
   const stepDown = input.maxDepthPerPass && input.maxDepthPerPass > 0 ? input.maxDepthPerPass : p.rough_pass_z_step
+  // Routing runs on its own work offset (e.g. G59) — always when a drill block
+  // has switched offsets, or whenever the profile opts in (Anderson-style).
+  // Shared by EVERY routing section: pockets and internal features used to omit
+  // it entirely and would cut in the drill block's offset after gang drilling.
+  const rOff = input.drillBlock || p.emit_router_work_offset ? `${p.router_work_offset} G90 ` : ''
+
+  // Emit one routing section (pockets / internal features / part perimeters)
+  // behind a tool-change block shaped like the reference programs:
+  //
+  //   G80 / G17 G91 G28 Z0 M95 / M22   close the previous routing section
+  //   (ROUTE TOOL #102:   COLOURBOARD 10MM)
+  //   (DIAMETER: 10.)
+  //   G0 G59 G90 X2192. Y-984.49       current position, in the NEW work offset
+  //   T102                             call the tool
+  //   G0 G59 G90 X705.9 Y-609.49 M13 S18000   to the lead-in, spindle up
+  //   G43 H12 Z38.                     length offset at safe Z
+  //   G0 Z28.                          approach plane
+  //
+  // The lead-in is only known once the section's own geometry has been laid
+  // out, so `body` is run into a buffer first and its opening approach folded
+  // up into the tool-change block. If the opening is not approach-shaped the
+  // buffer is emitted untouched and the tool change still gets its work offset,
+  // spindle and length offset — just without the combined move.
+  const emitRouterSection = (
+    toolNumber: number,
+    toolDiameter: number | null | undefined,
+    body: (e: (s: string) => void, cc: (s: string) => void) => void,
+  ) => {
+    const buf: string[] = []
+    const e = (s: string) => { buf.push(s) }
+    const cc = (s: string) => e(sanitiseComment(s, p.max_comment_length))
+    body(e, cc)
+    if (!buf.length) return
+
+    let head = 0
+    while (head < buf.length && buf[head].startsWith('(')) head++
+    // Two shapes occur: "G0 X.. Y.." then "G0 Z..", or "G0 X.. Y.. Z.." in one.
+    let leadIn: { x: string; y: string } | null = null
+    let approachZ: string | null = null
+    let eaten = 0
+    const mXY = /^G0 X(-?[\d.]+) Y(-?[\d.]+)(?: Z(-?[\d.]+))?$/.exec(buf[head] ?? '')
+    if (mXY) {
+      leadIn = { x: mXY[1], y: mXY[2] }
+      eaten = 1
+      if (mXY[3] !== undefined) approachZ = `Z${mXY[3]}`
+      else {
+        const mZ = /^G0 (Z-?[\d.]+)$/.exec(buf[head + 1] ?? '')
+        if (mZ) { approachZ = mZ[1]; eaten = 2 }
+      }
+    }
+
+    if (routerOpen) { blank(); emit('G80'); emit('G17 G91 G28 Z0 M95'); emit('M22') }
+    blank(); blank()
+
+    const name = input.toolNames?.[toolNumber] ?? (toolNumber === input.toolNumber ? input.toolName : null)
+    if (name) c(`ROUTE TOOL #${fInt(toolNumber)}: ${name}`)
+    if (toolDiameter != null) c(`DIAMETER: ${f(toolDiameter)}`)
+
+    if (headAt) emit(`G0 ${rOff}X${headAt.x} Y${headAt.y}`)
+    emit(p.tool_change_code.replace('{n}', String(toolNumber)))
+    const spindle = `${p.spindle_on_code} S${fInt(p.base_spindle_speed)}`
+    if (leadIn) emit(`G0 ${rOff}X${leadIn.x} Y${leadIn.y} ${spindle}`)
+    else {
+      if (rOff) emit(p.router_work_offset)
+      emit(spindle)
+    }
+    // The H register is ALWAYS derived from the machine rule (tool number +
+    // delta) so a wrong/typed value can never reach the controller.
+    if (p.emit_tool_length_offset) emit(`G43 H${fInt(toolNumber + p.tool_h_offset_delta)} Z${fz(safeZ)}`)
+    if (approachZ) emit(`G0 ${approachZ}`)
+
+    buf.slice(0, head).forEach(l => emit(l))          // the section's own comments
+    buf.slice(head + eaten).forEach(l => emit(l))     // everything after the approach
+
+    routerOpen = true
+    // Remember where this section leaves the head, for the next tool change.
+    for (let i = buf.length - 1; i >= 0; i--) {
+      const m = /X(-?[\d.]+) Y(-?[\d.]+)/.exec(buf[i])
+      if (m) { headAt = { x: m[1], y: m[2] }; break }
+    }
+  }
   // (The routing plunge feed is derived where it is used — routePerimeter and
   // emitRoutes each compute it from the routing tool. Drilling no longer shares
   // it; it has its own machine-level drill_feed_rate. See defect D5.)
@@ -479,7 +564,10 @@ export function generateSheetGcode(input: GcodeInput): string {
   if (realDrills.length) {
     if (input.drillBlock) {
       // Anderson gang drilling — detect 32mm-grid runs and emit M88/M89 bitmasks.
-      headAt = emitGangDrilling(emit, c, f, fz, fPlain, blank, realDrills, input.drillBlock, p, sheet.stock.h, thickness)
+      const lastMaster = emitGangDrilling(emit, c, f, fz, fPlain, blank, realDrills, input.drillBlock, p, sheet.stock.h, thickness)
+      // Into the router's frame: the block reads the same physical point with
+      // its head offset applied, the router reads it without.
+      if (lastMaster) headAt = { x: f(mapX(lastMaster.x)), y: f(mapY(lastMaster.y)) }
     } else {
       c(`Drilling ${realDrills.length} holes, ${p.drill_sequence_strategy} order`)
       emit(p.tool_change_code.replace('{n}', String(input.drillToolNumber ?? input.toolNumber)))
@@ -487,7 +575,7 @@ export function generateSheetGcode(input: GcodeInput): string {
       // Drill retract plane, shared with the gang-block path so both agree.
       const drillRapid = fz(p.drill_retract_mode !== 'absolute' ? p.drill_clearance_z : p.drill_rapid_z)
       for (const d of sequenceDrills(realDrills, p)) {
-        headAt = { x: d.x, y: d.y }
+        headAt = { x: f(mapX(d.x)), y: f(mapY(d.y)) }
         emit(`G0 X${f(mapX(d.x))} Y${f(mapY(d.y))} Z${drillRapid}`)
         // "Drill twice": plunge → retract, repeated `passes` times in hard board.
         const passes = Math.max(1, Math.round(d.passes ?? 1))
@@ -504,98 +592,44 @@ export function generateSheetGcode(input: GcodeInput): string {
 
   // ── 4b. Circular pockets for un-drillable holes (before routing) ─────────────
   // Each is helically ramped in with a router bit and cleared to the hole wall.
-  if (pocketHoles.length) emitCircularPockets(emit, c, f, fz, fInt, pocketHoles, p, mapX, mapY, safeZ, stepDown)
+  if (pocketHoles.length) emitCircularPockets(emitRouterSection, f, fz, pocketHoles, p, mapX, mapY, safeZ, stepDown)
 
   // ── 4c. Internal routing features (grooves / routes / pockets) ───────────────
   // Cut BEFORE the part perimeter so the part is still fully held. Each carries its
   // own router bit (grouped → one tool change). All run on the back/material-up pass
   // for now — plane_kind/front-face flip is Phase B §3a/b/d, not yet built.
-  if (input.routes?.length) emitRoutes(emit, c, f, fz, fInt, input.routes, p, mapX, mapY, safeZ, thickness)
+  if (input.routes?.length) emitRoutes(emitRouterSection, f, fz, input.routes, p, mapX, mapY, safeZ, thickness)
 
-  // ── 5-6. Tool change to the routing bit, then ALL routing ───────────────────
-  //
-  // The tool-change block follows the gold reference exactly (defect D6):
-  //
-  //   G0 G59 G90 X80.5 Y-325.75          park the gantry BEFORE the T-word
-  //   T101                                call the tool
-  //   G0 G59 G90 X429.4 Y-340. M13 S18000 move to the lead-in, spindle up
-  //   G43 H11 Z36.5                       apply the length offset at safe Z
-  //   G0 Z26.5                            drop to the approach plane
-  //
-  // Some ATC configurations alarm if the head is not positioned before the tool
-  // call, which is why the park move comes first. The third line needs the FIRST
-  // lead-in coordinate, which only the perimeter router knows, so the routing is
-  // emitted into a buffer first and its opening approach is folded up into the
-  // tool-change block below.
-  const routeBuf: string[] = []
-  const emitRoute = (s: string) => { routeBuf.push(s) }
-  const cRoute = (s: string) => emitRoute(sanitiseComment(s, p.max_comment_length))
-
-  // ── 6. ALL routing — inside-out, travel-ordered ──────────────────────────────
-  // (No internal part features in v1, so each part is a single outer perimeter;
-  //  the inside-out invariant is preserved trivially.)
+  // ── 5-6. ALL routing — inside-out, travel-ordered ──────────────────────────
+  // Runs through the same section helper as the pocket and internal-feature
+  // sections, so the tool-change block, work offset and head tracking are
+  // identical wherever a tool is called.
   const ordered = orderByTravel(sheet)
   const toolR = (input.toolDiameter ?? 0) / 2
-  if (p.cutter_compensation !== 'off' && toolR <= 0) cRoute('WARN: cutter compensation requested but routing tool diameter unknown - parts may cut undersized')
-  if (hasSkin) {
-    // Phase 1: rough every part down to the onion-skin depth (parts stay held).
-    cRoute('Roughing pass - leave onion skin')
-    for (const pl of ordered) {
-      cRoute(`Part ${pl.label}`)
-      routePerimeter(emitRoute, f, fz, pl, roughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, 0, toolR, input.toolNumber)
+  emitRouterSection(input.toolNumber, input.toolDiameter, (emitR, cR) => {
+    if (p.cutter_compensation !== 'off' && toolR <= 0) cR('WARN: cutter compensation requested but routing tool diameter unknown - parts may cut undersized')
+    if (hasSkin) {
+      // Phase 1: rough every part down to the onion-skin depth (parts stay held).
+      cR('Roughing pass - leave onion skin')
+      for (const pl of ordered) {
+        cR(`Part ${pl.label}`)
+        routePerimeter(emitR, f, fz, pl, roughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, 0, toolR, input.toolNumber)
+      }
+      // Phase 2: separate every part — cut through the remaining skin.
+      cR('Separation pass - cut through onion skin')
+      for (const pl of ordered) {
+        cR(`Part ${pl.label}`)
+        routePerimeter(emitR, f, fz, pl, throughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, roughDepth, toolR, input.toolNumber)
+      }
+    } else {
+      for (const pl of ordered) {
+        cR(`Part ${pl.label}`)
+        routePerimeter(emitR, f, fz, pl, throughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, 0, toolR, input.toolNumber)
+      }
     }
-    // Phase 2: separate every part — cut through the remaining skin.
-    cRoute('Separation pass - cut through onion skin')
-    for (const pl of ordered) {
-      cRoute(`Part ${pl.label}`)
-      routePerimeter(emitRoute, f, fz, pl, throughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, roughDepth, toolR, input.toolNumber)
-    }
-  } else {
-    for (const pl of ordered) {
-      cRoute(`Part ${pl.label}`)
-      routePerimeter(emitRoute, f, fz, pl, throughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, 0, toolR, input.toolNumber)
-    }
-  }
-  // (each routePerimeter already lifts to safe Z; the footer/template handles homing)
+    // (each routePerimeter already lifts to safe Z; the footer/template homes)
+  })
 
-  // Split the buffer into: leading comments, the opening approach pair
-  // ("G0 X.. Y.." then "G0 Z..") and the rest. If the opening does not have that
-  // shape (a non-ramp entry strategy), nothing is folded up and the routing is
-  // emitted as-is — the gantry is still parked before the T-word either way.
-  let head = 0
-  while (head < routeBuf.length && routeBuf[head].startsWith('(')) head++
-  const mXY = /^G0 (X-?[\d.]+ Y-?[\d.]+)$/.exec(routeBuf[head] ?? '')
-  const mZ = /^G0 (Z-?[\d.]+)$/.exec(routeBuf[head + 1] ?? '')
-  const leadIn = mXY && mZ ? mXY[1] : null
-  const approachZ = mXY && mZ ? mZ[1] : null
-
-  blank(); blank()   // a clear break between drilling and routing
-  if (input.toolName) c(`ROUTE TOOL #${fInt(input.toolNumber)}: ${input.toolName}`)
-  if (input.toolDiameter != null) c(`DIAMETER: ${f(input.toolDiameter)}`)
-
-  const rOff = input.drillBlock || p.emit_router_work_offset ? `${p.router_work_offset} G90 ` : ''
-  // Restate the current position in the incoming tool's work offset before the
-  // T-word. No motion: the head is already there. What it does establish is the
-  // work offset, G90 and rapid mode ahead of the tool call, which is what the
-  // reference programs do — a drill-to-router change shifts by the drill block's
-  // head offset, a router-to-router change is a zero-distance move.
-  if (headAt) emit(`G0 ${rOff}X${f(mapX(headAt.x))} Y${f(mapY(headAt.y))}`)
-  emit(p.tool_change_code.replace('{n}', String(input.toolNumber)))
-  const spindle = `${p.spindle_on_code} S${fInt(p.base_spindle_speed)}`
-  if (leadIn) {
-    emit(`G0 ${rOff}${leadIn} ${spindle}`)   // to the lead-in, spinning up
-  } else {
-    if (rOff) emit(p.router_work_offset)
-    emit(spindle)
-  }
-  // Tool-length offset (G43 H{register}) at the safe plane, like the .anc. The H
-  // register is ALWAYS derived from the machine rule (tool number + delta) so a
-  // wrong/typed value can never reach the controller and crash the Z.
-  if (p.emit_tool_length_offset) emit(`G43 H${fInt(input.toolNumber + p.tool_h_offset_delta)} Z${fz(safeZ)}`)
-  if (approachZ) emit(`G0 ${approachZ}`)
-
-  routeBuf.slice(0, head).forEach(l => emit(l))                  // the leading comments
-  routeBuf.slice(leadIn ? head + 2 : head).forEach(l => emit(l)) // the rest of the routing
 
   // ── 7-10. Shutdown ───────────────────────────────────────────────────────────
   // A machine template fully OWNS the postamble (G80, G28 homing, drill banks off,
@@ -616,6 +650,15 @@ export function generateSheetGcode(input: GcodeInput): string {
   const body = p.modal_output ? modalize(lines) : lines
   return toAscii(body.join(EOL) + EOL)
 }
+
+// Emits one routing section behind a tool-change block. Supplied by
+// generateSheetGcode, which owns the work offset, head tracking and section
+// closing; the section itself only lays out its own geometry.
+type RouterSection = (
+  toolNumber: number,
+  toolDiameter: number | null | undefined,
+  body: (emit: (s: string) => void, c: (s: string) => void) => void,
+) => void
 
 // Boustrophedon stripe ordering (spec §5.8.2 default). Other strategies fall
 // back to stripe for now.
@@ -642,8 +685,8 @@ function sequenceDrills(drills: SheetDrill[], p: PostProfile): SheetDrill[] {
 // "slow ram-in" instead of a straight plunge), then concentric finishing
 // circles clear out to the hole wall. Pure motion in sheet→machine coords.
 function emitCircularPockets(
-  emit: (s: string) => void, c: (s: string) => void,
-  f: (v: number) => string, fz: (v: number) => string, fInt: (v: number) => string,
+  section: RouterSection,
+  f: (v: number) => string, fz: (v: number) => string,
   holes: SheetDrill[], p: PostProfile,
   mapX: (x: number) => number, mapY: (y: number) => number, safeZ: number, stepDown: number,
 ) {
@@ -656,10 +699,8 @@ function emitCircularPockets(
   for (const h of holes) { const t = h.pocket!.toolNumber; (byTool.get(t) ?? byTool.set(t, []).get(t)!).push(h) }
 
   for (const [toolN, hs] of byTool) {
-    c(`Pocket-route ${hs.length} holes - no drill match, tool ${toolN}`)
-    emit(p.tool_change_code.replace('{n}', String(toolN)))
-    if (p.emit_tool_length_offset) emit(`G43 H${fInt(toolN + p.tool_h_offset_delta)} Z${fz(safeZ)}`)
-    emit(`${p.spindle_on_code} S${fInt(p.base_spindle_speed)}`)
+    section(toolN, hs[0].pocket!.toolDiameter, (emit, c) => {
+    c(`Pocket-route ${hs.length} holes - no drill match`)
 
     for (const h of hs) {
       const holeR = h.diameter / 2
@@ -692,7 +733,7 @@ function emitCircularPockets(
       }
       emit(`G0 Z${fz(safeZ)}`)
     }
-    emit(p.spindle_off_code)
+    })
   }
 }
 
@@ -706,11 +747,16 @@ function emitCircularPockets(
 // lanes across its width; a cleared pocket is rastered/spiralled a tool-radius inside
 // its rectangle (fillStrategy); an outline traces that inset rectangle.
 function emitRoutes(
-  emit: (s: string) => void, c: (s: string) => void,
-  f: (v: number) => string, fz: (v: number) => string, fInt: (v: number) => string,
+  section: RouterSection,
+  f: (v: number) => string, fz: (v: number) => string,
   routes: SheetRoute[], p: PostProfile,
   mapX: (x: number) => number, mapY: (y: number) => number, safeZ: number, thickness: number,
 ) {
+  // The section helper owns the output sink, but the geometry helpers below are
+  // shared across tool groups, so the sink is a binding they close over and each
+  // section fills in before running. Assigned synchronously inside section().
+  let emit: (s: string) => void = () => {}
+  let c: (s: string) => void = () => {}
   const cutFeed = f(p.base_feed_rate)
   const plungeFeed = f(p.plunge_feed_rate > 0 ? p.plunge_feed_rate : p.base_feed_rate)
   const helicalFeed = f(Math.round(p.base_feed_rate * (p.helical_feed_pct > 0 ? p.helical_feed_pct : 40) / 100))
@@ -761,10 +807,9 @@ function emitRoutes(
   for (const r of routes) (byTool.get(r.toolNumber) ?? byTool.set(r.toolNumber, []).get(r.toolNumber)!).push(r)
 
   for (const [toolN, rs] of byTool) {
-    c(`Routing ${rs.length} internal features - tool ${toolN}`)
-    emit(p.tool_change_code.replace('{n}', String(toolN)))
-    if (p.emit_tool_length_offset) emit(`G43 H${fInt(toolN + p.tool_h_offset_delta)} Z${fz(safeZ)}`)
-    emit(`${p.spindle_on_code} S${fInt(p.base_spindle_speed)}`)
+    section(toolN, rs[0].toolDiameter, (e, cc) => {
+    emit = e; c = cc
+    c(`Routing ${rs.length} internal features`)
 
     for (const r of rs) {
       const depth = Math.min(r.depth, thickness)   // never past the panel back
@@ -821,7 +866,7 @@ function emitRoutes(
         emit(`G0 Z${fz(safeZ)}`)
       }
     }
-    emit(p.spindle_off_code)
+    })
   }
 }
 
