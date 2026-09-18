@@ -9,6 +9,7 @@ export type EdgingKey  = keyof Required<EdgingDefaults>
 export const RULE_LABELS: Record<RuleKey, string> = {
   TOEH:    'Toe Height (mm)',
   TOE_TYPE:'Toe Type',
+  TOEFC:   'Toe Floor Clearance (mm)',
   TOESP:   'Toe Setback Panel (mm)',
   TOESCF:  'Toe Scribe Front (mm)',
   TOESCB:  'Toe Scribe Back (mm)',
@@ -25,6 +26,8 @@ export const RULE_LABELS: Record<RuleKey, string> = {
   ADJSB_B: 'Adj. Shelf Back Setback (mm)',
   ADJSL:   'Adj. Shelf Left Notch (mm)',
   ADJSR:   'Adj. Shelf Right Notch (mm)',
+  ADJ_DRILL: 'Adj. Shelf Drilling',
+  ADJ_ROWS:  'Adj. Shelf Drill Rows (0 = auto)',
   FIXSB_F: 'Fixed Shelf Front Setback (mm)',
   FIXSB_B: 'Fixed Shelf Back Setback (mm)',
   IDCL:          'Inner Drawer Front Clearance Left (mm)',
@@ -49,10 +52,10 @@ export const RULE_LABELS: Record<RuleKey, string> = {
 }
 
 export const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
-  { label: 'Toe Kick',           keys: ['TOEH', 'TOE_TYPE', 'TOESP', 'TOESCF', 'TOESCB', 'TOESCL', 'TOESCR'] },
+  { label: 'Toe Kick',           keys: ['TOEH', 'TOE_TYPE', 'TOEFC', 'TOESP', 'TOESCF', 'TOESCB', 'TOESCL', 'TOESCR'] },
   { label: 'Case Scribes',       keys: ['SCRBK', 'SCRBT', 'SCRL', 'SCRR', 'SCRT'] },
   { label: 'Top Rail',           keys: ['TOP_TYPE', 'RD'] },
-  { label: 'Adjustable Shelves', keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },
+  { label: 'Adjustable Shelves', keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR', 'ADJ_DRILL', 'ADJ_ROWS'] },
   { label: 'Fixed Shelves',      keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
   { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR'] },

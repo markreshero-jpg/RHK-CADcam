@@ -2,61 +2,65 @@
 
 import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import { rememberLibraryKeys } from '@/src/lib/displayLayers/customPartKinds'
 import type { ResolvedCabinet, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
 import {
   dbAddCustomPart, dbUpdateCustomPart, dbDeleteCustomPart,
   type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments,
 } from './canvasDB'
 import { DB_PART_LABELS } from './cabinetEditSvgHelpers'
-import { buildPartContext, evalPartExpr, type FormulaCtx } from '@/src/lib/partFormula'
+import {
+  classifyFieldInput, evaluateFormula, buildFormulaScope, type FormulaScope,
+} from '@/src/lib/formula'
 import { CUSTOM_ORIENT_LABELS, type CustomOrient } from '@/src/lib/customPartBox'
-import { evalCalc } from '@/src/lib/calc'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 
 // One dimension/position field: accepts a plain number (fixed), a plain
 // arithmetic calc (e.g. "100+100" → 200, evaluated and stored as the value), OR
-// a formula using cab.* / t.* variables (re-evaluated on resolve). Shows a live
-// readout.
-function FormulaField({ label, value, onChange, ctx }: {
-  label: string; value: string; onChange: (v: string) => void; ctx: FormulaCtx | null
+// a formula on the engine grammar — cab.* / r.* / t.* / part("left_gable").h
+// (re-evaluated on resolve). Shows a live readout with positioned errors.
+function FormulaField({ label, value, onChange, scope }: {
+  label: string; value: string; onChange: (v: string) => void; scope: FormulaScope | null
 }) {
   const trimmed = value.trim()
-  const isNum = trimmed !== '' && Number.isFinite(Number(trimmed))
-  // Pure arithmetic (no variables) resolves with evalCalc even without a context.
-  const calc = trimmed !== '' && !isNum ? evalCalc(trimmed) : null
-  const isArith = calc != null
-  const isFormula = trimmed !== '' && !isNum && !isArith
-  const evaluated = trimmed === '' ? null
-    : isNum ? Number(trimmed)
-    : isArith ? calc
-    : (ctx ? evalPartExpr(trimmed, ctx) : null)
+  const input = classifyFieldInput(trimmed)
+  const isNum = input.kind === 'literal' && Number.isFinite(Number(trimmed))
+  let readout = ' '
+  let isError = false
+  if (input.kind === 'literal') {
+    readout = isNum ? 'fixed' : `= ${Math.round(input.value * 10) / 10} mm`
+  } else if (input.kind === 'invalid') {
+    readout = input.error.message; isError = true
+  } else if (input.kind === 'formula') {
+    const r = scope ? evaluateFormula(input.ast, scope) : null
+    if (r?.ok) readout = `ƒ = ${Math.round(r.value * 10) / 10} mm`
+    else { readout = r ? r.error.message : 'formulas unavailable (no resolved cabinet)'; isError = true }
+  }
   return (
     <div>
       <label className="block text-[10px] text-gray-500 mb-1">{label}</label>
       <input type="text" value={value} onChange={e => onChange(e.target.value)} onFocus={e => e.target.select()}
         placeholder="0 · 100+100 · cab.d + t.door + 2"
         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500" />
-      <p className={`text-[9px] mt-0.5 ${isFormula && evaluated == null ? 'text-red-400' : 'text-gray-600'}`}>
-        {isFormula
-          ? (evaluated != null ? `ƒ = ${Math.round(evaluated * 10) / 10} mm` : 'invalid formula')
-          : isArith ? `= ${Math.round((evaluated ?? 0) * 10) / 10} mm`
-          : isNum ? 'fixed' : ' '}
-      </p>
+      <p className={`text-[9px] mt-0.5 ${isError ? 'text-red-400' : 'text-gray-600'}`}>{readout}</p>
     </div>
   )
 }
 
 // Parse a field's raw text into a literal value + (optional) formula string.
 // Plain numbers and plain arithmetic ("100+100") resolve to a fixed value (no
-// formula stored); only expressions with variables are kept as a formula.
-function parseField(raw: string, ctx: FormulaCtx | null, fallback: number): { value: number; expr?: string } {
-  const t = raw.trim()
-  if (t === '') return { value: 0 }
-  if (Number.isFinite(Number(t))) return { value: Number(t) }
-  const calc = evalCalc(t)
-  if (calc != null) return { value: calc }
-  const v = ctx ? evalPartExpr(t, ctx) : null
-  return { value: v ?? fallback, expr: t }
+// formula stored); only expressions with variables are kept as a formula. An
+// input that doesn't evaluate keeps its source (resolver re-eval picks it up
+// once valid) with the fallback as the cached value — same as pre-M3.
+function parseField(raw: string, scope: FormulaScope | null, fallback: number): { value: number; expr?: string } {
+  const input = classifyFieldInput(raw)
+  if (input.kind === 'empty') return { value: 0 }
+  if (input.kind === 'literal') return { value: input.value }
+  if (input.kind === 'formula' && scope) {
+    const r = evaluateFormula(input.ast, scope)
+    if (r.ok) return { value: r.value, expr: input.source }
+  }
+  return { value: fallback, expr: raw.trim() }
 }
 
 // ── Labels ────────────────────────────────────────────────────────────────────
@@ -103,12 +107,16 @@ const TYPE_ORDER = ['carcass', 'toekick', 'internal', 'face', 'drawerbox', 'slid
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
+// Dimension columns follow the CV standard-part convention: every part reads
+// as it would on the nested sheet — DY = length (with the grain), DX = width
+// (across the grain), DZ = thickness — regardless of its orientation in the
+// cabinet (a gable reads DY 720 × DX 560 × DZ 16).
 const COLS = [
   { key: 'type',     label: 'Type',     w: 100, sortable: true  },
   { key: 'name',     label: 'Part',     w: 190, sortable: true  },
   { key: 'material', label: 'Material', w: 150, sortable: true  },
-  { key: 'dy',       label: 'W (DY)',   w: 68,  sortable: true  },
-  { key: 'dx',       label: 'H (DX)',   w: 68,  sortable: true  },
+  { key: 'dy',       label: 'L (DY)',   w: 68,  sortable: true  },
+  { key: 'dx',       label: 'W (DX)',   w: 68,  sortable: true  },
   { key: 'dz',       label: 'T (DZ)',   w: 58,  sortable: true  },
   { key: 'edge',     label: 'Edge',     w: 90,  sortable: false },
   { key: 'comment',  label: 'Comment',  w: 220, sortable: false },
@@ -267,9 +275,9 @@ const CAT_LABELS: Record<string, string> = {
   slides: 'Slides', hinges: 'Hinges', misc: 'Misc', other: 'Other',
 }
 
-export function PartDialog({ cabinetId, ctx, editPart, initialPos, onSaved, onClose }: {
+export function PartDialog({ cabinetId, scope, editPart, initialPos, onSaved, onClose }: {
   cabinetId: string
-  ctx:       FormulaCtx | null
+  scope:     FormulaScope | null
   editPart?: CabinetCustomPart | null
   /** Seed x/y/z for a NEW part (e.g. from a right-click point in an ortho view). */
   initialPos?: { x: number; y: number; z: number }
@@ -306,7 +314,8 @@ export function PartDialog({ cabinetId, ctx, editPart, initialPos, onSaved, onCl
 
   useEffect(() => {
     Promise.all([
-      supabase.from('parts_library').select('id,key,name,category,edge_top,edge_bottom,edge_left,edge_right').eq('active', true).order('name'),
+      supabase.from('parts_library').select('id,key,name,category,edge_top,edge_bottom,edge_left,edge_right').eq('active', true).order('name')
+        .then(res => { rememberLibraryKeys((res.data ?? []) as { id: string; key: string | null }[]); return res }),
       supabase.from('materials').select('id,name,dz,face_colour').eq('active', true).order('name'),
     ]).then(([{ data: p }, { data: m }]) => {
       setLibParts((p ?? []) as LibraryPart[])
@@ -331,12 +340,12 @@ export function PartDialog({ cabinetId, ctx, editPart, initialPos, onSaved, onCl
     const partLibId = editPart?.part_library_id ?? sel?.id
     if (!partLibId) return
     setSaving(true)
-    const dy  = parseField(fDy, ctx, Number(editPart?.dy ?? 0))
-    const dx  = parseField(fDx, ctx, Number(editPart?.dx ?? 0))
-    const dzF = parseField(fDz, ctx, Number(editPart?.dz ?? (matDz || 18)))
-    const px  = parseField(fX, ctx, Number(editPart?.x ?? 0))
-    const py  = parseField(fY, ctx, Number(editPart?.y ?? 0))
-    const pz  = parseField(fZ, ctx, Number(editPart?.z ?? 0))
+    const dy  = parseField(fDy, scope, Number(editPart?.dy ?? 0))
+    const dx  = parseField(fDx, scope, Number(editPart?.dx ?? 0))
+    const dzF = parseField(fDz, scope, Number(editPart?.dz ?? (matDz || 18)))
+    const px  = parseField(fX, scope, Number(editPart?.x ?? 0))
+    const py  = parseField(fY, scope, Number(editPart?.y ?? 0))
+    const pz  = parseField(fZ, scope, Number(editPart?.z ?? 0))
     const expressions: Record<string, string> = {}
     if (dy.expr)  expressions.dy = dy.expr
     if (dx.expr)  expressions.dx = dx.expr
@@ -422,16 +431,16 @@ export function PartDialog({ cabinetId, ctx, editPart, initialPos, onSaved, onCl
                   placeholder={sel?.name ?? editPart?.name ?? ''}
                   className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500" />
               </div>
-              <p className="text-[10px] text-gray-500">Each size is a fixed number <span className="text-gray-600">or</span> a formula — e.g. <span className="font-mono text-gray-400">cab.d + t.door + 2</span>.</p>
+              <p className="text-[10px] text-gray-500">Each size is a fixed number <span className="text-gray-600">or</span> a formula — e.g. <span className="font-mono text-gray-400">cab.d + t.door + 2</span>. CV convention: DY = length (grain), DX = width, DZ = thickness.</p>
               <div className="grid grid-cols-3 gap-3">
-                <FormulaField label="Width (DY)"  value={fDy} onChange={setFDy} ctx={ctx} />
-                <FormulaField label="Height (DX)" value={fDx} onChange={setFDx} ctx={ctx} />
-                <FormulaField label="Thick (DZ)"  value={fDz} onChange={setFDz} ctx={ctx} />
+                <FormulaField label="Length (DY)" value={fDy} onChange={setFDy} scope={scope} />
+                <FormulaField label="Width (DX)"  value={fDx} onChange={setFDx} scope={scope} />
+                <FormulaField label="Thick (DZ)"  value={fDz} onChange={setFDz} scope={scope} />
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <FormulaField label="X pos" value={fX} onChange={setFX} ctx={ctx} />
-                <FormulaField label="Y pos" value={fY} onChange={setFY} ctx={ctx} />
-                <FormulaField label="Z pos" value={fZ} onChange={setFZ} ctx={ctx} />
+                <FormulaField label="X pos" value={fX} onChange={setFX} scope={scope} />
+                <FormulaField label="Y pos" value={fY} onChange={setFY} scope={scope} />
+                <FormulaField label="Z pos" value={fZ} onChange={setFZ} scope={scope} />
               </div>
               <div>
                 <label className="block text-[10px] text-gray-500 mb-1">Material override (role default otherwise)</label>
@@ -519,10 +528,10 @@ export default function PartsView({
   onToggleHidden?: (partId: string) => void
 }) {
   const hiddenSet = useMemo(() => new Set(hiddenParts ?? []), [hiddenParts])
-  // Formula context for live readouts + dialog editing (needs the cached resolver input).
-  const formulaCtx = useMemo<FormulaCtx | null>(() => {
+  // Formula scope for live readouts + dialog editing (needs the cached resolver input).
+  const formulaScope = useMemo<FormulaScope | null>(() => {
     const input = getCachedInput(cabinetId)
-    return input ? buildPartContext(rp, input) : null
+    return input ? buildFormulaScope(rp, input) : null
   }, [rp, cabinetId])
   const [matNames,   setMatNames]   = useState<Record<string, string>>({})
   const [matColours, setMatColours] = useState<Record<string, string | null>>({})
@@ -616,9 +625,9 @@ export default function PartsView({
         id, typeKey: 'face', typeLabel: 'Face',
         name: partLabels?.[id] ?? `${typeName} R${z.row_index + 1}C${z.col_index + 1}`,
         material: matNames[z.material_id] ?? '—', materialColor: matColours[z.material_id] ?? null,
-        // Face zones resolve DX=width, DY=height (post-migration) — cross them so
-        // width lands in the W (DY) column and height in H (DX) like every other row.
-        dy: z.DX, dx: z.DY, dz: z.DZ, eb: z.edge_band,
+        // Raw axes straight through — face zones resolve DX=width, DY=height,
+        // which IS the CV convention (DY = length/grain, DX = width).
+        dy: z.DY, dx: z.DX, dz: z.DZ, eb: z.edge_band,
         comment: partComments?.[id] ?? '',
         isCustom: false, isOverride: false,
       })
@@ -926,13 +935,13 @@ export default function PartsView({
       </div>
 
       <div className="flex-none px-3 py-1.5 text-[10px] text-gray-700 border-t border-gray-800">
-        W = DY · H = DX · T = DZ · all mm · click Part to rename · ✎ to edit sizes/formulas · sizes accept formulas like cab.d + t.door + 2
+        L = DY (grain) · W = DX · T = DZ · all mm · click Part to rename · ✎ to edit sizes/formulas · sizes accept formulas like cab.d + t.door + 2
       </div>
 
       {dialog && (
         <PartDialog
           cabinetId={cabinetId}
-          ctx={formulaCtx}
+          scope={formulaScope}
           editPart={dialog === 'new' ? null : dialog}
           onSaved={part => {
             setCustomParts(prev => prev.some(p => p.id === part.id) ? prev.map(p => p.id === part.id ? part : p) : [...prev, part])

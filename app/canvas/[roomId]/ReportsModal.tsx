@@ -1,27 +1,23 @@
 'use client'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import { generateElevationPDF } from './generateElevationPDF'
 import type { Project, Room, Wall, CabinetInstance, BenchtopInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { dbLoadResolvedParts } from './canvasDB'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
-import PlanDrawingSVG from './PlanDrawingSVG'
 import PlanViewReport from './PlanViewReport'
-import ElevationReportSVG from './ElevationReportSVG'
+import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import ElevationPrintReport from './ElevationPrintReport'
 import CabinetSheetReport from './CabinetSheetReport'
 
 export type ReportScope = 'job' | 'room'
-type ReportId = 'parts_list_summary' | 'shop_drawing_plan' | 'plan_view_v2' | 'elevation_view' | 'elevation_view_v2' | 'cabinet_sheets'
+type ReportId = 'parts_list_summary' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'parts_list_summary', label: 'Parts List Summary',  desc: 'Parts by room · material · cabinet' },
-  { id: 'shop_drawing_plan',  label: 'Plan View',           desc: 'B&W plan drawing for shop' },
-  { id: 'plan_view_v2',       label: 'Plan View (New)',     desc: 'Scaled PDF with toggleable layers' },
-  { id: 'elevation_view',     label: 'Elevation Views',     desc: 'B&W wall elevations with dimensions' },
-  { id: 'elevation_view_v2',  label: 'Elevation Views (New)', desc: 'Scaled PDF, one wall per page, layers' },
+  { id: 'plan_view_v2',       label: 'Plan View',           desc: 'Scaled PDF, follows a layer set' },
+  { id: 'elevation_view_v2',  label: 'Elevation Views',     desc: 'Scaled PDF, one wall per page, layer set' },
   { id: 'cabinet_sheets',     label: 'Cabinet Sheets',      desc: '1 page/cabinet — front, side, 3D + cut list' },
 ]
 
@@ -115,24 +111,7 @@ const PAPER = {
   A1L: { w: 841, h: 594, label: 'A1 Landscape' },
 }
 
-// Downloads an SVG at a fixed paper size — all drawings output identically sized.
-// preserveAspectRatio="xMinYMin meet" scales content to fill the page without distortion.
-function downloadSvgFile(svgEl: SVGSVGElement, filename: string, paperW: number, paperH: number) {
-  const clone = svgEl.cloneNode(true) as SVGSVGElement
-  clone.setAttribute('width',  `${paperW}mm`)
-  clone.setAttribute('height', `${paperH}mm`)
-  clone.setAttribute('preserveAspectRatio', 'xMinYMin meet')
-  clone.removeAttribute('style')
-  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
-  const svgStr = new XMLSerializer().serializeToString(clone)
-  const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url; a.download = filename; a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-export default function ReportsModal({ initialScope, project, room, walls, cabinets, resolvedParts, benchtops, onClose }: {
+export default function ReportsModal({ initialScope, project, room, walls, cabinets, resolvedParts, benchtops, layerSets, activeLayerSetId, onClose }: {
   initialScope: ReportScope
   project: Project | null
   room: Room
@@ -140,30 +119,17 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
   cabinets: CabinetInstance[]
   resolvedParts: Map<string, ResolvedCabinet>
   benchtops: BenchtopInstance[]
+  layerSets: LayerSet[]
+  activeLayerSetId: string | null
   onClose: () => void
 }) {
   const [scope, setScope] = useState<ReportScope>(initialScope)
   const [selectedReport, setSelectedReport] = useState<ReportId>('parts_list_summary')
-  const planSVGRef = useRef<SVGSVGElement>(null)
 
   // Paper size + scale for SVG output
   const [printPaper, setPrintPaper] = useState<keyof typeof PAPER>('A3L')
   const [printScale, setPrintScale] = useState(20)
   const SCALES = [5, 10, 15, 20, 25, 30, 40, 50, 100]
-  const paper = PAPER[printPaper]
-
-  // Wall picker for elevation view
-  const [selectedWallIds, setSelectedWallIds] = useState<Set<string>>(() => new Set(walls.map(w => w.id)))
-  const elevSvgRefs = useRef<Map<string, SVGSVGElement>>(new Map())
-
-  function toggleWall(id: string) {
-    setSelectedWallIds(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-  const visibleWalls = walls.filter(w => selectedWallIds.has(w.id))
 
   const [jobRooms, setJobRooms] = useState<Room[]>([])
   const [jobCabinets, setJobCabinets] = useState<CabinetInstance[]>([])
@@ -324,33 +290,6 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
     setTimeout(() => win.print(), 250)
   }
 
-  function handleDownloadPlan() {
-    const svgEl = planSVGRef.current
-    if (!svgEl) return
-    const scopeLabel = (scope === 'room' ? room.name : (project?.name ?? 'Job')).replace(/[^\w-]/g, '_')
-    downloadSvgFile(svgEl, `plan-${scopeLabel}.svg`, paper.w, paper.h)
-  }
-
-  function handleDownloadElev() {
-    if (visibleWalls.length === 0) return
-    const activeCabs = scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)
-    const doc = generateElevationPDF(visibleWalls, activeCabs, room, paper)
-    const scopeLabel = (scope === 'room' ? room.name : (project?.name ?? 'Job')).replace(/[^\w-]/g, '_')
-    const blob = doc.output('blob')
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `elevations-${scopeLabel}.pdf`
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-  }
-
-  function handlePrintActive() {
-    if (selectedReport === 'shop_drawing_plan') handleDownloadPlan()
-    else if (selectedReport === 'elevation_view') handleDownloadElev()
-    else handlePrint()
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onPointerDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl flex flex-col" style={{ width: 860, height: '78vh', maxWidth: '95vw', maxHeight: '90vh' }}>
@@ -403,14 +342,14 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {(selectedReport === 'shop_drawing_plan' || selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view' || selectedReport === 'elevation_view_v2') && (
+                {(selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view_v2') && (
                   <select value={printScale} onChange={e => setPrintScale(Number(e.target.value))}
                     className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1"
                     title="Drawing scale — 1:N">
                     {SCALES.map(s => <option key={s} value={s}>1:{s}</option>)}
                   </select>
                 )}
-                {(selectedReport === 'shop_drawing_plan' || selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view' || selectedReport === 'elevation_view_v2' || selectedReport === 'cabinet_sheets') && (
+                {(selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view_v2' || selectedReport === 'cabinet_sheets') && (
                   <select value={printPaper} onChange={e => setPrintPaper(e.target.value as keyof typeof PAPER)}
                     className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1">
                     {(Object.keys(PAPER) as (keyof typeof PAPER)[]).map(k => (
@@ -418,13 +357,11 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                     ))}
                   </select>
                 )}
-                {/* The new plan/elevation/cabinet reports have their own download button in their toolbar. */}
+                {/* The plan / elevation / cabinet reports have their own download button in their toolbar. */}
                 {selectedReport !== 'plan_view_v2' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && (
-                  <button onClick={handlePrintActive}
+                  <button onClick={handlePrint}
                     className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium">
-                    {selectedReport === 'shop_drawing_plan' ? 'Download SVG'
-                      : selectedReport === 'elevation_view' ? 'Download PDF'
-                      : 'Print / PDF'}
+                    Print / PDF
                   </button>
                 )}
               </div>
@@ -434,36 +371,17 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
             <div className="flex-1 overflow-y-auto p-4">
               {loadingJob ? (
                 <div className="text-gray-500 text-center py-12 text-sm">Loading job data…</div>
-              ) : selectedReport === 'shop_drawing_plan' ? (
-                <div className="bg-white rounded overflow-hidden shadow-inner" style={{ minHeight: 300 }}>
-                  <PlanDrawingSVG
-                    walls={walls}
-                    cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
-                    svgRef={planSVGRef}
-                    scale={printScale}
-                  />
-                </div>
               ) : selectedReport === 'plan_view_v2' ? (
                 <PlanViewReport
                   project={project}
                   room={room}
                   walls={walls}
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
+                  resolvedParts={allResolved}
+                  layerSets={layerSets}
+                  activeLayerSetId={activeLayerSetId}
                   scale={printScale}
                   paperKey={printPaper}
-                />
-              ) : selectedReport === 'elevation_view' ? (
-                <ElevationViewReport
-                  walls={walls}
-                  cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
-                  room={room}
-                  scale={printScale}
-                  selectedWallIds={selectedWallIds}
-                  onToggleWall={toggleWall}
-                  svgRefCallback={(wallId, el) => {
-                    if (el) elevSvgRefs.current.set(wallId, el)
-                    else elevSvgRefs.current.delete(wallId)
-                  }}
                 />
               ) : selectedReport === 'elevation_view_v2' ? (
                 <ElevationPrintReport
@@ -472,6 +390,8 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                   walls={walls}
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
                   resolvedParts={allResolved}
+                  layerSets={layerSets}
+                  activeLayerSetId={activeLayerSetId}
                   scale={printScale}
                   paperKey={printPaper}
                 />
@@ -493,62 +413,6 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-function ElevationViewReport({ walls, cabinets, room, scale, selectedWallIds, onToggleWall, svgRefCallback }: {
-  walls: Wall[]
-  cabinets: CabinetInstance[]
-  room: Room
-  scale: number
-  selectedWallIds: Set<string>
-  onToggleWall: (id: string) => void
-  svgRefCallback: (wallId: string, el: SVGSVGElement | null) => void
-}) {
-  const standardWalls = walls.filter(w => w.wall_type === 'standard')
-  if (standardWalls.length === 0) {
-    return <div className="text-gray-500 text-center py-12 text-sm">No standard walls in this room.</div>
-  }
-  return (
-    <div className="space-y-4">
-      {/* Wall picker */}
-      <div className="flex flex-wrap gap-2 pb-3 border-b border-gray-800">
-        <span className="text-[10px] text-gray-500 uppercase tracking-wider self-center mr-1">Show:</span>
-        {standardWalls.map(w => (
-          <button key={w.id} onClick={() => onToggleWall(w.id)}
-            className={`px-2 py-0.5 rounded text-xs border transition-colors ${
-              selectedWallIds.has(w.id)
-                ? 'bg-blue-600/25 border-blue-600/50 text-blue-300'
-                : 'bg-transparent border-gray-700 text-gray-500 hover:border-gray-500'
-            }`}>
-            {w.name}
-          </button>
-        ))}
-        <button onClick={() => standardWalls.forEach(w => onToggleWall(w.id))}
-          className="px-2 py-0.5 rounded text-xs border border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-500 transition-colors ml-1">
-          Toggle all
-        </button>
-      </div>
-
-      {/* Elevation drawings */}
-      {standardWalls.filter(w => selectedWallIds.has(w.id)).map(w => {
-        const wallCabs = cabinets.filter(c => c.wall_id === w.id)
-        return (
-          <div key={w.id} className="bg-white rounded shadow-inner overflow-hidden">
-            <ElevationReportSVG
-              wall={w}
-              cabinets={wallCabs}
-              room={room}
-              scale={scale}
-              svgRef={(el: SVGSVGElement | null) => svgRefCallback(w.id, el)}
-            />
-          </div>
-        )
-      })}
-      {standardWalls.every(w => !selectedWallIds.has(w.id)) && (
-        <div className="text-gray-500 text-center py-8 text-sm">No walls selected. Toggle walls above.</div>
-      )}
     </div>
   )
 }

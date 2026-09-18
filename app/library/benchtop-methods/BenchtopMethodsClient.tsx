@@ -6,6 +6,7 @@ import { supabase } from '@/src/lib/supabase'
 import type { BenchtopBuildMethod, BenchtopPartRole } from '@/src/lib/types'
 import BuildMethodWizard from './BuildMethodWizard'
 import { ThemeToggle } from '../../ThemeToggle'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 // ── Part role config ──────────────────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
   }
 
   async function del(id: string) {
-    if (!confirm('Delete this build method?')) return
+    if (!(await confirmDelete({ title: 'Delete Build Method', message: 'Delete this build method?' }))) return
     await supabase.from('benchtop_build_methods').delete().eq('id', id)
     if (selId === id) setSelId(null)
     setMethods(prev => prev.filter(m => m.id !== id))

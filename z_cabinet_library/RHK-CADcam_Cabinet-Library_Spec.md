@@ -160,6 +160,8 @@ Interaction:
 - Drag-to-canvas supported (`@dnd-kit` already in stack).
 - Search + a scope filter (All / This Job) header.
 
+> **Replace with library cabinet (built 2026-09-16):** right-click a cabinet (plan / elevation / 3D) → `ReplaceCabinetModal` → `handleReplaceCabinet` in `CanvasClient.tsx`. Decisions: builds the new row with `buildInstanceFromDefinition` (depth cascades like a fresh placement); **keeps** wall, anchor pos, rotation, notes, neighbour types, label (only when the class is unchanged — else `nextLabel`), width and height (optional "Keep current width/height", both default on; unticked height cascades), `pos_z` (same class). A kick-run member stays in its run (kick-less, raised) when the new definition is a floor unit with a kick. Inserts the new row **before** deleting the old one; the old cabinet's per-part overrides / custom parts / shapes are **not** carried (they belong to the old part set); the definition's custom parts are copied. Kick assemblies can't be replaced.
+
 > **Adjacency note:** `handleInsertAdjacent` (quick end-panel/filler insert) stays as-is for now — it's an adjacency action, not library placement. Fillers/panels also exist as library definitions for palette placement (§6). Don't rip out adjacency.
 
 **CHECK-IN 3:** Sidebar renders categories/subcategories/definitions from the DB; placing from it works for all three seeds; no localStorage group code remains.

@@ -90,11 +90,17 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
     })
   }
 
-  // 1. Carcase seam joints → case parts.
+  // 1. Seam joints → case parts (carcase seams) or internal shelves/dividers
+  //    (internal seams — targetPartKey already carries the int_… identity).
   for (const d of cabinetSeamDrills(rp)) {
-    const part = caseByKey.get(d.targetPartKey as never)
-    add('case_parts', `case_${d.targetPartKey}`, part ? caseFrame(part) : null, d, 'joint', d.seamKey,
-      { router_tool_id: d.router_tool_id ?? null, drill_id: d.drill_id ?? null, auto_tool: d.auto_tool ?? false })
+    const tool = { router_tool_id: d.router_tool_id ?? null, drill_id: d.drill_id ?? null, auto_tool: d.auto_tool ?? false }
+    if (d.targetPartKey.startsWith('int_')) {
+      const ip = intByKey.get(d.targetPartKey.slice(4))
+      add('internal_parts', d.targetPartKey, ip ? intFrame(ip) : null, d, 'joint', d.seamKey, tool)
+    } else {
+      const part = caseByKey.get(d.targetPartKey as never)
+      add('case_parts', `case_${d.targetPartKey}`, part ? caseFrame(part) : null, d, 'joint', d.seamKey, tool)
+    }
   }
 
   // 2. Hinges → cup holes on the door, plate holes on the mounting gable.

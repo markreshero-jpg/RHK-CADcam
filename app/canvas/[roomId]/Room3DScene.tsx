@@ -3,25 +3,21 @@
 import { Suspense, useMemo, useEffect, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei'
-import { Shape, ExtrudeGeometry, Vector3, DoubleSide } from 'three'
+import { Shape, ExtrudeGeometry, Vector3 } from 'three'
 import type { Wall, CabinetInstance, Room } from '@/src/lib/types'
-import type {
-  ResolvedCabinet, ResolvedToekickPart,
-  ResolvedInternalPart, ResolvedFaceZone,
-} from '@/src/lib/resolver/types'
+import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
   wallDir, wallInwardNormal, centroid, wallEnd, lineIntersect, dist,
 } from '@/src/lib/geometry'
 import type { Pt } from '@/src/lib/geometry'
 import { getUserPrefs } from '@/src/lib/userPrefs'
-import { getPalette } from '@/src/lib/partPalette'
-import { caseBox, isSide } from '@/src/lib/jointDrilling'
-import { customExtents, customPanelKind } from '@/src/lib/customPartBox'
-import {
-  panelFaceColors, edgeCoreBox, edgeStrips, unpackMatCol,
-  type PanelKind, type PartEdge, type EbSpec,
-} from '@/src/components/three/PartViewer'
+import { PassivePartsContext, alphaMat, type PartEdge, type MatColMap } from '@/src/components/three/PartViewer'
 import type { EbByMatId } from './useMaterialColours'
+import { CabinetScene, type SceneCustomPart } from './Cabinet3DView'
+import { dbLoadRoomPartDetails, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
+import { useHandOpMarkersMulti } from './HandOpMarkers'
+import type { CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 
 const TO_RAD = Math.PI / 180
 const FOV    = 40
@@ -61,103 +57,14 @@ function mitreCorners(w: Wall, walls: Wall[], cx: number, cy: number): [Pt, Pt, 
   return [s, e, pEO, pSO]
 }
 
-// ── Cabinet part box helpers (mirrors Cabinet3DView exactly) ──────────────────
-
-type Box = { x: number; y: number; z: number; w: number; h: number; d: number }
-
-// Box helpers below MUST stay identical to Cabinet3DView so room view and the
-// cabinet editor place every part the same way. caseBox is the shared canonical
-// helper from jointDrilling (imported above).
-function tkBox(p: ResolvedToekickPart): Box {
-  return p.part_key === 'spreader_horizontal'
-    ? { x: p.X, y: p.Y, z: p.Z, w: p.DX, h: p.DY, d: p.DZ }
-    : { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
-}
-function intBox(p: ResolvedInternalPart): Box {
-  // Inner-drawer / pull-out parts carry the drawer-box dimension convention
-  // (per-part DX/DY/DZ semantics + Z = front face); shelves/dividers differ.
-  switch (p.part_type) {
-    case 'divider':
-      return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
-    case 'inner_drawer_side':
-    case 'pull_out_side':
-      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DZ, h: p.DY, d: p.DX }
-    case 'inner_drawer_front':
-    case 'inner_drawer_back':
-    case 'pull_out_back':
-      return { x: p.X, y: p.Y, z: p.Z - p.DZ, w: p.DY, h: p.DX, d: p.DZ }
-    case 'inner_drawer_bottom':
-    case 'pull_out_bottom':
-      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DY, h: p.DZ, d: p.DX }
-    // adj_shelf, fixed_shelf, accessory — horizontal shelf-like; Z stored is the back edge.
-    default:
-      return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
-  }
-}
-function zoneBox(z: ResolvedFaceZone): Box {
-  return { x: z.X, y: z.Y, z: z.Z, w: z.DX, h: z.DY, d: z.DZ }   // face: DX=width, DY=height
-}
-
-// Panel-kind dispatch for ResolvedInternalPart — drives panelFaceColors + edgeStrips
-// orientation. Mirrors INT_PANEL_KIND in Cabinet3DView. Anything not listed → horizontal.
-const INT_PANEL_KIND: Record<string, PanelKind> = {
-  divider:            'side',
-  inner_drawer_side:  'side',
-  pull_out_side:      'side',
-  inner_drawer_front: 'face',
-  inner_drawer_back:  'face',
-  pull_out_back:      'face',
-}
-
-// Single part mesh (no pointer events — click captured by whole-cabinet overlay).
-// Renders per-face colours (interior / exposed / raw edge) and overlays edge-tape
-// strips on the banded edges, so raw (unedged) edges stay the bare substrate colour
-// while edged ones show the tape colour — matching Cabinet3DView exactly.
-function Part({ b, faceColors, edgeColor, edge, panelKind, ebSpec }: {
-  b:          Box
-  faceColors: [string, string, string, string, string, string]
-  edgeColor:  string
-  edge:       PartEdge
-  panelKind:  PanelKind
-  ebSpec?:    EbSpec
-}) {
-  const tapeT = ebSpec ? Math.max(0, ebSpec.thick) : 0
-  const strips = ebSpec ? edgeStrips(b, edge, panelKind, tapeT) : []
-  const core = ebSpec ? edgeCoreBox(b, edge, panelKind, tapeT) : b
-  return (
-    <>
-      <mesh position={[core.x + core.w / 2, core.y + core.h / 2, core.z + core.d / 2]}>
-        <boxGeometry args={[core.w, core.h, core.d]} />
-        {faceColors.map((c, i) => (
-          <meshStandardMaterial key={i} attach={`material-${i}`} color={c} roughness={0.7} metalness={0.05} />
-        ))}
-        <Edges threshold={10} color={edgeColor} />
-      </mesh>
-      {strips.map((s, i) => (
-        <mesh key={i} position={s.pos}>
-          <boxGeometry args={s.args} />
-          <meshStandardMaterial
-            color={ebSpec!.color}
-            roughness={0.35}
-            metalness={0}
-            polygonOffset
-            polygonOffsetFactor={-2}
-            polygonOffsetUnits={-2}
-          />
-        </mesh>
-      ))}
-    </>
-  )
-}
-
 // ── Wall mesh with mitre ──────────────────────────────────────────────────────
 // ExtrudeGeometry approach:
 //   • Shape is in Three.js XY plane using (planX, −planY) as coords.
 //   • Extruded along +Z then rotateX(−π/2) maps: X→worldX, Z(height)→worldY, −Y→worldZ.
 //   • So (planX,−planY) → (worldX, 0, planY) at floor — exactly right.
 
-function WallMesh({ wall, walls, room, cx, cy }: {
-  wall: Wall; walls: Wall[]; room: Room; cx: number; cy: number
+function WallMesh({ wall, walls, room, cx, cy, color = '#cbd5e1', alpha = 1 }: {
+  wall: Wall; walls: Wall[]; room: Room; cx: number; cy: number; color?: string; alpha?: number
 }) {
   const height   = wall.height ?? room.room_dy ?? 2400
   const angleRad = wall.angle * TO_RAD
@@ -191,9 +98,9 @@ function WallMesh({ wall, walls, room, cx, cy }: {
   if (!geometry) return null
 
   return (
-    <mesh geometry={geometry}>
-      <meshStandardMaterial color="#cbd5e1" roughness={0.85} metalness={0} />
-      <Edges threshold={25} color="#94a3b8" />
+    <mesh key={alpha < 1 ? 't' : 'o'} geometry={geometry}>
+      <meshStandardMaterial color={color} roughness={0.85} metalness={0} {...alphaMat(alpha)} />
+      <Edges threshold={25} color="#94a3b8" transparent opacity={alpha} />
     </mesh>
   )
 }
@@ -228,6 +135,9 @@ function WallLabel({ wall, room, cx, cy }: { wall: Wall; room: Room; cx: number;
 }
 
 // ── Cabinet mesh ──────────────────────────────────────────────────────────────
+// Parts are drawn by Cabinet3DView's CabinetScene — the same renderer as the
+// cabinet editor — so part overrides, drawn shapes, added parts and hardware
+// models match the editor exactly, gated by the display layer set.
 // The resolved cabinet's local space matches Cabinet3DView exactly:
 //   +X = along wall (width), +Y = up (height), +Z = into room (depth).
 // We place the group's origin at the cabinet's bottom-back-left world corner,
@@ -241,7 +151,7 @@ function WallLabel({ wall, room, cx, cy }: { wall: Wall; room: Room; cx: number;
 
 type MatColEntry = string | { face?: string; back?: string; edge?: string }
 
-function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMenu, rp, materialColours, ebByMatId }: {
+function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMenu, rp, materialColours, ebByMatId, layers, partOverrides, shapeOverrides, handMarkers }: {
   cab: CabinetInstance
   wall: Wall
   cx: number; cy: number
@@ -252,6 +162,10 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
   rp?: ResolvedCabinet
   materialColours?: Record<string, MatColEntry>
   ebByMatId?: EbByMatId
+  layers: LayerView
+  partOverrides?: PartPosOverrides
+  shapeOverrides?: ShapeOverrides
+  handMarkers?: CabinetOpMarker[]
 }) {
   const angleRad = wall.angle * TO_RAD
   const perp     = wallInwardNormal(wall, cx, cy)
@@ -269,46 +183,51 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
 
   const SEL  = '#d97706'
   const SELE = '#fbbf24'
-  const SEL6: [string, string, string, string, string, string] = [SEL, SEL, SEL, SEL, SEL, SEL]
-  const palette = useMemo(() => getPalette(), [])
+  // Selected cabinet = amber tint: every material lookup resolves to amber and
+  // edge tape is dropped (so strips don't paint over the tint).
+  const partColours = selected ? SELECTED_COLOURS : (materialColours as MatColMap | undefined)
+  const partEdgebands = selected ? undefined : ebByMatId
 
-  // Per-material face/back/edge colours and edge-tape spec. Mirrors Cabinet3DView so
-  // the room view paints exposed/interior/raw surfaces and edge-banding identically.
-  function matSpec(matId: string, fallback: string) {
-    return unpackMatCol(materialColours?.[matId], fallback)
-  }
-  function ebFor(matId: string): EbSpec | undefined {
-    const spec = ebByMatId?.[matId]
-    if (!spec) return undefined
-    // Tape with no colour on record reads as the part's material face colour —
-    // one colour for every strip, matched to the face.
-    return { thick: spec.thickness, color: spec.color ?? unpackMatCol(materialColours?.[matId], '#c8b89a').face }
-  }
+  // Room-visible added parts only (show_in_room), in CabinetScene's shape.
+  const customParts = useMemo(
+    () => (rp?.custom_parts ?? []).filter(p => p.show_in_room) as unknown as SceneCustomPart[],
+    [rp?.custom_parts],
+  )
 
   if (!rp) {
-    // Fallback box when resolver data isn't loaded yet
+    // Fallback box when resolver data isn't loaded yet (or failed) — stands in for
+    // the carcase, so it follows the carcase layer items.
+    if (!layers.any('carcass_gables', 'carcass_top', 'carcass_bottom', 'carcass_back')) return null
+    // Ghost / opacity: follow whichever carcase item is shown (gables first).
+    const placeholderAlpha = layers.alpha(
+      ['carcass_gables', 'carcass_top', 'carcass_bottom', 'carcass_back'].find(id => layers.show(id))!,
+    )
     const actualPerp = isFlipped ? { x: -perp.x, y: -perp.y } : perp
     const cx3 = cab.pos_x + (cab.dx / 2) * wd.x + (cab.dz / 2) * actualPerp.x
     const cz3 = cab.pos_y + (cab.dx / 2) * wd.y + (cab.dz / 2) * actualPerp.y
     return (
       <mesh
+        key={placeholderAlpha < 1 ? 't' : 'o'}
         position={[cx3, floorY + cab.dy / 2, cz3]}
         rotation={[0, rotY, 0]}
         onClick={e => { e.stopPropagation(); onSelect() }}
         onContextMenu={e => { e.stopPropagation(); onContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY) }}
       >
         <boxGeometry args={[cab.dx, cab.dy, cab.dz]} />
-        <meshStandardMaterial color={selected ? SEL : '#d4c5aa'} roughness={0.7} metalness={0.05} />
-        <Edges threshold={10} color={selected ? SELE : '#a89880'} />
+        <meshStandardMaterial color={selected ? SEL : '#d4c5aa'} roughness={0.7} metalness={0.05} {...alphaMat(placeholderAlpha)} />
+        <Edges threshold={10} color={selected ? SELE : '#a89880'} transparent opacity={placeholderAlpha} />
       </mesh>
     )
   }
 
-  // Resolved parts: render each panel in cabinet-local coordinates.
-  // Group origin = bottom-back-left corner of cabinet in world space.
-  // Pointer handlers live on the outer group so a click on ANY descendant part
-  // bubbles up and selects the cabinet — the transparent overlay alone is unreliable
-  // (when scaleZ === -1 its front faces flip inward and the raycaster culls them).
+  // Group origin = bottom-back-left corner of cabinet in world space; CabinetScene
+  // is centred on the cabinet, so it's offset by half the box.
+  // Pointer targets = the parts actually drawn. R3F raycasts every descendant of
+  // a group with handlers, so a click / right-click on any shown part bubbles to
+  // the outer group; parts hidden by the layer set aren't rendered, so they (and
+  // empty space where they'd be) can't be clicked. Parts are passive
+  // (PassivePartsContext) so no part-level handler competes with the cabinet's.
+  // No bounding-box overlay: it made hidden parts selectable.
   return (
     <group
       position={[cab.pos_x, floorY, cab.pos_y]}
@@ -317,104 +236,45 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
       onContextMenu={e => { e.stopPropagation(); onContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY) }}
     >
       <group scale={[1, 1, scaleZ]}>
-
-        {/* ── Carcass ── */}
-        {rp.case_parts.map((p, i) => {
-          const kind: PanelKind = isSide(p.part_key) ? 'side' : p.part_key === 'back' ? 'face' : 'horizontal'
-          const s = matSpec(p.material_id, '#ddd3bb')
-          return (
-            <Part key={`c${i}`}
-              b={caseBox(p)}
-              faceColors={selected ? SEL6 : panelFaceColors(kind, p.part_key, s.face, s.back, s.edge)}
-              edgeColor={selected ? SELE : palette.carcase}
-              edge={p.edge_band}
-              panelKind={kind}
-              ebSpec={selected ? undefined : ebFor(p.material_id)}
+        {/* Per-cabinet Suspense: a hardware model still loading only hides this cabinet. */}
+        <Suspense fallback={null}>
+          <PassivePartsContext.Provider value>
+          <group position={[cab.dx / 2, cab.dy / 2, cab.dz / 2]}>
+            <CabinetScene
+              cab={cab}
+              rp={rp}
+              selected={null}
+              onSelect={NOOP}
+              materialColours={partColours}
+              ebByMatId={partEdgebands}
+              doorsOpen={false}
+              openDrawers={EMPTY_DRAWERS}
+              openInnerDrawers={EMPTY_INNER_DRAWERS}
+              edgeOverrides={EMPTY_EDGES}
+              customParts={customParts}
+              partOverrides={partOverrides}
+              shapeOverrides={shapeOverrides}
+              showDrilling={layers.show('machining')}
+              handMarkers={handMarkers}
+              layers={layers}
+              roomOutlines
             />
-          )
-        })}
-
-        {/* ── Toe kick ── */}
-        {rp.toekick_parts.map((p, i) => {
-          const kind: PanelKind = p.part_key === 'spreader_horizontal'
-            ? 'horizontal'
-            : p.part_key === 'spreader_vertical'
-            ? 'side'
-            : 'face'
-          const s = matSpec(p.material_id, '#78716c')
-          return (
-            <Part key={`t${i}`}
-              b={tkBox(p)}
-              faceColors={selected ? SEL6 : panelFaceColors(kind, p.part_key, s.face, s.back, s.edge)}
-              edgeColor={selected ? SELE : palette.toekick}
-              edge={p.edge_band}
-              panelKind={kind}
-              ebSpec={selected ? undefined : ebFor(p.material_id)}
-            />
-          )
-        })}
-
-        {/* ── Shelves / internal (incl. inner-drawer / pull-out boxes) ── */}
-        {rp.internal_parts.map((p, i) => {
-          const kind: PanelKind = INT_PANEL_KIND[p.part_type] ?? 'horizontal'
-          const s = matSpec(p.material_id, '#e8dece')
-          return (
-            <Part key={`s${i}`}
-              b={intBox(p)}
-              faceColors={selected ? SEL6 : panelFaceColors(kind, p.part_type, s.face, s.back, s.edge)}
-              edgeColor={selected ? SELE : palette.internal}
-              edge={p.edge_band}
-              panelKind={kind}
-              ebSpec={selected ? undefined : ebFor(p.material_id)}
-            />
-          )
-        })}
-
-        {/* ── Face zones ── */}
-        {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
-          const s = matSpec(z.material_id, z.face_type === 'drawer_face' ? '#e2d9c8' : '#f0ebe0')
-          return (
-            <Part key={`f${i}`}
-              b={zoneBox(z)}
-              faceColors={selected ? SEL6 : panelFaceColors('face', z.face_type, s.face, s.back, s.edge)}
-              edgeColor={selected ? SELE : (z.face_type === 'drawer_face' ? palette.drawer_face : palette.door)}
-              edge={z.edge_band}
-              panelKind="face"
-              ebSpec={selected ? undefined : ebFor(z.material_id)}
-            />
-          )
-        })}
-
-        {/* ── Custom parts (panels / fillers / end panels) — room-visible only ── */}
-        {(rp.custom_parts ?? []).filter(p => p.show_in_room && Number(p.dz) > 0).map((p, i) => {
-          const s = matSpec(p.material_id ?? '', '#a78bfa')
-          const { ex, ey, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
-          const b: Box = { x: p.x, y: p.y, z: p.z, w: ex, h: ey, d: ez }
-          const kind = customPanelKind(p.orientation)
-          return (
-            <Part key={`cust${i}`}
-              b={b}
-              faceColors={selected ? SEL6 : panelFaceColors(kind, 'custom', s.face, s.back, s.edge)}
-              edgeColor={selected ? SELE : palette.carcase}
-              edge={{ top: p.edge_top, bottom: p.edge_bottom, left: p.edge_left, right: p.edge_right }}
-              panelKind={kind}
-              ebSpec={selected ? undefined : ebFor(p.material_id ?? '')}
-            />
-          )
-        })}
-
-        {/* Transparent click-capture overlay for the whole cabinet bounding box.
-            DoubleSide so the raycaster still hits it when scaleZ === -1 flips the
-            winding. The click bubbles to the outer group (which carries the handlers). */}
-        <mesh position={[cab.dx / 2, cab.dy / 2, cab.dz / 2]}>
-          <boxGeometry args={[cab.dx, cab.dy, cab.dz]} />
-          <meshStandardMaterial transparent opacity={0} depthWrite={false} side={DoubleSide} />
-        </mesh>
+          </group>
+          </PassivePartsContext.Provider>
+        </Suspense>
 
       </group>
     </group>
   )
 }
+
+const NOOP = () => {}
+const SELECTED_COLOURS: MatColMap = new Proxy({}, {
+  get: () => ({ face: '#d97706', back: '#d97706', edge: '#fbbf24' }),
+}) as MatColMap
+const EMPTY_DRAWERS = new Map<string, number>()
+const EMPTY_INNER_DRAWERS = new Map<number, number>()
+const EMPTY_EDGES = new Map<string, PartEdge>()
 
 // ── Wall visibility menu (DOM overlay) ───────────────────────────────────────
 
@@ -501,9 +361,10 @@ function WallVisibilityMenu({ x, y, walls, hiddenWallIds, onToggle, onShowAll, o
 
 // ── Cabinet context menu (DOM overlay) ───────────────────────────────────────
 
-function CabContextMenu({ x, y, onEdit, onDelete, onClose }: {
+function CabContextMenu({ x, y, onEdit, onReplace, onDelete, onClose }: {
   x: number; y: number
   onEdit: () => void
+  onReplace?: () => void
   onDelete: () => void
   onClose: () => void
 }) {
@@ -529,6 +390,14 @@ function CabContextMenu({ x, y, onEdit, onDelete, onClose }: {
       >
         Edit cabinet
       </button>
+      {onReplace && (
+        <button
+          className="w-full text-left px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700"
+          onClick={() => { onReplace(); onClose() }}
+        >
+          Replace with library cabinet…
+        </button>
+      )}
       <div className="my-1 border-t border-gray-700" />
       <button
         className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-gray-700"
@@ -545,7 +414,7 @@ function CabContextMenu({ x, y, onEdit, onDelete, onClose }: {
 // and zoom toward the 3D point under the cursor rather than the orbit target.
 //
 // Standard direction: scroll up = zoom in. Reversed by user pref (Settings → User → Preferences).
-// Ctrl = fast zoom, Shift = fine zoom, no modifier = normal.
+// Ctrl = fast zoom, Shift = fine zoom, no modifier = normal. Also handles touch pinch.
 
 function CustomZoom({ controlsRef }: { controlsRef: React.RefObject<any> }) {
   const { camera, gl } = useThree()
@@ -578,8 +447,62 @@ function CustomZoom({ controlsRef }: { controlsRef: React.RefObject<any> }) {
       controlsRef.current.update()
     }
 
+    // Touchscreen pinch. OrbitControls' own pinch dolly is gated on enableZoom (off,
+    // so the wheel handler above owns zoom); its two-finger pan still runs alongside.
+    // Scales the camera→target distance by the finger-spread ratio, clamped to the
+    // controls' min/max distance. No invertScroll here — pinch direction is physical.
+    const touches = new Map<number, { x: number; y: number }>()
+    let lastSpread = 0
+
+    function spread() {
+      const [a, b] = [...touches.values()]
+      return Math.hypot(a.x - b.x, a.y - b.y)
+    }
+
+    function onPointerDown(e: PointerEvent) {
+      if (e.pointerType !== 'touch') return
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      lastSpread = touches.size === 2 ? spread() : 0
+    }
+
+    function onPointerMove(e: PointerEvent) {
+      if (e.pointerType !== 'touch' || !touches.has(e.pointerId)) return
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      const ctrl = controlsRef.current
+      if (touches.size !== 2 || !ctrl || lastSpread <= 0) return
+
+      const now = spread()
+      if (now <= 0) return
+      const target: Vector3 = ctrl.target
+      const offset = camera.position.clone().sub(target)
+      const dist = offset.length()
+      const next = Math.min(ctrl.maxDistance, Math.max(ctrl.minDistance, dist * (lastSpread / now)))
+      lastSpread = now
+
+      camera.position.copy(target).add(offset.multiplyScalar(next / dist))
+      ctrl.update()
+    }
+
+    function onPointerUp(e: PointerEvent) {
+      if (!touches.delete(e.pointerId)) return
+      lastSpread = touches.size === 2 ? spread() : 0
+    }
+
+    // move/up on the document: OrbitControls captures the pointer, and a finger
+    // lifted off-canvas must still clear its entry.
+    const doc = canvas.ownerDocument
     canvas.addEventListener('wheel', onWheel, { passive: false })
-    return () => canvas.removeEventListener('wheel', onWheel)
+    canvas.addEventListener('pointerdown', onPointerDown)
+    doc.addEventListener('pointermove', onPointerMove)
+    doc.addEventListener('pointerup', onPointerUp)
+    doc.addEventListener('pointercancel', onPointerUp)
+    return () => {
+      canvas.removeEventListener('wheel', onWheel)
+      canvas.removeEventListener('pointerdown', onPointerDown)
+      doc.removeEventListener('pointermove', onPointerMove)
+      doc.removeEventListener('pointerup', onPointerUp)
+      doc.removeEventListener('pointercancel', onPointerUp)
+    }
   }, [camera, gl, controlsRef])
 
   return null
@@ -676,7 +599,7 @@ function ResetView({ signal, controlsRef, position, target }: {
 
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef }: {
+function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -690,9 +613,24 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
   birdsEyeSignal: number
   resetSignal: number
   cameraStateRef?: React.MutableRefObject<Camera3DState | null>
+  layers: LayerView
 }) {
   const controlsRef = useRef<any>(null)
   const { x: cx, y: cy } = useMemo(() => centroid(walls), [walls])
+
+  // Part overrides + drawn shapes for every cabinet. Re-fetched when the resolved
+  // map changes (a cabinet edit re-resolves → new map), so editor changes show here.
+  const cabIdsKey = cabinets.map(c => c.id).join(',')
+  const [details, setDetails] = useState<{ posById: Map<string, PartPosOverrides>; shapesById: Map<string, ShapeOverrides> } | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    dbLoadRoomPartDetails(cabIdsKey ? cabIdsKey.split(',') : []).then(d => { if (!cancelled) setDetails(d) })
+    return () => { cancelled = true }
+  }, [cabIdsKey, resolvedParts])
+  // Hand-added operations only load while the machining layer is shown.
+  const handMarkersByCab = useHandOpMarkersMulti(
+    layers.show('machining') ? cabinets.map(c => c.id) : [], resolvedParts,
+  )
   const roomH = room.room_dy ?? 2400
 
   const bounds = useMemo(() => {
@@ -759,14 +697,16 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
       </mesh>
 
       {/* Walls */}
-      {walls.map(w => hiddenWallIds.has(w.id) ? null : (
-        <WallMesh key={w.id} wall={w} walls={walls} room={room} cx={cx} cy={cy} />
+      {layers.show('walls') && walls.map(w => hiddenWallIds.has(w.id) ? null : (
+        <WallMesh key={w.id} wall={w} walls={walls} room={room} cx={cx} cy={cy} color={layers.colorOf('walls')} alpha={layers.alpha('walls')} />
       ))}
 
       {/* Wall name labels on top edge */}
-      {walls.map(w => hiddenWallIds.has(w.id) ? null : (
-        <WallLabel key={`lbl_${w.id}`} wall={w} room={room} cx={cx} cy={cy} />
-      ))}
+      <Suspense fallback={null}>
+        {layers.show('walls') && walls.map(w => hiddenWallIds.has(w.id) ? null : (
+          <WallLabel key={`lbl_${w.id}`} wall={w} room={room} cx={cx} cy={cy} />
+        ))}
+      </Suspense>
 
       {/* Cabinets */}
       {cabinets.map(cab => {
@@ -782,6 +722,10 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
             rp={resolvedParts.get(cab.id)}
             materialColours={materialColours}
             ebByMatId={ebByMatId}
+            layers={layers}
+            partOverrides={details?.posById.get(cab.id)}
+            shapeOverrides={details?.shapesById.get(cab.id)}
+            handMarkers={handMarkersByCab.get(cab.id)}
           />
         )
       })}
@@ -794,7 +738,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
 type MenuState     = { x: number; y: number; cabId: string }
 type WallMenuState = { x: number; y: number }
 
-export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0 }: {
+export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -803,11 +747,13 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   onDeselect: () => void
   onEditCabinet: (id: string) => void
   onDeleteCabinet: (id: string) => void
+  onReplaceCabinet?: (id: string) => void
   resolvedParts: Map<string, ResolvedCabinet>
   materialColours?: Record<string, MatColEntry>
   ebByMatId?: EbByMatId
   cameraStateRef?: React.MutableRefObject<Camera3DState | null>
   resetSignal?: number
+  layers: LayerView
 }) {
   const [menu, setMenu]               = useState<MenuState | null>(null)
   const [wallMenu, setWallMenu]       = useState<WallMenuState | null>(null)
@@ -850,7 +796,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
         hitCabRef.current = false
       }}
     >
-      <Canvas gl={{ antialias: true }} dpr={[1, 2]} style={{ background: '#e8e4de' }}>
+      <Canvas gl={{ antialias: true }} dpr={[1, 2]} style={{ background: layers.background ?? '#e8e4de' }}>
         <Suspense fallback={null}>
           {walls.length > 0 && (
             <RoomScene
@@ -868,6 +814,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
               birdsEyeSignal={birdsEyeSignal}
               resetSignal={resetSignal + resetViewSignal}
               cameraStateRef={cameraStateRef}
+              layers={layers}
             />
           )}
         </Suspense>
@@ -880,7 +827,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
       )}
 
       <div className="absolute bottom-2 left-3 text-[10px] text-gray-700 pointer-events-none select-none">
-        Left-drag rotate · scroll zoom · right-drag pan · right-click for options
+        Left-drag rotate · scroll/pinch zoom · right-drag pan · right-click for options
       </div>
 
       {menu && (
@@ -888,6 +835,8 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
           x={menu.x} y={menu.y}
           onEdit={() => onEditCabinet(menu.cabId)}
           onDelete={() => onDeleteCabinet(menu.cabId)}
+          onReplace={onReplaceCabinet && !cabinets.find(c => c.id === menu.cabId)?.is_kick_assembly
+            ? () => onReplaceCabinet(menu.cabId) : undefined}
           onClose={() => setMenu(null)}
         />
       )}

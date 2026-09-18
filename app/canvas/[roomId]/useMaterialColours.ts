@@ -4,11 +4,13 @@ import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet, ResolvedCustomPart } from '@/src/lib/resolver/types'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { dbLoadResolvedParts, dbResolveAndPersistCabinet } from './canvasDB'
+import { ebColour } from '@/src/lib/partPalette'
+import { ROOM_CUSTOM_PART_COLS, withLibraryKey } from '@/src/lib/displayLayers/customPartKinds'
 
 export type MatColours  = Record<string, { face?: string; back?: string; edge?: string }>
 export type EbByMatId   = Record<string, { thickness: number; color: string | null }>
 
-const CUSTOM_PART_COLS = 'id,cabinet_instance_id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,orientation'
+const CUSTOM_PART_COLS = ROOM_CUSTOM_PART_COLS
 
 // Minimal resolved cabinet carrying only custom parts — for standalone panels /
 // fillers / end panels that have no carcass, so they still render in room views.
@@ -51,7 +53,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
       // Attach standalone custom parts (panels/fillers/end panels) so room views
       // can draw them; this also creates entries for custom-only cabinets.
       const { data: cps } = await supabase.from('cabinet_custom_parts').select(CUSTOM_PART_COLS).in('cabinet_instance_id', ids)
-      if (cps && cps.length) attachCustomParts(map, cps as Record<string, unknown>[])
+      if (cps && cps.length) attachCustomParts(map, withLibraryKey(cps as Record<string, unknown>[]))
       if (map.size === 0) return
       setResolvedParts(map)
 
@@ -124,7 +126,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
           const specs: EbByMatId = {}
           for (const eb of ebData) {
             for (const matId of (ebIdToMatIds.get(eb.id) ?? [])) {
-              specs[matId] = { thickness: eb.thickness, color: eb.color ?? null }
+              specs[matId] = { thickness: eb.thickness, color: ebColour(eb.color) }
             }
           }
           if (Object.keys(specs).length > 0) setEbByMatId(specs)
@@ -171,7 +173,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
       const specs: EbByMatId = {}
       for (const [matId, ebId] of needed) {
         const eb = ebMap.get(ebId)
-        if (eb) specs[matId] = { thickness: eb.thickness, color: eb.color ?? null }
+        if (eb) specs[matId] = { thickness: eb.thickness, color: ebColour(eb.color) }
       }
       if (Object.keys(specs).length > 0) setEbByMatId(prev => ({ ...prev, ...specs }))
     })

@@ -4,14 +4,15 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { ThemeToggle } from '../../ThemeToggle'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 const Cabinet3DView = dynamic(() => import('@/app/canvas/[roomId]/Cabinet3DView'), { ssr: false })
 import { supabase } from '@/src/lib/supabase'
 import {
   ConstructionRules, DEFAULT_RULES, EdgingDefaults, DEFAULT_EDGING, EdgeSides,
-  CabinetInput, Material,
+  CabinetInput, Material, Section,
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone,
-  JointTypeOp, JointTargetPart, JointMachineOp, JointFace,
+  JointTypeOp, rowToJointTypeOp,
 } from '@/src/lib/resolver/types'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { DEFAULT_DIMS } from '@/src/lib/types'
@@ -22,7 +23,8 @@ import {
   EDGING_LABELS, EDGING_GROUPS, EDGE_SIDES, EDGE_LABELS,
   effectiveRule, effectiveEdgeSides, sidesEqual, computeDelta,
 } from '@/src/lib/constructionRuleConfig'
-import { carcaseSeamParts, toGenericSeamKey } from '@/src/lib/cabinetSeams'
+import { carcaseSeamParts, internalSeamParts, toGenericSeamKey, type SeamPart } from '@/src/lib/cabinetSeams'
+import { ebColour } from '@/src/lib/partPalette'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -117,26 +119,7 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
         const map: Record<string, JointTypeOp[]> = {}
         for (const op of ((data ?? []) as Record<string, unknown>[])) {
           const jid = op.joint_type_id as string
-          ;(map[jid] ??= []).push({
-            id:                op.id as string,
-            joint_type_id:     jid,
-            operation_order:   op.operation_order as number,
-            target_part:       op.target_part as JointTargetPart,
-            machine_operation: op.machine_operation as JointMachineOp,
-            face:              (op.face as JointFace) ?? 'normal',
-            tool_diameter_mm:  op.tool_diameter_mm as number,
-            depth_mm:          op.depth_mm as number,
-            offset_x_mm:       (op.offset_x_mm as number) ?? 0,
-            offset_y_mm:       (op.offset_y_mm as number) ?? 0,
-            offset_z_mm:       (op.offset_z_mm as number) ?? 0,
-            qty:               (op.qty as number) ?? 1,
-            spacing_mm:        (op.spacing_mm as number | null) ?? null,
-            router_tool_id:    (op.router_tool_id as string | null) ?? null,
-            drill_id:          (op.drill_id as string | null) ?? null,
-            auto_tool:         (op.auto_tool as boolean) ?? false,
-            notes:             (op.notes as string | null) ?? null,
-            expressions:       (op.expressions as Record<string, string> | null) ?? null,
-          })
+          ;(map[jid] ??= []).push(rowToJointTypeOp(op))
         }
         setJointTypeOps(map)
       })
@@ -184,7 +167,7 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
   }
 
   async function deleteSchedule(id: string) {
-    if (!confirm('Delete this construction method schedule?')) return
+    if (!(await confirmDelete({ title: 'Delete Schedule', message: 'Delete this construction method schedule?' }))) return
     await supabase.from('construction_method_schedules').delete().eq('id', id)
     if (selId === id) setSelId(null)
     await loadSchedules()
@@ -517,63 +500,87 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                       <p className="text-xs text-ink-subtle italic">
                         No joint types in library yet — add them in Library → Joints first.
                       </p>
-                    ) : (
-                      <div className="space-y-1">
-                        {carcaseSeamParts(effectiveRule(delta, 'TOP_TYPE') as string).map(part => {
-                          const isOpen   = openJointPart === part.partKey
-                          // Read the exact key, falling back to the legacy generic "top:…" key.
-                          const readJoint = (sk: string) =>
-                            jointDeltas[classTab][sk] ?? jointDeltas[classTab][toGenericSeamKey(sk)] ?? ''
-                          const assigned = part.edges.filter(e => readJoint(e.seamKey)).length
-                          return (
-                            <div key={part.partKey} className="rounded border border-edge overflow-hidden">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const next = isOpen ? null : part.partKey
-                                  setOpenJointPart(next)
-                                  setHoverParts(next ? [next] : null)
-                                }}
-                                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
-                                  isOpen ? 'bg-accent/10' : 'hover:bg-surface-2/40'
-                                }`}
-                              >
-                                <span className={`text-[10px] text-ink-subtle transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
-                                <span className={`text-xs flex-1 ${isOpen ? 'text-accent-ink' : 'text-ink-muted'}`}>{part.label}</span>
-                                <span className={`text-[10px] ${assigned ? 'text-accent-ink' : 'text-ink-subtle'}`}>
-                                  {assigned}/{part.edges.length} edges
-                                </span>
-                              </button>
-                              {isOpen && (
-                                <div className="px-3 py-2 space-y-px border-t border-edge bg-surface/40">
-                                  {part.edges.map(edge => {
-                                    const val = readJoint(edge.seamKey)
-                                    return (
-                                      <div key={edge.seamKey} className="flex items-center gap-3 py-1.5">
-                                        <span className={`flex-1 text-xs ${val ? 'text-accent-ink' : 'text-ink-muted'}`}>
-                                          {edge.edgeLabel}
-                                          <span className="text-ink-subtle"> → {edge.joinsLabel}</span>
-                                        </span>
-                                        <select
-                                          value={val}
-                                          onChange={e => setJointDefault(classTab, edge.seamKey, e.target.value || null)}
-                                          className="w-52 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
-                                        >
-                                          <option value="">— No joint —</option>
-                                          {jointTypes.map(j => (
-                                            <option key={j.id} value={j.id}>{j.name}</option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
+                    ) : (() => {
+                      // Read the exact key, falling back to the generic key
+                      // (legacy "top:…" and the internal family keys).
+                      const readJoint = (sk: string) =>
+                        jointDeltas[classTab][sk] ?? jointDeltas[classTab][toGenericSeamKey(sk)] ?? ''
+                      const renderSeamPart = (part: SeamPart) => {
+                        const isOpen   = openJointPart === part.partKey
+                        const assigned = part.edges.filter(e => readJoint(e.seamKey)).length
+                        return (
+                          <div key={part.partKey} className="rounded border border-edge overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = isOpen ? null : part.partKey
+                                setOpenJointPart(next)
+                                setHoverParts(next ? [next] : null)
+                              }}
+                              className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                                isOpen ? 'bg-accent/10' : 'hover:bg-surface-2/40'
+                              }`}
+                            >
+                              <span className={`text-[10px] text-ink-subtle transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                              <span className={`text-xs flex-1 ${isOpen ? 'text-accent-ink' : 'text-ink-muted'}`}>{part.label}</span>
+                              <span className={`text-[10px] ${assigned ? 'text-accent-ink' : 'text-ink-subtle'}`}>
+                                {assigned}/{part.edges.length} edges
+                              </span>
+                            </button>
+                            {isOpen && (
+                              <div className="px-3 py-2 space-y-px border-t border-edge bg-surface/40">
+                                {part.edges.map(edge => {
+                                  const val = readJoint(edge.seamKey)
+                                  return (
+                                    <div key={edge.seamKey} className="flex items-center gap-3 py-1.5">
+                                      <span className={`flex-1 text-xs ${val ? 'text-accent-ink' : 'text-ink-muted'}`}>
+                                        {edge.edgeLabel}
+                                        <span className="text-ink-subtle"> → {edge.joinsLabel}</span>
+                                      </span>
+                                      <select
+                                        value={val}
+                                        onChange={e => setJointDefault(classTab, edge.seamKey, e.target.value || null)}
+                                        className="w-52 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
+                                      >
+                                        <option value="">— No joint —</option>
+                                        {jointTypes.map(j => (
+                                          <option key={j.id} value={j.id}>{j.name}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )
+                                })}
+                                {part.partKey === 'adj_shelf' && (
+                                  <div className="flex items-center gap-3 py-1.5 mt-1 pt-2 border-t border-edge/60">
+                                    <span className={`flex-1 text-xs ${effectiveRule(delta, 'ADJ_DRILL') === 'full_bank' ? 'text-accent-ink' : 'text-ink-muted'}`}>
+                                      Drilling layout
+                                      <span className="text-ink-subtle"> — pin cluster per shelf, or one full-height bank per compartment</span>
+                                    </span>
+                                    <select
+                                      value={effectiveRule(delta, 'ADJ_DRILL') as string}
+                                      onChange={e => setRule(classTab, 'ADJ_DRILL', e.target.value as ConstructionRules['ADJ_DRILL'])}
+                                      className="w-52 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
+                                    >
+                                      <option value="per_shelf">Per shelf (cluster)</option>
+                                      <option value="full_bank">Full bank (line bore)</option>
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      return (
+                        <div className="space-y-1">
+                          {carcaseSeamParts(effectiveRule(delta, 'TOP_TYPE') as string).map(renderSeamPart)}
+                          <p className="text-[10px] text-ink-subtle uppercase tracking-wider pt-3 pb-1">
+                            Internal parts — every shelf / division instance inherits its family&apos;s joint
+                          </p>
+                          {internalSeamParts().map(renderSeamPart)}
+                        </div>
+                      )
+                    })()}
                   </div>
 
                 </div>
@@ -884,7 +891,7 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
         const { data: eb } = await supabase
           .from('edge_banding').select('thickness, color')
           .eq('id', row.edgeband_id).maybeSingle()
-        if (!cancelled) setScheduleEb(eb ? { thickness: eb.thickness, color: eb.color ?? null } : null)
+        if (!cancelled) setScheduleEb(eb ? { thickness: eb.thickness, color: ebColour(eb.color) } : null)
       } else if (!cancelled) {
         setScheduleEb(null)
       }
@@ -903,6 +910,20 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
 
   const resolvedCab = useMemo(() => {
     const jointTypeNames = Object.fromEntries(jointTypes.map(j => [j.id, j.name]))
+    // Default interior: two adjustable shelves. When a fixed-shelf or division
+    // joint is assigned, split the preview so those parts (and their drilling)
+    // actually exist to look at.
+    const jd = jointDeltas[classTab]
+    const showSplitDemo = !!(jd['fixed_shelf:side'] || jd['divider:bottom'] || jd['divider:top'])
+    const internalTree: Section = showSplitDemo
+      ? {
+          type: 'vsplit',
+          children: [
+            { section: { type: 'open', fittings: [{ type: 'adj_shelf', y_locked: false }, { type: 'adj_shelf', y_locked: false }] } },
+            { section: { type: 'open', fittings: [{ type: 'fixed_shelf', y_locked: false }] } },
+          ],
+        }
+      : { type: 'open', fittings: [{ type: 'adj_shelf', y_locked: false }, { type: 'adj_shelf', y_locked: false }] }
     const input: CabinetInput = {
       id: 'preview',
       assembly_class: classTab,
@@ -932,10 +953,7 @@ function PreviewPanel({ classTab, delta, highlightPartKeys, material, jointDelta
         cols:  [{ col_index: 0, width_locked: false }],
         zones: [{ row_index: 0, col_index: 0, face_type: 'open' }],
       },
-      internal_tree: {
-        type: 'open',
-        fittings: [{ type: 'adj_shelf', y_locked: false }, { type: 'adj_shelf', y_locked: false }],
-      },
+      internal_tree: internalTree,
     }
     return resolveCabinet(input)
   }, [classTab, dx, dy, dz, isWall, rules, mat, jointDeltas, jointTypes, jointTypeOps])
@@ -1351,6 +1369,21 @@ function RuleRow({ ruleKey, delta, onChange }: {
             <option value="front_rail">Front Rail</option>
             <option value="double_rail">Double Rail</option>
             <option value="none">None</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'ADJ_DRILL') {
+    return (
+      <div className={rowCls}>
+        <span className={txtCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline) === 'per_shelf' ? 'Per shelf' : 'Full bank'}</span>}
+          <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
+            <option value="per_shelf">Per shelf</option>
+            <option value="full_bank">Full bank</option>
           </select>
         </div>
       </div>

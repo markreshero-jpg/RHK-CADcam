@@ -15,6 +15,7 @@ import { ThemeToggle } from '../../ThemeToggle'
 import OperationToolSelect from '@/src/components/cnc/OperationToolSelect'
 import { DoorStylePreview, dbOpsToRawProfileOps } from '@/src/components/DoorStylePreview'
 import type { ResolvedDoorProfile } from '@/src/lib/resolver/types'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 // ── Option sets (mirror the DB CHECK constraints) ───────────────────────────────
 
@@ -220,7 +221,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
   }
 
   async function deleteItem(id: string) {
-    if (!confirm('Delete this item?')) return
+    if (!(await confirmDelete({ title: 'Delete Item', message: 'Delete this item?' }))) return
     const table = activeTab === 'catalogue' ? 'door_catalogue'
       : activeTab === 'schedules' ? 'door_material_schedules'
       : activeTab === 'profiles' ? 'door_profiles' : 'door_styles'

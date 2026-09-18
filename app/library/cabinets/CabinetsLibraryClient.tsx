@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '../../ThemeToggle'
 import { DEFAULT_DIMS, type AssemblyClass } from '@/src/lib/types'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ export default function CabinetsLibraryClient({
     await run(supabase.from('cabinet_definitions').update(patch).eq('id', id))
   }
   async function deleteDef(d: Definition) {
-    if (!confirm(`Delete “${d.name}” from the library?\nPlaced cabinets are unaffected.`)) return
+    if (!(await confirmDelete({ title: 'Delete Cabinet', message: `Delete “${d.name}” from the library? Placed cabinets are unaffected.` }))) return
     if (!(await run(supabase.from('cabinet_definitions').delete().eq('id', d.id)))) return
     setDefs(ds => ds.filter(x => x.id !== d.id))
   }

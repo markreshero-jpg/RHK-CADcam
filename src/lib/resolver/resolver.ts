@@ -62,9 +62,10 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   allWarnings.push(...drawerWarnings)
 
   // ── 6. Seam Joints ────────────────────────────────────────────
-  // For each case-part seam that has a joint assigned (per-cabinet or CM default),
-  // collect the joint type operations ready for display and eventual drilling export.
-  const seamJoints = resolveJoints(cab, caseParts)
+  // For each seam that has a joint assigned (per-cabinet or CM default) — carcase
+  // part seams plus internal seams (shelf ↔ support, divider ↔ panel) — collect
+  // the joint type operations ready for display and drilling export.
+  const seamJoints = resolveJoints(cab, caseParts, internalParts)
 
   // ── 6b. Hinges ────────────────────────────────────────────────
   // One instance per physical hinge on each door zone. Count is driven by the

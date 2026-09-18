@@ -1,53 +1,55 @@
 // New elevation report — parallel to the existing `elevation_view`.
-// One wall per page, true-scale PDF (jsPDF + svg2pdf.js), toggleable B&W layers
-// persisted to localStorage. Scale + paper come from the modal (same as plan view).
+// One wall per page, true-scale PDF (jsPDF + svg2pdf.js), B&W. Drawing content
+// follows a display layer set (toolbar picker); page extras are toggles persisted
+// to localStorage. Scale + paper come from the modal (same as plan view).
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
 import type { Project, Room, Wall, CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
-import ElevationPrintSVG, { type ElevationLayers } from './ElevationPrintSVG'
+import type { LayerSet } from '@/src/lib/displayLayers/registry'
+import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
+import ElevationPrintSVG, { type ElevationPageOptions } from './ElevationPrintSVG'
+import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
 
 const PAPER: Record<string, { w: number; h: number }> = {
   A4L: { w: 297, h: 210 }, A3L: { w: 420, h: 297 }, A2L: { w: 594, h: 420 }, A1L: { w: 841, h: 594 },
 }
 const MARGIN = 20
 const LS_KEY = 'elevation-print-layers'
-const DEFAULT_LAYERS: ElevationLayers = {
-  labels: true, dimensions: true, faces: true, doorSwings: true, drawers: true,
-  shelves: false, drawerBoxes: false, toekick: true, returnWalls: true, titleBlock: true,
-}
-const TOGGLES: { key: keyof ElevationLayers; label: string }[] = [
-  { key: 'labels',      label: 'Labels' },
-  { key: 'dimensions',  label: 'Dimensions' },
-  { key: 'faces',       label: 'Faces' },
-  { key: 'doorSwings',  label: 'Door Swings' },
-  { key: 'drawers',     label: 'Drawers' },
-  { key: 'shelves',     label: 'Shelves' },
-  { key: 'drawerBoxes', label: 'Drawer Boxes' },
-  { key: 'toekick',     label: 'Toe Kick' },
+const LS_SET_KEY = 'elevation-print-layer-set'
+const DEFAULT_PAGE: ElevationPageOptions = { returnWalls: true, titleBlock: true }
+const TOGGLES: { key: keyof ElevationPageOptions; label: string }[] = [
   { key: 'returnWalls', label: 'Return Walls' },
   { key: 'titleBlock',  label: 'Title Block' },
 ]
 
-export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, scale, paperKey }: {
+export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey }: {
   project:       Project | null
   room:          Room
   walls:         Wall[]
   cabinets:      CabinetInstance[]
   resolvedParts: Map<string, ResolvedCabinet>
+  layerSets:     LayerSet[]
+  activeLayerSetId: string | null
   scale:         number
   paperKey:      string
 }) {
   const refs = useRef<Map<string, SVGSVGElement>>(new Map())
   const [busy, setBusy] = useState(false)
-  const [show, setShow] = useState<ElevationLayers>(() => {
+  const [layerSet, setLayerSetId] = useReportLayerSet(LS_SET_KEY, layerSets, activeLayerSetId)
+  const layers = useMemo(() => resolveLayerView(layerSet, 'elevation'), [layerSet])
+  // Older storage also held drawing toggles (now layer items) — only page extras are read.
+  const [show, setShow] = useState<ElevationPageOptions>(() => {
     try {
       const raw = localStorage.getItem(LS_KEY)
-      if (raw) return { ...DEFAULT_LAYERS, ...JSON.parse(raw) }
+      if (raw) {
+        const s = JSON.parse(raw)
+        return Object.fromEntries(TOGGLES.map(t => [t.key, typeof s[t.key] === 'boolean' ? s[t.key] : DEFAULT_PAGE[t.key]])) as unknown as ElevationPageOptions
+      }
     } catch { /* ignore */ }
-    return DEFAULT_LAYERS
+    return DEFAULT_PAGE
   })
   useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(show)) } catch { /* ignore */ } }, [show])
 
@@ -96,7 +98,8 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
     <div className="space-y-3">
       {/* Layer toggles */}
       <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-gray-800">
-        <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Layers:</span>
+        <ReportLayerSetSelect sets={layerSets} value={layerSet} onChange={setLayerSetId} />
+        <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Page:</span>
         {TOGGLES.map(t => (
           <button key={t.key} onClick={() => setShow(s => ({ ...s, [t.key]: !s[t.key] }))}
             className={`px-2 py-0.5 rounded text-xs border transition-colors ${
@@ -143,6 +146,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
             resolvedParts={resolvedParts}
             svgRef={el => { if (el) refs.current.set(w.id, el); else refs.current.delete(w.id) }}
             scale={scale}
+            layers={layers}
             show={show}
             projectName={projectName}
             roomName={room.name}

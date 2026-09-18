@@ -2,6 +2,11 @@
 // Mirrors the canvas ElevationSVG geometry (the version trusted on screen):
 //   X = cabT(cab, wall) along the wall; height-from-floor → y = roomH - h;
 //   wall cabs hang from wallCabTop - dy; resolved parts drawn via *ElevRect().
+// What's drawn follows a display layer set (z_display_layers spec, Phase 3c):
+// show / hide, line style, weight, opacity and "line drawing". Colours and
+// background are ignored — prints stay black ink on white. With style solid,
+// internals keep the report's own fine dash. Return walls + title block are
+// report page toggles, not layer items.
 // All sizes are physical mm × scale = model mm, so the viewBox stays in model
 // mm and the drawing prints at true 1:scale.
 'use client'
@@ -12,16 +17,14 @@ import type {
   ResolvedInternalPart, ResolvedDrawerStack, ResolvedDrawerBoxPart, ResolvedDrawerSlide,
 } from '@/src/lib/resolver/types'
 import { doorProfileSvg } from './cabinetEditSvgHelpers'
+import type { LayerView } from '@/src/lib/displayLayers/resolve'
+import { casePartItem, faceZoneItem, internalPartItem, kickPartItem } from '@/src/lib/displayLayers/registry'
+import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
+import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
+import { customExtents } from '@/src/lib/customPartBox'
 
-export interface ElevationLayers {
-  faces:       boolean
-  shelves:     boolean
-  drawerBoxes: boolean
-  toekick:     boolean
-  doorSwings:  boolean
-  drawers:     boolean
-  dimensions:  boolean
-  labels:      boolean
+/** Report-only page extras (not drawing layers). */
+export interface ElevationPageOptions {
   returnWalls: boolean
   titleBlock:  boolean
 }
@@ -105,7 +108,7 @@ const INK3 = '#999'
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
-  wall, walls, cabinets, room, resolvedParts, svgRef, scale = 20, show, projectName, roomName, paperKey,
+  wall, walls, cabinets, room, resolvedParts, svgRef, scale = 20, layers, show, projectName, roomName, paperKey,
 }: {
   wall:          Wall
   walls:         Wall[]
@@ -114,14 +117,20 @@ export default function ElevationPrintSVG({
   resolvedParts?: Map<string, ResolvedCabinet>
   svgRef:        (el: SVGSVGElement | null) => void
   scale?:        number
-  show:          ElevationLayers
+  layers:        LayerView
+  show:          ElevationPageOptions
   projectName:   string
   roomName:      string
   paperKey:      string
 }) {
   const P = scale
   const roomH = wall.height ?? room.room_dy ?? 2400
-  const wallCabs = cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === 'face')
+  // Only cabinets the layer set draws — they also drive the dimension chains.
+  const wallCabs = cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === 'face'
+    && elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))
+  // Layer props at a "zoom" that makes the layer dash pattern 1.6 / 0.8 paper mm.
+  const lp = (id: string) => layers.props(id, 5 / P)
+  const lineDrawing = layers.lineDrawing
 
   // height-from-floor → svg y (y=0 ceiling, y=roomH floor)
   const FACE_INS = 15
@@ -166,15 +175,16 @@ export default function ElevationPrintSVG({
   const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 
   // ── Horizontal dimension chain (top or bottom) ────────────────────────────
-  function hChain(segs: Seg[], chainY: number, key: string) {
+  function hChain(segs: Seg[], chainY: number, key: string, item: string) {
     if (segs.length === 0) return null
     const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
     const padX = dimFs * 1.7, padY = dimFs * 0.7
+    const lineW = layers.w(item, thinSW)
     return (
-      <g key={key} pointerEvents="none">
-        <line x1={0} y1={chainY} x2={wall.length} y2={chainY} stroke={INK} strokeWidth={thinSW} />
+      <g key={key} pointerEvents="none" opacity={layers.op(item)}>
+        <line x1={0} y1={chainY} x2={wall.length} y2={chainY} stroke={INK} strokeWidth={lineW} strokeDasharray={lp(item).strokeDasharray} />
         {boundaries.map((x, i) => (
-          <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={INK} strokeWidth={thinSW} />
+          <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={INK} strokeWidth={lineW} />
         ))}
         {segs.map((seg, i) => {
           const mx = (seg.from + seg.to) / 2
@@ -203,125 +213,162 @@ export default function ElevationPrintSVG({
       ? (rp?.toekick_parts.find(p => p.part_key === 'kick_front_face')?.DX ?? 150)
       : 0
     const toSVG = (ex: number, ey: number, ew: number, eh: number) => ({ x: rx + ex, y: ry + cab.dy - ey, w: ew, h: eh })
+    const faceFill = lineDrawing ? 'none' : FACE_SHADE
+    // Internal / hardware outline: layer style, else the report's fine dash.
+    const fineRect = (key: string, item: string, r: { ex: number; ey: number; ew: number; eh: number }) => {
+      const { x, y, w, h } = toSVG(r.ex, r.ey, r.ew, r.eh)
+      const pp = lp(item)
+      return <rect key={key} x={x} y={y} width={w} height={h} fill="none" stroke={INK3} opacity={pp.opacity}
+        strokeWidth={layers.w(item, dashSW)} strokeDasharray={pp.strokeDasharray ?? dash} />
+    }
+    const labelFsL = layers.w('cabinet_labels', labelFs)
+    const sizeFs = layers.w('cabinet_sizes', labelFs * 0.7)
+    const hasLabel = layers.show('cabinet_labels')
 
     return (
       <g key={cab.id} pointerEvents="none">
         {/* Cabinet outer box */}
-        <rect x={rx} y={ry} width={cab.dx} height={cab.dy} fill="white" stroke={INK} strokeWidth={boxSW} />
+        {layers.show('carcass_outline') && (() => {
+          const pp = lp('carcass_outline')
+          return <rect x={rx} y={ry} width={cab.dx} height={cab.dy} fill={lineDrawing ? 'none' : 'white'} fillOpacity={pp.fillOpacity}
+            opacity={pp.opacity} stroke={INK} strokeWidth={layers.w('carcass_outline', boxSW)} strokeDasharray={pp.strokeDasharray} />
+        })()}
 
         {rp ? (
           <>
             {/* Case panels (skip back) */}
             {rp.case_parts.filter(p => p.part_key !== 'back').map((p, i) => {
+              const it = casePartItem(p.part_key)
+              if (!layers.show(it)) return null
               const { ex, ey, ew, eh } = caseElevRect(p)
               const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-              return <rect key={`cp-${i}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK2} strokeWidth={partSW} />
+              const pp = lp(it)
+              return <rect key={`cp-${i}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK2} opacity={pp.opacity}
+                strokeWidth={layers.w(it, partSW)} strokeDasharray={pp.strokeDasharray} />
             })}
 
-            {/* Toe kick — front face only (spreaders/sub/back are hidden in elevation) */}
-            {show.toekick && rp.toekick_parts.filter(p => p.part_key === 'kick_front_face').map((p, i) => {
+            {/* Toe kick parts */}
+            {rp.toekick_parts.map((p, i) => {
+              const it = kickPartItem(p.part_key)
+              if (!layers.show(it)) return null
               const { ex, ey, ew, eh } = tkElevRect(p)
               const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-              return <rect key={`tk-${i}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK2} strokeWidth={partSW} />
+              const pp = lp(it)
+              return <rect key={`tk-${i}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK2} opacity={pp.opacity}
+                strokeWidth={layers.w(it, partSW)} strokeDasharray={pp.strokeDasharray} />
+            })}
+
+            {/* Added parts (applied panels / fillers / other) */}
+            {(rp.custom_parts ?? []).map((p, i) => {
+              const it = customPartItem(p)
+              if (!p.show_in_room || !layers.show(it)) return null
+              const { ex, ey } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+              if (ex <= 0 || ey <= 0) return null
+              const { x, y, w, h } = toSVG(p.x, p.y + ey, ex, ey)
+              const pp = lp(it)
+              return <rect key={`cu-${i}`} x={x} y={y} width={w} height={h} fill={faceFill} fillOpacity={pp.fillOpacity}
+                stroke={INK} opacity={pp.opacity} strokeWidth={layers.w(it, partSW)} strokeDasharray={pp.strokeDasharray} />
             })}
 
             {/* Faces (doors / drawers / panels) — shaded so they read against open shelves.
                 Drawn BEFORE internals so the shade doesn't paint over shelves/drawer boxes. */}
-            {show.faces && rp.face_zones.map((fz, i) => {
-              if (fz.face_type === 'open') return null
+            {rp.face_zones.map((fz, i) => {
+              const it = faceZoneItem(fz.face_type)
+              if (!it || !layers.show(it)) return null
               const { ex, ey, ew, eh } = zoneElevRect(fz)
               const { x, y, w, h } = toSVG(ex, ey, ew, eh)
+              const pp = lp(it)
+              const fsw = layers.w(it, partSW)
               const hinge = fz.hinge_side === 'left'
-                ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={INK} strokeWidth={boxSW} />
+                ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={INK} strokeWidth={layers.w(it, boxSW)} />
                 : fz.hinge_side === 'right'
-                ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={INK} strokeWidth={boxSW} />
+                ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={INK} strokeWidth={layers.w(it, boxSW)} />
                 : null
-              const chevron = show.doorSwings && fz.face_type === 'door' && fz.hinge_side
+              const chP = lp('door_chevrons')
+              const chevron = layers.show('door_chevrons') && fz.face_type === 'door' && fz.hinge_side
                 ? <polyline
                     points={fz.hinge_side === 'left'
                       ? `${x},${y} ${x + w},${y + h / 2} ${x},${y + h}`
                       : `${x + w},${y} ${x},${y + h / 2} ${x + w},${y + h}`}
-                    fill="none" stroke={INK2} strokeWidth={thinSW} strokeDasharray={`${1.5 * P} ${0.8 * P}`} />
+                    fill="none" stroke={INK2} strokeWidth={layers.w('door_chevrons', thinSW)} opacity={chP.opacity}
+                    strokeDasharray={chP.strokeDasharray ?? `${1.5 * P} ${0.8 * P}`} />
                 : null
-              const drawerLbl = show.drawers && fz.face_type === 'drawer_face' && h > dimFs * 1.5
-                ? <text x={x + w / 2} y={y + h - dimFs * 0.55} textAnchor="middle" dominantBaseline="auto"
-                    fontSize={dimFs * 0.9} fill={INK2} fontFamily="Arial, Helvetica, sans-serif">drawer</text>
+              const lblFs = layers.w('drawer_labels', dimFs * 0.9)
+              const drawerLbl = layers.show('drawer_labels') && fz.face_type === 'drawer_face' && h > lblFs * 1.7
+                ? <text x={x + w / 2} y={y + h - lblFs * 0.6} textAnchor="middle" dominantBaseline="auto" opacity={layers.op('drawer_labels')}
+                    fontSize={lblFs} fill={INK2} fontFamily="Arial, Helvetica, sans-serif">drawer</text>
                 : null
               return (
                 <g key={`fz-${i}`}>
-                  <rect x={x} y={y} width={w} height={h} fill={FACE_SHADE} stroke={INK} strokeWidth={partSW} />
-                  {hinge}{chevron}{drawerLbl}
-                  {doorProfileSvg(fz, { x, y, w, h }, INK, thinSW, 0.9)}
+                  <g opacity={pp.opacity}>
+                    <rect x={x} y={y} width={w} height={h} fill={faceFill} fillOpacity={pp.fillOpacity}
+                      stroke={INK} strokeWidth={fsw} strokeDasharray={pp.strokeDasharray} />
+                    {hinge}
+                    {doorProfileSvg(fz, { x, y, w, h }, INK, thinSW, 0.9)}
+                  </g>
+                  {chevron}{drawerLbl}
                 </g>
               )
             })}
 
-            {/* Hinge cup + plate bore positions (grouped with door-swing detail). */}
-            {show.doorSwings && (rp.hinge_instances ?? []).map((h, hi) => (
-              <g key={`hg-${hi}`}>
+            {/* Hinge cup + plate bore positions */}
+            {layers.show('hinges') && (rp.hinge_instances ?? []).map((h, hi) => (
+              <g key={`hg-${hi}`} opacity={layers.op('hinges')}>
                 {[...h.cup_drills, ...h.plate_drills].map((dr, j) => {
                   const c = toSVG(dr.x, dr.y, 0, 0)
-                  return <circle key={j} cx={c.x} cy={c.y} r={Math.max(dr.radius, 0.5)} fill="none" stroke={INK2} strokeWidth={thinSW} />
+                  return <circle key={j} cx={c.x} cy={c.y} r={Math.max(dr.radius, 0.5)} fill="none" stroke={INK2}
+                    strokeWidth={layers.w('hinges', thinSW)} strokeDasharray={lp('hinges').strokeDasharray} />
                 })}
               </g>
             ))}
 
-            {/* Shelves — thin clean dashed (internal parts that aren't drawer-box parts) */}
-            {show.shelves && rp.internal_parts.filter(p => !p.part_type.startsWith('inner_drawer')).map((p, i) => {
-              const { ex, ey, ew, eh } = shelfElevRect(p)
-              const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-              return <rect key={`ip-${i}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK3}
-                strokeWidth={dashSW} strokeDasharray={dash} />
+            {/* Internals — shelves / dividers / accessories / inner drawers + pull-outs */}
+            {rp.internal_parts.map((p, i) => {
+              const it = internalPartItem(p.part_type)
+              return layers.show(it) ? fineRect(`ip-${i}`, it, shelfElevRect(p)) : null
             })}
+            {layers.show('inner_drawer_runners') && (rp.internal_slides ?? []).map((s, i) =>
+              fineRect(`is-${i}`, 'inner_drawer_runners', slideElevRect(s)))}
 
-            {/* Drawer boxes — thin clean dashed. Drawer-box parts live in internal_parts
-                (inner_drawer_*); drawer_stacks is a live-resolver extra (usually empty). */}
-            {show.drawerBoxes && (
-              <>
-                {rp.internal_parts.filter(p => p.part_type.startsWith('inner_drawer')).map((p, i) => {
-                  const { ex, ey, ew, eh } = shelfElevRect(p)
-                  const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                  return <rect key={`idb-${i}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK3}
-                    strokeWidth={dashSW} strokeDasharray={dash} />
-                })}
-                {rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => [
-                  ...ds.box_parts.map((p: ResolvedDrawerBoxPart, j: number) => {
-                    const { ex, ey, ew, eh } = drawerBoxPartElevRect(p)
-                    const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                    return <rect key={`db-${i}-${j}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK3}
-                      strokeWidth={dashSW} strokeDasharray={dash} />
-                  }),
-                  ...ds.slides.map((s: ResolvedDrawerSlide, j: number) => {
-                    const { ex, ey, ew, eh } = slideElevRect(s)
-                    const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                    return <rect key={`sl-${i}-${j}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK3}
-                      strokeWidth={dashSW} strokeDasharray={dash} />
-                  }),
-                ])}
-              </>
-            )}
+            {/* Drawer boxes + runners (drawer_stacks) */}
+            {rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => [
+              ...(layers.show('drawer_boxes') ? ds.box_parts.map((p: ResolvedDrawerBoxPart, j: number) =>
+                fineRect(`db-${i}-${j}`, 'drawer_boxes', drawerBoxPartElevRect(p))) : []),
+              ...(layers.show('drawer_runners') ? ds.slides.map((s: ResolvedDrawerSlide, j: number) =>
+                fineRect(`sl-${i}-${j}`, 'drawer_runners', slideElevRect(s))) : []),
+            ])}
           </>
         ) : (
           // Fallback when cabinet is not resolved — box + toekick + face inset
           <>
-            {tkH > 0 && (
-              <rect x={rx} y={ry + cab.dy - tkH} width={cab.dx} height={tkH} fill="none"
-                stroke={INK2} strokeWidth={partSW} strokeDasharray={`${1 * P} ${0.7 * P}`} />
+            {tkH > 0 && layers.show('kick_faces') && (
+              <rect x={rx} y={ry + cab.dy - tkH} width={cab.dx} height={tkH} fill="none" opacity={lp('kick_faces').opacity}
+                stroke={INK2} strokeWidth={layers.w('kick_faces', partSW)} strokeDasharray={`${1 * P} ${0.7 * P}`} />
             )}
-            {show.faces && cab.has_face && (() => {
+            {layers.any('doors', 'drawer_fronts') && cab.has_face && (() => {
               const fw = cab.dx - FACE_INS * 2, fh = cab.dy - tkH - FACE_INS * 2
               if (fw <= 0 || fh <= 0) return null
-              return <rect x={rx + FACE_INS} y={ry + FACE_INS} width={fw} height={fh} fill={FACE_SHADE} stroke={INK} strokeWidth={partSW} />
+              const it = layers.show('doors') ? 'doors' : 'drawer_fronts'
+              const pp = lp(it)
+              return <rect x={rx + FACE_INS} y={ry + FACE_INS} width={fw} height={fh} fill={faceFill} fillOpacity={pp.fillOpacity}
+                opacity={pp.opacity} stroke={INK} strokeWidth={layers.w(it, partSW)} strokeDasharray={pp.strokeDasharray} />
             })()}
           </>
         )}
 
-        {/* Cabinet label */}
-        {show.labels && (
+        {/* Cabinet name + size */}
+        {hasLabel && (
           <text x={rx + cab.dx / 2} y={ry + cab.dy / 2}
-            textAnchor="middle" dominantBaseline="middle"
-            fontSize={labelFs} fontWeight="600" fill={INK} fontFamily="Arial, Helvetica, sans-serif">
+            textAnchor="middle" dominantBaseline="middle" opacity={layers.op('cabinet_labels')}
+            fontSize={labelFsL} fontWeight="600" fill={INK} fontFamily="Arial, Helvetica, sans-serif">
             {cab.label ?? '—'}
+          </text>
+        )}
+        {layers.show('cabinet_sizes') && (
+          <text x={rx + cab.dx / 2} y={ry + cab.dy / 2 + (hasLabel ? labelFsL * 0.55 + sizeFs * 0.6 : 0)}
+            textAnchor="middle" dominantBaseline="middle" opacity={layers.op('cabinet_sizes')}
+            fontSize={sizeFs} fill={INK2} fontFamily="Arial, Helvetica, sans-serif">
+            {Math.round(cab.dx)}×{Math.round(cab.dy)}
           </text>
         )}
       </g>
@@ -417,11 +464,12 @@ export default function ElevationPrintSVG({
 
     const boundaries = Array.from(new Set(segs.flatMap(s => [s.fromY, s.toY])))
     const padX = dimFs * 1.7, padY = dimFs * 0.7
+    const lineW = layers.w('dim_elev_height', thinSW)
     return (
-      <g pointerEvents="none">
-        <line x1={heightChainX} y1={0} x2={heightChainX} y2={roomH} stroke={INK} strokeWidth={thinSW} />
+      <g pointerEvents="none" opacity={layers.op('dim_elev_height')}>
+        <line x1={heightChainX} y1={0} x2={heightChainX} y2={roomH} stroke={INK} strokeWidth={lineW} strokeDasharray={lp('dim_elev_height').strokeDasharray} />
         {boundaries.map((y, i) => (
-          <line key={i} x1={heightChainX - tk} y1={y} x2={heightChainX + tk} y2={y} stroke={INK} strokeWidth={thinSW} />
+          <line key={i} x1={heightChainX - tk} y1={y} x2={heightChainX + tk} y2={y} stroke={INK} strokeWidth={lineW} />
         ))}
         {segs.map((seg, i) => {
           const midY = (seg.fromY + seg.toY) / 2
@@ -468,20 +516,20 @@ export default function ElevationPrintSVG({
       {/* Cabinets */}
       {wallCabs.map(renderCab)}
 
-      {/* Dimensions */}
-      {show.dimensions && (
-        <>
-          {hChain(computeElevChain(overheadCabs, wall), overheadChainY, 'oh')}
-          {hChain(computeElevChain(floorCabs, wall), floorChainY, 'fl')}
-          {heightChain()}
+      {/* Dimensions (layer items; the overall wall length goes with the floor chain) */}
+      <>
+          {layers.show('dim_elev_wall_chain') && overheadCabs.length > 0 && hChain(computeElevChain(overheadCabs, wall), overheadChainY, 'oh', 'dim_elev_wall_chain')}
+          {layers.show('dim_elev_floor_chain') && floorCabs.length > 0 && hChain(computeElevChain(floorCabs, wall), floorChainY, 'fl', 'dim_elev_floor_chain')}
+          {layers.show('dim_elev_height') && heightChain()}
           {/* Overall wall length */}
-          {(() => {
+          {layers.show('dim_elev_floor_chain') && (() => {
             const mx = wall.length / 2, padX = dimFs * 1.8, padY = dimFs * 0.7
+            const lineW = layers.w('dim_elev_floor_chain', thinSW)
             return (
-              <g pointerEvents="none">
-                <line x1={0} y1={overallY} x2={wall.length} y2={overallY} stroke={INK} strokeWidth={thinSW} />
-                <line x1={0} y1={overallY - tk * 1.3} x2={0} y2={overallY + tk * 1.3} stroke={INK} strokeWidth={thinSW} />
-                <line x1={wall.length} y1={overallY - tk * 1.3} x2={wall.length} y2={overallY + tk * 1.3} stroke={INK} strokeWidth={thinSW} />
+              <g pointerEvents="none" opacity={layers.op('dim_elev_floor_chain')}>
+                <line x1={0} y1={overallY} x2={wall.length} y2={overallY} stroke={INK} strokeWidth={lineW} />
+                <line x1={0} y1={overallY - tk * 1.3} x2={0} y2={overallY + tk * 1.3} stroke={INK} strokeWidth={lineW} />
+                <line x1={wall.length} y1={overallY - tk * 1.3} x2={wall.length} y2={overallY + tk * 1.3} stroke={INK} strokeWidth={lineW} />
                 <rect x={mx - padX} y={overallY - padY} width={padX * 2} height={padY * 2} fill="white" />
                 <text x={mx} y={overallY} textAnchor="middle" dominantBaseline="middle"
                   fontSize={dimFs * 1.1} fontWeight="bold" fill={INK} fontFamily="Arial, Helvetica, sans-serif">
@@ -490,8 +538,7 @@ export default function ElevationPrintSVG({
               </g>
             )
           })()}
-        </>
-      )}
+      </>
 
       {/* Title block */}
       {show.titleBlock && (

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '../../ThemeToggle'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 // ── Tab config ────────────────────────────────────────────────────────────────
 
@@ -269,7 +270,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
   }
 
   async function deleteSchedule(id: string) {
-    if (!confirm('Delete this schedule?')) return
+    if (!(await confirmDelete({ title: 'Delete Schedule', message: 'Delete this schedule?' }))) return
     const tab = TABS.find(t => t.key === activeTab)!
     await supabase.from(tab.table).delete().eq('id', id)
     setSchedLists(prev => ({ ...prev, [activeTab]: (prev[activeTab] ?? []).filter(s => s.id !== id) }))

@@ -1,31 +1,36 @@
 'use client'
 
-import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
+import { Fragment, useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import { extForAxes } from '@/src/components/three/PartViewer'
 import type { CabinetInstance } from '@/src/lib/types'
-import type { ResolvedCabinet } from '@/src/lib/resolver/types'
-import { computeElevSeams } from '@/src/lib/cabinetSeams'
+import type { ResolvedCabinet, SeamJointAssign } from '@/src/lib/resolver/types'
+import { seamAssignJoint, seamAssignRows } from '@/src/lib/resolver/types'
+import { computeElevSeams, internalSeamPartLabel } from '@/src/lib/cabinetSeams'
 import type { CabinetCustomPart, PartPosOverrides, ShapeMeta, ShapeOverride, ShapeOverrides } from './canvasDB'
 import {
   dbSavePartPosOverride, dbDeletePartPosOverride, dbClearPartPosOverrides, dbUpdateCustomPart,
   dbLoadShapeOverrides, dbListShapeRevisions, dbRestoreShapeRevision, dbDeleteShapeOverride, dbClearShapeOverrides,
 } from './canvasDB'
 import CalcInput from '@/src/components/CalcInput'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
-// Resolved base size (W=DY, H=DX, D=DZ) of every part that can carry an override,
-// keyed by the same part id used in partOverrides. Lets the override row show what
-// the size was before the override (as a placeholder) so it's clear what changed.
-// Exported: CabinetEditModal feeds the same base dims into PartEditor so shape
-// saves can record baseAtSave (the stale-flag reference).
-export function buildBaseDims(rp?: ResolvedCabinet): Map<string, { w: number; h: number; d: number }> {
-  const m = new Map<string, { w: number; h: number; d: number }>()
+// Resolved base size of every part that can carry an override, keyed by the
+// same part id used in partOverrides, in RAW part axes (CV convention:
+// DY = length/grain, DX = width, DZ = thickness). Lets the override row show
+// what the size was before the override (as a placeholder) so it's clear what
+// changed. Exported: CabinetEditModal feeds the same base dims into PartEditor
+// so shape saves can record baseAtSave (the stale-flag reference).
+export type BaseDims = { dy: number; dx: number; dz: number }
+export function buildBaseDims(rp?: ResolvedCabinet): Map<string, BaseDims> {
+  const m = new Map<string, BaseDims>()
   if (!rp) return m
-  rp.case_parts.forEach(p    => m.set(`case_${p.part_key}`,                 { w: p.DY, h: p.DX, d: p.DZ }))
-  rp.toekick_parts.forEach(p => m.set(`tk_${p.part_key}_${p.sort_order}`,   { w: p.DY, h: p.DX, d: p.DZ }))
-  rp.internal_parts.forEach(p => m.set(`int_${p.part_type}_${p.sort_order}`, { w: p.DY, h: p.DX, d: p.DZ }))
-  rp.face_zones.forEach(z => { if (z.face_type !== 'open') m.set(`zone_${z.row_index}_${z.col_index}`, { w: z.DX, h: z.DY, d: z.DZ }) })
+  rp.case_parts.forEach(p    => m.set(`case_${p.part_key}`,                 { dy: p.DY, dx: p.DX, dz: p.DZ }))
+  rp.toekick_parts.forEach(p => m.set(`tk_${p.part_key}_${p.sort_order}`,   { dy: p.DY, dx: p.DX, dz: p.DZ }))
+  rp.internal_parts.forEach(p => m.set(`int_${p.part_type}_${p.sort_order}`, { dy: p.DY, dx: p.DX, dz: p.DZ }))
+  rp.face_zones.forEach(z => { if (z.face_type !== 'open') m.set(`zone_${z.row_index}_${z.col_index}`, { dy: z.DY, dx: z.DX, dz: z.DZ }) })
   ;(rp.drawer_stacks ?? []).forEach(s => s.box_parts.forEach(p =>
-    m.set(`db_${s.face_zone_row}_${s.face_zone_col}_${p.part_type}`, { w: p.DY, h: p.DX, d: p.DZ })))
+    m.set(`db_${s.face_zone_row}_${s.face_zone_col}_${p.part_type}`, { dy: p.DY, dx: p.DX, dz: p.DZ })))
   return m
 }
 
@@ -77,12 +82,42 @@ function partIdLabel(id: string): string {
   return id
 }
 
+// Display frame (panelKind + dxIsWidth) from a stable part id — feeds
+// extForAxes so the size fields read DY/DX/DZ (CV convention) like the Part
+// Editor sidebar. Mirrors the svg*Meta builders' panelKind assignments.
+function idDisplayFrame(id: string): { kind: 'side' | 'face' | 'horizontal'; dxIsWidth?: boolean } {
+  if (id.startsWith('case_')) {
+    const key = id.slice(5)
+    if (key === 'left_side' || key === 'right_side') return { kind: 'side' }
+    if (key === 'back') return { kind: 'face' }
+    return { kind: 'horizontal' }
+  }
+  if (id.startsWith('tk_')) {
+    const key = id.slice(3, id.lastIndexOf('_'))
+    if (key === 'spreader_vertical') return { kind: 'side' }
+    return { kind: key === 'spreader_horizontal' ? 'horizontal' : 'face' }
+  }
+  if (id.startsWith('int_')) {
+    const t = id.slice(4, id.lastIndexOf('_'))
+    if (t === 'inner_drawer_side' || t === 'pull_out_side' || t === 'divider') return { kind: 'side' }
+    if (t === 'inner_drawer_front' || t === 'inner_drawer_back' || t === 'pull_out_back') return { kind: 'face' }
+    return { kind: 'horizontal' }
+  }
+  if (id.startsWith('zone_')) return { kind: 'face', dxIsWidth: true }
+  if (id.startsWith('db_')) {
+    const t = id.slice(3).split('_').slice(2).join('_')
+    if (t === 'db_left_side' || t === 'db_right_side') return { kind: 'side' }
+    return { kind: t === 'db_bottom' ? 'horizontal' : 'face' }
+  }
+  return { kind: 'side' } // slides / unknown — hardware, labels are nominal
+}
+
 // ── Resolved override row ─────────────────────────────────────────────────────
 
 function OverrideRow({ partId, ov, base, cabinetId, partOverrides, onOverridesChange }: {
   partId: string
   ov: PartPosOverrides[string]
-  base?: { w: number; h: number; d: number }
+  base?: BaseDims
   cabinetId: string
   partOverrides: PartPosOverrides
   onOverridesChange: (o: PartPosOverrides) => void
@@ -130,16 +165,21 @@ function OverrideRow({ partId, ov, base, cabinetId, partOverrides, onOverridesCh
         {partIdLabel(partId)}
         {base && (
           <div className="text-[9px] text-gray-600 font-mono mt-0.5">
-            base {Math.round(base.w)}×{Math.round(base.h)}×{Math.round(base.d)}
+            base {Math.round(base.dy)}×{Math.round(base.dx)}×{Math.round(base.dz)}
           </div>
         )}
       </td>
       <td className="px-2 py-2" colSpan={3}>
         <div className="space-y-1">
-          <div className={`text-[9px] uppercase tracking-wider ${hasSize ? 'text-orange-400' : 'text-gray-600'}`}>Size override (W/H/D)</div>
-          {sizeField('W', 'sw', base?.w)}
-          {sizeField('H', 'sh', base?.h)}
-          {sizeField('D', 'sd', base?.d)}
+          {/* CV convention: DY = length (grain), DX = width, DZ = thickness.
+              The sw/sh/sd override slots stay box-space (shared with the
+              optimiser + shape sync), so each axis maps to its slot per part. */}
+          <div className={`text-[9px] uppercase tracking-wider ${hasSize ? 'text-orange-400' : 'text-gray-600'}`}>Size override (DY/DX/DZ)</div>
+          {(['DY', 'DX', 'DZ'] as const).map(axis => {
+            const f = idDisplayFrame(partId)
+            const e = extForAxes(f.kind, f.dxIsWidth)[axis]
+            return <Fragment key={axis}>{sizeField(axis, `s${e}` as 'sw' | 'sh' | 'sd', base?.[axis.toLowerCase() as 'dy' | 'dx' | 'dz'])}</Fragment>
+          })}
           <div className="border-t border-gray-800/60 pt-1" />
           <div className="text-[9px] uppercase tracking-wider text-gray-600">Position offset</div>
           {offField('X', 'ox', 'mm')}
@@ -277,7 +317,7 @@ function JointOverridesSection({ cabinet, rp, onUpdate }: {
     return () => { cancelled = true }
   }, [])
 
-  const carcaseJoints = (cabinet.carcase_joints ?? {}) as Record<string, string | null>
+  const carcaseJoints = (cabinet.carcase_joints ?? {}) as Record<string, SeamJointAssign>
   const entries = Object.entries(carcaseJoints)
   if (entries.length === 0) return null
 
@@ -292,15 +332,21 @@ function JointOverridesSection({ cabinet, rp, onUpdate }: {
   return (
     <>
       <SectionHead color="#22c55e" title="Joint Overrides" count={entries.length} />
-      {entries.map(([key, val]) => (
+      {entries.map(([key, val]) => {
+        const joint = seamAssignJoint(val)
+        const rows  = seamAssignRows(val)
+        return (
         <tr key={key} className="border-t border-gray-800/60 hover:bg-gray-800/20 group">
           <td className="px-3 py-2 text-xs text-gray-300 font-medium align-top pt-2.5">
-            {labelByKey[key] ?? key.replace(/[:_]/g, ' ')}
+            {labelByKey[key] ?? internalSeamPartLabel(key.slice(0, key.indexOf(':'))) + ' ' + key.slice(key.indexOf(':') + 1)}
           </td>
           <td className="px-2 py-2 text-xs align-top pt-2.5" colSpan={3}>
-            {val === null
+            {joint === null
               ? <span className="text-red-400">Suppressed — no drilling</span>
-              : <span className="text-green-400">{jointNames[val] ?? 'Assigned'}</span>}
+              : <span className="text-green-400">
+                  {joint ? (jointNames[joint] ?? 'Assigned') : 'Method joint'}
+                  {rows ? ` · ${rows} rows` : ''}
+                </span>}
           </td>
           <td className="px-2 py-2 text-right align-top pt-2.5">
             <button onClick={() => removeKey(key)}
@@ -308,7 +354,8 @@ function JointOverridesSection({ cabinet, rp, onUpdate }: {
               title="Revert to method default">✕</button>
           </td>
         </tr>
-      ))}
+        )
+      })}
     </>
   )
 }
@@ -403,20 +450,21 @@ export function shapePartLabel(partId: string, customParts: CabinetCustomPart[])
 export function shapeIsStale(
   partId: string,
   ov: ShapeOverride,
-  baseDims: Map<string, { w: number; h: number; d: number }>,
+  baseDims: Map<string, BaseDims>,
   customParts: CabinetCustomPart[],
 ): boolean {
   const saved = ov.meta?.baseAtSave
   if (!saved) return false
-  let cur: { w: number; h: number } | undefined
+  let cur: [number, number] | undefined   // in-plane pair (dy, dx), order-free
   if (partId.startsWith('custom_')) {
     const cp = customParts.find(p => `custom_${p.id}` === partId)
-    if (cp) cur = { w: cp.dy, h: cp.dx }
+    if (cp) cur = [Number(cp.dy), Number(cp.dx)]
   } else {
-    cur = baseDims.get(partId)
+    const b = baseDims.get(partId)
+    if (b) cur = [b.dy, b.dx]
   }
   if (!cur) return false
-  const a = [cur.w, cur.h].sort((x, y) => x - y)
+  const a = [...cur].sort((x, y) => x - y)
   const b = [saved.w, saved.h].sort((x, y) => x - y)
   return Math.abs(a[0] - b[0]) > 0.5 || Math.abs(a[1] - b[1]) > 0.5
 }
@@ -425,7 +473,7 @@ function ShapeOverridesSection({ cabinetId, shapes, setShapes, baseDims, partOve
   cabinetId: string
   shapes: ShapeOverrides
   setShapes: Dispatch<SetStateAction<ShapeOverrides>>
-  baseDims: Map<string, { w: number; h: number; d: number }>
+  baseDims: Map<string, BaseDims>
   partOverrides: PartPosOverrides
   onOverridesChange: (o: PartPosOverrides) => void
   customParts: CabinetCustomPart[]
@@ -462,7 +510,7 @@ function ShapeOverridesSection({ cabinetId, shapes, setShapes, baseDims, partOve
   }
 
   async function removeShape(partId: string, ov: ShapeOverride) {
-    if (!confirm(`Remove the drawn shape for ${labelFor(partId)}? All ${ov.revisions ?? 1} revision${(ov.revisions ?? 1) !== 1 ? 's' : ''} are deleted and the part reverts to a plain rectangle.`)) return
+    if (!(await confirmDelete({ title: 'Remove Shape', confirmLabel: 'Remove', message: `Remove the drawn shape for ${labelFor(partId)}? All ${ov.revisions ?? 1} revision${(ov.revisions ?? 1) !== 1 ? 's' : ''} are deleted and the part reverts to a plain rectangle.` }))) return
     await dbDeleteShapeOverride(cabinetId, partId)
     setShapes(s => { const n = { ...s }; delete n[partId]; return n })
     clearShapeWrittenSlots(cabinetId, partId, ov, syncCtx)

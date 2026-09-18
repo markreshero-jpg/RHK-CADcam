@@ -83,6 +83,7 @@ export function resolveKickRunParts(
   // assembly changes the toe height. Falls back to the construction TOEH if the
   // assembly somehow has no height set.
   const TK  = cab.DY > 0 ? cab.DY : r.TOEH
+  const FC  = r.TOEFC                           // subframe floor clearance
   const fid = cab.toekick_face_material.id
   const iid = cab.toekick_interior_material.id
 
@@ -109,12 +110,12 @@ export function resolveKickRunParts(
       edge_band: edgeSidesToBanding(edging.kick_front_face, faceEb),
       is_detached: true,
     })
-    // Kick Sub Front — behind the face, capped by it at the top
+    // Kick Sub Front — behind the face, lifted TOEFC off the floor, flush at top
     parts.push({
       part_key: 'kick_sub_front',
       sort_order: 100 + i,
-      DX: TK - TF, DY: seg.len, DZ: TI,
-      X: x0 + seg.start, Y: TI, Z: kickSubZ,
+      DX: TK - FC, DY: seg.len, DZ: TI,
+      X: x0 + seg.start, Y: FC, Z: kickSubZ,
       AX: 0, AY: 0, AZ: 0,
       material_id: iid,
       edge_band: edgeSidesToBanding(edging.kick_sub_front, intEb),
@@ -124,8 +125,8 @@ export function resolveKickRunParts(
     parts.push({
       part_key: 'kick_back',
       sort_order: 200 + i,
-      DX: TK - TF, DY: seg.len, DZ: TI,
-      X: x0 + seg.start, Y: TI, Z: kickBackZ,
+      DX: TK - FC, DY: seg.len, DZ: TI,
+      X: x0 + seg.start, Y: FC, Z: kickBackZ,
       AX: 0, AY: 0, AZ: 0,
       material_id: iid,
       edge_band: edgeSidesToBanding(edging.kick_back, intEb),
@@ -147,7 +148,7 @@ export function resolveKickRunParts(
     return { parts, errors }
   }
 
-  const sprH  = TK - TF   // vertical spreader height
+  const sprH  = TK - FC   // vertical spreader height
   const sprBW = 100       // horizontal brace width (fixed 100mm)
 
   // Collect vertical-spreader X positions across the whole run:
@@ -174,7 +175,7 @@ export function resolveKickRunParts(
       part_key: 'spreader_vertical',
       sort_order: 300 + k * 2,
       DX: sprH, DY: TI, DZ: sprEZ,
-      X: x, Y: TI, Z: sprZ0,
+      X: x, Y: FC, Z: sprZ0,
       AX: 0, AY: 0, AZ: 0,
       material_id: iid,
       edge_band: edgeSidesToBanding(edging.spreader_vertical, intEb),

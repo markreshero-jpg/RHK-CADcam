@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 const DRILL_TYPES = ['through', 'blind', 'countersink'] as const
 const ROTATIONS = ['clockwise', 'anticlockwise'] as const
@@ -70,7 +71,7 @@ export default function DrillLibraryClient() {
   }
 
   async function deleteDrill(id: string) {
-    if (!confirm('Delete this drill permanently? (Use the Active toggle to retire it instead.)')) return
+    if (!(await confirmDelete({ title: 'Delete Drill', message: 'Delete this drill permanently? (Use the Active toggle to retire it instead.)' }))) return
     const { error } = await supabase.from('cnc_drills').delete().eq('id', id)
     if (error) { alert(`Delete failed: ${error.message}`); return }
     setDrills(p => p.filter(d => d.id !== id))

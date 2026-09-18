@@ -159,7 +159,7 @@ export interface CabinetInstance {
   hardware_overrides: Record<string, unknown>
   face_grid: Record<string, unknown> | null
   internal_grid: Record<string, unknown> | null
-  carcase_joints: Record<string, string | null>
+  carcase_joints: Record<string, import('./resolver/types').SeamJointAssign>
   no_cnc?: boolean
   // Joined toe-kick run this cabinet belongs to (null = standalone kick). Member
   // cabinets drop their own kick; the run's kick is owned by a synthetic kick
@@ -226,7 +226,7 @@ export interface CabinetDefinition {
   // Frozen geometry / composition
   face_grid: Record<string, unknown> | null
   internal_grid: Record<string, unknown> | null
-  carcase_joints: Record<string, string | null>
+  carcase_joints: Record<string, import('./resolver/types').SeamJointAssign>
   rule_overrides: Record<string, unknown>
   // Preservation targets — assembly-level overrides copied into the instance at placement
   material_overrides: Record<string, unknown>

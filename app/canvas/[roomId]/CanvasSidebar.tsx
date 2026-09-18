@@ -5,6 +5,7 @@ import { supabase } from '@/src/lib/supabase'
 import { Mode, CabinetInstance } from './canvasTypes'
 import { Room, CabinetDefinition } from '@/src/lib/types'
 import RoomSwitcher, { type RoomSwitcherHandle } from './RoomSwitcher'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 const CabinetPreview3D = dynamic(() => import('./CabinetPreview3D'), { ssr: false })
 
@@ -239,14 +240,14 @@ export default function CanvasSidebar({
     const hasKids = childrenOf(cat.id).length > 0
     const hasDefs = definitions.some(d => d.category_id === cat.id)
     if (hasKids || hasDefs) { window.alert(`“${cat.name}” isn’t empty — move its ${hasKids ? 'sub-categories' : 'cabinets'} out first.`); return }
-    if (!window.confirm(`Delete category “${cat.name}”?`)) return
+    if (!(await confirmDelete({ title: 'Delete Category', message: `Delete category “${cat.name}”?` }))) return
     const { error } = await supabase.from('cabinet_categories').delete().eq('id', cat.id)
     if (error) setLibError(error.message); else await reloadCategories()
   }
 
   async function deleteDefinition(def: CabinetDefinition) {
     setCtxMenu(null)
-    if (!window.confirm(`Delete “${def.name}” from the library?\nPlaced cabinets are unaffected.`)) return
+    if (!(await confirmDelete({ title: 'Delete Cabinet', message: `Delete “${def.name}” from the library? Placed cabinets are unaffected.` }))) return
     const { error } = await supabase.from('cabinet_definitions').delete().eq('id', def.id)
     if (error) { setLibError(error.message); return }
     setDefinitions(ds => ds.filter(d => d.id !== def.id))

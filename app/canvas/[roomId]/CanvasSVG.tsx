@@ -11,11 +11,28 @@ import {
   gridDots,
 } from '@/src/lib/geometry'
 import WallDimensionChain from './WallDimensionChain'
-import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, DisplayConfig, SectionCut } from './canvasTypes'
-import { layerSVGProps } from '@/src/lib/displayConfig'
+import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, SectionCut } from './canvasTypes'
+import type { LayerView } from '@/src/lib/displayLayers/resolve'
+import { casePartItem, kickPartItem } from '@/src/lib/displayLayers/registry'
+import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
+import { planShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { roundMm } from '@/src/lib/format'
 import { SNAP_KIND_META, type SnapResult } from '@/src/lib/canvasSnap'
+import type { PlanGridPrefs } from '@/src/lib/userPrefs'
 import { getPalette } from '@/src/lib/partPalette'
+import { caseBox, isSide, tkPlanBox } from '@/src/lib/jointDrilling'
+import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
+
+// Union of cabinet-local plan rects (X along wall, Z = depth) → the cabinet's
+// click area. null = nothing of the cabinet is drawn (not selectable, no labels).
+type LocalRect = { x: number; z: number; w: number; d: number }
+function unionRect(rects: LocalRect[]): LocalRect | null {
+  const ok = rects.filter(r => r.w > 0 && r.d > 0)
+  if (!ok.length) return null
+  const x0 = Math.min(...ok.map(r => r.x)), z0 = Math.min(...ok.map(r => r.z))
+  const x1 = Math.max(...ok.map(r => r.x + r.w)), z1 = Math.max(...ok.map(r => r.z + r.d))
+  return { x: x0, z: z0, w: x1 - x0, d: z1 - z0 }
+}
 
 function buildBenchtopPath(
   pts: Array<{ x: number; y: number }>,
@@ -41,7 +58,9 @@ function buildBenchtopPath(
 }
 
 interface CanvasSVGProps {
-  displayConfig: DisplayConfig
+  layers: LayerView
+  /** Plan reference grid: visibility + spacing (0 = automatic by zoom). */
+  planGrid: PlanGridPrefs
   svgRef: React.RefObject<SVGSVGElement | null>
   walls: Wall[]
   cabinets: CabinetInstance[]
@@ -122,7 +141,7 @@ interface CanvasSVGProps {
 }
 
 export default function CanvasSVG({
-  svgRef, walls, cabinets, view, svgSize, selected, mode, armedDef, onCanvasDrop, displayConfig,
+  svgRef, walls, cabinets, view, svgSize, selected, mode, armedDef, onCanvasDrop, layers, planGrid,
   drawStart, drawCursor, drawThickness, placeGhost, clipboard, clipboardGroup, cabDrag, cabMoveDrag, cabResize, multiSelect, marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
   setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
@@ -143,7 +162,11 @@ export default function CanvasSVG({
   const palette = useMemo(() => getPalette(), [])
 
   const cx = centroid(walls)
-  const dots = gridDots(view.panX, view.panY, view.zoom, svgSize.w, svgSize.h)
+  // Dimension chains measure only cabinets the layer set draws.
+  const chainCabs = cabinets.filter(c => planShowsCabinet(c, layers, resolvedParts?.get(c.id)))
+  const dots = planGrid.visible
+    ? gridDots(view.panX, view.panY, view.zoom, svgSize.w, svgSize.h, planGrid.step)
+    : []
   const dotR = 1.5 / view.zoom
   const wallNameFs = 14 / view.zoom
   const cabLabelFs = 11 / view.zoom
@@ -157,7 +180,7 @@ export default function CanvasSVG({
     <svg
       ref={svgRef}
       className="flex-1 bg-gray-950 select-none"
-      style={{ cursor }}
+      style={{ cursor, background: layers.background }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -183,7 +206,7 @@ export default function CanvasSVG({
         <line x1={0} y1={-30 / view.zoom} x2={0} y2={30 / view.zoom} stroke="#374151" strokeWidth={1 / view.zoom} />
 
         {/* ── Benchtop instances ── rendered below walls so cabinets/walls sit on top */}
-        {benchtops.map(bt => {
+        {layers.show('benchtops') && benchtops.map(bt => {
           const pts = bt.polygon
           if (pts.length < 2) return null
           const isSel = bt.id === selectedBenchtopId
@@ -199,9 +222,11 @@ export default function CanvasSVG({
               <path
                 d={buildBenchtopPath(pts, arcs, bt.cutout_polygons ?? [])}
                 fillRule="evenodd"
-                fill={isSel ? 'rgba(20,184,166,0.22)' : 'rgba(20,184,166,0.10)'}
-                stroke={isSel ? '#f59e0b' : '#0d9488'}
-                strokeWidth={(isSel ? 2 : 1.5) / view.zoom}
+                fill={layers.colorOf('benchtops') ?? (isSel ? 'rgba(20,184,166,0.22)' : 'rgba(20,184,166,0.10)')}
+                fillOpacity={layers.colorOf('benchtops') ? (isSel ? 0.22 : 0.1) : undefined}
+                stroke={isSel ? '#f59e0b' : layers.color('benchtops', '#0d9488')}
+                opacity={layers.op('benchtops')}
+                strokeWidth={layers.w('benchtops', isSel ? 2 : 1.5) / view.zoom}
                 onPointerDown={e => { e.stopPropagation(); onBenchtopPointerDown(e, bt.id) }}
                 onClick={e => { e.stopPropagation(); onBenchtopClick(bt.id) }}
                 onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onBenchtopContextMenu(e, bt.id) }}
@@ -746,11 +771,12 @@ export default function CanvasSVG({
                   {w.name}
                 </text>
                 <WallDimensionChain
-                  wall={w} walls={walls} cabinets={cabinets}
+                  wall={w} walls={walls} cabinets={chainCabs}
                   centX={cx.x} centY={cx.y} zoom={view.zoom} selected={isSel}
-                  layerOverall={displayConfig.layers.dim_wall_overall}
-                  layerBase={displayConfig.layers.dim_base_chain}
-                  layerWallCab={displayConfig.layers.dim_wall_chain}
+                  layerOverall={layers.setting('dim_wall_overall')}
+                  layerBase={layers.setting('dim_base_chain')}
+                  layerWallCab={layers.setting('dim_wall_chain')}
+                  labelBg={layers.background}
                 />
               </Fragment>
             )
@@ -781,11 +807,12 @@ export default function CanvasSVG({
                 )
               })()}
               <WallDimensionChain
-                wall={w} walls={walls} cabinets={cabinets}
+                wall={w} walls={walls} cabinets={chainCabs}
                 centX={cx.x} centY={cx.y} zoom={view.zoom} selected={isSel}
-                layerOverall={displayConfig.layers.dim_wall_overall}
-                layerBase={displayConfig.layers.dim_base_chain}
-                layerWallCab={displayConfig.layers.dim_wall_chain}
+                layerOverall={layers.setting('dim_wall_overall')}
+                layerBase={layers.setting('dim_base_chain')}
+                layerWallCab={layers.setting('dim_wall_chain')}
+                  labelBg={layers.background}
               />
             </Fragment>
           )
@@ -793,16 +820,19 @@ export default function CanvasSVG({
 
         {/* ── Cabinets ── rendered low→high so overheads overlap bases in plan */}
         {[...cabinets].sort((a, b) => {
+          // Kick assemblies first (underneath): where a kick and its member cabinets
+          // are both shown, the cabinet above wins the click.
           const order: Record<string, number> = { base: 0, base_corner: 0, tall: 1, tall_corner: 1, wall: 2, wall_corner: 2 }
-          return (order[a.assembly_class] ?? 0) - (order[b.assembly_class] ?? 0)
+          const rank = (c: CabinetInstance) => c.is_kick_assembly ? -1 : (order[c.assembly_class] ?? 0)
+          return rank(a) - rank(b)
         }).map(cab => {
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return null
-          // Kick assemblies (joined toe kicks) aren't shown in plan — plan never
-          // draws toe kicks, and their full-depth box would overlay the run.
-          // They're selectable/movable in elevation + 3D instead.
-          if (cab.is_kick_assembly) return null
           const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
+          // Kick assemblies (joined toe kicks) take the normal cabinet path — names,
+          // sizes, move handle, stretch markers — but draw only their kick parts (no
+          // full-depth footprint over the run); click area = drawn kick extent.
+          const isKickAsm = !!cab.is_kick_assembly
           const isSel = selected?.type === 'cabinet' && selected.id === cab.id
           const isMultiSel = multiSelect.includes(cab.id)
           const isHover = hoveredId === cab.id && !isSel && !isMultiSel
@@ -826,27 +856,62 @@ export default function CanvasSVG({
 
           const baseColor = isSel ? CAB_FILL_SEL[cab.assembly_class] : CAB_FILL[cab.assembly_class]
 
-          // Layer configs
-          const carcL = displayConfig.layers.carcass
-          const faceL = displayConfig.layers.face
-          const intL  = displayConfig.layers.internal
-          const lblL  = displayConfig.layers.labels
-          const dimL  = displayConfig.layers.dimensions
-
-          // SVG visual props per layer style
-          const carcP = layerSVGProps(carcL.style, view.zoom)
-          const faceP = layerSVGProps(faceL.style, view.zoom)
-          const intP  = layerSVGProps(intL.style, view.zoom)
+          // Layer items (z_display_layers spec)
+          // Kick assembly: no footprint box, except mid-resize (resolved kick parts
+          // are stale then) so the stretch stays visible.
+          const showOutline = isKickAsm
+            ? cabResize?.cabId === cab.id && layers.any('kick_faces', 'kick_spreaders')
+            : layers.show('carcass_outline')
+          const carcP = layers.props('carcass_outline', view.zoom)
+          const showFace = layers.any('doors', 'drawer_fronts')
+          const faceP = layers.props(layers.show('doors') ? 'doors' : 'drawer_fronts', view.zoom)
+          const intP  = layers.props('internal_outline', view.zoom)
 
           // Front-edge endpoints for face layer
           const frontLeft  = { x: displayCab.pos_x + displayCab.dz * perp.x, y: displayCab.pos_y + displayCab.dz * perp.y }
           const frontRight = { x: displayCab.pos_x + displayCab.dx * wd.x + displayCab.dz * perp.x, y: displayCab.pos_y + displayCab.dx * wd.y + displayCab.dz * perp.y }
 
+          // Resolved part outlines (carcase / kick). Hidden mid-resize: resolved
+          // parts still reflect the committed width.
+          const rpPlan = cabResize?.cabId === cab.id ? undefined : resolvedParts?.get(cab.id)
+          const casePartsR = (rpPlan?.case_parts ?? []).filter(p => layers.show(casePartItem(p.part_key)))
+          const kickPartsR = (rpPlan?.toekick_parts ?? []).filter(p => layers.show(kickPartItem(p.part_key)))
+          const partPoly = (b: { x: number; z: number; w: number; d: number }) => {
+            const c = (lx: number, lz: number) => `${displayCab.pos_x + lx * wd.x + lz * perp.x},${displayCab.pos_y + lx * wd.y + lz * perp.y}`
+            return `${c(b.x, b.z)} ${c(b.x + b.w, b.z)} ${c(b.x + b.w, b.z + b.d)} ${c(b.x, b.z + b.d)}`
+          }
+
+          // Click area + labels follow the layer set: the extent of everything this
+          // cabinet actually draws. Nothing drawn → not selectable, no name / size.
+          const drawnRects: LocalRect[] = []
+          if (showOutline) drawnRects.push({ x: 0, z: 0, w: displayCab.dx, d: displayCab.dz })
+          for (const p of casePartsR) drawnRects.push(caseBox(p))
+          for (const p of kickPartsR) drawnRects.push(tkPlanBox(p))
+          if (layers.show('drawer_boxes'))   for (const ds of rpPlan?.drawer_stacks ?? []) for (const p of ds.box_parts) drawnRects.push(dbBox(p))
+          if (layers.show('drawer_runners')) for (const ds of rpPlan?.drawer_stacks ?? []) for (const sl of ds.slides) drawnRects.push(slideBox(sl))
+          for (const p of resolvedParts?.get(cab.id)?.custom_parts ?? []) {
+            if (!p.show_in_room || !layers.show(customPartItem(p))) continue
+            const { ex, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+            drawnRects.push({ x: p.x, z: p.z, w: ex, d: ez })
+          }
+          if (showFace && cab.has_face) drawnRects.push({ x: 0, z: displayCab.dz - 20, w: displayCab.dx, d: 40 })
+          if (layers.show('internal_outline') && cab.has_internal) drawnRects.push({ x: 20, z: 20, w: displayCab.dx - 40, d: displayCab.dz - 40 })
+          const hitRect = unionRect(drawnRects)
+          // Label anchor: footprint centre; kick assemblies label just behind their
+          // kick face (front) so the text clears the member cabinets' labels and the
+          // front stretch marker.
+          const kickFace = isKickAsm ? kickPartsR.find(p => p.part_key === 'kick_front_face') : undefined
+          const labelPt = kickFace ? (() => {
+            const b = tkPlanBox(kickFace)
+            const lx = b.x + b.w / 2, lz = Math.max(0, b.z - 150)
+            return { x: displayCab.pos_x + lx * wd.x + lz * perp.x, y: displayCab.pos_y + lx * wd.y + lz * perp.y }
+          })() : center
+
           const isBeingMoved = cabMoveDrag?.id === cab.id
           return (
             <g key={cab.id} opacity={isBeingMoved ? 0.4 : 1}>
-              {/* Invisible hit polygon — always present so cabinet is always clickable */}
-              <polygon points={pts} fill="transparent" stroke="none"
+              {/* Invisible hit polygon — the extent of what's drawn (see hitRect) */}
+              {hitRect && <polygon points={showOutline ? pts : partPoly(hitRect)} fill="transparent" stroke="none"
                 style={{ cursor: mode === 'select' ? 'default' : undefined }}
                 onPointerDown={ev => onCabinetPointerDown(ev, displayCab)}
                 onPointerEnter={() => setHoveredId(cab.id)}
@@ -854,36 +919,92 @@ export default function CanvasSVG({
                 onClick={ev => ev.stopPropagation()}
                 onContextMenu={ev => onCabinetContextMenu(ev, cab.id)}
                 onDoubleClick={ev => onCabinetDoubleClick(ev, cab.id)}
-              />
+              />}
 
               {/* Carcass — main cabinet footprint */}
-              {carcL.visible && (
+              {showOutline && (
                 <polygon points={pts}
                   fill={baseColor} fillOpacity={carcP.fillOpacity}
-                  stroke={isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : isHover ? '#f97316' : '#3b82f6'}
-                  strokeWidth={isSel || isMultiSel || isHover ? 2 / view.zoom : 1 / view.zoom}
+                  stroke={isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : isHover ? '#f97316' : layers.color('carcass_outline', '#3b82f6')}
+                  strokeWidth={layers.w('carcass_outline', isSel || isMultiSel || isHover ? 2 : 1) / view.zoom}
                   strokeDasharray={carcP.strokeDasharray}
                   opacity={carcP.opacity}
                   style={{ pointerEvents: 'none' }}
                 />
               )}
 
+              {/* Carcase parts — each case part's plan footprint (cabinet-local X along
+                  the wall, Z into the room — the same boxes Room3DScene extrudes).
+                  Vertical panels (gables, back) read as filled strips; horizontal ones
+                  (bottom, top, rails) as outlines. */}
+              {casePartsR.map((p, i) => {
+                const b = caseBox(p)
+                if (b.w <= 0 || b.d <= 0) return null
+                const it = casePartItem(p.part_key)
+                const lp = layers.props(it, view.zoom)
+                const col = layers.color(it, palette.carcase)
+                const vertical = isSide(p.part_key) || p.part_key === 'back'
+                return (
+                  <polygon key={`case-${i}`} points={partPoly(b)} data-part={p.part_key}
+                    fill={vertical ? col : 'none'} fillOpacity={vertical ? 0.55 * lp.fillOpacity : 0}
+                    stroke={isSel ? '#e2e8f0' : col} strokeWidth={layers.w(it, 0.75) / view.zoom}
+                    strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
+                )
+              })}
+
+              {/* Toe-kick parts — plan footprint, outlines only */}
+              {kickPartsR.map((p, i) => {
+                const b = tkPlanBox(p)
+                if (b.w <= 0 || b.d <= 0) return null
+                const it = kickPartItem(p.part_key)
+                const lp = layers.props(it, view.zoom)
+                return (
+                  <polygon key={`kick-${i}`} points={partPoly(b)} data-part={p.part_key}
+                    fill="none" stroke={isSel ? '#e2e8f0' : layers.color(it, palette.toekick)} strokeWidth={layers.w(it, 0.75) / view.zoom}
+                    strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
+                )
+              })}
+
+              {/* Drawer boxes + runners — plan footprint outlines (hardware items) */}
+              {layers.show('drawer_boxes') && (rpPlan?.drawer_stacks ?? []).flatMap((ds, si) => ds.box_parts.map((p, i) => {
+                const b = dbBox(p)
+                if (b.w <= 0 || b.d <= 0) return null
+                const lp = layers.props('drawer_boxes', view.zoom)
+                return (
+                  <polygon key={`db-${si}-${i}`} points={partPoly(b)} data-part={p.part_type}
+                    fill="none" stroke={isSel ? '#e2e8f0' : layers.color('drawer_boxes', palette.drawer_box)} strokeWidth={layers.w('drawer_boxes', 0.6) / view.zoom}
+                    strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
+                )
+              }))}
+              {layers.show('drawer_runners') && (rpPlan?.drawer_stacks ?? []).flatMap((ds, si) => ds.slides.map((s, i) => {
+                const b = slideBox(s)
+                if (b.w <= 0 || b.d <= 0) return null
+                const lp = layers.props('drawer_runners', view.zoom)
+                return (
+                  <polygon key={`sl-${si}-${i}`} points={partPoly(b)} data-part={`slide_${s.side}`}
+                    fill={layers.color('drawer_runners', palette.slides)} fillOpacity={0.5 * lp.fillOpacity} stroke={isSel ? '#e2e8f0' : layers.color('drawer_runners', palette.slides)} strokeWidth={layers.w('drawer_runners', 0.6) / view.zoom}
+                    strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
+                )
+              }))}
+
               {/* Custom parts (panels / fillers) — plan footprint, room-visible only */}
-              {carcL.visible && (resolvedParts?.get(cab.id)?.custom_parts ?? []).filter(p => p.show_in_room).map((p, i) => {
+              {layers.any(...CUSTOM_PART_ITEMS) && (resolvedParts?.get(cab.id)?.custom_parts ?? []).filter(p => p.show_in_room && layers.show(customPartItem(p))).map((p, i) => {
+                const cpi = customPartItem(p)
+                const cpp = layers.props(cpi, view.zoom)
                 const { ex, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
                 if (ex <= 0 || ez <= 0) return null
                 const c = (lx: number, lz: number) => `${displayCab.pos_x + lx * wd.x + lz * perp.x},${displayCab.pos_y + lx * wd.y + lz * perp.y}`
                 const poly = `${c(p.x, p.z)} ${c(p.x + ex, p.z)} ${c(p.x + ex, p.z + ez)} ${c(p.x, p.z + ez)}`
                 return (
-                  <polygon key={`cust-${i}`} points={poly}
-                    fill="#a78bfa" fillOpacity={0.35}
-                    stroke={isSel ? '#e2e8f0' : '#7c3aed'} strokeWidth={1 / view.zoom}
-                    opacity={carcP.opacity} style={{ pointerEvents: 'none' }} />
+                  <polygon key={`cust-${i}`} points={poly} data-part={cpi}
+                    fill={layers.color(cpi, '#a78bfa')} fillOpacity={0.35}
+                    stroke={isSel ? '#e2e8f0' : layers.color(cpi, '#7c3aed')} strokeWidth={layers.w(cpi, 1) / view.zoom}
+                    strokeDasharray={cpp.strokeDasharray} opacity={cpp.opacity} style={{ pointerEvents: 'none' }} />
                 )
               })}
 
-              {/* Internal — dashed inset polygon showing interior cavity */}
-              {intL.visible && cab.has_internal && (() => {
+              {/* Internal — dashed inset polygon marking a cabinet with internals */}
+              {layers.show('internal_outline') && cab.has_internal && (() => {
                 const ins = 20
                 const intCab = {
                   ...displayCab,
@@ -896,9 +1017,9 @@ export default function CanvasSVG({
                 return (
                   <polygon points={intPts}
                     fill="none"
-                    stroke={isSel ? '#cbd5e1' : palette.internal}
-                    strokeWidth={0.75 / view.zoom}
-                    strokeDasharray={intL.style === 'solid' ? undefined : `${8 / view.zoom} ${4 / view.zoom}`}
+                    stroke={isSel ? '#cbd5e1' : layers.color('internal_outline', palette.internal)}
+                    strokeWidth={layers.w('internal_outline', 0.75) / view.zoom}
+                    strokeDasharray={layers.style('internal_outline') === 'solid' ? undefined : `${8 / view.zoom} ${4 / view.zoom}`}
                     opacity={intP.opacity}
                     style={{ pointerEvents: 'none' }}
                   />
@@ -906,21 +1027,21 @@ export default function CanvasSVG({
               })()}
 
               {/* Face — bold line along front edge representing door/drawer face */}
-              {faceL.visible && cab.has_face && (
+              {showFace && cab.has_face && (
                 <line
                   x1={frontLeft.x} y1={frontLeft.y}
                   x2={frontRight.x} y2={frontRight.y}
-                  stroke={isSel ? '#e2e8f0' : palette.door}
-                  strokeWidth={(isSel ? 2.5 : 2) / view.zoom}
+                  stroke={isSel ? '#e2e8f0' : layers.color(layers.show('doors') ? 'doors' : 'drawer_fronts', palette.door)}
+                  strokeWidth={layers.w(layers.show('doors') ? 'doors' : 'drawer_fronts', isSel ? 2.5 : 2) / view.zoom}
                   strokeDasharray={faceP.strokeDasharray}
                   opacity={faceP.opacity}
                   style={{ pointerEvents: 'none' }}
                 />
               )}
 
-              {/* Selection ring — only when selected and carcass is hidden */}
-              {isSel && !carcL.visible && (
-                <polygon points={pts}
+              {/* Selection ring — only when selected and the outline is hidden */}
+              {isSel && !showOutline && hitRect && (
+                <polygon points={partPoly(hitRect)}
                   fill="none" stroke="#3b82f6" strokeWidth={1.5 / view.zoom}
                   strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }}
@@ -928,22 +1049,22 @@ export default function CanvasSVG({
               )}
 
               {/* Label */}
-              {lblL.visible && (
-                <text x={center.x} y={center.y - cabLabelFs * 0.7}
+              {hitRect && layers.show('cabinet_labels') && (
+                <text x={labelPt.x} y={labelPt.y - layers.w('cabinet_labels', cabLabelFs) * 0.7}
                   textAnchor="middle" dominantBaseline="middle"
-                  fontSize={cabLabelFs} fontWeight="600"
-                  fill={isSel ? '#fff' : '#93c5fd'}
+                  fontSize={layers.w('cabinet_labels', cabLabelFs)} fontWeight="600"
+                  fill={isSel ? '#fff' : layers.color('cabinet_labels', '#93c5fd')} opacity={layers.op('cabinet_labels')}
                   style={{ userSelect: 'none', pointerEvents: 'none' }}>
                   {cab.label ?? '—'}
                 </text>
               )}
 
               {/* Dimensions */}
-              {dimL.visible && (
-                <text x={center.x} y={center.y + cabDimFs * 0.7}
+              {hitRect && layers.show('cabinet_sizes') && (
+                <text x={labelPt.x} y={labelPt.y + layers.w('cabinet_sizes', cabDimFs) * 0.7}
                   textAnchor="middle" dominantBaseline="middle"
-                  fontSize={cabDimFs}
-                  fill={isSel ? '#e2e8f0' : '#94a3b8'}
+                  fontSize={layers.w('cabinet_sizes', cabDimFs)}
+                  fill={isSel ? '#e2e8f0' : layers.color('cabinet_sizes', '#94a3b8')} opacity={layers.op('cabinet_sizes')}
                   style={{ userSelect: 'none', pointerEvents: 'none' }}>
                   {displayCab.dx}×{displayCab.dz}
                 </text>
@@ -1011,7 +1132,7 @@ export default function CanvasSVG({
         })}
 
         {/* ── Door swings + drawer lines (plan annotations) ── */}
-        {(displayConfig.annotations.plan_door_swings || displayConfig.annotations.plan_drawer_lines) && cabinets.flatMap(cab => {
+        {layers.any('door_swings', 'drawer_lines') && cabinets.flatMap(cab => {
           if (!cab.has_face) return []
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return []
@@ -1035,7 +1156,11 @@ export default function CanvasSVG({
           const nodes: React.ReactNode[] = []
 
           // Door swing arcs — one per column (rows irrelevant in plan view)
-          if (displayConfig.annotations.plan_door_swings) {
+          if (layers.show('door_swings')) {
+            const swingCol = layers.colorOf('door_swings')
+            const swingPaint = swingCol
+              ? { fill: swingCol, fillOpacity: 0.08, stroke: swingCol, strokeOpacity: 0.4, opacity: layers.op('door_swings') }
+              : { fill: '#3b82f615', stroke: '#60a5fa60', opacity: layers.op('door_swings') }
             const baseCross  = wd.x * perp.y - wd.y * perp.x
             const leftSweep  = baseCross > 0 ? 1 : 0
             const rightSweep = 1 - leftSweep
@@ -1056,16 +1181,16 @@ export default function CanvasSVG({
                 const endY = colLeft.y + r * (c15 * wd.y + s15 * perp.y)
                 nodes.push(<path key={`swing-${cab.id}-${col}`}
                   d={`M ${colLeft.x} ${colLeft.y} L ${colRight.x} ${colRight.y} A ${r} ${r} 0 0 ${leftSweep} ${endX} ${endY} Z`}
-                  fill="#3b82f615" stroke="#60a5fa60"
-                  strokeWidth={0.75 / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
+                  {...swingPaint}
+                  strokeWidth={layers.w('door_swings', 0.75) / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />)
               } else {
                 const endX = colRight.x + r * (c15 * (-wd.x) + s15 * perp.x)
                 const endY = colRight.y + r * (c15 * (-wd.y) + s15 * perp.y)
                 nodes.push(<path key={`swing-${cab.id}-${col}`}
                   d={`M ${colRight.x} ${colRight.y} L ${colLeft.x} ${colLeft.y} A ${r} ${r} 0 0 ${rightSweep} ${endX} ${endY} Z`}
-                  fill="#3b82f615" stroke="#60a5fa60"
-                  strokeWidth={0.75 / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
+                  {...swingPaint}
+                  strokeWidth={layers.w('door_swings', 0.75) / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />)
               }
             }
@@ -1073,7 +1198,7 @@ export default function CanvasSVG({
 
           // Drawer lines — one dashed line per drawer zone, offset progressively from front
           // Stacked drawers (same col, different rows) each get their own line at +10px per step.
-          if (displayConfig.annotations.plan_drawer_lines) {
+          if (layers.show('drawer_lines')) {
             // Group rows per column so each column tracks its own step count
             const colRowsSeen = new Map<number, number[]>()
             for (const z of zones) {
@@ -1094,8 +1219,8 @@ export default function CanvasSVG({
                   y1={colLeft.y  + perpOff * perp.y + widthInset * wd.y}
                   x2={colRight.x + perpOff * perp.x - widthInset * wd.x}
                   y2={colRight.y + perpOff * perp.y - widthInset * wd.y}
-                  stroke="#f59e0b90"
-                  strokeWidth={0.75 / view.zoom}
+                  stroke={layers.color('drawer_lines', '#f59e0b')} strokeOpacity={0.56} opacity={layers.op('drawer_lines')}
+                  strokeWidth={layers.w('drawer_lines', 0.75) / view.zoom}
                   strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                   strokeLinecap="round"
                   style={{ pointerEvents: 'none' }} />)

@@ -224,32 +224,44 @@ export function OpMarkersDepthSVG({ ops, pu, pv, n, swap, mirror, activeFace, vi
   )
 }
 
-// The recess volume each area op removes from the panel, as CSG subtraction boxes
-// (cabinet-space, in the Part's box frame). Cut from the front face z = n down by
-// the op's real depth, opened a hair (0.8mm) above the surface so it breaches
-// cleanly. Fed to <Part subtractions=…> so pockets are genuine recesses in the
-// panel material — real depth, real walls — rather than a flat overlay on top.
+// True when the op's cut spans the panel's full thickness — a "through" op.
+export const opIsThrough = (op: PartOp, n: number): boolean => {
+  const { lo, hi } = opDepthSpan(op, n)
+  return lo <= 0.05 && hi >= n - 0.05
+}
+
+// The volume each op removes from the panel, as CSG subtractions (in the Part's
+// box frame). Area ops always cut; drills cut only when THROUGH (partial-depth
+// drills stay as the surface discs OpMarkers3D draws — parts can carry dozens of
+// system holes and per-hole CSG would be wasteful). Any end of a cut that reaches
+// a panel face is overrun a hair (0.8mm) so it breaches cleanly instead of
+// leaving a coplanar skin — a through op therefore opens BOTH faces and you can
+// see through the hole. Fed to <Part subtractions=…> so cuts are genuine
+// recesses in the panel material — real depth, real walls.
 export function buildOpSubtractions(ops: PartOp[], pu: number, pv: number, n: number, swap: boolean, mirror?: boolean):
-  { center: [number, number, number]; size: [number, number, number] }[] {
-  const out: { center: [number, number, number]; size: [number, number, number] }[] = []
+  { center: [number, number, number]; size: [number, number, number]; cylinder?: boolean }[] {
+  const out: { center: [number, number, number]; size: [number, number, number]; cylinder?: boolean }[] = []
   for (const op of ops) {
     let g = opFaceGlyph(op, pu, pv)
     if (mirror) g = mirrorGlyphX(g, pu)
     if (swap) g = swapGlyph(g)
+    // Cut spans the pos_z-aware depth range (Z0 = the active face surface); a
+    // pos_z > 0 pocket stays buried (no surface breach), as it should.
+    const { lo, hi } = opDepthSpan(op, n)
+    const zA = lo - (lo <= 0.01 ? 0.8 : 0)
+    const zB = hi + (hi >= n - 0.01 ? 0.8 : 0)
     for (const r of g.rects) {
       // Skip degenerate boxes — a zero/negative-size subtraction makes @react-three/csg
       // (three-bvh-csg) throw or lose the WebGL context, which an in-progress or
       // offset-defined op can easily produce.
       if (!(r.w > 0.1) || !(r.h > 0.1)) continue
-      // Recess spans the pos_z-aware depth range (Z0 = the active face surface). When
-      // the op opens the surface (pos_z ≈ 0) overrun it a hair so the cut breaches
-      // cleanly; a pos_z > 0 pocket stays buried (no surface breach), as it should.
-      const { lo, hi } = opDepthSpan(op, n)
-      const back = opFaceSide(op) === 'back'
-      const breach = (op.pos_z ?? 0) <= 0.01 ? 0.8 : 0
-      const zA = back ? lo - breach : lo
-      const zB = back ? hi : hi + breach
       out.push({ center: [r.x + r.w / 2, r.y + r.h / 2, (zA + zB) / 2], size: [r.w, r.h, zB - zA] })
+    }
+    if (opIsThrough(op, n)) {
+      for (const cir of g.circles) {
+        if (!(cir.r > 0.1)) continue
+        out.push({ center: [cir.cx, cir.cy, (zA + zB) / 2], size: [cir.r * 2, cir.r * 2, zB - zA], cylinder: true })
+      }
     }
   }
   return out
@@ -291,15 +303,27 @@ export function OpMarkers3D({ ops, pu, pv, n, swap, mirror, activeFace, selected
         const zDisc = back ? span.surface - 0.4 : span.surface + 0.4
         const click = ghost ? undefined : (e: { stopPropagation: () => void }) => { e.stopPropagation(); onSelect(op.id) }
         return [
-          // Drill hole — a thin disc sitting flush on the face. Panel-coloured unless
-          // highlighted; a faint black rim (Edges) marks the circle so it's legible.
+          // Drill hole. Partial depth → a thin disc sitting flush on the face,
+          // panel-coloured unless highlighted, with a faint black rim (Edges) so
+          // it's legible. THROUGH → the hole is CSG-cut right through the panel
+          // (buildOpSubtractions), so a solid disc would plug it — render only an
+          // invisible full-depth cylinder as the click target, tinted when
+          // selected / flagged (the CSG mesh's own Edges already outline the rim).
           ...g.circles.map((cir, i) => (
-            <mesh key={`${op.id}-c${i}`} position={[cir.cx, cir.cy, zDisc]} rotation={[Math.PI / 2, 0, 0]}
-              onClick={click}>
-              <cylinderGeometry args={[cir.r, cir.r, 0.8, 28]} />
-              <meshStandardMaterial color={hl ?? panelColor} roughness={0.7} metalness={0.05} transparent={ghost} opacity={ghost ? 0.3 : 1} />
-              <Edges threshold={20} color="#1e293b" linewidth={1} />
-            </mesh>
+            opIsThrough(op, n) ? (
+              <mesh key={`${op.id}-c${i}`} position={[cir.cx, cir.cy, n / 2]} rotation={[Math.PI / 2, 0, 0]} renderOrder={20}
+                onClick={click}>
+                <cylinderGeometry args={[cir.r, cir.r, n, 28]} />
+                <meshBasicMaterial color={hl ?? '#000000'} transparent opacity={hl ? (ghost ? 0.14 : 0.32) : 0} depthWrite={false} depthTest={false} />
+              </mesh>
+            ) : (
+              <mesh key={`${op.id}-c${i}`} position={[cir.cx, cir.cy, zDisc]} rotation={[Math.PI / 2, 0, 0]}
+                onClick={click}>
+                <cylinderGeometry args={[cir.r, cir.r, 0.8, 28]} />
+                <meshStandardMaterial color={hl ?? panelColor} roughness={0.7} metalness={0.05} transparent={ghost} opacity={ghost ? 0.3 : 1} />
+                <Edges threshold={20} color="#1e293b" linewidth={1} />
+              </mesh>
+            )
           )),
           // Area op — the recess is already CSG-cut into the panel. This box is the
           // click target (transparent, opacity 0, when un-highlighted) and a colour

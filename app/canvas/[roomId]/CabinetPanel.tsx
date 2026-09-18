@@ -12,7 +12,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
   wallCabinets: CabinetInstance[]
   room: Room | null
   onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
-  onDelete: (id: string) => Promise<void>
+  onDelete: (id: string) => void | Promise<void>
   hideWallPosition?: boolean
   hideDelete?: boolean
   /** Focus the width field when the panel opens, so Tab flows width → height → depth. */

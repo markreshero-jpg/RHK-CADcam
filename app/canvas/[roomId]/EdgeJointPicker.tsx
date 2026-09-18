@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance } from '@/src/lib/types'
-import { toGenericSeamKey } from '@/src/lib/cabinetSeams'
+import { toGenericSeamKey, withSeamJoint } from '@/src/lib/cabinetSeams'
+import { seamAssignJoint, type SeamJointAssign } from '@/src/lib/resolver/types'
 
 interface JointType {
   id: string
@@ -58,25 +59,23 @@ export default function EdgeJointPicker({ cabId, edgeKey, edgeLabel, cabinet, on
     load()
   }, [edgeKey, cabinet.assembly_class])
 
-  const existing: Record<string, string | null> = (cabinet.carcase_joints ?? {}) as Record<string, string | null>
+  const existing = (cabinet.carcase_joints ?? {}) as Record<string, SeamJointAssign>
   const isKeySet     = Object.prototype.hasOwnProperty.call(existing, edgeKey)
-  const currentVal   = isKeySet ? existing[edgeKey] : undefined
+  const currentVal   = isKeySet ? seamAssignJoint(existing[edgeKey]) : undefined
   const hasJoint     = typeof currentVal === 'string'
   const isSuppressed = currentVal === null
-  const isInherited  = !isKeySet && !!inheritedId
+  const isInherited  = (!isKeySet || currentVal === undefined) && !!inheritedId
 
   function assign(jointTypeId: string) {
-    onUpdate(cabId, { carcase_joints: { ...existing, [edgeKey]: jointTypeId } })
+    onUpdate(cabId, { carcase_joints: withSeamJoint(existing, edgeKey, jointTypeId) })
   }
 
   function suppress() {
-    onUpdate(cabId, { carcase_joints: { ...existing, [edgeKey]: null } })
+    onUpdate(cabId, { carcase_joints: withSeamJoint(existing, edgeKey, null) })
   }
 
   function clear() {
-    const next = { ...existing }
-    delete next[edgeKey]
-    onUpdate(cabId, { carcase_joints: next })
+    onUpdate(cabId, { carcase_joints: withSeamJoint(existing, edgeKey, 'clear') })
   }
 
   const resolvedId    = hasJoint ? (currentVal as string) : isInherited ? inheritedId! : null

@@ -17,6 +17,7 @@ const SYS = DEFAULT_CONSTRUCTION_METHOD.rules
 const RULE_LABELS: Record<RuleKey, string> = {
   TOEH:    'Toe Height (mm)',
   TOE_TYPE:'Toe Type',
+  TOEFC:   'Toe Floor Clearance (mm)',
   TOESP:   'Toe Setback Panel (mm)',
   TOESCF:  'Toe Scribe Front (mm)',
   TOESCB:  'Toe Scribe Back (mm)',
@@ -52,7 +53,7 @@ const RULE_LABELS: Record<RuleKey, string> = {
 }
 
 const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
-  { label: 'Toe Kick',           keys: ['TOEH', 'TOE_TYPE', 'TOESP', 'TOESCF', 'TOESCB', 'TOESCL', 'TOESCR'] },
+  { label: 'Toe Kick',           keys: ['TOEH', 'TOE_TYPE', 'TOEFC', 'TOESP', 'TOESCF', 'TOESCB', 'TOESCL', 'TOESCR'] },
   { label: 'Case Scribes',       keys: ['SCRBK', 'SCRBT', 'SCRL', 'SCRR', 'SCRT'] },
   { label: 'Top Rail',           keys: ['TOP_TYPE', 'RD'] },
   { label: 'Adjustable Shelves', keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },

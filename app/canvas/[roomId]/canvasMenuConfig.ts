@@ -1,8 +1,9 @@
 import type { CabinetInstance } from '@/src/lib/types'
+import { GRID_STEPS } from '@/src/lib/geometry'
+import type { PlanGridPrefs } from '@/src/lib/userPrefs'
 import type {
-  Mode, Selected, PlaceGhost, MenuGroup, ViewAction, CanvasView, DisplayConfig,
+  Mode, Selected, PlaceGhost, MenuGroup, ViewAction, CanvasView,
 } from './canvasTypes'
-import { toggleAnnotation } from './canvasTypes'
 import type { JobPropertiesTab } from './JobPropertiesModal'
 import type { RoomPropertiesTab } from './RoomPropertiesModal'
 import type { ReportScope } from './ReportsModal'
@@ -28,9 +29,11 @@ export interface MenuActions {
   svgSize:      { w: number; h: number }
   fitToWalls:   () => void
   switchView:   (v: CanvasView) => void
-  // Display / annotations
-  displayConfig:    DisplayConfig
-  setDisplayConfig: React.Dispatch<React.SetStateAction<DisplayConfig>>
+  // Display layers
+  openLayerManager: () => void
+  // Plan reference grid (per-user, localStorage)
+  planGrid:       PlanGridPrefs
+  setPlanGrid:    (next: PlanGridPrefs) => void
   // Modals
   setJobModalTab:    (tab: JobPropertiesTab) => void
   setRoomModalTab:   (tab: RoomPropertiesTab) => void
@@ -77,15 +80,20 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
       null,
       { label: '3D View', action: () => a.switchView('3d') },
     ]},
-    { label: 'Annotations', items: [
-      { label: 'Door swings (plan)',         checked: a.displayConfig.annotations.plan_door_swings,    action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'plan_door_swings')) },
-      { label: 'Drawer lines (plan)',        checked: a.displayConfig.annotations.plan_drawer_lines,   action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'plan_drawer_lines')) },
-      { label: 'Door chevrons (elevation)',  checked: a.displayConfig.annotations.elev_door_chevrons,  action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_door_chevrons')) },
-      { label: 'Drawer labels (elevation)',  checked: a.displayConfig.annotations.elev_drawer_labels,  action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_drawer_labels')) },
-      { label: 'Inner drawer labels (elev.)', checked: a.displayConfig.annotations.elev_inner_drawer_labels, action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_inner_drawer_labels')) },
-      { label: 'Shelf labels (elevation)',   checked: a.displayConfig.annotations.elev_shelf_labels,    action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_shelf_labels')) },
-      { label: 'Internal parts (elevation)', checked: a.displayConfig.annotations.elev_internal_parts, action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_internal_parts')) },
-      { label: 'Drawer box (elevation)',     checked: a.displayConfig.annotations.elev_drawer_box,      action: () => a.setDisplayConfig(c => toggleAnnotation(c, 'elev_drawer_box')) },
+    { label: 'Layers', items: [
+      { label: 'Manage Layers…', action: () => a.openLayerManager() },
+      null,
+      { label: 'Show Grid', checked: a.planGrid.visible,
+        action: () => a.setPlanGrid({ ...a.planGrid, visible: !a.planGrid.visible }) },
+      null,
+      { label: 'Grid: Auto', checked: a.planGrid.visible && a.planGrid.step === 0, disabled: !a.planGrid.visible,
+        action: () => a.setPlanGrid({ ...a.planGrid, step: 0 }) },
+      ...GRID_STEPS.map(step => ({
+        label: `Grid: ${step} mm`,
+        checked: a.planGrid.visible && a.planGrid.step === step,
+        disabled: !a.planGrid.visible,
+        action: () => a.setPlanGrid({ ...a.planGrid, step }),
+      })),
     ]},
     { label: 'Job', items: [
       { label: 'Details',           action: () => a.setJobModalTab('details') },

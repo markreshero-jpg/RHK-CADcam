@@ -1,16 +1,21 @@
 import { supabase } from '@/src/lib/supabase'
+import { ROOM_CUSTOM_PART_COLS, withLibraryKey } from '@/src/lib/displayLayers/customPartKinds'
 import type { Wall, CabinetInstance, CabinetDefinition, NeighbourType } from '@/src/lib/types'
 import type { CustomOrient } from '@/src/lib/customPartBox'
 import { resolveCabinetFromDB, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { loadCabinetInput } from '@/src/lib/resolver/loadCabinetInput'
 import { resolveHinges } from '@/src/lib/resolver/resolveHinges'
+import { enumerateInternalSeams } from '@/src/lib/resolver/resolveJoints'
 import { persistResolved } from '@/src/lib/resolver/persistResolved'
 import type {
-  ResolvedCabinet, ResolvedSeamJoint, JointTypeOp, JointTargetPart, JointMachineOp, JointFace,
+  ResolvedCabinet, ResolvedSeamJoint, JointTypeOp, SeamJointAssign,
   CabinetInput, HingeHardwareInput, HingePlateInput, HingeRuleInput, ExistingHingeInput, HingeBoreHole,
   FaceGridInput,
 } from '@/src/lib/resolver/types'
+import { rowToJointTypeOp, seamAssignJoint, seamAssignRows } from '@/src/lib/resolver/types'
+import type { ConstructionRules } from '@/src/lib/resolver/types'
+import { mergeRules } from '@/src/lib/resolver/mergeRules'
 
 const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 
@@ -42,16 +47,19 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
   const { hardwareById, plateById, countRules } = await loadHingeHardware(hingeRows)
 
   // Collect joint type IDs from per-cabinet carcase_joints overrides
-  const carcaseJointsById = new Map<string, Record<string, string | null>>()
+  const carcaseJointsById = new Map<string, Record<string, SeamJointAssign>>()
   const hiddenById = new Map<string, string[]>()
   const faceGridById = new Map<string, FaceGridInput | null>()
   const jointTypeIds = new Set<string>()
-  for (const row of (ci.data ?? []) as { id: string; carcase_joints: Record<string, string | null> | null; hidden_parts: string[] | null; face_grid: FaceGridInput | null }[]) {
+  for (const row of (ci.data ?? []) as { id: string; carcase_joints: Record<string, SeamJointAssign> | null; hidden_parts: string[] | null; face_grid: FaceGridInput | null }[]) {
     const joints = row.carcase_joints ?? {}
     carcaseJointsById.set(row.id, joints)
     hiddenById.set(row.id, row.hidden_parts ?? [])
     faceGridById.set(row.id, row.face_grid ?? null)
-    for (const v of Object.values(joints)) if (v) jointTypeIds.add(v)
+    for (const v of Object.values(joints)) {
+      const j = seamAssignJoint(v)
+      if (j) jointTypeIds.add(j)
+    }
   }
 
   // Load joint operations and names for all referenced joint types in one batch
@@ -66,26 +74,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
     for (const op of (opsRes.data ?? []) as Record<string, unknown>[]) {
       const jid = op.joint_type_id as string
       if (!jointOpsById[jid]) jointOpsById[jid] = []
-      jointOpsById[jid].push({
-        id:                op.id as string,
-        joint_type_id:     jid,
-        operation_order:   op.operation_order as number,
-        target_part:       op.target_part as JointTargetPart,
-        machine_operation: op.machine_operation as JointMachineOp,
-        face:              (op.face as JointFace) ?? 'normal',
-        tool_diameter_mm:  op.tool_diameter_mm as number,
-        depth_mm:          op.depth_mm as number,
-        offset_x_mm:       (op.offset_x_mm as number) ?? 0,
-        offset_y_mm:       (op.offset_y_mm as number) ?? 0,
-        offset_z_mm:       (op.offset_z_mm as number) ?? 0,
-        qty:               (op.qty as number) ?? 1,
-        spacing_mm:        (op.spacing_mm as number | null) ?? null,
-        router_tool_id:    (op.router_tool_id as string | null) ?? null,
-        drill_id:          (op.drill_id as string | null) ?? null,
-        auto_tool:         (op.auto_tool as boolean) ?? false,
-        notes:             (op.notes as string | null) ?? null,
-        expressions:       (op.expressions as Record<string, string> | null) ?? null,
-      })
+      jointOpsById[jid].push(rowToJointTypeOp(op))
     }
     for (const n of (namesRes.data ?? []) as { id: string; name: string }[]) {
       jointNamesById[n.id] = n.name
@@ -120,9 +109,30 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
     if (partKeys.has('back')     && partKeys.has('right_side')) candidateSeams.push('back:right_side')
     if (partKeys.has('back')     && partKeys.has('bottom'))     candidateSeams.push('back:bottom')
 
+    const casePartsArr = myCase.map(p => ({
+      part_key: p.part_key,
+      DX: p.dx, DY: p.dy, DZ: p.dz,
+      X: p.x, Y: p.y, Z: p.z,
+      AX: p.ax, AY: p.ay, AZ: p.az,
+      material_id: p.material_id,
+      edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right, id: p.edge_band_id ?? undefined },
+    }))
+    const intPartsArr = myInt.map(p => ({
+      part_type: p.part_type,
+      sort_order: p.sort_order,
+      y_locked: p.y_locked,
+      DX: p.dx, DY: p.dy, DZ: p.dz,
+      X: p.x, Y: p.y, Z: p.z,
+      AX: p.ax, AY: p.ay, AZ: p.az,
+      material_id: p.material_id,
+      // edge_band_front (DB) = right in resolver space (front DY edge)
+      // edge_band_back  (DB) = left in resolver space
+      edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_back, right: p.edge_band_front, id: p.edge_band_id ?? undefined },
+    }))
+
     const seamJoints: ResolvedSeamJoint[] = []
     for (const seamKey of candidateSeams) {
-      const jointTypeId = carcaseJoints[seamKey]
+      const jointTypeId = seamAssignJoint(carcaseJoints[seamKey])
       if (!jointTypeId) continue
       const colonIdx = seamKey.indexOf(':')
       seamJoints.push({
@@ -135,17 +145,29 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         ops:             jointOpsById[jointTypeId] ?? [],
       })
     }
+    // Internal seams (shelf ↔ support, divider ↔ panel): parity with the carcase
+    // reconstruction above — only per-cabinet assignments are known here (CM
+    // joint_defaults aren't loaded in this path).
+    for (const cand of enumerateInternalSeams(casePartsArr, intPartsArr)) {
+      const entry = carcaseJoints[cand.seam_key]
+      const jointTypeId = seamAssignJoint(entry)
+      if (!jointTypeId) continue
+      seamJoints.push({
+        seam_key:        cand.seam_key,
+        joint_type_id:   jointTypeId,
+        joint_type_name: jointNamesById[jointTypeId] ?? 'Unknown',
+        source:          'cabinet',
+        part_a_key:      cand.part_a_key,
+        part_b_key:      cand.part_b_key,
+        ops:             jointOpsById[jointTypeId] ?? [],
+        internal_edge:   cand.edge,
+        rows_override:   seamAssignRows(entry),
+      })
+    }
 
     const built: ResolvedCabinet = {
       cabinet_id: id,
-      case_parts: myCase.map(p => ({
-        part_key: p.part_key,
-        DX: p.dx, DY: p.dy, DZ: p.dz,
-        X: p.x, Y: p.y, Z: p.z,
-        AX: p.ax, AY: p.ay, AZ: p.az,
-        material_id: p.material_id,
-        edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right, id: p.edge_band_id ?? undefined },
-      })),
+      case_parts: casePartsArr,
       toekick_parts: myTk.map(p => ({
         part_key: p.part_key,
         sort_order: p.sort_order,
@@ -156,18 +178,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         material_id: p.material_id,
         edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right, id: p.edge_band_id ?? undefined },
       })),
-      internal_parts: myInt.map(p => ({
-        part_type: p.part_type,
-        sort_order: p.sort_order,
-        y_locked: p.y_locked,
-        DX: p.dx, DY: p.dy, DZ: p.dz,
-        X: p.x, Y: p.y, Z: p.z,
-        AX: p.ax, AY: p.ay, AZ: p.az,
-        material_id: p.material_id,
-        // edge_band_front (DB) = right in resolver space (front DY edge)
-        // edge_band_back  (DB) = left in resolver space
-        edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_back, right: p.edge_band_front, id: p.edge_band_id ?? undefined },
-      })),
+      internal_parts: intPartsArr,
       face_rows: myRows.map(r => ({
         row_index: r.row_index, height: r.height, height_locked: r.height_locked,
       })),
@@ -342,9 +353,9 @@ export async function dbResolveAndPersistCabinet(id: string, opts: { awaitPersis
     // Attach custom parts so room views (which read resolved.custom_parts) stay in
     // sync after a re-resolve instead of dropping them until a page reload.
     const { data } = await supabase.from('cabinet_custom_parts')
-      .select('id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,orientation')
+      .select(ROOM_CUSTOM_PART_COLS)
       .eq('cabinet_instance_id', id)
-    resolved.custom_parts = (data ?? []) as unknown as ResolvedCabinet['custom_parts']
+    resolved.custom_parts = withLibraryKey((data ?? []) as Record<string, unknown>[]) as unknown as ResolvedCabinet['custom_parts']
     return resolved
   } catch (e) { console.error('resolve after save:', e); return null }
 }
@@ -585,6 +596,46 @@ export async function dbUpdateCabinet(
     resolved.hidden_parts = getCachedHidden(id) ?? []
     persistResolved(resolved).catch(e => console.error('persist:', e))
     return resolved
+  }
+
+  // Fast path: cabinet rule-override-only change (scribes, reveals, gaps…) + cached
+  // input → re-merge the rules locally and resolve synchronously. Safe because
+  // rule_overrides is the LAST cascade layer and loadCabinetInput never uses the
+  // merged rules to decide what else to fetch — so nothing else in the input moves.
+  // Turns a ~13-round-trip reload into zero reads.
+  if (keys.length === 1 && keys[0] === 'rule_overrides') {
+    const cachedR = getCachedInput(id)
+    if (cachedR?.rules_base && !cachedR.kick_run) {
+      const ov = (u.rule_overrides ?? {}) as Partial<ConstructionRules>
+      const updated = { ...cachedR, rules: mergeRules(cachedR.rules_base, ov) }
+      setCachedInput(id, updated)
+      const resolved = resolveCabinet(updated)
+      applyEdgeOverridesFromCache(resolved)
+      resolved.hidden_parts = getCachedHidden(id) ?? []
+      persistResolved(resolved).catch(e => console.error('persist:', e))
+      return resolved
+    }
+  }
+
+  // Fast path: joint-override-only change + cached input → resolve synchronously
+  // so seam drilling updates instantly in the open editor. Falls through to a
+  // full reload when a newly-assigned joint's ops aren't in the cached input.
+  if (keys.length === 1 && keys[0] === 'carcase_joints') {
+    const cj = (u.carcase_joints ?? {}) as Record<string, SeamJointAssign>
+    const cachedJ = getCachedInput(id)
+    const opsKnown = cachedJ && Object.values(cj).every(v => {
+      const j = seamAssignJoint(v)
+      return !j || !!cachedJ.joint_type_ops?.[j]
+    })
+    if (cachedJ && opsKnown && !cachedJ.kick_run) {
+      const updated = { ...cachedJ, carcase_joints: cj }
+      setCachedInput(id, updated)
+      const resolved = resolveCabinet(updated)
+      applyEdgeOverridesFromCache(resolved)
+      resolved.hidden_parts = getCachedHidden(id) ?? []
+      persistResolved(resolved).catch(e => console.error('persist:', e))
+      return resolved
+    }
   }
 
   try { return await resolveCabinetFromDB(id) } catch (e) { console.error('resolve after update:', e); return null }
@@ -1280,4 +1331,35 @@ export async function dbClearShapeOverrides(cabinetId: string): Promise<void> {
     .delete()
     .eq('cabinet_id', cabinetId)
   if (error) console.error('[shape override clear]', error)
+}
+
+// Room 3D view: part position/size/rotation overrides + live shape overrides for
+// every cabinet in the room, in two queries (the cabinet editor loads these per
+// cabinet via dbLoadPartPosOverrides / dbLoadShapeOverrides).
+export async function dbLoadRoomPartDetails(cabinetIds: string[]): Promise<{
+  posById: Map<string, PartPosOverrides>
+  shapesById: Map<string, ShapeOverrides>
+}> {
+  const posById = new Map<string, PartPosOverrides>()
+  const shapesById = new Map<string, ShapeOverrides>()
+  if (cabinetIds.length === 0) return { posById, shapesById }
+  const [pos, shp] = await Promise.all([
+    supabase.from('cabinet_instances').select('id, part_pos_overrides').in('id', cabinetIds),
+    supabase.from('part_shape_overrides')
+      .select('cabinet_id, part_key, revision, segments, meta, created_at')
+      .in('cabinet_id', cabinetIds)
+      .order('revision', { ascending: false }),
+  ])
+  if (pos.error) console.error('[room part overrides load]', pos.error)
+  if (shp.error) console.error('[room shape overrides load]', shp.error)
+  for (const r of (pos.data ?? []) as { id: string; part_pos_overrides: PartPosOverrides | null }[]) {
+    if (r.part_pos_overrides && Object.keys(r.part_pos_overrides).length) posById.set(r.id, r.part_pos_overrides)
+  }
+  // Rows arrive revision-desc — first row seen per (cabinet, part_key) is the live head.
+  for (const r of (shp.data ?? []) as (ShapeRow & { cabinet_id: string })[]) {
+    const m = shapesById.get(r.cabinet_id) ?? {}
+    if (!(r.part_key in m)) m[r.part_key] = { revision: r.revision, segments: r.segments, meta: r.meta, created_at: r.created_at }
+    shapesById.set(r.cabinet_id, m)
+  }
+  return { posById, shapesById }
 }

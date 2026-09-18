@@ -4,7 +4,7 @@
 // Part Editor — per-part Overrides panel (right sidebar tab).
 // The same override machinery as the cabinet Overrides tab,
 // filtered to the one part being edited and compacted for the
-// sidebar: size (W/H/D) + position + rotation fields, and the
+// sidebar: size (DY/DX/DZ, CV convention) + position + rotation fields, and the
 // part's shape — revision history with restore-any (live: the
 // centre 3D/ortho views update as revisions are restored),
 // stale flag, remove. Shape mutations flow through the same
@@ -13,12 +13,19 @@
 // behaviour is identical wherever an override is touched.
 // ============================================================
 
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import type { PartMeta } from '@/src/components/three/PartViewer'
+import { Fragment, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { extForAxes, type PartMeta } from '@/src/components/three/PartViewer'
 import type { CabinetCustomPart, PartPosOverrides, ShapeOverride, ShapeRevisionEntry } from '../canvasDB'
 import { dbListShapeRevisions, dbSavePartPosOverride, dbDeletePartPosOverride, dbUpdateCustomPart } from '../canvasDB'
 import { shapeToSvgPath } from '@/src/lib/shapePath'
 import CalcInput from '@/src/components/CalcInput'
+import { fmtMm } from '@/src/lib/format'
+import FormulaInput from '@/src/components/FormulaInput'
+import type { FormulaScope } from '@/src/lib/formula'
+import {
+  dbLoadPartExpressions, dbSavePartExpressions, setPartExpression,
+  type PartExpressions, type PartSizeSlot,
+} from '@/src/lib/formula/partExpressions'
 
 type OvEntry = PartPosOverrides[string]
 
@@ -40,13 +47,16 @@ function ShapeThumb({ entry }: { entry: ShapeRevisionEntry }) {
 export default function PartOverridesPanel({
   width, cabinetId, part, partBase, partOverrides, onOverridesChange, customParts, setCustomParts,
   shapeOv, onEditShape, onRestoreRevision, onRemoveShape, previewRevision, onPreviewRevision,
+  formulaScope,
 }: {
   width:     number
   cabinetId: string
   part:      PartMeta
-  partBase?: { w: number; h: number; d: number }
+  partBase?: { dy: number; dx: number; dz: number }
   partOverrides?:     PartPosOverrides
   onOverridesChange?: (o: PartPosOverrides) => void
+  /** Evaluation scope for size formulas (cab.h - 100 …); null while resolving. */
+  formulaScope?:      FormulaScope | null
   customParts?:       CabinetCustomPart[]
   setCustomParts?:    Dispatch<SetStateAction<CabinetCustomPart[]>>
   shapeOv:            ShapeOverride | null
@@ -72,11 +82,38 @@ export default function PartOverridesPanel({
   }
   const setF   = (k: keyof OvEntry, v: number) => setEntry({ ...ov, [k]: v })
   const clearF = (k: keyof OvEntry) => { const n = { ...ov }; delete n[k]; setEntry(n) }
+
+  // Per-part size formulas (standard parts only). Loaded once per mount; the
+  // formula source lives in cabinet_instances.part_expressions, the computed
+  // value is cached into the sw/sh/sd override slot (setF) so every consumer
+  // keeps reading plain numbers. Re-evaluated on resolve by applyPartExpressions.
+  const [exprs, setExprs] = useState<PartExpressions | null>(null)
+  useEffect(() => {
+    if (isCustom) return
+    let live = true
+    dbLoadPartExpressions(cabinetId)
+      .then(e => { if (live) setExprs(e) })
+      .catch(e => console.error('[part expressions load]', e))
+    return () => { live = false }
+  }, [cabinetId, isCustom])
+
+  function saveExpr(slot: PartSizeSlot, formula: string | null) {
+    const next = setPartExpression(exprs ?? {}, part.id, slot, formula)
+    setExprs(next)
+    dbSavePartExpressions(cabinetId, next).catch(console.error)
+  }
+
   function removeEntry() {
     if (!canEdit || !hasEntry) return
     const { [part.id]: _removed, ...updated } = partOverrides!
     onOverridesChange!(updated)
     dbDeletePartPosOverride(cabinetId, part.id, partOverrides!).catch(console.error)
+    // Formulas drive the size slots — removing the overrides clears them too.
+    if (exprs?.[part.id]) {
+      const { [part.id]: _e, ...restE } = exprs
+      setExprs(restE)
+      dbSavePartExpressions(cabinetId, restE).catch(console.error)
+    }
   }
 
   // Full revision history, loaded on demand. Closing it drops any live preview.
@@ -98,9 +135,11 @@ export default function PartOverridesPanel({
   // Stale check — same rule as the cabinet tab (unordered in-plane pair vs
   // meta.baseAtSave, 0.5mm tolerance), sourced from partBase / the custom row.
   const savedBase = shapeOv?.meta?.baseAtSave
-  const curBase = isCustom ? (cp ? { w: cp.dy, h: cp.dx } : undefined) : partBase
+  const curBase: [number, number] | undefined = isCustom
+    ? (cp ? [Number(cp.dy), Number(cp.dx)] : undefined)
+    : (partBase ? [partBase.dy, partBase.dx] : undefined)
   const stale = !!(savedBase && curBase && (() => {
-    const a = [curBase.w, curBase.h].sort((x, y) => x - y)
+    const a = [...curBase].sort((x, y) => x - y)
     const b = [savedBase.w, savedBase.h].sort((x, y) => x - y)
     return Math.abs(a[0] - b[0]) > 0.5 || Math.abs(a[1] - b[1]) > 0.5
   })())
@@ -110,13 +149,21 @@ export default function PartOverridesPanel({
   const head = (label: string, accent?: boolean) => (
     <div className={`text-[9px] uppercase tracking-wider mb-1 ${accent ? 'text-orange-400' : 'text-gray-600'}`}>{label}</div>
   )
-  const sizeField = (label: string, k: 'sw' | 'sh' | 'sd', baseVal?: number) => (
-    <div className="flex items-center gap-1 mb-1">
-      <span className="text-[10px] text-gray-600 w-5">{label}</span>
-      <CalcInput value={ov[k] ?? null} decimals={1} className={inputCls}
-        placeholder={baseVal != null ? String(Math.round(baseVal)) : '—'}
-        onCommit={v => setF(k, v)} onClear={() => clearF(k)} />
-      <span className="text-[10px] text-gray-600">mm</span>
+  const sizeField = (label: string, k: PartSizeSlot, baseVal?: number) => (
+    <div className="flex items-start gap-1 mb-1">
+      <span className="text-[10px] text-gray-600 w-5 mt-1.5">{label}</span>
+      <FormulaInput
+        formula={exprs?.[part.id]?.[k] ?? null}
+        value={ov[k] ?? null}
+        scope={formulaScope ?? null}
+        decimals={1}
+        className={`${inputCls.replace('w-16 ', '')} w-full`}
+        placeholder={baseVal != null ? fmtMm(baseVal) : '—'}
+        onLiteral={v => { if (exprs?.[part.id]?.[k]) saveExpr(k, null); setF(k, v) }}
+        onFormula={(src, v) => { saveExpr(k, src); setF(k, v) }}
+        onClear={() => { if (exprs?.[part.id]?.[k]) saveExpr(k, null); clearF(k) }}
+      />
+      <span className="text-[10px] text-gray-600 mt-1.5">mm</span>
     </div>
   )
   const offField = (label: string, k: keyof OvEntry, unit: string) => (
@@ -168,10 +215,14 @@ export default function PartOverridesPanel({
           )
         ) : canEdit ? (
           <>
-            {head('Size override (W/H/D)', hasSize)}
-            {sizeField('W', 'sw', partBase?.w)}
-            {sizeField('H', 'sh', partBase?.h)}
-            {sizeField('D', 'sd', partBase?.d)}
+            {/* CV standard-part reading: DY = length (grain) / DX = width / DZ =
+                thickness for every part, mapped to the sw/sh/sd box slots that
+                the optimiser + shape sync share. */}
+            {head('Size override (DY/DX/DZ)', hasSize)}
+            {(['DY', 'DX', 'DZ'] as const).map(axis => {
+              const e = extForAxes(part.panelKind, part.dxIsWidth)[axis]
+              return <Fragment key={axis}>{sizeField(axis, `s${e}` as PartSizeSlot, partBase?.[axis.toLowerCase() as 'dy' | 'dx' | 'dz'])}</Fragment>
+            })}
             <div className="border-t border-gray-800/60 my-2" />
             {head('Position offset')}
             {offField('X', 'ox', 'mm')}
@@ -198,7 +249,7 @@ export default function PartOverridesPanel({
           <div className="space-y-2">
             <div className="text-[11px] font-mono text-sky-300 leading-relaxed">
               {shapeOv.segments.length} segment{shapeOv.segments.length !== 1 ? 's' : ''}
-              {bnd ? ` · ${Math.round(bnd.maxX)} × ${Math.round(bnd.maxY)} mm` : ''}
+              {bnd ? ` · ${fmtMm(bnd.maxX)} × ${fmtMm(bnd.maxY)} mm` : ''}
               <br />
               r{shapeOv.revision}{(shapeOv.revisions ?? 1) > 1 ? ` of ${shapeOv.revisions}` : ''}
               {` · ${new Date(shapeOv.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}
@@ -236,7 +287,7 @@ export default function PartOverridesPanel({
                           {isPreview && <span className="text-[9px] uppercase tracking-wider ml-1.5 text-sky-300">previewing</span>}
                         </div>
                         <div className="text-gray-500 text-[10px]">
-                          {b ? `${Math.round(b.maxX)}×${Math.round(b.maxY)} · ` : ''}{r.segments.length} seg · {new Date(r.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                          {b ? `${fmtMm(b.maxX)}×${fmtMm(b.maxY)} · ` : ''}{r.segments.length} seg · {new Date(r.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
                         </div>
                       </div>
                       {isPreview && !isHead && (

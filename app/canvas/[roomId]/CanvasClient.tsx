@@ -14,6 +14,7 @@ import {
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
 import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import { usePinchZoom } from './usePinchZoom'
 import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { useCanvasHistory } from './useCanvasHistory'
@@ -24,11 +25,14 @@ import { useKickRunOps } from './useKickRunOps'
 import { buildMenus } from './canvasMenuConfig'
 import {
   Mode, ArmedDefinition, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, SectionCut,
-  viewReducer, placeInfoFor, DisplayConfig, PresetId,
-  DEFAULT_DISPLAY_CONFIG, applyPreset, toggleAnnotation,
+  viewReducer, placeInfoFor,
 } from './canvasTypes'
 import { useBenchtopInteraction } from './useBenchtopInteraction'
-import { DISPLAY_PRESETS } from '@/src/lib/displayConfig'
+import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
+import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
+import { findLayerSet } from '@/src/lib/displayLayers/legacy'
+import type { LayerSet } from '@/src/lib/displayLayers/registry'
+import LayerManagerPanel from './LayerManagerPanel'
 import CanvasMenubar from './CanvasMenubar'
 import CanvasSidebar from './CanvasSidebar'
 import CanvasSVG from './CanvasSVG'
@@ -36,9 +40,10 @@ import ElevationSVG from './ElevationSVG'
 import SectionSVG from './SectionSVG'
 import CanvasContextMenu from './CanvasContextMenu'
 import { buildContextMenuGroups } from './canvasContextItems'
-import DeleteWallModal from './DeleteWallModal'
+import ConfirmDeleteModal from '@/src/components/ConfirmDeleteModal'
 import SplitCabinetModal from './SplitCabinetModal'
 import SaveToLibraryModal from './SaveToLibraryModal'
+import ReplaceCabinetModal from './ReplaceCabinetModal'
 import KickRunSettingsModal from './KickRunSettingsModal'
 import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
 import WallDrawPanel from './WallDrawPanel'
@@ -55,7 +60,7 @@ import ReportsModal, { type ReportScope } from './ReportsModal'
 import Room3DScene, { type Camera3DState } from './Room3DScene'
 import BenchtopPanel from './BenchtopPanel'
 import SnapToolbar from './SnapToolbar'
-import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
+import { getUserPrefs, setUserPrefs, type PlanGridPrefs } from '@/src/lib/userPrefs'
 import { computeSnap, SNAP_KINDS, SNAP_KIND_META, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
 import { type ElevSnapSettings, type ElevSnapResult } from '@/src/lib/elevationSnap'
 
@@ -100,8 +105,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [multiSelect, setMultiSelect] = useState<string[]>([])
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [deleteWallPending, setDeleteWallPending] = useState<string | null>(null)
+  const [deleteCabsPending, setDeleteCabsPending] = useState<string[] | null>(null)
   const [splitCabId, setSplitCabId] = useState<string | null>(null)
   const [saveLibCabId, setSaveLibCabId] = useState<string | null>(null)
+  const [replaceCabId, setReplaceCabId] = useState<string | null>(null)
   const [kickSettingsRunId, setKickSettingsRunId] = useState<string | null>(null)
   const [libRefresh, setLibRefresh] = useState(0)   // bump to reload the library palette
   const [toast, setToast] = useState<string | null>(null)
@@ -123,14 +130,23 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [canvasView, setCanvasView] = useState<CanvasView>('plan')
   const [elevWallId, setElevWallId] = useState<string | null>(null)
   const [elevWallSide, setElevWallSide] = useState<'face' | 'back'>('face')
-  const [displayConfig, setDisplayConfig] = useState<DisplayConfig>(() => {
-    // Canvas opens in plan view → seed from the plan default layer.
-    const preset = getUserPrefs().drawingPresets.plan
-    return applyPreset(preset)
-  })
-  // Once the user manually changes the Detail dropdown, stop auto-applying per-view
-  // defaults on switch — the dropdown then stays shared/sticky across views.
-  const presetTouchedRef = useRef(false)
+  // Display layer sets (z_display_layers spec): ONE active set drives plan,
+  // elevation and 3D (each set carries per-view item settings). The choice is
+  // remembered per user.
+  const layerSetsApi = useLayerSets()
+  const [layerSetPref, setLayerSetPref] = useState(() => getUserPrefs().layerSetId)
+  const activeLayerSet = findLayerSet(layerSetsApi.sets, layerSetPref)
+  function chooseLayerSet(id: string) {
+    setLayerSetPref(id)
+    setUserPrefs({ layerSetId: id })
+  }
+  const [showLayerManager, setShowLayerManager] = useState(false)
+  // Set being edited in the Layer Manager — previewed live on the canvas.
+  const [layerPreview, setLayerPreview] = useState<LayerSet | null>(null)
+  const shownLayerSet = layerPreview ?? activeLayerSet
+  const planLayers = useMemo(() => resolveLayerView(shownLayerSet, 'plan'),      [shownLayerSet])
+  const elevLayers = useMemo(() => resolveLayerView(shownLayerSet, 'elevation'), [shownLayerSet])
+  const layers3D   = useMemo(() => resolveLayerView(shownLayerSet, '3d'),        [shownLayerSet])
   const [jobModalTab, setJobModalTab]   = useState<JobPropertiesTab | null>(null)
   const [roomModalTab, setRoomModalTab] = useState<RoomPropertiesTab | null>(null)
   const [showObjectTree, setShowObjectTree] = useState(false)
@@ -141,6 +157,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
   const [sectionCut, setSectionCut] = useState<SectionCut | null>(null)
   const [sectionDrag, setSectionDrag] = useState<{ offsetX: number; offsetY: number } | null>(null)
+  // Plan reference grid (dots). Per-user, persisted to localStorage.
+  const [planGrid, setPlanGridState] = useState<PlanGridPrefs>(() => getUserPrefs().planGrid)
   // Snapping (shared by wall/benchtop/measure tools). Persisted to localStorage.
   const [snapSettings, setSnapSettingsState] = useState<SnapSettings>(() => getUserPrefs().snapSettings)
   const [snapResult, setSnapResult] = useState<SnapResult | null>(null)
@@ -156,6 +174,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [elevMeasureCursor, setElevMeasureCursor] = useState<Pt | null>(null)
   const ctrlRef = useRef(false)
 
+  const setPlanGrid = useCallback((next: PlanGridPrefs) => {
+    setPlanGridState(next)
+    setUserPrefs({ planGrid: next })
+  }, [])
   const updateSnapSettings = useCallback((next: SnapSettings) => {
     setSnapSettingsState(next)
     setUserPrefs({ snapSettings: next })
@@ -173,6 +195,20 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     matColours, ebByMatId,
     applyInputColours, applyInputEdgebands,
   } = useMaterialColours(initialCabinets)
+
+  // Opening the edit modal live re-resolves that cabinet: the page-load map
+  // (dbLoadResolvedParts) rebuilds seam joints only from per-cabinet overrides —
+  // construction-method joint defaults and slide hardware aren't reconstructable
+  // there — so without this the modal's Top/Elevation/Side/3D under-report
+  // drilling on untouched cabinets.
+  useEffect(() => {
+    if (!editCabId) return
+    let cancelled = false
+    dbResolveAndPersistCabinet(editCabId).then(resolved => {
+      if (!cancelled && resolved) setResolvedParts(m => new Map(m).set(editCabId, resolved))
+    })
+    return () => { cancelled = true }
+  }, [editCabId, setResolvedParts])
 
   // Hidden-part-filtered view of the resolved map for on-canvas drawings (elevation
   // + 3D room). The raw map is kept for the edit modal, whose Parts tab needs the
@@ -266,6 +302,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     return () => svg.removeEventListener('wheel', handler)
   }, [canvasView])
 
+  usePinchZoom(svgRef, dispatchView, canvasView === 'plan')
+
   // Reset interaction state on every mount — handles the Next.js router cache
   // case where the component is reused with stale mode/drawStart.
   useEffect(() => {
@@ -323,7 +361,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !isInput(e.target)) { e.preventDefault(); void handleUndo() }
       if (((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey) && !isInput(e.target)) || ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && e.shiftKey && !isInput(e.target))) { e.preventDefault(); void handleRedo() }
-      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode('select'); setArmedDef(null); setArmedDraft(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
+      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode('select'); setArmedDef(null); setArmedDraft(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setDeleteCabsPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput(e.target)) {
         if (mode === 'draw_benchtop' && e.key === 'Backspace') { bt.undoVertex(); return }
         if (selected?.type === 'cabinet') handleDeleteCabinet(selected.id)
@@ -462,16 +500,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     dbMigrateLegacyKickMembers(room.id).then(m => { if (m) applyKickMutation(m) }).catch(e => console.error('legacy kick migrate', e))
   }, [room.id, applyKickMutation])
 
-  async function handleDeleteCabinet(id: string) {
-    if (!confirm('Delete this cabinet?')) return
-    captureSnapshot()
-    setCabinets(cs => cs.filter(c => c.id !== id))
-    setSelected(null)
-    applyKickMutation(await dbDeleteCabinet(id))
+  // Both open the confirm modal; confirmDeleteCabinets does the work.
+  function handleDeleteCabinet(id: string) {
+    setDeleteCabsPending([id])
+    setContextMenu(null)
   }
 
-  async function handleDeleteMultipleCabinets(ids: string[]) {
-    if (!confirm(`Delete ${ids.length} cabinets?`)) return
+  function handleDeleteMultipleCabinets(ids: string[]) {
+    if (!ids.length) return
+    setDeleteCabsPending(ids)
+    setContextMenu(null)
+  }
+
+  async function confirmDeleteCabinets() {
+    if (!deleteCabsPending) return
+    const ids = deleteCabsPending
+    setDeleteCabsPending(null)
     captureSnapshot()
     setCabinets(cs => cs.filter(c => !ids.includes(c.id)))
     setSelected(null)
@@ -583,6 +627,58 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
       })
     }
+  }
+
+  // Swap a placed cabinet for a library definition in place (right-click → Replace).
+  // Keeps wall, anchor, rotation, notes, neighbour types, width + height (each optional) and the
+  // label (when the class is unchanged); everything else — construction, faces,
+  // internals, depth — comes from the definition exactly as a fresh placement.
+  // A kick-run member stays in its run as a kick-less raised carcase. Inserts the new
+  // row BEFORE deleting the old one so the run never drops below its member count;
+  // the old row's per-part overrides/custom parts go with it (they belong to the old
+  // part set).
+  async function handleReplaceCabinet(cabId: string, definitionId: string, keepWidth: boolean, keepHeight: boolean) {
+    const old = cabinets.find(c => c.id === cabId)
+    if (!old || old.is_kick_assembly) return
+    const def = await dbLoadCabinetDefinition(definitionId)
+    if (!def) { setToast('Replace failed — library cabinet not found'); return }
+    captureSnapshot()
+    const sameClass = def.assembly_class === old.assembly_class
+    const { dy, dz } = resolveClassDims(def.assembly_class, { room, project, shop: shopDims })
+    const data = buildInstanceFromDefinition(def, {
+      room_id: room.id, wall_id: old.wall_id ?? '',
+      label: sameClass && old.label ? old.label : nextLabel(cabinets, def.assembly_class),
+      pos_x: old.pos_x, pos_y: old.pos_y, rotation: old.rotation,
+      dx: keepWidth ? old.dx : undefined,
+      cascade_dy: dy, cascade_dz: dz,
+      left_neighbour_type: old.left_neighbour_type ?? undefined, right_neighbour_type: old.right_neighbour_type ?? undefined,
+    })
+    data.wall_id = old.wall_id
+    data.notes = old.notes
+    if (keepHeight) data.dy = old.dy
+    if (sameClass) data.pos_z = old.pos_z
+    const floorKick = (def.assembly_class === 'base' || def.assembly_class === 'tall')
+      && def.has_toekick && def.toe_type !== 'leg' && def.toe_type !== 'none'
+    if (old.kick_run_id && floorKick) {
+      const kickH = cabinets.find(c => c.is_kick_assembly && c.kick_run_id === old.kick_run_id)?.dy ?? (old.pos_z || 0)
+      data.kick_run_id = old.kick_run_id
+      data.has_toekick = false
+      data.dy = keepHeight ? old.dy : Math.max(1, data.dy - kickH)   // member dy is already kick-less
+      data.pos_z = old.pos_z
+    }
+    const cabinet = await dbInsertCabinet(data)
+    if (!cabinet) { setToast('Replace failed — see console'); return }
+    setCabinets(cs => cs.map(c => c.id === old.id ? cabinet : c))
+    setResolvedParts(m => { const next = new Map(m); next.delete(old.id); return next })
+    setSelected({ type: 'cabinet', id: cabinet.id })
+    setMultiSelect(ms => ms.filter(id => id !== old.id))
+    const mut = await dbDeleteCabinet(old.id)
+    mut.resolved.delete(old.id)
+    applyKickMutation(mut)
+    await dbInsertDefinitionParts(def.id, cabinet.id)
+    const resolved = await dbResolveAndPersistCabinet(cabinet.id)
+    if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
+    setToast(`Replaced ${cabinet.label ?? 'cabinet'} with “${def.name}”`)
   }
 
   // Drop a library definition onto the plan canvas at the drop point (drag-and-drop
@@ -1462,11 +1558,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (v !== 'plan') {
       setMode('select'); setDrawStart(null); setPlaceGhost(null); setContextMenu(null)
     }
-    // Apply the destination view's default layer until the user takes manual control
-    // of the Detail dropdown (plan/elevation are the only views with a layer system).
-    if (!presetTouchedRef.current && (v === 'plan' || v === 'elevation')) {
-      setDisplayConfig(applyPreset(getUserPrefs().drawingPresets[v]))
-    }
     setCanvasView(v)
   }
 
@@ -1512,8 +1603,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     selected, cabinets, clipboard, setClipboard, setMode, setPlaceGhost,
     handleDeleteCabinet, handleDeleteWall,
     dispatchView, svgSize, fitToWalls, switchView,
-    displayConfig,
-    setDisplayConfig: (next => { presetTouchedRef.current = true; setDisplayConfig(next) }) as typeof setDisplayConfig,
+    openLayerManager: () => setShowLayerManager(true),
+    planGrid, setPlanGrid,
     setJobModalTab, setRoomModalTab,
     openReportModal: setReportScope,
     openObjectTree: () => setShowObjectTree(true),
@@ -1583,23 +1674,23 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               Section Cut
             </button>
           )}
-          <span className="text-[10px] text-gray-600 uppercase tracking-wider select-none">Detail</span>
-          <select
-            value={displayConfig.activePreset}
-            onChange={e => {
-              const val = e.target.value as PresetId
-              presetTouchedRef.current = true
-              if (val !== 'custom') setDisplayConfig(applyPreset(val))
-            }}
-            className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500 cursor-pointer"
-          >
-            {(Object.entries(DISPLAY_PRESETS) as [Exclude<PresetId, 'custom'>, { label: string }][]).map(([id, { label }]) => (
-              <option key={id} value={id}>{label}</option>
-            ))}
-            {displayConfig.activePreset === 'custom' && (
-              <option value="custom">Custom</option>
-            )}
-          </select>
+          {canvasView !== 'section' && (<>
+            <span className="text-[10px] text-gray-600 uppercase tracking-wider select-none">Layers</span>
+            <select
+              value={activeLayerSet?.id ?? ''}
+              onChange={e => {
+                if (e.target.value === '__manage__') { setShowLayerManager(true); return }
+                chooseLayerSet(e.target.value)
+              }}
+              className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500 cursor-pointer"
+            >
+              {!activeLayerSet && <option value="">{layerSetsApi.loading ? 'Loading…' : 'Default'}</option>}
+              {layerSetsApi.sets.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+              <option value="__manage__">Manage layers…</option>
+            </select>
+          </>)}
         </div>
       </div>
 
@@ -1637,6 +1728,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             <div className="relative flex-1 flex min-w-0">
             <CanvasSVG
               svgRef={svgRef}
+              planGrid={planGrid}
               walls={walls}
               cabinets={cabinets}
               view={view}
@@ -1646,7 +1738,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               armedDef={armedDef}
               resolvedParts={visibleResolvedParts}
               onCanvasDrop={dropDefinitionAt}
-              displayConfig={displayConfig}
+              layers={planLayers}
               drawStart={drawStart}
               drawCursor={drawCursor}
               drawThickness={drawThickness}
@@ -1742,7 +1834,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             room={room}
             elevWallId={elevWallId}
             selected={selected}
-            displayConfig={displayConfig}
+            layers={elevLayers}
             multiSelect={multiSelect}
             armedDef={armedDef}
             canEqualize={canEqualize}
@@ -1839,11 +1931,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeselect={() => { setSelected(null); setMultiSelect([]) }}
             onEditCabinet={id => { setEditCabInitialView('3d'); setEditCabId(id) }}
             onDeleteCabinet={id => handleDeleteCabinet(id)}
+            onReplaceCabinet={id => setReplaceCabId(id)}
             resolvedParts={visibleResolvedParts}
             materialColours={matColours}
             ebByMatId={ebByMatId}
             cameraStateRef={camera3DStateRef}
             resetSignal={reset3DSignal}
+            layers={layers3D}
           />
         )}
 
@@ -2031,6 +2125,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onAlignRight: handleAlignRight,
             onSplit: id => { setContextMenu(null); setSplitCabId(id) },
             onSaveToLibrary: id => { setContextMenu(null); setSaveLibCabId(id) },
+            onReplace: id => { setContextMenu(null); setReplaceCabId(id) },
             onJoinKicks: id => { void handleJoinKicks(id) },
             onDetachKick: id => { void handleDetachKickSingle(id) },
             onSeparateKicks: id => { void handleSeparateKicks(id) },
@@ -2075,9 +2170,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       })()}
 
       {deleteWallPending && (
-        <DeleteWallModal
+        <ConfirmDeleteModal
+          title="Delete Wall"
+          message="Cabinets on this wall will also be removed. This cannot be undone."
           onConfirm={confirmDeleteWall}
           onCancel={() => setDeleteWallPending(null)}
+        />
+      )}
+
+      {deleteCabsPending && (
+        <ConfirmDeleteModal
+          title={deleteCabsPending.length === 1 ? 'Delete Cabinet' : `Delete ${deleteCabsPending.length} Cabinets`}
+          message={deleteCabsPending.length === 1
+            ? 'Delete this cabinet?'
+            : `Delete the ${deleteCabsPending.length} selected cabinets?`}
+          onConfirm={() => void confirmDeleteCabinets()}
+          onCancel={() => setDeleteCabsPending(null)}
         />
       )}
 
@@ -2105,6 +2213,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         )
       })()}
 
+      {replaceCabId && (() => {
+        const cab = cabinets.find(c => c.id === replaceCabId)
+        if (!cab) return null
+        return (
+          <ReplaceCabinetModal
+            cab={cab}
+            onClose={() => setReplaceCabId(null)}
+            onReplace={(defId, keepWidth, keepHeight) => { setReplaceCabId(null); void handleReplaceCabinet(cab.id, defId, keepWidth, keepHeight) }}
+          />
+        )
+      })()}
+
       {kickSettingsRunId && (() => {
         const asm = cabinets.find(c => c.kick_run_id === kickSettingsRunId && c.is_kick_assembly)
         if (!asm) return null
@@ -2122,6 +2242,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[60] bg-gray-800 border border-gray-700 text-gray-100 text-sm px-4 py-2 rounded-lg shadow-xl pointer-events-none">
           {toast}
         </div>
+      )}
+
+      {showLayerManager && (
+        <LayerManagerPanel
+          api={layerSetsApi}
+          initialView={canvasView === 'section' ? 'plan' : canvasView}
+          activeSetId={activeLayerSet?.id ?? null}
+          onPreview={setLayerPreview}
+          onUse={chooseLayerSet}
+          onClose={() => { setLayerPreview(null); setShowLayerManager(false) }}
+        />
       )}
 
       {jobModalTab && project && (
@@ -2163,6 +2294,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           cabinets={cabinets}
           resolvedParts={resolvedParts}
           benchtops={benchtops}
+          layerSets={layerSetsApi.sets}
+          activeLayerSetId={activeLayerSet?.id ?? null}
           onClose={() => setReportScope(null)}
         />
       )}

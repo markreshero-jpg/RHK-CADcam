@@ -1,13 +1,6 @@
 import { type SnapSettings, DEFAULT_SNAP_SETTINGS, normaliseSnapSettings } from './canvasSnap'
+import { GRID_STEPS } from './geometry'
 import { type ElevSnapSettings, DEFAULT_ELEV_SNAP_SETTINGS, normaliseElevSnapSettings } from './elevationSnap'
-
-export type DrawingPreset = 'schematic' | 'design' | 'working' | 'face_elevation' | 'full_parts' | 'line_drawing'
-
-/** Per-canvas-view default drawing layer (preset). Section view has no layer system yet. */
-export interface DrawingPresets {
-  plan:      DrawingPreset
-  elevation: DrawingPreset
-}
 
 export type ViewStyle = 'wire' | 'solid'
 
@@ -21,7 +14,9 @@ export interface CabinetViewStyles {
 
 export interface UserPrefs {
   invertScroll: boolean
-  drawingPresets:     DrawingPresets
+  /** Default display layer set (drawing_layer_sets id) — one set drives plan,
+   *  elevation and 3D. May hold a legacy preset key; resolve with findLayerSet. */
+  layerSetId:         string
   cabinetViewStyles:  CabinetViewStyles
   snapSettings:     SnapSettings
   elevSnapSettings: ElevSnapSettings
@@ -30,14 +25,19 @@ export interface UserPrefs {
   /** Part dimensions shown in the cabinet editor include edgebanding (finished
    *  size, the default). Off = show the cut (board) size, tape deducted. */
   includeBandingInPartSize: boolean
+  /** Plan-view reference grid: dots drawn behind the drawing. */
+  planGrid: PlanGridPrefs
 }
+
+export interface PlanGridPrefs {
+  visible: boolean
+  /** Dot spacing in mm; 0 = automatic (picked from the zoom). */
+  step: number
+}
+
+export const DEFAULT_PLAN_GRID: PlanGridPrefs = { visible: true, step: 0 }
 
 const KEY = 'rhk_user_prefs'
-
-const DEFAULT_DRAWING_PRESETS: DrawingPresets = {
-  plan:      'full_parts',
-  elevation: 'full_parts',
-}
 
 const DEFAULT_CABINET_VIEW_STYLES: CabinetViewStyles = {
   top:       'wire',
@@ -48,22 +48,27 @@ const DEFAULT_CABINET_VIEW_STYLES: CabinetViewStyles = {
 
 const DEFAULTS: UserPrefs = {
   invertScroll: false,
-  drawingPresets:    DEFAULT_DRAWING_PRESETS,
+  layerSetId:        '',
   cabinetViewStyles: DEFAULT_CABINET_VIEW_STYLES,
   snapSettings:     DEFAULT_SNAP_SETTINGS,
   elevSnapSettings: DEFAULT_ELEV_SNAP_SETTINGS,
   optimiserPartCols: null,
   includeBandingInPartSize: true,
+  planGrid: DEFAULT_PLAN_GRID,
 }
 
-function normaliseDrawingPresets(raw: unknown, legacy: unknown): DrawingPresets {
-  // legacy = old singular `defaultDrawingPreset` field; seeds both views if present.
-  const fallback = typeof legacy === 'string' ? (legacy as DrawingPreset) : DEFAULT_DRAWING_PRESETS.plan
-  const r = (raw ?? {}) as Partial<DrawingPresets>
-  return {
-    plan:      r.plan      ?? fallback,
-    elevation: r.elevation ?? fallback,
-  }
+// Legacy fields: per-view `drawingPresets.plan` and the older singular
+// `defaultDrawingPreset` (preset keys like 'full_parts'). The plan choice wins.
+function normaliseLayerSetId(stored: Record<string, unknown>): string {
+  const pick = (v: unknown) => (typeof v === 'string' && v ? v : null)
+  const dp = (stored.drawingPresets ?? {}) as Record<string, unknown>
+  return pick(stored.layerSetId) ?? pick(dp.plan) ?? pick(stored.defaultDrawingPreset) ?? ''
+}
+
+function normalisePlanGrid(raw: unknown): PlanGridPrefs {
+  const r = (raw ?? {}) as Partial<PlanGridPrefs>
+  const step = GRID_STEPS.includes(r.step as (typeof GRID_STEPS)[number]) ? r.step! : 0
+  return { visible: r.visible ?? DEFAULT_PLAN_GRID.visible, step }
 }
 
 function normaliseCabinetViewStyles(raw: unknown): CabinetViewStyles {
@@ -83,10 +88,11 @@ export function getUserPrefs(): UserPrefs {
     const merged = { ...DEFAULTS, ...stored }
     return {
       ...merged,
-      drawingPresets:    normaliseDrawingPresets(stored.drawingPresets, stored.defaultDrawingPreset),
+      layerSetId:        normaliseLayerSetId(stored),
       cabinetViewStyles: normaliseCabinetViewStyles(stored.cabinetViewStyles),
       snapSettings:     normaliseSnapSettings(merged.snapSettings),
       elevSnapSettings: normaliseElevSnapSettings(merged.elevSnapSettings),
+      planGrid:         normalisePlanGrid(merged.planGrid),
     }
   } catch {
     return DEFAULTS

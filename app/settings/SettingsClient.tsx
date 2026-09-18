@@ -17,8 +17,9 @@ import DrillLibraryClient from '@/app/settings/DrillLibraryClient'
 import CncToolSetsClient from '@/app/settings/CncToolSetsClient'
 import CncMachinesClient from '@/app/settings/CncMachinesClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
-import { getUserPrefs, setUserPrefs, type DrawingPreset, type DrawingPresets, type CabinetViewStyles, type ViewStyle } from '@/src/lib/userPrefs'
-import { DISPLAY_PRESETS } from '@/src/lib/displayConfig'
+import { getUserPrefs, setUserPrefs, type CabinetViewStyles, type ViewStyle } from '@/src/lib/userPrefs'
+import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
+import { findLayerSet } from '@/src/lib/displayLayers/legacy'
 import {
   getPalette, setUserPaletteOverride, DEFAULT_PALETTE,
   PALETTE_CATEGORY_ORDER, PALETTE_CATEGORY_LABELS,
@@ -358,14 +359,15 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
   // User preferences (localStorage)
   const [invertScroll, setInvertScroll] = useState(false)
   const [includeBanding, setIncludeBanding] = useState(true)
-  const [drawingPresets, setDrawingPresets] = useState<DrawingPresets>({ plan: 'full_parts', elevation: 'full_parts' })
+  const [layerSetId, setLayerSetId] = useState('')
+  const layerSets = useLayerSets()
   const [cabinetViewStyles, setCabinetViewStyles] = useState<CabinetViewStyles>({ top: 'wire', elevation: 'wire', side: 'wire', '3d': 'wire' })
   const [palette, setPalette] = useState<PartPalette>(DEFAULT_PALETTE)
   useEffect(() => {
     const prefs = getUserPrefs()
     setInvertScroll(prefs.invertScroll)
     setIncludeBanding(prefs.includeBandingInPartSize)
-    setDrawingPresets(prefs.drawingPresets)
+    setLayerSetId(prefs.layerSetId)
     setCabinetViewStyles(prefs.cabinetViewStyles)
     setPalette(getPalette())
   }, [])
@@ -393,10 +395,9 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
     setUserPrefs({ includeBandingInPartSize: val })
   }
 
-  function handleDrawingPreset(view: keyof DrawingPresets, val: DrawingPreset) {
-    const next = { ...drawingPresets, [view]: val }
-    setDrawingPresets(next)
-    setUserPrefs({ drawingPresets: next })
+  function handleLayerSet(val: string) {
+    setLayerSetId(val)
+    setUserPrefs({ layerSetId: val })
   }
 
   function handleCabinetViewStyle(view: keyof CabinetViewStyles, val: ViewStyle) {
@@ -579,28 +580,26 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">Default Drawing Layer</p>
+                  <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">Default Layer Set</p>
                   <div className="border border-edge-strong rounded-lg overflow-hidden divide-y divide-edge-strong/60">
-                    {([
-                      { view: 'plan' as const,      label: 'Plan view',      hint: 'Starting detail level in the plan canvas' },
-                      { view: 'elevation' as const, label: 'Elevation view', hint: 'Starting detail level in the elevation canvas' },
-                    ]).map(row => (
-                      <div key={row.view} className="flex items-center justify-between px-4 py-3 bg-surface">
-                        <div>
-                          <p className="text-xs font-medium text-ink">{row.label}</p>
-                          <p className="text-[11px] text-ink-subtle mt-0.5">{row.hint}</p>
-                        </div>
-                        <select
-                          value={drawingPresets[row.view]}
-                          onChange={e => handleDrawingPreset(row.view, e.target.value as DrawingPreset)}
-                          className="bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
-                        >
-                          {(Object.entries(DISPLAY_PRESETS) as [DrawingPreset, { label: string }][]).map(([id, { label }]) => (
-                            <option key={id} value={id}>{label}</option>
-                          ))}
-                        </select>
+                    <div className="flex items-center justify-between px-4 py-3 bg-surface">
+                      <div>
+                        <p className="text-xs font-medium text-ink">Layer set</p>
+                        <p className="text-[11px] text-ink-subtle mt-0.5">Used in plan, elevation and 3D. Changing it in the canvas updates this too.</p>
                       </div>
-                    ))}
+                      <select
+                        value={findLayerSet(layerSets.sets, layerSetId)?.id ?? ''}
+                        onChange={e => handleLayerSet(e.target.value)}
+                        className="bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
+                      >
+                        {!findLayerSet(layerSets.sets, layerSetId) && (
+                          <option value="">{layerSets.loading ? 'Loading…' : 'Default'}</option>
+                        )}
+                        {layerSets.sets.map(ls => (
+                          <option key={ls.id} value={ls.id}>{ls.name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
 

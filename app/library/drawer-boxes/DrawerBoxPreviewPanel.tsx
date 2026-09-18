@@ -11,6 +11,7 @@ import { DrawerBoxRules, DEFAULT_DB_RULES, Material, ResolvedDrawerBoxPart, Draw
 import { resolveDrawerBox, mergeDbRules } from '@/src/lib/resolver/resolveDrawerBox'
 import { effectiveDbEdgeSides } from '@/src/lib/drawerBoxConfig'
 import type { MatColour } from './DrawerBox3DView'
+import { ebColour } from '@/src/lib/partPalette'
 
 const DrawerBox3DView = dynamic(() => import('./DrawerBox3DView'), { ssr: false })
 
@@ -627,7 +628,7 @@ export default function DrawerBoxPreviewPanel({
   }), [selMat])
 
   const ebSpec = selEb
-    ? { thick: Number(selEb.thickness), color: selEb.color ?? matCol.edge }
+    ? { thick: Number(selEb.thickness), color: ebColour(selEb.color) ?? matCol.face }
     : undefined
 
   // Per-id lookups so the 3D view can render each part with its own material/banding
@@ -649,7 +650,7 @@ export default function DrawerBoxPreviewPanel({
     for (const eb of edgebands) {
       map[eb.id] = {
         thick: Number(eb.thickness),
-        color: eb.color ?? FALLBACK_COL.edge,
+        color: ebColour(eb.color) ?? FALLBACK_COL.edge,
       }
     }
     return map

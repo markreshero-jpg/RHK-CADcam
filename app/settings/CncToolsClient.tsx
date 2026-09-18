@@ -16,6 +16,7 @@ import {
   shapeTypeFor, defaultExtraParams, SHAPE_EXTRA_PARAMS,
   type ToolShape,
 } from '@/src/lib/cnc/toolProfile'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 // tool_type values mirror the DB check constraint.
 const TOOL_TYPES = [
@@ -96,7 +97,7 @@ export default function CncToolsClient() {
   }
 
   async function deleteTool(id: string) {
-    if (!confirm('Delete this tool permanently? (Use the Active toggle to retire it instead.)')) return
+    if (!(await confirmDelete({ title: 'Delete Tool', message: 'Delete this tool permanently? (Use the Active toggle to retire it instead.)' }))) return
     const { error } = await supabase.from('cnc_tools').delete().eq('id', id)
     if (error) { alert(`Delete failed: ${error.message}`); return }
     setTools(p => p.filter(t => t.id !== id))

@@ -130,6 +130,7 @@ export interface ConstructionRules {
   // Toe kick
   TOEH:     number   // toe kick height (mm)
   TOE_TYPE: 'ladder' | 'leg' | 'none'
+  TOEFC:    number   // toe floor clearance — subframe lift off the floor (mm)
   TOESP:    number   // spreader spacing (mm)
   TOESCF:   number   // toe scribe front
   TOESCB:   number   // toe scribe back
@@ -152,6 +153,13 @@ export interface ConstructionRules {
   ADJSB_B:  number   // adj shelf setback back
   ADJSL:    number   // adj shelf clearance left
   ADJSR:    number   // adj shelf clearance right
+  // Pin-hole layout: a qty2-sized cluster centred on each shelf vs one
+  // pitch-snapped bank spanning the whole compartment (line boring).
+  ADJ_DRILL: 'per_shelf' | 'full_bank'
+  // Rows drilled per adj-shelf seam: 0 = auto (joint's qty2 in cluster mode,
+  // pitch-filled extent in bank mode). Overridable per cabinet via
+  // rule_overrides, and per individual seam via the carcase_joints entry.
+  ADJ_ROWS: number
 
   // Internal — fixed shelf
   FIXSB_F:  number   // fixed shelf setback front
@@ -216,11 +224,11 @@ export const DEFAULT_JOINERY: JoineryConfig = {
 
 // Default construction rules — Standard Frameless EU
 export const DEFAULT_RULES: ConstructionRules = {
-  TOEH: 150, TOE_TYPE: 'ladder', TOESP: 450,
+  TOEH: 150, TOE_TYPE: 'ladder', TOEFC: 16.5, TOESP: 450,
   TOESCF: 40, TOESCB: 0, TOESCL: 0, TOESCR: 0,
   SCRBK: 0, SCRBT: 0, SCRL: 0, SCRR: 0, SCRT: 0,
   TOP_TYPE: 'front_rail', RD: 100,
-  ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1,
+  ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1, ADJ_DRILL: 'per_shelf', ADJ_ROWS: 0,
   FIXSB_F: 0, FIXSB_B: 0,
   IDCL: 2, IDCR: 2, IDFAO: 0, SLIDE_SETBACK: 20,
   REVT: 4, REVB: 0, REVL: 1, REVR: 1,
@@ -390,6 +398,25 @@ export const DEFAULT_DB_RULES: DrawerBoxRules = {
 
 // ── Joint Types ───────────────────────────────────────────────
 
+// One cabinet_instances.carcase_joints entry. Historically a joint_type_id
+// string (override) or null (suppressed); the object form adds a per-seam
+// rows override — `joint` omitted means "inherit the joint from the cascade,
+// only override the rows".
+export type SeamJointAssign = string | null | { joint?: string | null; rows?: number }
+
+// The joint component of an assignment: string = override, null = suppressed,
+// undefined = inherit from the CM cascade.
+export function seamAssignJoint(v: SeamJointAssign | undefined): string | null | undefined {
+  if (v === undefined || v === null || typeof v === 'string') return v
+  return v.joint
+}
+
+// The rows component (adj-shelf seams): undefined = no per-seam override.
+export function seamAssignRows(v: SeamJointAssign | undefined): number | undefined {
+  const r = (v !== null && typeof v === 'object') ? v.rows : undefined
+  return r && r > 0 ? r : undefined
+}
+
 export type JointTargetPart = 'part_a' | 'part_b'
 export type JointMachineOp  = 'drill' | 'route' | 'pocket' | 'saw'
 export type JointFace       = 'normal' | 'end' | 'top' | 'bottom'
@@ -408,12 +435,44 @@ export interface JointTypeOp {
   offset_z_mm:       number
   qty:               number
   spacing_mm:        number | null
+  // 2nd axis: holes across the joint edge, centred on the joint line
+  // (e.g. the vertical adjustable-shelf pin cluster on a gable face).
+  qty2:              number
+  spacing2_mm:       number | null
   // Three-column tool pattern (drill_block_3_tool_assignment_refactor).
   router_tool_id:    string | null
   drill_id:          string | null
   auto_tool:         boolean
   notes:             string | null
   expressions:       Record<string, string> | null
+}
+
+// Single source of truth for mapping a raw joint_type_operations row to a
+// JointTypeOp — every loader must use this so new columns can't silently drop
+// out of one copy of the mapping (qty2/spacing2_mm once did exactly that).
+export function rowToJointTypeOp(op: Record<string, unknown>): JointTypeOp {
+  return {
+    id:                op.id as string,
+    joint_type_id:     op.joint_type_id as string,
+    operation_order:   op.operation_order as number,
+    target_part:       op.target_part as JointTargetPart,
+    machine_operation: op.machine_operation as JointMachineOp,
+    face:              (op.face as JointFace) ?? 'normal',
+    tool_diameter_mm:  op.tool_diameter_mm as number,
+    depth_mm:          op.depth_mm as number,
+    offset_x_mm:       (op.offset_x_mm as number) ?? 0,
+    offset_y_mm:       (op.offset_y_mm as number) ?? 0,
+    offset_z_mm:       (op.offset_z_mm as number) ?? 0,
+    qty:               (op.qty as number) ?? 1,
+    spacing_mm:        (op.spacing_mm as number | null) ?? null,
+    qty2:              (op.qty2 as number) ?? 1,
+    spacing2_mm:       (op.spacing2_mm as number | null) ?? null,
+    router_tool_id:    (op.router_tool_id as string | null) ?? null,
+    drill_id:          (op.drill_id as string | null) ?? null,
+    auto_tool:         (op.auto_tool as boolean) ?? false,
+    notes:             (op.notes as string | null) ?? null,
+    expressions:       (op.expressions as Record<string, string> | null) ?? null,
+  }
 }
 
 // A joint assignment resolved for one seam — ready for 3D display and eventual drilling spec export
@@ -428,6 +487,19 @@ export interface ResolvedSeamJoint {
   // Only set for the back:bottom seam — selects the drill orientation:
   // 'butts_into_back' → front-to-back (Z) holes, 'back_on_bottom' → vertical (Y) holes.
   bottom_back_join?: 'back_on_bottom' | 'butts_into_back'
+  // Only set for internal seams (shelf/divider ↔ support). The seam key encodes
+  // the part edge ('int_adj_shelf_0:left'), NOT the support part — the actual
+  // support lives in part_b_key ('left_side' | 'int_divider_1' | 'bottom' | …),
+  // so it can change (e.g. a divider inserted) without invalidating overrides.
+  internal_edge?: 'left' | 'right' | 'top' | 'bottom'
+  // Full-bank adj-shelf drilling (ADJ_DRILL: 'full_bank'): the vertical extent
+  // of the compartment this bank spans. One seam per compartment side (anchored
+  // to its lowest shelf) replaces the per-shelf cluster seams; holes run the
+  // bank at the joint's spacing2 pitch, centred in the extent.
+  bank?: { y0: number; y1: number }
+  // Adj-shelf row-count override (per-seam entry, else cabinet ADJ_ROWS rule):
+  // cluster mode replaces the joint's qty2; bank mode replaces the auto count.
+  rows_override?: number
 }
 
 // ── Drawer Box Input ──────────────────────────────────────────
@@ -573,9 +645,14 @@ export interface CabinetInput {
 
   // Construction rules (already merged from system → job → room → cabinet)
   rules:           ConstructionRules
+  // The same cascade WITHOUT the cabinet layer (system → schedule → method →
+  // job → room). Lets a cabinet-level rule_overrides edit be re-merged locally
+  // instead of reloading the whole cascade — see dbUpdateCabinet's fast path.
+  // Only set by loadCabinetInput; the resolver itself never reads it.
+  rules_base?:     ConstructionRules
 
   // Joint assignments (resolved before passing to resolver)
-  carcase_joints?:   Record<string, string | null>   // per-cabinet overrides: seamKey → joint_type_id (null = suppressed)
+  carcase_joints?:   Record<string, SeamJointAssign> // per-cabinet overrides: seamKey → joint/suppress/rows (see SeamJointAssign)
   joint_defaults?:   Record<string, string>           // from construction method schedule row: genericSeamKey → joint_type_id
   joint_type_ops?:   Record<string, JointTypeOp[]>   // keyed by joint_type_id
   joint_type_names?: Record<string, string>           // joint_type_id → name
@@ -961,6 +1038,10 @@ export interface ResolvedCustomPart {
   visible:       boolean
   show_in_room:  boolean
   orientation:   'flat' | 'side' | 'front'
+  // Room loaders only: parts_library key (applied_panel / filler_strip / …) —
+  // drives the display-layer item (src/lib/displayLayers/customPartKinds.ts).
+  part_library_id?: string | null
+  library_key?:     string | null
 }
 
 export interface ResolvedCabinet {

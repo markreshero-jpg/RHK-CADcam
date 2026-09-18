@@ -1,0 +1,190 @@
+// ── Display layer item registry ───────────────────────────────────────────────
+// The fixed list of everything a layer set can show / hide, per canvas view.
+// Spec: z_display_layers/DISPLAY-LAYERS-SPEC.md
+// One active layer set drives every view; each set holds per-view item settings.
+//
+// Item ids are stored in drawing_layer_sets.settings — NEVER rename or reuse one.
+// A new module that draws on the canvas adds its items here and gates rendering
+// through LayerView.show()/props() (see resolve.ts).
+
+export type LayerViewId = 'plan' | 'elevation' | '3d'
+export const LAYER_VIEWS: { id: LayerViewId; label: string }[] = [
+  { id: 'plan',      label: 'Plan' },
+  { id: 'elevation', label: 'Elevation' },
+  { id: '3d',        label: '3D' },
+]
+
+export type LayerStyle = 'solid' | 'dashed' | 'ghost'
+
+export interface ItemSetting {
+  visible: boolean
+  style:   LayerStyle
+  /** Phase 3: override colour (#rrggbb). Unset = the renderer's normal colour. */
+  color?:  string
+  /** Phase 3: line-weight multiplier (text items: size multiplier). Unset = 1. */
+  weight?: number
+  /** Opacity multiplier 0.1–1 (applies on top of the style). Unset = 1. */
+  opacity?: number
+}
+
+export const WEIGHT_OPTIONS = [0.5, 1, 1.5, 2, 3] as const
+export const OPACITY_OPTIONS = [1, 0.75, 0.5, 0.25, 0.1] as const
+
+export type LayerGroup =
+  | 'carcase' | 'kicks' | 'fronts' | 'internals' | 'hardware' | 'panels'
+  | 'benchtops' | 'room' | 'labels' | 'dimensions'
+
+export const LAYER_GROUPS: { id: LayerGroup; label: string }[] = [
+  { id: 'carcase',    label: 'Carcase' },
+  { id: 'kicks',      label: 'Kicks' },
+  { id: 'fronts',     label: 'Fronts' },
+  { id: 'internals',  label: 'Internals' },
+  { id: 'hardware',   label: 'Hardware' },
+  { id: 'panels',     label: 'Panels' },
+  { id: 'benchtops',  label: 'Benchtops' },
+  { id: 'room',       label: 'Room' },
+  { id: 'labels',     label: 'Labels' },
+  { id: 'dimensions', label: 'Dimensions' },
+]
+
+export interface LayerItemDef {
+  id:     string
+  group:  LayerGroup
+  label:  string
+  views:  LayerViewId[]
+  /** Default for every view that can render it. */
+  default: ItemSetting
+  /** Per-view default overrides (e.g. kicks hidden in plan by default). */
+  viewDefaults?: Partial<Record<LayerViewId, Partial<ItemSetting>>>
+  hint?:  string
+}
+
+const ON:  ItemSetting = { visible: true,  style: 'solid' }
+const OFF: ItemSetting = { visible: false, style: 'solid' }
+const ALL: LayerViewId[] = ['plan', 'elevation', '3d']
+
+export const LAYER_ITEMS: LayerItemDef[] = [
+  // Carcase
+  { id: 'carcass_outline', group: 'carcase', label: 'Cabinet outline', views: ['plan', 'elevation'], default: ON,
+    hint: 'Plan footprint; elevation box while parts are loading or resizing' },
+  { id: 'carcass_gables', group: 'carcase', label: 'Gables',       views: ALL, default: ON },
+  { id: 'carcass_top',    group: 'carcase', label: 'Tops / rails', views: ALL, default: ON },
+  { id: 'carcass_bottom', group: 'carcase', label: 'Bottoms',      views: ALL, default: ON },
+  { id: 'carcass_back',   group: 'carcase', label: 'Backs',        views: ['plan', '3d'], default: ON },
+
+  // Kicks
+  { id: 'kick_faces',     group: 'kicks', label: 'Kick boards',        views: ALL, default: ON,
+    viewDefaults: { plan: { visible: false } } },
+  { id: 'kick_spreaders', group: 'kicks', label: 'Spreaders / ladder', views: ALL, default: ON,
+    viewDefaults: { plan: { visible: false } } },
+
+  // Fronts
+  { id: 'doors',          group: 'fronts', label: 'Doors',          views: ALL, default: ON },
+  { id: 'drawer_fronts',  group: 'fronts', label: 'Drawer fronts',  views: ALL, default: ON },
+  { id: 'false_panels',   group: 'fronts', label: 'False panels',   views: ['elevation', '3d'], default: ON },
+  { id: 'door_swings',    group: 'fronts', label: 'Door swings',    views: ['plan'], default: ON },
+  { id: 'drawer_lines',   group: 'fronts', label: 'Drawer lines',   views: ['plan'], default: ON },
+  { id: 'door_chevrons',  group: 'fronts', label: 'Door chevrons',  views: ['elevation'], default: ON },
+  { id: 'drawer_labels',  group: 'fronts', label: 'Drawer labels',  views: ['elevation'], default: ON },
+
+  // Internals
+  { id: 'internal_outline', group: 'internals', label: 'Interior marker', views: ['plan'], default: OFF,
+    hint: 'Dashed inset box on cabinets with internals' },
+  { id: 'shelves',        group: 'internals', label: 'Shelves',               views: ['elevation', '3d'], default: ON },
+  { id: 'dividers',       group: 'internals', label: 'Dividers',              views: ['elevation', '3d'], default: ON },
+  { id: 'inner_drawers',  group: 'internals', label: 'Inner drawers / pull-outs', views: ['elevation', '3d'], default: ON },
+  { id: 'accessories',    group: 'internals', label: 'Accessories',           views: ['elevation', '3d'], default: ON },
+  { id: 'shelf_labels',   group: 'internals', label: 'Shelf labels',          views: ['elevation'], default: ON },
+  { id: 'inner_drawer_labels', group: 'internals', label: 'Inner drawer labels', views: ['elevation'], default: ON },
+
+  // Hardware — hidden by default in plan + 3D (3D models only load when shown).
+  // ('hardware' was a Phase-1 item id — retired, split into the items below.)
+  { id: 'drawer_boxes',   group: 'hardware', label: 'Drawer boxes',        views: ALL, default: ON,
+    viewDefaults: { plan: { visible: false }, '3d': { visible: false } } },
+  { id: 'drawer_runners', group: 'hardware', label: 'Drawer runners',      views: ALL, default: ON,
+    viewDefaults: { plan: { visible: false }, '3d': { visible: false } } },
+  { id: 'inner_drawer_runners', group: 'hardware', label: 'Inner drawer / pull-out runners', views: ['elevation', '3d'], default: ON,
+    viewDefaults: { '3d': { visible: false } } },
+  { id: 'hinges',         group: 'hardware', label: 'Hinges + plates',     views: ['elevation', '3d'], default: ON,
+    viewDefaults: { '3d': { visible: false } }, hint: 'Elevation: cup bores; 3D: hinge + plate models' },
+  { id: 'machining',      group: 'hardware', label: 'Drilling / machining', views: ['elevation', '3d'], default: ON,
+    viewDefaults: { '3d': { visible: false } }, hint: 'Joint + hardware bores and hand-added operations' },
+
+  // Panels
+  // Added parts, split by parts_library key (Phase 3b) — see customPartKinds.ts.
+  // custom_panels keeps its Phase-1 id (stored in sets) = everything not below.
+  { id: 'applied_panels', group: 'panels', label: 'Applied / end panels', views: ALL, default: ON },
+  { id: 'fillers',        group: 'panels', label: 'Fillers',              views: ALL, default: ON },
+  { id: 'custom_panels',  group: 'panels', label: 'Other added parts',    views: ALL, default: ON,
+    hint: 'Added parts that are not applied panels or fillers (scribe mould, nailer, gusset…)' },
+
+  // Benchtops
+  { id: 'benchtops',      group: 'benchtops', label: 'Benchtops', views: ['plan'], default: ON },
+
+  // Room
+  { id: 'walls',          group: 'room', label: 'Walls', views: ['3d'], default: ON },
+
+  // Labels
+  { id: 'cabinet_labels', group: 'labels', label: 'Cabinet names', views: ['plan', 'elevation'], default: ON },
+  { id: 'cabinet_sizes',  group: 'labels', label: 'Cabinet sizes', views: ['plan', 'elevation'], default: ON },
+
+  // Dimensions
+  { id: 'dim_wall_overall',     group: 'dimensions', label: 'Wall overall',       views: ['plan'], default: ON },
+  { id: 'dim_base_chain',       group: 'dimensions', label: 'Base chain',         views: ['plan'], default: ON },
+  { id: 'dim_wall_chain',       group: 'dimensions', label: 'Wall-cabinet chain', views: ['plan'], default: ON },
+  { id: 'dim_elev_height',      group: 'dimensions', label: 'Height chain',       views: ['elevation'], default: ON },
+  { id: 'dim_elev_floor_chain', group: 'dimensions', label: 'Floor cabinet widths', views: ['elevation'], default: ON },
+  { id: 'dim_elev_wall_chain',  group: 'dimensions', label: 'Overhead cabinet widths', views: ['elevation'], default: ON },
+]
+
+export const LAYER_ITEM_BY_ID: Record<string, LayerItemDef> =
+  Object.fromEntries(LAYER_ITEMS.map(i => [i.id, i]))
+
+export function itemsForView(view: LayerViewId): LayerItemDef[] {
+  return LAYER_ITEMS.filter(i => i.views.includes(view))
+}
+
+export function itemDefault(item: LayerItemDef, view: LayerViewId): ItemSetting {
+  return { ...item.default, ...(item.viewDefaults?.[view] ?? {}) }
+}
+
+// ── Stored set shape ─────────────────────────────────────────────────────────
+
+export interface ViewLayerSettings {
+  items?: Record<string, Partial<ItemSetting>>
+  /** Elevation only: outline-only rendering in part-palette colours. */
+  lineDrawing?: boolean
+  /** Phase 3: view background colour (#rrggbb). Unset = the view's default. */
+  background?: string
+}
+export type LayerSetSettings = Partial<Record<LayerViewId, ViewLayerSettings>>
+
+export interface LayerSet {
+  id:         string            // drawing_layer_sets uuid
+  name:       string
+  sort_order: number
+  settings:   LayerSetSettings
+}
+
+// Part-key → item mapping helpers so every renderer classifies parts identically.
+export function casePartItem(partKey: string): string {
+  if (partKey === 'left_side' || partKey === 'right_side') return 'carcass_gables'
+  if (partKey === 'bottom') return 'carcass_bottom'
+  if (partKey === 'back') return 'carcass_back'
+  return 'carcass_top'            // full_top, front_rail, back_rail
+}
+export function kickPartItem(partKey: string): string {
+  return partKey === 'spreader_vertical' || partKey === 'spreader_horizontal' ? 'kick_spreaders' : 'kick_faces'
+}
+export function internalPartItem(partType: string): string {
+  if (partType === 'adj_shelf' || partType === 'fixed_shelf') return 'shelves'
+  if (partType === 'divider') return 'dividers'
+  if (partType === 'accessory') return 'accessories'
+  return 'inner_drawers'          // inner_drawer_*, pull_out_*
+}
+export function faceZoneItem(faceType: string): string | null {
+  if (faceType === 'door') return 'doors'
+  if (faceType === 'drawer_face') return 'drawer_fronts'
+  if (faceType === 'false_panel') return 'false_panels'
+  return null                     // open
+}

@@ -15,6 +15,7 @@ import { supabase } from '@/src/lib/supabase'
 import EntryMethodPreview from './EntryMethodPreview'
 import PerimeterEntryPreview from './PerimeterEntryPreview'
 import DrillBlockSetup from '@/app/settings/DrillBlockSetup'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 interface Machine {
   id: string; name: string; brand: string | null; model: string | null
@@ -203,7 +204,7 @@ export default function CncMachinesClient() {
     setNewName(''); setSelMachine((data as Machine).id)
   }
   async function deleteMachine(id: string) {
-    if (!confirm('Delete this machine and its profiles?')) return
+    if (!(await confirmDelete({ title: 'Delete Machine', message: 'Delete this machine and its profiles?' }))) return
     const { error } = await supabase.from('cnc_machines').delete().eq('id', id)
     if (error) { alert(`Delete failed: ${error.message}`); return }
     setMachines(p => p.filter(m => m.id !== id)); setProfiles(p => p.filter(pr => pr.cnc_machine_id !== id))
@@ -229,7 +230,7 @@ export default function CncMachinesClient() {
     setProfiles(p => [...p, data as Profile]); setSelProfile((data as Profile).id)
   }
   async function deleteProfile(id: string) {
-    if (!confirm('Delete this cutting profile?')) return
+    if (!(await confirmDelete({ title: 'Delete Cutting Profile', message: 'Delete this cutting profile?' }))) return
     const { error } = await supabase.from('cnc_machine_profiles').delete().eq('id', id)
     if (error) { alert(`Delete failed: ${error.message}`); return }
     setProfiles(p => p.filter(pr => pr.id !== id))

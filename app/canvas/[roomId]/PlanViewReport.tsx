@@ -1,13 +1,18 @@
 // New plan-view report — parallel to the existing `shop_drawing_plan`.
-// Toggleable SVG layers (persisted to localStorage) + true-scale PDF export
+// Drawing content follows a display layer set (picker in the toolbar); page
+// extras are toggles persisted to localStorage. True-scale PDF export
 // via jsPDF + svg2pdf.js. The SVG viewBox stays in model mm; svg2pdf renders it
 // into a paper-mm box of size vbW/scale × vbH/scale, giving a true 1:scale plot.
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
 import type { Project, Room, Wall, CabinetInstance } from '@/src/lib/types'
-import PlanViewReportSVG, { type PlanViewLayers } from './PlanViewReportSVG'
+import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import type { LayerSet } from '@/src/lib/displayLayers/registry'
+import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
+import PlanViewReportSVG, { type PlanViewPageOptions } from './PlanViewReportSVG'
+import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
 
 const PAPER: Record<string, { w: number; h: number }> = {
   A4L: { w: 297, h: 210 },
@@ -19,37 +24,41 @@ const STANDARD_SCALES = [5, 10, 15, 20, 25, 30, 40, 50, 100]
 
 const MARGIN = 10   // mm, usable-area margin on all sides
 const LS_KEY = 'plan-view-layers'
-const DEFAULT_LAYERS: PlanViewLayers = {
-  labels: true, wallNames: true, dimensions: true, doorSwings: true, drawers: true, hatch: true, titleBlock: true,
-}
+const LS_SET_KEY = 'plan-view-layer-set'
+const DEFAULT_PAGE: PlanViewPageOptions = { wallNames: true, hatch: true, titleBlock: true }
 
-const TOGGLES: { key: keyof PlanViewLayers; label: string }[] = [
-  { key: 'labels',     label: 'Labels' },
+const TOGGLES: { key: keyof PlanViewPageOptions; label: string }[] = [
   { key: 'wallNames',  label: 'Wall Names' },
-  { key: 'dimensions', label: 'Dimensions' },
-  { key: 'doorSwings', label: 'Door Swings' },
-  { key: 'drawers',    label: 'Drawers' },
   { key: 'hatch',      label: 'Wall Hatch' },
   { key: 'titleBlock', label: 'Title Block' },
 ]
 
-export default function PlanViewReport({ project, room, walls, cabinets, scale, paperKey }: {
+export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey }: {
   project:  Project | null
   room:     Room
   walls:    Wall[]
   cabinets: CabinetInstance[]
+  resolvedParts: Map<string, ResolvedCabinet>
+  layerSets: LayerSet[]
+  activeLayerSetId: string | null
   scale:    number
   paperKey: string
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
+  const [layerSet, setLayerSetId] = useReportLayerSet(LS_SET_KEY, layerSets, activeLayerSetId)
+  const layers = useMemo(() => resolveLayerView(layerSet, 'plan'), [layerSet])
   // Modal only mounts on user action (never SSR'd), so reading localStorage in the
-  // initializer is safe — no hydration mismatch.
-  const [show, setShow] = useState<PlanViewLayers>(() => {
+  // initializer is safe — no hydration mismatch. Older storage also held drawing
+  // toggles (now layer items) — only the page extras are read.
+  const [show, setShow] = useState<PlanViewPageOptions>(() => {
     try {
       const raw = localStorage.getItem(LS_KEY)
-      if (raw) return { ...DEFAULT_LAYERS, ...JSON.parse(raw) }
+      if (raw) {
+        const s = JSON.parse(raw)
+        return Object.fromEntries(TOGGLES.map(t => [t.key, typeof s[t.key] === 'boolean' ? s[t.key] : DEFAULT_PAGE[t.key]])) as unknown as PlanViewPageOptions
+      }
     } catch { /* ignore malformed storage */ }
-    return DEFAULT_LAYERS
+    return DEFAULT_PAGE
   })
   const [busy, setBusy] = useState(false)
   const [fitWarning, setFitWarning] = useState<string | null>(null)
@@ -109,7 +118,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, scale, 
       )
     })
     return () => cancelAnimationFrame(id)
-  }, [show, walls, cabinets, getFitInfo, paperKey, scale])
+  }, [show, layers, walls, cabinets, getFitInfo, paperKey, scale])
 
   async function handleDownload() {
     const svgEl = svgRef.current
@@ -148,7 +157,8 @@ export default function PlanViewReport({ project, room, walls, cabinets, scale, 
     <div className="space-y-3">
       {/* Layer toggle toolbar */}
       <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-gray-800">
-        <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Layers:</span>
+        <ReportLayerSetSelect sets={layerSets} value={layerSet} onChange={setLayerSetId} />
+        <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Page:</span>
         {TOGGLES.map(t => (
           <button key={t.key} onClick={() => setShow(s => ({ ...s, [t.key]: !s[t.key] }))}
             className={`px-2 py-0.5 rounded text-xs border transition-colors ${
@@ -176,8 +186,10 @@ export default function PlanViewReport({ project, room, walls, cabinets, scale, 
         <PlanViewReportSVG
           walls={walls}
           cabinets={cabinets}
+          resolvedParts={resolvedParts}
           svgRef={svgRef}
           scale={scale}
+          layers={layers}
           show={show}
           projectName={projectName}
           roomName={room.name}

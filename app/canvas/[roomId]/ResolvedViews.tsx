@@ -23,6 +23,7 @@ import {
   doorProfileSvg,
 } from './cabinetEditSvgHelpers'
 import type { EbByMatId } from './useMaterialColours'
+import { useViewBoxPinch } from './usePinchZoom'
 import { cabinetSeamDrills, orientSeamDrills, caseBoxByKey, type DrillAxis } from '@/src/lib/jointDrilling'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
 import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
@@ -73,6 +74,8 @@ function svgCustomMeta(p: CabinetCustomPart): PartMeta {
     thickness: p.dz,
     edge: { top: p.edge_top, bottom: p.edge_bottom, left: p.edge_left, right: p.edge_right },
     panelKind: customPanelKind(p.orientation),
+    // Front-standing customs match the face-zone frame (DX=width, DY=length).
+    dxIsWidth: p.orientation === 'front' || undefined,
     x: p.x, y: p.y, z: p.z,
   }
 }
@@ -315,6 +318,8 @@ export function useSvgZoom(initW: number, initH: number, zoomOut = 1, pad = 0) {
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
+
+  useViewBoxPinch(svgRef, vbRef, setVb, w0 / 30, w0 * 4)
 
   // px-per-mm of the rendered content (preserveAspectRatio="meet" → min of the two).
   // `unit` = mm per ~1 screen-px, so MeasureOverlay's `n * unit` constants come out

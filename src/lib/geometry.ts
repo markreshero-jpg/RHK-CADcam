@@ -364,9 +364,21 @@ export function nextLabel(cabinets: CabinetInstance[], cls: string): string {
   return `${prefix}-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(2, '0')}`
 }
 
-export function gridDots(panX: number, panY: number, zoom: number, svgW: number, svgH: number): Pt[] {
-  if (zoom < 0.04) return []
-  const step = zoom < 0.08 ? 500 : zoom < 0.15 ? 200 : zoom < 0.4 ? 100 : 50
+/** Fixed plan-grid spacings (mm) offered alongside 'Auto'. */
+export const GRID_STEPS = [25, 50, 100, 200, 500, 1000] as const
+
+/** Most dots we'll put in the DOM; past this the grid draws nothing. */
+const MAX_GRID_DOTS = 3000
+
+/**
+ * Plan-view reference dots covering the visible area.
+ * `fixedStep` in mm pins the spacing; 0 (the default) picks it from the zoom.
+ */
+export function gridDots(
+  panX: number, panY: number, zoom: number, svgW: number, svgH: number, fixedStep = 0,
+): Pt[] {
+  if (!fixedStep && zoom < 0.04) return []
+  const step = fixedStep || (zoom < 0.08 ? 500 : zoom < 0.15 ? 200 : zoom < 0.4 ? 100 : 50)
   const wL = Math.floor((-panX / zoom) / step) * step
   const wT = Math.floor((-panY / zoom) / step) * step
   const wR = (-panX + svgW) / zoom, wB = (-panY + svgH) / zoom
@@ -374,5 +386,5 @@ export function gridDots(panX: number, panY: number, zoom: number, svgW: number,
   for (let x = wL; x <= wR + step; x += step)
     for (let y = wT; y <= wB + step; y += step)
       dots.push({ x, y })
-  return dots.length <= 3000 ? dots : []
+  return dots.length <= MAX_GRID_DOTS ? dots : []
 }

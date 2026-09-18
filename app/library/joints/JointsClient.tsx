@@ -8,6 +8,7 @@ import JointPreviewPanel from './JointPreviewPanel'
 import type { JointOpForPreview } from './JointPreviewPanel'
 import { ThemeToggle } from '../../ThemeToggle'
 import OperationToolSelect, { useToolLibraries, type ToolLite, type DrillLite, type OpToolValue } from '@/src/components/cnc/OperationToolSelect'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -267,7 +268,7 @@ export default function JointsClient({
   }
 
   async function deleteJointType(id: string) {
-    if (!confirm('Delete this joint type and all its operations?')) return
+    if (!(await confirmDelete({ title: 'Delete Joint Type', message: 'Delete this joint type and all its operations?' }))) return
     await supabase.from('joint_types').delete().eq('id', id)
     if (selId === id) { setSelId(null); setOps([]); setIsNew(false) }
     await reloadJoints()
@@ -362,7 +363,7 @@ export default function JointsClient({
   }
 
   async function deleteFastener(id: string) {
-    if (!confirm('Delete this fastener?')) return
+    if (!(await confirmDelete({ title: 'Delete Fastener', message: 'Delete this fastener?' }))) return
     await supabase.from('hardware_fasteners').delete().eq('id', id)
     setFasteners(prev => prev.filter(f => f.id !== id))
   }

@@ -24,14 +24,16 @@
 // hinge axis. Material is overridden to a metallic look (trimesh GLBs ship
 // without PBR materials).
 
-import { Suspense, useMemo } from 'react'
+import { Suspense, useMemo, useContext } from 'react'
 import * as THREE from 'three'
 import { useGLTF } from '@react-three/drei'
+import { PartAlphaContext, alphaMat } from './PartViewer'
 
 export type HingeMeshName = 'HingePlate' | 'HingeCupArm' | 'HingeArm'
 
 function HingeMeshInner({ url, mesh, color, requireName }: { url: string; mesh: HingeMeshName; color: string; requireName?: boolean }) {
   const gltf = useGLTF(url)
+  const alpha = useContext(PartAlphaContext)
   const obj = useMemo(() => {
     // Named meshes (HingePlate / HingeCupArm / HingeArm) are picked by name;
     // single-part files (a plate-free hinge, or a standalone plate) have no such
@@ -43,14 +45,14 @@ function HingeMeshInner({ url, mesh, color, requireName }: { url: string; mesh: 
     const src = named ?? gltf.scene
     const c = src.clone(true)
     const mat = new THREE.MeshStandardMaterial({
-      color, metalness: 0.7, roughness: 0.35, side: THREE.DoubleSide,
+      color, metalness: 0.7, roughness: 0.35, side: THREE.DoubleSide, ...alphaMat(alpha),
     })
     c.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) m.material = mat })
     // Node transform is identity in the authored file; placement is the parent's
     // job, so neutralise any stray local transform on the cloned node.
     c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.scale.set(1, 1, 1)
     return c
-  }, [gltf.scene, mesh, color, requireName])
+  }, [gltf.scene, mesh, color, requireName, alpha])
   if (!obj) return null
   return <primitive object={obj} />
 }

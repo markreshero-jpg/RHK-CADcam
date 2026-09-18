@@ -1,6 +1,7 @@
 import type { CabinetInstance, Wall, Room } from '@/src/lib/types'
 import { cabT } from '@/src/lib/geometry'
 import { dbJoinKickRun, dbSeparateKickRun, type KickRunMutation } from './canvasDB'
+import { confirmAction } from '@/src/components/ConfirmDeleteModal'
 
 // Gap (mm) within which two cabinets along a wall count as touching.
 const KICK_TOL = 2
@@ -73,10 +74,12 @@ export function useKickRunOps(p: KickRunOpsParams) {
     const depths = [...new Set(run.map(c => Math.round(c.dz)))].sort((a, b) => a - b)
     if (depths.length > 1) {
       const deepest = Math.round(Math.max(...run.map(c => c.dz)))
-      const ok = window.confirm(
-        `This run mixes cabinet depths (${depths.join('/')}mm). ` +
-        `Build one continuous kick to the deepest (${deepest}mm)?`,
-      )
+      const ok = await confirmAction({
+        title: 'Join Kicks',
+        message: `This run mixes cabinet depths (${depths.join('/')}mm). ` +
+          `Build one continuous kick to the deepest (${deepest}mm)?`,
+        confirmLabel: 'Join',
+      })
       if (!ok) return
     }
 

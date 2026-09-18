@@ -6,7 +6,29 @@ import { loadCabinetInput } from './loadCabinetInput'
 import { resolveCabinet } from './resolver'
 import { persistResolved } from './persistResolved'
 import { CabinetInput, ResolvedCabinet } from './types'
-import { buildPartContext, evalPartFields, roleMaterialId } from '../partFormula'
+import { applyPartExpressions } from '../formula/partExpressions'
+import { evalCustomPartFields } from '../formula/customParts'
+import { buildFormulaScope } from '../formula/context'
+
+// Map a part's role (parts_library.material_role) to the assembly's scheduled
+// material id for that role. Used to auto-assign a custom part's material when the
+// user hasn't set an explicit override. Falls back to the carcass material.
+function roleMaterialId(role: string | null | undefined, input: CabinetInput): string | null {
+  switch (role) {
+    case 'door': case 'door_face':
+      return input.door_material?.id ?? input.material?.id ?? null
+    case 'shelf':
+      return input.shelf_material?.id ?? input.material?.id ?? null
+    case 'toekick': case 'toekick_face':
+      return input.toekick_face_material?.id ?? input.material?.id ?? null
+    case 'drawerbox': case 'drawer':
+      return input.drawer_material?.id ?? input.material?.id ?? null
+    case 'exposed': case 'exposed_interior': case 'end_panel': // legacy aliases fold into exposed
+      return input.exposed_material?.id ?? input.material?.id ?? null
+    default: // interior / unknown
+      return input.material?.id ?? null
+  }
+}
 
 // Resolve each custom part against its assembly: (1) evaluate parametric formulas
 // and write the computed dims/positions back, and (2) resolve its effective material
@@ -19,10 +41,10 @@ async function resolveCustomParts(cabinetId: string, resolved: ResolvedCabinet, 
     .select('id, dx, dy, dz, x, y, z, expressions, material_id, material_override_id, parts_library(material_role)')
     .eq('cabinet_instance_id', cabinetId)
   if (!parts || parts.length === 0) return
-  const ctx = buildPartContext(resolved, input)
+  const scope = buildFormulaScope(resolved, input)
   for (const p of parts) {
     const literal = { dx: Number(p.dx), dy: Number(p.dy), dz: Number(p.dz), x: Number(p.x), y: Number(p.y), z: Number(p.z) }
-    const patch: Record<string, unknown> = evalPartFields(literal, p.expressions as Record<string, string> | null, ctx)
+    const patch: Record<string, unknown> = evalCustomPartFields(literal, p.expressions as Record<string, string> | null, scope)
     // Effective material: explicit override, else role default from the schedule.
     const role = (p.parts_library as { material_role?: string | null } | null)?.material_role ?? null
     const eff = (p.material_override_id as string | null) ?? roleMaterialId(role, input)
@@ -153,6 +175,8 @@ export async function resolveCabinetFromDB(
   const persisted = persistResolved(resolved).catch(e => console.error('persistResolved:', e))
   // Re-evaluate any parametric custom parts against the fresh geometry (background).
   const customed = resolveCustomParts(cabinetId, resolved, input).catch(e => console.error('resolveCustomParts:', e))
-  if (opts.awaitPersist) await Promise.all([persisted, customed])
+  // Re-evaluate standard-part formulas → cache into part_pos_overrides (background).
+  const exprs = applyPartExpressions(cabinetId, resolved, input).catch(e => console.error('applyPartExpressions:', e))
+  if (opts.awaitPersist) await Promise.all([persisted, customed, exprs])
   return resolved
 }

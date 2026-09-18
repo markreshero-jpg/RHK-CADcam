@@ -1,4 +1,5 @@
-import type { ResolvedCabinet, ResolvedCasePart } from './resolver/types'
+import type { ResolvedCabinet, ResolvedCasePart, SeamJointAssign } from './resolver/types'
+import { seamAssignJoint, seamAssignRows } from './resolver/types'
 
 export interface ElevSeam {
   key: string
@@ -9,8 +10,14 @@ export interface ElevSeam {
 }
 
 // Maps actual part-key seam keys to generic keys used in CM joint_defaults.
-// e.g. "front_rail:left_side" → "top:left_side"
+// e.g. "front_rail:left_side" → "top:left_side". Internal seam instance keys
+// (int_adj_shelf_0:left, int_divider_2:bottom, …) fold to one generic key per
+// family — both sides of a shelf always drill the same joint.
 export function toGenericSeamKey(key: string): string {
+  if (/^int_adj_shelf_\d+:/.test(key))   return 'adj_shelf:side'
+  if (/^int_fixed_shelf_\d+:/.test(key)) return 'fixed_shelf:side'
+  const div = key.match(/^int_divider_\d+:(top|bottom)$/)
+  if (div) return `divider:${div[1]}`
   return key.replace(/^(front_rail|full_top|back_rail):/, 'top:')
 }
 
@@ -97,6 +104,104 @@ export function carcaseSeamParts(topType: string): SeamPart[] {
   }
 
   return parts
+}
+
+// Internal parts with joinable edges (CM builder joint UI). Internal seams are
+// per-instance at resolve time (int_adj_shelf_0:left, …) but the CM default is
+// ONE joint per family edge — every shelf/division instance inherits it.
+// partKey doubles as the 3D highlight key (matches ResolvedInternalPart.part_type).
+export function internalSeamParts(): SeamPart[] {
+  return [
+    {
+      partKey: 'adj_shelf', label: 'Adjustable Shelf',
+      edges: [
+        { edgeLabel: 'Side supports', seamKey: 'adj_shelf:side', joinsLabel: 'Gables / Divisions' },
+      ],
+    },
+    {
+      partKey: 'fixed_shelf', label: 'Fixed Shelf',
+      edges: [
+        { edgeLabel: 'Side supports', seamKey: 'fixed_shelf:side', joinsLabel: 'Gables / Divisions' },
+      ],
+    },
+    {
+      partKey: 'divider', label: 'Division',
+      edges: [
+        { edgeLabel: 'Bottom end', seamKey: 'divider:bottom', joinsLabel: 'Bottom / Fixed Shelf' },
+        { edgeLabel: 'Top end',    seamKey: 'divider:top',    joinsLabel: 'Top / Fixed Shelf' },
+      ],
+    },
+  ]
+}
+
+// ── Per-cabinet seam assignment state (shared by JointsPanel / PartEdgeJoints) ─
+
+export interface SeamAssignState {
+  status:  'cabinet' | 'method' | 'suppressed' | 'none'
+  jointId: string | null
+  rows?:   number     // per-seam rows override (adj-shelf seams)
+}
+
+// Resolve one seam's display state from the cabinet's overrides + CM defaults.
+export function getSeamAssignState(
+  overrides: Record<string, SeamJointAssign>,
+  defaults:  Record<string, string>,
+  seamKey:   string,
+): SeamAssignState {
+  const entry = Object.prototype.hasOwnProperty.call(overrides, seamKey) ? overrides[seamKey] : undefined
+  const rows  = seamAssignRows(entry)
+  const j     = seamAssignJoint(entry)
+  if (j === null)   return { status: 'suppressed', jointId: null }
+  if (j !== undefined) return { status: 'cabinet', jointId: j, rows }
+  const inherited = defaults[seamKey] ?? defaults[toGenericSeamKey(seamKey)] ?? null
+  return inherited
+    ? { status: 'method', jointId: inherited, rows }
+    : { status: 'none',   jointId: null,      rows }
+}
+
+// Set / suppress / clear a seam's joint, preserving any rows-only override
+// ('clear' reverts the whole entry; suppress drops rows too).
+export function withSeamJoint(
+  overrides: Record<string, SeamJointAssign>, seamKey: string, value: string | null | 'clear',
+): Record<string, SeamJointAssign> {
+  const next = { ...overrides }
+  const rows = seamAssignRows(next[seamKey])
+  if (value === 'clear') delete next[seamKey]
+  else if (value === null) next[seamKey] = null
+  else next[seamKey] = rows ? { joint: value, rows } : value
+  return next
+}
+
+// Set / clear a seam's rows override, preserving any joint assignment and
+// collapsing back to the compact string form when rows are cleared.
+export function withSeamRows(
+  overrides: Record<string, SeamJointAssign>, seamKey: string, rows: number | undefined,
+): Record<string, SeamJointAssign> {
+  const next  = { ...overrides }
+  const joint = seamAssignJoint(next[seamKey])
+  if (!rows || rows <= 0) {
+    if (typeof joint === 'string') next[seamKey] = joint
+    else if (joint === null)       next[seamKey] = null
+    else                           delete next[seamKey]
+  } else {
+    next[seamKey] = joint !== undefined ? { joint, rows } : { rows }
+  }
+  return next
+}
+
+// Human label for any part key appearing in an internal seam — case supports
+// (left_side, bottom, …) and internal instance keys (int_adj_shelf_0, …).
+export function internalSeamPartLabel(key: string): string {
+  const fixed: Record<string, string> = {
+    left_side: 'Left Gable', right_side: 'Right Gable',
+    bottom: 'Bottom Panel', full_top: 'Top Panel',
+    front_rail: 'Front Rail', back_rail: 'Back Rail', back: 'Back Panel',
+  }
+  if (fixed[key]) return fixed[key]
+  const m = key.match(/^int_(adj_shelf|fixed_shelf|divider)_(\d+)$/)
+  if (!m) return key
+  const n = Number(m[2]) + 1
+  return m[1] === 'adj_shelf' ? `Adj Shelf ${n}` : m[1] === 'fixed_shelf' ? `Fixed Shelf ${n}` : `Division ${n}`
 }
 
 export function computeElevSeams(rp: ResolvedCabinet): ElevSeam[] {

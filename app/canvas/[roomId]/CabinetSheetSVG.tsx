@@ -7,7 +7,8 @@
 // svg2pdf call per page.
 'use client'
 import type { Wall, CabinetInstance } from '@/src/lib/types'
-import type { ResolvedCabinet, SlideProduct, SlideScheduleEntry } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, SlideProduct, SlideScheduleEntry, SeamJointAssign } from '@/src/lib/resolver/types'
+import { seamAssignJoint, seamAssignRows } from '@/src/lib/resolver/types'
 import type { CabinetCustomPart, PartPosOverrides } from './canvasDB'
 import { findSlide } from '@/src/lib/resolver/resolveDrawerStack'
 import { computeElevSeams } from '@/src/lib/cabinetSeams'
@@ -428,14 +429,18 @@ export default function CabinetSheetSVG({
       if (o.oax || o.oay || o.oaz) seg.push(`rot ${o.oax || 0}/${o.oay || 0}/${o.oaz || 0}°`)
       if (seg.length) rows.push(`${partIdLabel(id)}: ${seg.join(' ')}`)
     }
-    // Joint overrides (seam label + assigned joint name / suppressed)
-    const cj = (cab.carcase_joints ?? {}) as Record<string, string | null>
+    // Joint overrides (seam label + assigned joint name / suppressed / rows)
+    const cj = (cab.carcase_joints ?? {}) as Record<string, SeamJointAssign>
     if (Object.keys(cj).length) {
       const labelByKey: Record<string, string> = {}
       if (rp) for (const sm of computeElevSeams(rp)) labelByKey[sm.key] = sm.label
       for (const [key, val] of Object.entries(cj)) {
         const lbl = labelByKey[key] ?? key.replace(/[:_]/g, ' ')
-        rows.push(`${lbl}: ${val === null ? 'Suppressed' : (jointNames?.[val] ?? 'Assigned')}`)
+        const joint = seamAssignJoint(val)
+        const jr = seamAssignRows(val)
+        const desc = joint === null ? 'Suppressed'
+          : `${joint ? (jointNames?.[joint] ?? 'Assigned') : 'Method joint'}${jr ? ` · ${jr} rows` : ''}`
+        rows.push(`${lbl}: ${desc}`)
       }
     }
     // Custom parts

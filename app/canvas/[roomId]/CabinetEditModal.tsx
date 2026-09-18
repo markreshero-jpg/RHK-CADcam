@@ -22,7 +22,7 @@ import InternalGridEditor from './InternalGridEditor'
 import { saveSVGEdge } from './cabinetEditSvgHelpers'
 import { ResolvedElevation, ResolvedTop, ResolvedSide, TopView, ElevationView, SideView, PartPickerMenu, PartContextMenu, type PartContextAction } from './ResolvedViews'
 import PartsView, { PartDialog } from './PartsView'
-import { buildPartContext, type FormulaCtx } from '@/src/lib/partFormula'
+import { buildFormulaScope, type FormulaScope } from '@/src/lib/formula'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import JointsPanel from './JointsPanel'
 import PartEdgeJoints from './PartEdgeJoints'
@@ -55,13 +55,15 @@ const VIEWS: { id: ViewId; label: string }[] = [
 // a carcass / face grid / internal tree.
 const KICK_HIDDEN_VIEWS = new Set<ViewId>(['face', 'interior', 'joints', 'tree'])
 
-function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onOverridesChange, setCustomParts }: {
+function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onOverridesChange, setCustomParts, className = 'absolute bottom-3 right-3 w-52' }: {
   part: PartMeta
   cabinetId: string
   customParts: CabinetCustomPart[]
   partOverrides: PartPosOverrides
   onOverridesChange: (o: PartPosOverrides) => void
   setCustomParts: React.Dispatch<React.SetStateAction<CabinetCustomPart[]>>
+  // Outer positioning/sizing only — 'relative w-full' docks it in the sidebar.
+  className?: string
 }) {
   const isCustom = part.id.startsWith('custom_')
   const customPartId = isCustom ? part.id.slice(7) : null
@@ -107,7 +109,7 @@ function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onO
   const inputCls = 'flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs font-mono text-right text-white focus:outline-none focus:border-blue-500'
 
   return (
-    <div className="absolute bottom-3 right-3 w-52 bg-gray-900/95 border border-gray-700 rounded-lg shadow-xl pointer-events-auto select-none" onClick={e => e.stopPropagation()}>
+    <div className={`${className} bg-gray-900/95 border border-gray-700 rounded-lg shadow-xl pointer-events-auto select-none`} onClick={e => e.stopPropagation()}>
       <div className="px-3 pt-2.5 pb-1.5 border-b border-gray-700 flex items-center justify-between">
         <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{label}</span>
         {hasOverride && (
@@ -171,7 +173,7 @@ export default function CabinetEditModal({
   resolvedCabinet?: ResolvedCabinet
   initialView?: ViewId | 'joints'
   onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
-  onDelete: (id: string) => Promise<void>
+  onDelete: (id: string) => void | Promise<void>
   onClose: () => void
   materialColours?: Record<string, string | { face?: string; back?: string; edge?: string }>
   ebByMatId?: Record<string, { thickness: number; color: string | null }>
@@ -225,11 +227,17 @@ export default function CabinetEditModal({
   // "⬠ Edit Shape" entry points (3D right-click, Overrides row ✎) open the Part
   // Editor with the shape overlay already on top.
   const [editShapeOnOpen, setEditShapeOnOpen] = useState(false)
+  // Part panels dock in the right sidebar, REPLACING the cabinet info while a
+  // part is selected (deselect to bring it back). The 3D view portals its own
+  // part panel into this element and reports its selection via panel3DVisible.
+  const [panelHost, setPanelHost]         = useState<HTMLDivElement | null>(null)
+  const [panel3DVisible, setPanel3DVisible] = useState(false)
 
   const prevPartRef     = useRef<PartMeta | null>(null)
   const originalEdgeRef = useRef<PartEdge | null>(null)
 
   const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face' && activeView !== 'interior' && activeView !== 'joints' && activeView !== 'overrides' && activeView !== 'routes' && activeView !== 'errors'
+  const dockedPanelOpen = (isOrthoView && !!selectedSVGPart) || (activeView === '3d' && panel3DVisible)
 
   useEffect(() => {
     if (resolvedCabinet) return
@@ -435,10 +443,12 @@ export default function CabinetEditModal({
     [shapeOverrides, baseDimsMap, customParts],
   )
 
-  // Formula context for the Add-Part dialog (lets sizes/positions use formulas).
-  const formulaCtx = useMemo<FormulaCtx | null>(() => {
+  // Engine scope for the Add-Part dialog and standard-part size formulas
+  // (Part Editor Overrides sidebar): cab.* / r.* / t.* / part("…") against
+  // the current resolved state.
+  const formulaScope = useMemo<FormulaScope | null>(() => {
     const input = getCachedInput(cabinet.id)
-    return rp && input ? buildPartContext(rp, input) : null
+    return rp && input ? buildFormulaScope(rp, input) : null
   }, [rp, cabinet.id])
 
   return (
@@ -596,7 +606,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} />}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onPanelVisibleChange={setPanel3DVisible} />}
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}
@@ -642,24 +652,6 @@ export default function CabinetEditModal({
                 }}
               />
             )}
-            {selectedSVGPart && isOrthoView && (
-              <PartPropertiesPanel
-                part={selectedSVGPart}
-                onClose={() => setSelectedSVGPart(null)}
-                onEdgeChange={handleSVGEdgeChange}
-                ebThickness={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId]?.thickness : undefined}
-              />
-            )}
-            {selectedSVGPart && isOrthoView && (
-              <PartPosOverridePanel
-                part={selectedSVGPart}
-                cabinetId={cabinet.id}
-                customParts={customParts}
-                partOverrides={partOverrides}
-                onOverridesChange={setPartOverrides}
-                setCustomParts={setCustomParts}
-              />
-            )}
             {picker && (
               <PartPickerMenu
                 parts={picker.parts}
@@ -701,7 +693,7 @@ export default function CabinetEditModal({
             {addAt && (
               <PartDialog
                 cabinetId={cabinet.id}
-                ctx={formulaCtx}
+                scope={formulaScope}
                 initialPos={addAt}
                 onSaved={part => { setCustomParts(prev => [...prev, part]); setAddAt(null) }}
                 onClose={() => setAddAt(null)}
@@ -710,18 +702,47 @@ export default function CabinetEditModal({
           </div>
         </div>
 
-        {/* Right: properties panel */}
-        <div className="flex-none w-72 border-l border-gray-800 overflow-y-auto">
-          <CabinetPanel
-            cabinet={cabinet}
-            wall={wall}
-            wallCabinets={wallCabinets}
-            room={null}
-            onUpdate={onUpdate}
-            onDelete={async id => { await onDelete(id); onClose() }}
-            hideWallPosition
-            hideDelete
-          />
+        {/* Right: properties panel. Selecting a part swaps the cabinet info out
+            for the part's panels; deselecting (click blank canvas) swaps it back. */}
+        <div className="flex-none w-72 border-l border-gray-800 relative">
+          <div className={dockedPanelOpen ? 'hidden' : 'h-full overflow-y-auto'}>
+            <CabinetPanel
+              cabinet={cabinet}
+              wall={wall}
+              wallCabinets={wallCabinets}
+              room={null}
+              onUpdate={onUpdate}
+              onDelete={async id => { await onDelete(id); onClose() }}
+              hideWallPosition
+              hideDelete
+            />
+          </div>
+          {/* Docked part panels: ortho views render below; the 3D view portals its
+              panel (with joint/drawer controls) into this same host. */}
+          <div className={`absolute inset-0 z-10 overflow-y-auto ${dockedPanelOpen ? '' : 'pointer-events-none'}`}>
+            <div ref={setPanelHost} className="p-2 space-y-2">
+              {selectedSVGPart && isOrthoView && (
+                <>
+                  <PartPropertiesPanel
+                    className="relative w-full"
+                    part={selectedSVGPart}
+                    onClose={() => setSelectedSVGPart(null)}
+                    onEdgeChange={handleSVGEdgeChange}
+                    ebThickness={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId]?.thickness : undefined}
+                  />
+                  <PartPosOverridePanel
+                    className="relative w-full"
+                    part={selectedSVGPart}
+                    cabinetId={cabinet.id}
+                    customParts={customParts}
+                    partOverrides={partOverrides}
+                    onOverridesChange={setPartOverrides}
+                    setCustomParts={setCustomParts}
+                  />
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -749,6 +770,7 @@ export default function CabinetEditModal({
           onShapeOverridesChange={setShapeOverrides}
           initialShapeOpen={editShapeOnOpen}
           referenceOutlines={editShapeRefOutlines}
+          formulaScope={formulaScope}
         />
       )}
     </div>

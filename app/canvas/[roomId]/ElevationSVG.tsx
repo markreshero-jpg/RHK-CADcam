@@ -2,8 +2,10 @@
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { Room, Wall, CabinetInstance } from '@/src/lib/types'
 import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, CAB_FILL, CAB_FILL_SEL, SNAP_PX, type Pt } from '@/src/lib/geometry'
-import { Selected, CabResize, viewReducer, DisplayConfig, Mode, ArmedDefinition, placeInfoFor } from './canvasTypes'
-import { layerSVGProps } from '@/src/lib/displayConfig'
+import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor } from './canvasTypes'
+import type { LayerView } from '@/src/lib/displayLayers/resolve'
+import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
+import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
 import { roundMm } from '@/src/lib/format'
 import { customExtents } from '@/src/lib/customPartBox'
 import { getUserPrefs } from '@/src/lib/userPrefs'
@@ -15,9 +17,11 @@ import {
   type ElevSnapSettings, type ElevSnapResult,
 } from '@/src/lib/elevationSnap'
 import SnapToolbar from './SnapToolbar'
+import { usePinchZoom } from './usePinchZoom'
 import { SlideShape, slideBox3, doorProfileSvg } from './cabinetEditSvgHelpers'
 import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
+import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
 // resolved per render below. PART_COLORS / LINE_DRAW_COLORS keep their `MAP[key]`
@@ -130,7 +134,7 @@ interface ElevationSVGProps {
   room: Room
   elevWallId: string | null
   selected: Selected
-  displayConfig: DisplayConfig
+  layers: LayerView
   multiSelect: string[]
   canEqualize: boolean
   mode: Mode
@@ -170,7 +174,7 @@ interface ElevationSVGProps {
 }
 
 export default function ElevationSVG({
-  walls, cabinets, room, elevWallId, selected, displayConfig,
+  walls, cabinets, room, elevWallId, selected, layers,
   multiSelect, canEqualize, mode, armedDef, clipboard, clipboardGroup,
   onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu,
   onBlankWallContextMenu, onShiftSelectCabinet, onMarqueeSelect, onEqualizeWidths,
@@ -219,6 +223,8 @@ export default function ElevationSVG({
 
   const wall = walls.find(w => w.id === elevWallId) ?? null
   const wallCabs = wall ? cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === elevWallSide) : []
+  // Dimension chains measure only cabinets the layer set draws.
+  const chainCabs = wallCabs.filter(c => elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))
   // Hand-added part_operations for every cabinet on this wall → cabinet-space markers.
   const handMarkersByCab = useHandOpMarkersMulti(wallCabs.map(c => c.id), resolvedParts)
 
@@ -330,6 +336,8 @@ export default function ElevationSVG({
     svg.addEventListener('wheel', handler, { passive: false })
     return () => svg.removeEventListener('wheel', handler)
   }, [])
+
+  usePinchZoom(svgRef, dispatchView)
 
   useEffect(() => {
     const kd = (e: KeyboardEvent) => {
@@ -546,6 +554,12 @@ export default function ElevationSVG({
           return left >= minX && right <= maxX && top >= minY && bottom <= maxY
         }).map(c => c.id)
         onMarqueeSelect(ids)
+      } else if (endX >= 0 && endX <= wall.length && endY >= 0 && endY <= roomH) {
+        // Plain click (not a drag) on the wall face → select the wall so its
+        // properties panel opens, matching plan-view behaviour. The wall rect's
+        // own onClick never fires here: select-mode pointerdown captures the
+        // pointer on the SVG, which retargets the click away from the rect.
+        onSelectWall(wall.id)
       }
     }
   }
@@ -669,7 +683,7 @@ export default function ElevationSVG({
     })
   }
 
-  const isLineDrawing = displayConfig.activePreset === 'line_drawing'
+  const isLineDrawing = layers.lineDrawing
 
   // Editable part-line palette → per-key colour map (see src/lib/partPalette.ts).
   // Read once on mount; the Settings editor persists to localStorage and the
@@ -684,7 +698,7 @@ export default function ElevationSVG({
   const mr      =  6 / z
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-950 overflow-hidden relative">
+    <div className="flex-1 flex flex-col bg-gray-950 overflow-hidden relative" style={{ background: layers.background }}>
 
       {/* Wall picker + side toggle + equalize strip */}
       <div className="flex-none flex items-center gap-1 px-3 py-1.5 bg-gray-900 border-b border-gray-800 overflow-x-auto shrink-0">
@@ -797,7 +811,7 @@ export default function ElevationSVG({
       <svg
         ref={svgRef}
         className="flex-1 bg-gray-950 select-none"
-        style={{ cursor: mode === 'measure' ? 'crosshair' : (placeInfoFor(mode, armedDef) || mode === 'paste') ? 'crosshair' : elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
+        style={{ background: layers.background, cursor: mode === 'measure' ? 'crosshair' : (placeInfoFor(mode, armedDef) || mode === 'paste') ? 'crosshair' : elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -999,29 +1013,60 @@ export default function ElevationSVG({
               const cabStroke = isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : isHover ? '#f97316' : '#3b82f6'
               const cabStrokeW = isSel || isMultiSel || isHover ? 2 / z : 1 / z
 
-              const carcL = displayConfig.layers.carcass
-              const faceL = displayConfig.layers.face
-              const intL  = displayConfig.layers.internal
-              const tkL   = displayConfig.layers.toekick
-              const lblL  = displayConfig.layers.labels
-              const dimL  = displayConfig.layers.dimensions
-
-              const carcP = layerSVGProps(carcL.style, z)
-              const faceP = layerSVGProps(faceL.style, z)
-              const intP  = layerSVGProps(intL.style, z)
-              const tkP   = layerSVGProps(tkL.style, z)
-              const showIntAnnot  = !intL.visible && displayConfig.annotations.elev_internal_parts
-              const intVisible    = intL.visible || showIntAnnot
-              const intEffP       = showIntAnnot ? layerSVGProps('ghost', z) : intP
-              const showDrawerBox = intVisible && displayConfig.annotations.elev_drawer_box
+              // Layer items (z_display_layers spec)
+              const showOutline = layers.show('carcass_outline')
+              const carcP = layers.props('carcass_outline', z)
+              const faceP = layers.props('doors', z)
+              const tkP   = layers.props('kick_faces', z)
+              const anyCarcase = layers.any('carcass_outline', 'carcass_gables', 'carcass_top', 'carcass_bottom')
 
               const pastFace = sectionMode && sectionDepth > FACE_THICK
               const faceOpacity = sectionMode ? Math.max(0, 1 - sectionDepth / FACE_THICK) : 1
-              const effectiveIntVisible = intVisible || pastFace
-              const effectiveShowDrawerBox = showDrawerBox || (pastFace && !!cab.has_internal)
+              // Section cut past the face reveals internals regardless of the layer set.
+              const showInt = (id: string) => layers.show(id) || pastFace
+              const effectiveShowDrawerBox     = layers.show('drawer_boxes')   || (pastFace && !!cab.has_internal)
+              const effectiveShowDrawerRunners = layers.show('drawer_runners') || (pastFace && !!cab.has_internal)
+
+              // Click area + labels follow the layer set: the extent of everything this
+              // cabinet actually draws (cabinet coords, ey = top edge, Y up). Nothing
+              // drawn → not selectable, no name / size.
+              const hitRects: { ex: number; ey: number; ew: number; eh: number }[] = []
+              {
+                const rpHit = elevResizeLive?.cabId === cab.id ? undefined : resolvedParts?.get(cab.id)
+                const full = { ex: 0, ey: displayDy, ew: displayDx, eh: displayDy }
+                if (!rpHit) {
+                  // Fallback box rendering (loading / resizing): outline, kick strip, face inset.
+                  if (showOutline || (faceOpacity > 0 && cab.has_face && layers.any('doors', 'drawer_fronts', 'false_panels'))) hitRects.push(full)
+                  if (layers.any('kick_faces', 'kick_spreaders') && cab.has_toekick && tkH > 0) hitRects.push({ ex: 0, ey: tkH, ew: displayDx, eh: tkH })
+                } else {
+                  for (const p of rpHit.case_parts) if (p.part_key !== 'back' && layers.show(casePartItem(p.part_key))) hitRects.push(caseElevRect(p))
+                  for (const p of rpHit.toekick_parts) if (layers.show(kickPartItem(p.part_key))) hitRects.push(tkElevRect(p))
+                  for (const p of rpHit.internal_parts) if (showInt(internalPartItem(p.part_type))) hitRects.push(shelfElevRect(p))
+                  if (showInt('inner_drawer_runners')) for (const sl of rpHit.internal_slides ?? []) hitRects.push(slideElevRect(sl))
+                  for (const ds of rpHit.drawer_stacks) {
+                    if (effectiveShowDrawerBox) for (const p of ds.box_parts) hitRects.push(drawerBoxPartElevRect(p))
+                    if (effectiveShowDrawerRunners) for (const sl of ds.slides) hitRects.push(slideElevRect(sl))
+                  }
+                  if (faceOpacity > 0) for (const fz of rpHit.face_zones) {
+                    const it = faceZoneItem(fz.face_type)
+                    if (it && layers.show(it)) hitRects.push(zoneElevRect(fz))
+                  }
+                  for (const p of rpHit.custom_parts ?? []) {
+                    if (!p.show_in_room || !layers.show(customPartItem(p))) continue
+                    const { ex, ey } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+                    hitRects.push({ ex: p.x, ey: p.y + ey, ew: ex, eh: ey })
+                  }
+                }
+              }
+              const hitOk = hitRects.filter(r => r.ew > 0 && r.eh > 0)
+              const hit = hitOk.length === 0 ? null : (() => {
+                const x0 = Math.min(...hitOk.map(r => r.ex)), x1 = Math.max(...hitOk.map(r => r.ex + r.ew))
+                const top = Math.max(...hitOk.map(r => r.ey)), bot = Math.min(...hitOk.map(r => r.ey - r.eh))
+                return { x: rx + x0, y: ry + displayDy - top, w: x1 - x0, h: top - bot }
+              })()
 
               const shelfYs: number[] = []
-              if (effectiveIntVisible && cab.has_internal) {
+              if (showInt('shelves') && cab.has_internal) {
                 const bottom = ry + displayDy - tkH
                 if (isTall) {
                   for (let offset = 300; offset < displayDy - tkH - 150; offset += 350)
@@ -1046,8 +1091,8 @@ export default function ElevationSVG({
                   }}
                   onContextMenu={e => onCabinetContextMenu(e, cab.id)}
                 >
-                  {/* Invisible hit area */}
-                  <rect x={rx} y={ry} width={displayDx} height={displayDy} fill="transparent" stroke="none" />
+                  {/* Invisible hit area — the extent of what's drawn (see hit) */}
+                  {hit && <rect x={hit.x} y={hit.y} width={hit.w} height={hit.h} fill="transparent" stroke="none" />}
 
                   {/* Multi-select outline — drawn underneath so case parts render on top */}
                   {isMultiSel && (
@@ -1065,39 +1110,39 @@ export default function ElevationSVG({
                     const rp = isBeingResized ? undefined : resolvedParts?.get(cab.id)
                     if (!rp) {
                       return (<>
-                        {carcL.visible && (
+                        {showOutline && (
                           <rect x={rx} y={ry} width={displayDx} height={displayDy}
                             fill={isLineDrawing ? 'none' : (pastFace ? 'url(#section-hatch)' : baseColor)}
                             fillOpacity={isLineDrawing ? 0 : carcP.fillOpacity}
-                            stroke={isLineDrawing ? (isSel ? '#e2e8f0' : '#94a3b8') : cabStroke}
-                            strokeWidth={isLineDrawing ? 1 / z : cabStrokeW}
+                            stroke={isLineDrawing ? (isSel ? '#e2e8f0' : layers.color('carcass_outline', '#94a3b8')) : (isSel || isMultiSel || isHover ? cabStroke : layers.color('carcass_outline', cabStroke))}
+                            strokeWidth={layers.w('carcass_outline', 1) * (isLineDrawing ? 1 / z : cabStrokeW)}
                             strokeDasharray={isLineDrawing ? undefined : carcP.strokeDasharray}
                             opacity={carcP.opacity} />
                         )}
-                        {tkL.visible && cab.has_toekick && tkH > 0 && !(cab.kick_run_id && !cab.is_kick_assembly) && (
+                        {layers.any('kick_faces', 'kick_spreaders') && cab.has_toekick && tkH > 0 && !(cab.kick_run_id && !cab.is_kick_assembly) && (
                           <rect x={rx} y={ry + displayDy - tkH} width={displayDx} height={tkH}
                             fill={isLineDrawing ? 'none' : baseColor}
                             fillOpacity={isLineDrawing ? 0 : (tkP.fillOpacity * 0.5) || 0}
-                            stroke={isLineDrawing ? '#fbbf24' : (isSel ? '#e2e8f0' : '#475569')}
-                            strokeWidth={1 / z}
+                            stroke={isLineDrawing ? layers.color('kick_faces', '#fbbf24') : (isSel ? '#e2e8f0' : layers.color('kick_faces', '#475569'))}
+                            strokeWidth={layers.w('kick_faces', 1) / z}
                             strokeDasharray={isLineDrawing ? undefined : (tkP.strokeDasharray ?? `${4 / z} ${2 / z}`)}
                             opacity={tkP.opacity} />
                         )}
-                        {effectiveIntVisible && shelfYs.map((sy, i) => (
+                        {shelfYs.map((sy, i) => (
                           <line key={i} x1={rx + 4 / z} y1={sy} x2={rx + displayDx - 4 / z} y2={sy}
-                            stroke={isLineDrawing ? '#a78bfa' : (pastFace ? '#818cf8' : (isSel ? '#cbd5e1' : '#4b5563'))}
-                            strokeWidth={pastFace ? 1.5 / z : 1 / z}
-                            strokeDasharray={isLineDrawing || (intL.style === 'solid' && !showIntAnnot) ? undefined : `${8 / z} ${4 / z}`}
-                            opacity={intEffP.opacity} />
+                            stroke={isLineDrawing ? layers.color('shelves', '#a78bfa') : (pastFace ? '#818cf8' : (isSel ? '#cbd5e1' : layers.color('shelves', '#4b5563')))}
+                            strokeWidth={layers.w('shelves', pastFace ? 1.5 : 1) / z}
+                            strokeDasharray={isLineDrawing || layers.style('shelves') === 'solid' ? undefined : `${8 / z} ${4 / z}`}
+                            opacity={layers.props('shelves', z).opacity} />
                         ))}
-                        {faceOpacity > 0 && faceL.visible && cab.has_face && (() => {
+                        {faceOpacity > 0 && layers.any('doors', 'drawer_fronts', 'false_panels') && cab.has_face && (() => {
                           const ins = 15; const fw = displayDx - ins * 2; const fh = displayDy - tkH - ins * 2
                           if (fw <= 0 || fh <= 0) return null
                           return <rect x={rx + ins} y={ry + ins} width={fw} height={fh}
                             fill={isLineDrawing ? 'none' : baseColor}
                             fillOpacity={isLineDrawing ? 0 : faceP.fillOpacity * 0.45 * faceOpacity}
-                            stroke={isLineDrawing ? '#60a5fa' : (isSel ? '#e2e8f0' : baseColor)}
-                            strokeWidth={isLineDrawing ? 1 / z : 0.75 / z}
+                            stroke={isLineDrawing ? layers.color('doors', '#60a5fa') : (isSel ? '#e2e8f0' : layers.color('doors', baseColor))}
+                            strokeWidth={layers.w('doors', isLineDrawing ? 1 : 0.75) / z}
                             strokeDasharray={isLineDrawing ? undefined : faceP.strokeDasharray}
                             opacity={faceP.opacity * faceOpacity} />
                         })()}
@@ -1109,31 +1154,35 @@ export default function ElevationSVG({
                     })
 
                     return (<>
-                      {carcL.visible && rp.case_parts.filter(p => p.part_key !== 'back').map((p, i) => {
+                      {rp.case_parts.filter(p => p.part_key !== 'back' && layers.show(casePartItem(p.part_key))).map((p, i) => {
                         const { ex, ey, ew, eh } = caseElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                        const fill = PART_COLORS[p.part_key] ?? '#b8c8dc'
-                        const ldStroke = LINE_DRAW_COLORS[p.part_key] ?? '#94a3b8'
+                        const cit = casePartItem(p.part_key)
+                        const fill = layers.colorOf(cit) ?? PART_COLORS[p.part_key] ?? '#b8c8dc'
+                        const ldStroke = layers.colorOf(cit) ?? LINE_DRAW_COLORS[p.part_key] ?? '#94a3b8'
                         return (
                           <rect key={`cp-${i}`} x={x} y={y} width={w} height={h}
                             fill={isLineDrawing ? 'none' : (pastFace ? 'url(#section-hatch)' : fill)}
                             fillOpacity={isLineDrawing ? 0 : (pastFace ? 0.9 : 0.6)}
                             stroke={isLineDrawing ? ldStroke : (pastFace ? '#8b9eb0' : (isSel ? '#e2e8f0' : fill))}
-                            strokeWidth={isLineDrawing ? 1 / z : (pastFace ? 1 / z : 0.5 / z)}
-                            opacity={carcP.opacity} style={{ pointerEvents: 'none' }} />
+                            strokeWidth={layers.w(cit, isLineDrawing ? 1 : (pastFace ? 1 : 0.5)) / z}
+                            strokeDasharray={layers.props(casePartItem(p.part_key), z).strokeDasharray}
+                            opacity={layers.props(casePartItem(p.part_key), z).opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
-                      {tkL.visible && rp.toekick_parts.map((p, i) => {
+                      {rp.toekick_parts.filter(p => layers.show(kickPartItem(p.part_key))).map((p, i) => {
+                        const tkP = layers.props(kickPartItem(p.part_key), z)
                         const { ex, ey, ew, eh } = tkElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                        const fill = PART_COLORS[p.part_key] ?? '#f59e0b'
-                        const ldStroke = LINE_DRAW_COLORS[p.part_key] ?? '#fbbf24'
+                        const kit = kickPartItem(p.part_key)
+                        const fill = layers.colorOf(kit) ?? PART_COLORS[p.part_key] ?? '#f59e0b'
+                        const ldStroke = layers.colorOf(kit) ?? LINE_DRAW_COLORS[p.part_key] ?? '#fbbf24'
                         const isSpreader = p.part_key === 'spreader_vertical' || p.part_key === 'spreader_horizontal'
                         if (isLineDrawing) {
                           return (
                             <rect key={`tk-${i}`} x={x} y={y} width={w} height={h}
                               fill="none"
-                              stroke={ldStroke} strokeWidth={1 / z}
+                              stroke={ldStroke} strokeWidth={layers.w(kit, 1) / z}
                               strokeDasharray={isSpreader ? `${4 / z} ${3 / z}` : undefined}
                               opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                           )
@@ -1141,33 +1190,36 @@ export default function ElevationSVG({
                         return isSpreader
                           ? <rect key={`tk-${i}`} x={x} y={y} width={w} height={h}
                               fill="none"
-                              stroke={isSel ? '#e2e8f0' : fill} strokeWidth={1 / z}
+                              stroke={isSel ? '#e2e8f0' : fill} strokeWidth={layers.w(kit, 1) / z}
                               strokeDasharray={`${4 / z} ${3 / z}`}
                               opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                           : <rect key={`tk-${i}`} x={x} y={y} width={w} height={h}
                               fill={fill} fillOpacity={0.7}
-                              stroke={isSel ? '#e2e8f0' : fill} strokeWidth={0.5 / z}
+                              stroke={isSel ? '#e2e8f0' : fill} strokeWidth={layers.w(kit, 0.5) / z}
                               opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                       })}
-                      {effectiveIntVisible && rp.internal_parts.map((p, i) => {
+                      {rp.internal_parts.filter(p => showInt(internalPartItem(p.part_type))).map((p, i) => {
+                        const intEffP = layers.props(internalPartItem(p.part_type), z)
                         const { ex, ey, ew, eh } = shelfElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                        const fill = PART_COLORS[p.part_type] ?? '#818cf8'
-                        const ldStroke = LINE_DRAW_COLORS[p.part_type] ?? '#a78bfa'
+                        const iit = internalPartItem(p.part_type)
+                        const fill = layers.colorOf(iit) ?? PART_COLORS[p.part_type] ?? '#818cf8'
+                        const ldStroke = layers.colorOf(iit) ?? LINE_DRAW_COLORS[p.part_type] ?? '#a78bfa'
                         return (
                           <rect key={`ip-${i}`} x={x} y={y} width={w} height={h}
                             fill={isLineDrawing ? 'none' : fill}
                             fillOpacity={isLineDrawing ? 0 : 0.6}
                             stroke={isLineDrawing ? ldStroke : fill}
-                            strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
+                            strokeWidth={layers.w(iit, isLineDrawing ? 1 : 0.5) / z}
                             opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
-                      {effectiveIntVisible && (rp.internal_slides ?? []).map((s: ResolvedDrawerSlide, j: number) => {
+                      {showInt('inner_drawer_runners') && (rp.internal_slides ?? []).map((s: ResolvedDrawerSlide, j: number) => {
+                        const intEffP = layers.props('inner_drawer_runners', z)
                         const { ex, ey, ew, eh } = slideElevRect(s)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                        const fill = PART_COLORS.db_slide
-                        const ldStroke = LINE_DRAW_COLORS.db_slide
+                        const fill = layers.color('inner_drawer_runners', PART_COLORS.db_slide)
+                        const ldStroke = layers.color('inner_drawer_runners', LINE_DRAW_COLORS.db_slide)
                         // Only use the detailed model silhouette while the rail is big enough
                         // on screen to resolve it. The silhouette is a dense run of tiny
                         // segments; on a thin rail seen edge-on they merge into a bulky blob
@@ -1185,7 +1237,7 @@ export default function ElevationSVG({
                                 slide={s} tris={tris} wireMode={false} selected={false}
                                 fill={isLineDrawing ? 'none' : fill}
                                 stroke={isLineDrawing ? ldStroke : fill}
-                                strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
+                                strokeWidth={layers.w('inner_drawer_runners', isLineDrawing ? 1 : 0.5) / z}
                                 dataPartId={`elev-islide-${cab.id}-${j}`} />
                             </g>
                           )
@@ -1195,43 +1247,46 @@ export default function ElevationSVG({
                             fill={isLineDrawing ? 'none' : fill}
                             fillOpacity={isLineDrawing ? 0 : 0.5}
                             stroke={isLineDrawing ? ldStroke : fill}
-                            strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
+                            strokeWidth={layers.w('inner_drawer_runners', isLineDrawing ? 1 : 0.5) / z}
                             opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
                       {/* Hinge cup + anchor bore markers (cheap circles — the full
                           GLB silhouette was too heavy to re-project on every zoom). */}
-                      {effectiveIntVisible && (rp.hinge_instances ?? []).flatMap((h, hi: number) =>
+                      {showInt('hinges') && (rp.hinge_instances ?? []).flatMap((h, hi: number) =>
                         h.cup_drills.map((dr, j) => {
                           const c = toSVGPt(dr.x, dr.y)
                           return (
                             <circle key={`hg-${hi}-${j}`} cx={c.x} cy={c.y} r={Math.max(dr.radius, 0.5)}
-                              fill="none" stroke={isLineDrawing ? '#475569' : '#a855f7'}
-                              strokeWidth={(isLineDrawing ? 1 : 0.6) / z}
-                              opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
+                              fill="none" stroke={layers.color('hinges', isLineDrawing ? '#475569' : '#a855f7')}
+                              strokeWidth={layers.w('hinges', isLineDrawing ? 1 : 0.6) / z}
+                              opacity={layers.props('hinges', z).opacity} style={{ pointerEvents: 'none' }} />
                           )
                         }),
                       )}
-                      {effectiveShowDrawerBox && rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => [
-                        ...ds.box_parts.map((p: ResolvedDrawerBoxPart, j: number) => {
+                      {(effectiveShowDrawerBox || effectiveShowDrawerRunners) && rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => {
+                        const boxP    = layers.props('drawer_boxes', z)
+                        const intEffP = layers.props('drawer_runners', z)
+                        return [
+                        ...(effectiveShowDrawerBox ? ds.box_parts : []).map((p: ResolvedDrawerBoxPart, j: number) => {
                           const { ex, ey, ew, eh } = drawerBoxPartElevRect(p)
                           const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                          const fill = PART_COLORS[p.part_type] ?? '#34d399'
-                          const ldStroke = LINE_DRAW_COLORS[p.part_type] ?? '#6ee7b7'
+                          const fill = layers.colorOf('drawer_boxes') ?? PART_COLORS[p.part_type] ?? '#34d399'
+                          const ldStroke = layers.colorOf('drawer_boxes') ?? LINE_DRAW_COLORS[p.part_type] ?? '#6ee7b7'
                           return (
                             <rect key={`ds-${i}-bp-${j}`} x={x} y={y} width={w} height={h}
                               fill={isLineDrawing ? 'none' : fill}
                               fillOpacity={isLineDrawing ? 0 : 0.6}
                               stroke={isLineDrawing ? ldStroke : fill}
-                              strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
-                              opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
+                              strokeWidth={layers.w('drawer_boxes', isLineDrawing ? 1 : 0.5) / z}
+                              opacity={boxP.opacity} style={{ pointerEvents: 'none' }} />
                           )
                         }),
-                        ...ds.slides.map((s: ResolvedDrawerSlide, j: number) => {
+                        ...(effectiveShowDrawerRunners ? ds.slides : []).map((s: ResolvedDrawerSlide, j: number) => {
                           const { ex, ey, ew, eh } = slideElevRect(s)
                           const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                          const fill = PART_COLORS.db_slide
-                          const ldStroke = LINE_DRAW_COLORS.db_slide
+                          const fill = layers.color('drawer_runners', PART_COLORS.db_slide)
+                          const ldStroke = layers.color('drawer_runners', LINE_DRAW_COLORS.db_slide)
                           // Only use the detailed model silhouette while the rail is big enough
                           // on screen to resolve it; when zoomed out the dense outline merges
                           // into a bulky blob, so until the rail is clearly wide on screen fall
@@ -1248,7 +1303,7 @@ export default function ElevationSVG({
                                   slide={s} tris={tris} wireMode={false} selected={false}
                                   fill={isLineDrawing ? 'none' : fill}
                                   stroke={isLineDrawing ? ldStroke : fill}
-                                  strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
+                                  strokeWidth={layers.w('drawer_runners', isLineDrawing ? 1 : 0.5) / z}
                                   dataPartId={`elev-slide-${cab.id}-${i}-${j}`} />
                               </g>
                             )
@@ -1258,42 +1313,46 @@ export default function ElevationSVG({
                               fill={isLineDrawing ? 'none' : fill}
                               fillOpacity={isLineDrawing ? 0 : 0.5}
                               stroke={isLineDrawing ? ldStroke : fill}
-                              strokeWidth={isLineDrawing ? 1 / z : 0.5 / z}
+                              strokeWidth={layers.w('drawer_runners', isLineDrawing ? 1 : 0.5) / z}
                               opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
                           )
                         }),
-                      ])}
-                      {faceOpacity > 0 && faceL.visible && (
+                      ]})}
+                      {faceOpacity > 0 && (
                       <g opacity={faceOpacity} style={{ pointerEvents: faceOpacity < 0.1 ? 'none' : undefined }}>
                       {rp.face_zones.map((fz, i) => {
+                        const faceItem = faceZoneItem(fz.face_type)
+                        if (faceItem && !layers.show(faceItem)) return null
+                        const faceP = layers.props(faceItem ?? 'doors', z)
                         const { ex, ey, ew, eh } = zoneElevRect(fz)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                        const fill = PART_COLORS[fz.face_type] ?? '#60a5fa'
-                        const ldStroke = LINE_DRAW_COLORS[fz.face_type] ?? '#60a5fa'
+                        const fit = faceItem ?? 'doors'
+                        const fill = layers.colorOf(fit) ?? PART_COLORS[fz.face_type] ?? '#60a5fa'
+                        const ldStroke = layers.colorOf(fit) ?? LINE_DRAW_COLORS[fz.face_type] ?? '#60a5fa'
                         const faceStroke = isLineDrawing ? ldStroke : (isSel ? '#e2e8f0' : fill)
                         const hingeLine = fz.hinge_side === 'left'
-                          ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={faceStroke} strokeWidth={isLineDrawing ? 1.5 / z : 2 / z} style={{ pointerEvents: 'none' }} />
+                          ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={faceStroke} strokeWidth={layers.w(fit, isLineDrawing ? 1.5 : 2) / z} style={{ pointerEvents: 'none' }} />
                           : fz.hinge_side === 'right'
-                          ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={faceStroke} strokeWidth={isLineDrawing ? 1.5 / z : 2 / z} style={{ pointerEvents: 'none' }} />
+                          ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={faceStroke} strokeWidth={layers.w(fit, isLineDrawing ? 1.5 : 2) / z} style={{ pointerEvents: 'none' }} />
                           : null
-                        const chevron = displayConfig.annotations.elev_door_chevrons && fz.face_type === 'door' && fz.hinge_side
+                        const chevron = layers.show('door_chevrons') && fz.face_type === 'door' && fz.hinge_side
                           ? (() => {
                               const pts = fz.hinge_side === 'left'
                                 ? `${x},${y} ${x + w},${y + h / 2} ${x},${y + h}`
                                 : `${x + w},${y} ${x},${y + h / 2} ${x + w},${y + h}`
-                              return <polyline points={pts} fill="none" stroke={faceStroke}
-                                strokeWidth={0.5 / z} strokeOpacity={0.7}
+                              return <polyline points={pts} fill="none" stroke={layers.color('door_chevrons', faceStroke)}
+                                strokeWidth={layers.w('door_chevrons', 0.5) / z} strokeOpacity={0.7} opacity={layers.op('door_chevrons')}
                                 strokeDasharray={`${6 / z} ${3 / z}`}
                                 strokeLinejoin="miter" strokeLinecap="butt"
                                 style={{ pointerEvents: 'none' }} />
                             })()
                           : null
-                        const drawerLabel = fz.face_type === 'drawer_face' && displayConfig.annotations.elev_drawer_labels
+                        const drawerLabel = fz.face_type === 'drawer_face' && layers.show('drawer_labels')
                           ? (
                             <text
                               x={x + w / 2} y={y + h - 4 / z}
                               textAnchor="middle" dominantBaseline="auto"
-                              fontSize={11 / z} fill={faceStroke} fillOpacity={0.7}
+                              fontSize={layers.w('drawer_labels', 11) / z} fill={layers.color('drawer_labels', faceStroke)} fillOpacity={0.7} opacity={layers.op('drawer_labels')}
                               style={{ userSelect: 'none', pointerEvents: 'none' }}>
                               drawer
                             </text>
@@ -1303,7 +1362,7 @@ export default function ElevationSVG({
                             <rect x={x} y={y} width={w} height={h}
                               fill={isLineDrawing ? 'none' : fill}
                               fillOpacity={isLineDrawing ? 0 : 0.25}
-                              stroke={faceStroke} strokeWidth={1 / z}
+                              stroke={faceStroke} strokeWidth={layers.w(fit, 1) / z}
                               opacity={faceP.opacity} />
                             {hingeLine}
                             {chevron}
@@ -1315,41 +1374,43 @@ export default function ElevationSVG({
                       </g>)}
 
                       {/* Custom parts (panels / fillers / end panels) — room-visible only */}
-                      {(rp.custom_parts ?? []).filter(p => p.show_in_room).map((p, i) => {
+                      {layers.any(...CUSTOM_PART_ITEMS) && (rp.custom_parts ?? []).filter(p => p.show_in_room && layers.show(customPartItem(p))).map((p, i) => {
+                        const cpi = customPartItem(p)
                         const { ex, ey } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
                         if (ex <= 0 || ey <= 0) return null
                         const { x, y, w, h } = toSVG(p.x, p.y + ey, ex, ey)
                         return (
                           <rect key={`cust-${i}`} x={x} y={y} width={w} height={h}
-                            fill={isLineDrawing ? 'none' : '#a78bfa'}
+                            fill={isLineDrawing ? 'none' : layers.color(cpi, '#a78bfa')}
                             fillOpacity={isLineDrawing ? 0 : 0.4}
-                            stroke={isLineDrawing ? '#a78bfa' : (isSel ? '#e2e8f0' : '#7c3aed')}
-                            strokeWidth={isLineDrawing ? 1 / z : 0.6 / z}
-                            opacity={carcP.opacity} style={{ pointerEvents: 'none' }} />
+                            stroke={isLineDrawing ? layers.color(cpi, '#a78bfa') : (isSel ? '#e2e8f0' : layers.color(cpi, '#7c3aed'))}
+                            strokeWidth={layers.w(cpi, isLineDrawing ? 1 : 0.6) / z}
+                            strokeDasharray={layers.props(cpi, z).strokeDasharray}
+                            opacity={layers.props(cpi, z).opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
 
                       {/* Hand-added part operations (Part Editor) — projected to this
                           cabinet's elevation. Generated holes are excluded (not drawn here). */}
-                      {(handMarkersByCab.get(cab.id)?.length ?? 0) > 0 && (
+                      {layers.show('machining') && (handMarkersByCab.get(cab.id)?.length ?? 0) > 0 && (
                         <HandOpMarkersSVG markers={handMarkersByCab.get(cab.id)!} project={(px, py) => toSVGPt(px, py)} />
                       )}
 
                       {/* Inner-drawer labels — one per inner-drawer face, drawn last so
                           they sit on top of the open-zone overlay. */}
-                      {effectiveIntVisible && displayConfig.annotations.elev_inner_drawer_labels &&
+                      {showInt('inner_drawers') && layers.show('inner_drawer_labels') &&
                         rp.internal_parts.filter(p => p.part_type === 'inner_drawer_front').map((p, i) => {
                           const { ex, ey, ew, eh } = shelfElevRect(p)
                           const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                           if (w < 24 / z || h < 12 / z) return null
-                          const col = isLineDrawing
+                          const col = layers.colorOf('inner_drawer_labels') ?? (isLineDrawing
                             ? (LINE_DRAW_COLORS.inner_drawer_front ?? '#fda4af')
-                            : (PART_COLORS.inner_drawer_front ?? '#fb7185')
+                            : (PART_COLORS.inner_drawer_front ?? '#fb7185'))
                           return (
                             <text key={`idl-${i}`}
                               x={x + w / 2} y={y + h - 4 / z}
                               textAnchor="middle" dominantBaseline="auto"
-                              fontSize={11 / z} fill={col} fillOpacity={0.85}
+                              fontSize={layers.w('inner_drawer_labels', 11) / z} fill={col} fillOpacity={0.85} opacity={layers.op('inner_drawer_labels')}
                               style={{ userSelect: 'none', pointerEvents: 'none' }}>
                               inner drawer
                             </text>
@@ -1357,19 +1418,19 @@ export default function ElevationSVG({
                         })}
 
                       {/* Shelf labels — "adj sh" / "fix sh" at each shelf's top-left corner. */}
-                      {effectiveIntVisible && displayConfig.annotations.elev_shelf_labels &&
+                      {showInt('shelves') && layers.show('shelf_labels') &&
                         rp.internal_parts.filter(p => p.part_type === 'adj_shelf' || p.part_type === 'fixed_shelf').map((p, i) => {
                           const { ex, ey, ew, eh } = shelfElevRect(p)
                           const { x, y, w } = toSVG(ex, ey, ew, eh)
                           if (w < 30 / z) return null
-                          const col = isLineDrawing
+                          const col = layers.colorOf('shelf_labels') ?? (isLineDrawing
                             ? (LINE_DRAW_COLORS[p.part_type] ?? '#a78bfa')
-                            : (PART_COLORS[p.part_type] ?? '#818cf8')
+                            : (PART_COLORS[p.part_type] ?? '#818cf8'))
                           return (
                             <text key={`shl-${i}`}
                               x={x + 3 / z} y={y - 2 / z}
                               textAnchor="start" dominantBaseline="auto"
-                              fontSize={9 / z} fill={col} fillOpacity={0.9}
+                              fontSize={layers.w('shelf_labels', 9) / z} fill={col} fillOpacity={0.9} opacity={layers.op('shelf_labels')}
                               style={{ userSelect: 'none', pointerEvents: 'none' }}>
                               {p.part_type === 'adj_shelf' ? 'adj sh' : 'fix sh'}
                             </text>
@@ -1378,33 +1439,33 @@ export default function ElevationSVG({
                     </>)
                   })()}
 
-                  {/* Selection ring when carcass layer is hidden */}
-                  {isSel && !carcL.visible && (
+                  {/* Selection ring when the carcase is hidden */}
+                  {isSel && !anyCarcase && hit && (
                     <rect
-                      x={rx} y={ry} width={displayDx} height={displayDy}
+                      x={hit.x} y={hit.y} width={hit.w} height={hit.h}
                       fill="none" stroke="#3b82f6" strokeWidth={1.5 / z}
                       strokeDasharray={`${6 / z} ${3 / z}`}
                     />
                   )}
 
                   {/* Label */}
-                  {lblL.visible && (
+                  {hit && layers.show('cabinet_labels') && (
                     <text
-                      x={rx + displayDx / 2} y={ry + displayDy / 2 - labelFs * 0.6}
+                      x={rx + displayDx / 2} y={ry + displayDy / 2 - layers.w('cabinet_labels', labelFs) * 0.6}
                       textAnchor="middle" dominantBaseline="middle"
-                      fontSize={labelFs} fontWeight="600"
-                      fill={isSel ? '#fff' : '#93c5fd'}
+                      fontSize={layers.w('cabinet_labels', labelFs)} fontWeight="600"
+                      fill={isSel ? '#fff' : layers.color('cabinet_labels', '#93c5fd')} opacity={layers.op('cabinet_labels')}
                       style={{ userSelect: 'none', pointerEvents: 'none' }}>
                       {cab.label ?? '—'}
                     </text>
                   )}
 
                   {/* Dimensions */}
-                  {dimL.visible && (
+                  {hit && layers.show('cabinet_sizes') && (
                     <text
-                      x={rx + displayDx / 2} y={ry + displayDy / 2 + dimFs * 0.8}
+                      x={rx + displayDx / 2} y={ry + displayDy / 2 + layers.w('cabinet_sizes', dimFs) * 0.8}
                       textAnchor="middle" dominantBaseline="middle"
-                      fontSize={dimFs} fill='#ffffff'
+                      fontSize={layers.w('cabinet_sizes', dimFs)} fill={layers.color('cabinet_sizes', '#ffffff')} opacity={layers.op('cabinet_sizes')}
                       style={{ userSelect: 'none', pointerEvents: 'none' }}>
                       {displayDx}W × {displayDy}H
                     </text>
@@ -1619,18 +1680,19 @@ export default function ElevationSVG({
             })()}
 
             {/* Top horizontal chain — overhead cabs (wall + wall_corner) */}
-            {displayConfig.layers.dim_elev_wall_chain.visible && (() => {
-              const overheadCabs = wallCabs.filter(c =>
+            {layers.show('dim_elev_wall_chain') && (() => {
+              const overheadCabs = chainCabs.filter(c =>
                 c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'
               )
               if (overheadCabs.length === 0) return null
               const segs = computeElevChain(overheadCabs, wall)
               const chainY = -tickH * 2
-              const col = '#ffffff'
-              const sw = 1 / z, fs = 12 / z, tk = 8 / z
+              const col = layers.color('dim_elev_wall_chain', '#ffffff')
+              const chainOp = layers.op('dim_elev_wall_chain')
+              const sw = layers.w('dim_elev_wall_chain', 1) / z, fs = 12 / z, tk = 8 / z
               const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
               return (
-                <g pointerEvents="none" style={{ userSelect: 'none' }}>
+                <g pointerEvents="none" opacity={chainOp} style={{ userSelect: 'none' }}>
                   <line x1={0} y1={chainY} x2={wall.length} y2={chainY} stroke={col} strokeWidth={sw} />
                   {boundaries.map((x, i) => (
                     <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={col} strokeWidth={sw} />
@@ -1640,7 +1702,7 @@ export default function ElevationSVG({
                     const padX = fs * 1.8, padY = fs * 0.6
                     return (
                       <g key={i}>
-                        <rect x={mx - padX} y={chainY - padY} width={padX * 2} height={padY * 2} fill="#030712" />
+                        <rect x={mx - padX} y={chainY - padY} width={padX * 2} height={padY * 2} fill={layers.background ?? '#030712'} />
                         <text x={mx} y={chainY} textAnchor="middle" dominantBaseline="middle"
                           fontSize={fs} fill={col} style={{ userSelect: 'none', pointerEvents: 'none' }}>
                           {seg.label}
@@ -1653,8 +1715,8 @@ export default function ElevationSVG({
             })()}
 
             {/* Bottom horizontal chain — floor-touching cabs (base + tall), closest to the elevation */}
-            {displayConfig.layers.dim_elev_floor_chain.visible && (() => {
-              const floorCabs = wallCabs.filter(c =>
+            {layers.show('dim_elev_floor_chain') && (() => {
+              const floorCabs = chainCabs.filter(c =>
                 !c.is_kick_assembly && (
                   c.assembly_class === 'base' || c.assembly_class === 'base_corner' ||
                   c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'
@@ -1663,11 +1725,12 @@ export default function ElevationSVG({
               if (floorCabs.length === 0) return null
               const segs = computeElevChain(floorCabs, wall)
               const chainY = roomH + tickH * 1.5
-              const col = '#ffffff'
-              const sw = 1 / z, fs = 12 / z, tk = 8 / z
+              const col = layers.color('dim_elev_floor_chain', '#ffffff')
+              const chainOp = layers.op('dim_elev_floor_chain')
+              const sw = layers.w('dim_elev_floor_chain', 1) / z, fs = 12 / z, tk = 8 / z
               const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
               return (
-                <g pointerEvents="none" style={{ userSelect: 'none' }}>
+                <g pointerEvents="none" opacity={chainOp} style={{ userSelect: 'none' }}>
                   <line x1={0} y1={chainY} x2={wall.length} y2={chainY} stroke={col} strokeWidth={sw} />
                   {boundaries.map((x, i) => (
                     <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={col} strokeWidth={sw} />
@@ -1677,7 +1740,7 @@ export default function ElevationSVG({
                     const padX = fs * 1.8, padY = fs * 0.6
                     return (
                       <g key={i}>
-                        <rect x={mx - padX} y={chainY - padY} width={padX * 2} height={padY * 2} fill="#030712" />
+                        <rect x={mx - padX} y={chainY - padY} width={padX * 2} height={padY * 2} fill={layers.background ?? '#030712'} />
                         <text x={mx} y={chainY} textAnchor="middle" dominantBaseline="middle"
                           fontSize={fs} fill={col} style={{ userSelect: 'none', pointerEvents: 'none' }}>
                           {seg.label}
@@ -1700,7 +1763,7 @@ export default function ElevationSVG({
                   <line x1={0} y1={dimY} x2={wall.length} y2={dimY} stroke={col} strokeWidth={sw} />
                   <line x1={0}           y1={dimY - tk} x2={0}           y2={dimY + tk} stroke={col} strokeWidth={sw} />
                   <line x1={wall.length} y1={dimY - tk} x2={wall.length} y2={dimY + tk} stroke={col} strokeWidth={sw} />
-                  <rect x={mx - padX} y={dimY - padY} width={padX * 2} height={padY * 2} fill="#030712" />
+                  <rect x={mx - padX} y={dimY - padY} width={padX * 2} height={padY * 2} fill={layers.background ?? '#030712'} />
                   <text x={mx} y={dimY} textAnchor="middle" dominantBaseline="middle"
                     fontSize={fs} fill={col} style={{ userSelect: 'none', pointerEvents: 'none' }}>
                     {Math.round(wall.length)}
@@ -1710,9 +1773,9 @@ export default function ElevationSVG({
             })()}
 
             {/* Left dimension — Y-axis height chain */}
-            {displayConfig.layers.dim_elevation_y.visible && (() => {
-              const baseCabEl = wallCabs.find(c => !c.is_kick_assembly && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')) ?? null
-              const overheadCabEl = wallCabs.find(c => c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') ?? null
+            {layers.show('dim_elev_height') && (() => {
+              const baseCabEl = chainCabs.find(c => !c.is_kick_assembly && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')) ?? null
+              const overheadCabEl = chainCabs.find(c => c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') ?? null
 
               // A kick-detached member carries no kick of its own (has_toekick false): its
               // dy IS the carcase height and it's raised by pos_z. The kick height comes from
@@ -1776,13 +1839,14 @@ export default function ElevationSVG({
 
               const chainX = -70 / z
               const tkLen = 8 / z
-              const sw = 1 / z
+              const sw = layers.w('dim_elev_height', 1) / z
               const fs = 12 / z
-              const dimCol = '#ffffff'
+              const dimCol = layers.color('dim_elev_height', '#ffffff')
+              const chainOp = layers.op('dim_elev_height')
               const boundaries = Array.from(new Set(segs.flatMap(s => [s.fromY, s.toY])))
 
               return (
-                <g pointerEvents="none" style={{ userSelect: 'none' }}>
+                <g pointerEvents="none" opacity={chainOp} style={{ userSelect: 'none' }}>
                   <line x1={chainX} y1={0} x2={chainX} y2={roomH} stroke={dimCol} strokeWidth={sw} />
                   {boundaries.map((y, i) => (
                     <line key={i}
@@ -1796,7 +1860,7 @@ export default function ElevationSVG({
                     const padY = fs * 0.6
                     return (
                       <g key={i} transform={`rotate(-90,${chainX},${midY})`}>
-                        <rect x={chainX - padX} y={midY - padY} width={padX * 2} height={padY * 2} fill="#030712" />
+                        <rect x={chainX - padX} y={midY - padY} width={padX * 2} height={padY * 2} fill={layers.background ?? '#030712'} />
                         <text x={chainX} y={midY}
                           textAnchor="middle" dominantBaseline="middle"
                           fontSize={fs} fill={dimCol}

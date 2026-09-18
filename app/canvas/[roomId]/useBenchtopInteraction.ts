@@ -6,6 +6,7 @@ import type { BenchtopInstance, BenchtopArcSegment, Room, Wall, CabinetInstance 
 import { type Pt, dist, SNAP_PX } from '@/src/lib/geometry'
 import { computeSnap, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
 import type { Mode, Selected, ContextMenuState, BtMoveDrag, BtRotateDrag } from './canvasTypes'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 type Snapshot = { walls: Wall[]; cabinets: CabinetInstance[]; benchtops: BenchtopInstance[] }
 
@@ -214,7 +215,7 @@ export function useBenchtopInteraction(p: Params) {
   }
 
   async function handleDeleteBenchtop(id: string) {
-    if (!confirm('Delete this benchtop?')) return
+    if (!(await confirmDelete({ title: 'Delete Benchtop', message: 'Delete this benchtop?' }))) return
     captureSnapshot()
     setBenchtops(bs => bs.filter(b => b.id !== id))
     setSelected(null)

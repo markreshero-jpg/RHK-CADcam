@@ -307,7 +307,7 @@ export default function PartOrthoView({ u, v, n, swap, mirror, face, view, measu
       {drag && (() => {
         const fs = Math.max(vw, vh) / 45
         const s = toS(drag.px, drag.py)
-        const label = `${Math.round(s.sx)}, ${Math.round(s.sy)}`
+        const label = `${fmtMm(s.sx)}, ${fmtMm(s.sy)}`
         const bx = s.sx + fs, by = (vh - s.sy) - fs * 2.2
         return (
           <g style={{ pointerEvents: 'none' }}>

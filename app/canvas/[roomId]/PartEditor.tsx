@@ -19,7 +19,7 @@
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import * as THREE from 'three'
-import { Part, PreviewCanvas, type PartMeta, type EbSpec } from '@/src/components/three/PartViewer'
+import { Part, PreviewCanvas, extForAxes, type PartMeta, type EbSpec } from '@/src/components/three/PartViewer'
 import { fmtMm } from '@/src/lib/format'
 import { sampleShapeOutline, type ShapePt } from '@/src/lib/shapePath'
 import { type EditorView, displayExtents, roundStore } from './partEditor/partEditorCore'
@@ -34,8 +34,10 @@ import type { RefOutline } from './partEditor/referenceOutlines'
 import PartOverridesPanel from './partEditor/PartOverridesPanel'
 import { dbLoadShapeOverrides, dbSaveShapeOverride, dbSavePartPosOverride, dbUpdateCustomPart, dbRestoreShapeRevision, dbDeleteShapeOverride } from './canvasDB'
 import type { ShapeMeta, ShapeSegment, ShapeOverride, ShapeOverrides, ShapeRevisionEntry, PartPosOverrides, CabinetCustomPart } from './canvasDB'
+import type { FormulaScope } from '@/src/lib/formula'
 import { applyShapeSizeSync, clearShapeWrittenSlots, type ShapeSyncCtx } from './OverridesView'
 import { customFieldForExtent } from '@/src/lib/customPartBox'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 // Thin vertical divider that reports drag deltas (px) so a parent can resize an
 // adjacent panel. Uses pointer capture so the drag survives leaving the 1.5px bar.
@@ -56,6 +58,7 @@ export default function PartEditor({
   cabinetId, part, ebSpec, onClose,
   partOverrides, onOverridesChange, customParts, setCustomParts, onPartMetaChange, partBase,
   shapeOverrides, onShapeOverridesChange, initialShapeOpen, referenceOutlines,
+  formulaScope,
 }: {
   cabinetId: string
   part:      PartMeta
@@ -71,9 +74,10 @@ export default function PartEditor({
   // Fires with the size-patched meta after a shape save so the host keeps this
   // editor's dims (and any part it re-renders) in step with what was written.
   onPartMetaChange?:  (m: PartMeta) => void
-  // Base resolved dims (buildBaseDims convention: w/h in-plane, d thickness) —
-  // recorded into shape meta at save so the Overrides tab can flag staleness.
-  partBase?:          { w: number; h: number; d: number }
+  // Base resolved dims (buildBaseDims: raw CV axes — dy=length, dx=width,
+  // dz=thickness) — recorded into shape meta at save so the Overrides tab can
+  // flag staleness.
+  partBase?:          { dy: number; dx: number; dz: number }
   // Lifted shape state (CabinetEditModal): when provided, this editor reads the
   // part's shape from the map and pushes saves back up — no self-load, and the
   // cabinet 3D view / Overrides tab see the new shape immediately.
@@ -85,6 +89,9 @@ export default function PartEditor({
   // Ghost outlines of neighbouring parts for the shape editor (M7c) —
   // computed by the modal from the resolved cabinet.
   referenceOutlines?:     RefOutline[]
+  // Evaluation scope for size formulas in the Overrides sidebar (built by
+  // CabinetEditModal from the resolved cabinet + cached input).
+  formulaScope?:          FormulaScope | null
 }) {
   const [view, setView] = useState<EditorView>('front')
   // Right sidebar tab: op properties (contextual) or this part's overrides —
@@ -302,7 +309,9 @@ export default function PartEditor({
       }
     } else if (!isCustom) {
       metaOut.sizeSlots = { across: `s${swExt}` as 'sw' | 'sh' | 'sd', up: `s${shExt}` as 'sw' | 'sh' | 'sd' }
-      if (partBase) metaOut.baseAtSave = { w: partBase.w, h: partBase.h }
+      // Stored meta keeps its w/h keys (an unordered in-plane pair) — fed from
+      // the raw base dims (dy=length, dx=width).
+      if (partBase) metaOut.baseAtSave = { w: partBase.dy, h: partBase.dx }
     }
 
     const saved = await dbSaveShapeOverride(cabinetId, part.id, segsOut, metaOut)
@@ -380,7 +389,7 @@ export default function PartEditor({
   async function handleShapeRemove() {
     if (!shapeOv) return
     const n = shapeOv.revisions ?? 1
-    if (!confirm(`Remove the drawn shape for ${part.label}? All ${n} revision${n !== 1 ? 's' : ''} are deleted and the part reverts to a plain rectangle.`)) return
+    if (!(await confirmDelete({ title: 'Remove Shape', confirmLabel: 'Remove', message: `Remove the drawn shape for ${part.label}? All ${n} revision${n !== 1 ? 's' : ''} are deleted and the part reverts to a plain rectangle.` }))) return
     await dbDeleteShapeOverride(cabinetId, part.id)
     clearShapeWrittenSlots(cabinetId, part.id, shapeOv, shapeSyncCtx)
     setShapePreview(null)
@@ -388,10 +397,10 @@ export default function PartEditor({
     // Revert the two in-plane display extents to base (thickness — and any
     // manual thickness override — untouched; custom dims stay authoritative).
     if (!part.id.startsWith('custom_') && partBase) {
+      const ext = extForAxes(part.panelKind, part.dxIsWidth)
       const next = { ...part }
-      if (part.panelKind === 'side')            { next.h = partBase.w; next.d = partBase.h }
-      else if (part.panelKind === 'horizontal') { next.w = partBase.w; next.d = partBase.h }
-      else                                      { next.w = partBase.w; next.h = partBase.h }
+      next[ext.DY] = partBase.dy
+      next[ext.DX] = partBase.dx
       onPartMetaChange?.(next)
     }
   }
@@ -406,7 +415,9 @@ export default function PartEditor({
         <div className="flex items-baseline gap-3 min-w-0">
           <span className="text-sm font-semibold text-white">Part Editor</span>
           <span className="text-xs text-gray-300 truncate">{part.label}</span>
-          <span className="text-[11px] text-gray-500 font-mono whitespace-nowrap">{fmtMm(u)} × {fmtMm(v)} × {fmtMm(n)} mm</span>
+          <span className="text-[11px] text-gray-500 font-mono whitespace-nowrap" title="CV convention: DY = length (grain) · DX = width · DZ = thickness">
+            {(() => { const e = extForAxes(part.panelKind, part.dxIsWidth); return `DY ${fmtMm(part[e.DY])} × DX ${fmtMm(part[e.DX])} × DZ ${fmtMm(part[e.DZ])} mm` })()}
+          </span>
           {(errorCount > 0 || warnCount > 0) && (
             <span className="flex items-center gap-1.5 text-[10px]">
               {errorCount > 0 && <span title="Operations with errors" className="px-1.5 py-0.5 rounded bg-red-900/60 text-red-300 font-medium">{errorCount} error{errorCount > 1 ? 's' : ''}</span>}
@@ -634,6 +645,7 @@ export default function PartEditor({
                 partBase={partBase}
                 partOverrides={partOverrides}
                 onOverridesChange={onOverridesChange}
+                formulaScope={formulaScope}
                 customParts={customParts}
                 setCustomParts={setCustomParts}
                 shapeOv={shapeOv}

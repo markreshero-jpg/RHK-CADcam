@@ -1,7 +1,7 @@
 'use client'
 import { Wall, CabinetInstance } from '@/src/lib/types'
 import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide } from '@/src/lib/geometry'
-import { LayerConfig } from '@/src/lib/displayConfig'
+import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
 
 interface Props {
   wall: Wall
@@ -14,6 +14,8 @@ interface Props {
   layerOverall: LayerConfig
   layerBase: LayerConfig
   layerWallCab: LayerConfig
+  /** Label backing-chip colour — the view background (layer set). */
+  labelBg?: string
 }
 
 type Seg = { from: number; to: number; label: number }
@@ -37,7 +39,7 @@ function computeChain(cabs: CabinetInstance[], wall: Wall): Seg[] {
 }
 
 function DimLine({
-  wall, out, dist, segs, zoom, col,
+  wall, out, dist, segs, zoom, col, weight = 1, bg = '#030712', opacity = 1,
 }: {
   wall: Wall
   out: { x: number; y: number }
@@ -45,11 +47,14 @@ function DimLine({
   segs: Seg[]
   zoom: number
   col: string
+  weight?: number   // layer line-weight multiplier
+  bg?: string       // label backing-chip colour
+  opacity?: number  // layer opacity multiplier
 }) {
   const z = zoom
   const wd = wallDir(wall)
   const thick = wall.wall_type === 'island' ? 0 : wall.thickness
-  const sw = 1 / z
+  const sw = weight / z
   const fs = 12 / z
   const tickH = 6 / z
   const textAngle = Math.cos(toRad(wall.angle)) < -0.001 ? wall.angle + 180 : wall.angle
@@ -63,7 +68,7 @@ function DimLine({
   const p0 = pt(0), pL = pt(wall.length)
 
   return (
-    <g pointerEvents="none" style={{ userSelect: 'none' }}>
+    <g pointerEvents="none" opacity={opacity} style={{ userSelect: 'none' }}>
       <line x1={p0.x} y1={p0.y} x2={pL.x} y2={pL.y} stroke={col} strokeWidth={sw} />
       {boundaries.map((t, i) => {
         const p = pt(t)
@@ -82,7 +87,7 @@ function DimLine({
         const padY = fs * 0.6
         return (
           <g key={i} transform={`rotate(${textAngle}, ${p.x}, ${p.y})`}>
-            <rect x={p.x - padX} y={p.y - padY} width={padX * 2} height={padY * 2} fill="#030712" />
+            <rect x={p.x - padX} y={p.y - padY} width={padX * 2} height={padY * 2} fill={bg} />
             <text x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>
               {seg.label}
             </text>
@@ -98,7 +103,7 @@ function DimLine({
 // (0 for front/inside-face cabinets; the wall thickness for back-side cabinets, whose
 // back sits on the outer face).
 function DepthDim({
-  wall, inward, tPos, dz, zoom, col, sign, backOffset = 0,
+  wall, inward, tPos, dz, zoom, col, sign, backOffset = 0, weight = 1, bg = '#030712', opacity = 1,
 }: {
   wall: Wall
   inward: { x: number; y: number }
@@ -106,12 +111,15 @@ function DepthDim({
   dz: number
   zoom: number
   col: string
+  weight?: number   // layer line-weight multiplier
+  bg?: string       // label backing-chip colour
+  opacity?: number  // layer opacity multiplier
   sign: 1 | -1
   backOffset?: number
 }) {
   const wd = wallDir(wall)
   const z = zoom
-  const sw = 1 / z
+  const sw = weight / z
   const fs = 12 / z
   const tickH = 6 / z
 
@@ -130,13 +138,13 @@ function DepthDim({
   const textAngle = Math.abs(rawAngle) > 90 ? rawAngle + 180 : rawAngle
 
   return (
-    <g pointerEvents="none" style={{ userSelect: 'none' }}>
+    <g pointerEvents="none" opacity={opacity} style={{ userSelect: 'none' }}>
       <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={col} strokeWidth={sw} />
       {/* Ticks run along the wall direction */}
       <line x1={sx - wd.x * tickH} y1={sy - wd.y * tickH} x2={sx + wd.x * tickH} y2={sy + wd.y * tickH} stroke={col} strokeWidth={sw} />
       <line x1={ex - wd.x * tickH} y1={ey - wd.y * tickH} x2={ex + wd.x * tickH} y2={ey + wd.y * tickH} stroke={col} strokeWidth={sw} />
       <g transform={`rotate(${textAngle}, ${midX}, ${midY})`}>
-        <rect x={midX - fs * 1.8} y={midY - fs * 0.6} width={fs * 3.6} height={fs * 1.2} fill="#030712" />
+        <rect x={midX - fs * 1.8} y={midY - fs * 0.6} width={fs * 3.6} height={fs * 1.2} fill={bg} />
         <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>
           {Math.round(dz)}
         </text>
@@ -147,7 +155,7 @@ function DepthDim({
 
 export default function WallDimensionChain({
   wall, walls, cabinets, centX, centY, zoom, selected,
-  layerOverall, layerBase, layerWallCab,
+  layerOverall, layerBase, layerWallCab, labelBg = '#030712',
 }: Props) {
   const inward = wallInwardNormal(wall, centX, centY)
   const out = { x: -inward.x, y: -inward.y }
@@ -193,26 +201,26 @@ export default function WallDimensionChain({
       <g key={key}>
         {/* Wall-parallel chain lines */}
         {layerWallCab.visible && wallCabs.length > 0 && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + 25 / z} segs={wallCabSegs} zoom={z} col={col} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + 25 / z} segs={wallCabSegs} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} bg={labelBg} />
         )}
         {layerBase.visible && baseCabs.length > 0 && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + 50 / z} segs={baseSegs} zoom={z} col={col} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + 50 / z} segs={baseSegs} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} bg={labelBg} />
         )}
         {layerOverall.visible && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + 75 / z} segs={overallSeg} zoom={z} col={col} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + 75 / z} segs={overallSeg} zoom={z} col={layerOverall.color ?? col} weight={layerOverall.weight} opacity={layerOverall.opacity} bg={labelBg} />
         )}
 
         {/* Perpendicular depth dimensions at wall ends */}
         {layerBase.visible && baseDz > 0 && (
           <>
-            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={baseDz} zoom={z} col={col} sign={-1} backOffset={backOffset} />
-            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={baseDz} zoom={z} col={col} sign={1} backOffset={backOffset} />
+            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={baseDz} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} sign={-1} backOffset={backOffset} bg={labelBg} />
+            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={baseDz} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} sign={1} backOffset={backOffset} bg={labelBg} />
           </>
         )}
         {layerWallCab.visible && showWallDepthSeparate && (
           <>
-            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={wallDz} zoom={z} col={col} sign={-1} backOffset={backOffset} />
-            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={wallDz} zoom={z} col={col} sign={1} backOffset={backOffset} />
+            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={wallDz} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} sign={-1} backOffset={backOffset} bg={labelBg} />
+            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={wallDz} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} sign={1} backOffset={backOffset} bg={labelBg} />
           </>
         )}
       </g>

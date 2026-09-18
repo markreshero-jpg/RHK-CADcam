@@ -32,6 +32,13 @@ export const PALETTE_CATEGORY_LABELS: Record<PaletteCategory, string> = {
   hinges:      'Hinges',
 }
 
+// Edgeband colour vocabulary: "Matching" (match the board face) is a stock
+// description, not a CSS colour — normalise it to null so consumers fall back
+// to the panel's face colour instead of feeding THREE.Color an unknown name.
+export function ebColour(c: string | null | undefined): string | null {
+  return c && !/^match/i.test(c.trim()) ? c : null
+}
+
 // Display order in the editor.
 export const PALETTE_CATEGORY_ORDER: PaletteCategory[] = [
   'carcase', 'toekick', 'door', 'drawer_face', 'internal', 'drawer_box', 'slides', 'hinges',

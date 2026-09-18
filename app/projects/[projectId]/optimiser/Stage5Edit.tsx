@@ -16,6 +16,7 @@ import { loadResolvedDrillOps, projectSheetDrills, type ResolvedDrillOps } from 
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import type { SheetDrill } from '@/src/lib/optimiser/gcode'
 import { getUserPrefs } from '@/src/lib/userPrefs'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 const MAX_W = 860, MAX_H = 470
 
@@ -609,7 +610,7 @@ function SheetManagePanel({ sheet, onDelete, onResize }: { sheet: NestedSheet; o
             className="w-full bg-surface-2 border border-edge-strong rounded px-1.5 py-0.5 text-xs text-ink font-mono mt-0.5 focus:outline-none focus:border-accent" />
         </label>
       </div>
-      <button onClick={() => { if (confirm('Delete this sheet? Its parts return to the unplaced pool.')) onDelete() }}
+      <button onClick={async () => { if (await confirmDelete({ title: 'Delete Sheet', message: 'Delete this sheet? Its parts return to the unplaced pool.' })) onDelete() }}
         className="w-full text-[11px] px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-red-900/30 hover:text-red-300 transition-colors">
         Delete sheet
       </button>

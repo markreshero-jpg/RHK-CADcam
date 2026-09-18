@@ -37,6 +37,7 @@ export function resolveToekickParts(
   const TF  = cab.toekick_face_material.DZ      // kick face material thickness
   const TI  = cab.toekick_interior_material.DZ  // kick interior material thickness
   const TK  = r.TOEH
+  const FC  = r.TOEFC                           // subframe floor clearance
   const fid = cab.toekick_face_material.id
   const iid = cab.toekick_interior_material.id
 
@@ -85,15 +86,15 @@ export function resolveToekickParts(
     is_detached: false,
   })
 
-  // Kick Sub Front — sits behind front face, height = TK - TF (front face caps top)
-  // Y = TI so it sits on top of a floor strip / at material thickness
+  // Kick Sub Front — sits behind front face, lifted TOEFC off the floor and
+  // flush with the top of the kick
   parts.push({
     part_key: 'kick_sub_front',
     sort_order: 1,
-    DX: TK - TF,
+    DX: TK - FC,
     DY: W,
     DZ: TI,
-    X: x0, Y: TI, Z: kickSubZ,
+    X: x0, Y: FC, Z: kickSubZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: iid,
     edge_band: edgeSidesToBanding(edging.kick_sub_front, cab.toekick_interior_edgeband_id),
@@ -104,10 +105,10 @@ export function resolveToekickParts(
   parts.push({
     part_key: 'kick_back',
     sort_order: 2,
-    DX: TK - TF,
+    DX: TK - FC,
     DY: W,
     DZ: TI,
-    X: x0, Y: TI, Z: kickBackZ,
+    X: x0, Y: FC, Z: kickBackZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: iid,
     edge_band: edgeSidesToBanding(edging.kick_back, cab.toekick_interior_edgeband_id),
@@ -130,7 +131,7 @@ export function resolveToekickParts(
     return { parts, errors }
   }
 
-  const sprH    = TK - TF                // vertical spreader height
+  const sprH    = TK - FC                // vertical spreader height
   const sprBW   = 100                    // horizontal brace width (fixed 100mm)
 
   // End spreaders — one at each end of the (inset) kick
@@ -147,7 +148,7 @@ export function resolveToekickParts(
       DX: sprH,
       DY: TI,
       DZ: sprEZ,
-      X: x, Y: TI, Z: sprZ0,
+      X: x, Y: FC, Z: sprZ0,
       AX: 0, AY: 0, AZ: 0,
       material_id: iid,
       edge_band: edgeSidesToBanding(edging.spreader_vertical, cab.toekick_interior_edgeband_id),
@@ -183,7 +184,7 @@ export function resolveToekickParts(
       DX: sprH,
       DY: TI,
       DZ: sprEZ,
-      X: sx, Y: TI, Z: sprZ0,
+      X: sx, Y: FC, Z: sprZ0,
       AX: 0, AY: 0, AZ: 0,
       material_id: iid,
       edge_band: edgeSidesToBanding(edging.spreader_vertical, cab.toekick_interior_edgeband_id),

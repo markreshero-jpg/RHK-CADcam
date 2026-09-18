@@ -8,6 +8,7 @@ export const DEFAULT_CONSTRUCTION_METHOD = {
     // Toe kick
     TOEH:    150,
     TOE_TYPE: 'ladder' as const,
+    TOEFC:   16.5,
     TOESP:   450,
     TOESCF:  40,
     TOESCB:  0,

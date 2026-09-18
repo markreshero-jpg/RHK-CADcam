@@ -10,6 +10,7 @@ import type {
 } from '@/src/lib/resolver/types'
 import { EMPTY_SECTION } from '@/src/lib/resolver/types'
 import { getUserPrefs } from '@/src/lib/userPrefs'
+import { useViewBoxPinch } from './usePinchZoom'
 import { supabase } from '@/src/lib/supabase'
 
 function useSvgZoom(initW: number, initH: number) {
@@ -41,6 +42,8 @@ function useSvgZoom(initW: number, initH: number) {
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
+
+  useViewBoxPinch(svgRef, vbRef, setVb, initW / 20, initW * 4)
 
   return { svgRef, viewBox: `${vb.x} ${vb.y} ${vb.w} ${vb.h}` }
 }

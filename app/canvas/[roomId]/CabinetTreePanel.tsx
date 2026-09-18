@@ -31,6 +31,14 @@ function partBox(key: string, rp: ResolvedCabinet): { w: number; h: number; d: n
   }
   const tp = rp.toekick_parts.find(p => p.part_key === key)
   if (tp) return { w: tp.DY, h: tp.DZ, d: tp.DX, thick: tp.DZ }
+  // Internal seam parts (shelves/dividers), keyed int_<type>_<sort>.
+  if (key.startsWith('int_')) {
+    const ip = rp.internal_parts.find(p => `int_${p.part_type}_${p.sort_order}` === key)
+    if (!ip) return null
+    if (ip.part_type === 'divider') return { w: ip.DZ, h: ip.DY, d: ip.DX, thick: ip.DZ }
+    if (ip.part_type === 'adj_shelf' || ip.part_type === 'fixed_shelf')
+      return { w: ip.DY, h: ip.DZ, d: ip.DX, thick: ip.DZ }
+  }
   return null
 }
 
@@ -39,6 +47,7 @@ function evalOpFields(op: JointTypeOp, seam: ResolvedSeamJoint, rp: ResolvedCabi
   tool_diameter_mm: number; depth_mm: number
   offset_x_mm: number; offset_y_mm: number; offset_z_mm: number
   qty: number; spacing_mm: number | null
+  qty2: number; spacing2_mm: number | null
 } | null {
   const exprs = op.expressions ?? {}
   const isA   = op.target_part === 'part_a'
@@ -67,6 +76,11 @@ function evalOpFields(op: JointTypeOp, seam: ResolvedSeamJoint, rp: ResolvedCabi
   const rawSpc = exprs.spacing_mm != null ? evalExpr(exprs.spacing_mm, vars) : op.spacing_mm
   if (exprs.spacing_mm != null && rawSpc === null) return null
 
+  const rawQty2 = exprs.qty2 != null ? evalExpr(exprs.qty2, vars) : (op.qty2 ?? 1)
+  if (rawQty2 === null) return null
+  const rawSpc2 = exprs.spacing2_mm != null ? evalExpr(exprs.spacing2_mm, vars) : op.spacing2_mm
+  if (exprs.spacing2_mm != null && rawSpc2 === null) return null
+
   return {
     tool_diameter_mm: tool,
     depth_mm:         depth,
@@ -75,6 +89,8 @@ function evalOpFields(op: JointTypeOp, seam: ResolvedSeamJoint, rp: ResolvedCabi
     offset_z_mm:      oz,
     qty:              Math.max(1, Math.round(rawQty)),
     spacing_mm:       rawSpc,
+    qty2:             Math.max(1, Math.round(rawQty2)),
+    spacing2_mm:      rawSpc2,
   }
 }
 
@@ -559,6 +575,8 @@ function NodeProps({ node, rp }: { node: TreeNode | null; rp: ResolvedCabinet })
           <EVR label="Offset Z" field="offset_z_mm"      unit="mm" />
           <EVR label="Qty"      field="qty" />
           {(op.spacing_mm !== null || exprs.spacing_mm) && <EVR label="Spacing" field="spacing_mm" unit="mm" />}
+          {(ev.qty2 > 1 || exprs.qty2) && <EVR label="Qty 2" field="qty2" />}
+          {(op.spacing2_mm !== null || exprs.spacing2_mm) && <EVR label="Spacing 2" field="spacing2_mm" unit="mm" />}
           {(op.auto_tool || op.router_tool_id || op.drill_id) && (
             <PR label="Tool" value={op.auto_tool ? 'Auto-select' : op.drill_id ? 'Drill' : 'Router bit'} />
           )}

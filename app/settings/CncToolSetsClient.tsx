@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 const OP_TYPES = ['pocket', 'outline', 'square_off', 'profile', 'drill', 'groove', 'raster'] as const
 const FILL_STRATEGIES = ['raster', 'spiral_in', 'spiral_out'] as const
@@ -77,7 +78,7 @@ export default function CncToolSetsClient() {
   }
 
   async function deleteSet(id: string) {
-    if (!confirm('Delete this tool set and all its operations?')) return
+    if (!(await confirmDelete({ title: 'Delete Tool Set', message: 'Delete this tool set and all its operations?' }))) return
     const { error } = await supabase.from('cnc_tool_sets').delete().eq('id', id)
     if (error) { alert(`Delete failed: ${error.message}`); return }
     setSets(p => p.filter(s => s.id !== id))

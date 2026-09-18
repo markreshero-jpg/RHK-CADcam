@@ -5,7 +5,7 @@ export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, canEqualize, clipboard, cabinets, multiSelect,
   onDeleteWall, onDeleteCabinet, onDeleteMultiple, onDeleteBenchtop, onDeleteBenchtopVertex, onRoundCorner, onChamfer,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
-  onAlignLeft, onAlignRight, onSaveToLibrary, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
+  onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
 }: {
   cabId?: string
   wallId?: string
@@ -34,6 +34,7 @@ export function buildContextMenuGroups({
   onAlignLeft?: () => void
   onAlignRight?: () => void
   onSaveToLibrary?: (cabId: string) => void
+  onReplace?: (cabId: string) => void
   onJoinKicks?: (cabId: string) => void
   onDetachKick?: (cabId: string) => void
   onSeparateKicks?: (cabId: string) => void
@@ -121,7 +122,10 @@ export function buildContextMenuGroups({
 
   groups.push([{ label: 'Edit…', onClick: () => onEdit(cabId), color: 'blue' }])
 
-  if (onSaveToLibrary) groups.push([{ label: 'Save to library…', onClick: () => onSaveToLibrary(cabId) }])
+  const libItems: ContextMenuItem[] = []
+  if (onReplace) libItems.push({ label: 'Replace with library cabinet…', onClick: () => onReplace(cabId) })
+  if (onSaveToLibrary) libItems.push({ label: 'Save to library…', onClick: () => onSaveToLibrary(cabId) })
+  if (libItems.length) groups.push(libItems)
 
   if (onSplit) groups.push([{ label: 'Split…', onClick: () => onSplit(cabId) }])
 

@@ -1,5 +1,10 @@
 # Plan View Report — New Component Spec
 
+> **Status (2026-09-17):** built. The old `shop_drawing_plan` report (`PlanDrawingSVG`) and the old
+> elevation report (`ElevationReportSVG` / `generateElevationPDF`) have been deleted; this report is now
+> "Plan View". Its layer toggles were replaced by display layer sets — see
+> `z_display_layers/DISPLAY-LAYERS-SPEC.md` Phase 3c.
+
 ## Overview
 Build a new `PlanViewReport.tsx` component as a parallel replacement for the existing `shop_drawing_plan` report inside `ReportsModal`. Do not delete or modify the existing code yet — this runs alongside it.
 

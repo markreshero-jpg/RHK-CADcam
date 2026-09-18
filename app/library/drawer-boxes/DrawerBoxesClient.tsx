@@ -15,6 +15,7 @@ import {
 import type { DrawerType } from '@/src/lib/resolver/types'
 import DrawerBoxPreviewPanel from './DrawerBoxPreviewPanel'
 import { ThemeToggle } from '../../ThemeToggle'
+import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -161,7 +162,7 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
   }
 
   async function deleteMethod(id: string) {
-    if (!confirm('Delete this drawer box method?')) return
+    if (!(await confirmDelete({ title: 'Delete Drawer Box Method', message: 'Delete this drawer box method?' }))) return
     await supabase.from('drawer_box_methods').delete().eq('id', id)
     if (selId === id) setSelId(null)
     await load()

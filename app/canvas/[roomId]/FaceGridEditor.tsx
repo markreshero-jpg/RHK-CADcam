@@ -6,6 +6,7 @@ import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { FaceGridInput, FaceZoneInput, DrawerType } from '@/src/lib/resolver/types'
 import { getUserPrefs } from '@/src/lib/userPrefs'
+import { useViewBoxPinch } from './usePinchZoom'
 import { intElevRect, dbElevRect, slideElevRect, TapePolys } from './cabinetEditSvgHelpers'
 import type { EbByMatId } from './useMaterialColours'
 
@@ -40,6 +41,8 @@ function useSvgZoom(initW: number, initH: number) {
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
+
+  useViewBoxPinch(svgRef, vbRef, setVb, initW / 20, initW * 4)
 
   return { svgRef, viewBox: `${vb.x} ${vb.y} ${vb.w} ${vb.h}` }
 }

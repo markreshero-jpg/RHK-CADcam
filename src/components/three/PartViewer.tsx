@@ -6,12 +6,12 @@
 //   panelFaceColors, edgeStrips, unpackMatCol, fitCamDist     (geometry helpers)
 //   Part, PartPropertiesPanel, PreviewCanvas                  (components)
 
-import { Suspense, useState, useEffect, useMemo, useRef } from 'react'
+import { Suspense, useState, useEffect, useMemo, useRef, createContext, useContext } from 'react'
 import * as THREE from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, OrthographicCamera, Edges, Line } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import { Geometry, Base, Subtraction } from '@react-three/csg'
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import { fmtMm, roundMm } from '@/src/lib/format'
 import { evalCalc } from '@/src/lib/calc'
@@ -182,6 +182,22 @@ export function fitCamDist(dx: number, dy: number, dz: number) {
 
 // ── Part mesh ──────────────────────────────────────────────────────────────────
 
+// true = parts carry no pointer handlers (not raycast, no hover / select). The
+// room 3D view sets this so one overlay per cabinet owns click + right-click.
+export const PassivePartsContext = createContext(false)
+
+// Material alpha for everything drawn inside (1 = opaque). The room 3D view wraps
+// each part in <PartAlpha> so a layer set's "ghost" style / opacity shows through
+// (z_display_layers spec, Phase 3c). Models (hinges, runners) read it too.
+export const PartAlphaContext = createContext(1)
+export function PartAlpha({ a, children }: { a: number; children: React.ReactNode }) {
+  return <PartAlphaContext.Provider value={a}>{children}</PartAlphaContext.Provider>
+}
+/** Props every see-through material needs (transparent panels must not occlude). */
+export function alphaMat(a: number) {
+  return a >= 1 ? {} : { transparent: true, opacity: a, depthWrite: false }
+}
+
 export function Part({
   b, faceColors, edgeLineColor, meta, selected, highlighted, onSelect, dragRef, ebSpec,
   contextMenuSelect = false,
@@ -205,10 +221,12 @@ export function Part({
   wire?:              boolean
   rotation?:          [number, number, number]
   onPartContextMenu?: (meta: PartMeta, clientX: number, clientY: number) => void
-  // Cabinet-space pocket boxes to CSG-subtract (real recesses). When present the
-  // panel renders as a single material colour — CSG can't keep the 6 per-face
-  // colours (three-bvh-csg collapses them), which is an accepted trade-off.
-  subtractions?:      { center: [number, number, number]; size: [number, number, number] }[]
+  // Cabinet-space pocket volumes to CSG-subtract (real recesses). `cylinder`
+  // entries cut a round hole (diameter = size[0], axis along the box d/z —
+  // through-drills). When present the panel renders as a single material colour
+  // — CSG can't keep the 6 per-face colours (three-bvh-csg collapses them),
+  // which is an accepted trade-off.
+  subtractions?:      { center: [number, number, number]; size: [number, number, number]; cylinder?: boolean }[]
   // When false, the panel shows no hover edge highlight (used by the Part Editor,
   // where the single part is the whole scene and the orange hover line is noise).
   hoverHighlight?:    boolean
@@ -218,6 +236,9 @@ export function Part({
   shape?:             PartShape | null
 }) {
   const [hovered, setHovered] = useState(false)
+  const passive = useContext(PassivePartsContext)
+  const alpha   = useContext(PartAlphaContext)
+  const am      = alphaMat(alpha)
   // Edges widths are in CSS pixels, so on a scaled display 1 renders as 1.5–2
   // physical pixels; 1/dpr keeps the resting outline an exact 1-device-px hairline.
   const hairline = 1 / useThree(s => s.viewport.dpr)
@@ -231,16 +252,87 @@ export function Part({
   )
   useEffect(() => () => { shapeGeom?.dispose() }, [shapeGeom])
 
+  // Edge-band tape shrinks the panel core; the tape strips render separately.
+  // Computed before the wire early-return because the CSG memo below needs it.
+  const tapeT = ebSpec ? Math.max(0, ebSpec.thick) : 0
+  const strips = ebSpec && !shapeGeom ? edgeStrips(b, meta.edge, meta.panelKind, tapeT) : []
+  const core = ebSpec && !shapeGeom ? edgeCoreBox(b, meta.edge, meta.panelKind, tapeT) : b
+
+  // Pocket ops → geometry computed imperatively with three-bvh-csg and handed to
+  // the mesh as a plain `geometry` prop. The former reactive <Geometry> tree
+  // (@react-three/csg) re-ran the CSG in a no-deps layout effect on every render
+  // and swapped the attached geometry's attributes in place — an attach-ordering
+  // race under r3f v9 that intermittently left the mesh drawing an orphaned empty
+  // geometry (part invisible in solid mode, stale in wire). Frame convention
+  // matches the mesh placement below: shaped base = corner-origin, box base =
+  // centred on the core box.
+  const csgGeom = useMemo(() => {
+    if (!subtractions || subtractions.length === 0) return null
+    const scratch: THREE.BufferGeometry[] = []
+    const baseGeo = shapeGeom ?? new THREE.BoxGeometry(core.w, core.h, core.d)
+    if (!shapeGeom) scratch.push(baseGeo)
+    const ev = new Evaluator()
+    ev.useGroups = false   // single material — matches the CSG branch's render
+    let brush = new Brush(baseGeo)
+    brush.updateMatrixWorld()
+    let cut = false
+    for (const s of subtractions) {
+      // Degenerate boxes make three-bvh-csg throw or emit garbage — skip them.
+      if (!(s.size[0] > 0.05 && s.size[1] > 0.05 && s.size[2] > 0.05)) continue
+      const subGeo = s.cylinder
+        ? new THREE.CylinderGeometry(s.size[0] / 2, s.size[0] / 2, s.size[2], 28).rotateX(Math.PI / 2)
+        : new THREE.BoxGeometry(s.size[0], s.size[1], s.size[2])
+      scratch.push(subGeo)
+      const sub = new Brush(subGeo)
+      sub.position.set(
+        s.center[0] - (shapeGeom ? b.x : core.x + core.w / 2),
+        s.center[1] - (shapeGeom ? b.y : core.y + core.h / 2),
+        s.center[2] - (shapeGeom ? b.z : core.z + core.d / 2),
+      )
+      sub.updateMatrixWorld()
+      const next = ev.evaluate(brush, sub, SUBTRACTION)
+      if (cut) scratch.push(brush.geometry)   // intermediate result, superseded
+      brush = next
+      cut = true
+    }
+    const result = cut ? brush.geometry : null
+    for (const g of scratch) if (g !== result) g.dispose()
+    // A cut that consumed the whole panel (bad op data) → fall back to the uncut
+    // panel rather than rendering nothing.
+    if (result && (result.attributes.position?.count ?? 0) === 0) { result.dispose(); return null }
+    return result
+  }, [subtractions, shapeGeom, b.x, b.y, b.z, core.x, core.y, core.z, core.w, core.h, core.d])
+  useEffect(() => () => { csgGeom?.dispose() }, [csgGeom])
+
   // Rotation pivots about the part's reference point (origin corner b.x/b.y/b.z):
   // the group sits at that corner and carries the rotation, while children are
   // positioned relative to it. With no rotation this is identical to placing the
   // mesh at the box centre. (Shaped geometry is built corner-origin, so its mesh
   // sits at [0,0,0] inside the group instead of the centred box.)
+  // The mesh is keyed by which render branch is active (wire / CSG / shaped /
+  // plain box). The branches attach materials to different slots (material vs
+  // material-0..N), and r3f cannot re-route `attach` on a live material when a
+  // branch flip reuses it — the old slot is left as a null hole and the mesh
+  // stops drawing (only its Edges remain, reading as stuck-in-wire). Keying
+  // remounts the mesh so each branch builds its materials fresh. Branch flips
+  // happen at runtime: pocket ops (subtractions) load async, and wire toggles.
+  // The alpha suffix remounts the mesh when a layer set turns transparency on or
+  // off: three keeps the compiled program when `transparent` flips on a live
+  // material, so the panel would keep rendering opaque.
+  const meshKey = (wire ? 'wire' : csgGeom ? 'csg' : shapeGeom ? 'shaped' : 'box') + (alpha < 1 ? '-t' : '')
+
   if (wire) {
+    const ownGeom = csgGeom ?? shapeGeom
     return (
       <group position={[b.x, b.y, b.z]} rotation={rotation}>
-        <mesh position={shapeGeom ? [0, 0, 0] : [b.w / 2, b.h / 2, b.d / 2]} geometry={shapeGeom ?? undefined}>
-          {!shapeGeom && <boxGeometry args={[b.w, b.h, b.d]} />}
+        <mesh
+          key={meshKey}
+          position={shapeGeom ? [0, 0, 0]
+                  : csgGeom  ? [core.x - b.x + core.w / 2, core.y - b.y + core.h / 2, core.z - b.z + core.d / 2]
+                  :            [b.w / 2, b.h / 2, b.d / 2]}
+          geometry={ownGeom ?? undefined}
+        >
+          {!ownGeom && <boxGeometry args={[b.w, b.h, b.d]} />}
           <meshStandardMaterial color="#9ca3af" transparent opacity={0.08} depthWrite={false} />
           <Edges threshold={10} color="#94a3b8" linewidth={1} />
         </mesh>
@@ -261,19 +353,16 @@ export function Part({
                  : edgeLineColor
   const lineWidth = selected || highlighted ? 1.5 : hov ? 2.5 : hairline
 
-  const tapeT = ebSpec ? Math.max(0, ebSpec.thick) : 0
-  const strips = ebSpec && !shapeGeom ? edgeStrips(b, meta.edge, meta.panelKind, tapeT) : []
-  const core = ebSpec && !shapeGeom ? edgeCoreBox(b, meta.edge, meta.panelKind, tapeT) : b
-
   return (
     <group position={[b.x, b.y, b.z]} rotation={rotation}>
       <mesh
+        key={meshKey}
         position={shapeGeom ? [0, 0, 0] : [core.x - b.x + core.w / 2, core.y - b.y + core.h / 2, core.z - b.z + core.d / 2]}
-        geometry={shapeGeom && !(subtractions && subtractions.length > 0) ? shapeGeom : undefined}
-        onPointerDown={() => { dragRef.current = false }}
-        onPointerMove={(e) => { if (e.buttons) dragRef.current = true }}
-        onClick={contextMenuSelect ? undefined : (e) => { e.stopPropagation(); if (!dragRef.current) onSelect(selected ? null : meta) }}
-        onContextMenu={(contextMenuSelect || onPartContextMenu) ? (e) => {
+        geometry={csgGeom ?? shapeGeom ?? undefined}
+        onPointerDown={passive ? undefined : () => { dragRef.current = false }}
+        onPointerMove={passive ? undefined : (e) => { if (e.buttons) dragRef.current = true }}
+        onClick={passive || contextMenuSelect ? undefined : (e) => { e.stopPropagation(); if (!dragRef.current) onSelect(selected ? null : meta) }}
+        onContextMenu={!passive && (contextMenuSelect || onPartContextMenu) ? (e) => {
           e.stopPropagation()
           if (contextMenuSelect) onSelect(meta)
           if (onPartContextMenu) {
@@ -281,30 +370,15 @@ export function Part({
             onPartContextMenu(meta, ne.clientX, ne.clientY)
           }
         } : undefined}
-        onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
-        onPointerOut={() => setHovered(false)}
+        onPointerOver={passive ? undefined : (e) => { e.stopPropagation(); setHovered(true) }}
+        onPointerOut={passive ? undefined : () => setHovered(false)}
       >
-        {subtractions && subtractions.length > 0 ? (
-          // Real recesses cut into the panel. Single material (CSG can't keep the
-          // 6 face colours); the mesh sits at the box centre, so localise each
-          // pocket by the box centre in cabinet space. Shaped parts feed the
-          // extruded silhouette in as the CSG base (corner-origin mesh) — pockets
-          // keep cutting correctly on shaped panels.
+        {csgGeom ? (
+          // Real recesses cut into the panel (csgGeom above). Single material —
+          // the CSG output collapses the 6 per-face colours, an accepted trade-off.
           <>
-            <Geometry>
-              <Base geometry={shapeGeom ?? undefined}>
-                {!shapeGeom && <boxGeometry args={[core.w, core.h, core.d]} />}
-              </Base>
-              {subtractions.map((s, i) => (
-                <Subtraction key={i} position={shapeGeom
-                  ? [s.center[0] - b.x, s.center[1] - b.y, s.center[2] - b.z]
-                  : [s.center[0] - (core.x + core.w / 2), s.center[1] - (core.y + core.h / 2), s.center[2] - (core.z + core.d / 2)]}>
-                  <boxGeometry args={s.size} />
-                </Subtraction>
-              ))}
-            </Geometry>
-            <meshStandardMaterial color={mats[0]} roughness={0.7} metalness={0.05} />
-            <Edges threshold={10} color={edgeLine} linewidth={lineWidth} />
+            <meshStandardMaterial color={mats[0]} roughness={0.7} metalness={0.05} {...am} />
+            <Edges threshold={10} color={edgeLine} linewidth={lineWidth} transparent opacity={alpha} />
           </>
         ) : shapeGeom ? (
           // ExtrudeGeometry material groups: 0 = the two caps (faces), 1 = the
@@ -318,9 +392,9 @@ export function Part({
             const wall = kind === 'side' ? mats[2] : mats[0]
             return (
               <>
-                <meshStandardMaterial attach="material-0" color={cap}  roughness={0.7} metalness={0.05} />
-                <meshStandardMaterial attach="material-1" color={wall} roughness={0.7} metalness={0.05} />
-                <Edges threshold={10} color={edgeLine} linewidth={lineWidth} />
+                <meshStandardMaterial attach="material-0" color={cap}  roughness={0.7} metalness={0.05} {...am} />
+                <meshStandardMaterial attach="material-1" color={wall} roughness={0.7} metalness={0.05} {...am} />
+                <Edges threshold={10} color={edgeLine} linewidth={lineWidth} transparent opacity={alpha} />
               </>
             )
           })()
@@ -328,18 +402,19 @@ export function Part({
           <>
             <boxGeometry args={[core.w, core.h, core.d]} />
             {mats.map((c, i) => (
-              <meshStandardMaterial key={i} attach={`material-${i}`} color={c} roughness={0.7} metalness={0.05} />
+              <meshStandardMaterial key={i} attach={`material-${i}`} color={c} roughness={0.7} metalness={0.05} {...am} />
             ))}
-            <Edges threshold={10} color={edgeLine} linewidth={lineWidth} />
+            <Edges threshold={10} color={edgeLine} linewidth={lineWidth} transparent opacity={alpha} />
           </>
         )}
       </mesh>
       {strips.map((s, i) => (
-        <mesh key={i} position={[s.pos[0] - b.x, s.pos[1] - b.y, s.pos[2] - b.z]}>
+        <mesh key={`${i}${alpha < 1 ? '-t' : ''}`} position={[s.pos[0] - b.x, s.pos[1] - b.y, s.pos[2] - b.z]}>
           <boxGeometry args={s.args} />
-          <meshStandardMaterial color={ebSpec!.color} roughness={0.35} metalness={0.0} />
-          {/* Faint black outline so the tape reads as a separate strip on the panel */}
-          <Edges threshold={10} color="#1a1a1a" linewidth={hairline} />
+          <meshStandardMaterial color={ebSpec!.color} roughness={0.35} metalness={0.0} {...am} />
+          {/* Faint black outline so the tape reads as a separate strip on the panel
+              (not in the room 3D view — passive parts — where it reads too bold) */}
+          {!passive && <Edges threshold={10} color="#1a1a1a" linewidth={hairline} />}
         </mesh>
       ))}
     </group>
@@ -370,20 +445,33 @@ function SizeField({ value, onCommit }: { value: number; onCommit: (v: number) =
   )
 }
 
-// Which resolver axis each displayed dimension (w/h/d) corresponds to, so the
-// panel can annotate Width/Height/Depth with DX/DY/DZ. Mirrors the *Box() world
-// mappings: side → w=DZ,h=DY,d=DX; horizontal → w=DY,h=DZ,d=DX; face → depends on
-// whether the part resolves upright (front zones: DX=width) or not (carcase back:
-// DX=height). Thickness is always DZ. (Toekick horizontal spreaders are the one
+// Which resolver axis each display-box extent (w/h/d) corresponds to. Mirrors
+// the *Box() world mappings: side → w=DZ,h=DY,d=DX; horizontal → w=DY,h=DZ,d=DX;
+// face → depends on whether the part resolves upright (front zones + front-
+// standing customs: DX=width) or not (carcase back: DX=height). The panel
+// inverts this so every part reads in the CV standard-part convention —
+// Length (DY, with the grain) / Width (DX) / Thickness (DZ) — no matter how
+// it is orientated in the cabinet. (Toekick horizontal spreaders are the one
 // part whose box maps w=DX — a rare edge case not worth special-casing here.)
-function dimAxes(kind: PanelKind, dxIsWidth?: boolean): { w: string; h: string; d: string } {
+type RawAxis = 'DX' | 'DY' | 'DZ'
+function dimAxes(kind: PanelKind, dxIsWidth?: boolean): { w: RawAxis; h: RawAxis; d: RawAxis } {
   if (kind === 'side')       return { w: 'DZ', h: 'DY', d: 'DX' }
   if (kind === 'horizontal') return { w: 'DY', h: 'DZ', d: 'DX' }
   return dxIsWidth ? { w: 'DX', h: 'DY', d: 'DZ' } : { w: 'DY', h: 'DX', d: 'DZ' }
 }
+// Inverse: which box extent holds each raw axis. Exported so the Part Editor
+// and Overrides sidebar can present the same CV reading (DY/DX/DZ rows).
+export type { RawAxis }
+export function extForAxes(kind: PanelKind, dxIsWidth?: boolean): Record<RawAxis, 'w' | 'h' | 'd'> {
+  const ax = dimAxes(kind, dxIsWidth)
+  const inv = {} as Record<RawAxis, 'w' | 'h' | 'd'>
+  for (const e of ['w', 'h', 'd'] as const) inv[ax[e]] = e
+  return inv
+}
 
 export function PartPropertiesPanel({
   part, onClose, onEdgeChange, onSizeChange, actions, jointControls, ebThickness,
+  className = 'absolute top-3 right-3 w-56',
 }: {
   part: PartMeta
   onClose: () => void
@@ -394,6 +482,9 @@ export function PartPropertiesPanel({
   // Tape thickness (mm) of this part's edgeband, when known — enables the
   // "include edge banding in overall part size" user pref (off = show cut size).
   ebThickness?: number
+  // Outer positioning/sizing only — pass e.g. 'relative w-full' to dock the
+  // panel in a sidebar instead of floating it over the canvas.
+  className?: string
 }) {
   // Stored dims are the FINISHED size (incl. banding). With the pref off, show
   // the CUT (board) size instead: tape deducted per banded edge along the axes
@@ -413,9 +504,20 @@ export function PartPropertiesPanel({
       ? { w: part.w - lr, h: part.h - tb, d: part.d }
       : { w: part.w - lr, h: part.h, d: part.d - tb }   // horizontal
   }
-  const ax = dimAxes(part.panelKind, part.dxIsWidth)
+  // CV standard-part reading: Length (DY, grain) / Width (DX) / Thickness (DZ)
+  // for every part regardless of orientation — a gable reads DY 720 × DX 560.
+  const ext = extForAxes(part.panelKind, part.dxIsWidth)
+  const row = (label: string, axis: RawAxis) => {
+    const e = ext[axis]
+    return (<>
+      <span className="text-gray-500 self-center">{label} <span className="text-gray-600 text-[10px]">({axis})</span></span>
+      {onSizeChange
+        ? <span className="text-right"><SizeField value={part[e]} onCommit={v => onSizeChange(e, v)} /> <span className="text-gray-600 text-[10px]">mm</span></span>
+        : <span className="text-gray-200 text-right font-mono">{fmtMm(disp[e])} mm</span>}
+    </>)
+  }
   return (
-    <div className="absolute top-3 right-3 w-56 bg-gray-900/95 border border-gray-700 rounded-lg shadow-xl pointer-events-auto select-none" onClick={e => e.stopPropagation()}>
+    <div className={`${className} bg-gray-900/95 border border-gray-700 rounded-lg shadow-xl pointer-events-auto select-none`} onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-gray-700">
         <span className="text-sm font-semibold text-white">{part.label}</span>
         <button onClick={onClose} className="text-gray-500 hover:text-white text-base leading-none ml-2" aria-label="Close">✕</button>
@@ -425,24 +527,9 @@ export function PartPropertiesPanel({
           Size{onSizeChange ? <span className="text-gray-700 normal-case tracking-normal"> · editable</span> : null}
           {showCut ? <span className="text-amber-500/80 normal-case tracking-normal"> · cut (banding deducted)</span> : null}
         </span>
-        <span className="text-gray-500 self-center">Width <span className="text-gray-600 text-[10px]">({ax.w})</span></span>
-        {onSizeChange
-          ? <span className="text-right"><SizeField value={part.w} onCommit={v => onSizeChange('w', v)} /> <span className="text-gray-600 text-[10px]">mm</span></span>
-          : <span className="text-gray-200 text-right font-mono">{fmtMm(disp.w)} mm</span>}
-        <span className="text-gray-500 self-center">Height <span className="text-gray-600 text-[10px]">({ax.h})</span></span>
-        {onSizeChange
-          ? <span className="text-right"><SizeField value={part.h} onCommit={v => onSizeChange('h', v)} /> <span className="text-gray-600 text-[10px]">mm</span></span>
-          : <span className="text-gray-200 text-right font-mono">{fmtMm(disp.h)} mm</span>}
-        <span className="text-gray-500 self-center">Depth <span className="text-gray-600 text-[10px]">({ax.d})</span></span>
-        {onSizeChange
-          ? <span className="text-right"><SizeField value={part.d} onCommit={v => onSizeChange('d', v)} /> <span className="text-gray-600 text-[10px]">mm</span></span>
-          : <span className="text-gray-200 text-right font-mono">{fmtMm(disp.d)} mm</span>}
-        {/* Thickness is always DZ; on a face part Depth already IS DZ, so skip the
-            duplicate row and only show it when Depth is a different axis. */}
-        {ax.d !== 'DZ' && <>
-          <span className="text-gray-500">Thickness <span className="text-gray-600 text-[10px]">(DZ)</span></span>
-          <span className="text-gray-200 text-right font-mono">{fmtMm(part.thickness)} mm</span>
-        </>}
+        {row('Length', 'DY')}
+        {row('Width', 'DX')}
+        {row('Thickness', 'DZ')}
         {(part.x != null || part.y != null || part.z != null) && (
           <>
             <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Position</span>
@@ -628,23 +715,37 @@ function defaultSnapPoints(dx: number, dy: number, dz: number): [number, number,
 // Standard Canvas + camera + lighting + OrbitControls.
 // Pass scene geometry as children; overlays (panels, tooltips) via overlay prop.
 
-function ModifierZoomSpeed({ controlsRef, baseSpeed }: {
+// OrbitControls uses one zoomSpeed for both the wheel and touch pinch. The
+// invertScroll pref makes baseSpeed negative, which must only flip the wheel —
+// pinch direction is physical. Capture listeners run before OrbitControls' own,
+// so each gesture sees the right speed without replacing its dolly/clamp logic.
+function ZoomSpeedSync({ controlsRef, baseSpeed, modifiers }: {
   controlsRef: React.RefObject<OrbitControlsImpl | null>
   baseSpeed: number
+  modifiers: boolean   // Ctrl = fast, Shift = fine on the wheel
 }) {
   const { gl } = useThree()
   useEffect(() => {
     const canvas = gl.domElement
-    // Capture runs before OrbitControls' own wheel listener, letting that handler
-    // use the appropriate speed without replacing its distance clamping/dolly logic.
     const onWheel = (e: WheelEvent) => {
       const controls = controlsRef.current
       if (!controls) return
-      controls.zoomSpeed = baseSpeed * (e.shiftKey ? 0.03 / 0.12 : e.ctrlKey ? 0.40 / 0.12 : 1)
+      controls.zoomSpeed = baseSpeed * (!modifiers ? 1 : e.shiftKey ? 0.03 / 0.12 : e.ctrlKey ? 0.40 / 0.12 : 1)
+    }
+    const onPointerDown = (e: PointerEvent) => {
+      const controls = controlsRef.current
+      if (controls && e.pointerType === 'touch') controls.zoomSpeed = Math.abs(baseSpeed)
     }
     canvas.addEventListener('wheel', onWheel, { capture: true, passive: true })
-    return () => canvas.removeEventListener('wheel', onWheel, { capture: true })
-  }, [baseSpeed, controlsRef, gl])
+    // Also on move: a re-render mid-pinch re-applies the (negative) zoomSpeed prop.
+    canvas.addEventListener('pointerdown', onPointerDown, { capture: true })
+    canvas.addEventListener('pointermove', onPointerDown, { capture: true })
+    return () => {
+      canvas.removeEventListener('wheel', onWheel, { capture: true })
+      canvas.removeEventListener('pointerdown', onPointerDown, { capture: true })
+      canvas.removeEventListener('pointermove', onPointerDown, { capture: true })
+    }
+  }, [baseSpeed, modifiers, controlsRef, gl])
   return null
 }
 
@@ -725,7 +826,6 @@ export function PreviewCanvas({
         gl={{ antialias: true, preserveDrawingBuffer: false }}
         dpr={[1, 2]}
         style={{ width: '100%', height: '100%', background: bgColor }}
-        onCreated={s => { (window as any).__debugScene = s.scene }} // TEMP DEBUG — remove
         onPointerMissed={onDeselect}
         onContextMenu={onContextMenu ?? (e => { e.preventDefault(); onDeselect?.() })}
       >
@@ -752,7 +852,7 @@ export function PreviewCanvas({
           enableDamping={false}
           zoomSpeed={zoomSpeed}
         />
-        {modifierZoom && <ModifierZoomSpeed controlsRef={controlsRef} baseSpeed={zoomSpeed} />}
+        <ZoomSpeedSync key={legacy ? 'legacy' : view} controlsRef={controlsRef} baseSpeed={zoomSpeed} modifiers={modifierZoom} />
         <ambientLight intensity={1.8} />
         <directionalLight position={[dx * 1.5, dy * 2, dz * 2]} intensity={1.6} />
         <directionalLight position={[-dx, dy * 0.5, -dz * 0.5]} intensity={0.6} color="#e8f0ff" />

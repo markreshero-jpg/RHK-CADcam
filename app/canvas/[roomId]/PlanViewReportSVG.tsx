@@ -1,5 +1,8 @@
 // New plan-view shop drawing — parallel to PlanDrawingSVG.
-// Layered & toggleable (labels / dimensions / door swings / drawers / hatch / title block).
+// What's drawn follows a display layer set (z_display_layers spec, Phase 3c):
+// show / hide, line style, weight and opacity. Colours and background are
+// ignored — prints stay black ink on white. Page extras (wall names, hatch,
+// title block) are report toggles, not layer items.
 // Reproduces the in-canvas plan view: 3-line dimension chain (wall-cab / base /
 // overall) + perpendicular depth dims, plus door-swing arcs & drawer indicators.
 // All sizes are in physical mm × scale = model mm, so the viewBox stays in model
@@ -7,17 +10,22 @@
 'use client'
 import type { ReactNode, RefObject } from 'react'
 import type { Wall, CabinetInstance } from '@/src/lib/types'
+import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
   toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon,
   cabinetPolygon, cabinetCenterPt, centroid, cabWallPerp, cabWallSide, cabT,
 } from '@/src/lib/geometry'
+import type { LayerView } from '@/src/lib/displayLayers/resolve'
+import { casePartItem, kickPartItem } from '@/src/lib/displayLayers/registry'
+import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
+import { planShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
+import { caseBox, isSide, tkPlanBox } from '@/src/lib/jointDrilling'
+import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
+import { customExtents } from '@/src/lib/customPartBox'
 
-export interface PlanViewLayers {
-  labels:     boolean
+/** Report-only page extras (not drawing layers). */
+export interface PlanViewPageOptions {
   wallNames:  boolean
-  dimensions: boolean
-  doorSwings: boolean
-  drawers:    boolean
   hatch:      boolean
   titleBlock: boolean
 }
@@ -53,13 +61,15 @@ function cabinetTypeFill(cab: CabinetInstance): string {
 }
 
 export default function PlanViewReportSVG({
-  walls, cabinets, svgRef, scale = 20, show, projectName, roomName, paperKey,
+  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, projectName, roomName, paperKey,
 }: {
   walls:       Wall[]
   cabinets:    CabinetInstance[]
+  resolvedParts?: Map<string, ResolvedCabinet>
   svgRef:      RefObject<SVGSVGElement | null>
   scale?:      number
-  show:        PlanViewLayers
+  layers:      LayerView
+  show:        PlanViewPageOptions
   projectName: string
   roomName:    string
   paperKey:    string   // e.g. 'A3L'
@@ -74,6 +84,12 @@ export default function PlanViewReportSVG({
 
   const cx = centroid(walls)
   const P  = scale   // 1 physical mm in model mm
+  // Layer props at a "zoom" that makes the layer dash pattern 1.6 / 0.8 paper mm.
+  const lp = (id: string) => layers.props(id, 5 / P)
+  const dimIds = ['dim_wall_chain', 'dim_base_chain', 'dim_wall_overall'] as const
+  const showDims = layers.any(...dimIds)
+  // Dimension chains measure only cabinets the layer set draws.
+  const chainCabs = cabinets.filter(c => planShowsCabinet(c, layers, resolvedParts?.get(c.id)))
 
   // ── Content bounds (includes wall thickness corners) ──────────────────────
   const pts = walls.flatMap(w => {
@@ -126,7 +142,7 @@ export default function PlanViewReportSVG({
   // deepest cabinet a chain must clear: any island cabinet, plus back-side cabinets
   // on a perimeter wall (whose outer chain is pushed past them).
   const wallById = new Map(walls.map(w => [w.id, w]))
-  const chainClearDepth = Math.max(0, ...cabinets
+  const chainClearDepth = Math.max(0, ...chainCabs
     .filter(c => {
       const w = c.wall_id ? wallById.get(c.wall_id) : undefined
       if (!w) return false
@@ -134,7 +150,7 @@ export default function PlanViewReportSVG({
     })
     .map(c => c.dz))
   const basePad  = 4 * P
-  const dimExtra = show.dimensions ? maxThick + chainClearDepth + ROW_OVERALL + dimFS * 2 + tickH : 0
+  const dimExtra = showDims ? maxThick + chainClearDepth + ROW_OVERALL + dimFS * 2 + tickH : 0
   const padL = basePad + dimExtra
   const padR = basePad + dimExtra
   const padT = basePad + dimExtra
@@ -154,7 +170,8 @@ export default function PlanViewReportSVG({
   const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 
   // ── One dimension-chain line (main line + boundary ticks + segment labels) ─
-  function dimLine(wall: Wall, out: { x: number; y: number }, rowDist: number, segs: Seg[], key: string) {
+  function dimLine(wall: Wall, out: { x: number; y: number }, rowDist: number, segs: Seg[], key: string, item: string) {
+    const lineW = layers.w(item, dimSW), dash = lp(item).strokeDasharray
     const wd = wallDir(wall)
     const thick = wall.wall_type === 'island' ? 0 : wall.thickness
     const textAngle = Math.cos(toRad(wall.angle)) < -0.001 ? wall.angle + 180 : wall.angle
@@ -166,15 +183,15 @@ export default function PlanViewReportSVG({
     const p0 = pt(0), pL = pt(wall.length)
     const padX = dimFS * 1.7, padY = dimFS * 0.7
     return (
-      <g key={key} pointerEvents="none">
-        <line x1={p0.x} y1={p0.y} x2={pL.x} y2={pL.y} stroke={INK} strokeWidth={dimSW} />
+      <g key={key} pointerEvents="none" opacity={layers.op(item)}>
+        <line x1={p0.x} y1={p0.y} x2={pL.x} y2={pL.y} stroke={INK} strokeWidth={lineW} strokeDasharray={dash} />
         {boundaries.map((t, i) => {
           const p = pt(t)
           return (
             <line key={i}
               x1={p.x - out.x * tickH} y1={p.y - out.y * tickH}
               x2={p.x + out.x * tickH} y2={p.y + out.y * tickH}
-              stroke={INK} strokeWidth={dimSW}
+              stroke={INK} strokeWidth={lineW}
             />
           )
         })}
@@ -199,7 +216,8 @@ export default function PlanViewReportSVG({
   // Runs from the cabinet's back face to its front. backOffset shifts the start off
   // the wall line to the cabinet back (0 for front cabinets; wall thickness for
   // back-side cabinets, whose back sits on the outer face).
-  function depthDim(wall: Wall, inward: { x: number; y: number }, tPos: number, dz: number, sign: 1 | -1, key: string, backOffset = 0) {
+  function depthDim(wall: Wall, inward: { x: number; y: number }, tPos: number, dz: number, sign: 1 | -1, key: string, item: string, backOffset = 0) {
+    const lineW = layers.w(item, dimSW)
     const wd = wallDir(wall)
     const offX = wd.x * sign * 5 * P, offY = wd.y * sign * 5 * P
     const sx = wall.pos_x + tPos * wd.x + offX + inward.x * backOffset
@@ -210,10 +228,10 @@ export default function PlanViewReportSVG({
     const textAngle = Math.abs(rawAngle) > 90 ? rawAngle + 180 : rawAngle
     const padX = dimFS * 1.7, padY = dimFS * 0.7
     return (
-      <g key={key} pointerEvents="none">
-        <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={INK} strokeWidth={dimSW} />
-        <line x1={sx - wd.x * tickH} y1={sy - wd.y * tickH} x2={sx + wd.x * tickH} y2={sy + wd.y * tickH} stroke={INK} strokeWidth={dimSW} />
-        <line x1={ex - wd.x * tickH} y1={ey - wd.y * tickH} x2={ex + wd.x * tickH} y2={ey + wd.y * tickH} stroke={INK} strokeWidth={dimSW} />
+      <g key={key} pointerEvents="none" opacity={layers.op(item)}>
+        <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={INK} strokeWidth={lineW} strokeDasharray={lp(item).strokeDasharray} />
+        <line x1={sx - wd.x * tickH} y1={sy - wd.y * tickH} x2={sx + wd.x * tickH} y2={sy + wd.y * tickH} stroke={INK} strokeWidth={lineW} />
+        <line x1={ex - wd.x * tickH} y1={ey - wd.y * tickH} x2={ex + wd.x * tickH} y2={ey + wd.y * tickH} stroke={INK} strokeWidth={lineW} />
         <g transform={`rotate(${textAngle}, ${midX}, ${midY})`}>
           <rect x={midX - padX} y={midY - padY} width={padX * 2} height={padY * 2} fill="white" />
           <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle"
@@ -286,44 +304,115 @@ export default function PlanViewReportSVG({
         )
       })}
 
-      {/* ── Cabinets (always on) + labels (toggle) ── */}
-      {cabinets.map(cab => {
+      {/* ── Cabinets — parts per layer set; kick assemblies (under) first ── */}
+      {[...cabinets].sort((a, b) => (a.is_kick_assembly ? 0 : 1) - (b.is_kick_assembly ? 0 : 1)).map(cab => {
         const wall = walls.find(w => w.id === cab.wall_id)
         if (!wall) return null
+        const rp       = resolvedParts?.get(cab.id)
+        if (!planShowsCabinet(cab, layers, rp)) return null
         const basePerp = wallInwardNormal(wall, cx.x, cx.y)
         const perp     = cabWallPerp(cab, wall, basePerp)
         const poly     = cabinetPolygon(cab, wall, perp)
-        const center   = cabinetCenterPt(cab, wall, perp)
         const wd       = wallDir(wall)
+        const at = (lx: number, lz: number) => `${cab.pos_x + lx * wd.x + lz * perp.x},${cab.pos_y + lx * wd.y + lz * perp.y}`
+        const boxPoly = (b: { x: number; z: number; w: number; d: number }) =>
+          `${at(b.x, b.z)} ${at(b.x + b.w, b.z)} ${at(b.x + b.w, b.z + b.d)} ${at(b.x, b.z + b.d)}`
         const inset    = Math.min(20, cab.dx * 0.08, cab.dz * 0.08)
-        const innerOk  = inset > 1 && cab.dx > inset * 2 && cab.dz > inset * 2
-        const ix = cab.pos_x + inset * wd.x + inset * perp.x
-        const iy = cab.pos_y + inset * wd.y + inset * perp.y
-        const iw = cab.dx - inset * 2
-        const id = cab.dz - inset * 2
-        const innerPoly = innerOk
-          ? `${ix},${iy} ${ix + iw * wd.x},${iy + iw * wd.y} ${ix + iw * wd.x + id * perp.x},${iy + iw * wd.y + id * perp.y} ${ix + id * perp.x},${iy + id * perp.y}`
+        const innerPoly = !rp && inset > 1 && cab.dx > inset * 2 && cab.dz > inset * 2
+          ? boxPoly({ x: inset, z: inset, w: cab.dx - inset * 2, d: cab.dz - inset * 2 })
           : null
+        const outline = !cab.is_kick_assembly && layers.show('carcass_outline')
+        const carcP = lp('carcass_outline')
+        // Kick assemblies label just behind their kick face, clear of member labels.
+        const kickFace = cab.is_kick_assembly ? rp?.toekick_parts.find(p => p.part_key === 'kick_front_face') : undefined
+        const labelPt = kickFace ? (() => {
+          const b = tkPlanBox(kickFace)
+          const lx = b.x + b.w / 2, lz = Math.max(0, b.z - 150)
+          return { x: cab.pos_x + lx * wd.x + lz * perp.x, y: cab.pos_y + lx * wd.y + lz * perp.y }
+        })() : cabinetCenterPt(cab, wall, perp)
+        const labelFs = layers.w('cabinet_labels', fontSize)
+        const sizeFs  = layers.w('cabinet_sizes', fontSize * 0.7)
+        const hasLabel = layers.show('cabinet_labels') && !!cab.label
         return (
           <g key={cab.id}>
-            <polygon points={poly} fill={cabinetTypeFill(cab)} stroke={INK2} strokeWidth={sw * 0.7} />
-            {innerPoly && <polygon points={innerPoly} fill="none" stroke={CARCASE_LINE} strokeWidth={sw * 0.35} />}
-            {show.labels && cab.label && (
+            {outline && (
+              <g opacity={carcP.opacity}>
+                <polygon points={poly} fill={cabinetTypeFill(cab)} fillOpacity={carcP.fillOpacity}
+                  stroke={INK2} strokeWidth={layers.w('carcass_outline', sw * 0.7)} strokeDasharray={carcP.strokeDasharray} />
+                {innerPoly && <polygon points={innerPoly} fill="none" stroke={CARCASE_LINE} strokeWidth={layers.w('carcass_outline', sw * 0.35)} />}
+              </g>
+            )}
+            {(rp?.case_parts ?? []).map((p, i) => {
+              const it = casePartItem(p.part_key)
+              const b = caseBox(p)
+              if (!layers.show(it) || b.w <= 0 || b.d <= 0) return null
+              const pp = lp(it)
+              const vertical = isSide(p.part_key) || p.part_key === 'back'
+              return <polygon key={`cp-${i}`} points={boxPoly(b)} opacity={pp.opacity}
+                fill={vertical ? CARCASE_LINE : 'none'} fillOpacity={vertical ? 0.45 * pp.fillOpacity : 0}
+                stroke={CARCASE_LINE} strokeWidth={layers.w(it, sw * 0.35)} strokeDasharray={pp.strokeDasharray} />
+            })}
+            {(rp?.toekick_parts ?? []).map((p, i) => {
+              const it = kickPartItem(p.part_key)
+              const b = tkPlanBox(p)
+              if (!layers.show(it) || b.w <= 0 || b.d <= 0) return null
+              const pp = lp(it)
+              return <polygon key={`tk-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"
+                stroke={INK3} strokeWidth={layers.w(it, sw * 0.35)} strokeDasharray={pp.strokeDasharray} />
+            })}
+            {layers.show('drawer_boxes') && (rp?.drawer_stacks ?? []).flatMap((ds, si) => ds.box_parts.map((p, i) => {
+              const b = dbBox(p), pp = lp('drawer_boxes')
+              if (b.w <= 0 || b.d <= 0) return null
+              return <polygon key={`db-${si}-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"
+                stroke={INK3} strokeWidth={layers.w('drawer_boxes', sw * 0.3)} strokeDasharray={pp.strokeDasharray} />
+            }))}
+            {layers.show('drawer_runners') && (rp?.drawer_stacks ?? []).flatMap((ds, si) => ds.slides.map((s, i) => {
+              const b = slideBox(s), pp = lp('drawer_runners')
+              if (b.w <= 0 || b.d <= 0) return null
+              return <polygon key={`sl-${si}-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"
+                stroke={INK3} strokeWidth={layers.w('drawer_runners', sw * 0.3)} strokeDasharray={pp.strokeDasharray} />
+            }))}
+            {(rp?.custom_parts ?? []).map((p, i) => {
+              const it = customPartItem(p)
+              if (!p.show_in_room || !layers.show(it)) return null
+              const { ex, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+              if (ex <= 0 || ez <= 0) return null
+              const pp = lp(it)
+              return <polygon key={`cu-${i}`} points={boxPoly({ x: p.x, z: p.z, w: ex, d: ez })} opacity={pp.opacity}
+                fill="#d4d4d4" fillOpacity={pp.fillOpacity} stroke={INK2}
+                strokeWidth={layers.w(it, sw * 0.5)} strokeDasharray={pp.strokeDasharray} />
+            })}
+            {layers.show('internal_outline') && cab.has_internal && cab.dx > 40 && cab.dz > 40 && (
+              <polygon points={boxPoly({ x: 20, z: 20, w: cab.dx - 40, d: cab.dz - 40 })} opacity={lp('internal_outline').opacity}
+                fill="none" stroke={INK3} strokeWidth={layers.w('internal_outline', sw * 0.3)}
+                strokeDasharray={lp('internal_outline').strokeDasharray ?? `${1 * P} ${0.8 * P}`} />
+            )}
+            {hasLabel && (
               <text
-                x={center.x} y={center.y}
+                x={labelPt.x} y={labelPt.y}
                 textAnchor="middle" dominantBaseline="central"
-                fontSize={fontSize} fill={INK}
+                fontSize={labelFs} fill={INK} opacity={layers.op('cabinet_labels')}
                 fontFamily="Arial, Helvetica, sans-serif"
               >
                 {cab.label}
+              </text>
+            )}
+            {layers.show('cabinet_sizes') && (
+              <text
+                x={labelPt.x} y={labelPt.y + (hasLabel ? labelFs * 0.55 + sizeFs * 0.6 : 0)}
+                textAnchor="middle" dominantBaseline="central"
+                fontSize={sizeFs} fill={INK2} opacity={layers.op('cabinet_sizes')}
+                fontFamily="Arial, Helvetica, sans-serif"
+              >
+                {Math.round(cab.dx)}×{Math.round(cab.dz)}
               </text>
             )}
           </g>
         )
       })}
 
-      {/* ── Door swings + drawer indicators (toggles) ── */}
-      {(show.doorSwings || show.drawers) && cabinets.flatMap(cab => {
+      {/* ── Door swings + drawer indicators ── */}
+      {layers.any('door_swings', 'drawer_lines') && cabinets.flatMap(cab => {
         if (!cab.has_face) return []
         const wall = walls.find(w => w.id === cab.wall_id)
         if (!wall) return []
@@ -346,7 +435,9 @@ export default function PlanViewReportSVG({
         const nodes: ReactNode[] = []
 
         // Door swing arcs — one per column (rows irrelevant in plan)
-        if (show.doorSwings) {
+        const swP = lp('door_swings'), swW = layers.w('door_swings', swingSW)
+        const swDash = swP.strokeDasharray ?? `${1.2 * P} ${0.8 * P}`
+        if (layers.show('door_swings')) {
           const baseCross  = wd.x * perp.y - wd.y * perp.x
           const leftSweep  = baseCross > 0 ? 1 : 0
           const rightSweep = 1 - leftSweep
@@ -366,21 +457,22 @@ export default function PlanViewReportSVG({
               const endY = colLeft.y + r * (c15 * wd.y + s15 * perp.y)
               nodes.push(<path key={`swing-${cab.id}-${col}`}
                 d={`M ${colLeft.x} ${colLeft.y} L ${colRight.x} ${colRight.y} A ${r} ${r} 0 0 ${leftSweep} ${endX} ${endY} Z`}
-                fill="none" stroke={INK3} strokeWidth={swingSW}
-                strokeDasharray={`${1.2 * P} ${0.8 * P}`} style={{ pointerEvents: 'none' }} />)
+                fill="none" stroke={INK3} strokeWidth={swW} opacity={swP.opacity}
+                strokeDasharray={swDash} style={{ pointerEvents: 'none' }} />)
             } else {
               const endX = colRight.x + r * (c15 * (-wd.x) + s15 * perp.x)
               const endY = colRight.y + r * (c15 * (-wd.y) + s15 * perp.y)
               nodes.push(<path key={`swing-${cab.id}-${col}`}
                 d={`M ${colRight.x} ${colRight.y} L ${colLeft.x} ${colLeft.y} A ${r} ${r} 0 0 ${rightSweep} ${endX} ${endY} Z`}
-                fill="none" stroke={INK3} strokeWidth={swingSW}
-                strokeDasharray={`${1.2 * P} ${0.8 * P}`} style={{ pointerEvents: 'none' }} />)
+                fill="none" stroke={INK3} strokeWidth={swW} opacity={swP.opacity}
+                strokeDasharray={swDash} style={{ pointerEvents: 'none' }} />)
             }
           }
         }
 
         // Drawer indicators — one dashed line per drawer, stepped out from the front
-        if (show.drawers) {
+        if (layers.show('drawer_lines')) {
+          const drP = lp('drawer_lines')
           const colRowsSeen = new Map<number, number[]>()
           for (const z of zones) {
             if (z.face_type !== 'drawer_face') continue
@@ -400,8 +492,8 @@ export default function PlanViewReportSVG({
                 y1={colLeft.y  + perpOff * perp.y + widthInset * wd.y}
                 x2={colRight.x + perpOff * perp.x - widthInset * wd.x}
                 y2={colRight.y + perpOff * perp.y - widthInset * wd.y}
-                stroke={INK3} strokeWidth={drawSW}
-                strokeDasharray={`${1.5 * P} ${0.8 * P}`} strokeLinecap="round"
+                stroke={INK3} strokeWidth={layers.w('drawer_lines', drawSW)} opacity={drP.opacity}
+                strokeDasharray={drP.strokeDasharray ?? `${1.5 * P} ${0.8 * P}`} strokeLinecap="round"
                 style={{ pointerEvents: 'none' }} />)
             }
           }
@@ -410,12 +502,12 @@ export default function PlanViewReportSVG({
         return nodes
       })}
 
-      {/* ── Dimension chains (toggle) — wall-cab / base / overall + depth ── */}
-      {show.dimensions && walls.map(w => {
+      {/* ── Dimension chains — wall-cab / base / overall + depth (layer items) ── */}
+      {showDims && walls.map(w => {
         const inward = wallInwardNormal(w, cx.x, cx.y)
         const out = { x: -inward.x, y: -inward.y }
-        const allBase = cabinets.filter(c => c.wall_id === w.id && (c.assembly_class === 'base' || c.assembly_class === 'base_corner'))
-        const allWall = cabinets.filter(c => c.wall_id === w.id && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'))
+        const allBase = chainCabs.filter(c => c.wall_id === w.id && (c.assembly_class === 'base' || c.assembly_class === 'base_corner'))
+        const allWall = chainCabs.filter(c => c.wall_id === w.id && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'))
         const sideDepth = (cabs: CabinetInstance[]) => cabs.length ? Math.max(...cabs.map(c => c.dz)) : 0
 
         // One side's width chain (pushed out by depthOffset) + depth dims.
@@ -436,19 +528,19 @@ export default function PlanViewReportSVG({
           const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
           return (
             <g key={key}>
-              {wallCabs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`)}
-              {baseCabs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_BASE, baseSegs, `bc-${key}`)}
-              {dimLine(w, chainDir, depthOffset + ROW_OVERALL, overallSeg, `ov-${key}`)}
-              {baseDz > 0 && (
+              {layers.show('dim_wall_chain') && wallCabs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`, 'dim_wall_chain')}
+              {layers.show('dim_base_chain') && baseCabs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_BASE, baseSegs, `bc-${key}`, 'dim_base_chain')}
+              {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + ROW_OVERALL, overallSeg, `ov-${key}`, 'dim_wall_overall')}
+              {layers.show('dim_base_chain') && baseDz > 0 && (
                 <>
-                  {depthDim(w, depthDir, 0,        baseDz, -1, `dd0-${key}`, backOffset)}
-                  {depthDim(w, depthDir, w.length, baseDz,  1, `dd1-${key}`, backOffset)}
+                  {depthDim(w, depthDir, 0,        baseDz, -1, `dd0-${key}`, 'dim_base_chain', backOffset)}
+                  {depthDim(w, depthDir, w.length, baseDz,  1, `dd1-${key}`, 'dim_base_chain', backOffset)}
                 </>
               )}
-              {showWallDepthSeparate && (
+              {layers.show('dim_wall_chain') && showWallDepthSeparate && (
                 <>
-                  {depthDim(w, depthDir, 0,        wallDz, -1, `wdd0-${key}`, backOffset)}
-                  {depthDim(w, depthDir, w.length, wallDz,  1, `wdd1-${key}`, backOffset)}
+                  {depthDim(w, depthDir, 0,        wallDz, -1, `wdd0-${key}`, 'dim_wall_chain', backOffset)}
+                  {depthDim(w, depthDir, w.length, wallDz,  1, `wdd1-${key}`, 'dim_wall_chain', backOffset)}
                 </>
               )}
             </g>

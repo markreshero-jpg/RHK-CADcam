@@ -14,11 +14,12 @@
 // so a slow or broken model degrades to the metallic-box fallback, not a blank
 // scene.
 
-import { Suspense, useMemo } from 'react'
+import { Suspense, useMemo, useContext } from 'react'
 import * as THREE from 'three'
 import { useGLTF } from '@react-three/drei'
 import { useLoader } from '@react-three/fiber'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
+import { PartAlphaContext, alphaMat } from './PartViewer'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 
 export type SlideModelFormat = 'glb' | 'stl' | 'obj'
@@ -63,37 +64,53 @@ function applyDoubleSide(obj: THREE.Object3D) {
 
 function GlbInner({ url }: LoaderProps) {
   const gltf = useGLTF(url)
+  // The layer set can make hardware see-through (ghost / opacity). The GLB's own
+  // materials are shared by every instance, so clone them before going transparent.
+  const alpha = useContext(PartAlphaContext)
   const cloned = useMemo(() => {
     const c = gltf.scene.clone(true)
     applyDoubleSide(c)
+    if (alpha < 1) c.traverse(o => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh) return
+      const mats = Array.isArray(m.material) ? m.material : [m.material]
+      m.material = mats.map(src => {
+        const mat = (src as THREE.Material).clone()
+        mat.transparent = true; mat.opacity = alpha; mat.depthWrite = false
+        return mat
+      }) as THREE.Material[] & THREE.Material
+      if (!Array.isArray(m.material)) m.material = (m.material as unknown as THREE.Material[])[0]
+    })
     return c
-  }, [gltf.scene])
+  }, [gltf.scene, alpha])
   return <primitive object={cloned} />
 }
 
 function StlInner({ url, color }: LoaderProps) {
   const geometry = useLoader(STLLoader, url)
+  const alpha = useContext(PartAlphaContext)
   return (
-    <mesh geometry={geometry}>
-      <meshStandardMaterial color={color} metalness={0.6} roughness={0.4} side={THREE.DoubleSide} />
+    <mesh key={alpha < 1 ? 't' : 'o'} geometry={geometry}>
+      <meshStandardMaterial color={color} metalness={0.6} roughness={0.4} side={THREE.DoubleSide} {...alphaMat(alpha)} />
     </mesh>
   )
 }
 
 function ObjInner({ url, color }: LoaderProps) {
   const obj = useLoader(OBJLoader, url)
+  const alpha = useContext(PartAlphaContext)
   const cloned = useMemo(() => {
     const g = obj.clone(true)
     g.traverse(o => {
       const m = o as THREE.Mesh
       if (m.isMesh) {
         m.material = new THREE.MeshStandardMaterial({
-          color, metalness: 0.6, roughness: 0.4, side: THREE.DoubleSide,
+          color, metalness: 0.6, roughness: 0.4, side: THREE.DoubleSide, ...alphaMat(alpha),
         })
       }
     })
     return g
-  }, [obj, color])
+  }, [obj, color, alpha])
   return <primitive object={cloned} />
 }
 
@@ -108,10 +125,11 @@ const LOADERS: Record<SlideModelFormat, React.ComponentType<LoaderProps>> = {
 // +X / -Y / -Z so it occupies the rail volume regardless of mirroring.
 
 function FallbackRunner({ w, h, d, color }: { w: number; h: number; d: number; color: string }) {
+  const alpha = useContext(PartAlphaContext)
   return (
-    <mesh position={[w / 2, -h / 2, -d / 2]}>
+    <mesh key={alpha < 1 ? 't' : 'o'} position={[w / 2, -h / 2, -d / 2]}>
       <boxGeometry args={[w, h, d]} />
-      <meshStandardMaterial color={color} metalness={0.6} roughness={0.4} />
+      <meshStandardMaterial color={color} metalness={0.6} roughness={0.4} {...alphaMat(alpha)} />
     </mesh>
   )
 }

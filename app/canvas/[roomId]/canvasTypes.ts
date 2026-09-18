@@ -2,11 +2,6 @@ import { AssemblyClass, DEFAULT_DIMS } from '@/src/lib/types'
 import { MIN_ZOOM, MAX_ZOOM } from '@/src/lib/geometry'
 import type { Wall, CabinetInstance, BenchtopArcSegment } from '@/src/lib/types'
 import type { Pt } from '@/src/lib/geometry'
-import type { DisplayConfig, PresetId, LayerId, AnnotationId } from '@/src/lib/displayConfig'
-import { DEFAULT_DISPLAY_CONFIG, applyPreset, toggleLayer, cycleLayerStyle, toggleAnnotation } from '@/src/lib/displayConfig'
-
-export type { DisplayConfig, PresetId, LayerId, AnnotationId }
-export { DEFAULT_DISPLAY_CONFIG, applyPreset, toggleLayer, cycleLayerStyle, toggleAnnotation }
 
 export type CanvasView = 'plan' | 'elevation' | 'section' | '3d'
 
