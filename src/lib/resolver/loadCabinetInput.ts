@@ -169,6 +169,65 @@ function applyRows(
   }
 }
 
+// ── Room → job → shop cascade config (cached per room) ───────────────────────
+// The room row, the job row and the shop defaults behind them. Identical for
+// every cabinet in the room, so it's fetched once per session and shared.
+interface RoomCascadeConfig {
+  room:      Record<string, unknown> | null
+  projectId: string | undefined
+  projRow:   Record<string, string | null> | null
+  shopSettings: Record<string, string | null> | null
+  shopInnerDbMethodId: string | undefined
+  projInnerDbMethodId: string | undefined
+  defaultAsmSchedId:   string | undefined
+  defaultTkSchedId:    string | undefined
+  defaultFrontSchedId: string | undefined
+  defaultSlideSchedId: string | undefined
+  defaultDbSchedId:    string | undefined
+}
+
+function loadRoomCascadeConfig(roomId: string): Promise<RoomCascadeConfig> {
+  return cachedCascade(`cfg:${roomId}`, async () => {
+    const [roomRes, shopAsmRes, shopTkRes, shopFrontRes, shopSettingsRes, shopSlideRes, shopDbSchedRes] = await Promise.all([
+      supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, drawerbox_schedule_id, inner_drawerbox_schedule_id, inner_drawer_box_method_id, door_style_override_id, hinge_schedule_id, rule_overrides').eq('id', roomId).single(),
+      supabase.from('assembly_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
+      supabase.from('toekick_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
+      supabase.from('front_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
+      supabase.from('shop_settings').select('construction_schedule_id, drawer_box_method_id, drawerbox_schedule_id, inner_drawerbox_schedule_id, inner_drawer_box_method_id, hinge_schedule_id').limit(1).maybeSingle(),
+      supabase.from('slide_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
+      supabase.from('drawerbox_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
+    ])
+
+    const room = roomRes.data as Record<string, unknown> | null
+    const projectId = room?.project_id as string | undefined
+
+    // Job row (one extra hop — it needs the room's project_id first).
+    let projRow: Record<string, string | null> | null = null
+    if (projectId) {
+      const { data } = await supabase
+        .from('projects')
+        .select('assembly_schedule_id, base_assembly_schedule_id, wall_assembly_schedule_id, tall_assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, drawerbox_schedule_id, inner_drawerbox_schedule_id, slide_schedule_id, default_door_style_id, base_door_style_id, wall_door_style_id, tall_door_style_id, base_door_colour_id, wall_door_colour_id, tall_door_colour_id, inner_drawer_box_method_id, hinge_schedule_id, rule_overrides')
+        .eq('id', projectId)
+        .single()
+      projRow = data as Record<string, string | null> | null
+    }
+
+    const shopSettings = shopSettingsRes.data as Record<string, string | null> | null
+    return {
+      room, projectId, projRow, shopSettings,
+      // inner_drawer_box_method_id is a newer column; a missing one yields null
+      // here rather than throwing, and we fall back to the face method.
+      shopInnerDbMethodId: shopSettings?.inner_drawer_box_method_id ?? undefined,
+      projInnerDbMethodId: projRow?.inner_drawer_box_method_id ?? undefined,
+      defaultAsmSchedId:   shopAsmRes.data?.id   as string | undefined,
+      defaultTkSchedId:    shopTkRes.data?.id    as string | undefined,
+      defaultFrontSchedId: shopFrontRes.data?.id as string | undefined,
+      defaultSlideSchedId: shopSlideRes.data?.id as string | undefined,
+      defaultDbSchedId:    shopDbSchedRes.data?.id as string | undefined,
+    }
+  })
+}
+
 export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput> {
   // ── 1. Load cabinet ──────────────────────────────────────────────────────────
   const { data: cab, error: cabErr } = await supabase
