@@ -129,7 +129,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 | Carcase | `carcass_outline` (P,E), `carcass_gables`, `carcass_top`, `carcass_bottom` (P,E,3D), `carcass_back` (P,3D) |
 | Kicks | `kick_faces`, `kick_spreaders` (P,E,3D; **plan default hidden**) |
 | Fronts | `doors`, `drawer_fronts` (P,E,3D), `false_panels` (E,3D), `door_swings`, `drawer_lines` (P), `door_chevrons`, `drawer_labels` (E) |
-| Internals | `internal_outline` (P, default hidden), `shelves`, `dividers`, `inner_drawers`, `accessories` (E,3D), `shelf_labels`, `inner_drawer_labels` (E) |
+| Internals | `internal_outline` (P, default hidden), `adj_shelves`, `fixed_shelves`, `dividers`, `inner_drawers`, `accessories` (E,3D), `shelf_labels`, `inner_drawer_labels` (E) |
 | Hardware | `drawer_boxes`, `drawer_runners` (P,E,3D), `inner_drawer_runners`, `hinges`, `machining` (E,3D) — **all default hidden in plan + 3D** |
 | Panels | `applied_panels`, `fillers`, `custom_panels` (P,E,3D) — by parts_library key (3b) |
 | Benchtops | `benchtops` (P / E / 3D), `benchtop_edges` (P: profile colour + code, wall edges; E: code on the front edge), `benchtop_joins` (P / E) — edges + joins added by benchtop Phase 3; elevation + 3D views by Phase 3b |
@@ -140,6 +140,11 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 Retired ids: `hardware` (Phase 1: hinges + inner-drawer slides, elevation) was
 split into `hinges` + `inner_drawer_runners`. Stored rows were migrated
 2026-09-16, and the old `drawer_boxes` setting also seeded `drawer_runners`.
+`shelves` was split into `adj_shelves` + `fixed_shelves` (user request,
+2026-10-11) so each can be styled on its own. No row migration: `SPLIT_FROM` in
+the registry lets each new item inherit a stored `shelves` setting until it has
+its own, and `sparseViewSettings` moves the old setting onto both on the next save.
+Elevation's placeholder shelf lines (cabinet not yet resolved) follow `adj_shelves`.
 
 Notes:
 - Plan draws toe-kick parts (outline, toekick colour), including kick assemblies
@@ -166,6 +171,9 @@ Notes:
     keep them in step.
 - 3D's unresolved-cabinet placeholder box follows the carcase items.
 - Elevation section cut past the face still reveals internals regardless of set.
+- Measure tools (plan, elevation and the 3D plane-to-plane tool, `Measure3D.tsx`,
+  added 2026-10-11) are transient tool overlays, not layer items. 3D picks
+  raycast the rendered meshes, so only faces the set draws can be measured.
 
 ## Phases
 

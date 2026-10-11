@@ -21,7 +21,7 @@ import type { BenchtopInstance, BenchtopEdgeProfile, Wall } from '@/src/lib/type
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { Pt } from '@/src/lib/geometry'
 import {
-  btSegments, outlinePoints, outwardNormal, segSamples, segMid, effectiveProfileId,
+  btSegments, outlinePoints, outwardNormal, segSamples, segMid, effectiveProfileId, waterfallJoin,
 } from '@/src/lib/benchtopGeometry'
 import { wallFrame, alongOf, offOf, wallContacts, btShowsOn, type WallSide } from '@/src/lib/benchtopAnchor'
 import type { BtThickness } from './useBenchtopCatalog'
@@ -95,34 +95,60 @@ export default function BenchtopElevation({
           return pid ? profiles[pid] : undefined
         }
 
-        // Waterfall legs: the edge's strip, a top-thickness deep, floor to top.
+        // Waterfall legs: the edge's strip, a top-thickness deep, under that edge.
+        // join: mitre = leg to the top surface, 45° at the corner; butt = the top
+        // sits on the leg (leg stops at the underside).
         const legs = segs.map((s, i) => ({ s, i })).filter(({ i }) => profileOf(i)?.generates === 'waterfall')
           .map(({ s, i }) => {
             const n = outwardNormal(segs, i)
             const inset = (p: Pt) => ({ x: p.x - n.x * thick.total, y: p.y - n.y * thick.total })
             const lts = [s.p0, s.p1, inset(s.p1), inset(s.p0)].map(p => alongOf(f, p))
             const m = segMid(s)
+            const outer = alongOf(f, m), inner = alongOf(f, inset(m))
+            const endOn = Math.abs(dot(n, f.d)) > 0.7
             return {
-              i, a: Math.min(...lts), b: Math.max(...lts),
-              endOn: Math.abs(dot(n, f.d)) > 0.7,
-              outer: alongOf(f, m), inner: alongOf(f, inset(m)),
+              i, a: Math.min(...lts), b: Math.max(...lts), endOn, outer, inner,
+              join: waterfallJoin(s),
+              // An end-on leg at the band's end shares the band's end line.
+              atEnd: endOn && (Math.abs(outer - t0) < 1 ? 'left' as const : Math.abs(outer - t1) < 1 ? 'right' as const : null),
             }
           })
+        const mitreAt = (side: 'left' | 'right') => legs.find(l => l.atEnd === side && l.join === 'mitre')
+        const mL = mitreAt('left'), mR = mitreAt('right')
+        // Band outline: a mitred end-on leg takes the triangle under the 45° joint.
+        const bandPts = [
+          [t0, yTop], [t1, yTop],
+          ...(mR ? [[mR.inner, yBot]] : [[t1, yBot]]),
+          ...(mL ? [[mL.inner, yBot]] : [[t0, yBot]]),
+        ].map(q => q.join(',')).join(' ')
+        const legPts = (l: typeof legs[number]) => {
+          if (l.endOn && l.join === 'mitre') {
+            // outer face to the top surface, 45° back to the underside
+            return [[l.outer, yTop], [l.outer, roomH], [l.inner, roomH], [l.inner, yBot]]
+          }
+          const top = l.join === 'mitre' ? yTop : yBot   // face-on mitre runs to the top edge
+          return [[l.a, top], [l.b, top], [l.b, roomH], [l.a, roomH]]
+        }
+        const legEl = (l: typeof legs[number]) => (
+          <polygon key={`wf${l.i}`} points={legPts(l).map(q => q.join(',')).join(' ')}
+            fill={fill} fillOpacity={layers.lineDrawing ? 0 : 0.85 * lp.fillOpacity}
+            stroke={isSel ? '#f59e0b' : stroke} strokeWidth={1 / z} opacity={lp.opacity}
+            strokeDasharray={lp.strokeDasharray}
+            style={{ cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
+            <title>{`Waterfall — ${l.join === 'mitre' ? 'mitred' : 'butt (top sits on the leg)'}`}</title>
+          </polygon>
+        )
+        // Face-on mitred legs cover the band (the joint is the top edge itself).
+        const faceMitre = (l: typeof legs[number]) => !l.endOn && l.join === 'mitre'
 
         return (
           <Fragment key={bt.id}>
-            {/* Waterfall legs (behind the top band) */}
-            {legs.map(l => (
-              <rect key={`wf${l.i}`} x={l.a} y={yTop} width={l.b - l.a} height={roomH - yTop}
-                fill={fill} fillOpacity={layers.lineDrawing ? 0 : 0.75 * lp.fillOpacity}
-                stroke={isSel ? '#f59e0b' : stroke} strokeWidth={1 / z} opacity={lp.opacity}
-                strokeDasharray={lp.strokeDasharray}
-                style={{ cursor: 'pointer' }}
-                onClick={e => { e.stopPropagation(); onSelect(bt.id) }} />
-            ))}
+            {/* Waterfall legs under / beside the band (face-on mitres go over it) */}
+            {legs.filter(l => !faceMitre(l)).map(legEl)}
 
-            {/* Top band */}
-            <rect x={t0} y={yTop} width={t1 - t0} height={thick.total}
+            {/* Top band — its ends follow any mitred end-on legs */}
+            <polygon points={bandPts}
               fill={fill} fillOpacity={layers.lineDrawing ? 0 : lp.fillOpacity}
               stroke={isSel ? '#f59e0b' : stroke}
               strokeWidth={layers.w('benchtops', isSel ? 2 : 1.25) / z}
@@ -130,7 +156,8 @@ export default function BenchtopElevation({
               style={{ cursor: 'pointer' }}
               onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
               <title>{`${bt.label ?? 'Benchtop'} · top ${Math.round(topZ)} · ${thick.total} thick`}</title>
-            </rect>
+            </polygon>
+            {legs.filter(faceMitre).map(legEl)}
 
             {/* Hit area: a top is only 20–40 mm tall (a few px zoomed out), so pick
                 over at least 16 screen px centred on the band. */}
@@ -157,11 +184,6 @@ export default function BenchtopElevation({
                   stroke={stroke} strokeWidth={0.5 / z} strokeDasharray={`${4 / z} ${2 / z}`} />
               )}
 
-              {/* Waterfall mitres (end-on legs) */}
-              {legs.filter(l => l.endOn).map(l => (
-                <line key={`mt${l.i}`} x1={l.outer} y1={yTop} x2={l.inner} y2={yBot}
-                  stroke={stroke} strokeWidth={0.75 / z} />
-              ))}
 
               {/* Join seams where they meet the front face */}
               {showJoins && (bt.joins ?? []).map((j, k) => {
@@ -189,7 +211,7 @@ export default function BenchtopElevation({
                   <text key={`pc${i}`} x={mid} y={yBot + 10 / z} textAnchor="middle"
                     fontSize={layers.w('benchtop_edges', 8) / z} fontWeight={600}
                     fill={layers.color('benchtop_edges', '#5eead4')} opacity={layers.op('benchtop_edges')}>
-                    {prof.code ?? prof.name}{prof.generates === 'waterfall' ? ' ▼' : ''}
+                    {prof.code ?? prof.name}{prof.generates === 'waterfall' ? (waterfallJoin(s) === 'mitre' ? ' ▼M' : ' ▼B') : ''}
                   </text>
                 )
               })}

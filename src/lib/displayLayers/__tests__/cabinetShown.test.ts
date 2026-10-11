@@ -23,7 +23,7 @@ const rp = {
 const only = (view: 'plan' | 'elevation', keep: string[]) => {
   const ids = ['carcass_outline', 'carcass_gables', 'carcass_top', 'carcass_bottom', 'carcass_back',
     'kick_faces', 'kick_spreaders', 'doors', 'drawer_fronts', 'false_panels', 'internal_outline',
-    'shelves', 'dividers', 'inner_drawers', 'accessories', 'drawer_boxes', 'drawer_runners',
+    'adj_shelves', 'fixed_shelves', 'dividers', 'inner_drawers', 'accessories', 'drawer_boxes', 'drawer_runners',
     'inner_drawer_runners', 'applied_panels', 'fillers', 'custom_panels']
   const vs: ViewLayerSettings = { items: Object.fromEntries(ids.map(id => [id, { visible: keep.includes(id) }])) }
   const set: LayerSet = { id: 's', name: 's', sort_order: 0, settings: { [view]: vs } }

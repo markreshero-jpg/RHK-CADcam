@@ -6,7 +6,7 @@ import CalcInput from '@/src/components/CalcInput'
 import { BenchtopInstance, BenchtopBuildMethod, BenchtopEdgeProfile, BenchtopEdge, BenchtopJoinType, Wall } from '@/src/lib/types'
 import type { BtPosition, WallSide, BtOverhang, StretchEnd } from '@/src/lib/benchtopAnchor'
 import type { BtThickness } from './useBenchtopCatalog'
-import { btSegments, segLength, effectiveProfileId, edgeProfileColor, outlineBounds, outlinePoints, signedArea } from '@/src/lib/benchtopGeometry'
+import { btSegments, segLength, effectiveProfileId, edgeProfileColor, outlineBounds, outlinePoints, signedArea, waterfallJoin } from '@/src/lib/benchtopGeometry'
 import { resolveBenchtopFromDB, loadResolvedParts } from '@/src/lib/benchtop-resolver/resolveBenchtopFromDB'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 
@@ -332,6 +332,16 @@ export default function BenchtopPanel({
                         </optgroup>
                       ))}
                     </select>
+                  )}
+                  {!wall && prof?.generates === 'waterfall' && (
+                    <span className="flex shrink-0" title="Waterfall leg joint — Mitre: leg runs to the top surface (45° corner). Butt: the top sits on the leg.">
+                      {(['butt', 'mitre'] as const).map(t => (
+                        <button key={t} onClick={() => onSetEdges(benchtop.id, [i], { waterfall_join: t })}
+                          className={`px-1 rounded ${waterfallJoin(s) === t ? 'bg-purple-800 text-purple-100' : 'text-gray-500 hover:text-gray-300'}`}>
+                          {t === 'butt' ? 'B' : 'M'}
+                        </button>
+                      ))}
+                    </span>
                   )}
                 </div>
               )

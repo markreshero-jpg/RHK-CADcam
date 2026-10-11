@@ -1708,6 +1708,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         : bt.btDrawPoly.length === 0 ? 'Click first vertex · Shift=45° · Ctrl=ortho · A=arc · Esc=cancel'
         : bt.btDrawPoly.length < 3 ? `${bt.btDrawPoly.length} ${bt.btDrawPoly.length === 1 ? 'vertex' : 'vertices'} · Backspace=undo · Shift=45° · Ctrl=ortho · A=arc`
         : `${bt.btDrawPoly.length} vertices · click near first vertex to close · Backspace=undo · A=arc`)
+    : mode === 'measure' && canvasView === '3d' ? 'Measure: hover a face · click it, then click a second face · parallel faces give the square gap · click again = new · right-click = clear · Esc = exit'
     : mode === 'measure'         ? (() => {
         const start = canvasView === 'elevation' ? elevMeasureStart : measureStart
         const end   = canvasView === 'elevation' ? elevMeasureEnd   : measureEnd
@@ -1786,7 +1787,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           )}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {(canvasView === 'plan' || canvasView === 'elevation') && (
+          {(canvasView === 'plan' || canvasView === 'elevation' || canvasView === '3d') && (
             <button
               onClick={() => onSelectMode('measure')}
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
@@ -2096,6 +2097,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             selectedId={selected?.type === 'cabinet' ? selected.id : null}
             onSelectCabinet={id => { setSelected({ type: 'cabinet', id }); setMultiSelect([]) }}
             pickBenchtops={isBenchtopMode(mode)}
+            measuring={mode === 'measure'}
             onDeselect={() => { setSelected(null); setMultiSelect([]) }}
             onEditCabinet={id => { setEditCabInitialView('3d'); setEditCabId(id) }}
             onDeleteCabinet={id => handleDeleteCabinet(id)}

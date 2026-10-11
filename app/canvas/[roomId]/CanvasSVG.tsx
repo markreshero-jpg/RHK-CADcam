@@ -2,7 +2,7 @@
 import React, { Fragment, useState, useMemo, useEffect } from 'react'
 import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment, BenchtopEdgeProfile } from '@/src/lib/types'
 import {
-  btSegments, outlinePath, outlineCentroid, outwardNormal, segMid, segLength,
+  btSegments, outlinePath, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin,
   edgePath, edgeProfileColor, effectiveProfileId,
 } from '@/src/lib/benchtopGeometry'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
@@ -267,7 +267,7 @@ export default function CanvasSVG({
                         fontSize={8 * layers.w('benchtop_edges', 1) / view.zoom} fontWeight={600}
                         fill={layers.color('benchtop_edges', col)}
                         style={{ userSelect: 'none' }}>
-                        {prof.code ?? prof.name}{prof.generates === 'waterfall' ? ' ▼' : ''}
+                        {prof.code ?? prof.name}{prof.generates === 'waterfall' ? (waterfallJoin(s) === 'mitre' ? ' ▼M' : ' ▼B') : ''}
                       </text>
                     )}
                   </g>

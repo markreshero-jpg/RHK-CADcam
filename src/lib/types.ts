@@ -270,6 +270,8 @@ export interface BenchtopArcSegment {
 export interface BenchtopEdge {
   wall?: boolean
   profile_id?: string | null
+  /** Waterfall edges only: how the leg meets the top. Default 'mitre'. */
+  waterfall_join?: BenchtopJoinType
 }
 
 // One outline segment — Shape Editor format, mm, room frame (plan, y-down).

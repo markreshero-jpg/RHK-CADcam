@@ -90,7 +90,9 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   // Internals
   { id: 'internal_outline', group: 'internals', label: 'Interior marker', views: ['plan'], default: OFF,
     hint: 'Dashed inset box on cabinets with internals' },
-  { id: 'shelves',        group: 'internals', label: 'Shelves',               views: ['elevation', '3d'], default: ON },
+  // ('shelves' was the combined item — split; stored settings carry over via SPLIT_FROM.)
+  { id: 'adj_shelves',    group: 'internals', label: 'Adjustable shelves',    views: ['elevation', '3d'], default: ON },
+  { id: 'fixed_shelves',  group: 'internals', label: 'Fixed shelves',         views: ['elevation', '3d'], default: ON },
   { id: 'dividers',       group: 'internals', label: 'Dividers',              views: ['elevation', '3d'], default: ON },
   { id: 'inner_drawers',  group: 'internals', label: 'Inner drawers / pull-outs', views: ['elevation', '3d'], default: ON },
   { id: 'accessories',    group: 'internals', label: 'Accessories',           views: ['elevation', '3d'], default: ON },
@@ -144,6 +146,13 @@ export const LAYER_ITEMS: LayerItemDef[] = [
 export const LAYER_ITEM_BY_ID: Record<string, LayerItemDef> =
   Object.fromEntries(LAYER_ITEMS.map(i => [i.id, i]))
 
+/** Item id → the retired item it was split from. Saved layer sets keep the old
+ *  id's setting; each new item inherits it until edited on its own. */
+export const SPLIT_FROM: Record<string, string> = {
+  adj_shelves:   'shelves',
+  fixed_shelves: 'shelves',
+}
+
 export function itemsForView(view: LayerViewId): LayerItemDef[] {
   return LAYER_ITEMS.filter(i => i.views.includes(view))
 }
@@ -181,7 +190,8 @@ export function kickPartItem(partKey: string): string {
   return partKey === 'spreader_vertical' || partKey === 'spreader_horizontal' ? 'kick_spreaders' : 'kick_faces'
 }
 export function internalPartItem(partType: string): string {
-  if (partType === 'adj_shelf' || partType === 'fixed_shelf') return 'shelves'
+  if (partType === 'adj_shelf') return 'adj_shelves'
+  if (partType === 'fixed_shelf') return 'fixed_shelves'
   if (partType === 'divider') return 'dividers'
   if (partType === 'accessory') return 'accessories'
   return 'inner_drawers'          // inner_drawer_*, pull_out_*

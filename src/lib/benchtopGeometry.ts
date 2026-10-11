@@ -11,7 +11,7 @@
 
 import type {
   BenchtopInstance, BenchtopSegment, BenchtopJoinLine, BenchtopArcSegment,
-  BenchtopEdgeTag, BenchtopEdgeProfile,
+  BenchtopEdgeTag, BenchtopEdgeProfile, BenchtopJoinType,
 } from './types'
 
 export type P = { x: number; y: number }
@@ -404,6 +404,11 @@ export function effectiveProfileId(s: BenchtopSegment, methodDefault: string | n
   if (s.edge?.wall) return null
   return s.edge?.profile_id ?? methodDefault ?? null
 }
+
+// Waterfall leg ↔ top joint. Mitre (default): the leg runs to the top surface,
+// 45° joint at the corner. Butt: the top sits ON the leg — the leg stops at the
+// underside and the top's end runs over it.
+export const waterfallJoin = (s: BenchtopSegment): BenchtopJoinType => s.edge?.waterfall_join ?? 'mitre'
 
 // ── Join lines ───────────────────────────────────────────────────────────────
 

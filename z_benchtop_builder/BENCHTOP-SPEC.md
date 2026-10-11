@@ -287,6 +287,7 @@ Built:
   Sidebar Benchtop button reopens the tool menu when in Benchtop mode with it
   closed (only leaves the mode when the menu is open); F4 still toggles.
   Verified headless: typed 1800 × 650 rect; L 2000 / 1500 @ depth 650.
+- [x] **Waterfall joint per edge** (Mark, 2026-10-11): edge.waterfall_join = mitre (default) | butt; B / M toggle on waterfall edges in the panel; plan + elevation label ▼M / ▼B. Mitre = leg to the top surface, 45° at the corner (elevation: band and end-on leg share the diagonal; face-on leg runs to the top edge; 3D: slab cut back by T, leg prism with the 45° face + corner wedge). Butt = the top sits ON the leg (leg stops at the underside; 3D leg box under the top). Phase 4: leg part length = topZ (mitre, both ends 45°) vs base height (butt).
 - [x] **Editable sizes in the panel** (Mark, 2026-10-11): Size card — Length (a
   'Length grows from ◀ Left / Both / Right ▶' toggle picks the end that moves;
   default Right), Depth (front edge moves, back stays on the wall), Sits at / Top

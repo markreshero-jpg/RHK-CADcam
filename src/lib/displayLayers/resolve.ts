@@ -3,7 +3,7 @@
 // defaults. Renderers ask show(id) / props(id, zoom) — never read raw settings.
 
 import {
-  LAYER_ITEM_BY_ID, itemDefault,
+  LAYER_ITEM_BY_ID, SPLIT_FROM, itemDefault,
   type ItemSetting, type LayerSet, type LayerStyle, type LayerViewId, type ViewLayerSettings,
 } from './registry'
 
@@ -53,7 +53,10 @@ export interface LayerView {
 export function effectiveSetting(vs: ViewLayerSettings | undefined, id: string, view: LayerViewId): ItemSetting {
   const def = LAYER_ITEM_BY_ID[id]
   const base: ItemSetting = def ? itemDefault(def, view) : { visible: false, style: 'solid' }
-  return { ...base, ...(vs?.items?.[id] ?? {}) }
+  // An item split from a retired one inherits the retired item's stored setting
+  // until it gets its own.
+  const legacyId = SPLIT_FROM[id]
+  return { ...base, ...(vs?.items?.[id] ?? (legacyId ? vs?.items?.[legacyId] : undefined) ?? {}) }
 }
 
 export function resolveLayerView(set: LayerSet | undefined, view: LayerViewId): LayerView {
@@ -89,7 +92,15 @@ export function resolveLayerView(set: LayerSet | undefined, view: LayerViewId): 
 /** Strip entries equal to the registry default so stored settings stay sparse. */
 export function sparseViewSettings(vs: ViewLayerSettings, view: LayerViewId): ViewLayerSettings {
   const items: Record<string, Partial<ItemSetting>> = {}
-  for (const [id, s] of Object.entries(vs.items ?? {})) {
+  // Split items: hand the retired item's setting to each child that has none, then
+  // drop it — otherwise a child set back to its default would be stripped below and
+  // fall back to the retired setting again.
+  const src: Record<string, Partial<ItemSetting>> = { ...(vs.items ?? {}) }
+  for (const [child, legacy] of Object.entries(SPLIT_FROM)) {
+    if (src[legacy] && !src[child]) src[child] = { ...src[legacy] }
+  }
+  for (const legacy of new Set(Object.values(SPLIT_FROM))) delete src[legacy]
+  for (const [id, s] of Object.entries(src)) {
     const def = LAYER_ITEM_BY_ID[id]
     if (!def) { items[id] = s; continue }    // unknown (newer build) — keep untouched
     const d = itemDefault(def, view)

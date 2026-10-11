@@ -1080,7 +1080,7 @@ export default function ElevationSVG({
               })()
 
               const shelfYs: number[] = []
-              if (showInt('shelves') && cab.has_internal) {
+              if (showInt('adj_shelves') && cab.has_internal) {
                 const bottom = ry + displayDy - tkH
                 if (isTall) {
                   for (let offset = 300; offset < displayDy - tkH - 150; offset += 350)
@@ -1144,10 +1144,10 @@ export default function ElevationSVG({
                         )}
                         {shelfYs.map((sy, i) => (
                           <line key={i} x1={rx + 4 / z} y1={sy} x2={rx + displayDx - 4 / z} y2={sy}
-                            stroke={isLineDrawing ? layers.color('shelves', '#a78bfa') : (pastFace ? '#818cf8' : (isSel ? '#cbd5e1' : layers.color('shelves', '#4b5563')))}
-                            strokeWidth={layers.w('shelves', pastFace ? 1.5 : 1) / z}
-                            strokeDasharray={isLineDrawing || layers.style('shelves') === 'solid' ? undefined : `${8 / z} ${4 / z}`}
-                            opacity={layers.props('shelves', z).opacity} />
+                            stroke={isLineDrawing ? layers.color('adj_shelves', '#a78bfa') : (pastFace ? '#818cf8' : (isSel ? '#cbd5e1' : layers.color('adj_shelves', '#4b5563')))}
+                            strokeWidth={layers.w('adj_shelves', pastFace ? 1.5 : 1) / z}
+                            strokeDasharray={isLineDrawing || layers.style('adj_shelves') === 'solid' ? undefined : `${8 / z} ${4 / z}`}
+                            opacity={layers.props('adj_shelves', z).opacity} />
                         ))}
                         {faceOpacity > 0 && layers.any('doors', 'drawer_fronts', 'false_panels') && cab.has_face && (() => {
                           const ins = 15; const fw = displayDx - ins * 2; const fh = displayDy - tkH - ins * 2
@@ -1432,8 +1432,8 @@ export default function ElevationSVG({
                         })}
 
                       {/* Shelf labels — "adj sh" / "fix sh" at each shelf's top-left corner. */}
-                      {showInt('shelves') && layers.show('shelf_labels') &&
-                        rp.internal_parts.filter(p => p.part_type === 'adj_shelf' || p.part_type === 'fixed_shelf').map((p, i) => {
+                      {layers.show('shelf_labels') &&
+                        rp.internal_parts.filter(p => (p.part_type === 'adj_shelf' || p.part_type === 'fixed_shelf') && showInt(internalPartItem(p.part_type))).map((p, i) => {
                           const { ex, ey, ew, eh } = shelfElevRect(p)
                           const { x, y, w } = toSVG(ex, ey, ew, eh)
                           if (w < 30 / z) return null

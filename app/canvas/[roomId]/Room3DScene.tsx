@@ -3,9 +3,9 @@
 import { Suspense, useMemo, useEffect, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei'
-import { Shape, Path, ExtrudeGeometry, Vector2, Vector3 } from 'three'
+import { Shape, Path, ExtrudeGeometry, Matrix4, Vector2, Vector3 } from 'three'
 import type { Wall, CabinetInstance, Room, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
-import { btSegments, outlinePoints, outwardNormal, effectiveProfileId } from '@/src/lib/benchtopGeometry'
+import { btSegments, outlinePoints, outwardNormal, effectiveProfileId, waterfallJoin } from '@/src/lib/benchtopGeometry'
 import type { BtElevInfo } from './BenchtopElevation'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -20,6 +20,7 @@ import { CabinetScene, type SceneCustomPart } from './Cabinet3DView'
 import { dbLoadRoomPartDetails, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
 import { useHandOpMarkersMulti } from './HandOpMarkers'
 import type { CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
+import Measure3D, { NO_MEASURE } from './Measure3D'
 
 const TO_RAD = Math.PI / 180
 const FOV    = 40
@@ -130,6 +131,7 @@ function WallLabel({ wall, room, cx, cy }: { wall: Wall; room: Room; cx: number;
       anchorY="middle"
       outlineWidth={5}
       outlineColor="#f1f5f9"
+      userData={NO_MEASURE}
     >
       {wall.name}
     </Text>
@@ -153,47 +155,76 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha }: 
   alpha: number
 }) {
   const { topZ, thick, defaultProfileId } = info
+  const T = thick.total
   const segs = useMemo(() => btSegments(bt), [bt])
 
+  // Waterfall edges (straight only). Mitre: the slab is cut back by T on that
+  // edge and the leg is a full-height prism with the 45° face, plus a wedge
+  // filling the top corner — so the joint shows as the diagonal on the side
+  // faces. Butt: the top runs over a leg that stops at the underside.
+  const waterfalls = useMemo(() => segs.flatMap((s, i) => {
+    if (s.type !== 'line' || s.edge?.wall || topZ - T <= 0) return []
+    const pid = effectiveProfileId(s, defaultProfileId)
+    if (!pid || profiles[pid]?.generates !== 'waterfall') return []
+    return [{ i, s, n: outwardNormal(segs, i), join: waterfallJoin(s) }]
+  }), [segs, defaultProfileId, profiles, topZ, T])
+
   const slab = useMemo(() => {
-    const pts = outlinePoints(segs, 24)
+    // Cut mitred waterfall edges back by T (their neighbours' ends follow).
+    const cut = segs.map(q => ({ ...q, p0: { ...q.p0 }, p1: { ...q.p1 } }))
+    for (const w of waterfalls) {
+      if (w.join !== 'mitre') continue
+      const k = w.i, prev = (k - 1 + cut.length) % cut.length, next = (k + 1) % cut.length
+      const mv = (q: Pt) => ({ x: q.x - w.n.x * T, y: q.y - w.n.y * T })
+      cut[k].p0 = mv(cut[k].p0); cut[k].p1 = mv(cut[k].p1)
+      cut[prev].p1 = cut[k].p0; cut[next].p0 = cut[k].p1
+    }
+    const pts = outlinePoints(cut, 24)
     if (pts.length < 3) return null
     const shape = new Shape(pts.map(p => new Vector2(p.x, -p.y)))
     for (const c of bt.cutout_polygons ?? []) {
       if (c.length >= 3) shape.holes.push(new Path(c.map(p => new Vector2(p.x, -p.y))))
     }
-    const geo = new ExtrudeGeometry(shape, { depth: thick.total, bevelEnabled: false })
+    const geo = new ExtrudeGeometry(shape, { depth: T, bevelEnabled: false })
     geo.rotateX(-Math.PI / 2)
-    geo.translate(0, topZ - thick.total, 0)
+    geo.translate(0, topZ - T, 0)
     geo.computeVertexNormals()
     return geo
-  }, [segs, bt.cutout_polygons, thick.total, topZ])
-  useEffect(() => () => { slab?.dispose() }, [slab])
+  }, [segs, waterfalls, bt.cutout_polygons, T, topZ])
 
-  const legH = topZ - thick.total
-  const legs = segs.flatMap((s, i) => {
-    if (s.type !== 'line' || s.edge?.wall || legH <= 0) return []
-    const pid = effectiveProfileId(s, defaultProfileId)
-    if (!pid || profiles[pid]?.generates !== 'waterfall') return []
-    const n = outwardNormal(segs, i)
-    const dx = s.p1.x - s.p0.x, dy = s.p1.y - s.p0.y
-    const mx = (s.p0.x + s.p1.x) / 2 - n.x * thick.total / 2
-    const my = (s.p0.y + s.p1.y) / 2 - n.y * thick.total / 2
-    return [{ i, len: Math.hypot(dx, dy), pos: [mx, legH / 2, my] as [number, number, number], rotY: -Math.atan2(dy, dx) }]
-  })
+  // Leg / wedge prisms: a profile in (u = inward from the outer face, v = up),
+  // extruded along the edge, placed by a basis matrix (u → −n, v → up, z → edge).
+  const legGeos = useMemo(() => waterfalls.flatMap(w => {
+    const len = Math.hypot(w.s.p1.x - w.s.p0.x, w.s.p1.y - w.s.p0.y)
+    const prism = (prof: [number, number][]) => {
+      const g = new ExtrudeGeometry(new Shape(prof.map(([u, v]) => new Vector2(u, v))), { depth: len, bevelEnabled: false })
+      // u × up must point along +z; pick the end so the basis is right-handed.
+      const zv = { x: w.n.y, y: -w.n.x }
+      const d = { x: (w.s.p1.x - w.s.p0.x) / len, y: (w.s.p1.y - w.s.p0.y) / len }
+      const o = zv.x * d.x + zv.y * d.y > 0 ? w.s.p0 : w.s.p1
+      const m = new Matrix4().makeBasis(new Vector3(-w.n.x, 0, -w.n.y), new Vector3(0, 1, 0), new Vector3(zv.x, 0, zv.y))
+      m.setPosition(o.x, 0, o.y)
+      g.applyMatrix4(m)
+      g.computeVertexNormals()
+      return g
+    }
+    const under = topZ - T
+    return w.join === 'mitre'
+      ? [{ key: `l${w.i}`, geo: prism([[0, 0], [T, 0], [T, under], [0, topZ]]) },
+         { key: `w${w.i}`, geo: prism([[T, under], [T, topZ], [0, topZ]]) }]
+      : [{ key: `l${w.i}`, geo: prism([[0, 0], [T, 0], [T, under], [0, under]]) }]
+  }), [waterfalls, T, topZ])
+
+  useEffect(() => () => { slab?.dispose() }, [slab])
+  useEffect(() => () => { legGeos.forEach(l => l.geo.dispose()) }, [legGeos])
 
   if (!slab) return null
   const col = selected ? '#f59e0b' : color
   const click = onSelect ? (e: { stopPropagation: () => void }) => { e.stopPropagation(); onSelect() } : undefined
   return (
     <group>
-      <mesh geometry={slab} onClick={click}>
-        <meshStandardMaterial color={col} roughness={0.5} metalness={0} {...alphaMat(alpha)} />
-        <Edges threshold={20} color="#64748b" transparent opacity={alpha} />
-      </mesh>
-      {legs.map(l => (
-        <mesh key={l.i} position={l.pos} rotation={[0, l.rotY, 0]} onClick={click}>
-          <boxGeometry args={[l.len, legH, thick.total]} />
+      {[{ key: 'slab', geo: slab }, ...legGeos].map(m => (
+        <mesh key={m.key} geometry={m.geo} onClick={click}>
           <meshStandardMaterial color={col} roughness={0.5} metalness={0} {...alphaMat(alpha)} />
           <Edges threshold={20} color="#64748b" transparent opacity={alpha} />
         </mesh>
@@ -662,7 +693,7 @@ function ResetView({ signal, controlsRef, position, target }: {
 
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, pickBenchtops }: {
+function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, pickBenchtops, measuring }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -679,6 +710,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
   layers: LayerView
   bt?: Bt3DProps
   pickBenchtops: boolean
+  measuring: boolean
 }) {
   const controlsRef = useRef<any>(null)
   const { x: cx, y: cy } = useMemo(() => centroid(walls), [walls])
@@ -782,9 +814,10 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
             key={cab.id}
             cab={cab} wall={wall} cx={cx} cy={cy} room={room}
             selected={selectedId === cab.id}
-            // F4 Benchtop mode: cabinets can't be picked (clicks fall to the tops)
-            onSelect={() => { if (!pickBenchtops) onSelectCabinet(cab.id) }}
-            onContextMenu={(x, y) => { if (!pickBenchtops) onCabContextMenu(cab.id, x, y) }}
+            // F4 Benchtop mode: cabinets can't be picked (clicks fall to the tops).
+            // Measure tool: clicks pick faces, not cabinets.
+            onSelect={() => { if (!pickBenchtops && !measuring) onSelectCabinet(cab.id) }}
+            onContextMenu={(x, y) => { if (!pickBenchtops && !measuring) onCabContextMenu(cab.id, x, y) }}
             rp={resolvedParts.get(cab.id)}
             materialColours={materialColours}
             ebByMatId={ebByMatId}
@@ -804,6 +837,8 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
             color={layers.color('benchtops', '#e7e5e4')} alpha={layers.alpha('benchtops')} />
         )
       ))}
+
+      {measuring && <Measure3D />}
     </>
   )
 }
@@ -822,7 +857,7 @@ export interface Bt3DProps {
 type MenuState     = { x: number; y: number; cabId: string }
 type WallMenuState = { x: number; y: number }
 
-export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, pickBenchtops = false }: {
+export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, pickBenchtops = false, measuring = false }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -841,6 +876,8 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   bt?: Bt3DProps
   /** F4 Benchtop mode: only benchtops pick; cabinets ignore clicks. */
   pickBenchtops?: boolean
+  /** Measure tool on: clicks pick faces to measure between; right-click clears. */
+  measuring?: boolean
 }) {
   const [menu, setMenu]               = useState<MenuState | null>(null)
   const [wallMenu, setWallMenu]       = useState<WallMenuState | null>(null)
@@ -875,6 +912,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
       className="flex-1 relative min-w-0"
       onContextMenu={e => {
         e.preventDefault()
+        if (measuring) return              // right-click clears the measurement (Measure3D)
         if (!hitCabRef.current) {
           setMenu(null)
           setWallMenu({ x: e.clientX, y: e.clientY })
@@ -904,6 +942,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
               layers={layers}
               bt={bt}
               pickBenchtops={pickBenchtops}
+              measuring={measuring}
             />
           )}
         </Suspense>
@@ -916,7 +955,9 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
       )}
 
       <div className="absolute bottom-2 left-3 text-[10px] text-gray-700 pointer-events-none select-none">
-        Left-drag rotate · scroll/pinch zoom · right-drag pan · right-click for options
+        {measuring
+          ? 'Measure: hover a face · click it · click a second face · right-click clear · drag still orbits · Esc exit'
+          : 'Left-drag rotate · scroll/pinch zoom · right-drag pan · right-click for options'}
       </div>
 
       {menu && (
