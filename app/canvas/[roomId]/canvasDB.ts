@@ -1,8 +1,7 @@
 import { supabase } from '@/src/lib/supabase'
-import { ROOM_CUSTOM_PART_COLS, withLibraryKey } from '@/src/lib/displayLayers/customPartKinds'
 import type { Wall, CabinetInstance, CabinetDefinition, NeighbourType } from '@/src/lib/types'
 import type { CustomOrient } from '@/src/lib/customPartBox'
-import { resolveCabinetFromDB, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { resolveCabinetFromDB, resolveCustomParts, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { loadCabinetInput } from '@/src/lib/resolver/loadCabinetInput'
 import { resolveHinges } from '@/src/lib/resolver/resolveHinges'
@@ -349,14 +348,8 @@ export async function dbInsertCabinet(
 
 export async function dbResolveAndPersistCabinet(id: string, opts: { awaitPersist?: boolean } = {}): Promise<ResolvedCabinet | null> {
   try {
-    const resolved = await resolveCabinetFromDB(id, opts)
-    // Attach custom parts so room views (which read resolved.custom_parts) stay in
-    // sync after a re-resolve instead of dropping them until a page reload.
-    const { data } = await supabase.from('cabinet_custom_parts')
-      .select(ROOM_CUSTOM_PART_COLS)
-      .eq('cabinet_instance_id', id)
-    resolved.custom_parts = withLibraryKey((data ?? []) as Record<string, unknown>[]) as unknown as ResolvedCabinet['custom_parts']
-    return resolved
+    // resolveCabinetFromDB attaches custom_parts (room views draw them from there).
+    return await resolveCabinetFromDB(id, opts)
   } catch (e) { console.error('resolve after save:', e); return null }
 }
 
@@ -569,6 +562,19 @@ export async function saveCabinetToLibrary(
   return created.id as string
 }
 
+// Fast-path tail shared by dbUpdateCabinet: resolve the patched cached input
+// locally, persist in background, then re-evaluate custom-part formulas against
+// the new geometry — awaited so the result carries custom_parts (room views draw
+// end panels / fillers from there; without them the assembly vanishes).
+async function resolveFromCachedInput(id: string, input: CabinetInput): Promise<ResolvedCabinet> {
+  const resolved = resolveCabinet(input)
+  applyEdgeOverridesFromCache(resolved)
+  resolved.hidden_parts = getCachedHidden(id) ?? []
+  persistResolved(resolved).catch(e => console.error('persist:', e))
+  await resolveCustomParts(id, resolved, input).catch(e => console.error('resolveCustomParts:', e))
+  return resolved
+}
+
 export async function dbUpdateCabinet(
   id: string,
   u: Partial<CabinetInstance>,
@@ -591,11 +597,7 @@ export async function dbUpdateCabinet(
       ...(u.dz !== undefined && { DZ: Number(u.dz) }),
     }
     setCachedInput(id, updated)
-    const resolved = resolveCabinet(updated)
-    applyEdgeOverridesFromCache(resolved)
-    resolved.hidden_parts = getCachedHidden(id) ?? []
-    persistResolved(resolved).catch(e => console.error('persist:', e))
-    return resolved
+    return resolveFromCachedInput(id, updated)
   }
 
   // Fast path: cabinet rule-override-only change (scribes, reveals, gaps…) + cached
@@ -609,11 +611,7 @@ export async function dbUpdateCabinet(
       const ov = (u.rule_overrides ?? {}) as Partial<ConstructionRules>
       const updated = { ...cachedR, rules: mergeRules(cachedR.rules_base, ov) }
       setCachedInput(id, updated)
-      const resolved = resolveCabinet(updated)
-      applyEdgeOverridesFromCache(resolved)
-      resolved.hidden_parts = getCachedHidden(id) ?? []
-      persistResolved(resolved).catch(e => console.error('persist:', e))
-      return resolved
+      return resolveFromCachedInput(id, updated)
     }
   }
 
@@ -630,11 +628,7 @@ export async function dbUpdateCabinet(
     if (cachedJ && opsKnown && !cachedJ.kick_run) {
       const updated = { ...cachedJ, carcase_joints: cj }
       setCachedInput(id, updated)
-      const resolved = resolveCabinet(updated)
-      applyEdgeOverridesFromCache(resolved)
-      resolved.hidden_parts = getCachedHidden(id) ?? []
-      persistResolved(resolved).catch(e => console.error('persist:', e))
-      return resolved
+      return resolveFromCachedInput(id, updated)
     }
   }
 
