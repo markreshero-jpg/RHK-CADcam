@@ -15,7 +15,7 @@ import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import type { SheetDrill } from '@/src/lib/optimiser/gcode'
-import { getUserPrefs } from '@/src/lib/userPrefs'
+import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 const MAX_W = 860, MAX_H = 470
@@ -437,8 +437,7 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
         fy: (e.clientY - r.top) / r.height,
         cx: e.clientX, cy: e.clientY,
       }
-      const delta = getUserPrefs().invertScroll ? -e.deltaY : e.deltaY
-      onZoom(delta < 0 ? 1.15 : 1 / 1.15)
+      onZoom(wheelZoomFactor(e))
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)

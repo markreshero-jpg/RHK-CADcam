@@ -18,7 +18,7 @@ import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import { parseGcode, frameAtTime, fmtClock, holesOf, type ParsedProgram, type SimMove } from '@/src/lib/optimiser/gcodeParser'
 import { shapeTypeFor, type ToolShape } from '@/src/lib/cnc/toolProfile'
-import { getUserPrefs } from '@/src/lib/userPrefs'
+import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import ToolProfilePreview from '@/src/components/ToolProfilePreview'
 import SimCanvas3D from './SimCanvas3D'
 
@@ -286,7 +286,7 @@ function Legend() {
 // ── Cursor-anchored wheel zoom ────────────────────────────────────────────────
 // The sheet SVG's viewBox is 1:1 with its pixel size, so zoom is just a sub-rect
 // of `0 0 pxW pxH` — no drawing code needs to know about it. Same behaviour as
-// the canvas/Part Editor views (ResolvedViews): 1.15× per notch, cursor stays
+// the canvas/Part Editor views (ResolvedViews): shared wheelZoomFactor, cursor stays
 // put, honours the "Reverse scroll wheel zoom" setting. Double-click resets.
 function useWheelZoom(pxW: number, pxH: number) {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -311,10 +311,7 @@ function useWheelZoom(pxW: number, pxH: number) {
       const cursor = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse())
       const { x, y, w, h } = vbRef.current
       const b = baseRef.current
-      // getUserPrefs() is read per-event (it isn't reactive) so toggling the
-      // setting takes effect without remounting the simulator.
-      const delta = getUserPrefs().invertScroll ? -e.deltaY : e.deltaY
-      const factor = delta > 0 ? 1.15 : 1 / 1.15
+      const factor = 1 / wheelZoomFactor(e)   // viewBox: larger = zoomed out
       const fx = (cursor.x - x) / w
       const fy = (cursor.y - y) / h
       const newW = Math.max(b.w / 30, Math.min(b.w * 4, w * factor))

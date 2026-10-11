@@ -7,6 +7,7 @@
 // real placement/resolve pipeline. Verifies the result from the DB afterwards.
 //
 // Layout schema: see layouts/*.json and the .claude/skills/draw-plan skill.
+//   room:     roomHeight [,roomRules {TOEH..}, wallCabinetTop]
 //   walls:    x,y,length,angle [,thickness,height,soffit,type:'island',detached]
 //   cabinets: def,wall,offset,dx [,dy,dz,flip,note]
 //     flip: place on the wall's BACK side (island far side) — rotation +180.
@@ -97,6 +98,10 @@ const { data: room, error: roomErr } = await sb.from('rooms').insert({
   name: layout.roomName ?? 'Room',
   sort_order: (siblings ?? []).reduce((m, r) => Math.max(m, r.sort_order + 1), 0),
   room_dy: layout.roomHeight ?? 2400,
+  // Room-level construction rule overrides (e.g. { TOEH: 100 } for a 100 kick
+  // job) — set before placement so every cabinet resolves with them.
+  ...(layout.roomRules ? { rule_overrides: layout.roomRules } : {}),
+  ...(layout.wallCabinetTop != null ? { wall_cabinet_top: layout.wallCabinetTop } : {}),
 }).select().single()
 if (roomErr) die(`room create failed: ${roomErr.message}`)
 console.log('created room', room.name, room.id)

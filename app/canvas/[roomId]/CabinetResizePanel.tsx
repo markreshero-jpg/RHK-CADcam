@@ -40,7 +40,7 @@ export default function CabinetResizePanel({ dim, liveValue, onApply, onCancel, 
         inputRef.current?.select()
       }
     }
-    if (e.key === 'Enter') { e.preventDefault(); apply() }
+    if (e.key === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); apply() }
     if (e.key === 'Escape') { e.stopPropagation(); onCancel() }
   }
 

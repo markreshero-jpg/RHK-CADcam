@@ -6,7 +6,7 @@ import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedIn
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import type { CabinetCustomPart, PartLabels, PartComments } from './canvasDB'
 import { customExtents, customPanelKind } from '@/src/lib/customPartBox'
-import { getUserPrefs } from '@/src/lib/userPrefs'
+import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import type { PartPosOverrides } from './canvasDB'
 import {
   C_INT, C_WALL, C_STROKE, C_PANEL, C_FACE,
@@ -305,8 +305,7 @@ export function useSvgZoom(initW: number, initH: number, zoomOut = 1, pad = 0) {
       if (!ctm) return
       const cursor = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse())
       const { x, y, w, h } = vbRef.current
-      const delta = getUserPrefs().invertScroll ? -e.deltaY : e.deltaY
-      const factor = delta > 0 ? 1.15 : 1 / 1.15
+      const factor = 1 / wheelZoomFactor(e)   // viewBox: larger = zoomed out
       const fx = (cursor.x - x) / w
       const fy = (cursor.y - y) / h
       const newW = Math.max(initRef.current.w / 30, Math.min(initRef.current.w * 4, w * factor))

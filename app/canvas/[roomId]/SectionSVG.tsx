@@ -5,7 +5,7 @@ import type { Pt } from '@/src/lib/geometry'
 import { wallDir, wallCorners, wallInwardNormal, centroid, cabWallPerp } from '@/src/lib/geometry'
 import { viewReducer } from './canvasTypes'
 import type { SectionCut } from './canvasTypes'
-import { getUserPrefs } from '@/src/lib/userPrefs'
+import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 
 // ── Geometry helpers ─────────────────────────────────────────────────────────
 
@@ -114,8 +114,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
     const handler = (e: WheelEvent) => {
       e.preventDefault()
       const r = svg.getBoundingClientRect()
-      const inv = getUserPrefs().invertScroll
-      const factor = (e.deltaY < 0) !== inv ? 1.15 : 1 / 1.15
+      const factor = wheelZoomFactor(e)
       dispatchView({ type: 'zoom', factor, svgX: e.clientX - r.left, svgY: e.clientY - r.top })
     }
     svg.addEventListener('wheel', handler, { passive: false })

@@ -61,8 +61,9 @@ async function resolveDoorStyles(
   const distinctIds = [...new Set(zoneStyle.values())]
   if (distinctIds.length === 0) return {}
 
-  // One nested query: style → catalogue(thickness) → profile(+ops).
-  const { data, error } = await supabase
+  // One nested query: style → catalogue(thickness) → profile(+ops). Library data,
+  // so the whole lookup is cached by style set + effective colour override.
+  const { data, error } = await cachedCascade(`styles:${[...distinctIds].sort().join(',')}`, async () => await supabase
     .from('door_styles')
     .select(`
       id, default_material_id,
@@ -72,7 +73,7 @@ async function resolveDoorStyles(
         ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order )
       )
     `)
-    .in('id', distinctIds)
+    .in('id', distinctIds))
   if (error) { console.error('[loadCabinetInput] door_styles query error:', error); return {} }
 
   // Optional: resolve colour → linked board material id + edge tape (best effort).
@@ -84,8 +85,8 @@ async function resolveDoorStyles(
   const colourMatById = new Map<string, string | null>()
   const colourEbById  = new Map<string, string | null>()
   if (colourIds.length > 0) {
-    const { data: cols } = await supabase
-      .from('door_schedule_materials').select('id, material_id, edgeband_id').in('id', colourIds)
+    const { data: cols } = await cachedCascade(`colours:${[...new Set(colourIds)].sort().join(',')}`, async () => await supabase
+      .from('door_schedule_materials').select('id, material_id, edgeband_id').in('id', colourIds))
     for (const c of (cols ?? []) as { id: string; material_id: string | null; edgeband_id: string | null }[]) {
       colourMatById.set(c.id, c.material_id)
       colourEbById.set(c.id, c.edgeband_id)
@@ -228,6 +229,127 @@ function loadRoomCascadeConfig(roomId: string): Promise<RoomCascadeConfig> {
   })
 }
 
+
+// ── Class-scoped schedule + library data (cached per room + assembly class) ──
+// Every query here is a function of the room/job/shop cascade and the assembly
+// class — never of the individual cabinet — so one fetch serves every cabinet.
+interface ClassScheduleArgs {
+  roomId:    string
+  classGroup: 'base' | 'wall' | 'tall'
+  projectId: string | undefined
+  asmSchedId:   string | null
+  frontSchedId: string | null
+  tkSchedId:    string | null
+  slideSchedId: string | null
+  conStrSchedId: string | null
+  effectiveDbMethodId:      string | null
+  effectiveInnerDbMethodId: string | null
+  effectiveInnerSchedId:    string | null
+  effectiveDbSchedId:       string | null
+}
+
+function loadClassSchedules(a: ClassScheduleArgs) {
+  // Key on every id the queries read, so a changed cascade can never be served
+  // a stale bundle even before an explicit invalidation lands.
+  const key = [
+    'sched', a.roomId, a.classGroup, a.projectId ?? '-', a.asmSchedId ?? '-', a.frontSchedId ?? '-',
+    a.tkSchedId ?? '-', a.slideSchedId ?? '-', a.conStrSchedId ?? '-', a.effectiveDbMethodId ?? '-',
+    a.effectiveInnerDbMethodId ?? '-', a.effectiveInnerSchedId ?? '-', a.effectiveDbSchedId ?? '-',
+  ].join(':')
+  return cachedCascade(key, async () => {
+    const [
+      asmRowsRes,
+      frontRowsRes,
+      tkRowsRes,
+      jobMatsRes,
+      jobTkRes,
+      roomMatsRes,
+      roomTkRes,
+      slideRes,
+      slideOpsRes,
+      conStrSchedRowRes,
+      slideSchedEntryRes,
+      dbMethodRes,
+      innerDbMethodRes,
+      innerSchedRes,
+      dbSchedRes,
+    ] = await Promise.all([
+    a.asmSchedId
+      ? supabase.from('assembly_schedule_rows').select('material_role, edgeband_id, materials(*)').eq('schedule_id', a.asmSchedId).eq('assembly_class', a.classGroup)
+      : Promise.resolve({ data: [] as unknown[] }),
+    a.frontSchedId
+      ? supabase.from('front_schedule_rows').select('edgeband_id, materials(*)').eq('schedule_id', a.frontSchedId).eq('assembly_class', a.classGroup).maybeSingle()
+      : Promise.resolve({ data: null }),
+    a.tkSchedId
+      ? supabase.from('toekick_schedule_rows').select('part_role, edgeband_id, materials(*)').eq('schedule_id', a.tkSchedId)
+      : Promise.resolve({ data: [] as unknown[] }),
+    a.projectId
+      ? supabase.from('job_materials').select('material_role, materials(*)').eq('project_id', a.projectId).eq('assembly_class', a.classGroup)
+      : Promise.resolve({ data: [] as unknown[] }),
+    a.projectId
+      ? supabase.from('job_toekick_materials').select('part_role, materials(*)').eq('project_id', a.projectId)
+      : Promise.resolve({ data: [] as unknown[] }),
+    supabase.from('room_materials').select('material_role, materials(*)').eq('room_id', a.roomId).eq('assembly_class', a.classGroup),
+    supabase.from('room_toekick_materials').select('part_role, materials(*)').eq('room_id', a.roomId),
+    // All active slide products (for resolver lookup)
+    supabase
+      .from('hardware_slides')
+      .select('id, name, brand, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair, colour, model_url, model_format, model_scale, model_anchor_x, model_anchor_y, model_anchor_z')
+      .eq('active', true)
+      .order('nominal_length', { ascending: true }),
+    // Slide drilling operations (child rows of hardware_slides), grouped onto
+    // each slide product below.
+    supabase
+      .from('drawer_slide_operations')
+      .select('id, slide_id, operation_order, target_surface, machine_operation, tool_diameter_mm, depth_mm, along_off_mm, up_off_mm, qty, spacing_mm, repeat_axis, side, router_tool_id, drill_id, auto_tool, notes, expressions')
+      .order('operation_order'),
+    // Construction method schedule row for this assembly class
+    a.conStrSchedId
+      ? supabase.from('construction_method_schedule_rows').select('rules, joint_defaults').eq('schedule_id', a.conStrSchedId).eq('assembly_class', a.classGroup).maybeSingle()
+      : Promise.resolve({ data: null }),
+    a.slideSchedId
+      ? supabase.from('slide_schedule_entries').select('id, schedule_id, depth_threshold, height_threshold, slide_id').eq('schedule_id', a.slideSchedId).order('depth_threshold').order('height_threshold')
+      : Promise.resolve({ data: [] as unknown[] }),
+    // Drawer box method rules (project → shop cascade, resolved above)
+    a.effectiveDbMethodId
+      ? supabase.from('drawer_box_methods').select('rules, drawer_type').eq('id', a.effectiveDbMethodId).single()
+      : Promise.resolve({ data: null }),
+    // Inner-drawer method rules (project → shop → face fallback)
+    a.effectiveInnerDbMethodId
+      ? supabase.from('drawer_box_methods').select('rules, drawer_type').eq('id', a.effectiveInnerDbMethodId).single()
+      : Promise.resolve({ data: null }),
+    // Inner-drawer material schedule (room → project → shop) with embedded materials
+    // for box / bottom / front roles.
+    a.effectiveInnerSchedId
+      ? supabase
+          .from('inner_drawerbox_schedules')
+          .select('material_id, edgeband_id, bottom_material_id, bottom_edgeband_id, front_material_id, front_edgeband_id, material:materials!inner_drawerbox_schedules_material_id_fkey(*), bottom_material:materials!inner_drawerbox_schedules_bottom_material_id_fkey(*), front_material:materials!inner_drawerbox_schedules_front_material_id_fkey(*)')
+          .eq('id', a.effectiveInnerSchedId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    // Outer drawer box material schedule (room → project → shop) with embedded
+    // materials for box / bottom roles.
+    a.effectiveDbSchedId
+      ? supabase
+          .from('drawerbox_schedules')
+          .select('material_id, edgeband_id, bottom_material_id, bottom_edgeband_id, material:materials!drawerbox_schedules_material_id_fkey(*), bottom_material:materials!drawerbox_schedules_bottom_material_id_fkey(*)')
+          .eq('id', a.effectiveDbSchedId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    ])
+    return { asmRowsRes, frontRowsRes, tkRowsRes, jobMatsRes, jobTkRes, roomMatsRes, roomTkRes, slideRes, slideOpsRes, conStrSchedRowRes, slideSchedEntryRes, dbMethodRes, innerDbMethodRes, innerSchedRes, dbSchedRes }
+  })
+}
+
+// The cabinet's construction method rules — cached by method id (or the shop
+// default when the cabinet doesn't name one), since the rows are library data.
+function loadConstructionMethod(methodId: string | null) {
+  return cachedCascade(`method:${methodId ?? 'default'}`, async () =>
+    methodId
+      ? await supabase.from('construction_methods').select('rules').eq('id', methodId).single()
+      : await supabase.from('construction_methods').select('rules').eq('is_default', true).limit(1).maybeSingle())
+}
+
 export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput> {
   // ── 1. Load cabinet ──────────────────────────────────────────────────────────
   const { data: cab, error: cabErr } = await supabase
@@ -295,96 +417,27 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     : classGroup === 'tall' ? projRow?.tall_assembly_schedule_id
     : projRow?.base_assembly_schedule_id
   ) as string | null | undefined
-  const asmSchedId   = room?.assembly_schedule_id   ?? projClassAsmId ?? projRow?.assembly_schedule_id ?? cfg.defaultAsmSchedId ?? null
-  const tkSchedId    = room?.toekick_schedule_id     ?? projRow?.toekick_schedule_id     ?? cfg.defaultTkSchedId    ?? null
-  const frontSchedId = room?.front_schedule_id       ?? projRow?.front_schedule_id       ?? cfg.defaultFrontSchedId ?? null
+  const asmSchedId   = (room?.assembly_schedule_id as string | null | undefined) ?? projClassAsmId ?? projRow?.assembly_schedule_id ?? cfg.defaultAsmSchedId ?? null
+  const tkSchedId    = (room?.toekick_schedule_id as string | null | undefined) ?? projRow?.toekick_schedule_id     ?? cfg.defaultTkSchedId    ?? null
+  const frontSchedId = (room?.front_schedule_id as string | null | undefined) ?? projRow?.front_schedule_id       ?? cfg.defaultFrontSchedId ?? null
   const slideSchedId = (room?.slide_schedule_id as string | null) ?? (projRow?.slide_schedule_id as string | null) ?? cfg.defaultSlideSchedId ?? null
 
-  // ── 5. Load schedule rows + per-role overrides + construction method in parallel
-  const [
-    asmRowsRes,
-    frontRowsRes,
-    tkRowsRes,
-    jobMatsRes,
-    jobTkRes,
-    roomMatsRes,
-    roomTkRes,
-    slideRes,
-    slideOpsRes,
-    methodRes,
-    conStrSchedRowRes,
-    slideSchedEntryRes,
-    dbMethodRes,
-    innerDbMethodRes,
-    innerSchedRes,
-    dbSchedRes,
-  ] = await Promise.all([
-    asmSchedId
-      ? supabase.from('assembly_schedule_rows').select('material_role, edgeband_id, materials(*)').eq('schedule_id', asmSchedId).eq('assembly_class', classGroup)
-      : Promise.resolve({ data: [] as unknown[] }),
-    frontSchedId
-      ? supabase.from('front_schedule_rows').select('edgeband_id, materials(*)').eq('schedule_id', frontSchedId).eq('assembly_class', classGroup).maybeSingle()
-      : Promise.resolve({ data: null }),
-    tkSchedId
-      ? supabase.from('toekick_schedule_rows').select('part_role, edgeband_id, materials(*)').eq('schedule_id', tkSchedId)
-      : Promise.resolve({ data: [] as unknown[] }),
-    projectId
-      ? supabase.from('job_materials').select('material_role, materials(*)').eq('project_id', projectId).eq('assembly_class', classGroup)
-      : Promise.resolve({ data: [] as unknown[] }),
-    projectId
-      ? supabase.from('job_toekick_materials').select('part_role, materials(*)').eq('project_id', projectId)
-      : Promise.resolve({ data: [] as unknown[] }),
-    supabase.from('room_materials').select('material_role, materials(*)').eq('room_id', cab.room_id).eq('assembly_class', classGroup),
-    supabase.from('room_toekick_materials').select('part_role, materials(*)').eq('room_id', cab.room_id),
-    // All active slide products (for resolver lookup)
-    supabase
-      .from('hardware_slides')
-      .select('id, name, brand, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair, colour, model_url, model_format, model_scale, model_anchor_x, model_anchor_y, model_anchor_z')
-      .eq('active', true)
-      .order('nominal_length', { ascending: true }),
-    // Slide drilling operations (child rows of hardware_slides), grouped onto
-    // each slide product below.
-    supabase
-      .from('drawer_slide_operations')
-      .select('id, slide_id, operation_order, target_surface, machine_operation, tool_diameter_mm, depth_mm, along_off_mm, up_off_mm, qty, spacing_mm, repeat_axis, side, router_tool_id, drill_id, auto_tool, notes, expressions')
-      .order('operation_order'),
-    cab.construction_method_id
-      ? supabase.from('construction_methods').select('rules').eq('id', cab.construction_method_id).single()
-      : supabase.from('construction_methods').select('rules').eq('is_default', true).limit(1).maybeSingle(),
-    // Construction method schedule row for this assembly class
-    conStrSchedId
-      ? supabase.from('construction_method_schedule_rows').select('rules, joint_defaults').eq('schedule_id', conStrSchedId).eq('assembly_class', classGroup).maybeSingle()
-      : Promise.resolve({ data: null }),
-    slideSchedId
-      ? supabase.from('slide_schedule_entries').select('id, schedule_id, depth_threshold, height_threshold, slide_id').eq('schedule_id', slideSchedId).order('depth_threshold').order('height_threshold')
-      : Promise.resolve({ data: [] as unknown[] }),
-    // Drawer box method rules (project → shop cascade, resolved above)
-    effectiveDbMethodId
-      ? supabase.from('drawer_box_methods').select('rules, drawer_type').eq('id', effectiveDbMethodId).single()
-      : Promise.resolve({ data: null }),
-    // Inner-drawer method rules (project → shop → face fallback)
-    effectiveInnerDbMethodId
-      ? supabase.from('drawer_box_methods').select('rules, drawer_type').eq('id', effectiveInnerDbMethodId).single()
-      : Promise.resolve({ data: null }),
-    // Inner-drawer material schedule (room → project → shop) with embedded materials
-    // for box / bottom / front roles.
-    effectiveInnerSchedId
-      ? supabase
-          .from('inner_drawerbox_schedules')
-          .select('material_id, edgeband_id, bottom_material_id, bottom_edgeband_id, front_material_id, front_edgeband_id, material:materials!inner_drawerbox_schedules_material_id_fkey(*), bottom_material:materials!inner_drawerbox_schedules_bottom_material_id_fkey(*), front_material:materials!inner_drawerbox_schedules_front_material_id_fkey(*)')
-          .eq('id', effectiveInnerSchedId)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    // Outer drawer box material schedule (room → project → shop) with embedded
-    // materials for box / bottom roles.
-    effectiveDbSchedId
-      ? supabase
-          .from('drawerbox_schedules')
-          .select('material_id, edgeband_id, bottom_material_id, bottom_edgeband_id, material:materials!drawerbox_schedules_material_id_fkey(*), bottom_material:materials!drawerbox_schedules_bottom_material_id_fkey(*)')
-          .eq('id', effectiveDbSchedId)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
+  // ── 5. Schedule rows + library hardware, plus this cabinet's construction
+  // method. The schedules are shared by every cabinet of this class in the room,
+  // so they are cached (cascadeCache.ts); the method is cached by its own id.
+  const [sched, methodRes] = await Promise.all([
+    loadClassSchedules({
+      roomId: cab.room_id as string, classGroup, projectId,
+      asmSchedId, frontSchedId, tkSchedId, slideSchedId, conStrSchedId,
+      effectiveDbMethodId, effectiveInnerDbMethodId, effectiveInnerSchedId, effectiveDbSchedId,
+    }),
+    loadConstructionMethod(cab.construction_method_id as string | null),
   ])
+  const {
+    asmRowsRes, frontRowsRes, tkRowsRes, jobMatsRes, jobTkRes,
+    roomMatsRes, roomTkRes, slideRes, slideOpsRes, conStrSchedRowRes,
+    slideSchedEntryRes, dbMethodRes, innerDbMethodRes, innerSchedRes, dbSchedRes,
+  } = sched
 
   // ── 6. Build material maps through cascade ───────────────────────────────────
   const matMap = new Map<string, Material>()
@@ -428,7 +481,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   const matOverrides = (cab.material_overrides ?? {}) as Record<string, string>
   if (Object.keys(matOverrides).length > 0) {
     const overrideIds = Object.values(matOverrides)
-    const { data: overrideMats } = await supabase.from('materials').select('*').in('id', overrideIds)
+    const { data: overrideMats } = await loadMaterialsByIds(overrideIds)
     const byId = new Map((overrideMats ?? []).map(m => [m.id, dbRowToMaterial(m as Record<string, unknown>)]))
     for (const [role, matId] of Object.entries(matOverrides)) {
       const mat = byId.get(matId)
@@ -441,7 +494,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   const tkOverrides = (cab.toekick_overrides ?? {}) as Record<string, string>
   if (Object.keys(tkOverrides).length > 0) {
     const overrideIds = Object.values(tkOverrides)
-    const { data: overrideMats } = await supabase.from('materials').select('*').in('id', overrideIds)
+    const { data: overrideMats } = await loadMaterialsByIds(overrideIds)
     const byId = new Map((overrideMats ?? []).map(m => [m.id, dbRowToMaterial(m as Record<string, unknown>)]))
     for (const [part_role, matId] of Object.entries(tkOverrides)) {
       const mat = byId.get(matId)
@@ -629,11 +682,11 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   const jointTypeNames: Record<string, string>          = {}
 
   if (jointTypeIds.size > 0) {
-    const ids = [...jointTypeIds]
-    const [opsRes, namesRes] = await Promise.all([
+    const ids = [...jointTypeIds].sort()
+    const [opsRes, namesRes] = await cachedCascade(`joints:${ids.join(',')}`, () => Promise.all([
       supabase.from('joint_type_operations').select('*').in('joint_type_id', ids).order('operation_order'),
       supabase.from('joint_types').select('id, name').in('id', ids),
-    ])
+    ]))
 
     if (opsRes.error)   console.error('[loadCabinetInput] joint_type_operations query error:', opsRes.error)
     if (namesRes.error) console.error('[loadCabinetInput] joint_types query error:', namesRes.error)
@@ -672,10 +725,11 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
 
   const methodRulesById: Record<string, DrawerBoxRules> = {}
   if (methodIdsInTree.size > 0) {
-    const { data: rows } = await supabase
+    const methodIds = [...methodIdsInTree].sort()
+    const { data: rows } = await cachedCascade(`dbmethods:${methodIds.join(',')}`, async () => await supabase
       .from('drawer_box_methods')
       .select('id, rules')
-      .in('id', [...methodIdsInTree])
+      .in('id', methodIds))
     for (const row of ((rows ?? []) as { id: string; rules: unknown }[])) {
       methodRulesById[row.id] = {
         ...DEFAULT_DB_RULES,
@@ -825,6 +879,53 @@ async function loadKickRunInput(
   }
 }
 
+// Material rows by id (cabinet-level material/toekick overrides). Library data,
+// so the same id set is fetched once per session.
+function loadMaterialsByIds(ids: string[]) {
+  const key = [...new Set(ids)].sort()
+  return cachedCascade(`materials:${key.join(',')}`, async () =>
+    await supabase.from('materials').select('*').in('id', key))
+}
+
+// ── Hinge schedule cascade (cached per room) ─────────────────────────────────
+// Resolves room → project → shop → is_default to a cup + plate id, and loads the
+// shop hinge count rules. All shared by every cabinet in the room.
+function loadHingeSchedule(roomId: string, projectId: string | undefined) {
+  return cachedCascade(`hinge:${roomId}:${projectId ?? '-'}`, async () => {
+    const [roomSchedRes, projSchedRes, shopSchedRes, defaultSchedRes, rulesRes] = await Promise.all([
+      supabase.from('rooms').select('hinge_schedule_id').eq('id', roomId).maybeSingle(),
+      projectId
+        ? supabase.from('projects').select('hinge_schedule_id').eq('id', projectId).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase.from('shop_settings').select('hinge_schedule_id').limit(1).maybeSingle(),
+      supabase.from('hinge_schedules').select('id, hinge_id, hinge_plate_id').eq('is_default', true).limit(1).maybeSingle(),
+      supabase.from('hinge_count_rules').select('max_height_mm, hinge_count, top_inset_mm, bottom_inset_mm').eq('active', true).order('max_height_mm', { ascending: true }),
+    ])
+
+    // Effective hinge schedule: room → project → shop → is_default row.
+    const roomSchedId = (roomSchedRes.data as { hinge_schedule_id?: string | null } | null)?.hinge_schedule_id ?? null
+    const projSchedId = (projSchedRes.data as { hinge_schedule_id?: string | null } | null)?.hinge_schedule_id ?? null
+    const shopSchedId = (shopSchedRes.data as { hinge_schedule_id?: string | null } | null)?.hinge_schedule_id ?? null
+    const defaultSched = defaultSchedRes.data as { id: string; hinge_id: string | null; hinge_plate_id: string | null } | null
+    const effSchedId = roomSchedId ?? projSchedId ?? shopSchedId ?? defaultSched?.id ?? null
+
+    // The chosen schedule's hinge_id + hinge_plate_id (one extra hop unless it IS
+    // the default row we already have).
+    let schedHingeId: string | null = null
+    let schedPlateIdFromSchedule: string | null = null
+    if (effSchedId && effSchedId === defaultSched?.id) {
+      schedHingeId = defaultSched.hinge_id
+      schedPlateIdFromSchedule = defaultSched.hinge_plate_id
+    } else if (effSchedId) {
+      const { data } = await supabase.from('hinge_schedules').select('hinge_id, hinge_plate_id').eq('id', effSchedId).maybeSingle()
+      schedHingeId = (data as { hinge_id: string | null } | null)?.hinge_id ?? null
+      schedPlateIdFromSchedule = (data as { hinge_plate_id: string | null } | null)?.hinge_plate_id ?? null
+    }
+
+    return { rulesRes, schedHingeId, schedPlateIdFromSchedule }
+  })
+}
+
 // ── Hinge inputs loader ───────────────────────────────────────────────────────
 // Resolves the hinge schedule (room → project → shop → is_default), loads the
 // chosen cup + plate, the shop hinge_count_rules, and any persisted
@@ -840,16 +941,13 @@ async function loadHingeInputs(
   hinge_count_rules: HingeRuleInput[]
   existing_hinges:  ExistingHingeInput[]
 }> {
-  const [roomSchedRes, projSchedRes, shopSchedRes, defaultSchedRes, rulesRes, existingRes] = await Promise.all([
-    supabase.from('rooms').select('hinge_schedule_id').eq('id', roomId).maybeSingle(),
-    projectId
-      ? supabase.from('projects').select('hinge_schedule_id').eq('id', projectId).maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase.from('shop_settings').select('hinge_schedule_id').limit(1).maybeSingle(),
-    supabase.from('hinge_schedules').select('id, hinge_id, hinge_plate_id').eq('is_default', true).limit(1).maybeSingle(),
-    supabase.from('hinge_count_rules').select('max_height_mm, hinge_count, top_inset_mm, bottom_inset_mm').eq('active', true).order('max_height_mm', { ascending: true }),
+  // The schedule cascade + count rules are shared by the whole room (cached);
+  // only this cabinet's persisted hinge_instances are per-cabinet.
+  const [shared, existingRes] = await Promise.all([
+    loadHingeSchedule(roomId, projectId),
     supabase.from('hinge_instances').select('row_index, col_index, sort_order, y_position_mm, y_locked, hinge_edge, mounting_surface, shelf_snap_tolerance_mm, hinge_plate_id').eq('cabinet_instance_id', cabinetId),
   ])
+  const { rulesRes, schedHingeId, schedPlateIdFromSchedule } = shared
 
   const hinge_count_rules: HingeRuleInput[] = ((rulesRes.data ?? []) as Record<string, unknown>[]).map(r => ({
     max_height_mm:   Number(r.max_height_mm),
@@ -870,24 +968,9 @@ async function loadHingeInputs(
     hinge_plate_id:          (e.hinge_plate_id as string | null) ?? null,
   }))
 
-  // Effective hinge schedule: room → project → shop → is_default row.
-  const roomSchedId = (roomSchedRes.data as { hinge_schedule_id?: string | null } | null)?.hinge_schedule_id ?? null
-  const projSchedId = (projSchedRes.data as { hinge_schedule_id?: string | null } | null)?.hinge_schedule_id ?? null
-  const shopSchedId = (shopSchedRes.data as { hinge_schedule_id?: string | null } | null)?.hinge_schedule_id ?? null
-  const defaultSched = defaultSchedRes.data as { id: string; hinge_id: string | null; hinge_plate_id: string | null } | null
-  const effSchedId = roomSchedId ?? projSchedId ?? shopSchedId ?? defaultSched?.id ?? null
-
-  // Get the chosen schedule's hinge_id + hinge_plate_id.
-  let hingeId: string | null = null
-  let schedPlateId: string | null = null
-  if (effSchedId && effSchedId === defaultSched?.id) {
-    hingeId = defaultSched.hinge_id
-    schedPlateId = defaultSched.hinge_plate_id
-  } else if (effSchedId) {
-    const { data } = await supabase.from('hinge_schedules').select('hinge_id, hinge_plate_id').eq('id', effSchedId).maybeSingle()
-    hingeId = (data as { hinge_id: string | null } | null)?.hinge_id ?? null
-    schedPlateId = (data as { hinge_plate_id: string | null } | null)?.hinge_plate_id ?? null
-  }
+  // Scheduled cup + plate (resolved room → project → shop → is_default above).
+  let hingeId: string | null = schedHingeId
+  let schedPlateId: string | null = schedPlateIdFromSchedule
 
   // Cabinet-level hardware overrides win over the schedule (preserved library hinge).
   const ovHingeId = hardwareOverrides.hinge_hardware_id as string | undefined
@@ -898,7 +981,7 @@ async function loadHingeInputs(
   if (!hingeId) return { hinge_hardware: null, hinge_plate: null, hinge_count_rules, existing_hinges }
 
   // Load the cup, and the plate (scheduled plate, else the hinge's default plate).
-  const [hingeRes, plateRes] = await Promise.all([
+  const [hingeRes, plateRes] = await cachedCascade(`hingehw:${hingeId}:${schedPlateId ?? 'default'}`, () => Promise.all([
     supabase.from('hardware_hinges')
       .select('id, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm, model_arm_fold_fraction')
       .eq('id', hingeId).maybeSingle(),
@@ -909,7 +992,7 @@ async function loadHingeInputs(
       : supabase.from('hardware_hinge_plates')
           .select('id, plate_offset_mm, mounting_hole_pattern, compatible_surfaces, model_plate_url, model_plate_scale, model_plate_anchor_x, model_plate_anchor_y, model_plate_anchor_z')
           .eq('hinge_id', hingeId).eq('is_default', true).limit(1).maybeSingle(),
-  ])
+  ]))
 
   const hRow = hingeRes.data as Record<string, unknown> | null
   const hinge_hardware: HingeHardwareInput | null = hRow ? {

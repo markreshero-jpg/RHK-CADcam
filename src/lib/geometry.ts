@@ -246,15 +246,23 @@ export function fitFreeSlot(
   return { t: gapStart, dx: gapWidth }
 }
 
+// Overlap tolerance (mm). Butted slots are computed as `o.t - dx` / `o.t + o.dx`,
+// and positions come from float wall projections — without slack, rounding noise
+// makes a flush slot read as overlapping and the move falls back to its origin.
+const SLOT_EPS = 0.5
+function slotsOverlap(t: number, dx: number, o: { t: number; dx: number }): boolean {
+  return t < o.t + o.dx - SLOT_EPS && t + dx > o.t + SLOT_EPS
+}
+
 export function findFreeSlot(desired: number, dx: number, wallLen: number, occupied: { t: number; dx: number }[]): number {
   const clamped = Math.max(0, Math.min(wallLen - dx, desired))
-  const conflicts = occupied.filter(o => clamped < o.t + o.dx && clamped + dx > o.t)
+  const conflicts = occupied.filter(o => slotsOverlap(clamped, dx, o))
   if (!conflicts.length) return clamped
   const sorted = [...conflicts].sort((a, b) => a.t - b.t)
   const leftT  = sorted[0].t - dx
   const rightT = sorted[sorted.length - 1].t + sorted[sorted.length - 1].dx
-  const leftOk  = leftT >= 0            && !occupied.some(o => leftT  < o.t + o.dx && leftT  + dx > o.t)
-  const rightOk = rightT + dx <= wallLen && !occupied.some(o => rightT < o.t + o.dx && rightT + dx > o.t)
+  const leftOk  = leftT >= -SLOT_EPS            && !occupied.some(o => slotsOverlap(leftT, dx, o))
+  const rightOk = rightT + dx <= wallLen + SLOT_EPS && !occupied.some(o => slotsOverlap(rightT, dx, o))
   if (!leftOk && !rightOk) return clamped
   if (!leftOk)  return rightT
   if (!rightOk) return leftT
@@ -274,7 +282,7 @@ export function slideToFreeSlot(
   occupied: { t: number; dx: number }[], originalT?: number,
 ): number {
   const clamped = Math.max(0, Math.min(wallLen - dx, desired))
-  const overlaps = (t: number) => occupied.some(o => t < o.t + o.dx && t + dx > o.t)
+  const overlaps = (t: number) => occupied.some(o => slotsOverlap(t, dx, o))
   // No overlap → drop exactly where the cursor put it (free movement within gaps).
   if (!overlaps(clamped)) return clamped
   if (originalT === undefined) return findFreeSlot(desired, dx, wallLen, occupied)
@@ -285,7 +293,7 @@ export function slideToFreeSlot(
   for (const o of occupied) { cands.push(o.t - dx); cands.push(o.t + o.dx) }
   // Keep only valid slots on the drag side (never the original side → no bounce-back).
   const valid = cands.filter(t =>
-    t >= 0 && t <= wallLen - dx && !overlaps(t) &&
+    t >= -SLOT_EPS && t <= wallLen - dx + SLOT_EPS && !overlaps(t) &&
     (draggingLeft ? t < originalT : t > originalT),
   )
   if (!valid.length) return originalT

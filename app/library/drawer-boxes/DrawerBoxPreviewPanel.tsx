@@ -12,6 +12,7 @@ import { resolveDrawerBox, mergeDbRules } from '@/src/lib/resolver/resolveDrawer
 import { effectiveDbEdgeSides } from '@/src/lib/drawerBoxConfig'
 import type { MatColour } from './DrawerBox3DView'
 import { ebColour } from '@/src/lib/partPalette'
+import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 
 const DrawerBox3DView = dynamic(() => import('./DrawerBox3DView'), { ssr: false })
 
@@ -107,7 +108,7 @@ function ZoomableArea({ children, resetKey }: { children: React.ReactNode; reset
       const rect = el.getBoundingClientRect()
       const mx = e.clientX - rect.left
       const my = e.clientY - rect.top
-      const factor = e.deltaY < 0 ? 1.15 : 0.87
+      const factor = wheelZoomFactor(e)
       const prev = viewRef.current
       const ns = Math.max(0.1, Math.min(12, prev.scale * factor))
       const r = ns / prev.scale

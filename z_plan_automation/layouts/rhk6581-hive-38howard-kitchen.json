@@ -1,0 +1,52 @@
+{
+  "_source": "z_sample_plans/38 Howard - Initial Joinery for Pricing 260816.pdf (sheet 1, architect Revit drawing) + user Q&A 2026-10-09",
+  "_notes": [
+    "Scope: back run (grid A, Elev B) + island (Elev A) only. Butler's pantry NOT drawn.",
+    "Heights: kick 100 (room TOEH override), base 100+730 fronts+10 shadowline = 840 dy; bench at 920 AFFL (island 80 stone edge, back run 20 ST01) not drawn. Talls + fridge overhead top 2500 = CH.",
+    "Depths: back run carcase 700 (user). Island carcase 580 (600 incl 18 front + 2 buffer, 20 bench overhang, 580 seating overhang).",
+    "Back run chain (east->west): 18+18 panels | 600 broom | 20 (18 panel + 2 gap) | 600 oven tower | 18 | 3x871 EQ 3DRW | 18 | 994 fridge | 18+18 panels = 4935.",
+    "Island position estimated from scaled plan (user OK'd): ~830 off east wall, ~1100 aisle front-to-front. Curved R300 ends drawn as doubled 18 panels (36). Seating-side back cladding not drawn.",
+    "West partition wall length (1100) and east wall length (3000) are estimates — no cabinets on them.",
+    "Fronts LAM01 Laminex Elegant Oak 18mm, carcase MEL01 white melamine, bench ST01 Brecciate Primavera marble, linear handles in matching laminate."
+  ],
+  "projectName": "RHK6581 The Hive Co - 38 Howard",
+  "createProject": true,
+  "jobNumber": "RHK6581",
+  "clientName": "The Hive Co",
+  "clientAddress": "38 Howard Street, Grange QLD",
+  "roomName": "Kitchen",
+  "roomHeight": 2500,
+  "roomRules": { "TOEH": 100 },
+  "wallCabinetTop": 2500,
+  "walls": [
+    { "x": 4935, "y": 0, "length": 3000, "angle": 90, "_": "east wall (grid 4), north->south" },
+    { "x": 4935, "y": 3000, "length": 4935, "angle": 180, "_": "back wall (grid A), east->west = Elev B left->right" },
+    { "x": 0, "y": 3000, "length": 1100, "angle": 270, "_": "butler's pantry partition (90 stud), south->north, length estimated" },
+    { "x": 1102, "y": 580, "length": 3000, "angle": 0, "type": "island", "detached": true, "height": 920, "_": "island back line, west->east -> face south = Elev A left->right" }
+  ],
+  "cabinets": [
+    { "def": "Tall End Panel", "wall": 2, "offset": 0, "dx": 18, "dy": 2500, "dz": 720, "note": "18 panel at east wall (1 of 2)" },
+    { "def": "Tall End Panel", "wall": 2, "offset": 18, "dx": 18, "dy": 2500, "dz": 720, "note": "18 panel at east wall (2 of 2)" },
+    { "def": "Tall Cabinet", "wall": 2, "offset": 36, "dx": 600, "dy": 2500, "dz": 700, "note": "BROOM tall, single full-height door" },
+    { "def": "Tall End Panel", "wall": 2, "offset": 636, "dx": 18, "dy": 2500, "dz": 720, "note": "plan shows 20 here: 18 panel + 2 gap" },
+    { "def": "Tall Cabinet", "wall": 2, "offset": 656, "dx": 600, "dy": 2500, "dz": 700, "note": "OVEN TOWER: door over, OV + COMBI ovens, drawer under" },
+    { "def": "Tall End Panel", "wall": 2, "offset": 1256, "dx": 18, "dy": 2500, "dz": 720, "note": "panel between oven tower and cooktop drawers" },
+    { "def": "D3-1S2Pot", "wall": 2, "offset": 1274, "dx": 871, "dy": 840, "dz": 700, "note": "3 x DRW (EQ). LAM01 wall panelling to 2500 above bench, ST01 splashback" },
+    { "def": "D3-1S2Pot", "wall": 2, "offset": 2145, "dx": 871, "dy": 840, "dz": 700, "note": "3 x DRW (EQ), under cooktop. PT04 rangehood box over" },
+    { "def": "D3-1S2Pot", "wall": 2, "offset": 3016, "dx": 871, "dy": 840, "dz": 700, "note": "3 x DRW (EQ)" },
+    { "def": "Tall End Panel", "wall": 2, "offset": 3887, "dx": 18, "dy": 2500, "dz": 720, "note": "fridge panel (cooktop side)" },
+    { "def": "Wall Unit", "wall": 2, "offset": 3905, "dx": 994, "dy": 700, "dz": 700, "note": "U/S fridge overhead cupboard, 1800-2500 AFFL, door pair. 994 fridge space below" },
+    { "def": "Tall End Panel", "wall": 2, "offset": 4899, "dx": 18, "dy": 2500, "dz": 720, "note": "fridge panel at partition (1 of 2)" },
+    { "def": "Tall End Panel", "wall": 2, "offset": 4917, "dx": 18, "dy": 2500, "dz": 720, "note": "fridge panel at partition (2 of 2)" },
+
+    { "def": "End Panel", "wall": 4, "offset": 0, "dx": 18, "dy": 840, "dz": 600, "note": "island west end, doubled 36 (1 of 2) - curved R300 end in drawing" },
+    { "def": "End Panel", "wall": 4, "offset": 18, "dx": 18, "dy": 840, "dz": 600, "note": "island west end, doubled 36 (2 of 2)" },
+    { "def": "D3-1S2Pot", "wall": 4, "offset": 36, "dx": 430, "dy": 840, "dz": 580, "note": "4 x DRW (EQ) - no 4-drawer def yet, needs 4 fronts" },
+    { "def": "D3-1S2Pot", "wall": 4, "offset": 466, "dx": 430, "dy": 840, "dz": 580, "note": "4 x DRW (EQ) - no 4-drawer def yet, needs 4 fronts" },
+    { "def": "B2", "wall": 4, "offset": 896, "dx": 450, "dy": 840, "dz": 580, "note": "BIN pull-out (single front) - no bin def yet" },
+    { "def": "B2", "wall": 4, "offset": 1346, "dx": 1000, "dy": 840, "dz": 580, "note": "SINK cabinet, door pair, ADJ shelf, undermount sink" },
+    { "def": "End Panel", "wall": 4, "offset": 2346, "dx": 18, "dy": 840, "dz": 600, "note": "panel between sink and DW" },
+    { "def": "End Panel", "wall": 4, "offset": 2964, "dx": 18, "dy": 840, "dz": 600, "note": "island east end, doubled 36 (1 of 2) - curved R300 end in drawing. 600 INTEGRATED DW gap to the left" },
+    { "def": "End Panel", "wall": 4, "offset": 2982, "dx": 18, "dy": 840, "dz": 600, "note": "island east end, doubled 36 (2 of 2)" }
+  ]
+}

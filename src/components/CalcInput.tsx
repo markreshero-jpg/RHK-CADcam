@@ -83,7 +83,7 @@ export default function CalcInput({
       onChange={e => setDraft(e.target.value)}
       onFocus={e => { if (selectOnFocus) e.currentTarget.select() }}
       onKeyDown={e => {
-        if (e.key === 'Enter') e.currentTarget.blur()
+        if (e.key === 'Enter' || e.code === 'NumpadEnter') e.currentTarget.blur()
         else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur() }
       }}
       onBlur={commit}

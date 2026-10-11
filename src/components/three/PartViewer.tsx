@@ -16,6 +16,7 @@ import { getUserPrefs } from '@/src/lib/userPrefs'
 import { fmtMm, roundMm } from '@/src/lib/format'
 import { evalCalc } from '@/src/lib/calc'
 import type { ShapePt } from '@/src/lib/shapePath'
+import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -719,10 +720,9 @@ function defaultSnapPoints(dx: number, dy: number, dz: number): [number, number,
 // invertScroll pref makes baseSpeed negative, which must only flip the wheel —
 // pinch direction is physical. Capture listeners run before OrbitControls' own,
 // so each gesture sees the right speed without replacing its dolly/clamp logic.
-function ZoomSpeedSync({ controlsRef, baseSpeed, modifiers }: {
+function ZoomSpeedSync({ controlsRef, baseSpeed }: {
   controlsRef: React.RefObject<OrbitControlsImpl | null>
   baseSpeed: number
-  modifiers: boolean   // Ctrl = fast, Shift = fine on the wheel
 }) {
   const { gl } = useThree()
   useEffect(() => {
@@ -730,13 +730,28 @@ function ZoomSpeedSync({ controlsRef, baseSpeed, modifiers }: {
     const onWheel = (e: WheelEvent) => {
       const controls = controlsRef.current
       if (!controls) return
-      controls.zoomSpeed = baseSpeed * (!modifiers ? 1 : e.shiftKey ? 0.03 / 0.12 : e.ctrlKey ? 0.40 / 0.12 : 1)
+      // Windows sends Shift+wheel as a horizontal scroll (deltaY 0), which
+      // three-stdlib ignores. Swallow it and replay it vertically.
+      if (e.deltaY === 0 && e.shiftKey && e.deltaX !== 0) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        canvas.dispatchEvent(new WheelEvent('wheel', {
+          deltaY: e.deltaX, deltaMode: e.deltaMode, shiftKey: true, ctrlKey: e.ctrlKey,
+          clientX: e.clientX, clientY: e.clientY, bubbles: true, cancelable: true,
+        }))
+        return
+      }
+      // three-stdlib dollies a fixed 0.95^zoomSpeed per wheel event; scale the step
+      // by this event's share of the shared wheel rate (incl. Ctrl = fast, Shift =
+      // fine) so smooth-scroll mice and touchpads zoom like the 2D views.
+      const step = Math.abs(Math.log(wheelZoomFactor(e))) / -Math.log(0.95)
+      controls.zoomSpeed = baseSpeed * step
     }
     const onPointerDown = (e: PointerEvent) => {
       const controls = controlsRef.current
       if (controls && e.pointerType === 'touch') controls.zoomSpeed = Math.abs(baseSpeed)
     }
-    canvas.addEventListener('wheel', onWheel, { capture: true, passive: true })
+    canvas.addEventListener('wheel', onWheel, { capture: true, passive: false })
     // Also on move: a re-render mid-pinch re-applies the (negative) zoomSpeed prop.
     canvas.addEventListener('pointerdown', onPointerDown, { capture: true })
     canvas.addEventListener('pointermove', onPointerDown, { capture: true })
@@ -745,16 +760,14 @@ function ZoomSpeedSync({ controlsRef, baseSpeed, modifiers }: {
       canvas.removeEventListener('pointerdown', onPointerDown, { capture: true })
       canvas.removeEventListener('pointermove', onPointerDown, { capture: true })
     }
-  }, [baseSpeed, modifiers, controlsRef, gl])
+  }, [baseSpeed, controlsRef, gl])
   return null
 }
 
 export function PreviewCanvas({
   dx, dy, dz,
   bgColor = '#111827',
-  enablePan = false,
-  zoomSpeedMultiplier = 1,
-  modifierZoom = false,
+  enablePan = false,
   onDeselect,
   onContextMenu,
   overlay,
@@ -772,9 +785,7 @@ export function PreviewCanvas({
   dy:             number
   dz:             number
   bgColor?:       string
-  enablePan?:     boolean
-  zoomSpeedMultiplier?: number
-  modifierZoom?:  boolean
+  enablePan?:     boolean
   onDeselect?:    () => void
   onContextMenu?: (e: React.MouseEvent) => void
   overlay?:       React.ReactNode
@@ -789,7 +800,7 @@ export function PreviewCanvas({
 }) {
   const maxDim  = Math.max(dx, dy, dz)
   const camDist = fitCamDist(dx, dy, dz)
-  const zoomSpeed = (getUserPrefs().invertScroll ? -1 : 1) * zoomSpeedMultiplier
+  const zoomSpeed = (getUserPrefs().invertScroll ? -1 : 1)
   const controlsRef = useRef<OrbitControlsImpl>(null)
 
   // View + measure state (only meaningful when viewModes is on).
@@ -852,7 +863,7 @@ export function PreviewCanvas({
           enableDamping={false}
           zoomSpeed={zoomSpeed}
         />
-        <ZoomSpeedSync key={legacy ? 'legacy' : view} controlsRef={controlsRef} baseSpeed={zoomSpeed} modifiers={modifierZoom} />
+        <ZoomSpeedSync key={legacy ? 'legacy' : view} controlsRef={controlsRef} baseSpeed={zoomSpeed} />
         <ambientLight intensity={1.8} />
         <directionalLight position={[dx * 1.5, dy * 2, dz * 2]} intensity={1.6} />
         <directionalLight position={[-dx, dy * 0.5, -dz * 0.5]} intensity={0.6} color="#e8f0ff" />

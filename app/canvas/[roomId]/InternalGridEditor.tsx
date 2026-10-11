@@ -9,7 +9,7 @@ import type {
   DrawerType,
 } from '@/src/lib/resolver/types'
 import { EMPTY_SECTION } from '@/src/lib/resolver/types'
-import { getUserPrefs } from '@/src/lib/userPrefs'
+import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { useViewBoxPinch } from './usePinchZoom'
 import { supabase } from '@/src/lib/supabase'
 
@@ -29,8 +29,7 @@ function useSvgZoom(initW: number, initH: number) {
       const cx = e.clientX - rect.left
       const cy = e.clientY - rect.top
       const { x, y, w, h } = vbRef.current
-      const delta = getUserPrefs().invertScroll ? -e.deltaY : e.deltaY
-      const factor = delta > 0 ? 1.15 : 1 / 1.15
+      const factor = 1 / wheelZoomFactor(e)   // viewBox: larger = zoomed out
       const vx = x + (cx / rect.width) * w
       const vy = y + (cy / rect.height) * h
       const newW = Math.max(initRef.current.w / 20, Math.min(initRef.current.w * 4, w * factor))

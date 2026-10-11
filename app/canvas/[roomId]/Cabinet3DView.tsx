@@ -1844,9 +1844,7 @@ export default function Cabinet3DView({
     <PreviewCanvas
       dx={dx} dy={dy} dz={dz}
       bgColor="#e8e4de"
-      enablePan
-      zoomSpeedMultiplier={1.3}
-      modifierZoom
+      enablePan
       onDeselect={() => setSelectedPart(null)}
       onContextMenu={handleCanvasContextMenu}
       hint="Left-drag rotate · scroll zoom · Ctrl fast · Shift fine · right-click part to inspect"

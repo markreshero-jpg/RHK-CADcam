@@ -9,6 +9,7 @@ import { CabinetInput, ResolvedCabinet } from './types'
 import { applyPartExpressions } from '../formula/partExpressions'
 import { evalCustomPartFields } from '../formula/customParts'
 import { buildFormulaScope } from '../formula/context'
+import { invalidateResolverCascade } from './cascadeCache'
 import { withLibraryKey } from '../displayLayers/customPartKinds'
 
 // Map a part's role (parts_library.material_role) to the assembly's scheduled
@@ -71,6 +72,19 @@ export async function resolveCustomParts(cabinetId: string, resolved: ResolvedCa
 const _inputCache     = new Map<string, CabinetInput>()
 const _edgeOvCache    = new Map<string, Awaited<ReturnType<typeof loadEdgeOverrides>>>()
 const _hiddenCache    = new Map<string, string[]>()
+
+/**
+ * Drop every resolver cache: the per-cabinet inputs above AND the shared
+ * cascade/library reads (cascadeCache.ts). Call after saving room, job, shop or
+ * library data, and when the canvas mounts — otherwise a fast path could resolve
+ * against a stale cascade. The next resolve reloads everything from the DB.
+ */
+export function invalidateResolverCaches(): void {
+  _inputCache.clear()
+  _edgeOvCache.clear()
+  _hiddenCache.clear()
+  invalidateResolverCascade()
+}
 
 // Hidden-part set from the last full resolve — lets the fast resize path carry
 // hidden_parts without an extra round-trip.
