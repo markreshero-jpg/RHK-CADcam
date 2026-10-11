@@ -115,6 +115,17 @@ What the shape editor guarantees:
 
 **Do not build banding UI into the shape editor.** Build it in PartEditor.
 
+### Exception — benchtops (`edgeOptions`, 2026-10-11)
+
+Benchtops have no PartEditor; their edge finish is authored in the shape
+editor. Passing the `edgeOptions` prop switches the edge model for that host
+only: each segment's `edge` becomes `{ wall, profile_id }` (ids from the
+`benchtop_edge_profiles` library), the Selected panel gets a
+Wall / Exposed toggle + profile picker (multi-selection aware, one undo step),
+and the banding display is replaced. Without `edgeOptions` nothing changes for
+cabinet parts. Benchtop hosts also pass `boundsCheck={false}` (the frame is the
+room, not a CNC datum). See `z_benchtop_builder/BENCHTOP-SPEC.md` Phase 3.
+
 ### Splitting a rectangle from a shaped part
 
 The two cases need different UI, and the difference is not cosmetic:

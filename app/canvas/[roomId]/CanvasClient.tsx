@@ -11,12 +11,15 @@ import {
   nearestWall, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabT, nextLabel,
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint,
 } from '@/src/lib/geometry'
+import { btSegments } from '@/src/lib/benchtopGeometry'
+import { btPosition, wallFrame, btOverhangs } from '@/src/lib/benchtopAnchor'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
 import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { usePinchZoom } from './usePinchZoom'
 import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
+import { invalidateResolverCaches } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { useCanvasHistory } from './useCanvasHistory'
 import { useMaterialColours } from './useMaterialColours'
 import { useCabinetOps } from './useCabinetOps'
@@ -25,7 +28,7 @@ import { useKickRunOps } from './useKickRunOps'
 import { buildMenus } from './canvasMenuConfig'
 import {
   Mode, ArmedDefinition, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, SectionCut,
-  viewReducer, placeInfoFor,
+  viewReducer, placeInfoFor, isBenchtopMode,
 } from './canvasTypes'
 import { useBenchtopInteraction } from './useBenchtopInteraction'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
@@ -46,6 +49,7 @@ import SaveToLibraryModal from './SaveToLibraryModal'
 import ReplaceCabinetModal from './ReplaceCabinetModal'
 import KickRunSettingsModal from './KickRunSettingsModal'
 import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
+import BenchtopDrawPanel, { type BenchtopDrawPanelHandle } from './BenchtopDrawPanel'
 import WallDrawPanel from './WallDrawPanel'
 import WallPanel from './WallPanel'
 import CabinetPanel from './CabinetPanel'
@@ -59,10 +63,16 @@ import ObjectTreeModal from './ObjectTreeModal'
 import ReportsModal, { type ReportScope } from './ReportsModal'
 import Room3DScene, { type Camera3DState } from './Room3DScene'
 import BenchtopPanel from './BenchtopPanel'
+import { useBenchtopCatalog } from './useBenchtopCatalog'
+import dynamic from 'next/dynamic'
 import SnapToolbar from './SnapToolbar'
 import { getUserPrefs, setUserPrefs, type PlanGridPrefs } from '@/src/lib/userPrefs'
-import { computeSnap, SNAP_KINDS, SNAP_KIND_META, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
+import { wheelZoomFactor } from '@/src/lib/wheelZoom'
+import { computeSnap, cabinetCorners, SNAP_KINDS, SNAP_KIND_META, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
 import { type ElevSnapSettings, type ElevSnapResult } from '@/src/lib/elevationSnap'
+
+// Shape Editor overlay is client-only and heavy — load it when first opened.
+const BenchtopShapeEditor = dynamic(() => import('./BenchtopShapeEditor'), { ssr: false })
 
 export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops }: {
   project: Project | null
@@ -187,7 +197,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setUserPrefs({ elevSnapSettings: next })
   }, [])
 
-  const { captureSnapshot, pushSnapshot, handleUndo, handleRedo, wallsRef, cabinetsRef, benchtopsRef, canUndo, canRedo } =
+  const { captureSnapshot, handleUndo, handleRedo, wallsRef, cabinetsRef, canUndo, canRedo } =
     useCanvasHistory(walls, cabinets, benchtops, setWalls, setCabinets, setBenchtops, setSelected)
 
   const {
@@ -239,19 +249,80 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Set to true when pointerDown starts the draw (so the matching pointerUp doesn't finish it).
   const drawStartedThisDownRef = useRef(false)
   const drawingPanelRef = useRef<DrawingPanelHandle>(null)
+  const btDrawPanelRef = useRef<BenchtopDrawPanelHandle>(null)
   const roomSwitcherRef = useRef<RoomSwitcherHandle>(null)
 
+  const btCatalog = useBenchtopCatalog(room, project)
   const bt = useBenchtopInteraction({
     room, walls, cabinets,
-    benchtops, setBenchtops, benchtopsRef,
-    wallsRef, cabinetsRef,
+    benchtops, setBenchtops,
     mode, zoom: view.zoom,
     svgRef, svgPointerDownRef, ctrlRef, shiftRef,
     selected,
     setSelected, setContextMenu, setMode,
-    captureSnapshot, pushSnapshot,
+    captureSnapshot,
     snapSettings, setSnapResult,
+    defaultJoinType: b => btCatalog.methodFor(b)?.default_join_type ?? 'butt',
   })
+
+  // F4 Benchtop mode owns selection: entering it drops a cabinet / wall
+  // selection, leaving it drops a benchtop one (adjusted during render, so no
+  // stale panel flashes). The cabinets selected on the way in are kept as the
+  // footprint for F4 → Draw in Shape Editor.
+  const [selModeSide, setSelModeSide] = useState(isBenchtopMode(mode))
+  const [btSeedCabIds, setBtSeedCabIds] = useState<string[]>([])
+  if (selModeSide !== isBenchtopMode(mode)) {
+    const bm = isBenchtopMode(mode)
+    setSelModeSide(bm)
+    setBtSeedCabIds(bm ? [...new Set([...multiSelect, ...(selected?.type === 'cabinet' ? [selected.id] : [])])] : [])
+    if (selected && (selected.type === 'benchtop') !== bm) setSelected(null)
+    if (bm && multiSelect.length) setMultiSelect([])
+  }
+
+  // F4 (key or sidebar button): toggle Benchtop mode. In it only benchtops can
+  // be picked; outside it they are click-through.
+  function toggleBenchtopMode() {
+    bt.resetDraw()
+    if (isBenchtopMode(mode)) {
+      setMode('select')
+    } else {
+      setMode('benchtop_select')
+      setArmedDef(null); setArmedDraft(null); setDrawStart(null); setPlaceGhost(null)
+      bt.setBenchtopMenuOpen(true)
+    }
+  }
+
+  // Benchtop height + thickness for elevation / 3D (Phase 3b, P-g): a top SITS ON
+  // the base cabinets — its underside is the base-height cascade (room → job →
+  // shop) unless the top overrides it; the surface is that + its thickness.
+  const btBaseHeight = resolveClassDims('base', { room, project, shop: shopDims }).dy
+  const btInfo = (b: BenchtopInstance) => {
+    const thick = btCatalog.thicknessFor(b)
+    return { topZ: (b.height_mm ?? btBaseHeight) + thick.total, thick, defaultProfileId: btCatalog.defaultProfileIdFor(b) }
+  }
+
+  // F4 → Draw in Shape Editor. Starting rectangle = the footprint bbox of the
+  // selected cabinets (select the base run first), else 1200 × 600 at the
+  // middle of the view.
+  function drawBenchtopInShapeEditor() {
+    const ids = new Set([...multiSelect, ...(selected?.type === 'cabinet' ? [selected.id] : []), ...btSeedCabIds])
+    const cx = centroid(walls)
+    const pts = cabinets.filter(c => ids.has(c.id)).flatMap(c => {
+      const w = walls.find(x => x.id === c.wall_id)
+      return w ? cabinetCorners(c, w, cx) : []
+    })
+    let seed: Pt[]
+    if (pts.length) {
+      const x0 = Math.min(...pts.map(p => p.x)), x1 = Math.max(...pts.map(p => p.x))
+      const y0 = Math.min(...pts.map(p => p.y)), y1 = Math.max(...pts.map(p => p.y))
+      seed = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }]
+    } else {
+      const c = { x: (svgSize.w / 2 - view.panX) / view.zoom, y: (svgSize.h / 2 - view.panY) / view.zoom }
+      seed = [{ x: c.x - 600, y: c.y - 300 }, { x: c.x + 600, y: c.y - 300 }, { x: c.x + 600, y: c.y + 300 }, { x: c.x - 600, y: c.y + 300 }]
+    }
+    setMultiSelect([])
+    bt.openNewInShapeEditor(seed)
+  }
 
   // ── Coordinate helpers ────────────────────────────────────────────────────
 
@@ -294,8 +365,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const handler = (e: WheelEvent) => {
       e.preventDefault()
       const r = svg.getBoundingClientRect()
-      const inv = getUserPrefs().invertScroll
-      const factor = (e.deltaY < 0) !== inv ? 1.15 : 1 / 1.15
+      const factor = wheelZoomFactor(e)
       dispatchView({ type: 'zoom', factor, svgX: e.clientX - r.left, svgY: e.clientY - r.top })
     }
     svg.addEventListener('wheel', handler, { passive: false })
@@ -314,7 +384,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     svgPointerDownRef.current = false
   }, [])
 
-  useEffect(() => { setElevWallSide('face') }, [elevWallId])
+  // Changing wall resets to the face side, unless the switch asked for a side
+  // (opening elevation on a selected back-face cabinet).
+  const pendingElevSideRef = useRef<'face' | 'back' | null>(null)
+  useEffect(() => {
+    setElevWallSide(pendingElevSideRef.current ?? 'face')
+    pendingElevSideRef.current = null
+  }, [elevWallId])
 
   // Drop any in-progress measurement (and snap glyph) whenever the measure tool
   // is exited — via Esc, view switch, or picking another tool.
@@ -336,6 +412,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (e.key === 'Tab' && mode === 'draw_wall' && drawStart && !isInput(e.target)) {
         e.preventDefault(); drawingPanelRef.current?.focusLength()
       }
+      // Benchtop quick-draw: Tab jumps into the size fields (BenchtopDrawPanel).
+      if (e.key === 'Tab' && (mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u') && !isInput(e.target)) {
+        e.preventDefault(); btDrawPanelRef.current?.focusFirst()
+      }
       if (e.key === 'F2' && !isInput(e.target)) {
         e.preventDefault()
         const next = mode === 'draw_wall' ? 'select' : 'draw_wall'
@@ -349,11 +429,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       if (e.key === 'F4' && !isInput(e.target)) {
         e.preventDefault()
-        const isBt = mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u' || mode === 'draw_benchtop_cutout_rect' || mode === 'draw_benchtop_cutout_circle'
-        const next = isBt ? 'select' : 'draw_benchtop'
-        setMode(next)
-        bt.resetDraw()
-        bt.setBenchtopMenuOpen(next === 'draw_benchtop')
+        toggleBenchtopMode()
       }
       if (e.key === 'a' && !isInput(e.target) && (mode === 'draw_benchtop') && bt.btDrawPoly.length > 0) {
         e.preventDefault()
@@ -361,7 +437,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !isInput(e.target)) { e.preventDefault(); void handleUndo() }
       if (((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey) && !isInput(e.target)) || ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && e.shiftKey && !isInput(e.target))) { e.preventDefault(); void handleRedo() }
-      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode('select'); setArmedDef(null); setArmedDraft(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setDeleteCabsPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
+      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode(isBenchtopMode(mode) && mode !== 'benchtop_select' ? 'benchtop_select' : 'select'); setArmedDef(null); setArmedDraft(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setDeleteCabsPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput(e.target)) {
         if (mode === 'draw_benchtop' && e.key === 'Backspace') { bt.undoVertex(); return }
         if (selected?.type === 'cabinet') handleDeleteCabinet(selected.id)
@@ -376,7 +452,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku)
     return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku) }
-  }, [selected])
+  }, [selected, mode])
 
   // Copy / cut / paste cabinets via keyboard (works for single or multi-select).
   // Separate from the keydown effect above so it re-binds with fresh selection /
@@ -416,6 +492,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setDeleteWallPending(null)
     setWalls(ws => ws.filter(w => w.id !== id))
     setCabinets(cs => cs.filter(c => c.wall_id !== id))
+    // FK sets the anchor null; the benchtop hook re-anchors the top to another wall.
+    setBenchtops(bs => bs.map(b => b.wall_id === id ? { ...b, wall_id: null } : b))
     setSelected(null)
     // Cabinets must be deleted first — wall delete fails with FK violation if they exist
     await supabase.from('cabinet_instances').delete().eq('wall_id', id)
@@ -490,6 +568,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const { handleJoinKicks, handleDetachKickSingle, handleSeparateKicks } = useKickRunOps({
     cabinets, walls, room, setCabinets, applyKickMutation, setContextMenu,
   })
+
+  // Library, shop and job settings can be edited on other routes while these
+  // module-level caches stay warm (client-side nav never reloads the module), so
+  // start every canvas session from a clean cascade.
+  useEffect(() => { invalidateResolverCaches() }, [])
 
   // One-time self-heal: migrate any kick-run members detached under the old model
   // (kick still on the cabinet) to the current kick-less-carcase model.
@@ -951,8 +1034,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     if (e.button !== 0) return
     if (cabFollowing) return
-    if (mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l') {
+    // Benchtop draw tools finish on pointer-up (useBenchtopInteraction). Cutouts
+    // and joins act on the selected benchtop, so they must not deselect here.
+    if (mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u'
+      || mode === 'draw_benchtop_cutout_rect' || mode === 'draw_benchtop_cutout_circle' || mode === 'draw_benchtop_join'
+      || mode === 'move_benchtop') {
       e.preventDefault()
+      return
+    }
+    // Benchtop mode: a press that reaches the canvas missed every top (tops stop
+    // propagation; walls / cabinets are click-through) → deselect.
+    if (mode === 'benchtop_select') {
+      e.preventDefault()
+      setSelected(null)
       return
     }
     if (mode === 'measure') { e.preventDefault(); return }
@@ -1004,7 +1098,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return
     }
 
-    if (bt.handlePointerMove(wp, e)) return
+    if (bt.handlePointerMove(wp)) return
 
     if (mode === 'measure') {
       const snap = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom,
@@ -1037,11 +1131,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return (wp.x - w.pos_x) * inward.x + (wp.y - w.pos_y) * inward.y < 0
     }
 
+    // Cursor's along-wall position (unclamped). The floating ghost is drawn
+    // centred on the cursor, so landings are centred on this too.
+    function cursorT(w: Wall): number {
+      const wd = wallDir(w)
+      return (wp.x - w.pos_x) * wd.x + (wp.y - w.pos_y) * wd.y
+    }
+
     if (mode === 'paste' && clipboard) {
       const raw = nearestWall(wp, walls, clipboard.dx, WALL_SNAP_PX / view.zoom)
       if (!raw) { setPlaceGhost(null); return }
-      const wd = wallDir(raw.wall)
-      const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
+      const desired = cursorT(raw.wall) - clipboard.dx / 2
       const flip = wallFlipFor(raw.wall)
       const side = flip ? 'back' : 'face'
       const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(clipboard, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
@@ -1058,14 +1158,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       // wall, matching the elevation-view placement feel (carry-in-hand + snap landing).
       const raw = nearestWall(wp, walls, clsInfo.dx, Infinity)
       if (!raw) { setPlaceGhost(null); return }
-      const wd = wallDir(raw.wall)
-      const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
       const flip = wallFlipFor(raw.wall)
       const side = flip ? 'back' : 'face'
       const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: clsInfo.cls, dy: clsInfo.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
       // Fit into the available gap: shrink the new cabinet's width if the gap is
       // narrower than the default, rather than overlapping the neighbour.
-      const fit = fitFreeSlot(desired, clsInfo.dx, raw.wall.length, occupied)
+      // fitFreeSlot centres on the cursor point itself.
+      const fit = fitFreeSlot(cursorT(raw.wall), clsInfo.dx, raw.wall.length, occupied)
       const cxp = centroid(walls)
       const a = wallAnchorPoint(raw.wall, fit.t, flip, cxp.x, cxp.y)
       setPlaceGhost({ wall: raw.wall, pos_x: a.x, pos_y: a.y, islandFlip: flip, freePos: wp, fitDx: fit.dx })
@@ -1077,9 +1176,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
 
     if (cabDragRef.current && mode === 'select') {
-      // Require 6 SVG pixels of movement before activating drag — prevents accidental
+      // Require 3 screen pixels of movement before activating drag — prevents accidental
       // micro-drags when clicking quickly.
-      if (!cabDragOriginRef.current || dist(svgP, cabDragOriginRef.current) >= 6) {
+      if (!cabDragOriginRef.current || dist(svgP, cabDragOriginRef.current) >= 3) {
         const { cabId, assemblyClass, wall, cabDX, dragOffset } = cabDragRef.current
         const wd = wallDir(wall)
         const cursorT = (wp.x - wall.pos_x) * wd.x + (wp.y - wall.pos_y) * wd.y
@@ -1101,14 +1200,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         // No distance limit — ghost always snaps to nearest wall regardless of cursor position
         const raw = nearestWall(wp, walls, cab.dx, Infinity)
         if (raw) {
-          const wd = wallDir(raw.wall)
-          const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
-          const moveSide = cabWallSide(cab, raw.wall)
+          const desired = cursorT(raw.wall) - cab.dx / 2
+          // Side the cabinet will land on (cursor side of the wall) — not its current
+          // rotation, which is meaningless against a different wall.
+          const flip = wallFlipFor(raw.wall)
+          const moveSide = flip ? 'back' : 'face'
           const occupied = cabinets.filter(c => c.id !== id && c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(cab, c, raw.wall, room) && cabWallSide(c, raw.wall) === moveSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
           // Same-wall move → keep it on the drag side (no bounce-back); cross-wall → free slot.
           const origT = raw.wall.id === cab.wall_id ? cabT(cab, raw.wall) : undefined
           const t = slideToFreeSlot(desired, cab.dx, raw.wall.length, occupied, origT)
-          const flip = wallFlipFor(raw.wall)
           const cxp = centroid(walls)
           const a = wallAnchorPoint(raw.wall, t, flip, cxp.x, cxp.y)
           setCabMoveDrag({ id, wall: raw.wall, pos_x: a.x, pos_y: a.y, islandFlip: flip, freePos: wp })
@@ -1170,7 +1270,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const svgP = svgCoords(e)
     const wp = toWorld(svgP.x, svgP.y)
 
-    if (await bt.handlePointerUp(wp, e)) return
+    if (await bt.handlePointerUp(wp)) return
 
     if (mode === 'measure') {
       const snap = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom,
@@ -1241,7 +1341,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const raw = nearestWall(wp, walls, clipboard.dx, WALL_SNAP_PX / view.zoom)
         if (raw) {
           const wd2 = wallDir(raw.wall)
-          const desired = (raw.pos_x - raw.wall.pos_x) * wd2.x + (raw.pos_y - raw.wall.pos_y) * wd2.y
+          const desired = (wp.x - raw.wall.pos_x) * wd2.x + (wp.y - raw.wall.pos_y) * wd2.y - clipboard.dx / 2
           const pasteFlip = (() => {
             const cx2 = centroid(walls)
             const inw = wallInwardNormal(raw.wall, cx2.x, cx2.y)
@@ -1336,12 +1436,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   function onCabinetPointerDown(e: React.PointerEvent, cab: CabinetInstance) {
     if (mode !== 'select' || e.button !== 0) return
     e.stopPropagation()
+    // Moving a cabinet → clicking on any cabinet (usually the moving one itself,
+    // on a small move) drops it rather than cancelling the move.
+    if (cabFollowing) { void commitCabMove(); return }
     // stopPropagation blocks the SVG onPointerDown, so set this ref here —
     // otherwise onPointerUp's phantom-event guard exits early and the drag save never fires.
     svgPointerDownRef.current = true
     setContextMenu(null); setOpenMenu(null); setCabMenuOpen(false)
     commitResize()
-    if (cabFollowing) { setCabFollowing(null); setCabMoveDrag(null) }
     setSelected({ type: 'cabinet', id: cab.id })
 
     if (shiftRef.current) {
@@ -1358,9 +1460,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   function onCabinetCrosshairClick(e: React.MouseEvent, cab: CabinetInstance) {
     if (mode !== 'select') return
     e.stopPropagation()
-    if (cabFollowing?.id === cab.id) {
-      setCabFollowing(null)
-      setCabMoveDrag(null)
+    if (cabFollowing) {
+      // Already moving a cabinet → this click drops it (Esc cancels).
+      void commitCabMove()
     } else {
       setCabResize(null); setMultiSelect([])
       setSelected({ type: 'cabinet', id: cab.id })
@@ -1379,13 +1481,27 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   async function onSVGClick(e: React.MouseEvent) {
     if (cabResize) { commitResize(); return }
     if (!cabFollowing) return
-    if (!cabMoveDrag) { setCabFollowing(null); return }
+    await commitCabMove()
+  }
+
+  // Drop the crosshair-moved cabinet at its landing spot. Called by ANY click while
+  // following — a small move leaves the cursor over the cabinet itself (or its
+  // crosshair), and those clicks must drop it, not cancel. No-op drops just end.
+  async function commitCabMove() {
+    if (!cabFollowing) return
     const { id } = cabFollowing
-    const { wall, pos_x, pos_y, islandFlip } = cabMoveDrag
+    const move = cabMoveDrag
     setCabFollowing(null)
     setCabMoveDrag(null)
-    captureSnapshot()
+    if (!move) return
+    const { wall, pos_x, pos_y, islandFlip } = move
+    const cab = cabinets.find(c => c.id === id)
     const newRotation = islandFlip ? wall.angle + 180 : wall.angle
+    const moved = !cab || cab.wall_id !== wall.id ||
+      Math.hypot(pos_x - cab.pos_x, pos_y - cab.pos_y) > 0.01 ||
+      ((cab.rotation - newRotation) % 360 + 360) % 360 !== 0
+    if (!moved) return
+    captureSnapshot()
     await handleUpdateCabinet(id, { wall_id: wall.id, pos_x, pos_y, rotation: newRotation })
   }
 
@@ -1457,6 +1573,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // ── Project / Room save handlers ──────────────────────────────────────────
 
   function reResolveAllCabinets() {
+    // Room/job settings feed the cascade every cabinet resolves through, so the
+    // shared cascade cache must go before anything re-resolves.
+    invalidateResolverCaches()
     for (const cab of cabinets) {
       dbResolveAndPersistCabinet(cab.id).then(resolved => {
         if (resolved) {
@@ -1488,14 +1607,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const selectedWall      = selected?.type === 'wall'      ? walls.find(w => w.id === selected.id) ?? null      : null
   const selectedCab       = selected?.type === 'cabinet'   ? cabinets.find(c => c.id === selected.id) ?? null   : null
   const selectedBenchtop  = selected?.type === 'benchtop'  ? benchtops.find(b => b.id === selected.id) ?? null  : null
+  // Selected top measured against its anchor wall face (panel sizes / ends).
+  const selectedBtPos = (() => {
+    const aw = selectedBenchtop && walls.find(w => w.id === selectedBenchtop.wall_id)
+    return selectedBenchtop && aw ? btPosition(btSegments(selectedBenchtop), wallFrame(aw, selectedBenchtop.wall_side, centroid(walls))) : null
+  })()
 
   const multiSelectCabs = multiSelect.length >= 2 ? cabinets.filter(c => multiSelect.includes(c.id)) : []
   const canEqualize = multiSelectCabs.length >= 2 && new Set(multiSelectCabs.map(c => c.wall_id)).size === 1
 
   const cursor = spaceRef.current ? 'grab'
-    : bt.isDragging ? 'grabbing'
     : sectionDrag ? 'grabbing'
-    : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_section' || mode === 'measure' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l') ? 'crosshair'
+    : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_section' || mode === 'measure' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_join' || mode === 'move_benchtop') ? 'crosshair'
     : (currentPlaceInfo() || mode === 'paste') ? 'cell'
     : cabResize ? 'crosshair'
     : 'default'
@@ -1515,7 +1638,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }
 
   function onSelectMode(m: Mode) {
-    setMode(prev => prev === m ? 'select' : m)
+    // Re-clicking a benchtop tool drops back to Benchtop mode, not Select.
+    setMode(prev => prev === m ? (isBenchtopMode(m) ? 'benchtop_select' : 'select') : m)
     setArmedDef(null); setArmedDraft(null)
     setDrawStart(null); setPlaceGhost(null)
   }
@@ -1552,7 +1676,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }
 
   function switchView(v: CanvasView) {
-    if (v === 'elevation' && elevWallId === null) {
+    // A selected cabinet opens its own wall (and side — back-face cabinets show the
+    // wall's back elevation); otherwise keep the last wall viewed.
+    const selCab = v === 'elevation' && selected?.type === 'cabinet' ? cabinets.find(c => c.id === selected.id) : undefined
+    const selCabWall = selCab ? walls.find(w => w.id === selCab.wall_id) : undefined
+    if (selCab && selCabWall) {
+      const side = cabWallSide(selCab, selCabWall)
+      if (selCabWall.id !== elevWallId) pendingElevSideRef.current = side
+      setElevWallId(selCabWall.id)
+      setElevWallSide(side)
+    } else if (v === 'elevation' && elevWallId === null) {
       setElevWallId(selectedWall?.id ?? walls[0]?.id ?? null)
     }
     if (v !== 'plan') {
@@ -1566,6 +1699,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     : mode === 'draw_benchtop_l' ? (bt.btLPoints.length === 0 ? 'L-shape: click start of first leg · Ctrl=ortho · Esc=cancel' : bt.btLPoints.length === 1 ? 'Click inner corner · Ctrl=ortho' : 'Click end of second leg to complete L-shape')
     : mode === 'draw_benchtop_u' ? (['U-shape: click start of arm 1 · Ctrl=ortho · Esc=cancel', 'Click inner corner 1', 'Click inner corner 2', 'Click end of arm 2'][bt.btUPoints.length] ?? 'Click end of arm 2')
     : mode === 'draw_benchtop_cutout_rect' ? (!bt.btCutoutStart ? 'Cutout: click first corner of rectangle · Esc=cancel' : 'Click opposite corner to finish cutout')
+    : mode === 'benchtop_select' ? 'Benchtop mode: click a benchtop to select · double-click = edit shape · cabinets are locked · F4 / Esc = back to cabinets'
+    : mode === 'move_benchtop' ? (!bt.btMoveBase ? 'Move benchtop: click a base point (snaps) · Esc=cancel' : 'Click the point to move it to · Ctrl=ortho · Esc=cancel')
+    : mode === 'draw_benchtop_join' ? (!bt.btJoinStart ? 'Join line: click a point on the benchtop edge · Esc=cancel' : 'Click the opposite edge to finish the join · Ctrl=ortho')
     : mode === 'draw_benchtop_cutout_circle' ? (!bt.btCutoutStart ? 'Cutout: click centre of circle · Esc=cancel' : 'Click to set radius and finish cutout')
     : mode === 'draw_benchtop'   ? (bt.btArcMode
         ? (!bt.btArcMidpoint ? 'Arc mode: click a point ON the arc curve' : 'Arc mode: click the arc endpoint')
@@ -1595,7 +1731,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     multiSelect.length >= 2                             ? `${multiSelect.length} cabinets selected · right-click to equalize widths`
     : selected?.type === 'wall'       && selectedWall       ? `${selectedWall.name} · ${Math.round(selectedWall.length)}mm · ${Math.round(selectedWall.angle)}°`
     : selected?.type === 'cabinet'    && selectedCab        ? `${selectedCab.assembly_class.replace(/_/g,' ')} · ${selectedCab.label ?? '—'} · ${selectedCab.dx}×${selectedCab.dy}×${selectedCab.dz}`
-    : selected?.type === 'benchtop'   && selectedBenchtop   ? `Benchtop · ${selectedBenchtop.label ?? '—'} · ${selectedBenchtop.polygon.length} vertices · drag vertices to reshape · click edges to tag · click vertices to toggle join · Delete = remove`
+    : selected?.type === 'benchtop'   && selectedBenchtop   ? `Benchtop · ${selectedBenchtop.label ?? '—'} · ${selectedBenchtop.polygon.length} vertices · anchored to ${walls.find(w => w.id === selectedBenchtop.wall_id)?.name ?? '—'} · double-click to edit shape + edge profiles · move it from the panel (Position / Move…) · Delete = remove`
     : null
 
   const menus = buildMenus({
@@ -1694,7 +1830,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
 
         <CanvasSidebar
           room={room}
@@ -1711,6 +1847,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           setCabMenuOpen={setCabMenuOpen}
           benchtopMenuOpen={bt.benchtopMenuOpen}
           setBenchtopMenuOpen={bt.setBenchtopMenuOpen}
+          // Sidebar button: in Benchtop mode with the tool menu closed, reopen the
+          // menu (e.g. after finishing a top) rather than leaving the mode.
+          onToggleBenchtopMode={() => {
+            if (isBenchtopMode(mode) && !bt.benchtopMenuOpen) bt.setBenchtopMenuOpen(true)
+            else toggleBenchtopMode()
+          }}
+          onDrawBenchtopInShapeEditor={drawBenchtopInShapeEditor}
           clipboard={clipboard}
           sidebarW={sidebarW}
         />
@@ -1774,9 +1917,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               onBenchtopEdgeShiftClick={bt.onBenchtopEdgeShiftClick}
               onBenchtopEdgeAltClick={bt.onBenchtopEdgeAltClick}
               onBenchtopVertexClick={bt.onBenchtopVertexClick}
-              onBenchtopVertexPointerDown={bt.onBtVertexPointerDown}
               onBenchtopContextMenu={bt.onBenchtopContextMenu}
-              onBenchtopArcPointerDown={bt.onBtArcPointerDown}
               onBtUndoVertex={bt.undoVertex}
               btDrawArcs={bt.btDrawArcs}
               btArcMode={bt.btArcMode}
@@ -1785,7 +1926,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               btRectCursor={bt.btRectCursor}
               onBenchtopVertexContextMenu={bt.onBenchtopVertexContextMenu}
               onBenchtopPointerDown={bt.onBenchtopPointerDown}
-              onBenchtopRotateHandlePointerDown={bt.onBenchtopRotateHandlePointerDown}
+              btMoveBase={bt.btMoveBase}
+              btMoveCursor={bt.btMoveCursor}
+              btDepth={bt.btDepth}
+              onBenchtopDoubleClick={bt.openShapeEditor}
+              btJoinStart={bt.btJoinStart}
+              btJoinCursor={bt.btJoinCursor}
+              edgeProfiles={btCatalog.profileById}
+              btDefaultProfileId={btCatalog.defaultProfileIdFor}
               btLPoints={bt.btLPoints}
               btLCursor={bt.btLCursor}
               btUPoints={bt.btUPoints}
@@ -1812,6 +1960,21 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 height={drawHeight}
                 setHeight={setDrawHeight}
                 onCancel={() => setMode('select')}
+              />
+            )}
+            {(mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u') && !bt.btArcMode && (
+              <BenchtopDrawPanel
+                ref={btDrawPanelRef}
+                mode={mode}
+                anchor={bt.drawAnchor()}
+                cursor={bt.drawCursor()}
+                pointCount={mode === 'draw_benchtop' ? bt.btDrawPoly.length : mode === 'draw_benchtop_l' ? bt.btLPoints.length : mode === 'draw_benchtop_u' ? bt.btUPoints.length : (bt.btRectStart ? 1 : 0)}
+                depth={bt.btDepth}
+                setDepth={bt.setBtDepth}
+                onPreview={bt.previewTyped}
+                onPlace={v => void bt.placeTyped(v)}
+                onClosePolygon={() => void bt.closePolygon()}
+                onCancel={() => { bt.resetDraw(); setMode('benchtop_select') }}
               />
             )}
             {mode === 'draw_wall' && drawStart && (
@@ -1842,7 +2005,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             clipboard={clipboard}
             clipboardGroup={clipboardGroup}
             onSelectCabinet={id => { setSelected({ type: 'cabinet', id }); setMultiSelect([]); setCabResize(null) }}
-            onSelectWall={id => setSelected({ type: 'wall', id })}
+            onSelectWall={id => { if (!isBenchtopMode(mode)) setSelected({ type: 'wall', id }) }}
             onSetElevWall={setElevWallId}
             elevWallSide={elevWallSide}
             onSetElevWallSide={setElevWallSide}
@@ -1901,6 +2064,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             setElevMeasureEnd={setElevMeasureEnd}
             setElevMeasureCursor={setElevMeasureCursor}
             onDeselect={() => setSelected(null)}
+            benchtops={benchtops}
+            benchtopInfo={btInfo}
+            edgeProfiles={btCatalog.profileById}
+            onSelectBenchtop={id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]); setCabResize(null) }}
             onSeamClick={(cabId) => {
               setSelected({ type: 'cabinet', id: cabId })
               setMultiSelect([])
@@ -1928,6 +2095,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             room={room}
             selectedId={selected?.type === 'cabinet' ? selected.id : null}
             onSelectCabinet={id => { setSelected({ type: 'cabinet', id }); setMultiSelect([]) }}
+            pickBenchtops={isBenchtopMode(mode)}
             onDeselect={() => { setSelected(null); setMultiSelect([]) }}
             onEditCabinet={id => { setEditCabInitialView('3d'); setEditCabId(id) }}
             onDeleteCabinet={id => handleDeleteCabinet(id)}
@@ -1938,12 +2106,21 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             cameraStateRef={camera3DStateRef}
             resetSignal={reset3DSignal}
             layers={layers3D}
+            bt={{
+              benchtops, info: btInfo, profiles: btCatalog.profileById,
+              selectedId: selected?.type === 'benchtop' ? selected.id : null,
+              onSelect: id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]) },
+            }}
           />
         )}
 
         {mode !== 'draw_wall' && mode !== 'draw_island' && selectedWall && (canvasView === 'plan' || canvasView === 'elevation') && (
           <WallPanel wall={selectedWall} roomHeight={room.room_dy ?? undefined} onUpdate={handleUpdateWall} onDelete={handleDeleteWall} />
         )}
+        {/* In 3D the right-hand panels float over the canvas instead of taking flex
+            space — otherwise selecting/deselecting resizes the WebGL canvas and the
+            view jumps sideways. Plan/elevation keep the docked column (`contents`). */}
+        <div className={canvasView === '3d' ? 'absolute top-0 right-0 bottom-0 z-20 flex shadow-xl' : 'contents'}>
         {selectedCab && cabResize?.cabId === selectedCab.id && (
           <CabinetResizePanel
             key={`${cabResize.cabId}-${cabResize.dim}`}
@@ -1977,6 +2154,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 update.pos_x = w.pos_x + newT * wd.x
                 update.pos_y = w.pos_y + newT * wd.y
               }
+              captureSnapshot()
               handleUpdateCabinet(cabResize.cabId, update)
               setCabResize(null)
             }}
@@ -2044,8 +2222,73 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeleteCutout={bt.handleDeleteCutout}
             onDrawCutoutRect={() => setMode('draw_benchtop_cutout_rect')}
             onDrawCutoutCircle={() => setMode('draw_benchtop_cutout_circle')}
+            profiles={btCatalog.profiles}
+            method={btCatalog.methodFor(selectedBenchtop)}
+            onSetEdges={bt.setBenchtopEdges}
+            onEditShape={bt.openShapeEditor}
+            onDrawJoin={() => { bt.resetDraw(); setMode('draw_benchtop_join') }}
+            onDeleteJoin={bt.handleDeleteJoin}
+            onSetJoinType={bt.handleSetJoinType}
+            walls={walls}
+            position={selectedBtPos}
+            wallLength={walls.find(w => w.id === selectedBenchtop.wall_id)?.length ?? null}
+            overhang={(() => {
+              // Base cabinets on the anchor wall + side (an island top spans both
+              // sides, so islands count either side), as along-wall spans.
+              const aw = walls.find(w => w.id === selectedBenchtop.wall_id)
+              if (!aw || !selectedBtPos) return null
+              const under = cabinets
+                .filter(c => c.wall_id === aw.id && !c.is_kick_assembly && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')
+                  && (aw.wall_type === 'island' || cabWallSide(c, aw) === selectedBenchtop.wall_side))
+                .map(c => ({ t: cabT(c, aw), dx: c.dx, dz: c.dz }))
+              return btOverhangs(selectedBtPos, under)
+            })()}
+            onStretch={bt.handleStretch}
+            baseHeight={btBaseHeight}
+            thickness={btCatalog.thicknessFor(selectedBenchtop)}
+            onSetPosition={bt.handleSetPosition}
+            onReanchor={bt.handleReanchor}
+            onMove={() => { if (canvasView !== 'plan') switchView('plan'); bt.startMoveBenchtop() }}
           />
         )}
+        {bt.shapeEditDraft && (() => {
+          const method = btCatalog.methodFor(bt.shapeEditDraft)
+          return (
+            <BenchtopShapeEditor
+              key="new"
+              isNew
+              benchtop={bt.shapeEditDraft}
+              benchtops={benchtops}
+              walls={walls}
+              cabinets={cabinets}
+              profiles={btCatalog.profiles}
+              defaultProfileId={method?.default_edge_profile_id ?? null}
+              defaultLabel={method ? `${method.name} default` : 'Method default'}
+              onSave={segs => bt.handleDraftSave(segs)}
+              onClose={() => bt.setShapeEditDraft(null)}
+            />
+          )
+        })()}
+        {bt.shapeEditId && (() => {
+          const editing = benchtops.find(b => b.id === bt.shapeEditId)
+          if (!editing) return null
+          const method = btCatalog.methodFor(editing)
+          return (
+            <BenchtopShapeEditor
+              key={editing.id}
+              benchtop={editing}
+              benchtops={benchtops}
+              walls={walls}
+              cabinets={cabinets}
+              profiles={btCatalog.profiles}
+              defaultProfileId={method?.default_edge_profile_id ?? null}
+              defaultLabel={method ? `${method.name} default` : 'Method default'}
+              onSave={segs => bt.handleShapeEditorSave(editing.id, segs)}
+              onClose={() => bt.setShapeEditId(null)}
+            />
+          )
+        })()}
+        </div>
 
       </div>
 

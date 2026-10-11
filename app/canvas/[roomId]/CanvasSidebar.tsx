@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/src/lib/supabase'
-import { Mode, CabinetInstance } from './canvasTypes'
+import { Mode, CabinetInstance, isBenchtopMode } from './canvasTypes'
 import { Room, CabinetDefinition } from '@/src/lib/types'
 import RoomSwitcher, { type RoomSwitcherHandle } from './RoomSwitcher'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
@@ -79,7 +79,7 @@ export default function CanvasSidebar({
   armedDefinitionId, onArmDefinition,
   wallMenuOpen, setWallMenuOpen,
   cabMenuOpen, setCabMenuOpen,
-  benchtopMenuOpen, setBenchtopMenuOpen,
+  benchtopMenuOpen, setBenchtopMenuOpen, onDrawBenchtopInShapeEditor, onToggleBenchtopMode,
   clipboard, sidebarW, libRefresh = 0,
 }: {
   room: Room
@@ -95,6 +95,10 @@ export default function CanvasSidebar({
   setCabMenuOpen: (v: boolean) => void
   benchtopMenuOpen: boolean
   setBenchtopMenuOpen: (v: boolean) => void
+  /** F4 button: enter / leave Benchtop mode (only benchtops pickable while on). */
+  onToggleBenchtopMode?: () => void
+  /** F4 → Draw in Shape Editor: new benchtop drawn straight in the full editor. */
+  onDrawBenchtopInShapeEditor?: () => void
   clipboard: CabinetInstance | null
   sidebarW: number
   /** Bumped by the parent after a Save-to-library so the palette reloads. */
@@ -195,7 +199,8 @@ export default function CanvasSidebar({
 
   const cabActive      = mode === 'place_definition'
   const wallActive     = WALL_MODES.includes(mode)
-  const benchtopActive = mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u' || mode === 'draw_benchtop_cutout_rect' || mode === 'draw_benchtop_cutout_circle'
+  // F4 Benchtop mode (any benchtop tool) — only benchtops are clickable while on.
+  const benchtopActive = isBenchtopMode(mode)
 
   // A definition is visible if it passes the scope + search filters.
   const q = search.trim().toLowerCase()
@@ -493,8 +498,8 @@ export default function CanvasSidebar({
 
         {/* Benchtop dropdown */}
         <button
-          title="Benchtop (F4)"
-          onClick={() => setBenchtopMenuOpen(!benchtopMenuOpen)}
+          title="Benchtop mode (F4) — only benchtops can be selected; F4 / Esc to leave"
+          onClick={() => onToggleBenchtopMode ? onToggleBenchtopMode() : setBenchtopMenuOpen(!benchtopMenuOpen)}
           className={`w-full px-3 h-11 rounded-lg flex items-center gap-3 text-sm font-medium transition-colors
             ${benchtopActive ? 'bg-teal-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}`}
         >
@@ -509,6 +514,21 @@ export default function CanvasSidebar({
 
         {benchtopMenuOpen && (
           <div className="flex flex-col gap-px pt-0.5">
+            {onDrawBenchtopInShapeEditor && (
+              <button
+                onClick={() => { onDrawBenchtopInShapeEditor(); setBenchtopMenuOpen(false) }}
+                title="Open the full Shape Editor for a new benchtop. Select base cabinets first to start from their footprint."
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors text-gray-400 hover:bg-gray-800 hover:text-white"
+              >
+                <span className="flex-none w-5 flex items-center justify-center text-blue-400">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 12V4h7l5 4v4z" fill="currentColor" fillOpacity="0.12"/>
+                    <path d="M11.5 1.5l3 3" />
+                  </svg>
+                </span>
+                <span className="truncate">Draw in Shape Editor</span>
+              </button>
+            )}
             <button
               onClick={() => { onSelectMode('draw_benchtop'); setBenchtopMenuOpen(false) }}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors

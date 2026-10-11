@@ -1,6 +1,6 @@
 import { AssemblyClass, DEFAULT_DIMS } from '@/src/lib/types'
 import { MIN_ZOOM, MAX_ZOOM } from '@/src/lib/geometry'
-import type { Wall, CabinetInstance, BenchtopArcSegment } from '@/src/lib/types'
+import type { Wall, CabinetInstance, BenchtopArcSegment, BenchtopInstance } from '@/src/lib/types'
 import type { Pt } from '@/src/lib/geometry'
 
 export type CanvasView = 'plan' | 'elevation' | 'section' | '3d'
@@ -10,11 +10,17 @@ export type SectionCut = { x1: number; y1: number; x2: number; y2: number; lookD
 export type Mode =
   | 'select' | 'draw_wall' | 'draw_island' | 'draw_section' | 'measure'
   | 'draw_benchtop' | 'draw_benchtop_rect' | 'draw_benchtop_l' | 'draw_benchtop_u'
-  | 'draw_benchtop_cutout_rect' | 'draw_benchtop_cutout_circle'
+  | 'draw_benchtop_cutout_rect' | 'draw_benchtop_cutout_circle' | 'draw_benchtop_join' | 'move_benchtop'
   | 'place_base' | 'place_wall_unit' | 'place_tall' | 'place_end_panel'
   | 'place_base_corner' | 'place_wall_corner' | 'place_tall_corner'
   | 'place_definition'
+  // F4 Benchtop mode (Phase 3b): only benchtops are clickable. Outside it they
+  // are click-through and cabinets / walls own the clicks.
+  | 'benchtop_select'
   | 'paste'
+
+/** Every F4 Benchtop-mode tool: select, the draw tools, cutouts, joins, Move. */
+export const isBenchtopMode = (m: Mode) => m === 'benchtop_select' || m === 'move_benchtop' || m.startsWith('draw_benchtop')
 
 // A library definition armed for placement. Carries the geometry the ghost needs
 // (assembly_class for collision/blocking, default dims for the footprint) plus the
@@ -56,8 +62,8 @@ export type CabResize = {
   livePosY?: number
 }
 
-export type BtMoveDrag = { id: string; originX: number; originY: number; originalPolygon: Array<{x:number;y:number}>; originalArcs: BenchtopArcSegment[]; hasMoved: boolean }
-export type BtRotateDrag = { id: string; originX: number; originY: number; centX: number; centY: number; startAngle: number; hasMoved: boolean; originalPolygon: Array<{x:number;y:number}>; originalArcs: BenchtopArcSegment[] }
+// Everything that moves with a benchtop (outline + joins + cutouts) — what transformBenchtop maps.
+export type BtShapeSnapshot = Pick<BenchtopInstance, 'segments' | 'polygon' | 'arc_segments' | 'edge_tags' | 'joins' | 'cutout_polygons'>
 
 export type MenuItem = { label: string; action?: () => void; disabled?: boolean; shortcut?: string; checked?: boolean } | null
 export type MenuGroup = { label: string; items: MenuItem[] }

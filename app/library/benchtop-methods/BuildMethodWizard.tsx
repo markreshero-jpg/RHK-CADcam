@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import type { BenchtopBuildMethod, BenchtopPartRole } from '@/src/lib/types'
+import type { BenchtopBuildMethod, BenchtopPartRole, BenchtopConstruction } from '@/src/lib/types'
+import { CONSTRUCTIONS, rolesForConstruction, isBuildUp } from '@/src/lib/benchtop-resolver/construction'
 
 // ── Illustration components (placeholder SVGs) ────────────────────────────────
 
@@ -215,6 +216,69 @@ function IllustrationJoinMitre({ selected }: { selected: boolean }) {
   )
 }
 
+// Construction cross-sections (front edge on the left, looking along the run)
+
+function ConstructionFrame({ caption, children }: { caption: string; children: React.ReactNode }) {
+  return (
+    <svg viewBox="0 0 160 100" className="w-full h-full">
+      <rect x="0" y="0" width="160" height="100" fill="#0f172a" rx="4"/>
+      {children}
+      <text x="80" y="94" textAnchor="middle" fontSize="8" fill="#64748b" fontFamily="system-ui">{caption}</text>
+    </svg>
+  )
+}
+
+function IllustrationBuildupFlat({ selected }: { selected: boolean }) {
+  const s = selected ? '#3b82f6' : '#64748b'
+  return (
+    <ConstructionFrame caption="top + flat strips">
+      <rect x="15" y="30" width="130" height="14" fill="#1e3a5f" stroke={s} strokeWidth="1.5"/>
+      <rect x="15" y="44" width="34" height="14" fill="#1e293b" stroke={s} strokeWidth="1.5"/>
+      <rect x="111" y="44" width="34" height="14" fill="#1e293b" stroke={s} strokeWidth="1.5"/>
+      <line x1="152" y1="30" x2="152" y2="58" stroke="#fbbf24" strokeWidth="1"/>
+      <text x="152" y="26" textAnchor="middle" fontSize="7" fill="#fbbf24" fontFamily="system-ui">33</text>
+    </ConstructionFrame>
+  )
+}
+
+function IllustrationBuildupVertical({ selected }: { selected: boolean }) {
+  const s = selected ? '#3b82f6' : '#64748b'
+  return (
+    <ConstructionFrame caption="top + rails on edge">
+      <rect x="15" y="26" width="130" height="14" fill="#1e3a5f" stroke={s} strokeWidth="1.5"/>
+      <rect x="15" y="40" width="14" height="34" fill="#1e293b" stroke={s} strokeWidth="1.5"/>
+      <rect x="131" y="40" width="14" height="34" fill="#1e293b" stroke={s} strokeWidth="1.5"/>
+    </ConstructionFrame>
+  )
+}
+
+function IllustrationSolid({ selected }: { selected: boolean }) {
+  const s = selected ? '#3b82f6' : '#64748b'
+  return (
+    <ConstructionFrame caption="single board, edged">
+      <rect x="15" y="34" width="130" height="22" fill="#1e3a5f" stroke={s} strokeWidth="1.5"/>
+      <rect x="12" y="34" width="3" height="22" fill={s}/>
+    </ConstructionFrame>
+  )
+}
+
+function IllustrationOutsourced({ selected }: { selected: boolean }) {
+  const s = selected ? '#3b82f6' : '#64748b'
+  return (
+    <ConstructionFrame caption="stone / laminate by supplier">
+      <rect x="15" y="34" width="130" height="18" fill="#334155" stroke={s} strokeWidth="1.5" strokeDasharray="5 3"/>
+      <text x="80" y="46" textAnchor="middle" fontSize="8" fill="#94a3b8" fontFamily="system-ui">supply item</text>
+    </ConstructionFrame>
+  )
+}
+
+const CONSTRUCTION_ART: Record<BenchtopConstruction, React.ComponentType<{ selected: boolean }>> = {
+  buildup_flat:     IllustrationBuildupFlat,
+  buildup_vertical: IllustrationBuildupVertical,
+  solid:            IllustrationSolid,
+  outsourced:       IllustrationOutsourced,
+}
+
 // ── Wizard step definitions ───────────────────────────────────────────────────
 
 type StepOption = {
@@ -235,9 +299,15 @@ type Step = {
 
 const STEPS: Step[] = [
   {
+    id: 'construction', question: 'How is this benchtop built?',
+    wizardKey: 'construction', methodField: 'construction',
+    condition: () => true,
+    options: CONSTRUCTIONS.map(c => ({ value: c.key, label: c.label, desc: c.desc, Illustration: CONSTRUCTION_ART[c.key] })),
+  },
+  {
     id: 'corner_join', question: 'How do build-up rails meet at corners?',
     wizardKey: 'corner_join', methodField: 'corner_join_type',
-    condition: m => m.active_part_roles.includes('buildup_rail'),
+    condition: m => isBuildUp(m.construction) && m.active_part_roles.includes('buildup_rail'),
     options: [
       { value: 'butt',  label: 'Butt',  desc: 'One rail runs full length, the other butts in', Illustration: IllustrationCornerButt  },
       { value: 'mitre', label: 'Mitre', desc: 'Both rails are mitre-cut at 45° at the corner',  Illustration: IllustrationCornerMitre },
@@ -300,7 +370,9 @@ export default function BuildMethodWizard({ method, onUpdate, onClose }: Props) 
     const init: Record<string, string> = {}
     for (const step of STEPS) {
       const stored = method.wizard_answers[step.wizardKey]
+      const current = step.methodField ? method[step.methodField] : undefined
       if (typeof stored === 'string') init[step.id] = stored
+      else if (typeof current === 'string') init[step.id] = current
     }
     return init
   })
@@ -314,7 +386,9 @@ export default function BuildMethodWizard({ method, onUpdate, onClose }: Props) 
     const init: Record<string, string> = {}
     for (const step of STEPS) {
       const stored = method.wizard_answers[step.wizardKey]
+      const current = step.methodField ? method[step.methodField] : undefined
       if (typeof stored === 'string') init[step.id] = stored
+      else if (typeof current === 'string') init[step.id] = current
     }
     setSelections(init)
     setStepIdx(0)
@@ -331,6 +405,9 @@ export default function BuildMethodWizard({ method, onUpdate, onClose }: Props) 
     const updates: Partial<BenchtopBuildMethod> = { wizard_answers: newAnswers }
     if (step.methodField) {
       (updates as Record<string, unknown>)[step.methodField] = value
+    }
+    if (step.id === 'construction' && value !== method.construction) {
+      updates.active_part_roles = rolesForConstruction(value as BenchtopConstruction, method.active_part_roles)
     }
     const { data } = await supabase
       .from('benchtop_build_methods')

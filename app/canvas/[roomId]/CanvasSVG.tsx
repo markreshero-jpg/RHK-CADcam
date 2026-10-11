@@ -1,6 +1,10 @@
 'use client'
-import React, { Fragment, useState, useMemo } from 'react'
-import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment } from '@/src/lib/types'
+import React, { Fragment, useState, useMemo, useEffect } from 'react'
+import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment, BenchtopEdgeProfile } from '@/src/lib/types'
+import {
+  btSegments, outlinePath, outlineCentroid, outwardNormal, segMid, segLength,
+  edgePath, edgeProfileColor, effectiveProfileId,
+} from '@/src/lib/benchtopGeometry'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { customExtents } from '@/src/lib/customPartBox'
 import {
@@ -11,9 +15,9 @@ import {
   gridDots,
 } from '@/src/lib/geometry'
 import WallDimensionChain from './WallDimensionChain'
-import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, SectionCut } from './canvasTypes'
+import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, SectionCut, isBenchtopMode } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
-import { casePartItem, kickPartItem } from '@/src/lib/displayLayers/registry'
+import { casePartItem, kickPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
 import { planShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { roundMm } from '@/src/lib/format'
@@ -22,6 +26,8 @@ import type { PlanGridPrefs } from '@/src/lib/userPrefs'
 import { getPalette } from '@/src/lib/partPalette'
 import { caseBox, isSide, tkPlanBox } from '@/src/lib/jointDrilling'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
+import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
+import { dbLoadRoomPartDetails, type PartPosOverrides } from './canvasDB'
 
 // Union of cabinet-local plan rects (X along wall, Z = depth) → the cabinet's
 // click area. null = nothing of the cabinet is drawn (not selectable, no labels).
@@ -32,29 +38,6 @@ function unionRect(rects: LocalRect[]): LocalRect | null {
   const x0 = Math.min(...ok.map(r => r.x)), z0 = Math.min(...ok.map(r => r.z))
   const x1 = Math.max(...ok.map(r => r.x + r.w)), z1 = Math.max(...ok.map(r => r.z + r.d))
   return { x: x0, z: z0, w: x1 - x0, d: z1 - z0 }
-}
-
-function buildBenchtopPath(
-  pts: Array<{ x: number; y: number }>,
-  arcs: BenchtopArcSegment[],
-  cutouts?: Array<Array<{ x: number; y: number }>>,
-): string {
-  if (pts.length < 2) return ''
-  let d = `M ${pts[0].x} ${pts[0].y}`
-  for (let i = 0; i < pts.length; i++) {
-    const next = pts[(i + 1) % pts.length]
-    const arc = arcs.find(a => a.edge_index === i)
-    if (arc) { d += ` Q ${arc.cpx} ${arc.cpy} ${next.x} ${next.y}` }
-    else { d += ` L ${next.x} ${next.y}` }
-  }
-  d += ' Z'
-  for (const cut of cutouts ?? []) {
-    if (cut.length < 3) continue
-    d += ` M ${cut[0].x} ${cut[0].y}`
-    for (let i = 1; i < cut.length; i++) d += ` L ${cut[i].x} ${cut[i].y}`
-    d += ' Z'
-  }
-  return d
 }
 
 interface CanvasSVGProps {
@@ -105,11 +88,9 @@ interface CanvasSVGProps {
   onBenchtopClick: (id: string) => void
   onBenchtopEdgeClick: (id: string, edgeIndex: number) => void
   onBenchtopVertexClick: (id: string, vertexIndex: number) => void
-  onBenchtopVertexPointerDown: (e: React.PointerEvent, btId: string, vi: number) => void
   onBenchtopContextMenu: (e: React.MouseEvent, id: string) => void
   onBenchtopEdgeShiftClick: (id: string, edgeIndex: number) => void
   onBenchtopEdgeAltClick: (id: string, edgeIndex: number) => void
-  onBenchtopArcPointerDown: (e: React.PointerEvent, btId: string, edgeIndex: number) => void
   onBtUndoVertex: () => void
   btDrawArcs: BenchtopArcSegment[]
   btArcMode: boolean
@@ -118,7 +99,6 @@ interface CanvasSVGProps {
   btRectCursor: Pt | null
   onBenchtopVertexContextMenu: (e: React.MouseEvent, btId: string, vi: number) => void
   onBenchtopPointerDown: (e: React.PointerEvent, id: string) => void
-  onBenchtopRotateHandlePointerDown: (e: React.PointerEvent, id: string) => void
   // L-shape / U-shape draw state
   btLPoints: Pt[]
   btLCursor: Pt | null
@@ -127,6 +107,18 @@ interface CanvasSVGProps {
   // Cutout draw state
   btCutoutStart: Pt | null
   btCutoutCursor: Pt | null
+  // Join line draw state + edge profile display (Phase 3)
+  btJoinStart?: Pt | null
+  btJoinCursor?: Pt | null
+  edgeProfiles?: Record<string, BenchtopEdgeProfile>
+  /** The build method default profile for a benchtop (edges with no profile of their own). */
+  btDefaultProfileId?: (bt: BenchtopInstance) => string | null
+  onBenchtopDoubleClick?: (id: string) => void
+  // Move command preview (Phase 3b): base point picked, cursor = target
+  btMoveBase?: Pt | null
+  btMoveCursor?: Pt | null
+  /** L / U quick-draw depth (draw panel) — previews match what will be saved. */
+  btDepth?: number
   // Section cut
   sectionCut?: SectionCut | null
   onSectionFlipLook?: () => void
@@ -147,12 +139,13 @@ export default function CanvasSVG({
   setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
   onCabMarkerClick, cabFollowing, onSVGClick,
   benchtops, selectedBenchtopId, btDrawPoly, btDrawCursor, onBenchtopClick, onBenchtopEdgeClick, onBenchtopVertexClick,
-  onBenchtopVertexPointerDown, onBenchtopContextMenu, onBenchtopEdgeShiftClick, onBenchtopEdgeAltClick, onBenchtopArcPointerDown, onBtUndoVertex,
+  onBenchtopContextMenu, onBenchtopEdgeShiftClick, onBenchtopEdgeAltClick, onBtUndoVertex,
   btDrawArcs, btArcMode, btArcMidpoint, btRectStart, btRectCursor,
-  onBenchtopVertexContextMenu, onBenchtopPointerDown, onBenchtopRotateHandlePointerDown,
+  onBenchtopVertexContextMenu, onBenchtopPointerDown,
   btLPoints, btLCursor,
   btUPoints, btUCursor,
   btCutoutStart, btCutoutCursor,
+  btJoinStart, btJoinCursor, edgeProfiles, btDefaultProfileId, onBenchtopDoubleClick, btMoveBase, btMoveCursor, btDepth,
   sectionCut, onSectionFlipLook, onSectionClear, onSectionLinePointerDown,
   snapResult, measureStart, measureEnd, measureCursor, onMeasureCancel,
   resolvedParts,
@@ -160,6 +153,17 @@ export default function CanvasSVG({
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   // Editable part-line palette (src/lib/partPalette.ts); read once on mount.
   const palette = useMemo(() => getPalette(), [])
+
+  // Per-part position / size / rotation overrides (part editor) — fronts are drawn
+  // with them applied so plan matches 3D. Re-fetched when the resolved map changes
+  // (an edit re-resolves → new map), same as Room3DScene.
+  const cabIdsKey = cabinets.map(c => c.id).join(',')
+  const [posOvById, setPosOvById] = useState<Map<string, PartPosOverrides>>(new Map())
+  useEffect(() => {
+    let cancelled = false
+    dbLoadRoomPartDetails(cabIdsKey ? cabIdsKey.split(',') : []).then(d => { if (!cancelled) setPosOvById(d.posById) })
+    return () => { cancelled = true }
+  }, [cabIdsKey, resolvedParts])
 
   const cx = centroid(walls)
   // Dimension chains measure only cabinets the layer set draws.
@@ -205,33 +209,88 @@ export default function CanvasSVG({
         <line x1={-30 / view.zoom} y1={0} x2={30 / view.zoom} y2={0} stroke="#374151" strokeWidth={1 / view.zoom} />
         <line x1={0} y1={-30 / view.zoom} x2={0} y2={30 / view.zoom} stroke="#374151" strokeWidth={1 / view.zoom} />
 
-        {/* ── Benchtop instances ── rendered below walls so cabinets/walls sit on top */}
+        {/* ── Benchtop instances ── rendered below walls so cabinets/walls sit on top.
+            Outline from segments (Phase 3); edge finishes + join lines are
+            their own layer items (benchtop_edges / benchtop_joins). */}
         {layers.show('benchtops') && benchtops.map(bt => {
-          const pts = bt.polygon
-          if (pts.length < 2) return null
+          const segs = btSegments(bt)
+          if (segs.length < 2) return null
           const isSel = bt.id === selectedBenchtopId
-          const arcs = bt.arc_segments ?? []
-          const bcx = pts.reduce((s, p) => s + p.x, 0) / pts.length
-          const bcy = pts.reduce((s, p) => s + p.y, 0) / pts.length
+          const c = outlineCentroid(segs)
+          const bcx = c.x, bcy = c.y
           const vr = 5 / view.zoom
           const er = 6 / view.zoom
+          const defaultProfileId = btDefaultProfileId?.(bt) ?? null
+          const showEdges = layers.show('benchtop_edges')
+          const showJoins = layers.show('benchtop_joins')
+          const handles = isSel && mode === 'benchtop_select'   // edit handles only in F4 Benchtop mode
 
           return (
             <Fragment key={bt.id}>
               {/* Fill + border (evenodd fill-rule creates cutout holes) */}
               <path
-                d={buildBenchtopPath(pts, arcs, bt.cutout_polygons ?? [])}
+                d={outlinePath(segs, bt.cutout_polygons ?? [])}
                 fillRule="evenodd"
                 fill={layers.colorOf('benchtops') ?? (isSel ? 'rgba(20,184,166,0.22)' : 'rgba(20,184,166,0.10)')}
                 fillOpacity={layers.colorOf('benchtops') ? (isSel ? 0.22 : 0.1) : undefined}
                 stroke={isSel ? '#f59e0b' : layers.color('benchtops', '#0d9488')}
                 opacity={layers.op('benchtops')}
                 strokeWidth={layers.w('benchtops', isSel ? 2 : 1.5) / view.zoom}
-                onPointerDown={e => { e.stopPropagation(); onBenchtopPointerDown(e, bt.id) }}
-                onClick={e => { e.stopPropagation(); onBenchtopClick(bt.id) }}
+                // Only Select mode owns the click: draw tools (cutouts, joins) need the
+                // pointer to reach the SVG handlers, which start the click.
+                onPointerDown={e => { if (mode !== 'benchtop_select') return; e.stopPropagation(); onBenchtopPointerDown(e, bt.id) }}
+                onClick={e => { if (mode !== 'benchtop_select') return; e.stopPropagation(); onBenchtopClick(bt.id) }}
+                onDoubleClick={e => { e.stopPropagation(); onBenchtopDoubleClick?.(bt.id) }}
                 onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onBenchtopContextMenu(e, bt.id) }}
-                style={{ cursor: mode === 'select' ? 'move' : undefined }}
+                // Only F4 Benchtop mode can pick a top (click selects, never drags —
+                // P-f); everywhere else tops are click-through so cabinets own clicks.
+                style={{ cursor: mode === 'benchtop_select' ? 'pointer' : undefined, pointerEvents: mode === 'benchtop_select' ? undefined : 'none' }}
               />
+
+              {/* Edge finishes: wall edges grey, exposed edges in their profile colour + code */}
+              {showEdges && segs.map((s, i) => {
+                const pid = effectiveProfileId(s, defaultProfileId)
+                const prof = pid ? edgeProfiles?.[pid] : undefined
+                const n = outwardNormal(segs, i)
+                const m = segMid(s)
+                const off = 4 / view.zoom
+                const col = s.edge?.wall ? '#6b7280' : edgeProfileColor(prof)
+                return (
+                  <g key={`ef${i}`} style={{ pointerEvents: 'none' }} opacity={layers.op('benchtop_edges')}>
+                    <path d={edgePath(s)} fill="none" stroke={layers.color('benchtop_edges', col)}
+                      strokeWidth={layers.w('benchtop_edges', s.edge?.wall ? 3 : 2.5) / view.zoom}
+                      strokeDasharray={s.edge?.wall ? `${4 / view.zoom} ${3 / view.zoom}` : undefined}
+                      transform={`translate(${n.x * off} ${n.y * off})`} />
+                    {!s.edge?.wall && prof && (
+                      <text x={m.x + n.x * 14 / view.zoom} y={m.y + n.y * 14 / view.zoom}
+                        textAnchor="middle" dominantBaseline="middle"
+                        fontSize={8 * layers.w('benchtop_edges', 1) / view.zoom} fontWeight={600}
+                        fill={layers.color('benchtop_edges', col)}
+                        style={{ userSelect: 'none' }}>
+                        {prof.code ?? prof.name}{prof.generates === 'waterfall' ? ' ▼' : ''}
+                      </text>
+                    )}
+                  </g>
+                )
+              })}
+
+              {/* Join lines — B = butt, M = mitre */}
+              {showJoins && (bt.joins ?? []).map((j, i) => {
+                const mx = (j.p0.x + j.p1.x) / 2, my = (j.p0.y + j.p1.y) / 2
+                const col = layers.color('benchtop_joins', '#ef4444')
+                return (
+                  <g key={`j${i}`} style={{ pointerEvents: 'none' }} opacity={layers.op('benchtop_joins')}>
+                    <line x1={j.p0.x} y1={j.p0.y} x2={j.p1.x} y2={j.p1.y} stroke={col}
+                      strokeWidth={layers.w('benchtop_joins', 1.5) / view.zoom}
+                      strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} />
+                    <circle cx={mx} cy={my} r={6 / view.zoom} fill="#111827" stroke={col} strokeWidth={1 / view.zoom} />
+                    <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle"
+                      fontSize={7 / view.zoom} fill={col} style={{ userSelect: 'none' }}>
+                      {j.type === 'mitre' ? 'M' : 'B'}
+                    </text>
+                  </g>
+                )
+              })}
 
               {/* Label */}
               <text x={bcx} y={bcy} textAnchor="middle" dominantBaseline="middle"
@@ -240,167 +299,116 @@ export default function CanvasSVG({
                 {bt.label ?? '—'}
               </text>
 
-              {/* Edge midpoint handles — W/E/A label, shift=insert vertex, alt=toggle arc */}
-              {pts.map((p, i) => {
-                const next = pts[(i + 1) % pts.length]
-                const arcSeg = arcs.find(a => a.edge_index === i)
-                const isArcEdge = !!arcSeg
-                const mx = arcSeg ? 0.25 * p.x + 0.5 * arcSeg.cpx + 0.25 * next.x : (p.x + next.x) / 2
-                const my = arcSeg ? 0.25 * p.y + 0.5 * arcSeg.cpy + 0.25 * next.y : (p.y + next.y) / 2
-                const isWallEdge = bt.edge_tags.some(t => t.edge_index === i && t.type === 'wall')
-                const hFill = isArcEdge ? '#7c3aed' : isWallEdge ? '#6b7280' : '#0d9488'
-                const hStroke = isArcEdge ? '#a78bfa' : isWallEdge ? '#9ca3af' : '#14b8a6'
-                const hLabel = isArcEdge ? 'A' : isWallEdge ? 'W' : 'E'
-                const hTextFill = isArcEdge ? '#e9d5ff' : isWallEdge ? '#d1d5db' : '#ccfbf1'
-                if (isSel) {
-                  const ew = er * 2, eh = er * 2
-                  return (
-                    <g key={`e${i}`}>
-                      <rect
-                        x={mx - er} y={my - er} width={ew} height={eh}
-                        rx={isArcEdge ? er : 1.5 / view.zoom}
-                        fill={hFill} stroke={hStroke} strokeWidth={1 / view.zoom}
-                        onClick={e => {
-                          e.stopPropagation()
-                          if (e.shiftKey) onBenchtopEdgeShiftClick(bt.id, i)
-                          else if (e.altKey) onBenchtopEdgeAltClick(bt.id, i)
-                          else onBenchtopEdgeClick(bt.id, i)
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <title>{isArcEdge
-                          ? 'Arc edge · click to toggle wall/exposed · Alt-click to make straight · Shift-click to insert vertex'
-                          : isWallEdge
-                            ? 'Wall edge · click to set exposed · Alt-click to arc · Shift-click to insert vertex'
-                            : 'Exposed edge · click to set wall · Alt-click to arc · Shift-click to insert vertex'}</title>
-                      </rect>
-                      <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle"
-                        fontSize={er * 1.1} fill={hTextFill}
-                        style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                        {hLabel}
-                      </text>
-                    </g>
-                  )
-                } else {
-                  return (
-                    <circle key={`edot${i}`} cx={mx} cy={my} r={2.5 / view.zoom}
-                      fill={hFill} style={{ pointerEvents: 'none' }} />
-                  )
-                }
+              {/* Edge midpoint handles — click = wall/exposed, shift = insert vertex, alt = curve */}
+              {handles && segs.map((s, i) => {
+                const { x: mx, y: my } = segMid(s)
+                const isCurve = s.type !== 'line'
+                const isWallEdge = !!s.edge?.wall
+                const hFill = isCurve ? '#7c3aed' : isWallEdge ? '#6b7280' : '#0d9488'
+                const hStroke = isCurve ? '#a78bfa' : isWallEdge ? '#9ca3af' : '#14b8a6'
+                const hLabel = isWallEdge ? 'W' : 'E'
+                const hTextFill = isCurve ? '#e9d5ff' : isWallEdge ? '#d1d5db' : '#ccfbf1'
+                // A plain curve's midpoint handle is its drag handle (below) — put the tag beside it.
+                const tagOff = s.type === 'curve' ? er * 2.4 : 0
+                const n = outwardNormal(segs, i)
+                const tx = mx - n.x * tagOff, ty = my - n.y * tagOff
+                return (
+                  <g key={`e${i}`}>
+                    <rect
+                      x={tx - er} y={ty - er} width={er * 2} height={er * 2}
+                      rx={isCurve ? er : 1.5 / view.zoom}
+                      fill={hFill} stroke={hStroke} strokeWidth={1 / view.zoom}
+                      onClick={e => {
+                        e.stopPropagation()
+                        if (e.shiftKey) onBenchtopEdgeShiftClick(bt.id, i)
+                        else if (e.altKey) onBenchtopEdgeAltClick(bt.id, i)
+                        else onBenchtopEdgeClick(bt.id, i)
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <title>{`${isWallEdge ? 'Wall' : 'Exposed'} edge · click to set ${isWallEdge ? 'exposed' : 'wall'} · Alt-click to ${isCurve ? 'straighten' : 'curve'} · Shift-click to insert vertex`}</title>
+                    </rect>
+                    <text x={tx} y={ty} textAnchor="middle" dominantBaseline="middle"
+                      fontSize={er * 1.1} fill={hTextFill}
+                      style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                      {hLabel}
+                    </text>
+                  </g>
+                )
               })}
 
               {/* Edge length labels when selected */}
-              {isSel && pts.map((p, i) => {
-                const next = pts[(i + 1) % pts.length]
-                const arcSeg = arcs.find(a => a.edge_index === i)
-                const len = Math.round(Math.sqrt((next.x - p.x) ** 2 + (next.y - p.y) ** 2))
-                const mx = arcSeg ? 0.25 * p.x + 0.5 * arcSeg.cpx + 0.25 * next.x : (p.x + next.x) / 2
-                const my = arcSeg ? 0.25 * p.y + 0.5 * arcSeg.cpy + 0.25 * next.y : (p.y + next.y) / 2
-                const ex = next.x - p.x, ey = next.y - p.y
-                const el = Math.sqrt(ex * ex + ey * ey)
-                if (el < 1) return null
-                const nx = -ey / el, ny = ex / el
-                const outward = (nx * (mx - bcx) + ny * (my - bcy)) >= 0 ? 1 : -1
-                const off = 18 / view.zoom
+              {isSel && segs.map((s, i) => {
+                const len = Math.round(segLength(s))
+                if (len < 1) return null
+                const m = segMid(s)
+                const n = outwardNormal(segs, i)
+                const off = (showEdges ? 26 : 18) / view.zoom
                 return (
                   <text
                     key={`len${i}`}
-                    x={mx + nx * outward * off} y={my + ny * outward * off}
+                    x={m.x + n.x * off} y={m.y + n.y * off}
                     textAnchor="middle" dominantBaseline="middle"
-                    fontSize={9 / view.zoom} fill={arcSeg ? '#c4b5fd' : '#94a3b8'}
+                    fontSize={9 / view.zoom} fill={s.type !== 'line' ? '#c4b5fd' : '#94a3b8'}
                     style={{ userSelect: 'none', pointerEvents: 'none' }}
                   >
-                    {arcSeg ? `~${len}` : len}
+                    {s.type !== 'line' ? `~${len}` : len}
                   </text>
                 )
               })}
 
-              {/* Vertex handles when selected — draggable */}
-              {isSel && pts.map((p, i) => {
-                const isMitre = bt.join_types.some(j => j.vertex_index === i && j.join_type === 'mitre')
-                return isMitre ? (
-                  <g key={`v${i}`}>
-                    <polygon
-                      points={`${p.x},${p.y - vr * 1.5} ${p.x + vr * 1.5},${p.y} ${p.x},${p.y + vr * 1.5} ${p.x - vr * 1.5},${p.y}`}
-                      fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom}
-                      onPointerDown={e => { e.stopPropagation(); onBenchtopVertexPointerDown(e, bt.id, i) }}
-                      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onBenchtopVertexContextMenu(e, bt.id, i) }}
-                      style={{ cursor: 'grab' }}
-                    >
-                      <title>Mitre join — drag to reshape · click to set butt · right-click for options</title>
-                    </polygon>
-                  </g>
-                ) : (
-                  <g key={`v${i}`}>
-                    <circle
-                      cx={p.x} cy={p.y} r={vr}
-                      fill="#14b8a6" stroke="#111827" strokeWidth={1 / view.zoom}
-                      onPointerDown={e => { e.stopPropagation(); onBenchtopVertexPointerDown(e, bt.id, i) }}
-                      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onBenchtopVertexContextMenu(e, bt.id, i) }}
-                      style={{ cursor: 'grab' }}
-                    >
-                      <title>Butt join — drag to reshape · click to set mitre · right-click for options</title>
-                    </circle>
-                  </g>
-                )
-              })}
+              {/* Vertex markers when selected — right-click only; reshaping is in the
+                  Shape Editor (double-click), never a drag on the plan (P-f). */}
+              {handles && segs.map((s, i) => (
+                <circle
+                  key={`v${i}`}
+                  cx={s.p0.x} cy={s.p0.y} r={vr}
+                  fill="#14b8a6" stroke="#111827" strokeWidth={1 / view.zoom}
+                  onPointerDown={e => e.stopPropagation()}
+                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onBenchtopVertexContextMenu(e, bt.id, i) }}
+                  style={{ cursor: 'context-menu' }}
+                >
+                  <title>Right-click for round / chamfer / remove · double-click the top to reshape</title>
+                </circle>
+              ))}
 
-              {/* Arc control point handles — draggable purple diamonds */}
-              {isSel && arcs.map(arc => {
-                const p0 = pts[arc.edge_index]
-                const p1 = pts[(arc.edge_index + 1) % pts.length]
-                if (!p0 || !p1) return null
-                const dr = 4.5 / view.zoom
-                const smx = (p0.x + p1.x) / 2
-                const smy = (p0.y + p1.y) / 2
-                return (
-                  <g key={`acp${arc.edge_index}`}>
-                    <line x1={smx} y1={smy} x2={arc.cpx} y2={arc.cpy}
-                      stroke="#a855f7" strokeWidth={0.75 / view.zoom}
-                      strokeDasharray={`${3 / view.zoom} ${2 / view.zoom}`}
-                      style={{ pointerEvents: 'none' }} />
-                    <polygon
-                      points={`${arc.cpx},${arc.cpy - dr * 1.5} ${arc.cpx + dr * 1.5},${arc.cpy} ${arc.cpx},${arc.cpy + dr * 1.5} ${arc.cpx - dr * 1.5},${arc.cpy}`}
-                      fill="#a855f7" stroke="#111827" strokeWidth={0.75 / view.zoom}
-                      onPointerDown={e => { e.stopPropagation(); onBenchtopArcPointerDown(e, bt.id, arc.edge_index) }}
-                      style={{ cursor: 'grab' }}
-                    >
-                      <title>Arc control point — drag to reshape curve</title>
-                    </polygon>
-                  </g>
-                )
-              })}
-
-              {/* Rotate handle — amber circle above bounding box */}
-              {isSel && (() => {
-                const minY = Math.min(...pts.map(p => p.y))
-                const rhr = 7 / view.zoom
-                const rhOff = 22 / view.zoom
-                return (
-                  <g>
-                    <line x1={bcx} y1={minY} x2={bcx} y2={minY - rhOff + rhr}
-                      stroke="#f59e0b" strokeWidth={0.75 / view.zoom}
-                      strokeDasharray={`${3 / view.zoom} ${2 / view.zoom}`}
-                      style={{ pointerEvents: 'none' }} />
-                    <circle
-                      cx={bcx} cy={minY - rhOff}
-                      r={rhr}
-                      fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom}
-                      onPointerDown={e => { e.stopPropagation(); onBenchtopRotateHandlePointerDown(e, bt.id) }}
-                      style={{ cursor: 'grab' }}
-                    >
-                      <title>Drag to rotate benchtop</title>
-                    </circle>
-                    <text x={bcx} y={minY - rhOff}
-                      textAnchor="middle" dominantBaseline="middle"
-                      fontSize={rhr * 1.4} fill="#111827"
-                      style={{ userSelect: 'none', pointerEvents: 'none' }}>↻</text>
-                  </g>
-                )
-              })()}
             </Fragment>
           )
         })}
+
+        {/* ── Move command preview: ghost of the selected top at the target ── */}
+        {mode === 'move_benchtop' && btMoveBase && btMoveCursor && (() => {
+          const mv = benchtops.find(b => b.id === selectedBenchtopId)
+          if (!mv) return null
+          const dx = btMoveCursor.x - btMoveBase.x, dy = btMoveCursor.y - btMoveBase.y
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <path d={outlinePath(btSegments(mv))} transform={`translate(${dx} ${dy})`}
+                fill="rgba(245,158,11,0.10)" stroke="#f59e0b" strokeWidth={1.5 / view.zoom}
+                strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} />
+              <line x1={btMoveBase.x} y1={btMoveBase.y} x2={btMoveCursor.x} y2={btMoveCursor.y}
+                stroke="#f59e0b" strokeWidth={1 / view.zoom} />
+              <circle cx={btMoveBase.x} cy={btMoveBase.y} r={4 / view.zoom} fill="#f59e0b" />
+              <text x={(btMoveBase.x + btMoveCursor.x) / 2} y={(btMoveBase.y + btMoveCursor.y) / 2 - 10 / view.zoom}
+                textAnchor="middle" fontSize={10 / view.zoom} fill="#fcd34d">{Math.round(Math.hypot(dx, dy))}</text>
+            </g>
+          )
+        })()}
+
+        {/* ── In-progress join line ── */}
+        {mode === 'draw_benchtop_join' && btJoinStart && btJoinCursor && (
+          <g style={{ pointerEvents: 'none' }}>
+            <line x1={btJoinStart.x} y1={btJoinStart.y} x2={btJoinCursor.x} y2={btJoinCursor.y}
+              stroke="#ef4444" strokeWidth={1.5 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} />
+            <circle cx={btJoinStart.x} cy={btJoinStart.y} r={4 / view.zoom} fill="#ef4444" />
+            <text x={(btJoinStart.x + btJoinCursor.x) / 2} y={(btJoinStart.y + btJoinCursor.y) / 2 - 10 / view.zoom}
+              textAnchor="middle" fontSize={10 / view.zoom} fill="#fca5a5">{Math.round(dist(btJoinStart, btJoinCursor))}</text>
+          </g>
+        )}
+        {mode === 'draw_benchtop_join' && !btJoinStart && btJoinCursor && (
+          <circle cx={btJoinCursor.x} cy={btJoinCursor.y} r={4 / view.zoom} fill="none" stroke="#ef4444"
+            strokeWidth={1.5 / view.zoom} style={{ pointerEvents: 'none' }} />
+        )}
 
         {/* ── In-progress benchtop polygon ── */}
         {mode === 'draw_benchtop' && (() => {
@@ -558,7 +566,7 @@ export default function CanvasSVG({
                 const u2x = d2x / d2len, u2y = d2y / d2len
                 const cross = u1x * u2y - u1y * u2x
                 const sign = cross >= 0 ? 1 : -1
-                const depth = 600
+                const depth = btDepth ?? 600
                 const p1x = sign * u1y, p1y = -sign * u1x
                 const p2x = sign * u2y, p2y = -sign * u2x
                 const polygon = [
@@ -624,7 +632,7 @@ export default function CanvasSVG({
                 const u1x=d1x/l1, u1y=d1y/l1, u2x=d2x/l2, u2y=d2y/l2, u3x=d3x/l3, u3y=d3y/l3
                 const cross = u1x*u2y - u1y*u2x; const s = cross >= 0 ? 1 : -1
                 const p1 = {x: s*u1y, y:-s*u1x}, p2 = {x: s*u2y, y:-s*u2x}, p3 = {x: s*u3y, y:-s*u3x}
-                const dep = 600
+                const dep = btDepth ?? 600
                 // miter corners
                 const miter = (pt: Pt, n1: Pt, n2: Pt) => {
                   const bx=n1.x+n2.x, by=n1.y+n2.y, bl=Math.sqrt(bx*bx+by*by)
@@ -740,6 +748,8 @@ export default function CanvasSVG({
           )
         })()}
 
+        {/* Walls + cabinets go click-through in F4 Benchtop mode — only tops pick. */}
+        <g style={{ pointerEvents: isBenchtopMode(mode) ? 'none' : undefined }}>
         {/* ── Walls ── */}
         {walls.map(w => {
           const isSel = selected?.type === 'wall' && selected.id === w.id
@@ -894,7 +904,27 @@ export default function CanvasSVG({
             const { ex, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
             drawnRects.push({ x: p.x, z: p.z, w: ex, d: ez })
           }
-          if (showFace && cab.has_face) drawnRects.push({ x: 0, z: displayCab.dz - 20, w: displayCab.dx, d: 40 })
+          // Fronts — each resolved face zone's real plan footprint: resolved Z (inset /
+          // overlay / buffer) + thickness, then the part editor's offset, size and
+          // rotation overrides (same transforms as Cabinet3DView). Without resolved
+          // parts (mid-resize) fall back to a line along the carcass front.
+          const posOv = posOvById.get(cab.id)
+          const faceRects = (rpPlan?.face_zones ?? []).flatMap(z => {
+            const item = faceZoneItem(z.face_type)
+            if (!item || !layers.show(item)) return []
+            const id = `zone_${z.row_index}_${z.col_index}`
+            const ov = posOv?.[id]
+            const box = { x: z.X, y: z.Y, z: z.Z, w: ov?.sw ?? z.DX, h: ov?.sh ?? z.DY, d: ov?.sd ?? z.DZ }
+            if (box.w <= 0 || box.d <= 0) return []
+            const rect: LocalRect = { x: box.x + (ov?.ox ?? 0), z: box.z + (ov?.oz ?? 0), w: box.w, d: box.d }
+            const rotPoly = rotatedBoxPolygon(box, ov, (lx, _ly, lz) => ({
+              x: displayCab.pos_x + lx * wd.x + lz * perp.x, y: displayCab.pos_y + lx * wd.y + lz * perp.y,
+            }))
+            return [{ id, item, rect, poly: rotPoly ?? partPoly(rect) }]
+          })
+          const faceLine = showFace && cab.has_face && !rpPlan
+          if (faceLine) drawnRects.push({ x: 0, z: displayCab.dz - 20, w: displayCab.dx, d: 40 })
+          for (const f of faceRects) drawnRects.push(f.rect)
           if (layers.show('internal_outline') && cab.has_internal) drawnRects.push({ x: 20, z: 20, w: displayCab.dx - 40, d: displayCab.dz - 40 })
           const hitRect = unionRect(drawnRects)
           // Label anchor: footprint centre; kick assemblies label just behind their
@@ -1026,8 +1056,20 @@ export default function CanvasSVG({
                 )
               })()}
 
-              {/* Face — bold line along front edge representing door/drawer face */}
-              {showFace && cab.has_face && (
+              {/* Fronts — doors / drawer fronts at their true thickness + position */}
+              {faceRects.map(f => {
+                const fp = layers.props(f.item, view.zoom)
+                const col = layers.color(f.item, palette.door)
+                return (
+                  <polygon key={f.id} points={f.poly} data-part={f.id}
+                    fill={col} fillOpacity={0.35 * fp.fillOpacity}
+                    stroke={isSel ? '#e2e8f0' : col} strokeWidth={layers.w(f.item, isSel ? 1.25 : 1) / view.zoom}
+                    strokeDasharray={fp.strokeDasharray} opacity={fp.opacity} style={{ pointerEvents: 'none' }} />
+                )
+              })}
+
+              {/* Face fallback — bold line along the carcass front (no resolved parts) */}
+              {faceLine && (
                 <line
                   x1={frontLeft.x} y1={frontLeft.y}
                   x2={frontRight.x} y2={frontRight.y}
@@ -1130,6 +1172,7 @@ export default function CanvasSVG({
             </g>
           )
         })}
+        </g>
 
         {/* ── Door swings + drawer lines (plan annotations) ── */}
         {layers.any('door_swings', 'drawer_lines') && cabinets.flatMap(cab => {
@@ -1265,8 +1308,15 @@ export default function CanvasSVG({
             const alen = Math.sqrt(adx * adx + ady * ady)
             const arrowSize = 10 / view.zoom
 
+            const landPts = cabinetPolygon({ ...movingCab, pos_x: cabMoveDrag.pos_x, pos_y: cabMoveDrag.pos_y }, moveWall, perp)
+
             return (
               <>
+                {/* Snap landing outline — exactly where the click will drop it */}
+                <polygon points={landPts} fill="none" stroke={CAB_FILL_SEL[movingCab.assembly_class]}
+                  strokeWidth={1 / view.zoom} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
+                  opacity={0.5} style={{ pointerEvents: 'none' }} />
+
                 {/* Floating ghost outline */}
                 <polygon points={floatPts}
                   fill="none"

@@ -23,4 +23,5 @@ export interface ResolvedBenchtopPart {
   benchtop_material_id:  string | null
   benchtop_material_name: string | null
   edgeband_id:           string | null
+  supply_item:           boolean   // outsourced: report/order only, never cut list
 }

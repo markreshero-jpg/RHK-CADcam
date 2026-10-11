@@ -19,7 +19,15 @@ export interface ShapeEditorSegment {
   ry?: number
   largeArc?: 0 | 1
   sweep?: 0 | 1
-  edge?: { band?: boolean; profile?: string }
+  // Cabinet parts: { band, profile }. Benchtops (edgeOptions): { wall, profile_id }.
+  edge?: { band?: boolean; profile?: string; wall?: boolean; profile_id?: string | null }
+}
+
+// Edge-finish authoring (benchtops). See the edgeOptions prop comment in ShapeEditor.jsx.
+export interface ShapeEditorEdgeOptions {
+  profiles: { id: string; code?: string | null; name: string; category?: string; color: string }[]
+  defaultProfileId?: string | null
+  defaultLabel?: string
 }
 
 export interface ShapeEditorMeta {
@@ -52,6 +60,9 @@ export interface ShapeEditorProps {
   // handle); the utility strip and tool rail stay.
   hideChrome?: boolean
   referenceOutlines?: ShapeEditorReferenceOutline[] | null
+  // false = the shape may sit anywhere (no part-origin error / part rectangle).
+  boundsCheck?: boolean
+  edgeOptions?: ShapeEditorEdgeOptions | null
 }
 
 // Imperative handle (forwardRef): host-owned Save/Exit run the same flows as

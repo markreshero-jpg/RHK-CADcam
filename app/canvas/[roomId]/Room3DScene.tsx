@@ -3,15 +3,17 @@
 import { Suspense, useMemo, useEffect, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei'
-import { Shape, ExtrudeGeometry, Vector3 } from 'three'
-import type { Wall, CabinetInstance, Room } from '@/src/lib/types'
+import { Shape, Path, ExtrudeGeometry, Vector2, Vector3 } from 'three'
+import type { Wall, CabinetInstance, Room, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
+import { btSegments, outlinePoints, outwardNormal, effectiveProfileId } from '@/src/lib/benchtopGeometry'
+import type { BtElevInfo } from './BenchtopElevation'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
   wallDir, wallInwardNormal, centroid, wallEnd, lineIntersect, dist,
 } from '@/src/lib/geometry'
 import type { Pt } from '@/src/lib/geometry'
-import { getUserPrefs } from '@/src/lib/userPrefs'
+import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { PassivePartsContext, alphaMat, type PartEdge, type MatColMap } from '@/src/components/three/PartViewer'
 import type { EbByMatId } from './useMaterialColours'
 import { CabinetScene, type SceneCustomPart } from './Cabinet3DView'
@@ -131,6 +133,72 @@ function WallLabel({ wall, room, cx, cy }: { wall: Wall; room: Room; cx: number;
     >
       {wall.name}
     </Text>
+  )
+}
+
+// ── Benchtop mesh (benchtop Phase 3b, P-i) ────────────────────────────────────
+// Outline (curves sampled, cutouts as holes) extruded by the top's thickness so
+// its surface sits at topZ. Same plan → world mapping as WallMesh. Waterfall
+// edges (profile generates = 'waterfall') get a leg panel from the floor to
+// the underside, set in by the thickness under that edge.
+
+function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha }: {
+  bt: BenchtopInstance
+  info: BtElevInfo
+  profiles: Record<string, BenchtopEdgeProfile>
+  selected: boolean
+  /** Only in F4 Benchtop mode — otherwise no handler, so clicks pass to the cabinets. */
+  onSelect?: () => void
+  color: string
+  alpha: number
+}) {
+  const { topZ, thick, defaultProfileId } = info
+  const segs = useMemo(() => btSegments(bt), [bt])
+
+  const slab = useMemo(() => {
+    const pts = outlinePoints(segs, 24)
+    if (pts.length < 3) return null
+    const shape = new Shape(pts.map(p => new Vector2(p.x, -p.y)))
+    for (const c of bt.cutout_polygons ?? []) {
+      if (c.length >= 3) shape.holes.push(new Path(c.map(p => new Vector2(p.x, -p.y))))
+    }
+    const geo = new ExtrudeGeometry(shape, { depth: thick.total, bevelEnabled: false })
+    geo.rotateX(-Math.PI / 2)
+    geo.translate(0, topZ - thick.total, 0)
+    geo.computeVertexNormals()
+    return geo
+  }, [segs, bt.cutout_polygons, thick.total, topZ])
+  useEffect(() => () => { slab?.dispose() }, [slab])
+
+  const legH = topZ - thick.total
+  const legs = segs.flatMap((s, i) => {
+    if (s.type !== 'line' || s.edge?.wall || legH <= 0) return []
+    const pid = effectiveProfileId(s, defaultProfileId)
+    if (!pid || profiles[pid]?.generates !== 'waterfall') return []
+    const n = outwardNormal(segs, i)
+    const dx = s.p1.x - s.p0.x, dy = s.p1.y - s.p0.y
+    const mx = (s.p0.x + s.p1.x) / 2 - n.x * thick.total / 2
+    const my = (s.p0.y + s.p1.y) / 2 - n.y * thick.total / 2
+    return [{ i, len: Math.hypot(dx, dy), pos: [mx, legH / 2, my] as [number, number, number], rotY: -Math.atan2(dy, dx) }]
+  })
+
+  if (!slab) return null
+  const col = selected ? '#f59e0b' : color
+  const click = onSelect ? (e: { stopPropagation: () => void }) => { e.stopPropagation(); onSelect() } : undefined
+  return (
+    <group>
+      <mesh geometry={slab} onClick={click}>
+        <meshStandardMaterial color={col} roughness={0.5} metalness={0} {...alphaMat(alpha)} />
+        <Edges threshold={20} color="#64748b" transparent opacity={alpha} />
+      </mesh>
+      {legs.map(l => (
+        <mesh key={l.i} position={l.pos} rotation={[0, l.rotY, 0]} onClick={click}>
+          <boxGeometry args={[l.len, legH, thick.total]} />
+          <meshStandardMaterial color={col} roughness={0.5} metalness={0} {...alphaMat(alpha)} />
+          <Edges threshold={20} color="#64748b" transparent opacity={alpha} />
+        </mesh>
+      ))}
+    </group>
   )
 }
 
@@ -426,22 +494,17 @@ function CustomZoom({ controlsRef }: { controlsRef: React.RefObject<any> }) {
       e.preventDefault()
       if (!controlsRef.current) return
 
-      // Speed multiplier by modifier key
-      let speed = 0.12
-      if (e.ctrlKey)  speed = 0.40
-      if (e.shiftKey) speed = 0.03
+      // Same rate as the 2D views (Ctrl = fast, Shift = fine)
+      const zoom = wheelZoomFactor(e)
 
-      // Standard: scroll up (deltaY < 0) = zoom in; toggle inverts
-      const inv = getUserPrefs().invertScroll
-      const zoomIn = inv ? e.deltaY > 0 : e.deltaY < 0
-
-      // Standard dolly: move along camera's forward axis toward the orbit target
+      // Standard dolly: move along camera's forward axis toward the orbit target,
+      // shrinking the camera→target distance by the zoom factor
       const dir = new Vector3()
       camera.getWorldDirection(dir)
 
       const target: Vector3 = controlsRef.current.target
       const dist = camera.position.distanceTo(target)
-      const move = dist * speed * (zoomIn ? 1 : -1)
+      const move = dist * (1 - 1 / zoom)
 
       camera.position.addScaledVector(dir, move)
       controlsRef.current.update()
@@ -599,7 +662,7 @@ function ResetView({ signal, controlsRef, position, target }: {
 
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers }: {
+function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, pickBenchtops }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -614,6 +677,8 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
   resetSignal: number
   cameraStateRef?: React.MutableRefObject<Camera3DState | null>
   layers: LayerView
+  bt?: Bt3DProps
+  pickBenchtops: boolean
 }) {
   const controlsRef = useRef<any>(null)
   const { x: cx, y: cy } = useMemo(() => centroid(walls), [walls])
@@ -717,8 +782,9 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
             key={cab.id}
             cab={cab} wall={wall} cx={cx} cy={cy} room={room}
             selected={selectedId === cab.id}
-            onSelect={() => onSelectCabinet(cab.id)}
-            onContextMenu={(x, y) => onCabContextMenu(cab.id, x, y)}
+            // F4 Benchtop mode: cabinets can't be picked (clicks fall to the tops)
+            onSelect={() => { if (!pickBenchtops) onSelectCabinet(cab.id) }}
+            onContextMenu={(x, y) => { if (!pickBenchtops) onCabContextMenu(cab.id, x, y) }}
             rp={resolvedParts.get(cab.id)}
             materialColours={materialColours}
             ebByMatId={ebByMatId}
@@ -729,16 +795,34 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
           />
         )
       })}
+
+      {/* Benchtops — hidden with their anchor wall, like cabinets */}
+      {bt && layers.show('benchtops') && bt.benchtops.map(b => (
+        b.wall_id && hiddenWallIds.has(b.wall_id) ? null : (
+          <BenchtopMesh key={b.id} bt={b} info={bt.info(b)} profiles={bt.profiles}
+            selected={bt.selectedId === b.id} onSelect={pickBenchtops ? () => bt.onSelect(b.id) : undefined}
+            color={layers.color('benchtops', '#e7e5e4')} alpha={layers.alpha('benchtops')} />
+        )
+      ))}
     </>
   )
 }
 
 // ── Public component ──────────────────────────────────────────────────────────
 
+/** Benchtop inputs for the 3D view (Phase 3b). */
+export interface Bt3DProps {
+  benchtops: BenchtopInstance[]
+  info: (bt: BenchtopInstance) => BtElevInfo
+  profiles: Record<string, BenchtopEdgeProfile>
+  selectedId: string | null
+  onSelect: (id: string) => void
+}
+
 type MenuState     = { x: number; y: number; cabId: string }
 type WallMenuState = { x: number; y: number }
 
-export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers }: {
+export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, pickBenchtops = false }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -754,6 +838,9 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   cameraStateRef?: React.MutableRefObject<Camera3DState | null>
   resetSignal?: number
   layers: LayerView
+  bt?: Bt3DProps
+  /** F4 Benchtop mode: only benchtops pick; cabinets ignore clicks. */
+  pickBenchtops?: boolean
 }) {
   const [menu, setMenu]               = useState<MenuState | null>(null)
   const [wallMenu, setWallMenu]       = useState<WallMenuState | null>(null)
@@ -815,6 +902,8 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
               resetSignal={resetSignal + resetViewSignal}
               cameraStateRef={cameraStateRef}
               layers={layers}
+              bt={bt}
+              pickBenchtops={pickBenchtops}
             />
           )}
         </Suspense>

@@ -55,8 +55,13 @@ export async function loadBenchtopInput(benchtopId: string): Promise<BenchtopRes
   if (!method) return null  // Cannot resolve without a build method
 
   // ── Resolve Schedule through hierarchy ──────────────────────────────────
+  // The method's own default schedule beats room/job: a schedule is tied to
+  // the kind of top (stone vs board), so a job-level built-up schedule must
+  // not leak onto a stone benchtop. Job colour choices go through the
+  // per-role overrides below instead.
   let scheduleId =
     bt.benchtop_schedule_id ??
+    method.default_schedule_id ??
     rm?.benchtop_schedule_id ??
     prj?.benchtop_schedule_id ??
     null

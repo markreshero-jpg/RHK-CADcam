@@ -1,14 +1,14 @@
 ﻿'use client'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
-import { Room, Wall, CabinetInstance } from '@/src/lib/types'
-import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, CAB_FILL, CAB_FILL_SEL, SNAP_PX, type Pt } from '@/src/lib/geometry'
-import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor } from './canvasTypes'
+import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
+import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, CAB_FILL, CAB_FILL_SEL, SNAP_PX, type Pt } from '@/src/lib/geometry'
+import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
 import { roundMm } from '@/src/lib/format'
 import { customExtents } from '@/src/lib/customPartBox'
-import { getUserPrefs } from '@/src/lib/userPrefs'
+import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { getPalette, paletteToPartColors } from '@/src/lib/partPalette'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone, ResolvedInternalPart, ResolvedDrawerStack, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
 import { computeElevSeams } from '@/src/lib/cabinetSeams'
@@ -22,6 +22,7 @@ import { SlideShape, slideBox3, doorProfileSvg } from './cabinetEditSvgHelpers'
 import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
+import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
 // resolved per render below. PART_COLORS / LINE_DRAW_COLORS keep their `MAP[key]`
@@ -171,6 +172,11 @@ interface ElevationSVGProps {
   setElevMeasureStart:  (p: Pt | null) => void
   setElevMeasureEnd:    (p: Pt | null) => void
   setElevMeasureCursor: (p: Pt | null) => void
+  // Benchtops (Phase 3b, P-h) — drawn over the cabinets at their top height
+  benchtops?: BenchtopInstance[]
+  benchtopInfo?: (bt: BenchtopInstance) => BtElevInfo
+  edgeProfiles?: Record<string, BenchtopEdgeProfile>
+  onSelectBenchtop?: (id: string) => void
 }
 
 export default function ElevationSVG({
@@ -184,6 +190,7 @@ export default function ElevationSVG({
   elevSnapResult, setElevSnapResult,
   elevMeasureStart, elevMeasureEnd, elevMeasureCursor,
   setElevMeasureStart, setElevMeasureEnd, setElevMeasureCursor,
+  benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop,
 }: ElevationSVGProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [view, dispatchView] = useReducer(viewReducer, { panX: 80, panY: 60, zoom: 1 })
@@ -211,6 +218,13 @@ export default function ElevationSVG({
   const [elevResizeLive, setElevResizeLive] = useState<{
     cabId: string; dim: 'dx' | 'dy'; value: number; posX?: number; posY?: number
   } | null>(null)
+  // The parent can end the resize without us (typed value + Enter / Apply / Esc in
+  // CabinetResizePanel). Drop the local mouse-follow state with it, otherwise the
+  // cabinet keeps tracking the cursor and the next click overwrites the typed value.
+  if (!cabResize && (elevResizeFollowing || elevResizeLive)) {
+    setElevResizeFollowing(null)
+    setElevResizeLive(null)
+  }
   // Prevents onMarkerClick from re-starting a resize on the same pointerup→click that just confirmed one.
   const justConfirmedRef = useRef(false)
   // Sync ref updated every render — gives the native pointermove handler fresh values without stale closures.
@@ -329,8 +343,7 @@ export default function ElevationSVG({
     const handler = (e: WheelEvent) => {
       e.preventDefault()
       const r = svg.getBoundingClientRect()
-      const inv = getUserPrefs().invertScroll
-      const factor = (e.deltaY < 0) !== inv ? 1.15 : 1 / 1.15
+      const factor = wheelZoomFactor(e)
       dispatchView({ type: 'zoom', factor, svgX: e.clientX - r.left, svgY: e.clientY - r.top })
     }
     svg.addEventListener('wheel', handler, { passive: false })
@@ -974,7 +987,8 @@ export default function ElevationSVG({
               </>)
             })()}
 
-            {/* Cabinets */}
+            {/* Cabinets — click-through in F4 Benchtop mode (only tops pick) */}
+            <g style={{ pointerEvents: isBenchtopMode(mode) ? 'none' : undefined }}>
             {wallCabs.map(cab => {
               const baseT   = cabT(cab, wall)
               const bottomZ = cabBottomZ(cab, room, wall)
@@ -1525,6 +1539,19 @@ export default function ElevationSVG({
                 </g>
               )
             })}
+            </g>
+
+            {/* Benchtops — over the cabinet tops */}
+            {benchtops && benchtopInfo && (
+              <BenchtopElevation
+                benchtops={benchtops} walls={walls} wall={wall} side={elevWallSide}
+                roomCx={centroid(walls)} roomH={roomH} zoom={z} layers={layers}
+                selectedId={selected?.type === 'benchtop' ? selected.id : null}
+                info={benchtopInfo} profiles={edgeProfiles ?? {}}
+                interactive={mode === 'benchtop_select'}
+                onSelect={id => onSelectBenchtop?.(id)}
+              />
+            )}
 
             {/* Placement ghost — floating at cursor + snap landing */}
             {placeGhost && (() => {

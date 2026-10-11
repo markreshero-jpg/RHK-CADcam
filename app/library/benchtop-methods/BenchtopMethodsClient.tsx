@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
-import type { BenchtopBuildMethod, BenchtopPartRole } from '@/src/lib/types'
+import type { BenchtopBuildMethod, BenchtopPartRole, BenchtopEdgeProfile, BenchtopConstruction } from '@/src/lib/types'
+import { CONSTRUCTIONS, BUILDUP_ROLES, rolesForConstruction, isBuildUp, DEFAULT_CROSS_MEMBER_SPACING } from '@/src/lib/benchtop-resolver/construction'
 import BuildMethodWizard from './BuildMethodWizard'
 import { ThemeToggle } from '../../ThemeToggle'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
@@ -12,8 +13,8 @@ import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 const PART_ROLES: { key: BenchtopPartRole; label: string; desc: string }[] = [
   { key: 'worktop_panel',        label: 'Worktop Panel',     desc: 'Main flat surface' },
-  { key: 'buildup_rail',         label: 'Build-Up Rail',     desc: 'Perimeter framing strips' },
-  { key: 'buildup_cross_member', label: 'Cross Member',      desc: 'Internal support members' },
+  { key: 'buildup_rail',         label: 'Build-Up Rails / Strips', desc: 'Perimeter members under the top' },
+  { key: 'buildup_cross_member', label: 'Cross Members',     desc: 'Internal supports across the depth' },
   { key: 'subtop',               label: 'Substrate',         desc: 'Under-stone substrate' },
   { key: 'drop_front_fascia',    label: 'Drop Front Fascia', desc: 'Exposed front face' },
   { key: 'side_fascia',          label: 'Side Fascia',       desc: 'Exposed end face' },
@@ -30,6 +31,8 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
   const [creating,   setCreating]   = useState(false)
   const [saving,     setSaving]     = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [profiles,   setProfiles]   = useState<BenchtopEdgeProfile[]>([])
+  const [schedules,  setSchedules]  = useState<{ id: string; name: string }[]>([])
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -37,6 +40,16 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
       .select('*')
       .order('name')
     setMethods((data ?? []) as BenchtopBuildMethod[])
+    const { data: profs } = await supabase
+      .from('benchtop_edge_profiles')
+      .select('*')
+      .order('sort_order')
+    setProfiles((profs ?? []) as BenchtopEdgeProfile[])
+    const { data: scheds } = await supabase
+      .from('benchtop_schedules')
+      .select('id, name')
+      .order('name')
+    setSchedules((scheds ?? []) as { id: string; name: string }[])
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -87,6 +100,40 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
 
   function handleWizardUpdate(updated: BenchtopBuildMethod) {
     setMethods(prev => prev.map(m => m.id === updated.id ? updated : m))
+  }
+
+  // One labelled mm input bound to a numeric method column (saved on blur).
+  function mmRow(field: 'strip_width_mm' | 'buildup_rail_depth' | 'cross_member_spacing_mm', label: string, hint: string) {
+    if (!sel) return null
+    return (
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs text-ink-muted">{label}</p>
+          <p className="text-[10px] text-ink-subtle">{hint}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <input
+            type="number"
+            defaultValue={sel[field] ?? ''}
+            key={sel.id + '_' + field}
+            onBlur={e => {
+              const v = parseFloat(e.target.value)
+              const next = isNaN(v) ? null : v
+              if (next !== sel[field]) patch({ [field]: next })
+            }}
+            onFocus={e => e.target.select()}
+            placeholder="—"
+            className={`bg-surface-2 border border-edge-strong rounded px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-accent w-24 text-right font-mono`}
+          />
+          <span className="text-xs text-ink-subtle">mm</span>
+        </div>
+      </div>
+    )
+  }
+
+  function setConstruction(c: BenchtopConstruction) {
+    if (!sel || sel.construction === c) return
+    patch({ construction: c, active_part_roles: rolesForConstruction(c, sel.active_part_roles) })
   }
 
   function toggleRole(role: BenchtopPartRole) {
@@ -243,6 +290,38 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
 
             <hr className="border-edge" />
 
+            {/* Construction */}
+            <div>
+              <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wide mb-3">
+                Construction
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {CONSTRUCTIONS.map(c => {
+                  const on = sel.construction === c.key
+                  return (
+                    <button
+                      key={c.key}
+                      onClick={() => setConstruction(c.key)}
+                      className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                        on ? 'border-blue-800/50 bg-accent/10' : 'border-edge hover:border-edge-strong'
+                      }`}
+                    >
+                      <p className={`text-xs font-medium ${on ? 'text-accent-ink' : 'text-ink-muted'}`}>{c.label}</p>
+                      <p className="text-[10px] text-ink-subtle mt-0.5">{c.desc}</p>
+                    </button>
+                  )
+                })}
+              </div>
+              {sel.construction === 'outsourced' && (
+                <p className="text-[10px] text-ink-subtle mt-2">
+                  Worktop / stone parts are listed as supply items for ordering — never sent to the cut list.
+                  Substrate and fascias, if ticked, are still made in-house.
+                </p>
+              )}
+            </div>
+
+            <hr className="border-edge" />
+
             {/* Active part roles */}
             <div>
               <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wide mb-3">
@@ -252,7 +331,7 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                 Which parts does this method generate? The resolver only creates parts for active roles.
               </p>
               <div className="space-y-1.5">
-                {PART_ROLES.map(role => {
+                {PART_ROLES.filter(role => isBuildUp(sel.construction) || !BUILDUP_ROLES.includes(role.key)).map(role => {
                   const active = sel.active_part_roles.includes(role.key)
                   return (
                     <label
@@ -287,28 +366,19 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                 Dimensions
               </p>
               <div className="space-y-3">
-                {sel.active_part_roles.includes('buildup_rail') && (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-ink-muted">Build-up rail depth</p>
-                      <p className="text-[10px] text-ink-subtle">Height of perimeter framing rails</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        defaultValue={sel.buildup_rail_depth ?? ''}
-                        key={sel.id + '_rail_depth'}
-                        onBlur={e => {
-                          const v = parseFloat(e.target.value)
-                          patch({ buildup_rail_depth: isNaN(v) ? null : v })
-                        }}
-                        onFocus={e => e.target.select()}
-                        placeholder="—"
-                        className={mm}
-                      />
-                      <span className="text-xs text-ink-subtle">mm</span>
-                    </div>
-                  </div>
+                {sel.construction === 'buildup_flat' && mmRow(
+                  'strip_width_mm', 'Strip width',
+                  'Width of the flat strips under the top — also how far end and cross strips are set back',
+                )}
+
+                {sel.construction === 'buildup_vertical' && mmRow(
+                  'buildup_rail_depth', 'Rail height',
+                  'Height of the on-edge rails under the top',
+                )}
+
+                {isBuildUp(sel.construction) && sel.active_part_roles.includes('buildup_cross_member') && mmRow(
+                  'cross_member_spacing_mm', 'Cross member spacing',
+                  `Maximum gap between supports along the run (blank = ${DEFAULT_CROSS_MEMBER_SPACING})`,
                 )}
 
                 {(sel.active_part_roles.includes('drop_front_fascia') ||
@@ -378,10 +448,46 @@ export default function BenchtopMethodsClient({ embedded }: { embedded?: boolean
                   </select>
                 </div>
 
-                {sel.active_part_roles.includes('buildup_rail') && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-ink-muted">Default material schedule</p>
+                    <p className="text-[10px] text-ink-subtle">Used unless the benchtop picks its own; beats room / job schedule</p>
+                  </div>
+                  <select
+                    value={sel.default_schedule_id ?? ''}
+                    onChange={e => patch({ default_schedule_id: e.target.value || null })}
+                    className={`${inp} w-48`}
+                  >
+                    <option value="">(inherit room / job)</option>
+                    {schedules.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-ink-muted">Default edge profile</p>
+                    <p className="text-[10px] text-ink-subtle">Applied to exposed edges with no profile set</p>
+                  </div>
+                  <select
+                    value={sel.default_edge_profile_id ?? ''}
+                    onChange={e => patch({ default_edge_profile_id: e.target.value || null })}
+                    className={`${inp} w-48`}
+                  >
+                    <option value="">(none)</option>
+                    {(['stone', 'board', 'postform'] as const).map(cat => (
+                      <optgroup key={cat} label={cat === 'postform' ? 'Postform / Laminate' : cat === 'stone' ? 'Stone' : 'Board'}>
+                        {profiles
+                          .filter(p => p.category === cat && (p.active || p.id === sel.default_edge_profile_id))
+                          .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+
+                {isBuildUp(sel.construction) && sel.active_part_roles.includes('buildup_rail') && (
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-ink-muted">Build-up rail corner join</p>
+                      <p className="text-xs text-ink-muted">Build-up corner join</p>
                       <p className="text-[10px] text-ink-subtle">How rails meet at internal corners</p>
                     </div>
                     <select

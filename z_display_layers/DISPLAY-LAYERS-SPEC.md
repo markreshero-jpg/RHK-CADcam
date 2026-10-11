@@ -132,7 +132,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 | Internals | `internal_outline` (P, default hidden), `shelves`, `dividers`, `inner_drawers`, `accessories` (E,3D), `shelf_labels`, `inner_drawer_labels` (E) |
 | Hardware | `drawer_boxes`, `drawer_runners` (P,E,3D), `inner_drawer_runners`, `hinges`, `machining` (E,3D) — **all default hidden in plan + 3D** |
 | Panels | `applied_panels`, `fillers`, `custom_panels` (P,E,3D) — by parts_library key (3b) |
-| Benchtops | `benchtops` (P) |
+| Benchtops | `benchtops` (P / E / 3D), `benchtop_edges` (P: profile colour + code, wall edges; E: code on the front edge), `benchtop_joins` (P / E) — edges + joins added by benchtop Phase 3; elevation + 3D views by Phase 3b |
 | Room | `walls` (3D) |
 | Labels | `cabinet_labels`, `cabinet_sizes` (P,E) |
 | Dimensions | `dim_wall_overall`, `dim_base_chain`, `dim_wall_chain` (P), `dim_elev_height`, `dim_elev_floor_chain`, `dim_elev_wall_chain` (E) |

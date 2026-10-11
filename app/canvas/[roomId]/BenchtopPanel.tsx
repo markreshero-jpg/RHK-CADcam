@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import CalcInput from '@/src/components/CalcInput'
-import { BenchtopInstance, BenchtopBuildMethod } from '@/src/lib/types'
+import { BenchtopInstance, BenchtopBuildMethod, BenchtopEdgeProfile, BenchtopEdge, BenchtopJoinType, Wall } from '@/src/lib/types'
+import type { BtPosition, WallSide, BtOverhang, StretchEnd } from '@/src/lib/benchtopAnchor'
+import type { BtThickness } from './useBenchtopCatalog'
+import { btSegments, segLength, effectiveProfileId, edgeProfileColor, outlineBounds, outlinePoints, signedArea } from '@/src/lib/benchtopGeometry'
 import { resolveBenchtopFromDB, loadResolvedParts } from '@/src/lib/benchtop-resolver/resolveBenchtopFromDB'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 
@@ -25,6 +28,9 @@ export default function BenchtopPanel({
   filletRadius, setFilletRadius,
   onMirrorH, onMirrorV, onOffset, onRotate,
   onDeleteCutout, onDrawCutoutRect, onDrawCutoutCircle,
+  profiles, method, onSetEdges, onEditShape, onDrawJoin, onDeleteJoin, onSetJoinType,
+  walls, position, baseHeight, thickness, onSetPosition, onReanchor, onMove,
+  wallLength, overhang, onStretch,
 }: {
   benchtop: BenchtopInstance
   onUpdate: (id: string, u: Partial<BenchtopInstance>) => Promise<void>
@@ -38,7 +44,29 @@ export default function BenchtopPanel({
   onDeleteCutout: (id: string, i: number) => void
   onDrawCutoutRect: () => void
   onDrawCutoutCircle: () => void
+  // Phase 3 — edge finishes + join lines
+  profiles: BenchtopEdgeProfile[]
+  method: BenchtopBuildMethod | null      // effective method (benchtop → room → job → default)
+  onSetEdges: (id: string, edgeIndices: number[], patch: BenchtopEdge) => void
+  onEditShape: (id: string) => void
+  onDrawJoin: () => void
+  onDeleteJoin: (id: string, i: number) => void
+  onSetJoinType: (id: string, i: number, type: BenchtopJoinType) => void
+  // Phase 3b — wall anchor + position (P-e / P-f) and height (P-g)
+  walls: Wall[]
+  position: BtPosition | null              // measured against the anchor wall face
+  baseHeight: number                        // base-height cascade (job → room)
+  thickness: BtThickness
+  onSetPosition: (id: string, target: { along?: number; off?: number }) => void
+  onReanchor: (id: string, wallId: string, side: WallSide) => void
+  onMove: () => void
+  // Editable sizes / ends (same idea as the cabinet wall-position block)
+  wallLength: number | null                 // anchor wall length
+  overhang: BtOverhang | null               // past the base cabinets under the top
+  onStretch: (id: string, end: StretchEnd, delta: number) => void
 }) {
+  // Which end a typed length change moves (remembered while the panel is open).
+  const [growEnd, setGrowEnd] = useState<'left' | 'right' | 'both'>('right')
   const [label, setLabel] = useState(benchtop.label ?? '')
   const [methods, setMethods] = useState<BenchtopBuildMethod[]>([])
   const [schedules, setSchedules] = useState<BenchtopSchedule[]>([])
@@ -62,7 +90,7 @@ export default function BenchtopPanel({
   }, [benchtop.id])
 
   async function handleResolve() {
-    if (benchtop.polygon.length < 3) {
+    if (btSegments(benchtop).length < 3) {
       setResolveError('Benchtop must have at least 3 vertices before resolving.')
       return
     }
@@ -83,9 +111,19 @@ export default function BenchtopPanel({
   const inp = 'w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500'
   const lbl = 'text-[10px] text-gray-500 uppercase tracking-wider mb-0.5 block'
 
-  const n = benchtop.polygon.length
-  const exposedCount = n - benchtop.edge_tags.filter(t => t.type === 'wall').length
-  const mitreCount   = benchtop.join_types.filter(j => j.join_type === 'mitre').length
+  const segs = btSegments(benchtop)
+  const n = segs.length
+  const defaultProfileId = method?.default_edge_profile_id ?? null
+  const profileById = Object.fromEntries(profiles.map(p => [p.id, p]))
+  const activeProfiles = profiles.filter(p => p.active)
+  const defaultProfile = defaultProfileId ? profileById[defaultProfileId] : undefined
+  // Lineal metres per profile over exposed edges — what the order / quote uses.
+  const lineal = new Map<string, number>()
+  for (const s of segs) {
+    const pid = effectiveProfileId(s, defaultProfileId)
+    if (pid) lineal.set(pid, (lineal.get(pid) ?? 0) + segLength(s))
+  }
+  const joins = benchtop.joins ?? []
 
   return (
     <div className="w-72 bg-gray-900 border-l border-gray-800 flex flex-col overflow-y-auto">
@@ -98,6 +136,64 @@ export default function BenchtopPanel({
       </div>
 
       <div className="p-4 space-y-3">
+
+        {/* Size — editable. Length / depth are measured along the anchor wall
+            (plan bbox if unanchored). A length change grows / shrinks the end
+            picked under it; depth always moves the front edge (back stays on the
+            wall). Thickness comes from the build method; area is net of cutouts. */}
+        {(() => {
+          const bb = outlineBounds(segs)
+          const length = position?.length ?? (bb ? bb.maxX - bb.minX : 0)
+          const depth = position?.depth ?? (bb ? bb.maxY - bb.minY : 0)
+          const sitsAt = benchtop.height_mm ?? baseHeight
+          const area = Math.abs(signedArea(outlinePoints(segs)))
+            - (benchtop.cutout_polygons ?? []).reduce((a, c) => a + Math.abs(signedArea(c)), 0)
+          const canSize = !!position
+          const setSitsAt = (v: number) => void onUpdate(benchtop.id, { height_mm: v === baseHeight ? null : v })
+          const field = (k: string, value: number, onCommit: ((v: number) => void) | null, title: string, extra = '') => (
+            <div title={title}>
+              <div className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5">{k}</div>
+              {onCommit
+                ? <CalcInput value={Math.round(value)} decimals={0} onCommit={onCommit} className={inp + ' text-right ' + extra} />
+                : <div className="bg-gray-800/60 rounded px-2 py-1 text-xs text-gray-300 text-right tabular-nums">{value}</div>}
+            </div>
+          )
+          return (
+            <div className="space-y-1.5">
+              <label className={lbl}>Size (mm)</label>
+              <div className="grid grid-cols-3 gap-1">
+                {field('Length', length, canSize ? v => { if (v >= 50) onStretch(benchtop.id, growEnd, v - length) } : null,
+                  'Overall length along the wall. The end picked below moves.')}
+                {field('Depth', depth, canSize ? v => { if (v >= 50) onStretch(benchtop.id, 'front', v - depth) } : null,
+                  'Overall depth off the wall. The front edge moves; the back stays on the wall.')}
+                {field('Thick', thickness.total, null, 'From the build method' + (thickness.buildUp ? ` (${thickness.top} top + ${thickness.total - thickness.top} build-up)` : ''))}
+              </div>
+              {canSize && (
+                <div className="flex items-center gap-1 text-[10px]">
+                  <span className="text-gray-500">Length grows from</span>
+                  {([['left', '◀ Left'], ['both', 'Both'], ['right', 'Right ▶']] as const).map(([k, t]) => (
+                    <button key={k} onClick={() => setGrowEnd(k)}
+                      className={`px-1.5 py-0.5 rounded ${growEnd === k ? 'bg-teal-800 text-teal-100' : 'text-gray-400 hover:bg-gray-800'}`}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-1">
+                {field('Sits at', sitsAt, setSitsAt, 'Underside — sits on the base cabinets. Default = the job / room base cabinet height.',
+                  benchtop.height_mm != null ? 'border-amber-600' : '')}
+                {field('Top at', sitsAt + thickness.total, v => setSitsAt(v - thickness.total), 'Finished top surface height')}
+                {field('Area m²', Number((area / 1e6).toFixed(2)), null, 'Net area (cutouts removed)')}
+              </div>
+              {benchtop.height_mm != null && (
+                <button onClick={() => void onUpdate(benchtop.id, { height_mm: null })} className="text-[10px] text-amber-400 hover:text-amber-300">
+                  ↺ sit on base cabinets ({baseHeight})
+                </button>
+              )}
+              {n > 4 && <p className="text-[10px] text-gray-600">Shaped top — sizes are the overall extent; a length / depth change moves every corner past the halfway line. Edge lengths are under Edges.</p>}
+            </div>
+          )
+        })()}
 
         {/* Label */}
         <div>
@@ -136,24 +232,147 @@ export default function BenchtopPanel({
           </select>
         </div>
 
-        {/* Edge tags */}
-        <div className="border-t border-gray-800 pt-3 space-y-1.5">
-          <p className={lbl}>Edge Tags</p>
-          <div className="text-xs text-gray-400 flex gap-3">
-            <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-teal-500 mr-1 align-middle" />{exposedCount} exposed</span>
-            <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-600 mr-1 align-middle" />{n - exposedCount} wall</span>
+        {/* ── Position (Phase 3b) — tops never drag on the plan; move them here ── */}
+        <div className="border-t border-gray-800 pt-3 space-y-2">
+          <p className={lbl}>Position</p>
+          <div>
+            <label className={lbl}>Anchored to</label>
+            <select
+              value={benchtop.wall_id ? `${benchtop.wall_id}|${benchtop.wall_side}` : ''}
+              onChange={e => {
+                const [wid, side] = e.target.value.split('|') as [string, WallSide]
+                if (wid) onReanchor(benchtop.id, wid, side)
+              }}
+              className={inp}
+              title="The wall elevation this top belongs to. Picking a wall it isn't on carries it there.">
+              {!benchtop.wall_id && <option value="">(not anchored)</option>}
+              {walls.flatMap(w => (['face', 'back'] as const).map(side => (
+                <option key={`${w.id}|${side}`} value={`${w.id}|${side}`}>
+                  {w.name} — {side === 'face' ? 'Face' : 'Back'}
+                </option>
+              )))}
+            </select>
           </div>
-          <p className="text-[10px] text-gray-600">Click edge midpoints on plan to toggle</p>
+          {position && wallLength != null && (
+            <div className="grid grid-cols-3 gap-1">
+              {([
+                ['From left end', position.along, (v: number) => onSetPosition(benchtop.id, { along: v }), 'Left end of the wall to the left end of the top — moves the top'],
+                ['From right end', wallLength - position.along - position.length, (v: number) => onSetPosition(benchtop.id, { along: wallLength - v - position.length }), 'Right end of the top to the right end of the wall — moves the top'],
+                ['Off wall', position.off, (v: number) => onSetPosition(benchtop.id, { off: v }), 'Wall face to the back of the top — moves the top'],
+              ] as const).map(([k, v, commit, title]) => (
+                <div key={k} title={title}>
+                  <div className="text-[9px] text-gray-500 mb-0.5">{k}</div>
+                  <CalcInput value={Math.round(v)} decimals={0} onCommit={commit} className={inp + ' text-right'} />
+                </div>
+              ))}
+            </div>
+          )}
+          {position && (overhang ? (
+            <div>
+              <div className="text-[9px] text-gray-500 mb-0.5" title="How far the top runs past the base cabinets under it. Editing one moves only that edge.">
+                Overhang past cabinets
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                {([['Left', 'left', overhang.left], ['Right', 'right', overhang.right], ['Front', 'front', overhang.front]] as const).map(([k, end, v]) => (
+                  <div key={k}>
+                    <div className="text-[9px] text-gray-500 mb-0.5">{k}</div>
+                    <CalcInput value={Math.round(v)} decimals={0}
+                      onCommit={nv => onStretch(benchtop.id, end, nv - v)}
+                      className={`${inp} text-right ${v < 0 ? 'text-red-400' : ''}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[10px] text-gray-600">No base cabinets under this top on its anchor wall.</p>
+          ))}
+          <button onClick={onMove}
+            className="w-full px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white"
+            title="Pick a base point, then the point to move it to (snaps). Esc cancels.">
+            Move…
+          </button>
         </div>
 
-        {/* Join points */}
-        <div className="border-t border-gray-800 pt-3 space-y-1.5">
-          <p className={lbl}>Join Points</p>
-          <div className="text-xs text-gray-400 flex gap-3">
-            <span><span className="inline-block w-2.5 h-2.5 rounded-full bg-teal-500 mr-1 align-middle" />{n - mitreCount} butt</span>
-            <span><span className="inline-block w-2.5 h-2.5 rotate-45 bg-amber-500 mr-1 align-middle" style={{ display: 'inline-block' }} />{mitreCount} mitre</span>
+        {/* ── Shape + edges (Phase 3) ── */}
+        <div className="border-t border-gray-800 pt-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className={lbl}>Edges</p>
+            <span className="text-[10px] text-gray-500">{method ? method.name : 'no method'}</span>
           </div>
-          <p className="text-[10px] text-gray-600">Click vertex dots on plan to toggle</p>
+          <button onClick={() => onEditShape(benchtop.id)}
+            className="w-full px-3 py-1.5 rounded text-xs font-medium bg-blue-700 hover:bg-blue-600 text-white">
+            Edit shape &amp; edges…
+          </button>
+          <div className="space-y-1">
+            {segs.map((s, i) => {
+              const wall = !!s.edge?.wall
+              const pid = effectiveProfileId(s, defaultProfileId)
+              const prof = pid ? profileById[pid] : undefined
+              return (
+                <div key={i} className="flex items-center gap-1 bg-gray-800 rounded px-1.5 py-1 text-[10px]">
+                  <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: wall ? '#6b7280' : edgeProfileColor(prof) }} />
+                  <span className="text-gray-400 w-12 shrink-0">{i + 1}{s.type !== 'line' ? '~' : ''} · {Math.round(segLength(s))}</span>
+                  <button
+                    onClick={() => onSetEdges(benchtop.id, [i], { wall: !wall })}
+                    title={wall ? 'Against a wall — click to make exposed' : 'Exposed — click to mark as a wall edge'}
+                    className={`px-1 rounded shrink-0 ${wall ? 'bg-gray-700 text-gray-300' : 'bg-teal-900 text-teal-300'}`}>
+                    {wall ? 'Wall' : 'Exp'}
+                  </button>
+                  {!wall && (
+                    <select
+                      value={s.edge?.profile_id ?? ''}
+                      onChange={e => onSetEdges(benchtop.id, [i], { wall: false, profile_id: e.target.value || null })}
+                      className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-white">
+                      <option value="">Default{defaultProfile ? ` (${defaultProfile.code ?? defaultProfile.name})` : ''}</option>
+                      {(['stone', 'board', 'postform'] as const).map(cat => (
+                        <optgroup key={cat} label={cat}>
+                          {activeProfiles.filter(p => p.category === cat).map(p => (
+                            <option key={p.id} value={p.id}>{p.code ? `${p.code} — ` : ''}{p.name}</option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {lineal.size > 0 && (
+            <div className="text-[10px] text-gray-400 space-y-0.5 pt-1">
+              {[...lineal.entries()].map(([pid, mm]) => {
+                const p = profileById[pid]
+                return (
+                  <div key={pid} className="flex justify-between">
+                    <span className="truncate">{p ? p.name : 'Unknown profile'}{p?.generates === 'waterfall' ? ' (waterfall)' : p?.generates === 'apron' ? ' (apron)' : ''}</span>
+                    <span className="text-gray-300 shrink-0 ml-2">{(mm / 1000).toFixed(2)} lm</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          <p className="text-[10px] text-gray-600">Plan: click an edge tag for wall/exposed · Alt = curve · Shift = add vertex</p>
+        </div>
+
+        {/* ── Join lines (P-b) ── */}
+        <div className="border-t border-gray-800 pt-3 space-y-2">
+          <p className={lbl}>Joins</p>
+          <button onClick={onDrawJoin}
+            className="w-full px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white">
+            + Add join line
+          </button>
+          {joins.length === 0 && <p className="text-[10px] text-gray-600">One piece — no joins</p>}
+          {joins.map((j, i) => (
+            <div key={i} className="flex items-center gap-1 bg-gray-800 rounded px-2 py-1 text-[10px]">
+              <span className="text-gray-400 flex-1">Join {i + 1} · {Math.round(Math.hypot(j.p1.x - j.p0.x, j.p1.y - j.p0.y))}</span>
+              {(['butt', 'mitre'] as const).map(t => (
+                <button key={t} onClick={() => onSetJoinType(benchtop.id, i, t)}
+                  className={`px-1.5 rounded ${j.type === t ? 'bg-red-900 text-red-200' : 'text-gray-500 hover:text-gray-300'}`}>
+                  {t === 'butt' ? 'Butt' : 'Mitre'}
+                </button>
+              ))}
+              <button onClick={() => onDeleteJoin(benchtop.id, i)} className="text-red-500 hover:text-red-400 ml-1">✕</button>
+            </div>
+          ))}
         </div>
 
         {/* ── Transform ── */}
@@ -283,6 +502,7 @@ export default function BenchtopPanel({
                 <div key={i} className="bg-gray-800 rounded px-2 py-1.5 text-[10px]">
                   <div className="flex items-center justify-between gap-1">
                     <span className="font-medium text-gray-300 truncate">{p.label}</span>
+                    {p.supply_item && <span className="text-amber-400 shrink-0" title="Supplied by others — order item, not cut in-house">supply</span>}
                     {p.quantity > 1 && <span className="text-teal-500 shrink-0">×{p.quantity}</span>}
                   </div>
                   <div className="text-gray-500 mt-0.5">

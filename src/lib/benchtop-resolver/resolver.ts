@@ -1,5 +1,6 @@
 import type { BenchtopScheduleRow, BenchtopPartRole } from '@/src/lib/types'
 import type { BenchtopResolverInput, ResolvedBenchtopPart } from './types'
+import { DEFAULT_CROSS_MEMBER_SPACING } from './construction'
 
 // ── Geometry helpers ──────────────────────────────────────────────────────────
 
@@ -134,9 +135,11 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
   const { benchtop, method, scheduleRows, boardMaterials, surfaceMaterials } = input
   const { polygon, edge_tags, arc_segments } = benchtop
   const {
-    active_part_roles, buildup_rail_depth, drop_front_height,
-    grain_direction, corner_join_type,
+    construction, active_part_roles, buildup_rail_depth, strip_width_mm,
+    cross_member_spacing_mm, drop_front_height, grain_direction, corner_join_type,
   } = method
+  // Outsourced surfaces (stone, laminate) are ordered, not cut.
+  const outsourced = construction === 'outsourced'
 
   if (polygon.length < 3) return []
 
@@ -152,13 +155,19 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
 
   const parts: ResolvedBenchtopPart[] = []
 
-  function push(p: ResolvedBenchtopPart) { parts.push(p) }
+  function push(p: Omit<ResolvedBenchtopPart, 'supply_item'> & { supply_item?: boolean }) {
+    parts.push({ ...p, supply_item: p.supply_item ?? false })
+  }
 
   // ── worktop_panel ────────────────────────────────────────────────────────
 
   if (active_part_roles.includes('worktop_panel')) {
     const row = rowFor(scheduleRows, 'worktop_panel')
-    const thick = surfaceThickness(row, surfaceMaterials, 33)
+    // Board worktop (built-up / solid) takes its thickness from the board;
+    // otherwise it's a surface material (laminate, stone).
+    const thick = row?.material_id
+      ? boardThickness(row, boardMaterials)
+      : surfaceThickness(row, surfaceMaterials, 33)
     push({
       part_role: 'worktop_panel',
       label: 'Worktop Panel',
@@ -172,65 +181,76 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
       benchtop_material_id:   row?.benchtop_material_id ?? null,
       benchtop_material_name: surfaceName(row, surfaceMaterials),
       edgeband_id:            row?.edgeband_id ?? null,
+      supply_item:            outsourced,
     })
   }
 
-  // ── buildup_rail ─────────────────────────────────────────────────────────
+  // ── Build-up: perimeter rails/strips + cross members ─────────────────────
+  // Only for build-up construction. The "set-back" is how far a member
+  // intrudes inward from the edge — it's what end members and cross members
+  // are shortened by at a butt joint:
+  //   buildup_flat     — strips lie flat: part width = strip_width_mm,
+  //                      set-back = strip width.
+  //   buildup_vertical — rails on edge:   part width = buildup_rail_depth (height),
+  //                      set-back = board thickness.
+  // Mitre corners: perimeter members all run full length, mitred.
 
-  if (active_part_roles.includes('buildup_rail') && buildup_rail_depth) {
+  const flat = construction === 'buildup_flat'
+  const memberWidth = flat ? strip_width_mm : construction === 'buildup_vertical' ? buildup_rail_depth : null
+  const memberLabel = flat ? 'Build-Up Strip' : 'Build-Up Rail'
+
+  if (memberWidth && active_part_roles.includes('buildup_rail')) {
     const row   = rowFor(scheduleRows, 'buildup_rail')
     const thick = boardThickness(row, boardMaterials)
-    const matId   = row?.material_id ?? null
-    const matName = boardName(row, boardMaterials)
-    const ebId    = row?.edgeband_id ?? null
+    const setBack = flat ? memberWidth : thick
 
     const common = {
       part_role: 'buildup_rail' as BenchtopPartRole,
-      width_mm: buildup_rail_depth,
+      width_mm: memberWidth,
       thickness_mm: thick,
       grain_direction: 'length' as const,
-      material_id: matId,
-      material_name: matName,
-      benchtop_material_id: null,
-      benchtop_material_name: null,
-      edgeband_id: ebId,
-    }
-
-    // Front and back rails run the full run length
-    push({ ...common, label: 'Build-Up Rail — Front', length_mm: runLength, quantity: 1 })
-    push({ ...common, label: 'Build-Up Rail — Back',  length_mm: runLength, quantity: 1 })
-
-    // End rails: length depends on corner join type
-    // Butt: shortened by front+back rail thickness; Mitre: full depth
-    const endLength = corner_join_type === 'mitre'
-      ? benchDepth
-      : Math.max(0, benchDepth - 2 * thick)
-
-    push({ ...common, label: 'Build-Up Rail — Ends', length_mm: Math.round(endLength), quantity: 2 })
-  }
-
-  // ── buildup_cross_member ─────────────────────────────────────────────────
-  // Cross members are generated as structural intermediates; count and spacing
-  // are method-dependent. Output one representative record flagged for layout.
-  if (active_part_roles.includes('buildup_cross_member') && buildup_rail_depth) {
-    const row   = rowFor(scheduleRows, 'buildup_cross_member')
-    const thick = boardThickness(row, boardMaterials)
-    // Inner span = benchDepth minus front/back rail thickness
-    const spanLength = Math.max(0, benchDepth - 2 * thick)
-    push({
-      part_role: 'buildup_cross_member',
-      label: 'Build-Up Cross Member',
-      length_mm: Math.round(spanLength),
-      width_mm: buildup_rail_depth,
-      thickness_mm: thick,
-      quantity: 2,  // minimum two; user can add more in cut list
-      grain_direction: 'width',
       material_id:            row?.material_id ?? null,
       material_name:          boardName(row, boardMaterials),
       benchtop_material_id:   null,
       benchtop_material_name: null,
       edgeband_id:            row?.edgeband_id ?? null,
-    })
+    }
+
+    push({ ...common, label: `${memberLabel} — Front`, length_mm: runLength, quantity: 1 })
+    push({ ...common, label: `${memberLabel} — Back`,  length_mm: runLength, quantity: 1 })
+
+    const endLength = corner_join_type === 'mitre'
+      ? benchDepth
+      : Math.max(0, benchDepth - 2 * setBack)
+    push({ ...common, label: `${memberLabel} — Ends`, length_mm: Math.round(endLength), quantity: 2 })
+  }
+
+  if (memberWidth && active_part_roles.includes('buildup_cross_member')) {
+    const row   = rowFor(scheduleRows, 'buildup_cross_member')
+    const thick = boardThickness(row, boardMaterials)
+    // Perimeter members' set-back — cross members sit between them.
+    const railThick = boardThickness(rowFor(scheduleRows, 'buildup_rail'), boardMaterials)
+    const setBack = flat ? memberWidth : railThick
+    // Bays between the end members; one cross member between each pair of bays.
+    const innerRun = Math.max(0, runLength - 2 * setBack)
+    const spacing  = cross_member_spacing_mm || DEFAULT_CROSS_MEMBER_SPACING
+    const count    = Math.max(0, Math.ceil(innerRun / spacing) - 1)
+    if (count > 0) {
+      push({
+        part_role: 'buildup_cross_member',
+        label: flat ? 'Build-Up Strip — Cross' : 'Build-Up Cross Member',
+        length_mm: Math.round(Math.max(0, benchDepth - 2 * setBack)),
+        width_mm: memberWidth,
+        thickness_mm: thick,
+        quantity: count,
+        grain_direction: 'length',
+        material_id:            row?.material_id ?? null,
+        material_name:          boardName(row, boardMaterials),
+        benchtop_material_id:   null,
+        benchtop_material_name: null,
+        edgeband_id:            row?.edgeband_id ?? null,
+      })
+    }
   }
 
   // ── subtop ───────────────────────────────────────────────────────────────
@@ -272,6 +292,7 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
       benchtop_material_id:   row?.benchtop_material_id ?? null,
       benchtop_material_name: surfaceName(row, surfaceMaterials),
       edgeband_id:            null,
+      supply_item:            outsourced,
     })
   }
 

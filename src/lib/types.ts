@@ -265,15 +265,54 @@ export interface BenchtopArcSegment {
   cpy: number
 }
 
+// Per-edge finish (Phase 3). No profile_id on an exposed edge = the build
+// method's default profile. Wall edges never carry a profile (P-d).
+export interface BenchtopEdge {
+  wall?: boolean
+  profile_id?: string | null
+}
+
+// One outline segment — Shape Editor format, mm, room frame (plan, y-down).
+export interface BenchtopSegment {
+  type: 'line' | 'arc' | 'curve'
+  p0: { x: number; y: number }
+  p1: { x: number; y: number }
+  cp1?: { x: number; y: number }
+  cp2?: { x: number; y: number }
+  rx?: number
+  ry?: number
+  largeArc?: 0 | 1
+  sweep?: 0 | 1
+  edge?: BenchtopEdge
+}
+
+// A straight cut line across the top; joins split the shape into pieces (P-b).
+export interface BenchtopJoinLine {
+  p0: { x: number; y: number }
+  p1: { x: number; y: number }
+  type: BenchtopJoinType
+}
+
 export interface BenchtopInstance {
   id: string
   room_id: string
   label: string | null
+  // Source of truth for the outline (Phase 3). polygon / arc_segments /
+  // edge_tags are derived from it on every write (benchtopGeometry.shapeWrite).
+  segments: BenchtopSegment[]
+  joins: BenchtopJoinLine[]
   polygon: Array<{ x: number; y: number }>
   arc_segments: BenchtopArcSegment[]
   edge_tags: BenchtopEdgeTag[]
+  /** @deprecated vertex join flags — replaced by `joins` (P-b); no longer written. */
   join_types: BenchtopJoinPoint[]
   cutout_polygons: Array<Array<{ x: number; y: number }>>
+  // Wall anchor (Phase 3b, P-e) — same meaning as a cabinet's wall + side.
+  // Null until the canvas auto-anchors it (benchtopAnchor.autoAnchor).
+  wall_id: string | null
+  wall_side: 'face' | 'back'
+  /** Underside height override (P-g) — the top sits on this; null = base-height cascade. */
+  height_mm: number | null
   benchtop_build_method_id: string | null
   benchtop_schedule_id: string | null
   notes: string | null
@@ -285,22 +324,53 @@ export interface BenchtopInstance {
 
 export type BenchtopJoinType      = 'butt' | 'mitre'
 export type BenchtopGrainDir      = 'length' | 'width'
+// buildup_flat: strips laid flat under the top · buildup_vertical: rails on edge ·
+// solid: single board · outsourced: stone/laminate by a supplier (supply items only)
+export type BenchtopConstruction  = 'buildup_flat' | 'buildup_vertical' | 'solid' | 'outsourced'
 
 export interface BenchtopBuildMethod {
   id:                  string
   name:                string
   description:         string | null
+  construction:        BenchtopConstruction
   active_part_roles:   BenchtopPartRole[]
-  buildup_rail_depth:  number | null
+  strip_width_mm:      number | null   // buildup_flat: strip width
+  buildup_rail_depth:  number | null   // buildup_vertical: rail height
+  cross_member_spacing_mm: number | null
+  default_schedule_id: string | null   // beats room/job schedule; benchtop override still wins
   drop_front_height:   number | null
   default_join_type:   BenchtopJoinType
   grain_direction:     BenchtopGrainDir
   corner_join_type:    BenchtopJoinType
+  default_edge_profile_id: string | null   // applied to exposed edges with no explicit profile
   wizard_answers:      Record<string, unknown>
   is_default:          boolean
   active:              boolean
   created_at:          string
   updated_at:          string
+}
+
+// ── Benchtop edge profile ─────────────────────────────────────────────────────
+// Applied per exposed edge. `generates` makes the resolver spawn parts:
+// apron → drop strip of apron_drop_mm, waterfall → full-height end panel.
+
+export type BenchtopEdgeProfileCategory = 'stone' | 'board' | 'postform'
+export type BenchtopEdgeProfileGenerates = 'none' | 'apron' | 'waterfall'
+
+export interface BenchtopEdgeProfile {
+  id:            string
+  name:          string
+  code:          string | null
+  category:      BenchtopEdgeProfileCategory
+  description:   string | null
+  generates:     BenchtopEdgeProfileGenerates
+  apron_drop_mm: number | null
+  radius_mm:     number | null
+  preview_svg:   string | null
+  sort_order:    number
+  active:        boolean
+  created_at:    string
+  updated_at:    string
 }
 
 // ── Benchtop schedule ─────────────────────────────────────────────────────────

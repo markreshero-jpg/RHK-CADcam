@@ -7,6 +7,7 @@ import MaterialsClient from '@/app/library/materials/MaterialsClient'
 import SchedulesClient from '@/app/library/schedules/SchedulesClient'
 import ConstructionMethodsClient from '@/app/library/construction-methods/ConstructionMethodsClient'
 import DrawerBoxesClient from '@/app/library/drawer-boxes/DrawerBoxesClient'
+import BenchtopBuilderClient from '@/app/library/benchtop-methods/BenchtopBuilderClient'
 import JointsClient from '@/app/library/joints/JointsClient'
 import PartsLibraryClient from '@/app/library/parts/PartsLibraryClient'
 import DoorSystemClient from '@/app/library/doors/DoorSystemClient'
@@ -511,6 +512,8 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
             <ConstructionMethodsClient embedded />
           ) : tab === 'drawer_builder' ? (
             <DrawerBoxesClient embedded />
+          ) : tab === 'benchtop_builder' ? (
+            <BenchtopBuilderClient embedded />
           ) : tab === 'hinge_rules' ? (
             <HingeCountRulesEditor embedded />
           ) : tab === 'cnc_tool' ? (
@@ -798,11 +801,6 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
               </div>
             )}
 
-            {/* ── Placeholder tabs ── */}
-            {['benchtop_builder'].includes(tab) && (
-              <ComingSoon label={activeTabDef.label} />
-            )}
-
           </div>
 
           {/* Footer */}
@@ -848,21 +846,5 @@ function NumInput({ value, onChange, baseline }: {
         isOverridden ? 'border-accent text-accent-ink' : 'border-edge-strong text-ink'
       }`}
     />
-  )
-}
-
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-      <div className="w-10 h-10 rounded-xl bg-surface-2 border border-edge-strong flex items-center justify-center text-ink-subtle">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="9" cy="9" r="7"/>
-          <line x1="9" y1="5" x2="9" y2="9.5"/>
-          <circle cx="9" cy="12.5" r="0.75" fill="currentColor" stroke="none"/>
-        </svg>
-      </div>
-      <p className="text-sm text-ink-subtle font-medium">{label}</p>
-      <p className="text-xs text-ink-subtle max-w-xs">Configuration for this section will be added as the feature is built out.</p>
-    </div>
   )
 }

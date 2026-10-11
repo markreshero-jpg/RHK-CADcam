@@ -1,14 +1,20 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import type { BenchtopInstance, BenchtopArcSegment, Room, Wall, CabinetInstance } from '@/src/lib/types'
-import { type Pt, dist, SNAP_PX } from '@/src/lib/geometry'
+import type { BenchtopInstance, BenchtopArcSegment, BenchtopSegment, BenchtopEdge, BenchtopJoinLine, BenchtopJoinType, Room, Wall, CabinetInstance } from '@/src/lib/types'
+import { type Pt, dist, SNAP_PX, centroid } from '@/src/lib/geometry'
 import { computeSnap, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
-import type { Mode, Selected, ContextMenuState, BtMoveDrag, BtRotateDrag } from './canvasTypes'
+import {
+  btSegments, shapeWrite, segmentsFromLegacy, transformBenchtop, translateFn, rotateFn, mapSegments,
+  splitSegment, deleteVertex, toggleCurve, filletVertex,
+  chamferVertex, offsetSegments, outlineCentroid, nearestOnOutline, lineHitOnOutline,
+} from '@/src/lib/benchtopGeometry'
+import {
+  autoAnchor, wallContacts, wallFrame, positionFn, reanchorFn, btTouches, stretchFn, type WallSide, type StretchEnd,
+} from '@/src/lib/benchtopAnchor'
+import type { Mode, Selected, ContextMenuState, BtShapeSnapshot } from './canvasTypes'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
-
-type Snapshot = { walls: Wall[]; cabinets: CabinetInstance[]; benchtops: BenchtopInstance[] }
 
 interface Params {
   room: Room
@@ -16,9 +22,6 @@ interface Params {
   cabinets: CabinetInstance[]
   benchtops: BenchtopInstance[]
   setBenchtops: React.Dispatch<React.SetStateAction<BenchtopInstance[]>>
-  benchtopsRef: React.MutableRefObject<BenchtopInstance[]>
-  wallsRef: React.MutableRefObject<Wall[]>
-  cabinetsRef: React.MutableRefObject<CabinetInstance[]>
   mode: Mode
   zoom: number
   svgRef: React.RefObject<SVGSVGElement | null>
@@ -30,45 +33,10 @@ interface Params {
   setContextMenu: React.Dispatch<React.SetStateAction<ContextMenuState | null>>
   setMode: React.Dispatch<React.SetStateAction<Mode>>
   captureSnapshot: () => void
-  pushSnapshot: (s: Snapshot) => void
   snapSettings: SnapSettings
   setSnapResult: (r: SnapResult | null) => void
-}
-
-// ── Polygon offset (inward/outward by amount mm) ──────────────────────────────
-
-function signedArea(pts: Pt[]): number {
-  let a = 0
-  for (let i = 0; i < pts.length; i++) {
-    const j = (i + 1) % pts.length
-    a += pts[i].x * pts[j].y - pts[j].x * pts[i].y
-  }
-  return a / 2
-}
-
-function offsetPolygon(pts: Pt[], amount: number): Pt[] {
-  const n = pts.length
-  const sa = signedArea(pts)
-  const sign = sa >= 0 ? 1 : -1  // CW in SVG Y-down = positive area
-  return pts.map((curr, i) => {
-    const prev = pts[(i - 1 + n) % n]
-    const next = pts[(i + 1) % n]
-    const d1x = curr.x - prev.x, d1y = curr.y - prev.y
-    const l1 = Math.sqrt(d1x * d1x + d1y * d1y)
-    const d2x = next.x - curr.x, d2y = next.y - curr.y
-    const l2 = Math.sqrt(d2x * d2x + d2y * d2y)
-    if (l1 < 0.01 || l2 < 0.01) return curr
-    // Outward normals (right-hand normal, sign-adjusted for winding)
-    const n1x = sign * d1y / l1,  n1y = -sign * d1x / l1
-    const n2x = sign * d2y / l2,  n2y = -sign * d2x / l2
-    let bx = n1x + n2x, by = n1y + n2y
-    const blen = Math.sqrt(bx * bx + by * by)
-    if (blen < 0.01) return { x: curr.x + n1x * amount, y: curr.y + n1y * amount }
-    bx /= blen; by /= blen
-    const dot = n1x * bx + n1y * by
-    const scale = Math.abs(dot) > 0.05 ? amount / dot : amount * 4
-    return { x: curr.x + bx * scale, y: curr.y + by * scale }
-  })
+  /** Join type a new join line starts with — the build method default (P-b). */
+  defaultJoinType?: (bt: BenchtopInstance) => BenchtopJoinType
 }
 
 // ── Circle polygon approximation (32 pts, CCW for cutout hole) ───────────────
@@ -120,16 +88,32 @@ function buildUPolygon(a: Pt, b: Pt, c: Pt, d: Pt, depth: number): Pt[] {
   return [a, aOut, bOut, cOut, dOut, d, c, b]
 }
 
+const snapshotOf = (bt: BenchtopInstance): BtShapeSnapshot => ({
+  segments: btSegments(bt), polygon: bt.polygon, arc_segments: bt.arc_segments, edge_tags: bt.edge_tags,
+  joins: bt.joins ?? [], cutout_polygons: bt.cutout_polygons ?? [],
+})
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
+// Every outline edit goes through the segment helpers in benchtopGeometry and
+// is written with shapeWrite (segments + derived polygon/arcs/tags). Whole-
+// benchtop transforms (move / rotate / mirror) carry joins and cutouts along.
+//
+// Movement lock (Phase 3b, P-f): nothing on the plan drags a top. Click
+// selects, double-click opens the Shape Editor. Position changes are
+// deliberate: typed Position (panel), the Move command (base → target
+// point) or Re-anchor. Every top is anchored to a wall + side (P-e).
+// Tops are only pickable in F4 Benchtop mode ('benchtop_select'); every tool
+// here returns to that mode when it finishes, not to plain Select.
+
 export function useBenchtopInteraction(p: Params) {
   const {
     room, walls, cabinets,
-    benchtops, setBenchtops, benchtopsRef,
-    wallsRef, cabinetsRef,
+    benchtops, setBenchtops,
     mode, zoom, svgRef, svgPointerDownRef, ctrlRef, shiftRef,
     selected,
     setSelected, setContextMenu, setMode,
-    captureSnapshot, pushSnapshot,
-    snapSettings, setSnapResult,
+    captureSnapshot,
+    snapSettings, setSnapResult, defaultJoinType,
   } = p
 
   // ── Draw state ────────────────────────────────────────────────────────────
@@ -146,25 +130,47 @@ export function useBenchtopInteraction(p: Params) {
   const [btUCursor, setBtUCursor] = useState<Pt | null>(null)
   const [btCutoutStart, setBtCutoutStart] = useState<Pt | null>(null)
   const [btCutoutCursor, setBtCutoutCursor] = useState<Pt | null>(null)
+  const [btJoinStart, setBtJoinStart] = useState<Pt | null>(null)
+  const [btJoinCursor, setBtJoinCursor] = useState<Pt | null>(null)
   const [benchtopMenuOpen, setBenchtopMenuOpen] = useState(false)
+  // Benchtop open in the full Shape Editor overlay (double-click / panel button).
+  const [shapeEditId, setShapeEditId] = useState<string | null>(null)
+  // A not-yet-saved benchtop open in the overlay (F4 → Draw in Shape Editor).
+  // Only inserted when the editor saves; cancel leaves nothing behind.
+  const [shapeEditDraft, setShapeEditDraft] = useState<BenchtopInstance | null>(null)
 
   // ── Tool settings ─────────────────────────────────────────────────────────
   const [filletRadius, setFilletRadius] = useState(100)
+  // L / U quick-draw depth (was a fixed 600) — set from the draw panel.
+  const [btDepth, setBtDepth] = useState(600)
 
-  // ── Drag refs ─────────────────────────────────────────────────────────────
-  const btVertexDragRef = useRef<{
-    btId: string; vertexIndex: number; hasMoved: boolean
-    originX: number; originY: number
-    originalPolygon: Pt[]; currentPolygon: Pt[]
-  } | null>(null)
-  const btArcDragRef = useRef<{
-    btId: string; edgeIndex: number; hasMoved: boolean
-    originX: number; originY: number
-    currentArcs: BenchtopArcSegment[]
-  } | null>(null)
-  const btMoveDragRef = useRef<BtMoveDrag | null>(null)
-  const btRotateDragRef = useRef<BtRotateDrag | null>(null)
-  const preDragBenchtopsRef = useRef<BenchtopInstance[]>([])
+  // ── Move command (base point → target point) ─────────────────────────────
+  const [btMoveBase, setBtMoveBase] = useState<Pt | null>(null)
+  const [btMoveCursor, setBtMoveCursor] = useState<Pt | null>(null)
+
+  // A press on a top: the pointer-up selects it (a drag does nothing more).
+  const btPressRef = useRef<{ id: string } | null>(null)
+  // Double-click detection: the plan SVG captures the pointer on pointer-down,
+  // so a native dblclick never reaches the benchtop path — count clicks here.
+  const lastBtClickRef = useRef<{ id: string; t: number } | null>(null)
+
+  const roomCx = centroid(walls)
+  const anchorOf = (segs: BenchtopSegment[]) => autoAnchor(segs, walls, roomCx)
+
+  // Anchor every top that has none yet (rows from before Phase 3b, or whose
+  // wall was deleted). Not an undo step — it doesn't change the drawing.
+  useEffect(() => {
+    if (!walls.length) return
+    const cx = centroid(walls)
+    for (const b of benchtops) {
+      if (b.wall_id && walls.some(w => w.id === b.wall_id)) continue
+      const a = autoAnchor(btSegments(b), walls, cx)
+      if (!a) continue
+      setBenchtops(bs => bs.map(x => x.id === b.id ? { ...x, ...a } : x))
+      void supabase.from('benchtop_instances').update(a).eq('id', b.id)
+        .then(({ error }) => { if (error) console.error('Failed to anchor benchtop:', error) })
+    }
+  }, [benchtops, walls, setBenchtops])
 
   // ── Shared snap helper ────────────────────────────────────────────────────
 
@@ -185,23 +191,24 @@ export function useBenchtopInteraction(p: Params) {
 
   async function saveBenchtop(polygon: Pt[], arcSegs: BenchtopArcSegment[] = []) {
     captureSnapshot()
+    const segs = segmentsFromLegacy(polygon, arcSegs)
     const data = {
       room_id: room.id,
       label: `Benchtop ${benchtops.length + 1}`,
-      polygon,
-      arc_segments: arcSegs,
-      edge_tags: [] as { edge_index: number; type: string }[],
-      join_types: [] as { vertex_index: number; join_type: string }[],
+      ...shapeWrite(segs),
+      ...(anchorOf(segs) ?? {}),
+      joins: [] as BenchtopJoinLine[],
       cutout_polygons: [] as Array<Array<{x:number;y:number}>>,
       benchtop_build_method_id: null,
       benchtop_schedule_id: null,
       notes: null,
     }
     const { data: saved, error } = await supabase.from('benchtop_instances').insert(data).select().single()
+    if (error) console.error('Failed to create benchtop:', error)
     if (!error && saved) {
       setBenchtops(bs => [...bs, saved as BenchtopInstance])
       setSelected({ type: 'benchtop', id: (saved as BenchtopInstance).id })
-      setMode('select')
+      setMode('benchtop_select')
       setBenchtopMenuOpen(false)
       resetDraw()
     }
@@ -214,6 +221,18 @@ export function useBenchtopInteraction(p: Params) {
     if (error) console.error('Failed to save benchtop:', error)
   }
 
+  const findBt = (id: string) => benchtops.find(b => b.id === id)
+
+  // Apply an outline edit to one benchtop and persist it.
+  function editSegments(id: string, fn: (segs: BenchtopSegment[]) => BenchtopSegment[]) {
+    const bt = findBt(id)
+    if (!bt) return
+    const before = btSegments(bt)
+    const after = fn(before)
+    if (after === before) return
+    void handleUpdateBenchtop(id, shapeWrite(after))
+  }
+
   async function handleDeleteBenchtop(id: string) {
     if (!(await confirmDelete({ title: 'Delete Benchtop', message: 'Delete this benchtop?' }))) return
     captureSnapshot()
@@ -222,136 +241,53 @@ export function useBenchtopInteraction(p: Params) {
     await supabase.from('benchtop_instances').delete().eq('id', id)
   }
 
-  // ── Pointer-down initiators ────────────────────────────────────────────────
+  // ── Pointer-down ───────────────────────────────────────────────────────────
 
-  function onBtVertexPointerDown(e: React.PointerEvent, btId: string, vi: number) {
-    if (mode !== 'select') return
-    const bt = benchtops.find(b => b.id === btId)
-    if (!bt) return
-    e.stopPropagation()
-    svgPointerDownRef.current = true
-    svgRef.current?.setPointerCapture(e.pointerId)
-    preDragBenchtopsRef.current = benchtopsRef.current
-    btVertexDragRef.current = {
-      btId, vertexIndex: vi, hasMoved: false,
-      originX: e.clientX, originY: e.clientY,
-      originalPolygon: bt.polygon,
-      currentPolygon: bt.polygon,
-    }
-  }
-
-  function onBtArcPointerDown(e: React.PointerEvent, btId: string, edgeIndex: number) {
-    if (mode !== 'select') return
-    const bt = benchtops.find(b => b.id === btId)
-    if (!bt) return
-    e.stopPropagation()
-    svgPointerDownRef.current = true
-    svgRef.current?.setPointerCapture(e.pointerId)
-    preDragBenchtopsRef.current = benchtopsRef.current
-    btArcDragRef.current = {
-      btId, edgeIndex, hasMoved: false,
-      originX: e.clientX, originY: e.clientY,
-      currentArcs: bt.arc_segments ?? [],
-    }
-  }
-
+  // Press on a top: capture so the canvas doesn't start a marquee / pan, but
+  // never move it (P-f). Pointer-up decides click / double-click.
   function onBenchtopPointerDown(e: React.PointerEvent, id: string) {
-    if (mode !== 'select') return
-    const bt = benchtops.find(b => b.id === id)
-    if (!bt) return
+    if (mode !== 'benchtop_select') return
+    if (!findBt(id)) return
     svgPointerDownRef.current = true
     svgRef.current?.setPointerCapture(e.pointerId)
-    preDragBenchtopsRef.current = benchtopsRef.current
-    btMoveDragRef.current = {
-      id, originX: e.clientX, originY: e.clientY,
-      originalPolygon: bt.polygon,
-      originalArcs: bt.arc_segments ?? [],
-      hasMoved: false,
-    }
-  }
-
-  function onBenchtopRotateHandlePointerDown(e: React.PointerEvent, id: string) {
-    if (mode !== 'select') return
-    const bt = benchtops.find(b => b.id === id)
-    if (!bt) return
-    e.stopPropagation()
-    svgPointerDownRef.current = true
-    svgRef.current?.setPointerCapture(e.pointerId)
-    preDragBenchtopsRef.current = benchtopsRef.current
-    const centX = bt.polygon.reduce((s, pt) => s + pt.x, 0) / bt.polygon.length
-    const centY = bt.polygon.reduce((s, pt) => s + pt.y, 0) / bt.polygon.length
-    btRotateDragRef.current = {
-      id, originX: e.clientX, originY: e.clientY,
-      centX, centY,
-      startAngle: NaN,  // set on first pointer-move so world coords are available
-      hasMoved: false,
-      originalPolygon: bt.polygon,
-      originalArcs: bt.arc_segments ?? [],
-    }
+    btPressRef.current = { id }
   }
 
   // ── Click / context-menu handlers ──────────────────────────────────────────
 
+  // Edge click: toggle wall ↔ exposed. A wall edge drops its profile (P-d).
   function onBenchtopEdgeClick(id: string, edgeIndex: number) {
-    const bt = benchtops.find(b => b.id === id)
-    if (!bt || mode !== 'select') return
-    const existing = bt.edge_tags.find(t => t.edge_index === edgeIndex)
-    const newType = !existing || existing.type === 'exposed' ? 'wall' : 'exposed'
-    const edge_tags = bt.edge_tags.filter(t => t.edge_index !== edgeIndex)
-    if (newType === 'wall') edge_tags.push({ edge_index: edgeIndex, type: 'wall' })
-    void handleUpdateBenchtop(id, { edge_tags })
+    if (mode !== 'benchtop_select') return
+    editSegments(id, segs => segs.map((s, i) => {
+      if (i !== edgeIndex) return s
+      const wall = !s.edge?.wall
+      return { ...s, edge: wall ? { wall: true } : { ...s.edge, wall: false } }
+    }))
   }
 
   function onBenchtopEdgeShiftClick(id: string, edgeIndex: number) {
-    const bt = benchtops.find(b => b.id === id)
-    if (!bt || mode !== 'select') return
-    const p = bt.polygon[edgeIndex]
-    const next = bt.polygon[(edgeIndex + 1) % bt.polygon.length]
-    const mid: Pt = { x: (p.x + next.x) / 2, y: (p.y + next.y) / 2 }
-    const newPolygon = [...bt.polygon.slice(0, edgeIndex + 1), mid, ...bt.polygon.slice(edgeIndex + 1)]
-    const oldTag = bt.edge_tags.find(t => t.edge_index === edgeIndex)
-    const newEdgeTags = [
-      ...bt.edge_tags.map(t => t.edge_index > edgeIndex ? { ...t, edge_index: t.edge_index + 1 } : t),
-      ...(oldTag ? [{ edge_index: edgeIndex + 1, type: oldTag.type }] : []),
-    ]
-    const newJoinTypes = bt.join_types.map(j =>
-      j.vertex_index > edgeIndex ? { ...j, vertex_index: j.vertex_index + 1 } : j
-    )
-    const newArcSegments = (bt.arc_segments ?? [])
-      .filter(a => a.edge_index !== edgeIndex)
-      .map(a => a.edge_index > edgeIndex ? { ...a, edge_index: a.edge_index + 1 } : a)
-    void handleUpdateBenchtop(id, { polygon: newPolygon, edge_tags: newEdgeTags, join_types: newJoinTypes, arc_segments: newArcSegments })
+    if (mode !== 'benchtop_select') return
+    editSegments(id, segs => splitSegment(segs, edgeIndex))
   }
 
   function onBenchtopEdgeAltClick(id: string, edgeIndex: number) {
-    const bt = benchtops.find(b => b.id === id)
-    if (!bt || mode !== 'select') return
-    const existing = (bt.arc_segments ?? []).find(a => a.edge_index === edgeIndex)
-    if (existing) {
-      const newArcs = (bt.arc_segments ?? []).filter(a => a.edge_index !== edgeIndex)
-      void handleUpdateBenchtop(id, { arc_segments: newArcs })
-    } else {
-      const p = bt.polygon[edgeIndex]
-      const next = bt.polygon[(edgeIndex + 1) % bt.polygon.length]
-      const cx2 = (p.x + next.x) / 2, cy2 = (p.y + next.y) / 2
-      const len = Math.sqrt((next.x - p.x) ** 2 + (next.y - p.y) ** 2)
-      const nx = -(next.y - p.y) / len, ny = (next.x - p.x) / len
-      const centX = bt.polygon.reduce((s, pt) => s + pt.x, 0) / bt.polygon.length
-      const centY = bt.polygon.reduce((s, pt) => s + pt.y, 0) / bt.polygon.length
-      const outward = (nx * (cx2 - centX) + ny * (cy2 - centY)) >= 0 ? 1 : -1
-      const newArcs = [...(bt.arc_segments ?? []), { edge_index: edgeIndex, cpx: cx2 + nx * outward * len * 0.25, cpy: cy2 + ny * outward * len * 0.25 }]
-      void handleUpdateBenchtop(id, { arc_segments: newArcs })
-    }
+    if (mode !== 'benchtop_select') return
+    editSegments(id, segs => toggleCurve(segs, edgeIndex))
   }
 
-  function onBenchtopVertexClick(id: string, vertexIndex: number) {
-    const bt = benchtops.find(b => b.id === id)
-    if (!bt || mode !== 'select') return
-    const existing = bt.join_types.find(j => j.vertex_index === vertexIndex)
-    const newJoin = !existing || existing.join_type === 'butt' ? 'mitre' : 'butt'
-    const join_types = bt.join_types.filter(j => j.vertex_index !== vertexIndex)
-    if (newJoin === 'mitre') join_types.push({ vertex_index: vertexIndex, join_type: 'mitre' })
-    void handleUpdateBenchtop(id, { join_types })
+  // Set one or more edges' finish (BenchtopPanel profile picker).
+  function setBenchtopEdges(id: string, edgeIndices: number[], patch: BenchtopEdge) {
+    editSegments(id, segs => segs.map((s, i) => {
+      if (!edgeIndices.includes(i)) return s
+      const edge = { ...s.edge, ...patch }
+      if (edge.wall) delete edge.profile_id
+      return { ...s, edge }
+    }))
+  }
+
+  // Vertex click (no drag): just select. Butt/mitre now lives on join lines (P-b).
+  function onBenchtopVertexClick(id: string) {
+    setSelected({ type: 'benchtop', id })
   }
 
   function onBenchtopContextMenu(e: React.MouseEvent, id: string) {
@@ -368,223 +304,215 @@ export function useBenchtopInteraction(p: Params) {
   // ── Vertex / edge operations ──────────────────────────────────────────────
 
   function handleDeleteBenchtopVertex(btId: string, vi: number) {
-    const bt = benchtops.find(b => b.id === btId)
-    if (!bt || bt.polygon.length <= 3) return
     setContextMenu(null)
-    const newPolygon = bt.polygon.filter((_, i) => i !== vi)
-    const prevEdge = (vi - 1 + bt.polygon.length) % bt.polygon.length
-    const newEdgeTags = bt.edge_tags
-      .filter(t => t.edge_index !== vi && t.edge_index !== prevEdge)
-      .map(t => t.edge_index > vi ? { ...t, edge_index: t.edge_index - 1 } : t)
-    const newJoinTypes = bt.join_types
-      .filter(j => j.vertex_index !== vi)
-      .map(j => j.vertex_index > vi ? { ...j, vertex_index: j.vertex_index - 1 } : j)
-    const newArcSegments = (bt.arc_segments ?? [])
-      .filter(a => a.edge_index !== vi && a.edge_index !== prevEdge)
-      .map(a => a.edge_index > vi ? { ...a, edge_index: a.edge_index - 1 } : a)
-    void handleUpdateBenchtop(btId, { polygon: newPolygon, edge_tags: newEdgeTags, join_types: newJoinTypes, arc_segments: newArcSegments })
+    editSegments(btId, segs => deleteVertex(segs, vi))
   }
 
   function handleRoundCorner(btId: string, vi: number) {
-    const bt = benchtops.find(b => b.id === btId)
-    if (!bt) return
     setContextMenu(null)
-    const n = bt.polygon.length
-    const vertex = bt.polygon[vi]
-    const prev   = bt.polygon[(vi - 1 + n) % n]
-    const next   = bt.polygon[(vi + 1) % n]
-    const dx1 = prev.x - vertex.x, dy1 = prev.y - vertex.y
-    const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1)
-    const dx2 = next.x - vertex.x, dy2 = next.y - vertex.y
-    const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2)
-    if (len1 < 1 || len2 < 1) return
-    const r = Math.min(filletRadius, len1 * 0.4, len2 * 0.4)
-    const p1 = { x: vertex.x + (dx1 / len1) * r, y: vertex.y + (dy1 / len1) * r }
-    const p2 = { x: vertex.x + (dx2 / len2) * r, y: vertex.y + (dy2 / len2) * r }
-    const newPolygon = [...bt.polygon]
-    newPolygon.splice(vi, 1, p1, p2)
-    const newEdgeTags = bt.edge_tags.map(t =>
-      t.edge_index >= vi ? { ...t, edge_index: t.edge_index + 1 } : t
-    )
-    const newJoinTypes = bt.join_types.map(j =>
-      j.vertex_index > vi ? { ...j, vertex_index: j.vertex_index + 1 } : j
-    )
-    const newArcSegments = [
-      ...(bt.arc_segments ?? []).map(a =>
-        a.edge_index >= vi ? { ...a, edge_index: a.edge_index + 1 } : a
-      ),
-      { edge_index: vi, cpx: vertex.x, cpy: vertex.y },
-    ]
-    void handleUpdateBenchtop(btId, { polygon: newPolygon, edge_tags: newEdgeTags, join_types: newJoinTypes, arc_segments: newArcSegments })
+    editSegments(btId, segs => filletVertex(segs, vi, filletRadius))
   }
 
   function handleChamfer(btId: string, vi: number) {
-    const bt = benchtops.find(b => b.id === btId)
-    if (!bt) return
     setContextMenu(null)
-    const n = bt.polygon.length
-    const vertex = bt.polygon[vi]
-    const prev   = bt.polygon[(vi - 1 + n) % n]
-    const next   = bt.polygon[(vi + 1) % n]
-    const dx1 = prev.x - vertex.x, dy1 = prev.y - vertex.y
-    const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1)
-    const dx2 = next.x - vertex.x, dy2 = next.y - vertex.y
-    const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2)
-    if (len1 < 1 || len2 < 1) return
-    const r = Math.min(filletRadius, len1 * 0.4, len2 * 0.4)
-    const p1 = { x: vertex.x + (dx1 / len1) * r, y: vertex.y + (dy1 / len1) * r }
-    const p2 = { x: vertex.x + (dx2 / len2) * r, y: vertex.y + (dy2 / len2) * r }
-    const newPolygon = [...bt.polygon]
-    newPolygon.splice(vi, 1, p1, p2)  // straight diagonal — no arc
-    const newEdgeTags = bt.edge_tags.map(t =>
-      t.edge_index >= vi ? { ...t, edge_index: t.edge_index + 1 } : t
-    )
-    const newJoinTypes = bt.join_types.map(j =>
-      j.vertex_index > vi ? { ...j, vertex_index: j.vertex_index + 1 } : j
-    )
-    const newArcSegments = (bt.arc_segments ?? []).map(a =>
-      a.edge_index >= vi ? { ...a, edge_index: a.edge_index + 1 } : a
-    )
-    void handleUpdateBenchtop(btId, { polygon: newPolygon, edge_tags: newEdgeTags, join_types: newJoinTypes, arc_segments: newArcSegments })
+    editSegments(btId, segs => chamferVertex(segs, vi, filletRadius))
   }
 
   // ── Transform operations ──────────────────────────────────────────────────
 
-  function handleMirrorH(btId: string) {
-    const bt = benchtops.find(b => b.id === btId)
+  function transformWhole(btId: string, fn: (p: Pt) => Pt, mirror = false) {
+    const bt = findBt(btId)
     if (!bt) return
-    const centX = bt.polygon.reduce((s, pt) => s + pt.x, 0) / bt.polygon.length
-    const newPolygon = bt.polygon.map(p => ({ x: 2 * centX - p.x, y: p.y })).reverse()
-    const newArcs = (bt.arc_segments ?? []).map(a => ({
-      ...a,
-      edge_index: bt.polygon.length - 1 - a.edge_index,
-      cpx: 2 * centX - a.cpx,
-    }))
-    void handleUpdateBenchtop(btId, { polygon: newPolygon, arc_segments: newArcs })
+    void handleUpdateBenchtop(btId, transformBenchtop(snapshotOf(bt), fn, mirror))
+  }
+
+  function handleMirrorH(btId: string) {
+    const bt = findBt(btId)
+    if (!bt) return
+    const c = outlineCentroid(btSegments(bt))
+    transformWhole(btId, p => ({ x: 2 * c.x - p.x, y: p.y }), true)
   }
 
   function handleMirrorV(btId: string) {
-    const bt = benchtops.find(b => b.id === btId)
+    const bt = findBt(btId)
     if (!bt) return
-    const centY = bt.polygon.reduce((s, pt) => s + pt.y, 0) / bt.polygon.length
-    const newPolygon = bt.polygon.map(p => ({ x: p.x, y: 2 * centY - p.y })).reverse()
-    const newArcs = (bt.arc_segments ?? []).map(a => ({
-      ...a,
-      edge_index: bt.polygon.length - 1 - a.edge_index,
-      cpy: 2 * centY - a.cpy,
-    }))
-    void handleUpdateBenchtop(btId, { polygon: newPolygon, arc_segments: newArcs })
+    const c = outlineCentroid(btSegments(bt))
+    transformWhole(btId, p => ({ x: p.x, y: 2 * c.y - p.y }), true)
   }
 
   function handleOffset(btId: string, amount: number) {
-    const bt = benchtops.find(b => b.id === btId)
-    if (!bt || bt.polygon.length < 3) return
-    const newPoly = offsetPolygon(bt.polygon, amount)
-    // Move arc CPs by average displacement of their edge's endpoints
-    const disps = bt.polygon.map((p, i) => ({ x: newPoly[i].x - p.x, y: newPoly[i].y - p.y }))
-    const n = bt.polygon.length
-    const newArcs = (bt.arc_segments ?? []).map(a => {
-      const d1 = disps[a.edge_index], d2 = disps[(a.edge_index + 1) % n]
-      return { ...a, cpx: a.cpx + (d1.x + d2.x) / 2, cpy: a.cpy + (d1.y + d2.y) / 2 }
-    })
-    void handleUpdateBenchtop(btId, { polygon: newPoly, arc_segments: newArcs })
+    editSegments(btId, segs => (segs.length < 3 ? segs : offsetSegments(segs, amount)))
   }
 
   function handleRotateByAngle(btId: string, angleDeg: number) {
-    const bt = benchtops.find(b => b.id === btId)
+    const bt = findBt(btId)
     if (!bt) return
-    const centX = bt.polygon.reduce((s, pt) => s + pt.x, 0) / bt.polygon.length
-    const centY = bt.polygon.reduce((s, pt) => s + pt.y, 0) / bt.polygon.length
-    const rad = (angleDeg * Math.PI) / 180
-    const cos = Math.cos(rad), sin = Math.sin(rad)
-    const rotate = (p: Pt): Pt => {
-      const dx = p.x - centX, dy = p.y - centY
-      return { x: centX + dx * cos - dy * sin, y: centY + dx * sin + dy * cos }
+    transformWhole(btId, rotateFn(outlineCentroid(btSegments(bt)), (angleDeg * Math.PI) / 180))
+  }
+
+  // ── Position / anchor (P-e, P-f) ───────────────────────────────────────────
+
+  const anchorWall = (bt: BenchtopInstance) => walls.find(w => w.id === bt.wall_id) ?? null
+
+  // Typed position: start along the anchor wall, distance off its face.
+  function handleSetPosition(btId: string, target: { along?: number; off?: number }) {
+    const bt = findBt(btId)
+    const wall = bt && anchorWall(bt)
+    if (!bt || !wall) return
+    const fn = positionFn(btSegments(bt), wallFrame(wall, bt.wall_side, roomCx), target)
+    if (fn) void handleUpdateBenchtop(btId, transformBenchtop(snapshotOf(bt), fn))
+  }
+
+  // Re-anchor: a top already on that face just changes its anchor; otherwise
+  // it is carried onto the new wall, turned to face it — flush against a wall
+  // face, same distance off an island line.
+  function handleReanchor(btId: string, wallId: string, side: WallSide) {
+    const bt = findBt(btId)
+    const to = walls.find(w => w.id === wallId)
+    if (!bt || !to) return
+    const segs = btSegments(bt)
+    const from = anchorWall(bt)
+    const anchor = { wall_id: wallId, wall_side: side }
+    if (!from || btTouches(segs, wallContacts(segs, walls, roomCx), to, side, roomCx)) {
+      void handleUpdateBenchtop(btId, anchor)
+      return
     }
-    const newPolygon = bt.polygon.map(rotate)
-    const newArcs = (bt.arc_segments ?? []).map(a => {
-      const r = rotate({ x: a.cpx, y: a.cpy })
-      return { ...a, cpx: r.x, cpy: r.y }
+    const fn = reanchorFn(segs, wallFrame(from, bt.wall_side, roomCx), wallFrame(to, side, roomCx),
+      to.wall_type === 'island' ? undefined : 0)
+    if (fn) void handleUpdateBenchtop(btId, { ...transformBenchtop(snapshotOf(bt), fn), ...anchor })
+  }
+
+  // Typed size change (panel): grow / shrink the chosen end by delta mm.
+  // Outline + joins stretch; a cutout moves whole (a sink keeps its size).
+  function handleStretch(btId: string, end: StretchEnd, delta: number) {
+    const bt = findBt(btId)
+    const wall = bt && anchorWall(bt)
+    if (!bt || !wall || !delta) return
+    const segs = btSegments(bt)
+    const fn = stretchFn(segs, wallFrame(wall, bt.wall_side, roomCx), end, delta)
+    if (!fn) return
+    const cutout_polygons = (bt.cutout_polygons ?? []).map(c => {
+      const cx = c.reduce((a, q) => a + q.x, 0) / c.length, cy = c.reduce((a, q) => a + q.y, 0) / c.length
+      const m = fn({ x: cx, y: cy }), dx = m.x - cx, dy = m.y - cy
+      return c.map(q => ({ x: q.x + dx, y: q.y + dy }))
     })
-    void handleUpdateBenchtop(btId, { polygon: newPolygon, arc_segments: newArcs })
+    void handleUpdateBenchtop(btId, {
+      ...shapeWrite(mapSegments(segs, fn)),
+      joins: (bt.joins ?? []).map(j => ({ ...j, p0: fn(j.p0), p1: fn(j.p1) })),
+      cutout_polygons,
+    })
+  }
+
+  function startMoveBenchtop() {
+    if (selected?.type !== 'benchtop') return
+    resetDraw()
+    setMode('move_benchtop')
+  }
+
+  // After a Move: keep the anchor while the top still touches it (or touches
+  // nothing); landed against another wall → anchor there.
+  function moveTo(btId: string, delta: Pt) {
+    const bt = findBt(btId)
+    if (!bt) return
+    const moved = transformBenchtop(snapshotOf(bt), translateFn(delta.x, delta.y))
+    const segs = moved.segments
+    const contacts = wallContacts(segs, walls, roomCx)
+    const keeps = !contacts.length || contacts.some(c => c.wallId === bt.wall_id && c.side === bt.wall_side)
+    void handleUpdateBenchtop(btId, keeps ? moved : { ...moved, ...(anchorOf(segs) ?? {}) })
+  }
+
+  // ── Shape Editor overlay ───────────────────────────────────────────────────
+
+  function openShapeEditor(id: string) {
+    setSelected({ type: 'benchtop', id })
+    setShapeEditId(id)
+  }
+
+  // Segments arrive back in the room frame (the overlay undoes its local shift).
+  async function handleShapeEditorSave(id: string, segs: BenchtopSegment[]) {
+    await handleUpdateBenchtop(id, shapeWrite(segs))
+    setShapeEditId(null)
+  }
+
+  // New benchtop straight into the editor, seeded with a rectangle (room frame).
+  function openNewInShapeEditor(seed: Pt[]) {
+    setMode('benchtop_select')
+    resetDraw()
+    const now = new Date().toISOString()
+    setShapeEditDraft({
+      id: 'new', room_id: room.id, label: `Benchtop ${benchtops.length + 1}`,
+      ...shapeWrite(segmentsFromLegacy(seed)), joins: [], join_types: [], cutout_polygons: [],
+      wall_id: null, wall_side: 'face', height_mm: null,
+      benchtop_build_method_id: null, benchtop_schedule_id: null, notes: null,
+      created_at: now, updated_at: now,
+    })
+  }
+
+  async function handleDraftSave(segs: BenchtopSegment[]) {
+    const draft = shapeEditDraft
+    if (!draft) return
+    captureSnapshot()
+    const { data: saved, error } = await supabase.from('benchtop_instances').insert({
+      room_id: room.id, label: draft.label, ...shapeWrite(segs), ...(anchorOf(segs) ?? {}),
+      joins: [], cutout_polygons: [],
+      benchtop_build_method_id: null, benchtop_schedule_id: null, notes: null,
+    }).select().single()
+    if (error || !saved) {
+      console.error('Failed to create benchtop:', error)
+      alert('Saving the benchtop failed — see console. The editor stays open so the drawing is not lost.')
+      return
+    }
+    setBenchtops(bs => [...bs, saved as BenchtopInstance])
+    setSelected({ type: 'benchtop', id: (saved as BenchtopInstance).id })
+    setShapeEditDraft(null)
   }
 
   // ── Cutout operations ──────────────────────────────────────────────────────
 
   function handleDeleteCutout(btId: string, cutoutIndex: number) {
-    const bt = benchtops.find(b => b.id === btId)
+    const bt = findBt(btId)
     if (!bt) return
     setContextMenu(null)
     const cutout_polygons = (bt.cutout_polygons ?? []).filter((_, i) => i !== cutoutIndex)
     void handleUpdateBenchtop(btId, { cutout_polygons })
   }
 
+  // ── Join lines (P-b) ───────────────────────────────────────────────────────
+
+  function updateJoins(btId: string, fn: (j: BenchtopJoinLine[]) => BenchtopJoinLine[]) {
+    const bt = findBt(btId)
+    if (!bt) return
+    void handleUpdateBenchtop(btId, { joins: fn(bt.joins ?? []) })
+  }
+  const handleDeleteJoin = (btId: string, i: number) => updateJoins(btId, js => js.filter((_, k) => k !== i))
+  const handleSetJoinType = (btId: string, i: number, type: BenchtopJoinType) =>
+    updateJoins(btId, js => js.map((j, k) => (k === i ? { ...j, type } : j)))
+
+  // Join ends always sit ON the outline: snap to the nearest edge point; with
+  // Ctrl the second end is where the ortho line from the first crosses the outline.
+  function joinPoint(wp: Pt, start: Pt | null): Pt | null {
+    const selId = selected?.type === 'benchtop' ? selected.id : null
+    const bt = selId ? findBt(selId) : null
+    if (!bt) return null
+    const segs = btSegments(bt)
+    if (start && ctrlRef.current) {
+      const dx = wp.x - start.x, dy = wp.y - start.y
+      const dir = Math.abs(dx) >= Math.abs(dy) ? { x: 1, y: 0 } : { x: 0, y: 1 }
+      return lineHitOnOutline(segs, start, dir, wp)
+    }
+    const hit = nearestOnOutline(segs, wp)
+    if (!hit || hit.d > (SNAP_PX * 3) / zoom) return null
+    return hit.pt
+  }
+
   // ── Pointer-move delegation ────────────────────────────────────────────────
 
-  function handlePointerMove(wp: Pt, e: React.PointerEvent): boolean {
-    if (btArcDragRef.current) {
-      const drag = btArcDragRef.current
-      const dx = e.clientX - drag.originX, dy = e.clientY - drag.originY
-      if (Math.sqrt(dx * dx + dy * dy) < 4 && !drag.hasMoved) return true
-      drag.hasMoved = true
-      drag.currentArcs = drag.currentArcs.map(a =>
-        a.edge_index === drag.edgeIndex ? { ...a, cpx: wp.x, cpy: wp.y } : a
-      )
-      setBenchtops(bs => bs.map(b => b.id === drag.btId ? { ...b, arc_segments: drag.currentArcs } : b))
-      return true
-    }
+  function handlePointerMove(wp: Pt): boolean {
+    // A press on a top never drags it (P-f) — just swallow the move.
+    if (btPressRef.current) return true
 
-    if (btMoveDragRef.current) {
-      const drag = btMoveDragRef.current
-      const screenDx = e.clientX - drag.originX, screenDy = e.clientY - drag.originY
-      if (Math.sqrt(screenDx * screenDx + screenDy * screenDy) < 4 && !drag.hasMoved) return true
-      drag.hasMoved = true
-      const worldDx = screenDx / zoom, worldDy = screenDy / zoom
-      const newPolygon = drag.originalPolygon.map(pt => ({ x: pt.x + worldDx, y: pt.y + worldDy }))
-      const newArcs = drag.originalArcs.map(a => ({ ...a, cpx: a.cpx + worldDx, cpy: a.cpy + worldDy }))
-      setBenchtops(bs => bs.map(b => b.id === drag.id ? { ...b, polygon: newPolygon, arc_segments: newArcs } : b))
-      return true
-    }
-
-    if (btRotateDragRef.current) {
-      const drag = btRotateDragRef.current
-      const currentAngle = Math.atan2(wp.y - drag.centY, wp.x - drag.centX)
-      if (isNaN(drag.startAngle)) {
-        drag.startAngle = currentAngle
-        return true
-      }
-      const screenDx = e.clientX - drag.originX, screenDy = e.clientY - drag.originY
-      // Use screen distance to detect movement
-      const screenDist = Math.sqrt(screenDx * screenDx + screenDy * screenDy)
-      if (screenDist < 4 && !drag.hasMoved) {
-        drag.startAngle = currentAngle
-        return true
-      }
-      drag.hasMoved = true
-      const delta = currentAngle - drag.startAngle
-      const cos = Math.cos(delta), sin = Math.sin(delta)
-      const cx = drag.centX, cy = drag.centY
-      const newPolygon = drag.originalPolygon.map(pt => {
-        const dx = pt.x - cx, dy = pt.y - cy
-        return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos }
-      })
-      const newArcs = drag.originalArcs.map(a => {
-        const dx = a.cpx - cx, dy = a.cpy - cy
-        return { ...a, cpx: cx + dx * cos - dy * sin, cpy: cy + dx * sin + dy * cos }
-      })
-      setBenchtops(bs => bs.map(b => b.id === drag.id ? { ...b, polygon: newPolygon, arc_segments: newArcs } : b))
-      return true
-    }
-
-    if (btVertexDragRef.current) {
-      const drag = btVertexDragRef.current
-      const dx = e.clientX - drag.originX, dy = e.clientY - drag.originY
-      if (Math.sqrt(dx * dx + dy * dy) < 4 && !drag.hasMoved) return true
-      drag.hasMoved = true
-      const snapped = snapWorld(wp)
-      const newPolygon = drag.originalPolygon.map((pt, i) => i === drag.vertexIndex ? snapped : pt)
-      drag.currentPolygon = newPolygon
-      setBenchtops(bs => bs.map(b => b.id === drag.btId ? { ...b, polygon: newPolygon } : b))
+    if (mode === 'move_benchtop') {
+      setBtMoveCursor(snapWorld(wp, btMoveBase ?? undefined))
       return true
     }
 
@@ -621,68 +549,46 @@ export function useBenchtopInteraction(p: Params) {
       return true
     }
 
+    if (mode === 'draw_benchtop_join') {
+      setBtJoinCursor(joinPoint(wp, btJoinStart) ?? wp)
+      return true
+    }
+
     return false
   }
 
   // ── Pointer-up delegation ──────────────────────────────────────────────────
 
-  async function handlePointerUp(wp: Pt, e: React.PointerEvent): Promise<boolean> {
-    if (btArcDragRef.current) {
-      const drag = btArcDragRef.current
-      btArcDragRef.current = null
-      if (drag.hasMoved) {
-        pushSnapshot({ walls: wallsRef.current, cabinets: cabinetsRef.current, benchtops: preDragBenchtopsRef.current })
-        const { error } = await supabase.from('benchtop_instances').update({ arc_segments: drag.currentArcs }).eq('id', drag.btId)
-        if (error) console.error('Failed to save arc:', error)
-      }
+  async function handlePointerUp(wp: Pt, exact = false): Promise<boolean> {
+    // exact = a point typed in the draw panel: use it as-is, no snapping.
+    const pick = (prev?: Pt | null) => (exact ? wp : snapWorld(wp, prev))
+    if (btPressRef.current) {
+      const { id } = btPressRef.current
+      btPressRef.current = null
+      setSelected({ type: 'benchtop', id })
+      const now = Date.now(), last = lastBtClickRef.current
+      if (last && last.id === id && now - last.t < 400) { lastBtClickRef.current = null; openShapeEditor(id) }
+      else lastBtClickRef.current = { id, t: now }
       return true
     }
 
-    if (btVertexDragRef.current) {
-      const drag = btVertexDragRef.current
-      btVertexDragRef.current = null
-      if (drag.hasMoved) {
-        pushSnapshot({ walls: wallsRef.current, cabinets: cabinetsRef.current, benchtops: preDragBenchtopsRef.current })
-        const { error } = await supabase.from('benchtop_instances').update({ polygon: drag.currentPolygon }).eq('id', drag.btId)
-        if (error) console.error('Failed to save benchtop polygon:', error)
+    if (mode === 'move_benchtop') {
+      const selId = selected?.type === 'benchtop' ? selected.id : null
+      if (!selId) { setMode('benchtop_select'); return true }
+      const snapped = snapWorld(wp, btMoveBase ?? undefined)
+      if (!btMoveBase) {
+        setBtMoveBase(snapped)
       } else {
-        onBenchtopVertexClick(drag.btId, drag.vertexIndex)
-      }
-      return true
-    }
-
-    if (btMoveDragRef.current) {
-      const drag = btMoveDragRef.current
-      btMoveDragRef.current = null
-      if (drag.hasMoved) {
-        const bt = benchtopsRef.current.find(b => b.id === drag.id)
-        if (bt) {
-          pushSnapshot({ walls: wallsRef.current, cabinets: cabinetsRef.current, benchtops: preDragBenchtopsRef.current })
-          const { error } = await supabase.from('benchtop_instances').update({ polygon: bt.polygon, arc_segments: bt.arc_segments }).eq('id', drag.id)
-          if (error) console.error('Failed to save benchtop move:', error)
-        }
-      } else {
-        setSelected({ type: 'benchtop', id: drag.id })
-      }
-      return true
-    }
-
-    if (btRotateDragRef.current) {
-      const drag = btRotateDragRef.current
-      btRotateDragRef.current = null
-      if (drag.hasMoved) {
-        const bt = benchtopsRef.current.find(b => b.id === drag.id)
-        if (bt) {
-          pushSnapshot({ walls: wallsRef.current, cabinets: cabinetsRef.current, benchtops: preDragBenchtopsRef.current })
-          const { error } = await supabase.from('benchtop_instances').update({ polygon: bt.polygon, arc_segments: bt.arc_segments }).eq('id', drag.id)
-          if (error) console.error('Failed to save benchtop rotate:', error)
-        }
+        const delta = { x: snapped.x - btMoveBase.x, y: snapped.y - btMoveBase.y }
+        setBtMoveBase(null); setBtMoveCursor(null); setSnapResult(null)
+        setMode('benchtop_select')
+        if (Math.hypot(delta.x, delta.y) > 0.5) moveTo(selId, delta)
       }
       return true
     }
 
     if (mode === 'draw_benchtop_rect') {
-      const snapped = snapWorld(wp, btRectStart ?? undefined)
+      const snapped = pick(btRectStart ?? undefined)
       if (!btRectStart) {
         setBtRectStart(snapped)
       } else {
@@ -699,7 +605,7 @@ export function useBenchtopInteraction(p: Params) {
     if (mode === 'draw_benchtop') {
       const snapDist = SNAP_PX / zoom
       const last = btDrawPoly.length > 0 ? btDrawPoly[btDrawPoly.length - 1] : null
-      const snapped = snapWorld(wp, btArcMode ? null : (last ?? undefined))
+      const snapped = pick(btArcMode ? null : (last ?? undefined))
 
       if (!btArcMode && btDrawPoly.length >= 3 && dist(snapped, btDrawPoly[0]) < snapDist) {
         const polygon = [...btDrawPoly]
@@ -733,7 +639,7 @@ export function useBenchtopInteraction(p: Params) {
 
     if (mode === 'draw_benchtop_l') {
       const last = btLPoints.length > 0 ? btLPoints[btLPoints.length - 1] : null
-      const snapped = snapWorld(wp, last ?? undefined)
+      const snapped = pick(last ?? undefined)
       if (btLPoints.length < 2) {
         setBtLPoints(prev => [...prev, snapped])
       } else {
@@ -748,7 +654,7 @@ export function useBenchtopInteraction(p: Params) {
           const u2x = d2x / d2len, u2y = d2y / d2len
           const cross = u1x * u2y - u1y * u2x
           const sign = cross >= 0 ? 1 : -1
-          const depth = 600
+          const depth = btDepth
           const p1x = sign * u1y, p1y = -sign * u1x
           const p2x = sign * u2y, p2y = -sign * u2x
           const polygon: Pt[] = [
@@ -769,13 +675,13 @@ export function useBenchtopInteraction(p: Params) {
 
     if (mode === 'draw_benchtop_u') {
       const last = btUPoints.length > 0 ? btUPoints[btUPoints.length - 1] : null
-      const snapped = snapWorld(wp, last ?? undefined)
+      const snapped = pick(last ?? undefined)
       if (btUPoints.length < 3) {
         setBtUPoints(prev => [...prev, snapped])
       } else {
         const [a, b, c] = btUPoints
         const d = snapped
-        const polygon = buildUPolygon(a, b, c, d, 600)
+        const polygon = buildUPolygon(a, b, c, d, btDepth)
         if (polygon.length === 8) {
           setBtUPoints([]); setBtUCursor(null)
           await saveBenchtop(polygon)
@@ -794,7 +700,7 @@ export function useBenchtopInteraction(p: Params) {
       if (!btCutoutStart) {
         setBtCutoutStart(snapped)
       } else {
-        const bt = benchtops.find(b => b.id === selId)
+        const bt = findBt(selId)
         if (!bt) { setBtCutoutStart(null); setBtCutoutCursor(null); return true }
         let newCutout: Array<{x:number;y:number}>
         if (mode === 'draw_benchtop_cutout_rect') {
@@ -808,13 +714,90 @@ export function useBenchtopInteraction(p: Params) {
         }
         const cutout_polygons = [...(bt.cutout_polygons ?? []), newCutout]
         setBtCutoutStart(null); setBtCutoutCursor(null)
-        setMode('select')
+        setMode('benchtop_select')
         void handleUpdateBenchtop(selId, { cutout_polygons })
       }
       return true
     }
 
+    if (mode === 'draw_benchtop_join') {
+      const selId = selected?.type === 'benchtop' ? selected.id : null
+      if (!selId) return true
+      const pt = joinPoint(wp, btJoinStart)
+      if (!pt) return true   // ends must land on the outline
+      if (!btJoinStart) {
+        setBtJoinStart(pt)
+      } else if (dist(pt, btJoinStart) > 10) {
+        const bt = findBt(selId)
+        const type: BenchtopJoinType = (bt && defaultJoinType?.(bt)) ?? 'butt'
+        setBtJoinStart(null); setBtJoinCursor(null)
+        setMode('benchtop_select')
+        if (bt) void handleUpdateBenchtop(selId, { joins: [...(bt.joins ?? []), { p0: btJoinStart, p1: pt, type }] })
+      }
+      return true
+    }
+
     return false
+  }
+
+  // ── Typed sizes from the draw panel ────────────────────────────────────────
+  // The panel previews by moving the tool's cursor and commits by feeding the
+  // same pointer-up path an exact (unsnapped) point — one code path for mouse
+  // and keyboard.
+
+  /** The fixed point the current side is measured from (null = nothing clicked yet). */
+  function drawAnchor(): Pt | null {
+    switch (mode) {
+      case 'draw_benchtop_rect': return btRectStart
+      case 'draw_benchtop':      return btDrawPoly[btDrawPoly.length - 1] ?? null
+      case 'draw_benchtop_l':    return btLPoints[btLPoints.length - 1] ?? null
+      case 'draw_benchtop_u':    return btUPoints[btUPoints.length - 1] ?? null
+      default:                   return null
+    }
+  }
+  function drawCursor(): Pt | null {
+    switch (mode) {
+      case 'draw_benchtop_rect': return btRectCursor
+      case 'draw_benchtop':      return btDrawCursor
+      case 'draw_benchtop_l':    return btLCursor
+      case 'draw_benchtop_u':    return btUCursor
+      default:                   return null
+    }
+  }
+  function setDrawCursorPt(pt: Pt) {
+    if (mode === 'draw_benchtop_rect') setBtRectCursor(pt)
+    else if (mode === 'draw_benchtop') setBtDrawCursor(pt)
+    else if (mode === 'draw_benchtop_l') setBtLCursor(pt)
+    else if (mode === 'draw_benchtop_u') setBtUCursor(pt)
+  }
+  const polarPt = (a: Pt, len: number, angDeg: number): Pt =>
+    ({ x: a.x + len * Math.cos(angDeg * Math.PI / 180), y: a.y + len * Math.sin(angDeg * Math.PI / 180) })
+  // Rectangle: width / depth keep the direction the mouse is pulling in.
+  function rectPt(a: Pt, w: number, d: number): Pt {
+    const c = btRectCursor ?? { x: a.x + 1, y: a.y + 1 }
+    return { x: a.x + (c.x < a.x ? -w : w), y: a.y + (c.y < a.y ? -d : d) }
+  }
+
+  function previewTyped(v: { len?: number; ang?: number; w?: number; d?: number }) {
+    const a = drawAnchor()
+    if (!a) return
+    if (mode === 'draw_benchtop_rect') { if (v.w != null && v.d != null) setDrawCursorPt(rectPt(a, v.w, v.d)) }
+    else if (v.len != null && v.ang != null) setDrawCursorPt(polarPt(a, v.len, v.ang))
+  }
+
+  async function placeTyped(v: { len?: number; ang?: number; w?: number; d?: number }) {
+    const a = drawAnchor()
+    if (!a) return
+    if (mode === 'draw_benchtop_rect') { if (v.w && v.d) await handlePointerUp(rectPt(a, v.w, v.d), true) }
+    else if (v.len && v.ang != null) await handlePointerUp(polarPt(a, v.len, v.ang), true)
+  }
+
+  // Polygon: finish without clicking back on the first vertex.
+  async function closePolygon() {
+    if (mode !== 'draw_benchtop' || btDrawPoly.length < 3) return
+    const polygon = [...btDrawPoly], arcs = [...btDrawArcs]
+    setBtDrawPoly([]); setBtDrawCursor(null); setBtDrawArcs([]); setBtArcMode(false); setBtArcMidpoint(null)
+    await saveBenchtop(polygon, arcs)
   }
 
   // ── Keyboard helpers ───────────────────────────────────────────────────────
@@ -825,6 +808,8 @@ export function useBenchtopInteraction(p: Params) {
     setBtLPoints([]); setBtLCursor(null)
     setBtUPoints([]); setBtUCursor(null)
     setBtCutoutStart(null); setBtCutoutCursor(null)
+    setBtJoinStart(null); setBtJoinCursor(null)
+    setBtMoveBase(null); setBtMoveCursor(null)
     setBenchtopMenuOpen(false)
   }
 
@@ -840,13 +825,6 @@ export function useBenchtopInteraction(p: Params) {
     setBtArcMidpoint(null)
   }
 
-  const isDragging = !!(
-    btVertexDragRef.current?.hasMoved ||
-    btArcDragRef.current?.hasMoved ||
-    btMoveDragRef.current?.hasMoved ||
-    btRotateDragRef.current?.hasMoved
-  )
-
   return {
     btDrawPoly, btDrawCursor,
     btDrawArcs, btArcMode, btArcMidpoint,
@@ -854,14 +832,13 @@ export function useBenchtopInteraction(p: Params) {
     btLPoints, btLCursor,
     btUPoints, btUCursor,
     btCutoutStart, btCutoutCursor,
+    btJoinStart, btJoinCursor,
     benchtopMenuOpen, setBenchtopMenuOpen,
-    isDragging,
     filletRadius, setFilletRadius,
+    shapeEditId, setShapeEditId, openShapeEditor, handleShapeEditorSave,
+    shapeEditDraft, setShapeEditDraft, openNewInShapeEditor, handleDraftSave,
 
-    onBtVertexPointerDown,
-    onBtArcPointerDown,
     onBenchtopPointerDown,
-    onBenchtopRotateHandlePointerDown,
     onBenchtopEdgeClick,
     onBenchtopEdgeShiftClick,
     onBenchtopEdgeAltClick,
@@ -878,6 +855,15 @@ export function useBenchtopInteraction(p: Params) {
     handleMirrorV,
     handleOffset,
     handleRotateByAngle,
+    setBenchtopEdges,
+    handleDeleteJoin,
+    handleSetJoinType,
+    handleSetPosition,
+    handleStretch,
+    handleReanchor,
+    startMoveBenchtop,
+    btMoveBase, btMoveCursor,
+    btDepth, setBtDepth, drawAnchor, drawCursor, previewTyped, placeTyped, closePolygon,
 
     handlePointerMove,
     handlePointerUp,

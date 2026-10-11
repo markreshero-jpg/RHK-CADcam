@@ -20,6 +20,7 @@
 // See SHAPE_EDITOR_README.md for the full contract.
 // ============================================================================
 import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { wheelZoomFactor } from '@/src/lib/wheelZoom';
 
 
 // -- Units: mm --------------------------------------------------------------
@@ -748,6 +749,16 @@ const ShapeEditor = forwardRef(function ShapeEditor({
   // mm frame as the shape: [{ label, segments }]. Not selectable, not snap
   // targets, ignored by heal/validation, never emitted.
   referenceOutlines = null,
+  // false: the shape may sit anywhere (no "outside the part origin" error, no
+  // part-face rectangle) — for hosts whose frame isn't a CNC datum (benchtops).
+  boundsCheck = true,
+  // Edge-finish authoring (benchtops, Phase 3). null = the default read-only
+  // banding display. When set, each segment's `edge` is { wall, profile_id }
+  // and the Selected panel edits it:
+  //   { profiles: [{ id, code, name, category, color }],
+  //     defaultProfileId,           // what an exposed edge with no profile_id uses
+  //     defaultLabel }              // e.g. 'Method default'
+  edgeOptions = null,
 } = {}, ref) {
   // Canvas fills its wrapper — measured live so the editor embeds in any pane.
   const wrapRef = useRef(null);
@@ -800,6 +811,10 @@ const ShapeEditor = forwardRef(function ShapeEditor({
   const [hoverVert, setHoverVert] = useState(null); // {si,role}
   const [hoverCP, setHoverCP]     = useState(null);  // {si,role}
   const [selSeg, setSelSeg]     = useState(null);
+  // Live mirrors for key/context handlers (were used but never declared —
+  // hovering or list-selecting a segment threw ReferenceError).
+  const selSegRef   = useRef(null);
+  const hoverSegRef = useRef(null);
   const setSelSegSynced = (v) => { selSegRef.current=v; setSelSeg(v); };   // single selected seg idx
   const [selSegs, setSelSegs]   = useState(new Set()); // multi-selection
   const [marquee, setMarquee]   = useState(null); // {x0,y0,x1,y1} drag box
@@ -929,7 +944,7 @@ const ShapeEditor = forwardRef(function ShapeEditor({
 
   function attemptSave() {
     if (!isExactlyClosed(segsRef.current)) { setSaveGate('open-shape'); return; }
-    const res = checkGeometry(segsRef.current, partWidth, partHeight);
+    const res = checkGeometry(segsRef.current, boundsCheck ? partWidth : null, boundsCheck ? partHeight : null);
     setGeoResult(res);
     if (!res.valid) { setSaveGate('open-shape'); return; }
     if (onSave) onSave(segsRef.current.map(segToPartMM), buildMeta());
@@ -950,7 +965,7 @@ const ShapeEditor = forwardRef(function ShapeEditor({
     if (r.closed) {
       setClosed(true);
       setSaveGate(null);
-      const res = checkGeometry(r.segs, partWidth, partHeight);
+      const res = checkGeometry(r.segs, boundsCheck ? partWidth : null, boundsCheck ? partHeight : null);
       setGeoResult(res);
       if (res.valid && onSave) onSave(r.segs.map(segToPartMM), {
         ...buildMeta(), closed:true, segmentCount:r.segs.length,
@@ -982,6 +997,30 @@ const ShapeEditor = forwardRef(function ShapeEditor({
     if (px*(mx-shapeCentroid.x) + py*(my-shapeCentroid.y) < 0) { px=-px; py=-py; }
     return { p0:{x:seg.p0.x+px*dist, y:seg.p0.y+py*dist},
              p1:{x:seg.p1.x+px*dist, y:seg.p1.y+py*dist} };
+  }
+
+  // ---- Edge finishes (edgeOptions hosts only) --------------------------
+  // Resolved finish of a segment: wall edges have no profile; an exposed
+  // edge without its own profile_id uses the host's default.
+  function edgeFinish(seg) {
+    const e = seg.edge || {};
+    if (e.wall) return { wall:true, profile:null, own:false, color:'#6b7280' };
+    const id = e.profile_id || edgeOptions?.defaultProfileId || null;
+    const profile = (edgeOptions?.profiles || []).find(p => p.id === id) || null;
+    return { wall:false, profile, own:!!e.profile_id, color: profile?.color || '#14b8a6' };
+  }
+
+  // Patch the edge of every target segment (multi-selection, else the single
+  // selection) as one undo step. Wall edges drop their profile.
+  function patchEdges(targets, patch) {
+    if (!targets.length) return;
+    pushHistory(segsRef.current.map((s,i) => {
+      if (!targets.includes(i)) return s;
+      const edge = { ...(s.edge || {}), ...patch };
+      if (edge.wall) delete edge.profile_id;
+      if (edge.profile_id === null) delete edge.profile_id;
+      return { ...s, edge };
+    }));
   }
 
   // ---- Origin / datum --------------------------------------------------
@@ -1030,11 +1069,11 @@ const ShapeEditor = forwardRef(function ShapeEditor({
     });
     setTimeout(()=>setHealMsg(null), 5000);
     // Re-run validation so the result panel reflects the healed shape
-    setGeoResult(checkGeometry(r.segs, partWidth, partHeight));
+    setGeoResult(checkGeometry(r.segs, boundsCheck ? partWidth : null, boundsCheck ? partHeight : null));
   }
 
   function runCheckShape() {
-    const res = checkGeometry(segsRef.current, partWidth, partHeight);
+    const res = checkGeometry(segsRef.current, boundsCheck ? partWidth : null, boundsCheck ? partHeight : null);
     setGeoResult(res);
     if (res.valid && onShapeConfirmed) {
       onShapeConfirmed(segsRef.current.map(segToPartMM),
@@ -1210,20 +1249,30 @@ const ShapeEditor = forwardRef(function ShapeEditor({
 
 
   // -- Wheel zoom -- zoom toward mouse position --
-  function onWheel(e) {
-    e.preventDefault();
-    const r = svgRef.current.getBoundingClientRect();
-    const mx = e.clientX - r.left;
-    const my = e.clientY - r.top;
-    const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
-    const newZoom = Math.min(8, Math.max(0.15, zoomRef.current * factor));
-    // Zoom toward mouse: adjust pan so world point under mouse stays fixed
-    setPan(p => ({
-      x: mx - (mx - p.x) * (newZoom / zoomRef.current),
-      y: my - (my - p.y) * (newZoom / zoomRef.current),
-    }));
-    setZoom(newZoom);
-  }
+  // Native non-passive listener (React's onWheel is passive, so preventDefault
+  // there can't stop Ctrl+wheel zooming the page). Rate/modifiers are shared
+  // with every other view via wheelZoomFactor.
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    function onWheel(e) {
+      e.preventDefault();
+      const r = svg.getBoundingClientRect();
+      const mx = e.clientX - r.left;
+      const my = e.clientY - r.top;
+      const prev = zoomRef.current;
+      const newZoom = Math.min(8, Math.max(0.15, prev * wheelZoomFactor(e)));
+      // Update the ref now: smooth-scroll mice fire many events per frame, and
+      // each must build on the last rather than the zoom from the last render.
+      zoomRef.current = newZoom;
+      const k = newZoom / prev;
+      // Zoom toward mouse: adjust pan so world point under mouse stays fixed
+      setPan(p => ({ x: mx - (mx - p.x) * k, y: my - (my - p.y) * k }));
+      setZoom(newZoom);
+    }
+    svg.addEventListener('wheel', onWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', onWheel);
+  }, []);
 
   // -- Click -- plain function, not useCallback, so always reads fresh state --
   function onSVGClick(e) {
@@ -1879,6 +1928,58 @@ const ShapeEditor = forwardRef(function ShapeEditor({
 
   const selInfo = selSeg!=null&&segs[selSeg]?segs[selSeg]:null;
 
+  // Edge finish editor (edgeOptions hosts): Wall / Exposed + profile picker
+  // for the target segments. Mixed values across a multi-selection show blank.
+  function renderEdgeEditor(targets) {
+    const ts = targets.filter(i => segs[i]);
+    if (!ts.length) return null;
+    const fins = ts.map(i => edgeFinish(segs[i]));
+    const allWall = fins.every(f => f.wall), anyWall = fins.some(f => f.wall);
+    const owns = ts.map(i => (segs[i].edge && segs[i].edge.profile_id) || '');
+    const sameOwn = owns.every(o => o === owns[0]);
+    const def = (edgeOptions.profiles || []).find(p => p.id === edgeOptions.defaultProfileId);
+    const groups = {};
+    for (const p of edgeOptions.profiles || []) (groups[p.category || 'other'] ||= []).push(p);
+    const pill = (active) => ({ ...sBtn, width:'auto', flex:1, textAlign:'center', marginBottom:0,
+      color:active?'#3b82f6':'#9ca3af', borderColor:active?'#3b82f6':'#374151',
+      background:active?'#3b82f612':'transparent' });
+    return (
+      <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #374151'}}>
+        <div style={{fontSize:8,letterSpacing:2,color:'#6b7280',marginBottom:5,textTransform:'uppercase',fontWeight:700}}>
+          Edge{ts.length>1?` ×${ts.length}`:''}
+        </div>
+        <div style={{display:'flex',gap:3,marginBottom:6}}>
+          <button style={pill(allWall)} onClick={()=>patchEdges(ts,{wall:true})}>Wall</button>
+          <button style={pill(!anyWall)} onClick={()=>patchEdges(ts,{wall:false})}>Exposed</button>
+        </div>
+        {!allWall&&(
+          <>
+            <div style={{color:'#9ca3af',marginBottom:2,fontSize:9}}>Profile</div>
+            <select value={sameOwn?owns[0]:'__mixed'}
+              onChange={e=>{ const v=e.target.value; if (v==='__mixed') return; patchEdges(ts,{wall:false,profile_id:v||null}); }}
+              style={{background:'#111827',border:'1px solid #374151',color:'#d1d5db',borderRadius:2,
+                padding:'2px 4px',fontSize:10,fontFamily:'IBM Plex Mono,monospace',width:'100%'}}>
+              {!sameOwn&&<option value="__mixed">— mixed —</option>}
+              <option value="">{edgeOptions.defaultLabel||'Default'}{def?` (${def.code||def.name})`:''}</option>
+              {Object.entries(groups).map(([cat,ps])=>(
+                <optgroup key={cat} label={cat}>
+                  {ps.map(p=><option key={p.id} value={p.id}>{p.code?`${p.code} — `:''}{p.name}</option>)}
+                </optgroup>
+              ))}
+            </select>
+            {fins.length===1&&fins[0].profile&&(
+              <div style={{display:'flex',alignItems:'center',gap:6,fontSize:9,marginTop:5,color:'#9ca3af'}}>
+                <span style={{width:10,height:10,borderRadius:2,background:fins[0].color,flexShrink:0}}/>
+                {fins[0].profile.name}{fins[0].own?'':' · default'}
+              </div>
+            )}
+          </>
+        )}
+        {allWall&&<div style={{fontSize:8,color:'#6b7280'}}>Against a wall — no profile</div>}
+      </div>
+    );
+  }
+
   const Btn=({label,onClick,active,danger,disabled})=>(
     <button onClick={onClick} disabled={disabled} style={{
       background:active?'#3b82f612':danger?'#ef444410':'transparent',
@@ -2163,7 +2264,6 @@ const ShapeEditor = forwardRef(function ShapeEditor({
               }
               marqueeRef.current=null; setMarquee(null);
             }}
-            onWheel={onWheel}
             tabIndex={0}
             onKeyDown={e=>{
               if(e.key==='Tab'){
@@ -2200,12 +2300,15 @@ const ShapeEditor = forwardRef(function ShapeEditor({
               if (!r || !r.segments || !r.segments.length) return null;
               const px = r.segments.map(segFromPartMM);
               const lp = px[0].p0;
+              // Labels keep a readable screen size when zoomed out (benchtops
+              // open at ~10%); at 100%+ they stay as before.
+              const k = 1 / Math.min(1, zoom || 1);
               return (
                 <g key={`ref${i}`} pointerEvents="none" opacity={0.55}>
                   <path d={buildD(px, true)} fill="none" stroke="#64748b"
-                    strokeWidth={1.25} strokeDasharray="5,4"/>
+                    strokeWidth={1.25} strokeDasharray="5,4" vectorEffect="non-scaling-stroke"/>
                   {r.label && (
-                    <text x={lp.x + 5} y={lp.y + 12} fontSize={8} fill="#64748b"
+                    <text x={lp.x + 5*k} y={lp.y + 12*k} fontSize={8*k} fill="#64748b"
                       fontFamily="IBM Plex Mono,monospace">{r.label}</text>
                   )}
                 </g>
@@ -2219,9 +2322,9 @@ const ShapeEditor = forwardRef(function ShapeEditor({
               return (
                 <g pointerEvents="none">
                   {/* part face */}
-                  <rect x={o.x} y={o.y} width={w} height={h}
+                  {boundsCheck && <rect x={o.x} y={o.y} width={w} height={h}
                     fill="#3b82f60a" stroke="#3b82f655" strokeWidth={1.5}
-                    strokeDasharray="10,6"/>
+                    strokeDasharray="10,6"/>}
                   {/* origin marker */}
                   <g>
                     <line x1={o.x-14} y1={o.y} x2={o.x+22} y2={o.y}
@@ -2283,7 +2386,27 @@ const ShapeEditor = forwardRef(function ShapeEditor({
                   {selSegs.has(i)&&<path d={sd} fill="none" stroke="#3b82f6" strokeWidth={3} opacity={0.8}/>}
 
                   {/* Edge banding -- drawn as tape sitting on the outside face */}
-                  {getEdge(seg).band&&(()=>{
+                  {edgeOptions&&(()=>{
+                    // Benchtop finishes: wall = dashed grey, exposed = profile colour
+                    // Screen-constant sizes: benchtops open zoomed far out.
+                    const f = edgeFinish(seg);
+                    const z = zoom || 1;
+                    const o = outwardOffset(seg, 5/z);
+                    return (
+                      <g pointerEvents="none">
+                        <line x1={o.p0.x} y1={o.p0.y} x2={o.p1.x} y2={o.p1.y}
+                          stroke={f.color} strokeWidth={(f.wall?3:4)/z} strokeLinecap="butt"
+                          strokeDasharray={f.wall?`${6/z},${4/z}`:undefined} opacity={0.9}/>
+                        {!f.wall&&f.profile&&seg.type==='line'&&(()=>{
+                          const q = outwardOffset(seg, 22/z);
+                          return <text x={(q.p0.x+q.p1.x)/2} y={(q.p0.y+q.p1.y)/2} fontSize={10/z}
+                            fill={f.color} textAnchor="middle" dominantBaseline="middle"
+                            fontFamily="IBM Plex Mono,monospace" fontWeight={700}>{f.profile.code||f.profile.name}</text>;
+                        })()}
+                      </g>
+                    );
+                  })()}
+                  {!edgeOptions&&getEdge(seg).band&&(()=>{
                     const o = outwardOffset(seg, 5);
                     const prof = getEdge(seg).profile;
                     const col = EDGE_COLOURS[prof] || '#f59e0b';
@@ -2841,8 +2964,8 @@ const ShapeEditor = forwardRef(function ShapeEditor({
         <div style={{width:190,background:'#1f2937',borderLeft:'1px solid #374151',
           padding:10,overflowY:'auto',flexShrink:0,fontSize:10,display:'flex',flexDirection:'column',gap:0}}>
 
-          {/* ---- ORIGIN / DATUM ---- */}
-          {(()=>{
+          {/* ---- ORIGIN / DATUM ---- (no datum when boundsCheck is off: the host frame isn't a CNC origin) */}
+          {boundsCheck&&(()=>{
             const b = shapeBoundsMM(segs);
             if (!b) return null;
             const off = b.minX !== 0 || b.minY !== 0;
@@ -3071,7 +3194,8 @@ const ShapeEditor = forwardRef(function ShapeEditor({
                 {/* ---- Edge (read-only) ----
                     Banding is authored in PartEditor. Shown here for context
                     only; the shape editor passes `edge` through untouched. */}
-                {(()=>{
+                {edgeOptions&&renderEdgeEditor(selSegs.size>1&&selSegs.has(selSeg)?[...selSegs]:[selSeg])}
+                {!edgeOptions&&(()=>{
                   const e = getEdge(selInfo);
                   return (
                     <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #374151'}}>
@@ -3100,8 +3224,13 @@ const ShapeEditor = forwardRef(function ShapeEditor({
                   <button onClick={()=>doDelSeg(selSeg)} style={{...sBtn,color:'#ef4444',borderColor:'#ef444433'}}>⊖ Delete</button>
                 </div>
               </div>
+            ):edgeOptions&&selSegs.size>0?(
+              <div>
+                <div style={{color:'#3b82f6',marginBottom:4,fontWeight:700,fontSize:11}}>{selSegs.size} edges</div>
+                {renderEdgeEditor([...selSegs])}
+              </div>
             ):(
-              <div style={{color:'#4b5563',fontSize:9}}>Click a segment</div>
+              <div style={{color:'#4b5563',fontSize:9}}>Click a segment{edgeOptions?' (Shift-click / drag a box for several)':''}</div>
             )}
           </div>
 
@@ -3128,7 +3257,9 @@ const ShapeEditor = forwardRef(function ShapeEditor({
                     background:selSeg===i?'#3b82f608':'transparent'}}>
                   {s.type==='curve'?'∿':s.type==='arc'?'◜':'╱'} {isHoriz(s)?'H':isVert(s)?'V':'D'} {i+1}
                   {s.type==='line'&&<span style={{color:'#4b5563'}}> {toMM(segLen(s))}mm</span>}
-                  {getEdge(s).band&&<span style={{color:'#f59e0b',marginLeft:3}}>●</span>}
+                  {edgeOptions
+                    ? (()=>{ const f=edgeFinish(s); return <span style={{color:f.color,marginLeft:3}}>{f.wall?'▬ wall':`● ${f.profile?.code||''}`}</span>; })()
+                    : getEdge(s).band&&<span style={{color:'#f59e0b',marginLeft:3}}>●</span>}
                 </div>
               ))}
             </div>

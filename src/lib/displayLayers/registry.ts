@@ -119,7 +119,11 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     hint: 'Added parts that are not applied panels or fillers (scribe mould, nailer, gusset…)' },
 
   // Benchtops
-  { id: 'benchtops',      group: 'benchtops', label: 'Benchtops', views: ['plan'], default: ON },
+  { id: 'benchtops',      group: 'benchtops', label: 'Benchtops', views: ALL, default: ON,
+    hint: 'Plan outline; elevation band at top height; 3D slab + waterfall legs' },
+  { id: 'benchtop_edges', group: 'benchtops', label: 'Benchtop edge profiles', views: ['plan', 'elevation'], default: ON,
+    hint: 'Plan: profile colour + code on exposed edges, wall edges dashed grey. Elevation: code on the front edge' },
+  { id: 'benchtop_joins', group: 'benchtops', label: 'Benchtop join lines', views: ['plan', 'elevation'], default: ON },
 
   // Room
   { id: 'walls',          group: 'room', label: 'Walls', views: ['3d'], default: ON },
