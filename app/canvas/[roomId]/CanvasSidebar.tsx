@@ -8,6 +8,7 @@ import RoomSwitcher, { type RoomSwitcherHandle } from './RoomSwitcher'
 import type { MatColours, EbByMatId } from './useMaterialColours'
 import type { MatColMap } from '@/src/components/three/PartViewer'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
+import { searchTokens, scoreDef } from '@/src/lib/cabinetSearch'
 
 const CabinetPreview3D = dynamic(() => import('./CabinetPreview3D'), { ssr: false })
 
@@ -148,7 +149,7 @@ function SectionHeader({ tone, icon, label, shortcut, open, active, summary, tit
       </span>
       {shortcut && (
         <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0
-          ${active ? 'border-white/30 text-white/60' : 'border-gray-700 text-gray-600'}`}>
+          ${active || open ? 'border-white/30 text-white/70' : 'border-gray-700 text-gray-600'}`}>
           {shortcut}
         </span>
       )}
@@ -354,10 +355,20 @@ export default function CanvasSidebar({
   const benchtopActive = isBenchtopMode(mode)
 
   // A definition is visible if it passes the scope + search filters.
+  // Search matches every typed word against code, description, class and
+  // category path (src/lib/cabinetSearch).
   const q = search.trim().toLowerCase()
+  const qTokens = searchTokens(search)
+  const catPath = (id: string | null): string => {
+    const names: string[] = []
+    let c = id ? categories.find(x => x.id === id) : undefined
+    while (c && names.length < 20) { names.unshift(c.name); c = c.parent_id ? categories.find(x => x.id === c!.parent_id) : undefined }
+    return names.join(' › ')
+  }
+  const searchScore = (d: CabinetDefinition) => scoreDef(d, qTokens, catPath(d.category_id))
   const matches = (d: CabinetDefinition) => {
     if (scope === 'job' && !placedDefIds.has(d.id)) return false
-    if (q) return d.name.toLowerCase().includes(q)
+    if (q) return searchScore(d) > 0
     return true
   }
   const visibleCount = definitions.filter(matches).length
@@ -467,7 +478,7 @@ export default function CanvasSidebar({
   }
 
 
-  function defRow(def: CabinetDefinition, sub?: string) {
+  function defRow(def: CabinetDefinition, sub?: string, desc?: string | null) {
     const sel = cabActive && armedDefinitionId === def.id
     return (
       <button
@@ -476,7 +487,7 @@ export default function CanvasSidebar({
         onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, definitionId: def.id }) }}
         draggable
         onDragStart={e => { e.dataTransfer.setData('application/x-rhk-cab-def', def.id); e.dataTransfer.effectAllowed = 'copy' }}
-        title={def.name}
+        title={def.description ? `${def.name} — ${def.description}` : def.name}
         className={`relative w-full flex items-center gap-2 pl-3 pr-2 py-2 rounded-md text-sm transition-colors
           ${sel ? 'bg-blue-600 text-white font-medium shadow-md shadow-black/30' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
       >
@@ -484,6 +495,7 @@ export default function CanvasSidebar({
         <span className="flex-1 min-w-0 text-left">
           <span className="block truncate">{def.name}</span>
           {sub && <span className={`block truncate text-[10px] ${sel ? 'text-white/70' : 'text-gray-500'}`}>{sub}</span>}
+          {desc && <span className={`block truncate text-[10px] ${sel ? 'text-white/60' : 'text-gray-600'}`}>{desc}</span>}
         </span>
         {sel && <span className="text-xs shrink-0">✓</span>}
       </button>
@@ -600,10 +612,14 @@ export default function CanvasSidebar({
 
   // Search: flat list of hits across the whole library, each with its path.
   function renderSearch() {
+    // Best match first; equal scores keep library order.
     const hits = definitions.filter(matches)
+      .map((d, i) => ({ d, i, s: searchScore(d) }))
+      .sort((a, b) => b.s - a.s || a.i - b.i)
+      .map(x => x.d)
     return (
       <div className="flex flex-col gap-px px-0.5">
-        {hits.map(def => defRow(def, pathTo(def.category_id ?? null).map(c => c.name).join(' › ') || 'Other'))}
+        {hits.map(def => defRow(def, catPath(def.category_id ?? null) || 'Other', def.description))}
         {hits.length === 0 && <p className="px-2 py-2 text-xs text-gray-600 italic">No cabinets match “{search.trim()}”.</p>}
       </div>
     )
@@ -681,7 +697,7 @@ export default function CanvasSidebar({
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search cabinets…"
+                placeholder="Search code, description, folder…"
                 className="w-full bg-gray-800 border border-gray-700 rounded-md px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-blue-500"
               />
               <div className="flex gap-1 text-xs">

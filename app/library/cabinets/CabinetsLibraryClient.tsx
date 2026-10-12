@@ -6,6 +6,7 @@ import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '../../ThemeToggle'
 import { DEFAULT_DIMS, type AssemblyClass } from '@/src/lib/types'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
+import { searchTokens, scoreDef } from '@/src/lib/cabinetSearch'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -117,9 +118,8 @@ export default function CabinetsLibraryClient({
   // ── Filter + sort ──
   const q = search.trim().toLowerCase()
   const rows = useMemo(() => {
-    const filtered = defs.filter(d =>
-      !q || d.name.toLowerCase().includes(q) || (d.description ?? '').toLowerCase().includes(q) ||
-      d.assembly_class.includes(q) || pathOf(d.category_id).toLowerCase().includes(q))
+    const tokens = searchTokens(q)
+    const filtered = defs.filter(d => scoreDef(d, tokens, pathOf(d.category_id)) > 0)
     const k = sort.key
     return [...filtered].sort((a, b) => {
       let av: string | number, bv: string | number
@@ -160,7 +160,7 @@ export default function CabinetsLibraryClient({
       <div className="flex-none px-4 py-2.5 flex items-center gap-2 border-b border-edge">
         <input
           value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search name, class, category…"
+          placeholder="Search code, description, class, folder…"
           className="w-64 bg-surface-2/60 border border-edge-strong rounded-md px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-accent"
         />
         <span className="text-xs text-ink-subtle">{rows.length} cabinet{rows.length === 1 ? '' : 's'}</span>

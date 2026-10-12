@@ -11,10 +11,13 @@ File: `app/canvas/[roomId]/CanvasSidebar.tsx`.
    To add a section: add a `TONES` entry, a header with `open` / `active` /
    `summary`, and a body of `ToolRow`s.
 2. **States**
-   - Open section → grey header, tone bar on the left, tone rail down the body.
+   - Open section → tone-tinted header with a tone outline + bar, F-key badge lit,
+     tone rail down the body.
    - Active (its tool is the current mode) → solid tone header; `summary` shows
      the current tool / armed item under the label so it's visible collapsed.
    - Active row → tinted bg + tone bar + ✓.
+   - **Select never highlights** — it is the resting mode, so lighting it would
+     always show something lit. It stays as a mouse shortcut for Esc.
 3. **One section open at a time.** Enforced in the sidebar by an effect that
    closes the others when any menu flips open (covers F-keys in CanvasClient).
    A new section's open flag must be added to that effect.

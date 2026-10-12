@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance, CabinetDefinition } from '@/src/lib/types'
+import { searchTokens, scoreDef } from '@/src/lib/cabinetSearch'
 
 type Cat = { id: string; name: string; sort_order: number; parent_id: string | null }
 
@@ -53,10 +54,12 @@ export default function ReplaceCabinetModal({ cab, onReplace, onClose }: {
 
   // Visible definitions grouped by category path (sorted by path, then library order).
   const groups = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const visible = defs.filter(d =>
-      (!sameClass || d.assembly_class === cab.assembly_class) &&
-      (!q || d.name.toLowerCase().includes(q)))
+    const tokens = searchTokens(search)
+    const visible = defs
+      .map((d, i) => ({ d, i, s: scoreDef(d, tokens, pathOf(d.category_id)) }))
+      .filter(x => x.s > 0 && (!sameClass || x.d.assembly_class === cab.assembly_class))
+      .sort((a, b) => b.s - a.s || a.i - b.i)
+      .map(x => x.d)
     const byPath = new Map<string, CabinetDefinition[]>()
     for (const d of visible) {
       const p = pathOf(d.category_id)
@@ -88,7 +91,7 @@ export default function ReplaceCabinetModal({ cab, onReplace, onClose }: {
 
         <input value={search} autoFocus onChange={e => setSearch(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') confirm() }}
-          placeholder="Search library…"
+          placeholder="Search code, description, folder…"
           className="w-full bg-gray-800 border border-gray-700 rounded-md px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-blue-500" />
 
         <div className="flex flex-wrap gap-x-4 gap-y-2">
@@ -122,7 +125,10 @@ export default function ReplaceCabinetModal({ cab, onReplace, onClose }: {
                     onDoubleClick={() => confirm(d.id)}
                     className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-sm transition-colors
                       ${sel ? 'bg-blue-600/30 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>
-                    <span className="flex-1 truncate">{d.name}</span>
+                    <span className="flex-1 min-w-0 truncate">
+                      {d.name}
+                      {d.description && <span className="ml-2 text-[11px] text-gray-500">{d.description}</span>}
+                    </span>
                     {!sameClass && <span className="text-[10px] text-gray-500">{CLASS_LABEL[d.assembly_class] ?? d.assembly_class}</span>}
                     <span className="text-[11px] text-gray-500 font-mono">{d.default_dx}×{d.default_dy}×{d.default_dz}</span>
                   </div>
