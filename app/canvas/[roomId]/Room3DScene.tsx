@@ -3,9 +3,10 @@
 import { Suspense, useMemo, useEffect, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei'
-import { Shape, Path, ExtrudeGeometry, Matrix4, Vector2, Vector3 } from 'three'
+import { Shape, ExtrudeGeometry, Matrix4, Vector2, Vector3 } from 'three'
 import type { Wall, CabinetInstance, Room, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import { btSegments, outlinePoints, outwardNormal, effectiveProfileId, waterfallJoin } from '@/src/lib/benchtopGeometry'
+import { loftSlab } from '@/src/lib/benchtopSlab3d'
 import type { BtElevInfo } from './BenchtopElevation'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -159,10 +160,11 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
   const T = thick.total
   const segs = useMemo(() => btSegments(bt), [bt])
 
-  // Waterfall edges (straight only). Mitre: the slab is cut back by T on that
-  // edge and the leg is a full-height prism with the 45° face, plus a wedge
-  // filling the top corner — so the joint shows as the diagonal on the side
-  // faces. Butt: the top runs over a leg that stops at the underside.
+  // Waterfall edges (straight only). Mitre: the slab's underside is set back by
+  // T on that edge, so its end IS the 45° bevel (one solid — loftSlab), and the
+  // leg is a full-height prism with the matching 45° top: one diagonal joint.
+  // (A separate wedge piece used to draw its own outline, which read as a butt
+  // joint too.) Butt: the top runs over a leg that stops at the underside.
   const waterfalls = useMemo(() => segs.flatMap((s, i) => {
     if (s.type !== 'line' || s.edge?.wall || topZ - T <= 0) return []
     const pid = effectiveProfileId(s, defaultProfileId)
@@ -171,7 +173,7 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
   }), [segs, defaultProfileId, profiles, topZ, T])
 
   const slab = useMemo(() => {
-    // Cut mitred waterfall edges back by T (their neighbours' ends follow).
+    // Underside outline: mitred waterfall edges set back by T (neighbours' ends follow).
     const cut = segs.map(q => ({ ...q, p0: { ...q.p0 }, p1: { ...q.p1 } }))
     for (const w of waterfalls) {
       if (w.join !== 'mitre') continue
@@ -180,17 +182,9 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
       cut[k].p0 = mv(cut[k].p0); cut[k].p1 = mv(cut[k].p1)
       cut[prev].p1 = cut[k].p0; cut[next].p0 = cut[k].p1
     }
-    const pts = outlinePoints(cut, 24)
-    if (pts.length < 3) return null
-    const shape = new Shape(pts.map(p => new Vector2(p.x, -p.y)))
-    for (const c of bt.cutout_polygons ?? []) {
-      if (c.length >= 3) shape.holes.push(new Path(c.map(p => new Vector2(p.x, -p.y))))
-    }
-    const geo = new ExtrudeGeometry(shape, { depth: T, bevelEnabled: false })
-    geo.rotateX(-Math.PI / 2)
-    geo.translate(0, topZ - T, 0)
-    geo.computeVertexNormals()
-    return geo
+    const topPts = outlinePoints(segs, 24), botPts = outlinePoints(cut, 24)
+    if (topPts.length < 3 || botPts.length !== topPts.length) return null
+    return loftSlab(topPts, botPts, (bt.cutout_polygons ?? []).filter(c => c.length >= 3), topZ, topZ - T)
   }, [segs, waterfalls, bt.cutout_polygons, T, topZ])
 
   // Leg / wedge prisms: a profile in (u = inward from the outer face, v = up),
@@ -211,8 +205,7 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
     }
     const under = topZ - T
     return w.join === 'mitre'
-      ? [{ key: `l${w.i}`, geo: prism([[0, 0], [T, 0], [T, under], [0, topZ]]) },
-         { key: `w${w.i}`, geo: prism([[T, under], [T, topZ], [0, topZ]]) }]
+      ? [{ key: `l${w.i}`, geo: prism([[0, 0], [T, 0], [T, under], [0, topZ]]) }]
       : [{ key: `l${w.i}`, geo: prism([[0, 0], [T, 0], [T, under], [0, under]]) }]
   }), [waterfalls, T, topZ])
 

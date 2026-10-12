@@ -476,6 +476,12 @@ sharing the profile library with cabinet-part shapes.
 ---
 
 ## Session log
+- 2026-10-12 — Fixed (Mark): 3D mitred waterfall showed a butt line as well as
+  the diagonal. The top's 45° corner was a separate wedge mesh whose own outline
+  drew a line across the top and down the side, T in from the end. The slab is
+  now one solid lofted from the full top outline to an underside set back by T
+  on mitred edges (`src/lib/benchtopSlab3d.ts` `loftSlab`, 3 tests: volume,
+  45° face, cutout); the leg keeps its 45° top. Butt unchanged.
 - 2026-10-12 — Phase 4 questions locked (defaults kept); Phase 4 committed.
   Phase 5 done (supply sheet report, benchtop parts in the optimiser).
 - 2026-10-11 — Audit done, decisions 1–7 locked, spec created. Phase 0 done
