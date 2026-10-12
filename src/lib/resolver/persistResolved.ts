@@ -57,6 +57,7 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
         rule_overrides:    {},
         nest_priority:     0,
         output_to_cnc:     true,
+        outline:           p.outline ?? null,
       }))
     ).select('id, part_key')
     if (error) console.error('persistResolved case_parts:', error)
@@ -107,6 +108,7 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
         edge_band_id:      p.edge_band.id ?? null,
         rule_overrides:    {},
         output_to_cnc:     true,
+        outline:           p.outline ?? null,
       }))
     ).select('id, part_type, sort_order')
     if (error) console.error('persistResolved internal_parts:', error)

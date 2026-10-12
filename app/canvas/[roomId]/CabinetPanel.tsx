@@ -5,6 +5,7 @@ import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/
 import { cabT, wallDir, findFreeSlot, cabsBlock } from '@/src/lib/geometry'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import CalcInput from '@/src/components/CalcInput'
+import CabinetShapeSection from './CabinetShapeSection'
 
 export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, hideWallPosition, hideDelete, autoFocusWidth }: {
   cabinet: CabinetInstance
@@ -158,6 +159,9 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
             ))}
           </div>
         </div>
+        {cabinet.has_carcass && !cabinet.is_kick_assembly && (
+          <CabinetShapeSection cabinet={cabinet} onUpdate={onUpdate} inp={inp} lbl={lbl} />
+        )}
         <div>
           <label className={lbl}>Top Type</label>
           <select value={(f('top_type') as string) ?? 'front_rail'}

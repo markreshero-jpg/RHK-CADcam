@@ -1,7 +1,7 @@
 ﻿'use client'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
-import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, CAB_FILL, CAB_FILL_SEL, SNAP_PX, type Pt } from '@/src/lib/geometry'
+import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, SNAP_PX, type Pt } from '@/src/lib/geometry'
 import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
@@ -23,6 +23,8 @@ import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
+import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
+import { caseBoxAABB } from '@/src/lib/jointDrilling'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
 // resolved per render below. PART_COLORS / LINE_DRAW_COLORS keep their `MAP[key]`
@@ -32,6 +34,12 @@ import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 function caseElevRect(p: ResolvedCasePart) {
   if (p.part_key === 'left_side' || p.part_key === 'right_side') {
     return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+  }
+  // Shaped-cabinet panels / facet rails: their front-view footprint after AY
+  // (true-width facet elevations are z_cabinet_shape Phase 5).
+  if (isShapedPanelKey(p.part_key) || p.AY) {
+    const b = caseBoxAABB(p)
+    return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h }
   }
   return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
 }
@@ -115,12 +123,13 @@ function cabBottomZ(cab: CabinetInstance, room: Room, elevWall?: Wall | null): n
   return cab.pos_z ?? 0
 }
 
-function computeElevChain(cabs: CabinetInstance[], wall: Wall) {
-  const sorted = [...cabs].sort((a, b) => cabT(a, wall) - cabT(b, wall))
+// xOf = the cabinet's left edge in elevation x (mirrored on the back side).
+function computeElevChain(cabs: CabinetInstance[], wall: Wall, xOf: (c: CabinetInstance) => number) {
+  const sorted = [...cabs].sort((a, b) => xOf(a) - xOf(b))
   const segs: { from: number; to: number; label: number }[] = []
   let cursor = 0
   for (const cab of sorted) {
-    const t = cabT(cab, wall)
+    const t = xOf(cab)
     if (t > cursor + 0.5) segs.push({ from: cursor, to: t, label: Math.round(t - cursor) })
     segs.push({ from: t, to: t + cab.dx, label: Math.round(cab.dx) })
     cursor = t + cab.dx
@@ -177,6 +186,8 @@ interface ElevationSVGProps {
   benchtopInfo?: (bt: BenchtopInstance) => BtElevInfo
   edgeProfiles?: Record<string, BenchtopEdgeProfile>
   onSelectBenchtop?: (id: string) => void
+  // Along-wall ranges of waterfall legs that block a mover on this wall + side
+  waterfallOcc?: (wall: Wall, side: 'face' | 'back', mover: { assembly_class: string; dy: number; dz?: number }) => { t: number; dx: number }[]
 }
 
 export default function ElevationSVG({
@@ -190,7 +201,7 @@ export default function ElevationSVG({
   elevSnapResult, setElevSnapResult,
   elevMeasureStart, elevMeasureEnd, elevMeasureCursor,
   setElevMeasureStart, setElevMeasureEnd, setElevMeasureCursor,
-  benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop,
+  benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop, waterfallOcc,
 }: ElevationSVGProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [view, dispatchView] = useReducer(viewReducer, { panX: 80, panY: 60, zoom: 1 })
@@ -237,6 +248,27 @@ export default function ElevationSVG({
 
   const wall = walls.find(w => w.id === elevWallId) ?? null
   const wallCabs = wall ? cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === elevWallSide) : []
+  // Elevation x runs left→right as seen by someone facing that side of the wall.
+  // The face side looks from inside the room, so x = along-wall distance t. The
+  // back side looks from outside, so the wall runs right-to-left: x = length − t.
+  // Everything in this view (occupancy, snapping, ghosts, chains) works in
+  // elevation x; only the commit sites convert back to wall space via elevPos.
+  const isBack = elevWallSide === 'back'
+  const mirrorX = (t: number, dx: number) => (isBack && wall ? wall.length - t - dx : t)
+  /** Cabinet's left edge in elevation x. */
+  const elevX = (c: CabinetInstance) => (wall ? mirrorX(cabT(c, wall), c.dx) : 0)
+  /** Wall-space anchor (pos_x/pos_y) for a cabinet whose left edge sits at
+   *  elevation x with width dx — the canonical landing for this side (back-side
+   *  cabinets sit on the wall's outer face, see wallAnchorPoint). */
+  const elevPos = (w: Wall, x: number, dx: number) => {
+    const gc = centroid(walls)
+    return wallAnchorPoint(w, isBack ? w.length - x - dx : x, isBack, gc.x, gc.y)
+  }
+  // Waterfall legs on this wall + side, as occupied ranges for the given mover.
+  const wfOcc = (mover: { assembly_class: string; dy: number; dz?: number }) =>
+    wall && waterfallOcc
+      ? waterfallOcc(wall, elevWallSide, mover).map(o => ({ t: mirrorX(o.t, o.dx), dx: o.dx }))
+      : []
   // Dimension chains measure only cabinets the layer set draws.
   const chainCabs = wallCabs.filter(c => elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))
   // Hand-added part_operations for every cabinet on this wall → cabinet-space markers.
@@ -268,7 +300,7 @@ export default function ElevationSVG({
     for (const cab of wallCabs) {
       const rp = resolvedParts?.get(cab.id)
       if (!rp) continue
-      const rx = cabT(cab, wall)
+      const rx = elevX(cab)
       const topY = roomH - cabBottomZ(cab, room, wall) - cab.dy
       const push = (ex: number, ey: number, ew: number, eh: number) => {
         const x0 = rx + ex, x1 = rx + ex + ew
@@ -286,7 +318,7 @@ export default function ElevationSVG({
       rp.face_zones.forEach(fz => { const r = zoneElevRect(fz); push(r.ex, r.ey, r.ew, r.eh) })
     }
     return pts
-  }, [wallCabs, resolvedParts, wall, room, roomH])
+  }, [wallCabs, resolvedParts, wall, room, roomH, isBack])
 
   // All enabled snap candidates, used to draw the faint white "near the cursor"
   // dot hints (mirrors the modal). Same set computeElevSnap considers.
@@ -297,7 +329,7 @@ export default function ElevationSVG({
       pts.push({ x: 0, y: 0 }, { x: wall.length, y: 0 }, { x: 0, y: roomH }, { x: wall.length, y: roomH })
     }
     if (elevSnapSettings.kinds['cabinet-corner']) {
-      for (const cab of wallCabs) for (const c of cabinetElevCorners(cab, wall, room, roomH)) pts.push(c)
+      for (const cab of wallCabs) for (const c of cabinetElevCorners(cab, wall, room, roomH, isBack)) pts.push(c)
     }
     if (elevSnapSettings.kinds['part-corner']) pts.push(...partSnapPoints)
     return pts
@@ -417,21 +449,23 @@ export default function ElevationSVG({
       const v = rfData.current.view
       const svgR = svgRef.current!.getBoundingClientRect()
       const vz = v.zoom
-      const wd = wallDir(resWall)
       const snap10 = (n: number) => Math.round(n / 10) * 10
+      // startCabT / neighbours are elevation x. The anchor moves whenever the
+      // wall-space start end moves — the elevation-left handle on the face side,
+      // the elevation-right handle on the back side — so always send it.
       if (side === 'right') {
         const cursorT = (e.clientX - svgR.left - v.panX) / vz
         const rightBound = neighbours.filter(o => o.t > startCabT + 1).reduce((min, o) => Math.min(min, o.t), resWall.length)
         const newDx = Math.max(50, Math.min(rightBound - startCabT, snap10(cursorT - startCabT)))
-        setElevResizeLive({ cabId, dim, value: newDx })
-        onCabResizeUpdate({ liveValue: newDx })
+        const { x: livePosX, y: livePosY } = elevPos(resWall, startCabT, newDx)
+        setElevResizeLive({ cabId, dim, value: newDx, posX: livePosX, posY: livePosY })
+        onCabResizeUpdate({ liveValue: newDx, livePosX, livePosY })
       } else if (side === 'left') {
         const cursorT = (e.clientX - svgR.left - v.panX) / vz
         const leftBound = neighbours.filter(o => o.t + o.dx < startCabEndT - 1).reduce((max, o) => Math.max(max, o.t + o.dx), 0)
         const newDx = Math.max(50, Math.min(startCabEndT - leftBound, snap10(startCabEndT - cursorT)))
         const newT = startCabEndT - newDx
-        const livePosX = resWall.pos_x + newT * wd.x
-        const livePosY = resWall.pos_y + newT * wd.y
+        const { x: livePosX, y: livePosY } = elevPos(resWall, newT, newDx)
         setElevResizeLive({ cabId, dim, value: newDx, posX: livePosX, posY: livePosY })
         onCabResizeUpdate({ liveValue: newDx, livePosX, livePosY })
       } else if (side === 'top') {
@@ -455,7 +489,7 @@ export default function ElevationSVG({
         x: (e.clientX - svgR.left - view.panX) / view.zoom,
         y: (e.clientY - svgR.top  - view.panY) / view.zoom,
       }
-      const snap = computeElevSnap(wp, { wallCabs, wall, room, roomH, partPoints: partSnapPoints }, elevSnapSettings, SNAP_PX / view.zoom,
+      const snap = computeElevSnap(wp, { wallCabs, wall, room, roomH, back: isBack, partPoints: partSnapPoints }, elevSnapSettings, SNAP_PX / view.zoom,
         elevMeasureStart, { ortho: ctrlRef.current, ortho45: shiftRef.current })
       setElevSnapResult(snap.kind ? snap : null)
       setElevMeasureCursor(snap.pt)
@@ -493,7 +527,7 @@ export default function ElevationSVG({
         const cls = clsInfo?.cls ?? clipboard!.assembly_class
         const occ = wallCabs
           .filter(c => !c.is_kick_assembly && cabsBlock({ assembly_class: cls, dy: dims.dy }, c, wall, room))
-          .map(c => ({ t: cabT(c, wall), dx: c.dx }))
+          .map(c => ({ t: elevX(c), dx: c.dx })).concat(wfOcc({ assembly_class: cls, dy: dims.dy, dz: dims.dz }))
         if (clsInfo) {
           // Placing a new cabinet from the library: fit it into the available gap,
           // shrinking the width when the gap is narrower than the default.
@@ -528,7 +562,7 @@ export default function ElevationSVG({
         x: (e.clientX - svgR.left - view.panX) / view.zoom,
         y: (e.clientY - svgR.top  - view.panY) / view.zoom,
       }
-      const snap = computeElevSnap(wp, { wallCabs, wall, room, roomH, partPoints: partSnapPoints }, elevSnapSettings, SNAP_PX / view.zoom,
+      const snap = computeElevSnap(wp, { wallCabs, wall, room, roomH, back: isBack, partPoints: partSnapPoints }, elevSnapSettings, SNAP_PX / view.zoom,
         elevMeasureStart, { ortho: ctrlRef.current, ortho45: shiftRef.current })
       if (!elevMeasureStart || elevMeasureEnd) {
         setElevMeasureStart(snap.pt); setElevMeasureEnd(null); setElevMeasureCursor(snap.pt)
@@ -539,9 +573,7 @@ export default function ElevationSVG({
     }
 
     if ((placeInfoFor(mode, armedDef) || mode === 'paste') && wall && placeGhost) {
-      const wd = wallDir(wall)
-      const pos_x = wall.pos_x + placeGhost.t * wd.x
-      const pos_y = wall.pos_y + placeGhost.t * wd.y
+      const { x: pos_x, y: pos_y } = elevPos(wall, placeGhost.t, placeGhost.dx)
       const fitDx = placeInfoFor(mode, armedDef) ? placeGhost.dx : undefined
       setPlaceGhost(null)
       await onPlaceAtWall(wall, pos_x, pos_y, fitDx)
@@ -562,7 +594,7 @@ export default function ElevationSVG({
         const minX = Math.min(start.x, endX), maxX = Math.max(start.x, endX)
         const minY = Math.min(start.y, endY), maxY = Math.max(start.y, endY)
         const ids = wallCabs.filter(cab => {
-          const left = cabT(cab, wall), right = left + cab.dx
+          const left = elevX(cab), right = left + cab.dx
           const top  = roomH - cabBottomZ(cab, room, wall) - cab.dy, bottom = top + cab.dy
           return left >= minX && right <= maxX && top >= minY && bottom <= maxY
         }).map(c => c.id)
@@ -582,7 +614,7 @@ export default function ElevationSVG({
     const { cabId, dim, side } = elevResizeFollowing
     const { value, posX, posY } = elevResizeLive
     const update: Partial<CabinetInstance> = { [dim]: Math.round(value) }
-    if (side === 'left' && posX !== undefined) {
+    if (side !== 'top' && posX !== undefined) {
       update.pos_x = Math.round(posX)
       update.pos_y = Math.round(posY!)
     }
@@ -619,18 +651,17 @@ export default function ElevationSVG({
     const occupied = (cab.is_kick_assembly
       ? wallCabs.filter(c => c.id !== id && c.kick_run_id !== cab.kick_run_id && cabsBlock(cab, c, wall, room))
       : wallCabs.filter(c => c.id !== id && !c.is_kick_assembly && cabsBlock(cab, c, wall, room))
-    ).map(c => ({ t: cabT(c, wall), dx: c.dx }))
+    ).map(c => ({ t: elevX(c), dx: c.dx })).concat(wfOcc(cab))
     const snapT = slideToFreeSlot(
       Math.max(0, Math.min(wall.length - cab.dx, elevCabFloat.t - cab.dx / 2)),
-      cab.dx, wall.length, occupied, cabT(cab, wall)
+      cab.dx, wall.length, occupied, elevX(cab)
     )
-    const wd = wallDir(wall)
-    const pos_x = wall.pos_x + snapT * wd.x
-    const pos_y = wall.pos_y + snapT * wd.y
+    const { x: pos_x, y: pos_y } = elevPos(wall, snapT, cab.dx)
 
     setElevCabFollowing(null)
     setElevCabFloat(null)
-    onUpdateCabinet(id, { wall_id: wall.id, pos_x, pos_y, pos_z: snapBottomZ, rotation: wall.angle })
+    // Keep the cabinet on the side being viewed (back = facing away from the room).
+    onUpdateCabinet(id, { wall_id: wall.id, pos_x, pos_y, pos_z: snapBottomZ, rotation: isBack ? wall.angle + 180 : wall.angle })
   }
 
   function onSVGClick() {
@@ -646,7 +677,7 @@ export default function ElevationSVG({
       setElevCabFloat(null)
     } else {
       // Seed ghost at cabinet's current centre
-      const t  = cabT(cab, wall) + cab.dx / 2
+      const t  = elevX(cab) + cab.dx / 2
       const ht = cabBottomZ(cab, room, wall) + cab.dy / 2
       setElevCabFollowing({ id: cab.id })
       setElevCabFloat({ t, ht })
@@ -658,6 +689,9 @@ export default function ElevationSVG({
     if (e.button !== 0 || !wall || spaceRef.current) return
     if (mode === 'measure') return  // let measure clicks pass through to the svg
     e.stopPropagation()
+    // Mid-stretch: a click over a neighbour commits the stretch (clamped against
+    // that neighbour) via the svg's onPointerUp — don't select the neighbour.
+    if (elevResizeFollowing) return
     if (elevCabFollowing) {
       // Mid-move: don't cancel on pointer-down over a cabinet — let the click
       // event drop it here (handled in the cabinet's onClick / onSVGClick).
@@ -675,7 +709,7 @@ export default function ElevationSVG({
     e.stopPropagation()
     if (justConfirmedRef.current) return
     onSelectCabinet(cab.id)
-    const t = cabT(cab, wall)
+    const t = elevX(cab)
     const wd = wallDir(wall)
     const perp = { x: -wd.y, y: wd.x }
     const dim: 'dx' | 'dy' = side === 'top' ? 'dy' : 'dx'
@@ -686,12 +720,16 @@ export default function ElevationSVG({
     const neighbours = (cab.is_kick_assembly
       ? wallCabs.filter(c => c.id !== cab.id && c.kick_run_id !== cab.kick_run_id && cabsBlock(cab, c, wall, room))
       : wallCabs.filter(c => c.id !== cab.id && !c.is_kick_assembly && cabsBlock(cab, c, wall, room))
-    ).map(c => ({ t: cabT(c, wall), dx: c.dx }))
+    ).map(c => ({ t: elevX(c), dx: c.dx })).concat(wfOcc(cab))
     setElevResizeFollowing({ cabId: cab.id, dim, side, startCabT: t, startCabEndT: t + cab.dx, resWall: wall, neighbours })
     setElevResizeLive({ cabId: cab.id, dim, value: dim === 'dx' ? cab.dx : cab.dy })
+    // The parent's CabResize is in wall space (side 'left' = the end at pos, which
+    // moves). On the back side the elevation-left handle is the wall-space right end.
+    const wallT = cabT(cab, wall)
+    const wallSide = isBack && side !== 'top' ? (side === 'left' ? 'right' : 'left') : side
     onCabResizeStart({
-      cabId: cab.id, dim, side, wall, perp,
-      startCabT: t, startCabEndT: t + cab.dx,
+      cabId: cab.id, dim, side: wallSide, wall, perp,
+      startCabT: wallT, startCabEndT: wallT + cab.dx,
       liveValue: dim === 'dx' ? cab.dx : cab.dy,
     })
   }
@@ -934,7 +972,8 @@ export default function ElevationSVG({
               const renderReturn = (rw: Wall, isLeft: boolean) => {
                 const t    = rw.thickness
                 const rwH  = rw.height ?? room.room_dy ?? 2400
-                const x0   = isLeft ? -t : wall.length
+                // Back side: the wall's start is on the viewer's right.
+                const x0   = isLeft !== isBack ? -t : wall.length
                 const slabY = roomH - rwH
                 const midY  = slabY + rwH / 2
                 const midX  = x0 + t / 2
@@ -990,7 +1029,7 @@ export default function ElevationSVG({
             {/* Cabinets — click-through in F4 Benchtop mode (only tops pick) */}
             <g style={{ pointerEvents: isBenchtopMode(mode) ? 'none' : undefined }}>
             {wallCabs.map(cab => {
-              const baseT   = cabT(cab, wall)
+              const baseT   = elevX(cab)
               const bottomZ = cabBottomZ(cab, room, wall)
               const isSel   = selected?.type === 'cabinet' && selected.id === cab.id
               const isMultiSel = multiSelect.includes(cab.id)
@@ -1005,7 +1044,7 @@ export default function ElevationSVG({
                   displayDx = elevResizeLive.value
                   if (elevResizeLive.posX !== undefined) {
                     const wd2 = wallDir(wall)
-                    displayT = (elevResizeLive.posX - wall.pos_x) * wd2.x + (elevResizeLive.posY! - wall.pos_y) * wd2.y
+                    displayT = mirrorX((elevResizeLive.posX - wall.pos_x) * wd2.x + (elevResizeLive.posY! - wall.pos_y) * wd2.y, displayDx)
                   }
                 } else if (elevResizeLive.dim === 'dy') {
                   displayDy = elevResizeLive.value
@@ -1022,7 +1061,7 @@ export default function ElevationSVG({
                 ? (resolvedParts?.get(cab.id)?.toekick_parts.find(p => p.part_key === 'kick_front_face')?.DX ?? 150)
                 : 0
 
-              const baseColor = isSel ? CAB_FILL_SEL[cab.assembly_class] : CAB_FILL[cab.assembly_class]
+              const baseColor = isSel ? layers.cabFillSel(cab.assembly_class) : layers.cabFill(cab.assembly_class)
               const isHover = hoveredCabId === cab.id && !isSel && !isMultiSel
               const cabStroke = isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : isHover ? '#f97316' : '#3b82f6'
               const cabStrokeW = isSel || isMultiSel || isHover ? 2 / z : 1 / z
@@ -1100,6 +1139,8 @@ export default function ElevationSVG({
                   onPointerLeave={() => setHoveredCabId(null)}
                   onClick={e => {
                     e.stopPropagation()
+                    if (elevResizeFollowing) { void confirmResize(); return }
+                    if (justConfirmedRef.current) return
                     if (elevCabFollowing) { dropFollowingCab(); return }
                     if (!shiftRef.current) onSelectCabinet(cab.id)
                   }}
@@ -1127,7 +1168,7 @@ export default function ElevationSVG({
                         {showOutline && (
                           <rect x={rx} y={ry} width={displayDx} height={displayDy}
                             fill={isLineDrawing ? 'none' : (pastFace ? 'url(#section-hatch)' : baseColor)}
-                            fillOpacity={isLineDrawing ? 0 : carcP.fillOpacity}
+                            fillOpacity={isLineDrawing ? 0 : carcP.fillOpacity * layers.cabFillOpacity}
                             stroke={isLineDrawing ? (isSel ? '#e2e8f0' : layers.color('carcass_outline', '#94a3b8')) : (isSel || isMultiSel || isHover ? cabStroke : layers.color('carcass_outline', cabStroke))}
                             strokeWidth={layers.w('carcass_outline', 1) * (isLineDrawing ? 1 / z : cabStrokeW)}
                             strokeDasharray={isLineDrawing ? undefined : carcP.strokeDasharray}
@@ -1275,6 +1316,23 @@ export default function ElevationSVG({
                               fill="none" stroke={layers.color('hinges', isLineDrawing ? '#475569' : '#a855f7')}
                               strokeWidth={layers.w('hinges', isLineDrawing ? 1 : 0.6) / z}
                               opacity={layers.props('hinges', z).opacity} style={{ pointerEvents: 'none' }} />
+                          )
+                        }),
+                      )}
+                      {/* Drawer-box fixing bores into the back of each drawer front
+                          (the runner's drawer_front drill ops). Inner-drawer fronts sit
+                          behind a door, so they follow the internals rule (showInt). */}
+                      {[
+                        ...(layers.show('drawer_front_drilling') ? rp.drawer_stacks.flatMap(ds => ds.slides) : []),
+                        ...(showInt('drawer_front_drilling') && showInt('inner_drawers') ? rp.internal_slides ?? [] : []),
+                      ].flatMap((s: ResolvedDrawerSlide, si: number) =>
+                        s.drills.filter(dr => dr.surface === 'drawer_front').map((dr, j) => {
+                          const c = toSVGPt(dr.x, dr.y)
+                          return (
+                            <circle key={`dfd-${si}-${j}`} cx={c.x} cy={c.y} r={Math.max(dr.radius, 0.5)}
+                              fill="none" stroke={layers.color('drawer_front_drilling', isLineDrawing ? '#475569' : '#d97706')}
+                              strokeWidth={layers.w('drawer_front_drilling', isLineDrawing ? 1 : 0.6) / z}
+                              opacity={layers.props('drawer_front_drilling', z).opacity} style={{ pointerEvents: 'none' }} />
                           )
                         }),
                       )}
@@ -1567,8 +1625,8 @@ export default function ElevationSVG({
               const floatX = placeGhost.cursorT - placeGhost.dx / 2
               const floatY = placeGhost.cursorSY - placeGhost.dy / 2
 
-              const fill = CAB_FILL[placeGhost.cls] ?? CAB_FILL.base
-              const sel  = CAB_FILL_SEL[placeGhost.cls] ?? CAB_FILL_SEL.base
+              const fill = layers.cabFill(placeGhost.cls)
+              const sel  = layers.cabFillSel(placeGhost.cls)
 
               // Arrow from float ghost face to snap surface
               const arrowFromX = placeGhost.cursorT
@@ -1587,7 +1645,9 @@ export default function ElevationSVG({
               const gwd = wallDir(wall)
               const groupExtras = (mode === 'paste' && clipboardGroup.length > 1 && baseCab)
                 ? clipboardGroup.slice(1).map(gc => {
-                    const o    = (gc.pos_x - baseCab.pos_x) * gwd.x + (gc.pos_y - baseCab.pos_y) * gwd.y
+                    const wo   = (gc.pos_x - baseCab.pos_x) * gwd.x + (gc.pos_y - baseCab.pos_y) * gwd.y
+                    // Wall-space offset from the lead; mirrored on the back side.
+                    const o    = isBack ? baseCab.dx - wo - gc.dx : wo
                     const topY = roomH - cabBottomZ(gc, room, wall) - gc.dy
                     return { cls: gc.assembly_class, o, topY, dx: gc.dx, dy: gc.dy }
                   })
@@ -1629,7 +1689,7 @@ export default function ElevationSVG({
                       fill="none" stroke="#60a5fa" strokeWidth={1 / z}
                       strokeDasharray={`${4 / z} ${4 / z}`} opacity={0.5} style={{ pointerEvents: 'none' }} />
                     <rect x={floatX + ex.o} y={floatY + (ex.topY - snapY)} width={ex.dx} height={ex.dy}
-                      fill={(CAB_FILL[ex.cls] ?? CAB_FILL.base) + 'cc'} stroke={CAB_FILL_SEL[ex.cls] ?? CAB_FILL_SEL.base}
+                      fill={layers.cabFill(ex.cls) + 'cc'} stroke={layers.cabFillSel(ex.cls)}
                       strokeWidth={2 / z} strokeDasharray={`${6 / z} ${3 / z}`} style={{ pointerEvents: 'none' }} />
                   </g>
                 ))}
@@ -1652,10 +1712,10 @@ export default function ElevationSVG({
               // Snap landing
               const occupied = wallCabs
                 .filter(c => c.id !== elevCabFollowing.id && cabsBlock(followingCab, c, wall, room))
-                .map(c => ({ t: cabT(c, wall), dx: c.dx }))
+                .map(c => ({ t: elevX(c), dx: c.dx })).concat(wfOcc(followingCab))
               const snapT = slideToFreeSlot(
                 Math.max(0, Math.min(wall.length - followingCab.dx, elevCabFloat.t - followingCab.dx / 2)),
-                followingCab.dx, wall.length, occupied, cabT(followingCab, wall)
+                followingCab.dx, wall.length, occupied, elevX(followingCab)
               )
               const snapX = snapT
               const snapY = roomH - snapBottomZ - followingCab.dy
@@ -1672,8 +1732,8 @@ export default function ElevationSVG({
               const alen = Math.sqrt(adx * adx + ady * ady)
               const showArrow = alen > arrowSize * 1.5
 
-              const baseColor = CAB_FILL[followingCab.assembly_class]
-              const selColor  = CAB_FILL_SEL[followingCab.assembly_class]
+              const baseColor = layers.cabFill(followingCab.assembly_class)
+              const selColor  = layers.cabFillSel(followingCab.assembly_class)
 
               return (<>
                 {/* Snap landing outline */}
@@ -1712,7 +1772,7 @@ export default function ElevationSVG({
                 c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'
               )
               if (overheadCabs.length === 0) return null
-              const segs = computeElevChain(overheadCabs, wall)
+              const segs = computeElevChain(overheadCabs, wall, elevX)
               const chainY = -tickH * 2
               const col = layers.color('dim_elev_wall_chain', '#ffffff')
               const chainOp = layers.op('dim_elev_wall_chain')
@@ -1750,7 +1810,7 @@ export default function ElevationSVG({
                 )
               )
               if (floorCabs.length === 0) return null
-              const segs = computeElevChain(floorCabs, wall)
+              const segs = computeElevChain(floorCabs, wall, elevX)
               const chainY = roomH + tickH * 1.5
               const col = layers.color('dim_elev_floor_chain', '#ffffff')
               const chainOp = layers.op('dim_elev_floor_chain')

@@ -17,6 +17,7 @@ import { resolveDrawerStacks }   from './resolveDrawerStack'
 import { resolveJoints }         from './resolveJoints'
 import { resolveHinges }         from './resolveHinges'
 import { checkHingeInnerDrawerClash } from './hingeClash'
+import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -25,9 +26,11 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const r = cab.rules  // already merged from system → job → room → cabinet
 
   // ── 1. Case Module ────────────────────────────────────────────
-  const { parts: caseParts, errors: caseErrors } = cab.has_carcass
+  const { parts: rectCaseParts, errors: caseErrors } = cab.has_carcass
     ? resolveCaseParts(cab, r)
     : { parts: [], errors: [] }
+  // Shaped cabinets (z_cabinet_shape): reshape the box carcass to the footprint.
+  const caseParts = cab.footprint ? shapeCaseParts(cab, r, rectCaseParts, caseErrors) : rectCaseParts
   allErrors.push(...caseErrors)
 
   // ── 2. Toe Kick Module ────────────────────────────────────────
@@ -44,9 +47,10 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   allErrors.push(...faceErrors)
 
   // ── 4. Internal Module ────────────────────────────────────────
-  const { parts: internalParts, slides: internalSlides, errors: internalErrors } = cab.has_internal
+  const { parts: rectInternalParts, slides: internalSlides, errors: internalErrors } = cab.has_internal
     ? resolveInternalParts(cab, r)
     : { parts: [], slides: [], errors: [] }
+  const internalParts = cab.footprint ? shapeShelves(cab, rectInternalParts) : rectInternalParts
   allErrors.push(...internalErrors)
 
   // ── 5. Drawer Stacks ──────────────────────────────────────────

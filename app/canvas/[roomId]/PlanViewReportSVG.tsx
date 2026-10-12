@@ -19,9 +19,11 @@ import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { planShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
-import { caseBox, isSide, tkPlanBox } from '@/src/lib/jointDrilling'
+import { caseBox, casePlanCorners, isSide, tkPlanBox } from '@/src/lib/jointDrilling'
+import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { customExtents } from '@/src/lib/customPartBox'
+import { returnWallThickness } from '@/src/lib/wallJoints'
 
 /** Report-only page extras (not drawing layers). */
 export interface PlanViewPageOptions {
@@ -219,7 +221,9 @@ export default function PlanViewReportSVG({
   function depthDim(wall: Wall, inward: { x: number; y: number }, tPos: number, dz: number, sign: 1 | -1, key: string, item: string, backOffset = 0) {
     const lineW = layers.w(item, dimSW)
     const wd = wallDir(wall)
-    const offX = wd.x * sign * 5 * P, offY = wd.y * sign * 5 * P
+    // Clear the return wall joined at this end before the paper-space gap.
+    const off = returnWallThickness(wall, walls, tPos === 0 ? 'start' : 'end') + 5 * P
+    const offX = wd.x * sign * off, offY = wd.y * sign * off
     const sx = wall.pos_x + tPos * wd.x + offX + inward.x * backOffset
     const sy = wall.pos_y + tPos * wd.y + offY + inward.y * backOffset
     const ex = sx + inward.x * dz, ey = sy + inward.y * dz
@@ -310,6 +314,10 @@ export default function PlanViewReportSVG({
         if (!wall) return null
         const rp       = resolvedParts?.get(cab.id)
         if (!planShowsCabinet(cab, layers, rp)) return null
+        // Shaped cabinets (z_cabinet_shape): the carcass follows the footprint;
+        // kick and drawer hardware are still box-built until Phase 4 — hidden.
+        const shaped   = !!cab.footprint?.segments?.length
+        const rpParts  = shaped ? undefined : rp
         const basePerp = wallInwardNormal(wall, cx.x, cx.y)
         const perp     = cabWallPerp(cab, wall, basePerp)
         const poly     = cabinetPolygon(cab, wall, perp)
@@ -318,7 +326,7 @@ export default function PlanViewReportSVG({
         const boxPoly = (b: { x: number; z: number; w: number; d: number }) =>
           `${at(b.x, b.z)} ${at(b.x + b.w, b.z)} ${at(b.x + b.w, b.z + b.d)} ${at(b.x, b.z + b.d)}`
         const inset    = Math.min(20, cab.dx * 0.08, cab.dz * 0.08)
-        const innerPoly = !rp && inset > 1 && cab.dx > inset * 2 && cab.dz > inset * 2
+        const innerPoly = !rp && !shaped && inset > 1 && cab.dx > inset * 2 && cab.dz > inset * 2
           ? boxPoly({ x: inset, z: inset, w: cab.dx - inset * 2, d: cab.dz - inset * 2 })
           : null
         const outline = !cab.is_kick_assembly && layers.show('carcass_outline')
@@ -347,12 +355,13 @@ export default function PlanViewReportSVG({
               const b = caseBox(p)
               if (!layers.show(it) || b.w <= 0 || b.d <= 0) return null
               const pp = lp(it)
-              const vertical = isSide(p.part_key) || p.part_key === 'back'
-              return <polygon key={`cp-${i}`} points={boxPoly(b)} opacity={pp.opacity}
+              const vertical = isSide(p.part_key) || p.part_key === 'back' || isShapedPanelKey(p.part_key)
+              const pts = casePlanCorners(p).map(q => at(q.x, q.z)).join(' ')
+              return <polygon key={`cp-${i}`} points={pts} opacity={pp.opacity}
                 fill={vertical ? CARCASE_LINE : 'none'} fillOpacity={vertical ? 0.45 * pp.fillOpacity : 0}
                 stroke={CARCASE_LINE} strokeWidth={layers.w(it, sw * 0.35)} strokeDasharray={pp.strokeDasharray} />
             })}
-            {(rp?.toekick_parts ?? []).map((p, i) => {
+            {(rpParts?.toekick_parts ?? []).map((p, i) => {
               const it = kickPartItem(p.part_key)
               const b = tkPlanBox(p)
               if (!layers.show(it) || b.w <= 0 || b.d <= 0) return null
@@ -360,13 +369,13 @@ export default function PlanViewReportSVG({
               return <polygon key={`tk-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"
                 stroke={INK3} strokeWidth={layers.w(it, sw * 0.35)} strokeDasharray={pp.strokeDasharray} />
             })}
-            {layers.show('drawer_boxes') && (rp?.drawer_stacks ?? []).flatMap((ds, si) => ds.box_parts.map((p, i) => {
+            {layers.show('drawer_boxes') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.box_parts.map((p, i) => {
               const b = dbBox(p), pp = lp('drawer_boxes')
               if (b.w <= 0 || b.d <= 0) return null
               return <polygon key={`db-${si}-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"
                 stroke={INK3} strokeWidth={layers.w('drawer_boxes', sw * 0.3)} strokeDasharray={pp.strokeDasharray} />
             }))}
-            {layers.show('drawer_runners') && (rp?.drawer_stacks ?? []).flatMap((ds, si) => ds.slides.map((s, i) => {
+            {layers.show('drawer_runners') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.slides.map((s, i) => {
               const b = slideBox(s), pp = lp('drawer_runners')
               if (b.w <= 0 || b.d <= 0) return null
               return <polygon key={`sl-${si}-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"
@@ -413,7 +422,7 @@ export default function PlanViewReportSVG({
 
       {/* ── Door swings + drawer indicators ── */}
       {layers.any('door_swings', 'drawer_lines') && cabinets.flatMap(cab => {
-        if (!cab.has_face) return []
+        if (!cab.has_face || cab.footprint?.segments?.length) return []   // shaped: swings land with Phase 3 facets
         const wall = walls.find(w => w.id === cab.wall_id)
         if (!wall) return []
         const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
@@ -507,7 +516,7 @@ export default function PlanViewReportSVG({
         const inward = wallInwardNormal(w, cx.x, cx.y)
         const out = { x: -inward.x, y: -inward.y }
         const allBase = chainCabs.filter(c => c.wall_id === w.id && (c.assembly_class === 'base' || c.assembly_class === 'base_corner'))
-        const allWall = chainCabs.filter(c => c.wall_id === w.id && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'))
+        const allWall = chainCabs.filter(c => c.wall_id === w.id && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner' || c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'))
         const sideDepth = (cabs: CabinetInstance[]) => cabs.length ? Math.max(...cabs.map(c => c.dz)) : 0
 
         // One side's width chain (pushed out by depthOffset) + depth dims.

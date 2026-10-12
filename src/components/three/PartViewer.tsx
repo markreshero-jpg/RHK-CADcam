@@ -194,6 +194,9 @@ export const PartAlphaContext = createContext(1)
 export function PartAlpha({ a, children }: { a: number; children: React.ReactNode }) {
   return <PartAlphaContext.Provider value={a}>{children}</PartAlphaContext.Provider>
 }
+/** Wire-mode part colours. The cabinet editor's dark background uses the
+ *  defaults; the room 3D (light background) provides darker edges. */
+export const WireColorContext = createContext({ fill: '#9ca3af', edge: '#94a3b8' })
 /** Props every see-through material needs (transparent panels must not occlude). */
 export function alphaMat(a: number) {
   return a >= 1 ? {} : { transparent: true, opacity: a, depthWrite: false }
@@ -239,6 +242,7 @@ export function Part({
   const [hovered, setHovered] = useState(false)
   const passive = useContext(PassivePartsContext)
   const alpha   = useContext(PartAlphaContext)
+  const wireCol = useContext(WireColorContext)
   const am      = alphaMat(alpha)
   // Edges widths are in CSS pixels, so on a scaled display 1 renders as 1.5–2
   // physical pixels; 1/dpr keeps the resting outline an exact 1-device-px hairline.
@@ -334,8 +338,8 @@ export function Part({
           geometry={ownGeom ?? undefined}
         >
           {!ownGeom && <boxGeometry args={[b.w, b.h, b.d]} />}
-          <meshStandardMaterial color="#9ca3af" transparent opacity={0.08} depthWrite={false} />
-          <Edges threshold={10} color="#94a3b8" linewidth={1} />
+          <meshStandardMaterial color={wireCol.fill} transparent opacity={0.08} depthWrite={false} />
+          <Edges threshold={10} color={wireCol.edge} linewidth={1} />
         </mesh>
       </group>
     )
@@ -767,7 +771,7 @@ function ZoomSpeedSync({ controlsRef, baseSpeed }: {
 export function PreviewCanvas({
   dx, dy, dz,
   bgColor = '#111827',
-  enablePan = false,
+  enablePan = false,
   onDeselect,
   onContextMenu,
   overlay,
@@ -785,7 +789,7 @@ export function PreviewCanvas({
   dy:             number
   dz:             number
   bgColor?:       string
-  enablePan?:     boolean
+  enablePan?:     boolean
   onDeselect?:    () => void
   onContextMenu?: (e: React.MouseEvent) => void
   overlay?:       React.ReactNode
@@ -863,7 +867,7 @@ export function PreviewCanvas({
           enableDamping={false}
           zoomSpeed={zoomSpeed}
         />
-        <ZoomSpeedSync key={legacy ? 'legacy' : view} controlsRef={controlsRef} baseSpeed={zoomSpeed} />
+        <ZoomSpeedSync key={`zoom-${legacy ? 'legacy' : view}`}controlsRef={controlsRef} baseSpeed={zoomSpeed} />
         <ambientLight intensity={1.8} />
         <directionalLight position={[dx * 1.5, dy * 2, dz * 2]} intensity={1.6} />
         <directionalLight position={[-dx, dy * 0.5, -dz * 0.5]} intensity={0.6} color="#e8f0ff" />

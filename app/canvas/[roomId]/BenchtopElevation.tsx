@@ -54,7 +54,12 @@ export default function BenchtopElevation({
   interactive: boolean
 }) {
   if (!layers.show('benchtops')) return null
-  const f = wallFrame(wall, side, roomCx)
+  // The back side is viewed from outside the room, so the wall runs right-to-left:
+  // measure along from the wall's far end (matches ElevationSVG's mirrored x).
+  const f0 = wallFrame(wall, side, roomCx)
+  const f = side === 'back'
+    ? { ...f0, o: { x: f0.o.x + f0.d.x * f0.len, y: f0.o.y + f0.d.y * f0.len }, d: { x: -f0.d.x, y: -f0.d.y } }
+    : f0
   const z = zoom
   const lp = layers.props('benchtops', z)
   const stroke = layers.color('benchtops', '#14b8a6')

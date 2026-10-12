@@ -323,7 +323,9 @@ function loadClassSchedules(a: ClassScheduleArgs) {
     a.effectiveInnerSchedId
       ? supabase
           .from('inner_drawerbox_schedules')
-          .select('material_id, edgeband_id, bottom_material_id, bottom_edgeband_id, front_material_id, front_edgeband_id, material:materials!inner_drawerbox_schedules_material_id_fkey(*), bottom_material:materials!inner_drawerbox_schedules_bottom_material_id_fkey(*), front_material:materials!inner_drawerbox_schedules_front_material_id_fkey(*)')
+          // Hint embeds by column, not FK name: PostgREST parses "!inner_…" as the
+          // !inner join modifier, so the FK-name form fails with PGRST100.
+          .select('material_id, edgeband_id, bottom_material_id, bottom_edgeband_id, front_material_id, front_edgeband_id, material:materials!material_id(*), bottom_material:materials!bottom_material_id(*), front_material:materials!front_material_id(*)')
           .eq('id', a.effectiveInnerSchedId)
           .maybeSingle()
       : Promise.resolve({ data: null }),
@@ -359,6 +361,19 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     .single()
 
   if (cabErr || !cab) throw new Error(`Cabinet not found: ${cabinetId}`)
+  return loadCabinetInputFromRow(cab)
+}
+
+/**
+ * Build the resolver input from an in-memory cabinet row (same shape as a
+ * cabinet_instances row). `persisted: false` = an unsaved draft (e.g. the armed
+ * library definition in the sidebar preview): its per-cabinet rows (hinge
+ * instances, kick run) don't exist yet, so those reads are skipped.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: boolean } = {}): Promise<CabinetInput> {
+  const persisted = opts.persisted !== false
+  const cabinetId = cab.id as string
 
   // ── 2. Room + job + shop cascade (cached per room; see cascadeCache.ts) ─────
   const cfg = await loadRoomCascadeConfig(cab.room_id as string)
@@ -770,13 +785,13 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
   // resolver keeps working before the v0.6 migration is applied — a missing
   // table just yields no hinge hardware and resolveCabinet skips hinges.
   const { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges } =
-    await loadHingeInputs(cabinetId, cab.room_id as string, projectId, (cab.hardware_overrides ?? {}) as Record<string, unknown>)
+    await loadHingeInputs(persisted ? cabinetId : null, cab.room_id as string, projectId, (cab.hardware_overrides ?? {}) as Record<string, unknown>)
 
   // ── 14. Kick-run context ────────────────────────────────────────────────────
   // When this cabinet is linked to a kick run, load its role + split settings so
   // the resolver builds the continuous kick (assembly) or skips it (member).
   // See z_kick_join/KICK-JOIN-PLAN.md.
-  const kick_run = await loadKickRunInput(cabinetId, cab.kick_run_id as string | null)
+  const kick_run = persisted ? await loadKickRunInput(cabinetId, cab.kick_run_id as string | null) : undefined
 
   return {
     id:              cab.id,
@@ -791,6 +806,7 @@ export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput>
     has_toekick:     cab.has_toekick,
     top_type:        cab.top_type ?? undefined,
     toe_type:        cab.toe_type ?? undefined,
+    footprint:       (cab.footprint as CabinetInput['footprint']) ?? null,
     left_neighbour:  (cab.left_neighbour_type  ?? 'wall') as CabinetInput['left_neighbour'],
     right_neighbour: (cab.right_neighbour_type ?? 'wall') as CabinetInput['right_neighbour'],
     exposed_interior: cab.exposed_interior,
@@ -931,7 +947,7 @@ function loadHingeSchedule(roomId: string, projectId: string | undefined) {
 // chosen cup + plate, the shop hinge_count_rules, and any persisted
 // hinge_instances for this cabinet (so the resolver can preserve y_locked rows).
 async function loadHingeInputs(
-  cabinetId: string,
+  cabinetId: string | null,   // null = unsaved draft (no persisted hinge_instances)
   roomId: string,
   projectId: string | undefined,
   hardwareOverrides: Record<string, unknown> = {},
@@ -945,7 +961,9 @@ async function loadHingeInputs(
   // only this cabinet's persisted hinge_instances are per-cabinet.
   const [shared, existingRes] = await Promise.all([
     loadHingeSchedule(roomId, projectId),
-    supabase.from('hinge_instances').select('row_index, col_index, sort_order, y_position_mm, y_locked, hinge_edge, mounting_surface, shelf_snap_tolerance_mm, hinge_plate_id').eq('cabinet_instance_id', cabinetId),
+    cabinetId
+      ? supabase.from('hinge_instances').select('row_index, col_index, sort_order, y_position_mm, y_locked, hinge_edge, mounting_surface, shelf_snap_tolerance_mm, hinge_plate_id').eq('cabinet_instance_id', cabinetId)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
   ])
   const { rulesRes, schedHingeId, schedPlateIdFromSchedule } = shared
 

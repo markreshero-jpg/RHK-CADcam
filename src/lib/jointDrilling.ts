@@ -8,6 +8,7 @@
 
 import type { Box } from '@/src/components/three/PartViewer'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, JointTypeOp, ResolvedToekickPart } from '@/src/lib/resolver/types'
+import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 
 export function isSide(k: string) { return k === 'left_side' || k === 'right_side' }
 
@@ -20,12 +21,43 @@ export function tkPlanBox(p: ResolvedToekickPart) {
 }
 
 // Cabinet-space bounding box for a case part. { x,y,z = min corner, w/h/d = X/Y/Z extents }.
+// Shaped-cabinet panels (side:/back:, z_cabinet_shape) are 'face'-kind boxes
+// like the back, before their AY rotation about the min corner — see
+// caseBoxAABB / casePlanCorners for where they actually land.
 export function caseBox(p: ResolvedCasePart): Box {
   if (isSide(p.part_key))
     return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
   if (p.part_key === 'back')
     return { x: p.X, y: p.Y + p.DZ, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
+  if (isShapedPanelKey(p.part_key))
+    return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
   return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+}
+
+// Plan footprint of a case part as cabinet-local (x along the width, z into
+// the room) points: the box corners turned by the part's AY, or a horizontal
+// part's resolver outline (shaped cabinets).
+export function casePlanCorners(p: ResolvedCasePart): { x: number; z: number }[] {
+  const b = caseBox(p)
+  if (p.outline && p.outline.length >= 3 && !isSide(p.part_key) && p.part_key !== 'back' && !isShapedPanelKey(p.part_key) && !p.AY)
+    return p.outline.map(q => ({ x: b.x + q.x, z: b.z + b.d - q.y }))
+  const local: [number, number][] = [[0, 0], [b.w, 0], [b.w, b.d], [0, b.d]]
+  if (!p.AY) return local.map(([x, z]) => ({ x: b.x + x, z: b.z + z }))
+  return local.map(([x, z]) => {
+    const [rx, , rz] = rotEulerXYZ(0, p.AY, 0, x, 0, z)
+    return { x: b.x + rx, z: b.z + rz }
+  })
+}
+
+// Axis-aligned cabinet-space bounds of a case part after its AY rotation
+// (2D elevation / side views, hit areas). Equals caseBox when AY = 0.
+export function caseBoxAABB(p: ResolvedCasePart): Box {
+  const b = caseBox(p)
+  if (!p.AY) return b
+  const c = casePlanCorners(p)
+  const xs = c.map(q => q.x), zs = c.map(q => q.z)
+  const x0 = Math.min(...xs), z0 = Math.min(...zs)
+  return { x: x0, y: b.y, z: z0, w: Math.max(...xs) - x0, h: b.h, d: Math.max(...zs) - z0 }
 }
 
 // Cabinet-space AABB for the internal parts that participate in seams. A divider

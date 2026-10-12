@@ -166,6 +166,9 @@ export interface CabinetInstance {
   // assembly (is_kick_assembly = true). See z_kick_join/.
   kick_run_id?: string | null
   is_kick_assembly?: boolean
+  // Shaped-cabinet plan outline + edge roles; null/absent = plain rectangle.
+  // See z_cabinet_shape/CABINET-SHAPE-SPEC.md.
+  footprint?: import('./cabinetShape/footprint').Footprint | null
   schema_version: string
   notes: string | null
   created_at: string
@@ -237,6 +240,8 @@ export interface CabinetDefinition {
   no_cnc?: boolean
   // Snapshot of the assembly's custom parts (copy-not-link); re-inserted at placement.
   custom_parts?: Record<string, unknown>[]
+  // Shaped-cabinet footprint, copied to the instance at placement.
+  footprint?: import('./cabinetShape/footprint').Footprint | null
   // UI metadata
   description: string | null
   thumbnail_svg: string | null

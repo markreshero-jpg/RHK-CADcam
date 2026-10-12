@@ -18,6 +18,8 @@ export interface UserPrefs {
    *  elevation and 3D. May hold a legacy preset key; resolve with findLayerSet. */
   layerSetId:         string
   cabinetViewStyles:  CabinetViewStyles
+  /** Room 3D view style (3D tab dropdown): solid or wire (see-through parts). */
+  room3DStyle:        ViewStyle
   snapSettings:     SnapSettings
   elevSnapSettings: ElevSnapSettings
   /** Panel Optimiser Stage 2 part-table column order (persisted layout). */
@@ -50,6 +52,7 @@ const DEFAULTS: UserPrefs = {
   invertScroll: false,
   layerSetId:        '',
   cabinetViewStyles: DEFAULT_CABINET_VIEW_STYLES,
+  room3DStyle:       'solid',
   snapSettings:     DEFAULT_SNAP_SETTINGS,
   elevSnapSettings: DEFAULT_ELEV_SNAP_SETTINGS,
   optimiserPartCols: null,

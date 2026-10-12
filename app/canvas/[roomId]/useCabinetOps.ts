@@ -52,11 +52,13 @@ export function useCabinetOps(p: CabinetOpsParams) {
     captureSnapshot()
     const data: Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'> = {
       room_id: room.id, wall_id: wall.id, cabinet_definition_id: null,
-      label: nextLabel(cabinets, 'ep'),
-      assembly_class: 'base',
+      label: nextLabel(cabinets, type === 'panel' ? 'ep' : 'filler'),
+      // Inherit the host's class (corner folded) so the panel / filler lands on the
+      // same dimension rows and material schedules as the cabinet beside it.
+      assembly_class: cab.assembly_class.replace('_corner', '') as AssemblyClass,
       pos_x: wall.pos_x + freeT * wd.x,
       pos_y: wall.pos_y + freeT * wd.y,
-      pos_z: 0, rotation: wall.angle,
+      pos_z: cab.pos_z, rotation: wall.angle,
       dx, dy: cab.dy, dz: cab.dz,
       has_carcass: false, has_internal: false, has_face: true, has_toekick: false,
       construction_method_id: null, top_type: 'front_rail', toe_type: 'ladder',

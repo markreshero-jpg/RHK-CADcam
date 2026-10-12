@@ -4,6 +4,7 @@ import type { OptiSnapshot, OptiMaterial, OptiMachine, OptiProfile, PartKeyMap }
 import { normalizeProject, collectEbIds, PART_SELECTS, type RawRoom, type RawCabinet } from '@/src/lib/optimiser/normalize'
 import { buildSizeOvByCab, type SizeOv } from '@/src/lib/optimiser/sizeOverrides'
 import { buildShapesByCab, SHAPE_SELECT, type ShapeRow } from '@/src/lib/optimiser/shapes'
+import { normalizeBenchtopParts, BENCHTOP_PART_SELECT, type RawBenchtop } from '@/src/lib/optimiser/benchtopParts'
 import OptimiserClient from './OptimiserClient'
 
 export const dynamic = 'force-dynamic'
@@ -71,13 +72,23 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
     (dbR.data ?? []) as Record<string, unknown>[], commentsByCab,
     (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab, shapesByCab)
 
+  // In-house benchtop parts (built-up / board tops) — benchtop Phase 5.
+  const { data: btRaw } = roomIds.length
+    ? await supabase.from('benchtop_instances').select('id,label,room_id').in('room_id', roomIds)
+    : { data: [] }
+  const bts = (btRaw ?? []) as RawBenchtop[]
+  const { data: btPartRows } = bts.length
+    ? await supabase.from('benchtop_resolved_parts').select(BENCHTOP_PART_SELECT).in('benchtop_id', bts.map(b => b.id))
+    : { data: [] }
+  const btNorm = normalizeBenchtopParts(project, norm.rooms, bts, (btPartRows ?? []) as Record<string, unknown>[])
+
   const snapshot: OptiSnapshot = {
     projectId,
     projectName: project.name,
     jobNumber: project.job_number ?? null,
     rooms: norm.rooms,
-    cabinets: norm.cabinets,
-    parts: norm.parts,
+    cabinets: [...norm.cabinets, ...btNorm.cabinets],
+    parts: [...norm.parts, ...btNorm.parts],
     materials: (matR.data ?? []) as OptiMaterial[],
     machines: (machR.data ?? []) as OptiMachine[],
     profiles: (profR.data ?? []) as OptiProfile[],

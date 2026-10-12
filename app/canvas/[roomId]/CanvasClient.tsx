@@ -11,6 +11,7 @@ import {
   nearestWall, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabT, nextLabel,
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint,
 } from '@/src/lib/geometry'
+import { waterfallLegs, waterfallOccupancy } from '@/src/lib/waterfallObstacles'
 import { btSegments } from '@/src/lib/benchtopGeometry'
 import { btPosition, wallFrame, btOverhangs } from '@/src/lib/benchtopAnchor'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
@@ -66,7 +67,7 @@ import BenchtopPanel from './BenchtopPanel'
 import { useBenchtopCatalog } from './useBenchtopCatalog'
 import dynamic from 'next/dynamic'
 import SnapToolbar from './SnapToolbar'
-import { getUserPrefs, setUserPrefs, type PlanGridPrefs } from '@/src/lib/userPrefs'
+import { getUserPrefs, setUserPrefs, type PlanGridPrefs, type ViewStyle } from '@/src/lib/userPrefs'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { computeSnap, cabinetCorners, SNAP_KINDS, SNAP_KIND_META, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
 import { type ElevSnapSettings, type ElevSnapResult } from '@/src/lib/elevationSnap'
@@ -169,6 +170,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [sectionDrag, setSectionDrag] = useState<{ offsetX: number; offsetY: number } | null>(null)
   // Plan reference grid (dots). Per-user, persisted to localStorage.
   const [planGrid, setPlanGridState] = useState<PlanGridPrefs>(() => getUserPrefs().planGrid)
+  // Room 3D solid / wire (3D tab dropdown), remembered per user.
+  const [room3DStyle, setRoom3DStyleState] = useState<ViewStyle>(() => getUserPrefs().room3DStyle)
+  const [view3DMenuOpen, setView3DMenuOpen] = useState(false)
+  function setRoom3DStyle(v: ViewStyle) {
+    setRoom3DStyleState(v)
+    setUserPrefs({ room3DStyle: v })
+  }
+  useEffect(() => {
+    if (!view3DMenuOpen) return
+    const close = () => setView3DMenuOpen(false)
+    window.addEventListener('pointerdown', close)
+    return () => window.removeEventListener('pointerdown', close)
+  }, [view3DMenuOpen])
   // Snapping (shared by wall/benchtop/measure tools). Persisted to localStorage.
   const [snapSettings, setSnapSettingsState] = useState<SnapSettings>(() => getUserPrefs().snapSettings)
   const [snapResult, setSnapResult] = useState<SnapResult | null>(null)
@@ -300,6 +314,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const thick = btCatalog.thicknessFor(b)
     return { topZ: (b.height_mm ?? btBaseHeight) + thick.total, thick, defaultProfileId: btCatalog.defaultProfileIdFor(b) }
   }
+  // Waterfall legs block cabinets (place / move / stretch) like another unit would.
+  const wfLegs = waterfallLegs(benchtops, btInfo, btCatalog.profileById)
+  const wfOcc = (w: Wall, side: 'face' | 'back', mover: { assembly_class: string; dy: number; dz?: number }) =>
+    waterfallOccupancy(wfLegs, w, side, centroid(walls), room, mover)
 
   // F4 → Draw in Shape Editor. Starting rectangle = the footprint bbox of the
   // selected cabinets (select the base run first), else 1200 × 600 at the
@@ -403,6 +421,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }, [mode])
 
+  // Esc is two-stage: first press cancels whatever is in progress (stretch, move,
+  // draw, armed placement, menu); a press with nothing in progress deselects.
+  // Read through a ref so the keydown closure (deps [selected, mode]) sees it fresh.
+  const escBusyRef = useRef(false)
+  escBusyRef.current = !!(cabResize || cabFollowing || cabMoveDrag || drawStart || armedDef || contextMenu || measureStart)
+
   useEffect(() => {
     const isInput = (t: EventTarget | null) => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement
     const kd = (e: KeyboardEvent) => {
@@ -437,7 +461,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !isInput(e.target)) { e.preventDefault(); void handleUndo() }
       if (((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey) && !isInput(e.target)) || ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && e.shiftKey && !isInput(e.target))) { e.preventDefault(); void handleRedo() }
-      if (e.key === 'Escape') { setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode(isBenchtopMode(mode) && mode !== 'benchtop_select' ? 'benchtop_select' : 'select'); setArmedDef(null); setArmedDraft(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setDeleteCabsPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
+      if (e.key === 'Escape') { if (!escBusyRef.current && !isInput(e.target) && (mode === 'select' || mode === 'benchtop_select')) setSelected(null); setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode(isBenchtopMode(mode) && mode !== 'benchtop_select' ? 'benchtop_select' : 'select'); setArmedDef(null); setArmedDraft(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setDeleteCabsPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput(e.target)) {
         if (mode === 'draw_benchtop' && e.key === 'Backspace') { bt.undoVertex(); return }
         if (selected?.type === 'cabinet') handleDeleteCabinet(selected.id)
@@ -784,7 +808,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const side = flip ? 'back' : 'face'
     const occupied = cabinets
       .filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: draft.assembly_class, dy: draft.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side)
-      .map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+      .map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, side, draft))
     const fit = fitFreeSlot(desired, draft.dx, raw.wall.length, occupied)
     const a = wallAnchorPoint(raw.wall, fit.t, flip, gc.x, gc.y)
     await placeFromDraft(draft, raw.wall, a.x, a.y, flip, fit.dx)
@@ -878,7 +902,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const desired = anchorT + (cabWallT(src) - baseT)
       const occupied = working
         .filter(c => c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(src, c, wall, room) && cabWallSide(c, wall) === side)
-        .map(c => ({ t: cabT(c, wall), dx: c.dx }))
+        .map(c => ({ t: cabT(c, wall), dx: c.dx })).concat(wfOcc(wall, side, src))
       const t = findFreeSlot(desired, src.dx, wall.length, occupied)
       const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, flip, cxp.x, cxp.y)
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1144,7 +1168,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const desired = cursorT(raw.wall) - clipboard.dx / 2
       const flip = wallFlipFor(raw.wall)
       const side = flip ? 'back' : 'face'
-      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(clipboard, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(clipboard, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, side, clipboard))
       const t = findFreeSlot(desired, clipboard.dx, raw.wall.length, occupied)
       const cxp = centroid(walls)
       const a = wallAnchorPoint(raw.wall, t, flip, cxp.x, cxp.y)
@@ -1160,7 +1184,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (!raw) { setPlaceGhost(null); return }
       const flip = wallFlipFor(raw.wall)
       const side = flip ? 'back' : 'face'
-      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: clsInfo.cls, dy: clsInfo.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: clsInfo.cls, dy: clsInfo.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, side, { assembly_class: clsInfo.cls, dy: clsInfo.dy, dz: clsInfo.dz }))
       // Fit into the available gap: shrink the new cabinet's width if the gap is
       // narrower than the default, rather than overlapping the neighbour.
       // fitFreeSlot centres on the cursor point itself.
@@ -1185,7 +1209,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const desired = Math.max(0, Math.min(wall.length - cabDX, cursorT - dragOffset))
         const dragCab = cabinets.find(c => c.id === cabId)
         const dragSide = dragCab ? cabWallSide(dragCab, wall) : 'face'
-        const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(dragCab ?? { assembly_class: assemblyClass, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === dragSide).map(c => ({ t: cabT(c, wall), dx: c.dx }))
+        const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(dragCab ?? { assembly_class: assemblyClass, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === dragSide).map(c => ({ t: cabT(c, wall), dx: c.dx })).concat(wfOcc(wall, dragSide, dragCab ?? { assembly_class: assemblyClass, dy: 9999 }))
         const t = slideToFreeSlot(desired, cabDX, wall.length, occupied, dragCab ? cabT(dragCab, wall) : undefined)
         const cxp = centroid(walls)
         const a = wallAnchorPoint(wall, t, dragSide === 'back', cxp.x, cxp.y)
@@ -1205,7 +1229,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           // rotation, which is meaningless against a different wall.
           const flip = wallFlipFor(raw.wall)
           const moveSide = flip ? 'back' : 'face'
-          const occupied = cabinets.filter(c => c.id !== id && c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(cab, c, raw.wall, room) && cabWallSide(c, raw.wall) === moveSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+          const occupied = cabinets.filter(c => c.id !== id && c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(cab, c, raw.wall, room) && cabWallSide(c, raw.wall) === moveSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, moveSide, cab))
           // Same-wall move → keep it on the drag side (no bounce-back); cross-wall → free slot.
           const origT = raw.wall.id === cab.wall_id ? cabT(cab, raw.wall) : undefined
           const t = slideToFreeSlot(desired, cab.dx, raw.wall.length, occupied, origT)
@@ -1227,7 +1251,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       // resizes freely (clamped only by the wall) — never by the units it overlaps.
       const neighbours = resizingCab?.is_kick_assembly ? [] : cabinets
         .filter(c => c.id !== cabId && c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(resizingCab ?? { assembly_class: resizingCls, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === resizingSide)
-        .map(c => ({ t: cabT(c, wall), dx: c.dx }))
+        .map(c => ({ t: cabT(c, wall), dx: c.dx })).concat(wfOcc(wall, resizingSide, resizingCab ?? { assembly_class: resizingCls, dy: 9999 }))
       if (side === 'right') {
         const cursorT = (wp.x - wall.pos_x) * wd.x + (wp.y - wall.pos_y) * wd.y
         // Hard limit: left edge of nearest neighbour to the right
@@ -1244,7 +1268,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           .reduce((max, o) => Math.max(max, o.t + o.dx), 0)
         const newT = Math.max(leftBound, Math.min(startCabEndT - 50, cursorT))
         const newDx = startCabEndT - newT
-        setCabResize(r => r ? { ...r, liveValue: Math.round(newDx), livePosX: wall.pos_x + newT * wd.x, livePosY: wall.pos_y + newT * wd.y } : r)
+        // Shift the anchor along the wall (keeps a back-side cabinet on the outer face).
+        const base = resizingCab ? { x: resizingCab.pos_x, y: resizingCab.pos_y, t: cabT(resizingCab, wall) } : { x: wall.pos_x, y: wall.pos_y, t: 0 }
+        setCabResize(r => r ? { ...r, liveValue: Math.round(newDx), livePosX: base.x + (newT - base.t) * wd.x, livePosY: base.y + (newT - base.t) * wd.y } : r)
       } else {
         const cab = cabinets.find(c => c.id === cabId)
         if (cab) {
@@ -1348,7 +1374,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             return (wp.x - raw.wall.pos_x) * inw.x + (wp.y - raw.wall.pos_y) * inw.y < 0
           })()
           const pasteSide = pasteFlip ? 'back' : 'face'
-          const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(clipboard, c, raw.wall, room) && cabWallSide(c, raw.wall) === pasteSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+          const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(clipboard, c, raw.wall, room) && cabWallSide(c, raw.wall) === pasteSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, pasteSide, clipboard))
           const t = findFreeSlot(desired, clipboard.dx, raw.wall.length, occupied)
           ghost = { wall: raw.wall, pos_x: raw.wall.pos_x + t * wd2.x, pos_y: raw.wall.pos_y + t * wd2.y, islandFlip: pasteFlip }
         }
@@ -1764,7 +1790,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       />
 
       {/* View tab bar */}
-      <div className="flex-none h-8 bg-gray-900 border-b border-gray-800 flex items-center px-3 shrink-0 relative">
+      <div className="flex-none h-8 bg-gray-900 border-b border-gray-800 flex items-center px-3 shrink-0 relative z-30">
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1">
           {(['plan', 'elevation', 'section', '3d'] as CanvasView[]).map(v => (
             <button key={v} onClick={() => switchView(v)}
@@ -1773,9 +1799,36 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
               }`}>
-              {v === 'plan' ? 'Plan' : v === 'elevation' ? 'Elevation' : v === 'section' ? 'Section' : '3D'}
+              {v === 'plan' ? 'Plan' : v === 'elevation' ? 'Elevation' : v === 'section' ? 'Section' : room3DStyle === 'wire' ? '3D · Wire' : '3D'}
             </button>
           ))}
+          {/* 3D style dropdown: solid / wire (see-through parts) */}
+          <div className="relative -ml-1" onPointerDown={e => e.stopPropagation()}>
+            <button
+              onClick={() => setView3DMenuOpen(o => !o)}
+              title="3D view style"
+              className={`px-1.5 py-1 text-xs rounded transition-colors ${
+                canvasView === '3d'
+                  ? 'bg-blue-600 text-white hover:bg-blue-500'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+              }`}
+            >
+              ▾
+            </button>
+            {view3DMenuOpen && (
+              <div className="absolute left-0 top-full mt-1 z-50 bg-gray-800 border border-gray-600 rounded shadow-xl py-1 min-w-[130px]">
+                {([['solid', 'Solid view'], ['wire', 'Wire view']] as const).map(([v, label]) => (
+                  <button key={v}
+                    onClick={() => { setRoom3DStyle(v); setView3DMenuOpen(false); if (canvasView !== '3d') switchView('3d') }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left text-gray-200 hover:bg-gray-700"
+                  >
+                    <span className="w-3 text-blue-400">{room3DStyle === v ? '✓' : ''}</span>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {canvasView === '3d' && (
             <button
               onClick={() => setReset3DSignal(s => s + 1)}
@@ -1841,6 +1894,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           onSelectMode={onSelectMode}
           armedDefinitionId={armedDef?.id ?? null}
           onArmDefinition={armDefinition}
+          armedDraft={mode === 'place_definition' ? armedDraft : null}
+          matColours={matColours}
+          ebByMatId={ebByMatId}
           libRefresh={libRefresh}
           wallMenuOpen={wallMenuOpen}
           setWallMenuOpen={setWallMenuOpen}
@@ -2067,6 +2123,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeselect={() => setSelected(null)}
             benchtops={benchtops}
             benchtopInfo={btInfo}
+            waterfallOcc={wfOcc}
             edgeProfiles={btCatalog.profileById}
             onSelectBenchtop={id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]); setCabResize(null) }}
             onSeamClick={(cabId) => {
@@ -2108,6 +2165,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             cameraStateRef={camera3DStateRef}
             resetSignal={reset3DSignal}
             layers={layers3D}
+            wire={room3DStyle === 'wire'}
             bt={{
               benchtops, info: btInfo, profiles: btCatalog.profileById,
               selectedId: selected?.type === 'benchtop' ? selected.id : null,
@@ -2138,8 +2196,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 const wd = wallDir(w)
                 const rightEndT = cabT(cab, w) + cab.dx
                 const newT = Math.max(0, rightEndT - v)
-                update.pos_x = w.pos_x + newT * wd.x
-                update.pos_y = w.pos_y + newT * wd.y
+                update.pos_x = cab.pos_x + (newT - cabT(cab, w)) * wd.x
+                update.pos_y = cab.pos_y + (newT - cabT(cab, w)) * wd.y
               }
               handleUpdateCabinet(cabResize.cabId, update)
               setCabResize(r => r ? { ...r, liveValue: v } : r)
@@ -2153,8 +2211,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 const wd = wallDir(w)
                 const rightEndT = cabT(cab, w) + cab.dx
                 const newT = Math.max(0, rightEndT - v)
-                update.pos_x = w.pos_x + newT * wd.x
-                update.pos_y = w.pos_y + newT * wd.y
+                update.pos_x = cab.pos_x + (newT - cabT(cab, w)) * wd.x
+                update.pos_y = cab.pos_y + (newT - cabT(cab, w)) * wd.y
               }
               captureSnapshot()
               handleUpdateCabinet(cabResize.cabId, update)
@@ -2356,7 +2414,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 const copySide = copyFlip ? 'back' : 'face'
                 const occupied = cabinets
                   .filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(cab, c, raw.wall, room) && cabWallSide(c, raw.wall) === copySide)
-                  .map(c => ({ t: cabT(c, raw.wall), dx: c.dx }))
+                  .map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, copySide, cab))
                 const t = findFreeSlot(desired, cab.dx, raw.wall.length, occupied)
                 setPlaceGhost({ wall: raw.wall, pos_x: raw.wall.pos_x + t * wd.x, pos_y: raw.wall.pos_y + t * wd.y, islandFlip: copyFlip, freePos: mouseWorld })
               } else {

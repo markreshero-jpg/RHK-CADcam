@@ -85,6 +85,11 @@ and how it draws them. Example: the "Kicks" set shows only toe kicks.
 - 3D honours show/hide, colour, opacity and the ghost style (3c part 2). Dashed and
   line weight mean nothing in 3D; weight is hidden on the 3D tab and dashed is
   filtered out of its style picker.
+- Room 3D **Solid / Wire view** (dropdown on the 3D tab, 2026-10-12) is a render
+  style, not visibility: a user pref (`room3DStyle`), not a layer-set option. Wire
+  draws every shown part as a faint see-through panel with edges (CabinetScene
+  `wire`, same as the cabinet editor) and ghosts walls + benchtops. Layer show/hide
+  still gates what is drawn.
 - A user set containing "hide everything but X" stores explicit `visible:false`
   entries. Items added by future modules fall back to their registry default, so
   they will **appear** in such sets until someone edits the set.
@@ -113,7 +118,7 @@ Migration `drawing_layer_sets`: `id uuid`, `name text unique`, `sort_order int`,
 
 ```ts
 settings = { plan?: ViewLayerSettings, elevation?: ViewLayerSettings, '3d'?: ViewLayerSettings }
-ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } }, lineDrawing?: boolean, background?: string }
+ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } }, lineDrawing?: boolean, background?: string, cabinetFill?: { base?, wall?, tall? } }
 ```
 
 - Saving from the manager stores **sparse** settings: only differences from
@@ -130,12 +135,12 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 | Kicks | `kick_faces`, `kick_spreaders` (P,E,3D; **plan default hidden**) |
 | Fronts | `doors`, `drawer_fronts` (P,E,3D), `false_panels` (E,3D), `door_swings`, `drawer_lines` (P), `door_chevrons`, `drawer_labels` (E) |
 | Internals | `internal_outline` (P, default hidden), `adj_shelves`, `fixed_shelves`, `dividers`, `inner_drawers`, `accessories` (E,3D), `shelf_labels`, `inner_drawer_labels` (E) |
-| Hardware | `drawer_boxes`, `drawer_runners` (P,E,3D), `inner_drawer_runners`, `hinges`, `machining` (E,3D) — **all default hidden in plan + 3D** |
+| Hardware | `drawer_boxes`, `drawer_runners` (P,E,3D), `inner_drawer_runners`, `hinges`, `machining` (E,3D), `drawer_front_drilling` (E — drawer_front slide bores; also in elevation reports) — **all default hidden in plan + 3D** |
 | Panels | `applied_panels`, `fillers`, `custom_panels` (P,E,3D) — by parts_library key (3b) |
 | Benchtops | `benchtops` (P / E / 3D), `benchtop_edges` (P: profile colour + code, wall edges; E: code on the front edge), `benchtop_joins` (P / E) — edges + joins added by benchtop Phase 3; elevation + 3D views by Phase 3b |
 | Room | `walls` (3D) |
 | Labels | `cabinet_labels`, `cabinet_sizes` (P,E) |
-| Dimensions | `dim_wall_overall`, `dim_base_chain`, `dim_wall_chain` (P), `dim_elev_height`, `dim_elev_floor_chain`, `dim_elev_wall_chain` (E) |
+| Dimensions | `dim_wall_overall`, `dim_base_chain`, `dim_wall_chain` (P), `dim_elev_height`, `dim_elev_floor_chain`, `dim_elev_wall_chain` (E) — chain items to be replaced by user-defined rows (`settings.<view>.dimRows`), see `z_dimension_rows/DIMENSION-ROWS-SPEC.md` |
 
 Retired ids: `hardware` (Phase 1: hinges + inner-drawer slides, elevation) was
 split into `hinges` + `inner_drawer_runners`. Stored rows were migrated
@@ -241,7 +246,8 @@ Decisions (2026-09-16): hardware before appearance; real hardware models in
   runners, elevation part rects). Weight scales line width. For text items
   (cabinet names / sizes, drawer / shelf / inner-drawer labels) weight scales
   font size. Selected / hover / multi-select highlight colours still win.
-  Cabinet-outline fill keeps the per-class fill (colour = outline stroke only).
+  Cabinet-outline fill keeps the per-class fill (colour = outline stroke only);
+  the per-class fill itself is a per-view set setting — see "Cabinet fill" below.
   Dimension chains (plan `WallDimensionChain`, elevation chains) take colour +
   weight. Their label backing chips follow the view background.
 - **3D:** colour = part outline colour (room palette fallback) via
@@ -253,6 +259,23 @@ Decisions (2026-09-16): hardware before appearance; real hardware models in
   Panel widened to 540px.
 - Verification: `z_plan_automation/verify-layers-p3.mjs` (needs a temporary set
   with overrides).
+
+- **Cabinet fill (added 2026-10-12, user request) — built, not verified in the app:**
+  `ViewLayerSettings.cabinetFill { base?, wall?, tall? }`, plan + elevation only
+  (corner classes follow their parent). Replaces the hard-coded `CAB_FILL` lookups in
+  `CanvasSVG` / `ElevationSVG`, including the place / drag / follow previews, via
+  `LayerView.cabFill(cls)` / `cabFillSel(cls)`. Unset = `CAB_FILL` / `CAB_FILL_SEL`.
+  With an override, the selected fill is derived (`selectedFill`: lighter, at least
+  60% saturation), so there's no second picker. Layer Manager: Base / Wall / Tall swatches
+  under Background colour on the **Plan tab only**, plus a fill-only opacity
+  select (`cabinetFillOpacity`, multiplies the outline style's fillOpacity; the
+  outline stroke keeps the Cabinet outline opacity). Reports ignore it (prints
+  ignore colours). Test: `__tests__/cabinetFill.test.ts`.
+  Elevation (2026-10-12, user choice, trial): controls hidden on the Elevation tab,
+  because resolved cabinets draw in part-palette colours and the class fill only
+  shows on the loading / resize fallback rect. `ElevationSVG` still reads the
+  elevation values, so with nothing stored it draws the defaults. Open: the user may
+  later want a class tint behind resolved elevation cabinets instead.
 
 - **Opacity (added 2026-09-17, user request):** `ItemSetting.opacity` (multiplier;
   `OPACITY_OPTIONS` 100/75/50/25/10%), `LayerView.op(id)`. `props()` multiplies the

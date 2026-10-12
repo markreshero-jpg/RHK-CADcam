@@ -5,7 +5,9 @@
 import {
   LAYER_ITEM_BY_ID, SPLIT_FROM, itemDefault,
   type ItemSetting, type LayerSet, type LayerStyle, type LayerViewId, type ViewLayerSettings,
+  type CabinetFillClass,
 } from './registry'
+import { CAB_FILL, CAB_FILL_SEL } from '../geometry'
 
 /** Ghost style in 3D — the material alpha (matches the 2D ghost's 0.25 opacity). */
 export const GHOST_ALPHA = 0.25
@@ -47,6 +49,40 @@ export interface LayerView {
   alpha(id: string): number
   /** View background override or undefined. */
   background?: string
+  /** Cabinet fill for an assembly class (set override, else CAB_FILL). */
+  cabFill(assemblyClass: string): string
+  /** Selected-cabinet fill: a brighter version of an overridden fill, else CAB_FILL_SEL. */
+  cabFillSel(assemblyClass: string): string
+  /** Cabinet fill opacity multiplier (fill only; 1 = unchanged). */
+  cabFillOpacity: number
+}
+
+/** base_corner → base etc.; unknown classes fall back to base. */
+function fillClass(assemblyClass: string): CabinetFillClass {
+  const c = assemblyClass.replace(/_corner$/, '')
+  return c === 'wall' || c === 'tall' ? c : 'base'
+}
+
+/** Brighter, more saturated version of a fill — the selected-cabinet colour. */
+export function selectedFill(hex: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex)
+  if (!m) return hex
+  const n = parseInt(m[1], 16)
+  const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min
+  let h = 0
+  if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  h = (h * 60 + 360) % 360
+  const l0 = (max + min) / 2
+  const s0 = d ? d / (1 - Math.abs(2 * l0 - 1)) : 0
+  const l = Math.min(l0 + 0.25, 0.85)
+  const s = d ? Math.max(s0, 0.6) : 0
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1))
+  const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x]
+    : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+  const to = (v: number) => Math.round((v + l - c / 2) * 255).toString(16).padStart(2, '0')
+  return `#${to(r1)}${to(g1)}${to(b1)}`
 }
 
 /** Effective setting for one item in one view (stored override ?? registry default). */
@@ -86,6 +122,12 @@ export function resolveLayerView(set: LayerSet | undefined, view: LayerViewId): 
     // 3D has no line style: ghost = see-through material, dashed = solid.
     alpha:   id => (setting(id).style === 'ghost' ? GHOST_ALPHA : 1) * (setting(id).opacity ?? 1),
     background: vs?.background,
+    cabFill: cls => vs?.cabinetFill?.[fillClass(cls)] ?? CAB_FILL[fillClass(cls)],
+    cabFillSel: cls => {
+      const o = vs?.cabinetFill?.[fillClass(cls)]
+      return o ? selectedFill(o) : CAB_FILL_SEL[fillClass(cls)]
+    },
+    cabFillOpacity: vs?.cabinetFillOpacity ?? 1,
   }
 }
 
@@ -115,5 +157,8 @@ export function sparseViewSettings(vs: ViewLayerSettings, view: LayerViewId): Vi
   const out: ViewLayerSettings = { items }
   if (vs.lineDrawing) out.lineDrawing = true
   if (vs.background) out.background = vs.background
+  const fill = Object.fromEntries(Object.entries(vs.cabinetFill ?? {}).filter(([, v]) => !!v))
+  if (Object.keys(fill).length) out.cabinetFill = fill
+  if (vs.cabinetFillOpacity !== undefined && vs.cabinetFillOpacity !== 1) out.cabinetFillOpacity = vs.cabinetFillOpacity
   return out
 }

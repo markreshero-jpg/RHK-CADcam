@@ -16,6 +16,7 @@
 // ============================================================
 
 import type { SourceTable } from './types'
+import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 
 export type SizeOv = { sw?: number | null; sh?: number | null; sd?: number | null }
 /** cabinet_instance_id → stable part id → override record */
@@ -41,7 +42,7 @@ function boxAxes(table: SourceTable, row: Row): [Axis, Axis, Axis] | null {
     case 'case_parts': {
       const key = String(row.part_key)
       if (key === 'left_side' || key === 'right_side') return ['dz', 'dy', 'dx']
-      if (key === 'back') return ['dy', 'dx', 'dz']
+      if (key === 'back' || isShapedPanelKey(key)) return ['dy', 'dx', 'dz']
       return ['dy', 'dz', 'dx']
     }
     case 'toekick_parts':
@@ -62,6 +63,7 @@ function boxAxes(table: SourceTable, row: Row): [Axis, Axis, Axis] | null {
       return ['dy', 'dx', 'dz']
     }
     case 'custom_parts':
+    case 'benchtop_parts':   // benchtop Phase 5 — no size overrides
       return null
   }
 }

@@ -7,8 +7,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Phase 0 (this spec) written 2026-10-11. Next: Phase 1
-> (footprint data model + presets + plan render). Nothing built yet.
+> **RESUME HERE** → Phases 1–2 checked in-app (Mark, 2026-10-12), uncommitted.
+> Next: Phase 3
+> (faces per front edge).
 
 ---
 
@@ -57,6 +58,33 @@ derived from geometry (`src/lib/benchtopAnchor.ts`). Same pattern here.
    free-form footprint editing.
 5. **Null footprint = rectangle = existing resolver path**, unchanged. No
    migration of existing cabinets.
+6. **Shape is a code modifier, not a config** (Mark, 2026-10-12). Codes describe
+   the box (cabinet-codes skill core principle); shape is orthogonal to the door
+   config, so it rides after `/` like `/L` `/R` `/SC` — not `-` (that's the
+   drawer-stack separator; `D3-SLL-L` would be ambiguous). Modifiers:
+   `/AE` angled end · `/CC` clipped corner · `/RE` radius end · `/TZ` trapezoid,
+   side via `/L` `/R`. e.g. `D3-SLL/AE/R`, `B2D/CC/L`, `BOPN/RE/R`.
+   Diagonal corner keeps its config code `BCNL` / `WCNL`.
+7. **No shaped entries in the library yet** (Mark, 2026-10-12) — get shaped
+   cabinets working on the canvas first. The modifiers are agreed but not yet
+   added to the parser (`rhk-crm/lib/cabinetCodes.ts`) or the skill.
+
+8. **Built for hand-editing from day one** (Mark, 2026-10-12). Phase 1 must not
+   paint free-form editing (Phase 6) into a corner:
+   - `segments` is the **single source of truth**. `preset` + `params` are
+     provenance only. Every consumer (plan, 3D, resolver, elevation) reads
+     `segments`, never `params`.
+   - **Stable edge ids.** Faces and role overrides key off `edge.id`, never the
+     segment index. Moving a vertex keeps ids. Splitting an edge keeps the id on
+     one half and gives the other a new id. Deleting an edge orphans its face
+     grid with a visible warning; it is never silently re-attached.
+   - **Vertices are formulas.** e.g. `x = W - 300`. A hand-dragged vertex is
+     re-expressed against its nearest bbox side (`W - 250`), so resize still
+     behaves.
+   - A hand edit sets `preset: null` and keeps `from_preset` as history.
+     "Re-apply preset" regenerates the shape from that preset.
+   - Roles live on `edge`, the same mechanism as benchtop `{wall}`. The Phase 6
+     editor is the Shape Editor with a role `edgeOptions`.
 
 ## Proposals (not yet locked)
 
@@ -66,13 +94,15 @@ derived from geometry (`src/lib/benchtopAnchor.ts`). Same pattern here.
   {
     "preset": "clipped_corner",          // null = free-form
     "params": { "clip_x": 300, "clip_z": 300, "side": "right" },
-    "segments": [                        // Shape Editor format, cabinet frame
-      // origin bottom-left-back, x → right, z → front (CABINET-GEOMETRY-SPEC)
-      { "type": "line", "start": [0,0], "end": [900,0],
-        "edge": { "id": "e0", "role": "back" } },
-      ...
+    "from_preset": "clipped_corner",     // history, survives a hand edit
+    "segments": [                        // Shape Editor format (p0/p1/rx/ry/sweep), cabinet frame:
+      // x along the width (0 = left side), y = depth (0 = back, cab.d = front)
+      { "type": "line", "p0": {"x":0,"y":0}, "p1": {"x":900,"y":0},   // cached numbers
+        "p0_expr": { "x": "0", "y": "0" },                           // live vertex formulas
+        "edge": { "id": "back", "role": "back" } },
+      ...                                 // arcs also carry "r_expr"
     ],
-    "role_overrides": { "e3": "open" }   // user overrides survive regeneration
+    "role_overrides": { "facet": "open" }  // user overrides survive regeneration
   }
   ```
   `dx` / `dz` stay as the footprint bbox (keeps every bbox consumer working).
@@ -109,7 +139,7 @@ derived from geometry (`src/lib/benchtopAnchor.ts`). Same pattern here.
 | `radius_end` | radius, side | back, side, front, **arc (open shelves)** | — |
 | `trapezoid` | front width, back width | back, side (angled), front, side (angled) | — |
 
-Codes: confirm with the `cabinet-codes` convention before seeding.
+Codes: diagonal = `BCNL`/`WCNL`; the rest use the shape modifiers (decision 6).
 
 ---
 
@@ -117,18 +147,59 @@ Codes: confirm with the `cabinet-codes` convention before seeding.
 
 ### Phase 0 — Spec `[x]` (2026-10-11)
 
-### Phase 1 — Footprint data + presets + plan `[ ]`
-- [ ] Migration: `footprint jsonb` on instances + definitions (S-a)
-- [ ] Types + preset generators (`src/lib/cabinetShape/presets.ts`), formula-driven (S-d)
-- [ ] `cabinetPolygon` in `src/lib/geometry.ts` returns the footprint when present
-- [ ] Plan render of shaped outline, registered through the display-layer API
-- [ ] Library: preset cabinets placeable from the library; preset param panel
+### Phase 1 — Footprint data + presets + plan `[x]` (2026-10-12, checked in-app by Mark)
+- [x] Migration `migration_s1_footprint.sql`: `footprint jsonb` on instances + definitions (S-a), applied
+- [x] `src/lib/cabinetShape/footprint.ts` (types, `evaluateFootprint`, outline, per-edge plan runs) +
+      `presets.ts` (5 presets, formula vertices `cab.w`/`cab.d`/`p.*`, stable edge ids, left/right mirror,
+      warnings) + tests
+- [x] `cabinetCornerPts` / `cabinetPolygon` return the shaped outline, evaluated at the live size, so
+      resize, move ghosts, marquee hit-test and the plan report all follow (new `cabinetToPlan`)
+- [x] Plan render: outline in the `carcass_outline` layer; front-role edges drawn in the `doors` /
+      `drawer_fronts` layer. Box-shaped resolved parts, the internal inset and door swings are hidden on
+      shaped cabinets until Phase 2/3 (CanvasSVG + PlanViewReportSVG)
+- [x] Shape section in the cabinet panel (`CabinetShapeSection.tsx`): preset, end side, params, per-edge
+      role (role_overrides). Replaces "placeable from library" (decision 7: no library entries yet).
+      A footprint copies through Save-to-library and placement.
+- [x] In-app check (dev server)
+- Not yet shaped: elevation, 3D, resolver parts — all still the bbox (Phases 2–5)
 
-### Phase 2 — Case resolver `[ ]`
-- [ ] Per-edge panel generator (own frame, non-zero AY rotation)
-- [ ] Horizontals = inward offset of footprint (bottom, top / rails)
-- [ ] Butt joints at every vertex first; 3D render (Cabinet3DView / Room3DScene)
-- [ ] Part-shape outlines on non-rectangular horizontals (reuse `part_shape_overrides` render path)
+### Phase 2 — Case resolver `[x]` (2026-10-12, checked in-app by Mark)
+Design (locked in code):
+- `resolveShapedCase.ts` runs after the box `resolveCaseParts` and reshapes it, so every
+  join / height rule (BACK_JOIN, BOTTOM_JOIN, RAIL_JOIN, TOP_TYPE) still comes from one place.
+- **Legacy keys kept where they fit**: a side edge on x=0 / x=DX stays `left_side` / `right_side`,
+  a back edge on y=0 stays `back` — trimmed to the edge. Hinges, seams, drilling, slides and the
+  cut list keep working for them. Box parts with no edge left are dropped.
+- **Other side/back edges** → `side:<edge>` / `back:<edge>`: 'face'-kind panel (DY length,
+  DX height, DZ thickness inward), `AY` = rotation about its outer start corner
+  (three.js Y, pivot = box min corner). Heights copy the box side / back.
+- **Front facets** (not the straight front) → `rail:<edge>` top rail when TOP_TYPE has rails.
+  The straight front keeps `front_rail`; no straight front (diagonal) → no `front_rail`.
+- **Horizontals** (bottom, full_top, rails, adj/fixed shelves) = box rect ∩ inset polygon
+  (footprint pushed in by the panel thickness on side/back edges, 0 on front/open edges;
+  BOTTOM_JOIN bottom_outside / RAIL_JOIN on_top_of_sides clip to the outline instead).
+  Non-rectangular results carry `outline` (horizontal Shape Editor frame) → persisted in
+  `case_parts.outline` / `internal_parts.outline` (migration_s2) → rendered via the
+  existing shape path (a user shape override still wins).
+- **Butt joints only**, priority side > back (BACK_JOIN behind_sides flips it), ties → earlier
+  edge. Square ends; an angled butt leaves a small gap (never an overlap). Inner faces are kept
+  inside the outline at acute corners. Mitres/bevels = Phase 4.
+- Curved (arc) side/back edges get no panel yet → `SHAPE_CURVED_PANEL` error, treated as open.
+- Scribes (SCRL/SCRR/SCRBK) apply only through the kept legacy parts.
+
+- [x] `src/lib/cabinetShape/construct.ts` (winding, inset polygon, convex clip, butt trims) +
+      `resolveShapedCase.ts` (case + shelves) wired in `resolver.ts`; tests (`shapedCase.test.ts`)
+- [x] DB: `case_parts_part_key_check` widened to `side:|back:|rail:<edge>`; `outline` columns (applied)
+- [x] Consumers routed through `cabinetShape/partKeys.ts`: caseBox (+ `casePlanCorners`,
+      `caseBoxAABB`), layer registry, formula `caseAxes`, optimiser `caseFrame` / `boxAxes`,
+      OverridesView frame, ElevationSVG + ortho views (AABB), 3D (`caseRot` = AY + override,
+      'face' kind, labels, resolver outlines → `shapes3D`), plan + plan report (turned panels,
+      outlines; kick / fronts / drawer hardware still hidden on shaped cabinets)
+- [x] In-app check
+- Known gaps: seams/joints/drilling are not generated for the new per-edge parts (fixed seam
+  list); the optimiser nests the bbox and does not cut outlines (Phase 5); Part Editor does
+  not yet show resolver outlines; toe kick + doors still box-built in 3D (Phases 3–4);
+  already-saved shaped cabinets re-resolve on their next edit (no page-load sweep).
 
 ### Phase 3 — Multi-facet faces `[ ]`
 - [ ] `faces` map per front edge (S-c); FaceGridEditor picks a facet

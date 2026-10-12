@@ -61,8 +61,9 @@ function cabBottomZ(cab: CabinetInstance, room: Room, wall: Wall): number {
 }
 
 // 4 cabinet corners in elevation coords (top-left, top-right, bottom-left, bottom-right).
-export function cabinetElevCorners(cab: CabinetInstance, wall: Wall, room: Room, roomH: number): Pt[] {
-  const t = cabT(cab, wall)
+// back = viewing the wall's back side: the wall runs right-to-left, so x is mirrored.
+export function cabinetElevCorners(cab: CabinetInstance, wall: Wall, room: Room, roomH: number, back = false): Pt[] {
+  const t = back ? wall.length - cabT(cab, wall) - cab.dx : cabT(cab, wall)
   const bottomZ = cabBottomZ(cab, room, wall)
   const ry = roomH - bottomZ - cab.dy   // top of cab in elev-y (from top of wall area)
   const ryB = ry + cab.dy                // bottom of cab
@@ -79,6 +80,7 @@ export interface ElevSnapContext {
   wall:     Wall
   room:     Room
   roomH:    number
+  back?:    boolean           // back side of the wall (x mirrored)
   // Resolved part / runner / face corners in elevation coords, precomputed by the
   // view (it owns the rect helpers + per-cabinet transform). Optional so non-measure
   // callers needn't build them.
@@ -115,7 +117,7 @@ export function computeElevSnap(
     }
     if (settings.kinds['cabinet-corner']) {
       for (const cab of ctx.wallCabs) {
-        for (const c of cabinetElevCorners(cab, ctx.wall, ctx.room, ctx.roomH)) {
+        for (const c of cabinetElevCorners(cab, ctx.wall, ctx.room, ctx.roomH, ctx.back)) {
           consider(c, 'cabinet-corner')
         }
       }

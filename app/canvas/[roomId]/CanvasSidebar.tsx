@@ -5,6 +5,8 @@ import { supabase } from '@/src/lib/supabase'
 import { Mode, CabinetInstance, isBenchtopMode } from './canvasTypes'
 import { Room, CabinetDefinition } from '@/src/lib/types'
 import RoomSwitcher, { type RoomSwitcherHandle } from './RoomSwitcher'
+import type { MatColours, EbByMatId } from './useMaterialColours'
+import type { MatColMap } from '@/src/components/three/PartViewer'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 const CabinetPreview3D = dynamic(() => import('./CabinetPreview3D'), { ssr: false })
@@ -76,7 +78,7 @@ type CabCtxMenu = { x: number; y: number; categoryId?: string | null; definition
 export default function CanvasSidebar({
   room, onOpenRoomProperties, roomSwitcherRef,
   mode, onSelectMode,
-  armedDefinitionId, onArmDefinition,
+  armedDefinitionId, onArmDefinition, armedDraft = null, matColours, ebByMatId,
   wallMenuOpen, setWallMenuOpen,
   cabMenuOpen, setCabMenuOpen,
   benchtopMenuOpen, setBenchtopMenuOpen, onDrawBenchtopInShapeEditor, onToggleBenchtopMode,
@@ -89,6 +91,10 @@ export default function CanvasSidebar({
   onSelectMode: (m: Mode) => void
   armedDefinitionId: string | null
   onArmDefinition: (def: CabinetDefinition) => void
+  /** Armed definition as an editable draft instance — drives the 3D preview. */
+  armedDraft?: CabinetInstance | null
+  matColours?: MatColours
+  ebByMatId?: EbByMatId
   wallMenuOpen: boolean
   setWallMenuOpen: (v: boolean) => void
   cabMenuOpen: boolean
@@ -619,13 +625,15 @@ export default function CanvasSidebar({
       </div>
 
       {/* ── 3-D preview of the armed definition — pinned to the bottom ── */}
-      {armedDef && (
+      {armedDef && armedDraft && (
         <div className="flex-none border-t border-gray-800 p-2">
           <CabinetPreview3D
-            assemblyClass={armedDef.assembly_class}
-            isEndPanel={false}
+            draft={armedDraft}
+            customParts={armedDef.custom_parts}
             label={armedDef.name}
             canvasWidth={sidebarW - 16}
+            materialColours={matColours as MatColMap | undefined}
+            ebByMatId={ebByMatId}
           />
         </div>
       )}

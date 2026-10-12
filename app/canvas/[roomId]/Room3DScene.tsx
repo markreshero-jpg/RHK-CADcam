@@ -10,11 +10,11 @@ import type { BtElevInfo } from './BenchtopElevation'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
-  wallDir, wallInwardNormal, centroid, wallEnd, lineIntersect, dist,
+  wallDir, wallInwardNormal, cabWallSide, centroid, wallEnd, lineIntersect, dist,
 } from '@/src/lib/geometry'
 import type { Pt } from '@/src/lib/geometry'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
-import { PassivePartsContext, alphaMat, type PartEdge, type MatColMap } from '@/src/components/three/PartViewer'
+import { PassivePartsContext, WireColorContext, alphaMat, type PartEdge, type MatColMap } from '@/src/components/three/PartViewer'
 import type { EbByMatId } from './useMaterialColours'
 import { CabinetScene, type SceneCustomPart } from './Cabinet3DView'
 import { dbLoadRoomPartDetails, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
@@ -66,8 +66,8 @@ function mitreCorners(w: Wall, walls: Wall[], cx: number, cy: number): [Pt, Pt, 
 //   • Extruded along +Z then rotateX(−π/2) maps: X→worldX, Z(height)→worldY, −Y→worldZ.
 //   • So (planX,−planY) → (worldX, 0, planY) at floor — exactly right.
 
-function WallMesh({ wall, walls, room, cx, cy, color = '#cbd5e1', alpha = 1 }: {
-  wall: Wall; walls: Wall[]; room: Room; cx: number; cy: number; color?: string; alpha?: number
+function WallMesh({ wall, walls, room, cx, cy, color = '#cbd5e1', alpha = 1, wire = false }: {
+  wall: Wall; walls: Wall[]; room: Room; cx: number; cy: number; color?: string; alpha?: number; wire?: boolean
 }) {
   const height   = wall.height ?? room.room_dy ?? 2400
   const angleRad = wall.angle * TO_RAD
@@ -101,9 +101,9 @@ function WallMesh({ wall, walls, room, cx, cy, color = '#cbd5e1', alpha = 1 }: {
   if (!geometry) return null
 
   return (
-    <mesh key={alpha < 1 ? 't' : 'o'} geometry={geometry}>
-      <meshStandardMaterial color={color} roughness={0.85} metalness={0} {...alphaMat(alpha)} />
-      <Edges threshold={25} color="#94a3b8" transparent opacity={alpha} />
+    <mesh key={alpha < 1 || wire ? 't' : 'o'} geometry={geometry}>
+      <meshStandardMaterial color={color} roughness={0.85} metalness={0} {...alphaMat(wire ? Math.min(alpha, WIRE_GHOST_ALPHA) : alpha)} />
+      <Edges threshold={25} color={wire ? WIRE_EDGE : '#94a3b8'} transparent opacity={wire ? Math.max(alpha, 0.6) : alpha} />
     </mesh>
   )
 }
@@ -144,7 +144,7 @@ function WallLabel({ wall, room, cx, cy }: { wall: Wall; room: Room; cx: number;
 // edges (profile generates = 'waterfall') get a leg panel from the floor to
 // the underside, set in by the thickness under that edge.
 
-function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha }: {
+function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wire = false }: {
   bt: BenchtopInstance
   info: BtElevInfo
   profiles: Record<string, BenchtopEdgeProfile>
@@ -153,6 +153,7 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha }: 
   onSelect?: () => void
   color: string
   alpha: number
+  wire?: boolean
 }) {
   const { topZ, thick, defaultProfileId } = info
   const T = thick.total
@@ -224,9 +225,9 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha }: 
   return (
     <group>
       {[{ key: 'slab', geo: slab }, ...legGeos].map(m => (
-        <mesh key={m.key} geometry={m.geo} onClick={click}>
-          <meshStandardMaterial color={col} roughness={0.5} metalness={0} {...alphaMat(alpha)} />
-          <Edges threshold={20} color="#64748b" transparent opacity={alpha} />
+        <mesh key={m.key + (wire ? '-w' : '')} geometry={m.geo} onClick={click}>
+          <meshStandardMaterial color={col} roughness={0.5} metalness={0} {...alphaMat(wire ? Math.min(alpha, WIRE_GHOST_ALPHA) : alpha)} />
+          <Edges threshold={20} color={selected ? '#f59e0b' : wire ? WIRE_EDGE : '#64748b'} transparent opacity={wire ? Math.max(alpha, 0.8) : alpha} />
         </mesh>
       ))}
     </group>
@@ -242,15 +243,18 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha }: 
 // We place the group's origin at the cabinet's bottom-back-left world corner,
 // then apply rotY = −angleRad so local +X aligns with the wall direction.
 //
-// The scaleZ term flips the depth axis when necessary:
+// When +Z must point the other way, the cabinet is turned 180° (rotY + π) with
+// its origin moved to the far end of its span — a real rotation, never a mirror:
+// a negative scale flips face winding, which culls drei <Edges> (fat-line quads)
+// and see-through faces, and swaps the cabinet's left/right.
 //   isNaturalPerp = true  → rotY=−angle makes +Z point toward wall inward ✓
-//   isNaturalPerp = false → +Z points outward → need scaleZ = −1
-//   isFlipped (island)    → cabinet faces opposite side → flip again
-//   net: needFlip = (isNaturalPerp === isFlipped)
+//   isNaturalPerp = false → +Z points outward → turn
+//   isFlipped (back side) → cabinet faces opposite side → turn again
+//   net: needTurn = (isNaturalPerp === isFlipped)
 
 type MatColEntry = string | { face?: string; back?: string; edge?: string }
 
-function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMenu, rp, materialColours, ebByMatId, layers, partOverrides, shapeOverrides, handMarkers }: {
+function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMenu, rp, materialColours, ebByMatId, layers, partOverrides, shapeOverrides, handMarkers, wire }: {
   cab: CabinetInstance
   wall: Wall
   cx: number; cy: number
@@ -265,20 +269,26 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
   partOverrides?: PartPosOverrides
   shapeOverrides?: ShapeOverrides
   handMarkers?: CabinetOpMarker[]
+  /** Wire view: every part a faint see-through panel with its edges drawn. */
+  wire: boolean
 }) {
   const angleRad = wall.angle * TO_RAD
   const perp     = wallInwardNormal(wall, cx, cy)
   const wd       = wallDir(wall)
 
-  const isFlipped = wall.wall_type === 'island' &&
-    Math.abs(((cab.rotation - wall.angle) % 360 + 360) % 360 - 180) < 5
+  // Back-side cabinets (islands and standard walls alike) face away from the
+  // room — same test the plan view uses via cabWallPerp.
+  const isFlipped = cabWallSide(cab, wall) === 'back'
 
   // natural +Z after rotY=−angle = (−sin θ, cos θ) in plan space
   const isNaturalPerp = (perp.x * (-Math.sin(angleRad)) + perp.y * Math.cos(angleRad)) >= 0
-  const scaleZ = (isNaturalPerp === isFlipped) ? -1 : 1
+  const needTurn = isNaturalPerp === isFlipped
 
   const floorY = cabFloorY(cab, room)
-  const rotY   = -angleRad
+  const rotY   = -angleRad + (needTurn ? Math.PI : 0)
+  // Turned: local +X runs back along the wall, so the origin is the span's far end.
+  const originX = cab.pos_x + (needTurn ? cab.dx * wd.x : 0)
+  const originZ = cab.pos_y + (needTurn ? cab.dx * wd.y : 0)
 
   const SEL  = '#d97706'
   const SELE = '#fbbf24'
@@ -313,8 +323,8 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
         onContextMenu={e => { e.stopPropagation(); onContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY) }}
       >
         <boxGeometry args={[cab.dx, cab.dy, cab.dz]} />
-        <meshStandardMaterial color={selected ? SEL : '#d4c5aa'} roughness={0.7} metalness={0.05} {...alphaMat(placeholderAlpha)} />
-        <Edges threshold={10} color={selected ? SELE : '#a89880'} transparent opacity={placeholderAlpha} />
+        <meshStandardMaterial color={selected ? SEL : '#d4c5aa'} roughness={0.7} metalness={0.05} {...alphaMat(wire ? 0.08 : placeholderAlpha)} />
+        <Edges threshold={10} color={selected ? SELE : wire ? WIRE_EDGE : '#a89880'} transparent opacity={wire ? 1 : placeholderAlpha} />
       </mesh>
     )
   }
@@ -329,12 +339,12 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
   // No bounding-box overlay: it made hidden parts selectable.
   return (
     <group
-      position={[cab.pos_x, floorY, cab.pos_y]}
+      position={[originX, floorY, originZ]}
       rotation={[0, rotY, 0]}
       onClick={e => { e.stopPropagation(); onSelect() }}
       onContextMenu={e => { e.stopPropagation(); onContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY) }}
     >
-      <group scale={[1, 1, scaleZ]}>
+      <group>
         {/* Per-cabinet Suspense: a hardware model still loading only hides this cabinet. */}
         <Suspense fallback={null}>
           <PassivePartsContext.Provider value>
@@ -346,6 +356,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
               onSelect={NOOP}
               materialColours={partColours}
               ebByMatId={partEdgebands}
+              wire={wire}
               doorsOpen={false}
               openDrawers={EMPTY_DRAWERS}
               openInnerDrawers={EMPTY_INNER_DRAWERS}
@@ -362,12 +373,28 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
           </PassivePartsContext.Provider>
         </Suspense>
 
+        {/* Wire view: parts ignore the amber selection tint, so outline the box.
+            raycast disabled — the outline must not make empty space clickable. */}
+        {wire && selected && (
+          <mesh position={[cab.dx / 2, cab.dy / 2, cab.dz / 2]} raycast={NO_RAYCAST}>
+            <boxGeometry args={[cab.dx, cab.dy, cab.dz]} />
+            <meshBasicMaterial visible={false} />
+            <Edges threshold={10} color={SEL} lineWidth={2} />
+          </mesh>
+        )}
       </group>
     </group>
   )
 }
 
 const NOOP = () => {}
+const RIGHT_CLICK_SLOP = 5
+const NO_RAYCAST = () => {}
+// Wire view on the room's light background: darker than the editor's defaults.
+const WIRE_EDGE = '#475569'
+const WIRE_COLORS = { fill: '#94a3b8', edge: WIRE_EDGE }
+// Walls / benchtops in wire view: ghosted so cabinets behind them show through.
+const WIRE_GHOST_ALPHA = 0.12
 const SELECTED_COLOURS: MatColMap = new Proxy({}, {
   get: () => ({ face: '#d97706', back: '#d97706', edge: '#fbbf24' }),
 }) as MatColMap
@@ -693,7 +720,7 @@ function ResetView({ signal, controlsRef, position, target }: {
 
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, pickBenchtops, measuring }: {
+function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, pickBenchtops, measuring, wire }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -711,6 +738,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
   bt?: Bt3DProps
   pickBenchtops: boolean
   measuring: boolean
+  wire: boolean
 }) {
   const controlsRef = useRef<any>(null)
   const { x: cx, y: cy } = useMemo(() => centroid(walls), [walls])
@@ -795,7 +823,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
 
       {/* Walls */}
       {layers.show('walls') && walls.map(w => hiddenWallIds.has(w.id) ? null : (
-        <WallMesh key={w.id} wall={w} walls={walls} room={room} cx={cx} cy={cy} color={layers.colorOf('walls')} alpha={layers.alpha('walls')} />
+        <WallMesh key={w.id} wall={w} walls={walls} room={room} cx={cx} cy={cy} color={layers.colorOf('walls')} alpha={layers.alpha('walls')} wire={wire} />
       ))}
 
       {/* Wall name labels on top edge */}
@@ -825,6 +853,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
             partOverrides={details?.posById.get(cab.id)}
             shapeOverrides={details?.shapesById.get(cab.id)}
             handMarkers={handMarkersByCab.get(cab.id)}
+            wire={wire}
           />
         )
       })}
@@ -834,7 +863,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
         b.wall_id && hiddenWallIds.has(b.wall_id) ? null : (
           <BenchtopMesh key={b.id} bt={b} info={bt.info(b)} profiles={bt.profiles}
             selected={bt.selectedId === b.id} onSelect={pickBenchtops ? () => bt.onSelect(b.id) : undefined}
-            color={layers.color('benchtops', '#e7e5e4')} alpha={layers.alpha('benchtops')} />
+            color={layers.color('benchtops', '#e7e5e4')} alpha={layers.alpha('benchtops')} wire={wire} />
         )
       ))}
 
@@ -857,7 +886,7 @@ export interface Bt3DProps {
 type MenuState     = { x: number; y: number; cabId: string }
 type WallMenuState = { x: number; y: number }
 
-export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, pickBenchtops = false, measuring = false }: {
+export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, pickBenchtops = false, measuring = false, wire = false }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -878,6 +907,8 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   pickBenchtops?: boolean
   /** Measure tool on: clicks pick faces to measure between; right-click clears. */
   measuring?: boolean
+  /** Wire view (3D tab dropdown): see-through parts with edges; walls + tops ghosted. */
+  wire?: boolean
 }) {
   const [menu, setMenu]               = useState<MenuState | null>(null)
   const [wallMenu, setWallMenu]       = useState<WallMenuState | null>(null)
@@ -889,6 +920,11 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   // Tracks whether the right-click landed on a cabinet so the div-level handler
   // can distinguish "empty space" right-clicks (which should show the wall menu).
   const hitCabRef = useRef(false)
+  // Right-drag pans the camera: only a static right-click (pointer moved less than
+  // RIGHT_CLICK_SLOP px between down and up) opens a menu. contextmenu fires on
+  // release (Windows), so the drag distance is known by then.
+  const rightDownRef = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  const rightDragged = () => !!rightDownRef.current?.moved
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -910,9 +946,19 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   return (
     <div
       className="flex-1 relative min-w-0"
+      onPointerDownCapture={e => {
+        if (e.button === 2) rightDownRef.current = { x: e.clientX, y: e.clientY, moved: false }
+      }}
+      onPointerMoveCapture={e => {
+        const r = rightDownRef.current
+        if (r && !r.moved && Math.hypot(e.clientX - r.x, e.clientY - r.y) > RIGHT_CLICK_SLOP) r.moved = true
+      }}
       onContextMenu={e => {
         e.preventDefault()
+        const dragged = rightDragged()
+        rightDownRef.current = null
         if (measuring) return              // right-click clears the measurement (Measure3D)
+        if (dragged) { hitCabRef.current = false; return }
         if (!hitCabRef.current) {
           setMenu(null)
           setWallMenu({ x: e.clientX, y: e.clientY })
@@ -923,12 +969,14 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
     >
       <Canvas gl={{ antialias: true }} dpr={[1, 2]} style={{ background: layers.background ?? '#e8e4de' }}>
         <Suspense fallback={null}>
+          <WireColorContext.Provider value={WIRE_COLORS}>
           {walls.length > 0 && (
             <RoomScene
               walls={walls} cabinets={cabinets} room={room}
               selectedId={selectedId} onSelectCabinet={onSelectCabinet}
               onCabContextMenu={(cabId, x, y) => {
                 hitCabRef.current = true
+                if (rightDragged()) return
                 setWallMenu(null)
                 setMenu({ cabId, x, y })
               }}
@@ -943,8 +991,10 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
               bt={bt}
               pickBenchtops={pickBenchtops}
               measuring={measuring}
+              wire={wire}
             />
           )}
+          </WireColorContext.Provider>
         </Suspense>
       </Canvas>
 

@@ -71,3 +71,18 @@ export function computeJointUpdates(
 
   return Array.from(allUpdates.entries()).map(([id, update]) => ({ id, update }))
 }
+
+// Thickest non-island wall joined to `wall` at its start (end='start') or end
+// (end='end'). Annotations placed just past a wall end (the perpendicular depth
+// dims) push out by this much so they clear the return wall's body instead of
+// landing inside it — the fixed screen-px gap alone is only a few mm when zoomed in.
+export function returnWallThickness(wall: Wall, walls: Wall[], end: 'start' | 'end'): number {
+  const p: Pt = end === 'start' ? { x: wall.pos_x, y: wall.pos_y } : wallEnd(wall)
+  let t = 0
+  for (const o of walls) {
+    if (o.id === wall.id || o.wall_type === 'island') continue
+    if (dist({ x: o.pos_x, y: o.pos_y }, p) < JOINT_TOL || dist(wallEnd(o), p) < JOINT_TOL)
+      t = Math.max(t, o.thickness)
+  }
+  return t
+}

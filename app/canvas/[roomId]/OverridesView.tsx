@@ -14,6 +14,7 @@ import {
 } from './canvasDB'
 import CalcInput from '@/src/components/CalcInput'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
+import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 
 // Resolved base size of every part that can carry an override, keyed by the
 // same part id used in partOverrides, in RAW part axes (CV convention:
@@ -89,7 +90,7 @@ function idDisplayFrame(id: string): { kind: 'side' | 'face' | 'horizontal'; dxI
   if (id.startsWith('case_')) {
     const key = id.slice(5)
     if (key === 'left_side' || key === 'right_side') return { kind: 'side' }
-    if (key === 'back') return { kind: 'face' }
+    if (key === 'back' || isShapedPanelKey(key)) return { kind: 'face' }
     return { kind: 'horizontal' }
   }
   if (id.startsWith('tk_')) {

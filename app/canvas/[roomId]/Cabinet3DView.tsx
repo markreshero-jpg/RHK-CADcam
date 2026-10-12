@@ -24,6 +24,7 @@ import {
 } from '@/src/components/three/PartViewer'
 import { isSide, caseBox, internalBox, internalSeamPartKey, seamJointDrillOps, coalesceOpposingDrills, type DrillOpPos } from '@/src/lib/jointDrilling'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
+import { isShapedPanelKey, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import type { ResolvedDoorProfile } from '@/src/lib/resolver/types'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
@@ -152,11 +153,11 @@ const FACE_LABELS: Record<string, string> = {
 function buildCaseInfo(p: ResolvedCasePart, b: Box): PartMeta {
   return {
     id:        `case_${p.part_key}`,
-    label:     CASE_LABELS[p.part_key] ?? p.part_key,
+    label:     CASE_LABELS[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key,
     w: b.w, h: b.h, d: b.d,
     thickness: p.DZ,
     edge:      p.edge_band,
-    panelKind: isSide(p.part_key) ? 'side' : p.part_key === 'back' ? 'face' : 'horizontal',
+    panelKind: isSide(p.part_key) ? 'side' : p.part_key === 'back' || isShapedPanelKey(p.part_key) ? 'face' : 'horizontal',
     materialId: p.material_id,
   }
 }
@@ -984,6 +985,15 @@ function getRotOv(id: string, overrides: PartPosOverrides | undefined): [number,
   return [(ov.oax ?? 0) * D, (ov.oay ?? 0) * D, (ov.oaz ?? 0) * D]
 }
 
+// Case part rotation: the resolver's own AY (shaped-cabinet panels / facet
+// rails, z_cabinet_shape) plus any Part Editor rotation override.
+function caseRot(p: ResolvedCasePart, id: string, overrides: PartPosOverrides | undefined): [number, number, number] | undefined {
+  const ov = getRotOv(id, overrides)
+  if (!p.AY) return ov
+  const ay = p.AY * Math.PI / 180
+  return ov ? [ov[0], ov[1] + ay, ov[2]] : [0, ay, 0]
+}
+
 // ── Animated group for inner-drawer slide-out ─────────────────────────────────
 // Lerps its position.z toward targetTravel each frame. Used to slide an inner-
 // drawer assembly (box parts + face + slide rails) forward together when the
@@ -1057,12 +1067,16 @@ export function CabinetScene({
   // not panels: never shaped.
   const shapes3D = useMemo(() => {
     const m = new Map<string, PartShape>()
+    // Resolver outlines first (shaped cabinets' bottom / top / shelves); a
+    // Shape Editor override for the same part replaces them below.
+    for (const p of rp.case_parts) if (p.outline && !p.AY) m.set(`case_${p.part_key}`, { pts: p.outline })
+    for (const p of rp.internal_parts ?? []) if (p.outline) m.set(`int_${p.part_type}_${p.sort_order}`, { pts: p.outline })
     for (const [pid, ov] of Object.entries(shapeOverrides ?? {})) {
       if (pid.startsWith('slide_')) continue
       if ((ov.segments?.length ?? 0) > 2) m.set(pid, { pts: sampleShapeOutline(ov.segments), mirror: pid.includes('right_side') })
     }
     return m
-  }, [shapeOverrides])
+  }, [shapeOverrides, rp])
 
   const boxByKey = useMemo(() => {
     const m: Record<string, Box> = {}
@@ -1217,7 +1231,7 @@ export function CabinetScene({
               wire={wire}
               contextMenuSelect
               ebSpec={ebFor(p.material_id)}
-              rotation={getRotOv(id, partOverrides)}
+              rotation={caseRot(p, id, partOverrides)}
               subtractions={pockets}
               shape={shapes3D.get(id)}
             /></PartAlpha>
@@ -1237,7 +1251,7 @@ export function CabinetScene({
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id)}
             wire={wire}
-            rotation={getRotOv(id, partOverrides)}
+            rotation={caseRot(p, id, partOverrides)}
             subtractions={pockets}
             shape={shapes3D.get(id)}
           /></PartAlpha>
@@ -1844,7 +1858,7 @@ export default function Cabinet3DView({
     <PreviewCanvas
       dx={dx} dy={dy} dz={dz}
       bgColor="#e8e4de"
-      enablePan
+      enablePan
       onDeselect={() => setSelectedPart(null)}
       onContextMenu={handleCanvasContextMenu}
       hint="Left-drag rotate · scroll zoom · Ctrl fast · Shift fine · right-click part to inspect"

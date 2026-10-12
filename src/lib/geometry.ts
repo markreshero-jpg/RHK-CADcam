@@ -1,4 +1,5 @@
 import { Wall, CabinetInstance, Room } from './types'
+import { footprintOutline } from './cabinetShape/footprint'
 
 export interface Pt { x: number; y: number }
 
@@ -338,23 +339,27 @@ export function wallAnchorPoint(wall: Wall, t: number, back: boolean, cx: number
 // cabinets, or the outer face (shifted out by wall thickness) for back-side cabinets.
 // See wallAnchorPoint. The footprint extrudes dz along perp from there.
 export function cabinetPolygon(cab: CabinetInstance, wall: Wall, perp: Pt): string {
-  const d = wallDir(wall)
-  const ax = cab.pos_x, ay = cab.pos_y
-  const bx = ax + cab.dx * d.x,    by = ay + cab.dx * d.y
-  const cx = bx + cab.dz * perp.x, cy = by + cab.dz * perp.y
-  const ex = ax + cab.dz * perp.x, ey = ay + cab.dz * perp.y
-  return `${ax},${ay} ${bx},${by} ${cx},${cy} ${ex},${ey}`
+  return cabinetCornerPts(cab, wall, perp).map(p => `${p.x},${p.y}`).join(' ')
 }
 
-// The four plan-view corner points of a cabinet's footprint (same order as
-// cabinetPolygon). Used for marquee hit-testing (cabinet fully inside the box).
-export function cabinetCornerPts(cab: CabinetInstance, wall: Wall, perp: Pt): Pt[] {
+// Cabinet-frame point (x along the width, z into the room from the back) →
+// plan coordinates. The same mapping the resolved part outlines use.
+export function cabinetToPlan(cab: CabinetInstance, wall: Wall, perp: Pt): (lx: number, lz: number) => Pt {
   const d = wallDir(wall)
-  const ax = cab.pos_x, ay = cab.pos_y
-  const bx = ax + cab.dx * d.x,    by = ay + cab.dx * d.y
-  const cx = bx + cab.dz * perp.x, cy = by + cab.dz * perp.y
-  const ex = ax + cab.dz * perp.x, ey = ay + cab.dz * perp.y
-  return [{ x: ax, y: ay }, { x: bx, y: by }, { x: cx, y: cy }, { x: ex, y: ey }]
+  return (lx, lz) => ({ x: cab.pos_x + lx * d.x + lz * perp.x, y: cab.pos_y + lx * d.y + lz * perp.y })
+}
+
+// The plan-view outline points of a cabinet's footprint (same order as
+// cabinetPolygon): the four box corners, or the shaped footprint
+// (z_cabinet_shape/) evaluated at the cabinet's current size. Used for
+// marquee hit-testing (cabinet fully inside the box).
+export function cabinetCornerPts(cab: CabinetInstance, wall: Wall, perp: Pt): Pt[] {
+  const toPlan = cabinetToPlan(cab, wall, perp)
+  if (cab.footprint?.segments?.length) {
+    const outline = footprintOutline(cab.footprint, { w: cab.dx, d: cab.dz })
+    if (outline.length >= 3) return outline.map(p => toPlan(p.x, p.y))
+  }
+  return [toPlan(0, 0), toPlan(cab.dx, 0), toPlan(cab.dx, cab.dz), toPlan(0, cab.dz)]
 }
 
 export function cabinetCenterPt(cab: CabinetInstance, wall: Wall, perp: Pt): Pt {
@@ -367,7 +372,8 @@ export function cabinetCenterPt(cab: CabinetInstance, wall: Wall, perp: Pt): Pt 
 
 export function nextLabel(cabinets: CabinetInstance[], cls: string): string {
   const prefix = cls === 'base' ? 'BC' : cls === 'wall' ? 'WC' : cls === 'tall' ? 'TC'
-    : cls === 'base_corner' ? 'BCC' : cls === 'wall_corner' ? 'WCC' : cls === 'tall_corner' ? 'TCC' : 'EP'
+    : cls === 'base_corner' ? 'BCC' : cls === 'wall_corner' ? 'WCC' : cls === 'tall_corner' ? 'TCC'
+    : cls === 'filler' ? 'FL' : 'EP'
   const nums = cabinets.filter(c => c.label?.startsWith(prefix + '-')).map(c => parseInt(c.label!.slice(3)) || 0)
   return `${prefix}-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(2, '0')}`
 }

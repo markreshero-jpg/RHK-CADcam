@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  LAYER_GROUPS, LAYER_VIEWS, WEIGHT_OPTIONS, OPACITY_OPTIONS, itemsForView,
+  LAYER_GROUPS, LAYER_VIEWS, WEIGHT_OPTIONS, OPACITY_OPTIONS, CABINET_FILL_CLASSES, itemsForView,
   type LayerSet, type LayerSetSettings, type LayerStyle, type LayerViewId, type ViewLayerSettings,
 } from '@/src/lib/displayLayers/registry'
 import { effectiveSetting, sparseViewSettings } from '@/src/lib/displayLayers/resolve'
@@ -220,6 +220,23 @@ export default function LayerManagerPanel({ api, initialView, activeSetId, onPre
                 onChange={v => patchView(cur => ({ ...cur, background: v }))} />
               Background colour
             </div>
+            {view === 'plan' && (
+              <div className="flex items-center gap-2 text-xs text-gray-300">
+                {CABINET_FILL_CLASSES.map(c => (
+                  <span key={c.id} className="flex items-center gap-1">
+                    <ColorSwatch title={`${c.label} cabinet fill`} value={vs.cabinetFill?.[c.id]}
+                      onChange={v => patchView(cur => ({ ...cur, cabinetFill: { ...cur.cabinetFill, [c.id]: v } }))} />
+                    {c.label}
+                  </span>
+                ))}
+                <select value={vs.cabinetFillOpacity ?? 1} title="Cabinet fill opacity (fill only — the outline keeps its own opacity)"
+                  onChange={e => patchView(cur => ({ ...cur, cabinetFillOpacity: Number(e.target.value) }))}
+                  className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[11px] text-gray-300">
+                  {OPACITY_OPTIONS.map(o => <option key={o} value={o}>{Math.round(o * 100)}%</option>)}
+                </select>
+                Cabinet fill
+              </div>
+            )}
             {view === 'elevation' && (
               <label className="flex items-center gap-1.5 text-xs text-gray-300">
                 <input type="checkbox" checked={!!vs.lineDrawing}

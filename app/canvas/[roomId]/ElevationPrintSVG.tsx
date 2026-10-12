@@ -322,6 +322,20 @@ export default function ElevationPrintSVG({
               </g>
             ))}
 
+            {/* Drawer-box fixing bores into the back of each drawer front */}
+            {layers.show('drawer_front_drilling') && (
+              <g opacity={layers.op('drawer_front_drilling')}>
+                {[
+                  ...rp.drawer_stacks.flatMap(ds => ds.slides),
+                  ...(layers.show('inner_drawers') ? rp.internal_slides ?? [] : []),
+                ].flatMap((s, si) => s.drills.filter(dr => dr.surface === 'drawer_front').map((dr, j) => {
+                  const c = toSVG(dr.x, dr.y, 0, 0)
+                  return <circle key={`dfd-${si}-${j}`} cx={c.x} cy={c.y} r={Math.max(dr.radius, 0.5)} fill="none" stroke={INK2}
+                    strokeWidth={layers.w('drawer_front_drilling', thinSW)} strokeDasharray={lp('drawer_front_drilling').strokeDasharray} />
+                }))}
+              </g>
+            )}
+
             {/* Internals — shelves / dividers / accessories / inner drawers + pull-outs */}
             {rp.internal_parts.map((p, i) => {
               const it = internalPartItem(p.part_type)

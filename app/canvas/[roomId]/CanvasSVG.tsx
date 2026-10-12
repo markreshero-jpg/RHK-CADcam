@@ -8,12 +8,14 @@ import {
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { customExtents } from '@/src/lib/customPartBox'
 import {
-  Pt, MIN_WALL_LEN, SNAP_PX, CAB_FILL, CAB_FILL_SEL,
+  Pt, MIN_WALL_LEN, SNAP_PX,
   toRad, toDeg, dist,
   wallEnd, wallDir, wallPolygon, wallMitrePolygon, wallInwardNormal, centroid,
-  cabWallPerp, cabinetPolygon, cabinetCenterPt, cabT,
+  cabWallPerp, cabinetPolygon, cabinetCenterPt, cabT, cabinetToPlan,
   gridDots,
 } from '@/src/lib/geometry'
+import { footprintEdgesPlan } from '@/src/lib/cabinetShape/footprint'
+import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import WallDimensionChain from './WallDimensionChain'
 import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, SectionCut, isBenchtopMode } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -24,7 +26,7 @@ import { roundMm } from '@/src/lib/format'
 import { SNAP_KIND_META, type SnapResult } from '@/src/lib/canvasSnap'
 import type { PlanGridPrefs } from '@/src/lib/userPrefs'
 import { getPalette } from '@/src/lib/partPalette'
-import { caseBox, isSide, tkPlanBox } from '@/src/lib/jointDrilling'
+import { caseBox, caseBoxAABB, casePlanCorners, isSide, tkPlanBox } from '@/src/lib/jointDrilling'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
 import { dbLoadRoomPartDetails, type PartPosOverrides } from './canvasDB'
@@ -864,7 +866,7 @@ export default function CanvasSVG({
           const center = cabinetCenterPt(displayCab, wall, perp)
           const mr     = 6 / view.zoom
 
-          const baseColor = isSel ? CAB_FILL_SEL[cab.assembly_class] : CAB_FILL[cab.assembly_class]
+          const baseColor = isSel ? layers.cabFillSel(cab.assembly_class) : layers.cabFill(cab.assembly_class)
 
           // Layer items (z_display_layers spec)
           // Kick assembly: no footprint box, except mid-resize (resolved kick parts
@@ -882,9 +884,13 @@ export default function CanvasSVG({
           const frontRight = { x: displayCab.pos_x + displayCab.dx * wd.x + displayCab.dz * perp.x, y: displayCab.pos_y + displayCab.dx * wd.y + displayCab.dz * perp.y }
 
           // Resolved part outlines (carcase / kick). Hidden mid-resize: resolved
-          // parts still reflect the committed width.
-          const rpPlan = cabResize?.cabId === cab.id ? undefined : resolvedParts?.get(cab.id)
-          const casePartsR = (rpPlan?.case_parts ?? []).filter(p => layers.show(casePartItem(p.part_key)))
+          // parts still reflect the committed width. On shaped cabinets
+          // (z_cabinet_shape) the carcass follows the footprint, but kick, fronts
+          // and drawer hardware are still box-built until Phases 3–4 — hidden.
+          const shaped = !!displayCab.footprint?.segments?.length
+          const rpAll  = cabResize?.cabId === cab.id ? undefined : resolvedParts?.get(cab.id)
+          const rpPlan = shaped ? undefined : rpAll
+          const casePartsR = (rpAll?.case_parts ?? []).filter(p => layers.show(casePartItem(p.part_key)))
           const kickPartsR = (rpPlan?.toekick_parts ?? []).filter(p => layers.show(kickPartItem(p.part_key)))
           const partPoly = (b: { x: number; z: number; w: number; d: number }) => {
             const c = (lx: number, lz: number) => `${displayCab.pos_x + lx * wd.x + lz * perp.x},${displayCab.pos_y + lx * wd.y + lz * perp.y}`
@@ -895,7 +901,7 @@ export default function CanvasSVG({
           // cabinet actually draws. Nothing drawn → not selectable, no name / size.
           const drawnRects: LocalRect[] = []
           if (showOutline) drawnRects.push({ x: 0, z: 0, w: displayCab.dx, d: displayCab.dz })
-          for (const p of casePartsR) drawnRects.push(caseBox(p))
+          for (const p of casePartsR) drawnRects.push(caseBoxAABB(p))
           for (const p of kickPartsR) drawnRects.push(tkPlanBox(p))
           if (layers.show('drawer_boxes'))   for (const ds of rpPlan?.drawer_stacks ?? []) for (const p of ds.box_parts) drawnRects.push(dbBox(p))
           if (layers.show('drawer_runners')) for (const ds of rpPlan?.drawer_stacks ?? []) for (const sl of ds.slides) drawnRects.push(slideBox(sl))
@@ -922,8 +928,14 @@ export default function CanvasSVG({
             }))
             return [{ id, item, rect, poly: rotPoly ?? partPoly(rect) }]
           })
-          const faceLine = showFace && cab.has_face && !rpPlan
+          const faceLine = showFace && cab.has_face && !rpPlan && !shaped
           if (faceLine) drawnRects.push({ x: 0, z: displayCab.dz - 20, w: displayCab.dx, d: 40 })
+          // Shaped: the face fallback runs along every front-role edge instead.
+          const shapedFronts = shaped && showFace && cab.has_face
+            ? footprintEdgesPlan(displayCab.footprint!, { w: displayCab.dx, d: displayCab.dz }, cabinetToPlan(displayCab, wall, perp))
+                .filter(e => e.edge.role === 'front')
+            : []
+          if (shapedFronts.length && !showOutline) drawnRects.push({ x: 0, z: 0, w: displayCab.dx, d: displayCab.dz })
           for (const f of faceRects) drawnRects.push(f.rect)
           if (layers.show('internal_outline') && cab.has_internal) drawnRects.push({ x: 20, z: 20, w: displayCab.dx - 40, d: displayCab.dz - 40 })
           const hitRect = unionRect(drawnRects)
@@ -954,7 +966,7 @@ export default function CanvasSVG({
               {/* Carcass — main cabinet footprint */}
               {showOutline && (
                 <polygon points={pts}
-                  fill={baseColor} fillOpacity={carcP.fillOpacity}
+                  fill={baseColor} fillOpacity={carcP.fillOpacity * layers.cabFillOpacity}
                   stroke={isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : isHover ? '#f97316' : layers.color('carcass_outline', '#3b82f6')}
                   strokeWidth={layers.w('carcass_outline', isSel || isMultiSel || isHover ? 2 : 1) / view.zoom}
                   strokeDasharray={carcP.strokeDasharray}
@@ -973,9 +985,11 @@ export default function CanvasSVG({
                 const it = casePartItem(p.part_key)
                 const lp = layers.props(it, view.zoom)
                 const col = layers.color(it, palette.carcase)
-                const vertical = isSide(p.part_key) || p.part_key === 'back'
+                const vertical = isSide(p.part_key) || p.part_key === 'back' || isShapedPanelKey(p.part_key)
+                const toPlan = cabinetToPlan(displayCab, wall, perp)
+                const pts = casePlanCorners(p).map(q => toPlan(q.x, q.z)).map(q => `${q.x},${q.y}`).join(' ')
                 return (
-                  <polygon key={`case-${i}`} points={partPoly(b)} data-part={p.part_key}
+                  <polygon key={`case-${i}`} points={pts} data-part={p.part_key}
                     fill={vertical ? col : 'none'} fillOpacity={vertical ? 0.55 * lp.fillOpacity : 0}
                     stroke={isSel ? '#e2e8f0' : col} strokeWidth={layers.w(it, 0.75) / view.zoom}
                     strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
@@ -1080,6 +1094,17 @@ export default function CanvasSVG({
                   style={{ pointerEvents: 'none' }}
                 />
               )}
+              {shapedFronts.map(f => (
+                <polyline key={`front-${f.edge.id}`} data-edge={f.edge.id}
+                  points={f.pts.map(p => `${p.x},${p.y}`).join(' ')}
+                  fill="none"
+                  stroke={isSel ? '#e2e8f0' : layers.color(layers.show('doors') ? 'doors' : 'drawer_fronts', palette.door)}
+                  strokeWidth={layers.w(layers.show('doors') ? 'doors' : 'drawer_fronts', isSel ? 2.5 : 2) / view.zoom}
+                  strokeDasharray={faceP.strokeDasharray}
+                  opacity={faceP.opacity}
+                  style={{ pointerEvents: 'none' }}
+                />
+              ))}
 
               {/* Selection ring — only when selected and the outline is hidden */}
               {isSel && !showOutline && hitRect && (
@@ -1176,7 +1201,7 @@ export default function CanvasSVG({
 
         {/* ── Door swings + drawer lines (plan annotations) ── */}
         {layers.any('door_swings', 'drawer_lines') && cabinets.flatMap(cab => {
-          if (!cab.has_face) return []
+          if (!cab.has_face || cab.footprint?.segments?.length) return []   // shaped: swings land with Phase 3 facets
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return []
           const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
@@ -1313,14 +1338,14 @@ export default function CanvasSVG({
             return (
               <>
                 {/* Snap landing outline — exactly where the click will drop it */}
-                <polygon points={landPts} fill="none" stroke={CAB_FILL_SEL[movingCab.assembly_class]}
+                <polygon points={landPts} fill="none" stroke={layers.cabFillSel(movingCab.assembly_class)}
                   strokeWidth={1 / view.zoom} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
                   opacity={0.5} style={{ pointerEvents: 'none' }} />
 
                 {/* Floating ghost outline */}
                 <polygon points={floatPts}
                   fill="none"
-                  stroke={CAB_FILL_SEL[movingCab.assembly_class]}
+                  stroke={layers.cabFillSel(movingCab.assembly_class)}
                   strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />
 
@@ -1356,7 +1381,7 @@ export default function CanvasSVG({
           return (
             <polygon points={pts}
               fill="none"
-              stroke={CAB_FILL_SEL[movingCab.assembly_class]}
+              stroke={layers.cabFillSel(movingCab.assembly_class)}
               strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
               style={{ pointerEvents: 'none' }} />
           )
@@ -1481,7 +1506,7 @@ export default function CanvasSVG({
             return (
               <>
                 {/* Snap landing outline */}
-                <polygon points={pts} fill="none" stroke={CAB_FILL_SEL[cls]}
+                <polygon points={pts} fill="none" stroke={layers.cabFillSel(cls)}
                   strokeWidth={1 / view.zoom} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
                   opacity={0.5} style={{ pointerEvents: 'none' }} />
 
@@ -1505,7 +1530,7 @@ export default function CanvasSVG({
                 })()}
 
                 {/* Floating ghost centred on cursor */}
-                <polygon points={floatPts} fill={CAB_FILL[cls] + 'cc'} stroke={CAB_FILL_SEL[cls]}
+                <polygon points={floatPts} fill={layers.cabFill(cls) + 'cc'} stroke={layers.cabFillSel(cls)}
                   strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />
                 <text x={floatCenter.x} y={floatCenter.y} textAnchor="middle" dominantBaseline="middle"
@@ -1516,10 +1541,10 @@ export default function CanvasSVG({
                 {/* Rest of the multi-paste group */}
                 {groupExtras.map((ex, i) => (
                   <Fragment key={`gx${i}`}>
-                    <polygon points={ex.landPts} fill="none" stroke={CAB_FILL_SEL[ex.cls]}
+                    <polygon points={ex.landPts} fill="none" stroke={layers.cabFillSel(ex.cls)}
                       strokeWidth={1 / view.zoom} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
                       opacity={0.5} style={{ pointerEvents: 'none' }} />
-                    <polygon points={ex.floatPts} fill={CAB_FILL[ex.cls] + 'cc'} stroke={CAB_FILL_SEL[ex.cls]}
+                    <polygon points={ex.floatPts} fill={layers.cabFill(ex.cls) + 'cc'} stroke={layers.cabFillSel(ex.cls)}
                       strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                       style={{ pointerEvents: 'none' }} />
                   </Fragment>
@@ -1530,7 +1555,7 @@ export default function CanvasSVG({
 
           return (
             <>
-              <polygon points={pts} fill={CAB_FILL[cls] + 'aa'} stroke={CAB_FILL_SEL[cls]}
+              <polygon points={pts} fill={layers.cabFill(cls) + 'aa'} stroke={layers.cabFillSel(cls)}
                 strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                 style={{ pointerEvents: 'none' }} />
               <text x={center.x} y={center.y} textAnchor="middle" dominantBaseline="middle"

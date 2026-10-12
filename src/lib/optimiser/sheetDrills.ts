@@ -42,7 +42,8 @@ export async function loadResolvedDrillOps(
   parts: OptiPart[],
   opts: { sync?: boolean; blockDiameters?: number[]; routerTools?: RouterToolItem[]; preferredPocketToolNumber?: number | null; deductEdgeband?: boolean } = {},
 ): Promise<ResolvedDrillOps> {
-  const cabIds = [...new Set(parts.map(p => p.cabinet_instance_id))]
+  // Benchtop parts (Phase 5) have no part_operations — their "cabinet" id is a benchtop.
+  const cabIds = [...new Set(parts.filter(p => p.source_table !== 'benchtop_parts').map(p => p.cabinet_instance_id))]
   // Regenerate generated part_operations against FINAL geometry so the read below is
   // current (§6.2 — authoritative pass). Two independent generators tagged with
   // different parameters.generated markers ('seam_joint' vs 'master_slave'); neither

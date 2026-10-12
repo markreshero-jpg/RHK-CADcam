@@ -10,12 +10,15 @@ import PlanViewReport from './PlanViewReport'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import ElevationPrintReport from './ElevationPrintReport'
 import CabinetSheetReport from './CabinetSheetReport'
+import { BenchtopSupplySheet, supplyPrintHtml } from './BenchtopSupplyReport'
+import { buildSupplyLines, supplyTotals } from '@/src/lib/benchtop-resolver/supply'
 
 export type ReportScope = 'job' | 'room'
-type ReportId = 'parts_list_summary' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets'
+type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'parts_list_summary', label: 'Parts List Summary',  desc: 'Parts by room · material · cabinet' },
+  { id: 'benchtop_supply',    label: 'Benchtop Supply',     desc: 'Stone / laminate order · m² · edges' },
   { id: 'plan_view_v2',       label: 'Plan View',           desc: 'Scaled PDF, follows a layer set' },
   { id: 'elevation_view_v2',  label: 'Elevation Views',     desc: 'Scaled PDF, one wall per page, layer set' },
   { id: 'cabinet_sheets',     label: 'Cabinet Sheets',      desc: '1 page/cabinet — front, side, 3D + cut list' },
@@ -89,10 +92,11 @@ function collectBtParts(
     const btParts = byBtId.get(bt.id) ?? []
     const lbl = bt.label ?? 'Benchtop'
     for (const p of btParts) {
+      // Outsourced stone / laminate are order items — on the Benchtop Supply sheet, not the cut list.
+      if (p.supply_item) continue
       rows.push({
         sourceLabel:  lbl,
-        // Outsourced stone / laminate: an order item, not a cut part (Phase 5 moves these to a supply sheet).
-        partDesc:     p.supply_item ? `${p.label} — supply` : p.label,
+        partDesc:     p.label,
         width:        p.width_mm,
         depth:        p.length_mm,
         thickness:    p.thickness_mm,
@@ -233,11 +237,17 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
     })
   }, [rooms, allCabinets, allResolved, allBtInstances, allBtParts, materialNames])
 
+  const supplyData = useMemo(() => rooms.map(r => ({
+    room: r,
+    lines: buildSupplyLines(allBtInstances.filter(bt => bt.room_id === r.id), allBtParts),
+  })), [rooms, allBtInstances, allBtParts])
+  const supplyTotalsAll = useMemo(() => supplyTotals(supplyData.flatMap(d => d.lines)), [supplyData])
+
   function handlePrint() {
     const reportTitle = REPORTS.find(r => r.id === selectedReport)?.label ?? 'Report'
     const scopeLabel  = scope === 'room' ? room.name : (project?.name ?? 'Job')
 
-    const rows = reportData.flatMap(({ room: rm, materialGroups }) =>
+    const rows = selectedReport === 'benchtop_supply' ? [supplyPrintHtml(supplyData, supplyTotalsAll)] : reportData.flatMap(({ room: rm, materialGroups }) =>
       materialGroups.length === 0 ? [] : [`
         <h2>${rm.name}</h2>
         ${materialGroups.map(({ matName, parts }) => `
@@ -284,7 +294,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
         <h1>${reportTitle}</h1>
         <p>${scopeLabel} &nbsp;·&nbsp; Generated ${new Date().toLocaleDateString()}</p>
       </div>
-      ${rows.join('') || '<p style="color:#888">No resolved parts found. Open and resolve cabinets first.</p>'}
+      ${rows.join('') || `<p style="color:#888">${selectedReport === 'benchtop_supply' ? 'No benchtop supply items.' : 'No resolved parts found. Open and resolve cabinets first.'}</p>`}
     </body></html>`)
     win.document.close()
     win.focus()
@@ -406,6 +416,8 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                   materialNames={materialNames}
                   paperKey={printPaper}
                 />
+              ) : selectedReport === 'benchtop_supply' ? (
+                <BenchtopSupplySheet data={supplyData} totals={supplyTotalsAll} />
               ) : (
                 <PartsListSummary data={reportData} />
               )}

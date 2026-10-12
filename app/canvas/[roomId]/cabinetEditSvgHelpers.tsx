@@ -4,7 +4,7 @@ import React, { useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { caseBox, rotEulerXYZ, type SeamDrill, type OrientedDrill, type DrillAxis } from '@/src/lib/jointDrilling'
+import { caseBox, caseBoxAABB, rotEulerXYZ, type SeamDrill, type OrientedDrill, type DrillAxis } from '@/src/lib/jointDrilling'
 import type { PartPosOverrides } from './canvasDB'
 import type {
   ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart,
@@ -14,6 +14,7 @@ import type {
 import { slideSilhouettePath, slideSilhouetteOutline, type SlidePlacement } from '@/src/lib/slideSilhouette'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
+import { isShapedPanelKey, isShapedRailKey, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 export const C_PANEL  = '#374151'
@@ -101,10 +102,16 @@ export function isSidePanel(key: string) {
   return key === 'left_side' || key === 'right_side'
 }
 
+// Shaped-cabinet per-edge parts (z_cabinet_shape) turn about Y; the ortho views
+// draw their axis-aligned footprint (caseBoxAABB).
+const isTurned = (p: { part_key?: string; AY?: number }) =>
+  !!p.part_key && (isShapedPanelKey(p.part_key) || isShapedRailKey(p.part_key) || !!p.AY)
+
 // Elevation (X-Y plane, front face)
 export function elevRect(p: { X: number; Y: number; DX: number; DY: number; DZ: number; part_key?: string }) {
   const isSide = p.part_key ? isSidePanel(p.part_key) : false
   if (isSide) return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+  if (isTurned(p)) { const b = caseBoxAABB(p as ResolvedCasePart); return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h } }
   if (p.part_key === 'back') return { ex: p.X, ey: p.Y + p.DZ + p.DX, ew: p.DY, eh: p.DX }
   return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
 }
@@ -176,6 +183,7 @@ export function intElevRect(p: ResolvedInternalPart) {
 // Top (X-Z plane, looking down)
 export function topRect(p: ResolvedCasePart) {
   if (isSidePanel(p.part_key)) return { tx: p.X, tz: p.Z, tw: p.DZ, td: p.DX }
+  if (isTurned(p)) { const b = caseBoxAABB(p); return { tx: b.x, tz: b.z, tw: b.w, td: b.d } }
   if (p.part_key === 'back')   return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DZ }
   return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX }
 }
@@ -211,6 +219,7 @@ export function zoneTopRect(z: ResolvedFaceZone)      { return { tx: z.X, tz: z.
 // Side (Z-Y plane, looking left from right)
 export function sideRect(p: ResolvedCasePart): { sz: number; cy_top: number; sw: number; sh: number } | null {
   if (isSidePanel(p.part_key)) return { sz: p.Z, cy_top: p.Y + p.DY, sw: p.DX, sh: p.DY }
+  if (isTurned(p)) { const b = caseBoxAABB(p); return { sz: b.z, cy_top: b.y + b.h, sw: b.d, sh: b.h } }
   if (p.part_key === 'back')   return { sz: p.Z, cy_top: p.Y + p.DZ + p.DX, sw: p.DZ, sh: p.DX }
   return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
 }
@@ -282,9 +291,9 @@ export function slideSideRect(s: ResolvedDrawerSlide) { return { sz: s.Z, cy_top
 // ── PartMeta builders ──────────────────────────────────────────────────────────
 
 export function svgCaseMeta(p: ResolvedCasePart): PartMeta {
-  const isS = isSidePanel(p.part_key), isB = p.part_key === 'back'
+  const isS = isSidePanel(p.part_key), isB = p.part_key === 'back' || isShapedPanelKey(p.part_key)
   return {
-    id: `case_${p.part_key}`, label: CASE_LABELS[p.part_key] ?? p.part_key,
+    id: `case_${p.part_key}`, label: CASE_LABELS[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key,
     w: isS ? p.DZ : p.DY, h: isS ? p.DY : isB ? p.DX : p.DZ, d: isS ? p.DX : isB ? p.DZ : p.DX,
     thickness: p.DZ, edge: p.edge_band, materialId: p.material_id,
     panelKind: isS ? 'side' : isB ? 'face' : 'horizontal',

@@ -398,9 +398,13 @@ function Stage2Parts() {
                 ? `Shaped part — STALE: the part is now ${fmtMm(p.w)}×${fmtMm(p.h)}mm but the shape was drawn at ${fmtMm(p.shape.bbox.w)}×${fmtMm(p.shape.bbox.h)}mm. Re-edit the shape in the cabinet; excluded from nesting until then.`
                 : `Shaped part (r${p.shape.revision}) — nests at its bounding box, cuts its drawn outline`}>⬠</span>
           )}
+          {p.source_table === 'benchtop_parts' ? (
+            <span className="px-1.5 py-0.5 text-ink truncate" title="Benchtop part — rename it on the benchtop (canvas)">{p.label}</span>
+          ) : (
           <input defaultValue={p.label} key={p.label} placeholder={p.default_label} title="Click to rename this part"
             onBlur={e => { if (e.target.value.trim() !== p.label) savePartLabel(p, e.target.value) }}
             className={`w-full bg-transparent border border-transparent hover:border-edge-strong focus:border-accent rounded px-1.5 py-0.5 focus:outline-none focus:bg-surface-2 ${p.label !== p.default_label ? 'text-accent font-medium' : 'text-ink'}`} />
+          )}
         </span>
       )
       case 'cabinet':  return <span className="text-ink-muted">{p.cabinet_label}</span>
@@ -409,7 +413,7 @@ function Stage2Parts() {
       case 'height':   return <span className="font-mono text-ink-muted tabular-nums">{fmtMm(dispDims(p).h)}{sizeOvMark(p, 'h')}</span>
       case 'thk':      return <span className="font-mono text-ink-muted tabular-nums">{p.thickness}{sizeOvMark(p, 't')}</span>
       case 'material': return p.material_id ? <span className="text-ink-muted">{matName.get(p.material_id) ?? '—'}</span> : <span className="text-amber-600">none</span>
-      case 'comment':  return (
+      case 'comment':  return p.source_table === 'benchtop_parts' ? <span className="px-1.5 text-ink-subtle">—</span> : (
         <input defaultValue={p.comment ?? ''} key={p.comment ?? ''} placeholder="—"
           onBlur={e => { if (e.target.value.trim() !== (p.comment ?? '')) saveComment(p, e.target.value) }}
           className="w-full bg-transparent border border-transparent hover:border-edge-strong focus:border-accent rounded px-1.5 py-0.5 text-ink focus:outline-none focus:bg-surface-2" />

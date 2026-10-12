@@ -109,6 +109,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     viewDefaults: { '3d': { visible: false } } },
   { id: 'hinges',         group: 'hardware', label: 'Hinges + plates',     views: ['elevation', '3d'], default: ON,
     viewDefaults: { '3d': { visible: false } }, hint: 'Elevation: cup bores; 3D: hinge + plate models' },
+  { id: 'drawer_front_drilling', group: 'hardware', label: 'Drawer front drilling', views: ['elevation'], default: ON,
+    hint: 'Drawer-box fixing bores into the back of each drawer front (from the runner drilling)' },
   { id: 'machining',      group: 'hardware', label: 'Drilling / machining', views: ['elevation', '3d'], default: ON,
     viewDefaults: { '3d': { visible: false } }, hint: 'Joint + hardware bores and hand-added operations' },
 
@@ -169,7 +171,19 @@ export interface ViewLayerSettings {
   lineDrawing?: boolean
   /** Phase 3: view background colour (#rrggbb). Unset = the view's default. */
   background?: string
+  /** Plan / elevation cabinet fill per class (#rrggbb). Corner classes follow
+   *  their parent class. Unset = the built-in CAB_FILL colour. */
+  cabinetFill?: Partial<Record<CabinetFillClass, string>>
+  /** Plan / elevation cabinet fill opacity multiplier 0.1–1 (fill only, not the
+   *  outline stroke). Unset = 1. */
+  cabinetFillOpacity?: number
 }
+export type CabinetFillClass = 'base' | 'wall' | 'tall'
+export const CABINET_FILL_CLASSES: { id: CabinetFillClass; label: string }[] = [
+  { id: 'base', label: 'Base' },
+  { id: 'wall', label: 'Wall' },
+  { id: 'tall', label: 'Tall' },
+]
 export type LayerSetSettings = Partial<Record<LayerViewId, ViewLayerSettings>>
 
 export interface LayerSet {
@@ -184,7 +198,10 @@ export function casePartItem(partKey: string): string {
   if (partKey === 'left_side' || partKey === 'right_side') return 'carcass_gables'
   if (partKey === 'bottom') return 'carcass_bottom'
   if (partKey === 'back') return 'carcass_back'
-  return 'carcass_top'            // full_top, front_rail, back_rail
+  // Shaped-cabinet per-edge panels (z_cabinet_shape): side:<edge> / back:<edge>.
+  if (partKey.startsWith('side:')) return 'carcass_gables'
+  if (partKey.startsWith('back:')) return 'carcass_back'
+  return 'carcass_top'            // full_top, front_rail, back_rail, rail:<edge>
 }
 export function kickPartItem(partKey: string): string {
   return partKey === 'spreader_vertical' || partKey === 'spreader_horizontal' ? 'kick_spreaders' : 'kick_faces'

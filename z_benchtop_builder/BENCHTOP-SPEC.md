@@ -7,10 +7,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Phase 5 (outputs: supply sheet + cut list / optimiser).
-> Phase 4 done (2026-10-11): shape-true resolver — pieces by joins, per-edge
-> members, profile parts, supply meta. Its rules Q-a…Q-h are PROPOSED defaults
-> with its 3 open questions now locked (2026-10-12).
+> **RESUME HERE** → Phases 0–5 done (2026-10-12). Next: pick from Deferred
+> (splashbacks, CNC profiles, auto panel splits) or Phase 5 follow-ups (R-f).
+> Phase 4 rules Q-a…Q-h are Claude's defaults; its 3 open questions are locked.
 
 ---
 
@@ -287,6 +286,7 @@ Built:
   closed (only leaves the mode when the menu is open); F4 still toggles.
   Verified headless: typed 1800 × 650 rect; L 2000 / 1500 @ depth 650.
 - [x] **Waterfall joint per edge** (Mark, 2026-10-11): edge.waterfall_join = mitre (default) | butt; B / M toggle on waterfall edges in the panel; plan + elevation label ▼M / ▼B. Mitre = leg to the top surface, 45° at the corner (elevation: band and end-on leg share the diagonal; face-on leg runs to the top edge; 3D: slab cut back by T, leg prism with the 45° face + corner wedge). Butt = the top sits ON the leg (leg stops at the underside; 3D leg box under the top). Phase 4: leg part length = topZ (mitre, both ends 45°) vs base height (butt).
+- [x] **Waterfall legs block cabinets** (Mark, 2026-10-12): `src/lib/waterfallObstacles.ts` — each waterfall leg (edge strip inset by the top thickness, floor to top surface) is added to the `occupied` ranges for cabinet place / move / stretch / paste in plan + elevation, on the wall + side within the mover's depth. Wall units above the top are not blocked. Typed positions in the cabinet panel (`CabinetPanel`, `useCabinetOps`) not yet covered.
 - [x] **Editable sizes in the panel** (Mark, 2026-10-11): Size card — Length (a
   'Length grows from ◀ Left / Both / Right ▶' toggle picks the end that moves;
   default Right), Depth (front edge moves, back stays on the wall), Sits at / Top
@@ -373,9 +373,35 @@ Started on Mark's go ("start phase 4"). Rules Q-a…Q-h are Claude's defaults �
 3. Non-square corners (45° join chords): set-back taken along the edge, not
    angle-adjusted.
 
-### Phase 5 — Outputs  `[ ]`
-- Reports: benchtop supply sheet (stone/laminate order), lineal m per profile.
-- In-house parts → optimiser / cut list as extra line items (no new infra).
+### Phase 5 — Outputs  `[x]` (2026-10-12)
+- **R-a Supply sheet** — Reports → "Benchtop Supply" (room / job scope):
+  every `supply_item` row as an order line — top, item (+ waterfall butt /
+  mitre), length × width × thickness, qty, material, m², lineal m per edge
+  profile code, notes (shaped outline thumbnail, cutouts, joins). Totals: m² +
+  item count per material / thickness, lineal m per profile, cutout / waterfall
+  leg / join counts (a join is on both its pieces — counted once). Print / PDF
+  via the modal button. Builder: `benchtop-resolver/supply.ts`; view:
+  `BenchtopSupplyReport.tsx`.
+- **R-b Parts List Summary** — supply items removed (the interim "— supply"
+  tag is gone); it lists only cut parts.
+- **R-c Optimiser** — in-house parts (rows with a board `material_id`, not
+  supply) join the snapshot via `optimiser/benchtopParts.ts`, from both the
+  server page and the batch loader: `source_table = 'benchtop_parts'`, the
+  benchtop stands in for the cabinet (room / cabinet filters work), one part per
+  unit of quantity ("Strip — Cross 1/2/3"). Footprint h = along the grain
+  (length) unless the row's grain is `width`. Shaped pieces carry their
+  outline as `shape` (rotated, not mirrored) and nest at the bbox like other
+  shaped parts. No edgebanding deduction.
+- **R-d Read-only in the optimiser** — no rename / comment (no cabinet row to
+  store them); no part_operations (excluded from drill / route sync).
+- **R-e Size overrides** — none for benchtop parts (`sizeOverrides` case).
+- **R-f Follow-ups, not built** — benchtop edgebanding per edge on the cut
+  list; cutouts / profiles as CNC ops; supply sheet export to CSV.
+- Tests: 5 new (`__tests__/outputs.test.ts`). 286/286.
+- Verified live: Living supply sheet → Benchtop 2 Stone Slab 2435 × 426 × 20,
+  1.04 m², ARR 5.72 lm; Parts List has no stone rows. Benchtop 2 switched to
+  33mm Built-Up + resolved → 8 parts in optimiser Stage 2 (worktop 426 × 2435,
+  front / back strips, 2 ends, 3 cross members, 16.5mm board). Restored to stone.
 
 ### Deferred
 Splashback module · CNC machining of profiles · automatic panel splits ·
@@ -384,6 +410,8 @@ sharing the profile library with cabinet-part shapes.
 ---
 
 ## Session log
+- 2026-10-12 — Phase 4 questions locked (defaults kept); Phase 4 committed.
+  Phase 5 done (supply sheet report, benchtop parts in the optimiser).
 - 2026-10-11 — Audit done, decisions 1–7 locked, spec created. Phase 0 done
   (cleanup, seeds, worktop-thickness fix, first live resolve). P-b (join
   lines) locked. Phase 1 done (edge profile library + Settings tab).

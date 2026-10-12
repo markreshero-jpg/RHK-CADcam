@@ -29,6 +29,7 @@ import type {
 } from '../resolver/types'
 import type { FormulaScope, ScopeValue } from './evaluate'
 import type { LookupFn } from './parser'
+import { isShapedPanelKey } from '../cabinetShape/partKeys'
 
 /** The numeric view of one part exposed to formulas. */
 export interface PartScopeValue {
@@ -45,7 +46,7 @@ type Axis = 'DX' | 'DY' | 'DZ'
 // [box-w, box-h, box-d] per part — mirrors sizeOverrides.boxAxes exactly.
 function caseAxes(key: ResolvedCasePart['part_key']): [Axis, Axis, Axis] {
   if (key === 'left_side' || key === 'right_side') return ['DZ', 'DY', 'DX']
-  if (key === 'back') return ['DY', 'DX', 'DZ']
+  if (key === 'back' || isShapedPanelKey(key)) return ['DY', 'DX', 'DZ']
   return ['DY', 'DZ', 'DX'] // bottom, full_top, rails (horizontal kinds)
 }
 function toekickAxes(key: ResolvedToekickPart['part_key']): [Axis, Axis, Axis] {

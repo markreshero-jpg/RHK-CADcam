@@ -2,7 +2,8 @@
 // Call this whenever a cabinet is created or updated.
 
 import { supabase } from '@/src/lib/supabase'
-import { loadCabinetInput } from './loadCabinetInput'
+import { loadCabinetInput, loadCabinetInputFromRow } from './loadCabinetInput'
+import type { CabinetInstance } from '../types'
 import { resolveCabinet } from './resolver'
 import { persistResolved } from './persistResolved'
 import { CabinetInput, ResolvedCabinet } from './types'
@@ -166,6 +167,47 @@ export function patchEdgeOverrideCache(
   else if (partId.startsWith('tk_'))    ov.toekick.set(partId.slice(3), edge)
   else if (partId.startsWith('int_'))   ov.internal.set(partId.slice(4), edge)
   else if (partId.startsWith('zone_'))  ov.zone.set(partId.slice(5), edge)
+}
+
+/**
+ * Resolve an UNSAVED cabinet (e.g. the armed library definition) for preview.
+ * Same cascade + resolver as a placed cabinet, but nothing is cached or
+ * persisted. `customParts` = the definition's custom_parts snapshot; their
+ * formulas and role materials are evaluated in memory, exactly as
+ * resolveCustomParts does for a placed cabinet.
+ */
+export async function resolveDraftCabinet(
+  draft: CabinetInstance,
+  customParts: Record<string, unknown>[] = [],
+): Promise<ResolvedCabinet> {
+  const input = await loadCabinetInputFromRow(draft, { persisted: false })
+  const resolved = resolveCabinet(input)
+  resolved.hidden_parts = []
+  if (customParts.length === 0) { resolved.custom_parts = []; return resolved }
+
+  const libIds = [...new Set(customParts.map(p => p.part_library_id).filter((v): v is string => typeof v === 'string'))]
+  const { data: libs } = libIds.length > 0
+    ? await supabase.from('parts_library').select('id,key,material_role').in('id', libIds)
+    : { data: [] as { id: string; key: string | null; material_role: string | null }[] }
+  const libById = new Map((libs ?? []).map(l => [l.id as string, l]))
+  const scope = buildFormulaScope(resolved, input)
+  resolved.custom_parts = customParts.map((p, i) => {
+    const literal = { dx: Number(p.dx ?? 0), dy: Number(p.dy ?? 0), dz: Number(p.dz ?? 18), x: Number(p.x ?? 0), y: Number(p.y ?? 0), z: Number(p.z ?? 0) }
+    const lib = libById.get(p.part_library_id as string)
+    return {
+      ...p,
+      ...literal,
+      ...evalCustomPartFields(literal, p.expressions as Record<string, string> | null, scope),
+      id: `draft_custom_${i}`,
+      cabinet_instance_id: draft.id,
+      material_id: (p.material_override_id as string | null) ?? roleMaterialId(lib?.material_role, input),
+      visible: p.visible !== false,
+      show_in_room: p.show_in_room !== false,
+      orientation: (p.orientation as string) ?? 'flat',
+      library_key: lib?.key ?? null,
+    }
+  }) as unknown as ResolvedCabinet['custom_parts']
+  return resolved
 }
 
 export async function resolveCabinetFromDB(

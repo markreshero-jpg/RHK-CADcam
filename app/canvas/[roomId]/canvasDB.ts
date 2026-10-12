@@ -115,6 +115,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
       AX: p.ax, AY: p.ay, AZ: p.az,
       material_id: p.material_id,
       edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right, id: p.edge_band_id ?? undefined },
+      ...(p.outline ? { outline: p.outline } : {}),
     }))
     const intPartsArr = myInt.map(p => ({
       part_type: p.part_type,
@@ -127,6 +128,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
       // edge_band_front (DB) = right in resolver space (front DY edge)
       // edge_band_back  (DB) = left in resolver space
       edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_back, right: p.edge_band_front, id: p.edge_band_id ?? undefined },
+      ...(p.outline ? { outline: p.outline } : {}),
     }))
 
     const seamJoints: ResolvedSeamJoint[] = []
@@ -420,6 +422,7 @@ export function buildInstanceFromDefinition(
     internal_grid: internalGrid,
     carcase_joints: def.carcase_joints,
     no_cnc: def.no_cnc ?? false,
+    footprint: def.footprint ?? null,
     schema_version: '0.4', notes: null,
   }
 }
@@ -553,6 +556,7 @@ export async function saveCabinetToLibrary(
     material_overrides, hardware_overrides, toekick_overrides, drawerbox_overrides: {},
     exposed_interior: p.exposed_interior ? !!inst.exposed_interior : false,
     no_cnc: !!inst.no_cnc,
+    footprint: inst.footprint ?? null,
     custom_parts: cps ?? [],
     description: opts.description ?? null,
     is_library_item: true, active: true, sort_order,
