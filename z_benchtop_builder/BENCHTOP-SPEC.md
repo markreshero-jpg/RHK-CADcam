@@ -453,6 +453,17 @@ outside it tops stay locked exactly as before (no drags).
   length / push-pull card is gone; round / chamfer / remove stay for the picked
   corner. Mode entry unchanged (right-click → Edit shape).
   Verified: line drag 119 mm parallel; corner 3 X 0 → 100 saved. Restored.
+- **S-f Stretch + save prompt — LOCKED (Mark, 2026-10-12)**: clicking a line
+  behaves like cabinet stretching — it follows the mouse (snaps), click places
+  it; the panel's "Stretch line" box is focused with the size across the line
+  (Depth for a line along the wall, Length for an end): type + Tab = apply live,
+  Enter = place, Esc = cancel the stretch. A press-drag still moves a line
+  straight away. Add a corner is now Shift-click (double-click clashed with
+  click-to-place). Esc in the mode with changes → "Save the new shape?"
+  (Save = Enter / Discard / Keep editing = Esc); no changes → just leaves.
+  Snapped line drags go exactly through the snap point (were off by the grab
+  point's distance from the line). Verified: stretch 426 → 545 by mouse, typed
+  600 + Enter, Esc → prompt → Discard left the DB unchanged, Save stored 600.
 - Verified live (Living, Benchtop 2): right-click → Edit shape; corner drag →
   right overhang −61 → 118 live; Ctrl+Z back; Edge 1 typed 2435 → 2535 (start
   fixed) → Enter saved 2535 × 426; Esc after a drag left the DB unchanged.
