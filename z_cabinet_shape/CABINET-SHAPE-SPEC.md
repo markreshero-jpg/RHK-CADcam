@@ -7,9 +7,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Phases 1–2 checked in-app (Mark, 2026-10-12), uncommitted.
-> Next: Phase 3
-> (faces per front edge).
+> **RESUME HERE** → Phases 1–2 done + committed (5dca77a). Phase 3a code done
+> 2026-10-12 (uncommitted), needs an in-app check. Next: Phase 3b (hinges +
+> drawers on facets).
 
 ---
 
@@ -85,6 +85,14 @@ derived from geometry (`src/lib/benchtopAnchor.ts`). Same pattern here.
      "Re-apply preset" regenerates the shape from that preset.
    - Roles live on `edge`, the same mechanism as benchtop `{wall}`. The Phase 6
      editor is the Shape Editor with a role `edgeOptions`.
+
+9. **Facet-to-facet door junction defaults to mitred door edges** (Mark,
+   2026-10-12). Where two front facets meet, the doors are bevelled to meet on
+   the corner line (half the facet angle each). Reveal / fixed post stay
+   available as per-vertex options (S-c).
+10. **Doors on an angled facet hinge on the adjacent side panel with an angled
+    hinge** sized to the facet angle (e.g. +45°), flagged on the hardware list
+    (Mark, 2026-10-12).
 
 ## Proposals (not yet locked)
 
@@ -201,10 +209,45 @@ Design (locked in code):
   not yet show resolver outlines; toe kick + doors still box-built in 3D (Phases 3–4);
   already-saved shaped cabinets re-resolve on their next edit (no page-load sweep).
 
-### Phase 3 — Multi-facet faces `[ ]`
-- [ ] `faces` map per front edge (S-c); FaceGridEditor picks a facet
-- [ ] Facet-to-facet junction: reveal / mitre / post
-- [ ] Hinges + drawer depth clearance per facet
+### Phase 3 — Multi-facet faces `[~]`
+Split 2026-10-12 into 3a / 3b / 3c (the face pipeline has ~40 consumers).
+
+Design (locked in code, 3a):
+- Every straight `front` edge is a facet. **Primary facet** = the straight front (y = DZ),
+  else the longest front edge (diagonal corner). It uses `face_grid` and keeps
+  `zone_<r>_<c>` ids, so existing overrides / hinges / drawers are untouched.
+- Other facets: `cabinet_instances.faces[edgeId]` (default: one door hinged toward its side
+  panel); zone ids `zone_<edge>.<r>_<c>` (dot = legacy `split('_').map(Number)` parsers get
+  NaN, never a primary zone). Helpers `zoneKey / zonePartId / parseZonePartId` (partKeys.ts).
+- `resolveShapedFace.ts` runs the ordinary `resolveFace` per facet in a facet-local frame
+  (new optional `FaceFrame`: width, end reveals, door-key prefix), then turns zones onto the
+  facet: AY about the zone min corner, +X → along the facet to the right, +Z → outward. A facet
+  on y = DZ is exactly the box front (test: rectangle-shaped footprint == plain fronts).
+- Facet ends: side panel on x=0 / x=DX → the box's left/right neighbour reveal; other panel or
+  open → end reveal; convex facet corner → **mitre** (decision 9): rev = GAPC/4 − tan(φ/2)·(door
+  mid-thickness offset), zone `bevel_l` / `bevel_r` = φ/2; concave facet corner → GAPC/4 gap.
+- Door styles: facets resolve under `resolved_doors['<edge>.<r>_<c>']`, '*' = room/job default.
+- DB (migration_s3): `faces` jsonb on instances + definitions; `facet` text default '' on
+  face_zones / face_rows / face_cols with the unique keys rebuilt to include it; face_zones
+  gained `ax/ay/az` (it had none) and `bevel_l/bevel_r`.
+
+- [x] 3a — resolver (`resolveShapedFace.ts`, tests `shapedFace.test.ts`), persist + reload
+      (facet, AY, bevels), loader (facet grids + door styles), 3D (`turnZone` turns the whole zone
+      incl. swing/hinges), plan (turned door outlines), elevation + ortho views (turned bounds),
+      zone id helper across 13 files, facet-aware edge-band writes/reads, Face Grid editor facet
+      picker (`FacetFaceGridEditor.tsx`)
+- [x] Mitred doors drawn with their true bevel (Mark's first check, 2026-10-12: doors were
+      square boxes — backs overlapped ~6 mm, fronts ~8 mm apart). `zoneBevelOutline` (jointDrilling)
+      = top-view trapezoid (DX at mid-thickness, front face longer); 3D extrudes it up
+      (`PartShape.extrude = 'up'`, incl. the door-swing path); plan draws it turned by AY.
+      Test: both doors' back corners and front corners meet within 2 mm.
+- [ ] 3a in-app check
+- [ ] 3b — hinges on facet doors: angled hinge on the adjacent side panel (decision 10; needs a
+      `mount_angle_deg` on hardware_hinges — library today has one hinge, no angle), hinge
+      instances keyed by facet; drawer boxes + slides per facet (width/depth from the inset
+      polygon, turned). Until then: drawer stacks + hinges only on primary zones with AY = 0.
+- [ ] 3c — cut list shows bevels; optimiser / drilling / trees / labels facet-aware; plan + report
+      door swings from resolved zones (today skipped on shaped cabinets); Part Editor outlines.
 
 ### Phase 4 — Angled joints, toe kick, benchtop `[ ]`
 - [ ] Joint chooser from dihedral angle + roles (mitre / bevel / butt), thickness compensation

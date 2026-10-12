@@ -142,35 +142,38 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
   }
 
   // Insert face rows — collect returned IDs for zone FK
-  const rowIdByIndex = new Map<number, string>()
+  // Keyed facet:index — a shaped cabinet's facets each have their own rows/cols.
+  const rowIdByIndex = new Map<string, string>()
   if (resolved.face_rows.length > 0) {
     const { data: insertedRows, error } = await supabase
       .from('face_rows')
       .insert(resolved.face_rows.map(r => ({
         cabinet_instance_id: cabId,
+        facet:         r.facet ?? '',
         row_index:     r.row_index,
         height:        r.height,
         height_locked: r.height_locked,
       })))
-      .select('id, row_index')
+      .select('id, row_index, facet')
     if (error) console.error('persistResolved face_rows:', error)
-    for (const r of insertedRows ?? []) rowIdByIndex.set(r.row_index, r.id)
+    for (const r of insertedRows ?? []) rowIdByIndex.set(`${r.facet ?? ''}:${r.row_index}`, r.id)
   }
 
   // Insert face cols — collect returned IDs for zone FK
-  const colIdByIndex = new Map<number, string>()
+  const colIdByIndex = new Map<string, string>()
   if (resolved.face_cols.length > 0) {
     const { data: insertedCols, error } = await supabase
       .from('face_cols')
       .insert(resolved.face_cols.map(c => ({
         cabinet_instance_id: cabId,
+        facet:         c.facet ?? '',
         col_index:     c.col_index,
         width:         c.width,
         width_locked:  c.width_locked,
       })))
-      .select('id, col_index')
+      .select('id, col_index, facet')
     if (error) console.error('persistResolved face_cols:', error)
-    for (const c of insertedCols ?? []) colIdByIndex.set(c.col_index, c.id)
+    for (const c of insertedCols ?? []) colIdByIndex.set(`${c.facet ?? ''}:${c.col_index}`, c.id)
   }
 
   // Insert face zones — capture ids by (row_index, col_index) for hinge pointer
@@ -179,13 +182,17 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
     const { data: insertedZones, error } = await supabase.from('face_zones').insert(
       resolved.face_zones.map(z => ({
         cabinet_instance_id: cabId,
-        row_id:        rowIdByIndex.get(z.row_index),
-        col_id:        colIdByIndex.get(z.col_index),
+        row_id:        rowIdByIndex.get(`${z.facet ?? ''}:${z.row_index}`),
+        col_id:        colIdByIndex.get(`${z.facet ?? ''}:${z.col_index}`),
+        facet:         z.facet ?? '',
         row_index:     z.row_index,
         col_index:     z.col_index,
         face_type:     z.face_type,
         dx: z.DX, dy: z.DY, dz: z.DZ,
         x:  z.X,  y:  z.Y,  z:  z.Z,
+        ax: z.AX, ay: z.AY, az: z.AZ,
+        bevel_l:           z.bevel_l ?? null,
+        bevel_r:           z.bevel_r ?? null,
         hinge_side:        z.hinge_side ?? null,
         material_id:       z.material_id,
         edge_band_top:     z.edge_band.top,
@@ -201,9 +208,12 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
         door_profile_id:   z.door_profile_id ?? null,
         door_profile:      z.door_profile ?? null,
       }))
-    ).select('id, row_index, col_index')
+    ).select('id, row_index, col_index, facet')
     if (error) console.error('persistResolved face_zones:', error)
-    for (const z of (insertedZones ?? []) as { id: string; row_index: number; col_index: number }[]) {
+    // Hinges / drawer stacks only exist on the primary facet (Phase 3b), so the
+    // primary zones keep their plain row:col key.
+    for (const z of (insertedZones ?? []) as { id: string; row_index: number; col_index: number; facet?: string }[]) {
+      if (z.facet) continue
       zoneIdByKey.set(`${z.row_index}:${z.col_index}`, z.id)
     }
   }

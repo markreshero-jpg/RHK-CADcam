@@ -383,6 +383,98 @@ export function offsetSegments(segs: BenchtopSegment[], amount: number): Benchto
   })
 }
 
+// ── In-plan shape editing (Phase 6) ──────────────────────────────────────────
+
+// Where the line p + t·u meets the line q + s·v (null when ~parallel).
+function lineMeet(p: P, u: P, q: P, v: P): P | null {
+  const den = u.x * v.y - u.y * v.x
+  if (Math.abs(den) < 1e-6 * Math.hypot(u.x, u.y) * Math.hypot(v.x, v.y)) return null
+  const t = ((q.x - p.x) * v.y - (q.y - p.y) * v.x) / den
+  return { x: p.x + u.x * t, y: p.y + u.y * t }
+}
+
+// Push (+, outward) / pull (−) straight edge i by d mm. It stays parallel; each
+// end slides along its straight neighbour's line (so the neighbours stretch
+// instead of tilting). A curved / parallel neighbour: that end just moves along
+// the normal (its curve handles follow).
+export function pushPullEdge(segs: BenchtopSegment[], i: number, d: number): BenchtopSegment[] {
+  const s = segs[i]
+  if (s.type !== 'line' || !d) return segs
+  const n = segs.length
+  const nrm = outwardNormal(segs, i)
+  const a = { x: s.p0.x + nrm.x * d, y: s.p0.y + nrm.y * d }
+  const b = { x: s.p1.x + nrm.x * d, y: s.p1.y + nrm.y * d }
+  const u = { x: s.p1.x - s.p0.x, y: s.p1.y - s.p0.y }
+  const prev = segs[(i - 1 + n) % n], next = segs[(i + 1) % n]
+  const p0 = (prev.type === 'line' && lineMeet(a, u, prev.p0, { x: prev.p1.x - prev.p0.x, y: prev.p1.y - prev.p0.y })) || a
+  const p1 = (next.type === 'line' && lineMeet(b, u, next.p1, { x: next.p0.x - next.p1.x, y: next.p0.y - next.p1.y })) || b
+  return moveVertex(moveVertex(segs, i, p0), (i + 1) % n, p1)
+}
+
+export type EdgeLengthKeep = 'start' | 'both' | 'end'
+
+// Make straight edge i `len` long. keep = the end that stays put ('both' =
+// grow / shrink evenly). The moving end pushes the neighbouring edge (an end
+// cap moves out square, the back edge stretches with it); a curved or
+// in-line neighbour just has the shared corner moved along the edge.
+export function setEdgeLength(segs: BenchtopSegment[], i: number, len: number, keep: EdgeLengthKeep): BenchtopSegment[] {
+  const s = segs[i]
+  if (s.type !== 'line' || len < 1) return segs
+  const n = segs.length
+  const L0 = dist(s.p0, s.p1)
+  if (L0 < 1e-6) return segs
+  const delta = len - L0
+  if (Math.abs(delta) < 0.01) return segs
+  const u = { x: (s.p1.x - s.p0.x) / L0, y: (s.p1.y - s.p0.y) / L0 }
+  // Move the end at vertex vi (i+1 = end, i = start) outward along the edge by dd.
+  const moveEnd = (sg: BenchtopSegment[], atEnd: boolean, dd: number) => {
+    const ni = atEnd ? (i + 1) % n : (i - 1 + n) % n
+    const nb = sg[ni]
+    const dir = atEnd ? u : { x: -u.x, y: -u.y }
+    const nn = outwardNormal(sg, ni)
+    const k = dir.x * nn.x + dir.y * nn.y
+    if (nb.type === 'line' && Math.abs(k) > 0.1) return pushPullEdge(sg, ni, dd * k)
+    const vi = atEnd ? (i + 1) % n : i
+    const v = sg[vi].p0
+    return moveVertex(sg, vi, { x: v.x + dir.x * dd, y: v.y + dir.y * dd })
+  }
+  if (keep === 'start') return moveEnd(segs, true, delta)
+  if (keep === 'end') return moveEnd(segs, false, delta)
+  return moveEnd(moveEnd(segs, true, delta / 2), false, delta / 2)
+}
+
+// Add a corner on edge i at (the projection of) pt; a curved edge splits at its
+// midpoint. Both halves keep the edge's finish.
+export function splitSegmentAt(segs: BenchtopSegment[], i: number, pt: P): BenchtopSegment[] {
+  const s = segs[i]
+  if (s.type !== 'line') return splitSegment(segs, i)
+  const L2 = (s.p1.x - s.p0.x) ** 2 + (s.p1.y - s.p0.y) ** 2
+  if (L2 < 1) return segs
+  const t = ((pt.x - s.p0.x) * (s.p1.x - s.p0.x) + (pt.y - s.p0.y) * (s.p1.y - s.p0.y)) / L2
+  if (t < 0.02 || t > 0.98) return segs
+  const m = lerp(s.p0, s.p1, t)
+  const out = [...segs]
+  out.splice(i, 1, { ...s, p1: m, edge: s.edge ? { ...s.edge } : undefined }, { ...s, p0: m, edge: s.edge ? { ...s.edge } : undefined })
+  return out
+}
+
+// The top's size across straight edge i: how far the outline reaches behind
+// it, along its inward normal (front edge → depth, end edge → length). The
+// stretch box shows / takes this, like a cabinet's width.
+export function sizeAcross(segs: BenchtopSegment[], i: number): number {
+  const s = segs[i]
+  const n = outwardNormal(segs, i)
+  let m = 0
+  for (const p of outlinePoints(segs, 8)) m = Math.max(m, (s.p0.x - p.x) * n.x + (s.p0.y - p.y) * n.y)
+  return m
+}
+
+// After a reshape, pull join ends back onto the outline (within tol mm).
+export function resnapJoins(segs: BenchtopSegment[], joins: BenchtopJoinLine[], tol = 150): BenchtopJoinLine[] {
+  const snap = (p: P) => { const h = nearestOnOutline(segs, p); return h && h.d <= tol ? clonePt(h.pt) : p }
+  return joins.map(j => ({ ...j, p0: snap(j.p0), p1: snap(j.p1) }))
+}
+
 // ── Edge profiles ────────────────────────────────────────────────────────────
 
 const PROFILE_PALETTE = ['#f59e0b', '#2dd4bf', '#a78bfa', '#f472b6', '#4ade80', '#60a5fa', '#fb923c', '#e879f9', '#facc15', '#38bdf8']

@@ -18,6 +18,7 @@ import {
   caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3, type Box3,
   doorProfileSvg,
 } from './cabinetEditSvgHelpers'
+import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
 
 export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean }
 
@@ -168,7 +169,7 @@ export default function CabinetSheetSVG({
       })
       // Opaque faces
       rp.face_zones.filter(z => z.face_type !== 'open').forEach((z, i) => {
-        const r = zoneElevRect(applyOv(z, `zone_${z.row_index}_${z.col_index}`))
+        const r = zoneElevRect(applyOv(z, zonePartId(z)))
         const rc = R(r.ex, r.ey, r.ew, r.eh)
         els.push(<rect key={`f${i}`} {...rc} fill={FACE_FILL} stroke={INK} strokeWidth={PART} />)
         if (z.hinge_side === 'left') els.push(<line key={`fh${i}`} x1={rc.x} y1={rc.y} x2={rc.x} y2={rc.y + rc.height} stroke={INK} strokeWidth={OUT} />)
@@ -223,7 +224,7 @@ export default function CabinetSheetSVG({
         els.push(<rect key={`t${i}`} {...S(r.sz, r.cy_top, r.sw, r.sh)} fill="none" stroke={spreader ? INK3 : INK2} strokeWidth={PART} strokeDasharray={spreader ? '1 0.7' : undefined} />)
       })
       rp.face_zones.filter(z => z.face_type !== 'open').forEach((z, i) => {
-        const r = zoneSideRect(applyOv(z, `zone_${z.row_index}_${z.col_index}`))
+        const r = zoneSideRect(applyOv(z, zonePartId(z)))
         els.push(<rect key={`f${i}`} {...S(r.sz, r.cy_top, r.sw, r.sh)} fill={FACE_FILL} stroke={INK} strokeWidth={PART} />)
       })
       if (show.internals) {
@@ -278,7 +279,7 @@ export default function CabinetSheetSVG({
     const ext: Ext[] = []
     rp.case_parts.forEach(p => { const b = caseBox(applyOv(p, `case_${p.part_key}`)); ext.push({ b, z: b.z + b.d / 2, faceFill: 'white' }) })
     rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => { const b = tkBox3(applyOv(p, `tk_${p.part_key}_${p.sort_order}`)); ext.push({ b, z: b.z + b.d / 2, faceFill: 'white' }) })
-    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const b = zoneBox3(applyOv(z, `zone_${z.row_index}_${z.col_index}`)); ext.push({ b, z: b.z + b.d / 2, faceFill: FACE_FILL }) })
+    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const b = zoneBox3(applyOv(z, zonePartId(z))); ext.push({ b, z: b.z + b.d / 2, faceFill: FACE_FILL }) })
     ext.sort((a, b) => a.z - b.z)
     ext.forEach((e, i) => {
       const fc = faces(e.b)

@@ -773,12 +773,25 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     ?? null
 
   const faceGridInput = (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID
-  const resolvedDoors = await resolveDoorStyles(
-    faceGridInput,
-    (room?.door_style_override_id as string | null | undefined) ?? null,
-    effectiveJobStyleId,
-    doorColourOverride,
-  )
+  const roomStyleId = (room?.door_style_override_id as string | null | undefined) ?? null
+  const resolvedDoors = await resolveDoorStyles(faceGridInput, roomStyleId, effectiveJobStyleId, doorColourOverride)
+
+  // Shaped cabinets (z_cabinet_shape Phase 3): the other front facets' grids
+  // resolve their styles under `${edgeId}.${row}_${col}`, and '*' carries the
+  // room/job default for facets that have no stored grid yet.
+  const facesInput = (cab.faces as Record<string, FaceGridInput> | null) ?? undefined
+  if (cab.footprint) {
+    const oneDoor: FaceGridInput = {
+      rows: [{ row_index: 0, height_locked: false }], cols: [{ col_index: 0, width_locked: false }],
+      zones: [{ row_index: 0, col_index: 0, face_type: 'door' }],
+    }
+    const dflt = (await resolveDoorStyles(oneDoor, roomStyleId, effectiveJobStyleId, doorColourOverride))['0_0']
+    if (dflt) resolvedDoors['*'] = dflt
+    for (const [edgeId, grid] of Object.entries(facesInput ?? {})) {
+      const styles = await resolveDoorStyles(grid, roomStyleId, effectiveJobStyleId, doorColourOverride)
+      for (const [k, v] of Object.entries(styles)) resolvedDoors[`${edgeId}.${k}`] = v
+    }
+  }
 
   // ── 13. Resolve hinge hardware + count rules + existing instances ───────────
   // All hinge queries are defensive (maybeSingle / tolerant of errors) so the
@@ -849,6 +862,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     joint_type_ops:   jointTypeOps,
     joint_type_names: jointTypeNames,
     face_grid:     faceGridInput,
+    faces:         facesInput,
     resolved_doors: resolvedDoors,
     // Internal layout: recursive section tree stored as internal_grid = { tree }.
     // Anything without a tree (e.g. legacy flat grids) resolves to an empty interior.

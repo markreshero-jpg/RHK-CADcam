@@ -15,9 +15,9 @@ import {
   gridDots,
 } from '@/src/lib/geometry'
 import { footprintEdgesPlan } from '@/src/lib/cabinetShape/footprint'
-import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
+import { isShapedPanelKey, zonePartId } from '@/src/lib/cabinetShape/partKeys'
 import WallDimensionChain from './WallDimensionChain'
-import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, SectionCut, isBenchtopMode } from './canvasTypes'
+import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, SectionCut, isBenchtopMode, type BtShapeEdit, btLocal } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
@@ -26,7 +26,7 @@ import { roundMm } from '@/src/lib/format'
 import { SNAP_KIND_META, type SnapResult } from '@/src/lib/canvasSnap'
 import type { PlanGridPrefs } from '@/src/lib/userPrefs'
 import { getPalette } from '@/src/lib/partPalette'
-import { caseBox, caseBoxAABB, casePlanCorners, isSide, tkPlanBox } from '@/src/lib/jointDrilling'
+import { caseBox, caseBoxAABB, casePlanCorners, isSide, tkPlanBox, zoneBevelOutline, rotEulerXYZ } from '@/src/lib/jointDrilling'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
 import { dbLoadRoomPartDetails, type PartPosOverrides } from './canvasDB'
@@ -121,6 +121,9 @@ interface CanvasSVGProps {
   btMoveCursor?: Pt | null
   /** L / U quick-draw depth (draw panel) — previews match what will be saved. */
   btDepth?: number
+  /** In-plan shape edit (Phase 6): the working outline + a press on a corner / edge. */
+  btShapeEdit?: BtShapeEdit | null
+  onShapeHandleDown?: (e: React.PointerEvent, kind: 'v' | 'e', i: number) => void
   // Section cut
   sectionCut?: SectionCut | null
   onSectionFlipLook?: () => void
@@ -148,6 +151,7 @@ export default function CanvasSVG({
   btUPoints, btUCursor,
   btCutoutStart, btCutoutCursor,
   btJoinStart, btJoinCursor, edgeProfiles, btDefaultProfileId, onBenchtopDoubleClick, btMoveBase, btMoveCursor, btDepth,
+  btShapeEdit, onShapeHandleDown,
   sectionCut, onSectionFlipLook, onSectionClear, onSectionLinePointerDown,
   snapResult, measureStart, measureEnd, measureCursor, onMeasureCancel,
   resolvedParts,
@@ -215,7 +219,10 @@ export default function CanvasSVG({
             Outline from segments (Phase 3); edge finishes + join lines are
             their own layer items (benchtop_edges / benchtop_joins). */}
         {layers.show('benchtops') && benchtops.map(bt => {
-          const segs = btSegments(bt)
+          // Phase 6: the top being shaped draws its working outline; the others dim.
+          const shaping = mode === 'edit_benchtop_shape' && btShapeEdit?.btId === bt.id
+          const dimmed = mode === 'edit_benchtop_shape' && !shaping
+          const segs = shaping ? btShapeEdit!.segs : btSegments(bt)
           if (segs.length < 2) return null
           const isSel = bt.id === selectedBenchtopId
           const c = outlineCentroid(segs)
@@ -228,7 +235,7 @@ export default function CanvasSVG({
           const handles = isSel && mode === 'benchtop_select'   // edit handles only in F4 Benchtop mode
 
           return (
-            <Fragment key={bt.id}>
+            <g key={bt.id} opacity={dimmed ? 0.35 : undefined}>
               {/* Fill + border (evenodd fill-rule creates cutout holes) */}
               <path
                 d={outlinePath(segs, bt.cutout_polygons ?? [])}
@@ -359,6 +366,73 @@ export default function CanvasSVG({
                 )
               })}
 
+              {/* Phase 6 edit handles: press an edge (straight = push / pull, curve =
+                  bulge), a corner (drag), double-click an edge = add a corner. */}
+              {shaping && onShapeHandleDown && (() => {
+                const sel = btShapeEdit!.sel
+                const hit = 14 / view.zoom
+                const fr = btShapeEdit!.frame
+                const ax = 60 / view.zoom
+                const fs = 9 / view.zoom
+                const pick = sel?.kind === 'v' ? segs[sel.i]?.p0 : null
+                const pl = pick ? btLocal(fr, pick) : null
+                return (
+                  <g>
+                    {/* 0,0 = back-left corner; arrows show +X / +Y for the typed corner coordinates */}
+                    <g style={{ pointerEvents: 'none' }} stroke="#22c55e" strokeWidth={1.5 / view.zoom} fill="#22c55e">
+                      <line x1={fr.o.x} y1={fr.o.y} x2={fr.o.x + fr.d.x * ax} y2={fr.o.y + fr.d.y * ax} />
+                      <line x1={fr.o.x} y1={fr.o.y} x2={fr.o.x + fr.n.x * ax} y2={fr.o.y + fr.n.y * ax} />
+                      <circle cx={fr.o.x} cy={fr.o.y} r={3.5 / view.zoom} />
+                      <text x={fr.o.x + fr.d.x * ax * 1.15} y={fr.o.y + fr.d.y * ax * 1.15} fontSize={fs} stroke="none" textAnchor="middle" dominantBaseline="middle">X</text>
+                      <text x={fr.o.x + fr.n.x * ax * 1.15} y={fr.o.y + fr.n.y * ax * 1.15} fontSize={fs} stroke="none" textAnchor="middle" dominantBaseline="middle">Y</text>
+                      <text x={fr.o.x - (fr.d.x + fr.n.x) * 14 / view.zoom} y={fr.o.y - (fr.d.y + fr.n.y) * 14 / view.zoom} fontSize={fs} stroke="none" textAnchor="middle" dominantBaseline="middle">0,0</text>
+                    </g>
+                    {pick && pl && (
+                      <text x={pick.x} y={pick.y - 16 / view.zoom} fontSize={10 / view.zoom} fill="#fbbf24" textAnchor="middle"
+                        style={{ pointerEvents: 'none', userSelect: 'none' }}>{Math.round(pl.x)}, {Math.round(pl.y)}</text>
+                    )}
+                    {segs.map((s, i) => {
+                      const on = sel?.kind === 'e' && sel.i === i
+                      return (
+                        <g key={`se${i}`}>
+                          {on && <path d={edgePath(s)} fill="none" stroke="#f59e0b" strokeWidth={3 / view.zoom} style={{ pointerEvents: 'none' }} />}
+                          {/* The selected edge's start corner (typed length: "Start fixed") */}
+                          {on && <circle cx={s.p0.x} cy={s.p0.y} r={9 / view.zoom} fill="none" stroke="#22c55e" strokeWidth={2 / view.zoom} style={{ pointerEvents: 'none' }} />}
+                          <path d={edgePath(s)} fill="none" stroke="transparent" strokeWidth={hit}
+                            style={{ cursor: s.type === 'line' ? (Math.abs(s.p1.x - s.p0.x) > Math.abs(s.p1.y - s.p0.y) ? 'ns-resize' : 'ew-resize') : 'pointer' }}
+                            onPointerDown={e => { if (e.button !== 0) return; e.stopPropagation(); onShapeHandleDown(e, 'e', i) }}>
+                            <title>{s.type === 'line'
+                              ? 'Click to stretch (follows the mouse, click to place) · drag to move · Shift-click to add a corner · Alt-click to curve'
+                              : 'Alt-click to straighten · drag the round handle to change the curve'}</title>
+                          </path>
+                          {s.type !== 'line' && (() => {
+                            const m = segMid(s)
+                            return (
+                              <circle cx={m.x} cy={m.y} r={5 / view.zoom} fill="#7c3aed" stroke="#e9d5ff" strokeWidth={1 / view.zoom}
+                                style={{ cursor: 'grab' }}
+                                onPointerDown={e => { if (e.button !== 0) return; e.stopPropagation(); onShapeHandleDown(e, 'e', i) }} />
+                            )
+                          })()}
+                        </g>
+                      )
+                    })}
+                    {segs.map((s, i) => {
+                      const on = sel?.kind === 'v' && sel.i === i
+                      return (
+                        <rect key={`sv${i}`}
+                          x={s.p0.x - (on ? 7 : 5.5) / view.zoom} y={s.p0.y - (on ? 7 : 5.5) / view.zoom}
+                          width={(on ? 14 : 11) / view.zoom} height={(on ? 14 : 11) / view.zoom}
+                          fill={on ? '#f59e0b' : '#f8fafc'} stroke="#0f172a" strokeWidth={1.2 / view.zoom}
+                          style={{ cursor: 'crosshair' }}
+                          onPointerDown={e => { if (e.button !== 0) return; e.stopPropagation(); onShapeHandleDown(e, 'v', i) }}>
+                          <title>Click to type its X / Y · drag to move it (snaps) · Delete removes it</title>
+                        </rect>
+                      )
+                    })}
+                  </g>
+                )
+              })()}
+
               {/* Vertex markers when selected — right-click only; reshaping is in the
                   Shape Editor (double-click), never a drag on the plan (P-f). */}
               {handles && segs.map((s, i) => (
@@ -374,7 +448,7 @@ export default function CanvasSVG({
                 </circle>
               ))}
 
-            </Fragment>
+            </g>
           )
         })}
 
@@ -915,23 +989,34 @@ export default function CanvasSVG({
           // rotation overrides (same transforms as Cabinet3DView). Without resolved
           // parts (mid-resize) fall back to a line along the carcass front.
           const posOv = posOvById.get(cab.id)
-          const faceRects = (rpPlan?.face_zones ?? []).flatMap(z => {
+          // Shaped cabinets: fronts resolve per facet (Phase 3), turned by z.AY.
+          const faceRects = ((shaped ? rpAll : rpPlan)?.face_zones ?? []).flatMap(z => {
             const item = faceZoneItem(z.face_type)
             if (!item || !layers.show(item)) return []
-            const id = `zone_${z.row_index}_${z.col_index}`
+            const id = zonePartId(z)
             const ov = posOv?.[id]
             const box = { x: z.X, y: z.Y, z: z.Z, w: ov?.sw ?? z.DX, h: ov?.sh ?? z.DY, d: ov?.sd ?? z.DZ }
             if (box.w <= 0 || box.d <= 0) return []
             const rect: LocalRect = { x: box.x + (ov?.ox ?? 0), z: box.z + (ov?.oz ?? 0), w: box.w, d: box.d }
-            const rotPoly = rotatedBoxPolygon(box, ov, (lx, _ly, lz) => ({
+            const turn = z.AY
+              ? { ox: ov?.ox ?? 0, oy: ov?.oy ?? 0, oz: ov?.oz ?? 0, oax: ov?.oax, oay: (ov?.oay ?? 0) + z.AY, oaz: ov?.oaz }
+              : ov
+            const rotPoly = rotatedBoxPolygon(box, turn, (lx, _ly, lz) => ({
               x: displayCab.pos_x + lx * wd.x + lz * perp.x, y: displayCab.pos_y + lx * wd.y + lz * perp.y,
             }))
-            return [{ id, item, rect, poly: rotPoly ?? partPoly(rect) }]
+            // Mitred door (facet corner): its true top-view outline, turned by AY.
+            const bevel = !ov && zoneBevelOutline(z)
+            const bevelPoly = bevel ? bevel.map(q => {
+              const [rx, , rz] = rotEulerXYZ(0, z.AY, 0, q.x, 0, q.z)
+              const lx = z.X + rx, lz = z.Z + rz
+              return `${displayCab.pos_x + lx * wd.x + lz * perp.x},${displayCab.pos_y + lx * wd.y + lz * perp.y}`
+            }).join(' ') : null
+            return [{ id, item, rect, poly: bevelPoly ?? rotPoly ?? partPoly(rect) }]
           })
           const faceLine = showFace && cab.has_face && !rpPlan && !shaped
           if (faceLine) drawnRects.push({ x: 0, z: displayCab.dz - 20, w: displayCab.dx, d: 40 })
           // Shaped: the face fallback runs along every front-role edge instead.
-          const shapedFronts = shaped && showFace && cab.has_face
+          const shapedFronts = shaped && showFace && cab.has_face && !rpAll
             ? footprintEdgesPlan(displayCab.footprint!, { w: displayCab.dx, d: displayCab.dz }, cabinetToPlan(displayCab, wall, perp))
                 .filter(e => e.edge.role === 'front')
             : []

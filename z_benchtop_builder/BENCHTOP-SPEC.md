@@ -7,8 +7,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Phases 0–5 done (2026-10-12). Next: pick from Deferred
-> (splashbacks, CNC profiles, auto panel splits) or Phase 5 follow-ups (R-f).
+> **RESUME HERE** → Phase 6 (in-plan shape editing) done (2026-10-12).
+> Next, Mark's agreed order: benchtop edgebanding on the cut list (R-f) →
+> splashbacks → auto panel splits → CNC cutouts / profiles → small items.
 > Phase 4 rules Q-a…Q-h are Claude's defaults; its 3 open questions are locked.
 
 ---
@@ -402,6 +403,60 @@ Started on Mark's go ("start phase 4"). Rules Q-a…Q-h are Claude's defaults �
   1.04 m², ARR 5.72 lm; Parts List has no stone rows. Benchtop 2 switched to
   33mm Built-Up + resolved → 8 parts in optimiser Stage 2 (worktop 426 × 2435,
   front / back strips, 2 ends, 3 cross members, 16.5mm board). Restored to stone.
+
+### Phase 6 — In-plan shape editing  `[x]` (2026-10-12)
+Mark (2026-10-12): "more control in plan view of the benchtop shaping" without
+opening the Shape Editor screen. **Relaxes P-f** for an explicit edit mode only:
+outside it tops stay locked exactly as before (no drags).
+
+- **S-a Entry** — LOCKED (Mark): right-click a top (F4 mode) → **Edit shape**.
+  The menu also gets "Open Shape Editor…" (full screen, unchanged) + Delete.
+  Mode `edit_benchtop_shape` (a benchtop mode). Enter / ✓ saves (one undo
+  step on the canvas), Esc / Cancel discards; Ctrl+Z inside the mode steps
+  back through the edit's own history.
+- **S-b Tools** — LOCKED (Mark: all four sets):
+  - Drag a corner (snaps to walls / cabinets / other tops; Ctrl = ortho from
+    the previous corner). Drag a straight edge = push / pull: it stays parallel
+    and the neighbouring edges stretch along their own lines.
+  - Select an edge → type its length + which end moves (start / both / end):
+    the edge at the moving end is pushed, so an end cap moves out square.
+    Push / pull by a typed amount.
+  - Add a corner: double-click an edge (at that point) or "Add corner" (mid).
+    Select a corner + Delete (or button) removes it.
+  - Corner → round (radius) / chamfer (size). Edge → curve (drag its bulge
+    handle) / straighten. Alt-click an edge toggles curve.
+- **S-c Live dims** — LOCKED (Mark): every edge length on the plan, plus the
+  overhang past the cabinets (left / right / front) in the panel, updating
+  while dragging.
+- **S-d Joins / cutouts** — on save, join ends within 150mm of the new outline
+  are re-snapped onto it; cutouts stay put.
+- Edge finishes ride along: a split edge keeps its finish on both halves; a
+  removed corner keeps the finish of the edge before it.
+- Built: geometry `pushPullEdge` / `setEdgeLength` / `splitSegmentAt` /
+  `resnapJoins` (benchtopGeometry, 5 tests); hook state `shapeEdit` (working
+  segs + own history + corner / edge pick) with drag on pointer move, Enter /
+  Esc / Ctrl+Z / Delete in CanvasClient; plan handles (white squares = corners,
+  transparent wide stroke per edge, purple bulge dot on curves, green ring =
+  the picked edge's start corner); `BenchtopShapeEditPanel` (Save / Cancel /
+  Undo, live overhang, edge list, typed length + fixed end, push / pull, add
+  corner, curve, radius / chamfer / remove). Other tops dim while editing.
+- Fixed on the way: a right-click on a top armed a "press" whose pointer-up
+  never arrived, swallowing every later mouse move — presses are left-button only.
+- **S-e Revision — LOCKED (Mark, 2026-10-12, after trying it: "i like to be
+  able to click and drag lines parallel and edit points with x/y coordinates")**:
+  the panel is now Save / Cancel / Undo, live overhang, and a **corner X / Y
+  table** (every corner editable). 0,0 = the top's **back-left corner** at edit
+  start (fixed for the whole edit): X along the anchor wall, left → right as
+  seen in that wall's elevation (back side: from the wall's far end), Y away
+  from the wall. Green 0,0 + X / Y arrows on the plan; the picked corner shows
+  its X,Y. Lines drag parallel (push / pull, neighbours stretch). The edge
+  length / push-pull card is gone; round / chamfer / remove stay for the picked
+  corner. Mode entry unchanged (right-click → Edit shape).
+  Verified: line drag 119 mm parallel; corner 3 X 0 → 100 saved. Restored.
+- Verified live (Living, Benchtop 2): right-click → Edit shape; corner drag →
+  right overhang −61 → 118 live; Ctrl+Z back; Edge 1 typed 2435 → 2535 (start
+  fixed) → Enter saved 2535 × 426; Esc after a drag left the DB unchanged.
+  Restored. 302/302 tests.
 
 ### Deferred
 Splashback module · CNC machining of profiles · automatic panel splits ·

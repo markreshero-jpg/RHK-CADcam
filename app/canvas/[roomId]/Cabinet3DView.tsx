@@ -22,9 +22,9 @@ import {
   panelFaceColors, unpackMatCol,
   Part, PartPropertiesPanel, PreviewCanvas,
 } from '@/src/components/three/PartViewer'
-import { isSide, caseBox, internalBox, internalSeamPartKey, seamJointDrillOps, coalesceOpposingDrills, type DrillOpPos } from '@/src/lib/jointDrilling'
+import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamJointDrillOps, coalesceOpposingDrills, type DrillOpPos } from '@/src/lib/jointDrilling'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
-import { isShapedPanelKey, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
+import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, parseZonePartId } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import type { ResolvedDoorProfile } from '@/src/lib/resolver/types'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
@@ -234,7 +234,7 @@ function buildInternalSlideInfo(s: ResolvedDrawerSlide, b: Box, index: number): 
 
 function buildZoneInfo(z: ResolvedFaceZone, b: Box): PartMeta {
   return {
-    id:        `zone_${z.row_index}_${z.col_index}`,
+    id:        zonePartId(z),
     label:     FACE_LABELS[z.face_type] ?? z.face_type,
     w: b.w, h: b.h, d: b.d,
     thickness: z.DZ,
@@ -265,6 +265,7 @@ type PartProps = {
   ebSpec?:            EbSpec
   contextMenuSelect?: boolean
   wire?:              boolean
+  shape?:             PartShape   // mitred doors (z_cabinet_shape) / Shape Editor overrides
 }
 
 // Routing-profile overlay drawn just proud of a door's front face, as line
@@ -509,7 +510,7 @@ function DrawerAssembly({
     return ov ? { ...info, edge: ov } : info
   }
 
-  const zoneId      = `zone_${faceZone.row_index}_${faceZone.col_index}`
+  const zoneId      = zonePartId(faceZone)
   const pz          = applyPosOv(faceZone, zoneId, partOverrides)
   const zb          = zoneBox(pz)
   const zInfo       = applyEdgeOv(buildZoneInfo(faceZone, zb))
@@ -894,10 +895,11 @@ async function saveEdge(cabId: string, part: PartMeta) {
       .eq('sort_order', parseInt(rest.slice(cut + 1)))
 
   } else if (id.startsWith('zone_')) {
-    const [row, col] = id.slice(5).split('_').map(Number)
+    const zid = parseZonePartId(id)
+    if (!zid) return
     result = await supabase.from('face_zones').update(direct)
-      .eq('cabinet_instance_id', cabId)
-      .eq('row_index', row).eq('col_index', col)
+      .eq('cabinet_instance_id', cabId).eq('facet', zid.facet ?? '')
+      .eq('row_index', zid.row).eq('col_index', zid.col)
 
   } else {
     return // drawer box / slide parts — no edge band columns
@@ -933,7 +935,7 @@ export function buildPartMetaById(
     return p ? buildIntInfo(p, sz(intBox(applyPosOv(p, partId, partOverrides)))) : null
   }
   if (partId.startsWith('zone_')) {
-    const z = rp.face_zones.find(x => `zone_${x.row_index}_${x.col_index}` === partId)
+    const z = rp.face_zones.find(x => zonePartId(x) === partId)
     return z ? buildZoneInfo(z, sz(zoneBox(applyPosOv(z, partId, partOverrides)))) : null
   }
   if (partId.startsWith('db_')) {
@@ -983,6 +985,19 @@ function getRotOv(id: string, overrides: PartPosOverrides | undefined): [number,
   if (!ov || (!ov.oax && !ov.oay && !ov.oaz)) return undefined
   const D = Math.PI / 180
   return [(ov.oax ?? 0) * D, (ov.oay ?? 0) * D, (ov.oaz ?? 0) * D]
+}
+
+// A front zone on a shaped cabinet's facet (z_cabinet_shape Phase 3) carries
+// AY about its min corner. Turning the whole rendered zone — door swing,
+// hinges, profile, drawer — about that corner keeps every child in the zone's
+// own square frame. AY = 0 → the element as-is.
+function turnZone(z: ResolvedFaceZone, i: number, el: React.ReactNode): React.ReactNode {
+  if (!z.AY) return el
+  return (
+    <group key={`turn${i}`} position={[z.X, z.Y, z.Z]} rotation={[0, z.AY * Math.PI / 180, 0]}>
+      <group position={[-z.X, -z.Y, -z.Z]}>{el}</group>
+    </group>
+  )
 }
 
 // Case part rotation: the resolver's own AY (shaped-cabinet panels / facet
@@ -1071,6 +1086,12 @@ export function CabinetScene({
     // Shape Editor override for the same part replaces them below.
     for (const p of rp.case_parts) if (p.outline && !p.AY) m.set(`case_${p.part_key}`, { pts: p.outline })
     for (const p of rp.internal_parts ?? []) if (p.outline) m.set(`int_${p.part_type}_${p.sort_order}`, { pts: p.outline })
+    // Mitred doors where two facets meet: top-view outline extruded up
+    // (horizontal shape frame: y down from the front face).
+    for (const z of rp.face_zones) {
+      const o = zoneBevelOutline(z)
+      if (o) m.set(zonePartId(z), { pts: o.map(q => ({ x: q.x, y: z.DZ - q.z })), extrude: 'up' })
+    }
     for (const [pid, ov] of Object.entries(shapeOverrides ?? {})) {
       if (pid.startsWith('slide_')) continue
       if ((ov.segments?.length ?? 0) > 2) m.set(pid, { pts: sampleShapeOutline(ov.segments), mirror: pid.includes('right_side') })
@@ -1131,7 +1152,7 @@ export function CabinetScene({
   // Door hinge_side per zone — decides which doors animate (left/right swing).
   const zoneEdge = useMemo(() => {
     const m = new Map<string, string | undefined>()
-    for (const z of rp.face_zones) if (z.face_type === 'door') m.set(`${z.row_index}_${z.col_index}`, z.hinge_side)
+    for (const z of rp.face_zones) if (z.face_type === 'door') m.set(zoneKey(z), z.hinge_side)
     return m
   }, [rp.face_zones])
   // Cup + anchor bores grouped by door zone (world coords) — these ride inside the
@@ -1408,11 +1429,11 @@ export function CabinetScene({
           </>
         )
       })()}
-      {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => {
-        const id = `zone_${z.row_index}_${z.col_index}`
+      {rp.face_zones.filter(z => z.face_type !== 'open').map((z, i) => turnZone(z, i, (() => {
+        const id = zonePartId(z)
 
         if (z.face_type === 'drawer_face') {
-          const stack = drawerStackByKey.get(`${z.row_index}_${z.col_index}`)
+          const stack = drawerStackByKey.get(zoneKey(z))
           if (stack) {
             if (!show('drawer_fronts') && !show('drawer_boxes') && !show('drawer_runners')) return null
             return (
@@ -1425,7 +1446,7 @@ export function CabinetScene({
                 key={`f${i}`}
                 faceZone={z}
                 stack={stack}
-                targetTravel={openDrawers.get(`${z.row_index}_${z.col_index}`) ?? 0}
+                targetTravel={openDrawers.get(zoneKey(z)) ?? 0}
                 selected={selected}
                 onSelect={onSelect}
                 faceHighlighted={hlSet?.has(z.face_type) ?? false}
@@ -1461,10 +1482,11 @@ export function CabinetScene({
           dragRef,
           ebSpec:            ebFor(z.material_id),
           wire,
+          shape:             shapes3D.get(id),
         }
 
         if (z.face_type === 'door' && (z.hinge_side === 'left' || z.hinge_side === 'right')) {
-          const zoneHinges = show('hinges') ? hingesByZone.get(`${z.row_index}_${z.col_index}`) ?? [] : []
+          const zoneHinges = show('hinges') ? hingesByZone.get(zoneKey(z)) ?? [] : []
           const hingeX = z.hinge_side === 'left' ? b.x : b.x + b.w
           const mirror = z.hinge_side === 'left'   // swapped to match DoorPanel
           return (
@@ -1478,7 +1500,7 @@ export function CabinetScene({
                 panelAlpha={alpha(faceItem ?? 'doors')}
                 hingeAlpha={alpha('hinges')}
                 hinges={zoneHinges}
-                cupDrills={cupDrillsByZone.get(`${z.row_index}_${z.col_index}`)}
+                cupDrills={cupDrillsByZone.get(zoneKey(z))}
                 showDrilling={showDrilling}
                 {...partProps}
               />
@@ -1548,7 +1570,7 @@ export function CabinetScene({
         }
 
         return <PartAlpha key={`f${i}`} a={alpha(faceItem ?? 'doors')}><Part key={`f${i}`} b={b} rotation={getRotOv(id, partOverrides)} shape={shapes3D.get(id)} {...partProps} /></PartAlpha>
-      })}
+      })()))}
       {(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0 && show(customPartItem(p))).map((p, i) => {
         const orient = (p.orientation ?? 'flat') as CustomOrient
         const { ex, ey, ez } = customExtents(orient, Number(p.dx), Number(p.dy), Number(p.dz))

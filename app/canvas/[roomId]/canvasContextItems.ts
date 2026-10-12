@@ -4,6 +4,7 @@ import type { CabinetInstance, ContextMenuItem } from './canvasTypes'
 export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, canEqualize, clipboard, cabinets, multiSelect,
   onDeleteWall, onDeleteCabinet, onDeleteMultiple, onDeleteBenchtop, onDeleteBenchtopVertex, onRoundCorner, onChamfer,
+  onEditBenchtopShape, onOpenShapeEditor,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
 }: {
@@ -24,6 +25,8 @@ export function buildContextMenuGroups({
   onDeleteBenchtopVertex?: (btId: string, vi: number) => void
   onRoundCorner?: (btId: string, vi: number) => void
   onChamfer?: (btId: string, vi: number) => void
+  onEditBenchtopShape?: (btId: string) => void   // Phase 6: reshape in the plan
+  onOpenShapeEditor?: (btId: string) => void     // full Shape Editor screen
   onCopy: (cab: CabinetInstance) => void
   onPaste: () => void
   onEdit: (id: string) => void
@@ -50,7 +53,13 @@ export function buildContextMenuGroups({
   }
 
   if (benchtopId && onDeleteBenchtop) {
-    return [[{ label: 'Delete Benchtop', onClick: () => onDeleteBenchtop(benchtopId), color: 'red' }]]
+    return [
+      [
+        ...(onEditBenchtopShape ? [{ label: 'Edit shape', onClick: () => onEditBenchtopShape(benchtopId), color: 'blue' as const }] : []),
+        ...(onOpenShapeEditor ? [{ label: 'Open Shape Editor…', onClick: () => onOpenShapeEditor(benchtopId) }] : []),
+      ],
+      [{ label: 'Delete Benchtop', onClick: () => onDeleteBenchtop(benchtopId), color: 'red' }],
+    ]
   }
 
   if (wallId) {

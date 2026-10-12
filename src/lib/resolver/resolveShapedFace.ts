@@ -1,0 +1,126 @@
+// ============================================================
+// Shaped-cabinet fronts (z_cabinet_shape Phase 3a).
+//
+// Every straight `front` edge of the footprint is a facet with its own face
+// grid. The primary facet — the straight front (y = DZ), else the longest
+// front edge — uses cab.face_grid and keeps the zone_<r>_<c> ids; the others
+// use cab.faces[edgeId] (default: one door hinged toward its side panel).
+//
+// Each facet runs the ordinary resolveFace in a facet-local frame (X from the
+// facet's left end as seen from the front), then its zones are turned onto
+// the facet: AY about the zone's min corner, local +X → along the facet to the
+// right, local +Z → out of the cabinet. For a facet on y = DZ that is exactly
+// the box front (AY = 0, same X/Z), so a rectangle-like footprint resolves
+// identically to the plain cabinet.
+//
+// Facet ends: next to a side panel → the usual neighbour reveal (the box's
+// left/right neighbour on x = 0 / x = DX, an end reveal elsewhere); next to
+// another front facet at a convex corner → mitred doors (decision 9): the door
+// runs past the corner by tan(φ/2)·(mid-thickness offset) less half the column
+// gap, and the zone carries bevel_l / bevel_r = φ/2.
+// ============================================================
+
+import type {
+  CabinetInput, ConstructionRules, FaceGridInput, ResolvedFaceZone, ResolvedFaceRow, ResolvedFaceCol,
+} from './types'
+import { resolveFace, type FaceResolution } from './resolveFace'
+import { resolveReveal, resolveFaceZ } from './mergeRules'
+import { shapedInterior } from './resolveShapedCase'
+import { edgeFrame } from '../cabinetShape/construct'
+import type { FootprintSegment } from '../cabinetShape/footprint'
+
+const NEAR = 0.5
+
+const isPanel = (s: FootprintSegment) =>
+  s.type === 'line' && (s.edge.role === 'side' || s.edge.role === 'scribe' || s.edge.role === 'back')
+const isFrontLine = (s: FootprintSegment) => s.type === 'line' && s.edge.role === 'front'
+
+/** Edge id of the primary front facet, or null when the footprint has no straight front. */
+export function primaryFacetId(segs: FootprintSegment[], DZ: number): string | null {
+  const fronts = segs.filter(isFrontLine)
+  if (!fronts.length) return null
+  const len = (s: FootprintSegment) => edgeFrame(s).len
+  const straight = fronts.filter(s => Math.abs(s.p0.y - DZ) < NEAR && Math.abs(s.p1.y - DZ) < NEAR)
+  const pool = straight.length ? straight : fronts
+  return pool.reduce((a, b) => (len(b) > len(a) ? b : a)).edge.id
+}
+
+function singleDoor(hinge: 'left' | 'right'): FaceGridInput {
+  return {
+    rows: [{ row_index: 0, height_locked: false }],
+    cols: [{ col_index: 0, width_locked: false }],
+    zones: [{ row_index: 0, col_index: 0, face_type: 'door', hinge_side: hinge }],
+  }
+}
+
+export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): FaceResolution {
+  const shape = shapedInterior(cab)
+  if (!shape) return resolveFace(cab, r)
+  const { segs } = shape
+  const n = segs.length
+  const primary = primaryFacetId(segs, cab.DZ)
+
+  const rows: ResolvedFaceRow[] = [], cols: ResolvedFaceCol[] = [], zones: ResolvedFaceZone[] = []
+  const errors: FaceResolution['errors'] = []
+
+  // Door back-plane offset out of the edge line (overlay > 0, inset < 0) and a
+  // nominal mid-thickness for the mitre run-past.
+  const ft = cab.resolved_doors?.['*']?.thickness_mm ?? cab.door_material.DZ
+  const backOff = resolveFaceZ(cab.DZ, ft, r) - cab.DZ
+  const midOff = backOff + ft / 2
+
+  segs.forEach((s, i) => {
+    if (!isFrontLine(s)) return
+    const isPrimary = s.edge.id === primary
+    const f = edgeFrame(s)
+    const prev = segs[(i - 1 + n) % n], next = segs[(i + 1) % n]
+
+    // Local left end = p1 (next edge), local right end = p0 (previous edge).
+    const end = (nb: FootprintSegment, vertex: { x: number }, side: 'left' | 'right', convexCross: number) => {
+      if (isFrontLine(nb) && convexCross > 1e-9) {
+        const g = edgeFrame(nb)
+        const phi = Math.acos(Math.max(-1, Math.min(1, f.u.x * g.u.x + f.u.y * g.u.y)))
+        return { rev: r.GAPC / 4 - Math.tan(phi / 2) * midOff, bevel: (phi / 2) * 180 / Math.PI }
+      }
+      if (isFrontLine(nb)) return { rev: r.GAPC / 4, bevel: 0 }   // concave facet corner: plain gap
+      if (isPanel(nb) && Math.abs(vertex.x) < NEAR) return { rev: resolveReveal('left', cab.left_neighbour, r), bevel: 0 }
+      if (isPanel(nb) && Math.abs(vertex.x - cab.DX) < NEAR) return { rev: resolveReveal('right', cab.right_neighbour, r), bevel: 0 }
+      return { rev: side === 'left' ? r.REVENDL : r.REVENDR, bevel: 0 }
+    }
+    const crossNext = f.u.x * edgeFrame(next).u.y - f.u.y * edgeFrame(next).u.x
+    const crossPrev = edgeFrame(prev).u.x * f.u.y - edgeFrame(prev).u.y * f.u.x
+    const L = end(next, s.p1, 'left', crossNext)
+    const R = end(prev, s.p0, 'right', crossPrev)
+
+    const grid = isPrimary
+      ? cab.face_grid
+      : cab.faces?.[s.edge.id] ?? singleDoor(isPanel(prev) ? 'right' : 'left')
+
+    const res = resolveFace({ ...cab, face_grid: grid }, r, {
+      width: f.len, revL: L.rev, revR: R.rev, doorKeyPrefix: isPrimary ? '' : s.edge.id,
+    })
+    const facet = isPrimary ? undefined : s.edge.id
+    for (const e of res.errors) errors.push({ ...e, message: facet ? `Facet "${facet}": ${e.message}` : e.message })
+    for (const row of res.rows) rows.push(facet ? { ...row, facet } : row)
+    for (const col of res.cols) cols.push(facet ? { ...col, facet } : col)
+
+    // Turn the facet-local zones onto the facet: +X → -u, +Z → -n (outward).
+    const ay = Math.atan2(f.u.y, -f.u.x) * 180 / Math.PI
+    const lastCol = Math.max(...grid.cols.map(c => c.col_index))
+    for (const z of res.zones) {
+      const xl = z.X, zo = z.Z - cab.DZ
+      const X = s.p1.x - f.u.x * xl - f.n.x * zo
+      const Z = s.p1.y - f.u.y * xl - f.n.y * zo
+      const out: ResolvedFaceZone = { ...z, X, Z, AY: Math.abs(ay) < 1e-9 ? 0 : ay }
+      if (facet) out.facet = facet
+      if (L.bevel && z.col_index === 0) out.bevel_l = L.bevel
+      if (R.bevel && z.col_index === lastCol) out.bevel_r = R.bevel
+      zones.push(out)
+    }
+  })
+
+  if (!primary && !segs.some(isFrontLine) && cab.has_face)
+    errors.push({ code: 'SHAPE_NO_FRONT', message: 'Shape has no straight front edge — no doors or drawer fronts', part: 'face' })
+
+  return { rows, cols, zones, errors }
+}

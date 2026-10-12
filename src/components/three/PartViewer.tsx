@@ -146,7 +146,10 @@ export function edgeStrips(
 // frame: mm, x across [0..across-dim], y DOWN from the part's visual top,
 // authored face-front in the Part Editor. `mirror` = right-hand side twins
 // (case_right_side): the outline was authored on the mirrored display frame.
-export type PartShape = { pts: ShapePt[]; mirror?: boolean }
+// `extrude: 'up'` = a top-view outline (horizontal frame: x across, y DOWN
+// from the front face) extruded up the part's height — mitred doors on shaped
+// cabinets (jointDrilling.zoneBevelOutline), whatever the panel kind.
+export type PartShape = { pts: ShapePt[]; mirror?: boolean; extrude?: 'up' }
 
 // Extruded silhouette in box-local coords ([0..w]×[0..h]×[0..d] off the box
 // origin corner — mount inside the Part group at position [0,0,0]). The 2D
@@ -156,7 +159,8 @@ export type PartShape = { pts: ShapePt[]; mirror?: boolean }
 //   face       — profile XY (across, up),      extrude +Z (thickness)
 //   side       — display-x → Z (left = back),  extrude X; mirror flips Z
 //   horizontal — display-top → +Z (front),     extrude Y
-export function buildShapedGeometry(shape: PartShape, b: Box, kind: PanelKind): THREE.ExtrudeGeometry {
+export function buildShapedGeometry(shape: PartShape, b: Box, panelKind: PanelKind): THREE.ExtrudeGeometry {
+  const kind: PanelKind = shape.extrude === 'up' ? 'horizontal' : panelKind
   const up    = kind === 'horizontal' ? b.d : b.h
   const thick = kind === 'side' ? b.w : kind === 'horizontal' ? b.h : b.d
   const s = new THREE.Shape()
@@ -393,8 +397,11 @@ export function Part({
           // horizontal → ±Y, face → ±Z. Walls take an edge slot for the kind.
           (() => {
             const kind = meta.panelKind
-            const cap  = kind === 'side' ? mats[shape?.mirror ? 1 : 0] : kind === 'horizontal' ? mats[2] : mats[4]
-            const wall = kind === 'side' ? mats[2] : mats[0]
+            // Extruded-up outline (mitred door): caps = top/bottom edges, walls
+            // carry the front/back faces.
+            const up   = shape?.extrude === 'up'
+            const cap  = up ? mats[2] : kind === 'side' ? mats[shape?.mirror ? 1 : 0] : kind === 'horizontal' ? mats[2] : mats[4]
+            const wall = up ? mats[4] : kind === 'side' ? mats[2] : mats[0]
             return (
               <>
                 <meshStandardMaterial attach="material-0" color={cap}  roughness={0.7} metalness={0.05} {...am} />

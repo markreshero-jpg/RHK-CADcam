@@ -60,6 +60,32 @@ export function caseBoxAABB(p: ResolvedCasePart): Box {
   return { x: x0, y: b.y, z: z0, w: Math.max(...xs) - x0, h: b.h, d: Math.max(...zs) - z0 }
 }
 
+// Axis-aligned bounds of a front zone after its AY turn about the min corner
+// (shaped-cabinet facets, z_cabinet_shape Phase 3). Face zones: DX = width,
+// DY = height, DZ = thickness. Equals the plain zone box when AY = 0.
+export function zoneBoxAABB(z: { X: number; Y: number; Z: number; DX: number; DY: number; DZ: number; AY: number }): Box {
+  if (!z.AY) return { x: z.X, y: z.Y, z: z.Z, w: z.DX, h: z.DY, d: z.DZ }
+  const pts = ([[0, 0], [z.DX, 0], [z.DX, z.DZ], [0, z.DZ]] as const).map(([x, d]) => {
+    const [rx, , rz] = rotEulerXYZ(0, z.AY, 0, x, 0, d)
+    return { x: z.X + rx, z: z.Z + rz }
+  })
+  const xs = pts.map(p => p.x), zs = pts.map(p => p.z)
+  const x0 = Math.min(...xs), z0 = Math.min(...zs)
+  return { x: x0, y: z.Y, z: z0, w: Math.max(...xs) - x0, h: z.DY, d: Math.max(...zs) - z0 }
+}
+
+// Top-view outline of a mitred front zone (z_cabinet_shape decision 9) in the
+// zone's own frame: x across the door from its left edge, z = 0 back face →
+// DZ front face. DX is the width at mid-thickness; a bevel β at an end runs the
+// front face out by (DZ/2)·tanβ and pulls the back face in by the same.
+// null when the zone has no bevel (square door).
+export function zoneBevelOutline(z: { DX: number; DZ: number; bevel_l?: number; bevel_r?: number }): { x: number; z: number }[] | null {
+  if (!z.bevel_l && !z.bevel_r) return null
+  const h = z.DZ / 2, D = Math.PI / 180
+  const l = h * Math.tan((z.bevel_l ?? 0) * D), r = h * Math.tan((z.bevel_r ?? 0) * D)
+  return [{ x: l, z: 0 }, { x: z.DX - r, z: 0 }, { x: z.DX + r, z: z.DZ }, { x: -l, z: z.DZ }]
+}
+
 // Cabinet-space AABB for the internal parts that participate in seams. A divider
 // is a vertical panel (thickness DZ along X, like a gable); shelves are
 // horizontal (thickness DZ along Y, like the carcase bottom). Other internal

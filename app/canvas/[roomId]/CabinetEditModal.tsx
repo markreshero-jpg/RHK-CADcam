@@ -17,7 +17,7 @@ import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetPanel from './CabinetPanel'
 import Cabinet3DView, { buildPartMetaById } from './Cabinet3DView'
-import FaceGridEditor from './FaceGridEditor'
+import FacetFaceGridEditor from './FacetFaceGridEditor'
 import InternalGridEditor from './InternalGridEditor'
 import { saveSVGEdge } from './cabinetEditSvgHelpers'
 import { ResolvedElevation, ResolvedTop, ResolvedSide, TopView, ElevationView, SideView, PartPickerMenu, PartContextMenu, type PartContextAction } from './ResolvedViews'
@@ -604,7 +604,7 @@ export default function CabinetEditModal({
                 partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId} />
               : <SideView cab={cabinet} />
             )}
-            {activeView === 'face'     && <FaceGridEditor     cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
+            {activeView === 'face'     && <FacetFaceGridEditor cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
             {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onPanelVisibleChange={setPanel3DVisible} />}
             {activeView === 'parts'  && rp && (

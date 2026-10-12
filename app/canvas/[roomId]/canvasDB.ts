@@ -182,9 +182,11 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
       internal_parts: intPartsArr,
       face_rows: myRows.map(r => ({
         row_index: r.row_index, height: r.height, height_locked: r.height_locked,
+        ...(r.facet ? { facet: r.facet } : {}),
       })),
       face_cols: myCols.map(c => ({
         col_index: c.col_index, width: c.width, width_locked: c.width_locked,
+        ...(c.facet ? { facet: c.facet } : {}),
       })),
       face_zones: myZones.map(z => ({
         row_index: z.row_index, col_index: z.col_index,
@@ -197,6 +199,9 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         door_style_id: z.door_style_id ?? null,
         door_profile_id: z.door_profile_id ?? null,
         door_profile: z.door_profile ?? null,
+        ...(z.facet ? { facet: z.facet } : {}),
+        ...(z.bevel_l ? { bevel_l: Number(z.bevel_l) } : {}),
+        ...(z.bevel_r ? { bevel_r: Number(z.bevel_r) } : {}),
       })),
       drawer_stacks: [],
       internal_slides: [],
@@ -423,6 +428,7 @@ export function buildInstanceFromDefinition(
     carcase_joints: def.carcase_joints,
     no_cnc: def.no_cnc ?? false,
     footprint: def.footprint ?? null,
+    faces: def.faces ?? null,
     schema_version: '0.4', notes: null,
   }
 }
@@ -557,6 +563,7 @@ export async function saveCabinetToLibrary(
     exposed_interior: p.exposed_interior ? !!inst.exposed_interior : false,
     no_cnc: !!inst.no_cnc,
     footprint: inst.footprint ?? null,
+    faces: inst.faces ?? null,
     custom_parts: cps ?? [],
     description: opts.description ?? null,
     is_library_item: true, active: true, sort_order,

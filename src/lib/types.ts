@@ -169,6 +169,9 @@ export interface CabinetInstance {
   // Shaped-cabinet plan outline + edge roles; null/absent = plain rectangle.
   // See z_cabinet_shape/CABINET-SHAPE-SPEC.md.
   footprint?: import('./cabinetShape/footprint').Footprint | null
+  // Face grids for the non-primary front facets of a shaped cabinet, keyed by
+  // footprint edge id (the primary facet uses face_grid).
+  faces?: Record<string, Record<string, unknown>> | null
   schema_version: string
   notes: string | null
   created_at: string
@@ -240,8 +243,9 @@ export interface CabinetDefinition {
   no_cnc?: boolean
   // Snapshot of the assembly's custom parts (copy-not-link); re-inserted at placement.
   custom_parts?: Record<string, unknown>[]
-  // Shaped-cabinet footprint, copied to the instance at placement.
+  // Shaped-cabinet footprint + facet face grids, copied to the instance at placement.
   footprint?: import('./cabinetShape/footprint').Footprint | null
+  faces?: Record<string, Record<string, unknown>> | null
   // UI metadata
   description: string | null
   thumbnail_svg: string | null

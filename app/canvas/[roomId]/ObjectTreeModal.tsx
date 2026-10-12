@@ -7,6 +7,7 @@ import {
   dbLoadPartPosOverrides, dbSavePartPosOverride, dbDeletePartPosOverride,
   type PartPosOverrides,
 } from './canvasDB'
+import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
 // ── Part label maps ───────────────────────────────────────────────────────────
 
 const CASE_LABELS: Record<string, string> = {
@@ -240,10 +241,10 @@ function buildTree(
         // ── Face ──────────────────────────────────────────────────────────────
         if (rp.face_zones.length > 0) {
           const parts: TreeNode[] = rp.face_zones.map(z => makePartNode(
-            `part-${cab.id}-zone_${z.row_index}_${z.col_index}`,
+            `part-${cab.id}-${zonePartId(z)}`,
             `${FACE_LABELS[z.face_type] ?? z.face_type} R${z.row_index + 1}C${z.col_index + 1}`,
             z.hinge_side ? `Hinge: ${z.hinge_side}` : undefined,
-            { cabinetId: cab.id, wall, ...cabPos, partId: `zone_${z.row_index}_${z.col_index}`,
+            { cabinetId: cab.id, wall, ...cabPos, partId: zonePartId(z),
               localX: z.X, localY: z.Y, localZ: z.Z,
               DX: z.DX, DY: z.DY, DZ: z.DZ,
               AX: z.AX, AY: z.AY, AZ: z.AZ,

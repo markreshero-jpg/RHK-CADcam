@@ -18,6 +18,7 @@ import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { caseFrame, zoneFrame, intFrame, projectToFrame, type FootprintFrame, type Axis } from './partFootprint'
 import { caseBox } from '@/src/lib/jointDrilling'
 import { isFiringRole } from '@/src/lib/partOps/enums'
+import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
 
 export const GENERATED_MARK = 'master_slave'
 
@@ -129,7 +130,7 @@ function partGeoms(rp: ResolvedCabinet): Map<string, PartGeom> {
     m.set(`case_${p.part_key}`, geom(`case_${p.part_key}`, 'case_parts', f, nMin, thick))
   }
   for (const z of rp.face_zones) {
-    m.set(`zone_${z.row_index}_${z.col_index}`, geom(`zone_${z.row_index}_${z.col_index}`, 'face_zones', zoneFrame(z), z.Z, z.DZ))
+    m.set(zonePartId(z), geom(zonePartId(z), 'face_zones', zoneFrame(z), z.Z, z.DZ))
   }
   for (const p of rp.internal_parts) {
     const f = intFrame(p)

@@ -7,6 +7,7 @@ import type {
 } from '@/src/lib/resolver/types'
 import { fmtMm } from '@/src/lib/format'
 import type { PartPosOverrides } from './canvasDB'
+import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
 
 // ── Expression evaluation ─────────────────────────────────────────────────────
 
@@ -355,7 +356,7 @@ function buildSections(rp: ResolvedCabinet, overrides: PartPosOverrides | undefi
     }
     const parts = rp.face_zones.map(z => {
       const node = makePart(
-        `zone_${z.row_index}_${z.col_index}`,
+        zonePartId(z),
         `${FACE_LABELS[z.face_type] ?? z.face_type} R${z.row_index + 1}C${z.col_index + 1}`,
         z.hinge_side ? `Hinge: ${z.hinge_side}` : undefined,
         z.X, z.Y, z.Z, z.DX, z.DY, z.DZ, z.AX, z.AY, z.AZ, z.material_id, z.face_type, rp, overrides, slideIdx, hingeIdx,

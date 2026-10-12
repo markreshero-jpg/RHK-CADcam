@@ -664,6 +664,13 @@ export interface CabinetInput {
   // Face grid definition
   face_grid:       FaceGridInput
 
+  // Shaped cabinets (z_cabinet_shape Phase 3): face grids for the front facets
+  // other than the primary one, keyed by footprint edge id. The primary facet
+  // (the straight front, else the longest front edge) uses face_grid. A facet
+  // with no entry gets a single door. Door styles for these zones are in
+  // resolved_doors under `${edgeId}.${row}_${col}`; '*' = the room/job default.
+  faces?:          Record<string, FaceGridInput>
+
   // Resolved door styles per zone, keyed by `${row_index}_${col_index}`.
   // Populated by loadCabinetInput after walking the cascade (zone → room → job)
   // and loading the style's catalogue (thickness) + profile (+ operations).
@@ -1123,12 +1130,14 @@ export interface ResolvedFaceRow {
   row_index:     number
   height:        number
   height_locked: boolean
+  facet?:        string   // shaped cabinets: footprint edge id; absent = primary front
 }
 
 export interface ResolvedFaceCol {
   col_index:     number
   width:         number
   width_locked:  boolean
+  facet?:        string
 }
 
 // ── Resolved Door Profile ─────────────────────────────────────
@@ -1161,6 +1170,14 @@ export interface ResolvedFaceZone extends ResolvedPart {
   door_style_id?:   string | null
   door_profile_id?: string | null
   door_profile?:    ResolvedDoorProfile | null
+  // Shaped cabinets (z_cabinet_shape Phase 3). facet = footprint edge id of a
+  // non-primary front facet (absent = primary front, ids stay zone_<r>_<c>).
+  // AY turns the zone about its min corner onto the facet. bevel_l / bevel_r =
+  // mitre angle (degrees off square) on the zone's left / right edge where two
+  // facets meet; DX is the width at the door's mid-thickness.
+  facet?:   string
+  bevel_l?: number
+  bevel_r?: number
 }
 
 // ── Resolved Drawer Stack ─────────────────────────────────────

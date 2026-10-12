@@ -7,6 +7,7 @@
 // Custom parts are NOT handled here — they use cabinet_custom_parts.visible.
 
 import type { ResolvedCabinet } from './types'
+import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
 
 // Returns a shallow-cloned cabinet with hidden parts stripped. `hidden` overrides
 // rp.hidden_parts (so a live UI set can be applied without re-resolving). Returns
@@ -21,7 +22,7 @@ export function filterHiddenParts(rp: ResolvedCabinet, hidden?: readonly string[
     case_parts:     rp.case_parts.filter(p => !H.has(`case_${p.part_key}`)),
     toekick_parts:  rp.toekick_parts.filter(p => !H.has(`tk_${p.part_key}_${p.sort_order}`)),
     internal_parts: rp.internal_parts.filter(p => !H.has(`int_${p.part_type}_${p.sort_order}`)),
-    face_zones:     rp.face_zones.filter(z => !H.has(`zone_${z.row_index}_${z.col_index}`)),
+    face_zones:     rp.face_zones.filter(z => !H.has(zonePartId(z))),
     drawer_stacks:  (rp.drawer_stacks ?? []).map(s => ({
       ...s,
       box_parts: s.box_parts.filter(p => !H.has(`db_${s.face_zone_row}_${s.face_zone_col}_${p.part_type}`)),

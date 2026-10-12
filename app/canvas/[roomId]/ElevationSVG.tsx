@@ -2,7 +2,7 @@
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, SNAP_PX, type Pt } from '@/src/lib/geometry'
-import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode } from './canvasTypes'
+import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode, MIN_STRETCH } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
@@ -24,7 +24,7 @@ import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
-import { caseBoxAABB } from '@/src/lib/jointDrilling'
+import { caseBoxAABB, zoneBoxAABB } from '@/src/lib/jointDrilling'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
 // resolved per render below. PART_COLORS / LINE_DRAW_COLORS keep their `MAP[key]`
@@ -52,7 +52,8 @@ function tkElevRect(p: ResolvedToekickPart) {
 }
 
 function zoneElevRect(z: ResolvedFaceZone) {
-  return { ex: z.X, ey: z.Y + z.DY, ew: z.DX, eh: z.DY }   // face: DX=width, DY=height
+  const b = zoneBoxAABB(z)   // face: DX=width, DY=height; facet zones turn by AY (true width = Phase 5)
+  return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h }
 }
 
 function shelfElevRect(p: ResolvedInternalPart) {
@@ -456,14 +457,14 @@ export default function ElevationSVG({
       if (side === 'right') {
         const cursorT = (e.clientX - svgR.left - v.panX) / vz
         const rightBound = neighbours.filter(o => o.t > startCabT + 1).reduce((min, o) => Math.min(min, o.t), resWall.length)
-        const newDx = Math.max(50, Math.min(rightBound - startCabT, snap10(cursorT - startCabT)))
+        const newDx = Math.max(MIN_STRETCH, Math.min(rightBound - startCabT, snap10(cursorT - startCabT)))
         const { x: livePosX, y: livePosY } = elevPos(resWall, startCabT, newDx)
         setElevResizeLive({ cabId, dim, value: newDx, posX: livePosX, posY: livePosY })
         onCabResizeUpdate({ liveValue: newDx, livePosX, livePosY })
       } else if (side === 'left') {
         const cursorT = (e.clientX - svgR.left - v.panX) / vz
         const leftBound = neighbours.filter(o => o.t + o.dx < startCabEndT - 1).reduce((max, o) => Math.max(max, o.t + o.dx), 0)
-        const newDx = Math.max(50, Math.min(startCabEndT - leftBound, snap10(startCabEndT - cursorT)))
+        const newDx = Math.max(MIN_STRETCH, Math.min(startCabEndT - leftBound, snap10(startCabEndT - cursorT)))
         const newT = startCabEndT - newDx
         const { x: livePosX, y: livePosY } = elevPos(resWall, newT, newDx)
         setElevResizeLive({ cabId, dim, value: newDx, posX: livePosX, posY: livePosY })
@@ -474,7 +475,7 @@ export default function ElevationSVG({
         if (cab) {
           const rm = rfData.current.room
           const rH = rm.room_dy ?? 2400
-          const newDy = Math.max(50, Math.min(5000, snap10(rH - cabBottomZ(cab, rm, resWall) - cursorY)))
+          const newDy = Math.max(MIN_STRETCH, Math.min(5000, snap10(rH - cabBottomZ(cab, rm, resWall) - cursorY)))
           setElevResizeLive({ cabId, dim: 'dy', value: newDy })
           onCabResizeUpdate({ liveValue: newDy })
         }

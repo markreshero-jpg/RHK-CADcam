@@ -29,7 +29,7 @@ import type {
 } from '../resolver/types'
 import type { FormulaScope, ScopeValue } from './evaluate'
 import type { LookupFn } from './parser'
-import { isShapedPanelKey } from '../cabinetShape/partKeys'
+import { isShapedPanelKey, zonePartId } from '../cabinetShape/partKeys'
 
 /** The numeric view of one part exposed to formulas. */
 export interface PartScopeValue {
@@ -104,7 +104,7 @@ export function buildPartMap(resolved: ResolvedCabinet): Map<string, PartScopeVa
     parts.set(`int_${p.part_type}_${p.sort_order}`, toPartValue(p, internalAxes(p.part_type)))
   }
   for (const z of resolved.face_zones) {
-    parts.set(`zone_${z.row_index}_${z.col_index}`, toPartValue(z, ZONE_AXES))
+    parts.set(zonePartId(z), toPartValue(z, ZONE_AXES))
   }
   return parts
 }

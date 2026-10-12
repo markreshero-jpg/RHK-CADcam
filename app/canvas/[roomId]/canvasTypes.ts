@@ -17,10 +17,36 @@ export type Mode =
   // F4 Benchtop mode (Phase 3b): only benchtops are clickable. Outside it they
   // are click-through and cabinets / walls own the clicks.
   | 'benchtop_select'
+  // Phase 6: in-plan shape editing of the selected top (right-click → Edit shape).
+  | 'edit_benchtop_shape'
   | 'paste'
 
+/** Smallest size (mm) a cabinet can be drag-stretched to — low enough for fillers / scribe strips. */
+export const MIN_STRETCH = 5
+
 /** Every F4 Benchtop-mode tool: select, the draw tools, cutouts, joins, Move. */
-export const isBenchtopMode = (m: Mode) => m === 'benchtop_select' || m === 'move_benchtop' || m.startsWith('draw_benchtop')
+export const isBenchtopMode = (m: Mode) =>
+  m === 'benchtop_select' || m === 'move_benchtop' || m === 'edit_benchtop_shape' || m.startsWith('draw_benchtop')
+
+/** In-plan shape edit (Phase 6): the working copy of one top's outline. */
+export type BtShapeSel = { kind: 'v' | 'e'; i: number } | null
+export interface BtShapeEdit {
+  btId: string
+  segs: import('@/src/lib/types').BenchtopSegment[]
+  history: import('@/src/lib/types').BenchtopSegment[][]
+  sel: BtShapeSel
+  /** Corner X / Y frame (Mark 2026-10-12): 0,0 = the top's back-left corner at
+   *  edit start; X along the anchor wall (left → right as seen in elevation),
+   *  Y away from it. Fixed for the whole edit so typing never shifts it. */
+  frame: { o: { x: number; y: number }; d: { x: number; y: number }; n: { x: number; y: number } }
+}
+
+export const btLocal = (f: BtShapeEdit['frame'], p: { x: number; y: number }) => {
+  const dx = p.x - f.o.x, dy = p.y - f.o.y
+  return { x: dx * f.d.x + dy * f.d.y, y: dx * f.n.x + dy * f.n.y }
+}
+export const btWorld = (f: BtShapeEdit['frame'], l: { x: number; y: number }) =>
+  ({ x: f.o.x + f.d.x * l.x + f.n.x * l.y, y: f.o.y + f.d.y * l.x + f.n.y * l.y })
 
 // A library definition armed for placement. Carries the geometry the ghost needs
 // (assembly_class for collision/blocking, default dims for the footprint) plus the

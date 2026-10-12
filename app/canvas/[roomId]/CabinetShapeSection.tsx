@@ -6,15 +6,10 @@
 
 import { CabinetInstance } from '@/src/lib/types'
 import CalcInput from '@/src/components/CalcInput'
-import { EDGE_ROLES, type EdgeRole } from '@/src/lib/cabinetShape/footprint'
+import { EDGE_ROLES, edgeLabel, type EdgeRole } from '@/src/lib/cabinetShape/footprint'
 import {
   SHAPE_PRESETS, getPreset, buildPresetFootprint, presetWarnings,
 } from '@/src/lib/cabinetShape/presets'
-
-const EDGE_LABELS: Record<string, string> = {
-  back: 'Back', back2: 'Back (corner wall)', end: 'End', facet: 'Angled facet',
-  front: 'Front', side: 'Side', curve: 'Curve', left: 'Left', right: 'Right',
-}
 
 export default function CabinetShapeSection({ cabinet, onUpdate, inp, lbl }: {
   cabinet: CabinetInstance
@@ -94,7 +89,7 @@ export default function CabinetShapeSection({ cabinet, onUpdate, inp, lbl }: {
           <div className="space-y-1">
             {fp.segments.map(s => (
               <div key={s.edge.id} className="flex items-center gap-2">
-                <span className="text-[11px] text-gray-400 w-24 truncate">{EDGE_LABELS[s.edge.id] ?? s.edge.id}</span>
+                <span className="text-[11px] text-gray-400 w-24 truncate">{edgeLabel(s.edge.id)}</span>
                 <select value={s.edge.role} onChange={e => setRole(s.edge.id, e.target.value as EdgeRole)}
                   className={inp + ' flex-1'}>
                   {EDGE_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}

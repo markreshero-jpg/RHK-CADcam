@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/src/lib/supabase'
 import { Mode, CabinetInstance, isBenchtopMode } from './canvasTypes'
@@ -59,13 +59,160 @@ const PasteIcon = () => (
   </svg>
 )
 
-// ── Wall tools (unchanged) ──────────────────────────────────────────────────────
+const FolderIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
+    <path d="M1.5 4 L1.5 13 L14.5 13 L14.5 5.5 L7.5 5.5 L6 4 Z" fill="currentColor" fillOpacity="0.15"/>
+  </svg>
+)
+
+// Category tile pictograms, picked by name (Base / Wall / Tall), generic otherwise.
+const BaseCatIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 30 30" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+    <rect x="3" y="11" width="24" height="14" rx="1" fill="currentColor" fillOpacity="0.15"/>
+    <line x1="3" y1="15.5" x2="27" y2="15.5"/><line x1="15" y1="15.5" x2="15" y2="25"/>
+    <line x1="2" y1="11" x2="28" y2="11" strokeWidth="2.2"/>
+  </svg>
+)
+const WallCatIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 30 30" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+    <rect x="4" y="4" width="22" height="12" rx="1" fill="currentColor" fillOpacity="0.15"/>
+    <line x1="15" y1="4" x2="15" y2="16"/>
+    <line x1="2" y1="27" x2="28" y2="27" strokeOpacity="0.35" strokeDasharray="2 2"/>
+  </svg>
+)
+const TallCatIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 30 30" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+    <rect x="9" y="2.5" width="12" height="25" rx="1" fill="currentColor" fillOpacity="0.15"/>
+    <line x1="9" y1="11" x2="21" y2="11"/>
+  </svg>
+)
+function catIconFor(name: string) {
+  const n = name.toLowerCase()
+  if (n.includes('base')) return <BaseCatIcon />
+  if (n.includes('wall') || n.includes('upper')) return <WallCatIcon />
+  if (n.includes('tall') || n.includes('pantry')) return <TallCatIcon />
+  return <CabinetIcon />
+}
+// Fallback category colours when accent_color is unset (by top-level order).
+const CAT_PALETTE = ['#60a5fa', '#34d399', '#a78bfa', '#fbbf24', '#f472b6', '#22d3ee']
+
+// ── Sidebar section primitives ─────────────────────────────────────────────────
+// Every tool section (Wall F2, Cabinet F3, Benchtop F4, and any future one) is
+// built from SectionHeader + SectionBody + ToolRow with a Tone, so "where am I"
+// looks the same everywhere: the open section's header gets a tone bar, its body
+// a tone rail, and the active tool a solid tinted row with a check. Only one
+// section is open at a time (see the exclusivity effect in CanvasSidebar).
+
+type Tone = {
+  solid: string   // header bg when the section's tool is active
+  bar: string     // left accent bar / rail colour (bg-*)
+  rail: string    // body rail (border-*)
+  tint: string    // active row bg
+  icon: string    // idle icon colour
+  ring: string    // open-header outline (ring-*)
+}
+export const TONES = {
+  select:   { solid: 'bg-blue-600',   bar: 'bg-blue-400',   rail: 'border-blue-500/50',   tint: 'bg-blue-600/30',   icon: 'text-blue-400', ring: 'ring-blue-500/60' },
+  wall:     { solid: 'bg-orange-700', bar: 'bg-orange-400', rail: 'border-orange-500/50', tint: 'bg-orange-600/30', icon: 'text-orange-400', ring: 'ring-orange-500/60' },
+  cabinet:  { solid: 'bg-blue-700',   bar: 'bg-blue-400',   rail: 'border-blue-500/50',   tint: 'bg-blue-600/30',   icon: 'text-blue-400', ring: 'ring-blue-500/60' },
+  benchtop: { solid: 'bg-teal-700',   bar: 'bg-teal-400',   rail: 'border-teal-500/50',   tint: 'bg-teal-600/30',   icon: 'text-teal-400', ring: 'ring-teal-500/60' },
+  paste:    { solid: 'bg-yellow-700', bar: 'bg-yellow-400', rail: 'border-yellow-500/50', tint: 'bg-yellow-600/30', icon: 'text-yellow-400', ring: 'ring-yellow-500/60' },
+} satisfies Record<string, Tone>
+
+function SectionHeader({ tone, icon, label, shortcut, open, active, summary, title, onClick }: {
+  tone: Tone; icon: React.ReactNode; label: string; shortcut?: string
+  /** Section body expanded. Omit for headers with no dropdown (Select, Paste). */
+  open?: boolean
+  /** One of this section's tools is the current mode. */
+  active: boolean
+  /** Current tool / armed item, shown under the label so it's visible collapsed. */
+  summary?: string | null
+  title?: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      title={title ?? (shortcut ? `${label} (${shortcut})` : label)}
+      aria-expanded={open}
+      onClick={onClick}
+      className={`relative w-full px-2.5 min-h-11 py-1.5 rounded-lg flex items-center gap-2.5 text-sm font-medium transition-colors
+        ${active ? `${tone.solid} text-white shadow-md shadow-black/30`
+          : open ? `${tone.tint} ${tone.ring} ring-1 ring-inset text-white`
+          : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}`}
+    >
+      {(open || active) && <span className={`absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r ${active ? 'bg-white/70' : tone.bar}`} />}
+      <span className={`flex-none w-5 flex items-center justify-center ${!active && open ? tone.icon : ''}`}>{icon}</span>
+      <span className="flex-1 min-w-0 text-left">
+        <span className="block truncate">{label}</span>
+        {summary && <span className={`block truncate text-[11px] font-normal ${active ? 'text-white/75' : 'text-gray-500'}`}>{summary}</span>}
+      </span>
+      {shortcut && (
+        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0
+          ${active ? 'border-white/30 text-white/60' : 'border-gray-700 text-gray-600'}`}>
+          {shortcut}
+        </span>
+      )}
+      {open !== undefined && <span className={`text-xs transition-transform ${open ? 'rotate-180 opacity-70' : 'opacity-40'}`}>▾</span>}
+    </button>
+  )
+}
+
+function SectionBody({ tone, children }: { tone: Tone; children: React.ReactNode }) {
+  return <div className={`ml-2.5 pl-1.5 border-l-2 ${tone.rail} flex flex-col gap-px pt-1 pb-1`}>{children}</div>
+}
+
+function ToolRow({ tone, icon, label, active, title, onClick, iconClass, sub }: {
+  tone: Tone; icon?: React.ReactNode; label: string; active: boolean
+  title?: string; onClick: () => void; iconClass?: string; sub?: string
+}) {
+  return (
+    <button
+      title={title ?? label}
+      onClick={onClick}
+      className={`relative w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors
+        ${active ? `${tone.tint} text-white font-medium` : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+    >
+      {active && <span className={`absolute left-0 top-1 bottom-1 w-1 rounded-r ${tone.bar}`} />}
+      {icon && <span className={`flex-none w-5 flex items-center justify-center ${active ? 'text-white' : iconClass ?? tone.icon}`}>{icon}</span>}
+      <span className="flex-1 min-w-0 text-left">
+        <span className="block truncate">{label}</span>
+        {sub && <span className="block truncate text-[10px] text-gray-500">{sub}</span>}
+      </span>
+      {active && <span className="text-xs text-white/80 shrink-0">✓</span>}
+    </button>
+  )
+}
+
+// ── Wall tools ──────────────────────────────────────────────────────────────────
 
 const WALL_ITEMS: { mode: Mode; label: string; icon: React.ReactNode; color: string }[] = [
   { mode: 'draw_wall',   label: 'Standard Wall', icon: <WallIcon />,   color: 'text-orange-400' },
   { mode: 'draw_island', label: 'Island',         icon: <IslandIcon />, color: 'text-yellow-400' },
 ]
 const WALL_MODES = WALL_ITEMS.map(w => w.mode)
+
+// ── Benchtop tools ──────────────────────────────────────────────────────────────
+
+const BT_ICON = (d: React.ReactNode) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
+)
+const BENCHTOP_TOOLS: { mode: Mode; label: string; icon: React.ReactNode; color: string; divider?: boolean }[] = [
+  { mode: 'draw_benchtop',      label: 'Draw Polygon',   color: 'text-teal-400', icon: <BenchtopIcon /> },
+  { mode: 'draw_benchtop_rect', label: 'Draw Rectangle', color: 'text-teal-400', icon: BT_ICON(<rect x="2" y="4" width="12" height="8" rx="0.8" fill="currentColor" fillOpacity="0.12"/>) },
+  { mode: 'draw_benchtop_l',    label: 'Draw L-Shape',   color: 'text-teal-400', icon: BT_ICON(<path d="M2 2 L2 14 L8 14 L8 8 L14 8 L14 2 Z" fill="currentColor" fillOpacity="0.12"/>) },
+  { mode: 'draw_benchtop_u',    label: 'Draw U-Shape',   color: 'text-teal-400', icon: BT_ICON(<path d="M2 2 L2 14 L5 14 L5 8 L11 8 L11 14 L14 14 L14 2 Z" fill="currentColor" fillOpacity="0.12"/>) },
+  { mode: 'draw_benchtop_cutout_rect', label: 'Rect Cutout', color: 'text-red-400', divider: true, icon: BT_ICON(<>
+    <rect x="1" y="1" width="14" height="14" rx="1" fill="currentColor" fillOpacity="0.08"/>
+    <rect x="4" y="4" width="8" height="8" rx="0.5" fill="#111827" stroke="currentColor" strokeDasharray="2 1.5"/>
+  </>) },
+  { mode: 'draw_benchtop_cutout_circle', label: 'Circle Cutout', color: 'text-red-400', icon: BT_ICON(<>
+    <rect x="1" y="1" width="14" height="14" rx="1" fill="currentColor" fillOpacity="0.08"/>
+    <circle cx="8" cy="8" r="4" fill="#111827" stroke="currentColor" strokeDasharray="2 1.5"/>
+  </>) },
+]
+
+const NAV_KEY = 'rhk-sidebar-cab-nav'
+const ORPHAN = '__uncategorised__'
 
 // ── DB-backed library types ─────────────────────────────────────────────────────
 
@@ -81,7 +228,7 @@ export default function CanvasSidebar({
   armedDefinitionId, onArmDefinition, armedDraft = null, matColours, ebByMatId,
   wallMenuOpen, setWallMenuOpen,
   cabMenuOpen, setCabMenuOpen,
-  benchtopMenuOpen, setBenchtopMenuOpen, onDrawBenchtopInShapeEditor, onToggleBenchtopMode,
+  benchtopMenuOpen, setBenchtopMenuOpen, onDrawBenchtopInShapeEditor,
   clipboard, sidebarW, libRefresh = 0,
 }: {
   room: Room
@@ -101,8 +248,6 @@ export default function CanvasSidebar({
   setCabMenuOpen: (v: boolean) => void
   benchtopMenuOpen: boolean
   setBenchtopMenuOpen: (v: boolean) => void
-  /** F4 button: enter / leave Benchtop mode (only benchtops pickable while on). */
-  onToggleBenchtopMode?: () => void
   /** F4 → Draw in Shape Editor: new benchtop drawn straight in the full editor. */
   onDrawBenchtopInShapeEditor?: () => void
   clipboard: CabinetInstance | null
@@ -110,28 +255,17 @@ export default function CanvasSidebar({
   /** Bumped by the parent after a Save-to-library so the palette reloads. */
   libRefresh?: number
 }) {
-  function Btn({ target, icon, label, shortcut, activeClass = 'bg-blue-600 text-white' }: {
-    target: Mode; icon: React.ReactNode; label: string; shortcut?: string; activeClass?: string
-  }) {
-    const active = mode === target
-    return (
-      <button
-        title={shortcut ? `${label} (${shortcut})` : label}
-        onClick={() => onSelectMode(target)}
-        className={`w-full px-3 h-11 rounded-lg flex items-center gap-3 text-sm font-medium transition-colors
-          ${active ? activeClass : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}`}
-      >
-        <span className="flex-none w-5 flex items-center justify-center">{icon}</span>
-        <span className="flex-1 truncate text-left">{label}</span>
-        {shortcut && (
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0
-            ${active ? 'border-white/30 text-white/60' : 'border-gray-700 text-gray-600'}`}>
-            {shortcut}
-          </span>
-        )}
-      </button>
-    )
-  }
+  // ── One section open at a time ──
+  // Menus can also be opened from CanvasClient (F2/F3/F4 keys, entering Benchtop
+  // mode), so close the others whenever one flips open, wherever it came from.
+  const prevOpen = useRef({ wall: wallMenuOpen, cab: cabMenuOpen, bt: benchtopMenuOpen })
+  useEffect(() => {
+    const p = prevOpen.current
+    if (wallMenuOpen && !p.wall) { setCabMenuOpen(false); setBenchtopMenuOpen(false) }
+    else if (cabMenuOpen && !p.cab) { setWallMenuOpen(false); setBenchtopMenuOpen(false) }
+    else if (benchtopMenuOpen && !p.bt) { setWallMenuOpen(false); setCabMenuOpen(false) }
+    prevOpen.current = { wall: wallMenuOpen, cab: cabMenuOpen, bt: benchtopMenuOpen }
+  }, [wallMenuOpen, cabMenuOpen, benchtopMenuOpen, setWallMenuOpen, setCabMenuOpen, setBenchtopMenuOpen])
 
   // ── Library data (categories + definitions) ──
   const [categories, setCategories]     = useState<Category[]>([])
@@ -145,6 +279,17 @@ export default function CanvasSidebar({
   const [ctxMenu, setCtxMenu] = useState<CabCtxMenu | null>(null)
   const [movingDef, setMovingDef] = useState<CabinetDefinition | null>(null)
   const [moveTarget, setMoveTarget] = useState<string | null>(null)
+  // Drill-down position in the library: null = top-level tiles, else a category
+  // id (or ORPHAN). Remembered per browser so F3 reopens where you left off.
+  // (Lazy read is hydration-safe: the library body only renders once F3 is opened.)
+  const [navRaw, setNavCat] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    try { return localStorage.getItem(NAV_KEY) } catch { return null /* storage blocked */ }
+  })
+  function goTo(id: string | null) {
+    setNavCat(id)
+    try { if (id) localStorage.setItem(NAV_KEY, id); else localStorage.removeItem(NAV_KEY) } catch { /* storage blocked */ }
+  }
 
   const reloadCategories = useCallback(async () => {
     const { data } = await supabase.from('cabinet_categories')
@@ -223,10 +368,10 @@ export default function CanvasSidebar({
     categories.filter(c => c.parent_id === parentId).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name))
   const defsOf = (catId: string) => definitions.filter(d => d.category_id === catId && matches(d))
   const orphanDefs = definitions.filter(d => matches(d) && !categories.some(c => c.id === d.category_id))
-  // Does this node, or any descendant, have a visible definition? (search auto-expand)
-  function nodeHasVisible(catId: string): boolean {
-    return defsOf(catId).length > 0 || childrenOf(catId).some(c => nodeHasVisible(c.id))
-  }
+  // Stale nav target (category deleted / emptied) falls back to the top level.
+  const navCat = !navRaw ? null
+    : navRaw === ORPHAN ? (orphanDefs.length ? ORPHAN : null)
+    : categories.length === 0 || categories.some(c => c.id === navRaw) ? navRaw : null
 
   async function createCategory(parentId: string | null) {
     const name = typeof window !== 'undefined' ? window.prompt(parentId ? 'New sub-category name' : 'New category name') : null
@@ -297,52 +442,169 @@ export default function CanvasSidebar({
     setMovingDef(null)
   }
 
-  // Recursive accordion node: child categories then this node's definitions.
-  function renderNode(cat: Category, depth: number): React.ReactNode {
-    if (q && !nodeHasVisible(cat.id)) return null
-    const defs = defsOf(cat.id)
-    const kids = childrenOf(cat.id)
-    const open = openCats.has(cat.id) || (!!q && nodeHasVisible(cat.id))
-    const hasContent = kids.length > 0 || defs.length > 0
+  // ── Drill-down helpers ──
+  const catById = (id: string | null | undefined) => (id ? categories.find(c => c.id === id) ?? null : null)
+  // Root → cat chain (guarded against parent cycles).
+  function pathTo(id: string | null): Category[] {
+    const out: Category[] = []
+    let c = catById(id)
+    while (c && out.length < 20) { out.unshift(c); c = catById(c.parent_id) }
+    return out
+  }
+  const countIn = (catId: string): number =>
+    defsOf(catId).length + childrenOf(catId).reduce((n, k) => n + countIn(k.id), 0)
+  // Categories on the armed cabinet's path — lit up so you can see where it lives.
+  const armedPath = new Set(cabActive ? pathTo(armedDef?.category_id ?? null).map(c => c.id) : [])
+  const armedIsOrphan = cabActive && !!armedDef && !catById(armedDef.category_id)
+  // Colour of a category = its own accent, else its top-level ancestor's, else palette.
+  const roots = childrenOf(null)
+  function colourOf(cat: Category): string {
+    const chain = pathTo(cat.id)
+    const own = [...chain].reverse().find(c => c.accent_color)?.accent_color
+    if (own) return own
+    const i = roots.findIndex(r => r.id === chain[0]?.id)
+    return CAT_PALETTE[(i < 0 ? 0 : i) % CAT_PALETTE.length]
+  }
+
+
+  function defRow(def: CabinetDefinition, sub?: string) {
+    const sel = cabActive && armedDefinitionId === def.id
     return (
-      <div key={cat.id} className="border-t border-gray-800">
-        <button
-          onClick={() => toggleCat(cat.id)}
-          onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, categoryId: cat.id }) }}
-          className="w-full flex items-center gap-1.5 pr-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
-          style={{ paddingLeft: 8 + depth * 12 }}
-        >
-          <span className="w-3 text-[9px] opacity-60">{hasContent ? (open ? '▾' : '▸') : '·'}</span>
-          <span className="flex-1 text-left truncate" style={cat.accent_color ? { color: cat.accent_color } : undefined}>{cat.name}</span>
-          {defs.length > 0 && <span className="text-[10px] text-gray-600 normal-case">{defs.length}</span>}
-        </button>
-        {open && (
-          <div className="flex flex-col">
-            {kids.map(k => renderNode(k, depth + 1))}
-            {defs.length > 0 && (
-              <div className="divide-y divide-gray-800/60 border-t border-gray-800/60">
-                {defs.map(def => {
-                  const sel = armedDefinitionId === def.id
-                  return (
-                    <button
-                      key={def.id}
-                      onClick={() => onArmDefinition(def)}
-                      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, definitionId: def.id }) }}
-                      draggable
-                      onDragStart={e => { e.dataTransfer.setData('application/x-rhk-cab-def', def.id); e.dataTransfer.effectAllowed = 'copy' }}
-                      title={def.name}
-                      className={`w-full flex items-center py-1.5 pr-2 text-sm transition-colors
-                        ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
-                      style={{ paddingLeft: 8 + (depth + 1) * 12 + 6 }}
-                    >
-                      <span className="flex-1 text-left truncate">{def.name}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+      <button
+        key={def.id}
+        onClick={() => onArmDefinition(def)}
+        onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, definitionId: def.id }) }}
+        draggable
+        onDragStart={e => { e.dataTransfer.setData('application/x-rhk-cab-def', def.id); e.dataTransfer.effectAllowed = 'copy' }}
+        title={def.name}
+        className={`relative w-full flex items-center gap-2 pl-3 pr-2 py-2 rounded-md text-sm transition-colors
+          ${sel ? 'bg-blue-600 text-white font-medium shadow-md shadow-black/30' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
+      >
+        {sel && <span className="absolute left-0 top-1 bottom-1 w-1 rounded-r bg-white/80" />}
+        <span className="flex-1 min-w-0 text-left">
+          <span className="block truncate">{def.name}</span>
+          {sub && <span className={`block truncate text-[10px] ${sel ? 'text-white/70' : 'text-gray-500'}`}>{sub}</span>}
+        </span>
+        {sel && <span className="text-xs shrink-0">✓</span>}
+      </button>
+    )
+  }
+
+  // Top level: one big tile per root category.
+  function renderTiles() {
+    const tiles = roots.filter(c => scope === 'all' || countIn(c.id) > 0)
+    return (
+      <div className="grid gap-1 px-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(44px, 1fr))' }}>
+        {tiles.map(cat => {
+          const col = colourOf(cat)
+          const onPath = armedPath.has(cat.id)
+          return (
+            <button
+              key={cat.id}
+              onClick={() => goTo(cat.id)}
+              onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, categoryId: cat.id }) }}
+              title={`Open ${cat.name}`}
+              className={`relative flex flex-col items-center gap-0.5 pt-2 pb-1.5 px-0.5 rounded-lg min-w-0 border bg-gray-800/50 hover:bg-gray-800 transition-colors
+                ${onPath ? 'border-blue-400 ring-1 ring-blue-400/50' : 'border-gray-700 hover:border-gray-500'}`}
+              style={{ borderTopColor: col, borderTopWidth: 3 }}
+            >
+              <span style={{ color: col }}>{catIconFor(cat.name)}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-200 truncate max-w-full">{cat.name}</span>
+              <span className="text-[10px] text-gray-500">{countIn(cat.id)}</span>
+              {onPath && <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-blue-400" title="Armed cabinet is in here" />}
+            </button>
+          )
+        })}
+        {orphanDefs.length > 0 && (
+          <button
+            onClick={() => goTo(ORPHAN)}
+            className={`relative flex flex-col items-center gap-0.5 pt-2 pb-1.5 px-0.5 rounded-lg min-w-0 border border-dashed bg-gray-800/30 hover:bg-gray-800 transition-colors
+              ${armedIsOrphan ? 'border-blue-400' : 'border-gray-700'}`}
+          >
+            <span className="text-gray-500"><FolderIcon /></span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Other</span>
+            <span className="text-[10px] text-gray-500">{orphanDefs.length}</span>
+          </button>
         )}
+      </div>
+    )
+  }
+
+  // Inside a category: breadcrumb, sub-category rows, then its cabinets.
+  function renderLevel() {
+    const isOrphan = navCat === ORPHAN
+    const cat = isOrphan ? null : catById(navCat)
+    const chain = pathTo(navCat)
+    const col = cat ? colourOf(cat) : '#6b7280'
+    const kids = cat ? childrenOf(cat.id).filter(k => scope === 'all' || countIn(k.id) > 0) : []
+    const defs = cat ? defsOf(cat.id) : orphanDefs
+    return (
+      <div className="flex flex-col gap-1">
+        {/* Breadcrumb: back + current level on one line, ancestors (clickable) above */}
+        <div className="flex flex-col gap-0.5 px-1 min-w-0">
+          <div className="flex items-center gap-1 text-[10px] min-w-0 overflow-hidden pl-7">
+            <button onClick={() => goTo(null)} className="shrink-0 text-gray-500 hover:text-gray-200">Cabinets</button>
+            {chain.slice(0, -1).map(c => (
+              <span key={c.id} className="flex items-center gap-1 min-w-0">
+                <span className="text-gray-600">/</span>
+                <button onClick={() => goTo(c.id)} className="truncate text-gray-500 hover:text-gray-200">{c.name}</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <button
+              onClick={() => goTo(chain.length > 1 ? chain[chain.length - 2].id : null)}
+              title="Back"
+              className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-gray-300 bg-gray-800 hover:bg-gray-700 hover:text-white"
+            >‹</button>
+            <span className="truncate text-xs font-semibold uppercase tracking-wider" style={{ color: col }}>
+              {isOrphan ? 'Other' : cat?.name}
+            </span>
+          </div>
+        </div>
+
+        <div
+          className="flex flex-col gap-px rounded-lg bg-gray-800/30 p-1 min-h-[40px]"
+          style={{ boxShadow: `inset 3px 0 0 ${col}` }}
+          onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, categoryId: cat?.id ?? null }) }}
+        >
+          {kids.map(k => {
+            const onPath = armedPath.has(k.id)
+            return (
+              <button
+                key={k.id}
+                onClick={() => goTo(k.id)}
+                onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, categoryId: k.id }) }}
+                className={`w-full flex items-center gap-2 pl-2.5 pr-2 py-2 rounded-md text-sm transition-colors
+                  ${onPath ? 'bg-blue-600/15 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
+              >
+                <span style={{ color: colourOf(k) }}><FolderIcon /></span>
+                <span className="flex-1 truncate text-left font-medium">{k.name}</span>
+                {onPath && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" title="Armed cabinet is in here" />}
+                <span className="text-[10px] text-gray-500 tabular-nums">{countIn(k.id)}</span>
+                <span className="text-gray-500">›</span>
+              </button>
+            )
+          })}
+          {kids.length > 0 && defs.length > 0 && <div className="border-t border-gray-700/60 my-1 mx-1" />}
+          {defs.map(def => defRow(def))}
+          {kids.length === 0 && defs.length === 0 && (
+            <p className="px-2 py-2 text-xs text-gray-600 italic">
+              {scope === 'job' ? 'Nothing from here placed in this job yet.' : 'Empty — right-click to add a sub-category.'}
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Search: flat list of hits across the whole library, each with its path.
+  function renderSearch() {
+    const hits = definitions.filter(matches)
+    return (
+      <div className="flex flex-col gap-px px-0.5">
+        {hits.map(def => defRow(def, pathTo(def.category_id ?? null).map(c => c.name).join(' › ') || 'Other'))}
+        {hits.length === 0 && <p className="px-2 py-2 text-xs text-gray-600 italic">No cabinets match “{search.trim()}”.</p>}
       </div>
     )
   }
@@ -378,68 +640,44 @@ export default function CanvasSidebar({
 
       {/* ── Scrollable tool area ── */}
       <div className="flex-1 flex flex-col py-2 gap-0.5 overflow-y-auto px-2 min-h-0">
-        <Btn target="select" icon={<SelectIcon />} label="Select" />
+        <SectionHeader
+          tone={TONES.select} icon={<SelectIcon />} label="Select" title="Back to Select (Esc)"
+          active={false} onClick={() => onSelectMode('select')}
+        />
 
         <div className="border-t border-gray-800 my-1 mx-1" />
 
-        {/* Wall dropdown */}
-        <button
-          title="Wall (F2)"
+        {/* Wall (F2) */}
+        <SectionHeader
+          tone={TONES.wall} icon={<WallIcon />} label="Wall" shortcut="F2"
+          open={wallMenuOpen} active={wallActive}
+          summary={wallActive ? WALL_ITEMS.find(w => w.mode === mode)?.label : null}
           onClick={() => setWallMenuOpen(!wallMenuOpen)}
-          className={`w-full px-3 h-11 rounded-lg flex items-center gap-3 text-sm font-medium transition-colors
-            ${wallActive ? 'bg-orange-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}`}
-        >
-          <span className="flex-none w-5 flex items-center justify-center"><WallIcon /></span>
-          <span className="flex-1 truncate text-left">Wall</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0
-            ${wallActive ? 'border-white/30 text-white/60' : 'border-gray-700 text-gray-600'}`}>
-            F2
-          </span>
-          <span className="text-xs opacity-40">{wallMenuOpen ? '▴' : '▾'}</span>
-        </button>
-
+        />
         {wallMenuOpen && (
-          <div className="flex flex-col gap-px pt-0.5">
+          <SectionBody tone={TONES.wall}>
             {WALL_ITEMS.map(({ mode: m, label, icon, color }) => (
-              <button
-                key={m}
-                onClick={() => { onSelectMode(m); setWallMenuOpen(false) }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
-                  ${mode === m ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-              >
-                <span className={`flex-none w-5 flex items-center justify-center ${mode === m ? 'text-white' : color}`}>
-                  {icon}
-                </span>
-                <span className="truncate">{label}</span>
-              </button>
+              <ToolRow key={m} tone={TONES.wall} icon={icon} iconClass={color} label={label}
+                active={mode === m} onClick={() => onSelectMode(m)} />
             ))}
-          </div>
+          </SectionBody>
         )}
 
         <div className="border-t border-gray-800 my-1 mx-1" />
 
-        {/* Cabinet library dropdown (DB-backed) */}
-        <button
-          title="Cabinet Library (F3)"
+        {/* Cabinet library (F3) — drill-down: tiles → category → cabinets */}
+        <SectionHeader
+          tone={TONES.cabinet} icon={<CabinetIcon />} label="Cabinet" shortcut="F3" title="Cabinet Library (F3)"
+          open={cabMenuOpen} active={cabActive}
+          summary={cabActive && armedDef ? armedDef.name : null}
           onClick={() => setCabMenuOpen(!cabMenuOpen)}
-          className={`w-full px-3 h-11 rounded-lg flex items-center gap-3 text-sm font-medium transition-colors
-            ${cabActive ? 'bg-blue-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}`}
-        >
-          <span className="flex-none w-5 flex items-center justify-center"><CabinetIcon /></span>
-          <span className="flex-1 truncate text-left">Cabinet</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0
-            ${cabActive ? 'border-white/30 text-white/60' : 'border-gray-700 text-gray-600'}`}>
-            F3
-          </span>
-          <span className="text-xs opacity-40">{cabMenuOpen ? '▴' : '▾'}</span>
-        </button>
-
+        />
         {cabMenuOpen && (
-          <div className="flex flex-col gap-1.5 pt-1">
+          <SectionBody tone={TONES.cabinet}>
             {libError && <p className="px-2 py-1.5 text-xs text-red-400">{libError}</p>}
 
             {/* Search + scope */}
-            <div className="px-1 flex flex-col gap-1.5">
+            <div className="px-1 pb-1 flex flex-col gap-1.5">
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
@@ -460,165 +698,64 @@ export default function CanvasSidebar({
               </div>
             </div>
 
-            {/* Nested category tree → list rows. Right-click for New category / Rename / Delete. */}
-            <div
-              className="flex flex-col border-b border-gray-800 min-h-[40px]"
-              onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, categoryId: null }) }}
-            >
-              {childrenOf(null).map(cat => renderNode(cat, 0))}
-
-              {/* Definitions whose category was removed */}
-              {orphanDefs.length > 0 && (
-                <div className="border-t border-gray-800">
-                  <div className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">Uncategorised</div>
-                  <div className="flex flex-col divide-y divide-gray-800/60 border-t border-gray-800/60">
-                    {orphanDefs.map(def => {
-                      const sel = armedDefinitionId === def.id
-                      return (
-                        <button key={def.id} onClick={() => onArmDefinition(def)}
-                          onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, definitionId: def.id }) }}
-                          draggable
-                          onDragStart={e => { e.dataTransfer.setData('application/x-rhk-cab-def', def.id); e.dataTransfer.effectAllowed = 'copy' }}
-                          title={def.name}
-                          className={`w-full flex items-center pl-4 pr-2 py-1.5 text-sm transition-colors
-                            ${sel ? 'bg-blue-600/20 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}>
-                          <span className="flex-1 text-left truncate">{def.name}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
+            {/* Right-click for New category / Rename / Delete. */}
+            <div onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, categoryId: q || !navCat || navCat === ORPHAN ? null : navCat }) }}>
+              {q ? renderSearch() : navCat ? renderLevel() : renderTiles()}
 
               {categories.length === 0 && definitions.length === 0 && (
                 <p className="px-2 py-2 text-xs text-gray-600 italic">Right-click to add a category.</p>
               )}
-              {scope === 'job' && visibleCount === 0 && definitions.length > 0 && (
+              {!q && !navCat && scope === 'job' && visibleCount === 0 && definitions.length > 0 && (
                 <p className="px-2 py-2 text-xs text-gray-600 italic">No library cabinets placed in this job yet.</p>
               )}
             </div>
-          </div>
+          </SectionBody>
         )}
 
         <div className="border-t border-gray-800 my-1 mx-1" />
 
-        {/* Benchtop dropdown */}
-        <button
-          title="Benchtop mode (F4) — only benchtops can be selected; F4 / Esc to leave"
-          onClick={() => onToggleBenchtopMode ? onToggleBenchtopMode() : setBenchtopMenuOpen(!benchtopMenuOpen)}
-          className={`w-full px-3 h-11 rounded-lg flex items-center gap-3 text-sm font-medium transition-colors
-            ${benchtopActive ? 'bg-teal-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}`}
-        >
-          <span className="flex-none w-5 flex items-center justify-center"><BenchtopIcon /></span>
-          <span className="flex-1 truncate text-left">Benchtop</span>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0
-            ${benchtopActive ? 'border-white/30 text-white/60' : 'border-gray-700 text-gray-600'}`}>
-            F4
-          </span>
-          <span className="text-xs opacity-40">{benchtopMenuOpen ? '▴' : '▾'}</span>
-        </button>
-
+        {/* Benchtop (F4) */}
+        <SectionHeader
+          tone={TONES.benchtop} icon={<BenchtopIcon />} label="Benchtop" shortcut="F4"
+          title="Benchtop (F4) — in Benchtop mode only benchtops can be selected; Esc to leave"
+          open={benchtopMenuOpen} active={benchtopActive}
+          summary={benchtopActive ? (mode === 'benchtop_select' ? 'Select Tops' : BENCHTOP_TOOLS.find(t => t.mode === mode)?.label ?? 'Benchtop mode') : null}
+          onClick={() => setBenchtopMenuOpen(!benchtopMenuOpen)}
+        />
         {benchtopMenuOpen && (
-          <div className="flex flex-col gap-px pt-0.5">
-            {onDrawBenchtopInShapeEditor && (
-              <button
-                onClick={() => { onDrawBenchtopInShapeEditor(); setBenchtopMenuOpen(false) }}
-                title="Open the full Shape Editor for a new benchtop. Select base cabinets first to start from their footprint."
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors text-gray-400 hover:bg-gray-800 hover:text-white"
-              >
-                <span className="flex-none w-5 flex items-center justify-center text-blue-400">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M2 12V4h7l5 4v4z" fill="currentColor" fillOpacity="0.12"/>
-                    <path d="M11.5 1.5l3 3" />
-                  </svg>
-                </span>
-                <span className="truncate">Draw in Shape Editor</span>
-              </button>
-            )}
-            <button
-              onClick={() => { onSelectMode('draw_benchtop'); setBenchtopMenuOpen(false) }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
-                ${mode === 'draw_benchtop' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-            >
-              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop' ? 'text-white' : 'text-teal-400'}`}>
-                <BenchtopIcon />
-              </span>
-              <span className="truncate">Draw Polygon</span>
-            </button>
-            <button
-              onClick={() => { onSelectMode('draw_benchtop_rect'); setBenchtopMenuOpen(false) }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
-                ${mode === 'draw_benchtop_rect' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-            >
-              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop_rect' ? 'text-white' : 'text-teal-400'}`}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="4" width="12" height="8" rx="0.8" fill="currentColor" fillOpacity="0.12"/>
-                </svg>
-              </span>
-              <span className="truncate">Draw Rectangle</span>
-            </button>
-            <button
-              onClick={() => { onSelectMode('draw_benchtop_l'); setBenchtopMenuOpen(false) }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
-                ${mode === 'draw_benchtop_l' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-            >
-              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop_l' ? 'text-white' : 'text-teal-400'}`}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 2 L2 14 L8 14 L8 8 L14 8 L14 2 Z" fill="currentColor" fillOpacity="0.12"/>
-                </svg>
-              </span>
-              <span className="truncate">Draw L-Shape</span>
-            </button>
-            <button
-              onClick={() => { onSelectMode('draw_benchtop_u'); setBenchtopMenuOpen(false) }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
-                ${mode === 'draw_benchtop_u' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-            >
-              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop_u' ? 'text-white' : 'text-teal-400'}`}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 2 L2 14 L5 14 L5 8 L11 8 L11 14 L14 14 L14 2 Z" fill="currentColor" fillOpacity="0.12"/>
-                </svg>
-              </span>
-              <span className="truncate">Draw U-Shape</span>
-            </button>
+          <SectionBody tone={TONES.benchtop}>
+            {/* Benchtop mode: only benchtops are pickable on the canvas (Esc / Select to leave). */}
+            <ToolRow
+              tone={TONES.benchtop} icon={<SelectIcon />} label="Select Tops"
+              title="Benchtop mode — only benchtops can be selected; Esc to leave"
+              active={mode === 'benchtop_select'} onClick={() => onSelectMode('benchtop_select')}
+            />
             <div className="border-t border-gray-800 my-1 mx-1" />
-            <button
-              onClick={() => { onSelectMode('draw_benchtop_cutout_rect'); setBenchtopMenuOpen(false) }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
-                ${mode === 'draw_benchtop_cutout_rect' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-            >
-              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop_cutout_rect' ? 'text-white' : 'text-red-400'}`}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="1" y="1" width="14" height="14" rx="1" fill="currentColor" fillOpacity="0.08"/>
-                  <rect x="4" y="4" width="8" height="8" rx="0.5" fill="#111827" stroke="currentColor" strokeDasharray="2 1.5"/>
-                </svg>
-              </span>
-              <span className="truncate">Rect Cutout</span>
-            </button>
-            <button
-              onClick={() => { onSelectMode('draw_benchtop_cutout_circle'); setBenchtopMenuOpen(false) }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors
-                ${mode === 'draw_benchtop_cutout_circle' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-            >
-              <span className={`flex-none w-5 flex items-center justify-center ${mode === 'draw_benchtop_cutout_circle' ? 'text-white' : 'text-red-400'}`}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="1" y="1" width="14" height="14" rx="1" fill="currentColor" fillOpacity="0.08"/>
-                  <circle cx="8" cy="8" r="4" fill="#111827" stroke="currentColor" strokeDasharray="2 1.5"/>
-                </svg>
-              </span>
-              <span className="truncate">Circle Cutout</span>
-            </button>
-          </div>
+            {onDrawBenchtopInShapeEditor && (
+              <ToolRow
+                tone={TONES.benchtop} iconClass="text-blue-400" label="Draw in Shape Editor" active={false}
+                title="Open the full Shape Editor for a new benchtop. Select base cabinets first to start from their footprint."
+                icon={BT_ICON(<><path d="M2 12V4h7l5 4v4z" fill="currentColor" fillOpacity="0.12"/><path d="M11.5 1.5l3 3" /></>)}
+                onClick={onDrawBenchtopInShapeEditor}
+              />
+            )}
+            {BENCHTOP_TOOLS.map(t => (
+              <div key={t.mode}>
+                {t.divider && <div className="border-t border-gray-800 my-1 mx-1" />}
+                <ToolRow tone={TONES.benchtop} icon={t.icon} iconClass={t.color} label={t.label}
+                  active={mode === t.mode} onClick={() => onSelectMode(t.mode)} />
+              </div>
+            ))}
+          </SectionBody>
         )}
 
         {clipboard && (
           <>
             <div className="border-t border-gray-800 my-1 mx-1" />
-            <Btn
-              target="paste"
-              icon={<PasteIcon />}
+            <SectionHeader
+              tone={TONES.paste} icon={<PasteIcon />}
               label={`Paste: ${clipboard.label ?? clipboard.assembly_class}`}
-              activeClass="bg-yellow-700 text-white"
+              active={mode === 'paste'} onClick={() => onSelectMode('paste')}
             />
           </>
         )}

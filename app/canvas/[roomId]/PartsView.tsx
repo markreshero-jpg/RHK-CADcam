@@ -14,6 +14,7 @@ import {
 } from '@/src/lib/formula'
 import { CUSTOM_ORIENT_LABELS, type CustomOrient } from '@/src/lib/customPartBox'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
 
 // One dimension/position field: accepts a plain number (fixed), a plain
 // arithmetic calc (e.g. "100+100" → 200, evaluated and stored as the value), OR
@@ -619,7 +620,7 @@ export default function PartsView({
 
     for (const z of rp.face_zones) {
       if (z.face_type === 'open') continue
-      const id = `zone_${z.row_index}_${z.col_index}`
+      const id = zonePartId(z)
       const typeName = z.face_type === 'door' ? 'Door' : z.face_type === 'drawer_face' ? 'Drawer Face' : 'False Panel'
       result.push({
         id, typeKey: 'face', typeLabel: 'Face',

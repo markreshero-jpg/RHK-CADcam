@@ -5,6 +5,7 @@ import { supabase } from '@/src/lib/supabase'
 import { loadCabinetInput, loadCabinetInputFromRow } from './loadCabinetInput'
 import type { CabinetInstance } from '../types'
 import { resolveCabinet } from './resolver'
+import { zoneKey } from '../cabinetShape/partKeys'
 import { persistResolved } from './persistResolved'
 import { CabinetInput, ResolvedCabinet } from './types'
 import { applyPartExpressions } from '../formula/partExpressions'
@@ -107,13 +108,14 @@ async function loadEdgeOverrides(cabinetId: string) {
     supabase.from('case_parts').select('part_key,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right').eq('cabinet_instance_id', cabinetId),
     supabase.from('toekick_parts').select('part_key,sort_order,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right').eq('cabinet_instance_id', cabinetId),
     supabase.from('internal_parts').select('part_type,sort_order,edge_band_top,edge_band_bottom,edge_band_front,edge_band_back').eq('cabinet_instance_id', cabinetId),
-    supabase.from('face_zones').select('row_index,col_index,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right').eq('cabinet_instance_id', cabinetId),
+    supabase.from('face_zones').select('facet,row_index,col_index,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right').eq('cabinet_instance_id', cabinetId),
   ])
   return {
     case:     new Map((cp.data ?? []).map(p => [p.part_key, { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right }])),
     toekick:  new Map((tp.data ?? []).map(p => [`${p.part_key}_${p.sort_order}`, { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right }])),
     internal: new Map((ip.data ?? []).map(p => [`${p.part_type}_${p.sort_order}`, { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_back, right: p.edge_band_front }])),
-    zone:     new Map((fz.data ?? []).map(z => [`${z.row_index}_${z.col_index}`, { top: z.edge_band_top, bottom: z.edge_band_bottom, left: z.edge_band_left, right: z.edge_band_right }])),
+    // Keyed like the zone part id minus 'zone_' (zoneKey): facets get `edge.r_c`.
+    zone:     new Map((fz.data ?? []).map(z => [zoneKey(z), { top: z.edge_band_top, bottom: z.edge_band_bottom, left: z.edge_band_left, right: z.edge_band_right }])),
   }
 }
 
@@ -143,7 +145,7 @@ function applyEdgeOverrides(
     if (e) p.edge_band = { ...p.edge_band, ...e }
   }
   for (const z of resolved.face_zones) {
-    const e = ov.zone.get(`${z.row_index}_${z.col_index}`)
+    const e = ov.zone.get(zoneKey(z))
     if (e) z.edge_band = { ...z.edge_band, ...e }
   }
 }

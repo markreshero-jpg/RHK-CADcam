@@ -9,11 +9,13 @@ import {
   btSegments, shapeWrite, segmentsFromLegacy, transformBenchtop, translateFn, rotateFn, mapSegments,
   splitSegment, deleteVertex, toggleCurve, filletVertex,
   chamferVertex, offsetSegments, outlineCentroid, nearestOnOutline, lineHitOnOutline,
+  moveVertex, outwardNormal, setCurveThrough, pushPullEdge, setEdgeLength, splitSegmentAt, resnapJoins, sizeAcross,
+  type EdgeLengthKeep,
 } from '@/src/lib/benchtopGeometry'
 import {
   autoAnchor, wallContacts, wallFrame, positionFn, reanchorFn, btTouches, stretchFn, type WallSide, type StretchEnd,
 } from '@/src/lib/benchtopAnchor'
-import type { Mode, Selected, ContextMenuState, BtShapeSnapshot } from './canvasTypes'
+import { btWorld, type Mode, type Selected, type ContextMenuState, type BtShapeSnapshot, type BtShapeEdit, type BtShapeSel } from './canvasTypes'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 interface Params {
@@ -154,6 +156,20 @@ export function useBenchtopInteraction(p: Params) {
   // so a native dblclick never reaches the benchtop path — count clicks here.
   const lastBtClickRef = useRef<{ id: string; t: number } | null>(null)
 
+  // ── In-plan shape edit (Phase 6) ───────────────────────────────────────────
+  // A working copy of one top's outline; nothing is saved until commit (one
+  // canvas undo step). history = the edit's own undo stack.
+  const [shapeEdit, setShapeEdit] = useState<BtShapeEdit | null>(null)
+  const shapeDragRef = useRef<{ kind: 'v' | 'e'; i: number; start: Pt; base: BenchtopSegment[]; moved: boolean; alt: boolean; shift: boolean } | null>(null)
+  // Line stretch, cabinet-style (Mark 2026-10-12): click a line → it follows the
+  // mouse (snaps) → click / Enter places it; the panel box takes a typed size
+  // (Tab = apply and keep going, Esc = cancel the stretch).
+  const [shapeStretch, setShapeStretch] = useState<{ i: number; base: BenchtopSegment[]; start: Pt } | null>(null)
+  // Leaving the mode by any route (tool button, F4, Esc) drops the working copy.
+  useEffect(() => {
+    if (mode !== 'edit_benchtop_shape' && shapeEdit) { setShapeEdit(null); setShapeStretch(null); shapeDragRef.current = null }
+  }, [mode, shapeEdit])
+
   const roomCx = centroid(walls)
   const anchorOf = (segs: BenchtopSegment[]) => autoAnchor(segs, walls, roomCx)
 
@@ -174,10 +190,10 @@ export function useBenchtopInteraction(p: Params) {
 
   // ── Shared snap helper ────────────────────────────────────────────────────
 
-  function snapWorld(wp: Pt, prevPt?: Pt | null): Pt {
+  function snapWorld(wp: Pt, prevPt?: Pt | null, excludeBtId?: string): Pt {
     const res = computeSnap(
       wp,
-      { walls, cabinets, benchtops },
+      { walls, cabinets, benchtops: excludeBtId ? benchtops.filter(b => b.id !== excludeBtId) : benchtops },
       snapSettings,
       SNAP_PX / zoom,
       prevPt,
@@ -209,7 +225,6 @@ export function useBenchtopInteraction(p: Params) {
       setBenchtops(bs => [...bs, saved as BenchtopInstance])
       setSelected({ type: 'benchtop', id: (saved as BenchtopInstance).id })
       setMode('benchtop_select')
-      setBenchtopMenuOpen(false)
       resetDraw()
     }
   }
@@ -247,6 +262,9 @@ export function useBenchtopInteraction(p: Params) {
   // never move it (P-f). Pointer-up decides click / double-click.
   function onBenchtopPointerDown(e: React.PointerEvent, id: string) {
     if (mode !== 'benchtop_select') return
+    // Left button only: a right-click's pointer-up never reaches handlePointerUp,
+    // so its press would stay armed and swallow every later move.
+    if (e.button !== 0) return
     if (!findBt(id)) return
     svgPointerDownRef.current = true
     svgRef.current?.setPointerCapture(e.pointerId)
@@ -467,6 +485,136 @@ export function useBenchtopInteraction(p: Params) {
     setShapeEditDraft(null)
   }
 
+  // ── In-plan shape edit (Phase 6) ───────────────────────────────────────────
+
+  function startShapeEdit(id: string) {
+    const b = findBt(id)
+    if (!b) return
+    resetDraw()
+    btPressRef.current = null
+    setContextMenu(null)
+    setSelected({ type: 'benchtop', id })
+    const segs = btSegments(b)
+    // Corner X / Y frame: back-left corner = 0,0. The back side of a wall is seen
+    // from outside, so its left is the wall's far end (as in its elevation).
+    const aw = anchorWall(b)
+    let d = { x: 1, y: 0 }, n = { x: 0, y: 1 }, o0 = { x: 0, y: 0 }
+    if (aw) {
+      const f = wallFrame(aw, b.wall_side, roomCx)
+      d = b.wall_side === 'back' ? { x: -f.d.x, y: -f.d.y } : f.d
+      n = f.n; o0 = f.o
+    }
+    const along = segs.map(s => (s.p0.x - o0.x) * d.x + (s.p0.y - o0.y) * d.y)
+    const off = segs.map(s => (s.p0.x - o0.x) * n.x + (s.p0.y - o0.y) * n.y)
+    const a0 = Math.min(...along), f0 = Math.min(...off)
+    const o = { x: o0.x + d.x * a0 + n.x * f0, y: o0.y + d.y * a0 + n.y * f0 }
+    setShapeEdit({ btId: id, segs, history: [], sel: null, frame: { o, d, n } })
+    setMode('edit_benchtop_shape')
+  }
+
+  // One edit step on the working copy (undoable inside the mode). A selection
+  // that no longer exists (corner removed) is dropped.
+  function applyShape(fn: (segs: BenchtopSegment[]) => BenchtopSegment[], sel?: BtShapeSel) {
+    setShapeEdit(se => {
+      if (!se) return se
+      const next = fn(se.segs)
+      if (next === se.segs) return se
+      const keep = sel !== undefined ? sel : se.sel && se.sel.i < next.length ? se.sel : null
+      return { ...se, segs: next, history: [...se.history, se.segs], sel: keep }
+    })
+  }
+
+  const setShapeSel = (sel: BtShapeSel) => setShapeEdit(se => (se ? { ...se, sel } : se))
+
+  function shapeEditUndo() {
+    setShapeEdit(se => {
+      if (!se || !se.history.length) return se
+      const segs = se.history[se.history.length - 1]
+      return { ...se, segs, history: se.history.slice(0, -1), sel: se.sel && se.sel.i < segs.length ? se.sel : null }
+    })
+  }
+
+  function cancelShapeEdit() {
+    shapeDragRef.current = null
+    setShapeStretch(null)
+    setShapeEdit(null)
+    setSnapResult(null)
+    setMode('benchtop_select')
+  }
+
+  // Save: one canvas undo step; join ends follow the new outline (S-d).
+  function commitShapeEdit() {
+    const se = shapeEdit
+    const b = se && findBt(se.btId)
+    // A stretch still following the mouse is kept as it stands.
+    if (se && b && (se.history.length || shapeStretch)) {
+      void handleUpdateBenchtop(se.btId, { ...shapeWrite(se.segs), joins: resnapJoins(se.segs, b.joins ?? []) })
+    }
+    cancelShapeEdit()
+  }
+
+  // Press on a corner / edge handle: select it; a drag past 3px reshapes.
+  // While a stretch follows the mouse, the press just places it.
+  function shapeHandleDown(kind: 'v' | 'e', i: number, wp: Pt, mods: { alt?: boolean; shift?: boolean } = {}) {
+    if (!shapeEdit) return
+    if (shapeStretch) { finishStretch(); return }
+    shapeDragRef.current = { kind, i, start: wp, base: shapeEdit.segs, moved: false, alt: !!mods.alt, shift: !!mods.shift }
+    setShapeSel({ kind, i })
+  }
+
+  // Push / pull offset for line i of base with the cursor at wp. Snapped: the
+  // line goes exactly through the snap point (measured from the line itself,
+  // not the grab point, which can sit up to half the hit width off it). Free:
+  // the cursor's travel from the grab, whole mm.
+  function lineOffset(base: BenchtopSegment[], i: number, start: Pt, wp: Pt, btId: string) {
+    const nrm = outwardNormal(base, i)
+    const p = snapWorld(wp, null, btId)
+    const e0 = base[i].p0
+    return p.x !== wp.x || p.y !== wp.y
+      ? (p.x - e0.x) * nrm.x + (p.y - e0.y) * nrm.y
+      : Math.round((p.x - start.x) * nrm.x + (p.y - start.y) * nrm.y)
+  }
+
+  // Place the stretch where it is (one undo step inside the edit).
+  function finishStretch() {
+    const st = shapeStretch
+    setShapeStretch(null)
+    setSnapResult(null)
+    if (st) setShapeEdit(se => (se && se.segs !== st.base ? { ...se, history: [...se.history, st.base] } : se))
+  }
+  function cancelStretch() {
+    const st = shapeStretch
+    setShapeStretch(null)
+    setSnapResult(null)
+    if (st) setShapeEdit(se => (se ? { ...se, segs: st.base } : se))
+  }
+  // Typed size across the line (depth / length): Tab = apply live, Enter = place.
+  function stretchToSize(size: number, place: boolean) {
+    const st = shapeStretch
+    if (!st || size < 1) return
+    const segs = pushPullEdge(st.base, st.i, size - sizeAcross(st.base, st.i))
+    if (place) {
+      setShapeStretch(null)
+      setShapeEdit(se => (se ? { ...se, segs, history: [...se.history, st.base] } : se))
+    } else {
+      setShapeEdit(se => (se ? { ...se, segs } : se))
+    }
+  }
+
+  // Typed / button edits from the edit panel.
+  const shapeOps = {
+    setLength: (i: number, len: number, keep: EdgeLengthKeep) => applyShape(s => setEdgeLength(s, i, len, keep)),
+    pushPull: (i: number, d: number) => applyShape(s => pushPullEdge(s, i, d)),
+    addCorner: (i: number) => applyShape(s => splitSegment(s, i), { kind: 'v', i: i + 1 }),
+    deleteCorner: (i: number) => applyShape(s => deleteVertex(s, i), null),
+    round: (i: number, r: number) => applyShape(s => filletVertex(s, i, r), null),
+    chamfer: (i: number, d: number) => applyShape(s => chamferVertex(s, i, d), null),
+    toggleCurve: (i: number) => applyShape(s => toggleCurve(s, i)),
+    /** Corner i to local X / Y (mm from the back-left 0,0). */
+    setCorner: (i: number, l: { x: number; y: number }) =>
+      applyShape(s => (shapeEdit ? moveVertex(s, i, btWorld(shapeEdit.frame, l)) : s)),
+  }
+
   // ── Cutout operations ──────────────────────────────────────────────────────
 
   function handleDeleteCutout(btId: string, cutoutIndex: number) {
@@ -510,6 +658,30 @@ export function useBenchtopInteraction(p: Params) {
   function handlePointerMove(wp: Pt): boolean {
     // A press on a top never drags it (P-f) — just swallow the move.
     if (btPressRef.current) return true
+
+    if (mode === 'edit_benchtop_shape') {
+      const d = shapeDragRef.current
+      if (!d && shapeStretch && shapeEdit) {
+        const segs = pushPullEdge(shapeStretch.base, shapeStretch.i,
+          lineOffset(shapeStretch.base, shapeStretch.i, shapeStretch.start, wp, shapeEdit.btId))
+        setShapeEdit(se => (se ? { ...se, segs } : se))
+        return true
+      }
+      if (!d || !shapeEdit) return true
+      if (!d.moved && Math.hypot(wp.x - d.start.x, wp.y - d.start.y) < 3 / zoom) return true
+      d.moved = true
+      const n = d.base.length
+      let segs = d.base
+      if (d.kind === 'v') {
+        segs = moveVertex(d.base, d.i, snapWorld(wp, d.base[(d.i - 1 + n) % n].p0, shapeEdit.btId))
+      } else if (d.base[d.i].type === 'line') {
+        segs = pushPullEdge(d.base, d.i, lineOffset(d.base, d.i, d.start, wp, shapeEdit.btId))
+      } else {
+        segs = d.base.map((s, k) => (k === d.i ? setCurveThrough(s, wp) : s))
+      }
+      setShapeEdit(se => (se ? { ...se, segs } : se))
+      return true
+    }
 
     if (mode === 'move_benchtop') {
       setBtMoveCursor(snapWorld(wp, btMoveBase ?? undefined))
@@ -569,6 +741,24 @@ export function useBenchtopInteraction(p: Params) {
       const now = Date.now(), last = lastBtClickRef.current
       if (last && last.id === id && now - last.t < 400) { lastBtClickRef.current = null; openShapeEditor(id) }
       else lastBtClickRef.current = { id, t: now }
+      return true
+    }
+
+    if (mode === 'edit_benchtop_shape') {
+      const d = shapeDragRef.current
+      shapeDragRef.current = null
+      setSnapResult(null)
+      // A click anywhere while a stretch follows the mouse places it.
+      if (!d) { if (shapeStretch) finishStretch(); return true }
+      if (d.moved) {
+        setShapeEdit(se => (se ? { ...se, history: [...se.history, d.base] } : se))
+      } else if (d.kind === 'e') {
+        // Click on a line: Alt = curve <-> straight, Shift = add a corner there,
+        // plain = start a cabinet-style stretch (straight lines).
+        if (d.alt) shapeOps.toggleCurve(d.i)
+        else if (d.shift) applyShape(s => splitSegmentAt(s, d.i, wp), { kind: 'v', i: d.i + 1 })
+        else if (d.base[d.i].type === 'line') setShapeStretch({ i: d.i, base: d.base, start: wp })
+      }
       return true
     }
 
@@ -810,7 +1000,9 @@ export function useBenchtopInteraction(p: Params) {
     setBtCutoutStart(null); setBtCutoutCursor(null)
     setBtJoinStart(null); setBtJoinCursor(null)
     setBtMoveBase(null); setBtMoveCursor(null)
-    setBenchtopMenuOpen(false)
+    shapeDragRef.current = null
+    setShapeStretch(null)
+    setShapeEdit(null)
   }
 
   function undoVertex() {
@@ -863,6 +1055,8 @@ export function useBenchtopInteraction(p: Params) {
     handleReanchor,
     startMoveBenchtop,
     btMoveBase, btMoveCursor,
+    shapeEdit, startShapeEdit, cancelShapeEdit, commitShapeEdit, shapeEditUndo, setShapeSel, shapeHandleDown, shapeOps,
+    shapeStretch, finishStretch, cancelStretch, stretchToSize,
     btDepth, setBtDepth, drawAnchor, drawCursor, previewTyped, placeTyped, closePolygon,
 
     handlePointerMove,

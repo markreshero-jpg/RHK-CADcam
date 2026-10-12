@@ -14,7 +14,7 @@ import {
 } from './canvasDB'
 import CalcInput from '@/src/components/CalcInput'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
-import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
+import { isShapedPanelKey, zonePartId } from '@/src/lib/cabinetShape/partKeys'
 
 // Resolved base size of every part that can carry an override, keyed by the
 // same part id used in partOverrides, in RAW part axes (CV convention:
@@ -29,7 +29,7 @@ export function buildBaseDims(rp?: ResolvedCabinet): Map<string, BaseDims> {
   rp.case_parts.forEach(p    => m.set(`case_${p.part_key}`,                 { dy: p.DY, dx: p.DX, dz: p.DZ }))
   rp.toekick_parts.forEach(p => m.set(`tk_${p.part_key}_${p.sort_order}`,   { dy: p.DY, dx: p.DX, dz: p.DZ }))
   rp.internal_parts.forEach(p => m.set(`int_${p.part_type}_${p.sort_order}`, { dy: p.DY, dx: p.DX, dz: p.DZ }))
-  rp.face_zones.forEach(z => { if (z.face_type !== 'open') m.set(`zone_${z.row_index}_${z.col_index}`, { dy: z.DY, dx: z.DX, dz: z.DZ }) })
+  rp.face_zones.forEach(z => { if (z.face_type !== 'open') m.set(zonePartId(z), { dy: z.DY, dx: z.DX, dz: z.DZ }) })
   ;(rp.drawer_stacks ?? []).forEach(s => s.box_parts.forEach(p =>
     m.set(`db_${s.face_zone_row}_${s.face_zone_col}_${p.part_type}`, { dy: p.DY, dx: p.DX, dz: p.DZ })))
   return m

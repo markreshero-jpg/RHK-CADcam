@@ -24,9 +24,23 @@ export interface FaceResolution {
 const EPS = 1e-6
 const round1 = (n: number) => Math.round(n * 10) / 10
 
+// One front facet of a shaped cabinet (z_cabinet_shape Phase 3): the opening
+// is `width` wide with these end reveals (negative = the door runs past the
+// edge end, e.g. into a mitre), in a facet-local frame where X runs from the
+// facet's left end and Z is still measured against cab.DZ. resolveShapedFace
+// then turns the zones onto the facet.
+export interface FaceFrame {
+  width:  number
+  revL:   number
+  revR:   number
+  /** resolved_doors key prefix ('' = primary front). */
+  doorKeyPrefix: string
+}
+
 export function resolveFace(
   cab: CabinetInput,
-  r: ConstructionRules
+  r: ConstructionRules,
+  frame?: FaceFrame,
 ): FaceResolution {
   const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }
   const ebId = cab.door_edgeband_id
@@ -36,15 +50,15 @@ export function resolveFace(
   // kick. A kick-detached member (has_toekick=false) carries no kick, so its faces
   // run flush to the carcase bottom (its kick lives in the standalone kick assembly).
   const TK  = (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner' || !cab.has_toekick) ? 0 : r.TOEH
-  const DX  = cab.DX
+  const DX  = frame ? frame.width : cab.DX
   const DY  = cab.DY
   const DZ  = cab.DZ
   const fid = cab.door_material.id
   const FT  = cab.door_material.DZ   // face material thickness
 
   // ── Resolve reveals ───────────────────────────────────────────
-  const revL = resolveReveal('left',  cab.left_neighbour,  r)
-  const revR = resolveReveal('right', cab.right_neighbour, r)
+  const revL = frame ? frame.revL : resolveReveal('left',  cab.left_neighbour,  r)
+  const revR = frame ? frame.revR : resolveReveal('right', cab.right_neighbour, r)
   const revT = r.REVT
   const revB = r.REVB
 
@@ -179,7 +193,12 @@ export function resolveFace(
     // Door style (zone → room → job cascade resolved in loadCabinetInput).
     // Applies to doors, drawer fronts and false panels alike; a blank's
     // catalogue thickness overrides the face material thickness.
-    const door = cab.resolved_doors?.[`${zone.row_index}_${zone.col_index}`]
+    // Facets: their own key, else the room/job default ('*') unless the zone
+    // names a style of its own that failed to resolve.
+    const door = frame?.doorKeyPrefix
+      ? cab.resolved_doors?.[`${frame.doorKeyPrefix}.${zone.row_index}_${zone.col_index}`]
+        ?? (zone.door_style_id ? undefined : cab.resolved_doors?.['*'])
+      : cab.resolved_doors?.[`${zone.row_index}_${zone.col_index}`]
     const ft   = door ? door.thickness_mm : FT
 
     // Evaluate the routing profile against the resolved panel dimensions.

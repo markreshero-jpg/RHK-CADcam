@@ -17,6 +17,7 @@ import { caseBox, tkBox3, intBox3, zoneBox3, dbBox3, type Box3 } from '../cabine
 import type { CabinetCustomPart, PartPosOverrides, ShapeSegment } from '../canvasDB'
 import { customExtents } from '@/src/lib/customPartBox'
 import { shapePartLabel } from '../OverridesView'
+import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
 
 export type RefOutline = { label: string; segments: ShapeSegment[] }
 
@@ -37,7 +38,7 @@ export function buildReferenceOutlines(
   for (const p of rp.case_parts)     all.push({ id: `case_${p.part_key}`,                  box: caseBox(p) })
   for (const p of rp.toekick_parts)  all.push({ id: `tk_${p.part_key}_${p.sort_order}`,    box: tkBox3(p) })
   for (const p of rp.internal_parts) all.push({ id: `int_${p.part_type}_${p.sort_order}`,  box: intBox3(p) })
-  for (const z of rp.face_zones)     { if (z.face_type !== 'open') all.push({ id: `zone_${z.row_index}_${z.col_index}`, box: zoneBox3(z) }) }
+  for (const z of rp.face_zones)     { if (z.face_type !== 'open') all.push({ id: zonePartId(z), box: zoneBox3(z) }) }
   for (const s of rp.drawer_stacks ?? [])
     for (const p of s.box_parts)     all.push({ id: `db_${s.face_zone_row}_${s.face_zone_col}_${p.part_type}`, box: dbBox3(p) })
   for (const cp of customParts ?? []) {

@@ -24,6 +24,15 @@ export const EDGE_ROLES: { value: EdgeRole; label: string }[] = [
   { value: 'scribe', label: 'Scribe' },
 ]
 
+// Display names for the preset edge ids (presets.ts); anything else shows its id.
+const EDGE_LABELS: Record<string, string> = {
+  back: 'Back', back2: 'Back (corner wall)', end: 'End', facet: 'Angled facet',
+  front: 'Front', side: 'Side', curve: 'Curve', left: 'Left', right: 'Right',
+}
+export function edgeLabel(id: string): string {
+  return EDGE_LABELS[id] ?? id
+}
+
 export interface FootprintEdge {
   /** Stable id. Faces and role overrides key off this, never the index. */
   id: string

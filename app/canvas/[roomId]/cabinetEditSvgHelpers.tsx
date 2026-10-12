@@ -4,7 +4,7 @@ import React, { useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { caseBox, caseBoxAABB, rotEulerXYZ, type SeamDrill, type OrientedDrill, type DrillAxis } from '@/src/lib/jointDrilling'
+import { caseBox, caseBoxAABB, zoneBoxAABB, rotEulerXYZ, type SeamDrill, type OrientedDrill, type DrillAxis } from '@/src/lib/jointDrilling'
 import type { PartPosOverrides } from './canvasDB'
 import type {
   ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart,
@@ -14,7 +14,7 @@ import type {
 import { slideSilhouettePath, slideSilhouetteOutline, type SlidePlacement } from '@/src/lib/slideSilhouette'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
-import { isShapedPanelKey, isShapedRailKey, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
+import { isShapedPanelKey, isShapedRailKey, shapedPartLabel, zonePartId, parseZonePartId } from '@/src/lib/cabinetShape/partKeys'
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 export const C_PANEL  = '#374151'
@@ -119,7 +119,7 @@ export function tkElevRect(p: ResolvedToekickPart) {
   if (p.part_key === 'spreader_horizontal') return { ex: p.X, ey: p.Y + p.DY, ew: p.DX, eh: p.DY }
   return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
 }
-export function zoneElevRect(z: ResolvedFaceZone)     { return { ex: z.X, ey: z.Y + z.DY, ew: z.DX, eh: z.DY } }
+export function zoneElevRect(z: ResolvedFaceZone)     { const b = zoneBoxAABB(z); return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h } }
 
 // Door-profile overlay for a face zone, mapped into an already-computed SVG rect.
 // Returns inset-frame <rect>s + groove <line>s (face-local mm → rect, y flipped to
@@ -214,7 +214,7 @@ export function intTopRect(p: ResolvedInternalPart) {
       return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX }
   }
 }
-export function zoneTopRect(z: ResolvedFaceZone)      { return { tx: z.X, tz: z.Z, tw: z.DX, td: z.DZ } }
+export function zoneTopRect(z: ResolvedFaceZone)      { const b = zoneBoxAABB(z); return { tx: b.x, tz: b.z, tw: b.w, td: b.d } }
 
 // Side (Z-Y plane, looking left from right)
 export function sideRect(p: ResolvedCasePart): { sz: number; cy_top: number; sw: number; sh: number } | null {
@@ -251,7 +251,7 @@ export function intSideRect(p: ResolvedInternalPart) {
       return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
   }
 }
-export function zoneSideRect(z: ResolvedFaceZone)      { return { sz: z.Z, cy_top: z.Y + z.DY, sw: z.DZ, sh: z.DY } }
+export function zoneSideRect(z: ResolvedFaceZone)      { const b = zoneBoxAABB(z); return { sz: b.z, cy_top: b.y + b.h, sw: b.d, sh: b.h } }
 
 // Drawer box & slide rects
 export function dbElevRect(p: ResolvedDrawerBoxPart) {
@@ -341,7 +341,7 @@ export function svgIntMeta(p: ResolvedInternalPart): PartMeta {
 }
 export function svgZoneMeta(z: ResolvedFaceZone): PartMeta {
   return {
-    id: `zone_${z.row_index}_${z.col_index}`,
+    id: zonePartId(z),
     label: FACE_LABELS_MAP[z.face_type] ?? z.face_type,
     w: z.DX, h: z.DY, d: z.DZ,
     thickness: z.DZ, edge: z.edge_band, materialId: z.material_id, panelKind: 'face', dxIsWidth: true,
@@ -402,8 +402,9 @@ export async function saveSVGEdge(cabId: string, part: PartMeta) {
     const rest = id.slice(4), cut = rest.lastIndexOf('_')
     result = await supabase.from('internal_parts').update({ edge_band_top: edge.top, edge_band_bottom: edge.bottom, edge_band_back: edge.left, edge_band_front: edge.right }).eq('cabinet_instance_id', cabId).eq('part_type', rest.slice(0, cut)).eq('sort_order', parseInt(rest.slice(cut + 1)))
   } else if (id.startsWith('zone_')) {
-    const [row, col] = id.slice(5).split('_').map(Number)
-    result = await supabase.from('face_zones').update(direct).eq('cabinet_instance_id', cabId).eq('row_index', row).eq('col_index', col)
+    const zid = parseZonePartId(id)
+    if (!zid) return
+    result = await supabase.from('face_zones').update(direct).eq('cabinet_instance_id', cabId).eq('facet', zid.facet ?? '').eq('row_index', zid.row).eq('col_index', zid.col)
   } else {
     return
   }

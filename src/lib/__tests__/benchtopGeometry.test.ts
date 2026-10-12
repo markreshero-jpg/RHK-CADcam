@@ -4,6 +4,7 @@ import {
   toggleCurve, filletVertex, chamferVertex, offsetSegments, mapSegments, transformBenchtop,
   outwardNormal, outlineBounds, signedArea, outlinePoints, segMid, segLength,
   nearestOnOutline, lineHitOnOutline, effectiveProfileId, translateFn,
+  pushPullEdge, setEdgeLength, splitSegmentAt, resnapJoins, sizeAcross,
 } from '../benchtopGeometry'
 import type { BenchtopSegment } from '../types'
 
@@ -164,5 +165,57 @@ describe('joins + profiles', () => {
     expect(effectiveProfileId(wall, 'def')).toBeNull()
     expect(effectiveProfileId(plain, 'def')).toBe('def')
     expect(effectiveProfileId({ ...plain, edge: { profile_id: 'own' } }, 'def')).toBe('own')
+  })
+})
+
+describe('in-plan shape editing (Phase 6)', () => {
+  // Edge 2 = front (1000,600)→(0,600); edge 1 = right end (1000,0)→(1000,600).
+  it('push / pull keeps a straight edge parallel and stretches its neighbours', () => {
+    const out = pushPullEdge(rect(), 2, 50)   // front out 50
+    expect(outlineBounds(out)).toMatchObject({ minX: 0, maxX: 1000, minY: 0, maxY: 650 })
+    expect(out.map(s => Math.round(segLength(s)))).toEqual([1000, 650, 1000, 650])
+    expect(closed(out)).toBe(true)
+    expect(out[0].edge?.wall).toBe(true)
+  })
+
+  it('setting an edge length moves the far end cap out square', () => {
+    const out = setEdgeLength(rect(), 0, 1200, 'start')   // back edge 1000 → 1200, left end fixed
+    expect(outlineBounds(out)).toMatchObject({ minX: 0, maxX: 1200, minY: 0, maxY: 600 })
+    expect(out.map(s => Math.round(segLength(s)))).toEqual([1200, 600, 1200, 600])
+    const both = setEdgeLength(rect(), 0, 800, 'both')
+    expect(outlineBounds(both)).toMatchObject({ minX: 100, maxX: 900 })
+    const end = setEdgeLength(rect(), 0, 900, 'end')
+    expect(outlineBounds(end)).toMatchObject({ minX: 100, maxX: 1000 })
+  })
+
+  it('an L leg grows from its end without tilting anything', () => {
+    // L: 3000 back, right leg 1500 deep, 600 wide.
+    const L = segmentsFromLegacy([{ x: 0, y: 0 }, { x: 3000, y: 0 }, { x: 3000, y: 1500 }, { x: 2400, y: 1500 }, { x: 2400, y: 600 }, { x: 0, y: 600 }])
+    const out = setEdgeLength(L, 1, 1800, 'start')   // right wall edge 1500 → 1800
+    expect(out.map(s => [Math.round(s.p0.x), Math.round(s.p0.y)])).toEqual([[0, 0], [3000, 0], [3000, 1800], [2400, 1800], [2400, 600], [0, 600]])
+  })
+
+  it('adds a corner where the edge was clicked, keeping the finish', () => {
+    const out = splitSegmentAt(rect(), 0, { x: 300, y: 7 })
+    expect(out).toHaveLength(5)
+    expect([out[0].p1.x, out[0].p1.y]).toEqual([300, 0])
+    expect(out[0].edge?.wall && out[1].edge?.wall).toBe(true)
+    expect(splitSegmentAt(rect(), 0, { x: 5, y: 0 })).toHaveLength(4)   // too close to a corner
+  })
+
+  it('size across an edge = depth for the front, length for an end', () => {
+    expect(Math.round(sizeAcross(rect(), 2))).toBe(600)
+    expect(Math.round(sizeAcross(rect(), 1))).toBe(1000)
+    // Stretch to a typed size = push by the difference.
+    const out = pushPullEdge(rect(), 2, 650 - sizeAcross(rect(), 2))
+    expect(Math.round(sizeAcross(out, 2))).toBe(650)
+  })
+
+  it('re-snaps join ends onto the reshaped outline', () => {
+    const out = pushPullEdge(rect(), 2, 40)
+    const [j] = resnapJoins(out, [{ p0: { x: 500, y: 0 }, p1: { x: 500, y: 600 }, type: 'butt' }])
+    expect(j.p1).toEqual({ x: 500, y: 640 })
+    const [far] = resnapJoins(out, [{ p0: { x: 500, y: 0 }, p1: { x: 500, y: 900 }, type: 'butt' }])
+    expect(far.p1).toEqual({ x: 500, y: 900 })   // beyond tolerance → left alone
   })
 })
