@@ -1,5 +1,6 @@
 import { supabase } from '@/src/lib/supabase'
-import type { BenchtopInstance, BenchtopBuildMethod, BenchtopScheduleRow, Room, Project } from '@/src/lib/types'
+import type { BenchtopInstance, BenchtopBuildMethod, BenchtopScheduleRow, BenchtopEdgeProfile, Room, Project } from '@/src/lib/types'
+import { resolveClassDims, shopDimsFromSettings } from '@/src/lib/resolver/resolveClassDims'
 import type { BenchtopResolverInput } from './types'
 
 export async function loadBenchtopInput(benchtopId: string): Promise<BenchtopResolverInput | null> {
@@ -117,9 +118,12 @@ export async function loadBenchtopInput(benchtopId: string): Promise<BenchtopRes
   scheduleRows = [...byRole.values()]
 
   // ── Load materials for thickness/name lookup ────────────────────────────
-  const [{ data: boards }, { data: surfaces }] = await Promise.all([
+  const [{ data: boards }, { data: surfaces }, { data: profileRows }, { data: shop }] = await Promise.all([
     supabase.from('materials').select('id, name, dz'),
     supabase.from('benchtop_materials').select('id, name, dz'),
+    // Edge profiles drive generated parts (waterfall legs, aprons) — Phase 4.
+    supabase.from('benchtop_edge_profiles').select('*'),
+    supabase.from('shop_settings').select('*').limit(1).maybeSingle(),
   ])
 
   const boardMaterials = new Map<string, { name: string; dz: number }>(
@@ -129,5 +133,9 @@ export async function loadBenchtopInput(benchtopId: string): Promise<BenchtopRes
     ((surfaces ?? []) as { id: string; name: string; dz: number }[]).map(m => [m.id, m])
   )
 
-  return { benchtop: bt, method, scheduleRows, boardMaterials, surfaceMaterials }
+  // Waterfall leg height: the top sits on the base cabinets (P-c revised).
+  const baseHeight = resolveClassDims('base', { room: rm, project: prj, shop: shopDimsFromSettings(shop as Record<string, unknown> | null) }).dy
+  const profiles = new Map(((profileRows ?? []) as BenchtopEdgeProfile[]).map(p => [p.id, p]))
+
+  return { benchtop: bt, method, scheduleRows, boardMaterials, surfaceMaterials, profiles, baseHeight }
 }

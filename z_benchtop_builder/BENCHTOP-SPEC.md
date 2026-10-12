@@ -7,11 +7,10 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Phase 4 (resolver rewrite) — not started. Inputs are ready:
-> `segments` (edges + profiles), `joins` (pieces), method default profile,
-> P-c waterfall height rule, wall anchor + `wallContacts` (which edges sit on
-> which wall). Phases 3 + 3b done (2026-10-11). P-c revised: tops sit ON the
-> base cabinets (underside = base.dy).
+> **RESUME HERE** → Phase 5 (outputs: supply sheet + cut list / optimiser).
+> Phase 4 done (2026-10-11): shape-true resolver — pieces by joins, per-edge
+> members, profile parts, supply meta. Its rules Q-a…Q-h are PROPOSED defaults
+> with its 3 open questions now locked (2026-10-12).
 
 ---
 
@@ -322,13 +321,57 @@ Built:
   re-anchor to Wall 1 carried it flush to the face; elevation band on
   Island 1 back (re-checked after the P-c revision: 900 → 920 for 20 mm stone); 3D slab selected. Test row restored.
 
-### Phase 4 — Resolver rewrite  `[ ]`
-- Split shape into pieces by joins; parts per piece; per-edge rails/strips from
-  actual edges (not bbox); construction-specific rules; profile-generated parts
-  (apron, waterfall); cutouts carried through.
-- `outsourced` → supply items (piece shape, area, lineal m per profile, cutouts,
-  waterfalls), not cut parts.
-- Unit tests on rectangle, L, U, island w/ waterfall.
+### Phase 4 — Resolver rewrite  `[x]` (2026-10-11)
+Started on Mark's go ("start phase 4"). Rules Q-a…Q-h are Claude's defaults —
+**PROPOSED, Mark to confirm or change** (open questions at the end).
+
+- **Q-a Pieces** — the outline is cut by its join lines (`pieces.ts`
+  `splitIntoPieces`: join ends are made outline vertices, the loop is cut along
+  the chord; joins that miss the outline are skipped). One worktop / stone /
+  subtop panel per piece, sized along the piece's long axis (its longest straight
+  edge) — rotated tops size correctly. Shaped pieces carry `outline` (part frame).
+  Labels gain "— Piece n" only when there are joins.
+- **Q-b Perimeter members** — a build-up strip / rail along EVERY piece edge (wall,
+  exposed, join, curved). Butt corners: the member along the long axis runs
+  through, the other is set back (strip width / board thickness); else the longer
+  runs through. Mitre (`corner_join_type`): all full length. Rectangles give
+  exactly the Phase 2 numbers (old tests unchanged).
+- **Q-c Cross members** — at the method spacing along the long axis; each is cut
+  to the top's real width at that point (scanline), minus set-backs.
+- **Q-d Fascias** — front / back / side from the exposed edges per piece (front =
+  long-axis edges facing away from the wall; island: the longest exposed side).
+- **Q-e Waterfall leg** (`waterfall_panel`) — worktop material at worktop
+  thickness; width = edge length; length = sits-at + thickness (mitre, 45° top)
+  or sits-at (butt). Base height comes from the cascade (loader).
+- **Q-f Apron strip** (`apron_strip`) — profile `generates = apron`: edge length ×
+  `apron_drop_mm`, worktop material + thickness.
+- **Q-g Cutouts** — assigned to the piece holding their centre; recorded in
+  `meta.cutouts` (w × h, round) — not cut out of build-up members.
+- **Q-h Outsourced** — worktop / stone / waterfall / apron parts are supply items;
+  every top panel carries `meta`: area m², lineal mm per profile code, cutouts,
+  waterfall count, joins (type + length).
+- Shared `topThickness` / `topRow` (resolver) now also drive the canvas display
+  thickness (`useBenchtopCatalog`) — the elevation draws what the parts list cuts.
+  Fixed: the top's material came from the worktop row even for stone-slab-only
+  methods.
+- Migration `benchtop_p4_resolved_pieces` (`migration_p4_resolved_pieces.sql`):
+  `benchtop_resolved_parts.piece / outline / meta`. New roles are text values.
+- Panel parts list shows "shaped" + area / lineal m / cutouts / joins; Reports
+  tags supply items "— supply" (Phase 5 moves them to a supply sheet).
+- Tests: 9 new (`__tests__/pieces.test.ts`) — L split by a mitre join, single-
+  piece L members + set-backs, cross members at real width, rotated top, island
+  waterfall mitre / butt, outsourced meta, apron, stale join. 268/268.
+- Verified live: Kitchen → one 1073 × 560 20mm Stone supply item (0.6 m², ARR
+  3.27 lm); Living Benchtop 2 with a temporary butt join + WF ends → two 1218 × 426
+  pieces, mitred leg 920, butt leg 900. Restored + re-resolved.
+
+**Phase 4 questions — LOCKED by Mark 2026-10-12 (defaults kept):**
+1. Single-piece L / U (no join): cross members only across the long run; the
+   return leg gets perimeter members, no cross members.
+2. Built-up waterfall legs: one worktop-thickness panel (no build-up on the leg);
+   perimeter members still run along the waterfall edge under the top.
+3. Non-square corners (45° join chords): set-back taken along the edge, not
+   angle-adjusted.
 
 ### Phase 5 — Outputs  `[ ]`
 - Reports: benchtop supply sheet (stone/laminate order), lineal m per profile.

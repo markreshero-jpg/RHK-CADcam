@@ -1,365 +1,310 @@
-import type { BenchtopScheduleRow, BenchtopPartRole } from '@/src/lib/types'
-import type { BenchtopResolverInput, ResolvedBenchtopPart } from './types'
+// ── Benchtop resolver (Phase 4) ──────────────────────────────────────────────
+// Spec: z_benchtop_builder/BENCHTOP-SPEC.md (Phase 4, decisions Q-a … Q-h).
+//
+// Shape-true: the outline (segments) is cut into pieces by its join lines and
+// every part comes from a piece's real edges — no bounding box of the whole
+// top. Per piece:
+//   worktop / stone / subtop   one panel, sized along the piece's long axis
+//                              (outline kept when shaped)
+//   build-up perimeter         a member along every edge (wall, exposed, join);
+//                              butt corners: the member along the long axis runs
+//                              through, the other is set back; mitre: full length
+//   build-up cross members     across the long axis at the method spacing, each
+//                              cut to the top's real width at that point
+//   fascias                    front / back / side from the exposed edges
+//   profile parts              waterfall legs + apron strips from edge profiles
+// Outsourced construction: worktop / stone / profile parts are supply items
+// carrying area, lineal metres per profile, cutouts and joins in `meta`.
+
+import type { BenchtopScheduleRow, BenchtopPartRole, BenchtopBuildMethod, BenchtopEdgeProfile } from '@/src/lib/types'
+import type { BenchtopResolverInput, ResolvedBenchtopPart, BenchtopPartMeta } from './types'
 import { DEFAULT_CROSS_MEMBER_SPACING } from './construction'
+import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, outlinePoints } from '@/src/lib/benchtopGeometry'
+import {
+  splitIntoPieces, pieceFrame, pieceArea, isRectangle, crossIntervals, edgeLength, pieceContains,
+  type PieceSeg, type PieceFrame,
+} from './pieces'
 
-// ── Geometry helpers ──────────────────────────────────────────────────────────
+type Mat = Map<string, { name: string; dz: number }>
+type P = { x: number; y: number }
+const dot = (a: P, b: P) => a.x * b.x + a.y * b.y
+const r1 = (n: number) => Math.round(n * 10) / 10
 
-type Pt = { x: number; y: number }
+// ── Material lookup ──────────────────────────────────────────────────────────
 
-function edgeLen(a: Pt, b: Pt): number {
-  const dx = b.x - a.x, dy = b.y - a.y
-  return Math.sqrt(dx * dx + dy * dy)
+const rowFor = (rows: BenchtopScheduleRow[], role: BenchtopPartRole) => rows.find(r => r.part_role === role)
+const boardThickness = (row: BenchtopScheduleRow | undefined, m: Mat, fallback = 18) =>
+  (row?.material_id ? m.get(row.material_id)?.dz : undefined) ?? fallback
+const surfaceThickness = (row: BenchtopScheduleRow | undefined, m: Mat, fallback = 20) =>
+  (row?.benchtop_material_id ? m.get(row.benchtop_material_id)?.dz : undefined) ?? fallback
+const boardName = (row: BenchtopScheduleRow | undefined, m: Mat) => (row?.material_id ? m.get(row.material_id)?.name ?? null : null)
+const surfaceName = (row: BenchtopScheduleRow | undefined, m: Mat) => (row?.benchtop_material_id ? m.get(row.benchtop_material_id)?.name ?? null : null)
+
+// The schedule row the top itself is made from: the worktop row when the
+// method makes a worktop panel, else the stone slab row.
+export function topRow(method: BenchtopBuildMethod, rows: BenchtopScheduleRow[]): BenchtopScheduleRow | undefined {
+  const order: BenchtopPartRole[] = method.active_part_roles.includes('worktop_panel') || !method.active_part_roles.includes('stone_slab')
+    ? ['worktop_panel', 'stone_slab'] : ['stone_slab', 'worktop_panel']
+  return rowFor(rows, order[0]) ?? rowFor(rows, order[1])
 }
 
-// Approximate quadratic bezier arc length via subdivision (20 steps)
-function arcLen(p0: Pt, cp: Pt, p1: Pt, steps = 20): number {
-  let len = 0, px = p0.x, py = p0.y
-  for (let i = 1; i <= steps; i++) {
-    const t = i / steps, u = 1 - t
-    const x = u * u * p0.x + 2 * u * t * cp.x + t * t * p1.x
-    const y = u * u * p0.y + 2 * u * t * cp.y + t * t * p1.y
-    const dx = x - px, dy = y - py
-    len += Math.sqrt(dx * dx + dy * dy)
-    px = x; py = y
-  }
-  return len
-}
-
-interface BBoxResult {
-  minX: number; maxX: number; minY: number; maxY: number
-  bboxDx: number; bboxDy: number
-}
-
-function polygonBBox(polygon: Pt[]): BBoxResult {
-  const xs = polygon.map(p => p.x), ys = polygon.map(p => p.y)
-  const minX = Math.min(...xs), maxX = Math.max(...xs)
-  const minY = Math.min(...ys), maxY = Math.max(...ys)
-  return { minX, maxX, minY, maxY, bboxDx: maxX - minX, bboxDy: maxY - minY }
-}
-
-interface EdgeAnalysis {
-  exposedFrontLength: number
-  exposedBackLength:  number
-  exposedEndEdges:    number[]
-}
-
-// Classifies each non-wall polygon edge into front/back (along primary axis)
-// or end (perpendicular to primary axis), then sums/collects their lengths.
-function analyzeEdges(
-  polygon: Pt[],
-  edgeTags: Array<{ edge_index: number; type: string }>,
-  primaryIsX: boolean,
-  midPerp: number,
-  arcSegs: Array<{ edge_index: number; cpx: number; cpy: number }> = [],
-): EdgeAnalysis {
-  const n = polygon.length
-  let exposedFrontLength = 0
-  let exposedBackLength  = 0
-  const exposedEndEdges: number[] = []
-
-  for (let i = 0; i < n; i++) {
-    const p    = polygon[i]
-    const next = polygon[(i + 1) % n]
-    const isWall = edgeTags.some(t => t.edge_index === i && t.type === 'wall')
-    if (isWall) continue
-
-    const arc = arcSegs.find(a => a.edge_index === i)
-    const len = arc ? arcLen(p, { x: arc.cpx, y: arc.cpy }, next) : edgeLen(p, next)
-    const absDx = Math.abs(next.x - p.x)
-    const absDy = Math.abs(next.y - p.y)
-
-    if (primaryIsX ? absDx > absDy : absDy > absDx) {
-      // Along-primary edge → front or back based on position
-      const midEdgePerp = primaryIsX ? (p.y + next.y) / 2 : (p.x + next.x) / 2
-      if (midEdgePerp <= midPerp) {
-        exposedFrontLength += len
-      } else {
-        exposedBackLength += len
-      }
-    } else {
-      // Perpendicular edge → side fascia
-      exposedEndEdges.push(len)
-    }
-  }
-
-  return {
-    exposedFrontLength: Math.round(exposedFrontLength),
-    exposedBackLength:  Math.round(exposedBackLength),
-    exposedEndEdges,
-  }
-}
-
-// ── Material lookup helpers ───────────────────────────────────────────────────
-
-function rowFor(scheduleRows: BenchtopScheduleRow[], role: BenchtopPartRole) {
-  return scheduleRows.find(r => r.part_role === role)
-}
-
-function boardThickness(
-  row: BenchtopScheduleRow | undefined,
-  boardMaterials: Map<string, { name: string; dz: number }>,
-  fallback = 18,
-): number {
-  if (!row?.material_id) return fallback
-  return boardMaterials.get(row.material_id)?.dz ?? fallback
-}
-
-function surfaceThickness(
-  row: BenchtopScheduleRow | undefined,
-  surfaceMaterials: Map<string, { name: string; dz: number }>,
-  fallback = 20,
-): number {
-  if (!row?.benchtop_material_id) return fallback
-  return surfaceMaterials.get(row.benchtop_material_id)?.dz ?? fallback
-}
-
-function boardName(
-  row: BenchtopScheduleRow | undefined,
-  boardMaterials: Map<string, { name: string; dz: number }>,
-): string | null {
-  if (!row?.material_id) return null
-  return boardMaterials.get(row.material_id)?.name ?? null
-}
-
-function surfaceName(
-  row: BenchtopScheduleRow | undefined,
-  surfaceMaterials: Map<string, { name: string; dz: number }>,
-): string | null {
-  if (!row?.benchtop_material_id) return null
-  return surfaceMaterials.get(row.benchtop_material_id)?.name ?? null
+/** Worktop thickness + finished edge thickness (worktop + build-up). Shared with the canvas display. */
+export function topThickness(method: BenchtopBuildMethod, rows: BenchtopScheduleRow[], boards: Mat, surfaces: Mat): { top: number; total: number } {
+  const wt = topRow(method, rows)
+  const top = wt?.material_id ? boardThickness(wt, boards) : surfaceThickness(wt, surfaces, method.construction === 'outsourced' ? 20 : 33)
+  if (method.construction === 'buildup_flat') return { top, total: top + boardThickness(rowFor(rows, 'buildup_rail'), boards, top) }
+  if (method.construction === 'buildup_vertical') return { top, total: top + (Number(method.buildup_rail_depth) || top) }
+  return { top, total: top }
 }
 
 // ── Main resolver ─────────────────────────────────────────────────────────────
 
 export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenchtopPart[] {
   const { benchtop, method, scheduleRows, boardMaterials, surfaceMaterials } = input
-  const { polygon, edge_tags, arc_segments } = benchtop
+  const profiles = input.profiles ?? new Map<string, BenchtopEdgeProfile>()
   const {
     construction, active_part_roles, buildup_rail_depth, strip_width_mm,
     cross_member_spacing_mm, drop_front_height, grain_direction, corner_join_type,
   } = method
-  // Outsourced surfaces (stone, laminate) are ordered, not cut.
   const outsourced = construction === 'outsourced'
+  const roles = new Set(active_part_roles)
 
-  if (polygon.length < 3) return []
+  const segs = btSegments(benchtop)
+  if (segs.length < 3) return []
+  const pieces = splitIntoPieces(segs, benchtop.joins ?? [])
+  const multi = pieces.length > 1
+  const thick = topThickness(method, scheduleRows, boardMaterials, surfaceMaterials)
+  const sitsAt = benchtop.height_mm ?? input.baseHeight ?? 900
 
-  const bbox      = polygonBBox(polygon)
-  const primaryIsX = bbox.bboxDx >= bbox.bboxDy
-  const runLength  = Math.round(Math.max(bbox.bboxDx, bbox.bboxDy))
-  const benchDepth = Math.round(Math.min(bbox.bboxDx, bbox.bboxDy))
-  const midPerp    = primaryIsX
-    ? (bbox.minY + bbox.maxY) / 2
-    : (bbox.minX + bbox.maxX) / 2
-
-  const edges = analyzeEdges(polygon, edge_tags, primaryIsX, midPerp, arc_segments ?? [])
+  const profileOf = (s: PieceSeg) => {
+    if (s.join || s.edge?.wall) return undefined
+    const id = effectiveProfileId(s, method.default_edge_profile_id)
+    return id ? profiles.get(id) : undefined
+  }
 
   const parts: ResolvedBenchtopPart[] = []
+  const push = (p: Omit<ResolvedBenchtopPart, 'supply_item'> & { supply_item?: boolean }) =>
+    parts.push({ supply_item: false, piece: null, outline: null, meta: null, ...p })
 
-  function push(p: Omit<ResolvedBenchtopPart, 'supply_item'> & { supply_item?: boolean }) {
-    parts.push({ ...p, supply_item: p.supply_item ?? false })
+  // Worktop-material row: profile parts (waterfall legs, aprons) use it too.
+  const wtRow = topRow(method, scheduleRows)
+  const wtMaterial = {
+    material_id:            wtRow?.material_id ?? null,
+    material_name:          boardName(wtRow, boardMaterials),
+    benchtop_material_id:   wtRow?.benchtop_material_id ?? null,
+    benchtop_material_name: surfaceName(wtRow, surfaceMaterials),
   }
 
-  // ── worktop_panel ────────────────────────────────────────────────────────
+  pieces.forEach((piece, k) => {
+    const ps = piece.segs
+    const f = pieceFrame(ps)
+    const pieceNo = multi ? k + 1 : null
+    const sfx = multi ? ` — Piece ${k + 1}` : ''
+    const rect = isRectangle(ps)
+    const outline = rect ? null : outlinePoints(ps, 8).map(f.toLocal).map(p => ({ x: r1(p.x), y: r1(p.y) }))
+    const normals = ps.map((_, i) => outwardNormal(ps, i))
+    const isPar = (i: number) => ps[i].type === 'line' && Math.abs(dot(dirOf(ps[i]), f.u)) > 0.9
 
-  if (active_part_roles.includes('worktop_panel')) {
-    const row = rowFor(scheduleRows, 'worktop_panel')
-    // Board worktop (built-up / solid) takes its thickness from the board;
-    // otherwise it's a surface material (laminate, stone).
-    const thick = row?.material_id
-      ? boardThickness(row, boardMaterials)
-      : surfaceThickness(row, surfaceMaterials, 33)
-    push({
-      part_role: 'worktop_panel',
-      label: 'Worktop Panel',
-      length_mm: runLength,
-      width_mm: benchDepth,
-      thickness_mm: thick,
-      quantity: 1,
-      grain_direction,
-      material_id:            row?.material_id ?? null,
-      material_name:          boardName(row, boardMaterials),
-      benchtop_material_id:   row?.benchtop_material_id ?? null,
-      benchtop_material_name: surfaceName(row, surfaceMaterials),
-      edgeband_id:            row?.edgeband_id ?? null,
-      supply_item:            outsourced,
-    })
-  }
-
-  // ── Build-up: perimeter rails/strips + cross members ─────────────────────
-  // Only for build-up construction. The "set-back" is how far a member
-  // intrudes inward from the edge — it's what end members and cross members
-  // are shortened by at a butt joint:
-  //   buildup_flat     — strips lie flat: part width = strip_width_mm,
-  //                      set-back = strip width.
-  //   buildup_vertical — rails on edge:   part width = buildup_rail_depth (height),
-  //                      set-back = board thickness.
-  // Mitre corners: perimeter members all run full length, mitred.
-
-  const flat = construction === 'buildup_flat'
-  const memberWidth = flat ? strip_width_mm : construction === 'buildup_vertical' ? buildup_rail_depth : null
-  const memberLabel = flat ? 'Build-Up Strip' : 'Build-Up Rail'
-
-  if (memberWidth && active_part_roles.includes('buildup_rail')) {
-    const row   = rowFor(scheduleRows, 'buildup_rail')
-    const thick = boardThickness(row, boardMaterials)
-    const setBack = flat ? memberWidth : thick
-
-    const common = {
-      part_role: 'buildup_rail' as BenchtopPartRole,
-      width_mm: memberWidth,
-      thickness_mm: thick,
-      grain_direction: 'length' as const,
-      material_id:            row?.material_id ?? null,
-      material_name:          boardName(row, boardMaterials),
-      benchtop_material_id:   null,
-      benchtop_material_name: null,
-      edgeband_id:            row?.edgeband_id ?? null,
+    // Front / back: exposed long-axis edges facing away from the wall are the
+    // front. No wall edge (island): the side the longest exposed edge faces.
+    const wallIdx = ps.map((s, i) => i).filter(i => ps[i].edge?.wall && isPar(i))
+    const refN = wallIdx.length
+      ? neg(normals[longest(ps, wallIdx)])
+      : normals[longest(ps, ps.map((_, i) => i).filter(i => isPar(i) && !ps[i].join && !ps[i].edge?.wall))] ?? { x: 0, y: 1 }
+    const kind = (i: number): 'Back' | 'Join' | 'Front' | 'Ends' => {
+      const s = ps[i]
+      if (s.join) return 'Join'
+      if (s.edge?.wall) return 'Back'
+      if (isPar(i)) return dot(normals[i], refN) > 0 ? 'Front' : 'Back'
+      return 'Ends'
     }
 
-    push({ ...common, label: `${memberLabel} — Front`, length_mm: runLength, quantity: 1 })
-    push({ ...common, label: `${memberLabel} — Back`,  length_mm: runLength, quantity: 1 })
+    // ── Order / quoting detail for this piece ──
+    const lineal: Record<string, number> = {}
+    let waterfalls = 0
+    ps.forEach(s => {
+      const prof = profileOf(s)
+      if (!prof) return
+      const code = prof.code ?? prof.name
+      lineal[code] = Math.round((lineal[code] ?? 0) + edgeLength(s))
+      if (prof.generates === 'waterfall') waterfalls++
+    })
+    const cutouts = (benchtop.cutout_polygons ?? [])
+      .filter(c => c.length >= 3 && pieceContains(ps, centroidOf(c)))
+      .map(c => {
+        const l = c.map(f.toLocal), xs = l.map(p => p.x), ys = l.map(p => p.y)
+        return { w: Math.round(Math.max(...xs) - Math.min(...xs)), h: Math.round(Math.max(...ys) - Math.min(...ys)), round: c.length >= 16 }
+      })
+    const joins = ps.filter(s => s.join).map(s => ({ type: s.join!, length: Math.round(edgeLength(s)) }))
+    const meta: BenchtopPartMeta = {
+      area_m2: Math.round(pieceArea(ps) / 1e4) / 100, shaped: !rect, profiles: lineal, cutouts, waterfalls, joins,
+    }
+    const panel = { length_mm: Math.round(f.length), width_mm: Math.round(f.width), quantity: 1, piece: pieceNo, outline, meta }
 
-    const endLength = corner_join_type === 'mitre'
-      ? benchDepth
-      : Math.max(0, benchDepth - 2 * setBack)
-    push({ ...common, label: `${memberLabel} — Ends`, length_mm: Math.round(endLength), quantity: 2 })
-  }
-
-  if (memberWidth && active_part_roles.includes('buildup_cross_member')) {
-    const row   = rowFor(scheduleRows, 'buildup_cross_member')
-    const thick = boardThickness(row, boardMaterials)
-    // Perimeter members' set-back — cross members sit between them.
-    const railThick = boardThickness(rowFor(scheduleRows, 'buildup_rail'), boardMaterials)
-    const setBack = flat ? memberWidth : railThick
-    // Bays between the end members; one cross member between each pair of bays.
-    const innerRun = Math.max(0, runLength - 2 * setBack)
-    const spacing  = cross_member_spacing_mm || DEFAULT_CROSS_MEMBER_SPACING
-    const count    = Math.max(0, Math.ceil(innerRun / spacing) - 1)
-    if (count > 0) {
+    // ── Worktop / stone / subtop ──
+    if (roles.has('worktop_panel')) {
+      const row = rowFor(scheduleRows, 'worktop_panel')
       push({
-        part_role: 'buildup_cross_member',
-        label: flat ? 'Build-Up Strip — Cross' : 'Build-Up Cross Member',
-        length_mm: Math.round(Math.max(0, benchDepth - 2 * setBack)),
-        width_mm: memberWidth,
-        thickness_mm: thick,
-        quantity: count,
-        grain_direction: 'length',
-        material_id:            row?.material_id ?? null,
-        material_name:          boardName(row, boardMaterials),
-        benchtop_material_id:   null,
-        benchtop_material_name: null,
-        edgeband_id:            row?.edgeband_id ?? null,
+        ...panel, part_role: 'worktop_panel', label: `Worktop Panel${sfx}`,
+        thickness_mm: row?.material_id ? boardThickness(row, boardMaterials) : surfaceThickness(row, surfaceMaterials, 33),
+        grain_direction,
+        material_id: row?.material_id ?? null, material_name: boardName(row, boardMaterials),
+        benchtop_material_id: row?.benchtop_material_id ?? null, benchtop_material_name: surfaceName(row, surfaceMaterials),
+        edgeband_id: row?.edgeband_id ?? null, supply_item: outsourced,
       })
     }
-  }
-
-  // ── subtop ───────────────────────────────────────────────────────────────
-
-  if (active_part_roles.includes('subtop')) {
-    const row   = rowFor(scheduleRows, 'subtop')
-    const thick = boardThickness(row, boardMaterials, 18)
-    push({
-      part_role: 'subtop',
-      label: 'Subtop Panel',
-      length_mm: runLength,
-      width_mm: benchDepth,
-      thickness_mm: thick,
-      quantity: 1,
-      grain_direction,
-      material_id:            row?.material_id ?? null,
-      material_name:          boardName(row, boardMaterials),
-      benchtop_material_id:   null,
-      benchtop_material_name: null,
-      edgeband_id:            row?.edgeband_id ?? null,
-    })
-  }
-
-  // ── stone_slab ───────────────────────────────────────────────────────────
-
-  if (active_part_roles.includes('stone_slab')) {
-    const row   = rowFor(scheduleRows, 'stone_slab')
-    const thick = surfaceThickness(row, surfaceMaterials, 20)
-    push({
-      part_role: 'stone_slab',
-      label: 'Stone Slab',
-      length_mm: runLength,
-      width_mm: benchDepth,
-      thickness_mm: thick,
-      quantity: 1,
-      grain_direction: null,
-      material_id:            null,
-      material_name:          null,
-      benchtop_material_id:   row?.benchtop_material_id ?? null,
-      benchtop_material_name: surfaceName(row, surfaceMaterials),
-      edgeband_id:            null,
-      supply_item:            outsourced,
-    })
-  }
-
-  // ── drop_front_fascia ────────────────────────────────────────────────────
-
-  if (active_part_roles.includes('drop_front_fascia') && drop_front_height && edges.exposedFrontLength > 0) {
-    const row   = rowFor(scheduleRows, 'drop_front_fascia')
-    const thick = boardThickness(row, boardMaterials)
-    push({
-      part_role: 'drop_front_fascia',
-      label: 'Drop Front Fascia',
-      length_mm: edges.exposedFrontLength,
-      width_mm: drop_front_height,
-      thickness_mm: thick,
-      quantity: 1,
-      grain_direction: 'length',
-      material_id:            row?.material_id ?? null,
-      material_name:          boardName(row, boardMaterials),
-      benchtop_material_id:   null,
-      benchtop_material_name: null,
-      edgeband_id:            row?.edgeband_id ?? null,
-    })
-  }
-
-  // ── back_fascia ──────────────────────────────────────────────────────────
-
-  if (active_part_roles.includes('back_fascia') && drop_front_height && edges.exposedBackLength > 0) {
-    const row   = rowFor(scheduleRows, 'back_fascia')
-    const thick = boardThickness(row, boardMaterials)
-    push({
-      part_role: 'back_fascia',
-      label: 'Back Fascia',
-      length_mm: edges.exposedBackLength,
-      width_mm: drop_front_height,
-      thickness_mm: thick,
-      quantity: 1,
-      grain_direction: 'length',
-      material_id:            row?.material_id ?? null,
-      material_name:          boardName(row, boardMaterials),
-      benchtop_material_id:   null,
-      benchtop_material_name: null,
-      edgeband_id:            row?.edgeband_id ?? null,
-    })
-  }
-
-  // ── side_fascia ──────────────────────────────────────────────────────────
-
-  if (active_part_roles.includes('side_fascia') && drop_front_height && edges.exposedEndEdges.length > 0) {
-    const row   = rowFor(scheduleRows, 'side_fascia')
-    const thick = boardThickness(row, boardMaterials)
-    edges.exposedEndEdges.forEach(len => {
+    if (roles.has('stone_slab')) {
+      const row = rowFor(scheduleRows, 'stone_slab')
       push({
-        part_role: 'side_fascia',
-        label: 'Side Fascia',
-        length_mm: Math.round(len),
-        width_mm: drop_front_height,
-        thickness_mm: thick,
-        quantity: 1,
-        grain_direction: 'width',
-        material_id:            row?.material_id ?? null,
-        material_name:          boardName(row, boardMaterials),
-        benchtop_material_id:   null,
-        benchtop_material_name: null,
-        edgeband_id:            row?.edgeband_id ?? null,
+        ...panel, part_role: 'stone_slab', label: `Stone Slab${sfx}`,
+        thickness_mm: surfaceThickness(row, surfaceMaterials, 20), grain_direction: null,
+        material_id: null, material_name: null,
+        benchtop_material_id: row?.benchtop_material_id ?? null, benchtop_material_name: surfaceName(row, surfaceMaterials),
+        edgeband_id: null, supply_item: outsourced,
       })
-    })
-  }
+    }
+    if (roles.has('subtop')) {
+      const row = rowFor(scheduleRows, 'subtop')
+      push({
+        ...panel, part_role: 'subtop', label: `Subtop Panel${sfx}`, meta: null,
+        thickness_mm: boardThickness(row, boardMaterials, 18), grain_direction,
+        material_id: row?.material_id ?? null, material_name: boardName(row, boardMaterials),
+        benchtop_material_id: null, benchtop_material_name: null, edgeband_id: row?.edgeband_id ?? null,
+      })
+    }
 
-  return parts
+    // ── Build-up ──
+    const flat = construction === 'buildup_flat'
+    const memberWidth = flat ? strip_width_mm : construction === 'buildup_vertical' ? buildup_rail_depth : null
+    const memberLabel = flat ? 'Build-Up Strip' : 'Build-Up Rail'
+    const railRow = rowFor(scheduleRows, 'buildup_rail')
+    const railThick = boardThickness(railRow, boardMaterials)
+    const setBack = flat ? Number(memberWidth) : railThick
+
+    if (memberWidth && roles.has('buildup_rail')) {
+      // At a butt corner one member runs through and the other stops against
+      // it: the long-axis member wins, else the longer, else the earlier edge.
+      const runsThrough = (i: number, j: number) => {
+        if (corner_join_type === 'mitre') return true
+        const pi = isPar(i), pj = isPar(j)
+        if (pi !== pj) return pi
+        const li = edgeLength(ps[i]), lj = edgeLength(ps[j])
+        if (Math.abs(li - lj) > 0.5) return li > lj
+        return i < j
+      }
+      const n = ps.length
+      ps.forEach((s, i) => {
+        const prev = (i - 1 + n) % n, next = (i + 1) % n
+        const cut = (runsThrough(i, prev) ? 0 : setBack) + (runsThrough(i, next) ? 0 : setBack)
+        const len = Math.max(0, edgeLength(s) - cut)
+        if (len < 1) return
+        push({
+          part_role: 'buildup_rail', label: `${memberLabel} — ${kind(i)}${s.type !== 'line' ? ' (curved)' : ''}${sfx}`,
+          length_mm: Math.round(len), width_mm: Number(memberWidth), thickness_mm: railThick, quantity: 1,
+          grain_direction: 'length', piece: pieceNo,
+          material_id: railRow?.material_id ?? null, material_name: boardName(railRow, boardMaterials),
+          benchtop_material_id: null, benchtop_material_name: null, edgeband_id: railRow?.edgeband_id ?? null,
+        })
+      })
+    }
+
+    if (memberWidth && roles.has('buildup_cross_member')) {
+      const row = rowFor(scheduleRows, 'buildup_cross_member')
+      const innerRun = Math.max(0, f.length - 2 * setBack)
+      const spacing = cross_member_spacing_mm || DEFAULT_CROSS_MEMBER_SPACING
+      const count = Math.max(0, Math.ceil(innerRun / spacing) - 1)
+      for (let c = 1; c <= count; c++) {
+        const along = setBack + (innerRun * c) / (count + 1)
+        for (const span of crossIntervals(ps, f, along)) {
+          const len = span - 2 * setBack
+          if (len < 1) continue
+          push({
+            part_role: 'buildup_cross_member', label: `${flat ? 'Build-Up Strip — Cross' : 'Build-Up Cross Member'}${sfx}`,
+            length_mm: Math.round(len), width_mm: Number(memberWidth), thickness_mm: boardThickness(row, boardMaterials),
+            quantity: 1, grain_direction: 'length', piece: pieceNo,
+            material_id: row?.material_id ?? null, material_name: boardName(row, boardMaterials),
+            benchtop_material_id: null, benchtop_material_name: null, edgeband_id: row?.edgeband_id ?? null,
+          })
+        }
+      }
+    }
+
+    // ── Fascias (method roles) from the exposed edges ──
+    if (drop_front_height) {
+      const fascia = (role: BenchtopPartRole, label: string, len: number, grain: 'length' | 'width') => {
+        if (len < 1 || !roles.has(role)) return
+        const row = rowFor(scheduleRows, role)
+        push({
+          part_role: role, label: `${label}${sfx}`, length_mm: Math.round(len), width_mm: drop_front_height,
+          thickness_mm: boardThickness(row, boardMaterials), quantity: 1, grain_direction: grain, piece: pieceNo,
+          material_id: row?.material_id ?? null, material_name: boardName(row, boardMaterials),
+          benchtop_material_id: null, benchtop_material_name: null, edgeband_id: row?.edgeband_id ?? null,
+        })
+      }
+      const sum = (want: string) => ps.reduce((a, s, i) => a + (!s.join && !s.edge?.wall && kind(i) === want ? edgeLength(s) : 0), 0)
+      fascia('drop_front_fascia', 'Drop Front Fascia', sum('Front'), 'length')
+      fascia('back_fascia', 'Back Fascia', sum('Back'), 'length')
+      ps.forEach((s, i) => { if (kind(i) === 'Ends') fascia('side_fascia', 'Side Fascia', edgeLength(s), 'width') })
+    }
+
+    // ── Parts generated by edge profiles ──
+    ps.forEach(s => {
+      const prof = profileOf(s)
+      if (!prof || s.type !== 'line') return
+      const len = edgeLength(s)
+      if (prof.generates === 'waterfall') {
+        // Mitre: leg runs to the top surface (45° top end). Butt: the top sits
+        // on the leg, so it stops at the underside.
+        const join = waterfallJoin(s)
+        push({
+          ...wtMaterial, part_role: 'waterfall_panel',
+          label: `Waterfall Leg — ${join === 'mitre' ? 'mitred' : 'butt'}${sfx}`,
+          length_mm: Math.round(join === 'mitre' ? sitsAt + thick.total : sitsAt),
+          width_mm: Math.round(len), thickness_mm: thick.top, quantity: 1,
+          grain_direction: 'length', edgeband_id: wtRow?.edgeband_id ?? null,
+          supply_item: outsourced, piece: pieceNo, meta: { waterfall_join: join },
+        })
+      } else if (prof.generates === 'apron' && prof.apron_drop_mm) {
+        push({
+          ...wtMaterial, part_role: 'apron_strip', label: `Apron Strip (${prof.code ?? prof.name})${sfx}`,
+          length_mm: Math.round(len), width_mm: Number(prof.apron_drop_mm), thickness_mm: thick.top, quantity: 1,
+          grain_direction: 'length', edgeband_id: wtRow?.edgeband_id ?? null,
+          supply_item: outsourced, piece: pieceNo,
+        })
+      }
+    })
+  })
+
+  return groupParts(parts)
 }
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function dirOf(s: PieceSeg): P {
+  const L = Math.hypot(s.p1.x - s.p0.x, s.p1.y - s.p0.y) || 1
+  return { x: (s.p1.x - s.p0.x) / L, y: (s.p1.y - s.p0.y) / L }
+}
+const neg = (p: P): P => ({ x: -p.x, y: -p.y })
+function longest(ps: PieceSeg[], idx: number[]): number {
+  return idx.reduce((b, i) => (b < 0 || edgeLength(ps[i]) > edgeLength(ps[b]) ? i : b), -1)
+}
+function centroidOf(c: P[]): P {
+  return { x: c.reduce((a, p) => a + p.x, 0) / c.length, y: c.reduce((a, p) => a + p.y, 0) / c.length }
+}
+
+// Identical cut parts (same role / label / size / material / piece, no shape
+// or order detail) collapse into one line with a quantity.
+function groupParts(parts: ResolvedBenchtopPart[]): ResolvedBenchtopPart[] {
+  const out: ResolvedBenchtopPart[] = []
+  const byKey = new Map<string, ResolvedBenchtopPart>()
+  for (const p of parts) {
+    if (p.outline || (p.meta && Object.keys(p.meta).length && p.part_role !== 'waterfall_panel')) { out.push(p); continue }
+    const key = [p.part_role, p.label, p.length_mm, p.width_mm, p.thickness_mm, p.material_id, p.benchtop_material_id, p.piece, JSON.stringify(p.meta)].join('|')
+    const hit = byKey.get(key)
+    if (hit) hit.quantity += p.quantity
+    else { const q = { ...p }; byKey.set(key, q); out.push(q) }
+  }
+  return out
+}
+
+export type { PieceFrame }

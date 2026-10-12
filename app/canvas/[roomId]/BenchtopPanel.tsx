@@ -517,7 +517,16 @@ export default function BenchtopPanel({
                   </div>
                   <div className="text-gray-500 mt-0.5">
                     {p.length_mm} × {p.width_mm} × {p.thickness_mm} mm
+                    {p.outline && <span className="ml-1 text-sky-400" title="Shaped piece — cut to its outline; the size is the overall extent">shaped</span>}
                   </div>
+                  {p.meta && (p.meta.area_m2 != null || (p.meta.cutouts?.length ?? 0) > 0) && (
+                    <div className="text-gray-600">
+                      {p.meta.area_m2 != null && <>{p.meta.area_m2} m²</>}
+                      {Object.entries(p.meta.profiles ?? {}).map(([code, mm]) => <span key={code}> · {code} {(mm / 1000).toFixed(2)} lm</span>)}
+                      {(p.meta.cutouts?.length ?? 0) > 0 && <> · {p.meta.cutouts!.length} cutout{p.meta.cutouts!.length > 1 ? 's' : ''}</>}
+                      {(p.meta.joins?.length ?? 0) > 0 && <> · {p.meta.joins!.map(j => j.type).join(', ')} join</>}
+                    </div>
+                  )}
                   {(p.material_name ?? p.benchtop_material_name) && (
                     <div className="text-gray-600 truncate">
                       {p.material_name ?? p.benchtop_material_name}

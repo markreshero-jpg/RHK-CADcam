@@ -91,7 +91,8 @@ function collectBtParts(
     for (const p of btParts) {
       rows.push({
         sourceLabel:  lbl,
-        partDesc:     p.label,
+        // Outsourced stone / laminate: an order item, not a cut part (Phase 5 moves these to a supply sheet).
+        partDesc:     p.supply_item ? `${p.label} — supply` : p.label,
         width:        p.width_mm,
         depth:        p.length_mm,
         thickness:    p.thickness_mm,

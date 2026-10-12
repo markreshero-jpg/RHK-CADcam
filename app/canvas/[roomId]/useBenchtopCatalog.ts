@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import { topThickness } from '@/src/lib/benchtop-resolver/resolver'
+import { isBuildUp } from '@/src/lib/benchtop-resolver/construction'
 import type { BenchtopBuildMethod, BenchtopEdgeProfile, BenchtopInstance, BenchtopScheduleRow, Project, Room } from '@/src/lib/types'
 
 /** Display thickness of a top (elevation / 3D): `total` = finished edge, `top` = the worktop itself. */
@@ -58,21 +60,18 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
   )
 
   // Schedule cascade as loadBenchtopInput (benchtop → method → room → job →
-  // shop default); thickness rules as the resolver's worktop + build-up. Job /
-  // room per-role material overrides are not applied here (display only).
+  // shop default); thickness rule shared with the resolver (topThickness), so
+  // the canvas draws exactly what the parts list cuts. Job / room per-role
+  // material overrides are not applied here (display only).
   const thicknessFor = useCallback((bt: BenchtopInstance): BtThickness => {
     const method = methodFor(bt)
     const schedId = bt.benchtop_schedule_id ?? method?.default_schedule_id ?? room.benchtop_schedule_id
       ?? project?.benchtop_schedule_id ?? schedules.find(s => s.is_default)?.id ?? null
-    const row = (role: string) => rows.find(r => r.schedule_id === schedId && r.part_role === role)
-    const thick = (r: BenchtopScheduleRow | undefined, fallback: number) =>
-      (r?.material_id ? boardDz.get(r.material_id) : r?.benchtop_material_id ? surfaceDz.get(r.benchtop_material_id) : undefined) || fallback
-    const top = thick(row('worktop_panel'), method?.construction === 'outsourced' ? 20 : 33)
-    switch (method?.construction) {
-      case 'buildup_flat':     return { total: top + thick(row('buildup_rail'), top), top, buildUp: true }
-      case 'buildup_vertical': return { total: top + (Number(method.buildup_rail_depth) || top), top, buildUp: true }
-      default:                 return { total: top, top, buildUp: false }
-    }
+    const sched = rows.filter(r => r.schedule_id === schedId)
+    if (!method) return { top: 33, total: 33, buildUp: false }
+    const asMat = (m: Map<string, number>) => new Map([...m].map(([k, dz]) => [k, { name: '', dz }]))
+    const t = topThickness(method, sched, asMat(boardDz), asMat(surfaceDz))
+    return { ...t, buildUp: isBuildUp(method.construction) }
   }, [methodFor, rows, schedules, boardDz, surfaceDz, room.benchtop_schedule_id, project?.benchtop_schedule_id])
 
   return { methods, profiles, profileById, methodFor, defaultProfileIdFor, thicknessFor }

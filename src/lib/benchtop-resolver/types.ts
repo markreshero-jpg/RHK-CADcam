@@ -1,4 +1,4 @@
-import type { BenchtopInstance, BenchtopBuildMethod, BenchtopPartRole, BenchtopGrainDir, BenchtopScheduleRow } from '@/src/lib/types'
+import type { BenchtopInstance, BenchtopBuildMethod, BenchtopPartRole, BenchtopGrainDir, BenchtopScheduleRow, BenchtopEdgeProfile } from '@/src/lib/types'
 
 export type { BenchtopPartRole, BenchtopGrainDir }
 
@@ -8,7 +8,25 @@ export interface BenchtopResolverInput {
   scheduleRows:     BenchtopScheduleRow[]
   boardMaterials:   Map<string, { name: string; dz: number }>
   surfaceMaterials: Map<string, { name: string; dz: number }>
+  /** Edge-profile library by id (apron / waterfall generators, codes). */
+  profiles?:        Map<string, BenchtopEdgeProfile>
+  /** Base cabinet height cascade (room → job → shop); the top's underside unless height_mm overrides. */
+  baseHeight?:      number
 }
+
+/** Order / quoting detail carried on a part (mainly outsourced supply items). */
+export interface BenchtopPartMeta {
+  area_m2?:     number
+  shaped?:      boolean
+  /** Lineal mm per edge profile code on this piece's exposed edges. */
+  profiles?:    Record<string, number>
+  cutouts?:     { w: number; h: number; round: boolean }[]
+  waterfalls?:  number
+  joins?:       BenchtopPartJoin[]
+  /** Waterfall legs: how the leg meets the top. */
+  waterfall_join?: 'butt' | 'mitre'
+}
+export interface BenchtopPartJoin { type: 'butt' | 'mitre'; length: number }
 
 export interface ResolvedBenchtopPart {
   part_role:             BenchtopPartRole
@@ -24,4 +42,9 @@ export interface ResolvedBenchtopPart {
   benchtop_material_name: string | null
   edgeband_id:           string | null
   supply_item:           boolean   // outsourced: report/order only, never cut list
+  /** 1-based piece number when the top is split by joins (null = whole top / not per piece). */
+  piece?:                number | null
+  /** Shaped piece outline, mm, in the part's own frame (x = length, y = width). Null = plain rectangle. */
+  outline?:              { x: number; y: number }[] | null
+  meta?:                 BenchtopPartMeta | null
 }
