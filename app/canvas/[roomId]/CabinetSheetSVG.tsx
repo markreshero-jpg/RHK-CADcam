@@ -7,6 +7,7 @@
 // svg2pdf call per page.
 'use client'
 import type { Wall, CabinetInstance } from '@/src/lib/types'
+import { frontViewHardware } from '@/src/lib/drawerHardwareBoxes'
 import type { ResolvedCabinet, SlideProduct, SlideScheduleEntry, SeamJointAssign } from '@/src/lib/resolver/types'
 import { seamAssignJoint, seamAssignRows } from '@/src/lib/resolver/types'
 import type { CabinetCustomPart, PartPosOverrides } from './canvasDB'
@@ -78,7 +79,7 @@ type HwRow = { item: string; qty: number; note: string }
 type OvP = { X: number; Y: number; Z: number }
 
 export default function CabinetSheetSVG({
-  cab, rp, wall, projectName, roomName, materialNames, paperKey, svgRef, show,
+  cab, rp: rpRaw, wall, projectName, roomName, materialNames, paperKey, svgRef, show,
   partOverrides, customParts, hardware, jointNames,
 }: {
   cab: CabinetInstance
@@ -95,6 +96,8 @@ export default function CabinetSheetSVG({
   hardware?: HardwareCfg
   jointNames?: Record<string, string>
 }) {
+  // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for the elevation.
+  const rp = rpRaw && frontViewHardware(rpRaw)
   const paper = PAPER[paperKey] ?? PAPER.A3L
   const PW = paper.w, PH = paper.h
   const { dx, dy, dz } = cab
@@ -379,7 +382,22 @@ export default function CabinetSheetSVG({
       const hinges = rp.hinge_instances ?? []
       const doorNote = `${doors.length} ${doors.length === 1 ? 'door' : 'doors'}`
       if (hinges.length) {
-        out.push({ item: hardware?.hingeName ?? 'Door hinge', qty: hinges.length, note: doorNote })
+        // Shaped cabinets (z_cabinet_shape decision 10): doors hung on an
+        // off-square panel need an angled hinge — listed per angle, flagged when
+        // the library has none.
+        const square = hinges.filter(h => !h.mount_angle_deg)
+        if (square.length) out.push({ item: hardware?.hingeName ?? 'Door hinge', qty: square.length, note: doorNote })
+        const byAngle = new Map<number, { qty: number; missing: boolean }>()
+        for (const h of hinges) {
+          if (!h.mount_angle_deg) continue
+          const e = byAngle.get(h.mount_angle_deg) ?? { qty: 0, missing: false }
+          e.qty++; e.missing ||= h.angle_matched === false
+          byAngle.set(h.mount_angle_deg, e)
+        }
+        for (const [a, e] of byAngle) out.push({
+          item: `${a > 0 ? '+' : ''}${a}° angled hinge`, qty: e.qty,
+          note: e.missing ? 'NOT IN LIBRARY — order' : '',
+        })
         const plateQty = hinges.filter(h => h.hinge_plate_id).length
         if (plateQty) out.push({ item: 'Hinge plate', qty: plateQty, note: '' })
       } else {

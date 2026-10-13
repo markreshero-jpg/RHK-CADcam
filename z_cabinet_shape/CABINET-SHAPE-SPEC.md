@@ -7,9 +7,10 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Phases 1–2 done + committed (5dca77a). Phase 3a code done
-> 2026-10-12 (uncommitted), needs an in-app check. Next: Phase 3b (hinges +
-> drawers on facets).
+> **RESUME HERE** → Phases 1–2 done (5dca77a), 3a committed (685786f). Phase 3b
+> code done 2026-10-13 (uncommitted): hinges + drawer boxes on every facet,
+> angled-hinge pick, packer / clash warnings. Checked in-app. Library still needs a
+> hinge with Mount° = 45. Next: Phase 3c.
 
 ---
 
@@ -92,7 +93,10 @@ derived from geometry (`src/lib/benchtopAnchor.ts`). Same pattern here.
    available as per-vertex options (S-c).
 10. **Doors on an angled facet hinge on the adjacent side panel with an angled
     hinge** sized to the facet angle (e.g. +45°), flagged on the hardware list
-    (Mark, 2026-10-12).
+    (Mark, 2026-10-12). Built 3b: `hardware_hinges.mount_angle_deg` (library
+    column "Mount°") = corner angle − 90°; the resolver picks the library hinge
+    within 2.5°, else uses the default hinge and flags it (warning
+    HINGE_ANGLE_MISSING, hardware list "NOT IN LIBRARY — order").
 
 ## Proposals (not yet locked)
 
@@ -242,10 +246,37 @@ Design (locked in code, 3a):
       (`PartShape.extrude = 'up'`, incl. the door-swing path); plan draws it turned by AY.
       Test: both doors' back corners and front corners meet within 2 mm.
 - [ ] 3a in-app check
-- [ ] 3b — hinges on facet doors: angled hinge on the adjacent side panel (decision 10; needs a
-      `mount_angle_deg` on hardware_hinges — library today has one hinge, no angle), hinge
-      instances keyed by facet; drawer boxes + slides per facet (width/depth from the inset
-      polygon, turned). Until then: drawer stacks + hinges only on primary zones with AY = 0.
+- [x] 3b — hinges + drawers on every facet (2026-10-13). `resolveShapedHardware.ts`:
+      - **Frame**: facet hardware is resolved in the zone's square frame (before its AY turn) and
+        carries `turn` (HardwareTurn: AY about the zone min corner); `hardwareTurn.ts`
+        (`turnPoint / turnDir / turnDrill`) maps it to cabinet coords. 3D draws it inside
+        `turnZone`; world-fixed drill markers, plan, 2D ortho and the flattened drill lists
+        (`cabinetSlideDrills / cabinetHingeDrills`) turn it; elevations use
+        `frontViewHardware` (view copy: X extent of the turned footprint).
+      - **Hinges** (`hingeMount`): side-hung door on a shaped cabinet hangs on the panel at that
+        end of its facet (left = next edge, right = previous). Plate on the panel's inner face,
+        plate-offset back from the door back plane, bored square into the panel (drill `dir`).
+        Mount angle = corner angle − 90° → angled hinge pick (decision 10). No panel at that end
+        (mitred corner / open / curve) → HINGE_NO_PANEL warning, no plate. Applies to primary
+        doors too (trapezoid / angled end).
+      - **Drawers** (`drawerOpening`): the inner polygon in the zone frame, sliced across the
+        depth; box = widest rectangle within the zone's width that stays inside; depth = deepest
+        with ≥ 100 mm width, less SCRBK + SLIDE_SETBACK, then the usual slide pick. Runner side
+        with no square panel → DRAWER_RUNNER_PACKER (one per facet side); boxes of different
+        facets overlapping in plan + height → DRAWER_FACET_CLASH; < 100 mm depth → DRAWER_NO_ROOM.
+        A rectangle-shaped footprint gives exactly the plain boxes / hinges (tests).
+      - **Ids / DB** (migration_s3b): `hinge_instances.facet` (identity key rebuilt incl. facet),
+        `drawer_box_parts.facet`, RPC merges hinges by facet; resolved hinges are also saved in
+        `resolved_drawer_hw.hinge_instances` (the DB rebuild can't redo facet hinges without the
+        footprint — older saves still rebuild primary square doors only). Part ids:
+        `dbPartId / stackKey` (`db_<edge>.<r>_<c>_<type>` on a facet), hinge ids
+        `hinge_<zoneKey>_<n>`.
+      - Tests: `shapedHardware.test.ts`.
+- [x] 3b in-app check (Mark, 2026-10-13: "looks good")
+- Known gaps (→ 3c): CNC / drill sync skips facet + turned + angled-panel hinges and facet
+  drawers (seamDrillSync); slide `cabinet_member` drills on a shaped cabinet still assume
+  left/right_side; hinge GLB plate/arm models sit as on a square gable; 2D ortho hinge
+  silhouettes skip turned doors.
 - [ ] 3c — cut list shows bevels; optimiser / drilling / trees / labels facet-aware; plan + report
       door swings from resolved zones (today skipped on shaped cabinets); Part Editor outlines.
 

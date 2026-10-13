@@ -7,7 +7,7 @@ import {
   dbLoadPartPosOverrides, dbSavePartPosOverride, dbDeletePartPosOverride,
   type PartPosOverrides,
 } from './canvasDB'
-import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, dbPartId } from '@/src/lib/cabinetShape/partKeys'
 // ── Part label maps ───────────────────────────────────────────────────────────
 
 const CASE_LABELS: Record<string, string> = {
@@ -208,10 +208,10 @@ function buildTree(
 
         const drawerNodes: TreeNode[] = (rp.drawer_stacks ?? []).flatMap(stack => {
           const dbParts: TreeNode[] = stack.box_parts.map(p => makePartNode(
-            `part-${cab.id}-db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`,
+            `part-${cab.id}-${dbPartId(stack, p.part_type)}`,
             DB_LABELS[p.part_type] ?? p.part_type,
             `R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`,
-            { cabinetId: cab.id, wall, ...cabPos, partId: `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`,
+            { cabinetId: cab.id, wall, ...cabPos, partId: dbPartId(stack, p.part_type),
               localX: p.X, localY: p.Y, localZ: p.Z,
               DX: p.DX, DY: p.DY, DZ: p.DZ,
               AX: p.AX, AY: p.AY, AZ: p.AZ,

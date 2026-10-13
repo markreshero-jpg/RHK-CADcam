@@ -93,6 +93,7 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
     // row/col, part_type) so part_operations can attach.
     drawer_box_parts: resolved.drawer_stacks.flatMap(stack =>
       stack.box_parts.map(p => ({
+        facet:         stack.facet ?? '',
         face_zone_row: stack.face_zone_row,
         face_zone_col: stack.face_zone_col,
         part_type:     p.part_type,
@@ -146,10 +147,11 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       door_profile_id:   z.door_profile_id ?? null,
       door_profile:      z.door_profile ?? null,
     })),
-    // Hinges merge by stable identity (cabinet, row, col, sort_order) — fronts
-    // get fresh ids every save. The zone and mounting part ids are looked up
-    // server-side from the mount keys; hinges only exist on the primary facet.
+    // Hinges merge by stable identity (cabinet, facet, row, col, sort_order) —
+    // fronts get fresh ids every save. The zone and mounting part ids are
+    // looked up server-side from the mount keys.
     hinges: resolved.hinge_instances.map(h => ({
+      facet:                   h.facet ?? '',
       row_index:               h.row_index,
       col_index:               h.col_index,
       sort_order:              h.sort_order,
@@ -165,11 +167,14 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       mount_internal_type:     h.mount_target?.internal_part_type ?? null,
       mount_internal_sort:     h.mount_target?.internal_sort_order ?? null,
     })),
-    // Computed drawer hardware, so the room loads it without re-resolving
-    // (dbLoadResolvedParts reads cabinet_instances.resolved_drawer_hw).
+    // Computed drawer hardware + hinges, so the room loads them without
+    // re-resolving (dbLoadResolvedParts reads cabinet_instances.resolved_drawer_hw).
+    // Hinges ride along because a shaped cabinet's facet hinges can't be
+    // rebuilt from the hinge rows alone (they need the footprint).
     drawer_hw: {
       drawer_stacks:   resolved.drawer_stacks,
       internal_slides: resolved.internal_slides,
+      hinge_instances: resolved.hinge_instances,
     },
   }
 }

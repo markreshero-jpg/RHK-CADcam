@@ -23,6 +23,7 @@ import {
 } from './types'
 import { resolveDrawerBox } from './resolveDrawerBox'
 import { slideDrillOps } from '../slideDrilling'
+import { gridForFacet, zoneTurn, type ZoneOpening } from './resolveShapedHardware'
 
 const EPS = 1e-6
 const round1 = (n: number) => Math.round(n * 10) / 10
@@ -104,6 +105,9 @@ export function resolveDrawerStacks(
   cab: CabinetInput,
   r: ConstructionRules,
   resolvedZones: ResolvedFaceZone[],
+  // Shaped cabinets (z_cabinet_shape Phase 3b): the clear opening behind each
+  // drawer front, in the zone's square frame. Absent = the plain box opening.
+  openingOf?: (zone: ResolvedFaceZone) => ZoneOpening | null,
 ): DrawerStackResolution {
   const errors:   ResolverError[] = []
   const warnings: ResolverError[] = []
@@ -133,14 +137,15 @@ export function resolveDrawerStacks(
   const stacks: ResolvedDrawerStack[] = []
 
   for (const zone of drawerZones) {
-    const zoneInput = cab.face_grid.zones.find(
+    const opening = openingOf?.(zone) ?? null
+    const zoneInput = gridForFacet(cab, zone.facet)?.zones.find(
       z => z.row_index === zone.row_index && z.col_index === zone.col_index
     )
     const config = zoneInput?.drawer_type_config
     const drawerType: DrawerType = config?.type ?? cab.default_drawer_type ?? 'system'
 
     const openingHeight = zone.DY   // face zone: DY = height (DX = width)
-    const zoneRef = `[${zone.row_index},${zone.col_index}]`
+    const zoneRef = `${zone.facet ? `${zone.facet} ` : ''}[${zone.row_index},${zone.col_index}]`
 
     if (openingHeight <= 0) {
       errors.push({
@@ -163,7 +168,16 @@ export function resolveDrawerStacks(
     // A cabinet resolved without any slide data at all must still produce geometry
     // (fixtures, previews); only complain when there was hardware to choose from.
     const hasHardware = slideProducts.length > 0 || slideSchedule.length > 0
-    const slide = findSlide(availableDepth, openingHeight, slideProducts, slideSchedule, slideOverride, { clearance })
+    const depthHere = opening ? opening.availableDepth : availableDepth
+    if (opening && depthHere < 100) {
+      errors.push({
+        code: 'DRAWER_NO_ROOM',
+        message: `Drawer ${zoneRef}: only ${round1(Math.max(0, depthHere))}mm of depth behind this front — make it a door or a false front`,
+        part: 'drawer_box',
+      })
+      continue
+    }
+    const slide = findSlide(depthHere, openingHeight, slideProducts, slideSchedule, slideOverride, { clearance })
 
     if (!slide && hasHardware && !slideOverride) {
       const source = slideSchedule.length > 0 ? 'the slide schedule' : 'the slide list'
@@ -171,7 +185,7 @@ export function resolveDrawerStacks(
         code: 'NO_SLIDE_FITS',
         message: `Drawer ${zoneRef}: nothing in ${source} fits a ${round1(openingHeight)}mm opening` +
           (clearance > 0 ? ` with ${round1(clearance)}mm clearance above the box` : '') +
-          ` at ${round1(availableDepth)}mm available depth`,
+          ` at ${round1(depthHere)}mm available depth`,
         part: 'drawer_box',
       })
       continue
@@ -193,7 +207,7 @@ export function resolveDrawerStacks(
 
     const sideDeduction  = slide?.side_deduction   ?? cab.slide_side_deduction
     const runnerThick    = slide?.runner_thickness  ?? 0
-    const nominalLength  = slide?.nominal_length    ?? availableDepth
+    const nominalLength  = slide?.nominal_length    ?? depthHere
 
     // Box height: system drawer uses slide.box_height; five_piece uses opening minus adjustment
     let boxHeight: number
@@ -233,12 +247,30 @@ export function resolveDrawerStacks(
     // faces), so the box spans the opening minus a runner on each side. No IDCL/IDCR
     // here — those are now inner-drawer FACE clearances only (see fittings.ts).
     // Scribes (SCRL/SCRR) shrink the opening like in resolveInternal/resolveCase.
-    const boxWidth = Math.max(1, cab.DX - 2 * T - r.SCRL - r.SCRR - runnerThick * 2)
+    // Shaped: the faces the runners fix to are the opening's sides over the
+    // runner length (zone frame); a side with no square panel needs a packer.
+    const span = opening?.span(nominalLength) ?? null
+    if (opening && !span) {
+      errors.push({ code: 'DRAWER_NO_ROOM', message: `Drawer ${zoneRef}: no clear opening for a ${round1(nominalLength)}mm runner`, part: 'drawer_box' })
+      continue
+    }
+    const leftMemberX  = span ? span.x0 : T + r.SCRL
+    const rightMemberX = span ? span.x1 : cab.DX - T - r.SCRR
+    if (opening && span) {
+      // One warning per facet side, not per drawer.
+      const where = zone.facet ? `on the ${zone.facet} facet` : 'on the front'
+      for (const [side, x] of [['left', span.x0], ['right', span.x1]] as const) {
+        const message = `Drawers ${where}: the ${side} runners have no square panel to fix to — need packers or rear brackets`
+        if (!opening.squarePanelAt(x, nominalLength) && !warnings.some(w => w.message === message))
+          warnings.push({ code: 'DRAWER_RUNNER_PACKER', message, part: 'drawer_box' })
+      }
+    }
+    const boxWidth = Math.max(1, rightMemberX - leftMemberX - runnerThick * 2)
     const boxDepth = nominalLength
 
     // Cabinet-space origin of the box — interior left face (T + SCRL) plus the left
     // runner, so the box sits between the two rails which touch the gables.
-    const boxX = T + r.SCRL + runnerThick
+    const boxX = leftMemberX + runnerThick
     // Bottom aligns with the face zone, but never below the interior floor — the
     // lowest drawer's zone.Y sits a panel thickness below it, which would drop the
     // box through the carcase bottom panel.
@@ -299,17 +331,14 @@ export function resolveDrawerStacks(
     }
 
     const slides: ResolvedDrawerSlide[] = [
-      { ...slideBase, side: 'left',  X: T + r.SCRL },
-      { ...slideBase, side: 'right', X: cab.DX - T - r.SCRR - runnerThick },
+      { ...slideBase, side: 'left',  X: leftMemberX },
+      { ...slideBase, side: 'right', X: rightMemberX - runnerThick },
     ]
 
     // Resolve slide-imposed drilling against the REAL resolved parts (not the box
     // envelope) so back setback, dado raise and face overhang land correctly.
     const backPart   = boxParts.find(p => p.part_type === 'db_back')
     const bottomPart = boxParts.find(p => p.part_type === 'db_bottom')
-    // Real gable inner faces (the runner sits IDCL/IDCR clearance inboard of these).
-    const leftMemberX  = T + r.SCRL
-    const rightMemberX = cab.DX - T - r.SCRR
     for (const sl of slides) {
       const sidePart = boxParts.find(p =>
         p.part_type === (sl.side === 'left' ? 'db_left_side' : 'db_right_side'))
@@ -320,6 +349,8 @@ export function resolveDrawerStacks(
     }
 
     stacks.push({
+      ...(zone.facet ? { facet: zone.facet } : {}),
+      ...(opening && zone.AY ? { turn: zoneTurn(zone) } : {}),
       face_zone_row: zone.row_index,
       face_zone_col: zone.col_index,
       drawer_type:   drawerType,

@@ -43,3 +43,16 @@ export function shapedPartLabel(k: string): string | null {
   const kind = m[1] === 'side' ? 'Side' : m[1] === 'back' ? 'Back' : 'Top Rail'
   return `${kind} (${m[2]})`
 }
+
+// ── Drawer hardware on facets (Phase 3b) ───────────────────────
+type StackRef = { face_zone_row: number; face_zone_col: number; facet?: string | null }
+
+/** Lookup key of a drawer stack = its front zone's key. */
+export function stackKey(s: StackRef): string {
+  return zoneKey({ row_index: s.face_zone_row, col_index: s.face_zone_col, facet: s.facet })
+}
+
+/** Part id of a drawer box panel: `db_<r>_<c>_<type>`, `db_<edge>.<r>_<c>_<type>` on a facet. */
+export function dbPartId(s: StackRef, partType: string): string {
+  return `db_${stackKey(s)}_${partType}`
+}

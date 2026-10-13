@@ -5,7 +5,8 @@ import {
   btSegments, outlinePath, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin,
   edgePath, edgeProfileColor, effectiveProfileId,
 } from '@/src/lib/benchtopGeometry'
-import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, HardwareTurn } from '@/src/lib/resolver/types'
+import { turnPoint } from '@/src/lib/resolver/hardwareTurn'
 import { customExtents } from '@/src/lib/customPartBox'
 import {
   Pt, MIN_WALL_LEN, SNAP_PX,
@@ -972,6 +973,18 @@ export default function CanvasSVG({
             const c = (lx: number, lz: number) => { const q = toPlanC(lx, lz); return `${q.x},${q.y}` }
             return `${c(b.x, b.z)} ${c(b.x + b.w, b.z)} ${c(b.x + b.w, b.z + b.d)} ${c(b.x, b.z + b.d)}`
           }
+          // Drawer hardware on a turned facet (z_cabinet_shape 3b) is zone-frame:
+          // turn its corners into cabinet coords first.
+          const turnedCorners = (b: { x: number; z: number; w: number; d: number }, t: HardwareTurn | undefined) =>
+            ([[b.x, b.z], [b.x + b.w, b.z], [b.x + b.w, b.z + b.d], [b.x, b.z + b.d]] as const)
+              .map(([x, z]) => { const [X, , Z] = turnPoint(t, x, 0, z); return { x: X, z: Z } })
+          const hwPoly = (b: { x: number; z: number; w: number; d: number }, t: HardwareTurn | undefined) =>
+            turnedCorners(b, t).map(p => { const q = toPlanC(p.x, p.z); return `${q.x},${q.y}` }).join(' ')
+          const hwRect = (b: { x: number; z: number; w: number; d: number }, t: HardwareTurn | undefined): LocalRect => {
+            if (!t) return b
+            const c = turnedCorners(b, t), xs = c.map(p => p.x), zs = c.map(p => p.z)
+            return { x: Math.min(...xs), z: Math.min(...zs), w: Math.max(...xs) - Math.min(...xs), d: Math.max(...zs) - Math.min(...zs) }
+          }
 
           // Click area + labels follow the layer set: the extent of everything this
           // cabinet actually draws. Nothing drawn → not selectable, no name / size.
@@ -979,8 +992,8 @@ export default function CanvasSVG({
           if (showOutline) drawnRects.push({ x: 0, z: 0, w: displayCab.dx, d: displayCab.dz })
           for (const p of casePartsR) drawnRects.push(caseBoxAABB(p))
           for (const p of kickPartsR) drawnRects.push(tkPlanBox(p))
-          if (layers.show('drawer_boxes'))   for (const ds of rpPlan?.drawer_stacks ?? []) for (const p of ds.box_parts) drawnRects.push(dbBox(p))
-          if (layers.show('drawer_runners')) for (const ds of rpPlan?.drawer_stacks ?? []) for (const sl of ds.slides) drawnRects.push(slideBox(sl))
+          if (layers.show('drawer_boxes'))   for (const ds of rpPlan?.drawer_stacks ?? []) for (const p of ds.box_parts) drawnRects.push(hwRect(dbBox(p), ds.turn))
+          if (layers.show('drawer_runners')) for (const ds of rpPlan?.drawer_stacks ?? []) for (const sl of ds.slides) drawnRects.push(hwRect(slideBox(sl), ds.turn))
           for (const p of resolvedParts?.get(cab.id)?.custom_parts ?? []) {
             if (!p.show_in_room || !layers.show(customPartItem(p))) continue
             const { ex, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
@@ -1101,7 +1114,7 @@ export default function CanvasSVG({
                 if (b.w <= 0 || b.d <= 0) return null
                 const lp = layers.props('drawer_boxes', view.zoom)
                 return (
-                  <polygon key={`db-${si}-${i}`} points={partPoly(b)} data-part={p.part_type}
+                  <polygon key={`db-${si}-${i}`} points={hwPoly(b, ds.turn)} data-part={p.part_type}
                     fill="none" stroke={isSel ? '#e2e8f0' : layers.color('drawer_boxes', palette.drawer_box)} strokeWidth={layers.w('drawer_boxes', 0.6) / view.zoom}
                     strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
                 )
@@ -1111,7 +1124,7 @@ export default function CanvasSVG({
                 if (b.w <= 0 || b.d <= 0) return null
                 const lp = layers.props('drawer_runners', view.zoom)
                 return (
-                  <polygon key={`sl-${si}-${i}`} points={partPoly(b)} data-part={`slide_${s.side}`}
+                  <polygon key={`sl-${si}-${i}`} points={hwPoly(b, ds.turn)} data-part={`slide_${s.side}`}
                     fill={layers.color('drawer_runners', palette.slides)} fillOpacity={0.5 * lp.fillOpacity} stroke={isSel ? '#e2e8f0' : layers.color('drawer_runners', palette.slides)} strokeWidth={layers.w('drawer_runners', 0.6) / view.zoom}
                     strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
                 )

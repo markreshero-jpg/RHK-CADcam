@@ -14,7 +14,7 @@ import {
 } from '@/src/lib/formula'
 import { CUSTOM_ORIENT_LABELS, type CustomOrient } from '@/src/lib/customPartBox'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, zoneKey, dbPartId } from '@/src/lib/cabinetShape/partKeys'
 
 // One dimension/position field: accepts a plain number (fixed), a plain
 // arithmetic calc (e.g. "100+100" → 200, evaluated and stored as the value), OR
@@ -636,7 +636,7 @@ export default function PartsView({
 
     for (const stack of (rp.drawer_stacks ?? [])) {
       for (const p of stack.box_parts as ResolvedDrawerBoxPart[]) {
-        const id = `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`
+        const id = dbPartId(stack, p.part_type)
         result.push({
           id, typeKey: 'drawerbox', typeLabel: 'Drawer Box',
           name: partLabels?.[id] ?? `${DB_PART_LABELS[p.part_type] ?? p.part_type} R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`,
@@ -662,7 +662,7 @@ export default function PartsView({
     // Hinges + plates — one row per physical hinge (qty = row count). No cut
     // dimensions; material column shows the mounting edge / surface.
     for (const h of (rp.hinge_instances ?? [])) {
-      const id = `hinge_${h.row_index}_${h.col_index}_${h.sort_order}`
+      const id = `hinge_${zoneKey(h)}_${h.sort_order}`
       result.push({
         id, typeKey: 'hinge', typeLabel: 'Hinge',
         name: partLabels?.[id] ?? `Hinge (${h.hinge_edge}) R${h.row_index + 1}C${h.col_index + 1} #${h.sort_order + 1}`,
@@ -672,7 +672,7 @@ export default function PartsView({
         isCustom: false, isOverride: false,
       })
       if (h.hinge_plate_id) {
-        const pid = `hplate_${h.row_index}_${h.col_index}_${h.sort_order}`
+        const pid = `hplate_${zoneKey(h)}_${h.sort_order}`
         result.push({
           id: pid, typeKey: 'hinge_plate', typeLabel: 'Hinge Plate',
           name: partLabels?.[pid] ?? `Hinge plate R${h.row_index + 1}C${h.col_index + 1} #${h.sort_order + 1}`,

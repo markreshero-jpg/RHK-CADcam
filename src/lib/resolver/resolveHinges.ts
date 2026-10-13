@@ -30,13 +30,18 @@ import {
   CabinetInput, ResolvedFaceZone, ResolvedCasePart, ResolvedInternalPart,
   ResolvedHingeInstance, ResolvedHingeDrill, ResolvedHingeMountTarget,
   HingeRuleInput, HingeHardwareInput, HingePlateInput, ExistingHingeInput,
-  HingeBoreHole,
+  HingeBoreHole, ResolverError,
 } from './types'
+import {
+  hingeMount, gridForFacet, zoneTurn, type ShapedHardwareCtx, type ShapedMount,
+} from './resolveShapedHardware'
+import { turnDrill } from './hardwareTurn'
 
 // Flatten every hinge's cup + plate drills into one list for overlay rendering.
 export function cabinetHingeDrills(hinges: ResolvedHingeInstance[]): ResolvedHingeDrill[] {
   const out: ResolvedHingeDrill[] = []
-  for (const h of hinges) { out.push(...h.cup_drills, ...h.plate_drills) }
+  // A turned facet door's drills are zone-frame — return cabinet coords.
+  for (const h of hinges) out.push(...[...h.cup_drills, ...h.plate_drills].map(d => turnDrill(h.turn, d)))
   return out
 }
 
@@ -77,11 +82,28 @@ function positions(count: number, span: number, topInset: number, bottomInset: n
   return out
 }
 
+// Shaped cabinets: the hinge built for the angle a door hangs at. Within
+// 2.5° counts as a match; otherwise the default hinge, flagged unmatched.
+function pickHinge(cab: CabinetInput, angle: number): { hw: HingeHardwareInput; matched: boolean } {
+  const hw = cab.hinge_hardware!
+  const pool = [hw, ...(cab.angled_hinges ?? [])]
+  let best: HingeHardwareInput | null = null, bestD = Infinity
+  for (const h of pool) {
+    const d = Math.abs((h.mount_angle_deg ?? 0) - angle)
+    if (d < bestD) { bestD = d; best = h }
+  }
+  return bestD <= 2.5 && best ? { hw: best, matched: true } : { hw, matched: false }
+}
+
 export function resolveHinges(
   cab: CabinetInput,
   zones: ResolvedFaceZone[],
   caseParts: ResolvedCasePart[],
   internalParts: ResolvedInternalPart[],
+  // Shaped cabinets (z_cabinet_shape Phase 3b): hinges on every facet, mounted
+  // on the real adjacent panel; drills are in each zone's square frame.
+  shaped?: ShapedHardwareCtx | null,
+  warnings?: ResolverError[],
 ): ResolvedHingeInstance[] {
   const hw = cab.hinge_hardware
   if (!hw) return []
@@ -93,7 +115,7 @@ export function resolveHinges(
   // Index existing locked instances by identity for preservation.
   const lockedByKey = new Map<string, ExistingHingeInput>()
   for (const e of cab.existing_hinges ?? []) {
-    if (e.y_locked) lockedByKey.set(`${e.row_index}:${e.col_index}:${e.sort_order}`, e)
+    if (e.y_locked) lockedByKey.set(`${e.facet ?? ''}:${e.row_index}:${e.col_index}:${e.sort_order}`, e)
   }
 
   const out: ResolvedHingeInstance[] = []
@@ -108,11 +130,36 @@ export function resolveHinges(
 
     const sideHung = edge === 'left' || edge === 'right'
     const span = sideHung ? doorH : doorW
+    const doorRef = `${z.facet ? `${z.facet} ` : ''}[${z.row_index},${z.col_index}]`
+
+    // Shaped cabinet, side-hung: the panel at that end of the facet decides the
+    // plate position and the hinge angle.
+    let mount: ShapedMount | null = null
+    let doorHw = hw
+    let angleMatched: boolean | undefined
+    if (shaped && sideHung) {
+      const m = hingeMount(cab, shaped, z, edge, plate?.plate_offset_mm ?? 0, caseParts)
+      if ('error' in m) {
+        warnings?.push({ code: 'HINGE_NO_PANEL', message: `Door ${doorRef} hinges ${edge}, but ${m.error} — hinge it the other way or add a panel`, part: 'hinge' })
+      } else {
+        mount = m.mount
+        if (mount.angleDeg) {
+          const pick = pickHinge(cab, mount.angleDeg)
+          doorHw = pick.hw
+          angleMatched = pick.matched
+          if (!pick.matched) warnings?.push({
+            code: 'HINGE_ANGLE_MISSING',
+            message: `Door ${doorRef} hangs on a panel at ${Math.round(90 + mount.angleDeg)}° — needs a ${mount.angleDeg > 0 ? '+' : ''}${mount.angleDeg}° hinge; none in the hinge library (set Mount° on one)`,
+            part: 'hinge',
+          })
+        }
+      }
+    }
 
     // Manual per-door hinge positions (from the face grid) override the shop
     // rules entirely — the user has placed these hinges explicitly.
     // A defined `hinges` array (even empty) is a manual override; undefined = auto.
-    const manual = cab.face_grid?.zones
+    const manual = gridForFacet(cab, z.facet)?.zones
       .find(fz => fz.row_index === z.row_index && fz.col_index === z.col_index)?.hinges
     const useManual = Array.isArray(manual)
 
@@ -125,7 +172,7 @@ export function resolveHinges(
     }
 
     pos.forEach((alongPos, i) => {
-      const key = `${z.row_index}:${z.col_index}:${i}`
+      const key = `${z.facet ?? ''}:${z.row_index}:${z.col_index}:${i}`
       const locked = useManual ? undefined : lockedByKey.get(key)
 
       // Manual hinges use their given position (locked). Otherwise locked
@@ -139,28 +186,35 @@ export function resolveHinges(
 
       // Cup centre in cabinet coords.
       let cupX: number, cupY: number
-      if (hingeEdge === 'left')       { cupX = z.X + hw.cup_x_from_edge_mm;          cupY = z.Y + along }
-      else if (hingeEdge === 'right') { cupX = z.X + doorW - hw.cup_x_from_edge_mm;  cupY = z.Y + along }
-      else if (hingeEdge === 'top')   { cupX = z.X + along;  cupY = z.Y + doorH - hw.cup_x_from_edge_mm }
-      else                            { cupX = z.X + along;  cupY = z.Y + hw.cup_x_from_edge_mm } // bottom
+      if (hingeEdge === 'left')       { cupX = z.X + doorHw.cup_x_from_edge_mm;          cupY = z.Y + along }
+      else if (hingeEdge === 'right') { cupX = z.X + doorW - doorHw.cup_x_from_edge_mm;  cupY = z.Y + along }
+      else if (hingeEdge === 'top')   { cupX = z.X + along;  cupY = z.Y + doorH - doorHw.cup_x_from_edge_mm }
+      else                            { cupX = z.X + along;  cupY = z.Y + doorHw.cup_x_from_edge_mm } // bottom
 
       // z.Z is already the door BACK (mounting) face — resolveFaceZ returns the
       // back plane for both overlay (cabinetDZ + buf) and inset doors. The cup is
       // bored into that face going forward (+Z) into the door.
       const backZ = z.Z
 
-      const cupDrills = buildCupDrills(hw, cupX, cupY, backZ, hingeEdge)
+      const cupDrills = buildCupDrills(doorHw, cupX, cupY, backZ, hingeEdge)
 
-      // Resolve the mounting surface (where the plate fires).
-      const { target, mountX, mountY, mountZ, mountAxis } = resolveMount(
-        hingeEdge, mountSurface, snapTol, cupY, z, caseParts, internalParts, plate,
-      )
-
-      const plateDrills = (plate && target)
-        ? buildPlateDrills(plate, mountX, mountY, mountZ, mountAxis)
-        : []
+      // Resolve the mounting surface (where the plate fires). A shaped
+      // cabinet's door uses the panel at its facet end (none → no plate).
+      let target: ResolvedHingeMountTarget | null
+      let plateDrills: ResolvedHingeDrill[]
+      if (shaped && sideHung) {
+        target = mount?.part_key ? { table: 'case_parts', part_key: mount.part_key as ResolvedCasePart['part_key'] } : null
+        plateDrills = (plate && mount && target) ? buildAngledPlateDrills(plate, mount, cupY) : []
+      } else {
+        const res = resolveMount(hingeEdge, mountSurface, snapTol, cupY, z, caseParts, internalParts, plate)
+        target = res.target
+        plateDrills = (plate && target) ? buildPlateDrills(plate, res.mountX, res.mountY, res.mountZ, res.mountAxis) : []
+      }
 
       out.push({
+        ...(z.facet ? { facet: z.facet } : {}),
+        ...(shaped && z.AY ? { turn: zoneTurn(z) } : {}),
+        ...(mount?.angleDeg ? { mount_angle_deg: mount.angleDeg, angle_matched: angleMatched } : {}),
         row_index:  z.row_index,
         col_index:  z.col_index,
         sort_order: i,
@@ -169,17 +223,17 @@ export function resolveHinges(
         y_locked: yLocked,
         mounting_surface: mountSurface,
         shelf_snap_tolerance_mm: snapTol,
-        hinge_hardware_id: hw.id,
+        hinge_hardware_id: doorHw.id,
         hinge_plate_id: plateId,
         mount_target: target,
         cup_drills: cupDrills,
         plate_drills: plateDrills,
-        model_url:       hw.model_combined_url,
-        model_scale:     hw.model_combined_scale,
-        bore_to_door_mm: hw.bore_centre_to_door_face_mm,
-        open_angle_deg:  hw.open_angle_deg,
-        arm_fold_fraction: hw.model_arm_fold_fraction,
-        cup_x_from_edge_mm: hw.cup_x_from_edge_mm,
+        model_url:       doorHw.model_combined_url,
+        model_scale:     doorHw.model_combined_scale,
+        bore_to_door_mm: doorHw.bore_centre_to_door_face_mm,
+        open_angle_deg:  doorHw.open_angle_deg,
+        arm_fold_fraction: doorHw.model_arm_fold_fraction,
+        cup_x_from_edge_mm: doorHw.cup_x_from_edge_mm,
         plate_model_url:   plate?.model_plate_url ?? null,
         plate_model_scale: plate?.model_plate_scale ?? 1,
         plate_anchor_x:    plate?.model_plate_anchor_x ?? 0,
@@ -352,4 +406,23 @@ function buildPlateDrills(
       kind: 'plate' as const,
     }
   })
+}
+
+// ── Plate drills on an angled panel (shaped cabinets) ──────────────────────────
+// Same plate pattern as a gable: offset_x runs along the panel face toward the
+// front, offset_y up the height; bores go square into the panel.
+function buildAngledPlateDrills(plate: HingePlateInput, m: ShapedMount, cy: number): ResolvedHingeDrill[] {
+  const axis: ResolvedHingeDrill['axis'] = Math.abs(m.into.x) >= Math.abs(m.into.y)
+    ? (m.into.x < 0 ? 'x-' : 'x+')
+    : (m.into.y < 0 ? 'z-' : 'z+')
+  return (plate.mounting_hole_pattern ?? []).map((h: HingeBoreHole) => ({
+    x: m.x + m.along.x * h.offset_x,
+    y: cy + h.offset_y,
+    z: m.z + m.along.y * h.offset_x,
+    axis,
+    dir: { x: m.into.x, y: 0, z: m.into.y },
+    radius: (h.diameter ?? 0) / 2,
+    depthLen: h.depth ?? 0,
+    kind: 'plate' as const,
+  }))
 }

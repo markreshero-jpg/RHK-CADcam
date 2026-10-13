@@ -19,7 +19,8 @@ import { mergeRules } from '@/src/lib/resolver/mergeRules'
 const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 
 // cabinet_instances.resolved_drawer_hw — written by persistResolved.
-type DrawerHw = Pick<ResolvedCabinet, 'drawer_stacks' | 'internal_slides'>
+// hinge_instances: saved since z_cabinet_shape Phase 3b (absent on older saves).
+type DrawerHw = Pick<ResolvedCabinet, 'drawer_stacks' | 'internal_slides'> & Partial<Pick<ResolvedCabinet, 'hinge_instances'>>
 
 // `needsResolve` (optional) collects cabinets whose saved copy can't be drawn
 // as-is and needs a live resolve: drawers but no saved drawer hardware (saved
@@ -222,7 +223,9 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
     }
     // Recover hinges (drills + 3D model fields) from the persisted instances so
     // they render in the canvas + edit modal without a live re-resolve.
-    built.hinge_instances = reconstructHinges(id, built, instancesByCab, hardwareById, plateById, countRules, faceGridById.get(id) ?? null)
+    // Saved resolved hinges win; older saves rebuild them from the hinge rows.
+    built.hinge_instances = drawerHwById.get(id)?.hinge_instances
+      ?? reconstructHinges(id, built, instancesByCab, hardwareById, plateById, countRules, faceGridById.get(id) ?? null)
     if (needsResolve) {
       const hasDrawers = built.face_zones.some(z => z.face_type === 'drawer_face')
         || built.internal_parts.some(p => p.part_type.startsWith('inner_drawer') || p.part_type.startsWith('pull_out'))
@@ -341,7 +344,9 @@ function reconstructHinges(
     hinge_hardware: hw, hinge_plate: plate, hinge_count_rules: countRules, existing_hinges: existing,
     face_grid: faceGrid ?? undefined,
   } as unknown as CabinetInput
-  return resolveHinges(cab, built.face_zones, built.case_parts, built.internal_parts)
+  // Facet / turned doors of a shaped cabinet need its footprint — they only
+  // come back from the saved resolved hinges.
+  return resolveHinges(cab, built.face_zones.filter(z => !z.facet && !z.AY), built.case_parts, built.internal_parts)
 }
 
 export async function dbSaveWall(data: Omit<Wall, 'id' | 'created_at'>): Promise<Wall | null> {

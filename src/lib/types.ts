@@ -433,6 +433,8 @@ export interface HardwareHinge {
   hinge_type:          HingeType
   default_hinge_edge:  HingeEdge
   opening_angle:       number | null
+  // Angled hinge: (door ↔ mounting panel angle) − 90°; 0 = ordinary (z_cabinet_shape decision 10).
+  mount_angle_deg:     number
   overlay:             number | null
   cup_diameter:        number | null   // mm — editable, never hardcoded
   cup_depth_mm:        number | null

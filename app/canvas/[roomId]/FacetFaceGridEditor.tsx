@@ -5,8 +5,8 @@
 // the chosen facet is edited as a stand-in cabinet as wide as the facet:
 //   primary facet → cabinet.face_grid (zone ids zone_<r>_<c>, unchanged)
 //   other facets  → cabinet.faces[edgeId]
-// The resolved overlays are narrowed to that facet's zones; hinges, drawer
-// boxes and internals stay on the primary facet only (Phase 3b).
+// The resolved overlays — zones, hinges, drawer stacks (Phase 3b) — are
+// narrowed to that facet. Internals stay on the plain front only.
 
 import { useMemo, useState } from 'react'
 import type { CabinetInstance } from '@/src/lib/types'
@@ -59,8 +59,8 @@ export default function FacetFaceGridEditor({ cabinet, rp, showInternals, onUpda
   const standRp: ResolvedCabinet | undefined = rp && {
     ...rp,
     face_zones: zonesHere,
-    hinge_instances: active.primary ? rp.hinge_instances : [],
-    drawer_stacks: active.primary ? rp.drawer_stacks : [],
+    hinge_instances: (rp.hinge_instances ?? []).filter(h => (h.facet ?? '') === facetKey),
+    drawer_stacks: (rp.drawer_stacks ?? []).filter(s => (s.facet ?? '') === facetKey),
   }
   const update = (id: string, u: Partial<CabinetInstance>) => {
     if (active.primary || !('face_grid' in u)) return onUpdate(id, u)

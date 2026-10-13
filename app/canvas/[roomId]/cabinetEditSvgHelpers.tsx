@@ -14,7 +14,7 @@ import type {
 import { slideSilhouettePath, slideSilhouetteOutline, type SlidePlacement } from '@/src/lib/slideSilhouette'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
-import { isShapedPanelKey, isShapedRailKey, shapedPartLabel, zonePartId, parseZonePartId } from '@/src/lib/cabinetShape/partKeys'
+import { isShapedPanelKey, isShapedRailKey, shapedPartLabel, zonePartId, parseZonePartId, dbPartId } from '@/src/lib/cabinetShape/partKeys'
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 export const C_PANEL  = '#374151'
@@ -354,7 +354,7 @@ export function svgDbMeta(p: ResolvedDrawerBoxPart, stack: ResolvedDrawerStack):
   const isH = p.part_type === 'db_bottom'
   const [w, h, d] = isS ? [p.DZ, p.DY, p.DX] : isH ? [p.DY, p.DZ, p.DX] : [p.DY, p.DX, p.DZ]
   return {
-    id: `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`,
+    id: dbPartId(stack, p.part_type),
     label: DB_PART_LABELS[p.part_type] ?? p.part_type,
     w, h, d, thickness: p.DZ, edge: p.edge_band, materialId: p.material_id,
     panelKind: isS ? 'side' : isH ? 'horizontal' : 'face',

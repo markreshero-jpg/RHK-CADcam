@@ -18,6 +18,7 @@ import { cabinetSeamDrills } from '@/src/lib/jointDrilling'
 import { caseFrame, zoneFrame, boxFrame, intFrame, projectToFrame, type FootprintFrame } from './partFootprint'
 import { coalesceByKey } from './coalesce'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import { dbPartId } from '@/src/lib/cabinetShape/partKeys'
 
 const GENERATED_MARK = 'seam_joint'
 
@@ -105,6 +106,9 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
 
   // 2. Hinges → cup holes on the door, plate holes on the mounting gable.
   for (const h of rp.hinge_instances) {
+    // Facet / turned doors and angled-panel plates of shaped cabinets are not
+    // machined yet (z_cabinet_shape Phase 3c) — their drills are zone-frame or off-axis.
+    if (h.facet || h.turn || h.mount_angle_deg) continue
     const opKey = `hinge_${h.row_index}_${h.col_index}_${h.sort_order}`
     const zone = zoneByKey.get(`${h.row_index}:${h.col_index}`)
     for (const cd of h.cup_drills) {
@@ -130,12 +134,14 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
 
   // 3. Slides → cabinet member (gable), drawer front (face), and box panels.
   for (const stack of rp.drawer_stacks) {
+    // Facet / turned drawers of shaped cabinets: not machined yet (z_cabinet_shape 3c).
+    if (stack.facet || stack.turn) continue
     const opKey = `slide_${stack.face_zone_row}_${stack.face_zone_col}`
     const zone = zoneByKey.get(`${stack.face_zone_row}:${stack.face_zone_col}`)
     const boxByType = new Map(stack.box_parts.map(p => [p.part_type, p]))
     // Must match svgDbMeta / normalize's key (db_<row>_<col>_<part_type>) so generated
     // slide drills land on the same part identity the nest/editor use.
-    const dboxKey = (t: string) => `db_${stack.face_zone_row}_${stack.face_zone_col}_${t}`
+    const dboxKey = (t: string) => dbPartId(stack, t)
 
     for (const sl of stack.slides) {
       for (const sd of sl.drills) {

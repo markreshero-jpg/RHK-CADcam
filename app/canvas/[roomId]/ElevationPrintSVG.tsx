@@ -11,6 +11,7 @@
 // mm and the drawing prints at true 1:scale.
 'use client'
 import type { Room, Wall, CabinetInstance } from '@/src/lib/types'
+import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { cabT, wallEnd, dist, cabWallSide } from '@/src/lib/geometry'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone,
@@ -108,7 +109,7 @@ const INK3 = '#999'
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
-  wall, walls, cabinets, room, resolvedParts, svgRef, scale = 20, layers, show, projectName, roomName, paperKey,
+  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, projectName, roomName, paperKey,
 }: {
   wall:          Wall
   walls:         Wall[]
@@ -123,6 +124,8 @@ export default function ElevationPrintSVG({
   roomName:      string
   paperKey:      string
 }) {
+  // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
+  const resolvedParts = frontViewHardwareMap(resolvedPartsRaw)
   const P = scale
   const roomH = wall.height ?? room.room_dy ?? 2400
   // Only cabinets the layer set draws — they also drive the dimension chains.

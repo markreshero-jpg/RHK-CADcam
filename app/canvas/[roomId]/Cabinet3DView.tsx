@@ -24,11 +24,12 @@ import {
 } from '@/src/components/three/PartViewer'
 import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamJointDrillOps, coalesceOpposingDrills, type DrillOpPos } from '@/src/lib/jointDrilling'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
-import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, parseZonePartId } from '@/src/lib/cabinetShape/partKeys'
+import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, parseZonePartId, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import type { ResolvedDoorProfile } from '@/src/lib/resolver/types'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
 import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
+import { turnDrill } from '@/src/lib/resolver/hardwareTurn'
 import { seatNudge, cupAcrossOffset } from '@/src/lib/hingeSilhouette'
 import type { ResolvedSlideDrill } from '@/src/lib/resolver/types'
 import PartEdgeJoints from './PartEdgeJoints'
@@ -194,7 +195,7 @@ function buildIntInfo(p: ResolvedInternalPart, b: Box): PartMeta {
 
 function buildDbPartInfo(p: ResolvedDrawerBoxPart, b: Box, stack: ResolvedDrawerStack): PartMeta {
   return {
-    id:        `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`,
+    id:        dbPartId(stack, p.part_type),
     label:     DB_PART_LABELS[p.part_type] ?? p.part_type,
     w: b.w, h: b.h, d: b.d,
     thickness: p.DZ,
@@ -208,7 +209,7 @@ function buildDbPartInfo(p: ResolvedDrawerBoxPart, b: Box, stack: ResolvedDrawer
 
 function buildSlideInfo(s: ResolvedDrawerSlide, b: Box, stack: ResolvedDrawerStack): PartMeta {
   return {
-    id:        `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`,
+    id:        `slide_${stackKey(stack)}_${s.side}`,
     label:     `Drawer Slide (${s.side})`,
     w: b.w, h: b.h, d: b.d,
     thickness: s.DZ,
@@ -536,7 +537,7 @@ function DrawerAssembly({
         shape={shapes3D?.get(zoneId)}
       /></PartAlpha>}
       {(showBox ? stack.box_parts : []).map((p, pi) => {
-        const id   = `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`
+        const id   = dbPartId(stack, p.part_type)
         const pp   = applyPosOv(p, id, partOverrides)
         const b    = dbBox(pp)
         const info = buildDbPartInfo(p, b, stack)
@@ -561,7 +562,7 @@ function DrawerAssembly({
         )
       })}
       {(showSlides ? stack.slides : []).map((sl, li) => {
-        const id   = `slide_${stack.face_zone_row}_${stack.face_zone_col}_${sl.side}`
+        const id   = `slide_${stackKey(stack)}_${sl.side}`
         const ps   = applyPosOv(sl, id, partOverrides)
         const b    = slideBox(ps)
         const sc   = sl.colour ?? slideColor
@@ -792,7 +793,7 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
 // the dark carcase-joint holes. The scene group is pre-translated by the cabinet
 // half-extents, so absolute coords map directly to local space here.
 function SlideDrillMarkers({ drills, wire, color = '#d97706' }: {
-  drills: { x: number; y: number; z: number; axis: ResolvedSlideDrill['axis']; radius: number; depthLen: number }[]
+  drills: { x: number; y: number; z: number; axis: ResolvedSlideDrill['axis']; radius: number; depthLen: number; dir?: { x: number; y: number; z: number } }[]
   wire?:  boolean
   color?: string
 }) {
@@ -801,6 +802,27 @@ function SlideDrillMarkers({ drills, wire, color = '#d97706' }: {
   return (
     <group>
       {drills.map((d, i) => {
+        // Off-axis bore (a plate on an angled panel / a turned facet's drawer).
+        if (d.dir) {
+          const len = Math.max(2, d.depthLen)
+          const v = new THREE.Vector3(d.dir.x, d.dir.y, d.dir.z).normalize()
+          const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), v)
+          const e = new THREE.Euler().setFromQuaternion(q)
+          const qd = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), v)
+          const ed = new THREE.Euler().setFromQuaternion(qd)
+          return (
+            <group key={i}>
+              <mesh position={[d.x, d.y, d.z]} rotation={[ed.x, ed.y, ed.z]} renderOrder={ro}>
+                <circleGeometry args={[d.radius, 24]} />
+                <meshBasicMaterial color={color} side={THREE.DoubleSide} depthTest={dt} />
+              </mesh>
+              <mesh position={[d.x + v.x * len / 2, d.y + v.y * len / 2, d.z + v.z * len / 2]} rotation={[e.x, e.y, e.z]} renderOrder={ro}>
+                <cylinderGeometry args={[d.radius, d.radius, len, 24, 1, true]} />
+                <meshBasicMaterial color={color} side={THREE.DoubleSide} depthTest={dt} />
+              </mesh>
+            </group>
+          )
+        }
         const isX = d.axis === 'x-' || d.axis === 'x+'
         const isY = d.axis === 'y-' || d.axis === 'y+'
         // Bore travels `depthLen` from the entry point along the axis sign.
@@ -940,7 +962,7 @@ export function buildPartMetaById(
   }
   if (partId.startsWith('db_')) {
     for (const s of rp.drawer_stacks ?? []) {
-      const p = s.box_parts.find(x => `db_${s.face_zone_row}_${s.face_zone_col}_${x.part_type}` === partId)
+      const p = s.box_parts.find(x => dbPartId(s, x.part_type) === partId)
       if (p) return buildDbPartInfo(p, sz(dbBox(applyPosOv(p, partId, partOverrides))), s)
     }
     return null
@@ -1117,7 +1139,7 @@ export function CabinetScene({
   const drawerStackByKey = useMemo(() => {
     const m = new Map<string, ResolvedDrawerStack>()
     for (const s of rp.drawer_stacks ?? []) {
-      m.set(`${s.face_zone_row}_${s.face_zone_col}`, s)
+      m.set(stackKey(s), s)
     }
     return m
   }, [rp.drawer_stacks])
@@ -1160,7 +1182,7 @@ export function CabinetScene({
   const cupDrillsByZone = useMemo(() => {
     const m = new Map<string, ResolvedHingeDrill[]>()
     for (const h of rp.hinge_instances ?? []) {
-      const k = `${h.row_index}_${h.col_index}`
+      const k = zoneKey(h)
       const arr = m.get(k) ?? []
       arr.push(...h.cup_drills)
       m.set(k, arr)
@@ -1173,9 +1195,10 @@ export function CabinetScene({
     if (!showDrilling) return []
     const out: ResolvedHingeDrill[] = []
     for (const h of rp.hinge_instances ?? []) {
-      const edge = zoneEdge.get(`${h.row_index}_${h.col_index}`)
-      if (edge !== 'left' && edge !== 'right') out.push(...h.cup_drills)
-      out.push(...h.plate_drills)
+      // World-fixed: a turned facet door's zone-frame drills → cabinet coords.
+      const edge = zoneEdge.get(zoneKey(h))
+      if (edge !== 'left' && edge !== 'right') out.push(...h.cup_drills.map(d => turnDrill(h.turn, d)))
+      out.push(...h.plate_drills.map(d => turnDrill(h.turn, d)))
     }
     return out
   }, [rp.hinge_instances, zoneEdge, showDrilling])
@@ -1185,7 +1208,7 @@ export function CabinetScene({
     const m = new Map<string, ResolvedHingeInstance[]>()
     for (const h of rp.hinge_instances ?? []) {
       if (!h.model_url && !h.plate_model_url) continue
-      const k = `${h.row_index}_${h.col_index}`
+      const k = zoneKey(h)
       const arr = m.get(k) ?? []
       arr.push(h)
       m.set(k, arr)
@@ -1830,14 +1853,14 @@ export default function Cabinet3DView({
     stacks.forEach((s, i) => {
       const nl     = s.slides[0]?.nominal_length ?? 300
       const travel = nl * Math.max(0.2, 1 - i * 0.2)
-      n.set(`${s.face_zone_row}_${s.face_zone_col}`, travel)
+      n.set(stackKey(s), travel)
     })
     setOpenDrawers(n)
   }
 
   const hasDoors      = rp?.face_zones.some(z => z.face_type === 'door' && z.hinge_side) ?? false
   const hasDrawers    = (rp?.drawer_stacks?.length ?? 0) > 0
-  const drawerZoneIds = new Set((rp?.drawer_stacks ?? []).map(s => `zone_${s.face_zone_row}_${s.face_zone_col}`))
+  const drawerZoneIds = new Set((rp?.drawer_stacks ?? []).map(s => `zone_${stackKey(s)}`))
 
   const innerDrawerIdx = innerDrawerIndexForSelected()
 

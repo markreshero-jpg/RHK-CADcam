@@ -7,7 +7,7 @@ import type {
 } from '@/src/lib/resolver/types'
 import { fmtMm } from '@/src/lib/format'
 import type { PartPosOverrides } from './canvasDB'
-import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, zoneKey, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 
 // ── Expression evaluation ─────────────────────────────────────────────────────
 
@@ -210,7 +210,7 @@ function buildSlideDrillIndex(rp: ResolvedCabinet): Map<string, ResolvedSlideDri
     idx.set(partId, arr)
   }
   for (const stack of rp.drawer_stacks ?? []) {
-    const rc = `${stack.face_zone_row}_${stack.face_zone_col}`
+    const rc = stackKey(stack)
     for (const sl of stack.slides) {
       for (const d of sl.drills) {
         let partId: string | null = null
@@ -330,7 +330,7 @@ function buildSections(rp: ResolvedCabinet, overrides: PartPosOverrides | undefi
   const drawerNodes = (rp.drawer_stacks ?? []).flatMap(stack => {
     const tag = `R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`
     const dbParts = stack.box_parts.map(p => makePart(
-      `db_${stack.face_zone_row}_${stack.face_zone_col}_${p.part_type}`,
+      dbPartId(stack, p.part_type),
       DB_LABELS[p.part_type] ?? p.part_type, tag,
       p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.AX, p.AY, p.AZ, p.material_id, p.part_type, rp, overrides, slideIdx, hingeIdx,
     ))
@@ -350,7 +350,7 @@ function buildSections(rp: ResolvedCabinet, overrides: PartPosOverrides | undefi
     // Hinges grouped by door zone, so each door lists its hinges as children.
     const hingesByZone = new Map<string, ResolvedHingeInstance[]>()
     for (const h of (rp.hinge_instances ?? [])) {
-      const k = `${h.row_index}_${h.col_index}`
+      const k = zoneKey(h)
       const arr = hingesByZone.get(k) ?? []
       arr.push(h); hingesByZone.set(k, arr)
     }
@@ -361,7 +361,7 @@ function buildSections(rp: ResolvedCabinet, overrides: PartPosOverrides | undefi
         z.hinge_side ? `Hinge: ${z.hinge_side}` : undefined,
         z.X, z.Y, z.Z, z.DX, z.DY, z.DZ, z.AX, z.AY, z.AZ, z.material_id, z.face_type, rp, overrides, slideIdx, hingeIdx,
       )
-      const hinges = hingesByZone.get(`${z.row_index}_${z.col_index}`) ?? []
+      const hinges = hingesByZone.get(zoneKey(z)) ?? []
       for (const h of hinges) {
         // Only the cup + anchor bores fire on the door; the plate bores live
         // under the carcass part they drill into (see buildHingeDrillIndex).

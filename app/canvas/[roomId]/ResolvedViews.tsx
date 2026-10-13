@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { zoneKey } from '@/src/lib/cabinetShape/partKeys'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack } from '@/src/lib/resolver/types'
 import type { PartMeta } from '@/src/components/three/PartViewer'
@@ -392,11 +393,12 @@ function hingeSnapPts(
   project: (x: number, y: number, z: number) => { x: number; y: number },
 ): MPt[] {
   const zoneByKey = new Map<string, ResolvedFaceZone>()
-  for (const z of rp.face_zones) if (z.face_type === 'door') zoneByKey.set(`${z.row_index}_${z.col_index}`, z)
+  for (const z of rp.face_zones) if (z.face_type === 'door') zoneByKey.set(zoneKey(z), z)
   const out: MPt[] = []
   for (const h of rp.hinge_instances ?? []) {
-    const z = zoneByKey.get(`${h.row_index}_${h.col_index}`)
-    if (!z || (z.hinge_side !== 'left' && z.hinge_side !== 'right')) continue
+    const z = zoneByKey.get(zoneKey(h))
+    // Turned facet doors: model silhouettes are zone-frame — not projected yet (3c).
+    if (!z || h.turn || (z.hinge_side !== 'left' && z.hinge_side !== 'right')) continue
     const pl = hingePlacement(h, { x: z.X, y: z.Y, z: z.Z, w: z.DX, d: z.DZ }, z.hinge_side)
     const platePl = { ...pl, oX: pl.oX + h.plate_anchor_x, oY: pl.oY + h.plate_anchor_y, oZ: pl.oZ + h.plate_anchor_z }
     for (const [url, p] of [[h.model_url, pl], [h.plate_model_url, platePl]] as const) {

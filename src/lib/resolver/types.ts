@@ -340,6 +340,7 @@ export interface ResolvedSlideDrill {
   surface:  SlideDrillSurface
   side:     'left' | 'right'         // which rail produced it
   machine_operation: JointMachineOp  // drill | route | pocket (for labelling)
+  dir?:     { x: number; y: number; z: number }   // exact bore direction once turned off-axis (cabinetSlideDrills)
 }
 
 // ── Drawer Box Edging ─────────────────────────────────────────
@@ -697,6 +698,11 @@ export interface CabinetInput {
   // resolver can preserve y_locked rows and per-hinge overrides across a
   // re-resolve. Keyed in code by (row_index, col_index, sort_order).
   existing_hinges?:   ExistingHingeInput[]
+  // Angled hinges in the library (mount_angle_deg ≠ 0). A shaped cabinet's
+  // door that hangs on a panel off square picks the one matching that angle
+  // (z_cabinet_shape decision 10).
+  angled_hinges?:     HingeHardwareInput[]
+
 }
 
 // ── Hinge resolver inputs ─────────────────────────────────────────────────────
@@ -729,6 +735,9 @@ export interface HingeHardwareInput {
   // of the door's open angle (0 = arm stays put, 0.5 = folds half, 1 = matches
   // the door). Ignored when the body GLB has no HingeArm mesh.
   model_arm_fold_fraction:     number
+  // (door ↔ mounting panel angle) − 90°: 0 = ordinary hinge, 45 = +45° angled.
+  mount_angle_deg?:            number
+  name?:                       string
 }
 export interface HingePlateInput {
   id:                    string
@@ -744,6 +753,7 @@ export interface HingePlateInput {
   model_plate_anchor_z:  number
 }
 export interface ExistingHingeInput {
+  facet?:                  string
   row_index:               number
   col_index:               number
   sort_order:              number
@@ -767,6 +777,9 @@ export interface ResolvedHingeDrill {
   radius:  number
   depthLen: number
   kind:    'cup' | 'anchor' | 'plate'
+  // Exact bore direction (unit) when the surface is off-axis — a plate on an
+  // angled side panel of a shaped cabinet. `axis` is then the nearest axis.
+  dir?:    { x: number; y: number; z: number }
 }
 // Where the plate fires. part_key identifies a case part; internal_sort_order +
 // internal_part_type identify an internal shelf. persist resolves this to the
@@ -777,7 +790,20 @@ export interface ResolvedHingeMountTarget {
   internal_part_type?: ResolvedInternalPart['part_type']
   internal_sort_order?: number
 }
+// Hardware on a turned front zone (shaped cabinets, z_cabinet_shape Phase 3b)
+// is resolved in the zone's own square frame — the frame the zone has before
+// its AY turn. To reach cabinet coords, rotate by AY (degrees, about +Y) about
+// (X, Y, Z) = the zone's min corner, exactly as the zone itself is turned.
+export interface HardwareTurn { AY: number; X: number; Y: number; Z: number }
+
 export interface ResolvedHingeInstance {
+  facet?:     string          // front facet edge id (absent = primary front)
+  turn?:      HardwareTurn    // set when the door is turned (drills are zone-frame)
+  // Shaped cabinets: the door hangs on a panel off square, needing a hinge built
+  // for this angle (degrees, as hardware_hinges.mount_angle_deg). angle_matched
+  // = false when the library has no such hinge and the default was used.
+  mount_angle_deg?: number
+  angle_matched?:   boolean
   row_index:  number
   col_index:  number
   sort_order: number
@@ -1218,6 +1244,8 @@ export interface ResolvedDrawerSlide {
 }
 
 export interface ResolvedDrawerStack {
+  facet?:        string          // front facet edge id (absent = primary front)
+  turn?:         HardwareTurn    // set on a turned zone: box + slides are zone-frame
   face_zone_row: number
   face_zone_col: number
   drawer_type:   DrawerType

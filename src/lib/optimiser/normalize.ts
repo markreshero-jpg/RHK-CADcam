@@ -9,7 +9,7 @@ import type { OptiPart, OptiRoom, OptiCabinet, SourceTable } from './types'
 import { PART_TYPE_LABELS } from '@/src/lib/partDisplayNames'
 import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
 import { attachShape, type ShapesByCab } from './shapes'
-import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, dbPartId } from '@/src/lib/cabinetShape/partKeys'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -242,7 +242,8 @@ export function normalizeProject(
   // part_comments are keyed by. Must match exactly or hand ops / comments are dropped here.
   for (const r0 of dbp) {
     const type = String(r0.part_type)
-    const { r, base } = sized('drawer_box_parts', r0, `db_${r0.face_zone_row}_${r0.face_zone_col}_${type}`)
+    const id = dbPartId({ face_zone_row: Number(r0.face_zone_row), face_zone_col: Number(r0.face_zone_col), facet: r0.facet as string | null }, type)
+    const { r, base } = sized('drawer_box_parts', r0, id)
     // Box sides/bottom run pos_x front→back (boxFrame dir −1): pos_x=0 is the
     // FRONT edge — 'right' flag for sides, 'top' flag for the bottom panel.
     const pairs: [EdgePair, EdgePair] =
@@ -250,7 +251,7 @@ export function normalizeProject(
       : type === 'db_bottom' ? [['top', 'bottom'], ['left', 'right']]
       : [['bottom', 'top'], ['left', 'right']]
     const eb = ebFields(flagsOf(r), tFor(r), pairs[0], pairs[1])
-    push('drawer_box_parts', r, `db_${r.face_zone_row}_${r.face_zone_col}_${type}`,
+    push('drawer_box_parts', r, id,
       { typeKey: type, base: humanize(type.replace(/^db_/, '')),
         suffix: ` (R${Number(r.face_zone_row) + 1}C${Number(r.face_zone_col) + 1})` },
       (r.grain_direction as string) ?? null, 0, undefined, eb, base)
@@ -275,7 +276,7 @@ export const PART_SELECTS = {
   internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_back,edge_band_front,edge_band_id',
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
-  drawer_box_parts: 'id,cabinet_instance_id,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
+  drawer_box_parts: 'id,cabinet_instance_id,facet,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   custom_parts: 'id,cabinet_instance_id,name,dx,dy,dz,material_id,no_cnc,edge_top,edge_bottom,edge_left,edge_right',
 } as const
 

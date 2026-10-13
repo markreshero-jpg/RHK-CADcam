@@ -110,7 +110,7 @@ const TABS: TabConfig[] = [
   },
   {
     id: 'hinges', label: 'Hinges', table: 'hardware_hinges', initKey: 'hinges',
-    defaults: { name: '', brand: null, hinge_type: 'euro', default_hinge_edge: 'left', cup_diameter: 35, cup_depth_mm: 12, cup_x_from_edge_mm: 22, boring_depth: 13, overlay: 'half', opening_angle: 110, soft_close: true, supplier_code: null, cost_per_unit: null, active: true },
+    defaults: { name: '', brand: null, hinge_type: 'euro', default_hinge_edge: 'left', cup_diameter: 35, cup_depth_mm: 12, cup_x_from_edge_mm: 22, boring_depth: 13, overlay: 'half', opening_angle: 110, mount_angle_deg: 0, soft_close: true, supplier_code: null, cost_per_unit: null, active: true },
     fields: [
       { key: 'name',          label: 'Name',     type: 'text',    w: 150 },
       { key: 'brand',         label: 'Brand',    type: 'text',    w: 90 },
@@ -139,7 +139,10 @@ const TABS: TabConfig[] = [
           { value: 'inset', label: 'Inset' },
         ],
       },
-      { key: 'opening_angle', label: 'Angle°',   type: 'number',  w: 58 },
+      { key: 'opening_angle', label: 'Open°',    type: 'number',  w: 58 },
+      // Angled hinge: (door ↔ mounting panel angle) − 90°, e.g. 45 for a +45°
+      // hinge on a 135° corner. 0 = ordinary. Shaped cabinets pick by this.
+      { key: 'mount_angle_deg', label: 'Mount°', type: 'number',  w: 58 },
       { key: 'soft_close',    label: 'Soft-C',   type: 'boolean', w: 52 },
       { key: 'supplier_code', label: 'Supplier', type: 'text',    w: 90 },
       { key: 'cost_per_unit', label: '$/ea',     type: 'number',  w: 60,  step: '0.01' },

@@ -797,8 +797,9 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
   // All hinge queries are defensive (maybeSingle / tolerant of errors) so the
   // resolver keeps working before the v0.6 migration is applied — a missing
   // table just yields no hinge hardware and resolveCabinet skips hinges.
-  const { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges } =
+  const { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges, angled_hinges } =
     await loadHingeInputs(persisted ? cabinetId : null, cab.room_id as string, projectId, (cab.hardware_overrides ?? {}) as Record<string, unknown>)
+
 
   // ── 14. Kick-run context ────────────────────────────────────────────────────
   // When this cabinet is linked to a kick run, load its role + split settings so
@@ -879,6 +880,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     hinge_plate,
     hinge_count_rules,
     existing_hinges,
+    angled_hinges,
     kick_run,
   }
 }
@@ -960,6 +962,26 @@ function loadHingeSchedule(roomId: string, projectId: string | undefined) {
 // Resolves the hinge schedule (room → project → shop → is_default), loads the
 // chosen cup + plate, the shop hinge_count_rules, and any persisted
 // hinge_instances for this cabinet (so the resolver can preserve y_locked rows).
+const HINGE_COLS = 'id, name, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm, model_arm_fold_fraction, mount_angle_deg'
+
+function toHingeInput(hRow: Record<string, unknown>): HingeHardwareInput {
+  return {
+    id:                 hRow.id as string,
+    name:               (hRow.name as string | undefined) ?? undefined,
+    default_hinge_edge: (hRow.default_hinge_edge as HingeHardwareInput['default_hinge_edge']) ?? 'left',
+    cup_x_from_edge_mm: Number(hRow.cup_x_from_edge_mm ?? 22),
+    cup_diameter:       hRow.cup_diameter != null ? Number(hRow.cup_diameter) : null,
+    cup_depth_mm:       hRow.cup_depth_mm != null ? Number(hRow.cup_depth_mm) : null,
+    anchor_holes:       toHoles(hRow.anchor_holes),
+    model_combined_url:          (hRow.model_combined_url as string | null) ?? null,
+    model_combined_scale:        hRow.model_combined_scale != null ? Number(hRow.model_combined_scale) : 1,
+    bore_centre_to_door_face_mm: hRow.bore_centre_to_door_face_mm != null ? Number(hRow.bore_centre_to_door_face_mm) : null,
+    open_angle_deg:              hRow.opening_angle != null ? Number(hRow.opening_angle) : null,
+    model_arm_fold_fraction:     hRow.model_arm_fold_fraction != null ? Number(hRow.model_arm_fold_fraction) : 0.5,
+    mount_angle_deg:             Number(hRow.mount_angle_deg ?? 0),
+  }
+}
+
 async function loadHingeInputs(
   cabinetId: string | null,   // null = unsaved draft (no persisted hinge_instances)
   roomId: string,
@@ -970,13 +992,14 @@ async function loadHingeInputs(
   hinge_plate:      HingePlateInput | null
   hinge_count_rules: HingeRuleInput[]
   existing_hinges:  ExistingHingeInput[]
+  angled_hinges:    HingeHardwareInput[]
 }> {
   // The schedule cascade + count rules are shared by the whole room (cached);
   // only this cabinet's persisted hinge_instances are per-cabinet.
   const [shared, existingRes] = await Promise.all([
     loadHingeSchedule(roomId, projectId),
     cabinetId
-      ? supabase.from('hinge_instances').select('row_index, col_index, sort_order, y_position_mm, y_locked, hinge_edge, mounting_surface, shelf_snap_tolerance_mm, hinge_plate_id').eq('cabinet_instance_id', cabinetId)
+      ? supabase.from('hinge_instances').select('facet, row_index, col_index, sort_order, y_position_mm, y_locked, hinge_edge, mounting_surface, shelf_snap_tolerance_mm, hinge_plate_id').eq('cabinet_instance_id', cabinetId)
       : Promise.resolve({ data: [] as Record<string, unknown>[] }),
   ])
   const { rulesRes, schedHingeId, schedPlateIdFromSchedule } = shared
@@ -989,6 +1012,7 @@ async function loadHingeInputs(
   }))
 
   const existing_hinges: ExistingHingeInput[] = ((existingRes.data ?? []) as Record<string, unknown>[]).map(e => ({
+    ...(e.facet ? { facet: e.facet as string } : {}),
     row_index:               Number(e.row_index),
     col_index:               Number(e.col_index),
     sort_order:              Number(e.sort_order),
@@ -1010,12 +1034,12 @@ async function loadHingeInputs(
   if (ovHingeId) hingeId = ovHingeId
   if (ovPlateId) schedPlateId = ovPlateId
 
-  if (!hingeId) return { hinge_hardware: null, hinge_plate: null, hinge_count_rules, existing_hinges }
+  if (!hingeId) return { hinge_hardware: null, hinge_plate: null, hinge_count_rules, existing_hinges, angled_hinges: [] }
 
   // Load the cup, and the plate (scheduled plate, else the hinge's default plate).
   const [hingeRes, plateRes] = await cachedCascade(`hingehw:${hingeId}:${schedPlateId ?? 'default'}`, () => Promise.all([
     supabase.from('hardware_hinges')
-      .select('id, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm, model_arm_fold_fraction')
+      .select(HINGE_COLS)
       .eq('id', hingeId).maybeSingle(),
     schedPlateId
       ? supabase.from('hardware_hinge_plates')
@@ -1027,19 +1051,13 @@ async function loadHingeInputs(
   ]))
 
   const hRow = hingeRes.data as Record<string, unknown> | null
-  const hinge_hardware: HingeHardwareInput | null = hRow ? {
-    id:                 hRow.id as string,
-    default_hinge_edge: (hRow.default_hinge_edge as HingeHardwareInput['default_hinge_edge']) ?? 'left',
-    cup_x_from_edge_mm: Number(hRow.cup_x_from_edge_mm ?? 22),
-    cup_diameter:       hRow.cup_diameter != null ? Number(hRow.cup_diameter) : null,
-    cup_depth_mm:       hRow.cup_depth_mm != null ? Number(hRow.cup_depth_mm) : null,
-    anchor_holes:       toHoles(hRow.anchor_holes),
-    model_combined_url:          (hRow.model_combined_url as string | null) ?? null,
-    model_combined_scale:        hRow.model_combined_scale != null ? Number(hRow.model_combined_scale) : 1,
-    bore_centre_to_door_face_mm: hRow.bore_centre_to_door_face_mm != null ? Number(hRow.bore_centre_to_door_face_mm) : null,
-    open_angle_deg:              hRow.opening_angle != null ? Number(hRow.opening_angle) : null,
-    model_arm_fold_fraction:     hRow.model_arm_fold_fraction != null ? Number(hRow.model_arm_fold_fraction) : 0.5,
-  } : null
+  const hinge_hardware: HingeHardwareInput | null = hRow ? toHingeInput(hRow) : null
+
+  // Angled hinges (z_cabinet_shape decision 10): every active library hinge
+  // built for a non-square mount, for shaped cabinets' off-square doors.
+  const angledRes = await cachedCascade('hinges:angled', async () =>
+    await supabase.from('hardware_hinges').select(HINGE_COLS).neq('mount_angle_deg', 0).eq('active', true))
+  const angled_hinges = ((angledRes.data ?? []) as Record<string, unknown>[]).map(toHingeInput)
 
   const pRow = plateRes.data as Record<string, unknown> | null
   const hinge_plate: HingePlateInput | null = pRow ? {
@@ -1056,5 +1074,5 @@ async function loadHingeInputs(
     model_plate_anchor_z:  pRow.model_plate_anchor_z != null ? Number(pRow.model_plate_anchor_z) : 0,
   } : null
 
-  return { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges }
+  return { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges, angled_hinges }
 }

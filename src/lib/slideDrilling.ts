@@ -32,6 +32,7 @@ import type {
   ResolvedDrawerSlide, ResolvedDrawerStack, ResolvedSlideDrill,
   SlideDrillOp, SlideDrillAxis,
 } from './resolver/types'
+import { turnDrill } from './resolver/hardwareTurn'
 
 // Minimal cabinet-space geometry the drill math reads off a part. Both
 // ResolvedDrawerBoxPart (face drawers) and ResolvedInternalPart (inner drawers)
@@ -238,8 +239,9 @@ export function cabinetSlideDrills(
   internalSlides: ResolvedDrawerSlide[] = [],
 ): ResolvedSlideDrill[] {
   const out: ResolvedSlideDrill[] = []
+  // A turned facet's drills are zone-frame — return cabinet coords.
   for (const stack of stacks) {
-    for (const slide of stack.slides) out.push(...slide.drills)
+    for (const slide of stack.slides) out.push(...slide.drills.map(d => turnDrill(stack.turn, d)))
   }
   for (const slide of internalSlides) out.push(...slide.drills)
   return out

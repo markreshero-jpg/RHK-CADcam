@@ -17,7 +17,7 @@ import { caseBox, tkBox3, intBox3, zoneBox3, dbBox3, type Box3 } from '../cabine
 import type { CabinetCustomPart, PartPosOverrides, ShapeSegment } from '../canvasDB'
 import { customExtents } from '@/src/lib/customPartBox'
 import { shapePartLabel } from '../OverridesView'
-import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, dbPartId } from '@/src/lib/cabinetShape/partKeys'
 
 export type RefOutline = { label: string; segments: ShapeSegment[] }
 
@@ -40,7 +40,7 @@ export function buildReferenceOutlines(
   for (const p of rp.internal_parts) all.push({ id: `int_${p.part_type}_${p.sort_order}`,  box: intBox3(p) })
   for (const z of rp.face_zones)     { if (z.face_type !== 'open') all.push({ id: zonePartId(z), box: zoneBox3(z) }) }
   for (const s of rp.drawer_stacks ?? [])
-    for (const p of s.box_parts)     all.push({ id: `db_${s.face_zone_row}_${s.face_zone_col}_${p.part_type}`, box: dbBox3(p) })
+    for (const p of s.box_parts)     all.push({ id: dbPartId(s, p.part_type), box: dbBox3(p) })
   for (const cp of customParts ?? []) {
     if (!cp.visible) continue
     const { ex, ey, ez } = customExtents(cp.orientation ?? 'flat', Number(cp.dx), Number(cp.dy), Number(cp.dz))

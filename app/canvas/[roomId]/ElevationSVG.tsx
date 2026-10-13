@@ -1,5 +1,6 @@
 ﻿'use client'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
+import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, SNAP_PX, type Pt } from '@/src/lib/geometry'
 import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode, MIN_STRETCH } from './canvasTypes'
@@ -197,13 +198,15 @@ export default function ElevationSVG({
   onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu,
   onBlankWallContextMenu, onShiftSelectCabinet, onMarqueeSelect, onEqualizeWidths,
   cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
-  resolvedParts, onDeselect, onSeamClick, elevWallSide, onSetElevWallSide,
+  resolvedParts: resolvedPartsRaw, onDeselect, onSeamClick, elevWallSide, onSetElevWallSide,
   elevSnapSettings, onElevSnapSettingsChange,
   elevSnapResult, setElevSnapResult,
   elevMeasureStart, elevMeasureEnd, elevMeasureCursor,
   setElevMeasureStart, setElevMeasureEnd, setElevMeasureCursor,
   benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop, waterfallOcc,
 }: ElevationSVGProps) {
+  // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
+  const resolvedParts = useMemo(() => frontViewHardwareMap(resolvedPartsRaw), [resolvedPartsRaw])
   const svgRef = useRef<SVGSVGElement>(null)
   const [view, dispatchView] = useReducer(viewReducer, { panX: 80, panY: 60, zoom: 1 })
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)

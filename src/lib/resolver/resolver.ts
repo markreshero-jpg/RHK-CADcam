@@ -19,6 +19,7 @@ import { resolveHinges }         from './resolveHinges'
 import { checkHingeInnerDrawerClash } from './hingeClash'
 import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
 import { resolveShapedFaces } from './resolveShapedFace'
+import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -46,9 +47,9 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     ? (cab.footprint ? resolveShapedFaces(cab, r) : resolveFace(cab, r))
     : { rows: [], cols: [], zones: [], errors: [] }
   allErrors.push(...faceErrors)
-  // Drawer boxes and hinges still assume the box front (z_cabinet_shape Phase
-  // 3b): on shaped cabinets only the primary facet's square zones get them.
-  const boxZones = cab.footprint ? zones.filter(z => !z.facet && !z.AY) : zones
+  // Shaped cabinets (z_cabinet_shape Phase 3b): hinges + drawer boxes on every
+  // facet, fitted to the footprint and built in each zone's square frame.
+  const shapedHw = cab.footprint ? shapedHardwareCtx(cab) : null
 
   // ── 4. Internal Module ────────────────────────────────────────
   const { parts: rectInternalParts, slides: internalSlides, errors: internalErrors } = cab.has_internal
@@ -64,10 +65,11 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     errors: drawerErrors,
     warnings: drawerWarnings,
   } = cab.has_face
-    ? resolveDrawerStacks(cab, r, boxZones)
+    ? resolveDrawerStacks(cab, r, zones, shapedHw ? z => drawerOpening(shapedHw, z, r) : undefined)
     : { stacks: [], errors: [], warnings: [] }
   allErrors.push(...drawerErrors)
   allWarnings.push(...drawerWarnings)
+  if (shapedHw) allWarnings.push(...drawerClashes(drawerStacks))
 
   // ── 6. Seam Joints ────────────────────────────────────────────
   // For each seam that has a joint assigned (per-cabinet or CM default) — carcase
@@ -80,7 +82,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // shop hinge_count_rules; mounting surface resolved against case/internal
   // parts; cup + plate drill positions computed. y_locked instances preserved.
   const hingeInstances = (cab.has_face && cab.hinge_hardware)
-    ? resolveHinges(cab, boxZones, caseParts, internalParts)
+    ? resolveHinges(cab, zones, caseParts, internalParts, shapedHw, allWarnings)
     : []
 
   // ── 6c. Hinge ↔ inner-drawer clash ────────────────────────────
