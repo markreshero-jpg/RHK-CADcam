@@ -43,6 +43,8 @@ import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { PartAlpha } from '@/src/components/three/PartViewer'
 import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
 import { areaSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
+import { handleShape, sharknoseProfile, type HandleShape } from '@/src/lib/handleGeometry'
+import Handle3D from '@/src/components/three/Handle3D'
 
 export type { MatColSpec, MatColMap }
 
@@ -369,7 +371,10 @@ function HingeArmFold({ url, pivot, openAngle, doorsOpen, mirror, scale, color, 
   )
 }
 
-function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, ...partProps }: PartProps & {
+function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, handle, handleAlpha = 1, handleParts, ...partProps }: PartProps & {
+  handle?:    HandleShape | null   // z_handles H2 — swings with the door
+  handleAlpha?: number
+  handleParts?: { bar: boolean; holes: boolean }
   b:          Box
   hingeSide:  'left' | 'right'
   doorsOpen:  boolean
@@ -411,6 +416,7 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, sh
           {doorProfile && <DoorProfile3D profile={doorProfile} b={localB} />}
         </PartAlpha>
       )}
+      {handle && <Handle3D s={handle} offset={[-hingeX, -b.y, -b.z]} opacity={handleAlpha} showBar={handleParts?.bar ?? true} showHoles={handleParts?.holes ?? true} />}
       {/* Door-side hinge body (HingeCupArm = cup + front arm to the knuckle) lives
           inside the rotating group so it swings with the door. The gable-side back
           arm (HingeArm) folds separately near the plate (see below). Local origin
@@ -453,8 +459,9 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, sh
 function DrawerAssembly({
   faceZone, stack, targetTravel, selected, onSelect,
   faceHighlighted, materialColours, ebByMatId, edgeOverrides, wire, partOverrides, dragRef, shapes3D,
-  showFace = true, showBox = true, showSlides = true, roomOutlines, layers,
+  showFace = true, showBox = true, showSlides = true, roomOutlines, layers, handle,
 }: {
+  handle?:           HandleShape | null   // z_handles H2 — slides with the drawer
   roomOutlines?:     boolean
   layers?:           LayerView
   showFace?:         boolean
@@ -536,6 +543,7 @@ function DrawerAssembly({
         rotation={getRotOv(zoneId, partOverrides)}
         shape={shapes3D?.get(zoneId)}
       /></PartAlpha>}
+      {handle && <Handle3D s={handle} opacity={alpha('handles')} showBar={!layers || layers.show('handles')} showHoles={!layers || layers.show('handle_holes')} />}
       {(showBox ? stack.box_parts : []).map((p, pi) => {
         const id   = dbPartId(stack, p.part_type)
         const pp   = applyPosOv(p, id, partOverrides)
@@ -1113,6 +1121,9 @@ export function CabinetScene({
     for (const z of rp.face_zones) {
       const o = zoneBevelOutline(z)
       if (o) m.set(zonePartId(z), { pts: o.map(q => ({ x: q.x, y: z.DZ - q.z })), extrude: 'up' })
+      // Sharknose fronts (z_handles H3): side profile with the back bevel.
+      const sn = sharknoseProfile(z)
+      if (sn) m.set(zonePartId(z), { pts: sn, extrude: 'across' })
     }
     for (const [pid, ov] of Object.entries(shapeOverrides ?? {})) {
       if (pid.startsWith('slide_')) continue
@@ -1464,6 +1475,7 @@ export function CabinetScene({
                 showFace={show('drawer_fronts')}
                 showBox={show('drawer_boxes')}
                 showSlides={show('drawer_runners')}
+                handle={show('drawer_fronts') && (show('handles') || show('handle_holes')) ? handleShape(z) : null}
                 roomOutlines={roomOutlines}
                 layers={layers}
                 key={`f${i}`}
@@ -1508,6 +1520,10 @@ export function CabinetScene({
           shape:             shapes3D.get(id),
         }
 
+        // Handle on a front that doesn't move (lift-up / fixed doors, false panels).
+        const staticShape = showFaceZone && (show('handles') || show('handle_holes')) ? handleShape(z) : null
+        const staticHandle = staticShape ? <Handle3D s={staticShape} opacity={alpha('handles')} showBar={show('handles')} showHoles={show('handle_holes')} /> : null
+
         if (z.face_type === 'door' && (z.hinge_side === 'left' || z.hinge_side === 'right')) {
           const zoneHinges = show('hinges') ? hingesByZone.get(zoneKey(z)) ?? [] : []
           const hingeX = z.hinge_side === 'left' ? b.x : b.x + b.w
@@ -1525,6 +1541,9 @@ export function CabinetScene({
                 hinges={zoneHinges}
                 cupDrills={cupDrillsByZone.get(zoneKey(z))}
                 showDrilling={showDrilling}
+                handle={showFaceZone && (show('handles') || show('handle_holes')) ? handleShape(z) : null}
+                handleAlpha={alpha('handles')}
+                handleParts={{ bar: show('handles'), holes: show('handle_holes') }}
                 {...partProps}
               />
               {/* Plates stay fixed in world space at the bore-centre anchor.
@@ -1588,11 +1607,12 @@ export function CabinetScene({
             <group key={`f${i}`}>
               <PartAlpha a={alpha(faceItem ?? 'doors')}><Part b={b} rotation={getRotOv(id, partOverrides)} shape={shapes3D.get(id)} {...partProps} />
               <DoorProfile3D profile={z.door_profile} b={b} /></PartAlpha>
+              {staticHandle}
             </group>
           )
         }
 
-        return <PartAlpha key={`f${i}`} a={alpha(faceItem ?? 'doors')}><Part key={`f${i}`} b={b} rotation={getRotOv(id, partOverrides)} shape={shapes3D.get(id)} {...partProps} /></PartAlpha>
+        return <group key={`f${i}`}><PartAlpha a={alpha(faceItem ?? 'doors')}><Part b={b} rotation={getRotOv(id, partOverrides)} shape={shapes3D.get(id)} {...partProps} /></PartAlpha>{staticHandle}</group>
       })()))}
       {(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0 && show(customPartItem(p))).map((p, i) => {
         const orient = (p.orientation ?? 'flat') as CustomOrient

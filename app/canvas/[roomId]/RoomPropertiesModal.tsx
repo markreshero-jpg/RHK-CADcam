@@ -58,6 +58,7 @@ const RULE_LABELS: Record<RuleKey, string> = {
   REVENDR: 'End Reveal Right (mm)',
   GAPC:    'Centre Gap (mm)',
   GAPR:    'Drawer Gap (mm)',
+  FPGAP:   'Finger Gap (mm)',
   FACBUF:  'Face Buffer (mm)',
   FACINS:  'Face Inset (mm)',
 }
@@ -69,7 +70,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Adjustable Shelves',keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },
   { label: 'Fixed Shelves',     keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',     keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
-  { label: 'Face Reveals',      keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR'] },
+  { label: 'Face Reveals',      keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR', 'FPGAP'] },
   { label: 'Face Clearance',    keys: ['FACBUF', 'FACINS'] },
 ]
 
@@ -126,6 +127,12 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
   const [drawerBoxMethods, setDrawerBoxMethods] = useState<DrawerBoxMethodItem[]>([])
   const [methodsLoading, setMethodsLoading] = useState(true)
   const [doorStyleOverride, setDoorStyleOverride] = useState(room.door_style_override_id ?? '')
+  // Handle holes (z_handles D13): '' = inherit the job, else 'on' / 'off'.
+  // Stored as rule_overrides.HANDLE_DRILL (outside the construction rule keys).
+  const [handleDrill, setHandleDrill] = useState<'' | 'on' | 'off'>(() => {
+    const v = (room.rule_overrides as Record<string, unknown> | null)?.HANDLE_DRILL
+    return v === true ? 'on' : v === false ? 'off' : ''
+  })
   const [doorStyles, setDoorStyles] = useState<{ id: string; name: string }[]>([])
   const doorPreviews = useDoorStylePreviews()
 
@@ -178,6 +185,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
     for (const k of Object.keys(SYS) as RuleKey[]) {
       if (rules[k] !== jobRules[k]) (newOverrides as Record<string, unknown>)[k] = rules[k]
     }
+    if (handleDrill) (newOverrides as Record<string, unknown>).HANDLE_DRILL = handleDrill === 'on'
     // Serialise cabinet size defaults: keep only axes the user actually set, drop
     // empty classes entirely so blank fields cleanly inherit the job.
     const classDims: ClassDimDefaults = {}
@@ -370,6 +378,21 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
 
           {tab === 'hardware' && (
             <div className="space-y-5">
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Handle Holes</p>
+                <select
+                  value={handleDrill}
+                  onChange={e => setHandleDrill(e.target.value as '' | 'on' | 'off')}
+                  className={`w-full bg-gray-800 border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 ${
+                    handleDrill ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
+                  }`}
+                >
+                  <option value="">— inherit from job (drill) —</option>
+                  <option value="on">Drill handle holes</option>
+                  <option value="off">Don&apos;t drill handle holes</option>
+                </select>
+                <p className="text-[10px] text-gray-500 mt-1">Off = handles are still drawn, listed and costed, but no holes go to the CNC. Cabinets and single doors / drawers can override this.</p>
+              </div>
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Door Style</p>
                 <div className="flex items-center gap-2 mb-2 text-[11px] text-gray-500">

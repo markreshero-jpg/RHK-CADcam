@@ -316,6 +316,19 @@ export default function FaceGridEditor({
     })
   }
 
+  // Per-front handle-hole switch (z_handles D13). null = inherit the cabinet /
+  // room / job HANDLE_DRILL rule.
+  function setZoneHandleDrill(rowIdx: number, colIdx: number, drill: boolean | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        const rest = { ...z }; delete rest.handle_drill
+        return drill === null ? rest : { ...rest, handle_drill: drill }
+      }),
+    })
+  }
+
   function setDrawerType(rowIdx: number, colIdx: number, type: DrawerType | null) {
     save({
       ...grid,
@@ -910,6 +923,22 @@ export default function FaceGridEditor({
                     >
                       <option value="">— inherit (room / job) —</option>
                       {doorStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {/* Handle holes — doors + drawer fronts (z_handles D13) */}
+                {(gz.face_type === 'door' || gz.face_type === 'drawer_face') && (
+                  <div>
+                    <p className="text-gray-600 mb-1">Handle holes</p>
+                    <select
+                      value={gz.handle_drill === true ? 'on' : gz.handle_drill === false ? 'off' : ''}
+                      onChange={e => setZoneHandleDrill(gz.row_index, gz.col_index, e.target.value === '' ? null : e.target.value === 'on')}
+                      className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
+                    >
+                      <option value="">— inherit (cabinet / room / job) —</option>
+                      <option value="on">Drill</option>
+                      <option value="off">Don&apos;t drill</option>
                     </select>
                   </div>
                 )}

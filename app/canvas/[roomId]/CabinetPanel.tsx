@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase } from '@/src/lib/supabase'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
 import { cabT, wallDir, findFreeSlot, cabsBlock } from '@/src/lib/geometry'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
@@ -21,6 +22,15 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
 }) {
   const [local, setLocal] = useState<Partial<CabinetInstance>>({})
   const [saving, setSaving] = useState(false)
+  // Handle schedules for the per-cabinet override (z_handles D7) — stored in
+  // hardware_overrides.handle_schedule_id, read by loadCabinetInput.
+  const [handleSchedules, setHandleSchedules] = useState<{ id: string; name: string }[]>([])
+  useEffect(() => {
+    let cancelled = false
+    void supabase.from('handle_schedules').select('id, name').eq('active', true).order('name')
+      .then(({ data }) => { if (!cancelled) setHandleSchedules((data ?? []) as { id: string; name: string }[]) })
+    return () => { cancelled = true }
+  }, [])
   function f<K extends keyof CabinetInstance>(k: K) { return (k in local ? local[k] : cabinet[k]) as CabinetInstance[K] }
   function set<K extends keyof CabinetInstance>(k: K, v: CabinetInstance[K]) { setLocal(l => ({ ...l, [k]: v })) }
   async function save() {
@@ -201,6 +211,66 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
             ))}
           </div>
         </div>
+        {f('has_face') && (
+          <div>
+            <p className={lbl}>Handle schedule</p>
+            <select
+              value={((cabinet.hardware_overrides ?? {}).handle_schedule_id as string | undefined) ?? ''}
+              onChange={e => {
+                const next = { ...(cabinet.hardware_overrides ?? {}) }
+                if (e.target.value) next.handle_schedule_id = e.target.value; else delete next.handle_schedule_id
+                void onUpdate(cabinet.id, { hardware_overrides: next })
+              }}
+              className={inp}
+            >
+              <option value="">Inherit (room / job)</option>
+              {handleSchedules.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            {/* Handle holes (z_handles D13) — rule_overrides.HANDLE_DRILL */}
+            {(() => {
+              const cur = (cabinet.rule_overrides ?? {}).HANDLE_DRILL
+              const inherited = getCachedInput(cabinet.id)?.rules_base?.HANDLE_DRILL ?? true
+              return (
+                <select
+                  value={cur === true ? 'on' : cur === false ? 'off' : ''}
+                  onChange={e => {
+                    const next = { ...(cabinet.rule_overrides ?? {}) }
+                    if (e.target.value === '') delete next.HANDLE_DRILL
+                    else next.HANDLE_DRILL = e.target.value === 'on'
+                    void onUpdate(cabinet.id, { rule_overrides: next })
+                  }}
+                  className={inp + ' mt-1'}
+                >
+                  <option value="">Holes: inherit ({inherited ? 'drill' : 'off'})</option>
+                  <option value="on">Holes: drill</option>
+                  <option value="off">Holes: don&apos;t drill</option>
+                </select>
+              )
+            })()}
+            {/* Finger gap (z_handles D4) — rule_overrides.FPGAP; only applies
+                where a front's grip needs one (sharknose, rail). */}
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] text-gray-500 shrink-0">Finger gap</span>
+              <CalcInput
+                value={typeof (cabinet.rule_overrides ?? {}).FPGAP === 'number' ? (cabinet.rule_overrides.FPGAP as number) : null}
+                decimals={1}
+                min={0}
+                placeholder={String(getCachedInput(cabinet.id)?.rules_base?.FPGAP ?? 20)}
+                onCommit={v => {
+                  const next = { ...(cabinet.rule_overrides ?? {}) }
+                  next.FPGAP = v
+                  void onUpdate(cabinet.id, { rule_overrides: next })
+                }}
+                onClear={() => {
+                  const next = { ...(cabinet.rule_overrides ?? {}) }
+                  delete next.FPGAP
+                  void onUpdate(cabinet.id, { rule_overrides: next })
+                }}
+                className={inp + ' text-right'}
+              />
+            </div>
+          </div>
+        )}
         <div>
           <p className={lbl}>Scribes (mm)</p>
           <div className="grid grid-cols-3 gap-1">

@@ -209,6 +209,9 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
         door_style_id: z.door_style_id ?? null,
         door_profile_id: z.door_profile_id ?? null,
         door_profile: z.door_profile ?? null,
+        // NULL = saved before handles (undefined → sheet falls back to the
+        // schedule); { none: true } = resolved to no handle (see persistResolved).
+        handle: z.handle == null ? undefined : z.handle.none ? null : z.handle,
         ...(z.facet ? { facet: z.facet } : {}),
         ...(z.bevel_l ? { bevel_l: Number(z.bevel_l) } : {}),
         ...(z.bevel_r ? { bevel_r: Number(z.bevel_r) } : {}),
@@ -230,7 +233,12 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
       const hasDrawers = built.face_zones.some(z => z.face_type === 'drawer_face')
         || built.internal_parts.some(p => p.part_type.startsWith('inner_drawer') || p.part_type.startsWith('pull_out'))
       const halfSaved = built.face_rows.length > 0 && built.face_zones.length === 0
-      if ((hasDrawers && !drawerHwById.has(id)) || halfSaved) needsResolve.add(id)
+      // Fronts saved before handles (z_handles H1: column NULL) or before handle
+      // holes (H2: no `holes`) re-resolve once so their handles + holes appear.
+      const handleStale = built.face_zones.some(z =>
+        (z.face_type === 'door' || z.face_type === 'drawer_face')
+        && (z.handle === undefined || (z.handle !== null && !Array.isArray(z.handle.holes))))
+      if ((hasDrawers && !drawerHwById.has(id)) || halfSaved || handleStale) needsResolve.add(id)
     }
     // NB: left UNFILTERED — this map also feeds the edit modal, whose Parts tab
     // needs the full list. Consumers (canvas elevation/plan, reports, cut lists)

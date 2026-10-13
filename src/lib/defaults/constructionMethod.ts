@@ -40,6 +40,7 @@ export const DEFAULT_CONSTRUCTION_METHOD = {
     REVENDR: 2,   // right end reveal
     GAPC:    2,   // gap between doors (centre split)
     GAPR:    2,   // gap between drawers
+    FPGAP:   20,  // finger gap at a sharknose / finger-pull grip edge (z_handles)
 
     // Face clearance
     FACBUF: 2,   // buffer around face opening

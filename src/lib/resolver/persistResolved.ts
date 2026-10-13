@@ -146,6 +146,11 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       door_style_id:     z.door_style_id ?? null,
       door_profile_id:   z.door_profile_id ?? null,
       door_profile:      z.door_profile ?? null,
+      // Resolved grip (z_handles H1)
+      // A NULL column means "saved before handles existed"; a front resolved
+      // to no handle stores { none: true } so the DB rebuild can tell them apart.
+      handle_hardware_id: z.handle?.handle_id ?? null,
+      handle:            z.handle === undefined ? null : (z.handle ?? { none: true }),
     })),
     // Hinges merge by stable identity (cabinet, facet, row, col, sort_order) —
     // fronts get fresh ids every save. The zone and mounting part ids are

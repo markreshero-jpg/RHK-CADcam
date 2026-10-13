@@ -23,6 +23,8 @@ import { casePartItem, faceZoneItem, internalPartItem, kickPartItem } from '@/sr
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { customExtents } from '@/src/lib/customPartBox'
+import { handleShapes } from '@/src/lib/handleGeometry'
+import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 
 /** Report-only page extras (not drawing layers). */
 export interface ElevationPageOptions {
@@ -313,6 +315,22 @@ export default function ElevationPrintSVG({
                 </g>
               )
             })}
+
+            {/* Handles (z_handles H2) — on the fronts that are drawn */}
+            {layers.show('handles') && handleShapes(rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })).map((s, i) => (
+              <HandleElevSVG key={`hd-${i}`} s={s} project={(px, py) => toSVG(px, py, 0, 0)}
+                stroke={layers.color('handles', INK)} fill={lineDrawing ? 'none' : layers.color('handles', '#94a3b8')}
+                strokeWidth={layers.w('handles', thinSW)} opacity={layers.op('handles')} />
+            ))}
+            {layers.show('handles') && (
+              <SharknoseLinesSVG zones={rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })}
+                project={(px, py) => toSVG(px, py, 0, 0)} stroke={layers.color('handles', INK2)}
+                strokeWidth={layers.w('handles', thinSW)} dash={`${1.5 * P} ${0.8 * P}`} opacity={layers.op('handles')} fill={lineDrawing ? 'none' : '#f59e0b'} fontSize={dimFs * 0.8} />
+            )}
+            {layers.show('handle_holes') && handleShapes(rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })).map((s, i) => (
+              <HandleHolesSVG key={`hh-${i}`} s={s} project={(px, py) => toSVG(px, py, 0, 0)}
+                color={layers.color('handle_holes', INK2)} strokeWidth={layers.w('handle_holes', thinSW)} opacity={layers.op('handle_holes')} />
+            ))}
 
             {/* Hinge cup + plate bore positions */}
             {layers.show('hinges') && (rp.hinge_instances ?? []).map((h, hi) => (

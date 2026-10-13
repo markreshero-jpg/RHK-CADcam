@@ -318,7 +318,12 @@ export default function CabinetSheetSVG({
     rp.case_parts.forEach(p => add(CASE_LABELS[p.part_key] ?? p.part_key, p))
     rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => add(TK_LABELS[p.part_key] ?? p.part_key, p))
     rp.internal_parts.forEach(p => add(INT_LABELS[p.part_type] ?? p.part_type, p))
-    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => add(FACE_LABELS[z.face_type] ?? z.face_type, z))
+    // Sharknose fronts carry the saw note (z_handles D3): edge + blade tilt.
+    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => {
+      const bv = z.handle?.bevel
+      const label = FACE_LABELS[z.face_type] ?? z.face_type
+      add(bv ? `${label} SN ${z.handle!.grip_edge === 'top' ? 'T' : 'B'}${Math.round(bv.angle_deg)}°` : label, z)
+    })
     ;(rp.drawer_stacks ?? []).forEach(stk => stk.box_parts.forEach(p => add(INT_LABELS[p.part_type as string] ?? p.part_type, p)))
     return [...map.values()].sort((a, b) => a.desc.localeCompare(b.desc))
   }
@@ -406,9 +411,17 @@ export default function CabinetSheetSVG({
         out.push({ item: hardware?.hingeName ?? 'Door hinge', qty, note: doorNote })
       }
     }
-    // Handles — model from handle schedule, one per door + drawer
-    const handleQty = doors.length + drawerZones.length
-    if (handleQty) out.push({ item: hardware?.handleName ?? 'Handle', qty: handleQty, note: '' })
+    // Handles — the resolved grip on each door / drawer front, grouped by model
+    // (z_handles H1). Zones resolved before handles existed (handle undefined)
+    // fall back to the schedule's name; null = deliberately no handle.
+    const byHandle = new Map<string, number>()
+    for (const z of [...doors, ...drawerZones]) {
+      if (z.handle === null) continue
+      if (z.handle?.grip_kind === 'sharknose') continue   // sawn into the front — no hardware
+      const name = z.handle?.name ?? hardware?.handleName ?? 'Handle'
+      byHandle.set(name, (byHandle.get(name) ?? 0) + 1)
+    }
+    for (const [name, qty] of byHandle) out.push({ item: name, qty, note: '' })
     if (isBase && cab.toe_type === 'leg') out.push({ item: 'Adjustable leg', qty: 4, note: '' })
     return out
   }

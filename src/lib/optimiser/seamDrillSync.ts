@@ -179,6 +179,20 @@ function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: Gener
     }
   }
 
+  // 4. Handles → through-holes on the door / drawer front, drilled from the
+  //    back face like the hinge cups (z_handles H2, D8). Facet fronts of shaped
+  //    cabinets are skipped like their hinges.
+  for (const z of rp.face_zones) {
+    const h = z.handle
+    if (!h || !h.holes?.length || z.facet || z.AY) continue
+    const opKey = `handle_${z.row_index}_${z.col_index}`
+    for (const p of h.holes) {
+      add('face_zones', `zone_${z.row_index}_${z.col_index}`, zoneFrame(z),
+        { x: z.X + p.x, y: z.Y + p.y, z: z.Z, axis: 'z+', radius: h.hole_dia / 2, depthLen: z.DZ },
+        'handle', opKey, AUTO_TOOL, 'face_back')
+    }
+  }
+
   return { rows, skipped }
 }
 

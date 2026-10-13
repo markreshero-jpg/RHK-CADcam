@@ -109,6 +109,12 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     viewDefaults: { '3d': { visible: false } } },
   { id: 'hinges',         group: 'hardware', label: 'Hinges + plates',     views: ['elevation', '3d'], default: ON,
     viewDefaults: { '3d': { visible: false } }, hint: 'Elevation: cup bores; 3D: hinge + plate models' },
+  // Handles (z_handles H2) — visible by default (they're part of how the job
+  // looks), except plan where they'd clutter the footprint.
+  { id: 'handles',        group: 'hardware', label: 'Handles',             views: ALL, default: ON,
+    viewDefaults: { plan: { visible: false } }, hint: 'Door + drawer handles from the handle schedule' },
+  { id: 'handle_holes',   group: 'hardware', label: 'Handle holes',        views: ['elevation', '3d'], default: ON,
+    hint: 'Through-holes drilled for each handle (gone when drilling is switched off)' },
   { id: 'drawer_front_drilling', group: 'hardware', label: 'Drawer front drilling', views: ['elevation'], default: ON,
     hint: 'Drawer-box fixing bores into the back of each drawer front (from the runner drilling)' },
   { id: 'machining',      group: 'hardware', label: 'Drilling / machining', views: ['elevation', '3d'], default: ON,

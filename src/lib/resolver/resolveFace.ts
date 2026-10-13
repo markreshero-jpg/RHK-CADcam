@@ -11,6 +11,7 @@ import {
 } from './types'
 import { resolveReveal, resolveFaceZ } from './mergeRules'
 import { evaluateProfileOps } from '../doorProfile'
+import { fingerGapEdge } from './resolveHandles'
 
 export interface FaceResolution {
   rows:   ResolvedFaceRow[]
@@ -59,8 +60,24 @@ export function resolveFace(
   // ── Resolve reveals ───────────────────────────────────────────
   const revL = frame ? frame.revL : resolveReveal('left',  cab.left_neighbour,  r)
   const revR = frame ? frame.revR : resolveReveal('right', cab.right_neighbour, r)
-  const revT = r.REVT
-  const revB = r.REVB
+  // ── Finger gaps (z_handles D4) ────────────────────────────────
+  // A front whose grip needs finger room (sharknose, rail) gets the FPGAP
+  // finger gap at its grip edge instead of the usual reveal / row gap. Rows run
+  // bottom-up (row_index 0 = bottom), so a top-grip zone in row i widens the
+  // gap above row i (the top reveal for the top row); a bottom-grip zone widens
+  // the gap below it. (cab.face_grid is the facet's own grid on shaped fronts.)
+  const fgAbove = new Set<number>(), fgBelow = new Set<number>()
+  for (const zn of cab.face_grid.zones) {
+    if (zn.face_type === 'open') continue
+    const e = fingerGapEdge(cab, zn)
+    if (e === 'top') fgAbove.add(zn.row_index)
+    else if (e === 'bottom') fgBelow.add(zn.row_index)
+  }
+  const topRow = cab.face_grid.rows.length - 1
+  const revT = fgAbove.has(topRow) ? r.FPGAP : r.REVT
+  const revB = fgBelow.has(0)      ? r.FPGAP : r.REVB
+  /** Gap between row i and row i + 1. */
+  const rowGap = (i: number) => (fgAbove.has(i) || fgBelow.has(i + 1)) ? r.FPGAP : r.GAPR
 
   // ── Face opening total dimensions ─────────────────────────────
   const faceW = DX - revL - revR
@@ -86,7 +103,8 @@ export function resolveFace(
 
   // ── Resolve row heights ───────────────────────────────────────
   // Total height available after gaps between rows
-  const totalRowGaps = (nRows - 1) * r.GAPR
+  let totalRowGaps = 0
+  for (let i = 0; i < nRows - 1; i++) totalRowGaps += rowGap(i)
   const availableH   = faceH - totalRowGaps
 
   // Sum of locked heights
@@ -155,7 +173,7 @@ export function resolveFace(
   let yOffset = TK + revB
   for (const row of resolvedRows) {
     rowOffsets.push(yOffset)
-    yOffset += row.height + r.GAPR
+    yOffset += row.height + rowGap(row.row_index)
   }
 
   // X offsets (from cabinet left, working rightward from revL)

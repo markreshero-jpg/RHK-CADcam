@@ -151,10 +151,22 @@ const TABS: TabConfig[] = [
   },
   {
     id: 'handles', label: 'Handles', table: 'hardware_handles', initKey: 'handles',
-    defaults: { name: '', brand: null, handle_type: 'bar', length: null, bore_centres: null, projection: null, finish: null, cost_per_unit: null, active: true },
+    defaults: { name: '', brand: null, grip_kind: 'hardware', handle_type: 'bar', length: null, bore_centres: null, projection: null, hole_dia_mm: null, needs_finger_gap: false, bevel_angle_deg: null, bevel_land_mm: null, finish: null, cost_per_unit: null, active: true },
     fields: [
       { key: 'name',          label: 'Name',     type: 'text',    w: 160 },
       { key: 'brand',         label: 'Brand',    type: 'text',    w: 100 },
+      // Grip kind (z_handles D1): what the "handle" physically is. Push-to-open
+      // and sharknose live here too so schedules, costing and reports treat
+      // them like any handle.
+      { key: 'grip_kind',     label: 'Kind',     type: 'select',  w: 100,
+        options: [
+          { value: 'hardware',  label: 'Handle' },
+          { value: 'push',      label: 'Push to open' },
+          { value: 'sharknose', label: 'Sharknose' },
+          { value: 'rail',      label: 'Rail' },
+          { value: 'channel',   label: 'Channel' },
+        ],
+      },
       { key: 'handle_type',   label: 'Type',     type: 'select',  w: 90,
         options: [
           { value: 'bar',      label: 'Bar' },
@@ -167,6 +179,13 @@ const TABS: TabConfig[] = [
       { key: 'length',        label: 'Length',   type: 'number',  w: 70 },
       { key: 'bore_centres',  label: 'Bore ctr', type: 'number',  w: 72 },
       { key: 'projection',    label: 'Proj mm',  type: 'number',  w: 68 },
+      { key: 'hole_dia_mm',   label: 'Hole ⌀',   type: 'number',  w: 60 },
+      // Sharknose / finger pulls (z_handles H3): finger gap = front sized with
+      // the FPGAP rule at its grip edge; tilt = saw blade from vertical; land =
+      // edge thickness left at the front.
+      { key: 'needs_finger_gap', label: 'Finger gap', type: 'boolean', w: 64 },
+      { key: 'bevel_angle_deg', label: 'Tilt°',  type: 'number',  w: 52 },
+      { key: 'bevel_land_mm', label: 'Land mm',  type: 'number',  w: 60 },
       { key: 'finish',        label: 'Finish',   type: 'text',    w: 110 },
       { key: 'cost_per_unit', label: '$/ea',     type: 'number',  w: 65,  step: '0.01' },
       { key: 'active',        label: 'Active',   type: 'boolean', w: 48 },

@@ -48,6 +48,7 @@ const RULE_LABELS: Record<RuleKey, string> = {
   REVENDR: 'End Reveal Right (mm)',
   GAPC:    'Centre Gap (mm)',
   GAPR:    'Drawer Gap (mm)',
+  FPGAP:   'Finger Gap (mm)',
   FACBUF:  'Face Buffer (mm)',
   FACINS:  'Face Inset (mm)',
 }
@@ -59,7 +60,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Adjustable Shelves', keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },
   { label: 'Fixed Shelves',      keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
-  { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR'] },
+  { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR', 'FPGAP'] },
   { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
 ]
 

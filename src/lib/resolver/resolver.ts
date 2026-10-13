@@ -20,6 +20,7 @@ import { checkHingeInnerDrawerClash } from './hingeClash'
 import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
 import { resolveShapedFaces } from './resolveShapedFace'
 import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
+import { resolveHandles } from './resolveHandles'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -47,6 +48,8 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     ? (cab.footprint ? resolveShapedFaces(cab, r) : resolveFace(cab, r))
     : { rows: [], cols: [], zones: [], errors: [] }
   allErrors.push(...faceErrors)
+  // One grip per door / drawer front from the handle schedule (z_handles H1).
+  resolveHandles(cab, zones)
   // Shaped cabinets (z_cabinet_shape Phase 3b): hinges + drawer boxes on every
   // facet, fitted to the footprint and built in each zone's square frame.
   const shapedHw = cab.footprint ? shapedHardwareCtx(cab) : null

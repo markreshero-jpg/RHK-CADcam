@@ -6,6 +6,7 @@ import {
   RawProfileOp, ResolvedDoorStyleInput, EdgeSides,
   HingeRuleInput, HingeHardwareInput, HingePlateInput, ExistingHingeInput, HingeBoreHole,
   KickRunInput, KickSplitMode,
+  HandleRole, GripKind, HandleProductInput, HandleScheduleEntryInput,
 } from './types'
 import { mergeRules } from './mergeRules'
 import { cachedCascade } from './cascadeCache'
@@ -800,6 +801,9 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
   const { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges, angled_hinges } =
     await loadHingeInputs(persisted ? cabinetId : null, cab.room_id as string, projectId, (cab.hardware_overrides ?? {}) as Record<string, unknown>)
 
+  // ── 13b. Handle schedule (z_handles H1) ─────────────────────────────────────
+  const { handle_schedule, handle_products } =
+    await loadHandleInputs(cab.room_id as string, projectId, (cab.hardware_overrides ?? {}) as Record<string, unknown>)
 
   // ── 14. Kick-run context ────────────────────────────────────────────────────
   // When this cabinet is linked to a kick run, load its role + split settings so
@@ -881,6 +885,8 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     hinge_count_rules,
     existing_hinges,
     angled_hinges,
+    handle_schedule,
+    handle_products,
     kick_run,
   }
 }
@@ -956,6 +962,99 @@ function loadHingeSchedule(roomId: string, projectId: string | undefined) {
 
     return { rulesRes, schedHingeId, schedPlateIdFromSchedule }
   })
+}
+
+// ── Handle schedule cascade (z_handles H1, cached) ───────────────────────────
+// cabinet hardware_overrides.handle_schedule_id → room → project → shop →
+// is_default, then the schedule's role rows. A schedule with no rows falls back
+// to its legacy single handle_id for every role. The whole active catalogue is
+// returned too, for per-zone overrides.
+const HANDLE_COLS = 'id, name, grip_kind, handle_type, length, bore_centres, projection, cost_per_unit, hole_dia_mm, holes, needs_finger_gap, bevel_angle_deg, bevel_land_mm'
+
+function toHandleProduct(h: Record<string, unknown>): HandleProductInput {
+  const num = (v: unknown) => (v == null ? null : Number(v))
+  return {
+    id:            h.id as string,
+    name:          h.name as string,
+    grip_kind:     ((h.grip_kind as string) ?? 'hardware') as GripKind,
+    handle_type:   (h.handle_type as string | null) ?? null,
+    length:        num(h.length),
+    bore_centres:  num(h.bore_centres),
+    projection:    num(h.projection),
+    cost_per_unit: num(h.cost_per_unit),
+    hole_dia_mm:   num(h.hole_dia_mm),
+    holes:         Array.isArray(h.holes) ? (h.holes as { offset_x: number; offset_y: number }[]) : [],
+    needs_finger_gap: Boolean(h.needs_finger_gap),
+    bevel_angle_deg:  num(h.bevel_angle_deg),
+    bevel_land_mm:    num(h.bevel_land_mm),
+  }
+}
+
+function loadHandleProducts() {
+  return cachedCascade('handles:all', async () => {
+    const { data } = await supabase.from('hardware_handles').select(HANDLE_COLS).eq('active', true)
+    return Object.fromEntries(((data ?? []) as Record<string, unknown>[]).map(h => [h.id as string, toHandleProduct(h)]))
+  })
+}
+
+function loadHandleScheduleId(roomId: string, projectId: string | undefined) {
+  return cachedCascade(`handlesched:${roomId}:${projectId ?? '-'}`, async () => {
+    const [roomRes, projRes, shopRes, defRes] = await Promise.all([
+      supabase.from('rooms').select('handle_schedule_id').eq('id', roomId).maybeSingle(),
+      projectId
+        ? supabase.from('projects').select('handle_schedule_id').eq('id', projectId).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase.from('shop_settings').select('handle_schedule_id').limit(1).maybeSingle(),
+      supabase.from('handle_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
+    ])
+    const id = (r: { data: unknown }) => (r.data as { handle_schedule_id?: string | null } | null)?.handle_schedule_id ?? null
+    return id(roomRes) ?? id(projRes) ?? id(shopRes) ?? (defRes.data as { id: string } | null)?.id ?? null
+  })
+}
+
+function loadHandleScheduleEntries(scheduleId: string, products: Record<string, HandleProductInput>) {
+  return cachedCascade(`handleentries:${scheduleId}`, async () => {
+    const [entriesRes, schedRes] = await Promise.all([
+      supabase.from('handle_schedule_entries').select('role, handle_id, offset_from_edge_mm, inset_from_side_mm, orientation').eq('schedule_id', scheduleId),
+      supabase.from('handle_schedules').select('handle_id').eq('id', scheduleId).maybeSingle(),
+    ])
+    const out: Partial<Record<HandleRole, HandleScheduleEntryInput>> = {}
+    const rows = (entriesRes.data ?? []) as Record<string, unknown>[]
+    for (const e of rows) {
+      out[e.role as HandleRole] = {
+        handle:              e.handle_id ? products[e.handle_id as string] ?? null : null,
+        offset_from_edge_mm: Number(e.offset_from_edge_mm ?? 50),
+        inset_from_side_mm:  e.inset_from_side_mm == null ? null : Number(e.inset_from_side_mm),
+        orientation:         (e.orientation as 'horizontal' | 'vertical') ?? 'horizontal',
+      }
+    }
+    // Legacy single-handle schedule: same handle on every role.
+    const legacyId = (schedRes.data as { handle_id: string | null } | null)?.handle_id
+    if (rows.length === 0 && legacyId && products[legacyId]) {
+      for (const role of ['door_base', 'door_wall', 'door_tall', 'drawer'] as HandleRole[]) {
+        out[role] = {
+          handle: products[legacyId], offset_from_edge_mm: 50,
+          inset_from_side_mm: role === 'drawer' ? null : 50,
+          orientation: role === 'drawer' ? 'horizontal' : 'vertical',
+        }
+      }
+    }
+    return out
+  })
+}
+
+async function loadHandleInputs(
+  roomId: string,
+  projectId: string | undefined,
+  hardwareOverrides: Record<string, unknown> = {},
+): Promise<{
+  handle_schedule: Partial<Record<HandleRole, HandleScheduleEntryInput>>
+  handle_products: Record<string, HandleProductInput>
+}> {
+  const [products, cascadeId] = await Promise.all([loadHandleProducts(), loadHandleScheduleId(roomId, projectId)])
+  const schedId = (hardwareOverrides.handle_schedule_id as string | undefined) || cascadeId
+  const handle_schedule = schedId ? await loadHandleScheduleEntries(schedId, products) : {}
+  return { handle_schedule, handle_products: products }
 }
 
 // ── Hinge inputs loader ───────────────────────────────────────────────────────

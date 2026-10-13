@@ -149,7 +149,10 @@ export function edgeStrips(
 // `extrude: 'up'` = a top-view outline (horizontal frame: x across, y DOWN
 // from the front face) extruded up the part's height — mitred doors on shaped
 // cabinets (jointDrilling.zoneBevelOutline), whatever the panel kind.
-export type PartShape = { pts: ShapePt[]; mirror?: boolean; extrude?: 'up' }
+// `extrude: 'across'` = a side profile (x = depth from the back face, y = up
+// from the bottom, both mm) extruded across the part's width — sharknose
+// fronts (z_handles H3, handleGeometry.sharknoseProfile).
+export type PartShape = { pts: ShapePt[]; mirror?: boolean; extrude?: 'up' | 'across' }
 
 // Extruded silhouette in box-local coords ([0..w]×[0..h]×[0..d] off the box
 // origin corner — mount inside the Part group at position [0,0,0]). The 2D
@@ -160,6 +163,16 @@ export type PartShape = { pts: ShapePt[]; mirror?: boolean; extrude?: 'up' }
 //   side       — display-x → Z (left = back),  extrude X; mirror flips Z
 //   horizontal — display-top → +Z (front),     extrude Y
 export function buildShapedGeometry(shape: PartShape, b: Box, panelKind: PanelKind): THREE.ExtrudeGeometry {
+  if (shape.extrude === 'across') {
+    const s = new THREE.Shape()
+    shape.pts.forEach((p, i) => { if (i === 0) s.moveTo(p.x, p.y); else s.lineTo(p.x, p.y) })
+    s.closePath()
+    // Profile in (Z, Y), extruded along +Z, then turned so the extrusion runs
+    // along X: rotateY(−90°) maps profile x → Z and extrusion → −X.
+    const g = new THREE.ExtrudeGeometry(s, { depth: b.w, bevelEnabled: false })
+    g.rotateY(-Math.PI / 2); g.translate(b.w, 0, 0)
+    return g
+  }
   const kind: PanelKind = shape.extrude === 'up' ? 'horizontal' : panelKind
   const up    = kind === 'horizontal' ? b.d : b.h
   const thick = kind === 'side' ? b.w : kind === 'horizontal' ? b.h : b.d
@@ -400,8 +413,11 @@ export function Part({
             // Extruded-up outline (mitred door): caps = top/bottom edges, walls
             // carry the front/back faces.
             const up   = shape?.extrude === 'up'
-            const cap  = up ? mats[2] : kind === 'side' ? mats[shape?.mirror ? 1 : 0] : kind === 'horizontal' ? mats[2] : mats[4]
-            const wall = up ? mats[4] : kind === 'side' ? mats[2] : mats[0]
+            // Side profile extruded across (sharknose front): caps = the left /
+            // right edges, walls carry the front / back faces and the bevel.
+            const across = shape?.extrude === 'across'
+            const cap  = across ? mats[0] : up ? mats[2] : kind === 'side' ? mats[shape?.mirror ? 1 : 0] : kind === 'horizontal' ? mats[2] : mats[4]
+            const wall = across ? mats[4] : up ? mats[4] : kind === 'side' ? mats[2] : mats[0]
             return (
               <>
                 <meshStandardMaterial attach="material-0" color={cap}  roughness={0.7} metalness={0.05} {...am} />

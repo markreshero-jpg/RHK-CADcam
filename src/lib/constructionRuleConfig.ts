@@ -3,7 +3,8 @@
 
 import { ConstructionRules, DEFAULT_RULES, EdgingDefaults, DEFAULT_EDGING, EdgeSides } from './resolver/types'
 
-export type RuleKey    = Exclude<keyof ConstructionRules, 'EDGING'>
+// HANDLE_DRILL is a job / room / cabinet switch (z_handles D13), not a method rule.
+export type RuleKey    = Exclude<keyof ConstructionRules, 'EDGING' | 'HANDLE_DRILL'>
 export type EdgingKey  = keyof Required<EdgingDefaults>
 
 export const RULE_LABELS: Record<RuleKey, string> = {
@@ -42,6 +43,7 @@ export const RULE_LABELS: Record<RuleKey, string> = {
   REVENDR: 'End Reveal Right (mm)',
   GAPC:    'Centre Gap (mm)',
   GAPR:    'Row Gap (mm)',
+  FPGAP:   'Finger Gap (mm)',
   FACBUF:  'Face Buffer (mm)',
   FACINS:  'Face Inset (mm)',
   BOTTOM_JOIN:      'Bottom Join',
@@ -58,7 +60,7 @@ export const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Adjustable Shelves', keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR', 'ADJ_DRILL', 'ADJ_ROWS'] },
   { label: 'Fixed Shelves',      keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
-  { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR'] },
+  { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR', 'FPGAP'] },
   { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
   { label: 'Joinery',            keys: ['BOTTOM_JOIN', 'BOTTOM_BACK_JOIN', 'BACK_JOIN', 'TOP_BACK_JOIN', 'RAIL_JOIN'] },
 ]

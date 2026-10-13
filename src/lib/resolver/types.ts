@@ -180,10 +180,15 @@ export interface ConstructionRules {
   REVENDR:  number   // reveal right (end panel / wall)
   GAPC:     number   // centre gap between face zones (horizontal)
   GAPR:     number   // gap between face rows (vertical)
+  FPGAP:    number   // finger gap at a finger-pull grip edge (z_handles D4) — replaces REVT / REVB / GAPR there
 
   // Face position
   FACBUF:   number   // buffer pad clearance (overlay mode)
   FACINS:   number   // inset depth (0 = overlay)
+
+  // Handles (z_handles D13): drill handle holes. Unset = true. Set false at
+  // job / room / cabinet via rule_overrides; a front can override it again.
+  HANDLE_DRILL?: boolean
 
   // Joinery — how panels connect to each other
   BOTTOM_JOIN:      'sides_outside' | 'bottom_outside'    // sides span full height vs bottom spans full width
@@ -232,7 +237,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   FIXSB_F: 0, FIXSB_B: 0,
   IDCL: 2, IDCR: 2, IDFAO: 0, SLIDE_SETBACK: 20,
   REVT: 4, REVB: 0, REVL: 1, REVR: 1,
-  REVENDL: 2, REVENDR: 2, GAPC: 2, GAPR: 2,
+  REVENDL: 2, REVENDR: 2, GAPC: 2, GAPR: 2, FPGAP: 20,
   FACBUF: 2, FACINS: 0,
   BOTTOM_JOIN: 'sides_outside', BOTTOM_BACK_JOIN: 'back_on_bottom',
   BACK_JOIN: 'between_sides', TOP_BACK_JOIN: 'butts_into_back', RAIL_JOIN: 'between_sides',
@@ -703,6 +708,76 @@ export interface CabinetInput {
   // (z_cabinet_shape decision 10).
   angled_hinges?:     HingeHardwareInput[]
 
+  // ── Handle inputs (z_handles H1) ────────────────────────────────────────────
+  // The effective handle schedule's role rows (cabinet hardware_overrides
+  // .handle_schedule_id → room → job → shop → is_default). Absent role = no
+  // handle. resolveHandles places one grip on each door / drawer front.
+  handle_schedule?:  Partial<Record<HandleRole, HandleScheduleEntryInput>>
+  // Every active catalogue handle by id, for per-zone overrides (face_grid
+  // zone.handle_id).
+  handle_products?:  Record<string, HandleProductInput>
+}
+
+// ── Handles (z_handles/HANDLES-SPEC.md) ─────────────────────────────────────
+export type HandleRole = 'door_base' | 'door_wall' | 'door_tall' | 'drawer'
+export type GripKind   = 'hardware' | 'sharknose' | 'routed' | 'push' | 'rail' | 'channel'
+
+export interface HandleProductInput {
+  id:            string
+  name:          string
+  grip_kind:     GripKind
+  handle_type:   string | null
+  length:        number | null
+  bore_centres:  number | null
+  projection:    number | null
+  cost_per_unit: number | null
+  hole_dia_mm:   number | null                  // null → 5mm
+  needs_finger_gap: boolean                     // grip edge gap becomes FPGAP (sharknose, rail)
+  // Sharknose (D3): saw blade tilt from vertical, and the edge thickness left
+  // at the front. The bevel runs (thickness − land) × tan(angle) along the face.
+  bevel_angle_deg: number | null                // null → 45
+  bevel_land_mm:   number | null                // null → 0 (knife edge)
+  // Custom hole pattern from the handle centre (offset_x along the handle,
+  // offset_y across it). Empty → derived: two holes at ±bore_centres/2, or one
+  // centre hole when bore_centres is unset (knob).
+  holes:         { offset_x: number; offset_y: number }[]
+}
+
+export interface HandleScheduleEntryInput {
+  handle:              HandleProductInput | null   // null = no handle for this role
+  offset_from_edge_mm: number                      // grip edge → nearest hole line
+  inset_from_side_mm:  number | null               // doors: non-hinged edge → hole line; null = centred
+  orientation:         'horizontal' | 'vertical'
+}
+
+// One resolved grip on a face zone. x / y = handle centre in zone-local mm
+// (from the zone's min corner, DX = width, DY = height); null for grips with
+// no position (push-to-open, sharknose).
+export interface ResolvedHandle {
+  handle_id:   string
+  name:        string
+  grip_kind:   GripKind
+  role:        HandleRole
+  source:      'schedule' | 'zone'
+  grip_edge:   'top' | 'bottom'
+  orientation: 'horizontal' | 'vertical'
+  x:           number | null
+  y:           number | null
+  length:      number | null
+  bore_centres: number | null
+  projection:  number | null
+  // Through-holes in zone-local mm (same frame as x / y). Empty for grips that
+  // aren't drilled (push-to-open is hand-drilled; sharknose is sawn).
+  holes:       { x: number; y: number }[]
+  hole_dia:    number
+  // false = a drillable handle whose holes are switched off (D13): still drawn,
+  // listed and costed, just not drilled.
+  drilled:     boolean
+  // The front is sized with the FPGAP finger gap at its grip edge.
+  finger_gap:  boolean
+  // Sharknose back bevel on the grip edge (null for other grips). run = how far
+  // the bevel reaches along the back face from the edge.
+  bevel:       { angle_deg: number; land: number; run: number } | null
 }
 
 // ── Hinge resolver inputs ─────────────────────────────────────────────────────
@@ -905,6 +980,12 @@ export interface FaceZoneInput {
   // hinge_count_rules — letting the user add/move/remove hinges per door.
   // Undefined = auto (rule-based). Lives in the face_grid JSONB.
   hinges?: number[]
+  // Per-zone handle override (hardware_handles.id) — wins over the cabinet's
+  // handle schedule (z_handles D7). Undefined = use the schedule.
+  handle_id?: string
+  // Per-front handle-hole override (z_handles D13). Undefined = inherit the
+  // HANDLE_DRILL rule (job → room → cabinet).
+  handle_drill?: boolean
 }
 
 // ── Internal Part Inputs ──────────────────────────────────────
@@ -1204,6 +1285,8 @@ export interface ResolvedFaceZone extends ResolvedPart {
   facet?:   string
   bevel_l?: number
   bevel_r?: number
+  // Resolved grip (z_handles H1). null = no handle; absent = not resolved.
+  handle?:  ResolvedHandle | null
 }
 
 // ── Resolved Drawer Stack ─────────────────────────────────────

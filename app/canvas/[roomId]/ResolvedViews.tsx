@@ -32,6 +32,8 @@ import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 import { hingePlacement, hingeSilhouetteOutline, hingeSilhouetteSnapPoints } from '@/src/lib/hingeSilhouette'
 import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
 import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
+import { handleShapes } from '@/src/lib/handleGeometry'
+import { HandleElevSVG, SharknoseLinesSVG, SharknoseWedgesSVG } from './HandleSVG'
 
 // Hinge cup/plate drill marker colour (distinct from amber slide drills).
 const HINGE_DRILL_COL = '#a855f7'   // violet-500
@@ -698,6 +700,13 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })} />
       {showDrilling && <HandOpMarkersSVG markers={handMarkers} project={proj} />}
       <HingeShapes rp={rp} project={proj} />
+      <SharknoseLinesSVG zones={rp.face_zones} project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
+        stroke="#fbbf24" strokeWidth={1} dash="6 4" fontSize={11} />
+      {/* Handles (z_handles H2); hole centres shown with the drilling overlay */}
+      {handleShapes(rp.face_zones).map((s, i) => (
+        <HandleElevSVG key={`hd${i}`} s={s} project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
+          stroke="#cbd5e1" fill={wireMode ? 'none' : '#64748b'} strokeWidth={1} showHoles={showDrilling} />
+      ))}
       <SlideDrillOverlay drills={slideDrills} perp="z"
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
@@ -1191,6 +1200,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
           {ec && <EdgeTapeSVG box={zoneBox3(z)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="x" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
         </g>
       })}
+      {/* Sharknose bevel (z_handles H3) — the wedge the saw cut removes */}
+      <SharknoseWedgesSVG zones={rp.face_zones} project={(y, zz) => proj(0, y, zz)} stroke="#b45309" strokeWidth={1} />
 
       {(customParts ?? []).filter(p => p.visible).map((p, i) => {
         const meta = svgCustomMeta(p)

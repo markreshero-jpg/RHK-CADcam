@@ -21,6 +21,7 @@ import WallDimensionChain from './WallDimensionChain'
 import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, SectionCut, isBenchtopMode, type BtShapeEdit, btLocal } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
+import { handleShape } from '@/src/lib/handleGeometry'
 import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
 import { planShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { roundMm } from '@/src/lib/format'
@@ -1036,6 +1037,16 @@ export default function CanvasSVG({
             : []
           if (shapedFronts.length && !showOutline) drawnRects.push({ x: 0, z: 0, w: displayCab.dx, d: displayCab.dz })
           for (const f of faceRects) drawnRects.push(f.rect)
+          // Handles (z_handles H2): projection footprint in front of each drawn
+          // front. Plan hides them by default.
+          const handleRects = layers.show('handles')
+            ? ((shaped ? rpAll : rpPlan)?.face_zones ?? []).flatMap(z => {
+                const item = faceZoneItem(z.face_type)
+                if (!item || !layers.show(item)) return []
+                const hs = handleShape(z)
+                return hs ? [{ id: zonePartId(z), poly: partPoly({ x: hs.cx - hs.w / 2, z: hs.frontZ, w: hs.w, d: hs.projection }) }] : []
+              })
+            : []
           if (layers.show('internal_outline') && cab.has_internal) drawnRects.push({ x: 20, z: 20, w: displayCab.dx - 40, d: displayCab.dz - 40 })
           const hitRect = unionRect(drawnRects)
           // Label anchor: footprint centre; kick assemblies label just behind their
@@ -1180,6 +1191,13 @@ export default function CanvasSVG({
                     strokeDasharray={fp.strokeDasharray} opacity={fp.opacity} style={{ pointerEvents: 'none' }} />
                 )
               })}
+
+              {handleRects.map(hr => (
+                <polygon key={`hd-${hr.id}`} points={hr.poly}
+                  fill={layers.color('handles', '#64748b')} fillOpacity={0.6}
+                  stroke={layers.color('handles', '#334155')} strokeWidth={layers.w('handles', 0.75) / view.zoom}
+                  opacity={layers.op('handles')} style={{ pointerEvents: 'none' }} />
+              ))}
 
               {/* Face fallback — bold line along the carcass front (no resolved parts) */}
               {faceLine && (

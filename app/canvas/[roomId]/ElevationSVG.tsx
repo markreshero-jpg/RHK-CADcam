@@ -26,6 +26,8 @@ import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB } from '@/src/lib/jointDrilling'
+import { handleShapes } from '@/src/lib/handleGeometry'
+import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
 // resolved per render below. PART_COLORS / LINE_DRAW_COLORS keep their `MAP[key]`
@@ -1447,6 +1449,26 @@ export default function ElevationSVG({
                           </g>
                         )
                       })}
+                      {/* Handles (z_handles H2) — on the fronts that are drawn. */}
+                      {layers.show('handles') && handleShapes(rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })).map((s, i) => (
+                        <HandleElevSVG key={`hd-${i}`} s={s} project={toSVGPt}
+                          stroke={layers.color('handles', isLineDrawing ? '#334155' : '#1e293b')}
+                          fill={isLineDrawing ? 'none' : layers.color('handles', '#475569')}
+                          strokeWidth={layers.w('handles', 0.8) / z} opacity={layers.op('handles')} />
+                      ))}
+                      {/* Sharknose bevels — hidden line where the bevel meets the back face */}
+                      {layers.show('handles') && (
+                        <SharknoseLinesSVG zones={rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })}
+                          project={toSVGPt} stroke={layers.color('handles', isLineDrawing ? '#334155' : '#94a3b8')}
+                          strokeWidth={layers.w('handles', 0.8) / z} dash={`${4 / z} ${3 / z}`} opacity={layers.op('handles')} fontSize={9 / z} />
+                      )}
+                      {/* Handle through-holes — drawn over the handle so you can see
+                          what gets drilled; empty when the handle isn't drilled. */}
+                      {layers.show('handle_holes') && handleShapes(rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })).map((s, i) => (
+                        <HandleHolesSVG key={`hh-${i}`} s={s} project={toSVGPt}
+                          color={layers.color('handle_holes', isLineDrawing ? '#475569' : '#f97316')}
+                          strokeWidth={layers.w('handle_holes', 0.6) / z} opacity={layers.op('handle_holes')} />
+                      ))}
                       </g>)}
 
                       {/* Custom parts (panels / fillers / end panels) — room-visible only */}

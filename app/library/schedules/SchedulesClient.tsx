@@ -16,7 +16,7 @@ const TABS = [
   { key: 'inner_drawerbox', label: 'Inner Drawer Box',     table: 'inner_drawerbox_schedules', type: 'idb_list',   valueCol: null,          ebCol: null           },
   { key: 'hinge',           label: 'Hinges',               table: 'hinge_schedules',           type: 'hw_single',  valueCol: 'hinge_id',   ebCol: null           },
   { key: 'slide',           label: 'Slides',               table: 'slide_schedules',           type: 'slide_grid', valueCol: null,         ebCol: null           },
-  { key: 'handle',          label: 'Handles',              table: 'handle_schedules',          type: 'hw_single',  valueCol: 'handle_id',  ebCol: null           },
+  { key: 'handle',          label: 'Handles',              table: 'handle_schedules',          type: 'handle_roles', valueCol: null,       ebCol: null           },
   { key: 'benchtop',        label: 'Benchtops',            table: 'benchtop_schedules',        type: 'bt_roles',   valueCol: null,          ebCol: null          },
 ] as const
 
@@ -61,7 +61,25 @@ type SchedRecord = {
 
 type MatItem       = { id: string; name: string; dz: number }
 type BenchtopItem  = { id: string; name: string; dz: number; material_type: string | null }
-type HwItem        = { id: string; name: string; brand: string | null }
+type HwItem        = { id: string; name: string; brand: string | null; grip_kind?: string }
+
+// Handle schedule rows (z_handles D6) — one per role. Offset = grip edge → the
+// handle's nearest hole line; inset = door's non-hinged edge → hole line
+// (blank = centred). No size bands by design: a different size is a deliberate
+// cabinet-level override, never picked from the front's width.
+const HANDLE_ROLES = [
+  { role: 'door_base', label: 'Base doors', inset: true  },
+  { role: 'door_wall', label: 'Wall doors', inset: true  },
+  { role: 'door_tall', label: 'Tall doors', inset: true  },
+  { role: 'drawer',    label: 'Drawers',    inset: false },
+] as const
+type HandleRoleKey = typeof HANDLE_ROLES[number]['role']
+type HandleEntryRow = {
+  handle_id: string | null
+  offset_from_edge_mm: number
+  inset_from_side_mm: number | null
+  orientation: 'horizontal' | 'vertical'
+}
 type HwSlideItem   = { id: string; name: string; brand: string | null; nominal_length: number | null; box_height: number | null }
 type SlideEntryRow = { id: string; depth_threshold: number; height_threshold: number; slide_id: string }
 type EbItem        = { id: string; name: string; thickness: number; material_match_id: string | null }
@@ -97,6 +115,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
   const [newTierDepth,  setNewTierDepth]  = useState('')
   const [newTierHeight, setNewTierHeight] = useState('')
   const [newTierSlide,  setNewTierSlide]  = useState('')
+  const [handleEntries, setHandleEntries] = useState<Partial<Record<HandleRoleKey, HandleEntryRow>>>({})
 
   // ── Initial load ──────────────────────────────────────────────────────────
 
@@ -121,7 +140,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         supabase.from('benchtop_materials').select('id,name,dz,material_type').eq('active', true).order('name'),
         supabase.from('hardware_hinges').select('id,name,brand').eq('active', true).order('name'),
         supabase.from('hardware_slides').select('id,name,brand,nominal_length,box_height').eq('active', true).order('name'),
-        supabase.from('hardware_handles').select('id,name,brand').eq('active', true).order('name'),
+        supabase.from('hardware_handles').select('id,name,brand,grip_kind').eq('active', true).order('name'),
         supabase.from('hardware_hinge_plates').select('id,name,hinge_id').eq('active', true).order('name'),
       ])
       if (cancelled) return
@@ -187,7 +206,40 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         .order('height_threshold')
       setSlideEntries((data ?? []) as SlideEntryRow[])
       setRowsLoading(false)
+    } else if (tab.type === 'handle_roles') {
+      setRowsLoading(true)
+      setHandleEntries({})
+      const { data } = await supabase
+        .from('handle_schedule_entries')
+        .select('role, handle_id, offset_from_edge_mm, inset_from_side_mm, orientation')
+        .eq('schedule_id', id)
+      const map: Partial<Record<HandleRoleKey, HandleEntryRow>> = {}
+      for (const r of (data ?? []) as (HandleEntryRow & { role: HandleRoleKey })[]) {
+        map[r.role] = {
+          handle_id: r.handle_id,
+          offset_from_edge_mm: Number(r.offset_from_edge_mm),
+          inset_from_side_mm: r.inset_from_side_mm == null ? null : Number(r.inset_from_side_mm),
+          orientation: r.orientation,
+        }
+      }
+      setHandleEntries(map)
+      setRowsLoading(false)
     }
+  }
+
+  // Upsert one role row of the selected handle schedule.
+  async function saveHandleEntry(role: HandleRoleKey, patch: Partial<HandleEntryRow>) {
+    if (!selectedId) return
+    const def = HANDLE_ROLES.find(r => r.role === role)!
+    const cur: HandleEntryRow = handleEntries[role] ?? {
+      handle_id: null, offset_from_edge_mm: 50,
+      inset_from_side_mm: def.inset ? 50 : null,
+      orientation: role === 'drawer' ? 'horizontal' : 'vertical',
+    }
+    const next = { ...cur, ...patch }
+    setHandleEntries(prev => ({ ...prev, [role]: next }))
+    await supabase.from('handle_schedule_entries')
+      .upsert({ schedule_id: selectedId, role, ...next }, { onConflict: 'schedule_id,role' })
   }
 
   async function fetchRows(type: string, schedId: string): Promise<Record<string, string>> {
@@ -748,6 +800,55 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     )
   }
 
+  function renderHandleRoles() {
+    const num = 'w-16 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink text-right focus:outline-none focus:border-accent'
+    const kindTag = (k?: string) => (k && k !== 'hardware' ? ` [${k}]` : '')
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-[6rem_minmax(0,1fr)_5rem_5rem_7rem] gap-2 text-[9px] text-ink-subtle uppercase tracking-wide">
+          <span>Role</span><span>Handle</span><span className="text-right">From edge</span><span className="text-right">From side</span><span>Orientation</span>
+        </div>
+        {HANDLE_ROLES.map(({ role, label, inset }) => {
+          const e = handleEntries[role]
+          return (
+            <div key={role} className="grid grid-cols-[6rem_minmax(0,1fr)_5rem_5rem_7rem] gap-2 items-center">
+              <span className="text-xs text-ink-muted">{label}</span>
+              <select value={e?.handle_id ?? ''} onChange={ev => saveHandleEntry(role, { handle_id: ev.target.value || null })} className={sel}>
+                <option value="">— no handle —</option>
+                {handles.map(h => <option key={h.id} value={h.id}>{h.name}{h.brand ? ` — ${h.brand}` : ''}{kindTag(h.grip_kind)}</option>)}
+              </select>
+              <input
+                key={`o-${selectedId}-${role}-${e?.offset_from_edge_mm ?? 50}`}
+                type="number" defaultValue={e?.offset_from_edge_mm ?? 50} className={num}
+                onBlur={ev => { const v = Number(ev.target.value); if (Number.isFinite(v) && v !== (e?.offset_from_edge_mm ?? 50)) saveHandleEntry(role, { offset_from_edge_mm: v }) }}
+              />
+              {inset ? (
+                <input
+                  key={`i-${selectedId}-${role}-${e?.inset_from_side_mm ?? ''}`}
+                  type="number" placeholder="centre" defaultValue={e?.inset_from_side_mm ?? ''} className={num}
+                  onBlur={ev => {
+                    const raw = ev.target.value.trim()
+                    const v = raw === '' ? null : Number(raw)
+                    if (v !== null && !Number.isFinite(v)) return
+                    if (v !== (e?.inset_from_side_mm ?? null)) saveHandleEntry(role, { inset_from_side_mm: v })
+                  }}
+                />
+              ) : <span className="text-[10px] text-ink-subtle text-right">centred</span>}
+              <select value={e?.orientation ?? (role === 'drawer' ? 'horizontal' : 'vertical')} onChange={ev => saveHandleEntry(role, { orientation: ev.target.value as HandleEntryRow['orientation'] })} className={sel}>
+                <option value="horizontal">Horizontal</option>
+                <option value="vertical">Vertical</option>
+              </select>
+            </div>
+          )
+        })}
+        <p className="text-[10px] text-ink-subtle pt-1">
+          From edge = grip edge (top; bottom on wall doors) to the handle&apos;s nearest hole. From side = door&apos;s non-hinged edge to the hole line; blank centres it.
+          One handle per role. Change a size per cabinet rather than by width.
+        </p>
+      </div>
+    )
+  }
+
   function renderSlideGrid() {
     const slideLabel = (s: HwSlideItem) =>
       `${s.name}${s.brand ? ` — ${s.brand}` : ''}${s.box_height != null ? ` (H${s.box_height})` : ''}`
@@ -954,6 +1055,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           {tab.type === 'idb_list'    && renderDbList(IDB_ROLES)}
           {tab.type === 'bt_roles'    && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderBtRoles()}</>}
           {tab.type === 'hw_single'   && renderHwSingle()}
+          {tab.type === 'handle_roles' && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderHandleRoles()}</>}
         </div>
 
         {/* Edging defaults hint for row-based tabs */}
