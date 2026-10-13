@@ -342,11 +342,27 @@ export function cabinetPolygon(cab: CabinetInstance, wall: Wall, perp: Pt): stri
   return cabinetCornerPts(cab, wall, perp).map(p => `${p.x},${p.y}`).join(' ')
 }
 
+// The cabinet's own frame in plan: `o` = local origin (back-left corner as seen
+// facing the cabinet's front), `x` = local +X (left → right facing the front).
+// Local +Z is always `perp`. When (wallDir, perp) is left-handed — back-side
+// cabinets, and any front whose inward normal falls that way — the cabinet is
+// TURNED, not mirrored: +X runs back along the wall from the span's far end.
+// Matches Room3DScene's needTurn and the elevation, so shaped footprints,
+// hinge sides and asymmetric parts agree across plan / 3D / elevation.
+// pos_x/pos_y stays the wall-start end of the span (wall-space anchor).
+export function cabinetPlanFrame(cab: CabinetInstance, wall: Wall, perp: Pt): { o: Pt; x: Pt } {
+  const d = wallDir(wall)
+  const turned = d.x * perp.y - d.y * perp.x < 0
+  return turned
+    ? { o: { x: cab.pos_x + cab.dx * d.x, y: cab.pos_y + cab.dx * d.y }, x: { x: -d.x, y: -d.y } }
+    : { o: { x: cab.pos_x, y: cab.pos_y }, x: d }
+}
+
 // Cabinet-frame point (x along the width, z into the room from the back) →
 // plan coordinates. The same mapping the resolved part outlines use.
 export function cabinetToPlan(cab: CabinetInstance, wall: Wall, perp: Pt): (lx: number, lz: number) => Pt {
-  const d = wallDir(wall)
-  return (lx, lz) => ({ x: cab.pos_x + lx * d.x + lz * perp.x, y: cab.pos_y + lx * d.y + lz * perp.y })
+  const { o, x } = cabinetPlanFrame(cab, wall, perp)
+  return (lx, lz) => ({ x: o.x + lx * x.x + lz * perp.x, y: o.y + lx * x.y + lz * perp.y })
 }
 
 // The plan-view outline points of a cabinet's footprint (same order as

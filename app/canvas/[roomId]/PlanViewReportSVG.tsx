@@ -14,6 +14,7 @@ import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
   toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon,
   cabinetPolygon, cabinetCenterPt, centroid, cabWallPerp, cabWallSide, cabT,
+  cabinetToPlan, cabinetPlanFrame,
 } from '@/src/lib/geometry'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem } from '@/src/lib/displayLayers/registry'
@@ -321,8 +322,9 @@ export default function PlanViewReportSVG({
         const basePerp = wallInwardNormal(wall, cx.x, cx.y)
         const perp     = cabWallPerp(cab, wall, basePerp)
         const poly     = cabinetPolygon(cab, wall, perp)
-        const wd       = wallDir(wall)
-        const at = (lx: number, lz: number) => `${cab.pos_x + lx * wd.x + lz * perp.x},${cab.pos_y + lx * wd.y + lz * perp.y}`
+        // Cabinet frame → plan (turned, never mirrored, on left-handed walls).
+        const toPlanC  = cabinetToPlan(cab, wall, perp)
+        const at = (lx: number, lz: number) => { const q = toPlanC(lx, lz); return `${q.x},${q.y}` }
         const boxPoly = (b: { x: number; z: number; w: number; d: number }) =>
           `${at(b.x, b.z)} ${at(b.x + b.w, b.z)} ${at(b.x + b.w, b.z + b.d)} ${at(b.x, b.z + b.d)}`
         const inset    = Math.min(20, cab.dx * 0.08, cab.dz * 0.08)
@@ -336,7 +338,7 @@ export default function PlanViewReportSVG({
         const labelPt = kickFace ? (() => {
           const b = tkPlanBox(kickFace)
           const lx = b.x + b.w / 2, lz = Math.max(0, b.z - 150)
-          return { x: cab.pos_x + lx * wd.x + lz * perp.x, y: cab.pos_y + lx * wd.y + lz * perp.y }
+          return toPlanC(lx, lz)
         })() : cabinetCenterPt(cab, wall, perp)
         const labelFs = layers.w('cabinet_labels', fontSize)
         const sizeFs  = layers.w('cabinet_sizes', fontSize * 0.7)
@@ -426,8 +428,10 @@ export default function PlanViewReportSVG({
         const wall = walls.find(w => w.id === cab.wall_id)
         if (!wall) return []
         const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
-        const wd = wallDir(wall)
-        const frontLeft = { x: cab.pos_x + cab.dz * perp.x, y: cab.pos_y + cab.dz * perp.y }
+        // Cabinet frame: column 0 / hinge 'left' sit on the cabinet's own left —
+        // turned on left-handed walls (back side), never mirrored.
+        const { o: fo, x: wd } = cabinetPlanFrame(cab, wall, perp)
+        const frontLeft = { x: fo.x + cab.dz * perp.x, y: fo.y + cab.dz * perp.y }
 
         type FgZone = { col_index: number; row_index: number; face_type: string; hinge_side?: string }
         type FgCol  = { col_index: number }

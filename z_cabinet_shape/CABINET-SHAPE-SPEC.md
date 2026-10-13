@@ -272,3 +272,15 @@ Design (locked in code, 3a):
 - `*_corner` classes are labels only; `_corner` stripped in `resolveClassDims.ts:52`, `loadCabinetInput.ts:408`
 - Neighbour reveals: left/right only (`left_/right_neighbour_type`)
 - Custom parts have no free rotation (view-only `part_pos_overrides`) — Phase 2 must give angled panels real rotation that reaches the optimiser
+
+## Plan handedness (fixed 2026-10-13)
+
+Back-side cabinets were drawn **mirrored** in plan: local X always ran along the
+wall direction from `pos_x/pos_y`, while 3D (Room3DScene `needTurn`) and the back
+elevation turn the cabinet 180°. Asymmetric footprints therefore showed opposite
+ways round in plan vs 3D. Locked: the cabinet's own frame is a **rotation, never a
+mirror** in every view. `cabinetPlanFrame()` / `cabinetToPlan()` in
+`src/lib/geometry.ts` turn the frame (origin at the span's far end, +X back along
+the wall) whenever `(wallDir, perp)` is left-handed; CanvasSVG + PlanViewReportSVG
+part outlines, shaped footprints, door swings / hinge sides and drawer lines all
+route through it. `pos_x/pos_y` keeps its wall-space meaning (wall-start end).

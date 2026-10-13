@@ -11,7 +11,7 @@ import {
   Pt, MIN_WALL_LEN, SNAP_PX,
   toRad, toDeg, dist,
   wallEnd, wallDir, wallPolygon, wallMitrePolygon, wallInwardNormal, centroid,
-  cabWallPerp, cabinetPolygon, cabinetCenterPt, cabT, cabinetToPlan,
+  cabWallPerp, cabinetPolygon, cabinetCenterPt, cabT, cabinetToPlan, cabinetPlanFrame,
   gridDots,
 } from '@/src/lib/geometry'
 import { footprintEdgesPlan } from '@/src/lib/cabinetShape/footprint'
@@ -953,6 +953,8 @@ export default function CanvasSVG({
           const faceP = layers.props(layers.show('doors') ? 'doors' : 'drawer_fronts', view.zoom)
           const intP  = layers.props('internal_outline', view.zoom)
 
+          // Cabinet frame → plan (turned, never mirrored, on left-handed walls).
+          const toPlanC = cabinetToPlan(displayCab, wall, perp)
           // Front-edge endpoints for face layer
           const frontLeft  = { x: displayCab.pos_x + displayCab.dz * perp.x, y: displayCab.pos_y + displayCab.dz * perp.y }
           const frontRight = { x: displayCab.pos_x + displayCab.dx * wd.x + displayCab.dz * perp.x, y: displayCab.pos_y + displayCab.dx * wd.y + displayCab.dz * perp.y }
@@ -967,7 +969,7 @@ export default function CanvasSVG({
           const casePartsR = (rpAll?.case_parts ?? []).filter(p => layers.show(casePartItem(p.part_key)))
           const kickPartsR = (rpPlan?.toekick_parts ?? []).filter(p => layers.show(kickPartItem(p.part_key)))
           const partPoly = (b: { x: number; z: number; w: number; d: number }) => {
-            const c = (lx: number, lz: number) => `${displayCab.pos_x + lx * wd.x + lz * perp.x},${displayCab.pos_y + lx * wd.y + lz * perp.y}`
+            const c = (lx: number, lz: number) => { const q = toPlanC(lx, lz); return `${q.x},${q.y}` }
             return `${c(b.x, b.z)} ${c(b.x + b.w, b.z)} ${c(b.x + b.w, b.z + b.d)} ${c(b.x, b.z + b.d)}`
           }
 
@@ -1001,15 +1003,14 @@ export default function CanvasSVG({
             const turn = z.AY
               ? { ox: ov?.ox ?? 0, oy: ov?.oy ?? 0, oz: ov?.oz ?? 0, oax: ov?.oax, oay: (ov?.oay ?? 0) + z.AY, oaz: ov?.oaz }
               : ov
-            const rotPoly = rotatedBoxPolygon(box, turn, (lx, _ly, lz) => ({
-              x: displayCab.pos_x + lx * wd.x + lz * perp.x, y: displayCab.pos_y + lx * wd.y + lz * perp.y,
-            }))
+            const rotPoly = rotatedBoxPolygon(box, turn, (lx, _ly, lz) => toPlanC(lx, lz))
             // Mitred door (facet corner): its true top-view outline, turned by AY.
             const bevel = !ov && zoneBevelOutline(z)
             const bevelPoly = bevel ? bevel.map(q => {
               const [rx, , rz] = rotEulerXYZ(0, z.AY, 0, q.x, 0, q.z)
               const lx = z.X + rx, lz = z.Z + rz
-              return `${displayCab.pos_x + lx * wd.x + lz * perp.x},${displayCab.pos_y + lx * wd.y + lz * perp.y}`
+              const p = toPlanC(lx, lz)
+              return `${p.x},${p.y}`
             }).join(' ') : null
             return [{ id, item, rect, poly: bevelPoly ?? rotPoly ?? partPoly(rect) }]
           })
@@ -1031,7 +1032,7 @@ export default function CanvasSVG({
           const labelPt = kickFace ? (() => {
             const b = tkPlanBox(kickFace)
             const lx = b.x + b.w / 2, lz = Math.max(0, b.z - 150)
-            return { x: displayCab.pos_x + lx * wd.x + lz * perp.x, y: displayCab.pos_y + lx * wd.y + lz * perp.y }
+            return toPlanC(lx, lz)
           })() : center
 
           const isBeingMoved = cabMoveDrag?.id === cab.id
@@ -1122,7 +1123,7 @@ export default function CanvasSVG({
                 const cpp = layers.props(cpi, view.zoom)
                 const { ex, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
                 if (ex <= 0 || ez <= 0) return null
-                const c = (lx: number, lz: number) => `${displayCab.pos_x + lx * wd.x + lz * perp.x},${displayCab.pos_y + lx * wd.y + lz * perp.y}`
+                const c = (lx: number, lz: number) => { const q = toPlanC(lx, lz); return `${q.x},${q.y}` }
                 const poly = `${c(p.x, p.z)} ${c(p.x + ex, p.z)} ${c(p.x + ex, p.z + ez)} ${c(p.x, p.z + ez)}`
                 return (
                   <polygon key={`cust-${i}`} points={poly} data-part={cpi}
@@ -1290,8 +1291,10 @@ export default function CanvasSVG({
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return []
           const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
-          const wd = wallDir(wall)
-          const frontLeft = { x: cab.pos_x + cab.dz * perp.x, y: cab.pos_y + cab.dz * perp.y }
+          // Cabinet frame: column 0 / hinge 'left' sit on the cabinet's own left —
+          // turned on left-handed walls (back side), never mirrored.
+          const { o: fo, x: wd } = cabinetPlanFrame(cab, wall, perp)
+          const frontLeft = { x: fo.x + cab.dz * perp.x, y: fo.y + cab.dz * perp.y }
 
           type FgZone = { col_index: number; row_index: number; face_type: string; hinge_side?: string }
           type FgCol  = { col_index: number }
