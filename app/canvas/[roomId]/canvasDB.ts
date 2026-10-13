@@ -18,7 +18,14 @@ import { mergeRules } from '@/src/lib/resolver/mergeRules'
 
 const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 
-export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<string, ResolvedCabinet>> {
+// cabinet_instances.resolved_drawer_hw — written by persistResolved.
+type DrawerHw = Pick<ResolvedCabinet, 'drawer_stacks' | 'internal_slides'>
+
+// `needsResolve` (optional) collects cabinets whose saved copy can't be drawn
+// as-is and needs a live resolve: drawers but no saved drawer hardware (saved
+// before resolved_drawer_hw existed), or face rows saved without their fronts
+// (an interrupted pre-RPC save).
+export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: Set<string>): Promise<Map<string, ResolvedCabinet>> {
   if (cabinetIds.length === 0) return new Map()
 
   const [cp, tp, ip, fr, fc, fz, ci, hin] = await Promise.all([
@@ -28,7 +35,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
     supabase.from('face_rows').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('face_cols').select('*').in('cabinet_instance_id', cabinetIds),
     supabase.from('face_zones').select('*').in('cabinet_instance_id', cabinetIds),
-    supabase.from('cabinet_instances').select('id, carcase_joints, hidden_parts, face_grid').in('id', cabinetIds),
+    supabase.from('cabinet_instances').select('id, carcase_joints, hidden_parts, face_grid, resolved_drawer_hw').in('id', cabinetIds),
     supabase.from('hinge_instances').select('*').in('cabinet_instance_id', cabinetIds),
   ])
 
@@ -49,12 +56,14 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
   const carcaseJointsById = new Map<string, Record<string, SeamJointAssign>>()
   const hiddenById = new Map<string, string[]>()
   const faceGridById = new Map<string, FaceGridInput | null>()
+  const drawerHwById = new Map<string, DrawerHw>()
   const jointTypeIds = new Set<string>()
-  for (const row of (ci.data ?? []) as { id: string; carcase_joints: Record<string, SeamJointAssign> | null; hidden_parts: string[] | null; face_grid: FaceGridInput | null }[]) {
+  for (const row of (ci.data ?? []) as { id: string; carcase_joints: Record<string, SeamJointAssign> | null; hidden_parts: string[] | null; face_grid: FaceGridInput | null; resolved_drawer_hw: DrawerHw | null }[]) {
     const joints = row.carcase_joints ?? {}
     carcaseJointsById.set(row.id, joints)
     hiddenById.set(row.id, row.hidden_parts ?? [])
     faceGridById.set(row.id, row.face_grid ?? null)
+    if (row.resolved_drawer_hw) drawerHwById.set(row.id, row.resolved_drawer_hw)
     for (const v of Object.values(joints)) {
       const j = seamAssignJoint(v)
       if (j) jointTypeIds.add(j)
@@ -203,8 +212,8 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
         ...(z.bevel_l ? { bevel_l: Number(z.bevel_l) } : {}),
         ...(z.bevel_r ? { bevel_r: Number(z.bevel_r) } : {}),
       })),
-      drawer_stacks: [],
-      internal_slides: [],
+      drawer_stacks: drawerHwById.get(id)?.drawer_stacks ?? [],
+      internal_slides: drawerHwById.get(id)?.internal_slides ?? [],
       seam_joints: seamJoints,
       hinge_instances: [],
       errors: [],
@@ -214,6 +223,12 @@ export async function dbLoadResolvedParts(cabinetIds: string[]): Promise<Map<str
     // Recover hinges (drills + 3D model fields) from the persisted instances so
     // they render in the canvas + edit modal without a live re-resolve.
     built.hinge_instances = reconstructHinges(id, built, instancesByCab, hardwareById, plateById, countRules, faceGridById.get(id) ?? null)
+    if (needsResolve) {
+      const hasDrawers = built.face_zones.some(z => z.face_type === 'drawer_face')
+        || built.internal_parts.some(p => p.part_type.startsWith('inner_drawer') || p.part_type.startsWith('pull_out'))
+      const halfSaved = built.face_rows.length > 0 && built.face_zones.length === 0
+      if ((hasDrawers && !drawerHwById.has(id)) || halfSaved) needsResolve.add(id)
+    }
     // NB: left UNFILTERED — this map also feeds the edit modal, whose Parts tab
     // needs the full list. Consumers (canvas elevation/plan, reports, cut lists)
     // call filterHiddenParts() at render; the modal filters its own viewers.

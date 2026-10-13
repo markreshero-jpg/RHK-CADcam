@@ -49,7 +49,8 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
   useEffect(() => {
     const ids = initialCabinets.map(c => c.id)
     if (ids.length === 0) return
-    dbLoadResolvedParts(ids).then(async map => {
+    const needsResolve = new Set<string>()
+    dbLoadResolvedParts(ids, needsResolve).then(async map => {
       // Attach standalone custom parts (panels/fillers/end panels) so room views
       // can draw them; this also creates entries for custom-only cabinets.
       const { data: cps } = await supabase.from('cabinet_custom_parts').select(CUSTOM_PART_COLS).in('cabinet_instance_id', ids)
@@ -57,25 +58,18 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
       if (map.size === 0) return
       setResolvedParts(map)
 
-      // Re-resolve cabinets whose drawer hardware is computed-only (never persisted):
-      // face drawers (drawer_face zones → drawer_stacks) AND inner drawers / pull-outs
-      // (internal_parts → internal_slides). dbLoadResolvedParts hardcodes both
-      // drawer_stacks and internal_slides to [], so without this re-resolve the slide
-      // rails + their drilling vanish on reopen.
-      const drawerCabIds = [...map.keys()].filter(id => {
-        const rp = map.get(id)
-        const hasDrawerFace = (rp?.face_zones ?? []).some(z => z.face_type === 'drawer_face')
-        const hasInnerDrawer = (rp?.internal_parts ?? []).some(p =>
-          p.part_type.startsWith('inner_drawer') || p.part_type.startsWith('pull_out'))
-        return hasDrawerFace || hasInnerDrawer
-      })
-      if (drawerCabIds.length > 0) {
-        Promise.allSettled(drawerCabIds.map(id => dbResolveAndPersistCabinet(id))).then(results => {
+      // Drawer hardware now loads from cabinet_instances.resolved_drawer_hw, so
+      // only cabinets whose saved copy is incomplete re-resolve: saved before that
+      // column existed, or left with face rows but no fronts by an old
+      // interrupted save (see dbLoadResolvedParts).
+      const resolveIds = [...needsResolve]
+      if (resolveIds.length > 0) {
+        Promise.allSettled(resolveIds.map(id => dbResolveAndPersistCabinet(id))).then(results => {
           setResolvedParts(prev => {
             const next = new Map(prev)
             results.forEach((r, i) => {
               if (r.status === 'fulfilled' && r.value)
-                next.set(drawerCabIds[i], { ...r.value, custom_parts: prev.get(drawerCabIds[i])?.custom_parts })
+                next.set(resolveIds[i], { ...r.value, custom_parts: prev.get(resolveIds[i])?.custom_parts })
             })
             return next
           })
