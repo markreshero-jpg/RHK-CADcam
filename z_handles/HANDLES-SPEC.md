@@ -1,6 +1,6 @@
 # Handles & Finger Pulls — Spec
 
-**Status:** H1–H3 committed (f96e204); H6a + H6b built 2026-10-14 (unit-tested, uncommitted). Next = H5 (per-door overrides).
+**Status:** H1–H3 committed (f96e204); H6a + H6b committed (843e42a). Next = live-check + commit H5a, then double dividers (`z_dividers/DIVIDERS-SPEC.md`), then H5b (rails per column).
 **Owner module:** `z_handles/`
 **Touches:** resolver (face zones, rules), handle catalogue + schedules,
 display layers, optimiser / G-code (drilling + routes), reports.
@@ -168,7 +168,8 @@ New tables need RLS policies (see access-control memory and `z_access_control/`)
 | **H2b** | Switch handle holes off: room, cabinet, and per door/drawer front (D13) | ✅ built 2026-10-13 — see D13 |
 | **H3** | `FPGAP` rule + grip-edge gap sizing in `resolveFace`; `sharknose` kind: 3D bevel, elevation hidden line, cut-list saw note | ✅ built 2026-10-13 — see H3 notes |
 | **H4** | `routed` kind: back-face route → G-code | **parked**: shop doesn't cut routed pulls (2026-10-13) |
-| **H5** | Per-door overrides UI: grip, grip edge, finger gap, handle offset | not started |
+| **H5a** | Per-door overrides: grip, grip edge, offset from edge, inset from side, finger gap (D14) | ✅ built 2026-10-14 (unit-tested, uncommitted) — see D14 |
+| **H5b** | Rails per column: split at dividers, notch dividers where seams line up (D15). Needs `z_dividers` V1–V3 first | not started |
 | **H6a** | Backing rail parts + side notches (geometry), rules RAILH / RAILUP / FPRAIL, layer item, cut list | ✅ built 2026-10-13 — see H6 notes in §7 |
 | **H6b** | Notch routing on the sides → CNC; knock-in block holes; front rail push-back; rail grain | ✅ built 2026-10-14 — see §7 |
 | **H7** | Recessed aluminium channel (rare) | parked |
@@ -260,7 +261,37 @@ costed, it just isn't drilled. Built in H2b:
 - Catalogue columns: Hole ⌀, Finger gap, Tilt°, Land mm.
 - Known gaps:
   - The face grid editor's schematic preview still uses fixed reveals.
-  - Per-door finger gap is H5.
+  - Per-door finger gap is H5a (D14).
+
+**D14. Per-door overrides (user, 2026-10-14) — H5a.** Each door / drawer
+front can override, in the face grid zone panel, with "inherit" as the default:
+grip (`handle_id`, already honoured by the resolver), grip edge (top / bottom),
+offset from the grip edge, inset from the side, and finger gap (mm). All live
+in the face_grid zone JSON, like `handle_drill`.
+- Fronts are sized on their **own** finger gap at their grip edge. Until now
+  a seam took FPGAP when any front on it needed one. So two fronts side by
+  side can end up with different seam heights.
+- The rail grows with the gap: RAILUP (5) and the 20 behind the bevelled front
+  stay fixed, and the rail gets taller by the extra gap (a 30 gap gives a 55
+  rail).
+- **As built:** zone fields `grip_edge`, `handle_offset`, `handle_inset`,
+  `finger_gap` (FaceZoneInput). `resolveHandles.fingerGap` gives each front's
+  edge + mm; `resolveFace` lays each seam out at the largest wanted gap and grows
+  a gripping front that wants less; `ResolvedHandle.finger_gap_mm` carries the
+  front's own gap to the rails. Rails whose heights overlap merge into one
+  (until H5b). UI: face grid zone panel → Handle block, blank = inherit, with
+  the resolved value as the hint. Tests in `handles.test.ts` (H5a block).
+
+**D15. Rails per column (user, 2026-10-14) — H5b.** Fronts side by side sit
+either side of an internal division (a double division for drawers, see
+`z_dividers/DIVIDERS-SPEC.md`), and each division carries the rail on its side.
+- Where neighbouring columns share a seam height, one rail runs straight
+  through and the division is notched like the sides.
+- Where the seam heights differ, each column gets its own rail, running from
+  its side or division to the next one.
+- Different seam heights with no division between them give a resolver warning.
+- Known gap in H6 as committed: the full-width rail runs through any internal
+  divider with no notch. H5b fixes this.
 
 H1 is the foundation; H2 and H3 can then run in either order. H3 is the
 likely first visible win, since sharknose is the most common case and needs no machining.

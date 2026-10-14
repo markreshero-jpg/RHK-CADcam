@@ -11,6 +11,7 @@ import { intElevRect, dbElevRect, slideElevRect, TapePolys } from './cabinetEdit
 import type { EbByMatId } from './useMaterialColours'
 
 type DoorStyleOpt = { id: string; name: string }
+type HandleOpt = { id: string; name: string; grip_kind: string }
 
 function useSvgZoom(initW: number, initH: number) {
   const initRef = useRef({ w: initW, h: initH })
@@ -170,12 +171,15 @@ export default function FaceGridEditor({
   )
   const [selectedZone, setSelectedZone] = useState<{ row: number; col: number } | null>(null)
   const [doorStyles, setDoorStyles] = useState<DoorStyleOpt[]>([])
+  const [handles, setHandles] = useState<HandleOpt[]>([])
   const [showChevrons, setShowChevrons] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     supabase.from('door_styles').select('id, name').eq('is_active', true).order('sort_order').order('name')
       .then(({ data }) => { if (!cancelled) setDoorStyles((data ?? []) as DoorStyleOpt[]) })
+    supabase.from('hardware_handles').select('id, name, grip_kind').eq('active', true).order('name')
+      .then(({ data }) => { if (!cancelled) setHandles((data ?? []) as HandleOpt[]) })
     return () => { cancelled = true }
   }, [])
 
@@ -325,6 +329,20 @@ export default function FaceGridEditor({
         if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
         const rest = { ...z }; delete rest.handle_drill
         return drill === null ? rest : { ...rest, handle_drill: drill }
+      }),
+    })
+  }
+
+  // Per-front grip overrides (z_handles D14). null = inherit.
+  function setZoneGrip<K extends 'handle_id' | 'grip_edge' | 'handle_offset' | 'handle_inset' | 'finger_gap'>(
+    rowIdx: number, colIdx: number, key: K, value: FaceZoneInput[K] | null,
+  ) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        const rest = { ...z }; delete rest[key]
+        return value === null ? rest : { ...rest, [key]: value }
       }),
     })
   }
@@ -926,6 +944,61 @@ export default function FaceGridEditor({
                     </select>
                   </div>
                 )}
+
+                {/* Handle — per-front overrides, doors + drawer fronts (z_handles D14).
+                    Blank = inherit; placeholders show what the front resolves to now. */}
+                {(gz.face_type === 'door' || gz.face_type === 'drawer_face') && (() => {
+                  const rh = rp?.face_zones.find(z => z.row_index === gz.row_index && z.col_index === gz.col_index)?.handle ?? null
+                  const sel = 'bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full'
+                  const sideInset = gz.face_type === 'door' && (gz.hinge_side ?? 'left') !== 'top' && gz.hinge_side !== 'bottom'
+                  const positioned = rh ? rh.x != null : true
+                  const num = (key: 'handle_offset' | 'handle_inset' | 'finger_gap', label: string, placeholder: string) => (
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500 text-[10px] w-20 shrink-0">{label}</span>
+                      <input
+                        key={`${key}-${gz.row_index}-${gz.col_index}-${gz[key] ?? ''}`}
+                        type="number" step={1} defaultValue={gz[key] ?? ''} placeholder={placeholder}
+                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                        onBlur={e => {
+                          const v = parseFloat(e.target.value)
+                          const next = isNaN(v) ? null : v
+                          if (next !== (gz[key] ?? null)) setZoneGrip(gz.row_index, gz.col_index, key, next)
+                        }}
+                        className={inp}
+                      />
+                      <span className="text-gray-600 text-[9px] shrink-0">mm</span>
+                    </div>
+                  )
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <p className="text-gray-600">Handle</p>
+                      <select
+                        value={gz.handle_id ?? ''}
+                        onChange={e => setZoneGrip(gz.row_index, gz.col_index, 'handle_id', e.target.value || null)}
+                        className={sel}
+                      >
+                        <option value="">— schedule{rh && !gz.handle_id ? ` (${rh.name})` : ''} —</option>
+                        {handles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                      </select>
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500 text-[10px] w-20 shrink-0">Grip edge</span>
+                        <select
+                          value={gz.grip_edge ?? ''}
+                          onChange={e => setZoneGrip(gz.row_index, gz.col_index, 'grip_edge', (e.target.value || null) as FaceZoneInput['grip_edge'] | null)}
+                          className={sel}
+                        >
+                          <option value="">— auto{rh && !gz.grip_edge ? ` (${rh.grip_edge})` : ''} —</option>
+                          <option value="top">Top</option>
+                          <option value="bottom">Bottom</option>
+                        </select>
+                      </div>
+                      {positioned && num('handle_offset', 'From grip edge', 'schedule')}
+                      {positioned && sideInset && num('handle_inset', 'From side', 'schedule')}
+                      {(rh?.finger_gap || gz.finger_gap != null) &&
+                        num('finger_gap', 'Finger gap', String(rh?.finger_gap_mm ?? ''))}
+                    </div>
+                  )
+                })()}
 
                 {/* Handle holes — doors + drawer fronts (z_handles D13) */}
                 {(gz.face_type === 'door' || gz.face_type === 'drawer_face') && (

@@ -60,13 +60,17 @@ export function zoneGrip(cab: CabinetInput, zone: ZoneLike): ZoneGrip | null {
   const override = zoneIn?.handle_id ? cab.handle_products?.[zoneIn.handle_id] : undefined
   const product = override ?? entry?.handle ?? null
   if (!product) return null
-  return { role, entry, product, override: !!override, edge: gripEdge(cab, zone), zoneIn }
+  // The front's own grip edge (D14) wins over the hinge / class default.
+  const edge = zoneIn?.grip_edge ?? gripEdge(cab, zone)
+  return { role, entry, product, override: !!override, edge, zoneIn }
 }
 
-/** The grip edge needing the FPGAP finger gap, or null (D4). */
-export function fingerGapEdge(cab: CabinetInput, zone: ZoneLike): 'top' | 'bottom' | null {
+/** The finger gap a front wants at its grip edge (D4): the front's own size
+ *  (D14), else FPGAP. Null when its grip needs no gap. */
+export function fingerGap(cab: CabinetInput, zone: ZoneLike, fpgap: number): { edge: 'top' | 'bottom'; gap: number } | null {
   const g = zoneGrip(cab, zone)
-  return g?.product.needs_finger_gap ? g.edge : null
+  if (!g?.product.needs_finger_gap) return null
+  return { edge: g.edge, gap: g.zoneIn?.finger_gap ?? fpgap }
 }
 
 export function resolveHandle(cab: CabinetInput, zone: ResolvedFaceZone): ResolvedHandle | null {
@@ -75,8 +79,8 @@ export function resolveHandle(cab: CabinetInput, zone: ResolvedFaceZone): Resolv
   const { role, entry, product, zoneIn, edge } = g
   const override = g.override
   const orientation = entry?.orientation ?? (role === 'drawer' ? 'horizontal' : 'vertical')
-  const offset      = entry?.offset_from_edge_mm ?? 50
-  const inset       = role === 'drawer' ? null : (entry?.inset_from_side_mm ?? null)
+  const offset      = zoneIn?.handle_offset ?? entry?.offset_from_edge_mm ?? 50
+  const inset       = role === 'drawer' ? null : (zoneIn?.handle_inset ?? entry?.inset_from_side_mm ?? null)
   const half        = (product.bore_centres ?? 0) / 2
 
   let x: number | null = null
@@ -131,6 +135,7 @@ export function resolveHandle(cab: CabinetInput, zone: ResolvedFaceZone): Resolv
     hole_dia:     product.hole_dia_mm ?? 5,
     drilled:      product.grip_kind === 'hardware' && drilled,
     finger_gap:   product.needs_finger_gap,
+    finger_gap_mm: product.needs_finger_gap ? (zoneIn?.finger_gap ?? cab.rules.FPGAP) : null,
     bevel:        product.grip_kind === 'sharknose' ? sharknoseBevel(product, zone.DZ) : null,
   }
 }

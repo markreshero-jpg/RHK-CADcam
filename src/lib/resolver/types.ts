@@ -783,8 +783,10 @@ export interface ResolvedHandle {
   // false = a drillable handle whose holes are switched off (D13): still drawn,
   // listed and costed, just not drilled.
   drilled:     boolean
-  // The front is sized with the FPGAP finger gap at its grip edge.
+  // The front is sized with a finger gap at its grip edge.
   finger_gap:  boolean
+  // That gap in mm: the front's own override (D14), else FPGAP. Null = no gap.
+  finger_gap_mm: number | null
   // Sharknose back bevel on the grip edge (null for other grips). run = how far
   // the bevel reaches along the back face from the edge.
   bevel:       { angle_deg: number; land: number; run: number } | null
@@ -996,6 +998,11 @@ export interface FaceZoneInput {
   // Per-front handle-hole override (z_handles D13). Undefined = inherit the
   // HANDLE_DRILL rule (job → room → cabinet).
   handle_drill?: boolean
+  // Per-front grip overrides (z_handles D14). Undefined = inherit.
+  grip_edge?:     'top' | 'bottom'   // else from hinge side / assembly class (D5)
+  handle_offset?: number             // grip edge → nearest hole (else the schedule row)
+  handle_inset?:  number             // doors: non-hinged side → hole line (else the schedule row)
+  finger_gap?:    number             // mm at the grip edge, for grips that need one (else FPGAP)
 }
 
 // ── Internal Part Inputs ──────────────────────────────────────

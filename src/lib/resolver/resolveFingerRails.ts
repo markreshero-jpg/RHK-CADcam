@@ -44,33 +44,35 @@ export function fingerRails(
   const carcBot = Math.min(left.Y, right.Y)
   const down = Math.max(r.RAILH - r.FPGAP - r.RAILUP, 0)   // behind the bevelled front
 
-  // One rail per gap (rows span every column, so fronts sharing a gap edge
-  // share a rail). Keyed by the gap's lower edge.
-  const byGap = new Map<number, FingerRail>()
+  // One rail per gap: the front's own gap (D14), with RAILUP and `down` fixed,
+  // so a bigger gap makes a taller rail. Fronts side by side on one seam share
+  // a rail; where their gaps differ the rails overlap and merge into one, tall
+  // enough for both (until H5b splits rails at dividers, D15).
+  const found: FingerRail[] = []
   for (const z of zones) {
     const h = z.handle
     if (!h?.finger_gap || z.facet || z.AY) continue
-    let bottom: number, top: number, gapKey: number
+    const gap = h.finger_gap_mm ?? r.FPGAP
+    let bottom: number, top: number
     if (h.grip_edge === 'top') {
-      const gapLo = z.Y + z.DY, gapHi = gapLo + r.FPGAP
+      const gapLo = z.Y + z.DY, gapHi = gapLo + gap
       bottom = gapLo - down
       top = Math.min(gapHi + r.RAILUP, carcTop)
-      gapKey = gapLo
     } else {
-      const gapHi = z.Y, gapLo = gapHi - r.FPGAP
+      const gapHi = z.Y, gapLo = gapHi - gap
       top = gapHi + down
       bottom = Math.max(gapLo - r.RAILUP, carcBot)
-      gapKey = gapLo
     }
     if (top - bottom <= EPS) continue
-    const k = Math.round(gapKey * 10) / 10
-    const prev = byGap.get(k)
-    if (prev) { prev.bottom = Math.min(prev.bottom, bottom); prev.top = Math.max(prev.top, top); continue }
-    byGap.set(k, { key: 'fprail:0', bottom, top, frontZ, thickness: z.DZ, material_id: z.material_id })
+    found.push({ key: 'fprail:0', bottom, top, frontZ, thickness: z.DZ, material_id: z.material_id })
   }
-  return [...byGap.values()]
-    .sort((a, b) => a.bottom - b.bottom)
-    .map((rail, i) => ({ ...rail, key: `fprail:${i}` as const }))
+  const merged: FingerRail[] = []
+  for (const rl of found.sort((a, b) => a.bottom - b.bottom)) {
+    const prev = merged[merged.length - 1]
+    if (prev && rl.bottom < prev.top - EPS) { prev.top = Math.max(prev.top, rl.top); continue }
+    merged.push({ ...rl })
+  }
+  return merged.map((rail, i) => ({ ...rail, key: `fprail:${i}` as const }))
 }
 
 /** Rail case parts (face-kind: DX = height, DY = width, DZ = thickness). */

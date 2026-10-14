@@ -11,7 +11,7 @@ import {
 } from './types'
 import { resolveReveal, resolveFaceZ } from './mergeRules'
 import { evaluateProfileOps } from '../doorProfile'
-import { fingerGapEdge } from './resolveHandles'
+import { fingerGap } from './resolveHandles'
 
 export interface FaceResolution {
   rows:   ResolvedFaceRow[]
@@ -66,18 +66,28 @@ export function resolveFace(
   // bottom-up (row_index 0 = bottom), so a top-grip zone in row i widens the
   // gap above row i (the top reveal for the top row); a bottom-grip zone widens
   // the gap below it. (cab.face_grid is the facet's own grid on shaped fronts.)
-  const fgAbove = new Set<number>(), fgBelow = new Set<number>()
+  // Fronts can ask for their own gap (D14): a seam is laid out at the largest
+  // gap any front on it wants, and a gripping front wanting less grows at its
+  // grip edge to suit (see the zone loop), so it gets its own gap and the
+  // plain fronts either side stay in line.
+  const fgAbove = new Map<number, number>(), fgBelow = new Map<number, number>()
+  const zoneGap = new Map<string, { edge: 'top' | 'bottom'; gap: number }>()
   for (const zn of cab.face_grid.zones) {
     if (zn.face_type === 'open') continue
-    const e = fingerGapEdge(cab, zn)
-    if (e === 'top') fgAbove.add(zn.row_index)
-    else if (e === 'bottom') fgBelow.add(zn.row_index)
+    const fg = fingerGap(cab, zn, r.FPGAP)
+    if (!fg) continue
+    zoneGap.set(`${zn.row_index}:${zn.col_index}`, fg)
+    const m = fg.edge === 'top' ? fgAbove : fgBelow
+    m.set(zn.row_index, Math.max(m.get(zn.row_index) ?? 0, fg.gap))
   }
   const topRow = cab.face_grid.rows.length - 1
-  const revT = fgAbove.has(topRow) ? r.FPGAP : r.REVT
-  const revB = fgBelow.has(0)      ? r.FPGAP : r.REVB
+  const revT = fgAbove.get(topRow) ?? r.REVT
+  const revB = fgBelow.get(0)      ?? r.REVB
   /** Gap between row i and row i + 1. */
-  const rowGap = (i: number) => (fgAbove.has(i) || fgBelow.has(i + 1)) ? r.FPGAP : r.GAPR
+  const rowGap = (i: number) => {
+    const a = fgAbove.get(i), b = fgBelow.get(i + 1)
+    return a == null && b == null ? r.GAPR : Math.max(a ?? 0, b ?? 0)
+  }
 
   // ── Face opening total dimensions ─────────────────────────────
   const faceW = DX - revL - revR
@@ -204,9 +214,23 @@ export function resolveFace(
     if (zone.face_type === 'open') continue
 
     const zoneW  = col.width
-    const zoneH  = row.height
+    let   zoneH  = row.height
     const zoneX  = colOffsets[zone.col_index]
-    const zoneY  = rowOffsets[zone.row_index]
+    let   zoneY  = rowOffsets[zone.row_index]
+
+    // A front wanting a smaller finger gap than its seam was laid out at grows
+    // into the difference at its grip edge (D14).
+    const fg = zoneGap.get(`${zone.row_index}:${zone.col_index}`)
+    if (fg) {
+      const seam = fg.edge === 'top'
+        ? (zone.row_index === topRow ? revT : rowGap(zone.row_index))
+        : (zone.row_index === 0 ? revB : rowGap(zone.row_index - 1))
+      const extra = seam - fg.gap
+      if (extra > EPS) {
+        zoneH += extra
+        if (fg.edge === 'bottom') zoneY -= extra
+      }
+    }
 
     // Door style (zone → room → job cascade resolved in loadCabinetInput).
     // Applies to doors, drawer fronts and false panels alike; a blank's

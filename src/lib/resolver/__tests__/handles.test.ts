@@ -215,6 +215,60 @@ describe('resolveHandles', () => {
       expect(900 - (zones[2].Y + zones[2].DY)).toBeCloseTo(DEFAULT_RULES.REVT)
       expect(zones[1].Y - (zones[0].Y + zones[0].DY)).toBeCloseTo(DEFAULT_RULES.GAPR)
     })
+
+    describe('per-front overrides (H5a, D14)', () => {
+      // Two columns of three drawers; col 0's middle drawer asks for a 30 gap.
+      const sixDrawers = (over: Record<string, unknown> = {}) => ({
+        rows: [0, 1, 2].map(i => ({ row_index: i, height_locked: false })),
+        cols: [0, 1].map(i => ({ col_index: i, width_locked: false })),
+        zones: [0, 1, 2].flatMap(i => [0, 1].map(c => ({
+          row_index: i, col_index: c, face_type: 'drawer_face' as const,
+          ...(i === 1 && c === 0 ? over : {}),
+        }))),
+      })
+      const at = (zs: ReturnType<typeof resolveCabinet>['face_zones'], r: number, c: number) =>
+        zs.find(z => z.row_index === r && z.col_index === c)!
+
+      it('a bigger per-front gap widens the seam; the neighbour grows to keep its own 20', () => {
+        const rp = resolveCabinet(cab({ face_grid: sixDrawers({ finger_gap: 30 }), handle_schedule: sharkSched }))
+        const zs = rp.face_zones
+        const above = at(zs, 2, 0).Y                                     // plain bottom edges stay in line
+        expect(at(zs, 2, 1).Y).toBeCloseTo(above)
+        expect(above - (at(zs, 1, 0).Y + at(zs, 1, 0).DY)).toBeCloseTo(30)
+        expect(above - (at(zs, 1, 1).Y + at(zs, 1, 1).DY)).toBeCloseTo(20)
+        expect(at(zs, 1, 1).DY - at(zs, 1, 0).DY).toBeCloseTo(10)
+        expect(at(zs, 1, 0).handle!.finger_gap_mm).toBe(30)
+        expect(at(zs, 1, 1).handle!.finger_gap_mm).toBe(20)
+        // Untouched seams keep FPGAP.
+        expect(at(zs, 1, 0).Y - (at(zs, 0, 0).Y + at(zs, 0, 0).DY)).toBeCloseTo(20)
+      })
+
+      it('the rail grows with the gap: 5 up / 30 gap / 20 down = 55, one merged rail per seam', () => {
+        const rp = resolveCabinet(cab({ face_grid: sixDrawers({ finger_gap: 30 }), handle_schedule: sharkSched }))
+        const rails = rp.case_parts.filter(p => p.part_key.startsWith('fprail:')).sort((a, b) => a.Y - b.Y)
+        expect(rails).toHaveLength(3)
+        const mid = rails[1], d = at(rp.face_zones, 1, 0)
+        expect(mid.Y).toBeCloseTo(d.Y + d.DY - 20)
+        expect(mid.DX).toBeCloseTo(55)
+        expect(rails[0].DX).toBeCloseTo(45)
+      })
+
+      it('grip edge override flips the gap to the other edge', () => {
+        const grid = { ...threeDrawers, zones: threeDrawers.zones.map(z => z.row_index === 0 ? { ...z, grip_edge: 'bottom' as const } : z) }
+        const zs = resolveCabinet(cab({ face_grid: grid, handle_schedule: sharkSched })).face_zones
+        const bottom = zs.find(z => z.row_index === 0)!
+        expect(bottom.handle!.grip_edge).toBe('bottom')
+        expect(bottom.Y - 150).toBeCloseTo(20)                          // finger gap above the kick (TK 150)
+      })
+    })
+  })
+
+  it('per-front handle offset + inset override the schedule row (H5a)', () => {
+    const grid = { ...twoDoors, zones: [{ ...twoDoors.zones[0], handle_offset: 80, handle_inset: 35 }, twoDoors.zones[1]] }
+    const [left, right] = resolveCabinet(cab({ face_grid: grid })).face_zones
+    expect(left.handle!.y).toBeCloseTo(left.DY - 80 - 80)
+    expect(left.handle!.x).toBeCloseTo(left.DX - 35)
+    expect(right.handle!.x).toBeCloseTo(50)
   })
 
   it('no schedule row → no handle', () => {
