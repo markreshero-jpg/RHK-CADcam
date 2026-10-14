@@ -1,6 +1,6 @@
 # Fixtures & Appliances — Spec
 
-Status: **P1 committed (50aef31); P2 placement built 2026-10-14, uncommitted** — next: P3 benchtop cutouts. See "RESUME HERE".
+Status: **P1 committed (50aef31); P2 placement committed in c7d1633 (WIP commit)** — next: P3 benchtop cutouts. See "RESUME HERE".
 
 Bought-in things placed in a room: ovens, cooktops, dishwashers, fridges,
 rangehoods, sinks, taps, decorative items. Catalogue lives in the Settings →
@@ -88,7 +88,7 @@ in the Wall tool (F2) — see "Openings (later)" at the bottom.
   `app/library/fixtures/` (Settings tab `fixtures_library` + standalone
   `/library/fixtures`), types `FixtureCatalogItem` / `RoomFixture` in types.ts.
   Model files are never deleted (placed fixtures point at them).
-- **P2 — Placement** ✅ built 2026-10-14 (uncommitted) — F5 picker, place/snap to wall, move/rotate/delete,
+- **P2 — Placement** ✅ built 2026-10-14 (committed in c7d1633) — F5 picker, place/snap to wall, move/rotate/delete,
   plan + elevation + 3D rendering, layer items, object tree.
 - **P3 — Benchtop cutouts** — sink/cooktop cutout template on the catalogue row
   becomes a cutout operation on the benchtop under it.
