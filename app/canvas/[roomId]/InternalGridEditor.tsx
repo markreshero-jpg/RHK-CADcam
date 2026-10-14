@@ -67,7 +67,7 @@ const adjOf = (fittings: InternalFitting[]): AdjShelfFitting[] =>
 // Normalise a stored section tree to the current shape. Older saves stored an open
 // compartment as { adj_shelves: [...] }; convert those to adj_shelf fittings so the
 // editor (and the resolver, once re-saved) sees the new model.
-function normalizeSection(raw: unknown): Section {
+export function normalizeSection(raw: unknown): Section {
   const s = raw as Record<string, unknown> | null
   if (!s || typeof s !== 'object') return EMPTY_SECTION
   if (s.type === 'open') {
@@ -90,6 +90,7 @@ function normalizeSection(raw: unknown): Section {
         ...(typeof c.equalise_group === 'string' && c.equalise_group ? { equalise_group: c.equalise_group } : {}),
         ...(c.separator === 'none' || c.separator === 'adj_shelf' || c.separator === 'fixed_shelf' ? { separator: c.separator } : {}),
         ...(c.auto_height === true ? { auto_height: true } : {}),
+        ...(c.divider === 'single' || c.divider === 'double' ? { divider: c.divider } : {}),
         section: normalizeSection(c.section),
       })),
     }
@@ -108,6 +109,8 @@ interface SepDisplay {
   sepT:       number
   locked:     boolean         // children[index] has a fixed size OR is group-sized
   equalised:  boolean         // children[index] is in an equalise group (drag would break it)
+  divider?:   SectionChild['divider']   // vertical only: single / double / undefined = automatic
+  double:     boolean         // drawn as two panels back to back
 }
 
 interface LeafDisplay {
@@ -175,12 +178,13 @@ const isDrawerBaySectionEd = (section: Section): boolean =>
   section.type === 'open' && section.fittings.some(f => f.type === 'inner_drawer' || f.type === 'pull_out')
 
 // Thickness of the divider between child i and i+1 of a split (editor mirror of
-// the resolver's gapThickness): vertical = divider (matT); horizontal = shelf
+// the resolver's gapThickness): vertical = divider (matT, 2 × for a double); horizontal = shelf
 // (shelfT) unless the gap is 'none' or borders a drawer/rollout bay with no
 // explicit separator set. matT/shelfT are the cabinet's real material thicknesses.
-const edGapT = (kids: SectionChild[], i: number, horiz: boolean, shelfT: number, matT: number): number => {
+// `auto` = the resolver doubled this automatic divider (rp.auto_double_dividers).
+const edGapT = (kids: SectionChild[], i: number, horiz: boolean, shelfT: number, matT: number, auto = false): number => {
   if (i >= kids.length - 1) return 0
-  if (!horiz) return matT
+  if (!horiz) return kids[i].divider === 'double' || (kids[i].divider === undefined && auto) ? 2 * matT : matT
   const c = kids[i]
   if (c.separator === 'none') return 0
   if (c.separator === undefined && (isDrawerBaySectionEd(c.section) || (!!kids[i + 1] && isDrawerBaySectionEd(kids[i + 1].section)))) return 0
@@ -215,17 +219,20 @@ const childFixed = (c: SectionChild, slides: SlideLite[]): number | null =>
 // Pass-1 walker (editor-side mirror of resolveInternal.computeGroupSizes).
 // Records each equalise group's per-split natural fair share; the group's
 // resolved size is min(candidates) so it always fits.
-function computeGroupSizes(root: Section, interior: Box, slides: SlideLite[], shelfT: number, matT: number): Map<string, number> {
+// Same key as the resolver's sepKey: "<path>:<index>".
+const edSepKey = (path: Path, i: number) => `${path.join('.')}:${i}`
+
+function computeGroupSizes(root: Section, interior: Box, slides: SlideLite[], shelfT: number, matT: number, autoKeys: Set<string>): Map<string, number> {
   const candidates = new Map<string, number[]>()
 
-  function walk(s: Section, box: Box) {
+  function walk(s: Section, box: Box, path: Path = []) {
     if (s.type === 'open' || box.w <= 0 || box.h <= 0) return
     const horiz = s.type === 'hsplit'
     const total = horiz ? box.h : box.w
     const kids  = s.children
     const N     = kids.length
     if (N === 0) return
-    const sepThick = (i: number) => edGapT(kids, i, horiz, shelfT, matT)
+    const sepThick = (i: number) => edGapT(kids, i, horiz, shelfT, matT, autoKeys.has(edSepKey(path, i)))
     const fixedOf      = (c: SectionChild) => childFixed(c, slides)
     const sumSep       = kids.reduce<number>((a, _c, i) => a + sepThick(i), 0)
     const avail        = total - sumSep
@@ -247,7 +254,7 @@ function computeGroupSizes(root: Section, interior: Box, slides: SlideLite[], sh
       const childBox: Box = horiz
         ? { x: box.x, y: cursor, w: box.w, h: size }
         : { x: cursor, y: box.y, w: size, h: box.h }
-      walk(c.section, childBox)
+      walk(c.section, childBox, [...path, i])
       cursor += size + sepThick(i)
     })
   }
@@ -370,10 +377,11 @@ function computeLayout(
   slides:   SlideLite[],
   shelfT:   number,
   matT:     number,
+  autoKeys: Set<string> = new Set(),
 ): { seps: SepDisplay[]; leaves: LeafDisplay[]; groupSizes: Map<string, number> } {
   const seps:   SepDisplay[]  = []
   const leaves: LeafDisplay[] = []
-  const groupSizes = computeGroupSizes(root, interior, slides, shelfT, matT)
+  const groupSizes = computeGroupSizes(root, interior, slides, shelfT, matT, autoKeys)
 
   function walk(section: Section, box: Box, path: Path) {
     if (box.w <= 0 || box.h <= 0) return
@@ -472,7 +480,7 @@ function computeLayout(
     // Per-separator thickness: horizontal honours each child's separator type
     // ('none' = open gap = 0, and inferred 'none' around drawer bays); vertical
     // separators are always dividers.
-    const sepThick = (i: number) => edGapT(kids, i, horiz, shelfT, matT)
+    const sepThick = (i: number) => edGapT(kids, i, horiz, shelfT, matT, autoKeys.has(edSepKey(path, i)))
 
     // Classify: locked (size set), auto-height drawer bay, grouped (resolved
     // group size), or free flex.
@@ -515,6 +523,7 @@ function computeLayout(
                      : { x: cursor + size, y: box.y, w: st, h: box.h },
           childStart: cursor, splitEnd, sepT: st,
           locked: childResolved[i] !== null, equalised: !!c.equalise_group,
+          divider: horiz ? undefined : c.divider, double: !horiz && st > matT + 0.01,
         })
       }
       cursor += size + st
@@ -658,13 +667,25 @@ function setChildSize(root: Section, path: Path, index: number, size: number | u
   })
 }
 
+// Single / double / automatic (undefined) for the vsplit divider after children[index] (z_dividers V-D4).
+function setChildDivider(root: Section, path: Path, index: number, divider: SectionChild['divider']): Section {
+  return updateAtPath(root, path, s => {
+    if (s.type === 'open') return s
+    return { ...s, children: s.children.map((c, i) => {
+      if (i !== index) return c
+      const rest = { ...c }; delete rest.divider
+      return divider ? { ...rest, divider } : rest
+    }) }
+  })
+}
+
 function equaliseSplit(root: Section, path: Path): Section {
   return updateAtPath(root, path, s => s.type === 'open' ? s : { ...s, children: s.children.map(c => ({ ...c, size: undefined })) })
 }
 
 function equaliseAll(s: Section): Section {
   if (s.type === 'open') return s
-  return { ...s, children: s.children.map(c => ({ size: undefined, section: equaliseAll(c.section) })) }
+  return { ...s, children: s.children.map(c => ({ size: undefined, ...(c.divider ? { divider: c.divider } : {}), section: equaliseAll(c.section) })) }
 }
 
 // ── Equalise-group helpers ───────────────────────────────────────────────────
@@ -870,6 +891,12 @@ export default function InternalGridEditor({
   const [tree, setTree]         = useState<Section>(() =>
     normalizeSection((cabinet.internal_grid as { tree?: unknown } | null)?.tree)
   )
+  // Pick up tree changes made elsewhere — the face grid editor adds a double
+  // divider for drawers side by side (z_dividers V4).
+  useEffect(() => {
+    const next = normalizeSection((cabinet.internal_grid as { tree?: unknown } | null)?.tree)
+    setTree(cur => JSON.stringify(cur) === JSON.stringify(next) ? cur : next)
+  }, [cabinet.internal_grid])
   // Per-cabinet vertical gap between stacked fittings (mm). Stored as a sibling
   // of `tree` in internal_grid; mirrored on the resolver side via
   // CabinetInput.internal_stack_gap so the editor preview and the resolved
@@ -1084,7 +1111,7 @@ export default function InternalGridEditor({
   if (dragLive) layoutTree = setChildSize(layoutTree, dragLive.path, dragLive.index, dragLive.size)
   if (fittingDragLive) layoutTree = patchFitting(layoutTree, fittingDragLive.path, fittingDragLive.fittingIndex,
     { y_locked: true, y_position: fittingDragLive.y } as Partial<InternalFitting>)
-  const { seps, leaves } = computeLayout(layoutTree, interior, rp?.internal_parts, stackGap, slideProds, shelfT, matT)
+  const { seps, leaves } = computeLayout(layoutTree, interior, rp?.internal_parts, stackGap, slideProds, shelfT, matT, new Set(rp?.auto_double_dividers ?? []))
 
   dragDataRef.current = { svg: svgRef.current, ox, oy, cabDY, save, tree }
 
@@ -1751,6 +1778,12 @@ export default function InternalGridEditor({
                         ? <title>Locked bay — change its size in the box’s Lock field, or unlock it to drag.</title>
                         : null}
                   </rect>
+                  {/* Double divider: the joint line between the two panels */}
+                  {sep.double && (
+                    <line x1={ox + sep.box.x + sep.box.w / 2} x2={ox + sep.box.x + sep.box.w / 2}
+                      y1={svgY(sep.box.y + sep.box.h)} y2={svgY(sep.box.y)}
+                      stroke={stroke} strokeWidth={1} style={{ pointerEvents: 'none' }} />
+                  )}
                   {sep.axis === 'h' && sep.box.w > 80 && (
                     <text x={ox + sep.box.x + sep.box.w / 2} y={svgY(sep.box.y + sep.box.h / 2)}
                       textAnchor="middle" dominantBaseline="central"
@@ -2046,6 +2079,27 @@ export default function InternalGridEditor({
                 onBlur={e => commitSepSize(selSep.path, selSep.index, e.target.value.trim())}
                 className={inp}
               />
+              {selSep.axis === 'v' && (
+                <div className="mt-2">
+                  <p className="text-gray-500 mb-1">Panels</p>
+                  <div className="flex gap-1">
+                    {([['single', 'Single'], ['double', 'Double'], [undefined, 'Auto']] as const).map(([v, label]) => {
+                      const active = selSep.divider === v
+                      return (
+                        <button key={label}
+                          onClick={() => save(setChildDivider(tree, selSep.path, selSep.index, v))}
+                          className={`px-2 py-0.5 rounded text-[10px] border transition-colors ${active
+                            ? 'bg-blue-700 border-blue-500 text-white'
+                            : 'bg-gray-700 border-gray-600 text-gray-400 hover:bg-gray-600'}`}
+                        >{label}</button>
+                      )
+                    })}
+                  </div>
+                  <p className="text-gray-600 text-[9px] mt-1">
+                    {selSep.double ? 'Two panels back to back' : 'One panel'}{selSep.divider ? '' : ' (automatic)'}
+                  </p>
+                </div>
+              )}
               <div className="flex flex-col gap-1 mt-2">
                 <button className={addBtn + ' text-left'} onClick={() => equaliseThis(selSep.path)}>= Equalise this split</button>
                 <button className="px-2 py-0.5 rounded text-[10px] bg-red-900/40 hover:bg-red-900/60 text-red-300 text-left transition-colors"

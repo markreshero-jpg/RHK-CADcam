@@ -9,6 +9,8 @@ import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { useViewBoxPinch } from './usePinchZoom'
 import { intElevRect, dbElevRect, slideElevRect, TapePolys } from './cabinetEditSvgHelpers'
 import type { EbByMatId } from './useMaterialColours'
+import { normalizeSection } from './InternalGridEditor'
+import { drawerBoundaries, planAutoDivider, AUTO_DIVIDER_NOTE, type SeamGeometry } from '@/src/lib/dividers/autoDivider'
 
 type DoorStyleOpt = { id: string; name: string }
 type HandleOpt = { id: string; name: string; grip_kind: string }
@@ -172,6 +174,7 @@ export default function FaceGridEditor({
   const [selectedZone, setSelectedZone] = useState<{ row: number; col: number } | null>(null)
   const [doorStyles, setDoorStyles] = useState<DoorStyleOpt[]>([])
   const [handles, setHandles] = useState<HandleOpt[]>([])
+  const [dividerNote, setDividerNote] = useState<string | null>(null)
   const [showChevrons, setShowChevrons] = useState(true)
 
   useEffect(() => {
@@ -195,7 +198,55 @@ export default function FaceGridEditor({
 
   async function save(next: FaceGridInput) {
     setGrid(next)
-    await onUpdate(cabinet.id, { face_grid: next as unknown as Record<string, unknown> })
+    const update: Partial<CabinetInstance> = { face_grid: next as unknown as Record<string, unknown> }
+    // Drawers newly side by side need a (double) divider between them (z_dividers V4).
+    const before = drawerBoundaries(grid), after = drawerBoundaries(next)
+    const fresh = [...after.keys()].filter(c => !before.has(c))
+    if (fresh.length) {
+      const tree = normalizeSection((cabinet.internal_grid as { tree?: unknown } | null)?.tree)
+      const plan = planAutoDivider(tree, fresh, next.cols.length, seamGeometry(next), c => !!after.get(c)?.full)
+      if (plan?.kind === 'created') {
+        update.internal_grid = { ...(cabinet.internal_grid ?? {}), tree: plan.tree } as unknown as Record<string, unknown>
+        if (!cabinet.has_internal) update.has_internal = true   // the divider is an internal part
+      }
+      const note = plan ? AUTO_DIVIDER_NOTE[plan.kind] : null
+      if (note) setDividerNote(note)
+    }
+    await onUpdate(cabinet.id, update)
+  }
+
+  // Where the seams between the fronts sit, from the last resolve (z_dividers V4).
+  function seamGeometry(next: FaceGridInput): SeamGeometry {
+    const side = rp?.case_parts.find(p => p.part_key === 'left_side')
+    const T = side?.DZ ?? 18
+    const zones = rp?.face_zones.filter(z => !z.facet) ?? []
+    const sameCols = new Set(zones.map(z => z.col_index)).size === next.cols.length
+    const seamX = new Map<number, number>()
+    if (sameCols) {
+      for (let c = 0; c < next.cols.length - 1; c++) {
+        const a = zones.find(z => z.col_index === c), b = a && zones.find(z => z.col_index === c + 1 && z.row_index === a.row_index)
+        if (a && b) seamX.set(c, (a.X + a.DX + b.X) / 2)
+      }
+    }
+    // Root-level dividers: the full-height ones, a double counted once, left to right.
+    const tree = normalizeSection((cabinet.internal_grid as { tree?: unknown } | null)?.tree)
+    const divs = (rp?.internal_parts ?? []).filter(p => p.part_type === 'divider')
+    const tallest = Math.max(0, ...divs.map(d => d.DY))
+    const full = divs.filter(d => d.DY >= tallest - 0.5).sort((a, b) => a.X - b.X)
+    const centres: number[] = []
+    for (let i = 0; i < full.length; i++) {
+      const pair = full[i + 1] && Math.abs(full[i + 1].X - (full[i].X + full[i].DZ)) < 0.5
+      centres.push(pair ? full[i].X + full[i].DZ : full[i].X + full[i].DZ / 2)
+      if (pair) i++
+    }
+    const dividers = tree.type === 'vsplit'
+      ? tree.children.slice(0, -1).map((child, i) => ({ x: centres[i] ?? NaN, key: `:${i}`, child }))
+      : []
+    return {
+      seamX, T, dividers,
+      intLeft: side ? side.X + side.DZ : T,
+      equalCols: next.cols.every(c => !c.width_locked),
+    }
   }
 
   // ── Zone interactions ──────────────────────────────────────────────────────
@@ -532,7 +583,21 @@ export default function FaceGridEditor({
   const addBtn = 'px-2 py-0.5 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors'
 
   return (
-    <div className="w-full h-full flex flex-col overflow-hidden bg-gray-950">
+    <div className="w-full h-full flex flex-col overflow-hidden bg-gray-950 relative">
+
+      {/* Automatic double divider note (z_dividers V4) */}
+      {dividerNote && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50">
+          <div className="max-w-sm rounded border border-gray-700 bg-gray-900 p-4 shadow-xl">
+            <p className="text-xs font-semibold text-gray-200 mb-2">Double divider</p>
+            <p className="text-xs text-gray-300 leading-relaxed">{dividerNote}</p>
+            <div className="mt-3 flex justify-end">
+              <button onClick={() => setDividerNote(null)}
+                className="px-3 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-white">OK</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top bar: structural controls */}
       <div className="flex-none flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 border-b border-gray-700 flex-wrap text-[11px]">

@@ -1,6 +1,6 @@
 # Internal Dividers — Spec
 
-**Status:** decisions locked 2026-10-14, nothing built. Next = V1.
+**Status:** V1–V4 built + live-checked 2026-10-14. Next = `z_handles` H5b (rails per column).
 **Owner module:** `z_dividers/`
 **Touches:** internal section tree (`internal_grid`), `resolveInternal`,
 `resolveDrawerStack`, `InternalGridEditor`, `FaceGridEditor`, cut list / 3D /
@@ -61,12 +61,44 @@ the automatic value from the face grid each time, and that is what the editor sh
 
 | Phase | Scope | Status |
 |---|---|---|
-| **V1** | Model + resolver: `divider` field, double = two `divider` parts back to back, `gapThickness` 2 × matT (resolver + editor mirror), cut list / 3D / elevation / joint drilling on both panels | not started |
-| **V2** | Drawer runners mount to their compartment: a drawer's box spans the side / divider faces of its own column (fixes the §2 bug) | not started |
-| **V3** | Internal editor: click a divider → Single / Double / Automatic | not started |
-| **V4** | Automatic rule (V-D3): drawers in neighbouring columns → double divider centred on the front gap, created or moved; pop-up note in the face grid editor; explicit override sticks; resolver warning for drawers side by side with no divider | not started |
+| **V1** | Model + resolver: `divider` field, double = two `divider` parts back to back, `gapThickness` 2 × matT (resolver + editor mirror), cut list / 3D / elevation / joint drilling on both panels | ✅ built 2026-10-14 |
+| **V2** | Drawer runners mount to their compartment: a drawer's box spans the side / divider faces of its own column (fixes the §2 bug) | ✅ built 2026-10-14 |
+| **V3** | Internal editor: click a divider → Single / Double / Automatic | ✅ built 2026-10-14 |
+| **V4** | Automatic rule (V-D3): drawers in neighbouring columns → double divider centred on the front gap, created or moved; pop-up note in the face grid editor; explicit override sticks | ✅ built 2026-10-14 (see notes; no resolver warning yet, no moving) |
 
 After V4, `z_handles` H5b (rails per column) can split rails at the dividers.
+
+**As built (2026-10-14):**
+- V1: `SectionChild.divider`; `resolveInternal.dividerPanels` / `gapThickness`; a
+  double emits two `divider` parts (consecutive sort orders). Joints are per
+  divider ↔ top / bottom / shelf, so each panel gets its own end joints. The
+  editor mirror (`edGapT`) draws the pair 36 wide with a joint line.
+- V2: `resolveDrawerStacks` takes the divider parts; `memberBounds` picks the
+  nearest divider face either side of the front's centre (covering ≥ half its
+  height), else the carcass side. Slides on a divider carry `member`
+  (`ResolvedHingeMountTarget` shape), and `seamDrillSync` drills those runner
+  holes into the divider (`int_divider_<n>`). Shaped cabinets keep their own
+  opening logic.
+- V3: Internal editor → select a divider → Panels: Single / Double / Auto.
+  Auto shows what it resolved to.
+- V4, resolver: an automatic divider whose centre is within 30mm
+  (`AUTO_DOUBLE_TOL`) of a drawer seam, over ≥ half the seam's height, resolves
+  double. Two walks: find them, then lay out again with the doubles. Reported
+  as `ResolvedCabinet.auto_double_dividers` (tree keys `<path>:<index>`), which
+  the internal editor reads.
+- V4, editor (`src/lib/dividers/autoDivider.ts`, called from the face grid
+  editor's save): only when an edit creates a NEW side-by-side drawer boundary.
+  - Open interior + drawers both sides in every row → the tree becomes a
+    vsplit at each boundary, unsized for equal columns, else the bays are
+    locked so each double centres on its seam. Internals are switched on.
+  - A root divider already near the seam → automatic: note "now double";
+    explicit single: left alone, no note.
+  - Anything else (drawers in only some rows, nested trees, columns just
+    added) → a note asking the user to add the divider in Internals.
+  - The internal editor now resyncs its tree when the cabinet changes.
+- Known limits: seam X comes from the last resolve; locked bay sizes ignore the
+  left scribe (SCRL); a divider isn't moved onto the seam; no resolver warning
+  for drawers side by side with no divider.
 
 ## 6. Open questions
 

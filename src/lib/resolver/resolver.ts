@@ -63,9 +63,9 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const shapedHw = cab.footprint ? shapedHardwareCtx(cab) : null
 
   // ── 4. Internal Module ────────────────────────────────────────
-  const { parts: rectInternalParts, slides: internalSlides, errors: internalErrors } = cab.has_internal
-    ? resolveInternalParts(cab, r)
-    : { parts: [], slides: [], errors: [] }
+  const { parts: rectInternalParts, slides: internalSlides, errors: internalErrors, autoDouble } = cab.has_internal
+    ? resolveInternalParts(cab, r, cab.footprint ? [] : zones)
+    : { parts: [], slides: [], errors: [], autoDouble: undefined }
   const internalParts = cab.footprint ? shapeShelves(cab, rectInternalParts) : rectInternalParts
   allErrors.push(...internalErrors)
 
@@ -76,7 +76,8 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     errors: drawerErrors,
     warnings: drawerWarnings,
   } = cab.has_face
-    ? resolveDrawerStacks(cab, r, zones, shapedHw ? z => drawerOpening(shapedHw, z, r) : undefined)
+    ? resolveDrawerStacks(cab, r, zones, shapedHw ? z => drawerOpening(shapedHw, z, r) : undefined,
+        internalParts.filter(p => p.part_type === 'divider'))
     : { stacks: [], errors: [], warnings: [] }
   allErrors.push(...drawerErrors)
   allWarnings.push(...drawerWarnings)
@@ -116,6 +117,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     toekick_parts:   toekickParts,
     internal_parts:  internalParts,
     internal_slides: internalSlides,
+    ...(autoDouble ? { auto_double_dividers: autoDouble } : {}),
     face_rows:       rows,
     face_cols:       cols,
     face_zones:      zones,

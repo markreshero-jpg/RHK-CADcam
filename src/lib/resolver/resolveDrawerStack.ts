@@ -2,7 +2,8 @@
 // Drawer Stack Resolver
 // For each drawer_face zone, resolves:
 //   1. The 5-piece drawer box (positioned in cabinet space)
-//   2. Two slide rails (left + right, mounted to gable inner faces)
+//   2. Two slide rails (left + right, mounted to gable inner faces, or to the
+//      internal dividers either side of the front — z_dividers V2)
 //
 // Drawer box local convention (resolveDrawerBox output):
 //   Z=0 = front face of the box; Z increases toward the back.
@@ -17,7 +18,7 @@
 
 import {
   CabinetInput, ConstructionRules, ResolvedFaceZone, ResolverError,
-  ResolvedDrawerStack, ResolvedDrawerSlide,
+  ResolvedDrawerStack, ResolvedDrawerSlide, ResolvedInternalPart, ResolvedHingeMountTarget,
   DrawerType, SlideProduct, SlideScheduleEntry,
   DEFAULT_DB_RULES,
 } from './types'
@@ -27,6 +28,27 @@ import { gridForFacet, zoneTurn, type ZoneOpening } from './resolveShapedHardwar
 
 const EPS = 1e-6
 const round1 = (n: number) => Math.round(n * 10) / 10
+
+// The panels a front's runners fix to (z_dividers V2): the nearest internal
+// divider face either side of the front's centre that spans most of the
+// front's height, else the carcass side (target null).
+interface Member { x: number; target: ResolvedHingeMountTarget | null }
+function memberBounds(
+  zone: ResolvedFaceZone, dividers: ResolvedInternalPart[], left: number, right: number,
+): { left: Member; right: Member } {
+  const cx = zone.X + zone.DX / 2
+  const y0 = zone.Y, y1 = zone.Y + zone.DY
+  const out: { left: Member; right: Member } = { left: { x: left, target: null }, right: { x: right, target: null } }
+  for (const d of dividers) {
+    // Divider: X = left face, DZ = thickness along X, Y..Y+DY = height.
+    const overlap = Math.min(y1, d.Y + d.DY) - Math.max(y0, d.Y)
+    if (overlap < Math.min(zone.DY, d.DY) * 0.5) continue
+    const target: ResolvedHingeMountTarget = { table: 'internal_parts', internal_part_type: d.part_type, internal_sort_order: d.sort_order }
+    if (d.X + d.DZ <= cx && d.X + d.DZ > out.left.x) out.left = { x: d.X + d.DZ, target }
+    if (d.X >= cx && d.X < out.right.x) out.right = { x: d.X, target }
+  }
+  return out
+}
 
 export interface DrawerStackResolution {
   stacks:   ResolvedDrawerStack[]
@@ -108,6 +130,8 @@ export function resolveDrawerStacks(
   // Shaped cabinets (z_cabinet_shape Phase 3b): the clear opening behind each
   // drawer front, in the zone's square frame. Absent = the plain box opening.
   openingOf?: (zone: ResolvedFaceZone) => ZoneOpening | null,
+  // Internal dividers the runners can fix to (z_dividers V2). Box cabinets only.
+  dividers: ResolvedInternalPart[] = [],
 ): DrawerStackResolution {
   const errors:   ResolverError[] = []
   const warnings: ResolverError[] = []
@@ -254,8 +278,9 @@ export function resolveDrawerStacks(
       errors.push({ code: 'DRAWER_NO_ROOM', message: `Drawer ${zoneRef}: no clear opening for a ${round1(nominalLength)}mm runner`, part: 'drawer_box' })
       continue
     }
-    const leftMemberX  = span ? span.x0 : T + r.SCRL
-    const rightMemberX = span ? span.x1 : cab.DX - T - r.SCRR
+    const members = span ? null : memberBounds(zone, dividers, T + r.SCRL, cab.DX - T - r.SCRR)
+    const leftMemberX  = span ? span.x0 : members!.left.x
+    const rightMemberX = span ? span.x1 : members!.right.x
     if (opening && span) {
       // One warning per facet side, not per drawer.
       const where = zone.facet ? `on the ${zone.facet} facet` : 'on the front'
@@ -331,8 +356,8 @@ export function resolveDrawerStacks(
     }
 
     const slides: ResolvedDrawerSlide[] = [
-      { ...slideBase, side: 'left',  X: leftMemberX },
-      { ...slideBase, side: 'right', X: rightMemberX - runnerThick },
+      { ...slideBase, side: 'left',  X: leftMemberX, ...(members?.left.target ? { member: members.left.target } : {}) },
+      { ...slideBase, side: 'right', X: rightMemberX - runnerThick, ...(members?.right.target ? { member: members.right.target } : {}) },
     ]
 
     // Resolve slide-imposed drilling against the REAL resolved parts (not the box

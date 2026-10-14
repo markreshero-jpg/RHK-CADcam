@@ -149,6 +149,13 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
         if (sd.machine_operation !== 'drill') { skipped++; continue }
         switch (sd.surface) {
           case 'cabinet_member': {
+            // A runner on an internal divider (z_dividers V2) drills that divider.
+            const mt = sl.member
+            if (mt?.internal_part_type != null && mt.internal_sort_order != null) {
+              const ip = intByKey.get(`${mt.internal_part_type}_${mt.internal_sort_order}`)
+              add('internal_parts', `int_${mt.internal_part_type}_${mt.internal_sort_order}`, ip ? intFrame(ip) : null, sd, 'slide', opKey, AUTO_TOOL)
+              break
+            }
             const key = sd.side === 'left' ? 'left_side' : 'right_side'
             const cp = caseByKey.get(key)
             add('case_parts', `case_${key}`, cp ? caseFrame(cp) : null, sd, 'slide', opKey, AUTO_TOOL)

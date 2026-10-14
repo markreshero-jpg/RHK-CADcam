@@ -1069,6 +1069,7 @@ export interface SectionChild {
   size?:           number    // locked extent in mm (height for hsplit, width for vsplit); undefined = equalise to fill
   equalise_group?: string    // shared-size group id (e.g. "A"). Members across the tree share one size; computed as min per-split fair share so the group always fits.
   separator?:      SectionSeparator   // hsplit divider after this child; default 'fixed_shelf'
+  divider?:        'single' | 'double'   // vsplit divider after this child (z_dividers V-D4): double = two panels back to back; undefined = automatic
   auto_height?:    boolean    // size this bay to its content's real height (a drawer/rollout bay) rather than a fixed/flex size; the rest of the split fills around it
   section:         Section
 }
@@ -1191,6 +1192,9 @@ export interface ResolvedCabinet {
   // per-stack slides on face drawers, but anchored to the compartment box
   // (no parent face zone).
   internal_slides: ResolvedDrawerSlide[]
+  // Automatic dividers resolved double for drawers side by side (z_dividers
+  // V-D3), as section-tree keys "<path>:<index>" (resolveInternal.sepKey).
+  auto_double_dividers?: string[]
   face_rows:     ResolvedFaceRow[]
   face_cols:     ResolvedFaceCol[]
   face_zones:    ResolvedFaceZone[]
@@ -1346,6 +1350,9 @@ export interface ResolvedDrawerSlide {
   // Holes this rail drills into the cabinet member + drawer-box surfaces,
   // resolved to absolute cabinet coords. Empty when the slide has no drill_ops.
   drills: ResolvedSlideDrill[]
+  // The internal divider this rail fixes to (z_dividers V2). Absent = the
+  // carcass side on its own side.
+  member?: ResolvedHingeMountTarget
 }
 
 export interface ResolvedDrawerStack {

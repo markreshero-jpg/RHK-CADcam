@@ -9,7 +9,7 @@
 // ============================================================
 
 import {
-  CabinetInput, ResolvedInternalPart, ResolvedDrawerSlide, ConstructionRules,
+  CabinetInput, ResolvedInternalPart, ResolvedDrawerSlide, ConstructionRules, ResolvedFaceZone,
   ResolverError, Section, SectionChild,
   edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults, DEFAULT_DB_RULES,
 } from './types'
@@ -23,14 +23,38 @@ function isDrawerBaySection(section: Section | undefined | null): boolean {
     && (section.fittings ?? []).some(f => f.type === 'inner_drawer' || f.type === 'pull_out')
 }
 
+// Panels in the vsplit divider after a child (z_dividers): a double divider is
+// two panels back to back. Undefined = automatic: double when it stands between
+// drawers side by side (`auto`, V-D3), else single.
+export function dividerPanels(c: SectionChild, auto = false): 1 | 2 {
+  return c.divider === 'double' || (c.divider === undefined && auto) ? 2 : 1
+}
+
+/** Tree key of the separator after children[index] of the split at `path`. */
+export const sepKey = (path: number[], index: number) => `${path.join('.')}:${index}`
+
+// A seam between two drawer fronts side by side (same row, neighbouring
+// columns): the gap's centre line and the fronts' height.
+interface DrawerSeam { mid: number; y0: number; y1: number }
+function drawerSeams(zones: ResolvedFaceZone[]): DrawerSeam[] {
+  const out: DrawerSeam[] = []
+  const drawers = zones.filter(z => z.face_type === 'drawer_face' && !z.facet && !z.AY)
+  for (const a of drawers) {
+    const b = drawers.find(z => z.row_index === a.row_index && z.col_index === a.col_index + 1)
+    if (!b) continue
+    out.push({ mid: (a.X + a.DX + b.X) / 2, y0: Math.min(a.Y, b.Y), y1: Math.max(a.Y + a.DY, b.Y + b.DY) })
+  }
+  return out
+}
+
 // Thickness consumed by the divider between child i and i+1 of a split. Vertical
 // splits = a divider panel (matT). Horizontal splits = a shelf (shelfT) UNLESS
 // the gap is 'none' (explicit open gap) or borders a drawer/rollout bay with no
 // explicit separator set (open gap, inferred — keeps drawers shelf-free even if
 // the separator field was lost in old data).
-function gapThickness(kids: SectionChild[], i: number, horiz: boolean, shelfT: number, matT: number): number {
+function gapThickness(kids: SectionChild[], i: number, horiz: boolean, shelfT: number, matT: number, autoDouble = false): number {
   if (i >= kids.length - 1) return 0
-  if (!horiz) return matT
+  if (!horiz) return dividerPanels(kids[i], autoDouble) * matT
   const c = kids[i]
   if (c.separator === 'none') return 0
   if (c.separator === undefined && (isDrawerBaySection(c.section) || isDrawerBaySection(kids[i + 1]?.section))) return 0
@@ -61,7 +85,9 @@ function autoBayHeight(
 export function resolveInternalParts(
   cab: CabinetInput,
   r: ConstructionRules,
-): { parts: ResolvedInternalPart[], slides: ResolvedDrawerSlide[], errors: ResolverError[] } {
+  // Resolved fronts, for the automatic double divider (z_dividers V-D3).
+  zones: ResolvedFaceZone[] = [],
+): { parts: ResolvedInternalPart[], slides: ResolvedDrawerSlide[], errors: ResolverError[], autoDouble?: string[] } {
   const parts:  ResolvedInternalPart[] = []
   const slides: ResolvedDrawerSlide[]  = []
   const errors: ResolverError[]        = []
@@ -196,7 +222,11 @@ export function resolveInternalParts(
   // share. The group's final size = min of those candidates, so the size always
   // fits in every split the group appears in. Free flex children in larger splits
   // absorb the surplus. Locked children are honoured verbatim.
-  const groupSizes = computeGroupSizes(cab.internal_tree, intW, intH, TS, T, cab.slide_products ?? [])
+  // Automatic dividers that stand between drawers side by side resolve double
+  // (z_dividers V-D3): found on a first walk, then the tree is walked again.
+  const seams = drawerSeams(zones)
+  const autoDouble = new Set<string>()
+  let groupSizes = computeGroupSizes(cab.internal_tree, intW, intH, TS, T, cab.slide_products ?? [])
 
   // ── Walk the section tree ─────────────────────────────────────────────────────
   // For a split, the available extent along the split axis is divided among the
@@ -204,7 +234,7 @@ export function resolveInternalParts(
   // computed size, the remainder shared equally among free-flex children. A
   // separator part (shelf or divider) is emitted between consecutive children.
   // An open leaf delegates to the fitting registry against its compartment box.
-  function walk(section: Section | undefined | null, box: Box) {
+  function walk(section: Section | undefined | null, box: Box, path: number[] = []) {
     // Defensive: a cabinet may carry no internal_tree, or a child may have a
     // missing section (legacy / partial data). Bail rather than throwing — an
     // uncaught error here propagates all the way up and crashes the whole page.
@@ -224,7 +254,7 @@ export function resolveInternalParts(
     // Per-separator thickness. Horizontal: each child's separator type ('none'
     // = open gap = 0mm, else a shelf = TS). Vertical: every separator is a
     // divider panel (T).
-    const sepThick = (i: number): number => gapThickness(kids, i, horiz, TS, T)
+    const sepThick = (i: number): number => gapThickness(kids, i, horiz, TS, T, autoDouble.has(sepKey(path, i)))
     const sumSep = kids.reduce<number>((a, _c, i) => a + sepThick(i), 0)
 
     // Classify children: locked (size set), grouped (group id with resolved size),
@@ -263,15 +293,26 @@ export function resolveInternalParts(
         ? { x: box.x, y: cursor, w: box.w, h: size }
         : { x: cursor, y: box.y, w: size, h: box.h }
 
-      walk(c.section, childBox)
+      walk(c.section, childBox, [...path, i])
 
       const st = sepThick(i)
+      // An automatic divider centred on a drawer seam, over most of the seam's
+      // height, is a candidate for double (V-D3).
+      if (!horiz && i < N - 1 && c.divider === undefined) {
+        const mid = cursor + size + st / 2
+        const y0 = box.y, y1 = box.y + box.h
+        if (seams.some(s => Math.abs(s.mid - mid) <= AUTO_DOUBLE_TOL
+          && Math.min(y1, s.y1) - Math.max(y0, s.y0) >= (s.y1 - s.y0) * 0.5)) autoDouble.add(sepKey(path, i))
+      }
       if (i < N - 1 && st > 0) {
         // Group-constrained children are also "locked" from the consumer's
         // perspective — the separator's downstream position is fixed.
         const locked = childResolved[i] !== null
         if (!horiz) {
-          emitDivider({ x: cursor + size, y: box.y, w: st, h: box.h }, locked)
+          // A double divider = two panels back to back, each its own part.
+          for (let p = 0; p * T < st - 0.01; p++) {
+            emitDivider({ x: cursor + size + p * T, y: box.y, w: T, h: box.h }, locked)
+          }
         } else if (c.separator === 'adj_shelf') {
           emitAdjShelf({ x: box.x, y: cursor + size, w: box.w, h: st }, locked)
         } else {
@@ -282,10 +323,27 @@ export function resolveInternalParts(
     })
   }
 
-  walk(cab.internal_tree, { x: intLeft, y: intBottom, w: intW, h: intH })
+  const root: Box = { x: intLeft, y: intBottom, w: intW, h: intH }
+  const startErrors = errors.length
+  walk(cab.internal_tree, root)
+  if (autoDouble.size) {
+    // Second walk with the doubles in place (thicker separators move the bays).
+    parts.length = 0; slides.length = 0; errors.length = startErrors
+    for (const k of Object.keys(sort)) sort[k] = 0
+    groupSizes = computeGroupSizes(cab.internal_tree, intW, intH, TS, T, cab.slide_products ?? [], autoDouble)
+    const found = new Set(autoDouble)
+    walk(cab.internal_tree, root)
+    // Keep exactly the first walk's set (the second can't add new ones mid-walk
+    // without moving the layout again).
+    autoDouble.clear(); found.forEach(k => autoDouble.add(k))
+  }
 
-  return { parts, slides, errors }
+  return { parts, slides, errors, ...(autoDouble.size ? { autoDouble: [...autoDouble] } : {}) }
 }
+
+// How far an automatic divider's centre may sit from a drawer seam's centre
+// line and still count as standing between the drawers.
+const AUTO_DOUBLE_TOL = 30
 
 // Pass-1 walker: collect per-split natural fair-share for each group, then take
 // the min so the group fits in every split that contains its members. Splits
@@ -297,6 +355,7 @@ function computeGroupSizes(
   shelfT: number,
   matT:   number,
   slideProducts: { id: string; box_height?: number | null }[],
+  autoDouble: Set<string> = new Set(),
 ): Map<string, number> {
   const candidates = new Map<string, number[]>()
   if (!root) return new Map()
@@ -308,14 +367,14 @@ function computeGroupSizes(
     : c.auto_height ? (autoBayHeight(c.section, slideProducts) ?? null)
     : null
 
-  function walk(s: Section | undefined | null, w: number, h: number) {
+  function walk(s: Section | undefined | null, w: number, h: number, path: number[] = []) {
     if (!s || s.type === 'open' || w <= 0 || h <= 0) return
     const horiz = s.type === 'hsplit'
     const total = horiz ? h : w
     const kids  = s.children ?? []
     const N     = kids.length
     if (N === 0) return
-    const sumSep = kids.reduce<number>((a, _c, i) => a + gapThickness(kids, i, horiz, shelfT, matT), 0)
+    const sumSep = kids.reduce<number>((a, _c, i) => a + gapThickness(kids, i, horiz, shelfT, matT, autoDouble.has(sepKey(path, i))), 0)
     const avail        = total - sumSep
     const lockedSum    = kids.reduce((a, c) => a + (fixedOf(c) ?? 0), 0)
     const unlockedCnt  = kids.filter(c => fixedOf(c) === null).length
@@ -332,10 +391,10 @@ function computeGroupSizes(
     // Recurse with the naive (pass-1) child box so nested groups see the right
     // parent extent. For hsplit parents the child's height = size, width = w;
     // for vsplit parents width = size, height = h.
-    kids.forEach(c => {
+    kids.forEach((c, i) => {
       const size = fixedOf(c) ?? Math.max(0, naturalFlex)
-      if (horiz) walk(c.section, w,    size)
-      else       walk(c.section, size, h   )
+      if (horiz) walk(c.section, w,    size, [...path, i])
+      else       walk(c.section, size, h,    [...path, i])
     })
   }
 
