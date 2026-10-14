@@ -61,7 +61,7 @@ const CORNER_CLASSES = new Set<string>(['base', 'wall', 'tall', 'base_corner', '
 // is the depth along the inward perpendicular.
 export function cabinetCorners(cab: CabinetInstance, wall: Wall, cx: Pt): Pt[] {
   const wd = wallDir(wall)
-  const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
+  const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx))
   const bl = { x: cab.pos_x, y: cab.pos_y }
   const br = { x: bl.x + cab.dx * wd.x, y: bl.y + cab.dx * wd.y }
   const fl = { x: bl.x + cab.dz * perp.x, y: bl.y + cab.dz * perp.y }
@@ -100,7 +100,7 @@ export function computeSnap(
           consider(wallEnd(w), 'wall-end')
         } else {
           // All 4 drawn footprint corners (inside + mitred outside).
-          for (const c of wallMitreCorners(w, ctx.walls, cx.x, cx.y)) consider(c, 'wall-end')
+          for (const c of wallMitreCorners(w, ctx.walls, cx)) consider(c, 'wall-end')
         }
       }
     }

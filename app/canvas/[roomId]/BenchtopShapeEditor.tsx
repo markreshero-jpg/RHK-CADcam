@@ -60,7 +60,7 @@ export default function BenchtopShapeEditor({
     for (const wl of walls) {
       const pts = wl.wall_type === 'island'
         ? [{ x: wl.pos_x, y: wl.pos_y }, wallEnd(wl)]
-        : wallMitreCorners(wl, walls, cx.x, cx.y)
+        : wallMitreCorners(wl, walls, cx)
       if (pts.length < 2 || !near(pts)) continue
       roomRefs.push({ label: 'Wall', segments: loop(pts) })
     }

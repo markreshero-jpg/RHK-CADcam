@@ -1,6 +1,6 @@
 'use client'
 import { Wall, CabinetInstance } from '@/src/lib/types'
-import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide } from '@/src/lib/geometry'
+import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide, type RoomRef } from '@/src/lib/geometry'
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
 
@@ -8,8 +8,7 @@ interface Props {
   wall: Wall
   walls: Wall[]
   cabinets: CabinetInstance[]
-  centX: number
-  centY: number
+  rc: RoomRef
   zoom: number
   selected: boolean
   layerOverall: LayerConfig
@@ -170,10 +169,10 @@ function DepthDim({
 }
 
 export default function WallDimensionChain({
-  wall, walls, cabinets, centX, centY, zoom, selected,
+  wall, walls, cabinets, rc, zoom, selected,
   layerOverall, layerBase, layerWallCab, labelBg = '#030712',
 }: Props) {
-  const inward = wallInwardNormal(wall, centX, centY)
+  const inward = wallInwardNormal(wall, rc)
   const out = { x: -inward.x, y: -inward.y }
   const z = zoom
   const col = '#ffffff'

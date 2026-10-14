@@ -211,7 +211,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
     for (const cab of cabinets) {
       const wall = walls.find(w => w.id === cab.wall_id)
       if (!wall) continue
-      const inward = wallInwardNormal(wall, cx.x, cx.y)
+      const inward = wallInwardNormal(wall, cx)
       const perp = cabWallPerp(cab, wall, inward)
       const corners = cabWorldCorners(cab, wall, perp)
       const cls = classifyPolygon(corners, P1, n, lookDir)

@@ -24,7 +24,7 @@ const dot = (a: Pt, b: Pt) => a.x * b.x + a.y * b.y
 
 export function wallFrame(wall: Wall, side: WallSide, cx: Pt): WallFrame {
   const d = wallDir(wall)
-  const inward = wallInwardNormal(wall, cx.x, cx.y)
+  const inward = wallInwardNormal(wall, cx)
   if (side === 'face') return { o: { x: wall.pos_x, y: wall.pos_y }, d, n: inward, len: wall.length }
   // Back = the outer face, thickness out (islands: thickness 0, same line).
   const t = wall.thickness ?? 0

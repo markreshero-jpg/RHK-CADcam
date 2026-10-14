@@ -268,7 +268,7 @@ export default function ElevationSVG({
    *  cabinets sit on the wall's outer face, see wallAnchorPoint). */
   const elevPos = (w: Wall, x: number, dx: number) => {
     const gc = centroid(walls)
-    return wallAnchorPoint(w, isBack ? w.length - x - dx : x, isBack, gc.x, gc.y)
+    return wallAnchorPoint(w, isBack ? w.length - x - dx : x, isBack, gc)
   }
   // Waterfall legs on this wall + side, as occupied ranges for the given mover.
   const wfOcc = (mover: { assembly_class: string; dy: number; dz?: number }) =>

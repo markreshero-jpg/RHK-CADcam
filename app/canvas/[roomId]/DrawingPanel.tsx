@@ -78,12 +78,9 @@ const DrawingPanel = forwardRef<DrawingPanelHandle, Props>(function DrawingPanel
   const inputCls = 'w-full bg-gray-800 border border-gray-700 focus:border-blue-500 rounded px-2 py-1.5 text-sm text-white outline-none'
 
   return (
-    <div className="w-52 bg-gray-900 border-l border-gray-800 flex flex-col shrink-0">
-      <div className="px-4 py-3 border-b border-gray-800">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Drawing Wall</p>
-      </div>
-
-      <div className="px-4 py-4 flex flex-col gap-4">
+    // Rendered inside WallDrawPanel, which owns the column + header.
+    <div className="flex flex-col">
+      <div className="flex flex-col gap-4">
         <div>
           <label className="text-xs text-gray-500 block mb-1">Length (mm)</label>
           <input
@@ -126,7 +123,7 @@ const DrawingPanel = forwardRef<DrawingPanelHandle, Props>(function DrawingPanel
         </button>
 
         <p className="text-xs text-gray-600 leading-relaxed">
-          Tab to switch fields · Shift = 5° snap · Esc to cancel
+          Tab to switch fields · Shift = 5° snap
         </p>
       </div>
     </div>

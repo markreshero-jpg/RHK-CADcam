@@ -861,7 +861,7 @@ export default function CanvasSVG({
                 </text>
                 <WallDimensionChain
                   wall={w} walls={walls} cabinets={chainCabs}
-                  centX={cx.x} centY={cx.y} zoom={view.zoom} selected={isSel}
+                  rc={cx} zoom={view.zoom} selected={isSel}
                   layerOverall={layers.setting('dim_wall_overall')}
                   layerBase={layers.setting('dim_base_chain')}
                   layerWallCab={layers.setting('dim_wall_chain')}
@@ -874,7 +874,7 @@ export default function CanvasSVG({
           return (
             <Fragment key={w.id}>
               <polygon
-                points={wallMitrePolygon(w, walls, cx.x, cx.y)}
+                points={wallMitrePolygon(w, walls, cx)}
                 fill={isSel ? '#1d3557' : '#1f2937'}
                 stroke={isSel ? '#3b82f6' : '#374151'}
                 strokeWidth={isSel ? 2 / view.zoom : 1 / view.zoom}
@@ -883,7 +883,7 @@ export default function CanvasSVG({
                 onClick={onClick} onContextMenu={onCtx}
               />
               {(() => {
-                const inorm = wallInwardNormal(w, cx.x, cx.y)
+                const inorm = wallInwardNormal(w, cx)
                 const tx = midX - inorm.x * w.thickness / 2
                 const ty = midY - inorm.y * w.thickness / 2
                 return (
@@ -897,7 +897,7 @@ export default function CanvasSVG({
               })()}
               <WallDimensionChain
                 wall={w} walls={walls} cabinets={chainCabs}
-                centX={cx.x} centY={cx.y} zoom={view.zoom} selected={isSel}
+                rc={cx} zoom={view.zoom} selected={isSel}
                 layerOverall={layers.setting('dim_wall_overall')}
                 layerBase={layers.setting('dim_base_chain')}
                 layerWallCab={layers.setting('dim_wall_chain')}
@@ -917,7 +917,7 @@ export default function CanvasSVG({
         }).map(cab => {
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return null
-          const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
+          const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx))
           // Kick assemblies (joined toe kicks) take the normal cabinet path — names,
           // sizes, move handle, stretch markers — but draw only their kick parts (no
           // full-depth footprint over the run); click area = drawn kick extent.
@@ -1322,7 +1322,7 @@ export default function CanvasSVG({
           if (!cab.has_face) return []
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return []
-          const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
+          const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx))
           // Cabinet frame: column 0 / hinge 'left' sit on the cabinet's own left —
           // turned on left-handed walls (back side), never mirrored.
           const { o: fo, x: wd } = cabinetPlanFrame(cab, wall, perp)
@@ -1464,7 +1464,7 @@ export default function CanvasSVG({
           const movingCab = cabinets.find(c => c.id === cabMoveDrag.id)
           if (!movingCab) return null
           const moveWall = cabMoveDrag.wall
-          const basePerp = wallInwardNormal(moveWall, cx.x, cx.y)
+          const basePerp = wallInwardNormal(moveWall, cx)
           // islandFlip carries the back-side flag for any wall; flip perp outward so the
           // preview matches the committed cabinet (which flips via cabWallPerp).
           const perp = cabMoveDrag.islandFlip
@@ -1616,7 +1616,7 @@ export default function CanvasSVG({
             cls = m.cls
           }
           const wall = placeGhost.wall
-          const basePerp = wallInwardNormal(wall, cx.x, cx.y)
+          const basePerp = wallInwardNormal(wall, cx)
           // islandFlip carries the back-side flag for any wall; flip perp outward so the
           // preview matches the committed cabinet (which flips via cabWallPerp).
           const perp = placeGhost.islandFlip

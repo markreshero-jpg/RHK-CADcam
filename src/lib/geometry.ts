@@ -95,21 +95,118 @@ export function wallPolygon(w: Wall): string {
   return wallCorners(w).map(c => `${c.x},${c.y}`).join(' ')
 }
 
-export function wallInwardNormal(w: Wall, cx: number, cy: number): Pt {
+/** Room reference for deciding each wall's inside face: the wall centroid, plus
+ *  (from `centroid(walls)`) the inward normal of every wall that belongs to a
+ *  joined chain, taken from the chain's winding. */
+export interface RoomRef extends Pt {
+  inward?: Map<string, Pt>
+}
+
+export function wallInwardNormal(w: Wall, ref: RoomRef): Pt {
   const d = wallDir(w)
   // Islands have no room side, so the face direction is fixed to the left-perp of
   // the draw direction rather than derived from the centroid — otherwise placement,
   // plan render and elevation can disagree depending on where the island was drawn.
   if (w.wall_type === 'island') return { x: -d.y, y: d.x }
+  const chained = ref.inward?.get(w.id)
+  if (chained) return chained
+  // Lone wall (or a branching / straight run): face the room centroid.
   const mid = { x: w.pos_x + w.length * 0.5 * d.x, y: w.pos_y + w.length * 0.5 * d.y }
   const p1 = { x: -d.y, y: d.x }
-  return (p1.x * (cx - mid.x) + p1.y * (cy - mid.y)) >= 0 ? p1 : { x: d.y, y: -d.x }
+  return (p1.x * (ref.x - mid.x) + p1.y * (ref.y - mid.y)) >= 0 ? p1 : { x: d.y, y: -d.x }
 }
 
-export function centroid(walls: Wall[]): Pt {
+export function centroid(walls: Wall[]): RoomRef {
   if (!walls.length) return { x: 0, y: 0 }
   const pts = walls.flatMap(w => [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)])
-  return { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length }
+  return {
+    x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+    y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
+    inward: chainInwardNormals(walls),
+  }
+}
+
+/**
+ * Inside face of every wall in a joined chain, from the chain's winding.
+ *
+ * Walls joined end-to-end (open run or closed room) all keep their thickness on
+ * the same side of the chain, so corners mitre instead of flipping back to front.
+ * The centroid test alone gets this wrong for spiral / strongly concave shapes,
+ * where the room centre falls on the outside of some walls. The winding comes
+ * from the signed area of the chain's points (an open run is closed by a chord
+ * from its last point to its first). Walls drawn in either direction are fine:
+ * each is traversed in chain order. Branching joints (3+ walls at a point) and
+ * straight runs have no winding, so their walls fall back to the centroid test.
+ */
+function chainInwardNormals(walls: Wall[]): Map<string, Pt> {
+  const JSNAP = 5
+  const ws = walls.filter(w => w.wall_type !== 'island' && w.length > 0)
+  const ends = ws.map(w => [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)] as const)
+  // nb[i][e] = walls joined at end e (0 = start, 1 = end) of wall i, with their joined end.
+  const nb = ws.map((_, i) => [0, 1].map(e => {
+    const out: { j: number; ej: number }[] = []
+    ws.forEach((_, j) => {
+      if (j === i) return
+      for (const ej of [0, 1]) if (dist(ends[i][e], ends[j][ej]) < JSNAP) out.push({ j, ej })
+    })
+    return out
+  }))
+
+  const result = new Map<string, Pt>()
+  const seen = new Set<number>()
+  for (let i0 = 0; i0 < ws.length; i0++) {
+    if (seen.has(i0)) continue
+    // Collect the component; bail to the centroid test if any joint branches.
+    const comp: number[] = []
+    const stack = [i0]
+    let branching = false
+    seen.add(i0)
+    while (stack.length) {
+      const i = stack.pop()!
+      comp.push(i)
+      for (const e of [0, 1]) {
+        if (nb[i][e].length > 1) branching = true
+        for (const { j } of nb[i][e]) if (!seen.has(j)) { seen.add(j); stack.push(j) }
+      }
+    }
+    if (branching || comp.length < 2) continue
+
+    // Walk from a free end (open run) or from any wall (closed loop).
+    const freeStart = comp.find(i => nb[i][0].length === 0 || nb[i][1].length === 0)
+    let cur = freeStart ?? comp[0]
+    let enterEnd = freeStart != null && nb[cur][0].length !== 0 ? 1 : 0
+    const order: { i: number; forward: boolean }[] = []
+    const pts: Pt[] = []
+    while (order.length < comp.length) {
+      const forward = enterEnd === 0
+      order.push({ i: cur, forward })
+      pts.push(ends[cur][enterEnd])
+      const next = nb[cur][1 - enterEnd][0]
+      if (!next || order.some(o => o.i === next.j)) { pts.push(ends[cur][1 - enterEnd]); break }
+      cur = next.j; enterEnd = next.ej
+    }
+    if (order.length !== comp.length) continue
+
+    let area2 = 0
+    for (let k = 0; k < pts.length; k++) {
+      const a = pts[k], b = pts[(k + 1) % pts.length]
+      area2 += a.x * b.y - b.x * a.y
+    }
+    // Straight (or near-straight) run: no winding to go by.
+    let perim = 0
+    for (const { i } of order) perim += ws[i].length
+    if (Math.abs(area2) < 1e-4 * perim * perim) continue
+
+    // y-down plan space: positive area = clockwise on screen = room on the
+    // left-perp (-d.y, d.x) of the travel direction.
+    const sign = area2 > 0 ? 1 : -1
+    for (const { i, forward } of order) {
+      const d = wallDir(ws[i])
+      const t = forward ? d : { x: -d.x, y: -d.y }
+      result.set(ws[i].id, { x: -t.y * sign, y: t.x * sign })
+    }
+  }
+  return result
 }
 
 // ── Intersection helpers ──────────────────────────────────────────────────────
@@ -137,10 +234,10 @@ export function ptToSeg(p: Pt, a: Pt, b: Pt): { dist: number; proj: Pt } {
 // Returns the 4 drawn footprint corners [insideStart, insideEnd, outsideEnd,
 // outsideStart], with the outside corners mitred where walls share a corner.
 // Empty for islands (zero thickness, no footprint).
-export function wallMitreCorners(w: Wall, walls: Wall[], cx: number, cy: number): Pt[] {
+export function wallMitreCorners(w: Wall, walls: Wall[], ref: RoomRef): Pt[] {
   if (w.wall_type === 'island') return []
   const d = wallDir(w)
-  const inward = wallInwardNormal(w, cx, cy)
+  const inward = wallInwardNormal(w, ref)
   const thick = w.thickness
 
   const s = { x: w.pos_x, y: w.pos_y }
@@ -155,7 +252,7 @@ export function wallMitreCorners(w: Wall, walls: Wall[], cx: number, cy: number)
   for (const o of walls) {
     if (o.id === w.id || o.wall_type === 'island') continue
     const od = wallDir(o)
-    const oInward = wallInwardNormal(o, cx, cy)
+    const oInward = wallInwardNormal(o, ref)
     const oThick = o.thickness
     const oS = { x: o.pos_x, y: o.pos_y }
     const oE = wallEnd(o)
@@ -170,8 +267,8 @@ export function wallMitreCorners(w: Wall, walls: Wall[], cx: number, cy: number)
   return [s, e, pEO, pSO]
 }
 
-export function wallMitrePolygon(w: Wall, walls: Wall[], cx: number, cy: number): string {
-  return wallMitreCorners(w, walls, cx, cy).map(p => `${p.x},${p.y}`).join(' ')
+export function wallMitrePolygon(w: Wall, walls: Wall[], ref: RoomRef): string {
+  return wallMitreCorners(w, walls, ref).map(p => `${p.x},${p.y}`).join(' ')
 }
 
 // ── Snapping ──────────────────────────────────────────────────────────────────
@@ -324,14 +421,14 @@ export const islandCabPerp = cabWallPerp
 // Landing point (back-left corner) for a cabinet anchored at along-wall distance `t`.
 // Face-side cabinets sit on the wall's inside face. Back-side cabinets are pushed out
 // by the wall thickness so their back is flush with the wall's OUTER face rather than
-// overlapping the wall body. Islands (thickness 0) get no offset. cx/cy = room centroid,
+// overlapping the wall body. Islands (thickness 0) get no offset. ref = centroid(walls),
 // the same reference wallInwardNormal uses everywhere else.
-export function wallAnchorPoint(wall: Wall, t: number, back: boolean, cx: number, cy: number): Pt {
+export function wallAnchorPoint(wall: Wall, t: number, back: boolean, ref: RoomRef): Pt {
   const d = wallDir(wall)
   const px = wall.pos_x + t * d.x
   const py = wall.pos_y + t * d.y
   if (!back || wall.thickness <= 0) return { x: px, y: py }
-  const inward = wallInwardNormal(wall, cx, cy)
+  const inward = wallInwardNormal(wall, ref)
   return { x: px - inward.x * wall.thickness, y: py - inward.y * wall.thickness }
 }
 

@@ -1,14 +1,14 @@
 'use client'
 
 import { Wall } from '@/src/lib/types'
-import { toRad, wallDir, wallEnd, wallInwardNormal } from '@/src/lib/geometry'
+import { toRad, wallDir, wallEnd, wallInwardNormal, type RoomRef } from '@/src/lib/geometry'
 
-export default function WallDimension({ wall, walls, centX, centY, zoom, selected }: {
-  wall: Wall; walls: Wall[]; centX: number; centY: number; zoom: number; selected: boolean
+export default function WallDimension({ wall, walls, rc, zoom, selected }: {
+  wall: Wall; walls: Wall[]; rc: RoomRef; zoom: number; selected: boolean
 }) {
   if (wall.wall_type === 'island') return null
 
-  const inward = wallInwardNormal(wall, centX, centY)
+  const inward = wallInwardNormal(wall, rc)
   const out = { x: -inward.x, y: -inward.y }
   const thick = wall.thickness
 

@@ -29,7 +29,21 @@ export interface UserPrefs {
   includeBandingInPartSize: boolean
   /** Plan-view reference grid: dots drawn behind the drawing. */
   planGrid: PlanGridPrefs
+  /** Wall draw tool settings (WallDrawPanel / DrawingPanel). */
+  wallDraw: WallDrawPrefs
 }
+
+export interface WallDrawPrefs {
+  /** Chained line: each click finishes a wall and starts the next from its end. */
+  chain: boolean
+  /** Thickness (mm) for new walls. */
+  thickness: number
+  /** Angle snap step (°) while drawing; 0 = free. Shift always snaps to 5°. */
+  angleStep: number
+}
+
+export const WALL_ANGLE_STEPS = [0, 15, 22.5, 45, 90] as const
+export const DEFAULT_WALL_DRAW: WallDrawPrefs = { chain: true, thickness: 90, angleStep: 22.5 }
 
 export interface PlanGridPrefs {
   visible: boolean
@@ -58,6 +72,7 @@ const DEFAULTS: UserPrefs = {
   optimiserPartCols: null,
   includeBandingInPartSize: true,
   planGrid: DEFAULT_PLAN_GRID,
+  wallDraw: DEFAULT_WALL_DRAW,
 }
 
 // Legacy fields: per-view `drawingPresets.plan` and the older singular
@@ -72,6 +87,15 @@ function normalisePlanGrid(raw: unknown): PlanGridPrefs {
   const r = (raw ?? {}) as Partial<PlanGridPrefs>
   const step = GRID_STEPS.includes(r.step as (typeof GRID_STEPS)[number]) ? r.step! : 0
   return { visible: r.visible ?? DEFAULT_PLAN_GRID.visible, step }
+}
+
+function normaliseWallDraw(raw: unknown): WallDrawPrefs {
+  const r = (raw ?? {}) as Partial<WallDrawPrefs>
+  return {
+    chain:     typeof r.chain === 'boolean' ? r.chain : DEFAULT_WALL_DRAW.chain,
+    thickness: typeof r.thickness === 'number' && r.thickness >= 10 ? r.thickness : DEFAULT_WALL_DRAW.thickness,
+    angleStep: WALL_ANGLE_STEPS.includes(r.angleStep as (typeof WALL_ANGLE_STEPS)[number]) ? r.angleStep! : DEFAULT_WALL_DRAW.angleStep,
+  }
 }
 
 function normaliseCabinetViewStyles(raw: unknown): CabinetViewStyles {
@@ -96,6 +120,7 @@ export function getUserPrefs(): UserPrefs {
       snapSettings:     normaliseSnapSettings(merged.snapSettings),
       elevSnapSettings: normaliseElevSnapSettings(merged.elevSnapSettings),
       planGrid:         normalisePlanGrid(merged.planGrid),
+      wallDraw:         normaliseWallDraw(merged.wallDraw),
     }
   } catch {
     return DEFAULTS

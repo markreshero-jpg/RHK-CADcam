@@ -99,7 +99,7 @@ export default function PlanViewReportSVG({
   const pts = walls.flatMap(w => {
     const e = wallEnd(w)
     if (w.wall_type === 'island') return [{ x: w.pos_x, y: w.pos_y }, e]
-    const inward = wallInwardNormal(w, cx.x, cx.y)
+    const inward = wallInwardNormal(w, cx)
     const t = w.thickness
     return [
       { x: w.pos_x, y: w.pos_y },
@@ -275,7 +275,7 @@ export default function PlanViewReportSVG({
             />
           )
         }
-        const poly = wallMitrePolygon(w, walls, cx.x, cx.y)
+        const poly = wallMitrePolygon(w, walls, cx)
         if (!poly) return null
         return (
           <polygon key={w.id}
@@ -290,7 +290,7 @@ export default function PlanViewReportSVG({
       {/* Matches the 3D room view WallLabel: wall midpoint shifted out by ½ thickness. */}
       {show.wallNames && walls.map(w => {
         if (w.wall_type === 'island' || !w.name) return null
-        const inward = wallInwardNormal(w, cx.x, cx.y)
+        const inward = wallInwardNormal(w, cx)
         const e = wallEnd(w)
         const mx = (w.pos_x + e.x) / 2 - inward.x * w.thickness / 2
         const my = (w.pos_y + e.y) / 2 - inward.y * w.thickness / 2
@@ -320,7 +320,7 @@ export default function PlanViewReportSVG({
         // kick and drawer hardware are still box-built until Phase 4 — hidden.
         const shaped   = !!cab.footprint?.segments?.length
         const rpParts  = shaped ? undefined : rp
-        const basePerp = wallInwardNormal(wall, cx.x, cx.y)
+        const basePerp = wallInwardNormal(wall, cx)
         const perp     = cabWallPerp(cab, wall, basePerp)
         const poly     = cabinetPolygon(cab, wall, perp)
         // Cabinet frame → plan (turned, never mirrored, on left-handed walls).
@@ -428,7 +428,7 @@ export default function PlanViewReportSVG({
         if (!cab.has_face) return []
         const wall = walls.find(w => w.id === cab.wall_id)
         if (!wall) return []
-        const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
+        const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx))
         // Cabinet frame: column 0 / hinge 'left' sit on the cabinet's own left —
         // turned on left-handed walls (back side), never mirrored.
         const { o: fo, x: wd } = cabinetPlanFrame(cab, wall, perp)
@@ -555,7 +555,7 @@ export default function PlanViewReportSVG({
 
       {/* ── Dimension chains — wall-cab / base / overall + depth (layer items) ── */}
       {showDims && walls.map(w => {
-        const inward = wallInwardNormal(w, cx.x, cx.y)
+        const inward = wallInwardNormal(w, cx)
         const out = { x: -inward.x, y: -inward.y }
         const allBase = chainCabs.filter(c => c.wall_id === w.id && (c.assembly_class === 'base' || c.assembly_class === 'base_corner'))
         const allWall = chainCabs.filter(c => c.wall_id === w.id && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner' || c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'))

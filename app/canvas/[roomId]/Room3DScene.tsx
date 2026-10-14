@@ -13,7 +13,7 @@ import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
   wallDir, wallInwardNormal, cabWallSide, centroid, wallEnd, lineIntersect, dist,
 } from '@/src/lib/geometry'
-import type { Pt } from '@/src/lib/geometry'
+import type { Pt, RoomRef } from '@/src/lib/geometry'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { PassivePartsContext, WireColorContext, alphaMat, type PartEdge, type MatColMap } from '@/src/components/three/PartViewer'
 import type { EbByMatId } from './useMaterialColours'
@@ -37,9 +37,9 @@ function cabFloorY(cab: CabinetInstance, room: Room): number {
 }
 
 // Same logic as wallMitrePolygon; returns [startInside, endInside, endOutside, startOutside]
-function mitreCorners(w: Wall, walls: Wall[], cx: number, cy: number): [Pt, Pt, Pt, Pt] {
+function mitreCorners(w: Wall, walls: Wall[], rc: RoomRef): [Pt, Pt, Pt, Pt] {
   const d    = wallDir(w)
-  const in_  = wallInwardNormal(w, cx, cy)
+  const in_  = wallInwardNormal(w, rc)
   const s    = { x: w.pos_x, y: w.pos_y }
   const e    = wallEnd(w)
   const ox   = -in_.x * w.thickness, oy = -in_.y * w.thickness
@@ -49,7 +49,7 @@ function mitreCorners(w: Wall, walls: Wall[], cx: number, cy: number): [Pt, Pt, 
   for (const o of walls) {
     if (o.id === w.id || o.wall_type === 'island') continue
     const od  = wallDir(o)
-    const oIn = wallInwardNormal(o, cx, cy)
+    const oIn = wallInwardNormal(o, rc)
     const oS  = { x: o.pos_x, y: o.pos_y }
     const oE  = wallEnd(o)
     const oox = -oIn.x * o.thickness, ooy = -oIn.y * o.thickness
@@ -67,16 +67,16 @@ function mitreCorners(w: Wall, walls: Wall[], cx: number, cy: number): [Pt, Pt, 
 //   • Extruded along +Z then rotateX(−π/2) maps: X→worldX, Z(height)→worldY, −Y→worldZ.
 //   • So (planX,−planY) → (worldX, 0, planY) at floor — exactly right.
 
-function WallMesh({ wall, walls, room, cx, cy, color = '#cbd5e1', alpha = 1, wire = false }: {
-  wall: Wall; walls: Wall[]; room: Room; cx: number; cy: number; color?: string; alpha?: number; wire?: boolean
+function WallMesh({ wall, walls, room, rc, color = '#cbd5e1', alpha = 1, wire = false }: {
+  wall: Wall; walls: Wall[]; room: Room; rc: RoomRef; color?: string; alpha?: number; wire?: boolean
 }) {
   const height   = wall.height ?? room.room_dy ?? 2400
   const angleRad = wall.angle * TO_RAD
 
   const corners = useMemo(
-    () => wall.wall_type === 'island' ? null : mitreCorners(wall, walls, cx, cy),
+    () => wall.wall_type === 'island' ? null : mitreCorners(wall, walls, rc),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [wall.id, walls.map(w => w.id).join(), cx, cy],
+    [wall.id, walls.map(w => w.id).join(), rc],
   )
 
   const geometry = useMemo(() => {
@@ -111,13 +111,13 @@ function WallMesh({ wall, walls, room, cx, cy, color = '#cbd5e1', alpha = 1, wir
 
 // ── Wall label (flat text on wall top edge) ───────────────────────────────────
 
-function WallLabel({ wall, room, cx, cy }: { wall: Wall; room: Room; cx: number; cy: number }) {
+function WallLabel({ wall, room, rc }: { wall: Wall; room: Room; rc: RoomRef }) {
   if (wall.wall_type === 'island') return null
   const height = (wall.height ?? room.room_dy ?? 2400) + 10
   const e = wallEnd(wall)
   // Start from the midpoint of the inner face, then shift outward by half the wall thickness
   // so the label sits over the wall centre rather than just the inner edge.
-  const inward = wallInwardNormal(wall, cx, cy)
+  const inward = wallInwardNormal(wall, rc)
   const midX = (wall.pos_x + e.x) / 2 - inward.x * wall.thickness / 2
   const midZ = (wall.pos_y + e.y) / 2 - inward.y * wall.thickness / 2
   const angleRad = wall.angle * TO_RAD
@@ -247,10 +247,10 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
 
 type MatColEntry = string | { face?: string; back?: string; edge?: string }
 
-function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMenu, rp, materialColours, ebByMatId, layers, partOverrides, shapeOverrides, handMarkers, wire }: {
+function CabinetMesh({ cab, wall, rc, room, selected, onSelect, onContextMenu, rp, materialColours, ebByMatId, layers, partOverrides, shapeOverrides, handMarkers, wire }: {
   cab: CabinetInstance
   wall: Wall
-  cx: number; cy: number
+  rc: RoomRef
   room: Room
   selected: boolean
   onSelect: () => void
@@ -266,7 +266,7 @@ function CabinetMesh({ cab, wall, cx, cy, room, selected, onSelect, onContextMen
   wire: boolean
 }) {
   const angleRad = wall.angle * TO_RAD
-  const perp     = wallInwardNormal(wall, cx, cy)
+  const perp     = wallInwardNormal(wall, rc)
   const wd       = wallDir(wall)
 
   // Back-side cabinets (islands and standard walls alike) face away from the
@@ -734,7 +734,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
   wire: boolean
 }) {
   const controlsRef = useRef<any>(null)
-  const { x: cx, y: cy } = useMemo(() => centroid(walls), [walls])
+  const rc = useMemo(() => centroid(walls), [walls])
 
   // Part overrides + drawn shapes for every cabinet. Re-fetched when the resolved
   // map changes (a cabinet edit re-resolves → new map), so editor changes show here.
@@ -816,13 +816,13 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
 
       {/* Walls */}
       {layers.show('walls') && walls.map(w => hiddenWallIds.has(w.id) ? null : (
-        <WallMesh key={w.id} wall={w} walls={walls} room={room} cx={cx} cy={cy} color={layers.colorOf('walls')} alpha={layers.alpha('walls')} wire={wire} />
+        <WallMesh key={w.id} wall={w} walls={walls} room={room} rc={rc} color={layers.colorOf('walls')} alpha={layers.alpha('walls')} wire={wire} />
       ))}
 
       {/* Wall name labels on top edge */}
       <Suspense fallback={null}>
         {layers.show('walls') && walls.map(w => hiddenWallIds.has(w.id) ? null : (
-          <WallLabel key={`lbl_${w.id}`} wall={w} room={room} cx={cx} cy={cy} />
+          <WallLabel key={`lbl_${w.id}`} wall={w} room={room} rc={rc} />
         ))}
       </Suspense>
 
@@ -833,7 +833,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
         return (
           <CabinetMesh
             key={cab.id}
-            cab={cab} wall={wall} cx={cx} cy={cy} room={room}
+            cab={cab} wall={wall} rc={rc} room={room}
             selected={selectedId === cab.id}
             // F4 Benchtop mode: cabinets can't be picked (clicks fall to the tops).
             // Measure tool: clicks pick faces, not cabinets.

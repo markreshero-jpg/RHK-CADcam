@@ -68,7 +68,7 @@ import BenchtopShapeEditPanel, { SaveShapePrompt } from './BenchtopShapeEditPane
 import { useBenchtopCatalog } from './useBenchtopCatalog'
 import dynamic from 'next/dynamic'
 import SnapToolbar from './SnapToolbar'
-import { getUserPrefs, setUserPrefs, type PlanGridPrefs, type ViewStyle } from '@/src/lib/userPrefs'
+import { getUserPrefs, setUserPrefs, type PlanGridPrefs, type ViewStyle, type WallDrawPrefs } from '@/src/lib/userPrefs'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { computeSnap, cabinetCorners, SNAP_KINDS, SNAP_KIND_META, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
 import { type ElevSnapSettings, type ElevSnapResult } from '@/src/lib/elevationSnap'
@@ -106,8 +106,23 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [selected, setSelected] = useState<Selected>(null)
   const [view, dispatchView] = useReducer(viewReducer, { panX: 200, panY: 200, zoom: 0.15 })
   const [svgSize, setSvgSize] = useState({ w: 1200, h: 800 })
-  const [drawThickness, setDrawThickness] = useState(90)
+  // Wall draw tool settings (chain / thickness / angle snap), remembered per user.
+  const [wallDraw, setWallDrawState] = useState<WallDrawPrefs>(() => getUserPrefs().wallDraw)
+  const updateWallDraw = useCallback((patch: Partial<WallDrawPrefs>) => {
+    setWallDrawState(prev => { const next = { ...prev, ...patch }; setUserPrefs({ wallDraw: next }); return next })
+  }, [])
+  const drawThickness = wallDraw.thickness
+  const setDrawThickness = useCallback((v: number) => updateWallDraw({ thickness: v }), [updateWallDraw])
+  const [drawSoffit, setDrawSoffit] = useState<number | null>(null)
   const [drawStart, setDrawStart] = useState<Pt | null>(null)
+  // Chained wall drawing: first point of the chain (click it again to close the
+  // loop) and how many walls the current chain has placed.
+  const chainStartRef = useRef<Pt | null>(null)
+  const [chainCount, setChainCount] = useState(0)
+  const drawStartRef = useRef<Pt | null>(null)
+  drawStartRef.current = drawStart
+  const wallDrawRef = useRef(wallDraw)
+  wallDrawRef.current = wallDraw
   const [drawCursor, setDrawCursor] = useState<Pt | null>(null)
   const [placeGhost, setPlaceGhost] = useState<PlaceGhost | null>(null)
   const [cabDrag, setCabDrag] = useState<CabDrag | null>(null)
@@ -424,8 +439,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (e.key === ' ' && !isInput(e.target)) { spaceRef.current = true; e.preventDefault() }
       if (e.key === 'Shift') shiftRef.current = true
       if (e.key === 'Control') ctrlRef.current = true
-      if (e.key === 'Tab' && mode === 'draw_wall' && drawStart && !isInput(e.target)) {
+      if (e.key === 'Tab' && mode === 'draw_wall' && drawStartRef.current && !isInput(e.target)) {
         e.preventDefault(); drawingPanelRef.current?.focusLength()
+      }
+      // Chained walls: Esc ends the chain but keeps the wall tool armed;
+      // a second Esc (nothing in progress) leaves the tool.
+      if (e.key === 'Escape' && mode === 'draw_wall' && drawStartRef.current && wallDrawRef.current.chain && !isInput(e.target)) {
+        endWallChain(); return
       }
       // Benchtop quick-draw: Tab jumps into the size fields (BenchtopDrawPanel).
       if (e.key === 'Tab' && (mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u') && !isInput(e.target)) {
@@ -811,14 +831,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const wd = wallDir(raw.wall)
     const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
     const gc = centroid(walls)
-    const inward = wallInwardNormal(raw.wall, gc.x, gc.y)
+    const inward = wallInwardNormal(raw.wall, gc)
     const flip = (wp.x - raw.wall.pos_x) * inward.x + (wp.y - raw.wall.pos_y) * inward.y < 0
     const side = flip ? 'back' : 'face'
     const occupied = cabinets
       .filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: draft.assembly_class, dy: draft.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side)
       .map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, side, draft))
     const fit = fitFreeSlot(desired, draft.dx, raw.wall.length, occupied)
-    const a = wallAnchorPoint(raw.wall, fit.t, flip, gc.x, gc.y)
+    const a = wallAnchorPoint(raw.wall, fit.t, flip, gc)
     await placeFromDraft(draft, raw.wall, a.x, a.y, flip, fit.dx)
   }
 
@@ -912,7 +932,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         .filter(c => c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(src, c, wall, room) && cabWallSide(c, wall) === side)
         .map(c => ({ t: cabT(c, wall), dx: c.dx })).concat(wfOcc(wall, side, src))
       const t = findFreeSlot(desired, src.dx, wall.length, occupied)
-      const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, flip, cxp.x, cxp.y)
+      const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, flip, cxp)
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, created_at, updated_at, ...rest } = src
       const cab = await dbInsertCabinet({ ...rest, room_id: room.id, wall_id: wall.id, label: nextLabel(working, src.assembly_class), pos_x, pos_y, rotation: flip ? wall.angle + 180 : wall.angle })
@@ -931,6 +951,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }
 
+  /** Wall/island angle snap: Shift = 5°, else the tool's step (0 = free). */
+  function wallAngleSnap(start: Pt, pt: Pt): Pt {
+    const step = shiftRef.current ? 5 : wallDraw.angleStep
+    return step > 0 ? snapAngle(start, pt, step) : pt
+  }
+
   function onUpdateDrawPreview(length: number, angle: number) {
     if (!drawStart) return
     const rad = (angle * Math.PI) / 180
@@ -946,12 +972,37 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       sort_order: walls.length, length, angle,
       pos_x: drawStart.x, pos_y: drawStart.y,
       thickness: drawThickness, height: drawHeight,
-      soffit_height: null,
+      soffit_height: drawSoffit,
       wall_type: 'standard',
     }
     const saved = await dbSaveWall(data)
     if (saved) { setWalls(ws => [...ws, saved]); setSelected({ type: 'wall', id: saved.id }) }
-    setDrawStart(null); setDrawCursor(null)
+    const rad = (angle * Math.PI) / 180
+    afterWallPlaced({ x: drawStart.x + length * Math.cos(rad), y: drawStart.y + length * Math.sin(rad) }, !!saved)
+  }
+
+  /** After a standard wall is placed: chain mode starts the next wall from its
+   *  end (closing on the chain's first point ends it); otherwise the draw ends. */
+  function afterWallPlaced(end: Pt, ok: boolean) {
+    const first = chainStartRef.current
+    if (ok && mode === 'draw_wall' && wallDraw.chain && !(first && dist(first, end) < 1)) {
+      setDrawStart(end); setDrawCursor(end); setChainCount(n => n + 1)
+      return
+    }
+    endWallChain()
+  }
+
+  /** Drop the pending start point (wall tool stays armed). */
+  function endWallChain() {
+    chainStartRef.current = null
+    setChainCount(0)
+    setDrawStart(null); setDrawCursor(null); setSnapResult(null)
+  }
+
+  /** Right-click / panel cancel: ends a chain in progress, else leaves the tool. */
+  function cancelWallDraw() {
+    if (mode === 'draw_wall' && wallDraw.chain && drawStart) { endWallChain(); return }
+    endWallChain(); setMode('select')
   }
 
   // ── Dev automation bridge ─────────────────────────────────────────────────
@@ -1094,6 +1145,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (!drawStart) {
         const snapped = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom).pt
         setDrawStart(snapped); setDrawCursor(snapped)
+        chainStartRef.current = snapped; setChainCount(0)
         drawStartedThisDownRef.current = true
       }
       return
@@ -1151,7 +1203,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const snap = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom)
       let end = snap.pt
       if (drawStart && snap.kind == null) {
-        end = snapAngle(drawStart, end, shiftRef.current ? 5 : 22.5)
+        end = wallAngleSnap(drawStart, end)
       }
       setSnapResult(snap.kind ? snap : null)
       setDrawCursor(end)
@@ -1166,7 +1218,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
     function wallFlipFor(w: Wall): boolean {
       const cx = centroid(walls)
-      const inward = wallInwardNormal(w, cx.x, cx.y)
+      const inward = wallInwardNormal(w, cx)
       return (wp.x - w.pos_x) * inward.x + (wp.y - w.pos_y) * inward.y < 0
     }
 
@@ -1186,7 +1238,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(clipboard, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, side, clipboard))
       const t = findFreeSlot(desired, clipboard.dx, raw.wall.length, occupied)
       const cxp = centroid(walls)
-      const a = wallAnchorPoint(raw.wall, t, flip, cxp.x, cxp.y)
+      const a = wallAnchorPoint(raw.wall, t, flip, cxp)
       setPlaceGhost({ wall: raw.wall, pos_x: a.x, pos_y: a.y, islandFlip: flip, freePos: wp })
       return
     }
@@ -1205,7 +1257,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       // fitFreeSlot centres on the cursor point itself.
       const fit = fitFreeSlot(cursorT(raw.wall), clsInfo.dx, raw.wall.length, occupied)
       const cxp = centroid(walls)
-      const a = wallAnchorPoint(raw.wall, fit.t, flip, cxp.x, cxp.y)
+      const a = wallAnchorPoint(raw.wall, fit.t, flip, cxp)
       setPlaceGhost({ wall: raw.wall, pos_x: a.x, pos_y: a.y, islandFlip: flip, freePos: wp, fitDx: fit.dx })
       return
     }
@@ -1227,7 +1279,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(dragCab ?? { assembly_class: assemblyClass, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === dragSide).map(c => ({ t: cabT(c, wall), dx: c.dx })).concat(wfOcc(wall, dragSide, dragCab ?? { assembly_class: assemblyClass, dy: 9999 }))
         const t = slideToFreeSlot(desired, cabDX, wall.length, occupied, dragCab ? cabT(dragCab, wall) : undefined)
         const cxp = centroid(walls)
-        const a = wallAnchorPoint(wall, t, dragSide === 'back', cxp.x, cxp.y)
+        const a = wallAnchorPoint(wall, t, dragSide === 'back', cxp)
         setCabDrag({ id: cabId, pos_x: a.x, pos_y: a.y })
       }
     }
@@ -1249,7 +1301,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           const origT = raw.wall.id === cab.wall_id ? cabT(cab, raw.wall) : undefined
           const t = slideToFreeSlot(desired, cab.dx, raw.wall.length, occupied, origT)
           const cxp = centroid(walls)
-          const a = wallAnchorPoint(raw.wall, t, flip, cxp.x, cxp.y)
+          const a = wallAnchorPoint(raw.wall, t, flip, cxp)
           setCabMoveDrag({ id, wall: raw.wall, pos_x: a.x, pos_y: a.y, islandFlip: flip, freePos: wp })
         }
       }
@@ -1333,7 +1385,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const snap = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom)
         let end = snap.pt
         if (snap.kind == null) {
-          end = snapAngle(drawStart, end, shiftRef.current ? 5 : 22.5)
+          end = wallAngleSnap(drawStart, end)
         }
         const adjStart = drawStart
         const adjEnd   = end
@@ -1347,13 +1399,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             sort_order: walls.length, length: len, angle,
             pos_x: adjStart.x, pos_y: adjStart.y,
             thickness: isIsland ? 0 : drawThickness, height: drawHeight,
-            soffit_height: null,
+            soffit_height: isIsland ? null : drawSoffit,
             wall_type: isIsland ? 'island' : 'standard',
           }
           const saved = await dbSaveWall(data)
           if (saved) { setWalls(ws => [...ws, saved]); setSelected({ type: 'wall', id: saved.id }) }
+          if (isIsland) { setDrawStart(null); setDrawCursor(null) }
+          else afterWallPlaced(adjEnd, !!saved)
+        } else {
+          // A click on the start point (e.g. double-click) finishes the chain.
+          endWallChain()
         }
-        setDrawStart(null); setDrawCursor(null)
         placingRef.current = false
       }
       return
@@ -1385,7 +1441,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           const desired = (wp.x - raw.wall.pos_x) * wd2.x + (wp.y - raw.wall.pos_y) * wd2.y - clipboard.dx / 2
           const pasteFlip = (() => {
             const cx2 = centroid(walls)
-            const inw = wallInwardNormal(raw.wall, cx2.x, cx2.y)
+            const inw = wallInwardNormal(raw.wall, cx2)
             return (wp.x - raw.wall.pos_x) * inw.x + (wp.y - raw.wall.pos_y) * inw.y < 0
           })()
           const pasteSide = pasteFlip ? 'back' : 'face'
@@ -1446,7 +1502,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const ids = cabinets.filter(cab => {
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return false
-          const basePerp = wallInwardNormal(wall, cxpt.x, cxpt.y)
+          const basePerp = wallInwardNormal(wall, cxpt)
           const perp = cabWallPerp(cab, wall, basePerp)
           // Full enclosure: every corner of the cabinet must be inside the box.
           return cabinetCornerPts(cab, wall, perp).every(p =>
@@ -1772,7 +1828,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         return !start || end ? 'Measure: click first point · snaps to corners · Ctrl=ortho · Esc=exit' : 'Click second point · Ctrl=ortho · Shift=45° · right-click=clear'
       })()
     : mode === 'draw_section'     ? (!drawStart ? 'Click to set start of section cut · Esc=cancel' : 'Click to finish · Shift=45° snap · Esc=cancel')
-    : mode === 'draw_wall'       ? (!drawStart ? 'Click to set start point · snap rings show existing endpoints' : 'Click to finish · Shift = 5° snap · or type in panel →')
+    : mode === 'draw_wall'       ? (!drawStart ? 'Click to set start point · snap rings show existing endpoints' : (wallDraw.chain ? 'Click to place & continue · click first point to close · double-click / Esc = finish · Shift = 5° snap' : 'Click to finish · Shift = 5° snap · or type in panel →'))
     : mode === 'draw_island'     ? (!drawStart ? 'Click to set island start · Shift = 5° snap · Right-click = cancel' : 'Click to finish island · cabinets snap to either side')
     : mode === 'place_base'        ? 'Click near a wall to place base cabinet · Esc = cancel'
     : mode === 'place_wall_unit'   ? 'Click near a wall to place wall unit · Esc = cancel'
@@ -1978,7 +2034,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
-              onCancelDraw={() => { setDrawStart(null); setDrawCursor(null); setMode('select') }}
+              onCancelDraw={cancelWallDraw}
               setSelected={setSelected}
               setContextMenu={setContextMenu}
               onWallPointerDown={onWallPointerDown}
@@ -2044,12 +2100,28 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             {(mode === 'draw_wall' || mode === 'draw_island') && !drawStart && (
               <WallDrawPanel
                 mode={mode as 'draw_wall' | 'draw_island'}
-                thickness={drawThickness}
-                setThickness={setDrawThickness}
+                drawing={!!drawStart}
+                chainCount={chainCount}
+                settings={wallDraw}
+                onSettings={updateWallDraw}
                 height={drawHeight}
                 setHeight={setDrawHeight}
-                onCancel={() => setMode('select')}
-              />
+                soffit={drawSoffit}
+                setSoffit={setDrawSoffit}
+                onFinishChain={endWallChain}
+                onCancel={() => { endWallChain(); setMode('select') }}
+              >
+                {mode === 'draw_wall' && drawStart && (
+                  <DrawingPanel
+                    ref={drawingPanelRef}
+                    drawStart={drawStart}
+                    drawCursor={drawCursor}
+                    onPlace={onPlaceFromPanel}
+                    onCancel={cancelWallDraw}
+                    onUpdatePreview={onUpdateDrawPreview}
+                  />
+                )}
+              </WallDrawPanel>
             )}
             {(mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u') && !bt.btArcMode && (
               <BenchtopDrawPanel
@@ -2064,16 +2136,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 onPlace={v => void bt.placeTyped(v)}
                 onClosePolygon={() => void bt.closePolygon()}
                 onCancel={() => { bt.resetDraw(); setMode('benchtop_select') }}
-              />
-            )}
-            {mode === 'draw_wall' && drawStart && (
-              <DrawingPanel
-                ref={drawingPanelRef}
-                drawStart={drawStart}
-                drawCursor={drawCursor}
-                onPlace={onPlaceFromPanel}
-                onCancel={() => { setDrawStart(null); setDrawCursor(null); setMode('select') }}
-                onUpdatePreview={onUpdateDrawPreview}
               />
             )}
           </>
@@ -2106,7 +2168,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               const wd = wallDir(wall)
               const t = (rawX - wall.pos_x) * wd.x + (rawY - wall.pos_y) * wd.y
               const gc = centroid(walls)
-              const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, elevWallSide === 'back', gc.x, gc.y)
+              const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, elevWallSide === 'back', gc)
               if (mode === 'paste' && clipboard) {
                 if (clipboardGroup.length > 1) await pasteGroupAt(wall, pos_x, pos_y, elevWallSide === 'back')
                 else await pasteCabinet(wall, pos_x, pos_y, elevWallSide === 'back')
@@ -2454,7 +2516,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
                 const copyFlip = (() => {
                   const cx2 = centroid(walls)
-                  const inw = wallInwardNormal(raw.wall, cx2.x, cx2.y)
+                  const inw = wallInwardNormal(raw.wall, cx2)
                   return (mouseWorld.x - raw.wall.pos_x) * inw.x + (mouseWorld.y - raw.wall.pos_y) * inw.y < 0
                 })()
                 const copySide = copyFlip ? 'back' : 'face'
