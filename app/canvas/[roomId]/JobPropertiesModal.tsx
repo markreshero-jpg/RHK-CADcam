@@ -49,6 +49,12 @@ const RULE_LABELS: Record<RuleKey, string> = {
   GAPC:    'Centre Gap (mm)',
   GAPR:    'Drawer Gap (mm)',
   FPGAP:   'Finger Gap (mm)',
+  RAILH:   'Finger Rail Height (mm)',
+  RAILUP:  'Finger Rail Overlap Up (mm)',
+  RAILCUT: 'Finger Rail Notch Relief (mm)',
+  RAILBLK: 'Knock-in Block Setback (mm)',
+  RAILBLKD:'Knock-in Block Hole Ø (mm)',
+  RAILBLKZ:'Knock-in Block Hole Depth (mm)',
   FACBUF:  'Face Buffer (mm)',
   FACINS:  'Face Inset (mm)',
 }
@@ -61,6 +67,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Fixed Shelves',      keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
   { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR', 'FPGAP'] },
+  { label: 'Finger Pull Rails', keys: ['RAILH', 'RAILUP', 'RAILCUT', 'RAILBLK', 'RAILBLKD', 'RAILBLKZ'] },
   { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
 ]
 

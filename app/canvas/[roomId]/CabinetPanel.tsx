@@ -247,6 +247,48 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
                 </select>
               )
             })()}
+            {/* Finger-pull backing rails (z_handles H6) — rule_overrides.FPRAIL */}
+            {(() => {
+              const cur = (cabinet.rule_overrides ?? {}).FPRAIL
+              const inherited = getCachedInput(cabinet.id)?.rules_base?.FPRAIL ?? true
+              return (
+                <select
+                  value={cur === true ? 'on' : cur === false ? 'off' : ''}
+                  onChange={e => {
+                    const next = { ...(cabinet.rule_overrides ?? {}) }
+                    if (e.target.value === '') delete next.FPRAIL
+                    else next.FPRAIL = e.target.value === 'on'
+                    void onUpdate(cabinet.id, { rule_overrides: next })
+                  }}
+                  className={inp + ' mt-1'}
+                >
+                  <option value="">Finger rails: inherit ({inherited ? 'on' : 'off'})</option>
+                  <option value="on">Finger rails: on</option>
+                  <option value="off">Finger rails: off</option>
+                </select>
+              )
+            })()}
+            {/* Rail grain (z_handles H6) — rule_overrides.RAILGRAIN */}
+            {(() => {
+              const cur = (cabinet.rule_overrides ?? {}).RAILGRAIN
+              const inherited = getCachedInput(cabinet.id)?.rules_base?.RAILGRAIN ?? 'horizontal'
+              return (
+                <select
+                  value={cur === 'horizontal' || cur === 'vertical' ? cur : ''}
+                  onChange={e => {
+                    const next = { ...(cabinet.rule_overrides ?? {}) }
+                    if (e.target.value === '') delete next.RAILGRAIN
+                    else next.RAILGRAIN = e.target.value
+                    void onUpdate(cabinet.id, { rule_overrides: next })
+                  }}
+                  className={inp + ' mt-1'}
+                >
+                  <option value="">Rail grain: inherit ({inherited})</option>
+                  <option value="horizontal">Rail grain: horizontal</option>
+                  <option value="vertical">Rail grain: vertical</option>
+                </select>
+              )
+            })()}
             {/* Finger gap (z_handles D4) — rule_overrides.FPGAP; only applies
                 where a front's grip needs one (sharknose, rail). */}
             <div className="flex items-center gap-2 mt-1">

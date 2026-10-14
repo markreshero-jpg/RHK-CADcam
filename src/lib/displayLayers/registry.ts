@@ -68,6 +68,9 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'carcass_outline', group: 'carcase', label: 'Cabinet outline', views: ['plan', 'elevation'], default: ON,
     hint: 'Plan footprint; elevation box while parts are loading or resizing' },
   { id: 'carcass_gables', group: 'carcase', label: 'Gables',       views: ALL, default: ON },
+  { id: 'finger_rails',   group: 'carcase', label: 'Finger pull rails', views: ALL, default: ON,
+    viewDefaults: { plan: { visible: false } },
+    hint: 'Door-colour backing rails behind each finger gap (z_handles H6)' },
   { id: 'carcass_top',    group: 'carcase', label: 'Tops / rails', views: ALL, default: ON },
   { id: 'carcass_bottom', group: 'carcase', label: 'Bottoms',      views: ALL, default: ON },
   { id: 'carcass_back',   group: 'carcase', label: 'Backs',        views: ['plan', '3d'], default: ON },
@@ -207,6 +210,7 @@ export function casePartItem(partKey: string): string {
   // Shaped-cabinet per-edge panels (z_cabinet_shape): side:<edge> / back:<edge>.
   if (partKey.startsWith('side:')) return 'carcass_gables'
   if (partKey.startsWith('back:')) return 'carcass_back'
+  if (partKey.startsWith('fprail:')) return 'finger_rails'
   return 'carcass_top'            // full_top, front_rail, back_rail, rail:<edge>
 }
 export function kickPartItem(partKey: string): string {

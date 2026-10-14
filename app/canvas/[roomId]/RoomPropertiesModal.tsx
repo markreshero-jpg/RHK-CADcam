@@ -59,6 +59,12 @@ const RULE_LABELS: Record<RuleKey, string> = {
   GAPC:    'Centre Gap (mm)',
   GAPR:    'Drawer Gap (mm)',
   FPGAP:   'Finger Gap (mm)',
+  RAILH:   'Finger Rail Height (mm)',
+  RAILUP:  'Finger Rail Overlap Up (mm)',
+  RAILCUT: 'Finger Rail Notch Relief (mm)',
+  RAILBLK: 'Knock-in Block Setback (mm)',
+  RAILBLKD:'Knock-in Block Hole Ø (mm)',
+  RAILBLKZ:'Knock-in Block Hole Depth (mm)',
   FACBUF:  'Face Buffer (mm)',
   FACINS:  'Face Inset (mm)',
 }
@@ -71,6 +77,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Fixed Shelves',     keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',     keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
   { label: 'Face Reveals',      keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR', 'FPGAP'] },
+  { label: 'Finger Pull Rails', keys: ['RAILH', 'RAILUP', 'RAILCUT', 'RAILBLK', 'RAILBLKD', 'RAILBLKZ'] },
   { label: 'Face Clearance',    keys: ['FACBUF', 'FACINS'] },
 ]
 
@@ -133,6 +140,16 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
     const v = (room.rule_overrides as Record<string, unknown> | null)?.HANDLE_DRILL
     return v === true ? 'on' : v === false ? 'off' : ''
   })
+  // Finger-pull backing rails (z_handles H6) — rule_overrides.FPRAIL, same shape.
+  const [fpRail, setFpRail] = useState<'' | 'on' | 'off'>(() => {
+    const v = (room.rule_overrides as Record<string, unknown> | null)?.FPRAIL
+    return v === true ? 'on' : v === false ? 'off' : ''
+  })
+  // Rail grain (rule_overrides.RAILGRAIN): '' = inherit (horizontal).
+  const [railGrain, setRailGrain] = useState<'' | 'horizontal' | 'vertical'>(() => {
+    const v = (room.rule_overrides as Record<string, unknown> | null)?.RAILGRAIN
+    return v === 'horizontal' || v === 'vertical' ? v : ''
+  })
   const [doorStyles, setDoorStyles] = useState<{ id: string; name: string }[]>([])
   const doorPreviews = useDoorStylePreviews()
 
@@ -186,6 +203,8 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
       if (rules[k] !== jobRules[k]) (newOverrides as Record<string, unknown>)[k] = rules[k]
     }
     if (handleDrill) (newOverrides as Record<string, unknown>).HANDLE_DRILL = handleDrill === 'on'
+    if (fpRail) (newOverrides as Record<string, unknown>).FPRAIL = fpRail === 'on'
+    if (railGrain) (newOverrides as Record<string, unknown>).RAILGRAIN = railGrain
     // Serialise cabinet size defaults: keep only axes the user actually set, drop
     // empty classes entirely so blank fields cleanly inherit the job.
     const classDims: ClassDimDefaults = {}
@@ -392,6 +411,32 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
                   <option value="off">Don&apos;t drill handle holes</option>
                 </select>
                 <p className="text-[10px] text-gray-500 mt-1">Off = handles are still drawn, listed and costed, but no holes go to the CNC. Cabinets and single doors / drawers can override this.</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Finger Pull Rails</p>
+                <select
+                  value={fpRail}
+                  onChange={e => setFpRail(e.target.value as '' | 'on' | 'off')}
+                  className={`w-full bg-gray-800 border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 ${
+                    fpRail ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
+                  }`}
+                >
+                  <option value="">— inherit from job (rails on) —</option>
+                  <option value="on">Backing rail behind each finger gap</option>
+                  <option value="off">No backing rails</option>
+                </select>
+                <select
+                  value={railGrain}
+                  onChange={e => setRailGrain(e.target.value as '' | 'horizontal' | 'vertical')}
+                  className={`w-full mt-2 bg-gray-800 border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 ${
+                    railGrain ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
+                  }`}
+                >
+                  <option value="">— rail grain: inherit (horizontal) —</option>
+                  <option value="horizontal">Rail grain horizontal (along the rail)</option>
+                  <option value="vertical">Rail grain vertical (across the rail)</option>
+                </select>
+                <p className="text-[10px] text-gray-500 mt-1">Door-colour rail notched into the sides behind every sharknose finger gap. Cabinets can override this.</p>
               </div>
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Door Style</p>

@@ -1,6 +1,6 @@
 // Handle glyphs for the 2D views (z_handles H2). Geometry comes from
 // src/lib/handleGeometry so elevation, print and plan all agree.
-import { sharknoseLine, sharknoseWedge, type HandleShape } from '@/src/lib/handleGeometry'
+import { sharknoseLine, type HandleShape } from '@/src/lib/handleGeometry'
 import type { ResolvedFaceZone } from '@/src/lib/resolver/types'
 
 type Project = (x: number, y: number) => { x: number; y: number }
@@ -58,17 +58,16 @@ export function HandleHolesSVG({ s, project, color, strokeWidth, opacity }: {
   )
 }
 
-/** Sharknose (z_handles H3): a shaded band over the bevel, from the grip edge
- *  to a dashed hidden line where the bevel meets the back face, labelled
- *  "SN 38°" when there's room. Fronts without a bevel draw nothing. */
-export function SharknoseLinesSVG({ zones, project, stroke, strokeWidth, dash, opacity, fill = '#f59e0b', fontSize }: {
+/** Sharknose (z_handles H3): dashed hidden line where the bevel meets the back
+ *  face, labelled "SN 38°" between it and the grip edge when there's room
+ *  (no shading — user, 2026-10-14). Fronts without a bevel draw nothing. */
+export function SharknoseLinesSVG({ zones, project, stroke, strokeWidth, dash, opacity, fontSize }: {
   zones: ResolvedFaceZone[]
   project: Project
   stroke: string
   strokeWidth: number
   dash: string
   opacity?: number
-  fill?: string
   /** SVG units; omit for no label */
   fontSize?: number
 }) {
@@ -83,7 +82,6 @@ export function SharknoseLinesSVG({ zones, project, stroke, strokeWidth, dash, o
         const showLabel = fontSize != null && h >= fontSize * 0.9 && w >= fontSize * label.length * 0.7
         return (
           <g key={i}>
-            <rect x={Math.min(a.x, b.x)} y={y} width={w} height={h} fill={fill} fillOpacity={0.3} />
             <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={dash} />
             {showLabel && (
               <text x={(a.x + b.x) / 2} y={y + h / 2} textAnchor="middle" dominantBaseline="central"
@@ -92,26 +90,6 @@ export function SharknoseLinesSVG({ zones, project, stroke, strokeWidth, dash, o
           </g>
         )
       })}
-    </g>
-  )
-}
-
-/** Side view: the wedge the sharknose saw cut removes, shaded over the front. */
-export function SharknoseWedgesSVG({ zones, project, stroke, strokeWidth }: {
-  zones: ResolvedFaceZone[]
-  /** cabinet Y / Z → SVG point */
-  project: (y: number, z: number) => { x: number; y: number }
-  stroke: string
-  strokeWidth: number
-}) {
-  const wedges = zones.map(sharknoseWedge).filter(w => w != null)
-  if (!wedges.length) return null
-  return (
-    <g style={{ pointerEvents: 'none' }}>
-      {wedges.map((w, i) => (
-        <polygon key={i} points={w.map(p => { const q = project(p.y, p.z); return `${q.x},${q.y}` }).join(' ')}
-          fill="#f59e0b" fillOpacity={0.55} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
-      ))}
     </g>
   )
 }

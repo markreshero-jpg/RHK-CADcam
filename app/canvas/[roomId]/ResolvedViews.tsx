@@ -33,7 +33,7 @@ import { hingePlacement, hingeSilhouetteOutline, hingeSilhouetteSnapPoints } fro
 import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
 import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
 import { handleShapes } from '@/src/lib/handleGeometry'
-import { HandleElevSVG, SharknoseLinesSVG, SharknoseWedgesSVG } from './HandleSVG'
+import { HandleElevSVG, SharknoseLinesSVG } from './HandleSVG'
 
 // Hinge cup/plate drill marker colour (distinct from amber slide drills).
 const HINGE_DRILL_COL = '#a855f7'   // violet-500
@@ -1200,8 +1200,6 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
           {ec && <EdgeTapeSVG box={zoneBox3(z)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="x" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
         </g>
       })}
-      {/* Sharknose bevel (z_handles H3) — the wedge the saw cut removes */}
-      <SharknoseWedgesSVG zones={rp.face_zones} project={(y, zz) => proj(0, y, zz)} stroke="#b45309" strokeWidth={1} />
 
       {(customParts ?? []).filter(p => p.visible).map((p, i) => {
         const meta = svgCustomMeta(p)

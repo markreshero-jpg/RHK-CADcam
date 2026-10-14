@@ -64,16 +64,6 @@ export function sharknoseLine(z: ResolvedFaceZone): { x1: number; x2: number; y:
   return { x1: z.X, x2: z.X + z.DX, y: top ? z.Y + z.DY - run : z.Y + run, edgeY: top ? z.Y + z.DY : z.Y, angle: bv.angle_deg }
 }
 
-/** Side-view wedge the sharknose cut removes (cabinet Y / Z). */
-export function sharknoseWedge(z: ResolvedFaceZone): { y: number; z: number }[] | null {
-  const bv = z.handle?.bevel
-  if (!bv || z.facet || z.AY) return null
-  const run = Math.min(bv.run, z.DY), front = z.Z + z.DZ - bv.land
-  return z.handle!.grip_edge === 'top'
-    ? [{ y: z.Y + z.DY - run, z: z.Z }, { y: z.Y + z.DY, z: z.Z }, { y: z.Y + z.DY, z: front }]
-    : [{ y: z.Y + run, z: z.Z }, { y: z.Y, z: z.Z }, { y: z.Y, z: front }]
-}
-
 export function handleShapes(zones: ResolvedFaceZone[]): HandleShape[] {
   const out: HandleShape[] = []
   for (const z of zones) { const s = handleShape(z); if (s) out.push(s) }

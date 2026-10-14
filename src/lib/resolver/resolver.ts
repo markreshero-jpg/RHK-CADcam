@@ -21,6 +21,7 @@ import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
 import { resolveShapedFaces } from './resolveShapedFace'
 import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
 import { resolveHandles } from './resolveHandles'
+import { fingerRails, fingerRailParts, notchSides, pushFrontRailBack } from './resolveFingerRails'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -50,6 +51,13 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   allErrors.push(...faceErrors)
   // One grip per door / drawer front from the handle schedule (z_handles H1).
   resolveHandles(cab, zones)
+  // Backing rail behind each finger gap, notched into the sides (z_handles H6).
+  if (cab.has_carcass && cab.has_face) {
+    const rails = fingerRails(cab, r, zones, caseParts)
+    notchSides(caseParts, rails, r.RAILCUT)
+    pushFrontRailBack(caseParts, rails)
+    caseParts.push(...fingerRailParts(cab, r, rails))
+  }
   // Shaped cabinets (z_cabinet_shape Phase 3b): hinges + drawer boxes on every
   // facet, fitted to the footprint and built in each zone's square frame.
   const shapedHw = cab.footprint ? shapedHardwareCtx(cab) : null

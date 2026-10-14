@@ -41,6 +41,12 @@ export const DEFAULT_CONSTRUCTION_METHOD = {
     GAPC:    2,   // gap between doors (centre split)
     GAPR:    2,   // gap between drawers
     FPGAP:   20,  // finger gap at a sharknose / finger-pull grip edge (z_handles)
+    RAILH:   45,  // finger-pull backing rail height
+    RAILUP:  5,   // rail overlap behind the plain front above the gap
+    RAILCUT: 5,   // notch end relief depth (cutter radius); relief height = 2 × this
+    RAILBLK: 15,  // knock-in block hole: back of rail → hole centre
+    RAILBLKD: 10, // knock-in block hole diameter
+    RAILBLKZ: 12, // knock-in block hole depth
 
     // Face clearance
     FACBUF: 2,   // buffer around face opening

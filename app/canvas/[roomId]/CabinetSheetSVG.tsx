@@ -19,7 +19,7 @@ import {
   caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3, type Box3,
   doorProfileSvg,
 } from './cabinetEditSvgHelpers'
-import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 
 export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean }
 
@@ -315,7 +315,7 @@ export default function CabinetSheetSVG({
       const key = `${desc}|${w}|${l}|${t}|${mat}`
       const ex = map.get(key); if (ex) ex.qty++; else map.set(key, { desc, w, l, t, mat, qty: 1 })
     }
-    rp.case_parts.forEach(p => add(CASE_LABELS[p.part_key] ?? p.part_key, p))
+    rp.case_parts.forEach(p => add(CASE_LABELS[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key, p))
     rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => add(TK_LABELS[p.part_key] ?? p.part_key, p))
     rp.internal_parts.forEach(p => add(INT_LABELS[p.part_type] ?? p.part_type, p))
     // Sharknose fronts carry the saw note (z_handles D3): edge + blade tilt.

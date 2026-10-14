@@ -166,6 +166,50 @@ describe('resolveHandles', () => {
       expect(wall.handle!.grip_edge).toBe('bottom')
     })
 
+    it('backing rails: one per finger gap, 5 up / 20 gap / 20 down, notched into both sides (H6)', () => {
+      const rp = resolveCabinet(cab({ face_grid: threeDrawers, handle_schedule: sharkSched }))
+      const zones = rp.face_zones.sort((a, b) => a.row_index - b.row_index)
+      const rails = rp.case_parts.filter(p => p.part_key.startsWith('fprail:')).sort((a, b) => a.Y - b.Y)
+      expect(rails).toHaveLength(3)                                  // two between drawers + the top gap
+      // Between drawers 0 and 1: 20 below drawer 0's top, 5 above drawer 1's bottom.
+      const r0 = rails[0], d0top = zones[0].Y + zones[0].DY
+      expect(r0.Y).toBeCloseTo(d0top - 20)
+      expect(r0.DX).toBeCloseTo(45)                                  // DX = height
+      expect(r0.Y + r0.DX).toBeCloseTo(zones[1].Y + 5)
+      expect(r0.DY).toBe(900)                                        // full carcass width
+      expect(r0.DZ).toBe(18)
+      // Top rail clamps to the carcass top: 20 + 20 = 40 tall.
+      const top = rails[2]
+      expect(top.Y + top.DX).toBeCloseTo(900)
+      expect(top.DX).toBeCloseTo(40)
+      // Sides carry the notches in their outlines.
+      const side = rp.case_parts.find(p => p.part_key === 'left_side')!
+      expect(side.outline?.length).toBeGreaterThan(4)
+      // Notch = rail thickness; closed ends get a RAILCUT (5) deeper relief.
+      expect(side.outline!.some(q => Math.abs(q.x - (side.DX - 18)) < 0.01)).toBe(true)
+      expect(side.outline!.some(q => Math.abs(q.x - (side.DX - 18 - 5)) < 0.01)).toBe(true)
+      // Rails carry their grain (horizontal by default) + machining settings.
+      expect(r0.grain_direction).toBe('horizontal')
+      expect(r0.fprail).toEqual({ cut: 5, blockSetback: 15, blockDia: 10, blockDepth: 12 })
+    })
+
+    it('top backing rail pushes the carcass front rail back by its thickness; grain can run vertical', () => {
+      const plain = resolveCabinet(cab({ face_grid: threeDrawers, top_type: 'front_rail' })).case_parts.find(p => p.part_key === 'front_rail')!
+      const rp = resolveCabinet(cab({ face_grid: threeDrawers, handle_schedule: sharkSched, top_type: 'front_rail',
+        rules: mergeRules(DEFAULT_RULES, { RAILGRAIN: 'vertical' }) }))
+      const pushed = rp.case_parts.find(p => p.part_key === 'front_rail')!
+      expect(pushed.Z).toBeCloseTo(plain.Z - 18)
+      expect(rp.case_parts.find(p => p.part_key.startsWith('fprail:'))!.grain_direction).toBe('vertical')
+    })
+
+    it('FPRAIL=false (or bar handles) → no rails, plain sides', () => {
+      const off = resolveCabinet(cab({ face_grid: threeDrawers, handle_schedule: sharkSched, rules: mergeRules(DEFAULT_RULES, { FPRAIL: false }) }))
+      expect(off.case_parts.some(p => p.part_key.startsWith('fprail:'))).toBe(false)
+      const bars = resolveCabinet(cab({ face_grid: threeDrawers }))
+      expect(bars.case_parts.some(p => p.part_key.startsWith('fprail:'))).toBe(false)
+      expect(bars.case_parts.find(p => p.part_key === 'left_side')!.outline).toBeUndefined()
+    })
+
     it('bar handles keep the normal reveals', () => {
       const zones = resolveCabinet(cab({ face_grid: threeDrawers })).face_zones.sort((a, b) => a.row_index - b.row_index)
       expect(900 - (zones[2].Y + zones[2].DY)).toBeCloseTo(DEFAULT_RULES.REVT)

@@ -181,6 +181,12 @@ export interface ConstructionRules {
   GAPC:     number   // centre gap between face zones (horizontal)
   GAPR:     number   // gap between face rows (vertical)
   FPGAP:    number   // finger gap at a finger-pull grip edge (z_handles D4) — replaces REVT / REVB / GAPR there
+  RAILH:    number   // finger-pull backing rail height (z_handles D11)
+  RAILUP:   number   // how far the rail runs up behind the plain front above the gap
+  RAILCUT:  number   // notch relief at each closed end: this much deeper over one cutter width (2 ×), so the rail's back corners seat square
+  RAILBLK:  number   // knock-in block hole: back of the rail → hole centre
+  RAILBLKD: number   // knock-in block hole diameter
+  RAILBLKZ: number   // knock-in block hole depth into the side
 
   // Face position
   FACBUF:   number   // buffer pad clearance (overlay mode)
@@ -189,6 +195,10 @@ export interface ConstructionRules {
   // Handles (z_handles D13): drill handle holes. Unset = true. Set false at
   // job / room / cabinet via rule_overrides; a front can override it again.
   HANDLE_DRILL?: boolean
+  // Finger-pull backing rails (z_handles H6). Unset = on.
+  FPRAIL?: boolean
+  // Rail grain on the sheet: along the rail (horizontal, default) or across it.
+  RAILGRAIN?: 'horizontal' | 'vertical'
 
   // Joinery — how panels connect to each other
   BOTTOM_JOIN:      'sides_outside' | 'bottom_outside'    // sides span full height vs bottom spans full width
@@ -237,7 +247,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   FIXSB_F: 0, FIXSB_B: 0,
   IDCL: 2, IDCR: 2, IDFAO: 0, SLIDE_SETBACK: 20,
   REVT: 4, REVB: 0, REVL: 1, REVR: 1,
-  REVENDL: 2, REVENDR: 2, GAPC: 2, GAPR: 2, FPGAP: 20,
+  REVENDL: 2, REVENDR: 2, GAPC: 2, GAPR: 2, FPGAP: 20, RAILH: 45, RAILUP: 5, RAILCUT: 5, RAILBLK: 15, RAILBLKD: 10, RAILBLKZ: 12,
   FACBUF: 2, FACINS: 0,
   BOTTOM_JOIN: 'sides_outside', BOTTOM_BACK_JOIN: 'back_on_bottom',
   BACK_JOIN: 'between_sides', TOP_BACK_JOIN: 'butts_into_back', RAIL_JOIN: 'between_sides',
@@ -1207,8 +1217,13 @@ export interface ResolvedPart extends PartTransform {
 export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}`
 
 export interface ResolvedCasePart extends ResolvedPart {
+  // Finger-pull rails only (z_handles H6): sheet grain, and the side notch +
+  // knock-in block settings seamDrillSync machines from. Not persisted.
+  grain_direction?: 'horizontal' | 'vertical'
+  fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number }
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
-            'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey
+            'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
+            `fprail:${number}`   // finger-pull backing rail (z_handles H6)
 }
 
 export interface ResolvedToekickPart extends ResolvedPart {

@@ -1,6 +1,6 @@
 # Handles & Finger Pulls — Spec
 
-**Status:** H1, H2, H2b, H3 built 2026-10-13 (unit-tested; live-app check pending) — decisions D1–D13 locked. Next = H5 (per-door overrides) or H6 (backing rail).
+**Status:** H1–H3 committed (f96e204); H6a + H6b built 2026-10-14 (unit-tested, uncommitted). Next = H5 (per-door overrides).
 **Owner module:** `z_handles/`
 **Touches:** resolver (face zones, rules), handle catalogue + schedules,
 display layers, optimiser / G-code (drilling + routes), reports.
@@ -169,7 +169,8 @@ New tables need RLS policies (see access-control memory and `z_access_control/`)
 | **H3** | `FPGAP` rule + grip-edge gap sizing in `resolveFace`; `sharknose` kind: 3D bevel, elevation hidden line, cut-list saw note | ✅ built 2026-10-13 — see H3 notes |
 | **H4** | `routed` kind: back-face route → G-code | **parked**: shop doesn't cut routed pulls (2026-10-13) |
 | **H5** | Per-door overrides UI: grip, grip edge, finger gap, handle offset | not started |
-| **H6** | Matching backing rail: geometry locked (D11), fixing still exploratory, see §7 | not started |
+| **H6a** | Backing rail parts + side notches (geometry), rules RAILH / RAILUP / FPRAIL, layer item, cut list | ✅ built 2026-10-13 — see H6 notes in §7 |
+| **H6b** | Notch routing on the sides → CNC; knock-in block holes; front rail push-back; rail grain | ✅ built 2026-10-14 — see §7 |
 | **H7** | Recessed aluminium channel (rare) | parked |
 
 **H1 notes (2026-10-13):**
@@ -299,14 +300,72 @@ replaces nothing.
 small knock-in blocks, each set in a 10mm hole. Block holes are a later
 H6 sub-phase, deferred until the handle work is right.
 
-Still to work out in H6:
-- Notch depth front-to-back (= rail thickness) and its exact position relative to the
-  front edge of the side.
-- **Top rail**: with no front above it, does the 45mm rail keep its height (top
-  flush with the carcass top, i.e. 25mm below the gap) or shrink to gap + 20?
-- Knock-in block holes: which part (side, rail or both), how many, and where.
-- Edging, and how the rail reaches the cutlist and optimiser.
-- Automatic on every finger-gap seam, or switched on per job or cabinet?
+**H6a as built (2026-10-13):**
+- `resolveFingerRails.ts`: one rail per finger-gap seam, made from the resolved
+  zones (`handle.finger_gap` + grip edge), after `resolveHandles`.
+  - Rails are case parts keyed `fprail:<n>`, classed with the shaped
+    `side:` / `back:` keys in `isShapedPanelKey`, so every view and sizing path
+    treats them as face-kind panels (DX = height, DY = width, DZ = thickness).
+  - DB check `case_parts_part_key_check` extended (`migration_h6_fprail.sql`).
+- Geometry:
+  - Full carcass width (X 0..DX), front face flush with the sides' front edge,
+    thickness and board from the front it backs.
+  - Height = RAILUP above the gap + FPGAP + (RAILH − FPGAP − RAILUP) behind the
+    bevelled front.
+  - At the carcass top (base) / bottom (wall) gap the rail is clamped to the
+    carcass, so it's 40 tall with defaults. **Decision taken in build — confirm.**
+- Side notches: each side's `outline` gets a rail-thickness × rail-height notch
+  at its front edge.
+  - It shows in 3D (the shaped-part path). Outline isn't sent to the CNC, so
+    **the CNC sides are not notched yet**.
+- Rules:
+  - RAILH (45) and RAILUP (5) are in the construction rules (Face Reveals group).
+  - FPRAIL (unset = on) switches rails off per room (Hardware tab) or per cabinet.
+- Display: layer item `finger_rails` (Carcase group).
+- Labels:
+  - Cabinet sheet cut list: "Finger Rail n". Optimiser parts list: "Finger Rail n".
+  - No edging (the edges sit hidden in the notches and behind the fronts).
+- Not yet:
+  - Shaped (footprint) cabinets get no rails.
+  - No clash check against drawer boxes or the carcass front rail.
+
+**H6b decisions (user, 2026-10-14) + build:**
+- **Front rail:** pushed back by the backing rail's thickness when a top
+  backing rail is present (`pushFrontRailBack`). A `full_top` is not adjusted yet.
+- **Notches** (refined by the user, 2026-10-14): cut right through the side,
+  **rail thickness deep** for the full rail height.
+  - At each **closed** end there's a relief: `RAILCUT` (5) deeper, over one
+    cutter width (10 high). That puts the round cutter's corner behind the rail,
+    so the rail's back corners seat square.
+  - An end that runs out through the side's top / bottom edge (the top rail)
+    has no corner and gets no relief.
+  - `seamDrillSync.collectNotchRoutes` writes, per rail per side:
+    - one generated through pocket (`kind: 'fprail_notch'`), run 5mm past the
+      front edge, and past the top / bottom where open, so those mouths are
+      square;
+    - one generated groove per closed end: a 10mm slot from the rail's back
+      face out past the front, whose round end reaches 5mm deeper.
+  - The overruns are inside the nest gap, which is at least the tool Ø and
+    cleared by the profile cut.
+  - Tool: the active 10mm router bit with the lowest tool number (T101 today).
+    No 10mm bit means the notch is skipped with a warning.
+  - The side outline draws the notch with square reliefs.
+- **Knock-in blocks:** one hole per rail per side, into the side's inner face.
+  - Ø `RAILBLKD` (10) × `RAILBLKZ` (12) deep.
+  - Centre `RAILBLK` (15) behind the back of the rail, at mid rail height.
+  - Generated drill `kind: 'fprail_block'`.
+- **Grain:** `RAILGRAIN` horizontal (default, along the rail) or vertical.
+  - Set per room (Hardware tab) or per cabinet.
+  - Persisted to `case_parts.grain_direction`.
+  - The nest turns vertical rails (`normalize.ts`); rails carry no machining,
+    so turning them is safe.
+- New rules sit in a "Finger Pull Rails" group: RAILH, RAILUP, RAILCUT,
+  RAILBLK, RAILBLKD, RAILBLKZ.
+- Display: the sharknose amber shading (elevation band and side wedge) was
+  removed at the user's request, leaving the dashed line and "SN 38°" label.
+  Rails are hidden in plan by default.
+- Tests: `src/lib/optimiser/__tests__/fingerRailOps.test.ts`, plus the rail
+  cases in `handles.test.ts`.
 
 ## 8. Open questions
 

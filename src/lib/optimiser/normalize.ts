@@ -182,8 +182,13 @@ export function normalizeProject(
     const eb = ebFields(flagsOf(r), tFor(r),
       isSide ? ['left', 'right'] : ['bottom', 'top'],
       isSide ? ['bottom', 'top'] : ['left', 'right'])
-    push('case_parts', r, `case_${key}`, { typeKey: key, base: humanize(key) },
-      (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), undefined, eb, base)
+    // Finger-pull rails: the nest's h runs with the grain, so a horizontal-grain
+    // rail nests as-is (h = length) and a vertical-grain rail is turned. Rails
+    // carry no machining, so turning them can't misplace an op.
+    const turned = key.startsWith('fprail:') && r.grain_direction === 'vertical'
+      ? { w: Number(r.dy), h: Number(r.dx), thickness: Number(r.dz) } : undefined
+    push('case_parts', r, `case_${key}`, { typeKey: key, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : humanize(key) },
+      (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), turned, eb, base)
   }
   for (const r0 of ip) {
     const type = String(r0.part_type)
