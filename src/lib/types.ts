@@ -548,3 +548,55 @@ export const DEFAULT_DIMS: Record<string, { dx: number; dy: number; dz: number }
   wall_corner: { dx: 900, dy: 700,  dz: 900 },
   tall_corner: { dx: 900, dy: 2100, dz: 900 },
 }
+
+// ── Fixtures & appliances (z_fixtures/FIXTURES-SPEC.md) ───────────────────────
+
+export type FixtureCategory = 'appliance' | 'sink' | 'tap' | 'decorative'
+export type FixtureMount = 'floor' | 'under_bench' | 'benchtop' | 'wall'
+
+/** Model + size fields shared by the catalogue row and the placed (job) copy. */
+export interface FixtureBody {
+  category:     FixtureCategory
+  kind:         string | null
+  name:         string
+  width:        number
+  depth:        number
+  height:       number
+  mount:        FixtureMount
+  colour:       string | null
+  model_url:    string | null
+  model_format: 'glb' | 'stl' | 'obj' | null
+  model_scale:  number
+  model_rot_x:  number
+  model_rot_y:  number
+  model_off_x:  number
+  model_off_y:  number
+  model_off_z:  number
+}
+
+export interface FixtureCatalogItem extends FixtureBody {
+  id:           string
+  brand:        string | null
+  model_no:     string | null
+  mount_height: number | null
+  notes:        string | null
+  active:       boolean
+  sort_order:   number
+  created_at:   string
+  updated_at:   string
+}
+
+/** A fixture placed in a room — a copy of the catalogue row at placement time. */
+export interface RoomFixture extends FixtureBody {
+  id:         string
+  room_id:    string
+  catalog_id: string | null
+  x:          number
+  y:          number
+  rotation:   number
+  z:          number
+  wall_id:    string | null
+  label:      string | null
+  created_at: string
+  updated_at: string
+}

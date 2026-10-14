@@ -12,17 +12,13 @@
 //
 // Suspense boundary lives INSIDE this component (not around the parent canvas)
 // so a slow or broken model degrades to the metallic-box fallback, not a blank
-// scene.
+// scene. Loading itself is shared with fixtures — see ModelAsset.tsx.
 
-import { Suspense, useMemo, useContext } from 'react'
-import * as THREE from 'three'
-import { useGLTF } from '@react-three/drei'
-import { useLoader } from '@react-three/fiber'
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
+import { Suspense, useContext } from 'react'
 import { PartAlphaContext, alphaMat } from './PartViewer'
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import { ModelSource, preloadModel, type ModelFormat } from './ModelAsset'
 
-export type SlideModelFormat = 'glb' | 'stl' | 'obj'
+export type SlideModelFormat = ModelFormat
 
 export interface SlideModelProps {
   url:              string
@@ -36,88 +32,6 @@ export interface SlideModelProps {
   // loading or fails to load. Pass the rail's (thickness, height, depth) so the
   // fallback matches the current procedural look.
   fallbackBox?:     { w: number; h: number; d: number }
-}
-
-interface LoaderProps {
-  url:   string
-  color: string
-}
-
-// ── Format-specific loader components ─────────────────────────────────────────
-// Each one is its own component so React mounts/unmounts the right hook based
-// on `format`. New formats: add a component + entry to LOADERS below.
-
-// Force all meshes in a loaded object to render double-sided. Necessary because
-// the right rail is rendered with a negative X scale, which inverts triangle
-// winding — single-sided materials would render the right rail inside-out.
-// Cheap for runner-sized meshes; safer than per-material patching.
-function applyDoubleSide(obj: THREE.Object3D) {
-  obj.traverse(o => {
-    const m = o as THREE.Mesh
-    if (!m.isMesh) return
-    const mats = Array.isArray(m.material) ? m.material : [m.material]
-    for (const mat of mats) {
-      if (mat) (mat as THREE.Material).side = THREE.DoubleSide
-    }
-  })
-}
-
-function GlbInner({ url }: LoaderProps) {
-  const gltf = useGLTF(url)
-  // The layer set can make hardware see-through (ghost / opacity). The GLB's own
-  // materials are shared by every instance, so clone them before going transparent.
-  const alpha = useContext(PartAlphaContext)
-  const cloned = useMemo(() => {
-    const c = gltf.scene.clone(true)
-    applyDoubleSide(c)
-    if (alpha < 1) c.traverse(o => {
-      const m = o as THREE.Mesh
-      if (!m.isMesh) return
-      const mats = Array.isArray(m.material) ? m.material : [m.material]
-      m.material = mats.map(src => {
-        const mat = (src as THREE.Material).clone()
-        mat.transparent = true; mat.opacity = alpha; mat.depthWrite = false
-        return mat
-      }) as THREE.Material[] & THREE.Material
-      if (!Array.isArray(m.material)) m.material = (m.material as unknown as THREE.Material[])[0]
-    })
-    return c
-  }, [gltf.scene, alpha])
-  return <primitive object={cloned} />
-}
-
-function StlInner({ url, color }: LoaderProps) {
-  const geometry = useLoader(STLLoader, url)
-  const alpha = useContext(PartAlphaContext)
-  return (
-    <mesh key={alpha < 1 ? 't' : 'o'} geometry={geometry}>
-      <meshStandardMaterial color={color} metalness={0.6} roughness={0.4} side={THREE.DoubleSide} {...alphaMat(alpha)} />
-    </mesh>
-  )
-}
-
-function ObjInner({ url, color }: LoaderProps) {
-  const obj = useLoader(OBJLoader, url)
-  const alpha = useContext(PartAlphaContext)
-  const cloned = useMemo(() => {
-    const g = obj.clone(true)
-    g.traverse(o => {
-      const m = o as THREE.Mesh
-      if (m.isMesh) {
-        m.material = new THREE.MeshStandardMaterial({
-          color, metalness: 0.6, roughness: 0.4, side: THREE.DoubleSide, ...alphaMat(alpha),
-        })
-      }
-    })
-    return g
-  }, [obj, color, alpha])
-  return <primitive object={cloned} />
-}
-
-const LOADERS: Record<SlideModelFormat, React.ComponentType<LoaderProps>> = {
-  glb: GlbInner,
-  stl: StlInner,
-  obj: ObjInner,
 }
 
 // ── Fallback box (matches the metallic-runner look used today) ────────────────
@@ -139,7 +53,6 @@ function FallbackRunner({ w, h, d, color }: { w: number; h: number; d: number; c
 export function SlideModel({
   url, format, scale, anchor, position, sideOrientation, color, fallbackBox,
 }: SlideModelProps) {
-  const Loader = LOADERS[format]
   const safeColor = color || '#6b7280'
   const mirror = sideOrientation === 'right' ? -1 : 1
   const fb = fallbackBox ?? { w: 12, h: 30, d: 450 }
@@ -149,7 +62,9 @@ export function SlideModel({
       <group position={[anchor.x, anchor.y, anchor.z]} scale={scale}>
         <group scale={[mirror, 1, 1]}>
           <Suspense fallback={<FallbackRunner w={fb.w} h={fb.h} d={fb.d} color={safeColor} />}>
-            <Loader url={url} color={safeColor} />
+            <ModelSource url={url} format={format} look={{ color: safeColor }}>
+              {obj => <primitive object={obj} />}
+            </ModelSource>
           </Suspense>
         </group>
       </group>
@@ -160,5 +75,5 @@ export function SlideModel({
 // Warm the GLB cache for a URL — call from resolver-complete code paths so
 // cabinets with many drawers sharing the same slide fetch the model once.
 export function preloadSlideModel(format: SlideModelFormat, url: string) {
-  if (format === 'glb') useGLTF.preload(url)
+  preloadModel(format, url)
 }

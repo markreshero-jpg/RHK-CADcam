@@ -12,6 +12,7 @@ import JointsClient from '@/app/library/joints/JointsClient'
 import PartsLibraryClient from '@/app/library/parts/PartsLibraryClient'
 import DoorSystemClient from '@/app/library/doors/DoorSystemClient'
 import CabinetsLibraryClient from '@/app/library/cabinets/CabinetsLibraryClient'
+import FixturesLibraryClient from '@/app/library/fixtures/FixturesLibraryClient'
 import HingeCountRulesEditor from '@/app/settings/HingeCountRulesEditor'
 import CncToolsClient from '@/app/settings/CncToolsClient'
 import DrillLibraryClient from '@/app/settings/DrillLibraryClient'
@@ -84,7 +85,7 @@ type SettingsTab =
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'hinge_rules'
   | 'cnc_tool' | 'drill_library' | 'cnc_tool_set' | 'cnc_machine'
-  | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library' | 'doors_library' | 'cabinets_library'
+  | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library' | 'doors_library' | 'cabinets_library' | 'fixtures_library'
 
 interface TabDef {
   id: SettingsTab
@@ -307,6 +308,18 @@ const TABS: TabDef[] = [
       </svg>
     ),
   },
+  {
+    id: 'fixtures_library', label: 'Fixtures & Appliances', group: 'Library',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2.5" y="1.5" width="10" height="12" rx="0.8"/>
+        <line x1="2.5" y1="4.5" x2="12.5" y2="4.5"/>
+        <circle cx="5" cy="3" r="0.5" fill="currentColor"/>
+        <circle cx="7" cy="3" r="0.5" fill="currentColor"/>
+        <rect x="4.5" y="7" width="6" height="4.5" rx="0.5"/>
+      </svg>
+    ),
+  },
 ]
 
 const GROUPS = ['User', 'Shop', 'Builders', 'CNC', 'Library'] as const
@@ -508,6 +521,8 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
             <DoorSystemClient embedded />
           ) : tab === 'cabinets_library' ? (
             <CabinetsLibraryClient embedded />
+          ) : tab === 'fixtures_library' ? (
+            <FixturesLibraryClient embedded />
           ) : tab === 'cabinet_builder' ? (
             <ConstructionMethodsClient embedded />
           ) : tab === 'drawer_builder' ? (
