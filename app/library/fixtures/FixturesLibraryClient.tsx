@@ -443,6 +443,23 @@ function FixtureEditor({ item, kinds, onPatch, onError }: {
                 Model at this scale: {fmt(native.x * item.model_scale)} W × {fmt(native.z * item.model_scale)} D × {fmt(native.y * item.model_scale)} H
               </p>
             )}
+            {/* Blender / most glTF exporters write metres — at scale 1 a 600 mm oven
+                is 0.6 mm and invisible. Offer the fix instead of guessing silently. */}
+            {native && Number(item.model_scale) === 1 && Math.max(native.x, native.y, native.z) < 5 && (
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded border border-amber-600/50 bg-amber-900/20 text-[11px] text-amber-300">
+                <span className="flex-1">
+                  This model looks like it&apos;s in metres ({round(native.x, 3)} × {round(native.z, 3)} × {round(native.y, 3)} m) — it&apos;s too small to see.
+                </span>
+                <button
+                  onClick={() => onPatch({
+                    model_scale: 1000, model_off_x: 0, model_off_y: 0, model_off_z: 0,
+                    width: round(native.x * 1000, 1), depth: round(native.z * 1000, 1), height: round(native.y * 1000, 1),
+                  })}
+                  className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white whitespace-nowrap"
+                  title="Scale ×1000 and set the size from the model"
+                >Convert to mm</button>
+              </div>
+            )}
 
             <div className="flex gap-3">
               <NumField label="Nudge X" value={item.model_off_x} onCommit={v => onPatch({ model_off_x: v })} />
