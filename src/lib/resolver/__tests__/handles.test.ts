@@ -158,6 +158,14 @@ describe('resolveHandles', () => {
       expect(c.DY - (top.Y + top.DY)).toBeCloseTo(25)
     })
 
+    it('a wider FPGAP rule grows the rails too: 5 up / 30 gap / 20 down = 55', () => {
+      const rp = resolveCabinet(cab({ face_grid: threeDrawers, handle_schedule: sharkSched, rules: mergeRules(DEFAULT_RULES, { FPGAP: 30 }) }))
+      const zones = rp.face_zones.sort((a, b) => a.row_index - b.row_index)
+      const r0 = rp.case_parts.filter(p => p.part_key.startsWith('fprail:')).sort((a, b) => a.Y - b.Y)[0]
+      expect(r0.DX).toBeCloseTo(55)
+      expect(zones[0].Y + zones[0].DY - r0.Y).toBeCloseTo(20)        // still 20 behind the bevelled front
+    })
+
     it('base doors drop FPGAP below the carcass top; wall doors rise FPGAP above the bottom', () => {
       const base = resolveCabinet(cab({ handle_schedule: sharkSched })).face_zones[0]
       expect(900 - (base.Y + base.DY)).toBeCloseTo(20)
@@ -251,6 +259,74 @@ describe('resolveHandles', () => {
         expect(mid.Y).toBeCloseTo(d.Y + d.DY - 20)
         expect(mid.DX).toBeCloseTo(55)
         expect(rails[0].DX).toBeCloseTo(45)
+      })
+
+      describe('rails per column (H5b, D15)', () => {
+        const bay = () => ({ type: 'open' as const, fittings: [] })
+        const split = (divider?: 'single' | 'double') => ({
+          type: 'vsplit' as const,
+          children: [{ ...(divider ? { divider } : {}), section: bay() }, { section: bay() }],
+        })
+        const resolve = (face: ReturnType<typeof sixDrawers>, divider?: 'single' | 'double') =>
+          resolveCabinet(cab({ face_grid: face, handle_schedule: sharkSched, has_internal: true, internal_tree: split(divider) }))
+        const railsOf = (rp: ReturnType<typeof resolveCabinet>) =>
+          rp.case_parts.filter(p => p.part_key.startsWith('fprail:')).sort((a, b) => a.Y - b.Y || a.X - b.X)
+        const divs = (rp: ReturnType<typeof resolveCabinet>) =>
+          rp.internal_parts.filter(p => p.part_type === 'divider').sort((a, b) => a.X - b.X)
+
+        it('same seams: rails run straight through the (double) divider, notching both panels', () => {
+          const rp = resolve(sixDrawers())
+          const rails = railsOf(rp)
+          expect(rails).toHaveLength(3)
+          for (const rl of rails) { expect(rl.X).toBe(0); expect(rl.DY).toBe(900) }
+          const [a, b] = divs(rp)
+          expect(a.outline?.length).toBeGreaterThan(4)
+          expect(b.outline?.length).toBeGreaterThan(4)
+          expect(rp.warnings.some(w => w.code.startsWith('FPRAIL'))).toBe(false)
+        })
+
+        it('different seams on a double: each column stops at the joint line', () => {
+          const rp = resolve(sixDrawers({ finger_gap: 30 }))
+          const [a, b] = divs(rp)
+          const joint = a.X + a.DZ
+          expect(b.X).toBeCloseTo(joint)
+          const mid = railsOf(rp).filter(rl => rl.X > 0 || rl.DY < 900)
+          expect(mid).toHaveLength(2)
+          const l = mid.find(rl => rl.X === 0)!, r = mid.find(rl => rl.X > 0)!
+          expect(l.X + l.DY).toBeCloseTo(joint)
+          expect(r.X).toBeCloseTo(joint)
+          expect(r.X + r.DY).toBeCloseTo(900)
+          expect(l.DX).toBeCloseTo(55)                                  // the 30 gap's rail
+          expect(r.DX).toBeCloseTo(45)
+          expect(rp.warnings.some(w => w.code.startsWith('FPRAIL'))).toBe(false)
+        })
+
+        it('different seams on a single divider: warned, both stop on its centre line', () => {
+          const rp = resolve(sixDrawers({ finger_gap: 30 }), 'single')
+          const [d] = divs(rp)
+          const mid = railsOf(rp).filter(rl => rl.DY < 900)
+          expect(mid).toHaveLength(2)
+          expect(mid.some(rl => Math.abs(rl.X + rl.DY - (d.X + d.DZ / 2)) < 0.01)).toBe(true)
+          expect(rp.warnings.some(w => w.code === 'FPRAIL_SINGLE_DIVIDER')).toBe(true)
+        })
+
+        it('a rail with nothing across a single divider runs through it, like a side', () => {
+          // Column 1 drawers get bar handles: rails only behind column 0.
+          const face = sixDrawers()
+          face.zones = face.zones.map(z => z.col_index === 1 ? { ...z, handle_id: 'h160' } : z)
+          const rp = resolve(face, 'single')
+          const [d] = divs(rp)
+          const rails = railsOf(rp)
+          expect(rails.length).toBeGreaterThan(0)
+          for (const rl of rails) { expect(rl.X).toBe(0); expect(rl.X + rl.DY).toBeCloseTo(d.X + d.DZ) }
+          expect(rp.case_parts.find(p => p.part_key === 'right_side')!.outline).toBeUndefined()
+          expect(d.outline?.length).toBeGreaterThan(4)
+        })
+
+        it('different seams with no division: merged and warned', () => {
+          const rp = resolveCabinet(cab({ face_grid: sixDrawers({ finger_gap: 30 }), handle_schedule: sharkSched }))
+          expect(rp.warnings.some(w => w.code === 'FPRAIL_NO_DIVISION')).toBe(true)
+        })
       })
 
       it('grip edge override flips the gap to the other edge', () => {

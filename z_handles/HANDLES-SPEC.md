@@ -1,6 +1,6 @@
 # Handles & Finger Pulls — Spec
 
-**Status:** H1–H3 committed (f96e204); H6a + H6b committed (843e42a). Next = live-check + commit H5a, then double dividers (`z_dividers/DIVIDERS-SPEC.md`), then H5b (rails per column).
+**Status:** H1–H3, H6, H5a committed (f8b3d4a); double dividers committed (d116edc); H5b committed 2026-10-14 (rails per column + rail grows with the FPGAP rule). Open: H7 channel (parked), push-to-open visual.
 **Owner module:** `z_handles/`
 **Touches:** resolver (face zones, rules), handle catalogue + schedules,
 display layers, optimiser / G-code (drilling + routes), reports.
@@ -168,8 +168,8 @@ New tables need RLS policies (see access-control memory and `z_access_control/`)
 | **H2b** | Switch handle holes off: room, cabinet, and per door/drawer front (D13) | ✅ built 2026-10-13 — see D13 |
 | **H3** | `FPGAP` rule + grip-edge gap sizing in `resolveFace`; `sharknose` kind: 3D bevel, elevation hidden line, cut-list saw note | ✅ built 2026-10-13 — see H3 notes |
 | **H4** | `routed` kind: back-face route → G-code | **parked**: shop doesn't cut routed pulls (2026-10-13) |
-| **H5a** | Per-door overrides: grip, grip edge, offset from edge, inset from side, finger gap (D14) | ✅ built 2026-10-14 (unit-tested, uncommitted) — see D14 |
-| **H5b** | Rails per column: split at dividers, notch dividers where seams line up (D15). Needs `z_dividers` V1–V3 first | not started |
+| **H5a** | Per-door overrides: grip, grip edge, offset from edge, inset from side, finger gap (D14) | ✅ committed f8b3d4a — see D14 |
+| **H5b** | Rails per column: split at dividers, notch dividers where seams line up (D15) | ✅ committed 2026-10-14 — see D15 |
 | **H6a** | Backing rail parts + side notches (geometry), rules RAILH / RAILUP / FPRAIL, layer item, cut list | ✅ built 2026-10-13 — see H6 notes in §7 |
 | **H6b** | Notch routing on the sides → CNC; knock-in block holes; front rail push-back; rail grain | ✅ built 2026-10-14 — see §7 |
 | **H7** | Recessed aluminium channel (rare) | parked |
@@ -274,6 +274,10 @@ in the face_grid zone JSON, like `handle_drill`.
 - The rail grows with the gap: RAILUP (5) and the 20 behind the bevelled front
   stay fixed, and the rail gets taller by the extra gap (a 30 gap gives a 55
   rail).
+  - This holds for the FPGAP rule too (fixed 2026-10-14): RAILH is the rail height
+    at the standard 20 gap, and the part behind the front is RAILH − 20 − RAILUP
+    whatever the gap. Before the fix, a wider FPGAP rule kept the rail at 45
+    and left a hole into the cabinet.
 - **As built:** zone fields `grip_edge`, `handle_offset`, `handle_inset`,
   `finger_gap` (FaceZoneInput). `resolveHandles.fingerGap` gives each front's
   edge + mm; `resolveFace` lays each seam out at the largest wanted gap and grows
@@ -292,6 +296,25 @@ either side of an internal division (a double division for drawers, see
 - Different seam heights with no division between them give a resolver warning.
 - Known gap in H6 as committed: the full-width rail runs through any internal
   divider with no notch. H5b fixes this.
+- **As built (H5b):** rails are resolved after the internals.
+  `fingerRails` takes the divider parts, groups touching panels into divisions
+  (double = joint on the shared face; single = its centre line), and:
+  1. gives each front a rail from the division or side left of its centre to
+     the one right of it (a division counts when it reaches into the rail's height);
+  2. merges overlapping rails within a column (warning `FPRAIL_NO_DIVISION` when
+     their heights differ);
+  3. joins rails at the same height (±0.5) across a division, so they run through;
+  4. at a single divider: with nothing across, the rail runs through to its
+     far face; against a different rail, both stop on the centre line
+     (warning `FPRAIL_SINGLE_DIVIDER`).
+  - Rail parts carry their own X / width.
+  - `notchPanels` notches every side and divider a rail passes through or
+    ends in (dividers share the side frame and front edge).
+  - `seamDrillSync`: notch pockets and reliefs go on each reached panel
+    (dividers as `internal_parts` / `int_divider_<n>`, output face 'left').
+    Knock-in block holes go at each rail end, into the inner face of the
+    panel that end sits in; none where a rail runs through.
+  - Tests: `handles.test.ts` (rails per column), `fingerRailOps.test.ts` (H5b block).
 
 H1 is the foundation; H2 and H3 can then run in either order. H3 is the
 likely first visible win, since sharknose is the most common case and needs no machining.

@@ -21,7 +21,7 @@ import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
 import { resolveShapedFaces } from './resolveShapedFace'
 import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
 import { resolveHandles } from './resolveHandles'
-import { fingerRails, fingerRailParts, notchSides, pushFrontRailBack } from './resolveFingerRails'
+import { fingerRails, fingerRailParts, notchPanels, pushFrontRailBack } from './resolveFingerRails'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -51,13 +51,6 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   allErrors.push(...faceErrors)
   // One grip per door / drawer front from the handle schedule (z_handles H1).
   resolveHandles(cab, zones)
-  // Backing rail behind each finger gap, notched into the sides (z_handles H6).
-  if (cab.has_carcass && cab.has_face) {
-    const rails = fingerRails(cab, r, zones, caseParts)
-    notchSides(caseParts, rails, r.RAILCUT)
-    pushFrontRailBack(caseParts, rails)
-    caseParts.push(...fingerRailParts(cab, r, rails))
-  }
   // Shaped cabinets (z_cabinet_shape Phase 3b): hinges + drawer boxes on every
   // facet, fitted to the footprint and built in each zone's square frame.
   const shapedHw = cab.footprint ? shapedHardwareCtx(cab) : null
@@ -68,6 +61,18 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     : { parts: [], slides: [], errors: [], autoDouble: undefined }
   const internalParts = cab.footprint ? shapeShelves(cab, rectInternalParts) : rectInternalParts
   allErrors.push(...internalErrors)
+
+  // Backing rail behind each finger gap, per column between the sides and
+  // internal dividers, notched into every panel it passes through (z_handles
+  // H6 / H5b). After the internals, so the rails know where the divisions are.
+  if (cab.has_carcass && cab.has_face) {
+    const dividers = internalParts.filter(p => p.part_type === 'divider')
+    const { rails, warnings: railWarnings } = fingerRails(cab, r, zones, caseParts, dividers)
+    notchPanels([...caseParts.filter(p => p.part_key === 'left_side' || p.part_key === 'right_side'), ...dividers], rails, r.RAILCUT)
+    pushFrontRailBack(caseParts, rails)
+    caseParts.push(...fingerRailParts(cab, r, rails))
+    allWarnings.push(...railWarnings)
+  }
 
   // ── 5. Drawer Stacks ──────────────────────────────────────────
   // Resolves one drawer box + two slides per drawer_face zone

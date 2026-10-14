@@ -201,19 +201,25 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
     }
   }
 
-  // 5. Finger-pull backing rails (z_handles H6): a knock-in block hole into
-  //    each side's inner face, RAILBLK behind the back of the rail, centred on
-  //    the rail's height.
+  // 5. Finger-pull backing rails (z_handles H6 / H5b): a knock-in block hole
+  //    at each rail end, into the inner face of the panel (side or divider)
+  //    that end sits in, RAILBLK behind the back of the rail, centred on the
+  //    rail's height. A rail running through a division gets none there.
+  const panels = railPanels(rp)
   for (const rail of rp.case_parts) {
     if (!rail.part_key.startsWith('fprail:') || !rail.fprail) continue
     const m = rail.fprail
     const y = rail.Y + rail.DX / 2
     const z = rail.Z - m.blockSetback
-    for (const key of ['left_side', 'right_side'] as const) {
-      const side = caseByKey.get(key)
-      if (!side) { skipped++; continue }
-      const inner = key === 'left_side' ? { x: side.X + side.DZ, axis: 'x-' } : { x: side.X, axis: 'x+' }
-      add('case_parts', `case_${key}`, caseFrame(side),
+    const x0 = rail.X, x1 = rail.X + rail.DY
+    const ends = [
+      { p: panels.find(p => p.X <= x0 + RAIL_EPS && p.X + p.DZ > x0 + RAIL_EPS), face: 'right' as const },
+      { p: panels.find(p => p.X < x1 - RAIL_EPS && p.X + p.DZ >= x1 - RAIL_EPS), face: 'left' as const },
+    ]
+    for (const { p, face } of ends) {
+      if (!p) { skipped++; continue }
+      const inner = face === 'right' ? { x: p.X + p.DZ, axis: 'x-' } : { x: p.X, axis: 'x+' }
+      add(p.table, p.key, p.frame,
         { x: inner.x, y, z, axis: inner.axis, radius: m.blockDia / 2, depthLen: m.blockDepth },
         'fprail_block', `fprail_block_${rail.part_key.slice(7)}`, AUTO_TOOL)
     }
@@ -222,8 +228,35 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
   return { rows, skipped }
 }
 
-// ── Finger-rail notches (z_handles H6) ───────────────────────────────────────
-// Each rail sits in a notch cut right through both sides at the front edge,
+// The vertical panels finger rails sit in (z_handles H5b): the carcass sides
+// and internal dividers. All share the side frame (u = depth from the back,
+// v = height; DZ = thickness along X).
+const RAIL_EPS = 0.01
+interface RailPanelRef {
+  table: 'case_parts' | 'internal_parts'
+  key: string                 // optimiser part key (case_left_side / int_divider_0)
+  frame: FootprintFrame | null
+  face: 'left' | 'right'      // through-op output face, as each side uses
+  X: number; Y: number; Z: number; DX: number; DY: number; DZ: number
+}
+function railPanels(rp: ResolvedCabinet): RailPanelRef[] {
+  const out: RailPanelRef[] = []
+  for (const p of rp.case_parts) {
+    if (p.part_key !== 'left_side' && p.part_key !== 'right_side') continue
+    out.push({ table: 'case_parts', key: `case_${p.part_key}`, frame: caseFrame(p), face: p.part_key === 'left_side' ? 'left' : 'right',
+      X: p.X, Y: p.Y, Z: p.Z, DX: p.DX, DY: p.DY, DZ: p.DZ })
+  }
+  for (const p of rp.internal_parts) {
+    if (p.part_type !== 'divider') continue
+    out.push({ table: 'internal_parts', key: `int_divider_${p.sort_order}`, frame: intFrame(p), face: 'left',
+      X: p.X, Y: p.Y, Z: p.Z, DX: p.DX, DY: p.DY, DZ: p.DZ })
+  }
+  return out
+}
+
+// ── Finger-rail notches (z_handles H6 / H5b) ─────────────────────────────────
+// Each rail sits in a notch cut right through every panel it reaches (sides,
+// and dividers it passes through or ends in) at the front edge,
 // the rail thickness deep and the rail's height (user, 2026-10-14):
 //   • a generated through pocket for the notch, run NOTCH_OVERRUN past the
 //     front edge — and past the side's top / bottom where the notch runs out
@@ -236,7 +269,7 @@ const NOTCH_OVERRUN = 5
 const NOTCH_TOOL_DIA = 10
 
 interface GeneratedRoute {
-  source_table: 'case_parts'
+  source_table: 'case_parts' | 'internal_parts'
   source_cabinet_id: string
   source_part_key: string
   operation_type: 'route' | 'groove'
@@ -258,18 +291,18 @@ export function collectNotchRoutes(rp: ResolvedCabinet, cabinetId: string, toolI
   let skipped = 0
   const rails = rp.case_parts.filter(p => p.part_key.startsWith('fprail:') && p.fprail)
   if (!rails.length) return { rows, skipped }
-  const EPS = 0.01
-  for (const key of ['left_side', 'right_side'] as const) {
-    const side = rp.case_parts.find(p => p.part_key === key)
-    if (!side) { skipped += rails.length; continue }
+  const EPS = RAIL_EPS
+  for (const side of railPanels(rp)) {
     for (const rail of rails) {
+      // Only the rails that pass through or end in this panel.
+      if (Math.min(rail.X + rail.DY, side.X + side.DZ) - Math.max(rail.X, side.X) <= EPS) continue
       if (!toolId) { skipped++; continue }
       const n = rail.part_key.slice(7)
       const cut = rail.fprail!.cut
       const base = {
-        source_table: 'case_parts' as const, source_cabinet_id: cabinetId, source_part_key: `case_${key}`,
+        source_table: side.table, source_cabinet_id: cabinetId, source_part_key: side.key,
         depth: round(side.DZ + 0.2),          // right through, with the usual through-hole overshoot
-        output_face: key === 'left_side' ? 'left' : 'right',
+        output_face: side.face,
         output_to_cnc: true, router_tool_id: toolId,
         parameters: { generated: GENERATED_MARK, kind: 'fprail_notch' },
       }

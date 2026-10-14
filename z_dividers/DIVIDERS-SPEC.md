@@ -1,6 +1,6 @@
 # Internal Dividers — Spec
 
-**Status:** V1–V4 built + live-checked 2026-10-14. Next = `z_handles` H5b (rails per column).
+**Status:** V1–V4 committed (d116edc). `z_handles` H5b (rails per column) builds on it.
 **Owner module:** `z_dividers/`
 **Touches:** internal section tree (`internal_grid`), `resolveInternal`,
 `resolveDrawerStack`, `InternalGridEditor`, `FaceGridEditor`, cut list / 3D /

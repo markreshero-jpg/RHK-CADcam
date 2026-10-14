@@ -91,3 +91,56 @@ describe('finger-rail machining (H6b)', () => {
     expect(collectDrillRows(off, 'c1').rows.some(o => o.parameters.kind === 'fprail_block')).toBe(false)
   })
 })
+
+describe('finger-rail machining per column (H5b)', () => {
+  // Two drawer columns, a double divider between them (automatic for drawers
+  // side by side); column 0's bottom drawer asks for a 30 gap, so the seam
+  // above it has a rail per column, each ending on its own divider panel.
+  const twoCol: CabinetInput = {
+    ...cab, DX: 900, has_internal: true,
+    face_grid: {
+      rows: cab.face_grid.rows,
+      cols: [0, 1].map(i => ({ col_index: i, width_locked: false })),
+      zones: [0, 1].flatMap(r => [0, 1].map(c => ({
+        row_index: r, col_index: c, face_type: 'drawer_face' as const, ...(r === 0 && c === 0 ? { finger_gap: 30 } : {}),
+      }))),
+    },
+    internal_tree: { type: 'vsplit', children: [{ section: { type: 'open', fittings: [] } }, { section: { type: 'open', fittings: [] } }] },
+  }
+  const rp = resolveCabinet(twoCol)
+  const [a, b] = rp.internal_parts.filter(p => p.part_type === 'divider').sort((p, q) => p.X - q.X)
+  const left = rp.case_parts.find(p => p.part_key === 'left_side')!
+  const rails = rp.case_parts.filter(p => p.part_key.startsWith('fprail:'))
+  const split = rails.filter(rl => rl.DY < twoCol.DX)
+  const through = rails.filter(rl => rl.DY >= twoCol.DX)
+
+  it('dividers share the sides\' front edge, so the notch depth is the same', () => {
+    expect(a.Z + a.DX).toBeCloseTo(left.Z + left.DX)
+  })
+
+  it('notches: through rails cut both panels; a column rail only its own panel', () => {
+    const pockets = collectNotchRoutes(rp, 'c1', 'tool10').rows.filter(o => o.operation_type === 'route')
+    const on = (key: string, rl: { part_key: string }) => pockets.some(o => o.source_part_key === key && o.operation_key === `fprail_notch_${rl.part_key.slice(7)}`)
+    expect(split).toHaveLength(2)
+    const [l, r] = [...split].sort((p, q) => p.X - q.X)
+    expect(on(`int_divider_${a.sort_order}`, l)).toBe(true)
+    expect(on(`int_divider_${b.sort_order}`, l)).toBe(false)
+    expect(on(`int_divider_${b.sort_order}`, r)).toBe(true)
+    expect(on('case_right_side', l)).toBe(false)
+    for (const rl of through) {
+      expect(on(`int_divider_${a.sort_order}`, rl)).toBe(true)
+      expect(on(`int_divider_${b.sort_order}`, rl)).toBe(true)
+    }
+    expect(pockets.find(o => o.source_part_key.startsWith('int_divider_'))!.source_table).toBe('internal_parts')
+  })
+
+  it('blocks: one at each rail end, into the panel that end sits in', () => {
+    const blocks = collectDrillRows(rp, 'c1').rows.filter(o => o.parameters.kind === 'fprail_block')
+    expect(blocks).toHaveLength(rails.length * 2)
+    const [l, r] = [...split].sort((p, q) => p.X - q.X)
+    const at = (rl: { part_key: string }) => blocks.filter(o => o.operation_key === `fprail_block_${rl.part_key.slice(7)}`).map(o => o.source_part_key).sort()
+    expect(at(l)).toEqual(['case_left_side', `int_divider_${a.sort_order}`].sort())
+    expect(at(r)).toEqual(['case_right_side', `int_divider_${b.sort_order}`].sort())
+    for (const rl of through) expect(at(rl)).toEqual(['case_left_side', 'case_right_side'])
+  })
+})
