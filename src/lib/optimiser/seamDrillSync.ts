@@ -14,11 +14,12 @@
 
 import { supabase } from '@/src/lib/supabase'
 import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { cabinetSeamDrills } from '@/src/lib/jointDrilling'
+import { cabinetSeamDrills, caseBox } from '@/src/lib/jointDrilling'
 import { caseFrame, zoneFrame, boxFrame, intFrame, projectToFrame, type FootprintFrame } from './partFootprint'
 import { coalesceByKey } from './coalesce'
-import type { ResolvedCabinet } from '@/src/lib/resolver/types'
-import { dbPartId } from '@/src/lib/cabinetShape/partKeys'
+import type { ResolvedCabinet, ResolvedCasePart } from '@/src/lib/resolver/types'
+import { dbPartId, zoneKey, zonePartId, stackKey, isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
+import { turnDrill } from '@/src/lib/resolver/hardwareTurn'
 
 const GENERATED_MARK = 'seam_joint'
 
@@ -48,15 +49,40 @@ const AUTO_TOOL = { router_tool_id: null as string | null, drill_id: null as str
 
 const round = (n: number) => Math.round(n * 100) / 100
 
+// ── Shaped cabinets (z_cabinet_shape 3c) ──────────────────────────────────────
+// An angled panel (side:/back:<edge>) is turned AY about its outer start corner;
+// caseFrame describes it unturned. Bring a cabinet-space drill into that frame.
+function intoPanel<T extends { x: number; y: number; z: number; axis: string; dir?: { x: number; y: number; z: number } }>(cp: ResolvedCasePart, d: T): T {
+  if (!cp.AY) return d
+  return turnDrill({ AY: -cp.AY, X: cp.X, Y: 0, Z: cp.Z }, d as T & { axis: 'x-' | 'x+' | 'y-' | 'y+' | 'z-' | 'z+' })
+}
+
+// The vertical carcass panel a cabinet-space bore lands in: inside the panel's
+// thickness (±1 mm) and within its face. Null = no panel there (a packer).
+function memberPanel(parts: ResolvedCasePart[], d: { x: number; y: number; z: number; axis: string }): ResolvedCasePart | null {
+  for (const cp of parts) {
+    const vertical = cp.part_key === 'left_side' || cp.part_key === 'right_side' || isShapedPanelKey(cp.part_key)
+    if (!vertical || cp.part_key.startsWith('back:')) continue
+    const q = intoPanel(cp, { ...d, axis: d.axis as 'x-' })
+    const b = cp.AY
+      ? { x0: cp.X, x1: cp.X + cp.DY, y0: cp.Y, y1: cp.Y + cp.DX, z0: cp.Z, z1: cp.Z + cp.DZ }
+      : (() => { const c = caseBox(cp); return { x0: c.x, x1: c.x + c.w, y0: c.y, y1: c.y + c.h, z0: c.z, z1: c.z + c.d } })()
+    const T = 1
+    if (q.x >= b.x0 - T && q.x <= b.x1 + T && q.y >= b.y0 - T && q.y <= b.y1 + T && q.z >= b.z0 - T && q.z <= b.z1 + T) return cp
+  }
+  return null
+}
+
 // Collect every resolver-computed hole, projected onto its target part's flat
 // footprint and keyed so the optimiser's buildSheetDrills can find it.
 // Exported for tests.
 export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: GeneratedDrill[]; skipped: number } {
   const rows: GeneratedDrill[] = []
   let skipped = 0
+  const shaped = rp.case_parts.some(p => p.AY) || rp.face_zones.some(z => z.facet || z.AY)
 
   const caseByKey = new Map(rp.case_parts.map(p => [p.part_key, p]))
-  const zoneByKey = new Map(rp.face_zones.map(z => [`${z.row_index}:${z.col_index}`, z]))
+  const zoneByKey = new Map(rp.face_zones.map(z => [zoneKey(z), z]))
   const intByKey = new Map(rp.internal_parts.map(p => [`${p.part_type}_${p.sort_order}`, p]))
 
   const add = (
@@ -106,20 +132,21 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
   }
 
   // 2. Hinges → cup holes on the door, plate holes on the mounting gable.
+  // Facet doors (z_cabinet_shape 3c): cup drills are already in the door's own
+  // square frame; plates are turned to cabinet coords, then into the panel's
+  // own frame when the panel is angled.
   for (const h of rp.hinge_instances) {
-    // Facet / turned doors and angled-panel plates of shaped cabinets are not
-    // machined yet (z_cabinet_shape Phase 3c) — their drills are zone-frame or off-axis.
-    if (h.facet || h.turn || h.mount_angle_deg) continue
-    const opKey = `hinge_${h.row_index}_${h.col_index}_${h.sort_order}`
-    const zone = zoneByKey.get(`${h.row_index}:${h.col_index}`)
+    const opKey = `hinge_${zoneKey(h)}_${h.sort_order}`
+    const zone = zoneByKey.get(zoneKey(h))
     for (const cd of h.cup_drills) {
-      add('face_zones', `zone_${h.row_index}_${h.col_index}`, zone ? zoneFrame(zone) : null, cd, 'hinge_cup', opKey, AUTO_TOOL, 'face_back')
+      add('face_zones', zonePartId(h), zone ? zoneFrame(zone) : null, cd, 'hinge_cup', opKey, AUTO_TOOL, 'face_back')
     }
     const mt = h.mount_target
     if (mt?.table === 'case_parts' && mt.part_key) {
       const cp = caseByKey.get(mt.part_key)
       for (const pd of h.plate_drills) {
-        add('case_parts', `case_${mt.part_key}`, cp ? caseFrame(cp) : null, pd, 'hinge_plate', opKey, AUTO_TOOL)
+        const d = turnDrill(h.turn, pd)
+        add('case_parts', `case_${mt.part_key}`, cp ? caseFrame(cp) : null, cp ? intoPanel(cp, d) : d, 'hinge_plate', opKey, AUTO_TOOL)
       }
     } else if (mt?.table === 'internal_parts' && mt.internal_part_type != null && mt.internal_sort_order != null) {
       // Plate mounted on an internal divider (vertical) or shelf (horizontal).
@@ -134,11 +161,12 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
   }
 
   // 3. Slides → cabinet member (gable), drawer front (face), and box panels.
+  // Facet drawers (z_cabinet_shape 3c): box parts and the front are in the
+  // zone's square frame like the drills; the runner's cabinet-member holes go
+  // into whichever panel the runner actually sits on (none → packer, hand-fixed).
   for (const stack of rp.drawer_stacks) {
-    // Facet / turned drawers of shaped cabinets: not machined yet (z_cabinet_shape 3c).
-    if (stack.facet || stack.turn) continue
-    const opKey = `slide_${stack.face_zone_row}_${stack.face_zone_col}`
-    const zone = zoneByKey.get(`${stack.face_zone_row}:${stack.face_zone_col}`)
+    const opKey = `slide_${stackKey(stack)}`
+    const zone = zoneByKey.get(stackKey(stack))
     const boxByType = new Map(stack.box_parts.map(p => [p.part_type, p]))
     // Must match svgDbMeta / normalize's key (db_<row>_<col>_<part_type>) so generated
     // slide drills land on the same part identity the nest/editor use.
@@ -156,13 +184,14 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
               add('internal_parts', `int_${mt.internal_part_type}_${mt.internal_sort_order}`, ip ? intFrame(ip) : null, sd, 'slide', opKey, AUTO_TOOL)
               break
             }
-            const key = sd.side === 'left' ? 'left_side' : 'right_side'
-            const cp = caseByKey.get(key)
-            add('case_parts', `case_${key}`, cp ? caseFrame(cp) : null, sd, 'slide', opKey, AUTO_TOOL)
+            const d = turnDrill(stack.turn, sd)
+            const cp = shaped ? memberPanel(rp.case_parts, d) : caseByKey.get(sd.side === 'left' ? 'left_side' : 'right_side')
+            if (!cp) { skipped++; break }
+            add('case_parts', `case_${cp.part_key}`, caseFrame(cp), intoPanel(cp, d), 'slide', opKey, AUTO_TOOL)
             break
           }
           case 'drawer_front':
-            add('face_zones', `zone_${stack.face_zone_row}_${stack.face_zone_col}`, zone ? zoneFrame(zone) : null, sd, 'slide', opKey, AUTO_TOOL, 'face_back')
+            add('face_zones', `zone_${stackKey(stack)}`, zone ? zoneFrame(zone) : null, sd, 'slide', opKey, AUTO_TOOL, 'face_back')
             break
           case 'drawer_side': {
             const t = sd.side === 'left' ? 'db_left_side' : 'db_right_side'

@@ -69,6 +69,9 @@ export interface Footprint {
   segments: FootprintSegment[]
   /** User-chosen roles by edge id. Survives regenerating from the preset. */
   role_overrides?: Record<string, EdgeRole>
+  /** Panel edges whose end is bevelled flush where it meets an angled front /
+   *  open edge (z_cabinet_shape 4a). Default square; set per part by right-click. */
+  flush_ends?: string[]
 }
 
 export interface FootprintDims { w: number; d: number }

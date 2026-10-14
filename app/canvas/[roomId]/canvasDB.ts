@@ -126,6 +126,8 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
       material_id: p.material_id,
       edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right, id: p.edge_band_id ?? undefined },
       ...(p.outline ? { outline: p.outline } : {}),
+      ...(p.bevel_lo ? { bevel_lo: Number(p.bevel_lo) } : {}),
+      ...(p.bevel_hi ? { bevel_hi: Number(p.bevel_hi) } : {}),
     }))
     const intPartsArr = myInt.map(p => ({
       part_type: p.part_type,

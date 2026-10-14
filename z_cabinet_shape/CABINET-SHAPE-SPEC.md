@@ -7,10 +7,10 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Phases 1–2 done (5dca77a), 3a committed (685786f). Phase 3b
-> code done 2026-10-13 (uncommitted): hinges + drawer boxes on every facet,
-> angled-hinge pick, packer / clash warnings. Checked in-app. Library still needs a
-> hinge with Mount° = 45. Next: Phase 3c.
+> **RESUME HERE** → Phases 1–2 (5dca77a), 3a (685786f), 3b (c405730), 3c + 4a
+> (angled carcass joints, square/bevel front ends, doors clear angled sides) committed
+> 2026-10-14, all checked in-app. Next: 4b toe kick (decision 13), then 4c benchtop.
+> Library still needs a hinge with Mount° = 45.
 
 ---
 
@@ -97,6 +97,21 @@ derived from geometry (`src/lib/benchtopAnchor.ts`). Same pattern here.
     column "Mount°") = corner angle − 90°; the resolver picks the library hinge
     within 2.5°, else uses the default hinge and flags it (warning
     HINGE_ANGLE_MISSING, hardware list "NOT IN LIBRARY — order").
+
+11. **Angled panel joints are a rule** (Mark, 2026-10-14): `ANGLE_JOIN` =
+    `butt_bevel` (default: the BACK_JOIN priority still picks the through panel;
+    its end lies flush in the outline, the stopping panel's end is bevelled flat
+    against it) | `mitre` (both bevelled on the corner line). Set on the
+    construction method, job, room or cabinet like any rule. Applies only to
+    corners off 90° by more than 0.5°; square corners keep the butts.
+12. **Panel ends at an angled front stay square by default** (Mark, 2026-10-14,
+    revised same day — first locked as "always bevelled flush"). Per part, a 3D
+    right-click **"Bevel front edge to facet"** / **"Square front edge"** toggles
+    it; stored as `footprint.flush_ends` (edge ids), kept when the preset is
+    rebuilt. Also applies at angled `open` edges.
+13. **Toe kick on a shaped cabinet: one board per front facet, mitred** where
+    they meet (Mark, 2026-10-14).
+14. **Phase 4 is split 4a / 4b / 4c** with an in-app check each (Mark, 2026-10-14).
 
 ## Proposals (not yet locked)
 
@@ -273,17 +288,73 @@ Design (locked in code, 3a):
         `hinge_<zoneKey>_<n>`.
       - Tests: `shapedHardware.test.ts`.
 - [x] 3b in-app check (Mark, 2026-10-13: "looks good")
-- Known gaps (→ 3c): CNC / drill sync skips facet + turned + angled-panel hinges and facet
-  drawers (seamDrillSync); slide `cabinet_member` drills on a shaped cabinet still assume
-  left/right_side; hinge GLB plate/arm models sit as on a square gable; 2D ortho hinge
-  silhouettes skip turned doors.
-- [ ] 3c — cut list shows bevels; optimiser / drilling / trees / labels facet-aware; plan + report
-      door swings from resolved zones (today skipped on shaped cabinets); Part Editor outlines.
+- [x] 3c (2026-10-14):
+      - **Mitre blanks**: a mitred front is cut at its front-face width and bevelled after —
+        `zoneBlank` (x0 ≤ 0, width = DX + overhang each bevelled side) / `zoneBevelNote`
+        ("mitre L22.5° R22.5°") in jointDrilling. Cabinet sheet cut list, Parts list and the
+        optimiser (normalize: reads `bevel_l/bevel_r`) list the blank width + note;
+        `zoneFrame` puts the drill origin at the blank's left edge.
+      - **CNC drilling** (seamDrillSync): facet hinges + drawers are machined. Cup / front / box
+        drills are already zone-frame (= the part's own frame). Plates and runner member holes
+        are turned to cabinet coords (`turnDrill`), then into an angled panel's unturned frame
+        (`intoPanel`: inverse AY about its outer start corner). Runner member holes go to the
+        panel the bore actually lands in (`memberPanel`); none → packer, skipped (hand-fixed).
+        Ids `zone_<key>`, `hinge_<zoneKey>_<n>`, `slide_<stackKey>`. Tests `shapedDrills.test.ts`.
+      - **Plan swings + drawer lines** on shaped cabinets (canvas plan + plan report) from the
+        resolved zones on every facet: `cabinetShape/planSwings.ts` (`shapedFrontMarks`,
+        cabinet-local; `sweepFlag`). Tests `planSwings.test.ts`.
+      - **Labels / trees**: `zoneRef / stackRef` ("Angled facet R1C1") in the cabinet tree,
+        object tree, Parts list and optimiser names; 3D part info shows facet + mitre + cut width.
+      - **Part Editor**: `PartMeta.outline` carries the resolver outline (clipped bottom / top /
+        shelves); the editor shows it — and seeds the Shape Editor with it — until the part
+        has a drawn shape of its own.
+- [x] 3c in-app check (Mark, 2026-10-14: "looks good")
+- Known gaps: hinge GLB plate/arm models on an angled panel sit as on a square gable; 2D ortho
+  hinge silhouettes skip turned doors; handle holes on facet fronts are not machined yet
+  (handles module skips facet / turned fronts); optimiser nests the mitre blank as a rectangle
+  (bevel sawn by hand — Phase 5 CNC bevels).
 
-### Phase 4 — Angled joints, toe kick, benchtop `[ ]`
-- [ ] Joint chooser from dihedral angle + roles (mitre / bevel / butt), thickness compensation
-- [ ] Toe kick follows front edges
-- [ ] Benchtop auto-outline from shaped cabinets
+### Phase 4 — Angled joints, toe kick, benchtop `[~]`
+- [x] 4a — angled carcass joints (2026-10-14):
+      - `construct.ts`: `angledEnd(kind, …)` — an end is the plane through a line L, cutting the
+        outer face at `sOut` and the inner face at `sIn` from the vertex. flush (L = neighbour's
+        outline), stop (L = neighbour panel's inner face), mitre (L = outline → inner vertex);
+        `interiorAngle`, `faceHit`.
+      - `resolveShapedCase`: every panel end picks square butt (|α − 90| ≤ 0.5°, arcs, reflex),
+        ANGLE_JOIN at another panel (decision 11); at an angled front / open edge square, or flush
+        when the panel's edge is in `footprint.flush_ends` (decision 12; `panelFrontEnd` finds the
+        edge for a part key and whether the option applies — drives the 3D right-click item).
+        Parts are listed at the **blank** (longest face); `bevel_lo` / `bevel_hi` = degrees from
+        square at the low / high end of the part's length axis, + = inner face shorter.
+        A legacy box part (left/right side, back) only stays clamped to its box extents at an end
+        that meets another box part — fixes an 18×18 hole where a diagonal corner's two backs
+        meet (the box back stopped at a side that no longer exists).
+      - DB (migration_s4a): `case_parts.bevel_lo/bevel_hi` (applied); persist + reload.
+      - `jointDrilling.caseBevelOutline` (top-view outline, extruded up in 3D) /
+        `caseBevelNote` ("bevel 19° / 33.7°"); `casePlanCorners` draws it, so plan + plan report +
+        AABBs follow. Cut list, Parts list (+ shaped part names), optimiser names carry the note;
+        3D part info shows it with the cut length.
+      - Rule UI: construction methods (Joinery card), job + room properties ("Shaped Cabinets").
+      - Tests `angledJoints.test.ts`: for both rules × trapezoid / angled end (both hands) /
+        clipped / diagonal, with every front end set flush, the panels fill the band between
+        outline and inside exactly (inside the outline, no overlaps, areas add up); square
+        default stays inside + no overlaps; bevel angles for butt + mitre; flush toggle.
+      - **Doors clear angled sides** (Mark's check, 2026-10-14: the facet door's edge sat past the
+        cabinet's outside on the angled side). resolveShapedFace: a door end next to a panel / open
+        edge runs along the facet until its outermost corner (the front face leans out past an angled
+        side) is the reveal inside that edge's outer plane; square corners unchanged. Test
+        `facetDoorClear.test.ts` (clipped both hands, trapezoid, angled end).
+      - **Square-fronted sides come forward to the facet door** (Mark, 2026-10-14: the side sat a
+        long way back from the door). With a door on the angled front, a square end runs past the
+        clip vertex until both its corners are FACBUF clear of the door's end face
+        (`facetDoorRun` in resolveShapedFace gives the door's start along the facet); the outer
+        corner may pass the outline, beside the door. 45° clip on a 580 deep cabinet: 280 → 291.5.
+- [x] 4a in-app check (Mark, 2026-10-14: "looks better" after the door + side fixes)
+- Known gaps (4a): no CNC bevel or fixing drilling at angled joints (per-edge panels have no
+  seams yet; hand-fixed); edge-tape strips in 3D still drawn on the square blank; the Part
+  Editor shows a bevelled panel as its blank rectangle.
+- [ ] 4b — toe kick follows the front facets (decision 13)
+- [ ] 4c — benchtop auto-outline from shaped cabinets
 
 ### Phase 5 — Output `[ ]`
 - [ ] Elevations at true width (decision 3)

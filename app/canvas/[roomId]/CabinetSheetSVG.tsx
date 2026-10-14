@@ -20,6 +20,7 @@ import {
   doorProfileSvg,
 } from './cabinetEditSvgHelpers'
 import { zonePartId, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
+import { zoneBlank, zoneBevelNote, caseBevelNote } from '@/src/lib/jointDrilling'
 
 export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean }
 
@@ -315,14 +316,21 @@ export default function CabinetSheetSVG({
       const key = `${desc}|${w}|${l}|${t}|${mat}`
       const ex = map.get(key); if (ex) ex.qty++; else map.set(key, { desc, w, l, t, mat, qty: 1 })
     }
-    rp.case_parts.forEach(p => add(CASE_LABELS[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key, p))
+    // Angled panel ends (z_cabinet_shape 4a): listed at the blank, bevel noted.
+    rp.case_parts.forEach(p => {
+      const label = CASE_LABELS[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key
+      add(caseBevelNote(p) ? `${label} ${caseBevelNote(p)}` : label, p)
+    })
     rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => add(TK_LABELS[p.part_key] ?? p.part_key, p))
     rp.internal_parts.forEach(p => add(INT_LABELS[p.part_type] ?? p.part_type, p))
     // Sharknose fronts carry the saw note (z_handles D3): edge + blade tilt.
     rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => {
       const bv = z.handle?.bevel
       const label = FACE_LABELS[z.face_type] ?? z.face_type
-      add(bv ? `${label} SN ${z.handle!.grip_edge === 'top' ? 'T' : 'B'}${Math.round(bv.angle_deg)}°` : label, z)
+      // Mitred facet fronts (z_cabinet_shape 3c): cut at the front-face width, bevel noted.
+      const mitre = zoneBevelNote(z)
+      const desc = bv ? `${label} SN ${z.handle!.grip_edge === 'top' ? 'T' : 'B'}${Math.round(bv.angle_deg)}°` : label
+      add(mitre ? `${desc} ${mitre}` : desc, mitre ? { ...z, DX: zoneBlank(z).width } : z)
     })
     ;(rp.drawer_stacks ?? []).forEach(stk => stk.box_parts.forEach(p => add(INT_LABELS[p.part_type as string] ?? p.part_type, p)))
     return [...map.values()].sort((a, b) => a.desc.localeCompare(b.desc))

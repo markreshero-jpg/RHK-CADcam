@@ -57,6 +57,7 @@ export const RULE_LABELS: Record<RuleKey, string> = {
   BACK_JOIN:        'Back Join',
   TOP_BACK_JOIN:    'Top / Back Join',
   RAIL_JOIN:        'Rail / Top Join',
+  ANGLE_JOIN:       'Angled Panel Join (shaped)',
 }
 
 export const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
@@ -69,7 +70,7 @@ export const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR', 'FPGAP'] },
   { label: 'Finger Pull Rails', keys: ['RAILH', 'RAILUP', 'RAILCUT', 'RAILBLK', 'RAILBLKD', 'RAILBLKZ'] },
   { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
-  { label: 'Joinery',            keys: ['BOTTOM_JOIN', 'BOTTOM_BACK_JOIN', 'BACK_JOIN', 'TOP_BACK_JOIN', 'RAIL_JOIN'] },
+  { label: 'Joinery',            keys: ['BOTTOM_JOIN', 'BOTTOM_BACK_JOIN', 'BACK_JOIN', 'TOP_BACK_JOIN', 'RAIL_JOIN', 'ANGLE_JOIN'] },
 ]
 
 export const EDGING_LABELS: Record<EdgingKey, string> = {

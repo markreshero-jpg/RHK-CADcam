@@ -51,6 +51,9 @@ export const DEFAULT_CONSTRUCTION_METHOD = {
     // Face clearance
     FACBUF: 2,   // buffer around face opening
     FACINS: 0,   // face inset
+
+    // Shaped cabinets: panels meeting at an angle (z_cabinet_shape 4a)
+    ANGLE_JOIN: 'butt_bevel' as 'butt_bevel' | 'mitre',
   }
 }
 

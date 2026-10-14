@@ -147,7 +147,14 @@ export default function PartEditor({
   // centre views show the previewed revision while the saved head stays put.
   const [shapePreview, setShapePreview] = useState<ShapeRevisionEntry | null>(null)
   useEffect(() => { setShapePreview(null) }, [part.id])
-  const displaySegs = shapePreview?.segments ?? shapeOv?.segments ?? null
+  // A shaped cabinet's clipped part shows its resolver outline until it gets a
+  // drawn shape of its own (z_cabinet_shape 3c).
+  const resolvedSegs = useMemo<ShapeSegment[] | null>(() => {
+    const o = part.outline
+    if (!o || o.length < 3) return null
+    return o.map((p, i) => ({ type: 'line' as const, p0: { x: p.x, y: p.y }, p1: { x: o[(i + 1) % o.length].x, y: o[(i + 1) % o.length].y } }))
+  }, [part.outline])
+  const displaySegs = shapePreview?.segments ?? shapeOv?.segments ?? resolvedSegs
   // Sampled outline polygon (shape frame, mm) — drives the 3D face overlay and
   // the ops-outside-outline validation inside usePartOps.
   const shapePoly = useMemo(
@@ -487,7 +494,7 @@ export default function PartEditor({
               partWidth={sw}
               partHeight={sh}
               edge={displayEdge}
-              initialSegments={shapeOv?.segments ?? null}
+              initialSegments={shapeOv?.segments ?? resolvedSegs}
               referenceOutlines={referenceOutlines}
               onSave={(segments: ShapeSegment[], meta: ShapeMeta) => void handleShapeSave(segments, meta)}
               onCancel={() => setShapeOpen(false)}

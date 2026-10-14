@@ -1320,6 +1320,19 @@ function QuestionPanel({ classTab, delta, onChange, onHoverParts }: {
         />
       </QCard>
 
+      <QCard question="Shaped cabinets: how do two panels meet at an angle other than 90°?" isOverride={'ANGLE_JOIN' in delta}
+        partKeys={[]}
+        onHover={onHoverParts}>
+        <ChipSelect
+          value={effectiveRule(delta, 'ANGLE_JOIN')}
+          onChange={v => onChange('ANGLE_JOIN', v as ConstructionRules['ANGLE_JOIN'])}
+          options={[
+            { label: "One runs through — the other's end is bevelled against it", value: 'butt_bevel' },
+            { label: 'Both mitred on the corner line',                               value: 'mitre' },
+          ]}
+        />
+      </QCard>
+
     </div>
   )
 }
@@ -1459,6 +1472,21 @@ function RuleRow({ ruleKey, delta, onChange }: {
           <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
             <option value="between_sides">Between sides</option>
             <option value="on_top_of_sides">On top of sides</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'ANGLE_JOIN') {
+    return (
+      <div className={rowCls}>
+        <span className={txtCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
+          <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
+            <option value="butt_bevel">Butt — end bevelled</option>
+            <option value="mitre">Mitre</option>
           </select>
         </div>
       </div>

@@ -25,6 +25,10 @@ export default function CabinetShapeSection({ cabinet, onUpdate, inp, lbl }: {
     void onUpdate(cabinet.id, { footprint: next })
   }
 
+  // Per-part bevelled ends (set from the 3D right-click) survive a rebuild.
+  const keepFlush = (next: CabinetInstance['footprint']) =>
+    next && fp?.flush_ends?.length ? { ...next, flush_ends: fp.flush_ends } : next
+
   function choosePreset(key: string) {
     if (!key) return setFootprint(null)
     setFootprint(buildPresetFootprint(key, {}, dims))
@@ -32,13 +36,13 @@ export default function CabinetShapeSection({ cabinet, onUpdate, inp, lbl }: {
 
   function setParam(k: string, v: number | string) {
     if (!fp?.preset) return
-    setFootprint(buildPresetFootprint(fp.preset, { ...fp.params, [k]: v }, dims, fp.role_overrides))
+    setFootprint(keepFlush(buildPresetFootprint(fp.preset, { ...fp.params, [k]: v }, dims, fp.role_overrides)))
   }
 
   function setRole(edgeId: string, role: EdgeRole) {
     if (!fp) return
     const role_overrides = { ...(fp.role_overrides ?? {}), [edgeId]: role }
-    if (fp.preset) return setFootprint(buildPresetFootprint(fp.preset, fp.params, dims, role_overrides))
+    if (fp.preset) return setFootprint(keepFlush(buildPresetFootprint(fp.preset, fp.params, dims, role_overrides)))
     setFootprint({
       ...fp, role_overrides,
       segments: fp.segments.map(s => s.edge.id === edgeId ? { ...s, edge: { ...s.edge, role } } : s),

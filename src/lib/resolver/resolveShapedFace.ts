@@ -14,7 +14,9 @@
 // identically to the plain cabinet.
 //
 // Facet ends: next to a side panel → the usual neighbour reveal (the box's
-// left/right neighbour on x = 0 / x = DX, an end reveal elsewhere); next to
+// left/right neighbour on x = 0 / x = DX, an end reveal elsewhere), measured
+// in from the panel's outer face to the door's outermost corner (an angled
+// side would otherwise have the door's front corner past the cabinet side); next to
 // another front facet at a convex corner → mitred doors (decision 9): the door
 // runs past the corner by tan(φ/2)·(mid-thickness offset) less half the column
 // gap, and the zone carries bevel_l / bevel_r = φ/2.
@@ -26,7 +28,7 @@ import type {
 import { resolveFace, type FaceResolution } from './resolveFace'
 import { resolveReveal, resolveFaceZ } from './mergeRules'
 import { shapedInterior } from './resolveShapedCase'
-import { edgeFrame } from '../cabinetShape/construct'
+import { edgeFrame, type EdgeFrame } from '../cabinetShape/construct'
 import type { FootprintSegment } from '../cabinetShape/footprint'
 
 const NEAR = 0.5
@@ -43,6 +45,45 @@ export function primaryFacetId(segs: FootprintSegment[], DZ: number): string | n
   const straight = fronts.filter(s => Math.abs(s.p0.y - DZ) < NEAR && Math.abs(s.p1.y - DZ) < NEAR)
   const pool = straight.length ? straight : fronts
   return pool.reduce((a, b) => (len(b) > len(a) ? b : a)).edge.id
+}
+
+// Door thickness + back-plane offset out of the edge line (overlay > 0, inset < 0).
+function doorPlane(cab: CabinetInput, r: ConstructionRules) {
+  const ft = cab.resolved_doors?.['*']?.thickness_mm ?? cab.door_material.DZ
+  return { ft, backOff: resolveFaceZ(cab.DZ, ft, r) - cab.DZ }
+}
+
+// Reveal at a facet end that is not another front facet.
+function endReveal(cab: CabinetInput, r: ConstructionRules, nb: FootprintSegment, vertex: { x: number }, side: 'left' | 'right') {
+  if (isPanel(nb) && Math.abs(vertex.x) < NEAR) return resolveReveal('left', cab.left_neighbour, r)
+  if (isPanel(nb) && Math.abs(vertex.x - cab.DX) < NEAR) return resolveReveal('right', cab.right_neighbour, r)
+  return side === 'left' ? r.REVENDL : r.REVENDR
+}
+
+// A door end next to a panel / open edge: run the door along the facet until
+// its outermost corner (back or front face — the front leans out past an
+// angled side) is `rev` inside that edge's outer plane. A square corner gives
+// exactly `rev`. `away` = along the facet from the vertex.
+function doorRun(rev: number, f: EdgeFrame, nb: FootprintSegment, away: { x: number; y: number }, backOff: number, ft: number) {
+  const g = edgeFrame(nb)
+  const k = away.x * g.n.x + away.y * g.n.y
+  if (k <= 1e-9) return rev
+  const lean = f.n.x * g.n.x + f.n.y * g.n.y
+  return Math.max(...[backOff, backOff + ft].map(off => (rev + off * lean) / k))
+}
+
+/**
+ * How far along front facet `facet` (from its vertex V with neighbour `nb`) the
+ * door at that end starts — the case resolver brings a square-fronted side
+ * panel forward to it (z_cabinet_shape 4a).
+ */
+export function facetDoorRun(cab: CabinetInput, r: ConstructionRules, facet: FootprintSegment, nb: FootprintSegment, V: { x: number; y: number }): number {
+  const f = edgeFrame(facet)
+  const atP1 = Math.hypot(V.x - facet.p1.x, V.y - facet.p1.y) < NEAR
+  const side = atP1 ? 'left' : 'right'
+  const away = atP1 ? { x: -f.u.x, y: -f.u.y } : f.u
+  const { ft, backOff } = doorPlane(cab, r)
+  return doorRun(endReveal(cab, r, nb, V, side), f, nb, away, backOff, ft)
 }
 
 function singleDoor(hinge: 'left' | 'right'): FaceGridInput {
@@ -65,8 +106,7 @@ export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): Fac
 
   // Door back-plane offset out of the edge line (overlay > 0, inset < 0) and a
   // nominal mid-thickness for the mitre run-past.
-  const ft = cab.resolved_doors?.['*']?.thickness_mm ?? cab.door_material.DZ
-  const backOff = resolveFaceZ(cab.DZ, ft, r) - cab.DZ
+  const { ft, backOff } = doorPlane(cab, r)
   const midOff = backOff + ft / 2
 
   segs.forEach((s, i) => {
@@ -83,9 +123,8 @@ export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): Fac
         return { rev: r.GAPC / 4 - Math.tan(phi / 2) * midOff, bevel: (phi / 2) * 180 / Math.PI }
       }
       if (isFrontLine(nb)) return { rev: r.GAPC / 4, bevel: 0 }   // concave facet corner: plain gap
-      if (isPanel(nb) && Math.abs(vertex.x) < NEAR) return { rev: resolveReveal('left', cab.left_neighbour, r), bevel: 0 }
-      if (isPanel(nb) && Math.abs(vertex.x - cab.DX) < NEAR) return { rev: resolveReveal('right', cab.right_neighbour, r), bevel: 0 }
-      return { rev: side === 'left' ? r.REVENDL : r.REVENDR, bevel: 0 }
+      const away = side === 'left' ? { x: -f.u.x, y: -f.u.y } : f.u
+      return { rev: doorRun(endReveal(cab, r, nb, vertex, side), f, nb, away, backOff, ft), bevel: 0 }
     }
     const crossNext = f.u.x * edgeFrame(next).u.y - f.u.y * edgeFrame(next).u.x
     const crossPrev = edgeFrame(prev).u.x * f.u.y - edgeFrame(prev).u.y * f.u.x

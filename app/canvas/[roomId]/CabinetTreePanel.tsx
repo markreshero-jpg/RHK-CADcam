@@ -7,7 +7,7 @@ import type {
 } from '@/src/lib/resolver/types'
 import { fmtMm } from '@/src/lib/format'
 import type { PartPosOverrides } from './canvasDB'
-import { zonePartId, zoneKey, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, zoneKey, dbPartId, stackKey, zoneRef, stackRef } from '@/src/lib/cabinetShape/partKeys'
 
 // ── Expression evaluation ─────────────────────────────────────────────────────
 
@@ -328,7 +328,7 @@ function buildSections(rp: ResolvedCabinet, overrides: PartPosOverrides | undefi
     undefined, p.X, p.Y, p.Z, p.DX, p.DY, p.DZ, p.AX, p.AY, p.AZ, p.material_id, p.part_type, rp, overrides, slideIdx, hingeIdx,
   ))
   const drawerNodes = (rp.drawer_stacks ?? []).flatMap(stack => {
-    const tag = `R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`
+    const tag = `${stackRef(stack)}`
     const dbParts = stack.box_parts.map(p => makePart(
       dbPartId(stack, p.part_type),
       DB_LABELS[p.part_type] ?? p.part_type, tag,
@@ -357,7 +357,7 @@ function buildSections(rp: ResolvedCabinet, overrides: PartPosOverrides | undefi
     const parts = rp.face_zones.map(z => {
       const node = makePart(
         zonePartId(z),
-        `${FACE_LABELS[z.face_type] ?? z.face_type} R${z.row_index + 1}C${z.col_index + 1}`,
+        `${FACE_LABELS[z.face_type] ?? z.face_type} ${zoneRef(z)}`,
         z.hinge_side ? `Hinge: ${z.hinge_side}` : undefined,
         z.X, z.Y, z.Z, z.DX, z.DY, z.DZ, z.AX, z.AY, z.AZ, z.material_id, z.face_type, rp, overrides, slideIdx, hingeIdx,
       )

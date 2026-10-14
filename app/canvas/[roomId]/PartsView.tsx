@@ -14,7 +14,8 @@ import {
 } from '@/src/lib/formula'
 import { CUSTOM_ORIENT_LABELS, type CustomOrient } from '@/src/lib/customPartBox'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { zonePartId, zoneKey, dbPartId } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, zoneKey, dbPartId, zoneRef, stackRef, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
+import { zoneBlank, zoneBevelNote, caseBevelNote } from '@/src/lib/jointDrilling'
 
 // One dimension/position field: accepts a plain number (fixed), a plain
 // arithmetic calc (e.g. "100+100" → 200, evaluated and stored as the value), OR
@@ -585,7 +586,7 @@ export default function PartsView({
       const id = `case_${p.part_key}`
       result.push({
         id, typeKey: 'carcass', typeLabel: 'Carcass',
-        name: partLabels?.[id] ?? PART_LABEL[p.part_key] ?? p.part_key,
+        name: partLabels?.[id] ?? `${PART_LABEL[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key}${caseBevelNote(p) ? ` (${caseBevelNote(p)})` : ''}`,
         material: matNames[p.material_id] ?? '—', materialColor: matColours[p.material_id] ?? null,
         dy: p.DY, dx: p.DX, dz: p.DZ, eb: p.edge_band,
         comment: partComments?.[id] ?? '',
@@ -624,11 +625,12 @@ export default function PartsView({
       const typeName = z.face_type === 'door' ? 'Door' : z.face_type === 'drawer_face' ? 'Drawer Face' : 'False Panel'
       result.push({
         id, typeKey: 'face', typeLabel: 'Face',
-        name: partLabels?.[id] ?? `${typeName} R${z.row_index + 1}C${z.col_index + 1}`,
+        name: partLabels?.[id] ?? `${typeName} ${zoneRef(z)}${zoneBevelNote(z) ? ` (${zoneBevelNote(z)})` : ''}`,
         material: matNames[z.material_id] ?? '—', materialColor: matColours[z.material_id] ?? null,
         // Raw axes straight through — face zones resolve DX=width, DY=height,
-        // which IS the CV convention (DY = length/grain, DX = width).
-        dy: z.DY, dx: z.DX, dz: z.DZ, eb: z.edge_band,
+        // which IS the CV convention (DY = length/grain, DX = width). A mitred
+        // facet front is cut at its front-face width (z_cabinet_shape 3c).
+        dy: z.DY, dx: zoneBlank(z).width, dz: z.DZ, eb: z.edge_band,
         comment: partComments?.[id] ?? '',
         isCustom: false, isOverride: false,
       })
@@ -639,7 +641,7 @@ export default function PartsView({
         const id = dbPartId(stack, p.part_type)
         result.push({
           id, typeKey: 'drawerbox', typeLabel: 'Drawer Box',
-          name: partLabels?.[id] ?? `${DB_PART_LABELS[p.part_type] ?? p.part_type} R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`,
+          name: partLabels?.[id] ?? `${DB_PART_LABELS[p.part_type] ?? p.part_type} ${stackRef(stack)}`,
           material: matNames[p.material_id] ?? '—', materialColor: matColours[p.material_id] ?? null,
           dy: p.DY, dx: p.DX, dz: p.DZ, eb: p.edge_band,
           comment: partComments?.[id] ?? '',
@@ -650,7 +652,7 @@ export default function PartsView({
         const id = `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`
         result.push({
           id, typeKey: 'slide', typeLabel: 'Slide',
-          name: partLabels?.[id] ?? `Slide (${s.side}) R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`,
+          name: partLabels?.[id] ?? `Slide (${s.side}) ${stackRef(stack)}`,
           material: `${s.nominal_length}mm`, materialColor: null,
           dy: s.DY, dx: s.DX, dz: s.DZ, eb: null,
           comment: partComments?.[id] ?? '',
@@ -665,7 +667,7 @@ export default function PartsView({
       const id = `hinge_${zoneKey(h)}_${h.sort_order}`
       result.push({
         id, typeKey: 'hinge', typeLabel: 'Hinge',
-        name: partLabels?.[id] ?? `Hinge (${h.hinge_edge}) R${h.row_index + 1}C${h.col_index + 1} #${h.sort_order + 1}`,
+        name: partLabels?.[id] ?? `Hinge (${h.hinge_edge}) ${zoneRef(h)} #${h.sort_order + 1}`,
         material: h.mounting_surface === 'auto' ? 'auto' : h.mounting_surface, materialColor: null,
         dy: 0, dx: 0, dz: 0, eb: null,
         comment: partComments?.[id] ?? '',
@@ -675,7 +677,7 @@ export default function PartsView({
         const pid = `hplate_${zoneKey(h)}_${h.sort_order}`
         result.push({
           id: pid, typeKey: 'hinge_plate', typeLabel: 'Hinge Plate',
-          name: partLabels?.[pid] ?? `Hinge plate R${h.row_index + 1}C${h.col_index + 1} #${h.sort_order + 1}`,
+          name: partLabels?.[pid] ?? `Hinge plate ${zoneRef(h)} #${h.sort_order + 1}`,
           material: '—', materialColor: null,
           dy: 0, dx: 0, dz: 0, eb: null,
           comment: partComments?.[pid] ?? '',

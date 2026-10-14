@@ -41,12 +41,42 @@ export function casePlanCorners(p: ResolvedCasePart): { x: number; z: number }[]
   const b = caseBox(p)
   if (p.outline && p.outline.length >= 3 && !isSide(p.part_key) && p.part_key !== 'back' && !isShapedPanelKey(p.part_key) && !p.AY)
     return p.outline.map(q => ({ x: b.x + q.x, z: b.z + b.d - q.y }))
-  const local: [number, number][] = [[0, 0], [b.w, 0], [b.w, b.d], [0, b.d]]
+  const bev = caseBevelOutline(p)
+  const local: [number, number][] = bev
+    ? bev.map(q => [q.x, b.d - q.y])
+    : [[0, 0], [b.w, 0], [b.w, b.d], [0, b.d]]
   if (!p.AY) return local.map(([x, z]) => ({ x: b.x + x, z: b.z + z }))
   return local.map(([x, z]) => {
     const [rx, , rz] = rotEulerXYZ(0, p.AY, 0, x, 0, z)
     return { x: b.x + rx, z: b.z + rz }
   })
+}
+
+// Angled ends of a shaped cabinet's vertical panel (z_cabinet_shape 4a): the
+// top-view outline in the horizontal shape frame (x across the box, y down
+// from its front face), extruded up in 3D. null = square ends. The box is the
+// blank; bevel_lo / bevel_hi (+ = inner face shorter) take the corners off.
+export function caseBevelOutline(p: ResolvedCasePart): { x: number; y: number }[] | null {
+  if (!p.bevel_lo && !p.bevel_hi) return null
+  const side = isSide(p.part_key)
+  if (!side && p.part_key !== 'back' && !isShapedPanelKey(p.part_key)) return null
+  const b = caseBox(p), t = p.DZ, D = Math.PI / 180
+  const L = side ? b.d : b.w
+  const dLo = t * Math.tan((p.bevel_lo ?? 0) * D), dHi = t * Math.tan((p.bevel_hi ?? 0) * D)
+  const inLo = Math.max(0, dLo), inHi = L - Math.max(0, dHi)
+  const outLo = Math.max(0, -dLo), outHi = L - Math.max(0, -dHi)
+  if (!side) // length along x; outer face at the back (z = 0 → y = d)
+    return [{ x: outLo, y: b.d }, { x: outHi, y: b.d }, { x: inHi, y: 0 }, { x: inLo, y: 0 }]
+  // Sides: length along z (y = d − z); outer face at x = 0 (left) / x = t (right).
+  const xo = p.part_key === 'right_side' ? b.w : 0, xi = b.w - xo
+  return [{ x: xo, y: b.d - outLo }, { x: xo, y: b.d - outHi }, { x: xi, y: b.d - inHi }, { x: xi, y: b.d - inLo }]
+}
+
+/** Cut-list note for a panel with angled ends, e.g. "bevel 19° / 33.7°"; '' when square. */
+export function caseBevelNote(p: { bevel_lo?: number | null; bevel_hi?: number | null }): string {
+  const f = (a: number) => `${Math.round(Math.abs(a) * 10) / 10}°`
+  const parts = [p.bevel_lo ? f(p.bevel_lo) : '', p.bevel_hi ? f(p.bevel_hi) : ''].filter(Boolean)
+  return parts.length ? `bevel ${parts.join(' / ')}` : ''
 }
 
 // Axis-aligned cabinet-space bounds of a case part after its AY rotation
@@ -84,6 +114,24 @@ export function zoneBevelOutline(z: { DX: number; DZ: number; bevel_l?: number; 
   const h = z.DZ / 2, D = Math.PI / 180
   const l = h * Math.tan((z.bevel_l ?? 0) * D), r = h * Math.tan((z.bevel_r ?? 0) * D)
   return [{ x: l, z: 0 }, { x: z.DX - r, z: 0 }, { x: z.DX + r, z: z.DZ }, { x: -l, z: z.DZ }]
+}
+
+/**
+ * The blank a mitred front is cut from (z_cabinet_shape 3c): the front face is
+ * the widest, so the blank runs from x0 (≤ 0, zone-local) for `width`, and the
+ * bevels are sawn after. A square front: x0 = 0, width = DX.
+ */
+export function zoneBlank(z: { DX: number; DZ: number; bevel_l?: number | null; bevel_r?: number | null }): { x0: number; width: number } {
+  const h = z.DZ / 2, D = Math.PI / 180
+  const l = h * Math.tan((z.bevel_l ?? 0) * D), r = h * Math.tan((z.bevel_r ?? 0) * D)
+  return { x0: -l, width: z.DX + l + r }
+}
+
+/** Cut-list note for a mitred front, e.g. "mitre L22.5° R22.5°"; '' when square. */
+export function zoneBevelNote(z: { bevel_l?: number | null; bevel_r?: number | null }): string {
+  const f = (a: number) => `${Math.round(a * 10) / 10}°`
+  const parts = [z.bevel_l ? `L${f(z.bevel_l)}` : '', z.bevel_r ? `R${f(z.bevel_r)}` : ''].filter(Boolean)
+  return parts.length ? `mitre ${parts.join(' ')}` : ''
 }
 
 // Cabinet-space AABB for the internal parts that participate in seams. A divider

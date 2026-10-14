@@ -12,7 +12,7 @@
 // Pure / framework-free.
 // ============================================================
 
-import { caseBox } from '@/src/lib/jointDrilling'
+import { caseBox, zoneBlank } from '@/src/lib/jointDrilling'
 import type {
   ResolvedCasePart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedInternalPart,
 } from '@/src/lib/resolver/types'
@@ -60,8 +60,12 @@ export function caseFrame(p: ResolvedCasePart): FootprintFrame {
 // runs bottom→top (height) — the panel's own upright orientation, no display
 // swap needed. Nested cup-side (back, +Z) UP and drilled as-is, so +normal bores
 // are NOT mirrored (upSign '+') — otherwise the hinge cluster flips across the door.
+// A mitred front (shaped cabinets) is cut at its front-face width and bevelled
+// after, so its blank starts zoneBlank.x0 left of the zone's mid-thickness edge.
+// Drills arrive in the zone's square frame (facet hardware is zone-frame).
 export function zoneFrame(z: ResolvedFaceZone): FootprintFrame {
-  return { normal: 'z', upSign: '+', u: { axis: 'x', dir: 1, origin: z.X, extent: z.DX }, v: { axis: 'y', dir: 1, origin: z.Y, extent: z.DY } }
+  const bl = zoneBlank(z)
+  return { normal: 'z', upSign: '+', u: { axis: 'x', dir: 1, origin: z.X + bl.x0, extent: bl.width }, v: { axis: 'y', dir: 1, origin: z.Y, extent: z.DY } }
 }
 
 // Drawer-box panel in cabinet space. resolveDrawerStack maps box-local → cabinet

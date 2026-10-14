@@ -22,7 +22,7 @@ import {
   panelFaceColors, unpackMatCol,
   Part, PartPropertiesPanel, PreviewCanvas,
 } from '@/src/components/three/PartViewer'
-import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamJointDrillOps, coalesceOpposingDrills, type DrillOpPos } from '@/src/lib/jointDrilling'
+import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamJointDrillOps, coalesceOpposingDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelOutline, caseBevelNote } from '@/src/lib/jointDrilling'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, parseZonePartId, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
@@ -30,6 +30,7 @@ import type { ResolvedDoorProfile } from '@/src/lib/resolver/types'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
 import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
 import { turnDrill } from '@/src/lib/resolver/hardwareTurn'
+import { panelFrontEnd } from '@/src/lib/resolver/resolveShapedCase'
 import { seatNudge, cupAcrossOffset } from '@/src/lib/hingeSilhouette'
 import type { ResolvedSlideDrill } from '@/src/lib/resolver/types'
 import PartEdgeJoints from './PartEdgeJoints'
@@ -45,6 +46,7 @@ import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
 import { areaSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 import { handleShape, sharknoseProfile, type HandleShape } from '@/src/lib/handleGeometry'
 import Handle3D from '@/src/components/three/Handle3D'
+import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
 
 export type { MatColSpec, MatColMap }
 
@@ -162,6 +164,8 @@ function buildCaseInfo(p: ResolvedCasePart, b: Box): PartMeta {
     edge:      p.edge_band,
     panelKind: isSide(p.part_key) ? 'side' : p.part_key === 'back' || isShapedPanelKey(p.part_key) ? 'face' : 'horizontal',
     materialId: p.material_id,
+    ...(p.outline && !p.AY ? { outline: p.outline } : {}),
+    ...(caseBevelNote(p) ? { detail: `${caseBevelNote(p)} — cut ${Math.round(isSide(p.part_key) ? p.DX : p.DY)} long` } : {}),
   }
 }
 
@@ -192,6 +196,7 @@ function buildIntInfo(p: ResolvedInternalPart, b: Box): PartMeta {
     panelKind: INT_PANEL_KIND[p.part_type] ?? 'horizontal',
     detail:    p.y_locked ? 'Position locked' : undefined,
     materialId: p.material_id,
+    ...(p.outline ? { outline: p.outline } : {}),
   }
 }
 
@@ -245,8 +250,10 @@ function buildZoneInfo(z: ResolvedFaceZone, b: Box): PartMeta {
     panelKind: 'face',
     dxIsWidth: true,   // face zone: DX=width, DY=height (already upright)
     detail:    [
+      z.facet ? edgeLabel(z.facet) : null,
       `Row ${z.row_index + 1}, Col ${z.col_index + 1}`,
       z.hinge_side ? `Hinge: ${z.hinge_side}` : null,
+      zoneBevelNote(z) ? `${zoneBevelNote(z)} — cut ${Math.round(zoneBlank(z).width)} wide` : null,
     ].filter(Boolean).join(' · '),
     materialId: z.material_id,
   }
@@ -1115,6 +1122,11 @@ export function CabinetScene({
     // Resolver outlines first (shaped cabinets' bottom / top / shelves); a
     // Shape Editor override for the same part replaces them below.
     for (const p of rp.case_parts) if (p.outline && !p.AY) m.set(`case_${p.part_key}`, { pts: p.outline })
+    // Angled panel ends (4a): top-view outline extruded up.
+    for (const p of rp.case_parts) {
+      const o = caseBevelOutline(p)
+      if (o) m.set(`case_${p.part_key}`, { pts: o, extrude: 'up' })
+    }
     for (const p of rp.internal_parts ?? []) if (p.outline) m.set(`int_${p.part_type}_${p.sort_order}`, { pts: p.outline })
     // Mitred doors where two facets meet: top-view outline extruded up
     // (horizontal shape frame: y down from the front face).
@@ -1818,12 +1830,24 @@ export default function Cabinet3DView({
     }
   }
 
+  // Right-click option: bevel a shaped cabinet's side panel flush with the
+  // angled front it meets (footprint.flush_ends), or back to square.
+  const frontEnd = onUpdate && selectedPart?.id.startsWith('case_')
+    ? panelFrontEnd(cab.footprint, cab.dx, cab.dz, selectedPart.id.slice(5)) : null
+  function toggleFlushEnd(edgeId: string) {
+    const fp = cab.footprint
+    if (!fp || !onUpdate) return
+    const cur = fp.flush_ends ?? []
+    const next = cur.includes(edgeId) ? cur.filter(e => e !== edgeId) : [...cur, edgeId]
+    void onUpdate(cab.id, { footprint: { ...fp, flush_ends: next } })
+  }
+
   function handleCanvasContextMenu(e: React.MouseEvent) {
     e.preventDefault()
     if (didHitPartRef.current) {
       // A part was right-clicked (and just selected via contextMenuSelect). Offer
       // the Part Editor at the cursor when the host supports it.
-      if (onEditPart) setEditMenu({ cx: e.clientX, cy: e.clientY })
+      if (onEditPart || onUpdate) setEditMenu({ cx: e.clientX, cy: e.clientY })
     } else {
       setSelectedPart(null)
       setEditMenu(null)
@@ -1948,7 +1972,7 @@ export default function Cabinet3DView({
             )
             return panelHost ? createPortal(panel, panelHost) : panel
           })()}
-          {editMenu && selectedPart && onEditPart && (
+          {editMenu && selectedPart && (onEditPart || frontEnd) && (
             <>
               <div className="fixed inset-0 z-[55]"
                 onClick={() => setEditMenu(null)}
@@ -1956,18 +1980,29 @@ export default function Cabinet3DView({
               <div className="fixed z-[56] bg-gray-800 border border-gray-700 rounded shadow-xl py-1 text-[11px] pointer-events-auto"
                 style={{ left: editMenu.cx, top: editMenu.cy }}
                 onClick={e => e.stopPropagation()}>
-                <button
-                  className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-200 transition-colors whitespace-nowrap"
-                  onClick={() => { onEditPart(selectedPart); setEditMenu(null) }}>
-                  ✎ Edit Part
-                </button>
+                {onEditPart && (
+                  <button
+                    className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-200 transition-colors whitespace-nowrap"
+                    onClick={() => { onEditPart(selectedPart); setEditMenu(null) }}>
+                    ✎ Edit Part
+                  </button>
+                )}
                 {/* Slides are hardware — every panel part is shapeable (scope
                     amendment 2026-07-30). */}
-                {!selectedPart.id.startsWith('slide_') && (
+                {onEditPart && !selectedPart.id.startsWith('slide_') && (
                   <button
                     className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-200 transition-colors whitespace-nowrap"
                     onClick={() => { onEditPart(selectedPart, true); setEditMenu(null) }}>
                     ⬠ Edit Shape
+                  </button>
+                )}
+                {/* Shaped cabinets (z_cabinet_shape 4a): a side panel's end at an
+                    angled front is square unless bevelled flush here. */}
+                {frontEnd && (
+                  <button
+                    className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-200 transition-colors whitespace-nowrap"
+                    onClick={() => { toggleFlushEnd(frontEnd.edgeId); setEditMenu(null) }}>
+                    {frontEnd.flush ? '▭ Square front edge' : '◢ Bevel front edge to facet'}
                   </button>
                 )}
               </div>

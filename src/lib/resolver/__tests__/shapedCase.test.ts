@@ -38,7 +38,8 @@ describe('shaped case', () => {
     // Same box parts, no new panels; the facet only adds its top rail.
     expect(keys(res.case_parts)).toEqual(keys([...rect.case_parts, { part_key: 'rail:facet' }]))
     const rs = get(res.case_parts, 'right_side'), rsRect = get(rect.case_parts, 'right_side')
-    expect(rs.DX).toBeCloseTo(380 - rsRect.Z, 3)                   // stops where the clip starts
+    expect(rs.DX).toBeCloseTo(380 - rsRect.Z, 3)                   // stops where the clip starts (square end)
+    expect(rs.bevel_hi).toBeUndefined()
     const bottom = get(res.case_parts, 'bottom')
     expect(bottom.outline?.length).toBe(5)                          // bottom has the chamfer
     // Bottom stays inside the facet line through (900,380)–(600,580): 2x + 3z = 2940.

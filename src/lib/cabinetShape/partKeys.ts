@@ -2,6 +2,8 @@
 // Every renderer that dispatches on case part_key routes the new per-edge keys
 // through these, so an angled panel is never mistaken for a horizontal one.
 
+import { edgeLabel } from './footprint'
+
 /** Vertical per-edge panel (`side:<edge>` / `back:<edge>`), 'face' panel kind.
  *  Finger-pull backing rails (`fprail:<n>`, z_handles H6) are face-kind
  *  panels with the same frame, so they ride the same path. */
@@ -59,4 +61,15 @@ export function stackKey(s: StackRef): string {
 /** Part id of a drawer box panel: `db_<r>_<c>_<type>`, `db_<edge>.<r>_<c>_<type>` on a facet. */
 export function dbPartId(s: StackRef, partType: string): string {
   return `db_${stackKey(s)}_${partType}`
+}
+
+/** Display reference for a front zone: "R1C2", or "Angled facet R1C1" on a facet (3c). */
+export function zoneRef(z: ZoneRef): string {
+  const rc = `R${z.row_index + 1}C${z.col_index + 1}`
+  return z.facet ? `${edgeLabel(z.facet)} ${rc}` : rc
+}
+
+/** Display reference for a drawer stack = its front zone's. */
+export function stackRef(s: StackRef): string {
+  return zoneRef({ row_index: s.face_zone_row, col_index: s.face_zone_col, facet: s.facet })
 }

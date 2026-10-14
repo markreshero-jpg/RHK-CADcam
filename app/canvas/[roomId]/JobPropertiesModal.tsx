@@ -57,6 +57,7 @@ const RULE_LABELS: Record<RuleKey, string> = {
   RAILBLKZ:'Knock-in Block Hole Depth (mm)',
   FACBUF:  'Face Buffer (mm)',
   FACINS:  'Face Inset (mm)',
+  ANGLE_JOIN: 'Angled Panel Join',
 }
 
 const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
@@ -69,6 +70,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR', 'FPGAP'] },
   { label: 'Finger Pull Rails', keys: ['RAILH', 'RAILUP', 'RAILCUT', 'RAILBLK', 'RAILBLKD', 'RAILBLKZ'] },
   { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
+  { label: 'Shaped Cabinets',   keys: ['ANGLE_JOIN'] },
 ]
 
 const STATUS_OPTIONS: ProjectStatus[] = ['draft', 'quoted', 'approved', 'in_production', 'completed', 'archived']
@@ -956,6 +958,22 @@ function RuleRow({ ruleKey, value, baseline, baselineLabel, onChange }: {
             <option value="ladder">Ladder</option>
             <option value="leg">Leg</option>
             <option value="none">None</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'ANGLE_JOIN') {
+    return (
+      <div className={rowCls}>
+        <span className={textCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverridden && <span className="text-gray-600 text-[10px]">{baselineLabel}: {String(baseline)}</span>}
+          <select value={value as string} onChange={e => onChange(e.target.value as Rules[RuleKey])}
+            className={inputCls}>
+            <option value="butt_bevel">Butt — end bevelled</option>
+            <option value="mitre">Mitre</option>
           </select>
         </div>
       </div>

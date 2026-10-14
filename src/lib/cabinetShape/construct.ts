@@ -148,3 +148,42 @@ export function vertexTrim(
   if (stops) s = Math.max(s, t / k, (t - t * nn) / k)
   return s
 }
+
+const cross = (a: ShapePt, b: ShapePt) => a.x * b.y - a.y * b.x
+
+/**
+ * Along `away` from vertex V: where the panel face `off` in from the outline
+ * (0 = outer face, t = inner face; `n` = the panel's inward normal) meets the
+ * line through P along d. Parallel → 0.
+ */
+export function faceHit(V: ShapePt, away: ShapePt, n: ShapePt, off: number, P: ShapePt, d: ShapePt): number {
+  const k = cross(away, d)
+  if (Math.abs(k) < 1e-9) return 0
+  const w = { x: P.x - V.x - n.x * off, y: P.y - V.y - n.y * off }
+  return cross(w, d) / k
+}
+
+/** Interior angle (degrees, 0–360) at the vertex where edge `a` ends and edge `b` starts (positive winding). */
+export function interiorAngle(a: { p0: ShapePt; p1: ShapePt }, b: { p0: ShapePt; p1: ShapePt }): number {
+  const u = edgeFrame(a).u, v = edgeFrame(b).u
+  return 180 - Math.atan2(cross(u, v), dot(u, v)) * 180 / Math.PI
+}
+
+/**
+ * An angled panel end (z_cabinet_shape 4a). The end is the plane through the
+ * line L; it cuts the outer face `sOut` and the inner face `sIn` along `away`
+ * from the vertex. sIn > sOut = the inner face is the shorter (bevel leans in).
+ *   flush  L = the neighbour's outline (a front / open edge, or the through
+ *          panel of a butt): the end lies in the neighbour's outer plane
+ *   stop   L = the neighbour panel's inner face (the stopping panel of a butt)
+ *   mitre  L = outline vertex → inner vertex (both panels, corner line)
+ */
+export function angledEnd(
+  kind: 'flush' | 'stop' | 'mitre',
+  V: ShapePt, away: ShapePt, n: ShapePt, nb: EdgeFrame, t: number,
+): { sOut: number; sIn: number } {
+  const inner = { x: V.x + nb.n.x * t, y: V.y + nb.n.y * t }
+  if (kind === 'flush') return { sOut: 0, sIn: faceHit(V, away, n, t, V, nb.u) }
+  if (kind === 'stop') return { sOut: faceHit(V, away, n, 0, inner, nb.u), sIn: faceHit(V, away, n, t, inner, nb.u) }
+  return { sOut: 0, sIn: faceHit(V, away, n, t, inner, nb.u) }
+}

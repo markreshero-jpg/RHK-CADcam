@@ -55,6 +55,8 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       nest_priority:     0,
       output_to_cnc:     true,
       outline:           p.outline ?? null,
+      bevel_lo:          p.bevel_lo ?? null,
+      bevel_hi:          p.bevel_hi ?? null,
       // Finger-pull rails carry their sheet grain (z_handles H6); others keep the default.
       ...(p.grain_direction ? { grain_direction: p.grain_direction } : {}),
     })),

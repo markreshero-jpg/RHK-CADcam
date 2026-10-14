@@ -32,6 +32,7 @@ import { caseBox, caseBoxAABB, casePlanCorners, isSide, tkPlanBox, zoneBevelOutl
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
 import { dbLoadRoomPartDetails, type PartPosOverrides } from './canvasDB'
+import { shapedFrontMarks, sweepFlag, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
 
 // Union of cabinet-local plan rects (X along wall, Z = depth) → the cabinet's
 // click area. null = nothing of the cabinet is drawn (not selectable, no labels).
@@ -1318,7 +1319,7 @@ export default function CanvasSVG({
 
         {/* ── Door swings + drawer lines (plan annotations) ── */}
         {layers.any('door_swings', 'drawer_lines') && cabinets.flatMap(cab => {
-          if (!cab.has_face || cab.footprint?.segments?.length) return []   // shaped: swings land with Phase 3 facets
+          if (!cab.has_face) return []
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return []
           const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx.x, cx.y))
@@ -1326,6 +1327,46 @@ export default function CanvasSVG({
           // turned on left-handed walls (back side), never mirrored.
           const { o: fo, x: wd } = cabinetPlanFrame(cab, wall, perp)
           const frontLeft = { x: fo.x + cab.dz * perp.x, y: fo.y + cab.dz * perp.y }
+
+          // Shaped cabinets (z_cabinet_shape 3c): swings + drawer lines from the
+          // resolved zones on every facet.
+          if (cab.footprint?.segments?.length) {
+            const rpS = resolvedParts?.get(cab.id)
+            if (!rpS) return []
+            const toP = (p: LocalPt) => ({ x: fo.x + p.x * wd.x + p.z * perp.x, y: fo.y + p.x * wd.y + p.z * perp.y })
+            const vec = (v: LocalPt) => ({ x: v.x * wd.x + v.z * perp.x, y: v.x * wd.y + v.z * perp.y })
+            const marks = shapedFrontMarks(rpS.face_zones)
+            const out: React.ReactNode[] = []
+            if (layers.show('door_swings')) {
+              const swingCol = layers.colorOf('door_swings')
+              const swingPaint = swingCol
+                ? { fill: swingCol, fillOpacity: 0.08, stroke: swingCol, strokeOpacity: 0.4, opacity: layers.op('door_swings') }
+                : { fill: '#3b82f615', stroke: '#60a5fa60', opacity: layers.op('door_swings') }
+              for (const s of marks.swings) {
+                const h = toP(s.hinge), f = toP(s.free), e = toP(s.end)
+                out.push(<path key={`swing-${cab.id}-${s.key}`}
+                  d={`M ${h.x} ${h.y} L ${f.x} ${f.y} A ${s.r} ${s.r} 0 0 ${sweepFlag(h, f, e)} ${e.x} ${e.y} Z`}
+                  {...swingPaint}
+                  strokeWidth={layers.w('door_swings', 0.75) / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
+                  style={{ pointerEvents: 'none' }} />)
+              }
+            }
+            if (layers.show('drawer_lines')) {
+              for (const d of marks.drawers) {
+                const o = vec(d.out), al = vec(d.along)
+                const off = d.step * 10 / view.zoom, ins = d.step * 20 / view.zoom
+                const a = toP(d.a), b = toP(d.b)
+                out.push(<line key={`drawer-${cab.id}-${d.key}`}
+                  x1={a.x + off * o.x + ins * al.x} y1={a.y + off * o.y + ins * al.y}
+                  x2={b.x + off * o.x - ins * al.x} y2={b.y + off * o.y - ins * al.y}
+                  stroke={layers.color('drawer_lines', '#f59e0b')} strokeOpacity={0.56} opacity={layers.op('drawer_lines')}
+                  strokeWidth={layers.w('drawer_lines', 0.75) / view.zoom}
+                  strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} strokeLinecap="round"
+                  style={{ pointerEvents: 'none' }} />)
+              }
+            }
+            return out
+          }
 
           type FgZone = { col_index: number; row_index: number; face_type: string; hinge_side?: string }
           type FgCol  = { col_index: number }

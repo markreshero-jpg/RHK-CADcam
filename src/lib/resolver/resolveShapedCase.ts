@@ -14,17 +14,26 @@
 //   - box parts with no edge left to stand on are dropped;
 //   - bottom / top / rails are clipped to the inside of the outline and carry
 //     the clipped outline; front facets get their own `rail:<edge>`.
-// Joints are square butts (priority from BACK_JOIN); mitres/bevels = Phase 4.
+// Square corners are butts (priority from BACK_JOIN). Angled corners (4a):
+// ANGLE_JOIN butt_bevel (the same priority; the stopping panel's end bevelled
+// against the through panel, whose end lies flush in the outline) or mitre;
+// a panel end at an angled front / open edge stays square unless its edge is
+// in footprint.flush_ends (then bevelled flush with it).
+// Panels are listed at their blank length; bevel_lo / bevel_hi say how the
+// ends are cut (jointDrilling.caseBevelOutline).
 // ============================================================
 
 import type { CabinetInput, ConstructionRules, ResolvedCasePart, ResolvedInternalPart, ResolverError } from './types'
-import type { FootprintSegment } from '../cabinetShape/footprint'
+import type { Footprint, FootprintSegment } from '../cabinetShape/footprint'
 import type { ShapePt } from '../shapePath'
 import {
   canonicalSegments, edgeFrame, insetPolygon, clipToRect, clipToConvex, bbox, isBoxLike, vertexTrim,
+  angledEnd, interiorAngle,
 } from '../cabinetShape/construct'
+import { facetDoorRun } from './resolveShapedFace'
 
 const NEAR = 0.5   // mm — "this edge sits on the box side"
+const ANGLE_TOL = 0.5   // degrees — corners this close to 90° keep the square butt
 
 const isPanelRole = (s: FootprintSegment) =>
   s.type === 'line' && (s.edge.role === 'side' || s.edge.role === 'scribe' || s.edge.role === 'back')
@@ -46,6 +55,33 @@ export function shapedInterior(cab: CabinetInput): ShapedInterior | null {
     outline: insetPolygon(segs, () => 0),
     inner: insetPolygon(segs, s => (isPanelRole(s) ? t : 0)),
   }
+}
+
+/**
+ * The footprint edge a case panel stands on, and whether that panel has an end
+ * at an angled front / open edge (so it can be bevelled flush — the 3D
+ * right-click option). Mirrors the legacy-slot matching in shapeCaseParts.
+ */
+export function panelFrontEnd(
+  fp: Footprint | null | undefined, w: number, d: number, partKey: string,
+): { edgeId: string; flush: boolean } | null {
+  if (!fp?.segments?.length) return null
+  const segs = canonicalSegments(fp, w, d)
+  const n = segs.length
+  const at = (x: number) => (s: FootprintSegment) => Math.abs(s.p0.x - x) < NEAR && Math.abs(s.p1.x - x) < NEAR
+  const pick = partKey === 'left_side' ? segs.find(s => s.type === 'line' && s.edge.role !== 'back' && isPanelRole(s) && at(0)(s))
+    : partKey === 'right_side' ? segs.find(s => s.type === 'line' && s.edge.role !== 'back' && isPanelRole(s) && at(w)(s))
+    : partKey === 'back' ? segs.find(s => s.type === 'line' && s.edge.role === 'back' && Math.abs(s.p0.y) < NEAR && Math.abs(s.p1.y) < NEAR)
+    : /^(side|back):/.test(partKey) ? segs.find(s => s.edge.id === partKey.slice(partKey.indexOf(':') + 1))
+    : undefined
+  if (!pick) return null
+  const i = segs.indexOf(pick)
+  const prev = segs[(i - 1 + n) % n], next = segs[(i + 1) % n]
+  const angledFront = (nb: FootprintSegment, alpha: number) => nb.type === 'line'
+    && (nb.edge.role === 'front' || nb.edge.role === 'open')
+    && Math.abs(alpha - 90) > ANGLE_TOL && alpha < 180 - ANGLE_TOL
+  if (!angledFront(prev, interiorAngle(prev, pick)) && !angledFront(next, interiorAngle(pick, next))) return null
+  return { edgeId: pick.edge.id, flush: (fp.flush_ends ?? []).includes(pick.edge.id) }
 }
 
 // Clip a horizontal part (plan rect X..X+DY × Z..Z+DX) to `poly`. Returns null
@@ -85,6 +121,15 @@ export function shapeCaseParts(
   const behind = r.BACK_JOIN === 'behind_sides'
   const rank = (s: FootprintSegment) => s.edge.role === 'back' ? (behind ? 2 : 1) : (behind ? 1 : 2)
 
+  // Edges the box build already has a part on (left/right side, back).
+  const legacySlot = (e: FootprintSegment) => {
+    if (e.type !== 'line' || !isPanelRole(e)) return false
+    if (e.edge.role === 'back') return Math.abs(e.p0.y) < NEAR && Math.abs(e.p1.y) < NEAR
+    return (Math.abs(e.p0.x) < NEAR && Math.abs(e.p1.x) < NEAR) || (Math.abs(e.p0.x - cab.DX) < NEAR && Math.abs(e.p1.x - cab.DX) < NEAR)
+  }
+
+  const flush = new Set(cab.footprint?.flush_ends ?? [])
+
   const out: ResolvedCasePart[] = []
   const used = new Set<string>()
   const n = segs.length
@@ -92,37 +137,88 @@ export function shapeCaseParts(
   segs.forEach((s, i) => {
     if (!isPanelRole(s)) return
     const f = edgeFrame(s)
-    const prev = segs[(i - 1 + n) % n], next = segs[(i + 1) % n]
+    const ip = (i - 1 + n) % n, inx = (i + 1) % n
+    const prev = segs[ip], next = segs[inx]
     // An arc neighbour is approximated by its chord (arcs never carry panels).
     const stops = (nb: FootprintSegment, j: number) =>
       isPanelRole(nb) && (rank(nb) > rank(s) || (rank(nb) === rank(s) && j < i))
-    const s0 = vertexTrim(f.u, f.n, edgeFrame(prev).n, t, stops(prev, (i - 1 + n) % n))
-    const s1 = vertexTrim({ x: -f.u.x, y: -f.u.y }, f.n, edgeFrame(next).n, t, stops(next, (i + 1) % n))
-    const len = f.len - s0 - s1
+    // Each end: where the outer face (sOut) and inner face (sIn) stop, along the
+    // panel from its vertex. Square corners keep the butt trims; an angled
+    // corner to another panel follows ANGLE_JOIN, to a front / open edge the
+    // end is bevelled flush with it (decision 12).
+    const endCut = (nb: FootprintSegment, j: number, V: ShapePt, away: ShapePt, alpha: number) => {
+      const nf = edgeFrame(nb)
+      const angled = nb.type === 'line' && Math.abs(alpha - 90) > ANGLE_TOL && alpha < 180 - ANGLE_TOL
+      if (angled && isPanelRole(nb))
+        return { ...angledEnd(r.ANGLE_JOIN === 'mitre' ? 'mitre' : stops(nb, j) ? 'stop' : 'flush', V, away, f.n, nf, t), angled, boxed: false }
+      if (angled && (nb.edge.role === 'front' || nb.edge.role === 'open') && flush.has(s.edge.id))
+        return { ...angledEnd('flush', V, away, f.n, nf, t), angled, boxed: false }
+      const sq = vertexTrim(away, f.n, nf.n, t, stops(nb, j))
+      // A square end at an angled front with a door on it: come forward to the
+      // door's end (less the face buffer) instead of stopping at the vertex,
+      // which leaves a gap behind the door you can see into. Both end corners
+      // keep FACBUF clear of the door's end face; the outer corner may pass the
+      // outline — it sits beside the door, not behind it.
+      if (angled && nb.edge.role === 'front' && cab.has_face) {
+        const af = Math.hypot(V.x - nb.p0.x, V.y - nb.p0.y) < NEAR ? nf.u : { x: -nf.u.x, y: -nf.u.y }
+        const fwd = -(away.x * af.x + away.y * af.y)
+        if (fwd > 1e-6) {
+          const sd = facetDoorRun(cab, r, nb, s, V)
+          const e = Math.min(...[0, t].map(off => (sd - r.FACBUF - off * (f.n.x * af.x + f.n.y * af.y)) / fwd))
+          if (e > 0 && -e < sq) return { sOut: -e, sIn: -e, angled: false, boxed: false }
+        }
+      }
+      return { sOut: sq, sIn: sq, angled: false, boxed: legacySlot(nb) }
+    }
+    const c0 = endCut(prev, ip, s.p0, f.u, interiorAngle(prev, s))
+    const c1 = endCut(next, inx, s.p1, { x: -f.u.x, y: -f.u.y }, interiorAngle(s, next))
+    const lo = Math.min(c0.sOut, c0.sIn), hi = f.len - Math.min(c1.sOut, c1.sIn)
+    const len = hi - lo
     if (len < 1) return
-    const a = { x: s.p0.x + f.u.x * s0, y: s.p0.y + f.u.y * s0 }
-    const b = { x: a.x + f.u.x * len, y: a.y + f.u.y * len }
+    const a = { x: s.p0.x + f.u.x * lo, y: s.p0.y + f.u.y * lo }
+    const b = { x: s.p0.x + f.u.x * hi, y: s.p0.y + f.u.y * hi }
+    // Bevel from square, degrees; + = the inner face is the shorter.
+    const bev = (c: { sOut: number; sIn: number }) => {
+      const d = Math.atan2(c.sIn - c.sOut, t) * 180 / Math.PI
+      return Math.abs(d) < 0.01 ? 0 : Math.round(d * 100) / 100
+    }
+    const bevels = (p0First: boolean) => {
+      const [l, h] = p0First ? [bev(c0), bev(c1)] : [bev(c1), bev(c0)]
+      return { ...(l ? { bevel_lo: l } : {}), ...(h ? { bevel_hi: h } : {}) }
+    }
 
     const isSideRole = s.edge.role !== 'back'
     const vertical = Math.abs(f.u.x) < 1e-6, horizontal = Math.abs(f.u.y) < 1e-6
 
-    // Legacy slots: keep the box part, trimmed to this edge.
+    // Legacy slots: keep the box part, trimmed to this edge. An end against
+    // another box part stays inside the box part (scribes, BACK_JOIN); any
+    // other end goes where the joint puts it (e.g. two backs of a diagonal
+    // corner meeting where the box had a side).
+    const span = (boxLo: number, boxHi: number, pa: number, pb: number) => {
+      const [cLo, cHi] = pa <= pb ? [c0, c1] : [c1, c0]
+      const l = cLo.boxed ? Math.max(boxLo, Math.min(pa, pb)) : Math.min(pa, pb)
+      const h = cHi.boxed ? Math.min(boxHi, Math.max(pa, pb)) : Math.max(pa, pb)
+      return [l, h - l]
+    }
     if (isSideRole && vertical && Math.abs(s.p0.x) < NEAR && byKey.has('left_side') && !used.has('left_side')) {
       used.add('left_side')
       const p = byKey.get('left_side')!
-      out.push({ ...p, Z: Math.max(p.Z, Math.min(a.y, b.y)), DX: Math.min(p.Z + p.DX, Math.max(a.y, b.y)) - Math.max(p.Z, Math.min(a.y, b.y)) })
+      const [Z, DX] = span(p.Z, p.Z + p.DX, a.y, b.y)
+      out.push({ ...p, Z, DX, ...bevels(a.y <= b.y) })
       return
     }
     if (isSideRole && vertical && Math.abs(s.p0.x - cab.DX) < NEAR && byKey.has('right_side') && !used.has('right_side')) {
       used.add('right_side')
       const p = byKey.get('right_side')!
-      out.push({ ...p, Z: Math.max(p.Z, Math.min(a.y, b.y)), DX: Math.min(p.Z + p.DX, Math.max(a.y, b.y)) - Math.max(p.Z, Math.min(a.y, b.y)) })
+      const [Z, DX] = span(p.Z, p.Z + p.DX, a.y, b.y)
+      out.push({ ...p, Z, DX, ...bevels(a.y <= b.y) })
       return
     }
     if (!isSideRole && horizontal && Math.abs(s.p0.y) < NEAR && byKey.has('back') && !used.has('back')) {
       used.add('back')
       const p = byKey.get('back')!
-      out.push({ ...p, X: Math.max(p.X, Math.min(a.x, b.x)), DY: Math.min(p.X + p.DY, Math.max(a.x, b.x)) - Math.max(p.X, Math.min(a.x, b.x)) })
+      const [X, DY] = span(p.X, p.X + p.DY, a.x, b.x)
+      out.push({ ...p, X, DY, ...bevels(a.x <= b.x) })
       return
     }
 
@@ -138,6 +234,7 @@ export function shapeCaseParts(
       AX: 0, AY: Math.atan2(-f.u.y, f.u.x) * 180 / Math.PI, AZ: 0,
       material_id: ref.material_id,
       edge_band: ref.edge_band,
+      ...bevels(true),
     })
   })
 

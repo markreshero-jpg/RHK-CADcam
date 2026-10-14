@@ -50,6 +50,10 @@ export interface PartMeta {
   // out without the height→DX display swap it applies to other non-side panels.
   // Ignored by 3D rendering — purely an editor hint.
   dxIsWidth?: boolean
+  // Resolver outline of a shaped cabinet's part (bottom / top / shelf clipped to
+  // the footprint, z_cabinet_shape) in the Shape Editor frame — the Part Editor
+  // shows it when the part has no drawn shape of its own.
+  outline?: { x: number; y: number }[]
 }
 
 export type MatColSpec = { face?: string; back?: string; edge?: string }

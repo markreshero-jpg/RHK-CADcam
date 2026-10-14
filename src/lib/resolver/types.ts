@@ -206,6 +206,10 @@ export interface ConstructionRules {
   BACK_JOIN:        'between_sides' | 'behind_sides'      // back fits between sides vs wraps behind them
   TOP_BACK_JOIN:    'butts_into_back' | 'sits_over_back'  // top/rail starts at back inner face vs runs full depth over back
   RAIL_JOIN:        'between_sides' | 'on_top_of_sides'   // top rail fits between sides vs sits on top
+  // Shaped cabinets (z_cabinet_shape 4a): two panels meeting at an angle other
+  // than 90° — one runs through and the other's end is bevelled flat against
+  // it, or both are mitred on the corner line.
+  ANGLE_JOIN:       'butt_bevel' | 'mitre'
 
   // Edging defaults (optional — falls back to DEFAULT_EDGING if absent)
   EDGING?:  EdgingDefaults
@@ -251,6 +255,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   FACBUF: 2, FACINS: 0,
   BOTTOM_JOIN: 'sides_outside', BOTTOM_BACK_JOIN: 'back_on_bottom',
   BACK_JOIN: 'between_sides', TOP_BACK_JOIN: 'butts_into_back', RAIL_JOIN: 'between_sides',
+  ANGLE_JOIN: 'butt_bevel',
 }
 
 // ── Drawer Types ─────────────────────────────────────────────
@@ -1232,6 +1237,12 @@ export interface ResolvedCasePart extends ResolvedPart {
   // knock-in block settings seamDrillSync machines from. Not persisted.
   grain_direction?: 'horizontal' | 'vertical'
   fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number }
+  // Shaped cabinets (z_cabinet_shape 4a): vertical panels' angled ends, degrees
+  // from square at the low / high end of the part's length axis (sides: Z,
+  // back: X, side:/back:<edge>: its own length from the outer start corner).
+  // + = the inner face is the shorter. The part is listed at its blank length.
+  bevel_lo?: number
+  bevel_hi?: number
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
             'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
             `fprail:${number}`   // finger-pull backing rail (z_handles H6)

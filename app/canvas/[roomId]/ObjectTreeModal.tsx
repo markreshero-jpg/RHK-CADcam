@@ -7,7 +7,7 @@ import {
   dbLoadPartPosOverrides, dbSavePartPosOverride, dbDeletePartPosOverride,
   type PartPosOverrides,
 } from './canvasDB'
-import { zonePartId, dbPartId } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, dbPartId, zoneRef, stackRef } from '@/src/lib/cabinetShape/partKeys'
 // ── Part label maps ───────────────────────────────────────────────────────────
 
 const CASE_LABELS: Record<string, string> = {
@@ -210,7 +210,7 @@ function buildTree(
           const dbParts: TreeNode[] = stack.box_parts.map(p => makePartNode(
             `part-${cab.id}-${dbPartId(stack, p.part_type)}`,
             DB_LABELS[p.part_type] ?? p.part_type,
-            `R${stack.face_zone_row + 1}C${stack.face_zone_col + 1}`,
+            `${stackRef(stack)}`,
             { cabinetId: cab.id, wall, ...cabPos, partId: dbPartId(stack, p.part_type),
               localX: p.X, localY: p.Y, localZ: p.Z,
               DX: p.DX, DY: p.DY, DZ: p.DZ,
@@ -221,7 +221,7 @@ function buildTree(
           const slideNodes: TreeNode[] = stack.slides.map(s => makePartNode(
             `part-${cab.id}-slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`,
             `Slide (${s.side})`,
-            `R${stack.face_zone_row + 1}C${stack.face_zone_col + 1} · ${s.nominal_length}mm`,
+            `${stackRef(stack)} · ${s.nominal_length}mm`,
             { cabinetId: cab.id, wall, ...cabPos, partId: `slide_${stack.face_zone_row}_${stack.face_zone_col}_${s.side}`,
               localX: s.X, localY: s.Y, localZ: s.Z,
               DX: s.DX, DY: s.DY, DZ: s.DZ,
@@ -242,7 +242,7 @@ function buildTree(
         if (rp.face_zones.length > 0) {
           const parts: TreeNode[] = rp.face_zones.map(z => makePartNode(
             `part-${cab.id}-${zonePartId(z)}`,
-            `${FACE_LABELS[z.face_type] ?? z.face_type} R${z.row_index + 1}C${z.col_index + 1}`,
+            `${FACE_LABELS[z.face_type] ?? z.face_type} ${zoneRef(z)}`,
             z.hinge_side ? `Hinge: ${z.hinge_side}` : undefined,
             { cabinetId: cab.id, wall, ...cabPos, partId: zonePartId(z),
               localX: z.X, localY: z.Y, localZ: z.Z,

@@ -9,7 +9,8 @@ import type { OptiPart, OptiRoom, OptiCabinet, SourceTable } from './types'
 import { PART_TYPE_LABELS } from '@/src/lib/partDisplayNames'
 import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
 import { attachShape, type ShapesByCab } from './shapes'
-import { zonePartId, dbPartId } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, dbPartId, zoneRef } from '@/src/lib/cabinetShape/partKeys'
+import { zoneBlank, zoneBevelNote, caseBevelNote } from '@/src/lib/jointDrilling'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -187,7 +188,10 @@ export function normalizeProject(
     // carry no machining, so turning them can't misplace an op.
     const turned = key.startsWith('fprail:') && r.grain_direction === 'vertical'
       ? { w: Number(r.dy), h: Number(r.dx), thickness: Number(r.dz) } : undefined
-    push('case_parts', r, `case_${key}`, { typeKey: key, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : humanize(key) },
+    // Angled panel ends (z_cabinet_shape 4a): nested as the blank, bevel named.
+    const bevel = caseBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
+    push('case_parts', r, `case_${key}`, { typeKey: key, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : humanize(key),
+      ...(bevel ? { suffix: ` (${bevel})` } : {}) },
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), turned, eb, base)
   }
   for (const r0 of ip) {
@@ -234,12 +238,18 @@ export function normalizeProject(
       base)
   }
   for (const r0 of fz) {
-    const { r, base } = sized('face_zones', r0, zonePartId(r0 as unknown as { row_index: number; col_index: number; facet?: string }))
+    const { r: rs, base } = sized('face_zones', r0, zonePartId(r0 as unknown as { row_index: number; col_index: number; facet?: string }))
+    // Mitred facet fronts (z_cabinet_shape 3c) nest at their front-face width;
+    // the bevel is sawn after and named on the part.
+    const bev = { DX: Number(rs.dx), DZ: Number(rs.dz), bevel_l: Number(rs.bevel_l ?? 0), bevel_r: Number(rs.bevel_r ?? 0) }
+    const mitre = zoneBevelNote(bev)
+    const r = mitre ? { ...rs, dx: zoneBlank(bev).width } : rs
     // Face zones: dx = width (w, banded left/right), dy = height (h, banded bottom/top).
     const eb = ebFields(flagsOf(r), tFor(r), ['left', 'right'], ['bottom', 'top'])
-    push('face_zones', r, zonePartId(r as unknown as { row_index: number; col_index: number; facet?: string }),
+    const zref = { row_index: Number(r.row_index), col_index: Number(r.col_index), facet: (r.facet as string | null) || undefined }
+    push('face_zones', r, zonePartId(zref),
       { typeKey: String(r.face_type), base: humanize(String(r.face_type)),
-        suffix: ` (R${Number(r.row_index) + 1}C${Number(r.col_index) + 1})` },
+        suffix: ` (${zoneRef(zref)}${mitre ? `, ${mitre}` : ''})` },
       (r.grain_direction as string) ?? null, 0, undefined, eb, base)
   }
   // Drawer box panels — key mirrors svgDbMeta / Cabinet3DView (db_<row>_<col>_<part_type>),
@@ -258,7 +268,7 @@ export function normalizeProject(
     const eb = ebFields(flagsOf(r), tFor(r), pairs[0], pairs[1])
     push('drawer_box_parts', r, id,
       { typeKey: type, base: humanize(type.replace(/^db_/, '')),
-        suffix: ` (R${Number(r.face_zone_row) + 1}C${Number(r.face_zone_col) + 1})` },
+        suffix: ` (${zoneRef({ row_index: Number(r.face_zone_row), col_index: Number(r.face_zone_col), facet: (r.facet as string | null) || undefined })})` },
       (r.grain_direction as string) ?? null, 0, undefined, eb, base)
   }
   // Custom parts (fillers / applied panels / end panels). Key mirrors PartsView (custom_<id>).
@@ -277,10 +287,10 @@ export function normalizeProject(
 
 // Column selections shared by server + client loaders.
 export const PART_SELECTS = {
-  case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
+  case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_back,edge_band_front,edge_band_id',
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
-  face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
+  face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   drawer_box_parts: 'id,cabinet_instance_id,facet,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   custom_parts: 'id,cabinet_instance_id,name,dx,dy,dz,material_id,no_cnc,edge_top,edge_bottom,edge_left,edge_right',
 } as const
