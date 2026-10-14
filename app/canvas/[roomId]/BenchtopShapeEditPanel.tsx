@@ -177,7 +177,7 @@ function StretchBox({ label, live, onSize, onCancel }: {
 }
 
 /** Esc in Edit shape with changes: save, discard or keep editing. */
-export function SaveShapePrompt({ onSave, onDiscard, onKeep }: { onSave: () => void; onDiscard: () => void; onKeep: () => void }) {
+export function SaveShapePrompt({ onSave, onDiscard, onKeep, what = 'shape' }: { onSave: () => void; onDiscard: () => void; onKeep: () => void; what?: 'shape' | 'edges' }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); onSave() }
@@ -191,8 +191,8 @@ export function SaveShapePrompt({ onSave, onDiscard, onKeep }: { onSave: () => v
       <div className="bg-surface border border-edge-strong rounded-xl shadow-2xl w-80 max-w-full p-6 flex flex-col gap-4"
         onPointerDown={e => e.stopPropagation()}>
         <div>
-          <p className="text-sm font-semibold text-ink">Save the new shape?</p>
-          <p className="text-xs text-ink-muted mt-1">You changed this benchtop&apos;s shape. Save it, or discard the changes.</p>
+          <p className="text-sm font-semibold text-ink">{what === 'edges' ? 'Save the edge changes?' : 'Save the new shape?'}</p>
+          <p className="text-xs text-ink-muted mt-1">You changed this benchtop&apos;s {what === 'edges' ? 'edges' : 'shape'}. Save, or discard the changes.</p>
         </div>
         <div className="flex gap-2 justify-end">
           <button onClick={onKeep} className="px-3 py-1.5 text-xs rounded-lg bg-surface-3 text-ink-muted hover:text-ink">Keep editing</button>

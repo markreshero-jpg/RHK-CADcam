@@ -22,6 +22,7 @@ import { dbLoadRoomPartDetails, type PartPosOverrides, type ShapeOverrides } fro
 import { useHandOpMarkersMulti } from './HandOpMarkers'
 import type { CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 import Measure3D, { NO_MEASURE } from './Measure3D'
+import Fixtures3D, { type Fixtures3DProps } from './Fixtures3D'
 
 const TO_RAD = Math.PI / 180
 const FOV    = 40
@@ -150,7 +151,7 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
   info: BtElevInfo
   profiles: Record<string, BenchtopEdgeProfile>
   selected: boolean
-  /** Only in F4 Benchtop mode — otherwise no handler, so clicks pass to the cabinets. */
+  /** Absent (click-through) while measuring, or in wire view outside F4 Benchtop mode. */
   onSelect?: () => void
   color: string
   alpha: number
@@ -713,7 +714,7 @@ function ResetView({ signal, controlsRef, position, target }: {
 
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, pickBenchtops, measuring, wire }: {
+function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, fx, pickBenchtops, measuring, wire }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -729,6 +730,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
   cameraStateRef?: React.MutableRefObject<Camera3DState | null>
   layers: LayerView
   bt?: Bt3DProps
+  fx?: Fixtures3DProps
   pickBenchtops: boolean
   measuring: boolean
   wire: boolean
@@ -855,10 +857,16 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
       {bt && layers.show('benchtops') && bt.benchtops.map(b => (
         b.wall_id && hiddenWallIds.has(b.wall_id) ? null : (
           <BenchtopMesh key={b.id} bt={b} info={bt.info(b)} profiles={bt.profiles}
-            selected={bt.selectedId === b.id} onSelect={pickBenchtops ? () => bt.onSelect(b.id) : undefined}
+            // Pickable in any mode (cabinets still pick by their fronts); not while
+            // measuring, nor in wire view outside F4 — a ghosted top would steal
+            // clicks meant for the cabinets seen through it.
+            selected={bt.selectedId === b.id} onSelect={!measuring && (pickBenchtops || !wire) ? () => bt.onSelect(b.id) : undefined}
             color={layers.color('benchtops', '#e7e5e4')} alpha={layers.alpha('benchtops')} wire={wire} />
         )
       ))}
+
+      {/* Fixtures & appliances (z_fixtures) */}
+      {fx && <Fixtures3D {...fx} layers={layers} hiddenWallIds={hiddenWallIds} pick={!pickBenchtops && !measuring} />}
 
       {measuring && <Measure3D />}
     </>
@@ -879,7 +887,7 @@ export interface Bt3DProps {
 type MenuState     = { x: number; y: number; cabId: string }
 type WallMenuState = { x: number; y: number }
 
-export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, pickBenchtops = false, measuring = false, wire = false }: {
+export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, fx, pickBenchtops = false, measuring = false, wire = false }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -896,6 +904,8 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   resetSignal?: number
   layers: LayerView
   bt?: Bt3DProps
+  /** Fixtures & appliances (z_fixtures P2). */
+  fx?: Fixtures3DProps
   /** F4 Benchtop mode: only benchtops pick; cabinets ignore clicks. */
   pickBenchtops?: boolean
   /** Measure tool on: clicks pick faces to measure between; right-click clears. */
@@ -982,6 +992,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
               cameraStateRef={cameraStateRef}
               layers={layers}
               bt={bt}
+              fx={fx}
               pickBenchtops={pickBenchtops}
               measuring={measuring}
               wire={wire}

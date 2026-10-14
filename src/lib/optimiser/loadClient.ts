@@ -11,7 +11,7 @@ import type { NormalizedProject } from './normalize'
 import type { PartKeyMap } from './types'
 import { buildSizeOvByCab, type SizeOv } from './sizeOverrides'
 import { buildShapesByCab, SHAPE_SELECT, type ShapeRow } from './shapes'
-import { normalizeBenchtopParts, BENCHTOP_PART_SELECT, type RawBenchtop } from './benchtopParts'
+import { normalizeBenchtopParts, benchtopEbIds, BENCHTOP_PART_SELECT, type RawBenchtop } from './benchtopParts'
 
 // Cabinet parts + in-house benchtop parts (benchtop Phase 5), as one project.
 export async function loadProjectParts(projectId: string): Promise<NormalizedProject> {
@@ -25,7 +25,11 @@ export async function loadProjectParts(projectId: string): Promise<NormalizedPro
   const bts = (btRaw ?? []) as RawBenchtop[]
   if (!bts.length) return cab
   const { data: rows } = await supabase.from('benchtop_resolved_parts').select(BENCHTOP_PART_SELECT).in('benchtop_id', bts.map(b => b.id))
-  const bt = normalizeBenchtopParts(project, cab.rooms, bts, (rows ?? []) as Record<string, unknown>[])
+  // Edge tape thicknesses for the deduction (Phase 7).
+  const ebIds = benchtopEbIds((rows ?? []) as Record<string, unknown>[])
+  const { data: ebRows } = ebIds.length ? await supabase.from('edge_banding').select('id,thickness').in('id', ebIds) : { data: [] }
+  const ebThickness = new Map((ebRows ?? []).map(r => [r.id as string, Number(r.thickness)]))
+  const bt = normalizeBenchtopParts(project, cab.rooms, bts, (rows ?? []) as Record<string, unknown>[], ebThickness)
   return { rooms: cab.rooms, cabinets: [...cab.cabinets, ...bt.cabinets], parts: [...cab.parts, ...bt.parts] }
 }
 

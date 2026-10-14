@@ -3,12 +3,13 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/src/lib/supabase'
 import { Mode, CabinetInstance, isBenchtopMode } from './canvasTypes'
-import { Room, CabinetDefinition } from '@/src/lib/types'
+import { Room, CabinetDefinition, type FixtureCatalogItem, type FixtureCategory } from '@/src/lib/types'
 import RoomSwitcher, { type RoomSwitcherHandle } from './RoomSwitcher'
 import type { MatColours, EbByMatId } from './useMaterialColours'
 import type { MatColMap } from '@/src/components/three/PartViewer'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 import { searchTokens, scoreDef } from '@/src/lib/cabinetSearch'
+import { useIsAdmin } from '@/src/lib/useRole'
 
 const CabinetPreview3D = dynamic(() => import('./CabinetPreview3D'), { ssr: false })
 
@@ -117,6 +118,7 @@ export const TONES = {
   wall:     { solid: 'bg-orange-700', bar: 'bg-orange-400', rail: 'border-orange-500/50', tint: 'bg-orange-600/30', icon: 'text-orange-400', ring: 'ring-orange-500/60' },
   cabinet:  { solid: 'bg-blue-700',   bar: 'bg-blue-400',   rail: 'border-blue-500/50',   tint: 'bg-blue-600/30',   icon: 'text-blue-400', ring: 'ring-blue-500/60' },
   benchtop: { solid: 'bg-teal-700',   bar: 'bg-teal-400',   rail: 'border-teal-500/50',   tint: 'bg-teal-600/30',   icon: 'text-teal-400', ring: 'ring-teal-500/60' },
+  fixture:  { solid: 'bg-sky-700',    bar: 'bg-sky-400',    rail: 'border-sky-500/50',    tint: 'bg-sky-600/30',    icon: 'text-sky-400', ring: 'ring-sky-500/60' },
   paste:    { solid: 'bg-yellow-700', bar: 'bg-yellow-400', rail: 'border-yellow-500/50', tint: 'bg-yellow-600/30', icon: 'text-yellow-400', ring: 'ring-yellow-500/60' },
 } satisfies Record<string, Tone>
 
@@ -194,6 +196,20 @@ const WALL_MODES = WALL_ITEMS.map(w => w.mode)
 
 // ── Benchtop tools ──────────────────────────────────────────────────────────────
 
+const FIXTURE_GROUPS: { key: FixtureCategory; label: string }[] = [
+  { key: 'appliance', label: 'Appliances' }, { key: 'sink', label: 'Sinks' },
+  { key: 'tap', label: 'Taps' }, { key: 'decorative', label: 'Decorative' },
+]
+function FixtureIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="1.5" width="11" height="13" rx="1" fill="currentColor" fillOpacity="0.12" />
+      <line x1="2.5" y1="5" x2="13.5" y2="5" />
+      <rect x="5" y="7.5" width="6" height="4.5" rx="0.5" />
+    </svg>
+  )
+}
+
 const BT_ICON = (d: React.ReactNode) => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
 )
@@ -230,6 +246,7 @@ export default function CanvasSidebar({
   wallMenuOpen, setWallMenuOpen,
   cabMenuOpen, setCabMenuOpen,
   benchtopMenuOpen, setBenchtopMenuOpen, onDrawBenchtopInShapeEditor,
+  fixtureMenuOpen = false, setFixtureMenuOpen, armedFixtureId = null, onArmFixture,
   clipboard, sidebarW, libRefresh = 0,
 }: {
   room: Room
@@ -251,6 +268,11 @@ export default function CanvasSidebar({
   setBenchtopMenuOpen: (v: boolean) => void
   /** F4 → Draw in Shape Editor: new benchtop drawn straight in the full editor. */
   onDrawBenchtopInShapeEditor?: () => void
+  /** F5 Fixtures & appliances (z_fixtures P2). */
+  fixtureMenuOpen?: boolean
+  setFixtureMenuOpen?: (v: boolean) => void
+  armedFixtureId?: string | null
+  onArmFixture?: (item: FixtureCatalogItem) => void
   clipboard: CabinetInstance | null
   sidebarW: number
   /** Bumped by the parent after a Save-to-library so the palette reloads. */
@@ -259,14 +281,26 @@ export default function CanvasSidebar({
   // ── One section open at a time ──
   // Menus can also be opened from CanvasClient (F2/F3/F4 keys, entering Benchtop
   // mode), so close the others whenever one flips open, wherever it came from.
-  const prevOpen = useRef({ wall: wallMenuOpen, cab: cabMenuOpen, bt: benchtopMenuOpen })
+  const prevOpen = useRef({ wall: wallMenuOpen, cab: cabMenuOpen, bt: benchtopMenuOpen, fx: fixtureMenuOpen })
   useEffect(() => {
     const p = prevOpen.current
-    if (wallMenuOpen && !p.wall) { setCabMenuOpen(false); setBenchtopMenuOpen(false) }
-    else if (cabMenuOpen && !p.cab) { setWallMenuOpen(false); setBenchtopMenuOpen(false) }
-    else if (benchtopMenuOpen && !p.bt) { setWallMenuOpen(false); setCabMenuOpen(false) }
-    prevOpen.current = { wall: wallMenuOpen, cab: cabMenuOpen, bt: benchtopMenuOpen }
-  }, [wallMenuOpen, cabMenuOpen, benchtopMenuOpen, setWallMenuOpen, setCabMenuOpen, setBenchtopMenuOpen])
+    const closeFx = () => setFixtureMenuOpen?.(false)
+    if (wallMenuOpen && !p.wall) { setCabMenuOpen(false); setBenchtopMenuOpen(false); closeFx() }
+    else if (cabMenuOpen && !p.cab) { setWallMenuOpen(false); setBenchtopMenuOpen(false); closeFx() }
+    else if (benchtopMenuOpen && !p.bt) { setWallMenuOpen(false); setCabMenuOpen(false); closeFx() }
+    else if (fixtureMenuOpen && !p.fx) { setWallMenuOpen(false); setCabMenuOpen(false); setBenchtopMenuOpen(false) }
+    prevOpen.current = { wall: wallMenuOpen, cab: cabMenuOpen, bt: benchtopMenuOpen, fx: fixtureMenuOpen }
+  }, [wallMenuOpen, cabMenuOpen, benchtopMenuOpen, fixtureMenuOpen, setWallMenuOpen, setCabMenuOpen, setBenchtopMenuOpen, setFixtureMenuOpen])
+
+  // ── Fixtures catalogue (F5) — loaded the first time the section opens ──
+  const [fixtureItems, setFixtureItems] = useState<FixtureCatalogItem[] | null>(null)
+  useEffect(() => {
+    if (!fixtureMenuOpen || fixtureItems) return
+    let live = true
+    supabase.from('fixture_catalog').select('*').eq('active', true).order('sort_order').order('name')
+      .then(({ data }) => { if (live) setFixtureItems((data ?? []) as FixtureCatalogItem[]) })
+    return () => { live = false }
+  }, [fixtureMenuOpen, fixtureItems])
 
   // ── Library data (categories + definitions) ──
   const [categories, setCategories]     = useState<Category[]>([])
@@ -278,6 +312,7 @@ export default function CanvasSidebar({
   const [scope, setScope]     = useState<Scope>('all')
   const [openCats, setOpenCats] = useState<Set<string>>(new Set())
   const [ctxMenu, setCtxMenu] = useState<CabCtxMenu | null>(null)
+  const isAdmin = useIsAdmin()   // the right-click menu edits the shared library
   const [movingDef, setMovingDef] = useState<CabinetDefinition | null>(null)
   const [moveTarget, setMoveTarget] = useState<string | null>(null)
   // Drill-down position in the library: null = top-level tiles, else a category
@@ -765,6 +800,43 @@ export default function CanvasSidebar({
           </SectionBody>
         )}
 
+        {onArmFixture && setFixtureMenuOpen && (<>
+          <div className="border-t border-gray-800 my-1 mx-1" />
+
+          {/* Fixtures & appliances (F5) — z_fixtures */}
+          <SectionHeader
+            tone={TONES.fixture} icon={<FixtureIcon />} label="Fixtures" shortcut="F5"
+            title="Fixtures & appliances (F5) — pick one, click to drop it (backs onto the nearest wall; Shift = free, R = turn); Esc to finish"
+            open={fixtureMenuOpen} active={mode === 'place_fixture'}
+            summary={mode === 'place_fixture' ? (fixtureItems?.find(i => i.id === armedFixtureId)?.name ?? 'Moving') : null}
+            onClick={() => setFixtureMenuOpen(!fixtureMenuOpen)}
+          />
+          {fixtureMenuOpen && (
+            <SectionBody tone={TONES.fixture}>
+              {fixtureItems === null && <div className="px-2.5 py-1.5 text-xs text-gray-500">Loading…</div>}
+              {fixtureItems?.length === 0 && (
+                <div className="px-2.5 py-1.5 text-xs text-gray-500">No fixtures yet — add them in Settings → Fixtures &amp; Appliances.</div>
+              )}
+              {FIXTURE_GROUPS.map(g => {
+                const items = fixtureItems?.filter(i => i.category === g.key) ?? []
+                if (!items.length) return null
+                return (
+                  <div key={g.key}>
+                    <div className="px-2.5 pt-1.5 pb-0.5 text-[10px] uppercase tracking-wide text-gray-500">{g.label}</div>
+                    {items.map(i => (
+                      <ToolRow key={i.id} tone={TONES.fixture} label={i.name}
+                        sub={`${i.width}×${i.depth}×${i.height}`}
+                        title={[i.kind, i.brand, i.model_no].filter(Boolean).join(' · ') || i.name}
+                        active={mode === 'place_fixture' && armedFixtureId === i.id}
+                        onClick={() => onArmFixture(i)} />
+                    ))}
+                  </div>
+                )
+              })}
+            </SectionBody>
+          )}
+        </>)}
+
         {clipboard && (
           <>
             <div className="border-t border-gray-800 my-1 mx-1" />
@@ -792,7 +864,7 @@ export default function CanvasSidebar({
       )}
 
       {/* ── Right-click menu (cabinet or category) ── */}
-      {ctxMenu && (() => {
+      {ctxMenu && isAdmin && (() => {
         const item = 'w-full text-left px-3 py-1.5 text-sm hover:bg-gray-700 transition-colors'
         const def = ctxMenu.definitionId ? definitions.find(d => d.id === ctxMenu.definitionId) ?? null : null
         const cat = ctxMenu.categoryId ? categories.find(c => c.id === ctxMenu.categoryId) ?? null : null

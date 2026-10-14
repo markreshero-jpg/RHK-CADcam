@@ -11,11 +11,12 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { Project, ProjectStatus, Room } from '@/src/lib/types'
 import { supabase } from '@/src/lib/supabase'
+import { useIsAdmin } from '@/src/lib/useRole'
 import RoomPropertiesModal from './canvas/[roomId]/RoomPropertiesModal'
 import DeleteRoomModal from './DeleteRoomModal'
 import DeleteProjectModal from './DeleteProjectModal'
 
-type RoomCounts = { cabinets: number; walls: number; benchtops: number }
+type RoomCounts = { cabinets: number; walls: number; benchtops: number; fixtures: number }
 type ProjectCounts = { rooms: number; cabinets: number }
 
 // ── Status config (shared shape with the projects page) ─────────────────────────
@@ -204,6 +205,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
   defaultExpanded?: boolean
   onStatusChange?: (status: ProjectStatus) => void
 }) {
+  const isAdmin = useIsAdmin()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [rooms, setRooms] = useState<Room[]>(initialRooms)
   const [editRoom, setEditRoom] = useState<Room | null>(null)
@@ -288,12 +290,13 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
     setDeleteBlocked(false)
     // Fetch cascade counts before showing the confirmation
     void (async () => {
-      const [cab, wal, ben] = await Promise.all([
+      const [cab, wal, ben, fix] = await Promise.all([
         supabase.from('cabinet_instances').select('*', { count: 'exact', head: true }).eq('room_id', room.id),
         supabase.from('walls').select('*', { count: 'exact', head: true }).eq('room_id', room.id),
         supabase.from('benchtop_instances').select('*', { count: 'exact', head: true }).eq('room_id', room.id),
+        supabase.from('room_fixtures').select('*', { count: 'exact', head: true }).eq('room_id', room.id),
       ])
-      setDeleteCounts({ cabinets: cab.count ?? 0, walls: wal.count ?? 0, benchtops: ben.count ?? 0 })
+      setDeleteCounts({ cabinets: cab.count ?? 0, walls: wal.count ?? 0, benchtops: ben.count ?? 0, fixtures: fix.count ?? 0 })
     })()
   }
 
@@ -482,13 +485,15 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
             {project.status === 'archived' ? <UnarchiveIcon /> : <ArchiveIcon />}
           </button>
 
-          <button
-            onClick={openDeleteProject}
-            className="flex-none text-ink-subtle hover:text-red-400 p-1.5 rounded hover:bg-surface-2 transition-colors"
-            title="Delete project"
-          >
-            <TrashIcon />
-          </button>
+          {isAdmin && (
+            <button
+              onClick={openDeleteProject}
+              className="flex-none text-ink-subtle hover:text-red-400 p-1.5 rounded hover:bg-surface-2 transition-colors"
+              title="Delete project"
+            >
+              <TrashIcon />
+            </button>
+          )}
         </div>
       </div>
 

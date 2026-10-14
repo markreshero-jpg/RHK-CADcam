@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import type { BenchtopInstance, BenchtopArcSegment, BenchtopSegment, BenchtopEdge, BenchtopJoinLine, BenchtopJoinType, Room, Wall, CabinetInstance } from '@/src/lib/types'
+import type { BenchtopInstance, BenchtopArcSegment, BenchtopSegment, BenchtopEdgeProfile, BenchtopJoinLine, BenchtopJoinType, Room, Wall, CabinetInstance } from '@/src/lib/types'
 import { type Pt, dist, SNAP_PX, centroid } from '@/src/lib/geometry'
 import { computeSnap, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
 import {
@@ -15,7 +15,8 @@ import {
 import {
   autoAnchor, wallContacts, wallFrame, positionFn, reanchorFn, btTouches, stretchFn, type WallSide, type StretchEnd,
 } from '@/src/lib/benchtopAnchor'
-import { btWorld, type Mode, type Selected, type ContextMenuState, type BtShapeSnapshot, type BtShapeEdit, type BtShapeSel } from './canvasTypes'
+import { btWorld, type Mode, type Selected, type ContextMenuState, type BtShapeSnapshot, type BtShapeEdit, type BtShapeSel, type BtEdgeEdit } from './canvasTypes'
+import { paintTape, paintProfile } from '@/src/lib/benchtopEdgeband'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 interface Params {
@@ -165,6 +166,12 @@ export function useBenchtopInteraction(p: Params) {
   // mouse (snaps) → click / Enter places it; the panel box takes a typed size
   // (Tab = apply and keep going, Esc = cancel the stretch).
   const [shapeStretch, setShapeStretch] = useState<{ i: number; base: BenchtopSegment[]; start: Pt } | null>(null)
+  // ── Edit edges (Phase 7b) ─────────────────────────────────────────────────
+  // Same pattern as Edit shape: a working copy, its own undo, one save.
+  const [edgeEdit, setEdgeEdit] = useState<BtEdgeEdit | null>(null)
+  // Edges changed since this top's parts were resolved (the panel nags to re-resolve).
+  const [edgesChangedId, setEdgesChangedId] = useState<string | null>(null)
+
   // Leaving the mode by any route (tool button, F4, Esc) drops the working copy.
   useEffect(() => {
     if (mode !== 'edit_benchtop_shape' && shapeEdit) { setShapeEdit(null); setShapeStretch(null); shapeDragRef.current = null }
@@ -294,15 +301,6 @@ export function useBenchtopInteraction(p: Params) {
   }
 
   // Set one or more edges' finish (BenchtopPanel profile picker).
-  function setBenchtopEdges(id: string, edgeIndices: number[], patch: BenchtopEdge) {
-    editSegments(id, segs => segs.map((s, i) => {
-      if (!edgeIndices.includes(i)) return s
-      const edge = { ...s.edge, ...patch }
-      if (edge.wall) delete edge.profile_id
-      return { ...s, edge }
-    }))
-  }
-
   // Vertex click (no drag): just select. Butt/mitre now lives on join lines (P-b).
   function onBenchtopVertexClick(id: string) {
     setSelected({ type: 'benchtop', id })
@@ -494,9 +492,15 @@ export function useBenchtopInteraction(p: Params) {
     btPressRef.current = null
     setContextMenu(null)
     setSelected({ type: 'benchtop', id })
+    setShapeEdit({ btId: id, segs: btSegments(b), history: [], sel: null, frame: viewFrameFor(b) })
+    setMode('edit_benchtop_shape')
+  }
+
+  // Corner X / Y frame: back-left corner = 0,0, X along the anchor wall, Y off
+  // it. The back side of a wall is seen from outside, so its left is the
+  // wall's far end (as in its elevation). Also orients the edge-tape picker.
+  function viewFrameFor(b: BenchtopInstance): BtShapeEdit['frame'] {
     const segs = btSegments(b)
-    // Corner X / Y frame: back-left corner = 0,0. The back side of a wall is seen
-    // from outside, so its left is the wall's far end (as in its elevation).
     const aw = anchorWall(b)
     let d = { x: 1, y: 0 }, n = { x: 0, y: 1 }, o0 = { x: 0, y: 0 }
     if (aw) {
@@ -508,8 +512,51 @@ export function useBenchtopInteraction(p: Params) {
     const off = segs.map(s => (s.p0.x - o0.x) * n.x + (s.p0.y - o0.y) * n.y)
     const a0 = Math.min(...along), f0 = Math.min(...off)
     const o = { x: o0.x + d.x * a0 + n.x * f0, y: o0.y + d.y * a0 + n.y * f0 }
-    setShapeEdit({ btId: id, segs, history: [], sel: null, frame: { o, d, n } })
-    setMode('edit_benchtop_shape')
+    return { o, d, n }
+  }
+
+  // ── Edit edges (Phase 7b) ──
+  function startEdgeEdit(id: string, tab: BtEdgeEdit['tab'] = 'profile', tapePaint: string | null = null) {
+    const b = findBt(id)
+    if (!b) return
+    resetDraw()
+    setContextMenu(null)
+    setSelected({ type: 'benchtop', id })
+    setEdgeEdit({ btId: id, segs: btSegments(b), history: [], tab, profilePaint: '', tapePaint, sel: null })
+    setMode('edit_benchtop_edges')
+  }
+  /** One undoable step on the working copy. */
+  function applyEdges(fn: (segs: BenchtopSegment[]) => BenchtopSegment[], sel?: number | null) {
+    setEdgeEdit(ee => {
+      if (!ee) return ee
+      const next = fn(ee.segs)
+      if (next === ee.segs) return sel !== undefined ? { ...ee, sel } : ee
+      return { ...ee, segs: next, history: [...ee.history, ee.segs], sel: sel !== undefined ? sel : ee.sel }
+    })
+  }
+  /** Click an edge (panel drawing or plan) with the current chip; reset = back to the default. */
+  function paintEdge(i: number, reset: boolean, aux: { defaultTape: string | null; profileOf: (s: BenchtopSegment) => BenchtopEdgeProfile | undefined }) {
+    if (!edgeEdit) return
+    const ee = edgeEdit
+    if (ee.tab === 'tape') applyEdges(segs => paintTape(segs, i, ee.tapePaint, aux.defaultTape, aux.profileOf, reset), i)
+    else applyEdges(segs => paintProfile(segs, i, ee.profilePaint, reset), i)
+  }
+  const setEdgeEditUi = (patch: Partial<Pick<BtEdgeEdit, 'tab' | 'profilePaint' | 'tapePaint' | 'sel'>>) =>
+    setEdgeEdit(ee => (ee ? { ...ee, ...patch } : ee))
+  function edgeEditUndo() {
+    setEdgeEdit(ee => (ee && ee.history.length ? { ...ee, segs: ee.history[ee.history.length - 1], history: ee.history.slice(0, -1) } : ee))
+  }
+  function cancelEdgeEdit() {
+    setEdgeEdit(null)
+    setMode('benchtop_select')
+  }
+  function commitEdgeEdit() {
+    const ee = edgeEdit
+    if (ee && ee.history.length && findBt(ee.btId)) {
+      void handleUpdateBenchtop(ee.btId, shapeWrite(ee.segs))
+      setEdgesChangedId(ee.btId)
+    }
+    cancelEdgeEdit()
   }
 
   // One edit step on the working copy (undoable inside the mode). A selection
@@ -1047,7 +1094,9 @@ export function useBenchtopInteraction(p: Params) {
     handleMirrorV,
     handleOffset,
     handleRotateByAngle,
-    setBenchtopEdges,
+    viewFrameFor,
+    edgeEdit, startEdgeEdit, applyEdges, paintEdge, setEdgeEditUi, edgeEditUndo, cancelEdgeEdit, commitEdgeEdit,
+    edgesChangedId, setEdgesChangedId,
     handleDeleteJoin,
     handleSetJoinType,
     handleSetPosition,

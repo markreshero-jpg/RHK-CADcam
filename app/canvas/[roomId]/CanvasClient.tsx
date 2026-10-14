@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback, useReducer, useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance } from '@/src/lib/types'
+import { useIsAdmin } from '@/src/lib/useRole'
+import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopSegment, RoomFixture, FixtureCatalogItem } from '@/src/lib/types'
 import {
   Pt, MIN_ZOOM, MAX_ZOOM, MIN_WALL_LEN, SNAP_PX, WALL_SNAP_PX,
   toDeg, dist,
@@ -12,7 +13,7 @@ import {
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint,
 } from '@/src/lib/geometry'
 import { waterfallLegs, waterfallOccupancy } from '@/src/lib/waterfallObstacles'
-import { btSegments } from '@/src/lib/benchtopGeometry'
+import { btSegments, effectiveProfileId } from '@/src/lib/benchtopGeometry'
 import { btPosition, wallFrame, btOverhangs } from '@/src/lib/benchtopAnchor'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
 import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
@@ -32,6 +33,9 @@ import {
   viewReducer, placeInfoFor, isBenchtopMode, MIN_STRETCH,
 } from './canvasTypes'
 import { useBenchtopInteraction } from './useBenchtopInteraction'
+import { useFixtureInteraction } from './useFixtureInteraction'
+import FixturesPlan from './FixturesPlan'
+import FixturePanel from './FixturePanel'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
 import { findLayerSet } from '@/src/lib/displayLayers/legacy'
@@ -65,6 +69,8 @@ import ReportsModal, { type ReportScope } from './ReportsModal'
 import Room3DScene, { type Camera3DState } from './Room3DScene'
 import BenchtopPanel from './BenchtopPanel'
 import BenchtopShapeEditPanel, { SaveShapePrompt } from './BenchtopShapeEditPanel'
+import BenchtopEdgeEditPanel from './BenchtopEdgeEditPanel'
+import { edgeTape } from '@/src/lib/benchtopEdgeband'
 import { useBenchtopCatalog } from './useBenchtopCatalog'
 import dynamic from 'next/dynamic'
 import SnapToolbar from './SnapToolbar'
@@ -76,12 +82,13 @@ import { type ElevSnapSettings, type ElevSnapResult } from '@/src/lib/elevationS
 // Shape Editor overlay is client-only and heavy — load it when first opened.
 const BenchtopShapeEditor = dynamic(() => import('./BenchtopShapeEditor'), { ssr: false })
 
-export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops }: {
+export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops, initialFixtures }: {
   project: Project | null
   room: Room
   walls: Wall[]
   initialCabinets: CabinetInstance[]
   initialBenchtops: BenchtopInstance[]
+  initialFixtures?: RoomFixture[]
 }) {
   const [project, setProjectState] = useState<Project | null>(initProject)
   const [room, setRoomState] = useState<Room>(initRoom)
@@ -129,6 +136,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [cabResize, setCabResize] = useState<CabResize | null>(null)
   // Esc in Edit shape with unsaved changes → ask to save (Mark 2026-10-12).
   const [btSavePrompt, setBtSavePrompt] = useState(false)
+  // Edit edges: hovering an edge in the panel drawing lights it on the plan (Phase 7b).
+  const [btEdgeHover, setBtEdgeHover] = useState<{ btId: string; i: number } | null>(null)
   const [cabMoveDrag, setCabMoveDrag] = useState<CabMoveDrag | null>(null)
   const [cabFollowing, setCabFollowing] = useState<{ id: string; assemblyClass: string } | null>(null)
   const [multiSelect, setMultiSelect] = useState<string[]>([])
@@ -137,6 +146,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [deleteCabsPending, setDeleteCabsPending] = useState<string[] | null>(null)
   const [splitCabId, setSplitCabId] = useState<string | null>(null)
   const [saveLibCabId, setSaveLibCabId] = useState<string | null>(null)
+  const isAdmin = useIsAdmin()   // testers can't write the shared library
   const [replaceCabId, setReplaceCabId] = useState<string | null>(null)
   const [kickSettingsRunId, setKickSettingsRunId] = useState<string | null>(null)
   const [libRefresh, setLibRefresh] = useState(0)   // bump to reload the library palette
@@ -184,6 +194,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation' | 'joints'>('elevation')
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
+  const [fixtures, setFixtures] = useState<RoomFixture[]>(initialFixtures ?? [])
   const [sectionCut, setSectionCut] = useState<SectionCut | null>(null)
   const [sectionDrag, setSectionDrag] = useState<{ offsetX: number; offsetY: number } | null>(null)
   // Plan reference grid (dots). Per-user, persisted to localStorage.
@@ -230,7 +241,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }, [])
 
   const { captureSnapshot, handleUndo, handleRedo, wallsRef, cabinetsRef, canUndo, canRedo } =
-    useCanvasHistory(walls, cabinets, benchtops, setWalls, setCabinets, setBenchtops, setSelected)
+    useCanvasHistory(walls, cabinets, benchtops, setWalls, setCabinets, setBenchtops, setSelected, fixtures, setFixtures)
 
   const {
     resolvedParts, setResolvedParts,
@@ -285,6 +296,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const roomSwitcherRef = useRef<RoomSwitcherHandle>(null)
 
   const btCatalog = useBenchtopCatalog(room, project)
+  const fx = useFixtureInteraction({
+    room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot,
+  })
   const bt = useBenchtopInteraction({
     room, walls, cabinets,
     benchtops, setBenchtops,
@@ -320,6 +334,30 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const thick = btCatalog.thicknessFor(b)
     return { topZ: (b.height_mm ?? btBaseHeight) + thick.total, thick, defaultProfileId: btCatalog.defaultProfileIdFor(b) }
   }
+  // Edit edges (Phase 7b): the editing top's default tape + profile lookup, for painting.
+  const edgeEditBt = bt.edgeEdit ? benchtops.find(b => b.id === bt.edgeEdit!.btId) ?? null : null
+  const btEdgeAux = edgeEditBt ? {
+    defaultTape: btCatalog.tapeContextFor(edgeEditBt).defaultTape,
+    profileOf: (s: BenchtopSegment) => {
+      const pid = effectiveProfileId(s, btCatalog.defaultProfileIdFor(edgeEditBt))
+      return pid ? btCatalog.profileById[pid] : undefined
+    },
+  } : null
+  // Right-click → Edit edges (or the panel button). The tape chip starts on the
+  // schedule tape, else the first tape already on the top.
+  const startEdgeEdit = (id: string) => {
+    const b = benchtops.find(x => x.id === id)
+    if (!b) return
+    if (canvasView !== 'plan') switchView('plan')
+    const ctx = btCatalog.tapeContextFor(b)
+    const def = btCatalog.defaultProfileIdFor(b)
+    const firstTape = btSegments(b).map(s => {
+      const pid = effectiveProfileId(s, def)
+      return edgeTape(s, pid ? btCatalog.profileById[pid] : undefined, ctx.defaultTape)
+    }).find((t): t is string => !!t) ?? null
+    bt.startEdgeEdit(id, 'profile', ctx.defaultTape ?? firstTape)
+  }
+
   // Waterfall legs block cabinets (place / move / stretch) like another unit would.
   const wfLegs = waterfallLegs(benchtops, btInfo, btCatalog.profileById)
   const wfOcc = (w: Wall, side: 'face' | 'back', mover: { assembly_class: string; dy: number; dz?: number }) =>
@@ -431,7 +469,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // draw, armed placement, menu); a press with nothing in progress deselects.
   // Read through a ref so the keydown closure (deps [selected, mode]) sees it fresh.
   const escBusyRef = useRef(false)
-  escBusyRef.current = !!(cabResize || cabFollowing || cabMoveDrag || drawStart || armedDef || contextMenu || measureStart)
+  escBusyRef.current = !!(cabResize || cabFollowing || cabMoveDrag || drawStart || armedDef || contextMenu || measureStart || fx.carry)
 
   useEffect(() => {
     const isInput = (t: EventTarget | null) => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement
@@ -465,6 +503,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         e.preventDefault()
         bt.setBenchtopMenuOpen(v => !v)
       }
+      // F5 Fixtures & appliances (z_fixtures). R turns a free-floating carried item;
+      // M picks up the selected fixture.
+      if (e.key === 'F5' && !isInput(e.target)) {
+        e.preventDefault()
+        fx.setMenuOpen(v => !v)
+      }
+      if ((e.key === 'r' || e.key === 'R') && mode === 'place_fixture' && !e.ctrlKey && !e.metaKey && !isInput(e.target)) {
+        e.preventDefault(); fx.rotateCarry()
+      }
+      if ((e.key === 'm' || e.key === 'M') && selected?.type === 'fixture' && mode === 'select' && !e.ctrlKey && !e.metaKey && !isInput(e.target)) {
+        e.preventDefault(); fx.startMove(selected.id)
+      }
       if (e.key === 'a' && !isInput(e.target) && (mode === 'draw_benchtop') && bt.btDrawPoly.length > 0) {
         e.preventDefault()
         bt.toggleArcMode()
@@ -487,14 +537,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           return
         }
       }
+      // Edit edges (Phase 7b): Enter saves, Esc asks if anything changed, Ctrl+Z steps back inside.
+      if (mode === 'edit_benchtop_edges' && !isInput(e.target)) {
+        if (e.key === 'Escape') { e.preventDefault(); if (bt.edgeEdit?.history.length) setBtSavePrompt(true); else bt.cancelEdgeEdit(); return }
+        if (e.key === 'Enter') { e.preventDefault(); bt.commitEdgeEdit(); return }
+        if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey) { e.preventDefault(); bt.edgeEditUndo(); return }
+      }
       if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !isInput(e.target)) { e.preventDefault(); void handleUndo() }
       if (((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey) && !isInput(e.target)) || ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && e.shiftKey && !isInput(e.target))) { e.preventDefault(); void handleRedo() }
+      if (e.key === 'Escape' && !isInput(e.target)) fx.cancel()
       if (e.key === 'Escape') { if (!escBusyRef.current && !isInput(e.target) && (mode === 'select' || mode === 'benchtop_select')) setSelected(null); setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode(isBenchtopMode(mode) && mode !== 'benchtop_select' ? 'benchtop_select' : 'select'); setArmedDef(null); setArmedDraft(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setDeleteCabsPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput(e.target)) {
         if (mode === 'draw_benchtop' && e.key === 'Backspace') { bt.undoVertex(); return }
         if (selected?.type === 'cabinet') handleDeleteCabinet(selected.id)
         if (selected?.type === 'wall') handleDeleteWall(selected.id)
         if (selected?.type === 'benchtop') void bt.handleDeleteBenchtop(selected.id)
+        if (selected?.type === 'fixture') void fx.remove(selected.id)
       }
     }
     const ku = (e: KeyboardEvent) => {
@@ -1117,6 +1175,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     if (e.button !== 0) return
     if (cabFollowing) return
+    // Carrying a fixture: the drop happens on pointer-up (useFixtureInteraction).
+    if (mode === 'place_fixture') { e.preventDefault(); svgRef.current.setPointerCapture(e.pointerId); return }
     // Benchtop draw tools finish on pointer-up (useBenchtopInteraction). Cutouts
     // and joins act on the selected benchtop, so they must not deselect here.
     if (mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u'
@@ -1139,6 +1199,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (!bt.shapeStretch) bt.setShapeSel(null)
       return
     }
+    // Edit edges: clicks land on the edges (plan overlay); a press elsewhere does nothing.
+    if (mode === 'edit_benchtop_edges') { e.preventDefault(); return }
     if (mode === 'measure') { e.preventDefault(); return }
     if (mode === 'draw_wall' || mode === 'draw_island') {
       e.preventDefault()
@@ -1190,6 +1252,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
 
     if (bt.handlePointerMove(wp)) return
+    if (fx.handlePointerMove(wp, shiftRef.current)) return
 
     if (mode === 'measure') {
       const snap = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom,
@@ -1364,6 +1427,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const wp = toWorld(svgP.x, svgP.y)
 
     if (await bt.handlePointerUp(wp)) return
+    if (await fx.handlePointerUp(wp, shiftRef.current)) return
 
     if (mode === 'measure') {
       const snap = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom,
@@ -1704,6 +1768,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const selectedWall      = selected?.type === 'wall'      ? walls.find(w => w.id === selected.id) ?? null      : null
   const selectedCab       = selected?.type === 'cabinet'   ? cabinets.find(c => c.id === selected.id) ?? null   : null
   const selectedBenchtop  = selected?.type === 'benchtop'  ? benchtops.find(b => b.id === selected.id) ?? null  : null
+  const selectedFixture   = selected?.type === 'fixture'   ? fixtures.find(f => f.id === selected.id) ?? null   : null
   // Selected top measured against its anchor wall face (panel sizes / ends).
   // While shaping in plan (Phase 6) it follows the working outline, so the overhang is live.
   const selectedBtPos = (() => {
@@ -1753,6 +1818,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setMode(prev => prev === m ? (isBenchtopMode(m) && m !== 'benchtop_select' ? 'benchtop_select' : 'select') : m)
     setArmedDef(null); setArmedDraft(null)
     setDrawStart(null); setPlaceGhost(null)
+  }
+
+  // F5: arm a catalogue fixture (re-click the armed one to stop).
+  function armFixture(item: FixtureCatalogItem) {
+    setArmedDef(null); setArmedDraft(null); setDrawStart(null); setPlaceGhost(null)
+    if (mode === 'place_fixture' && fx.carry?.kind === 'place' && fx.carry.item.id === item.id) { fx.cancel(); return }
+    if (canvasView !== 'plan') switchView('plan')
+    fx.arm(item)
   }
 
   // Arm a library definition for placement (click in the sidebar). Re-clicking the
@@ -1810,9 +1883,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     : mode === 'draw_benchtop_l' ? (bt.btLPoints.length === 0 ? 'L-shape: click start of first leg · Ctrl=ortho · Esc=cancel' : bt.btLPoints.length === 1 ? 'Click inner corner · Ctrl=ortho' : 'Click end of second leg to complete L-shape')
     : mode === 'draw_benchtop_u' ? (['U-shape: click start of arm 1 · Ctrl=ortho · Esc=cancel', 'Click inner corner 1', 'Click inner corner 2', 'Click end of arm 2'][bt.btUPoints.length] ?? 'Click end of arm 2')
     : mode === 'draw_benchtop_cutout_rect' ? (!bt.btCutoutStart ? 'Cutout: click first corner of rectangle · Esc=cancel' : 'Click opposite corner to finish cutout')
-    : mode === 'benchtop_select' ? 'Benchtop mode: click a benchtop to select · right-click = Edit shape · double-click = Shape Editor · cabinets are locked · F4 / Esc = back to cabinets'
+    : mode === 'benchtop_select' ? 'Benchtop mode: click a benchtop to select · right-click = Edit shape / Edit edges · double-click = Shape Editor · cabinets are locked · F4 / Esc = back to cabinets'
     : mode === 'edit_benchtop_shape' ? (bt.shapeStretch ? 'Stretch: move the mouse (snaps) · click to place · or type the size in the panel · Esc = cancel the stretch'
       : 'Edit shape: click a line to stretch it · drag a line to move it · click a corner for X / Y · Shift-click a line = add corner · Enter = save · Esc = finish · Ctrl+Z = undo')
+    : mode === 'edit_benchtop_edges' ? 'Edit edges: pick a chip in the panel, then click edges on the plan · click again = take it off · Alt-click = default · Enter = save · Esc = finish · Ctrl+Z = undo'
     : mode === 'move_benchtop' ? (!bt.btMoveBase ? 'Move benchtop: click a base point (snaps) · Esc=cancel' : 'Click the point to move it to · Ctrl=ortho · Esc=cancel')
     : mode === 'draw_benchtop_join' ? (!bt.btJoinStart ? 'Join line: click a point on the benchtop edge · Esc=cancel' : 'Click the opposite edge to finish the join · Ctrl=ortho')
     : mode === 'draw_benchtop_cutout_circle' ? (!bt.btCutoutStart ? 'Cutout: click centre of circle · Esc=cancel' : 'Click to set radius and finish cutout')
@@ -1992,6 +2066,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           benchtopMenuOpen={bt.benchtopMenuOpen}
           setBenchtopMenuOpen={bt.setBenchtopMenuOpen}
           onDrawBenchtopInShapeEditor={drawBenchtopInShapeEditor}
+          fixtureMenuOpen={fx.menuOpen}
+          setFixtureMenuOpen={fx.setMenuOpen}
+          armedFixtureId={fx.carry?.kind === 'place' ? fx.carry.item.id : null}
+          onArmFixture={armFixture}
           clipboard={clipboard}
           sidebarW={sidebarW}
         />
@@ -2069,6 +2147,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               btDepth={bt.btDepth}
               onBenchtopDoubleClick={bt.openShapeEditor}
               btShapeEdit={bt.shapeEdit}
+              btEdgeHover={btEdgeHover}
+              btEdgeEdit={mode === 'edit_benchtop_edges' ? bt.edgeEdit : null}
+              onBtEdgePaint={(i, reset) => btEdgeAux && bt.paintEdge(i, reset, btEdgeAux)}
+              onBtEdgeHover={i => setBtEdgeHover(i == null || !bt.edgeEdit ? null : { btId: bt.edgeEdit.btId, i })}
+              btTapeIds={btCatalog.tapes.map(t => t.id)}
+              btTapeContextFor={btCatalog.tapeContextFor}
               onShapeHandleDown={(e, kind, i) => {
                 svgPointerDownRef.current = true
                 svgRef.current?.setPointerCapture(e.pointerId)
@@ -2094,10 +2178,25 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               measureEnd={measureEnd}
               measureCursor={measureCursor}
               onMeasureCancel={() => { setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }}
+              fixturesLayer={
+                <FixturesPlan
+                  fixtures={fixtures}
+                  ghost={mode === 'place_fixture' ? fx.ghost : null}
+                  ghostBody={fx.carried}
+                  hiddenId={mode === 'place_fixture' && fx.carry?.kind === 'move' ? fx.carry.id : null}
+                  selectedId={selected?.type === 'fixture' ? selected.id : null}
+                  zoom={view.zoom}
+                  layers={planLayers}
+                  interactive={mode === 'select'}
+                  onPointerDown={(_e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null); setContextMenu(null) }}
+                  onContextMenu={(_e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]) }}
+                  onDoubleClick={(_e, id) => fx.startMove(id)}
+                />
+              }
             />
               <SnapToolbar settings={snapSettings} onChange={updateSnapSettings} kinds={SNAP_KINDS} meta={SNAP_KIND_META} />
             </div>
-            {(mode === 'draw_wall' || mode === 'draw_island') && !drawStart && (
+            {(mode === 'draw_wall' || mode === 'draw_island') && (
               <WallDrawPanel
                 mode={mode as 'draw_wall' | 'draw_island'}
                 drawing={!!drawStart}
@@ -2220,6 +2319,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             waterfallOcc={wfOcc}
             edgeProfiles={btCatalog.profileById}
             onSelectBenchtop={id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]); setCabResize(null) }}
+            fixtures={fixtures}
+            onSelectFixture={id => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null) }}
             onSeamClick={(cabId) => {
               setSelected({ type: 'cabinet', id: cabId })
               setMultiSelect([])
@@ -2264,6 +2365,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               benchtops, info: btInfo, profiles: btCatalog.profileById,
               selectedId: selected?.type === 'benchtop' ? selected.id : null,
               onSelect: id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]) },
+            }}
+            fx={{
+              fixtures,
+              selectedId: selected?.type === 'fixture' ? selected.id : null,
+              onSelect: id => { setSelected({ type: 'fixture', id }); setMultiSelect([]) },
             }}
           />
         )}
@@ -2379,12 +2485,43 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         )}
         {btSavePrompt && (
           <SaveShapePrompt
-            onSave={() => { setBtSavePrompt(false); bt.commitShapeEdit() }}
-            onDiscard={() => { setBtSavePrompt(false); bt.cancelShapeEdit() }}
+            what={mode === 'edit_benchtop_edges' ? 'edges' : 'shape'}
+            onSave={() => { setBtSavePrompt(false); if (mode === 'edit_benchtop_edges') bt.commitEdgeEdit(); else bt.commitShapeEdit() }}
+            onDiscard={() => { setBtSavePrompt(false); if (mode === 'edit_benchtop_edges') bt.cancelEdgeEdit(); else bt.cancelShapeEdit() }}
             onKeep={() => setBtSavePrompt(false)}
           />
         )}
-        {mode !== 'place_definition' && mode !== 'edit_benchtop_shape' && selectedBenchtop && (
+        {mode === 'edit_benchtop_edges' && selectedBenchtop && bt.edgeEdit?.btId === selectedBenchtop.id && btEdgeAux && (
+          <BenchtopEdgeEditPanel
+            benchtop={selectedBenchtop}
+            edit={bt.edgeEdit}
+            frame={bt.viewFrameFor(selectedBenchtop)}
+            profiles={btCatalog.profiles}
+            defaultProfileId={btCatalog.defaultProfileIdFor(selectedBenchtop)}
+            tapes={btCatalog.tapes}
+            tapeCtx={btCatalog.tapeContextFor(selectedBenchtop)}
+            legHeight={(selectedBenchtop.height_mm ?? btBaseHeight) + btCatalog.thicknessFor(selectedBenchtop).total}
+            edgeThickness={btCatalog.thicknessFor(selectedBenchtop).total}
+            onPaint={(i, reset) => bt.paintEdge(i, reset, btEdgeAux)}
+            onApply={fn => bt.applyEdges(fn)}
+            onUi={bt.setEdgeEditUi}
+            onHover={i => setBtEdgeHover(i == null ? null : { btId: selectedBenchtop.id, i })}
+            onSave={bt.commitEdgeEdit}
+            onCancel={bt.cancelEdgeEdit}
+            onUndo={bt.edgeEditUndo}
+          />
+        )}
+        {mode !== 'place_fixture' && selectedFixture && (
+          <FixturePanel
+            fixture={selectedFixture}
+            walls={walls}
+            onUpdate={(id, patch) => void fx.update(id, patch)}
+            onDelete={id => void fx.remove(id)}
+            onMove={id => { if (canvasView !== 'plan') switchView('plan'); fx.startMove(id) }}
+            onTurn={(id, deg) => void fx.rotateBy(id, deg)}
+          />
+        )}
+        {mode !== 'place_definition' && mode !== 'edit_benchtop_shape' && mode !== 'edit_benchtop_edges' && selectedBenchtop && (
           <BenchtopPanel
             benchtop={selectedBenchtop}
             onUpdate={bt.handleUpdateBenchtop}
@@ -2400,7 +2537,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDrawCutoutCircle={() => setMode('draw_benchtop_cutout_circle')}
             profiles={btCatalog.profiles}
             method={btCatalog.methodFor(selectedBenchtop)}
-            onSetEdges={bt.setBenchtopEdges}
             onEditShape={bt.openShapeEditor}
             onDrawJoin={() => { bt.resetDraw(); setMode('draw_benchtop_join') }}
             onDeleteJoin={bt.handleDeleteJoin}
@@ -2415,6 +2551,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onSetPosition={bt.handleSetPosition}
             onReanchor={bt.handleReanchor}
             onMove={() => { if (canvasView !== 'plan') switchView('plan'); bt.startMoveBenchtop() }}
+            tapes={btCatalog.tapes}
+            tapeCtx={btCatalog.tapeContextFor(selectedBenchtop)}
+            onEditEdges={startEdgeEdit}
+            edgesChanged={bt.edgesChangedId === selectedBenchtop.id}
+            onResolved={() => bt.setEdgesChangedId(null)}
           />
         )}
         {bt.shapeEditDraft && (() => {
@@ -2496,6 +2637,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onRoundCorner: bt.handleRoundCorner,
             onChamfer: bt.handleChamfer,
             onEditBenchtopShape: id => { if (canvasView !== 'plan') switchView('plan'); bt.startShapeEdit(id) },
+            onEditBenchtopEdges: startEdgeEdit,
             onOpenShapeEditor: id => { setContextMenu(null); bt.openShapeEditor(id) },
             canEqualize,
             clipboard,
@@ -2535,7 +2677,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onAlignLeft: handleAlignLeft,
             onAlignRight: handleAlignRight,
             onSplit: id => { setContextMenu(null); setSplitCabId(id) },
-            onSaveToLibrary: id => { setContextMenu(null); setSaveLibCabId(id) },
+            onSaveToLibrary: isAdmin ? id => { setContextMenu(null); setSaveLibCabId(id) } : undefined,
             onReplace: id => { setContextMenu(null); setReplaceCabId(id) },
             onJoinKicks: id => { void handleJoinKicks(id) },
             onDetachKick: id => { void handleDetachKickSingle(id) },
@@ -2691,6 +2833,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           walls={walls}
           cabinets={cabinets}
           resolvedParts={resolvedParts}
+          fixtures={fixtures}
           onUpdateCabinet={handleUpdateCabinet}
           onClose={() => setShowObjectTree(false)}
         />

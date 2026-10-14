@@ -18,6 +18,8 @@ const env = Object.fromEntries(
     .map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()])
 )
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+// No anonymous DB access (z_access_control) — sign in as the automation account.
+{ const { error } = await sb.auth.signInWithPassword({ email: env.AUTOMATION_EMAIL, password: env.AUTOMATION_PASSWORD }); if (error) { console.error("automation sign-in failed (AUTOMATION_EMAIL/PASSWORD in .env.local):", error.message); process.exit(1) } }
 
 // Find any cabinet with an sw/sh/sd size override on a case part
 const { data: allCabs } = await sb.from('cabinet_instances').select('id,room_id,label,part_pos_overrides').not('part_pos_overrides', 'eq', '{}')

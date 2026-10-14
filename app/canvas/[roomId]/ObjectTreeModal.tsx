@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Room, Wall, CabinetInstance } from '@/src/lib/types'
+import type { Room, Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
 import type { ResolvedCabinet, ResolvedSeamJoint, JointTypeOp } from '@/src/lib/resolver/types'
 import {
   dbLoadPartPosOverrides, dbSavePartPosOverride, dbDeletePartPosOverride,
@@ -40,7 +40,7 @@ const OP_LABELS: Record<string, string> = {
 
 // ── Tree node types ───────────────────────────────────────────────────────────
 
-type NodeKind = 'room' | 'wall' | 'cabinet' | 'section' | 'part' | 'seam' | 'op'
+type NodeKind = 'room' | 'wall' | 'cabinet' | 'section' | 'part' | 'seam' | 'op' | 'fixture'
 
 type PartPayload = {
   kind: 'part'
@@ -70,6 +70,7 @@ type TreeNode = {
   | PartPayload
   | { kind: 'seam';   cabinetId: string; seam: ResolvedSeamJoint }
   | { kind: 'op';     cabinetId: string; op: JointTypeOp; ownerPartId: string; ax: number; ay: number; az: number }
+  | { kind: 'fixture'; fixture: RoomFixture; wallName: string | null }
 )
 
 // ── Tree builder ──────────────────────────────────────────────────────────────
@@ -147,6 +148,7 @@ function buildTree(
   cabinets: CabinetInstance[],
   resolvedParts: Map<string, ResolvedCabinet>,
   overrides: Map<string, PartPosOverrides>,
+  fixtures: RoomFixture[] = [],
 ): TreeNode {
   const wallNodes: TreeNode[] = walls.map(wall => {
     const wallCabs = cabinets.filter(c => c.wall_id === wall.id)
@@ -279,13 +281,25 @@ function buildTree(
     }
   })
 
+  // Fixtures & appliances (z_fixtures) — room-level, they may not sit on a wall.
+  const fixtureNodes: TreeNode[] = fixtures.map(f => ({
+    id: `fixture-${f.id}`, kind: 'fixture' as const, fixture: f,
+    wallName: walls.find(w => w.id === f.wall_id)?.name ?? null,
+    label: f.label || f.name, detail: `${f.width}×${f.depth}×${f.height}`,
+    children: [], expandable: false,
+  }))
+  const children = fixtureNodes.length
+    ? [...wallNodes, { id: 'fixtures', kind: 'section' as const, label: 'Fixtures', detail: `${fixtureNodes.length}`,
+        children: fixtureNodes, expandable: true }]
+    : wallNodes
+
   return {
     id: 'room',
     kind: 'room',
     label: room.name,
     detail: `${walls.length} wall${walls.length !== 1 ? 's' : ''}`,
-    children: wallNodes,
-    expandable: wallNodes.length > 0,
+    children,
+    expandable: children.length > 0,
     room,
   }
 }
@@ -293,11 +307,12 @@ function buildTree(
 // ── Tree row component ────────────────────────────────────────────────────────
 
 const KIND_ICON: Record<NodeKind, string> = {
-  room: '⌂', wall: '▦', cabinet: '▣', section: '▸', part: '▬', seam: '⟳', op: '•',
+  room: '⌂', wall: '▦', cabinet: '▣', section: '▸', part: '▬', seam: '⟳', op: '•', fixture: '◫',
 }
 const KIND_COLOR: Record<NodeKind, string> = {
   room: 'text-sky-400', wall: 'text-amber-400', cabinet: 'text-emerald-400',
   section: 'text-gray-400', part: 'text-gray-300', seam: 'text-violet-400', op: 'text-gray-500',
+  fixture: 'text-sky-300',
 }
 
 // Compact rotation tag (parts carry AX/AY/AZ, ops carry their owner's ax/ay/az,
@@ -450,6 +465,29 @@ function PropertiesPanel({
           <PropRow label="Pos X"   value={w.pos_x}   unit="mm" />
           <PropRow label="Pos Y"   value={w.pos_y}   unit="mm" />
           <PropRow label="Thickness" value={w.thickness} unit="mm" />
+        </dl>
+      </div>
+    )
+  }
+
+  // ── Fixture (read-only here; edit in the canvas side panel) ──────────────
+  if (node.kind === 'fixture') {
+    const f = node.fixture
+    return (
+      <div className="p-4">
+        <h3 className="text-sm font-semibold text-gray-200 mb-1">{f.label || f.name}</h3>
+        <p className="text-[10px] text-gray-500 mb-3">{f.category}{f.kind ? ` · ${f.kind}` : ''}</p>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 items-baseline">
+          <SectionDivider label="Dimensions" />
+          <PropRow label="Width"  value={f.width}  unit="mm" />
+          <PropRow label="Depth"  value={f.depth}  unit="mm" />
+          <PropRow label="Height" value={f.height} unit="mm" />
+          <SectionDivider label="Position" />
+          <PropRow label="X (back-left)" value={f.x} unit="mm" />
+          <PropRow label="Y (back-left)" value={f.y} unit="mm" />
+          <PropRow label="Off floor" value={f.z} unit="mm" />
+          <PropRow label="Rotation" value={f.rotation} unit="°" />
+          <PropRow label="Wall" value={node.wallName ?? 'free-standing'} />
         </dl>
       </div>
     )
@@ -617,11 +655,12 @@ function PropertiesPanel({
 // ── Main modal ────────────────────────────────────────────────────────────────
 
 export default function ObjectTreeModal({
-  room, walls, cabinets, resolvedParts, onUpdateCabinet, onClose,
+  room, walls, cabinets, resolvedParts, onUpdateCabinet, onClose, fixtures = [],
 }: {
   room: Room
   walls: Wall[]
   cabinets: CabinetInstance[]
+  fixtures?: RoomFixture[]
   resolvedParts: Map<string, ResolvedCabinet>
   onUpdateCabinet: (id: string, u: Partial<CabinetInstance>) => Promise<void>
   onClose: () => void
@@ -633,7 +672,7 @@ export default function ObjectTreeModal({
   const [selectedNode, setSelectedNode]   = useState<TreeNode | null>(null)
   const [overrideCache, setOverrideCache] = useState<Map<string, PartPosOverrides>>(new Map())
 
-  const tree = buildTree(room, walls, cabinets, resolvedParts, overrideCache)
+  const tree = buildTree(room, walls, cabinets, resolvedParts, overrideCache, fixtures)
 
   // Eager-load every cabinet's overrides once so the inline rotation tags are
   // consistent across the whole tree without having to select each part first.

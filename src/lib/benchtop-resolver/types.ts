@@ -1,3 +1,4 @@
+import type { BtPartBands } from '@/src/lib/benchtopEdgeband'
 import type { BenchtopInstance, BenchtopBuildMethod, BenchtopPartRole, BenchtopGrainDir, BenchtopScheduleRow, BenchtopEdgeProfile } from '@/src/lib/types'
 
 export type { BenchtopPartRole, BenchtopGrainDir }
@@ -47,4 +48,6 @@ export interface ResolvedBenchtopPart {
   /** Shaped piece outline, mm, in the part's own frame (x = length, y = width). Null = plain rectangle. */
   outline?:              { x: number; y: number }[] | null
   meta?:                 BenchtopPartMeta | null
+  /** Edge tape per side of the part (Phase 7). Null = no tape. */
+  edgebands?:            BtPartBands | null
 }

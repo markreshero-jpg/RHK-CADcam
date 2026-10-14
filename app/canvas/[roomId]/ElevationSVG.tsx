@@ -24,6 +24,8 @@ import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
+import FixturesElevation from './FixturesElevation'
+import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB } from '@/src/lib/jointDrilling'
 import { handleShapes } from '@/src/lib/handleGeometry'
@@ -192,6 +194,9 @@ interface ElevationSVGProps {
   onSelectBenchtop?: (id: string) => void
   // Along-wall ranges of waterfall legs that block a mover on this wall + side
   waterfallOcc?: (wall: Wall, side: 'face' | 'back', mover: { assembly_class: string; dy: number; dz?: number }) => { t: number; dx: number }[]
+  // Fixtures & appliances (z_fixtures P2)
+  fixtures?: RoomFixture[]
+  onSelectFixture?: (id: string) => void
 }
 
 export default function ElevationSVG({
@@ -206,6 +211,7 @@ export default function ElevationSVG({
   elevMeasureStart, elevMeasureEnd, elevMeasureCursor,
   setElevMeasureStart, setElevMeasureEnd, setElevMeasureCursor,
   benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop, waterfallOcc,
+  fixtures, onSelectFixture,
 }: ElevationSVGProps) {
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = useMemo(() => frontViewHardwareMap(resolvedPartsRaw), [resolvedPartsRaw])
@@ -1624,6 +1630,16 @@ export default function ElevationSVG({
               )
             })}
             </g>
+
+            {/* Fixtures & appliances (z_fixtures) */}
+            {fixtures && fixtures.length > 0 && (
+              <FixturesElevation
+                fixtures={fixtures} wall={wall} side={elevWallSide}
+                roomCx={centroid(walls)} roomH={roomH} zoom={z} layers={layers}
+                selectedId={selected?.type === 'fixture' ? selected.id : null}
+                onSelect={id => onSelectFixture?.(id)}
+              />
+            )}
 
             {/* Benchtops — over the cabinet tops */}
             {benchtops && benchtopInfo && (

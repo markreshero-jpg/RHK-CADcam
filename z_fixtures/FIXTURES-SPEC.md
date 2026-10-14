@@ -1,6 +1,6 @@
 # Fixtures & Appliances — Spec
 
-Status: **P1 (library) built 2026-10-14, uncommitted** — next: P2 placement. See "RESUME HERE".
+Status: **P1 committed (50aef31); P2 placement built 2026-10-14, uncommitted** — next: P3 benchtop cutouts. See "RESUME HERE".
 
 Bought-in things placed in a room: ovens, cooktops, dishwashers, fridges,
 rangehoods, sinks, taps, decorative items. Catalogue lives in the Settings →
@@ -88,28 +88,50 @@ in the Wall tool (F2) — see "Openings (later)" at the bottom.
   `app/library/fixtures/` (Settings tab `fixtures_library` + standalone
   `/library/fixtures`), types `FixtureCatalogItem` / `RoomFixture` in types.ts.
   Model files are never deleted (placed fixtures point at them).
-- **P2 — Placement** — F5 picker, place/snap to wall, move/rotate/delete,
+- **P2 — Placement** ✅ built 2026-10-14 (uncommitted) — F5 picker, place/snap to wall, move/rotate/delete,
   plan + elevation + 3D rendering, layer items, object tree.
 - **P3 — Benchtop cutouts** — sink/cooktop cutout template on the catalogue row
   becomes a cutout operation on the benchtop under it.
 - **P4 — Cabinet links + schedule** — snap sink to sink cabinet, oven into tower
   opening; appliance schedule in reports.
 
-## RESUME HERE — P2 placement notes (from the canvas map, 2026-10-14)
+## P2 — what was built (2026-10-14)
 
-- Load: add a 4th query to `app/canvas/[roomId]/page.tsx` (room_fixtures by room_id) + prop.
-- State/persistence: model on `useBenchtopInteraction.ts` (direct supabase, optimistic
-  update, captureSnapshot) — no resolver. Add `fixtures` to `useCanvasHistory` Snapshot
-  + diff-sync, and to ProjectCard room duplicate/delete counts.
-- F5: key handler next to F2–F4 in CanvasClient; picker = new section in
-  `CanvasSidebar.tsx` (like the Cabinet section, rows arm a placement).
-- Snap: reuse `nearestWall` + `wallInwardNormal` + `wallAnchorPoint` (geometry.ts);
-  fixtures may also sit free (no wall) — store free `rotation`.
-- Plan: CanvasSVG loop like benchtops (`layers.show(...)` gate); elevation: project
-  like BenchtopElevation (`wallFrame`/`alongOf`) so free-standing items show on any
-  wall they face; 3D: Room3DScene, group at (x, floorY+z, y), rotY from rotation,
-  render `FixtureModel`.
-- Layers: add group `fixtures` + items to registry.ts; object tree: room-level node.
+- **Geometry** `src/lib/fixtureGeometry.ts` (+ test): axes from rotation
+  (a = (cos r, sin r) width, n = (−sin r, cos r) front), corners, centre,
+  `snapFixture` (back onto the nearest wall face within 600 mm on the cursor's side,
+  centred on the cursor, clamped to the wall; none in range → free), `fixtureOnFace`
+  (elevation membership: faces the viewer within ~45°, back within 1200 mm of the
+  face), `defaultFixtureZ` (benchtop mount = 900 placeholder, wall = catalogue
+  mount_height), `fixtureLayer(category)`.
+- **Canvas** `useFixtureInteraction.ts`: carry state (place / move), ghost, insert /
+  update / rotateBy / remove, all through captureSnapshot. Mode `place_fixture`;
+  Selected `{ type: 'fixture' }`. Keys: **F5** sidebar section, **R** turn 90° while
+  carrying free, **Shift** = don't snap, **M** / double-click = move selected,
+  **Del** delete, **Esc** stop. Placing stays armed for repeat drops.
+- **Views**: `FixturesPlan` (CanvasSVG `fixturesLayer` slot; symbols: appliance box +
+  cross, cooktop burners, sink bowl, tap circle, decorative ellipse; heavy front edge),
+  `FixturesElevation` (ElevationSVG), `Fixtures3D` (Room3DScene `fx` prop; hides
+  with its wall). `FixturePanel` (right dock): label, per-placement size, off-floor,
+  centre X/Y, rotation, Move, Turn 90°.
+- **Undo**: `useCanvasHistory` takes optional fixtures (Snapshot.fixtures optional so
+  old drag snapshots still work).
+- **Layers**: group `fixtures` — `fixture_appliances`, `fixture_sinks`,
+  `fixture_taps`, `fixture_decorative`, `fixture_labels` (all on by default; no
+  shop layer-set rows changed).
+- Object tree: room-level "Fixtures" section (read-only details). Room delete dialog
+  counts fixtures (cascade already deletes them).
+- Verified in the dev app (Kitchen Test Room, scripted events — Chrome tab was in the
+  background, so no 3D screenshot yet): place snaps to wall + elevation position,
+  turn, undo, delete + undo-delete (DB restored), move free with R. Test row removed.
+
+## RESUME HERE — open items
+
+- Live visual check of the 3D view + a real uploaded model (not yet seen on screen).
+- Right-click context menu for fixtures (today right-click only selects).
+- Fixtures don't avoid cabinets when snapping (no collision) — decide with P4.
+- Benchtop-mount height uses 900 placeholder → take the benchtop top under it (P3).
+- Elevation: fixtures aren't placeable from elevation; no dimension chains include them.
 
 ## Openings (later, separate spec)
 

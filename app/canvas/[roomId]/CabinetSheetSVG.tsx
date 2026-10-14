@@ -20,7 +20,7 @@ import {
   doorProfileSvg,
 } from './cabinetEditSvgHelpers'
 import { zonePartId, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
-import { zoneBlank, zoneBevelNote, caseBevelNote } from '@/src/lib/jointDrilling'
+import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 
 export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean }
 
@@ -321,7 +321,10 @@ export default function CabinetSheetSVG({
       const label = CASE_LABELS[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key
       add(caseBevelNote(p) ? `${label} ${caseBevelNote(p)}` : label, p)
     })
-    rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => add(TK_LABELS[p.part_key] ?? p.part_key, p))
+    rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => {
+      const label = TK_LABELS[p.part_key] ?? p.part_key
+      add(tkBevelNote(p) ? `${label} ${tkBevelNote(p)}` : label, p)
+    })
     rp.internal_parts.forEach(p => add(INT_LABELS[p.part_type] ?? p.part_type, p))
     // Sharknose fronts carry the saw note (z_handles D3): edge + blade tilt.
     rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => {

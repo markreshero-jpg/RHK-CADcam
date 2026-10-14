@@ -7,6 +7,7 @@ import {
   ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
 import { resolveKickRunParts } from './resolveKickRun'
+import { resolveShapedKick } from './resolveShapedKick'
 
 export function resolveToekickParts(
   cab: CabinetInput,
@@ -28,6 +29,9 @@ export function resolveToekickParts(
   if (toeType === 'none' || cab.assembly_class === 'wall') {
     return { parts, errors }
   }
+
+  // Shaped cabinets (z_cabinet_shape 4b): the kick follows the footprint.
+  if (cab.footprint?.segments?.length) return resolveShapedKick(cab, r, toeType)
 
   const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }
 

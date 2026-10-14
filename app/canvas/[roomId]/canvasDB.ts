@@ -190,6 +190,8 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
         AX: p.ax, AY: p.ay, AZ: p.az,
         material_id: p.material_id,
         edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right, id: p.edge_band_id ?? undefined },
+        ...(p.bevel_lo ? { bevel_lo: Number(p.bevel_lo) } : {}),
+        ...(p.bevel_hi ? { bevel_hi: Number(p.bevel_hi) } : {}),
       })),
       internal_parts: intPartsArr,
       face_rows: myRows.map(r => ({

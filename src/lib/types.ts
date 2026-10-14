@@ -281,6 +281,8 @@ export interface BenchtopEdge {
   profile_id?: string | null
   /** Waterfall edges only: how the leg meets the top. Default 'mitre'. */
   waterfall_join?: BenchtopJoinType
+  /** Edge tape (Phase 7): undefined = the schedule's tape, null = none, id = that tape. */
+  edgeband_id?: string | null
 }
 
 // One outline segment — Shape Editor format, mm, room frame (plan, y-down).

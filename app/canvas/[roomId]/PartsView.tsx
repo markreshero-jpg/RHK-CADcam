@@ -15,7 +15,7 @@ import {
 import { CUSTOM_ORIENT_LABELS, type CustomOrient } from '@/src/lib/customPartBox'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { zonePartId, zoneKey, dbPartId, zoneRef, stackRef, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
-import { zoneBlank, zoneBevelNote, caseBevelNote } from '@/src/lib/jointDrilling'
+import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 
 // One dimension/position field: accepts a plain number (fixed), a plain
 // arithmetic calc (e.g. "100+100" → 200, evaluated and stored as the value), OR
@@ -598,7 +598,7 @@ export default function PartsView({
       const id = `tk_${p.part_key}_${p.sort_order}`
       result.push({
         id, typeKey: 'toekick', typeLabel: 'Toekick',
-        name: partLabels?.[id] ?? PART_LABEL[p.part_key] ?? p.part_key,
+        name: partLabels?.[id] ?? `${PART_LABEL[p.part_key] ?? p.part_key}${tkBevelNote(p) ? ` (${tkBevelNote(p)})` : ''}`,
         material: matNames[p.material_id] ?? '—', materialColor: matColours[p.material_id] ?? null,
         dy: p.DY, dx: p.DX, dz: p.DZ, eb: p.edge_band,
         comment: partComments?.[id] ?? '',

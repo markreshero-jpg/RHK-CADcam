@@ -20,6 +20,51 @@ export function tkPlanBox(p: ResolvedToekickPart) {
     : { x: p.X, z: p.Z, w: p.DY, d: p.DZ }
 }
 
+// The kick part's own box (before its AY turn about the min corner).
+export function tkBoxLocal(p: ResolvedToekickPart): Box {
+  return p.part_key === 'spreader_horizontal'
+    ? { x: p.X, y: p.Y, z: p.Z, w: p.DX, h: p.DY, d: p.DZ }
+    : { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
+}
+
+// Mitred kick boards of a shaped cabinet (z_cabinet_shape 4b): top-view
+// outline in the horizontal shape frame (x across the box, y down from its
+// front face = z max), extruded up in 3D. + bevel = back (z = 0) face shorter.
+export function tkBevelOutline(p: ResolvedToekickPart): { x: number; y: number }[] | null {
+  if (!p.bevel_lo && !p.bevel_hi) return null
+  const L = p.DY, t = p.DZ, R = Math.PI / 180
+  const dLo = t * Math.tan((p.bevel_lo ?? 0) * R), dHi = t * Math.tan((p.bevel_hi ?? 0) * R)
+  const inLo = Math.max(0, dLo), inHi = L - Math.max(0, dHi)
+  const outLo = Math.max(0, -dLo), outHi = L - Math.max(0, -dHi)
+  return [{ x: outLo, y: 0 }, { x: outHi, y: 0 }, { x: inHi, y: t }, { x: inLo, y: t }]
+}
+
+/** Plan footprint of a kick part, cabinet-local (x, z): turned by AY, bevels cut. */
+export function tkPlanCorners(p: ResolvedToekickPart): { x: number; z: number }[] {
+  const b = tkBoxLocal(p)
+  const bev = tkBevelOutline(p)
+  const local: [number, number][] = bev ? bev.map(q => [q.x, b.d - q.y]) : [[0, 0], [b.w, 0], [b.w, b.d], [0, b.d]]
+  if (!p.AY) return local.map(([x, z]) => ({ x: b.x + x, z: b.z + z }))
+  return local.map(([x, z]) => {
+    const [rx, , rz] = rotEulerXYZ(0, p.AY, 0, x, 0, z)
+    return { x: b.x + rx, z: b.z + rz }
+  })
+}
+
+/** Cut-list note for a mitred kick board, e.g. "mitre 22.5°"; '' when square. */
+export function tkBevelNote(p: { bevel_lo?: number | null; bevel_hi?: number | null }): string {
+  return caseBevelNote(p).replace(/^bevel/, 'mitre')
+}
+
+/** Axis-aligned cabinet-space bounds of a kick part after its AY turn (= tkBoxLocal when AY = 0). */
+export function tkBoxAABB(p: ResolvedToekickPart): Box {
+  const b = tkBoxLocal(p)
+  if (!p.AY) return b
+  const c = tkPlanCorners(p), xs = c.map(q => q.x), zs = c.map(q => q.z)
+  const x0 = Math.min(...xs), z0 = Math.min(...zs)
+  return { x: x0, y: b.y, z: z0, w: Math.max(...xs) - x0, h: b.h, d: Math.max(...zs) - z0 }
+}
+
 // Cabinet-space bounding box for a case part. { x,y,z = min corner, w/h/d = X/Y/Z extents }.
 // Shaped-cabinet panels (side:/back:, z_cabinet_shape) are 'face'-kind boxes
 // like the back, before their AY rotation about the min corner — see

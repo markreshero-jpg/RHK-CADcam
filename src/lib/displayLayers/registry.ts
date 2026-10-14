@@ -32,7 +32,7 @@ export const OPACITY_OPTIONS = [1, 0.75, 0.5, 0.25, 0.1] as const
 
 export type LayerGroup =
   | 'carcase' | 'kicks' | 'fronts' | 'internals' | 'hardware' | 'panels'
-  | 'benchtops' | 'room' | 'labels' | 'dimensions'
+  | 'benchtops' | 'fixtures' | 'room' | 'labels' | 'dimensions'
 
 export const LAYER_GROUPS: { id: LayerGroup; label: string }[] = [
   { id: 'carcase',    label: 'Carcase' },
@@ -42,6 +42,7 @@ export const LAYER_GROUPS: { id: LayerGroup; label: string }[] = [
   { id: 'hardware',   label: 'Hardware' },
   { id: 'panels',     label: 'Panels' },
   { id: 'benchtops',  label: 'Benchtops' },
+  { id: 'fixtures',   label: 'Fixtures & appliances' },
   { id: 'room',       label: 'Room' },
   { id: 'labels',     label: 'Labels' },
   { id: 'dimensions', label: 'Dimensions' },
@@ -137,6 +138,13 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'benchtop_edges', group: 'benchtops', label: 'Benchtop edge profiles', views: ['plan', 'elevation'], default: ON,
     hint: 'Plan: profile colour + code on exposed edges, wall edges dashed grey. Elevation: code on the front edge' },
   { id: 'benchtop_joins', group: 'benchtops', label: 'Benchtop join lines', views: ['plan', 'elevation'], default: ON },
+
+  // Fixtures & appliances (z_fixtures) — one item per catalogue category
+  { id: 'fixture_appliances', group: 'fixtures', label: 'Appliances', views: ALL, default: ON },
+  { id: 'fixture_sinks',      group: 'fixtures', label: 'Sinks',      views: ALL, default: ON },
+  { id: 'fixture_taps',       group: 'fixtures', label: 'Taps',       views: ALL, default: ON },
+  { id: 'fixture_decorative', group: 'fixtures', label: 'Decorative', views: ALL, default: ON },
+  { id: 'fixture_labels',     group: 'fixtures', label: 'Fixture names', views: ['plan', 'elevation'], default: ON },
 
   // Room
   { id: 'walls',          group: 'room', label: 'Walls', views: ['3d'], default: ON },

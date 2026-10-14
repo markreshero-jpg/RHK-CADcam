@@ -2,7 +2,7 @@
 
 import { Room } from '@/src/lib/types'
 
-type Counts = { cabinets: number; walls: number; benchtops: number }
+type Counts = { cabinets: number; walls: number; benchtops: number; fixtures?: number }
 
 export default function DeleteRoomModal({ room, counts, blocked, busy, error, onCancel, onConfirm }: {
   room: Room
@@ -44,7 +44,7 @@ export default function DeleteRoomModal({ room, counts, blocked, busy, error, on
 
             <p className="text-sm text-ink-muted mb-3">
               This will permanently delete <span className="font-medium text-ink">{room.name}</span> and
-              all cabinets, walls, and benchtops within it. This cannot be undone.
+              all cabinets, walls, benchtops and fixtures within it. This cannot be undone.
             </p>
 
             <div className="text-xs text-ink-subtle mb-5">
@@ -55,6 +55,7 @@ export default function DeleteRoomModal({ room, counts, blocked, busy, error, on
                   {counts.cabinets} {counts.cabinets === 1 ? 'cabinet' : 'cabinets'},{' '}
                   {counts.walls} {counts.walls === 1 ? 'wall' : 'walls'},{' '}
                   {counts.benchtops} {counts.benchtops === 1 ? 'benchtop' : 'benchtops'}
+                  {!!counts.fixtures && <>, {counts.fixtures} {counts.fixtures === 1 ? 'fixture' : 'fixtures'}</>}
                 </>
               )}
             </div>

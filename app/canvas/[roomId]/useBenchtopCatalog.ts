@@ -2,12 +2,18 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import { topThickness } from '@/src/lib/benchtop-resolver/resolver'
+import { topThickness, topRow } from '@/src/lib/benchtop-resolver/resolver'
+import { tapeApplies } from '@/src/lib/benchtopEdgeband'
 import { isBuildUp } from '@/src/lib/benchtop-resolver/construction'
 import type { BenchtopBuildMethod, BenchtopEdgeProfile, BenchtopInstance, BenchtopScheduleRow, Project, Room } from '@/src/lib/types'
 
 /** Display thickness of a top (elevation / 3D): `total` = finished edge, `top` = the worktop itself. */
 export interface BtThickness { total: number; top: number; buildUp: boolean }
+
+/** An edge tape from the catalogue (edge_banding). */
+export interface BtTape { id: string; name: string; thickness: number; width: number | null; color: string | null }
+/** Edge tape for one top (Phase 7): applies = in-house board top; defaultTape = its schedule row's tape. */
+export interface BtTapeContext { applies: boolean; defaultTape: string | null }
 
 // Build methods + edge profiles for the plan canvas (benchtop Phase 3):
 // edge colours / codes on the plan, the Shape Editor profile picker and the
@@ -20,6 +26,7 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
   const [rows, setRows] = useState<BenchtopScheduleRow[]>([])
   const [boardDz, setBoardDz] = useState<Map<string, number>>(new Map())
   const [surfaceDz, setSurfaceDz] = useState<Map<string, number>>(new Map())
+  const [tapes, setTapes] = useState<BtTape[]>([])
 
   useEffect(() => {
     let live = true
@@ -29,8 +36,10 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
       supabase.from('benchtop_schedules').select('id, is_default'),
       supabase.from('benchtop_schedule_rows').select('*'),
       supabase.from('benchtop_materials').select('id, dz'),
-    ]).then(async ([m, p, s, r, bm]) => {
+      supabase.from('edge_banding').select('id, name, thickness, width, color').eq('active', true).order('name'),
+    ]).then(async ([m, p, s, r, bm, eb]) => {
       if (!live) return
+      setTapes(((eb.data ?? []) as BtTape[]).map(t => ({ ...t, thickness: Number(t.thickness), width: t.width == null ? null : Number(t.width) })))
       setMethods((m.data ?? []) as BenchtopBuildMethod[])
       setProfiles((p.data ?? []) as BenchtopEdgeProfile[])
       setSchedules((s.data ?? []) as { id: string; is_default: boolean }[])
@@ -63,16 +72,30 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
   // shop default); thickness rule shared with the resolver (topThickness), so
   // the canvas draws exactly what the parts list cuts. Job / room per-role
   // material overrides are not applied here (display only).
-  const thicknessFor = useCallback((bt: BenchtopInstance): BtThickness => {
+  const scheduleRowsFor = useCallback((bt: BenchtopInstance) => {
     const method = methodFor(bt)
     const schedId = bt.benchtop_schedule_id ?? method?.default_schedule_id ?? room.benchtop_schedule_id
       ?? project?.benchtop_schedule_id ?? schedules.find(s => s.is_default)?.id ?? null
-    const sched = rows.filter(r => r.schedule_id === schedId)
+    return rows.filter(r => r.schedule_id === schedId)
+  }, [methodFor, rows, schedules, room.benchtop_schedule_id, project?.benchtop_schedule_id])
+
+  const thicknessFor = useCallback((bt: BenchtopInstance): BtThickness => {
+    const method = methodFor(bt)
+    const sched = scheduleRowsFor(bt)
     if (!method) return { top: 33, total: 33, buildUp: false }
     const asMat = (m: Map<string, number>) => new Map([...m].map(([k, dz]) => [k, { name: '', dz }]))
     const t = topThickness(method, sched, asMat(boardDz), asMat(surfaceDz))
     return { ...t, buildUp: isBuildUp(method.construction) }
-  }, [methodFor, rows, schedules, boardDz, surfaceDz, room.benchtop_schedule_id, project?.benchtop_schedule_id])
+  }, [methodFor, scheduleRowsFor, boardDz, surfaceDz])
 
-  return { methods, profiles, profileById, methodFor, defaultProfileIdFor, thicknessFor }
+  // Same rule as the resolver: tape only on in-house board tops; the default
+  // is the tape on the schedule row the top is made from.
+  const tapeContextFor = useCallback((bt: BenchtopInstance): BtTapeContext => {
+    const method = methodFor(bt)
+    const top = method ? topRow(method, scheduleRowsFor(bt)) : undefined
+    const applies = tapeApplies(method, top)
+    return { applies, defaultTape: applies ? top?.edgeband_id ?? null : null }
+  }, [methodFor, scheduleRowsFor])
+
+  return { methods, profiles, profileById, methodFor, defaultProfileIdFor, thicknessFor, tapes, tapeContextFor }
 }

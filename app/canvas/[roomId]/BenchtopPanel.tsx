@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import CalcInput from '@/src/components/CalcInput'
-import { BenchtopInstance, BenchtopBuildMethod, BenchtopEdgeProfile, BenchtopEdge, BenchtopJoinType, Wall } from '@/src/lib/types'
+import { BenchtopInstance, BenchtopBuildMethod, BenchtopEdgeProfile, BenchtopJoinType, Wall } from '@/src/lib/types'
 import type { BtPosition, WallSide, BtOverhang, StretchEnd } from '@/src/lib/benchtopAnchor'
-import type { BtThickness } from './useBenchtopCatalog'
-import { btSegments, segLength, effectiveProfileId, edgeProfileColor, outlineBounds, outlinePoints, signedArea, waterfallJoin } from '@/src/lib/benchtopGeometry'
+import type { BtThickness, BtTape, BtTapeContext } from './useBenchtopCatalog'
+import { tapeTotals } from '@/src/lib/benchtopEdgeband'
+import { btSegments, segLength, effectiveProfileId, outlineBounds, outlinePoints, signedArea } from '@/src/lib/benchtopGeometry'
 import { resolveBenchtopFromDB, loadResolvedParts } from '@/src/lib/benchtop-resolver/resolveBenchtopFromDB'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 
@@ -28,9 +29,10 @@ export default function BenchtopPanel({
   filletRadius, setFilletRadius,
   onMirrorH, onMirrorV, onOffset, onRotate,
   onDeleteCutout, onDrawCutoutRect, onDrawCutoutCircle,
-  profiles, method, onSetEdges, onEditShape, onDrawJoin, onDeleteJoin, onSetJoinType,
+  profiles, method, onEditShape, onDrawJoin, onDeleteJoin, onSetJoinType,
   walls, position, baseHeight, thickness, onSetPosition, onReanchor, onMove,
   wallLength, overhang, onStretch,
+  tapes, tapeCtx, onEditEdges, edgesChanged, onResolved,
 }: {
   benchtop: BenchtopInstance
   onUpdate: (id: string, u: Partial<BenchtopInstance>) => Promise<void>
@@ -47,7 +49,6 @@ export default function BenchtopPanel({
   // Phase 3 — edge finishes + join lines
   profiles: BenchtopEdgeProfile[]
   method: BenchtopBuildMethod | null      // effective method (benchtop → room → job → default)
-  onSetEdges: (id: string, edgeIndices: number[], patch: BenchtopEdge) => void
   onEditShape: (id: string) => void
   onDrawJoin: () => void
   onDeleteJoin: (id: string, i: number) => void
@@ -64,6 +65,13 @@ export default function BenchtopPanel({
   wallLength: number | null                 // anchor wall length
   overhang: BtOverhang | null               // past the base cabinets under the top
   onStretch: (id: string, end: StretchEnd, delta: number) => void
+  // Phase 7 — edge tape
+  tapes: BtTape[]
+  tapeCtx: BtTapeContext
+  onEditEdges: (id: string) => void
+  /** Edges were edited since these parts were resolved. */
+  edgesChanged: boolean
+  onResolved: () => void
 }) {
   // Which end a typed length change moves (remembered while the panel is open).
   const [growEnd, setGrowEnd] = useState<'left' | 'right' | 'both'>('right')
@@ -102,6 +110,7 @@ export default function BenchtopPanel({
         setResolveError('Could not resolve — make sure a Build Method is assigned (at benchtop, room, or job level).')
       } else {
         setParts(result)
+        onResolved()
       }
     } finally {
       setResolving(false)
@@ -115,7 +124,6 @@ export default function BenchtopPanel({
   const n = segs.length
   const defaultProfileId = method?.default_edge_profile_id ?? null
   const profileById = Object.fromEntries(profiles.map(p => [p.id, p]))
-  const activeProfiles = profiles.filter(p => p.active)
   const defaultProfile = defaultProfileId ? profileById[defaultProfileId] : undefined
   // Lineal metres per profile over exposed edges — what the order / quote uses.
   const lineal = new Map<string, number>()
@@ -293,75 +301,43 @@ export default function BenchtopPanel({
           </button>
         </div>
 
-        {/* ── Shape + edges (Phase 3) ── */}
-        <div className="border-t border-gray-800 pt-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className={lbl}>Edges</p>
-            <span className="text-[10px] text-gray-500">{method ? method.name : 'no method'}</span>
-          </div>
-          <button onClick={() => onEditShape(benchtop.id)}
-            className="w-full px-3 py-1.5 rounded text-xs font-medium bg-blue-700 hover:bg-blue-600 text-white">
-            Edit shape &amp; edges…
-          </button>
-          <div className="space-y-1">
-            {segs.map((s, i) => {
-              const wall = !!s.edge?.wall
-              const pid = effectiveProfileId(s, defaultProfileId)
-              const prof = pid ? profileById[pid] : undefined
-              return (
-                <div key={i} className="flex items-center gap-1 bg-gray-800 rounded px-1.5 py-1 text-[10px]">
-                  <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: wall ? '#6b7280' : edgeProfileColor(prof) }} />
-                  <span className="text-gray-400 w-12 shrink-0">{i + 1}{s.type !== 'line' ? '~' : ''} · {Math.round(segLength(s))}</span>
-                  <button
-                    onClick={() => onSetEdges(benchtop.id, [i], { wall: !wall })}
-                    title={wall ? 'Against a wall — click to make exposed' : 'Exposed — click to mark as a wall edge'}
-                    className={`px-1 rounded shrink-0 ${wall ? 'bg-gray-700 text-gray-300' : 'bg-teal-900 text-teal-300'}`}>
-                    {wall ? 'Wall' : 'Exp'}
-                  </button>
-                  {!wall && (
-                    <select
-                      value={s.edge?.profile_id ?? ''}
-                      onChange={e => onSetEdges(benchtop.id, [i], { wall: false, profile_id: e.target.value || null })}
-                      className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-white">
-                      <option value="">Default{defaultProfile ? ` (${defaultProfile.code ?? defaultProfile.name})` : ''}</option>
-                      {(['stone', 'board', 'postform'] as const).map(cat => (
-                        <optgroup key={cat} label={cat}>
-                          {activeProfiles.filter(p => p.category === cat).map(p => (
-                            <option key={p.id} value={p.id}>{p.code ? `${p.code} — ` : ''}{p.name}</option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  )}
-                  {!wall && prof?.generates === 'waterfall' && (
-                    <span className="flex shrink-0" title="Waterfall leg joint — Mitre: leg runs to the top surface (45° corner). Butt: the top sits on the leg.">
-                      {(['butt', 'mitre'] as const).map(t => (
-                        <button key={t} onClick={() => onSetEdges(benchtop.id, [i], { waterfall_join: t })}
-                          className={`px-1 rounded ${waterfallJoin(s) === t ? 'bg-purple-800 text-purple-100' : 'text-gray-500 hover:text-gray-300'}`}>
-                          {t === 'butt' ? 'B' : 'M'}
-                        </button>
-                      ))}
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-          {lineal.size > 0 && (
-            <div className="text-[10px] text-gray-400 space-y-0.5 pt-1">
-              {[...lineal.entries()].map(([pid, mm]) => {
-                const p = profileById[pid]
-                return (
-                  <div key={pid} className="flex justify-between">
-                    <span className="truncate">{p ? p.name : 'Unknown profile'}{p?.generates === 'waterfall' ? ' (waterfall)' : p?.generates === 'apron' ? ' (apron)' : ''}</span>
-                    <span className="text-gray-300 shrink-0 ml-2">{(mm / 1000).toFixed(2)} lm</span>
-                  </div>
-                )
-              })}
+        {/* ── Edges: a summary here; editing is the Edit edges mode (Phase 7b) ── */}
+        {(() => {
+          const wallN = segs.filter(s => s.edge?.wall).length
+          const tapeMm = tapeCtx.applies
+            ? tapeTotals(segs, s => { const pid = effectiveProfileId(s, defaultProfileId); return pid ? profileById[pid] : undefined }, tapeCtx.defaultTape,
+              (benchtop.height_mm ?? baseHeight) + thickness.total)
+            : null
+          const tapeById = new Map(tapes.map(t => [t.id, t]))
+          return (
+            <div className="border-t border-gray-800 pt-3 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className={lbl}>Edges</p>
+                <span className="text-[10px] text-gray-500">{method ? method.name : 'no method'}</span>
+              </div>
+              <div className="text-[10px] text-gray-400 space-y-0.5">
+                <div>{n - wallN} exposed · {wallN} wall{defaultProfile ? ` · default ${defaultProfile.code ?? defaultProfile.name}` : ''}</div>
+                {lineal.size > 0 && (
+                  <div>{[...lineal.entries()].map(([pid, mm]) => `${profileById[pid]?.code ?? profileById[pid]?.name ?? '?'} ${(mm / 1000).toFixed(2)} lm`).join(' · ')}</div>
+                )}
+                {tapeMm && (
+                  <div>Tape: {tapeMm.size ? [...tapeMm.entries()].map(([id, mm]) => `${tapeById.get(id)?.name ?? '?'} ${(mm / 1000).toFixed(2)} m`).join(' · ') : 'none'}</div>
+                )}
+              </div>
+              <div className="flex gap-1">
+                <button onClick={() => onEditEdges(benchtop.id)}
+                  className="flex-1 px-3 py-1.5 rounded text-xs font-medium bg-blue-700 hover:bg-blue-600 text-white"
+                  title="Paint edge profiles, walls and edge tape on the plan (also: right-click the top)">
+                  Edit edges…
+                </button>
+                <button onClick={() => onEditShape(benchtop.id)}
+                  className="px-2 py-1.5 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white" title="The full-screen Shape Editor">
+                  Shape Editor…
+                </button>
+              </div>
             </div>
-          )}
-          <p className="text-[10px] text-gray-600">Plan: click an edge tag for wall/exposed · Alt = curve · Shift = add vertex</p>
-        </div>
+          )
+        })()}
 
         {/* ── Join lines (P-b) ── */}
         <div className="border-t border-gray-800 pt-3 space-y-2">
@@ -502,6 +478,9 @@ export default function BenchtopPanel({
           >
             {resolving ? 'Resolving…' : 'Resolve Parts'}
           </button>
+          {edgesChanged && parts.length > 0 && !resolving && (
+            <p className="text-[10px] text-amber-400">Edges changed — Resolve Parts to update the cut list.</p>
+          )}
           {resolveError && (
             <p className="text-[10px] text-red-400">{resolveError}</p>
           )}
@@ -518,6 +497,9 @@ export default function BenchtopPanel({
                   <div className="text-gray-500 mt-0.5">
                     {p.length_mm} × {p.width_mm} × {p.thickness_mm} mm
                     {p.outline && <span className="ml-1 text-sky-400" title="Shaped piece — cut to its outline; the size is the overall extent">shaped</span>}
+                    {p.edgebands && Object.keys(p.edgebands.sides).length > 0 && (
+                      <span className="ml-1 text-amber-300" title="Edges taped on the cut list">taped {Object.keys(p.edgebands.sides).length}</span>
+                    )}
                   </div>
                   {p.meta && (p.meta.area_m2 != null || (p.meta.cutouts?.length ?? 0) > 0) && (
                     <div className="text-gray-600">

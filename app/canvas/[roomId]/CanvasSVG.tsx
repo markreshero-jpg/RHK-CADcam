@@ -5,6 +5,8 @@ import {
   btSegments, outlinePath, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin,
   edgePath, edgeProfileColor, effectiveProfileId,
 } from '@/src/lib/benchtopGeometry'
+import { edgeTape, tapeable, tapeOverridden, tapeColour } from '@/src/lib/benchtopEdgeband'
+import type { BtTapeContext } from './useBenchtopCatalog'
 import type { ResolvedCabinet, HardwareTurn } from '@/src/lib/resolver/types'
 import { turnPoint } from '@/src/lib/resolver/hardwareTurn'
 import { customExtents } from '@/src/lib/customPartBox'
@@ -127,6 +129,13 @@ interface CanvasSVGProps {
   /** In-plan shape edit (Phase 6): the working outline + a press on a corner / edge. */
   btShapeEdit?: BtShapeEdit | null
   onShapeHandleDown?: (e: React.PointerEvent, kind: 'v' | 'e', i: number) => void
+  /** Edit edges (Phase 7b): panel hover lights an edge; the working copy's edges are painted on click. */
+  btEdgeHover?: { btId: string; i: number } | null
+  btEdgeEdit?: import('./canvasTypes').BtEdgeEdit | null
+  onBtEdgePaint?: (i: number, reset: boolean) => void
+  onBtEdgeHover?: (i: number | null) => void
+  btTapeIds?: string[]
+  btTapeContextFor?: (bt: BenchtopInstance) => BtTapeContext
   // Section cut
   sectionCut?: SectionCut | null
   onSectionFlipLook?: () => void
@@ -138,6 +147,8 @@ interface CanvasSVGProps {
   measureEnd: Pt | null
   measureCursor: Pt | null
   onMeasureCancel?: () => void
+  /** Fixtures & appliances (z_fixtures) — drawn in world space above cabinets. */
+  fixturesLayer?: React.ReactNode
 }
 
 export default function CanvasSVG({
@@ -154,10 +165,10 @@ export default function CanvasSVG({
   btUPoints, btUCursor,
   btCutoutStart, btCutoutCursor,
   btJoinStart, btJoinCursor, edgeProfiles, btDefaultProfileId, onBenchtopDoubleClick, btMoveBase, btMoveCursor, btDepth,
-  btShapeEdit, onShapeHandleDown,
+  btShapeEdit, onShapeHandleDown, btEdgeHover, btEdgeEdit, onBtEdgePaint, onBtEdgeHover, btTapeIds, btTapeContextFor,
   sectionCut, onSectionFlipLook, onSectionClear, onSectionLinePointerDown,
   snapResult, measureStart, measureEnd, measureCursor, onMeasureCancel,
-  resolvedParts,
+  resolvedParts, fixturesLayer,
 }: CanvasSVGProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   // Editable part-line palette (src/lib/partPalette.ts); read once on mount.
@@ -224,8 +235,9 @@ export default function CanvasSVG({
         {layers.show('benchtops') && benchtops.map(bt => {
           // Phase 6: the top being shaped draws its working outline; the others dim.
           const shaping = mode === 'edit_benchtop_shape' && btShapeEdit?.btId === bt.id
-          const dimmed = mode === 'edit_benchtop_shape' && !shaping
-          const segs = shaping ? btShapeEdit!.segs : btSegments(bt)
+          const edging = mode === 'edit_benchtop_edges' && btEdgeEdit?.btId === bt.id
+          const dimmed = (mode === 'edit_benchtop_shape' && !shaping) || (mode === 'edit_benchtop_edges' && !edging)
+          const segs = shaping ? btShapeEdit!.segs : edging ? btEdgeEdit!.segs : btSegments(bt)
           if (segs.length < 2) return null
           const isSel = bt.id === selectedBenchtopId
           const c = outlineCentroid(segs)
@@ -260,7 +272,7 @@ export default function CanvasSVG({
               />
 
               {/* Edge finishes: wall edges grey, exposed edges in their profile colour + code */}
-              {showEdges && segs.map((s, i) => {
+              {showEdges && !edging && segs.map((s, i) => {
                 const pid = effectiveProfileId(s, defaultProfileId)
                 const prof = pid ? edgeProfiles?.[pid] : undefined
                 const n = outwardNormal(segs, i)
@@ -285,6 +297,56 @@ export default function CanvasSVG({
                   </g>
                 )
               })}
+
+              {/* Edit edges (Phase 7b): the working copy's edges in the active tab's
+                  colours, clickable. Mode feedback like the shape-edit handles —
+                  not a layer item. */}
+              {edging && (() => {
+                const ee = btEdgeEdit!
+                const ctx = btTapeContextFor?.(bt) ?? { applies: false, defaultTape: null }
+                const defPid = btDefaultProfileId?.(bt) ?? null
+                const off = 4 / view.zoom
+                return segs.map((s, i) => {
+                  const pid = effectiveProfileId(s, defPid)
+                  const prof = pid ? edgeProfiles?.[pid] : undefined
+                  const wall = !!s.edge?.wall
+                  let col = '#6b7280', w = 1.5, faded = false, label: string | null = null, clickable = true
+                  if (ee.tab === 'profile') {
+                    if (wall) { w = 3 } else if (prof) {
+                      col = edgeProfileColor(prof); w = 4; faded = !s.edge?.profile_id
+                      label = (prof.code ?? prof.name) + (prof.generates === 'waterfall' ? (waterfallJoin(s) === 'mitre' ? ' ▼M' : ' ▼B') : '')
+                    }
+                  } else {
+                    clickable = ctx.applies && tapeable(s, prof)
+                    const t = ctx.applies ? edgeTape(s, prof, ctx.defaultTape) : null
+                    if (t) { col = tapeColour(t, btTapeIds ?? []); w = 4; faded = !tapeOverridden(s) }
+                    else if (!wall && !clickable) col = '#a855f7'
+                  }
+                  const n = outwardNormal(segs, i)
+                  const m = segMid(s)
+                  const lit = btEdgeHover?.btId === bt.id && btEdgeHover.i === i
+                  return (
+                    <g key={`ee${i}`} transform={`translate(${n.x * off} ${n.y * off})`}>
+                      {(lit || ee.sel === i) && clickable && (
+                        <path d={edgePath(s)} fill="none" stroke="#fbbf24" strokeOpacity={lit ? 0.8 : 0.35}
+                          strokeWidth={9 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                      )}
+                      <path d={edgePath(s)} fill="none" stroke={col} strokeOpacity={faded ? 0.55 : 1}
+                        strokeWidth={w / view.zoom} strokeLinecap="round"
+                        strokeDasharray={wall ? `${4 / view.zoom} ${3 / view.zoom}` : undefined} style={{ pointerEvents: 'none' }} />
+                      {label && (
+                        <text x={m.x + n.x * 12 / view.zoom} y={m.y + n.y * 12 / view.zoom} textAnchor="middle" dominantBaseline="middle"
+                          fontSize={8 / view.zoom} fontWeight={600} fill={col} style={{ userSelect: 'none', pointerEvents: 'none' }}>{label}</text>
+                      )}
+                      <path d={edgePath(s)} fill="none" stroke="transparent" strokeWidth={14 / view.zoom}
+                        style={{ pointerEvents: 'stroke', cursor: clickable ? 'pointer' : 'not-allowed' }}
+                        onPointerDown={e => { e.stopPropagation() }}
+                        onClick={e => { e.stopPropagation(); if (clickable) onBtEdgePaint?.(i, e.altKey) }}
+                        onMouseEnter={() => onBtEdgeHover?.(i)} onMouseLeave={() => onBtEdgeHover?.(null)} />
+                    </g>
+                  )
+                })
+              })()}
 
               {/* Join lines — B = butt, M = mitre */}
               {showJoins && (bt.joins ?? []).map((j, i) => {
@@ -1458,6 +1520,8 @@ export default function CanvasSVG({
 
           return nodes
         })}
+
+        {fixturesLayer}
 
         {/* ── Cabinet move ghost ── */}
         {cabMoveDrag && (() => {

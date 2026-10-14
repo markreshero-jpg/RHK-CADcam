@@ -18,6 +18,7 @@ import CncToolsClient from '@/app/settings/CncToolsClient'
 import DrillLibraryClient from '@/app/settings/DrillLibraryClient'
 import CncToolSetsClient from '@/app/settings/CncToolSetsClient'
 import CncMachinesClient from '@/app/settings/CncMachinesClient'
+import UsersClient from '@/app/settings/UsersClient'
 import { DEFAULT_DIMS } from '@/src/lib/types'
 import { getUserPrefs, setUserPrefs, type CabinetViewStyles, type ViewStyle } from '@/src/lib/userPrefs'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
@@ -81,7 +82,7 @@ const SCHED_TYPES: { key: SchedKey; label: string; col: keyof ShopSettings }[] =
 
 type SettingsTab =
   | 'user_preferences'
-  | 'company' | 'dimensions' | 'materials'
+  | 'company' | 'users' | 'dimensions' | 'materials'
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'hinge_rules'
   | 'cnc_tool' | 'drill_library' | 'cnc_tool_set' | 'cnc_machine'
@@ -112,6 +113,17 @@ const TABS: TabDef[] = [
         <path d="M4.5 4.5V3a1 1 0 011-1h4a1 1 0 011 1v1.5"/>
         <line x1="7.5" y1="8" x2="7.5" y2="11"/>
         <line x1="5.5" y1="9.5" x2="9.5" y2="9.5"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'users', label: 'Users', group: 'Shop',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="5.5" cy="5" r="2.2"/>
+        <path d="M1.5 13c0-2.3 1.8-4 4-4s4 1.7 4 4"/>
+        <circle cx="10.8" cy="5.5" r="1.7"/>
+        <path d="M10.5 9.1c1.8.1 3 1.6 3 3.4"/>
       </svg>
     ),
   },
@@ -509,7 +521,9 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
 
         {/* Content area */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {tab === 'materials_library' ? (
+          {tab === 'users' ? (
+            <UsersClient />
+          ) : tab === 'materials_library' ? (
             <MaterialsClient embedded />
           ) : tab === 'materials_schedule' ? (
             <SchedulesClient embedded />

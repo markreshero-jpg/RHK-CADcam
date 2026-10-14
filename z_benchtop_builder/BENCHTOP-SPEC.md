@@ -7,9 +7,11 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Phase 6 (in-plan shape editing) done (2026-10-12).
-> Next, Mark's agreed order: benchtop edgebanding on the cut list (R-f) →
-> splashbacks → auto panel splits → CNC cutouts / profiles → small items.
+> **RESUME HERE** → Phase 7 (edge tape, R-f) + 7b (Edit edges mode) built
+> 2026-10-14 — Mark liked the picker; 7b awaiting his live try (headless check blocked: no AUTOMATION_* creds in
+> .env.local). Then: the same picker for cabinet parts (needs saved per-part
+> overrides first — the 3D inspector's tick boxes never save) → splashbacks →
+> auto panel splits → CNC cutouts / profiles → small items.
 > Phase 4 rules Q-a…Q-h are Claude's defaults; its 3 open questions are locked.
 
 ---
@@ -270,8 +272,11 @@ Built:
   sidebar Benchtop button toggles it; Esc steps a tool back to Benchtop mode,
   then out to Select. In it only benchtops pick — plan walls + cabinets,
   elevation cabinets + wall face, and 3D cabinets are click-through / inert.
-  Outside it benchtops are click-through (plan, elevation, 3D) so cabinets own
-  every click. Crossing the boundary drops the other kind's selection; the
+  Outside it benchtops are click-through in plan + elevation so cabinets own
+  every click. **3D exception** (Mark, 2026-10-14): tops pick in any mode
+  (cabinets still pick by their fronts) — except while measuring, and in wire
+  view outside F4 (a ghosted top would block the cabinets seen through it).
+  Crossing the boundary drops the other kind's selection; the
   cabinets selected on the way in still seed Draw in Shape Editor. Benchtop
   tools finish back in Benchtop mode, not Select. Fixed on the way: the canvas
   key handler's effect didn't depend on `mode` (F4 / Esc read a stale mode).
@@ -392,12 +397,12 @@ Started on Mark's go ("start phase 4"). Rules Q-a…Q-h are Claude's defaults �
   unit of quantity ("Strip — Cross 1/2/3"). Footprint h = along the grain
   (length) unless the row's grain is `width`. Shaped pieces carry their
   outline as `shape` (rotated, not mirrored) and nest at the bbox like other
-  shaped parts. No edgebanding deduction.
+  shaped parts. Edge tape deduction added in Phase 7 (T-d).
 - **R-d Read-only in the optimiser** — no rename / comment (no cabinet row to
   store them); no part_operations (excluded from drill / route sync).
 - **R-e Size overrides** — none for benchtop parts (`sizeOverrides` case).
-- **R-f Follow-ups, not built** — benchtop edgebanding per edge on the cut
-  list; cutouts / profiles as CNC ops; supply sheet export to CSV.
+- **R-f Follow-ups, not built** — ~~benchtop edgebanding per edge on the cut
+  list~~ (Phase 7); cutouts / profiles as CNC ops; supply sheet export to CSV.
 - Tests: 5 new (`__tests__/outputs.test.ts`). 286/286.
 - Verified live: Living supply sheet → Benchtop 2 Stone Slab 2435 × 426 × 20,
   1.04 m², ARR 5.72 lm; Parts List has no stone rows. Benchtop 2 switched to
@@ -469,6 +474,77 @@ outside it tops stay locked exactly as before (no drags).
   fixed) → Enter saved 2535 × 426; Esc after a drag left the DB unchanged.
   Restored. 302/302 tests.
 
+### Phase 7 — Edge tape picker  `[x]` built (2026-10-14), live try pending
+Mark (2026-10-14): user friendly and easy; if it looks good the same look and
+feel goes on door / panel / carcase edgebanding. Locked with Mark: tape is set
+**per edge** on benchtops (fronts and ends often differ); cabinets may start
+one-tape-per-part with the same picker. Benchtops first, then cabinets.
+
+- **T-a Storage** — `segment.edge.edgeband_id`: undefined = default (the
+  tape on the schedule row the top is made from — `topRow`), null = none, id
+  = that tape. Setting the default by hand stores undefined, so edges follow
+  schedule changes. Wall edges drop it. Rules: `src/lib/benchtopEdgeband.ts`.
+- **T-b What tape covers** — in-house board tops only (`tapeApplies`:
+  not outsourced and the top row has a board). Plain edge → the worktop's
+  edge + the build-up under it (one strip). Apron profile → the apron's bottom
+  edge. Butt waterfall → the top's end. Mitred waterfall → not tapeable. A
+  waterfall leg's two upright edges take the tape of the edges either side.
+  Walls and joins never.
+- **T-c Picker** (BenchtopPanel → "Edge tape", `BenchtopEdgeTapePicker.tsx`):
+  a drawing of the top in its wall frame (back at the top, same frame as the
+  Phase 6 corner X/Y — `viewFrameFor`). Pick a tape chip, click edges to
+  paint; click a taped edge to take it off; Alt-click / ↺ dot = back to the
+  default. Default tape drawn faded, hand-set solid. Quick: All / Front / None /
+  Default. Metres per tape (legs included) + a warning when the tape is
+  narrower than the finished edge. Hovering an edge lights it on the plan
+  (selection feedback, not a layer item). Stone tops show a one-line note.
+  A tape change after resolving shows "Resolve Parts to update the cut list".
+- **T-d Cut list** — `benchtop_resolved_parts.edgebands` jsonb
+  (`migration_phase7_edgebands.sql`): `{ sides: {x0,xL,y0,yW: tape}, mm }`
+  in the part frame. Worktop: a side per taped edge (rectangles) + metres.
+  Perimeter members: outer face (y0) under a taped edge + ends that run
+  through to a taped neighbour (no metres — same strip as the worktop). Legs:
+  upright sides + metres. Aprons: bottom (yW) + metres. Optimiser maps sides
+  to eb_* (length grain turned a quarter: y0/yW → w1/w2, x0 → h2, xL → h1),
+  thickness from `edge_banding` via both loaders (`benchtopEbIds`);
+  unknown thickness → eb_missing. Shaped pieces: no rect deduction (O5), the
+  metres go on `shape.tape_mm`.
+- Not taped yet: fascias (drop front / side / back), subtop, cross members.
+- **T-c superseded by 7b**: the picker moved out of the side bar into the
+  Edit edges mode (below).
+- Tests: 5 (`__tests__/edgeband.test.ts`). 385/385.
+
+### Phase 7b — Edit edges mode  `[x]` built (2026-10-14), live try pending
+Mark (2026-10-14): "right click and say edit edges … and edit edge profiles
+(waterfall ends etc) so there is less to look at in the side bar all at once".
+
+- **E-a Entry** — right-click a top (F4 mode) → **Edit edges** (next to Edit
+  shape), or the side bar's "Edit edges…" button. Mode `edit_benchtop_edges`
+  (a benchtop mode). Working copy + its own undo, like Edit shape: Enter /
+  ✓ Done saves (one canvas undo step), Esc asks Save / Discard / Keep editing
+  when something changed (the shared SaveShapePrompt, `what="edges"`),
+  Ctrl+Z steps back.
+- **E-b Panel** (`BenchtopEdgeEditPanel.tsx`) — tabs **Profiles** | **Tape**,
+  one drawing of the top (wall frame, back at the top). Same rules on both
+  tabs: pick a chip, click edges (on the drawing or the plan); the same chip
+  again takes it off; Alt-click / ↺ = back to the default; default faded,
+  hand-set solid. Profiles chips: Default (method), Wall, profiles in use,
+  "+ Profile…". Quick All / Front / Default. A clicked waterfall edge shows
+  Butt / Mitre. Lineal m per profile. Tape tab = Phase 7 (chips seeded with
+  the schedule tape, else the first tape in use; quick All / Front / None /
+  Default; metres; narrow-tape warning). Paint rules are pure
+  (`benchtopEdgeband.ts` paintTape / paintProfile / setTapes / setProfiles).
+- **E-c Plan** — while editing, the top's edges are drawn in the active tab's
+  colours (tape colours fixed per catalogue position — `tapeColour` — so plan
+  and panel agree) with click targets; other tops dim. Mode feedback like the
+  shape-edit handles, not a layer item; the normal edge-finish layer is
+  skipped for that top meanwhile.
+- **E-d Side bar** — the per-edge list and the tape section are gone: one
+  summary (exposed / wall, lm per profile, tape metres) + "Edit edges…" and
+  "Shape Editor…". After an edge edit, a resolved top shows "Edges changed —
+  Resolve Parts to update the cut list" until it is resolved again.
+- Tests: +2 (paint rules) in `__tests__/edgeband.test.ts`.
+
 ### Deferred
 Splashback module · CNC machining of profiles · automatic panel splits ·
 sharing the profile library with cabinet-part shapes.
@@ -476,6 +552,11 @@ sharing the profile library with cabinet-part shapes.
 ---
 
 ## Session log
+- 2026-10-14 — Phase 7b Edit edges mode (right-click → Edit edges; Profiles /
+  Tape tabs; plan click-to-paint); side bar edge list replaced by a summary.
+- 2026-10-14 — Phase 7 edge tape picker built (T-a … T-d). Live data check
+  not run: DB is sign-in only and .env.local has no AUTOMATION_* creds; picker
+  checked by a standalone render instead.
 - 2026-10-12 — Fixed (Mark): 3D mitred waterfall showed a butt line as well as
   the diagonal. The top's 45° corner was a separate wedge mesh whose own outline
   drew a line across the top and down the side, T in from the end. The slab is

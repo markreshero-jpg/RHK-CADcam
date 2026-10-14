@@ -1,9 +1,11 @@
 import { useRef, useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import type { Wall, CabinetInstance, BenchtopInstance } from '@/src/lib/types'
+import type { Wall, CabinetInstance, BenchtopInstance, RoomFixture } from '@/src/lib/types'
 import type { Selected } from './canvasTypes'
 
-type Snapshot = { walls: Wall[]; cabinets: CabinetInstance[]; benchtops: BenchtopInstance[] }
+// fixtures optional: drag snapshots built by callers predate fixtures — an
+// absent list leaves fixtures as they are.
+type Snapshot = { walls: Wall[]; cabinets: CabinetInstance[]; benchtops: BenchtopInstance[]; fixtures?: RoomFixture[] }
 
 export function useCanvasHistory(
   walls: Wall[],
@@ -13,24 +15,29 @@ export function useCanvasHistory(
   setCabinets: React.Dispatch<React.SetStateAction<CabinetInstance[]>>,
   setBenchtops: React.Dispatch<React.SetStateAction<BenchtopInstance[]>>,
   setSelected: (s: Selected) => void,
+  fixtures: RoomFixture[] = [],
+  setFixtures?: React.Dispatch<React.SetStateAction<RoomFixture[]>>,
 ) {
   const undoStackRef   = useRef<Snapshot[]>([])
   const redoStackRef   = useRef<Snapshot[]>([])
   const wallsRef       = useRef<Wall[]>(walls)
   const cabinetsRef    = useRef<CabinetInstance[]>(cabinets)
   const benchtopsRef   = useRef<BenchtopInstance[]>(benchtops)
+  const fixturesRef    = useRef<RoomFixture[]>(fixtures)
   const [version, setVersion] = useState(0)
 
   useEffect(() => { wallsRef.current     = walls     }, [walls])
   useEffect(() => { cabinetsRef.current  = cabinets  }, [cabinets])
   useEffect(() => { benchtopsRef.current = benchtops }, [benchtops])
+  useEffect(() => { fixturesRef.current  = fixtures  }, [fixtures])
+
+  const current = (): Snapshot => ({
+    walls: wallsRef.current, cabinets: cabinetsRef.current,
+    benchtops: benchtopsRef.current, fixtures: fixturesRef.current,
+  })
 
   function captureSnapshot() {
-    undoStackRef.current = [...undoStackRef.current.slice(-49), {
-      walls: wallsRef.current,
-      cabinets: cabinetsRef.current,
-      benchtops: benchtopsRef.current,
-    }]
+    undoStackRef.current = [...undoStackRef.current.slice(-49), current()]
     redoStackRef.current = []
     setVersion(v => v + 1)
   }
@@ -39,7 +46,9 @@ export function useCanvasHistory(
     const pw = wallsRef.current
     const pc = cabinetsRef.current
     const pb = benchtopsRef.current
+    const pf = fixturesRef.current
     setWalls(snap.walls); setCabinets(snap.cabinets); setBenchtops(snap.benchtops); setSelected(null)
+    if (snap.fixtures && setFixtures) setFixtures(snap.fixtures)
 
     // Sync walls
     const pwMap = new Map(pw.map(w => [w.id, w]))
@@ -82,12 +91,27 @@ export function useCanvasHistory(
       const p = pbMap.get(b.id)
       if (p && JSON.stringify(p) !== JSON.stringify(b)) await supabase.from('benchtop_instances').update(b).eq('id', b.id)
     }
+
+    // Sync fixtures (z_fixtures)
+    if (snap.fixtures && setFixtures) {
+      const pfMap = new Map(pf.map(f => [f.id, f]))
+      const sfMap = new Map(snap.fixtures.map(f => [f.id, f]))
+      for (const f of pf) {
+        if (!sfMap.has(f.id)) await supabase.from('room_fixtures').delete().eq('id', f.id)
+      }
+      const newFx = snap.fixtures.filter(f => !pfMap.has(f.id))
+      if (newFx.length) await supabase.from('room_fixtures').insert(newFx)
+      for (const f of snap.fixtures) {
+        const p = pfMap.get(f.id)
+        if (p && JSON.stringify(p) !== JSON.stringify(f)) await supabase.from('room_fixtures').update(f).eq('id', f.id)
+      }
+    }
   }
 
   async function handleUndo() {
     if (!undoStackRef.current.length) return
     const snap = undoStackRef.current[undoStackRef.current.length - 1]
-    redoStackRef.current = [...redoStackRef.current, { walls: wallsRef.current, cabinets: cabinetsRef.current, benchtops: benchtopsRef.current }]
+    redoStackRef.current = [...redoStackRef.current, current()]
     undoStackRef.current = undoStackRef.current.slice(0, -1)
     setVersion(v => v + 1)
     await applySnapshot(snap)
@@ -96,7 +120,7 @@ export function useCanvasHistory(
   async function handleRedo() {
     if (!redoStackRef.current.length) return
     const snap = redoStackRef.current[redoStackRef.current.length - 1]
-    undoStackRef.current = [...undoStackRef.current, { walls: wallsRef.current, cabinets: cabinetsRef.current, benchtops: benchtopsRef.current }]
+    undoStackRef.current = [...undoStackRef.current, current()]
     redoStackRef.current = redoStackRef.current.slice(0, -1)
     setVersion(v => v + 1)
     await applySnapshot(snap)
@@ -118,6 +142,7 @@ export function useCanvasHistory(
     wallsRef,
     cabinetsRef,
     benchtopsRef,
+    fixturesRef,
     canUndo: version >= 0 && undoStackRef.current.length > 0,
     canRedo: version >= 0 && redoStackRef.current.length > 0,
   }

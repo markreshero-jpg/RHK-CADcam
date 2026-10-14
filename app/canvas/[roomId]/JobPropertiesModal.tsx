@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { Project, ProjectStatus, DEFAULT_DIMS } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
 import { supabase } from '@/src/lib/supabase'
+import { useIsAdmin } from '@/src/lib/useRole'
 import { DoorStylePreview, useDoorStylePreviews } from '@/src/components/DoorStylePreview'
 import MaterialsScheduleTab from './MaterialsScheduleTab'
 
@@ -187,6 +188,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const [presets,         setPresets]         = useState<JobPreset[]>([])
   const [savingDefaults,  setSavingDefaults]  = useState(false)
   const [savePresetOpen,  setSavePresetOpen]  = useState(false)
+  const isAdmin = useIsAdmin()   // presets are shop-wide — admins only
   const [newPresetName,   setNewPresetName]   = useState('')
 
   // ── Load all schedule/method lists on mount ───────────────────────────────
@@ -494,7 +496,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                     <button onClick={() => { setSavePresetOpen(false); setNewPresetName('') }}
                       className="px-2 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">✕</button>
                   </div>
-                ) : (
+                ) : isAdmin && (
                   <button onClick={() => setSavePresetOpen(true)}
                     className="px-3 py-1.5 text-xs rounded bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition-colors whitespace-nowrap">
                     Save as preset…
@@ -1013,6 +1015,7 @@ function RuleRow({ ruleKey, value, baseline, baselineLabel, onChange }: {
 }
 
 function SaveDefaultsButton({ onClick, saving }: { onClick: () => void; saving: boolean }) {
+  if (!useIsAdmin()) return null   // shop-wide settings — admins only
   return (
     <div className="pt-4 border-t border-gray-800 mt-2">
       <button

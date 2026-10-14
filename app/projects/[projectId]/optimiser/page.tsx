@@ -4,7 +4,7 @@ import type { OptiSnapshot, OptiMaterial, OptiMachine, OptiProfile, PartKeyMap }
 import { normalizeProject, collectEbIds, PART_SELECTS, type RawRoom, type RawCabinet } from '@/src/lib/optimiser/normalize'
 import { buildSizeOvByCab, type SizeOv } from '@/src/lib/optimiser/sizeOverrides'
 import { buildShapesByCab, SHAPE_SELECT, type ShapeRow } from '@/src/lib/optimiser/shapes'
-import { normalizeBenchtopParts, BENCHTOP_PART_SELECT, type RawBenchtop } from '@/src/lib/optimiser/benchtopParts'
+import { normalizeBenchtopParts, benchtopEbIds, BENCHTOP_PART_SELECT, type RawBenchtop } from '@/src/lib/optimiser/benchtopParts'
 import OptimiserClient from './OptimiserClient'
 
 export const dynamic = 'force-dynamic'
@@ -80,7 +80,13 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
   const { data: btPartRows } = bts.length
     ? await supabase.from('benchtop_resolved_parts').select(BENCHTOP_PART_SELECT).in('benchtop_id', bts.map(b => b.id))
     : { data: [] }
-  const btNorm = normalizeBenchtopParts(project, norm.rooms, bts, (btPartRows ?? []) as Record<string, unknown>[])
+  // Their edge tape thicknesses (Phase 7), on top of the cabinet ones.
+  const btEbIds = benchtopEbIds((btPartRows ?? []) as Record<string, unknown>[]).filter(id => !ebThickness.has(id))
+  if (btEbIds.length) {
+    const { data } = await supabase.from('edge_banding').select('id,thickness').in('id', btEbIds)
+    for (const r of data ?? []) ebThickness.set(r.id as string, Number(r.thickness))
+  }
+  const btNorm = normalizeBenchtopParts(project, norm.rooms, bts, (btPartRows ?? []) as Record<string, unknown>[], ebThickness)
 
   const snapshot: OptiSnapshot = {
     projectId,

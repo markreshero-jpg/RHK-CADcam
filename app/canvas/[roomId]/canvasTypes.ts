@@ -19,6 +19,10 @@ export type Mode =
   | 'benchtop_select'
   // Phase 6: in-plan shape editing of the selected top (right-click → Edit shape).
   | 'edit_benchtop_shape'
+  // Phase 7b: paint edge profiles / tape on the selected top (right-click → Edit edges).
+  | 'edit_benchtop_edges'
+  // z_fixtures P2: a catalogue fixture (or a moved one) follows the cursor; click drops.
+  | 'place_fixture'
   | 'paste'
 
 /** Smallest size (mm) a cabinet can be drag-stretched to — low enough for fillers / scribe strips. */
@@ -26,7 +30,7 @@ export const MIN_STRETCH = 5
 
 /** Every F4 Benchtop-mode tool: select, the draw tools, cutouts, joins, Move. */
 export const isBenchtopMode = (m: Mode) =>
-  m === 'benchtop_select' || m === 'move_benchtop' || m === 'edit_benchtop_shape' || m.startsWith('draw_benchtop')
+  m === 'benchtop_select' || m === 'move_benchtop' || m === 'edit_benchtop_shape' || m === 'edit_benchtop_edges' || m.startsWith('draw_benchtop')
 
 /** In-plan shape edit (Phase 6): the working copy of one top's outline. */
 export type BtShapeSel = { kind: 'v' | 'e'; i: number } | null
@@ -39,6 +43,20 @@ export interface BtShapeEdit {
    *  edit start; X along the anchor wall (left → right as seen in elevation),
    *  Y away from it. Fixed for the whole edit so typing never shifts it. */
   frame: { o: { x: number; y: number }; d: { x: number; y: number }; n: { x: number; y: number } }
+}
+
+/** Edit edges mode (Phase 7b): a working copy of the outline; chips picked per tab. */
+export interface BtEdgeEdit {
+  btId: string
+  segs: import('@/src/lib/types').BenchtopSegment[]
+  history: import('@/src/lib/types').BenchtopSegment[][]
+  tab: 'profile' | 'tape'
+  /** Profile chip: '' = method default, 'wall', or a profile id. */
+  profilePaint: string
+  /** Tape chip: a tape id, or null = none picked yet. */
+  tapePaint: string | null
+  /** Last edge clicked (waterfall Butt / Mitre switch). */
+  sel: number | null
 }
 
 export const btLocal = (f: BtShapeEdit['frame'], p: { x: number; y: number }) => {
@@ -60,7 +78,7 @@ export type ArmedDefinition = {
   name:           string
 }
 
-export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: string } | { type: 'benchtop'; id: string } | null
+export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: string } | { type: 'benchtop'; id: string } | { type: 'fixture'; id: string } | null
 
 export type ContextMenuState = { x: number; y: number; cabId?: string; wallId?: string; elevWallId?: string; elevWallT?: number; benchtopId?: string; vertexContext?: { btId: string; vi: number } }
 

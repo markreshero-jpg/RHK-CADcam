@@ -22,7 +22,7 @@ import {
   panelFaceColors, unpackMatCol,
   Part, PartPropertiesPanel, PreviewCanvas,
 } from '@/src/components/three/PartViewer'
-import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamJointDrillOps, coalesceOpposingDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelOutline, caseBevelNote } from '@/src/lib/jointDrilling'
+import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamJointDrillOps, coalesceOpposingDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelOutline, caseBevelNote, tkBevelOutline, tkBevelNote } from '@/src/lib/jointDrilling'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, parseZonePartId, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
@@ -170,6 +170,11 @@ function buildCaseInfo(p: ResolvedCasePart, b: Box): PartMeta {
 }
 
 function buildTkInfo(p: ResolvedToekickPart, b: Box): PartMeta {
+  const mitre = tkBevelNote(p)
+  return { ...buildTkInfoBase(p, b), ...(mitre ? { detail: `${mitre} — cut ${Math.round(p.DY)} long` } : {}) }
+}
+
+function buildTkInfoBase(p: ResolvedToekickPart, b: Box): PartMeta {
   return {
     id:        `tk_${p.part_key}_${p.sort_order}`,
     label:     TK_LABELS[p.part_key] ?? p.part_key,
@@ -1046,6 +1051,15 @@ function caseRot(p: ResolvedCasePart, id: string, overrides: PartPosOverrides | 
   return ov ? [ov[0], ov[1] + ay, ov[2]] : [0, ay, 0]
 }
 
+// Kick part rotation: shaped cabinets turn kick boards / spreaders onto their
+// edge (z_cabinet_shape 4b) plus any Part Editor rotation override.
+function tkRot(p: ResolvedToekickPart, id: string, overrides: PartPosOverrides | undefined): [number, number, number] | undefined {
+  const ov = getRotOv(id, overrides)
+  if (!p.AY) return ov
+  const ay = p.AY * Math.PI / 180
+  return ov ? [ov[0], ov[1] + ay, ov[2]] : [0, ay, 0]
+}
+
 // ── Animated group for inner-drawer slide-out ─────────────────────────────────
 // Lerps its position.z toward targetTravel each frame. Used to slide an inner-
 // drawer assembly (box parts + face + slide rails) forward together when the
@@ -1126,6 +1140,11 @@ export function CabinetScene({
     for (const p of rp.case_parts) {
       const o = caseBevelOutline(p)
       if (o) m.set(`case_${p.part_key}`, { pts: o, extrude: 'up' })
+    }
+    // Mitred kick boards on shaped cabinets (4b).
+    for (const p of rp.toekick_parts) {
+      const o = tkBevelOutline(p)
+      if (o) m.set(`tk_${p.part_key}_${p.sort_order}`, { pts: o, extrude: 'up' })
     }
     for (const p of rp.internal_parts ?? []) if (p.outline) m.set(`int_${p.part_type}_${p.sort_order}`, { pts: p.outline })
     // Mitred doors where two facets meet: top-view outline extruded up
@@ -1343,7 +1362,7 @@ export function CabinetScene({
             dragRef={dragRef}
             ebSpec={ebFor(p.material_id)}
             wire={wire}
-            rotation={getRotOv(id, partOverrides)}
+            rotation={tkRot(p, id, partOverrides)}
             shape={shapes3D.get(id)}
           /></PartAlpha>
         )

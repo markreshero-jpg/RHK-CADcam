@@ -10,7 +10,7 @@ import { PART_TYPE_LABELS } from '@/src/lib/partDisplayNames'
 import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
 import { attachShape, type ShapesByCab } from './shapes'
 import { zonePartId, dbPartId, zoneRef } from '@/src/lib/cabinetShape/partKeys'
-import { zoneBlank, zoneBevelNote, caseBevelNote } from '@/src/lib/jointDrilling'
+import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -231,8 +231,10 @@ export function normalizeProject(
       { v: Number(r.dy), d1: flags.left ? tt : 0, d2: flags.right ? tt : 0 },
       { v: Number(r.dz), d1: 0, d2: 0 },
     ].sort((a, b) => b.v - a.v)
+    // Mitred kick boards of a shaped cabinet (z_cabinet_shape 4b): blank + note.
+    const mitre = tkBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
     push('toekick_parts', r, `tk_${r.part_key}_${r.sort_order}`,
-      { typeKey: String(r.part_key), base: humanize(String(r.part_key)) }, null, 0,
+      { typeKey: String(r.part_key), base: humanize(String(r.part_key)), ...(mitre ? { suffix: ` (${mitre})` } : {}) }, null, 0,
       { w: trip[0].v, h: trip[1].v, thickness: trip[2].v },
       { eb_w1: trip[0].d1, eb_w2: trip[0].d2, eb_h1: trip[1].d1, eb_h2: trip[1].d2, eb_missing: banded && t == null },
       base)
@@ -289,7 +291,7 @@ export function normalizeProject(
 export const PART_SELECTS = {
   case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_back,edge_band_front,edge_band_id',
-  toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
+  toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   drawer_box_parts: 'id,cabinet_instance_id,facet,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   custom_parts: 'id,cabinet_instance_id,name,dx,dy,dz,material_id,no_cnc,edge_top,edge_bottom,edge_left,edge_right',

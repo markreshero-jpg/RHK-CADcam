@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createServerClient } from '@/src/lib/supabase-server'
+import { fetchRole } from '@/src/lib/role'
 import { SignOutButton } from './SignOutButton'
 import { ThemeToggle } from './ThemeToggle'
 import { Project, Room } from '@/src/lib/types'
@@ -73,6 +74,7 @@ export default async function HomePage({ searchParams }: {
 }) {
   const { expand } = await searchParams
   const projects = await getProjectsWithRooms()
+  const isAdmin = (await fetchRole(await createServerClient())) === 'admin'
 
   return (
     <div className="min-h-screen bg-canvas text-ink">
@@ -91,21 +93,25 @@ export default async function HomePage({ searchParams }: {
         </div>
 
         <nav className="flex items-center gap-1">
-          <Link
-            href="/settings"
-            className="flex items-center gap-2 text-ink-muted hover:text-ink text-sm px-3 py-2 rounded-lg hover:bg-surface-2 transition-colors"
-          >
-            <SettingsIcon />
-            Settings
-          </Link>
-          <div className="w-px h-5 bg-edge mx-1" />
-          <Link
-            href="/projects/new"
-            className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-          >
-            <PlusIcon />
-            New Project
-          </Link>
+          {isAdmin && (
+            <>
+              <Link
+                href="/settings"
+                className="flex items-center gap-2 text-ink-muted hover:text-ink text-sm px-3 py-2 rounded-lg hover:bg-surface-2 transition-colors"
+              >
+                <SettingsIcon />
+                Settings
+              </Link>
+              <div className="w-px h-5 bg-edge mx-1" />
+              <Link
+                href="/projects/new"
+                className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                <PlusIcon />
+                New Project
+              </Link>
+            </>
+          )}
           <SignOutButton />
         </nav>
       </header>

@@ -1253,6 +1253,11 @@ export interface ResolvedToekickPart extends ResolvedPart {
               'spreader_vertical' | 'spreader_horizontal'
   sort_order: number
   is_detached: boolean
+  // Shaped cabinets (z_cabinet_shape 4b): mitred kick boards, degrees from
+  // square at local x = 0 / x = DY; + = the back (inner) face shorter. The
+  // part is listed at its blank. AY turns it about its min corner.
+  bevel_lo?: number
+  bevel_hi?: number
 }
 
 export interface ResolvedInternalPart extends ResolvedPart {

@@ -75,6 +75,8 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       rule_overrides:    {},
       output_to_cnc:     true,
       is_detached:       p.is_detached,
+      bevel_lo:          p.bevel_lo ?? null,
+      bevel_hi:          p.bevel_hi ?? null,
     })),
     internal_parts: resolved.internal_parts.map(p => ({
       part_type:       p.part_type,
