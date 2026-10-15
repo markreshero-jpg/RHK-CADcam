@@ -1861,7 +1861,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   function switchView(v: CanvasView) {
     // A selected cabinet opens its own wall (and side — back-face cabinets show the
-    // wall's back elevation); otherwise keep the last wall viewed.
+    // wall's back elevation); a selected wall opens that wall; otherwise keep the
+    // last wall viewed.
     const selCab = v === 'elevation' && selected?.type === 'cabinet' ? cabinets.find(c => c.id === selected.id) : undefined
     const selCabWall = selCab ? walls.find(w => w.id === selCab.wall_id) : undefined
     if (selCab && selCabWall) {
@@ -1869,6 +1870,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (selCabWall.id !== elevWallId) pendingElevSideRef.current = side
       setElevWallId(selCabWall.id)
       setElevWallSide(side)
+    } else if (v === 'elevation' && selectedWall) {
+      setElevWallId(selectedWall.id)
     } else if (v === 'elevation' && elevWallId === null) {
       setElevWallId(selectedWall?.id ?? walls[0]?.id ?? null)
     }
