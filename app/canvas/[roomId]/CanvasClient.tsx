@@ -36,6 +36,7 @@ import { useBenchtopInteraction } from './useBenchtopInteraction'
 import { useFixtureInteraction } from './useFixtureInteraction'
 import FixturesPlan from './FixturesPlan'
 import FixturePanel from './FixturePanel'
+import FixtureViewModal from './FixtureViewModal'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
 import { findLayerSet } from '@/src/lib/displayLayers/legacy'
@@ -191,6 +192,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [showObjectTree, setShowObjectTree] = useState(false)
   const [reportScope, setReportScope] = useState<ReportScope | null>(null)
   const [editCabId, setEditCabId] = useState<string | null>(null)
+  const [viewFixtureId, setViewFixtureId] = useState<string | null>(null)
   const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation' | 'joints'>('elevation')
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
@@ -2193,7 +2195,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                   interactive={mode === 'select'}
                   onPointerDown={(_e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null); setContextMenu(null) }}
                   onContextMenu={(_e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]) }}
-                  onDoubleClick={(_e, id) => fx.startMove(id)}
+                  onDoubleClick={(_e, id) => { setSelected({ type: 'fixture', id }); setViewFixtureId(id) }}
                 />
               }
             />
@@ -2522,6 +2524,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDelete={id => void fx.remove(id)}
             onMove={id => { if (canvasView !== 'plan') switchView('plan'); fx.startMove(id) }}
             onTurn={(id, deg) => void fx.rotateBy(id, deg)}
+            onOpen={id => setViewFixtureId(id)}
           />
         )}
         {mode !== 'place_definition' && mode !== 'edit_benchtop_shape' && mode !== 'edit_benchtop_edges' && selectedBenchtop && (
@@ -2694,6 +2697,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           onClose={() => setContextMenu(null)}
         />
       )}
+
+      {viewFixtureId && (() => {
+        const f = fixtures.find(x => x.id === viewFixtureId)
+        if (!f) return null
+        return (
+          <FixtureViewModal
+            fixture={f}
+            walls={walls}
+            onUpdate={(id, patch) => void fx.update(id, patch)}
+            onDelete={id => void fx.remove(id)}
+            onMove={id => { if (canvasView !== 'plan') switchView('plan'); fx.startMove(id) }}
+            onTurn={(id, deg) => void fx.rotateBy(id, deg)}
+            onClose={() => setViewFixtureId(null)}
+          />
+        )
+      })()}
 
       {editCabId && (() => {
         const cab = cabinets.find(c => c.id === editCabId)

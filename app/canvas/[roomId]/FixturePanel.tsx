@@ -13,13 +13,15 @@ const CATEGORY_LABEL: Record<string, string> = {
   appliance: 'Appliance', sink: 'Sink', tap: 'Tap', decorative: 'Decorative',
 }
 
-export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMove, onTurn }: {
+export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMove, onTurn, onOpen }: {
   fixture:  RoomFixture
   walls:    Wall[]
   onUpdate: (id: string, patch: Partial<RoomFixture>) => void
   onDelete: (id: string) => void
   onMove:   (id: string) => void
   onTurn:   (id: string, deg: number) => void
+  /** Open the big viewer (double-click does the same); omitted inside the viewer. */
+  onOpen?:  (id: string) => void
 }) {
   const f = fixture
   const c = fixtureCenter(f)
@@ -109,6 +111,11 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
             className="flex-1 px-2 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-xs text-gray-200"
             title="Turn 90° about its centre">Turn 90°</button>
         </div>
+        {onOpen && (
+          <button onClick={() => onOpen(f.id)}
+            className="w-full px-2 py-1.5 rounded bg-blue-700 hover:bg-blue-600 text-xs text-white"
+            title="Open the viewer: 3D, front, back, sides, top (double-click)">View 3D / elevations</button>
+        )}
 
         {f.model_url
           ? <p className="text-[10px] text-gray-500">3D model: {f.model_format?.toUpperCase()}</p>

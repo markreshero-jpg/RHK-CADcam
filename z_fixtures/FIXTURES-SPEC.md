@@ -107,7 +107,7 @@ in the Wall tool (F2) — see "Openings (later)" at the bottom.
 - **Canvas** `useFixtureInteraction.ts`: carry state (place / move), ghost, insert /
   update / rotateBy / remove, all through captureSnapshot. Mode `place_fixture`;
   Selected `{ type: 'fixture' }`. Keys: **F5** sidebar section, **R** turn 90° while
-  carrying free, **Shift** = don't snap, **M** / double-click = move selected,
+  carrying free, **Shift** = don't snap, **M** = move selected (double-click opens the viewer),
   **Del** delete, **Esc** stop. Placing stays armed for repeat drops.
 - **Views**: `FixturesPlan` (CanvasSVG `fixturesLayer` slot; symbols: appliance box +
   cross, cooktop burners, sink bowl, tap circle, decorative ellipse; heavy front edge),
@@ -124,6 +124,14 @@ in the Wall tool (F2) — see "Openings (later)" at the bottom.
 - Verified in the dev app (Kitchen Test Room, scripted events — Chrome tab was in the
   background, so no 3D screenshot yet): place snaps to wall + elevation position,
   turn, undo, delete + undo-delete (DB restored), move free with R. Test row removed.
+
+## Fixture viewer (2026-10-15)
+
+Double-click a placed fixture in plan (or **View 3D / elevations** in its panel) →
+`FixtureViewModal`: PreviewCanvas with 3D + Front / Back / Left / Right / Top ortho
+views (Back/Left added to PartViewer as opt-in `views`/`viewLabels`), measure tool,
+"Size box" outline toggle, and the same FixturePanel fields beside it. Checked in-app
+with the Miele oven GLB.
 
 ## RESUME HERE — open items
 

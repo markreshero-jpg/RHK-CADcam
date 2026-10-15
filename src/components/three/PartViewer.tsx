@@ -635,7 +635,8 @@ export function PartPropertiesPanel({
 // looks down one axis toward the origin. NET NEW for the Part Editor (ortho
 // Top/Front/Side); the legacy perspective path is unchanged.
 
-export type ViewMode = '3d' | 'top' | 'front' | 'side'
+// 'back' / 'left' are opt-in (pass `views`); 'side' looks from the right.
+export type ViewMode = '3d' | 'top' | 'front' | 'side' | 'back' | 'left'
 
 export const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: '3d',    label: '3D'    },
@@ -657,6 +658,10 @@ function OrthoCam({ view, dx, dy, dz }: { view: Exclude<ViewMode, '3d'>; dx: num
     position = [0, far * 0.5, 0]; up = [0, 0, -1]; worldW = dx; worldH = dz
   } else if (view === 'front') {   // look along −Z; screen = X(width) × Y(height)
     position = [0, 0, far * 0.5]; worldW = dx; worldH = dy
+  } else if (view === 'back') {    // look along +Z from behind
+    position = [0, 0, -far * 0.5]; worldW = dx; worldH = dy
+  } else if (view === 'left') {    // look along +X from the left
+    position = [-far * 0.5, 0, 0]; worldW = dz; worldH = dy
   } else {                         // 'side' — look along −X; screen = Z(depth) × Y(height)
     position = [far * 0.5, 0, 0]; worldW = dz; worldH = dy
   }
@@ -683,11 +688,13 @@ function SceneCamera({ view, dx, dy, dz }: { view: ViewMode; dx: number; dy: num
 // A mm grid in the plane of the current ortho view, pushed to the far side of the
 // part so it doesn't z-fight. gridHelper sits in the XZ plane by default.
 function ViewGrid({ view, dx, dy, dz, cell }: { view: Exclude<ViewMode, '3d'>; dx: number; dy: number; dz: number; cell: number }) {
-  const span = view === 'top' ? Math.max(dx, dz) : view === 'front' ? Math.max(dx, dy) : Math.max(dz, dy)
+  const span = view === 'top' ? Math.max(dx, dz) : (view === 'front' || view === 'back') ? Math.max(dx, dy) : Math.max(dz, dy)
   const div  = Math.max(2, Math.round(span / Math.max(cell, 1)))
   const helper = <gridHelper args={[div * cell, div, '#3b4252', '#272b36']} />
   if (view === 'top')   return <group position={[0, -dy / 2, 0]}>{helper}</group>
   if (view === 'front') return <group position={[0, 0, -dz / 2]} rotation={[Math.PI / 2, 0, 0]}>{helper}</group>
+  if (view === 'back')  return <group position={[0, 0, dz / 2]} rotation={[Math.PI / 2, 0, 0]}>{helper}</group>
+  if (view === 'left')  return <group position={[dx / 2, 0, 0]} rotation={[0, 0, Math.PI / 2]}>{helper}</group>
   return <group position={[-dx / 2, 0, 0]} rotation={[0, 0, Math.PI / 2]}>{helper}</group>   // side
 }
 
@@ -811,6 +818,8 @@ export function PreviewCanvas({
   gridCell = 50,                     // mm per minor grid cell
   measure = false,                   // enable the measure tool toggle (only when viewModes)
   snapPoints,                        // world-space snap targets; default = derived bbox nodes
+  views,                             // which view buttons to show (default: 3D/Top/Front/Side)
+  viewLabels,                        // relabel buttons, e.g. { side: 'Right' }
 }: {
   dx:             number
   dy:             number
@@ -828,6 +837,8 @@ export function PreviewCanvas({
   gridCell?:      number
   measure?:       boolean
   snapPoints?:    [number, number, number][]
+  views?:         ViewMode[]
+  viewLabels?:    Partial<Record<ViewMode, string>>
 }) {
   const maxDim  = Math.max(dx, dy, dz)
   const camDist = fitCamDist(dx, dy, dz)
@@ -859,7 +870,7 @@ export function PreviewCanvas({
   const hintText = hint ?? (
     legacy || view === '3d'
       ? `Left-drag rotate · scroll zoom${panEnabled ? ' · right-drag pan' : ''} · click part to inspect · click empty to deselect`
-      : `${VIEW_MODES.find(v => v.id === view)?.label} view · scroll zoom · drag pan`
+      : `${viewLabels?.[view] ?? VIEW_MODES.find(v => v.id === view)?.label ?? view} view · scroll zoom · drag pan`
   )
 
   return (
@@ -908,7 +919,7 @@ export function PreviewCanvas({
       {viewModes && (
         <div className="absolute top-2 left-2 flex items-center gap-2 select-none">
           <div className="flex rounded-md overflow-hidden border border-gray-700 bg-gray-900/90">
-            {VIEW_MODES.map(v => (
+            {(views ?? VIEW_MODES.map(v => v.id)).map(id => ({ id, label: viewLabels?.[id] ?? VIEW_MODES.find(v => v.id === id)?.label ?? id })).map(v => (
               <button
                 key={v.id}
                 onClick={() => setView(v.id)}
