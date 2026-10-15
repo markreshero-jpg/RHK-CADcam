@@ -4,7 +4,7 @@ Status: **P1 committed (50aef31); P2 placement committed in c7d1633 (WIP commit)
 
 Bought-in things placed in a room: ovens, cooktops, dishwashers, fridges,
 rangehoods, sinks, taps, decorative items. Catalogue lives in the Settings →
-Library group ("Fixtures & Appliances"); placed into a job from the canvas with **F5**.
+Library group ("Fixtures & Appliances"); placed into a job from the canvas with **F6**.
 
 Wall openings (doors, windows, archways) are a **separate module** that lives
 in the Wall tool (F2) — see "Openings (later)" at the bottom.
@@ -88,7 +88,7 @@ in the Wall tool (F2) — see "Openings (later)" at the bottom.
   `app/library/fixtures/` (Settings tab `fixtures_library` + standalone
   `/library/fixtures`), types `FixtureCatalogItem` / `RoomFixture` in types.ts.
   Model files are never deleted (placed fixtures point at them).
-- **P2 — Placement** ✅ built 2026-10-14 (committed in c7d1633) — F5 picker, place/snap to wall, move/rotate/delete,
+- **P2 — Placement** ✅ built 2026-10-14 (committed in c7d1633) — F6 picker, place/snap to wall, move/rotate/delete,
   plan + elevation + 3D rendering, layer items, object tree.
 - **P3 — Benchtop cutouts** — sink/cooktop cutout template on the catalogue row
   becomes a cutout operation on the benchtop under it.
@@ -106,7 +106,7 @@ in the Wall tool (F2) — see "Openings (later)" at the bottom.
   mount_height), `fixtureLayer(category)`.
 - **Canvas** `useFixtureInteraction.ts`: carry state (place / move), ghost, insert /
   update / rotateBy / remove, all through captureSnapshot. Mode `place_fixture`;
-  Selected `{ type: 'fixture' }`. Keys: **F5** sidebar section, **R** turn 90° while
+  Selected `{ type: 'fixture' }`. Keys: **F6** sidebar section, **R** turn 90° while
   carrying free, **Shift** = don't snap, **M** = move selected (double-click opens the viewer),
   **Del** delete, **Esc** stop. Placing stays armed for repeat drops.
 - **Views**: `FixturesPlan` (CanvasSVG `fixturesLayer` slot; symbols: appliance box +

@@ -505,9 +505,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         e.preventDefault()
         bt.setBenchtopMenuOpen(v => !v)
       }
-      // F5 Fixtures & appliances (z_fixtures). R turns a free-floating carried item;
+      // F6 Fixtures & appliances (z_fixtures). R turns a free-floating carried item;
       // M picks up the selected fixture.
-      if (e.key === 'F5' && !isInput(e.target)) {
+      if (e.key === 'F6' && !isInput(e.target)) {
         e.preventDefault()
         fx.setMenuOpen(v => !v)
       }
@@ -1822,7 +1822,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setDrawStart(null); setPlaceGhost(null)
   }
 
-  // F5: arm a catalogue fixture (re-click the armed one to stop).
+  // F6: arm a catalogue fixture (re-click the armed one to stop).
   function armFixture(item: FixtureCatalogItem) {
     setArmedDef(null); setArmedDraft(null); setDrawStart(null); setPlaceGhost(null)
     if (mode === 'place_fixture' && fx.carry?.kind === 'place' && fx.carry.item.id === item.id) { fx.cancel(); return }

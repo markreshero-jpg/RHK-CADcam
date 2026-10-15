@@ -268,7 +268,7 @@ export default function CanvasSidebar({
   setBenchtopMenuOpen: (v: boolean) => void
   /** F4 → Draw in Shape Editor: new benchtop drawn straight in the full editor. */
   onDrawBenchtopInShapeEditor?: () => void
-  /** F5 Fixtures & appliances (z_fixtures P2). */
+  /** F6 Fixtures & appliances (z_fixtures P2). */
   fixtureMenuOpen?: boolean
   setFixtureMenuOpen?: (v: boolean) => void
   armedFixtureId?: string | null
@@ -292,7 +292,7 @@ export default function CanvasSidebar({
     prevOpen.current = { wall: wallMenuOpen, cab: cabMenuOpen, bt: benchtopMenuOpen, fx: fixtureMenuOpen }
   }, [wallMenuOpen, cabMenuOpen, benchtopMenuOpen, fixtureMenuOpen, setWallMenuOpen, setCabMenuOpen, setBenchtopMenuOpen, setFixtureMenuOpen])
 
-  // ── Fixtures catalogue (F5) — loaded the first time the section opens ──
+  // ── Fixtures catalogue (F6) — loaded the first time the section opens ──
   const [fixtureItems, setFixtureItems] = useState<FixtureCatalogItem[] | null>(null)
   useEffect(() => {
     if (!fixtureMenuOpen || fixtureItems) return
@@ -803,10 +803,10 @@ export default function CanvasSidebar({
         {onArmFixture && setFixtureMenuOpen && (<>
           <div className="border-t border-gray-800 my-1 mx-1" />
 
-          {/* Fixtures & appliances (F5) — z_fixtures */}
+          {/* Fixtures & appliances (F6) — z_fixtures */}
           <SectionHeader
-            tone={TONES.fixture} icon={<FixtureIcon />} label="Fixtures" shortcut="F5"
-            title="Fixtures & appliances (F5) — pick one, click to drop it (backs onto the nearest wall; Shift = free, R = turn); Esc to finish"
+            tone={TONES.fixture} icon={<FixtureIcon />} label="Fixtures" shortcut="F6"
+            title="Fixtures & appliances (F6) — pick one, click to drop it (backs onto the nearest wall; Shift = free, R = turn); Esc to finish"
             open={fixtureMenuOpen} active={mode === 'place_fixture'}
             summary={mode === 'place_fixture' ? (fixtureItems?.find(i => i.id === armedFixtureId)?.name ?? 'Moving') : null}
             onClick={() => setFixtureMenuOpen(!fixtureMenuOpen)}

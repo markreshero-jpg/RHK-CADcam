@@ -1,7 +1,7 @@
 'use client'
 
 // ── Fixture placement + editing (z_fixtures P2) ───────────────────────────────
-// F5 opens the Fixtures sidebar section. Picking a catalogue item "carries" it:
+// F6 opens the Fixtures sidebar section. Picking a catalogue item "carries" it:
 // the ghost follows the cursor, backs onto the nearest wall face (Shift = free),
 // R turns it 90° while free, click drops it. Move re-uses the same carry.
 // Placed rows copy the catalogue item (jobs stay as-built).

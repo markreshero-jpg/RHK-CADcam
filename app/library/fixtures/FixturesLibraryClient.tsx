@@ -2,7 +2,7 @@
 
 // ── Fixtures & Appliances library ─────────────────────────────────────────────
 // Spec: z_fixtures/FIXTURES-SPEC.md. Catalogue of bought-in items (appliances,
-// sinks, taps, decorative) placed into jobs from the canvas (F5). Each row has
+// sinks, taps, decorative) placed into jobs from the canvas (F6). Each row has
 // an outside size, a mount type and an optional uploaded 3D model that is
 // auto-fitted into that size.
 //
@@ -382,7 +382,7 @@ function FixtureEditor({ item, kinds, onPatch, onError }: {
             </div>
             <label className="flex items-center gap-2 text-xs text-ink-muted pb-1 cursor-pointer">
               <input type="checkbox" checked={item.active} onChange={e => onPatch({ active: e.target.checked })} />
-              Active (shown in the F5 picker)
+              Active (shown in the F6 picker)
             </label>
           </div>
 
