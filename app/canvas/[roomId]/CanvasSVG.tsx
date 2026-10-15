@@ -30,7 +30,7 @@ import { roundMm } from '@/src/lib/format'
 import { SNAP_KIND_META, type SnapResult } from '@/src/lib/canvasSnap'
 import type { PlanGridPrefs } from '@/src/lib/userPrefs'
 import { getPalette } from '@/src/lib/partPalette'
-import { caseBox, caseBoxAABB, casePlanCorners, isSide, tkPlanBox, zoneBevelOutline, rotEulerXYZ } from '@/src/lib/jointDrilling'
+import { caseBox, caseBoxAABB, casePlanCorners, isSide, tkPlanBox, tkPlanCorners, tkBoxAABB, zoneBevelOutline, rotEulerXYZ } from '@/src/lib/jointDrilling'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
 import { dbLoadRoomPartDetails, type PartPosOverrides } from './canvasDB'
@@ -1026,13 +1026,13 @@ export default function CanvasSVG({
 
           // Resolved part outlines (carcase / kick). Hidden mid-resize: resolved
           // parts still reflect the committed width. On shaped cabinets
-          // (z_cabinet_shape) the carcass follows the footprint, but kick, fronts
-          // and drawer hardware are still box-built until Phases 3–4 — hidden.
+          // (z_cabinet_shape) the carcass and kick (4b) follow the footprint;
+          // drawer hardware is still hidden.
           const shaped = !!displayCab.footprint?.segments?.length
           const rpAll  = cabResize?.cabId === cab.id ? undefined : resolvedParts?.get(cab.id)
           const rpPlan = shaped ? undefined : rpAll
           const casePartsR = (rpAll?.case_parts ?? []).filter(p => layers.show(casePartItem(p.part_key)))
-          const kickPartsR = (rpPlan?.toekick_parts ?? []).filter(p => layers.show(kickPartItem(p.part_key)))
+          const kickPartsR = (rpAll?.toekick_parts ?? []).filter(p => layers.show(kickPartItem(p.part_key)))
           const partPoly = (b: { x: number; z: number; w: number; d: number }) => {
             const c = (lx: number, lz: number) => { const q = toPlanC(lx, lz); return `${q.x},${q.y}` }
             return `${c(b.x, b.z)} ${c(b.x + b.w, b.z)} ${c(b.x + b.w, b.z + b.d)} ${c(b.x, b.z + b.d)}`
@@ -1055,7 +1055,7 @@ export default function CanvasSVG({
           const drawnRects: LocalRect[] = []
           if (showOutline) drawnRects.push({ x: 0, z: 0, w: displayCab.dx, d: displayCab.dz })
           for (const p of casePartsR) drawnRects.push(caseBoxAABB(p))
-          for (const p of kickPartsR) drawnRects.push(tkPlanBox(p))
+          for (const p of kickPartsR) { const b = tkBoxAABB(p); drawnRects.push({ x: b.x, z: b.z, w: b.w, d: b.d }) }
           if (layers.show('drawer_boxes'))   for (const ds of rpPlan?.drawer_stacks ?? []) for (const p of ds.box_parts) drawnRects.push(hwRect(dbBox(p), ds.turn))
           if (layers.show('drawer_runners')) for (const ds of rpPlan?.drawer_stacks ?? []) for (const sl of ds.slides) drawnRects.push(hwRect(slideBox(sl), ds.turn))
           for (const p of resolvedParts?.get(cab.id)?.custom_parts ?? []) {
@@ -1175,8 +1175,10 @@ export default function CanvasSVG({
                 if (b.w <= 0 || b.d <= 0) return null
                 const it = kickPartItem(p.part_key)
                 const lp = layers.props(it, view.zoom)
+                // Turned / mitred boards on shaped cabinets (4b) draw their true corners.
+                const pts = tkPlanCorners(p).map(q => toPlanC(q.x, q.z)).map(q => `${q.x},${q.y}`).join(' ')
                 return (
-                  <polygon key={`kick-${i}`} points={partPoly(b)} data-part={p.part_key}
+                  <polygon key={`kick-${i}`} points={pts} data-part={p.part_key}
                     fill="none" stroke={isSel ? '#e2e8f0' : layers.color(it, palette.toekick)} strokeWidth={layers.w(it, 0.75) / view.zoom}
                     strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
                 )

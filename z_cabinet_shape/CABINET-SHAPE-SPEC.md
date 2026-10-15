@@ -9,7 +9,8 @@
 >
 > **RESUME HERE** → Phases 1–2 (5dca77a), 3a (685786f), 3b (c405730), 3c + 4a
 > (angled carcass joints, square/bevel front ends, doors clear angled sides) committed
-> 2026-10-14, all checked in-app. Next: 4b toe kick (decision 13), then 4c benchtop.
+> 2026-10-14 (49ed16e), all checked in-app. 4b (toe kick follows the shape) committed
+> 2026-10-15 (most of it rode in WIP c7d1633) — needs an in-app check. Next: 4c benchtop.
 > Library still needs a hinge with Mount° = 45.
 
 ---
@@ -353,7 +354,27 @@ Design (locked in code, 3a):
 - Known gaps (4a): no CNC bevel or fixing drilling at angled joints (per-edge panels have no
   seams yet; hand-fixed); edge-tape strips in 3D still drawn on the square blank; the Part
   Editor shows a bevelled panel as its blank rectangle.
-- [ ] 4b — toe kick follows the front facets (decision 13)
+- [x] 4b — toe kick follows the shape (2026-10-14), `resolveShapedKick.ts` (hooked in resolveToekick
+      after the none / wall check; kick runs unchanged):
+      - Kick outline K = footprint pushed in by TOESCF (front / open), TOESCB (back), TOESCL / TOESCR
+        (side on x = 0 / x = DX), 0 (other sides). Arcs are kicked along their chord.
+      - Every front edge: kick face (TF) + sub front (TI, lifted TOEFC) in the zone-like frame
+        (+X along the edge to the right seen from the front, +Z out, AY about the min corner); front
+        neighbours **mitred** (decision 13), other ends square inside K. Leg type = faces only.
+      - Back edges: kick back (TI), butted (earlier edge runs through). Side edges: end spreader
+        along the edge (turned) + brace; internal spreaders at TOESP centres across the width,
+        front-to-back, cut square to fit inside the band (kept clear of end spreaders + braces).
+      - Blank + `bevel_lo/bevel_hi` (+ = back face shorter) on toekick_parts (migration_s4b, applied);
+        persist + reload. `jointDrilling`: `tkBoxLocal / tkBevelOutline / tkPlanCorners / tkBoxAABB /
+        tkBevelNote`. 3D turns (`tkRot`) + extrudes mitres; plan + plan report now draw the kick on
+        shaped cabinets; elevation / top / side / Part Editor reference boxes use the turned bounds;
+        cut list, Parts list, optimiser names carry "mitre 22.5°".
+      - Tests `shapedKick.test.ts`: a rectangle-shaped footprint gives exactly the box kick; six
+        presets: every kick part inside the footprint, no collisions at the same height; clipped
+        corner faces share both mitre corners, set back TOESCF from the facet; leg = faces only.
+- [ ] 4b in-app check
+- Known gaps (4b): a shaped cabinet in a joined kick run still gets the run's straight kick;
+  elevations show turned kick boards at their bounding width (true width = Phase 5).
 - [ ] 4c — benchtop auto-outline from shaped cabinets
 
 ### Phase 5 — Output `[ ]`

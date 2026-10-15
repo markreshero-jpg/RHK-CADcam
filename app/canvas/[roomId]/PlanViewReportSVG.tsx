@@ -20,7 +20,7 @@ import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { planShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
-import { caseBox, casePlanCorners, isSide, tkPlanBox } from '@/src/lib/jointDrilling'
+import { caseBox, casePlanCorners, isSide, tkPlanBox, tkPlanCorners } from '@/src/lib/jointDrilling'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { customExtents } from '@/src/lib/customPartBox'
@@ -316,8 +316,8 @@ export default function PlanViewReportSVG({
         if (!wall) return null
         const rp       = resolvedParts?.get(cab.id)
         if (!planShowsCabinet(cab, layers, rp)) return null
-        // Shaped cabinets (z_cabinet_shape): the carcass follows the footprint;
-        // kick and drawer hardware are still box-built until Phase 4 — hidden.
+        // Shaped cabinets (z_cabinet_shape): the carcass and kick (4b) follow the
+        // footprint; drawer hardware is still hidden.
         const shaped   = !!cab.footprint?.segments?.length
         const rpParts  = shaped ? undefined : rp
         const basePerp = wallInwardNormal(wall, cx)
@@ -364,12 +364,12 @@ export default function PlanViewReportSVG({
                 fill={vertical ? CARCASE_LINE : 'none'} fillOpacity={vertical ? 0.45 * pp.fillOpacity : 0}
                 stroke={CARCASE_LINE} strokeWidth={layers.w(it, sw * 0.35)} strokeDasharray={pp.strokeDasharray} />
             })}
-            {(rpParts?.toekick_parts ?? []).map((p, i) => {
+            {(rp?.toekick_parts ?? []).map((p, i) => {
               const it = kickPartItem(p.part_key)
               const b = tkPlanBox(p)
               if (!layers.show(it) || b.w <= 0 || b.d <= 0) return null
               const pp = lp(it)
-              return <polygon key={`tk-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"
+              return <polygon key={`tk-${i}`} points={tkPlanCorners(p).map(q => at(q.x, q.z)).join(' ')} opacity={pp.opacity} fill="none"
                 stroke={INK3} strokeWidth={layers.w(it, sw * 0.35)} strokeDasharray={pp.strokeDasharray} />
             })}
             {layers.show('drawer_boxes') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.box_parts.map((p, i) => {

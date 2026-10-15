@@ -25,6 +25,7 @@ import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { customExtents } from '@/src/lib/customPartBox'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
+import { tkBoxAABB } from '@/src/lib/jointDrilling'
 
 /** Report-only page extras (not drawing layers). */
 export interface ElevationPageOptions {
@@ -39,9 +40,9 @@ function caseElevRect(p: ResolvedCasePart) {
   return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
 }
 function tkElevRect(p: ResolvedToekickPart) {
-  if (p.part_key === 'spreader_horizontal')
-    return { ex: p.X, ey: p.Y + p.DY, ew: p.DX, eh: p.DY }
-  return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
+  // Turned bounds: shaped cabinets turn kick boards onto their facet (4b).
+  const b = tkBoxAABB(p)
+  return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h }
 }
 function zoneElevRect(z: ResolvedFaceZone) {
   return { ex: z.X, ey: z.Y + z.DY, ew: z.DX, eh: z.DY }   // face: DX=width, DY=height

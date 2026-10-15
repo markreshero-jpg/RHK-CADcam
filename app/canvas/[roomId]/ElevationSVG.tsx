@@ -27,7 +27,7 @@ import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import FixturesElevation from './FixturesElevation'
 import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
-import { caseBoxAABB, zoneBoxAABB } from '@/src/lib/jointDrilling'
+import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 
@@ -50,10 +50,9 @@ function caseElevRect(p: ResolvedCasePart) {
 }
 
 function tkElevRect(p: ResolvedToekickPart) {
-  if (p.part_key === 'spreader_horizontal') {
-    return { ex: p.X, ey: p.Y + p.DY, ew: p.DX, eh: p.DY }
-  }
-  return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
+  // Turned bounds: shaped cabinets turn kick boards onto their facet (4b).
+  const b = tkBoxAABB(p)
+  return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h }
 }
 
 function zoneElevRect(z: ResolvedFaceZone) {

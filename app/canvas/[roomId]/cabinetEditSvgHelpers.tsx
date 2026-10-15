@@ -4,7 +4,7 @@ import React, { useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { caseBox, caseBoxAABB, zoneBoxAABB, rotEulerXYZ, type SeamDrill, type OrientedDrill, type DrillAxis } from '@/src/lib/jointDrilling'
+import { caseBox, caseBoxAABB, zoneBoxAABB, rotEulerXYZ, type SeamDrill, type OrientedDrill, type DrillAxis, tkBoxAABB } from '@/src/lib/jointDrilling'
 import type { PartPosOverrides } from './canvasDB'
 import type {
   ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart,
@@ -115,10 +115,8 @@ export function elevRect(p: { X: number; Y: number; DX: number; DY: number; DZ: 
   if (p.part_key === 'back') return { ex: p.X, ey: p.Y + p.DZ + p.DX, ew: p.DY, eh: p.DX }
   return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
 }
-export function tkElevRect(p: ResolvedToekickPart) {
-  if (p.part_key === 'spreader_horizontal') return { ex: p.X, ey: p.Y + p.DY, ew: p.DX, eh: p.DY }
-  return { ex: p.X, ey: p.Y + p.DX, ew: p.DY, eh: p.DX }
-}
+// Kick parts use their turned bounds (shaped cabinets turn kick boards, 4b).
+export function tkElevRect(p: ResolvedToekickPart) { const b = tkBoxAABB(p); return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h } }
 export function zoneElevRect(z: ResolvedFaceZone)     { const b = zoneBoxAABB(z); return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h } }
 
 // Door-profile overlay for a face zone, mapped into an already-computed SVG rect.
@@ -187,10 +185,7 @@ export function topRect(p: ResolvedCasePart) {
   if (p.part_key === 'back')   return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DZ }
   return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX }
 }
-export function tkTopRect(p: ResolvedToekickPart) {
-  if (p.part_key === 'spreader_horizontal') return { tx: p.X, tz: p.Z, tw: p.DX, td: p.DZ }
-  return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DZ }
-}
+export function tkTopRect(p: ResolvedToekickPart) { const b = tkBoxAABB(p); return { tx: b.x, tz: b.z, tw: b.w, td: b.d } }
 export function shelfTopRect(p: ResolvedInternalPart) { return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX } }
 export function intTopRect(p: ResolvedInternalPart) {
   // Drawer-box-derived parts store Z = front-most edge (cabinet front = larger Z),
@@ -223,10 +218,7 @@ export function sideRect(p: ResolvedCasePart): { sz: number; cy_top: number; sw:
   if (p.part_key === 'back')   return { sz: p.Z, cy_top: p.Y + p.DZ + p.DX, sw: p.DZ, sh: p.DX }
   return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
 }
-export function tkSideRect(p: ResolvedToekickPart) {
-  if (p.part_key === 'spreader_horizontal') return { sz: p.Z, cy_top: p.Y + p.DY, sw: p.DZ, sh: p.DY }
-  return { sz: p.Z, cy_top: p.Y + p.DX, sw: p.DZ, sh: p.DX }
-}
+export function tkSideRect(p: ResolvedToekickPart) { const b = tkBoxAABB(p); return { sz: b.z, cy_top: b.y + b.h, sw: b.d, sh: b.h } }
 export function shelfSideRect(p: ResolvedInternalPart) { return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ } }
 export function intSideRect(p: ResolvedInternalPart) {
   // Same anchor logic as intTopRect: drawer-box-derived parts have Z =
@@ -544,11 +536,7 @@ export function SlideDrillOverlay({ drills, project, perp, dirOf, color = SLIDE_
 export type Box3 = { x: number; y: number; z: number; w: number; h: number; d: number }
 
 export { caseBox }
-export function tkBox3(p: ResolvedToekickPart): Box3 {
-  return p.part_key === 'spreader_horizontal'
-    ? { x: p.X, y: p.Y, z: p.Z, w: p.DX, h: p.DY, d: p.DZ }
-    : { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
-}
+export function tkBox3(p: ResolvedToekickPart): Box3 { return tkBoxAABB(p) }
 export function intBox3(p: ResolvedInternalPart): Box3 {
   // AABB anchor must match cabinet coords: drawer-box-derived parts have
   // Z = front edge and extend back by depth, so subtract to get the back-edge
