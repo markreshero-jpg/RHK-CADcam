@@ -79,6 +79,8 @@ import { getUserPrefs, setUserPrefs, type PlanGridPrefs, type ViewStyle, type Wa
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { computeSnap, cabinetCorners, SNAP_KINDS, SNAP_KIND_META, type SnapSettings, type SnapResult } from '@/src/lib/canvasSnap'
 import { type ElevSnapSettings, type ElevSnapResult } from '@/src/lib/elevationSnap'
+import { benchtopSeedFromCabinets, btFrontOverhang } from '@/src/lib/benchtopSeed'
+import { loadRoomHandleSchedule } from '@/src/lib/resolver/loadCabinetInput'
 
 // Shape Editor overlay is client-only and heavy — load it when first opened.
 const BenchtopShapeEditor = dynamic(() => import('./BenchtopShapeEditor'), { ssr: false })
@@ -365,16 +367,29 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const wfOcc = (w: Wall, side: 'face' | 'back', mover: { assembly_class: string; dy: number; dz?: number }) =>
     waterfallOccupancy(wfLegs, w, side, centroid(walls), room, mover)
 
-  // F4 → Draw in Shape Editor. Starting rectangle = the footprint bbox of the
-  // selected cabinets (select the base run first), else 1200 × 600 at the
-  // middle of the view.
-  function drawBenchtopInShapeEditor() {
+  // F4 → Draw in Shape Editor. Starting outline = the selected base cabinets'
+  // plan outlines merged, fronts (angled facets too) pushed out by the front
+  // overhang — 40 with handles, 25 with finger pulls (z_cabinet_shape 4c).
+  // Falls back to their bbox, else 1200 × 600 at the middle of the view.
+  async function drawBenchtopInShapeEditor() {
     const ids = new Set([...multiSelect, ...(selected?.type === 'cabinet' ? [selected.id] : []), ...btSeedCabIds])
     const cx = centroid(walls)
-    const pts = cabinets.filter(c => ids.has(c.id)).flatMap(c => {
+    const picked = cabinets.filter(c => ids.has(c.id))
+    const bases = picked.filter(c => !c.is_kick_assembly && (c.assembly_class === 'base' || c.assembly_class === 'base_corner'))
+    const under = (bases.length ? bases : picked).flatMap(c => {
       const w = walls.find(x => x.id === c.wall_id)
-      return w ? cabinetCorners(c, w, cx) : []
+      return w ? [{ cab: c, wall: w, perp: cabWallPerp(c, w, wallInwardNormal(w, cx)) }] : []
     })
+    if (under.length) {
+      const oh = btFrontOverhang(await loadRoomHandleSchedule(room.id, project?.id).catch(() => ({})))
+      const segs = benchtopSeedFromCabinets(under, oh)
+      if (segs) {
+        setMultiSelect([])
+        bt.openNewInShapeEditor(segs)
+        return
+      }
+    }
+    const pts = under.flatMap(u => cabinetCorners(u.cab, u.wall, cx))
     let seed: Pt[]
     if (pts.length) {
       const x0 = Math.min(...pts.map(p => p.x)), x1 = Math.max(...pts.map(p => p.x))

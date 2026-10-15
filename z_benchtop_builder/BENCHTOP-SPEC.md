@@ -193,6 +193,10 @@ Defects found:
   cabinets (else 1200 × 600 mid-view); whole room shown as reference; the row
   is only inserted on Save (Cancel leaves nothing). The plan quick-draw tools
   (polygon / rect / L / U) stay.
+  **2026-10-15 (z_cabinet_shape 4c, decision 16):** the start shape is now the
+  selected base cabinets' merged outlines (shaped footprints included), fronts
+  pushed out 40 mm (handles) / 25 mm (finger pulls) from the carcase; bbox is
+  only the fallback.
 - [x] Plan: renders from segments (curves + true arcs); layer items
   `benchtop_edges` (profile colour + code, wall edges dashed grey) and
   `benchtop_joins` (dashed red line, B / M tag). Vertex butt/mitre flags gone.

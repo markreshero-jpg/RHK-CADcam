@@ -1057,6 +1057,11 @@ async function loadHandleInputs(
   return { handle_schedule, handle_products: products }
 }
 
+/** The room's cascaded handle schedule (no cabinet override) — new-benchtop overhang (z_cabinet_shape 4c). */
+export async function loadRoomHandleSchedule(roomId: string, projectId: string | undefined) {
+  return (await loadHandleInputs(roomId, projectId)).handle_schedule
+}
+
 // ── Hinge inputs loader ───────────────────────────────────────────────────────
 // Resolves the hinge schedule (room → project → shop → is_default), loads the
 // chosen cup + plate, the shop hinge_count_rules, and any persisted

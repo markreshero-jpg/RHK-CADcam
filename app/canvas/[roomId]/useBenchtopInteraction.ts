@@ -450,14 +450,15 @@ export function useBenchtopInteraction(p: Params) {
     setShapeEditId(null)
   }
 
-  // New benchtop straight into the editor, seeded with a rectangle (room frame).
-  function openNewInShapeEditor(seed: Pt[]) {
+  // New benchtop straight into the editor, seeded with a rectangle or a ready
+  // outline (room frame).
+  function openNewInShapeEditor(seed: Pt[] | BenchtopSegment[]) {
     setMode('benchtop_select')
     resetDraw()
     const now = new Date().toISOString()
     setShapeEditDraft({
       id: 'new', room_id: room.id, label: `Benchtop ${benchtops.length + 1}`,
-      ...shapeWrite(segmentsFromLegacy(seed)), joins: [], join_types: [], cutout_polygons: [],
+      ...shapeWrite(seed.length && 'p0' in seed[0] ? seed as BenchtopSegment[] : segmentsFromLegacy(seed as Pt[])), joins: [], join_types: [], cutout_polygons: [],
       wall_id: null, wall_side: 'face', height_mm: null,
       benchtop_build_method_id: null, benchtop_schedule_id: null, notes: null,
       created_at: now, updated_at: now,

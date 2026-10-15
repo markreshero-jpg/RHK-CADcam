@@ -10,7 +10,8 @@
 > **RESUME HERE** → Phases 1–2 (5dca77a), 3a (685786f), 3b (c405730), 3c + 4a
 > (angled carcass joints, square/bevel front ends, doors clear angled sides) committed
 > 2026-10-14 (49ed16e), all checked in-app. 4b (toe kick follows the shape) committed
-> 2026-10-15 (most of it rode in WIP c7d1633), checked in-app. Next: 4c benchtop.
+> 2026-10-15 (most of it rode in WIP c7d1633), checked in-app. 4c (new benchtop
+> follows the cabinets' outline, decision 16) built 2026-10-15, awaiting in-app check.
 > Library still needs a hinge with Mount° = 45.
 
 ---
@@ -113,6 +114,14 @@ derived from geometry (`src/lib/benchtopAnchor.ts`). Same pattern here.
 13. **Toe kick on a shaped cabinet: one board per front facet, mitred** where
     they meet (Mark, 2026-10-14).
 14. **Phase 4 is split 4a / 4b / 4c** with an in-app check each (Mark, 2026-10-14).
+16. **New benchtop over shaped cabinets** (Mark, 2026-10-15). F4 → Draw in Shape
+    Editor starts from the selected base cabinets' real outlines merged, every front
+    edge (angled facets too) pushed out by the front overhang, measured from the
+    carcase: **40 mm with handles** (door 16–18 + 2 bump-on + ~20 so the handle
+    doesn't stick out past the top), **25 mm with finger pulls** (3–5 mm past the
+    doors to get fingers under the top drawer). Picked from the room's handle
+    schedule (door_base / drawer roles; any hardware handle or nothing set → 40).
+    **New tops only** — existing tops are not re-fitted.
 
 ## Proposals (not yet locked)
 
@@ -375,7 +384,20 @@ Design (locked in code, 3a):
 - [x] 4b in-app check (Mark, 2026-10-15: "BC-15's kick looks good")
 - Known gaps (4b): a shaped cabinet in a joined kick run still gets the run's straight kick;
   elevations show turned kick boards at their bounding width (true width = Phase 5).
-- [ ] 4c — benchtop auto-outline from shaped cabinets
+- [~] 4c — benchtop auto-outline from shaped cabinets (built 2026-10-15)
+      - `src/lib/benchtopSeed.ts`: `cabinetSeedOutline` (footprint or box, fronts pushed out
+        via `insetPolygon` with −overhang), `unionOutlines` (split at crossings, drop pieces
+        inside another outline / shared seams, chain, largest loop), `benchtopSeedFromCabinets`
+        (back / scribe edges and edges on a wall face → wall edges; collinear runs merged),
+        `btFrontOverhang` (decision 16). `loadRoomHandleSchedule` exported from loadCabinetInput.
+      - CanvasClient `drawBenchtopInShapeEditor`: base cabinets of the selection (else all
+        selected) → seed outline; falls back to the old bbox if nothing merges.
+        `openNewInShapeEditor` takes a ready outline.
+      - Tests `benchtopSeed.test.ts`: straight run, clipped corner facet out 40, L across two
+        walls, overhang pick.
+      - Not done: sides stay flush with the carcase (no end overhang); arcs come through as
+        short straight runs; the panel's "Overhang past cabinets" still reads the box depth.
+- [ ] 4c in-app check
 
 ### Phase 5 — Output `[ ]`
 - [ ] Elevations at true width (decision 3)
