@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Wall } from '../types'
-import { fixtureCorners, fixtureCenter, rotationForFront, snapFixture, fixtureOnFace, fixtureAxes } from '../fixtureGeometry'
+import { fixtureCorners, fixtureCenter, rotationForFront, snapFixture, fixtureOnFace, fixtureAxes, fixtureCutoutPolygon, fixtureCutoutCenter, withFixtureCutouts } from '../fixtureGeometry'
 import { wallFrame } from '../benchtopAnchor'
 
 // A 4000 × 3000 room drawn clockwise in SVG coords (y down): top wall runs east.
@@ -53,5 +53,39 @@ describe('fixture geometry', () => {
     const on = fixtureOnFace(fx, wallFrame(walls[0], 'face', room))
     expect(on?.t0).toBeCloseTo(700); expect(on?.t1).toBeCloseTo(1300)
     expect(fixtureOnFace(fx, wallFrame(walls[2], 'face', room))).toBeNull()
+  })
+})
+
+describe('benchtop cutouts (P3)', () => {
+  const sink = {
+    x: 1000, y: 0, rotation: 0, width: 600, depth: 500,
+    cutout_shape: 'rect' as const, cutout_w: 580, cutout_d: 480, cutout_radius: 0, cutout_off_x: 0, cutout_off_y: 0,
+  }
+  // 3000 × 600 top along the top wall
+  const top = { segments: null, polygon: [{ x: 0, y: 0 }, { x: 3000, y: 0 }, { x: 3000, y: 600 }, { x: 0, y: 600 }], arc_segments: [], edge_tags: [], cutout_polygons: [] } as never
+
+  it('rect cutout is centred on the footprint and follows the offset + rotation', () => {
+    const p = fixtureCutoutPolygon(sink)!
+    expect(p).toHaveLength(4)
+    expect(p[0].x).toBeCloseTo(1010); expect(p[0].y).toBeCloseTo(10)
+    expect(p[2].x).toBeCloseTo(1590); expect(p[2].y).toBeCloseTo(490)
+    const c = fixtureCutoutCenter({ ...sink, rotation: 90, cutout_off_y: 50 })
+    // rotation 90: width runs +y, front runs −x; centre (1000 − 250, 0 + 300) then 50 forward
+    expect(c.x).toBeCloseTo(700); expect(c.y).toBeCloseTo(300)
+  })
+
+  it('rounded corners and round cutouts', () => {
+    expect(fixtureCutoutPolygon({ ...sink, cutout_radius: 15 })!.length).toBe(20)
+    const r = fixtureCutoutPolygon({ ...sink, cutout_shape: 'round', cutout_w: 100 })!
+    expect(r).toHaveLength(32)
+    expect(Math.hypot(r[0].x - 1300, r[0].y - 250)).toBeCloseTo(50)
+    expect(fixtureCutoutPolygon({ ...sink, cutout_shape: null })).toBeNull()
+  })
+
+  it('cuts only the benchtop under the cutout centre', () => {
+    const merged = withFixtureCutouts(top, [sink]) as { cutout_polygons: unknown[] }
+    expect(merged.cutout_polygons).toHaveLength(1)
+    const off = withFixtureCutouts(top, [{ ...sink, y: 1500 }])
+    expect(off).toBe(top)
   })
 })

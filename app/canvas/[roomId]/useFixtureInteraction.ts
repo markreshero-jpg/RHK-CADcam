@@ -27,6 +27,7 @@ const BODY_KEYS: (keyof FixtureBody)[] = [
   'category', 'kind', 'name', 'width', 'depth', 'height', 'mount', 'colour',
   'model_url', 'model_format', 'model_scale', 'model_rot_x', 'model_rot_y',
   'model_off_x', 'model_off_y', 'model_off_z',
+  'cutout_shape', 'cutout_w', 'cutout_d', 'cutout_radius', 'cutout_off_x', 'cutout_off_y', 'bench_drop',
 ]
 
 export function bodyFromCatalog(item: FixtureCatalogItem): FixtureBody {
@@ -36,12 +37,14 @@ export function bodyFromCatalog(item: FixtureCatalogItem): FixtureBody {
 }
 
 export function useFixtureInteraction({
-  room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot,
+  room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot, benchTopAt,
 }: {
   room:          Room
   walls:         Wall[]
   fixtures:      RoomFixture[]
   setFixtures:   React.Dispatch<React.SetStateAction<RoomFixture[]>>
+  /** P3: top height of the benchtop under a plan point, or null when there's none. */
+  benchTopAt?:   (p: Pt) => number | null
   mode:          Mode
   setMode:       (m: Mode) => void
   selected:      Selected
@@ -110,7 +113,7 @@ export function useFixtureInteraction({
       const row = {
         room_id: room.id, catalog_id: item.id, ...bodyFromCatalog(item),
         x: round1(s.x), y: round1(s.y), rotation: round3(s.rotation), wall_id: s.wall_id,
-        z: defaultFixtureZ(item.mount, item.mount_height),
+        z: benchZ(item, s) ?? defaultFixtureZ(item.mount, item.mount_height) - (item.mount === 'benchtop' ? Number(item.bench_drop) || 0 : 0),
       }
       const { data, error: e } = await supabase.from('room_fixtures').insert(row).select('*').single()
       if (e || !data) { setError(e?.message ?? 'Insert failed'); return true }
@@ -122,9 +125,20 @@ export function useFixtureInteraction({
     }
     const id = carry.id
     setCarry(null); setGhost(null); setMode('select')
-    await update(id, { x: round1(s.x), y: round1(s.y), rotation: round3(s.rotation), wall_id: s.wall_id })
+    const moved = fixtures.find(f => f.id === id)
+    const z = moved ? benchZ(moved, s) : null
+    await update(id, { x: round1(s.x), y: round1(s.y), rotation: round3(s.rotation), wall_id: s.wall_id, ...(z != null ? { z } : {}) })
     setSelected({ type: 'fixture', id })
     return true
+  }
+
+  // Benchtop-mount items sit on the top under their centre (less bench_drop for
+  // sinks / drop-in cooktops). Null = not a benchtop item, or no benchtop there.
+  function benchZ(f: Pick<RoomFixture, 'mount' | 'width' | 'depth' | 'bench_drop'>, s: FixtureSnap): number | null {
+    if (f.mount !== 'benchtop' || !benchTopAt) return null
+    const top = benchTopAt(fixtureCenter({ x: s.x, y: s.y, rotation: s.rotation, width: f.width, depth: f.depth }))
+    if (top == null) return null
+    return round1(top - (Number(f.bench_drop) || 0))
   }
 
   async function update(id: string, patch: Partial<RoomFixture>) {

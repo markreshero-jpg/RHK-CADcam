@@ -368,6 +368,54 @@ function FixtureEditor({ item, kinds, onPatch, onError }: {
                   onCommit={v => onPatch({ mount_height: v })} />
               </div>
             )}
+            {item.mount === 'benchtop' && (
+              <div className="mt-2 flex items-end gap-3">
+                <NumField label="Drops below top" value={item.bench_drop ?? 0}
+                  onCommit={v => onPatch({ bench_drop: Math.max(0, v) })} />
+                <p className="text-[10px] text-ink-subtle pb-1.5">
+                  Underside sits this far under the benchtop top — the bowl depth for a sink, 0 for a tap.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* ── Benchtop cutout template (z_fixtures P3) ── */}
+          <div>
+            <label className={lbl}>Benchtop cutout</label>
+            <div className="flex gap-1.5">
+              {([[null, 'None'], ['rect', 'Rectangle'], ['round', 'Round']] as const).map(([k, label]) => (
+                <button
+                  key={label}
+                  onClick={() => onPatch(k && !item.cutout_shape && !(item.cutout_w > 0)
+                    ? { cutout_shape: k, cutout_w: Math.max(0, item.width - 20), cutout_d: k === 'rect' ? Math.max(0, item.depth - 20) : item.cutout_d }
+                    : { cutout_shape: k })}
+                  className={`px-2.5 py-1 rounded border text-xs transition-colors ${
+                    (item.cutout_shape ?? null) === k ? 'border-accent bg-accent/10 text-accent-ink' : 'border-edge-strong text-ink-muted hover:bg-surface-2'
+                  }`}
+                >{label}</button>
+              ))}
+            </div>
+            {item.cutout_shape && (
+              <>
+                <div className="flex gap-3 mt-2">
+                  {item.cutout_shape === 'round'
+                    ? <NumField label="Diameter" value={item.cutout_w} onCommit={v => v > 0 && onPatch({ cutout_w: v })} />
+                    : <>
+                        <NumField label="Width"  value={item.cutout_w} onCommit={v => v > 0 && onPatch({ cutout_w: v })} />
+                        <NumField label="Depth"  value={item.cutout_d} onCommit={v => v > 0 && onPatch({ cutout_d: v })} />
+                        <NumField label="Corner radius" value={item.cutout_radius} onCommit={v => onPatch({ cutout_radius: Math.max(0, v) })} />
+                      </>}
+                </div>
+                <div className="flex gap-3 mt-2">
+                  <NumField label="Offset right" value={item.cutout_off_x} onCommit={v => onPatch({ cutout_off_x: v })} />
+                  <NumField label="Offset forward" value={item.cutout_off_y} onCommit={v => onPatch({ cutout_off_y: v })} />
+                </div>
+                <p className="text-[10px] text-ink-subtle mt-1">
+                  From the maker&apos;s cutout template. Centred on the item unless offset (looking at its front).
+                  Cut into whichever benchtop is under it.
+                </p>
+              </>
+            )}
           </div>
 
           <div className="flex gap-6 items-end">

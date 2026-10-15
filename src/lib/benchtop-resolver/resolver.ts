@@ -141,7 +141,7 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
       .filter(c => c.length >= 3 && pieceContains(ps, centroidOf(c)))
       .map(c => {
         const l = c.map(f.toLocal), xs = l.map(p => p.x), ys = l.map(p => p.y)
-        return { w: Math.round(Math.max(...xs) - Math.min(...xs)), h: Math.round(Math.max(...ys) - Math.min(...ys)), round: c.length >= 16 }
+        return { w: Math.round(Math.max(...xs) - Math.min(...xs)), h: Math.round(Math.max(...ys) - Math.min(...ys)), round: isRound(c) }
       })
     const joins = ps.filter(s => s.join).map(s => ({ type: s.join!, length: Math.round(edgeLength(s)) }))
     const meta: BenchtopPartMeta = {
@@ -343,6 +343,21 @@ function sideOf(f: PieceFrame, s: PieceSeg): BtBandSide | null {
 function longest(ps: PieceSeg[], idx: number[]): number {
   return idx.reduce((b, i) => (b < 0 || edgeLength(ps[i]) > edgeLength(ps[b]) ? i : b), -1)
 }
+// A circle: many points, all the same distance from the centroid. (A point count
+// alone misreads rounded-corner rectangles, e.g. fixture sink cutouts.)
+function isRound(c: P[]): boolean {
+  if (c.length < 12) return false
+  const m = centroidOf(c)
+  // vertices and edge midpoints (a rounded rectangle has its points only at the
+  // corners, so its straight edges' midpoints sit well inside)
+  const ds = c.flatMap((p, i) => {
+    const q = c[(i + 1) % c.length]
+    return [Math.hypot(p.x - m.x, p.y - m.y), Math.hypot((p.x + q.x) / 2 - m.x, (p.y + q.y) / 2 - m.y)]
+  })
+  const lo = Math.min(...ds), hi = Math.max(...ds)
+  return hi > 0 && (hi - lo) / hi < 0.03
+}
+
 function centroidOf(c: P[]): P {
   return { x: c.reduce((a, p) => a + p.x, 0) / c.length, y: c.reduce((a, p) => a + p.y, 0) / c.length }
 }

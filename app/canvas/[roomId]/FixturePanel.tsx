@@ -117,6 +117,12 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
             title="Open the viewer: 3D, front, back, sides, top (double-click)">View 3D / elevations</button>
         )}
 
+        {f.cutout_shape && (
+          <p className="text-[10px] text-gray-500">
+            Benchtop cutout: {f.cutout_shape === 'round' ? `Ø${f.cutout_w}` : `${f.cutout_w} × ${f.cutout_d}${f.cutout_radius ? ` R${f.cutout_radius}` : ''}`}
+            {f.bench_drop ? ` · drops ${f.bench_drop} below the top` : ''}
+          </p>
+        )}
         {f.model_url
           ? <p className="text-[10px] text-gray-500">3D model: {f.model_format?.toUpperCase()}</p>
           : <p className="text-[10px] text-gray-500">No 3D model — shows as a box.</p>}

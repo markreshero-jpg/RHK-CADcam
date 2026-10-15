@@ -1,6 +1,6 @@
 # Fixtures & Appliances — Spec
 
-Status: **P1 committed (50aef31); P2 placement committed in c7d1633 (WIP commit)** — next: P3 benchtop cutouts. See "RESUME HERE".
+Status: **P1 + P2 committed and on main; viewer modal (b41c0c1); P3 benchtop cutouts built 2026-10-15** — next: P4 cabinet links + schedule. See "RESUME HERE".
 
 Bought-in things placed in a room: ovens, cooktops, dishwashers, fridges,
 rangehoods, sinks, taps, decorative items. Catalogue lives in the Settings →
@@ -90,8 +90,8 @@ in the Wall tool (F2) — see "Openings (later)" at the bottom.
   Model files are never deleted (placed fixtures point at them).
 - **P2 — Placement** ✅ built 2026-10-14 (committed in c7d1633) — F6 picker, place/snap to wall, move/rotate/delete,
   plan + elevation + 3D rendering, layer items, object tree.
-- **P3 — Benchtop cutouts** — sink/cooktop cutout template on the catalogue row
-  becomes a cutout operation on the benchtop under it.
+- **P3 — Benchtop cutouts** ✅ built 2026-10-15 — sink/cooktop cutout template on the
+  catalogue row cuts the benchtop under it; benchtop-mount height from the real top.
 - **P4 — Cabinet links + schedule** — snap sink to sink cabinet, oven into tower
   opening; appliance schedule in reports.
 
@@ -133,12 +133,40 @@ views (Back/Left added to PartViewer as opt-in `views`/`viewLabels`), measure to
 "Size box" outline toggle, and the same FixturePanel fields beside it. Checked in-app
 with the Miele oven GLB.
 
+## P3 — what was built (2026-10-15)
+
+- **Columns** (migration `fixtures_p3_cutout_template`, applied live; copy in
+  `z_fixtures/migration_p3_cutout_template.sql`) on both `fixture_catalog` and
+  `room_fixtures` (placed copy, like the rest of FixtureBody): `cutout_shape`
+  (null | rect | round), `cutout_w`, `cutout_d`, `cutout_radius`, `cutout_off_x`
+  (+ right), `cutout_off_y` (+ forward), `bench_drop`.
+- **Locked: cutouts are derived, never stored.** `withFixtureCutouts(bt, fixtures)`
+  (fixtureGeometry.ts) appends a fixture's cutout polygon to the benchtop whose
+  outline holds the cutout centre. Used by CanvasClient `benchtopsDrawn` (plan
+  CanvasSVG + Room3DScene — render only, state/saves untouched) and by
+  `loadBenchtopInput` (resolver now loads room_fixtures). So the hole follows the
+  sink when it moves; `benchtop.cutout_polygons` stays the hand-drawn ones only.
+  Supply / reports read stored `meta.cutouts` → they update on the next Resolve.
+- Resolver round test was "≥16 points" — misread rounded-corner rects. Now
+  `isRound`: vertices + edge midpoints all within 3% of one radius.
+- **Height**: placing / moving a benchtop-mount fixture sets
+  z = top of the benchtop under its centre − `bench_drop` (CanvasClient passes
+  `benchTopAt` → `btInfo(b).topZ`). No benchtop there → 900 placeholder − drop.
+  Not re-run when the benchtop height changes later (edit Off floor or move it).
+- Library editor: "Drops below top" (benchtop mount) + "Benchtop cutout" section
+  (None / Rectangle / Round, size, corner radius, offsets). FixturePanel shows it.
+- Test item: "Test sink 600 single bowl (inset)" — generated GLB (600×500 rim,
+  450×380×190 bowl), cutout 580×480 R15, drop 190. Placed in the "Kichen" test
+  room; plan hole + resolver meta (580×480, not round) checked in-app.
+
 ## RESUME HERE — open items
 
-- Live visual check of the 3D view + a real uploaded model (not yet seen on screen).
+- ~~Live visual check of a real uploaded model~~ done 2026-10-15 in the fixture viewer (Miele oven GLB); room 3D view still not eyeballed.
 - Right-click context menu for fixtures (today right-click only selects).
 - Fixtures don't avoid cabinets when snapping (no collision) — decide with P4.
-- Benchtop-mount height uses 900 placeholder → take the benchtop top under it (P3).
+- Room 3D: sink-in-hole not clearly eyeballed yet (plan + resolver verified).
+- Cutout as a CNC op (optimiser / gcode ignore benchtop cutouts entirely today).
+- Per-placement cutout edits (FixturePanel only displays the template).
 - Elevation: fixtures aren't placeable from elevation; no dimension chains include them.
 
 ## Openings (later, separate spec)

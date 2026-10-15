@@ -2,6 +2,8 @@ import { supabase } from '@/src/lib/supabase'
 import type { BenchtopInstance, BenchtopBuildMethod, BenchtopScheduleRow, BenchtopEdgeProfile, Room, Project } from '@/src/lib/types'
 import { resolveClassDims, shopDimsFromSettings } from '@/src/lib/resolver/resolveClassDims'
 import type { BenchtopResolverInput } from './types'
+import { withFixtureCutouts } from '@/src/lib/fixtureGeometry'
+import type { RoomFixture } from '@/src/lib/types'
 
 export async function loadBenchtopInput(benchtopId: string): Promise<BenchtopResolverInput | null> {
   // Load the benchtop itself
@@ -13,7 +15,9 @@ export async function loadBenchtopInput(benchtopId: string): Promise<BenchtopRes
 
   if (btErr || !benchtop) return null
 
-  const bt = benchtop as BenchtopInstance
+  // Sink / cooktop cutouts come from the room's fixtures (z_fixtures P3).
+  const { data: fixtures } = await supabase.from('room_fixtures').select('*').eq('room_id', (benchtop as BenchtopInstance).room_id)
+  const bt = withFixtureCutouts(benchtop as BenchtopInstance, (fixtures ?? []) as RoomFixture[])
 
   // Load room and project for hierarchy resolution
   const [{ data: room }, { data: project }] = await Promise.all([

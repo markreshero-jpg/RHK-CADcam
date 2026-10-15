@@ -37,6 +37,7 @@ import { useFixtureInteraction } from './useFixtureInteraction'
 import FixturesPlan from './FixturesPlan'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
+import { withFixtureCutouts, benchtopAt } from '@/src/lib/fixtureGeometry'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
 import { findLayerSet } from '@/src/lib/displayLayers/legacy'
@@ -302,7 +303,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const btCatalog = useBenchtopCatalog(room, project)
   const fx = useFixtureInteraction({
     room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot,
+    benchTopAt: p => { const b = benchtopAt(benchtops, p); return b ? btInfo(b).topZ : null },
   })
+  // Benchtops as drawn: own cutouts + sink / cooktop cutouts from the fixtures on
+  // them (z_fixtures P3). Render-only — state and saves keep the stored outline.
+  const benchtopsDrawn = useMemo(() => benchtops.map(b => withFixtureCutouts(b, fixtures)), [benchtops, fixtures])
   const bt = useBenchtopInteraction({
     room, walls, cabinets,
     benchtops, setBenchtops,
@@ -2144,7 +2149,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               cabMoveDrag={cabMoveDrag}
               cabFollowing={cabFollowing}
               onSVGClick={onSVGClick}
-              benchtops={benchtops}
+              benchtops={benchtopsDrawn}
               selectedBenchtopId={selectedBenchtop?.id ?? null}
               btDrawPoly={bt.btDrawPoly}
               btDrawCursor={bt.btDrawCursor}
@@ -2382,7 +2387,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             layers={layers3D}
             wire={room3DStyle === 'wire'}
             bt={{
-              benchtops, info: btInfo, profiles: btCatalog.profileById,
+              benchtops: benchtopsDrawn, info: btInfo, profiles: btCatalog.profileById,
               selectedId: selected?.type === 'benchtop' ? selected.id : null,
               onSelect: id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]) },
             }}

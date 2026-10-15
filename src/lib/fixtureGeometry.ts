@@ -4,7 +4,8 @@
 //   n = (−sin r, cos r)  front direction (out of the back, toward the room)
 // In 3D: group at (x, z, y), rotation Y = −r, local +X = a, +Z = n.
 
-import type { Wall, FixtureMount, RoomFixture } from './types'
+import type { Wall, FixtureMount, RoomFixture, BenchtopInstance } from './types'
+import { btSegments, outlinePoints } from './benchtopGeometry'
 import { wallFrame, alongOf, offOf, type WallSide, type WallFrame } from './benchtopAnchor'
 import type { Pt } from './geometry'
 
@@ -125,3 +126,90 @@ export const FIXTURE_LAYER: Record<string, string> = {
   decorative: 'fixture_decorative',
 }
 export const fixtureLayer = (category: string) => FIXTURE_LAYER[category] ?? 'fixture_appliances'
+
+// ── Benchtop cutouts (P3) ─────────────────────────────────────────────────────
+// A fixture with a cutout template cuts a hole in the benchtop holding the
+// cutout's centre. Derived live (never written into benchtop.cutout_polygons),
+// so the hole follows the fixture: plan + 3D + resolver all merge it in through
+// withFixtureCutouts.
+
+export type FixtureCutoutSpec = FixtureFootprint & Pick<RoomFixture,
+  'cutout_shape' | 'cutout_w' | 'cutout_d' | 'cutout_radius' | 'cutout_off_x' | 'cutout_off_y'>
+
+export function fixtureCutoutCenter(f: FixtureCutoutSpec): Pt {
+  const c = fixtureCenter(f)
+  const { a, n } = fixtureAxes(f.rotation)
+  const u = f.cutout_off_x ?? 0, v = f.cutout_off_y ?? 0
+  return { x: c.x + a.x * u + n.x * v, y: c.y + a.y * u + n.y * v }
+}
+
+const ROUND_STEPS = 32, CORNER_STEPS = 4
+
+/** The cutout outline in plan (mm), or null when the fixture has no cutout. */
+export function fixtureCutoutPolygon(f: FixtureCutoutSpec): Pt[] | null {
+  const w = Number(f.cutout_w) || 0, d = Number(f.cutout_d) || 0
+  if (!f.cutout_shape || w <= 0) return null
+  const c = fixtureCutoutCenter(f)
+  const { a, n } = fixtureAxes(f.rotation)
+  const at = (u: number, v: number): Pt => ({ x: c.x + a.x * u + n.x * v, y: c.y + a.y * u + n.y * v })
+  if (f.cutout_shape === 'round') {
+    const r = w / 2
+    return Array.from({ length: ROUND_STEPS }, (_, i) => {
+      const t = (i / ROUND_STEPS) * Math.PI * 2
+      return at(r * Math.cos(t), r * Math.sin(t))
+    })
+  }
+  if (d <= 0) return null
+  const hw = w / 2, hd = d / 2
+  const r = Math.max(0, Math.min(Number(f.cutout_radius) || 0, hw, hd))
+  if (r < 0.5) return [at(-hw, -hd), at(hw, -hd), at(hw, hd), at(-hw, hd)]
+  // Rounded corners: arc centres inset by r, swept a quarter turn each.
+  const corners: [number, number, number][] = [[hw - r, -hd + r, -90], [hw - r, hd - r, 0], [-hw + r, hd - r, 90], [-hw + r, -hd + r, 180]]
+  const pts: Pt[] = []
+  for (const [cu, cv, start] of corners) {
+    for (let i = 0; i <= CORNER_STEPS; i++) {
+      const t = (start + (90 * i) / CORNER_STEPS) * DEG
+      pts.push(at(cu + r * Math.cos(t), cv + r * Math.sin(t)))
+    }
+  }
+  return pts
+}
+
+export function pointInPolygon(pts: Pt[], p: Pt): boolean {
+  let inside = false
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i], b = pts[j]
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
+
+type BtOutline = Pick<BenchtopInstance, 'segments' | 'polygon' | 'arc_segments' | 'edge_tags'>
+
+/** Does the benchtop outline contain the plan point? */
+export function benchtopContains(bt: BtOutline, p: Pt): boolean {
+  const pts = outlinePoints(btSegments(bt), 16)
+  return pts.length >= 3 && pointInPolygon(pts, p)
+}
+
+/** Cutout polygons the fixtures make in this benchtop (cutout centre inside its outline). */
+export function benchtopFixtureCutouts(bt: BtOutline, fixtures: FixtureCutoutSpec[]): Pt[][] {
+  const out: Pt[][] = []
+  for (const f of fixtures) {
+    const poly = fixtureCutoutPolygon(f)
+    if (poly && benchtopContains(bt, fixtureCutoutCenter(f))) out.push(poly)
+  }
+  return out
+}
+
+/** The benchtop with its fixtures' cutouts appended — for drawing / resolving only, never saved. */
+export function withFixtureCutouts<T extends BtOutline & Pick<BenchtopInstance, 'cutout_polygons'>>(bt: T, fixtures: FixtureCutoutSpec[]): T {
+  const extra = benchtopFixtureCutouts(bt, fixtures)
+  if (!extra.length) return bt
+  return { ...bt, cutout_polygons: [...(bt.cutout_polygons ?? []), ...extra] }
+}
+
+/** The benchtop under a plan point (first match), for benchtop-mount heights. */
+export function benchtopAt<T extends BtOutline>(benchtops: T[], p: Pt): T | null {
+  return benchtops.find(b => benchtopContains(b, p)) ?? null
+}

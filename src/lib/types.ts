@@ -574,6 +574,17 @@ export interface FixtureBody {
   model_off_x:  number
   model_off_y:  number
   model_off_z:  number
+  // ── Benchtop cutout template (P3) — null shape = no cutout ──
+  /** 'rect' = cutout_w × cutout_d (corner cutout_radius); 'round' = Ø cutout_w. */
+  cutout_shape:  'rect' | 'round' | null
+  cutout_w:      number
+  cutout_d:      number
+  cutout_radius: number
+  /** Cutout centre offset from the footprint centre: + right (along width), + forward. */
+  cutout_off_x:  number
+  cutout_off_y:  number
+  /** Benchtop mount: underside sits this far below the benchtop top (sink bowl depth). */
+  bench_drop:    number
 }
 
 export interface FixtureCatalogItem extends FixtureBody {
