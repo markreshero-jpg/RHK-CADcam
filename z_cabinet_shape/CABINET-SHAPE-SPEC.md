@@ -10,7 +10,7 @@
 > **RESUME HERE** → Phases 1–2 (5dca77a), 3a (685786f), 3b (c405730), 3c + 4a
 > (angled carcass joints, square/bevel front ends, doors clear angled sides) committed
 > 2026-10-14 (49ed16e), all checked in-app. 4b (toe kick follows the shape) committed
-> 2026-10-15 (most of it rode in WIP c7d1633) — needs an in-app check. Next: 4c benchtop.
+> 2026-10-15 (most of it rode in WIP c7d1633), checked in-app. Next: 4c benchtop.
 > Library still needs a hinge with Mount° = 45.
 
 ---
@@ -372,7 +372,7 @@ Design (locked in code, 3a):
       - Tests `shapedKick.test.ts`: a rectangle-shaped footprint gives exactly the box kick; six
         presets: every kick part inside the footprint, no collisions at the same height; clipped
         corner faces share both mitre corners, set back TOESCF from the facet; leg = faces only.
-- [ ] 4b in-app check
+- [x] 4b in-app check (Mark, 2026-10-15: "BC-15's kick looks good")
 - Known gaps (4b): a shaped cabinet in a joined kick run still gets the run's straight kick;
   elevations show turned kick boards at their bounding width (true width = Phase 5).
 - [ ] 4c — benchtop auto-outline from shaped cabinets
