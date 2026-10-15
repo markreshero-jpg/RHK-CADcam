@@ -2,9 +2,9 @@ import type { AssemblyClass } from '@/src/lib/types'
 import type { CabinetInstance, ContextMenuItem } from './canvasTypes'
 
 export function buildContextMenuGroups({
-  cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, canEqualize, clipboard, cabinets, multiSelect,
+  cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, fixtureId, fixture, canEqualize, clipboard, cabinets, multiSelect,
   onDeleteWall, onDeleteCabinet, onDeleteMultiple, onDeleteBenchtop, onDeleteBenchtopVertex, onRoundCorner, onChamfer,
-  onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor,
+  onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
 }: {
@@ -14,6 +14,14 @@ export function buildContextMenuGroups({
   elevWallT?: number
   benchtopId?: string
   vertexContext?: { btId: string; vi: number }
+  /** Right-clicked fixture / appliance (z_fixtures) and its actions. */
+  fixtureId?: string
+  fixture?: {
+    onView:   (id: string) => void
+    onMove:   (id: string) => void
+    onTurn:   (id: string) => void
+    onDelete: (id: string) => void
+  }
   canEqualize: boolean
   clipboard: CabinetInstance | null
   cabinets: CabinetInstance[]
@@ -28,6 +36,8 @@ export function buildContextMenuGroups({
   onEditBenchtopShape?: (btId: string) => void   // Phase 6: reshape in the plan
   onEditBenchtopEdges?: (btId: string) => void   // Phase 7b: paint profiles / tape in the plan
   onOpenShapeEditor?: (btId: string) => void     // full Shape Editor screen
+  btJoinCount?: number                           // Phase 7c: tops shift-picked (incl. this one)
+  onJoinBenchtops?: () => void
   onCopy: (cab: CabinetInstance) => void
   onPaste: () => void
   onEdit: (id: string) => void
@@ -53,8 +63,22 @@ export function buildContextMenuGroups({
     ]]
   }
 
+  if (fixtureId && fixture) {
+    return [
+      [
+        { label: 'View 3D / elevations', onClick: () => fixture.onView(fixtureId), color: 'blue' },
+        { label: 'Move', onClick: () => fixture.onMove(fixtureId) },
+        { label: 'Turn 90°', onClick: () => fixture.onTurn(fixtureId) },
+      ],
+      [{ label: 'Delete', onClick: () => fixture.onDelete(fixtureId), color: 'red' }],
+    ]
+  }
+
   if (benchtopId && onDeleteBenchtop) {
     return [
+      ...(btJoinCount && btJoinCount >= 2 && onJoinBenchtops
+        ? [[{ label: 'Join benchtops (' + btJoinCount + ')…', onClick: onJoinBenchtops, color: 'blue' as const }]]
+        : []),
       [
         ...(onEditBenchtopShape ? [{ label: 'Edit shape', onClick: () => onEditBenchtopShape(benchtopId), color: 'blue' as const }] : []),
         ...(onEditBenchtopEdges ? [{ label: 'Edit edges', onClick: () => onEditBenchtopEdges(benchtopId), color: 'blue' as const }] : []),

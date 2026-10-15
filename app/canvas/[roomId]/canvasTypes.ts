@@ -80,7 +80,7 @@ export type ArmedDefinition = {
 
 export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: string } | { type: 'benchtop'; id: string } | { type: 'fixture'; id: string } | null
 
-export type ContextMenuState = { x: number; y: number; cabId?: string; wallId?: string; elevWallId?: string; elevWallT?: number; benchtopId?: string; vertexContext?: { btId: string; vi: number } }
+export type ContextMenuState = { x: number; y: number; cabId?: string; wallId?: string; elevWallId?: string; elevWallT?: number; benchtopId?: string; vertexContext?: { btId: string; vi: number }; fixtureId?: string }
 
 // pos_x/pos_y = snapped back-left landing on the wall.
 // freePos = raw cursor world position so the ghost can float at the cursor (matches

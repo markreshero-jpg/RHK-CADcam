@@ -2214,7 +2214,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                   layers={planLayers}
                   interactive={mode === 'select'}
                   onPointerDown={(_e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null); setContextMenu(null) }}
-                  onContextMenu={(_e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]) }}
+                  onContextMenu={(e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setContextMenu({ x: e.clientX, y: e.clientY, fixtureId: id }) }}
                   onDoubleClick={(_e, id) => { setSelected({ type: 'fixture', id }); setViewFixtureId(id) }}
                 />
               }
@@ -2658,6 +2658,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             elevWallT: contextMenu.elevWallT,
             benchtopId: contextMenu.benchtopId,
             vertexContext: contextMenu.vertexContext,
+            fixtureId: contextMenu.fixtureId,
+            fixture: {
+              onView:   id => { setContextMenu(null); setViewFixtureId(id) },
+              onMove:   id => { setContextMenu(null); if (canvasView !== 'plan') switchView('plan'); fx.startMove(id) },
+              onTurn:   id => { setContextMenu(null); void fx.rotateBy(id, 90) },
+              onDelete: id => { setContextMenu(null); setSelected(null); void fx.remove(id) },
+            },
             onDeleteBenchtop: id => void bt.handleDeleteBenchtop(id),
             onDeleteBenchtopVertex: bt.handleDeleteBenchtopVertex,
             onRoundCorner: bt.handleRoundCorner,

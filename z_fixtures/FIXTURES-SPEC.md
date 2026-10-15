@@ -162,7 +162,7 @@ with the Miele oven GLB.
 ## RESUME HERE — open items
 
 - ~~Live visual check of a real uploaded model~~ done 2026-10-15 in the fixture viewer (Miele oven GLB); room 3D view still not eyeballed.
-- Right-click context menu for fixtures (today right-click only selects).
+- ~~Right-click context menu~~ done 2026-10-15 in plan: View 3D / elevations, Move, Turn 90°, Delete (undoable). Not in elevation / 3D yet.
 - Fixtures don't avoid cabinets when snapping (no collision) — decide with P4.
 - Room 3D: sink-in-hole not clearly eyeballed yet (plan + resolver verified).
 - Cutout as a CNC op (optimiser / gcode ignore benchtop cutouts entirely today).
