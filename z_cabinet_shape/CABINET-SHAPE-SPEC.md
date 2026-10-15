@@ -13,6 +13,7 @@
 > 2026-10-15 (most of it rode in WIP c7d1633), checked in-app. 4c (new benchtop
 > follows the cabinets' outline, decision 16) built 2026-10-15, awaiting in-app check.
 > Library still needs a hinge with Mount° = 45.
+> **L corner (BCNP)**: L1 + check-#1 fixes + L3 drilling built 2026-10-15 (uncommitted), awaiting in-app check → then L2 bi-fold (Phase L).
 
 ---
 
@@ -114,6 +115,12 @@ derived from geometry (`src/lib/benchtopAnchor.ts`). Same pattern here.
 13. **Toe kick on a shaped cabinet: one board per front facet, mitred** where
     they meet (Mark, 2026-10-14).
 14. **Phase 4 is split 4a / 4b / 4c** with an in-app check each (Mark, 2026-10-14).
+15. **L corner (pie) = `BCNP`** (Mark, 2026-10-15). Square L footprint on a 900 × 900
+    box; both leg depths = the run's base depth (room → job → shop cascade) **at
+    placement** — like every other cabinet's depth, a later room change doesn't move
+    it. `BCNR` stays blind corner (rhk-crm's hinge picker reads it). Doors are a
+    **bi-fold pair** (Phase L2). Decision 7 is lifted for BCNP only: it's the first
+    shaped library entry.
 16. **New benchtop over shaped cabinets** (Mark, 2026-10-15). F4 → Draw in Shape
     Editor starts from the selected base cabinets' real outlines merged, every front
     edge (angled facets too) pushed out by the front overhang, measured from the
@@ -173,6 +180,7 @@ derived from geometry (`src/lib/benchtopAnchor.ts`). Same pattern here.
 | `clipped_corner` | clip_x, clip_z, side | back, side, front, **front (angled facet)**, side | — |
 | `diagonal_corner` | return_l, return_r (depths) | back, back, side, **front 45°**, side | BCNL/WCNL (proposed) |
 | `angled_end` | angle or end depth, side | back, side, front, **side (angled, finished)** | — |
+| `l_corner` | leg_back, leg_side (class depth), side | back, side, front, **front (inside corner)**, side, back | BCNP |
 | `radius_end` | radius, side | back, side, front, **arc (open shelves)** | — |
 | `trapezoid` | front width, back width | back, side (angled), front, side (angled) | — |
 
@@ -399,7 +407,127 @@ Design (locked in code, 3a):
         short straight runs; the panel's "Overhang past cabinets" still reads the box depth.
 - [ ] 4c in-app check
 
+### Phase L — L corner / pie (`BCNP`) `[~]`
+Decision 15. Split L1 (shape + library) / L2 (bi-fold doors), in-app check each.
+- [x] L1 — (2026-10-15)
+      - Preset `l_corner` (presets.ts): edges back, end, front (back-wall leg, primary —
+        first of the equal-length fronts), front2 (return leg), end2, back2. `side` = the end
+        away from the room corner, as the diagonal corner.
+      - `PresetParamDef.classDepth`: params seeded from the cascaded class depth at placement —
+        `seedClassDepthParams` in `buildInstanceFromDefinition` (canvasDB), so it covers library
+        placement and Replace. Runs even when the box depth is preserved (900 × 900).
+      - **Inside-corner doors** (resolveShapedFace `concaveRev`): overlay doors on two facets
+        meeting at a concave corner shared a ft × ft block. The primary (else earlier) facet's
+        door runs long — its end GAPC/2 past the other door's back face — and the other stops
+        GAPC/2 clear of its front face. Inset doors keep the plain GAPC/4 gap.
+        Test `lCorner.test.ts` (both hands; fails on the old gap).
+      - Library row `BCNP` (migration_l1_bcnp_library.sql, applied): class `base`,
+        preserve_dz, copied from B2D. Primary door hinged right on `end`; front2's default
+        facet door hinges on `end2`. Left-hand version: flip `side` in the Shape section and set
+        the primary door's hinge to left by hand (until L2 picks hinges itself).
+- [x] L1 in-app check #1 (Mark, 2026-10-15: "not bad for the first try") → fixes, same day:
+      - **Pie-corner doors**: both stop door t + 2 back from the doors' inside corner (where
+        their back planes meet, FACBUF out from the carcass corner) — each end 2 clear of the
+        other door's face. Replaces the "one runs long" first cut. `PIE_CORNER_GAP`.
+      - **Rails at the inside corner**: the earlier facet's `rail:<edge>` runs through past the
+        corner by the other rail's plan depth; the later one butts against it.
+      - **Rule `RAIL_ORIENT`** `vertical` | `horizontal` (default — Mark changed it 2026-10-15), every top rail
+        incl. plain boxes. Upright rail: DX = RD (its height), DY = length, DZ = thickness,
+        `upright: true` → caseBox maps it like a back panel (w = DY, h = DX, d = DZ); the seam
+        frame then lays rail-to-side holes up its height. Front rail face flush with the carcass
+        front, back rail on the top's back line. `case_parts.upright` (migration_l1b, applied);
+        persist + reload; optimiser frame; ortho/plan/3D treat it as standing. Rule UI in
+        construction methods, job + room properties. Finger-pull top rail push reads its height.
+        **Changes every existing cabinet's rails on its next resolve.**
+        Per cabinet: "Rails" select under Top Type in CabinetPanel (rule_overrides.RAIL_ORIENT, shown unless full top / none). BCNP library row + placed copies set to vertical (Mark: "all corner cabinets are vertical rails"; so no knock-in block at the pie corner).
+      - **Shelf pin rows follow the panel** (`sharedDepth` in jointDrilling — seam frame + full
+        bank): rows lay out along the Z overlap of shelf and panel, not the shelf's bbox depth.
+        Plain boxes unchanged (test).
+- [ ] L1 in-app check #2
+- [x] L3 — construction drilling on per-edge panels (Mark, 2026-10-15: "drill holes are not
+      making it onto some parts"; built same day). Carcass seams existed only between legacy box
+      parts. Now `resolver/shapedSeams.ts` `enumerateShapedSeams` (pure; resolver + canvasDB
+      reload): for every standing panel B (side / back / upright rail) square to the cabinet,
+      in a frame turned so B faces ±X, a part whose end sits on B's face, overlapping it in
+      height and depth, is a seam. Pairs: bottom / top / rail / back → side; side / back → back;
+      rail → upright rail (flat rails at a pie corner are hand-fixed). Per-edge backs on the
+      bottom = the turned back:bottom seam. Shelves on `side:` panels (per shelf or full bank).
+      Plain boxes: none (legacy list untouched).
+      - Key `part_a|part_b` (part keys hold colons); `ResolvedSeamJoint.shaped` = { turn, kind,
+        side }. Joint cascade: per-cabinet entry → CM default of the legacy seam it plays
+        (`bottom:left_side`, `front_rail:right_side`, `back:left_side`, `back:bottom`,
+        `adj_shelf:side`…, picked by side).
+      - Drilling (`jointDrilling.shapedSeamDrillOps` / `seamDrillsFor`): parts' plan AABBs in the
+        turned frame (`partPlan / turnedBox / panelTurn / squareIn`), the legacy X-normal code,
+        holes turned back (`turnDrill`). 3D draws a turned panel's holes in its own frame
+        (`intoPartFrame`); CNC sync turns them into the panel (`intoPanel`); through-bore
+        coalescing measures turned panels on their plan AABB (`seamExtentBoxes`). Part joint
+        panel lists shaped seams for per-cabinet override (`getSeamAssignState` takes the
+        generic key).
+      - **Fix found on the way**: with BOTTOM_BACK_JOIN back_on_bottom the shaped bottom stopped
+        at the backs' inner faces — backs floated 18 up over nothing. It now runs under the
+        backs to the outline (sides still inset).
+      - Which back / rail runs through at a corner follows the edge order, so it differs by hand.
+      - Tests `shapedSeams.test.ts`: seam set both hands; every hole (real shop recipes) enters
+        its part through a face and bores into it, both hands × both rail orientations; end2
+        holes stay within its 560; plain box unchanged.
+      - Angled panels (any angle) now get their seams — z_angled_filler A5 (2026-10-15): parts must meet
+        them square (end-on / an edge along the face); angled butts + mitres stay hand-fixed.
+      - Not done: angled butt / mitre joints; flat-rail pie-corner joint; 3D seam reference planes
+        for shaped seams (holes draw, the green/blue joint plane doesn't).
+- [x] L3 in-app check (Mark, 2026-10-15: "carcase drilling looks good"). Follow-ups same day:
+      - Shelf pins on the backs: on a multi-back cabinet (L) both backs are shelf supports too
+        (`shapedSeams` shelf loop), seams `int_adj_shelf_N|back` / `|back:back2`, inheriting
+        their own CM key `adj_shelf:back` (CM builder "Back supports"), falling back to
+        `adj_shelf:side`; overridable per cabinet. Shop default = "Adjustable Shelf Holes x1 Row
+        (centre)": one row at D / 2 of the shared edge (`migration_l3b_adj_shelf_back_joint.sql`).
+      - Through top rail: at the pie corner the earlier facet's rail now runs on across the other
+        leg to the inset outline (other leg's back less back.t / scribe), not just past the corner
+        by one rail depth (`resolveShapedCase` runOn). New seam rail → back (`rail:front|back:back2`
+        right hand, `rail:front2|back` left), CM default from `front_rail:<side>`.
+- [x] L4 — finger-pull backing rails on shaped cabinets (Mark, 2026-10-15: "the gables don't
+      get checked out nor set back to allow for backing rail"). `resolveShapedFingerRails.ts`:
+      - Per front facet, heights as the box (RAILH / RAILUP / gap, clamped to the carcass), along the
+        facet line, front face on it, through the end panel to its outer face.
+      - Pie corner: the earlier facet's rail runs on by the other's thickness, the later butts (same
+        order as the top rails).
+      - End panels notched at the front edge (box side → side frame; turned side:<edge> → face frame;
+        3D now draws resolver outlines on turned side:/back: panels).
+      - A rail at the carcass top pushes that facet's top rail back by its thickness; the top rail
+        butting it at the pie corner grows to meet it.
+      - CNC (seamDrillSync, fprail.shaped): knock-in block hole at each end that sits in a panel;
+        notch + closed-end reliefs as pockets projected into each panel's own frame.
+      - Not done: no block / fixing where the two rails meet at the pie corner; dividers.
+      - Tests `lCornerFingerRails.test.ts`. In-app check pending.
+- [x] L5 — placement + sharknose fixes (Mark, 2026-10-15):
+      - Cabinets on other walls block placement by their real plan outline (`src/lib/cabinetObstacles.ts`
+        crossWallCabinetOccupancy, appended in CanvasClient `wfOcc` → plan + elevation place / drag /
+        stretch / paste, and useCabinetOps add-neighbour). Applies to every corner, not just shaped ones.
+        Not in the CabinetPanel typed-position inputs. Tests `cabinetObstacles.test.ts`.
+      - Sharknose profile now draws on turned facet doors (handleGeometry.sharknoseProfile).
+- [ ] L2 — bi-fold pair (research 2026-10-15): Blum CLIP top 60° bi-fold **79T8500** (screw-on) /
+      **79T8530** (knock-in), only with CLIP top 170° (71T6550 / 71T6580) or 155°. **Lead door**
+      carries every cup: 170° cups on its outer edge to its end panel, bi-fold cups on its pie
+      edge at **12.5 mm** cup centre (partial bore). **Trailing door**: no cups — the bi-fold's
+      plate screws to its back face; nothing on the carcass at the inside corner. Gap adjusts
+      +7.2 / −4.2. No soft-close built in (add-on 970.1002). Lincoln Sentry lists 79T850/853 as
+      discontinued. Mark's answers (2026-10-15): trailing-door plate holes **37 mm from the door
+      edge**; **either leg's door can lead** — the resolver infers it from the face grid hinge
+      sides (door hinged toward its end panel = lead, door hinged toward the pie corner =
+      trailing); **2 hinges per base door**, 170° and bi-fold hinges to be created in the hardware
+      library. Then rhk-crm `BCNP` + `pie` corner kind, both skill copies.
+      Order: L3 drilling first, then L2.
+      - L2a done 2026-10-15: Mark uses **INSERTA 170° (71T6580)** + **knock-in bi-fold (79T8530)**.
+        Both added to `hardware_hinges` ("Blum 170 INSERTA", "Blum 60 bi-fold knock-in", cup X 12.5;
+        `migration_l2a_bifold_hinges.sql`). Dowel/anchor pattern copied from Blum 110 (45/9.5) — confirm
+        against Blum's template. The table has no plate-hole fields yet; the trailing door's 37 mm plate
+        holes are in the row's notes until L2 adds them.
+      - Shelf pins on the L shelf's second leg (Mark, 2026-10-15): both end panels drill since L3
+        (resolver test confirms 2 holes on each end, inside each shelf leg).
+
 ### Phase 5 — Output `[ ]`
+> Nest / CNC of true shapes is tracked in `z_part_shape_editor/OPTIMISER-PHASE-PLAN.md`
+> (O2b resolver outlines → O3 sheet preview → O4 contour G-code → O5 EB deduction), 2026-10-15.
 - [ ] Elevations at true width (decision 3)
 - [ ] Cut list / optimiser / CNC: bevel edges and angled cuts
 - [ ] Reports

@@ -48,7 +48,7 @@ export function caseFrame(p: ResolvedCasePart): FootprintFrame {
     default: // bottom, full_top, front_rail, back_rail — horizontal panels
       // Shaped-cabinet panels (side:/back:) are face-kind like the back. Their
       // AY turns them in the cabinet, but the panel's own frame is unchanged.
-      if (isShapedPanelKey(p.part_key))
+      if (isShapedPanelKey(p.part_key) || p.upright)
         return { normal: 'z', u: { axis: 'y', dir: 1, origin: cb.y, extent: p.DX }, v: { axis: 'x', dir: 1, origin: cb.x, extent: p.DY } }
       return { normal: 'y', u: { axis: 'z', dir: 1, origin: cb.z, extent: p.DX }, v: { axis: 'x', dir: 1, origin: cb.x, extent: p.DY } }
   }

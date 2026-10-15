@@ -34,12 +34,18 @@ File: `app/canvas/[roomId]/CanvasSidebar.tsx`.
    `localStorage['rhk-sidebar-cab-nav']` (per-browser convenience only, not the
    old localStorage *groups*, which stay removed per the Cabinet Library spec §4).
    A stale id (deleted category) falls back to the top level.
-7. **F-keys and headers are identical and only toggle the menu** (decided
-   2026-10-12). F2 / F3 / F4 key == clicking that header == open/close that
-   section. They never change the mode on their own: a section lights solid
-   only once one of its tools is picked. F4 no longer enters Benchtop mode —
-   that's the "Select Tops" tool (`benchtop_select`) in the menu; Esc or
-   Select leaves it.
+7. **F-keys and headers toggle the menu** (decided 2026-10-12; F2 and F4
+   amended 2026-10-15). F3 key == clicking that header == open/close that
+   section, and never changes the mode on its own: a section lights solid
+   only once one of its tools is picked.
+   **F2 exception:** opening the Wall section with F2 also arms Standard Wall
+   (`draw_wall`, switching to plan view if needed); pressing F2 again closes
+   the section and leaves the wall tool. Clicking the Wall header still only
+   toggles the menu.
+   **F4 exception:** opening the Benchtop section with F4 also arms "Select
+   Tops" (`benchtop_select`); pressing F4 again closes the section and leaves
+   Benchtop mode (back to `select`). Clicking the Benchtop header still only
+   toggles the menu; Esc from Select Tops leaves it too.
 8. **Menus stay open** until their key/header is pressed again or another
    section opens. Canvas clicks, Esc, picking a tool and finishing a benchtop
    do not close them.

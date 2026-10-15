@@ -35,23 +35,35 @@ interface KEdge { kind: Kind; seg: FootprintSegment }
 const kindOf = (s: FootprintSegment): Kind =>
   s.edge.role === 'front' || s.edge.role === 'open' ? 'front' : s.edge.role === 'back' ? 'back' : 'side'
 
-/** Where line P + d·t is inside the convex polygon: [t0, t1], or null. */
-function lineInterval(poly: ShapePt[], P: ShapePt, d: ShapePt): [number, number] | null {
-  let t0 = -Infinity, t1 = Infinity
-  const ccw = poly.reduce((a, p, i) => { const q = poly[(i + 1) % poly.length]; return a + p.x * q.y - q.x * p.y }, 0) >= 0
+/**
+ * Where line P + d·t (d a unit vector) is inside the polygon — any polygon,
+ * convex or not (an angled filler's kick has an inside corner, z_angled_filler:
+ * the old half-plane cut let the far facet's line clip the end spreaders short).
+ * Crossings, even–odd; returns the inside stretch containing `tRef`, else the
+ * longest. A line lying exactly on an edge is ambiguous — callers nudge it in.
+ */
+function lineInterval(poly: ShapePt[], P: ShapePt, d: ShapePt, tRef?: number): [number, number] | null {
+  const ts: number[] = []
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i], b = poly[(i + 1) % poly.length]
-    // Inside = left of a→b for a positive (ccw) polygon.
-    const ex = b.x - a.x, ey = b.y - a.y
-    const s = ccw ? 1 : -1
-    const c0 = s * (ex * (P.y - a.y) - ey * (P.x - a.x))     // side at t = 0
-    const dc = s * (ex * d.y - ey * d.x)                     // change per unit t
-    if (Math.abs(dc) < 1e-12) { if (c0 < -1e-9) return null; continue }
-    const t = -c0 / dc
-    if (dc > 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t)
+    const sa = d.x * (a.y - P.y) - d.y * (a.x - P.x), sb = d.x * (b.y - P.y) - d.y * (b.x - P.x)
+    if ((sa > 0) === (sb > 0)) continue
+    const k = sa / (sa - sb)
+    const q = { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k }
+    ts.push((q.x - P.x) * d.x + (q.y - P.y) * d.y)
   }
-  return t1 - t0 > 1e-6 ? [t0, t1] : null
+  ts.sort((u, v) => u - v)
+  let best: [number, number] | null = null
+  for (let i = 0; i + 1 < ts.length; i += 2) {
+    const iv: [number, number] = [ts[i], ts[i + 1]]
+    if (iv[1] - iv[0] <= 1e-6) continue
+    if (tRef != null && tRef >= iv[0] - 1e-6 && tRef <= iv[1] + 1e-6) return iv
+    if (!best || iv[1] - iv[0] > best[1] - best[0]) best = iv
+  }
+  return best
 }
+
+const NUDGE = 0.01   // mm — keeps a spreader's line off the outline it runs along
 
 const isect = (a: [number, number] | null, b: [number, number] | null): [number, number] | null =>
   a && b && Math.min(a[1], b[1]) - Math.max(a[0], b[0]) > 1e-6 ? [Math.max(a[0], b[0]), Math.min(a[1], b[1])] : null
@@ -161,9 +173,9 @@ export function resolveShapedKick(
   // A spreader (+ brace) between two parallel lines P0 + d·t and P0 + w·k + d·t
   // (k = TI for the spreader; the brace takes the next 100 on the inward side).
   // d is the length direction; `w` points across (thickness side).
-  const spreader = (P0: ShapePt, d: ShapePt, w: ShapePt, KI: ShapePt[]) => {
+  const spreader = (P0: ShapePt, d: ShapePt, w: ShapePt, KI: ShapePt[], tRef?: number) => {
     const across = (o: number) => ({ x: P0.x + w.x * o, y: P0.y + w.y * o })
-    const iv = isect(lineInterval(KI, across(0), d), lineInterval(KI, across(TI), d))
+    const iv = isect(lineInterval(KI, across(NUDGE), d, tRef), lineInterval(KI, across(TI - NUDGE), d, tRef))
     if (!iv || iv[1] - iv[0] < 50) return
     // Frame: local +Z = length dir (flip so AY stays in (−90°, 90°]); local +X = (dz, −dx).
     let dd = d, [t0, t1] = iv
@@ -187,7 +199,7 @@ export function resolveShapedKick(
     }
     // Positions along dd use the flipped parameter: P0 + d·t = P0 + dd·(−t).
     place(0, TI, t0, t1, 'spreader_vertical', FC, sprH, TI)
-    const bv = isect(lineInterval(KI, across(TI), d), lineInterval(KI, across(TI + sprBW), d))
+    const bv = isect(lineInterval(KI, across(TI + NUDGE), d, tRef), lineInterval(KI, across(TI + sprBW - NUDGE), d, tRef))
     if (bv && bv[1] - bv[0] > 20) {
       const [b0, b1] = dd === d ? bv : [-bv[1], -bv[0]]
       place(TI, TI + sprBW, b0, b1, 'spreader_horizontal', TK - TI, TI, sprBW)
@@ -199,7 +211,7 @@ export function resolveShapedKick(
     if (ed.kind !== 'side') return
     const e = kEdge(K, i), f = edgeFrame(e)
     if (f.len < 1) return
-    spreader(e.p0, f.u, f.n, KE)
+    spreader(e.p0, f.u, f.n, KE, f.len / 2)
   })
 
   // Internal spreaders at TOESP centres across the kick's width, front-to-back.

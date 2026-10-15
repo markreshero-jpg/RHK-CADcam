@@ -6,6 +6,7 @@ import {
   edgePath, edgeProfileColor, effectiveProfileId,
 } from '@/src/lib/benchtopGeometry'
 import { edgeTape, tapeable, tapeOverridden, tapeColour } from '@/src/lib/benchtopEdgeband'
+import { lineRect, offsetFromLine } from '@/src/lib/benchtopJoinTops'
 import type { BtTapeContext } from './useBenchtopCatalog'
 import type { ResolvedCabinet, HardwareTurn } from '@/src/lib/resolver/types'
 import { turnPoint } from '@/src/lib/resolver/hardwareTurn'
@@ -20,6 +21,7 @@ import {
 import { footprintEdgesPlan } from '@/src/lib/cabinetShape/footprint'
 import { isShapedPanelKey, zonePartId } from '@/src/lib/cabinetShape/partKeys'
 import WallDimensionChain from './WallDimensionChain'
+import { kickPlanSpans } from '@/src/lib/kickDims'
 import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, SectionCut, isBenchtopMode, type BtShapeEdit, btLocal } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
@@ -71,6 +73,8 @@ interface CanvasSVGProps {
   cabMoveDrag: CabMoveDrag | null
   cabResize: CabResize | null
   multiSelect: string[]
+  /** Box / Shift+click wall selection (≥2 ids, else empty). */
+  multiWalls?: string[]
   marquee: { x1: number; y1: number; x2: number; y2: number } | null
   cursor: string
   onPointerDown: (e: React.PointerEvent) => void
@@ -111,6 +115,11 @@ interface CanvasSVGProps {
   btLCursor: Pt | null
   btUPoints: Pt[]
   btUCursor: Pt | null
+  /** Line + offset tool (Phase 7c): back line ends, cursor. */
+  btLinePts?: Pt[]
+  btLineCursor?: Pt | null
+  /** Shift-click pick of several tops (Phase 7c) — drawn selected. */
+  btMultiIds?: string[]
   // Cutout draw state
   btCutoutStart: Pt | null
   btCutoutCursor: Pt | null
@@ -153,7 +162,7 @@ interface CanvasSVGProps {
 
 export default function CanvasSVG({
   svgRef, walls, cabinets, view, svgSize, selected, mode, armedDef, onCanvasDrop, layers, planGrid,
-  drawStart, drawCursor, drawThickness, placeGhost, clipboard, clipboardGroup, cabDrag, cabMoveDrag, cabResize, multiSelect, marquee, cursor,
+  drawStart, drawCursor, drawThickness, placeGhost, clipboard, clipboardGroup, cabDrag, cabMoveDrag, cabResize, multiSelect, multiWalls = [], marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
   setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
   onCabMarkerClick, cabFollowing, onSVGClick,
@@ -162,7 +171,7 @@ export default function CanvasSVG({
   btDrawArcs, btArcMode, btArcMidpoint, btRectStart, btRectCursor,
   onBenchtopVertexContextMenu, onBenchtopPointerDown,
   btLPoints, btLCursor,
-  btUPoints, btUCursor,
+  btUPoints, btUCursor, btLinePts, btLineCursor, btMultiIds,
   btCutoutStart, btCutoutCursor,
   btJoinStart, btJoinCursor, edgeProfiles, btDefaultProfileId, onBenchtopDoubleClick, btMoveBase, btMoveCursor, btDepth,
   btShapeEdit, onShapeHandleDown, btEdgeHover, btEdgeEdit, onBtEdgePaint, onBtEdgeHover, btTapeIds, btTapeContextFor,
@@ -239,7 +248,7 @@ export default function CanvasSVG({
           const dimmed = (mode === 'edit_benchtop_shape' && !shaping) || (mode === 'edit_benchtop_edges' && !edging)
           const segs = shaping ? btShapeEdit!.segs : edging ? btEdgeEdit!.segs : btSegments(bt)
           if (segs.length < 2) return null
-          const isSel = bt.id === selectedBenchtopId
+          const isSel = bt.id === selectedBenchtopId || !!btMultiIds?.includes(bt.id)
           const c = outlineCentroid(segs)
           const bcx = c.x, bcy = c.y
           const vr = 5 / view.zoom
@@ -247,7 +256,7 @@ export default function CanvasSVG({
           const defaultProfileId = btDefaultProfileId?.(bt) ?? null
           const showEdges = layers.show('benchtop_edges')
           const showJoins = layers.show('benchtop_joins')
-          const handles = isSel && mode === 'benchtop_select'   // edit handles only in F4 Benchtop mode
+          const handles = isSel && mode === 'benchtop_select' && !btMultiIds?.length   // edit handles only in F4 Benchtop mode, one top
 
           return (
             <g key={bt.id} opacity={dimmed ? 0.35 : undefined}>
@@ -273,6 +282,22 @@ export default function CanvasSVG({
 
               {/* Edge finishes: wall edges grey, exposed edges in their profile colour + code */}
               {showEdges && !edging && segs.map((s, i) => {
+                // A joint with another top (Phase 7c) draws like a join line.
+                if (s.edge?.joint) {
+                  if (!showJoins) return null
+                  const jc = layers.color('benchtop_joins', '#ef4444'), jm = segMid(s)
+                  return (
+                    <g key={`ef${i}`} style={{ pointerEvents: 'none' }} opacity={layers.op('benchtop_joins')}>
+                      <path d={edgePath(s)} fill="none" stroke={jc} strokeWidth={layers.w('benchtop_joins', 1.5) / view.zoom}
+                        strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} />
+                      <circle cx={jm.x} cy={jm.y} r={6 / view.zoom} fill="#111827" stroke={jc} strokeWidth={1 / view.zoom} />
+                      <text x={jm.x} y={jm.y} textAnchor="middle" dominantBaseline="middle"
+                        fontSize={7 / view.zoom} fill={jc} style={{ userSelect: 'none' }}>
+                        {s.edge.joint === 'mitre' ? 'M' : 'B'}
+                      </text>
+                    </g>
+                  )
+                }
                 const pid = effectiveProfileId(s, defaultProfileId)
                 const prof = pid ? edgeProfiles?.[pid] : undefined
                 const n = outwardNormal(segs, i)
@@ -747,6 +772,41 @@ export default function CanvasSVG({
           )
         })()}
 
+        {/* ── In-progress Line + offset benchtop (Phase 7c) ── */}
+        {mode === 'draw_benchtop_line' && btLinePts && (() => {
+          const z = view.zoom
+          const cur = btLineCursor ?? null
+          const rect = btLinePts.length === 2 && cur ? lineRect(btLinePts[0], btLinePts[1], offsetFromLine(btLinePts[0], btLinePts[1], cur)) : null
+          const depth = rect ? Math.round(Math.abs(offsetFromLine(btLinePts[0], btLinePts[1], cur!))) : 0
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              {btLinePts.length === 1 && cur && (
+                <line x1={btLinePts[0].x} y1={btLinePts[0].y} x2={cur.x} y2={cur.y} stroke="#14b8a6" strokeWidth={2.5 / z} />
+              )}
+              {btLinePts.length === 2 && (
+                <line x1={btLinePts[0].x} y1={btLinePts[0].y} x2={btLinePts[1].x} y2={btLinePts[1].y} stroke="#14b8a6" strokeWidth={2.5 / z} />
+              )}
+              {rect && (
+                <Fragment>
+                  <polygon points={rect.map(p => `${p.x},${p.y}`).join(' ')}
+                    fill="rgba(20,184,166,0.12)" stroke="#14b8a6" strokeWidth={1.5 / z}
+                    strokeDasharray={`${6 / z} ${3 / z}`} />
+                  <line x1={rect[3].x} y1={rect[3].y} x2={rect[2].x} y2={rect[2].y} stroke="#f59e0b" strokeWidth={2 / z} />
+                </Fragment>
+              )}
+              {btLinePts.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={4 / z} fill={i === 0 ? '#14b8a6' : '#f59e0b'} stroke="#111827" strokeWidth={1 / z} />
+              ))}
+              {cur && <circle cx={cur.x} cy={cur.y} r={3 / z} fill="#f59e0b" stroke="#111827" strokeWidth={1 / z} />}
+              {cur && (
+                <text x={cur.x + 10 / z} y={cur.y - 8 / z} fontSize={9 / z} fill="#5eead4" style={{ userSelect: 'none' }}>
+                  {btLinePts.length === 0 ? 'click start of back line' : btLinePts.length === 1 ? 'click end of back line' : `depth ${depth} — click to place`}
+                </text>
+              )}
+            </g>
+          )
+        })()}
+
         {/* ── In-progress U-shape benchtop ── */}
         {mode === 'draw_benchtop_u' && (() => {
           return (
@@ -893,14 +953,14 @@ export default function CanvasSVG({
         <g style={{ pointerEvents: isBenchtopMode(mode) ? 'none' : undefined }}>
         {/* ── Walls ── */}
         {walls.map(w => {
-          const isSel = selected?.type === 'wall' && selected.id === w.id
+          const isSel = (selected?.type === 'wall' && selected.id === w.id) || multiWalls.includes(w.id)
           const wd = wallDir(w)
           const e = wallEnd(w)
           const midX = w.pos_x + w.length * 0.5 * wd.x
           const midY = w.pos_y + w.length * 0.5 * wd.y
           const clickable = mode !== 'draw_wall' && mode !== 'draw_island' && mode !== 'paste' && !placeInfoFor(mode, armedDef)
           const onCtx = (ev: React.MouseEvent) => { ev.preventDefault(); ev.stopPropagation(); setSelected({ type: 'wall', id: w.id }); setContextMenu({ x: ev.clientX, y: ev.clientY, wallId: w.id }) }
-          const onClick = (ev: React.MouseEvent) => { if (clickable) { ev.stopPropagation(); setSelected({ type: 'wall', id: w.id }) } }
+          const onClick = (ev: React.MouseEvent) => { if (clickable) { ev.stopPropagation(); if (!ev.shiftKey) setSelected({ type: 'wall', id: w.id }) } }
 
           if (w.wall_type === 'island') {
             return (
@@ -927,6 +987,8 @@ export default function CanvasSVG({
                   layerOverall={layers.setting('dim_wall_overall')}
                   layerBase={layers.setting('dim_base_chain')}
                   layerWallCab={layers.setting('dim_wall_chain')}
+                  layerKick={layers.setting('dim_kicks')}
+                  kickSpans={layers.show('dim_kicks') ? kickPlanSpans(cabinets, w, resolvedParts, cx) : undefined}
                   labelBg={layers.background}
                 />
               </Fragment>
@@ -963,6 +1025,8 @@ export default function CanvasSVG({
                 layerOverall={layers.setting('dim_wall_overall')}
                 layerBase={layers.setting('dim_base_chain')}
                 layerWallCab={layers.setting('dim_wall_chain')}
+                layerKick={layers.setting('dim_kicks')}
+                kickSpans={layers.show('dim_kicks') ? kickPlanSpans(cabinets, w, resolvedParts, cx) : undefined}
                   labelBg={layers.background}
               />
             </Fragment>
@@ -1158,7 +1222,7 @@ export default function CanvasSVG({
                 const it = casePartItem(p.part_key)
                 const lp = layers.props(it, view.zoom)
                 const col = layers.color(it, palette.carcase)
-                const vertical = isSide(p.part_key) || p.part_key === 'back' || isShapedPanelKey(p.part_key)
+                const vertical = isSide(p.part_key) || p.part_key === 'back' || isShapedPanelKey(p.part_key) || !!p.upright
                 const toPlan = cabinetToPlan(displayCab, wall, perp)
                 const pts = casePlanCorners(p).map(q => toPlan(q.x, q.z)).map(q => `${q.x},${q.y}`).join(' ')
                 return (

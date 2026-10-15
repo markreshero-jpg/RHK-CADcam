@@ -86,3 +86,68 @@ export function returnWallThickness(wall: Wall, walls: Wall[], end: 'start' | 'e
   }
   return t
 }
+
+// ── Moving walls off their joints ────────────────────────────────────────────
+// A drag of walls `movedIds` by (dx, dy) pulls their endpoints away from any
+// other wall joined there. These helpers find those walls and work out how
+// each one follows when the user picks "stretch connected walls".
+
+/** A wall outside the drag that shares an endpoint with a dragged wall. */
+export interface DetachedNeighbour { id: string; startJoined: boolean; endJoined: boolean }
+
+const endpoints = (w: Wall): Pt[] => [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)]
+
+/** Walls (not in `movedIds`) joined to a dragged wall, with which of their ends are joined. */
+export function detachedNeighbours(walls: Wall[], movedIds: string[]): DetachedNeighbour[] {
+  const moved = new Set(movedIds)
+  const pts = walls.filter(w => moved.has(w.id)).flatMap(endpoints)
+  const near = (p: Pt) => pts.some(q => dist(p, q) < JOINT_TOL)
+  const out: DetachedNeighbour[] = []
+  for (const w of walls) {
+    if (moved.has(w.id)) continue
+    const [s, e] = endpoints(w)
+    const startJoined = near(s), endJoined = near(e)
+    if (startJoined || endJoined) out.push({ id: w.id, startJoined, endJoined })
+  }
+  return out
+}
+
+/** Every wall joined to `ids` through any chain of shared endpoints (includes `ids`). */
+export function connectedWallIds(walls: Wall[], ids: string[]): string[] {
+  const set = new Set(ids)
+  for (let grew = true; grew;) {
+    grew = false
+    for (const n of detachedNeighbours(walls, [...set])) { set.add(n.id); grew = true }
+  }
+  return [...set]
+}
+
+/**
+ * How a joined neighbour follows a drag of (dx, dy): the joined end moves with
+ * the drag, the free end stays put, so the wall lengthens / shortens and turns
+ * about its free end. Joined at both ends → it just moves along. `fn` maps any
+ * plan point riding on the wall (cabinets, tops, fixtures) to its new place and
+ * `turn` is the change in angle (deg) for their rotation. Null when the wall
+ * would shrink below MIN_WALL_LEN.
+ */
+export function stretchNeighbour(w: Wall, n: DetachedNeighbour, dx: number, dy: number):
+  { update: Partial<Wall>; fn: (p: Pt) => Pt; turn: number } | null {
+  if (n.startJoined && n.endJoined) {
+    return { update: { pos_x: w.pos_x + dx, pos_y: w.pos_y + dy }, fn: p => ({ x: p.x + dx, y: p.y + dy }), turn: 0 }
+  }
+  const [s0, e0] = endpoints(w)
+  const s = n.startJoined ? { x: s0.x + dx, y: s0.y + dy } : s0
+  const e = n.endJoined ? { x: e0.x + dx, y: e0.y + dy } : e0
+  const length = dist(s, e)
+  if (length < MIN_WALL_LEN) return null
+  const angle = Math.atan2(e.y - s.y, e.x - s.x) * 180 / Math.PI
+  let turn = angle - w.angle
+  turn = ((turn % 360) + 540) % 360 - 180
+  const pivot = n.startJoined ? e0 : s0            // the end that stays put
+  const r = turn * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r)
+  const fn = (p: Pt): Pt => {
+    const vx = p.x - pivot.x, vy = p.y - pivot.y
+    return { x: pivot.x + vx * c - vy * sn, y: pivot.y + vx * sn + vy * c }
+  }
+  return { update: { pos_x: s.x, pos_y: s.y, length, angle }, fn, turn }
+}

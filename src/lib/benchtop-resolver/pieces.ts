@@ -93,7 +93,8 @@ function cutLoop(segs: PieceSeg[], a: P, b: P, type: BenchtopJoinType): [Piece, 
 // its ends lie on. A join that touches no piece (stale / off the outline) is
 // skipped.
 export function splitIntoPieces(segs: BenchtopSegment[], joins: BenchtopJoinLine[]): Piece[] {
-  let pieces: Piece[] = [{ segs: segs.map(s => ({ ...s })) }]
+  // An edge that joints another top (Phase 7c) is a join edge like a chord.
+  let pieces: Piece[] = [{ segs: segs.map(s => (s.edge?.joint ? { ...s, join: s.edge.joint } : { ...s })) }]
   for (const j of joins) {
     for (let k = 0; k < pieces.length; k++) {
       const cut = cutLoop(pieces[k].segs, j.p0, j.p1, j.type)

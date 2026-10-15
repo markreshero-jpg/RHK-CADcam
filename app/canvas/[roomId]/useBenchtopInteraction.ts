@@ -17,6 +17,7 @@ import {
 } from '@/src/lib/benchtopAnchor'
 import { btWorld, type Mode, type Selected, type ContextMenuState, type BtShapeSnapshot, type BtShapeEdit, type BtShapeSel, type BtEdgeEdit } from './canvasTypes'
 import { paintTape, paintProfile } from '@/src/lib/benchtopEdgeband'
+import { jointTops, offsetFromLine, lineRect, type JoinChoice } from '@/src/lib/benchtopJoinTops'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 interface Params {
@@ -135,6 +136,15 @@ export function useBenchtopInteraction(p: Params) {
   const [btCutoutCursor, setBtCutoutCursor] = useState<Pt | null>(null)
   const [btJoinStart, setBtJoinStart] = useState<Pt | null>(null)
   const [btJoinCursor, setBtJoinCursor] = useState<Pt | null>(null)
+  // Line tool (Phase 7c): back line (2 clicks), then the depth pulled off it.
+  const [btLinePts, setBtLinePts] = useState<Pt[]>([])
+  const [btLineCursor, setBtLineCursor] = useState<Pt | null>(null)
+  // Shift-click picks several tops (selection order) → right-click → Join benchtops.
+  const [btMultiRaw, setBtMulti] = useState<string[]>([])
+  // Only live while a top is selected in F4 Benchtop mode (clicking off / leaving drops it).
+  const btMulti = mode === 'benchtop_select' && selected?.type === 'benchtop' ? btMultiRaw : []
+  // The Join benchtops window: the tops, in the order they join.
+  const [joinDialogIds, setJoinDialogIds] = useState<string[] | null>(null)
   const [benchtopMenuOpen, setBenchtopMenuOpen] = useState(false)
   // Benchtop open in the full Shape Editor overlay (double-click / panel button).
   const [shapeEditId, setShapeEditId] = useState<string | null>(null)
@@ -212,9 +222,14 @@ export function useBenchtopInteraction(p: Params) {
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
-  async function saveBenchtop(polygon: Pt[], arcSegs: BenchtopArcSegment[] = []) {
+  // markWalls: edges drawn on a wall face come out as wall edges (line tool).
+  async function saveBenchtop(polygon: Pt[], arcSegs: BenchtopArcSegment[] = [], markWalls = false) {
     captureSnapshot()
-    const segs = segmentsFromLegacy(polygon, arcSegs)
+    let segs = segmentsFromLegacy(polygon, arcSegs)
+    if (markWalls) {
+      const onWall = new Set(wallContacts(segs, walls, roomCx).map(c => c.edge))
+      segs = segs.map((s, i) => (onWall.has(i) ? { ...s, edge: { wall: true } } : s))
+    }
     const data = {
       room_id: room.id,
       label: `Benchtop ${benchtops.length + 1}`,
@@ -307,6 +322,7 @@ export function useBenchtopInteraction(p: Params) {
   }
 
   function onBenchtopContextMenu(e: React.MouseEvent, id: string) {
+    if (!btMulti.includes(id)) setBtMulti([])
     setSelected({ type: 'benchtop', id })
     setContextMenu({ x: e.clientX, y: e.clientY, benchtopId: id })
   }
@@ -435,6 +451,30 @@ export function useBenchtopInteraction(p: Params) {
     const contacts = wallContacts(segs, walls, roomCx)
     const keeps = !contacts.length || contacts.some(c => c.wallId === bt.wall_id && c.side === bt.wall_side)
     void handleUpdateBenchtop(btId, keeps ? moved : { ...moved, ...(anchorOf(segs) ?? {}) })
+  }
+
+  // ── Joints between benchtops (Phase 7c) ────────────────────────────────────
+  // The tops stay separate: each is trimmed to the joint and its meeting edges
+  // marked as joint edges. One undo step.
+
+  function openJoinDialog() {
+    setContextMenu(null)
+    if (btMulti.length >= 2) setJoinDialogIds(btMulti)
+  }
+
+  async function commitJoin(ids: string[], choices: Record<string, JoinChoice | null>) {
+    const tops = ids.map(findBt).filter((b): b is BenchtopInstance => !!b)
+    if (tops.length < 2) return
+    const r = jointTops(tops.map(b => btSegments(b)), choices)
+    if (!r.ok) return
+    captureSnapshot()
+    const ups = tops.map((b, k) => ({ id: b.id, u: shapeWrite(r.tops[k]) }))
+    setBenchtops(bs => bs.map(b => { const x = ups.find(q => q.id === b.id); return x ? { ...b, ...x.u } : b }))
+    setSelected({ type: 'benchtop', id: tops[0].id })
+    setEdgesChangedId(tops[0].id)
+    setBtMulti([]); setJoinDialogIds(null)
+    const res = await Promise.all(ups.map(x => supabase.from('benchtop_instances').update(x.u).eq('id', x.id)))
+    for (const { error } of res) if (error) console.error('Failed to save benchtop joint:', error)
   }
 
   // ── Shape Editor overlay ───────────────────────────────────────────────────
@@ -756,6 +796,12 @@ export function useBenchtopInteraction(p: Params) {
       return true
     }
 
+    if (mode === 'draw_benchtop_line') {
+      // Depth stage: the cursor still snaps (a cabinet front, a wall); the depth is its distance off the line.
+      setBtLineCursor(snapWorld(wp, btLinePts.length < 2 ? btLinePts[btLinePts.length - 1] : undefined))
+      return true
+    }
+
     if (mode === 'draw_benchtop_u') {
       const last = btUPoints.length > 0 ? btUPoints[btUPoints.length - 1] : null
       const snapped = snapWorld(wp, last ?? undefined)
@@ -785,6 +831,17 @@ export function useBenchtopInteraction(p: Params) {
     if (btPressRef.current) {
       const { id } = btPressRef.current
       btPressRef.current = null
+      if (shiftRef.current) {
+        // Shift-click: add / remove this top from the pick (the selected one starts it).
+        const cur = selected?.type === 'benchtop' ? selected.id : null
+        const base = btMulti.length ? btMulti : cur && cur !== id ? [cur] : []
+        const next = base.includes(id) ? base.filter(x => x !== id) : [...base, id]
+        setBtMulti(next.length >= 2 ? next : [])
+        setSelected(next.length ? { type: 'benchtop', id: next[next.length - 1] } : null)
+        lastBtClickRef.current = null
+        return true
+      }
+      setBtMulti([])
       setSelected({ type: 'benchtop', id })
       const now = Date.now(), last = lastBtClickRef.current
       if (last && last.id === id && now - last.t < 400) { lastBtClickRef.current = null; openShapeEditor(id) }
@@ -911,6 +968,21 @@ export function useBenchtopInteraction(p: Params) {
       return true
     }
 
+    if (mode === 'draw_benchtop_line') {
+      if (btLinePts.length < 2) {
+        const last = btLinePts[btLinePts.length - 1]
+        const snapped = pick(last)
+        if (!last || dist(snapped, last) > 10) setBtLinePts(prev => [...prev, snapped])
+        return true
+      }
+      const [a, b] = btLinePts
+      const off = offsetFromLine(a, b, pick())
+      if (Math.abs(off) < 10) return true
+      setBtLinePts([]); setBtLineCursor(null)
+      await saveBenchtop(lineRect(a, b, off), [], true)
+      return true
+    }
+
     if (mode === 'draw_benchtop_u') {
       const last = btUPoints.length > 0 ? btUPoints[btUPoints.length - 1] : null
       const snapped = pick(last ?? undefined)
@@ -990,6 +1062,7 @@ export function useBenchtopInteraction(p: Params) {
       case 'draw_benchtop':      return btDrawPoly[btDrawPoly.length - 1] ?? null
       case 'draw_benchtop_l':    return btLPoints[btLPoints.length - 1] ?? null
       case 'draw_benchtop_u':    return btUPoints[btUPoints.length - 1] ?? null
+      case 'draw_benchtop_line': return btLinePts[btLinePts.length - 1] ?? null
       default:                   return null
     }
   }
@@ -999,6 +1072,7 @@ export function useBenchtopInteraction(p: Params) {
       case 'draw_benchtop':      return btDrawCursor
       case 'draw_benchtop_l':    return btLCursor
       case 'draw_benchtop_u':    return btUCursor
+      case 'draw_benchtop_line': return btLineCursor
       default:                   return null
     }
   }
@@ -1007,6 +1081,15 @@ export function useBenchtopInteraction(p: Params) {
     else if (mode === 'draw_benchtop') setBtDrawCursor(pt)
     else if (mode === 'draw_benchtop_l') setBtLCursor(pt)
     else if (mode === 'draw_benchtop_u') setBtUCursor(pt)
+    else if (mode === 'draw_benchtop_line') setBtLineCursor(pt)
+  }
+  // Line tool depth stage: a typed depth goes to the side the mouse is on
+  // (the room side when the mouse is on the line).
+  function lineDepthPt(d: number): Pt | null {
+    if (btLinePts.length < 2) return null
+    const [a, b] = btLinePts
+    const side = Math.sign(btLineCursor ? offsetFromLine(a, b, btLineCursor) : 0) || Math.sign(offsetFromLine(a, b, roomCx)) || 1
+    return lineRect(a, b, side * d)[2]
   }
   const polarPt = (a: Pt, len: number, angDeg: number): Pt =>
     ({ x: a.x + len * Math.cos(angDeg * Math.PI / 180), y: a.y + len * Math.sin(angDeg * Math.PI / 180) })
@@ -1020,6 +1103,7 @@ export function useBenchtopInteraction(p: Params) {
     const a = drawAnchor()
     if (!a) return
     if (mode === 'draw_benchtop_rect') { if (v.w != null && v.d != null) setDrawCursorPt(rectPt(a, v.w, v.d)) }
+    else if (mode === 'draw_benchtop_line' && btLinePts.length >= 2) { const q = v.d ? lineDepthPt(v.d) : null; if (q) setBtLineCursor(q) }
     else if (v.len != null && v.ang != null) setDrawCursorPt(polarPt(a, v.len, v.ang))
   }
 
@@ -1027,6 +1111,7 @@ export function useBenchtopInteraction(p: Params) {
     const a = drawAnchor()
     if (!a) return
     if (mode === 'draw_benchtop_rect') { if (v.w && v.d) await handlePointerUp(rectPt(a, v.w, v.d), true) }
+    else if (mode === 'draw_benchtop_line' && btLinePts.length >= 2) { const q = v.d ? lineDepthPt(v.d) : null; if (q) await handlePointerUp(q, true) }
     else if (v.len && v.ang != null) await handlePointerUp(polarPt(a, v.len, v.ang), true)
   }
 
@@ -1045,6 +1130,7 @@ export function useBenchtopInteraction(p: Params) {
     setBtRectStart(null); setBtRectCursor(null)
     setBtLPoints([]); setBtLCursor(null)
     setBtUPoints([]); setBtUCursor(null)
+    setBtLinePts([]); setBtLineCursor(null)
     setBtCutoutStart(null); setBtCutoutCursor(null)
     setBtJoinStart(null); setBtJoinCursor(null)
     setBtMoveBase(null); setBtMoveCursor(null)
@@ -1071,6 +1157,8 @@ export function useBenchtopInteraction(p: Params) {
     btRectStart, btRectCursor,
     btLPoints, btLCursor,
     btUPoints, btUCursor,
+    btLinePts, btLineCursor,
+    btMulti, joinDialogIds, setJoinDialogIds, openJoinDialog, commitJoin,
     btCutoutStart, btCutoutCursor,
     btJoinStart, btJoinCursor,
     benchtopMenuOpen, setBenchtopMenuOpen,

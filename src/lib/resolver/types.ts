@@ -146,7 +146,10 @@ export interface ConstructionRules {
 
   // Top options
   TOP_TYPE: 'full_top' | 'front_rail' | 'double_rail' | 'none'
-  RD:       number   // rail depth mm
+  RD:       number   // rail depth mm (its height when the rail stands on edge)
+  // Top rails stand on edge (face to the front, RD tall) or lie flat (RD deep).
+  // Vertical is the shop norm (Mark, 2026-10-15).
+  RAIL_ORIENT: 'vertical' | 'horizontal'
 
   // Internal — adjustable shelf
   ADJSB_F:  number   // adj shelf setback front
@@ -246,7 +249,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   TOEH: 150, TOE_TYPE: 'ladder', TOEFC: 16.5, TOESP: 450,
   TOESCF: 40, TOESCB: 0, TOESCL: 0, TOESCR: 0,
   SCRBK: 0, SCRBT: 0, SCRL: 0, SCRR: 0, SCRT: 0,
-  TOP_TYPE: 'front_rail', RD: 100,
+  TOP_TYPE: 'front_rail', RD: 100, RAIL_ORIENT: 'horizontal',
   ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1, ADJ_DRILL: 'per_shelf', ADJ_ROWS: 0,
   FIXSB_F: 0, FIXSB_B: 0,
   IDCL: 2, IDCR: 2, IDFAO: 0, SLIDE_SETBACK: 20,
@@ -521,6 +524,12 @@ export interface ResolvedSeamJoint {
   // Adj-shelf row-count override (per-seam entry, else cabinet ADJ_ROWS rule):
   // cluster mode replaces the joint's qty2; bank mode replaces the auto count.
   rows_override?: number
+  // Shaped cabinets (z_cabinet_shape L3): a seam on a turned / per-edge panel.
+  // Drilled in a frame turned `turn`° about Y (multiple of 90) where the
+  // receiving panel faces ±X (kind 'side', part A on the `side` of it) or the
+  // back panel lies along X with the bottom in front (kind 'back_bottom'); the
+  // holes are turned back to cabinet coords. Key `${part_a}|${part_b}`.
+  shaped?: { turn: number; kind: 'side' | 'back_bottom'; side: 'left' | 'right' }
 }
 
 // ── Drawer Box Input ──────────────────────────────────────────
@@ -1229,20 +1238,28 @@ export interface ResolvedPart extends PartTransform {
 //   side:<edge> / back:<edge>  vertical panel, 'face' kind (DY length, DX height,
 //                              DZ thickness inward), rotated AY about its outer start
 //   rail:<edge>                top rail along a front facet, horizontal kind, rotated AY
+//   cleat:<edge>               return cleat behind a face filler on side edge <edge>
+//                              (z_angled_filler, carcass off) — same frame as side:<edge>
 // See src/lib/cabinetShape/partKeys.ts.
-export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}`
+export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}` | `cleat:${string}`
 
 export interface ResolvedCasePart extends ResolvedPart {
   // Finger-pull rails only (z_handles H6): sheet grain, and the side notch +
   // knock-in block settings seamDrillSync machines from. Not persisted.
   grain_direction?: 'horizontal' | 'vertical'
-  fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number }
+  // shaped: a facet rail (resolveShapedFingerRails) — turned AY, local z = DZ its
+  // front face (as the box rails); seamDrillSync machines its ends in each panel's own frame.
+  fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number; shaped?: true }
   // Shaped cabinets (z_cabinet_shape 4a): vertical panels' angled ends, degrees
   // from square at the low / high end of the part's length axis (sides: Z,
   // back: X, side:/back:<edge>: its own length from the outer start corner).
   // + = the inner face is the shorter. The part is listed at its blank length.
   bevel_lo?: number
   bevel_hi?: number
+  // Top rails standing on edge (RAIL_ORIENT 'vertical'): DX = RD is the rail's
+  // height, DZ its thickness front-to-back — the box maps like a back panel
+  // (caseBox). Persisted (case_parts.upright).
+  upright?: boolean
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
             'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
             `fprail:${number}`   // finger-pull backing rail (z_handles H6)

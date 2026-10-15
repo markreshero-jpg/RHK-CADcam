@@ -22,6 +22,8 @@ import { resolveShapedFaces } from './resolveShapedFace'
 import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
 import { resolveHandles } from './resolveHandles'
 import { fingerRails, fingerRailParts, notchPanels, pushFrontRailBack } from './resolveFingerRails'
+import { shapedFingerRails } from './resolveShapedFingerRails'
+import { resolveFillerCleats } from './resolveFillerCleats'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -51,6 +53,8 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   allErrors.push(...faceErrors)
   // One grip per door / drawer front from the handle schedule (z_handles H1).
   resolveHandles(cab, zones)
+  // Face fillers with the support carcass off: return cleats (z_angled_filler).
+  if (cab.footprint && !cab.has_carcass) caseParts.push(...resolveFillerCleats(cab, r, zones))
   // Shaped cabinets (z_cabinet_shape Phase 3b): hinges + drawer boxes on every
   // facet, fitted to the footprint and built in each zone's square frame.
   const shapedHw = cab.footprint ? shapedHardwareCtx(cab) : null
@@ -65,7 +69,10 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // Backing rail behind each finger gap, per column between the sides and
   // internal dividers, notched into every panel it passes through (z_handles
   // H6 / H5b). After the internals, so the rails know where the divisions are.
-  if (cab.has_carcass && cab.has_face) {
+  // Shaped cabinets: per front facet (resolveShapedFingerRails).
+  if (cab.has_carcass && cab.has_face && cab.footprint) {
+    caseParts.push(...shapedFingerRails(cab, r, zones, caseParts))
+  } else if (cab.has_carcass && cab.has_face) {
     const dividers = internalParts.filter(p => p.part_type === 'divider')
     const { rails, warnings: railWarnings } = fingerRails(cab, r, zones, caseParts, dividers)
     notchPanels([...caseParts.filter(p => p.part_key === 'left_side' || p.part_key === 'right_side'), ...dividers], rails, r.RAILCUT)

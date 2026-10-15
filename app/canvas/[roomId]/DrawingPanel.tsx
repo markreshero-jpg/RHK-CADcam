@@ -50,6 +50,9 @@ const DrawingPanel = forwardRef<DrawingPanelHandle, Props>(function DrawingPanel
     if (l == null || l < 10 || a == null) return
     lenDirty.current = false
     angDirty.current = false
+    // Hand focus back to the canvas so the next wall's fields track the mouse
+    // again and Tab starts from Length (canvas Tab → focusLength).
+    lenRef.current?.blur(); angRef.current?.blur()
     onPlace(l, a)
   }
 

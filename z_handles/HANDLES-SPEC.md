@@ -1,6 +1,6 @@
 # Handles & Finger Pulls — Spec
 
-**Status:** H1–H3, H6, H5a committed (f8b3d4a); double dividers committed (d116edc); H5b committed 2026-10-14 (rails per column + rail grows with the FPGAP rule). Open: H7 channel (parked), push-to-open visual.
+**Status:** H1–H3, H6, H5a committed (f8b3d4a); double dividers committed (d116edc); H5b committed 2026-10-14 (rails per column + rail grows with the FPGAP rule). Open: H8a 3D handle models built 2026-10-15 (uncommitted; migration_h8_models.sql NOT yet applied), H8b next, H7 channel (parked), push-to-open visual.
 **Owner module:** `z_handles/`
 **Touches:** resolver (face zones, rules), handle catalogue + schedules,
 display layers, optimiser / G-code (drilling + routes), reports.
@@ -143,7 +143,7 @@ hardware_handles  (extend)
   + bevel_angle_deg    numeric               -- sharknose
   + bevel_land_mm      numeric               -- sharknose (renamed from bevel_depth_mm in H3)
   + route_params       jsonb                 -- routed: width, depth, length mode (full/centred length), tool_id
-  + model_url / svg    text                  -- optional display geometry (later)
+  + model_url / svg    text                  -- optional display geometry (H8, see D16)
 
 handle_schedule_entries  (new)
   id, schedule_id → handle_schedules, role, handle_id → hardware_handles, position, offset_from_edge_mm, orientation, align, sort_order
@@ -173,6 +173,9 @@ New tables need RLS policies (see access-control memory and `z_access_control/`)
 | **H6a** | Backing rail parts + side notches (geometry), rules RAILH / RAILUP / FPRAIL, layer item, cut list | ✅ built 2026-10-13 — see H6 notes in §7 |
 | **H6b** | Notch routing on the sides → CNC; knock-in block holes; front rail push-back; rail grain | ✅ built 2026-10-14 — see §7 |
 | **H7** | Recessed aluminium channel (rare) | parked |
+| **H8a** | 3D models, schema + library: model columns on `hardware_handles` (D16), handle detail panel with upload / preview / hole markers / Auto-fit | built 2026-10-15, see D16 as-built. Migration `z_handles/migration_h8_models.sql` written, not applied yet |
+| **H8b** | 3D models in the views: `Handle3D` draws the model through `ModelAsset`, falls back to bar / knob; STL takes the `finish` colour | spec'd 2026-10-15 |
+| **H8c** | (optional) Elevation silhouette from the model, like `slideSilhouette.ts` | later |
 
 **H1 notes (2026-10-13):**
 - Migration applied to live: grip-kind columns on `hardware_handles`,
@@ -316,6 +319,35 @@ either side of an internal division (a double division for drawers, see
     panel that end sits in; none where a rail runs through.
   - Tests: `handles.test.ts` (rails per column), `fingerRailOps.test.ts` (H5b block).
 
+**D16. 3D handle models (user, 2026-10-15) — H8.** Bought handles can carry
+an uploaded GLB / STL / OBJ so 3D shows the real handle.
+- **Reuse, don't rebuild.** Same loader as slides and fixtures
+  (`src/components/three/ModelAsset.tsx`), same storage bucket and the same
+  model columns as fixtures: `model_url`, `model_format`, `model_scale`,
+  `model_rot_x/y/z`, `model_off_x/y/z` on `hardware_handles`. Existing RLS
+  covers the new columns.
+- **Anchor convention.** Model origin = midpoint between the fixing holes, on
+  the handle's back (the face that touches the door). Long axis along X,
+  projecting along +Z. The resolved grip (hole midpoint, door front face,
+  orientation) places it; vertical handles rotate 90° about Z. A knob's origin
+  is its single hole.
+- **One model per size.** 128 / 160 / 192 centres are separate handle rows,
+  each with its own file. Models are never stretched to fit.
+- **Library editor.** Handle detail panel (Library → Materials → Handles):
+  upload / replace / remove, preview with the handle's hole positions drawn as
+  red dots so misalignment is obvious, rotation pickers, scale, metres → mm
+  auto-fix, nudge. **Auto-fit** centres the model's bounding box on the hole
+  midpoint and sits its min-Z on the door face.
+- **Display.** `Handle3D` draws the model when present, else today's bar /
+  knob. Still swings / slides with the front, still gated by the `handles`
+  layer (holes by `handle_holes`). GLB keeps its own materials; STL / OBJ take
+  a colour from `finish`. Loads are cached once per file and cloned per front.
+- **Files.** GLB preferred (keeps the metal finish). STEP isn't loadable in the
+  browser — convert once per handle (FreeCAD / Blender → GLB). Aim for under
+  ~1 MB per file; decimate heavy manufacturer meshes.
+- Elevation and plan keep the rectangle until H8c.
+- **As built (H8a):** bucket is `handle-models` (one bucket per kind, like hinge / slide / fixture), added to the shared `models_admin_*` storage policies. Rotation order: X, then Y, then Z about fixed axes (Euler `ZYX`). The model is always auto-aligned (bbox centred on the hole midpoint in X / Y, min Z on the door face); **Auto-fit** clears the nudges. Extra buttons: **Fit to length** (scale so bbox X = Length) and **×1000** when the file looks like metres. STL / OBJ colour from `finishLook(finish)` (keyword map). Files: `src/lib/handleModelFit.ts` (+ test), `src/components/three/HandleModel.tsx` (reused by H8b), `app/library/materials/HandleModelEditor.tsx` + `HandlePreviewScene.tsx`, mounted in `MaterialsClient` for grip kind Handle only.
+
 H1 is the foundation; H2 and H3 can then run in either order. H3 is the
 likely first visible win, since sharknose is the most common case and needs no machining.
 
@@ -380,7 +412,8 @@ H6 sub-phase, deferred until the handle work is right.
   - Cabinet sheet cut list: "Finger Rail n". Optimiser parts list: "Finger Rail n".
   - No edging (the edges sit hidden in the notches and behind the fronts).
 - Not yet:
-  - Shaped (footprint) cabinets get no rails.
+  - Shaped (footprint) cabinets: built 2026-10-15 for front facets (L corner BCNP) — see
+    z_cabinet_shape Phase L "L4" (resolveShapedFingerRails). No dividers there yet.
   - No clash check against drawer boxes or the carcass front rail.
 
 **H6b decisions (user, 2026-10-14) + build:**
@@ -439,3 +472,4 @@ Answered 2026-10-13:
 Still open (none block H1):
 1. Rail details for H6 (§7): notch position, top-rail height, knock-in block holes.
 2. Push-to-open visual (low priority).
+3. H8: which handles to model first, and test files to check Auto-fit against.

@@ -16,6 +16,10 @@ export interface ElevSeam {
 export function toGenericSeamKey(key: string): string {
   if (/^int_adj_shelf_\d+:/.test(key))   return 'adj_shelf:side'
   if (/^int_fixed_shelf_\d+:/.test(key)) return 'fixed_shelf:side'
+  // Shelf pins on an L corner's backs fall back to the side joint when the
+  // method sets no back joint of its own.
+  const back = key.match(/^(adj_shelf|fixed_shelf):back$/)
+  if (back) return `${back[1]}:side`
   const div = key.match(/^int_divider_\d+:(top|bottom)$/)
   if (div) return `divider:${div[1]}`
   return key.replace(/^(front_rail|full_top|back_rail):/, 'top:')
@@ -116,6 +120,7 @@ export function internalSeamParts(): SeamPart[] {
       partKey: 'adj_shelf', label: 'Adjustable Shelf',
       edges: [
         { edgeLabel: 'Side supports', seamKey: 'adj_shelf:side', joinsLabel: 'Gables / Divisions' },
+        { edgeLabel: 'Back supports', seamKey: 'adj_shelf:back', joinsLabel: 'Backs (L corner)' },
       ],
     },
     {
@@ -147,13 +152,17 @@ export function getSeamAssignState(
   overrides: Record<string, SeamJointAssign>,
   defaults:  Record<string, string>,
   seamKey:   string,
+  // Shaped-cabinet seams (part_a|part_b) inherit the legacy seam they play.
+  genericKey?: string,
 ): SeamAssignState {
   const entry = Object.prototype.hasOwnProperty.call(overrides, seamKey) ? overrides[seamKey] : undefined
   const rows  = seamAssignRows(entry)
   const j     = seamAssignJoint(entry)
   if (j === null)   return { status: 'suppressed', jointId: null }
   if (j !== undefined) return { status: 'cabinet', jointId: j, rows }
-  const inherited = defaults[seamKey] ?? defaults[toGenericSeamKey(seamKey)] ?? null
+  const inherited = defaults[seamKey]
+    ?? (genericKey ? defaults[genericKey] ?? defaults[toGenericSeamKey(genericKey)] : undefined)
+    ?? defaults[toGenericSeamKey(seamKey)] ?? null
   return inherited
     ? { status: 'method', jointId: inherited, rows }
     : { status: 'none',   jointId: null,      rows }

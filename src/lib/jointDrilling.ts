@@ -9,6 +9,7 @@
 import type { Box } from '@/src/components/three/PartViewer'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, JointTypeOp, ResolvedToekickPart } from '@/src/lib/resolver/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
+import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
 
 export function isSide(k: string) { return k === 'left_side' || k === 'right_side' }
 
@@ -74,7 +75,7 @@ export function caseBox(p: ResolvedCasePart): Box {
     return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
   if (p.part_key === 'back')
     return { x: p.X, y: p.Y + p.DZ, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
-  if (isShapedPanelKey(p.part_key))
+  if (isShapedPanelKey(p.part_key) || p.upright)
     return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
   return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
 }
@@ -162,13 +163,15 @@ export function zoneBevelOutline(z: { DX: number; DZ: number; bevel_l?: number; 
 }
 
 /**
- * The blank a mitred front is cut from (z_cabinet_shape 3c): the front face is
- * the widest, so the blank runs from x0 (≤ 0, zone-local) for `width`, and the
- * bevels are sawn after. A square front: x0 = 0, width = DX.
+ * The blank a mitred front is cut from (z_cabinet_shape 3c): the blank runs
+ * from x0 (≤ 0, zone-local) for `width` over the longer face at each end, and
+ * the bevels are sawn after — the front face at a positive (convex) bevel, the
+ * back face at a negative one (inside-corner fillers, z_angled_filler).
+ * A square front: x0 = 0, width = DX.
  */
 export function zoneBlank(z: { DX: number; DZ: number; bevel_l?: number | null; bevel_r?: number | null }): { x0: number; width: number } {
   const h = z.DZ / 2, D = Math.PI / 180
-  const l = h * Math.tan((z.bevel_l ?? 0) * D), r = h * Math.tan((z.bevel_r ?? 0) * D)
+  const l = Math.abs(h * Math.tan((z.bevel_l ?? 0) * D)), r = Math.abs(h * Math.tan((z.bevel_r ?? 0) * D))
   return { x0: -l, width: z.DX + l + r }
 }
 
@@ -302,19 +305,31 @@ interface SeamFrame {
   thickB:      number
 }
 
+// The depth a horizontal part (shelf, bottom, rail) actually shares with the
+// panel it meets: front edge + length of the Z overlap. A shaped cabinet's
+// panel can be shorter than the shelf's bbox (L corner end panel 560 deep on a
+// 900 box) — holes lay out along the panel, not past its front. Falls back to
+// the part's own depth when they don't overlap.
+function sharedDepth(boxA: Box, boxB: Box): { front: number; len: number } {
+  const front = Math.min(boxA.z + boxA.d, boxB.z + boxB.d)
+  const len = front - Math.max(boxA.z, boxB.z)
+  return len > 0 ? { front, len } : { front: boxA.z + boxA.d, len: boxA.d }
+}
+
 function buildSeamFrame(partAKey: string, isLeft: boolean, boxA: Box, boxB: Box): SeamFrame {
   const interfaceX  = isLeft ? boxA.x : boxA.x + boxA.w
   const drillIntoA: 'x+' | 'x-' = isLeft ? 'x+' : 'x-'
   const drillIntoB: 'x+' | 'x-' = isLeft ? 'x-' : 'x+'
   const isVertical  = boxA.h > boxA.d
 
+  const shared = sharedDepth(boxA, boxB)
   const alongAxis:   'z' | 'y' = isVertical ? 'y' : 'z'
-  const alongOrigin: number    = isVertical ? boxA.y + boxA.h : boxA.z + boxA.d
+  const alongOrigin: number    = isVertical ? boxA.y + boxA.h : shared.front
 
   const insetAxis:   'y' | 'z' = isVertical ? 'z' : 'y'
   const insetOrigin: number    = isVertical ? boxA.z + boxA.d : boxA.y + boxA.h
 
-  const jointLength = isVertical ? boxA.h : boxA.d
+  const jointLength = isVertical ? boxA.h : shared.len
 
   const thickA = isSide(partAKey) ? boxA.w : isVertical ? boxA.d : boxA.h
   const thickB = boxB.w
@@ -560,18 +575,20 @@ function bankDrillOps(
 ): DrillOpPos[] {
   const out: DrillOpPos[] = []
   const isLeft = side === 'left'
-  const evB = { ...boxB, d: boxA.d }
+  const shared = sharedDepth(boxA, boxB)
+  const evA = { ...boxA, d: shared.len }
+  const evB = { ...boxB, d: shared.len }
   const thickA = boxA.h
   const thickB = boxB.w
   const bInner = isLeft ? boxB.x + boxB.w : boxB.x
   const axis: DrillAxis = isLeft ? 'x-' : 'x+'
-  const alongOrigin = boxA.z + boxA.d
+  const alongOrigin = shared.front
   const usable = bank.y1 - bank.y0
   if (usable <= 0) return out
 
   for (const op of ops) {
     if (op.machine_operation !== 'drill' || op.target_part !== 'part_b') continue
-    const ev = evalOp(op, boxA, evB, thickA, thickB)
+    const ev = evalOp(op, evA, evB, thickA, thickB)
     if (!ev) continue
     const pitch = (ev.spacing2_mm != null && ev.spacing2_mm > 0) ? ev.spacing2_mm : 32
     // Rows override wins over the auto pitch-fill, clamped so the run still
@@ -636,6 +653,166 @@ export function seamJointDrillOps(sj: ResolvedSeamJoint, boxA: Box, boxB: Box): 
     default:
       return seamDrillOps(sj.seam_key, boxA, boxB, sj.ops, { bottomBackJoin: sj.bottom_back_join })
   }
+}
+
+// ── Shaped-cabinet seams (z_cabinet_shape L3) ─────────────────────────────────
+// A per-edge / turned panel is drilled in a frame turned about Y so the legacy
+// X-normal seam code applies; the holes are turned back. Plan geometry here is
+// cabinet-local (x across, z = depth), as casePlanCorners.
+
+export interface PlanPart {
+  corners:  { x: number; z: number }[]
+  y:        number
+  h:        number
+  vertical: boolean   // stands up (gable / back / upright rail / divider)
+}
+
+export function partPlan(p: ResolvedCasePart | ResolvedInternalPart): PlanPart {
+  if ('part_key' in p) {
+    const b = caseBox(p)
+    const vertical = isSide(p.part_key) || p.part_key === 'back' || isShapedPanelKey(p.part_key) || !!p.upright
+    return { corners: casePlanCorners(p), y: b.y, h: b.h, vertical }
+  }
+  const b = internalBox(p) ?? { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
+  const corners = p.outline && p.outline.length >= 3
+    ? p.outline.map(q => ({ x: b.x + q.x, z: b.z + b.d - q.y }))
+    : [{ x: b.x, z: b.z }, { x: b.x + b.w, z: b.z }, { x: b.x + b.w, z: b.z + b.d }, { x: b.x, z: b.z + b.d }]
+  return { corners, y: b.y, h: b.h, vertical: p.part_type === 'divider' }
+}
+
+const INTO = (turn: number) => ({ AY: -turn, X: 0, Y: 0, Z: 0 })
+const BACK = (turn: number) => ({ AY: turn, X: 0, Y: 0, Z: 0 })
+
+const turnedCorners = (pp: PlanPart, turn: number) =>
+  pp.corners.map(q => { const [x, , z] = turnPoint(INTO(turn), q.x, 0, q.z); return { x, z } })
+
+/** The part's AABB in a frame turned `turn`° about Y (cabinet origin). */
+export function turnedBox(pp: PlanPart, turn: number): Box {
+  const c = turnedCorners(pp, turn)
+  const xs = c.map(q => q.x), zs = c.map(q => q.z)
+  const x = Math.min(...xs), z = Math.min(...zs)
+  return { x, y: pp.y, z, w: Math.max(...xs) - x, h: pp.h, d: Math.max(...zs) - z }
+}
+
+/** Every plan edge runs along X or Z in the turned frame (a square part there). */
+export function squareIn(pp: PlanPart, turn: number): boolean {
+  const c = turnedCorners(pp, turn)
+  return c.every((q, i) => {
+    const r = c[(i + 1) % c.length]
+    return Math.abs(r.x - q.x) < 0.5 || Math.abs(r.z - q.z) < 0.5
+  })
+}
+
+/** Turn that lays a vertical panel's thickness along X: a multiple of 90
+ *  (0–270) for a panel square to the cabinet; otherwise (an angled per-edge
+ *  panel, z_angled_filler) the exact angle, from the panel's long faces so a
+ *  bevelled end doesn't skew it. null when it isn't a four-cornered panel. */
+export function panelTurn(pp: PlanPart): number | null {
+  if (pp.corners.length !== 4) return null
+  const [a, b, c] = pp.corners
+  const e0 = { x: b.x - a.x, z: b.z - a.z }, e1 = { x: c.x - b.x, z: c.z - b.z }
+  const t = Math.hypot(e0.x, e0.z) <= Math.hypot(e1.x, e1.z) ? e0 : e1
+  const turn = -Math.atan2(t.z, t.x) * 180 / Math.PI
+  const snap = Math.round(turn / 90) * 90
+  if (Math.abs(turn - snap) <= 0.5) return ((snap % 360) + 360) % 360
+  const edges = pp.corners.map((q, i) => { const r = pp.corners[(i + 1) % 4]; return { x: r.x - q.x, z: r.z - q.z } })
+  const L = edges.reduce((m, e) => (Math.hypot(e.x, e.z) > Math.hypot(m.x, m.z) ? e : m))
+  const raw = -Math.atan2(L.x, -L.z) * 180 / Math.PI     // thickness = L turned 90°
+  const s2 = Math.round(raw / 90) * 90
+  // A square panel whose first corners are a bevelled end: still square.
+  const out = Math.abs(raw - s2) <= 0.5 ? s2 : raw
+  return ((out % 360) + 360) % 360
+}
+
+/**
+ * Where part `pp` meets a receiving panel in that panel's turned frame: the
+ * stretch (along Z) of its corners lying on the face it presents to the panel
+ * (its min-X face when it is the panel's `left`-side neighbour's part — A to +X
+ * of B — else its max-X face). null when fewer than two corners lie there.
+ */
+export function contactSpan(pp: PlanPart, turn: number, side: 'left' | 'right'): { z0: number; z1: number } | null {
+  const c = turnedCorners(pp, turn)
+  const xs = c.map(q => q.x)
+  const plane = side === 'left' ? Math.min(...xs) : Math.max(...xs)
+  const on = c.filter(q => Math.abs(q.x - plane) < 0.5).map(q => q.z)
+  return on.length >= 2 ? { z0: Math.min(...on), z1: Math.max(...on) } : null
+}
+
+/** A vertical part's long faces run along X in the turned frame (it meets the panel end-on). */
+export function runsAlongX(pp: PlanPart, turn: number): boolean {
+  const c = turnedCorners(pp, turn)
+  const edges = c.map((q, i) => { const r = c[(i + 1) % c.length]; return { x: r.x - q.x, z: r.z - q.z } })
+  const L = edges.reduce((m, e) => (Math.hypot(e.x, e.z) > Math.hypot(m.x, m.z) ? e : m))
+  return Math.abs(L.z) < 0.01 * Math.hypot(L.x, L.z)
+}
+
+/** Drills for a shaped seam, in cabinet coords. */
+export function shapedSeamDrillOps(
+  sj: ResolvedSeamJoint,
+  caseParts: ResolvedCasePart[],
+  internalParts: ResolvedInternalPart[] = [],
+): DrillOpPos[] {
+  const sh = sj.shaped
+  if (!sh) return []
+  const find = (k: string) => k.startsWith('int_')
+    ? internalParts.find(p => internalSeamPartKey(p) === k)
+    : caseParts.find(p => p.part_key === k)
+  const a = find(sj.part_a_key), b = find(sj.part_b_key)
+  if (!a || !b) return []
+  const pA = partPlan(a)
+  let bA = turnedBox(pA, sh.turn)
+  const bB = turnedBox(partPlan(b), sh.turn)
+  // A part that isn't square in the turned frame (a bottom meeting an angled
+  // side, z_angled_filler): lay the holes along the edge that actually meets
+  // the panel, not its whole bounding box.
+  const square = squareIn(pA, sh.turn)
+  if (!square && sh.kind === 'side' && !sj.internal_edge) {
+    const cs = contactSpan(pA, sh.turn, sh.side)
+    if (cs) bA = { ...bA, z: cs.z0, d: cs.z1 - cs.z0 }
+  }
+  const raw = sh.kind === 'back_bottom'
+    ? backBottomDrillOps(bA, bB, sj.ops, sj.bottom_back_join ?? 'back_on_bottom').map(d => ({ ...d, targetPartKey: d.targetPartKey === 'back' ? sj.part_a_key : d.targetPartKey }))
+    : sj.internal_edge
+      ? seamJointDrillOps({ ...sj, internal_edge: sh.side }, bA, bB)
+      : seamDrillOps(sj.seam_key, bA, bB, sj.ops, { side: sh.side, partAKey: sj.part_a_key, partBKey: sj.part_b_key })
+  return raw.flatMap(d => {
+    const t = turnDrill(BACK(sh.turn), d)
+    const { dir, ...rest } = t as typeof t & { dir?: { x: number; y: number; z: number } }
+    // A horizontal bore into the edge of an unturned part (bottom / top) that
+    // isn't square to its sheet edges can't be machined — the drill axis would
+    // snap to the wrong direction. Keep the panel's face holes only (hand-fixed).
+    const target = find(rest.targetPartKey)
+    const turned = !!target && 'part_key' in target && !!target.AY
+    if (dir && !turned && Math.max(Math.abs(dir.x), Math.abs(dir.y), Math.abs(dir.z)) < 0.9999) return []
+    return [rest]
+  })
+}
+
+/** A cabinet-space drill → a turned case part's own (unturned) frame, the frame
+ *  its box and silhouette are built in before the AY turn about its min corner. */
+export function intoPartFrame<T extends DrillOpPos>(p: Pick<ResolvedCasePart, 'AY' | 'X' | 'Z'>, d: T): T {
+  if (!p.AY) return d
+  const t = turnDrill({ AY: -p.AY, X: p.X, Y: 0, Z: p.Z }, d)
+  const { dir: _dir, ...rest } = t as typeof t & { dir?: unknown }
+  void _dir
+  return rest as T
+}
+
+/** One seam's drills, shaped or legacy. */
+export function seamDrillsFor(sj: ResolvedSeamJoint, rp: Pick<ResolvedCabinet, 'case_parts' | 'internal_parts'>, boxA: Box, boxB: Box): DrillOpPos[] {
+  return sj.shaped ? shapedSeamDrillOps(sj, rp.case_parts, rp.internal_parts ?? []) : seamJointDrillOps(sj, boxA, boxB)
+}
+
+// Cabinet-axis extents per seam part key, for coalesceOpposingDrills: a turned
+// per-edge panel's local box runs along its own axes, so use its plan AABB.
+export function seamExtentBoxes(rp: Pick<ResolvedCabinet, 'case_parts' | 'internal_parts'>): Record<string, Box> {
+  const m: Record<string, Box> = {}
+  for (const p of rp.case_parts) m[p.part_key] = p.AY ? caseBoxAABB(p) : caseBox(p)
+  for (const p of rp.internal_parts ?? []) {
+    const b = internalBox(p)
+    if (b) m[internalSeamPartKey(p)] = b
+  }
+  return m
 }
 
 // ── Convenience: all drills for a resolved cabinet ────────────────────────────
@@ -703,7 +880,8 @@ export function orientSeamDrills(
     // Master part = part_a, the left-hand side of the seam key (e.g. front_rail
     // in "front_rail:left_side"). Every hole in the seam follows this part.
     // Internal masters (int_adj_shelf_0, …) already carry their override key.
-    const masterKey = d.seamKey.slice(0, d.seamKey.indexOf(':'))
+    // Shaped seams key as part_a|part_b (part keys may hold a colon).
+    const masterKey = d.seamKey.includes('|') ? d.seamKey.slice(0, d.seamKey.indexOf('|')) : d.seamKey.slice(0, d.seamKey.indexOf(':'))
     const ov   = overrides?.[masterKey.startsWith('int_') ? masterKey : `case_${masterKey}`]
     const box  = boxByKey[masterKey]
     if (!ov || !box) return { ...d, dir: base }
@@ -773,9 +951,9 @@ export function cabinetSeamDrills(rp: ResolvedCabinet): SeamDrill[] {
     const bA = boxByKey[sj.part_a_key]
     const bB = boxByKey[sj.part_b_key]
     if (!bA || !bB) continue
-    for (const d of seamJointDrillOps(sj, bA, bB)) {
+    for (const d of seamDrillsFor(sj, rp, bA, bB)) {
       out.push({ ...d, source: sj.source, seamKey: sj.seam_key })
     }
   }
-  return coalesceOpposingDrills(out, boxByKey)
+  return coalesceOpposingDrills(out, seamExtentBoxes(rp))
 }

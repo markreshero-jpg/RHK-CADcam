@@ -19,7 +19,7 @@ import { caseFrame, zoneFrame, boxFrame, intFrame, projectToFrame, type Footprin
 import { coalesceByKey } from './coalesce'
 import type { ResolvedCabinet, ResolvedCasePart } from '@/src/lib/resolver/types'
 import { dbPartId, zoneKey, zonePartId, stackKey, isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
-import { turnDrill } from '@/src/lib/resolver/hardwareTurn'
+import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
 
 const GENERATED_MARK = 'seam_joint'
 
@@ -127,7 +127,7 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
       add('internal_parts', d.targetPartKey, ip ? intFrame(ip) : null, d, 'joint', d.seamKey, tool)
     } else {
       const part = caseByKey.get(d.targetPartKey as never)
-      add('case_parts', `case_${d.targetPartKey}`, part ? caseFrame(part) : null, d, 'joint', d.seamKey, tool)
+      add('case_parts', `case_${d.targetPartKey}`, part ? caseFrame(part) : null, part ? intoPanel(part, d) : d, 'joint', d.seamKey, tool)
     }
   }
 
@@ -236,7 +236,7 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
   //    rail's height. A rail running through a division gets none there.
   const panels = railPanels(rp)
   for (const rail of rp.case_parts) {
-    if (!rail.part_key.startsWith('fprail:') || !rail.fprail) continue
+    if (!rail.part_key.startsWith('fprail:') || !rail.fprail || rail.fprail.shaped) continue
     const m = rail.fprail
     const y = rail.Y + rail.DX / 2
     const z = rail.Z - m.blockSetback
@@ -254,7 +254,41 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
     }
   }
 
+  // 5b. Shaped facet rails: the same block hole at each end that sits in a
+  //     panel, worked in the rail's own frame and turned into the panel's.
+  for (const e of shapedRailEnds(rp)) {
+    const { rail, panel, atStart } = e
+    const m = rail.fprail!
+    const lx = atStart ? panel.DZ : rail.DY - panel.DZ
+    const d = turnDrill({ AY: rail.AY, X: rail.X, Y: 0, Z: rail.Z }, {
+      x: rail.X + lx, y: rail.Y + rail.DX / 2, z: rail.Z - m.blockSetback,
+      axis: (atStart ? 'x-' : 'x+') as 'x-' | 'x+', radius: m.blockDia / 2, depthLen: m.blockDepth,
+    })
+    add('case_parts', `case_${panel.part_key}`, caseFrame(panel), intoPanel(panel, d),
+      'fprail_block', `fprail_block_${rail.part_key.slice(7)}`, AUTO_TOOL)
+  }
+
   return { rows, skipped }
+}
+
+// Shaped facet rails (resolveShapedFingerRails): each end of a rail that sits
+// in a vertical panel. Local rail frame: x along its length from (X, Z), y up,
+// z = 0 its back face → DZ its front (as the box rails); it runs through the
+// end panel to the panel's outer face.
+interface ShapedRailEnd { rail: ResolvedCasePart; panel: ResolvedCasePart; atStart: boolean }
+function shapedRailEnds(rp: ResolvedCabinet): ShapedRailEnd[] {
+  const out: ShapedRailEnd[] = []
+  const panels = rp.case_parts.filter(p => !p.part_key.startsWith('fprail:'))
+  for (const rail of rp.case_parts) {
+    if (!rail.part_key.startsWith('fprail:') || !rail.fprail?.shaped) continue
+    const t = { AY: rail.AY, X: rail.X, Y: 0, Z: rail.Z }
+    for (const atStart of [true, false]) {
+      const [x, y, z] = turnPoint(t, rail.X + (atStart ? 1 : rail.DY - 1), rail.Y + rail.DX / 2, rail.Z + rail.DZ / 2)
+      const panel = memberPanel(panels, { x, y, z, axis: 'x-' })
+      if (panel) out.push({ rail, panel, atStart })
+    }
+  }
+  return out
 }
 
 // The vertical panels finger rails sit in (z_handles H5b): the carcass sides
@@ -318,7 +352,8 @@ interface GeneratedRoute {
 export function collectNotchRoutes(rp: ResolvedCabinet, cabinetId: string, toolId: string | null): { rows: GeneratedRoute[]; skipped: number } {
   const rows: GeneratedRoute[] = []
   let skipped = 0
-  const rails = rp.case_parts.filter(p => p.part_key.startsWith('fprail:') && p.fprail)
+  const rails = rp.case_parts.filter(p => p.part_key.startsWith('fprail:') && p.fprail && !p.fprail.shaped)
+  shapedNotchRoutes(rp, cabinetId, toolId, rows, () => skipped++)
   if (!rails.length) return { rows, skipped }
   const EPS = RAIL_EPS
   for (const side of railPanels(rp)) {
@@ -361,6 +396,53 @@ export function collectNotchRoutes(rp: ResolvedCabinet, cabinetId: string, toolI
     }
   }
   return { rows, skipped }
+}
+
+// Shaped facet rails: the notch (and closed-end reliefs) in each end panel,
+// worked as boxes in the rail's frame and projected into the panel's own
+// footprint frame — a turned `side:<edge>` panel is face-kind (u = height,
+// v = length), so reliefs go out as one-cutter-wide pockets rather than
+// grooves (a pocket exactly the cutter wide leaves the same round end).
+function shapedNotchRoutes(
+  rp: ResolvedCabinet, cabinetId: string, toolId: string | null, rows: GeneratedRoute[], skip: () => void,
+): void {
+  for (const { rail, panel, atStart } of shapedRailEnds(rp)) {
+    if (!toolId) { skip(); continue }
+    const frame = caseFrame(panel)
+    const t = { AY: rail.AY, X: rail.X, Y: 0, Z: rail.Z }
+    const pY0 = panel.Y, pY1 = panel.Y + (panel.part_key.startsWith('side:') ? panel.DX : panel.DY)
+    const bot = rail.Y, top = rail.Y + rail.DX
+    const openBot = bot <= pY0 + RAIL_EPS, openTop = top >= pY1 - RAIL_EPS
+    const x0 = atStart ? 0 : rail.DY - panel.DZ, x1 = atStart ? panel.DZ : rail.DY
+    // A box in rail-local coords → u / v extents in the panel's frame.
+    const rect = (y0: number, y1: number, z0: number, z1: number) => {
+      const us: number[] = [], vs: number[] = []
+      for (const lx of [x0, x1]) for (const ly of [y0, y1]) for (const lz of [z0, z1]) {
+        const [x, y, z] = turnPoint(t, rail.X + lx, ly, rail.Z + lz)
+        const q = intoPanel(panel, { x, y, z, axis: 'x-' as const }) as { x: number; y: number; z: number }
+        us.push(q[frame.u.axis] - frame.u.origin); vs.push(q[frame.v.axis] - frame.v.origin)
+      }
+      const u0 = Math.min(...us), u1 = Math.max(...us), v0 = Math.min(...vs), v1 = Math.max(...vs)
+      return { pos_x: round((u0 + u1) / 2), pos_y: round((v0 + v1) / 2), size_dx: round(u1 - u0), size_dy: round(v1 - v0) }
+    }
+    const n = rail.part_key.slice(7)
+    const cut = rail.fprail!.cut
+    const base = {
+      source_table: 'case_parts' as const, source_cabinet_id: cabinetId, source_part_key: `case_${panel.part_key}`,
+      depth: round(panel.DZ + 0.2),
+      output_face: isShapedPanelKey(panel.part_key) ? 'back' : panel.part_key === 'left_side' ? 'left' : 'right',
+      output_to_cnc: true, router_tool_id: toolId, length: null, width: null,
+      parameters: { generated: GENERATED_MARK, kind: 'fprail_notch' },
+    }
+    rows.push({ ...base, operation_type: 'route', operation_action: 'pocket', operation_key: `fprail_notch_${n}_${atStart ? 0 : 1}`,
+      ...rect(openBot ? bot - NOTCH_OVERRUN : bot, openTop ? top + NOTCH_OVERRUN : top, 0, rail.DZ + NOTCH_OVERRUN) })
+    if (cut > 0 && top - bot > 4 * cut) {
+      const ends = [...(openTop ? [] : [top - cut]), ...(openBot ? [] : [bot + cut])]
+      ends.forEach((v, i) => rows.push({ ...base, operation_type: 'route', operation_action: 'pocket',
+        operation_key: `fprail_relief_${n}_${atStart ? 0 : 1}_${i}`,
+        ...rect(v - cut, v + cut, -cut, rail.DZ + NOTCH_OVERRUN) }))
+    }
+  }
 }
 
 // The notch cutter: the active 10mm router bit with the lowest tool number.

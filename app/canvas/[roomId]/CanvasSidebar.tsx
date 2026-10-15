@@ -216,6 +216,10 @@ const BT_ICON = (d: React.ReactNode) => (
 const BENCHTOP_TOOLS: { mode: Mode; label: string; icon: React.ReactNode; color: string; divider?: boolean }[] = [
   { mode: 'draw_benchtop',      label: 'Draw Polygon',   color: 'text-teal-400', icon: <BenchtopIcon /> },
   { mode: 'draw_benchtop_rect', label: 'Draw Rectangle', color: 'text-teal-400', icon: BT_ICON(<rect x="2" y="4" width="12" height="8" rx="0.8" fill="currentColor" fillOpacity="0.12"/>) },
+  { mode: 'draw_benchtop_line', label: 'Line + Offset',  color: 'text-teal-400', icon: BT_ICON(<>
+    <path d="M2 9 L9 2 L14 7 L7 14 Z" fill="currentColor" fillOpacity="0.12" strokeDasharray="2 1.5"/>
+    <line x1="2" y1="9" x2="9" y2="2" strokeWidth="2.2"/>
+  </>) },
   { mode: 'draw_benchtop_l',    label: 'Draw L-Shape',   color: 'text-teal-400', icon: BT_ICON(<path d="M2 2 L2 14 L8 14 L8 8 L14 8 L14 2 Z" fill="currentColor" fillOpacity="0.12"/>) },
   { mode: 'draw_benchtop_u',    label: 'Draw U-Shape',   color: 'text-teal-400', icon: BT_ICON(<path d="M2 2 L2 14 L5 14 L5 8 L11 8 L11 14 L14 14 L14 2 Z" fill="currentColor" fillOpacity="0.12"/>) },
   { mode: 'draw_benchtop_cutout_rect', label: 'Rect Cutout', color: 'text-red-400', divider: true, icon: BT_ICON(<>
@@ -729,12 +733,30 @@ export default function CanvasSidebar({
 
             {/* Search + scope */}
             <div className="px-1 pb-1 flex flex-col gap-1.5">
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search code, description, folder…"
-                className="w-full bg-gray-800 border border-gray-700 rounded-md px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-blue-500"
-              />
+              <div className="relative">
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  onKeyDown={e => {
+                    // Esc: clear the search and go back to the F3 top-level tiles.
+                    // Stop it here so the canvas-wide Esc handler doesn't also fire.
+                    if (e.key !== 'Escape') return
+                    e.preventDefault(); e.stopPropagation()
+                    setSearch(''); goTo(null); e.currentTarget.blur()
+                  }}
+                  placeholder="Search code, description, folder…"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-md pl-2 pr-6 py-1.5 text-sm text-gray-200 outline-none focus:border-blue-500"
+                />
+                {search && (
+                  <button
+                    type="button" title="Clear search" aria-label="Clear search"
+                    onClick={() => setSearch('')}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700"
+                  >
+                    <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 2l8 8M10 2l-8 8" /></svg>
+                  </button>
+                )}
+              </div>
               <div className="flex gap-1 text-xs">
                 {(['all', 'job'] as Scope[]).map(s => (
                   <button

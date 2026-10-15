@@ -28,6 +28,7 @@ export const EDGE_ROLES: { value: EdgeRole; label: string }[] = [
 const EDGE_LABELS: Record<string, string> = {
   back: 'Back', back2: 'Back (corner wall)', end: 'End', facet: 'Angled facet',
   front: 'Front', side: 'Side', curve: 'Curve', left: 'Left', right: 'Right',
+  fill_a: 'Filler A', fill_b: 'Filler B', side_a: 'Side A', side_b: 'Side B',
 }
 export function edgeLabel(id: string): string {
   return EDGE_LABELS[id] ?? id
@@ -38,6 +39,10 @@ export interface FootprintEdge {
   id: string
   role: EdgeRole
   finish?: SideFinish
+  /** A face filler strip on this front edge (z_angled_filler): one false panel
+   *  whose front face is exactly `width` wide, with a return cleat `cleat` deep
+   *  at its end against a side edge when the cabinet has no carcass. */
+  filler?: { width: number; cleat: number }
 }
 
 /** A vertex as formulas. Scope: cab.w, cab.d, p.<param>. */

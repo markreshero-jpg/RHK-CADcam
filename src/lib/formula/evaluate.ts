@@ -36,6 +36,11 @@ const FUNCTIONS: Record<string, { minArgs: number; maxArgs: number }> = {
   floor: { minArgs: 1, maxArgs: 2 },
   ceil:  { minArgs: 1, maxArgs: 2 },
   abs:   { minArgs: 1, maxArgs: 1 },
+  // Trig in degrees (shaped-cabinet angles, z_angled_filler) and square root.
+  sin:   { minArgs: 1, maxArgs: 1 },
+  cos:   { minArgs: 1, maxArgs: 1 },
+  tan:   { minArgs: 1, maxArgs: 1 },
+  sqrt:  { minArgs: 1, maxArgs: 1 },
 }
 
 export const FUNCTION_NAMES = Object.keys(FUNCTIONS)
@@ -189,6 +194,15 @@ export function evaluate(node: FormulaNode, scope: FormulaScope): number {
           return Math.max(...node.args.map(a => evaluate(a, scope)))
         case 'abs':
           return Math.abs(evaluate(node.args[0], scope))
+        case 'sin': case 'cos': case 'tan': {
+          const a = evaluate(node.args[0], scope) * Math.PI / 180
+          return node.name === 'sin' ? Math.sin(a) : node.name === 'cos' ? Math.cos(a) : Math.tan(a)
+        }
+        case 'sqrt': {
+          const x = evaluate(node.args[0], scope)
+          if (x < 0) throw new FormulaError('sqrt() of a negative number', node.start, node.end)
+          return Math.sqrt(x)
+        }
         case 'round': case 'floor': case 'ceil': {
           const x = evaluate(node.args[0], scope)
           const fn = node.name === 'round' ? Math.round : node.name === 'floor' ? Math.floor : Math.ceil

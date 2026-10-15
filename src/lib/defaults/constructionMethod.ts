@@ -20,7 +20,8 @@ export const DEFAULT_CONSTRUCTION_METHOD = {
 
     // Top
     TOP_TYPE: 'front_rail' as const,
-    RD:       100,  // rail depth mm
+    RD:       100,  // rail depth mm (its height when the rail stands on edge)
+    RAIL_ORIENT: 'horizontal' as 'vertical' | 'horizontal',  // top rails on edge vs flat
 
     // Adjustable shelves
     ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1,

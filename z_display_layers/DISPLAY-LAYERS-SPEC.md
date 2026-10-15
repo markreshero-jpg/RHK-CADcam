@@ -140,7 +140,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 | Benchtops | `benchtops` (P / E / 3D), `benchtop_edges` (P: profile colour + code, wall edges; E: code on the front edge), `benchtop_joins` (P / E) — edges + joins added by benchtop Phase 3; elevation + 3D views by Phase 3b |
 | Room | `walls` (3D) |
 | Labels | `cabinet_labels`, `cabinet_sizes` (P,E) |
-| Dimensions | `dim_wall_overall`, `dim_base_chain`, `dim_wall_chain` (P), `dim_elev_height`, `dim_elev_floor_chain`, `dim_elev_wall_chain` (E) — chain items to be replaced by user-defined rows (`settings.<view>.dimRows`), see `z_dimension_rows/DIMENSION-ROWS-SPEC.md` |
+| Dimensions | `dim_wall_overall`, `dim_base_chain`, `dim_wall_chain` (P), `dim_elev_height`, `dim_elev_floor_chain`, `dim_elev_wall_chain` (E), `dim_kicks` (P,E; default off — plan: kick board chain between the base row and the overall + kick depth at the wall ends on lane 2; elevation: kick height per kick, `src/lib/kickDims.ts`; not in reports yet) — chain items to be replaced by user-defined rows (`settings.<view>.dimRows`), see `z_dimension_rows/DIMENSION-ROWS-SPEC.md` |
 
 Retired ids: `hardware` (Phase 1: hinges + inner-drawer slides, elevation) was
 split into `hinges` + `inner_drawer_runners`. Stored rows were migrated
@@ -276,6 +276,18 @@ Decisions (2026-09-16): hardware before appearance; real hardware models in
   shows on the loading / resize fallback rect. `ElevationSVG` still reads the
   elevation values, so with nothing stored it draws the defaults. Open: the user may
   later want a class tint behind resolved elevation cabinets instead.
+
+- **Dimension offset (added 2026-10-15, user request) — built, not verified in the app:**
+  `ItemSetting.offset` (mm, unset = 0; sparse-saved), `LayerView.offset(id)`. Layer
+  Manager: an Offset number box (step 25; negative allowed, pulls the dim in; focus and
+  Enter select the whole value) on Dimensions-group rows. Plan
+  (`WallDimensionChain`): rows are cumulative, so each row moves out by its own offset
+  plus every row inside it (wall-cab → base → kicks → overall), and the end-of-wall
+  depth dims move out by their own item's offset. Depth-dim lanes now sit at
+  half steps (`0.5 + lane`) so they fall between a return wall's chain rows instead
+  of on top of them (the likely cause of the back-wall overlap the user reported; unconfirmed). Elevation: wall chain
+  up, floor chain down (the overall wall length follows it), height chain left, kick
+  marks right. Reports ignore offsets (own chain copies).
 
 - **Opacity (added 2026-09-17, user request):** `ItemSetting.opacity` (multiplier;
   `OPACITY_OPTIONS` 100/75/50/25/10%), `LayerView.op(id)`. `props()` multiplies the

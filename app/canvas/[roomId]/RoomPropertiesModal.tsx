@@ -40,6 +40,7 @@ const RULE_LABELS: Record<RuleKey, string> = {
   SCRT:    'Scribe Top (mm)',
   TOP_TYPE:'Top Type',
   RD:      'Rail Depth (mm)',
+  RAIL_ORIENT: 'Rail Orientation',
   ADJSB_F: 'Adj. Shelf Front Setback (mm)',
   ADJSB_B: 'Adj. Shelf Back Setback (mm)',
   ADJSL:   'Adj. Shelf Left Notch (mm)',
@@ -73,7 +74,7 @@ const RULE_LABELS: Record<RuleKey, string> = {
 const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Toe Kick',          keys: ['TOEH', 'TOE_TYPE', 'TOEFC', 'TOESP', 'TOESCF', 'TOESCB', 'TOESCL', 'TOESCR'] },
   { label: 'Case Scribes',      keys: ['SCRBK', 'SCRBT', 'SCRL', 'SCRR', 'SCRT'] },
-  { label: 'Top Rail',          keys: ['TOP_TYPE', 'RD'] },
+  { label: 'Top Rail',          keys: ['TOP_TYPE', 'RD', 'RAIL_ORIENT'] },
   { label: 'Adjustable Shelves',keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },
   { label: 'Fixed Shelves',     keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',     keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
@@ -585,6 +586,21 @@ function RuleRow({ ruleKey, value, baseline, baselineLabel, onChange }: {
             <option value="ladder">Ladder</option>
             <option value="leg">Leg</option>
             <option value="none">None</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'RAIL_ORIENT') {
+    return (
+      <div className={rowCls}>
+        <span className={textCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverridden && <span className="text-gray-600 text-[10px]">{baselineLabel}: {String(baseline)}</span>}
+          <select value={value as string} onChange={e => onChange(e.target.value as Rules[RuleKey])} className={inputCls}>
+            <option value="vertical">On edge (vertical)</option>
+            <option value="horizontal">Flat (horizontal)</option>
           </select>
         </div>
       </div>

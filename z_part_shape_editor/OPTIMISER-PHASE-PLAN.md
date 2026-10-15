@@ -6,6 +6,15 @@
 > the optimiser, G-code and paper all stop pretending every part is its base rectangle.
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
+>
+> **RESUME HERE** (2026-10-15) → restarted for shaped cabinets (Mark: "when will the nest pick up
+> the true shape of corner cabinets, radius cabinets etc."). Agreed order: **O2b** (resolver
+> outlines into the snapshot) → **O3** (sheet preview) → O4 (contour G-code) → O5 (EB deduction).
+> True-polygon / NFP nesting stays deferred (locked decision #2: nest at bbox, cut the contour).
+> Working on: O2b. Done so far: `PART_SELECTS` (normalize.ts) now loads `outline` for case_parts +
+> internal_parts (both columns exist; 34 case parts carry one). Frame mapping is DONE — see
+> "Frame findings" under O2b. Next: `shapeToOpFrame` in shapes.ts (+ tests per kind), resolver
+> shapes in normalize.ts (drawn shape wins, `source: 'resolver'`, never stale), Stage 2 "⬠ auto".
 
 ---
 
@@ -94,6 +103,52 @@
   authoring phase's "keep shape, flag error" policy).
 - **Accept**: shaped gable appears in Stage 2 flagged as shaped, nests at bbox; stale shape
   blocks that part with a visible reason; rect-only projects unchanged.
+
+### O2b — Shaped-cabinet outlines into the snapshot (added 2026-10-15)
+**Status: [ ] not started**
+Shaped cabinets (z_cabinet_shape: L / diagonal / clipped corners, radius ends, angled fillers…)
+write a resolver outline on their non-rectangular horizontals — `case_parts.outline` (bottom,
+full_top, rails) and `internal_parts.outline` (shelves) — in the horizontal Shape Editor frame
+(x across from the part's X, y down from its front edge; the Part Editor already shows it and
+seeds the Shape Editor with it, z_cabinet_shape 3c). Today the optimiser never reads it, so those
+parts nest AND cut as their bounding rectangle.
+- Both loaders select the `outline` columns; `normalize.ts` turns an outline into a shape for the
+  part (closed line loop) when the part has **no drawn shape** (a drawn shape wins — same rule as
+  the renderers). `OptiShape.source`: `'drawn' | 'resolver'`; a resolver shape is never stale
+  (it is regenerated with the part).
+- **Frame**: settle once which shape axis is the part's `w` (dx) / `h` (dy) per part kind, for
+  drawn AND resolver shapes (attachShape's unordered-pair compare sidestepped it; O3/O4 can't).
+  Pin it in `shapes.ts` with a test per kind — a near-square L-corner bottom makes "match by size" ambiguous.
+- Stage 2: ⬠ marker reads "auto" for resolver shapes.
+- **Frame findings (code sweep 2026-10-15 — use these, don't re-derive):**
+  - Optimiser part: `w = DX`, `h = DY` (normalize.ts ~132). Op frame = origin bottom-left, y UP,
+    `pos_x` along w, `pos_y` along h (partFootprint.ts header; partEditorCore PLANE_EDGES). Sheet:
+    `drills.ts toSheet` — `rotated ? (pl.x + pl.w − oy, pl.y + ox) : (pl.x + ox, pl.y + oy)`, plus
+    `ebShift`. No op mirror at sheet time; machine datum / mirror_y applied later in gcode.ts mapX/mapY.
+  - Shapes (drawn AND resolver outlines) are stored in the Part Editor's **display frame, y-down**
+    (PartEditor.tsx ~249: `swap = panelKind !== 'side' && !dxIsWidth`, `mirror = side && id has right_side`).
+    Shape → op: **no swap** `pos_x = sx` (or `DX − sx` mirrored), `pos_y = DY − sy`;
+    **swap** `pos_x = DX − sy`, `pos_y = sx` (transpose + flip). Proof the frames agree: usePartOps.ts ~157-171.
+  - Per kind: **swap** = bottom / full_top / flat rails / shelves (sy = 0 is the FRONT; shape origin =
+    front-left), back + `side:`/`back:` panels (sy = 0 = top), drawer-box front/back/bottom, custom flat,
+    kick boards, tk horizontal spreader. **No swap** = gables (left from the back; right_side
+    mirrored = from the front), dividers, face zones / doors (`dxIsWidth`), custom side/front,
+    tk vertical spreader. Resolver horizontal outline matches the swap rule exactly
+    (resolveShapedCase clipHorizontal: `{ x: q.x − b.x0, y: b.y1 − q.y }`).
+  - **Exceptions**: toe-kick dims are sorted by `canonicalPanelDims` (w = longest), so kick
+    boards are transposed against DX/DY; vertical-grain finger rails are turned (w = DY, h = DX).
+  - Nothing converts shape → op frame yet; `benchtopParts.ts shapeFor` is the only precedent.
+    Write ONE `shapeToOpFrame(shape, kind/swap/mirror, DX, DY)` in shapes.ts and use it for O3 + O4.
+  - Side bugs found (not O2b; log/fix separately): (A) right_side resolver finger-rail notch outline is
+    stored unmirrored but the Part Editor mirrors every right_side shape — the notch shows at the wrong
+    edge and saving it unedited flips it; (B) toe-kick hand ops likely transposed on the sheet;
+    (C) upright rails: sizeOverrides.boxAxes ignores `upright` (shape sh → dz) and svgCaseMeta labels
+    them horizontal; (D) custom-part hand ops keyed `cabinet_custom_parts` vs normalize's
+    `custom_parts` — probably never reach the sheet; (E) drawer-box side/bottom: Part Editor vs
+    cabinet 3D disagree on which edge is the front for a drawn shape.
+- Not in O2b: bevelled / mitred ends (still the blank + a note, sawn by hand — z_cabinet_shape Phase 5).
+- **Accept**: an L-corner (BCNP) bottom, a radius-end shelf and a BFKANG bottom show ⬠ auto in
+  Stage 2 with the right bbox; rect projects byte-identical.
 
 ### O3 — Shape preview on the sheet + persisted polygon
 **Status: [ ] not started**

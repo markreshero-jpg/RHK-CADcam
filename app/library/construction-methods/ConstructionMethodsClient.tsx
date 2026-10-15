@@ -1320,6 +1320,19 @@ function QuestionPanel({ classTab, delta, onChange, onHoverParts }: {
         />
       </QCard>
 
+      <QCard question="Do top rails stand on edge or lie flat?" isOverride={'RAIL_ORIENT' in delta}
+        partKeys={['front_rail','back_rail']}
+        onHover={onHoverParts}>
+        <ChipSelect
+          value={effectiveRule(delta, 'RAIL_ORIENT')}
+          onChange={v => onChange('RAIL_ORIENT', v as ConstructionRules['RAIL_ORIENT'])}
+          options={[
+            { label: 'On edge — face to the front, rail depth is its height', value: 'vertical' },
+            { label: 'Flat — lies under the benchtop',                           value: 'horizontal' },
+          ]}
+        />
+      </QCard>
+
       <QCard question="Shaped cabinets: how do two panels meet at an angle other than 90°?" isOverride={'ANGLE_JOIN' in delta}
         partKeys={[]}
         onHover={onHoverParts}>
@@ -1472,6 +1485,21 @@ function RuleRow({ ruleKey, delta, onChange }: {
           <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
             <option value="between_sides">Between sides</option>
             <option value="on_top_of_sides">On top of sides</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'RAIL_ORIENT') {
+    return (
+      <div className={rowCls}>
+        <span className={txtCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
+          <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
+            <option value="vertical">On edge (vertical)</option>
+            <option value="horizontal">Flat (horizontal)</option>
           </select>
         </div>
       </div>

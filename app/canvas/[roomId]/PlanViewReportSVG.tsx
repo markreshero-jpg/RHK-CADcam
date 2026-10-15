@@ -358,7 +358,7 @@ export default function PlanViewReportSVG({
               const b = caseBox(p)
               if (!layers.show(it) || b.w <= 0 || b.d <= 0) return null
               const pp = lp(it)
-              const vertical = isSide(p.part_key) || p.part_key === 'back' || isShapedPanelKey(p.part_key)
+              const vertical = isSide(p.part_key) || p.part_key === 'back' || isShapedPanelKey(p.part_key) || !!p.upright
               const pts = casePlanCorners(p).map(q => at(q.x, q.z)).join(' ')
               return <polygon key={`cp-${i}`} points={pts} opacity={pp.opacity}
                 fill={vertical ? CARCASE_LINE : 'none'} fillOpacity={vertical ? 0.45 * pp.fillOpacity : 0}

@@ -154,7 +154,7 @@ describe('functions', () => {
   })
 
   it('unknown function lists available ones', () => {
-    expect(() => evalSrc('sqrt(4)')).toThrowError(/Unknown function "sqrt".*min/)
+    expect(() => evalSrc('log(4)')).toThrowError(/Unknown function "log".*min/)
   })
 })
 

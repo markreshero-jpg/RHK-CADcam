@@ -47,6 +47,9 @@ export function primaryFacetId(segs: FootprintSegment[], DZ: number): string | n
   return pool.reduce((a, b) => (len(b) > len(a) ? b : a)).edge.id
 }
 
+// Clearance past the other door's thickness at an inside (pie) corner.
+const PIE_CORNER_GAP = 2
+
 // Door thickness + back-plane offset out of the edge line (overlay > 0, inset < 0).
 function doorPlane(cab: CabinetInput, r: ConstructionRules) {
   const ft = cab.resolved_doors?.['*']?.thickness_mm ?? cab.door_material.DZ
@@ -94,6 +97,14 @@ function singleDoor(hinge: 'left' | 'right'): FaceGridInput {
   }
 }
 
+function fillerPanel(): FaceGridInput {
+  return {
+    rows: [{ row_index: 0, height_locked: false }],
+    cols: [{ col_index: 0, width_locked: false }],
+    zones: [{ row_index: 0, col_index: 0, face_type: 'false_panel' }],
+  }
+}
+
 export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): FaceResolution {
   const shape = shapedInterior(cab)
   if (!shape) return resolveFace(cab, r)
@@ -109,6 +120,13 @@ export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): Fac
   const { ft, backOff } = doorPlane(cab, r)
   const midOff = backOff + ft / 2
 
+  // Concave facet corner (L / pie corner): both doors stop door thickness + 2
+  // back from the doors' inside corner (where their back planes meet, FACBUF
+  // out from the carcass corner), so each end is 2 clear of the other door's
+  // face (Mark, 2026-10-15). Inset doors sit behind the facet lines and keep
+  // the plain gap.
+  const concaveRev = () => backOff < 0 ? r.GAPC / 4 : backOff + ft + PIE_CORNER_GAP
+
   segs.forEach((s, i) => {
     if (!isFrontLine(s)) return
     const isPrimary = s.edge.id === primary
@@ -117,12 +135,22 @@ export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): Fac
 
     // Local left end = p1 (next edge), local right end = p0 (previous edge).
     const end = (nb: FootprintSegment, vertex: { x: number }, side: 'left' | 'right', convexCross: number) => {
-      if (isFrontLine(nb) && convexCross > 1e-9) {
+      const phi = () => {
         const g = edgeFrame(nb)
-        const phi = Math.acos(Math.max(-1, Math.min(1, f.u.x * g.u.x + f.u.y * g.u.y)))
-        return { rev: r.GAPC / 4 - Math.tan(phi / 2) * midOff, bevel: (phi / 2) * 180 / Math.PI }
+        return Math.acos(Math.max(-1, Math.min(1, f.u.x * g.u.x + f.u.y * g.u.y)))
       }
-      if (isFrontLine(nb)) return { rev: r.GAPC / 4, bevel: 0 }   // concave facet corner: plain gap
+      if (isFrontLine(nb) && convexCross > 1e-9) {
+        const p = phi()
+        return { rev: r.GAPC / 4 - Math.tan(p / 2) * midOff, bevel: (p / 2) * 180 / Math.PI }
+      }
+      // Two face fillers at an inside corner (z_angled_filler): a tight mitre.
+      // The mid-thickness lines meet short of the vertex; negative bevel = the
+      // front face is the shorter.
+      if (isFrontLine(nb) && s.edge.filler && nb.edge.filler) {
+        const p = phi()
+        return { rev: Math.tan(p / 2) * midOff, bevel: -(p / 2) * 180 / Math.PI }
+      }
+      if (isFrontLine(nb)) return { rev: concaveRev(), bevel: 0 }
       const away = side === 'left' ? { x: -f.u.x, y: -f.u.y } : f.u
       return { rev: doorRun(endReveal(cab, r, nb, vertex, side), f, nb, away, backOff, ft), bevel: 0 }
     }
@@ -131,9 +159,21 @@ export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): Fac
     const L = end(next, s.p1, 'left', crossNext)
     const R = end(prev, s.p0, 'right', crossPrev)
 
-    const grid = isPrimary
-      ? cab.face_grid
-      : cab.faces?.[s.edge.id] ?? singleDoor(isPanel(prev) ? 'right' : 'left')
+    // A face filler is always one false panel whose front face is exactly
+    // filler.width wide: the end that isn't mitred takes up the difference
+    // between the nominal face offset / reveal the shape was drawn with and
+    // the real ones. Front width = DX + (ft/2)·(tan bevel_l + tan bevel_r).
+    if (s.edge.filler) {
+      const tb = (b: number) => Math.tan(b * Math.PI / 180) * ft / 2
+      const DX = s.edge.filler.width - tb(L.bevel) - tb(R.bevel)
+      if (L.bevel && !R.bevel) R.rev = f.len - L.rev - DX
+      else if (!L.bevel) L.rev = f.len - R.rev - DX
+    }
+    const grid = s.edge.filler
+      ? fillerPanel()
+      : isPrimary
+        ? cab.face_grid
+        : cab.faces?.[s.edge.id] ?? singleDoor(isPanel(prev) ? 'right' : 'left')
 
     const res = resolveFace({ ...cab, face_grid: grid }, r, {
       width: f.len, revL: L.rev, revR: R.rev, doorKeyPrefix: isPrimary ? '' : s.edge.id,

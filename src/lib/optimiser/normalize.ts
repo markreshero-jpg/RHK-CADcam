@@ -289,8 +289,8 @@ export function normalizeProject(
 
 // Column selections shared by server + client loaders.
 export const PART_SELECTS = {
-  case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
-  internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_back,edge_band_front,edge_band_id',
+  case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,outline,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
+  internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,outline,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_back,edge_band_front,edge_band_id',
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   drawer_box_parts: 'id,cabinet_instance_id,facet,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',

@@ -52,7 +52,7 @@ export default function BenchtopEdgeEditPanel({
   const [hover, setHover] = useState<number | null>(null)
   const hov = (i: number | null) => { setHover(i); onHover(i) }
 
-  const exposed = segs.map((_, i) => i).filter(i => !segs[i].edge?.wall)
+  const exposed = segs.map((_, i) => i).filter(i => !segs[i].edge?.wall && !segs[i].edge?.joint)
   const isFront = (i: number) => { const n = outwardNormal(segs, i); return n.x * frame.n.x + n.y * frame.n.y > 0.7 }
   const quick = (label: string, title: string, fn: () => void, disabled = false) => (
     <button key={label} onClick={fn} disabled={disabled} title={title}
@@ -65,6 +65,8 @@ export default function BenchtopEdgeEditPanel({
   const look = (i: number): { col: string; width: number; faded: boolean; dashed: boolean; set: boolean; label: string; clickable: boolean } => {
     const s = segs[i]
     const wall = !!s.edge?.wall
+    // A joint with another top (Phase 7c): shown, never painted.
+    if (s.edge?.joint) return { col: '#ef4444', width: 2, faded: false, dashed: true, set: false, label: s.edge.joint === 'mitre' ? 'joint M' : 'joint B', clickable: false }
     if (tab === 'profile') {
       const prof = profileOf(s)
       const label = wall ? 'wall' : prof ? (prof.code ?? prof.name) + (prof.generates === 'waterfall' ? (waterfallJoin(s) === 'mitre' ? ' ▼M' : ' ▼B') : '') : String(i + 1)

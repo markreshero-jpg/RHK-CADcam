@@ -22,7 +22,7 @@ import {
   panelFaceColors, unpackMatCol,
   Part, PartPropertiesPanel, PreviewCanvas,
 } from '@/src/components/three/PartViewer'
-import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamJointDrillOps, coalesceOpposingDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelOutline, caseBevelNote, tkBevelOutline, tkBevelNote } from '@/src/lib/jointDrilling'
+import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamDrillsFor, intoPartFrame, seamExtentBoxes, coalesceOpposingDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelOutline, caseBevelNote, tkBevelOutline, tkBevelNote } from '@/src/lib/jointDrilling'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, parseZonePartId, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
@@ -162,9 +162,9 @@ function buildCaseInfo(p: ResolvedCasePart, b: Box): PartMeta {
     w: b.w, h: b.h, d: b.d,
     thickness: p.DZ,
     edge:      p.edge_band,
-    panelKind: isSide(p.part_key) ? 'side' : p.part_key === 'back' || isShapedPanelKey(p.part_key) ? 'face' : 'horizontal',
+    panelKind: isSide(p.part_key) ? 'side' : p.part_key === 'back' || isShapedPanelKey(p.part_key) || p.upright ? 'face' : 'horizontal',
     materialId: p.material_id,
-    ...(p.outline && !p.AY ? { outline: p.outline } : {}),
+    ...(p.outline && (!p.AY || isShapedPanelKey(p.part_key)) ? { outline: p.outline } : {}),
     ...(caseBevelNote(p) ? { detail: `${caseBevelNote(p)} — cut ${Math.round(isSide(p.part_key) ? p.DX : p.DY)} long` } : {}),
   }
 }
@@ -1135,7 +1135,9 @@ export function CabinetScene({
     const m = new Map<string, PartShape>()
     // Resolver outlines first (shaped cabinets' bottom / top / shelves); a
     // Shape Editor override for the same part replaces them below.
-    for (const p of rp.case_parts) if (p.outline && !p.AY) m.set(`case_${p.part_key}`, { pts: p.outline })
+    // Turned per-edge panels carry theirs in their own face frame (finger-rail
+    // notches on an L corner's end panel), so they draw too.
+    for (const p of rp.case_parts) if (p.outline && (!p.AY || isShapedPanelKey(p.part_key))) m.set(`case_${p.part_key}`, { pts: p.outline })
     // Angled panel ends (4a): top-view outline extruded up.
     for (const p of rp.case_parts) {
       const o = caseBevelOutline(p)
@@ -1197,15 +1199,19 @@ export function CabinetScene({
       const bA = boxByKey[sj.part_a_key]
       const bB = boxByKey[sj.part_b_key]
       if (!bA || !bB) continue
-      flat.push(...seamJointDrillOps(sj, bA, bB))
+      flat.push(...seamDrillsFor(sj, rp, bA, bB))
     }
-    for (const d of coalesceOpposingDrills(flat, boxByKey)) {
+    // Turned panels measure their through-bore along their plan AABB (L3).
+    const turned = rp.case_parts.filter(p => p.AY)
+    const eb = turned.length ? seamExtentBoxes(rp) : null
+    const ext = eb ? { ...boxByKey, ...Object.fromEntries(turned.map(p => [p.part_key, eb[p.part_key]])) } : boxByKey
+    for (const d of coalesceOpposingDrills(flat, ext)) {
       const arr = m.get(d.targetPartKey) ?? []
       arr.push(d)
       m.set(d.targetPartKey, arr)
     }
     return m
-  }, [rp.seam_joints, boxByKey, showDrilling])
+  }, [rp, boxByKey, showDrilling])
 
   // Slide-imposed drilling (cabinet member + drawer-box surfaces), already
   // resolved to absolute cabinet coords on each slide. Rendered as an overlay.
@@ -1299,7 +1305,8 @@ export function CabinetScene({
         const b     = applySizeOv(caseBox(pp), id, partOverrides)
         const info  = applyEdge(buildCaseInfo(p, b))
         const s     = matSpec(p.material_id, '#ddd3bb')
-        const holes = holesByPartKey.get(p.part_key) ?? []
+        // Turned per-edge panels draw in their own frame (z_cabinet_shape L3).
+        const holes = (holesByPartKey.get(p.part_key) ?? []).map(d => intoPartFrame(p, d))
         const pockets = pocketsByPart.get(id)
 
         if (holes.length > 0) {

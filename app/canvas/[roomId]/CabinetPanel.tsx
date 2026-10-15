@@ -170,7 +170,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
           </div>
         </div>
         {cabinet.has_carcass && !cabinet.is_kick_assembly && (
-          <CabinetShapeSection cabinet={cabinet} onUpdate={onUpdate} inp={inp} lbl={lbl} />
+          <CabinetShapeSection cabinet={cabinet} wall={wall} onUpdate={onUpdate} inp={inp} lbl={lbl} />
         )}
         <div>
           <label className={lbl}>Top Type</label>
@@ -181,6 +181,28 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
             <option value="double_rail">Double Rail</option>
             <option value="none">None</option>
           </select>
+          {/* Rail orientation (z_cabinet_shape L1) — rule_overrides.RAIL_ORIENT */}
+          {((f('top_type') as string) ?? 'front_rail') !== 'full_top' && (f('top_type') as string) !== 'none' && (() => {
+            const cur = (cabinet.rule_overrides ?? {}).RAIL_ORIENT
+            const inherited = getCachedInput(cabinet.id)?.rules_base?.RAIL_ORIENT ?? 'horizontal'
+            const name = (v: string) => v === 'vertical' ? 'on edge (vertical)' : 'flat (horizontal)'
+            return (
+              <select
+                value={cur === 'horizontal' || cur === 'vertical' ? cur : ''}
+                onChange={e => {
+                  const next = { ...(cabinet.rule_overrides ?? {}) }
+                  if (e.target.value === '') delete next.RAIL_ORIENT
+                  else next.RAIL_ORIENT = e.target.value
+                  void onUpdate(cabinet.id, { rule_overrides: next })
+                }}
+                className={inp + ' mt-1'}
+              >
+                <option value="">Rails: inherit ({name(inherited)})</option>
+                <option value="horizontal">Rails: flat (horizontal)</option>
+                <option value="vertical">Rails: on edge (vertical)</option>
+              </select>
+            )
+          })()}
         </div>
         {(cabinet.assembly_class === 'base' || cabinet.assembly_class === 'tall' ||
           cabinet.assembly_class === 'base_corner' || cabinet.assembly_class === 'tall_corner') && (

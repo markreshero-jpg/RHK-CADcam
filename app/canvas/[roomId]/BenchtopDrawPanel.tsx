@@ -7,12 +7,15 @@
 // previews; Enter places the point (the final point commits the
 // benchtop). Rectangle = Width / Depth; the others = Length /
 // Angle of the side being drawn, plus Depth for L / U.
+// Line + offset (Phase 7c) = Length / Angle of the back line, then
+// the Depth pulled off it.
 // ============================================================
 
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { evalCalc } from '@/src/lib/calc'
 import type { Pt } from '@/src/lib/geometry'
 import type { Mode } from './canvasTypes'
+import { offsetFromLine } from '@/src/lib/benchtopJoinTops'
 
 type Vals = { len?: number; ang?: number; w?: number; d?: number }
 type FieldKey = 'w' | 'd' | 'len' | 'ang' | 'depth'
@@ -21,10 +24,12 @@ export interface BenchtopDrawPanelHandle { focusFirst: () => void }
 
 const TITLES: Partial<Record<Mode, string>> = {
   draw_benchtop_rect: 'Rectangle', draw_benchtop: 'Polygon', draw_benchtop_l: 'L-shape', draw_benchtop_u: 'U-shape',
+  draw_benchtop_line: 'Line + offset',
 }
 const STEP_NAMES: Partial<Record<Mode, string[]>> = {
   draw_benchtop_l: ['First leg', 'Second leg'],
   draw_benchtop_u: ['Arm 1', 'Back', 'Arm 2'],
+  draw_benchtop_line: ['Back line', 'Depth'],
 }
 
 const BenchtopDrawPanel = forwardRef<BenchtopDrawPanelHandle, {
@@ -32,22 +37,26 @@ const BenchtopDrawPanel = forwardRef<BenchtopDrawPanelHandle, {
   anchor: Pt | null
   cursor: Pt | null
   pointCount: number
+  /** Line tool: the back line, once both ends are placed. */
+  lineBase?: [Pt, Pt] | null
   depth: number
   setDepth: (d: number) => void
   onPreview: (v: Vals) => void
   onPlace: (v: Vals) => void
   onClosePolygon: () => void
   onCancel: () => void
-}>(function BenchtopDrawPanel({ mode, anchor, cursor, pointCount, depth, setDepth, onPreview, onPlace, onClosePolygon, onCancel }, ref) {
+}>(function BenchtopDrawPanel({ mode, anchor, cursor, pointCount, lineBase, depth, setDepth, onPreview, onPlace, onClosePolygon, onCancel }, ref) {
   const isRect = mode === 'draw_benchtop_rect'
   const hasDepth = mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u'
+  const lineDepth = mode === 'draw_benchtop_line' && !!lineBase
   const fields: FieldKey[] = !anchor
     ? (hasDepth ? ['depth'] : [])
-    : isRect ? ['w', 'd'] : hasDepth ? ['len', 'ang', 'depth'] : ['len', 'ang']
+    : isRect ? ['w', 'd'] : lineDepth ? ['d'] : hasDepth ? ['len', 'ang', 'depth'] : ['len', 'ang']
 
   const live: Record<FieldKey, number> = {
     w: anchor && cursor ? Math.round(Math.abs(cursor.x - anchor.x)) : 0,
-    d: anchor && cursor ? Math.round(Math.abs(cursor.y - anchor.y)) : 0,
+    d: lineDepth && cursor ? Math.round(Math.abs(offsetFromLine(lineBase![0], lineBase![1], cursor)))
+      : anchor && cursor ? Math.round(Math.abs(cursor.y - anchor.y)) : 0,
     len: anchor && cursor ? Math.round(Math.hypot(cursor.x - anchor.x, cursor.y - anchor.y)) : 0,
     ang: anchor && cursor ? Math.round(Math.atan2(cursor.y - anchor.y, cursor.x - anchor.x) * 1800 / Math.PI) / 10 : 0,
     depth,
@@ -145,7 +154,7 @@ const BenchtopDrawPanel = forwardRef<BenchtopDrawPanelHandle, {
         {anchor && (
           <button onClick={() => { commitDepth(); onPlace(current()) }}
             className="w-full bg-teal-700 hover:bg-teal-600 text-white text-xs font-semibold py-1.5 rounded transition-colors">
-            {isRect || (mode === 'draw_benchtop_l' && pointCount >= 2) || (mode === 'draw_benchtop_u' && pointCount >= 3)
+            {isRect || lineDepth || (mode === 'draw_benchtop_l' && pointCount >= 2) || (mode === 'draw_benchtop_u' && pointCount >= 3)
               ? 'Place benchtop ↵' : 'Place point ↵'}
           </button>
         )}
@@ -158,6 +167,11 @@ const BenchtopDrawPanel = forwardRef<BenchtopDrawPanelHandle, {
         <p className="text-xs text-gray-600 leading-relaxed">
           Tab between fields · Enter to place · Esc to cancel{isRect ? ' · direction follows the mouse' : ''}
         </p>
+        {mode === 'draw_benchtop_line' && (
+          <p className="text-[10px] text-gray-600 leading-relaxed">
+            Click both ends of the back line on the wall (any angle), then pull the depth off it — or type it. It goes to the side the mouse is on.
+          </p>
+        )}
         {hasDepth && (
           <p className="text-[10px] text-gray-600 leading-relaxed">
             Lengths run along the front (inside) edge you click; the depth goes behind it.

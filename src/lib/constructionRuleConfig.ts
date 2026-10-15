@@ -23,6 +23,7 @@ export const RULE_LABELS: Record<RuleKey, string> = {
   SCRT:    'Scribe Top (mm)',
   TOP_TYPE:'Top Type',
   RD:      'Rail Depth (mm)',
+  RAIL_ORIENT: 'Rail Orientation',
   ADJSB_F: 'Adj. Shelf Front Setback (mm)',
   ADJSB_B: 'Adj. Shelf Back Setback (mm)',
   ADJSL:   'Adj. Shelf Left Notch (mm)',
@@ -63,7 +64,7 @@ export const RULE_LABELS: Record<RuleKey, string> = {
 export const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Toe Kick',           keys: ['TOEH', 'TOE_TYPE', 'TOEFC', 'TOESP', 'TOESCF', 'TOESCB', 'TOESCL', 'TOESCR'] },
   { label: 'Case Scribes',       keys: ['SCRBK', 'SCRBT', 'SCRL', 'SCRR', 'SCRT'] },
-  { label: 'Top Rail',           keys: ['TOP_TYPE', 'RD'] },
+  { label: 'Top Rail',           keys: ['TOP_TYPE', 'RD', 'RAIL_ORIENT'] },
   { label: 'Adjustable Shelves', keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR', 'ADJ_DRILL', 'ADJ_ROWS'] },
   { label: 'Fixed Shelves',      keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },

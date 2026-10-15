@@ -3,6 +3,7 @@ import { Wall, CabinetInstance } from '@/src/lib/types'
 import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide, type RoomRef } from '@/src/lib/geometry'
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
+import { kickChain, type KickSpan } from '@/src/lib/kickDims'
 
 interface Props {
   wall: Wall
@@ -14,6 +15,9 @@ interface Props {
   layerOverall: LayerConfig
   layerBase: LayerConfig
   layerWallCab: LayerConfig
+  /** Kick chain + kick depth dims (`dim_kicks`); spans from kickPlanSpans. */
+  layerKick?: LayerConfig
+  kickSpans?: KickSpan[]
   /** Label backing-chip colour — the view background (layer set). */
   labelBg?: string
 }
@@ -115,7 +119,7 @@ function DimLine({
 // back sits on the outer face). endClear (model mm) is the thickness of the return
 // wall joined at this end, so the dim sits past it rather than inside it.
 function DepthDim({
-  wall, inward, tPos, dz, zoom, col, sign, backOffset = 0, endClear = 0, lane = 0, weight = 1, bg = '#030712', opacity = 1,
+  wall, inward, tPos, dz, zoom, col, sign, backOffset = 0, endClear = 0, lane = 0, extra = 0, weight = 1, bg = '#030712', opacity = 1,
 }: {
   wall: Wall
   inward: { x: number; y: number }
@@ -130,6 +134,7 @@ function DepthDim({
   backOffset?: number
   endClear?: number
   lane?: number      // 0 = nearest the wall end; each lane steps one dimStep further out
+  extra?: number     // layer offset (mm) on top of the lane position
 }) {
   const wd = wallDir(wall)
   const z = zoom
@@ -137,7 +142,9 @@ function DepthDim({
   const fs = 12 / z
   const tickH = 6 / z
 
-  const off = endClear + dimStep(z) * (1 + lane)
+  // Half-step lanes: a return wall's chain rows sit whole steps out from this
+  // wall's end, so the depth dims fall between them instead of on top.
+  const off = endClear + dimStep(z) * (0.5 + lane) + extra
   const offX = wd.x * sign * off
   const offY = wd.y * sign * off
 
@@ -170,7 +177,7 @@ function DepthDim({
 
 export default function WallDimensionChain({
   wall, walls, cabinets, rc, zoom, selected,
-  layerOverall, layerBase, layerWallCab, labelBg = '#030712',
+  layerOverall, layerBase, layerWallCab, layerKick, kickSpans = [], labelBg = '#030712',
 }: Props) {
   const inward = wallInwardNormal(wall, rc)
   const out = { x: -inward.x, y: -inward.y }
@@ -208,8 +215,14 @@ export default function WallDimensionChain({
     wallCabs: CabinetInstance[],
     depthOffset: number,
     backOffset = 0,
+    kicks: KickSpan[] = [],
   ) {
     const baseSegs = computeChain(baseCabs, wall)
+    // Kick row sits between the base row and the overall, which steps out past it.
+    const showKicks = !!layerKick?.visible && kicks.length > 0
+    const kickSegs = showKicks ? kickChain(kicks, wall.length) : []
+    const kickCol = layerKick?.color ?? col
+    const kick0 = kicks[0], kickL = kicks[kicks.length - 1]
     const wallCabSegs = computeChain(wallCabs, wall)
     const overallSeg: Seg[] = [{ from: 0, to: wall.length, label: Math.round(wall.length) }]
     const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
@@ -218,31 +231,46 @@ export default function WallDimensionChain({
     const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
 
     const step = dimStep(z)
+    // Layer offsets (mm). Each row moves out by its own offset plus every row inside
+    // it, so pushing one row out never lands it on the next.
+    const oW = layerWallCab.offset ?? 0, oB = layerBase.offset ?? 0
+    const oK = showKicks ? (layerKick?.offset ?? 0) : 0, oO = layerOverall.offset ?? 0
+    const rW = oW, rB = rW + oB, rK = rB + oK, rO = rK + oO
 
     return (
       <g key={key}>
         {/* Wall-parallel chain lines */}
         {layerWallCab.visible && wallCabs.length > 0 && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step} segs={wallCabSegs} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step + rW} segs={wallCabSegs} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} bg={labelBg} />
         )}
         {layerBase.visible && baseCabs.length > 0 && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * 2} segs={baseSegs} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * 2 + rB} segs={baseSegs} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} bg={labelBg} />
+        )}
+        {showKicks && (
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * 3 + rK} segs={kickSegs} zoom={z} col={kickCol} weight={layerKick!.weight} opacity={layerKick!.opacity} bg={labelBg} />
         )}
         {layerOverall.visible && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * 3} segs={overallSeg} zoom={z} col={layerOverall.color ?? col} weight={layerOverall.weight} opacity={layerOverall.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * (showKicks ? 4 : 3) + rO} segs={overallSeg} zoom={z} col={layerOverall.color ?? col} weight={layerOverall.weight} opacity={layerOverall.opacity} bg={labelBg} />
+        )}
+        {/* Kick depth (wall face → kick face) at the wall ends, outside the cabinet depth lanes */}
+        {showKicks && (
+          <>
+            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={kick0.depth} zoom={z} col={kickCol} weight={layerKick!.weight} opacity={layerKick!.opacity} sign={-1} backOffset={backOffset} lane={2} extra={oK} endClear={clear0} bg={labelBg} />
+            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={kickL.depth} zoom={z} col={kickCol} weight={layerKick!.weight} opacity={layerKick!.opacity} sign={1} backOffset={backOffset} lane={2} extra={oK} endClear={clearL} bg={labelBg} />
+          </>
         )}
 
         {/* Perpendicular depth dimensions at wall ends */}
         {layerBase.visible && baseDz > 0 && (
           <>
-            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={baseDz} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} sign={-1} backOffset={backOffset} endClear={clear0} bg={labelBg} />
-            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={baseDz} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} sign={1} backOffset={backOffset} endClear={clearL} bg={labelBg} />
+            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={baseDz} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} sign={-1} backOffset={backOffset} extra={oB} endClear={clear0} bg={labelBg} />
+            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={baseDz} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} sign={1} backOffset={backOffset} extra={oB} endClear={clearL} bg={labelBg} />
           </>
         )}
         {layerWallCab.visible && showWallDepthSeparate && (
           <>
-            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={wallDz} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} sign={-1} backOffset={backOffset} lane={1} endClear={clear0} bg={labelBg} />
-            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={wallDz} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} sign={1} backOffset={backOffset} lane={1} endClear={clearL} bg={labelBg} />
+            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={wallDz} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} sign={-1} backOffset={backOffset} lane={1} extra={oW} endClear={clear0} bg={labelBg} />
+            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={wallDz} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} sign={1} backOffset={backOffset} lane={1} extra={oW} endClear={clearL} bg={labelBg} />
           </>
         )}
       </g>
@@ -255,13 +283,15 @@ export default function WallDimensionChain({
   const outBase = allBase.filter(c => cabWallSide(c, wall) === 'back')
   const inWall  = allWall.filter(c => cabWallSide(c, wall) === 'face')
   const outWall = allWall.filter(c => cabWallSide(c, wall) === 'back')
+  const inKicks  = kickSpans.filter(k => k.side === 'face')
+  const outKicks = kickSpans.filter(k => k.side === 'back')
   const hasIn  = inBase.length > 0 || inWall.length > 0
   const hasOut = outBase.length > 0 || outWall.length > 0
 
   // Perimeter wall with cabinets only on the room side (the common case): keep the
   // historic single chain on the empty outward side, depth dims pointing inward.
   if (!isIsland && !hasOut) {
-    return renderSide('main', out, inward, allBase, allWall, 0)
+    return renderSide('main', out, inward, allBase, allWall, 0, 0, kickSpans)
   }
 
   // Island, or a perimeter wall that now has back-side cabinets: draw each occupied
@@ -271,8 +301,8 @@ export default function WallDimensionChain({
   const outBackOffset = isIsland ? 0 : wall.thickness
   return (
     <g>
-      {hasIn && renderSide('in', inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]))}
-      {(hasOut || !hasIn) && renderSide('out', out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset)}
+      {hasIn && renderSide('in', inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]), 0, inKicks)}
+      {(hasOut || !hasIn) && renderSide('out', out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, outKicks)}
     </g>
   )
 }

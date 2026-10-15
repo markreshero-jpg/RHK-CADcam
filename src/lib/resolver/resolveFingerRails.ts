@@ -23,7 +23,7 @@
 // into the panels' outlines so every view shows them; seamDrillSync routes
 // them and drills the knock-in block holes.
 // Off with rule FPRAIL = false (job / room / cabinet rule_overrides).
-// Box-front cabinets only: shaped (footprint) cabinets get no rails yet.
+// Box-front cabinets only: shaped (footprint) cabinets use resolveShapedFingerRails.
 // ============================================================
 
 import type {
@@ -180,7 +180,7 @@ export function fingerRailParts(_cab: CabinetInput, r: ConstructionRules, rails:
 export function pushFrontRailBack(caseParts: ResolvedCasePart[], rails: FingerRail[]): void {
   const front = caseParts.find(p => p.part_key === 'front_rail')
   if (!front) return
-  const frontTop = front.Y + front.DZ
+  const frontTop = front.Y + (front.upright ? front.DX : front.DZ)   // on edge: RD tall
   const topRail = rails.find(rl => rl.top >= frontTop - EPS && rl.bottom < frontTop)
   if (topRail) front.Z -= topRail.thickness
 }

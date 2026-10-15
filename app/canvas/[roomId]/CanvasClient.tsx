@@ -10,10 +10,12 @@ import {
   wallEnd, wallDir,
   snapAngle,
   nearestWall, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabT, nextLabel,
-  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint,
+  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint, cabWallSpan,
 } from '@/src/lib/geometry'
+import { angledFillerSnap } from '@/src/lib/cabinetShape/angledFillerSnap'
 import { waterfallLegs, waterfallOccupancy } from '@/src/lib/waterfallObstacles'
-import { btSegments, effectiveProfileId } from '@/src/lib/benchtopGeometry'
+import { crossWallCabinetOccupancy } from '@/src/lib/cabinetObstacles'
+import { btSegments, effectiveProfileId, transformBenchtop, translateFn } from '@/src/lib/benchtopGeometry'
 import { btPosition, wallFrame, btOverhangs } from '@/src/lib/benchtopAnchor'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
 import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
@@ -59,6 +61,9 @@ import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
 import BenchtopDrawPanel, { type BenchtopDrawPanelHandle } from './BenchtopDrawPanel'
 import WallDrawPanel from './WallDrawPanel'
 import WallPanel from './WallPanel'
+import MultiWallPanel from './MultiWallPanel'
+import WallDetachModal, { type WallDetachChoice } from './WallDetachModal'
+import { detachedNeighbours, connectedWallIds, stretchNeighbour, type DetachedNeighbour } from '@/src/lib/wallJoints'
 import CabinetPanel from './CabinetPanel'
 import CabinetGroupPanel from './CabinetGroupPanel'
 import CabinetResizePanel from './CabinetResizePanel'
@@ -71,6 +76,7 @@ import ReportsModal, { type ReportScope } from './ReportsModal'
 import Room3DScene, { type Camera3DState } from './Room3DScene'
 import BenchtopPanel from './BenchtopPanel'
 import BenchtopShapeEditPanel, { SaveShapePrompt } from './BenchtopShapeEditPanel'
+import BenchtopJoinDialog from './BenchtopJoinDialog'
 import BenchtopEdgeEditPanel from './BenchtopEdgeEditPanel'
 import { edgeTape } from '@/src/lib/benchtopEdgeband'
 import { useBenchtopCatalog } from './useBenchtopCatalog'
@@ -145,8 +151,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [cabMoveDrag, setCabMoveDrag] = useState<CabMoveDrag | null>(null)
   const [cabFollowing, setCabFollowing] = useState<{ id: string; assemblyClass: string } | null>(null)
   const [multiSelect, setMultiSelect] = useState<string[]>([])
+  // Box / Shift+click wall selection. `selected` holds one of these walls;
+  // any other selection drops the set (effect below).
+  const [multiWalls, setMultiWalls] = useState<string[]>([])
+  useEffect(() => {
+    if (multiWalls.length && !(selected?.type === 'wall' && multiWalls.includes(selected.id))) setMultiWalls([])
+  }, [selected, multiWalls])
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
-  const [deleteWallPending, setDeleteWallPending] = useState<string | null>(null)
+  const [deleteWallPending, setDeleteWallPending] = useState<string[] | null>(null)
   const [deleteCabsPending, setDeleteCabsPending] = useState<string[] | null>(null)
   const [splitCabId, setSplitCabId] = useState<string | null>(null)
   const [saveLibCabId, setSaveLibCabId] = useState<string | null>(null)
@@ -166,6 +178,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [clipboardGroup, setClipboardGroup] = useState<CabinetInstance[]>([])
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const [wallMenuOpen, setWallMenuOpen] = useState(false)
+  const wallMenuOpenRef = useRef(false)
+  wallMenuOpenRef.current = wallMenuOpen
   const [cabMenuOpen, setCabMenuOpen] = useState(false)
   const [drawHeight, setDrawHeight] = useState<number | null>(null)
   const [sidebarW, setSidebarW] = useState(192)
@@ -291,6 +305,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const placingRef = useRef(false)
   const sidebarResizeRef = useRef<{ startX: number; startW: number } | null>(null)
   const marqueeStartRef = useRef<Pt | null>(null)
+  // Dragging the selected wall(s): everything sitting on them (cabinets, the
+  // benchtops anchored to them, wall fixtures) moves by the same delta.
+  // `base` holds the pre-drag copies so each move re-applies from the start.
+  const wallDragRef = useRef<{
+    ids: string[]; start: Pt; startPx: Pt; active: boolean; clickedId: string
+    base: { walls: Wall[]; cabs: CabinetInstance[]; bts: BenchtopInstance[]; fxs: RoomFixture[] }
+  } | null>(null)
+  type WallDrag = NonNullable<typeof wallDragRef.current>
+  // A drop that pulled walls off walls joined to them waits here for the user's choice.
+  const [wallDetach, setWallDetach] = useState<{ d: WallDrag; dx: number; dy: number; pre: Wall[]; neighbours: DetachedNeighbour[]; canStretch: boolean } | null>(null)
   // Tracks whether a pointerdown actually fired on the SVG — guards against phantom
   // pointerup events that arrive when Next.js mounts the canvas mid-navigation-click.
   const svgPointerDownRef = useRef(false)
@@ -319,6 +343,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     snapSettings, setSnapResult,
     defaultJoinType: b => btCatalog.methodFor(b)?.default_join_type ?? 'butt',
   })
+  const benchtopMenuOpenRef = useRef(false)
+  benchtopMenuOpenRef.current = bt.benchtopMenuOpen
 
   // F4 Benchtop mode owns selection: entering it drops a cabinet / wall
   // selection, leaving it drops a benchtop one (adjusted during render, so no
@@ -369,8 +395,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   // Waterfall legs block cabinets (place / move / stretch) like another unit would.
   const wfLegs = waterfallLegs(benchtops, btInfo, btCatalog.profileById)
-  const wfOcc = (w: Wall, side: 'face' | 'back', mover: { assembly_class: string; dy: number; dz?: number }) =>
-    waterfallOccupancy(wfLegs, w, side, centroid(walls), room, mover)
+  // So do cabinets on other walls that reach into this wall's floor space (a
+  // corner unit's depth, an L corner's return leg) — by their real outline.
+  const wfOcc = (w: Wall, side: 'face' | 'back', mover: { id?: string; assembly_class: string; dy: number; dz?: number }) => [
+    ...waterfallOccupancy(wfLegs, w, side, centroid(walls), room, mover),
+    ...crossWallCabinetOccupancy(cabinets, walls, w, side, centroid(walls), room, mover),
+  ]
 
   // F4 → Draw in Shape Editor. Starting outline = the selected base cabinets'
   // plan outlines merged, fronts (angled facets too) pushed out by the front
@@ -508,14 +538,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         endWallChain(); return
       }
       // Benchtop quick-draw: Tab jumps into the size fields (BenchtopDrawPanel).
-      if (e.key === 'Tab' && (mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u') && !isInput(e.target)) {
+      if (e.key === 'Tab' && (mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u' || mode === 'draw_benchtop_line') && !isInput(e.target)) {
         e.preventDefault(); btDrawPanelRef.current?.focusFirst()
       }
-      // F2 / F3 / F4 behave identically: open / close that sidebar section only.
-      // A section lights up once one of its tools is picked (z_sidebar spec §2).
+      // F2 opens the Wall section with Standard Wall armed; pressing it again
+      // closes the section and leaves the wall tool. F4 does the same with
+      // Select Tops; F3 only opens / closes its section (z_sidebar spec §7).
       if (e.key === 'F2' && !isInput(e.target)) {
         e.preventDefault()
-        setWallMenuOpen(v => !v)
+        if (!wallMenuOpenRef.current) {
+          setWallMenuOpen(true)
+          if (canvasView !== 'plan') switchView('plan')
+          if (mode !== 'draw_wall') onSelectMode('draw_wall')
+        } else {
+          setWallMenuOpen(false)
+          if (mode === 'draw_wall' || mode === 'draw_island') { endWallChain(); setMode('select') }
+        }
       }
       if (e.key === 'F3' && !isInput(e.target)) {
         e.preventDefault()
@@ -523,7 +561,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       }
       if (e.key === 'F4' && !isInput(e.target)) {
         e.preventDefault()
-        bt.setBenchtopMenuOpen(v => !v)
+        // F4 opens the Benchtop section with Select Tops armed; pressing it
+        // again closes the section and drops back to cabinet select.
+        if (!benchtopMenuOpenRef.current) {
+          bt.setBenchtopMenuOpen(true)
+          if (mode !== 'benchtop_select') onSelectMode('benchtop_select')
+        } else {
+          bt.setBenchtopMenuOpen(false)
+          if (isBenchtopMode(mode)) { bt.resetDraw(); setMode('select') }
+        }
       }
       // F6 Fixtures & appliances (z_fixtures). R turns a free-floating carried item;
       // M picks up the selected fixture.
@@ -584,7 +630,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku)
     return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku) }
-  }, [selected, mode, bt.shapeEdit, bt.shapeStretch])
+  }, [selected, multiWalls, mode, canvasView, bt.shapeEdit, bt.shapeStretch])
 
   // Copy / cut / paste cabinets via keyboard (works for single or multi-select).
   // Separate from the keydown effect above so it re-binds with fresh selection /
@@ -613,23 +659,23 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // ── Actions ───────────────────────────────────────────────────────────────
 
   function handleDeleteWall(id: string) {
-    setDeleteWallPending(id)
+    setDeleteWallPending(multiWalls.length >= 2 && multiWalls.includes(id) ? multiWalls : [id])
     setContextMenu(null)
   }
 
   async function confirmDeleteWall() {
     if (!deleteWallPending) return
     captureSnapshot()
-    const id = deleteWallPending
+    const ids = deleteWallPending
     setDeleteWallPending(null)
-    setWalls(ws => ws.filter(w => w.id !== id))
-    setCabinets(cs => cs.filter(c => c.wall_id !== id))
+    setWalls(ws => ws.filter(w => !ids.includes(w.id)))
+    setCabinets(cs => cs.filter(c => !(c.wall_id && ids.includes(c.wall_id))))
     // FK sets the anchor null; the benchtop hook re-anchors the top to another wall.
-    setBenchtops(bs => bs.map(b => b.wall_id === id ? { ...b, wall_id: null } : b))
-    setSelected(null)
+    setBenchtops(bs => bs.map(b => b.wall_id && ids.includes(b.wall_id) ? { ...b, wall_id: null } : b))
+    setSelected(null); setMultiWalls([])
     // Cabinets must be deleted first — wall delete fails with FK violation if they exist
-    await supabase.from('cabinet_instances').delete().eq('wall_id', id)
-    await dbDeleteWall(id)
+    await supabase.from('cabinet_instances').delete().in('wall_id', ids)
+    for (const id of ids) await dbDeleteWall(id)
   }
 
   const handleUpdateWall = useCallback(async (id: string, u: Partial<Wall>) => {
@@ -829,6 +875,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       label: nextLabel(cabinets, draft.assembly_class),
       pos_x, pos_y, rotation: islandFlip ? wall.angle + 180 : wall.angle,
       dx: dxOverride != null && dxOverride > 0 ? Math.round(dxOverride) : draft.dx,
+    }
+    // Angled corner filler (z_angled_filler A3): drop into the nearer inside
+    // corner of the wall, angle + hand from the wall joined there. Its box comes
+    // from the shape, never a gap fit.
+    if (draft.footprint?.preset === 'angled_filler') {
+      data.dx = draft.dx
+      if (!islandFlip) {
+        const wd = wallDir(wall)
+        const snap = angledFillerSnap(draft, wall, walls, centroid(walls), (pos_x - wall.pos_x) * wd.x + (pos_y - wall.pos_y) * wd.y)
+        if (snap) Object.assign(data, snap)
+        else setToast('No angled inside corner at this wall — placed as drawn (set the wall angle in Shape)')
+      }
     }
     const cabinet = await dbInsertCabinet(data)
     if (cabinet) {
@@ -1201,7 +1259,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (mode === 'place_fixture') { e.preventDefault(); svgRef.current.setPointerCapture(e.pointerId); return }
     // Benchtop draw tools finish on pointer-up (useBenchtopInteraction). Cutouts
     // and joins act on the selected benchtop, so they must not deselect here.
-    if (mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u'
+    if (mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u' || mode === 'draw_benchtop_line'
       || mode === 'draw_benchtop_cutout_rect' || mode === 'draw_benchtop_cutout_circle' || mode === 'draw_benchtop_join'
       || mode === 'move_benchtop') {
       e.preventDefault()
@@ -1347,6 +1405,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return
     }
 
+    if (wallDragRef.current) {
+      const d = wallDragRef.current
+      // Same 3px dead zone as cabinet drags so a click never nudges a wall.
+      if (!d.active && dist(svgP, d.startPx) < 3) return
+      if (!d.active) { captureSnapshot(); d.active = true }
+      let dx = wp.x - d.start.x, dy = wp.y - d.start.y
+      if (ctrlRef.current) { if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0 }   // Ctrl = ortho
+      applyWallDrag(d, dx, dy, false)
+      return
+    }
+
     if (marqueeStartRef.current && mode === 'select') {
       setMarquee({ x1: marqueeStartRef.current.x, y1: marqueeStartRef.current.y, x2: wp.x, y2: wp.y })
     }
@@ -1358,11 +1427,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const { cabId, assemblyClass, wall, cabDX, dragOffset } = cabDragRef.current
         const wd = wallDir(wall)
         const cursorT = (wp.x - wall.pos_x) * wd.x + (wp.y - wall.pos_y) * wd.y
-        const desired = Math.max(0, Math.min(wall.length - cabDX, cursorT - dragOffset))
         const dragCab = cabinets.find(c => c.id === cabId)
+        // Clamp on the stretch of wall the cabinet stands on (an angled corner
+        // filler's other leg stands past the wall's end — z_angled_filler).
+        const sp = dragCab ? cabWallSpan(dragCab, wall, cabWallPerp(dragCab, wall, wallInwardNormal(wall, centroid(walls)))) : { lo: 0, hi: cabDX }
+        const desired = Math.max(-sp.lo, Math.min(wall.length - sp.hi, cursorT - dragOffset))
         const dragSide = dragCab ? cabWallSide(dragCab, wall) : 'face'
         const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(dragCab ?? { assembly_class: assemblyClass, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === dragSide).map(c => ({ t: cabT(c, wall), dx: c.dx })).concat(wfOcc(wall, dragSide, dragCab ?? { assembly_class: assemblyClass, dy: 9999 }))
-        const t = slideToFreeSlot(desired, cabDX, wall.length, occupied, dragCab ? cabT(dragCab, wall) : undefined)
+        const t = slideToFreeSlot(desired + sp.lo, sp.hi - sp.lo, wall.length, occupied, dragCab ? cabT(dragCab, wall) + sp.lo : undefined) - sp.lo
         const cxp = centroid(walls)
         const a = wallAnchorPoint(wall, t, dragSide === 'back', cxp)
         setCabDrag({ id: cabId, pos_x: a.x, pos_y: a.y })
@@ -1384,7 +1456,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           const occupied = cabinets.filter(c => c.id !== id && c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(cab, c, raw.wall, room) && cabWallSide(c, raw.wall) === moveSide).map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, moveSide, cab))
           // Same-wall move → keep it on the drag side (no bounce-back); cross-wall → free slot.
           const origT = raw.wall.id === cab.wall_id ? cabT(cab, raw.wall) : undefined
-          const t = slideToFreeSlot(desired, cab.dx, raw.wall.length, occupied, origT)
+          const inw = wallInwardNormal(raw.wall, centroid(walls))
+          const sp = cabWallSpan(cab, raw.wall, flip ? { x: -inw.x, y: -inw.y } : inw)
+          const t = slideToFreeSlot(Math.max(0, desired + sp.lo), sp.hi - sp.lo, raw.wall.length, occupied, origT != null ? origT + sp.lo : undefined) - sp.lo
           const cxp = centroid(walls)
           const a = wallAnchorPoint(raw.wall, t, flip, cxp)
           setCabMoveDrag({ id, wall: raw.wall, pos_x: a.x, pos_y: a.y, islandFlip: flip, freePos: wp })
@@ -1447,6 +1521,30 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
     const svgP = svgCoords(e)
     const wp = toWorld(svgP.x, svgP.y)
+
+    if (wallDragRef.current) {
+      const d = wallDragRef.current
+      wallDragRef.current = null
+      if (!d.active) {
+        // Plain click on a member of the set → just that wall.
+        setSelected({ type: 'wall', id: d.clickedId }); setMultiWalls([])
+        return
+      }
+      let dx = wp.x - d.start.x, dy = wp.y - d.start.y
+      if (ctrlRef.current) { if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0 }
+      dx = Math.round(dx); dy = Math.round(dy)
+      // Pre-drag walls: state already holds the live-moved copies.
+      const pre = walls.map(w => d.base.walls.find(b => b.id === w.id) ?? w)
+      const neighbours = (dx || dy) ? detachedNeighbours(pre, d.ids) : []
+      if (neighbours.length) {
+        await applyWallDrag(d, dx, dy, false)
+        const canStretch = neighbours.every(n => stretchNeighbour(pre.find(w => w.id === n.id)!, n, dx, dy))
+        setWallDetach({ d, dx, dy, pre, neighbours, canStretch })
+        return
+      }
+      await applyWallDrag(d, dx, dy, true)
+      return
+    }
 
     if (await bt.handlePointerUp(wp)) return
     if (await fx.handlePointerUp(wp, shiftRef.current)) return
@@ -1584,6 +1682,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (widthPx > 5 || heightPx > 5) {
         const minX = Math.min(start.x, wp.x), maxX = Math.max(start.x, wp.x)
         const minY = Math.min(start.y, wp.y), maxY = Math.max(start.y, wp.y)
+        const inBox = (p: Pt) => p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY
+        // Walls fully inside the box take the selection (a box round a room
+        // means the walls); otherwise it picks the cabinets it encloses.
+        const wallIds = walls.filter(w => inBox({ x: w.pos_x, y: w.pos_y }) && inBox(wallEnd(w))).map(w => w.id)
+        if (wallIds.length) {
+          setSelected({ type: 'wall', id: wallIds[0] })
+          setMultiWalls(wallIds.length >= 2 ? wallIds : [])
+          return
+        }
         const cxpt = centroid(walls)
         const ids = cabinets.filter(cab => {
           const wall = walls.find(w => w.id === cab.wall_id)
@@ -1605,15 +1712,115 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }
 
+  // Translate the dragged walls and what sits on them from their pre-drag
+  // copies. Live moves only touch state; `persist` writes the final delta.
+  // Joints to walls outside the drag are left where they are (they come apart).
+  async function applyWallDrag(d: NonNullable<typeof wallDragRef.current>, dx: number, dy: number, persist: boolean) {
+    const { base } = d
+    const wMap = new Map(base.walls.map(w => [w.id, { pos_x: w.pos_x + dx, pos_y: w.pos_y + dy }]))
+    const cMap = new Map(base.cabs.map(c => [c.id, { pos_x: c.pos_x + dx, pos_y: c.pos_y + dy }]))
+    const fn = translateFn(dx, dy)
+    const bMap = new Map(base.bts.map(b => [b.id, transformBenchtop(b, fn)]))
+    const xMap = new Map(base.fxs.map(x => [x.id, { x: x.x + dx, y: x.y + dy }]))
+    setWalls(ws => ws.map(w => wMap.has(w.id) ? { ...w, ...wMap.get(w.id)! } : w))
+    setCabinets(cs => cs.map(c => cMap.has(c.id) ? { ...c, ...cMap.get(c.id)! } : c))
+    setBenchtops(bs => bs.map(b => bMap.has(b.id) ? { ...b, ...bMap.get(b.id)! } : b))
+    setFixtures(xs => xs.map(x => xMap.has(x.id) ? { ...x, ...xMap.get(x.id)! } : x))
+    if (!persist || (!dx && !dy)) return
+    await Promise.all([
+      ...[...wMap].map(([id, u]) => dbUpdateWall(id, u)),
+      ...[...cMap].map(([id, u]) => dbUpdateCabinet(id, u)),
+      // Direct writes: the hooks' update helpers each take their own undo
+      // snapshot, which would split one drag into several undo steps.
+      ...[...bMap].map(async ([id, u]) => { const { error } = await supabase.from('benchtop_instances').update(u).eq('id', id); if (error) console.error(error) }),
+      ...[...xMap].map(async ([id, u]) => { const { error } = await supabase.from('room_fixtures').update({ ...u, updated_at: new Date().toISOString() }).eq('id', id); if (error) console.error(error) }),
+    ])
+  }
+
+  async function resolveWallDetach(choice: WallDetachChoice) {
+    const p = wallDetach
+    if (!p) return
+    setWallDetach(null)
+    const { d, dx, dy, pre } = p
+    if (choice === 'cancel') { await applyWallDrag(d, 0, 0, false); return }
+    if (choice === 'detach') { await applyWallDrag(d, dx, dy, true); return }
+    if (choice === 'move_all') {
+      // Put the drag back, then move the whole joined group from its pre-drag state.
+      await applyWallDrag(d, 0, 0, false)
+      const ids = connectedWallIds(pre, d.ids)
+      const orig = <T extends { id: string }>(list: T[], base: T[]) => list.map(x => base.find(b => b.id === x.id) ?? x)
+      const cabs = orig(cabinets, d.base.cabs), bts = orig(benchtops, d.base.bts), fxs = orig(fixtures, d.base.fxs)
+      const all: WallDrag = { ...d, ids, base: {
+        walls: pre.filter(w => ids.includes(w.id)),
+        cabs: cabs.filter(c => c.wall_id && ids.includes(c.wall_id)),
+        bts: bts.filter(b => b.wall_id && ids.includes(b.wall_id)),
+        fxs: fxs.filter(x => x.wall_id && ids.includes(x.wall_id)),
+      } }
+      await applyWallDrag(all, dx, dy, true)
+      if (ids.length >= 2) { setSelected({ type: 'wall', id: d.clickedId }); setMultiWalls(ids) }
+      return
+    }
+    // stretch: moved walls go where they were dropped; each joined wall's
+    // joined end follows, and what sits on it turns with it about its free end.
+    await applyWallDrag(d, dx, dy, true)
+    const writes: PromiseLike<unknown>[] = []
+    for (const n of p.neighbours) {
+      const w = pre.find(x => x.id === n.id)!
+      const r = stretchNeighbour(w, n, dx, dy)
+      if (!r) continue
+      const cab = (c: CabinetInstance) => { const q = r.fn({ x: c.pos_x, y: c.pos_y }); return { pos_x: q.x, pos_y: q.y, rotation: c.rotation + r.turn } }
+      const fixt = (x: RoomFixture) => { const q = r.fn({ x: x.x, y: x.y }); return { x: q.x, y: q.y, rotation: x.rotation + r.turn } }
+      const cMap = new Map(cabinets.filter(c => c.wall_id === w.id).map(c => [c.id, cab(c)]))
+      const bMap = new Map(benchtops.filter(b => b.wall_id === w.id).map(b => [b.id, transformBenchtop(b, r.fn)]))
+      const xMap = new Map(fixtures.filter(x => x.wall_id === w.id).map(x => [x.id, fixt(x)]))
+      setWalls(ws => ws.map(x => x.id === w.id ? { ...x, ...r.update } : x))
+      setCabinets(cs => cs.map(c => cMap.has(c.id) ? { ...c, ...cMap.get(c.id)! } : c))
+      setBenchtops(bs => bs.map(b => bMap.has(b.id) ? { ...b, ...bMap.get(b.id)! } : b))
+      setFixtures(xs => xs.map(x => xMap.has(x.id) ? { ...x, ...xMap.get(x.id)! } : x))
+      writes.push(dbUpdateWall(w.id, r.update))
+      for (const [id, u] of cMap) writes.push(dbUpdateCabinet(id, u))
+      for (const [id, u] of bMap) writes.push(supabase.from('benchtop_instances').update(u).eq('id', id).then(({ error }) => { if (error) console.error(error) }))
+      for (const [id, u] of xMap) writes.push(supabase.from('room_fixtures').update({ ...u, updated_at: new Date().toISOString() }).eq('id', id).then(({ error }) => { if (error) console.error(error) }))
+    }
+    await Promise.all(writes)
+  }
+
   function onWallPointerDown(e: React.PointerEvent, wallId: string) {
     const clickable = mode !== 'draw_wall' && mode !== 'draw_island' && mode !== 'paste' && !currentPlaceInfo()
     if (!clickable || e.button !== 0 || spaceRef.current) return
     e.stopPropagation()
     svgPointerDownRef.current = true
     setContextMenu(null); setOpenMenu(null)
-    setSelected({ type: 'wall', id: wallId })
     setCabResize(null)
     setMultiSelect([])
+    // Pressing a wall that's already selected (alone or in the set) arms a drag.
+    const inSet = multiWalls.length >= 2 && multiWalls.includes(wallId)
+    if (!e.shiftKey && (inSet || (selected?.type === 'wall' && selected.id === wallId))) {
+      const ids = inSet ? multiWalls : [wallId]
+      const svgP = svgCoords(e)
+      wallDragRef.current = {
+        ids, start: toWorld(svgP.x, svgP.y), startPx: svgP, active: false, clickedId: wallId,
+        base: {
+          walls: walls.filter(w => ids.includes(w.id)),
+          cabs: cabinets.filter(c => c.wall_id && ids.includes(c.wall_id)),
+          bts: benchtops.filter(b => b.wall_id && ids.includes(b.wall_id)),
+          fxs: fixtures.filter(x => x.wall_id && ids.includes(x.wall_id)),
+        },
+      }
+      svgRef.current?.setPointerCapture(e.pointerId)
+      return
+    }
+    // Shift+click adds / removes a wall from the multi-wall selection.
+    if (e.shiftKey && selected?.type === 'wall') {
+      const cur = multiWalls.length ? multiWalls : [selected.id]
+      const next = cur.includes(wallId) ? cur.filter(id => id !== wallId) : [...cur, wallId]
+      if (next.length === 0) { setSelected(null); setMultiWalls([]); return }
+      setSelected({ type: 'wall', id: next.includes(wallId) ? wallId : next[0] })
+      setMultiWalls(next.length >= 2 ? next : [])
+      return
+    }
+    setSelected({ type: 'wall', id: wallId })
+    setMultiWalls([])
   }
 
   function onCabinetPointerDown(e: React.PointerEvent, cab: CabinetInstance) {
@@ -1788,6 +1995,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const selectedWall      = selected?.type === 'wall'      ? walls.find(w => w.id === selected.id) ?? null      : null
+  const multiWallObjs = multiWalls.length >= 2 ? walls.filter(w => multiWalls.includes(w.id)) : []
   const selectedCab       = selected?.type === 'cabinet'   ? cabinets.find(c => c.id === selected.id) ?? null   : null
   const selectedBenchtop  = selected?.type === 'benchtop'  ? benchtops.find(b => b.id === selected.id) ?? null  : null
   const selectedFixture   = selected?.type === 'fixture'   ? fixtures.find(f => f.id === selected.id) ?? null   : null
@@ -1816,7 +2024,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   const cursor = spaceRef.current ? 'grab'
     : sectionDrag ? 'grabbing'
-    : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_section' || mode === 'measure' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_join' || mode === 'move_benchtop') ? 'crosshair'
+    : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_section' || mode === 'measure' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_line' || mode === 'draw_benchtop_join' || mode === 'move_benchtop') ? 'crosshair'
     : (currentPlaceInfo() || mode === 'paste') ? 'cell'
     : cabResize ? 'crosshair'
     : 'default'
@@ -1905,10 +2113,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   const modeHint =
     mode === 'draw_benchtop_rect'? (!bt.btRectStart ? 'Click first corner · Shift=45° · Ctrl=ortho' : 'Click opposite corner to finish · Esc=cancel · Ctrl=ortho')
+    : mode === 'draw_benchtop_line' ? (bt.btLinePts.length === 0 ? 'Line + offset: click the start of the back line on the wall · Shift = 45° · Ctrl = ortho · Esc = cancel' : bt.btLinePts.length === 1 ? 'Click the end of the back line · Tab = type length / angle' : 'Pull the depth off the line and click (snaps to cabinet fronts) · Tab = type the depth')
     : mode === 'draw_benchtop_l' ? (bt.btLPoints.length === 0 ? 'L-shape: click start of first leg · Ctrl=ortho · Esc=cancel' : bt.btLPoints.length === 1 ? 'Click inner corner · Ctrl=ortho' : 'Click end of second leg to complete L-shape')
     : mode === 'draw_benchtop_u' ? (['U-shape: click start of arm 1 · Ctrl=ortho · Esc=cancel', 'Click inner corner 1', 'Click inner corner 2', 'Click end of arm 2'][bt.btUPoints.length] ?? 'Click end of arm 2')
     : mode === 'draw_benchtop_cutout_rect' ? (!bt.btCutoutStart ? 'Cutout: click first corner of rectangle · Esc=cancel' : 'Click opposite corner to finish cutout')
-    : mode === 'benchtop_select' ? 'Benchtop mode: click a benchtop to select · right-click = Edit shape / Edit edges · double-click = Shape Editor · cabinets are locked · F4 / Esc = back to cabinets'
+    : mode === 'benchtop_select' && bt.btMulti.length >= 2 ? `${bt.btMulti.length} benchtops picked · right-click one = Join benchtops · Shift-click = add / remove · click = pick one`
+    : mode === 'benchtop_select' ? 'Benchtop mode: click a benchtop to select · Shift-click = pick several (then right-click = Join) · right-click = Edit shape / Edit edges · double-click = Shape Editor · cabinets are locked · F4 / Esc = back to cabinets'
     : mode === 'edit_benchtop_shape' ? (bt.shapeStretch ? 'Stretch: move the mouse (snaps) · click to place · or type the size in the panel · Esc = cancel the stretch'
       : 'Edit shape: click a line to stretch it · drag a line to move it · click a corner for X / Y · Shift-click a line = add corner · Enter = save · Esc = finish · Ctrl+Z = undo')
     : mode === 'edit_benchtop_edges' ? 'Edit edges: pick a chip in the panel, then click edges on the plan · click again = take it off · Alt-click = default · Enter = save · Esc = finish · Ctrl+Z = undo'
@@ -1942,6 +2152,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   const selectionInfo =
     multiSelect.length >= 2                             ? `${multiSelect.length} cabinets selected · right-click to equalize widths`
+    : multiWallObjs.length >= 2                         ? `${multiWallObjs.length} walls selected · drag to move · Shift+click to add/remove · Delete = remove`
     : selected?.type === 'wall'       && selectedWall       ? `${selectedWall.name} · ${Math.round(selectedWall.length)}mm · ${Math.round(selectedWall.angle)}°`
     : selected?.type === 'cabinet'    && selectedCab        ? `${selectedCab.assembly_class.replace(/_/g,' ')} · ${selectedCab.label ?? '—'} · ${selectedCab.dx}×${selectedCab.dy}×${selectedCab.dz}`
     : selected?.type === 'benchtop'   && selectedBenchtop   ? `Benchtop · ${selectedBenchtop.label ?? '—'} · ${selectedBenchtop.polygon.length} vertices · anchored to ${walls.find(w => w.id === selectedBenchtop.wall_id)?.name ?? '—'} · double-click to edit shape + edge profiles · move it from the panel (Position / Move…) · Delete = remove`
@@ -2132,6 +2343,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               cabDrag={cabDrag}
               cabResize={cabResize}
               multiSelect={multiSelect}
+              multiWalls={multiWalls}
               marquee={marquee}
               cursor={cursor}
               onPointerDown={onPointerDown}
@@ -2192,6 +2404,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               btLCursor={bt.btLCursor}
               btUPoints={bt.btUPoints}
               btUCursor={bt.btUCursor}
+              btLinePts={bt.btLinePts}
+              btLineCursor={bt.btLineCursor}
+              btMultiIds={bt.btMulti}
               btCutoutStart={bt.btCutoutStart}
               btCutoutCursor={bt.btCutoutCursor}
               sectionCut={sectionCut}
@@ -2247,13 +2462,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 )}
               </WallDrawPanel>
             )}
-            {(mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u') && !bt.btArcMode && (
+            {(mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_u' || mode === 'draw_benchtop_line') && !bt.btArcMode && (
               <BenchtopDrawPanel
                 ref={btDrawPanelRef}
                 mode={mode}
                 anchor={bt.drawAnchor()}
                 cursor={bt.drawCursor()}
-                pointCount={mode === 'draw_benchtop' ? bt.btDrawPoly.length : mode === 'draw_benchtop_l' ? bt.btLPoints.length : mode === 'draw_benchtop_u' ? bt.btUPoints.length : (bt.btRectStart ? 1 : 0)}
+                pointCount={mode === 'draw_benchtop' ? bt.btDrawPoly.length : mode === 'draw_benchtop_l' ? bt.btLPoints.length : mode === 'draw_benchtop_u' ? bt.btUPoints.length : mode === 'draw_benchtop_line' ? bt.btLinePts.length : (bt.btRectStart ? 1 : 0)}
+                lineBase={mode === 'draw_benchtop_line' && bt.btLinePts.length === 2 ? [bt.btLinePts[0], bt.btLinePts[1]] : null}
                 depth={bt.btDepth}
                 setDepth={bt.setBtDepth}
                 onPreview={bt.previewTyped}
@@ -2399,7 +2615,23 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           />
         )}
 
-        {mode !== 'draw_wall' && mode !== 'draw_island' && selectedWall && (canvasView === 'plan' || canvasView === 'elevation') && (
+        {mode !== 'draw_wall' && mode !== 'draw_island' && multiWallObjs.length >= 2 && (canvasView === 'plan' || canvasView === 'elevation') && (
+          <MultiWallPanel
+            walls={multiWallObjs}
+            roomHeight={room.room_dy ?? undefined}
+            onUpdateMany={u => {
+              captureSnapshot()
+              // Islands have no thickness — leave them at 0.
+              for (const w of multiWallObjs) {
+                const uw = 'thickness' in u && w.wall_type === 'island' ? (({ thickness: _t, ...r }) => r)(u) : u
+                if (Object.keys(uw).length) void handleUpdateWall(w.id, uw)
+              }
+            }}
+            onDeleteMany={() => setDeleteWallPending(multiWalls)}
+            onClear={() => { setSelected(null); setMultiWalls([]) }}
+          />
+        )}
+        {mode !== 'draw_wall' && mode !== 'draw_island' && selectedWall && multiWallObjs.length < 2 && (canvasView === 'plan' || canvasView === 'elevation') && (
           <WallPanel wall={selectedWall} roomHeight={room.room_dy ?? undefined} onUpdate={handleUpdateWall} onDelete={handleDeleteWall} />
         )}
         {/* In 3D the right-hand panels float over the canvas instead of taking flex
@@ -2508,6 +2740,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onStretchCancel={bt.cancelStretch}
           />
         )}
+        {bt.joinDialogIds && (() => {
+          const tops = bt.joinDialogIds.map(id => benchtops.find(b => b.id === id)).filter((b): b is BenchtopInstance => !!b)
+          if (tops.length < 2) return null
+          return (
+            <BenchtopJoinDialog
+              tops={tops.map((b, i) => ({ id: b.id, label: b.label || `Benchtop ${i + 1}`, segs: btSegments(b) }))}
+              onJoin={choices => void bt.commitJoin(tops.map(b => b.id), choices)}
+              onCancel={() => bt.setJoinDialogIds(null)}
+            />
+          )
+        })()}
         {btSavePrompt && (
           <SaveShapePrompt
             what={mode === 'edit_benchtop_edges' ? 'edges' : 'shape'}
@@ -2671,6 +2914,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onChamfer: bt.handleChamfer,
             onEditBenchtopShape: id => { if (canvasView !== 'plan') switchView('plan'); bt.startShapeEdit(id) },
             onEditBenchtopEdges: startEdgeEdit,
+            btJoinCount: contextMenu.benchtopId && bt.btMulti.includes(contextMenu.benchtopId) ? bt.btMulti.length : 0,
+            onJoinBenchtops: bt.openJoinDialog,
             onOpenShapeEditor: id => { setContextMenu(null); bt.openShapeEditor(id) },
             canEqualize,
             clipboard,
@@ -2771,10 +3016,21 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         )
       })()}
 
+      {wallDetach && (
+        <WallDetachModal
+          movedCount={wallDetach.d.ids.length}
+          neighbourNames={wallDetach.neighbours.map(n => wallDetach.pre.find(w => w.id === n.id)?.name ?? 'a wall')}
+          canStretch={wallDetach.canStretch}
+          onChoose={c => void resolveWallDetach(c)}
+        />
+      )}
+
       {deleteWallPending && (
         <ConfirmDeleteModal
-          title="Delete Wall"
-          message="Cabinets on this wall will also be removed. This cannot be undone."
+          title={deleteWallPending.length === 1 ? 'Delete Wall' : `Delete ${deleteWallPending.length} Walls`}
+          message={deleteWallPending.length === 1
+            ? 'Cabinets on this wall will also be removed. This cannot be undone.'
+            : 'Cabinets on these walls will also be removed. This cannot be undone.'}
           onConfirm={confirmDeleteWall}
           onCancel={() => setDeleteWallPending(null)}
         />

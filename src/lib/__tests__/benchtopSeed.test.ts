@@ -58,3 +58,26 @@ describe('benchtop seed from cabinets (4c)', () => {
     expect(btFrontOverhang({ door_base: h('push'), drawer: h('hardware') })).toBe(40)
   })
 })
+
+// z_angled_filler decision 11: the top follows the filler's angled front.
+describe('angled corner filler', () => {
+  it('both filler fronts pushed out by the overhang, meeting on the bisector', async () => {
+    const { cabinetSeedOutline } = await import('../benchtopSeed')
+    const { presetBox } = await import('../cabinetShape/presets')
+    const fp = buildPresetFootprint('angled_filler', {}, { w: 0, d: 0 })!
+    const box = presetBox(fp)!
+    const { cab: c, wall: w, perp } = cab(ROOM[0], 500, 0, box.w, box.d, { footprint: fp })
+    const out = cabinetSeedOutline(c, w, perp, 40)
+    const fronts = out.filter(e => e.role === 'front')
+    expect(fronts).toHaveLength(2)
+    // Filler A's front runs along y = 580 + 40; filler B's is parallel to wall B (45°).
+    const dirs = fronts.map(e => Math.round(Math.atan2(e.b.y - e.a.y, e.b.x - e.a.x) * 180 / Math.PI))
+    expect(dirs.map(d => ((d % 180) + 180) % 180).sort((a, b) => a - b)).toEqual([0, 45])
+    const flat = fronts.find(e => Math.abs(e.a.y - e.b.y) < 1e-6)!
+    expect(flat.a.y).toBeCloseTo(620, 6)
+    // The two fronts share their apex.
+    const [f1, f2] = fronts
+    const ends = [f1.a, f1.b].flatMap(p => [f2.a, f2.b].map(q => Math.hypot(p.x - q.x, p.y - q.y)))
+    expect(Math.min(...ends)).toBeLessThan(1e-6)
+  })
+})

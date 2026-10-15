@@ -491,9 +491,9 @@ export function edgeProfileColor(p: Pick<BenchtopEdgeProfile, 'id' | 'generates'
 }
 
 // The profile an edge actually uses: its own, else the method default.
-// Wall edges have none (P-d).
+// Wall edges and joints with another top (Phase 7c) have none (P-d).
 export function effectiveProfileId(s: BenchtopSegment, methodDefault: string | null | undefined): string | null {
-  if (s.edge?.wall) return null
+  if (s.edge?.wall || s.edge?.joint) return null
   return s.edge?.profile_id ?? methodDefault ?? null
 }
 

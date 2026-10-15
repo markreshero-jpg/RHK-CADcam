@@ -5,10 +5,11 @@
 import { edgeLabel } from './footprint'
 
 /** Vertical per-edge panel (`side:<edge>` / `back:<edge>`), 'face' panel kind.
- *  Finger-pull backing rails (`fprail:<n>`, z_handles H6) are face-kind
- *  panels with the same frame, so they ride the same path. */
+ *  Finger-pull backing rails (`fprail:<n>`, z_handles H6) and filler return
+ *  cleats (`cleat:<edge>`, z_angled_filler) are face-kind panels with the same
+ *  frame, so they ride the same path. */
 export function isShapedPanelKey(k: string): boolean {
-  return k.startsWith('side:') || k.startsWith('back:') || k.startsWith('fprail:')
+  return k.startsWith('side:') || k.startsWith('back:') || k.startsWith('fprail:') || k.startsWith('cleat:')
 }
 
 /** Top rail along a front facet (`rail:<edge>`), horizontal panel kind. */
@@ -44,9 +45,9 @@ export function parseZonePartId(id: string): { facet?: string; row: number; col:
 export function shapedPartLabel(k: string): string | null {
   const fp = /^fprail:(\d+)$/.exec(k)
   if (fp) return `Finger Rail ${Number(fp[1]) + 1}`
-  const m = /^(side|back|rail):(.+)$/.exec(k)
+  const m = /^(side|back|rail|cleat):(.+)$/.exec(k)
   if (!m) return null
-  const kind = m[1] === 'side' ? 'Side' : m[1] === 'back' ? 'Back' : 'Top Rail'
+  const kind = m[1] === 'side' ? 'Side' : m[1] === 'back' ? 'Back' : m[1] === 'cleat' ? 'Return Cleat' : 'Top Rail'
   return `${kind} (${m[2]})`
 }
 

@@ -102,6 +102,18 @@ function clipHorizontal<P extends { X: number; Z: number; DX: number; DY: number
   return next
 }
 
+// A top rail clipped to the shape. An upright rail's plan depth is its
+// thickness (DZ), not RD, so clip with the two swapped and swap back; it has
+// no horizontal outline.
+function clipRail(p: ResolvedCasePart, poly: ShapePt[], grow?: { x0?: number; x1?: number }): ResolvedCasePart | null {
+  if (!p.upright) return clipHorizontal(p, poly, grow)
+  const c = clipHorizontal({ ...p, DX: p.DZ, DZ: p.DX }, poly, grow)
+  if (!c) return null
+  const next = { ...c, DX: c.DZ, DZ: c.DX }
+  delete next.outline
+  return next
+}
+
 export function shapeCaseParts(
   cab: CabinetInput, r: ConstructionRules, rect: ResolvedCasePart[], errors: ResolverError[],
 ): ResolvedCasePart[] {
@@ -252,37 +264,69 @@ export function shapeCaseParts(
   for (const p of rect) {
     const k = p.part_key
     if (k === 'bottom') {
-      const c = clipHorizontal(p, r.BOTTOM_JOIN === 'bottom_outside' ? outline : inner, grow)
+      // Backs sitting on the bottom (BOTTOM_BACK_JOIN back_on_bottom, as the box)
+      // need it to run under them to the outline (L3: back:bottom holes).
+      const underBacks = r.BOTTOM_BACK_JOIN === 'back_on_bottom'
+        ? insetPolygon(segs, s => (isPanelRole(s) && s.edge.role !== 'back' ? t : 0))
+        : inner
+      const c = clipHorizontal(p, r.BOTTOM_JOIN === 'bottom_outside' ? outline : underBacks, grow)
       if (c) out.push(c)
     } else if (k === 'full_top') {
       const c = clipHorizontal(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, grow)
       if (c) out.push(c)
     } else if (k === 'front_rail') {
       if (!mainFront) continue
-      const c = clipHorizontal(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, { x0: grow.x0, x1: grow.x1 })
+      const c = clipRail(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, { x0: grow.x0, x1: grow.x1 })
       if (c) out.push(c)
     } else if (k === 'back_rail') {
       if (!used.has('back')) continue
-      const c = clipHorizontal(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, { x0: grow.x0, x1: grow.x1 })
+      const c = clipRail(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, { x0: grow.x0, x1: grow.x1 })
       if (c) out.push(c)
     }
   }
 
-  // Top rails along every other front facet.
+  // Top rails along every other front facet. Plan depth = RD lying flat, the
+  // board thickness standing on edge.
   const fr = rect.find(p => p.part_key === 'front_rail')
   if (fr) {
-    for (const s of segs) {
-      if (s.type !== 'line' || s.edge.role !== 'front' || s === mainFront) continue
+    const depth = fr.upright ? fr.DZ : r.RD
+    const n = segs.length
+    const isFront = (q: FootprintSegment) => q.type === 'line' && q.edge.role === 'front'
+    const concave = (a: FootprintSegment, b: FootprintSegment) => {   // a then b, meeting at a.p1
+      const fa = edgeFrame(a), fb = edgeFrame(b)
+      return fa.u.x * fb.u.y - fa.u.y * fb.u.x < -1e-9
+    }
+    for (const [i, s] of segs.entries()) {
+      if (!isFront(s) || s === mainFront) continue
       const f = edgeFrame(s)
       const strip = [
         s.p0, s.p1,
-        { x: s.p1.x + f.n.x * r.RD, y: s.p1.y + f.n.y * r.RD },
-        { x: s.p0.x + f.n.x * r.RD, y: s.p0.y + f.n.y * r.RD },
+        { x: s.p1.x + f.n.x * depth, y: s.p1.y + f.n.y * depth },
+        { x: s.p0.x + f.n.x * depth, y: s.p0.y + f.n.y * depth },
       ]
       const c = clipToConvex(inner, strip)
       if (c.length < 3) continue
       const along = c.map(q => (q.x - s.p0.x) * f.u.x + (q.y - s.p0.y) * f.u.y)
-      const sMin = Math.min(...along), sMax = Math.max(...along)
+      let sMin = Math.min(...along), sMax = Math.max(...along)
+      // Inside (pie) corner between two front facets: the earlier facet's rail
+      // runs through the corner and on across the other leg to the cabinet's
+      // back (the inset outline — less back.t, scribe…); the later one butts
+      // against it. Stopping at the corner was too weak (Mark, 2026-10-15).
+      const prev = segs[(i - 1 + n) % n], next = segs[(i + 1) % n]
+      const runOn = (dir: 1 | -1) => {
+        const far = (cab.DX + cab.DZ) * 2
+        const from = dir > 0 ? s.p1 : s.p0
+        const to = { x: from.x + f.u.x * far * dir, y: from.y + f.u.y * far * dir }
+        const band = [from, to, { x: to.x + f.n.x * depth, y: to.y + f.n.y * depth }, { x: from.x + f.n.x * depth, y: from.y + f.n.y * depth }]
+        const cc = clipToConvex(inner, band)
+        return cc.length < 3 ? null : cc.map(q => (q.x - s.p0.x) * f.u.x + (q.y - s.p0.y) * f.u.y)
+      }
+      if (isFront(next) && next !== mainFront && concave(s, next) && i < (i + 1) % n) {
+        const a = runOn(1); sMax = a ? Math.max(sMax, ...a) : sMax + depth
+      }
+      if (isFront(prev) && prev !== mainFront && concave(prev, s) && (i - 1 + n) % n > i) {
+        const a = runOn(-1); sMin = a ? Math.min(sMin, ...a) : sMin - depth
+      }
       if (sMax - sMin < 1) continue
       out.push({
         ...fr,

@@ -304,6 +304,7 @@ export default function BenchtopPanel({
         {/* ── Edges: a summary here; editing is the Edit edges mode (Phase 7b) ── */}
         {(() => {
           const wallN = segs.filter(s => s.edge?.wall).length
+          const jointN = segs.filter(s => s.edge?.joint).length
           const tapeMm = tapeCtx.applies
             ? tapeTotals(segs, s => { const pid = effectiveProfileId(s, defaultProfileId); return pid ? profileById[pid] : undefined }, tapeCtx.defaultTape,
               (benchtop.height_mm ?? baseHeight) + thickness.total)
@@ -316,7 +317,7 @@ export default function BenchtopPanel({
                 <span className="text-[10px] text-gray-500">{method ? method.name : 'no method'}</span>
               </div>
               <div className="text-[10px] text-gray-400 space-y-0.5">
-                <div>{n - wallN} exposed · {wallN} wall{defaultProfile ? ` · default ${defaultProfile.code ?? defaultProfile.name}` : ''}</div>
+                <div>{n - wallN - jointN} exposed · {wallN} wall{jointN ? ` · ${jointN} joint${jointN > 1 ? "s" : ""}` : ""}{defaultProfile ? ` · default ${defaultProfile.code ?? defaultProfile.name}` : ''}</div>
                 {lineal.size > 0 && (
                   <div>{[...lineal.entries()].map(([pid, mm]) => `${profileById[pid]?.code ?? profileById[pid]?.name ?? '?'} ${(mm / 1000).toFixed(2)} lm`).join(' · ')}</div>
                 )}

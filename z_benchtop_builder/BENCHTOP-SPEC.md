@@ -7,9 +7,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Phase 7 (edge tape, R-f) + 7b (Edit edges mode) built
-> 2026-10-14 — Mark liked the picker; 7b awaiting his live try (headless check blocked: no AUTOMATION_* creds in
-> .env.local). Then: the same picker for cabinet parts (needs saved per-part
+> **RESUME HERE** → Phase 7 / 7b committed (c7d1633). Phase 7c (Line + offset
+> tool, Shift-click → joints between separate tops) built 2026-10-15, uncommitted, awaiting
+> Mark's live try (headless check blocked: no AUTOMATION_* creds in .env.local). Then: the same picker for cabinet parts (needs saved per-part
 > overrides first — the 3D inspector's tick boxes never save) → splashbacks →
 > auto panel splits → CNC cutouts / profiles → small items.
 > Phase 4 rules Q-a…Q-h are Claude's defaults; its 3 open questions are locked.
@@ -549,6 +549,60 @@ Mark (2026-10-14): "right click and say edit edges … and edit edge profiles
   Resolve Parts to update the cut list" until it is resolved again.
 - Tests: +2 (paint rules) in `__tests__/edgeband.test.ts`.
 
+### Phase 7c — Line + offset tool, Join benchtops  `[x]` built (2026-10-15), live try pending
+Mark (2026-10-15), drawing on a 45° wall: "a line tool where i can draw a
+line on the back wall then … offsets … parallel to it and make a rectangle"
+and "shift click multiple benchtops … right click … join benchtops and a join
+option window pops up for user to choose what join type".
+
+- **J-a Line + offset tool** (`draw_benchtop_line`, F4 tools "Line + Offset")
+  — click both ends of the back line (wall snaps, Shift = 45°, Ctrl = ortho,
+  Tab = type length / angle), then the depth follows the mouse square off the
+  line (the cursor still snaps, so it can land on a cabinet front) → click, or
+  type the depth (goes to the side the mouse is on; the room side when the
+  mouse is on the line). Any wall angle. Edges drawn on a wall face come out
+  as wall edges (`wallContacts`). `lineRect` / `offsetFromLine`.
+- **J-b Pick several** — Shift-click tops in F4 mode (the selected top starts
+  the pick; Shift-click again removes). Picked tops draw selected; edit
+  handles hide while several are picked. Clicking off / a plain click drops
+  the pick.
+- **J-c Joints, not a merge — LOCKED (Mark 2026-10-15)**: "they still need to
+  be separate benches just with joints on them". The first build merged the
+  tops into one outline — wrong; replaced the same day. Right-click a picked
+  top → **Join benchtops (n)…** → window (`BenchtopJoinDialog.tsx`): the tops
+  drawn cut to their joints (live), joint lines red with M / B, and a row per
+  pair that meets (pick order; pairs that don't touch are skipped):
+  touching end to end → **Butt** / **Mitre** (the shared edge is the joint);
+  overlapping → **Butt — A runs through** (B cut back to A's edge) / **Butt —
+  B runs through** / **Mitre** (when the two tops' combined outline has
+  exactly one inside + one outside corner in the overlap — where the fronts
+  cross and the wall / outer corner — both tops are cut along the line
+  between them; any wall angle). Default = **Mitre wherever it fits** (Mark
+  2026-10-15); end to end in line stays Butt; a T overlap has no Mitre →
+  Butt, first top runs through. Enter = Apply joints, Esc = Cancel. No pair
+  meeting, or a curved edge running into the other top → message, no Apply.
+- **J-d Joint edges** — `BenchtopEdge.joint` = 'butt' | 'mitre' marks an
+  edge that meets another top. Not exposed: no profile (`effectiveProfileId`
+  → null), no tape (`tapeable` false), Edit edges shows it red and won't
+  paint it (`paintProfile` / `paintTape` leave it). The resolver treats it
+  as a join edge (`splitIntoPieces` copies it to the piece's `join`):
+  perimeter members along it, no fascia, `meta.joins`. Plan: drawn on the
+  `benchtop_joins` layer like a join line (red dashed + M / B). Panel
+  summary counts joints apart from exposed / wall.
+- **J-e Cut rules** (`src/lib/benchtopJoinTops.ts`, pure) — each top's
+  edges are cut where the other's outline crosses them and sorted
+  (outside / inside / shared opposite = touching / shared same way). Butt:
+  the top that runs through keeps its outline (its edges inside the other
+  become joint edges); the other = its outside edges + the through-top's
+  inside edges reversed (A − B). Mitre: the combined outline is cut along the
+  mitre line (`splitIntoPieces`) and each piece goes back to the top it
+  holds most of. Other edges keep their finish. One undo step; both tops'
+  rows are updated (re-resolve their parts — the panel nags).
+- Tests: `src/lib/__tests__/benchtopJoinTops.test.ts` (11: L choices +
+  Mitre default, butt either way, mitre areas, joint edge = no tape + resolver
+  join, end to end, 45° mitre + butt, apart / curve / T, U of three, no pair,
+  line rect at 45°).
+
 ### Deferred
 Splashback module · CNC machining of profiles · automatic panel splits ·
 sharing the profile library with cabinet-part shapes.
@@ -556,6 +610,10 @@ sharing the profile library with cabinet-part shapes.
 ---
 
 ## Session log
+- 2026-10-15 — Phase 7c: Line + offset draw tool (any wall angle) and
+  Shift-click → right-click → Join benchtops. First built as a merge into one
+  top; Mark: tops stay separate with joints → reworked to joint edges
+  (`edge.joint`), tops cut to the joint, Mitre default.
 - 2026-10-14 — Phase 7b Edit edges mode (right-click → Edit edges; Profiles /
   Tape tabs; plan click-to-paint); side bar edge list replaced by a summary.
 - 2026-10-14 — Phase 7 edge tape picker built (T-a … T-d). Live data check

@@ -50,3 +50,13 @@ describe('cabinet fill opacity', () => {
     expect(sparseViewSettings({ cabinetFillOpacity: 0.25 }, 'plan').cabinetFillOpacity).toBe(0.25)
   })
 })
+
+describe('dimension offset', () => {
+  it('defaults to 0, reads the stored value, and stays sparse', () => {
+    const s: LayerSet = { id: 's', name: 'S', sort_order: 0, settings: { plan: { items: { dim_kicks: { offset: 200 } } } } }
+    expect(resolveLayerView(s, 'plan').offset('dim_kicks')).toBe(200)
+    expect(resolveLayerView(s, 'plan').offset('dim_base_chain')).toBe(0)
+    expect(sparseViewSettings({ items: { dim_kicks: { offset: 0 } } }, 'plan').items).toEqual({})
+    expect(sparseViewSettings({ items: { dim_kicks: { offset: 150 } } }, 'plan').items).toEqual({ dim_kicks: { offset: 150 } })
+  })
+})

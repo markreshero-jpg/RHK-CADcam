@@ -4,7 +4,7 @@
 // One active set drives every view; the Plan / Elevation / 3D tabs edit that
 // set's per-view items. Docked right so the canvas stays visible; edits preview live.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   LAYER_GROUPS, LAYER_VIEWS, WEIGHT_OPTIONS, OPACITY_OPTIONS, CABINET_FILL_CLASSES, itemsForView,
   type LayerSet, type LayerSetSettings, type LayerStyle, type LayerViewId, type ViewLayerSettings,
@@ -38,6 +38,37 @@ function ColorSwatch({ value, onChange, disabled, title }: {
     </span>
   )
 }
+// Dimension offset (mm, may be negative). Keeps its own text so "-" or an empty
+// box can be typed; commits whenever the text is a number, and on Enter / blur.
+// Focus and Enter select the whole value so the next number replaces it.
+function OffsetInput({ value, onCommit, disabled }: {
+  value: number
+  onCommit: (n: number) => void
+  disabled?: boolean
+}) {
+  const [text, setText] = useState(String(value))
+  const justFocused = useRef(false)
+  useEffect(() => { setText(t => (Number(t) === value && t.trim() !== '' ? t : String(value))) }, [value])
+  const commit = (t: string) => {
+    const n = Number(t)
+    if (t.trim() !== '' && Number.isFinite(n) && n !== value) onCommit(n)
+  }
+  return (
+    <input type="number" step={25} value={text} disabled={disabled}
+      title="Offset (mm): extra distance out from what it measures; negative pulls it in. Rows outside move with it."
+      onFocus={e => { e.currentTarget.select(); justFocused.current = true }}
+      onMouseUp={e => { if (justFocused.current) e.preventDefault(); justFocused.current = false }}
+      onChange={e => { setText(e.target.value); commit(e.target.value) }}
+      onKeyDown={e => {
+        if (e.key !== 'Enter') return
+        commit(text)
+        e.currentTarget.select()
+      }}
+      onBlur={() => { if (text.trim() === '' || !Number.isFinite(Number(text))) setText(String(value)) }}
+      className="w-14 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[11px] text-gray-300 disabled:opacity-40" />
+  )
+}
+
 const EMPTY_SET: LayerSet = { id: '', name: '', sort_order: 0, settings: {} }
 
 function sparseSettings(settings: LayerSetSettings): LayerSetSettings {
@@ -91,7 +122,7 @@ export default function LayerManagerPanel({ api, initialView, activeSetId, onPre
     if (!effDraft.id) return
     setDraft({ ...effDraft, settings: { ...effDraft.settings, [view]: fn(effDraft.settings[view] ?? {}) } })
   }
-  function setItem(ids: string[], patch: { visible?: boolean; style?: LayerStyle; color?: string; weight?: number; opacity?: number }) {
+  function setItem(ids: string[], patch: { visible?: boolean; style?: LayerStyle; color?: string; weight?: number; opacity?: number; offset?: number }) {
     patchView(v => {
       const next = { ...(v.items ?? {}) }
       for (const id of ids) next[id] = { ...effectiveSetting(v, id, view), ...patch }
@@ -282,6 +313,10 @@ export default function LayerManagerPanel({ api, initialView, activeSetId, onPre
                             className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[11px] text-gray-300 disabled:opacity-40">
                             {OPACITY_OPTIONS.map(o => <option key={o} value={o}>{Math.round(o * 100)}%</option>)}
                           </select>
+                        )}
+                        {item.group === 'dimensions' && (
+                          <OffsetInput value={st.offset ?? 0} disabled={!st.visible}
+                            onCommit={n => setItem([item.id], { offset: n })} />
                         )}
                         {(
                           <select value={st.style} disabled={!st.visible} title={view === '3d' ? 'Ghost = see-through' : 'Line style'}

@@ -164,6 +164,20 @@ export function resolveCaseParts(
   // ── Top options ───────────────────────────────────────────────
   const topType = cab.top_type ?? r.TOP_TYPE
 
+  // Top rails (RAIL_ORIENT): on edge — RD tall, front / back face flush with
+  // the carcass front / the top's back line — or flat, RD deep. DX = RD,
+  // DY = length, DZ = thickness either way; `upright` tells caseBox.
+  const railPlace = (at: 'front' | 'back') => {
+    const upright = r.RAIL_ORIENT === 'vertical'
+    return {
+      DX: r.RD, DY: railW, DZ: topT, X: railX,
+      Y: DY - r.SCRT - (upright ? r.RD : topT),
+      Z: at === 'back' ? topZstart : DZ - (upright ? topT : r.RD),
+      AX: 0, AY: 0, AZ: 0,
+      ...(upright ? { upright: true } : {}),
+    }
+  }
+
   if (topType === 'full_top') {
     parts.push({
       part_key: 'full_top',
@@ -184,13 +198,7 @@ export function resolveCaseParts(
     } else {
       parts.push({
         part_key: 'front_rail',
-        DX: r.RD,
-        DY: railW,
-        DZ: topT,
-        X:  railX,
-        Y:  DY - r.SCRT - topT,
-        Z:  DZ - r.RD,
-        AX: 0, AY: 0, AZ: 0,
+        ...railPlace('front'),
         material_id: topMat.id,
         edge_band: edgeSidesToBanding(edging.front_rail, ebId),
       })
@@ -200,26 +208,14 @@ export function resolveCaseParts(
     // Front rail
     parts.push({
       part_key: 'front_rail',
-      DX: r.RD,
-      DY: railW,
-      DZ: topT,
-      X:  railX,
-      Y:  DY - r.SCRT - topT,
-      Z:  DZ - r.RD,
-      AX: 0, AY: 0, AZ: 0,
+      ...railPlace('front'),
       material_id: topMat.id,
       edge_band: edgeSidesToBanding(edging.front_rail, ebId),
     })
     // Back rail: Z follows same top/back join rule as full_top
     parts.push({
       part_key: 'back_rail',
-      DX: r.RD,
-      DY: railW,
-      DZ: topT,
-      X:  railX,
-      Y:  DY - r.SCRT - topT,
-      Z:  topZstart,
-      AX: 0, AY: 0, AZ: 0,
+      ...railPlace('back'),
       material_id: topMat.id,
       edge_band: edgeSidesToBanding(edging.back_rail, ebId),
     })

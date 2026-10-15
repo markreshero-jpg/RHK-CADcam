@@ -45,6 +45,8 @@ export interface LayerView {
   w(id: string, base: number): number
   /** Item opacity multiplier (1 = unchanged). props() already includes it. */
   op(id: string): number
+  /** Dimension item extra offset in mm (0 = default position). */
+  offset(id: string): number
   /** 3D material alpha: ghost style × opacity (1 = fully opaque). */
   alpha(id: string): number
   /** View background override or undefined. */
@@ -119,6 +121,7 @@ export function resolveLayerView(set: LayerSet | undefined, view: LayerViewId): 
     colorOf: id => setting(id).color,
     w:       (id, base) => base * (setting(id).weight ?? 1),
     op:      id => setting(id).opacity ?? 1,
+    offset:  id => setting(id).offset ?? 0,
     // 3D has no line style: ghost = see-through material, dashed = solid.
     alpha:   id => (setting(id).style === 'ghost' ? GHOST_ALPHA : 1) * (setting(id).opacity ?? 1),
     background: vs?.background,
@@ -152,6 +155,7 @@ export function sparseViewSettings(vs: ViewLayerSettings, view: LayerViewId): Vi
     if (s.color) diff.color = s.color
     if (s.weight !== undefined && s.weight !== 1) diff.weight = s.weight
     if (s.opacity !== undefined && s.opacity !== 1) diff.opacity = s.opacity
+    if (s.offset) diff.offset = s.offset
     if (Object.keys(diff).length) items[id] = diff
   }
   const out: ViewLayerSettings = { items }

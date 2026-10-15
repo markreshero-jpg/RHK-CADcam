@@ -41,7 +41,7 @@ Today's fixed chains:
   the Layer Manager already has its own settings, and elevation rows need a top /
   bottom position that plan doesn't.
 - **Corners fold into their class**: picking "base" includes `base_corner`, etc.
-- **Kick assemblies and benchtops are never in a row.** They have their own items.
+- **Kick assemblies and benchtops are never in a row.** They have their own items: kicks = `dim_kicks` (built 2026-10-15, stays a fixed item, not a row); benchtops = none yet.
 - **Overlap within a row** (e.g. a row measuring base + wall, where they overlap along
   the wall): the row measures the **union** of their extents, so segments never
   overlap. Overlapping cabinets merge into one segment.

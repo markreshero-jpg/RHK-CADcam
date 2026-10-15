@@ -11,7 +11,7 @@
 //   waterfall (butt)    the top's end, which runs over the leg
 //   waterfall (mitre)   nothing — the leg meets the top at 45°; not tapeable
 // A waterfall leg's two upright edges take the tape of the edges either side.
-// Wall edges and join edges never take tape.
+// Wall edges, join edges and joints with another top never take tape.
 
 import type { BenchtopSegment, BenchtopEdge, BenchtopEdgeProfile, BenchtopBuildMethod, BenchtopScheduleRow } from '@/src/lib/types'
 import { waterfallJoin, segLength } from '@/src/lib/benchtopGeometry'
@@ -25,7 +25,7 @@ export function tapeApplies(method: BenchtopBuildMethod | null, top: BenchtopSch
 
 /** Can the user put tape on this edge? */
 export function tapeable(s: Seg, prof: BenchtopEdgeProfile | undefined): boolean {
-  if (s.join || s.edge?.wall) return false
+  if (s.join || s.edge?.wall || s.edge?.joint) return false
   return !(prof?.generates === 'waterfall' && waterfallJoin(s) === 'mitre')
 }
 
@@ -113,7 +113,7 @@ export function setProfiles(segs: BenchtopSegment[], idx: number[], paint: Profi
 /** Click on edge i with the profile chip `paint`; the same chip again = back to the default (or off the wall). */
 export function paintProfile(segs: BenchtopSegment[], i: number, paint: ProfilePaint, reset = false): BenchtopSegment[] {
   const s = segs[i]
-  if (!s) return segs
+  if (!s || s.edge?.joint) return segs   // a joint with another top keeps its join
   if (reset) return setProfiles(segs, [i], '')
   const wall = !!s.edge?.wall
   if (paint === 'wall') return setProfiles(segs, [i], wall ? '' : 'wall')

@@ -4,15 +4,17 @@
 // preset, edits its params and per-edge roles. Writes `footprint` only; the
 // plan outline re-evaluates it at the cabinet's live size.
 
-import { CabinetInstance } from '@/src/lib/types'
+import { CabinetInstance, Wall } from '@/src/lib/types'
+import { cabT, wallDir } from '@/src/lib/geometry'
 import CalcInput from '@/src/components/CalcInput'
-import { EDGE_ROLES, edgeLabel, type EdgeRole } from '@/src/lib/cabinetShape/footprint'
+import { EDGE_ROLES, edgeLabel, evaluateFootprint, type EdgeRole } from '@/src/lib/cabinetShape/footprint'
 import {
-  SHAPE_PRESETS, getPreset, buildPresetFootprint, presetWarnings,
+  SHAPE_PRESETS, getPreset, buildPresetFootprint, presetWarnings, presetBox,
 } from '@/src/lib/cabinetShape/presets'
 
-export default function CabinetShapeSection({ cabinet, onUpdate, inp, lbl }: {
+export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl }: {
   cabinet: CabinetInstance
+  wall?: Wall | null
   onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
   inp: string
   lbl: string
@@ -21,8 +23,29 @@ export default function CabinetShapeSection({ cabinet, onUpdate, inp, lbl }: {
   const preset = getPreset(fp?.preset)
   const dims = { w: cabinet.dx, d: cabinet.dz }
 
+  // A shape that sets its own box (angled corner filler) carries dx / dz with it.
   function setFootprint(next: CabinetInstance['footprint']) {
-    void onUpdate(cabinet.id, { footprint: next })
+    const box = presetBox(next)
+    if (!box) return void onUpdate(cabinet.id, { footprint: next })
+    void onUpdate(cabinet.id, { footprint: next, dx: box.w, dz: box.d, ...keepCorner(next, box.w) })
+  }
+
+  // Angled corner filler: keep its wall corner (where the two backs meet) where
+  // it is when the angle / widths change. The cabinet frame may run either way
+  // along the wall; the reading that puts the corner on a wall end wins, else
+  // the frame is taken as running with the wall.
+  function keepCorner(next: CabinetInstance['footprint'], w: number): Partial<CabinetInstance> {
+    const cOf = (f: CabinetInstance['footprint'], bw: number) =>
+      f ? evaluateFootprint(f, { w: bw, d: 0 }).find(q => q.edge.id === 'back2')?.p0.x : undefined
+    const c0 = cOf(fp, cabinet.dx), c1 = cOf(next, w)
+    if (!wall || c0 == null || c1 == null) return {}
+    const t = cabT(cabinet, wall)
+    const onEnd = (v: number) => Math.min(Math.abs(v), Math.abs(v - wall.length)) < 1
+    const turned = !onEnd(t + c0) && onEnd(t + cabinet.dx - c0)
+    const shift = turned ? (cabinet.dx - c0) - (w - c1) : c0 - c1
+    if (Math.abs(shift) < 1e-6) return {}
+    const d = wallDir(wall)
+    return { pos_x: cabinet.pos_x + shift * d.x, pos_y: cabinet.pos_y + shift * d.y }
   }
 
   // Per-part bevelled ends (set from the 3D right-click) survive a rebuild.
@@ -77,9 +100,9 @@ export default function CabinetShapeSection({ cabinet, onUpdate, inp, lbl }: {
               </div>
             </div>
           )}
-          {preset.params.map(d => (
+          {preset.params.filter(d => !d.hidden).map(d => (
             <div key={d.key}>
-              <label className={lbl}>{d.label} (mm)</label>
+              <label className={lbl}>{d.label}{d.label.includes('°') ? '' : ' (mm)'}</label>
               <CalcInput value={Number(fp.params[d.key] ?? d.default)} decimals={0}
                 onCommit={v => setParam(d.key, v)} className={inp + ' text-right'} />
             </div>

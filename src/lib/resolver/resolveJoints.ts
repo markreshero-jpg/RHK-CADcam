@@ -1,5 +1,6 @@
 import { CabinetInput, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, seamAssignJoint, seamAssignRows } from './types'
 import { toGenericSeamKey } from '../cabinetSeams'
+import { enumerateShapedSeams } from './shapedSeams'
 
 // ── Internal seams (shelves & dividers ↔ their supports) ─────────────────────
 // Enumerated geometrically from the resolved parts: a shelf's supports are
@@ -203,10 +204,41 @@ export function resolveJoints(
     })
   }
 
+  // Shaped cabinets (z_cabinet_shape L3): seams on per-edge / turned panels and
+  // shelves on them. Same cascade; the CM default comes from the legacy seam
+  // the joint plays the part of (bottom:left_side, back:bottom, adj_shelf:side…).
+  const adjFullBank = cab.rules?.ADJ_DRILL === 'full_bank'
+  for (const cand of enumerateShapedSeams(caseParts, internalParts, { adjFullBank })) {
+    const entry = Object.prototype.hasOwnProperty.call(carcaseJoints, cand.seam_key) ? carcaseJoints[cand.seam_key] : undefined
+    const assigned = seamAssignJoint(entry)
+    const jointTypeId = assigned !== undefined
+      ? assigned
+      : jointDefaults[cand.seam_key] ?? jointDefaults[cand.generic_key] ?? jointDefaults[toGenericSeamKey(cand.generic_key)] ?? null
+    if (!jointTypeId) continue
+    let rows = seamAssignRows(entry)
+    if (rows === undefined && (cand.generic_key === 'adj_shelf:side' || cand.generic_key === 'adj_shelf:back')) {
+      const r = cab.rules?.ADJ_ROWS
+      if (r && r > 0) rows = r
+    }
+    result.push({
+      seam_key:        cand.seam_key,
+      joint_type_id:   jointTypeId,
+      joint_type_name: jointTypeNames[jointTypeId] ?? 'Unknown',
+      source:          assigned !== undefined ? 'cabinet' : 'method',
+      part_a_key:      cand.part_a_key,
+      part_b_key:      cand.part_b_key,
+      ops:             jointTypeOps[jointTypeId] ?? [],
+      shaped:          cand.shaped,
+      ...(cand.shaped.kind === 'back_bottom' ? { bottom_back_join: cab.rules?.BOTTOM_BACK_JOIN } : {}),
+      ...(cand.internal_edge ? { internal_edge: cand.internal_edge } : {}),
+      ...(cand.bank ? { bank: cand.bank } : {}),
+      ...(rows !== undefined ? { rows_override: rows } : {}),
+    })
+  }
+
   // Internal seams: shelves ↔ side supports, dividers ↔ horizontal anchors.
   // Same cascade as carcase seams; the CM default lives under the family's
   // generic key (adj_shelf:side, fixed_shelf:side, divider:top/bottom).
-  const adjFullBank = cab.rules?.ADJ_DRILL === 'full_bank'
   for (const cand of enumerateInternalSeams(caseParts, internalParts, { adjFullBank })) {
     let jointTypeId: string | null | undefined
     let source: 'cabinet' | 'method' = 'method'

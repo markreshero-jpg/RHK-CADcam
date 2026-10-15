@@ -283,6 +283,8 @@ export interface BenchtopEdge {
   waterfall_join?: BenchtopJoinType
   /** Edge tape (Phase 7): undefined = the schedule's tape, null = none, id = that tape. */
   edgeband_id?: string | null
+  /** Joint with another benchtop here (Phase 7c): not exposed — no profile / tape; the resolver treats it as a join edge. */
+  joint?: BenchtopJoinType
 }
 
 // One outline segment — Shape Editor format, mm, room frame (plan, y-down).

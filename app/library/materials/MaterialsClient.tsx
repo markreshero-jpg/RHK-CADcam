@@ -7,6 +7,7 @@ import { ThemeToggle } from '../../ThemeToggle'
 import SlideModelEditor, { type SlideModelRow } from './SlideModelEditor'
 import SlideDrillingEditor from './SlideDrillingEditor'
 import HingeDetailEditor from './HingeDetailEditor'
+import HandleModelEditor from './HandleModelEditor'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -625,6 +626,24 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                 setAllRows(prev => ({
                   ...prev,
                   hinges: prev.hinges.map(x => x.id === editingId ? { ...x, ...patch } : x),
+                }))
+              }}
+            />
+          )
+        })()}
+
+        {/* ── Handle 3D model (z_handles H8a), bought handles only ── */}
+        {activeTab === 'handles' && editingId && (() => {
+          const r = rows.find(x => x.id === editingId)
+          if (!r || (r.grip_kind ?? 'hardware') !== 'hardware') return null
+          return (
+            <HandleModelEditor
+              key={`handle-${editingId}`}
+              row={r}
+              onSaved={patch => {
+                setAllRows(prev => ({
+                  ...prev,
+                  handles: prev.handles.map(x => x.id === editingId ? { ...x, ...patch } : x),
                 }))
               }}
             />

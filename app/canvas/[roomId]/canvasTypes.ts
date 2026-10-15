@@ -10,6 +10,8 @@ export type SectionCut = { x1: number; y1: number; x2: number; y2: number; lookD
 export type Mode =
   | 'select' | 'draw_wall' | 'draw_island' | 'draw_section' | 'measure'
   | 'draw_benchtop' | 'draw_benchtop_rect' | 'draw_benchtop_l' | 'draw_benchtop_u'
+  // Phase 7c: back line along the wall, then the depth pulled off it (any angle).
+  | 'draw_benchtop_line'
   | 'draw_benchtop_cutout_rect' | 'draw_benchtop_cutout_circle' | 'draw_benchtop_join' | 'move_benchtop'
   | 'place_base' | 'place_wall_unit' | 'place_tall' | 'place_end_panel'
   | 'place_base_corner' | 'place_wall_corner' | 'place_tall_corner'

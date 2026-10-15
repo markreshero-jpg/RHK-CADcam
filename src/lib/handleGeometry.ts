@@ -47,7 +47,9 @@ export function handleShape(z: ResolvedFaceZone): HandleShape | null {
  *  is cut away, leaving `land` at the front. */
 export function sharknoseProfile(z: ResolvedFaceZone): { x: number; y: number }[] | null {
   const bv = z.handle?.bevel
-  if (!bv || z.facet || z.AY || z.bevel_l || z.bevel_r) return null
+  // Turned facet doors draw in their own square frame (Cabinet3DView), so the
+  // profile applies as is; a mitred door (bevel_l / _r) has its own outline.
+  if (!bv || z.bevel_l || z.bevel_r) return null
   const d = z.DZ, h = z.DY, run = Math.min(bv.run, h)
   return z.handle!.grip_edge === 'top'
     ? [{ x: 0, y: 0 }, { x: d, y: 0 }, { x: d, y: h }, { x: d - bv.land, y: h }, { x: 0, y: h - run }]

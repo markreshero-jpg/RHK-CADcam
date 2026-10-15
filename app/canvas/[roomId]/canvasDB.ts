@@ -1,11 +1,13 @@
 import { supabase } from '@/src/lib/supabase'
 import type { Wall, CabinetInstance, CabinetDefinition, NeighbourType } from '@/src/lib/types'
 import type { CustomOrient } from '@/src/lib/customPartBox'
+import { seedClassDepthParams, presetBox } from '@/src/lib/cabinetShape/presets'
 import { resolveCabinetFromDB, resolveCustomParts, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { loadCabinetInput } from '@/src/lib/resolver/loadCabinetInput'
 import { resolveHinges } from '@/src/lib/resolver/resolveHinges'
 import { enumerateInternalSeams } from '@/src/lib/resolver/resolveJoints'
+import { enumerateShapedSeams } from '@/src/lib/resolver/shapedSeams'
 import { persistResolved } from '@/src/lib/resolver/persistResolved'
 import type {
   ResolvedCabinet, ResolvedSeamJoint, JointTypeOp, SeamJointAssign,
@@ -128,6 +130,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
       ...(p.outline ? { outline: p.outline } : {}),
       ...(p.bevel_lo ? { bevel_lo: Number(p.bevel_lo) } : {}),
       ...(p.bevel_hi ? { bevel_hi: Number(p.bevel_hi) } : {}),
+      ...(p.upright ? { upright: true } : {}),
     }))
     const intPartsArr = myInt.map(p => ({
       part_type: p.part_type,
@@ -174,6 +177,25 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
         part_b_key:      cand.part_b_key,
         ops:             jointOpsById[jointTypeId] ?? [],
         internal_edge:   cand.edge,
+        rows_override:   seamAssignRows(entry),
+      })
+    }
+    // Shaped-cabinet seams (z_cabinet_shape L3) — same parity rule.
+    for (const cand of enumerateShapedSeams(casePartsArr, intPartsArr)) {
+      const entry = carcaseJoints[cand.seam_key]
+      const jointTypeId = seamAssignJoint(entry)
+      if (!jointTypeId) continue
+      seamJoints.push({
+        seam_key:        cand.seam_key,
+        joint_type_id:   jointTypeId,
+        joint_type_name: jointNamesById[jointTypeId] ?? 'Unknown',
+        source:          'cabinet',
+        part_a_key:      cand.part_a_key,
+        part_b_key:      cand.part_b_key,
+        ops:             jointOpsById[jointTypeId] ?? [],
+        shaped:          cand.shaped,
+        ...(cand.internal_edge ? { internal_edge: cand.internal_edge } : {}),
+        ...(cand.bank ? { bank: cand.bank } : {}),
         rows_override:   seamAssignRows(entry),
       })
     }
@@ -433,16 +455,23 @@ export function buildInstanceFromDefinition(
   // the resolver falls back to its default face, matching the legacy null path.
   const faceGrid = def.face_grid && Object.keys(def.face_grid).length > 0 ? def.face_grid : null
   const internalGrid = def.internal_grid && Object.keys(def.internal_grid).length > 0 ? def.internal_grid : null
+  const dx = p.dx != null && p.dx > 0 ? Math.round(p.dx) : def.default_dx
+  // Height/depth cascade unless the definition preserves that axis. A missing
+  // cascade value (older callers) also falls back to the frozen default.
+  const dz = def.preserve_dz || p.cascade_dz == null ? def.default_dz : p.cascade_dz
+  // Shape params that follow the run's depth (L corner legs) take the cascaded
+  // class depth even when the box depth itself is preserved (900 × 900 corner).
+  const footprint = seedClassDepthParams(def.footprint ?? null, p.cascade_dz, { w: dx, d: dz })
+  // A shape that sets its own box (angled corner filler, z_angled_filler).
+  const shapeBox = presetBox(footprint)
   return {
     room_id: p.room_id, wall_id: p.wall_id,
     cabinet_definition_id: def.id,                 // audit / origin pointer only
     label: p.label, assembly_class: def.assembly_class,
     pos_x: p.pos_x, pos_y: p.pos_y, pos_z: 0, rotation: p.rotation,
-    dx: p.dx != null && p.dx > 0 ? Math.round(p.dx) : def.default_dx,
-    // Height/depth cascade unless the definition preserves that axis. A missing
-    // cascade value (older callers) also falls back to the frozen default.
+    dx: shapeBox?.w ?? dx,
     dy: def.preserve_dy || p.cascade_dy == null ? def.default_dy : p.cascade_dy,
-    dz: def.preserve_dz || p.cascade_dz == null ? def.default_dz : p.cascade_dz,
+    dz: shapeBox?.d ?? dz,
     has_carcass: def.has_carcass, has_internal: def.has_internal,
     has_face: def.has_face, has_toekick: def.has_toekick,
     construction_method_id: def.construction_method_id,
@@ -459,7 +488,7 @@ export function buildInstanceFromDefinition(
     internal_grid: internalGrid,
     carcase_joints: def.carcase_joints,
     no_cnc: def.no_cnc ?? false,
-    footprint: def.footprint ?? null,
+    footprint,
     faces: def.faces ?? null,
     schema_version: '0.4', notes: null,
   }

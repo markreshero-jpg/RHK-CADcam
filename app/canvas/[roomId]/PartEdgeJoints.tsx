@@ -6,6 +6,8 @@ import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { computeElevSeams, internalSeamPartLabel, getSeamAssignState, withSeamJoint, withSeamRows } from '@/src/lib/cabinetSeams'
 import { enumerateInternalSeams } from '@/src/lib/resolver/resolveJoints'
+import { enumerateShapedSeams } from '@/src/lib/resolver/shapedSeams'
+import { shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import type { SeamJointAssign } from '@/src/lib/resolver/types'
 
@@ -73,7 +75,13 @@ export default function PartEdgeJoints({ cabinet, rp, partKey, onUpdate }: {
     adjFullBank: adjDrillEffective === 'full_bank',
   }).filter(c => c.part_a_key === partKey || c.part_b_key === partKey)
 
-  const getSeamState = (seamKey: string) => getSeamAssignState(carcaseJoints, cmDefaults, seamKey)
+  // Shaped-cabinet seams (z_cabinet_shape L3) on this part, either side.
+  const shapedSeams = enumerateShapedSeams(rp.case_parts, rp.internal_parts, {
+    adjFullBank: adjDrillEffective === 'full_bank',
+  }).filter(c => c.part_a_key === partKey || c.part_b_key === partKey)
+  const genericByKey = new Map(shapedSeams.map(c => [c.seam_key, c.generic_key]))
+
+  const getSeamState = (seamKey: string) => getSeamAssignState(carcaseJoints, cmDefaults, seamKey, genericByKey.get(seamKey))
 
   function setSeamOverride(seamKey: string, value: string | null | 'clear') {
     void onUpdate(cabinet.id, { carcase_joints: withSeamJoint(carcaseJoints, seamKey, value) })
@@ -103,6 +111,14 @@ export default function PartEdgeJoints({ cabinet, rp, partKey, onUpdate }: {
         ? `→ ${internalSeamPartLabel(c.part_b_key)}${c.bank ? ' (bank)' : ''}`
         : `← ${c.bank ? 'Shelf Bank' : internalSeamPartLabel(c.part_a_key)}`,
     })),
+    ...shapedSeams.map(c => {
+      const other = c.part_a_key === partKey ? c.part_b_key : c.part_a_key
+      const name = shapedPartLabel(other) ?? (other.startsWith('int_') ? internalSeamPartLabel(other) : ({
+        left_side: 'Left Gable', right_side: 'Right Gable', bottom: 'Bottom', back: 'Back',
+        full_top: 'Top', front_rail: 'Front Rail', back_rail: 'Back Rail',
+      } as Record<string, string>)[other] ?? other)
+      return { key: c.seam_key, label: `${c.part_a_key === partKey ? '→' : '←'} ${name}${c.bank ? ' (bank)' : ''}` }
+    }),
   ]
 
   if (rows.length === 0) return null

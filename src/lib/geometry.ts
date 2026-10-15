@@ -475,6 +475,19 @@ export function cabinetCornerPts(cab: CabinetInstance, wall: Wall, perp: Pt): Pt
   return [toPlan(0, 0), toPlan(cab.dx, 0), toPlan(cab.dx, cab.dz), toPlan(0, cab.dz)]
 }
 
+// The stretch of the wall a cabinet stands on, as offsets from cabT(cab, wall):
+// [0, dx] for a box. A shaped cabinet's is the part of its outline on the wall
+// face (local y = 0) — an angled corner filler's other leg stands past the
+// wall's end (z_angled_filler), so moves clamp on this, not on dx.
+export function cabWallSpan(cab: CabinetInstance, wall: Wall, perp: Pt): { lo: number; hi: number } {
+  if (!cab.footprint?.segments?.length) return { lo: 0, hi: cab.dx }
+  const xs = footprintOutline(cab.footprint, { w: cab.dx, d: cab.dz }).filter(p => Math.abs(p.y) < 0.5).map(p => p.x)
+  if (xs.length < 2) return { lo: 0, hi: cab.dx }
+  const lo = Math.max(0, Math.min(...xs)), hi = Math.min(cab.dx, Math.max(...xs))
+  const d = wallDir(wall)
+  return d.x * perp.y - d.y * perp.x < 0 ? { lo: cab.dx - hi, hi: cab.dx - lo } : { lo, hi }
+}
+
 export function cabinetCenterPt(cab: CabinetInstance, wall: Wall, perp: Pt): Pt {
   const d = wallDir(wall)
   return {

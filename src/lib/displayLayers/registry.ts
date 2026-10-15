@@ -25,6 +25,9 @@ export interface ItemSetting {
   weight?: number
   /** Opacity multiplier 0.1–1 (applies on top of the style). Unset = 1. */
   opacity?: number
+  /** Dimension items: extra distance (mm) out from the measured object. Rows
+   *  outside this one move out with it. Unset = 0. */
+  offset?: number
 }
 
 export const WEIGHT_OPTIONS = [0.5, 1, 1.5, 2, 3] as const
@@ -160,6 +163,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'dim_elev_height',      group: 'dimensions', label: 'Height chain',       views: ['elevation'], default: ON },
   { id: 'dim_elev_floor_chain', group: 'dimensions', label: 'Floor cabinet widths', views: ['elevation'], default: ON },
   { id: 'dim_elev_wall_chain',  group: 'dimensions', label: 'Overhead cabinet widths', views: ['elevation'], default: ON },
+  { id: 'dim_kicks',            group: 'dimensions', label: 'Kicks',              views: ['plan', 'elevation'], default: OFF,
+    hint: 'Plan: kick board lengths + kick depth at the wall ends; elevation: kick height' },
 ]
 
 export const LAYER_ITEM_BY_ID: Record<string, LayerItemDef> =
@@ -219,6 +224,8 @@ export function casePartItem(partKey: string): string {
   if (partKey.startsWith('side:')) return 'carcass_gables'
   if (partKey.startsWith('back:')) return 'carcass_back'
   if (partKey.startsWith('fprail:')) return 'finger_rails'
+  // Return cleats behind angled corner fillers (z_angled_filler).
+  if (partKey.startsWith('cleat:')) return 'fillers'
   return 'carcass_top'            // full_top, front_rail, back_rail, rail:<edge>
 }
 export function kickPartItem(partKey: string): string {

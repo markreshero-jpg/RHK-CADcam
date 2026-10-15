@@ -64,7 +64,7 @@ export function FixtureBox({ w, h, d, color, edges = true }: {
 
 // A model that fails to load (deleted file, bad export) falls back to the box
 // instead of taking the whole scene down.
-class ModelErrorBoundary extends Component<
+export class ModelErrorBoundary extends Component<
   { fallback: React.ReactNode; resetKey: string; children: React.ReactNode },
   { failed: boolean }
 > {

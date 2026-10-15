@@ -23,6 +23,7 @@ import { SlideShape, slideBox3, doorProfileSvg } from './cabinetEditSvgHelpers'
 import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
+import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import FixturesElevation from './FixturesElevation'
 import type { RoomFixture } from '@/src/lib/types'
@@ -1814,7 +1815,7 @@ export default function ElevationSVG({
               )
               if (overheadCabs.length === 0) return null
               const segs = computeElevChain(overheadCabs, wall, elevX)
-              const chainY = -tickH * 2
+              const chainY = -tickH * 2 - layers.offset('dim_elev_wall_chain')
               const col = layers.color('dim_elev_wall_chain', '#ffffff')
               const chainOp = layers.op('dim_elev_wall_chain')
               const sw = layers.w('dim_elev_wall_chain', 1) / z, fs = 12 / z, tk = 8 / z
@@ -1852,7 +1853,7 @@ export default function ElevationSVG({
               )
               if (floorCabs.length === 0) return null
               const segs = computeElevChain(floorCabs, wall, elevX)
-              const chainY = roomH + tickH * 1.5
+              const chainY = roomH + tickH * 1.5 + layers.offset('dim_elev_floor_chain')
               const col = layers.color('dim_elev_floor_chain', '#ffffff')
               const chainOp = layers.op('dim_elev_floor_chain')
               const sw = layers.w('dim_elev_floor_chain', 1) / z, fs = 12 / z, tk = 8 / z
@@ -1880,9 +1881,46 @@ export default function ElevationSVG({
               )
             })()}
 
+            {/* Kick heights — a vertical dim just inside the start of each kick
+                (a run of butting kicks at the same height shares one). */}
+            {layers.show('dim_kicks') && (() => {
+              const kicks = wallCabs.flatMap(c => {
+                const k = kickLocal(resolvedParts?.get(c.id))
+                if (!k) return []
+                const x = elevX(c), bz = cabBottomZ(c, room, wall)
+                return [{ x0: x + k.x0, x1: x + k.x1, top: bz + k.top }]
+              })
+              const marks = kickHeightMarks(kicks)
+              if (!marks.length) return null
+              const col = layers.color('dim_kicks', '#ffffff')
+              const sw = layers.w('dim_kicks', 1) / z, fs = 12 / z, tk = 6 / z
+              return (
+                <g pointerEvents="none" opacity={layers.op('dim_kicks')} style={{ userSelect: 'none' }}>
+                  {marks.map((m, i) => {
+                    const x = m.x + 24 / z + layers.offset('dim_kicks'), y0 = roomH, y1 = roomH - m.top, my = (y0 + y1) / 2
+                    const padX = fs * 1.8, padY = fs * 0.6
+                    return (
+                      <g key={i}>
+                        <line x1={x} y1={y0} x2={x} y2={y1} stroke={col} strokeWidth={sw} />
+                        <line x1={x - tk} y1={y0} x2={x + tk} y2={y0} stroke={col} strokeWidth={sw} />
+                        <line x1={x - tk} y1={y1} x2={x + tk} y2={y1} stroke={col} strokeWidth={sw} />
+                        <g transform={`rotate(-90,${x},${my})`}>
+                          <rect x={x - padX} y={my - padY} width={padX * 2} height={padY * 2} fill={layers.background ?? '#030712'} />
+                          <text x={x} y={my} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>
+                            {Math.round(m.top)}
+                          </text>
+                        </g>
+                      </g>
+                    )
+                  })}
+                </g>
+              )
+            })()}
+
             {/* Bottom dimension — overall wall length */}
             {(() => {
-              const dimY = roomH + tickH * 4
+              // Overall sits outside the floor chain, so it moves out with it.
+              const dimY = roomH + tickH * 4 + (layers.show('dim_elev_floor_chain') ? layers.offset('dim_elev_floor_chain') : 0)
               const fs = 12 / z, tk = 8 / z, sw = 1 / z, col = '#ffffff'
               const mx = wall.length / 2
               const padX = fs * 1.8, padY = fs * 0.6
@@ -1965,7 +2003,7 @@ export default function ElevationSVG({
                 segs.push({ fromY: 0, toY: roomH, label: `${roomH}` })
               }
 
-              const chainX = -70 / z
+              const chainX = -70 / z - layers.offset('dim_elev_height')
               const tkLen = 8 / z
               const sw = layers.w('dim_elev_height', 1) / z
               const fs = 12 / z
