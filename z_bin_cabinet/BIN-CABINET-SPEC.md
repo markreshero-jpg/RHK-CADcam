@@ -1,6 +1,6 @@
 # Bin Cabinet (BBIN) — Spec
 
-**Status:** B1 + B2 live (fe12004). B3 live 2026-10-16 (200db67) and library rows applied. Next: generic bin visual (B5), then B4.
+**Status:** B1–B3 live (200db67 + aaf6de7 rail cap / bin override). B5 generic 3D bin built 2026-10-16. Next B4 (add-divisions action), then GLB models when files exist.
 **Owner module:** `z_bin_cabinet/`
 **Source data:** `Nikpol-Teramo-TDS-2026-05.pdf` (tech data sheet, May 2026) and
 `teramo-p5..p8.png` (install template + drilling pages for each bin height).
@@ -125,7 +125,7 @@ void | division | bin | division | void, with equal voids.
 | **B2** | Filter `kind = 'slide'` on every active-slide query (loadCabinetInput, SchedulesClient, CabinetSheetReport, InternalGridEditor, DrawerBoxPreviewPanel), **then** set the bins active. Resolver: `drawer_type 'bin'`, `findBin`, floor datum, gable + door drilling (2mm pricks); `NO_BIN_FITS` warning | ✅ live 2026-10-16 (fe12004) — see as-built notes |
 | **B3** | Library: `BBIN` and `BBIN+I1` cabinets; `+I1` inner drawer placed above the bin | ✅ built 2026-10-16 — see as-built notes |
 | **B4** | "Add divisions" action on the warning | ☐ |
-| **B5** | 3D: bin frame + bins drawn in the cabinet (layer-registered, `z_display_layers`) | ☐ |
+| **B5** | 3D: bin frame + bins drawn in the cabinet (layer-registered, `z_display_layers`) | ✅ built 2026-10-16 (generic shape) — see as-built notes |
 
 **B2 as built (2026-10-16):**
 - `DrawerFrontType = DrawerType | 'bin'` on `DrawerTypeConfig.type` and `ResolvedDrawerStack.drawer_type`
@@ -159,6 +159,15 @@ void | division | bin | division | void, with equal voids.
 - **Override:** the face grid editor's Bin select (Auto (picked) / any bin) writes
   `drawer_type_config.slide_product_id`. A forced bin that misses the width, height or depth still
   resolves, with a `BIN_FORCED_MISFIT` warning.
+
+**B5 as built (2026-10-16):**
+- `src/lib/binGeometry.ts` `binShape(stack)`: runners (12 × 40) on the mounting faces, a 3mm tray on
+  them, bins standing on the tray — two front-to-back, four (2 × 2) when the clear width ≥ 500 (600 module).
+  Pure, cabinet-space boxes, so plan / elevation can reuse it.
+- `src/components/three/Bin3D.tsx` draws it inside `DrawerAssembly`'s moving group (slides out with the
+  front). New display-layer item `bins` (3D, default shown). Bin stacks no longer draw their rails as runners
+  in 3D; elevation / plan still show the rails until they get the bin outline.
+- GLB later: a per-bin `model_url` would render in place of `binShape`, with the generic shape as fallback.
 
 ## 6. Answered questions (user, 2026-10-16)
 

@@ -47,6 +47,7 @@ import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
 import { areaSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 import { handleShape, sharknoseProfile, type HandleShape } from '@/src/lib/handleGeometry'
 import Handle3D from '@/src/components/three/Handle3D'
+import Bin3D from '@/src/components/three/Bin3D'
 import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
 
 export type { MatColSpec, MatColMap }
@@ -582,7 +583,9 @@ function DrawerAssembly({
           /></PartAlpha>
         )
       })}
-      {(showSlides ? stack.slides : []).map((sl, li) => {
+      {/* Pull-out bin (z_bin_cabinet B5): the generic bin replaces its rails. */}
+      {stack.drawer_type === 'bin' && (!layers || layers.show('bins')) && <Bin3D stack={stack} opacity={alpha('bins')} />}
+      {(showSlides && stack.drawer_type !== 'bin' ? stack.slides : []).map((sl, li) => {
         const id   = `slide_${stackKey(stack)}_${sl.side}`
         const ps   = applyPosOv(sl, id, partOverrides)
         const b    = slideBox(ps)

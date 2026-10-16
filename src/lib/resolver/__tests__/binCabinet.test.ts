@@ -211,3 +211,27 @@ describe('forcing a bin (override)', () => {
     expect(rp.warnings.find(w => w.code === 'BIN_FORCED_MISFIT')?.message).toMatch(/417mm inside is over its 280 maximum/)
   })
 })
+
+describe('generic 3D bin (B5)', () => {
+  it('two bins front-to-back on a tray, inside the runners, within the bin envelope', async () => {
+    const { binShape } = await import('../../binGeometry')
+    const [stack] = resolveCabinet(binCab(450)).drawer_stacks
+    const boxes = binShape(stack)
+    expect(boxes.filter(b => b.kind === 'runner')).toHaveLength(2)
+    const bins = boxes.filter(b => b.kind === 'bin')
+    expect(bins).toHaveLength(2)
+    for (const b of boxes) {
+      expect(b.x).toBeGreaterThanOrEqual(stack.box_X - 1e-6)
+      expect(b.x + b.w).toBeLessThanOrEqual(stack.box_X + stack.box_width + 1e-6)
+      expect(b.y + b.h).toBeLessThanOrEqual(stack.box_Y + 620 + 1e-6)
+      expect(b.z + b.d).toBeLessThanOrEqual(stack.box_Z + 520 + 1e-6)
+    }
+    expect(bins[0].x).toBeCloseTo(bins[1].x)          // same column
+    expect(bins[0].z).not.toBeCloseTo(bins[1].z)      // one behind the other
+  })
+  it('600 module: four bins, 2 × 2', async () => {
+    const { binShape } = await import('../../binGeometry')
+    const [stack] = resolveCabinet(binCab(600)).drawer_stacks
+    expect(binShape(stack).filter(b => b.kind === 'bin')).toHaveLength(4)
+  })
+})
