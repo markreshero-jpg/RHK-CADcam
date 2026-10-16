@@ -1,6 +1,6 @@
 # Bin Cabinet (BBIN) — Spec
 
-**Status:** B1 + B2 live (fe12004). B3 built 2026-10-16 — library rows (`migration_b3_library.sql`) to apply once B3 is deployed. Next: generic bin visual (B5), then B4.
+**Status:** B1 + B2 live (fe12004). B3 live 2026-10-16 (200db67) and library rows applied. Next: generic bin visual (B5), then B4.
 **Owner module:** `z_bin_cabinet/`
 **Source data:** `Nikpol-Teramo-TDS-2026-05.pdf` (tech data sheet, May 2026) and
 `teramo-p5..p8.png` (install template + drilling pages for each bin height).
