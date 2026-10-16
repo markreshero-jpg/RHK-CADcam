@@ -1,6 +1,6 @@
 # Bin Cabinet (BBIN) — Spec
 
-**Status:** B1 in the DB (bins still **inactive**), B2 built 2026-10-16 uncommitted (tests: `resolver/__tests__/binCabinet.test.ts`). Bins can be switched on once B2 is live. Next B3.
+**Status:** B1 + B2 live 2026-10-16 (commit fe12004; bins switched on after the deploy). Tests: `resolver/__tests__/binCabinet.test.ts`. Next B3.
 **Owner module:** `z_bin_cabinet/`
 **Source data:** `Nikpol-Teramo-TDS-2026-05.pdf` (tech data sheet, May 2026) and
 `teramo-p5..p8.png` (install template + drilling pages for each bin height).
@@ -121,8 +121,8 @@ void | division | bin | division | void, with equal voids.
 
 | Phase | Scope | Status |
 |---|---|---|
-| **B1** | Schema: `kind`, `inside_width_min/max` on `hardware_slides`; seed the six Teramos + their drill ops | ✅ applied 2026-10-16 — seeded `active = false` |
-| **B2** | Filter `kind = 'slide'` on every active-slide query (loadCabinetInput, SchedulesClient, CabinetSheetReport, InternalGridEditor, DrawerBoxPreviewPanel), **then** set the bins active. Resolver: `drawer_type 'bin'`, `findBin`, floor datum, gable + door drilling (2mm pricks); `NO_BIN_FITS` warning | ✅ built 2026-10-16, uncommitted — see as-built notes |
+| **B1** | Schema: `kind`, `inside_width_min/max` on `hardware_slides`; seed the six Teramos + their drill ops | ✅ applied 2026-10-16 — seeded inactive, switched on 2026-10-16 after B2 deployed |
+| **B2** | Filter `kind = 'slide'` on every active-slide query (loadCabinetInput, SchedulesClient, CabinetSheetReport, InternalGridEditor, DrawerBoxPreviewPanel), **then** set the bins active. Resolver: `drawer_type 'bin'`, `findBin`, floor datum, gable + door drilling (2mm pricks); `NO_BIN_FITS` warning | ✅ live 2026-10-16 (fe12004) — see as-built notes |
 | **B3** | Library: `BBIN` and `BBIN+I1` cabinets; `+I1` inner drawer placed above the bin | ☐ |
 | **B4** | "Add divisions" action on the warning | ☐ |
 | **B5** | 3D: bin frame + bins drawn in the cabinet (layer-registered, `z_display_layers`) | ☐ |
