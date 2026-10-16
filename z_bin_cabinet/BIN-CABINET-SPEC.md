@@ -152,6 +152,13 @@ void | division | bin | division | void, with equal voids.
 - At 900 high / 140 kick (687 interior): `BBIN` 450 → 74L (620); `BBIN+I1` 450 → 66L (540), 147 left above.
 - Library: `BBIN` and `BBIN+I1` in Drawers, 450×900×580 defaults (`migration_b3_library.sql`).
 - Rules in the Job / Room properties under **Bins**.
+- **Finger-pull rails cap the bin (user, 2026-10-16):** the usable height stops at the bottom of the
+  lowest backing rail above the bin over its span (`resolveDrawerStacks(…, backingRails)`; the
+  resolver's bin plan calls `fingerRails()` on the first pass). BC-23 (900 high, 100 kick, sharknose
+  top): 74L → 66L.
+- **Override:** the face grid editor's Bin select (Auto (picked) / any bin) writes
+  `drawer_type_config.slide_product_id`. A forced bin that misses the width, height or depth still
+  resolves, with a `BIN_FORCED_MISFIT` warning.
 
 ## 6. Answered questions (user, 2026-10-16)
 

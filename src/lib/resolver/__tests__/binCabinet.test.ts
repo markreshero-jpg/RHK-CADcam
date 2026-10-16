@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { resolveCabinet } from '../resolver'
 import { mergeRules } from '../mergeRules'
 import { findBin } from '../resolveDrawerStack'
-import { DEFAULT_RULES, type CabinetInput, type Material, type SlideDrillOp, type SlideProduct } from '../types'
+import { DEFAULT_RULES, type CabinetInput, type Material, type SlideDrillOp, type SlideProduct, type HandleProductInput } from '../types'
 
 // z_bin_cabinet/BIN-CABINET-SPEC.md — B2
 
@@ -159,5 +159,55 @@ describe('BBIN+I1: inner drawer above the bin (B3)', () => {
     const rp = resolveCabinet(withInner(720))   // 537 interior
     expect(rp.drawer_stacks[0].slides[0].slide_id).toBe('Teramo 56L')
     expect(rp.warnings.find(w => w.code === 'BIN_NO_ROOM_ABOVE')?.message).toMatch(/no bin leaves 140mm/)
+  })
+})
+
+describe('finger-pull backing rail caps the bin (B3)', () => {
+  const shark: HandleProductInput = {
+    id: 'sn', name: 'Sharknose 45°', grip_kind: 'sharknose', handle_type: 'other', length: null, bore_centres: null,
+    projection: null, cost_per_unit: 0, hole_dia_mm: null, holes: [], needs_finger_gap: true, bevel_angle_deg: 45, bevel_land_mm: 2,
+  }
+  const sharkSched = { drawer: { handle: shark, offset_from_edge_mm: 0, inset_from_side_mm: null, orientation: 'horizontal' as const } }
+  // 900 high on a 100 kick, like BC-23: floor 116.5, carcass top 883.5.
+  const rules = mergeRules({ ...DEFAULT_RULES, TOEH: 100 })
+  const c = (inner: boolean) => binCab(450, {
+    DY: 900, rules, has_internal: true, handle_schedule: sharkSched,
+    internal_tree: { type: 'open', fittings: inner ? [{ type: 'inner_drawer', y_locked: false }] : [] },
+  })
+
+  it('without the rail the 620 fits under BINUP; the rail pushes it down to the 540', () => {
+    const plain = binCab(450, { DY: 900, rules, has_internal: true, internal_tree: { type: 'open', fittings: [{ type: 'inner_drawer', y_locked: false }] } })
+    expect(resolveCabinet(plain).drawer_stacks[0].slides[0].slide_id).toBe('Teramo 74L')   // 767 − 140 ≥ 620
+    const rp = resolveCabinet(c(true))
+    const rail = rp.case_parts.find(p => String(p.part_key).startsWith('fprail'))
+    expect(rail).toBeDefined()
+    expect(rp.drawer_stacks[0].slides[0].slide_id).toBe('Teramo 66L')
+    // The inner drawer stays under the rail.
+    const inner = rp.internal_parts.filter(p => p.part_type.startsWith('inner_drawer'))
+    expect(Math.max(...inner.map(p => p.Y + (p.part_type === 'inner_drawer_side' ? p.DY : 0)))).toBeLessThanOrEqual(rail!.Y + 1e-6)
+  })
+
+  it('no inner drawer: the bin only has to fit under the rail', () => {
+    expect(resolveCabinet(c(false)).drawer_stacks[0].slides[0].slide_id).toBe('Teramo 74L')
+  })
+})
+
+describe('forcing a bin (override)', () => {
+  const forced = (DX: number, id: string) => binCab(DX, {
+    face_grid: {
+      rows: [{ row_index: 0, height_locked: false }],
+      cols: [{ col_index: 0, width_locked: false }],
+      zones: [{ row_index: 0, col_index: 0, face_type: 'drawer_face', drawer_type_config: { type: 'bin', slide_product_id: id } }],
+    },
+  })
+  it('uses the chosen bin, quietly when it fits', () => {
+    const rp = resolveCabinet(forced(450, 'Teramo 56L'))
+    expect(rp.drawer_stacks[0].slides[0].slide_id).toBe('Teramo 56L')
+    expect(rp.warnings.some(w => w.code === 'BIN_FORCED_MISFIT')).toBe(false)
+  })
+  it('warns when the chosen bin does not fit the width', () => {
+    const rp = resolveCabinet(forced(450, 'Teramo 32L'))
+    expect(rp.drawer_stacks[0].slides[0].slide_id).toBe('Teramo 32L')
+    expect(rp.warnings.find(w => w.code === 'BIN_FORCED_MISFIT')?.message).toMatch(/417mm inside is over its 280 maximum/)
   })
 })

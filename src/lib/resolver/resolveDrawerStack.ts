@@ -177,6 +177,9 @@ export function resolveDrawerStacks(
   openingOf?: (zone: ResolvedFaceZone) => ZoneOpening | null,
   // Internal dividers the runners can fix to (z_dividers V2). Box cabinets only.
   dividers: ResolvedInternalPart[] = [],
+  // Finger-pull backing rails (z_handles H6). A bin's usable height stops under
+  // the lowest one above it: nothing inside can rise past it.
+  backingRails: { bottom: number; x0: number; x1: number }[] = [],
 ): DrawerStackResolution {
   const errors:   ResolverError[] = []
   const warnings: ResolverError[] = []
@@ -236,7 +239,10 @@ export function resolveDrawerStacks(
       }
       const binMembers = memberBounds(zone, dividers, T + r.SCRL, cab.DX - T - r.SCRR)
       const insideW = binMembers.right.x - binMembers.left.x
-      const interiorTop = Math.min(zone.Y + zone.DY, cab.DY - T - r.SCRT)
+      const railUnder = backingRails
+        .filter(rl => rl.bottom > internalFloorY && rl.x0 < binMembers.right.x && rl.x1 > binMembers.left.x)
+        .map(rl => rl.bottom)
+      const interiorTop = Math.min(zone.Y + zone.DY, cab.DY - T - r.SCRT, ...railUnder)
       const availH = interiorTop - internalFloorY
       const bins = cab.bin_products ?? []
       const binOverride = config?.slide_product_id
@@ -264,6 +270,15 @@ export function resolveDrawerStacks(
           part: 'drawer_box',
         })
         continue
+      }
+      if (binOverride) {
+        const issues = [
+          bin.inside_width_min != null && insideW < bin.inside_width_min - EPS && `${round1(insideW)}mm inside is under its ${bin.inside_width_min} minimum`,
+          bin.inside_width_max != null && insideW > bin.inside_width_max + EPS && `${round1(insideW)}mm inside is over its ${bin.inside_width_max} maximum`,
+          (bin.box_height ?? 0) > availH + EPS && `it is ${round1((bin.box_height ?? 0) - availH)}mm too tall`,
+          (bin.nominal_length ?? 0) > internalDepth + EPS && `the cabinet is ${round1((bin.nominal_length ?? 0) - internalDepth)}mm too shallow`,
+        ].filter(Boolean)
+        if (issues.length) warnings.push({ code: 'BIN_FORCED_MISFIT', message: `Bin ${zoneRef}: the chosen ${bin.name} doesn't fit — ${issues.join('; ')}`, part: 'drawer_box' })
       }
       const NL = bin.nominal_length ?? 520
       const binH = bin.box_height ?? 0

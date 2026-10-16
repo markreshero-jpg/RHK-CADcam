@@ -21,7 +21,7 @@ import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
 import { resolveShapedFaces } from './resolveShapedFace'
 import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
 import { resolveHandles } from './resolveHandles'
-import { fingerRails, fingerRailParts, notchPanels, pushFrontRailBack } from './resolveFingerRails'
+import { fingerRails, fingerRailParts, notchPanels, pushFrontRailBack, type FingerRail } from './resolveFingerRails'
 import { shapedFingerRails } from './resolveShapedFingerRails'
 import { resolveFillerCleats } from './resolveFillerCleats'
 
@@ -67,8 +67,9 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // start above it. The bin pick needs the dividers, so plan it off the first
   // pass, then re-run the interior with the fittings floor raised.
   if (internal.parts.length && cab.has_face && !cab.footprint && treeHasDrawerFittings(cab.internal_tree)) {
-    const binTop = Math.max(-Infinity, ...resolveDrawerStacks(cab, r, zones, undefined,
-      internal.parts.filter(p => p.part_type === 'divider'))
+    const divs = internal.parts.filter(p => p.part_type === 'divider')
+    const planRails = cab.has_carcass ? fingerRails(cab, r, zones, caseParts, divs).rails : []
+    const binTop = Math.max(-Infinity, ...resolveDrawerStacks(cab, r, zones, undefined, divs, planRails)
       .stacks.filter(s => s.drawer_type === 'bin').map(s => s.box_Y + s.box_height))
     if (Number.isFinite(binTop)) internal = resolveInternalParts(cab, r, zones, { fittingFloorY: binTop + r.BINGAP })
   }
@@ -80,11 +81,13 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // internal dividers, notched into every panel it passes through (z_handles
   // H6 / H5b). After the internals, so the rails know where the divisions are.
   // Shaped cabinets: per front facet (resolveShapedFingerRails).
+  let backingRails: FingerRail[] = []
   if (cab.has_carcass && cab.has_face && cab.footprint) {
     caseParts.push(...shapedFingerRails(cab, r, zones, caseParts))
   } else if (cab.has_carcass && cab.has_face) {
     const dividers = internalParts.filter(p => p.part_type === 'divider')
     const { rails, warnings: railWarnings } = fingerRails(cab, r, zones, caseParts, dividers)
+    backingRails = rails
     notchPanels([...caseParts.filter(p => p.part_key === 'left_side' || p.part_key === 'right_side'), ...dividers], rails, r.RAILCUT)
     pushFrontRailBack(caseParts, rails)
     caseParts.push(...fingerRailParts(cab, r, rails))
@@ -99,7 +102,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     warnings: drawerWarnings,
   } = cab.has_face
     ? resolveDrawerStacks(cab, r, zones, shapedHw ? z => drawerOpening(shapedHw, z, r) : undefined,
-        internalParts.filter(p => p.part_type === 'divider'))
+        internalParts.filter(p => p.part_type === 'divider'), backingRails)
     : { stacks: [], errors: [], warnings: [] }
   allErrors.push(...drawerErrors)
   allWarnings.push(...drawerWarnings)

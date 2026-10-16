@@ -174,6 +174,7 @@ export default function FaceGridEditor({
   const [selectedZone, setSelectedZone] = useState<{ row: number; col: number } | null>(null)
   const [doorStyles, setDoorStyles] = useState<DoorStyleOpt[]>([])
   const [handles, setHandles] = useState<HandleOpt[]>([])
+  const [bins, setBins] = useState<{ id: string; name: string; box_height: number | null; inside_width_min: number | null; inside_width_max: number | null }[]>([])
   const [dividerNote, setDividerNote] = useState<string | null>(null)
   const [showChevrons, setShowChevrons] = useState(true)
 
@@ -183,6 +184,9 @@ export default function FaceGridEditor({
       .then(({ data }) => { if (!cancelled) setDoorStyles((data ?? []) as DoorStyleOpt[]) })
     supabase.from('hardware_handles').select('id, name, grip_kind').eq('active', true).order('name')
       .then(({ data }) => { if (!cancelled) setHandles((data ?? []) as HandleOpt[]) })
+    supabase.from('hardware_slides').select('id, name, box_height, inside_width_min, inside_width_max')
+      .eq('active', true).eq('kind', 'bin').order('inside_width_min').order('box_height')
+      .then(({ data }) => { if (!cancelled) setBins((data ?? []) as typeof bins) })
     return () => { cancelled = true }
   }, [])
 
@@ -424,6 +428,18 @@ export default function FaceGridEditor({
         if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
         const cfg = z.drawer_type_config ?? { type: 'five_piece' as DrawerType }
         return { ...z, drawer_type_config: { ...cfg, height_adjustment: adj ?? undefined } }
+      }),
+    })
+  }
+
+  // Force a specific bin on a bin front (z_bin_cabinet). null = automatic pick.
+  function setBinProduct(rowIdx: number, colIdx: number, id: string | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        const { slide_product_id: _, ...cfg } = z.drawer_type_config ?? { type: 'bin' as const }
+        return { ...z, drawer_type_config: { ...cfg, type: 'bin', ...(id ? { slide_product_id: id } : {}) } }
       }),
     })
   }
@@ -1115,6 +1131,31 @@ export default function FaceGridEditor({
                     </p>
 
                     {/* Height adjustment for five_piece */}
+                    {/* Bin model — automatic (widest-fitting, tallest that leaves BINUP) or forced. */}
+                    {gz.drawer_type_config?.type === 'bin' && (() => {
+                      const picked = zoneStack(gz.row_index, gz.col_index)?.slides[0]?.slide_id
+                      const pickedName = bins.find(b => b.id === picked)?.name
+                      const forced = gz.drawer_type_config?.slide_product_id ?? ''
+                      return (
+                        <div className="mt-1.5">
+                          <p className="text-gray-600 mb-0.5">Bin</p>
+                          <select
+                            value={forced}
+                            onChange={e => setBinProduct(gz.row_index, gz.col_index, e.target.value || null)}
+                            className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-500 w-full"
+                          >
+                            <option value="">Auto{!forced && pickedName ? ` (${pickedName})` : ''}</option>
+                            {bins.map(b => (
+                              <option key={b.id} value={b.id}>
+                                {b.name} · {b.box_height}h · {b.inside_width_min}–{b.inside_width_max} inside
+                              </option>
+                            ))}
+                          </select>
+                          {!picked && <p className="text-amber-500 mt-0.5">No bin placed — see the cabinet warnings</p>}
+                        </div>
+                      )
+                    })()}
+
                     {gz.drawer_type_config?.type === 'five_piece' && (
                       <div className="mt-1.5">
                         <p className="text-gray-600 mb-0.5">Height adj (mm)</p>
