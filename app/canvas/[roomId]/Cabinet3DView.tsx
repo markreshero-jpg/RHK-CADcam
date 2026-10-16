@@ -1936,6 +1936,17 @@ export default function Cabinet3DView({
 
   const hasDoors      = rp?.face_zones.some(z => z.face_type === 'door' && z.hinge_side) ?? false
   const hasDrawers    = (rp?.drawer_stacks?.length ?? 0) > 0
+  const hasInnerDrawers = (rp?.internal_slides ?? []).some(s => s.inner_drawer_index != null)
+  const anyDrawerOpen = [...openDrawers.values(), ...openInnerDrawers.values()].some(t => t > 0)
+
+  // Toolbar "Open drawers": every inner drawer out to its slide length.
+  function openAllInner() {
+    const n = new Map<number, number>()
+    for (const s of rp?.internal_slides ?? []) {
+      if (s.inner_drawer_index != null && !n.has(s.inner_drawer_index)) n.set(s.inner_drawer_index, s.nominal_length ?? 300)
+    }
+    setOpenInnerDrawers(n)
+  }
   const drawerZoneIds = new Set((rp?.drawer_stacks ?? []).map(s => `zone_${stackKey(s)}`))
 
   const innerDrawerIdx = innerDrawerIndexForSelected()
@@ -2055,20 +2066,15 @@ export default function Cabinet3DView({
                 {doorsOpen ? 'Close doors' : 'Open doors'}
               </button>
             )}
-            {hasDrawers && openDrawers.size > 0 && (
+            {(hasDrawers || hasInnerDrawers) && (
               <button
-                onClick={() => setOpenDrawers(new Map())}
+                onClick={() => {
+                  if (anyDrawerOpen) { setOpenDrawers(new Map()); setOpenInnerDrawers(new Map()) }
+                  else { openAllCascade(); openAllInner() }
+                }}
                 className="text-[11px] font-mono text-orange-700 hover:text-orange-600 bg-white/70 hover:bg-white/90 border border-orange-300 hover:border-orange-400 rounded px-2 py-1 transition-colors pointer-events-auto select-none"
               >
-                Close drawers
-              </button>
-            )}
-            {openInnerDrawers.size > 0 && (
-              <button
-                onClick={() => setOpenInnerDrawers(new Map())}
-                className="text-[11px] font-mono text-orange-700 hover:text-orange-600 bg-white/70 hover:bg-white/90 border border-orange-300 hover:border-orange-400 rounded px-2 py-1 transition-colors pointer-events-auto select-none"
-              >
-                Close inner drawers
+                {anyDrawerOpen ? 'Close drawers' : 'Open drawers'}
               </button>
             )}
           </div>
