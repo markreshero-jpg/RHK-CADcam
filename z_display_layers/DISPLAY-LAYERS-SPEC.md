@@ -135,7 +135,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 | Kicks | `kick_faces`, `kick_spreaders` (P,E,3D; **plan default hidden**) |
 | Fronts | `doors`, `drawer_fronts` (P,E,3D), `false_panels` (E,3D), `door_swings`, `drawer_lines` (P), `door_chevrons`, `drawer_labels` (E) |
 | Internals | `internal_outline` (P, default hidden), `adj_shelves`, `fixed_shelves`, `dividers`, `inner_drawers`, `accessories` (E,3D), `shelf_labels`, `inner_drawer_labels` (E) |
-| Hardware | `drawer_boxes`, `drawer_runners` (P,E,3D), `inner_drawer_runners`, `hinges`, `machining` (E,3D), `drawer_front_drilling` (E — drawer_front slide bores; also in elevation reports) — **all default hidden in plan + 3D**; `bins` (3D — z_bin_cabinet generic bin, default shown; a bin's rails never draw as runners in 3D) |
+| Hardware | `drawer_boxes`, `drawer_runners` (P,E,3D), `inner_drawer_runners`, `hinges`, `machining` (E,3D), `drawer_front_drilling` (E — drawer_front slide bores; also in elevation reports) — **all default hidden in plan + 3D**; `bins` (E,3D — z_bin_cabinet bin + its outline in elevation / sheet / editor views, default shown; a bin's rails never draw as runners) |
 | Panels | `applied_panels`, `fillers`, `custom_panels` (P,E,3D) — by parts_library key (3b) |
 | Benchtops | `benchtops` (P / E / 3D), `benchtop_edges` (P: profile colour + code, wall edges; E: code on the front edge), `benchtop_joins` (P / E) — edges + joins added by benchtop Phase 3; elevation + 3D views by Phase 3b |
 | Room | `walls` (3D) |

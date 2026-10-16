@@ -82,11 +82,13 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
       const slideSchedId  = room.slide_schedule_id  ?? project?.slide_schedule_id  ?? slideDef.data?.id  ?? null
       const hingeSchedId  = room.hinge_schedule_id  ?? project?.hinge_schedule_id  ?? hingeDef.data?.id  ?? null
       const handleSchedId = room.handle_schedule_id ?? project?.handle_schedule_id ?? handleDef.data?.id ?? null
-      const [slides, entries, hingeSched, handleSched] = await Promise.all([
+      const [slides, entries, hingeSched, handleSched, bins] = await Promise.all([
         supabase.from('hardware_slides').select('id,name,brand,nominal_length,box_height,runner_thickness,side_deduction,min_runner_depth,max_runner_depth,soft_close,full_extension,cost_per_pair,colour').eq('active', true).eq('kind', 'slide'),
         slideSchedId  ? supabase.from('slide_schedule_entries').select('id,schedule_id,depth_threshold,height_threshold,slide_id').eq('schedule_id', slideSchedId) : Promise.resolve({ data: [] as SlideScheduleEntry[] }),
         hingeSchedId  ? supabase.from('hinge_schedules').select('hinge_id').eq('id', hingeSchedId).maybeSingle()   : Promise.resolve({ data: null as { hinge_id: string | null } | null }),
         handleSchedId ? supabase.from('handle_schedules').select('handle_id').eq('id', handleSchedId).maybeSingle() : Promise.resolve({ data: null as { handle_id: string | null } | null }),
+        // Bin names for the hardware list — a placed bin may since have been retired, so no active filter.
+        supabase.from('hardware_slides').select('id,name').eq('kind', 'bin'),
       ])
       const hingeId  = (hingeSched.data as { hinge_id: string | null } | null)?.hinge_id ?? null
       const handleId = (handleSched.data as { handle_id: string | null } | null)?.handle_id ?? null
@@ -98,6 +100,7 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
       setHardware({
         slideProducts: (slides.data ?? []) as SlideProduct[],
         slideEntries:  (entries.data ?? []) as SlideScheduleEntry[],
+        binNames:      Object.fromEntries(((bins.data ?? []) as { id: string; name: string }[]).map(b => [b.id, b.name])),
         hingeName:  (hingeProd.data as { name: string } | null)?.name ?? null,
         handleName: (handleProd.data as { name: string } | null)?.name ?? null,
       })

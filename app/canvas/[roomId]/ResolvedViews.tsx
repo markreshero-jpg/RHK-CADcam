@@ -34,6 +34,7 @@ import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeas
 import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, SharknoseLinesSVG } from './HandleSVG'
+import { binOutlines } from '@/src/lib/binGeometry'
 
 // Hinge cup/plate drill marker colour (distinct from amber slide drills).
 const HINGE_DRILL_COL = '#a855f7'   // violet-500
@@ -84,6 +85,17 @@ function svgCustomMeta(p: CabinetCustomPart): PartMeta {
 }
 
 // ── Part picker ───────────────────────────────────────────────────────────────
+
+// Pull-out bin outline (z_bin_cabinet) in an editor view — dashed, not
+// selectable (the bin is hardware; its rails carry no part of their own).
+function binSvg(stack: ResolvedDrawerStack, view: 'front' | 'side' | 'top',
+  project: (h: number, v: number) => { x: number; y: number }, key: string) {
+  return binOutlines(stack, view).map((o, j) => (
+    <polygon key={`${key}_${j}`} points={o.pts.map(([h, v]) => { const p = project(h, v); return `${p.x},${p.y}` }).join(' ')}
+      fill={o.kind === 'bin' ? RC.slide.fill : 'none'} fillOpacity={0.25} stroke={RC.slide.stroke} strokeWidth={0.5}
+      strokeDasharray="3 2" style={{ pointerEvents: 'none' }} />
+  ))
+}
 
 export function PartPickerMenu({ parts, clientX, clientY, onPick, onClose }: {
   parts: PartMeta[]; clientX: number; clientY: number
@@ -584,7 +596,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
             {ec && <EdgeTapeSVG box={dbBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="z" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
           </g>
         }),
-        ...stack.slides.map((s, li) => {
+        ...(stack.drawer_type === 'bin' ? binSvg(stack, 'front', (h, v) => proj(h, v), `bin${si}`) : []),
+        ...(stack.drawer_type === 'bin' ? [] : stack.slides).map((s, li) => {
           const meta = svgSlideMeta(s, stack)
           const pp = applyOv(s, meta.id, partOverrides)
           const { ex, ey, ew, eh } = slideElevRect(pp as typeof s)
@@ -852,7 +865,8 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
             {ec && <EdgeTapeSVG box={dbBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="y" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
           </g>
         }),
-        ...stack.slides.map((sl, li) => {
+        ...(stack.drawer_type === 'bin' ? binSvg(stack, 'top', (h, v) => proj(h, 0, v), `bin${si}`) : []),
+        ...(stack.drawer_type === 'bin' ? [] : stack.slides).map((sl, li) => {
           const meta = svgSlideMeta(sl, stack)
           const pp = applyOv(sl, meta.id, partOverrides)
           const r = slideTopRect(pp as typeof sl); const s = toSVG(r.tx, r.tz, r.tw, r.td)
@@ -1115,7 +1129,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
             {ec && <EdgeTapeSVG box={dbBox3(p)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="x" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
           </g>
         }),
-        ...stack.slides.map((sl, li) => {
+        ...(stack.drawer_type === 'bin' ? binSvg(stack, 'side', (h, v) => proj(0, v, h), `bin${si}`) : []),
+        ...(stack.drawer_type === 'bin' ? [] : stack.slides).map((sl, li) => {
           const meta = svgSlideMeta(sl, stack)
           const pp = applyOv(sl, meta.id, partOverrides)
           const r = slideSideRect(pp as typeof sl); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)

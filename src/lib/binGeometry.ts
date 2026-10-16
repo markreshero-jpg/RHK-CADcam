@@ -128,3 +128,39 @@ export function binShape(stack: ResolvedDrawerStack): BinPart[] {
   }
   return out
 }
+
+// ── 2D outlines (elevation / side view) ────────────────────────────────────────
+// The bin flattened onto a view plane, in cabinet coords: front = (X, Y),
+// side = (Z, Y), top = (X, Z). Boxes become rectangles, tapered bins
+// trapezoids (their top footprint from above). Identical outlines (bins one
+// behind the other in the front view) are drawn once.
+export interface BinOutline {
+  kind: BinPartKind
+  pts:  [h: number, v: number][]   // front (X, Y) · side (Z, Y) · top (X, Z)
+}
+
+export function binOutlines(stack: ResolvedDrawerStack, view: 'front' | 'side' | 'top'): BinOutline[] {
+  const out: BinOutline[] = []
+  const seen = new Set<string>()
+  const add = (kind: BinPartKind, pts: [number, number][]) => {
+    const key = kind + pts.map(([h, y]) => `${h.toFixed(1)},${y.toFixed(1)}`).join(' ')
+    if (seen.has(key)) return
+    seen.add(key); out.push({ kind, pts })
+  }
+  for (const p of binShape(stack)) {
+    if (view === 'top') {
+      const [x0, z0, w, d] = p.shape === 'box' ? [p.x, p.z, p.w, p.d]
+        : [p.cx - p.top[0] / 2, p.cz - p.top[1] / 2, p.top[0], p.top[1]]
+      add(p.kind, [[x0, z0], [x0 + w, z0], [x0 + w, z0 + d], [x0, z0 + d]])
+    } else if (p.shape === 'box') {
+      const [h0, len] = view === 'front' ? [p.x, p.w] : [p.z, p.d]
+      add(p.kind, [[h0, p.y], [h0 + len, p.y], [h0 + len, p.y + p.h], [h0, p.y + p.h]])
+    } else {
+      const c = view === 'front' ? p.cx : p.cz
+      const i = view === 'front' ? 0 : 1
+      const b = p.bottom[i] / 2, t = p.top[i] / 2
+      add('bin', [[c - b, p.y0], [c + b, p.y0], [c + t, p.y1], [c - t, p.y1]])
+    }
+  }
+  return out
+}

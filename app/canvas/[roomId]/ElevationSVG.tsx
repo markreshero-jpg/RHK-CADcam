@@ -31,6 +31,7 @@ import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
 import { handleShapes } from '@/src/lib/handleGeometry'
+import { binOutlines } from '@/src/lib/binGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
@@ -1114,7 +1115,7 @@ export default function ElevationSVG({
                   if (showInt('inner_drawer_runners')) for (const sl of rpHit.internal_slides ?? []) hitRects.push(slideElevRect(sl))
                   for (const ds of rpHit.drawer_stacks) {
                     if (effectiveShowDrawerBox) for (const p of ds.box_parts) hitRects.push(drawerBoxPartElevRect(p))
-                    if (effectiveShowDrawerRunners) for (const sl of ds.slides) hitRects.push(slideElevRect(sl))
+                    if (effectiveShowDrawerRunners && ds.drawer_type !== 'bin') for (const sl of ds.slides) hitRects.push(slideElevRect(sl))
                   }
                   if (faceOpacity > 0) for (const fz of rpHit.face_zones) {
                     const it = faceZoneItem(fz.face_type)
@@ -1352,9 +1353,25 @@ export default function ElevationSVG({
                           )
                         }),
                       )}
-                      {(effectiveShowDrawerBox || effectiveShowDrawerRunners) && rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => {
+                      {(effectiveShowDrawerBox || effectiveShowDrawerRunners || layers.show('bins')) && rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => {
                         const boxP    = layers.props('drawer_boxes', z)
                         const intEffP = layers.props('drawer_runners', z)
+                        // Pull-out bin (z_bin_cabinet): its outline replaces the rails.
+                        if (ds.drawer_type === 'bin') {
+                          if (!layers.show('bins')) return []
+                          const binP = layers.props('bins', z)
+                          const fill = layers.color('bins', '#6b7280')
+                          const ldStroke = layers.color('bins', '#9ca3af')
+                          return binOutlines(ds, 'front').map((o, j) => (
+                            <polygon key={`ds-${i}-bin-${j}`}
+                              points={o.pts.map(([px, py]) => { const p = toSVGPt(px, py); return `${p.x},${p.y}` }).join(' ')}
+                              fill={isLineDrawing ? 'none' : fill}
+                              fillOpacity={isLineDrawing ? 0 : o.kind === 'bin' ? 0.35 : 0.5}
+                              stroke={isLineDrawing ? ldStroke : fill}
+                              strokeWidth={layers.w('bins', isLineDrawing ? 1 : 0.5) / lz}
+                              opacity={binP.opacity} style={{ pointerEvents: 'none' }} />
+                          ))
+                        }
                         return [
                         ...(effectiveShowDrawerBox ? ds.box_parts : []).map((p: ResolvedDrawerBoxPart, j: number) => {
                           const { ex, ey, ew, eh } = drawerBoxPartElevRect(p)

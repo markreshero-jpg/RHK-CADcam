@@ -1,6 +1,6 @@
 # Bin Cabinet (BBIN) — Spec
 
-**Status:** B1–B3 live (200db67 + aaf6de7 rail cap / bin override). B5 generic 3D bin built 2026-10-16. Next B4 (add-divisions action), then GLB models when files exist.
+**Status:** B1–B5 live; parametric 3D bin (build_bin.py port), elevation outlines and cabinet-sheet hardware row built 2026-10-17. Remaining: plan-view outline (bins still not drawn in plan), real per-bin GLBs if supplied.
 **Owner module:** `z_bin_cabinet/`
 **Source data:** `Nikpol-Teramo-TDS-2026-05.pdf` (tech data sheet, May 2026) and
 `teramo-p5..p8.png` (install template + drilling pages for each bin height).
@@ -189,6 +189,16 @@ void | division | bin | division | void, with equal voids.
 - Buttons: the Errors tab card ("Add divisions for the Teramo 74L") and the Face Grid Bin section
   (`app/canvas/[roomId]/binDivisionsAction.ts`). Turns has_internal on if needed.
 - Known: full-height divisions split a finger-pull backing rail to the bin column.
+
+**2D views + hardware sheet (2026-10-17):**
+- `binOutlines(stack, 'front' | 'side' | 'top')` flattens `binShape()` to rectangles / trapezoids
+  (duplicates drawn once). Drawn instead of a bin's rails in: room elevation (ElevationSVG), print
+  elevation (ElevationPrintSVG), cabinet sheet front / side / 3D sketch (CabinetSheetSVG), and the
+  cabinet editor's front / top / side views (ResolvedViews — dashed, not selectable). Gated by the
+  `bins` layer, now on in elevation as well as 3D. Plan view still draws nothing for a bin.
+- Cabinet sheet hardware: bin fronts are listed as the picked bin ("Teramo 74L · 620 high · runners
+  incl."), from the resolved stacks, and are kept out of the drawer-runner estimate (which used to
+  count a bin front as a runner pair). A bin front with no bin placed → "Pull-out bin — none fits".
 
 ## 6. Answered questions (user, 2026-10-16)
 

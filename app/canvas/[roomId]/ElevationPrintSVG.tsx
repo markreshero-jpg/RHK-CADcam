@@ -26,6 +26,7 @@ import { customExtents } from '@/src/lib/customPartBox'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { tkBoxAABB } from '@/src/lib/jointDrilling'
+import { binOutlines } from '@/src/lib/binGeometry'
 
 /** Report-only page extras (not drawing layers). */
 export interface ElevationPageOptions {
@@ -227,6 +228,14 @@ export default function ElevationPrintSVG({
       return <rect key={key} x={x} y={y} width={w} height={h} fill="none" stroke={INK3} opacity={pp.opacity}
         strokeWidth={layers.w(item, dashSW)} strokeDasharray={pp.strokeDasharray ?? dash} />
     }
+    // Pull-out bin outline (z_bin_cabinet), same fine dash as the other hardware.
+    const binPolys = (key: string, ds: ResolvedDrawerStack) => {
+      const pp = lp('bins')
+      return binOutlines(ds, 'front').map((o, j) => (
+        <polygon key={`${key}-${j}`} points={o.pts.map(([px, py]) => { const p = toSVG(px, py, 0, 0); return `${p.x},${p.y}` }).join(' ')}
+          fill="none" stroke={INK3} opacity={pp.opacity} strokeWidth={layers.w('bins', dashSW)} strokeDasharray={pp.strokeDasharray ?? dash} />
+      ))
+    }
     const labelFsL = layers.w('cabinet_labels', labelFs)
     const sizeFs = layers.w('cabinet_sizes', labelFs * 0.7)
     const hasLabel = layers.show('cabinet_labels')
@@ -370,8 +379,9 @@ export default function ElevationPrintSVG({
             {rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => [
               ...(layers.show('drawer_boxes') ? ds.box_parts.map((p: ResolvedDrawerBoxPart, j: number) =>
                 fineRect(`db-${i}-${j}`, 'drawer_boxes', drawerBoxPartElevRect(p))) : []),
-              ...(layers.show('drawer_runners') ? ds.slides.map((s: ResolvedDrawerSlide, j: number) =>
+              ...(layers.show('drawer_runners') && ds.drawer_type !== 'bin' ? ds.slides.map((s: ResolvedDrawerSlide, j: number) =>
                 fineRect(`sl-${i}-${j}`, 'drawer_runners', slideElevRect(s))) : []),
+              ...(ds.drawer_type === 'bin' && layers.show('bins') ? binPolys(`bin-${i}`, ds) : []),
             ])}
           </>
         ) : (

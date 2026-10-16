@@ -112,7 +112,7 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     viewDefaults: { plan: { visible: false }, '3d': { visible: false } } },
   { id: 'drawer_runners', group: 'hardware', label: 'Drawer runners',      views: ALL, default: ON,
     viewDefaults: { plan: { visible: false }, '3d': { visible: false } } },
-  { id: 'bins',           group: 'hardware', label: 'Bins',                views: ['3d'], default: ON,
+  { id: 'bins',           group: 'hardware', label: 'Bins',                views: ['elevation', '3d'], default: ON,
     hint: 'Pull-out bins (z_bin_cabinet): runners, tray and bins, sized from the bin pick' },
   { id: 'inner_drawer_runners', group: 'hardware', label: 'Inner drawer / pull-out runners', views: ['elevation', '3d'], default: ON,
     viewDefaults: { '3d': { visible: false } } },

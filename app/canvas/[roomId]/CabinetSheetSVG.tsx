@@ -21,6 +21,7 @@ import {
 } from './cabinetEditSvgHelpers'
 import { zonePartId, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
+import { binOutlines, binShape } from '@/src/lib/binGeometry'
 
 export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean }
 
@@ -28,6 +29,7 @@ export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD:
 export interface HardwareCfg {
   slideProducts: SlideProduct[]
   slideEntries:  SlideScheduleEntry[]
+  binNames?:     Record<string, string>   // bin product id → name (z_bin_cabinet)
   hingeName:     string | null
   handleName:    string | null
 }
@@ -189,6 +191,7 @@ export default function CabinetSheetSVG({
         })
         ;(rp.drawer_stacks ?? []).forEach((stk, si) => {
           stk.box_parts.forEach((p, j) => { const r = dbElevRect(p); els.push(<rect key={`db${si}_${j}`} {...R(r.ex, r.ey, r.ew, r.eh)} fill={INT_FILL} fillOpacity={0.6} stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
+          if (stk.drawer_type === 'bin') { els.push(...binOutlines(stk, 'front').map((o, j) => <polygon key={`binf${si}_${j}`} points={o.pts.map(([h, y]) => `${tx + h * s},${ty + (dy - y) * s}`).join(' ')} fill="none" stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />)); return }   // z_bin_cabinet: bin outline, not rails
           stk.slides.forEach((sl, j) => { const r = slideElevRect(sl); els.push(<rect key={`sl${si}_${j}`} {...R(r.ex, r.ey, r.ew, r.eh)} fill="none" stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
         })
         // Hinge cup + plate bore positions (front projection).
@@ -238,6 +241,7 @@ export default function CabinetSheetSVG({
         })
         ;(rp.drawer_stacks ?? []).forEach((stk, si) => {
           stk.box_parts.forEach((p, j) => { const r = dbSideRect(p); els.push(<rect key={`db${si}_${j}`} {...S(r.sz, r.cy_top, r.sw, r.sh)} fill={INT_FILL} fillOpacity={0.6} stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
+          if (stk.drawer_type === 'bin') { els.push(...binOutlines(stk, 'side').map((o, j) => <polygon key={`bins${si}_${j}`} points={o.pts.map(([h, y]) => `${tx + h * s},${ty + (dy - y) * s}`).join(' ')} fill="none" stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />)); return }
           stk.slides.forEach((sl, j) => { const r = slideSideRect(sl); els.push(<rect key={`sl${si}_${j}`} {...S(r.sz, r.cy_top, r.sw, r.sh)} fill="none" stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
         })
       }
@@ -295,7 +299,14 @@ export default function CabinetSheetSVG({
     if (show.internals) {
       const intl: Box3[] = []
       rp.internal_parts.forEach(p => intl.push(intBox3(applyOv(p, `int_${p.part_type}_${p.sort_order}`))))
-      ;(rp.drawer_stacks ?? []).forEach(stk => { stk.box_parts.forEach(p => intl.push(dbBox3(p))); stk.slides.forEach(sl => intl.push(slideBox3(sl))) })
+      ;(rp.drawer_stacks ?? []).forEach(stk => {
+        stk.box_parts.forEach(p => intl.push(dbBox3(p)))
+        // A bin draws as its parts (tapered bodies as their top footprint), not its rails.
+        if (stk.drawer_type === 'bin') binShape(stk).forEach(p => intl.push(p.shape === 'box'
+          ? { x: p.x, y: p.y, z: p.z, w: p.w, h: p.h, d: p.d }
+          : { x: p.cx - p.top[0] / 2, y: p.y0, z: p.cz - p.top[1] / 2, w: p.top[0], h: p.y1 - p.y0, d: p.top[1] }))
+        else stk.slides.forEach(sl => intl.push(slideBox3(sl)))
+      })
       intl.forEach((b, i) => {
         const fc = faces(b)
         els.push(<polygon key={`it${i}`} points={fc.top} fill="none" stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />)
@@ -373,8 +384,29 @@ export default function CabinetSheetSVG({
   function hwRows(): HwRow[] {
     if (!rp) return []
     const doors = rp.face_zones.filter(z => z.face_type === 'door')
-    const drawerZones = rp.face_zones.filter(z => z.face_type === 'drawer_face')
+    // Bin fronts (z_bin_cabinet) carry their own runners — listed as the bin
+    // the resolver picked, never as a drawer runner pair.
+    const binStacks = (rp.drawer_stacks ?? []).filter(st => st.drawer_type === 'bin')
+    const isBinZone = (z: { row_index: number; col_index: number; facet?: string }) =>
+      binStacks.some(st => st.face_zone_row === z.row_index && st.face_zone_col === z.col_index && (st.facet ?? null) === (z.facet ?? null))
+    // The front's type lives on the cabinet's face grid (resolved zones don't carry it).
+    const gridZones = ((cab.face_grid as { zones?: { row_index: number; col_index: number; drawer_type_config?: { type?: string } }[] } | null)?.zones) ?? []
+    const binCfg = (z: { row_index: number; col_index: number; facet?: string }) => !z.facet &&
+      gridZones.some(g => g.row_index === z.row_index && g.col_index === z.col_index && g.drawer_type_config?.type === 'bin')
+    const binZoneCount = rp.face_zones.filter(z => z.face_type === 'drawer_face' && (binCfg(z) || isBinZone(z))).length
+    const drawerZones = rp.face_zones.filter(z => z.face_type === 'drawer_face' && !isBinZone(z) && !binCfg(z))
     const out: HwRow[] = []
+    if (binStacks.length || binZoneCount) {
+      const byBin = new Map<string, { name: string; h: number; qty: number }>()
+      for (const st of binStacks) {
+        const id = st.slides[0]?.slide_id ?? ''
+        const name = hardware?.binNames?.[id] ?? 'Pull-out bin'
+        const e = byBin.get(id); if (e) e.qty++; else byBin.set(id, { name, h: st.box_height, qty: 1 })
+      }
+      for (const v of byBin.values()) out.push({ item: v.name, qty: v.qty, note: `${Math.round(v.h)} high · runners incl.` })
+      const unplaced = binZoneCount - binStacks.length
+      if (unplaced > 0) out.push({ item: 'Pull-out bin — none fits', qty: unplaced, note: 'see cabinet warnings' })
+    }
     // Drawer runners — chosen from the slide schedule per drawer, aggregated by model
     if (drawerZones.length) {
       if (hardware && (hardware.slideProducts.length || hardware.slideEntries.length)) {

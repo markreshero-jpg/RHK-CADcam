@@ -283,3 +283,25 @@ describe('add divisions (B4)', () => {
     expect(applyBinDivisions(t, 6.5)).toBeNull()
   })
 })
+
+describe('bin outlines for elevation / side / top (2D)', () => {
+  it('front: the two bins (one behind the other) draw once, as trapezoids wider at the top', async () => {
+    const { binOutlines } = await import('../../binGeometry')
+    const [stack] = resolveCabinet(binCab(450)).drawer_stacks
+    const bins = binOutlines(stack, 'front').filter(o => o.kind === 'bin')
+    expect(bins).toHaveLength(1)
+    const [[bl], [br], [tr], [tl]] = bins[0].pts
+    expect(tr - tl).toBeGreaterThan(br - bl)
+    // Everything inside the bin envelope, floor to bin top.
+    for (const o of binOutlines(stack, 'front')) for (const [x, y] of o.pts) {
+      expect(x).toBeGreaterThanOrEqual(stack.box_X - 1e-6); expect(x).toBeLessThanOrEqual(stack.box_X + stack.box_width + 1e-6)
+      expect(y).toBeGreaterThanOrEqual(stack.box_Y - 1e-6); expect(y).toBeLessThanOrEqual(stack.box_Y + stack.box_height + 1e-6)
+    }
+  })
+  it('side and top: two bins front-to-back', async () => {
+    const { binOutlines } = await import('../../binGeometry')
+    const [stack] = resolveCabinet(binCab(450)).drawer_stacks
+    expect(binOutlines(stack, 'side').filter(o => o.kind === 'bin')).toHaveLength(2)
+    expect(binOutlines(stack, 'top').filter(o => o.kind === 'bin')).toHaveLength(2)
+  })
+})
