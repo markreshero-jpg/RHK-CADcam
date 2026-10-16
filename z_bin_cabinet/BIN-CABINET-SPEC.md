@@ -167,7 +167,12 @@ void | division | bin | division | void, with equal voids.
 - `src/components/three/Bin3D.tsx` draws it inside `DrawerAssembly`'s moving group (slides out with the
   front). New display-layer item `bins` (3D, default shown). Bin stacks no longer draw their rails as runners
   in 3D; elevation / plan still show the rails until they get the bin outline.
-- GLB later: a per-bin `model_url` would render in place of `binShape`, with the generic shape as fallback.
+- **Models (2026-10-16):** a bin product's `model_url` renders in place of `binShape` (generic shape while
+  loading / on failure). The model is FITTED to the bin envelope (clear width × bin height × nominal depth,
+  floor-back-left corner) from its own bounding box, so units and module size don't matter; the
+  model_anchor_x/y/z columns nudge it (mm). Teramo 74L uses `public/models/bins/nikpol-teramo-74L.glb`
+  (user-supplied; source copy in this folder). That GLB is 360 × 540 × 520 (m-units), not 74L size
+  (≈421 × 620 × 520), so it is stretched ~1.17 × 1.15 to fit. `.glb` added to the proxy's static-file skip.
 
 **B4 as built (2026-10-16):**
 - `NO_BIN_FITS` carries `action: { type: 'add_bin_divisions', void_mm, bin, zone }` (new optional
