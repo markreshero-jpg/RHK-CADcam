@@ -49,6 +49,10 @@ export const DEFAULT_CONSTRUCTION_METHOD = {
     RAILBLKD: 10, // knock-in block hole diameter
     RAILBLKZ: 12, // knock-in block hole depth
 
+    // Pull-out bins (z_bin_cabinet)
+    BINUP:  140,  // min clear height above a bin for an inner drawer
+    BINGAP: 10,   // bin top → first fitting above
+
     // Face clearance
     FACBUF: 2,   // buffer around face opening
     FACINS: 0,   // face inset

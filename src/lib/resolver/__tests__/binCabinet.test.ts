@@ -131,3 +131,33 @@ describe('BBIN front (B2)', () => {
     expect(rp.drawer_stacks.every(s => !s.slides.some(sl => sl.slide_id.startsWith('Teramo')))).toBe(true)
   })
 })
+
+describe('BBIN+I1: inner drawer above the bin (B3)', () => {
+  const withInner = (DY: number) => binCab(450, {
+    DY, has_internal: true,
+    internal_tree: { type: 'open', fittings: [{ type: 'inner_drawer', y_locked: false }] },
+  })
+  const binOf = (c: CabinetInput) => resolveCabinet(c).drawer_stacks[0]?.slides[0]?.slide_id
+
+  it('keeps BINUP (140) clear above the bin: 687 interior → the 540 bin, not the 620', () => {
+    expect(binOf(binCab(450))).toBe('Teramo 74L')
+    expect(binOf(withInner(870))).toBe('Teramo 66L')
+  })
+
+  it('a lower carcass drops to the 460 bin', () => {
+    expect(binOf(withInner(800))).toBe('Teramo 56L')   // 617 interior − 140 = 477
+  })
+
+  it('the inner drawer sits above the bin top + BINGAP, not on the floor', () => {
+    const rp = resolveCabinet(withInner(870))
+    const inner = rp.internal_parts.filter(p => p.part_type.startsWith('inner_drawer'))
+    expect(inner.length).toBeGreaterThan(0)
+    expect(Math.min(...inner.map(p => p.Y))).toBeGreaterThanOrEqual(FLOOR + 540 + 10 - 1e-6)
+  })
+
+  it('no bin leaves room: tallest that fits + a warning', () => {
+    const rp = resolveCabinet(withInner(720))   // 537 interior
+    expect(rp.drawer_stacks[0].slides[0].slide_id).toBe('Teramo 56L')
+    expect(rp.warnings.find(w => w.code === 'BIN_NO_ROOM_ABOVE')?.message).toMatch(/no bin leaves 140mm/)
+  })
+})

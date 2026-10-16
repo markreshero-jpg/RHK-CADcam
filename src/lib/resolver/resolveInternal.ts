@@ -87,6 +87,9 @@ export function resolveInternalParts(
   r: ConstructionRules,
   // Resolved fronts, for the automatic double divider (z_dividers V-D3).
   zones: ResolvedFaceZone[] = [],
+  // fittingFloorY: cabinet Y below which no fitting may sit (the top of a
+  // pull-out bin + BINGAP). Absent = the interior floor.
+  opts: { fittingFloorY?: number } = {},
 ): { parts: ResolvedInternalPart[], slides: ResolvedDrawerSlide[], errors: ResolverError[], autoDouble?: string[] } {
   const parts:  ResolvedInternalPart[] = []
   const slides: ResolvedDrawerSlide[]  = []
@@ -241,7 +244,13 @@ export function resolveInternalParts(
     if (!section || box.w <= 0 || box.h <= 0) return
 
     if (section.type === 'open') {
-      parts.push(...resolveFittings(box, section.fittings ?? [], ctx))
+      // A bin on the floor (z_bin_cabinet B3): fittings start above it.
+      // Separators (dividers, shelves) keep the full box.
+      const floor = opts.fittingFloorY
+      const fbox = floor != null && floor > box.y
+        ? { ...box, y: floor, h: box.y + box.h - floor }
+        : box
+      if (fbox.h > 0) parts.push(...resolveFittings(fbox, section.fittings ?? [], ctx))
       return
     }
 

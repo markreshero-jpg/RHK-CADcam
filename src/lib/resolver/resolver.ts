@@ -13,7 +13,7 @@ import { resolveCaseParts }      from './resolveCase'
 import { resolveToekickParts }   from './resolveToekick'
 import { resolveInternalParts }  from './resolveInternal'
 import { resolveFace }           from './resolveFace'
-import { resolveDrawerStacks }   from './resolveDrawerStack'
+import { resolveDrawerStacks, treeHasDrawerFittings } from './resolveDrawerStack'
 import { resolveJoints }         from './resolveJoints'
 import { resolveHinges }         from './resolveHinges'
 import { checkHingeInnerDrawerClash } from './hingeClash'
@@ -60,9 +60,19 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const shapedHw = cab.footprint ? shapedHardwareCtx(cab) : null
 
   // ── 4. Internal Module ────────────────────────────────────────
-  const { parts: rectInternalParts, slides: internalSlides, errors: internalErrors, autoDouble } = cab.has_internal
+  let internal = cab.has_internal
     ? resolveInternalParts(cab, r, cab.footprint ? [] : zones)
     : { parts: [], slides: [], errors: [], autoDouble: undefined }
+  // A pull-out bin on the floor (z_bin_cabinet B3): inner drawers / pull-outs
+  // start above it. The bin pick needs the dividers, so plan it off the first
+  // pass, then re-run the interior with the fittings floor raised.
+  if (internal.parts.length && cab.has_face && !cab.footprint && treeHasDrawerFittings(cab.internal_tree)) {
+    const binTop = Math.max(-Infinity, ...resolveDrawerStacks(cab, r, zones, undefined,
+      internal.parts.filter(p => p.part_type === 'divider'))
+      .stacks.filter(s => s.drawer_type === 'bin').map(s => s.box_Y + s.box_height))
+    if (Number.isFinite(binTop)) internal = resolveInternalParts(cab, r, zones, { fittingFloorY: binTop + r.BINGAP })
+  }
+  const { parts: rectInternalParts, slides: internalSlides, errors: internalErrors, autoDouble } = internal
   const internalParts = cab.footprint ? shapeShelves(cab, r, rectInternalParts) : rectInternalParts
   allErrors.push(...internalErrors)
 

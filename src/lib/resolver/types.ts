@@ -193,6 +193,10 @@ export interface ConstructionRules {
   RAILBLKD: number   // knock-in block hole diameter
   RAILBLKZ: number   // knock-in block hole depth into the side
 
+  // Pull-out bins (z_bin_cabinet B3)
+  BINUP:    number   // min clear height kept above a bin when the cabinet has inner drawers / pull-outs
+  BINGAP:   number   // gap between the bin top and the first fitting above it
+
   // Face position
   FACBUF:   number   // buffer pad clearance (overlay mode)
   FACINS:   number   // inset depth (0 = overlay)
@@ -257,6 +261,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   IDCL: 2, IDCR: 2, IDFAO: 0, SLIDE_SETBACK: 20,
   REVT: 4, REVB: 0, REVL: 1, REVR: 1,
   REVENDL: 2, REVENDR: 2, GAPC: 2, GAPR: 2, FPGAP: 20, RAILH: 45, RAILUP: 5, RAILCUT: 5, RAILBLK: 15, RAILBLKD: 10, RAILBLKZ: 12,
+  BINUP: 140, BINGAP: 10,
   FACBUF: 2, FACINS: 0,
   BOTTOM_JOIN: 'sides_outside', BOTTOM_BACK_JOIN: 'back_on_bottom',
   BACK_JOIN: 'between_sides', TOP_BACK_JOIN: 'butts_into_back', RAIL_JOIN: 'between_sides',

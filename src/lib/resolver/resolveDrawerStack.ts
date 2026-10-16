@@ -19,7 +19,7 @@
 import {
   CabinetInput, ConstructionRules, ResolvedFaceZone, ResolverError,
   ResolvedDrawerStack, ResolvedDrawerSlide, ResolvedInternalPart, ResolvedHingeMountTarget,
-  DrawerType, DrawerFrontType, SlideProduct, SlideScheduleEntry,
+  DrawerType, DrawerFrontType, SlideProduct, SlideScheduleEntry, Section,
   DEFAULT_DB_RULES,
 } from './types'
 import { resolveDrawerBox } from './resolveDrawerBox'
@@ -139,6 +139,13 @@ export function findBin(
   )[0] ?? null
 }
 
+// Does the interior hold anything that needs height above a bin?
+export function treeHasDrawerFittings(s: Section | undefined | null): boolean {
+  if (!s) return false
+  if (s.type === 'open') return (s.fittings ?? []).some(f => f.type === 'inner_drawer' || f.type === 'pull_out')
+  return s.children.some(c => treeHasDrawerFittings(c.section))
+}
+
 // When no bin fits the clear width, the widest bin narrower than it (height +
 // depth permitting) — the one divisions would make fit (B-D4).
 export function binForDivisions(
@@ -233,7 +240,19 @@ export function resolveDrawerStacks(
       const availH = interiorTop - internalFloorY
       const bins = cab.bin_products ?? []
       const binOverride = config?.slide_product_id
-      const bin = findBin(insideW, internalDepth, availH, bins, binOverride)
+      // Inner drawers / pull-outs inside (BBIN+I1, B-D7): keep BINUP clear above
+      // the bin. If no bin leaves that much, fall back to the tallest that fits
+      // and say the fittings won't.
+      const roomAbove = cab.has_internal && treeHasDrawerFittings(cab.internal_tree) ? r.BINUP : 0
+      let bin = findBin(insideW, internalDepth, availH - roomAbove, bins, binOverride)
+      if (!bin && roomAbove > 0) {
+        bin = findBin(insideW, internalDepth, availH, bins, binOverride)
+        if (bin) warnings.push({
+          code: 'BIN_NO_ROOM_ABOVE',
+          message: `Bin ${zoneRef}: no bin leaves ${round1(roomAbove)}mm for the inner drawer above — the ${bin.name} leaves ${round1(availH - (bin.box_height ?? 0))}mm`,
+          part: 'drawer_box',
+        })
+      }
       if (!bin) {
         const fix = binForDivisions(insideW, internalDepth, availH, bins)
         warnings.push({

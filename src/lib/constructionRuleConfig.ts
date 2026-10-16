@@ -51,6 +51,8 @@ export const RULE_LABELS: Record<RuleKey, string> = {
   RAILBLK: 'Knock-in Block Setback (mm)',
   RAILBLKD:'Knock-in Block Hole Ø (mm)',
   RAILBLKZ:'Knock-in Block Hole Depth (mm)',
+  BINUP:   'Min Height Above Bin for Inner Drawer (mm)',
+  BINGAP:  'Gap Above Bin (mm)',
   FACBUF:  'Face Buffer (mm)',
   FACINS:  'Face Inset (mm)',
   BOTTOM_JOIN:      'Bottom Join',
@@ -70,6 +72,7 @@ export const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
   { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR', 'FPGAP'] },
   { label: 'Finger Pull Rails', keys: ['RAILH', 'RAILUP', 'RAILCUT', 'RAILBLK', 'RAILBLKD', 'RAILBLKZ'] },
+  { label: 'Bins',               keys: ['BINUP', 'BINGAP'] },
   { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
   { label: 'Joinery',            keys: ['BOTTOM_JOIN', 'BOTTOM_BACK_JOIN', 'BACK_JOIN', 'TOP_BACK_JOIN', 'RAIL_JOIN', 'ANGLE_JOIN'] },
 ]
