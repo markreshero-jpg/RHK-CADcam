@@ -541,7 +541,7 @@ function DrawerAssembly({
   const slideColor  = '#6b7280'
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} userData={{ drawerTravel: true }}>
       {showFace && <PartAlpha a={alpha('drawer_fronts')}><Part
         b={zb}
         faceColors={zFaceColors}

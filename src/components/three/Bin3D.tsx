@@ -1,36 +1,76 @@
 'use client'
 // 3D pull-out bin (z_bin_cabinet B5). Cabinet-space mm; render it inside the
-// drawer's moving group so it slides out with the front.
+// drawer's moving group. The carrier + bins slide out with the front; the frame
+// + runners stay on the gables (the fixed group cancels the parent's travel).
 //
-// With a model on the bin product (hardware_slides.model_url) the model is
-// FITTED to the bin envelope — its bounding box stretched to the clear width ×
-// bin height × nominal depth at the bin's floor-back-left corner — so a model
-// in metres or mm, at any module size, lines up with the drilling. Without one
-// (or while it loads) the generic shape from binShape() stands in.
-import { Suspense, useMemo } from 'react'
+// Geometry: binShape() — the port of build_bin.py, sized from the bin pick.
+// A bin product with its own model (hardware_slides.model_url) renders that
+// instead, FITTED to the bin envelope from its bounding box (any units / size);
+// the parametric bin stands in while it loads.
+import { Suspense, useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { ResolvedDrawerStack } from '@/src/lib/resolver/types'
-import { binShape } from '@/src/lib/binGeometry'
+import { binShape, type BinPart, type BinPartKind } from '@/src/lib/binGeometry'
 import { ModelSource } from './ModelAsset'
 import { PartAlpha } from './PartViewer'
 
-const METAL = '#9ca3af'
-const BIN   = '#3f4651'
+// build_bin.py MATS
+const LOOK: Record<BinPartKind, { color: string; metalness: number; roughness: number }> = {
+  frame:   { color: '#bec0c4', metalness: 0.8, roughness: 0.35 },
+  runner:  { color: '#a0a2a6', metalness: 0.9, roughness: 0.3 },
+  carrier: { color: '#46484c', metalness: 0,   roughness: 0.6 },
+  bin:     { color: '#5a5c60', metalness: 0,   roughness: 0.6 },
+  rim:     { color: '#5a5c60', metalness: 0,   roughness: 0.6 },
+  lid:     { color: '#cdcfd2', metalness: 0,   roughness: 0.6 },
+}
 
-function GenericBin({ stack, opacity }: { stack: ResolvedDrawerStack; opacity: number }) {
+// Tapered bin body: 8 corners, flat-shaded.
+function frustumGeometry(p: Extract<BinPart, { shape: 'frustum' }>): THREE.BufferGeometry {
+  const c = (y: number, [w, d]: [number, number]) => [
+    [p.cx - w / 2, y, p.cz - d / 2], [p.cx + w / 2, y, p.cz - d / 2],
+    [p.cx + w / 2, y, p.cz + d / 2], [p.cx - w / 2, y, p.cz + d / 2],
+  ]
+  const [b0, b1, b2, b3] = c(p.y0, p.bottom), [t0, t1, t2, t3] = c(p.y1, p.top)
+  const quads = [[b0, b3, b2, b1], [t0, t1, t2, t3], [b0, b1, t1, t0], [b1, b2, t2, t1], [b2, b3, t3, t2], [b3, b0, t0, t3]]
+  const pos: number[] = []
+  for (const [a, b, cc, d] of quads) pos.push(...a, ...b, ...cc, ...a, ...cc, ...d)
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.computeVertexNormals()
+  return g
+}
+
+function PartMesh({ p, opacity }: { p: BinPart; opacity: number }) {
+  const look = LOOK[p.kind]
+  const geo = useMemo(() => (p.shape === 'frustum' ? frustumGeometry(p) : null), [p])
+  const mat = <meshStandardMaterial {...look} side={THREE.DoubleSide} transparent={opacity < 1} opacity={opacity} />
+  if (p.shape === 'frustum') return <mesh geometry={geo!}>{mat}</mesh>
+  return (
+    <mesh position={[p.x + p.w / 2, p.y + p.h / 2, p.z + p.d / 2]}>
+      <boxGeometry args={[p.w, p.h, p.d]} />{mat}
+    </mesh>
+  )
+}
+
+// Holds its children still while the drawer group (tagged userData.drawerTravel
+// by DrawerAssembly) slides in Z.
+function Fixed({ children }: { children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null)
+  useFrame(() => {
+    let p = ref.current?.parent ?? null
+    while (p && !p.userData.drawerTravel) p = p.parent
+    if (ref.current) ref.current.position.z = p ? -p.position.z : 0
+  })
+  return <group ref={ref}>{children}</group>
+}
+
+function ParametricBin({ stack, opacity }: { stack: ResolvedDrawerStack; opacity: number }) {
+  const parts = useMemo(() => binShape(stack), [stack])
   return (
     <group>
-      {binShape(stack).map((b, i) => (
-        <mesh key={i} position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]}>
-          <boxGeometry args={[b.w, b.h, b.d]} />
-          <meshStandardMaterial
-            color={b.kind === 'bin' ? BIN : METAL}
-            metalness={b.kind === 'bin' ? 0.05 : 0.6}
-            roughness={b.kind === 'bin' ? 0.8 : 0.4}
-            transparent={opacity < 1} opacity={opacity}
-          />
-        </mesh>
-      ))}
+      <Fixed>{parts.filter(p => !p.moving).map((p, i) => <PartMesh key={`f${i}`} p={p} opacity={opacity} />)}</Fixed>
+      {parts.filter(p => p.moving).map((p, i) => <PartMesh key={`m${i}`} p={p} opacity={opacity} />)}
     </group>
   )
 }
@@ -56,13 +96,13 @@ function Fitted({ obj, env, nudge }: { obj: THREE.Object3D; env: Envelope; nudge
 
 export default function Bin3D({ stack, opacity = 1 }: { stack: ResolvedDrawerStack; opacity?: number }) {
   const rail = stack.slides[0]
-  const generic = <GenericBin stack={stack} opacity={opacity} />
-  if (!rail?.model_url || !rail.model_format) return generic
+  const parametric = <ParametricBin stack={stack} opacity={opacity} />
+  if (!rail?.model_url || !rail.model_format) return parametric
   const env: Envelope = { x: stack.box_X, y: stack.box_Y, z: stack.box_Z, w: stack.box_width, h: stack.box_height, d: stack.box_depth }
   return (
     <PartAlpha a={opacity}>
-      <Suspense fallback={generic}>
-        <ModelSource url={rail.model_url} format={rail.model_format} look={{ color: METAL }}>
+      <Suspense fallback={parametric}>
+        <ModelSource url={rail.model_url} format={rail.model_format} look={{ color: LOOK.frame.color }}>
           {obj => <Fitted obj={obj} env={env} nudge={[rail.model_anchor_x, rail.model_anchor_y, rail.model_anchor_z]} />}
         </ModelSource>
       </Suspense>

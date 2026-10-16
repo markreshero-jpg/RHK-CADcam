@@ -212,27 +212,43 @@ describe('forcing a bin (override)', () => {
   })
 })
 
-describe('generic 3D bin (B5)', () => {
-  it('two bins front-to-back on a tray, inside the runners, within the bin envelope', async () => {
+describe('parametric 3D bin — build_bin.py port (B5)', () => {
+  it('matches the script in its own 370 × 520 space: 320 × 246 rims, 316 × 242 lids', async () => {
+    const { binShape } = await import('../../binGeometry')
+    const stack = { ...resolveCabinet(binCab(450)).drawer_stacks[0], box_width: 370, box_height: 540, box_depth: 520 }
+    const parts = binShape(stack)
+    const rims = parts.filter(p => p.kind === 'rim' && p.shape === 'box')
+    expect(rims.map(r => r.shape === 'box' && [Math.round(r.w), Math.round(r.d)])).toEqual([[320, 246], [320, 246]])
+    const bins = parts.filter(p => p.shape === 'frustum')
+    expect(bins).toHaveLength(2)
+    expect(bins[0].shape === 'frustum' && bins[0].top).toEqual([316, 242])
+    // Frame + runners stay; carrier, bins, rims, lids slide.
+    expect(parts.filter(p => !p.moving).every(p => p.kind === 'frame' || p.kind === 'runner')).toBe(true)
+  })
+
+  it('a 74L: stays inside its envelope, two bins front-to-back, standing on the floor', async () => {
     const { binShape } = await import('../../binGeometry')
     const [stack] = resolveCabinet(binCab(450)).drawer_stacks
-    const boxes = binShape(stack)
-    expect(boxes.filter(b => b.kind === 'runner')).toHaveLength(2)
-    const bins = boxes.filter(b => b.kind === 'bin')
-    expect(bins).toHaveLength(2)
-    for (const b of boxes) {
-      expect(b.x).toBeGreaterThanOrEqual(stack.box_X - 1e-6)
-      expect(b.x + b.w).toBeLessThanOrEqual(stack.box_X + stack.box_width + 1e-6)
-      expect(b.y + b.h).toBeLessThanOrEqual(stack.box_Y + 620 + 1e-6)
-      expect(b.z + b.d).toBeLessThanOrEqual(stack.box_Z + 520 + 1e-6)
+    const parts = binShape(stack)
+    const top = stack.box_Y + stack.box_height
+    for (const p of parts) {
+      if (p.shape === 'box') {
+        expect(p.x).toBeGreaterThanOrEqual(stack.box_X - 1e-6)
+        expect(p.x + p.w).toBeLessThanOrEqual(stack.box_X + stack.box_width + 1e-6)
+        expect(p.y + p.h).toBeLessThanOrEqual(top + 1e-6)
+        expect(p.z + p.d).toBeLessThanOrEqual(stack.box_Z + stack.box_depth + 1e-6)
+      }
     }
-    expect(bins[0].x).toBeCloseTo(bins[1].x)          // same column
-    expect(bins[0].z).not.toBeCloseTo(bins[1].z)      // one behind the other
+    const bins = parts.filter(p => p.shape === 'frustum')
+    expect(bins).toHaveLength(2)
+    expect(bins.every(b => b.shape === 'frustum' && Math.abs(b.y0 - stack.box_Y) < 1e-6)).toBe(true)
+    expect(bins[0].shape === 'frustum' && bins[1].shape === 'frustum' && bins[0].cz).not.toBeCloseTo(bins[1].shape === 'frustum' ? bins[1].cz : 0)
   })
+
   it('600 module: four bins, 2 × 2', async () => {
     const { binShape } = await import('../../binGeometry')
     const [stack] = resolveCabinet(binCab(600)).drawer_stacks
-    expect(binShape(stack).filter(b => b.kind === 'bin')).toHaveLength(4)
+    expect(binShape(stack).filter(p => p.shape === 'frustum')).toHaveLength(4)
   })
 })
 

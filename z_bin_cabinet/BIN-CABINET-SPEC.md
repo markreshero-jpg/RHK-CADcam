@@ -167,12 +167,18 @@ void | division | bin | division | void, with equal voids.
 - `src/components/three/Bin3D.tsx` draws it inside `DrawerAssembly`'s moving group (slides out with the
   front). New display-layer item `bins` (3D, default shown). Bin stacks no longer draw their rails as runners
   in 3D; elevation / plan still show the rails until they get the bin outline.
-- **Models (2026-10-16):** a bin product's `model_url` renders in place of `binShape` (generic shape while
-  loading / on failure). The model is FITTED to the bin envelope (clear width × bin height × nominal depth,
-  floor-back-left corner) from its own bounding box, so units and module size don't matter; the
-  model_anchor_x/y/z columns nudge it (mm). Teramo 74L uses `public/models/bins/nikpol-teramo-74L.glb`
-  (user-supplied; source copy in this folder). That GLB is 360 × 540 × 520 (m-units), not 74L size
-  (≈421 × 620 × 520), so it is stretched ~1.17 × 1.15 to fit. `.glb` added to the proxy's static-file skip.
+- **Parametric bin (2026-10-17):** `binShape()` is now a port of the shop's `build_bin.py` (this folder):
+  fixed frame (plate, skirts, back) + runners hanging from the top; moving carrier (rails, front/mid/back
+  bars); tapered bins on the floor with rim, lid and lid handle. Sized from the bin pick (clear width ×
+  bin height × depth). Bin plan size scales with the space (the script's fixed 320 × 246 rim only fits
+  its own 370-wide space — reproduced exactly there); 600 module = 2 × 2 bins. Frame + runners stay put
+  when the drawer opens (`Fixed` cancels the travel of the group tagged `userData.drawerTravel`).
+  NB the script's ProductSpec "74L" (362–380 / 540 high) disagrees with Nikpol's TDS (412–430 / 620);
+  the app uses the TDS via the bin pick.
+- **Models:** a bin product's `model_url` still renders in place of the parametric bin, FITTED to the bin
+  envelope from its bounding box (any units / size; model_anchor_x/y/z nudge in mm). None set today — the
+  user's 360 × 540 74L GLB (source copy here) was replaced by the parametric bin. `.glb` is in the
+  proxy's static-file skip.
 
 **B4 as built (2026-10-16):**
 - `NO_BIN_FITS` carries `action: { type: 'add_bin_divisions', void_mm, bin, zone }` (new optional
