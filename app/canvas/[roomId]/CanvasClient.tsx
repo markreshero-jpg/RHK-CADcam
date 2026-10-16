@@ -21,6 +21,8 @@ import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
 import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { usePinchZoom } from './usePinchZoom'
+import { useIsPhone } from '@/src/lib/usePhone'
+import PhoneDrawerTab from './PhoneDrawerTab'
 import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import { invalidateResolverCaches } from '@/src/lib/resolver/resolveCabinetFromDB'
@@ -183,6 +185,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [cabMenuOpen, setCabMenuOpen] = useState(false)
   const [drawHeight, setDrawHeight] = useState<number | null>(null)
   const [sidebarW, setSidebarW] = useState(192)
+  // Phones (z_mobile/MOBILE-SPEC.md): sidebar becomes a drawer, panels a bottom sheet.
+  const phone = useIsPhone()
+  const [phoneSidebar, setPhoneSidebar] = useState(false)
+  const [phonePanelHidden, setPhonePanelHidden] = useState(false)
+  // Picking a tool or library item closes the drawer so the canvas is usable.
+  const toolKey = `${mode}|${armedDef?.id ?? ''}`
+  const [drawerToolKey, setDrawerToolKey] = useState(toolKey)
+  if (toolKey !== drawerToolKey) { setDrawerToolKey(toolKey); setPhoneSidebar(false) }
   const [mouseWorld, setMouseWorld] = useState<Pt>({ x: 0, y: 0 })
   const [canvasView, setCanvasView] = useState<CanvasView>('plan')
   const [elevWallId, setElevWallId] = useState<string | null>(null)
@@ -2176,7 +2186,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-screen flex flex-col bg-gray-950 text-white overflow-hidden">
+    <div className="h-dvh flex flex-col bg-gray-950 text-white overflow-hidden touch-no-select">
 
       <CanvasMenubar
         projectName={project?.name ?? 'Untitled'}
@@ -2184,19 +2194,30 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         openMenu={openMenu}
         setOpenMenu={setOpenMenu}
         menus={menus}
+        compact={phone}
       />
 
       {/* View tab bar */}
-      <div className="flex-none h-8 bg-gray-900 border-b border-gray-800 flex items-center px-3 shrink-0 relative z-30">
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1">
+      <div className={phone
+        ? 'flex-none h-10 bg-gray-900 border-b border-gray-800 flex items-center gap-1 px-1 shrink-0 relative z-30'
+        : 'flex-none h-8 bg-gray-900 border-b border-gray-800 flex items-center px-3 shrink-0 relative z-30'}>
+        {phone && (
+          <button onClick={() => setPhoneSidebar(o => !o)} title="Tools" aria-label="Tools" aria-expanded={phoneSidebar}
+            className={`flex-none w-9 h-8 rounded-lg flex items-center justify-center border transition-colors ${phoneSidebar ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800/50 border-gray-700 text-gray-300 active:bg-gray-800'}`}>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M4 6h12M4 10h12M4 14h12" />
+            </svg>
+          </button>
+        )}
+        <div className={phone ? 'flex items-center gap-0.5 min-w-0' : 'absolute left-1/2 -translate-x-1/2 flex items-center gap-1'}>
           {(['plan', 'elevation', 'section', '3d'] as CanvasView[]).map(v => (
             <button key={v} onClick={() => switchView(v)}
-              className={`px-3 py-1 text-xs rounded transition-colors ${
+              className={`${phone ? 'px-2 py-1.5' : 'px-3 py-1'} text-xs rounded transition-colors ${
                 canvasView === v
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
               }`}>
-              {v === 'plan' ? 'Plan' : v === 'elevation' ? 'Elevation' : v === 'section' ? 'Section' : room3DStyle === 'wire' ? '3D · Wire' : '3D'}
+              {v === 'plan' ? 'Plan' : v === 'elevation' ? (phone ? 'Elev' : 'Elevation') : v === 'section' ? (phone ? 'Sect' : 'Section') : room3DStyle === 'wire' ? (phone ? 'Wire' : '3D · Wire') : '3D'}
             </button>
           ))}
           {/* 3D style dropdown: solid / wire (see-through parts) */}
@@ -2226,7 +2247,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               </div>
             )}
           </div>
-          {canvasView === '3d' && (
+          {canvasView === '3d' && !phone && (
             <button
               onClick={() => setReset3DSignal(s => s + 1)}
               title="Reset 3D view"
@@ -2236,8 +2257,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             </button>
           )}
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          {(canvasView === 'plan' || canvasView === 'elevation' || canvasView === '3d') && (
+        <div className={`ml-auto flex items-center ${phone ? 'gap-1 min-w-0' : 'gap-2'}`}>
+          {canvasView === '3d' && phone && (
+            <button onClick={() => setReset3DSignal(s => s + 1)} title="Reset 3D view"
+              className="px-2 py-1 text-xs rounded bg-gray-700 text-gray-100 border border-gray-500">⟲</button>
+          )}
+          {!phone && (canvasView === 'plan' || canvasView === 'elevation' || canvasView === '3d') && (
             <button
               onClick={() => onSelectMode('measure')}
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
@@ -2249,7 +2274,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               📏 Measure
             </button>
           )}
-          {canvasView === 'plan' && (
+          {/* Phone: 3D measure only (tap face, tap face; long-press clears; tap again to exit). */}
+          {phone && canvasView === '3d' && (
+            <button onClick={() => onSelectMode('measure')} title="Measure" aria-label="Measure" aria-pressed={mode === 'measure'}
+              className={`flex-none w-9 h-8 rounded-lg flex items-center justify-center border transition-colors ${
+                mode === 'measure' ? 'bg-amber-500 border-amber-400 text-white' : 'bg-gray-800/50 border-gray-700 text-gray-300 active:bg-gray-800'}`}>
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2.5" y="6.5" width="15" height="7" rx="1.2" />
+                <path d="M5.5 6.5v2.5M8.5 6.5v3.5M11.5 6.5v2.5M14.5 6.5v3.5" />
+              </svg>
+            </button>
+          )}
+          {canvasView === 'plan' && !phone && (
             <button
               onClick={() => onSelectMode('draw_section')}
               className={`px-2 py-0.5 text-xs rounded transition-colors ${
@@ -2262,14 +2298,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             </button>
           )}
           {canvasView !== 'section' && (<>
-            <span className="text-[10px] text-gray-600 uppercase tracking-wider select-none">Layers</span>
+            {!phone && <span className="text-[10px] text-gray-600 uppercase tracking-wider select-none">Layers</span>}
             <select
+              title="Layers"
               value={activeLayerSet?.id ?? ''}
               onChange={e => {
                 if (e.target.value === '__manage__') { setShowLayerManager(true); return }
                 chooseLayerSet(e.target.value)
               }}
-              className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500 cursor-pointer"
+              className={`text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 focus:outline-none focus:border-blue-500 cursor-pointer ${phone ? 'py-1.5 max-w-[6.5rem] min-w-0' : 'py-0.5'}`}
             >
               {!activeLayerSet && <option value="">{layerSetsApi.loading ? 'Loading…' : 'Default'}</option>}
               {layerSetsApi.sets.map(s => (
@@ -2283,6 +2320,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
       <div className="flex flex-1 overflow-hidden relative">
 
+        {/* Phone: the sidebar is a drawer over the canvas (kept mounted so its menus keep state). */}
+        {phone && phoneSidebar && <div className="absolute inset-0 z-30 bg-black/40" onPointerDown={() => setPhoneSidebar(false)} />}
+        <div className={phone ? `absolute inset-y-0 left-0 z-40 shadow-2xl ${phoneSidebar ? 'flex' : 'hidden'}` : 'contents'}>
         <CanvasSidebar
           room={room}
           onOpenRoomProperties={() => setRoomModalTab('details')}
@@ -2309,14 +2349,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           clipboard={clipboard}
           sidebarW={sidebarW}
         />
+        </div>
 
-        <div
+        {!phone && <div
           className="flex-none w-1 bg-gray-800 hover:bg-blue-500/60 active:bg-blue-500 cursor-col-resize transition-colors"
           style={{ touchAction: 'none' }}
           onPointerDown={onResizePointerDown}
           onPointerMove={onResizePointerMove}
           onPointerUp={onResizePointerUp}
-        />
+        />}
 
         {canvasView === 'plan' && (
           <>
@@ -2434,7 +2475,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 />
               }
             />
-              <SnapToolbar settings={snapSettings} onChange={updateSnapSettings} kinds={SNAP_KINDS} meta={SNAP_KIND_META} />
+              {!phone && <SnapToolbar settings={snapSettings} onChange={updateSnapSettings} kinds={SNAP_KINDS} meta={SNAP_KIND_META} />}
             </div>
             {(mode === 'draw_wall' || mode === 'draw_island') && (
               <WallDrawPanel
@@ -2615,6 +2656,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           />
         )}
 
+        {/* In 3D the right-hand panels float over the canvas instead of taking flex
+            space — otherwise selecting/deselecting resizes the WebGL canvas and the
+            view jumps sideways. Plan/elevation keep the docked column (`contents`).
+            Phones stack them in a drawer that slides over the canvas from the right,
+            with an edge tab to hide / show it (hidden stays hidden across selections).
+            The drawer slides via `right`, not a transform — a transformed ancestor
+            would trap the fixed-position editors rendered inside it. */}
+        <div className={phone ? 'absolute top-0 bottom-0 z-20 flex items-start transition-[right] duration-200 [&:has(>.panel-stack:empty)]:hidden' : 'contents'}
+          style={phone ? { right: phonePanelHidden ? 'calc(-1 * min(18rem, 82vw))' : 0 } : undefined}>
+        {phone && <PhoneDrawerTab hidden={phonePanelHidden} onToggle={() => setPhonePanelHidden(h => !h)} />}
+        <div className={phone
+          ? 'panel-stack h-full w-[min(18rem,82vw)] overflow-y-auto flex flex-col bg-gray-900 border-l border-gray-700 shadow-2xl [&>*]:w-full! [&>*]:shrink-0 [&>*]:border-l-0'
+          : canvasView === '3d' ? 'absolute top-0 right-0 bottom-0 z-20 flex shadow-xl' : 'contents'}>
         {mode !== 'draw_wall' && mode !== 'draw_island' && multiWallObjs.length >= 2 && (canvasView === 'plan' || canvasView === 'elevation') && (
           <MultiWallPanel
             walls={multiWallObjs}
@@ -2632,12 +2686,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           />
         )}
         {mode !== 'draw_wall' && mode !== 'draw_island' && selectedWall && multiWallObjs.length < 2 && (canvasView === 'plan' || canvasView === 'elevation') && (
-          <WallPanel wall={selectedWall} roomHeight={room.room_dy ?? undefined} onUpdate={handleUpdateWall} onDelete={handleDeleteWall} />
+          <WallPanel wall={selectedWall} roomHeight={room.room_dy ?? undefined} onUpdate={handleUpdateWall} onDelete={handleDeleteWall} onClose={() => setSelected(null)} />
         )}
-        {/* In 3D the right-hand panels float over the canvas instead of taking flex
-            space — otherwise selecting/deselecting resizes the WebGL canvas and the
-            view jumps sideways. Plan/elevation keep the docked column (`contents`). */}
-        <div className={canvasView === '3d' ? 'absolute top-0 right-0 bottom-0 z-20 flex shadow-xl' : 'contents'}>
         {selectedCab && cabResize?.cabId === selectedCab.id && (
           <CabinetResizePanel
             key={`${cabResize.cabId}-${cabResize.dim}`}
@@ -2688,6 +2738,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             room={room}
             onUpdate={patchDraft}
             onDelete={async () => cancelArm()}
+            onClose={cancelArm}
+            hideDelete
             hideWallPosition
             autoFocusWidth
           />
@@ -2722,6 +2774,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             room={room}
             onUpdate={handleUpdateCabinet}
             onDelete={handleDeleteCabinet}
+            onClose={() => { setSelected(null); setCabResize(null) }}
             autoFocusWidth
           />
         )}
@@ -2788,6 +2841,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onMove={id => { if (canvasView !== 'plan') switchView('plan'); fx.startMove(id) }}
             onTurn={(id, deg) => void fx.rotateBy(id, deg)}
             onOpen={id => setViewFixtureId(id)}
+            onClose={() => setSelected(null)}
           />
         )}
         {mode !== 'place_definition' && mode !== 'edit_benchtop_shape' && mode !== 'edit_benchtop_edges' && selectedBenchtop && (
@@ -2795,6 +2849,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             benchtop={selectedBenchtop}
             onUpdate={bt.handleUpdateBenchtop}
             onDelete={bt.handleDeleteBenchtop}
+            onClose={() => setSelected(null)}
             filletRadius={bt.filletRadius}
             setFilletRadius={bt.setFilletRadius}
             onMirrorH={bt.handleMirrorH}
@@ -2865,10 +2920,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           )
         })()}
         </div>
+        </div>
 
       </div>
 
-      <footer className="flex-none h-6 bg-gray-900 border-t border-gray-800 flex items-center text-[10px] text-gray-500 select-none">
+      <footer className={`flex-none h-6 bg-gray-900 border-t border-gray-800 items-center text-[10px] text-gray-500 select-none ${phone ? 'hidden' : 'flex'}`}>
         <div className="px-3 border-r border-gray-800 font-mono whitespace-nowrap">
           X: {String(Math.round(mouseWorld.x)).padStart(5)}&nbsp;&nbsp;Y: {String(Math.round(mouseWorld.y)).padStart(5)}
         </div>

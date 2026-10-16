@@ -11,10 +11,13 @@
 > the true shape of corner cabinets, radius cabinets etc."). Agreed order: **O2b** (resolver
 > outlines into the snapshot) → **O3** (sheet preview) → O4 (contour G-code) → O5 (EB deduction).
 > True-polygon / NFP nesting stays deferred (locked decision #2: nest at bbox, cut the contour).
-> Working on: O2b. Done so far: `PART_SELECTS` (normalize.ts) now loads `outline` for case_parts +
-> internal_parts (both columns exist; 34 case parts carry one). Frame mapping is DONE — see
-> "Frame findings" under O2b. Next: `shapeToOpFrame` in shapes.ts (+ tests per kind), resolver
-> shapes in normalize.ts (drawn shape wins, `source: 'resolver'`, never stale), Stage 2 "⬠ auto".
+> **2026-10-16: O2b + O3 + O4 built** (uncommitted until Mark's in-app check). Test job: RHK6581 The
+> Hive Co (BC-09 L corner + radius end, BC-15 clipped corner, BC-07/08 angled fillers, notched
+> finger-pull gables on most base cabinets). Next after the check: O5 (EB deduction on inner
+> shaped edges).
+> **2026-10-16: true arcs built** (uncommitted, check on RHK6581 BC-21 radius end — Mark: "this
+> should be a radius, one continuous curve"; machine Anderson Genesis Plus 49, Fanuc → G2/G3 on by
+> default, no profile toggle). See O4 "True arcs" below.
 
 ---
 
@@ -105,7 +108,27 @@
   blocks that part with a visible reason; rect-only projects unchanged.
 
 ### O2b — Shaped-cabinet outlines into the snapshot (added 2026-10-15)
-**Status: [ ] not started**
+**Status: [x] built 2026-10-16 — in-app check pending.** `shapes.ts`: `shapeFrameFor(table, typeKey,
+partId)` (swap / mirror per kind, mirrors Cabinet3DView panelKind + PartEditor), `shapeToOpFrame`,
+`outlineToSegments`; `attachShape` takes the op frame + the row's `outline` → `OptiShape.source`
+`'drawn' | 'resolver'` + `op_polygon` (op frame: bottom-left, y up, x along w, y along h).
+normalize.ts: op frame = DX × DY; `transpose` when the part nests turned (vertical-grain fprail,
+toe-kick canonical sort); on-edge kick spreaders (nest face ≠ DX × DY) get no op outline.
+Custom parts now select `orientation`. Decisions made in the build:
+- Resolver outlines are **never mirrored** (written unmirrored on both gables) and never stale; one
+  that no longer fits the part (hand sw/sh override) is **dropped** → plain rectangle, as before.
+- `nestsFullSize(p)` = drawn shapes only. Resolver shapes keep the ordinary cut-size nest while
+  they still CUT as the rectangle (until O4) — otherwise every finger-pull gable would lose its
+  EB deduction. Benchtop pieces count as drawn (they always nested full size).
+- Bug fixed en route: sheetDrills shifted holes for EB deduction on drawn-shape parts that nest at
+  full size (holes ~tape thickness off) — now `deduct && !nestsFullSize`.
+- Side bug (A) fixed: PartEditor flips a right-hand side's resolver outline into its mirrored
+  display frame (notch showed at the back; saving it unedited moved it there).
+- Stage 2: "⬠ auto" for resolver shapes.
+Tests `__tests__/shapeOpFrame.test.ts`: frame per kind, transform, drawn-wins / no-mirror / drop /
+transpose; end to end through normalizeProject on a resolved BCNP, both hands: the bottom's L
+matches the plan footprint on a grid, and every finger-rail notch pocket lands in the cut-away
+while every drill on that panel lands on material (box gable + turned `side:end2`).
 Shaped cabinets (z_cabinet_shape: L / diagonal / clipped corners, radius ends, angled fillers…)
 write a resolver outline on their non-rectangular horizontals — `case_parts.outline` (bottom,
 full_top, rails) and `internal_parts.outline` (shelves) — in the horizontal Shape Editor frame
@@ -151,17 +174,58 @@ parts nest AND cut as their bounding rectangle.
   Stage 2 with the right bbox; rect projects byte-identical.
 
 ### O3 — Shape preview on the sheet + persisted polygon
-**Status: [ ] not started**
+**Status: [x] built 2026-10-16 — in-app check pending.** `shapes.placedOutline(part, pl, deductEb)`
+= op_polygon through the drill transform (drills.toSheet + the up-face ebShift on a deducted
+blank), relative to the placement corner. `SheetSVG` (Stage 4, `outlineFor` prop + exported
+`PlacedOutline`) and Stage 5 `InteractiveSheet` draw the bbox faint + dashed (still what packs /
+drags) and the outline filled inside it; follows drag + rotate. Stage 6 writes
+`nest_placements.shape_polygon` = **op_polygon** (part-local mm, origin bottom-left, **y up**,
+finished size, pre-rotation — changed from the "y-down" first draft so it matches ops and the
+sheet). Test: placedOutline == toSheet per point, plain + rotated; deducted shift resolver vs drawn.
 - Stage 4/5 sheet SVGs (`SheetSVG.tsx`, `Stage5Edit.tsx`): draw the sampled outline inside the
   placement rect for shaped parts (rotation-aware; reuse shapePath sampling, don't re-tessellate
   per frame).
-- Stage 6 save: write `nest_placements.shape_polygon` (sampled polygon, part-local mm,
-  y-down, pre-rotation) instead of `null`.
+- Stage 6 save: write `nest_placements.shape_polygon` instead of `null`.
 - **Accept**: shaped part visibly shaped in Stages 4/5 incl. after 90° rotation and manual move;
   saved run rows carry the polygon.
 
 ### O4 — Contour G-code
-**Status: [ ] not started**
+**Status: [x] built 2026-10-16 — in-app check pending (with O2b + O3).**
+- `GcodeInput.outlines` (placement uid → outline in sheet coords); Stage 6 builds it per sheet from
+  `placedOutline` + the placement corner, so G-code, sheet preview and holes share one transform.
+- `routePerimeter` takes the outline: wound CCW (climb) / CW (conventional) like the rect, grown by
+  the computer-comp radius, mapped, flip-wound for reflecting datums; the rect path generalised to
+  N corners (longest-edge-midpoint start + front tie-break, ramp / lead-in / lead-out / onion skin /
+  control comp unchanged). Outward normal now from the loop's winding (equal to the old
+  centroid test on a rect; correct on concave outlines).
+- **Rect output is byte-identical** (all existing G-code fixture tests pass; a rect outline in
+  either winding posts the same program as no outline — 6 post setups).
+- `shapes.toolPathLoop`: outer-profile offset that **drops recesses narrower than the bit** and
+  re-joins the neighbours (else the offset crosses itself and gouges — proven: a plain offset
+  gouges a finger-pull gable with a 12 / 16 mm bit). Dropped → `(WARN: … detail smaller than the
+  Nmm bit - not cut there)` in the program. Finger-pull reliefs (RAILCUT 5 → 10 tall) fit a
+  ≤ 10 mm bit exactly.
+- Deducted blanks (decision made in the build): `placedOutline` pulls outline edges lying on the
+  part's rectangle in by that side's tape, so a resolver contour fits the cut-size blank; inner
+  edges (notch walls, angled facets) stay at finished size until O5. Drawn shapes still cut full size.
+- Simulator 2D + 3D draw the outline (parts + carve mask); the toolpath comes from the G-code itself.
+- Tests `__tests__/contourGcode.test.ts` (rect identity, L tool-centre corners incl. inside corner,
+  never enters the missing quarter, climb CCW / conventional CW, start + waste-side ramp, validator
+  clean) + gouge guard in `shapeOpFrame.test.ts` (6 / 10 / 12 / 16 mm bits on a resolved gable,
+  path sampled every 0.5 mm stays ≥ r from the part and outside it).
+- **True arcs (2026-10-16)**: resolver outlines store each footprint-arc edge as ONE edge — a DXF
+  bulge `b` on its start point (`shapePath.OutlinePt`; read via `sampleOutline` / `outlineSegments`,
+  never as bare points). `resolveShapedCase.clipHorizontal` clips the sampled inset as before, then
+  `restoreArcs` swaps runs on a footprint circle back to one arc (ends snapped onto the circle along
+  the clip line). Part Editor draws it as an SVG arc; 3D samples at 2°. Contour G-code: the final
+  tool-centre loop (machine space, after EB + cutter offset + datum) goes through `fitLoopArcs` —
+  ≥ 3 gentle (≤ 12°) same-way edges within 0.025 mm of one circle → one G2/G3 (I/J), so drawn
+  shapes and benchtops get arcs too; a loop with no straight edge stays as flats. Start point =
+  longest STRAIGHT edge. Simulator parser now replays G2/G3 along the arc (was a straight chord —
+  lead-in arcs and helical entries too). Tests `__tests__/arcContour.test.ts`.
+- Known gaps: inside corners keep
+  the bit radius (unavoidable). Tabs still comment-only (as the rect). With `control` comp the
+  machine applies the offset, so small reliefs rely on the controller.
 - `routePerimeter` (or a sibling `routeContour`) takes the shape outline for shaped parts:
   segments → toolpath (lines + arcs as G2/G3 where the post supports them, sampled polyline
   fallback; beziers always sampled), cutter compensation side from loop winding, ramp/lead-in
@@ -220,6 +284,9 @@ parts nest AND cut as their bounding rectangle.
 - Snapshot-uid instability / reload-a-saved-run / `output_to_cnc` reset on resolve (pre-existing).
 
 ## Session log
+- **2026-10-16** — O2b + O3 + O4 built (see their status blocks); side bug (A) fixed, plus the
+  drawn-shape drill-shift bug and a bit-too-big gouge guard. Side bugs B–E still open. Awaiting
+  Mark's check on RHK6581.
 - **2026-08-03** — O2 done + verified headlessly. Found + fixed the ShapeEditor endpoint-only
   bounds bug (see O2 status block). DATA NOTE for Mark: BC-09's Right Gable now has r2 (no-op
   re-save) + r3 revisions and the part grew to 725mm deep — that's the drawn grow-wider arc

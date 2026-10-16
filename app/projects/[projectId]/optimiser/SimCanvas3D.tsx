@@ -29,6 +29,7 @@ import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import { holesOf, type ParsedProgram, type SimMove } from '@/src/lib/optimiser/gcodeParser'
 import { buildProfile, type ToolShape } from '@/src/lib/cnc/toolProfile'
+import { pointInShape } from '@/src/lib/shapePath'
 
 const BOARD_COLOR = '#d8c8a4'   // finished panel face
 const PART_COLOR  = '#c6ad82'   // nested parts — a touch darker so they read against the board
@@ -82,7 +83,8 @@ function Segments({ moves, map, level, color, opacity }: {
 }
 
 // ── The carvable board (height-field / Z-map) ─────────────────────────────────
-function CarvedBoard({ W, H, thickness, placements, prog, elapsedRef, toolDia }: {
+function CarvedBoard({ W, H, thickness, placements, outlines, prog, elapsedRef, toolDia }: {
+  outlines?: Record<string, { x: number; y: number }[]>
   W: number; H: number; thickness: number
   placements: NestedSheet['placements']
   prog: ParsedProgram
@@ -105,7 +107,9 @@ function CarvedBoard({ W, H, thickness, placements, prog, elapsedRef, toolDia }:
     const state = new Uint8Array(count)              // 0 = uncut, 1 = shaded margin, 2 = cut core
     const board = new THREE.Color(BOARD_COLOR)
     const part = new THREE.Color(PART_COLOR)
-    const rects = placements.map(p => ({ x0: p.x, y0: p.y, x1: p.x + p.w, y1: p.y + p.h }))
+    const rects = placements.map(p => ({ x0: p.x, y0: p.y, x1: p.x + p.w, y1: p.y + p.h, poly: outlines?.[p.uid] }))
+    const inRect = (r: (typeof rects)[number], x: number, y: number) =>
+      x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1 && (!r.poly || pointInShape({ x, y }, r.poly))
     for (let j = 0; j < cz; j++) {
       const sy = Math.min(H, j * cell)
       for (let i = 0; i < cx; i++) {
@@ -114,7 +118,7 @@ function CarvedBoard({ W, H, thickness, placements, prog, elapsedRef, toolDia }:
         positions[idx * 3] = sx - W / 2
         positions[idx * 3 + 1] = 0
         positions[idx * 3 + 2] = H / 2 - sy
-        const inPart = rects.some(r => sx >= r.x0 && sx <= r.x1 && sy >= r.y0 && sy <= r.y1)
+        const inPart = rects.some(r => inRect(r, sx, sy))
         const c = inPart ? part : board
         colors[idx * 3] = c.r; colors[idx * 3 + 1] = c.g; colors[idx * 3 + 2] = c.b
       }
@@ -131,7 +135,7 @@ function CarvedBoard({ W, H, thickness, placements, prog, elapsedRef, toolDia }:
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3))
     geom.setIndex(new THREE.BufferAttribute(index, 1))
     return { geom, heights, state, baseColors: colors.slice(), cols, rows, cell, floorY: -(thickness - 0.3) }
-  }, [W, H, thickness, placements])
+  }, [W, H, thickness, placements, outlines])
 
   useEffect(() => { last.current = 0 }, [geom])
   useEffect(() => () => geom.dispose(), [geom])
@@ -307,7 +311,7 @@ function Tool({ shape, cx, cz, tipY, cutting, span }: {
 }
 
 // ── Scene ──────────────────────────────────────────────────────────────────────
-function Scene({ sheet, prog, elapsed, toolDia, activeShape, drillBlock }: Props) {
+function Scene({ sheet, prog, elapsed, toolDia, activeShape, drillBlock, outlines }: Props) {
   const { w: W, h: H } = sheet.stock
   const thickness = sheet.thickness || 18
   const span = Math.max(W, H)
@@ -355,7 +359,7 @@ function Scene({ sheet, prog, elapsed, toolDia, activeShape, drillBlock }: Props
         <Lightformer intensity={1.0} position={[-span, span * 0.5, -span]} scale={span * 0.7} color="#ffe7c2" />
       </Environment>
 
-      <CarvedBoard W={W} H={H} thickness={thickness} placements={sheet.placements}
+      <CarvedBoard W={W} H={H} thickness={thickness} placements={sheet.placements} outlines={outlines}
         prog={prog} elapsedRef={elapsedRef} toolDia={toolDia} />
 
       {/* Drilled holes popping in sequence (gang block has no routing-Z carve) */}
@@ -365,6 +369,11 @@ function Scene({ sheet, prog, elapsed, toolDia, activeShape, drillBlock }: Props
       {sheet.placements.map(p => {
         const x0 = p.x - W / 2, x1 = p.x + p.w - W / 2
         const z0 = H / 2 - p.y, z1 = H / 2 - (p.y + p.h)
+        const poly = outlines?.[p.uid]
+        if (poly) return (
+          <Line key={p.uid} points={[...poly, poly[0]].map(q => [q.x - W / 2, 0.3, H / 2 - q.y] as [number, number, number])}
+            color={OUTLINE_COLOR} lineWidth={1.25} transparent opacity={0.55} />
+        )
         return (
           <Line key={p.uid} points={[[x0, 0.3, z0], [x1, 0.3, z0], [x1, 0.3, z1], [x0, 0.3, z1], [x0, 0.3, z0]]}
             color={OUTLINE_COLOR} lineWidth={1.25} transparent opacity={0.55} />
@@ -407,6 +416,7 @@ interface Props {
   toolDia: (n: number | null, fallback?: number) => number
   activeShape: ToolShape
   drillBlock?: DrillBlockConfig
+  outlines?: Record<string, { x: number; y: number }[]>   // shaped parts, sheet coords (O4)
 }
 
 export default function SimCanvas3D(props: Props) {

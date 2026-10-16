@@ -14,10 +14,11 @@ import { useOptiStore } from '@/src/lib/optimiser/store'
 import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
 import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from '@/src/lib/optimiser/gcodeValidate'
 import { loadSheetDrills } from '@/src/lib/optimiser/sheetDrills'
+import { placedOutline } from '@/src/lib/optimiser/shapes'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
 
-interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number; findings: Finding[] }
+interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number; findings: Finding[]; outlines?: Record<string, { x: number; y: number }[]> }
 
 function dateStamp() {
   const d = new Date()
@@ -156,6 +157,19 @@ export default function Stage6Gcode() {
       const jobInt = parseInt((snap.jobNumber ?? '').match(/\d+/)?.[0] ?? '', 10)
       const oBase = Number.isFinite(jobInt) ? jobInt : 0
 
+      // Shaped parts (O4): the perimeter cut follows each part's outline — the
+      // same placement transform the sheet preview and the holes use.
+      const partByUid = new Map(snap.parts.map(p => [p.uid, p]))
+      const outlinesFor = (sheet: (typeof nestResult.sheets)[number]) => {
+        const out: Record<string, { x: number; y: number }[]> = {}
+        for (const pl of sheet.placements) {
+          const part = partByUid.get(pl.baseUid)
+          const local = part ? placedOutline(part, pl, deductEb) : null
+          if (local) out[pl.uid] = local.map(q => ({ x: pl.x + q.x, y: pl.y + q.y }))
+        }
+        return out
+      }
+
       const gen: GenFile[] = nestResult.sheets.map((sheet, i) => {
         const drills = sheetDrills.get(sheet.index) ?? []
         const routes = sheetRoutes.get(sheet.index) ?? []
@@ -166,6 +180,7 @@ export default function Stage6Gcode() {
           : undefined)
         // Material-level feed override (% of the tool/profile base feed).
         if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100)
+        const outlines = outlinesFor(sheet)
         const gcode = generateSheetGcode({
           sheet, thickness: sheet.thickness, profile: post, drills, routes,
           toolNumber: toolNum(tool?.tool_number), drillToolNumber: 2,
@@ -175,12 +190,14 @@ export default function Stage6Gcode() {
           toolName: (tool?.name as string | null) ?? null, toolNames,
           programNumber: `O${String(oBase + i).padStart(4, '0')}`,
           drillBlock,
+          outlines,
         })
         const fileName = gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: i + 1, ext: post.file_extension })
         return {
           sheetIndex: sheet.index, fileName,
           gcode, lines: gcode.split('\n').length,
           findings: validateGcode(gcode, { maxCommentLength: post.max_comment_length }),
+          outlines,
         }
       })
 
@@ -232,6 +249,9 @@ export default function Stage6Gcode() {
 
         if (sheet.placements.length) {
           const partProject = new Map(snap.parts.map(p => [p.uid, p.project_id]))
+          // O3: the part's outline in its own op frame (mm, origin bottom-left,
+          // y up, FINISHED size, pre-rotation) — rotation / sheet_x / sheet_y place it.
+          const partShape = new Map(snap.parts.map(p => [p.uid, p.shape?.op_polygon?.length ? p.shape.op_polygon : null]))
           const rows = sheet.placements.map(pl => {
             const [stbl, ...rest] = pl.baseUid.split(':')
             return {
@@ -239,7 +259,7 @@ export default function Stage6Gcode() {
               source_table: stbl, source_part_id: rest.join(':') || null,
               sheet_x: pl.x, sheet_y: pl.y, rotation: pl.rotated ? 90 : 0,
               cut_dx: pl.w, cut_dy: pl.h,
-              part_label: pl.label, project_id: partProject.get(pl.baseUid) ?? snap.projectId, cut_quantity: 1, shape_polygon: null,
+              part_label: pl.label, project_id: partProject.get(pl.baseUid) ?? snap.projectId, cut_quantity: 1, shape_polygon: partShape.get(pl.baseUid) ?? null,
             }
           })
           const { error: pErr } = await supabase.from('nest_placements').insert(rows)
@@ -325,7 +345,7 @@ export default function Stage6Gcode() {
 
       {simulating && nestResult && (
         <Simulator
-          files={files.map(f => ({ sheetIndex: f.sheetIndex, fileName: f.fileName, gcode: f.gcode }))}
+          files={files.map(f => ({ sheetIndex: f.sheetIndex, fileName: f.fileName, gcode: f.gcode, outlines: f.outlines }))}
           sheets={nestResult.sheets}
           coord={coord ?? undefined}
           drillBlock={simDrillBlock ?? undefined}

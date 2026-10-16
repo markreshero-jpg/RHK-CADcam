@@ -1,15 +1,17 @@
 'use client'
 
+import PanelDeleteButton, { PanelCloseButton } from './PanelDeleteButton'
 import { useState } from 'react'
 import { Wall, WallType } from '@/src/lib/types'
 import { wallEnd } from '@/src/lib/geometry'
 import CalcInput from '@/src/components/CalcInput'
 
-export default function WallPanel({ wall, roomHeight, onUpdate, onDelete }: {
+export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClose }: {
   wall: Wall
   roomHeight?: number
   onUpdate: (id: string, u: Partial<Wall>) => Promise<void>
   onDelete: (id: string) => void
+  onClose?: () => void
 }) {
   const [local, setLocal] = useState<Partial<Wall>>({})
   const [saving, setSaving] = useState(false)
@@ -32,7 +34,7 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete }: {
           <p className="text-xs font-medium text-gray-300">{wall.wall_type === 'island' ? 'Island' : 'Wall'}</p>
           <p className="text-[10px] text-gray-500">{displayLen}mm</p>
         </div>
-        <button onClick={() => onDelete(wall.id)} className="text-gray-600 hover:text-red-400 text-xs" title="Delete">✕</button>
+        {onClose && <PanelCloseButton onClose={onClose} />}
       </div>
       <div className="p-4 space-y-3">
         <div>
@@ -93,6 +95,7 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete }: {
           </div>
         </div>
       </div>
+      <PanelDeleteButton label={wall.wall_type === 'island' ? 'Delete island' : 'Delete wall'} onDelete={() => onDelete(wall.id)} />
       {saving && <div className="px-4 py-2 border-t border-gray-800 text-[10px] text-gray-500">Saving…</div>}
     </div>
   )

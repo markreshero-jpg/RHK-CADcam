@@ -82,4 +82,31 @@ describe('shaped case', () => {
     expect(l.case_parts.some(p => p.part_key === 'right_side')).toBe(true)
     expect(get(l.case_parts, 'side:end').DY).toBeCloseTo(get(r.case_parts, 'side:end').DY, 3)
   })
+
+  it('radius end with the end set to open: shelf runs out flush with the end (no side to clear)', () => {
+    const fp = buildPresetFootprint('radius_end', { radius: 300 }, { w: 1000, d: 560 }, { end: 'open' })
+    const res = resolveCabinet(cab({ DX: 1000, DZ: 560, footprint: fp }))
+    expect(res.case_parts.some(p => p.part_key === 'right_side')).toBe(false)
+    const shelf = res.internal_parts.find(p => p.part_type === 'adj_shelf')!
+    const rect = resolveCabinet(cab({ DX: 1000, DZ: 560 })).internal_parts.find(p => p.part_type === 'adj_shelf')!
+    expect(shelf.X).toBeCloseTo(rect.X, 3)                 // left side still there: same clearance
+    expect(shelf.X + shelf.DY).toBeCloseTo(1000, 3)        // right: flush with the open end
+    // The default end (a side panel) keeps the deduction.
+    const sided = resolveCabinet(cab({ DX: 1000, DZ: 560, footprint: buildPresetFootprint('radius_end', { radius: 300 }, { w: 1000, d: 560 }) }))
+    const s2 = sided.internal_parts.find(p => p.part_type === 'adj_shelf')!
+    expect(s2.X + s2.DY).toBeCloseTo(rect.X + rect.DY, 3)
+  })
+
+  it('radius end: bottom and front rail follow the full arc, no spike into the square corner', () => {
+    const fp = buildPresetFootprint('radius_end', { radius: 300 }, { w: 1000, d: 560 })
+    const res = resolveCabinet(cab({ DX: 1000, DZ: 560, footprint: fp }))
+    // Arc centre (700, 260), r 300: nothing may sit outside it in the front-right quadrant.
+    for (const k of ['bottom', 'front_rail']) {
+      const p = get(res.case_parts, k), b = caseBox(p)
+      for (const q of p.outline!) {
+        const X = b.x + q.x, Z = b.z + b.d - q.y
+        if (X > 700 && Z > 260) expect(Math.hypot(X - 700, Z - 260)).toBeLessThanOrEqual(300 + 0.01)
+      }
+    }
+  })
 })

@@ -1,5 +1,6 @@
 'use client'
 import React, { Fragment, useState, useMemo, useEffect } from 'react'
+import { useLineScale } from '@/src/lib/usePhone'
 import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment, BenchtopEdgeProfile } from '@/src/lib/types'
 import {
   btSegments, outlinePath, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin,
@@ -194,6 +195,8 @@ export default function CanvasSVG({
     return () => { cancelled = true }
   }, [cabIdsKey, resolvedParts])
 
+  // Strokes divide by the line zoom (finer on phones); text and hit targets use view.zoom.
+  const lz = view.zoom / useLineScale()
   const cx = centroid(walls)
   // Dimension chains measure only cabinets the layer set draws.
   const chainCabs = cabinets.filter(c => planShowsCabinet(c, layers, resolvedParts?.get(c.id)))
@@ -235,8 +238,8 @@ export default function CanvasSVG({
 
         {dots.map((d, i) => <circle key={i} cx={d.x} cy={d.y} r={dotR} fill="#1f2937" />)}
 
-        <line x1={-30 / view.zoom} y1={0} x2={30 / view.zoom} y2={0} stroke="#374151" strokeWidth={1 / view.zoom} />
-        <line x1={0} y1={-30 / view.zoom} x2={0} y2={30 / view.zoom} stroke="#374151" strokeWidth={1 / view.zoom} />
+        <line x1={-30 / view.zoom} y1={0} x2={30 / view.zoom} y2={0} stroke="#374151" strokeWidth={1 / lz} />
+        <line x1={0} y1={-30 / view.zoom} x2={0} y2={30 / view.zoom} stroke="#374151" strokeWidth={1 / lz} />
 
         {/* ── Benchtop instances ── rendered below walls so cabinets/walls sit on top.
             Outline from segments (Phase 3); edge finishes + join lines are
@@ -268,7 +271,7 @@ export default function CanvasSVG({
                 fillOpacity={layers.colorOf('benchtops') ? (isSel ? 0.22 : 0.1) : undefined}
                 stroke={isSel ? '#f59e0b' : layers.color('benchtops', '#0d9488')}
                 opacity={layers.op('benchtops')}
-                strokeWidth={layers.w('benchtops', isSel ? 2 : 1.5) / view.zoom}
+                strokeWidth={layers.w('benchtops', isSel ? 2 : 1.5) / lz}
                 // Only Select mode owns the click: draw tools (cutouts, joins) need the
                 // pointer to reach the SVG handlers, which start the click.
                 onPointerDown={e => { if (mode !== 'benchtop_select') return; e.stopPropagation(); onBenchtopPointerDown(e, bt.id) }}
@@ -288,9 +291,9 @@ export default function CanvasSVG({
                   const jc = layers.color('benchtop_joins', '#ef4444'), jm = segMid(s)
                   return (
                     <g key={`ef${i}`} style={{ pointerEvents: 'none' }} opacity={layers.op('benchtop_joins')}>
-                      <path d={edgePath(s)} fill="none" stroke={jc} strokeWidth={layers.w('benchtop_joins', 1.5) / view.zoom}
+                      <path d={edgePath(s)} fill="none" stroke={jc} strokeWidth={layers.w('benchtop_joins', 1.5) / lz}
                         strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} />
-                      <circle cx={jm.x} cy={jm.y} r={6 / view.zoom} fill="#111827" stroke={jc} strokeWidth={1 / view.zoom} />
+                      <circle cx={jm.x} cy={jm.y} r={6 / view.zoom} fill="#111827" stroke={jc} strokeWidth={1 / lz} />
                       <text x={jm.x} y={jm.y} textAnchor="middle" dominantBaseline="middle"
                         fontSize={7 / view.zoom} fill={jc} style={{ userSelect: 'none' }}>
                         {s.edge.joint === 'mitre' ? 'M' : 'B'}
@@ -307,7 +310,7 @@ export default function CanvasSVG({
                 return (
                   <g key={`ef${i}`} style={{ pointerEvents: 'none' }} opacity={layers.op('benchtop_edges')}>
                     <path d={edgePath(s)} fill="none" stroke={layers.color('benchtop_edges', col)}
-                      strokeWidth={layers.w('benchtop_edges', s.edge?.wall ? 3 : 2.5) / view.zoom}
+                      strokeWidth={layers.w('benchtop_edges', s.edge?.wall ? 3 : 2.5) / lz}
                       strokeDasharray={s.edge?.wall ? `${4 / view.zoom} ${3 / view.zoom}` : undefined}
                       transform={`translate(${n.x * off} ${n.y * off})`} />
                     {!s.edge?.wall && prof && (
@@ -354,10 +357,10 @@ export default function CanvasSVG({
                     <g key={`ee${i}`} transform={`translate(${n.x * off} ${n.y * off})`}>
                       {(lit || ee.sel === i) && clickable && (
                         <path d={edgePath(s)} fill="none" stroke="#fbbf24" strokeOpacity={lit ? 0.8 : 0.35}
-                          strokeWidth={9 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                          strokeWidth={9 / lz} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
                       )}
                       <path d={edgePath(s)} fill="none" stroke={col} strokeOpacity={faded ? 0.55 : 1}
-                        strokeWidth={w / view.zoom} strokeLinecap="round"
+                        strokeWidth={w / lz} strokeLinecap="round"
                         strokeDasharray={wall ? `${4 / view.zoom} ${3 / view.zoom}` : undefined} style={{ pointerEvents: 'none' }} />
                       {label && (
                         <text x={m.x + n.x * 12 / view.zoom} y={m.y + n.y * 12 / view.zoom} textAnchor="middle" dominantBaseline="middle"
@@ -380,9 +383,9 @@ export default function CanvasSVG({
                 return (
                   <g key={`j${i}`} style={{ pointerEvents: 'none' }} opacity={layers.op('benchtop_joins')}>
                     <line x1={j.p0.x} y1={j.p0.y} x2={j.p1.x} y2={j.p1.y} stroke={col}
-                      strokeWidth={layers.w('benchtop_joins', 1.5) / view.zoom}
+                      strokeWidth={layers.w('benchtop_joins', 1.5) / lz}
                       strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} />
-                    <circle cx={mx} cy={my} r={6 / view.zoom} fill="#111827" stroke={col} strokeWidth={1 / view.zoom} />
+                    <circle cx={mx} cy={my} r={6 / view.zoom} fill="#111827" stroke={col} strokeWidth={1 / lz} />
                     <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle"
                       fontSize={7 / view.zoom} fill={col} style={{ userSelect: 'none' }}>
                       {j.type === 'mitre' ? 'M' : 'B'}
@@ -416,7 +419,7 @@ export default function CanvasSVG({
                     <rect
                       x={tx - er} y={ty - er} width={er * 2} height={er * 2}
                       rx={isCurve ? er : 1.5 / view.zoom}
-                      fill={hFill} stroke={hStroke} strokeWidth={1 / view.zoom}
+                      fill={hFill} stroke={hStroke} strokeWidth={1 / lz}
                       onClick={e => {
                         e.stopPropagation()
                         if (e.shiftKey) onBenchtopEdgeShiftClick(bt.id, i)
@@ -469,7 +472,7 @@ export default function CanvasSVG({
                 return (
                   <g>
                     {/* 0,0 = back-left corner; arrows show +X / +Y for the typed corner coordinates */}
-                    <g style={{ pointerEvents: 'none' }} stroke="#22c55e" strokeWidth={1.5 / view.zoom} fill="#22c55e">
+                    <g style={{ pointerEvents: 'none' }} stroke="#22c55e" strokeWidth={1.5 / lz} fill="#22c55e">
                       <line x1={fr.o.x} y1={fr.o.y} x2={fr.o.x + fr.d.x * ax} y2={fr.o.y + fr.d.y * ax} />
                       <line x1={fr.o.x} y1={fr.o.y} x2={fr.o.x + fr.n.x * ax} y2={fr.o.y + fr.n.y * ax} />
                       <circle cx={fr.o.x} cy={fr.o.y} r={3.5 / view.zoom} />
@@ -485,9 +488,9 @@ export default function CanvasSVG({
                       const on = sel?.kind === 'e' && sel.i === i
                       return (
                         <g key={`se${i}`}>
-                          {on && <path d={edgePath(s)} fill="none" stroke="#f59e0b" strokeWidth={3 / view.zoom} style={{ pointerEvents: 'none' }} />}
+                          {on && <path d={edgePath(s)} fill="none" stroke="#f59e0b" strokeWidth={3 / lz} style={{ pointerEvents: 'none' }} />}
                           {/* The selected edge's start corner (typed length: "Start fixed") */}
-                          {on && <circle cx={s.p0.x} cy={s.p0.y} r={9 / view.zoom} fill="none" stroke="#22c55e" strokeWidth={2 / view.zoom} style={{ pointerEvents: 'none' }} />}
+                          {on && <circle cx={s.p0.x} cy={s.p0.y} r={9 / view.zoom} fill="none" stroke="#22c55e" strokeWidth={2 / lz} style={{ pointerEvents: 'none' }} />}
                           <path d={edgePath(s)} fill="none" stroke="transparent" strokeWidth={hit}
                             style={{ cursor: s.type === 'line' ? (Math.abs(s.p1.x - s.p0.x) > Math.abs(s.p1.y - s.p0.y) ? 'ns-resize' : 'ew-resize') : 'pointer' }}
                             onPointerDown={e => { if (e.button !== 0) return; e.stopPropagation(); onShapeHandleDown(e, 'e', i) }}>
@@ -498,7 +501,7 @@ export default function CanvasSVG({
                           {s.type !== 'line' && (() => {
                             const m = segMid(s)
                             return (
-                              <circle cx={m.x} cy={m.y} r={5 / view.zoom} fill="#7c3aed" stroke="#e9d5ff" strokeWidth={1 / view.zoom}
+                              <circle cx={m.x} cy={m.y} r={5 / view.zoom} fill="#7c3aed" stroke="#e9d5ff" strokeWidth={1 / lz}
                                 style={{ cursor: 'grab' }}
                                 onPointerDown={e => { if (e.button !== 0) return; e.stopPropagation(); onShapeHandleDown(e, 'e', i) }} />
                             )
@@ -512,7 +515,7 @@ export default function CanvasSVG({
                         <rect key={`sv${i}`}
                           x={s.p0.x - (on ? 7 : 5.5) / view.zoom} y={s.p0.y - (on ? 7 : 5.5) / view.zoom}
                           width={(on ? 14 : 11) / view.zoom} height={(on ? 14 : 11) / view.zoom}
-                          fill={on ? '#f59e0b' : '#f8fafc'} stroke="#0f172a" strokeWidth={1.2 / view.zoom}
+                          fill={on ? '#f59e0b' : '#f8fafc'} stroke="#0f172a" strokeWidth={1.2 / lz}
                           style={{ cursor: 'crosshair' }}
                           onPointerDown={e => { if (e.button !== 0) return; e.stopPropagation(); onShapeHandleDown(e, 'v', i) }}>
                           <title>Click to type its X / Y · drag to move it (snaps) · Delete removes it</title>
@@ -529,7 +532,7 @@ export default function CanvasSVG({
                 <circle
                   key={`v${i}`}
                   cx={s.p0.x} cy={s.p0.y} r={vr}
-                  fill="#14b8a6" stroke="#111827" strokeWidth={1 / view.zoom}
+                  fill="#14b8a6" stroke="#111827" strokeWidth={1 / lz}
                   onPointerDown={e => e.stopPropagation()}
                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onBenchtopVertexContextMenu(e, bt.id, i) }}
                   style={{ cursor: 'context-menu' }}
@@ -550,10 +553,10 @@ export default function CanvasSVG({
           return (
             <g style={{ pointerEvents: 'none' }}>
               <path d={outlinePath(btSegments(mv))} transform={`translate(${dx} ${dy})`}
-                fill="rgba(245,158,11,0.10)" stroke="#f59e0b" strokeWidth={1.5 / view.zoom}
+                fill="rgba(245,158,11,0.10)" stroke="#f59e0b" strokeWidth={1.5 / lz}
                 strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} />
               <line x1={btMoveBase.x} y1={btMoveBase.y} x2={btMoveCursor.x} y2={btMoveCursor.y}
-                stroke="#f59e0b" strokeWidth={1 / view.zoom} />
+                stroke="#f59e0b" strokeWidth={1 / lz} />
               <circle cx={btMoveBase.x} cy={btMoveBase.y} r={4 / view.zoom} fill="#f59e0b" />
               <text x={(btMoveBase.x + btMoveCursor.x) / 2} y={(btMoveBase.y + btMoveCursor.y) / 2 - 10 / view.zoom}
                 textAnchor="middle" fontSize={10 / view.zoom} fill="#fcd34d">{Math.round(Math.hypot(dx, dy))}</text>
@@ -565,7 +568,7 @@ export default function CanvasSVG({
         {mode === 'draw_benchtop_join' && btJoinStart && btJoinCursor && (
           <g style={{ pointerEvents: 'none' }}>
             <line x1={btJoinStart.x} y1={btJoinStart.y} x2={btJoinCursor.x} y2={btJoinCursor.y}
-              stroke="#ef4444" strokeWidth={1.5 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} />
+              stroke="#ef4444" strokeWidth={1.5 / lz} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} />
             <circle cx={btJoinStart.x} cy={btJoinStart.y} r={4 / view.zoom} fill="#ef4444" />
             <text x={(btJoinStart.x + btJoinCursor.x) / 2} y={(btJoinStart.y + btJoinCursor.y) / 2 - 10 / view.zoom}
               textAnchor="middle" fontSize={10 / view.zoom} fill="#fca5a5">{Math.round(dist(btJoinStart, btJoinCursor))}</text>
@@ -573,7 +576,7 @@ export default function CanvasSVG({
         )}
         {mode === 'draw_benchtop_join' && !btJoinStart && btJoinCursor && (
           <circle cx={btJoinCursor.x} cy={btJoinCursor.y} r={4 / view.zoom} fill="none" stroke="#ef4444"
-            strokeWidth={1.5 / view.zoom} style={{ pointerEvents: 'none' }} />
+            strokeWidth={1.5 / lz} style={{ pointerEvents: 'none' }} />
         )}
 
         {/* ── In-progress benchtop polygon ── */}
@@ -603,7 +606,7 @@ export default function CanvasSVG({
                 }
                 return (
                   <path d={d} fill="none" stroke="#14b8a6"
-                    strokeWidth={1.5 / view.zoom}
+                    strokeWidth={1.5 / lz}
                     strokeDasharray={`${8 / view.zoom} ${4 / view.zoom}`}
                     style={{ pointerEvents: 'none' }}
                   />
@@ -615,7 +618,7 @@ export default function CanvasSVG({
                 <line
                   x1={last.x} y1={last.y}
                   x2={btDrawCursor.x} y2={btDrawCursor.y}
-                  stroke={btArcMode ? '#a855f7' : '#14b8a6'} strokeWidth={1.5 / view.zoom}
+                  stroke={btArcMode ? '#a855f7' : '#14b8a6'} strokeWidth={1.5 / lz}
                   strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }}
                 />
@@ -625,7 +628,7 @@ export default function CanvasSVG({
               {showArcPreview && (
                 <path
                   d={`M ${last!.x} ${last!.y} Q ${arcCpx} ${arcCpy} ${btDrawCursor!.x} ${btDrawCursor!.y}`}
-                  fill="none" stroke="#a855f7" strokeWidth={1.5 / view.zoom}
+                  fill="none" stroke="#a855f7" strokeWidth={1.5 / lz}
                   strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }}
                 />
@@ -634,7 +637,7 @@ export default function CanvasSVG({
               {/* Arc midpoint dot */}
               {btArcMidpoint && (
                 <circle cx={btArcMidpoint.x} cy={btArcMidpoint.y} r={3.5 / view.zoom}
-                  fill="#a855f7" stroke="#111827" strokeWidth={1 / view.zoom}
+                  fill="#a855f7" stroke="#111827" strokeWidth={1 / lz}
                   style={{ pointerEvents: 'none' }}
                 />
               )}
@@ -645,7 +648,7 @@ export default function CanvasSVG({
                   cx={btDrawPoly[0].x} cy={btDrawPoly[0].y}
                   r={snapDist}
                   fill="rgba(20,184,166,0.25)" stroke="#14b8a6"
-                  strokeWidth={1.5 / view.zoom}
+                  strokeWidth={1.5 / lz}
                   style={{ pointerEvents: 'none' }}
                 />
               )}
@@ -653,14 +656,14 @@ export default function CanvasSVG({
               {btDrawPoly.map((p, i) => (
                 <circle key={i} cx={p.x} cy={p.y} r={4 / view.zoom}
                   fill={i === 0 ? '#14b8a6' : '#e5e7eb'}
-                  stroke="#0d9488" strokeWidth={1 / view.zoom}
+                  stroke="#0d9488" strokeWidth={1 / lz}
                   style={{ pointerEvents: 'none' }}
                 />
               ))}
               {/* Cursor dot — purple in arc mode */}
               {btDrawCursor && !nearClose && (
                 <circle cx={btDrawCursor.x} cy={btDrawCursor.y} r={3 / view.zoom}
-                  fill={btArcMode ? '#a855f7' : '#f59e0b'} stroke="#111827" strokeWidth={1 / view.zoom}
+                  fill={btArcMode ? '#a855f7' : '#f59e0b'} stroke="#111827" strokeWidth={1 / lz}
                   style={{ pointerEvents: 'none' }}
                 />
               )}
@@ -679,7 +682,7 @@ export default function CanvasSVG({
                     x={btDrawCursor.x + labelPad} y={btDrawCursor.y - labelFs * 1.5 - labelPad}
                     width={labelFs * 5.5} height={labelFs * 3 + labelPad}
                     rx={2 / view.zoom}
-                    fill="rgba(17,24,39,0.85)" stroke="#374151" strokeWidth={0.5 / view.zoom}
+                    fill="rgba(17,24,39,0.85)" stroke="#374151" strokeWidth={0.5 / lz}
                   />
                   <text x={btDrawCursor.x + labelPad * 2} y={btDrawCursor.y - labelFs * 0.5}
                     fontSize={labelFs} fill="#f3f4f6"
@@ -705,7 +708,7 @@ export default function CanvasSVG({
               {/* Placed corner dots */}
               {btLPoints.map((p, i) => (
                 <circle key={i} cx={p.x} cy={p.y} r={4 / view.zoom}
-                  fill={i === 0 ? '#14b8a6' : '#f59e0b'} stroke="#111827" strokeWidth={1 / view.zoom}
+                  fill={i === 0 ? '#14b8a6' : '#f59e0b'} stroke="#111827" strokeWidth={1 / lz}
                   style={{ pointerEvents: 'none' }} />
               ))}
 
@@ -714,7 +717,7 @@ export default function CanvasSVG({
                 <line
                   x1={btLPoints[btLPoints.length - 1].x} y1={btLPoints[btLPoints.length - 1].y}
                   x2={btLCursor.x} y2={btLCursor.y}
-                  stroke="#14b8a6" strokeWidth={1.5 / view.zoom}
+                  stroke="#14b8a6" strokeWidth={1.5 / lz}
                   strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />
               )}
@@ -747,7 +750,7 @@ export default function CanvasSVG({
                 return (
                   <polygon points={pts2}
                     fill="rgba(20,184,166,0.12)" stroke="#14b8a6"
-                    strokeWidth={1.5 / view.zoom}
+                    strokeWidth={1.5 / lz}
                     strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                     style={{ pointerEvents: 'none' }} />
                 )
@@ -756,7 +759,7 @@ export default function CanvasSVG({
               {/* Cursor dot */}
               {btLCursor && (
                 <circle cx={btLCursor.x} cy={btLCursor.y} r={3 / view.zoom}
-                  fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom}
+                  fill="#f59e0b" stroke="#111827" strokeWidth={1 / lz}
                   style={{ pointerEvents: 'none' }} />
               )}
 
@@ -781,23 +784,23 @@ export default function CanvasSVG({
           return (
             <g style={{ pointerEvents: 'none' }}>
               {btLinePts.length === 1 && cur && (
-                <line x1={btLinePts[0].x} y1={btLinePts[0].y} x2={cur.x} y2={cur.y} stroke="#14b8a6" strokeWidth={2.5 / z} />
+                <line x1={btLinePts[0].x} y1={btLinePts[0].y} x2={cur.x} y2={cur.y} stroke="#14b8a6" strokeWidth={2.5 / lz} />
               )}
               {btLinePts.length === 2 && (
-                <line x1={btLinePts[0].x} y1={btLinePts[0].y} x2={btLinePts[1].x} y2={btLinePts[1].y} stroke="#14b8a6" strokeWidth={2.5 / z} />
+                <line x1={btLinePts[0].x} y1={btLinePts[0].y} x2={btLinePts[1].x} y2={btLinePts[1].y} stroke="#14b8a6" strokeWidth={2.5 / lz} />
               )}
               {rect && (
                 <Fragment>
                   <polygon points={rect.map(p => `${p.x},${p.y}`).join(' ')}
-                    fill="rgba(20,184,166,0.12)" stroke="#14b8a6" strokeWidth={1.5 / z}
+                    fill="rgba(20,184,166,0.12)" stroke="#14b8a6" strokeWidth={1.5 / lz}
                     strokeDasharray={`${6 / z} ${3 / z}`} />
-                  <line x1={rect[3].x} y1={rect[3].y} x2={rect[2].x} y2={rect[2].y} stroke="#f59e0b" strokeWidth={2 / z} />
+                  <line x1={rect[3].x} y1={rect[3].y} x2={rect[2].x} y2={rect[2].y} stroke="#f59e0b" strokeWidth={2 / lz} />
                 </Fragment>
               )}
               {btLinePts.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r={4 / z} fill={i === 0 ? '#14b8a6' : '#f59e0b'} stroke="#111827" strokeWidth={1 / z} />
+                <circle key={i} cx={p.x} cy={p.y} r={4 / z} fill={i === 0 ? '#14b8a6' : '#f59e0b'} stroke="#111827" strokeWidth={1 / lz} />
               ))}
-              {cur && <circle cx={cur.x} cy={cur.y} r={3 / z} fill="#f59e0b" stroke="#111827" strokeWidth={1 / z} />}
+              {cur && <circle cx={cur.x} cy={cur.y} r={3 / z} fill="#f59e0b" stroke="#111827" strokeWidth={1 / lz} />}
               {cur && (
                 <text x={cur.x + 10 / z} y={cur.y - 8 / z} fontSize={9 / z} fill="#5eead4" style={{ userSelect: 'none' }}>
                   {btLinePts.length === 0 ? 'click start of back line' : btLinePts.length === 1 ? 'click end of back line' : `depth ${depth} — click to place`}
@@ -813,13 +816,13 @@ export default function CanvasSVG({
             <Fragment>
               {btUPoints.map((p, i) => (
                 <circle key={i} cx={p.x} cy={p.y} r={4 / view.zoom}
-                  fill={i === 0 ? '#14b8a6' : '#f59e0b'} stroke="#111827" strokeWidth={1 / view.zoom}
+                  fill={i === 0 ? '#14b8a6' : '#f59e0b'} stroke="#111827" strokeWidth={1 / lz}
                   style={{ pointerEvents: 'none' }} />
               ))}
               {btUPoints.length > 0 && btUCursor && (
                 <line x1={btUPoints[btUPoints.length - 1].x} y1={btUPoints[btUPoints.length - 1].y}
                   x2={btUCursor.x} y2={btUCursor.y}
-                  stroke="#14b8a6" strokeWidth={1.5 / view.zoom}
+                  stroke="#14b8a6" strokeWidth={1.5 / lz}
                   strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />
               )}
@@ -845,13 +848,13 @@ export default function CanvasSVG({
                 return (
                   <polygon points={poly.map(p=>`${p.x},${p.y}`).join(' ')}
                     fill="rgba(20,184,166,0.12)" stroke="#14b8a6"
-                    strokeWidth={1.5/view.zoom} strokeDasharray={`${6/view.zoom} ${3/view.zoom}`}
+                    strokeWidth={1.5/ lz} strokeDasharray={`${6/view.zoom} ${3/view.zoom}`}
                     style={{ pointerEvents: 'none' }} />
                 )
               })()}
               {btUCursor && (
                 <circle cx={btUCursor.x} cy={btUCursor.y} r={3/view.zoom}
-                  fill="#f59e0b" stroke="#111827" strokeWidth={1/view.zoom}
+                  fill="#f59e0b" stroke="#111827" strokeWidth={1/ lz}
                   style={{ pointerEvents: 'none' }} />
               )}
             </Fragment>
@@ -870,7 +873,7 @@ export default function CanvasSVG({
               <Fragment>
                 <rect x={rx} y={ry} width={rw} height={rh}
                   fill="rgba(20,184,166,0.12)" stroke="#14b8a6"
-                  strokeWidth={1.5 / view.zoom}
+                  strokeWidth={1.5 / lz}
                   strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />
                 {rw > 20 / view.zoom && rh > 12 / view.zoom && (
@@ -881,17 +884,17 @@ export default function CanvasSVG({
                   </text>
                 )}
                 <circle cx={btRectStart.x} cy={btRectStart.y} r={4 / view.zoom}
-                  fill="#14b8a6" stroke="#111827" strokeWidth={1 / view.zoom}
+                  fill="#14b8a6" stroke="#111827" strokeWidth={1 / lz}
                   style={{ pointerEvents: 'none' }} />
                 <circle cx={btRectCursor.x} cy={btRectCursor.y} r={3 / view.zoom}
-                  fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom}
+                  fill="#f59e0b" stroke="#111827" strokeWidth={1 / lz}
                   style={{ pointerEvents: 'none' }} />
               </Fragment>
             )
           }
           return (
             <circle cx={btRectStart.x} cy={btRectStart.y} r={4 / view.zoom}
-              fill="#14b8a6" stroke="#111827" strokeWidth={1 / view.zoom}
+              fill="#14b8a6" stroke="#111827" strokeWidth={1 / lz}
               style={{ pointerEvents: 'none' }} />
           )
         })()}
@@ -906,7 +909,7 @@ export default function CanvasSVG({
             <Fragment>
               <rect x={rx} y={ry} width={rw} height={rh}
                 fill="rgba(239,68,68,0.15)" stroke="#ef4444"
-                strokeWidth={1.5/view.zoom} strokeDasharray={`${5/view.zoom} ${3/view.zoom}`}
+                strokeWidth={1.5/ lz} strokeDasharray={`${5/view.zoom} ${3/view.zoom}`}
                 style={{ pointerEvents: 'none' }} />
               {rw > 20/view.zoom && rh > 12/view.zoom && (
                 <text x={rx+rw/2} y={ry+rh/2} textAnchor="middle" dominantBaseline="middle"
@@ -916,9 +919,9 @@ export default function CanvasSVG({
                 </text>
               )}
               <circle cx={btCutoutStart.x} cy={btCutoutStart.y} r={4/view.zoom}
-                fill="#ef4444" stroke="#111827" strokeWidth={1/view.zoom} style={{ pointerEvents:'none' }} />
+                fill="#ef4444" stroke="#111827" strokeWidth={1/ lz} style={{ pointerEvents:'none' }} />
               <circle cx={btCutoutCursor.x} cy={btCutoutCursor.y} r={3/view.zoom}
-                fill="#f59e0b" stroke="#111827" strokeWidth={1/view.zoom} style={{ pointerEvents:'none' }} />
+                fill="#f59e0b" stroke="#111827" strokeWidth={1/ lz} style={{ pointerEvents:'none' }} />
             </Fragment>
           )
         })()}
@@ -930,7 +933,7 @@ export default function CanvasSVG({
             <Fragment>
               <circle cx={btCutoutStart.x} cy={btCutoutStart.y} r={Math.max(r, 1/view.zoom)}
                 fill="rgba(239,68,68,0.15)" stroke="#ef4444"
-                strokeWidth={1.5/view.zoom} strokeDasharray={`${5/view.zoom} ${3/view.zoom}`}
+                strokeWidth={1.5/ lz} strokeDasharray={`${5/view.zoom} ${3/view.zoom}`}
                 style={{ pointerEvents:'none' }} />
               {r > 10 && (
                 <text x={btCutoutStart.x} y={btCutoutStart.y} textAnchor="middle" dominantBaseline="middle"
@@ -940,10 +943,10 @@ export default function CanvasSVG({
                 </text>
               )}
               <circle cx={btCutoutStart.x} cy={btCutoutStart.y} r={4/view.zoom}
-                fill="#ef4444" stroke="#111827" strokeWidth={1/view.zoom} style={{ pointerEvents:'none' }} />
+                fill="#ef4444" stroke="#111827" strokeWidth={1/ lz} style={{ pointerEvents:'none' }} />
               {btCutoutCursor && (
                 <circle cx={btCutoutCursor.x} cy={btCutoutCursor.y} r={3/view.zoom}
-                  fill="#f59e0b" stroke="#111827" strokeWidth={1/view.zoom} style={{ pointerEvents:'none' }} />
+                  fill="#f59e0b" stroke="#111827" strokeWidth={1/ lz} style={{ pointerEvents:'none' }} />
               )}
             </Fragment>
           )
@@ -972,7 +975,7 @@ export default function CanvasSVG({
                   onClick={onClick} onContextMenu={onCtx} />
                 <line x1={w.pos_x} y1={w.pos_y} x2={e.x} y2={e.y}
                   stroke={isSel ? '#f59e0b' : '#78350f'}
-                  strokeWidth={(isSel ? 2.5 : 1.5) / view.zoom}
+                  strokeWidth={(isSel ? 2.5 : 1.5) / lz}
                   strokeDasharray={`${10 / view.zoom} ${5 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />
                 <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle"
@@ -1001,7 +1004,7 @@ export default function CanvasSVG({
                 points={wallMitrePolygon(w, walls, cx)}
                 fill={isSel ? '#1d3557' : '#1f2937'}
                 stroke={isSel ? '#3b82f6' : '#374151'}
-                strokeWidth={isSel ? 2 / view.zoom : 1 / view.zoom}
+                strokeWidth={isSel ? 2 / lz : 1 / lz}
                 style={{ cursor: mode === 'select' ? 'pointer' : undefined }}
                 onPointerDown={ev => onWallPointerDown(ev, w.id)}
                 onClick={onClick} onContextMenu={onCtx}
@@ -1205,7 +1208,7 @@ export default function CanvasSVG({
                 <polygon points={pts}
                   fill={baseColor} fillOpacity={carcP.fillOpacity * layers.cabFillOpacity}
                   stroke={isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : isHover ? '#f97316' : layers.color('carcass_outline', '#3b82f6')}
-                  strokeWidth={layers.w('carcass_outline', isSel || isMultiSel || isHover ? 2 : 1) / view.zoom}
+                  strokeWidth={layers.w('carcass_outline', isSel || isMultiSel || isHover ? 2 : 1) / lz}
                   strokeDasharray={carcP.strokeDasharray}
                   opacity={carcP.opacity}
                   style={{ pointerEvents: 'none' }}
@@ -1228,7 +1231,7 @@ export default function CanvasSVG({
                 return (
                   <polygon key={`case-${i}`} points={pts} data-part={p.part_key}
                     fill={vertical ? col : 'none'} fillOpacity={vertical ? 0.55 * lp.fillOpacity : 0}
-                    stroke={isSel ? '#e2e8f0' : col} strokeWidth={layers.w(it, 0.75) / view.zoom}
+                    stroke={isSel ? '#e2e8f0' : col} strokeWidth={layers.w(it, 0.75) / lz}
                     strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
                 )
               })}
@@ -1243,7 +1246,7 @@ export default function CanvasSVG({
                 const pts = tkPlanCorners(p).map(q => toPlanC(q.x, q.z)).map(q => `${q.x},${q.y}`).join(' ')
                 return (
                   <polygon key={`kick-${i}`} points={pts} data-part={p.part_key}
-                    fill="none" stroke={isSel ? '#e2e8f0' : layers.color(it, palette.toekick)} strokeWidth={layers.w(it, 0.75) / view.zoom}
+                    fill="none" stroke={isSel ? '#e2e8f0' : layers.color(it, palette.toekick)} strokeWidth={layers.w(it, 0.75) / lz}
                     strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
                 )
               })}
@@ -1255,7 +1258,7 @@ export default function CanvasSVG({
                 const lp = layers.props('drawer_boxes', view.zoom)
                 return (
                   <polygon key={`db-${si}-${i}`} points={hwPoly(b, ds.turn)} data-part={p.part_type}
-                    fill="none" stroke={isSel ? '#e2e8f0' : layers.color('drawer_boxes', palette.drawer_box)} strokeWidth={layers.w('drawer_boxes', 0.6) / view.zoom}
+                    fill="none" stroke={isSel ? '#e2e8f0' : layers.color('drawer_boxes', palette.drawer_box)} strokeWidth={layers.w('drawer_boxes', 0.6) / lz}
                     strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
                 )
               }))}
@@ -1265,7 +1268,7 @@ export default function CanvasSVG({
                 const lp = layers.props('drawer_runners', view.zoom)
                 return (
                   <polygon key={`sl-${si}-${i}`} points={hwPoly(b, ds.turn)} data-part={`slide_${s.side}`}
-                    fill={layers.color('drawer_runners', palette.slides)} fillOpacity={0.5 * lp.fillOpacity} stroke={isSel ? '#e2e8f0' : layers.color('drawer_runners', palette.slides)} strokeWidth={layers.w('drawer_runners', 0.6) / view.zoom}
+                    fill={layers.color('drawer_runners', palette.slides)} fillOpacity={0.5 * lp.fillOpacity} stroke={isSel ? '#e2e8f0' : layers.color('drawer_runners', palette.slides)} strokeWidth={layers.w('drawer_runners', 0.6) / lz}
                     strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
                 )
               }))}
@@ -1281,7 +1284,7 @@ export default function CanvasSVG({
                 return (
                   <polygon key={`cust-${i}`} points={poly} data-part={cpi}
                     fill={layers.color(cpi, '#a78bfa')} fillOpacity={0.35}
-                    stroke={isSel ? '#e2e8f0' : layers.color(cpi, '#7c3aed')} strokeWidth={layers.w(cpi, 1) / view.zoom}
+                    stroke={isSel ? '#e2e8f0' : layers.color(cpi, '#7c3aed')} strokeWidth={layers.w(cpi, 1) / lz}
                     strokeDasharray={cpp.strokeDasharray} opacity={cpp.opacity} style={{ pointerEvents: 'none' }} />
                 )
               })}
@@ -1301,7 +1304,7 @@ export default function CanvasSVG({
                   <polygon points={intPts}
                     fill="none"
                     stroke={isSel ? '#cbd5e1' : layers.color('internal_outline', palette.internal)}
-                    strokeWidth={layers.w('internal_outline', 0.75) / view.zoom}
+                    strokeWidth={layers.w('internal_outline', 0.75) / lz}
                     strokeDasharray={layers.style('internal_outline') === 'solid' ? undefined : `${8 / view.zoom} ${4 / view.zoom}`}
                     opacity={intP.opacity}
                     style={{ pointerEvents: 'none' }}
@@ -1316,7 +1319,7 @@ export default function CanvasSVG({
                 return (
                   <polygon key={f.id} points={f.poly} data-part={f.id}
                     fill={col} fillOpacity={0.35 * fp.fillOpacity}
-                    stroke={isSel ? '#e2e8f0' : col} strokeWidth={layers.w(f.item, isSel ? 1.25 : 1) / view.zoom}
+                    stroke={isSel ? '#e2e8f0' : col} strokeWidth={layers.w(f.item, isSel ? 1.25 : 1) / lz}
                     strokeDasharray={fp.strokeDasharray} opacity={fp.opacity} style={{ pointerEvents: 'none' }} />
                 )
               })}
@@ -1324,7 +1327,7 @@ export default function CanvasSVG({
               {handleRects.map(hr => (
                 <polygon key={`hd-${hr.id}`} points={hr.poly}
                   fill={layers.color('handles', '#64748b')} fillOpacity={0.6}
-                  stroke={layers.color('handles', '#334155')} strokeWidth={layers.w('handles', 0.75) / view.zoom}
+                  stroke={layers.color('handles', '#334155')} strokeWidth={layers.w('handles', 0.75) / lz}
                   opacity={layers.op('handles')} style={{ pointerEvents: 'none' }} />
               ))}
 
@@ -1334,7 +1337,7 @@ export default function CanvasSVG({
                   x1={frontLeft.x} y1={frontLeft.y}
                   x2={frontRight.x} y2={frontRight.y}
                   stroke={isSel ? '#e2e8f0' : layers.color(layers.show('doors') ? 'doors' : 'drawer_fronts', palette.door)}
-                  strokeWidth={layers.w(layers.show('doors') ? 'doors' : 'drawer_fronts', isSel ? 2.5 : 2) / view.zoom}
+                  strokeWidth={layers.w(layers.show('doors') ? 'doors' : 'drawer_fronts', isSel ? 2.5 : 2) / lz}
                   strokeDasharray={faceP.strokeDasharray}
                   opacity={faceP.opacity}
                   style={{ pointerEvents: 'none' }}
@@ -1345,7 +1348,7 @@ export default function CanvasSVG({
                   points={f.pts.map(p => `${p.x},${p.y}`).join(' ')}
                   fill="none"
                   stroke={isSel ? '#e2e8f0' : layers.color(layers.show('doors') ? 'doors' : 'drawer_fronts', palette.door)}
-                  strokeWidth={layers.w(layers.show('doors') ? 'doors' : 'drawer_fronts', isSel ? 2.5 : 2) / view.zoom}
+                  strokeWidth={layers.w(layers.show('doors') ? 'doors' : 'drawer_fronts', isSel ? 2.5 : 2) / lz}
                   strokeDasharray={faceP.strokeDasharray}
                   opacity={faceP.opacity}
                   style={{ pointerEvents: 'none' }}
@@ -1355,7 +1358,7 @@ export default function CanvasSVG({
               {/* Selection ring — only when selected and the outline is hidden */}
               {isSel && !showOutline && hitRect && (
                 <polygon points={partPoly(hitRect)}
-                  fill="none" stroke="#3b82f6" strokeWidth={1.5 / view.zoom}
+                  fill="none" stroke="#3b82f6" strokeWidth={1.5 / lz}
                   strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }}
                 />
@@ -1391,10 +1394,10 @@ export default function CanvasSVG({
                 return (
                   <g style={{ cursor: mode === 'select' ? (isFollowing ? 'crosshair' : 'move') : undefined }}>
                     <line x1={center.x - arm} y1={center.y} x2={center.x + arm} y2={center.y}
-                      stroke={isFollowing ? '#60a5fa' : 'white'} strokeWidth={1.5 / view.zoom} opacity={crosshairOpacity} strokeLinecap="round"
+                      stroke={isFollowing ? '#60a5fa' : 'white'} strokeWidth={1.5 / lz} opacity={crosshairOpacity} strokeLinecap="round"
                       style={{ pointerEvents: 'none' }} />
                     <line x1={center.x} y1={center.y - arm} x2={center.x} y2={center.y + arm}
-                      stroke={isFollowing ? '#60a5fa' : 'white'} strokeWidth={1.5 / view.zoom} opacity={crosshairOpacity} strokeLinecap="round"
+                      stroke={isFollowing ? '#60a5fa' : 'white'} strokeWidth={1.5 / lz} opacity={crosshairOpacity} strokeLinecap="round"
                       style={{ pointerEvents: 'none' }} />
                     <circle cx={center.x} cy={center.y} r={3 / view.zoom}
                       fill={isFollowing ? '#60a5fa' : 'white'} opacity={crosshairOpacity} style={{ pointerEvents: 'none' }} />
@@ -1418,21 +1421,21 @@ export default function CanvasSVG({
                   <>
                     <circle cx={leftPt.x} cy={leftPt.y} r={mr}
                       fill={cabResize?.cabId === cab.id && cabResize.side === 'left' ? '#3b82f6' : '#1d4ed8'}
-                      stroke="#93c5fd" strokeWidth={1.5 / view.zoom}
+                      stroke="#93c5fd" strokeWidth={1.5 / lz}
                       style={{ cursor: 'ew-resize' }}
                       onPointerDown={e => e.stopPropagation()}
                       onClick={e => onCabMarkerClick(e, displayCab, 'left', wall, perp)}
                     />
                     <circle cx={rightPt.x} cy={rightPt.y} r={mr}
                       fill={cabResize?.cabId === cab.id && cabResize.side === 'right' ? '#3b82f6' : '#1d4ed8'}
-                      stroke="#93c5fd" strokeWidth={1.5 / view.zoom}
+                      stroke="#93c5fd" strokeWidth={1.5 / lz}
                       style={{ cursor: 'ew-resize' }}
                       onPointerDown={e => e.stopPropagation()}
                       onClick={e => onCabMarkerClick(e, displayCab, 'right', wall, perp)}
                     />
                     <circle cx={frontPt.x} cy={frontPt.y} r={mr}
                       fill={cabResize?.cabId === cab.id && cabResize.side === 'front' ? '#a855f7' : '#7c3aed'}
-                      stroke="#c4b5fd" strokeWidth={1.5 / view.zoom}
+                      stroke="#c4b5fd" strokeWidth={1.5 / lz}
                       style={{ cursor: 'crosshair' }}
                       onPointerDown={e => e.stopPropagation()}
                       onClick={e => onCabMarkerClick(e, displayCab, 'front', wall, perp)}
@@ -1475,7 +1478,7 @@ export default function CanvasSVG({
                 out.push(<path key={`swing-${cab.id}-${s.key}`}
                   d={`M ${h.x} ${h.y} L ${f.x} ${f.y} A ${s.r} ${s.r} 0 0 ${sweepFlag(h, f, e)} ${e.x} ${e.y} Z`}
                   {...swingPaint}
-                  strokeWidth={layers.w('door_swings', 0.75) / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
+                  strokeWidth={layers.w('door_swings', 0.75) / lz} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />)
               }
             }
@@ -1488,7 +1491,7 @@ export default function CanvasSVG({
                   x1={a.x + off * o.x + ins * al.x} y1={a.y + off * o.y + ins * al.y}
                   x2={b.x + off * o.x - ins * al.x} y2={b.y + off * o.y - ins * al.y}
                   stroke={layers.color('drawer_lines', '#f59e0b')} strokeOpacity={0.56} opacity={layers.op('drawer_lines')}
-                  strokeWidth={layers.w('drawer_lines', 0.75) / view.zoom}
+                  strokeWidth={layers.w('drawer_lines', 0.75) / lz}
                   strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} strokeLinecap="round"
                   style={{ pointerEvents: 'none' }} />)
               }
@@ -1538,7 +1541,7 @@ export default function CanvasSVG({
                 nodes.push(<path key={`swing-${cab.id}-${col}`}
                   d={`M ${colLeft.x} ${colLeft.y} L ${colRight.x} ${colRight.y} A ${r} ${r} 0 0 ${leftSweep} ${endX} ${endY} Z`}
                   {...swingPaint}
-                  strokeWidth={layers.w('door_swings', 0.75) / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
+                  strokeWidth={layers.w('door_swings', 0.75) / lz} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />)
               } else {
                 const endX = colRight.x + r * (c15 * (-wd.x) + s15 * perp.x)
@@ -1546,7 +1549,7 @@ export default function CanvasSVG({
                 nodes.push(<path key={`swing-${cab.id}-${col}`}
                   d={`M ${colRight.x} ${colRight.y} L ${colLeft.x} ${colLeft.y} A ${r} ${r} 0 0 ${rightSweep} ${endX} ${endY} Z`}
                   {...swingPaint}
-                  strokeWidth={layers.w('door_swings', 0.75) / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
+                  strokeWidth={layers.w('door_swings', 0.75) / lz} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />)
               }
             }
@@ -1576,7 +1579,7 @@ export default function CanvasSVG({
                   x2={colRight.x + perpOff * perp.x - widthInset * wd.x}
                   y2={colRight.y + perpOff * perp.y - widthInset * wd.y}
                   stroke={layers.color('drawer_lines', '#f59e0b')} strokeOpacity={0.56} opacity={layers.op('drawer_lines')}
-                  strokeWidth={layers.w('drawer_lines', 0.75) / view.zoom}
+                  strokeWidth={layers.w('drawer_lines', 0.75) / lz}
                   strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                   strokeLinecap="round"
                   style={{ pointerEvents: 'none' }} />)
@@ -1629,14 +1632,14 @@ export default function CanvasSVG({
               <>
                 {/* Snap landing outline — exactly where the click will drop it */}
                 <polygon points={landPts} fill="none" stroke={layers.cabFillSel(movingCab.assembly_class)}
-                  strokeWidth={1 / view.zoom} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
+                  strokeWidth={1 / lz} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
                   opacity={0.5} style={{ pointerEvents: 'none' }} />
 
                 {/* Floating ghost outline */}
                 <polygon points={floatPts}
                   fill="none"
                   stroke={layers.cabFillSel(movingCab.assembly_class)}
-                  strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+                  strokeWidth={2 / lz} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />
 
                 {/* Snap arrow: dashed line + arrowhead from ghost back → snap landing */}
@@ -1650,7 +1653,7 @@ export default function CanvasSVG({
                       <line
                         x1={ghostBackCx} y1={ghostBackCy}
                         x2={baseX} y2={baseY}
-                        stroke="#60a5fa" strokeWidth={1.5 / view.zoom}
+                        stroke="#60a5fa" strokeWidth={1.5 / lz}
                         strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`}
                         strokeLinecap="round"
                         style={{ pointerEvents: 'none' }} />
@@ -1672,7 +1675,7 @@ export default function CanvasSVG({
             <polygon points={pts}
               fill="none"
               stroke={layers.cabFillSel(movingCab.assembly_class)}
-              strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+              strokeWidth={2 / lz} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
               style={{ pointerEvents: 'none' }} />
           )
         })()}
@@ -1681,28 +1684,28 @@ export default function CanvasSVG({
         {(mode === 'draw_wall' || mode === 'draw_island') && drawCursor && (
           <>
             <circle cx={drawCursor.x} cy={drawCursor.y} r={6 / view.zoom}
-              fill="#7c3aed55" stroke="#a78bfa" strokeWidth={1.5 / view.zoom}
+              fill="#7c3aed55" stroke="#a78bfa" strokeWidth={1.5 / lz}
               style={{ pointerEvents: 'none' }} />
             {drawStart && (
               <>
                 <line x1={drawStart.x} y1={drawStart.y} x2={drawCursor.x} y2={drawCursor.y}
-                  stroke="#7c3aed66" strokeWidth={1 / view.zoom}
+                  stroke="#7c3aed66" strokeWidth={1 / lz}
                   strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />
                 {drawLen >= MIN_WALL_LEN && (mode === 'draw_island' ? (
                   <line x1={drawStart.x} y1={drawStart.y} x2={drawCursor.x} y2={drawCursor.y}
-                    stroke="#f59e0b" strokeWidth={2 / view.zoom}
+                    stroke="#f59e0b" strokeWidth={2 / lz}
                     strokeDasharray={`${10 / view.zoom} ${5 / view.zoom}`}
                     style={{ pointerEvents: 'none' }} />
                 ) : (() => {
                   const pang = toDeg(Math.atan2(drawCursor.y - drawStart.y, drawCursor.x - drawStart.x))
                   const pw = { pos_x: drawStart.x, pos_y: drawStart.y, length: drawLen, angle: pang, thickness: drawThickness, wall_type: 'standard' } as Wall
                   return <polygon points={wallPolygon(pw)} fill="#7c3aed22" stroke="#7c3aed"
-                    strokeWidth={2 / view.zoom} strokeDasharray={`${8 / view.zoom} ${4 / view.zoom}`}
+                    strokeWidth={2 / lz} strokeDasharray={`${8 / view.zoom} ${4 / view.zoom}`}
                     style={{ pointerEvents: 'none' }} />
                 })())}
                 <circle cx={drawStart.x} cy={drawStart.y} r={8 / view.zoom}
-                  fill="none" stroke="#7c3aed" strokeWidth={2 / view.zoom}
+                  fill="none" stroke="#7c3aed" strokeWidth={2 / lz}
                   style={{ pointerEvents: 'none' }} />
                 {drawLen >= MIN_WALL_LEN && (
                   <text x={drawMidX} y={drawMidY - (13 / view.zoom)}
@@ -1727,7 +1730,7 @@ export default function CanvasSVG({
                 width={SNAP_PX * 1.1 / view.zoom} height={SNAP_PX * 1.1 / view.zoom}
                 fill={isSnapped ? '#7c3aed33' : 'none'}
                 stroke={isSnapped ? '#a78bfa' : '#7c3aed44'}
-                strokeWidth={1 / view.zoom} style={{ pointerEvents: 'none' }} />
+                strokeWidth={1 / lz} style={{ pointerEvents: 'none' }} />
             )
           })
         )}
@@ -1797,7 +1800,7 @@ export default function CanvasSVG({
               <>
                 {/* Snap landing outline */}
                 <polygon points={pts} fill="none" stroke={layers.cabFillSel(cls)}
-                  strokeWidth={1 / view.zoom} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
+                  strokeWidth={1 / lz} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
                   opacity={0.5} style={{ pointerEvents: 'none' }} />
 
                 {/* Snap arrow: dashed line + arrowhead from ghost back → snap landing */}
@@ -1809,7 +1812,7 @@ export default function CanvasSVG({
                   return (
                     <>
                       <line x1={ghostBackCx} y1={ghostBackCy} x2={baseX} y2={baseY}
-                        stroke="#60a5fa" strokeWidth={1.5 / view.zoom}
+                        stroke="#60a5fa" strokeWidth={1.5 / lz}
                         strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`} strokeLinecap="round"
                         style={{ pointerEvents: 'none' }} />
                       <polygon
@@ -1821,7 +1824,7 @@ export default function CanvasSVG({
 
                 {/* Floating ghost centred on cursor */}
                 <polygon points={floatPts} fill={layers.cabFill(cls) + 'cc'} stroke={layers.cabFillSel(cls)}
-                  strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+                  strokeWidth={2 / lz} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />
                 <text x={floatCenter.x} y={floatCenter.y} textAnchor="middle" dominantBaseline="middle"
                   fontSize={cabLabelFs} fill="#e2e8f0" style={{ userSelect: 'none', pointerEvents: 'none' }}>
@@ -1832,10 +1835,10 @@ export default function CanvasSVG({
                 {groupExtras.map((ex, i) => (
                   <Fragment key={`gx${i}`}>
                     <polygon points={ex.landPts} fill="none" stroke={layers.cabFillSel(ex.cls)}
-                      strokeWidth={1 / view.zoom} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
+                      strokeWidth={1 / lz} strokeDasharray={`${4 / view.zoom} ${4 / view.zoom}`}
                       opacity={0.5} style={{ pointerEvents: 'none' }} />
                     <polygon points={ex.floatPts} fill={layers.cabFill(ex.cls) + 'cc'} stroke={layers.cabFillSel(ex.cls)}
-                      strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+                      strokeWidth={2 / lz} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                       style={{ pointerEvents: 'none' }} />
                   </Fragment>
                 ))}
@@ -1846,7 +1849,7 @@ export default function CanvasSVG({
           return (
             <>
               <polygon points={pts} fill={layers.cabFill(cls) + 'aa'} stroke={layers.cabFillSel(cls)}
-                strokeWidth={2 / view.zoom} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
+                strokeWidth={2 / lz} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`}
                 style={{ pointerEvents: 'none' }} />
               <text x={center.x} y={center.y} textAnchor="middle" dominantBaseline="middle"
                 fontSize={cabLabelFs} fill="#e2e8f0" style={{ userSelect: 'none', pointerEvents: 'none' }}>
@@ -1880,27 +1883,27 @@ export default function CanvasSVG({
                 onPointerDown={e => { e.stopPropagation(); onSectionLinePointerDown?.(e) }}
               />
               <line x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke="#f59e0b" strokeWidth={2 / view.zoom}
+                stroke="#f59e0b" strokeWidth={2 / lz}
                 strokeDasharray={`${8 / view.zoom} ${4 / view.zoom}`}
                 style={{ pointerEvents: 'none' }} />
               <line x1={x1 - nx * tickLen / 2} y1={y1 - ny * tickLen / 2} x2={x1 + nx * tickLen / 2} y2={y1 + ny * tickLen / 2}
-                stroke="#f59e0b" strokeWidth={2 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                stroke="#f59e0b" strokeWidth={2 / lz} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
               <line x1={x2 - nx * tickLen / 2} y1={y2 - ny * tickLen / 2} x2={x2 + nx * tickLen / 2} y2={y2 + ny * tickLen / 2}
-                stroke="#f59e0b" strokeWidth={2 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                stroke="#f59e0b" strokeWidth={2 / lz} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
               <g onClick={e => { e.stopPropagation(); onSectionFlipLook?.() }} style={{ cursor: 'pointer' }}>
                 <line x1={mx} y1={my} x2={tipX} y2={tipY}
-                  stroke="#f59e0b" strokeWidth={2 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                  stroke="#f59e0b" strokeWidth={2 / lz} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
                 <polygon
                   points={`${tipX},${tipY} ${tipX - aDir.x * aW - aDir.y * aW * 0.5},${tipY - aDir.y * aW + aDir.x * aW * 0.5} ${tipX - aDir.x * aW + aDir.y * aW * 0.5},${tipY - aDir.y * aW - aDir.x * aW * 0.5}`}
                   fill="#f59e0b" style={{ pointerEvents: 'none' }} />
                 <circle cx={tipX} cy={tipY} r={16 / view.zoom} fill="transparent" />
               </g>
               <g onClick={e => { e.stopPropagation(); onSectionClear?.() }} style={{ cursor: 'pointer' }}>
-                <circle cx={x1} cy={y1} r={delR} fill="#111827" stroke="#f59e0b" strokeWidth={1.5 / view.zoom} />
+                <circle cx={x1} cy={y1} r={delR} fill="#111827" stroke="#f59e0b" strokeWidth={1.5 / lz} />
                 <line x1={x1 - delR * 0.55} y1={y1 - delR * 0.55} x2={x1 + delR * 0.55} y2={y1 + delR * 0.55}
-                  stroke="#f59e0b" strokeWidth={1.5 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                  stroke="#f59e0b" strokeWidth={1.5 / lz} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
                 <line x1={x1 + delR * 0.55} y1={y1 - delR * 0.55} x2={x1 - delR * 0.55} y2={y1 + delR * 0.55}
-                  stroke="#f59e0b" strokeWidth={1.5 / view.zoom} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+                  stroke="#f59e0b" strokeWidth={1.5 / lz} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
               </g>
             </g>
           )
@@ -1910,7 +1913,7 @@ export default function CanvasSVG({
         {mode === 'draw_section' && drawStart && drawCursor && (
           <>
             <line x1={drawStart.x} y1={drawStart.y} x2={drawCursor.x} y2={drawCursor.y}
-              stroke="#f59e0b88" strokeWidth={2 / view.zoom}
+              stroke="#f59e0b88" strokeWidth={2 / lz}
               strokeDasharray={`${8 / view.zoom} ${4 / view.zoom}`}
               style={{ pointerEvents: 'none' }} />
             <circle cx={drawStart.x} cy={drawStart.y} r={5 / view.zoom}
@@ -1924,7 +1927,7 @@ export default function CanvasSVG({
             x={Math.min(marquee.x1, marquee.x2)} y={Math.min(marquee.y1, marquee.y2)}
             width={Math.abs(marquee.x2 - marquee.x1)} height={Math.abs(marquee.y2 - marquee.y1)}
             fill="rgba(59,130,246,0.08)" stroke="#3b82f6"
-            strokeWidth={1 / view.zoom} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
+            strokeWidth={1 / lz} strokeDasharray={`${4 / view.zoom} ${2 / view.zoom}`}
             style={{ pointerEvents: 'none' }}
           />
         )}
@@ -1936,7 +1939,7 @@ export default function CanvasSVG({
           if (!a) return null
           const ep = 4 / view.zoom
           if (!b) {
-            return <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom} style={{ pointerEvents: 'none' }} />
+            return <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / lz} style={{ pointerEvents: 'none' }} />
           }
           const d  = roundMm(dist(a, b))
           const dx = roundMm(Math.abs(b.x - a.x))
@@ -1947,12 +1950,12 @@ export default function CanvasSVG({
           return (
             <g style={{ pointerEvents: 'none' }}>
               <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                stroke="#f59e0b" strokeWidth={1.5 / view.zoom}
+                stroke="#f59e0b" strokeWidth={1.5 / lz}
                 strokeDasharray={measureEnd ? undefined : `${6 / view.zoom} ${3 / view.zoom}`} />
-              <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom} />
-              <circle cx={b.x} cy={b.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / view.zoom} />
+              <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / lz} />
+              <circle cx={b.x} cy={b.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / lz} />
               <rect x={mx - boxW / 2} y={my - boxH - pad} width={boxW} height={boxH} rx={2 / view.zoom}
-                fill="rgba(17,24,39,0.9)" stroke="#f59e0b" strokeWidth={0.75 / view.zoom} />
+                fill="rgba(17,24,39,0.9)" stroke="#f59e0b" strokeWidth={0.75 / lz} />
               <text x={mx} y={my - boxH + fs * 0.5} textAnchor="middle" dominantBaseline="middle"
                 fontSize={fs} fontWeight="600" fill="#fcd34d" style={{ userSelect: 'none' }}>
                 {d}mm
@@ -1973,11 +1976,11 @@ export default function CanvasSVG({
           return (
             <g style={{ pointerEvents: 'none' }}>
               <rect x={pt.x - s} y={pt.y - s} width={s * 2} height={s * 2}
-                fill="none" stroke={color} strokeWidth={1.5 / view.zoom} />
+                fill="none" stroke={color} strokeWidth={1.5 / lz} />
               <line x1={pt.x - s * 1.7} y1={pt.y} x2={pt.x + s * 1.7} y2={pt.y}
-                stroke={color} strokeWidth={0.75 / view.zoom} />
+                stroke={color} strokeWidth={0.75 / lz} />
               <line x1={pt.x} y1={pt.y - s * 1.7} x2={pt.x} y2={pt.y + s * 1.7}
-                stroke={color} strokeWidth={0.75 / view.zoom} />
+                stroke={color} strokeWidth={0.75 / lz} />
             </g>
           )
         })()}

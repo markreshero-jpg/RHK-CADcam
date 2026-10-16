@@ -1,5 +1,6 @@
 'use client'
 
+import PanelDeleteButton, { PanelCloseButton } from './PanelDeleteButton'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
@@ -8,13 +9,15 @@ import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetShapeSection from './CabinetShapeSection'
 
-export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, hideWallPosition, hideDelete, autoFocusWidth }: {
+export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, onClose, hideWallPosition, hideDelete, autoFocusWidth }: {
   cabinet: CabinetInstance
   wall: Wall | null
   wallCabinets: CabinetInstance[]
   room: Room | null
   onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
   onDelete: (id: string) => void | Promise<void>
+  /** Header ✕ — closes (deselects). Omitted → no ✕. */
+  onClose?: () => void
   hideWallPosition?: boolean
   hideDelete?: boolean
   /** Focus the width field when the panel opens, so Tab flows width → height → depth. */
@@ -70,9 +73,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
           <p className="text-xs font-mono font-medium text-gray-300">{cabinet.label ?? '—'}</p>
           <p className="text-[10px] text-gray-500 capitalize">{cabinet.assembly_class.replace('_', ' ')}</p>
         </div>
-        {!hideDelete && (
-          <button onClick={() => onDelete(cabinet.id)} className="text-gray-600 hover:text-red-400 text-xs">✕</button>
-        )}
+        {onClose && <PanelCloseButton onClose={onClose} />}
       </div>
       <div className="p-4 space-y-3">
         <div>
@@ -416,6 +417,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
             onBlur={save} rows={2} className={inp + ' resize-none'} />
         </div>
       </div>
+      {!hideDelete && <PanelDeleteButton label="Delete cabinet" onDelete={() => void onDelete(cabinet.id)} />}
       {saving && <div className="px-4 py-2 border-t border-gray-800 text-[10px] text-gray-500">Saving…</div>}
     </div>
   )

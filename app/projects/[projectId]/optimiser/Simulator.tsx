@@ -22,7 +22,7 @@ import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import ToolProfilePreview from '@/src/components/ToolProfilePreview'
 import SimCanvas3D from './SimCanvas3D'
 
-export interface SimFile { sheetIndex: number; fileName: string; gcode: string }
+export interface SimFile { sheetIndex: number; fileName: string; gcode: string; outlines?: Record<string, { x: number; y: number }[]> }
 // The output datum the G-code was posted with, so the simulator can map the
 // machine coordinates BACK to the canonical internal frame it renders in
 // (bottom-left origin, Y up, top-of-material Z = 0 with cuts negative).
@@ -204,8 +204,8 @@ export default function Simulator({
         <div className={`flex-1 overflow-hidden p-4 ${view === '3d' ? '' : 'grid place-items-center'}`}>
           {!sheet ? <p className="text-xs text-ink-subtle">No sheet geometry for this file.</p>
             : view === '3d'
-              ? <SimCanvas3D sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} activeShape={activeShape} drillBlock={drillBlock} />
-              : <Canvas sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} drillBlock={drillBlock} />}
+              ? <SimCanvas3D sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} activeShape={activeShape} drillBlock={drillBlock} outlines={file?.outlines} />
+              : <Canvas sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} drillBlock={drillBlock} outlines={file?.outlines} />}
         </div>
 
         {/* Right info column */}
@@ -330,8 +330,9 @@ function useWheelZoom(pxW: number, pxH: number) {
 
 // ── Sheet canvas ──────────────────────────────────────────────────────────────
 function Canvas({
-  sheet, prog, elapsed, toolDia, headPos, cutting, activeTool, drillBlock,
+  sheet, prog, elapsed, toolDia, headPos, cutting, activeTool, drillBlock, outlines,
 }: {
+  outlines?: Record<string, { x: number; y: number }[]>   // shaped parts, sheet coords (O4)
   sheet: NestedSheet
   prog: ParsedProgram
   elapsed: number
@@ -410,8 +411,11 @@ function Canvas({
       {/* Panels (uncut material) */}
       {sheet.placements.map(p => (
         <g key={p.uid}>
-          <rect x={X(p.x)} y={Y(p.y + p.h)} width={p.w * scale} height={p.h * scale}
-            fill="#1e293b" stroke="#3b556e" strokeWidth={0.8} />
+          {outlines?.[p.uid]
+            ? <polygon points={outlines[p.uid].map(q => `${X(q.x)},${Y(q.y)}`).join(' ')}
+                fill="#1e293b" stroke="#3b556e" strokeWidth={0.8} />
+            : <rect x={X(p.x)} y={Y(p.y + p.h)} width={p.w * scale} height={p.h * scale}
+                fill="#1e293b" stroke="#3b556e" strokeWidth={0.8} />}
           {p.w * scale > 30 && p.h * scale > 14 && (
             <text x={X(p.x + p.w / 2)} y={Y(p.y + p.h / 2)} textAnchor="middle" dominantBaseline="middle"
               fill="#64748b" fontSize={Math.min(10, Math.max(6, p.h * scale / 5))} fontFamily="monospace">

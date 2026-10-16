@@ -567,7 +567,7 @@ export default function DrawerBoxPreviewPanel({
         .eq('active', true).order('name'),
       supabase.from('hardware_slides')
         .select('id,name,brand,nominal_length,box_height,runner_thickness,colour,side_deduction,model_url,model_format,model_scale,model_anchor_x,model_anchor_y,model_anchor_z')
-        .eq('active', true).order('nominal_length'),
+        .eq('active', true).eq('kind', 'slide').order('nominal_length'),
     ]).then(([schedRes, matsRes, ebRes, slideRes]) => {
       const scheds = ((schedRes.data ?? []) as unknown) as DbSched[]
       setDbScheds(scheds)

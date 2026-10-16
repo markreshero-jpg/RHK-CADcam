@@ -24,6 +24,8 @@
 import type { NestedSheet } from './nest'
 import { computeGangs, type DrillBlockConfig, type GangGroup } from './gangDrill'
 import { clearPath, outlinePath, type Pt2 } from './routePatterns'
+import { loopArea, toolPathLoop } from './shapes'
+import { fitLoopArcs } from '../shapePath'
 
 // Gold reference's longest comment carries 78 characters of content, so the
 // controller's real limit is at least that. 80 is the default until Pencil
@@ -217,6 +219,10 @@ export interface GcodeInput {
   // When present, the drilling pass uses Anderson gang detection + M88/M89
   // bitmask output instead of the generic single-spindle plunge loop.
   drillBlock?: DrillBlockConfig
+  // Shaped parts (phase plan O4): placement uid → the part's finished/cut
+  // outline in SHEET coords (bottom-left origin, mm) — shapes.placedOutline +
+  // the placement corner. The perimeter cut follows it instead of the rect.
+  outlines?: Record<string, { x: number; y: number }[]>
 }
 
 // Modal compaction (spec §5.8 / Anderson .anc). Drops words that are unchanged
@@ -606,6 +612,10 @@ export function generateSheetGcode(input: GcodeInput): string {
   // identical wherever a tool is called.
   const ordered = orderByTravel(sheet)
   const toolR = (input.toolDiameter ?? 0) / 2
+  const outlineOf = (pl: { uid: string }) => {
+    const o = input.outlines?.[pl.uid]
+    return o && o.length >= 3 ? o : undefined
+  }
   emitRouterSection(input.toolNumber, input.toolDiameter, (emitR, cR) => {
     if (p.cutter_compensation !== 'off' && toolR <= 0) cR('WARN: cutter compensation requested but routing tool diameter unknown - parts may cut undersized')
     if (hasSkin) {
@@ -613,18 +623,18 @@ export function generateSheetGcode(input: GcodeInput): string {
       cR('Roughing pass - leave onion skin')
       for (const pl of ordered) {
         cR(`Part ${pl.label}`)
-        routePerimeter(emitR, f, fz, pl, roughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, 0, toolR, input.toolNumber)
+        routePerimeter(emitR, f, fz, pl, roughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, 0, toolR, input.toolNumber, outlineOf(pl))
       }
       // Phase 2: separate every part — cut through the remaining skin.
       cR('Separation pass - cut through onion skin')
       for (const pl of ordered) {
         cR(`Part ${pl.label}`)
-        routePerimeter(emitR, f, fz, pl, throughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, roughDepth, toolR, input.toolNumber)
+        routePerimeter(emitR, f, fz, pl, throughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, roughDepth, toolR, input.toolNumber, outlineOf(pl))
       }
     } else {
       for (const pl of ordered) {
         cR(`Part ${pl.label}`)
-        routePerimeter(emitR, f, fz, pl, throughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, 0, toolR, input.toolNumber)
+        routePerimeter(emitR, f, fz, pl, throughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, 0, toolR, input.toolNumber, outlineOf(pl))
       }
     }
     // (each routePerimeter already lifts to safe Z; the footer/template homes)
@@ -1031,6 +1041,7 @@ function routePerimeter(
   startDepth = 0,   // depth-from-top where this routing begins (>0 = separating into an existing kerf)
   toolRadius = 0,   // routing bit radius (mm) — used for cutter compensation
   toolNumber = 1,   // routing tool number — used as the G41/G42 offset register (D)
+  outline?: { x: number; y: number }[],   // shaped part: closed outline, sheet coords (O4)
 ) {
   type V = [number, number]
   // Cutter compensation so the part cuts to size (otherwise the tool centreline on the
@@ -1052,35 +1063,71 @@ function routePerimeter(
   const compCode = climb ? 'G42' : 'G41'
   const ex = pl.x - r, ey = pl.y - r, ew = pl.w + 2 * r, eh = pl.h + 2 * r
   const m = (x: number, y: number): V => [mapX(x), mapY(y)]
-  const corners: V[] = climb
-    ? [m(ex, ey), m(ex + ew, ey), m(ex + ew, ey + eh), m(ex, ey + eh)]
-    : [m(ex, ey), m(ex, ey + eh), m(ex + ew, ey + eh), m(ex + ew, ey)]
+  let corners: V[]
+  if (outline) {
+    // Shaped part (O4): the outline, wound CCW for climb / CW for conventional
+    // like the rect, grown out by the computer-comp radius (sharp mitred
+    // corners — an inside corner keeps the tool's radius, as any router does).
+    // A recess narrower than the bit is skipped, never gouged (toolPathLoop).
+    const wound = (loopArea(outline) >= 0) === climb ? outline : [...outline].reverse()
+    const tp = toolPathLoop(wound, r)
+    if (tp.dropped) emit(sanitiseComment(`WARN: ${pl.label} has detail smaller than the ${f(toolRadius * 2)}mm bit - not cut there`, p.max_comment_length))
+    corners = tp.pts.map(q => m(q.x, q.y))
+  } else {
+    corners = climb
+      ? [m(ex, ey), m(ex + ew, ey), m(ex + ew, ey + eh), m(ex, ey + eh)]
+      : [m(ex, ey), m(ex, ey + eh), m(ex + ew, ey + eh), m(ex + ew, ey)]
+  }
   if (flipWinding) corners.reverse()
+  const n = corners.length
 
   const unit = (a: V, b: V): V => { const dx = b[0] - a[0], dy = b[1] - a[1]; const l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l] }
   const len = (a: V, b: V) => Math.hypot(b[0] - a[0], b[1] - a[1])
 
-  // Start point = midpoint of the part's LONGEST edge; on ties pick the edge nearest
-  // the FRONT of the machine (lowest machine Y, then lowest X) so the entry/exit scar
-  // lands in the near waste — matches the Anderson post.
+  // The loop as moves. A shaped outline's sampled arcs (a radius end's 5° flats)
+  // fit back into true arcs, cut as one G2/G3 each — fitted in machine space, so
+  // the datum's mirror is already in the turn direction. A loop with no
+  // straight edge to start on stays as flats.
+  type Move = { a: V; b: V; arc?: { c: V; ccw: boolean } }
+  let moves: Move[] = corners.map((a, i) => ({ a, b: corners[(i + 1) % n] }))
+  if (outline) {
+    const fit = fitLoopArcs(corners.map(([x, y]) => ({ x, y })))
+    if (fit.some(mv => !mv.arc)) {
+      moves = fit.map(mv => ({
+        a: [mv.a.x, mv.a.y], b: [mv.b.x, mv.b.y],
+        ...(mv.arc ? { arc: { c: [mv.arc.c.x, mv.arc.c.y] as V, ccw: mv.arc.ccw } } : {}),
+      }))
+    }
+  }
+  const nm = moves.length
+
+  // Start point = midpoint of the part's LONGEST straight edge; on ties pick the edge
+  // nearest the FRONT of the machine (lowest machine Y, then lowest X) so the
+  // entry/exit scar lands in the near waste — matches the Anderson post.
   let eIdx = 0, bestL = -1, bestY = Infinity, bestX = Infinity
-  for (let i = 0; i < 4; i++) {
-    const a = corners[i], b = corners[(i + 1) % 4]
+  for (let i = 0; i < nm; i++) {
+    if (moves[i].arc) continue
+    const { a, b } = moves[i]
     const l = len(a, b), my = (a[1] + b[1]) / 2, mx = (a[0] + b[0]) / 2
     if (l > bestL + 1e-6 ||
        (Math.abs(l - bestL) < 1e-6 && (my < bestY - 1e-6 || (Math.abs(my - bestY) < 1e-6 && mx < bestX - 1e-6)))) {
       bestL = l; bestY = my; bestX = mx; eIdx = i
     }
   }
-  const A = corners[eIdx], B = corners[(eIdx + 1) % 4]
+  const A = moves[eIdx].a, B = moves[eIdx].b
   const S: V = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2]
   // Closed cut path starting AND ending at S (the longest edge is split at its midpoint).
-  const path: V[] = [S, corners[(eIdx + 1) % 4], corners[(eIdx + 2) % 4], corners[(eIdx + 3) % 4], corners[eIdx], S]
+  const path: { to: V; arc?: Move['arc'] }[] = [{ to: S }, { to: B }]
+  for (let k = 1; k < nm; k++) { const mv = moves[(eIdx + k) % nm]; path.push({ to: mv.b, ...(mv.arc ? { arc: mv.arc } : {}) }) }
+  path.push({ to: S })
 
   // Tangent leaving S along the edge, and outward normal (into scrap). The cut both
   // leaves and returns to S along the same edge line, so in/out tangents coincide.
-  const ctr: V = m(ex + ew / 2, ey + eh / 2)
-  const outward = (at: V, tan: V): V => { const c: V = [-tan[1], tan[0]]; return (at[0] - ctr[0]) * c[0] + (at[1] - ctr[1]) * c[1] >= 0 ? c : [tan[1], -tan[0]] }
+  // Outward = right of travel on a CCW (machine-space) loop, left on a CW one —
+  // from the winding, so it holds for concave outlines too.
+  let area2 = 0
+  for (let i = 0; i < n; i++) { const a = corners[i], b = corners[(i + 1) % n]; area2 += a[0] * b[1] - b[0] * a[1] }
+  const outward = (_at: V, tan: V): V => area2 >= 0 ? [tan[1], -tan[0]] : [-tan[1], tan[0]]
   const tIn = unit(S, B)
   const nIn = outward(S, tIn)
   const tOut = tIn, nOut = nIn
@@ -1098,13 +1145,19 @@ function routePerimeter(
     emit(`G${ccw ? 3 : 2} X${f(to[0])} Y${f(to[1])} Z${fz(d)} I${f(c[0] - from[0])} J${f(c[1] - from[1])} F${feed}`)
 
   // Cut the full closed perimeter from S back to S at constant depth d.
-  const cutLoop = (d: number) => { for (let i = 1; i < path.length; i++) emit(`G1 X${f(path[i][0])} Y${f(path[i][1])} Z${fz(d)} F${cutF}`) }
+  const cutLoop = (d: number) => {
+    for (let i = 1; i < path.length; i++) {
+      const { to, arc: a } = path[i]
+      if (a) arc(path[i - 1].to, to, a.c, a.ccw, d, cutF)
+      else emit(`G1 X${f(to[0])} Y${f(to[1])} Z${fz(d)} F${cutF}`)
+    }
+  }
 
   // Straight ramp entry/exit (Anderson .anc). Approach a point offset back along the
   // start edge by the ramp run (= drop / tan(angle)) and tool_entry_offset into the
   // waste, drop to the clearance plane, then a SINGLE G1 ramp down onto S at depth.
   // The exit mirrors it past a tool-diameter overshoot, lifting back to clearance.
-  const firstDir = unit(S, path[1])
+  const firstDir = unit(S, path[1].to)
   const nrmS = outward(S, firstDir)
   // 'straight' approach ramps on the edge line (no lateral offset); 'offset' starts
   // tool_entry_offset into the waste so the entry scar sits off the finished edge.

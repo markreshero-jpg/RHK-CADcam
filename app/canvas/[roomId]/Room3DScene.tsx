@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useMemo, useEffect, useRef, useState } from 'react'
+import { useLongPressMenu } from './useLongPressMenu'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei'
 import { Shape, ExtrudeGeometry, Matrix4, Vector2, Vector3 } from 'three'
@@ -923,6 +924,9 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   // Tracks whether the right-click landed on a cabinet so the div-level handler
   // can distinguish "empty space" right-clicks (which should show the wall menu).
   const hitCabRef = useRef(false)
+  // Touch: long-press = right-click (cabinet menu, or the wall menu on empty space).
+  const rootRef = useRef<HTMLDivElement>(null)
+  useLongPressMenu(rootRef)
   // Right-drag pans the camera: only a static right-click (pointer moved less than
   // RIGHT_CLICK_SLOP px between down and up) opens a menu. contextmenu fires on
   // release (Windows), so the drag distance is known by then.
@@ -948,6 +952,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
 
   return (
     <div
+      ref={rootRef}
       className="flex-1 relative min-w-0"
       onPointerDownCapture={e => {
         if (e.button === 2) rightDownRef.current = { x: e.clientX, y: e.clientY, moved: false }

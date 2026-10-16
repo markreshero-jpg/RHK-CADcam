@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
-import type { FaceGridInput, FaceZoneInput, DrawerType } from '@/src/lib/resolver/types'
+import type { FaceGridInput, FaceZoneInput, DrawerType, DrawerFrontType } from '@/src/lib/resolver/types'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { useViewBoxPinch } from './usePinchZoom'
 import { intElevRect, dbElevRect, slideElevRect, TapePolys } from './cabinetEditSvgHelpers'
@@ -398,7 +398,7 @@ export default function FaceGridEditor({
     })
   }
 
-  function setDrawerType(rowIdx: number, colIdx: number, type: DrawerType | null) {
+  function setDrawerType(rowIdx: number, colIdx: number, type: DrawerFrontType | null) {
     save({
       ...grid,
       zones: grid.zones.map(z => {
@@ -407,7 +407,12 @@ export default function FaceGridEditor({
           const { drawer_type_config: _, ...rest } = z
           return rest
         }
-        return { ...z, drawer_type_config: { ...z.drawer_type_config, type } }
+        // A forced product is a runner OR a bin, never both — drop it when
+        // crossing between drawer and bin so the resolver re-picks.
+        const prev = z.drawer_type_config
+        const crosses = (prev?.type === 'bin') !== (type === 'bin')
+        const kept = crosses && prev ? (({ slide_product_id: _, ...r }) => r)(prev) : prev
+        return { ...z, drawer_type_config: { ...kept, type } }
       }),
     })
   }
@@ -1086,7 +1091,7 @@ export default function FaceGridEditor({
                   <div>
                     <p className="text-gray-600 mb-1">Drawer type</p>
                     <div className="flex gap-1">
-                      {(['system', 'five_piece'] as DrawerType[]).map(dt => {
+                      {(['system', 'five_piece', 'bin'] as DrawerFrontType[]).map(dt => {
                         const active = (gz.drawer_type_config?.type ?? null) === dt
                         return (
                           <button
@@ -1098,7 +1103,7 @@ export default function FaceGridEditor({
                                 : 'bg-gray-700 border-gray-600 text-gray-400 hover:bg-gray-600'
                             }`}
                           >
-                            {dt === 'system' ? 'System' : '5-Piece'}
+                            {dt === 'system' ? 'System' : dt === 'bin' ? 'Bin' : '5-Piece'}
                           </button>
                         )
                       })}

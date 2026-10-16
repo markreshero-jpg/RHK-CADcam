@@ -9,6 +9,7 @@
 import type { Box } from '@/src/components/three/PartViewer'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, JointTypeOp, ResolvedToekickPart } from '@/src/lib/resolver/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
+import { sampleOutline } from '@/src/lib/shapePath'
 import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
 
 export function isSide(k: string) { return k === 'left_side' || k === 'right_side' }
@@ -86,7 +87,7 @@ export function caseBox(p: ResolvedCasePart): Box {
 export function casePlanCorners(p: ResolvedCasePart): { x: number; z: number }[] {
   const b = caseBox(p)
   if (p.outline && p.outline.length >= 3 && !isSide(p.part_key) && p.part_key !== 'back' && !isShapedPanelKey(p.part_key) && !p.AY)
-    return p.outline.map(q => ({ x: b.x + q.x, z: b.z + b.d - q.y }))
+    return sampleOutline(p.outline).map(q => ({ x: b.x + q.x, z: b.z + b.d - q.y }))
   const bev = caseBevelOutline(p)
   const local: [number, number][] = bev
     ? bev.map(q => [q.x, b.d - q.y])
@@ -675,7 +676,7 @@ export function partPlan(p: ResolvedCasePart | ResolvedInternalPart): PlanPart {
   }
   const b = internalBox(p) ?? { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
   const corners = p.outline && p.outline.length >= 3
-    ? p.outline.map(q => ({ x: b.x + q.x, z: b.z + b.d - q.y }))
+    ? sampleOutline(p.outline).map(q => ({ x: b.x + q.x, z: b.z + b.d - q.y }))
     : [{ x: b.x, z: b.z }, { x: b.x + b.w, z: b.z }, { x: b.x + b.w, z: b.z + b.d }, { x: b.x, z: b.z + b.d }]
   return { corners, y: b.y, h: b.h, vertical: p.part_type === 'divider' }
 }

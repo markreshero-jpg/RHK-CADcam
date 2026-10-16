@@ -14,6 +14,9 @@ import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/opt
 import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
+import { placedOutline } from '@/src/lib/optimiser/shapes'
+import type { ShapePt } from '@/src/lib/shapePath'
+import { PlacedOutline } from './SheetSVG'
 import type { SheetDrill } from '@/src/lib/optimiser/gcode'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
@@ -54,6 +57,7 @@ export default function Stage5Edit() {
   // Nest was laid out at cut size when the profile deducts edgebanding — the
   // drill overlay must shift holes onto the deducted blanks the same way Stage 6 does.
   const deductEb = snap?.profiles.find(pr => pr.id === profileId)?.deduct_edgeband === true
+  const partByUid = useMemo(() => new Map((snap?.parts ?? []).map(p => [p.uid, p])), [snap])
 
   const [ctxMenu, setCtxMenu] = useState<{ uid: string; x: number; y: number } | null>(null)
   // Accordion: one material group open at a time. null = follow current sheet's
@@ -269,6 +273,7 @@ export default function Stage5Edit() {
               onSelect={selectPlacement}
               onMove={(uid, x, y) => movePartWithin(uid, x, y)}
               onContext={(uid, x, y) => { selectPlacement(uid); setCtxMenu({ uid, x, y }) }}
+              outlineFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedOutline(p, pl, deductEb) : null }}
             />
           </div>
         </div>
@@ -402,7 +407,8 @@ export default function Stage5Edit() {
 }
 
 // ── Interactive sheet (pointer drag with live snap preview) ────────────────────────
-function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef, onSelect, onMove, onContext }: {
+function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor }: {
+  outlineFor: (pl: NestedSheet['placements'][number]) => ShapePt[] | null
   sheet: NestedSheet
   selectedUid: string | null
   drills: SheetDrill[]
@@ -497,15 +503,20 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
         const y = isDrag ? drag!.gy : p.y
         const on = selectedUid === p.uid
         const num = idx + 1   // per-sheet part number
+        const outline = outlineFor(p)
         return (
           <g key={p.uid}
             onPointerDown={e => onPointerDown(e, p.uid)}
             onClick={e => e.stopPropagation()}
             onContextMenu={e => { e.preventDefault(); onContext(p.uid, e.clientX, e.clientY) }}
             style={{ cursor: 'move' }}>
+            {/* Shaped parts: the bbox stays as a faint dashed footprint (it's
+                still what the nest packs and what you drag) and the outline is drawn in it. */}
             <rect x={x * scale} y={fy(y, p.h)} width={p.w * scale} height={p.h * scale}
-              fill={on ? '#2563eb' : '#1e3a5f'} fillOpacity={on ? 0.6 : 0.42}
-              stroke={on ? '#60a5fa' : '#3b82f6'} strokeWidth={on ? 1.8 : 0.9} />
+              fill={on ? '#2563eb' : '#1e3a5f'} fillOpacity={outline ? 0.14 : on ? 0.6 : 0.42}
+              stroke={on ? '#60a5fa' : '#3b82f6'} strokeWidth={outline ? 0.6 : on ? 1.8 : 0.9}
+              strokeDasharray={outline ? '4 3' : undefined} />
+            {outline && <PlacedOutline local={outline} x={x} y={y} H={H} scale={scale} on={on} />}
             {(() => {
               const wpx = p.w * scale, hpx = p.h * scale
               const cx = (x + p.w / 2) * scale

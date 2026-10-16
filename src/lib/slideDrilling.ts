@@ -57,6 +57,10 @@ export interface SlideDrillContext {
   // runner sits IDCL/IDCR clearance inboard of the real face. Falls back to the
   // runner edge if omitted.
   memberFaceX?: number
+  // Cabinet Y that drawer_front `up` is measured from. Absent = the bottom of
+  // the visible face. Bins (z_bin_cabinet B-D6) set the cabinet floor, so the
+  // door pricks line up with the gable rows whatever the front's bottom reveal.
+  frontDatumY?: number
 }
 
 // Expression evaluator — mirrors jointDrilling.evalExpr. Variables exposed:
@@ -196,7 +200,7 @@ export function slideDrillOps(
           // can't break through the face front.
           if (!face) continue
           x = gableFaceX + inward * along
-          y = face.Y + up
+          y = (ctx.frontDatumY ?? face.Y) + up
           z = face.Z                                         // back face of the visible front
           axis = 'z+'                                        // bore forward into the face
           depthLen = Math.min(ev.depth_mm, Math.max(1, face.DZ - 1))   // through-break guard

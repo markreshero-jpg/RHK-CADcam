@@ -16,6 +16,8 @@ import {
 import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetPanel from './CabinetPanel'
+import PhoneDrawerTab from './PhoneDrawerTab'
+import { useIsPhone } from '@/src/lib/usePhone'
 import Cabinet3DView, { buildPartMetaById } from './Cabinet3DView'
 import FacetFaceGridEditor from './FacetFaceGridEditor'
 import InternalGridEditor from './InternalGridEditor'
@@ -184,6 +186,20 @@ export default function CabinetEditModal({
   // shared resolved map's custom_parts so the room plan/elevation/3D update at once).
   onCustomPartsChange?: (cabinetId: string, parts: CabinetCustomPart[]) => void
 }) {
+  // Phones (z_mobile/MOBILE-SPEC.md): full screen, properties panel is a narrow
+  // drawer over the views with an edge tab to hide / show it.
+  const phone = useIsPhone()
+  const [panelHidden, setPanelHidden] = useState(false)
+  // The phone drawer starts below the header + tabs so it never covers the close ✕.
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [drawerTop, setDrawerTop] = useState(0)
+  useEffect(() => {
+    const el = contentRef.current
+    if (!phone || !el) return
+    const ro = new ResizeObserver(() => setDrawerTop(el.offsetTop))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [phone])
   const [activeView, setActiveView]       = useState<ViewId>(initialView ?? 'elevation')
   // Wire/solid is tracked per-view (Top/Elevation/Side/3D each individual), seeded
   // from the user's default view styles. Other views fall back to wire (no effect).
@@ -238,6 +254,9 @@ export default function CabinetEditModal({
 
   const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face' && activeView !== 'interior' && activeView !== 'joints' && activeView !== 'overrides' && activeView !== 'routes' && activeView !== 'errors'
   const dockedPanelOpen = (isOrthoView && !!selectedSVGPart) || (activeView === '3d' && panel3DVisible)
+  // Picking a part re-opens a hidden phone drawer so its details show.
+  const [prevDocked, setPrevDocked] = useState(dockedPanelOpen)
+  if (dockedPanelOpen !== prevDocked) { setPrevDocked(dockedPanelOpen); if (dockedPanelOpen) setPanelHidden(false) }
 
   useEffect(() => {
     if (resolvedCabinet) return
@@ -453,18 +472,20 @@ export default function CabinetEditModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+      className={`fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center touch-no-select ${phone ? '' : 'p-4'}`}
       onPointerDown={onClose}
     >
       <div
-        className="flex w-full h-full max-w-7xl max-h-[92vh] bg-gray-900 rounded-xl shadow-2xl overflow-hidden"
+        className={phone
+          ? 'relative flex w-full h-dvh bg-gray-900 overflow-hidden'
+          : 'flex w-full h-full max-w-7xl max-h-[92vh] bg-gray-900 rounded-xl shadow-2xl overflow-hidden'}
         onPointerDown={e => e.stopPropagation()}
       >
         {/* Left: view tabs + canvas */}
         <div className="flex flex-col flex-1 overflow-hidden min-w-0">
           {/* Header */}
-          <div className="flex-none bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
-            <div className="flex items-baseline gap-3">
+          <div className={`flex-none bg-gray-800 border-b border-gray-700 py-2 flex items-center justify-between gap-2 ${phone ? 'pl-3 pr-1.5' : 'px-4'}`}>
+            <div className={`flex items-baseline gap-3 min-w-0 ${phone ? 'overflow-hidden whitespace-nowrap' : ''}`}>
               <span className="text-sm font-medium text-gray-200">
                 {cabinet.label ?? cabinet.assembly_class.replace(/_/g, ' ')}
               </span>
@@ -478,10 +499,19 @@ export default function CabinetEditModal({
                 <span className="text-[10px] text-amber-600 italic">resolver data unavailable — showing approximate views</span>
               )}
             </div>
-            <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none px-1">✕</button>
+            {phone ? (
+              <button onClick={onClose} title="Close" aria-label="Close"
+                className="flex-none w-9 h-9 rounded-lg flex items-center justify-center border border-gray-600 bg-gray-700/60 text-gray-200 active:bg-gray-600">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+                  <path d="M4 4l8 8M12 4l-8 8" />
+                </svg>
+              </button>
+            ) : (
+              <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none px-1">✕</button>
+            )}
           </div>
           {/* Tabs */}
-          <div className="flex-none bg-gray-800/60 border-b border-gray-700 px-4 py-1.5 flex items-center gap-1">
+          <div className={`flex-none bg-gray-800/60 border-b border-gray-700 py-1.5 flex items-center gap-1 ${phone ? 'px-2 overflow-x-auto [&>*]:shrink-0' : 'px-4'}`}>
             {(cabinet.is_kick_assembly ? VIEWS.filter(v => !KICK_HIDDEN_VIEWS.has(v.id)) : VIEWS).map(v => {
               const disabled = (v.id === 'parts' || v.id === '3d' || v.id === 'tree' || v.id === 'routes') && !rp
               const overrideCount = v.id === 'overrides'
@@ -564,6 +594,7 @@ export default function CabinetEditModal({
           </div>
           {/* Content */}
           <div
+            ref={contentRef}
             className={`flex-1 overflow-hidden relative ${
               activeView === 'parts'     ? 'bg-gray-900'
               : activeView === '3d'      ? 'bg-gray-950'
@@ -606,7 +637,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'face'     && <FacetFaceGridEditor cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onPanelVisibleChange={setPanel3DVisible} />}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onPanelVisibleChange={setPanel3DVisible} compactInfo={phone} />}
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}
@@ -703,8 +734,15 @@ export default function CabinetEditModal({
         </div>
 
         {/* Right: properties panel. Selecting a part swaps the cabinet info out
-            for the part's panels; deselecting (click blank canvas) swaps it back. */}
-        <div className="flex-none w-72 border-l border-gray-800 relative">
+            for the part's panels; deselecting (click blank canvas) swaps it back.
+            Phone: a drawer sliding via `right` (not a transform — that would trap
+            the fixed menus rendered inside), with an edge tab. */}
+        <div className={phone ? 'absolute bottom-0 z-20 flex items-start transition-[right] duration-200' : 'contents'}
+          style={phone ? { top: drawerTop, right: panelHidden ? 'calc(-1 * min(15rem, 70vw))' : 0 } : undefined}>
+        {phone && <PhoneDrawerTab hidden={panelHidden} onToggle={() => setPanelHidden(h => !h)} />}
+        <div className={phone
+          ? 'h-full w-[min(15rem,70vw)] bg-gray-900 border-l border-gray-700 shadow-2xl relative [&_.w-72]:w-full! [&_.w-72]:border-l-0'
+          : 'flex-none w-72 border-l border-gray-800 relative'}>
           <div className={dockedPanelOpen ? 'hidden' : 'h-full overflow-y-auto'}>
             <CabinetPanel
               cabinet={cabinet}
@@ -743,6 +781,7 @@ export default function CabinetEditModal({
               )}
             </div>
           </div>
+        </div>
         </div>
       </div>
 

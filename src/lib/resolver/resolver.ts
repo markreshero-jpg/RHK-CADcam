@@ -63,7 +63,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const { parts: rectInternalParts, slides: internalSlides, errors: internalErrors, autoDouble } = cab.has_internal
     ? resolveInternalParts(cab, r, cab.footprint ? [] : zones)
     : { parts: [], slides: [], errors: [], autoDouble: undefined }
-  const internalParts = cab.footprint ? shapeShelves(cab, rectInternalParts) : rectInternalParts
+  const internalParts = cab.footprint ? shapeShelves(cab, r, rectInternalParts) : rectInternalParts
   allErrors.push(...internalErrors)
 
   // Backing rail behind each finger gap, per column between the sides and

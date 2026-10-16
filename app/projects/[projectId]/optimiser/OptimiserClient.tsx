@@ -20,6 +20,7 @@ import type { OptiSnapshot, OptiPart } from '@/src/lib/optimiser/types'
 import { materialGroupKey, buildMargins, cutSize } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
+import { nestsFullSize, placedOutline } from '@/src/lib/optimiser/shapes'
 import SheetSVG from './SheetSVG'
 import Stage5Edit from './Stage5Edit'
 import Stage6Gcode from './Stage6Gcode'
@@ -396,7 +397,9 @@ function Stage2Parts() {
             <span className={`shrink-0 cursor-help select-none ${p.shape_stale ? 'text-amber-500' : 'text-sky-400'}`}
               title={p.shape_stale
                 ? `Shaped part — STALE: the part is now ${fmtMm(p.w)}×${fmtMm(p.h)}mm but the shape was drawn at ${fmtMm(p.shape.bbox.w)}×${fmtMm(p.shape.bbox.h)}mm. Re-edit the shape in the cabinet; excluded from nesting until then.`
-                : `Shaped part (r${p.shape.revision}) — nests at its bounding box, cuts its drawn outline`}>⬠</span>
+                : p.shape.source === 'resolver'
+                ? 'Shaped part (auto — the cabinet\'s own outline) — nests at its bounding box'
+                : `Shaped part (r${p.shape.revision}) — nests at its bounding box, cuts its drawn outline`}>⬠{p.shape.source === 'resolver' && <span className="text-[10px] ml-0.5">auto</span>}</span>
           )}
           {p.source_table === 'benchtop_parts' ? (
             <span className="px-1.5 py-0.5 text-ink truncate" title="Benchtop part — rename it on the benchtop (canvas)">{p.label}</span>
@@ -638,6 +641,7 @@ function Stage4Nesting() {
   const filterMaterialIds = useOptiStore(s => s.filterMaterialIds)
 
   const matById = useMemo(() => new Map(snap.materials.map(m => [m.id, m])), [snap.materials])
+  const partByUid = useMemo(() => new Map(snap.parts.map(p => [p.uid, p])), [snap.parts])
   const filtersActive = filterRoomIds.length > 0 || filterCabinetIds.length > 0 || filterMaterialIds.length > 0
   const passesFilter = (p: OptiPart) =>
     (filterRoomIds.length === 0 || filterRoomIds.includes(p.room_id)) &&
@@ -657,8 +661,11 @@ function Stage4Nesting() {
   // Until contour EB offsetting lands (phase plan O5), shaped parts nest and
   // cut at FULL drawn size even when the profile deducts — a deducted rect
   // smaller than the contour would let the packer overlap real material.
+  // Drawn shapes only: resolver outlines (shaped cabinets, finger-pull notches)
+  // still CUT as the rectangle until O4, so they keep the cut-size nest.
+  const fullSize = nestsFullSize
   const shapedBanded = deductEb
-    ? nestableParts.filter(p => p.shape && (p.eb_w1 || p.eb_w2 || p.eb_h1 || p.eb_h2))
+    ? nestableParts.filter(p => fullSize(p) && (p.eb_w1 || p.eb_w2 || p.eb_h1 || p.eb_h2))
     : []
 
   function run() {
@@ -678,8 +685,8 @@ function Stage4Nesting() {
         const label = isBatch && p.job_number ? `${p.job_number} ${p.label}` : p.label
         const gk = materialGroupKey(p.material_id, p.thickness)
         if (!stockForRun[gk]) stockForRun[gk] = { standard: seedStock(snap, p.material_id), offcuts: [] }
-        // Shaped parts always occupy their full bbox (no EB deduction until O5).
-        const dims = deductEb && !p.shape ? cutSize(p) : { w: p.w, h: p.h }
+        // Drawn shapes always occupy their full bbox (no EB deduction until O5).
+        const dims = deductEb && !fullSize(p) ? cutSize(p) : { w: p.w, h: p.h }
         for (let i = 0; i < qty; i++) {
           const inst: NestPartInput = { uid: `${p.uid}#${i}`, baseUid: p.uid, label, w: dims.w, h: dims.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority }
           parts.push(inst); index[inst.uid] = inst
@@ -759,7 +766,8 @@ function Stage4Nesting() {
             <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-5">
               {nestResult.sheets.map(s => (
                 <div key={s.index} className="space-y-1.5">
-                  <SheetSVG sheet={s} pxWidth={230} />
+                  <SheetSVG sheet={s} pxWidth={230}
+                    outlineFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedOutline(p, pl, deductEb) : null }} />
                   <p className="text-[11px] text-ink-muted flex justify-between">
                     <span>Sheet {s.index + 1}{s.stock.isOffcut ? ` · ${s.stock.label ?? 'offcut'}` : ''}</span>
                     <span className="font-mono">{(s.efficiency * 100).toFixed(0)}% · {s.placements.length}</span>

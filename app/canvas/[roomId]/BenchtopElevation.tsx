@@ -17,6 +17,7 @@
 // ============================================================
 
 import { Fragment } from 'react'
+import { useLineScale } from '@/src/lib/usePhone'
 import type { BenchtopInstance, BenchtopEdgeProfile, Wall } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { Pt } from '@/src/lib/geometry'
@@ -53,6 +54,7 @@ export default function BenchtopElevation({
   /** F4 Benchtop mode: tops pick. Otherwise click-through so cabinets own clicks. */
   interactive: boolean
 }) {
+  const lineScale = useLineScale()
   if (!layers.show('benchtops')) return null
   // The back side is viewed from outside the room, so the wall runs right-to-left:
   // measure along from the wall's far end (matches ElevationSVG's mirrored x).
@@ -61,6 +63,7 @@ export default function BenchtopElevation({
     ? { ...f0, o: { x: f0.o.x + f0.d.x * f0.len, y: f0.o.y + f0.d.y * f0.len }, d: { x: -f0.d.x, y: -f0.d.y } }
     : f0
   const z = zoom
+  const lz = z / lineScale   // strokes only — finer on phones
   const lp = layers.props('benchtops', z)
   const stroke = layers.color('benchtops', '#14b8a6')
   const showEdges = layers.show('benchtop_edges')
@@ -137,7 +140,7 @@ export default function BenchtopElevation({
         const legEl = (l: typeof legs[number]) => (
           <polygon key={`wf${l.i}`} points={legPts(l).map(q => q.join(',')).join(' ')}
             fill={fill} fillOpacity={layers.lineDrawing ? 0 : 0.85 * lp.fillOpacity}
-            stroke={isSel ? '#f59e0b' : stroke} strokeWidth={1 / z} opacity={lp.opacity}
+            stroke={isSel ? '#f59e0b' : stroke} strokeWidth={1 / lz} opacity={lp.opacity}
             strokeDasharray={lp.strokeDasharray}
             style={{ cursor: 'pointer' }}
             onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
@@ -156,7 +159,7 @@ export default function BenchtopElevation({
             <polygon points={bandPts}
               fill={fill} fillOpacity={layers.lineDrawing ? 0 : lp.fillOpacity}
               stroke={isSel ? '#f59e0b' : stroke}
-              strokeWidth={layers.w('benchtops', isSel ? 2 : 1.25) / z}
+              strokeWidth={layers.w('benchtops', isSel ? 2 : 1.25) / lz}
               strokeDasharray={lp.strokeDasharray} opacity={lp.opacity}
               style={{ cursor: 'pointer' }}
               onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
@@ -180,13 +183,13 @@ export default function BenchtopElevation({
             <g style={{ pointerEvents: 'none' }} opacity={lp.opacity}>
               {/* Front-face steps (return legs end-on read as their own band) */}
               {[...steps].map(t => (
-                <line key={`st${t}`} x1={t} y1={yTop} x2={t} y2={yBot} stroke={stroke} strokeWidth={0.75 / z} />
+                <line key={`st${t}`} x1={t} y1={yTop} x2={t} y2={yBot} stroke={stroke} strokeWidth={0.75 / lz} />
               ))}
 
               {/* Build-up: worktop over strips / rails */}
               {thick.buildUp && thick.total > thick.top && (
                 <line x1={t0} y1={yTop + thick.top} x2={t1} y2={yTop + thick.top}
-                  stroke={stroke} strokeWidth={0.5 / z} strokeDasharray={`${4 / z} ${2 / z}`} />
+                  stroke={stroke} strokeWidth={0.5 / lz} strokeDasharray={`${4 / z} ${2 / z}`} />
               )}
 
 
@@ -198,7 +201,7 @@ export default function BenchtopElevation({
                 return (
                   <g key={`j${k}`} opacity={layers.op('benchtop_joins')}>
                     <line x1={t} y1={yTop} x2={t} y2={yBot} stroke={col}
-                      strokeWidth={layers.w('benchtop_joins', 1.25) / z} strokeDasharray={`${3 / z} ${2 / z}`} />
+                      strokeWidth={layers.w('benchtop_joins', 1.25) / lz} strokeDasharray={`${3 / z} ${2 / z}`} />
                     <text x={t} y={yTop - 4 / z} textAnchor="middle" fontSize={8 / z} fill={col}>
                       {j.type === 'mitre' ? 'M' : 'B'}
                     </text>

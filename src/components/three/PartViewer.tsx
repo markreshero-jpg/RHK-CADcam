@@ -15,7 +15,7 @@ import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import { fmtMm, roundMm } from '@/src/lib/format'
 import { evalCalc } from '@/src/lib/calc'
-import type { ShapePt } from '@/src/lib/shapePath'
+import type { OutlinePt, ShapePt } from '@/src/lib/shapePath'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ export interface PartMeta {
   // Resolver outline of a shaped cabinet's part (bottom / top / shelf clipped to
   // the footprint, z_cabinet_shape) in the Shape Editor frame — the Part Editor
   // shows it when the part has no drawn shape of its own.
-  outline?: { x: number; y: number }[]
+  outline?: OutlinePt[]
 }
 
 export type MatColSpec = { face?: string; back?: string; edge?: string }
@@ -261,6 +261,7 @@ export function Part({
   shape?:             PartShape | null
 }) {
   const [hovered, setHovered] = useState(false)
+  const touchDownRef = useRef<{ x: number; y: number } | null>(null)   // finger press origin (tap-to-select)
   const passive = useContext(PassivePartsContext)
   const alpha   = useContext(PartAlphaContext)
   const wireCol = useContext(WireColorContext)
@@ -385,9 +386,24 @@ export function Part({
         key={meshKey}
         position={shapeGeom ? [0, 0, 0] : [core.x - b.x + core.w / 2, core.y - b.y + core.h / 2, core.z - b.z + core.d / 2]}
         geometry={csgGeom ?? shapeGeom ?? undefined}
-        onPointerDown={passive ? undefined : () => { dragRef.current = false }}
-        onPointerMove={passive ? undefined : (e) => { if (e.buttons) dragRef.current = true }}
-        onClick={passive || contextMenuSelect ? undefined : (e) => { e.stopPropagation(); if (!dragRef.current) onSelect(selected ? null : meta) }}
+        onPointerDown={passive ? undefined : (e) => {
+          dragRef.current = false
+          const ne = e.nativeEvent as PointerEvent
+          touchDownRef.current = ne.pointerType === 'touch' ? { x: ne.clientX, y: ne.clientY } : null
+        }}
+        onPointerMove={passive ? undefined : (e) => {
+          if (!e.buttons) return
+          // Fingers jitter: a touch only counts as a drag once it travels a few px.
+          const t = touchDownRef.current, ne = e.nativeEvent as PointerEvent
+          if (!t || Math.hypot(ne.clientX - t.x, ne.clientY - t.y) > 8) dragRef.current = true
+        }}
+        // Right-click-select parts still select on a tap: touch browsers (iOS
+        // Safari) never fire contextmenu, so a phone would have no way to pick.
+        onClick={passive ? undefined : (e) => {
+          if (contextMenuSelect && !touchDownRef.current) return
+          e.stopPropagation()
+          if (!dragRef.current) onSelect(contextMenuSelect || !selected ? meta : null)
+        }}
         onContextMenu={!passive && (contextMenuSelect || onPartContextMenu) ? (e) => {
           e.stopPropagation()
           if (contextMenuSelect) onSelect(meta)

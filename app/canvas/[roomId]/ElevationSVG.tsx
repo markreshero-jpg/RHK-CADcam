@@ -1,5 +1,6 @@
 ﻿'use client'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
+import { useLineScale } from '@/src/lib/usePhone'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, SNAP_PX, type Pt } from '@/src/lib/geometry'
@@ -216,6 +217,7 @@ export default function ElevationSVG({
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = useMemo(() => frontViewHardwareMap(resolvedPartsRaw), [resolvedPartsRaw])
   const svgRef = useRef<SVGSVGElement>(null)
+  const lineScale = useLineScale()
   const [view, dispatchView] = useReducer(viewReducer, { panX: 80, panY: 60, zoom: 1 })
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
   const spaceRef = useRef(false)
@@ -755,6 +757,8 @@ export default function ElevationSVG({
   const LINE_DRAW_COLORS = PART_COLORS
 
   const z = view.zoom
+  // Strokes divide by the line zoom (finer on phones); text and hit targets use z.
+  const lz = z / lineScale
   const labelFs = 11 / z
   const dimFs   =  9 / z
   const tickH   = 30 / z
@@ -931,7 +935,7 @@ export default function ElevationSVG({
                 <rect x={0} y={0} width={wall.length} height={roomH}
                   fill={isLineDrawing ? 'none' : '#1f2937'}
                   stroke={isWallSel ? '#3b82f6' : '#374151'}
-                  strokeWidth={isWallSel ? 2 / z : 1 / z}
+                  strokeWidth={isWallSel ? 2 / lz : 1 / lz}
                   style={{ cursor: 'pointer' }}
                   onClick={e => { e.stopPropagation(); onSelectWall(wall.id) }}
                   onContextMenu={cmHandler} />
@@ -940,7 +944,7 @@ export default function ElevationSVG({
 
             {/* Floor line */}
             <line x1={0} y1={roomH} x2={wall.length} y2={roomH}
-              stroke="#4b5563" strokeWidth={2 / z} />
+              stroke="#4b5563" strokeWidth={2 / lz} />
 
             {/* Ceiling / soffit / wall-cabinet-top — not applicable to islands */}
             {wall.wall_type !== 'island' && (() => {
@@ -952,15 +956,15 @@ export default function ElevationSVG({
               const wcTop   = room.wall_cabinet_top ?? null
               return (<>
                 <line x1={0} y1={0} x2={wall.length} y2={0}
-                  stroke="#374151" strokeWidth={1 / z}
+                  stroke="#374151" strokeWidth={1 / lz}
                   strokeDasharray={`${8 / z} ${4 / z}`} />
                 {soffitH != null && (
                   <line x1={0} y1={roomH - soffitH} x2={wall.length} y2={roomH - soffitH}
-                    stroke="#78350f" strokeWidth={0.5 / z} strokeDasharray={`${6 / z} ${3 / z}`} />
+                    stroke="#78350f" strokeWidth={0.5 / lz} strokeDasharray={`${6 / z} ${3 / z}`} />
                 )}
                 {wcTop != null && (
                   <line x1={0} y1={roomH - wcTop} x2={wall.length} y2={roomH - wcTop}
-                    stroke="#1e3a5f" strokeWidth={0.5 / z} strokeDasharray={`${4 / z} ${4 / z}`} />
+                    stroke="#1e3a5f" strokeWidth={0.5 / lz} strokeDasharray={`${4 / z} ${4 / z}`} />
                 )}
               </>)
             })()}
@@ -998,17 +1002,17 @@ export default function ElevationSVG({
                       </clipPath>
                     </defs>
                     <rect x={x0} y={slabY} width={t} height={rwH}
-                      fill="#111827" stroke="#4b5563" strokeWidth={1 / z} />
+                      fill="#111827" stroke="#4b5563" strokeWidth={1 / lz} />
                     <g clipPath={`url(#${clipId})`}>
                       {Array.from({ length: Math.floor(rwH / (t * 1.5)) + 2 }, (_, i) => {
                         const y1 = slabY + i * t * 1.5 - t
                         return <line key={i} x1={x0} y1={y1} x2={x0 + t} y2={y1 + t}
-                          stroke="#1f2937" strokeWidth={1.5 / z} />
+                          stroke="#1f2937" strokeWidth={1.5 / lz} />
                       })}
                     </g>
                     {slabY > 1 && (
                       <line x1={x0} y1={slabY} x2={x0 + t} y2={slabY}
-                        stroke="#6b7280" strokeWidth={1.5 / z}
+                        stroke="#6b7280" strokeWidth={1.5 / lz}
                         strokeDasharray={`${4 / z} ${3 / z}`} />
                     )}
                     <text x={midX} y={midY}
@@ -1019,9 +1023,9 @@ export default function ElevationSVG({
                       {rw.name}
                     </text>
                     <line x1={x0} y1={slabY - tickH * 0.7} x2={x0 + t} y2={slabY - tickH * 0.7}
-                      stroke="#6b7280" strokeWidth={1 / z} />
-                    <line x1={x0}     y1={slabY - tickH * 0.3} x2={x0}     y2={slabY - tickH * 1.1} stroke="#6b7280" strokeWidth={1 / z} />
-                    <line x1={x0 + t} y1={slabY - tickH * 0.3} x2={x0 + t} y2={slabY - tickH * 1.1} stroke="#6b7280" strokeWidth={1 / z} />
+                      stroke="#6b7280" strokeWidth={1 / lz} />
+                    <line x1={x0}     y1={slabY - tickH * 0.3} x2={x0}     y2={slabY - tickH * 1.1} stroke="#6b7280" strokeWidth={1 / lz} />
+                    <line x1={x0 + t} y1={slabY - tickH * 0.3} x2={x0 + t} y2={slabY - tickH * 1.1} stroke="#6b7280" strokeWidth={1 / lz} />
                     <text x={midX} y={slabY - tickH * 1.5}
                       textAnchor="middle" dominantBaseline="middle"
                       fontSize={dimFs2} fill="#ffffff"
@@ -1076,7 +1080,7 @@ export default function ElevationSVG({
               const baseColor = isSel ? layers.cabFillSel(cab.assembly_class) : layers.cabFill(cab.assembly_class)
               const isHover = hoveredCabId === cab.id && !isSel && !isMultiSel
               const cabStroke = isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : isHover ? '#f97316' : '#3b82f6'
-              const cabStrokeW = isSel || isMultiSel || isHover ? 2 / z : 1 / z
+              const cabStrokeW = isSel || isMultiSel || isHover ? 2 / lz : 1 / lz
 
               // Layer items (z_display_layers spec)
               const showOutline = layers.show('carcass_outline')
@@ -1165,7 +1169,7 @@ export default function ElevationSVG({
                   {isMultiSel && (
                     <rect x={rx - 2 / z} y={ry - 2 / z}
                       width={displayDx + 4 / z} height={displayDy + 4 / z}
-                      fill="none" stroke="#f59e0b" strokeWidth={2 / z}
+                      fill="none" stroke="#f59e0b" strokeWidth={2 / lz}
                       style={{ pointerEvents: 'none' }} />
                   )}
 
@@ -1182,7 +1186,7 @@ export default function ElevationSVG({
                             fill={isLineDrawing ? 'none' : (pastFace ? 'url(#section-hatch)' : baseColor)}
                             fillOpacity={isLineDrawing ? 0 : carcP.fillOpacity * layers.cabFillOpacity}
                             stroke={isLineDrawing ? (isSel ? '#e2e8f0' : layers.color('carcass_outline', '#94a3b8')) : (isSel || isMultiSel || isHover ? cabStroke : layers.color('carcass_outline', cabStroke))}
-                            strokeWidth={layers.w('carcass_outline', 1) * (isLineDrawing ? 1 / z : cabStrokeW)}
+                            strokeWidth={layers.w('carcass_outline', 1) * (isLineDrawing ? 1 / lz : cabStrokeW)}
                             strokeDasharray={isLineDrawing ? undefined : carcP.strokeDasharray}
                             opacity={carcP.opacity} />
                         )}
@@ -1191,14 +1195,14 @@ export default function ElevationSVG({
                             fill={isLineDrawing ? 'none' : baseColor}
                             fillOpacity={isLineDrawing ? 0 : (tkP.fillOpacity * 0.5) || 0}
                             stroke={isLineDrawing ? layers.color('kick_faces', '#fbbf24') : (isSel ? '#e2e8f0' : layers.color('kick_faces', '#475569'))}
-                            strokeWidth={layers.w('kick_faces', 1) / z}
+                            strokeWidth={layers.w('kick_faces', 1) / lz}
                             strokeDasharray={isLineDrawing ? undefined : (tkP.strokeDasharray ?? `${4 / z} ${2 / z}`)}
                             opacity={tkP.opacity} />
                         )}
                         {shelfYs.map((sy, i) => (
                           <line key={i} x1={rx + 4 / z} y1={sy} x2={rx + displayDx - 4 / z} y2={sy}
                             stroke={isLineDrawing ? layers.color('adj_shelves', '#a78bfa') : (pastFace ? '#818cf8' : (isSel ? '#cbd5e1' : layers.color('adj_shelves', '#4b5563')))}
-                            strokeWidth={layers.w('adj_shelves', pastFace ? 1.5 : 1) / z}
+                            strokeWidth={layers.w('adj_shelves', pastFace ? 1.5 : 1) / lz}
                             strokeDasharray={isLineDrawing || layers.style('adj_shelves') === 'solid' ? undefined : `${8 / z} ${4 / z}`}
                             opacity={layers.props('adj_shelves', z).opacity} />
                         ))}
@@ -1209,7 +1213,7 @@ export default function ElevationSVG({
                             fill={isLineDrawing ? 'none' : baseColor}
                             fillOpacity={isLineDrawing ? 0 : faceP.fillOpacity * 0.45 * faceOpacity}
                             stroke={isLineDrawing ? layers.color('doors', '#60a5fa') : (isSel ? '#e2e8f0' : layers.color('doors', baseColor))}
-                            strokeWidth={layers.w('doors', isLineDrawing ? 1 : 0.75) / z}
+                            strokeWidth={layers.w('doors', isLineDrawing ? 1 : 0.75) / lz}
                             strokeDasharray={isLineDrawing ? undefined : faceP.strokeDasharray}
                             opacity={faceP.opacity * faceOpacity} />
                         })()}
@@ -1232,7 +1236,7 @@ export default function ElevationSVG({
                             fill={isLineDrawing ? 'none' : (pastFace ? 'url(#section-hatch)' : fill)}
                             fillOpacity={isLineDrawing ? 0 : (pastFace ? 0.9 : 0.6)}
                             stroke={isLineDrawing ? ldStroke : (pastFace ? '#8b9eb0' : (isSel ? '#e2e8f0' : fill))}
-                            strokeWidth={layers.w(cit, isLineDrawing ? 1 : (pastFace ? 1 : 0.5)) / z}
+                            strokeWidth={layers.w(cit, isLineDrawing ? 1 : (pastFace ? 1 : 0.5)) / lz}
                             strokeDasharray={layers.props(casePartItem(p.part_key), z).strokeDasharray}
                             opacity={layers.props(casePartItem(p.part_key), z).opacity} style={{ pointerEvents: 'none' }} />
                         )
@@ -1249,7 +1253,7 @@ export default function ElevationSVG({
                           return (
                             <rect key={`tk-${i}`} x={x} y={y} width={w} height={h}
                               fill="none"
-                              stroke={ldStroke} strokeWidth={layers.w(kit, 1) / z}
+                              stroke={ldStroke} strokeWidth={layers.w(kit, 1) / lz}
                               strokeDasharray={isSpreader ? `${4 / z} ${3 / z}` : undefined}
                               opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                           )
@@ -1257,12 +1261,12 @@ export default function ElevationSVG({
                         return isSpreader
                           ? <rect key={`tk-${i}`} x={x} y={y} width={w} height={h}
                               fill="none"
-                              stroke={isSel ? '#e2e8f0' : fill} strokeWidth={layers.w(kit, 1) / z}
+                              stroke={isSel ? '#e2e8f0' : fill} strokeWidth={layers.w(kit, 1) / lz}
                               strokeDasharray={`${4 / z} ${3 / z}`}
                               opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                           : <rect key={`tk-${i}`} x={x} y={y} width={w} height={h}
                               fill={fill} fillOpacity={0.7}
-                              stroke={isSel ? '#e2e8f0' : fill} strokeWidth={layers.w(kit, 0.5) / z}
+                              stroke={isSel ? '#e2e8f0' : fill} strokeWidth={layers.w(kit, 0.5) / lz}
                               opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                       })}
                       {rp.internal_parts.filter(p => showInt(internalPartItem(p.part_type))).map((p, i) => {
@@ -1277,7 +1281,7 @@ export default function ElevationSVG({
                             fill={isLineDrawing ? 'none' : fill}
                             fillOpacity={isLineDrawing ? 0 : 0.6}
                             stroke={isLineDrawing ? ldStroke : fill}
-                            strokeWidth={layers.w(iit, isLineDrawing ? 1 : 0.5) / z}
+                            strokeWidth={layers.w(iit, isLineDrawing ? 1 : 0.5) / lz}
                             opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
@@ -1304,7 +1308,7 @@ export default function ElevationSVG({
                                 slide={s} tris={tris} wireMode={false} selected={false}
                                 fill={isLineDrawing ? 'none' : fill}
                                 stroke={isLineDrawing ? ldStroke : fill}
-                                strokeWidth={layers.w('inner_drawer_runners', isLineDrawing ? 1 : 0.5) / z}
+                                strokeWidth={layers.w('inner_drawer_runners', isLineDrawing ? 1 : 0.5) / lz}
                                 dataPartId={`elev-islide-${cab.id}-${j}`} />
                             </g>
                           )
@@ -1314,7 +1318,7 @@ export default function ElevationSVG({
                             fill={isLineDrawing ? 'none' : fill}
                             fillOpacity={isLineDrawing ? 0 : 0.5}
                             stroke={isLineDrawing ? ldStroke : fill}
-                            strokeWidth={layers.w('inner_drawer_runners', isLineDrawing ? 1 : 0.5) / z}
+                            strokeWidth={layers.w('inner_drawer_runners', isLineDrawing ? 1 : 0.5) / lz}
                             opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
                         )
                       })}
@@ -1326,7 +1330,7 @@ export default function ElevationSVG({
                           return (
                             <circle key={`hg-${hi}-${j}`} cx={c.x} cy={c.y} r={Math.max(dr.radius, 0.5)}
                               fill="none" stroke={layers.color('hinges', isLineDrawing ? '#475569' : '#a855f7')}
-                              strokeWidth={layers.w('hinges', isLineDrawing ? 1 : 0.6) / z}
+                              strokeWidth={layers.w('hinges', isLineDrawing ? 1 : 0.6) / lz}
                               opacity={layers.props('hinges', z).opacity} style={{ pointerEvents: 'none' }} />
                           )
                         }),
@@ -1343,7 +1347,7 @@ export default function ElevationSVG({
                           return (
                             <circle key={`dfd-${si}-${j}`} cx={c.x} cy={c.y} r={Math.max(dr.radius, 0.5)}
                               fill="none" stroke={layers.color('drawer_front_drilling', isLineDrawing ? '#475569' : '#d97706')}
-                              strokeWidth={layers.w('drawer_front_drilling', isLineDrawing ? 1 : 0.6) / z}
+                              strokeWidth={layers.w('drawer_front_drilling', isLineDrawing ? 1 : 0.6) / lz}
                               opacity={layers.props('drawer_front_drilling', z).opacity} style={{ pointerEvents: 'none' }} />
                           )
                         }),
@@ -1362,7 +1366,7 @@ export default function ElevationSVG({
                               fill={isLineDrawing ? 'none' : fill}
                               fillOpacity={isLineDrawing ? 0 : 0.6}
                               stroke={isLineDrawing ? ldStroke : fill}
-                              strokeWidth={layers.w('drawer_boxes', isLineDrawing ? 1 : 0.5) / z}
+                              strokeWidth={layers.w('drawer_boxes', isLineDrawing ? 1 : 0.5) / lz}
                               opacity={boxP.opacity} style={{ pointerEvents: 'none' }} />
                           )
                         }),
@@ -1387,7 +1391,7 @@ export default function ElevationSVG({
                                   slide={s} tris={tris} wireMode={false} selected={false}
                                   fill={isLineDrawing ? 'none' : fill}
                                   stroke={isLineDrawing ? ldStroke : fill}
-                                  strokeWidth={layers.w('drawer_runners', isLineDrawing ? 1 : 0.5) / z}
+                                  strokeWidth={layers.w('drawer_runners', isLineDrawing ? 1 : 0.5) / lz}
                                   dataPartId={`elev-slide-${cab.id}-${i}-${j}`} />
                               </g>
                             )
@@ -1397,7 +1401,7 @@ export default function ElevationSVG({
                               fill={isLineDrawing ? 'none' : fill}
                               fillOpacity={isLineDrawing ? 0 : 0.5}
                               stroke={isLineDrawing ? ldStroke : fill}
-                              strokeWidth={layers.w('drawer_runners', isLineDrawing ? 1 : 0.5) / z}
+                              strokeWidth={layers.w('drawer_runners', isLineDrawing ? 1 : 0.5) / lz}
                               opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
                           )
                         }),
@@ -1415,9 +1419,9 @@ export default function ElevationSVG({
                         const ldStroke = layers.colorOf(fit) ?? LINE_DRAW_COLORS[fz.face_type] ?? '#60a5fa'
                         const faceStroke = isLineDrawing ? ldStroke : (isSel ? '#e2e8f0' : fill)
                         const hingeLine = fz.hinge_side === 'left'
-                          ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={faceStroke} strokeWidth={layers.w(fit, isLineDrawing ? 1.5 : 2) / z} style={{ pointerEvents: 'none' }} />
+                          ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={faceStroke} strokeWidth={layers.w(fit, isLineDrawing ? 1.5 : 2) / lz} style={{ pointerEvents: 'none' }} />
                           : fz.hinge_side === 'right'
-                          ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={faceStroke} strokeWidth={layers.w(fit, isLineDrawing ? 1.5 : 2) / z} style={{ pointerEvents: 'none' }} />
+                          ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={faceStroke} strokeWidth={layers.w(fit, isLineDrawing ? 1.5 : 2) / lz} style={{ pointerEvents: 'none' }} />
                           : null
                         const chevron = layers.show('door_chevrons') && fz.face_type === 'door' && fz.hinge_side
                           ? (() => {
@@ -1425,7 +1429,7 @@ export default function ElevationSVG({
                                 ? `${x},${y} ${x + w},${y + h / 2} ${x},${y + h}`
                                 : `${x + w},${y} ${x},${y + h / 2} ${x + w},${y + h}`
                               return <polyline points={pts} fill="none" stroke={layers.color('door_chevrons', faceStroke)}
-                                strokeWidth={layers.w('door_chevrons', 0.5) / z} strokeOpacity={0.7} opacity={layers.op('door_chevrons')}
+                                strokeWidth={layers.w('door_chevrons', 0.5) / lz} strokeOpacity={0.7} opacity={layers.op('door_chevrons')}
                                 strokeDasharray={`${6 / z} ${3 / z}`}
                                 strokeLinejoin="miter" strokeLinecap="butt"
                                 style={{ pointerEvents: 'none' }} />
@@ -1446,7 +1450,7 @@ export default function ElevationSVG({
                             <rect x={x} y={y} width={w} height={h}
                               fill={isLineDrawing ? 'none' : fill}
                               fillOpacity={isLineDrawing ? 0 : 0.25}
-                              stroke={faceStroke} strokeWidth={layers.w(fit, 1) / z}
+                              stroke={faceStroke} strokeWidth={layers.w(fit, 1) / lz}
                               opacity={faceP.opacity} />
                             {hingeLine}
                             {chevron}
@@ -1460,20 +1464,20 @@ export default function ElevationSVG({
                         <HandleElevSVG key={`hd-${i}`} s={s} project={toSVGPt}
                           stroke={layers.color('handles', isLineDrawing ? '#334155' : '#1e293b')}
                           fill={isLineDrawing ? 'none' : layers.color('handles', '#475569')}
-                          strokeWidth={layers.w('handles', 0.8) / z} opacity={layers.op('handles')} />
+                          strokeWidth={layers.w('handles', 0.8) / lz} opacity={layers.op('handles')} />
                       ))}
                       {/* Sharknose bevels — hidden line where the bevel meets the back face */}
                       {layers.show('handles') && (
                         <SharknoseLinesSVG zones={rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })}
                           project={toSVGPt} stroke={layers.color('handles', isLineDrawing ? '#334155' : '#94a3b8')}
-                          strokeWidth={layers.w('handles', 0.8) / z} dash={`${4 / z} ${3 / z}`} opacity={layers.op('handles')} fontSize={9 / z} />
+                          strokeWidth={layers.w('handles', 0.8) / lz} dash={`${4 / z} ${3 / z}`} opacity={layers.op('handles')} fontSize={9 / z} />
                       )}
                       {/* Handle through-holes — drawn over the handle so you can see
                           what gets drilled; empty when the handle isn't drilled. */}
                       {layers.show('handle_holes') && handleShapes(rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })).map((s, i) => (
                         <HandleHolesSVG key={`hh-${i}`} s={s} project={toSVGPt}
                           color={layers.color('handle_holes', isLineDrawing ? '#475569' : '#f97316')}
-                          strokeWidth={layers.w('handle_holes', 0.6) / z} opacity={layers.op('handle_holes')} />
+                          strokeWidth={layers.w('handle_holes', 0.6) / lz} opacity={layers.op('handle_holes')} />
                       ))}
                       </g>)}
 
@@ -1488,7 +1492,7 @@ export default function ElevationSVG({
                             fill={isLineDrawing ? 'none' : layers.color(cpi, '#a78bfa')}
                             fillOpacity={isLineDrawing ? 0 : 0.4}
                             stroke={isLineDrawing ? layers.color(cpi, '#a78bfa') : (isSel ? '#e2e8f0' : layers.color(cpi, '#7c3aed'))}
-                            strokeWidth={layers.w(cpi, isLineDrawing ? 1 : 0.6) / z}
+                            strokeWidth={layers.w(cpi, isLineDrawing ? 1 : 0.6) / lz}
                             strokeDasharray={layers.props(cpi, z).strokeDasharray}
                             opacity={layers.props(cpi, z).opacity} style={{ pointerEvents: 'none' }} />
                         )
@@ -1547,7 +1551,7 @@ export default function ElevationSVG({
                   {isSel && !anyCarcase && hit && (
                     <rect
                       x={hit.x} y={hit.y} width={hit.w} height={hit.h}
-                      fill="none" stroke="#3b82f6" strokeWidth={1.5 / z}
+                      fill="none" stroke="#3b82f6" strokeWidth={1.5 / lz}
                       strokeDasharray={`${6 / z} ${3 / z}`}
                     />
                   )}
@@ -1584,11 +1588,11 @@ export default function ElevationSVG({
                     return (
                       <g>
                         <line x1={cx - arm} y1={cy} x2={cx + arm} y2={cy}
-                          stroke={isF ? '#60a5fa' : 'white'} strokeWidth={1.5 / z}
+                          stroke={isF ? '#60a5fa' : 'white'} strokeWidth={1.5 / lz}
                           opacity={isF ? 1 : 0.4} strokeLinecap="round"
                           style={{ pointerEvents: 'none' }} />
                         <line x1={cx} y1={cy - arm} x2={cx} y2={cy + arm}
-                          stroke={isF ? '#60a5fa' : 'white'} strokeWidth={1.5 / z}
+                          stroke={isF ? '#60a5fa' : 'white'} strokeWidth={1.5 / lz}
                           opacity={isF ? 1 : 0.4} strokeLinecap="round"
                           style={{ pointerEvents: 'none' }} />
                         <circle cx={cx} cy={cy} r={3 / z}
@@ -1607,19 +1611,19 @@ export default function ElevationSVG({
                   {isSel && multiSelect.length < 2 && (
                     <>
                       <circle cx={rx} cy={ry + displayDy / 2} r={mr}
-                        fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.5 / z}
+                        fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.5 / lz}
                         style={{ cursor: 'ew-resize' }}
                         onPointerDown={e => e.stopPropagation()}
                         onClick={e => onMarkerClick(e, cab, 'left')}
                       />
                       <circle cx={rx + displayDx} cy={ry + displayDy / 2} r={mr}
-                        fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.5 / z}
+                        fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.5 / lz}
                         style={{ cursor: 'ew-resize' }}
                         onPointerDown={e => e.stopPropagation()}
                         onClick={e => onMarkerClick(e, cab, 'right')}
                       />
                       <circle cx={rx + displayDx / 2} cy={ry} r={mr}
-                        fill="#7c3aed" stroke="#c4b5fd" strokeWidth={1.5 / z}
+                        fill="#7c3aed" stroke="#c4b5fd" strokeWidth={1.5 / lz}
                         style={{ cursor: 'ns-resize' }}
                         onPointerDown={e => e.stopPropagation()}
                         onClick={e => onMarkerClick(e, cab, 'top')}
@@ -1698,14 +1702,14 @@ export default function ElevationSVG({
               return (<>
                 {/* Snap landing outline */}
                 <rect x={snapX} y={snapY} width={placeGhost.dx} height={placeGhost.dy}
-                  fill="none" stroke="#60a5fa" strokeWidth={1 / z}
+                  fill="none" stroke="#60a5fa" strokeWidth={1 / lz}
                   strokeDasharray={`${4 / z} ${4 / z}`} opacity={0.5}
                   style={{ pointerEvents: 'none' }} />
 
                 {/* Arrow from ghost face to snap surface */}
                 {showArrow && (<>
                   <line x1={arrowFromX} y1={arrowFromY} x2={arrowToX} y2={arrowToY}
-                    stroke="#60a5fa" strokeWidth={1.5 / z}
+                    stroke="#60a5fa" strokeWidth={1.5 / lz}
                     strokeDasharray={`${8 / z} ${4 / z}`}
                     style={{ pointerEvents: 'none' }} />
                   <polygon
@@ -1721,18 +1725,18 @@ export default function ElevationSVG({
                 {/* Floating ghost centred on cursor */}
                 <rect x={floatX} y={floatY} width={placeGhost.dx} height={placeGhost.dy}
                   fill={fill + 'cc'} stroke={sel}
-                  strokeWidth={2 / z} strokeDasharray={`${6 / z} ${3 / z}`}
+                  strokeWidth={2 / lz} strokeDasharray={`${6 / z} ${3 / z}`}
                   style={{ pointerEvents: 'none' }} />
 
                 {/* Rest of the multi-paste group */}
                 {groupExtras.map((ex, i) => (
                   <g key={`gx${i}`}>
                     <rect x={placeGhost.t + ex.o} y={ex.topY} width={ex.dx} height={ex.dy}
-                      fill="none" stroke="#60a5fa" strokeWidth={1 / z}
+                      fill="none" stroke="#60a5fa" strokeWidth={1 / lz}
                       strokeDasharray={`${4 / z} ${4 / z}`} opacity={0.5} style={{ pointerEvents: 'none' }} />
                     <rect x={floatX + ex.o} y={floatY + (ex.topY - snapY)} width={ex.dx} height={ex.dy}
                       fill={layers.cabFill(ex.cls) + 'cc'} stroke={layers.cabFillSel(ex.cls)}
-                      strokeWidth={2 / z} strokeDasharray={`${6 / z} ${3 / z}`} style={{ pointerEvents: 'none' }} />
+                      strokeWidth={2 / lz} strokeDasharray={`${6 / z} ${3 / z}`} style={{ pointerEvents: 'none' }} />
                   </g>
                 ))}
               </>)
@@ -1780,14 +1784,14 @@ export default function ElevationSVG({
               return (<>
                 {/* Snap landing outline */}
                 <rect x={snapX} y={snapY} width={followingCab.dx} height={followingCab.dy}
-                  fill="none" stroke="#60a5fa" strokeWidth={1 / z}
+                  fill="none" stroke="#60a5fa" strokeWidth={1 / lz}
                   strokeDasharray={`${4 / z} ${4 / z}`} opacity={0.5}
                   style={{ pointerEvents: 'none' }} />
 
                 {/* Arrow + arrowhead from ghost face to snap surface */}
                 {showArrow && (<>
                   <line x1={arrowFromX} y1={arrowFromY} x2={arrowToX} y2={arrowToY}
-                    stroke="#60a5fa" strokeWidth={1.5 / z}
+                    stroke="#60a5fa" strokeWidth={1.5 / lz}
                     strokeDasharray={`${8 / z} ${4 / z}`}
                     style={{ pointerEvents: 'none' }} />
                   <polygon
@@ -1803,7 +1807,7 @@ export default function ElevationSVG({
                 {/* Floating ghost */}
                 <rect x={gx} y={gy} width={followingCab.dx} height={followingCab.dy}
                   fill={baseColor + 'cc'} stroke={selColor}
-                  strokeWidth={2 / z} strokeDasharray={`${6 / z} ${3 / z}`}
+                  strokeWidth={2 / lz} strokeDasharray={`${6 / z} ${3 / z}`}
                   style={{ pointerEvents: 'none' }} />
               </>)
             })()}
@@ -1818,7 +1822,7 @@ export default function ElevationSVG({
               const chainY = -tickH * 2 - layers.offset('dim_elev_wall_chain')
               const col = layers.color('dim_elev_wall_chain', '#ffffff')
               const chainOp = layers.op('dim_elev_wall_chain')
-              const sw = layers.w('dim_elev_wall_chain', 1) / z, fs = 12 / z, tk = 8 / z
+              const sw = layers.w('dim_elev_wall_chain', 1) / lz, fs = 12 / z, tk = 8 / z
               const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
               return (
                 <g pointerEvents="none" opacity={chainOp} style={{ userSelect: 'none' }}>
@@ -1856,7 +1860,7 @@ export default function ElevationSVG({
               const chainY = roomH + tickH * 1.5 + layers.offset('dim_elev_floor_chain')
               const col = layers.color('dim_elev_floor_chain', '#ffffff')
               const chainOp = layers.op('dim_elev_floor_chain')
-              const sw = layers.w('dim_elev_floor_chain', 1) / z, fs = 12 / z, tk = 8 / z
+              const sw = layers.w('dim_elev_floor_chain', 1) / lz, fs = 12 / z, tk = 8 / z
               const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
               return (
                 <g pointerEvents="none" opacity={chainOp} style={{ userSelect: 'none' }}>
@@ -1893,7 +1897,7 @@ export default function ElevationSVG({
               const marks = kickHeightMarks(kicks)
               if (!marks.length) return null
               const col = layers.color('dim_kicks', '#ffffff')
-              const sw = layers.w('dim_kicks', 1) / z, fs = 12 / z, tk = 6 / z
+              const sw = layers.w('dim_kicks', 1) / lz, fs = 12 / z, tk = 6 / z
               return (
                 <g pointerEvents="none" opacity={layers.op('dim_kicks')} style={{ userSelect: 'none' }}>
                   {marks.map((m, i) => {
@@ -1921,7 +1925,7 @@ export default function ElevationSVG({
             {(() => {
               // Overall sits outside the floor chain, so it moves out with it.
               const dimY = roomH + tickH * 4 + (layers.show('dim_elev_floor_chain') ? layers.offset('dim_elev_floor_chain') : 0)
-              const fs = 12 / z, tk = 8 / z, sw = 1 / z, col = '#ffffff'
+              const fs = 12 / z, tk = 8 / z, sw = 1 / lz, col = '#ffffff'
               const mx = wall.length / 2
               const padX = fs * 1.8, padY = fs * 0.6
               return (
@@ -2005,7 +2009,7 @@ export default function ElevationSVG({
 
               const chainX = -70 / z - layers.offset('dim_elev_height')
               const tkLen = 8 / z
-              const sw = layers.w('dim_elev_height', 1) / z
+              const sw = layers.w('dim_elev_height', 1) / lz
               const fs = 12 / z
               const dimCol = layers.color('dim_elev_height', '#ffffff')
               const chainOp = layers.op('dim_elev_height')
@@ -2046,7 +2050,7 @@ export default function ElevationSVG({
                 x={Math.min(marquee.x1, marquee.x2)} y={Math.min(marquee.y1, marquee.y2)}
                 width={Math.abs(marquee.x2 - marquee.x1)} height={Math.abs(marquee.y2 - marquee.y1)}
                 fill="rgba(59,130,246,0.08)" stroke="#3b82f6"
-                strokeWidth={1 / z} strokeDasharray={`${4 / z} ${2 / z}`}
+                strokeWidth={1 / lz} strokeDasharray={`${4 / z} ${2 / z}`}
                 style={{ pointerEvents: 'none' }}
               />
             )}
@@ -2075,7 +2079,7 @@ export default function ElevationSVG({
               if (!a) return null
               const ep = 4 / z
               if (!b) {
-                return <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / z} style={{ pointerEvents: 'none' }} />
+                return <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / lz} style={{ pointerEvents: 'none' }} />
               }
               const d  = roundMm(dist(a, b))
               const ddx = roundMm(Math.abs(b.x - a.x))
@@ -2086,12 +2090,12 @@ export default function ElevationSVG({
               return (
                 <g style={{ pointerEvents: 'none' }}>
                   <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                    stroke="#f59e0b" strokeWidth={1.5 / z}
+                    stroke="#f59e0b" strokeWidth={1.5 / lz}
                     strokeDasharray={elevMeasureEnd ? undefined : `${6 / z} ${3 / z}`} />
-                  <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / z} />
-                  <circle cx={b.x} cy={b.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / z} />
+                  <circle cx={a.x} cy={a.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / lz} />
+                  <circle cx={b.x} cy={b.y} r={ep} fill="#f59e0b" stroke="#111827" strokeWidth={1 / lz} />
                   <rect x={mx - boxW / 2} y={my - boxH - pad} width={boxW} height={boxH} rx={2 / z}
-                    fill="rgba(17,24,39,0.9)" stroke="#f59e0b" strokeWidth={0.75 / z} />
+                    fill="rgba(17,24,39,0.9)" stroke="#f59e0b" strokeWidth={0.75 / lz} />
                   <text x={mx} y={my - boxH + fs * 0.5} textAnchor="middle" dominantBaseline="middle"
                     fontSize={fs} fontWeight="600" fill="#fcd34d" style={{ userSelect: 'none' }}>
                     {d}mm
@@ -2112,11 +2116,11 @@ export default function ElevationSVG({
               return (
                 <g style={{ pointerEvents: 'none' }}>
                   <rect x={pt.x - s} y={pt.y - s} width={s * 2} height={s * 2}
-                    fill="none" stroke={color} strokeWidth={1.5 / z} />
+                    fill="none" stroke={color} strokeWidth={1.5 / lz} />
                   <line x1={pt.x - s * 1.7} y1={pt.y} x2={pt.x + s * 1.7} y2={pt.y}
-                    stroke={color} strokeWidth={0.75 / z} />
+                    stroke={color} strokeWidth={0.75 / lz} />
                   <line x1={pt.x} y1={pt.y - s * 1.7} x2={pt.x} y2={pt.y + s * 1.7}
-                    stroke={color} strokeWidth={0.75 / z} />
+                    stroke={color} strokeWidth={0.75 / lz} />
                 </g>
               )
             })()}

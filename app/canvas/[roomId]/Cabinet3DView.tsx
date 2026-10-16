@@ -1,5 +1,6 @@
 'use client'
 
+import PartInfoCard from './PartInfoCard'
 import { useRef, useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import * as THREE from 'three'
@@ -8,7 +9,7 @@ import { supabase } from '@/src/lib/supabase'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
 import type { CabinetInstance } from '@/src/lib/types'
 import { dbUpdateCustomPart, dbSavePartPosOverride, type CabinetCustomPart, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
-import { sampleShapeOutline } from '@/src/lib/shapePath'
+import { sampleOutline, sampleShapeOutline } from '@/src/lib/shapePath'
 import { customExtents, customFieldForExtent, customPanelKind, type CustomOrient } from '@/src/lib/customPartBox'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
@@ -1137,7 +1138,7 @@ export function CabinetScene({
     // Shape Editor override for the same part replaces them below.
     // Turned per-edge panels carry theirs in their own face frame (finger-rail
     // notches on an L corner's end panel), so they draw too.
-    for (const p of rp.case_parts) if (p.outline && (!p.AY || isShapedPanelKey(p.part_key))) m.set(`case_${p.part_key}`, { pts: p.outline })
+    for (const p of rp.case_parts) if (p.outline && (!p.AY || isShapedPanelKey(p.part_key))) m.set(`case_${p.part_key}`, { pts: sampleOutline(p.outline, 2) })
     // Angled panel ends (4a): top-view outline extruded up.
     for (const p of rp.case_parts) {
       const o = caseBevelOutline(p)
@@ -1148,7 +1149,7 @@ export function CabinetScene({
       const o = tkBevelOutline(p)
       if (o) m.set(`tk_${p.part_key}_${p.sort_order}`, { pts: o, extrude: 'up' })
     }
-    for (const p of rp.internal_parts ?? []) if (p.outline) m.set(`int_${p.part_type}_${p.sort_order}`, { pts: p.outline })
+    for (const p of rp.internal_parts ?? []) if (p.outline) m.set(`int_${p.part_type}_${p.sort_order}`, { pts: sampleOutline(p.outline, 2) })
     // Mitred doors where two facets meet: top-view outline extruded up
     // (horizontal shape frame: y down from the front face).
     for (const z of rp.face_zones) {
@@ -1702,7 +1703,7 @@ export function CabinetScene({
 
 export default function Cabinet3DView({
   cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, shapeOverrides, onPartSelect, showDrilling = true, onUpdate, onDeletePart,
-  setCustomParts, onOverridesChange, onEditPart, panelHost, onPanelVisibleChange,
+  setCustomParts, onOverridesChange, onEditPart, panelHost, onPanelVisibleChange, compactInfo = false,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
@@ -1740,8 +1741,13 @@ export default function Cabinet3DView({
   // Fires when the part panel shows/hides so the host can swap the cabinet info
   // out while it's docked. Pass a stable function (e.g. a setState).
   onPanelVisibleChange?: (visible: boolean) => void
+  // Phones (z_mobile): a tap shows the small read-only PartInfoCard over the model;
+  // its "Details" opens the full panel (docked via panelHost as usual).
+  compactInfo?:      boolean
 }) {
   const [selectedPart, setSelectedPart]       = useState<PartMeta | null>(null)
+  const [fullFor, setFullFor]                 = useState<string | null>(null)   // compactInfo: part showing the full panel
+  const showFullPanel = !!selectedPart && (!compactInfo || fullFor === selectedPart.id)
   const [editMenu, setEditMenu]               = useState<{ cx: number; cy: number } | null>(null)
   const [doorsOpen, setDoorsOpen]             = useState(false)
   const [openDrawers, setOpenDrawers]         = useState<Map<string, number>>(new Map())
@@ -1759,9 +1765,9 @@ export default function Cabinet3DView({
   // Report panel visibility to the host (edit modal) so it can swap the cabinet
   // info out while the docked part panel is showing.
   useEffect(() => {
-    onPanelVisibleChange?.(!!selectedPart)
+    onPanelVisibleChange?.(showFullPanel)
     return () => onPanelVisibleChange?.(false)
-  }, [selectedPart, onPanelVisibleChange])
+  }, [showFullPanel, onPanelVisibleChange])
 
   // Persist edge band changes when the selection moves away from a part.
   useEffect(() => {
@@ -1979,7 +1985,13 @@ export default function Cabinet3DView({
       hint="Left-drag rotate · scroll zoom · Ctrl fast · Shift fine · right-click part to inspect"
       overlay={
         <>
-          {selectedPart && (() => {
+          {selectedPart && !showFullPanel && (
+            <PartInfoCard part={selectedPart}
+              ebThickness={selectedPart.materialId ? ebByMatId?.[selectedPart.materialId]?.thickness : undefined}
+              onClose={() => setSelectedPart(null)}
+              onDetails={() => setFullFor(selectedPart.id)} />
+          )}
+          {selectedPart && showFullPanel && (() => {
             const panel = (
               <PartPropertiesPanel
                 className={panelHost ? 'relative w-full' : undefined}

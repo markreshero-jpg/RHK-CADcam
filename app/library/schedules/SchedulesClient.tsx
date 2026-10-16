@@ -139,7 +139,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         supabase.from('edge_banding').select('id,name,thickness,material_match_id').eq('active', true).order('name'),
         supabase.from('benchtop_materials').select('id,name,dz,material_type').eq('active', true).order('name'),
         supabase.from('hardware_hinges').select('id,name,brand').eq('active', true).order('name'),
-        supabase.from('hardware_slides').select('id,name,brand,nominal_length,box_height').eq('active', true).order('name'),
+        supabase.from('hardware_slides').select('id,name,brand,nominal_length,box_height').eq('active', true).eq('kind', 'slide').order('name'),
         supabase.from('hardware_handles').select('id,name,brand,grip_kind').eq('active', true).order('name'),
         supabase.from('hardware_hinge_plates').select('id,name,hinge_id').eq('active', true).order('name'),
       ])

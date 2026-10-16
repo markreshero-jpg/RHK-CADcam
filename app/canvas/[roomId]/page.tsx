@@ -1,9 +1,20 @@
+import type { Viewport } from 'next'
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/src/lib/supabase-server'
 import { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture } from '@/src/lib/types'
 import CanvasClient from './CanvasClient'
 
 export const dynamic = 'force-dynamic'
+
+// The canvas does its own pinch zoom (usePinchZoom). Pinning the page scale stops
+// iOS zooming the whole app when a <16px panel input is focused, or when a pinch
+// lands on a toolbar. See z_mobile/MOBILE-SPEC.md.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
+}
 
 export default async function CanvasPage({
   params,

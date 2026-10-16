@@ -21,7 +21,7 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 import * as THREE from 'three'
 import { Part, PreviewCanvas, extForAxes, type PartMeta, type EbSpec } from '@/src/components/three/PartViewer'
 import { fmtMm } from '@/src/lib/format'
-import { sampleShapeOutline, type ShapePt } from '@/src/lib/shapePath'
+import { mapOutline, outlineSegments, reverseOutline, sampleOutline, sampleShapeOutline, type ShapePt } from '@/src/lib/shapePath'
 import { type EditorView, displayExtents, roundStore } from './partEditor/partEditorCore'
 import { usePartOps } from './partEditor/usePartOps'
 import { OpMarkers3D, buildOpSubtractions } from './partEditor/partOpGlyphs'
@@ -149,16 +149,24 @@ export default function PartEditor({
   useEffect(() => { setShapePreview(null) }, [part.id])
   // A shaped cabinet's clipped part shows its resolver outline until it gets a
   // drawn shape of its own (z_cabinet_shape 3c).
+  // The resolver writes right-hand side outlines UNmirrored (x = depth from the
+  // back, like the left gable), but this editor shows right-hand sides mirrored
+  // (see `mirror` below) — flip it into the display frame (reversed to keep the
+  // winding), else a finger-pull notch shows at the back and a save moves it there.
   const resolvedSegs = useMemo<ShapeSegment[] | null>(() => {
-    const o = part.outline
-    if (!o || o.length < 3) return null
-    return o.map((p, i) => ({ type: 'line' as const, p0: { x: p.x, y: p.y }, p1: { x: o[(i + 1) % o.length].x, y: o[(i + 1) % o.length].y } }))
-  }, [part.outline])
+    const raw = part.outline
+    if (!raw || raw.length < 3) return null
+    const flip = part.panelKind === 'side' && part.id.includes('right_side')
+    const D = Math.max(...sampleOutline(raw).map(p => p.x))
+    const o = flip ? reverseOutline(mapOutline(raw, p => ({ x: D - p.x, y: p.y }), true)) : raw
+    // Bulged edges come through as true arcs (a radius end shows one curve).
+    return outlineSegments(o) as ShapeSegment[]
+  }, [part.outline, part.panelKind, part.id])
   const displaySegs = shapePreview?.segments ?? shapeOv?.segments ?? resolvedSegs
   // Sampled outline polygon (shape frame, mm) — drives the 3D face overlay and
   // the ops-outside-outline validation inside usePartOps.
   const shapePoly = useMemo(
-    () => (displaySegs && displaySegs.length > 2 ? sampleShapeOutline(displaySegs) : null),
+    () => (displaySegs && displaySegs.length > 2 ? sampleShapeOutline(displaySegs, 2) : null),
     [displaySegs],
   )
   // Draggable side-panel widths (px). Clamped so neither panel can crowd out the scene.

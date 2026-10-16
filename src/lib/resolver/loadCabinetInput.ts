@@ -295,7 +295,7 @@ function loadClassSchedules(a: ClassScheduleArgs) {
     // All active slide products (for resolver lookup)
     supabase
       .from('hardware_slides')
-      .select('id, name, brand, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair, colour, model_url, model_format, model_scale, model_anchor_x, model_anchor_y, model_anchor_z')
+      .select('id, name, brand, kind, inside_width_min, inside_width_max, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair, colour, model_url, model_format, model_scale, model_anchor_x, model_anchor_y, model_anchor_z')
       .eq('active', true)
       .order('nominal_length', { ascending: true }),
     // Slide drilling operations (child rows of hardware_slides), grouped onto
@@ -583,8 +583,11 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
 
   type SlideRow = Record<string, unknown>
   const slideRows = ((slideRes as { data: unknown[] | null }).data ?? []) as SlideRow[]
-  const slideProducts: SlideProduct[] = slideRows.map(r => ({
+  const hardwareRows: SlideProduct[] = slideRows.map(r => ({
     id:               r.id as string,
+    kind:             r.kind === 'bin' ? 'bin' as const : 'slide' as const,
+    inside_width_min: r.inside_width_min != null ? Number(r.inside_width_min) : null,
+    inside_width_max: r.inside_width_max != null ? Number(r.inside_width_max) : null,
     name:             r.name as string,
     brand:            (r.brand as string | null) ?? null,
     nominal_length:   r.nominal_length != null ? Number(r.nominal_length) : null,
@@ -605,6 +608,9 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     model_anchor_z:   r.model_anchor_z != null ? Number(r.model_anchor_z) : 0,
     drill_ops:        slideOpsBySlideId.get(r.id as string) ?? [],
   }))
+  // Bins share the table but must never be picked as drawer runners (z_bin_cabinet).
+  const slideProducts = hardwareRows.filter(p => p.kind !== 'bin')
+  const binProducts   = hardwareRows.filter(p => p.kind === 'bin')
 
   type SlideEntryRow = { id: string; schedule_id: string; depth_threshold: unknown; height_threshold: unknown; slide_id: string }
   const slideSchedule: SlideScheduleEntry[] = ((slideSchedEntryRes as { data: SlideEntryRow[] | null }).data ?? []).map(r => ({
@@ -858,6 +864,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     inner_drawer_front_material:      innerDrawerFrontMat,
     inner_drawer_front_edgeband_id:   innerDrawerFrontEbId,
     slide_products:            slideProducts,
+    bin_products:              binProducts,
     slide_schedule:            slideSchedule,
     hardware_overrides:        (cab.hardware_overrides ?? {}) as Record<string, unknown>,
     rules,

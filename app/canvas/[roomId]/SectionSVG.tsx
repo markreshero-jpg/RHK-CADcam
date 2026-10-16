@@ -1,5 +1,6 @@
 'use client'
 import { useState, useReducer, useRef, useEffect } from 'react'
+import { useLineScale } from '@/src/lib/usePhone'
 import type { Wall, CabinetInstance, Room } from '@/src/lib/types'
 import type { Pt } from '@/src/lib/geometry'
 import { wallDir, wallCorners, wallInwardNormal, centroid, cabWallPerp } from '@/src/lib/geometry'
@@ -89,6 +90,7 @@ interface SectionSVGProps {
 
 export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLook, onClearCut }: SectionSVGProps) {
   const svgRef = useRef<SVGSVGElement>(null)
+  const lineScale = useLineScale()
   const [view, dispatchView] = useReducer(viewReducer, { panX: 80, panY: 60, zoom: 1 })
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
   const spaceRef = useRef(false)
@@ -150,6 +152,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
   function onPointerUp() { panRef.current = null }
 
   const z = view.zoom
+  const lz = z / lineScale   // strokes only — finer on phones
   const labelFs = 11 / z
   const tickH = 20 / z
 
@@ -183,7 +186,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
         wallEls.push(
           <g key={w.id} style={{ pointerEvents: 'none' }}>
             <rect x={rX} y={y0} width={wid} height={wallH}
-              fill="url(#sec-hatch)" stroke="#6b7280" strokeWidth={1.5 / z} />
+              fill="url(#sec-hatch)" stroke="#6b7280" strokeWidth={1.5 / lz} />
             <text x={midU} y={midV} textAnchor="middle" dominantBaseline="middle"
               fontSize={labelFs * 0.8} fill="#ffffff"
               transform={`rotate(-90,${midU},${midV})`}
@@ -200,7 +203,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
         const wid = Math.max(1 / z, uMax - uMin)
         wallEls.push(
           <rect key={w.id} x={dispRX(uMin, uMax)} y={y0} width={wid} height={wallH}
-            fill="none" stroke="#374151" strokeWidth={1 / z}
+            fill="none" stroke="#374151" strokeWidth={1 / lz}
             strokeDasharray={`${8 / z} ${4 / z}`}
             style={{ pointerEvents: 'none' }} />
         )
@@ -241,7 +244,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
               if (sy > intTop + 10 / z && sy < intBot - 10 / z) {
                 shelfLines.push(
                   <line key={off} x1={rX + 1 / z} y1={sy} x2={rX + wid - 1 / z} y2={sy}
-                    stroke="#818cf8" strokeWidth={1 / z} />
+                    stroke="#818cf8" strokeWidth={1 / lz} />
                 )
               }
             }
@@ -250,7 +253,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
             if (sy > intTop + 10 / z && sy < intBot - 10 / z) {
               shelfLines.push(
                 <line key="shelf" x1={rX + 1 / z} y1={sy} x2={rX + wid - 1 / z} y2={sy}
-                  stroke="#818cf8" strokeWidth={1 / z} />
+                  stroke="#818cf8" strokeWidth={1 / lz} />
               )
             }
           }
@@ -259,10 +262,10 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
         cabEls.push(
           <g key={cab.id} style={{ pointerEvents: 'none' }}>
             <rect x={rX} y={cabTopY} width={wid} height={cab.dy}
-              fill="url(#sec-hatch)" stroke="#8b9eb0" strokeWidth={1.5 / z} />
+              fill="url(#sec-hatch)" stroke="#8b9eb0" strokeWidth={1.5 / lz} />
             {tkH > 0 && (
               <rect x={rX} y={roomH - tkH} width={wid} height={tkH}
-                fill="#111827" stroke="#8b9eb0" strokeWidth={0.5 / z} />
+                fill="#111827" stroke="#8b9eb0" strokeWidth={0.5 / lz} />
             )}
             {shelfLines}
             {cab.label && wid > 24 / z && (
@@ -283,7 +286,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
         cabEls.push(
           <rect key={cab.id}
             x={dispRX(uMin, uMax)} y={cabTopY} width={wid} height={cab.dy}
-            fill="none" stroke="#374151" strokeWidth={0.5 / z}
+            fill="none" stroke="#374151" strokeWidth={0.5 / lz}
             strokeDasharray={`${6 / z} ${4 / z}`}
             style={{ pointerEvents: 'none' }} />
         )
@@ -346,18 +349,18 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
 
             {/* Floor */}
             <line x1={-200} y1={roomH} x2={cutLen + 200} y2={roomH}
-              stroke="#4b5563" strokeWidth={2 / z} />
+              stroke="#4b5563" strokeWidth={2 / lz} />
 
             {/* Ceiling */}
             <line x1={-200} y1={0} x2={cutLen + 200} y2={0}
-              stroke="#374151" strokeWidth={0.5 / z} strokeDasharray={`${8 / z} ${4 / z}`} />
+              stroke="#374151" strokeWidth={0.5 / lz} strokeDasharray={`${8 / z} ${4 / z}`} />
 
             {cabEls}
 
             {/* Y-axis dimension */}
             {(() => {
               const chainX = -60 / z
-              const sw = 1 / z, fs = 12 / z, tk = 8 / z
+              const sw = 1 / lz, fs = 12 / z, tk = 8 / z
               const midY = roomH / 2
               return (
                 <g pointerEvents="none" style={{ userSelect: 'none' }}>
@@ -376,7 +379,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
             {/* X-axis (cut length) dimension */}
             {(() => {
               const dimY = roomH + tickH * 3
-              const sw = 1 / z, fs = 12 / z, tk = 8 / z
+              const sw = 1 / lz, fs = 12 / z, tk = 8 / z
               const midX = cutLen / 2
               return (
                 <g pointerEvents="none" style={{ userSelect: 'none' }}>

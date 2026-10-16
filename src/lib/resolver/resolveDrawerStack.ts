@@ -19,7 +19,7 @@
 import {
   CabinetInput, ConstructionRules, ResolvedFaceZone, ResolverError,
   ResolvedDrawerStack, ResolvedDrawerSlide, ResolvedInternalPart, ResolvedHingeMountTarget,
-  DrawerType, SlideProduct, SlideScheduleEntry,
+  DrawerType, DrawerFrontType, SlideProduct, SlideScheduleEntry,
   DEFAULT_DB_RULES,
 } from './types'
 import { resolveDrawerBox } from './resolveDrawerBox'
@@ -116,6 +116,44 @@ export function findSlide(
   )[0] ?? null
 }
 
+// z_bin_cabinet: picks the pull-out bin for a front. A bin fits when the clear
+// width between its mounting faces is inside the product's range, the cabinet
+// is deep enough (nominal_length = min inside depth) and the bin is no taller
+// than the height above the floor. The tallest fitting bin wins (B-D7), ties
+// broken by name so the pick is stable.
+export function findBin(
+  insideWidth: number,
+  insideDepth: number,
+  availableHeight: number,
+  bins: SlideProduct[],
+  productId?: string,
+): SlideProduct | null {
+  if (productId) return bins.find(b => b.id === productId) ?? null
+  const fitting = bins.filter(b =>
+    b.inside_width_min != null && b.inside_width_max != null &&
+    insideWidth >= b.inside_width_min - EPS && insideWidth <= b.inside_width_max + EPS &&
+    (b.nominal_length ?? 0) <= insideDepth + EPS &&
+    (b.box_height ?? 0) <= availableHeight + EPS)
+  return [...fitting].sort((a, b) =>
+    (b.box_height ?? 0) - (a.box_height ?? 0) || a.name.localeCompare(b.name),
+  )[0] ?? null
+}
+
+// When no bin fits the clear width, the widest bin narrower than it (height +
+// depth permitting) — the one divisions would make fit (B-D4).
+export function binForDivisions(
+  insideWidth: number, insideDepth: number, availableHeight: number, bins: SlideProduct[],
+): SlideProduct | null {
+  const narrower = bins.filter(b =>
+    b.inside_width_max != null && b.inside_width_max < insideWidth &&
+    (b.nominal_length ?? 0) <= insideDepth + EPS &&
+    (b.box_height ?? 0) <= availableHeight + EPS)
+  return [...narrower].sort((a, b) =>
+    (b.inside_width_max ?? 0) - (a.inside_width_max ?? 0) ||
+    (b.box_height ?? 0) - (a.box_height ?? 0) || a.name.localeCompare(b.name),
+  )[0] ?? null
+}
+
 // Products that tie with the chosen slide on box height in the no-schedule fallback.
 // Distinct brands here mean the pick was effectively arbitrary — worth surfacing.
 export function tiedSlideBrands(chosen: SlideProduct, products: SlideProduct[]): string[] {
@@ -166,7 +204,7 @@ export function resolveDrawerStacks(
       z => z.row_index === zone.row_index && z.col_index === zone.col_index
     )
     const config = zoneInput?.drawer_type_config
-    const drawerType: DrawerType = config?.type ?? cab.default_drawer_type ?? 'system'
+    const drawerType: DrawerFrontType = config?.type ?? cab.default_drawer_type ?? 'system'
 
     const openingHeight = zone.DY   // face zone: DY = height (DX = width)
     const zoneRef = `${zone.facet ? `${zone.facet} ` : ''}[${zone.row_index},${zone.col_index}]`
@@ -176,6 +214,73 @@ export function resolveDrawerStacks(
         code: 'DRAWER_OPENING_INVALID',
         message: `Drawer zone ${zoneRef} has a ${round1(openingHeight)}mm opening height`,
         part: 'drawer_face',
+      })
+      continue
+    }
+
+    // ── Pull-out bin (z_bin_cabinet B2) ─────────────────────────────────────
+    // No drawer box and no separate runners: the bin product carries both. Its
+    // rails sit on the mounting faces (gables, or the divisions either side),
+    // and every hole is measured up from the cabinet floor (B-D6).
+    if (drawerType === 'bin') {
+      if (opening) {
+        errors.push({ code: 'BIN_SHAPED_UNSUPPORTED', message: `Bin ${zoneRef}: bins need a square cabinet`, part: 'drawer_box' })
+        continue
+      }
+      const binMembers = memberBounds(zone, dividers, T + r.SCRL, cab.DX - T - r.SCRR)
+      const insideW = binMembers.right.x - binMembers.left.x
+      const interiorTop = Math.min(zone.Y + zone.DY, cab.DY - T - r.SCRT)
+      const availH = interiorTop - internalFloorY
+      const bins = cab.bin_products ?? []
+      const binOverride = config?.slide_product_id
+      const bin = findBin(insideW, internalDepth, availH, bins, binOverride)
+      if (!bin) {
+        const fix = binForDivisions(insideW, internalDepth, availH, bins)
+        warnings.push({
+          code: 'NO_BIN_FITS',
+          message: bins.length === 0
+            ? `Bin ${zoneRef}: no bins in the hardware library`
+            : `Bin ${zoneRef}: no bin fits ${round1(insideW)}mm inside` +
+              (fix ? ` — add a division each side to fit the ${fix.name} (${fix.inside_width_min}–${fix.inside_width_max})` : ''),
+          part: 'drawer_box',
+        })
+        continue
+      }
+      const NL = bin.nominal_length ?? 520
+      const binH = bin.box_height ?? 0
+      const RT = bin.runner_thickness
+      const railBase: Omit<ResolvedDrawerSlide, 'side' | 'X'> = {
+        Y: internalFloorY, Z: zone.Z - NL, DX: NL, DY: binH, DZ: RT,
+        slide_id: bin.id, nominal_length: NL, box_height: binH, runner_thickness: RT,
+        colour: bin.colour, model_url: bin.model_url, model_format: bin.model_format,
+        model_scale: bin.model_scale, model_anchor_x: bin.model_anchor_x,
+        model_anchor_y: bin.model_anchor_y, model_anchor_z: bin.model_anchor_z,
+        drills: [],
+      }
+      const rails: ResolvedDrawerSlide[] = [
+        { ...railBase, side: 'left',  X: binMembers.left.x, ...(binMembers.left.target ? { member: binMembers.left.target } : {}) },
+        { ...railBase, side: 'right', X: binMembers.right.x - RT, ...(binMembers.right.target ? { member: binMembers.right.target } : {}) },
+      ]
+      for (const sl of rails) {
+        sl.drills = slideDrillOps(sl, bin.drill_ops, {
+          face: zone,
+          memberFaceX: sl.side === 'left' ? binMembers.left.x : binMembers.right.x,
+          frontDatumY: internalFloorY,
+        })
+      }
+      stacks.push({
+        ...(zone.facet ? { facet: zone.facet } : {}),
+        face_zone_row: zone.row_index,
+        face_zone_col: zone.col_index,
+        drawer_type:   'bin',
+        box_parts:     [],
+        slides:        rails,
+        box_width:  insideW,
+        box_height: binH,
+        box_depth:  NL,
+        box_X: binMembers.left.x,
+        box_Y: internalFloorY,
+        box_Z: zone.Z - NL,
       })
       continue
     }

@@ -13,7 +13,10 @@
 > 2026-10-15 (most of it rode in WIP c7d1633), checked in-app. 4c (new benchtop
 > follows the cabinets' outline, decision 16) built 2026-10-15, awaiting in-app check.
 > Library still needs a hinge with Mount° = 45.
-> **L corner (BCNP)**: L1 + check-#1 fixes + L3 drilling built 2026-10-15 (uncommitted), awaiting in-app check → then L2 bi-fold (Phase L).
+> **L corner (BCNP)**: L1 check-#1 fixes, L3 (checked), L4, L5 and L2a committed 2026-10-15
+> (d72e8e1). Awaiting in-app checks: 4c, L1 #2, L4. Then L2b bi-fold pair.
+> **Optimiser true shapes** (Phase 5 nest/CNC): O2b + O3 + O4 (contour G-code) built 2026-10-16 — tracker
+> `z_part_shape_editor/OPTIMISER-PHASE-PLAN.md`.
 
 ---
 
@@ -169,7 +172,9 @@ derived from geometry (`src/lib/benchtopAnchor.ts`). Same pattern here.
   cabinet code. Wall/neighbour contact derived from geometry each time, like
   `wallContacts`.
 - **S-f Radius edges** — arc segments with role `open` (radius end shelf unit)
-  are in scope with the presets. Arc with role `front` (curved doors) needs a
+  are in scope with the presets. Clipped parts keep the arc as ONE true arc edge
+  (bulge on the outline point, 2026-10-16 — z_part_shape_editor/OPTIMISER-PHASE-PLAN.md
+  O4 "True arcs"), shown and cut (G2/G3) as a radius, not 5° flats. Arc with role `front` (curved doors) needs a
   curved-door supply decision — treat as outsourced door, report-only, until
   decided.
 
@@ -230,6 +235,12 @@ Design (locked in code):
   edge. Square ends; an angled butt leaves a small gap (never an overlap). Inner faces are kept
   inside the outline at acute corners. Mitres/bevels = Phase 4.
 - Curved (arc) side/back edges get no panel yet → `SHAPE_CURVED_PANEL` error, treated as open.
+- **Shelves at open edges** (Mark, 2026-10-16: "if the end is set to open then the internal parts
+  eg shelves should come out flush with the end as there is no deduction needed for a side"):
+  where no panel stands on the box's left / right / back edge, shelves grow to the cabinet edge
+  like the bottom, so an open end is flush with the outline. Adjustable shelves keep their pin
+  clearance (max ADJSL/ADJSR) off every side panel they meet, angled ones included; none off backs,
+  none on fixed shelves.
 - Scribes (SCRL/SCRR/SCRBK) apply only through the kept legacy parts.
 
 - [x] `src/lib/cabinetShape/construct.ts` (winding, inset polygon, convex clip, butt trims) +

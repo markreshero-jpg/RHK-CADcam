@@ -13,7 +13,7 @@
 import type { Pt } from './geometry'
 import { cabinetToPlan, wallEnd } from './geometry'
 import type { CabinetInstance, Wall, BenchtopSegment } from './types'
-import { canonicalSegments, insetPolygon, edgeFrame } from './cabinetShape/construct'
+import { canonicalSegments, insetPolygonTagged, edgeFrame } from './cabinetShape/construct'
 import { withRoleOverrides, type FootprintSegment, type EdgeRole } from './cabinetShape/footprint'
 import { sampleShapeOutline } from './shapePath'
 import type { HandleRole, HandleScheduleEntryInput } from './resolver/types'
@@ -41,16 +41,16 @@ export function cabinetSeedOutline(cab: CabinetInstance, wall: Wall, perp: Pt, o
         type: 'line', p0: { x: x0, y: y0 }, p1: { x: x1, y: y1 }, edge: { id: `r${i}`, role: RECT_ROLES[i] },
       }) as FootprintSegment)
   if (segs.length < 3) return []
-  // insetPolygon gives one vertex per sub-edge (arcs sampled) — mirror its sampling for the roles.
+  // Roles per sub-edge (arcs sampled as insetPolygon samples them); each vertex says which sub-edge it starts.
   const roles: EdgeRole[] = []
   for (const s of segs) {
     const n = s.type === 'arc' ? sampleShapeOutline([s, { type: 'line', p0: s.p1, p1: s.p0 }]).length - 1 : 1
     for (let i = 0; i < n; i++) roles.push(s.edge.role)
   }
-  const pts = insetPolygon(segs, s => (s.edge.role === 'front' ? -oh : 0))
+  const { pts, sub } = insetPolygonTagged(segs, s => (s.edge.role === 'front' ? -oh : 0))
   const toPlan = cabinetToPlan(cab, wall, perp)
   const plan = pts.map(p => toPlan(p.x, p.y))
-  const out = plan.map((a, i) => ({ a, b: plan[(i + 1) % plan.length], role: roles[i] }))
+  const out = plan.map((a, i) => ({ a, b: plan[(i + 1) % plan.length], role: roles[sub[i]] }))
     .filter(e => Math.hypot(e.b.x - e.a.x, e.b.y - e.a.y) > 1e-6)
   return area(out.map(e => e.a)) >= 0 ? out : out.reverse().map(e => ({ a: e.b, b: e.a, role: e.role }))
 }

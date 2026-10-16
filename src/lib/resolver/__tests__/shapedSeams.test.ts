@@ -107,8 +107,11 @@ describe('L corner construction drilling', () => {
       const onBacks = cabinetSeamDrills(rp).filter(q => q.seamKey.startsWith('int_') && q.targetPartKey.startsWith('back'))
       expect(onBacks.map(d => d.targetPartKey).sort()).toEqual(['back', 'back:back2'])
       // Mid-way along the edge the shelf shares with the back: 900 box → 450.
-      const mid = 450
-      for (const d of onBacks) expect(d.targetPartKey === 'back' ? d.x : d.z).toBeCloseTo(mid, 0)
+      // back:back2's edge stops the adj shelf's 1 mm pin clearance short of the
+      // return leg's end panel, so its middle sits 0.5 nearer the back.
+      for (const d of onBacks) {
+        expect(d.targetPartKey === 'back' ? d.x : d.z).toBeCloseTo(d.targetPartKey === 'back' ? 450 : 449.5, 2)
+      }
     })
   }
 

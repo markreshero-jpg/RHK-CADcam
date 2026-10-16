@@ -29,7 +29,9 @@ type Row = Record<string, unknown>
 function shapeFor(outline: { x: number; y: number }[], L: number, W: number, lengthGrain: boolean, tapeMm: number | null): OptiShape {
   const polygon = lengthGrain ? outline.map(p => ({ x: p.y, y: L - p.x })) : outline.map(p => ({ x: p.x, y: p.y }))
   const segments = polygon.map((p, i) => ({ type: 'line', p0: p, p1: polygon[(i + 1) % polygon.length] }))
-  return { segments, polygon, bbox: lengthGrain ? { w: W, h: L } : { w: L, h: W }, tape_mm: tapeMm, revision: 0 }
+  // 'drawn': a benchtop piece nests at its full outline (no contour deduction
+  // yet — O5). The polygon is already in the footprint (op) frame.
+  return { source: 'drawn', segments, polygon, op_polygon: polygon, bbox: lengthGrain ? { w: W, h: L } : { w: L, h: W }, tape_mm: tapeMm, revision: 0 }
 }
 
 /** Tape ids the rows use — the loaders fetch their thickness for the deduction. */

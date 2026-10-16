@@ -25,7 +25,7 @@
 
 import type { CabinetInput, ConstructionRules, ResolvedCasePart, ResolvedInternalPart, ResolverError } from './types'
 import type { Footprint, FootprintSegment } from '../cabinetShape/footprint'
-import type { ShapePt } from '../shapePath'
+import { arcGeom, mapOutline, restoreArcs, type Circle, type OutlinePt, type ShapePt } from '../shapePath'
 import {
   canonicalSegments, edgeFrame, insetPolygon, clipToRect, clipToConvex, bbox, isBoxLike, vertexTrim,
   angledEnd, interiorAngle,
@@ -42,6 +42,9 @@ export interface ShapedInterior {
   segs: FootprintSegment[]
   outline: ShapePt[]   // plan polygon of the footprint
   inner: ShapePt[]     // inside of the carcass panels
+  /** The footprint's arcs (they never carry panels, so every inset keeps them
+   *  on the outline) — clipped parts get them back as true arcs. */
+  arcs: Circle[]
 }
 
 /** Plan polygons for a shaped cabinet, or null for a plain box. */
@@ -54,6 +57,10 @@ export function shapedInterior(cab: CabinetInput): ShapedInterior | null {
     segs,
     outline: insetPolygon(segs, () => 0),
     inner: insetPolygon(segs, s => (isPanelRole(s) ? t : 0)),
+    arcs: segs.flatMap(s => {
+      const g = s.type === 'arc' ? arcGeom(s.p0, s.p1, s.rx ?? 0, s.ry ?? 0, s.largeArc ?? 0, s.sweep ?? 0) : null
+      return g ? [{ c: { x: g.cx, y: g.cy }, r: g.rx }] : []
+    }),
   }
 }
 
@@ -87,8 +94,10 @@ export function panelFrontEnd(
 // Clip a horizontal part (plan rect X..X+DY × Z..Z+DX) to `poly`. Returns null
 // when nothing is left. The outline is in the horizontal shape frame: x across
 // from the part's X, y DOWN from its front edge (PartViewer.buildShapedGeometry).
-function clipHorizontal<P extends { X: number; Z: number; DX: number; DY: number; outline?: ShapePt[] }>(
-  p: P, poly: ShapePt[], grow?: { x0?: number; x1?: number; z0?: number },
+// Edges cut from a footprint arc come back as one true arc (a bulge — shapePath
+// OutlinePt), so the part shows and cuts a radius, not 5° flats.
+function clipHorizontal<P extends { X: number; Z: number; DX: number; DY: number; outline?: OutlinePt[] }>(
+  p: P, poly: ShapePt[], arcs: Circle[], grow?: { x0?: number; x1?: number; z0?: number },
 ): P | null {
   const x0 = grow?.x0 ?? p.X, x1 = grow?.x1 ?? p.X + p.DY
   const z0 = grow?.z0 ?? p.Z, z1 = p.Z + p.DX
@@ -98,16 +107,17 @@ function clipHorizontal<P extends { X: number; Z: number; DX: number; DY: number
   if (b.x1 - b.x0 < 1 || b.y1 - b.y0 < 1) return null
   const next = { ...p, X: b.x0, Z: b.y0, DY: b.x1 - b.x0, DX: b.y1 - b.y0 }
   if (isBoxLike(clipped)) { delete next.outline; return next }
-  next.outline = clipped.map(q => ({ x: q.x - b.x0, y: b.y1 - q.y }))
+  // y flips into the shape frame — a reflection, so each arc turns the other way.
+  next.outline = mapOutline(restoreArcs(clipped, arcs), q => ({ x: q.x - b.x0, y: b.y1 - q.y }), true)
   return next
 }
 
 // A top rail clipped to the shape. An upright rail's plan depth is its
 // thickness (DZ), not RD, so clip with the two swapped and swap back; it has
 // no horizontal outline.
-function clipRail(p: ResolvedCasePart, poly: ShapePt[], grow?: { x0?: number; x1?: number }): ResolvedCasePart | null {
-  if (!p.upright) return clipHorizontal(p, poly, grow)
-  const c = clipHorizontal({ ...p, DX: p.DZ, DZ: p.DX }, poly, grow)
+function clipRail(p: ResolvedCasePart, poly: ShapePt[], arcs: Circle[], grow?: { x0?: number; x1?: number }): ResolvedCasePart | null {
+  if (!p.upright) return clipHorizontal(p, poly, arcs, grow)
+  const c = clipHorizontal({ ...p, DX: p.DZ, DZ: p.DX }, poly, arcs, grow)
   if (!c) return null
   const next = { ...c, DX: c.DZ, DZ: c.DX }
   delete next.outline
@@ -119,7 +129,7 @@ export function shapeCaseParts(
 ): ResolvedCasePart[] {
   const shape = shapedInterior(cab)
   if (!shape) return rect
-  const { segs, outline, inner } = shape
+  const { segs, outline, inner, arcs } = shape
   const t = cab.material.DZ
   const byKey = new Map(rect.map(p => [p.part_key as string, p]))
   const lsRect = byKey.get('left_side'), bkRect = byKey.get('back')
@@ -269,18 +279,18 @@ export function shapeCaseParts(
       const underBacks = r.BOTTOM_BACK_JOIN === 'back_on_bottom'
         ? insetPolygon(segs, s => (isPanelRole(s) && s.edge.role !== 'back' ? t : 0))
         : inner
-      const c = clipHorizontal(p, r.BOTTOM_JOIN === 'bottom_outside' ? outline : underBacks, grow)
+      const c = clipHorizontal(p, r.BOTTOM_JOIN === 'bottom_outside' ? outline : underBacks, arcs, grow)
       if (c) out.push(c)
     } else if (k === 'full_top') {
-      const c = clipHorizontal(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, grow)
+      const c = clipHorizontal(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, arcs, grow)
       if (c) out.push(c)
     } else if (k === 'front_rail') {
       if (!mainFront) continue
-      const c = clipRail(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, { x0: grow.x0, x1: grow.x1 })
+      const c = clipRail(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, arcs, { x0: grow.x0, x1: grow.x1 })
       if (c) out.push(c)
     } else if (k === 'back_rail') {
       if (!used.has('back')) continue
-      const c = clipRail(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, { x0: grow.x0, x1: grow.x1 })
+      const c = clipRail(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, arcs, { x0: grow.x0, x1: grow.x1 })
       if (c) out.push(c)
     }
   }
@@ -342,13 +352,32 @@ export function shapeCaseParts(
 }
 
 /** Clip shelves to the inside of a shaped carcass; drop any that vanish. */
-export function shapeShelves(cab: CabinetInput, parts: ResolvedInternalPart[]): ResolvedInternalPart[] {
+export function shapeShelves(cab: CabinetInput, r: ConstructionRules, parts: ResolvedInternalPart[]): ResolvedInternalPart[] {
   const shape = shapedInterior(cab)
   if (!shape) return parts
+  // Adjustable shelves keep their pin clearance off every side panel they meet,
+  // angled ones too (a box side's is already in the shelf's rect); none at the
+  // back, none on a fixed shelf — as the box build.
+  const t = cab.material.DZ
+  const adjClr = Math.max(r.ADJSL ?? 0, r.ADJSR ?? 0)
+  const adjInner = adjClr > 0
+    ? insetPolygon(shape.segs, s => (isPanelRole(s) ? t + (s.edge.role === 'back' ? 0 : adjClr) : 0))
+    : shape.inner
+  // No box side / back panel on that edge (an end set to open, a shape with no
+  // edge there): nothing to clear, so the shelf runs out to the outline — the
+  // inset polygon decides — as the bottom does (shapeCaseParts `grow`).
+  const on = (s: FootprintSegment, k: 'x' | 'y', v: number) =>
+    s.type === 'line' && isPanelRole(s) && Math.abs(s.p0[k] - v) < NEAR && Math.abs(s.p1[k] - v) < NEAR
+  const has = (k: 'x' | 'y', v: number) => shape.segs.some(s => on(s, k, v))
+  const grow = {
+    ...(!has('x', 0) ? { x0: 0 } : {}),
+    ...(!has('x', cab.DX) ? { x1: cab.DX } : {}),
+    ...(!has('y', 0) ? { z0: 0 } : {}),
+  }
   const out: ResolvedInternalPart[] = []
   for (const p of parts) {
     if (p.part_type !== 'adj_shelf' && p.part_type !== 'fixed_shelf') { out.push(p); continue }
-    const c = clipHorizontal(p, shape.inner)
+    const c = clipHorizontal(p, p.part_type === 'adj_shelf' ? adjInner : shape.inner, shape.arcs, grow)
     if (c) out.push(c)
   }
   return out

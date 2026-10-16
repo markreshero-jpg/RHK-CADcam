@@ -87,7 +87,7 @@ export function parseGcode(text: string, opts?: ParseOpts): ParsedProgram {
   const lines = text.split(/\r?\n/)
 
   let x = 0, y = 0, z = 0, feed = BASE
-  let motion = 0                  // 0 = G0 (rapid), 1 = G1 (feed); G2/G3 collapse to linear
+  let motion = 0                  // 0 = G0 (rapid), 1 = G1 (feed), 2 / 3 = G2 / G3 arc (I/J centre)
   let tool: number | null = null
   let phase: Phase = 'setup'
   let context = ''
@@ -132,7 +132,7 @@ export function parseGcode(text: string, opts?: ParseOpts): ParsedProgram {
       else if (mc === yMcode) bankY = parseInt(bMatch[1], 10)
     }
 
-    let nx = x, ny = y, nz = z, nf = feed
+    let nx = x, ny = y, nz = z, nf = feed, ci = 0, cj = 0
     let hasCoord = false
     let sawTool = false
     const words = code.matchAll(/([A-Za-z])\s*(-?\d*\.?\d+)/g)
@@ -142,7 +142,7 @@ export function parseGcode(text: string, opts?: ParseOpts): ParsedProgram {
       switch (L) {
         case 'G':
           if (v === 0) motion = 0
-          else if (v === 1 || v === 2 || v === 3) motion = 1   // G2/G3 → linear approx
+          else if (v === 1 || v === 2 || v === 3) motion = v
           else if (v >= 81 && v <= 89) { cycle = true; motion = 1 }   // canned drill cycle (G81…)
           else if (v === 80) { cycle = false; motion = 0 }            // cancel cycle → back to rapid
           else if (v === 28) motion = 0                               // return-to-home is a rapid
@@ -154,6 +154,8 @@ export function parseGcode(text: string, opts?: ParseOpts): ParsedProgram {
         case 'Y': ny = v; hasCoord = true; break
         case 'Z': nz = v; hasCoord = true; break
         case 'F': nf = v; break
+        case 'I': ci = v; break
+        case 'J': cj = v; break
         case 'T': tool = v; sawTool = true; break
         case 'M': if (v === 0) pauses.push(i); break
       }
@@ -182,14 +184,30 @@ export function parseGcode(text: string, opts?: ParseOpts): ParsedProgram {
     const t0 = t, t1 = t + dur
 
     const activeBank: 'x' | 'y' | undefined = bankX ? 'x' : bankY ? 'y' : undefined
-    moves.push({
-      kind, x0: x, y0: y, z0: z, x1: nx, y1: ny, z1: nz, feed: f, tool, phase, context, lineIndex: i, t0, t1,
+    const extra = {
       ...(kind === 'drill' && activeBank ? { bank: activeBank, bitmask: activeBank === 'x' ? bankX : bankY } : {}),
       ...(kind === 'drill' && drillDia ? { dia: drillDia } : {}),
       ...(activeBank ? { blockFrame: true } : {}),   // posted in the block's G54 datum
       ...(comp && (kind === 'cut' || kind === 'plunge') ? { comp } : {}),
-    })
-    t = t1
+    }
+    const arcPts = (motion === 2 || motion === 3) && !cycle && (ci || cj)
+      ? arcPoints(x, y, z, nx, ny, nz, x + ci, y + cj, motion === 3) : null
+    if (arcPts) {
+      // G2 / G3: replayed as short chords along the true arc (a helix when Z
+      // moves), all on this program line, paced by the arc length.
+      const fa = feed > 0 ? feed : BASE
+      let px = x, py = y, pz = z
+      for (const q of arcPts) {
+        const d = Math.hypot(q.x - px, q.y - py) || Math.abs(q.z - pz)
+        const tt = t + (d / fa) * 60000
+        moves.push({ kind: 'cut', x0: px, y0: py, z0: pz, x1: q.x, y1: q.y, z1: q.z, feed: fa, tool, phase, context, lineIndex: i, t0: t, t1: tt, ...extra })
+        minX = Math.min(minX, q.x); maxX = Math.max(maxX, q.x); minY = Math.min(minY, q.y); maxY = Math.max(maxY, q.y)
+        px = q.x; py = q.y; pz = q.z; t = tt
+      }
+    } else {
+      moves.push({ kind, x0: x, y0: y, z0: z, x1: nx, y1: ny, z1: nz, feed: f, tool, phase, context, lineIndex: i, t0, t1, ...extra })
+      t = t1
+    }
 
     if (Number.isFinite(nx)) { minX = Math.min(minX, x, nx); maxX = Math.max(maxX, x, nx) }
     if (Number.isFinite(ny)) { minY = Math.min(minY, y, ny); maxY = Math.max(maxY, y, ny) }
@@ -198,6 +216,24 @@ export function parseGcode(text: string, opts?: ParseOpts): ParsedProgram {
 
   if (!Number.isFinite(minX)) { minX = 0; maxX = 0; minY = 0; maxY = 0 }
   return { lines, moves, totalTime: t, bounds: { minX, minY, maxX, maxY }, pauses, tools }
+}
+
+// Points along an XY arc from (x0, y0) to (x1, y1) about (cx, cy), ccw = G3,
+// ~3° apart, Z running linearly (helix). Same start and end = a full circle.
+function arcPoints(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, cx: number, cy: number, ccw: boolean) {
+  const r = Math.hypot(x0 - cx, y0 - cy)
+  if (r < EPS) return null
+  const a0 = Math.atan2(y0 - cy, x0 - cx)
+  let da = Math.atan2(y1 - cy, x1 - cx) - a0
+  if (ccw && da <= EPS) da += 2 * Math.PI
+  if (!ccw && da >= -EPS) da -= 2 * Math.PI
+  const steps = Math.max(2, Math.ceil(Math.abs(da) / (Math.PI / 60)))
+  const out: { x: number; y: number; z: number }[] = []
+  for (let k = 1; k <= steps; k++) {
+    const a = a0 + (da * k) / steps
+    out.push(k === steps ? { x: x1, y: y1, z: z1 } : { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a), z: z0 + (z1 - z0) * (k / steps) })
+  }
+  return out
 }
 
 // ── Frame derivation ──────────────────────────────────────────────────────────

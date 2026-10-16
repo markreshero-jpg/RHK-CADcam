@@ -8,7 +8,8 @@
 import type { OptiPart, OptiRoom, OptiCabinet, SourceTable } from './types'
 import { PART_TYPE_LABELS } from '@/src/lib/partDisplayNames'
 import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
-import { attachShape, type ShapesByCab } from './shapes'
+import { attachShape, shapeFrameFor, type ShapesByCab } from './shapes'
+import type { OutlinePt } from '@/src/lib/shapePath'
 import { zonePartId, dbPartId, zoneRef } from '@/src/lib/cabinetShape/partKeys'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 
@@ -116,9 +117,20 @@ export function normalizeProject(
     // Either is overridden to false when the whole assembly is flagged no_cnc.
     const partCut = table === 'custom_parts' ? !(row.no_cnc as boolean) : ((row.output_to_cnc as boolean) ?? true)
     // Drawn outline for this part (O2) — stale-checked against the effective
-    // in-plane dims this row is about to nest with.
-    const effW = dims?.w ?? Number(row.dx), effH = dims?.h ?? Number(row.dy)
-    const { shape, stale } = attachShape(shapesByCab.get(cabId)?.[partKey], effW, effH)
+    // in-plane dims this row is about to nest with — else the resolver's
+    // outline on the row (shaped cabinets / finger-pull notches, O2b).
+    // Op frame = DX × DY; a part nested turned (w = DY) is transposed. Parts
+    // whose nest face isn't the DX × DY face (on-edge kick spreaders) get no
+    // op outline.
+    const DX = Number(row.dx), DY = Number(row.dy)
+    const effW = dims?.w ?? DX, effH = dims?.h ?? DY
+    const near = (a: number, b: number) => Math.abs(a - b) < 0.01
+    const transpose = near(effW, DY) && near(effH, DX) && !near(DX, DY)
+    const inPlane = transpose || (near(effW, DX) && near(effH, DY))
+    const frame = shapeFrameFor(table, table === 'custom_parts' ? String(row.orientation ?? 'flat') : naming.typeKey, partKey)
+    const { shape, stale } = attachShape(shapesByCab.get(cabId)?.[partKey], effW, effH,
+      inPlane ? { frame, DX, DY, transpose } : undefined,
+      Array.isArray(row.outline) ? row.outline as OutlinePt[] : null)
     parts.push({
       uid: `${table}:${row.id as string}`,
       source_table: table, source_part_id: row.id as string,
@@ -294,7 +306,7 @@ export const PART_SELECTS = {
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   drawer_box_parts: 'id,cabinet_instance_id,facet,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
-  custom_parts: 'id,cabinet_instance_id,name,dx,dy,dz,material_id,no_cnc,edge_top,edge_bottom,edge_left,edge_right',
+  custom_parts: 'id,cabinet_instance_id,name,orientation,dx,dy,dz,material_id,no_cnc,edge_top,edge_bottom,edge_left,edge_right',
 } as const
 
 // Fetch the edge_banding thicknesses referenced by a set of part rows — shared

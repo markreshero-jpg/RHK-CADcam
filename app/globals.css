@@ -56,3 +56,18 @@ input[type='number']::-webkit-outer-spin-button {
 input[type='number'] {
   -moz-appearance: textfield;
 }
+
+/* Touch screens: a long-press on the canvas opens the right-click menu
+   (z_mobile/MOBILE-SPEC.md), so iOS must not start a text selection or its
+   press-and-hold callout first. Fields stay selectable so values can be edited. */
+@media (pointer: coarse) {
+  .touch-no-select {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .touch-no-select :is(input, textarea, select, [contenteditable='true']) {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}

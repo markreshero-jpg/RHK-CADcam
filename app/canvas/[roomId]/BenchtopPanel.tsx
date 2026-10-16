@@ -1,5 +1,6 @@
 'use client'
 
+import PanelDeleteButton, { PanelCloseButton } from './PanelDeleteButton'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import CalcInput from '@/src/components/CalcInput'
@@ -25,7 +26,7 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 export default function BenchtopPanel({
-  benchtop, onUpdate, onDelete,
+  benchtop, onUpdate, onDelete, onClose,
   filletRadius, setFilletRadius,
   onMirrorH, onMirrorV, onOffset, onRotate,
   onDeleteCutout, onDrawCutoutRect, onDrawCutoutCircle,
@@ -37,6 +38,8 @@ export default function BenchtopPanel({
   benchtop: BenchtopInstance
   onUpdate: (id: string, u: Partial<BenchtopInstance>) => Promise<void>
   onDelete: (id: string) => void
+  /** Header ✕ — closes (deselects). Omitted → no ✕. */
+  onClose?: () => void
   filletRadius: number
   setFilletRadius: (r: number) => void
   onMirrorH: (id: string) => void
@@ -140,7 +143,7 @@ export default function BenchtopPanel({
           <p className="text-xs font-medium text-gray-300">Benchtop</p>
           <p className="text-[10px] text-gray-500">{n} vertices</p>
         </div>
-        <button onClick={() => onDelete(benchtop.id)} className="text-gray-600 hover:text-red-400 text-xs" title="Delete">✕</button>
+        {onClose && <PanelCloseButton onClose={onClose} />}
       </div>
 
       <div className="p-4 space-y-3">
@@ -522,6 +525,7 @@ export default function BenchtopPanel({
         </div>
 
       </div>
+      <PanelDeleteButton label="Delete benchtop" onDelete={() => onDelete(benchtop.id)} />
     </div>
   )
 }

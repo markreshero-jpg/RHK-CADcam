@@ -5,7 +5,8 @@
 // second face for a live preview, click to lock plane B. Parallel faces read the
 // true perpendicular gap (kick to kick, cabinet back to wall); non-parallel faces
 // fall back to point-to-point with X / Y / height components. A third click
-// starts a new measurement; right-click clears; Esc exits the tool (CanvasClient).
+// starts a new measurement; right-click (touch: long-press) clears; Esc or the
+// Measure button again exits the tool (CanvasClient). Touch: tap = click, no hover.
 //
 // Picks are raycast against what the scene actually renders, so only parts the
 // layer set draws can be measured (hidden parts aren't in the scene). The overlay
@@ -27,6 +28,7 @@ type Pick = PlanePick & { key: string; tris: Float32Array }
 const HOVER = '#22d3ee'
 const PICKED = '#f59e0b'
 const CLICK_SLOP = 5   // px of pointer travel still counted as a click (not an orbit / pan)
+const TAP_MAX_MS = 400  // a longer touch is a long-press (clears), not a pick
 
 /** Mark a subtree with this userData to keep it out of measure picks. */
 export const NO_MEASURE = { noMeasure: true }
@@ -79,7 +81,7 @@ export default function Measure3D() {
 
     let raf = 0
     let last: { x: number; y: number } | null = null
-    let down: { x: number; y: number; button: number } | null = null
+    let down: { x: number; y: number; button: number; t: number } | null = null
 
     function onMove(e: PointerEvent) {
       if (e.buttons) return                     // orbiting / panning
@@ -92,23 +94,28 @@ export default function Measure3D() {
         setHover(prev => (prev && p && prev.key === p.key && prev.point.distanceTo(p.point) < 0.5) ? prev : p)
       })
     }
-    function onDown(e: PointerEvent) { down = { x: e.clientX, y: e.clientY, button: e.button } }
+    function onDown(e: PointerEvent) { down = { x: e.clientX, y: e.clientY, button: e.button, t: performance.now() } }
     function onUp(e: PointerEvent) {
       const d = down; down = null
       if (!d || d.button !== e.button || Math.hypot(e.clientX - d.x, e.clientY - d.y) > CLICK_SLOP) return
       if (e.button === 2) { setPicks({ a: null, b: null }); return }
       if (e.button !== 0) return
+      if (e.pointerType === 'touch' && performance.now() - d.t > TAP_MAX_MS) return
       const p = pickAt(e.clientX, e.clientY)
       if (!p) return
       setPicks(prev => !prev.a || prev.b ? { a: p, b: null } : { a: prev.a, b: p })
     }
     function onLeave() { last = null; setHover(null) }
+    // Touch has no right button: a long-press (useLongPressMenu's synthetic
+    // contextmenu) clears instead. Harmless double-clear on a real right-click.
+    function onMenu() { setPicks({ a: null, b: null }) }
 
     el.style.cursor = 'crosshair'
     el.addEventListener('pointermove', onMove)
     el.addEventListener('pointerdown', onDown)
     el.addEventListener('pointerup', onUp)
     el.addEventListener('pointerleave', onLeave)
+    el.addEventListener('contextmenu', onMenu)
     return () => {
       cancelAnimationFrame(raf)
       el.style.cursor = ''
@@ -116,6 +123,7 @@ export default function Measure3D() {
       el.removeEventListener('pointerdown', onDown)
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointerleave', onLeave)
+      el.removeEventListener('contextmenu', onMenu)
     }
   }, [gl, get, ray, ndc, nm])
 

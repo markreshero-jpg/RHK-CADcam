@@ -927,7 +927,7 @@ export default function InternalGridEditor({
     let alive = true
     Promise.all([
       supabase.from('drawer_box_methods').select('id,name,drawer_type,kind').eq('active', true).order('name'),
-      supabase.from('hardware_slides').select('id,name,nominal_length,box_height,runner_thickness').eq('active', true).order('nominal_length', { ascending: true }),
+      supabase.from('hardware_slides').select('id,name,nominal_length,box_height,runner_thickness').eq('active', true).eq('kind', 'slide').order('nominal_length', { ascending: true }),
     ]).then(async ([m, s]) => {
       if (!alive) return
       // Fall back to the legacy (no-kind) select if `kind` doesn't exist yet.

@@ -5,6 +5,7 @@
 // the catalogue row is untouched. Position = footprint centre in plan; Move picks
 // the fixture up (same carry as placing), Turn rotates 90° about its centre.
 
+import PanelDeleteButton, { PanelCloseButton } from './PanelDeleteButton'
 import CalcInput from '@/src/components/CalcInput'
 import type { RoomFixture, Wall } from '@/src/lib/types'
 import { fixtureCenter, backLeftForCenter } from '@/src/lib/fixtureGeometry'
@@ -13,11 +14,13 @@ const CATEGORY_LABEL: Record<string, string> = {
   appliance: 'Appliance', sink: 'Sink', tap: 'Tap', decorative: 'Decorative',
 }
 
-export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMove, onTurn, onOpen }: {
+export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMove, onTurn, onOpen, onClose }: {
   fixture:  RoomFixture
   walls:    Wall[]
   onUpdate: (id: string, patch: Partial<RoomFixture>) => void
   onDelete: (id: string) => void
+  /** Header ✕ — closes (deselects). Omitted → no ✕. */
+  onClose?: () => void
   onMove:   (id: string) => void
   onTurn:   (id: string, deg: number) => void
   /** Open the big viewer (double-click does the same); omitted inside the viewer. */
@@ -66,7 +69,7 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
             {CATEGORY_LABEL[f.category] ?? f.category}{f.kind ? ` · ${f.kind}` : ''}{wall ? ` · on ${wall.name || 'wall'}` : ' · free-standing'}
           </p>
         </div>
-        <button onClick={() => onDelete(f.id)} className="text-gray-600 hover:text-red-400 text-xs" title="Delete (Del)">✕</button>
+        {onClose && <PanelCloseButton onClose={onClose} />}
       </div>
 
       <div className="p-4 space-y-4">
@@ -127,6 +130,7 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
           ? <p className="text-[10px] text-gray-500">3D model: {f.model_format?.toUpperCase()}</p>
           : <p className="text-[10px] text-gray-500">No 3D model — shows as a box.</p>}
       </div>
+      <PanelDeleteButton label="Delete fixture" onDelete={() => onDelete(f.id)} />
     </div>
   )
 }

@@ -53,6 +53,24 @@ const dot = (a: ShapePt, b: ShapePt) => a.x * b.x + a.y * b.y
  * offset point. `offsetOf` gives the inset for a segment (0 = stays on the outline).
  */
 export function insetPolygon(segs: FootprintSegment[], offsetOf: (s: FootprintSegment) => number): ShapePt[] {
+  return insetPolygonTagged(segs, offsetOf).pts
+}
+
+// Below this turn, two edges with different insets get a step between them
+// instead of a mitre — e.g. a side panel's inner face running into the
+// tangent start of an open arc, whose near-parallel offset lines would
+// otherwise meet hundreds of mm away (a spike to the square corner).
+const BEVEL_SIN = Math.sin(10 * Math.PI / 180)
+
+/**
+ * insetPolygon, plus the sub-edge each vertex starts (`sub[i]`). Sub-edges are
+ * numbered in order, arcs sampled as by sampleShapeOutline. A stepped joint
+ * adds a vertex whose outgoing edge is the step; it is tagged with the edge
+ * before the step.
+ */
+export function insetPolygonTagged(
+  segs: FootprintSegment[], offsetOf: (s: FootprintSegment) => number,
+): { pts: ShapePt[]; sub: number[] } {
   const sub: { a: ShapePt; b: ShapePt; o: number }[] = []
   for (const s of segs) {
     const o = offsetOf(s)
@@ -63,18 +81,29 @@ export function insetPolygon(segs: FootprintSegment[], offsetOf: (s: FootprintSe
   }
   const lines = sub.map(e => {
     const f = edgeFrame({ p0: e.a, p1: e.b })
-    return { p: { x: e.a.x + f.n.x * e.o, y: e.a.y + f.n.y * e.o }, u: f.u }
+    return {
+      p: { x: e.a.x + f.n.x * e.o, y: e.a.y + f.n.y * e.o },
+      end: { x: e.b.x + f.n.x * e.o, y: e.b.y + f.n.y * e.o },
+      u: f.u, o: e.o,
+    }
   })
-  const out: ShapePt[] = []
-  for (let i = 0; i < lines.length; i++) {
-    const A = lines[(i - 1 + lines.length) % lines.length], B = lines[i]
+  const pts: ShapePt[] = [], tags: number[] = []
+  const n = lines.length
+  for (let i = 0; i < n; i++) {
+    const ia = (i - 1 + n) % n, A = lines[ia], B = lines[i]
     const cross = A.u.x * B.u.y - A.u.y * B.u.x
-    if (Math.abs(cross) < 1e-9) { out.push(B.p); continue }
+    const nearParallel = Math.abs(cross) < BEVEL_SIN && A.u.x * B.u.x + A.u.y * B.u.y > 0
+    if (nearParallel && Math.abs(A.o - B.o) > 1e-6) {
+      pts.push(A.end); tags.push(ia)
+      pts.push(B.p); tags.push(i)
+      continue
+    }
+    if (Math.abs(cross) < 1e-9) { pts.push(B.p); tags.push(i); continue }
     // A.p + A.u·s = B.p + B.u·t  → solve for s
     const s = ((B.p.x - A.p.x) * B.u.y - (B.p.y - A.p.y) * B.u.x) / cross
-    out.push({ x: A.p.x + A.u.x * s, y: A.p.y + A.u.y * s })
+    pts.push({ x: A.p.x + A.u.x * s, y: A.p.y + A.u.y * s }); tags.push(i)
   }
-  return out
+  return { pts, sub: tags }
 }
 
 /** Clip `subject` by a convex polygon (any winding). */
