@@ -31,6 +31,10 @@ export interface UserPrefs {
   planGrid: PlanGridPrefs
   /** Wall draw tool settings (WallDrawPanel / DrawingPanel). */
   wallDraw: WallDrawPrefs
+  /** Double-clicking a cabinet in plan or elevation opens the cabinet editor. */
+  cabinetDoubleClickEdit: boolean
+  /** Enter with one cabinet selected (plan or elevation) opens the cabinet editor. */
+  cabinetEnterEdit: boolean
 }
 
 export interface WallDrawPrefs {
@@ -73,6 +77,8 @@ const DEFAULTS: UserPrefs = {
   includeBandingInPartSize: true,
   planGrid: DEFAULT_PLAN_GRID,
   wallDraw: DEFAULT_WALL_DRAW,
+  cabinetDoubleClickEdit: true,
+  cabinetEnterEdit: true,
 }
 
 // Legacy fields: per-view `drawingPresets.plan` and the older singular

@@ -178,6 +178,7 @@ interface ElevationSVGProps {
   resolvedParts?: Map<string, ResolvedCabinet>
   onDeselect: () => void
   onSeamClick?: (cabId: string, edgeKey: string, label: string) => void
+  onCabinetDoubleClick?: (e: React.MouseEvent, cabId: string) => void
   // Measure-tool + snap state (parent-owned so view switches clear it cleanly)
   elevSnapSettings:  ElevSnapSettings
   onElevSnapSettingsChange: (s: ElevSnapSettings) => void
@@ -207,7 +208,7 @@ export default function ElevationSVG({
   onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu,
   onBlankWallContextMenu, onShiftSelectCabinet, onMarqueeSelect, onEqualizeWidths,
   cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
-  resolvedParts: resolvedPartsRaw, onDeselect, onSeamClick, elevWallSide, onSetElevWallSide,
+  resolvedParts: resolvedPartsRaw, onDeselect, onSeamClick, onCabinetDoubleClick, elevWallSide, onSetElevWallSide,
   elevSnapSettings, onElevSnapSettingsChange,
   elevSnapResult, setElevSnapResult,
   elevMeasureStart, elevMeasureEnd, elevMeasureCursor,
@@ -1162,6 +1163,7 @@ export default function ElevationSVG({
                     if (!shiftRef.current) onSelectCabinet(cab.id)
                   }}
                   onContextMenu={e => onCabinetContextMenu(e, cab.id)}
+                  onDoubleClick={e => { if (mode === 'select' && !elevCabFollowing && !elevResizeFollowing) onCabinetDoubleClick?.(e, cab.id) }}
                 >
                   {/* Invisible hit area — the extent of what's drawn (see hit) */}
                   {hit && <rect x={hit.x} y={hit.y} width={hit.w} height={hit.h} fill="transparent" stroke="none" />}

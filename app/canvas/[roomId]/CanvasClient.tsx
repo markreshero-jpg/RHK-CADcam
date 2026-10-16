@@ -530,6 +530,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Esc is two-stage: first press cancels whatever is in progress (stretch, move,
   // draw, armed placement, menu); a press with nothing in progress deselects.
   // Read through a ref so the keydown closure (deps [selected, mode]) sees it fresh.
+  const editCabIdRef = useRef<string | null>(null)
+  editCabIdRef.current = editCabId
   const escBusyRef = useRef(false)
   escBusyRef.current = !!(cabResize || cabFollowing || cabMoveDrag || drawStart || armedDef || contextMenu || measureStart || fx.carry)
 
@@ -625,6 +627,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey) && !isInput(e.target)) || ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && e.shiftKey && !isInput(e.target))) { e.preventDefault(); void handleRedo() }
       if (e.key === 'Escape' && !isInput(e.target)) fx.cancel()
       if (e.key === 'Escape') { if (!escBusyRef.current && !isInput(e.target) && (mode === 'select' || mode === 'benchtop_select')) setSelected(null); setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode(isBenchtopMode(mode) && mode !== 'benchtop_select' ? 'benchtop_select' : 'select'); setArmedDef(null); setArmedDraft(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setDeleteCabsPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
+      // Enter opens the cabinet editor for the single selected cabinet (user pref).
+      // Skipped while a field / button / select has focus so Enter keeps its usual job there.
+      if (e.key === 'Enter' && selected?.type === 'cabinet' && mode === 'select' && !editCabIdRef.current
+          && (canvasView === 'plan' || canvasView === 'elevation') && !e.ctrlKey && !e.metaKey && !e.altKey
+          && !isInput(e.target) && !(e.target instanceof HTMLButtonElement || e.target instanceof HTMLSelectElement || (e.target instanceof HTMLElement && e.target.isContentEditable))
+          && getUserPrefs().cabinetEnterEdit) {
+        e.preventDefault(); setContextMenu(null); setEditCabId(selected.id); return
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput(e.target)) {
         if (mode === 'draw_benchtop' && e.key === 'Backspace') { bt.undoVertex(); return }
         if (selected?.type === 'cabinet') handleDeleteCabinet(selected.id)
@@ -1925,6 +1935,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   function onCabinetDoubleClick(e: React.MouseEvent, cabId: string) {
     e.stopPropagation()
+    if (!getUserPrefs().cabinetDoubleClickEdit) return
     setContextMenu(null)
     setEditCabId(cabId)
   }
@@ -2537,6 +2548,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             clipboard={clipboard}
             clipboardGroup={clipboardGroup}
             onSelectCabinet={id => { setSelected({ type: 'cabinet', id }); setMultiSelect([]); setCabResize(null) }}
+            onCabinetDoubleClick={onCabinetDoubleClick}
             onSelectWall={id => { if (!isBenchtopMode(mode)) setSelected({ type: 'wall', id }) }}
             onSetElevWall={setElevWallId}
             elevWallSide={elevWallSide}

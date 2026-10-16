@@ -385,6 +385,8 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
   // User preferences (localStorage)
   const [invertScroll, setInvertScroll] = useState(false)
   const [includeBanding, setIncludeBanding] = useState(true)
+  const [cabDblClickEdit, setCabDblClickEdit] = useState(true)
+  const [cabEnterEdit, setCabEnterEdit] = useState(true)
   const [layerSetId, setLayerSetId] = useState('')
   const layerSets = useLayerSets()
   const [cabinetViewStyles, setCabinetViewStyles] = useState<CabinetViewStyles>({ top: 'wire', elevation: 'wire', side: 'wire', '3d': 'wire' })
@@ -393,6 +395,8 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
     const prefs = getUserPrefs()
     setInvertScroll(prefs.invertScroll)
     setIncludeBanding(prefs.includeBandingInPartSize)
+    setCabDblClickEdit(prefs.cabinetDoubleClickEdit)
+    setCabEnterEdit(prefs.cabinetEnterEdit)
     setLayerSetId(prefs.layerSetId)
     setCabinetViewStyles(prefs.cabinetViewStyles)
     setPalette(getPalette())
@@ -414,6 +418,16 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
   function toggleInvertScroll(val: boolean) {
     setInvertScroll(val)
     setUserPrefs({ invertScroll: val })
+  }
+
+  function toggleCabDblClickEdit(val: boolean) {
+    setCabDblClickEdit(val)
+    setUserPrefs({ cabinetDoubleClickEdit: val })
+  }
+
+  function toggleCabEnterEdit(val: boolean) {
+    setCabEnterEdit(val)
+    setUserPrefs({ cabinetEnterEdit: val })
   }
 
   function toggleIncludeBanding(val: boolean) {
@@ -587,6 +601,42 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
                       >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
                           invertScroll ? 'translate-x-4' : 'translate-x-0'
+                        }`} />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3 bg-surface">
+                      <div>
+                        <p className="text-xs font-medium text-ink">Double-click a cabinet to edit it</p>
+                        <p className="text-[11px] text-ink-subtle mt-0.5">Opens the cabinet editor from plan or elevation</p>
+                      </div>
+                      <button
+                        onClick={() => toggleCabDblClickEdit(!cabDblClickEdit)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                          cabDblClickEdit ? 'bg-accent' : 'bg-surface-3'
+                        }`}
+                        role="switch"
+                        aria-checked={cabDblClickEdit}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                          cabDblClickEdit ? 'translate-x-4' : 'translate-x-0'
+                        }`} />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3 bg-surface">
+                      <div>
+                        <p className="text-xs font-medium text-ink">Enter edits the selected cabinet</p>
+                        <p className="text-[11px] text-ink-subtle mt-0.5">With one cabinet selected in plan or elevation, Enter opens the cabinet editor</p>
+                      </div>
+                      <button
+                        onClick={() => toggleCabEnterEdit(!cabEnterEdit)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                          cabEnterEdit ? 'bg-accent' : 'bg-surface-3'
+                        }`}
+                        role="switch"
+                        aria-checked={cabEnterEdit}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                          cabEnterEdit ? 'translate-x-4' : 'translate-x-0'
                         }`} />
                       </button>
                     </div>
