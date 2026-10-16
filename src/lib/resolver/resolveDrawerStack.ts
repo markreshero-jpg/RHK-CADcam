@@ -261,7 +261,16 @@ export function resolveDrawerStacks(
       }
       if (!bin) {
         const fix = binForDivisions(insideW, internalDepth, availH, bins)
+        // One-click fix (B4): a division each side, bin column mid-range. Only
+        // between the carcass sides — existing divisions are the user's layout.
+        const target = fix && fix.inside_width_min != null && fix.inside_width_max != null
+          ? (fix.inside_width_min + fix.inside_width_max) / 2 : null
+        const voidMm = target != null ? (insideW - 2 * T - target) / 2 : 0
+        const action = target != null && voidMm > 0 && !binMembers.left.target && !binMembers.right.target
+          ? { type: 'add_bin_divisions' as const, void_mm: round1(voidMm), bin: fix!.name, zone: [zone.row_index, zone.col_index] as [number, number] }
+          : undefined
         warnings.push({
+          ...(action ? { action } : {}),
           code: 'NO_BIN_FITS',
           message: bins.length === 0
             ? `Bin ${zoneRef}: no bins in the hardware library`

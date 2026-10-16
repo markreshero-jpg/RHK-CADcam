@@ -1429,4 +1429,12 @@ export interface ResolverError {
   code:    string
   message: string
   part?:   string
+  // A one-click fix the UI can offer (z_bin_cabinet B4).
+  action?: ResolverAction
 }
+
+// add_bin_divisions: wrap the interior in void | bin column | void with a
+// single division each side; void_mm = each void's width, so the bin column's
+// clear width lands mid-range for `bin`.
+export type ResolverAction =
+  { type: 'add_bin_divisions'; void_mm: number; bin: string; zone: [row: number, col: number] }

@@ -124,7 +124,7 @@ void | division | bin | division | void, with equal voids.
 | **B1** | Schema: `kind`, `inside_width_min/max` on `hardware_slides`; seed the six Teramos + their drill ops | ✅ applied 2026-10-16 — seeded inactive, switched on 2026-10-16 after B2 deployed |
 | **B2** | Filter `kind = 'slide'` on every active-slide query (loadCabinetInput, SchedulesClient, CabinetSheetReport, InternalGridEditor, DrawerBoxPreviewPanel), **then** set the bins active. Resolver: `drawer_type 'bin'`, `findBin`, floor datum, gable + door drilling (2mm pricks); `NO_BIN_FITS` warning | ✅ live 2026-10-16 (fe12004) — see as-built notes |
 | **B3** | Library: `BBIN` and `BBIN+I1` cabinets; `+I1` inner drawer placed above the bin | ✅ built 2026-10-16 — see as-built notes |
-| **B4** | "Add divisions" action on the warning | ☐ |
+| **B4** | "Add divisions" action on the warning | ✅ built 2026-10-16 — see as-built notes |
 | **B5** | 3D: bin frame + bins drawn in the cabinet (layer-registered, `z_display_layers`) | ✅ built 2026-10-16 (generic shape) — see as-built notes |
 
 **B2 as built (2026-10-16):**
@@ -168,6 +168,16 @@ void | division | bin | division | void, with equal voids.
   front). New display-layer item `bins` (3D, default shown). Bin stacks no longer draw their rails as runners
   in 3D; elevation / plan still show the rails until they get the bin outline.
 - GLB later: a per-bin `model_url` would render in place of `binShape`, with the generic shape as fallback.
+
+**B4 as built (2026-10-16):**
+- `NO_BIN_FITS` carries `action: { type: 'add_bin_divisions', void_mm, bin, zone }` (new optional
+  `ResolverError.action`) when the bin sits between the carcass sides and a narrower bin exists:
+  void = (inside − 2 × board − mid-range) / 2. 500 cabinet → 6.5mm voids, 421 clear, 74L.
+- `applyBinDivisions(tree, void)` (src/lib/binDivisions.ts): void | old tree | void, single divisions,
+  voids locked. Refuses an interior that is already a vsplit (that's the user's own layout).
+- Buttons: the Errors tab card ("Add divisions for the Teramo 74L") and the Face Grid Bin section
+  (`app/canvas/[roomId]/binDivisionsAction.ts`). Turns has_internal on if needed.
+- Known: full-height divisions split a finger-pull backing rail to the bin column.
 
 ## 6. Answered questions (user, 2026-10-16)
 

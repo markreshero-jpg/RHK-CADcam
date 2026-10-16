@@ -1,6 +1,6 @@
 'use client'
 
-import type { ResolvedCabinet, ResolverError } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, ResolverError, ResolverAction } from '@/src/lib/resolver/types'
 
 type FixView = 'interior' | 'face' | 'overrides'
 
@@ -52,6 +52,16 @@ function guidanceFor(err: ResolverError): { title: string; hint: string; fix?: F
       return { title: 'Slide brand picked arbitrarily', hint: 'Two brands offer the same slide height and this job has no slide schedule, so the resolver guessed. Set a slide schedule for the shop or job so the right brand is chosen.' }
     case 'NO_SLIDE_FITS':
       return { title: 'No slide fits this drawer', hint: 'Every slide is too tall for the opening once the clearance above the box is reserved. Give the drawer a taller row, reduce its clearance in the Face Grid tab, or add a shorter slide to the schedule.', fix: 'face' }
+    case 'NO_BIN_FITS':
+      return { title: 'No bin fits this width', hint: err.action
+        ? 'Add a division each side so the bin sits central — or change the cabinet width (300 / 400 / 450 / 600 fit a Teramo directly).'
+        : 'Change the cabinet width (300 / 400 / 450 / 600 fit a Teramo directly), or set the divisions up in the Interior tab.', fix: err.action ? undefined : 'interior' }
+    case 'BIN_NO_ROOM_ABOVE':
+      return { title: 'No room for the inner drawer above the bin', hint: 'Pick a shorter bin in the Face Grid tab, lower the Min Height Above Bin rule (Job properties → Bins), or remove the inner drawer.', fix: 'face' }
+    case 'BIN_FORCED_MISFIT':
+      return { title: "The chosen bin doesn't fit", hint: 'Set the Bin back to Auto in the Face Grid tab, or pick one that fits.', fix: 'face' }
+    case 'BIN_SHAPED_UNSUPPORTED':
+      return { title: 'Bins need a square cabinet', hint: 'Use a drawer or a door on this shaped cabinet.', fix: 'face' }
     case 'FACE_COLS_OVERFLOW':
       return { title: 'Locked column widths overflow', hint: 'The locked column widths exceed the available face width. Adjust them in the Face Grid tab.', fix: 'face' }
     case 'CASE_TOO_NARROW':
@@ -71,10 +81,11 @@ function guidanceFor(err: ResolverError): { title: string; hint: string; fix?: F
   }
 }
 
-function ErrorCard({ err, severity, onGoToView }: {
+function ErrorCard({ err, severity, onGoToView, onAction }: {
   err: ResolverError
   severity: 'error' | 'warning'
   onGoToView: (v: FixView) => void
+  onAction?: (a: ResolverAction) => void
 }) {
   const g = guidanceFor(err)
   const accent = severity === 'error' ? 'border-red-700/60 bg-red-950/40' : 'border-amber-700/60 bg-amber-950/30'
@@ -95,6 +106,14 @@ function ErrorCard({ err, severity, onGoToView }: {
           </div>
           <p className="text-xs text-gray-300 mt-1 font-mono">{err.message}</p>
           {g.hint && <p className="text-xs text-gray-400 mt-1.5">{g.hint}</p>}
+          {err.action && onAction && (
+            <button
+              onClick={() => onAction(err.action!)}
+              className="mt-2 mr-2 text-[11px] font-medium text-emerald-300 hover:text-emerald-200 bg-emerald-900/40 hover:bg-emerald-900/60 border border-emerald-800/60 rounded px-2.5 py-1 transition-colors"
+            >
+              Add divisions for the {err.action.bin}
+            </button>
+          )}
           {fixLabel && g.fix && (
             <button
               onClick={() => onGoToView(g.fix!)}
@@ -109,9 +128,10 @@ function ErrorCard({ err, severity, onGoToView }: {
   )
 }
 
-export default function CabinetErrorsPanel({ rp, onGoToView, staleShapes = [] }: {
+export default function CabinetErrorsPanel({ rp, onGoToView, onAction, staleShapes = [] }: {
   rp: ResolvedCabinet | undefined
   onGoToView: (v: FixView) => void
+  onAction?: (a: ResolverAction) => void   // one-click fixes carried by a warning (z_bin_cabinet B4)
   // Shaped parts whose base resolved size changed after the shape was drawn
   // (Shape Editor M6) — surfaced here at cabinet level; managed in Overrides.
   staleShapes?: { id: string; label: string }[]
@@ -180,7 +200,7 @@ export default function CabinetErrorsPanel({ rp, onGoToView, staleShapes = [] }:
             {warnings.length} {warnings.length === 1 ? 'warning' : 'warnings'}
           </p>
           {warnings.map((err, i) => (
-            <ErrorCard key={`w${i}`} err={err} severity="warning" onGoToView={onGoToView} />
+            <ErrorCard key={`w${i}`} err={err} severity="warning" onGoToView={onGoToView} onAction={onAction} />
           ))}
         </div>
       )}

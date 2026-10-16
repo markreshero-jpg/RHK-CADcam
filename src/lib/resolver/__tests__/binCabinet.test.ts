@@ -235,3 +235,35 @@ describe('generic 3D bin (B5)', () => {
     expect(binShape(stack).filter(b => b.kind === 'bin')).toHaveLength(4)
   })
 })
+
+describe('add divisions (B4)', () => {
+  it('500 wide: the warning carries the fix; applying it centres a 74L between two divisions', async () => {
+    const { applyBinDivisions } = await import('../../binDivisions')
+    const c500 = binCab(500, { has_internal: true })
+    const w = resolveCabinet(c500).warnings.find(x => x.code === 'NO_BIN_FITS')!
+    expect(w.action).toEqual({ type: 'add_bin_divisions', void_mm: 6.5, bin: 'Teramo 74L', zone: [0, 0] })
+    // 467 inside − 2 × 16.5 divisions − 421 (mid 412–430) = 13 → 6.5 each side.
+
+    const tree = applyBinDivisions(c500.internal_tree, w.action!.void_mm)!
+    const rp = resolveCabinet({ ...c500, internal_tree: tree })
+    expect(rp.warnings.some(x => x.code === 'NO_BIN_FITS')).toBe(false)
+    const [stack] = rp.drawer_stacks
+    expect(stack.slides[0].slide_id).toBe('Teramo 74L')
+    expect(stack.box_width).toBeCloseTo(421)
+    expect(stack.box_X + stack.box_width / 2).toBeCloseTo(250)          // central
+    const divs = rp.internal_parts.filter(p => p.part_type === 'divider')
+    expect(divs).toHaveLength(2)
+    expect(stack.slides.every(s => s.member?.internal_part_type === 'divider')).toBe(true)
+    // Gable holes now land on the division faces.
+    const left = stack.slides.find(s => s.side === 'left')!
+    expect(left.drills.filter(d => d.surface === 'cabinet_member').every(d => Math.abs(d.x - stack.box_X) < 1e-6)).toBe(true)
+  })
+
+  it('keeps what was in the bin column (BBIN+I1 inner drawer) and refuses an existing vsplit', async () => {
+    const { applyBinDivisions } = await import('../../binDivisions')
+    const inner = { type: 'open' as const, fittings: [{ type: 'inner_drawer' as const, y_locked: false }] }
+    const t = applyBinDivisions(inner, 6.5)!
+    expect(t.type === 'vsplit' && t.children[1].section).toEqual(inner)
+    expect(applyBinDivisions(t, 6.5)).toBeNull()
+  })
+})

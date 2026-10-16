@@ -32,6 +32,7 @@ import OverridesView, { buildBaseDims, shapeIsStale, shapePartLabel } from './Ov
 import CabinetTreePanel from './CabinetTreePanel'
 import CabinetRoutesPanel from './CabinetRoutesPanel'
 import CabinetErrorsPanel from './CabinetErrorsPanel'
+import { addBinDivisions } from './binDivisionsAction'
 import PartEditor from './PartEditor'
 import { buildReferenceOutlines } from './partEditor/referenceOutlines'
 import { getUserPrefs } from '@/src/lib/userPrefs'
@@ -663,7 +664,7 @@ export default function CabinetEditModal({
             {activeView === 'joints' && <JointsPanel cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
             {activeView === 'tree'   && rp && <CabinetTreePanel rp={rp} partOverrides={partOverrides} />}
             {activeView === 'routes' && rp && <CabinetRoutesPanel cabinet={cabinet} rp={rp} />}
-            {activeView === 'errors' && <CabinetErrorsPanel rp={rp} onGoToView={setActiveView} staleShapes={staleShapes} />}
+            {activeView === 'errors' && <CabinetErrorsPanel rp={rp} onGoToView={setActiveView} staleShapes={staleShapes} onAction={a => { void addBinDivisions(cabinet, a, onUpdate) }} />}
             {activeView === 'overrides' && (
               <OverridesView
                 cabinetId={cabinet.id}

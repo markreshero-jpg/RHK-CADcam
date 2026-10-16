@@ -10,6 +10,7 @@ import { useViewBoxPinch } from './usePinchZoom'
 import { intElevRect, dbElevRect, slideElevRect, TapePolys } from './cabinetEditSvgHelpers'
 import type { EbByMatId } from './useMaterialColours'
 import { normalizeSection } from './InternalGridEditor'
+import { addBinDivisions } from './binDivisionsAction'
 import { drawerBoundaries, planAutoDivider, AUTO_DIVIDER_NOTE, type SeamGeometry } from '@/src/lib/dividers/autoDivider'
 
 type DoorStyleOpt = { id: string; name: string }
@@ -1151,7 +1152,18 @@ export default function FaceGridEditor({
                               </option>
                             ))}
                           </select>
-                          {!picked && <p className="text-amber-500 mt-0.5">No bin placed — see the cabinet warnings</p>}
+                          {!picked && (() => {
+                            const fix = rp?.warnings.find(w => w.action?.type === 'add_bin_divisions'
+                              && w.action.zone[0] === gz.row_index && w.action.zone[1] === gz.col_index)?.action
+                            return fix ? (
+                              <button
+                                onClick={() => { void addBinDivisions(cabinet, fix, onUpdate) }}
+                                className="mt-1 w-full text-[10px] font-medium text-emerald-300 bg-emerald-900/40 hover:bg-emerald-900/60 border border-emerald-800/60 rounded px-1.5 py-0.5"
+                              >
+                                No bin fits — add divisions for the {fix.bin}
+                              </button>
+                            ) : <p className="text-amber-500 mt-0.5">No bin placed — see the cabinet warnings</p>
+                          })()}
                         </div>
                       )
                     })()}
