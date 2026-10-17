@@ -77,12 +77,14 @@ export function arcGeom(p0: ShapePt, p1: ShapePt, rx: number, ry: number, largeA
 }
 
 // Closed outline → polyline (last point NOT repeated as first). Lines keep
-// their endpoints; arcs sample at ~5°; cubics at 16 steps.
-export function sampleShapeOutline(segs: ShapeSegmentLike[], arcStepDeg = 5): ShapePt[] {
+// their endpoints; arcs sample at ~5°; cubics at 16 steps. `edgeSeg`, when
+// given, is filled with the segment index of each output edge (point i → i+1).
+export function sampleShapeOutline(segs: ShapeSegmentLike[], arcStepDeg = 5, edgeSeg?: number[]): ShapePt[] {
   const out: ShapePt[] = []
   if (segs.length === 0) return out
   out.push({ ...segs[0].p0 })
-  for (const s of segs) {
+  for (const [k, s] of segs.entries()) {
+    const from = out.length
     if (s.type === 'arc' && s.rx && s.ry) {
       sampleArc(s.p0, s.p1, s.rx, s.ry, s.largeArc ?? 0, s.sweep ?? 0, out, arcStepDeg * Math.PI / 180)
     } else if (s.type === 'curve' && s.cp1 && s.cp2) {
@@ -97,10 +99,13 @@ export function sampleShapeOutline(segs: ShapeSegmentLike[], arcStepDeg = 5): Sh
     } else {
       out.push({ ...s.p1 })
     }
+    // Each point this segment added ends one of its edges.
+    if (edgeSeg) for (let j = from; j < out.length; j++) edgeSeg[j - 1] = k
   }
   // The loop is closed, so the final p1 duplicates the first point — drop it.
   const first = out[0], last = out[out.length - 1]
   if (out.length > 1 && Math.abs(first.x - last.x) < 0.01 && Math.abs(first.y - last.y) < 0.01) out.pop()
+  if (edgeSeg) edgeSeg.length = out.length
   return out
 }
 
@@ -110,7 +115,12 @@ export function sampleShapeOutline(segs: ShapeSegmentLike[], arcStepDeg = 5): Sh
 // point (the DXF convention): b = tan(θ/4), θ = the arc's signed sweep, + = the
 // angle increasing in the outline's own frame (SVG sweep-flag 1). No `b` = a
 // straight edge, so rows written before arcs read as before.
-export type OutlinePt = ShapePt & { b?: number }
+// `e` (O5) = which of the part's edge-band flags the edge from this point takes
+// (shaped horizontals: their fronts, sides and back no longer sit on the
+// bounding rectangle). No `e` = the optimiser falls back to the rectangle side
+// the edge lies on.
+export type EdgeTag = 'top' | 'bottom' | 'left' | 'right'
+export type OutlinePt = ShapePt & { b?: number; e?: EdgeTag }
 
 const hasBulge = (p: OutlinePt) => typeof p.b === 'number' && Math.abs(p.b) > 1e-9
 
@@ -147,7 +157,9 @@ export function sampleOutline(pts: OutlinePt[], stepDeg = 5): ShapePt[] {
 export function mapOutline(pts: OutlinePt[], f: (p: ShapePt) => ShapePt, reflect: boolean): OutlinePt[] {
   return pts.map(p => {
     const q = f(p)
-    return hasBulge(p) ? { x: q.x, y: q.y, b: reflect ? -p.b! : p.b! } : { x: q.x, y: q.y }
+    const o: OutlinePt = hasBulge(p) ? { x: q.x, y: q.y, b: reflect ? -p.b! : p.b! } : { x: q.x, y: q.y }
+    if (p.e) o.e = p.e
+    return o
   })
 }
 
@@ -156,7 +168,9 @@ export function reverseOutline(pts: OutlinePt[]): OutlinePt[] {
   const n = pts.length
   return pts.map((_, k) => {
     const p = pts[n - 1 - k], e = pts[(2 * n - 2 - k) % n]
-    return hasBulge(e) ? { x: p.x, y: p.y, b: -e.b! } : { x: p.x, y: p.y }
+    const o: OutlinePt = hasBulge(e) ? { x: p.x, y: p.y, b: -e.b! } : { x: p.x, y: p.y }
+    if (e.e) o.e = e.e
+    return o
   })
 }
 

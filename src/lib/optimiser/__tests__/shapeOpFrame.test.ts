@@ -104,10 +104,10 @@ describe('placedOutline (O3) uses the drill-hole transform', () => {
     expect(o.some(p => Math.abs(p.x - 79) < 1e-6)).toBe(true)
     expect(o.some(p => Math.abs(p.y - 29) < 1e-6)).toBe(true)
   })
-  it('a drawn shape on a deducted profile stays full size (nests full size until O5)', () => {
+  it('a drawn shape on a deducted profile is deducted too (O5; untagged → rectangle sides)', () => {
     const drawn = { ...part(1), shape: { ...part().shape!, source: 'drawn' as const } }
-    const o = placedOutline(drawn, { w: 100, rotated: false }, true)!
-    expect(Math.max(...o.map(p => p.x))).toBe(100); expect(Math.max(...o.map(p => p.y))).toBe(40)
+    const o = placedOutline(drawn, { w: 98, rotated: false }, true)!
+    expect(Math.max(...o.map(p => p.x))).toBeCloseTo(98); expect(Math.max(...o.map(p => p.y))).toBeCloseTo(38)
   })
 })
 

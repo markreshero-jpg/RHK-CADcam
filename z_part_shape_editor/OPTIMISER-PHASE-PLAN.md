@@ -19,6 +19,9 @@
 > should be a radius, one continuous curve"; machine Anderson Genesis Plus 49, Fanuc → G2/G3 on by
 > default, no profile toggle). See O4 "True arcs" below. **Checked in-app by Mark 2026-10-18** ("arcs on
 > cabinet work well").
+> **2026-10-18: O5 built** (EB deduction on shaped contours — see O5). In-app check pending: a
+> deducting profile on RHK6581 — BC-09's L bottom should nest 1 tape smaller on its fronts / ends only.
+> Next: O6 / O7.
 
 ---
 
@@ -241,7 +244,38 @@ sheet). Test: placedOutline == toSheet per point, plain + rotated; deducted shif
   G-code to before (regression-diff a saved program).
 
 ### O5 — Edgeband deduction on shaped contours (locked decision #3)
-**Status: [ ] not started**
+**Status: [x] built 2026-10-18 — in-app check pending.** One function, `shapes.cutBlank(part, deduct)`,
+is the blank every consumer uses: nest dims + Stage 2 dims (OptimiserClient), the op shift
+(sheetDrills → PartRef eb_w1 / eb_w2 / eb_h1 = the blank's sx / sx2 / sy, so ebShift is unchanged), and
+the sheet / G-code contour (`placedOutline` = the blank's outline). Plain rectangles = cutSize as before.
+- **Per-edge tape** (`OptiShape.op_tape`, one per op_polygon edge, from `attachShape`'s new `eb` arg =
+  the part's tape thickness + edge flags, normalize `bandOf` per table): drawn shapes use each segment's
+  `edge.band` tag (seeded from the rect banding); resolver outlines use a new per-edge **flag tag**
+  `OutlinePt.e` ('top' | 'bottom' | 'left' | 'right' — shapePath `EdgeTag`, carried by mapOutline /
+  reverseOutline). Untagged edges (old rows, finger-pull gables, benchtops) keep the O4 rule: the tape of
+  the rectangle side they lie on, inner edges none.
+- **Resolver tags** (`resolveShapedCase.tagEdges`, every clipped horizontal — bottom, full_top, rails,
+  shelves): an arc or an edge on a footprint front → 'top' (front) whichever way it faces (a pie corner's
+  second leg); an edge along a panel (within 45 mm) → 'bottom' for a back panel, else the end it stands at,
+  left / right by which half of the cabinet the panel is in (the pie corner's end2 panel closes the side
+  leg at the front and is still an end); anything else → the way it faces. Fixes the O4 rule on an L
+  bottom: the side leg's wall edge was banded as the 'left' end and the leg-2 front not at all.
+- **Offset**: `offsetLoop` per edge (arcs offset concentrically as their 5° chords); neighbours with
+  different tapes that are parallel or **within 12° of tangent** step instead of mitring (a banded arc
+  into an unbanded straight — the mitre would run ~t / sin θ along the straight). Blank = the offset
+  loop's bbox; sx / sy = its min corner, sx2 = w − its max x.
+- **Failure**: `insetClean` (winding kept, area shrinks, every point on the part, no non-neighbour edges
+  crossing OR touching — a sliver narrower than its tapes folds onto itself) → `failed`: cut at finished
+  size and the run warns, naming the parts (replaces the "contour EB not built yet" note).
+- Tape missing on a banded shaped edge → `eb_missing` (existing warning).
+- Blanks cached per part (WeakMap) — the sheet views ask per placement per frame.
+- Tests `__tests__/contourEdgeband.test.ts`: rect = cutSize; drawn notch (banded top + notch wall +
+  right) comes in by exactly the tape on those edges only; untagged → rectangle sides; banded arc at
+  r − t, straights untouched; collapsing sliver fails; tape missing flagged; BCNP L bottom both hands
+  (4 of 6 edges banded, every edge's midpoint moved by its tape lies on the blank, 882 → 881 × 881).
+- Not done: benchtop shaped pieces still nest at their full outline (their segments carry no band tags —
+  the benchtop track's call). Two-sided (pre-mirrored down-face) bores on shaped parts use sx2 like the
+  rectangle; untested on a real down-face bore of a shaped part.
 - When profile `deduct_edgeband` is on: offset each BANDED segment of the outline inward by its
   tape thickness (per-segment `edge.band` flags; tape thickness resolution reuses the
   `normalize.ts` matEb fallback chain). Adjacent-segment reconciliation: re-intersect
@@ -285,6 +319,7 @@ sheet). Test: placedOutline == toSheet per point, plain + rotated; deducted shif
 - Snapshot-uid instability / reload-a-saved-run / `output_to_cnc` reset on resolve (pre-existing).
 
 ## Session log
+- **2026-10-18** — O5 built (see its status block). Arcs (O4) checked in-app by Mark.
 - **2026-10-16** — O2b + O3 + O4 built (see their status blocks); side bug (A) fixed, plus the
   drawn-shape drill-shift bug and a bit-too-big gouge guard. Side bugs B–E still open. Awaiting
   Mark's check on RHK6581.

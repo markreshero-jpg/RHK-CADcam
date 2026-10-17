@@ -17,7 +17,7 @@ import { syncMasterSlavesForCabinets } from './masterSlaveSync'
 import type { NestedSheet } from './nest'
 import type { SheetDrill, SheetRoute } from './gcode'
 import type { OptiPart } from './types'
-import { nestsFullSize } from './shapes'
+import { cutBlank } from './shapes'
 
 export interface SheetDrillsResult {
   bySheet: Map<number, SheetDrill[]>
@@ -145,11 +145,15 @@ export async function loadResolvedDrillOps(
     }
   }
 
-  const partByUid = new Map<string, PartRef>(parts.map(p => [p.uid, {
-    source_table: p.source_table, cabinet_instance_id: p.cabinet_instance_id, source_part_key: p.source_part_key, w: p.w, h: p.h,
-    // Drawn shapes nest at full size (no contour deduction yet) — no shift.
-    deduct: !!opts.deductEdgeband && !nestsFullSize(p), eb_w1: p.eb_w1, eb_w2: p.eb_w2, eb_h1: p.eb_h1,
-  }]))
+  const partByUid = new Map<string, PartRef>(parts.map(p => {
+    // Ops shift by how far the cut blank's edges came in (a shaped part's
+    // banded-edge offset, O5; the tape on a rectangle's sides).
+    const b = cutBlank(p, !!opts.deductEdgeband)
+    return [p.uid, {
+      source_table: p.source_table, cabinet_instance_id: p.cabinet_instance_id, source_part_key: p.source_part_key, w: p.w, h: p.h,
+      deduct: !!opts.deductEdgeband, eb_w1: b.sx, eb_w2: b.sx2, eb_h1: b.sy,
+    }]
+  }))
   return { opsByKey, routesByKey, partByUid, warnings: [...warnings] }
 }
 

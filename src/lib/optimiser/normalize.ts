@@ -128,9 +128,9 @@ export function normalizeProject(
     const transpose = near(effW, DY) && near(effH, DX) && !near(DX, DY)
     const inPlane = transpose || (near(effW, DX) && near(effH, DY))
     const frame = shapeFrameFor(table, table === 'custom_parts' ? String(row.orientation ?? 'flat') : naming.typeKey, partKey)
-    const { shape, stale } = attachShape(shapesByCab.get(cabId)?.[partKey], effW, effH,
+    const { shape, stale, tapeMissing } = attachShape(shapesByCab.get(cabId)?.[partKey], effW, effH,
       inPlane ? { frame, DX, DY, transpose } : undefined,
-      Array.isArray(row.outline) ? row.outline as OutlinePt[] : null)
+      Array.isArray(row.outline) ? row.outline as OutlinePt[] : null, bandOf(table, row))
     parts.push({
       uid: `${table}:${row.id as string}`,
       source_table: table, source_part_id: row.id as string,
@@ -143,6 +143,7 @@ export function normalizeProject(
       part_type_key: naming.typeKey,
       w: dims?.w ?? Number(row.dx), h: dims?.h ?? Number(row.dy), thickness: dims?.thickness ?? Number(row.dz),
       ...eb,
+      ...(tapeMissing ? { eb_missing: true } : {}),
       material_id: (row.material_id as string) ?? null,
       grain_direction: grain, nest_priority: nestPriority,
       output_to_cnc: partCut && !cabNoCnc.has(cabId),
@@ -183,6 +184,13 @@ export function normalizeProject(
     top: !!r.edge_band_top, bottom: !!r.edge_band_bottom,
     left: !!r.edge_band_left, right: !!r.edge_band_right,
   })
+  // Tape + resolver-frame edge flags for a shaped part's per-edge tape (O5).
+  // Same flag mapping and thickness fallback as each table's loop below.
+  function bandOf(table: SourceTable, r: Row): { t: number | undefined; flags: EdgeFlags } {
+    if (table === 'internal_parts') return { t: tFor(r), flags: { top: !!r.edge_band_top, bottom: !!r.edge_band_bottom, left: !!r.edge_band_back, right: !!r.edge_band_front } }
+    if (table === 'custom_parts') return { t: r.material_id ? matEb.get(r.material_id as string) : undefined, flags: { top: !!r.edge_top, bottom: !!r.edge_bottom, left: !!r.edge_left, right: !!r.edge_right } }
+    return { t: tFor(r) ?? (r.material_id ? matEb.get(r.material_id as string) : undefined), flags: flagsOf(r) }
+  }
 
   // partKey mirrors the svg*Meta synthetic ids so it matches part_operations.source_part_key.
   for (const r0 of cp) {

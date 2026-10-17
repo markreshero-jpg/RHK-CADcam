@@ -38,6 +38,7 @@ export interface PartRef {
   // the origin edge moved inward by that edge's tape, so holes shift by:
   //   pos_x − eb_w1 (or − eb_w2 for pre-mirrored down-face bores, whose origin
   //   is the finished far edge), pos_y − eb_h1.
+  // For a shaped part these are the cut blank's edge moves (shapes.cutBlank, O5).
   deduct?: boolean
   eb_w1?: number; eb_w2?: number; eb_h1?: number
 }

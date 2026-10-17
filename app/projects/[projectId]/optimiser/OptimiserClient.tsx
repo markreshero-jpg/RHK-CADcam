@@ -17,10 +17,10 @@ import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '@/app/ThemeToggle'
 import { useOptiStore, type Stage } from '@/src/lib/optimiser/store'
 import type { OptiSnapshot, OptiPart } from '@/src/lib/optimiser/types'
-import { materialGroupKey, buildMargins, cutSize } from '@/src/lib/optimiser/types'
+import { materialGroupKey, buildMargins } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
-import { nestsFullSize, placedOutline } from '@/src/lib/optimiser/shapes'
+import { cutBlank, placedOutline } from '@/src/lib/optimiser/shapes'
 import SheetSVG from './SheetSVG'
 import Stage5Edit from './Stage5Edit'
 import Stage6Gcode from './Stage6Gcode'
@@ -237,11 +237,16 @@ function Stage2Parts() {
   const isBatch = includedProjectIds.length > 1
 
   // Machine-profile option: show/nest CUT sizes (finished − edgeband per banded
-  // edge, fractional to 0.1mm) instead of finished sizes.
+  // edge, fractional to 0.1mm; a shaped part's banded edges offset in — O5)
+  // instead of finished sizes.
   const profileId = useOptiStore(s => s.profileId)
   const deductEb = snap.profiles.find(pr => pr.id === profileId)?.deduct_edgeband === true
   const fmtMm = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1))
-  const dispDims = (p: OptiPart) => (deductEb ? cutSize(p) : { w: Math.round(p.w), h: Math.round(p.h) })
+  const dispDims = (p: OptiPart) => {
+    if (!deductEb) return { w: Math.round(p.w), h: Math.round(p.h) }
+    const b = cutBlank(p, true)
+    return { w: b.w, h: b.h }
+  }
   // Sky dot on dims changed by a part size override (hand resize or shape save)
   // — shown only on the axes that actually differ from the resolver's base size.
   const sizeOvMark = (p: OptiPart, axis: 'w' | 'h' | 't') => {
@@ -658,15 +663,10 @@ function Stage4Nesting() {
   // (locked policy: keep shape, flag error; re-edit in the cabinet to clear).
   const staleShapes = runParts.filter(p => p.shape_stale)
   const nestableParts = runParts.filter(p => !p.shape_stale)
-  // Until contour EB offsetting lands (phase plan O5), shaped parts nest and
-  // cut at FULL drawn size even when the profile deducts — a deducted rect
-  // smaller than the contour would let the packer overlap real material.
-  // Drawn shapes only: resolver outlines (shaped cabinets, finger-pull notches)
-  // still CUT as the rectangle until O4, so they keep the cut-size nest.
-  const fullSize = nestsFullSize
-  const shapedBanded = deductEb
-    ? nestableParts.filter(p => fullSize(p) && (p.eb_w1 || p.eb_w2 || p.eb_h1 || p.eb_h2))
-    : []
+  // Shaped parts nest and cut as their cut blank (O5: banded edges of the
+  // outline offset in by the tape). One whose offset didn't come out clean is
+  // cut at finished size instead — never silently wrong geometry — and named.
+  const offsetFailed = deductEb ? nestableParts.filter(p => p.shape && cutBlank(p, true).failed) : []
 
   function run() {
     const isBatch = includedProjectIds.length > 1
@@ -685,8 +685,7 @@ function Stage4Nesting() {
         const label = isBatch && p.job_number ? `${p.job_number} ${p.label}` : p.label
         const gk = materialGroupKey(p.material_id, p.thickness)
         if (!stockForRun[gk]) stockForRun[gk] = { standard: seedStock(snap, p.material_id), offcuts: [] }
-        // Drawn shapes always occupy their full bbox (no EB deduction until O5).
-        const dims = deductEb && !fullSize(p) ? cutSize(p) : { w: p.w, h: p.h }
+        const dims = cutBlank(p, deductEb)
         for (let i = 0; i < qty; i++) {
           const inst: NestPartInput = { uid: `${p.uid}#${i}`, baseUid: p.uid, label, w: dims.w, h: dims.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority }
           parts.push(inst); index[inst.uid] = inst
@@ -742,10 +741,10 @@ function Stage4Nesting() {
             re-edit the shape in the cabinet: {[...new Set(staleShapes.map(p => `${p.cabinet_label} ${p.label}`))].slice(0, 6).join(', ')}{staleShapes.length > 6 ? '…' : ''}
           </p>
         )}
-        {shapedBanded.length > 0 && (
+        {offsetFailed.length > 0 && (
           <p className="text-[11px] text-amber-500 mb-4">
-            ⬠ {shapedBanded.length} shaped part(s) have edgebanding but nest/cut at full drawn size —
-            contour edgeband deduction is not built yet: {[...new Set(shapedBanded.map(p => p.label))].slice(0, 6).join(', ')}{shapedBanded.length > 6 ? '…' : ''}
+            ⬠ {offsetFailed.length} shaped part(s) cut at FULL finished size — their banded edges could not be
+            offset cleanly (an edge too short for the tape?): {[...new Set(offsetFailed.map(p => `${p.cabinet_label} ${p.label}`))].slice(0, 6).join(', ')}{offsetFailed.length > 6 ? '…' : ''}
           </p>
         )}
         {ebMissing.length > 0 && (
