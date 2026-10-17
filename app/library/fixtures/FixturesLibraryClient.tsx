@@ -14,7 +14,8 @@ import Link from 'next/link'
 import { ThemeToggle } from '../../ThemeToggle'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/src/lib/supabase'
-import type { FixtureCatalogItem, FixtureCategory, FixtureMount } from '@/src/lib/types'
+import type { FixtureCatalogItem, FixtureCategory, FixtureMount, FixtureGroup } from '@/src/lib/types'
+import FixtureIcon, { FixtureIconPicker } from '@/src/components/FixtureIcon'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 import { modelFormatFromName, MODEL_ACCEPT } from '@/src/lib/modelFormat'
 import { fitScale } from '@/src/lib/fixtureFit'
@@ -30,6 +31,9 @@ const FixtureModel = dynamic(
 )
 
 const TABLE  = 'fixture_catalog'
+const GROUPS = 'fixture_groups'
+/** Tab key for items with no category (group deleted, or not sorted yet). */
+const OTHER = 'other'
 const BUCKET = 'fixture-models'
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -60,13 +64,19 @@ const ROT_STEPS = [0, 90, 180, 270]
 // ── Component ─────────────────────────────────────────────────────────────────
 
 async function fetchItems() {
-  const { data, error } = await supabase.from(TABLE).select('*').order('sort_order').order('name')
-  return { rows: (data ?? []) as FixtureCatalogItem[], error: error?.message ?? null }
+  const [{ data, error }, { data: g, error: ge }] = await Promise.all([
+    supabase.from(TABLE).select('*').order('sort_order').order('name'),
+    supabase.from(GROUPS).select('*').order('sort_order').order('name'),
+  ])
+  return { rows: (data ?? []) as FixtureCatalogItem[], groups: (g ?? []) as FixtureGroup[], error: error?.message ?? ge?.message ?? null }
 }
 
 export default function FixturesLibraryClient({ embedded }: { embedded?: boolean }) {
   const [items,    setItems]    = useState<FixtureCatalogItem[]>([])
-  const [cat,      setCat]      = useState<FixtureCategory>('appliance')
+  const [groups,   setGroups]   = useState<FixtureGroup[]>([])
+  const [grp,      setGrp]      = useState<string>(OTHER)
+  /** Editing the active category (name / icon / type) instead of an item. */
+  const [editGrp,  setEditGrp]  = useState(false)
   const [selId,    setSelId]    = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [newName,  setNewName]  = useState('')
@@ -74,26 +84,36 @@ export default function FixturesLibraryClient({ embedded }: { embedded?: boolean
 
   useEffect(() => {
     let live = true
-    void fetchItems().then(r => { if (live) { setItems(r.rows); setError(r.error) } })
+    void fetchItems().then(r => {
+      if (!live) return
+      setItems(r.rows); setGroups(r.groups); setError(r.error)
+      setGrp(g => g === OTHER && r.groups.length ? r.groups[0].id : g)
+    })
     return () => { live = false }
   }, [])
 
   async function reload() {
     const r = await fetchItems()
     setItems(r.rows)
+    setGroups(r.groups)
   }
 
+  const group  = groups.find(g => g.id === grp) ?? null
+  const inGrp  = (i: FixtureCatalogItem) => grp === OTHER ? !i.group_id || !groups.some(g => g.id === i.group_id) : i.group_id === grp
+  const cat: FixtureCategory = group?.category ?? 'appliance'
   const catDef = CATEGORIES.find(c => c.key === cat)!
-  const list   = items.filter(i => i.category === cat)
-  const sel    = items.find(i => i.id === selId && i.category === cat) ?? null
+  const list   = items.filter(inGrp)
+  const sel    = items.find(i => i.id === selId && inGrp(i)) ?? null
+  const otherCount = items.filter(i => !i.group_id || !groups.some(g => g.id === i.group_id)).length
+  const grpLabel = group?.name ?? 'Other'
 
   // Group the list by kind (unset kind last).
-  const groups = new Map<string, FixtureCatalogItem[]>()
+  const byKind = new Map<string, FixtureCatalogItem[]>()
   for (const i of list) {
     const k = i.kind?.trim() || 'Other'
-    groups.set(k, [...(groups.get(k) ?? []), i])
+    byKind.set(k, [...(byKind.get(k) ?? []), i])
   }
-  const groupKeys = [...groups.keys()].sort((a, b) => (a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b)))
+  const groupKeys = [...byKind.keys()].sort((a, b) => (a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b)))
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -104,7 +124,7 @@ export default function FixturesLibraryClient({ embedded }: { embedded?: boolean
     const sort_order = Math.max(0, ...list.map(i => i.sort_order)) + 10
     const { data, error: e } = await supabase
       .from(TABLE)
-      .insert({ name, category: cat, mount: catDef.mount, width, depth, height, sort_order, ...(catDef.sill != null ? { mount_height: catDef.sill } : {}) })
+      .insert({ name, category: cat, group_id: group?.id ?? null, mount: catDef.mount, width, depth, height, sort_order, ...(catDef.sill != null ? { mount_height: catDef.sill } : {}) })
       .select('*')
       .single()
     if (e) { setError(e.message); return }
@@ -155,6 +175,51 @@ export default function FixturesLibraryClient({ embedded }: { embedded?: boolean
     setItems(prev => prev.map(p => p.id === id ? row : p))
   }
 
+  // ── Categories (fixture_groups, P6) ────────────────────────────────────────
+
+  async function addGroup() {
+    const sort_order = Math.max(0, ...groups.map(g => g.sort_order)) + 10
+    const { data, error: e } = await supabase.from(GROUPS)
+      .insert({ name: 'New category', icon: 'Box', category: 'appliance', sort_order }).select('*').single()
+    if (e) { setError(e.message); return }
+    const g = data as FixtureGroup
+    setGroups(prev => [...prev, g])
+    setGrp(g.id); setSelId(null); setCreating(false); setEditGrp(true)
+  }
+
+  async function patchGroup(id: string, updates: Partial<FixtureGroup>) {
+    setGroups(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g))
+    const { error: e } = await supabase.from(GROUPS).update(updates).eq('id', id)
+    if (e) { setError(e.message); await reload() }
+  }
+
+  /** Swap with the neighbour (dir −1 = left). */
+  async function moveGroup(id: string, dir: -1 | 1) {
+    const i = groups.findIndex(g => g.id === id), j = i + dir
+    if (i < 0 || j < 0 || j >= groups.length) return
+    const a = groups[i], b = groups[j]
+    const next = [...groups]; next[i] = { ...b, sort_order: a.sort_order }; next[j] = { ...a, sort_order: b.sort_order }
+    setGroups(next)
+    await Promise.all([
+      supabase.from(GROUPS).update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from(GROUPS).update({ sort_order: a.sort_order }).eq('id', b.id),
+    ])
+  }
+
+  async function deleteGroup(g: FixtureGroup) {
+    const n = items.filter(i => i.group_id === g.id).length
+    const ok = await confirmDelete({
+      title: 'Delete Category',
+      message: n ? `Delete "${g.name}"? Its ${n} item${n > 1 ? 's' : ''} move to Other.` : `Delete "${g.name}"?`,
+    })
+    if (!ok) return
+    const { error: e } = await supabase.from(GROUPS).delete().eq('id', g.id)
+    if (e) { setError(e.message); return }
+    setGroups(prev => prev.filter(x => x.id !== g.id))
+    setItems(prev => prev.map(i => i.group_id === g.id ? { ...i, group_id: null } : i))
+    setGrp(groups.find(x => x.id !== g.id)?.id ?? OTHER); setEditGrp(false)
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -168,23 +233,26 @@ export default function FixturesLibraryClient({ embedded }: { embedded?: boolean
         </div>
       )}
 
-      {/* Category tabs */}
-      <div className="flex-none flex items-center gap-1 px-4 border-b border-edge">
-        {CATEGORIES.map(c => {
-          const n = items.filter(i => i.category === c.key).length
-          const active = c.key === cat
+      {/* Category tabs — the user's categories (fixture_groups), each with its icon */}
+      <div className="flex-none flex items-center gap-0.5 px-4 border-b border-edge overflow-x-auto">
+        {[...groups.map(g => ({ key: g.id, label: g.name, icon: g.icon })), ...(otherCount ? [{ key: OTHER, label: 'Other', icon: 'Package' }] : [])].map(c => {
+          const n = c.key === OTHER ? otherCount : items.filter(i => i.group_id === c.key).length
+          const active = c.key === grp
           return (
             <button
               key={c.key}
-              onClick={() => { setCat(c.key); setCreating(false) }}
-              className={`px-3 py-2.5 text-xs border-b-2 -mb-px transition-colors ${
+              onClick={() => { setGrp(c.key); setCreating(false); setEditGrp(false) }}
+              className={`flex items-center gap-1.5 px-2.5 py-2.5 text-xs border-b-2 -mb-px whitespace-nowrap transition-colors ${
                 active ? 'border-accent text-accent-ink' : 'border-transparent text-ink-muted hover:text-ink'
               }`}
             >
-              {c.label}<span className="ml-1.5 text-[10px] text-ink-subtle">{n}</span>
+              <FixtureIcon name={c.icon} size={14} />
+              {c.label}<span className="text-[10px] text-ink-subtle">{n}</span>
             </button>
           )
         })}
+        <button onClick={addGroup} title="Add a category"
+          className="px-2.5 py-2.5 text-xs text-ink-subtle hover:text-accent-ink whitespace-nowrap">+ Category</button>
         {error && <span className="ml-auto text-[11px] text-red-400 truncate">{error}</span>}
       </div>
 
@@ -193,9 +261,16 @@ export default function FixturesLibraryClient({ embedded }: { embedded?: boolean
         {/* ── Left: items grouped by kind ─────────────────────────────────── */}
         <aside className="w-64 flex-none border-r border-edge flex flex-col overflow-y-auto">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-edge">
-            <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">{catDef.label}</span>
+            <span className="flex items-center gap-1.5 min-w-0 text-xs font-semibold text-ink-muted uppercase tracking-wider">
+              <FixtureIcon name={group?.icon ?? 'Package'} size={14} />
+              <span className="truncate">{grpLabel}</span>
+              {group && (
+                <button onClick={() => { setEditGrp(true); setSelId(null) }} title="Edit this category (name, icon, type)"
+                  className="text-ink-subtle hover:text-accent-ink normal-case font-normal">✎</button>
+              )}
+            </span>
             <button
-              onClick={() => { setCreating(true); setNewName('') }}
+              onClick={() => { setCreating(true); setNewName(''); setEditGrp(false) }}
               className="text-xs text-accent-ink hover:text-accent-ink transition-colors"
             >+ New</button>
           </div>
@@ -218,10 +293,10 @@ export default function FixturesLibraryClient({ embedded }: { embedded?: boolean
           {groupKeys.map(k => (
             <div key={k} className="border-b border-edge pb-1">
               <div className="px-4 pt-2 pb-1 text-[10px] text-ink-subtle uppercase tracking-wide">{k}</div>
-              {groups.get(k)!.map(i => (
+              {byKind.get(k)!.map(i => (
                 <div
                   key={i.id}
-                  onClick={() => setSelId(i.id)}
+                  onClick={() => { setSelId(i.id); setEditGrp(false) }}
                   className={`group flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors ${
                     selId === i.id ? 'bg-accent/10 text-accent-ink' : 'text-ink-muted hover:bg-surface-2/60'
                   }`}
@@ -245,18 +320,81 @@ export default function FixturesLibraryClient({ embedded }: { embedded?: boolean
             </div>
           ))}
           {list.length === 0 && !creating && (
-            <p className="px-4 py-3 text-[10px] text-ink-subtle">No {catDef.label.toLowerCase()} yet.</p>
+            <p className="px-4 py-3 text-[10px] text-ink-subtle">No {grpLabel.toLowerCase()} yet.</p>
           )}
         </aside>
 
         {/* ── Right: editor ───────────────────────────────────────────────── */}
-        {!sel ? (
+        {editGrp && group ? (
+          <GroupEditor key={group.id} group={group} itemCount={items.filter(i => i.group_id === group.id).length}
+            first={groups[0]?.id === group.id} last={groups[groups.length - 1]?.id === group.id}
+            onPatch={u => patchGroup(group.id, u)} onMove={d => moveGroup(group.id, d)}
+            onDelete={() => deleteGroup(group)} onDone={() => setEditGrp(false)} />
+        ) : !sel ? (
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm text-ink-subtle">Select or create a {catDef.label.toLowerCase().replace(/s$/, '')}</p>
+            <p className="text-sm text-ink-subtle">Select or create an item in {grpLabel}</p>
           </div>
         ) : (
-          <FixtureEditor key={sel.id} item={sel} kinds={catDef.kinds} onPatch={u => patch(sel.id, u)} onError={setError} />
+          <FixtureEditor key={sel.id} item={sel} kinds={catDef.kinds} groups={groups} onPatch={u => patch(sel.id, u)} onError={setError} />
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── Category editor (P6) ──────────────────────────────────────────────────────
+
+const TYPE_LABEL: Record<FixtureCategory, string> = {
+  appliance:  'Appliance — stands on the floor, under the bench or on the wall',
+  sink:       'Sink — drops into the benchtop and cuts it',
+  tap:        'Tap — sits on the benchtop',
+  decorative: 'Decorative — furniture, plants, lamps',
+  opening:    'Door / window — sits in a wall and cuts it',
+}
+
+function GroupEditor({ group, itemCount, first, last, onPatch, onMove, onDelete, onDone }: {
+  group: FixtureGroup; itemCount: number; first: boolean; last: boolean
+  onPatch: (u: Partial<FixtureGroup>) => void; onMove: (dir: -1 | 1) => void
+  onDelete: () => void; onDone: () => void
+}) {
+  const [name, setName] = useState(group.name)
+  const btn = 'px-2.5 py-1 rounded border border-edge-strong text-xs text-ink-muted hover:bg-surface-2 disabled:opacity-40'
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="max-w-xl space-y-5">
+        <div className="flex items-center gap-2">
+          <FixtureIcon name={group.icon} size={20} className="text-accent-ink" />
+          <input value={name} onChange={e => setName(e.target.value)}
+            onBlur={() => { const v = name.trim(); if (v && v !== group.name) onPatch({ name: v }) }}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+            className={`${inp} flex-1 text-sm`} />
+          <button onClick={onDone} className={btn}>Done</button>
+        </div>
+
+        <div>
+          <label className={lbl}>Icon</label>
+          <FixtureIconPicker value={group.icon} onPick={icon => onPatch({ icon })} />
+        </div>
+
+        <div>
+          <label className={lbl}>Type</label>
+          <select value={group.category} disabled={itemCount > 0}
+            onChange={e => onPatch({ category: e.target.value as FixtureCategory })}
+            className={`${inp} w-full disabled:opacity-60`}>
+            {(Object.keys(TYPE_LABEL) as FixtureCategory[]).map(k => <option key={k} value={k}>{TYPE_LABEL[k]}</option>)}
+          </select>
+          <p className="text-[10px] text-ink-subtle mt-1">
+            {itemCount > 0
+              ? `Fixed while the category has items (${itemCount}) — it decides how they behave when placed.`
+              : 'Decides how items in this category behave when placed.'}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button onClick={() => onMove(-1)} disabled={first} className={btn}>← Move left</button>
+          <button onClick={() => onMove(1)} disabled={last} className={btn}>Move right →</button>
+          <button onClick={onDelete} className="ml-auto px-2.5 py-1 rounded border border-red-800 text-xs text-red-400 hover:bg-red-950/40">Delete category</button>
+        </div>
       </div>
     </div>
   )
@@ -267,9 +405,11 @@ export default function FixturesLibraryClient({ embedded }: { embedded?: boolean
 const inp = 'bg-surface-2 border border-edge-strong rounded px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-accent'
 const lbl = 'text-[10px] text-ink-subtle uppercase tracking-wide mb-1 block'
 
-function FixtureEditor({ item, kinds, onPatch, onError }: {
+function FixtureEditor({ item, kinds, groups, onPatch, onError }: {
   item:    FixtureCatalogItem
   kinds:   string[]
+  /** Categories (P6) — the item can move to any category of its own type. */
+  groups:  FixtureGroup[]
   onPatch: (u: Partial<FixtureCatalogItem>) => void
   onError: (msg: string | null) => void
 }) {
@@ -322,9 +462,16 @@ function FixtureEditor({ item, kinds, onPatch, onError }: {
         {/* ── Fields ─────────────────────────────────────────────────────── */}
         <div className="flex-1 max-w-md space-y-5">
           <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
+            <div>
               <label className={lbl}>Name</label>
               <TextField value={item.name} onCommit={v => v.trim() && onPatch({ name: v.trim() })} className={`${inp} w-full`} />
+            </div>
+            <div title="Only categories of the same type — the type decides how the item behaves">
+              <label className={lbl}>Category</label>
+              <select value={item.group_id ?? ''} onChange={ev => onPatch({ group_id: ev.target.value || null })} className={`${inp} w-full`}>
+                {groups.filter(g => g.category === item.category).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                <option value="">Other</option>
+              </select>
             </div>
             <div>
               <label className={lbl}>Kind</label>

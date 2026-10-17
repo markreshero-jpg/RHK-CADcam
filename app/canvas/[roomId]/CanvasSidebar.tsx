@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/src/lib/supabase'
 import { Mode, CabinetInstance, isBenchtopMode } from './canvasTypes'
-import { Room, CabinetDefinition, type FixtureCatalogItem, type FixtureCategory } from '@/src/lib/types'
+import { Room, CabinetDefinition, type FixtureCatalogItem, type FixtureGroup } from '@/src/lib/types'
+import CategoryIcon from '@/src/components/FixtureIcon'
 import RoomSwitcher, { type RoomSwitcherHandle } from './RoomSwitcher'
 import type { MatColours, EbByMatId } from './useMaterialColours'
 import type { MatColMap } from '@/src/components/three/PartViewer'
@@ -196,11 +197,6 @@ const WALL_MODES = WALL_ITEMS.map(w => w.mode)
 
 // ── Benchtop tools ──────────────────────────────────────────────────────────────
 
-const FIXTURE_GROUPS: { key: FixtureCategory; label: string }[] = [
-  { key: 'appliance', label: 'Appliances' }, { key: 'sink', label: 'Sinks' },
-  { key: 'tap', label: 'Taps' }, { key: 'decorative', label: 'Decorative' },
-  { key: 'opening', label: 'Doors & windows' },
-]
 function FixtureIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -299,11 +295,19 @@ export default function CanvasSidebar({
 
   // ── Fixtures catalogue (F6) — loaded the first time the section opens ──
   const [fixtureItems, setFixtureItems] = useState<FixtureCatalogItem[] | null>(null)
+  // Library categories (P6) — headed by their icon, in the library's order.
+  const [fixtureGroups, setFixtureGroups] = useState<FixtureGroup[]>([])
   useEffect(() => {
     if (!fixtureMenuOpen || fixtureItems) return
     let live = true
-    supabase.from('fixture_catalog').select('*').eq('active', true).order('sort_order').order('name')
-      .then(({ data }) => { if (live) setFixtureItems((data ?? []) as FixtureCatalogItem[]) })
+    void Promise.all([
+      supabase.from('fixture_catalog').select('*').eq('active', true).order('sort_order').order('name'),
+      supabase.from('fixture_groups').select('*').order('sort_order').order('name'),
+    ]).then(([{ data }, { data: g }]) => {
+      if (!live) return
+      setFixtureItems((data ?? []) as FixtureCatalogItem[])
+      setFixtureGroups((g ?? []) as FixtureGroup[])
+    })
     return () => { live = false }
   }, [fixtureMenuOpen, fixtureItems])
 
@@ -840,12 +844,16 @@ export default function CanvasSidebar({
               {fixtureItems?.length === 0 && (
                 <div className="px-2.5 py-1.5 text-xs text-gray-500">No fixtures yet — add them in Settings → Fixtures &amp; Appliances.</div>
               )}
-              {FIXTURE_GROUPS.map(g => {
-                const items = fixtureItems?.filter(i => i.category === g.key) ?? []
+              {[...fixtureGroups.map(g => ({ key: g.id, label: g.name, icon: g.icon })), { key: '', label: 'Other', icon: 'Package' }].map(g => {
+                const items = fixtureItems?.filter(i => g.key
+                  ? i.group_id === g.key
+                  : !i.group_id || !fixtureGroups.some(x => x.id === i.group_id)) ?? []
                 if (!items.length) return null
                 return (
-                  <div key={g.key}>
-                    <div className="px-2.5 pt-1.5 pb-0.5 text-[10px] uppercase tracking-wide text-gray-500">{g.label}</div>
+                  <div key={g.key || 'other'}>
+                    <div className="flex items-center gap-1.5 px-2.5 pt-1.5 pb-0.5 text-[10px] uppercase tracking-wide text-gray-500">
+                      <CategoryIcon name={g.icon} size={12} />{g.label}
+                    </div>
                     {items.map(i => (
                       <ToolRow key={i.id} tone={TONES.fixture} label={i.name}
                         sub={`${i.width}×${i.depth}×${i.height}`}

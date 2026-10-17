@@ -589,8 +589,21 @@ export interface FixtureBody {
   bench_drop:    number
 }
 
+/** A library category (P6): what the tabs / F6 picker show. `category` = the behaviour type its items get. */
+export interface FixtureGroup {
+  id:         string
+  name:       string
+  /** Key into FIXTURE_ICONS (src/components/FixtureIcon.tsx). */
+  icon:       string
+  category:   FixtureCategory
+  sort_order: number
+  created_at: string
+}
+
 export interface FixtureCatalogItem extends FixtureBody {
   id:           string
+  /** P6: library category (fixture_groups); null = Other. */
+  group_id:     string | null
   brand:        string | null
   model_no:     string | null
   mount_height: number | null
