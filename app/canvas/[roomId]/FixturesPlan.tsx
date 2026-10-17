@@ -14,6 +14,7 @@ import type { FixtureSnap } from '@/src/lib/fixtureGeometry'
 
 const STROKE = '#0ea5e9'
 const FILL   = '#0ea5e9'
+const CLASH  = '#dc2626'
 
 type Body = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'width' | 'depth'>
 
@@ -49,13 +50,15 @@ function Symbol({ f, z, color, lw }: { f: Body; z: number; color: string; lw: nu
   </>
 }
 
-function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label }: {
+function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, clash = false }: {
   f: Body; x: number; y: number; rotation: number; z: number
   layers: LayerView; selected: boolean; ghost: boolean; label: boolean
+  /** P4: overlaps a cabinet — drawn red. */
+  clash?: boolean
 }) {
   const id = fixtureLayer(f.category)
   const lp = layers.props(id, z)
-  const color = selected ? '#f59e0b' : layers.color(id, STROKE)
+  const color = clash ? CLASH : selected ? '#f59e0b' : layers.color(id, STROKE)
   const lw = layers.w(id, (selected ? 2 : 1.4) / z)
   const fs = Math.max(11 / z, Math.min(f.width, f.depth) / 7)
   // Text reads upright: flip it when the item is turned past 90°.
@@ -81,7 +84,7 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label }: 
 }
 
 export default function FixturesPlan({
-  fixtures, ghost, ghostBody, hiddenId, selectedId, zoom, layers, interactive,
+  fixtures, ghost, ghostBody, hiddenId, selectedId, zoom, layers, interactive, clashIds,
   onPointerDown, onContextMenu, onDoubleClick,
 }: {
   fixtures:   RoomFixture[]
@@ -94,6 +97,8 @@ export default function FixturesPlan({
   layers:     LayerView
   /** false while another tool owns the clicks (fixtures click-through). */
   interactive: boolean
+  /** P4: fixtures that overlap a cabinet (fixtureClashes). */
+  clashIds?:  Set<string>
   onPointerDown: (e: React.PointerEvent, id: string) => void
   onContextMenu: (e: React.MouseEvent, id: string) => void
   onDoubleClick: (e: React.MouseEvent, id: string) => void
@@ -112,7 +117,7 @@ export default function FixturesPlan({
             onDoubleClick={e => { e.stopPropagation(); onDoubleClick(e, f.id) }}
           >
             <FixtureShape f={f} x={f.x} y={f.y} rotation={f.rotation} z={z} layers={layers}
-              selected={f.id === selectedId} ghost={false} label={showLabels} />
+              selected={f.id === selectedId} ghost={false} label={showLabels} clash={clashIds?.has(f.id)} />
           </g>
         )
       })}

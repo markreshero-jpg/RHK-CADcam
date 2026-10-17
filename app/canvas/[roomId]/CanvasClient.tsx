@@ -42,6 +42,7 @@ import FixturesPlan from './FixturesPlan'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
 import { withFixtureCutouts, benchtopAt } from '@/src/lib/fixtureGeometry'
+import { cabinetPlans, linkFor, followLinks, fixtureClashes } from '@/src/lib/fixtureLinks'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
 import { findLayerSet } from '@/src/lib/displayLayers/legacy'
@@ -335,10 +336,49 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const roomSwitcherRef = useRef<RoomSwitcherHandle>(null)
 
   const btCatalog = useBenchtopCatalog(room, project)
+  // Cabinet plan frames for fixture links + overlap warnings (z_fixtures P4).
+  const cabPlans = useMemo(() => cabinetPlans(cabinets, walls, centroid(walls)), [cabinets, walls])
   const fx = useFixtureInteraction({
     room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot,
     benchTopAt: p => { const b = benchtopAt(benchtops, p); return b ? btInfo(b).topZ : null },
+    linkAt: f => linkFor(f, cabPlans),
   })
+  const fixtureClashMap = useMemo(() => fixtureClashes(fixtures, cabPlans, room), [fixtures, cabPlans, room])
+  const fixtureClashIds = useMemo(() => new Set(fixtureClashMap.keys()), [fixtureClashMap])
+  // Linked fixtures go with their cabinet (P4). Watching the cabinets covers every
+  // way one moves (drag, resize, panels, elevation, wall drag, undo). State follows
+  // live; the DB write waits until the cabinets settle. No undo snapshot here — the
+  // cabinet change already took one holding the fixtures' old poses.
+  const fixtureFollowRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; pending: Map<string, Partial<RoomFixture>> }>({ timer: null, pending: new Map() })
+  useEffect(() => {
+    const moves = followLinks(fixtures, cabPlans)
+    // A deleted cabinet clears the link in the DB (on delete set null); mirror it locally.
+    const cabIds = new Set(cabinets.map(c => c.id))
+    const orphans = fixtures.filter(f => f.cabinet_id && !cabIds.has(f.cabinet_id))
+    if (!moves.length && !orphans.length) return
+    const patch = new Map<string, Partial<RoomFixture>>(moves.map(m => [m.id, m.patch]))
+    for (const f of orphans) patch.set(f.id, { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 })
+    // Syncing derived poses after a cabinet change; settles in one pass (followLinks → []).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFixtures(xs => xs.map(x => patch.has(x.id) ? { ...x, ...patch.get(x.id)! } : x))
+    if (!moves.length) return
+    const q = fixtureFollowRef.current
+    for (const m of moves) q.pending.set(m.id, { ...q.pending.get(m.id), ...m.patch })
+    if (q.timer) clearTimeout(q.timer)
+    q.timer = setTimeout(flushFixtureFollow, 400)
+  }, [cabPlans, cabinets, fixtures])
+  function flushFixtureFollow() {
+    const q = fixtureFollowRef.current
+    if (q.timer) clearTimeout(q.timer)
+    q.timer = null
+    const batch = [...q.pending]
+    q.pending.clear()
+    for (const [id, u] of batch) {
+      void supabase.from('room_fixtures').update({ ...u, updated_at: new Date().toISOString() }).eq('id', id)
+        .then(({ error }) => { if (error) console.error(error) })
+    }
+  }
+  useEffect(() => () => flushFixtureFollow(), [])
   // Benchtops as drawn: own cutouts + sink / cooktop cutouts from the fixtures on
   // them (z_fixtures P3). Render-only — state and saves keep the stored outline.
   const benchtopsDrawn = useMemo(() => benchtops.map(b => withFixtureCutouts(b, fixtures)), [benchtops, fixtures])
@@ -1252,7 +1292,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               const offset = w ? Math.round((c.pos_x - w.pos_x) * Math.cos(rad) + (c.pos_y - w.pos_y) * Math.sin(rad)) : null
               return { id: c.id, label: c.label, wall: w?.name ?? null, offset, dx: c.dx, dy: c.dy, dz: c.dz, class: c.assembly_class }
             }),
+            fixtures: fixtures.map(f => ({
+              id: f.id, name: f.label || f.name, mount: f.mount, x: f.x, y: f.y, rotation: f.rotation, width: f.width, depth: f.depth,
+              cabinet: cabinets.find(c => c.id === f.cabinet_id)?.label ?? null, clash: fixtureClashMap.get(f.id)?.map(c => c.label) ?? [],
+            })),
           }
+        },
+        // Same path as the Fixture panel's fields (x / y / rotation re-link to the cabinet under it).
+        async updateFixture(id: string, patch: Partial<Pick<RoomFixture, 'x' | 'y' | 'rotation' | 'z' | 'width' | 'depth' | 'height'>>) {
+          await fx.update(id, patch)
         },
       }
       ;(window as unknown as { __canvasApi?: typeof api }).__canvasApi = api
@@ -2480,6 +2528,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                   zoom={view.zoom}
                   layers={planLayers}
                   interactive={mode === 'select'}
+                  clashIds={fixtureClashIds}
                   onPointerDown={(_e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null); setContextMenu(null) }}
                   onContextMenu={(e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setContextMenu({ x: e.clientX, y: e.clientY, fixtureId: id }) }}
                   onDoubleClick={(_e, id) => { setSelected({ type: 'fixture', id }); setViewFixtureId(id) }}
@@ -2848,6 +2897,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           <FixturePanel
             fixture={selectedFixture}
             walls={walls}
+            linkedTo={selectedFixture.cabinet_id ? (cabinets.find(c => c.id === selectedFixture.cabinet_id)?.label ?? 'cabinet') : null}
+            clashWith={fixtureClashMap.get(selectedFixture.id)?.map(c => c.label ?? 'cabinet')}
+            onUnlink={id => void fx.unlink(id)}
             onUpdate={(id, patch) => void fx.update(id, patch)}
             onDelete={id => void fx.remove(id)}
             onMove={id => { if (canvasView !== 'plan') switchView('plan'); fx.startMove(id) }}
@@ -3221,6 +3273,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           cabinets={cabinets}
           resolvedParts={resolvedParts}
           benchtops={benchtops}
+          fixtures={fixtures}
           layerSets={layerSetsApi.sets}
           activeLayerSetId={activeLayerSet?.id ?? null}
           onClose={() => setReportScope(null)}

@@ -612,6 +612,12 @@ export interface RoomFixture extends FixtureBody {
   z:          number
   wall_id:    string | null
   label:      string | null
+  /** P4: the cabinet it sits on (it follows that cabinet), else null. */
+  cabinet_id: string | null
+  /** P4: footprint centre in the cabinet's frame (x along the width, z from the back) + turn vs the cabinet. */
+  link_x:     number
+  link_z:     number
+  link_rot:   number
   created_at: string
   updated_at: string
 }

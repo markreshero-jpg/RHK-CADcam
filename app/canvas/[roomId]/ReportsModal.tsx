@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import type { Project, Room, Wall, CabinetInstance, BenchtopInstance } from '@/src/lib/types'
+import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { dbLoadResolvedParts } from './canvasDB'
@@ -12,13 +12,15 @@ import ElevationPrintReport from './ElevationPrintReport'
 import CabinetSheetReport from './CabinetSheetReport'
 import { BenchtopSupplySheet, supplyPrintHtml } from './BenchtopSupplyReport'
 import { buildSupplyLines, supplyTotals } from '@/src/lib/benchtop-resolver/supply'
+import { ApplianceScheduleSheet, buildSchedule, schedulePrintHtml, type CatalogRef } from './ApplianceScheduleReport'
 
 export type ReportScope = 'job' | 'room'
-type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets'
+type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'parts_list_summary', label: 'Parts List Summary',  desc: 'Parts by room · material · cabinet' },
   { id: 'benchtop_supply',    label: 'Benchtop Supply',     desc: 'Stone / laminate order · m² · edges' },
+  { id: 'appliance_schedule', label: 'Appliance Schedule',  desc: 'Appliances, sinks, taps · model · location' },
   { id: 'plan_view_v2',       label: 'Plan View',           desc: 'Scaled PDF, follows a layer set' },
   { id: 'elevation_view_v2',  label: 'Elevation Views',     desc: 'Scaled PDF, one wall per page, layer set' },
   { id: 'cabinet_sheets',     label: 'Cabinet Sheets',      desc: '1 page/cabinet — front, side, 3D + cut list' },
@@ -116,7 +118,7 @@ const PAPER = {
   A1L: { w: 841, h: 594, label: 'A1 Landscape' },
 }
 
-export default function ReportsModal({ initialScope, project, room, walls, cabinets, resolvedParts, benchtops, layerSets, activeLayerSetId, onClose }: {
+export default function ReportsModal({ initialScope, project, room, walls, cabinets, resolvedParts, benchtops, fixtures = [], layerSets, activeLayerSetId, onClose }: {
   initialScope: ReportScope
   project: Project | null
   room: Room
@@ -124,6 +126,8 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
   cabinets: CabinetInstance[]
   resolvedParts: Map<string, ResolvedCabinet>
   benchtops: BenchtopInstance[]
+  /** Placed fixtures in this room (appliance schedule). */
+  fixtures?: RoomFixture[]
   layerSets: LayerSet[]
   activeLayerSetId: string | null
   onClose: () => void
@@ -146,6 +150,9 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
   const [jobBtParts, setJobBtParts] = useState<StoredBtPart[]>([])
 
   const [materialNames, setMaterialNames] = useState<Record<string, string>>({})
+  const [jobFixtures, setJobFixtures] = useState<RoomFixture[]>([])
+  const [jobWalls, setJobWalls] = useState<Wall[]>([])
+  const [fixtureCatalog, setFixtureCatalog] = useState<Map<string, CatalogRef>>(new Map())
 
   const rooms          = scope === 'room' ? [room]        : jobRooms
   const allCabinets    = scope === 'room' ? cabinets      : jobCabinets
@@ -167,10 +174,14 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
       if (!rms) { setLoadingJob(false); return }
       setJobRooms(rms as Room[])
       const roomIds = rms.map(r => r.id)
-      const [{ data: cabs }, { data: bts }] = await Promise.all([
+      const [{ data: cabs }, { data: bts }, { data: fxs }, { data: wls }] = await Promise.all([
         supabase.from('cabinet_instances').select('*').in('room_id', roomIds),
         supabase.from('benchtop_instances').select('*').in('room_id', roomIds),
+        supabase.from('room_fixtures').select('*').in('room_id', roomIds),
+        supabase.from('walls').select('*').in('room_id', roomIds),
       ])
+      setJobFixtures((fxs ?? []) as RoomFixture[])
+      setJobWalls((wls ?? []) as Wall[])
       if (!cabs) { setLoadingJob(false); return }
       setJobCabinets(cabs as CabinetInstance[])
       setJobBtInstances((bts ?? []) as BenchtopInstance[])
@@ -241,13 +252,28 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
     room: r,
     lines: buildSupplyLines(allBtInstances.filter(bt => bt.room_id === r.id), allBtParts),
   })), [rooms, allBtInstances, allBtParts])
+  // Appliance schedule: brand / model no. come from the library row each fixture was placed from.
+  const allFixtures = scope === 'room' ? fixtures : jobFixtures
+  const allWalls    = scope === 'room' ? walls    : jobWalls
+  useEffect(() => {
+    const ids = [...new Set(allFixtures.map(f => f.catalog_id).filter((x): x is string => !!x))].filter(id => !fixtureCatalog.has(id))
+    if (!ids.length) return
+    void supabase.from('fixture_catalog').select('id, brand, model_no').in('id', ids).then(({ data }) => {
+      if (!data) return
+      setFixtureCatalog(prev => { const next = new Map(prev); for (const r of data) next.set(r.id, { brand: r.brand, model_no: r.model_no }); return next })
+    })
+  }, [allFixtures]) // eslint-disable-line react-hooks/exhaustive-deps
+  const scheduleData = useMemo(() => buildSchedule(rooms, allFixtures, allCabinets, allWalls, fixtureCatalog),
+    [rooms, allFixtures, allCabinets, allWalls, fixtureCatalog])
+
   const supplyTotalsAll = useMemo(() => supplyTotals(supplyData.flatMap(d => d.lines)), [supplyData])
 
   function handlePrint() {
     const reportTitle = REPORTS.find(r => r.id === selectedReport)?.label ?? 'Report'
     const scopeLabel  = scope === 'room' ? room.name : (project?.name ?? 'Job')
 
-    const rows = selectedReport === 'benchtop_supply' ? [supplyPrintHtml(supplyData, supplyTotalsAll)] : reportData.flatMap(({ room: rm, materialGroups }) =>
+    const rows = selectedReport === 'benchtop_supply' ? [supplyPrintHtml(supplyData, supplyTotalsAll)]
+      : selectedReport === 'appliance_schedule' ? [schedulePrintHtml(scheduleData)] : reportData.flatMap(({ room: rm, materialGroups }) =>
       materialGroups.length === 0 ? [] : [`
         <h2>${rm.name}</h2>
         ${materialGroups.map(({ matName, parts }) => `
@@ -294,7 +320,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
         <h1>${reportTitle}</h1>
         <p>${scopeLabel} &nbsp;·&nbsp; Generated ${new Date().toLocaleDateString()}</p>
       </div>
-      ${rows.join('') || `<p style="color:#888">${selectedReport === 'benchtop_supply' ? 'No benchtop supply items.' : 'No resolved parts found. Open and resolve cabinets first.'}</p>`}
+      ${rows.join('') || `<p style="color:#888">${selectedReport === 'benchtop_supply' ? 'No benchtop supply items.' : selectedReport === 'appliance_schedule' ? 'No appliances placed.' : 'No resolved parts found. Open and resolve cabinets first.'}</p>`}
     </body></html>`)
     win.document.close()
     win.focus()
@@ -418,6 +444,8 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                 />
               ) : selectedReport === 'benchtop_supply' ? (
                 <BenchtopSupplySheet data={supplyData} totals={supplyTotalsAll} />
+              ) : selectedReport === 'appliance_schedule' ? (
+                <ApplianceScheduleSheet data={scheduleData} />
               ) : (
                 <PartsListSummary data={reportData} />
               )}

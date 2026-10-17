@@ -13,7 +13,8 @@ import { useState, useCallback, useRef } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { Room, Wall, FixtureCatalogItem, RoomFixture, FixtureBody } from '@/src/lib/types'
 import { centroid, type Pt } from '@/src/lib/geometry'
-import { snapFixture, defaultFixtureZ, fixtureCenter, backLeftForCenter, type FixtureSnap } from '@/src/lib/fixtureGeometry'
+import { snapFixture, defaultFixtureZ, fixtureCenter, backLeftForCenter, type FixtureSnap, type FixtureFootprint } from '@/src/lib/fixtureGeometry'
+import type { FixtureLink } from '@/src/lib/fixtureLinks'
 import type { Mode, Selected } from './canvasTypes'
 
 /** How far (mm) from a wall face the cursor can be and still snap to it. */
@@ -37,7 +38,7 @@ export function bodyFromCatalog(item: FixtureCatalogItem): FixtureBody {
 }
 
 export function useFixtureInteraction({
-  room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot, benchTopAt,
+  room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot, benchTopAt, linkAt,
 }: {
   room:          Room
   walls:         Wall[]
@@ -45,6 +46,8 @@ export function useFixtureInteraction({
   setFixtures:   React.Dispatch<React.SetStateAction<RoomFixture[]>>
   /** P3: top height of the benchtop under a plan point, or null when there's none. */
   benchTopAt?:   (p: Pt) => number | null
+  /** P4: the cabinet link for a pose (the cabinet it's dropped over), or null. */
+  linkAt?:       (f: FixtureFootprint & { mount: RoomFixture['mount'] }) => FixtureLink | null
   mode:          Mode
   setMode:       (m: Mode) => void
   selected:      Selected
@@ -114,6 +117,7 @@ export function useFixtureInteraction({
         room_id: room.id, catalog_id: item.id, ...bodyFromCatalog(item),
         x: round1(s.x), y: round1(s.y), rotation: round3(s.rotation), wall_id: s.wall_id,
         z: benchZ(item, s) ?? defaultFixtureZ(item.mount, item.mount_height) - (item.mount === 'benchtop' ? Number(item.bench_drop) || 0 : 0),
+        ...linkFields({ ...s, width: item.width, depth: item.depth, mount: item.mount }),
       }
       const { data, error: e } = await supabase.from('room_fixtures').insert(row).select('*').single()
       if (e || !data) { setError(e?.message ?? 'Insert failed'); return true }
@@ -127,7 +131,10 @@ export function useFixtureInteraction({
     setCarry(null); setGhost(null); setMode('select')
     const moved = fixtures.find(f => f.id === id)
     const z = moved ? benchZ(moved, s) : null
-    await update(id, { x: round1(s.x), y: round1(s.y), rotation: round3(s.rotation), wall_id: s.wall_id, ...(z != null ? { z } : {}) })
+    await update(id, {
+      x: round1(s.x), y: round1(s.y), rotation: round3(s.rotation), wall_id: s.wall_id, ...(z != null ? { z } : {}),
+      ...(moved ? linkFields({ ...s, width: moved.width, depth: moved.depth, mount: moved.mount }) : {}),
+    })
     setSelected({ type: 'fixture', id })
     return true
   }
@@ -141,7 +148,24 @@ export function useFixtureInteraction({
     return round1(top - (Number(f.bench_drop) || 0))
   }
 
+  // Link to the cabinet under the dropped pose (P4) — or clear a stale link.
+  function linkFields(f: FixtureFootprint & { mount: RoomFixture['mount'] }): Pick<RoomFixture, 'cabinet_id' | 'link_x' | 'link_z' | 'link_rot'> {
+    const l = linkAt?.(f)
+    return l ?? { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 }
+  }
+
+  /** Stop following the cabinet (the fixture stays where it is). */
+  async function unlink(id: string) {
+    await update(id, { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 })
+  }
+
   async function update(id: string, patch: Partial<RoomFixture>) {
+    // A pose change from the panel (centre / rotation fields) re-links to
+    // whatever cabinet is now under it; callers that set the link pass it.
+    if (('x' in patch || 'y' in patch || 'rotation' in patch) && !('cabinet_id' in patch)) {
+      const f = fixturesRef.current.find(x => x.id === id)
+      if (f) { const m = { ...f, ...patch }; patch = { ...patch, ...linkFields(m) } }
+    }
     captureSnapshot()
     setFixtures(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f))
     const { error: e } = await supabase.from('room_fixtures')
@@ -156,7 +180,8 @@ export function useFixtureInteraction({
     const c = fixtureCenter(f)
     const rotation = ((f.rotation + deg) % 360 + 360) % 360
     const bl = backLeftForCenter(c, rotation, f.width, f.depth)
-    await update(id, { x: round1(bl.x), y: round1(bl.y), rotation: round3(rotation), wall_id: null })
+    const pose = { x: round1(bl.x), y: round1(bl.y), rotation: round3(rotation) }
+    await update(id, { ...pose, wall_id: null })
   }
 
   async function remove(id: string) {
@@ -172,7 +197,7 @@ export function useFixtureInteraction({
     carry, ghost, carried, freeRot, error,
     arm, startMove, cancel, rotateCarry,
     handlePointerMove, handlePointerUp,
-    update, rotateBy, remove,
+    update, rotateBy, remove, unlink,
   }
 }
 

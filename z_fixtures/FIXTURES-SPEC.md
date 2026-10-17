@@ -1,6 +1,6 @@
 # Fixtures & Appliances — Spec
 
-Status: **P1 + P2 committed and on main; viewer modal (b41c0c1); P3 benchtop cutouts built 2026-10-15** — next: P4 cabinet links + schedule. See "RESUME HERE".
+Status: **P1–P3 on main; P4 cabinet links + overlap warning + appliance schedule built 2026-10-18 (not yet checked in-app)** — next: live check of P4, then P5 openings. See "RESUME HERE".
 
 Bought-in things placed in a room: ovens, cooktops, dishwashers, fridges,
 rangehoods, sinks, taps, decorative items. Catalogue lives in the Settings →
@@ -93,8 +93,9 @@ decided 2026-10-18) — see "Openings (P5)" at the bottom.
   plan + elevation + 3D rendering, layer items, object tree.
 - **P3 — Benchtop cutouts** ✅ built 2026-10-15 — sink/cooktop cutout template on the
   catalogue row cuts the benchtop under it; benchtop-mount height from the real top.
-- **P4 — Cabinet links + schedule** — snap sink to sink cabinet, oven into tower
-  opening; appliance schedule in reports.
+- **P4 — Cabinet links + schedule** ✅ built 2026-10-18 — fixtures dropped over a cabinet
+  link to it and follow it (no centring); overlap warning; appliance schedule report.
+  See "P4 — what was built".
 - **P5 — Openings** — doors / windows / archways as the `opening` category, wall-hosted (see bottom).
 
 ## P2 — what was built (2026-10-14)
@@ -161,11 +162,60 @@ with the Miele oven GLB.
   450×380×190 bowl), cutout 580×480 R15, drop 190. Placed in the "Kichen" test
   room; plan hole + resolver meta (580×480, not round) checked in-app.
 
+## P4 — what was built (2026-10-18)
+
+Locked with the user 2026-10-18:
+- **No auto-centring.** Sinks are off-centre on their cabinet about half the time, so a
+  fixture stays exactly where it's dropped. It only *remembers* its spot on the cabinet.
+- **Link by position, no appliance cabinet codes.** Real jobs draw a plain B2 for the
+  sink and leave oven voids / D/W gaps as space between panels.
+- **Ovens in an open zone of a tower: later** (needs the resolver to expose open-zone
+  rectangles — `resolveFace` skips open zones today).
+- **Overlaps warn, never block.**
+- Future, separate module (no spec yet): **cabinet groups / assemblies** — save e.g. a
+  WOT (oven tower) as a group of cabinets in the library, drop it as one, then edit each
+  cabinet on its own. The integrated D/W assembly on the roadmap fits the same idea.
+
+Built:
+- **Columns** on `room_fixtures` (migration `fixtures_p4_cabinet_links`, applied live;
+  copy in `z_fixtures/migration_p4_cabinet_links.sql`): `cabinet_id` (→ cabinet_instances,
+  on delete set null), `link_x` / `link_z` (footprint centre in the cabinet's frame: x from
+  its left along the width, z from its back) and `link_rot` (turn vs the cabinet frame).
+- **Geometry** `src/lib/fixtureLinks.ts` (+ test): `cabinetPlans` (frame per cabinet from
+  `cabinetPlanFrame`), `linkFor` (benchtop / under-bench → base+tall cabinets, wall → wall
+  cabinets, floor → never; kick assemblies skipped; centre-in-footprint),
+  `linkedPose`, `followLinks`, `fixtureClashes` (plan overlap with 1 mm tolerance + height
+  overlap via `cabBottomZ`, now exported from elevationSnap; benchtop-mount items and the
+  fixture's own cabinet ignored).
+- **Linking**: place / move / turn / panel centre edits all re-link to the cabinet under the
+  new pose (`linkAt` in useFixtureInteraction; `update` re-links any x / y / rotation patch
+  without an explicit link). Panel shows "On BC3 · follows it" + **Unlink**.
+- **Follow**: an effect in CanvasClient watches the cabinets (covers drag, resize, panels,
+  elevation, wall drag, undo) — state follows live, DB write debounced 400 ms, flushed on
+  unmount. No own undo snapshot (the cabinet change's snapshot holds the old fixtures).
+  Deleted cabinet → link cleared locally (DB does it via FK).
+- **Overlap warning**: red outline in plan (`FixturesPlan` `clashIds`) + red note in the
+  panel naming the cabinets.
+- **Appliance schedule** report (ReportsModal, room + job scope;
+  `ApplianceScheduleReport.tsx`): appliances, sinks, taps (no decorative) — item, name,
+  brand + model no. (looked up from the catalogue row via `catalog_id`; blank if that row
+  was deleted), W×D×H, location (linked cabinet, else wall, else free-standing). Print = HTML.
+- Dev bridge: `getState().fixtures` + `updateFixture` (canvas-api-bridge.md).
+
 ## RESUME HERE — open items
+
+- **P4 not yet checked in the app** — headless check blocked: AUTOMATION_EMAIL /
+  AUTOMATION_PASSWORD are missing from .env.local. Check: drop the test sink on a base
+  cabinet (panel says "On …"), slide the cabinet → sink follows; drop a 620 D/W in a
+  600 gap → red; Reports → Appliance Schedule.
+- Brand / model no. aren't copied onto the placed fixture (only looked up) — copy them if
+  jobs must survive catalogue edits ([[job version pinning]]).
+- Elevation / 3D don't show the overlap warning yet (plan + panel only).
+- Existing placed fixtures aren't linked until moved once.
 
 - ~~Live visual check of a real uploaded model~~ done 2026-10-15 in the fixture viewer (Miele oven GLB); room 3D view still not eyeballed.
 - ~~Right-click context menu~~ done 2026-10-15 in plan: View 3D / elevations, Move, Turn 90°, Delete (undoable). Not in elevation / 3D yet.
-- Fixtures don't avoid cabinets when snapping (no collision) — decide with P4.
+- ~~Fixtures don't avoid cabinets~~ decided in P4: warn only (red), never block.
 - Room 3D: sink-in-hole not clearly eyeballed yet (plan + resolver verified).
 - Cutout as a CNC op (optimiser / gcode ignore benchtop cutouts entirely today).
 - Per-placement cutout edits (FixturePanel only displays the template).

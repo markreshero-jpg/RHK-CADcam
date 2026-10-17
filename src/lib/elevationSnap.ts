@@ -53,7 +53,7 @@ function wallCabTopFor(wall: Wall, room: Room): number {
   return room.wall_cabinet_top ?? 2100
 }
 
-function cabBottomZ(cab: CabinetInstance, room: Room, wall: Wall): number {
+export function cabBottomZ(cab: CabinetInstance, room: Room, wall: Wall): number {
   if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') {
     return wallCabTopFor(wall, room) - cab.dy
   }

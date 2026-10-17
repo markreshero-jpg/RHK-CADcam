@@ -14,9 +14,14 @@ const CATEGORY_LABEL: Record<string, string> = {
   appliance: 'Appliance', sink: 'Sink', tap: 'Tap', decorative: 'Decorative',
 }
 
-export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMove, onTurn, onOpen, onClose }: {
+export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMove, onTurn, onOpen, onClose, linkedTo, clashWith, onUnlink }: {
   fixture:  RoomFixture
   walls:    Wall[]
+  /** P4: label of the cabinet it sits on (follows it), or null. */
+  linkedTo?:  string | null
+  /** P4: labels of cabinets it overlaps. */
+  clashWith?: string[]
+  onUnlink?:  (id: string) => void
   onUpdate: (id: string, patch: Partial<RoomFixture>) => void
   onDelete: (id: string) => void
   /** Header ✕ — closes (deselects). Omitted → no ✕. */
@@ -105,6 +110,22 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
             {field('Rotation', f.rotation, v => onTurn(f.id, v - f.rotation), 'Plan rotation in degrees (turns about the centre)')}
           </div>
         </div>
+
+        {linkedTo && (
+          <div className="flex items-center gap-2 rounded bg-gray-800/60 px-2 py-1.5">
+            <p className="flex-1 text-[11px] text-gray-300" title="Moves with this cabinet when the cabinet is moved or slid">On <span className="font-medium text-white">{linkedTo}</span> · follows it</p>
+            {onUnlink && (
+              <button onClick={() => onUnlink(f.id)}
+                className="px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-[10px] text-gray-200"
+                title="Stop following the cabinet (stays where it is)">Unlink</button>
+            )}
+          </div>
+        )}
+        {!!clashWith?.length && (
+          <p className="rounded border border-red-800 bg-red-950/50 px-2 py-1.5 text-[11px] text-red-300">
+            Overlaps {clashWith.join(', ')} — check the gap or move it.
+          </p>
+        )}
 
         <div className="flex gap-1.5">
           <button onClick={() => onMove(f.id)}
