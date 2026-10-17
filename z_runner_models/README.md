@@ -40,3 +40,15 @@ drawer side, rear hook, the cabinet member's real shape instead of the solid blo
 
 Keep the gable drilling OUT of the script — the app drills from the Dragon Pro's
 drill ops (37 / 261 from the front, etc.), not from the model.
+
+## In the app (as built 2026-10-17)
+
+- `hardware_slides.drawn_as` (`dragon_pro` | null) picks the family; set it per row in
+  Library → Materials → Slides → the row's 3D model panel ("Drawn as"). An uploaded
+  `model_url` still wins — remove it to see the parametric drawing.
+- `src/lib/runnerGeometry.ts` `runnerShape(rail)` = the build_runner.py port, placed on
+  each resolved rail (left from the member face, right mirrored; Y = drawer-box bottom
+  line; Z = back of runner → +NL front). `src/components/three/Runner3D.tsx` draws it for
+  face-drawer and inner-drawer rails; the drawer side slides with the drawer, the cabinet
+  member stays (`FixedInDrawer`, shared with the bin frame).
+- 3D only. Elevation still draws runners as their box / uploaded-model outline.

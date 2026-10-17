@@ -317,6 +317,7 @@ function emitBoxStack(box: Box, items: BoxItem[], ctx: FittingCtx, cfg: BoxStack
         model_anchor_x:   slide.model_anchor_x ?? 0,
         model_anchor_y:   slide.model_anchor_y ?? 0,
         model_anchor_z:   slide.model_anchor_z ?? 0,
+        drawn_as:         slide.drawn_as ?? null,
         inner_drawer_index: drawerIdx,
         drills:           [],
       }

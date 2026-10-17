@@ -7,8 +7,8 @@
 // A bin product with its own model (hardware_slides.model_url) renders that
 // instead, FITTED to the bin envelope from its bounding box (any units / size);
 // the parametric bin stands in while it loads.
-import { Suspense, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { Suspense, useMemo } from 'react'
+import { FixedInDrawer } from './FixedInDrawer'
 import * as THREE from 'three'
 import type { ResolvedDrawerStack } from '@/src/lib/resolver/types'
 import { binShape, type BinPart, type BinPartKind } from '@/src/lib/binGeometry'
@@ -53,23 +53,12 @@ function PartMesh({ p, opacity }: { p: BinPart; opacity: number }) {
   )
 }
 
-// Holds its children still while the drawer group (tagged userData.drawerTravel
-// by DrawerAssembly) slides in Z.
-function Fixed({ children }: { children: React.ReactNode }) {
-  const ref = useRef<THREE.Group>(null)
-  useFrame(() => {
-    let p = ref.current?.parent ?? null
-    while (p && !p.userData.drawerTravel) p = p.parent
-    if (ref.current) ref.current.position.z = p ? -p.position.z : 0
-  })
-  return <group ref={ref}>{children}</group>
-}
 
 function ParametricBin({ stack, opacity }: { stack: ResolvedDrawerStack; opacity: number }) {
   const parts = useMemo(() => binShape(stack), [stack])
   return (
     <group>
-      <Fixed>{parts.filter(p => !p.moving).map((p, i) => <PartMesh key={`f${i}`} p={p} opacity={opacity} />)}</Fixed>
+      <FixedInDrawer>{parts.filter(p => !p.moving).map((p, i) => <PartMesh key={`f${i}`} p={p} opacity={opacity} />)}</FixedInDrawer>
       {parts.filter(p => p.moving).map((p, i) => <PartMesh key={`m${i}`} p={p} opacity={opacity} />)}
     </group>
   )

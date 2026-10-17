@@ -33,6 +33,7 @@ export interface SlideModelRow {
   model_anchor_x: number
   model_anchor_y: number
   model_anchor_z: number
+  drawn_as?:      'dragon_pro' | null   // parametric drawing (z_runner_models)
 }
 
 interface Props {
@@ -187,6 +188,22 @@ export default function SlideModelEditor({ row, onSaved }: Props) {
           </div>
 
           {error && <div className="text-[10px] text-red-400">{error}</div>}
+
+          {/* Parametric drawing (z_runner_models): one family draws every length × height. */}
+          <label className="flex items-center gap-2 text-[11px] text-ink-muted">
+            Drawn as
+            <select
+              value={row.drawn_as ?? ''}
+              onChange={e => { void commitPatch({ drawn_as: (e.target.value || null) as SlideModelRow['drawn_as'] }) }}
+              className="bg-surface-2 border border-edge-strong rounded px-1.5 py-0.5 text-[11px] text-ink"
+            >
+              <option value="">Plain box</option>
+              <option value="dragon_pro">DTC Dragon Pro (parametric)</option>
+            </select>
+          </label>
+          {row.drawn_as && row.model_url && (
+            <div className="text-[9px] text-amber-400 leading-snug">The uploaded model is used while one is set — remove it to see the parametric drawing.</div>
+          )}
 
           <div className="grid grid-cols-4 gap-1.5 mt-1">
             <NudgeField label="Scale"   value={scale}   onChange={setScale}   onBlur={() => commitNumber('model_scale',    scale,   1)} step="0.001" />

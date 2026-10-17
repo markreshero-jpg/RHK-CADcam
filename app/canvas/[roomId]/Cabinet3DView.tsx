@@ -48,6 +48,7 @@ import { areaSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partO
 import { handleShape, sharknoseProfile, type HandleShape } from '@/src/lib/handleGeometry'
 import Handle3D from '@/src/components/three/Handle3D'
 import Bin3D from '@/src/components/three/Bin3D'
+import Runner3D from '@/src/components/three/Runner3D'
 import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
 
 export type { MatColSpec, MatColMap }
@@ -608,6 +609,8 @@ function DrawerAssembly({
             /></PartAlpha>
           )
         }
+        // Parametric runner family (z_runner_models), drawn at this rail's size.
+        if (ps.drawn_as) return <PartAlpha key={`sl_${li}`} a={alpha('drawer_runners')}><Runner3D rail={ps} opacity={alpha('drawer_runners')} /></PartAlpha>
         const info = buildSlideInfo(sl, b, stack)
         const fc   = panelFaceColors('side', `slide_${sl.side}`, sc, sc, sc)
         return (
@@ -1084,7 +1087,7 @@ function AnimatedGroup({ targetTravel, children }: { targetTravel: number; child
     curZ.current = THREE.MathUtils.lerp(curZ.current, target, 0.1)
     groupRef.current.position.z = curZ.current
   })
-  return <group ref={groupRef}>{children}</group>
+  return <group ref={groupRef} userData={{ drawerTravel: true }}>{children}</group>
 }
 
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
@@ -1448,6 +1451,7 @@ export function CabinetScene({
               /></PartAlpha>
             )
           }
+          if (ps.drawn_as) return <PartAlpha key={key} a={alpha('inner_drawer_runners')}><Runner3D rail={ps} opacity={alpha('inner_drawer_runners')} /></PartAlpha>
           const info = buildInternalSlideInfo(sl, b, li)
           const fc   = panelFaceColors('side', `slide_${sl.side}`, sc, sc, sc)
           return (
@@ -1511,7 +1515,7 @@ export function CabinetScene({
         if (z.face_type === 'drawer_face') {
           const stack = drawerStackByKey.get(zoneKey(z))
           if (stack) {
-            if (!show('drawer_fronts') && !show('drawer_boxes') && !show('drawer_runners')) return null
+            if (!show('drawer_fronts') && !show('drawer_boxes') && !show('drawer_runners') && !show('bins')) return null
             return (
               <DrawerAssembly
                 showFace={show('drawer_fronts')}
