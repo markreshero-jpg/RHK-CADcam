@@ -1,6 +1,6 @@
 # Fixtures & Appliances — Spec
 
-Status: **P1–P3 on main; P4 cabinet links + overlap warning + appliance schedule built 2026-10-18 (not yet checked in-app)** — next: live check of P4, then P5 openings. See "RESUME HERE".
+Status: **P1–P4 on main (P4 checked in-app by the user 2026-10-18); P5 doors & windows built 2026-10-18, not yet checked in-app** — next: live check of P5. See "RESUME HERE".
 
 Bought-in things placed in a room: ovens, cooktops, dishwashers, fridges,
 rangehoods, sinks, taps, decorative items. Catalogue lives in the Settings →
@@ -96,7 +96,8 @@ decided 2026-10-18) — see "Openings (P5)" at the bottom.
 - **P4 — Cabinet links + schedule** ✅ built 2026-10-18 — fixtures dropped over a cabinet
   link to it and follow it (no centring); overlap warning; appliance schedule report.
   See "P4 — what was built".
-- **P5 — Openings** — doors / windows / archways as the `opening` category, wall-hosted (see bottom).
+- **P5 — Openings** ✅ built 2026-10-18 — doors / windows / sliding doors / openings as the
+  `opening` category, sitting in a wall (see "Openings (P5)" at the bottom).
 
 ## P2 — what was built (2026-10-14)
 
@@ -204,10 +205,19 @@ Built:
 
 ## RESUME HERE — open items
 
-- **P4 not yet checked in the app** — headless check blocked: AUTOMATION_EMAIL /
-  AUTOMATION_PASSWORD are missing from .env.local. Check: drop the test sink on a base
-  cabinet (panel says "On …"), slide the cabinet → sink follows; drop a 620 D/W in a
-  600 gap → red; Reports → Appliance Schedule.
+- ~~P4 in-app check~~ done by the user 2026-10-18 ("works well").
+- **P5 not yet checked in the app** (no AUTOMATION_* creds for headless). Check: F6 →
+  Doors & windows → drop a window and a door on a wall (gap in plan, swing arc); panel
+  Sill / From start / Hinge / Swings; elevation hole on both faces + dims; 3D hole with
+  frame + glass / leaf; drag the wall / change its thickness → openings follow;
+  Reports → Plan View + Elevation Views PDFs.
+- P5 gaps: elevation print draws the width row only (no sill / head heights); the
+  elevation canvas width row sits above the overhead chain — check it isn't clipped;
+  openings aren't in the appliance schedule (could be a door & window schedule);
+  a door's swing doesn't warn when it hits a cabinet.
+- Dishwasher: "Generic dishwasher 600 freestanding" catalogue row added 2026-10-18;
+  GLB `z_fixtures/models/generic-dishwasher-600-freestanding.glb` (generator
+  `build_dishwasher.mjs`, any W × D × H) to be uploaded by the user in the library.
 - Brand / model no. aren't copied onto the placed fixture (only looked up) — copy them if
   jobs must survive catalogue edits ([[job version pinning]]).
 - Elevation / 3D don't show the overlap warning yet (plan + panel only).
@@ -221,13 +231,41 @@ Built:
 - Per-placement cutout edits (FixturePanel only displays the template).
 - Elevation: fixtures aren't placeable from elevation; no dimension chains include them.
 
-## Openings (P5 — not started)
+## Openings (P5 — built 2026-10-18)
 
 **Decision changed 2026-10-18 (user):** doors, windows and archways are a
 **fixtures sub-category** (`opening`), not a separate Wall-tool module. This
 replaces the 2026-10-14 "Wall tool (F2)" decision.
 
-Proposed shape (to confirm before building):
+Built as proposed below (user: "lets go p5"). Kinds: Window / Door / Sliding door /
+Opening. Starter library rows: Window 1200×1200 + 1800×1200 (sill 900), Door 820×2040,
+Sliding door 2400×2100, Opening 900×2100.
+
+- **DB** (migration `fixtures_p5_openings`, applied live; copy in
+  `z_fixtures/migration_p5_openings.sql`): `fixture_catalog` category check gains
+  `opening`; `room_fixtures.hinge_side` (left/right, from inside the room) + `swing`
+  (in/out).
+- **Geometry** (`fixtureGeometry.ts`, test `openings.test.ts`): `snapOpening` — in the
+  nearest real wall (cursor in the body or ≤ 600 either side; islands skipped), back on the
+  outer face, depth = thickness, rotation from the inward normal; never free (Shift
+  ignored). `openingSpans` (per wall, inside-face t, merged), `openingOnWall` (both
+  faces, back mirrored, + hinge jamb x), `refitOpenings` (re-seat after the wall moves /
+  changes thickness — run in CanvasClient's follow effect). `geometry.ts`: `wallPieces`
+  (footprint split around spans, mitred ends kept) + `wallSpanQuad`.
+- **Plan**: CanvasSVG `wallOpenings` → wall drawn as pieces; `OpeningSymbol`
+  (FixturesPlan) — window glazing lines, door leaf + dashed swing arc, sliding panels,
+  opening dashed head; no box / front edge / label. Moving one closes its old gap.
+- **Elevation**: `OpeningHoles` cut after the wall face (under cabinets), frame +
+  `OpeningElev` symbol on top; both faces. 3D: `WallMesh` `holes` → prisms around each
+  hole; `OpeningModel` (frame, glass / leaf) when there's no GLB.
+- **Dims**: layer item `dim_openings` (plan + elevation, on). Plan: a row to the jambs
+  between the kick row and the overall (canvas + Plan View PDF). Elevation canvas: width
+  row above the wall + sill / opening height at each right jamb. Elevation PDF: width row.
+- **Panel**: Width / Height, Sill, From start (left jamb from the wall start), Hinge
+  Left/Right + Swings Into room/Out for doors; no Turn / free X-Y. Openings never link to
+  cabinets and are left out of the overlap check.
+
+Original proposal:
 - Catalogue: `category = 'opening'`, `kind` = Window / Door / Archway / Servery…;
   width + height + default sill (`mount = wall`, `mount_height` = sill; doors/archways 0).
   Optional 3D model (frame/sash) like any fixture; no model → frame outline only.

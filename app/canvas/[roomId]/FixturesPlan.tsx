@@ -20,7 +20,7 @@ type Body = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'width' | 'depth'> 
 
 // Doors / windows (P5), in the opening's frame: y = 0 outer face, y = depth the
 // inside face (room side). Hinge side is as seen from inside the room (x = 0 = left).
-function OpeningSymbol({ f, z, color, lw }: { f: Body; z: number; color: string; lw: number }) {
+export function OpeningSymbol({ f, z, color, lw }: { f: Body; z: number; color: string; lw: number }) {
   const w = f.width, d = f.depth
   const kind = (f.kind ?? '').toLowerCase()
   const thin = lw * 0.6

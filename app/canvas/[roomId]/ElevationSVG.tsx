@@ -27,6 +27,7 @@ import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import FixturesElevation, { OpeningHoles } from './FixturesElevation'
+import { openingOnWall } from '@/src/lib/fixtureGeometry'
 import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
@@ -1939,6 +1940,65 @@ export default function ElevationSVG({
                             {Math.round(m.top)}
                           </text>
                         </g>
+                      </g>
+                    )
+                  })}
+                </g>
+              )
+            })()}
+
+            {/* Doors / windows (z_fixtures P5): width row above the wall (wall start →
+                jambs → wall end) + sill and opening height up each one's right jamb. */}
+            {layers.show('dim_openings') && fixtures && (() => {
+              const rc = centroid(walls)
+              const ops = fixtures.flatMap(fx => {
+                const o = openingOnWall(fx, wall, elevWallSide, rc)
+                return o ? [{ t0: Math.max(0, o.t0), t1: Math.min(wall.length, o.t1), sill: Number(fx.z) || 0, h: Number(fx.height) }] : []
+              }).sort((a, b) => a.t0 - b.t0)
+              if (!ops.length) return null
+              const col = layers.color('dim_openings', '#ffffff')
+              const sw = layers.w('dim_openings', 1) / lz, fs = 12 / z, tk = 8 / z
+              const padX = fs * 1.8, padY = fs * 0.6
+              const bg = layers.background ?? '#030712'
+              const segs: { from: number; to: number }[] = []
+              let cur = 0
+              for (const o of ops) {
+                if (o.t0 > cur + 0.5) segs.push({ from: cur, to: o.t0 })
+                segs.push({ from: Math.max(cur, o.t0), to: o.t1 })
+                cur = Math.max(cur, o.t1)
+              }
+              if (cur < wall.length - 0.5) segs.push({ from: cur, to: wall.length })
+              const chainY = -tickH * 4 - layers.offset('dim_openings')
+              const label = (x: number, y: number, v: number, vertical = false) => (
+                <g transform={vertical ? `rotate(-90,${x},${y})` : undefined}>
+                  <rect x={x - padX} y={y - padY} width={padX * 2} height={padY * 2} fill={bg} />
+                  <text x={x} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>{Math.round(v)}</text>
+                </g>
+              )
+              const vDim = (key: string, x: number, zLo: number, zHi: number) => {
+                const y0 = roomH - zLo, y1 = roomH - zHi
+                return (
+                  <g key={key}>
+                    <line x1={x} y1={y0} x2={x} y2={y1} stroke={col} strokeWidth={sw} />
+                    <line x1={x - tk} y1={y0} x2={x + tk} y2={y0} stroke={col} strokeWidth={sw} />
+                    <line x1={x - tk} y1={y1} x2={x + tk} y2={y1} stroke={col} strokeWidth={sw} />
+                    {label(x, (y0 + y1) / 2, zHi - zLo, true)}
+                  </g>
+                )
+              }
+              return (
+                <g pointerEvents="none" opacity={layers.op('dim_openings')} style={{ userSelect: 'none' }}>
+                  <line x1={0} y1={chainY} x2={wall.length} y2={chainY} stroke={col} strokeWidth={sw} />
+                  {Array.from(new Set(segs.flatMap(s => [s.from, s.to]))).map((x, i) => (
+                    <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={col} strokeWidth={sw} />
+                  ))}
+                  {segs.map((s, i) => <g key={i}>{label((s.from + s.to) / 2, chainY, s.to - s.from)}</g>)}
+                  {ops.map((o, i) => {
+                    const x = o.t1 - 40 / z
+                    return (
+                      <g key={`v${i}`}>
+                        {o.sill > 0.5 && vDim('s', x, 0, o.sill)}
+                        {vDim('h', x, o.sill, o.sill + o.h)}
                       </g>
                     )
                   })}

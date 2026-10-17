@@ -9,10 +9,12 @@
 // mm and the drawing prints at the correct physical size at 1:scale.
 'use client'
 import type { ReactNode, RefObject } from 'react'
-import type { Wall, CabinetInstance } from '@/src/lib/types'
+import type { Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
+import { openingSpans } from '@/src/lib/fixtureGeometry'
+import { OpeningSymbol } from './FixturesPlan'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
-  toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon,
+  toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon, wallPieces,
   cabinetPolygon, cabinetCenterPt, centroid, cabWallPerp, cabWallSide, cabT,
   cabinetToPlan, cabinetPlanFrame,
 } from '@/src/lib/geometry'
@@ -65,9 +67,11 @@ function cabinetTypeFill(cab: CabinetInstance): string {
 }
 
 export default function PlanViewReportSVG({
-  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, projectName, roomName, paperKey,
+  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, projectName, roomName, paperKey, fixtures = [],
 }: {
   walls:       Wall[]
+  /** Placed fixtures — doors / windows (z_fixtures P5) split the walls and draw their symbol. */
+  fixtures?:   RoomFixture[]
   cabinets:    CabinetInstance[]
   resolvedParts?: Map<string, ResolvedCabinet>
   svgRef:      RefObject<SVGSVGElement | null>
@@ -90,10 +94,13 @@ export default function PlanViewReportSVG({
   const P  = scale   // 1 physical mm in model mm
   // Layer props at a "zoom" that makes the layer dash pattern 1.6 / 0.8 paper mm.
   const lp = (id: string) => layers.props(id, 5 / P)
-  const dimIds = ['dim_wall_chain', 'dim_base_chain', 'dim_wall_overall'] as const
+  const dimIds = ['dim_wall_chain', 'dim_base_chain', 'dim_wall_overall', 'dim_openings'] as const
   const showDims = layers.any(...dimIds)
   // Dimension chains measure only cabinets the layer set draws.
   const chainCabs = cabinets.filter(c => planShowsCabinet(c, layers, resolvedParts?.get(c.id)))
+  const showOpenings = layers.show('fixture_openings')
+  const openings = showOpenings ? fixtures.filter(f => f.category === 'opening' && f.wall_id) : []
+  const openingsByWall = openingSpans(openings, walls, cx)
 
   // ── Content bounds (includes wall thickness corners) ──────────────────────
   const pts = walls.flatMap(w => {
@@ -124,6 +131,7 @@ export default function PlanViewReportSVG({
   const ROW_WALLCAB = 4 * P
   const ROW_BASE    = 8 * P
   const ROW_OVERALL = 12 * P
+  const ROW_OPEN_STEP = 4 * P   // doors / windows row sits where the overall was; the overall steps out
 
   const swingSW = 0.25 * P    // door swing arc
   const drawSW  = 0.25 * P    // drawer indicator line
@@ -154,7 +162,7 @@ export default function PlanViewReportSVG({
     })
     .map(c => c.dz))
   const basePad  = 4 * P
-  const dimExtra = showDims ? maxThick + chainClearDepth + ROW_OVERALL + dimFS * 2 + tickH : 0
+  const dimExtra = showDims ? maxThick + chainClearDepth + ROW_OVERALL + (openingsByWall.size && layers.show('dim_openings') ? ROW_OPEN_STEP : 0) + dimFS * 2 + tickH : 0
   const padL = basePad + dimExtra
   const padR = basePad + dimExtra
   const padT = basePad + dimExtra
@@ -275,16 +283,25 @@ export default function PlanViewReportSVG({
             />
           )
         }
-        const poly = wallMitrePolygon(w, walls, cx)
-        if (!poly) return null
-        return (
-          <polygon key={w.id}
+        const spans = openingsByWall.get(w.id)
+        const polys = spans?.length
+          ? wallPieces(w, walls, cx, spans).map(pts => pts.map(p => `${p.x},${p.y}`).join(' '))
+          : [wallMitrePolygon(w, walls, cx)]
+        return polys.filter(Boolean).map((poly, i) => (
+          <polygon key={`${w.id}_${i}`}
             points={poly}
             fill={show.hatch ? `url(#${HATCH_ID})` : 'white'}
             stroke={INK} strokeWidth={sw} strokeLinejoin="miter"
           />
-        )
+        ))
       })}
+
+      {/* ── Doors / windows (z_fixtures P5) ── */}
+      {showOpenings && openings.map(f => (
+        <g key={f.id} transform={`translate(${f.x},${f.y}) rotate(${f.rotation})`}>
+          <OpeningSymbol f={f} z={4 / P} color={INK} lw={sw} />
+        </g>
+      ))}
 
       {/* ── Wall names (toggle) — centred over each wall, capped at thickness ── */}
       {/* Matches the 3D room view WallLabel: wall midpoint shifted out by ½ thickness. */}
@@ -570,7 +587,19 @@ export default function PlanViewReportSVG({
           wallCabs: CabinetInstance[],
           depthOffset: number,
           backOffset = 0,
+          withOpenings = false,
         ) => {
+          // Doors / windows row (z_fixtures P5): wall start → jambs → wall end.
+          const spans = withOpenings && layers.show('dim_openings') ? openingsByWall.get(w.id) ?? [] : []
+          const openSegs: Seg[] = []
+          let cur = 0
+          for (const s of spans) {
+            if (s.t0 > cur + 0.5) openSegs.push({ from: cur, to: s.t0, label: Math.round(s.t0 - cur) })
+            openSegs.push({ from: s.t0, to: s.t1, label: Math.round(s.t1 - s.t0) })
+            cur = s.t1
+          }
+          if (spans.length && cur < w.length - 0.5) openSegs.push({ from: cur, to: w.length, label: Math.round(w.length - cur) })
+          const rowOverall = ROW_OVERALL + (openSegs.length ? ROW_OPEN_STEP : 0)
           const baseSegs    = computeChain(baseCabs, w)
           const wallCabSegs = computeChain(wallCabs, w)
           const overallSeg: Seg[] = [{ from: 0, to: w.length, label: Math.round(w.length) }]
@@ -581,7 +610,8 @@ export default function PlanViewReportSVG({
             <g key={key}>
               {layers.show('dim_wall_chain') && wallCabs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`, 'dim_wall_chain')}
               {layers.show('dim_base_chain') && baseCabs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_BASE, baseSegs, `bc-${key}`, 'dim_base_chain')}
-              {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + ROW_OVERALL, overallSeg, `ov-${key}`, 'dim_wall_overall')}
+              {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL, openSegs, `op-${key}`, 'dim_openings')}
+              {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall')}
               {layers.show('dim_base_chain') && baseDz > 0 && (
                 <>
                   {depthDim(w, depthDir, 0,        baseDz, -1, `dd0-${key}`, 'dim_base_chain', backOffset)}
@@ -610,7 +640,7 @@ export default function PlanViewReportSVG({
         // Perimeter wall with cabinets only on the room side (the common case): keep
         // the historic single chain on the empty outward side, depth dims inward.
         if (w.wall_type !== 'island' && !hasOut) {
-          return <g key={`dim-${w.id}`}>{renderSide(`m-${w.id}`, out, inward, allBase, allWall, 0)}</g>
+          return <g key={`dim-${w.id}`}>{renderSide(`m-${w.id}`, out, inward, allBase, allWall, 0, 0, true)}</g>
         }
 
         // Island, or a perimeter wall with back-side cabinets: dimension each occupied
@@ -620,7 +650,7 @@ export default function PlanViewReportSVG({
         return (
           <g key={`dim-${w.id}`}>
             {hasIn && renderSide(`in-${w.id}`, inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]))}
-            {(hasOut || !hasIn) && renderSide(`out-${w.id}`, out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset)}
+            {(hasOut || !hasIn) && renderSide(`out-${w.id}`, out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, true)}
           </g>
         )
       })}

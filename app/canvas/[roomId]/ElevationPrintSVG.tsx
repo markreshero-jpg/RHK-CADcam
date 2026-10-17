@@ -10,9 +10,11 @@
 // All sizes are physical mm × scale = model mm, so the viewBox stays in model
 // mm and the drawing prints at true 1:scale.
 'use client'
-import type { Room, Wall, CabinetInstance } from '@/src/lib/types'
+import type { Room, Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
+import { openingOnWall } from '@/src/lib/fixtureGeometry'
+import { OpeningElev } from './FixturesElevation'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
-import { cabT, wallEnd, dist, cabWallSide } from '@/src/lib/geometry'
+import { cabT, wallEnd, dist, cabWallSide, centroid } from '@/src/lib/geometry'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone,
   ResolvedInternalPart, ResolvedDrawerStack, ResolvedDrawerBoxPart, ResolvedDrawerSlide,
@@ -113,9 +115,11 @@ const INK3 = '#999'
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
-  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, projectName, roomName, paperKey,
+  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, projectName, roomName, paperKey, fixtures = [],
 }: {
   wall:          Wall
+  /** Doors / windows in this wall (z_fixtures P5) — outline + symbol + a width row. */
+  fixtures?:     RoomFixture[]
   walls:         Wall[]
   cabinets:      CabinetInstance[]
   room:          Room
@@ -132,6 +136,21 @@ export default function ElevationPrintSVG({
   const resolvedParts = frontViewHardwareMap(resolvedPartsRaw)
   const P = scale
   const roomH = wall.height ?? room.room_dy ?? 2400
+  // Doors / windows in this wall, face side (z_fixtures P5).
+  const openings = !layers.show('fixture_openings') ? [] : fixtures.flatMap(fx => {
+    const o = openingOnWall(fx, wall, 'face', centroid(walls))
+    return o ? [{ fx, t0: Math.max(0, o.t0), t1: Math.min(wall.length, o.t1), hingeT: o.hingeT, sill: Number(fx.z) || 0, h: Number(fx.height) }] : []
+  }).sort((a, b) => a.t0 - b.t0)
+  const openingSegs: Seg[] = []
+  {
+    let cur = 0
+    for (const o of openings) {
+      if (o.t0 > cur + 0.5) openingSegs.push({ from: cur, to: o.t0, label: Math.round(o.t0 - cur) })
+      openingSegs.push({ from: Math.max(cur, o.t0), to: o.t1, label: Math.round(o.t1 - Math.max(cur, o.t0)) })
+      cur = Math.max(cur, o.t1)
+    }
+    if (openings.length && cur < wall.length - 0.5) openingSegs.push({ from: cur, to: wall.length, label: Math.round(wall.length - cur) })
+  }
   // Only cabinets the layer set draws — they also drive the dimension chains.
   const wallCabs = cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === 'face'
     && elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))
@@ -154,6 +173,7 @@ export default function ElevationPrintSVG({
 
   // Chain / annotation positions
   const overheadChainY = -7 * P
+  const openingChainY  = -3 * P
   const floorChainY    = roomH + 6 * P
   const overallY       = roomH + 13 * P
   const heightChainX   = -13 * P
@@ -556,6 +576,14 @@ export default function ElevationPrintSVG({
       {/* Return walls */}
       {show.returnWalls && returnWalls()}
 
+      {/* Doors / windows (z_fixtures P5) */}
+      {openings.map(o => (
+        <g key={o.fx.id}>
+          <rect x={o.t0} y={roomH - o.sill - o.h} width={o.t1 - o.t0} height={o.h} fill="white" stroke={INK} strokeWidth={boxSW} />
+          <OpeningElev kind={o.fx.kind ?? ''} x={o.t0} y={roomH - o.sill - o.h} w={o.t1 - o.t0} h={o.h} hingeT={o.hingeT} color={INK} lw={boxSW} z={10 / P} />
+        </g>
+      ))}
+
       {/* Floor (bold) */}
       <line x1={0} y1={roomH} x2={wall.length} y2={roomH} stroke={INK} strokeWidth={boxSW * 1.6} />
 
@@ -567,6 +595,7 @@ export default function ElevationPrintSVG({
           {layers.show('dim_elev_wall_chain') && overheadCabs.length > 0 && hChain(computeElevChain(overheadCabs, wall), overheadChainY, 'oh', 'dim_elev_wall_chain')}
           {layers.show('dim_elev_floor_chain') && floorCabs.length > 0 && hChain(computeElevChain(floorCabs, wall), floorChainY, 'fl', 'dim_elev_floor_chain')}
           {layers.show('dim_elev_height') && heightChain()}
+          {layers.show('dim_openings') && openings.length > 0 && hChain(openingSegs, openingChainY, 'op', 'dim_openings')}
           {/* Overall wall length */}
           {layers.show('dim_elev_floor_chain') && (() => {
             const mx = wall.length / 2, padX = dimFs * 1.8, padY = dimFs * 0.7

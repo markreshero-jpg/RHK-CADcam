@@ -1,6 +1,6 @@
 'use client'
 import { Wall, CabinetInstance } from '@/src/lib/types'
-import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide, type RoomRef } from '@/src/lib/geometry'
+import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide, type RoomRef, type WallSpan } from '@/src/lib/geometry'
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
 import { kickChain, type KickSpan } from '@/src/lib/kickDims'
@@ -18,6 +18,9 @@ interface Props {
   /** Kick chain + kick depth dims (`dim_kicks`); spans from kickPlanSpans. */
   layerKick?: LayerConfig
   kickSpans?: KickSpan[]
+  /** Doors / windows row (`dim_openings`, z_fixtures P5): spans along the wall, drawn on the outer side. */
+  layerOpenings?: LayerConfig
+  openingSpans?: WallSpan[]
   /** Label backing-chip colour — the view background (layer set). */
   labelBg?: string
 }
@@ -50,6 +53,19 @@ function computeChain(cabs: CabinetInstance[], wall: Wall): Seg[] {
   if (cursor < wall.length - 0.5) {
     segs.push({ from: cursor, to: wall.length, label: Math.round(wall.length - cursor) })
   }
+  return segs
+}
+
+// Row to opening jambs: wall start → jamb → jamb → … → wall end.
+function spanChain(spans: WallSpan[], len: number): Seg[] {
+  const segs: Seg[] = []
+  let cursor = 0
+  for (const s of spans) {
+    if (s.t0 > cursor + 0.5) segs.push({ from: cursor, to: s.t0, label: Math.round(s.t0 - cursor) })
+    segs.push({ from: s.t0, to: s.t1, label: Math.round(s.t1 - s.t0) })
+    cursor = s.t1
+  }
+  if (cursor < len - 0.5) segs.push({ from: cursor, to: len, label: Math.round(len - cursor) })
   return segs
 }
 
@@ -178,6 +194,7 @@ function DepthDim({
 export default function WallDimensionChain({
   wall, walls, cabinets, rc, zoom, selected,
   layerOverall, layerBase, layerWallCab, layerKick, kickSpans = [], labelBg = '#030712',
+  layerOpenings, openingSpans = [],
 }: Props) {
   const inward = wallInwardNormal(wall, rc)
   const out = { x: -inward.x, y: -inward.y }
@@ -216,6 +233,7 @@ export default function WallDimensionChain({
     depthOffset: number,
     backOffset = 0,
     kicks: KickSpan[] = [],
+    openings: WallSpan[] = [],
   ) {
     const baseSegs = computeChain(baseCabs, wall)
     // Kick row sits between the base row and the overall, which steps out past it.
@@ -234,8 +252,13 @@ export default function WallDimensionChain({
     // Layer offsets (mm). Each row moves out by its own offset plus every row inside
     // it, so pushing one row out never lands it on the next.
     const oW = layerWallCab.offset ?? 0, oB = layerBase.offset ?? 0
+    const showOpen = !!layerOpenings?.visible && openings.length > 0
+    const openSegs = showOpen ? spanChain(openings, wall.length) : []
     const oK = showKicks ? (layerKick?.offset ?? 0) : 0, oO = layerOverall.offset ?? 0
-    const rW = oW, rB = rW + oB, rK = rB + oK, rO = rK + oO
+    const oD = showOpen ? (layerOpenings?.offset ?? 0) : 0
+    const rW = oW, rB = rW + oB, rK = rB + oK, rD = rK + oD, rO = rD + oO
+    // Row numbers: 1 wall cabs, 2 base, then kicks / openings when shown, overall last.
+    const nK = 3, nD = showKicks ? 4 : 3, nO = nD + (showOpen ? 1 : 0)
 
     return (
       <g key={key}>
@@ -247,10 +270,13 @@ export default function WallDimensionChain({
           <DimLine wall={wall} out={chainDir} dist={depthOffset + step * 2 + rB} segs={baseSegs} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} bg={labelBg} />
         )}
         {showKicks && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * 3 + rK} segs={kickSegs} zoom={z} col={kickCol} weight={layerKick!.weight} opacity={layerKick!.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nK + rK} segs={kickSegs} zoom={z} col={kickCol} weight={layerKick!.weight} opacity={layerKick!.opacity} bg={labelBg} />
+        )}
+        {showOpen && (
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nD + rD} segs={openSegs} zoom={z} col={layerOpenings!.color ?? col} weight={layerOpenings!.weight} opacity={layerOpenings!.opacity} bg={labelBg} />
         )}
         {layerOverall.visible && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * (showKicks ? 4 : 3) + rO} segs={overallSeg} zoom={z} col={layerOverall.color ?? col} weight={layerOverall.weight} opacity={layerOverall.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nO + rO} segs={overallSeg} zoom={z} col={layerOverall.color ?? col} weight={layerOverall.weight} opacity={layerOverall.opacity} bg={labelBg} />
         )}
         {/* Kick depth (wall face → kick face) at the wall ends, outside the cabinet depth lanes */}
         {showKicks && (
@@ -291,7 +317,7 @@ export default function WallDimensionChain({
   // Perimeter wall with cabinets only on the room side (the common case): keep the
   // historic single chain on the empty outward side, depth dims pointing inward.
   if (!isIsland && !hasOut) {
-    return renderSide('main', out, inward, allBase, allWall, 0, 0, kickSpans)
+    return renderSide('main', out, inward, allBase, allWall, 0, 0, kickSpans, openingSpans)
   }
 
   // Island, or a perimeter wall that now has back-side cabinets: draw each occupied
@@ -302,7 +328,7 @@ export default function WallDimensionChain({
   return (
     <g>
       {hasIn && renderSide('in', inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]), 0, inKicks)}
-      {(hasOut || !hasIn) && renderSide('out', out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, outKicks)}
+      {(hasOut || !hasIn) && renderSide('out', out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, outKicks, openingSpans)}
     </g>
   )
 }

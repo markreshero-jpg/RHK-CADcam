@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
-import type { Project, Room, Wall, CabinetInstance } from '@/src/lib/types'
+import type { Project, Room, Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
@@ -33,7 +33,9 @@ const TOGGLES: { key: keyof PlanViewPageOptions; label: string }[] = [
   { key: 'titleBlock', label: 'Title Block' },
 ]
 
-export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey }: {
+export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures }: {
+  /** Doors / windows (z_fixtures P5) are drawn from these. */
+  fixtures?: RoomFixture[]
   project:  Project | null
   room:     Room
   walls:    Wall[]
@@ -186,6 +188,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
         <PlanViewReportSVG
           walls={walls}
           cabinets={cabinets}
+          fixtures={fixtures}
           resolvedParts={resolvedParts}
           svgRef={svgRef}
           scale={scale}

@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
-import type { Project, Room, Wall, CabinetInstance } from '@/src/lib/types'
+import type { Project, Room, Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
@@ -25,7 +25,9 @@ const TOGGLES: { key: keyof ElevationPageOptions; label: string }[] = [
   { key: 'titleBlock',  label: 'Title Block' },
 ]
 
-export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey }: {
+export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures }: {
+  /** Doors / windows (z_fixtures P5). */
+  fixtures?: RoomFixture[]
   project:       Project | null
   room:          Room
   walls:         Wall[]
@@ -142,6 +144,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
             wall={w}
             walls={walls}
             cabinets={cabinets}
+            fixtures={fixtures}
             room={room}
             resolvedParts={resolvedParts}
             svgRef={el => { if (el) refs.current.set(w.id, el); else refs.current.delete(w.id) }}

@@ -14,7 +14,7 @@ import { fixtureOnFace, fixtureLayer, openingOnWall } from '@/src/lib/fixtureGeo
 
 // Door / window (P5) drawn over its hole: frame + sash (window), leaf with
 // dashed swing lines to the hinge jamb + handle (door), two panels (sliding).
-function OpeningElev({ kind, x, y, w, h, hingeT, color, lw, z }: {
+export function OpeningElev({ kind, x, y, w, h, hingeT, color, lw, z }: {
   kind: string; x: number; y: number; w: number; h: number; hingeT: number; color: string; lw: number; z: number
 }) {
   const k = kind.toLowerCase(), thin = lw * 0.6, fr = Math.min(50, w / 10, h / 10)

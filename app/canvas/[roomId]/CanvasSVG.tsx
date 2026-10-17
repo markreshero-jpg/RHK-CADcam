@@ -1063,6 +1063,8 @@ export default function CanvasSVG({
                 layerWallCab={layers.setting('dim_wall_chain')}
                 layerKick={layers.setting('dim_kicks')}
                 kickSpans={layers.show('dim_kicks') ? kickPlanSpans(cabinets, w, resolvedParts, cx) : undefined}
+                layerOpenings={layers.setting('dim_openings')}
+                openingSpans={wallOpenings?.get(w.id)}
                   labelBg={layers.background}
               />
             </Fragment>

@@ -168,6 +168,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'dim_elev_wall_chain',  group: 'dimensions', label: 'Overhead cabinet widths', views: ['elevation'], default: ON },
   { id: 'dim_kicks',            group: 'dimensions', label: 'Kicks',              views: ['plan', 'elevation'], default: OFF,
     hint: 'Plan: kick board lengths + kick depth at the wall ends; elevation: kick height' },
+  { id: 'dim_openings',         group: 'dimensions', label: 'Doors & windows',    views: ['plan', 'elevation'], default: ON,
+    hint: 'Plan: a row to the door / window jambs; elevation: widths + sill and head heights' },
 ]
 
 export const LAYER_ITEM_BY_ID: Record<string, LayerItemDef> =

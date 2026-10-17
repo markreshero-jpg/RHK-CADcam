@@ -255,6 +255,8 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
   // Appliance schedule: brand / model no. come from the library row each fixture was placed from.
   const allFixtures = scope === 'room' ? fixtures : jobFixtures
   const allWalls    = scope === 'room' ? walls    : jobWalls
+  // The plan / elevation PDFs draw the current room only.
+  const roomFixtures = scope === 'room' ? fixtures : jobFixtures.filter(f => f.room_id === room.id)
   useEffect(() => {
     const ids = [...new Set(allFixtures.map(f => f.catalog_id).filter((x): x is string => !!x))].filter(id => !fixtureCatalog.has(id))
     if (!ids.length) return
@@ -413,6 +415,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                   project={project}
                   room={room}
                   walls={walls}
+                  fixtures={roomFixtures}
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
                   resolvedParts={allResolved}
                   layerSets={layerSets}
@@ -425,6 +428,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                   project={project}
                   room={room}
                   walls={walls}
+                  fixtures={roomFixtures}
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
                   resolvedParts={allResolved}
                   layerSets={layerSets}
