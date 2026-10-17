@@ -148,6 +148,14 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
         const d = turnDrill(h.turn, pd)
         add('case_parts', `case_${mt.part_key}`, cp ? caseFrame(cp) : null, cp ? intoPanel(cp, d) : d, 'hinge_plate', opKey, AUTO_TOOL)
       }
+    } else if (mt?.table === 'face_zones' && mt.row_index != null && mt.col_index != null) {
+      // Bi-fold (z_cabinet_shape L2): screw holes on the trailing door's back
+      // face, already in that door's own square frame.
+      const ref = { facet: mt.facet, row_index: mt.row_index, col_index: mt.col_index }
+      const tz = zoneByKey.get(zoneKey(ref))
+      for (const pd of h.plate_drills) {
+        add('face_zones', zonePartId(ref), tz ? zoneFrame(tz) : null, pd, 'hinge_plate', opKey, AUTO_TOOL, 'face_back')
+      }
     } else if (mt?.table === 'internal_parts' && mt.internal_part_type != null && mt.internal_sort_order != null) {
       // Plate mounted on an internal divider (vertical) or shelf (horizontal).
       const ip = intByKey.get(`${mt.internal_part_type}_${mt.internal_sort_order}`)

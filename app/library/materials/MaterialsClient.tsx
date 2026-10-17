@@ -111,7 +111,7 @@ const TABS: TabConfig[] = [
   },
   {
     id: 'hinges', label: 'Hinges', table: 'hardware_hinges', initKey: 'hinges',
-    defaults: { name: '', brand: null, hinge_type: 'euro', default_hinge_edge: 'left', cup_diameter: 35, cup_depth_mm: 12, cup_x_from_edge_mm: 22, boring_depth: 13, overlay: 'half', opening_angle: 110, mount_angle_deg: 0, soft_close: true, supplier_code: null, cost_per_unit: null, active: true },
+    defaults: { name: '', brand: null, hinge_type: 'euro', default_hinge_edge: 'left', cup_diameter: 35, cup_depth_mm: 12, cup_x_from_edge_mm: 22, boring_depth: 13, overlay: 'half', opening_angle: 110, mount_angle_deg: 0, pie_role: null, soft_close: true, supplier_code: null, cost_per_unit: null, active: true },
     fields: [
       { key: 'name',          label: 'Name',     type: 'text',    w: 150 },
       { key: 'brand',         label: 'Brand',    type: 'text',    w: 90 },
@@ -144,6 +144,15 @@ const TABS: TabConfig[] = [
       // Angled hinge: (door ↔ mounting panel angle) − 90°, e.g. 45 for a +45°
       // hinge on a 135° corner. 0 = ordinary. Shaped cabinets pick by this.
       { key: 'mount_angle_deg', label: 'Mount°', type: 'number',  w: 58 },
+      // Pie-corner bi-fold pair (z_cabinet_shape L2): 'lead' hangs the lead
+      // door on its end panel (170°), 'bifold' joins the two doors.
+      { key: 'pie_role',      label: 'Pie',      type: 'select',  w: 70,
+        options: [
+          { value: '',       label: '—' },
+          { value: 'lead',   label: 'Lead' },
+          { value: 'bifold', label: 'Bi-fold' },
+        ],
+      },
       { key: 'soft_close',    label: 'Soft-C',   type: 'boolean', w: 52 },
       { key: 'supplier_code', label: 'Supplier', type: 'text',    w: 90 },
       { key: 'cost_per_unit', label: '$/ea',     type: 'number',  w: 60,  step: '0.01' },

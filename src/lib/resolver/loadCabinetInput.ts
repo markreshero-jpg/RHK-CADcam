@@ -805,7 +805,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
   // All hinge queries are defensive (maybeSingle / tolerant of errors) so the
   // resolver keeps working before the v0.6 migration is applied — a missing
   // table just yields no hinge hardware and resolveCabinet skips hinges.
-  const { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges, angled_hinges } =
+  const { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges, angled_hinges, pie_hinges } =
     await loadHingeInputs(persisted ? cabinetId : null, cab.room_id as string, projectId, (cab.hardware_overrides ?? {}) as Record<string, unknown>)
 
   // ── 13b. Handle schedule (z_handles H1) ─────────────────────────────────────
@@ -893,6 +893,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     hinge_count_rules,
     existing_hinges,
     angled_hinges,
+    pie_hinges,
     handle_schedule,
     handle_products,
     kick_run,
@@ -1074,7 +1075,7 @@ export async function loadRoomHandleSchedule(roomId: string, projectId: string |
 // Resolves the hinge schedule (room → project → shop → is_default), loads the
 // chosen cup + plate, the shop hinge_count_rules, and any persisted
 // hinge_instances for this cabinet (so the resolver can preserve y_locked rows).
-const HINGE_COLS = 'id, name, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm, model_arm_fold_fraction, mount_angle_deg'
+const HINGE_COLS = 'id, name, default_hinge_edge, cup_x_from_edge_mm, cup_diameter, cup_depth_mm, anchor_holes, opening_angle, model_combined_url, model_combined_scale, bore_centre_to_door_face_mm, model_arm_fold_fraction, mount_angle_deg, pie_role, door_plate_holes'
 
 function toHingeInput(hRow: Record<string, unknown>): HingeHardwareInput {
   return {
@@ -1091,6 +1092,8 @@ function toHingeInput(hRow: Record<string, unknown>): HingeHardwareInput {
     open_angle_deg:              hRow.opening_angle != null ? Number(hRow.opening_angle) : null,
     model_arm_fold_fraction:     hRow.model_arm_fold_fraction != null ? Number(hRow.model_arm_fold_fraction) : 0.5,
     mount_angle_deg:             Number(hRow.mount_angle_deg ?? 0),
+    pie_role:                    (hRow.pie_role as HingeHardwareInput['pie_role']) ?? null,
+    door_plate_holes:            toHoles(hRow.door_plate_holes),
   }
 }
 
@@ -1105,6 +1108,7 @@ async function loadHingeInputs(
   hinge_count_rules: HingeRuleInput[]
   existing_hinges:  ExistingHingeInput[]
   angled_hinges:    HingeHardwareInput[]
+  pie_hinges:       { lead?: HingeHardwareInput; bifold?: HingeHardwareInput }
 }> {
   // The schedule cascade + count rules are shared by the whole room (cached);
   // only this cabinet's persisted hinge_instances are per-cabinet.
@@ -1146,7 +1150,7 @@ async function loadHingeInputs(
   if (ovHingeId) hingeId = ovHingeId
   if (ovPlateId) schedPlateId = ovPlateId
 
-  if (!hingeId) return { hinge_hardware: null, hinge_plate: null, hinge_count_rules, existing_hinges, angled_hinges: [] }
+  if (!hingeId) return { hinge_hardware: null, hinge_plate: null, hinge_count_rules, existing_hinges, angled_hinges: [], pie_hinges: {} }
 
   // Load the cup, and the plate (scheduled plate, else the hinge's default plate).
   const [hingeRes, plateRes] = await cachedCascade(`hingehw:${hingeId}:${schedPlateId ?? 'default'}`, () => Promise.all([
@@ -1171,6 +1175,14 @@ async function loadHingeInputs(
     await supabase.from('hardware_hinges').select(HINGE_COLS).neq('mount_angle_deg', 0).eq('active', true))
   const angled_hinges = ((angledRes.data ?? []) as Record<string, unknown>[]).map(toHingeInput)
 
+  // Pie-corner bi-fold pair (z_cabinet_shape L2): the library's lead + bi-fold hinges.
+  const pieRes = await cachedCascade('hinges:pie', async () =>
+    await supabase.from('hardware_hinges').select(HINGE_COLS).not('pie_role', 'is', null).eq('active', true))
+  const pie_hinges: { lead?: HingeHardwareInput; bifold?: HingeHardwareInput } = {}
+  for (const h of ((pieRes.data ?? []) as Record<string, unknown>[]).map(toHingeInput)) {
+    if (h.pie_role && !pie_hinges[h.pie_role]) pie_hinges[h.pie_role] = h
+  }
+
   const pRow = plateRes.data as Record<string, unknown> | null
   const hinge_plate: HingePlateInput | null = pRow ? {
     id:                    pRow.id as string,
@@ -1186,5 +1198,5 @@ async function loadHingeInputs(
     model_plate_anchor_z:  pRow.model_plate_anchor_z != null ? Number(pRow.model_plate_anchor_z) : 0,
   } : null
 
-  return { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges, angled_hinges }
+  return { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges, angled_hinges, pie_hinges }
 }

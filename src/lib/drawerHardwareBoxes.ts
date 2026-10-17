@@ -62,15 +62,17 @@ function frontViewStack(s: ResolvedDrawerStack): ResolvedDrawerStack {
 
 /** A resolved cabinet with turned facet hardware flattened for 2D front views. */
 export function frontViewHardware(rp: ResolvedCabinet): ResolvedCabinet {
-  if (!(rp.drawer_stacks ?? []).some(s => s.turn) && !(rp.hinge_instances ?? []).some(h => h.turn)) return rp
+  if (!(rp.drawer_stacks ?? []).some(s => s.turn) && !(rp.hinge_instances ?? []).some(h => h.turn || h.plate_turn)) return rp
   return {
     ...rp,
     drawer_stacks: rp.drawer_stacks.map(frontViewStack),
-    hinge_instances: rp.hinge_instances.map(h => h.turn ? {
+    // A bi-fold's plate drills are in the trailing door's frame (plate_turn).
+    hinge_instances: rp.hinge_instances.map(h => h.turn || h.plate_turn ? {
       ...h,
       cup_drills: h.cup_drills.map(d => turnDrill(h.turn, d)),
-      plate_drills: h.plate_drills.map(d => turnDrill(h.turn, d)),
+      plate_drills: h.plate_drills.map(d => turnDrill(h.pie === 'bifold' ? h.plate_turn : h.turn, d)),
       turn: undefined,
+      plate_turn: undefined,
     } : h),
   }
 }

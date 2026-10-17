@@ -15,6 +15,7 @@
 //   drawerOpening  the clear opening behind a drawer front: the inside of the
 //                carcass panels in the zone frame, sliced across the depth;
 //                the box is the widest rectangle that stays inside.
+//   piePairs     the bi-fold door pairs at an inside (pie) corner (Phase L2).
 // ============================================================
 
 import type {
@@ -27,6 +28,7 @@ import { edgeFrame } from '../cabinetShape/construct'
 import { shapedInterior } from './resolveShapedCase'
 import { primaryFacetId } from './resolveShapedFace'
 import { turnPoint } from './hardwareTurn'
+import { zoneKey } from '../cabinetShape/partKeys'
 export { turnPoint, turnDir, turnDrill } from './hardwareTurn'
 
 const NEAR = 0.5
@@ -137,6 +139,49 @@ function panelPartKey(cab: CabinetInput, s: FootprintSegment, caseParts: Resolve
   if (s.edge.role !== 'back' && vertical && Math.abs(s.p0.x - cab.DX) < NEAR && keys.has('right_side')) return 'right_side'
   if (s.edge.role === 'back' && Math.abs(s.p0.y - s.p1.y) < NEAR && Math.abs(s.p0.y) < NEAR && keys.has('back')) return 'back'
   return null
+}
+
+// ── Pie-corner bi-fold pairs (Phase L2) ────────────────────────
+// Two doors meeting at a concave front-facet corner. The door hinged toward
+// the corner is TRAILING (no cups — the bi-fold plate screws to its back); the
+// door on the other facet at that corner, hinged to its own end panel, LEADS
+// and carries every cup (Mark, 2026-10-15: either leg can lead, read from the
+// hinge sides). Both hinged toward the corner → no lead, no pair.
+
+export interface PiePartner {
+  role: 'lead' | 'trailing'
+  other: ResolvedFaceZone
+  pieEdge: 'left' | 'right'   // this door's edge at the pie corner
+}
+
+export function piePairs(ctx: ShapedHardwareCtx, zones: ResolvedFaceZone[]): Map<string, PiePartner> {
+  const n = ctx.segs.length
+  const out = new Map<string, PiePartner>()
+  const doors = zones.filter(z => z.face_type === 'door' && (z.hinge_side === 'left' || z.hinge_side === 'right'))
+  const facetOf = (z: ResolvedFaceZone) => z.facet ?? ctx.primary
+  // Is the zone in the end column of its facet on that side? (left = col 0)
+  const atEnd = (z: ResolvedFaceZone, side: 'left' | 'right') => side === 'left'
+    ? z.col_index === 0
+    : z.col_index === Math.max(...zones.filter(o => facetOf(o) === facetOf(z)).map(o => o.col_index))
+  for (const t of doors) {
+    const i = facetIndex(ctx, t)
+    if (i < 0) continue
+    const edge = t.hinge_side as 'left' | 'right'
+    const j = edge === 'left' ? (i + 1) % n : (i - 1 + n) % n
+    const s = ctx.segs[i], nb = ctx.segs[j]
+    if (nb.type !== 'line' || nb.edge.role !== 'front' || !atEnd(t, edge)) continue
+    // Concave corner only (as resolveShapedFace): convex facet corners are mitred.
+    const f = edgeFrame(s), g = edgeFrame(nb)
+    const cross = edge === 'left' ? f.u.x * g.u.y - f.u.y * g.u.x : g.u.x * f.u.y - g.u.y * f.u.x
+    if (cross > -1e-9) continue
+    const leadEdge = edge === 'left' ? 'right' : 'left'
+    const lead = doors.find(z => facetOf(z) === nb.edge.id && atEnd(z, leadEdge)
+      && z.Y < t.Y + t.DY - NEAR && t.Y < z.Y + z.DY - NEAR)
+    if (!lead || lead.hinge_side === leadEdge) continue
+    out.set(zoneKey(t), { role: 'trailing', other: lead, pieEdge: edge })
+    out.set(zoneKey(lead), { role: 'lead', other: t, pieEdge: leadEdge })
+  }
+  return out
 }
 
 // ── Drawers ────────────────────────────────────────────────────

@@ -14,8 +14,11 @@
 > follows the cabinets' outline, decision 16) built 2026-10-15, awaiting in-app check.
 > Library still needs a hinge with Mount° = 45.
 > **L corner (BCNP)**: L1 check-#1 fixes, L3 (checked), L4, L5 and L2a committed 2026-10-15
-> (d72e8e1). Awaiting in-app checks: 4c, L1 #2, L4. Then L2b bi-fold pair.
-> **Optimiser true shapes** (Phase 5 nest/CNC): O2b + O3 + O4 (contour G-code) built 2026-10-16 — tracker
+> (d72e8e1). Awaiting in-app checks: 4c, L1 #2, L4. **L2b bi-fold pair built 2026-10-18** (in-app check
+> pending — place a fresh BCNP; existing ones keep both doors on their end panels until a door is
+> flipped toward the pie corner).
+> **Optimiser true shapes** (Phase 5 nest/CNC): O2b + O3 + O4 (contour G-code) built 2026-10-16, true arcs
+> checked in-app by Mark 2026-10-18 ("arcs on cabinet work well") — tracker
 > `z_part_shape_editor/OPTIMISER-PHASE-PLAN.md`.
 
 ---
@@ -516,7 +519,7 @@ Decision 15. Split L1 (shape + library) / L2 (bi-fold doors), in-app check each.
         stretch / paste, and useCabinetOps add-neighbour). Applies to every corner, not just shaped ones.
         Not in the CabinetPanel typed-position inputs. Tests `cabinetObstacles.test.ts`.
       - Sharknose profile now draws on turned facet doors (handleGeometry.sharknoseProfile).
-- [ ] L2 — bi-fold pair (research 2026-10-15): Blum CLIP top 60° bi-fold **79T8500** (screw-on) /
+- [x] L2 — bi-fold pair (research 2026-10-15): Blum CLIP top 60° bi-fold **79T8500** (screw-on) /
       **79T8530** (knock-in), only with CLIP top 170° (71T6550 / 71T6580) or 155°. **Lead door**
       carries every cup: 170° cups on its outer edge to its end panel, bi-fold cups on its pie
       edge at **12.5 mm** cup centre (partial bore). **Trailing door**: no cups — the bi-fold's
@@ -533,6 +536,32 @@ Decision 15. Split L1 (shape + library) / L2 (bi-fold doors), in-app check each.
         `migration_l2a_bifold_hinges.sql`). Dowel/anchor pattern copied from Blum 110 (45/9.5) — confirm
         against Blum's template. The table has no plate-hole fields yet; the trailing door's 37 mm plate
         holes are in the row's notes until L2 adds them.
+- [x] L2b — bi-fold pair (2026-10-18, `migration_l2b_bifold_pair.sql`, applied):
+      - `hardware_hinges.pie_role` (`lead` | `bifold`, library column "Pie"): 71T6580 = lead,
+        79T8530 = bifold. `hardware_hinges.door_plate_holes` (bi-fold only): Mark 2026-10-18 —
+        "37mm back from door edge, 5mm holes 12mm deep (same as normal hinge plate drilling on
+        gables)" → Ø5 × 12 at 37 from the trailing door's pie edge, ±16 about each hinge height.
+      - `resolveShapedHardware.piePairs`: at a CONCAVE front-facet corner, the end-column door hinged
+        toward the corner trails; the end-column door on the other facet (overlapping in height),
+        hinged to its own end panel, leads. Both toward the corner → no pair, the old HINGE_NO_PANEL
+        warnings stay. Both on their end panels → two ordinary doors (still allowed).
+      - resolveHinges: trailing door → no hinge instances. Lead door → the `lead` hinge (count rules,
+        so 2 on a base door) on its end panel, `pie: 'lead'`; plus one `pie: 'bifold'` instance per
+        hinge at the same height, `sort_order` 100 + i, cup at the bi-fold's Cup X (12.5) from the
+        lead's pie edge, `mount_target` = { table: 'face_zones', facet, row, col } of the trailing door,
+        plate drills on the trailing door's back face in ITS frame (`plate_turn`). Missing library rows
+        → PIE_HINGE_MISSING warning (default hinge / no bi-fold).
+      - CNC (seamDrillSync): face_zones mount target → holes on the trailing door, face_back. 3D: the
+        holes ride on the trailing door (cupDrillsByZone), no bi-fold GLB placed. Sheet hardware list
+        groups pie hinges by name. Save RPC stores no mounting part for the bi-fold (face zones get
+        fresh ids every save) — the instance itself carries the target in resolved_drawer_hw.
+      - BCNP library row: primary door now hinged `left` (toward the pie corner) — a fresh BCNP is a
+        pair in both hands. Placed BCNPs unchanged.
+      - Tests `lCornerBifold.test.ts` (both hands, no-pair cases, missing library rows).
+      - Not done: 3D swing of the pair (each door still swings on its own hinge edge — the trailing
+        door turns about its pie edge); no soft-close add-on line; rhk-crm `BCNP` + `pie` corner kind
+        (needs a pie-corner hinge situation in rhk-crm's hinge_variants) and its skill copy.
+- [ ] L2b in-app check
       - Shelf pins on the L shelf's second leg (Mark, 2026-10-15): both end panels drill since L3
         (resolver test confirms 2 holes on each end, inside each shelf leg).
 

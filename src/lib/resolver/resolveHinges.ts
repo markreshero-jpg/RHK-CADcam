@@ -33,15 +33,20 @@ import {
   HingeBoreHole, ResolverError,
 } from './types'
 import {
-  hingeMount, gridForFacet, zoneTurn, type ShapedHardwareCtx, type ShapedMount,
+  hingeMount, gridForFacet, zoneTurn, piePairs, type ShapedHardwareCtx, type ShapedMount,
 } from './resolveShapedHardware'
 import { turnDrill } from './hardwareTurn'
+import { zoneKey } from '../cabinetShape/partKeys'
 
 // Flatten every hinge's cup + plate drills into one list for overlay rendering.
 export function cabinetHingeDrills(hinges: ResolvedHingeInstance[]): ResolvedHingeDrill[] {
   const out: ResolvedHingeDrill[] = []
-  // A turned facet door's drills are zone-frame — return cabinet coords.
-  for (const h of hinges) out.push(...[...h.cup_drills, ...h.plate_drills].map(d => turnDrill(h.turn, d)))
+  // A turned facet door's drills are zone-frame — return cabinet coords. A
+  // bi-fold's plate drills are in the trailing door's frame (plate_turn).
+  for (const h of hinges) {
+    out.push(...h.cup_drills.map(d => turnDrill(h.turn, d)))
+    out.push(...h.plate_drills.map(d => turnDrill(h.pie === 'bifold' ? h.plate_turn : h.turn, d)))
+  }
   return out
 }
 
@@ -95,6 +100,10 @@ function pickHinge(cab: CabinetInput, angle: number): { hw: HingeHardwareInput; 
   return bestD <= 2.5 && best ? { hw: best, matched: true } : { hw, matched: false }
 }
 
+// Bi-fold hinges sit on the lead door after its own hinges; a fixed base keeps
+// their identity stable when the lead door's hinge count changes.
+const BIFOLD_SORT = 100
+
 export function resolveHinges(
   cab: CabinetInput,
   zones: ResolvedFaceZone[],
@@ -120,8 +129,15 @@ export function resolveHinges(
 
   const out: ResolvedHingeInstance[] = []
 
+  // Pie-corner bi-fold pairs (z_cabinet_shape L2).
+  const pies = shaped ? piePairs(shaped, zones) : null
+  const bifold = cab.pie_hinges?.bifold
+
   for (const z of zones) {
     if (z.face_type !== 'door') continue
+    const pie = pies?.get(zoneKey(z))
+    // The trailing door has no cups: the lead door's bi-fold carries it.
+    if (pie?.role === 'trailing') continue
 
     const doorH = z.DY   // cabinet-Y extent (height)
     const doorW = z.DX   // cabinet-X extent (width)
@@ -143,6 +159,10 @@ export function resolveHinges(
         warnings?.push({ code: 'HINGE_NO_PANEL', message: `Door ${doorRef} hinges ${edge}, but ${m.error} — hinge it the other way or add a panel`, part: 'hinge' })
       } else {
         mount = m.mount
+        if (pie?.role === 'lead') {
+          if (cab.pie_hinges?.lead) doorHw = cab.pie_hinges.lead
+          else warnings?.push({ code: 'PIE_HINGE_MISSING', message: `Door ${doorRef} leads a bi-fold pair, but no hinge in the library has Pie role "lead" (the 170°) — using the default hinge`, part: 'hinge' })
+        }
         if (mount.angleDeg) {
           const pick = pickHinge(cab, mount.angleDeg)
           doorHw = pick.hw
@@ -162,6 +182,12 @@ export function resolveHinges(
     const manual = gridForFacet(cab, z.facet)?.zones
       .find(fz => fz.row_index === z.row_index && fz.col_index === z.col_index)?.hinges
     const useManual = Array.isArray(manual)
+
+    if (pie?.role === 'lead' && !bifold) warnings?.push({
+      code: 'PIE_HINGE_MISSING',
+      message: `Door ${doorRef} leads a bi-fold pair, but no hinge in the library has Pie role "bifold" — no bi-fold hinges or trailing-door holes`,
+      part: 'hinge',
+    })
 
     let pos: number[]
     if (useManual) {
@@ -223,6 +249,8 @@ export function resolveHinges(
         y_locked: yLocked,
         mounting_surface: mountSurface,
         shelf_snap_tolerance_mm: snapTol,
+        ...(pie?.role === 'lead' ? { pie: 'lead' as const } : {}),
+        ...(doorHw.name ? { hinge_name: doorHw.name } : {}),
         hinge_hardware_id: doorHw.id,
         hinge_plate_id: plateId,
         mount_target: target,
@@ -240,6 +268,53 @@ export function resolveHinges(
         plate_anchor_y:    plate?.model_plate_anchor_y ?? 0,
         plate_anchor_z:    plate?.model_plate_anchor_z ?? 0,
       })
+
+      // Bi-fold at the same height: cup on the lead door's pie edge, plate
+      // holes on the trailing door's back face in that door's own frame.
+      if (pie?.role === 'lead' && bifold && sideHung) {
+        const t = pie.other
+        const tEdge = t.hinge_side as 'left' | 'right'
+        const bx = pie.pieEdge === 'left' ? z.X + bifold.cup_x_from_edge_mm : z.X + doorW - bifold.cup_x_from_edge_mm
+        out.push({
+          ...(z.facet ? { facet: z.facet } : {}),
+          ...(z.AY ? { turn: zoneTurn(z) } : {}),
+          ...(t.AY ? { plate_turn: zoneTurn(t) } : {}),
+          pie: 'bifold',
+          ...(bifold.name ? { hinge_name: bifold.name } : {}),
+          row_index:  z.row_index,
+          col_index:  z.col_index,
+          sort_order: BIFOLD_SORT + i,
+          hinge_edge: pie.pieEdge,
+          y_position_mm: along,
+          y_locked: false,
+          mounting_surface: 'auto',
+          shelf_snap_tolerance_mm: 3,
+          hinge_hardware_id: bifold.id,
+          hinge_plate_id: null,
+          mount_target: { table: 'face_zones', ...(t.facet ? { facet: t.facet } : {}), row_index: t.row_index, col_index: t.col_index },
+          cup_drills: buildCupDrills(bifold, bx, cupY, backZ, pie.pieEdge),
+          plate_drills: (bifold.door_plate_holes ?? []).map(h => ({
+            x: tEdge === 'left' ? t.X + h.offset_x : t.X + t.DX - h.offset_x,
+            y: cupY + h.offset_y,
+            z: t.Z,
+            axis: 'z+' as const,
+            radius: (h.diameter ?? 0) / 2,
+            depthLen: h.depth ?? 0,
+            kind: 'plate' as const,
+          })),
+          model_url:        bifold.model_combined_url,
+          model_scale:      bifold.model_combined_scale,
+          bore_to_door_mm:  bifold.bore_centre_to_door_face_mm,
+          open_angle_deg:   bifold.open_angle_deg,
+          arm_fold_fraction: bifold.model_arm_fold_fraction,
+          cup_x_from_edge_mm: bifold.cup_x_from_edge_mm,
+          plate_model_url:   null,
+          plate_model_scale: 1,
+          plate_anchor_x:    0,
+          plate_anchor_y:    0,
+          plate_anchor_z:    0,
+        })
+      }
     })
   }
 

@@ -17,7 +17,8 @@
 > shaped edges).
 > **2026-10-16: true arcs built** (uncommitted, check on RHK6581 BC-21 radius end — Mark: "this
 > should be a radius, one continuous curve"; machine Anderson Genesis Plus 49, Fanuc → G2/G3 on by
-> default, no profile toggle). See O4 "True arcs" below.
+> default, no profile toggle). See O4 "True arcs" below. **Checked in-app by Mark 2026-10-18** ("arcs on
+> cabinet work well").
 
 ---
 

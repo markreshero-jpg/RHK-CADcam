@@ -754,6 +754,10 @@ export interface CabinetInput {
   // door that hangs on a panel off square picks the one matching that angle
   // (z_cabinet_shape decision 10).
   angled_hinges?:     HingeHardwareInput[]
+  // Pie-corner bi-fold pair (z_cabinet_shape L2): the library hinges flagged
+  // pie_role — 'lead' hangs the lead door on its end panel, 'bifold' joins the
+  // lead door's pie edge to the trailing door.
+  pie_hinges?:        { lead?: HingeHardwareInput; bifold?: HingeHardwareInput }
 
   // ── Handle inputs (z_handles H1) ────────────────────────────────────────────
   // The effective handle schedule's role rows (cabinet hardware_overrides
@@ -862,6 +866,12 @@ export interface HingeHardwareInput {
   // (door ↔ mounting panel angle) − 90°: 0 = ordinary hinge, 45 = +45° angled.
   mount_angle_deg?:            number
   name?:                       string
+  // Pie-corner role (z_cabinet_shape L2): 'lead' = the lead door's hinge to its
+  // end panel, 'bifold' = the hinge joining the two doors.
+  pie_role?:                   'lead' | 'bifold' | null
+  // Bi-fold only: screw holes on the trailing door's back face. offset_x = in
+  // from the trailing door's pie edge, offset_y = along the hinge line.
+  door_plate_holes?:           HingeBoreHole[]
 }
 export interface HingePlateInput {
   id:                    string
@@ -909,10 +919,14 @@ export interface ResolvedHingeDrill {
 // internal_part_type identify an internal shelf. persist resolves this to the
 // new DB row id after case/internal parts are inserted.
 export interface ResolvedHingeMountTarget {
-  table: 'case_parts' | 'internal_parts'
+  table: 'case_parts' | 'internal_parts' | 'face_zones'
   part_key?: ResolvedCasePart['part_key']
   internal_part_type?: ResolvedInternalPart['part_type']
   internal_sort_order?: number
+  // face_zones (bi-fold, z_cabinet_shape L2): the trailing door the plate screws to.
+  facet?: string
+  row_index?: number
+  col_index?: number
 }
 // Hardware on a turned front zone (shaped cabinets, z_cabinet_shape Phase 3b)
 // is resolved in the zone's own square frame — the frame the zone has before
@@ -928,6 +942,12 @@ export interface ResolvedHingeInstance {
   // = false when the library has no such hinge and the default was used.
   mount_angle_deg?: number
   angle_matched?:   boolean
+  // Pie-corner bi-fold pair (z_cabinet_shape L2): both kinds sit on the lead
+  // door. 'bifold' plate drills are on the trailing door's back face, in that
+  // door's own square frame (plate_turn), not the lead door's.
+  pie?:        'lead' | 'bifold'
+  plate_turn?: HardwareTurn
+  hinge_name?: string
   row_index:  number
   col_index:  number
   sort_order: number

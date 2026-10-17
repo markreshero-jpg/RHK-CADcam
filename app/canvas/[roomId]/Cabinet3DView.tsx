@@ -1236,11 +1236,14 @@ export function CabinetScene({
   // door's rotating group for animated doors so they swing with the door.
   const cupDrillsByZone = useMemo(() => {
     const m = new Map<string, ResolvedHingeDrill[]>()
+    const push = (k: string, ds: ResolvedHingeDrill[]) => m.set(k, [...(m.get(k) ?? []), ...ds])
     for (const h of rp.hinge_instances ?? []) {
-      const k = zoneKey(h)
-      const arr = m.get(k) ?? []
-      arr.push(...h.cup_drills)
-      m.set(k, arr)
+      push(zoneKey(h), h.cup_drills)
+      // Bi-fold screw holes ride on the trailing door (z_cabinet_shape L2).
+      const mt = h.mount_target
+      if (h.pie === 'bifold' && mt?.table === 'face_zones') {
+        push(zoneKey({ facet: mt.facet, row_index: mt.row_index ?? 0, col_index: mt.col_index ?? 0 }), h.plate_drills)
+      }
     }
     return m
   }, [rp.hinge_instances])
@@ -1253,7 +1256,7 @@ export function CabinetScene({
       // World-fixed: a turned facet door's zone-frame drills → cabinet coords.
       const edge = zoneEdge.get(zoneKey(h))
       if (edge !== 'left' && edge !== 'right') out.push(...h.cup_drills.map(d => turnDrill(h.turn, d)))
-      out.push(...h.plate_drills.map(d => turnDrill(h.turn, d)))
+      if (h.pie !== 'bifold') out.push(...h.plate_drills.map(d => turnDrill(h.turn, d)))
     }
     return out
   }, [rp.hinge_instances, zoneEdge, showDrilling])
@@ -1263,6 +1266,8 @@ export function CabinetScene({
     const m = new Map<string, ResolvedHingeInstance[]>()
     for (const h of rp.hinge_instances ?? []) {
       if (!h.model_url && !h.plate_model_url) continue
+      // Models are placed on the door's hinge side — not on a bi-fold's pie edge.
+      if (h.pie === 'bifold') continue
       const k = zoneKey(h)
       const arr = m.get(k) ?? []
       arr.push(h)

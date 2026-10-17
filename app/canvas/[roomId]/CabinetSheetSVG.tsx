@@ -434,7 +434,13 @@ export default function CabinetSheetSVG({
         // off-square panel need an angled hinge — listed per angle, flagged when
         // the library has none.
         const square = hinges.filter(h => !h.mount_angle_deg)
-        if (square.length) out.push({ item: hardware?.hingeName ?? 'Door hinge', qty: square.length, note: doorNote })
+        // Pie-corner pairs (L2) bring their own hinges — listed by name.
+        const byName = new Map<string, number>()
+        for (const h of square) {
+          const name = (h.pie ? h.hinge_name : undefined) ?? hardware?.hingeName ?? 'Door hinge'
+          byName.set(name, (byName.get(name) ?? 0) + 1)
+        }
+        for (const [name, qty] of byName) out.push({ item: name, qty, note: doorNote })
         const byAngle = new Map<number, { qty: number; missing: boolean }>()
         for (const h of hinges) {
           if (!h.mount_angle_deg) continue
