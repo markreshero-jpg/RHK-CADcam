@@ -52,3 +52,12 @@ drill ops (37 / 261 from the front, etc.), not from the model.
   face-drawer and inner-drawer rails; the drawer side slides with the drawer, the cabinet
   member stays (`FixedInDrawer`, shared with the bin frame).
 - 3D only. Elevation still draws runners as their box / uploaded-model outline.
+
+## Library range (2026-10-17)
+
+`migration_dragon_pro_range.sql` (applied): Dragon Pro NL 300 / 350 / 400 / 450 × H 95 / 127 / 178,
+cloned from the 500 of the same height, gable rear-bracket hole per length (300/350 → 165,
+400 → 229, 450/500 → 261; front 37), `drawn_as = dragon_pro`, and entries in the
+"DTC Dragon Pro" slide schedule. Data: `NIKPOL-DRAGON-PRO-RESEARCH.md` (Nikpol 2026 tilt-adjust
+install guide). Open: gable hole HEIGHT isn't dimensioned in the guide — rows keep the shop's 44
+from the 500s; no prices (Nikpol login).
