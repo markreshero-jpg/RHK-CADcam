@@ -271,6 +271,49 @@ export function wallMitrePolygon(w: Wall, walls: Wall[], ref: RoomRef): string {
   return wallMitreCorners(w, walls, ref).map(p => `${p.x},${p.y}`).join(' ')
 }
 
+// Points on a wall's inside / outside face at distance t from its start.
+function wallFaceLines(w: Wall, corners: Pt[]) {
+  const [s, , , pSO] = corners
+  const d = wallDir(w)
+  const tSO = (pSO.x - s.x) * d.x + (pSO.y - s.y) * d.y
+  return {
+    ins: (t: number): Pt => ({ x: s.x + d.x * t, y: s.y + d.y * t }),
+    out: (t: number): Pt => ({ x: pSO.x + d.x * (t - tSO), y: pSO.y + d.y * (t - tSO) }),
+  }
+}
+
+/** The wall footprint across one span (the bit under / over an opening): [insideA, insideB, outsideB, outsideA]. */
+export function wallSpanQuad(w: Wall, walls: Wall[], ref: RoomRef, span: WallSpan): Pt[] {
+  const c = wallMitreCorners(w, walls, ref)
+  if (c.length < 4) return []
+  const { ins, out } = wallFaceLines(w, c)
+  return [ins(span.t0), ins(span.t1), out(span.t1), out(span.t0)]
+}
+
+/** An opening's stretch along a wall (mm from the wall start), z_fixtures P5. */
+export interface WallSpan { t0: number; t1: number }
+
+/**
+ * The wall footprint split around openings: one 4-point piece [insideA, insideB,
+ * outsideB, outsideA] per solid stretch. Mitred ends stay on the first / last
+ * piece. `spans` must be sorted and non-overlapping (openingSpans does that).
+ * No spans → the whole mitred footprint as one piece.
+ */
+export function wallPieces(w: Wall, walls: Wall[], ref: RoomRef, spans: WallSpan[]): Pt[][] {
+  const c = wallMitreCorners(w, walls, ref)
+  if (c.length < 4 || !spans.length) return c.length ? [c] : []
+  const [s, e, pEO, pSO] = c
+  const { ins, out } = wallFaceLines(w, c)
+  const pieces: Pt[][] = []
+  let from: { i: Pt; o: Pt } = { i: s, o: pSO }
+  for (const sp of spans) {
+    if (sp.t0 > 0.5) pieces.push([from.i, ins(sp.t0), out(sp.t0), from.o])
+    from = { i: ins(sp.t1), o: out(sp.t1) }
+  }
+  if (spans[spans.length - 1].t1 < w.length - 0.5) pieces.push([from.i, e, pEO, from.o])
+  return pieces
+}
+
 // ── Snapping ──────────────────────────────────────────────────────────────────
 
 // Snaps to inside face corners only (the two endpoints of each wall's inside face).

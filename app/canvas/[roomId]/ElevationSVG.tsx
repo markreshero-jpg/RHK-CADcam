@@ -26,7 +26,7 @@ import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
-import FixturesElevation from './FixturesElevation'
+import FixturesElevation, { OpeningHoles } from './FixturesElevation'
 import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
@@ -943,6 +943,12 @@ export default function ElevationSVG({
                   onContextMenu={cmHandler} />
               )
             })()}
+
+            {/* Door / window holes (z_fixtures P5) — under everything drawn on the wall */}
+            {fixtures && fixtures.length > 0 && (
+              <OpeningHoles fixtures={fixtures} wall={wall} side={elevWallSide} roomCx={centroid(walls)} roomH={roomH}
+                layers={layers} fill={isLineDrawing ? 'none' : (layers.background ?? '#030712')} />
+            )}
 
             {/* Floor line */}
             <line x1={0} y1={roomH} x2={wall.length} y2={roomH}

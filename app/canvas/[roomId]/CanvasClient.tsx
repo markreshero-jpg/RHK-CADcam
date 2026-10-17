@@ -41,7 +41,7 @@ import { useFixtureInteraction } from './useFixtureInteraction'
 import FixturesPlan from './FixturesPlan'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
-import { withFixtureCutouts, benchtopAt } from '@/src/lib/fixtureGeometry'
+import { withFixtureCutouts, benchtopAt, openingSpans, refitOpenings } from '@/src/lib/fixtureGeometry'
 import { cabinetPlans, linkFor, followLinks, fixtureClashes } from '@/src/lib/fixtureLinks'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
@@ -345,13 +345,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   })
   const fixtureClashMap = useMemo(() => fixtureClashes(fixtures, cabPlans, room), [fixtures, cabPlans, room])
   const fixtureClashIds = useMemo(() => new Set(fixtureClashMap.keys()), [fixtureClashMap])
+  // Doors / windows (P5) split the walls they sit in.
+  // The one being carried (Move) leaves its old gap closed.
+  const movingFixtureId = mode === 'place_fixture' && fx.carry?.kind === 'move' ? fx.carry.id : null
+  const wallOpenings = useMemo(() => openingSpans(fixtures.filter(f => f.id !== movingFixtureId), walls, centroid(walls)),
+    [fixtures, walls, movingFixtureId])
   // Linked fixtures go with their cabinet (P4). Watching the cabinets covers every
   // way one moves (drag, resize, panels, elevation, wall drag, undo). State follows
   // live; the DB write waits until the cabinets settle. No undo snapshot here — the
   // cabinet change already took one holding the fixtures' old poses.
   const fixtureFollowRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; pending: Map<string, Partial<RoomFixture>> }>({ timer: null, pending: new Map() })
   useEffect(() => {
-    const moves = followLinks(fixtures, cabPlans)
+    // + doors / windows re-seated in a wall that moved or changed thickness (P5).
+    const moves = [...followLinks(fixtures, cabPlans), ...refitOpenings(fixtures, walls, centroid(walls))]
     // A deleted cabinet clears the link in the DB (on delete set null); mirror it locally.
     const cabIds = new Set(cabinets.map(c => c.id))
     const orphans = fixtures.filter(f => f.cabinet_id && !cabIds.has(f.cabinet_id))
@@ -366,7 +372,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     for (const m of moves) q.pending.set(m.id, { ...q.pending.get(m.id), ...m.patch })
     if (q.timer) clearTimeout(q.timer)
     q.timer = setTimeout(flushFixtureFollow, 400)
-  }, [cabPlans, cabinets, fixtures])
+  }, [cabPlans, cabinets, fixtures, walls])
   function flushFixtureFollow() {
     const q = fixtureFollowRef.current
     if (q.timer) clearTimeout(q.timer)
@@ -2500,6 +2506,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               btJoinCursor={bt.btJoinCursor}
               edgeProfiles={btCatalog.profileById}
               btDefaultProfileId={btCatalog.defaultProfileIdFor}
+              btThickness={b => btCatalog.thicknessFor(b).total}
               btLPoints={bt.btLPoints}
               btLCursor={bt.btLCursor}
               btUPoints={bt.btUPoints}
@@ -2518,11 +2525,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               measureEnd={measureEnd}
               measureCursor={measureCursor}
               onMeasureCancel={() => { setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }}
+              wallOpenings={wallOpenings}
               fixturesLayer={
                 <FixturesPlan
                   fixtures={fixtures}
                   ghost={mode === 'place_fixture' ? fx.ghost : null}
-                  ghostBody={fx.carried}
+                  ghostBody={fx.carried && fx.ghost?.depth != null ? { ...fx.carried, depth: fx.ghost.depth } : fx.carried}
                   hiddenId={mode === 'place_fixture' && fx.carry?.kind === 'move' ? fx.carry.id : null}
                   selectedId={selected?.type === 'fixture' ? selected.id : null}
                   zoom={view.zoom}

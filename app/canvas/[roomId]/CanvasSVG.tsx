@@ -15,10 +15,11 @@ import { customExtents } from '@/src/lib/customPartBox'
 import {
   Pt, MIN_WALL_LEN, SNAP_PX,
   toRad, toDeg, dist,
-  wallEnd, wallDir, wallPolygon, wallMitrePolygon, wallInwardNormal, centroid,
+  wallEnd, wallDir, wallPolygon, wallMitrePolygon, wallPieces, wallInwardNormal, centroid,
   cabWallPerp, cabinetPolygon, cabinetCenterPt, cabT, cabinetToPlan, cabinetPlanFrame,
   gridDots,
 } from '@/src/lib/geometry'
+import type { WallSpan } from '@/src/lib/geometry'
 import { footprintEdgesPlan } from '@/src/lib/cabinetShape/footprint'
 import { isShapedPanelKey, zonePartId } from '@/src/lib/cabinetShape/partKeys'
 import WallDimensionChain from './WallDimensionChain'
@@ -130,6 +131,8 @@ interface CanvasSVGProps {
   edgeProfiles?: Record<string, BenchtopEdgeProfile>
   /** The build method default profile for a benchtop (edges with no profile of their own). */
   btDefaultProfileId?: (bt: BenchtopInstance) => string | null
+  /** A top's total thickness (mm) — plan draws each waterfall leg's footprint at it. */
+  btThickness?: (bt: BenchtopInstance) => number
   onBenchtopDoubleClick?: (id: string) => void
   // Move command preview (Phase 3b): base point picked, cursor = target
   btMoveBase?: Pt | null
@@ -159,6 +162,8 @@ interface CanvasSVGProps {
   onMeasureCancel?: () => void
   /** Fixtures & appliances (z_fixtures) — drawn in world space above cabinets. */
   fixturesLayer?: React.ReactNode
+  /** P5: door / window spans per wall id — the wall is drawn split around them. */
+  wallOpenings?: Map<string, WallSpan[]>
 }
 
 export default function CanvasSVG({
@@ -174,11 +179,11 @@ export default function CanvasSVG({
   btLPoints, btLCursor,
   btUPoints, btUCursor, btLinePts, btLineCursor, btMultiIds,
   btCutoutStart, btCutoutCursor,
-  btJoinStart, btJoinCursor, edgeProfiles, btDefaultProfileId, onBenchtopDoubleClick, btMoveBase, btMoveCursor, btDepth,
+  btJoinStart, btJoinCursor, edgeProfiles, btDefaultProfileId, btThickness, onBenchtopDoubleClick, btMoveBase, btMoveCursor, btDepth,
   btShapeEdit, onShapeHandleDown, btEdgeHover, btEdgeEdit, onBtEdgePaint, onBtEdgeHover, btTapeIds, btTapeContextFor,
   sectionCut, onSectionFlipLook, onSectionClear, onSectionLinePointerDown,
   snapResult, measureStart, measureEnd, measureCursor, onMeasureCancel,
-  resolvedParts, fixturesLayer,
+  resolvedParts, fixturesLayer, wallOpenings,
 }: CanvasSVGProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   // Editable part-line palette (src/lib/partPalette.ts); read once on mount.
@@ -282,6 +287,29 @@ export default function CanvasSVG({
                 // P-f); everywhere else tops are click-through so cabinets own clicks.
                 style={{ cursor: mode === 'benchtop_select' ? 'pointer' : undefined, pointerEvents: mode === 'benchtop_select' ? undefined : 'none' }}
               />
+
+              {/* Waterfall legs: the leg's footprint under the edge, inset by the top's
+                  thickness (same strip as waterfallLegs / elevation / 3D). Drawn like
+                  the outline: its inner face as a line in the top's colour + weight. */}
+              {btThickness && (() => {
+                const t = btThickness(bt)
+                if (!(t > 0)) return null
+                return segs.map((s, i) => {
+                  if (s.type !== 'line' || s.edge?.wall || s.edge?.joint) return null
+                  const pid = effectiveProfileId(s, defaultProfileId)
+                  if (!pid || edgeProfiles?.[pid]?.generates !== 'waterfall') return null
+                  const n = outwardNormal(segs, i)
+                  const a = { x: s.p0.x - n.x * t, y: s.p0.y - n.y * t }
+                  const b = { x: s.p1.x - n.x * t, y: s.p1.y - n.y * t }
+                  return (
+                    <line key={`wf${i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                      stroke={isSel ? '#f59e0b' : layers.color('benchtops', '#0d9488')}
+                      opacity={layers.op('benchtops')}
+                      strokeWidth={layers.w('benchtops', isSel ? 2 : 1.5) / lz}
+                      style={{ pointerEvents: 'none' }} />
+                  )
+                })
+              })()}
 
               {/* Edge finishes: wall edges grey, exposed edges in their profile colour + code */}
               {showEdges && !edging && segs.map((s, i) => {
@@ -1000,15 +1028,20 @@ export default function CanvasSVG({
 
           return (
             <Fragment key={w.id}>
-              <polygon
-                points={wallMitrePolygon(w, walls, cx)}
-                fill={isSel ? '#1d3557' : '#1f2937'}
-                stroke={isSel ? '#3b82f6' : '#374151'}
-                strokeWidth={isSel ? 2 / lz : 1 / lz}
-                style={{ cursor: mode === 'select' ? 'pointer' : undefined }}
-                onPointerDown={ev => onWallPointerDown(ev, w.id)}
-                onClick={onClick} onContextMenu={onCtx}
-              />
+              {(wallOpenings?.get(w.id)?.length
+                ? wallPieces(w, walls, cx, wallOpenings.get(w.id)!).map(pts => pts.map(p => `${p.x},${p.y}`).join(' '))
+                : [wallMitrePolygon(w, walls, cx)]
+              ).map((points, i) => (
+                <polygon key={i}
+                  points={points}
+                  fill={isSel ? '#1d3557' : '#1f2937'}
+                  stroke={isSel ? '#3b82f6' : '#374151'}
+                  strokeWidth={isSel ? 2 / lz : 1 / lz}
+                  style={{ cursor: mode === 'select' ? 'pointer' : undefined }}
+                  onPointerDown={ev => onWallPointerDown(ev, w.id)}
+                  onClick={onClick} onContextMenu={onCtx}
+                />
+              ))}
               {(() => {
                 const inorm = wallInwardNormal(w, cx)
                 const tx = midX - inorm.x * w.thickness / 2

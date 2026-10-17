@@ -139,7 +139,7 @@ export const LAYER_ITEMS: LayerItemDef[] = [
 
   // Benchtops
   { id: 'benchtops',      group: 'benchtops', label: 'Benchtops', views: ALL, default: ON,
-    hint: 'Plan outline; elevation band at top height; 3D slab + waterfall legs' },
+    hint: 'Plan outline + waterfall leg footprints; elevation band at top height; 3D slab + waterfall legs' },
   { id: 'benchtop_edges', group: 'benchtops', label: 'Benchtop edge profiles', views: ['plan', 'elevation'], default: ON,
     hint: 'Plan: profile colour + code on exposed edges, wall edges dashed grey. Elevation: code on the front edge' },
   { id: 'benchtop_joins', group: 'benchtops', label: 'Benchtop join lines', views: ['plan', 'elevation'], default: ON },
@@ -149,6 +149,7 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'fixture_sinks',      group: 'fixtures', label: 'Sinks',      views: ALL, default: ON },
   { id: 'fixture_taps',       group: 'fixtures', label: 'Taps',       views: ALL, default: ON },
   { id: 'fixture_decorative', group: 'fixtures', label: 'Decorative', views: ALL, default: ON },
+  { id: 'fixture_openings',   group: 'fixtures', label: 'Doors & windows', views: ALL, default: ON },
   { id: 'fixture_labels',     group: 'fixtures', label: 'Fixture names', views: ['plan', 'elevation'], default: ON },
 
   // Room

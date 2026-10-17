@@ -34,7 +34,7 @@ const BUCKET = 'fixture-models'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const CATEGORIES: { key: FixtureCategory; label: string; mount: FixtureMount; size: [number, number, number]; kinds: string[] }[] = [
+const CATEGORIES: { key: FixtureCategory; label: string; mount: FixtureMount; size: [number, number, number]; kinds: string[]; sill?: number }[] = [
   { key: 'appliance',  label: 'Appliances', mount: 'floor',    size: [600, 600, 850],
     kinds: ['Oven', 'Cooktop', 'Dishwasher', 'Fridge', 'Rangehood', 'Microwave', 'Washing machine', 'Dryer'] },
   { key: 'sink',       label: 'Sinks',      mount: 'benchtop', size: [800, 450, 220],
@@ -43,6 +43,9 @@ const CATEGORIES: { key: FixtureCategory; label: string; mount: FixtureMount; si
     kinds: ['Mixer', 'Pull-out mixer', 'Filter tap', 'Boiling water tap'] },
   { key: 'decorative', label: 'Decorative', mount: 'floor',    size: [400, 400, 800],
     kinds: ['Plant', 'Table', 'Stool', 'Chair', 'Bowl', 'Lamp'] },
+  // P5: sit IN a wall — depth follows the wall thickness, mount_height = sill.
+  { key: 'opening',    label: 'Doors & windows', mount: 'wall', size: [900, 100, 1200], sill: 900,
+    kinds: ['Window', 'Door', 'Sliding door', 'Opening'] },
 ]
 
 const MOUNTS: { key: FixtureMount; label: string; desc: string }[] = [
@@ -101,7 +104,7 @@ export default function FixturesLibraryClient({ embedded }: { embedded?: boolean
     const sort_order = Math.max(0, ...list.map(i => i.sort_order)) + 10
     const { data, error: e } = await supabase
       .from(TABLE)
-      .insert({ name, category: cat, mount: catDef.mount, width, depth, height, sort_order })
+      .insert({ name, category: cat, mount: catDef.mount, width, depth, height, sort_order, ...(catDef.sill != null ? { mount_height: catDef.sill } : {}) })
       .select('*')
       .single()
     if (e) { setError(e.message); return }
@@ -342,11 +345,21 @@ function FixtureEditor({ item, kinds, onPatch, onError }: {
             <label className={lbl}>Outside size (mm)</label>
             <div className="flex gap-3">
               <NumField label="Width"  value={item.width}  onCommit={v => v > 0 && onPatch({ width: v })} />
-              <NumField label="Depth"  value={item.depth}  onCommit={v => v > 0 && onPatch({ depth: v })} />
+              {item.category !== 'opening' && <NumField label="Depth"  value={item.depth}  onCommit={v => v > 0 && onPatch({ depth: v })} />}
               <NumField label="Height" value={item.height} onCommit={v => v > 0 && onPatch({ height: v })} />
             </div>
+            {item.category === 'opening' && (
+              <p className="text-[10px] text-ink-subtle mt-1">The opening in the wall (frame outside). Depth follows the wall it&apos;s placed in.</p>
+            )}
           </div>
 
+          {item.category === 'opening' ? (
+            <div>
+              <NumField label="Sill height from floor" value={item.mount_height ?? 0}
+                onCommit={v => onPatch({ mount_height: Math.max(0, v), mount: 'wall' })} />
+              <p className="text-[10px] text-ink-subtle mt-1">0 for doors and floor-level openings.</p>
+            </div>
+          ) : <>
           <div>
             <label className={lbl}>Mount</label>
             <div className="grid grid-cols-2 gap-1.5">
@@ -417,6 +430,7 @@ function FixtureEditor({ item, kinds, onPatch, onError }: {
               </>
             )}
           </div>
+          </>}
 
           <div className="flex gap-6 items-end">
             <div>

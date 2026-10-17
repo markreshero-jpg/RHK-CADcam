@@ -555,7 +555,7 @@ export const DEFAULT_DIMS: Record<string, { dx: number; dy: number; dz: number }
 
 // ── Fixtures & appliances (z_fixtures/FIXTURES-SPEC.md) ───────────────────────
 
-export type FixtureCategory = 'appliance' | 'sink' | 'tap' | 'decorative'
+export type FixtureCategory = 'appliance' | 'sink' | 'tap' | 'decorative' | 'opening'
 export type FixtureMount = 'floor' | 'under_bench' | 'benchtop' | 'wall'
 
 /** Model + size fields shared by the catalogue row and the placed (job) copy. */
@@ -618,6 +618,9 @@ export interface RoomFixture extends FixtureBody {
   link_x:     number
   link_z:     number
   link_rot:   number
+  /** P5 openings: hinge (or slide-to) side looking from inside the room, and which way a door swings. */
+  hinge_side: 'left' | 'right'
+  swing:      'in' | 'out'
   created_at: string
   updated_at: string
 }

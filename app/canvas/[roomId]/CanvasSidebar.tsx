@@ -199,6 +199,7 @@ const WALL_MODES = WALL_ITEMS.map(w => w.mode)
 const FIXTURE_GROUPS: { key: FixtureCategory; label: string }[] = [
   { key: 'appliance', label: 'Appliances' }, { key: 'sink', label: 'Sinks' },
   { key: 'tap', label: 'Taps' }, { key: 'decorative', label: 'Decorative' },
+  { key: 'opening', label: 'Doors & windows' },
 ]
 function FixtureIcon() {
   return (

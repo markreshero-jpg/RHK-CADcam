@@ -12,8 +12,9 @@ import type { BtElevInfo } from './BenchtopElevation'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
-  wallDir, wallInwardNormal, cabWallSide, centroid, wallEnd, lineIntersect, dist,
+  wallDir, wallInwardNormal, cabWallSide, centroid, wallEnd, lineIntersect, dist, wallPieces, wallSpanQuad,
 } from '@/src/lib/geometry'
+import { openingOnWall } from '@/src/lib/fixtureGeometry'
 import type { Pt, RoomRef } from '@/src/lib/geometry'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { PassivePartsContext, WireColorContext, alphaMat, type PartEdge, type MatColMap } from '@/src/components/three/PartViewer'
@@ -69,8 +70,29 @@ function mitreCorners(w: Wall, walls: Wall[], rc: RoomRef): [Pt, Pt, Pt, Pt] {
 //   • Extruded along +Z then rotateX(−π/2) maps: X→worldX, Z(height)→worldY, −Y→worldZ.
 //   • So (planX,−planY) → (worldX, 0, planY) at floor — exactly right.
 
-function WallMesh({ wall, walls, room, rc, color = '#cbd5e1', alpha = 1, wire = false }: {
+/** A door / window hole through a wall (P5): span along it + bottom / top heights. */
+export interface WallHole { t0: number; t1: number; z0: number; z1: number }
+
+// Wall split around its holes: full-height pieces between them, plus the bit
+// under each sill and over each head. Each prism = footprint quad + z range.
+function wallPrisms(wall: Wall, walls: Wall[], rc: RoomRef, height: number, holes: WallHole[]): { pts: Pt[]; z0: number; z1: number }[] {
+  const spans = [...holes].sort((a, b) => a.t0 - b.t0).reduce<{ t0: number; t1: number }[]>((m, h) => {
+    const last = m[m.length - 1]
+    if (last && h.t0 <= last.t1) last.t1 = Math.max(last.t1, h.t1); else m.push({ t0: h.t0, t1: h.t1 })
+    return m
+  }, [])
+  const out = wallPieces(wall, walls, rc, spans).map(pts => ({ pts, z0: 0, z1: height }))
+  for (const h of holes) {
+    const q = wallSpanQuad(wall, walls, rc, h)
+    if (h.z0 > 0.5) out.push({ pts: q, z0: 0, z1: h.z0 })
+    if (h.z1 < height - 0.5) out.push({ pts: q, z0: h.z1, z1: height })
+  }
+  return out
+}
+
+function WallMesh({ wall, walls, room, rc, color = '#cbd5e1', alpha = 1, wire = false, holes }: {
   wall: Wall; walls: Wall[]; room: Room; rc: RoomRef; color?: string; alpha?: number; wire?: boolean
+  holes?: WallHole[]
 }) {
   const height   = wall.height ?? room.room_dy ?? 2400
   const angleRad = wall.angle * TO_RAD
@@ -80,6 +102,23 @@ function WallMesh({ wall, walls, room, rc, color = '#cbd5e1', alpha = 1, wire = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [wall.id, walls.map(w => w.id).join(), rc],
   )
+
+  const holesKey = JSON.stringify(holes ?? [])
+  const holed = useMemo(() => {
+    if (wall.wall_type === 'island' || !holes?.length) return null
+    return wallPrisms(wall, walls, rc, height, holes).map(({ pts, z0, z1 }) => {
+      const shape = new Shape()
+      pts.forEach((p, i) => i ? shape.lineTo(p.x, -p.y) : shape.moveTo(p.x, -p.y))
+      shape.closePath()
+      const geo = new ExtrudeGeometry(shape, { depth: z1 - z0, bevelEnabled: false })
+      geo.rotateX(-Math.PI / 2)
+      geo.translate(0, z0, 0)
+      geo.computeVertexNormals()
+      return geo
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holesKey, wall, walls.map(w => w.id).join(), rc, height])
+  useEffect(() => () => { holed?.forEach(g => g.dispose()) }, [holed])
 
   const geometry = useMemo(() => {
     if (!corners) return null
@@ -100,6 +139,15 @@ function WallMesh({ wall, walls, room, rc, color = '#cbd5e1', alpha = 1, wire = 
 
   // Islands are invisible — they exist only as placement targets in plan view
   if (wall.wall_type === 'island') return null
+
+  if (holed) {
+    return <>{holed.map((g, i) => (
+      <mesh key={`${alpha < 1 || wire ? 't' : 'o'}${i}`} geometry={g}>
+        <meshStandardMaterial color={color} roughness={0.85} metalness={0} {...alphaMat(wire ? Math.min(alpha, WIRE_GHOST_ALPHA) : alpha)} />
+        <Edges threshold={25} color={wire ? WIRE_EDGE : '#94a3b8'} transparent opacity={wire ? Math.max(alpha, 0.6) : alpha} />
+      </mesh>
+    ))}</>
+  }
 
   if (!geometry) return null
 
@@ -738,6 +786,18 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
 }) {
   const controlsRef = useRef<any>(null)
   const rc = useMemo(() => centroid(walls), [walls])
+  // Door / window holes per wall (z_fixtures P5), on the inside-face span.
+  const wallHoles = useMemo(() => {
+    const m = new Map<string, WallHole[]>()
+    if (!fx || !layers.show('fixture_openings')) return m
+    for (const f of fx.fixtures) {
+      const w = f.wall_id ? walls.find(x => x.id === f.wall_id) : undefined
+      const o = w && openingOnWall(f, w, 'face', rc)
+      if (!w || !o) continue
+      m.set(w.id, [...(m.get(w.id) ?? []), { t0: Math.max(0, o.t0), t1: Math.min(w.length, o.t1), z0: Number(f.z) || 0, z1: (Number(f.z) || 0) + Number(f.height) }])
+    }
+    return m
+  }, [fx, walls, rc, layers])
 
   // Part overrides + drawn shapes for every cabinet. Re-fetched when the resolved
   // map changes (a cabinet edit re-resolves → new map), so editor changes show here.
@@ -819,7 +879,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
 
       {/* Walls */}
       {layers.show('walls') && walls.map(w => hiddenWallIds.has(w.id) ? null : (
-        <WallMesh key={w.id} wall={w} walls={walls} room={room} rc={rc} color={layers.colorOf('walls')} alpha={layers.alpha('walls')} wire={wire} />
+        <WallMesh key={w.id} wall={w} walls={walls} room={room} rc={rc} color={layers.colorOf('walls')} alpha={layers.alpha('walls')} wire={wire} holes={wallHoles.get(w.id)} />
       ))}
 
       {/* Wall name labels on top edge */}

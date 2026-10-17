@@ -55,10 +55,10 @@ const isWallClass = (c: CabinetInstance) => c.assembly_class === 'wall' || c.ass
  * The cabinet a fixture sits on, as a link from its current pose — or null.
  * Wall-mount items link to wall cabinets; benchtop / under-bench items to base
  * and tall cabinets (base and wall cabinets overlap in plan, so the class
- * decides). Floor items never link. Kick assemblies are skipped.
+ * decides). Floor items and openings never link. Kick assemblies are skipped.
  */
-export function linkFor(f: FixtureFootprint & { mount: FixtureMount }, plans: CabPlan[]): FixtureLink | null {
-  if (f.mount === 'floor') return null
+export function linkFor(f: FixtureFootprint & { mount: FixtureMount; category?: string }, plans: CabPlan[]): FixtureLink | null {
+  if (f.mount === 'floor' || f.category === 'opening') return null
   const c = fixtureCenter(f)
   const wantWall = f.mount === 'wall'
   const hit = plans.find(p => !p.cab.is_kick_assembly && isWallClass(p.cab) === wantWall && pointInPolygon(p.pts, c))
@@ -121,7 +121,7 @@ export function followLinks(
 export function fixtureClashes(fixtures: RoomFixture[], plans: CabPlan[], room: Room): Map<string, CabinetInstance[]> {
   const out = new Map<string, CabinetInstance[]>()
   for (const f of fixtures) {
-    if (f.mount === 'benchtop') continue
+    if (f.mount === 'benchtop' || f.category === 'opening') continue
     const poly = shrunkCorners(f, 1)
     const z0 = Number(f.z) || 0, z1 = z0 + Number(f.height)
     const hits: CabinetInstance[] = []

@@ -13,7 +13,7 @@ import { useState, useCallback, useRef } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { Room, Wall, FixtureCatalogItem, RoomFixture, FixtureBody } from '@/src/lib/types'
 import { centroid, type Pt } from '@/src/lib/geometry'
-import { snapFixture, defaultFixtureZ, fixtureCenter, backLeftForCenter, type FixtureSnap, type FixtureFootprint } from '@/src/lib/fixtureGeometry'
+import { snapFixture, snapOpening, defaultFixtureZ, fixtureCenter, backLeftForCenter, type FixtureSnap, type FixtureFootprint } from '@/src/lib/fixtureGeometry'
 import type { FixtureLink } from '@/src/lib/fixtureLinks'
 import type { Mode, Selected } from './canvasTypes'
 
@@ -47,7 +47,7 @@ export function useFixtureInteraction({
   /** P3: top height of the benchtop under a plan point, or null when there's none. */
   benchTopAt?:   (p: Pt) => number | null
   /** P4: the cabinet link for a pose (the cabinet it's dropped over), or null. */
-  linkAt?:       (f: FixtureFootprint & { mount: RoomFixture['mount'] }) => FixtureLink | null
+  linkAt?:       (f: FixtureFootprint & { mount: RoomFixture['mount']; category: RoomFixture['category'] }) => FixtureLink | null
   mode:          Mode
   setMode:       (m: Mode) => void
   selected:      Selected
@@ -96,6 +96,8 @@ export function useFixtureInteraction({
 
   function snapAt(wp: Pt, free: boolean): FixtureSnap | null {
     if (!carried) return null
+    // Doors / windows (P5) always sit in a wall — Shift doesn't free them.
+    if (carried.category === 'opening') return snapOpening(wp, carried.width, walls, centroid(walls), SNAP_REACH)
     return snapFixture(wp, carried.width, carried.depth, free ? [] : walls, centroid(walls), SNAP_REACH, freeRot)
   }
 
@@ -117,7 +119,8 @@ export function useFixtureInteraction({
         room_id: room.id, catalog_id: item.id, ...bodyFromCatalog(item),
         x: round1(s.x), y: round1(s.y), rotation: round3(s.rotation), wall_id: s.wall_id,
         z: benchZ(item, s) ?? defaultFixtureZ(item.mount, item.mount_height) - (item.mount === 'benchtop' ? Number(item.bench_drop) || 0 : 0),
-        ...linkFields({ ...s, width: item.width, depth: item.depth, mount: item.mount }),
+        ...(s.depth != null ? { depth: s.depth } : {}),
+        ...linkFields({ ...s, width: item.width, depth: s.depth ?? item.depth, mount: item.mount, category: item.category }),
       }
       const { data, error: e } = await supabase.from('room_fixtures').insert(row).select('*').single()
       if (e || !data) { setError(e?.message ?? 'Insert failed'); return true }
@@ -133,7 +136,8 @@ export function useFixtureInteraction({
     const z = moved ? benchZ(moved, s) : null
     await update(id, {
       x: round1(s.x), y: round1(s.y), rotation: round3(s.rotation), wall_id: s.wall_id, ...(z != null ? { z } : {}),
-      ...(moved ? linkFields({ ...s, width: moved.width, depth: moved.depth, mount: moved.mount }) : {}),
+      ...(s.depth != null ? { depth: s.depth } : {}),
+      ...(moved ? linkFields({ ...s, width: moved.width, depth: s.depth ?? moved.depth, mount: moved.mount, category: moved.category }) : {}),
     })
     setSelected({ type: 'fixture', id })
     return true
@@ -149,7 +153,7 @@ export function useFixtureInteraction({
   }
 
   // Link to the cabinet under the dropped pose (P4) — or clear a stale link.
-  function linkFields(f: FixtureFootprint & { mount: RoomFixture['mount'] }): Pick<RoomFixture, 'cabinet_id' | 'link_x' | 'link_z' | 'link_rot'> {
+  function linkFields(f: FixtureFootprint & { mount: RoomFixture['mount']; category: RoomFixture['category'] }): Pick<RoomFixture, 'cabinet_id' | 'link_x' | 'link_z' | 'link_rot'> {
     const l = linkAt?.(f)
     return l ?? { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 }
   }
@@ -176,7 +180,7 @@ export function useFixtureInteraction({
   /** Turn in place about the footprint centre (keeps the item where it is). */
   async function rotateBy(id: string, deg: number) {
     const f = fixturesRef.current.find(x => x.id === id)
-    if (!f) return
+    if (!f || f.category === 'opening') return   // openings stay square in their wall
     const c = fixtureCenter(f)
     const rotation = ((f.rotation + deg) % 360 + 360) % 360
     const bl = backLeftForCenter(c, rotation, f.width, f.depth)

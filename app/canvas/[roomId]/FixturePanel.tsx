@@ -8,10 +8,12 @@
 import PanelDeleteButton, { PanelCloseButton } from './PanelDeleteButton'
 import CalcInput from '@/src/components/CalcInput'
 import type { RoomFixture, Wall } from '@/src/lib/types'
-import { fixtureCenter, backLeftForCenter } from '@/src/lib/fixtureGeometry'
+import { fixtureCenter, backLeftForCenter, fixtureCorners } from '@/src/lib/fixtureGeometry'
+import { wallFrame, alongOf } from '@/src/lib/benchtopAnchor'
+import { centroid } from '@/src/lib/geometry'
 
 const CATEGORY_LABEL: Record<string, string> = {
-  appliance: 'Appliance', sink: 'Sink', tap: 'Tap', decorative: 'Decorative',
+  appliance: 'Appliance', sink: 'Sink', tap: 'Tap', decorative: 'Decorative', opening: 'Door / window',
 }
 
 export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMove, onTurn, onOpen, onClose, linkedTo, clashWith, onUnlink }: {
@@ -59,6 +61,21 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
     onUpdate(f.id, { ...patch, x: Math.round(bl.x * 10) / 10, y: Math.round(bl.y * 10) / 10 })
   }
 
+  // Openings (P5): position = distance of the left jamb from the wall start.
+  const opening = f.category === 'opening'
+  const face = opening && wall ? wallFrame(wall, 'face', centroid(walls)) : null
+  const fromStart = face ? Math.min(...fixtureCorners(f).map(p => alongOf(face, p))) : 0
+  function slideAlong(v: number) {
+    if (!face) return
+    const k = v - fromStart
+    onUpdate(f.id, { x: Math.round((f.x + face.d.x * k) * 10) / 10, y: Math.round((f.y + face.d.y * k) * 10) / 10 })
+  }
+  const isDoor = opening && /door/i.test(f.kind ?? '') && !/sliding/i.test(f.kind ?? '')
+  const toggle = (on: boolean, label: string, onClick: () => void, title: string) => (
+    <button onClick={onClick} title={title}
+      className={`flex-1 px-2 py-1 rounded text-xs ${on ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{label}</button>
+  )
+
   function moveCentre(axis: 'x' | 'y', v: number) {
     const centre = { ...c, [axis]: v }
     const bl = backLeftForCenter(centre, f.rotation, f.width, f.depth)
@@ -94,11 +111,32 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
           <label className={lbl}>Size (mm)</label>
           <div className="grid grid-cols-3 gap-1">
             {field('Width',  f.width,  v => resize({ width: v }),  'Width (this placement only — the library item is unchanged)')}
-            {field('Depth',  f.depth,  v => resize({ depth: v }),  'Depth — grows forward when backed onto a wall')}
+            {!opening && field('Depth',  f.depth,  v => resize({ depth: v }),  'Depth — grows forward when backed onto a wall')}
             {field('Height', f.height, v => resize({ height: v }), 'Height')}
           </div>
         </div>
 
+        {opening ? (
+          <div className="space-y-1.5">
+            <label className={lbl}>Position (mm)</label>
+            <div className="grid grid-cols-3 gap-1">
+              {field('Sill', f.z, v => onUpdate(f.id, { z: Math.max(0, v) }), 'Sill height above the floor (0 for doors)')}
+              {face && field('From start', fromStart, slideAlong, 'Distance of the left jamb from the wall start (inside face)')}
+            </div>
+            {isDoor && <>
+              <label className={lbl}>Hinge (from inside)</label>
+              <div className="flex gap-1">
+                {toggle(f.hinge_side === 'left', 'Left', () => onUpdate(f.id, { hinge_side: 'left' }), 'Hinged on the left, looking at it from inside the room')}
+                {toggle(f.hinge_side === 'right', 'Right', () => onUpdate(f.id, { hinge_side: 'right' }), 'Hinged on the right, looking at it from inside the room')}
+              </div>
+              <label className={lbl}>Swings</label>
+              <div className="flex gap-1">
+                {toggle(f.swing === 'in', 'Into room', () => onUpdate(f.id, { swing: 'in' }), 'Opens into this room')}
+                {toggle(f.swing === 'out', 'Out', () => onUpdate(f.id, { swing: 'out' }), 'Opens away from this room')}
+              </div>
+            </>}
+          </div>
+        ) : (
         <div className="space-y-1.5">
           <label className={lbl}>Position (mm)</label>
           <div className="grid grid-cols-3 gap-1">
@@ -110,6 +148,7 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
             {field('Rotation', f.rotation, v => onTurn(f.id, v - f.rotation), 'Plan rotation in degrees (turns about the centre)')}
           </div>
         </div>
+        )}
 
         {linkedTo && (
           <div className="flex items-center gap-2 rounded bg-gray-800/60 px-2 py-1.5">
@@ -131,9 +170,9 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
           <button onClick={() => onMove(f.id)}
             className="flex-1 px-2 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-xs text-gray-200"
             title="Pick up and drop somewhere else (M)">Move</button>
-          <button onClick={() => onTurn(f.id, 90)}
+          {!opening && <button onClick={() => onTurn(f.id, 90)}
             className="flex-1 px-2 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-xs text-gray-200"
-            title="Turn 90° about its centre">Turn 90°</button>
+            title="Turn 90° about its centre">Turn 90°</button>}
         </div>
         {onOpen && (
           <button onClick={() => onOpen(f.id)}

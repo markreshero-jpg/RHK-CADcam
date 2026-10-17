@@ -7,7 +7,7 @@
 import type { Wall, FixtureMount, RoomFixture, BenchtopInstance } from './types'
 import { btSegments, outlinePoints } from './benchtopGeometry'
 import { wallFrame, alongOf, offOf, type WallSide, type WallFrame } from './benchtopAnchor'
-import type { Pt } from './geometry'
+import type { Pt, WallSpan } from './geometry'
 
 const DEG = Math.PI / 180
 
@@ -55,6 +55,8 @@ export function rotationForFront(n: Pt): number {
 export interface FixtureSnap {
   x: number; y: number; rotation: number
   wall_id: string | null
+  /** Openings (P5): depth taken from the wall's thickness. */
+  depth?: number
 }
 
 /**
@@ -92,6 +94,112 @@ export function snapFixture(
   return { x: cx - a.x * width / 2, y: cy - a.y * width / 2, rotation, wall_id: wall.id }
 }
 
+/**
+ * Where an opening (door / window, P5) lands: IN the nearest real wall — back on
+ * the outer face, front on the inside face (depth = wall thickness), centred on
+ * the cursor along the wall and kept within it. The cursor may be in the wall
+ * body or up to `maxDist` either side. Islands / zero-thickness walls are
+ * skipped. Null = no wall in reach (openings never float free).
+ */
+export function snapOpening(cursor: Pt, width: number, walls: Wall[], roomRef: Pt, maxDist: number): FixtureSnap | null {
+  let best: { wall: Wall; face: WallFrame; dist: number } | null = null
+  for (const wall of walls) {
+    const thk = Number(wall.thickness) || 0
+    if (wall.wall_type === 'island' || thk <= 0) continue
+    const face = wallFrame(wall, 'face', roomRef)
+    const t = alongOf(face, cursor)
+    if (t < -width / 2 || t > face.len + width / 2) continue
+    const off = offOf(face, cursor)   // + into the room, −thk = outer face
+    const dist = off > 0 ? off : off < -thk ? -thk - off : 0
+    if (dist > maxDist) continue
+    if (!best || dist < best.dist) best = { wall, face, dist }
+  }
+  if (!best) return null
+  const { wall, face } = best
+  const back = wallFrame(wall, 'back', roomRef)
+  const rotation = rotationForFront(face.n)
+  const { a } = fixtureAxes(rotation)
+  let t = alongOf(face, cursor)
+  if (width <= face.len) t = Math.max(width / 2, Math.min(face.len - width / 2, t))
+  const cx = back.o.x + back.d.x * t, cy = back.o.y + back.d.y * t
+  return { x: cx - a.x * width / 2, y: cy - a.y * width / 2, rotation, wall_id: wall.id, depth: Number(wall.thickness) }
+}
+
+/**
+ * Each wall's openings as spans along it (mm from its start, on the inside
+ * face), sorted, clamped to the wall and merged where they overlap.
+ */
+export function openingSpans(
+  fixtures: Pick<RoomFixture, 'category' | 'wall_id' | 'x' | 'y' | 'rotation' | 'width' | 'depth'>[],
+  walls: Wall[], roomRef: Pt,
+): Map<string, WallSpan[]> {
+  const out = new Map<string, WallSpan[]>()
+  for (const f of fixtures) {
+    if (f.category !== 'opening' || !f.wall_id) continue
+    const wall = walls.find(w => w.id === f.wall_id)
+    if (!wall) continue
+    const face = wallFrame(wall, 'face', roomRef)
+    const ts = fixtureCorners(f).map(p => alongOf(face, p))
+    const t0 = Math.max(0, Math.min(...ts)), t1 = Math.min(wall.length, Math.max(...ts))
+    if (t1 - t0 < 1) continue
+    out.set(wall.id, [...(out.get(wall.id) ?? []), { t0, t1 }])
+  }
+  for (const [id, spans] of out) {
+    spans.sort((p, q) => p.t0 - q.t0)
+    const merged: WallSpan[] = []
+    for (const s of spans) {
+      const last = merged[merged.length - 1]
+      if (last && s.t0 <= last.t1) last.t1 = Math.max(last.t1, s.t1)
+      else merged.push({ ...s })
+    }
+    out.set(id, merged)
+  }
+  return out
+}
+
+/**
+ * Openings re-seated in their wall after the wall changed (moved, turned,
+ * thickness / length edits): same spot along it, depth = thickness. Only the
+ * ones that moved are returned.
+ */
+export function refitOpenings(fixtures: RoomFixture[], walls: Wall[], roomRef: Pt): { id: string; patch: Pick<RoomFixture, 'x' | 'y' | 'rotation' | 'depth'> }[] {
+  const out: { id: string; patch: Pick<RoomFixture, 'x' | 'y' | 'rotation' | 'depth'> }[] = []
+  for (const f of fixtures) {
+    if (f.category !== 'opening' || !f.wall_id) continue
+    const wall = walls.find(w => w.id === f.wall_id)
+    if (!wall) continue
+    const s = snapOpening(fixtureCenter(f), f.width, [wall], roomRef, Infinity)
+    if (!s || s.depth == null) continue
+    const patch = { x: Math.round(s.x * 10) / 10, y: Math.round(s.y * 10) / 10, rotation: Math.round(s.rotation * 1000) / 1000, depth: s.depth }
+    const turn = (((patch.rotation - f.rotation) % 360) + 360) % 360
+    if (Math.abs(patch.x - f.x) > 0.05 || Math.abs(patch.y - f.y) > 0.05 || Math.min(turn, 360 - turn) > 0.001 || Math.abs(patch.depth - f.depth) > 0.05) {
+      out.push({ id: f.id, patch })
+    }
+  }
+  return out
+}
+
+/**
+ * An opening's place on one face of its own wall, in that elevation's x (face
+ * side: along the wall; back side: mirrored), plus the hinge jamb's x. Null if
+ * it isn't an opening in this wall. Openings show on BOTH faces.
+ */
+export function openingOnWall(
+  fx: Pick<RoomFixture, 'category' | 'wall_id' | 'x' | 'y' | 'rotation' | 'width' | 'depth' | 'hinge_side'>,
+  wall: Wall, side: WallSide, roomRef: Pt,
+): { t0: number; t1: number; hingeT: number } | null {
+  if (fx.category !== 'opening' || fx.wall_id !== wall.id) return null
+  const f0 = wallFrame(wall, side, roomRef)
+  const f = side === 'back'
+    ? { ...f0, o: { x: f0.o.x + f0.d.x * f0.len, y: f0.o.y + f0.d.y * f0.len }, d: { x: -f0.d.x, y: -f0.d.y } }
+    : f0
+  const ts = fixtureCorners(fx).map(p => alongOf(f, p))
+  const { a } = fixtureAxes(fx.rotation)
+  const hw = fx.hinge_side === 'right' ? fx.width : 0
+  const hingeT = alongOf(f, { x: fx.x + a.x * hw, y: fx.y + a.y * hw })
+  return { t0: Math.min(...ts), t1: Math.max(...ts), hingeT }
+}
+
 /** Default underside height for a mount type. */
 export const FIXTURE_BENCH_Z = 900
 export function defaultFixtureZ(mount: FixtureMount, mountHeight: number | null): number {
@@ -124,6 +232,7 @@ export const FIXTURE_LAYER: Record<string, string> = {
   sink:       'fixture_sinks',
   tap:        'fixture_taps',
   decorative: 'fixture_decorative',
+  opening:    'fixture_openings',
 }
 export const fixtureLayer = (category: string) => FIXTURE_LAYER[category] ?? 'fixture_appliances'
 
