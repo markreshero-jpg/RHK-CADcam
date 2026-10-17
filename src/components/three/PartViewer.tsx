@@ -27,6 +27,9 @@ export type PartEdge  = { top: boolean; bottom: boolean; left: boolean; right: b
 export interface PartMeta {
   id:        string
   label:     string
+  // Bought-in hardware (runner / hinge / handle / bin), not a board part: the
+  // info panels drop material + edge banding, and the size when it's unknown.
+  hardware?: boolean
   w:         number
   h:         number
   d:         number
@@ -575,9 +578,11 @@ export function PartPropertiesPanel({
           Size{onSizeChange ? <span className="text-gray-700 normal-case tracking-normal"> · editable</span> : null}
           {showCut ? <span className="text-amber-500/80 normal-case tracking-normal"> · cut (banding deducted)</span> : null}
         </span>
-        {row('Length', 'DY')}
-        {row('Width', 'DX')}
-        {row('Thickness', 'DZ')}
+        {!(part.hardware && !part.w && !part.h && !part.d) && <>
+          {row('Length', 'DY')}
+          {row('Width', 'DX')}
+          {row('Thickness', 'DZ')}
+        </>}
         {(part.x != null || part.y != null || part.z != null) && (
           <>
             <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Position</span>
@@ -597,7 +602,7 @@ export function PartPropertiesPanel({
             {part.az !== 0 && <><span className="text-gray-500">AZ</span><span className="text-gray-200 text-right font-mono">{part.az}°</span></>}
           </>
         )}
-        <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Edge band</span>
+        {!part.hardware && <><span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Edge band</span>
         <span className="col-span-2">
           <div className="grid grid-cols-2 gap-x-2 gap-y-1">
             {(['top', 'bottom', 'left', 'right'] as const).map(e => (
@@ -613,7 +618,7 @@ export function PartPropertiesPanel({
               </label>
             ))}
           </div>
-        </span>
+        </span></>}
         {jointControls && (
           <>
             <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Edge joints (drilling)</span>

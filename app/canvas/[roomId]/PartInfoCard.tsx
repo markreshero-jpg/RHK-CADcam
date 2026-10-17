@@ -84,7 +84,7 @@ export default function PartInfoCard({ part, ebThickness, onClose, onDetails }: 
       </div>
       <div className="px-3 pt-1.5 pb-2.5 flex items-end gap-3">
         <div className="flex-1 min-w-0 grid grid-cols-3 gap-2 text-center">
-          {([['Length', s.length], ['Width', s.width], ['Thick', s.thickness]] as const).map(([k, v]) => (
+          {(part.hardware && !part.w && !part.h && !part.d ? [] : [['Length', s.length], ['Width', s.width], ['Thick', s.thickness]] as const).map(([k, v]) => (
             <div key={k} className="rounded-md bg-gray-800/70 py-1">
               <p className="text-[9px] uppercase tracking-wider text-gray-500">{k}</p>
               <p className="text-sm font-mono text-gray-100">{fmtMm(v)}</p>
@@ -98,11 +98,11 @@ export default function PartInfoCard({ part, ebThickness, onClose, onDetails }: 
           </button>
         )}
       </div>
-      <div className="px-3 pb-2.5 -mt-1 text-[11px] text-gray-400 truncate">
+      {!part.hardware && <div className="px-3 pb-2.5 -mt-1 text-[11px] text-gray-400 truncate">
         {material ?? (part.materialId ? 'Loading material…' : 'No material')}
         {edges.length > 0 && <span className="text-gray-500"> · banded {edges.join(', ')}</span>}
         {s.cut && <span className="text-amber-500/80"> · cut size</span>}
-      </div>
+      </div>}
     </div>
   )
 }

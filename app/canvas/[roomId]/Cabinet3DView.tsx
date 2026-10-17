@@ -226,6 +226,7 @@ function buildDbPartInfo(p: ResolvedDrawerBoxPart, b: Box, stack: ResolvedDrawer
 function buildSlideInfo(s: ResolvedDrawerSlide, b: Box, stack: ResolvedDrawerStack): PartMeta {
   return {
     id:        `slide_${stackKey(stack)}_${s.side}`,
+    hardware:  true,
     label:     `Drawer Slide (${s.side})`,
     w: b.w, h: b.h, d: b.d,
     thickness: s.DZ,
@@ -240,6 +241,7 @@ function buildSlideInfo(s: ResolvedDrawerSlide, b: Box, stack: ResolvedDrawerSta
 function buildInternalSlideInfo(s: ResolvedDrawerSlide, b: Box, index: number): PartMeta {
   return {
     id:        `int_slide_${index}_${s.side}`,
+    hardware:  true,
     label:     `Inner Drawer Slide (${s.side})`,
     w: b.w, h: b.h, d: b.d,
     thickness: s.DZ,
@@ -249,13 +251,23 @@ function buildInternalSlideInfo(s: ResolvedDrawerSlide, b: Box, index: number): 
   }
 }
 
-// Click-to-select wrapper for hardware drawn as a model (runner GLB / parametric
-// Runner3D) rather than a Part box. Mirrors Part's pick behaviour — right-click
-// selects on desktop, tap selects on touch, orbit drags don't select — and draws
-// the rail's bounding box in the selection / hover colours, since the model's
-// own materials can't be recoloured.
-function PickableHardware({ b, meta, selected, onSelect, dragRef, children }: {
-  b:        Box
+// Hardware ids that aren't panels: no Part Editor, no shape, no delete.
+// Slides keep their older slide_ / int_slide_ ids; everything else is hw_.
+function isHardwarePartId(id: string): boolean {
+  return id.startsWith('hw_') || id.startsWith('slide_') || id.startsWith('int_slide_')
+}
+
+const _hwInv = new THREE.Matrix4(), _hwMat = new THREE.Matrix4()
+const _hwBox = new THREE.Box3(), _hwTmp = new THREE.Box3()
+const _hwC = new THREE.Vector3(), _hwS = new THREE.Vector3()
+
+// Click-to-select wrapper for cabinet hardware drawn as models (runners, hinges,
+// handles, bins) rather than Part boxes. Mirrors Part's pick behaviour —
+// right-click selects on desktop, tap selects on touch, orbit drags don't
+// select. The model's own materials can't be recoloured, so selection / hover
+// draws an outline box around the meshes, measured each frame in this group's
+// space (models load async, hinge arms fold, bins slide).
+function PickableHardware({ meta, selected, onSelect, dragRef, children }: {
   meta:     PartMeta
   selected: boolean
   onSelect: (meta: PartMeta | null) => void
@@ -264,11 +276,33 @@ function PickableHardware({ b, meta, selected, onSelect, dragRef, children }: {
 }) {
   const [hovered, setHovered] = useState(false)
   const touchDownRef = useRef<{ x: number; y: number } | null>(null)
-  const passive = useContext(PassivePartsContext)
+  const groupRef = useRef<THREE.Group>(null)
+  const boxRef   = useRef<THREE.Mesh>(null)
+  const passive  = useContext(PassivePartsContext)
+  const outline  = selected ? '#f59e0b' : hovered ? '#ff6200' : null
+  useFrame(() => {
+    const g = groupRef.current, m = boxRef.current
+    if (!g || !m) return
+    g.updateWorldMatrix(true, true)
+    _hwInv.copy(g.matrixWorld).invert()
+    _hwBox.makeEmpty()
+    g.traverse(o => {
+      const mesh = o as THREE.Mesh
+      if (o === m || !mesh.isMesh || !mesh.visible) return
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+      _hwTmp.copy(mesh.geometry.boundingBox!).applyMatrix4(_hwMat.multiplyMatrices(_hwInv, mesh.matrixWorld))
+      _hwBox.union(_hwTmp)
+    })
+    if (_hwBox.isEmpty()) { m.visible = false; return }
+    _hwBox.getCenter(_hwC); _hwBox.getSize(_hwS)
+    m.position.copy(_hwC)
+    m.scale.set(_hwS.x + 2, _hwS.y + 2, _hwS.z + 2)
+    m.visible = true
+  })
   if (passive) return <>{children}</>
-  const outline = selected ? '#f59e0b' : hovered ? '#ff6200' : null
   return (
     <group
+      ref={groupRef}
       onPointerDown={e => {
         dragRef.current = false
         const ne = e.nativeEvent as PointerEvent
@@ -290,14 +324,61 @@ function PickableHardware({ b, meta, selected, onSelect, dragRef, children }: {
     >
       {children}
       {outline && (
-        <mesh position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]} raycast={() => null}>
-          <boxGeometry args={[b.w + 1, b.h + 1, b.d + 1]} />
-          <meshBasicMaterial color={outline} transparent opacity={selected ? 0.25 : 0} depthWrite={false} />
+        <mesh ref={boxRef} visible={false} raycast={() => null}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshBasicMaterial color={outline} transparent opacity={selected ? 0.2 : 0} depthWrite={false} />
           <Edges threshold={10} color={outline} linewidth={selected ? 1.5 : 2.5} />
         </mesh>
       )}
     </group>
   )
+}
+
+function buildHingeInfo(h: ResolvedHingeInstance): PartMeta {
+  return {
+    id:        `hw_hinge_${h.row_index}_${h.col_index}_${h.sort_order}`,
+    hardware:  true,
+    label:     h.hinge_name ? `Hinge — ${h.hinge_name}` : 'Hinge',
+    w: 0, h: 0, d: 0,
+    thickness: 0,
+    edge:      { top: false, bottom: false, left: false, right: false },
+    panelKind: 'side',
+    detail:    `${h.hinge_edge} edge · ${Math.round(h.y_position_mm)}mm up the door`
+             + (h.mount_target ? '' : ' · no mounting surface')
+             + (h.mount_angle_deg ? ` · ${h.mount_angle_deg}° mount${h.angle_matched === false ? ' (no match, default used)' : ''}` : ''),
+  }
+}
+
+function buildHandleInfo(s: HandleShape, z: ResolvedFaceZone): PartMeta {
+  const h = s.handle
+  return {
+    id:        `hw_handle_${zoneKey(z)}`,
+    hardware:  true,
+    label:     `Handle — ${h.name}`,
+    w: Math.round(s.w), h: Math.round(s.h), d: Math.round(s.projection),
+    thickness: Math.round(s.projection),
+    edge:      { top: false, bottom: false, left: false, right: false },
+    panelKind: 'face',
+    detail:    [
+      h.orientation,
+      h.bore_centres ? `${h.bore_centres}mm centres` : null,
+      h.holes.length ? `${h.holes.length} × Ø${h.hole_dia} holes${h.drilled ? '' : ' (not drilled)'}` : null,
+    ].filter(Boolean).join(' · '),
+  }
+}
+
+function buildBinInfo(stack: ResolvedDrawerStack): PartMeta {
+  return {
+    id:        `hw_bin_${stackKey(stack)}`,
+    hardware:  true,
+    label:     'Pull-out Bin',
+    w: Math.round(stack.box_width), h: Math.round(stack.box_height), d: Math.round(stack.box_depth),
+    thickness: 0,
+    edge:      { top: false, bottom: false, left: false, right: false },
+    panelKind: 'side',
+    detail:    `Row ${stack.face_zone_row + 1}, Col ${stack.face_zone_col + 1}`
+             + (stack.slides[0] ? ` · ${stack.slides[0].nominal_length}mm NL` : ''),
+  }
 }
 
 function buildZoneInfo(z: ResolvedFaceZone, b: Box): PartMeta {
@@ -438,8 +519,10 @@ function HingeArmFold({ url, pivot, openAngle, doorsOpen, mirror, scale, color, 
   )
 }
 
-function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, handle, handleAlpha = 1, handleParts, ...partProps }: PartProps & {
+function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, handle, handleMeta, handleAlpha = 1, handleParts, selectedId, ...partProps }: PartProps & {
   handle?:    HandleShape | null   // z_handles H2 — swings with the door
+  handleMeta?: PartMeta            // click-to-select info for the handle
+  selectedId?: string | null       // selected part id (hinge / handle highlight)
   handleAlpha?: number
   handleParts?: { bar: boolean; holes: boolean }
   b:          Box
@@ -483,13 +566,19 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, sh
           {doorProfile && <DoorProfile3D profile={doorProfile} b={localB} />}
         </PartAlpha>
       )}
-      {handle && <Handle3D s={handle} offset={[-hingeX, -b.y, -b.z]} opacity={handleAlpha} showBar={handleParts?.bar ?? true} showHoles={handleParts?.holes ?? true} />}
+      {handle && (() => {
+        const h3 = <Handle3D s={handle} offset={[-hingeX, -b.y, -b.z]} opacity={handleAlpha} showBar={handleParts?.bar ?? true} showHoles={handleParts?.holes ?? true} />
+        return handleMeta
+          ? <PickableHardware meta={handleMeta} selected={selectedId === handleMeta.id} onSelect={partProps.onSelect} dragRef={partProps.dragRef}>{h3}</PickableHardware>
+          : h3
+      })()}
       {/* Door-side hinge body (HingeCupArm = cup + front arm to the knuckle) lives
           inside the rotating group so it swings with the door. The gable-side back
           arm (HingeArm) folds separately near the plate (see below). Local origin
           sits on the hinge axis; y = hinge height from door bottom. */}
-      {(hinges ?? []).filter(h => h.model_url).map((h, hi) => (
+      {(hinges ?? []).filter(h => h.model_url).map((h, hi) => { const hm = buildHingeInfo(h); return (
         <PartAlpha key={`cup${hi}`} a={hingeAlpha}>
+        <PickableHardware meta={hm} selected={selectedId === hm.id} onSelect={partProps.onSelect} dragRef={partProps.dragRef}>
         <HingeMeshPlaced
           url={h.model_url!}
           mesh="HingeCupArm"
@@ -504,8 +593,9 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, sh
           scale={h.model_scale}
           color="#c0c6d0"
         />
+        </PickableHardware>
         </PartAlpha>
-      ))}
+      )})}
       {/* Cup + anchor bore markers — inside the group, so they swing with the
           door. Convert from world to door-group-local coords. */}
       {showDrilling && (cupDrills?.length ?? 0) > 0 && (
@@ -610,7 +700,11 @@ function DrawerAssembly({
         rotation={getRotOv(zoneId, partOverrides)}
         shape={shapes3D?.get(zoneId)}
       /></PartAlpha>}
-      {handle && <Handle3D s={handle} opacity={alpha('handles')} showBar={!layers || layers.show('handles')} showHoles={!layers || layers.show('handle_holes')} />}
+      {handle && (() => { const hm = buildHandleInfo(handle, faceZone); return (
+        <PickableHardware meta={hm} selected={selected?.id === hm.id} onSelect={onSelect} dragRef={dragRef}>
+          <Handle3D s={handle} opacity={alpha('handles')} showBar={!layers || layers.show('handles')} showHoles={!layers || layers.show('handle_holes')} />
+        </PickableHardware>
+      )})()}
       {(showBox ? stack.box_parts : []).map((p, pi) => {
         const id   = dbPartId(stack, p.part_type)
         const pp   = applyPosOv(p, id, partOverrides)
@@ -637,7 +731,11 @@ function DrawerAssembly({
         )
       })}
       {/* Pull-out bin (z_bin_cabinet B5): the generic bin replaces its rails. */}
-      {stack.drawer_type === 'bin' && (!layers || layers.show('bins')) && <Bin3D stack={stack} opacity={alpha('bins')} />}
+      {stack.drawer_type === 'bin' && (!layers || layers.show('bins')) && (() => { const bm = buildBinInfo(stack); return (
+        <PickableHardware meta={bm} selected={selected?.id === bm.id} onSelect={onSelect} dragRef={dragRef}>
+          <Bin3D stack={stack} opacity={alpha('bins')} />
+        </PickableHardware>
+      )})()}
       {(showSlides && stack.drawer_type !== 'bin' ? stack.slides : []).map((sl, li) => {
         const id   = `slide_${stackKey(stack)}_${sl.side}`
         const ps   = applyPosOv(sl, id, partOverrides)
@@ -650,7 +748,7 @@ function DrawerAssembly({
           const originY = ps.Y + ps.DY
           const originZ = ps.Z + ps.DX
           return (
-            <PartAlpha key={`sl_${li}`} a={alpha('drawer_runners')}><PickableHardware b={b} meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><SlideModel
+            <PartAlpha key={`sl_${li}`} a={alpha('drawer_runners')}><PickableHardware meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><SlideModel
               url={ps.model_url}
               format={ps.model_format}
               scale={ps.model_scale}
@@ -663,7 +761,7 @@ function DrawerAssembly({
           )
         }
         // Parametric runner family (z_runner_models), drawn at this rail's size.
-        if (ps.drawn_as) return <PartAlpha key={`sl_${li}`} a={alpha('drawer_runners')}><PickableHardware b={b} meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><Runner3D rail={ps} opacity={alpha('drawer_runners')} /></PickableHardware></PartAlpha>
+        if (ps.drawn_as) return <PartAlpha key={`sl_${li}`} a={alpha('drawer_runners')}><PickableHardware meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><Runner3D rail={ps} opacity={alpha('drawer_runners')} /></PickableHardware></PartAlpha>
         const fc   = panelFaceColors('side', `slide_${sl.side}`, sc, sc, sc)
         return (
           <PartAlpha key={`sl_${li}`} a={alpha('drawer_runners')}><Part
@@ -1497,7 +1595,7 @@ export function CabinetScene({
             const originY = ps.Y + ps.DY
             const originZ = ps.Z + ps.DX
             return (
-              <PartAlpha key={key} a={alpha('inner_drawer_runners')}><PickableHardware b={b} meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><SlideModel
+              <PartAlpha key={key} a={alpha('inner_drawer_runners')}><PickableHardware meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><SlideModel
                 url={ps.model_url}
                 format={ps.model_format}
                 scale={ps.model_scale}
@@ -1509,7 +1607,7 @@ export function CabinetScene({
               /></PickableHardware></PartAlpha>
             )
           }
-          if (ps.drawn_as) return <PartAlpha key={key} a={alpha('inner_drawer_runners')}><PickableHardware b={b} meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><Runner3D rail={ps} opacity={alpha('inner_drawer_runners')} /></PickableHardware></PartAlpha>
+          if (ps.drawn_as) return <PartAlpha key={key} a={alpha('inner_drawer_runners')}><PickableHardware meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><Runner3D rail={ps} opacity={alpha('inner_drawer_runners')} /></PickableHardware></PartAlpha>
           const fc   = panelFaceColors('side', `slide_${sl.side}`, sc, sc, sc)
           return (
             <PartAlpha key={key} a={alpha('inner_drawer_runners')}><Part
@@ -1625,7 +1723,12 @@ export function CabinetScene({
 
         // Handle on a front that doesn't move (lift-up / fixed doors, false panels).
         const staticShape = showFaceZone && (show('handles') || show('handle_holes')) ? handleShape(z) : null
-        const staticHandle = staticShape ? <Handle3D s={staticShape} opacity={alpha('handles')} showBar={show('handles')} showHoles={show('handle_holes')} /> : null
+        const hMeta        = staticShape ? buildHandleInfo(staticShape, z) : undefined
+        const staticHandle = staticShape && hMeta ? (
+          <PickableHardware meta={hMeta} selected={selected?.id === hMeta.id} onSelect={onSelect} dragRef={dragRef}>
+            <Handle3D s={staticShape} opacity={alpha('handles')} showBar={show('handles')} showHoles={show('handle_holes')} />
+          </PickableHardware>
+        ) : null
 
         if (z.face_type === 'door' && (z.hinge_side === 'left' || z.hinge_side === 'right')) {
           const zoneHinges = show('hinges') ? hingesByZone.get(zoneKey(z)) ?? [] : []
@@ -1645,6 +1748,8 @@ export function CabinetScene({
                 cupDrills={cupDrillsByZone.get(zoneKey(z))}
                 showDrilling={showDrilling}
                 handle={showFaceZone && (show('handles') || show('handle_holes')) ? handleShape(z) : null}
+                handleMeta={hMeta}
+                selectedId={selected?.id ?? null}
                 handleAlpha={alpha('handles')}
                 handleParts={{ bar: show('handles'), holes: show('handle_holes') }}
                 {...partProps}
@@ -1657,8 +1762,10 @@ export function CabinetScene({
                 const plateUrl   = h.plate_model_url ?? h.model_url
                 const plateScale = h.plate_model_url ? h.plate_model_scale : h.model_scale
                 if (!plateUrl) return null
+                const hm = buildHingeInfo(h)
                 return (
                 <PartAlpha key={`plate${hi}`} a={alpha('hinges')}>
+                <PickableHardware meta={hm} selected={selected?.id === hm.id} onSelect={onSelect} dragRef={dragRef}>
                 <HingeMeshPlaced
                   url={plateUrl}
                   mesh="HingePlate"
@@ -1676,6 +1783,7 @@ export function CabinetScene({
                   scale={plateScale}
                   color="#8b919b"
                 />
+                </PickableHardware>
                 </PartAlpha>
                 )})}
               {/* Gable-side back arm (HingeArm) of a SPLIT hinge body. Sits at the
@@ -1683,8 +1791,9 @@ export function CabinetScene({
                   a fraction of the door angle, so the body articulates at the
                   knuckle. Renders nothing if the body GLB has no HingeArm mesh
                   (one-piece bodies just swing with the door inside DoorPanel). */}
-              {zoneHinges.filter(h => h.model_url).map((h, hi) => (
+              {zoneHinges.filter(h => h.model_url).map((h, hi) => { const hm = buildHingeInfo(h); return (
                 <PartAlpha key={`arm${hi}`} a={alpha('hinges')}>
+                <PickableHardware meta={hm} selected={selected?.id === hm.id} onSelect={onSelect} dragRef={dragRef}>
                 <HingeArmFold
                   url={h.model_url!}
                   pivot={[
@@ -1699,8 +1808,9 @@ export function CabinetScene({
                   color="#c0c6d0"
                   foldFraction={h.arm_fold_fraction}
                 />
+                </PickableHardware>
                 </PartAlpha>
-              ))}
+              )})}
             </group>
           )
         }
@@ -1823,6 +1933,7 @@ export default function Cabinet3DView({
   const handMarkers = useHandOpMarkers(cab.id, rp)
 
   const didHitPartRef   = useRef(false)
+  const hitHardwareRef  = useRef(false)   // last pick was a hinge / handle / bin (no edit menu)
   const prevPartRef     = useRef<PartMeta | null>(null)
   const originalEdgeRef = useRef<PartEdge | null>(null)
 
@@ -1860,7 +1971,7 @@ export default function Cabinet3DView({
   const deleteSelRef = useRef<() => void>(() => {})
   useEffect(() => {
     deleteSelRef.current = () => {
-      if (!selectedPart || !onDeletePart) return
+      if (!selectedPart || !onDeletePart || isHardwarePartId(selectedPart.id)) return
       onDeletePart(selectedPart.id)
       setSelectedPart(null)
     }
@@ -1879,7 +1990,7 @@ export default function Cabinet3DView({
   }, [onDeletePart])
 
   function handleSelect(info: PartMeta | null) {
-    if (info !== null) didHitPartRef.current = true
+    if (info !== null) { didHitPartRef.current = true; hitHardwareRef.current = isHardwarePartId(info.id) && !info.id.includes('slide_') }
     setSelectedPart(info)
     if (onPartSelect && info) {
       // Case parts report their part_key; internal seam parts report their
@@ -1943,7 +2054,7 @@ export default function Cabinet3DView({
     if (didHitPartRef.current) {
       // A part was right-clicked (and just selected via contextMenuSelect). Offer
       // the Part Editor at the cursor when the host supports it.
-      if (onEditPart || onUpdate) setEditMenu({ cx: e.clientX, cy: e.clientY })
+      if ((onEditPart || onUpdate) && !hitHardwareRef.current) setEditMenu({ cx: e.clientX, cy: e.clientY })
     } else {
       setSelectedPart(null)
       setEditMenu(null)
@@ -2074,7 +2185,7 @@ export default function Cabinet3DView({
                 onClose={() => setSelectedPart(null)}
                 onEdgeChange={handleEdgeChange}
                 ebThickness={selectedPart.materialId ? ebByMatId?.[selectedPart.materialId]?.thickness : undefined}
-                onSizeChange={/^(case_|tk_|int_|zone_|custom_)/.test(selectedPart.id) ? handleSizeChange : undefined}
+                onSizeChange={!selectedPart.hardware && /^(case_|tk_|int_|zone_|custom_)/.test(selectedPart.id) ? handleSizeChange : undefined}
                 actions={drawerActions}
                 jointControls={onUpdate && rp && /^(case_|int_(adj_shelf|fixed_shelf|divider)_)/.test(selectedPart.id)
                   ? <PartEdgeJoints cabinet={cab} rp={rp}
@@ -2102,7 +2213,7 @@ export default function Cabinet3DView({
                 )}
                 {/* Slides are hardware — every panel part is shapeable (scope
                     amendment 2026-07-30). */}
-                {onEditPart && !selectedPart.id.startsWith('slide_') && (
+                {onEditPart && !isHardwarePartId(selectedPart.id) && (
                   <button
                     className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-200 transition-colors whitespace-nowrap"
                     onClick={() => { onEditPart(selectedPart, true); setEditMenu(null) }}>
