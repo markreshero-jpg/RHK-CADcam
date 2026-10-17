@@ -1,10 +1,11 @@
 'use client'
 
 import PartInfoCard from './PartInfoCard'
-import { useRef, useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
+import { useRef, useState, useEffect, useMemo, useContext, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
+import { Edges } from '@react-three/drei'
 import { supabase } from '@/src/lib/supabase'
 import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
 import type { CabinetInstance } from '@/src/lib/types'
@@ -21,7 +22,7 @@ import {
   Box, PanelKind, PartMeta, PartEdge,
   MatColSpec, MatColMap, EbSpec, PartShape,
   panelFaceColors, unpackMatCol,
-  Part, PartPropertiesPanel, PreviewCanvas,
+  Part, PartPropertiesPanel, PreviewCanvas, PassivePartsContext,
 } from '@/src/components/three/PartViewer'
 import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamDrillsFor, intoPartFrame, seamExtentBoxes, coalesceOpposingDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelOutline, caseBevelNote, tkBevelOutline, tkBevelNote } from '@/src/lib/jointDrilling'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
@@ -246,6 +247,57 @@ function buildInternalSlideInfo(s: ResolvedDrawerSlide, b: Box, index: number): 
     panelKind: 'side',
     detail:    `${s.nominal_length}mm NL · Box ht ${s.box_height}mm`,
   }
+}
+
+// Click-to-select wrapper for hardware drawn as a model (runner GLB / parametric
+// Runner3D) rather than a Part box. Mirrors Part's pick behaviour — right-click
+// selects on desktop, tap selects on touch, orbit drags don't select — and draws
+// the rail's bounding box in the selection / hover colours, since the model's
+// own materials can't be recoloured.
+function PickableHardware({ b, meta, selected, onSelect, dragRef, children }: {
+  b:        Box
+  meta:     PartMeta
+  selected: boolean
+  onSelect: (meta: PartMeta | null) => void
+  dragRef:  React.MutableRefObject<boolean>
+  children: React.ReactNode
+}) {
+  const [hovered, setHovered] = useState(false)
+  const touchDownRef = useRef<{ x: number; y: number } | null>(null)
+  const passive = useContext(PassivePartsContext)
+  if (passive) return <>{children}</>
+  const outline = selected ? '#f59e0b' : hovered ? '#ff6200' : null
+  return (
+    <group
+      onPointerDown={e => {
+        dragRef.current = false
+        const ne = e.nativeEvent as PointerEvent
+        touchDownRef.current = ne.pointerType === 'touch' ? { x: ne.clientX, y: ne.clientY } : null
+      }}
+      onPointerMove={e => {
+        if (!e.buttons) return
+        const t = touchDownRef.current, ne = e.nativeEvent as PointerEvent
+        if (!t || Math.hypot(ne.clientX - t.x, ne.clientY - t.y) > 8) dragRef.current = true
+      }}
+      onClick={e => {
+        if (!touchDownRef.current) return
+        e.stopPropagation()
+        if (!dragRef.current) onSelect(meta)
+      }}
+      onContextMenu={e => { e.stopPropagation(); onSelect(meta) }}
+      onPointerOver={e => { e.stopPropagation(); setHovered(true) }}
+      onPointerOut={() => setHovered(false)}
+    >
+      {children}
+      {outline && (
+        <mesh position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]} raycast={() => null}>
+          <boxGeometry args={[b.w + 1, b.h + 1, b.d + 1]} />
+          <meshBasicMaterial color={outline} transparent opacity={selected ? 0.25 : 0} depthWrite={false} />
+          <Edges threshold={10} color={outline} linewidth={selected ? 1.5 : 2.5} />
+        </mesh>
+      )}
+    </group>
+  )
 }
 
 function buildZoneInfo(z: ResolvedFaceZone, b: Box): PartMeta {
@@ -591,13 +643,14 @@ function DrawerAssembly({
         const ps   = applyPosOv(sl, id, partOverrides)
         const b    = slideBox(ps)
         const sc   = sl.colour ?? slideColor
+        const info = buildSlideInfo(sl, b, stack)
         if (ps.model_url && ps.model_format) {
           // Front-top-outer corner of the rail (model convention origin).
           const originX = ps.side === 'left' ? ps.X : ps.X + ps.DZ
           const originY = ps.Y + ps.DY
           const originZ = ps.Z + ps.DX
           return (
-            <PartAlpha key={`sl_${li}`} a={alpha('drawer_runners')}><SlideModel
+            <PartAlpha key={`sl_${li}`} a={alpha('drawer_runners')}><PickableHardware b={b} meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><SlideModel
               url={ps.model_url}
               format={ps.model_format}
               scale={ps.model_scale}
@@ -606,12 +659,11 @@ function DrawerAssembly({
               sideOrientation={ps.side}
               color={sc}
               fallbackBox={{ w: ps.DZ, h: ps.DY, d: ps.DX }}
-            /></PartAlpha>
+            /></PickableHardware></PartAlpha>
           )
         }
         // Parametric runner family (z_runner_models), drawn at this rail's size.
-        if (ps.drawn_as) return <PartAlpha key={`sl_${li}`} a={alpha('drawer_runners')}><Runner3D rail={ps} opacity={alpha('drawer_runners')} /></PartAlpha>
-        const info = buildSlideInfo(sl, b, stack)
+        if (ps.drawn_as) return <PartAlpha key={`sl_${li}`} a={alpha('drawer_runners')}><PickableHardware b={b} meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><Runner3D rail={ps} opacity={alpha('drawer_runners')} /></PickableHardware></PartAlpha>
         const fc   = panelFaceColors('side', `slide_${sl.side}`, sc, sc, sc)
         return (
           <PartAlpha key={`sl_${li}`} a={alpha('drawer_runners')}><Part
@@ -1439,12 +1491,13 @@ export function CabinetScene({
           const ps    = applyPosOv(sl, info0.id, partOverrides)
           const b     = slideBox(ps)
           const sc    = sl.colour ?? '#6b7280'
+          const info  = buildInternalSlideInfo(sl, b, li)
           if (ps.model_url && ps.model_format) {
             const originX = ps.side === 'left' ? ps.X : ps.X + ps.DZ
             const originY = ps.Y + ps.DY
             const originZ = ps.Z + ps.DX
             return (
-              <PartAlpha key={key} a={alpha('inner_drawer_runners')}><SlideModel
+              <PartAlpha key={key} a={alpha('inner_drawer_runners')}><PickableHardware b={b} meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><SlideModel
                 url={ps.model_url}
                 format={ps.model_format}
                 scale={ps.model_scale}
@@ -1453,11 +1506,10 @@ export function CabinetScene({
                 sideOrientation={ps.side}
                 color={sc}
                 fallbackBox={{ w: ps.DZ, h: ps.DY, d: ps.DX }}
-              /></PartAlpha>
+              /></PickableHardware></PartAlpha>
             )
           }
-          if (ps.drawn_as) return <PartAlpha key={key} a={alpha('inner_drawer_runners')}><Runner3D rail={ps} opacity={alpha('inner_drawer_runners')} /></PartAlpha>
-          const info = buildInternalSlideInfo(sl, b, li)
+          if (ps.drawn_as) return <PartAlpha key={key} a={alpha('inner_drawer_runners')}><PickableHardware b={b} meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}><Runner3D rail={ps} opacity={alpha('inner_drawer_runners')} /></PickableHardware></PartAlpha>
           const fc   = panelFaceColors('side', `slide_${sl.side}`, sc, sc, sc)
           return (
             <PartAlpha key={key} a={alpha('inner_drawer_runners')}><Part
