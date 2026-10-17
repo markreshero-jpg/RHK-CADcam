@@ -6,15 +6,16 @@ Bought-in things placed in a room: ovens, cooktops, dishwashers, fridges,
 rangehoods, sinks, taps, decorative items. Catalogue lives in the Settings →
 Library group ("Fixtures & Appliances"); placed into a job from the canvas with **F6**.
 
-Wall openings (doors, windows, archways) are a **separate module** that lives
-in the Wall tool (F2) — see "Openings (later)" at the bottom.
+Wall openings (doors, windows, archways) are a fixtures sub-category (`opening`,
+decided 2026-10-18) — see "Openings (P5)" at the bottom.
 
 ## Locked decisions (2026-10-14)
 
 1. **One library**, own Settings tab `fixtures_library` ("Fixtures & Appliances",
    group Library). Not part of the Materials library — materials are things cut or
    fitted per cabinet; fixtures are placed room objects with geometry.
-2. **Category tabs** inside the library: `appliance`, `sink`, `tap`, `decorative`.
+2. **Category tabs** inside the library: `appliance`, `sink`, `tap`, `decorative`,
+   `opening` (added 2026-10-18 — doors/windows/archways, see P5).
    Free-text `kind` under a category (Oven, Cooktop, Dishwasher…) for grouping.
 3. **3D models**: GLB / glTF-binary / STL / OBJ, same loader stack as drawer slides.
    The loader is shared (`src/components/three/ModelAsset.tsx`); slides keep their
@@ -48,7 +49,7 @@ in the Wall tool (F2) — see "Openings (later)" at the bottom.
 | column | type | notes |
 |---|---|---|
 | id | uuid pk | |
-| category | text | appliance / sink / tap / decorative |
+| category | text | appliance / sink / tap / decorative / opening (P5) |
 | kind | text null | Oven, Cooktop, Dishwasher… |
 | name | text | |
 | brand, model_no | text null | |
@@ -94,6 +95,7 @@ in the Wall tool (F2) — see "Openings (later)" at the bottom.
   catalogue row cuts the benchtop under it; benchtop-mount height from the real top.
 - **P4 — Cabinet links + schedule** — snap sink to sink cabinet, oven into tower
   opening; appliance schedule in reports.
+- **P5 — Openings** — doors / windows / archways as the `opening` category, wall-hosted (see bottom).
 
 ## P2 — what was built (2026-10-14)
 
@@ -169,9 +171,21 @@ with the Miele oven GLB.
 - Per-placement cutout edits (FixturePanel only displays the template).
 - Elevation: fixtures aren't placeable from elevation; no dimension chains include them.
 
-## Openings (later, separate spec)
+## Openings (P5 — not started)
 
-Doors, windows and archways belong to a wall: offset along wall, width, height,
-sill, type, hinge/swing side. Added from the **Wall tool** (F2) rather than a new
-F-key (agreed with the user 2026-10-14). Plan swing symbol, wall gap in elevation + 3D, dimension strings measure to
-openings. Layer group `room` (or a new `openings` group).
+**Decision changed 2026-10-18 (user):** doors, windows and archways are a
+**fixtures sub-category** (`opening`), not a separate Wall-tool module. This
+replaces the 2026-10-14 "Wall tool (F2)" decision.
+
+Proposed shape (to confirm before building):
+- Catalogue: `category = 'opening'`, `kind` = Window / Door / Archway / Servery…;
+  width + height + default sill (`mount = wall`, `mount_height` = sill; doors/archways 0).
+  Optional 3D model (frame/sash) like any fixture; no model → frame outline only.
+- Placement: F6 picker like other fixtures, but an opening **must** snap to a wall
+  (`wall_id` required); depth follows the wall thickness, not the catalogue.
+- Per placement: offset along wall, sill height, hinge side + swing (doors).
+- Drawing: wall gap + swing/glazing symbol in plan; hole through the wall in
+  elevation + 3D; dimension strings can measure to opening edges.
+- Layers: new item `fixture_openings` in the `fixtures` group.
+- Needs `'opening'` added to `FixtureCategory` (types.ts), the category tabs, and
+  the category → layer map in `fixtureGeometry.ts`.
