@@ -286,13 +286,18 @@ function PickableHardware({ meta, selected, onSelect, dragRef, children }: {
     g.updateWorldMatrix(true, true)
     _hwInv.copy(g.matrixWorld).invert()
     _hwBox.makeEmpty()
-    g.traverse(o => {
-      const mesh = o as THREE.Mesh
-      if (o === m || !mesh.isMesh || !mesh.visible) return
-      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
-      _hwTmp.copy(mesh.geometry.boundingBox!).applyMatrix4(_hwMat.multiplyMatrices(_hwInv, mesh.matrixWorld))
-      _hwBox.union(_hwTmp)
-    })
+    // Measure the hardware only — never the outline box itself (drei's Edges
+    // lines are a Mesh too, so including them grew the box every frame).
+    for (const child of g.children) {
+      if (child === m) continue
+      child.traverse(o => {
+        const mesh = o as THREE.Mesh
+        if (!mesh.isMesh || !mesh.visible) return
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+        _hwTmp.copy(mesh.geometry.boundingBox!).applyMatrix4(_hwMat.multiplyMatrices(_hwInv, mesh.matrixWorld))
+        _hwBox.union(_hwTmp)
+      })
+    }
     if (_hwBox.isEmpty()) { m.visible = false; return }
     _hwBox.getCenter(_hwC); _hwBox.getSize(_hwS)
     m.position.copy(_hwC)
