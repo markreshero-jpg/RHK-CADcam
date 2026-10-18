@@ -267,6 +267,8 @@ export interface CabinetDefinition {
   part_hide_views?: import('./resolver/types').PartHideViews
   // Per-part No CNC list, copied to the instance at placement.
   part_no_cnc?: string[]
+  // Default contents (z_ubo U4): fixtures spawned linked to the new cabinet at placement.
+  contents?: import('./cabinetContents').ContentItem[]
   // UI metadata
   description: string | null
   thumbnail_svg: string | null
@@ -686,6 +688,8 @@ export interface RoomFixture extends FixtureBody {
   link_x:     number
   link_z:     number
   link_rot:   number
+  /** z_ubo U4: seated in an open face cell of its cabinet (cabinet contents), else null. */
+  link_zone?: import('./cabinetContents').LinkZone | null
   /** P5 openings: hinge (or slide-to) side looking from inside the room, and which way a door swings. */
   hinge_side: 'left' | 'right'
   swing:      'in' | 'out'

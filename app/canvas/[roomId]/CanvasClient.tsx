@@ -50,6 +50,8 @@ import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
 import { withFixtureCutouts, benchtopAt, openingSpans, fixtureChainSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, fixtureClearances, type StretchSide } from '@/src/lib/fixtureGeometry'
 import { cabinetPlans, linkFor, followLinks, fixtureClashes, stretchObstacles } from '@/src/lib/fixtureLinks'
+import { zoneFollow } from '@/src/lib/cabinetContents'
+import { dbSpawnDefinitionContents } from './contentsDB'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
 import { findLayerSet } from '@/src/lib/displayLayers/legacy'
@@ -397,23 +399,32 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // cabinet change already took one holding the fixtures' old poses.
   const fixtureFollowRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; pending: Map<string, Partial<RoomFixture>> }>({ timer: null, pending: new Map() })
   useEffect(() => {
+    // Cabinet contents (z_ubo U4) re-seat in their open cell first — link + height
+    // from the cabinet's latest resolve — so followLinks places them from the new link.
+    const seats = zoneFollow(fixtures, cabPlans, resolvedParts, room)
+    const seatMap = new Map(seats.map(s => [s.id, s.patch]))
+    const seated = seats.length ? fixtures.map(f => seatMap.has(f.id) ? { ...f, ...seatMap.get(f.id)! } : f) : fixtures
     // + doors / windows re-seated in a wall that moved or changed thickness (P5).
-    const moves = [...followLinks(fixtures, cabPlans), ...refitOpenings(fixtures, walls, centroid(walls))]
+    const moves = [...seats, ...followLinks(seated, cabPlans), ...refitOpenings(fixtures, walls, centroid(walls))]
     // A deleted cabinet clears the link in the DB (on delete set null); mirror it locally.
+    // Its contents (zone-seated fixtures) go with it — undo restores both from the snapshot.
     const cabIds = new Set(cabinets.map(c => c.id))
     const orphans = fixtures.filter(f => f.cabinet_id && !cabIds.has(f.cabinet_id))
+    const gone = new Set(orphans.filter(f => f.link_zone).map(f => f.id))
     if (!moves.length && !orphans.length) return
-    const patch = new Map<string, Partial<RoomFixture>>(moves.map(m => [m.id, m.patch]))
-    for (const f of orphans) patch.set(f.id, { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 })
+    const patch = new Map<string, Partial<RoomFixture>>()
+    for (const m of moves) if (!gone.has(m.id)) patch.set(m.id, { ...patch.get(m.id), ...m.patch })
+    for (const f of orphans) if (!gone.has(f.id)) patch.set(f.id, { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 })
+    if (gone.size) void supabase.from('room_fixtures').delete().in('id', [...gone])
     // Syncing derived poses after a cabinet change; settles in one pass (followLinks → []).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setFixtures(xs => xs.map(x => patch.has(x.id) ? { ...x, ...patch.get(x.id)! } : x))
+    setFixtures(xs => xs.filter(x => !gone.has(x.id)).map(x => patch.has(x.id) ? { ...x, ...patch.get(x.id)! } : x))
     if (!moves.length) return
     const q = fixtureFollowRef.current
-    for (const m of moves) q.pending.set(m.id, { ...q.pending.get(m.id), ...m.patch })
+    for (const m of moves) if (!gone.has(m.id)) q.pending.set(m.id, { ...q.pending.get(m.id), ...m.patch })
     if (q.timer) clearTimeout(q.timer)
     q.timer = setTimeout(flushFixtureFollow, 400)
-  }, [cabPlans, cabinets, fixtures, walls])
+  }, [cabPlans, cabinets, fixtures, walls, resolvedParts, room])
   // Clearances of the selected fixture (plan): gaps to cabinets / appliances at its
   // height and to the walls; doors / windows to the wall ends and other openings.
   const selFixtureId = selected?.type === 'fixture' ? selected.id : null
@@ -1064,8 +1075,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         : Promise.resolve()
       parts.then(() => dbResolveAndPersistCabinet(cabinet.id)).then(resolved => {
         if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
+        if (resolved) void spawnContents(cabinet, resolved)
       })
     }
+  }
+
+  // Default contents (z_ubo U4): the definition's fixtures, linked to the new
+  // cabinet — e.g. the oven seated in a UBO's open row. Part of the placement's
+  // undo step (the snapshot taken before the insert holds no fixtures for it).
+  async function spawnContents(cabinet: CabinetInstance, resolved: ResolvedCabinet) {
+    const plan = cabinetPlans([cabinet], walls, centroid(walls))[0]
+    if (!plan) return
+    const spawned = await dbSpawnDefinitionContents(cabinet, resolved, plan, room)
+    if (spawned.length) setFixtures(prev => [...prev, ...spawned])
   }
 
   // Swap a placed cabinet for a library definition in place (right-click → Replace).
@@ -1117,6 +1139,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     await dbInsertDefinitionParts(def.id, cabinet.id)
     const resolved = await dbResolveAndPersistCabinet(cabinet.id)
     if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
+    // The old cabinet's contents went with it (follow effect); the new one brings its own.
+    if (resolved) await spawnContents(cabinet, resolved)
     setToast(`Replaced ${cabinet.label ?? 'cabinet'} with “${def.name}”`)
   }
 

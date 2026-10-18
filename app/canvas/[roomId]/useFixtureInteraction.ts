@@ -192,9 +192,11 @@ export function useFixtureInteraction({
   }
 
   // Link to the cabinet under the dropped pose (P4) — or clear a stale link.
-  function linkFields(f: FixtureFootprint & { mount: RoomFixture['mount']; category: RoomFixture['category'] }): Pick<RoomFixture, 'cabinet_id' | 'link_x' | 'link_z' | 'link_rot'> {
+  // Moving / stretching it by hand takes it out of an open cell (z_ubo U4): it
+  // stays where it's put, linked by position like any other fixture.
+  function linkFields(f: FixtureFootprint & { mount: RoomFixture['mount']; category: RoomFixture['category'] }): Pick<RoomFixture, 'cabinet_id' | 'link_x' | 'link_z' | 'link_rot' | 'link_zone'> {
     const l = linkAt?.(f)
-    return l ?? { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 }
+    return { ...(l ?? { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 }), link_zone: null }
   }
 
   // ── Stretch (P7) — click a handle, the edge follows the cursor, click sets it ──
@@ -226,7 +228,7 @@ export function useFixtureInteraction({
     setStretch(null)
     const cur = fixturesRef.current.find(f => f.id === s.id)
     if (!cur) return true
-    const keys = ['x', 'y', 'width', 'depth', 'height', 'z', 'cabinet_id', 'link_x', 'link_z', 'link_rot',
+    const keys = ['x', 'y', 'width', 'depth', 'height', 'z', 'cabinet_id', 'link_x', 'link_z', 'link_rot', 'link_zone',
       'cutout_w', 'cutout_d', 'cutout_off_x', 'cutout_off_y'] as const
     const patch: Record<string, unknown> = {}
     for (const k of keys) if (cur[k] !== s.base[k]) patch[k] = cur[k]

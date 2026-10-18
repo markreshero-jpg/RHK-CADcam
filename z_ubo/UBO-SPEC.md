@@ -1,6 +1,6 @@
 # UBO — under-bench oven cabinet + cabinet contents
 
-Status: **U1 + U2 + U3 built 2026-10-18, in-app check pending.** RESUME HERE → U4.
+Status: **U1–U4 built 2026-10-18, in-app check pending.** RESUME HERE → U5.
 
 A library base cabinet that comes out with an oven already inside it. Built
 natively (face grid + interior + carcass options), with the oven as a real
@@ -132,6 +132,29 @@ two ~71 panels at default rules; 820 keeps the 600 opening).
 - Contents fixtures are **deleted with their cabinet** (and re-spawned by
   Replace); a fixture dropped onto a plain cabinet keeps today's behaviour
   (unlinks on delete).
+
+*Built (U4):* migration `z_ubo/migration_u4_contents.sql` (applied):
+`cabinet_definitions.contents jsonb not null default '[]'`,
+`room_fixtures.link_zone jsonb` (`{ row_index, col_index, y }`, y = cell
+bottom above the cabinet bottom); UBO contents = "Generic oven 600" in row 1
+(looked up by name).
+- `src/lib/cabinetContents.ts` — `ContentItem` / `LinkZone` types,
+  `zoneSeat` (centre across the cell, front on the face plane = max front
+  Z + DZ, link_rot facing the room), `zoneFollow` (re-seat from a live resolve
+  with `open_zones`; else the stored seat; z = cabinet bottom + link_zone.y),
+  `definitionContents` parser. Test `src/lib/__tests__/cabinetContents.test.ts`.
+- `app/canvas/[roomId]/contentsDB.ts` `dbSpawnDefinitionContents` — after the
+  cabinet's first resolve; inserts linked `room_fixtures` from the catalog
+  rows. Called from `placeFromDraft` (incl. drag-drop) and
+  `handleReplaceCabinet` (CanvasClient `spawnContents`).
+- Follow effect (CanvasClient): `zoneFollow` before `followLinks`; orphaned
+  zone fixtures are **deleted** (DB + state), others just unlink. Undo / redo
+  sync fixtures from the snapshot, so placement undo removes the oven and
+  delete undo restores it.
+- Moving / stretching a seated fixture by hand clears `link_zone`
+  (`linkFields`) — it then stays where it's put, position-linked.
+- **Not yet:** headless `dbPlaceCabinetFromDefinition` (canvasDB) doesn't
+  spawn contents; the fixture panel's height edit is overridden while seated.
 
 **U5 — edit modal shows contents.** `CabinetScene` gets a `fixtures` prop and
 renders `FixtureModel` at the cabinet-local pose (3D tab + room 3D unchanged
