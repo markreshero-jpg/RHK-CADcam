@@ -471,7 +471,9 @@ export function buildInstanceFromDefinition(
     label: p.label, assembly_class: def.assembly_class,
     pos_x: p.pos_x, pos_y: p.pos_y, pos_z: 0, rotation: p.rotation,
     dx: shapeBox?.w ?? dx,
-    dy: def.preserve_dy || p.cascade_dy == null ? def.default_dy : p.cascade_dy,
+    // A bulkhead never takes the wall-cabinet height: it keeps its own (or fits the
+    // ceiling at placement when "Height to ceiling" is on).
+    dy: def.preserve_dy || def.bulkhead || p.cascade_dy == null ? def.default_dy : p.cascade_dy,
     dz: shapeBox?.d ?? dz,
     has_carcass: def.has_carcass, has_internal: def.has_internal,
     has_face: def.has_face, has_toekick: def.has_toekick,
