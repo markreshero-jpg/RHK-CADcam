@@ -314,6 +314,34 @@ export function slideClear(
   return { ...s, x: s.x + f.d.x * (t - t0), y: s.y + f.d.y * (t - t0) }
 }
 
+/**
+ * Plan area a hinged door's leaf sweeps (P5): a quarter disc of radius = width
+ * from the hinge jamb, on the inside face (swing in) or outside (swing out) —
+ * the same arc OpeningSymbol draws. Pulled in `inset` mm so cabinets standing
+ * right beside the frame don't count. Null for anything that isn't a hinged door.
+ */
+export function doorSwingPolygon(
+  f: Pick<RoomFixture, 'x' | 'y' | 'rotation' | 'width' | 'depth' | 'category' | 'kind' | 'hinge_side' | 'swing'>,
+  inset = 1, steps = 12,
+): Pt[] | null {
+  const kind = (f.kind ?? '').toLowerCase()
+  if (f.category !== 'opening' || !kind.includes('door') || kind.includes('sliding')) return null
+  const { a, n } = fixtureAxes(f.rotation)
+  const left = (f.hinge_side ?? 'left') === 'left'
+  const inward = (f.swing ?? 'in') === 'in'
+  const su = left ? 1 : -1, sv = inward ? 1 : -1
+  // hinge point in the local frame (u along the width, v toward the room)
+  const hu = (left ? 0 : f.width) + su * inset, hv = (inward ? f.depth : 0) + sv * inset
+  const r = Math.max(0, f.width - 2 * inset)
+  const at = (u: number, v: number): Pt => ({ x: f.x + a.x * u + n.x * v, y: f.y + a.y * u + n.y * v })
+  const pts = [at(hu, hv)]
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * Math.PI / 2
+    pts.push(at(hu + su * r * Math.cos(t), hv + sv * r * Math.sin(t)))
+  }
+  return pts
+}
+
 // ── Clearances (selected fixture) ─────────────────────────────────────────────
 
 /** Gap (mm) from each side of a fixture to the nearest obstacle; undefined = nothing within reach / touching. */

@@ -48,9 +48,11 @@ export interface Fixtures3DProps {
   fixtures:   RoomFixture[]
   selectedId: string | null
   onSelect:   (id: string) => void
+  /** Overlapping a cabinet / another fixture — red outline, like plan. */
+  clashIds?:  Set<string>
 }
 
-export default function Fixtures3D({ fixtures, selectedId, onSelect, layers, hiddenWallIds, pick }: Fixtures3DProps & {
+export default function Fixtures3D({ fixtures, selectedId, onSelect, clashIds, layers, hiddenWallIds, pick }: Fixtures3DProps & {
   layers: LayerView
   hiddenWallIds: Set<string>
   /** false in F4 / measure: fixtures don't take clicks. */
@@ -74,7 +76,9 @@ export default function Fixtures3D({ fixtures, selectedId, onSelect, layers, hid
                 ? <OpeningModel f={f} colour={layers.colorOf(id) ?? null} />
                 : <FixtureModel f={{ ...f, colour }} />}
             </PartAlpha>
-            {f.id === selectedId && <FixtureOutline w={f.width} h={f.height} d={f.depth} color="#f59e0b" />}
+            {f.id === selectedId
+              ? <FixtureOutline w={f.width} h={f.height} d={f.depth} color="#f59e0b" />
+              : clashIds?.has(f.id) && <FixtureOutline w={f.width} h={f.height} d={f.depth} color="#dc2626" />}
           </group>
         )
       })}

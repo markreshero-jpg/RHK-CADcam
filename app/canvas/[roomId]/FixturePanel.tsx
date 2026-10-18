@@ -213,7 +213,9 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
         )}
         {!!clashWith?.length && (
           <p className="rounded border border-red-800 bg-red-950/50 px-2 py-1.5 text-[11px] text-red-300">
-            Overlaps {clashWith.join(', ')} — check the gap or move it.
+            {f.category === 'opening'
+              ? <>Door swing hits {clashWith.join(', ')} — change the hinge / swing or move it.</>
+              : <>Overlaps {clashWith.join(', ')} — check the gap or move it.</>}
           </p>
         )}
 

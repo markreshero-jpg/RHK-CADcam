@@ -252,6 +252,12 @@ Esc cancels; one undo step.
     would undo a deliberate Unlink).
   - **Slide-clear uses the fixture's own off-wall band** — `bandOccupancy(…, depth, near)`;
     a sink pulled forward no longer slides away from something only behind it.
+  - **Overlap warning in elevation + 3D** — `fixtureClashIds` → FixturesElevation (red
+    outline) and Fixtures3D (red box outline when not selected).
+  - **Door swing warning** — `doorSwingPolygon` (fixtureGeometry, test `doorSwing.test.ts`):
+    quarter disc the leaf sweeps (in / out, hinge side). `fixtureClashes` checks hinged doors
+    against every cabinet in it (base or wall — the leaf is full height); door goes red in plan,
+    panel says "Door swing hits B3". Sliding doors / windows / archways aren't checked.
 
 - 2026-10-18 (user): **P10 Cut benchtop tick box + per-placement cutout override.** Column
   `cut_benchtop` (bool, default true) on fixture_catalog + room_fixtures (migration
@@ -327,11 +333,11 @@ Esc cancels; one undo step.
 - P5 gaps: elevation print draws the width row only (no sill / head heights); the
   elevation canvas width row sits above the overhead chain — check it isn't clipped;
   openings aren't in the appliance schedule (could be a door & window schedule);
-  a door's swing doesn't warn when it hits a cabinet.
+  ~~a door's swing doesn't warn when it hits a cabinet~~ done 2026-10-18.
 - Dishwasher: "Generic dishwasher 600 freestanding" catalogue row added 2026-10-18;
   GLB `z_fixtures/models/generic-dishwasher-600-freestanding.glb` (generator
   `build_dishwasher.mjs`, any W × D × H) to be uploaded by the user in the library.
-- Elevation / 3D don't show the overlap warning yet (plan + panel only).
+- ~~Elevation / 3D don't show the overlap warning~~ done 2026-10-18.
 - ~~Existing placed fixtures aren't linked until moved once~~ — Link button 2026-10-18.
 
 - ~~Live visual check of a real uploaded model~~ done 2026-10-15 in the fixture viewer (Miele oven GLB); room 3D view still not eyeballed.

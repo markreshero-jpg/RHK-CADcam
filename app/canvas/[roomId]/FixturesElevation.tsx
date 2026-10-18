@@ -152,7 +152,7 @@ function ElevClearance({ box, others, len, roomH, z, bg }: {
 
 export default function FixturesElevation({
   fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, onSelect, stretching, onStretchHandle, ghost, onMoveHandle,
-  obstacles = [], showClearance = false, interactive = true,
+  obstacles = [], showClearance = false, interactive = true, clashIds,
 }: {
   fixtures:   RoomFixture[]
   wall:       Wall
@@ -176,6 +176,8 @@ export default function FixturesElevation({
   showClearance?: boolean
   /** false while a cabinet / fixture is being stretched or moved — fixtures are click-through. */
   interactive?: boolean
+  /** Fixtures overlapping a cabinet / another fixture — drawn red, like plan. */
+  clashIds?: Set<string>
 }) {
   const f = elevationFrame(wall, side, roomCx)
   const handles = (fx: RoomFixture, x: number, y: number, w: number, h: number) =>
@@ -245,7 +247,7 @@ export default function FixturesElevation({
         if (!on) return null
         const sel = fx.id === selectedId
         const lp = layers.props(id, z)
-        const color = sel ? '#f59e0b' : layers.color(id, STROKE)
+        const color = clashIds?.has(fx.id) ? '#dc2626' : sel ? '#f59e0b' : layers.color(id, STROKE)
         const lw = layers.w(id, (sel ? 2 : 1.4) / z)
         const x = on.t0, w = on.t1 - on.t0
         const y = roomH - fx.z - fx.height, h = fx.height

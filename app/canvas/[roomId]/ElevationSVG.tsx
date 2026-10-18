@@ -179,6 +179,8 @@ interface ElevationSVGProps {
   waterfallOcc?: (wall: Wall, side: 'face' | 'back', mover: { assembly_class: string; dy: number; dz?: number }) => { t: number; dx: number }[]
   // Fixtures & appliances (z_fixtures P2)
   fixtures?: RoomFixture[]
+  /** Fixtures that overlap a cabinet / another fixture (red, like plan). */
+  fixtureClashIds?: Set<string>
   onSelectFixture?: (id: string) => void
   /** P7: fixture edge stretch — handle grab, live cursor, commit (the canvas owns the state). */
   fixtureStretching?: { id: string; side: StretchSide } | null
@@ -204,7 +206,7 @@ export default function ElevationSVG({
   elevMeasureStart, elevMeasureEnd, elevMeasureCursor,
   setElevMeasureStart, setElevMeasureEnd, setElevMeasureCursor,
   benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop, waterfallOcc,
-  fixtures, onSelectFixture,
+  fixtures, fixtureClashIds, onSelectFixture,
   fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
   fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop, onFixtureMoveHandle,
 }: ElevationSVGProps) {
@@ -1691,6 +1693,7 @@ export default function ElevationSVG({
                 stretching={fixtureStretching}
                 ghost={mode === 'place_fixture' ? fixtureGhost : null}
                 showClearance={mode === 'select' || !!fixtureStretching}
+                clashIds={fixtureClashIds}
                 interactive={mode === 'select' && !elevResizeFollowing && !elevCabFollowing && !cabResize && !fixtureStretching}
                 obstacles={wallCabs.map(c => {
                   const z0 = cabBottomZ(c, room, wall)

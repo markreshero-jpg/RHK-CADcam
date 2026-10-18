@@ -12,7 +12,7 @@
 
 import type { CabinetInstance, Wall, Room, RoomFixture, FixtureMount } from './types'
 import { cabWallPerp, cabinetPlanFrame, cabinetCornerPts, wallInwardNormal, type Pt, type RoomRef } from './geometry'
-import { fixtureCenter, fixtureCorners, backLeftForCenter, pointInPolygon, type FixtureFootprint } from './fixtureGeometry'
+import { fixtureCenter, fixtureCorners, backLeftForCenter, pointInPolygon, doorSwingPolygon, type FixtureFootprint } from './fixtureGeometry'
 import { cabBottomZ } from './elevationSnap'
 
 const DEG = Math.PI / 180
@@ -116,12 +116,21 @@ export function followLinks(
  * Cabinets each fixture overlaps (plan footprint and height), by fixture id.
  * Benchtop-mount items (sinks, cooktops, taps) sit on cabinets by design and
  * are never checked; a fixture's own linked cabinet is ignored. Touching
- * faces don't count (1 mm tolerance).
+ * faces don't count (1 mm tolerance). Hinged doors are checked by the area
+ * their leaf sweeps (any cabinet in it, base or wall — the leaf is full height);
+ * other openings never.
  */
 export function fixtureClashes(fixtures: RoomFixture[], plans: CabPlan[], room: Room): Map<string, CabinetInstance[]> {
   const out = new Map<string, CabinetInstance[]>()
   for (const f of fixtures) {
-    if (f.mount === 'benchtop' || f.category === 'opening') continue
+    if (f.category === 'opening') {
+      const swing = doorSwingPolygon(f)
+      if (!swing) continue
+      const hits = plans.filter(p => !p.cab.is_kick_assembly && cabBottomZ(p.cab, room, p.wall) < Number(f.z) + Number(f.height) - 1 && polygonsOverlap(swing, p.pts)).map(p => p.cab)
+      if (hits.length) out.set(f.id, hits)
+      continue
+    }
+    if (f.mount === 'benchtop') continue
     const poly = shrunkCorners(f, 1)
     const z0 = Number(f.z) || 0, z1 = z0 + Number(f.height)
     const hits: CabinetInstance[] = []

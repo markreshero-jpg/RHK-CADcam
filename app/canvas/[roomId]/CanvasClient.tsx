@@ -2751,6 +2751,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             edgeProfiles={btCatalog.profileById}
             onSelectBenchtop={id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]); setCabResize(null) }}
             fixtures={movingFixtureId ? fixtures.filter(x => x.id !== movingFixtureId) : fixtures}
+            fixtureClashIds={fixtureClashIds}
             onSelectFixture={id => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null) }}
             fixtureStretching={fx.stretch ? { id: fx.stretch.id, side: fx.stretch.side } : null}
             onFixtureStretchHandle={(id, side) => startFixtureStretch(id, side, 10)}
@@ -2807,6 +2808,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             }}
             fx={{
               fixtures,
+              clashIds: fixtureClashIds,
               selectedId: selected?.type === 'fixture' ? selected.id : null,
               onSelect: id => { setSelected({ type: 'fixture', id }); setMultiSelect([]) },
             }}
