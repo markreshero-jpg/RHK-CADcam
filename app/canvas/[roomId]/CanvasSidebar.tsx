@@ -121,6 +121,7 @@ export const TONES = {
   cabinet:  { solid: 'bg-blue-700',   bar: 'bg-blue-400',   rail: 'border-blue-500/50',   tint: 'bg-blue-600/30',   icon: 'text-blue-400', ring: 'ring-blue-500/60' },
   benchtop: { solid: 'bg-teal-700',   bar: 'bg-teal-400',   rail: 'border-teal-500/50',   tint: 'bg-teal-600/30',   icon: 'text-teal-400', ring: 'ring-teal-500/60' },
   fixture:  { solid: 'bg-sky-700',    bar: 'bg-sky-400',    rail: 'border-sky-500/50',    tint: 'bg-sky-600/30',    icon: 'text-sky-400', ring: 'ring-sky-500/60' },
+  cad:      { solid: 'bg-rose-700',   bar: 'bg-rose-400',   rail: 'border-rose-500/50',   tint: 'bg-rose-600/30',   icon: 'text-rose-400', ring: 'ring-rose-500/60' },
   paste:    { solid: 'bg-yellow-700', bar: 'bg-yellow-400', rail: 'border-yellow-500/50', tint: 'bg-yellow-600/30', icon: 'text-yellow-400', ring: 'ring-yellow-500/60' },
 } satisfies Record<string, Tone>
 
@@ -204,6 +205,15 @@ const WALL_MODES = WALL_ITEMS.map(w => w.mode)
 
 // ── Benchtop tools ──────────────────────────────────────────────────────────────
 
+function CadIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 3.5h7M6 3.5v7" />
+      <path d="M9.5 13.5l4-4M13.5 9.5l-.4 2.6M13.5 9.5l-2.6.4" />
+    </svg>
+  )
+}
+
 function FixtureIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -255,6 +265,7 @@ export default function CanvasSidebar({
   cabMenuOpen, setCabMenuOpen,
   benchtopMenuOpen, setBenchtopMenuOpen, onDrawBenchtopInShapeEditor,
   fixtureMenuOpen = false, setFixtureMenuOpen, armedFixtureId = null, onArmFixture,
+  cadOn = false, onToggleCad,
   clipboard, sidebarW, libRefresh = 0,
 }: {
   room: Room
@@ -281,6 +292,9 @@ export default function CanvasSidebar({
   setFixtureMenuOpen?: (v: boolean) => void
   armedFixtureId?: string | null
   onArmFixture?: (item: FixtureCatalogItem) => void
+  /** F7 CAD annotations (z_CAD_tool): mode on + toggle. */
+  cadOn?: boolean
+  onToggleCad?: () => void
   clipboard: CabinetInstance | null
   sidebarW: number
   /** Bumped by the parent after a Save-to-library so the palette reloads. */
@@ -922,6 +936,17 @@ export default function CanvasSidebar({
               })}
             </SectionBody>
           )}
+        </>)}
+
+        {onToggleCad && (<>
+          <div className="border-t border-gray-800 my-1 mx-1" />
+          {/* CAD annotations (F7) — z_CAD_tool. Opens the ribbon under the view tabs. */}
+          <SectionHeader
+            tone={TONES.cad} icon={<CadIcon />} label="CAD" shortcut="F7" tour="tool-cad"
+            title="CAD annotations (F7): text, text boxes and markup that print on the shop drawings. Esc / F7 to finish"
+            active={cadOn} summary={cadOn ? 'Annotating' : null}
+            onClick={onToggleCad}
+          />
         </>)}
 
         {clipboard && (

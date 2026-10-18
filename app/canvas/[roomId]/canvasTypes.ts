@@ -26,6 +26,8 @@ export type Mode =
   // z_fixtures P2: a catalogue fixture (or a moved one) follows the cursor; click drops.
   | 'place_fixture'
   | 'paste'
+  // z_CAD_tool A2: F7 CAD annotations — the ribbon is up and the drawing is click-through.
+  | 'cad'
 
 /** Smallest size (mm) a cabinet can be drag-stretched to — low enough for fillers / scribe strips. */
 export const MIN_STRETCH = 5

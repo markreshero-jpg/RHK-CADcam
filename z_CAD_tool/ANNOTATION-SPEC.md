@@ -1,6 +1,6 @@
 # CAD Annotation Tool — Spec
 
-Status: **A1 built 2026-10-18 (read-only plan canvas + Plan View report); A2 next.** All decisions below are Mark's
+Status: **A1 + A2 built 2026-10-18 (plan: F7 CAD mode, ribbon, text + text box authoring); in-app check pending; A3 next.** All decisions below are Mark's
 (2026-10-18). Open: how sheet notes react to cabinet revisions (decided at A7).
 
 > History: this folder used to hold the original Shape Editor handoff (May 2026). That
@@ -210,7 +210,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | Phase | Scope | Status |
 |---|---|---|
 | A1 | Table + RLS + `rooms.annotation_scale`; types + DB helpers; layer items; `src/lib/annotations/` geometry + tests; `AnnotationLayer` read-only in the plan canvas + Plan View report (check with a hand-seeded row) | [x] built 2026-10-18; in-app check pending |
-| A2 | Plan authoring: F7 CAD sidebar tool + **ribbon** under the view tabs, **Text** tool with full text styling (decision 7), colour picker, select/move/delete/copy, undo, snaps, last-used defaults, annotation scale on the ribbon; "Print annotation colours" report toggle; PDF text check | [ ] |
+| A2 | Plan authoring: F7 CAD sidebar tool + **ribbon** under the view tabs, **Text** tool with full text styling (decision 7), colour picker, select/move/delete/copy, undo, snaps, last-used defaults, annotation scale on the ribbon; "Print annotation colours" report toggle; PDF text check | [x] built 2026-10-18; in-app check pending (PDF text check not done yet) |
 | A3 | **Arrow / line + text leaders** (full arrowhead set per end, dash types, weight, vertex grips) | [ ] |
 | A4 | **Box / ellipse / cloud** with fill (none / solid / tint) | [ ] |
 | A5 | **Manual dimension** (live value, text override, offset grip, arrowhead/tick ends) | [ ] |
@@ -238,4 +238,56 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 - Layer Manager shows its normal colour / weight controls on the annot items. They do
   nothing (annotations keep their own style); hide them there in A2 if it confuses.
 
-Next: A2 (F7 CAD mode + ribbon + Text / Text box tools).
+**A2 built 2026-10-18** (not yet seen in the running app: the Chrome extension can't
+reach localhost and there's no `AUTOMATION_*` login for headless runs).
+- **Mode:** `Mode` gained `'cad'`. F7, the sidebar **CAD** header (rose tone, after
+  Fixtures) and the ribbon ✕ toggle it. While on, an invisible full-canvas rect
+  inside `annotationsLayer` takes left clicks (tools / marquee). Wheel, pinch and
+  right-drag pan still reach the svg.
+- **Files:** `useAnnotationTool.ts` (tools, selection, drags, editor state,
+  clipboard, keys), `CadRibbon.tsx`, `AnnotTextEditor.tsx` (fixed-position
+  textarea styled like the drawn text). `AnnotationLayer` gained `edit` props (hit
+  areas, selection outline, rotate + text-box width grips).
+- **Keys** (capture-phase listener, CAD mode only, ignored in inputs):
+  - S / T / B pick Select / Text / Text box.
+  - Del deletes the selection.
+  - Ctrl+C / Ctrl+V copy and paste (pasted copies sit 5 paper mm down-right);
+    Ctrl+D duplicates; Ctrl+A selects all.
+  - Enter edits the selected text.
+  - Esc clears the selection, then drops back to Select, then exits CAD.
+  - Ctrl+Z / Y fall through to the shared canvas undo; annotations are in
+    `useCanvasHistory` snapshots.
+- **Text tool:** click = point text. Text box tool: drag = a box whose width is in
+  paper mm (a drag narrower than 8 paper mm makes point text). In the editor, Enter
+  is a new line; Ctrl+Enter, a click away, or blur finishes. Esc cancels. An empty
+  new note is discarded; emptying an existing one deletes it.
+- **Moving and rotating:** placement and moves snap with the canvas snap settings
+  (Shift = free). Rotation is about the block's top-left `at`, snapping to quarter
+  turns within 4° (Shift = free).
+- **Plain select mode:** clicking an annotation opens CAD mode on it (decision 9);
+  double-click edits.
+- **Ribbon:**
+  - Colour palette + picker.
+  - Text: size presets / custom, B / I / U, alignment, line spacing, rotation.
+  - Background: none / mask / solid + colour + padding.
+  - Border: none / box / round + colour / weight / dash.
+  - For the A1 seeded kinds: line weight / dash, arrowheads per end + size, fill
+    none / solid / tint.
+  - Front / back, delete, reset.
+  - Room annotation scale (writes `rooms.annotation_scale` directly; deliberately
+    not `handleUpdateRoom`, which re-resolves every cabinet).
+  - Edits apply to the selection or the edit in progress, and become that kind's
+    default (`userPrefs.annotStyleDefaults`). Buttons keep focus, so the editor
+    stays open.
+- **Plan View report:** new "Annotation colours" page toggle (default off = black).
+- **Elevation:** the ribbon shows there with a note that elevation annotations come
+  in A6; tools are disabled.
+- **Known rough edges:**
+  - Rotated box / ellipse selection outline is axis-aligned.
+  - The editor textarea's baseline sits within about 1px of the drawn text, not
+    exact.
+  - Layer Manager still shows its colour / weight controls on the annot items.
+  - Annotation text drawn in black is hard to see on the dark canvas.
+
+Next: Mark checks A2 in-app (Test Kitchen → Void Corner Demo), then A3 (arrow / line
+tools + text leaders).

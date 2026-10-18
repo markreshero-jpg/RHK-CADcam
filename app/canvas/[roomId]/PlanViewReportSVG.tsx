@@ -39,6 +39,8 @@ export interface PlanViewPageOptions {
   wallNames:  boolean
   hatch:      boolean
   titleBlock: boolean
+  /** z_CAD_tool decision 6: print annotations in their own colours (off = black). */
+  annotColours: boolean
 }
 
 type Seg = { from: number; to: number; label: number }
@@ -674,8 +676,8 @@ export default function PlanViewReportSVG({
         )
       })}
 
-      {/* ── CAD annotations (z_CAD_tool) — print black until A2 adds the colour toggle ── */}
-      <AnnotationLayer annotations={annotations} frame={IDENTITY_FRAME} paper={P} layers={layers} printColours={false} />
+      {/* ── CAD annotations (z_CAD_tool) — black unless "Annotation colours" is ticked ── */}
+      <AnnotationLayer annotations={annotations} frame={IDENTITY_FRAME} paper={P} layers={layers} printColours={show.annotColours} />
 
       {/* ── Title block (toggle) ── */}
       {show.titleBlock && (

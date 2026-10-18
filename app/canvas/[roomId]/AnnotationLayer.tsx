@@ -26,26 +26,154 @@ export interface AnnotationLayerProps {
   layers?:       LayerView
   /** Reports: "Print annotation colours" (decision 6). Canvas always shows colours. */
   printColours?: boolean
+  /** Canvas editing (A2): selection outlines, hit areas and grips. Reports omit it. */
+  edit?: AnnotationEditProps
 }
 
-export default function AnnotationLayer({ annotations, frame, paper, layers, printColours = true }: AnnotationLayerProps) {
+export type AnnotGrip = 'rotate' | 'width'
+
+export interface AnnotationEditProps {
+  selectedIds: ReadonlySet<string>
+  /** Being typed in the inline editor — the editor draws it instead. */
+  hiddenId?:   string | null
+  /** Hit / grip size in svg units (≈ a fixed number of screen px). */
+  hitWidth:    number
+  /** Hit areas take clicks (CAD select tool, or plain select mode). */
+  hittable:    boolean
+  onDown:      (e: React.PointerEvent, id: string) => void
+  onDouble:    (e: React.MouseEvent, id: string) => void
+  onGrip:      (e: React.PointerEvent, id: string, grip: AnnotGrip) => void
+}
+
+const SEL = '#38bdf8'
+
+export default function AnnotationLayer({ annotations, frame, paper, layers, printColours = true, edit }: AnnotationLayerProps) {
   if (!annotations.length) return null
   const sorted = [...annotations].sort((a, b) => a.sort_order - b.sort_order)
   return (
     <g data-layer="annotations" style={{ pointerEvents: 'none' }}>
       {sorted.map(a => {
         const item = annotLayerItem(a.kind)
-        if (layers && !layers.show(item)) return null
+        if (layers && !layers.show(item)) return null   // only what's shown is selectable
         const s = printStyle(resolveStyle(a.kind, a.style), printColours)
         const opacity = layers ? layers.alpha(item) : 1
+        const hidden = edit?.hiddenId === a.id
         return (
-          <g key={a.id} opacity={opacity < 1 ? opacity : undefined}>
-            {renderOne(a, s, frame, paper)}
+          <g key={a.id}>
+            {!hidden && <g opacity={opacity < 1 ? opacity : undefined}>{renderOne(a, s, frame, paper)}</g>}
+            {edit && !hidden && edit.hittable && (
+              <g style={{ cursor: 'move' }}
+                onPointerDown={e => { if (e.button === 0) edit.onDown(e, a.id) }}
+                onDoubleClick={e => edit.onDouble(e, a.id)}>
+                {hitShape(a, s, frame, paper, edit.hitWidth)}
+              </g>
+            )}
+            {edit?.selectedIds.has(a.id) && selection(a, s, frame, paper, edit)}
           </g>
         )
       })}
     </g>
   )
+}
+
+/** Text block outline in svg (4 corners), padding included. */
+function textOutline(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number): Pt[] {
+  const g = a.geom as TextGeom
+  const block = layoutText(a.text ?? '', s.size, { bold: s.bold, lineSpacing: s.lineSpacing, width: g.width })
+  const pad = s.bg !== 'none' || s.border !== 'none' ? s.bgPad : 0
+  const at = mapPt(f, g.at), rot = mapRot(f, g.rot)
+  return [{ x: -pad, y: -pad }, { x: block.w + pad, y: -pad }, { x: block.w + pad, y: block.h + pad }, { x: -pad, y: block.h + pad }]
+    .map(c => { const r = rotatePt({ x: c.x * k, y: c.y * k }, rot); return { x: at.x + r.x, y: at.y + r.y } })
+}
+
+const ptsAttr = (pts: Pt[]) => pts.map(p => `${p.x},${p.y}`).join(' ')
+
+/** Invisible click target: the text block, or the drawn strokes widened to hitWidth
+ *  (plus the inside of filled shapes). */
+function hitShape(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number, hw: number): React.ReactNode {
+  const stroke = { stroke: 'transparent', strokeWidth: hw, fill: 'none', pointerEvents: 'stroke' as const }
+  const filled = s.fill !== 'none'
+  switch (a.kind) {
+    case 'text': {
+      const g = a.geom as TextGeom
+      if (!g?.at) return null
+      return <>
+        <polygon points={ptsAttr(textOutline(a, s, f, k))} fill="transparent" style={{ pointerEvents: 'all' }} />
+        {g.leader?.length ? <polyline points={ptsAttr(g.leader.map(p => mapPt(f, p)))} {...stroke} /> : null}
+      </>
+    }
+    case 'line':
+      return <polyline points={ptsAttr(((a.geom as LineGeom).pts ?? []).map(p => mapPt(f, p)))} {...stroke} />
+    case 'cloud': {
+      const pts = ((a.geom as CloudGeom).pts ?? []).map(p => mapPt(f, p))
+      return <polygon points={ptsAttr(pts)} {...stroke} fill={filled ? 'transparent' : 'none'}
+        style={{ pointerEvents: filled ? 'all' : 'stroke' }} />
+    }
+    case 'rect':
+    case 'ellipse': {
+      const g = a.geom as BoxGeom
+      const p = mapPt(f, g.a), q = mapPt(f, g.b)
+      const cx = (p.x + q.x) / 2, cy = (p.y + q.y) / 2, w = Math.abs(q.x - p.x), h = Math.abs(q.y - p.y)
+      const rot = mapRot(f, g.rot)
+      const props = { ...stroke, fill: filled ? 'transparent' : 'none', style: { pointerEvents: filled ? 'all' as const : 'stroke' as const },
+        transform: rot ? `rotate(${rot} ${cx} ${cy})` : undefined }
+      return a.kind === 'rect'
+        ? <rect x={cx - w / 2} y={cy - h / 2} width={w} height={h} {...props} />
+        : <ellipse cx={cx} cy={cy} rx={w / 2} ry={h / 2} {...props} />
+    }
+    case 'dim': {
+      const g = a.geom as DimGeom
+      if (!g?.p1 || !g?.p2) return null
+      const l = dimLayout(g)
+      return <polyline points={ptsAttr([g.p1, l.d1, l.d2, g.p2].map(p => mapPt(f, p)))} {...stroke} />
+    }
+  }
+}
+
+/** Dashed outline round a selected annotation; text also gets rotate + (text box) width grips. */
+function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number, edit: AnnotationEditProps): React.ReactNode {
+  const hw = edit.hitWidth
+  const line = { stroke: SEL, strokeWidth: hw / 6, strokeDasharray: `${hw / 2} ${hw / 3}`, fill: 'none' }
+  if (a.kind === 'text') {
+    const g = a.geom as TextGeom
+    if (!g?.at) return null
+    const c = textOutline(a, s, f, k)
+    // Rotate grip: above the top edge's middle. Width grip: middle of the right edge.
+    const top = { x: (c[0].x + c[1].x) / 2, y: (c[0].y + c[1].y) / 2 }
+    const ux = c[0].x - c[3].x, uy = c[0].y - c[3].y, ul = Math.hypot(ux, uy) || 1
+    const rotG = { x: top.x + ux / ul * hw * 2.5, y: top.y + uy / ul * hw * 2.5 }
+    const right = { x: (c[1].x + c[2].x) / 2, y: (c[1].y + c[2].y) / 2 }
+    const grip = (p: Pt, kind: AnnotGrip, round: boolean) => (
+      <g style={{ pointerEvents: 'all', cursor: kind === 'rotate' ? 'grab' : 'ew-resize' }}
+        onPointerDown={e => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, a.id, kind) } }}>
+        {round
+          ? <circle cx={p.x} cy={p.y} r={hw * 0.45} fill="#0f172a" stroke={SEL} strokeWidth={hw / 6} />
+          : <rect x={p.x - hw * 0.4} y={p.y - hw * 0.4} width={hw * 0.8} height={hw * 0.8} fill="#0f172a" stroke={SEL} strokeWidth={hw / 6} />}
+      </g>
+    )
+    return <>
+      <polygon points={ptsAttr(c)} {...line} />
+      <line x1={top.x} y1={top.y} x2={rotG.x} y2={rotG.y} stroke={SEL} strokeWidth={hw / 6} />
+      {grip(rotG, 'rotate', true)}
+      {g.width != null && grip(right, 'width', false)}
+    </>
+  }
+  const pts = selectionPoints(a, f)
+  if (!pts.length) return null
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y), m = hw / 2
+  return <rect x={Math.min(...xs) - m} y={Math.min(...ys) - m}
+    width={Math.max(...xs) - Math.min(...xs) + 2 * m} height={Math.max(...ys) - Math.min(...ys) + 2 * m} {...line} />
+}
+
+function selectionPoints(a: RoomAnnotation, f: AnnotFrame): Pt[] {
+  switch (a.kind) {
+    case 'line':
+    case 'cloud':   return ((a.geom as LineGeom).pts ?? []).map(p => mapPt(f, p))
+    case 'rect':
+    case 'ellipse': { const g = a.geom as BoxGeom; return [mapPt(f, g.a), mapPt(f, g.b)] }
+    case 'dim':     { const g = a.geom as DimGeom; const l = dimLayout(g); return [g.p1, g.p2, l.d1, l.d2].map(p => mapPt(f, p)) }
+    default:        return []
+  }
 }
 
 function strokeProps(s: ResolvedStyle, k: number, weight = s.weight, dash = s.dash, color = s.color) {

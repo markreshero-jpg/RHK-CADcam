@@ -26,12 +26,13 @@ const STANDARD_SCALES = [5, 10, 15, 20, 25, 30, 40, 50, 100]
 const MARGIN = 10   // mm, usable-area margin on all sides
 const LS_KEY = 'plan-view-layers'
 const LS_SET_KEY = 'plan-view-layer-set'
-const DEFAULT_PAGE: PlanViewPageOptions = { wallNames: true, hatch: true, titleBlock: true }
+const DEFAULT_PAGE: PlanViewPageOptions = { wallNames: true, hatch: true, titleBlock: true, annotColours: false }
 
 const TOGGLES: { key: keyof PlanViewPageOptions; label: string }[] = [
   { key: 'wallNames',  label: 'Wall Names' },
   { key: 'hatch',      label: 'Wall Hatch' },
   { key: 'titleBlock', label: 'Title Block' },
+  { key: 'annotColours', label: 'Annotation colours' },
 ]
 
 export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, annotations }: {

@@ -43,6 +43,9 @@ import { useBenchtopInteraction } from './useBenchtopInteraction'
 import { useFixtureInteraction } from './useFixtureInteraction'
 import FixturesPlan from './FixturesPlan'
 import AnnotationLayer from './AnnotationLayer'
+import AnnotTextEditor from './AnnotTextEditor'
+import CadRibbon from './CadRibbon'
+import { useAnnotationTool } from './useAnnotationTool'
 import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
 import TutorialHintsPlan from './TutorialHintsPlan'
 import { useTutorial } from '@/src/lib/tutorial/store'
@@ -241,8 +244,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
   const [fixtures, setFixtures] = useState<RoomFixture[]>(initialFixtures ?? [])
-  // CAD annotations (z_CAD_tool). A1 is read-only; A2 adds the setter + authoring.
-  const [annotations] = useState<RoomAnnotation[]>(initialAnnotations ?? [])
+  // CAD annotations (z_CAD_tool). F7 = CAD mode (mode 'cad'); authoring in useAnnotationTool.
+  const [annotations, setAnnotations] = useState<RoomAnnotation[]>(initialAnnotations ?? [])
   const planAnnotations = useMemo(() => annotations.filter(a => a.view === 'plan'), [annotations])
   const [sectionCut, setSectionCut] = useState<SectionCut | null>(null)
   const [sectionDrag, setSectionDrag] = useState<{ offsetX: number; offsetY: number } | null>(null)
@@ -290,7 +293,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }, [])
 
   const { captureSnapshot, handleUndo, handleRedo, wallsRef, cabinetsRef, canUndo, canRedo } =
-    useCanvasHistory(walls, cabinets, benchtops, setWalls, setCabinets, setBenchtops, setSelected, fixtures, setFixtures)
+    useCanvasHistory(walls, cabinets, benchtops, setWalls, setCabinets, setBenchtops, setSelected, fixtures, setFixtures, annotations, setAnnotations)
 
   const {
     resolvedParts, setResolvedParts,
@@ -588,6 +591,26 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     return { x: e.clientX - r.left, y: e.clientY - r.top }
   }
 
+  // ── CAD annotations (F7, z_CAD_tool A2) ──
+  const annotScale = room.annotation_scale ?? 20
+  function enterCad() {
+    setMode('cad'); setSelected(null); setMultiSelect([]); setContextMenu(null)
+    setArmedDef(null); setArmedDraft(null); setDrawStart(null); setPlaceGhost(null)
+    if (canvasView !== 'plan' && canvasView !== 'elevation') switchView('plan')
+  }
+  const cad = useAnnotationTool({
+    room, annotations, setAnnotations, captureSnapshot, frame: IDENTITY_FRAME, paper: annotScale, zoom: view.zoom,
+    active: mode === 'cad' && canvasView === 'plan',
+    toWorld: e => { const r = svgRef.current!.getBoundingClientRect(); return toWorld(e.clientX - r.left, e.clientY - r.top) },
+    snap: wp => computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom).pt,
+    enterCad, exitCad: () => setMode('select'),
+  })
+  function setAnnotScale(n: number) {
+    setRoomState(prev => ({ ...prev, annotation_scale: n }))
+    void supabase.from('rooms').update({ annotation_scale: n }).eq('id', room.id)
+      .then(({ error }) => { if (error) console.error('[annotation scale]', error) })
+  }
+
   // ── Effects ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -717,6 +740,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (e.key === 'F6' && !isInput(e.target)) {
         e.preventDefault()
         fx.setMenuOpen(v => !v)
+      }
+      // F7 CAD annotations (z_CAD_tool): toggles CAD mode + the ribbon.
+      if (e.key === 'F7' && !isInput(e.target)) {
+        e.preventDefault()
+        if (mode === 'cad') setMode('select'); else enterCad()
       }
       if ((e.key === 'r' || e.key === 'R') && mode === 'place_fixture' && !e.ctrlKey && !e.metaKey && !isInput(e.target)) {
         e.preventDefault(); fx.rotateCarry()
@@ -2520,6 +2548,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         </div>
       </div>
 
+      {mode === 'cad' && (canvasView === 'plan' || canvasView === 'elevation') && (
+        <CadRibbon cad={cad} viewSupported={canvasView === 'plan'} scale={annotScale} onScale={setAnnotScale}
+          onClose={() => setMode('select')} />
+      )}
+      {cad.editing && canvasView === 'plan' && (
+        <AnnotTextEditor key={cad.editing.draft.id} editing={cad.editing} frame={IDENTITY_FRAME} paper={annotScale} zoom={view.zoom}
+          toClient={p => { const r = svgRef.current!.getBoundingClientRect(); return { x: r.left + p.x * view.zoom + view.panX, y: r.top + p.y * view.zoom + view.panY } }}
+          onChange={cad.setEditText} onCommit={cad.commitEdit} onCancel={cad.cancelEdit} />
+      )}
+
       <div className="flex flex-1 overflow-hidden relative">
 
         {/* Phone: the sidebar is a drawer over the canvas (kept mounted so its menus keep state). */}
@@ -2548,6 +2586,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           setFixtureMenuOpen={fx.setMenuOpen}
           armedFixtureId={fx.carry?.kind === 'place' ? fx.carry.item.id : null}
           onArmFixture={armFixture}
+          cadOn={mode === 'cad'}
+          onToggleCad={() => { if (mode === 'cad') setMode('select'); else enterCad() }}
           clipboard={clipboard}
           sidebarW={sidebarW}
         />
@@ -2664,8 +2704,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               onMeasureCancel={() => { setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }}
               wallOpenings={wallOpenings}
               wallFixtureSpans={wallFixtureSpans}
-              annotationsLayer={<AnnotationLayer annotations={planAnnotations} frame={IDENTITY_FRAME}
-                paper={room.annotation_scale ?? 20} layers={planLayers} />}
+              annotationsLayer={<g>
+                {/* CAD mode: an invisible sheet over the drawing takes the clicks (tools / marquee). */}
+                {mode === 'cad' && (
+                  <rect x={-1e7} y={-1e7} width={2e7} height={2e7} fill="transparent"
+                    style={{ pointerEvents: 'all', cursor: cad.tool === 'select' ? 'default' : 'crosshair' }}
+                    onPointerDown={cad.onCaptureDown} />
+                )}
+                <AnnotationLayer annotations={planAnnotations} frame={IDENTITY_FRAME} paper={annotScale} layers={planLayers}
+                  edit={{ ...cad.editProps, hittable: cad.editProps.hittable && (mode === 'cad' || mode === 'select') }} />
+                {cad.ghost && (
+                  <rect x={Math.min(cad.ghost.a.x, cad.ghost.b.x)} y={Math.min(cad.ghost.a.y, cad.ghost.b.y)}
+                    width={Math.abs(cad.ghost.b.x - cad.ghost.a.x)} height={Math.abs(cad.ghost.b.y - cad.ghost.a.y)}
+                    fill={cad.ghost.kind === 'marquee' ? 'rgba(56,189,248,0.08)' : 'none'} stroke="#38bdf8"
+                    strokeWidth={1 / view.zoom} strokeDasharray={`${5 / view.zoom} ${3 / view.zoom}`} style={{ pointerEvents: 'none' }} />
+                )}
+              </g>}
               tutorialLayer={tutorialOn && <TutorialHintsPlan zoom={view.zoom} layers={planLayers} />}
               fixturesLayer={
                 <FixturesPlan

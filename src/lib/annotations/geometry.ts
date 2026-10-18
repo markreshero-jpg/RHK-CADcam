@@ -264,3 +264,54 @@ export function annotationFramePoints(kind: AnnotationKind, geom: AnnotationGeom
     case 'dim':     { const g = geom as DimGeom; const l = dimLayout(g); return [g.p1, g.p2, l.d1, l.d2] }
   }
 }
+
+// ── Editing helpers (A2) ─────────────────────────────────────────────────────
+
+/** svg → frame (inverse of mapPt). */
+export function unmapPt(f: AnnotFrame, p: Pt): Pt {
+  return { x: (p.x - f.ox) / f.s, y: (f.flipY ? -1 : 1) * (p.y - f.oy) / f.s }
+}
+
+/** Move every point of a geometry by (dx, dy) frame mm. */
+export function translateGeom(kind: AnnotationKind, geom: AnnotationGeom, dx: number, dy: number): AnnotationGeom {
+  const t = (p: Pt): Pt => ({ x: p.x + dx, y: p.y + dy })
+  switch (kind) {
+    case 'text':    { const g = geom as TextGeom; return { ...g, at: t(g.at), leader: g.leader?.map(t) } }
+    case 'line':
+    case 'cloud':   { const g = geom as LineGeom; return { ...g, pts: (g.pts ?? []).map(t) } }
+    case 'rect':
+    case 'ellipse': { const g = geom as BoxGeom; return { ...g, a: t(g.a), b: t(g.b) } }
+    case 'dim':     { const g = geom as DimGeom; return { ...g, p1: t(g.p1), p2: t(g.p2) } }
+  }
+}
+
+export interface Box { minX: number; minY: number; maxX: number; maxY: number }
+
+export function boundsOf(pts: Pt[]): Box | null {
+  if (!pts.length) return null
+  return {
+    minX: Math.min(...pts.map(p => p.x)), minY: Math.min(...pts.map(p => p.y)),
+    maxX: Math.max(...pts.map(p => p.x)), maxY: Math.max(...pts.map(p => p.y)),
+  }
+}
+
+export function boxesOverlap(a: Box, b: Box): boolean {
+  return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY
+}
+
+/** The text block's outline (incl. background padding) as 4 frame corners, clockwise
+ *  from the top-left. paperToFrame = frame mm per paper mm. */
+export function textCorners(g: TextGeom, block: TextBlock, pad: number, paperToFrame: number): Pt[] {
+  const k = paperToFrame
+  return [
+    { x: -pad, y: -pad }, { x: block.w + pad, y: -pad },
+    { x: block.w + pad, y: block.h + pad }, { x: -pad, y: block.h + pad },
+  ].map(c => add(g.at, rotatePt(mul(c, k), g.rot ?? 0)))
+}
+
+/** Snap an angle (deg) to the nearest quarter turn when within `tol` degrees. */
+export function snapQuarter(deg: number, tol = 4): number {
+  const n = ((deg % 360) + 360) % 360
+  for (const q of [0, 90, 180, 270, 360]) if (Math.abs(n - q) <= tol) return q % 360
+  return Math.round(n * 10) / 10
+}

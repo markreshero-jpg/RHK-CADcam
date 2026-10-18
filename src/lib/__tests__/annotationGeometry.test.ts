@@ -109,3 +109,37 @@ describe('style + layers', () => {
     expect(pts[4]).toEqual({ x: 0, y: 0 })
   })
 })
+
+import { unmapPt, translateGeom, boundsOf, boxesOverlap, textCorners, snapQuarter } from '../annotations/geometry'
+
+describe('editing helpers', () => {
+  it('unmapPt inverts mapPt', () => {
+    const f = { ox: 10, oy: 500, s: 0.5, flipY: true }
+    const p = { x: 123, y: 456 }
+    const back = unmapPt(f, mapPt(f, p))
+    expect(back.x).toBeCloseTo(123); expect(back.y).toBeCloseTo(456)
+  })
+  it('translates every point of every kind', () => {
+    expect(translateGeom('text', { at: { x: 0, y: 0 }, leader: [{ x: 1, y: 1 }] }, 5, 5))
+      .toEqual({ at: { x: 5, y: 5 }, leader: [{ x: 6, y: 6 }] })
+    expect(translateGeom('dim', { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 }, offset: 3 }, 1, 2))
+      .toEqual({ p1: { x: 1, y: 2 }, p2: { x: 2, y: 2 }, offset: 3 })
+  })
+  it('bounds + overlap', () => {
+    const b = boundsOf([{ x: 0, y: 5 }, { x: 10, y: -5 }])!
+    expect(b).toEqual({ minX: 0, minY: -5, maxX: 10, maxY: 5 })
+    expect(boxesOverlap(b, { minX: 9, minY: 4, maxX: 20, maxY: 20 })).toBe(true)
+    expect(boxesOverlap(b, { minX: 11, minY: 0, maxX: 20, maxY: 20 })).toBe(false)
+  })
+  it('text corners scale paper → frame and include padding', () => {
+    const block = layoutText('x', 3.5, { width: 10 })
+    const c = textCorners({ at: { x: 100, y: 100 } }, block, 1, 20)
+    expect(c[0]).toEqual({ x: 80, y: 80 })
+    expect(c[1].x).toBeCloseTo(100 + 11 * 20)
+  })
+  it('snaps near quarter turns only', () => {
+    expect(snapQuarter(88)).toBe(90)
+    expect(snapQuarter(-2)).toBe(0)
+    expect(snapQuarter(45)).toBe(45)
+  })
+})

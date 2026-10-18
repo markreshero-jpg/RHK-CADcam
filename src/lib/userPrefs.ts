@@ -1,3 +1,5 @@
+import type { AnnotationKind } from './types'
+import type { AnnotationStyle } from './annotations/style'
 import { type SnapSettings, DEFAULT_SNAP_SETTINGS, normaliseSnapSettings } from './canvasSnap'
 import { GRID_STEPS } from './geometry'
 import { type ElevSnapSettings, DEFAULT_ELEV_SNAP_SETTINGS, normaliseElevSnapSettings } from './elevationSnap'
@@ -39,6 +41,8 @@ export interface UserPrefs {
   cabinetEnterEdit: boolean
   /** Tutorial mode (z_tutorial): on/off + where the user is up to. */
   tutorial: TutorialPrefs
+  /** CAD annotations (z_CAD_tool decision 7): last-used style per kind = the next item's default. */
+  annotStyleDefaults: Partial<Record<AnnotationKind, AnnotationStyle>>
 }
 
 export interface TutorialPrefs {
@@ -97,6 +101,7 @@ const DEFAULTS: UserPrefs = {
   cabinetDoubleClickEdit: true,
   cabinetEnterEdit: true,
   tutorial: DEFAULT_TUTORIAL,
+  annotStyleDefaults: {},
 }
 
 // Legacy fields: per-view `drawingPresets.plan` and the older singular
@@ -158,6 +163,7 @@ export function getUserPrefs(): UserPrefs {
       planGrid:         normalisePlanGrid(merged.planGrid),
       wallDraw:         normaliseWallDraw(merged.wallDraw),
       tutorial:         normaliseTutorial(merged.tutorial),
+      annotStyleDefaults: merged.annotStyleDefaults && typeof merged.annotStyleDefaults === 'object' ? merged.annotStyleDefaults : {},
     }
   } catch {
     return DEFAULTS
