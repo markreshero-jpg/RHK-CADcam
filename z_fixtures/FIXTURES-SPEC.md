@@ -242,6 +242,9 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-18 (user): **sidebar preview of the armed fixture** (`FixturePreview3D`, pinned at the
+  sidebar bottom like `CabinetPreview3D`) — fitted model / box / opening frame + size, brand.
+
 - 2026-10-18 (user): picking a fixture (F6) or Move while in **elevation** no longer jumps to
   plan — it's carried in that elevation (cursor → plan point 1 mm off the face, so it snaps to
   this wall / side; dashed ghost at the landing spot; drop on pointer-up). And placing is

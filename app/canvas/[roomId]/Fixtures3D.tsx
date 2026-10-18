@@ -14,7 +14,7 @@ import { fixtureLayer } from '@/src/lib/fixtureGeometry'
 // Door / window (P5) with no model: a frame lining the hole, plus glass
 // (window / sliding) or a closed leaf near the room face (door). Item frame:
 // z = 0 outer face … depth = inside face.
-function OpeningModel({ f, colour }: { f: RoomFixture; colour: string | null }) {
+export function OpeningModel({ f, colour }: { f: RoomFixture; colour: string | null }) {
   const w = f.width, h = f.height, d = f.depth
   const fr = Math.min(50, w / 10, h / 10)
   const kind = (f.kind ?? '').toLowerCase()

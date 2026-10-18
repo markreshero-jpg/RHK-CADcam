@@ -13,6 +13,7 @@ import { searchTokens, scoreDef } from '@/src/lib/cabinetSearch'
 import { useIsAdmin } from '@/src/lib/useRole'
 
 const CabinetPreview3D = dynamic(() => import('./CabinetPreview3D'), { ssr: false })
+const FixturePreview3D = dynamic(() => import('./FixturePreview3D'), { ssr: false })
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -893,6 +894,16 @@ export default function CanvasSidebar({
           />
         </div>
       )}
+
+      {/* ── 3-D preview of the armed fixture (F6) — same place as the cabinet one ── */}
+      {mode === 'place_fixture' && armedFixtureId && (() => {
+        const item = fixtureItems?.find(i => i.id === armedFixtureId)
+        return item ? (
+          <div className="flex-none border-t border-gray-800 p-2">
+            <FixturePreview3D item={item} canvasWidth={sidebarW - 16} />
+          </div>
+        ) : null
+      })()}
 
       {/* ── Right-click menu (cabinet or category) ── */}
       {ctxMenu && isAdmin && (() => {
