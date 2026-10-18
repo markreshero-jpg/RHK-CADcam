@@ -119,6 +119,11 @@ export function resolveToekickParts(
     is_detached: false,
   })
 
+  const sprBW   = 100                    // horizontal brace width (fixed 100mm)
+
+  // Too narrow for a 100mm brace (e.g. a 70mm BFK filler) → boards only, no spreaders.
+  if (W < sprBW) return { parts, errors }
+
   // Spreader span — Z distance between inner faces of kick back and kick sub front
   // Inner face of kick back   = kickBackZ + TI
   // Inner face of kick sub    = kickSubZ
@@ -136,7 +141,6 @@ export function resolveToekickParts(
   }
 
   const sprH    = TK - FC                // vertical spreader height
-  const sprBW   = 100                    // horizontal brace width (fixed 100mm)
 
   // End spreaders — one at each end of the (inset) kick
   const endPositions: Array<{ x: number; isRight: boolean }> = [

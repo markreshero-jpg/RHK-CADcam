@@ -135,6 +135,11 @@ export function resolveKickRunParts(
   })
 
   // ── Spreaders ───────────────────────────────────────────────────────────────
+  const sprBW = 100       // horizontal brace width (fixed 100mm)
+
+  // Too narrow for a 100mm brace (e.g. a detached 70mm filler kick) → no spreaders.
+  if (L < sprBW) return { parts, errors }
+
   const sprZ0 = kickBackZ + TI   // inner face of kick back
   const sprZ1 = kickSubZ         // inner face of kick sub front
   const sprEZ = sprZ1 - sprZ0    // Z span of spreaders
@@ -149,7 +154,6 @@ export function resolveKickRunParts(
   }
 
   const sprH  = TK - FC   // vertical spreader height
-  const sprBW = 100       // horizontal brace width (fixed 100mm)
 
   // Collect vertical-spreader X positions across the whole run:
   //   • both run ends, • TOESP-spaced internals, • forced at each split seam.
