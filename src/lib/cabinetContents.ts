@@ -17,9 +17,18 @@ import type { CabPlan } from './fixtureLinks'
 import { rotationForFront } from './fixtureGeometry'
 import { cabBottomZ } from './geometry'
 
+// 'point': footprint centre in the cabinet frame. Turn = `yaw` vs facing out of
+// the cabinet (seeded library data, e.g. BSK) or a raw `link_rot` (saved from a
+// placed cabinet). `z` = underside above the cabinet bottom — ignored for
+// benchtop-mount items, which sit on the benchtop like a hand-dropped sink.
 export type ContentAnchor =
   | { kind: 'zone'; row_index: number; col_index: number }
-  | { kind: 'point'; link_x: number; link_z: number; link_rot: number; z: number }
+  | { kind: 'point'; link_x: number; link_z: number; link_rot?: number; yaw?: number; z: number }
+
+/** link_rot that turns a fixture to face out of the cabinet, plus `yaw` deg. */
+export function facingOutRot(plan: Pick<CabPlan, 'perp' | 'angle'>, yaw = 0): number {
+  return round3(norm(rotationForFront(plan.perp) - plan.angle + yaw))
+}
 
 /** One default content item on a cabinet definition. */
 export interface ContentItem {
@@ -51,7 +60,7 @@ export function zoneSeat(
   return {
     link_x:   round1(cell.X + cell.DX / 2),
     link_z:   round1(frontZ - depth / 2),
-    link_rot: round3(norm(rotationForFront(plan.perp) - plan.angle)),
+    link_rot: facingOutRot(plan),
     link_zone: { row_index: zone.row_index, col_index: zone.col_index, y: round1(cell.Y) },
   }
 }
@@ -97,7 +106,7 @@ export interface LocalFixtureBox {
 }
 
 export function fixtureLocalBox(f: RoomFixture, plan: CabPlan, room: Room): LocalFixtureBox {
-  const yaw = round3(norm(f.link_rot - norm(rotationForFront(plan.perp) - plan.angle)))
+  const yaw = round3(norm(f.link_rot - facingOutRot(plan)))
   const quarter = Math.abs(Math.sin(yaw * Math.PI / 180)) > 0.7
   const w = quarter ? f.depth : f.width, d = quarter ? f.width : f.depth
   return {

@@ -191,6 +191,20 @@ code; Duplicate copies contents (select *).
 **U7 — check in-app** (place UBO, resize, change kick, join kicks, swap oven,
 cut list has the shelf + back rail and no back).
 
+## BSK — sink cabinet (2026-10-18)
+
+`z_ubo/migration_bsk_library.sql`, applied. `BSK` (Appliances): B2D at 900
+wide, pair of doors, no shelf. Contents = two **point** anchors: Abi Zalo
+Double Bowl U/M sink (centre x 450, z 310) + Abi Pull-out Sink Mixer (hole
+centred behind the sink, 50 off the wall → footprint centre 481.5 / 156.75).
+- Point anchors may carry `yaw` (turn vs facing out, `facingOutRot`) instead
+  of a raw `link_rot` — seeded data uses yaw so it's right on any wall side.
+- Spawn: **benchtop-mount** contents sit on the benchtop under them less their
+  drop (no top yet → default bench height), like a hand-dropped sink; the
+  anchor `z` is ignored for them. They cut the top as usual. Drawing the
+  benchtop after placing doesn't re-seat them (same as any sink today, P3).
+- Fixed the Zalo catalogue row (was under_bench / drop 0 → benchtop / 205).
+
 ## Open
 
 - Small leftovers: headless `dbPlaceCabinetFromDefinition` doesn't spawn

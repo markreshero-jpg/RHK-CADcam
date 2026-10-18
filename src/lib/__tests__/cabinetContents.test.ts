@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { zoneSeat, zoneFollow, definitionContents, fixtureLocalBox, contentsFromFixtures } from '../cabinetContents'
+import { zoneSeat, zoneFollow, definitionContents, fixtureLocalBox, contentsFromFixtures, facingOutRot } from '../cabinetContents'
 import { cabinetPlans, linkedPose } from '../fixtureLinks'
 import { fixtureCenter } from '../fixtureGeometry'
 import { centroid } from '../geometry'
@@ -64,6 +64,14 @@ describe('zoneFollow', () => {
 
   it('point-linked fixtures are left alone', () => {
     expect(zoneFollow([{ ...fx, link_zone: null }], [plan], new Map([['c1', resolved]]), room)).toEqual([])
+  })
+})
+
+describe('facingOutRot', () => {
+  it('matches the turn zoneSeat gives a seated fixture, and adds yaw', () => {
+    const seat = zoneSeat(resolved, cab, plan, { row_index: 1, col_index: 0 }, 600)!
+    expect(facingOutRot(plan)).toBe(seat.link_rot)
+    expect(facingOutRot(plan, 90)).toBeCloseTo((seat.link_rot + 90) % 360, 3)
   })
 })
 

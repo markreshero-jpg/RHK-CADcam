@@ -1134,7 +1134,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   async function spawnContents(cabinet: CabinetInstance, resolved: ResolvedCabinet) {
     const plan = cabinetPlans([cabinet], walls, centroid(walls))[0]
     if (!plan) return
-    const spawned = await dbSpawnDefinitionContents(cabinet, resolved, plan, room)
+    const spawned = await dbSpawnDefinitionContents(cabinet, resolved, plan, room,
+      p => { const b = benchtopAt(benchtops, p); return b ? btInfo(b).topZ : null })
     if (spawned.length) setFixtures(prev => [...prev, ...spawned])
   }
 
