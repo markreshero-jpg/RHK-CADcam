@@ -163,6 +163,8 @@ interface CanvasSVGProps {
   onMeasureCancel?: () => void
   /** Fixtures & appliances (z_fixtures) — drawn in world space above cabinets. */
   fixturesLayer?: React.ReactNode
+  /** CAD annotations (z_CAD_tool) — drawn on top of the room, under tool overlays. */
+  annotationsLayer?: React.ReactNode
   /** Tutorial hints (z_tutorial) — world space, click-through. */
   tutorialLayer?: React.ReactNode
   /** P5: door / window spans per wall id — the wall is drawn split around them. */
@@ -188,7 +190,7 @@ export default function CanvasSVG({
   btShapeEdit, onShapeHandleDown, btEdgeHover, btEdgeEdit, onBtEdgePaint, onBtEdgeHover, btTapeIds, btTapeContextFor,
   sectionCut, onSectionFlipLook, onSectionClear, onSectionLinePointerDown,
   snapResult, measureStart, measureEnd, measureCursor, onMeasureCancel,
-  resolvedParts, fixturesLayer, tutorialLayer, wallOpenings, wallFixtureSpans,
+  resolvedParts, fixturesLayer, annotationsLayer, tutorialLayer, wallOpenings, wallFixtureSpans,
 }: CanvasSVGProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   // Editable part-line palette (src/lib/partPalette.ts); read once on mount.
@@ -1633,6 +1635,8 @@ export default function CanvasSVG({
         })}
 
         {fixturesLayer}
+
+        {annotationsLayer}
 
         {tutorialLayer}
 

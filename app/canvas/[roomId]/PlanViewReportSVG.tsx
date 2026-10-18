@@ -9,9 +9,12 @@
 // mm and the drawing prints at the correct physical size at 1:scale.
 'use client'
 import type { ReactNode, RefObject } from 'react'
-import type { Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
+import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
 import { openingSpans, fixtureChainSpans, fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 import { OpeningSymbol } from './FixturesPlan'
+import AnnotationLayer from './AnnotationLayer'
+import { IDENTITY_FRAME, annotLayerItem, annotationFramePoints } from '@/src/lib/annotations/geometry'
+import { resolveStyle } from '@/src/lib/annotations/style'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
   toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon, wallPieces,
@@ -69,11 +72,13 @@ function cabinetTypeFill(cab: CabinetInstance): string {
 }
 
 export default function PlanViewReportSVG({
-  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, projectName, roomName, paperKey, fixtures = [],
+  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, projectName, roomName, paperKey, fixtures = [], annotations = [],
 }: {
   walls:       Wall[]
   /** Placed fixtures — doors / windows (z_fixtures P5) split the walls and draw their symbol. */
   fixtures?:   RoomFixture[]
+  /** CAD annotations (z_CAD_tool), plan rows — drawn on top, paper-mm sized at this scale. */
+  annotations?: RoomAnnotation[]
   cabinets:    CabinetInstance[]
   resolvedParts?: Map<string, ResolvedCabinet>
   svgRef:      RefObject<SVGSVGElement | null>
@@ -119,6 +124,11 @@ export default function PlanViewReportSVG({
       { x: e.x - inward.x * t, y: e.y - inward.y * t },
     ]
   })
+  // Annotations may sit outside the walls (notes off to the side) — fit them too.
+  for (const a of annotations) {
+    if (!layers.show(annotLayerItem(a.kind))) continue
+    pts.push(...annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, P))
+  }
   const minX = Math.min(...pts.map(p => p.x))
   const maxX = Math.max(...pts.map(p => p.x))
   const minY = Math.min(...pts.map(p => p.y))
@@ -663,6 +673,9 @@ export default function PlanViewReportSVG({
           </g>
         )
       })}
+
+      {/* ── CAD annotations (z_CAD_tool) — print black until A2 adds the colour toggle ── */}
+      <AnnotationLayer annotations={annotations} frame={IDENTITY_FRAME} paper={P} layers={layers} printColours={false} />
 
       {/* ── Title block (toggle) ── */}
       {show.titleBlock && (

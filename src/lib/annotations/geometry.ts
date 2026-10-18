@@ -1,0 +1,266 @@
+// CAD annotation geometry (z_CAD_tool/ANNOTATION-SPEC.md). Pure — shared by the
+// canvas, the printed reports and (A7) cabinet sheets so they all draw alike.
+//
+// Two spaces:
+//   frame  real mm in the view's frame (plan: room mm; elevation: wall u / z up;
+//          sheet: cabinet-local). This is what geom stores.
+//   svg    the drawing's SVG units. AnnotFrame maps frame → svg; `paper` (svg units
+//          per paper mm) turns style sizes into drawing sizes.
+
+import type { AnnotationKind } from '../types'
+import type { ArrowType } from './style'
+
+export interface Pt { x: number; y: number }
+
+/** text: `at` = top-left of the text block (svg orientation), rot in degrees.
+ *  width (paper mm) makes it a TEXT BOX — lines wrap to it; absent = point text. */
+export interface TextGeom  { at: Pt; rot?: number; width?: number; leader?: Pt[] }
+export interface LineGeom  { pts: Pt[] }
+export interface BoxGeom   { a: Pt; b: Pt; rot?: number }
+export interface CloudGeom { pts: Pt[] }
+/** offset: signed distance (frame mm) of the dim line from p1→p2, + = left of p1→p2. */
+export interface DimGeom   { p1: Pt; p2: Pt; offset: number }
+export type AnnotationGeom = TextGeom | LineGeom | BoxGeom | CloudGeom | DimGeom
+
+/** frame → svg: svg = (ox + s·x, oy ± s·y). flipY for frames whose y runs up (elevation). */
+export interface AnnotFrame { ox: number; oy: number; s: number; flipY: boolean }
+export const IDENTITY_FRAME: AnnotFrame = { ox: 0, oy: 0, s: 1, flipY: false }
+
+export function mapPt(f: AnnotFrame, p: Pt): Pt {
+  return { x: f.ox + f.s * p.x, y: f.oy + (f.flipY ? -1 : 1) * f.s * p.y }
+}
+/** Frame rotation (deg) as drawn in svg. */
+export function mapRot(f: AnnotFrame, rot: number | undefined): number {
+  return (f.flipY ? -1 : 1) * (rot ?? 0)
+}
+
+// ── Layer items (display layers, Annotations group) ──────────────────────────
+
+export function annotLayerItem(kind: AnnotationKind): 'annot_text' | 'annot_dims' | 'annot_markup' {
+  return kind === 'text' ? 'annot_text' : kind === 'dim' ? 'annot_dims' : 'annot_markup'
+}
+
+// ── Vectors ──────────────────────────────────────────────────────────────────
+
+const sub = (a: Pt, b: Pt): Pt => ({ x: a.x - b.x, y: a.y - b.y })
+const add = (a: Pt, b: Pt): Pt => ({ x: a.x + b.x, y: a.y + b.y })
+const mul = (a: Pt, k: number): Pt => ({ x: a.x * k, y: a.y * k })
+const len = (a: Pt) => Math.hypot(a.x, a.y)
+const unit = (a: Pt): Pt => { const l = len(a) || 1; return { x: a.x / l, y: a.y / l } }
+const f2 = (n: number) => +n.toFixed(3)
+const P = (p: Pt) => `${f2(p.x)} ${f2(p.y)}`
+
+export function rotatePt(p: Pt, deg: number): Pt {
+  const r = deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r)
+  return { x: p.x * c - p.y * s, y: p.x * s + p.y * c }
+}
+
+// ── Arrowheads ───────────────────────────────────────────────────────────────
+
+export interface ArrowShape {
+  d:      string
+  filled: boolean
+  /** Distance to pull the line end back from the tip so it doesn't poke through. */
+  trim:   number
+}
+
+/** Arrowhead at `tip`, pointing away from `from`. size = head length (svg units). */
+export function arrowHead(tip: Pt, from: Pt, type: ArrowType, size: number): ArrowShape | null {
+  if (type === 'none' || size <= 0) return null
+  const u = unit(sub(tip, from))           // along the line, towards the tip
+  const n = { x: -u.y, y: u.x }
+  const back = sub(tip, mul(u, size))
+  const hw = size * 0.33
+  switch (type) {
+    case 'closed':
+    case 'closed_open': {
+      const b1 = add(back, mul(n, hw)), b2 = sub(back, mul(n, hw))
+      return { d: `M${P(tip)}L${P(b1)}L${P(b2)}Z`, filled: type === 'closed', trim: size }
+    }
+    case 'open': {
+      const b1 = add(back, mul(n, hw * 1.2)), b2 = sub(back, mul(n, hw * 1.2))
+      return { d: `M${P(b1)}L${P(tip)}L${P(b2)}`, filled: false, trim: 0 }
+    }
+    case 'dot':
+    case 'dot_open': {
+      const r = size * 0.25
+      return { d: circlePath(tip, r), filled: type === 'dot', trim: type === 'dot_open' ? r : 0 }
+    }
+    case 'tick': {
+      const t = unit(add(u, n))                // 45° to the line
+      const h = size * 0.45
+      return { d: `M${P(sub(tip, mul(t, h)))}L${P(add(tip, mul(t, h)))}`, filled: false, trim: 0 }
+    }
+    case 'square': {
+      const h = size * 0.2
+      const c = [add(add(tip, mul(u, h)), mul(n, h)), add(sub(tip, mul(u, h)), mul(n, h)),
+                 sub(sub(tip, mul(u, h)), mul(n, h)), sub(add(tip, mul(u, h)), mul(n, h))]
+      return { d: `M${c.map(P).join('L')}Z`, filled: true, trim: 0 }
+    }
+  }
+  return null
+}
+
+export function circlePath(c: Pt, r: number): string {
+  return `M${f2(c.x - r)} ${f2(c.y)}a${f2(r)} ${f2(r)} 0 1 0 ${f2(2 * r)} 0a${f2(r)} ${f2(r)} 0 1 0 ${f2(-2 * r)} 0Z`
+}
+
+/** Pull `p` back towards `toward` by d (for trimming line ends under closed heads). */
+export function trimEnd(p: Pt, toward: Pt, d: number): Pt {
+  if (d <= 0) return p
+  const v = sub(toward, p), l = len(v)
+  return l <= d ? toward : add(p, mul(v, d / l))
+}
+
+// ── Text measuring + layout ──────────────────────────────────────────────────
+// Arial/Helvetica advance widths (em) by character class — close enough that the
+// canvas, the PDF and wrapping agree to a few %. Reports render Arial, Helvetica.
+
+const NARROW = new Set("iIl.,:;'|!jft()[] ")
+const WIDE = new Set('mwMW@')
+function charEm(ch: string, bold: boolean): number {
+  let w: number
+  if (NARROW.has(ch)) w = ch === ' ' ? 0.278 : 0.29
+  else if (WIDE.has(ch)) w = 0.86
+  else if (ch >= '0' && ch <= '9') w = 0.556
+  else if (ch >= 'A' && ch <= 'Z') w = 0.68
+  else w = 0.53
+  return bold ? w * 1.07 : w
+}
+
+/** Width of one line (same units as size). */
+export function textWidth(str: string, size: number, bold = false): number {
+  let em = 0
+  for (const ch of str) em += charEm(ch, bold)
+  return em * size
+}
+
+/** Split on newlines; with maxWidth, word-wrap each paragraph (a word longer than the
+ *  box sits on its own line). */
+export function wrapText(text: string, size: number, bold: boolean, maxWidth?: number): string[] {
+  const paras = text.replace(/\r\n?/g, '\n').split('\n')
+  if (!maxWidth || maxWidth <= 0) return paras
+  const out: string[] = []
+  for (const para of paras) {
+    const words = para.split(/ +/)
+    let line = ''
+    for (const w of words) {
+      const next = line ? `${line} ${w}` : w
+      if (line && textWidth(next, size, bold) > maxWidth) { out.push(line); line = w }
+      else line = next
+    }
+    out.push(line)
+  }
+  return out
+}
+
+export interface TextBlock {
+  lines:     string[]
+  /** Baseline y of each line from the block top. */
+  baselines: number[]
+  w:         number
+  h:         number
+  /** y of the first line's middle (leader attach height). */
+  midFirst:  number
+}
+
+/** Layout in "size" units (paper mm × whatever the caller scales by). */
+export function layoutText(text: string, size: number, opts: { bold?: boolean; lineSpacing?: number; width?: number } = {}): TextBlock {
+  const lines = wrapText(text, size, !!opts.bold, opts.width)
+  const lh = size * (opts.lineSpacing ?? 1.3)
+  const baselines = lines.map((_, i) => size * 0.9 + i * lh)
+  const w = opts.width ?? Math.max(0, ...lines.map(l => textWidth(l, size, !!opts.bold)))
+  const h = size * 1.15 + (lines.length - 1) * lh
+  return { lines, baselines, w, h, midFirst: size * 0.55 }
+}
+
+/** Where a leader meets its text: middle of the first line, on whichever side (left /
+ *  right, outside the padding) is nearer the leader's last point. Local block coords. */
+export function leaderAttachLocal(block: TextBlock, pad: number, lastLocal: Pt): Pt {
+  const left = { x: -pad, y: block.midFirst }, right = { x: block.w + pad, y: block.midFirst }
+  return len(sub(lastLocal, left)) <= len(sub(lastLocal, right)) ? left : right
+}
+
+// ── Revision cloud ───────────────────────────────────────────────────────────
+
+/** Closed scalloped path through svg-space points; bumps bulge outward, each about
+ *  `bump` long along the edge. */
+export function cloudPath(pts: Pt[], bump: number): string {
+  if (pts.length < 3 || bump <= 0) return ''
+  // Shoelace in svg coords (y down): > 0 = clockwise on screen → outward is the left of
+  // each edge, which a sweep-1 arc bulges towards.
+  let area = 0
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length]
+    area += a.x * b.y - b.x * a.y
+  }
+  const sweep = area > 0 ? 1 : 0
+  let d = `M${P(pts[0])}`
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length]
+    const L = len(sub(b, a))
+    if (L === 0) continue
+    const n = Math.max(1, Math.round(L / bump))
+    const step = L / n, r = step * 0.62
+    for (let k = 1; k <= n; k++) {
+      const q = add(a, mul(sub(b, a), k / n))
+      d += `A${f2(r)} ${f2(r)} 0 0 ${sweep} ${P(q)}`
+    }
+  }
+  return d + 'Z'
+}
+
+// ── Manual dimension ─────────────────────────────────────────────────────────
+
+export interface DimLayout {
+  /** dimension line ends (frame mm) */
+  d1: Pt; d2: Pt
+  /** unit normal (frame) the dim line was pushed along */
+  n: Pt
+  /** measured length, frame mm */
+  value: number
+}
+
+export function dimLayout(g: DimGeom): DimLayout {
+  const u = unit(sub(g.p2, g.p1))
+  const n = { x: -u.y, y: u.x }
+  return {
+    d1: add(g.p1, mul(n, g.offset)),
+    d2: add(g.p2, mul(n, g.offset)),
+    n, value: len(sub(g.p2, g.p1)),
+  }
+}
+
+/** Text angle (deg, svg) for a line a→b, flipped so it never reads upside down. */
+export function readableAngle(a: Pt, b: Pt): number {
+  let ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI
+  if (ang > 90) ang -= 180
+  else if (ang <= -90) ang += 180
+  return ang
+}
+
+export function dimText(value: number, override: string | null | undefined): string {
+  return override?.trim() ? override : String(Math.round(value))
+}
+
+// ── Bounds (report viewBox) ──────────────────────────────────────────────────
+
+/** Frame points an annotation covers. Text blocks need `paperToFrame` (frame mm per
+ *  paper mm) to size the box. */
+export function annotationFramePoints(kind: AnnotationKind, geom: AnnotationGeom, text: string | null, size: number, paperToFrame: number): Pt[] {
+  switch (kind) {
+    case 'text': {
+      const g = geom as TextGeom
+      const b = layoutText(text ?? '', size, { width: g.width })
+      const w = b.w * paperToFrame, h = b.h * paperToFrame
+      const corners = [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }]
+        .map(c => add(g.at, rotatePt(c, g.rot ?? 0)))
+      return [...corners, ...(g.leader ?? [])]
+    }
+    case 'line':
+    case 'cloud':   return (geom as LineGeom).pts ?? []
+    case 'rect':
+    case 'ellipse': { const g = geom as BoxGeom; return [g.a, g.b, { x: g.a.x, y: g.b.y }, { x: g.b.x, y: g.a.y }] }
+    case 'dim':     { const g = geom as DimGeom; const l = dimLayout(g); return [g.p1, g.p2, l.d1, l.d2] }
+  }
+}

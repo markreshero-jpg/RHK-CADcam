@@ -1,7 +1,7 @@
 import type { Viewport } from 'next'
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/src/lib/supabase-server'
-import { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture } from '@/src/lib/types'
+import { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
 import CanvasClient from './CanvasClient'
 
 export const dynamic = 'force-dynamic'
@@ -34,12 +34,13 @@ export default async function CanvasPage({
   if (!room) notFound()
 
   // Load project, walls, cabinets, benchtops in parallel
-  const [{ data: project }, { data: walls }, { data: cabinets }, { data: benchtops }, { data: fixtures }] = await Promise.all([
+  const [{ data: project }, { data: walls }, { data: cabinets }, { data: benchtops }, { data: fixtures }, { data: annotations }] = await Promise.all([
     supabase.from('projects').select('*').eq('id', (room as Room).project_id).single(),
     supabase.from('walls').select('*').eq('room_id', roomId).order('sort_order'),
     supabase.from('cabinet_instances').select('*').eq('room_id', roomId).order('created_at'),
     supabase.from('benchtop_instances').select('*').eq('room_id', roomId).order('created_at'),
     supabase.from('room_fixtures').select('*').eq('room_id', roomId).order('created_at'),
+    supabase.from('room_annotations').select('*').eq('room_id', roomId).order('sort_order'),
   ])
 
   return (
@@ -50,6 +51,7 @@ export default async function CanvasPage({
       initialCabinets={(cabinets ?? []) as CabinetInstance[]}
       initialBenchtops={(benchtops ?? []) as BenchtopInstance[]}
       initialFixtures={(fixtures ?? []) as RoomFixture[]}
+      initialAnnotations={(annotations ?? []) as RoomAnnotation[]}
     />
   )
 }

@@ -1,5 +1,5 @@
 import { supabase } from '@/src/lib/supabase'
-import type { Wall, CabinetInstance, CabinetDefinition, NeighbourType } from '@/src/lib/types'
+import type { Wall, CabinetInstance, CabinetDefinition, NeighbourType, RoomAnnotation } from '@/src/lib/types'
 import type { CustomOrient } from '@/src/lib/customPartBox'
 import { seedClassDepthParams, presetBox } from '@/src/lib/cabinetShape/presets'
 import { resolveCabinetFromDB, resolveCustomParts, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
@@ -1470,4 +1470,35 @@ export async function dbLoadRoomPartDetails(cabinetIds: string[]): Promise<{
     shapesById.set(r.cabinet_id, m)
   }
   return { posById, shapesById }
+}
+
+// ── CAD annotations (z_CAD_tool/ANNOTATION-SPEC.md) ──────────────────────────
+// Paper-only markup; rows never feed the resolver / nest. The canvas loads a room's
+// rows server-side (page.tsx); these are for authoring (A2+) and other screens.
+
+export type AnnotationDraft = Omit<RoomAnnotation, 'id' | 'created_at' | 'updated_at'>
+type AnnotationPatch = Partial<Pick<RoomAnnotation, 'geom' | 'text' | 'style' | 'sort_order'>>
+
+export async function dbLoadAnnotations(roomId: string): Promise<RoomAnnotation[]> {
+  const { data, error } = await supabase.from('room_annotations').select('*').eq('room_id', roomId).order('sort_order')
+  if (error) console.error('[annotations load]', error)
+  return (data ?? []) as RoomAnnotation[]
+}
+
+export async function dbInsertAnnotation(draft: AnnotationDraft): Promise<RoomAnnotation | null> {
+  const { data, error } = await supabase.from('room_annotations').insert(draft).select('*').single()
+  if (error) { console.error('[annotation insert]', error); return null }
+  return data as RoomAnnotation
+}
+
+export async function dbUpdateAnnotation(id: string, patch: AnnotationPatch): Promise<void> {
+  const { error } = await supabase.from('room_annotations')
+    .update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
+  if (error) console.error('[annotation update]', error)
+}
+
+export async function dbDeleteAnnotations(ids: string[]): Promise<void> {
+  if (!ids.length) return
+  const { error } = await supabase.from('room_annotations').delete().in('id', ids)
+  if (error) console.error('[annotation delete]', error)
 }

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture } from '@/src/lib/types'
+import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { dbLoadResolvedParts } from './canvasDB'
@@ -121,7 +121,7 @@ const PAPER = {
   A1L: { w: 841, h: 594, label: 'A1 Landscape' },
 }
 
-export default function ReportsModal({ initialScope, project, room, walls, cabinets, resolvedParts, benchtops, fixtures = [], layerSets, activeLayerSetId, onClose }: {
+export default function ReportsModal({ initialScope, project, room, walls, cabinets, resolvedParts, benchtops, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
   initialScope: ReportScope
   project: Project | null
   room: Room
@@ -131,6 +131,8 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
   benchtops: BenchtopInstance[]
   /** Placed fixtures in this room (appliance schedule). */
   fixtures?: RoomFixture[]
+  /** CAD annotations (z_CAD_tool) for this room — the plan / elevation reports draw the canvas room. */
+  annotations?: RoomAnnotation[]
   layerSets: LayerSet[]
   activeLayerSetId: string | null
   onClose: () => void
@@ -424,6 +426,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                   room={room}
                   walls={walls}
                   fixtures={roomFixtures}
+                  annotations={annotations.filter(a => a.view === 'plan')}
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
                   resolvedParts={planResolved}
                   layerSets={layerSets}

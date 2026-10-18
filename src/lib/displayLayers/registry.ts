@@ -35,7 +35,7 @@ export const OPACITY_OPTIONS = [1, 0.75, 0.5, 0.25, 0.1] as const
 
 export type LayerGroup =
   | 'carcase' | 'kicks' | 'fronts' | 'internals' | 'hardware' | 'panels'
-  | 'benchtops' | 'fixtures' | 'room' | 'labels' | 'dimensions'
+  | 'benchtops' | 'fixtures' | 'room' | 'labels' | 'dimensions' | 'annotations'
 
 export const LAYER_GROUPS: { id: LayerGroup; label: string }[] = [
   { id: 'carcase',    label: 'Carcase' },
@@ -49,6 +49,7 @@ export const LAYER_GROUPS: { id: LayerGroup; label: string }[] = [
   { id: 'room',       label: 'Room' },
   { id: 'labels',     label: 'Labels' },
   { id: 'dimensions', label: 'Dimensions' },
+  { id: 'annotations', label: 'Annotations' },
 ]
 
 export interface LayerItemDef {
@@ -174,6 +175,14 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     hint: 'Plan: kick board lengths + kick depth at the wall ends; elevation: kick height' },
   { id: 'dim_openings',         group: 'dimensions', label: 'Doors & windows',    views: ['plan', 'elevation'], default: ON,
     hint: 'Plan: a row to the door / window jambs; elevation: widths + sill and head heights' },
+
+  // Annotations (z_CAD_tool) — CAD markup printed on the shop drawings. Show / hide /
+  // ghost only: each annotation keeps its own colour, weight and dash.
+  { id: 'annot_text',   group: 'annotations', label: 'Text notes',        views: ['plan', 'elevation'], default: ON,
+    hint: 'Text, text boxes and their leaders' },
+  { id: 'annot_markup', group: 'annotations', label: 'Markup',            views: ['plan', 'elevation'], default: ON,
+    hint: 'Lines, arrows, boxes, ellipses and clouds' },
+  { id: 'annot_dims',   group: 'annotations', label: 'Manual dimensions', views: ['plan', 'elevation'], default: ON },
 ]
 
 export const LAYER_ITEM_BY_ID: Record<string, LayerItemDef> =

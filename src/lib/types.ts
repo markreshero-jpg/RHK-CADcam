@@ -88,6 +88,8 @@ export interface Room {
   construction_schedule_id:    string | null
   inner_drawer_box_method_id:  string | null
   door_style_override_id:      string | null   // room-level door style override
+  /** CAD annotations (z_CAD_tool): the canvas previews paper-mm sizes at 1:this. */
+  annotation_scale?:           number
   created_at: string
   updated_at: string
 }
@@ -631,6 +633,29 @@ export interface FixtureCatalogItem extends FixtureBody {
   sort_order:   number
   created_at:   string
   updated_at:   string
+}
+
+// ── CAD annotations (z_CAD_tool/ANNOTATION-SPEC.md) ──────────────────────────
+
+export type AnnotationView = 'plan' | 'elevation' | 'cabinet_sheet'
+export type AnnotationKind = 'text' | 'line' | 'rect' | 'ellipse' | 'cloud' | 'dim'
+
+/** A markup item printed on the shop drawings. geom is in real mm in the view frame;
+ *  style sizes are paper mm (see src/lib/annotations/style.ts for the keys). */
+export interface RoomAnnotation {
+  id:         string
+  room_id:    string
+  view:       AnnotationView
+  wall_id:    string | null
+  cabinet_id: string | null
+  sheet_view: 'front' | 'side' | null
+  kind:       AnnotationKind
+  geom:       import('./annotations/geometry').AnnotationGeom
+  text:       string | null
+  style:      import('./annotations/style').AnnotationStyle
+  sort_order: number
+  created_at: string
+  updated_at: string
 }
 
 /** A fixture placed in a room — a copy of the catalogue row at placement time. */

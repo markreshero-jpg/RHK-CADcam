@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useReducer, useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { useIsAdmin } from '@/src/lib/useRole'
-import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopSegment, RoomFixture, FixtureCatalogItem } from '@/src/lib/types'
+import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopSegment, RoomFixture, RoomAnnotation, FixtureCatalogItem } from '@/src/lib/types'
 import {
   Pt, MIN_ZOOM, MAX_ZOOM, MIN_WALL_LEN, SNAP_PX, WALL_SNAP_PX,
   toDeg, dist,
@@ -42,6 +42,8 @@ import {
 import { useBenchtopInteraction } from './useBenchtopInteraction'
 import { useFixtureInteraction } from './useFixtureInteraction'
 import FixturesPlan from './FixturesPlan'
+import AnnotationLayer from './AnnotationLayer'
+import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
 import TutorialHintsPlan from './TutorialHintsPlan'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import FixturePanel from './FixturePanel'
@@ -100,13 +102,15 @@ import { loadRoomHandleSchedule } from '@/src/lib/resolver/loadCabinetInput'
 // Shape Editor overlay is client-only and heavy — load it when first opened.
 const BenchtopShapeEditor = dynamic(() => import('./BenchtopShapeEditor'), { ssr: false })
 
-export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops, initialFixtures }: {
+export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops, initialFixtures, initialAnnotations }: {
   project: Project | null
   room: Room
   walls: Wall[]
   initialCabinets: CabinetInstance[]
   initialBenchtops: BenchtopInstance[]
   initialFixtures?: RoomFixture[]
+  /** CAD annotations (z_CAD_tool) — every view's rows for this room. */
+  initialAnnotations?: RoomAnnotation[]
 }) {
   const [project, setProjectState] = useState<Project | null>(initProject)
   const [room, setRoomState] = useState<Room>(initRoom)
@@ -235,6 +239,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
   const [fixtures, setFixtures] = useState<RoomFixture[]>(initialFixtures ?? [])
+  // CAD annotations (z_CAD_tool). A1 is read-only; A2 adds the setter + authoring.
+  const [annotations] = useState<RoomAnnotation[]>(initialAnnotations ?? [])
+  const planAnnotations = useMemo(() => annotations.filter(a => a.view === 'plan'), [annotations])
   const [sectionCut, setSectionCut] = useState<SectionCut | null>(null)
   const [sectionDrag, setSectionDrag] = useState<{ offsetX: number; offsetY: number } | null>(null)
   // Plan reference grid (dots). Per-user, persisted to localStorage.
@@ -2633,6 +2640,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               onMeasureCancel={() => { setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }}
               wallOpenings={wallOpenings}
               wallFixtureSpans={wallFixtureSpans}
+              annotationsLayer={<AnnotationLayer annotations={planAnnotations} frame={IDENTITY_FRAME}
+                paper={room.annotation_scale ?? 20} layers={planLayers} />}
               tutorialLayer={tutorialOn && <TutorialHintsPlan zoom={view.zoom} layers={planLayers} />}
               fixturesLayer={
                 <FixturesPlan
@@ -3411,6 +3420,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           resolvedParts={resolvedParts}
           benchtops={benchtops}
           fixtures={fixtures}
+          annotations={annotations}
           layerSets={layerSetsApi.sets}
           activeLayerSetId={activeLayerSet?.id ?? null}
           onClose={() => setReportScope(null)}

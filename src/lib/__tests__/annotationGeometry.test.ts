@@ -1,0 +1,111 @@
+import { describe, it, expect } from 'vitest'
+import {
+  mapPt, mapRot, arrowHead, trimEnd, textWidth, wrapText, layoutText, leaderAttachLocal,
+  cloudPath, dimLayout, readableAngle, dimText, annotLayerItem, annotationFramePoints,
+} from '../annotations/geometry'
+import { resolveStyle, printStyle, ANNOT_INK, dashPattern } from '../annotations/style'
+
+describe('frames', () => {
+  it('maps plan (identity-ish) and elevation (y up) frames', () => {
+    expect(mapPt({ ox: 10, oy: 20, s: 2, flipY: false }, { x: 5, y: 5 })).toEqual({ x: 20, y: 30 })
+    expect(mapPt({ ox: 0, oy: 100, s: 1, flipY: true }, { x: 5, y: 30 })).toEqual({ x: 5, y: 70 })
+    expect(mapRot({ ox: 0, oy: 0, s: 1, flipY: true }, 30)).toBe(-30)
+  })
+})
+
+describe('arrowheads', () => {
+  it('closed head sits behind the tip and trims the line by its length', () => {
+    const a = arrowHead({ x: 10, y: 0 }, { x: 0, y: 0 }, 'closed', 2)!
+    expect(a.filled).toBe(true)
+    expect(a.trim).toBe(2)
+    expect(a.d.startsWith('M10 0L8 ')).toBe(true)
+  })
+  it('every type draws except none', () => {
+    for (const t of ['closed', 'closed_open', 'open', 'dot', 'dot_open', 'tick', 'square'] as const)
+      expect(arrowHead({ x: 1, y: 1 }, { x: 0, y: 0 }, t, 2)?.d).toBeTruthy()
+    expect(arrowHead({ x: 1, y: 1 }, { x: 0, y: 0 }, 'none', 2)).toBeNull()
+  })
+  it('trimEnd pulls back along the line, never past the other end', () => {
+    expect(trimEnd({ x: 10, y: 0 }, { x: 0, y: 0 }, 2)).toEqual({ x: 8, y: 0 })
+    expect(trimEnd({ x: 1, y: 0 }, { x: 0, y: 0 }, 5)).toEqual({ x: 0, y: 0 })
+  })
+})
+
+describe('text', () => {
+  it('measures wider for capitals and bold', () => {
+    expect(textWidth('MMM', 3.5)).toBeGreaterThan(textWidth('iii', 3.5))
+    expect(textWidth('abc', 3.5, true)).toBeGreaterThan(textWidth('abc', 3.5))
+  })
+  it('point text keeps its own lines; a text box wraps to its width', () => {
+    expect(wrapText('one\ntwo', 3.5, false)).toEqual(['one', 'two'])
+    const lines = wrapText('the quick brown fox jumps over the lazy dog', 3.5, false, 25)
+    expect(lines.length).toBeGreaterThan(2)
+    for (const l of lines) expect(textWidth(l, 3.5) <= 25 || !l.includes(' ')).toBe(true)
+  })
+  it('text box width is the box, point text width is the longest line', () => {
+    expect(layoutText('hi', 3.5, { width: 40 }).w).toBe(40)
+    expect(layoutText('hi\nhello there', 3.5).w).toBeCloseTo(textWidth('hello there', 3.5))
+  })
+  it('leader attaches on the nearer side', () => {
+    const b = layoutText('note', 3.5)
+    expect(leaderAttachLocal(b, 1, { x: -50, y: 0 }).x).toBe(-1)
+    expect(leaderAttachLocal(b, 1, { x: 500, y: 0 }).x).toBeCloseTo(b.w + 1)
+  })
+})
+
+describe('cloud', () => {
+  it('bulges outward whichever way the polygon winds', () => {
+    const sq = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }]
+    const cw = cloudPath(sq, 5), ccw = cloudPath([...sq].reverse(), 5)
+    expect(cw).toMatch(/A3\.1 3\.1 0 0 1 /)
+    expect(ccw).toMatch(/A3\.1 3\.1 0 0 0 /)
+    expect((cw.match(/A/g) ?? []).length).toBe(8)
+  })
+  it('needs at least 3 points', () => {
+    expect(cloudPath([{ x: 0, y: 0 }, { x: 1, y: 1 }], 5)).toBe('')
+  })
+})
+
+describe('dimension', () => {
+  it('offsets the dim line along the left normal and measures', () => {
+    const l = dimLayout({ p1: { x: 0, y: 0 }, p2: { x: 600, y: 0 }, offset: 50 })
+    expect(l.value).toBe(600)
+    expect(l.d1).toEqual({ x: 0, y: 50 })
+    expect(l.d2).toEqual({ x: 600, y: 50 })
+  })
+  it('reads left-to-right and honours a text override', () => {
+    expect(readableAngle({ x: 10, y: 0 }, { x: 0, y: 0 })).toBeCloseTo(0)
+    expect(readableAngle({ x: 0, y: 10 }, { x: 0, y: 0 })).toBe(90)
+    expect(dimText(599.6, null)).toBe('600')
+    expect(dimText(600, 'TBC')).toBe('TBC')
+  })
+})
+
+describe('style + layers', () => {
+  it('fills defaults per kind and keeps user values', () => {
+    expect(resolveStyle('dim', {}).arrowEnd).toBe('tick')
+    expect(resolveStyle('text', { size: 7 }).size).toBe(7)
+    expect(resolveStyle('line', { color: '#00f' }).color).toBe('#00f')
+  })
+  it('print without colours goes ink, white backgrounds, no fills', () => {
+    const s = printStyle(resolveStyle('rect', { color: '#f00', fill: 'solid', bg: 'solid', bgColor: '#ff0' }), false)
+    expect(s.color).toBe(ANNOT_INK)
+    expect(s.fill).toBe('none')
+    expect(s.bgColor).toBe('#ffffff')
+    expect(printStyle(resolveStyle('rect', { color: '#f00' }), true).color).toBe('#f00')
+  })
+  it('dash patterns', () => {
+    expect(dashPattern('solid', 0.35)).toEqual([])
+    expect(dashPattern('dashed', 0.35)).toEqual([2, 1])
+  })
+  it('maps kinds to layer items', () => {
+    expect(annotLayerItem('text')).toBe('annot_text')
+    expect(annotLayerItem('dim')).toBe('annot_dims')
+    expect(annotLayerItem('cloud')).toBe('annot_markup')
+  })
+  it('bounds cover a rotated text block and its leader', () => {
+    const pts = annotationFramePoints('text', { at: { x: 100, y: 100 }, leader: [{ x: 0, y: 0 }] }, 'note', 3.5, 20)
+    expect(pts).toHaveLength(5)
+    expect(pts[4]).toEqual({ x: 0, y: 0 })
+  })
+})

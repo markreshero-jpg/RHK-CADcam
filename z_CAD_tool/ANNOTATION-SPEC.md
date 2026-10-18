@@ -1,6 +1,6 @@
 # CAD Annotation Tool — Spec
 
-Status: **Spec agreed 2026-10-18 — not started.** All decisions below are Mark's
+Status: **A1 built 2026-10-18 (read-only plan canvas + Plan View report); A2 next.** All decisions below are Mark's
 (2026-10-18). Open: how sheet notes react to cabinet revisions (decided at A7).
 
 > History: this folder used to hold the original Shape Editor handoff (May 2026). That
@@ -27,8 +27,11 @@ paper information only.
    at 1:20 and at 1:50. **Positions** are in real mm in the view's frame (below), so an
    arrow keeps pointing at the same spot at every scale.
 3. **v1 tools:**
-   - **Text.** Multi-line note. Can have a **leader** (polyline + arrowhead) pointing
-     at something.
+   - **Text.** Point text: a multi-line note that runs from where you click. Can have a
+     **leader** (polyline + arrowhead) pointing at something.
+   - **Text box** (added 2026-10-18). Drag out a frame and the text wraps inside it.
+     Same `text` kind with `geom.width`. The width is in **paper mm**, so it wraps the
+     same at every print scale. Background and border wrap the frame.
    - **Arrow / line.** Standalone.
    - **Box / ellipse / cloud.** The cloud is a revision cloud: a rectangle or
      freehand polygon with arc bumps.
@@ -206,7 +209,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 
 | Phase | Scope | Status |
 |---|---|---|
-| A1 | Table + RLS + `rooms.annotation_scale`; types + DB helpers; layer items; `src/lib/annotations/` geometry + tests; `AnnotationLayer` read-only in the plan canvas + Plan View report (check with a hand-seeded row) | [ ] |
+| A1 | Table + RLS + `rooms.annotation_scale`; types + DB helpers; layer items; `src/lib/annotations/` geometry + tests; `AnnotationLayer` read-only in the plan canvas + Plan View report (check with a hand-seeded row) | [x] built 2026-10-18; in-app check pending |
 | A2 | Plan authoring: F7 CAD sidebar tool + **ribbon** under the view tabs, **Text** tool with full text styling (decision 7), colour picker, select/move/delete/copy, undo, snaps, last-used defaults, annotation scale on the ribbon; "Print annotation colours" report toggle; PDF text check | [ ] |
 | A3 | **Arrow / line + text leaders** (full arrowhead set per end, dash types, weight, vertex grips) | [ ] |
 | A4 | **Box / ellipse / cloud** with fill (none / solid / tint) | [ ] |
@@ -217,4 +220,22 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 
 ## RESUME HERE
 
-Spec agreed 2026-10-18. Next: build A1.
+**A1 built 2026-10-18.** Migration `cad_a1_room_annotations` applied live (SQL in
+`migration_a1_room_annotations.sql`).
+- Files: `src/lib/annotations/{style,geometry}.ts` (17 tests in
+  `src/lib/__tests__/annotationGeometry.test.ts`), `app/canvas/[roomId]/AnnotationLayer.tsx`
+  (the one renderer), and `canvasDB.ts` helpers (`dbLoadAnnotations` /
+  `dbInsertAnnotation` / `dbUpdateAnnotation` / `dbDeleteAnnotations`).
+- Wiring: `page.tsx` loads the rows → CanvasClient `annotations` state (no setter yet)
+  → CanvasSVG `annotationsLayer` (after fixtures). ReportsModal → PlanViewReport →
+  PlanViewReportSVG draws them above the chains, under the title block, and fits the
+  viewBox to them. They print black until A2 adds the colour toggle.
+- Test data: 8 sample rows (one of each kind + a second arrow) on **Test Kitchen →
+  "Void Corner Demo"** (room `edb6c46b…`). Delete them once A2 can author real ones.
+- Verified by rendering `AnnotationLayer` to static SVG and screenshotting, in colour
+  and print-black. Not yet seen inside the running app: headless sign-in needs
+  `AUTOMATION_*` in `.env.local`.
+- Layer Manager shows its normal colour / weight controls on the annot items. They do
+  nothing (annotations keep their own style); hide them there in A2 if it confuses.
+
+Next: A2 (F7 CAD mode + ribbon + Text / Text box tools).
