@@ -3,7 +3,7 @@
 // ── Fixture placement + editing (z_fixtures P2) ───────────────────────────────
 // F6 opens the Fixtures sidebar section. Picking a catalogue item "carries" it:
 // the ghost follows the cursor, backs onto the nearest wall face (Shift = free),
-// R turns it 90° while free, click drops it. Move re-uses the same carry.
+// R turns it 90° while free, click drops it (one drop, then Select). Move re-uses the same carry. Works in plan and in elevation.
 // Placed rows copy the catalogue item (jobs stay as-built).
 //
 // Same shape as useBenchtopInteraction: direct supabase calls, optimistic state,
@@ -75,10 +75,15 @@ export function useFixtureInteraction({
   const fixturesRef = useRef(fixtures)
   fixturesRef.current = fixtures
 
-  const carried: Pick<RoomFixture, 'category' | 'kind' | 'name' | 'width' | 'depth'> | null =
+  const carried: Pick<RoomFixture, 'category' | 'kind' | 'name' | 'width' | 'depth' | 'height'> | null =
     carry?.kind === 'place' ? carry.item
     : carry?.kind === 'move' ? fixtures.find(f => f.id === carry.id) ?? null
     : null
+  /** Underside height the ghost is drawn at in elevation (where it will land, before any benchtop fit). */
+  const carriedZ: number =
+    carry?.kind === 'place'
+      ? defaultFixtureZ(carry.item.mount, carry.item.mount_height) - (carry.item.mount === 'benchtop' ? Number(carry.item.bench_drop) || 0 : 0)
+      : carry?.kind === 'move' ? Number(fixtures.find(f => f.id === carry.id)?.z) || 0 : 0
 
   const arm = useCallback((item: FixtureCatalogItem) => {
     setCarry({ kind: 'place', item })
@@ -138,8 +143,9 @@ export function useFixtureInteraction({
       if (e || !data) { setError(e?.message ?? 'Insert failed'); return true }
       const placed = data as RoomFixture
       setFixtures(prev => [...prev, placed])
+      // One drop, then back to Select with it selected — like placing a cabinet.
+      setCarry(null); setGhost(null); setMode('select')
       setSelected({ type: 'fixture', id: placed.id })
-      // Stay armed so several of the same item can be dropped; Esc ends.
       return true
     }
     const id = carry.id
@@ -254,7 +260,7 @@ export function useFixtureInteraction({
 
   return {
     menuOpen, setMenuOpen,
-    carry, ghost, carried, freeRot, error,
+    carry, ghost, carried, carriedZ, freeRot, error,
     arm, startMove, cancel, rotateCarry,
     handlePointerMove, handlePointerUp,
     update, rotateBy, remove, unlink,

@@ -242,6 +242,11 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-18 (user): picking a fixture (F6) or Move while in **elevation** no longer jumps to
+  plan — it's carried in that elevation (cursor → plan point 1 mm off the face, so it snaps to
+  this wall / side; dashed ghost at the landing spot; drop on pointer-up). And placing is
+  **one drop, then Select with it selected** (like cabinets) — no longer stays armed.
+
 - **P6 / P7 not checked in the app.** Check: library tabs + icons, + Category / ✎ editor,
   F6 picker headings; stretch a dishwasher between two cabinets (stops at them), a window
   in plan + its sill in elevation, a linked sink (stays linked).

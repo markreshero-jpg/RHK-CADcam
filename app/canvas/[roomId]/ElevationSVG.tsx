@@ -27,7 +27,7 @@ import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import FixturesElevation, { OpeningHoles } from './FixturesElevation'
-import { openingOnWall, elevationFrame, type StretchSide } from '@/src/lib/fixtureGeometry'
+import { openingOnWall, elevationFrame, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
@@ -206,6 +206,10 @@ interface ElevationSVGProps {
   onFixtureStretchHandle?: (id: string, side: StretchSide) => void
   onFixtureStretchMove?: (cursor: { p?: Pt; z?: number }) => void
   onFixtureStretchCommit?: () => void
+  /** Placing / moving a fixture here (mode 'place_fixture'): cursor → plan point just off this face. */
+  fixtureGhost?: { snap: FixtureSnap; body: Pick<RoomFixture, 'category' | 'name' | 'width' | 'depth' | 'height'>; z: number } | null
+  onFixtureCarryMove?: (p: Pt) => void
+  onFixtureCarryDrop?: (p: Pt) => void
 }
 
 export default function ElevationSVG({
@@ -222,6 +226,7 @@ export default function ElevationSVG({
   benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop, waterfallOcc,
   fixtures, onSelectFixture,
   fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
+  fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop,
 }: ElevationSVGProps) {
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = useMemo(() => frontViewHardwareMap(resolvedPartsRaw), [resolvedPartsRaw])
@@ -465,6 +470,13 @@ export default function ElevationSVG({
       return
     }
 
+    // Carrying a fixture (F6 place / Move): elevation x → a plan point just in front of
+    // this face, so it snaps to this wall and side.
+    if (mode === 'place_fixture' && wall && onFixtureCarryMove) {
+      onFixtureCarryMove(fixtureCarryPoint(e))
+      return
+    }
+
     // Fixture edge stretch (P7): elevation x → a plan point on this face's frame, y → height.
     if (fixtureStretching && wall && onFixtureStretchMove) {
       const svgR = svgRef.current!.getBoundingClientRect()
@@ -577,6 +589,15 @@ export default function ElevationSVG({
     if (mode === 'select') setPlaceGhost(null)
   }
 
+  // Plan point for a fixture carried in elevation: on this face at the cursor's x,
+  // 1 mm out from it (into the room on the face side, outside on the back).
+  function fixtureCarryPoint(e: React.PointerEvent): Pt {
+    const svgR = svgRef.current!.getBoundingClientRect()
+    const ex = (e.clientX - svgR.left - view.panX) / view.zoom
+    const fr = elevationFrame(wall!, elevWallSide, centroid(walls))
+    return { x: fr.o.x + fr.d.x * ex + fr.n.x, y: fr.o.y + fr.d.y * ex + fr.n.y }
+  }
+
   async function onPointerUp(e: React.PointerEvent) {
     const wasPanning = panRef.current !== null
     panRef.current = null
@@ -588,6 +609,7 @@ export default function ElevationSVG({
 
     if (elevResizeFollowing) { await confirmResize(); return }
     if (fixtureStretching) { onFixtureStretchCommit?.(); return }
+    if (mode === 'place_fixture' && wall && onFixtureCarryDrop) { onFixtureCarryDrop(fixtureCarryPoint(e)); return }
 
     // Measure tool — first click sets start, second sets end; further clicks restart.
     if (mode === 'measure' && wall) {
@@ -1678,14 +1700,15 @@ export default function ElevationSVG({
             })}
             </g>
 
-            {/* Fixtures & appliances (z_fixtures) */}
-            {fixtures && fixtures.length > 0 && (
+            {/* Fixtures & appliances (z_fixtures) — also while placing the first one */}
+            {((fixtures && fixtures.length > 0) || (mode === 'place_fixture' && fixtureGhost)) && (
               <FixturesElevation
-                fixtures={fixtures} wall={wall} side={elevWallSide}
+                fixtures={fixtures ?? []} wall={wall} side={elevWallSide}
                 roomCx={centroid(walls)} roomH={roomH} zoom={z} layers={layers}
                 selectedId={selected?.type === 'fixture' ? selected.id : null}
                 onSelect={id => onSelectFixture?.(id)}
                 stretching={fixtureStretching}
+                ghost={mode === 'place_fixture' ? fixtureGhost : null}
                 onStretchHandle={mode === 'select' ? onFixtureStretchHandle : undefined}
               />
             )}

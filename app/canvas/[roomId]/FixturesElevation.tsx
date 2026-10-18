@@ -10,7 +10,7 @@ import type { RoomFixture, Wall } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { Pt } from '@/src/lib/geometry'
 import { wallFrame, type WallSide } from '@/src/lib/benchtopAnchor'
-import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide } from '@/src/lib/fixtureGeometry'
+import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 
 // Edge handles on the selected fixture (P7), like the cabinet elevation markers:
 // blue = width (left / right), purple = height (top) and sill (bottom, openings).
@@ -84,7 +84,7 @@ export function OpeningHoles({ fixtures, wall, side, roomCx, roomH, layers, fill
 }
 
 export default function FixturesElevation({
-  fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, onSelect, stretching, onStretchHandle,
+  fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, onSelect, stretching, onStretchHandle, ghost,
 }: {
   fixtures:   RoomFixture[]
   wall:       Wall
@@ -98,6 +98,8 @@ export default function FixturesElevation({
   /** P7: the edge being stretched, and grabbing a handle (omitted → no handles). */
   stretching?: { id: string; side: StretchSide } | null
   onStretchHandle?: (id: string, side: StretchSide) => void
+  /** Placing / moving in elevation: where the carried item would land (snap pose + body + height). */
+  ghost?: { snap: FixtureSnap; body: Pick<RoomFixture, 'category' | 'name' | 'width' | 'depth' | 'height'>; z: number } | null
 }) {
   const f = elevationFrame(wall, side, roomCx)
   const handles = (fx: RoomFixture, x: number, y: number, w: number, h: number) =>
@@ -109,8 +111,23 @@ export default function FixturesElevation({
   const z = zoom
   const showLabels = layers.show('fixture_labels')
 
+  // Ghost: dashed outline at the landing spot on this face (openings: in this wall).
+  const ghostEl = (() => {
+    if (!ghost) return null
+    const g = { ...ghost.body, x: ghost.snap.x, y: ghost.snap.y, rotation: ghost.snap.rotation, wall_id: ghost.snap.wall_id,
+      depth: ghost.snap.depth ?? ghost.body.depth, hinge_side: 'left' as const }
+    const on = g.category === 'opening' ? openingOnWall(g, wall, side, roomCx) : fixtureOnFace(g, f)
+    if (!on) return null
+    return (
+      <rect x={on.t0} y={roomH - ghost.z - g.height} width={on.t1 - on.t0} height={g.height}
+        fill={STROKE} fillOpacity={0.12} stroke={STROKE} strokeWidth={1.4 / z}
+        strokeDasharray={`${10 / z} ${6 / z}`} style={{ pointerEvents: 'none' }} />
+    )
+  })()
+
   return (
     <g>
+      {ghostEl}
       {fixtures.map(fx => {
         const id = fixtureLayer(fx.category)
         if (!layers.show(id)) return null

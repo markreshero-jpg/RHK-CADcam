@@ -2139,7 +2139,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   function armFixture(item: FixtureCatalogItem) {
     setArmedDef(null); setArmedDraft(null); setDrawStart(null); setPlaceGhost(null)
     if (mode === 'place_fixture' && fx.carry?.kind === 'place' && fx.carry.item.id === item.id) { fx.cancel(); return }
-    if (canvasView !== 'plan') switchView('plan')
+    // Places in plan or in the elevation you're on (3D / section → plan).
+    if (canvasView !== 'plan' && canvasView !== 'elevation') switchView('plan')
     fx.arm(item)
   }
 
@@ -2688,6 +2689,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onFixtureStretchHandle={(id, side) => startFixtureStretch(id, side, 10)}
             onFixtureStretchMove={c => { fx.stretchMove(c) }}
             onFixtureStretchCommit={() => { void fx.commitStretch() }}
+            fixtureGhost={fx.ghost && fx.carried ? { snap: fx.ghost, body: fx.carried, z: fx.carriedZ } : null}
+            onFixtureCarryMove={p => { fx.handlePointerMove(p, false) }}
+            onFixtureCarryDrop={p => { void fx.handlePointerUp(p, false) }}
             onSeamClick={(cabId) => {
               setSelected({ type: 'cabinet', id: cabId })
               setMultiSelect([])
@@ -2926,7 +2930,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onUnlink={id => void fx.unlink(id)}
             onUpdate={(id, patch) => void fx.update(id, patch)}
             onDelete={id => void fx.remove(id)}
-            onMove={id => { if (canvasView !== 'plan') switchView('plan'); fx.startMove(id) }}
+            onMove={id => { if (canvasView !== 'plan' && canvasView !== 'elevation') switchView('plan'); fx.startMove(id) }}
             onTurn={(id, deg) => void fx.rotateBy(id, deg)}
             onOpen={id => setViewFixtureId(id)}
             onClose={() => setSelected(null)}
@@ -3048,7 +3052,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             fixtureId: contextMenu.fixtureId,
             fixture: {
               onView:   id => { setContextMenu(null); setViewFixtureId(id) },
-              onMove:   id => { setContextMenu(null); if (canvasView !== 'plan') switchView('plan'); fx.startMove(id) },
+              onMove:   id => { setContextMenu(null); if (canvasView !== 'plan' && canvasView !== 'elevation') switchView('plan'); fx.startMove(id) },
               onTurn:   id => { setContextMenu(null); void fx.rotateBy(id, 90) },
               onDelete: id => { setContextMenu(null); setSelected(null); void fx.remove(id) },
             },
