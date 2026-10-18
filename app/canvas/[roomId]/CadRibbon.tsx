@@ -8,6 +8,7 @@
 
 import React from 'react'
 import { ARROW_TYPES, TEXT_SIZES, type AnnotationStyle, type DashType } from '@/src/lib/annotations/style'
+import { useTutorial } from '@/src/lib/tutorial/store'
 import type { AnnotationTool, CadTool } from './useAnnotationTool'
 
 const PALETTE = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#111111', '#ffffff']
@@ -21,12 +22,12 @@ const TOOLS: { id: CadTool; label: string; key: string; icon: React.ReactNode }[
   { id: 'select',  label: 'Select',   key: 'S', icon: <path d="M4 2l9 6-4 1 2 5-2 1-2-5-3 3z" fill="currentColor" /> },
   { id: 'text',    label: 'Text',     key: 'T', icon: <path d="M3 3h10M8 3v10M6 13h4" /> },
   { id: 'textbox', label: 'Text box', key: 'B', icon: <><rect x="2" y="2.5" width="12" height="11" rx="1" /><path d="M5 6h6M5 8.5h6M5 11h4" /></> },
+  { id: 'leader',  label: 'Leader note — click the tip, click where the text goes', key: 'Q', icon: <><path d="M3 13l6-6h5" /><path d="M3 13l1-3 2 2z" fill="currentColor" /></> },
+  { id: 'line',    label: 'Line — click points; double-click, Enter or right-click to finish', key: 'L', icon: <path d="M3 13L13 3" /> },
+  { id: 'arrow',   label: 'Arrow — click points; double-click, Enter or right-click to finish', key: 'A', icon: <><path d="M3 13L12 4" /><path d="M13 3l-1 4-3-3z" fill="currentColor" /></> },
 ]
-// Later phases (A3–A5) — shown so the ribbon's shape is settled, not clickable yet.
+// Later phases (A4–A5) — shown so the ribbon's shape is settled, not clickable yet.
 const LATER: { label: string; phase: string; icon: React.ReactNode }[] = [
-  { label: 'Leader',    phase: 'A3', icon: <><path d="M3 13l6-6h5" /><path d="M3 13l1-3 2 2z" fill="currentColor" /></> },
-  { label: 'Line',      phase: 'A3', icon: <path d="M3 13L13 3" /> },
-  { label: 'Arrow',     phase: 'A3', icon: <><path d="M3 13L12 4" /><path d="M13 3l-1 4-3-3z" fill="currentColor" /></> },
   { label: 'Box',       phase: 'A4', icon: <rect x="3" y="4" width="10" height="8" /> },
   { label: 'Ellipse',   phase: 'A4', icon: <ellipse cx="8" cy="8" rx="5.5" ry="4" /> },
   { label: 'Cloud',     phase: 'A4', icon: <path d="M4 11a2 2 0 010-4 2.5 2.5 0 014-2 2.5 2.5 0 014 1.5 2 2 0 010 4.5z" /> },
@@ -37,11 +38,13 @@ const keep = (e: React.MouseEvent) => e.preventDefault()
 
 function Sep() { return <div className="w-px self-stretch my-1.5 bg-gray-700 shrink-0" /> }
 
-function Btn({ on, title, onClick, children, disabled, wide }: {
+function Btn({ on, title, onClick, children, disabled, wide, tour }: {
   on?: boolean; title: string; onClick?: () => void; children: React.ReactNode; disabled?: boolean; wide?: boolean
+  /** Tutorial spotlight target (data-tour). */
+  tour?: string
 }) {
   return (
-    <button title={title} disabled={disabled} onMouseDown={keep} onClick={onClick}
+    <button title={title} disabled={disabled} onMouseDown={keep} onClick={onClick} data-tour={tour}
       className={`${wide ? 'px-2' : 'w-7'} h-7 shrink-0 rounded flex items-center justify-center text-xs transition-colors
         ${disabled ? 'text-gray-600 cursor-not-allowed'
           : on ? 'bg-rose-600 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}>
@@ -88,9 +91,9 @@ function Pick<T extends string | number>({ value, options, onChange, title }: {
   )
 }
 
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
+function Group({ label, children, tour }: { label: string; children: React.ReactNode; tour?: string }) {
   return (
-    <div className="flex items-center gap-1 shrink-0">
+    <div className="flex items-center gap-1 shrink-0" data-tour={tour}>
       <span className="text-[10px] uppercase tracking-wide text-gray-500 mr-0.5">{label}</span>
       {children}
     </div>
@@ -106,15 +109,22 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
   onClose: () => void
 }) {
   const s = cad.ribbonStyle
-  const set = (patch: AnnotationStyle) => cad.applyStyle(patch)
+  // The tutorial (z_tutorial) counts a ribbon style change as one event.
+  const set = (patch: AnnotationStyle) => { cad.applyStyle(patch); useTutorial.getState().emit('annot_style') }
   const kind = cad.ribbonKind
   const isText = kind === 'text'
   const shapeFill = kind === 'rect' || kind === 'ellipse' || kind === 'cloud'
   const arrows = kind === 'line' || kind === 'dim'
   const nSel = cad.selected.length
+  const NEXT: Record<CadTool, string> = { select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow' }
   const what = cad.editing ? (cad.editing.isNew ? 'New text' : 'Editing text')
     : nSel > 1 ? `${nSel} selected` : nSel === 1 ? `Selected ${kind === 'text' && (cad.selected[0].geom as { width?: number }).width != null ? 'text box' : kind}`
-    : `Next ${cad.tool === 'textbox' ? 'text box' : 'text'}`
+    : `Next ${NEXT[cad.tool]}`
+  const oneText = nSel === 1 && kind === 'text' && !cad.editing
+  const drawHint = !cad.drawing ? null
+    : cad.drawing.attachId ? 'Click where the leader points · Esc cancels'
+    : cad.drawing.tool === 'leader' ? 'Click where the text goes · Esc cancels'
+    : 'Click the next point · double-click / Enter / right-click finishes · Backspace steps back · Esc cancels'
 
   return (
     <div className="flex-none h-10 bg-gray-900 border-b border-rose-900/60 flex items-center gap-1.5 px-2 shrink-0 relative z-20 overflow-x-auto"
@@ -122,7 +132,7 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
       <span className="text-[11px] font-semibold text-rose-300 shrink-0 mr-1" title="CAD annotations (F7)">CAD</span>
 
       {TOOLS.map(t => (
-        <Btn key={t.id} on={cad.tool === t.id} title={`${t.label} (${t.key})`} onClick={() => cad.setTool(t.id)} disabled={!viewSupported}>
+        <Btn key={t.id} on={cad.tool === t.id} title={`${t.label} (${t.key})`} onClick={() => cad.setTool(t.id)} disabled={!viewSupported} tour={`cad-${t.id}`}>
           <Icon>{t.icon}</Icon>
         </Btn>
       ))}
@@ -135,8 +145,9 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
       ) : (<>
         <Sep />
         <span className="text-[11px] text-gray-400 shrink-0 w-24 truncate" title={what}>{what}</span>
+        {drawHint && <span className="text-[11px] text-rose-200 shrink-0">{drawHint}</span>}
 
-        <Group label="Colour">
+        <Group label="Colour" tour="cad-colour">
           {PALETTE.map(c => (
             <button key={c} title={c} onMouseDown={keep} onClick={() => set({ color: c, borderColor: c, fillColor: c })}
               className={`w-4 h-4 shrink-0 rounded-sm border ${s.color.toLowerCase() === c ? 'border-white ring-1 ring-rose-400' : 'border-gray-600'}`}
@@ -166,6 +177,19 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
             {cad.ribbonRot != null && (
               <Num title="Rotation (degrees)" value={cad.ribbonRot} step={1} w="w-12" suffix="°" onChange={n => cad.applyRotation(n)} />
             )}
+          </Group>
+          <Sep />
+          <Group label="Leader">
+            {cad.ribbonLeader && (<>
+              <Pick title="Leader arrowhead" value={s.arrowStart} onChange={v => set({ arrowStart: v })} options={ARROW_TYPES} />
+              <Num title="Arrowhead size (paper mm)" value={s.arrowSize} step={0.5} min={0.5} max={10} w="w-10" suffix="mm"
+                onChange={n => set({ arrowSize: Math.max(0.5, n) })} />
+              <Pick title="Leader line weight (paper mm)" value={s.weight} onChange={v => set({ weight: v })}
+                options={WEIGHTS.map(w => ({ id: w, label: `${w}` }))} />
+            </>)}
+            {oneText && (cad.ribbonLeader
+              ? <Btn title="Remove the leader" wide onClick={cad.removeLeader}>Remove</Btn>
+              : <Btn title="Add a leader: click where it should point" wide onClick={cad.startAddLeader}>+ Add</Btn>)}
           </Group>
           <Sep />
           <Group label="Back">

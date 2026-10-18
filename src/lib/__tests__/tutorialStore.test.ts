@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useTutorial } from '../tutorial/store'
 import { LESSONS, EMPTY_CTX, searchLessons } from '../tutorial/lessons'
-import type { Wall, CabinetInstance, BenchtopInstance } from '../types'
+import type { Wall, CabinetInstance, BenchtopInstance, RoomAnnotation } from '../types'
 
 const wall = (id: string, angle: number, x = 0, y = 0, wall_type: Wall['wall_type'] = 'standard'): Wall => ({
   id, room_id: 'r', name: id, sort_order: 0, length: 3000, height: null, soffit_height: null,
@@ -129,6 +129,26 @@ describe('tutorial store', () => {
     st().setEnabled(false)
     st().setEnabled(true)
     expect(st().minimised).toBe(false)
+  })
+
+  it('CAD notes: text, then a text box, select, style, leave', () => {
+    const note = (id: string, width?: number) =>
+      ({ id, view: 'plan', kind: 'text', geom: { at: { x: 0, y: 0 }, width } }) as unknown as RoomAnnotation
+    const old = note('old')
+    st().setCtx({ path: '/canvas/x', inCanvas: true, annotations: [old] })
+    st().setEnabled(true)
+    st().goTo(lessonIdx('cad_notes'))
+    st().setCtx({ mode: 'cad' })
+    expect(st().step).toBe(1) // the note already on the plan doesn't count
+    st().setCtx({ annotations: [old, note('a', 40)] })
+    expect(st().step).toBe(1) // a box isn't point text
+    st().setCtx({ annotations: [old, note('a', 40), note('b')] })
+    expect(st().step).toBe(3)
+    st().setCtx({ annotSelected: 1 })
+    st().emit('annot_style')
+    expect(st().step).toBe(5)
+    st().setCtx({ mode: 'select' })
+    expect(st().step).toBe(6)
   })
 
   it('a PDF download ticks the print step', () => {

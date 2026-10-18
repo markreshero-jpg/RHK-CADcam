@@ -6,7 +6,7 @@
 // plan-view shapes in room mm (TutorialHintsPlan).
 // Lesson + step ids are stored in userPrefs.tutorial — never rename one.
 
-import type { Wall, CabinetInstance, BenchtopInstance, RoomFixture } from '../types'
+import type { Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '../types'
 import { cabT, centroid, wallDir, wallEnd, wallInwardNormal, type Pt } from '../geometry'
 
 export interface TutorialCtx {
@@ -28,13 +28,16 @@ export interface TutorialCtx {
   report:        string | null
   /** One-off actions counted by emit() — e.g. elevation_pdf, plan_pdf. */
   events:        Record<string, number>
+  /** Plan CAD annotations (F7) and how many are selected. */
+  annotations:   RoomAnnotation[]
+  annotSelected: number
 }
 
 export const EMPTY_CTX: TutorialCtx = {
   path: '', inCanvas: false, mode: 'select', view: 'plan',
   walls: [], cabinets: [], benchtops: [], fixtures: [], selected: null,
   cabEditorOpen: false, pickedTops: 0, joinDialogOpen: false, kickSettingsOpen: false,
-  report: null, events: {},
+  report: null, events: {}, annotations: [], annotSelected: 0,
 }
 
 export type TutorialHint =
@@ -56,7 +59,7 @@ export interface TutorialStep {
 
 // Picker tree: level ▸ topic ▸ tutorial. Getting started is one flat course.
 export type TutorialLevel = 'start' | 'basics' | 'intermediate' | 'advanced'
-export type TutorialTopic = 'room' | 'cabinets' | 'benchtops' | 'appliances' | 'reports' | 'production'
+export type TutorialTopic = 'room' | 'cabinets' | 'benchtops' | 'appliances' | 'cad' | 'reports' | 'production'
 
 export const TUTORIAL_LEVELS: { id: TutorialLevel; label: string; blurb: string }[] = [
   { id: 'start',        label: 'Getting started', blurb: 'In order — a whole small kitchen, start to finish.' },
@@ -70,6 +73,7 @@ export const TUTORIAL_TOPICS: { id: TutorialTopic; label: string }[] = [
   { id: 'cabinets',   label: 'Cabinets' },
   { id: 'benchtops',  label: 'Benchtops' },
   { id: 'appliances', label: 'Appliances & fixtures' },
+  { id: 'cad',        label: 'CAD notes & markup' },
   { id: 'reports',    label: 'Reports & printing' },
   { id: 'production', label: 'Production' },
 ]
@@ -161,6 +165,10 @@ const reshaped = (c: TutorialCtx, s: TutorialCtx) => {
 }
 
 // Reused steps
+/** Text notes (F7): point text, or a text box when it has a width. */
+const notes = (c: TutorialCtx, boxed: boolean) =>
+  c.annotations.filter(a => a.kind === 'text' && ((a.geom as { width?: number }).width != null) === boxed).length
+
 const lineTool = (id = 'tool'): TutorialStep => ({
   id, title: 'Pick Line + Offset',
   body: 'Open Benchtop in the sidebar (F4) and choose Line + Offset. In Benchtop mode only tops can be selected; Esc leaves it.',
@@ -441,6 +449,30 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'look', title: 'Work through the stages',
       body: 'The optimiser works stage by stage, from the parts to the sheets, the nest and the G-code. Use your browser Back button to return to the drawing.',
       done: c => c.inCanvas },
+  ]},
+
+  // Appended 2026-10-18 (z_CAD_tool A2 — plan text + text boxes).
+  { id: 'cad_notes', level: 'basics', topic: 'cad', title: 'Notes on the plan (F7 CAD)',
+    blurb: 'Add text and text boxes that print on the plan.',
+    keywords: 'cad f7 annotation annotate note notes text label textbox text box markup ribbon comment write colour', steps: [
+    { id: 'open', title: 'Turn on CAD mode',
+      body: 'Press F7, or click CAD in the left sidebar. A ribbon of CAD tools appears under the Plan / Elevation / 3D tabs. CAD notes go on the Plan for now.',
+      target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
+    { id: 'text', title: 'Place a note',
+      body: 'Pick Text on the ribbon (or press T) and click on the plan where the note goes. Type it; Enter starts a new line. Click away or press Ctrl+Enter to finish.',
+      target: 'cad-text', canvas: true, done: (c, s) => notes(c, false) > notes(s, false) },
+    { id: 'box', title: 'Draw a text box',
+      body: 'Pick Text box (or press B) and drag out a box. Its text wraps to that width. Type a note and click away.',
+      target: 'cad-textbox', canvas: true, done: (c, s) => notes(c, true) > notes(s, true) },
+    { id: 'select', title: 'Select a note',
+      body: 'Pick Select (or press S) and click one of your notes. Drag it to move it, or drag the handle to rotate it. Double-click to change the words.',
+      target: 'cad-select', canvas: true, done: c => c.annotSelected > 0 },
+    { id: 'style', title: 'Change its look',
+      body: 'With the note selected, pick a colour on the ribbon, or change the size, bold, background or border. Whatever you pick becomes the default for your next note.',
+      target: 'cad-colour', canvas: true, done: (c, s) => ev(c, 'annot_style') > ev(s, 'annot_style') },
+    { id: 'finish', title: 'Leave CAD mode',
+      body: 'Press F7 again, or Esc until the ribbon closes. Your notes print on the Plan View report; tick Annotation colours there to print them in colour.',
+      canvas: true, done: c => c.mode !== 'cad' },
   ]},
 ]
 
