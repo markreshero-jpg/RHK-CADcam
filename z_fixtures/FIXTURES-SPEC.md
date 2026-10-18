@@ -273,6 +273,11 @@ Esc cancels; one undo step.
     hinge + swing for hinged doors. Room or job scope, print like the appliance schedule.
   - **Right-click menu in elevation** (View 3D / elevations, Move, Turn 90°, Delete) — same
     menu as plan, via ElevationSVG `onFixtureContextMenu`. Not in 3D.
+  - **Appliances in the dimension rows** — `fixtureChainSpans` (fixtureGeometry, test
+    `fixtureChainSpans.test.ts`): wall-snapped solid fixtures (not openings / benchtop / linked)
+    within 300 of a face. Floor items → base row (plan) / floor chain (elevation); wall-mount
+    (rangehood) → wall-cabinet row / overhead chain. Canvas plan + elevation and both PDFs; gated
+    by the fixture's layer. Depth dims still from cabinets only.
 
 - 2026-10-18 (user): **P10 Cut benchtop tick box + per-placement cutout override.** Column
   `cut_benchtop` (bool, default true) on fixture_catalog + room_fixtures (migration
@@ -361,7 +366,7 @@ Esc cancels; one undo step.
 - Room 3D: sink-in-hole not clearly eyeballed yet (plan + resolver verified).
 - Cutout as a CNC op (optimiser / gcode ignore benchtop cutouts entirely today).
 - ~~Per-placement cutout edits~~ done in P10.
-- ~~Elevation: fixtures aren't placeable from elevation~~ done 2026-10-18. Dimension chains still don't include appliances (only clearance dims on the selected one; openings have their own row).
+- ~~Elevation: fixtures aren't placeable from elevation~~ done 2026-10-18. ~~Dimension chains don't include appliances~~ done 2026-10-18.
 
 ## Openings (P5 — built 2026-10-18)
 

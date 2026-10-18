@@ -10,7 +10,7 @@
 'use client'
 import type { ReactNode, RefObject } from 'react'
 import type { Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
-import { openingSpans } from '@/src/lib/fixtureGeometry'
+import { openingSpans, fixtureChainSpans, fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 import { OpeningSymbol } from './FixturesPlan'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
@@ -40,15 +40,15 @@ export interface PlanViewPageOptions {
 type Seg = { from: number; to: number; label: number }
 
 // Mirror of WallDimensionChain.computeChain — cabinet widths + gaps along a wall.
-function computeChain(cabs: CabinetInstance[], wall: Wall): Seg[] {
-  const sorted = [...cabs].sort((a, b) => cabT(a, wall) - cabT(b, wall))
+// `extra` = other items in the row (appliances), as along-wall { t, dx }.
+function computeChain(cabs: CabinetInstance[], wall: Wall, extra: { t: number; dx: number }[] = []): Seg[] {
+  const sorted = [...cabs.map(c => ({ t: cabT(c, wall), dx: c.dx })), ...extra].sort((a, b) => a.t - b.t)
   const segs: Seg[] = []
   let cursor = 0
-  for (const cab of sorted) {
-    const t = cabT(cab, wall)
+  for (const { t, dx } of sorted) {
     if (t > cursor + 0.5) segs.push({ from: cursor, to: t, label: roundMm(t - cursor) })
-    segs.push({ from: t, to: t + cab.dx, label: roundMm(cab.dx) })
-    cursor = t + cab.dx
+    segs.push({ from: t, to: t + dx, label: roundMm(dx) })
+    cursor = t + dx
   }
   if (cursor < wall.length - 0.5) segs.push({ from: cursor, to: wall.length, label: roundMm(wall.length - cursor) })
   return segs
@@ -102,6 +102,8 @@ export default function PlanViewReportSVG({
   const showOpenings = layers.show('fixture_openings')
   const openings = showOpenings ? fixtures.filter(f => f.category === 'opening' && f.wall_id) : []
   const openingsByWall = openingSpans(openings, walls, cx)
+  // Free-standing appliances take their place in the base / wall-cabinet rows.
+  const chainFixtures = fixtures.filter(f => layers.show(fixtureLayer(f.category)))
 
   // ── Content bounds (includes wall thickness corners) ──────────────────────
   const pts = walls.flatMap(w => {
@@ -589,7 +591,9 @@ export default function PlanViewReportSVG({
           depthOffset: number,
           backOffset = 0,
           withOpenings = false,
+          fx: FixtureChainSpan[] = [],
         ) => {
+          const baseFx = fx.filter(s => s.row === 'floor'), wallFx = fx.filter(s => s.row === 'wall')
           // Doors / windows row (z_fixtures P5): wall start → jambs → wall end.
           const spans = withOpenings && layers.show('dim_openings') ? openingsByWall.get(w.id) ?? [] : []
           const openSegs: Seg[] = []
@@ -601,16 +605,16 @@ export default function PlanViewReportSVG({
           }
           if (spans.length && cur < w.length - 0.5) openSegs.push({ from: cur, to: w.length, label: roundMm(w.length - cur) })
           const rowOverall = ROW_OVERALL + (openSegs.length ? ROW_OPEN_STEP : 0)
-          const baseSegs    = computeChain(baseCabs, w)
-          const wallCabSegs = computeChain(wallCabs, w)
+          const baseSegs    = computeChain(baseCabs, w, baseFx)
+          const wallCabSegs = computeChain(wallCabs, w, wallFx)
           const overallSeg: Seg[] = [{ from: 0, to: w.length, label: roundMm(w.length) }]
           const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
           const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
           const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
           return (
             <g key={key}>
-              {layers.show('dim_wall_chain') && wallCabs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`, 'dim_wall_chain')}
-              {layers.show('dim_base_chain') && baseCabs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_BASE, baseSegs, `bc-${key}`, 'dim_base_chain')}
+              {layers.show('dim_wall_chain') && (wallCabs.length > 0 || wallFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`, 'dim_wall_chain')}
+              {layers.show('dim_base_chain') && (baseCabs.length > 0 || baseFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_BASE, baseSegs, `bc-${key}`, 'dim_base_chain')}
               {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL, openSegs, `op-${key}`, 'dim_openings')}
               {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall')}
               {layers.show('dim_base_chain') && baseDz > 0 && (
@@ -635,13 +639,15 @@ export default function PlanViewReportSVG({
         const outBase = allBase.filter(c => cabWallSide(c, w) === 'back')
         const inWall  = allWall.filter(c => cabWallSide(c, w) === 'face')
         const outWall = allWall.filter(c => cabWallSide(c, w) === 'back')
-        const hasIn  = inBase.length > 0 || inWall.length > 0
-        const hasOut = outBase.length > 0 || outWall.length > 0
+        const fxSpans = fixtureChainSpans(chainFixtures, w, cx)
+        const inFx = fxSpans.filter(s => s.side === 'face'), outFx = fxSpans.filter(s => s.side === 'back')
+        const hasIn  = inBase.length > 0 || inWall.length > 0 || inFx.length > 0
+        const hasOut = outBase.length > 0 || outWall.length > 0 || outFx.length > 0
 
         // Perimeter wall with cabinets only on the room side (the common case): keep
         // the historic single chain on the empty outward side, depth dims inward.
         if (w.wall_type !== 'island' && !hasOut) {
-          return <g key={`dim-${w.id}`}>{renderSide(`m-${w.id}`, out, inward, allBase, allWall, 0, 0, true)}</g>
+          return <g key={`dim-${w.id}`}>{renderSide(`m-${w.id}`, out, inward, allBase, allWall, 0, 0, true, inFx)}</g>
         }
 
         // Island, or a perimeter wall with back-side cabinets: dimension each occupied
@@ -650,8 +656,8 @@ export default function PlanViewReportSVG({
         const outBackOffset = w.wall_type === 'island' ? 0 : w.thickness
         return (
           <g key={`dim-${w.id}`}>
-            {hasIn && renderSide(`in-${w.id}`, inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]))}
-            {(hasOut || !hasIn) && renderSide(`out-${w.id}`, out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, true)}
+            {hasIn && renderSide(`in-${w.id}`, inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]), 0, false, inFx)}
+            {(hasOut || !hasIn) && renderSide(`out-${w.id}`, out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, true, outFx)}
           </g>
         )
       })}

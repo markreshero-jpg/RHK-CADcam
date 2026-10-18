@@ -28,7 +28,7 @@ import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import FixturesElevation, { OpeningHoles } from './FixturesElevation'
-import { openingOnWall, elevationFrame, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
+import { openingOnWall, elevationFrame, fixtureChainSpans, fixtureLayer, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
@@ -111,16 +111,16 @@ function slideElevRect(s: ResolvedDrawerSlide) {
 }
 
 
-// xOf = the cabinet's left edge in elevation x (mirrored on the back side).
-function computeElevChain(cabs: CabinetInstance[], wall: Wall, xOf: (c: CabinetInstance) => number) {
-  const sorted = [...cabs].sort((a, b) => xOf(a) - xOf(b))
+// xOf = the cabinet's left edge in elevation x (mirrored on the back side);
+// `extra` = appliances in the row, already in elevation x.
+function computeElevChain(cabs: CabinetInstance[], wall: Wall, xOf: (c: CabinetInstance) => number, extra: { t: number; dx: number }[] = []) {
+  const sorted = [...cabs.map(c => ({ t: xOf(c), dx: c.dx })), ...extra].sort((a, b) => a.t - b.t)
   const segs: { from: number; to: number; label: number }[] = []
   let cursor = 0
-  for (const cab of sorted) {
-    const t = xOf(cab)
+  for (const { t, dx } of sorted) {
     if (t > cursor + 0.5) segs.push({ from: cursor, to: t, label: roundMm(t - cursor) })
-    segs.push({ from: t, to: t + cab.dx, label: roundMm(cab.dx) })
-    cursor = t + cab.dx
+    segs.push({ from: t, to: t + dx, label: roundMm(dx) })
+    cursor = t + dx
   }
   if (cursor < wall.length - 0.5) segs.push({ from: cursor, to: wall.length, label: roundMm(wall.length - cursor) })
   return segs
@@ -282,6 +282,12 @@ export default function ElevationSVG({
       : []
   // Dimension chains measure only cabinets the layer set draws.
   const chainCabs = wallCabs.filter(c => elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))
+  // Free-standing appliances on this face, in elevation x, for the floor / wall rows.
+  const chainFx = wall && fixtures
+    ? fixtureChainSpans(fixtures.filter(f => layers.show(fixtureLayer(f.category))), wall, centroid(walls))
+      .filter(s => s.side === elevWallSide).map(s => ({ row: s.row, t: mirrorX(s.t, s.dx), dx: s.dx }))
+    : []
+  const chainFxWall = chainFx.filter(s => s.row === 'wall'), chainFxFloor = chainFx.filter(s => s.row === 'floor')
   // Hand-added part_operations for every cabinet on this wall → cabinet-space markers.
   const handMarkersByCab = useHandOpMarkersMulti(wallCabs.map(c => c.id), resolvedParts)
 
@@ -1878,8 +1884,8 @@ export default function ElevationSVG({
               const overheadCabs = chainCabs.filter(c =>
                 c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'
               )
-              if (overheadCabs.length === 0) return null
-              const segs = computeElevChain(overheadCabs, wall, elevX)
+              if (overheadCabs.length === 0 && chainFxWall.length === 0) return null
+              const segs = computeElevChain(overheadCabs, wall, elevX, chainFxWall)
               const chainY = -tickH * 2 - layers.offset('dim_elev_wall_chain')
               const col = layers.color('dim_elev_wall_chain', '#ffffff')
               const chainOp = layers.op('dim_elev_wall_chain')
@@ -1916,8 +1922,8 @@ export default function ElevationSVG({
                   c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'
                 )
               )
-              if (floorCabs.length === 0) return null
-              const segs = computeElevChain(floorCabs, wall, elevX)
+              if (floorCabs.length === 0 && chainFxFloor.length === 0) return null
+              const segs = computeElevChain(floorCabs, wall, elevX, chainFxFloor)
               const chainY = roomH + tickH * 1.5 + layers.offset('dim_elev_floor_chain')
               const col = layers.color('dim_elev_floor_chain', '#ffffff')
               const chainOp = layers.op('dim_elev_floor_chain')

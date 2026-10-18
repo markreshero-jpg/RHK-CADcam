@@ -20,6 +20,7 @@ import {
   gridDots,
 } from '@/src/lib/geometry'
 import type { WallSpan } from '@/src/lib/geometry'
+import { fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 import { footprintEdgesPlan } from '@/src/lib/cabinetShape/footprint'
 import { isShapedPanelKey, zonePartId } from '@/src/lib/cabinetShape/partKeys'
 import WallDimensionChain from './WallDimensionChain'
@@ -166,6 +167,8 @@ interface CanvasSVGProps {
   tutorialLayer?: React.ReactNode
   /** P5: door / window spans per wall id — the wall is drawn split around them. */
   wallOpenings?: Map<string, WallSpan[]>
+  /** Free-standing appliances per wall id for the dimension rows (fixtureChainSpans). */
+  wallFixtureSpans?: Map<string, FixtureChainSpan[]>
 }
 
 export default function CanvasSVG({
@@ -185,7 +188,7 @@ export default function CanvasSVG({
   btShapeEdit, onShapeHandleDown, btEdgeHover, btEdgeEdit, onBtEdgePaint, onBtEdgeHover, btTapeIds, btTapeContextFor,
   sectionCut, onSectionFlipLook, onSectionClear, onSectionLinePointerDown,
   snapResult, measureStart, measureEnd, measureCursor, onMeasureCancel,
-  resolvedParts, fixturesLayer, tutorialLayer, wallOpenings,
+  resolvedParts, fixturesLayer, tutorialLayer, wallOpenings, wallFixtureSpans,
 }: CanvasSVGProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   // Editable part-line palette (src/lib/partPalette.ts); read once on mount.
@@ -1022,6 +1025,7 @@ export default function CanvasSVG({
                   layerWallCab={layers.setting('dim_wall_chain')}
                   layerKick={layers.setting('dim_kicks')}
                   kickSpans={layers.show('dim_kicks') ? kickPlanSpans(cabinets, w, resolvedParts, cx) : undefined}
+                  fixtureSpans={wallFixtureSpans?.get(w.id)?.filter(s => layers.show(fixtureLayer(s.category)))}
                   labelBg={layers.background}
                 />
               </Fragment>
@@ -1067,6 +1071,7 @@ export default function CanvasSVG({
                 kickSpans={layers.show('dim_kicks') ? kickPlanSpans(cabinets, w, resolvedParts, cx) : undefined}
                 layerOpenings={layers.setting('dim_openings')}
                 openingSpans={wallOpenings?.get(w.id)}
+                fixtureSpans={wallFixtureSpans?.get(w.id)?.filter(s => layers.show(fixtureLayer(s.category)))}
                   labelBg={layers.background}
               />
             </Fragment>

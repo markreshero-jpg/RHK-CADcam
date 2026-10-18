@@ -433,6 +433,31 @@ export function fixtureOnFace(fx: FixtureFootprint, f: WallFrame, reach = 1200):
   return { t0, t1 }
 }
 
+/** A free-standing fixture in a wall's dimension rows: along-wall span from the wall start (plan t, not mirrored). */
+export interface FixtureChainSpan { side: WallSide; row: 'floor' | 'wall'; t: number; dx: number; category: string }
+
+/**
+ * Fixtures that take a place in a wall's cabinet dimension rows (dishwasher,
+ * fridge, freestanding oven → the base / floor row; wall-mount rangehood → the
+ * wall-cabinet row): wall-snapped, solid (not an opening, not benchtop-mount,
+ * not linked — a linked one is inside its cabinet's width already), facing the
+ * room off that face, within 300 mm of it.
+ */
+export function fixtureChainSpans(fixtures: RoomFixture[], wall: Wall, roomRef: Pt): FixtureChainSpan[] {
+  const out: FixtureChainSpan[] = []
+  for (const fx of fixtures) {
+    if (fx.wall_id !== wall.id || fx.category === 'opening' || fx.mount === 'benchtop' || fx.cabinet_id) continue
+    for (const side of ['face', 'back'] as const) {
+      const on = fixtureOnFace(fx, wallFrame(wall, side, roomRef), 300)
+      if (!on) continue
+      const t0 = Math.max(0, on.t0), t1 = Math.min(wall.length, on.t1)
+      out.push({ side, row: fx.mount === 'wall' ? 'wall' : 'floor', t: t0, dx: t1 - t0, category: fx.category })
+      break
+    }
+  }
+  return out
+}
+
 /** Display-layer item for each catalogue category (registry.ts, group 'fixtures'). */
 export const FIXTURE_LAYER: Record<string, string> = {
   appliance:  'fixture_appliances',

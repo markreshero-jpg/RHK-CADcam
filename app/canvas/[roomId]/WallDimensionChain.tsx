@@ -5,6 +5,7 @@ import { returnWallThickness } from '@/src/lib/wallJoints'
 import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
 import { kickChain, type KickSpan } from '@/src/lib/kickDims'
 import { roundMm } from '@/src/lib/format'
+import type { FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 
 interface Props {
   wall: Wall
@@ -22,6 +23,8 @@ interface Props {
   /** Doors / windows row (`dim_openings`, z_fixtures P5): spans along the wall, drawn on the outer side. */
   layerOpenings?: LayerConfig
   openingSpans?: WallSpan[]
+  /** Free-standing appliances on this wall (fixtureChainSpans) — they take their place in the base / wall-cabinet rows. */
+  fixtureSpans?: FixtureChainSpan[]
   /** Label backing-chip colour — the view background (layer set). */
   labelBg?: string
 }
@@ -39,17 +42,17 @@ function dimStep(zoom: number): number {
   return Math.min(Math.max(DIM_STEP_MM * zoom, DIM_STEP_MIN_PX), DIM_STEP_MAX_PX) / zoom
 }
 
-function computeChain(cabs: CabinetInstance[], wall: Wall): Seg[] {
-  const sorted = [...cabs].sort((a, b) => cabT(a, wall) - cabT(b, wall))
+// `extra` = other items in the row (appliances), as along-wall { t, dx }.
+function computeChain(cabs: CabinetInstance[], wall: Wall, extra: { t: number; dx: number }[] = []): Seg[] {
+  const sorted = [...cabs.map(c => ({ t: cabT(c, wall), dx: c.dx })), ...extra].sort((a, b) => a.t - b.t)
   const segs: Seg[] = []
   let cursor = 0
-  for (const cab of sorted) {
-    const t = cabT(cab, wall)
+  for (const { t, dx } of sorted) {
     if (t > cursor + 0.5) {
       segs.push({ from: cursor, to: t, label: roundMm(t - cursor) })
     }
-    segs.push({ from: t, to: t + cab.dx, label: roundMm(cab.dx) })
-    cursor = t + cab.dx
+    segs.push({ from: t, to: t + dx, label: roundMm(dx) })
+    cursor = t + dx
   }
   if (cursor < wall.length - 0.5) {
     segs.push({ from: cursor, to: wall.length, label: roundMm(wall.length - cursor) })
@@ -195,7 +198,7 @@ function DepthDim({
 export default function WallDimensionChain({
   wall, walls, cabinets, rc, zoom, selected,
   layerOverall, layerBase, layerWallCab, layerKick, kickSpans = [], labelBg = '#030712',
-  layerOpenings, openingSpans = [],
+  layerOpenings, openingSpans = [], fixtureSpans = [],
 }: Props) {
   const inward = wallInwardNormal(wall, rc)
   const out = { x: -inward.x, y: -inward.y }
@@ -235,14 +238,16 @@ export default function WallDimensionChain({
     backOffset = 0,
     kicks: KickSpan[] = [],
     openings: WallSpan[] = [],
+    fx: FixtureChainSpan[] = [],
   ) {
-    const baseSegs = computeChain(baseCabs, wall)
+    const baseFx = fx.filter(s => s.row === 'floor'), wallFx = fx.filter(s => s.row === 'wall')
+    const baseSegs = computeChain(baseCabs, wall, baseFx)
     // Kick row sits between the base row and the overall, which steps out past it.
     const showKicks = !!layerKick?.visible && kicks.length > 0
     const kickSegs = showKicks ? kickChain(kicks, wall.length) : []
     const kickCol = layerKick?.color ?? col
     const kick0 = kicks[0], kickL = kicks[kicks.length - 1]
-    const wallCabSegs = computeChain(wallCabs, wall)
+    const wallCabSegs = computeChain(wallCabs, wall, wallFx)
     const overallSeg: Seg[] = [{ from: 0, to: wall.length, label: roundMm(wall.length) }]
     const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
     const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
@@ -264,10 +269,10 @@ export default function WallDimensionChain({
     return (
       <g key={key}>
         {/* Wall-parallel chain lines */}
-        {layerWallCab.visible && wallCabs.length > 0 && (
+        {layerWallCab.visible && (wallCabs.length > 0 || wallFx.length > 0) && (
           <DimLine wall={wall} out={chainDir} dist={depthOffset + step + rW} segs={wallCabSegs} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} bg={labelBg} />
         )}
-        {layerBase.visible && baseCabs.length > 0 && (
+        {layerBase.visible && (baseCabs.length > 0 || baseFx.length > 0) && (
           <DimLine wall={wall} out={chainDir} dist={depthOffset + step * 2 + rB} segs={baseSegs} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} bg={labelBg} />
         )}
         {showKicks && (
@@ -312,13 +317,15 @@ export default function WallDimensionChain({
   const outWall = allWall.filter(c => cabWallSide(c, wall) === 'back')
   const inKicks  = kickSpans.filter(k => k.side === 'face')
   const outKicks = kickSpans.filter(k => k.side === 'back')
-  const hasIn  = inBase.length > 0 || inWall.length > 0
-  const hasOut = outBase.length > 0 || outWall.length > 0
+  const inFx  = fixtureSpans.filter(s => s.side === 'face')
+  const outFx = fixtureSpans.filter(s => s.side === 'back')
+  const hasIn  = inBase.length > 0 || inWall.length > 0 || inFx.length > 0
+  const hasOut = outBase.length > 0 || outWall.length > 0 || outFx.length > 0
 
   // Perimeter wall with cabinets only on the room side (the common case): keep the
   // historic single chain on the empty outward side, depth dims pointing inward.
   if (!isIsland && !hasOut) {
-    return renderSide('main', out, inward, allBase, allWall, 0, 0, kickSpans, openingSpans)
+    return renderSide('main', out, inward, allBase, allWall, 0, 0, kickSpans, openingSpans, inFx)
   }
 
   // Island, or a perimeter wall that now has back-side cabinets: draw each occupied
@@ -328,8 +335,8 @@ export default function WallDimensionChain({
   const outBackOffset = isIsland ? 0 : wall.thickness
   return (
     <g>
-      {hasIn && renderSide('in', inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]), 0, inKicks)}
-      {(hasOut || !hasIn) && renderSide('out', out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, outKicks, openingSpans)}
+      {hasIn && renderSide('in', inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]), 0, inKicks, [], inFx)}
+      {(hasOut || !hasIn) && renderSide('out', out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, outKicks, openingSpans, outFx)}
     </g>
   )
 }

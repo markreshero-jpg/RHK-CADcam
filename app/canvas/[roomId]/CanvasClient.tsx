@@ -46,7 +46,7 @@ import TutorialHintsPlan from './TutorialHintsPlan'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
-import { withFixtureCutouts, benchtopAt, openingSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, fixtureClearances, type StretchSide } from '@/src/lib/fixtureGeometry'
+import { withFixtureCutouts, benchtopAt, openingSpans, fixtureChainSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, fixtureClearances, type StretchSide } from '@/src/lib/fixtureGeometry'
 import { cabinetPlans, linkFor, followLinks, fixtureClashes, stretchObstacles } from '@/src/lib/fixtureLinks'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
@@ -381,6 +381,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const movingFixtureId = mode === 'place_fixture' && fx.carry?.kind === 'move' ? fx.carry.id : null
   const wallOpenings = useMemo(() => openingSpans(fixtures.filter(f => f.id !== movingFixtureId), walls, centroid(walls)),
     [fixtures, walls, movingFixtureId])
+  // Free-standing appliances in the plan dimension rows (the canvas gates them by layer).
+  const wallFixtureSpans = useMemo(() => {
+    const rc = centroid(walls), list = fixtures.filter(f => f.id !== movingFixtureId)
+    return new Map(walls.map(w => [w.id, fixtureChainSpans(list, w, rc)]))
+  }, [fixtures, walls, movingFixtureId])
   // Linked fixtures go with their cabinet (P4). Watching the cabinets covers every
   // way one moves (drag, resize, panels, elevation, wall drag, undo). State follows
   // live; the DB write waits until the cabinets settle. No undo snapshot here — the
@@ -2599,6 +2604,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               measureCursor={measureCursor}
               onMeasureCancel={() => { setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }}
               wallOpenings={wallOpenings}
+              wallFixtureSpans={wallFixtureSpans}
               tutorialLayer={tutorialOn && <TutorialHintsPlan zoom={view.zoom} layers={planLayers} />}
               fixturesLayer={
                 <FixturesPlan

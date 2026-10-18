@@ -11,7 +11,7 @@
 // mm and the drawing prints at true 1:scale.
 'use client'
 import type { Room, Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
-import { openingOnWall } from '@/src/lib/fixtureGeometry'
+import { openingOnWall, fixtureChainSpans, fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { OpeningElev } from './FixturesElevation'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ } from '@/src/lib/geometry'
@@ -85,15 +85,15 @@ function slideElevRect(s: ResolvedDrawerSlide) {
 
 
 type Seg = { from: number; to: number; label: number }
-function computeElevChain(cabs: CabinetInstance[], wall: Wall): Seg[] {
-  const sorted = [...cabs].sort((a, b) => cabT(a, wall) - cabT(b, wall))
+// `extra` = appliances in the row, as along-wall { t, dx }.
+function computeElevChain(cabs: CabinetInstance[], wall: Wall, extra: { t: number; dx: number }[] = []): Seg[] {
+  const sorted = [...cabs.map(c => ({ t: cabT(c, wall), dx: c.dx })), ...extra].sort((a, b) => a.t - b.t)
   const segs: Seg[] = []
   let cursor = 0
-  for (const cab of sorted) {
-    const t = cabT(cab, wall)
+  for (const { t, dx } of sorted) {
     if (t > cursor + 0.5) segs.push({ from: cursor, to: t, label: roundMm(t - cursor) })
-    segs.push({ from: t, to: t + cab.dx, label: roundMm(cab.dx) })
-    cursor = t + cab.dx
+    segs.push({ from: t, to: t + dx, label: roundMm(dx) })
+    cursor = t + dx
   }
   if (cursor < wall.length - 0.5) segs.push({ from: cursor, to: wall.length, label: roundMm(wall.length - cursor) })
   return segs
@@ -546,6 +546,9 @@ export default function ElevationPrintSVG({
   const floorCabs = wallCabs.filter(c =>
     c.assembly_class === 'base' || c.assembly_class === 'base_corner' ||
     c.assembly_class === 'tall' || c.assembly_class === 'tall_corner')
+  // Free-standing appliances on this face take their place in the rows.
+  const chainFx = fixtureChainSpans(fixtures.filter(f => layers.show(fixtureLayer(f.category))), wall, centroid(walls)).filter(s => s.side === 'face')
+  const fxWall = chainFx.filter(s => s.row === 'wall'), fxFloor = chainFx.filter(s => s.row === 'floor')
 
   return (
     <svg
@@ -583,8 +586,8 @@ export default function ElevationPrintSVG({
 
       {/* Dimensions (layer items; the overall wall length goes with the floor chain) */}
       <>
-          {layers.show('dim_elev_wall_chain') && overheadCabs.length > 0 && hChain(computeElevChain(overheadCabs, wall), overheadChainY, 'oh', 'dim_elev_wall_chain')}
-          {layers.show('dim_elev_floor_chain') && floorCabs.length > 0 && hChain(computeElevChain(floorCabs, wall), floorChainY, 'fl', 'dim_elev_floor_chain')}
+          {layers.show('dim_elev_wall_chain') && (overheadCabs.length > 0 || fxWall.length > 0) && hChain(computeElevChain(overheadCabs, wall, fxWall), overheadChainY, 'oh', 'dim_elev_wall_chain')}
+          {layers.show('dim_elev_floor_chain') && (floorCabs.length > 0 || fxFloor.length > 0) && hChain(computeElevChain(floorCabs, wall, fxFloor), floorChainY, 'fl', 'dim_elev_floor_chain')}
           {layers.show('dim_elev_height') && heightChain()}
           {layers.show('dim_openings') && openings.length > 0 && hChain(openingSegs, openingChainY, 'op', 'dim_openings')}
           {/* Sill + opening height at each right jamb (same as the canvas) */}
