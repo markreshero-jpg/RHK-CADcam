@@ -207,6 +207,10 @@ export function fitCamDist(dx: number, dy: number, dz: number) {
 
 // ── Part mesh ──────────────────────────────────────────────────────────────────
 
+// Passed when a part has no turn: an undefined `rotation` prop leaves r3f's
+// previous value in place, so a reused mesh would keep another part's turn.
+export const NO_ROTATION: [number, number, number] = [0, 0, 0]
+
 // true = parts carry no pointer handlers (not raycast, no hover / select). The
 // room 3D view sets this so one overlay per cabinet owns click + right-click.
 export const PassivePartsContext = createContext(false)
@@ -354,7 +358,7 @@ export function Part({
   if (wire) {
     const ownGeom = csgGeom ?? shapeGeom
     return (
-      <group position={[b.x, b.y, b.z]} rotation={rotation}>
+      <group position={[b.x, b.y, b.z]} rotation={rotation ?? NO_ROTATION}>
         <mesh
           key={meshKey}
           position={shapeGeom ? [0, 0, 0]
@@ -384,7 +388,7 @@ export function Part({
   const lineWidth = selected || highlighted ? 1.5 : hov ? 2.5 : hairline
 
   return (
-    <group position={[b.x, b.y, b.z]} rotation={rotation}>
+    <group position={[b.x, b.y, b.z]} rotation={rotation ?? NO_ROTATION}>
       <mesh
         key={meshKey}
         position={shapeGeom ? [0, 0, 0] : [core.x - b.x + core.w / 2, core.y - b.y + core.h / 2, core.z - b.z + core.d / 2]}

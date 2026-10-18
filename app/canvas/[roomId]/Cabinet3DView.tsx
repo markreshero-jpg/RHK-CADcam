@@ -43,7 +43,7 @@ import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
-import { PartAlpha } from '@/src/components/three/PartViewer'
+import { PartAlpha, NO_ROTATION } from '@/src/components/three/PartViewer'
 import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
 import { areaSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 import { handleShape, sharknoseProfile, type HandleShape } from '@/src/lib/handleGeometry'
@@ -910,7 +910,7 @@ function PartWithHoles({ b, drills, faceColors, edgeLineColor, meta, selected, h
           rotation, the inner group offsets to the box centre — matching how
           Part positions its mesh. With no rotation this is identical to placing
           the markers at the absolute box centre. */}
-      <group position={[b.x, b.y, b.z]} rotation={rotation}>
+      <group position={[b.x, b.y, b.z]} rotation={rotation ?? NO_ROTATION}>
       <group position={[b.w / 2, b.h / 2, b.d / 2]}>
         {drills.map((d, i) => {
           const localX = d.x - (b.x + b.w / 2)
@@ -1466,7 +1466,7 @@ export function CabinetScene({
       {showDrilling && handMarkers.length > 0 && (
         <HandOpMarkers3D markers={handMarkers} csgPartKeys={new Set([...pocketsByPart.keys()].filter(k => k.startsWith('case_')))} />
       )}
-      {rp.case_parts.filter(p => show(casePartItem(p.part_key))).map((p, i) => {
+      {rp.case_parts.filter(p => show(casePartItem(p.part_key))).map(p => {
         const id    = `case_${p.part_key}`
         const pp    = applyPosOv(p, id, partOverrides)
         const b     = applySizeOv(caseBox(pp), id, partOverrides)
@@ -1478,7 +1478,7 @@ export function CabinetScene({
 
         if (holes.length > 0) {
           return (
-            <PartAlpha key={`c${i}`} a={alpha(casePartItem(p.part_key))}><PartWithHoles
+            <PartAlpha key={id} a={alpha(casePartItem(p.part_key))}><PartWithHoles
               b={b}
               drills={holes}
               faceColors={panelFaceColors(info.panelKind, p.part_key, s.face, s.back, s.edge)}
@@ -1499,7 +1499,7 @@ export function CabinetScene({
         }
 
         return (
-          <PartAlpha key={`c${i}`} a={alpha(casePartItem(p.part_key))}><Part
+          <PartAlpha key={id} a={alpha(casePartItem(p.part_key))}><Part
             b={b}
             faceColors={panelFaceColors(info.panelKind, p.part_key, s.face, s.back, s.edge)}
             edgeLineColor={outline('carcase', casePartItem(p.part_key))}
