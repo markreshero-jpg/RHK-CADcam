@@ -763,6 +763,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku) }
   }, [selected, multiWalls, mode, canvasView, bt.shapeEdit, bt.shapeStretch])
 
+  // Right-click while a cabinet / fixture is on the cursor (not yet placed) cancels
+  // it, same as Esc. Capture phase so no wall/cabinet context menu opens underneath.
+  useEffect(() => {
+    if (!mode.startsWith('place_')) return
+    const onCtx = (e: MouseEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    }
+    window.addEventListener('contextmenu', onCtx, true)
+    return () => window.removeEventListener('contextmenu', onCtx, true)
+  }, [mode])
+
   // Copy / cut / paste cabinets via keyboard (works for single or multi-select).
   // Separate from the keydown effect above so it re-binds with fresh selection /
   // clipboard / cabinet state rather than the stale [selected]-only closure.
@@ -2299,14 +2311,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     : mode === 'draw_section'     ? (!drawStart ? 'Click to set start of section cut · Esc=cancel' : 'Click to finish · Shift=45° snap · Esc=cancel')
     : mode === 'draw_wall'       ? (!drawStart ? 'Click to set start point · snap rings show existing endpoints' : (wallDraw.chain ? 'Click to place & continue · click first point to close · double-click / Esc = finish · Shift = 5° snap' : 'Click to finish · Shift = 5° snap · or type in panel →'))
     : mode === 'draw_island'     ? (!drawStart ? 'Click to set island start · Shift = 5° snap · Right-click = cancel' : 'Click to finish island · cabinets snap to either side')
-    : mode === 'place_base'        ? 'Click near a wall to place base cabinet · Esc = cancel'
-    : mode === 'place_wall_unit'   ? 'Click near a wall to place wall unit · Esc = cancel'
-    : mode === 'place_tall'        ? 'Click near a wall to place tall cabinet · Esc = cancel'
-    : mode === 'place_end_panel'   ? 'Click near a wall to place end panel · Esc = cancel'
-    : mode === 'place_base_corner' ? 'Click near a wall to place base corner cabinet · Esc = cancel'
-    : mode === 'place_wall_corner' ? 'Click near a wall to place wall corner unit · Esc = cancel'
-    : mode === 'place_tall_corner' ? 'Click near a wall to place tall corner cabinet · Esc = cancel'
-    : mode === 'place_definition'  ? `Click near a wall to place ${armedDef?.name ?? 'cabinet'} · Esc = cancel`
+    : mode === 'place_base'        ? 'Click near a wall to place base cabinet · Esc or right-click = cancel'
+    : mode === 'place_wall_unit'   ? 'Click near a wall to place wall unit · Esc or right-click = cancel'
+    : mode === 'place_tall'        ? 'Click near a wall to place tall cabinet · Esc or right-click = cancel'
+    : mode === 'place_end_panel'   ? 'Click near a wall to place end panel · Esc or right-click = cancel'
+    : mode === 'place_base_corner' ? 'Click near a wall to place base corner cabinet · Esc or right-click = cancel'
+    : mode === 'place_wall_corner' ? 'Click near a wall to place wall corner unit · Esc or right-click = cancel'
+    : mode === 'place_tall_corner' ? 'Click near a wall to place tall corner cabinet · Esc or right-click = cancel'
+    : mode === 'place_definition'  ? `Click near a wall to place ${armedDef?.name ?? 'cabinet'} · Esc or right-click = cancel`
     : mode === 'paste'             ? `Click near a wall to paste ${clipboard?.label ?? 'cabinet'} · Esc = cancel`
     : null
 
