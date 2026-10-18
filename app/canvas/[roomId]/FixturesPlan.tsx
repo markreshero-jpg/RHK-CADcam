@@ -10,7 +10,7 @@
 import type { RoomFixture } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { fixtureLayer } from '@/src/lib/fixtureGeometry'
-import type { FixtureSnap } from '@/src/lib/fixtureGeometry'
+import type { FixtureSnap, StretchSide } from '@/src/lib/fixtureGeometry'
 
 const STROKE = '#0ea5e9'
 const FILL   = '#0ea5e9'
@@ -126,8 +126,37 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, cl
   )
 }
 
+// Edge handles on the selected fixture (P7) — same look as the cabinet resize
+// markers: blue = width (left / right), purple = depth (front). Openings: width only.
+function StretchHandles({ f, z, active, onGrab }: {
+  f: RoomFixture; z: number; active: StretchSide | null; onGrab: (side: StretchSide) => void
+}) {
+  const mr = 6 / z, sw = 1.5 / z
+  const pts: { side: StretchSide; x: number; y: number }[] = [
+    { side: 'left', x: 0, y: f.depth / 2 },
+    { side: 'right', x: f.width, y: f.depth / 2 },
+    ...(f.category === 'opening' ? [] : [{ side: 'front' as const, x: f.width / 2, y: f.depth }]),
+  ]
+  return (
+    <g transform={`translate(${f.x},${f.y}) rotate(${f.rotation})`}>
+      {pts.map(p => {
+        const depth = p.side === 'front'
+        return (
+          <circle key={p.side} cx={p.x} cy={p.y} r={mr}
+            fill={active === p.side ? (depth ? '#a855f7' : '#3b82f6') : (depth ? '#7c3aed' : '#1d4ed8')}
+            stroke={depth ? '#c4b5fd' : '#93c5fd'} strokeWidth={sw}
+            style={{ cursor: depth ? 'crosshair' : 'ew-resize' }}
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); onGrab(p.side) }} />
+        )
+      })}
+    </g>
+  )
+}
+
 export default function FixturesPlan({
   fixtures, ghost, ghostBody, hiddenId, selectedId, zoom, layers, interactive, clashIds,
+  stretching, onStretchHandle,
   onPointerDown, onContextMenu, onDoubleClick,
 }: {
   fixtures:   RoomFixture[]
@@ -142,6 +171,9 @@ export default function FixturesPlan({
   interactive: boolean
   /** P4: fixtures that overlap a cabinet (fixtureClashes). */
   clashIds?:  Set<string>
+  /** P7: the edge being stretched (handle drawn lit), and grabbing a handle. */
+  stretching?: { id: string; side: StretchSide } | null
+  onStretchHandle?: (id: string, side: StretchSide) => void
   onPointerDown: (e: React.PointerEvent, id: string) => void
   onContextMenu: (e: React.MouseEvent, id: string) => void
   onDoubleClick: (e: React.MouseEvent, id: string) => void
@@ -161,6 +193,10 @@ export default function FixturesPlan({
           >
             <FixtureShape f={f} x={f.x} y={f.y} rotation={f.rotation} z={z} layers={layers}
               selected={f.id === selectedId} ghost={false} label={showLabels} clash={clashIds?.has(f.id)} />
+            {interactive && f.id === selectedId && onStretchHandle && (
+              <StretchHandles f={f} z={z} active={stretching?.id === f.id ? stretching.side : null}
+                onGrab={side => onStretchHandle(f.id, side)} />
+            )}
           </g>
         )
       })}

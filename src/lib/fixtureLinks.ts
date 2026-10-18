@@ -136,6 +136,29 @@ export function fixtureClashes(fixtures: RoomFixture[], plans: CabPlan[], room: 
   return out
 }
 
+/**
+ * What a fixture's left / right edge stops against when stretched (P7), as plan
+ * outlines: openings → the other openings in their wall; benchtop items → none
+ * (they sit on cabinets; only the wall ends limit them); everything else →
+ * cabinets and other free-standing fixtures at an overlapping height (not its
+ * own linked cabinet).
+ */
+export function stretchObstacles(f: RoomFixture, plans: CabPlan[], fixtures: RoomFixture[], room: Room): Pt[][] {
+  if (f.category === 'opening') {
+    return fixtures.filter(o => o.id !== f.id && o.category === 'opening' && o.wall_id === f.wall_id).map(o => fixtureCorners(o))
+  }
+  if (f.mount === 'benchtop') return []
+  const z0 = Number(f.z) || 0, z1 = z0 + Number(f.height)
+  const overlaps = (b0: number, b1: number) => Math.min(z1, b1) - Math.max(z0, b0) > 1
+  const cabs = plans
+    .filter(p => p.cab.id !== f.cabinet_id && overlaps(cabBottomZ(p.cab, room, p.wall), cabBottomZ(p.cab, room, p.wall) + p.cab.dy))
+    .map(p => p.pts)
+  const others = fixtures
+    .filter(o => o.id !== f.id && o.category !== 'opening' && o.mount !== 'benchtop' && overlaps(Number(o.z) || 0, (Number(o.z) || 0) + Number(o.height)))
+    .map(o => fixtureCorners(o))
+  return [...cabs, ...others]
+}
+
 function shrunkCorners(f: FixtureFootprint, by: number): Pt[] {
   const c = fixtureCenter(f)
   const w = Math.max(0, f.width - 2 * by), d = Math.max(0, f.depth - 2 * by)

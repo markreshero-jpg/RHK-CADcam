@@ -180,6 +180,23 @@ export function refitOpenings(fixtures: RoomFixture[], walls: Wall[], roomRef: P
 }
 
 /**
+ * The frame an elevation of one wall face measures along: x = alongOf(frame, p).
+ * Back side runs from the wall's far end (mirrored), like the elevation draws it.
+ */
+export function elevationFrame(wall: Wall, side: WallSide, roomRef: Pt): WallFrame {
+  const f0 = wallFrame(wall, side, roomRef)
+  return side === 'back'
+    ? { ...f0, o: { x: f0.o.x + f0.d.x * f0.len, y: f0.o.y + f0.d.y * f0.len }, d: { x: -f0.d.x, y: -f0.d.y } }
+    : f0
+}
+
+/** Which fixture edge is on the elevation's left (smaller x): its own 'left' when its width runs with x. */
+export function elevLeftSide(rotation: number, f: WallFrame): 'left' | 'right' {
+  const { a } = fixtureAxes(rotation)
+  return a.x * f.d.x + a.y * f.d.y >= 0 ? 'left' : 'right'
+}
+
+/**
  * An opening's place on one face of its own wall, in that elevation's x (face
  * side: along the wall; back side: mirrored), plus the hinge jamb's x. Null if
  * it isn't an opening in this wall. Openings show on BOTH faces.
@@ -189,16 +206,94 @@ export function openingOnWall(
   wall: Wall, side: WallSide, roomRef: Pt,
 ): { t0: number; t1: number; hingeT: number } | null {
   if (fx.category !== 'opening' || fx.wall_id !== wall.id) return null
-  const f0 = wallFrame(wall, side, roomRef)
-  const f = side === 'back'
-    ? { ...f0, o: { x: f0.o.x + f0.d.x * f0.len, y: f0.o.y + f0.d.y * f0.len }, d: { x: -f0.d.x, y: -f0.d.y } }
-    : f0
+  const f = elevationFrame(wall, side, roomRef)
   const ts = fixtureCorners(fx).map(p => alongOf(f, p))
   const { a } = fixtureAxes(fx.rotation)
   const hw = fx.hinge_side === 'right' ? fx.width : 0
   const hingeT = alongOf(f, { x: fx.x + a.x * hw, y: fx.y + a.y * hw })
   return { t0: Math.min(...ts), t1: Math.max(...ts), hingeT }
 }
+
+// ── Stretching (P7) ───────────────────────────────────────────────────────────
+// Same feel as cabinets: grab an edge handle, the edge follows the cursor, click
+// sets it. Plan: left / right (width, along a) and front (depth, along n).
+// Elevation: left / right, top (height) and — openings — bottom (sill; the head
+// stays put). The opposite edge never moves. Left / right stop at obstacles and
+// the wall ends (stretchBounds).
+
+export type StretchSide = 'left' | 'right' | 'front' | 'top' | 'bottom'
+export const MIN_FIXTURE = 20
+
+/** Allowed range for the moving edge, in the fixture's own width axis (u from its back-left corner). */
+export interface StretchBounds { lo: number; hi: number }
+
+/**
+ * The patch a stretch makes for a cursor: `p` = cursor in plan (left / right /
+ * front), `z` = cursor height above the floor (top / bottom). `step` rounds
+ * the new size (elevation uses 10 like cabinets).
+ */
+export function stretchPatch(
+  f: Pick<RoomFixture, 'x' | 'y' | 'rotation' | 'width' | 'depth' | 'height' | 'z'>,
+  side: StretchSide, cursor: { p?: Pt; z?: number }, b: StretchBounds, step = 1,
+): Partial<Pick<RoomFixture, 'x' | 'y' | 'width' | 'depth' | 'height' | 'z'>> | null {
+  const r = (v: number) => Math.round(v / step) * step
+  const { a, n } = fixtureAxes(f.rotation)
+  if (side === 'top' || side === 'bottom') {
+    if (cursor.z == null) return null
+    const z0 = Number(f.z) || 0, top = z0 + Number(f.height)
+    if (side === 'top') return { height: Math.max(MIN_FIXTURE, r(cursor.z - z0)) }
+    const nz = Math.max(0, Math.min(top - MIN_FIXTURE, r(cursor.z)))
+    return { z: nz, height: top - nz }
+  }
+  if (!cursor.p) return null
+  const dx = cursor.p.x - f.x, dy = cursor.p.y - f.y
+  if (side === 'front') return { depth: Math.max(MIN_FIXTURE, Math.min(3000, r(dx * n.x + dy * n.y))) }
+  const u = dx * a.x + dy * a.y
+  if (side === 'right') {
+    return { width: Math.max(MIN_FIXTURE, Math.min(b.hi, r(u))) }
+  }
+  // left: the right edge (u = width) stays
+  const u0 = Math.min(f.width - MIN_FIXTURE, Math.max(b.lo, r(u)))
+  return { width: f.width - u0, x: round1(f.x + a.x * u0), y: round1(f.y + a.y * u0) }
+}
+
+/**
+ * How far the left / right edge may go: the wall's ends (wall-backed items) and
+ * the nearest obstacle on that side whose footprint overlaps the fixture's
+ * depth band. `obstacles` = plan outlines already filtered by height.
+ */
+export function stretchBounds(
+  f: Pick<RoomFixture, 'x' | 'y' | 'rotation' | 'width' | 'depth' | 'wall_id'>,
+  walls: Wall[], roomRef: Pt, obstacles: Pt[][],
+): StretchBounds {
+  const { a, n } = fixtureAxes(f.rotation)
+  let lo = -Infinity, hi = Infinity
+  const wall = f.wall_id ? walls.find(w => w.id === f.wall_id) : undefined
+  if (wall) {
+    const face = wallFrame(wall, 'face', roomRef)
+    const t0 = alongOf(face, { x: f.x, y: f.y })
+    const s = a.x * face.d.x + a.y * face.d.y   // ±1: does the width run with the wall?
+    if (Math.abs(s) > 0.9) {
+      // t(u) = t0 + s·u must stay within [0, len]
+      const uA = (0 - t0) / s, uB = (face.len - t0) / s
+      lo = Math.max(lo, Math.min(uA, uB)); hi = Math.min(hi, Math.max(uA, uB))
+    }
+  }
+  for (const poly of obstacles) {
+    let uMin = Infinity, uMax = -Infinity, vMin = Infinity, vMax = -Infinity
+    for (const p of poly) {
+      const dx = p.x - f.x, dy = p.y - f.y
+      const u = dx * a.x + dy * a.y, v = dx * n.x + dy * n.y
+      uMin = Math.min(uMin, u); uMax = Math.max(uMax, u); vMin = Math.min(vMin, v); vMax = Math.max(vMax, v)
+    }
+    if (vMax <= 1 || vMin >= f.depth - 1) continue       // not in the depth band
+    if (uMin >= f.width - 1) hi = Math.min(hi, uMin)       // to the right
+    else if (uMax <= 1) lo = Math.max(lo, uMax)           // to the left
+  }
+  return { lo, hi }
+}
+
+function round1(v: number) { return Math.round(v * 10) / 10 }
 
 /** Default underside height for a mount type. */
 export const FIXTURE_BENCH_Z = 900

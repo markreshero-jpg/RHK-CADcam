@@ -1,6 +1,6 @@
 # Fixtures & Appliances — Spec
 
-Status: **P1–P4 on main (P4 checked in-app by the user 2026-10-18); P5 doors & windows built 2026-10-18, not yet checked in-app** — next: live check of P5. See "RESUME HERE".
+Status: **P1–P4 on main (P4 checked in-app by the user 2026-10-18); P5 doors & windows, P6 categories with icons, P7 stretching built 2026-10-18, not yet checked in-app** — next: live check of P5–P7. See "RESUME HERE".
 
 Bought-in things placed in a room: ovens, cooktops, dishwashers, fridges,
 rangehoods, sinks, taps, decorative items. Catalogue lives in the Settings →
@@ -96,6 +96,8 @@ decided 2026-10-18) — see "Openings (P5)" at the bottom.
 - **P4 — Cabinet links + schedule** ✅ built 2026-10-18 — fixtures dropped over a cabinet
   link to it and follow it (no centring); overlap warning; appliance schedule report.
   See "P4 — what was built".
+- **P6 — Categories with icons** ✅ built 2026-10-18 — see "P6 / P7" below.
+- **P7 — Stretching like cabinets** ✅ built 2026-10-18 — see "P6 / P7" below.
 - **P5 — Openings** ✅ built 2026-10-18 — doors / windows / sliding doors / openings as the
   `opening` category, sitting in a wall (see "Openings (P5)" at the bottom).
 
@@ -203,7 +205,46 @@ Built:
   was deleted), W×D×H, location (linked cabinet, else wall, else free-standing). Print = HTML.
 - Dev bridge: `getState().fixtures` + `updateFixture` (canvas-api-bridge.md).
 
+## P6 / P7 — what was built (2026-10-18)
+
+**P6 — categories.** User asked for finer categories (sinks, taps, ovens, fridges,
+windows, doors…) with an icon, and an icon picker for new ones. Locked with the user:
+**Lucide icons** (lucide-react added; a curated ~60-icon set in
+`src/components/FixtureIcon.tsx`, imported by name so the bundle stays small — the full
+`icons` map / `lucide-react/dynamic` were avoided); **starter list** Ovens, Cooktops,
+Rangehoods, Dishwashers, Fridges, Microwaves, Laundry, Sinks, Taps, Windows, Doors,
+Decorative.
+- Table `fixture_groups` (name, icon, `category` = behaviour type, sort_order; library_read +
+  admin_write) + `fixture_catalog.group_id` (on delete set null → "Other"). Migration
+  `fixtures_p6_groups` (copy `z_fixtures/migration_p6_groups.sql`) seeded the 12 and sorted
+  the existing rows by kind.
+- The old fixed `category` stays as the **type** that drives behaviour (mount defaults,
+  cutouts, wall hosting, layers, links). A category's type can only change while it's empty;
+  an item can move to another category of the same type.
+- Library: tabs = categories with icon + count, "Other" tab when anything's unsorted,
+  "+ Category", ✎ on the active one → GroupEditor (name, icon grid, type, move left/right,
+  delete → items go to Other). F6 picker lists by category with the icon.
+- Placed fixtures don't store the group (schedule still groups by type).
+
+**P7 — stretching.** "Same stretching behaviour as cabinets" for every fixture incl.
+windows / appliances: click an edge handle, the edge follows the cursor, click sets it;
+Esc cancels; one undo step.
+- Plan (`FixturesPlan` StretchHandles): left / right (blue, width), front (purple, depth;
+  not openings). Elevation (`FixturesElevation` ElevHandles): left / right, top (height),
+  bottom = sill for openings (head stays). Elevation rounds to 10 like cabinets.
+- `fixtureGeometry.ts`: `stretchPatch`, `stretchBounds` (wall ends + nearest obstacle in the
+  depth band), `elevationFrame`, `elevLeftSide`; `fixtureLinks.ts` `stretchObstacles`
+  (openings → other openings in the wall; benchtop items → none; else cabinets + free-standing
+  fixtures at an overlapping height, not the linked cabinet). Test `fixtureStretch.test.ts`.
+- Hook: `startStretch` (snapshot) / `stretchMove` (state only, re-links live so a linked
+  sink doesn't snap back) / `commitStretch` (one DB write) / `cancelStretch`. Plan commits on
+  the canvas click (like `commitResize`); elevation on pointer-up (like `confirmResize`).
+
 ## RESUME HERE — open items
+
+- **P6 / P7 not checked in the app.** Check: library tabs + icons, + Category / ✎ editor,
+  F6 picker headings; stretch a dishwasher between two cabinets (stops at them), a window
+  in plan + its sill in elevation, a linked sink (stays linked).
 
 - ~~P4 in-app check~~ done by the user 2026-10-18 ("works well").
 - **P5 not yet checked in the app** (no AUTOMATION_* creds for headless). Check: F6 →

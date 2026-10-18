@@ -13,12 +13,23 @@ import { useState, useCallback, useRef } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { Room, Wall, FixtureCatalogItem, RoomFixture, FixtureBody } from '@/src/lib/types'
 import { centroid, type Pt } from '@/src/lib/geometry'
+import { stretchBounds, stretchPatch, type StretchSide, type StretchBounds } from '@/src/lib/fixtureGeometry'
 import { snapFixture, snapOpening, defaultFixtureZ, fixtureCenter, backLeftForCenter, type FixtureSnap, type FixtureFootprint } from '@/src/lib/fixtureGeometry'
 import type { FixtureLink } from '@/src/lib/fixtureLinks'
 import type { Mode, Selected } from './canvasTypes'
 
 /** How far (mm) from a wall face the cursor can be and still snap to it. */
 const SNAP_REACH = 600
+
+/** An edge being stretched (P7): the pose at the start, the side, its limits. */
+export interface FixtureStretch {
+  id:     string
+  side:   StretchSide
+  base:   RoomFixture
+  bounds: StretchBounds
+  /** Size rounding: 1 in plan, 10 in elevation (like cabinets). */
+  step:   number
+}
 
 export type FixtureCarry =
   | { kind: 'place'; item: FixtureCatalogItem }
@@ -59,6 +70,7 @@ export function useFixtureInteraction({
   const [ghost,    setGhost]    = useState<FixtureSnap | null>(null)
   const [freeRot,  setFreeRot]  = useState(0)
   const [error,    setError]    = useState<string | null>(null)
+  const [stretch,  setStretch]  = useState<FixtureStretch | null>(null)
   // Key handlers in CanvasClient bind with stale closures — read fixtures fresh.
   const fixturesRef = useRef(fixtures)
   fixturesRef.current = fixtures
@@ -158,6 +170,50 @@ export function useFixtureInteraction({
     return l ?? { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 }
   }
 
+  // ── Stretch (P7) — click a handle, the edge follows the cursor, click sets it ──
+
+  /** `obstacles` = plan outlines the left / right edge stops at (stretchObstacles). */
+  function startStretch(id: string, side: StretchSide, obstacles: Pt[][], step = 1) {
+    const f = fixturesRef.current.find(x => x.id === id)
+    if (!f) return
+    captureSnapshot()   // one undo step for the whole stretch
+    setStretch({ id, side, base: f, bounds: stretchBounds(f, walls, centroid(walls), obstacles), step })
+  }
+
+  /** Live: state only. Re-links as it goes so a linked item doesn't snap back to its old spot. */
+  function stretchMove(cursor: { p?: Pt; z?: number }): boolean {
+    if (!stretch) return false
+    const p = stretchPatch(stretch.base, stretch.side, cursor, stretch.bounds, stretch.step)
+    if (!p) return true
+    const merged = { ...stretch.base, ...p }
+    const link = linkFields(merged)
+    setFixtures(prev => prev.map(f => f.id === stretch.id ? { ...f, ...p, ...link } : f))
+    return true
+  }
+
+  async function commitStretch(): Promise<boolean> {
+    if (!stretch) return false
+    const s = stretch
+    setStretch(null)
+    const cur = fixturesRef.current.find(f => f.id === s.id)
+    if (!cur) return true
+    const keys = ['x', 'y', 'width', 'depth', 'height', 'z', 'cabinet_id', 'link_x', 'link_z', 'link_rot'] as const
+    const patch: Record<string, unknown> = {}
+    for (const k of keys) if (cur[k] !== s.base[k]) patch[k] = cur[k]
+    if (!Object.keys(patch).length) return true
+    const { error: e } = await supabase.from('room_fixtures')
+      .update({ ...patch, updated_at: new Date().toISOString() }).eq('id', s.id)
+    if (e) setError(e.message)
+    return true
+  }
+
+  function cancelStretch() {
+    if (!stretch) return
+    const base = stretch.base
+    setFixtures(prev => prev.map(f => f.id === base.id ? base : f))
+    setStretch(null)
+  }
+
   /** Stop following the cabinet (the fixture stays where it is). */
   async function unlink(id: string) {
     await update(id, { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 })
@@ -202,6 +258,7 @@ export function useFixtureInteraction({
     arm, startMove, cancel, rotateCarry,
     handlePointerMove, handlePointerUp,
     update, rotateBy, remove, unlink,
+    stretch, startStretch, stretchMove, commitStretch, cancelStretch,
   }
 }
 

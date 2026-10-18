@@ -41,8 +41,8 @@ import { useFixtureInteraction } from './useFixtureInteraction'
 import FixturesPlan from './FixturesPlan'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
-import { withFixtureCutouts, benchtopAt, openingSpans, refitOpenings } from '@/src/lib/fixtureGeometry'
-import { cabinetPlans, linkFor, followLinks, fixtureClashes } from '@/src/lib/fixtureLinks'
+import { withFixtureCutouts, benchtopAt, openingSpans, refitOpenings, type StretchSide } from '@/src/lib/fixtureGeometry'
+import { cabinetPlans, linkFor, followLinks, fixtureClashes, stretchObstacles } from '@/src/lib/fixtureLinks'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
 import { findLayerSet } from '@/src/lib/displayLayers/legacy'
@@ -373,6 +373,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (q.timer) clearTimeout(q.timer)
     q.timer = setTimeout(flushFixtureFollow, 400)
   }, [cabPlans, cabinets, fixtures, walls])
+  // Grab a fixture edge handle (plan or elevation) — P7.
+  function startFixtureStretch(id: string, side: StretchSide, step = 1) {
+    const f = fixtures.find(x => x.id === id)
+    if (!f) return
+    setCabResize(null); setContextMenu(null)
+    fx.startStretch(id, side, stretchObstacles(f, cabPlans, fixtures, room), step)
+  }
   function flushFixtureFollow() {
     const q = fixtureFollowRef.current
     if (q.timer) clearTimeout(q.timer)
@@ -579,7 +586,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const editCabIdRef = useRef<string | null>(null)
   editCabIdRef.current = editCabId
   const escBusyRef = useRef(false)
-  escBusyRef.current = !!(cabResize || cabFollowing || cabMoveDrag || drawStart || armedDef || contextMenu || measureStart || fx.carry)
+  escBusyRef.current = !!(cabResize || cabFollowing || cabMoveDrag || drawStart || armedDef || contextMenu || measureStart || fx.carry || fx.stretch)
 
   useEffect(() => {
     const isInput = (t: EventTarget | null) => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement
@@ -672,7 +679,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !isInput(e.target)) { e.preventDefault(); void handleUndo() }
       if (((e.key === 'y' || e.key === 'Y') && (e.ctrlKey || e.metaKey) && !isInput(e.target)) || ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && e.shiftKey && !isInput(e.target))) { e.preventDefault(); void handleRedo() }
       if (e.key === 'Escape' && !isInput(e.target)) fx.cancel()
-      if (e.key === 'Escape') { if (!escBusyRef.current && !isInput(e.target) && (mode === 'select' || mode === 'benchtop_select')) setSelected(null); setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode(isBenchtopMode(mode) && mode !== 'benchtop_select' ? 'benchtop_select' : 'select'); setArmedDef(null); setArmedDraft(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setDeleteCabsPending(null); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
+      if (e.key === 'Escape') { if (!escBusyRef.current && !isInput(e.target) && (mode === 'select' || mode === 'benchtop_select')) setSelected(null); setCabResize(null); setCabFollowing(null); setCabMoveDrag(null); setMultiSelect([]); setMode(isBenchtopMode(mode) && mode !== 'benchtop_select' ? 'benchtop_select' : 'select'); setArmedDef(null); setArmedDraft(null); setDrawStart(null); setDrawCursor(null); setPlaceGhost(null); setContextMenu(null); setMarquee(null); marqueeStartRef.current = null; bt.resetDraw(); setDeleteWallPending(null); setDeleteCabsPending(null); fx.cancelStretch(); setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }
       // Enter opens the cabinet editor for the single selected cabinet (user pref).
       // Skipped while a field / button / select has focus so Enter keeps its usual job there.
       if (e.key === 'Enter' && selected?.type === 'cabinet' && mode === 'select' && !editCabIdRef.current
@@ -1406,6 +1413,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
 
     if (bt.handlePointerMove(wp)) return
+    if (fx.stretchMove({ p: wp })) return
     if (fx.handlePointerMove(wp, shiftRef.current)) return
 
     if (mode === 'measure') {
@@ -1621,6 +1629,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
 
     if (await bt.handlePointerUp(wp)) return
+    if (fx.stretch) return   // committed by the click (onSVGClick), like a cabinet resize
     if (await fx.handlePointerUp(wp, shiftRef.current)) return
 
     if (mode === 'measure') {
@@ -1944,6 +1953,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   async function onSVGClick(e: React.MouseEvent) {
     if (cabResize) { commitResize(); return }
+    if (fx.stretch) { void fx.commitStretch(); return }
     if (!cabFollowing) return
     await commitCabMove()
   }
@@ -2537,6 +2547,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                   layers={planLayers}
                   interactive={mode === 'select'}
                   clashIds={fixtureClashIds}
+                  stretching={fx.stretch ? { id: fx.stretch.id, side: fx.stretch.side } : null}
+                  onStretchHandle={(id, side) => startFixtureStretch(id, side)}
                   onPointerDown={(_e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null); setContextMenu(null) }}
                   onContextMenu={(e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setContextMenu({ x: e.clientX, y: e.clientY, fixtureId: id }) }}
                   onDoubleClick={(_e, id) => { setSelected({ type: 'fixture', id }); setViewFixtureId(id) }}
@@ -2672,6 +2684,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onSelectBenchtop={id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]); setCabResize(null) }}
             fixtures={fixtures}
             onSelectFixture={id => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null) }}
+            fixtureStretching={fx.stretch ? { id: fx.stretch.id, side: fx.stretch.side } : null}
+            onFixtureStretchHandle={(id, side) => startFixtureStretch(id, side, 10)}
+            onFixtureStretchMove={c => { fx.stretchMove(c) }}
+            onFixtureStretchCommit={() => { void fx.commitStretch() }}
             onSeamClick={(cabId) => {
               setSelected({ type: 'cabinet', id: cabId })
               setMultiSelect([])

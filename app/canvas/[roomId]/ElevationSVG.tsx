@@ -27,7 +27,7 @@ import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import FixturesElevation, { OpeningHoles } from './FixturesElevation'
-import { openingOnWall } from '@/src/lib/fixtureGeometry'
+import { openingOnWall, elevationFrame, type StretchSide } from '@/src/lib/fixtureGeometry'
 import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
@@ -201,6 +201,11 @@ interface ElevationSVGProps {
   // Fixtures & appliances (z_fixtures P2)
   fixtures?: RoomFixture[]
   onSelectFixture?: (id: string) => void
+  /** P7: fixture edge stretch — handle grab, live cursor, commit (the canvas owns the state). */
+  fixtureStretching?: { id: string; side: StretchSide } | null
+  onFixtureStretchHandle?: (id: string, side: StretchSide) => void
+  onFixtureStretchMove?: (cursor: { p?: Pt; z?: number }) => void
+  onFixtureStretchCommit?: () => void
 }
 
 export default function ElevationSVG({
@@ -216,6 +221,7 @@ export default function ElevationSVG({
   setElevMeasureStart, setElevMeasureEnd, setElevMeasureCursor,
   benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop, waterfallOcc,
   fixtures, onSelectFixture,
+  fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
 }: ElevationSVGProps) {
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = useMemo(() => frontViewHardwareMap(resolvedPartsRaw), [resolvedPartsRaw])
@@ -459,6 +465,16 @@ export default function ElevationSVG({
       return
     }
 
+    // Fixture edge stretch (P7): elevation x → a plan point on this face's frame, y → height.
+    if (fixtureStretching && wall && onFixtureStretchMove) {
+      const svgR = svgRef.current!.getBoundingClientRect()
+      const ex = (e.clientX - svgR.left - view.panX) / view.zoom
+      const ey = (e.clientY - svgR.top - view.panY) / view.zoom
+      const fr = elevationFrame(wall, elevWallSide, centroid(walls))
+      onFixtureStretchMove({ p: { x: fr.o.x + fr.d.x * ex, y: fr.o.y + fr.d.y * ex }, z: roomH - ey })
+      return
+    }
+
     // Resize following — read from ref so view/elevResizeFollowing are always fresh (no stale closure)
     const rf = rfData.current.elevResizeFollowing
     if (rf) {
@@ -571,6 +587,7 @@ export default function ElevationSVG({
     }
 
     if (elevResizeFollowing) { await confirmResize(); return }
+    if (fixtureStretching) { onFixtureStretchCommit?.(); return }
 
     // Measure tool — first click sets start, second sets end; further clicks restart.
     if (mode === 'measure' && wall) {
@@ -1668,6 +1685,8 @@ export default function ElevationSVG({
                 roomCx={centroid(walls)} roomH={roomH} zoom={z} layers={layers}
                 selectedId={selected?.type === 'fixture' ? selected.id : null}
                 onSelect={id => onSelectFixture?.(id)}
+                stretching={fixtureStretching}
+                onStretchHandle={mode === 'select' ? onFixtureStretchHandle : undefined}
               />
             )}
 

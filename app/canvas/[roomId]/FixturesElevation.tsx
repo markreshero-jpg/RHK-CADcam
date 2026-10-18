@@ -10,7 +10,31 @@ import type { RoomFixture, Wall } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { Pt } from '@/src/lib/geometry'
 import { wallFrame, type WallSide } from '@/src/lib/benchtopAnchor'
-import { fixtureOnFace, fixtureLayer, openingOnWall } from '@/src/lib/fixtureGeometry'
+import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide } from '@/src/lib/fixtureGeometry'
+
+// Edge handles on the selected fixture (P7), like the cabinet elevation markers:
+// blue = width (left / right), purple = height (top) and sill (bottom, openings).
+function ElevHandles({ x, y, w, h, z, opening, leftSide, active, onGrab }: {
+  x: number; y: number; w: number; h: number; z: number; opening: boolean
+  leftSide: 'left' | 'right'; active: StretchSide | null; onGrab: (side: StretchSide) => void
+}) {
+  const mr = 6 / z, sw = 1.5 / z
+  const rightSide = leftSide === 'left' ? 'right' : 'left'
+  const pts: { side: StretchSide; cx: number; cy: number; v: boolean }[] = [
+    { side: leftSide, cx: x, cy: y + h / 2, v: false },
+    { side: rightSide, cx: x + w, cy: y + h / 2, v: false },
+    { side: 'top', cx: x + w / 2, cy: y, v: true },
+    ...(opening ? [{ side: 'bottom' as const, cx: x + w / 2, cy: y + h, v: true }] : []),
+  ]
+  return <>{pts.map(p => (
+    <circle key={p.side} cx={p.cx} cy={p.cy} r={mr}
+      fill={active === p.side ? (p.v ? '#a855f7' : '#3b82f6') : (p.v ? '#7c3aed' : '#1d4ed8')}
+      stroke={p.v ? '#c4b5fd' : '#93c5fd'} strokeWidth={sw}
+      style={{ cursor: p.v ? 'ns-resize' : 'ew-resize' }}
+      onPointerDown={e => e.stopPropagation()}
+      onClick={e => { e.stopPropagation(); onGrab(p.side) }} />
+  ))}</>
+}
 
 // Door / window (P5) drawn over its hole: frame + sash (window), leaf with
 // dashed swing lines to the hinge jamb + handle (door), two panels (sliding).
@@ -60,7 +84,7 @@ export function OpeningHoles({ fixtures, wall, side, roomCx, roomH, layers, fill
 }
 
 export default function FixturesElevation({
-  fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, onSelect,
+  fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, onSelect, stretching, onStretchHandle,
 }: {
   fixtures:   RoomFixture[]
   wall:       Wall
@@ -71,11 +95,17 @@ export default function FixturesElevation({
   layers:     LayerView
   selectedId: string | null
   onSelect:   (id: string) => void
+  /** P7: the edge being stretched, and grabbing a handle (omitted → no handles). */
+  stretching?: { id: string; side: StretchSide } | null
+  onStretchHandle?: (id: string, side: StretchSide) => void
 }) {
-  const f0 = wallFrame(wall, side, roomCx)
-  const f = side === 'back'
-    ? { ...f0, o: { x: f0.o.x + f0.d.x * f0.len, y: f0.o.y + f0.d.y * f0.len }, d: { x: -f0.d.x, y: -f0.d.y } }
-    : f0
+  const f = elevationFrame(wall, side, roomCx)
+  const handles = (fx: RoomFixture, x: number, y: number, w: number, h: number) =>
+    fx.id === selectedId && onStretchHandle ? (
+      <ElevHandles x={x} y={y} w={w} h={h} z={z} opening={fx.category === 'opening'}
+        leftSide={elevLeftSide(fx.rotation, f)} active={stretching?.id === fx.id ? stretching.side : null}
+        onGrab={s => onStretchHandle(fx.id, s)} />
+    ) : null
   const z = zoom
   const showLabels = layers.show('fixture_labels')
 
@@ -98,6 +128,7 @@ export default function FixturesElevation({
               onPointerDown={e => { e.stopPropagation(); onSelect(fx.id) }}>
               <rect x={x} y={y} width={w} height={h} fill="transparent" stroke={color} strokeWidth={lw} />
               <OpeningElev kind={fx.kind ?? ''} x={x} y={y} w={w} h={h} hingeT={o.hingeT} color={color} lw={lw} z={z} />
+              {handles(fx, x, y, w, h)}
             </g>
           )
         }
@@ -125,6 +156,7 @@ export default function FixturesElevation({
                 {fx.name}
               </text>
             )}
+            {handles(fx, x, y, w, h)}
           </g>
         )
       })}
