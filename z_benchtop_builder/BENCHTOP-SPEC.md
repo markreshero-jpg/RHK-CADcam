@@ -267,6 +267,9 @@ Built:
 - [x] Auto-anchor: on insert (quick-draw + Shape Editor draft) and, for rows
   with no / a deleted anchor, on canvas load (not an undo step). All 3 live rows
   anchored (Kitchen → Wall 1 face; Living → Island 1 back).
+- [x] **Decision changed (Mark, 2026-10-18)**: deleting a wall deletes the tops
+  anchored to it, like its cabinets (was: anchor set null, then re-anchored).
+  Undo restores them. The FK stays `on delete set null` as a fallback.
 - [x] Movement lock: press on a top = select (double-click = Shape Editor); drag
   does nothing. Removed: move drag, rotate handle, vertex drag, curve-handle drag.
   Kept (deliberate, no drag): edge tags, Alt/Shift edge clicks, vertex right-click

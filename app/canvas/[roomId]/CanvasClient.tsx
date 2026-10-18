@@ -793,11 +793,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setDeleteWallPending(null)
     setWalls(ws => ws.filter(w => !ids.includes(w.id)))
     setCabinets(cs => cs.filter(c => !(c.wall_id && ids.includes(c.wall_id))))
-    // FK sets the anchor null; the benchtop hook re-anchors the top to another wall.
-    setBenchtops(bs => bs.map(b => b.wall_id && ids.includes(b.wall_id) ? { ...b, wall_id: null } : b))
+    // Benchtops anchored to the wall go with it, like its cabinets (undo restores them).
+    setBenchtops(bs => bs.filter(b => !(b.wall_id && ids.includes(b.wall_id))))
     setSelected(null); setMultiWalls([])
     // Cabinets must be deleted first — wall delete fails with FK violation if they exist
     await supabase.from('cabinet_instances').delete().in('wall_id', ids)
+    await supabase.from('benchtop_instances').delete().in('wall_id', ids)
     for (const id of ids) await dbDeleteWall(id)
   }
 
@@ -3258,8 +3259,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         <ConfirmDeleteModal
           title={deleteWallPending.length === 1 ? 'Delete Wall' : `Delete ${deleteWallPending.length} Walls`}
           message={deleteWallPending.length === 1
-            ? 'Cabinets on this wall will also be removed. This cannot be undone.'
-            : 'Cabinets on these walls will also be removed. This cannot be undone.'}
+            ? 'Cabinets and benchtops on this wall will also be removed.'
+            : 'Cabinets and benchtops on these walls will also be removed.'}
           onConfirm={confirmDeleteWall}
           onCancel={() => setDeleteWallPending(null)}
         />
