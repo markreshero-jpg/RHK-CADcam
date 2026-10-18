@@ -6,6 +6,7 @@ import { supabase } from '@/src/lib/supabase'
 import { useIsAdmin } from '@/src/lib/useRole'
 import { DoorStylePreview, useDoorStylePreviews } from '@/src/components/DoorStylePreview'
 import MaterialsScheduleTab from './MaterialsScheduleTab'
+import CalcInput from '@/src/components/CalcInput'
 
 export type JobPropertiesTab = 'details' | 'cabinet_standards' | 'overrides'
 type CabinetStandardsTab = 'construction' | 'materials' | 'hardware' | 'doors'
@@ -929,8 +930,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function NumInput({ value, onChange, baseline }: { value: number; onChange: (v: number) => void; baseline: number }) {
   const isOverridden = value !== baseline
   return (
-    <input type="number" value={value}
-      onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v) && v > 0) onChange(v) }}
+    <CalcInput value={value} decimals={0} min={1}
+      onCommit={onChange}
       className={`w-24 bg-gray-800 border rounded px-2 py-1 text-xs text-right font-mono focus:outline-none focus:border-blue-500 ${
         isOverridden ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
       }`}
@@ -1024,8 +1025,8 @@ function RuleRow({ ruleKey, value, baseline, baselineLabel, onChange }: {
       <span className={textCls}>{label}</span>
       <div className="flex items-center gap-2">
         {isOverridden && <span className="text-gray-600 text-[10px]">{baselineLabel}: {String(baseline)}</span>}
-        <input type="number" value={value as number}
-          onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v)) onChange(v as Rules[RuleKey]) }}
+        <CalcInput value={value as number} decimals={0}
+          onCommit={v => onChange(v as Rules[RuleKey])}
           className={`w-20 text-right ${inputCls}`}
         />
       </div>

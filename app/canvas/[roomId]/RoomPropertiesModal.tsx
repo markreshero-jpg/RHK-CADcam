@@ -5,6 +5,7 @@ import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMeth
 import { supabase } from '@/src/lib/supabase'
 import { DoorStylePreview, useDoorStylePreviews } from '@/src/components/DoorStylePreview'
 import MaterialsScheduleTab from './MaterialsScheduleTab'
+import CalcInput from '@/src/components/CalcInput'
 
 type DrawerBoxMethodItem = { id: string; name: string; is_default: boolean; kind?: 'external' | 'internal' | null }
 
@@ -324,15 +325,15 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
                         <td className="py-2 text-gray-300 capitalize">{cls}</td>
                         <td className="py-2 pr-4">
                           <div className="flex justify-end">
-                            <input type="number" value={cabDims[cls].dy} placeholder={`job ${inheritedDim(cls, 'dy')}`}
-                              onChange={e => setCabDim(cls, 'dy', e.target.value)}
+                            <CalcInput value={cabDims[cls].dy === '' ? null : Number(cabDims[cls].dy)} placeholder={`job ${inheritedDim(cls, 'dy')}`}
+                              onCommit={v => setCabDim(cls, 'dy', String(v))} onClear={() => setCabDim(cls, 'dy', '')}
                               className={`w-24 bg-gray-800 border rounded px-2 py-1 text-xs text-right font-mono placeholder-gray-600 focus:outline-none focus:border-blue-500 ${cabDims[cls].dy !== '' ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'}`} />
                           </div>
                         </td>
                         <td className="py-2">
                           <div className="flex justify-end">
-                            <input type="number" value={cabDims[cls].dz} placeholder={`job ${inheritedDim(cls, 'dz')}`}
-                              onChange={e => setCabDim(cls, 'dz', e.target.value)}
+                            <CalcInput value={cabDims[cls].dz === '' ? null : Number(cabDims[cls].dz)} placeholder={`job ${inheritedDim(cls, 'dz')}`}
+                              onCommit={v => setCabDim(cls, 'dz', String(v))} onClear={() => setCabDim(cls, 'dz', '')}
                               className={`w-24 bg-gray-800 border rounded px-2 py-1 text-xs text-right font-mono placeholder-gray-600 focus:outline-none focus:border-blue-500 ${cabDims[cls].dz !== '' ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'}`} />
                           </div>
                         </td>
@@ -552,11 +553,11 @@ function DimField({ label, value, placeholder, onChange }: {
   return (
     <div className="flex items-center justify-between">
       <label className="text-xs text-gray-400">{label}</label>
-      <input
-        type="number"
-        value={isEmpty ? '' : value}
+      <CalcInput
+        value={isEmpty ? null : Number(value)}
         placeholder={placeholder}
-        onChange={e => onChange(e.target.value)}
+        onCommit={v => onChange(String(v))}
+        onClear={() => onChange('')}
         className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-right font-mono text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
       />
     </div>
@@ -649,8 +650,8 @@ function RuleRow({ ruleKey, value, baseline, baselineLabel, onChange }: {
       <span className={textCls}>{label}</span>
       <div className="flex items-center gap-2">
         {isOverridden && <span className="text-gray-600 text-[10px]">{baselineLabel}: {String(baseline)}</span>}
-        <input type="number" value={value as number}
-          onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v)) onChange(v as Rules[RuleKey]) }}
+        <CalcInput value={value as number} decimals={0}
+          onCommit={v => onChange(v as Rules[RuleKey])}
           className={`w-20 text-right ${inputCls}`}
         />
       </div>
