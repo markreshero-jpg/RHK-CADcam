@@ -264,7 +264,7 @@ export default function FixturesElevation({
         const y = roomH - fx.z - fx.height, h = fx.height
         // Same on-screen size as cabinet names (11 px); wraps to the item's width.
         const fs = 11 / z
-        const lines = showLabels ? wrapLabel(fx.name, w * 0.9, fs) : []
+        const lines = showLabels ? wrapLabel(fx.label || fx.name, w * 0.9, fs) : []
         return (
           <g key={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
             onPointerDown={e => { e.stopPropagation(); onSelect(fx.id) }}

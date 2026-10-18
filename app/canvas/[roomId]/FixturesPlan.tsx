@@ -19,7 +19,7 @@ const STROKE = '#0ea5e9'
 const FILL   = '#0ea5e9'
 const CLASH  = '#dc2626'
 
-type Body = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'width' | 'depth'> & Partial<Pick<RoomFixture, 'hinge_side' | 'swing' | 'plan_shape' | 'resizable' | 'stretch' | 'model_scale' | 'model_rot_x' | 'model_rot_y'>>
+type Body = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'width' | 'depth'> & Partial<Pick<RoomFixture, 'label' | 'hinge_side' | 'swing' | 'plan_shape' | 'resizable' | 'stretch' | 'model_scale' | 'model_rot_x' | 'model_rot_y'>>
 
 // Doors / windows (P5), in the opening's frame: y = 0 outer face, y = depth the
 // inside face (room side). Hinge side is as seen from inside the room (x = 0 = left).
@@ -106,7 +106,7 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, cl
   const lw = layers.w(id, (selected ? 2 : 1.4) / z)
   // Same on-screen size as cabinet names (11 px); wraps to the item's width.
   const fs = 11 / z
-  const lines = label ? wrapLabel(f.name, f.width * 0.9, fs) : []
+  const lines = label ? wrapLabel(f.label || f.name, f.width * 0.9, fs) : []
   const opening = f.category === 'opening'
   // P8: a traced plan shape replaces the box outline, symbol and front edge.
   const shaped = !opening && !!f.plan_shape?.lines?.length
