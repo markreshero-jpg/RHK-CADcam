@@ -29,6 +29,7 @@ import { customExtents } from '@/src/lib/customPartBox'
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import { shapedFrontMarks, sweepFlag, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
 import { roundMm } from '@/src/lib/format'
+import { DimLabel, dimLabelFits, dimLabelSides } from './dimLabel'
 
 /** Report-only page extras (not drawing layers). */
 export interface PlanViewPageOptions {
@@ -196,7 +197,7 @@ export default function PlanViewReportSVG({
     })
     const boundaries = Array.from(new Set([0, ...segs.flatMap(s => [s.from, s.to])]))
     const p0 = pt(0), pL = pt(wall.length)
-    const padX = dimFS * 1.7, padY = dimFS * 0.7
+    const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.to - s.from })), dimFS)
     return (
       <g key={key} pointerEvents="none" opacity={layers.op(item)}>
         <line x1={p0.x} y1={p0.y} x2={pL.x} y2={pL.y} stroke={INK} strokeWidth={lineW} strokeDasharray={dash} />
@@ -215,11 +216,8 @@ export default function PlanViewReportSVG({
           const p = pt(mid)
           return (
             <g key={`t${i}`} transform={`rotate(${textAngle}, ${p.x}, ${p.y})`}>
-              <rect x={p.x - padX} y={p.y - padY} width={padX * 2} height={padY * 2} fill="white" />
-              <text x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle"
-                fontSize={dimFS} fill={INK} fontFamily="Arial, Helvetica, sans-serif">
-                {seg.label}
-              </text>
+              <DimLabel x={p.x} y={p.y} label={seg.label} fs={dimFS} col={INK} bg="white" side={sides[i]}
+                padY={0.7} fontFamily="Arial, Helvetica, sans-serif" />
             </g>
           )
         })}
@@ -243,18 +241,14 @@ export default function PlanViewReportSVG({
     const midX = (sx + ex) / 2, midY = (sy + ey) / 2
     const rawAngle = Math.atan2(inward.y, inward.x) * 180 / Math.PI
     const textAngle = Math.abs(rawAngle) > 90 ? rawAngle + 180 : rawAngle
-    const padX = dimFS * 1.7, padY = dimFS * 0.7
     return (
       <g key={key} pointerEvents="none" opacity={layers.op(item)}>
         <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={INK} strokeWidth={lineW} strokeDasharray={lp(item).strokeDasharray} />
         <line x1={sx - wd.x * tickH} y1={sy - wd.y * tickH} x2={sx + wd.x * tickH} y2={sy + wd.y * tickH} stroke={INK} strokeWidth={lineW} />
         <line x1={ex - wd.x * tickH} y1={ey - wd.y * tickH} x2={ex + wd.x * tickH} y2={ey + wd.y * tickH} stroke={INK} strokeWidth={lineW} />
         <g transform={`rotate(${textAngle}, ${midX}, ${midY})`}>
-          <rect x={midX - padX} y={midY - padY} width={padX * 2} height={padY * 2} fill="white" />
-          <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle"
-            fontSize={dimFS} fill={INK} fontFamily="Arial, Helvetica, sans-serif">
-            {roundMm(dz)}
-          </text>
+          <DimLabel x={midX} y={midY} label={roundMm(dz)} fs={dimFS} col={INK} bg="white" padY={0.7}
+            side={dimLabelFits(roundMm(dz), dz, dimFS) ? 0 : 1} fontFamily="Arial, Helvetica, sans-serif" />
         </g>
       </g>
     )

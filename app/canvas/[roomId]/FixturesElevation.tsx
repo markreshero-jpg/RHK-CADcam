@@ -127,12 +127,18 @@ function ElevClearance({ box, others, len, roomH, z, bg }: {
   const dim = (key: string, x1: number, y1: number, x2: number, y2: number, v: number) => {
     if (v < 1) return null
     const vert = Math.abs(x1 - x2) < 1e-6
-    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+    let mx = (x1 + x2) / 2, my = (y1 + y2) / 2
     const tick = (x: number, y: number) => vert
       ? <line x1={x - tk} y1={y} x2={x + tk} y2={y} stroke={CLEAR} strokeWidth={sw} />
       : <line x1={x} y1={y - tk} x2={x} y2={y + tk} stroke={CLEAR} strokeWidth={sw} />
     const label = String(roundMm(v))
     const w = label.length * fs * 0.62 + fs * 0.6, h = fs * 1.3
+    // Too short for the chip → sit it beside the line (below a horizontal dim,
+    // right of a vertical one) so the line and ticks stay visible.
+    if (vert ? Math.abs(y2 - y1) < h + fs * 0.3 : Math.abs(x2 - x1) < w + fs * 0.3) {
+      if (vert) mx += tk + fs * 0.3 + w / 2
+      else my += tk + fs * 0.3 + h / 2
+    }
     return (
       <g key={key}>
         <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={CLEAR} strokeWidth={sw} strokeDasharray={`${4 / z} ${3 / z}`} />

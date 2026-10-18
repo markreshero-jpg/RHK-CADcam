@@ -9,6 +9,7 @@ import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
 import { roundMm } from '@/src/lib/format'
+import { DimLabel, dimLabelFits, dimLabelSides, type DimSide } from './dimLabel'
 import { customExtents } from '@/src/lib/customPartBox'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { getPalette, paletteToPartColors } from '@/src/lib/partPalette'
@@ -1897,19 +1898,13 @@ export default function ElevationSVG({
                   {boundaries.map((x, i) => (
                     <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={col} strokeWidth={sw} />
                   ))}
-                  {segs.map((seg, i) => {
-                    const mx = (seg.from + seg.to) / 2
-                    const padX = fs * 1.8, padY = fs * 0.6
-                    return (
-                      <g key={i}>
-                        <rect x={mx - padX} y={chainY - padY} width={padX * 2} height={padY * 2} fill={layers.background ?? '#030712'} />
-                        <text x={mx} y={chainY} textAnchor="middle" dominantBaseline="middle"
-                          fontSize={fs} fill={col} style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                          {seg.label}
-                        </text>
-                      </g>
-                    )
-                  })}
+                  {(() => {
+                    const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.to - s.from })), fs)
+                    return segs.map((seg, i) => (
+                      <DimLabel key={i} x={(seg.from + seg.to) / 2} y={chainY} label={seg.label} fs={fs} col={col}
+                        bg={layers.background ?? '#030712'} side={sides[i]} />
+                    ))
+                  })()}
                 </g>
               )
             })()}
@@ -1935,19 +1930,13 @@ export default function ElevationSVG({
                   {boundaries.map((x, i) => (
                     <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={col} strokeWidth={sw} />
                   ))}
-                  {segs.map((seg, i) => {
-                    const mx = (seg.from + seg.to) / 2
-                    const padX = fs * 1.8, padY = fs * 0.6
-                    return (
-                      <g key={i}>
-                        <rect x={mx - padX} y={chainY - padY} width={padX * 2} height={padY * 2} fill={layers.background ?? '#030712'} />
-                        <text x={mx} y={chainY} textAnchor="middle" dominantBaseline="middle"
-                          fontSize={fs} fill={col} style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                          {seg.label}
-                        </text>
-                      </g>
-                    )
-                  })}
+                  {(() => {
+                    const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.to - s.from })), fs)
+                    return segs.map((seg, i) => (
+                      <DimLabel key={i} x={(seg.from + seg.to) / 2} y={chainY} label={seg.label} fs={fs} col={col}
+                        bg={layers.background ?? '#030712'} side={sides[i]} />
+                    ))
+                  })()}
                 </g>
               )
             })()}
@@ -1969,17 +1958,14 @@ export default function ElevationSVG({
                 <g pointerEvents="none" opacity={layers.op('dim_kicks')} style={{ userSelect: 'none' }}>
                   {marks.map((m, i) => {
                     const x = m.x + 24 / z + layers.offset('dim_kicks'), y0 = roomH, y1 = roomH - m.top, my = (y0 + y1) / 2
-                    const padX = fs * 1.8, padY = fs * 0.6
                     return (
                       <g key={i}>
                         <line x1={x} y1={y0} x2={x} y2={y1} stroke={col} strokeWidth={sw} />
                         <line x1={x - tk} y1={y0} x2={x + tk} y2={y0} stroke={col} strokeWidth={sw} />
                         <line x1={x - tk} y1={y1} x2={x + tk} y2={y1} stroke={col} strokeWidth={sw} />
                         <g transform={`rotate(-90,${x},${my})`}>
-                          <rect x={x - padX} y={my - padY} width={padX * 2} height={padY * 2} fill={layers.background ?? '#030712'} />
-                          <text x={x} y={my} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>
-                            {roundMm(m.top)}
-                          </text>
+                          <DimLabel x={x} y={my} label={roundMm(m.top)} fs={fs} col={col} bg={layers.background ?? '#030712'}
+                            side={dimLabelFits(roundMm(m.top), m.top, fs) ? 0 : 1} />
                         </g>
                       </g>
                     )
@@ -1999,7 +1985,6 @@ export default function ElevationSVG({
               if (!ops.length) return null
               const col = layers.color('dim_openings', '#ffffff')
               const sw = layers.w('dim_openings', 1) / lz, fs = 12 / z, tk = 8 / z
-              const padX = fs * 1.8, padY = fs * 0.6
               const bg = layers.background ?? '#030712'
               const segs: { from: number; to: number }[] = []
               let cur = 0
@@ -2010,12 +1995,13 @@ export default function ElevationSVG({
               }
               if (cur < wall.length - 0.5) segs.push({ from: cur, to: wall.length })
               const chainY = -tickH * 4 - layers.offset('dim_openings')
-              const label = (x: number, y: number, v: number, vertical = false) => (
+              const label = (x: number, y: number, v: number, vertical = false, side?: DimSide) => (
                 <g transform={vertical ? `rotate(-90,${x},${y})` : undefined}>
-                  <rect x={x - padX} y={y - padY} width={padX * 2} height={padY * 2} fill={bg} />
-                  <text x={x} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>{roundMm(v)}</text>
+                  <DimLabel x={x} y={y} label={roundMm(v)} fs={fs} col={col} bg={bg}
+                    side={side ?? (dimLabelFits(roundMm(v), v, fs) ? 0 : 1)} />
                 </g>
               )
+              const opSides = dimLabelSides(segs.map(s => ({ label: roundMm(s.to - s.from), span: s.to - s.from })), fs)
               const vDim = (key: string, x: number, zLo: number, zHi: number) => {
                 const y0 = roomH - zLo, y1 = roomH - zHi
                 return (
@@ -2033,7 +2019,7 @@ export default function ElevationSVG({
                   {Array.from(new Set(segs.flatMap(s => [s.from, s.to]))).map((x, i) => (
                     <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={col} strokeWidth={sw} />
                   ))}
-                  {segs.map((s, i) => <g key={i}>{label((s.from + s.to) / 2, chainY, s.to - s.from)}</g>)}
+                  {segs.map((s, i) => <g key={i}>{label((s.from + s.to) / 2, chainY, s.to - s.from, false, opSides[i])}</g>)}
                   {ops.map((o, i) => {
                     const x = o.t1 - 40 / z
                     return (
@@ -2150,22 +2136,18 @@ export default function ElevationSVG({
                       stroke={dimCol} strokeWidth={sw}
                     />
                   ))}
-                  {segs.map((seg, i) => {
-                    const midY = (seg.fromY + seg.toY) / 2
-                    const padX = fs * 1.8
-                    const padY = fs * 0.6
-                    return (
-                      <g key={i} transform={`rotate(-90,${chainX},${midY})`}>
-                        <rect x={chainX - padX} y={midY - padY} width={padX * 2} height={padY * 2} fill={layers.background ?? '#030712'} />
-                        <text x={chainX} y={midY}
-                          textAnchor="middle" dominantBaseline="middle"
-                          fontSize={fs} fill={dimCol}
-                          style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                          {seg.label}
-                        </text>
-                      </g>
-                    )
-                  })}
+                  {(() => {
+                    const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.toY - s.fromY })), fs)
+                    return segs.map((seg, i) => {
+                      const midY = (seg.fromY + seg.toY) / 2
+                      return (
+                        <g key={i} transform={`rotate(-90,${chainX},${midY})`}>
+                          <DimLabel x={chainX} y={midY} label={seg.label} fs={fs} col={dimCol}
+                            bg={layers.background ?? '#030712'} side={sides[i]} />
+                        </g>
+                      )
+                    })
+                  })()}
                 </g>
               )
             })()}

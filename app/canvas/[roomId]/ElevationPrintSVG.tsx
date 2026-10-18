@@ -30,6 +30,7 @@ import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { tkBoxAABB } from '@/src/lib/jointDrilling'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
+import { DimLabel, dimLabelFits, dimLabelSides } from './dimLabel'
 
 /** Report-only page extras (not drawing layers). */
 export interface ElevationPageOptions {
@@ -195,7 +196,7 @@ export default function ElevationPrintSVG({
   function hChain(segs: Seg[], chainY: number, key: string, item: string) {
     if (segs.length === 0) return null
     const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
-    const padX = dimFs * 1.7, padY = dimFs * 0.7
+    const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.to - s.from })), dimFs)
     const lineW = layers.w(item, thinSW)
     return (
       <g key={key} pointerEvents="none" opacity={layers.op(item)}>
@@ -203,17 +204,10 @@ export default function ElevationPrintSVG({
         {boundaries.map((x, i) => (
           <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={INK} strokeWidth={lineW} />
         ))}
-        {segs.map((seg, i) => {
-          const mx = (seg.from + seg.to) / 2
-          if (seg.to - seg.from < dimFs * 2) return null
-          return (
-            <g key={`t${i}`}>
-              <rect x={mx - padX} y={chainY - padY} width={padX * 2} height={padY * 2} fill="white" />
-              <text x={mx} y={chainY} textAnchor="middle" dominantBaseline="middle"
-                fontSize={dimFs} fill={INK} fontFamily="Arial, Helvetica, sans-serif">{seg.label}</text>
-            </g>
-          )
-        })}
+        {segs.map((seg, i) => (
+          <DimLabel key={`t${i}`} x={(seg.from + seg.to) / 2} y={chainY} label={seg.label} fs={dimFs} col={INK}
+            bg="white" side={sides[i]} padY={0.7} fontFamily="Arial, Helvetica, sans-serif" />
+        ))}
       </g>
     )
   }
@@ -520,7 +514,7 @@ export default function ElevationPrintSVG({
     if (segs.length === 0) segs.push({ fromY: 0, toY: roomH, label: `${roomH}` })
 
     const boundaries = Array.from(new Set(segs.flatMap(s => [s.fromY, s.toY])))
-    const padX = dimFs * 1.7, padY = dimFs * 0.7
+    const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.toY - s.fromY })), dimFs)
     const lineW = layers.w('dim_elev_height', thinSW)
     return (
       <g pointerEvents="none" opacity={layers.op('dim_elev_height')}>
@@ -532,9 +526,8 @@ export default function ElevationPrintSVG({
           const midY = (seg.fromY + seg.toY) / 2
           return (
             <g key={i} transform={`rotate(-90,${heightChainX},${midY})`}>
-              <rect x={heightChainX - padX} y={midY - padY} width={padX * 2} height={padY * 2} fill="white" />
-              <text x={heightChainX} y={midY} textAnchor="middle" dominantBaseline="middle"
-                fontSize={dimFs} fill={INK} fontFamily="Arial, Helvetica, sans-serif">{seg.label}</text>
+              <DimLabel x={heightChainX} y={midY} label={seg.label} fs={dimFs} col={INK}
+                bg="white" side={sides[i]} padY={0.7} fontFamily="Arial, Helvetica, sans-serif" />
             </g>
           )
         })}
@@ -594,7 +587,6 @@ export default function ElevationPrintSVG({
           {layers.show('dim_openings') && openings.map(o => {
             const x = o.t1 - 4 * P
             const lineW = layers.w('dim_openings', thinSW)
-            const padX = dimFs * 0.7, padY = dimFs * 1.7
             const vDim = (key: string, zLo: number, zHi: number) => {
               const y0 = roomH - zLo, y1 = roomH - zHi, my = (y0 + y1) / 2
               return (
@@ -602,11 +594,11 @@ export default function ElevationPrintSVG({
                   <line x1={x} y1={y0} x2={x} y2={y1} stroke={INK} strokeWidth={lineW} />
                   <line x1={x - tk} y1={y0} x2={x + tk} y2={y0} stroke={INK} strokeWidth={lineW} />
                   <line x1={x - tk} y1={y1} x2={x + tk} y2={y1} stroke={INK} strokeWidth={lineW} />
-                  {y0 - y1 >= dimFs * 2 && <>
-                    <rect x={x - padX} y={my - padY} width={padX * 2} height={padY * 2} fill="white" />
-                    <text x={x} y={my} textAnchor="middle" dominantBaseline="middle" transform={`rotate(-90,${x},${my})`}
-                      fontSize={dimFs} fill={INK} fontFamily="Arial, Helvetica, sans-serif">{roundMm(zHi - zLo)}</text>
-                  </>}
+                  <g transform={`rotate(-90,${x},${my})`}>
+                    <DimLabel x={x} y={my} label={roundMm(zHi - zLo)} fs={dimFs} col={INK} bg="white" padY={0.7}
+                      side={dimLabelFits(roundMm(zHi - zLo), zHi - zLo, dimFs) ? 0 : 1}
+                      fontFamily="Arial, Helvetica, sans-serif" />
+                  </g>
                 </g>
               )
             }

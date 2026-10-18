@@ -5,6 +5,7 @@ import { returnWallThickness } from '@/src/lib/wallJoints'
 import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
 import { kickChain, type KickSpan } from '@/src/lib/kickDims'
 import { roundMm } from '@/src/lib/format'
+import { DimLabel, dimLabelFits, dimLabelSides } from './dimLabel'
 import type { FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 
 interface Props {
@@ -101,6 +102,7 @@ function DimLine({
 
   const boundaries = Array.from(new Set([0, ...segs.flatMap(s => [s.from, s.to])]))
   const p0 = pt(0), pL = pt(wall.length)
+  const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.to - s.from })), fs)
 
   return (
     <g pointerEvents="none" opacity={opacity} style={{ userSelect: 'none' }}>
@@ -118,14 +120,9 @@ function DimLine({
       {segs.map((seg, i) => {
         const mid = (seg.from + seg.to) / 2
         const p = pt(mid)
-        const padX = fs * 1.8
-        const padY = fs * 0.6
         return (
           <g key={i} transform={`rotate(${textAngle}, ${p.x}, ${p.y})`}>
-            <rect x={p.x - padX} y={p.y - padY} width={padX * 2} height={padY * 2} fill={bg} />
-            <text x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>
-              {seg.label}
-            </text>
+            <DimLabel x={p.x} y={p.y} label={seg.label} fs={fs} col={col} bg={bg} side={sides[i]} />
           </g>
         )
       })}
@@ -186,10 +183,8 @@ function DepthDim({
       <line x1={sx - wd.x * tickH} y1={sy - wd.y * tickH} x2={sx + wd.x * tickH} y2={sy + wd.y * tickH} stroke={col} strokeWidth={sw} />
       <line x1={ex - wd.x * tickH} y1={ey - wd.y * tickH} x2={ex + wd.x * tickH} y2={ey + wd.y * tickH} stroke={col} strokeWidth={sw} />
       <g transform={`rotate(${textAngle}, ${midX}, ${midY})`}>
-        <rect x={midX - fs * 1.8} y={midY - fs * 0.6} width={fs * 3.6} height={fs * 1.2} fill={bg} />
-        <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>
-          {roundMm(dz)}
-        </text>
+        <DimLabel x={midX} y={midY} label={roundMm(dz)} fs={fs} col={col} bg={bg}
+          side={dimLabelFits(roundMm(dz), dz, fs) ? 0 : 1} />
       </g>
     </g>
   )
