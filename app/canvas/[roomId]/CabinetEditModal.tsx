@@ -14,6 +14,7 @@ import {
   type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments, type ShapeOverrides,
 } from './canvasDB'
 import { PART_HIDE_VIEWS } from '@/src/lib/resolver/filterHidden'
+import { PartHideContext, type PartHideApi } from '@/src/components/PartHideTicks'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetPanel from './CabinetPanel'
 import PhoneDrawerTab from './PhoneDrawerTab'
@@ -299,6 +300,22 @@ export default function CabinetEditModal({
     onHiddenChange?.(cabinet.id, next)
   }
 
+  // One hide API for the Parts tab, right-click menus and docked part panels.
+  // Custom parts keep their own list (survives library placement); resolved
+  // parts go through the cabinet's part_hide_views map.
+  const partHideApi: PartHideApi = {
+    get: id => id.startsWith('custom_')
+      ? (customParts.find(p => p.id === id.slice(7))?.hide_views ?? [])
+      : (hiddenParts[id] ?? []),
+    set: (id, views) => {
+      if (id.startsWith('custom_')) {
+        const cid = id.slice(7)
+        setCustomParts(prev => prev.map(p => p.id === cid ? { ...p, hide_views: views } : p))
+        dbUpdateCustomPart(cid, { hide_views: views }).catch(console.error)
+      } else setHiddenViews(id, views)
+    },
+  }
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return
@@ -482,6 +499,7 @@ export default function CabinetEditModal({
   }, [rp, cabinet.id])
 
   return (
+    <PartHideContext.Provider value={partHideApi}>
     <div
       className={`fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center touch-no-select ${phone ? '' : 'p-4'}`}
       onPointerDown={onClose}
@@ -652,7 +670,6 @@ export default function CabinetEditModal({
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}
-                hiddenParts={hiddenParts} onSetHiddenViews={setHiddenViews}
                 customParts={customParts} setCustomParts={setCustomParts}
                 partOverrides={partOverrides}
                 onDeletePosOverride={async id => { const u = await dbDeletePartPosOverride(cabinet.id, id, partOverrides); setPartOverrides(u) }}
@@ -824,5 +841,6 @@ export default function CabinetEditModal({
         />
       )}
     </div>
+    </PartHideContext.Provider>
   )
 }

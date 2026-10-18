@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { rememberLibraryKeys } from '@/src/lib/displayLayers/customPartKinds'
-import type { ResolvedCabinet, ResolvedDrawerBoxPart, ResolvedDrawerSlide, PartHideViews, PartHideView } from '@/src/lib/resolver/types'
-import { PART_HIDE_VIEWS } from '@/src/lib/resolver/filterHidden'
+import type { ResolvedCabinet, ResolvedDrawerBoxPart, ResolvedDrawerSlide, PartHideView } from '@/src/lib/resolver/types'
+import { PartHideTicks, HIDE_COLS } from '@/src/components/PartHideTicks'
 import {
   dbAddCustomPart, dbUpdateCustomPart, dbDeleteCustomPart,
   type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments,
@@ -126,14 +126,6 @@ const COLS = [
 ] as const
 
 type SortKey = 'type' | 'name' | 'material' | 'dy' | 'dx' | 'dz'
-
-// Per-view hide ticks (z_display_layers/PART-HIDE-SPEC.md). Ticked = the part is
-// NOT drawn in that room view; this editor always shows every part.
-const HIDE_COLS: { view: PartHideView; label: string; title: string }[] = [
-  { view: 'plan',      label: 'Plan',  title: 'Hide in the room plan view (and plan report)' },
-  { view: 'elevation', label: 'Elev',  title: 'Hide in the room elevation view (and elevation report)' },
-  { view: '3d',        label: '3D',    title: 'Hide in the room 3D view' },
-]
 
 // ── Flat row ──────────────────────────────────────────────────────────────────
 
@@ -524,7 +516,6 @@ export default function PartsView({
   rp, cabinetId, customParts, setCustomParts,
   partOverrides, onDeletePosOverride,
   partLabels, partComments, onLabelChange, onCommentChange,
-  hiddenParts, onSetHiddenViews,
 }: {
   rp: ResolvedCabinet
   cabinetId: string
@@ -536,8 +527,6 @@ export default function PartsView({
   partComments?: PartComments
   onLabelChange?: (partId: string, label: string) => void
   onCommentChange?: (partId: string, comment: string) => void
-  hiddenParts?: PartHideViews
-  onSetHiddenViews?: (partId: string, views: PartHideView[]) => void
 }) {
   // Formula scope for live readouts + dialog editing (needs the cached resolver input).
   const formulaScope = useMemo<FormulaScope | null>(() => {
@@ -760,18 +749,6 @@ export default function PartsView({
     else { setSortKey(key); setSortDir('asc') }
   }
 
-  // Custom parts keep their own list (survives library placement); resolved parts
-  // go through the cabinet's part_hide_views map.
-  function setRowHideViews(row: FlatRow, views: PartHideView[]) {
-    const cp = row.customPartRef
-    if (row.isCustom && cp) {
-      setCustomParts(prev => prev.map(q => q.id === cp.id ? { ...q, hide_views: views } : q))
-      dbUpdateCustomPart(cp.id, { hide_views: views }).catch(console.error)
-    } else {
-      onSetHiddenViews?.(row.id, views)
-    }
-  }
-
   async function handleDeleteCustom(id: string) {
     await dbDeleteCustomPart(id)
     setCustomParts(prev => prev.filter(p => p.id !== id))
@@ -845,13 +822,6 @@ export default function PartsView({
               {search ? 'No parts match the filter.' : 'No parts.'}
             </div>
           ) : filtered.map(row => {
-            const views: PartHideView[] = row.isOverride ? []
-              : row.isCustom ? (row.customPartRef?.hide_views ?? [])
-              : (hiddenParts?.[row.id] ?? [])
-            const canHide = !row.isOverride && (row.isCustom ? !!row.customPartRef : !!onSetHiddenViews)
-            const allHidden = PART_HIDE_VIEWS.every(v => views.includes(v))
-            const toggleView = (v: PartHideView) =>
-              setRowHideViews(row, views.includes(v) ? views.filter(x => x !== v) : [...views, v])
             return (
             <div key={row.id}
               className={`flex items-center border-b border-gray-800/50 hover:bg-gray-800/20 group min-h-[30px] ${
@@ -859,19 +829,8 @@ export default function PartsView({
               }`}>
 
               {/* Hide in room views — the row itself stays fully visible here */}
-              <div className="flex-none border-r border-gray-800 px-1 py-1.5 flex items-center justify-around" style={{ width: HIDE_W }}>
-                {canHide && (<>
-                  {HIDE_COLS.map(c => (
-                    <input key={c.view} type="checkbox" checked={views.includes(c.view)} onChange={() => toggleView(c.view)}
-                      title={c.title}
-                      className="accent-orange-500 w-3.5 h-3.5 cursor-pointer" />
-                  ))}
-                  <input type="checkbox" checked={allHidden}
-                    ref={el => { if (el) el.indeterminate = !allHidden && views.length > 0 }}
-                    onChange={() => setRowHideViews(row, allHidden ? [] : [...PART_HIDE_VIEWS])}
-                    title="Hide in every room view"
-                    className="accent-orange-500 w-3.5 h-3.5 cursor-pointer" />
-                </>)}
+              <div className="flex-none border-r border-gray-800 px-1 py-1.5 flex items-center" style={{ width: HIDE_W }}>
+                {!row.isOverride && <PartHideTicks partId={row.id} compact />}
               </div>
 
               {/* Type */}

@@ -16,6 +16,11 @@ import { zonePartId, dbPartId } from '@/src/lib/cabinetShape/partKeys'
 type LayerViewId = PartHideView
 export const PART_HIDE_VIEWS: readonly PartHideView[] = ['plan', 'elevation', '3d']
 
+/** Ids this filter can hide (hinges / plates aren't drawn per part in room views). */
+export function isHideablePartId(id: string): boolean {
+  return /^(case_|tk_|int_|zone_|db_|slide_|custom_)/.test(id)
+}
+
 /** Part ids hidden in `view` (custom parts excluded). */
 export function hiddenIdsFor(hide: PartHideViews | undefined, view: LayerViewId): Set<string> {
   const H = new Set<string>()

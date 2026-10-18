@@ -36,6 +36,7 @@ import { handleShapes } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, SharknoseLinesSVG } from './HandleSVG'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
+import { PartHideTicks } from '@/src/components/PartHideTicks'
 
 // Hinge cup/plate drill marker colour (distinct from amber slide drills).
 const HINGE_DRILL_COL = '#a855f7'   // violet-500
@@ -176,7 +177,7 @@ export function PartContextMenu({ part, clientX, clientY, isCustom, existingComm
   }
 
   const menuW = 192
-  const menuH = mode ? 120 : (isCustom ? 163 : 133)
+  const menuH = mode ? 120 : (isCustom ? 163 : 133) + 52   // + hide ticks row
   const top  = Math.min(clientY + 6, window.innerHeight - menuH - 8)
   const left = Math.min(clientX + 6, window.innerWidth  - menuW - 8)
 
@@ -242,6 +243,7 @@ export function PartContextMenu({ part, clientX, clientY, isCustom, existingComm
             <span className="text-gray-500">💬</span>
             {existingComment ? 'Edit comment' : 'Add comment'}
           </button>
+          <PartHideTicks partId={part.id} className="px-3 py-2 border-t border-gray-700" />
           {isCustom && (
             <button
               onClick={() => { onAction('delete'); onClose() }}

@@ -57,6 +57,13 @@ one cabinet* in chosen room views.
 - `CabinetEditModal.setHiddenViews` saves the map and syncs it live into the
   canvas map. Pressing Delete on a standard part = hide in all three room views
   (the part stays visible in the modal).
+- `src/components/PartHideTicks.tsx`: the shared Plan / Elev / 3D / All ticks plus
+  `PartHideContext` (get / set by part id). `CabinetEditModal` provides it, and the
+  component renders nothing without a provider. Used in the Parts tab rows, the
+  ortho right-click menu (`PartContextMenu`), the 3D right-click menu, and the
+  docked right-hand part panel (`PartPropertiesPanel`, ortho + 3D) — added
+  2026-10-18 at the user's request. `isHideablePartId` skips hinges / plates /
+  override rows.
 - `PartsView`: tick columns. The add/edit-part dialog has the same three ticks.
 - `dbCopyCabinetChildren` (copy/paste, duplicate) copies the map from the DB.
 

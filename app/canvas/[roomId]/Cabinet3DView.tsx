@@ -51,6 +51,7 @@ import Handle3D from '@/src/components/three/Handle3D'
 import Bin3D from '@/src/components/three/Bin3D'
 import Runner3D from '@/src/components/three/Runner3D'
 import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
+import { PartHideTicks } from '@/src/components/PartHideTicks'
 
 export type { MatColSpec, MatColMap }
 
@@ -2234,6 +2235,7 @@ export default function Cabinet3DView({
                     {frontEnd.flush ? '▭ Square front edge' : '◢ Bevel front edge to facet'}
                   </button>
                 )}
+                <PartHideTicks partId={selectedPart.id} className="px-3 pt-1.5 pb-1 mt-1 border-t border-gray-700" />
               </div>
             </>
           )}

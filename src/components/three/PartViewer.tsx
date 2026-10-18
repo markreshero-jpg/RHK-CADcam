@@ -17,6 +17,7 @@ import { fmtMm, roundMm } from '@/src/lib/format'
 import { evalCalc } from '@/src/lib/calc'
 import type { OutlinePt, ShapePt } from '@/src/lib/shapePath'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
+import { PartHideTicks } from '@/src/components/PartHideTicks'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -642,6 +643,8 @@ export function PartPropertiesPanel({
           </>
         )}
       </div>
+      {/* Per-view hide ticks — render only inside the cabinet editor (provider). */}
+      <PartHideTicks partId={part.id} className="border-t border-gray-700 px-3 py-2 empty:hidden" />
       {actions && (
         <div className="border-t border-gray-700 px-3 py-2">
           <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Actions</span>
