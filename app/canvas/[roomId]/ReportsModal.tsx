@@ -5,7 +5,7 @@ import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixtur
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { dbLoadResolvedParts } from './canvasDB'
-import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
+import { filterHiddenMap } from '@/src/lib/resolver/filterHidden'
 import PlanViewReport from './PlanViewReport'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import ElevationPrintReport from './ElevationPrintReport'
@@ -158,13 +158,11 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
 
   const rooms          = scope === 'room' ? [room]        : jobRooms
   const allCabinets    = scope === 'room' ? cabinets      : jobCabinets
-  // Strip user-hidden parts so every report and the cut list exclude them.
-  const allResolved    = useMemo(() => {
-    const src = scope === 'room' ? resolvedParts : jobResolved
-    const out = new Map<string, ResolvedCabinet>()
-    for (const [id, r] of src) out.set(id, filterHiddenParts(r))
-    return out
-  }, [scope, resolvedParts, jobResolved])
+  // Unfiltered: cut lists and cabinet sheets list every part. Per-view part hides
+  // (z_display_layers/PART-HIDE-SPEC.md) apply only to the plan / elevation drawings.
+  const allResolved    = scope === 'room' ? resolvedParts : jobResolved
+  const planResolved   = useMemo(() => filterHiddenMap(allResolved, 'plan'), [allResolved])
+  const elevResolved   = useMemo(() => filterHiddenMap(allResolved, 'elevation'), [allResolved])
   const allBtInstances = scope === 'room' ? benchtops     : jobBtInstances
   const allBtParts     = scope === 'room' ? roomBtParts   : jobBtParts
 
@@ -421,7 +419,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                   walls={walls}
                   fixtures={roomFixtures}
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
-                  resolvedParts={allResolved}
+                  resolvedParts={planResolved}
                   layerSets={layerSets}
                   activeLayerSetId={activeLayerSetId}
                   scale={printScale}
@@ -434,7 +432,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                   walls={walls}
                   fixtures={roomFixtures}
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
-                  resolvedParts={allResolved}
+                  resolvedParts={elevResolved}
                   layerSets={layerSets}
                   activeLayerSetId={activeLayerSetId}
                   scale={printScale}

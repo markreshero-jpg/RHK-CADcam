@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import type { CabinetInstance, Wall } from '@/src/lib/types'
-import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, PartHideViews, PartHideView } from '@/src/lib/resolver/types'
 import { PartMeta, PartEdge, PartPropertiesPanel, unpackMatCol } from '@/src/components/three/PartViewer'
 import {
   dbResolveAndPersistCabinet, dbLoadCustomParts, dbUpdateCustomPart, dbDeleteCustomPart,
@@ -13,7 +13,7 @@ import {
   dbLoadShapeOverrides,
   type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments, type ShapeOverrides,
 } from './canvasDB'
-import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
+import { PART_HIDE_VIEWS } from '@/src/lib/resolver/filterHidden'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetPanel from './CabinetPanel'
 import PhoneDrawerTab from './PhoneDrawerTab'
@@ -181,8 +181,8 @@ export default function CabinetEditModal({
   materialColours?: Record<string, string | { face?: string; back?: string; edge?: string }>
   ebByMatId?: Record<string, { thickness: number; color: string | null }>
   // Lets the parent canvas reflect hide/show toggles live (updates the shared
-  // resolved map's hidden_parts so the on-canvas elevation / 3D update at once).
-  onHiddenChange?: (cabinetId: string, hidden: string[]) => void
+  // resolved map's part_hide_views so the on-canvas elevation / 3D update at once).
+  onHiddenChange?: (cabinetId: string, hidden: PartHideViews) => void
   // Lets the parent canvas reflect custom-part add/edit/delete live (updates the
   // shared resolved map's custom_parts so the room plan/elevation/3D update at once).
   onCustomPartsChange?: (cabinetId: string, parts: CabinetCustomPart[]) => void
@@ -232,7 +232,7 @@ export default function CabinetEditModal({
   const [shapeOverrides, setShapeOverrides] = useState<ShapeOverrides>({})
   const [partLabels, setPartLabels]       = useState<PartLabels>({})
   const [partComments, setPartComments]   = useState<PartComments>({})
-  const [hiddenParts, setHiddenParts]     = useState<string[]>([])
+  const [hiddenParts, setHiddenParts]     = useState<PartHideViews>({})
   const [contextMenu, setContextMenu]     = useState<{ part: PartMeta; cx: number; cy: number } | null>(null)
   // Right-click on empty space in an ortho view → a small "Add part here" menu,
   // then the Add-Part dialog seeded with that cabinet-space point.
@@ -285,13 +285,15 @@ export default function CabinetEditModal({
     onCustomPartsChange?.(cabinet.id, customParts)
   }, [customParts]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function toggleHidden(partId: string) {
+  // Per-view hide ticks (z_display_layers/PART-HIDE-SPEC.md) — room views only;
+  // nothing is hidden inside this modal.
+  function setHiddenViews(partId: string, views: PartHideView[]) {
     // Compute next outside the updater so the DB write + parent sync are real
     // event-handler side effects, not run inside a (pure) setState updater — the
     // latter can fire during render and setState the parent mid-render.
-    const next = hiddenParts.includes(partId)
-      ? hiddenParts.filter(id => id !== partId)
-      : [...hiddenParts, partId]
+    const next = { ...hiddenParts }
+    if (views.length) next[partId] = views
+    else delete next[partId]
     setHiddenParts(next)
     dbSaveHiddenParts(cabinet.id, next).catch(console.error)
     onHiddenChange?.(cabinet.id, next)
@@ -318,7 +320,8 @@ export default function CabinetEditModal({
   }, [onClose])
 
   // Delete a part by id: a custom part is truly removed; a resolver-generated
-  // part can only be hidden (it would otherwise regenerate), so Delete hides it.
+  // part can only be hidden (it would otherwise regenerate), so Delete hides it
+  // in every room view (the modal itself always shows it — PART-HIDE-SPEC).
   // Shared by the ortho views, the 3D view, and the Parts view.
   function deletePartById(partId: string) {
     if (partId.startsWith('custom_')) {
@@ -326,7 +329,7 @@ export default function CabinetEditModal({
       setCustomParts(prev => prev.filter(p => p.id !== cid))
       dbDeleteCustomPart(cid).catch(console.error)
     } else {
-      toggleHidden(partId)   // resolved part → hide (closest to "delete")
+      setHiddenViews(partId, [...PART_HIDE_VIEWS])   // resolved part → hide (closest to "delete")
     }
   }
 
@@ -445,7 +448,8 @@ export default function CabinetEditModal({
 
   // Geometry viewers (Top/Elevation/Side/3D/Face/Interior) render the cabinet with
   // user-hidden parts removed; the Parts tab + inspector panels keep the full list.
-  const visibleRp = useMemo(() => (rp ? filterHiddenParts(rp, hiddenParts) : rp), [rp, hiddenParts])
+  // The modal never hides parts (per-view hides apply to room views only).
+  const visibleRp = rp
 
   // Base resolved dims by part id — Shape Editor plumbing (stale flags + the
   // baseAtSave reference PartEditor stamps into shape meta on save).
@@ -642,7 +646,7 @@ export default function CabinetEditModal({
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}
-                hiddenParts={hiddenParts} onToggleHidden={toggleHidden}
+                hiddenParts={hiddenParts} onSetHiddenViews={setHiddenViews}
                 customParts={customParts} setCustomParts={setCustomParts}
                 partOverrides={partOverrides}
                 onDeletePosOverride={async id => { const u = await dbDeletePartPosOverride(cabinet.id, id, partOverrides); setPartOverrides(u) }}

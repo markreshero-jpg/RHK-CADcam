@@ -27,7 +27,7 @@ import { useRightDragPan } from './useRightDragPan'
 import { useIsPhone } from '@/src/lib/usePhone'
 import PhoneDrawerTab from './PhoneDrawerTab'
 import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
-import { filterHiddenParts } from '@/src/lib/resolver/filterHidden'
+import { filterHiddenMap } from '@/src/lib/resolver/filterHidden'
 import { invalidateResolverCaches } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { useCanvasHistory } from './useCanvasHistory'
 import { useMaterialColours } from './useMaterialColours'
@@ -213,6 +213,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setLayerSetPref(id)
     setUserPrefs({ layerSetId: id })
   }
+  const [showHiddenParts, setShowHiddenParts] = useState(() => getUserPrefs().showHiddenParts)
+  function toggleShowHiddenParts(v: boolean) {
+    setShowHiddenParts(v)
+    setUserPrefs({ showHiddenParts: v })
+  }
   const [showLayerManager, setShowLayerManager] = useState(false)
   // Set being edited in the Layer Manager — previewed live on the canvas.
   const [layerPreview, setLayerPreview] = useState<LayerSet | null>(null)
@@ -298,14 +303,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     return () => { cancelled = true }
   }, [editCabId, setResolvedParts])
 
-  // Hidden-part-filtered view of the resolved map for on-canvas drawings (elevation
-  // + 3D room). The raw map is kept for the edit modal, whose Parts tab needs the
-  // full list; the modal filters its own geometry viewers internally.
-  const visibleResolvedParts = useMemo(() => {
-    const out = new Map<string, ResolvedCabinet>()
-    for (const [id, r] of resolvedParts) out.set(id, filterHiddenParts(r))
-    return out
-  }, [resolvedParts])
+  // Per-view filtered copies of the resolved map for the room drawings — parts the
+  // user hid for that view (z_display_layers/PART-HIDE-SPEC.md) are stripped. The
+  // raw map is kept for the edit modal, which always shows every part.
+  const planResolvedParts = useMemo(() => filterHiddenMap(resolvedParts, 'plan', showHiddenParts), [resolvedParts, showHiddenParts])
+  const elevResolvedParts = useMemo(() => filterHiddenMap(resolvedParts, 'elevation', showHiddenParts), [resolvedParts, showHiddenParts])
+  const resolvedParts3D   = useMemo(() => filterHiddenMap(resolvedParts, '3d', showHiddenParts), [resolvedParts, showHiddenParts])
 
   const svgRef = useRef<SVGSVGElement>(null)
   // Retained 3D camera state — survives the Room3DScene unmount when switching to
@@ -2463,6 +2466,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               ))}
               <option value="__manage__">Manage layers…</option>
             </select>
+            {/* Override for per-part view hides (z_display_layers/PART-HIDE-SPEC.md). */}
+            <label title="Show parts hidden per view in the cabinet editor's Parts tab"
+              className={`flex items-center gap-1 text-xs cursor-pointer select-none ${showHiddenParts ? 'text-orange-300' : 'text-gray-500 hover:text-gray-300'}`}>
+              <input type="checkbox" checked={showHiddenParts} onChange={e => toggleShowHiddenParts(e.target.checked)}
+                className="accent-orange-500 w-3 h-3" />
+              {phone ? 'Hidden' : 'Show hidden parts'}
+            </label>
           </>)}
         </div>
       </div>
@@ -2521,7 +2531,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               selected={selected}
               mode={mode}
               armedDef={armedDef}
-              resolvedParts={visibleResolvedParts}
+              resolvedParts={planResolvedParts}
               onCanvasDrop={dropDefinitionAt}
               layers={planLayers}
               drawStart={drawStart}
@@ -2746,7 +2756,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onCabResizeStart={r => { setSelected({ type: 'cabinet', id: r.cabId }); setMultiSelect([]); setCabResize(r) }}
             onCabResizeUpdate={updates => setCabResize(r => r ? { ...r, ...updates } : r)}
             onCabResizeDone={() => setCabResize(null)}
-            resolvedParts={visibleResolvedParts}
+            resolvedParts={elevResolvedParts}
             elevSnapSettings={elevSnapSettings}
             onElevSnapSettingsChange={updateElevSnapSettings}
             elevSnapResult={elevSnapResult}
@@ -2807,7 +2817,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onEditCabinet={id => { setEditCabInitialView('3d'); setEditCabId(id) }}
             onDeleteCabinet={id => handleDeleteCabinet(id)}
             onReplaceCabinet={id => setReplaceCabId(id)}
-            resolvedParts={visibleResolvedParts}
+            resolvedParts={resolvedParts3D}
             materialColours={matColours}
             ebByMatId={ebByMatId}
             cameraStateRef={camera3DStateRef}
@@ -3240,7 +3250,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onHiddenChange={(cabinetId, hidden) => setResolvedParts(m => {
               const r = m.get(cabinetId)
               if (!r) return m
-              return new Map(m).set(cabinetId, { ...r, hidden_parts: hidden })
+              return new Map(m).set(cabinetId, { ...r, part_hide_views: hidden })
             })}
             onCustomPartsChange={(cabinetId, parts) => setResolvedParts(m => {
               const r = m.get(cabinetId)

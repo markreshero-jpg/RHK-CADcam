@@ -7,7 +7,7 @@ import type { CabinetInstance } from '../types'
 import { resolveCabinet } from './resolver'
 import { zoneKey } from '../cabinetShape/partKeys'
 import { persistResolved } from './persistResolved'
-import { CabinetInput, ResolvedCabinet } from './types'
+import { CabinetInput, ResolvedCabinet, type PartHideViews } from './types'
 import { applyPartExpressions } from '../formula/partExpressions'
 import { evalCustomPartFields } from '../formula/customParts'
 import { buildFormulaScope } from '../formula/context'
@@ -37,7 +37,7 @@ function roleMaterialId(role: string | null | undefined, input: CabinetInput): s
 // Room-view custom part columns plus what resolution needs (formulas, override,
 // role). Same embed as ROOM_CUSTOM_PART_COLS, widened with material_role.
 const CUSTOM_PART_RESOLVE_COLS =
-  'id,cabinet_instance_id,part_library_id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,orientation,' +
+  'id,cabinet_instance_id,part_library_id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,' +
   'expressions,material_override_id,parts_library(key,material_role)'
 
 // Resolve each custom part against its assembly: (1) evaluate parametric formulas
@@ -73,7 +73,7 @@ export async function resolveCustomParts(cabinetId: string, resolved: ResolvedCa
 // Module-level caches: populated after each full DB load.
 const _inputCache     = new Map<string, CabinetInput>()
 const _edgeOvCache    = new Map<string, Awaited<ReturnType<typeof loadEdgeOverrides>>>()
-const _hiddenCache    = new Map<string, string[]>()
+const _hiddenCache    = new Map<string, PartHideViews>()
 
 /**
  * Drop every resolver cache: the per-cabinet inputs above AND the shared
@@ -88,9 +88,9 @@ export function invalidateResolverCaches(): void {
   invalidateResolverCascade()
 }
 
-// Hidden-part set from the last full resolve — lets the fast resize path carry
-// hidden_parts without an extra round-trip.
-export function getCachedHidden(id: string): string[] | undefined {
+// Per-view hide map from the last full resolve — lets the fast resize path carry
+// part_hide_views without an extra round-trip.
+export function getCachedHidden(id: string): PartHideViews | undefined {
   return _hiddenCache.get(id)
 }
 
@@ -119,12 +119,12 @@ async function loadEdgeOverrides(cabinetId: string) {
   }
 }
 
-// Load the user's hidden-part ID set so it can be carried on the resolved cabinet
-// (consumers strip them via filterHiddenParts).
-export async function loadHiddenParts(cabinetId: string): Promise<string[]> {
+// Load the user's per-view hide map so it can be carried on the resolved cabinet
+// (room views strip parts via filterHiddenParts).
+export async function loadHiddenParts(cabinetId: string): Promise<PartHideViews> {
   const { data } = await supabase
-    .from('cabinet_instances').select('hidden_parts').eq('id', cabinetId).single()
-  return ((data as { hidden_parts?: unknown } | null)?.hidden_parts ?? []) as string[]
+    .from('cabinet_instances').select('part_hide_views').eq('id', cabinetId).single()
+  return ((data as { part_hide_views?: unknown } | null)?.part_hide_views ?? {}) as PartHideViews
 }
 
 // Merge saved edge bands back onto freshly-resolved parts (preserves manual edits through resolves).
@@ -184,7 +184,7 @@ export async function resolveDraftCabinet(
 ): Promise<ResolvedCabinet> {
   const input = await loadCabinetInputFromRow(draft, { persisted: false })
   const resolved = resolveCabinet(input)
-  resolved.hidden_parts = []
+  resolved.part_hide_views = {}
   if (customParts.length === 0) { resolved.custom_parts = []; return resolved }
 
   const libIds = [...new Set(customParts.map(p => p.part_library_id).filter((v): v is string => typeof v === 'string'))]
@@ -205,6 +205,7 @@ export async function resolveDraftCabinet(
       material_id: (p.material_override_id as string | null) ?? roleMaterialId(lib?.material_role, input),
       visible: p.visible !== false,
       show_in_room: p.show_in_room !== false,
+      hide_views: (p.hide_views as string[] | undefined) ?? [],
       orientation: (p.orientation as string) ?? 'flat',
       library_key: lib?.key ?? null,
     }
@@ -233,7 +234,7 @@ export async function resolveCabinetFromDB(
     const log = opts.quiet ? console.warn : console.error
     log('Resolver errors for cabinet', cabinetId, resolved.errors)
   }
-  resolved.hidden_parts = hidden
+  resolved.part_hide_views = hidden
 
   applyEdgeOverrides(resolved, edgeOverrides)
 

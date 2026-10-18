@@ -1233,6 +1233,8 @@ export interface ResolvedCustomPart {
   edge_top: boolean; edge_bottom: boolean; edge_left: boolean; edge_right: boolean
   visible:       boolean
   show_in_room:  boolean
+  // Room views this part is hidden in (z_display_layers/PART-HIDE-SPEC.md).
+  hide_views?:   PartHideView[]
   orientation:   'flat' | 'side' | 'front'
   // Room loaders only: parts_library key (applied_panel / filler_strip / …) —
   // drives the display-layer item (src/lib/displayLayers/customPartKinds.ts).
@@ -1266,10 +1268,14 @@ export interface ResolvedCabinet {
   // Validation errors — non-empty means something is wrong
   errors:        ResolverError[]
   warnings:      ResolverError[]
-  // Resolved-part IDs the user has hidden from viewers/reports/cut lists.
-  // Carried through resolution so any consumer can filter via filterHiddenParts().
-  hidden_parts?: string[]
+  // Per-view part hiding (z_display_layers/PART-HIDE-SPEC.md): part id → the
+  // room views it is hidden in. Visual only — room views filter via filterHiddenParts().
+  part_hide_views?: PartHideViews
 }
+
+export type PartHideView = 'plan' | 'elevation' | '3d'
+/** part id → room views the part is not drawn in (cabinet_instances.part_hide_views). */
+export type PartHideViews = Record<string, PartHideView[]>
 
 export interface ResolvedPart extends PartTransform {
   material_id:    string

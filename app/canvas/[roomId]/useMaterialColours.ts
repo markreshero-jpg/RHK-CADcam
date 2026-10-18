@@ -19,7 +19,7 @@ function emptyResolved(cabinet_id: string, custom_parts: ResolvedCustomPart[]): 
     cabinet_id, custom_parts,
     case_parts: [], toekick_parts: [], internal_parts: [], internal_slides: [],
     face_rows: [], face_cols: [], face_zones: [], drawer_stacks: [],
-    seam_joints: [], hinge_instances: [], errors: [], warnings: [], hidden_parts: [],
+    seam_joints: [], hinge_instances: [], errors: [], warnings: [], part_hide_views: {},
   }
 }
 

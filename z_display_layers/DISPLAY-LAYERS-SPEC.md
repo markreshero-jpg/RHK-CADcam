@@ -3,6 +3,11 @@
 Status: **Phases 1–3 built (3c complete 2026-09-18), pending manual test**
 Date: 2026-09-16
 
+> **Per-part hiding (2026-10-18):** hiding one part on one cabinet per view
+> (Plan / Elev / 3D ticks in the Parts tab) lives in
+> [PART-HIDE-SPEC.md](PART-HIDE-SPEC.md). It gates through `filterHiddenMap`,
+> not through layer items.
+
 ## ▶ RESUME HERE (handoff 2026-09-18)
 
 **Where we are:** Phases 1, 2, 3a, 3b, opacity and **all of 3c** are built — reports

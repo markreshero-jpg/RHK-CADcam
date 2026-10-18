@@ -17,6 +17,8 @@ export interface UserPrefs {
   /** Default display layer set (drawing_layer_sets id) — one set drives plan,
    *  elevation and 3D. May hold a legacy preset key; resolve with findLayerSet. */
   layerSetId:         string
+  /** Layers menu override: draw parts hidden per view (PART-HIDE-SPEC) anyway. */
+  showHiddenParts:    boolean
   cabinetViewStyles:  CabinetViewStyles
   /** Room 3D view style (3D tab dropdown): solid or wire (see-through parts). */
   room3DStyle:        ViewStyle
@@ -81,6 +83,7 @@ const DEFAULT_CABINET_VIEW_STYLES: CabinetViewStyles = {
 const DEFAULTS: UserPrefs = {
   invertScroll: false,
   layerSetId:        '',
+  showHiddenParts:   false,
   cabinetViewStyles: DEFAULT_CABINET_VIEW_STYLES,
   room3DStyle:       'solid',
   snapSettings:     DEFAULT_SNAP_SETTINGS,

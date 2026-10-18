@@ -174,6 +174,8 @@ export interface CabinetInstance {
   faces?: Record<string, Record<string, unknown>> | null
   // Bulkhead settings (z_bulkhead); non-null = this cabinet is a bulkhead.
   bulkhead?: import('./bulkhead').BulkheadSettings | null
+  // Per-view part hiding (z_display_layers/PART-HIDE-SPEC.md).
+  part_hide_views?: import('./resolver/types').PartHideViews
   schema_version: string
   notes: string | null
   created_at: string
@@ -250,6 +252,8 @@ export interface CabinetDefinition {
   faces?: Record<string, Record<string, unknown>> | null
   // Bulkhead defaults (z_bulkhead), copied to the instance at placement.
   bulkhead?: import('./bulkhead').BulkheadSettings | null
+  // Per-view part hides, copied to the instance at placement (PART-HIDE-SPEC).
+  part_hide_views?: import('./resolver/types').PartHideViews
   // UI metadata
   description: string | null
   thumbnail_svg: string | null

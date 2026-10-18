@@ -28,7 +28,7 @@ export const CUSTOM_PART_ITEMS = ['applied_panels', 'fillers', 'custom_panels'] 
 
 /** Supabase select for room-view custom part rows (includes the library key). */
 export const ROOM_CUSTOM_PART_COLS =
-  'id,cabinet_instance_id,part_library_id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,orientation,parts_library(key)'
+  'id,cabinet_instance_id,part_library_id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,parts_library(key)'
 
 /** Flatten the parts_library join onto the row as library_key (and cache it). */
 export function withLibraryKey<T extends Record<string, unknown>>(rows: T[]): (T & { library_key: string | null })[] {
