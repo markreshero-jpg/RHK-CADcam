@@ -105,3 +105,16 @@ export function dashPattern(d: DashType, weight: number): number[] {
     default:        return []
   }
 }
+
+/** Remembered-defaults key: lines with an arrowhead remember separately from plain
+ *  lines, so the Arrow and Line tools each keep their own last-used style. */
+export type StyleKey = AnnotationKind | 'arrow'
+
+/** What the Arrow tool adds on top of the line defaults. */
+export const ARROW_TOOL: AnnotationStyle = { arrowEnd: 'closed' }
+
+export function styleKeyOf(kind: AnnotationKind, style: AnnotationStyle | null | undefined): StyleKey {
+  if (kind !== 'line') return kind
+  const s = resolveStyle(kind, style)
+  return s.arrowStart !== 'none' || s.arrowEnd !== 'none' ? 'arrow' : 'line'
+}

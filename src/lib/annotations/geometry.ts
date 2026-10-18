@@ -315,3 +315,31 @@ export function snapQuarter(deg: number, tol = 4): number {
   for (const q of [0, 90, 180, 270, 360]) if (Math.abs(n - q) <= tol) return q % 360
   return Math.round(n * 10) / 10
 }
+
+/** Line drawing (A3): with no snap target, lock the segment from `prev` to the nearest
+ *  `step`° direction when within `tol`° of it (length kept). */
+export function angleSnap(prev: Pt, p: Pt, step = 15, tol = 4): Pt {
+  const v = sub(p, prev), L = len(v)
+  if (L === 0) return p
+  const ang = Math.atan2(v.y, v.x) * 180 / Math.PI
+  const near = Math.round(ang / step) * step
+  if (Math.abs(ang - near) > tol) return p
+  const r = near * Math.PI / 180
+  return { x: prev.x + Math.cos(r) * L, y: prev.y + Math.sin(r) * L }
+}
+
+/** Drop consecutive points closer than `eps` (a double-click's repeat click). */
+export function dedupePts(pts: Pt[], eps: number): Pt[] {
+  const out: Pt[] = []
+  for (const p of pts) if (!out.length || len(sub(p, out[out.length - 1])) > eps) out.push(p)
+  return out
+}
+
+/** Where a new leader's text goes: just right of the landing point, first line centred
+ *  on it. Frame mm; size / paperToFrame as for the block. */
+export function leaderTextAt(landing: Pt, tip: Pt, size: number, paperToFrame: number): Pt {
+  const block = layoutText('M', size)
+  const right = landing.x >= tip.x
+  const gap = 1.5 * paperToFrame
+  return { x: right ? landing.x + gap : landing.x - gap - block.w * 4 * paperToFrame, y: landing.y - block.midFirst * paperToFrame }
+}

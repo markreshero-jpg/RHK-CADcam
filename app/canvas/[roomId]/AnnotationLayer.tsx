@@ -30,7 +30,9 @@ export interface AnnotationLayerProps {
   edit?: AnnotationEditProps
 }
 
-export type AnnotGrip = 'rotate' | 'width'
+/** rotate / width: text grips. vN: drag vertex N of a line or leader. mN: drag the
+ *  midpoint of segment N→N+1 to insert a vertex there. */
+export type AnnotGrip = 'rotate' | 'width' | `v${number}` | `m${number}`
 
 export interface AnnotationEditProps {
   selectedIds: ReadonlySet<string>
@@ -130,9 +132,28 @@ function hitShape(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number,
   }
 }
 
-/** Dashed outline round a selected annotation; text also gets rotate + (text box) width grips. */
+/** Vertex grips (circles) + midpoint insert grips (small diamonds) along a polyline. */
+function vertexGrips(id: string, pts: Pt[], edit: AnnotationEditProps): React.ReactNode {
+  const hw = edit.hitWidth
+  const down = (g: AnnotGrip) => (e: React.PointerEvent) => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, id, g) } }
+  return <>
+    {pts.slice(0, -1).map((p, i) => {
+      const q = pts[i + 1], m = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, r = hw * 0.32
+      return <path key={`m${i}`} d={`M${m.x} ${m.y - r}L${m.x + r} ${m.y}L${m.x} ${m.y + r}L${m.x - r} ${m.y}Z`}
+        fill={SEL} fillOpacity={0.5} style={{ pointerEvents: 'all', cursor: 'copy' }} onPointerDown={down(`m${i}`)} />
+    })}
+    {pts.map((p, i) => (
+      <circle key={`v${i}`} cx={p.x} cy={p.y} r={hw * 0.4} fill="#0f172a" stroke={SEL} strokeWidth={hw / 6}
+        style={{ pointerEvents: 'all', cursor: 'crosshair' }} onPointerDown={down(`v${i}`)} />
+    ))}
+  </>
+}
+
+/** Dashed outline round a selected annotation; text also gets rotate + (text box) width
+ *  grips, lines and leaders get vertex grips. */
 function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number, edit: AnnotationEditProps): React.ReactNode {
   const hw = edit.hitWidth
+  const single = edit.selectedIds.size === 1
   const line = { stroke: SEL, strokeWidth: hw / 6, strokeDasharray: `${hw / 2} ${hw / 3}`, fill: 'none' }
   if (a.kind === 'text') {
     const g = a.geom as TextGeom
@@ -156,7 +177,12 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
       <line x1={top.x} y1={top.y} x2={rotG.x} y2={rotG.y} stroke={SEL} strokeWidth={hw / 6} />
       {grip(rotG, 'rotate', true)}
       {g.width != null && grip(right, 'width', false)}
+      {single && g.leader?.length ? vertexGrips(a.id, g.leader.map(p => mapPt(f, p)), edit) : null}
     </>
+  }
+  if (a.kind === 'line' && single) {
+    const pts = ((a.geom as LineGeom).pts ?? []).map(p => mapPt(f, p))
+    return vertexGrips(a.id, pts, edit)
   }
   const pts = selectionPoints(a, f)
   if (!pts.length) return null

@@ -1,8 +1,9 @@
 'use client'
 
-// CAD mode (F7) — annotation authoring on the plan (z_CAD_tool A2).
+// CAD mode (F7) — annotation authoring on the plan (z_CAD_tool A2 + A3).
 // Owns the CAD tool, the annotation selection, drags (move / rotate / text-box width /
-// marquee / text placement), the inline text editor state, clipboard and keyboard.
+// vertex / marquee / text placement), line + leader drawing, the inline text editor
+// state, clipboard and keyboard.
 // Every change takes one undo snapshot first (shared canvas history) and is saved to
 // room_annotations straight away; style edits from the ribbon are debounced.
 
@@ -10,17 +11,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RoomAnnotation, AnnotationKind, Room } from '@/src/lib/types'
 import {
   type AnnotFrame, type Pt, type TextGeom, type Box,
+  type LineGeom,
   unmapPt, translateGeom, annotationFramePoints, boundsOf, boxesOverlap, layoutText, snapQuarter, rotatePt,
+  angleSnap, dedupePts, leaderTextAt,
 } from '@/src/lib/annotations/geometry'
-import { resolveStyle, type AnnotationStyle, type ResolvedStyle } from '@/src/lib/annotations/style'
+import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
 import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
 import { supabase } from '@/src/lib/supabase'
 import { dbUpdateAnnotation, dbDeleteAnnotations } from './canvasDB'
 import type { AnnotationEditProps, AnnotGrip } from './AnnotationLayer'
 
-export type CadTool = 'select' | 'text' | 'textbox'
+export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'arrow'
 
-export const CAD_TOOL_KEYS: Record<string, CadTool> = { s: 'select', t: 'text', b: 'textbox' }
+export const CAD_TOOL_KEYS: Record<string, CadTool> = { s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', a: 'arrow' }
+
+/** Kind of row a tool makes, and whose remembered style it starts from. */
+const TOOL_KIND: Record<CadTool, AnnotationKind> = { select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'line' }
+const TOOL_STYLE_KEY: Record<CadTool, StyleKey> = { select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'arrow' }
+
+/** A line / arrow / leader being clicked out. attachId = adding a leader to that text. */
+export interface AnnotDrawing { tool: 'line' | 'arrow' | 'leader'; pts: Pt[]; cur: Pt | null; attachId?: string }
 
 /** Text being typed in the inline editor. `draft` is the row as it will be saved. */
 export interface AnnotEditing { draft: RoomAnnotation; text: string; isNew: boolean }
@@ -29,6 +39,9 @@ type Drag =
   | { kind: 'move'; start: Pt; orig: Map<string, RoomAnnotation['geom']>; moved: boolean }
   | { kind: 'rotate'; id: string; origRot: number; startAng: number; moved: boolean }
   | { kind: 'width'; id: string; moved: boolean }
+  // Vertex of a line (pts) or a text's leader. insertAfter: a midpoint grip — the new
+  // point is only added once the pointer actually moves.
+  | { kind: 'vertex'; id: string; i: number; insertAfter?: number; moved: boolean }
   | { kind: 'marquee'; start: Pt; cur: Pt; additive: boolean }
   | { kind: 'place'; start: Pt; cur: Pt; tool: 'text' | 'textbox' }
 
@@ -53,7 +66,8 @@ export function useAnnotationTool({
   /** CAD mode is on and this view takes annotation clicks. */
   active:          boolean
   toWorld:         (e: { clientX: number; clientY: number }) => Pt
-  snap:            (wp: Pt) => Pt
+  /** Canvas snap; kind null = nothing snapped (then lines angle-lock to 15°). */
+  snap:            (wp: Pt) => { pt: Pt; kind: string | null }
   enterCad:        () => void
   exitCad:         () => void
 }) {
@@ -61,15 +75,22 @@ export function useAnnotationTool({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [editing, setEditing] = useState<AnnotEditing | null>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
+  const [drawing, setDrawing] = useState<AnnotDrawing | null>(null)
+  const drawingRef = useRef<AnnotDrawing | null>(null)
+  useEffect(() => { drawingRef.current = drawing }, [drawing])
   const dragRef = useRef<Drag | null>(null)
   const annRef = useRef(annotations)
   useEffect(() => { annRef.current = annotations }, [annotations])
 
   // frame mm per paper mm
   const k = paper / frame.s
-  const toFrame = useCallback((e: { clientX: number; clientY: number }, snapIt: boolean) => {
+  /** Pointer → frame mm. snapIt: canvas snaps; prev: lock to 15° from it when nothing snapped. */
+  const toFrame = useCallback((e: { clientX: number; clientY: number }, snapIt: boolean, prev?: Pt | null) => {
     const wp = toWorld(e)
-    return unmapPt(frame, snapIt ? snap(wp) : wp)
+    if (!snapIt) return unmapPt(frame, wp)
+    const r = snap(wp)
+    const p = unmapPt(frame, r.pt)
+    return prev && !r.kind ? angleSnap(prev, p) : p
   }, [toWorld, snap, frame])
 
   // Drop ids that vanished (undo, delete elsewhere).
@@ -84,25 +105,34 @@ export function useAnnotationTool({
   const [wasActive, setWasActive] = useState(active)
   if (wasActive !== active) {
     setWasActive(active)
-    if (!active) setTool('select')
+    if (!active) { setTool('select'); setDrawing(null) }
   }
+  // A new tool abandons a half-drawn line.
+  const [drawTool, setDrawTool] = useState(tool)
+  if (drawTool !== tool) { setDrawTool(tool); setDrawing(null) }
 
   // ── Styles ────────────────────────────────────────────────────────────────
 
   const [prefsTick, setPrefsTick] = useState(0)
-  const defaultsFor = useCallback((kind: AnnotationKind): AnnotationStyle => {
+  const defaultsFor = useCallback((key: StyleKey): AnnotationStyle => {
     void prefsTick
-    return getUserPrefs().annotStyleDefaults[kind] ?? {}
+    const saved = getUserPrefs().annotStyleDefaults[key] ?? {}
+    return key === 'arrow' ? { ...ARROW_TOOL, ...saved } : saved
   }, [prefsTick])
 
   /** The style the ribbon shows: the edit in progress, else the first selected item,
    *  else the next new item's defaults. */
-  const ribbonKind: AnnotationKind = editing?.draft.kind ?? selected[0]?.kind ?? 'text'
+  const ribbonKind: AnnotationKind = editing?.draft.kind ?? selected[0]?.kind ?? TOOL_KIND[tool]
+  const ribbonKey: StyleKey = editing ? styleKeyOf(editing.draft.kind, editing.draft.style)
+    : selected[0] ? styleKeyOf(selected[0].kind, selected[0].style) : TOOL_STYLE_KEY[tool]
   const ribbonStyle: ResolvedStyle = useMemo(() => {
     if (editing) return resolveStyle(editing.draft.kind, editing.draft.style)
     if (selected[0]) return resolveStyle(selected[0].kind, selected[0].style)
-    return resolveStyle('text', defaultsFor('text'))
-  }, [editing, selected, defaultsFor])
+    return resolveStyle(TOOL_KIND[tool], defaultsFor(TOOL_STYLE_KEY[tool]))
+  }, [editing, selected, defaultsFor, tool])
+  /** The selected / edited text has a leader (ribbon shows leader controls). */
+  const ribbonLeader = editing ? !!(editing.draft.geom as TextGeom).leader?.length
+    : selected[0]?.kind === 'text' ? !!(selected[0].geom as TextGeom).leader?.length : tool === 'leader'
   const ribbonRot: number | null = editing?.draft.kind === 'text'
     ? ((editing.draft.geom as TextGeom).rot ?? 0)
     : selected.length === 1 && selected[0].kind === 'text' ? ((selected[0].geom as TextGeom).rot ?? 0) : null
@@ -125,14 +155,14 @@ export function useAnnotationTool({
     lastStyleEdit.current = now
   }, [captureSnapshot])
 
-  const rememberDefaults = useCallback((kind: AnnotationKind, patch: AnnotationStyle) => {
+  const rememberDefaults = useCallback((key: StyleKey, patch: AnnotationStyle) => {
     const all = getUserPrefs().annotStyleDefaults
-    setUserPrefs({ annotStyleDefaults: { ...all, [kind]: { ...(all[kind] ?? {}), ...patch } } })
+    setUserPrefs({ annotStyleDefaults: { ...all, [key]: { ...(all[key] ?? {}), ...patch } } })
     setPrefsTick(t => t + 1)
   }, [])
 
   const applyStyle = useCallback((patch: AnnotationStyle) => {
-    rememberDefaults(ribbonKind, patch)
+    rememberDefaults(ribbonKey, patch)
     if (editing) {   // saved with the text on commit
       setEditing(ed => ed && { ...ed, draft: { ...ed.draft, style: { ...ed.draft.style, ...patch } } })
       return
@@ -141,18 +171,18 @@ export function useAnnotationTool({
     snapshotForBurst()
     setAnnotations(xs => xs.map(a => liveSelected.has(a.id) ? { ...a, style: { ...a.style, ...patch } } : a))
     for (const id of liveSelected) persistSoon(id)
-  }, [editing, liveSelected, ribbonKind, rememberDefaults, snapshotForBurst, setAnnotations, persistSoon])
+  }, [editing, liveSelected, ribbonKey, rememberDefaults, snapshotForBurst, setAnnotations, persistSoon])
 
   const resetStyle = useCallback(() => {
     const all = getUserPrefs().annotStyleDefaults
-    setUserPrefs({ annotStyleDefaults: { ...all, [ribbonKind]: {} } })
+    setUserPrefs({ annotStyleDefaults: { ...all, [ribbonKey]: {} } })
     setPrefsTick(t => t + 1)
     if (editing) { setEditing(ed => ed && { ...ed, draft: { ...ed.draft, style: {} } }); return }
     if (!liveSelected.size) return
     captureSnapshot()
     setAnnotations(xs => xs.map(a => liveSelected.has(a.id) ? { ...a, style: {} } : a))
     for (const id of liveSelected) persistSoon(id)
-  }, [ribbonKind, editing, liveSelected, captureSnapshot, setAnnotations, persistSoon])
+  }, [ribbonKey, editing, liveSelected, captureSnapshot, setAnnotations, persistSoon])
 
   const applyRotation = useCallback((deg: number) => {
     const rot = ((deg % 360) + 360) % 360
@@ -268,6 +298,77 @@ export function useAnnotationTool({
   // Leaving CAD mode (sidebar button, view tab, ribbon ✕) moves focus off the editor,
   // and its blur commits — no separate exit hook needed.
 
+  // ── Lines, arrows, leaders (A3) ───────────────────────────────────────────
+
+  /** Finish the line / arrow being clicked out (Enter, double-click, right-click). */
+  const finishDrawing = useCallback(() => {
+    const d = drawingRef.current
+    drawingRef.current = null
+    setDrawing(null)
+    if (!d || d.tool === 'leader') return
+    const pts = dedupePts(d.pts, 1 / zoom / frame.s)
+    if (pts.length < 2) return
+    const row = newRow('line', { pts }, null, defaultsFor(d.tool === 'arrow' ? 'arrow' : 'line'))
+    captureSnapshot()
+    setAnnotations(xs => [...xs, row])
+    void insertRows([row])
+  }, [zoom, frame.s, newRow, defaultsFor, captureSnapshot, setAnnotations, insertRows])
+
+  /** Ribbon: point a leader from the selected text (next click = arrow tip). */
+  const startAddLeader = useCallback(() => {
+    const a = selected.length === 1 && selected[0].kind === 'text' ? selected[0] : null
+    if (!a) return
+    setTool('leader')
+    setDrawTool('leader')
+    const d: AnnotDrawing = { tool: 'leader', pts: [], cur: null, attachId: a.id }
+    drawingRef.current = d; setDrawing(d)
+  }, [selected])
+
+  const removeLeader = useCallback(() => {
+    const a = selected.length === 1 && selected[0].kind === 'text' ? selected[0] : null
+    if (!a || !(a.geom as TextGeom).leader?.length) return
+    captureSnapshot()
+    const geom: TextGeom = { ...(a.geom as TextGeom) }
+    delete geom.leader
+    setAnnotations(xs => xs.map(x => x.id === a.id ? { ...x, geom } : x))
+    void dbUpdateAnnotation(a.id, { geom })
+  }, [selected, captureSnapshot, setAnnotations])
+
+  /** A drawing click. Line / arrow: add a point. Leader: tip, then landing → type the note. */
+  const drawClick = useCallback((p: Pt) => {
+    const d = drawingRef.current
+    const t = tool as AnnotDrawing['tool']
+    if (!d) {
+      const nd: AnnotDrawing = { tool: t, pts: [p], cur: p }
+      drawingRef.current = nd; setDrawing(nd)
+      return
+    }
+    if (d.tool === 'leader' && d.attachId) {   // adding a leader to existing text: one click = tip
+      drawingRef.current = null; setDrawing(null)
+      const a = annRef.current.find(x => x.id === d.attachId)
+      setTool('select')
+      if (!a) return
+      captureSnapshot()
+      const geom: TextGeom = { ...(a.geom as TextGeom), leader: [p] }
+      setAnnotations(xs => xs.map(x => x.id === a.id ? { ...x, geom } : x))
+      setSelectedIds(new Set([a.id]))
+      void dbUpdateAnnotation(a.id, { geom })
+      return
+    }
+    if (d.tool === 'leader') {
+      drawingRef.current = null; setDrawing(null)
+      const tip = d.pts[0]
+      if (Math.hypot(p.x - tip.x, p.y - tip.y) < 1 / zoom / frame.s) return
+      const style = defaultsFor('text')
+      const at = leaderTextAt(p, tip, resolveStyle('text', style).size, k)
+      setSelectedIds(new Set())
+      setEditing({ draft: newRow('text', { at, leader: [tip, p] }, '', style), text: '', isNew: true })
+      return
+    }
+    const nd = { ...d, pts: [...d.pts, p], cur: p }
+    drawingRef.current = nd; setDrawing(nd)
+  }, [tool, zoom, frame.s, k, defaultsFor, newRow, captureSnapshot, setAnnotations])
+
   // ── Pointer: drags via window listeners ───────────────────────────────────
 
   const beginDrag = useCallback((d: Drag, startClient: { x: number; y: number }) => {
@@ -289,6 +390,25 @@ export function useAnnotationTool({
         const ang = Math.atan2(p.y - at.y, p.x - at.x) * 180 / Math.PI
         const rot = ev.shiftKey ? Math.round(cur.origRot + ang - cur.startAng) : snapQuarter(cur.origRot + ang - cur.startAng)
         setAnnotations(xs => xs.map(x => x.id === cur.id ? { ...x, geom: { ...(x.geom as TextGeom), rot: ((rot % 360) + 360) % 360 } } : x))
+      } else if (cur.kind === 'vertex') {
+        const a = annRef.current.find(x => x.id === cur.id); if (!a) return
+        if (!cur.moved && !far) return
+        if (!cur.moved) {
+          captureSnapshot(); cur.moved = true
+          if (cur.insertAfter != null) {   // midpoint grip: the new vertex appears now
+            const pts = [...vertsOf(a)]
+            const i = cur.insertAfter
+            pts.splice(i + 1, 0, { x: (pts[i].x + pts[i + 1].x) / 2, y: (pts[i].y + pts[i + 1].y) / 2 })
+            setAnnotations(xs => xs.map(x => x.id === a.id ? withVerts(x, pts) : x))
+            annRef.current = annRef.current.map(x => x.id === a.id ? withVerts(x, pts) : x)
+            cur.i = i + 1; cur.insertAfter = undefined
+          }
+        }
+        const a2 = annRef.current.find(x => x.id === cur.id)!
+        const pts = [...vertsOf(a2)]
+        const prev = pts[cur.i - 1] ?? pts[cur.i + 1] ?? null
+        pts[cur.i] = toFrame(ev, !ev.shiftKey, prev)
+        setAnnotations(xs => xs.map(x => x.id === cur.id ? withVerts(x, pts) : x))
       } else if (cur.kind === 'width') {
         const a = annRef.current.find(x => x.id === cur.id); if (!a) return
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
@@ -308,7 +428,7 @@ export function useAnnotationTool({
       const cur = dragRef.current
       dragRef.current = null; setDrag(null)
       if (!cur) return
-      if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width') && cur.moved) {
+      if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex') && cur.moved) {
         const ids = cur.kind === 'move' ? [...cur.orig.keys()] : [cur.id]
         for (const id of ids) {
           const a = annRef.current.find(x => x.id === id)
@@ -340,15 +460,39 @@ export function useAnnotationTool({
     window.addEventListener('pointerup', up)
   }, [captureSnapshot, toFrame, setAnnotations, k, newRow, defaultsFor])
 
-  /** Empty canvas under CAD mode: place text / start a marquee. */
+  /** Empty canvas under CAD mode: place text / click out lines / start a marquee. */
   const onCaptureDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return
     e.stopPropagation()
     if (editing) { commitEdit(); return }   // first click outside the editor just finishes it
+    if (tool === 'line' || tool === 'arrow' || tool === 'leader') {
+      const d = drawingRef.current
+      drawClick(toFrame(e, !e.shiftKey, d?.pts[d.pts.length - 1]))
+      return
+    }
     const p = toFrame(e, tool !== 'select' && !e.shiftKey)
     if (tool === 'select') beginDrag({ kind: 'marquee', start: p, cur: p, additive: e.shiftKey }, { x: e.clientX, y: e.clientY })
-    else beginDrag({ kind: 'place', start: p, cur: p, tool }, { x: e.clientX, y: e.clientY })
-  }, [editing, commitEdit, toFrame, tool, beginDrag])
+    else beginDrag({ kind: 'place', start: p, cur: p, tool: tool as 'text' | 'textbox' }, { x: e.clientX, y: e.clientY })
+  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick])
+
+  /** Rubber band for the segment being drawn. */
+  const onCaptureMove = useCallback((e: React.PointerEvent) => {
+    const d = drawingRef.current
+    if (!d) return
+    const nd = { ...d, cur: toFrame(e, !e.shiftKey, d.pts[d.pts.length - 1]) }
+    drawingRef.current = nd; setDrawing(nd)
+  }, [toFrame])
+
+  const onCaptureDouble = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (drawingRef.current && drawingRef.current.tool !== 'leader') finishDrawing()
+  }, [finishDrawing])
+
+  const onCaptureMenu = useCallback((e: React.MouseEvent) => {
+    if (!drawingRef.current) return
+    e.preventDefault(); e.stopPropagation()
+    finishDrawing()
+  }, [finishDrawing])
 
   const editProps: AnnotationEditProps = {
     selectedIds: liveSelected,
@@ -378,7 +522,15 @@ export function useAnnotationTool({
     },
     onGrip: (e, id, grip: AnnotGrip) => {
       const a = annRef.current.find(x => x.id === id)
-      if (!a || a.kind !== 'text') return
+      if (!a) return
+      if (grip.startsWith('v') || grip.startsWith('m')) {
+        const i = Number(grip.slice(1))
+        beginDrag(grip.startsWith('v')
+          ? { kind: 'vertex', id, i, moved: false }
+          : { kind: 'vertex', id, i, insertAfter: i, moved: false }, { x: e.clientX, y: e.clientY })
+        return
+      }
+      if (a.kind !== 'text') return
       if (grip === 'rotate') {
         const at = (a.geom as TextGeom).at, p = toFrame(e, false)
         beginDrag({ kind: 'rotate', id, origRot: (a.geom as TextGeom).rot ?? 0,
@@ -400,16 +552,25 @@ export function useAnnotationTool({
       if (e.key === 'Escape') {
         take()
         if (dragRef.current) return
+        if (drawingRef.current) { drawingRef.current = null; setDrawing(null); return }
         if (liveSelected.size) setSelectedIds(new Set())
         else if (tool !== 'select') setTool('select')
         else exitCad()
         return
       }
-      if (e.key === 'Delete' || e.key === 'Backspace') { take(); deleteSelected(); return }
       if (mod && (e.key === 'c' || e.key === 'C')) { take(); clipboard = selected; return }
       if (mod && (e.key === 'v' || e.key === 'V')) { take(); paste(clipboard); return }
       if (mod && (e.key === 'd' || e.key === 'D')) { take(); paste(selected); return }
       if (mod && (e.key === 'a' || e.key === 'A')) { take(); setSelectedIds(new Set(annRef.current.filter(a => a.view === 'plan').map(a => a.id))); return }
+      if (e.key === 'Enter' && drawingRef.current) { take(); finishDrawing(); return }
+      if (e.key === 'Backspace' && drawingRef.current && drawingRef.current.pts.length > 1) {   // step back one point
+        take()
+        const d = drawingRef.current
+        const nd = { ...d, pts: d.pts.slice(0, -1) }
+        drawingRef.current = nd; setDrawing(nd)
+        return
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') { take(); deleteSelected(); return }
       if (e.key === 'Enter' && selected.length === 1 && selected[0].kind === 'text') { take(); startEdit(selected[0]); return }
       if (!mod && !e.altKey) {
         const t = CAD_TOOL_KEYS[e.key.toLowerCase()]
@@ -418,18 +579,32 @@ export function useAnnotationTool({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad])
+  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing])
 
   // Ghosts for the canvas: marquee box / text box being dragged out (frame coords).
   const ghost = drag && (drag.kind === 'marquee' || (drag.kind === 'place' && drag.tool === 'textbox'))
     ? { kind: drag.kind, a: drag.start, b: drag.cur }
     : null
 
+  // The line / arrow / leader being drawn, as a row the layer can draw (frame coords).
+  const drawPreview: RoomAnnotation | null = useMemo(() => {
+    if (!drawing || !drawing.pts.length) return null
+    const pts = drawing.cur ? [...drawing.pts, drawing.cur] : drawing.pts
+    const style = drawing.tool === 'leader'
+      ? { ...defaultsFor('text'), arrowEnd: 'none' as const }
+      : defaultsFor(drawing.tool === 'arrow' ? 'arrow' : 'line')
+    return {
+      id: '__draw__', room_id: room.id, view: 'plan', wall_id: null, cabinet_id: null, sheet_view: null,
+      kind: 'line', geom: { pts }, text: null, style, sort_order: 0, created_at: '', updated_at: '',
+    }
+  }, [drawing, defaultsFor, room.id])
+
   return {
     tool, setTool, selected, selectedIds: liveSelected, setSelectedIds,
     editing, setEditText, commitEdit, cancelEdit,
-    ribbonKind, ribbonStyle, ribbonRot, applyStyle, resetStyle, applyRotation,
-    deleteSelected, reorder, onCaptureDown, editProps, ghost,
+    ribbonKind, ribbonStyle, ribbonRot, ribbonLeader, applyStyle, resetStyle, applyRotation,
+    deleteSelected, reorder, onCaptureDown, onCaptureMove, onCaptureDouble, onCaptureMenu, editProps, ghost,
+    drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
     /** Text block size helper for the editor overlay. */
     layoutFor: (a: RoomAnnotation, text: string) => {
       const s = resolveStyle(a.kind, a.style)
@@ -439,3 +614,15 @@ export function useAnnotationTool({
 }
 
 export type AnnotationTool = ReturnType<typeof useAnnotationTool>
+
+/** Editable vertices: a line's points, or a text's leader. */
+function vertsOf(a: RoomAnnotation): Pt[] {
+  if (a.kind === 'line') return (a.geom as LineGeom).pts ?? []
+  if (a.kind === 'text') return (a.geom as TextGeom).leader ?? []
+  return []
+}
+function withVerts(a: RoomAnnotation, pts: Pt[]): RoomAnnotation {
+  if (a.kind === 'line') return { ...a, geom: { ...(a.geom as LineGeom), pts } }
+  if (a.kind === 'text') return { ...a, geom: { ...(a.geom as TextGeom), leader: pts } }
+  return a
+}

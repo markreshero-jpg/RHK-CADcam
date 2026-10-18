@@ -143,3 +143,26 @@ describe('editing helpers', () => {
     expect(snapQuarter(45)).toBe(45)
   })
 })
+
+import { angleSnap, dedupePts, leaderTextAt } from '../annotations/geometry'
+import { styleKeyOf } from '../annotations/style'
+
+describe('A3 drawing helpers', () => {
+  it('locks near-15° segments, keeps length, leaves others alone', () => {
+    const p = angleSnap({ x: 0, y: 0 }, { x: 100, y: 3 })
+    expect(p.y).toBeCloseTo(0); expect(p.x).toBeCloseTo(Math.hypot(100, 3))
+    expect(angleSnap({ x: 0, y: 0 }, { x: 100, y: 15 })).toEqual({ x: 100, y: 15 })   // 8.5° — free
+  })
+  it('dedupes double-click repeats', () => {
+    expect(dedupePts([{ x: 0, y: 0 }, { x: 0.1, y: 0 }, { x: 10, y: 0 }], 1)).toEqual([{ x: 0, y: 0 }, { x: 10, y: 0 }])
+  })
+  it('leader text sits beyond the landing, on the side away from the tip', () => {
+    expect(leaderTextAt({ x: 100, y: 0 }, { x: 0, y: 0 }, 3.5, 20).x).toBeGreaterThan(100)
+    expect(leaderTextAt({ x: 100, y: 0 }, { x: 200, y: 0 }, 3.5, 20).x).toBeLessThan(100)
+  })
+  it('arrows remember apart from plain lines', () => {
+    expect(styleKeyOf('line', {})).toBe('line')
+    expect(styleKeyOf('line', { arrowEnd: 'closed' })).toBe('arrow')
+    expect(styleKeyOf('text', {})).toBe('text')
+  })
+})

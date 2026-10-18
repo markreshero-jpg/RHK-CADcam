@@ -1,5 +1,5 @@
-import type { AnnotationKind } from './types'
-import type { AnnotationStyle } from './annotations/style'
+
+import type { AnnotationStyle, StyleKey } from './annotations/style'
 import { type SnapSettings, DEFAULT_SNAP_SETTINGS, normaliseSnapSettings } from './canvasSnap'
 import { GRID_STEPS } from './geometry'
 import { type ElevSnapSettings, DEFAULT_ELEV_SNAP_SETTINGS, normaliseElevSnapSettings } from './elevationSnap'
@@ -42,7 +42,7 @@ export interface UserPrefs {
   /** Tutorial mode (z_tutorial): on/off + where the user is up to. */
   tutorial: TutorialPrefs
   /** CAD annotations (z_CAD_tool decision 7): last-used style per kind = the next item's default. */
-  annotStyleDefaults: Partial<Record<AnnotationKind, AnnotationStyle>>
+  annotStyleDefaults: Partial<Record<StyleKey, AnnotationStyle>>
 }
 
 export interface TutorialPrefs {

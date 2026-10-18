@@ -602,7 +602,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     room, annotations, setAnnotations, captureSnapshot, frame: IDENTITY_FRAME, paper: annotScale, zoom: view.zoom,
     active: mode === 'cad' && canvasView === 'plan',
     toWorld: e => { const r = svgRef.current!.getBoundingClientRect(); return toWorld(e.clientX - r.left, e.clientY - r.top) },
-    snap: wp => computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom).pt,
+    snap: wp => computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom),
     enterCad, exitCad: () => setMode('select'),
   })
   function setAnnotScale(n: number) {
@@ -2729,10 +2729,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 {mode === 'cad' && (
                   <rect x={-1e7} y={-1e7} width={2e7} height={2e7} fill="transparent"
                     style={{ pointerEvents: 'all', cursor: cad.tool === 'select' ? 'default' : 'crosshair' }}
-                    onPointerDown={cad.onCaptureDown} />
+                    onPointerDown={cad.onCaptureDown} onPointerMove={cad.onCaptureMove}
+                    onDoubleClick={cad.onCaptureDouble} onContextMenu={cad.onCaptureMenu} />
                 )}
                 <AnnotationLayer annotations={planAnnotations} frame={IDENTITY_FRAME} paper={annotScale} layers={planLayers}
                   edit={{ ...cad.editProps, hittable: cad.editProps.hittable && (mode === 'cad' || mode === 'select') }} />
+                {cad.drawPreview && (
+                  <AnnotationLayer annotations={[cad.drawPreview]} frame={IDENTITY_FRAME} paper={annotScale} />
+                )}
                 {cad.ghost && (
                   <rect x={Math.min(cad.ghost.a.x, cad.ghost.b.x)} y={Math.min(cad.ghost.a.y, cad.ghost.b.y)}
                     width={Math.abs(cad.ghost.b.x - cad.ghost.a.x)} height={Math.abs(cad.ghost.b.y - cad.ghost.a.y)}
