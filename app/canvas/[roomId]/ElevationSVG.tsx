@@ -20,6 +20,7 @@ import {
 } from '@/src/lib/elevationSnap'
 import SnapToolbar from './SnapToolbar'
 import { usePinchZoom } from './usePinchZoom'
+import { useRightDragPan } from './useRightDragPan'
 import { SlideShape, slideBox3, doorProfileSvg } from './cabinetEditSvgHelpers'
 import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
@@ -411,6 +412,7 @@ export default function ElevationSVG({
   }, [])
 
   usePinchZoom(svgRef, dispatchView)
+  useRightDragPan(svgRef, dispatchView)
 
   useEffect(() => {
     const kd = (e: KeyboardEvent) => {

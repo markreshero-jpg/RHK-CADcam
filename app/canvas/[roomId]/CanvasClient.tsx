@@ -21,6 +21,7 @@ import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
 import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { usePinchZoom } from './usePinchZoom'
+import { useRightDragPan } from './useRightDragPan'
 import { useIsPhone } from '@/src/lib/usePhone'
 import PhoneDrawerTab from './PhoneDrawerTab'
 import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
@@ -550,6 +551,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }, [canvasView])
 
   usePinchZoom(svgRef, dispatchView, canvasView === 'plan')
+  useRightDragPan(svgRef, dispatchView, canvasView === 'plan')
 
   // Reset interaction state on every mount — handles the Next.js router cache
   // case where the component is reused with stale mode/drawStart.
