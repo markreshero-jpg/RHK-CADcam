@@ -250,6 +250,11 @@ Esc cancels; one undo step.
   surface), cutout = rim − 15 each side R10 (as Zalo); cooktops drop 45 gas / 55 induction,
   cutout = body size; tap 35 round hole under its base. Plan / elev shapes traced headless
   (vitest + GLTFLoader.parse). Not checked in-app.
+  - 2026-10-18: **sink models updated** from `z_fixtures/models/Sinks/` (Ohelu 380, Seba 550,
+    Zalo double). Same bbox + traced outlines as before, so sizes / cutouts / shapes unchanged;
+    files replaced in `public/fixture-models/`. Zalo's library row moved off the bucket to
+    `/fixture-models/ABI_Zalo_Double_Bowl.glb`; the one already-placed Zalo keeps the old
+    bucket copy (jobs are as-built).
 
 - 2026-10-18 (user: "lets work through the known gaps"):
   - **Brand / model no. copied onto placed fixtures** — `room_fixtures.brand` + `model_no`
