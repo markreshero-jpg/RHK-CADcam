@@ -4,6 +4,7 @@ import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide, type RoomRef, type
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
 import { kickChain, type KickSpan } from '@/src/lib/kickDims'
+import { roundMm } from '@/src/lib/format'
 
 interface Props {
   wall: Wall
@@ -45,13 +46,13 @@ function computeChain(cabs: CabinetInstance[], wall: Wall): Seg[] {
   for (const cab of sorted) {
     const t = cabT(cab, wall)
     if (t > cursor + 0.5) {
-      segs.push({ from: cursor, to: t, label: Math.round(t - cursor) })
+      segs.push({ from: cursor, to: t, label: roundMm(t - cursor) })
     }
-    segs.push({ from: t, to: t + cab.dx, label: Math.round(cab.dx) })
+    segs.push({ from: t, to: t + cab.dx, label: roundMm(cab.dx) })
     cursor = t + cab.dx
   }
   if (cursor < wall.length - 0.5) {
-    segs.push({ from: cursor, to: wall.length, label: Math.round(wall.length - cursor) })
+    segs.push({ from: cursor, to: wall.length, label: roundMm(wall.length - cursor) })
   }
   return segs
 }
@@ -61,11 +62,11 @@ function spanChain(spans: WallSpan[], len: number): Seg[] {
   const segs: Seg[] = []
   let cursor = 0
   for (const s of spans) {
-    if (s.t0 > cursor + 0.5) segs.push({ from: cursor, to: s.t0, label: Math.round(s.t0 - cursor) })
-    segs.push({ from: s.t0, to: s.t1, label: Math.round(s.t1 - s.t0) })
+    if (s.t0 > cursor + 0.5) segs.push({ from: cursor, to: s.t0, label: roundMm(s.t0 - cursor) })
+    segs.push({ from: s.t0, to: s.t1, label: roundMm(s.t1 - s.t0) })
     cursor = s.t1
   }
-  if (cursor < len - 0.5) segs.push({ from: cursor, to: len, label: Math.round(len - cursor) })
+  if (cursor < len - 0.5) segs.push({ from: cursor, to: len, label: roundMm(len - cursor) })
   return segs
 }
 
@@ -184,7 +185,7 @@ function DepthDim({
       <g transform={`rotate(${textAngle}, ${midX}, ${midY})`}>
         <rect x={midX - fs * 1.8} y={midY - fs * 0.6} width={fs * 3.6} height={fs * 1.2} fill={bg} />
         <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>
-          {Math.round(dz)}
+          {roundMm(dz)}
         </text>
       </g>
     </g>
@@ -242,7 +243,7 @@ export default function WallDimensionChain({
     const kickCol = layerKick?.color ?? col
     const kick0 = kicks[0], kickL = kicks[kicks.length - 1]
     const wallCabSegs = computeChain(wallCabs, wall)
-    const overallSeg: Seg[] = [{ from: 0, to: wall.length, label: Math.round(wall.length) }]
+    const overallSeg: Seg[] = [{ from: 0, to: wall.length, label: roundMm(wall.length) }]
     const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
     const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
     // Only show wall depth separately if it differs meaningfully from base depth

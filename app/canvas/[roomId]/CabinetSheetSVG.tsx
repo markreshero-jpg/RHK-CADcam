@@ -22,6 +22,7 @@ import {
 import { zonePartId, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 import { binOutlines, binShape } from '@/src/lib/binGeometry'
+import { roundMm } from '@/src/lib/format'
 
 export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean }
 
@@ -207,9 +208,9 @@ export default function CabinetSheetSVG({
     }
     if (show.dims) {
       const yb = ty + dy * s + 4
-      els.push(...dim(tx, yb, tx + dx * s, yb, `${Math.round(dx)}`, 'below', 'fw'))
+      els.push(...dim(tx, yb, tx + dx * s, yb, `${roundMm(dx)}`, 'below', 'fw'))
       const xl = tx - 4.5
-      els.push(...dim(xl, ty, xl, ty + dy * s, `${Math.round(dy)}`, 'left', 'fh'))
+      els.push(...dim(xl, ty, xl, ty + dy * s, `${roundMm(dy)}`, 'left', 'fh'))
     }
     return els
   }
@@ -248,9 +249,9 @@ export default function CabinetSheetSVG({
     }
     if (show.dims) {
       const yb = ty + dy * s + 4
-      els.push(...dim(tx, yb, tx + dz * s, yb, `${Math.round(dz)}`, 'below', 'sd'))
+      els.push(...dim(tx, yb, tx + dz * s, yb, `${roundMm(dz)}`, 'below', 'sd'))
       const xl = tx - 4.5
-      els.push(...dim(xl, ty, xl, ty + dy * s, `${Math.round(dy)}`, 'left', 'sh'))
+      els.push(...dim(xl, ty, xl, ty + dy * s, `${roundMm(dy)}`, 'left', 'sh'))
     }
     return els
   }
@@ -558,7 +559,7 @@ export default function CabinetSheetSVG({
       <text x={M} y={M + 6} fontSize={6.5} fontWeight="bold" fill={INK}>{cab.label ?? '—'}</text>
       <text x={M} y={M + 12} fontSize={3.4} fill={INK2}>{classLabel}{loc ? `   ·   ${loc}` : ''}</text>
       <text x={PW - M} y={M + 6} textAnchor="end" fontSize={5} fontWeight="bold" fill={INK}>
-        {Math.round(dx)} W × {Math.round(dy)} H × {Math.round(dz)} D
+        {roundMm(dx)} W × {roundMm(dy)} H × {roundMm(dz)} D
       </text>
       <text x={PW - M} y={M + 12} textAnchor="end" fontSize={3} fill={INK2}>{projectName}   ·   {dateStr}</text>
       <line x1={M} y1={M + headerH} x2={PW - M} y2={M + headerH} stroke={INK} strokeWidth={0.4} />

@@ -29,6 +29,7 @@ import { handleShapes } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { tkBoxAABB } from '@/src/lib/jointDrilling'
 import { binOutlines } from '@/src/lib/binGeometry'
+import { roundMm } from '@/src/lib/format'
 
 /** Report-only page extras (not drawing layers). */
 export interface ElevationPageOptions {
@@ -90,11 +91,11 @@ function computeElevChain(cabs: CabinetInstance[], wall: Wall): Seg[] {
   let cursor = 0
   for (const cab of sorted) {
     const t = cabT(cab, wall)
-    if (t > cursor + 0.5) segs.push({ from: cursor, to: t, label: Math.round(t - cursor) })
-    segs.push({ from: t, to: t + cab.dx, label: Math.round(cab.dx) })
+    if (t > cursor + 0.5) segs.push({ from: cursor, to: t, label: roundMm(t - cursor) })
+    segs.push({ from: t, to: t + cab.dx, label: roundMm(cab.dx) })
     cursor = t + cab.dx
   }
-  if (cursor < wall.length - 0.5) segs.push({ from: cursor, to: wall.length, label: Math.round(wall.length - cursor) })
+  if (cursor < wall.length - 0.5) segs.push({ from: cursor, to: wall.length, label: roundMm(wall.length - cursor) })
   return segs
 }
 
@@ -134,11 +135,11 @@ export default function ElevationPrintSVG({
   {
     let cur = 0
     for (const o of openings) {
-      if (o.t0 > cur + 0.5) openingSegs.push({ from: cur, to: o.t0, label: Math.round(o.t0 - cur) })
-      openingSegs.push({ from: Math.max(cur, o.t0), to: o.t1, label: Math.round(o.t1 - Math.max(cur, o.t0)) })
+      if (o.t0 > cur + 0.5) openingSegs.push({ from: cur, to: o.t0, label: roundMm(o.t0 - cur) })
+      openingSegs.push({ from: Math.max(cur, o.t0), to: o.t1, label: roundMm(o.t1 - Math.max(cur, o.t0)) })
       cur = Math.max(cur, o.t1)
     }
-    if (openings.length && cur < wall.length - 0.5) openingSegs.push({ from: cur, to: wall.length, label: Math.round(wall.length - cur) })
+    if (openings.length && cur < wall.length - 0.5) openingSegs.push({ from: cur, to: wall.length, label: roundMm(wall.length - cur) })
   }
   // Only cabinets the layer set draws — they also drive the dimension chains.
   const wallCabs = cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === 'face'
@@ -423,7 +424,7 @@ export default function ElevationPrintSVG({
           <text x={rx + cab.dx / 2} y={ry + cab.dy / 2 + (hasLabel ? labelFsL * 0.55 + sizeFs * 0.6 : 0)}
             textAnchor="middle" dominantBaseline="middle" opacity={layers.op('cabinet_sizes')}
             fontSize={sizeFs} fill={INK2} fontFamily="Arial, Helvetica, sans-serif">
-            {Math.round(cab.dx)}×{Math.round(cab.dy)}
+            {roundMm(cab.dx)}×{roundMm(cab.dy)}
           </text>
         )}
       </g>
@@ -476,12 +477,12 @@ export default function ElevationPrintSVG({
         {/* Ceiling */}
         <line x1={0} y1={0} x2={wall.length} y2={0} stroke={INK2} strokeWidth={thinSW} strokeDasharray={`${2 * P} ${1 * P}`} />
         <text x={wall.length + 1 * P} y={0} textAnchor="start" dominantBaseline="middle"
-          fontSize={dimFs * 0.85} fill={INK2} fontFamily="Arial, Helvetica, sans-serif">C {Math.round(roomH)}</text>
+          fontSize={dimFs * 0.85} fill={INK2} fontFamily="Arial, Helvetica, sans-serif">C {roundMm(roomH)}</text>
         {soffitH != null && soffitH < roomH - 20 && (
           <>
             <line x1={0} y1={roomH - soffitH} x2={wall.length} y2={roomH - soffitH} stroke={INK3} strokeWidth={thinSW} strokeDasharray={`${1.2 * P} ${0.8 * P}`} />
             <text x={wall.length + 1 * P} y={roomH - soffitH} textAnchor="start" dominantBaseline="middle"
-              fontSize={dimFs * 0.85} fill={INK3} fontFamily="Arial, Helvetica, sans-serif">S {Math.round(soffitH)}</text>
+              fontSize={dimFs * 0.85} fill={INK3} fontFamily="Arial, Helvetica, sans-serif">S {roundMm(soffitH)}</text>
           </>
         )}
         {wcTop != null && wcTop < roomH - 20 && (
@@ -512,10 +513,10 @@ export default function ElevationPrintSVG({
     if (overheadDy > 0) {
       const overheadBotY = roomH - (wcTopZ - overheadDy)
       const overheadTopY = roomH - wcTopZ
-      if (overheadBotY < cursorY - 0.5) segs.push({ fromY: overheadBotY, toY: cursorY, label: `${Math.round(cursorY - overheadBotY)}` })
+      if (overheadBotY < cursorY - 0.5) segs.push({ fromY: overheadBotY, toY: cursorY, label: `${roundMm(cursorY - overheadBotY)}` })
       segs.push({ fromY: overheadTopY, toY: overheadBotY, label: `${overheadDy}` }); cursorY = overheadTopY
     }
-    if (cursorY > 0.5) segs.push({ fromY: 0, toY: cursorY, label: `${Math.round(cursorY)}` })
+    if (cursorY > 0.5) segs.push({ fromY: 0, toY: cursorY, label: `${roundMm(cursorY)}` })
     if (segs.length === 0) segs.push({ fromY: 0, toY: roomH, label: `${roomH}` })
 
     const boundaries = Array.from(new Set(segs.flatMap(s => [s.fromY, s.toY])))
@@ -601,7 +602,7 @@ export default function ElevationPrintSVG({
                   {y0 - y1 >= dimFs * 2 && <>
                     <rect x={x - padX} y={my - padY} width={padX * 2} height={padY * 2} fill="white" />
                     <text x={x} y={my} textAnchor="middle" dominantBaseline="middle" transform={`rotate(-90,${x},${my})`}
-                      fontSize={dimFs} fill={INK} fontFamily="Arial, Helvetica, sans-serif">{Math.round(zHi - zLo)}</text>
+                      fontSize={dimFs} fill={INK} fontFamily="Arial, Helvetica, sans-serif">{roundMm(zHi - zLo)}</text>
                   </>}
                 </g>
               )
@@ -625,7 +626,7 @@ export default function ElevationPrintSVG({
                 <rect x={mx - padX} y={overallY - padY} width={padX * 2} height={padY * 2} fill="white" />
                 <text x={mx} y={overallY} textAnchor="middle" dominantBaseline="middle"
                   fontSize={dimFs * 1.1} fontWeight="bold" fill={INK} fontFamily="Arial, Helvetica, sans-serif">
-                  {Math.round(wall.length)}
+                  {roundMm(wall.length)}
                 </text>
               </g>
             )

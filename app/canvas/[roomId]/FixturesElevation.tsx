@@ -13,6 +13,7 @@ import { wallFrame, type WallSide } from '@/src/lib/benchtopAnchor'
 import { wrapLabel } from '@/src/lib/textWrap'
 import { planShapePath } from '@/src/lib/fixturePlanShape'
 import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
+import { roundMm } from '@/src/lib/format'
 
 
 // Centre move handle (white crosshair) — same as the cabinet one: click it and
@@ -129,7 +130,7 @@ function ElevClearance({ box, others, len, roomH, z, bg }: {
     const tick = (x: number, y: number) => vert
       ? <line x1={x - tk} y1={y} x2={x + tk} y2={y} stroke={CLEAR} strokeWidth={sw} />
       : <line x1={x} y1={y - tk} x2={x} y2={y + tk} stroke={CLEAR} strokeWidth={sw} />
-    const label = String(Math.round(v))
+    const label = String(roundMm(v))
     const w = label.length * fs * 0.62 + fs * 0.6, h = fs * 1.3
     return (
       <g key={key}>

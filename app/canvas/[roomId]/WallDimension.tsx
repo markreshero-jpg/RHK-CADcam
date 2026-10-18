@@ -2,6 +2,7 @@
 
 import { Wall } from '@/src/lib/types'
 import { toRad, wallDir, wallEnd, wallInwardNormal, type RoomRef } from '@/src/lib/geometry'
+import { roundMm } from '@/src/lib/format'
 
 export default function WallDimension({ wall, walls, rc, zoom, selected }: {
   wall: Wall; walls: Wall[]; rc: RoomRef; zoom: number; selected: boolean
@@ -16,7 +17,7 @@ export default function WallDimension({ wall, walls, rc, zoom, selected }: {
   const e = wallEnd(wall)
 
   // wall.length IS the inside face length — no adjacent-wall lookup needed
-  const internalLen = Math.round(wall.length)
+  const internalLen = roundMm(wall.length)
 
   const extGap  = 12 / zoom
   const dimDist = 90 / zoom

@@ -118,11 +118,11 @@ function computeElevChain(cabs: CabinetInstance[], wall: Wall, xOf: (c: CabinetI
   let cursor = 0
   for (const cab of sorted) {
     const t = xOf(cab)
-    if (t > cursor + 0.5) segs.push({ from: cursor, to: t, label: Math.round(t - cursor) })
-    segs.push({ from: t, to: t + cab.dx, label: Math.round(cab.dx) })
+    if (t > cursor + 0.5) segs.push({ from: cursor, to: t, label: roundMm(t - cursor) })
+    segs.push({ from: t, to: t + cab.dx, label: roundMm(cab.dx) })
     cursor = t + cab.dx
   }
-  if (cursor < wall.length - 0.5) segs.push({ from: cursor, to: wall.length, label: Math.round(wall.length - cursor) })
+  if (cursor < wall.length - 0.5) segs.push({ from: cursor, to: wall.length, label: roundMm(wall.length - cursor) })
   return segs
 }
 
@@ -148,6 +148,7 @@ interface ElevationSVGProps {
   onPlaceAtWall: (wall: Wall, pos_x: number, pos_y: number, dx?: number) => Promise<void>
   onCabinetContextMenu: (e: React.MouseEvent, cabId: string) => void
   onBlankWallContextMenu: (e: React.MouseEvent, wallId: string, wallT: number) => void
+  onFixtureContextMenu?: (e: React.MouseEvent, fixtureId: string) => void
   onShiftSelectCabinet: (id: string) => void
   onMarqueeSelect: (ids: string[]) => void
   onEqualizeWidths: (targetDx?: number) => void
@@ -198,7 +199,7 @@ export default function ElevationSVG({
   walls, cabinets, room, elevWallId, selected, layers,
   multiSelect, canEqualize, mode, armedDef, clipboard, clipboardGroup,
   onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu,
-  onBlankWallContextMenu, onShiftSelectCabinet, onMarqueeSelect, onEqualizeWidths,
+  onBlankWallContextMenu, onFixtureContextMenu, onShiftSelectCabinet, onMarqueeSelect, onEqualizeWidths,
   cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
   resolvedParts: resolvedPartsRaw, onDeselect, onSeamClick, onCabinetDoubleClick, elevWallSide, onSetElevWallSide,
   elevSnapSettings, onElevSnapSettingsChange,
@@ -1694,6 +1695,7 @@ export default function ElevationSVG({
                 ghost={mode === 'place_fixture' ? fixtureGhost : null}
                 showClearance={mode === 'select' || !!fixtureStretching}
                 clashIds={fixtureClashIds}
+                onContextMenu={onFixtureContextMenu}
                 interactive={mode === 'select' && !elevResizeFollowing && !elevCabFollowing && !cabResize && !fixtureStretching}
                 obstacles={wallCabs.map(c => {
                   const z0 = cabBottomZ(c, room, wall)
@@ -1970,7 +1972,7 @@ export default function ElevationSVG({
                         <g transform={`rotate(-90,${x},${my})`}>
                           <rect x={x - padX} y={my - padY} width={padX * 2} height={padY * 2} fill={layers.background ?? '#030712'} />
                           <text x={x} y={my} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>
-                            {Math.round(m.top)}
+                            {roundMm(m.top)}
                           </text>
                         </g>
                       </g>
@@ -2005,7 +2007,7 @@ export default function ElevationSVG({
               const label = (x: number, y: number, v: number, vertical = false) => (
                 <g transform={vertical ? `rotate(-90,${x},${y})` : undefined}>
                   <rect x={x - padX} y={y - padY} width={padX * 2} height={padY * 2} fill={bg} />
-                  <text x={x} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>{Math.round(v)}</text>
+                  <text x={x} y={y} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={col}>{roundMm(v)}</text>
                 </g>
               )
               const vDim = (key: string, x: number, zLo: number, zHi: number) => {
@@ -2054,7 +2056,7 @@ export default function ElevationSVG({
                   <rect x={mx - padX} y={dimY - padY} width={padX * 2} height={padY * 2} fill={layers.background ?? '#030712'} />
                   <text x={mx} y={dimY} textAnchor="middle" dominantBaseline="middle"
                     fontSize={fs} fill={col} style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                    {Math.round(wall.length)}
+                    {roundMm(wall.length)}
                   </text>
                 </g>
               )
@@ -2092,18 +2094,18 @@ export default function ElevationSVG({
               if (baseDy > 0) {
                 // Kick band at the floor.
                 if (kickH > 0) {
-                  segs.push({ fromY: roomH - kickH, toY: cursorY, label: `${Math.round(kickH)}` })
+                  segs.push({ fromY: roomH - kickH, toY: cursorY, label: `${roundMm(kickH)}` })
                   cursorY = roomH - kickH
                 }
                 // Gap between the kick top and the (raised) carcase bottom.
                 const gap = carcBottom - kickH
                 if (gap > 0.5) {
-                  segs.push({ fromY: roomH - carcBottom, toY: cursorY, label: `${Math.round(gap)}` })
+                  segs.push({ fromY: roomH - carcBottom, toY: cursorY, label: `${roundMm(gap)}` })
                   cursorY = roomH - carcBottom
                 }
                 // Carcase.
                 const carcTopY = roomH - (carcBottom + carcDy)
-                segs.push({ fromY: carcTopY, toY: cursorY, label: `${Math.round(carcDy)}` })
+                segs.push({ fromY: carcTopY, toY: cursorY, label: `${roundMm(carcDy)}` })
                 cursorY = carcTopY
               }
 
@@ -2111,14 +2113,14 @@ export default function ElevationSVG({
                 const overheadBotY = roomH - (wcTopZ - overheadDy)
                 const overheadTopY = roomH - wcTopZ
                 if (overheadBotY < cursorY - 0.5) {
-                  segs.push({ fromY: overheadBotY, toY: cursorY, label: `${Math.round(cursorY - overheadBotY)}` })
+                  segs.push({ fromY: overheadBotY, toY: cursorY, label: `${roundMm(cursorY - overheadBotY)}` })
                 }
                 segs.push({ fromY: overheadTopY, toY: overheadBotY, label: `${overheadDy}` })
                 cursorY = overheadTopY
               }
 
               if (cursorY > 0.5) {
-                segs.push({ fromY: 0, toY: cursorY, label: `${Math.round(cursorY)}` })
+                segs.push({ fromY: 0, toY: cursorY, label: `${roundMm(cursorY)}` })
               }
 
               if (segs.length === 0) {

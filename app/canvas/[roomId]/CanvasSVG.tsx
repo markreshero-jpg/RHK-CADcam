@@ -215,7 +215,7 @@ export default function CanvasSVG({
   const cabLabelFs = 11 / view.zoom
   const cabDimFs   = 9 / view.zoom
 
-  const drawLen = drawStart && drawCursor ? Math.round(dist(drawStart, drawCursor)) : 0
+  const drawLen = drawStart && drawCursor ? roundMm(dist(drawStart, drawCursor)) : 0
   const drawMidX = drawStart && drawCursor ? (drawStart.x + drawCursor.x) / 2 : 0
   const drawMidY = drawStart && drawCursor ? (drawStart.y + drawCursor.y) / 2 : 0
 
@@ -471,7 +471,7 @@ export default function CanvasSVG({
 
               {/* Edge length labels when selected */}
               {isSel && segs.map((s, i) => {
-                const len = Math.round(segLength(s))
+                const len = roundMm(segLength(s))
                 if (len < 1) return null
                 const m = segMid(s)
                 const n = outwardNormal(segs, i)
@@ -512,7 +512,7 @@ export default function CanvasSVG({
                     </g>
                     {pick && pl && (
                       <text x={pick.x} y={pick.y - 16 / view.zoom} fontSize={10 / view.zoom} fill="#fbbf24" textAnchor="middle"
-                        style={{ pointerEvents: 'none', userSelect: 'none' }}>{Math.round(pl.x)}, {Math.round(pl.y)}</text>
+                        style={{ pointerEvents: 'none', userSelect: 'none' }}>{roundMm(pl.x)}, {roundMm(pl.y)}</text>
                     )}
                     {segs.map((s, i) => {
                       const on = sel?.kind === 'e' && sel.i === i
@@ -589,7 +589,7 @@ export default function CanvasSVG({
                 stroke="#f59e0b" strokeWidth={1 / lz} />
               <circle cx={btMoveBase.x} cy={btMoveBase.y} r={4 / view.zoom} fill="#f59e0b" />
               <text x={(btMoveBase.x + btMoveCursor.x) / 2} y={(btMoveBase.y + btMoveCursor.y) / 2 - 10 / view.zoom}
-                textAnchor="middle" fontSize={10 / view.zoom} fill="#fcd34d">{Math.round(Math.hypot(dx, dy))}</text>
+                textAnchor="middle" fontSize={10 / view.zoom} fill="#fcd34d">{roundMm(Math.hypot(dx, dy))}</text>
             </g>
           )
         })()}
@@ -601,7 +601,7 @@ export default function CanvasSVG({
               stroke="#ef4444" strokeWidth={1.5 / lz} strokeDasharray={`${6 / view.zoom} ${3 / view.zoom}`} />
             <circle cx={btJoinStart.x} cy={btJoinStart.y} r={4 / view.zoom} fill="#ef4444" />
             <text x={(btJoinStart.x + btJoinCursor.x) / 2} y={(btJoinStart.y + btJoinCursor.y) / 2 - 10 / view.zoom}
-              textAnchor="middle" fontSize={10 / view.zoom} fill="#fca5a5">{Math.round(dist(btJoinStart, btJoinCursor))}</text>
+              textAnchor="middle" fontSize={10 / view.zoom} fill="#fca5a5">{roundMm(dist(btJoinStart, btJoinCursor))}</text>
           </g>
         )}
         {mode === 'draw_benchtop_join' && !btJoinStart && btJoinCursor && (
@@ -614,7 +614,7 @@ export default function CanvasSVG({
           const snapDist = SNAP_PX / view.zoom
           const nearClose = btDrawPoly.length >= 3 && btDrawCursor != null && dist(btDrawCursor, btDrawPoly[0]) < snapDist
           const last = btDrawPoly.length > 0 ? btDrawPoly[btDrawPoly.length - 1] : null
-          const segLen = last && btDrawCursor ? Math.round(dist(last, btDrawCursor)) : 0
+          const segLen = last && btDrawCursor ? roundMm(dist(last, btDrawCursor)) : 0
           const segAngle = last && btDrawCursor ? Math.round(toDeg(Math.atan2(btDrawCursor.y - last.y, btDrawCursor.x - last.x))) : 0
           const labelFs = 10 / view.zoom
           const labelPad = 6 / view.zoom
@@ -810,7 +810,7 @@ export default function CanvasSVG({
           const z = view.zoom
           const cur = btLineCursor ?? null
           const rect = btLinePts.length === 2 && cur ? lineRect(btLinePts[0], btLinePts[1], offsetFromLine(btLinePts[0], btLinePts[1], cur)) : null
-          const depth = rect ? Math.round(Math.abs(offsetFromLine(btLinePts[0], btLinePts[1], cur!))) : 0
+          const depth = rect ? roundMm(Math.abs(offsetFromLine(btLinePts[0], btLinePts[1], cur!))) : 0
           return (
             <g style={{ pointerEvents: 'none' }}>
               {btLinePts.length === 1 && cur && (
@@ -910,7 +910,7 @@ export default function CanvasSVG({
                   <text x={rx + rw / 2} y={ry + rh / 2} textAnchor="middle" dominantBaseline="middle"
                     fontSize={10 / view.zoom} fill="#5eead4"
                     style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                    {Math.round(rw)}×{Math.round(rh)}
+                    {roundMm(rw)}×{roundMm(rh)}
                   </text>
                 )}
                 <circle cx={btRectStart.x} cy={btRectStart.y} r={4 / view.zoom}
@@ -945,7 +945,7 @@ export default function CanvasSVG({
                 <text x={rx+rw/2} y={ry+rh/2} textAnchor="middle" dominantBaseline="middle"
                   fontSize={10/view.zoom} fill="#fca5a5"
                   style={{ userSelect:'none', pointerEvents:'none' }}>
-                  {Math.round(rw)}×{Math.round(rh)}
+                  {roundMm(rw)}×{roundMm(rh)}
                 </text>
               )}
               <circle cx={btCutoutStart.x} cy={btCutoutStart.y} r={4/view.zoom}
@@ -969,7 +969,7 @@ export default function CanvasSVG({
                 <text x={btCutoutStart.x} y={btCutoutStart.y} textAnchor="middle" dominantBaseline="middle"
                   fontSize={10/view.zoom} fill="#fca5a5"
                   style={{ userSelect:'none', pointerEvents:'none' }}>
-                  ⌀{Math.round(r*2)}
+                  ⌀{roundMm(r*2)}
                 </text>
               )}
               <circle cx={btCutoutStart.x} cy={btCutoutStart.y} r={4/view.zoom}

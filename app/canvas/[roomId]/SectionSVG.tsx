@@ -7,6 +7,7 @@ import { wallDir, wallCorners, wallInwardNormal, centroid, cabWallPerp, wallCabT
 import { viewReducer } from './canvasTypes'
 import type { SectionCut } from './canvasTypes'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
+import { roundMm } from '@/src/lib/format'
 
 // ── Geometry helpers ─────────────────────────────────────────────────────────
 
@@ -357,7 +358,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
                   <g transform={`rotate(-90,${chainX},${midY})`}>
                     <rect x={chainX - fs * 2} y={midY - fs * 0.6} width={fs * 4} height={fs * 1.2} fill="#030712" />
                     <text x={chainX} y={midY} textAnchor="middle" dominantBaseline="middle"
-                      fontSize={fs} fill="#fff">{Math.round(roomH)}</text>
+                      fontSize={fs} fill="#fff">{roundMm(roomH)}</text>
                   </g>
                 </g>
               )
@@ -375,7 +376,7 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
                   <line x1={cutLen} y1={dimY - tk} x2={cutLen} y2={dimY + tk} stroke="#fff" strokeWidth={sw} />
                   <rect x={midX - fs * 2} y={dimY - fs * 0.6} width={fs * 4} height={fs * 1.2} fill="#030712" />
                   <text x={midX} y={dimY} textAnchor="middle" dominantBaseline="middle"
-                    fontSize={fs} fill="#fff">{Math.round(cutLen)}</text>
+                    fontSize={fs} fill="#fff">{roundMm(cutLen)}</text>
                 </g>
               )
             })()}

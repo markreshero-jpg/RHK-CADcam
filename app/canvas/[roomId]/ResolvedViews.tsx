@@ -35,6 +35,7 @@ import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, SharknoseLinesSVG } from './HandleSVG'
 import { binOutlines } from '@/src/lib/binGeometry'
+import { roundMm } from '@/src/lib/format'
 
 // Hinge cup/plate drill marker colour (distinct from amber slide drills).
 const HINGE_DRILL_COL = '#a855f7'   // violet-500
@@ -1245,12 +1246,12 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
       <line x1={oz-20} y1={oy+dy} x2={oz+dz+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
 
       {dimH(oz, oz + dz, oy - 50, `${dz}mm`, false)}
-      {kickZmin < Infinity && dimH(oz + kickZmin, oz + kickZmax, oy + dy + 30, `${Math.round(kickZmax - kickZmin)}mm`)}
+      {kickZmin < Infinity && dimH(oz + kickZmin, oz + kickZmax, oy + dy + 30, `${roundMm(kickZmax - kickZmin)}mm`)}
       {/* Three vertical (height) dimension columns, spaced so the white labels
           don't collide: inner = breakdown (face heights + toe kick), middle =
           gaps/reveals, outer = overall height. */}
       {dimV(visibleZones.length > 0 ? oz + dz + 290 : oz + dz + 185, oy, oy + dy, `${dy}mm`, true)}
-      {tkHeight > 0 && dimV(oz + dz + 90, oy + dy - tkHeight, oy + dy, `${Math.round(tkHeight)}mm`, true)}
+      {tkHeight > 0 && dimV(oz + dz + 90, oy + dy - tkHeight, oy + dy, `${roundMm(tkHeight)}mm`, true)}
       {visibleZones.map((z, i) => {
         const y1 = oy + dy - (z.Y + z.DY)
         const y2 = oy + dy - z.Y
@@ -1258,8 +1259,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
         const gap = next ? next.Y - (z.Y + z.DY) : 0
         return (
           <g key={`fd${i}`}>
-            {dimV(oz + dz + 90, y1, y2, `${Math.round(z.DY)}mm`, true)}
-            {gap > 1 && dimV(oz + dz + 185, oy + dy - next.Y, y1, `${Math.round(gap)}mm`, true)}
+            {dimV(oz + dz + 90, y1, y2, `${roundMm(z.DY)}mm`, true)}
+            {gap > 1 && dimV(oz + dz + 185, oy + dy - next.Y, y1, `${roundMm(gap)}mm`, true)}
           </g>
         )
       })}

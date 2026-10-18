@@ -28,6 +28,7 @@ import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { customExtents } from '@/src/lib/customPartBox'
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import { shapedFrontMarks, sweepFlag, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
+import { roundMm } from '@/src/lib/format'
 
 /** Report-only page extras (not drawing layers). */
 export interface PlanViewPageOptions {
@@ -45,11 +46,11 @@ function computeChain(cabs: CabinetInstance[], wall: Wall): Seg[] {
   let cursor = 0
   for (const cab of sorted) {
     const t = cabT(cab, wall)
-    if (t > cursor + 0.5) segs.push({ from: cursor, to: t, label: Math.round(t - cursor) })
-    segs.push({ from: t, to: t + cab.dx, label: Math.round(cab.dx) })
+    if (t > cursor + 0.5) segs.push({ from: cursor, to: t, label: roundMm(t - cursor) })
+    segs.push({ from: t, to: t + cab.dx, label: roundMm(cab.dx) })
     cursor = t + cab.dx
   }
-  if (cursor < wall.length - 0.5) segs.push({ from: cursor, to: wall.length, label: Math.round(wall.length - cursor) })
+  if (cursor < wall.length - 0.5) segs.push({ from: cursor, to: wall.length, label: roundMm(wall.length - cursor) })
   return segs
 }
 
@@ -250,7 +251,7 @@ export default function PlanViewReportSVG({
           <rect x={midX - padX} y={midY - padY} width={padX * 2} height={padY * 2} fill="white" />
           <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle"
             fontSize={dimFS} fill={INK} fontFamily="Arial, Helvetica, sans-serif">
-            {Math.round(dz)}
+            {roundMm(dz)}
           </text>
         </g>
       </g>
@@ -433,7 +434,7 @@ export default function PlanViewReportSVG({
                 fontSize={sizeFs} fill={INK2} opacity={layers.op('cabinet_sizes')}
                 fontFamily="Arial, Helvetica, sans-serif"
               >
-                {Math.round(cab.dx)}×{Math.round(cab.dz)}
+                {roundMm(cab.dx)}×{roundMm(cab.dz)}
               </text>
             )}
           </g>
@@ -594,15 +595,15 @@ export default function PlanViewReportSVG({
           const openSegs: Seg[] = []
           let cur = 0
           for (const s of spans) {
-            if (s.t0 > cur + 0.5) openSegs.push({ from: cur, to: s.t0, label: Math.round(s.t0 - cur) })
-            openSegs.push({ from: s.t0, to: s.t1, label: Math.round(s.t1 - s.t0) })
+            if (s.t0 > cur + 0.5) openSegs.push({ from: cur, to: s.t0, label: roundMm(s.t0 - cur) })
+            openSegs.push({ from: s.t0, to: s.t1, label: roundMm(s.t1 - s.t0) })
             cur = s.t1
           }
-          if (spans.length && cur < w.length - 0.5) openSegs.push({ from: cur, to: w.length, label: Math.round(w.length - cur) })
+          if (spans.length && cur < w.length - 0.5) openSegs.push({ from: cur, to: w.length, label: roundMm(w.length - cur) })
           const rowOverall = ROW_OVERALL + (openSegs.length ? ROW_OPEN_STEP : 0)
           const baseSegs    = computeChain(baseCabs, w)
           const wallCabSegs = computeChain(wallCabs, w)
-          const overallSeg: Seg[] = [{ from: 0, to: w.length, label: Math.round(w.length) }]
+          const overallSeg: Seg[] = [{ from: 0, to: w.length, label: roundMm(w.length) }]
           const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
           const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
           const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5

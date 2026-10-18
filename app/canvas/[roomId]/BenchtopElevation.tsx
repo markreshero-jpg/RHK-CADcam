@@ -26,6 +26,7 @@ import {
 } from '@/src/lib/benchtopGeometry'
 import { wallFrame, alongOf, offOf, wallContacts, btShowsOn, type WallSide } from '@/src/lib/benchtopAnchor'
 import type { BtThickness } from './useBenchtopCatalog'
+import { roundMm } from '@/src/lib/format'
 
 export interface BtElevInfo {
   /** Top-surface height above the floor = underside (base height) + thickness (P-g). */
@@ -163,7 +164,7 @@ export default function BenchtopElevation({
               strokeDasharray={lp.strokeDasharray} opacity={lp.opacity}
               style={{ cursor: 'pointer' }}
               onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
-              <title>{`${bt.label ?? 'Benchtop'} · top ${Math.round(topZ)} · ${thick.total} thick`}</title>
+              <title>{`${bt.label ?? 'Benchtop'} · top ${roundMm(topZ)} · ${thick.total} thick`}</title>
             </polygon>
             {legs.filter(faceMitre).map(legEl)}
 
@@ -175,7 +176,7 @@ export default function BenchtopElevation({
                 <rect x={t0} y={yTop + thick.total / 2 - h / 2} width={t1 - t0} height={h}
                   fill="transparent" style={{ cursor: 'pointer' }}
                   onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
-                  <title>{`${bt.label ?? 'Benchtop'} · top ${Math.round(topZ)} · ${thick.total} thick`}</title>
+                  <title>{`${bt.label ?? 'Benchtop'} · top ${roundMm(topZ)} · ${thick.total} thick`}</title>
                 </rect>
               )
             })()}
@@ -227,7 +228,7 @@ export default function BenchtopElevation({
               {/* Label above the band — stacked when tops share a span */}
               <text x={(t0 + t1) / 2} y={yTop - (14 + 11 * k) / z} textAnchor="middle"
                 fontSize={9 / z} fill={isSel ? '#fcd34d' : '#5eead4'} style={{ userSelect: 'none' }}>
-                {bt.label ?? 'Benchtop'} · {Math.round(topZ)}
+                {bt.label ?? 'Benchtop'} · {roundMm(topZ)}
               </text>
             </g>
           </Fragment>
