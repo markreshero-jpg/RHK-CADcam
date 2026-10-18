@@ -258,6 +258,10 @@ Esc cancels; one undo step.
     quarter disc the leaf sweeps (in / out, hinge side). `fixtureClashes` checks hinged doors
     against every cabinet in it (base or wall — the leaf is full height); door goes red in plan,
     panel says "Door swing hits B3". Sliding doors / windows / archways aren't checked.
+  - **Elevation PDF sill + opening height** at each right jamb (same as the canvas).
+  - **Door & Window Schedule** report (`OpeningScheduleReport.tsx`, test `openingSchedule.test.ts`):
+    Mark (label, else D1 / S1 / W1 / O1 per room), type, name, W × H, sill, head, wall,
+    hinge + swing for hinged doors. Room or job scope, print like the appliance schedule.
 
 - 2026-10-18 (user): **P10 Cut benchtop tick box + per-placement cutout override.** Column
   `cut_benchtop` (bool, default true) on fixture_catalog + room_fixtures (migration
@@ -330,9 +334,9 @@ Esc cancels; one undo step.
   Sill / From start / Hinge / Swings; elevation hole on both faces + dims; 3D hole with
   frame + glass / leaf; drag the wall / change its thickness → openings follow;
   Reports → Plan View + Elevation Views PDFs.
-- P5 gaps: elevation print draws the width row only (no sill / head heights); the
+- P5 gaps: ~~elevation print draws the width row only~~ sill + height added 2026-10-18; the
   elevation canvas width row sits above the overhead chain — check it isn't clipped;
-  openings aren't in the appliance schedule (could be a door & window schedule);
+  ~~openings aren't in any schedule~~ Door & Window Schedule 2026-10-18;
   ~~a door's swing doesn't warn when it hits a cabinet~~ done 2026-10-18.
 - Dishwasher: "Generic dishwasher 600 freestanding" catalogue row added 2026-10-18;
   GLB `z_fixtures/models/generic-dishwasher-600-freestanding.glb` (generator

@@ -586,6 +586,33 @@ export default function ElevationPrintSVG({
           {layers.show('dim_elev_floor_chain') && floorCabs.length > 0 && hChain(computeElevChain(floorCabs, wall), floorChainY, 'fl', 'dim_elev_floor_chain')}
           {layers.show('dim_elev_height') && heightChain()}
           {layers.show('dim_openings') && openings.length > 0 && hChain(openingSegs, openingChainY, 'op', 'dim_openings')}
+          {/* Sill + opening height at each right jamb (same as the canvas) */}
+          {layers.show('dim_openings') && openings.map(o => {
+            const x = o.t1 - 4 * P
+            const lineW = layers.w('dim_openings', thinSW)
+            const padX = dimFs * 0.7, padY = dimFs * 1.7
+            const vDim = (key: string, zLo: number, zHi: number) => {
+              const y0 = roomH - zLo, y1 = roomH - zHi, my = (y0 + y1) / 2
+              return (
+                <g key={key}>
+                  <line x1={x} y1={y0} x2={x} y2={y1} stroke={INK} strokeWidth={lineW} />
+                  <line x1={x - tk} y1={y0} x2={x + tk} y2={y0} stroke={INK} strokeWidth={lineW} />
+                  <line x1={x - tk} y1={y1} x2={x + tk} y2={y1} stroke={INK} strokeWidth={lineW} />
+                  {y0 - y1 >= dimFs * 2 && <>
+                    <rect x={x - padX} y={my - padY} width={padX * 2} height={padY * 2} fill="white" />
+                    <text x={x} y={my} textAnchor="middle" dominantBaseline="middle" transform={`rotate(-90,${x},${my})`}
+                      fontSize={dimFs} fill={INK} fontFamily="Arial, Helvetica, sans-serif">{Math.round(zHi - zLo)}</text>
+                  </>}
+                </g>
+              )
+            }
+            return (
+              <g key={`opv${o.fx.id}`} pointerEvents="none" opacity={layers.op('dim_openings')}>
+                {o.sill > 0.5 && vDim('s', 0, o.sill)}
+                {vDim('h', o.sill, o.sill + o.h)}
+              </g>
+            )
+          })}
           {/* Overall wall length */}
           {layers.show('dim_elev_floor_chain') && (() => {
             const mx = wall.length / 2, padX = dimFs * 1.8, padY = dimFs * 0.7
