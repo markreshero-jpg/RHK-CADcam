@@ -242,6 +242,16 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-18 (user): **P8 true plan shape** — plan draws the model's top view instead of the box +
+  symbol. `fixturePlanShape.ts` (+ test): fitted triangles → top-down height map (2–6 mm grid) →
+  marching squares for the outline + a contour midway between neighbouring height plateaus
+  (≥ 6 mm apart: sink bowls, drains, burners), shared stretches de-duplicated, Douglas–Peucker,
+  stored normalised (`plan_shape` jsonb on fixture_catalog + room_fixtures, migration
+  `fixtures_p8_plan_shape`) so stretching scales it. Library editor traces it automatically
+  (`fixturePlanShapeLoad.ts`) when the model / fit / size changes or an item without one is
+  opened, shows a preview + Re-trace, and copies it to placed fixtures with the same model.
+  Existing three models backfilled 2026-10-18. Openings and model-less items keep their symbols.
+
 - 2026-10-18 (user): **clearance dims on the selected fixture** (cyan, dashed, value chip).
   Plan (`fixtureClearances` + FixturesPlan `ClearanceDims`): left / right / front / back to the
   nearest stretch obstacle (cabinets + solid fixtures at its height) or wall; doors / windows to

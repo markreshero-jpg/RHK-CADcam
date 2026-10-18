@@ -9,7 +9,7 @@
 // Uploaded model files are never deleted on replace / row delete — placed
 // fixtures copy model_url into the job and keep pointing at the file.
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ThemeToggle } from '../../ThemeToggle'
 import dynamic from 'next/dynamic'
@@ -19,6 +19,8 @@ import FixtureIcon, { FixtureIconPicker } from '@/src/components/FixtureIcon'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 import { modelFormatFromName, MODEL_ACCEPT } from '@/src/lib/modelFormat'
 import { fitScale } from '@/src/lib/fixtureFit'
+import { planShapePath } from '@/src/lib/fixturePlanShape'
+import { tracePlanShape } from '@/src/lib/fixturePlanShapeLoad'
 
 // three/drei loaders — client only.
 const PreviewCanvas = dynamic(
@@ -415,6 +417,41 @@ function FixtureEditor({ item, kinds, groups, onPatch, onError }: {
 }) {
   const [uploading, setUploading] = useState(false)
   const [native,    setNative]    = useState<{ x: number; y: number; z: number } | null>(null)
+  const [tracing,   setTracing]   = useState(false)
+
+  // ── Plan shape (P8): traced from the model whenever it or its fit changes
+  // (and the first time an item with a model but no shape is opened). ──
+  const fitKey = [item.model_url, item.model_format, item.model_scale, item.model_rot_x, item.model_rot_y,
+    item.model_off_x, item.model_off_y, item.model_off_z, item.width, item.depth, item.height].join('|')
+  const tracedKey = useRef<string | null>(item.plan_shape ? fitKey : null)
+  useEffect(() => {
+    if (!item.model_url) { tracedKey.current = fitKey; return }
+    if (tracedKey.current === fitKey) return
+    let live = true
+    const t = setTimeout(() => { void retrace(() => live) }, 500)
+    return () => { live = false; clearTimeout(t) }
+  }, [fitKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function retrace(alive: () => boolean = () => true) {
+    const key = fitKey
+    setTracing(true)
+    try {
+      const shape = await tracePlanShape(item)
+      if (!alive()) return
+      tracedKey.current = key
+      onPatch({ plan_shape: shape })
+      // Placed copies of this item with the same model get the drawing too (it's
+      // derived from the model, not a spec change).
+      if (item.model_url) {
+        await supabase.from('room_fixtures').update({ plan_shape: shape })
+          .eq('catalog_id', item.id).eq('model_url', item.model_url)
+      }
+    } catch (e) {
+      if (alive()) onError(`Plan shape: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      if (alive()) setTracing(false)
+    }
+  }
 
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -679,6 +716,27 @@ function FixtureEditor({ item, kinds, groups, onPatch, onError }: {
               The model is centred in the box and stood on its base automatically. X = right,
               Y = up, Z = toward the front. A model in metres needs scale 1000; inches 25.4.
             </p>
+
+            {/* Plan shape (P8) — what plan view draws instead of the box + symbol */}
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`${lbl} mb-0`}>Plan shape</span>
+                <span className="text-[10px] text-ink-subtle">{tracing ? 'tracing…' : item.plan_shape?.lines.length ? 'traced from the model' : 'none'}</span>
+                <button onClick={() => void retrace()} disabled={tracing}
+                  className="ml-auto px-2 py-0.5 bg-surface-3 hover:bg-surface-2 text-ink-muted text-[11px] rounded disabled:opacity-40"
+                  title="Trace the plan drawing from the model again">Re-trace</button>
+              </div>
+              <div className="border border-edge-strong rounded bg-[#030712] p-2">
+                <svg viewBox={`-10 -10 ${w + 20} ${d + 20}`} className="w-full" style={{ maxHeight: 180 }}>
+                  <rect x={0} y={0} width={w} height={d} fill="none" stroke="#334155" strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
+                  {item.plan_shape && (
+                    <path d={planShapePath(item.plan_shape, w, d)} fill="none" stroke="#0ea5e9" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
+                  )}
+                  <line x1={0} y1={d} x2={w} y2={d} stroke="#64748b" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+                </svg>
+              </div>
+              <p className="text-[10px] text-ink-subtle mt-1">Seen from above, front at the bottom. Updates when the model or its fit changes.</p>
+            </div>
           </>)}
         </div>
       </div>

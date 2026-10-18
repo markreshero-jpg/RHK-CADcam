@@ -587,6 +587,8 @@ export interface FixtureBody {
   cutout_off_y:  number
   /** Benchtop mount: underside sits this far below the benchtop top (sink bowl depth). */
   bench_drop:    number
+  /** P8: true plan shape traced from the fitted model (null = draw the box + symbol). */
+  plan_shape:    import('./fixturePlanShape').PlanShape | null
 }
 
 /** A library category (P6): what the tabs / F6 picker show. `category` = the behaviour type its items get. */

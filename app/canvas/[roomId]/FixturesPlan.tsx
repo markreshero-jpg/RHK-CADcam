@@ -11,13 +11,14 @@ import type { RoomFixture } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { wrapLabel } from '@/src/lib/textWrap'
+import { planShapePath } from '@/src/lib/fixturePlanShape'
 import type { FixtureSnap, StretchSide, Clearances } from '@/src/lib/fixtureGeometry'
 
 const STROKE = '#0ea5e9'
 const FILL   = '#0ea5e9'
 const CLASH  = '#dc2626'
 
-type Body = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'width' | 'depth'> & Partial<Pick<RoomFixture, 'hinge_side' | 'swing'>>
+type Body = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'width' | 'depth'> & Partial<Pick<RoomFixture, 'hinge_side' | 'swing' | 'plan_shape'>>
 
 // Doors / windows (P5), in the opening's frame: y = 0 outer face, y = depth the
 // inside face (room side). Hinge side is as seen from inside the room (x = 0 = left).
@@ -106,6 +107,8 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, cl
   const fs = 11 / z
   const lines = label ? wrapLabel(f.name, f.width * 0.9, fs) : []
   const opening = f.category === 'opening'
+  // P8: a traced plan shape replaces the box outline, symbol and front edge.
+  const shaped = !opening && !!f.plan_shape?.lines?.length
   // Text reads upright: flip it when the item is turned past 90°.
   const r = ((rotation % 360) + 360) % 360
   const flip = r > 90 && r < 270
@@ -113,11 +116,14 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, cl
     <g transform={`translate(${x},${y}) rotate(${rotation})`} opacity={ghost ? 0.6 : lp.opacity}>
       {/* Openings: no box (the wall is split around them) — a transparent hit area only. */}
       <rect x={0} y={0} width={f.width} height={f.depth}
-        fill={FILL} fillOpacity={opening ? (ghost ? 0.12 : 0.001) : ghost ? 0.12 : 0.06 * (lp.fillOpacity ?? 1)}
-        stroke={opening && !ghost ? 'none' : color} strokeWidth={lw} strokeDasharray={ghost ? `${10 / z} ${6 / z}` : lp.strokeDasharray} />
-      <Symbol f={f} z={z} color={color} lw={lw} />
+        fill={FILL} fillOpacity={opening || shaped ? (ghost ? 0.12 : 0.001) : ghost ? 0.12 : 0.06 * (lp.fillOpacity ?? 1)}
+        stroke={(opening || shaped) && !ghost ? 'none' : color} strokeWidth={lw} strokeDasharray={ghost ? `${10 / z} ${6 / z}` : lp.strokeDasharray} />
+      {shaped
+        ? <path d={planShapePath(f.plan_shape!, f.width, f.depth)} fill="none" stroke={color} strokeWidth={lw}
+            strokeLinejoin="round" strokeDasharray={ghost ? `${10 / z} ${6 / z}` : lp.strokeDasharray} />
+        : <Symbol f={f} z={z} color={color} lw={lw} />}
       {/* front edge */}
-      {!opening && <line x1={0} y1={f.depth} x2={f.width} y2={f.depth} stroke={color} strokeWidth={lw * 2.2} />}
+      {!opening && !shaped && <line x1={0} y1={f.depth} x2={f.width} y2={f.depth} stroke={color} strokeWidth={lw * 2.2} />}
       {label && !opening && (
         <text x={f.width / 2} y={f.depth / 2} fontSize={fs} fill={color} textAnchor="middle" dominantBaseline="central"
           transform={flip ? `rotate(180 ${f.width / 2} ${f.depth / 2})` : undefined}
