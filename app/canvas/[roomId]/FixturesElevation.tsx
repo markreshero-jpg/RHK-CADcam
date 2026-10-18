@@ -261,7 +261,7 @@ export default function FixturesElevation({
         return (
           <g key={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
             onPointerDown={e => { e.stopPropagation(); onSelect(fx.id) }}
-              onContextMenu={onContextMenu ? e => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, fx.id) } : undefined}>
+            onContextMenu={onContextMenu ? e => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, fx.id) } : undefined}>
             {/* P8: the model's true front shape when traced; else the box (+ inner panel for appliances). */}
             <rect x={x} y={y} width={w} height={h} fill={STROKE} fillOpacity={(fx.elev_shape?.lines.length ? 0.001 : 0.06) * (lp.fillOpacity ?? 1)}
               stroke={fx.elev_shape?.lines.length ? 'none' : color} strokeWidth={lw} strokeDasharray={lp.strokeDasharray} />

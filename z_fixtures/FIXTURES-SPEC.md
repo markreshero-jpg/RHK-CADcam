@@ -271,6 +271,8 @@ Esc cancels; one undo step.
   - **Door & Window Schedule** report (`OpeningScheduleReport.tsx`, test `openingSchedule.test.ts`):
     Mark (label, else D1 / S1 / W1 / O1 per room), type, name, W × H, sill, head, wall,
     hinge + swing for hinged doors. Room or job scope, print like the appliance schedule.
+  - **Right-click menu in elevation** (View 3D / elevations, Move, Turn 90°, Delete) — same
+    menu as plan, via ElevationSVG `onFixtureContextMenu`. Not in 3D.
 
 - 2026-10-18 (user): **P10 Cut benchtop tick box + per-placement cutout override.** Column
   `cut_benchtop` (bool, default true) on fixture_catalog + room_fixtures (migration
@@ -354,7 +356,7 @@ Esc cancels; one undo step.
 - ~~Existing placed fixtures aren't linked until moved once~~ — Link button 2026-10-18.
 
 - ~~Live visual check of a real uploaded model~~ done 2026-10-15 in the fixture viewer (Miele oven GLB); room 3D view still not eyeballed.
-- ~~Right-click context menu~~ done 2026-10-15 in plan: View 3D / elevations, Move, Turn 90°, Delete (undoable). Not in elevation / 3D yet.
+- ~~Right-click context menu~~ done 2026-10-15 in plan: View 3D / elevations, Move, Turn 90°, Delete (undoable); elevation 2026-10-18. Not in 3D.
 - ~~Fixtures don't avoid cabinets~~ P4 said warn only; changed 2026-10-18 — they now block / slide (see top).
 - Room 3D: sink-in-hole not clearly eyeballed yet (plan + resolver verified).
 - Cutout as a CNC op (optimiser / gcode ignore benchtop cutouts entirely today).
