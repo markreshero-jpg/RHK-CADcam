@@ -343,3 +343,25 @@ export function leaderTextAt(landing: Pt, tip: Pt, size: number, paperToFrame: n
   const gap = 1.5 * paperToFrame
   return { x: right ? landing.x + gap : landing.x - gap - block.w * 4 * paperToFrame, y: landing.y - block.midFirst * paperToFrame }
 }
+
+// ── Boxes (A4) ───────────────────────────────────────────────────────────────
+
+/** The 4 corners of an (unrotated) box geom, in order a, (b.x,a.y), b, (a.x,b.y). */
+export function boxCorners(g: BoxGeom): Pt[] {
+  return [g.a, { x: g.b.x, y: g.a.y }, g.b, { x: g.a.x, y: g.b.y }]
+}
+
+/** Move corner i (boxCorners order) to p; the opposite corner stays put. */
+export function setBoxCorner(g: BoxGeom, i: number, p: Pt): BoxGeom {
+  switch (i) {
+    case 0:  return { ...g, a: p }
+    case 1:  return { ...g, a: { x: g.a.x, y: p.y }, b: { x: p.x, y: g.b.y } }
+    case 2:  return { ...g, b: p }
+    default: return { ...g, a: { x: p.x, y: g.a.y }, b: { x: g.b.x, y: p.y } }
+  }
+}
+
+/** A rectangle as a closed point list (rectangular revision cloud). */
+export function rectPts(a: Pt, b: Pt): Pt[] {
+  return [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }]
+}

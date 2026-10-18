@@ -166,3 +166,21 @@ describe('A3 drawing helpers', () => {
     expect(styleKeyOf('text', {})).toBe('text')
   })
 })
+
+import { boxCorners, setBoxCorner, rectPts } from '../annotations/geometry'
+
+describe('A4 boxes', () => {
+  const g = { a: { x: 0, y: 0 }, b: { x: 10, y: 20 } }
+  it('lists corners round the box', () => {
+    expect(boxCorners(g)).toEqual([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 20 }, { x: 0, y: 20 }])
+  })
+  it('moving a corner keeps the opposite corner', () => {
+    const m = setBoxCorner(g, 1, { x: 15, y: -5 })
+    expect(boxCorners(m)[1]).toEqual({ x: 15, y: -5 })
+    expect(boxCorners(m)[3]).toEqual({ x: 0, y: 20 })
+    expect(boxCorners(setBoxCorner(g, 3, { x: -2, y: 25 }))[1]).toEqual({ x: 10, y: 0 })
+  })
+  it('rectangle cloud points', () => {
+    expect(rectPts({ x: 0, y: 0 }, { x: 1, y: 1 })).toHaveLength(4)
+  })
+})

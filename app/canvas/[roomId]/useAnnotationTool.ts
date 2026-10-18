@@ -11,9 +11,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RoomAnnotation, AnnotationKind, Room } from '@/src/lib/types'
 import {
   type AnnotFrame, type Pt, type TextGeom, type Box,
-  type LineGeom,
+  type LineGeom, type BoxGeom,
   unmapPt, translateGeom, annotationFramePoints, boundsOf, boxesOverlap, layoutText, snapQuarter, rotatePt,
-  angleSnap, dedupePts, leaderTextAt,
+  angleSnap, dedupePts, leaderTextAt, setBoxCorner, rectPts,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
 import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
@@ -21,16 +21,25 @@ import { supabase } from '@/src/lib/supabase'
 import { dbUpdateAnnotation, dbDeleteAnnotations } from './canvasDB'
 import type { AnnotationEditProps, AnnotGrip } from './AnnotationLayer'
 
-export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'arrow'
+export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'cloud'
 
-export const CAD_TOOL_KEYS: Record<string, CadTool> = { s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', a: 'arrow' }
+export const CAD_TOOL_KEYS: Record<string, CadTool> = {
+  s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', a: 'arrow', r: 'rect', e: 'ellipse', c: 'cloud',
+}
+
+/** Tools that drag out a shape on the canvas. */
+type PlaceTool = 'text' | 'textbox' | 'rect' | 'ellipse' | 'cloud'
 
 /** Kind of row a tool makes, and whose remembered style it starts from. */
-const TOOL_KIND: Record<CadTool, AnnotationKind> = { select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'line' }
-const TOOL_STYLE_KEY: Record<CadTool, StyleKey> = { select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'arrow' }
+const TOOL_KIND: Record<CadTool, AnnotationKind> = {
+  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'line', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud',
+}
+const TOOL_STYLE_KEY: Record<CadTool, StyleKey> = {
+  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'arrow', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud',
+}
 
 /** A line / arrow / leader being clicked out. attachId = adding a leader to that text. */
-export interface AnnotDrawing { tool: 'line' | 'arrow' | 'leader'; pts: Pt[]; cur: Pt | null; attachId?: string }
+export interface AnnotDrawing { tool: 'line' | 'arrow' | 'leader' | 'cloud'; pts: Pt[]; cur: Pt | null; attachId?: string }
 
 /** Text being typed in the inline editor. `draft` is the row as it will be saved. */
 export interface AnnotEditing { draft: RoomAnnotation; text: string; isNew: boolean }
@@ -43,7 +52,9 @@ type Drag =
   // point is only added once the pointer actually moves.
   | { kind: 'vertex'; id: string; i: number; insertAfter?: number; moved: boolean }
   | { kind: 'marquee'; start: Pt; cur: Pt; additive: boolean }
-  | { kind: 'place'; start: Pt; cur: Pt; tool: 'text' | 'textbox' }
+  | { kind: 'place'; start: Pt; cur: Pt; tool: PlaceTool }
+  // Corner of an unrotated box / ellipse (boxCorners order).
+  | { kind: 'corner'; id: string; i: number; moved: boolean }
 
 const DRAG_PX = 4
 const MIN_BOX_PAPER = 8   // text box narrower than this (paper mm) = point text
@@ -133,9 +144,10 @@ export function useAnnotationTool({
   /** The selected / edited text has a leader (ribbon shows leader controls). */
   const ribbonLeader = editing ? !!(editing.draft.geom as TextGeom).leader?.length
     : selected[0]?.kind === 'text' ? !!(selected[0].geom as TextGeom).leader?.length : tool === 'leader'
+  const rotatable = (a: RoomAnnotation) => a.kind === 'text' || a.kind === 'rect' || a.kind === 'ellipse'
   const ribbonRot: number | null = editing?.draft.kind === 'text'
     ? ((editing.draft.geom as TextGeom).rot ?? 0)
-    : selected.length === 1 && selected[0].kind === 'text' ? ((selected[0].geom as TextGeom).rot ?? 0) : null
+    : selected.length === 1 && rotatable(selected[0]) ? ((selected[0].geom as TextGeom | BoxGeom).rot ?? 0) : null
 
   const lastStyleEdit = useRef(0)
   const persistTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
@@ -190,10 +202,10 @@ export function useAnnotationTool({
       setEditing(ed => ed && { ...ed, draft: { ...ed.draft, geom: { ...(ed.draft.geom as TextGeom), rot } } })
       return
     }
-    const one = selected.length === 1 && selected[0].kind === 'text' ? selected[0] : null
+    const one = selected.length === 1 && rotatable(selected[0]) ? selected[0] : null
     if (!one) return
     snapshotForBurst()
-    setAnnotations(xs => xs.map(a => a.id === one.id ? { ...a, geom: { ...(a.geom as TextGeom), rot } } : a))
+    setAnnotations(xs => xs.map(a => a.id === one.id ? { ...a, geom: { ...(a.geom as TextGeom | BoxGeom), rot } } : a))
     persistSoon(one.id)
   }, [editing, selected, snapshotForBurst, setAnnotations, persistSoon])
 
@@ -307,8 +319,11 @@ export function useAnnotationTool({
     setDrawing(null)
     if (!d || d.tool === 'leader') return
     const pts = dedupePts(d.pts, 1 / zoom / frame.s)
-    if (pts.length < 2) return
-    const row = newRow('line', { pts }, null, defaultsFor(d.tool === 'arrow' ? 'arrow' : 'line'))
+    const cloud = d.tool === 'cloud'
+    if (pts.length < (cloud ? 3 : 2)) return
+    const row = cloud
+      ? newRow('cloud', { pts }, null, defaultsFor('cloud'))
+      : newRow('line', { pts }, null, defaultsFor(d.tool === 'arrow' ? 'arrow' : 'line'))
     captureSnapshot()
     setAnnotations(xs => [...xs, row])
     void insertRows([row])
@@ -397,8 +412,8 @@ export function useAnnotationTool({
           captureSnapshot(); cur.moved = true
           if (cur.insertAfter != null) {   // midpoint grip: the new vertex appears now
             const pts = [...vertsOf(a)]
-            const i = cur.insertAfter
-            pts.splice(i + 1, 0, { x: (pts[i].x + pts[i + 1].x) / 2, y: (pts[i].y + pts[i + 1].y) / 2 })
+            const i = cur.insertAfter, j = (i + 1) % pts.length   // a cloud's closing segment wraps
+            pts.splice(i + 1, 0, { x: (pts[i].x + pts[j].x) / 2, y: (pts[i].y + pts[j].y) / 2 })
             setAnnotations(xs => xs.map(x => x.id === a.id ? withVerts(x, pts) : x))
             annRef.current = annRef.current.map(x => x.id === a.id ? withVerts(x, pts) : x)
             cur.i = i + 1; cur.insertAfter = undefined
@@ -409,6 +424,11 @@ export function useAnnotationTool({
         const prev = pts[cur.i - 1] ?? pts[cur.i + 1] ?? null
         pts[cur.i] = toFrame(ev, !ev.shiftKey, prev)
         setAnnotations(xs => xs.map(x => x.id === cur.id ? withVerts(x, pts) : x))
+      } else if (cur.kind === 'corner') {
+        if (!cur.moved && !far) return
+        if (!cur.moved) { captureSnapshot(); cur.moved = true }
+        const p = toFrame(ev, !ev.shiftKey)
+        setAnnotations(xs => xs.map(x => x.id === cur.id ? { ...x, geom: setBoxCorner(x.geom as BoxGeom, cur.i, p) } : x))
       } else if (cur.kind === 'width') {
         const a = annRef.current.find(x => x.id === cur.id); if (!a) return
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
@@ -428,7 +448,7 @@ export function useAnnotationTool({
       const cur = dragRef.current
       dragRef.current = null; setDrag(null)
       if (!cur) return
-      if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex') && cur.moved) {
+      if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex' || cur.kind === 'corner') && cur.moved) {
         const ids = cur.kind === 'move' ? [...cur.orig.keys()] : [cur.id]
         for (const id of ids) {
           const a = annRef.current.find(x => x.id === id)
@@ -447,6 +467,21 @@ export function useAnnotationTool({
           return b && boxesOverlap(b, box)
         }).map(a => a.id)
         setSelectedIds(prev => new Set(cur.additive ? [...prev, ...hit] : hit))
+      } else if (cur.kind === 'place' && (cur.tool === 'rect' || cur.tool === 'ellipse' || cur.tool === 'cloud')) {
+        const far = Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y) >= DRAG_PX
+        if (!far) {
+          // A click (no drag) with the cloud tool starts a freehand cloud: click the corners.
+          if (cur.tool === 'cloud') {
+            const nd: AnnotDrawing = { tool: 'cloud', pts: [cur.start], cur: cur.start }
+            drawingRef.current = nd; setDrawing(nd)
+          }
+          return
+        }
+        const geom = cur.tool === 'cloud' ? { pts: rectPts(cur.start, cur.cur) } : { a: cur.start, b: cur.cur }
+        const row = newRow(cur.tool, geom, null, defaultsFor(cur.tool))
+        captureSnapshot()
+        setAnnotations(xs => [...xs, row])
+        void insertRows([row])
       } else if (cur.kind === 'place') {
         const wPaper = Math.abs(cur.cur.x - cur.start.x) / k
         const box = cur.tool === 'textbox' && wPaper >= MIN_BOX_PAPER
@@ -458,21 +493,21 @@ export function useAnnotationTool({
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
-  }, [captureSnapshot, toFrame, setAnnotations, k, newRow, defaultsFor])
+  }, [captureSnapshot, toFrame, setAnnotations, k, newRow, defaultsFor, insertRows])
 
   /** Empty canvas under CAD mode: place text / click out lines / start a marquee. */
   const onCaptureDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return
     e.stopPropagation()
     if (editing) { commitEdit(); return }   // first click outside the editor just finishes it
-    if (tool === 'line' || tool === 'arrow' || tool === 'leader') {
+    if (tool === 'line' || tool === 'arrow' || tool === 'leader' || (tool === 'cloud' && drawingRef.current)) {
       const d = drawingRef.current
       drawClick(toFrame(e, !e.shiftKey, d?.pts[d.pts.length - 1]))
       return
     }
     const p = toFrame(e, tool !== 'select' && !e.shiftKey)
     if (tool === 'select') beginDrag({ kind: 'marquee', start: p, cur: p, additive: e.shiftKey }, { x: e.clientX, y: e.clientY })
-    else beginDrag({ kind: 'place', start: p, cur: p, tool: tool as 'text' | 'textbox' }, { x: e.clientX, y: e.clientY })
+    else beginDrag({ kind: 'place', start: p, cur: p, tool: tool as PlaceTool }, { x: e.clientX, y: e.clientY })
   }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick])
 
   /** Rubber band for the segment being drawn. */
@@ -523,6 +558,10 @@ export function useAnnotationTool({
     onGrip: (e, id, grip: AnnotGrip) => {
       const a = annRef.current.find(x => x.id === id)
       if (!a) return
+      if (grip.startsWith('c')) {
+        beginDrag({ kind: 'corner', id, i: Number(grip.slice(1)), moved: false }, { x: e.clientX, y: e.clientY })
+        return
+      }
       if (grip.startsWith('v') || grip.startsWith('m')) {
         const i = Number(grip.slice(1))
         beginDrag(grip.startsWith('v')
@@ -587,17 +626,28 @@ export function useAnnotationTool({
     : null
 
   // The line / arrow / leader being drawn, as a row the layer can draw (frame coords).
+  // A box / ellipse / cloud being dragged out previews as the real shape.
   const drawPreview: RoomAnnotation | null = useMemo(() => {
+    const row = (kind: AnnotationKind, geom: RoomAnnotation['geom'], style: AnnotationStyle): RoomAnnotation => ({
+      id: '__draw__', room_id: room.id, view: 'plan', wall_id: null, cabinet_id: null, sheet_view: null,
+      kind, geom, text: null, style, sort_order: 0, created_at: '', updated_at: '',
+    })
+    if (drag?.kind === 'place' && (drag.tool === 'rect' || drag.tool === 'ellipse' || drag.tool === 'cloud')) {
+      if (drag.start.x === drag.cur.x && drag.start.y === drag.cur.y) return null
+      return drag.tool === 'cloud'
+        ? row('cloud', { pts: rectPts(drag.start, drag.cur) }, defaultsFor('cloud'))
+        : row(drag.tool, { a: drag.start, b: drag.cur }, defaultsFor(drag.tool))
+    }
     if (!drawing || !drawing.pts.length) return null
     const pts = drawing.cur ? [...drawing.pts, drawing.cur] : drawing.pts
+    if (drawing.tool === 'cloud') {
+      return pts.length >= 3 ? row('cloud', { pts }, defaultsFor('cloud')) : row('line', { pts }, defaultsFor('cloud'))
+    }
     const style = drawing.tool === 'leader'
       ? { ...defaultsFor('text'), arrowEnd: 'none' as const }
       : defaultsFor(drawing.tool === 'arrow' ? 'arrow' : 'line')
-    return {
-      id: '__draw__', room_id: room.id, view: 'plan', wall_id: null, cabinet_id: null, sheet_view: null,
-      kind: 'line', geom: { pts }, text: null, style, sort_order: 0, created_at: '', updated_at: '',
-    }
-  }, [drawing, defaultsFor, room.id])
+    return row('line', { pts }, style)
+  }, [drag, drawing, defaultsFor, room.id])
 
   return {
     tool, setTool, selected, selectedIds: liveSelected, setSelectedIds,
@@ -617,12 +667,12 @@ export type AnnotationTool = ReturnType<typeof useAnnotationTool>
 
 /** Editable vertices: a line's points, or a text's leader. */
 function vertsOf(a: RoomAnnotation): Pt[] {
-  if (a.kind === 'line') return (a.geom as LineGeom).pts ?? []
+  if (a.kind === 'line' || a.kind === 'cloud') return (a.geom as LineGeom).pts ?? []
   if (a.kind === 'text') return (a.geom as TextGeom).leader ?? []
   return []
 }
 function withVerts(a: RoomAnnotation, pts: Pt[]): RoomAnnotation {
-  if (a.kind === 'line') return { ...a, geom: { ...(a.geom as LineGeom), pts } }
+  if (a.kind === 'line' || a.kind === 'cloud') return { ...a, geom: { ...(a.geom as LineGeom), pts } }
   if (a.kind === 'text') return { ...a, geom: { ...(a.geom as TextGeom), leader: pts } }
   return a
 }

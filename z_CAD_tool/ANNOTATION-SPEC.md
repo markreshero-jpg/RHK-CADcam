@@ -1,6 +1,6 @@
 # CAD Annotation Tool — Spec
 
-Status: **A1–A3 built 2026-10-18 (plan: F7 CAD mode, ribbon, text / text box / leader / line / arrow). A2 checked in-app by Mark; A3 check pending; A4 next.** All decisions below are Mark's
+Status: **A1–A4 built 2026-10-18 (plan: F7 CAD mode, ribbon, text / text box / leader / line / arrow / box / ellipse / cloud). A2 + A3 checked in-app by Mark; A4 check pending; A5 next.** All decisions below are Mark's
 (2026-10-18). Open: how sheet notes react to cabinet revisions (decided at A7).
 
 > History: this folder used to hold the original Shape Editor handoff (May 2026). That
@@ -212,7 +212,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | A1 | Table + RLS + `rooms.annotation_scale`; types + DB helpers; layer items; `src/lib/annotations/` geometry + tests; `AnnotationLayer` read-only in the plan canvas + Plan View report (check with a hand-seeded row) | [x] built 2026-10-18; in-app check pending |
 | A2 | Plan authoring: F7 CAD sidebar tool + **ribbon** under the view tabs, **Text** tool with full text styling (decision 7), colour picker, select/move/delete/copy, undo, snaps, last-used defaults, annotation scale on the ribbon; "Print annotation colours" report toggle; PDF text check | [x] built 2026-10-18; in-app check pending (PDF text check not done yet) |
 | A3 | **Arrow / line + text leaders** (full arrowhead set per end, dash types, weight, vertex grips) | [x] built 2026-10-18 (1865f72); in-app check pending |
-| A4 | **Box / ellipse / cloud** with fill (none / solid / tint) | [ ] |
+| A4 | **Box / ellipse / cloud** with fill (none / solid / tint) | [x] built 2026-10-18; in-app check pending |
 | A5 | **Manual dimension** (live value, text override, offset grip, arrowhead/tick ends) | [ ] |
 | A6 | **Elevations:** wall-local frame, canvas + Elevation Views report, wall-split remap | [ ] |
 | A7 | **Cabinet sheets:** ribbon on the sheet preview (decision 10), cabinet-local frame, sheet toggle, own undo; **decide the cabinet-revision behaviour first** | [ ] |
@@ -314,4 +314,22 @@ A2 checked in-app by Mark 2026-10-18 ("looks good").
 - `8f776b0` (tutorial session) committed the A3 ribbon before its hook; 1865f72
   restored a consistent main.
 
-Next: A4 (box / ellipse / cloud tools).
+A3 checked in-app by Mark 2026-10-18.
+
+**A4 built 2026-10-18** (in-app check pending).
+- **Tools:** Box (R) and Ellipse (E): drag corner to corner, with a live preview of
+  the real shape. Cloud (C) works two ways:
+  - drag = a rectangular cloud (`rectPts`, stored as `pts`);
+  - click without dragging = start a freehand cloud: click the corners;
+    double-click / Enter / right-click closes it (3+ points). This reuses the line
+    drawing path (`AnnotDrawing.tool = 'cloud'`).
+- **Grips** (single selection):
+  - unrotated box / ellipse: 4 square corner grips (`c0–c3`, `setBoxCorner` keeps the
+    opposite corner). Rotated ones move / rotate only.
+  - cloud: vertex grips, plus midpoint diamonds that include the closing segment.
+- **Ribbon:** a "Turn" rotation field for a single box / ellipse (rotates about the
+  centre; `applyRotation` now covers them), and "Arcs" (new style key `cloudBump`,
+  paper mm, default 6) for clouds. The Fill group (none / solid / tint) was already
+  there from A2.
+
+Next: A5 (manual dimension tool).

@@ -35,6 +35,8 @@ export interface AnnotationStyle {
   arrowStart?:   ArrowType
   arrowEnd?:     ArrowType
   arrowSize?:    number
+  /** Cloud scallop length (paper mm). */
+  cloudBump?:    number
 }
 
 export type ResolvedStyle = Required<AnnotationStyle>
@@ -62,6 +64,7 @@ const BASE: ResolvedStyle = {
   weight: 0.35, dash: 'solid',
   fill: 'none', fillColor: '#dc2626', fillOpacity: 0.15,
   arrowStart: 'none', arrowEnd: 'none', arrowSize: 2.5,
+  cloudBump: 6,
 }
 
 /** Per-kind differences from BASE. */

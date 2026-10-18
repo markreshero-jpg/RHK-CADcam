@@ -11,12 +11,11 @@ import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
   type AnnotFrame, type Pt, type TextGeom, type LineGeom, type BoxGeom, type CloudGeom, type DimGeom,
   mapPt, mapRot, arrowHead, trimEnd, layoutText, leaderAttachLocal, rotatePt, cloudPath,
-  dimLayout, readableAngle, dimText, annotLayerItem,
+  dimLayout, readableAngle, dimText, annotLayerItem, boxCorners,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, printStyle, dashPattern, type ResolvedStyle, type ArrowType } from '@/src/lib/annotations/style'
 
 const FONT = 'Arial, Helvetica, sans-serif'
-const CLOUD_BUMP = 6   // paper mm per scallop
 
 export interface AnnotationLayerProps {
   annotations:   RoomAnnotation[]
@@ -30,9 +29,9 @@ export interface AnnotationLayerProps {
   edit?: AnnotationEditProps
 }
 
-/** rotate / width: text grips. vN: drag vertex N of a line or leader. mN: drag the
- *  midpoint of segment N→N+1 to insert a vertex there. */
-export type AnnotGrip = 'rotate' | 'width' | `v${number}` | `m${number}`
+/** rotate / width: text grips. vN: drag vertex N of a line, cloud or leader. mN: drag
+ *  the midpoint of segment N→N+1 to insert a vertex there. cN: box / ellipse corner N. */
+export type AnnotGrip = 'rotate' | 'width' | `v${number}` | `m${number}` | `c${number}`
 
 export interface AnnotationEditProps {
   selectedIds: ReadonlySet<string>
@@ -132,13 +131,14 @@ function hitShape(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number,
   }
 }
 
-/** Vertex grips (circles) + midpoint insert grips (small diamonds) along a polyline. */
-function vertexGrips(id: string, pts: Pt[], edit: AnnotationEditProps): React.ReactNode {
+/** Vertex grips (circles) + midpoint insert grips (small diamonds) along a polyline.
+ *  closed: a cloud — the last point joins back to the first. */
+function vertexGrips(id: string, pts: Pt[], edit: AnnotationEditProps, closed = false): React.ReactNode {
   const hw = edit.hitWidth
   const down = (g: AnnotGrip) => (e: React.PointerEvent) => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, id, g) } }
   return <>
-    {pts.slice(0, -1).map((p, i) => {
-      const q = pts[i + 1], m = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, r = hw * 0.32
+    {(closed ? pts : pts.slice(0, -1)).map((p, i) => {
+      const q = pts[(i + 1) % pts.length], m = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, r = hw * 0.32
       return <path key={`m${i}`} d={`M${m.x} ${m.y - r}L${m.x + r} ${m.y}L${m.x} ${m.y + r}L${m.x - r} ${m.y}Z`}
         fill={SEL} fillOpacity={0.5} style={{ pointerEvents: 'all', cursor: 'copy' }} onPointerDown={down(`m${i}`)} />
     })}
@@ -180,9 +180,22 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
       {single && g.leader?.length ? vertexGrips(a.id, g.leader.map(p => mapPt(f, p)), edit) : null}
     </>
   }
-  if (a.kind === 'line' && single) {
+  if ((a.kind === 'line' || a.kind === 'cloud') && single) {
     const pts = ((a.geom as LineGeom).pts ?? []).map(p => mapPt(f, p))
-    return vertexGrips(a.id, pts, edit)
+    return vertexGrips(a.id, pts, edit, a.kind === 'cloud')
+  }
+  // Unrotated box / ellipse: a square grip on each corner of its frame. (Rotated ones
+  // move and rotate only — resizing a turned box is left for later.)
+  if ((a.kind === 'rect' || a.kind === 'ellipse') && single && !((a.geom as BoxGeom).rot)) {
+    const c = boxCorners(a.geom as BoxGeom).map(p => mapPt(f, p))
+    return <>
+      <polygon points={ptsAttr(c)} {...line} />
+      {c.map((p, i) => (
+        <rect key={i} x={p.x - hw * 0.4} y={p.y - hw * 0.4} width={hw * 0.8} height={hw * 0.8}
+          fill="#0f172a" stroke={SEL} strokeWidth={hw / 6} style={{ pointerEvents: 'all', cursor: 'nwse-resize' }}
+          onPointerDown={e => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, a.id, `c${i}`) } }} />
+      ))}
+    </>
   }
   const pts = selectionPoints(a, f)
   if (!pts.length) return null
@@ -263,7 +276,7 @@ function renderOne(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
     }
     case 'cloud': {
       const pts = ((a.geom as CloudGeom).pts ?? []).map(p => mapPt(f, p))
-      return <path d={cloudPath(pts, CLOUD_BUMP * k)} {...strokeProps(s, k)} {...shapeFill(s)} />
+      return <path d={cloudPath(pts, Math.max(1, s.cloudBump) * k)} {...strokeProps(s, k)} {...shapeFill(s)} />
     }
     case 'dim':     return <ManualDim a={a} s={s} f={f} k={k} />
   }

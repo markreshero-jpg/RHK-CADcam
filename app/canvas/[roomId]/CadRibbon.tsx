@@ -25,12 +25,12 @@ const TOOLS: { id: CadTool; label: string; key: string; icon: React.ReactNode }[
   { id: 'leader',  label: 'Leader note — click the tip, click where the text goes', key: 'Q', icon: <><path d="M3 13l6-6h5" /><path d="M3 13l1-3 2 2z" fill="currentColor" /></> },
   { id: 'line',    label: 'Line — click points; double-click, Enter or right-click to finish', key: 'L', icon: <path d="M3 13L13 3" /> },
   { id: 'arrow',   label: 'Arrow — click points; double-click, Enter or right-click to finish', key: 'A', icon: <><path d="M3 13L12 4" /><path d="M13 3l-1 4-3-3z" fill="currentColor" /></> },
+  { id: 'rect',    label: 'Box — drag corner to corner', key: 'R', icon: <rect x="3" y="4" width="10" height="8" /> },
+  { id: 'ellipse', label: 'Ellipse — drag out its frame', key: 'E', icon: <ellipse cx="8" cy="8" rx="5.5" ry="4" /> },
+  { id: 'cloud',   label: 'Revision cloud — drag a rectangle, or click the corners of a freehand one (double-click / Enter to close)', key: 'C', icon: <path d="M4 11a2 2 0 010-4 2.5 2.5 0 014-2 2.5 2.5 0 014 1.5 2 2 0 010 4.5z" /> },
 ]
-// Later phases (A4–A5) — shown so the ribbon's shape is settled, not clickable yet.
+// Later phases (A5) — shown so the ribbon's shape is settled, not clickable yet.
 const LATER: { label: string; phase: string; icon: React.ReactNode }[] = [
-  { label: 'Box',       phase: 'A4', icon: <rect x="3" y="4" width="10" height="8" /> },
-  { label: 'Ellipse',   phase: 'A4', icon: <ellipse cx="8" cy="8" rx="5.5" ry="4" /> },
-  { label: 'Cloud',     phase: 'A4', icon: <path d="M4 11a2 2 0 010-4 2.5 2.5 0 014-2 2.5 2.5 0 014 1.5 2 2 0 010 4.5z" /> },
   { label: 'Dimension', phase: 'A5', icon: <><path d="M2 8h12M2 5v6M14 5v6" /></> },
 ]
 
@@ -116,7 +116,9 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
   const shapeFill = kind === 'rect' || kind === 'ellipse' || kind === 'cloud'
   const arrows = kind === 'line' || kind === 'dim'
   const nSel = cad.selected.length
-  const NEXT: Record<CadTool, string> = { select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow' }
+  const NEXT: Record<CadTool, string> = {
+    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud',
+  }
   const what = cad.editing ? (cad.editing.isNew ? 'New text' : 'Editing text')
     : nSel > 1 ? `${nSel} selected` : nSel === 1 ? `Selected ${kind === 'text' && (cad.selected[0].geom as { width?: number }).width != null ? 'text box' : kind}`
     : `Next ${NEXT[cad.tool]}`
@@ -241,6 +243,17 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
               )}
             </Group>
           </>)}
+          {kind === 'cloud' && (
+            <Group label="Arcs">
+              <Num title="Cloud arc length (paper mm)" value={s.cloudBump} step={1} min={2} max={30} w="w-11" suffix="mm"
+                onChange={n => set({ cloudBump: Math.max(2, Math.min(30, n)) })} />
+            </Group>
+          )}
+          {cad.ribbonRot != null && (
+            <Group label="Turn">
+              <Num title="Rotation (degrees)" value={cad.ribbonRot} step={1} w="w-12" suffix="°" onChange={n => cad.applyRotation(n)} />
+            </Group>
+          )}
         </>)}
 
         <Sep />
