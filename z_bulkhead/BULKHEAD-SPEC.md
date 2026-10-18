@@ -11,7 +11,7 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → B0–B2 built 2026-10-18 (migration b1 applied; 7 resolver tests). Not checked in-app. Next B3 (sidebar + right-click UI, auto-height sync) then B4 (library row).
+> **RESUME HERE** → B0–B4 built 2026-10-18 (migrations b1 + b4 applied; BH is in the library under Wall → Bulkheads). Next: B5 in-app check by Mark — place BH over overheads with a soffit set; tick returns; check 3D, elevation, cut list.
 
 ---
 
@@ -34,7 +34,7 @@ underside when the bulkhead isn't sitting on cabinets.
 
 ## Locked decisions (Mark, 2026-10-18)
 
-1. **It's a cabinet, placed from F3.** A `BH` library row under Wall → Panels,
+1. **It's a cabinet, placed from F3.** A `BH` library row under Wall → Bulkheads,
    `assembly_class: 'wall'`, no carcase / internals / kick / face zones. All
    sizes (W, H, D) are editable like any cabinet. No new F key (F5 stays free —
    it's browser refresh).
@@ -108,10 +108,10 @@ underside when the bulkhead isn't sitting on cabinets.
       ceiling). Auto-height sync on soffit / ceiling edits while `auto_h`. *Done 2026-10-18 except the auto-height sync (moved to B3): placement sets H = ceiling − wall-cab top; `cabVExtent` / `cabBottomZ` put the top at the ceiling, so a bulkhead never blocks the overheads below.*
 - [x] **B2 — `resolveBulkhead`.** Fascia, returns, bottom return, cleat;
       mitre bevels; exposed / carcase materials; edgebanding on visible edges.
-- [ ] **B3 — UI.** Bulkhead section in the cabinet sidebar (front line,
+- [x] **B3 — UI.** Bulkhead section in the cabinet sidebar (front line,
       L / R / bottom checkboxes + depth + joint, cleat toggle); right-click
-      toggles on the canvas.
-- [ ] **B4 — library row.** Seed `BH` under Wall → Panels with defaults; place
+      toggles on the canvas. *Done: `BulkheadSection.tsx` in the cabinet panel (+ "Height to ceiling" switch; typing H turns it off), "Bulkhead" submenu on the cabinet right-click, auto-height sync effect in CanvasClient, bulkhead fast path in dbUpdateCabinet.*
+- [x] **B4 — library row.** Seed `BH` under Wall → Bulkheads (new category; subcategory Panels) with defaults; place
       via F3 (width typed / gap-fit).
 - [ ] **B5 — in-app check.** Plan, elevation, 3D, cut list, optimiser,
       dimension rows, reports.

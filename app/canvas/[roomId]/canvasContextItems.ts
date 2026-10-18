@@ -1,5 +1,6 @@
 import type { AssemblyClass } from '@/src/lib/types'
 import type { CabinetInstance, ContextMenuItem } from './canvasTypes'
+import { normaliseBulkhead, type BulkheadSettings } from '@/src/lib/bulkhead'
 
 export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, fixtureId, fixture, canEqualize, clipboard, cabinets, multiSelect,
@@ -7,6 +8,7 @@ export function buildContextMenuGroups({
   onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
+  onUpdateBulkhead,
 }: {
   cabId?: string
   wallId?: string
@@ -53,6 +55,8 @@ export function buildContextMenuGroups({
   onDetachKick?: (cabId: string) => void
   onSeparateKicks?: (cabId: string) => void
   onKickSettings?: (cabId: string) => void
+  /** Bulkheads (z_bulkhead): toggle a return / the cleat. */
+  onUpdateBulkhead?: (cabId: string, next: BulkheadSettings) => void
 }): ContextMenuItem[][] {
   if (vertexContext && onDeleteBenchtopVertex) {
     const { btId, vi } = vertexContext
@@ -156,6 +160,18 @@ export function buildContextMenuGroups({
   }
 
   groups.push([{ label: 'Edit…', onClick: () => onEdit(cabId), color: 'blue' }])
+
+  // Bulkhead toggles — the same switches as the sidebar section.
+  const bh = normaliseBulkhead(cab?.bulkhead)
+  if (bh && onUpdateBulkhead) {
+    const tick = (on: boolean, label: string) => (on ? '✓ ' : '    ') + label
+    const ret = (k: 'left' | 'right' | 'bottom', label: string) =>
+      ({ label: tick(bh[k].on, label), onClick: () => onUpdateBulkhead(cabId, { ...bh, [k]: { ...bh[k], on: !bh[k].on } }) })
+    groups.push([{ label: 'Bulkhead', children: [
+      ret('left', 'Left return'), ret('right', 'Right return'), ret('bottom', 'Bottom return'),
+      { label: tick(bh.cleat, 'Fixing cleat'), onClick: () => onUpdateBulkhead(cabId, { ...bh, cleat: !bh.cleat }) },
+    ] }])
+  }
 
   const libItems: ContextMenuItem[] = []
   if (onReplace) libItems.push({ label: 'Replace with library cabinet…', onClick: () => onReplace(cabId) })

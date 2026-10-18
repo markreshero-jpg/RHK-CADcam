@@ -8,6 +8,7 @@ import { cabT, wallDir, findFreeSlot, cabsBlock, cabBottomZ } from '@/src/lib/ge
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetShapeSection from './CabinetShapeSection'
+import BulkheadSection from './BulkheadSection'
 
 export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, onClose, hideWallPosition, hideDelete, autoFocusWidth }: {
   cabinet: CabinetInstance
@@ -161,7 +162,11 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
                 <p className="text-[10px] text-gray-600 text-center mb-0.5 uppercase">{dim}</p>
                 <CalcInput value={f(dim) as number}
                   autoFocus={autoFocusWidth && dim === 'dx'}
-                  onCommit={v => onUpdate(cabinet.id, { [dim]: v })}
+                  onCommit={v => onUpdate(cabinet.id, {
+                    [dim]: v,
+                    // A typed bulkhead height is the user's — stop following the ceiling.
+                    ...(dim === 'dy' && cabinet.bulkhead?.auto_h ? { bulkhead: { ...cabinet.bulkhead, auto_h: false } } : {}),
+                  })}
                   className={inp + ' text-right'} />
               </div>
             ))}
@@ -169,6 +174,9 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
         </div>
         {cabinet.has_carcass && !cabinet.is_kick_assembly && (
           <CabinetShapeSection cabinet={cabinet} wall={wall} onUpdate={onUpdate} inp={inp} lbl={lbl} />
+        )}
+        {cabinet.bulkhead && (
+          <BulkheadSection cabinet={cabinet} wall={wall} room={room} onUpdate={onUpdate} inp={inp} lbl={lbl} />
         )}
         <div>
           <label className={lbl}>Top Type</label>

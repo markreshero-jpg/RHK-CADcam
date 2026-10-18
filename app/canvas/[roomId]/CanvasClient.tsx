@@ -10,9 +10,9 @@ import {
   wallEnd, wallDir,
   snapAngle,
   nearestWall, wallMitreCorners, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabT, nextLabel,
-  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint, cabWallSpan, wallCabTop,
+  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint, cabWallSpan,
 } from '@/src/lib/geometry'
-import { ceilingZ } from '@/src/lib/bulkhead'
+import { bulkheadAutoHeight } from '@/src/lib/bulkhead'
 import { angledFillerSnap } from '@/src/lib/cabinetShape/angledFillerSnap'
 import { waterfallLegs, waterfallOccupancy } from '@/src/lib/waterfallObstacles'
 import { crossWallCabinetOccupancy, fixtureOccupancy, bandOccupancy, solidFixtures } from '@/src/lib/cabinetObstacles'
@@ -920,6 +920,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     // dissolved (explicit Separate, or a delete dropping it below 2 members).
   }, [])
 
+  // Bulkheads on "height to ceiling" (z_bulkhead) follow their wall's ceiling /
+  // soffit / wall-cab top — room or wall edits, or a move to another wall.
+  useEffect(() => {
+    for (const c of cabinets) {
+      if (!c.bulkhead?.auto_h) continue
+      const h = bulkheadAutoHeight(walls.find(w => w.id === c.wall_id), room)
+      if (h > 0 && Math.abs(h - c.dy) >= 0.5) void handleUpdateCabinet(c.id, { dy: h })
+    }
+  }, [cabinets, walls, room, handleUpdateCabinet])
+
   function commitResize() {
     if (!cabResize) return
     captureSnapshot()
@@ -993,7 +1003,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     // Bulkhead (z_bulkhead): fills from the wall-cab top up to this wall's ceiling.
     if (data.bulkhead?.auto_h) {
-      const h = Math.round(ceilingZ(wall, room) - wallCabTop(wall, room))
+      const h = bulkheadAutoHeight(wall, room)
       if (h > 0) data.dy = h
     }
     // Angled corner filler (z_angled_filler A3): drop into the nearer inside
@@ -3127,6 +3137,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             multiSelect,
             onDeleteWall: handleDeleteWall,
             onDeleteCabinet: id => void handleDeleteCabinet(id),
+            onUpdateBulkhead: (id, next) => { setContextMenu(null); captureSnapshot(); void handleUpdateCabinet(id, { bulkhead: next }) },
             onDeleteMultiple: ids => void handleDeleteMultipleCabinets(ids),
             onInsertCabinet: (wId, t, cls) => { void handleInsertCabinetAtElevT(wId, t, cls) },
             onInsertAdjacent: (cabId, type, side) => { void handleInsertAdjacent(cabId, type, side) },

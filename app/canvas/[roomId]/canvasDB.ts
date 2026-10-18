@@ -17,6 +17,7 @@ import type {
 import { rowToJointTypeOp, seamAssignJoint, seamAssignRows } from '@/src/lib/resolver/types'
 import type { ConstructionRules } from '@/src/lib/resolver/types'
 import { mergeRules } from '@/src/lib/resolver/mergeRules'
+import { normaliseBulkhead } from '@/src/lib/bulkhead'
 
 const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 
@@ -662,13 +663,15 @@ export async function dbUpdateCabinet(
   // kick (owned by the lead), which the single-cabinet fast path can't see — they
   // fall through to a full resolve, and the caller fans the run out (resolveKickRun).
   const keys = Object.keys(u)
-  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k)) ? getCachedInput(id) : undefined
+  // Bulkhead settings (z_bulkhead) only feed resolveBulkhead — same fast path.
+  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead') ? getCachedInput(id) : undefined
   if (cached && !cached.kick_run) {
     const updated = {
       ...cached,
       ...(u.dx !== undefined && { DX: Number(u.dx) }),
       ...(u.dy !== undefined && { DY: Number(u.dy) }),
       ...(u.dz !== undefined && { DZ: Number(u.dz) }),
+      ...(u.bulkhead !== undefined && { bulkhead: normaliseBulkhead(u.bulkhead) }),
     }
     setCachedInput(id, updated)
     return resolveFromCachedInput(id, updated)

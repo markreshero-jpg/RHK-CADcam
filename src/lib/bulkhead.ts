@@ -8,6 +8,7 @@
 // ============================================================
 
 import type { Wall, Room } from './types'
+import { wallCabTop } from './geometry'
 
 export type BulkheadJoint = 'mitre' | 'butt'
 export interface BulkheadReturn { on: boolean; depth: number; joint: BulkheadJoint }
@@ -53,4 +54,9 @@ export function normaliseBulkhead(b: Partial<BulkheadSettings> | null | undefine
 /** Ceiling height (mm from floor) a bulkhead hangs from. */
 export function ceilingZ(wall: Wall | null | undefined, room: Room): number {
   return wall?.height ?? room.room_dy ?? 2400
+}
+
+/** Auto height: from the wall-cabinet top up to the ceiling (the soffit drop). */
+export function bulkheadAutoHeight(wall: Wall | null | undefined, room: Room): number {
+  return Math.round(ceilingZ(wall, room) - wallCabTop(wall, room))
 }
