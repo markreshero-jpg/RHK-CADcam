@@ -1,6 +1,6 @@
 # UBO — under-bench oven cabinet + cabinet contents
 
-Status: **U1–U5 built 2026-10-18, in-app check pending.** RESUME HERE → U6.
+Status: **U1–U6 built 2026-10-18, in-app check pending.** RESUME HERE → U7 (in-app check).
 
 A library base cabinet that comes out with an oven already inside it. Built
 natively (face grid + interior + carcass options), with the oven as a real
@@ -176,6 +176,16 @@ the fixture → its normal FixturePanel = the "fixture editor").
 **U6 — Save to library carries contents.** `saveCabinetToLibrary` snapshots
 the cabinet's linked fixtures into `contents` (zone anchor when the fixture
 sits in an open zone, else point). Library list shows a contents count.
+
+*Built (U6):* `contentsFromFixtures` (cabinetContents.ts): seated → zone anchor;
+position-linked (e.g. a sink on a base) → point anchor (link_* + height above
+the cabinet bottom); fixtures without a catalog_id skipped.
+`saveCabinetToLibrary` (canvasDB) loads the cabinet's linked fixtures + its
+room / wall for the bottom height. It now also carries the cabinet's own
+carcass choices in `rule_overrides` — **only** `BACK_TYPE`, `BKRH`,
+`RAIL_ORIENT` (it used to save `{}`; other cabinet overrides such as a kick
+join's `TOEH` stay behind). Library list: "+N fixture(s)" badge next to the
+code; Duplicate copies contents (select *).
 
 **U7 — check in-app** (place UBO, resize, change kick, join kicks, swap oven,
 cut list has the shelf + back rail and no back).

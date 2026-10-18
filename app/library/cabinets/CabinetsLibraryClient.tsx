@@ -16,6 +16,7 @@ interface Definition {
   category_id: string | null; description: string | null
   sort_order: number; active: boolean
   default_dx: number; default_dy: number; default_dz: number
+  contents?: unknown[] | null
 }
 
 const CLASSES: AssemblyClass[] = ['base', 'wall', 'tall', 'base_corner', 'wall_corner', 'tall_corner']
@@ -191,7 +192,15 @@ export default function CabinetsLibraryClient({
             {rows.map((d, i) => (
               <tr key={d.id} className={`${i % 2 ? 'bg-surface/30' : ''} ${d.active ? '' : 'opacity-50'} hover:bg-surface-2/30`}>
                 <td className="px-1 py-0.5 min-w-[180px]">
-                  <input defaultValue={d.name} onBlur={e => { const v = e.target.value.trim(); if (v && v !== d.name) updateDef(d.id, { name: v }) }} className={`${cellInput} font-medium`} />
+                  <div className="flex items-center gap-1">
+                    <input defaultValue={d.name} onBlur={e => { const v = e.target.value.trim(); if (v && v !== d.name) updateDef(d.id, { name: v }) }} className={`${cellInput} font-medium`} />
+                    {/* Default contents (z_ubo U6): fixtures that come with it, e.g. a UBO's oven. */}
+                    {!!d.contents?.length && (
+                      <span title="Fixtures placed with this cabinet" className="shrink-0 rounded bg-sky-900/40 px-1.5 py-0.5 text-[10px] text-sky-300">
+                        +{d.contents.length} fixture{d.contents.length === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-1 py-0.5">
                   <select value={d.assembly_class} onChange={e => updateDef(d.id, { assembly_class: e.target.value as AssemblyClass })} className={cellInput}>

@@ -108,6 +108,21 @@ export function fixtureLocalBox(f: RoomFixture, plan: CabPlan, room: Room): Loca
   }
 }
 
+/**
+ * Contents to save with a library definition (z_ubo U6) from the fixtures
+ * linked to the cabinet: a seated one keeps its open cell; anything else (a
+ * sink dropped on a base) keeps its spot — link_* plus its height above the
+ * cabinet bottom. Fixtures not from the catalogue can't be re-spawned → skipped.
+ */
+export function contentsFromFixtures(fixtures: RoomFixture[], cabinetBottomZ: number): ContentItem[] {
+  return fixtures.filter(f => !!f.catalog_id).map(f => ({
+    fixture_catalog_id: f.catalog_id!,
+    anchor: f.link_zone
+      ? { kind: 'zone', row_index: f.link_zone.row_index, col_index: f.link_zone.col_index }
+      : { kind: 'point', link_x: f.link_x, link_z: f.link_z, link_rot: f.link_rot, z: round1((Number(f.z) || 0) - cabinetBottomZ) },
+  }))
+}
+
 /** Parse a definition's contents column defensively (jsonb, may be null / legacy). */
 export function definitionContents(raw: unknown): ContentItem[] {
   if (!Array.isArray(raw)) return []

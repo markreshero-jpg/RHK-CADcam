@@ -1,5 +1,7 @@
 import { supabase } from '@/src/lib/supabase'
-import type { Wall, CabinetInstance, CabinetDefinition, NeighbourType, RoomAnnotation } from '@/src/lib/types'
+import type { Wall, CabinetInstance, CabinetDefinition, NeighbourType, RoomAnnotation, Room, RoomFixture } from '@/src/lib/types'
+import { contentsFromFixtures } from '@/src/lib/cabinetContents'
+import { cabBottomZ } from '@/src/lib/geometry'
 import type { CustomOrient } from '@/src/lib/customPartBox'
 import { seedClassDepthParams, presetBox } from '@/src/lib/cabinetShape/presets'
 import { resolveCabinetFromDB, resolveCustomParts, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
@@ -649,6 +651,24 @@ export async function saveCabinetToLibrary(
     .select('part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,no_cnc,sort_order')
     .eq('cabinet_instance_id', cabinetInstanceId).order('sort_order')
 
+  // Fixtures linked to it become the definition's default contents (z_ubo U6):
+  // the oven seated in its opening, a sink on its base…
+  const [{ data: fxs }, { data: roomRow }, { data: wallRow }] = await Promise.all([
+    supabase.from('room_fixtures').select('*').eq('cabinet_id', cabinetInstanceId),
+    supabase.from('rooms').select('*').eq('id', inst.room_id).maybeSingle(),
+    inst.wall_id ? supabase.from('walls').select('*').eq('id', inst.wall_id).maybeSingle() : Promise.resolve({ data: null }),
+  ])
+  const contents = roomRow
+    ? contentsFromFixtures((fxs ?? []) as RoomFixture[], cabBottomZ(inst as CabinetInstance, roomRow as Room, (wallRow ?? null) as Wall | null))
+    : []
+
+  // Carcass choices made on the cabinet travel with it (z_ubo U6) — a saved
+  // UBO copy keeps its back rail. Other cabinet overrides (e.g. the kick height
+  // a kick join writes) stay behind.
+  const CARRIED_RULES = ['BACK_TYPE', 'BKRH', 'RAIL_ORIENT'] as const
+  const instRules = (inst.rule_overrides ?? {}) as Record<string, unknown>
+  const rule_overrides = Object.fromEntries(CARRIED_RULES.filter(k => instRules[k] !== undefined).map(k => [k, instRules[k]]))
+
   const row = {
     name: opts.name,
     assembly_class: inst.assembly_class,
@@ -660,7 +680,8 @@ export async function saveCabinetToLibrary(
     top_type: inst.top_type, toe_type: inst.toe_type,
     construction_method_id: inst.construction_method_id,
     face_grid: inst.face_grid ?? {}, internal_grid: inst.internal_grid, carcase_joints: inst.carcase_joints ?? {},
-    rule_overrides: {},
+    rule_overrides,
+    contents,
     material_overrides, hardware_overrides, toekick_overrides, drawerbox_overrides: {},
     exposed_interior: p.exposed_interior ? !!inst.exposed_interior : false,
     no_cnc: !!inst.no_cnc,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { zoneSeat, zoneFollow, definitionContents, fixtureLocalBox } from '../cabinetContents'
+import { zoneSeat, zoneFollow, definitionContents, fixtureLocalBox, contentsFromFixtures } from '../cabinetContents'
 import { cabinetPlans, linkedPose } from '../fixtureLinks'
 import { fixtureCenter } from '../fixtureGeometry'
 import { centroid } from '../geometry'
@@ -74,6 +74,20 @@ describe('fixtureLocalBox', () => {
     const b = fixtureLocalBox(f, plan, room)
     expect(b.yaw).toBe(0)
     expect(b).toMatchObject({ x0: 0, z0: 0, y0: 220, w: 600, d: 600, h: 596 })
+  })
+})
+
+describe('contentsFromFixtures', () => {
+  it('seated → zone anchor; position-linked → point anchor with height above the cabinet; non-catalogue skipped', () => {
+    const fx = [
+      { catalog_id: 'oven', link_zone: { row_index: 1, col_index: 0, y: 220 }, link_x: 300, link_z: 300, link_rot: 0, z: 220 },
+      { catalog_id: 'sink', link_zone: null, link_x: 250, link_z: 280, link_rot: 0, z: 1050 },
+      { catalog_id: null, link_zone: null, link_x: 0, link_z: 0, link_rot: 0, z: 0 },
+    ] as unknown as RoomFixture[]
+    expect(contentsFromFixtures(fx, 150)).toEqual([
+      { fixture_catalog_id: 'oven', anchor: { kind: 'zone', row_index: 1, col_index: 0 } },
+      { fixture_catalog_id: 'sink', anchor: { kind: 'point', link_x: 250, link_z: 280, link_rot: 0, z: 900 } },
+    ])
   })
 })
 
