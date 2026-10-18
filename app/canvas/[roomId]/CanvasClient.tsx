@@ -9,7 +9,7 @@ import {
   toDeg, dist,
   wallEnd, wallDir,
   snapAngle,
-  nearestWall, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabT, nextLabel,
+  nearestWall, wallMitreCorners, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabT, nextLabel,
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint, cabWallSpan,
 } from '@/src/lib/geometry'
 import { angledFillerSnap } from '@/src/lib/cabinetShape/angledFillerSnap'
@@ -43,7 +43,7 @@ import { useFixtureInteraction } from './useFixtureInteraction'
 import FixturesPlan from './FixturesPlan'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
-import { withFixtureCutouts, benchtopAt, openingSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, type StretchSide } from '@/src/lib/fixtureGeometry'
+import { withFixtureCutouts, benchtopAt, openingSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, fixtureClearances, type StretchSide } from '@/src/lib/fixtureGeometry'
 import { cabinetPlans, linkFor, followLinks, fixtureClashes, stretchObstacles } from '@/src/lib/fixtureLinks'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
@@ -393,6 +393,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (q.timer) clearTimeout(q.timer)
     q.timer = setTimeout(flushFixtureFollow, 400)
   }, [cabPlans, cabinets, fixtures, walls])
+  // Clearances of the selected fixture (plan): gaps to cabinets / appliances at its
+  // height and to the walls; doors / windows to the wall ends and other openings.
+  const selFixtureId = selected?.type === 'fixture' ? selected.id : null
+  const fixtureClearance = useMemo(() => {
+    const f = selFixtureId ? fixtures.find(x => x.id === selFixtureId) : undefined
+    if (!f) return null
+    const cx = centroid(walls)
+    const wallPolys = f.category === 'opening' ? [] : walls.map(w => wallMitreCorners(w, walls, cx)).filter(p => p.length >= 3)
+    const obstacles = [...stretchObstacles(f, cabPlans, fixtures, room), ...wallPolys]
+    return { id: f.id, c: fixtureClearances(f, walls, cx, obstacles) }
+  }, [selFixtureId, fixtures, walls, cabPlans, room])
+
   // Grab a fixture edge handle (plan or elevation) — P7.
   function startFixtureStretch(id: string, side: StretchSide, step = 1) {
     const f = fixtures.find(x => x.id === id)
@@ -2573,6 +2585,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                   stretching={fx.stretch ? { id: fx.stretch.id, side: fx.stretch.side } : null}
                   onStretchHandle={(id, side) => startFixtureStretch(id, side)}
                   onMoveHandle={id => { setCabResize(null); setContextMenu(null); fx.startMove(id) }}
+                  clearance={mode === 'select' || fx.stretch ? fixtureClearance : null}
                   onPointerDown={(_e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null); setContextMenu(null) }}
                   onContextMenu={(e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setContextMenu({ x: e.clientX, y: e.clientY, fixtureId: id }) }}
                   onDoubleClick={(_e, id) => { setSelected({ type: 'fixture', id }); setViewFixtureId(id) }}

@@ -11,7 +11,7 @@ import type { RoomFixture } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { wrapLabel } from '@/src/lib/textWrap'
-import type { FixtureSnap, StretchSide } from '@/src/lib/fixtureGeometry'
+import type { FixtureSnap, StretchSide, Clearances } from '@/src/lib/fixtureGeometry'
 
 const STROKE = '#0ea5e9'
 const FILL   = '#0ea5e9'
@@ -148,6 +148,43 @@ function MoveHandle({ cx, cy, z, onGrab }: { cx: number; cy: number; z: number; 
   )
 }
 
+// Clearance dims on the selected fixture: a dimension line from each side to the
+// nearest obstacle (fixtureClearances), drawn in the fixture's own frame.
+const CLEAR = '#22d3ee'
+function ClearanceDims({ f, c, z, bg }: { f: RoomFixture; c: Clearances; z: number; bg: string }) {
+  const sw = 1 / z, tk = 5 / z, fs = 10 / z
+  const r = ((f.rotation % 360) + 360) % 360
+  const flip = r > 90 && r < 270
+  const dim = (key: string, x1: number, y1: number, x2: number, y2: number, v: number) => {
+    const vert = Math.abs(x1 - x2) < 1e-6
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+    const tick = (x: number, y: number) => vert
+      ? <line x1={x - tk} y1={y} x2={x + tk} y2={y} stroke={CLEAR} strokeWidth={sw} />
+      : <line x1={x} y1={y - tk} x2={x} y2={y + tk} stroke={CLEAR} strokeWidth={sw} />
+    const label = String(v)
+    const w = label.length * fs * 0.62 + fs * 0.6, h = fs * 1.3
+    return (
+      <g key={key}>
+        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={CLEAR} strokeWidth={sw} strokeDasharray={`${4 / z} ${3 / z}`} />
+        {tick(x1, y1)}{tick(x2, y2)}
+        <g transform={flip ? `rotate(180 ${mx} ${my})` : undefined}>
+          <rect x={mx - w / 2} y={my - h / 2} width={w} height={h} rx={2 / z} fill={bg} stroke={CLEAR} strokeWidth={sw * 0.6} />
+          <text x={mx} y={my} fontSize={fs} fill={CLEAR} textAnchor="middle" dominantBaseline="central">{label}</text>
+        </g>
+      </g>
+    )
+  }
+  const cy = f.depth / 2, cx = f.width / 2
+  return (
+    <g transform={`translate(${f.x},${f.y}) rotate(${f.rotation})`} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      {c.left  != null && dim('l', -c.left, cy, 0, cy, c.left)}
+      {c.right != null && dim('r', f.width, cy, f.width + c.right, cy, c.right)}
+      {c.front != null && dim('f', cx, f.depth, cx, f.depth + c.front, c.front)}
+      {c.back  != null && dim('b', cx, -c.back, cx, 0, c.back)}
+    </g>
+  )
+}
+
 // Edge handles on the selected fixture (P7) — same look as the cabinet resize
 // markers: blue = width (left / right), purple = depth (front). Openings: width only.
 function StretchHandles({ f, z, active, onGrab, onMove }: {
@@ -180,7 +217,7 @@ function StretchHandles({ f, z, active, onGrab, onMove }: {
 
 export default function FixturesPlan({
   fixtures, ghost, ghostBody, hiddenId, selectedId, zoom, layers, interactive, clashIds,
-  stretching, onStretchHandle, onMoveHandle,
+  stretching, onStretchHandle, onMoveHandle, clearance,
   onPointerDown, onContextMenu, onDoubleClick,
 }: {
   fixtures:   RoomFixture[]
@@ -200,6 +237,8 @@ export default function FixturesPlan({
   onStretchHandle?: (id: string, side: StretchSide) => void
   /** Centre crosshair: pick the selected fixture up (follows the cursor, click drops). */
   onMoveHandle?: (id: string) => void
+  /** Gaps to the nearest obstacles for the selected fixture (shown while it's selected). */
+  clearance?: { id: string; c: Clearances } | null
   onPointerDown: (e: React.PointerEvent, id: string) => void
   onContextMenu: (e: React.MouseEvent, id: string) => void
   onDoubleClick: (e: React.MouseEvent, id: string) => void
@@ -227,6 +266,10 @@ export default function FixturesPlan({
           </g>
         )
       })}
+      {clearance && (() => {
+        const f = fixtures.find(x => x.id === clearance.id && x.id !== hiddenId)
+        return f ? <ClearanceDims f={f} c={clearance.c} z={z} bg={layers.background ?? '#030712'} /> : null
+      })()}
       {ghost && ghostBody && (
         <g style={{ pointerEvents: 'none' }}>
           <FixtureShape f={ghostBody} x={ghost.x} y={ghost.y} rotation={ghost.rotation} z={z} layers={layers}

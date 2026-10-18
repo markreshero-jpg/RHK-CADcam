@@ -242,6 +242,13 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-18 (user): **clearance dims on the selected fixture** (cyan, dashed, value chip).
+  Plan (`fixtureClearances` + FixturesPlan `ClearanceDims`): left / right / front / back to the
+  nearest stretch obstacle (cabinets + solid fixtures at its height) or wall; doors / windows to
+  the wall ends + other openings. Elevation (FixturesElevation `ElevClearance`): left / right to
+  boxes at its height or the wall ends, below to the box under it or the floor, above to the box
+  over it or the ceiling. Shown in Select and while stretching; < 1 mm (touching) hidden.
+
 - **Decision changed 2026-10-18 (user: "appliances aren't being recognised by the cabinets and
   overlapping is occurring")** — replaces P4's "overlaps warn, never block":
   - Cabinets treat appliances as obstacles: `fixtureOccupancy` (cabinetObstacles.ts) is in

@@ -102,8 +102,56 @@ export function OpeningHoles({ fixtures, wall, side, roomCx, roomH, layers, fill
   </g>
 }
 
+export interface ElevBox { x0: number; x1: number; z0: number; z1: number }
+
+// Clearance dims for the selected fixture in elevation: left / right to the
+// nearest box at an overlapping height (else the wall end), below to the nearest
+// box under it (else the floor), above to the nearest box over it (else the
+// ceiling). Gaps under 1 mm are left out.
+const CLEAR = '#22d3ee'
+function ElevClearance({ box, others, len, roomH, z, bg }: {
+  box: ElevBox; others: ElevBox[]; len: number; roomH: number; z: number; bg: string
+}) {
+  const zOver = (o: ElevBox) => Math.min(o.z1, box.z1) - Math.max(o.z0, box.z0) > 1
+  const xOver = (o: ElevBox) => Math.min(o.x1, box.x1) - Math.max(o.x0, box.x0) > 1
+  const leftEdge  = Math.max(0,   ...others.filter(o => zOver(o) && o.x1 <= box.x0 + 1).map(o => o.x1))
+  const rightEdge = Math.min(len, ...others.filter(o => zOver(o) && o.x0 >= box.x1 - 1).map(o => o.x0))
+  const below     = Math.max(0,     ...others.filter(o => xOver(o) && o.z1 <= box.z0 + 1).map(o => o.z1))
+  const above     = Math.min(roomH, ...others.filter(o => xOver(o) && o.z0 >= box.z1 - 1).map(o => o.z0))
+  const sw = 1 / z, tk = 5 / z, fs = 10 / z
+  const Y = (h: number) => roomH - h
+  const midX = (box.x0 + box.x1) / 2, midY = Y((box.z0 + box.z1) / 2)
+  const dim = (key: string, x1: number, y1: number, x2: number, y2: number, v: number) => {
+    if (v < 1) return null
+    const vert = Math.abs(x1 - x2) < 1e-6
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+    const tick = (x: number, y: number) => vert
+      ? <line x1={x - tk} y1={y} x2={x + tk} y2={y} stroke={CLEAR} strokeWidth={sw} />
+      : <line x1={x} y1={y - tk} x2={x} y2={y + tk} stroke={CLEAR} strokeWidth={sw} />
+    const label = String(Math.round(v))
+    const w = label.length * fs * 0.62 + fs * 0.6, h = fs * 1.3
+    return (
+      <g key={key}>
+        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={CLEAR} strokeWidth={sw} strokeDasharray={`${4 / z} ${3 / z}`} />
+        {tick(x1, y1)}{tick(x2, y2)}
+        <rect x={mx - w / 2} y={my - h / 2} width={w} height={h} rx={2 / z} fill={bg} stroke={CLEAR} strokeWidth={sw * 0.6} />
+        <text x={mx} y={my} fontSize={fs} fill={CLEAR} textAnchor="middle" dominantBaseline="central">{label}</text>
+      </g>
+    )
+  }
+  return (
+    <g style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      {dim('l', leftEdge, midY, box.x0, midY, box.x0 - leftEdge)}
+      {dim('r', box.x1, midY, rightEdge, midY, rightEdge - box.x1)}
+      {dim('b', midX, Y(below), midX, Y(box.z0), box.z0 - below)}
+      {dim('t', midX, Y(box.z1), midX, Y(above), above - box.z1)}
+    </g>
+  )
+}
+
 export default function FixturesElevation({
   fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, onSelect, stretching, onStretchHandle, ghost, onMoveHandle,
+  obstacles = [], showClearance = false,
 }: {
   fixtures:   RoomFixture[]
   wall:       Wall
@@ -121,6 +169,10 @@ export default function FixturesElevation({
   onMoveHandle?: (id: string) => void
   /** Placing / moving in elevation: where the carried item would land (snap pose + body + height). */
   ghost?: { snap: FixtureSnap; body: Pick<RoomFixture, 'category' | 'name' | 'width' | 'depth' | 'height'>; z: number } | null
+  /** Cabinets on this face as elevation boxes (x along, z up) — for the selected fixture's clearances. */
+  obstacles?: ElevBox[]
+  /** Show clearance dims on the selected fixture. */
+  showClearance?: boolean
 }) {
   const f = elevationFrame(wall, side, roomCx)
   const handles = (fx: RoomFixture, x: number, y: number, w: number, h: number) =>
@@ -147,9 +199,24 @@ export default function FixturesElevation({
     )
   })()
 
+  // Each fixture's box on this face (openings: in their wall; others: facing it).
+  const boxOf = (fx: RoomFixture): ElevBox | null => {
+    const on = fx.category === 'opening' ? openingOnWall(fx, wall, side, roomCx) : fixtureOnFace(fx, f)
+    if (!on) return null
+    const z0 = Number(fx.z) || 0
+    return { x0: on.t0, x1: on.t1, z0, z1: z0 + Number(fx.height) }
+  }
+  const selFx = showClearance && selectedId ? fixtures.find(x => x.id === selectedId) : undefined
+  const selBox = selFx ? boxOf(selFx) : null
+  const clearanceEl = selFx && selBox ? (
+    <ElevClearance box={selBox} len={wall.length} roomH={roomH} z={z} bg={layers.background ?? '#030712'}
+      others={[...obstacles, ...fixtures.filter(x => x.id !== selFx.id).map(boxOf).filter((b): b is ElevBox => !!b)]} />
+  ) : null
+
   return (
     <g>
       {ghostEl}
+      {clearanceEl}
       {fixtures.map(fx => {
         const id = fixtureLayer(fx.category)
         if (!layers.show(id)) return null

@@ -314,6 +314,40 @@ export function slideClear(
   return { ...s, x: s.x + f.d.x * (t - t0), y: s.y + f.d.y * (t - t0) }
 }
 
+// ── Clearances (selected fixture) ─────────────────────────────────────────────
+
+/** Gap (mm) from each side of a fixture to the nearest obstacle; undefined = nothing within reach / touching. */
+export interface Clearances { left?: number; right?: number; front?: number; back?: number }
+
+/**
+ * Plan clearances of a fixture to `obstacles` (plan outlines — cabinets, other
+ * fixtures, walls) and, when wall-backed along its width, to the wall's ends.
+ * Left / right look along the width within the fixture's depth band; front /
+ * back look along the depth within its width band. Gaps under 1 mm (touching)
+ * or over `reach` are left out.
+ */
+export function fixtureClearances(
+  f: Pick<RoomFixture, 'x' | 'y' | 'rotation' | 'width' | 'depth' | 'wall_id'>,
+  walls: Wall[], roomRef: Pt, obstacles: Pt[][], reach = 6000,
+): Clearances {
+  const { a, n } = fixtureAxes(f.rotation)
+  const b = stretchBounds(f, walls, roomRef, obstacles)
+  let front = Infinity, back = Infinity
+  for (const poly of obstacles) {
+    let uMin = Infinity, uMax = -Infinity, vMin = Infinity, vMax = -Infinity
+    for (const p of poly) {
+      const dx = p.x - f.x, dy = p.y - f.y
+      const u = dx * a.x + dy * a.y, v = dx * n.x + dy * n.y
+      uMin = Math.min(uMin, u); uMax = Math.max(uMax, u); vMin = Math.min(vMin, v); vMax = Math.max(vMax, v)
+    }
+    if (uMax <= 1 || uMin >= f.width - 1) continue          // not in the width band
+    if (vMin >= f.depth - 1) front = Math.min(front, vMin - f.depth)
+    else if (vMax <= 1) back = Math.min(back, -vMax)
+  }
+  const keep = (g: number) => (g >= 1 && g <= reach ? Math.round(g) : undefined)
+  return { left: keep(-b.lo), right: keep(b.hi - f.width), front: keep(front), back: keep(back) }
+}
+
 /** Default underside height for a mount type. */
 export const FIXTURE_BENCH_Z = 900
 export function defaultFixtureZ(mount: FixtureMount, mountHeight: number | null): number {

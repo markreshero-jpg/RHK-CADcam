@@ -1712,6 +1712,11 @@ export default function ElevationSVG({
                 onSelect={id => onSelectFixture?.(id)}
                 stretching={fixtureStretching}
                 ghost={mode === 'place_fixture' ? fixtureGhost : null}
+                showClearance={mode === 'select' || !!fixtureStretching}
+                obstacles={wallCabs.map(c => {
+                  const z0 = cabBottomZ(c, room, wall)
+                  return { x0: elevX(c), x1: elevX(c) + c.dx, z0, z1: z0 + c.dy }
+                })}
                 onStretchHandle={mode === 'select' ? onFixtureStretchHandle : undefined}
                 onMoveHandle={mode === 'select' ? onFixtureMoveHandle : undefined}
               />
