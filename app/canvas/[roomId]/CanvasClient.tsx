@@ -461,9 +461,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   useEffect(() => {
     if (tutorialOn) useTutorial.getState().setCtx({
       mode, view: canvasView, walls, cabinets, benchtops, fixtures, selected,
-      cabEditorOpen: editCabId !== null, pickedTops, joinDialogOpen,
+      cabEditorOpen: editCabId !== null, pickedTops, joinDialogOpen, kickSettingsOpen: kickSettingsRunId !== null,
     })
-  }, [tutorialOn, mode, canvasView, walls, cabinets, benchtops, fixtures, selected, editCabId, pickedTops, joinDialogOpen])
+  }, [tutorialOn, mode, canvasView, walls, cabinets, benchtops, fixtures, selected, editCabId, pickedTops, joinDialogOpen, kickSettingsRunId])
 
   // F4 Benchtop mode owns selection: entering it drops a cabinet / wall
   // selection, leaving it drops a benchtop one (adjusted during render, so no

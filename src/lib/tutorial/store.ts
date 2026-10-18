@@ -21,6 +21,8 @@ interface TutorialState extends TutorialPrefs {
   load: () => void
   setEnabled: (on: boolean) => void
   setCtx: (patch: Partial<TutorialCtx>) => void
+  /** Count a one-off action (ctx.events[name]++), e.g. a PDF download. */
+  emit: (name: string) => void
   goTo: (lesson: number, step?: number) => void
   next: () => void
   back: () => void
@@ -80,6 +82,11 @@ export const useTutorial = create<TutorialState>((set, get) => ({
     if (next !== s) persist(next)
   },
 
+  emit: name => {
+    const events = get().ctx.events
+    get().setCtx({ events: { ...events, [name]: (events[name] ?? 0) + 1 } })
+  },
+
   goTo: (lesson, step = 0) => {
     const s = get()
     const start = startFrom(s.ctx)
@@ -94,7 +101,7 @@ export const useTutorial = create<TutorialState>((set, get) => ({
     if (s.step >= lesson.steps.length) {
       // Finished: Getting started runs on to its next lesson; topics go back to the picker.
       const following = LESSONS[s.lesson + 1]
-      if (following && following.group === lesson.group && lesson.group === 'start') get().goTo(s.lesson + 1)
+      if (following && following.level === 'start' && lesson.level === 'start') get().goTo(s.lesson + 1)
       else set({ picking: true })
       return
     }

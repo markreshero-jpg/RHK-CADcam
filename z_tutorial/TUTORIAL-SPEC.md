@@ -1,6 +1,6 @@
 # Tutorial Mode — interactive lessons for new users
 
-Status: **T1–T3 + T5 (picker + topic tutorials) built 2026-10-18, pending in-app check**
+Status: **T1–T3 + T5 + T6 (levels tree, search, 7 more tutorials) built 2026-10-18, pending in-app check**
 Date: 2026-10-18
 
 ## Goal
@@ -31,6 +31,12 @@ plan to show *where* to do it.
    finished, "in progress" on the one part-done. "☰ All" in a lesson goes back to it.
    Getting started is a course — finishing a lesson offers the next one; a topic
    tutorial goes back to the picker when done.
+9. **Levels ▸ topics tree + search** (Mark 2026-10-18, "the tutorials will get quite
+   large"): top level Getting started / Basics / Intermediate / Advanced, each a
+   collapsible branch; under Basics–Advanced a topic branch (Room, Cabinets, Benchtops,
+   Appliances & fixtures, Reports & printing, Production). Branches show done/total.
+   A search box above the tree filters to a flat list (every word must match title,
+   blurb, `keywords` or a step title), each hit with its "Level › Topic" crumb.
 8. **Steps count from the lesson's start** — `done(ctx, start)`: `start` is the canvas
    when the lesson began, so "add a top" in a job that already has tops needs one
    more, not any. Not persisted: a reload re-takes it from the drawing as it is then.
@@ -39,7 +45,7 @@ plan to show *where* to do it.
 
 | File | Role |
 |---|---|
-| `src/lib/tutorial/lessons.ts` | `LESSONS` (+ `group`, `blurb`) and `TUTORIAL_GROUPS`. Each step: `title`, `body`, `target?` (data-tour id, `a|b` = first one on screen), `canvas?`, `done(ctx, start)`, `hints?(ctx)` |
+| `src/lib/tutorial/lessons.ts` | `LESSONS` (+ `level`, `topic`, `blurb`, `keywords`), `TUTORIAL_LEVELS`, `TUTORIAL_TOPICS`, `searchLessons(q)`. Each step: `title`, `body`, `target?` (data-tour id, `a|b` = first one on screen), `canvas?`, `done(ctx, start)`, `hints?(ctx)` |
 | `src/lib/tutorial/store.ts` | zustand store: `enabled`, `lesson`, `step`, `done[]` (persisted) + live `ctx`, `start`, `picking`; auto-advances when the current step's `done` turns true |
 | `src/components/tutorial/TutorialHost.tsx` | Mounted in the root layout. Feeds the route into ctx, renders the panel + spotlight when enabled |
 | `src/components/tutorial/TutorialPanel.tsx` | Floating card (bottom-right): picker view / lesson view (steps with ticks, Back · Show me · Skip) |
@@ -50,7 +56,10 @@ plan to show *where* to do it.
 ### Ctx (what steps check)
 
 `path`, `inCanvas`, `mode`, `view`, `walls`, `cabinets`, `benchtops`, `fixtures`,
-`selected`, `cabEditorOpen`, `pickedTops` (Shift-picked tops in F4), `joinDialogOpen`.
+`selected`, `cabEditorOpen`, `pickedTops` (Shift-picked tops in F4), `joinDialogOpen`,
+`kickSettingsOpen`, `report` (id open in the Reports window, set by ReportsModal),
+`events` (counters bumped by `useTutorial.getState().emit(name)` — `elevation_pdf`,
+`plan_pdf` from the report Download buttons).
 Only the **current** step's `done` is evaluated, so steps are ordered and a
 completed step stays completed. Canvas steps wait until the canvas is open.
 
@@ -60,7 +69,8 @@ completed step stays completed. Canvas steps wait until the canvas is open.
 (every canvas menubar group; the phone "Menu" button is `menu-File`), `tool-wall`,
 `tool-cabinet`, `tool-benchtop`, `tool-fixtures` (sidebar section headers, via
 `SectionHeader tour=`), `mode-<Mode>` (wall + benchtop tool rows, via `ToolRow tour=`),
-`cab-shape` (cabinet panel Shape select), `view-plan` / `view-elevation` /
+`cab-shape` (cabinet panel Shape select), `report-<ReportId>` (Reports window list),
+`elev-download` / `plan-download` (report PDF buttons), `view-plan` / `view-elevation` /
 `view-section` / `view-3d`. Never rename one without updating `lessons.ts`.
 
 Tests: `src/lib/__tests__/tutorialStore.test.ts` (picker on enable, step order +
@@ -69,7 +79,10 @@ end to end, island cabinets, benchtop hint zone, unique ids).
 
 ## Tutorials
 
-| Group | Tutorial | Steps |
+Lesson order in `LESSONS` is **append only** (the index is persisted); the picker
+orders by level / topic, not array position.
+
+| Level › Topic | Tutorial | Steps |
 |---|---|---|
 | Getting started | Start a job | Back to Projects → New Project → name it + Create (lands in the canvas) |
 | | Draw the walls | Wall tool → draw ≥ 2 walls → back to Select |
@@ -77,11 +90,18 @@ end to end, island cabinets, benchtop hint zone, unique ids).
 | | Benchtops | Line + Offset → top over the run (hint: the base run) → one top per wall with bases |
 | | Appliances | Pick an appliance → drop it (hint: end of the base run) |
 | | Look at your job | Elevation → 3D → back to Plan |
-| Benchtops | Join benchtops in a corner | L corner exists → Line + Offset → top 1 into the corner → top 2 into the corner (hints: both strips) → Shift-pick both → right-click → Join benchtops → Apply (a joint edge appears) |
-| | Sink or cooktop cutout | Have a top → pick a sink → drop it on the top → select it (Cut benchtop tick) → 3D |
+| Basics › Room | Draw an island | Wall → Island → draw it → drop a base on the island line (hint) |
+| | Doors and windows | Fixtures → Doors & windows → drop in a wall (hint) → select it (size / sill) |
+| Basics › Cabinets | Copy and paste a cabinet | Select → Ctrl+C (paste mode) → drop the copy |
+| Basics › Benchtops | Sink or cooktop cutout | Have a top → pick a sink → drop it on the top → select it (Cut benchtop tick) → 3D |
+| Intermediate › Cabinets | Make a shaped cabinet | Select a base → Shape preset (footprint set) → sizes + 3D |
+| | Join kicks along a run | ≥ 2 bases on a wall (hint) → right-click → Join kicks in run (new kick_run_id) → Elevation → right-click the kick → Kick split… |
+| Intermediate › Benchtops | Join benchtops in a corner | L corner → Line + Offset → top 1 + top 2 into the corner (hints) → Shift-pick both → right-click → Join benchtops → Apply (joint edge appears) |
 | | Edge profiles | Have a top → right-click → Edit edges → paint an edge + save |
-| Cabinets | Make a shaped cabinet | Select a base → Shape: pick a preset (footprint set) → sizes + 3D |
-| Room | Draw an island | Wall → Island → draw it → drop a base on the island line (hint: the island) |
+| Intermediate › Reports | Print elevations | Reports → Room Reports… → Elevation Views → Download PDF (`elevation_pdf`) |
+| | Print the plan | Reports → Room Reports… → Plan View → Download PDF (`plan_pdf`) |
+| Advanced › Benchtops | Reshape a benchtop | Have a top → right-click → Edit shape → change the outline + save (a top's segments differ from the start) |
+| Advanced › Production | Cut list and CNC | Production → Generate CNC… (path ends /optimiser) → back to the canvas |
 
 ## Phases
 
@@ -89,7 +109,9 @@ end to end, island cabinets, benchtop hint zone, unique ids).
 - **T2** ✅ spotlight + data-tour attributes.
 - **T3** ✅ lessons 4–6 + plan hints (`tutorial_hints` layer item).
 - **T5** ✅ picker, groups, start-relative steps, 5 topic tutorials.
+- **T6** ✅ levels ▸ topics tree, search box, 7 more tutorials (doors & windows, copy /
+  paste, kick runs, print elevations, print plan, reshape a top, CNC).
 - **T4** not started: headless script per lesson (`z_plan_automation/verify-tutorial.mjs`)
   that walks the lessons and checks each step ticks; elevation / 3D hints if wanted.
-- Ideas for more topics: copy / paste a run, kick runs, print elevations, layer sets,
-  doors & windows (openings), the panel optimiser.
+- Ideas for more topics: layer sets (Manage Layers), cabinet editor doors / drawers,
+  split a cabinet, job / room construction defaults, multiple rooms, cabinet sheets report.

@@ -10,6 +10,7 @@ import PlanViewReport from './PlanViewReport'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import ElevationPrintReport from './ElevationPrintReport'
 import CabinetSheetReport from './CabinetSheetReport'
+import { useTutorial } from '@/src/lib/tutorial/store'
 import { BenchtopSupplySheet, supplyPrintHtml } from './BenchtopSupplyReport'
 import { buildSupplyLines, supplyTotals } from '@/src/lib/benchtop-resolver/supply'
 import { ApplianceScheduleSheet, buildSchedule, schedulePrintHtml, type CatalogRef } from './ApplianceScheduleReport'
@@ -136,6 +137,11 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
 }) {
   const [scope, setScope] = useState<ReportScope>(initialScope)
   const [selectedReport, setSelectedReport] = useState<ReportId>('parts_list_summary')
+  // Tutorial mode (z_tutorial): which report is open, null once the window closes.
+  useEffect(() => {
+    useTutorial.getState().setCtx({ report: selectedReport })
+    return () => useTutorial.getState().setCtx({ report: null })
+  }, [selectedReport])
 
   // Paper size + scale for SVG output
   const [printPaper, setPrintPaper] = useState<keyof typeof PAPER>('A3L')
@@ -359,7 +365,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
           <div className="w-44 flex-none border-r border-gray-800 p-2 space-y-1">
             <div className="text-[10px] text-gray-600 uppercase tracking-wider px-2 py-1">Available</div>
             {REPORTS.map(rep => (
-              <button key={rep.id} onClick={() => setSelectedReport(rep.id)}
+              <button key={rep.id} data-tour={`report-${rep.id}`} onClick={() => setSelectedReport(rep.id)}
                 className={`w-full text-left px-2 py-2 rounded text-xs transition-colors ${
                   selectedReport === rep.id
                     ? 'bg-blue-600/25 text-blue-300 border border-blue-600/40'

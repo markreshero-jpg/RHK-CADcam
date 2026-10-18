@@ -13,6 +13,7 @@ import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
 import PlanViewReportSVG, { type PlanViewPageOptions } from './PlanViewReportSVG'
 import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
+import { useTutorial } from '@/src/lib/tutorial/store'
 
 const PAPER: Record<string, { w: number; h: number }> = {
   A4L: { w: 297, h: 210 },
@@ -125,6 +126,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
   async function handleDownload() {
     const svgEl = svgRef.current
     if (!svgEl) return
+    useTutorial.getState().emit('plan_pdf')
     setBusy(true)
     try {
       const fit = getFitInfo()
@@ -171,7 +173,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
             {show[t.key] ? '☑' : '☐'} {t.label}
           </button>
         ))}
-        <button onClick={handleDownload} disabled={busy || walls.length === 0}
+        <button data-tour="plan-download" onClick={handleDownload} disabled={busy || walls.length === 0}
           className="ml-auto px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded transition-colors font-medium">
           {busy ? 'Generating…' : `Download PDF · 1:${scale}`}
         </button>

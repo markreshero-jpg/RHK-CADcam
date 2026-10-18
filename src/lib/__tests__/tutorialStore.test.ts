@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useTutorial } from '../tutorial/store'
-import { LESSONS, EMPTY_CTX } from '../tutorial/lessons'
+import { LESSONS, EMPTY_CTX, searchLessons } from '../tutorial/lessons'
 import type { Wall, CabinetInstance, BenchtopInstance } from '../types'
 
 const wall = (id: string, angle: number, x = 0, y = 0, wall_type: Wall['wall_type'] = 'standard'): Wall => ({
@@ -107,5 +107,29 @@ describe('tutorial store', () => {
   it('every lesson and step id is unique', () => {
     expect(new Set(LESSONS.map(l => l.id)).size).toBe(LESSONS.length)
     for (const l of LESSONS) expect(new Set(l.steps.map(s => s.id)).size).toBe(l.steps.length)
+  })
+  it('search matches words from titles, blurbs and keywords', () => {
+    const ids = (q: string) => searchLessons(q).map(i => LESSONS[i].id)
+    expect(ids('corner join')).toContain('corner_join')
+    expect(ids('KICK')).toEqual(['kick_runs'])
+    expect(ids('print elevation')).toEqual(['print_elevations'])
+    expect(ids('pdf')).toEqual(expect.arrayContaining(['print_elevations', 'print_plan']))
+    expect(ids('zzz')).toEqual([])
+    expect(ids('  ')).toEqual([])
+  })
+
+  it('every tutorial outside Getting started sits in a topic', () => {
+    for (const l of LESSONS) expect(l.level === 'start' || !!l.topic).toBe(true)
+  })
+
+  it('a PDF download ticks the print step', () => {
+    st().setCtx({ path: '/canvas/x', inCanvas: true })
+    st().setEnabled(true)
+    st().goTo(LESSONS.findIndex(l => l.id === 'print_elevations'))
+    st().setCtx({ report: 'parts_list_summary' })
+    st().setCtx({ report: 'elevation_view_v2' })
+    expect(st().step).toBe(2)
+    st().emit('elevation_pdf')
+    expect(st().step).toBe(3)
   })
 })

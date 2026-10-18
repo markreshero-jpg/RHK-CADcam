@@ -23,12 +23,18 @@ export interface TutorialCtx {
   /** Benchtops Shift-picked in F4 mode. */
   pickedTops:    number
   joinDialogOpen: boolean
+  kickSettingsOpen: boolean
+  /** Report open in the Reports window (its id), null when the window is closed. */
+  report:        string | null
+  /** One-off actions counted by emit() — e.g. elevation_pdf, plan_pdf. */
+  events:        Record<string, number>
 }
 
 export const EMPTY_CTX: TutorialCtx = {
   path: '', inCanvas: false, mode: 'select', view: 'plan',
   walls: [], cabinets: [], benchtops: [], fixtures: [], selected: null,
-  cabEditorOpen: false, pickedTops: 0, joinDialogOpen: false,
+  cabEditorOpen: false, pickedTops: 0, joinDialogOpen: false, kickSettingsOpen: false,
+  report: null, events: {},
 }
 
 export type TutorialHint =
@@ -48,21 +54,36 @@ export interface TutorialStep {
   hints?: (c: TutorialCtx) => TutorialHint[]
 }
 
-export type TutorialGroup = 'start' | 'benchtops' | 'cabinets' | 'room'
+// Picker tree: level ▸ topic ▸ tutorial. Getting started is one flat course.
+export type TutorialLevel = 'start' | 'basics' | 'intermediate' | 'advanced'
+export type TutorialTopic = 'room' | 'cabinets' | 'benchtops' | 'appliances' | 'reports' | 'production'
 
-export const TUTORIAL_GROUPS: { id: TutorialGroup; label: string; blurb: string }[] = [
-  { id: 'start',     label: 'Getting started', blurb: 'The basics, in order — a whole small kitchen.' },
-  { id: 'benchtops', label: 'Benchtops',       blurb: '' },
-  { id: 'cabinets',  label: 'Cabinets',        blurb: '' },
-  { id: 'room',      label: 'Room',            blurb: '' },
+export const TUTORIAL_LEVELS: { id: TutorialLevel; label: string; blurb: string }[] = [
+  { id: 'start',        label: 'Getting started', blurb: 'In order — a whole small kitchen, start to finish.' },
+  { id: 'basics',       label: 'Basics',          blurb: 'Everyday drawing jobs.' },
+  { id: 'intermediate', label: 'Intermediate',    blurb: 'Joins, shapes, kicks and printing.' },
+  { id: 'advanced',     label: 'Advanced',        blurb: 'Shape editing and production.' },
+]
+
+export const TUTORIAL_TOPICS: { id: TutorialTopic; label: string }[] = [
+  { id: 'room',       label: 'Room' },
+  { id: 'cabinets',   label: 'Cabinets' },
+  { id: 'benchtops',  label: 'Benchtops' },
+  { id: 'appliances', label: 'Appliances & fixtures' },
+  { id: 'reports',    label: 'Reports & printing' },
+  { id: 'production', label: 'Production' },
 ]
 
 export interface TutorialLesson {
   id:    string
-  group: TutorialGroup
+  level: TutorialLevel
+  /** Sub-folder in the picker (not used by Getting started). */
+  topic?: TutorialTopic
   title: string
   /** One line for the picker. */
   blurb: string
+  /** Extra words the search matches (title, blurb and step titles are searched too). */
+  keywords?: string
   steps: TutorialStep[]
 }
 
@@ -123,6 +144,22 @@ function mainRunWall(c: TutorialCtx): Wall | null {
   return best
 }
 
+const kickRuns = (c: TutorialCtx) => new Set(c.cabinets.map(k => k.kick_run_id).filter(Boolean)).size
+const openings = (c: TutorialCtx) => c.fixtures.filter(f => f.category === 'opening')
+const ev = (c: TutorialCtx, name: string) => c.events[name] ?? 0
+/** Some wall carries two or more base cabinets (a run to join kicks along). */
+const hasBaseRun = (c: TutorialCtx) => {
+  const n = new Map<string, number>()
+  for (const b of bases(c)) if (b.wall_id) n.set(b.wall_id, (n.get(b.wall_id) ?? 0) + 1)
+  return [...n.values()].some(v => v >= 2)
+}
+const topShapes = (c: TutorialCtx) => new Map(c.benchtops.map(b => [b.id, JSON.stringify(b.segments)]))
+/** A top that existed at the start has a different outline now. */
+const reshaped = (c: TutorialCtx, s: TutorialCtx) => {
+  const before = topShapes(s)
+  return [...topShapes(c)].some(([id, seg]) => before.has(id) && before.get(id) !== seg)
+}
+
 // Reused steps
 const lineTool = (id = 'tool'): TutorialStep => ({
   id, title: 'Pick Line + Offset',
@@ -134,7 +171,7 @@ const lineTool = (id = 'tool'): TutorialStep => ({
 
 export const LESSONS: TutorialLesson[] = [
   // ── Getting started (a course: Next lesson runs through these in order) ──
-  { id: 'job', group: 'start', title: 'Start a job', blurb: 'Create a project and open its first room.', steps: [
+  { id: 'job', level: 'start', keywords: 'new job project create room', title: 'Start a job', blurb: 'Create a project and open its first room.', steps: [
     { id: 'projects', title: 'Go to Projects',
       body: 'Every drawing lives in a job. Open File → Back to Projects (skip this lesson if you already have a job open to practise in).',
       target: 'menu-File', done: c => c.path === '/' },
@@ -146,7 +183,7 @@ export const LESSONS: TutorialLesson[] = [
       target: 'project-name', done: c => c.inCanvas },
   ]},
 
-  { id: 'walls', group: 'start', title: 'Draw the walls', blurb: 'Draw the room with the wall tool.', steps: [
+  { id: 'walls', level: 'start', keywords: 'wall draw room length corner', title: 'Draw the walls', blurb: 'Draw the room with the wall tool.', steps: [
     { id: 'tool', title: 'Pick the wall tool',
       body: 'Open Wall in the left sidebar (or press F2) and choose Standard Wall.',
       target: 'mode-draw_wall|tool-wall', canvas: true, done: c => c.mode === 'draw_wall' },
@@ -158,7 +195,7 @@ export const LESSONS: TutorialLesson[] = [
       canvas: true, done: c => c.mode === 'select' && c.walls.length >= 2 },
   ]},
 
-  { id: 'cabinets', group: 'start', title: 'Place cabinets', blurb: 'Drop base and wall cabinets from the library.', steps: [
+  { id: 'cabinets', level: 'start', keywords: 'cabinet place library base wall overhead upper', title: 'Place cabinets', blurb: 'Drop base and wall cabinets from the library.', steps: [
     { id: 'library', title: 'Open the cabinet library',
       body: 'Open Cabinet in the sidebar (F3), go into a base cabinet category and click a cabinet. It follows your cursor.',
       target: 'tool-cabinet', canvas: true, done: c => c.mode.startsWith('place_') && c.mode !== 'place_fixture' },
@@ -180,7 +217,7 @@ export const LESSONS: TutorialLesson[] = [
       hints: c => wallHint(mainRunWall(c), 'Wall cabinets go above the bases') },
   ]},
 
-  { id: 'benchtops', group: 'start', title: 'Benchtops', blurb: 'Draw a top over the base cabinets.', steps: [
+  { id: 'benchtops', level: 'start', keywords: 'benchtop top bench worktop', title: 'Benchtops', blurb: 'Draw a top over the base cabinets.', steps: [
     lineTool(),
     { id: 'first', title: 'Draw a top over the base run',
       body: 'Click the back corners of the run along the wall, then pull out to the depth (or type it) and click.',
@@ -194,7 +231,7 @@ export const LESSONS: TutorialLesson[] = [
       canvas: true, done: c => c.benchtops.length >= Math.max(1, wallsWithBases(c)) },
   ]},
 
-  { id: 'appliances', group: 'start', title: 'Appliances', blurb: 'Drop a dishwasher, oven or fridge.', steps: [
+  { id: 'appliances', level: 'start', keywords: 'appliance dishwasher oven fridge fixture', title: 'Appliances', blurb: 'Drop a dishwasher, oven or fridge.', steps: [
     { id: 'pick', title: 'Pick an appliance',
       body: 'Open Fixtures in the sidebar (F6) and click an appliance (e.g. a dishwasher or oven). R turns it, Shift places it freely.',
       target: 'tool-fixtures', canvas: true, done: c => c.mode === 'place_fixture' },
@@ -210,7 +247,7 @@ export const LESSONS: TutorialLesson[] = [
       } },
   ]},
 
-  { id: 'views', group: 'start', title: 'Look at your job', blurb: 'Elevation and 3D views.', steps: [
+  { id: 'views', level: 'start', keywords: 'elevation 3d plan view orbit', title: 'Look at your job', blurb: 'Elevation and 3D views.', steps: [
     { id: 'elevation', title: 'Elevation view',
       body: 'Click Elevation at the top. Select a wall first to look at that wall.',
       target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' },
@@ -222,7 +259,7 @@ export const LESSONS: TutorialLesson[] = [
   ]},
 
   // ── Benchtops ──
-  { id: 'corner_join', group: 'benchtops', title: 'Join benchtops in a corner',
+  { id: 'corner_join', level: 'intermediate', topic: 'benchtops', keywords: 'mitre butt joint l shape corner two tops join', title: 'Join benchtops in a corner',
     blurb: 'Two tops, one per wall, with a mitre or butt joint where they meet.', steps: [
     { id: 'corner', title: 'Have an L corner',
       body: 'You need two walls that meet at a corner. Draw them with the wall tool (F2) if this room has none.',
@@ -247,7 +284,7 @@ export const LESSONS: TutorialLesson[] = [
       canvas: true, done: (c, s) => jointEdges(c) > jointEdges(s) && !c.joinDialogOpen },
   ]},
 
-  { id: 'sink_cutout', group: 'benchtops', title: 'Sink or cooktop cutout',
+  { id: 'sink_cutout', level: 'basics', topic: 'benchtops', keywords: 'sink cooktop hob hole cutout cut out', title: 'Sink or cooktop cutout',
     blurb: 'Drop a sink on a benchtop so it cuts its own hole.', steps: [
     { id: 'top', title: 'Have a benchtop',
       body: 'The sink needs a top to sit in. Draw one with Benchtop → Line + Offset if this room has none.',
@@ -265,7 +302,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click 3D to see the sink sitting in its cutout.', target: 'view-3d', canvas: true, done: c => c.view === '3d' },
   ]},
 
-  { id: 'edge_profiles', group: 'benchtops', title: 'Edge profiles',
+  { id: 'edge_profiles', level: 'intermediate', topic: 'benchtops', keywords: 'edge profile bullnose pencil round arris finish edgeband tape', title: 'Edge profiles',
     blurb: 'Choose the finish on each exposed edge of a top.', steps: [
     { id: 'top', title: 'Have a benchtop',
       body: 'Draw a top first with Benchtop → Line + Offset if this room has none.',
@@ -279,7 +316,7 @@ export const LESSONS: TutorialLesson[] = [
   ]},
 
   // ── Cabinets ──
-  { id: 'shaped_cabinet', group: 'cabinets', title: 'Make a shaped cabinet',
+  { id: 'shaped_cabinet', level: 'intermediate', topic: 'cabinets', keywords: 'shape clipped corner angled end diagonal pie l corner footprint', title: 'Make a shaped cabinet',
     blurb: 'Clipped corner, angled end or L corner from a plain box.', steps: [
     { id: 'select', title: 'Select a base cabinet',
       body: 'Click a base cabinet in plan (place one from the library first if the room has none). Its panel opens on the right.',
@@ -293,7 +330,7 @@ export const LESSONS: TutorialLesson[] = [
   ]},
 
   // ── Room ──
-  { id: 'island', group: 'room', title: 'Draw an island',
+  { id: 'island', level: 'basics', topic: 'room', keywords: 'island bench peninsula', title: 'Draw an island',
     blurb: 'An island bench with cabinets on it.', steps: [
     { id: 'tool', title: 'Pick the island tool',
       body: 'Open Wall (F2) and choose Island. An island is a line with no wall thickness that cabinets can stand on.',
@@ -311,7 +348,111 @@ export const LESSONS: TutorialLesson[] = [
       },
       hints: c => { const w = islandWalls(c).at(-1); return wallHint(w ?? null, 'Drop cabinets on the island') } },
   ]},
+
+  // ── Added 2026-10-18 (append only — the lesson index is persisted) ──
+  { id: 'copy_paste', level: 'basics', topic: 'cabinets', title: 'Copy and paste a cabinet',
+    blurb: 'Repeat a cabinet you have already set up.', keywords: 'copy paste duplicate clone ctrl c v', steps: [
+    { id: 'select', title: 'Select a cabinet',
+      body: 'Click a cabinet you have already set up (place one from the library first if the room has none).',
+      canvas: true, done: c => c.selected?.type === 'cabinet' },
+    { id: 'copy', title: 'Copy it',
+      body: 'Press Ctrl+C (or Edit → Copy Cabinet). A copy follows your cursor.',
+      target: 'menu-Edit', canvas: true, done: c => c.mode === 'paste' },
+    { id: 'paste', title: 'Drop the copy',
+      body: 'Click against a wall or next to another cabinet to place it. Ctrl+V pastes another; Esc to finish.',
+      canvas: true, done: (c, s) => c.cabinets.length > s.cabinets.length },
+  ]},
+
+  { id: 'openings', level: 'basics', topic: 'room', title: 'Doors and windows',
+    blurb: 'Put a door or window in a wall.', keywords: 'door window opening archway sill head', steps: [
+    { id: 'pick', title: 'Pick a door or window',
+      body: 'Open Fixtures (F6), go into Doors & windows and click one.',
+      target: 'tool-fixtures', canvas: true, done: c => c.mode === 'place_fixture' },
+    { id: 'drop', title: 'Drop it in a wall',
+      body: 'Move it onto a wall — it sits in the wall and the wall is drawn split around it — and click. Esc to finish.',
+      canvas: true, done: (c, s) => openings(c).length > openings(s).length,
+      hints: c => wallHint(longestWall(c), 'Drop it in a wall') },
+    { id: 'size', title: 'Set its size',
+      body: 'Click the opening. In its panel set the width, height and sill (windows), or move it along the wall.',
+      canvas: true, done: c => c.selected?.type === 'fixture' && openings(c).some(f => f.id === c.selected!.id) },
+  ]},
+
+  { id: 'kick_runs', level: 'intermediate', topic: 'cabinets', title: 'Join kicks along a run',
+    blurb: 'One continuous toe kick under a run of base cabinets.', keywords: 'kick toe kick plinth ladder join run split', steps: [
+    { id: 'run', title: 'Have a run of base cabinets',
+      body: 'You need two or more base cabinets side by side on one wall, with ladder kicks (the default).',
+      canvas: true, done: c => hasBaseRun(c),
+      hints: c => wallHint(mainRunWall(c), 'This run') },
+    { id: 'join', title: 'Right-click → Join kicks in run',
+      body: 'Right-click any base cabinet in the run and choose Join kicks in run. If the cabinets are different depths it asks to build the kick to the deepest one.',
+      canvas: true, done: (c, s) => kickRuns(c) > kickRuns(s) },
+    { id: 'look', title: 'See the kick',
+      body: 'Kicks are hidden in plan by default. Select the run\'s wall and click Elevation to see one kick under the whole run.',
+      target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' },
+    { id: 'split', title: 'Set the split length',
+      body: 'Right-click the kick under the cabinets and choose Kick split… to set the longest piece the kick may be — longer runs are cut into pieces at that size. (Separate kicks undoes the join.)',
+      canvas: true, done: c => c.kickSettingsOpen },
+  ]},
+
+  { id: 'print_elevations', level: 'intermediate', topic: 'reports', title: 'Print elevations',
+    blurb: 'A scaled PDF, one wall per page.', keywords: 'print pdf elevation drawing report wall page scale', steps: [
+    { id: 'open', title: 'Open Room Reports',
+      body: 'Click Reports in the menu bar and choose Room Reports… (Job Reports… does every room).',
+      target: 'menu-Reports', canvas: true, done: c => c.report !== null },
+    { id: 'pick', title: 'Choose Elevation Views',
+      body: 'In the list on the left, click Elevation Views.',
+      target: 'report-elevation_view_v2', canvas: true, done: c => c.report === 'elevation_view_v2' },
+    { id: 'download', title: 'Pick walls and download',
+      body: 'Choose the paper and scale, the layer set, and click the walls you want (each is a page). Then Download PDF.',
+      target: 'elev-download', canvas: true, done: (c, s) => ev(c, 'elevation_pdf') > ev(s, 'elevation_pdf') },
+  ]},
+
+  { id: 'print_plan', level: 'intermediate', topic: 'reports', title: 'Print the plan',
+    blurb: 'A scaled plan view PDF that follows a layer set.', keywords: 'print pdf plan drawing report layout scale', steps: [
+    { id: 'open', title: 'Open Room Reports',
+      body: 'Click Reports in the menu bar and choose Room Reports…',
+      target: 'menu-Reports', canvas: true, done: c => c.report !== null },
+    { id: 'pick', title: 'Choose Plan View',
+      body: 'In the list on the left, click Plan View.',
+      target: 'report-plan_view_v2', canvas: true, done: c => c.report === 'plan_view_v2' },
+    { id: 'download', title: 'Download it',
+      body: 'Set the paper, scale and layer set, then Download PDF.',
+      target: 'plan-download', canvas: true, done: (c, s) => ev(c, 'plan_pdf') > ev(s, 'plan_pdf') },
+  ]},
+
+  { id: 'reshape_top', level: 'advanced', topic: 'benchtops', title: 'Reshape a benchtop',
+    blurb: 'Move corners, add points and curves on a top.', keywords: 'shape edit vertex corner curve arc radius notch benchtop', steps: [
+    { id: 'top', title: 'Have a benchtop',
+      body: 'Draw a top first with Benchtop → Line + Offset if this room has none.',
+      canvas: true, done: c => c.benchtops.length > 0 },
+    { id: 'mode', title: 'Right-click a top → Edit shape',
+      body: 'In Benchtop mode (F4 → Select Tops), right-click the top and choose Edit shape.',
+      target: 'tool-benchtop', canvas: true, done: c => c.mode === 'edit_benchtop_shape' },
+    { id: 'edit', title: 'Change the outline and save',
+      body: 'Drag a corner to move it, or select an edge to type its length. Save when done.',
+      canvas: true, done: (c, s) => c.mode !== 'edit_benchtop_shape' && reshaped(c, s) },
+  ]},
+
+  { id: 'cnc', level: 'advanced', topic: 'production', title: 'Cut list and CNC',
+    blurb: 'Send the job to the panel optimiser.', keywords: 'cnc nest nesting optimiser optimizer gcode cut list sheets production', steps: [
+    { id: 'open', title: 'Production → Generate CNC…',
+      body: 'Click Production in the menu bar and choose Generate CNC… The panel optimiser opens on this job.',
+      target: 'menu-Production', canvas: true, done: c => c.path.endsWith('/optimiser') },
+    { id: 'look', title: 'Work through the stages',
+      body: 'The optimiser works stage by stage, from the parts to the sheets, the nest and the G-code. Use your browser Back button to return to the drawing.',
+      done: c => c.inCanvas },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
+/** Tutorials matching every word of the query (title, blurb, keywords, step titles). */
+export function searchLessons(query: string): number[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (!words.length) return []
+  return LESSONS.flatMap((l, i) => {
+    const text = [l.title, l.blurb, l.keywords ?? '', ...l.steps.map(s => s.title)].join(' ').toLowerCase()
+    return words.every(w => text.includes(w)) ? [i] : []
+  })
+}
+
 export const lessonDone = (lesson: TutorialLesson, done: string[]) => lesson.steps.every(s => done.includes(stepKey(lesson, s)))

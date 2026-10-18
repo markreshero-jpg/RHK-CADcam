@@ -12,6 +12,7 @@ import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
 import ElevationPrintSVG, { type ElevationPageOptions } from './ElevationPrintSVG'
 import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
+import { useTutorial } from '@/src/lib/tutorial/store'
 
 const PAPER: Record<string, { w: number; h: number }> = {
   A4L: { w: 297, h: 210 }, A3L: { w: 420, h: 297 }, A2L: { w: 594, h: 420 }, A1L: { w: 841, h: 594 },
@@ -67,6 +68,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
 
   async function handleDownload() {
     if (visibleWalls.length === 0) return
+    useTutorial.getState().emit('elevation_pdf')
     setBusy(true)
     try {
       const paper = PAPER[paperKey] ?? PAPER.A3L
@@ -111,7 +113,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
             {show[t.key] ? '☑' : '☐'} {t.label}
           </button>
         ))}
-        <button onClick={handleDownload} disabled={busy || visibleWalls.length === 0}
+        <button data-tour="elev-download" onClick={handleDownload} disabled={busy || visibleWalls.length === 0}
           className="ml-auto px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded transition-colors font-medium">
           {busy ? 'Generating…' : `Download PDF · 1:${scale}`}
         </button>
