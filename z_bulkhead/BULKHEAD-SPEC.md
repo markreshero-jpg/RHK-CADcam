@@ -113,6 +113,13 @@ underside when the bulkhead isn't sitting on cabinets.
       toggles on the canvas. *Done: `BulkheadSection.tsx` in the cabinet panel (+ "Height to ceiling" switch; typing H turns it off), "Bulkhead" submenu on the cabinet right-click, auto-height sync effect in CanvasClient, bulkhead fast path in dbUpdateCabinet.*
 - [x] **B4 — library row.** Seed `BH` under Wall → Bulkheads (new category; subcategory Panels) with defaults; place
       via F3 (width typed / gap-fit).
+- [x] **B4a — dimensions** (Mark, 2026-10-18). Elevation height chain: the
+      bulkhead is its own segment (its bottom → ceiling); the overhead pick skips
+      bulkheads. Width rows (elevation, elevation print, plan, plan print):
+      bulkheads leave the overhead row (they overlap the overheads below them)
+      and get their own row just outside it, under the same layer item
+      (`dim_elev_wall_chain` / `dim_wall_chain`); plan rows past it step out.
+      Library bulkheads never take the wall-cab height cascade (canvasDB).
 - [ ] **B5 — in-app check.** Plan, elevation, 3D, cut list, optimiser,
       dimension rows, reports.
 
