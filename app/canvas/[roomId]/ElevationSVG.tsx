@@ -1880,31 +1880,37 @@ export default function ElevationSVG({
               </>)
             })()}
 
-            {/* Top horizontal chain — overhead cabs (wall + wall_corner) */}
+            {/* Top horizontal chains — overhead cabs (wall + wall_corner), and
+                bulkheads on their own row just outside (they overlap the overheads
+                below them, so one row can't hold both). */}
             {layers.show('dim_elev_wall_chain') && (() => {
-              const overheadCabs = chainCabs.filter(c =>
-                c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'
-              )
-              if (overheadCabs.length === 0 && chainFxWall.length === 0) return null
-              const segs = computeElevChain(overheadCabs, wall, elevX, chainFxWall)
-              const chainY = -tickH * 2 - layers.offset('dim_elev_wall_chain')
+              const isOverhead = (c: CabinetInstance) => c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'
+              const overheadCabs = chainCabs.filter(c => isOverhead(c) && !c.bulkhead)
+              const bulkheadCabs = chainCabs.filter(c => isOverhead(c) && !!c.bulkhead)
               const col = layers.color('dim_elev_wall_chain', '#ffffff')
               const chainOp = layers.op('dim_elev_wall_chain')
               const sw = layers.w('dim_elev_wall_chain', 1) / lz, fs = 12 / z, tk = 8 / z
-              const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
-              return (
-                <g pointerEvents="none" opacity={chainOp} style={{ userSelect: 'none' }}>
-                  <line x1={0} y1={chainY} x2={wall.length} y2={chainY} stroke={col} strokeWidth={sw} />
-                  {boundaries.map((x, i) => (
-                    <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={col} strokeWidth={sw} />
-                  ))}
-                  {(() => {
-                    const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.to - s.from })), fs)
-                    return segs.map((seg, i) => (
+              const row = (segs: ReturnType<typeof computeElevChain>, chainY: number, key: string) => {
+                const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
+                const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.to - s.from })), fs)
+                return (
+                  <g key={key}>
+                    <line x1={0} y1={chainY} x2={wall.length} y2={chainY} stroke={col} strokeWidth={sw} />
+                    {boundaries.map((x, i) => (
+                      <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={col} strokeWidth={sw} />
+                    ))}
+                    {segs.map((seg, i) => (
                       <DimLabel key={i} x={(seg.from + seg.to) / 2} y={chainY} label={seg.label} fs={fs} col={col}
                         bg={layers.background ?? '#030712'} side={sides[i]} />
-                    ))
-                  })()}
+                    ))}
+                  </g>
+                )
+              }
+              const chainY = -tickH * 2 - layers.offset('dim_elev_wall_chain')
+              return (
+                <g pointerEvents="none" opacity={chainOp} style={{ userSelect: 'none' }}>
+                  {(overheadCabs.length > 0 || chainFxWall.length > 0) && row(computeElevChain(overheadCabs, wall, elevX, chainFxWall), chainY, 'oh')}
+                  {bulkheadCabs.length > 0 && row(computeElevChain(bulkheadCabs, wall, elevX), chainY - tickH, 'bh')}
                 </g>
               )
             })()}
@@ -2057,7 +2063,8 @@ export default function ElevationSVG({
             {/* Left dimension — Y-axis height chain */}
             {layers.show('dim_elev_height') && (() => {
               const baseCabEl = chainCabs.find(c => !c.is_kick_assembly && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')) ?? null
-              const overheadCabEl = chainCabs.find(c => c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') ?? null
+              const overheadCabEl = chainCabs.find(c => (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead) ?? null
+              const bulkheadEl = chainCabs.find(c => !!c.bulkhead) ?? null
 
               // A kick-detached member carries no kick of its own (has_toekick false): its
               // dy IS the carcase height and it's raised by pos_z. The kick height comes from
@@ -2109,6 +2116,15 @@ export default function ElevationSVG({
                 }
                 segs.push({ fromY: overheadTopY, toY: overheadBotY, label: `${overheadDy}` })
                 cursorY = overheadTopY
+              }
+
+              // Bulkhead: hangs from the ceiling (z_bulkhead), its own segment.
+              if (bulkheadEl && bulkheadEl.dy > 0) {
+                const bhBotY = roomH - cabBottomZ(bulkheadEl, room, wall)
+                const bhTopY = bhBotY - bulkheadEl.dy
+                if (bhBotY < cursorY - 0.5) segs.push({ fromY: bhBotY, toY: cursorY, label: `${roundMm(cursorY - bhBotY)}` })
+                segs.push({ fromY: bhTopY, toY: Math.min(bhBotY, cursorY), label: `${roundMm(Math.min(bhBotY, cursorY) - bhTopY)}` })
+                cursorY = bhTopY
               }
 
               if (cursorY > 0.5) {

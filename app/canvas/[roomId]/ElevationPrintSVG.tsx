@@ -164,11 +164,12 @@ export default function ElevationPrintSVG({
 
   // Chain / annotation positions
   const overheadChainY = -7 * P
+  const bulkheadChainY = -9.5 * P
   const openingChainY  = -3 * P
   const floorChainY    = roomH + 6 * P
   const overallY       = roomH + 13 * P
   const heightChainX   = -13 * P
-  const titleY         = -12 * P
+  const titleY         = (wallCabs.some(c => !!c.bulkhead) ? -13.5 : -12) * P   // clear of the bulkhead row
 
   // ── Title block ───────────────────────────────────────────────────────────
   const tbRowH = 4.6 * P, tbPad = 2 * P, tbRows = 5
@@ -489,7 +490,8 @@ export default function ElevationPrintSVG({
   // ── Left height chain ─────────────────────────────────────────────────────
   function heightChain() {
     const baseCabEl = wallCabs.find(c => c.assembly_class === 'base' || c.assembly_class === 'base_corner') ?? null
-    const overheadCabEl = wallCabs.find(c => c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') ?? null
+    const overheadCabEl = wallCabs.find(c => (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead) ?? null
+    const bulkheadEl = wallCabs.find(c => !!c.bulkhead) ?? null
     const kickH = baseCabEl?.has_toekick
       ? (resolvedParts?.get(baseCabEl.id)?.toekick_parts.find(p => p.part_key === 'kick_front_face')?.DX ?? 150)
       : 0
@@ -509,6 +511,14 @@ export default function ElevationPrintSVG({
       const overheadTopY = roomH - wcTopZ
       if (overheadBotY < cursorY - 0.5) segs.push({ fromY: overheadBotY, toY: cursorY, label: `${roundMm(cursorY - overheadBotY)}` })
       segs.push({ fromY: overheadTopY, toY: overheadBotY, label: `${overheadDy}` }); cursorY = overheadTopY
+    }
+    // Bulkhead: hangs from the ceiling (z_bulkhead), its own segment.
+    if (bulkheadEl && bulkheadEl.dy > 0) {
+      const bhBotY = roomH - cabBottomZ(bulkheadEl, room, wall)
+      const bhTopY = bhBotY - bulkheadEl.dy
+      if (bhBotY < cursorY - 0.5) segs.push({ fromY: bhBotY, toY: cursorY, label: `${roundMm(cursorY - bhBotY)}` })
+      segs.push({ fromY: bhTopY, toY: Math.min(bhBotY, cursorY), label: `${roundMm(Math.min(bhBotY, cursorY) - bhTopY)}` })
+      cursorY = bhTopY
     }
     if (cursorY > 0.5) segs.push({ fromY: 0, toY: cursorY, label: `${roundMm(cursorY)}` })
     if (segs.length === 0) segs.push({ fromY: 0, toY: roomH, label: `${roomH}` })
@@ -535,7 +545,9 @@ export default function ElevationPrintSVG({
     )
   }
 
-  const overheadCabs = wallCabs.filter(c => c.assembly_class === 'wall' || c.assembly_class === 'wall_corner')
+  const overheadCabs = wallCabs.filter(c => (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead)
+  // Bulkheads overlap the overheads below them — their own row, just outside.
+  const bulkheadCabs = wallCabs.filter(c => !!c.bulkhead)
   const floorCabs = wallCabs.filter(c =>
     c.assembly_class === 'base' || c.assembly_class === 'base_corner' ||
     c.assembly_class === 'tall' || c.assembly_class === 'tall_corner')
@@ -580,6 +592,7 @@ export default function ElevationPrintSVG({
       {/* Dimensions (layer items; the overall wall length goes with the floor chain) */}
       <>
           {layers.show('dim_elev_wall_chain') && (overheadCabs.length > 0 || fxWall.length > 0) && hChain(computeElevChain(overheadCabs, wall, fxWall), overheadChainY, 'oh', 'dim_elev_wall_chain')}
+          {layers.show('dim_elev_wall_chain') && bulkheadCabs.length > 0 && hChain(computeElevChain(bulkheadCabs, wall), bulkheadChainY, 'bh', 'dim_elev_wall_chain')}
           {layers.show('dim_elev_floor_chain') && (floorCabs.length > 0 || fxFloor.length > 0) && hChain(computeElevChain(floorCabs, wall, fxFloor), floorChainY, 'fl', 'dim_elev_floor_chain')}
           {layers.show('dim_elev_height') && heightChain()}
           {layers.show('dim_openings') && openings.length > 0 && hChain(openingSegs, openingChainY, 'op', 'dim_openings')}

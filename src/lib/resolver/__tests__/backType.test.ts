@@ -40,6 +40,23 @@ describe('BACK_TYPE', () => {
     expect(rail.Y).toBe(900 - 100)
   })
 
+  it('rail: lower edge taped by default; an explicit EDGING.back_rail wins', () => {
+    const rail = (rules: Partial<ConstructionRules>) => parts({ BACK_TYPE: 'rail', ...rules }).find(p => p.part_key === 'back_rail')!
+    expect(rail({}).edge_band).toMatchObject({ top: false, bottom: true, left: false, right: false })
+    expect(rail({ EDGING: { back_rail: ['top'] } }).edge_band).toMatchObject({ top: true, bottom: false })
+  })
+
+  it('no back panel: shelves run to the back of the box', () => {
+    const shelf = (rules: Partial<ConstructionRules>) => resolveCabinet({
+      ...cab(rules), has_internal: true,
+      internal_tree: { type: 'open', fittings: [{ type: 'fixed_shelf', y_locked: false }] },
+    }).internal_parts.find(p => p.part_type === 'fixed_shelf')!
+    const withBack = shelf({}), none = shelf({ BACK_TYPE: 'none' }), rail = shelf({ BACK_TYPE: 'rail' })
+    expect(none.Z).toBe(withBack.Z - 18)
+    expect(none.DX).toBe(withBack.DX + 18)
+    expect(rail.Z).toBe(none.Z)
+  })
+
   it('rail with a double-rail top: one back rail, on edge, BKRH tall', () => {
     const rails = parts({ BACK_TYPE: 'rail', BKRH: 120 }, 'double_rail').filter(p => p.part_key === 'back_rail')
     expect(rails).toHaveLength(1)

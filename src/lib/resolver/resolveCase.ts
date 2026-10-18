@@ -8,6 +8,13 @@ import {
   ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
 
+/** Thickness of the back panel the interior stops at — 0 when BACK_TYPE drops
+ *  the panel ('none' / 'rail'), so shelves, dividers and drawers run to the
+ *  back of the box (z_ubo U1). */
+export function caseBackT(cab: CabinetInput, r: ConstructionRules): number {
+  return (r.BACK_TYPE ?? 'panel') === 'panel' ? cab.material.DZ : 0
+}
+
 export function resolveCaseParts(
   cab: CabinetInput,
   r: ConstructionRules
@@ -34,7 +41,7 @@ export function resolveCaseParts(
 
   const sideT   = sideMat.DZ
   const bottomT = bottomMat.DZ
-  const backT   = hasBack ? backMat.DZ : 0
+  const backT   = caseBackT(cab, r)
   const topT    = topMat.DZ
 
   const DX = cab.DX   // cabinet width
@@ -187,6 +194,12 @@ export function resolveCaseParts(
     }
   }
 
+  // A back rail on edge shows its lower edge (DX runs bottom → top, so that's
+  // 'bottom') — taped by default. Flat, it keeps DEFAULT_EDGING (none). An
+  // explicit EDGING.back_rail always wins.
+  const backRailUpright = backType === 'rail' || r.RAIL_ORIENT === 'vertical'
+  const backRailEdging = r.EDGING?.back_rail ?? (backRailUpright ? ['bottom' as const] : edging.back_rail)
+
   if (topType === 'full_top') {
     parts.push({
       part_key: 'full_top',
@@ -226,7 +239,7 @@ export function resolveCaseParts(
       part_key: 'back_rail',
       ...railPlace('back'),
       material_id: topMat.id,
-      edge_band: edgeSidesToBanding(edging.back_rail, ebId),
+      edge_band: edgeSidesToBanding(backRailEdging, ebId),
     })
   }
   // TOP_TYPE 'none' → no top parts added
@@ -238,7 +251,7 @@ export function resolveCaseParts(
       part_key: 'back_rail',
       ...railPlace('back'),
       material_id: topMat.id,
-      edge_band: edgeSidesToBanding(edging.back_rail, ebId),
+      edge_band: edgeSidesToBanding(backRailEdging, ebId),
     })
   }
 

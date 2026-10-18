@@ -136,6 +136,7 @@ export default function PlanViewReportSVG({
   const ROW_BASE    = 8 * P
   const ROW_OVERALL = 12 * P
   const ROW_OPEN_STEP = 4 * P   // doors / windows row sits where the overall was; the overall steps out
+  const ROW_BH_STEP   = 4 * P   // bulkhead row (z_bulkhead) sits next to the overheads; rows past it step out
 
   const swingSW = 0.25 * P    // door swing arc
   const drawSW  = 0.25 * P    // drawer indicator line
@@ -166,7 +167,9 @@ export default function PlanViewReportSVG({
     })
     .map(c => c.dz))
   const basePad  = 4 * P
-  const dimExtra = showDims ? maxThick + chainClearDepth + ROW_OVERALL + (openingsByWall.size && layers.show('dim_openings') ? ROW_OPEN_STEP : 0) + dimFS * 2 + tickH : 0
+  // Bulkheads get their own row outside the overhead row; the rows past it step out.
+  const bhStep = layers.show('dim_wall_chain') && chainCabs.some(c => !!c.bulkhead) ? ROW_BH_STEP : 0
+  const dimExtra = showDims ? maxThick + chainClearDepth + ROW_OVERALL + bhStep + (openingsByWall.size && layers.show('dim_openings') ? ROW_OPEN_STEP : 0) + dimFS * 2 + tickH : 0
   const padL = basePad + dimExtra
   const padR = basePad + dimExtra
   const padT = basePad + dimExtra
@@ -598,18 +601,23 @@ export default function PlanViewReportSVG({
             cur = s.t1
           }
           if (spans.length && cur < w.length - 0.5) openSegs.push({ from: cur, to: w.length, label: roundMm(w.length - cur) })
-          const rowOverall = ROW_OVERALL + (openSegs.length ? ROW_OPEN_STEP : 0)
+          // Bulkheads overlap the overheads below them — own row, same layer item.
+          const ohCabs = wallCabs.filter(c => !c.bulkhead), bhCabs = wallCabs.filter(c => !!c.bulkhead)
+          const showBh = layers.show('dim_wall_chain') && bhCabs.length > 0
+          const bh = showBh ? ROW_BH_STEP : 0
+          const rowOverall = ROW_OVERALL + bh + (openSegs.length ? ROW_OPEN_STEP : 0)
           const baseSegs    = computeChain(baseCabs, w, baseFx)
-          const wallCabSegs = computeChain(wallCabs, w, wallFx)
+          const wallCabSegs = computeChain(ohCabs, w, wallFx)
           const overallSeg: Seg[] = [{ from: 0, to: w.length, label: roundMm(w.length) }]
           const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
           const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
           const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
           return (
             <g key={key}>
-              {layers.show('dim_wall_chain') && (wallCabs.length > 0 || wallFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`, 'dim_wall_chain')}
-              {layers.show('dim_base_chain') && (baseCabs.length > 0 || baseFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_BASE, baseSegs, `bc-${key}`, 'dim_base_chain')}
-              {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL, openSegs, `op-${key}`, 'dim_openings')}
+              {layers.show('dim_wall_chain') && (ohCabs.length > 0 || wallFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`, 'dim_wall_chain')}
+              {showBh && dimLine(w, chainDir, depthOffset + ROW_WALLCAB + ROW_BH_STEP, computeChain(bhCabs, w), `bh-${key}`, 'dim_wall_chain')}
+              {layers.show('dim_base_chain') && (baseCabs.length > 0 || baseFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_BASE + bh, baseSegs, `bc-${key}`, 'dim_base_chain')}
+              {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL + bh, openSegs, `op-${key}`, 'dim_openings')}
               {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall')}
               {layers.show('dim_base_chain') && baseDz > 0 && (
                 <>

@@ -23,6 +23,7 @@ import {
   DEFAULT_DB_RULES,
 } from './types'
 import { resolveDrawerBox } from './resolveDrawerBox'
+import { caseBackT } from './resolveCase'
 import { slideDrillOps } from '../slideDrilling'
 import { gridForFacet, zoneTurn, type ZoneOpening } from './resolveShapedHardware'
 
@@ -187,8 +188,8 @@ export function resolveDrawerStacks(
   if (drawerZones.length === 0) return { stacks: [], errors, warnings }
 
   const T            = cab.material.DZ
-  // Internal depth: from back panel inner face to front edge of case
-  const internalDepth  = cab.DZ - T - r.SCRBK
+  // Internal depth: from back panel inner face (or the box back, no panel) to front edge of case
+  const internalDepth  = cab.DZ - caseBackT(cab, r) - r.SCRBK
   const availableDepth = internalDepth - r.SLIDE_SETBACK
   const slideProducts = cab.slide_products ?? []
   const slideSchedule = cab.slide_schedule ?? []

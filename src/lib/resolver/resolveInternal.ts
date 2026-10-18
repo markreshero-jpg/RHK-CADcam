@@ -14,6 +14,7 @@ import {
   edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults, DEFAULT_DB_RULES,
 } from './types'
 import { Box, FittingCtx, resolveFittings, DEFAULT_STACK_GAP } from './fittings'
+import { caseBackT } from './resolveCase'
 
 // A drawer/rollout bay = an open compartment holding a drawer or rollout. Such a
 // bay should have OPEN gaps around it (no shelves), so we detect it to self-heal
@@ -109,12 +110,13 @@ export function resolveInternalParts(
   // ── Internal opening reference dimensions ─────────────────────
   const intW = DX - 2 * T - r.SCRL - r.SCRR     // interior width
   const intH = DY - TK - 2 * T - r.SCRT - r.SCRBT   // interior height
-  const intD = DZ - r.SCRBK - T                 // interior depth
+  const BT   = caseBackT(cab, r)                // back panel thickness (0 = no back)
+  const intD = DZ - r.SCRBK - BT                // interior depth
 
   // Interior origin (cabinet coordinates)
   const intLeft   = T + r.SCRL        // X of interior left face
   const intBottom = TK + T + r.SCRBT  // Y of interior bottom face
-  const intBack   = r.SCRBK + T       // Z of interior back face (back panel inner face)
+  const intBack   = r.SCRBK + BT      // Z of interior back face (back panel inner face)
 
   if (intW <= 0) {
     errors.push({ code: 'INTERNAL_TOO_NARROW', message: `Internal opening width is ${intW}mm`, part: 'internal' })

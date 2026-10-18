@@ -242,7 +242,13 @@ export default function WallDimensionChain({
     const kickSegs = showKicks ? kickChain(kicks, wall.length) : []
     const kickCol = layerKick?.color ?? col
     const kick0 = kicks[0], kickL = kicks[kicks.length - 1]
-    const wallCabSegs = computeChain(wallCabs, wall, wallFx)
+    // Bulkheads overlap the overheads below them, so they get their own row just
+    // outside the overhead row (same layer item); every row further out steps by one.
+    const ohCabs = wallCabs.filter(c => !c.bulkhead), bhCabs = wallCabs.filter(c => !!c.bulkhead)
+    const wallCabSegs = computeChain(ohCabs, wall, wallFx)
+    const showBh = layerWallCab.visible && bhCabs.length > 0
+    const bhSegs = showBh ? computeChain(bhCabs, wall) : []
+    const nBh = showBh ? 1 : 0
     const overallSeg: Seg[] = [{ from: 0, to: wall.length, label: roundMm(wall.length) }]
     const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
     const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
@@ -259,16 +265,19 @@ export default function WallDimensionChain({
     const oD = showOpen ? (layerOpenings?.offset ?? 0) : 0
     const rW = oW, rB = rW + oB, rK = rB + oK, rD = rK + oD, rO = rD + oO
     // Row numbers: 1 wall cabs, 2 base, then kicks / openings when shown, overall last.
-    const nK = 3, nD = showKicks ? 4 : 3, nO = nD + (showOpen ? 1 : 0)
+    const nB = 2 + nBh, nK = 3 + nBh, nD = (showKicks ? 4 : 3) + nBh, nO = nD + (showOpen ? 1 : 0)
 
     return (
       <g key={key}>
         {/* Wall-parallel chain lines */}
-        {layerWallCab.visible && (wallCabs.length > 0 || wallFx.length > 0) && (
+        {layerWallCab.visible && (ohCabs.length > 0 || wallFx.length > 0) && (
           <DimLine wall={wall} out={chainDir} dist={depthOffset + step + rW} segs={wallCabSegs} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} bg={labelBg} />
         )}
+        {showBh && (
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * 2 + rW} segs={bhSegs} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} bg={labelBg} />
+        )}
         {layerBase.visible && (baseCabs.length > 0 || baseFx.length > 0) && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * 2 + rB} segs={baseSegs} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nB + rB} segs={baseSegs} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} bg={labelBg} />
         )}
         {showKicks && (
           <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nK + rK} segs={kickSegs} zoom={z} col={kickCol} weight={layerKick!.weight} opacity={layerKick!.opacity} bg={labelBg} />
