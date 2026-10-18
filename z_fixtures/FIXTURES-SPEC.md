@@ -242,6 +242,17 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-18 (user: "lets work through the known gaps"):
+  - **Brand / model no. copied onto placed fixtures** — `room_fixtures.brand` + `model_no`
+    (migration `fixtures_brand_snapshot`, applied live + backfilled; copy in
+    `z_fixtures/migration_brand_snapshot.sql`), in BODY_KEYS, editable per placement in the
+    panel (job copy only). Schedule reads the job copy, library row as fallback.
+  - **Link button** — an unlinked fixture sitting on a cabinet (placed before P4, or Unlinked)
+    shows "Sits on B3 · not linked" + **Link** in the panel. No automatic re-link on load (it
+    would undo a deliberate Unlink).
+  - **Slide-clear uses the fixture's own off-wall band** — `bandOccupancy(…, depth, near)`;
+    a sink pulled forward no longer slides away from something only behind it.
+
 - 2026-10-18 (user): **P10 Cut benchtop tick box + per-placement cutout override.** Column
   `cut_benchtop` (bool, default true) on fixture_catalog + room_fixtures (migration
   `fixtures_p10_cut_benchtop`, applied live; copy in `z_fixtures/migration_p10_cut_benchtop.sql`),
@@ -320,10 +331,8 @@ Esc cancels; one undo step.
 - Dishwasher: "Generic dishwasher 600 freestanding" catalogue row added 2026-10-18;
   GLB `z_fixtures/models/generic-dishwasher-600-freestanding.glb` (generator
   `build_dishwasher.mjs`, any W × D × H) to be uploaded by the user in the library.
-- Brand / model no. aren't copied onto the placed fixture (only looked up) — copy them if
-  jobs must survive catalogue edits ([[job version pinning]]).
 - Elevation / 3D don't show the overlap warning yet (plan + panel only).
-- Existing placed fixtures aren't linked until moved once.
+- ~~Existing placed fixtures aren't linked until moved once~~ — Link button 2026-10-18.
 
 - ~~Live visual check of a real uploaded model~~ done 2026-10-15 in the fixture viewer (Miele oven GLB); room 3D view still not eyeballed.
 - ~~Right-click context menu~~ done 2026-10-15 in plan: View 3D / elevations, Move, Turn 90°, Delete (undoable). Not in elevation / 3D yet.

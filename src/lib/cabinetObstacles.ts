@@ -15,18 +15,18 @@ import { clipToRect } from './cabinetShape/construct'
 
 /**
  * Along-wall ranges of plan outlines that reach into a wall face's floor band
- * (0 … depth off the face) at a height overlapping z0 … z1. The common core of
- * the obstacle lists below.
+ * (near … depth off the face; near > 0 for something pulled off the wall) at a
+ * height overlapping z0 … z1. The common core of the obstacle lists below.
  */
 export function bandOccupancy(
   items: { pts: Pt[]; z0: number; z1: number }[],
-  wall: Wall, side: WallSide, cx: Pt, z0: number, z1: number, depth: number,
+  wall: Wall, side: WallSide, cx: Pt, z0: number, z1: number, depth: number, near = 0,
 ): { t: number; dx: number }[] {
   const f = wallFrame(wall, side, cx)
   const out: { t: number; dx: number }[] = []
   for (const it of items) {
     if (!(z0 < it.z1 - 1 && it.z0 < z1 - 1)) continue
-    const local = clipToRect(it.pts.map(p => ({ x: alongOf(f, p), y: offOf(f, p) })), -1e7, 1, 1e7, depth - 1)
+    const local = clipToRect(it.pts.map(p => ({ x: alongOf(f, p), y: offOf(f, p) })), -1e7, near + 1, 1e7, depth - 1)
     if (local.length < 3) continue
     const ts = local.map(p => p.x)
     const t0 = Math.min(...ts), t1 = Math.max(...ts)

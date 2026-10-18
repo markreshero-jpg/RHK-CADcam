@@ -567,6 +567,9 @@ export interface FixtureBody {
   category:     FixtureCategory
   kind:         string | null
   name:         string
+  /** Copied onto placed fixtures too (schedule reads the job copy). */
+  brand:        string | null
+  model_no:     string | null
   width:        number
   depth:        number
   height:       number
@@ -614,8 +617,6 @@ export interface FixtureCatalogItem extends FixtureBody {
   id:           string
   /** P6: library category (fixture_groups); null = Other. */
   group_id:     string | null
-  brand:        string | null
-  model_no:     string | null
   mount_height: number | null
   notes:        string | null
   active:       boolean

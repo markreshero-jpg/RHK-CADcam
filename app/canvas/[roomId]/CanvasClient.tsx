@@ -367,7 +367,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const face = wallFrame(wall, 'face', cx)
       const fp = { x: s.x, y: s.y, rotation: s.rotation, width: body.width, depth: body.depth }
       const side = offOf(face, fixtureCenter(fp)) >= 0 ? 'face' as const : 'back' as const
-      const occ = bandOccupancy(items, wall, side, cx, body.z, body.z + body.height, body.depth)
+      // Its own band off the wall — a sink pulled forward clears what sits behind it.
+      const sf = wallFrame(wall, side, cx)
+      const offs = fixtureCorners(fp).map(p => offOf(sf, p))
+      const occ = bandOccupancy(items, wall, side, cx, body.z, body.z + body.height, Math.max(...offs), Math.max(0, Math.min(...offs)))
       return slideClear(s, body.width, body.depth, wall, cx, occ, findFreeSlot)
     },
   })
@@ -2994,6 +2997,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             clearance={fixtureClearance?.id === selectedFixture.id ? fixtureClearance.c : null}
             clashWith={fixtureClashMap.get(selectedFixture.id)?.map(c => c.label ?? 'cabinet')}
             onUnlink={id => void fx.unlink(id)}
+            linkable={selectedFixture.cabinet_id ? null : (() => { const l = linkFor(selectedFixture, cabPlans); return l ? (cabinets.find(c => c.id === l.cabinet_id)?.label ?? 'cabinet') : null })()}
+            onLink={id => { const l = linkFor(selectedFixture, cabPlans); if (l && id === selectedFixture.id) void fx.update(id, l) }}
             onUpdate={(id, patch) => void fx.update(id, patch)}
             onDelete={id => void fx.remove(id)}
             onMove={id => { if (canvasView !== 'plan' && canvasView !== 'elevation') switchView('plan'); fx.startMove(id) }}

@@ -47,4 +47,11 @@ describe('appliances as obstacles', () => {
     expect(s2.x).toBe(2000)
     expect(fixtureCorners({ ...s, width: 600, depth: 600 })[0].x).toBeCloseTo(1600)
   })
+
+  it('something pulled off the wall only sees what reaches its own band', () => {
+    // a 300-deep shelf on the wall; a sink pulled 400 forward (400…850 off) clears it
+    const shelf = { pts: [{ x: 1000, y: 0 }, { x: 1600, y: 0 }, { x: 1600, y: 300 }, { x: 1000, y: 300 }], z0: 0, z1: 870 }
+    expect(bandOccupancy([shelf], top, 'face', cx, 0, 850, 850, 400)).toHaveLength(0)
+    expect(bandOccupancy([shelf], top, 'face', cx, 0, 850, 850, 200)).toHaveLength(1)
+  })
 })

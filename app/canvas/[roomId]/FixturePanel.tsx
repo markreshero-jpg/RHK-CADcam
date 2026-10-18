@@ -16,7 +16,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   appliance: 'Appliance', sink: 'Sink', tap: 'Tap', decorative: 'Decorative', opening: 'Door / window',
 }
 
-export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMove, onTurn, onOpen, onClose, linkedTo, clashWith, onUnlink, clearance }: {
+export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMove, onTurn, onOpen, onClose, linkedTo, linkable, onLink, clashWith, onUnlink, clearance }: {
   fixture:  RoomFixture
   walls:    Wall[]
   /** Gaps to the nearest objects (left / right feed Clear left / Clear right). */
@@ -26,6 +26,9 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
   /** P4: labels of cabinets it overlaps. */
   clashWith?: string[]
   onUnlink?:  (id: string) => void
+  /** Unlinked but sitting on a cabinet (e.g. placed before P4, or unlinked): that cabinet's label. */
+  linkable?:  string | null
+  onLink?:    (id: string) => void
   onUpdate: (id: string, patch: Partial<RoomFixture>) => void
   onDelete: (id: string) => void
   /** Header ✕ — closes (deselects). Omitted → no ✕. */
@@ -117,6 +120,24 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
           />
         </div>
 
+        {f.category !== 'opening' && (
+          // This job's copy — the schedule prints these; editing doesn't touch the library.
+          <div className="grid grid-cols-2 gap-1">
+            {(['brand', 'model_no'] as const).map(k => (
+              <div key={k}>
+                <label className={lbl}>{k === 'brand' ? 'Brand' : 'Model no.'}</label>
+                <input
+                  key={f.id + (f[k] ?? '')}
+                  defaultValue={f[k] ?? ''}
+                  onBlur={e => { const v = e.target.value.trim() || null; if (v !== f[k]) onUpdate(f.id, { [k]: v }) }}
+                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  className={inp.replace('text-right', '')}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="space-y-1.5">
           <label className={lbl}>Size (mm)</label>
           <div className="grid grid-cols-3 gap-1">
@@ -180,6 +201,14 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
                 className="px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-[10px] text-gray-200"
                 title="Stop following the cabinet (stays where it is)">Unlink</button>
             )}
+          </div>
+        )}
+        {!linkedTo && linkable && onLink && (
+          <div className="flex items-center gap-2 rounded bg-gray-800/60 px-2 py-1.5">
+            <p className="flex-1 text-[11px] text-gray-400">Sits on <span className="font-medium text-gray-200">{linkable}</span> · not linked</p>
+            <button onClick={() => onLink(f.id)}
+              className="px-2 py-0.5 rounded bg-blue-700 hover:bg-blue-600 text-[10px] text-white"
+              title="Follow this cabinet when it moves or slides (stays where it is now)">Link</button>
           </div>
         )}
         {!!clashWith?.length && (

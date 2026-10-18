@@ -37,7 +37,7 @@ export type FixtureCarry =
   | { kind: 'move'; id: string }
 
 const BODY_KEYS: (keyof FixtureBody)[] = [
-  'category', 'kind', 'name', 'width', 'depth', 'height', 'mount', 'colour',
+  'category', 'kind', 'name', 'brand', 'model_no', 'width', 'depth', 'height', 'mount', 'colour',
   'model_url', 'model_format', 'model_scale', 'model_rot_x', 'model_rot_y',
   'model_off_x', 'model_off_y', 'model_off_z',
   'cutout_shape', 'cutout_w', 'cutout_d', 'cutout_radius', 'cutout_off_x', 'cutout_off_y', 'cut_benchtop', 'bench_drop',

@@ -1,7 +1,7 @@
 'use client'
 // Appliance schedule (z_fixtures P4): every appliance, sink and tap placed in the
-// room / job — what it is, brand + model number (from the library row it came
-// from), size, and where it goes (the cabinet it sits on, else its wall).
+// room / job — what it is, brand + model number (copied at placement; the library
+// row is the fallback for older placements), size, and where it goes (the cabinet it sits on, else its wall).
 // Decorative items are left out.
 
 import type { Room, Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
@@ -39,8 +39,8 @@ export function buildSchedule(
         return {
           item:     f.kind || CATEGORY_LABEL[f.category] || f.category,
           name:     f.label || f.name,
-          brand:    cat?.brand ?? '',
-          modelNo:  cat?.model_no ?? '',
+          brand:    f.brand ?? cat?.brand ?? '',
+          modelNo:  f.model_no ?? cat?.model_no ?? '',
           size:     `${Math.round(f.width)} × ${Math.round(f.depth)} × ${Math.round(f.height)}`,
           location: cab ? `On ${cab.label ?? 'cabinet'}` : wall ? (wall.name || 'Wall') : 'Free-standing',
         }
