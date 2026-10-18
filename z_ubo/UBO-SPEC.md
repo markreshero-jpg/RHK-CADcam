@@ -1,7 +1,6 @@
 # UBO — under-bench oven cabinet + cabinet contents
 
-Status: **U1 + U2 built 2026-10-18 (c82ba0b, 2df4e62, e36fc3a), in-app check
-pending.** RESUME HERE → U3.
+Status: **U1 + U2 + U3 built 2026-10-18, in-app check pending.** RESUME HERE → U4.
 
 A library base cabinet that comes out with an oven already inside it. Built
 natively (face grid + interior + carcass options), with the oven as a real
@@ -112,6 +111,14 @@ when custom appliance cabinets need it. Test: `openZones.test.ts`.
 construction / materials / kick): 600 wide, face grid per D3, interior per D4,
 `BACK_TYPE: 'rail'`, contents per U4. Subcategory: Appliances (create if
 missing). Migration in `z_ubo/`.
+
+*Built (U3):* `z_ubo/migration_u3_ubo_library.sql`, applied — new
+`cabinet_subcategories` row "Appliances"; `UBO` definition (base, 600 ×
+cascade height / depth, B2D construction / materials / kick, front_rail top,
+`rule_overrides.BACK_TYPE = 'rail'` — copied onto the instance at placement).
+Fixed shelf via `align_face_row { row_index: 1, edge: 'bottom' }`. No contents
+yet (oven arrives in U4). Test: `uboCabinet.test.ts` (exact seeded data; 900 →
+two ~71 panels at default rules; 820 keeps the 600 opening).
 
 **U4 — contents data model + spawning.**
 - `cabinet_definitions.contents jsonb` — `[{ fixture_catalog_id, anchor }]`,
