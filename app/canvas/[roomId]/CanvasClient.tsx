@@ -2467,7 +2467,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               <option value="__manage__">Manage layers…</option>
             </select>
             {/* Override for per-part view hides (z_display_layers/PART-HIDE-SPEC.md). */}
-            <label title="Show parts hidden per view in the cabinet editor's Parts tab"
+            <label title="Draw parts that were hidden per view (Hide in ticks, cabinet editor → Parts tab)"
               className={`flex items-center gap-1 text-xs cursor-pointer select-none ${showHiddenParts ? 'text-orange-300' : 'text-gray-500 hover:text-gray-300'}`}>
               <input type="checkbox" checked={showHiddenParts} onChange={e => toggleShowHiddenParts(e.target.checked)}
                 className="accent-orange-500 w-3 h-3" />
