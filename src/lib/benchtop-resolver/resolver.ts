@@ -15,10 +15,13 @@
 //   profile parts              waterfall legs + apron strips from edge profiles
 // Outsourced construction: worktop / stone / profile parts are supply items
 // carrying area, lineal metres per profile, cutouts and joins in `meta`.
+// Sink / cooktop cutouts: the worktop and subtop panels carry them as `holes`
+// (cut on the CNC for board tops); build-up members are never cut — a cross
+// member that lands in a cutout moves across clear of it.
 
 import type { BenchtopScheduleRow, BenchtopPartRole, BenchtopBuildMethod, BenchtopEdgeProfile } from '@/src/lib/types'
 import type { BenchtopResolverInput, ResolvedBenchtopPart, BenchtopPartMeta } from './types'
-import { DEFAULT_CROSS_MEMBER_SPACING } from './construction'
+import { DEFAULT_CROSS_MEMBER_SPACING, crossMemberPositions } from './construction'
 import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, outlinePoints } from '@/src/lib/benchtopGeometry'
 import {
   splitIntoPieces, pieceFrame, pieceArea, isRectangle, crossIntervals, edgeLength, pieceContains,
@@ -137,12 +140,15 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
       lineal[code] = Math.round((lineal[code] ?? 0) + edgeLength(s))
       if (prof.generates === 'waterfall') waterfalls++
     })
-    const cutouts = (benchtop.cutout_polygons ?? [])
+    // This piece's cutouts in the part frame.
+    const holes = (benchtop.cutout_polygons ?? [])
       .filter(c => c.length >= 3 && pieceContains(ps, centroidOf(c)))
-      .map(c => {
-        const l = c.map(f.toLocal), xs = l.map(p => p.x), ys = l.map(p => p.y)
-        return { w: Math.round(Math.max(...xs) - Math.min(...xs)), h: Math.round(Math.max(...ys) - Math.min(...ys)), round: isRound(c) }
-      })
+      .map(c => ({ c, l: c.map(f.toLocal).map(p => ({ x: r1(p.x), y: r1(p.y) })) }))
+    const cutouts = holes.map(({ c, l }) => {
+      const xs = l.map(p => p.x), ys = l.map(p => p.y)
+      return { w: Math.round(Math.max(...xs) - Math.min(...xs)), h: Math.round(Math.max(...ys) - Math.min(...ys)), round: isRound(c) }
+    })
+    const panelHoles = holes.length ? holes.map(h => h.l) : null
     const joins = ps.filter(s => s.join).map(s => ({ type: s.join!, length: Math.round(edgeLength(s)) }))
     const meta: BenchtopPartMeta = {
       area_m2: Math.round(pieceArea(ps) / 1e4) / 100, shaped: !rect, profiles: lineal, cutouts, waterfalls, joins,
@@ -172,7 +178,7 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
         material_id: row?.material_id ?? null, material_name: boardName(row, boardMaterials),
         benchtop_material_id: row?.benchtop_material_id ?? null, benchtop_material_name: surfaceName(row, surfaceMaterials),
         edgeband_id: row?.edgeband_id ?? null, supply_item: outsourced,
-        edgebands: row?.material_id ? worktopBands() : null,
+        edgebands: row?.material_id ? worktopBands() : null, holes: panelHoles,
       })
     }
     if (roles.has('stone_slab')) {
@@ -192,6 +198,7 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
         thickness_mm: boardThickness(row, boardMaterials, 18), grain_direction,
         material_id: row?.material_id ?? null, material_name: boardName(row, boardMaterials),
         benchtop_material_id: null, benchtop_material_name: null, edgeband_id: row?.edgeband_id ?? null,
+        holes: panelHoles,
       })
     }
 
@@ -244,9 +251,8 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
       const row = rowFor(scheduleRows, 'buildup_cross_member')
       const innerRun = Math.max(0, f.length - 2 * setBack)
       const spacing = cross_member_spacing_mm || DEFAULT_CROSS_MEMBER_SPACING
-      const count = Math.max(0, Math.ceil(innerRun / spacing) - 1)
-      for (let c = 1; c <= count; c++) {
-        const along = setBack + (innerRun * c) / (count + 1)
+      const spans = holes.map(({ l }) => ({ x0: Math.min(...l.map(p => p.x)), x1: Math.max(...l.map(p => p.x)) }))
+      for (const along of crossMemberPositions(innerRun, setBack, spacing, Number(memberWidth), spans)) {
         for (const span of crossIntervals(ps, f, along)) {
           const len = span - 2 * setBack
           if (len < 1) continue
@@ -368,7 +374,7 @@ function groupParts(parts: ResolvedBenchtopPart[]): ResolvedBenchtopPart[] {
   const out: ResolvedBenchtopPart[] = []
   const byKey = new Map<string, ResolvedBenchtopPart>()
   for (const p of parts) {
-    if (p.outline || (p.meta && Object.keys(p.meta).length && p.part_role !== 'waterfall_panel')) { out.push(p); continue }
+    if (p.outline || p.holes?.length || (p.meta && Object.keys(p.meta).length && p.part_role !== 'waterfall_panel')) { out.push(p); continue }
     const key = [p.part_role, p.label, p.length_mm, p.width_mm, p.thickness_mm, p.material_id, p.benchtop_material_id, p.piece, JSON.stringify(p.meta), JSON.stringify(p.edgebands ?? null)].join('|')
     const hit = byKey.get(key)
     if (hit) hit.quantity += p.quantity

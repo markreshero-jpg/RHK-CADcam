@@ -20,7 +20,7 @@ import type { OptiSnapshot, OptiPart } from '@/src/lib/optimiser/types'
 import { materialGroupKey, buildMargins } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
-import { cutBlank, placedOutline } from '@/src/lib/optimiser/shapes'
+import { cutBlank, placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import SheetSVG from './SheetSVG'
 import Stage5Edit from './Stage5Edit'
 import Stage6Gcode from './Stage6Gcode'
@@ -766,7 +766,8 @@ function Stage4Nesting() {
               {nestResult.sheets.map(s => (
                 <div key={s.index} className="space-y-1.5">
                   <SheetSVG sheet={s} pxWidth={230}
-                    outlineFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedOutline(p, pl, deductEb) : null }} />
+                    outlineFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedOutline(p, pl, deductEb) : null }}
+                    holesFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedHoles(p, pl, deductEb) : [] }} />
                   <p className="text-[11px] text-ink-muted flex justify-between">
                     <span>Sheet {s.index + 1}{s.stock.isOffcut ? ` · ${s.stock.label ?? 'offcut'}` : ''}</span>
                     <span className="font-mono">{(s.efficiency * 100).toFixed(0)}% · {s.placements.length}</span>

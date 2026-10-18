@@ -50,4 +50,6 @@ export interface ResolvedBenchtopPart {
   meta?:                 BenchtopPartMeta | null
   /** Edge tape per side of the part (Phase 7). Null = no tape. */
   edgebands?:            BtPartBands | null
+  /** Sink / cooktop cutouts, mm, part frame (as `outline`) — worktop + subtop panels. Null = none. */
+  holes?:                { x: number; y: number }[][] | null
 }

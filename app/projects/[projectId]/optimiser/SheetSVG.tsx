@@ -26,8 +26,20 @@ export function PlacedOutline({ local, x, y, H, scale, on }: {
   )
 }
 
+/** Through-cut holes (benchtop cutouts) of a placed part, relative to the
+ *  placement corner (shapes.placedHoles) — drawn as sheet showing through. */
+export function PlacedHoles({ holes, x, y, H, scale }: {
+  holes: ShapePt[][]; x: number; y: number; H: number; scale: number
+}) {
+  return <>{holes.map((h, i) => (
+    <polygon key={i} style={{ pointerEvents: 'none' }}
+      points={h.map(p => `${((x + p.x) * scale).toFixed(1)},${((H - y - p.y) * scale).toFixed(1)}`).join(' ')}
+      fill="#0f172a" stroke="#60a5fa" strokeWidth={0.6} strokeDasharray="2 1.5" />
+  ))}</>
+}
+
 export default function SheetSVG({
-  sheet, pxWidth, selectedUid, onPartClick, showLabels = true, outlineFor,
+  sheet, pxWidth, selectedUid, onPartClick, showLabels = true, outlineFor, holesFor,
 }: {
   sheet: NestedSheet
   pxWidth: number
@@ -35,6 +47,7 @@ export default function SheetSVG({
   onPartClick?: (uid: string) => void
   showLabels?: boolean
   outlineFor?: (pl: Placement) => ShapePt[] | null
+  holesFor?: (pl: Placement) => ShapePt[][]
 }) {
   const { w: W, h: H, trimTop, trimBottom, trimLeft, trimRight } = sheet.stock
   const scale = pxWidth / W
@@ -66,6 +79,7 @@ export default function SheetSVG({
               stroke={on ? '#60a5fa' : '#3b82f6'} strokeWidth={outline ? 0.5 : on ? 1.6 : 0.8}
               strokeDasharray={outline ? '3 2' : undefined} />
             {outline && <PlacedOutline local={outline} x={p.x} y={p.y} H={H} scale={scale} on={on} />}
+            {holesFor && <PlacedHoles holes={holesFor(p)} x={p.x} y={p.y} H={H} scale={scale} />}
             {/* Grain indicator: arrow along the part's height (vertical = with grain) */}
             {p.rotated && (
               <line x1={(p.x + p.w / 2) * scale} y1={fy(p.y, p.h) + 4} x2={(p.x + p.w / 2) * scale} y2={fy(p.y, p.h) + p.h * scale - 4}

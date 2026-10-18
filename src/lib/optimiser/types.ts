@@ -54,6 +54,9 @@ export interface OptiPart {
   // part size changed after the shape was drawn → excluded from nesting.
   shape?: import('./shapes').OptiShape
   shape_stale?: boolean
+  // Through-cut holes (benchtop sink / cooktop cutouts): closed loops in the
+  // op frame at finished size, placed like the outline (shapes.placedHoles).
+  cut_holes?: { x: number; y: number }[][]
 }
 
 // Cabinet-level maps of user-authored, regen-surviving content keyed by

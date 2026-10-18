@@ -278,6 +278,24 @@ Esc cancels; one undo step.
     within 300 of a face. Floor items → base row (plan) / floor chain (elevation); wall-mount
     (rangehood) → wall-cabinet row / overhead chain. Canvas plan + elevation and both PDFs; gated
     by the fixture's layer. Depth dims still from cabinets only.
+  - **Benchtop cutouts cut on the CNC** (gap 1; Mark: "we do cutouts sometimes … we dont need
+    build up rails cut around it but if one lands inside a cut then it should move across").
+    Resolver: the worktop + subtop panels carry the piece's cutouts as `holes` (part frame,
+    like `outline`; new column `benchtop_resolved_parts.holes` jsonb — migration
+    `benchtop_resolved_parts_holes`, applied live, copy `z_fixtures/migration_benchtop_holes.sql`).
+    Build-up strips / rails are never cut: `crossMemberPositions` (construction.ts) moves a cross
+    member whose band lands in a cutout to the nearer side, CUTOUT_CLEARANCE 10 mm clear, still
+    between the end members; no room either side, or landing on another member → left out.
+    Perimeter rails don't move. Optimiser: `cut_holes` on the benchtop OptiPart (op frame);
+    `shapes.placedHoles` places them like the outline (EB-shifted blank + rotation); Stage 4 / 5
+    sheets draw them; Stage 6 passes `GcodeInput.holes`. G-code: each hole is an inside profile
+    (`routePerimeter(…, inside)`; `toolPathLoop(…, inside)` offsets inward) cut just before
+    its part's perimeter, both onion-skin phases; climb = CW in a hole. Ramp entry zig-zags
+    along the start edge (a straight ramp would run out of the hole into the part) and lifts
+    straight out. A hole the bit can't get round → WARN comment, not cut. Tests
+    `cutoutHoles.test.ts` (resolver) + `holeGcode.test.ts` (optimiser). **Existing tops need
+    Resolve pressed once** to get holes. Simulator 3D carve doesn't cut the hole out (the toolpath
+    shows). Same routing bit as the perimeter.
 
 - 2026-10-18 (user): **P10 Cut benchtop tick box + per-placement cutout override.** Column
   `cut_benchtop` (bool, default true) on fixture_catalog + room_fixtures (migration
@@ -364,7 +382,7 @@ Esc cancels; one undo step.
 - ~~Right-click context menu~~ done 2026-10-15 in plan: View 3D / elevations, Move, Turn 90°, Delete (undoable); elevation 2026-10-18. Not in 3D.
 - ~~Fixtures don't avoid cabinets~~ P4 said warn only; changed 2026-10-18 — they now block / slide (see top).
 - Room 3D: sink-in-hole not clearly eyeballed yet (plan + resolver verified).
-- Cutout as a CNC op (optimiser / gcode ignore benchtop cutouts entirely today).
+- ~~Cutout as a CNC op~~ done 2026-10-18 (see the gaps block). Not checked on the machine.
 - ~~Per-placement cutout edits~~ done in P10.
 - ~~Elevation: fixtures aren't placeable from elevation~~ done 2026-10-18. ~~Dimension chains don't include appliances~~ done 2026-10-18.
 

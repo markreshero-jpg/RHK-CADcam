@@ -319,6 +319,9 @@ the sheet / G-code contour (`placedOutline` = the blank's outline). Plain rectan
 - Snapshot-uid instability / reload-a-saved-run / `output_to_cnc` reset on resolve (pre-existing).
 
 ## Session log
+- **2026-10-18 (fixtures session)** — benchtop sink / cooktop cutouts reach the CNC: `OptiPart.cut_holes`,
+  `shapes.placedHoles`, `GcodeInput.holes`, `routePerimeter(…, inside)` + `toolPathLoop(…, inside)`.
+  Rect / outline output unchanged (all fixture tests pass). Detail in z_fixtures/FIXTURES-SPEC.md.
 - **2026-10-18** — O5 built (see its status block). Arcs (O4) checked in-app by Mark.
 - **2026-10-16** — O2b + O3 + O4 built (see their status blocks); side bug (A) fixed, plus the
   drawn-shape drill-shift bug and a bit-too-big gouge guard. Side bugs B–E still open. Awaiting

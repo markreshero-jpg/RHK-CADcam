@@ -14,9 +14,9 @@ import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/opt
 import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
-import { placedOutline } from '@/src/lib/optimiser/shapes'
+import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { ShapePt } from '@/src/lib/shapePath'
-import { PlacedOutline } from './SheetSVG'
+import { PlacedOutline, PlacedHoles } from './SheetSVG'
 import type { SheetDrill } from '@/src/lib/optimiser/gcode'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
@@ -274,6 +274,7 @@ export default function Stage5Edit() {
               onMove={(uid, x, y) => movePartWithin(uid, x, y)}
               onContext={(uid, x, y) => { selectPlacement(uid); setCtxMenu({ uid, x, y }) }}
               outlineFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedOutline(p, pl, deductEb) : null }}
+              holesFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedHoles(p, pl, deductEb) : [] }}
             />
           </div>
         </div>
@@ -407,8 +408,9 @@ export default function Stage5Edit() {
 }
 
 // ── Interactive sheet (pointer drag with live snap preview) ────────────────────────
-function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor }: {
+function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor, holesFor }: {
   outlineFor: (pl: NestedSheet['placements'][number]) => ShapePt[] | null
+  holesFor: (pl: NestedSheet['placements'][number]) => ShapePt[][]
   sheet: NestedSheet
   selectedUid: string | null
   drills: SheetDrill[]
@@ -517,6 +519,7 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
               stroke={on ? '#60a5fa' : '#3b82f6'} strokeWidth={outline ? 0.6 : on ? 1.8 : 0.9}
               strokeDasharray={outline ? '4 3' : undefined} />
             {outline && <PlacedOutline local={outline} x={x} y={y} H={H} scale={scale} on={on} />}
+            <PlacedHoles holes={holesFor(p)} x={x} y={y} H={H} scale={scale} />
             {(() => {
               const wpx = p.w * scale, hpx = p.h * scale
               const cx = (x + p.w / 2) * scale

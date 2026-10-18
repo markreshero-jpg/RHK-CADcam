@@ -233,6 +233,18 @@ export function placedOutline(part: BlankPart, pl: { w: number; rotated: boolean
   return poly.map(p => (pl.rotated ? { x: pl.w - p.y, y: p.x } : { x: p.x, y: p.y }))
 }
 
+/** A part's through-cut holes (benchtop cutouts) in SHEET axes, relative to
+ *  the placement corner — the same transform as placedOutline: shifted onto
+ *  the cut blank, then turned with the placement. */
+export function placedHoles(part: BlankPart & { cut_holes?: ShapePt[][] }, pl: { w: number; rotated: boolean }, deductEb: boolean): ShapePt[][] {
+  if (!part.cut_holes?.length) return []
+  const { sx, sy } = cutBlank(part, deductEb)
+  return part.cut_holes.map(h => h.map(p => {
+    const q = { x: p.x - sx, y: p.y - sy }
+    return pl.rotated ? { x: pl.w - q.y, y: q.x } : q
+  }))
+}
+
 /** Signed area (+ = CCW in a y-up frame). */
 export function loopArea(pts: ShapePt[]): number {
   let a = 0
@@ -296,7 +308,8 @@ export function offsetLoop(pts: ShapePt[], d: number[] | number): ShapePt[] {
  * too-small edge is dropped and its neighbours re-joined, so the bit just
  * skips the feature. `dropped` > 0 → some detail can't be cut with this bit.
  */
-export function toolPathLoop(pts: ShapePt[], r: number): { pts: ShapePt[]; dropped: number } {
+// inside = a hole: the tool runs inside the loop (offset toward its interior).
+export function toolPathLoop(pts: ShapePt[], r: number, inside = false): { pts: ShapePt[]; dropped: number } {
   // Clean: no duplicate points, no collinear same-direction joints.
   const clean: ShapePt[] = []
   for (const p of pts) {
@@ -317,7 +330,7 @@ export function toolPathLoop(pts: ShapePt[], r: number): { pts: ShapePt[]; dropp
     const b = clean[(i + 1) % clean.length]
     const len = Math.hypot(b.x - a.x, b.y - a.y)
     const u = { x: (b.x - a.x) / len, y: (b.y - a.y) / len }
-    const out = ccw ? { x: u.y, y: -u.x } : { x: -u.y, y: u.x }   // away from the material
+    const out = ccw !== inside ? { x: u.y, y: -u.x } : { x: -u.y, y: u.x }   // away from the material
     return { p: { x: a.x + out.x * r, y: a.y + out.y * r }, u, len }
   })
   const meet = (A: Ln, B: Ln): ShapePt | null => {

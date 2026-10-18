@@ -223,6 +223,10 @@ export interface GcodeInput {
   // outline in SHEET coords (bottom-left origin, mm) — shapes.placedOutline +
   // the placement corner. The perimeter cut follows it instead of the rect.
   outlines?: Record<string, { x: number; y: number }[]>
+  // Through-cut holes (benchtop sink / cooktop cutouts): placement uid → closed
+  // loops in SHEET coords (shapes.placedHoles + the placement corner). Each is
+  // cut as an inside profile just before that part's perimeter.
+  holes?: Record<string, { x: number; y: number }[][]>
 }
 
 // Modal compaction (spec §5.8 / Anderson .anc). Drops words that are unchanged
@@ -616,23 +620,34 @@ export function generateSheetGcode(input: GcodeInput): string {
     const o = input.outlines?.[pl.uid]
     return o && o.length >= 3 ? o : undefined
   }
+  // A part's holes, cut inside-out before its perimeter (the part still held).
+  const cutHoles = (emitR: (s: string) => void, cR: (s: string) => void, pl: { uid: string; label: string }, depth: number, start: number) => {
+    const hs = (input.holes?.[pl.uid] ?? []).filter(h => h.length >= 3)
+    hs.forEach((h, i) => {
+      cR(`Cutout ${i + 1} in ${pl.label}`)
+      routePerimeter(emitR, f, fz, { x: 0, y: 0, w: 0, h: 0, label: `${pl.label} cutout ${i + 1}` }, depth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, start, toolR, input.toolNumber, h, true)
+    })
+  }
   emitRouterSection(input.toolNumber, input.toolDiameter, (emitR, cR) => {
     if (p.cutter_compensation !== 'off' && toolR <= 0) cR('WARN: cutter compensation requested but routing tool diameter unknown - parts may cut undersized')
     if (hasSkin) {
       // Phase 1: rough every part down to the onion-skin depth (parts stay held).
       cR('Roughing pass - leave onion skin')
       for (const pl of ordered) {
+        cutHoles(emitR, cR, pl, roughDepth, 0)
         cR(`Part ${pl.label}`)
         routePerimeter(emitR, f, fz, pl, roughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, 0, toolR, input.toolNumber, outlineOf(pl))
       }
       // Phase 2: separate every part — cut through the remaining skin.
       cR('Separation pass - cut through onion skin')
       for (const pl of ordered) {
+        cutHoles(emitR, cR, pl, throughDepth, roughDepth)
         cR(`Part ${pl.label}`)
         routePerimeter(emitR, f, fz, pl, throughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, roughDepth, toolR, input.toolNumber, outlineOf(pl))
       }
     } else {
       for (const pl of ordered) {
+        cutHoles(emitR, cR, pl, throughDepth, 0)
         cR(`Part ${pl.label}`)
         routePerimeter(emitR, f, fz, pl, throughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, 0, toolR, input.toolNumber, outlineOf(pl))
       }
@@ -1042,6 +1057,7 @@ function routePerimeter(
   toolRadius = 0,   // routing bit radius (mm) — used for cutter compensation
   toolNumber = 1,   // routing tool number — used as the G41/G42 offset register (D)
   outline?: { x: number; y: number }[],   // shaped part: closed outline, sheet coords (O4)
+  inside = false,   // outline is a hole (benchtop cutout): the tool runs inside it, the slug is waste
 ) {
   type V = [number, number]
   // Cutter compensation so the part cuts to size (otherwise the tool centreline on the
@@ -1069,8 +1085,14 @@ function routePerimeter(
     // like the rect, grown out by the computer-comp radius (sharp mitred
     // corners — an inside corner keeps the tool's radius, as any router does).
     // A recess narrower than the bit is skipped, never gouged (toolPathLoop).
-    const wound = (loopArea(outline) >= 0) === climb ? outline : [...outline].reverse()
-    const tp = toolPathLoop(wound, r)
+    // A hole winds the other way (CW for climb): the waste is inside it.
+    const wound = (loopArea(outline) >= 0) === (climb !== inside) ? outline : [...outline].reverse()
+    const tp = toolPathLoop(wound, r, inside)
+    // A hole the bit can't get round collapses (its tool path turns inside out).
+    if (inside && (tp.pts.length < 3 || Math.sign(loopArea(tp.pts)) !== Math.sign(loopArea(wound)) || Math.abs(loopArea(tp.pts)) < 1)) {
+      emit(sanitiseComment(`WARN: ${pl.label} is too small for the ${f(toolRadius * 2)}mm bit - not cut`, p.max_comment_length))
+      return
+    }
     if (tp.dropped) emit(sanitiseComment(`WARN: ${pl.label} has detail smaller than the ${f(toolRadius * 2)}mm bit - not cut there`, p.max_comment_length))
     corners = tp.pts.map(q => m(q.x, q.y))
   } else {
@@ -1127,7 +1149,8 @@ function routePerimeter(
   // from the winding, so it holds for concave outlines too.
   let area2 = 0
   for (let i = 0; i < n; i++) { const a = corners[i], b = corners[(i + 1) % n]; area2 += a[0] * b[1] - b[0] * a[1] }
-  const outward = (_at: V, tan: V): V => area2 >= 0 ? [tan[1], -tan[0]] : [-tan[1], tan[0]]
+  // (A hole's waste is its inside: the other side.)
+  const outward = (_at: V, tan: V): V => (area2 >= 0) !== inside ? [tan[1], -tan[0]] : [-tan[1], tan[0]]
   const tIn = unit(S, B)
   const nIn = outward(S, tIn)
   const tOut = tIn, nOut = nIn
@@ -1164,7 +1187,26 @@ function routePerimeter(
   const offIn = p.perimeter_approach_type === 'straight' ? 0 : Math.max(0, p.tool_entry_offset)
   const toolDia = toolRadius * 2
   const rampRun = (d: number) => (clearZ - d) / Math.max(1e-3, Math.tan((p.ramp_in_angle > 0 ? p.ramp_in_angle : 3) * Math.PI / 180))
+  // In a hole the run back along the edge would leave the hole and cut the
+  // part, so the ramp zig-zags along the start edge (S back towards its start
+  // and over again), no steeper than the set angle, finishing at S.
+  const edgeRoom = Math.max(1, len(A, S) - 0.5)
+  const zigRampIn = (d: number) => {
+    const tv = rampRun(d)
+    const legs = Math.max(1, Math.ceil(tv / edgeRoom))
+    const runL = Math.min(edgeRoom, tv)
+    const back: V = [S[0] - firstDir[0] * runL, S[1] - firstDir[1] * runL]
+    const at = (k: number): V => ((legs - k) % 2 === 0 ? S : back)
+    emit(`G0 X${f(at(0)[0])} Y${f(at(0)[1])}`)
+    emit(`G0 Z${fz(clearZ)}`)
+    for (let k = 1; k <= legs; k++) {
+      const z = clearZ + (d - clearZ) * (k / legs)
+      const to = at(k)
+      emit(`G1 X${f(to[0])} Y${f(to[1])} Z${fz(z)} F${plungeF}`)
+    }
+  }
   const straightRampIn = (d: number) => {
+    if (inside) return zigRampIn(d)
     const tv = rampRun(d)
     const ap: V = [S[0] - firstDir[0] * tv + nrmS[0] * offIn, S[1] - firstDir[1] * tv + nrmS[1] * offIn]
     emit(`G0 X${f(ap[0])} Y${f(ap[1])}`)
@@ -1172,6 +1214,13 @@ function routePerimeter(
     emit(`G1 X${f(S[0])} Y${f(S[1])} Z${fz(d)} F${plungeF}`)
   }
   const straightRampOut = (d: number) => {
+    if (inside) {
+      // Past S along the cut (already cut), then straight up out of the hole.
+      const o = Math.min(toolDia, Math.max(0, len(S, B) - toolRadius))
+      emit(`G1 X${f(S[0] + firstDir[0] * o)} Y${f(S[1] + firstDir[1] * o)} Z${fz(d)} F${cutF}`)
+      emit(`G0 Z${fz(clearZ)}`)
+      return
+    }
     const tv = rampRun(d)
     const over: V = [S[0] + firstDir[0] * toolDia, S[1] + firstDir[1] * toolDia]
     const ex2: V = [over[0] + firstDir[0] * tv + nrmS[0] * offIn, over[1] + firstDir[1] * tv + nrmS[1] * offIn]

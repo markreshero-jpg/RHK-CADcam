@@ -8,6 +8,7 @@
 // Read-only in the optimiser: no part_operations, comments or renames.
 // Edge tape (Phase 7): each row's `edgebands` sides become eb_* so the cut size
 // deducts the tape like a cabinet part; a shaped piece carries the metres only.
+// Sink / cooktop cutouts (`holes`) become cut_holes, cut through on the CNC.
 // ============================================================
 
 import type { OptiPart, OptiCabinet, OptiRoom } from './types'
@@ -19,15 +20,18 @@ export interface RawBenchtop { id: string; label: string | null; room_id: string
 
 /** Columns the loaders read from benchtop_resolved_parts. */
 export const BENCHTOP_PART_SELECT =
-  'id,benchtop_id,part_role,label,length_mm,width_mm,thickness_mm,quantity,grain_direction,material_id,supply_item,piece,outline,edgebands'
+  'id,benchtop_id,part_role,label,length_mm,width_mm,thickness_mm,quantity,grain_direction,material_id,supply_item,piece,outline,edgebands,holes'
 
 type Row = Record<string, unknown>
 
 // Part frame: x = length, y = width (min corner at 0). The optimiser footprint
 // is w × h with h along the grain (CV DY = length), so a length-grain part is
 // rotated a quarter turn (not mirrored): (x, y) → (y, L − x).
+const toOp = (pts: { x: number; y: number }[], L: number, lengthGrain: boolean) =>
+  lengthGrain ? pts.map(p => ({ x: p.y, y: L - p.x })) : pts.map(p => ({ x: p.x, y: p.y }))
+
 function shapeFor(outline: { x: number; y: number }[], L: number, W: number, lengthGrain: boolean, tapeMm: number | null): OptiShape {
-  const polygon = lengthGrain ? outline.map(p => ({ x: p.y, y: L - p.x })) : outline.map(p => ({ x: p.x, y: p.y }))
+  const polygon = toOp(outline, L, lengthGrain)
   const segments = polygon.map((p, i) => ({ type: 'line', p0: p, p1: polygon[(i + 1) % polygon.length] }))
   // 'drawn': a benchtop piece nests at its full outline (no contour deduction
   // yet — O5). The polygon is already in the footprint (op) frame.
@@ -82,6 +86,9 @@ export function normalizeBenchtopParts(
     // A shaped piece nests at its full outline (no contour deduction yet — O5).
     const eb = outline ? { eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0, eb_missing: false } : ebFor(bands, lengthGrain, ebThickness)
     const tapeMm = bands?.mm ? Object.values(bands.mm).reduce((a, v) => a + v, 0) : null
+    const holes = Array.isArray(r.holes)
+      ? (r.holes as { x: number; y: number }[][]).filter(h => Array.isArray(h) && h.length >= 3).map(h => toOp(h, L, lengthGrain))
+      : []
     const room = roomById.get(bt.room_id)
     for (let i = 0; i < qty; i++) {
       const label = String(r.label) + (qty > 1 ? ` ${i + 1}` : '')
@@ -99,6 +106,7 @@ export function normalizeBenchtopParts(
         grain_direction: (r.grain_direction as string) ?? null,
         nest_priority: 0, output_to_cnc: true, comment: null,
         ...(outline ? { shape: shapeFor(outline, L, W, lengthGrain, tapeMm), shape_stale: false } : {}),
+        ...(holes.length ? { cut_holes: holes } : {}),
       })
     }
   }

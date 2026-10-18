@@ -12,6 +12,8 @@
 > Mark's live try (headless check blocked: no AUTOMATION_* creds in .env.local). Then: the same picker for cabinet parts (needs saved per-part
 > overrides first — the 3D inspector's tick boxes never save) → splashbacks →
 > auto panel splits → CNC cutouts / profiles → small items.
+> **2026-10-18: CNC cutouts done** (sink / cooktop holes on worktop + subtop, cross members move
+> clear) — see z_fixtures/FIXTURES-SPEC.md RESUME HERE. Edge profiles on the CNC still open.
 > Phase 4 rules Q-a…Q-h are Claude's defaults; its 3 open questions are locked.
 
 ---

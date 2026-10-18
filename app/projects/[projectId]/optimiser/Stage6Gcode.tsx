@@ -14,7 +14,7 @@ import { useOptiStore } from '@/src/lib/optimiser/store'
 import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
 import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from '@/src/lib/optimiser/gcodeValidate'
 import { loadSheetDrills } from '@/src/lib/optimiser/sheetDrills'
-import { placedOutline } from '@/src/lib/optimiser/shapes'
+import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
 
@@ -169,6 +169,16 @@ export default function Stage6Gcode() {
         }
         return out
       }
+      // Benchtop sink / cooktop cutouts: cut inside each part before its perimeter.
+      const holesFor = (sheet: (typeof nestResult.sheets)[number]) => {
+        const out: Record<string, { x: number; y: number }[][]> = {}
+        for (const pl of sheet.placements) {
+          const part = partByUid.get(pl.baseUid)
+          const hs = part ? placedHoles(part, pl, deductEb) : []
+          if (hs.length) out[pl.uid] = hs.map(h => h.map(q => ({ x: pl.x + q.x, y: pl.y + q.y })))
+        }
+        return out
+      }
 
       const gen: GenFile[] = nestResult.sheets.map((sheet, i) => {
         const drills = sheetDrills.get(sheet.index) ?? []
@@ -191,6 +201,7 @@ export default function Stage6Gcode() {
           programNumber: `O${String(oBase + i).padStart(4, '0')}`,
           drillBlock,
           outlines,
+          holes: holesFor(sheet),
         })
         const fileName = gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: i + 1, ext: post.file_extension })
         return {
