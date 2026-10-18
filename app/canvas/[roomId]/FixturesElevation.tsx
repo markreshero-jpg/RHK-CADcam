@@ -10,6 +10,7 @@ import type { RoomFixture, Wall } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { Pt } from '@/src/lib/geometry'
 import { wallFrame, type WallSide } from '@/src/lib/benchtopAnchor'
+import { wrapLabel } from '@/src/lib/textWrap'
 import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 
 
@@ -178,7 +179,9 @@ export default function FixturesElevation({
         const lw = layers.w(id, (sel ? 2 : 1.4) / z)
         const x = on.t0, w = on.t1 - on.t0
         const y = roomH - fx.z - fx.height, h = fx.height
-        const fs = Math.max(11 / z, Math.min(w, h) / 8)
+        // Same on-screen size as cabinet names (11 px); wraps to the item's width.
+        const fs = 11 / z
+        const lines = showLabels ? wrapLabel(fx.name, w * 0.9, fs) : []
         return (
           <g key={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
             onPointerDown={e => { e.stopPropagation(); onSelect(fx.id) }}>
@@ -191,7 +194,9 @@ export default function FixturesElevation({
             {showLabels && (
               <text x={x + w / 2} y={y + h / 2} fontSize={fs} fill={color} textAnchor="middle" dominantBaseline="central"
                 style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                {fx.name}
+                {lines.map((ln, i) => (
+            <tspan key={i} x={x + w / 2} y={y + h / 2 + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
+          ))}
               </text>
             )}
             {handles(fx, x, y, w, h)}

@@ -10,6 +10,7 @@
 import type { RoomFixture } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { fixtureLayer } from '@/src/lib/fixtureGeometry'
+import { wrapLabel } from '@/src/lib/textWrap'
 import type { FixtureSnap, StretchSide } from '@/src/lib/fixtureGeometry'
 
 const STROKE = '#0ea5e9'
@@ -101,7 +102,9 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, cl
   const lp = layers.props(id, z)
   const color = clash ? CLASH : selected ? '#f59e0b' : layers.color(id, STROKE)
   const lw = layers.w(id, (selected ? 2 : 1.4) / z)
-  const fs = Math.max(11 / z, Math.min(f.width, f.depth) / 7)
+  // Same on-screen size as cabinet names (11 px); wraps to the item's width.
+  const fs = 11 / z
+  const lines = label ? wrapLabel(f.name, f.width * 0.9, fs) : []
   const opening = f.category === 'opening'
   // Text reads upright: flip it when the item is turned past 90°.
   const r = ((rotation % 360) + 360) % 360
@@ -119,7 +122,9 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, cl
         <text x={f.width / 2} y={f.depth / 2} fontSize={fs} fill={color} textAnchor="middle" dominantBaseline="central"
           transform={flip ? `rotate(180 ${f.width / 2} ${f.depth / 2})` : undefined}
           style={{ pointerEvents: 'none', userSelect: 'none' }}>
-          {f.name}
+          {lines.map((ln, i) => (
+            <tspan key={i} x={f.width / 2} y={f.depth / 2 + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
+          ))}
         </text>
       )}
     </g>
