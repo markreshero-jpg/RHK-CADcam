@@ -17,14 +17,13 @@ const iconBtn = 'w-6 h-6 rounded text-gray-400 hover:text-white hover:bg-gray-80
 
 export default function TutorialPanel() {
   const t = useTutorial()
-  const [min, setMin] = useState(false)
   const lesson = LESSONS[t.lesson]
   const finished = t.step >= lesson.steps.length
 
-  if (min) {
+  if (t.minimised) {
     return (
       <button
-        onClick={() => setMin(false)}
+        onClick={() => t.setMinimised(false)}
         className="fixed bottom-4 right-4 z-[61] rounded-full bg-amber-500 hover:bg-amber-400 text-gray-950 text-xs font-semibold px-3 py-2 shadow-lg"
       >
         {t.picking ? 'Tutorials' : <>Tutorial · {lesson.title} {Math.min(t.step + 1, lesson.steps.length)}/{lesson.steps.length}</>}
@@ -42,7 +41,7 @@ export default function TutorialPanel() {
               className="shrink-0 text-xs text-amber-400 hover:text-amber-300">☰ All</button>
             <span className="flex-1 min-w-0 truncate font-semibold text-white">{lesson.title}</span>
           </>}
-        <button title="Minimise" onClick={() => setMin(true)} className={iconBtn}>–</button>
+        <button title="Minimise" onClick={() => t.setMinimised(true)} className={iconBtn}>–</button>
         <button title="Turn tutorial mode off" onClick={() => t.setEnabled(false)} className={iconBtn}>✕</button>
       </div>
       {t.picking ? <Picker /> : <Lesson finished={finished} />}

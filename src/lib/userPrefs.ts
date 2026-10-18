@@ -47,9 +47,11 @@ export interface TutorialPrefs {
   step:    number
   /** Completed step keys, `${lessonId}/${stepId}`. */
   done:    string[]
+  /** Panel folded down to its pill (kept across reloads). */
+  minimised: boolean
 }
 
-export const DEFAULT_TUTORIAL: TutorialPrefs = { enabled: false, lesson: 0, step: 0, done: [] }
+export const DEFAULT_TUTORIAL: TutorialPrefs = { enabled: false, lesson: 0, step: 0, done: [], minimised: false }
 
 export interface WallDrawPrefs {
   /** Chained line: each click finishes a wall and starts the next from its end. */
@@ -128,6 +130,7 @@ function normaliseTutorial(raw: unknown): TutorialPrefs {
     lesson:  int(r.lesson),
     step:    int(r.step),
     done:    Array.isArray(r.done) ? r.done.filter((d): d is string => typeof d === 'string') : [],
+    minimised: r.minimised === true,
   }
 }
 

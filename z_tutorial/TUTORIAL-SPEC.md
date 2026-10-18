@@ -23,7 +23,8 @@ plan to show *where* to do it.
 4. **The user's own job** — no seeded practice job. Lesson 1 sends them back to
    Projects to create one (New Project is admin-only today, so testers skip lesson 1).
 5. **Per-user, per-browser state** in `userPrefs.tutorial` (localStorage): on/off,
-   current lesson + step, completed steps. No new table.
+   current lesson + step, completed steps, minimised (survives a reload; turning
+   tutorial mode on from the File menu unfolds it). No new table.
 6. **No tour library.** Targets are `data-tour="…"` attributes; a small spotlight ring
    (pointer-events none, so it never blocks the click) is drawn around the target.
 7. **Tutorial picker** (Mark 2026-10-18): turning tutorial mode on opens a picker of

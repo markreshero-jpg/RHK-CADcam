@@ -122,6 +122,15 @@ describe('tutorial store', () => {
     for (const l of LESSONS) expect(l.level === 'start' || !!l.topic).toBe(true)
   })
 
+  it('minimised is saved, and turning it on unfolds it', () => {
+    st().setEnabled(true)
+    st().setMinimised(true)
+    expect(st().minimised).toBe(true)
+    st().setEnabled(false)
+    st().setEnabled(true)
+    expect(st().minimised).toBe(false)
+  })
+
   it('a PDF download ticks the print step', () => {
     st().setCtx({ path: '/canvas/x', inCanvas: true })
     st().setEnabled(true)

@@ -28,11 +28,12 @@ interface TutorialState extends TutorialPrefs {
   back: () => void
   setPicking: (on: boolean) => void
   setSpotlight: (on: boolean) => void
+  setMinimised: (on: boolean) => void
   restart: () => void
 }
 
 const persist = (s: TutorialPrefs) =>
-  setUserPrefs({ tutorial: { enabled: s.enabled, lesson: s.lesson, step: s.step, done: s.done } })
+  setUserPrefs({ tutorial: { enabled: s.enabled, lesson: s.lesson, step: s.step, done: s.done, minimised: s.minimised } })
 
 const clampLesson = (i: number) => Math.max(0, Math.min(LESSONS.length - 1, i))
 
@@ -56,7 +57,7 @@ function advance<S extends TutorialPrefs>(s: S, ctx: TutorialCtx, start: Tutoria
 const startFrom = (ctx: TutorialCtx) => (ctx.inCanvas ? ctx : null)
 
 export const useTutorial = create<TutorialState>((set, get) => ({
-  enabled: false, lesson: 0, step: 0, done: [],
+  enabled: false, lesson: 0, step: 0, done: [], minimised: false,
   ctx: EMPTY_CTX, start: null, picking: false, spotlight: true, loaded: false,
 
   load: () => {
@@ -67,9 +68,9 @@ export const useTutorial = create<TutorialState>((set, get) => ({
 
   setEnabled: on => {
     const s = get()
-    // Turning it on opens the picker; the lesson in progress stays where it was.
-    set({ enabled: on, picking: on, spotlight: true, start: on ? startFrom(s.ctx) : null })
-    persist({ ...s, enabled: on })
+    // Turning it on opens the picker (unfolded); the lesson in progress stays where it was.
+    set({ enabled: on, picking: on, spotlight: true, minimised: false, start: on ? startFrom(s.ctx) : null })
+    persist({ ...s, enabled: on, minimised: false })
   },
 
   setCtx: patch => {
@@ -121,6 +122,11 @@ export const useTutorial = create<TutorialState>((set, get) => ({
   setPicking: on => set({ picking: on }),
 
   setSpotlight: on => set({ spotlight: on }),
+
+  setMinimised: on => {
+    set({ minimised: on })
+    persist({ ...get(), minimised: on })
+  },
 
   restart: () => {
     const n = { ...get(), lesson: 0, step: 0, done: [] }
