@@ -311,6 +311,19 @@ export default function CanvasSidebar({
     })
     return () => { live = false }
   }, [fixtureMenuOpen, fixtureItems])
+  // Fixture search — same matcher as the cabinet library (src/lib/cabinetSearch):
+  // name ranks first, then group, then kind / brand / model / notes.
+  const [fixtureSearch, setFixtureSearch] = useState('')
+  const fixtureHits = (() => {
+    const tokens = searchTokens(fixtureSearch)
+    if (!tokens.length || !fixtureItems) return null
+    const groupName = (i: FixtureCatalogItem) => fixtureGroups.find(g => g.id === i.group_id)?.name ?? 'Other'
+    return fixtureItems
+      .map((i, n) => ({ i, n, s: scoreDef({ name: i.name, description: [i.kind, i.brand, i.model_no, i.notes].filter(Boolean).join(' ') }, tokens, groupName(i)) }))
+      .filter(x => x.s > 0)
+      .sort((a, b) => b.s - a.s || a.n - b.n)
+      .map(x => x.i)
+  })()
 
   // ── Library data (categories + definitions) ──
   const [categories, setCategories]     = useState<Category[]>([])
@@ -845,7 +858,43 @@ export default function CanvasSidebar({
               {fixtureItems?.length === 0 && (
                 <div className="px-2.5 py-1.5 text-xs text-gray-500">No fixtures yet — add them in Settings → Fixtures &amp; Appliances.</div>
               )}
-              {[...fixtureGroups.map(g => ({ key: g.id, label: g.name, icon: g.icon })), { key: '', label: 'Other', icon: 'Package' }].map(g => {
+              {!!fixtureItems?.length && (
+                <div className="px-1 pb-1">
+                  <div className="relative">
+                    <input
+                      value={fixtureSearch}
+                      onChange={e => setFixtureSearch(e.target.value)}
+                      onKeyDown={e => {
+                        // Esc: clear the search. Stop it here so the canvas-wide Esc handler doesn't also fire.
+                        if (e.key !== 'Escape') return
+                        e.preventDefault(); e.stopPropagation()
+                        setFixtureSearch(''); e.currentTarget.blur()
+                      }}
+                      placeholder="Search name, brand, model…"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-md pl-2 pr-6 py-1.5 text-sm text-gray-200 outline-none focus:border-blue-500"
+                    />
+                    {fixtureSearch && (
+                      <button
+                        type="button" title="Clear search" aria-label="Clear search"
+                        onClick={() => setFixtureSearch('')}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-gray-700"
+                      >
+                        <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 2l8 8M10 2l-8 8" /></svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+              {fixtureHits && (fixtureHits.length === 0
+                ? <div className="px-2.5 py-1.5 text-xs text-gray-500 italic">No fixtures match.</div>
+                : fixtureHits.map(i => (
+                  <ToolRow key={i.id} tone={TONES.fixture} label={i.name}
+                    sub={`${i.width}×${i.depth}×${i.height}`}
+                    title={[i.kind, i.brand, i.model_no].filter(Boolean).join(' · ') || i.name}
+                    active={mode === 'place_fixture' && armedFixtureId === i.id}
+                    onClick={() => onArmFixture(i)} />
+                )))}
+              {!fixtureHits && [...fixtureGroups.map(g => ({ key: g.id, label: g.name, icon: g.icon })), { key: '', label: 'Other', icon: 'Package' }].map(g => {
                 const items = fixtureItems?.filter(i => g.key
                   ? i.group_id === g.key
                   : !i.group_id || !fixtureGroups.some(x => x.id === i.group_id)) ?? []
