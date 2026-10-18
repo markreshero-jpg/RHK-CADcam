@@ -49,9 +49,9 @@ export function solidFixtures(fixtures: RoomFixture[], excludeId?: string): Room
  */
 export function fixtureOccupancy(
   fixtures: RoomFixture[], wall: Wall, side: WallSide, cx: Pt, room: Room,
-  mover: { assembly_class: string; dy: number; dz?: number },
+  mover: { assembly_class: string; dy: number; dz?: number; bulkhead?: unknown },
 ): { t: number; dx: number }[] {
-  const [mB, mT] = cabVExtent(mover.assembly_class, mover.dy, wall, room)
+  const [mB, mT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, !!mover.bulkhead)
   const items = solidFixtures(fixtures).map(f => ({ pts: fixtureCorners(f), z0: Number(f.z) || 0, z1: (Number(f.z) || 0) + Number(f.height) }))
   return bandOccupancy(items, wall, side, cx, mB, mT, mover.dz ?? 600)
 }
@@ -63,9 +63,9 @@ export function crossWallCabinetOccupancy(
   side: WallSide,
   cx: Pt,
   room: Room,
-  mover: { id?: string; assembly_class: string; dy: number; dz?: number },
+  mover: { id?: string; assembly_class: string; dy: number; dz?: number; bulkhead?: unknown },
 ): { t: number; dx: number }[] {
-  const [mB, mT] = cabVExtent(mover.assembly_class, mover.dy, wall, room)
+  const [mB, mT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, !!mover.bulkhead)
   const depth = mover.dz ?? 600
   const f = wallFrame(wall, side, cx)
   const out: { t: number; dx: number }[] = []
@@ -74,7 +74,7 @@ export function crossWallCabinetOccupancy(
     const cw = walls.find(w => w.id === c.wall_id)
     if (!cw) continue
     // Vertical: wall units clear base units, as cabsBlock.
-    const [oB, oT] = cabVExtent(c.assembly_class, c.dy, cw, room)
+    const [oB, oT] = cabVExtent(c.assembly_class, c.dy, cw, room, !!c.bulkhead)
     if (!(mB < oT - 1 && oB < mT - 1)) continue
     const pts = cabinetCornerPts(c, cw, cabWallPerp(c, cw, wallInwardNormal(cw, cx)))
     // Into this face's frame (x = along, y = off), cut to the mover's depth band.

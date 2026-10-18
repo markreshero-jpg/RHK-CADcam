@@ -134,6 +134,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   // custom_panels keeps its Phase-1 id (stored in sets) = everything not below.
   { id: 'applied_panels', group: 'panels', label: 'Applied / end panels', views: ALL, default: ON },
   { id: 'fillers',        group: 'panels', label: 'Fillers',              views: ALL, default: ON },
+  { id: 'bulkheads',      group: 'panels', label: 'Bulkheads',            views: ALL, default: ON,
+    hint: 'Bulkhead fascia, returns and fixing cleat (z_bulkhead)' },
   { id: 'custom_panels',  group: 'panels', label: 'Other added parts',    views: ALL, default: ON,
     hint: 'Added parts that are not applied panels or fillers (scribe mould, nailer, gusset…)' },
 
@@ -233,6 +235,7 @@ export function casePartItem(partKey: string): string {
   if (partKey.startsWith('fprail:')) return 'finger_rails'
   // Return cleats behind angled corner fillers (z_angled_filler).
   if (partKey.startsWith('cleat:')) return 'fillers'
+  if (partKey.startsWith('bh:')) return 'bulkheads'      // z_bulkhead
   return 'carcass_top'            // full_top, front_rail, back_rail, rail:<edge>
 }
 export function kickPartItem(partKey: string): string {

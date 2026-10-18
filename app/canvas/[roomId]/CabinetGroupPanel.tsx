@@ -44,7 +44,7 @@ export default function CabinetGroupPanel({ cabinets, wallCabinets, walls, room,
   const box = (wall && room) ? (() => {
     const sel = cabinets
     const tL = (c: CabinetInstance) => cabT(c, wall)
-    const vEx = (c: CabinetInstance) => cabVExtent(c.assembly_class, c.dy, wall, room)
+    const vEx = (c: CabinetInstance) => cabVExtent(c.assembly_class, c.dy, wall, room, !!c.bulkhead)
     const gLeft   = Math.min(...sel.map(tL))
     const gRight  = Math.max(...sel.map(c => tL(c) + c.dx))
     const gBottom = Math.min(...sel.map(c => vEx(c)[0]))

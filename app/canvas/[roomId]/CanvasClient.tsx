@@ -10,8 +10,9 @@ import {
   wallEnd, wallDir,
   snapAngle,
   nearestWall, wallMitreCorners, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabT, nextLabel,
-  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint, cabWallSpan,
+  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint, cabWallSpan, wallCabTop,
 } from '@/src/lib/geometry'
+import { ceilingZ } from '@/src/lib/bulkhead'
 import { angledFillerSnap } from '@/src/lib/cabinetShape/angledFillerSnap'
 import { waterfallLegs, waterfallOccupancy } from '@/src/lib/waterfallObstacles'
 import { crossWallCabinetOccupancy, fixtureOccupancy, bandOccupancy, solidFixtures } from '@/src/lib/cabinetObstacles'
@@ -989,6 +990,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       label: nextLabel(cabinets, draft.assembly_class),
       pos_x, pos_y, rotation: islandFlip ? wall.angle + 180 : wall.angle,
       dx: dxOverride != null && dxOverride > 0 ? Math.round(dxOverride) : draft.dx,
+    }
+    // Bulkhead (z_bulkhead): fills from the wall-cab top up to this wall's ceiling.
+    if (data.bulkhead?.auto_h) {
+      const h = Math.round(ceilingZ(wall, room) - wallCabTop(wall, room))
+      if (h > 0) data.dy = h
     }
     // Angled corner filler (z_angled_filler A3): drop into the nearer inside
     // corner of the wall, angle + hand from the wall joined there. Its box comes

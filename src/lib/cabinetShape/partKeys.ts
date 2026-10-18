@@ -7,9 +7,18 @@ import { edgeLabel } from './footprint'
 /** Vertical per-edge panel (`side:<edge>` / `back:<edge>`), 'face' panel kind.
  *  Finger-pull backing rails (`fprail:<n>`, z_handles H6) and filler return
  *  cleats (`cleat:<edge>`, z_angled_filler) are face-kind panels with the same
- *  frame, so they ride the same path. */
+ *  frame, so they ride the same path — as do the upright bulkhead parts. */
 export function isShapedPanelKey(k: string): boolean {
   return k.startsWith('side:') || k.startsWith('back:') || k.startsWith('fprail:') || k.startsWith('cleat:')
+    || (isBulkheadKey(k) && !BH_HORIZONTAL.has(k))
+}
+
+/** Bulkhead parts (z_bulkhead, resolveBulkhead). Fascia, side returns and the
+ *  cleat's upright leg are face-kind panels (turned AY, as side:/back:<edge>);
+ *  the bottom return and the cleat's flat leg are horizontal box-frame panels. */
+export const BH_HORIZONTAL = new Set(['bh:ret_b', 'bh:cleat_h'])
+export function isBulkheadKey(k: string): boolean {
+  return k.startsWith('bh:')
 }
 
 /** Top rail along a front facet (`rail:<edge>`), horizontal panel kind. */

@@ -620,6 +620,9 @@ export interface CabinetInput {
   // Evaluated against DX/DZ inside the resolver, so a resize needs no reload.
   footprint?:     import('../cabinetShape/footprint').Footprint | null
 
+  // Bulkhead (z_bulkhead): fascia + returns + cleat from resolveBulkhead.
+  bulkhead?:      import('../bulkhead').BulkheadSettings | null
+
   // Kick-run membership — present only when this cabinet is joined into a kick
   // run. The lead member resolves the whole run's continuous toe kick; the rest
   // resolve none. Populated by loadCabinetInput. See z_kick_join/KICK-JOIN-PLAN.md.
@@ -1286,7 +1289,7 @@ export interface ResolvedPart extends PartTransform {
 //   cleat:<edge>               return cleat behind a face filler on side edge <edge>
 //                              (z_angled_filler, carcass off) — same frame as side:<edge>
 // See src/lib/cabinetShape/partKeys.ts.
-export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}` | `cleat:${string}`
+export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}` | `cleat:${string}` | `bh:${string}`
 
 export interface ResolvedCasePart extends ResolvedPart {
   // Finger-pull rails only (z_handles H6): sheet grain, and the side notch +

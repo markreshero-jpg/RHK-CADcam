@@ -489,6 +489,7 @@ export function buildInstanceFromDefinition(
     carcase_joints: def.carcase_joints,
     no_cnc: def.no_cnc ?? false,
     footprint,
+    bulkhead: def.bulkhead ?? null,
     faces: def.faces ?? null,
     schema_version: '0.4', notes: null,
   }
@@ -624,6 +625,7 @@ export async function saveCabinetToLibrary(
     exposed_interior: p.exposed_interior ? !!inst.exposed_interior : false,
     no_cnc: !!inst.no_cnc,
     footprint: inst.footprint ?? null,
+    bulkhead: inst.bulkhead ?? null,
     faces: inst.faces ?? null,
     custom_parts: cps ?? [],
     description: opts.description ?? null,

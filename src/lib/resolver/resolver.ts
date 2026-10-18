@@ -24,6 +24,7 @@ import { resolveHandles } from './resolveHandles'
 import { fingerRails, fingerRailParts, notchPanels, pushFrontRailBack, type FingerRail } from './resolveFingerRails'
 import { shapedFingerRails } from './resolveShapedFingerRails'
 import { resolveFillerCleats } from './resolveFillerCleats'
+import { resolveBulkhead } from './resolveBulkhead'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -55,6 +56,8 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   resolveHandles(cab, zones)
   // Face fillers with the support carcass off: return cleats (z_angled_filler).
   if (cab.footprint && !cab.has_carcass) caseParts.push(...resolveFillerCleats(cab, r, zones))
+  // Bulkheads (z_bulkhead): fascia, returns + fixing cleat.
+  if (cab.bulkhead) caseParts.push(...resolveBulkhead(cab, r))
   // Shaped cabinets (z_cabinet_shape Phase 3b): hinges + drawer boxes on every
   // facet, fitted to the footprint and built in each zone's square frame.
   const shapedHw = cab.footprint ? shapedHardwareCtx(cab) : null

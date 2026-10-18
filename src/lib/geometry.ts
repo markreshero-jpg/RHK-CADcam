@@ -43,32 +43,35 @@ export function wallCabTop(wall: Wall | null | undefined, room: Room): number {
 // (elevation, print, section, 3D, object tree, panels) uses. Wall units hang
 // down from the wall-cabinet-top line (their pos_z is only a cache of this);
 // floor units sit at pos_z (0 unless raised — a kick-detached member is lifted
-// by the kick height).
+// by the kick height). Bulkheads (z_bulkhead) hang from the ceiling instead.
 export function cabBottomZ(cab: CabinetInstance, room: Room, wall?: Wall | null): number {
-  if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') {
-    return wallCabTop(wall, room) - cab.dy
-  }
-  return cab.pos_z ?? 0
+  return cabVExtent(cab.assembly_class, cab.dy, wall, room, !!cab.bulkhead, cab.pos_z)[0]
 }
 
 // Vertical extent [bottomZ, topZ] of a cabinet given its class + height. Base and
-// tall units sit on the floor; wall units hang down from the wall-cabinet-top line.
-export function cabVExtent(cls: string, dy: number, wall: Wall | null | undefined, room: Room): [number, number] {
-  const bottom = (cls === 'wall' || cls === 'wall_corner') ? wallCabTop(wall, room) - dy : 0
+// tall units sit on the floor (at pos_z when given); wall units hang down from the
+// wall-cabinet-top line; a bulkhead's top is the ceiling.
+export function cabVExtent(
+  cls: string, dy: number, wall: Wall | null | undefined, room: Room,
+  bulkhead = false, posZ?: number | null,
+): [number, number] {
+  const bottom = bulkhead ? (wall?.height ?? room.room_dy ?? 2400) - dy
+    : (cls === 'wall' || cls === 'wall_corner') ? wallCabTop(wall, room) - dy
+    : posZ ?? 0
   return [bottom, bottom + dy]
 }
 
 // Do two cabinets overlap vertically? `eps` keeps a flush top/bottom touch from
 // counting as an overlap.
 export function cabsBlock(
-  mover: { assembly_class: string; dy: number },
-  obstacle: { assembly_class: string; dy: number },
+  mover: { assembly_class: string; dy: number; bulkhead?: unknown },
+  obstacle: { assembly_class: string; dy: number; bulkhead?: unknown },
   wall: Wall | null | undefined,
   room: Room,
   eps = 1,
 ): boolean {
-  const [aB, aT] = cabVExtent(mover.assembly_class, mover.dy, wall, room)
-  const [bB, bT] = cabVExtent(obstacle.assembly_class, obstacle.dy, wall, room)
+  const [aB, aT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, !!mover.bulkhead)
+  const [bB, bT] = cabVExtent(obstacle.assembly_class, obstacle.dy, wall, room, !!obstacle.bulkhead)
   return aB < bT - eps && bB < aT - eps
 }
 

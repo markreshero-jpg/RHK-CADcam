@@ -21,6 +21,13 @@ export const PART_TYPE_LABELS: Record<string, string> = {
   db_bottom:     'Drawer Box Bottom',
   db_front:      'Drawer Box Front',
   db_back:       'Drawer Box Back',
+  // Bulkheads (z_bulkhead) — "bh:fascia" would humanize badly.
+  'bh:fascia':   'Bulkhead Fascia',
+  'bh:ret_l':    'Bulkhead Left Return',
+  'bh:ret_r':    'Bulkhead Right Return',
+  'bh:ret_b':    'Bulkhead Bottom Return',
+  'bh:cleat_v':  'Bulkhead Cleat (upright)',
+  'bh:cleat_h':  'Bulkhead Cleat (flat)',
 }
 
 export const humanizePartKey = (s: string): string =>
