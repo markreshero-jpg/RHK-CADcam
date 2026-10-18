@@ -2552,6 +2552,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                   clashIds={fixtureClashIds}
                   stretching={fx.stretch ? { id: fx.stretch.id, side: fx.stretch.side } : null}
                   onStretchHandle={(id, side) => startFixtureStretch(id, side)}
+                  onMoveHandle={id => { setCabResize(null); setContextMenu(null); fx.startMove(id) }}
                   onPointerDown={(_e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null); setContextMenu(null) }}
                   onContextMenu={(e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setContextMenu({ x: e.clientX, y: e.clientY, fixtureId: id }) }}
                   onDoubleClick={(_e, id) => { setSelected({ type: 'fixture', id }); setViewFixtureId(id) }}
@@ -2685,7 +2686,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             waterfallOcc={wfOcc}
             edgeProfiles={btCatalog.profileById}
             onSelectBenchtop={id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]); setCabResize(null) }}
-            fixtures={fixtures}
+            fixtures={movingFixtureId ? fixtures.filter(x => x.id !== movingFixtureId) : fixtures}
             onSelectFixture={id => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null) }}
             fixtureStretching={fx.stretch ? { id: fx.stretch.id, side: fx.stretch.side } : null}
             onFixtureStretchHandle={(id, side) => startFixtureStretch(id, side, 10)}
@@ -2694,6 +2695,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             fixtureGhost={fx.ghost && fx.carried ? { snap: fx.ghost, body: fx.carried, z: fx.carriedZ } : null}
             onFixtureCarryMove={p => { fx.handlePointerMove(p, false) }}
             onFixtureCarryDrop={p => { void fx.handlePointerUp(p, false) }}
+            onFixtureMoveHandle={id => { setCabResize(null); setContextMenu(null); fx.startMove(id) }}
             onSeamClick={(cabId) => {
               setSelected({ type: 'cabinet', id: cabId })
               setMultiSelect([])

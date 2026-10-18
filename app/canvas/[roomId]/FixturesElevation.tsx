@@ -12,11 +12,29 @@ import type { Pt } from '@/src/lib/geometry'
 import { wallFrame, type WallSide } from '@/src/lib/benchtopAnchor'
 import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 
+
+// Centre move handle (white crosshair) — same as the cabinet one: click it and
+// the item follows the cursor; the next click drops it.
+function MoveHandle({ cx, cy, z, onGrab }: { cx: number; cy: number; z: number; onGrab: () => void }) {
+  const arm = 10 / z, sw = 1.5 / z
+  return (
+    <g style={{ cursor: 'move' }}>
+      <line x1={cx - arm} y1={cy} x2={cx + arm} y2={cy} stroke="white" strokeWidth={sw} opacity={0.5} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+      <line x1={cx} y1={cy - arm} x2={cx} y2={cy + arm} stroke="white" strokeWidth={sw} opacity={0.5} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+      <circle cx={cx} cy={cy} r={3 / z} fill="white" opacity={0.5} style={{ pointerEvents: 'none' }} />
+      <circle cx={cx} cy={cy} r={8 / z} fill="transparent"
+        onPointerDown={e => e.stopPropagation()}
+        onClick={e => { e.stopPropagation(); onGrab() }} />
+    </g>
+  )
+}
+
 // Edge handles on the selected fixture (P7), like the cabinet elevation markers:
 // blue = width (left / right), purple = height (top) and sill (bottom, openings).
-function ElevHandles({ x, y, w, h, z, opening, leftSide, active, onGrab }: {
+function ElevHandles({ x, y, w, h, z, opening, leftSide, active, onGrab, onMove }: {
   x: number; y: number; w: number; h: number; z: number; opening: boolean
   leftSide: 'left' | 'right'; active: StretchSide | null; onGrab: (side: StretchSide) => void
+  onMove?: () => void
 }) {
   const mr = 6 / z, sw = 1.5 / z
   const rightSide = leftSide === 'left' ? 'right' : 'left'
@@ -26,7 +44,7 @@ function ElevHandles({ x, y, w, h, z, opening, leftSide, active, onGrab }: {
     { side: 'top', cx: x + w / 2, cy: y, v: true },
     ...(opening ? [{ side: 'bottom' as const, cx: x + w / 2, cy: y + h, v: true }] : []),
   ]
-  return <>{pts.map(p => (
+  return <>{onMove && <MoveHandle cx={x + w / 2} cy={y + h / 2} z={z} onGrab={onMove} />}{pts.map(p => (
     <circle key={p.side} cx={p.cx} cy={p.cy} r={mr}
       fill={active === p.side ? (p.v ? '#a855f7' : '#3b82f6') : (p.v ? '#7c3aed' : '#1d4ed8')}
       stroke={p.v ? '#c4b5fd' : '#93c5fd'} strokeWidth={sw}
@@ -84,7 +102,7 @@ export function OpeningHoles({ fixtures, wall, side, roomCx, roomH, layers, fill
 }
 
 export default function FixturesElevation({
-  fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, onSelect, stretching, onStretchHandle, ghost,
+  fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, onSelect, stretching, onStretchHandle, ghost, onMoveHandle,
 }: {
   fixtures:   RoomFixture[]
   wall:       Wall
@@ -98,6 +116,8 @@ export default function FixturesElevation({
   /** P7: the edge being stretched, and grabbing a handle (omitted → no handles). */
   stretching?: { id: string; side: StretchSide } | null
   onStretchHandle?: (id: string, side: StretchSide) => void
+  /** Centre crosshair: pick the selected fixture up (follows the cursor, click drops). */
+  onMoveHandle?: (id: string) => void
   /** Placing / moving in elevation: where the carried item would land (snap pose + body + height). */
   ghost?: { snap: FixtureSnap; body: Pick<RoomFixture, 'category' | 'name' | 'width' | 'depth' | 'height'>; z: number } | null
 }) {
@@ -106,7 +126,8 @@ export default function FixturesElevation({
     fx.id === selectedId && onStretchHandle ? (
       <ElevHandles x={x} y={y} w={w} h={h} z={z} opening={fx.category === 'opening'}
         leftSide={elevLeftSide(fx.rotation, f)} active={stretching?.id === fx.id ? stretching.side : null}
-        onGrab={s => onStretchHandle(fx.id, s)} />
+        onGrab={s => onStretchHandle(fx.id, s)}
+        onMove={onMoveHandle ? () => onMoveHandle(fx.id) : undefined} />
     ) : null
   const z = zoom
   const showLabels = layers.show('fixture_labels')

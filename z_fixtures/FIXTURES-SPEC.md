@@ -242,6 +242,10 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-18 (user): **move like a cabinet** — selected fixture shows the white centre
+  crosshair (plan + elevation); click it → follows the cursor (same carry as Move / M), next
+  click drops. The carried one is hidden in elevation while its ghost shows.
+
 - 2026-10-18 (user): **sidebar preview of the armed fixture** (`FixturePreview3D`, pinned at the
   sidebar bottom like `CabinetPreview3D`) — fitted model / box / opening frame + size, brand.
 

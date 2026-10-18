@@ -126,10 +126,28 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, cl
   )
 }
 
+
+// Centre move handle (white crosshair) — same as the cabinet one: click it and
+// the item follows the cursor; the next click drops it.
+function MoveHandle({ cx, cy, z, onGrab }: { cx: number; cy: number; z: number; onGrab: () => void }) {
+  const arm = 10 / z, sw = 1.5 / z
+  return (
+    <g style={{ cursor: 'move' }}>
+      <line x1={cx - arm} y1={cy} x2={cx + arm} y2={cy} stroke="white" strokeWidth={sw} opacity={0.5} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+      <line x1={cx} y1={cy - arm} x2={cx} y2={cy + arm} stroke="white" strokeWidth={sw} opacity={0.5} strokeLinecap="round" style={{ pointerEvents: 'none' }} />
+      <circle cx={cx} cy={cy} r={3 / z} fill="white" opacity={0.5} style={{ pointerEvents: 'none' }} />
+      <circle cx={cx} cy={cy} r={8 / z} fill="transparent"
+        onPointerDown={e => e.stopPropagation()}
+        onClick={e => { e.stopPropagation(); onGrab() }} />
+    </g>
+  )
+}
+
 // Edge handles on the selected fixture (P7) — same look as the cabinet resize
 // markers: blue = width (left / right), purple = depth (front). Openings: width only.
-function StretchHandles({ f, z, active, onGrab }: {
+function StretchHandles({ f, z, active, onGrab, onMove }: {
   f: RoomFixture; z: number; active: StretchSide | null; onGrab: (side: StretchSide) => void
+  onMove?: () => void
 }) {
   const mr = 6 / z, sw = 1.5 / z
   const pts: { side: StretchSide; x: number; y: number }[] = [
@@ -139,6 +157,7 @@ function StretchHandles({ f, z, active, onGrab }: {
   ]
   return (
     <g transform={`translate(${f.x},${f.y}) rotate(${f.rotation})`}>
+      {onMove && <MoveHandle cx={f.width / 2} cy={f.depth / 2} z={z} onGrab={onMove} />}
       {pts.map(p => {
         const depth = p.side === 'front'
         return (
@@ -156,7 +175,7 @@ function StretchHandles({ f, z, active, onGrab }: {
 
 export default function FixturesPlan({
   fixtures, ghost, ghostBody, hiddenId, selectedId, zoom, layers, interactive, clashIds,
-  stretching, onStretchHandle,
+  stretching, onStretchHandle, onMoveHandle,
   onPointerDown, onContextMenu, onDoubleClick,
 }: {
   fixtures:   RoomFixture[]
@@ -174,6 +193,8 @@ export default function FixturesPlan({
   /** P7: the edge being stretched (handle drawn lit), and grabbing a handle. */
   stretching?: { id: string; side: StretchSide } | null
   onStretchHandle?: (id: string, side: StretchSide) => void
+  /** Centre crosshair: pick the selected fixture up (follows the cursor, click drops). */
+  onMoveHandle?: (id: string) => void
   onPointerDown: (e: React.PointerEvent, id: string) => void
   onContextMenu: (e: React.MouseEvent, id: string) => void
   onDoubleClick: (e: React.MouseEvent, id: string) => void
@@ -195,7 +216,8 @@ export default function FixturesPlan({
               selected={f.id === selectedId} ghost={false} label={showLabels} clash={clashIds?.has(f.id)} />
             {interactive && f.id === selectedId && onStretchHandle && (
               <StretchHandles f={f} z={z} active={stretching?.id === f.id ? stretching.side : null}
-                onGrab={side => onStretchHandle(f.id, side)} />
+                onGrab={side => onStretchHandle(f.id, side)}
+                onMove={onMoveHandle ? () => onMoveHandle(f.id) : undefined} />
             )}
           </g>
         )

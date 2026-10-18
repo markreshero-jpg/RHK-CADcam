@@ -211,6 +211,7 @@ interface ElevationSVGProps {
   fixtureGhost?: { snap: FixtureSnap; body: Pick<RoomFixture, 'category' | 'name' | 'width' | 'depth' | 'height'>; z: number } | null
   onFixtureCarryMove?: (p: Pt) => void
   onFixtureCarryDrop?: (p: Pt) => void
+  onFixtureMoveHandle?: (id: string) => void
 }
 
 export default function ElevationSVG({
@@ -227,7 +228,7 @@ export default function ElevationSVG({
   benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop, waterfallOcc,
   fixtures, onSelectFixture,
   fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
-  fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop,
+  fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop, onFixtureMoveHandle,
 }: ElevationSVGProps) {
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = useMemo(() => frontViewHardwareMap(resolvedPartsRaw), [resolvedPartsRaw])
@@ -1712,6 +1713,7 @@ export default function ElevationSVG({
                 stretching={fixtureStretching}
                 ghost={mode === 'place_fixture' ? fixtureGhost : null}
                 onStretchHandle={mode === 'select' ? onFixtureStretchHandle : undefined}
+                onMoveHandle={mode === 'select' ? onFixtureMoveHandle : undefined}
               />
             )}
 
