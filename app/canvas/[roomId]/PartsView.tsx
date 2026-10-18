@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from
 import { supabase } from '@/src/lib/supabase'
 import { rememberLibraryKeys } from '@/src/lib/displayLayers/customPartKinds'
 import type { ResolvedCabinet, ResolvedDrawerBoxPart, ResolvedDrawerSlide, PartHideView } from '@/src/lib/resolver/types'
-import { PartHideTicks, HIDE_COLS } from '@/src/components/PartHideTicks'
+import { PartHideTicks, PartNoCncTick, HIDE_COLS } from '@/src/components/PartHideTicks'
 import {
   dbAddCustomPart, dbUpdateCustomPart, dbDeleteCustomPart,
   type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments,
@@ -759,6 +759,7 @@ export default function PartsView({
     (rp.drawer_stacks ?? []).reduce((n, s) => n + s.box_parts.length + s.slides.length, 0)
 
   const HIDE_W  = 112
+  const CNC_W   = 40
   const cellCls = 'flex-none border-r border-gray-800 px-2 py-1.5 text-xs overflow-hidden'
   const hdCls   = 'flex-none border-r border-gray-800 px-2 pb-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider select-none'
 
@@ -799,6 +800,11 @@ export default function PartsView({
                 <span title="Hide in every room view">All</span>
               </div>
             </div>
+            <div className={`${hdCls} text-center`} style={{ width: CNC_W }}
+              title="Don't cut on the CNC — the part is left out of the optimiser. Still drawn.">
+              <div className="text-[9px] text-red-400/80 normal-case tracking-normal pb-0.5">No</div>
+              CNC
+            </div>
             {COLS.map(col => (
               <div key={col.key} className={hdCls} style={{ width: col.w }}>
                 {col.sortable ? (
@@ -831,6 +837,11 @@ export default function PartsView({
               {/* Hide in room views — the row itself stays fully visible here */}
               <div className="flex-none border-r border-gray-800 px-1 py-1.5 flex items-center" style={{ width: HIDE_W }}>
                 {!row.isOverride && <PartHideTicks partId={row.id} compact />}
+              </div>
+
+              {/* No CNC — left out of the optimiser */}
+              <div className="flex-none border-r border-gray-800 px-1 py-1.5 flex items-center justify-center" style={{ width: CNC_W }}>
+                {!row.isOverride && <PartNoCncTick partId={row.id} />}
               </div>
 
               {/* Type */}

@@ -20,6 +20,23 @@ one cabinet* in chosen room views.
 5. **Visual only.** Cut lists, the optimiser, CNC, costing and cabinet sheets
    ignore it. A hidden part is still made.
 
+## No CNC tick (added 2026-10-18, user)
+
+Hiding is visual only, so a separate **No CNC** tick sits next to the hide ticks
+(Parts tab column, docked part panels, right-click menus). Ticked = the part is
+still drawn and listed but goes to the optimiser unticked (`output_to_cnc =
+false`), so it isn't nested or cut.
+
+- Resolved parts: `cabinet_instances.part_no_cnc jsonb` (array of part ids, same
+  id scheme as below); library copy `cabinet_definitions.part_no_cnc`, carried by
+  save-to-library, placement and copy/paste like the hides.
+- Custom parts: their existing `cabinet_custom_parts.no_cnc` column (the tick in
+  the add/edit-part dialog is the same flag).
+- Read in `normalizeProject` (`src/lib/optimiser/normalize.ts`). The assembly-wide
+  `cabinet_instances.no_cnc` still overrides everything (no UI for it yet).
+- Cut lists and cabinet sheets still show the part.
+- Migration: `migration_part_no_cnc.sql` (applied 2026-10-18).
+
 ## Where it applies
 
 | Consumer | Filter |

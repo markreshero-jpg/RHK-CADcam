@@ -9,7 +9,7 @@ import {
   dbLoadPartPosOverrides, dbSavePartPosOverride, dbDeletePartPosOverride,
   dbLoadPartLabels, dbSavePartLabel,
   dbLoadPartComments, dbSavePartComment,
-  dbLoadHiddenParts, dbSaveHiddenParts,
+  dbLoadHiddenParts, dbSaveHiddenParts, dbLoadNoCncParts, dbSaveNoCncParts,
   dbLoadShapeOverrides,
   type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments, type ShapeOverrides,
 } from './canvasDB'
@@ -234,6 +234,7 @@ export default function CabinetEditModal({
   const [partLabels, setPartLabels]       = useState<PartLabels>({})
   const [partComments, setPartComments]   = useState<PartComments>({})
   const [hiddenParts, setHiddenParts]     = useState<PartHideViews>({})
+  const [noCncParts, setNoCncParts]       = useState<string[]>([])
   const [contextMenu, setContextMenu]     = useState<{ part: PartMeta; cx: number; cy: number } | null>(null)
   // Right-click on empty space in an ortho view → a small "Add part here" menu,
   // then the Add-Part dialog seeded with that cabinet-space point.
@@ -275,6 +276,7 @@ export default function CabinetEditModal({
     dbLoadPartLabels(cabinet.id).then(setPartLabels)
     dbLoadPartComments(cabinet.id).then(setPartComments)
     dbLoadHiddenParts(cabinet.id).then(setHiddenParts)
+    dbLoadNoCncParts(cabinet.id).then(setNoCncParts)
   }, [cabinet.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Push custom-part changes (add/edit/delete/visibility) up to the parent so the
@@ -313,6 +315,22 @@ export default function CabinetEditModal({
         setCustomParts(prev => prev.map(p => p.id === cid ? { ...p, hide_views: views } : p))
         dbUpdateCustomPart(cid, { hide_views: views }).catch(console.error)
       } else setHiddenViews(id, views)
+    },
+    // No CNC: custom parts use their own no_cnc column, resolved parts the
+    // cabinet's part_no_cnc list (read by the optimiser's normalize).
+    getNoCnc: id => id.startsWith('custom_')
+      ? !!customParts.find(p => p.id === id.slice(7))?.no_cnc
+      : noCncParts.includes(id),
+    setNoCnc: (id, noCnc) => {
+      if (id.startsWith('custom_')) {
+        const cid = id.slice(7)
+        setCustomParts(prev => prev.map(p => p.id === cid ? { ...p, no_cnc: noCnc } : p))
+        dbUpdateCustomPart(cid, { no_cnc: noCnc }).catch(console.error)
+        return
+      }
+      const next = noCnc ? [...new Set([...noCncParts, id])] : noCncParts.filter(x => x !== id)
+      setNoCncParts(next)
+      dbSaveNoCncParts(cabinet.id, next).catch(console.error)
     },
   }
 

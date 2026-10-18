@@ -52,7 +52,7 @@ export function canonicalPanelDims(dx: number, dy: number, dz: number): { w: num
 
 export interface RawProject { id: string; name: string; job_number: string | null }
 export interface RawRoom { id: string; name: string }
-export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; no_cnc?: boolean | null }
+export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; no_cnc?: boolean | null; part_no_cnc?: string[] | null }
 type Row = Record<string, unknown>
 
 export interface NormalizedProject {
@@ -81,6 +81,8 @@ export function normalizeProject(
   const cabById = new Map(cabinets.map(c => [c.id, c]))
   // Assembly-level no_cnc cascades to ALL of a cabinet's parts (standard + custom).
   const cabNoCnc = new Set(cabsRaw.filter(c => c.no_cnc).map(c => c.id))
+  // Per-part No CNC ticks (cabinet_instances.part_no_cnc), keyed by the same part ids as partKey.
+  const partNoCnc = new Map(cabsRaw.map(c => [c.id, new Set(Array.isArray(c.part_no_cnc) ? c.part_no_cnc : [])]))
 
   const parts: OptiPart[] = []
   const meta = (cabId: string) => {
@@ -146,7 +148,7 @@ export function normalizeProject(
       ...(tapeMissing ? { eb_missing: true } : {}),
       material_id: (row.material_id as string) ?? null,
       grain_direction: grain, nest_priority: nestPriority,
-      output_to_cnc: partCut && !cabNoCnc.has(cabId),
+      output_to_cnc: partCut && !cabNoCnc.has(cabId) && !partNoCnc.get(cabId)?.has(partKey),
       comment: commentsByCab.get(cabId)?.[partKey] ?? null,
       ...(baseDims ? {
         size_overridden: true,

@@ -495,6 +495,7 @@ export function buildInstanceFromDefinition(
     bulkhead: def.bulkhead ?? null,
     faces: def.faces ?? null,
     part_hide_views: def.part_hide_views ?? {},
+    part_no_cnc: def.part_no_cnc ?? [],
     schema_version: '0.4', notes: null,
   }
 }
@@ -533,6 +534,8 @@ export async function dbCopyCabinetChildren(srcCabinetId: string, dstCabinetId: 
   // instance the copy was built from may be stale — take them from the DB.
   const hide = await dbLoadHiddenParts(srcCabinetId)
   if (Object.keys(hide).length) await dbSaveHiddenParts(dstCabinetId, hide)
+  const noCnc = await dbLoadNoCncParts(srcCabinetId)
+  if (noCnc.length) await dbSaveNoCncParts(dstCabinetId, noCnc)
   const { data: cps } = await supabase.from('cabinet_custom_parts').select('*').eq('cabinet_instance_id', srcCabinetId).order('sort_order')
   const idMap = new Map<string, string>()
   for (const p of cps ?? []) {
@@ -667,6 +670,7 @@ export async function saveCabinetToLibrary(
     custom_parts: cps ?? [],
     // Per-view part hides travel with the definition (z_display_layers/PART-HIDE-SPEC.md).
     part_hide_views: inst.part_hide_views ?? {},
+    part_no_cnc: inst.part_no_cnc ?? [],
     description: opts.description ?? null,
     is_library_item: true, active: true, sort_order,
   }
@@ -1186,6 +1190,20 @@ export async function dbLoadHiddenParts(cabinetId: string): Promise<PartHideView
 export async function dbSaveHiddenParts(cabinetId: string, hidden: PartHideViews): Promise<void> {
   const { error } = await supabase.from('cabinet_instances').update({ part_hide_views: hidden }).eq('id', cabinetId)
   if (error) console.error('[hidden parts save]', error)
+}
+
+// Per-part "No CNC": part ids left out of the optimiser / CNC (still drawn).
+// Custom parts carry their own cabinet_custom_parts.no_cnc.
+export async function dbLoadNoCncParts(cabinetId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from('cabinet_instances').select('part_no_cnc').eq('id', cabinetId).single()
+  const v = (data as { part_no_cnc?: unknown } | null)?.part_no_cnc
+  return Array.isArray(v) ? v as string[] : []
+}
+
+export async function dbSaveNoCncParts(cabinetId: string, ids: string[]): Promise<void> {
+  const { error } = await supabase.from('cabinet_instances').update({ part_no_cnc: ids }).eq('id', cabinetId)
+  if (error) console.error('[no-cnc parts save]', error)
 }
 
 // ── Part Comments ─────────────────────────────────────────────────────────────

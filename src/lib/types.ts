@@ -185,6 +185,8 @@ export interface CabinetInstance {
   bulkhead?: import('./bulkhead').BulkheadSettings | null
   // Per-view part hiding (z_display_layers/PART-HIDE-SPEC.md).
   part_hide_views?: import('./resolver/types').PartHideViews
+  // Part ids not sent to the optimiser / CNC (custom parts use their own no_cnc).
+  part_no_cnc?: string[]
   schema_version: string
   notes: string | null
   created_at: string
@@ -263,6 +265,8 @@ export interface CabinetDefinition {
   bulkhead?: import('./bulkhead').BulkheadSettings | null
   // Per-view part hides, copied to the instance at placement (PART-HIDE-SPEC).
   part_hide_views?: import('./resolver/types').PartHideViews
+  // Per-part No CNC list, copied to the instance at placement.
+  part_no_cnc?: string[]
   // UI metadata
   description: string | null
   thumbnail_svg: string | null

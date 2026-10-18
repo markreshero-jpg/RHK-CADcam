@@ -40,7 +40,7 @@ async function loadCabinetParts(project: { id: string; name: string; job_number:
   const roomIds = rooms.map(r => r.id)
   if (!roomIds.length) return normalizeProject(project, rooms, [], [], [], [], [], [])
 
-  const { data: cabsRaw } = await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id,part_comments,part_names,no_cnc,part_pos_overrides').in('room_id', roomIds)
+  const { data: cabsRaw } = await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id,part_comments,part_names,no_cnc,part_no_cnc,part_pos_overrides').in('room_id', roomIds)
   const cabs = (cabsRaw ?? []) as (RawCabinet & { part_comments?: PartKeyMap | null; part_names?: PartKeyMap | null; part_pos_overrides?: Record<string, SizeOv> | null })[]
   const cabIds = cabs.map(c => c.id)
   const commentsByCab = new Map<string, PartKeyMap>(cabs.map(c => [c.id, c.part_comments ?? {}]))
