@@ -2712,6 +2712,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             }}
             onCabinetContextMenu={onCabinetContextMenu}
             onBlankWallContextMenu={onBlankWallContextMenu}
+            onFixtureContextMenu={(e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null); setContextMenu({ x: e.clientX, y: e.clientY, fixtureId: id }) }}
             onShiftSelectCabinet={id => {
               setSelected({ type: 'cabinet', id })
               setMultiSelect(prev => {

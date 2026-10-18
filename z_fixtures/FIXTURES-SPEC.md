@@ -242,6 +242,15 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-18 (user): **library rows from supplied GLBs** — Abi Ohelu 380 + Seba 550 U/M sinks,
+  Abi pull-out tap, gas + induction cooktops 600 / 900 (7 rows). Models served from the app's
+  `public/fixture-models/` (model_url `/fixture-models/<file>.glb`) — no bucket write access
+  from the session; re-uploading in the library editor moves one into the bucket. Sizes from
+  the model bbox (metres → scale 1000); all benchtop-mount: sinks drop 205 (rim at the top
+  surface), cutout = rim − 15 each side R10 (as Zalo); cooktops drop 45 gas / 55 induction,
+  cutout = body size; tap 35 round hole under its base. Plan / elev shapes traced headless
+  (vitest + GLTFLoader.parse). Not checked in-app.
+
 - 2026-10-18 (user: "lets work through the known gaps"):
   - **Brand / model no. copied onto placed fixtures** — `room_fixtures.brand` + `model_no`
     (migration `fixtures_brand_snapshot`, applied live + backfilled; copy in
