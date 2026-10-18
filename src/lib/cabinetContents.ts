@@ -84,6 +84,30 @@ export function zoneFollow(
   return out
 }
 
+/** A linked fixture as a box in its cabinet's own frame (z_ubo U5) — cabinet
+ *  X from the left, Y up from the cabinet bottom, Z from the back — for
+ *  drawing it inside the cabinet edit modal. `yaw` = turn vs facing out of the
+ *  cabinet (deg, 0 = its front to the cabinet front); w / d are its footprint
+ *  along X / Z (swapped when it's turned a quarter). */
+export interface LocalFixtureBox {
+  f: RoomFixture
+  x0: number; y0: number; z0: number
+  w: number; h: number; d: number
+  yaw: number
+}
+
+export function fixtureLocalBox(f: RoomFixture, plan: CabPlan, room: Room): LocalFixtureBox {
+  const yaw = round3(norm(f.link_rot - norm(rotationForFront(plan.perp) - plan.angle)))
+  const quarter = Math.abs(Math.sin(yaw * Math.PI / 180)) > 0.7
+  const w = quarter ? f.depth : f.width, d = quarter ? f.width : f.depth
+  return {
+    f, yaw, w, d, h: f.height,
+    x0: f.link_x - w / 2,
+    z0: f.link_z - d / 2,
+    y0: (Number(f.z) || 0) - cabBottomZ(plan.cab, room, plan.wall),
+  }
+}
+
 /** Parse a definition's contents column defensively (jsonb, may be null / legacy). */
 export function definitionContents(raw: unknown): ContentItem[] {
   if (!Array.isArray(raw)) return []

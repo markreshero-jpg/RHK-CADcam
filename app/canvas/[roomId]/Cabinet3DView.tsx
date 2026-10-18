@@ -38,6 +38,8 @@ import type { ResolvedSlideDrill } from '@/src/lib/resolver/types'
 import PartEdgeJoints from './PartEdgeJoints'
 import { SlideModel } from '@/src/components/three/SlideModel'
 import { HingeModel } from '@/src/components/three/HingeModel'
+import { FixtureModel, FixtureOutline } from '@/src/components/three/FixtureModel'
+import type { LocalFixtureBox } from '@/src/lib/cabinetContents'
 import { getPalette } from '@/src/lib/partPalette'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -1884,6 +1886,7 @@ export function CabinetScene({
 export default function Cabinet3DView({
   cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, shapeOverrides, onPartSelect, showDrilling = true, onUpdate, onDeletePart,
   setCustomParts, onOverridesChange, onEditPart, panelHost, onPanelVisibleChange, compactInfo = false,
+  fixtures, selectedFixtureId, onFixtureSelect,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
@@ -1924,6 +1927,11 @@ export default function Cabinet3DView({
   // Phones (z_mobile): a tap shows the small read-only PartInfoCard over the model;
   // its "Details" opens the full panel (docked via panelHost as usual).
   compactInfo?:      boolean
+  // Linked fixtures drawn inside the cabinet (z_ubo U5) — e.g. a UBO's oven —
+  // and their selection. Edit modal only; the room 3D draws fixtures itself.
+  fixtures?:          LocalFixtureBox[]
+  selectedFixtureId?: string | null
+  onFixtureSelect?:   (id: string) => void
 }) {
   const [selectedPart, setSelectedPart]       = useState<PartMeta | null>(null)
   const [fullFor, setFullFor]                 = useState<string | null>(null)   // compactInfo: part showing the full panel
@@ -2286,6 +2294,20 @@ export default function Cabinet3DView({
           <boxGeometry args={[dx, dy, dz]} />
           <meshStandardMaterial color="#ddd3bb" roughness={0.7} />
         </mesh>
+      )}
+      {/* Linked fixtures (z_ubo U5), in cabinet space like CabinetScene's root group. */}
+      {!!fixtures?.length && (
+        <group position={[-dx / 2, -dy / 2, -dz / 2]}>
+          {fixtures.map(b => (
+            <group key={b.f.id} position={[b.x0 + b.w / 2, b.y0, b.z0 + b.d / 2]} rotation={[0, -b.yaw * Math.PI / 180, 0]}
+              onClick={onFixtureSelect ? e => { e.stopPropagation(); onFixtureSelect(b.f.id) } : undefined}>
+              <group position={[-b.f.width / 2, 0, -b.f.depth / 2]}>
+                <FixtureModel f={b.f} />
+                {selectedFixtureId === b.f.id && <FixtureOutline w={b.f.width} h={b.f.height} d={b.f.depth} color="#facc15" />}
+              </group>
+            </group>
+          ))}
+        </group>
       )}
     </PreviewCanvas>
   )

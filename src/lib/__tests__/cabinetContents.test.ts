@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { zoneSeat, zoneFollow, definitionContents } from '../cabinetContents'
+import { zoneSeat, zoneFollow, definitionContents, fixtureLocalBox } from '../cabinetContents'
 import { cabinetPlans, linkedPose } from '../fixtureLinks'
 import { fixtureCenter } from '../fixtureGeometry'
 import { centroid } from '../geometry'
@@ -64,6 +64,16 @@ describe('zoneFollow', () => {
 
   it('point-linked fixtures are left alone', () => {
     expect(zoneFollow([{ ...fx, link_zone: null }], [plan], new Map([['c1', resolved]]), room)).toEqual([])
+  })
+})
+
+describe('fixtureLocalBox', () => {
+  it('a seated oven: in the cabinet frame, facing out, on the cell bottom', () => {
+    const seat = zoneSeat(resolved, cab, plan, { row_index: 1, col_index: 0 }, 600)!
+    const f = { id: 'f1', cabinet_id: 'c1', width: 600, depth: 600, height: 596, z: 220, ...seat } as unknown as RoomFixture
+    const b = fixtureLocalBox(f, plan, room)
+    expect(b.yaw).toBe(0)
+    expect(b).toMatchObject({ x0: 0, z0: 0, y0: 220, w: 600, d: 600, h: 596 })
   })
 })
 

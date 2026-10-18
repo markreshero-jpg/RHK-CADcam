@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import CabinetFixturesOverlay from './CabinetFixturesOverlay'
+import type { LocalFixtureBox } from '@/src/lib/cabinetContents'
 import { zoneKey } from '@/src/lib/cabinetShape/partKeys'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack } from '@/src/lib/resolver/types'
@@ -449,9 +451,11 @@ function clientToSvgUser(svg: SVGSVGElement | null, clientX: number, clientY: nu
 // caller can offer "Add part here". Each ortho view maps two of the three axes.
 export type EmptyContextMenu = (pos: { x: number; y: number; z: number }, clientX: number, clientY: number) => void
 
-export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments, ebByMatId }: {
+export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments, ebByMatId, fixtures, selectedFixtureId, onFixtureSelect }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
+  // Linked fixtures drawn in the cabinet (z_ubo U5) + their selection.
+  fixtures?: LocalFixtureBox[]; selectedFixtureId?: string | null; onFixtureSelect?: (id: string) => void
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   onEmptyContextMenu?: EmptyContextMenu
@@ -742,13 +746,17 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
       )}
       {viewLabel(ox+dx/2, vh-14, 'ELEVATION — WIDTH × HEIGHT')}
       {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={unit} vb={vb} pts={[...measurePts, ...rawPanelPts]} />}
+      <CabinetFixturesOverlay view="elevation" fixtures={fixtures ?? []} map={(x, y) => ({ x: ox + x, y: oy + dy - y })}
+        selectedId={selectedFixtureId} onSelect={onFixtureSelect} />
     </svg>
   )
 }
 
-export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments, ebByMatId }: {
+export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments, ebByMatId, fixtures, selectedFixtureId, onFixtureSelect }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
+  // Linked fixtures drawn in the cabinet (z_ubo U5) + their selection.
+  fixtures?: LocalFixtureBox[]; selectedFixtureId?: string | null; onFixtureSelect?: (id: string) => void
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   onEmptyContextMenu?: EmptyContextMenu
@@ -993,13 +1001,17 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
       )}
       {viewLabel(ox + dx/2, vh - 14, 'TOP — WIDTH × DEPTH')}
       {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={unit} vb={vb} pts={measurePts} />}
+      <CabinetFixturesOverlay view="top" fixtures={fixtures ?? []} map={(x, _y, z) => ({ x: ox + x, y: oz + z })}
+        selectedId={selectedFixtureId} onSelect={onFixtureSelect} />
     </svg>
   )
 }
 
-export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments, ebByMatId }: {
+export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, partLabels, partComments, ebByMatId, fixtures, selectedFixtureId, onFixtureSelect }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
+  // Linked fixtures drawn in the cabinet (z_ubo U5) + their selection.
+  fixtures?: LocalFixtureBox[]; selectedFixtureId?: string | null; onFixtureSelect?: (id: string) => void
   selectedPartId: string | null; onPartsAtPoint: (parts: PartMeta[], cx: number, cy: number) => void
   onPartContextMenu?: (parts: PartMeta[], cx: number, cy: number) => void
   onEmptyContextMenu?: EmptyContextMenu
@@ -1274,6 +1286,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
         <OriginMarker sx={oz + selOrigin.z} sy={oy + dy - selOrigin.y} hLabel="Z" vLabel="Y" />
       )}
       {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={unit} vb={vb} pts={measurePts} />}
+      <CabinetFixturesOverlay view="side" fixtures={fixtures ?? []} map={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}
+        selectedId={selectedFixtureId} onSelect={onFixtureSelect} />
     </svg>
   )
 }

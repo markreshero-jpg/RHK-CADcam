@@ -40,7 +40,7 @@ import {
   viewReducer, placeInfoFor, isBenchtopMode, MIN_STRETCH,
 } from './canvasTypes'
 import { useBenchtopInteraction } from './useBenchtopInteraction'
-import { useFixtureInteraction } from './useFixtureInteraction'
+import { useFixtureInteraction, bodyFromCatalog } from './useFixtureInteraction'
 import FixturesPlan from './FixturesPlan'
 import AnnotationLayer from './AnnotationLayer'
 import AnnotTextEditor from './AnnotTextEditor'
@@ -53,7 +53,7 @@ import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
 import { withFixtureCutouts, benchtopAt, openingSpans, fixtureChainSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, fixtureClearances, type StretchSide } from '@/src/lib/fixtureGeometry'
 import { cabinetPlans, linkFor, followLinks, fixtureClashes, stretchObstacles } from '@/src/lib/fixtureLinks'
-import { zoneFollow } from '@/src/lib/cabinetContents'
+import { zoneFollow, fixtureLocalBox } from '@/src/lib/cabinetContents'
 import { dbSpawnDefinitionContents } from './contentsDB'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
@@ -610,6 +610,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     void supabase.from('rooms').update({ annotation_scale: n }).eq('id', room.id)
       .then(({ error }) => { if (error) console.error('[annotation scale]', error) })
   }
+  const annotSelected = cad.selectedIds.size
+  useEffect(() => {
+    if (tutorialOn) useTutorial.getState().setCtx({ annotations: planAnnotations, annotSelected })
+  }, [tutorialOn, planAnnotations, annotSelected])
 
   // ── Effects ───────────────────────────────────────────────────────────────
 
@@ -1106,6 +1110,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         if (resolved) void spawnContents(cabinet, resolved)
       })
     }
+  }
+
+  // Swap a linked fixture for another catalogue item (cabinet edit modal, z_ubo
+  // U5). A seated one keeps its front on the face plane (link_z shifts by the
+  // depth change); the follow effect re-places it from the link.
+  async function handleSwapFixture(id: string, item: FixtureCatalogItem) {
+    const f = fixtures.find(x => x.id === id)
+    if (!f || f.catalog_id === item.id) return
+    captureSnapshot()
+    const patch: Partial<RoomFixture> = {
+      ...bodyFromCatalog(item), catalog_id: item.id,
+      ...(f.link_zone ? { link_z: Math.round((f.link_z + f.depth / 2 - Number(item.depth) / 2) * 10) / 10 } : {}),
+    }
+    setFixtures(prev => prev.map(x => x.id === id ? { ...x, ...patch } : x))
+    const { error } = await supabase.from('room_fixtures').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) setToast(`Swap failed: ${error.message}`)
   }
 
   // Default contents (z_ubo U4): the definition's fixtures, linked to the new
@@ -3356,6 +3376,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               if (!r) return m
               return new Map(m).set(cabinetId, { ...r, custom_parts: parts as unknown as typeof r.custom_parts })
             })}
+            fixtures={(() => {
+              const plan = cabPlans.find(p => p.cab.id === cab.id)
+              return plan ? fixtures.filter(f => f.cabinet_id === cab.id).map(f => fixtureLocalBox(f, plan, room)) : []
+            })()}
+            onFixtureSwap={handleSwapFixture}
+            onFixtureRemove={async id => {
+              captureSnapshot()
+              setFixtures(prev => prev.filter(f => f.id !== id))
+              const { error } = await supabase.from('room_fixtures').delete().eq('id', id)
+              if (error) setToast(`Remove failed: ${error.message}`)
+            }}
+            onFixtureSelectOnCanvas={id => { setEditCabId(null); setEditCabInitialView('elevation'); setSelected({ type: 'fixture', id }) }}
           />
         )
       })()}

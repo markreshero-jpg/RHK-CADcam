@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import CabinetFixtureCard from './CabinetFixtureCard'
+import type { LocalFixtureBox } from '@/src/lib/cabinetContents'
+import type { FixtureCatalogItem } from '@/src/lib/types'
 import type { CabinetInstance, Wall } from '@/src/lib/types'
 import type { ResolvedCabinet, PartHideViews, PartHideView } from '@/src/lib/resolver/types'
 import { PartMeta, PartEdge, PartPropertiesPanel, unpackMatCol } from '@/src/components/three/PartViewer'
@@ -170,6 +173,7 @@ function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onO
 
 export default function CabinetEditModal({
   cabinet, wall, wallCabinets, resolvedCabinet, initialView, onUpdate, onDelete, onClose, materialColours, ebByMatId, onHiddenChange, onCustomPartsChange,
+  fixtures, onFixtureSwap, onFixtureRemove, onFixtureSelectOnCanvas,
 }: {
   cabinet: CabinetInstance
   wall: Wall | null
@@ -187,7 +191,15 @@ export default function CabinetEditModal({
   // Lets the parent canvas reflect custom-part add/edit/delete live (updates the
   // shared resolved map's custom_parts so the room plan/elevation/3D update at once).
   onCustomPartsChange?: (cabinetId: string, parts: CabinetCustomPart[]) => void
+  // Fixtures linked to this cabinet, in its frame (z_ubo U5) — drawn in the
+  // Top / Elevation / Side / 3D views; picking one shows its card.
+  fixtures?: LocalFixtureBox[]
+  onFixtureSwap?: (fixtureId: string, item: FixtureCatalogItem) => void | Promise<void>
+  onFixtureRemove?: (fixtureId: string) => void | Promise<void>
+  onFixtureSelectOnCanvas?: (fixtureId: string) => void
 }) {
+  const [selFixtureId, setSelFixtureId] = useState<string | null>(null)
+  const selFixture = fixtures?.find(b => b.f.id === selFixtureId)?.f ?? null
   // Phones (z_mobile/MOBILE-SPEC.md): full screen, properties panel is a narrow
   // drawer over the views with an edge tab to hide / show it.
   const phone = useIsPhone()
@@ -653,7 +665,7 @@ export default function CabinetEditModal({
               : activeView === 'errors'  ? 'bg-gray-900'
               : 'flex items-center justify-center bg-gray-950 p-6'
             }`}
-            onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null) } : undefined}
+            onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null); setSelFixtureId(null) } : undefined}
           >
             {activeView === 'top' && (
               visibleRp ? <ResolvedTop cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
@@ -661,7 +673,8 @@ export default function CabinetEditModal({
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
                 customParts={customParts} partOverrides={partOverrides}
-                partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId} />
+                partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId}
+                fixtures={fixtures} selectedFixtureId={selFixtureId} onFixtureSelect={setSelFixtureId} />
               : <TopView cab={cabinet} />
             )}
             {activeView === 'elevation' && (
@@ -670,7 +683,8 @@ export default function CabinetEditModal({
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
                 customParts={customParts} partOverrides={partOverrides}
-                partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId} />
+                partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId}
+                fixtures={fixtures} selectedFixtureId={selFixtureId} onFixtureSelect={setSelFixtureId} />
               : <ElevationView cab={cabinet} />
             )}
             {activeView === 'side' && (
@@ -679,12 +693,21 @@ export default function CabinetEditModal({
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
                 customParts={customParts} partOverrides={partOverrides}
-                partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId} />
+                partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId}
+                fixtures={fixtures} selectedFixtureId={selFixtureId} onFixtureSelect={setSelFixtureId} />
               : <SideView cab={cabinet} />
             )}
             {activeView === 'face'     && <FacetFaceGridEditor cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onPanelVisibleChange={setPanel3DVisible} compactInfo={phone} />}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onPanelVisibleChange={setPanel3DVisible} compactInfo={phone}
+              fixtures={fixtures} selectedFixtureId={selFixtureId} onFixtureSelect={setSelFixtureId} />}
+            {selFixture && (activeView === '3d' || isOrthoView) && (
+              <CabinetFixtureCard f={selFixture}
+                onClose={() => setSelFixtureId(null)}
+                onSwap={item => onFixtureSwap?.(selFixture.id, item)}
+                onRemove={async () => { await onFixtureRemove?.(selFixture.id); setSelFixtureId(null) }}
+                onSelectOnCanvas={() => onFixtureSelectOnCanvas?.(selFixture.id)} />
+            )}
             {activeView === 'parts'  && rp && (
               <PartsView
                 rp={rp} cabinetId={cabinet.id}

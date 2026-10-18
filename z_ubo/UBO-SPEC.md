@@ -1,6 +1,6 @@
 # UBO — under-bench oven cabinet + cabinet contents
 
-Status: **U1–U4 built 2026-10-18, in-app check pending.** RESUME HERE → U5.
+Status: **U1–U5 built 2026-10-18, in-app check pending.** RESUME HERE → U6.
 
 A library base cabinet that comes out with an oven already inside it. Built
 natively (face grid + interior + carcass options), with the oven as a real
@@ -161,6 +161,17 @@ renders `FixtureModel` at the cabinet-local pose (3D tab + room 3D unchanged
 since room fixtures render separately — room view passes none). Elevation /
 Side / Top draw the fixture outline. Clicking it selects it: small panel with
 Swap model (catalog picker, same kind), Remove, Open in fixture editor.
+
+*Built (U5):* `fixtureLocalBox` (cabinetContents.ts) — linked fixture → box in
+the cabinet frame + yaw vs facing out. CanvasClient passes every fixture with
+`cabinet_id` = the cabinet (seated or point-linked, e.g. a sink) to
+CabinetEditModal `fixtures`. Ortho views (`ResolvedElevation / Top / Side`)
+draw `CabinetFixturesOverlay` (traced elev_shape when facing out, else a dashed
+box + name); `Cabinet3DView` renders `FixtureModel` next to CabinetScene (not
+inside it, so the room 3D doesn't draw it twice). Click → `CabinetFixtureCard`:
+Swap for (catalogue items of the same category + kind; a seated item keeps its
+front on the face plane), Remove, Select on canvas (closes the modal, selects
+the fixture → its normal FixturePanel = the "fixture editor").
 
 **U6 — Save to library carries contents.** `saveCabinetToLibrary` snapshots
 the cabinet's linked fixtures into `contents` (zone anchor when the fixture
