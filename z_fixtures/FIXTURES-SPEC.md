@@ -242,6 +242,14 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-18 (user): **P10 Cut benchtop tick box + per-placement cutout override.** Column
+  `cut_benchtop` (bool, default true) on fixture_catalog + room_fixtures (migration
+  `fixtures_p10_cut_benchtop`, applied live; copy in `z_fixtures/migration_p10_cut_benchtop.sql`),
+  copied on placement (BODY_KEYS). Unticked → `benchtopFixtureCutouts` skips it (plan, 3D,
+  resolver). FixturePanel: tick box + editable shape / size / radius / offsets on the placed copy
+  (overrides the library for this job only). Library editor: tick box = default for new
+  placements. Not checked in-app. No "reset to library" button yet.
+
 - 2026-10-18 (user): **elevation true shape** — `elev_shape` (same format, v down from the top;
   migration `fixtures_p8_elev_shape`), traced with the plan shape (`traceShapes`): front view =
   nearest surface toward +Z per cell, outline + step-back contours (oven door / glass / knobs).
@@ -322,7 +330,7 @@ Esc cancels; one undo step.
 - ~~Fixtures don't avoid cabinets~~ P4 said warn only; changed 2026-10-18 — they now block / slide (see top).
 - Room 3D: sink-in-hole not clearly eyeballed yet (plan + resolver verified).
 - Cutout as a CNC op (optimiser / gcode ignore benchtop cutouts entirely today).
-- Per-placement cutout edits (FixturePanel only displays the template).
+- ~~Per-placement cutout edits~~ done in P10.
 - ~~Elevation: fixtures aren't placeable from elevation~~ done 2026-10-18. Dimension chains still don't include appliances (only clearance dims on the selected one; openings have their own row).
 
 ## Openings (P5 — built 2026-10-18)
