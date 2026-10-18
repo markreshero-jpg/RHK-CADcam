@@ -71,8 +71,8 @@ fixture dropped onto a plain cabinet.
 `back_rail_v` part: board standing on edge in the back plane, full width
 between gables, height `BKRH` (default 100) at the top of the box, joined to
 the gables like the top rails. Cut list / nest / drilling / 3D / views pick it
-up through the normal case-part path. *Confirm: one rail at the top only, ~100
-high?*
+up through the normal case-part path. **Locked 2026-10-18: one rail, at the top
+only** (`BKRH` default 100, overridable).
 
 **U2 — open-zone rects + shelf on a face row.**
 - `resolveFace` emits `open_zones[]` (row, col, X, Y, DX, DY in cabinet
@@ -115,5 +115,4 @@ cut list has the shelf + back rail and no back).
 
 ## Open
 
-- Back rail details (U1 confirm).
 - Later: `BSK` (sink + tap, point anchors), integrated D/W, `WOT` (two zones).
