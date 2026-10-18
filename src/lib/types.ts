@@ -604,6 +604,10 @@ export interface FixtureBody {
   plan_shape:    import('./fixturePlanShape').PlanShape | null
   /** P8: true front (elevation) shape, u across, v down from the top. */
   elev_shape:    import('./fixturePlanShape').PlanShape | null
+  /** P11: the model follows width / depth when stretched (banded via `stretch`, else scaled). */
+  resizable:     boolean
+  /** P11: the model's stretch spec (GLB scene extras), read when the library traces it. */
+  stretch:       import('./fixtureStretch').StretchSpec | null
 }
 
 /** A library category (P6): what the tabs / F6 picker show. `category` = the behaviour type its items get. */

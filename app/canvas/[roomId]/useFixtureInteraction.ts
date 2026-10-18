@@ -15,6 +15,7 @@ import type { Room, Wall, FixtureCatalogItem, RoomFixture, FixtureBody } from '@
 import { centroid, type Pt } from '@/src/lib/geometry'
 import { stretchBounds, stretchPatch, type StretchSide, type StretchBounds } from '@/src/lib/fixtureGeometry'
 import { fixtureWallRef, fixtureAxes } from '@/src/lib/fixtureGeometry'
+import { stretchedCutout } from '@/src/lib/fixtureStretch'
 import { snapFixture, snapOpening, defaultFixtureZ, fixtureCenter, backLeftForCenter, type FixtureSnap, type FixtureFootprint } from '@/src/lib/fixtureGeometry'
 import type { FixtureLink } from '@/src/lib/fixtureLinks'
 import type { Mode, Selected } from './canvasTypes'
@@ -41,7 +42,7 @@ const BODY_KEYS: (keyof FixtureBody)[] = [
   'model_url', 'model_format', 'model_scale', 'model_rot_x', 'model_rot_y',
   'model_off_x', 'model_off_y', 'model_off_z',
   'cutout_shape', 'cutout_w', 'cutout_d', 'cutout_radius', 'cutout_off_x', 'cutout_off_y', 'cut_benchtop', 'bench_drop',
-  'plan_shape', 'elev_shape',
+  'plan_shape', 'elev_shape', 'resizable', 'stretch',
 ]
 
 export function bodyFromCatalog(item: FixtureCatalogItem): FixtureBody {
@@ -211,9 +212,11 @@ export function useFixtureInteraction({
     if (!stretch) return false
     const p = stretchPatch(stretch.base, stretch.side, cursor, stretch.bounds, stretch.step)
     if (!p) return true
-    const merged = { ...stretch.base, ...p }
+    // P11: a resizable model's cutout follows the stretch (from the size at the start).
+    const cut = stretchedCutout(stretch.base, { ...stretch.base, ...p })
+    const merged = { ...stretch.base, ...p, ...cut }
     const link = linkFields(merged)
-    setFixtures(prev => prev.map(f => f.id === stretch.id ? { ...f, ...p, ...link } : f))
+    setFixtures(prev => prev.map(f => f.id === stretch.id ? { ...f, ...p, ...cut, ...link } : f))
     return true
   }
 
@@ -223,7 +226,8 @@ export function useFixtureInteraction({
     setStretch(null)
     const cur = fixturesRef.current.find(f => f.id === s.id)
     if (!cur) return true
-    const keys = ['x', 'y', 'width', 'depth', 'height', 'z', 'cabinet_id', 'link_x', 'link_z', 'link_rot'] as const
+    const keys = ['x', 'y', 'width', 'depth', 'height', 'z', 'cabinet_id', 'link_x', 'link_z', 'link_rot',
+      'cutout_w', 'cutout_d', 'cutout_off_x', 'cutout_off_y'] as const
     const patch: Record<string, unknown> = {}
     for (const k of keys) if (cur[k] !== s.base[k]) patch[k] = cur[k]
     if (!Object.keys(patch).length) return true
@@ -251,6 +255,11 @@ export function useFixtureInteraction({
     if (('x' in patch || 'y' in patch || 'rotation' in patch) && !('cabinet_id' in patch)) {
       const f = fixturesRef.current.find(x => x.id === id)
       if (f) { const m = { ...f, ...patch }; patch = { ...patch, ...linkFields(m) } }
+    }
+    // P11: a resizable model's cutout follows a typed width / depth (unless the cutout itself is being set).
+    if (('width' in patch || 'depth' in patch) && !Object.keys(patch).some(k => k.startsWith('cutout_'))) {
+      const f = fixturesRef.current.find(x => x.id === id)
+      if (f) patch = { ...patch, ...stretchedCutout(f, { ...f, ...patch }) }
     }
     captureSnapshot()
     setFixtures(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f))

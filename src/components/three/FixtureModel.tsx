@@ -17,6 +17,7 @@ import * as THREE from 'three'
 import { PartAlphaContext, alphaMat } from './PartViewer'
 import { ModelSource, type ModelFormat } from './ModelAsset'
 import { rotatedBounds, fitOffset } from '@/src/lib/fixtureFit'
+import { activeStretch, nativeTargets, stretchObject } from '@/src/lib/fixtureStretch'
 
 export interface FixtureLook {
   width:  number
@@ -31,6 +32,9 @@ export interface FixtureLook {
   model_off_x:  number
   model_off_y:  number
   model_off_z:  number
+  /** P11: follow width / depth (banded stretch when the model has a spec, else scale). */
+  resizable?:   boolean | null
+  stretch?:     unknown
 }
 
 export const FIXTURE_DEFAULT_COLOUR = '#cbd5e1'
@@ -77,6 +81,9 @@ export class ModelErrorBoundary extends Component<
 }
 
 // ── Fitted model ──────────────────────────────────────────────────────────────
+// A resizable item (P11) is stretched to its box first: banded via the stretch
+// spec (the row's copy, else the GLB's own scene extras), or — no spec — scaled
+// in width / depth to fill the box. Height never stretches.
 
 function Fitted({ obj, f, onNativeSize }: {
   obj: THREE.Object3D
@@ -90,18 +97,41 @@ function Fitted({ obj, f, onNativeSize }: {
   // Rotated bounds at scale 1 — the "native" size the editor's Fit-to-size uses.
   const native = useMemo(() => rotatedBounds(obj, f.model_rot_x, f.model_rot_y), [obj, f.model_rot_x, f.model_rot_y])
 
+  const spec = f.resizable ? activeStretch({ ...f, stretch: f.stretch ?? obj.userData?.stretch }) : null
+  const targets = spec ? nativeTargets(f) : null
+  const specKey = spec ? JSON.stringify(spec) : ''
+  const shaped = useMemo(
+    () => spec && targets ? stretchObject(obj, spec, targets) : obj,
+    [obj, specKey, targets?.x, targets?.z], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const shapedBounds = useMemo(
+    () => shaped === obj ? native : rotatedBounds(shaped, f.model_rot_x, f.model_rot_y),
+    [shaped, obj, native, f.model_rot_x, f.model_rot_y],
+  )
+
   useEffect(() => {
     if (!onNativeSize || native.isEmpty()) return
     const sz = native.getSize(new THREE.Vector3())
     onNativeSize({ x: sz.x, y: sz.y, z: sz.z })
   }, [native, onNativeSize])
 
-  const offset = fitOffset(native, f)
+  // Resizable, no spec: stretch the box-space width / depth to fill the box.
+  const sz = shapedBounds.isEmpty() ? null : shapedBounds.getSize(new THREE.Vector3())
+  const kx = f.resizable && !spec && sz && sz.x > 0 ? f.width / (sz.x * s) : 1
+  const kz = f.resizable && !spec && sz && sz.z > 0 ? f.depth / (sz.z * s) : 1
+  const [ox, oy, oz] = fitOffset(shapedBounds, f)
+  const c = shapedBounds.isEmpty() ? null : shapedBounds.getCenter(new THREE.Vector3())
+  // fitOffset centres the unscaled model; the k scale is about the origin, so re-centre.
+  const offset: [number, number, number] = c
+    ? [ox + c.x * s * (1 - kx), oy, oz + c.z * s * (1 - kz)]
+    : [ox, oy, oz]
 
   return (
     <group position={offset}>
-      <group rotation={[rx, ry, 0, 'YXZ']} scale={s}>
-        <primitive object={obj} />
+      <group scale={[kx, 1, kz]}>
+        <group rotation={[rx, ry, 0, 'YXZ']} scale={s}>
+          <primitive object={shaped} />
+        </group>
       </group>
     </group>
   )

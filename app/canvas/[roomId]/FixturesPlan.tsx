@@ -12,13 +12,14 @@ import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { wrapLabel } from '@/src/lib/textWrap'
 import { planShapePath } from '@/src/lib/fixturePlanShape'
+import { stretchedPlanShape } from '@/src/lib/fixtureStretch'
 import type { FixtureSnap, StretchSide, Clearances } from '@/src/lib/fixtureGeometry'
 
 const STROKE = '#0ea5e9'
 const FILL   = '#0ea5e9'
 const CLASH  = '#dc2626'
 
-type Body = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'width' | 'depth'> & Partial<Pick<RoomFixture, 'hinge_side' | 'swing' | 'plan_shape'>>
+type Body = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'width' | 'depth'> & Partial<Pick<RoomFixture, 'hinge_side' | 'swing' | 'plan_shape' | 'resizable' | 'stretch' | 'model_scale' | 'model_rot_x' | 'model_rot_y'>>
 
 // Doors / windows (P5), in the opening's frame: y = 0 outer face, y = depth the
 // inside face (room side). Hinge side is as seen from inside the room (x = 0 = left).
@@ -119,7 +120,7 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, cl
         fill={FILL} fillOpacity={opening || shaped ? (ghost ? 0.12 : 0.001) : ghost ? 0.12 : 0.06 * (lp.fillOpacity ?? 1)}
         stroke={(opening || shaped) && !ghost ? 'none' : color} strokeWidth={lw} strokeDasharray={ghost ? `${10 / z} ${6 / z}` : lp.strokeDasharray} />
       {shaped
-        ? <path d={planShapePath(f.plan_shape!, f.width, f.depth)} fill="none" stroke={color} strokeWidth={lw}
+        ? <path d={planShapePath(stretchedPlanShape(f.plan_shape!, f), f.width, f.depth)} fill="none" stroke={color} strokeWidth={lw}
             strokeLinejoin="round" strokeDasharray={ghost ? `${10 / z} ${6 / z}` : lp.strokeDasharray} />
         : <Symbol f={f} z={z} color={color} lw={lw} />}
       {/* front edge */}

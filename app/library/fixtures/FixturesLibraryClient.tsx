@@ -693,6 +693,21 @@ function FixtureEditor({ item, kinds, groups, onPatch, onError }: {
                 Model at this scale: {fmt(native.x * item.model_scale)} W × {fmt(native.z * item.model_scale)} D × {fmt(native.y * item.model_scale)} H
               </p>
             )}
+            {/* P11: the model follows width / depth when a placement is stretched. */}
+            <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
+              <input type="checkbox" checked={!!item.resizable} onChange={e => {
+                onPatch({ resizable: e.target.checked })
+                if (e.target.checked && !item.stretch && item.model_url) void retrace()
+              }} />
+              Resizable (model stretches with the item)
+            </label>
+            {item.resizable && (
+              <p className="text-[10px] text-ink-subtle">
+                {item.stretch
+                  ? 'Model has stretch bands — bowls, clips and cutout keep their shape. Height doesn’t stretch.'
+                  : 'No stretch bands in this model — it scales to fill the width / depth.'}
+              </p>
+            )}
             {/* Blender / most glTF exporters write metres — at scale 1 a 600 mm oven
                 is 0.6 mm and invisible. Offer the fix instead of guessing silently. */}
             {native && Number(item.model_scale) === 1 && Math.max(native.x, native.y, native.z) < 5 && (

@@ -256,6 +256,22 @@ Esc cancels; one undo step.
     `/fixture-models/ABI_Zalo_Double_Bowl.glb`; the one already-placed Zalo keeps the old
     bucket copy (jobs are as-built).
 
+- 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
+  section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`
+  (migration `fixtures_p11_resizable`, applied live; copy `z_fixtures/migration_p11_resizable.sql`),
+  in BODY_KEYS. `stretch` = the GLB scene extras `stretch` block (per native axis: nominal, bands,
+  min; rigid_nodes), read by the library trace (`traceShapes`); a spec'd model is traced at its
+  nominal size. `src/lib/fixtureStretch.ts` (+ `fixtureResizable.test.ts`): one piecewise map
+  (extra length shared between bands, re-centred) drives
+  - 3D (`FixtureModel` → `stretchObject`: vertices mapped, rigid clips moved not stretched);
+  - plan / elevation shapes (`stretchedPlanShape` / `stretchedElevShape`, at draw time);
+  - the cutout (`stretchedCutout`: edges back to nominal, out to the new size) — written live
+    during a stretch and on a typed width / depth, so the panel numbers stay true.
+  Resizable without a spec → the model scales to fill width / depth. Height never stretches.
+  Works at rot_x 0 + rot_y in 90° steps; anything else doesn't stretch. Below the spec `min`
+  the model stops shrinking (the box doesn't — no handle limit yet). Abi Ohelu / Seba / Zalo
+  ticked + specs stored (catalogue + placed copies on the same file). Not checked in-app.
+
 - 2026-10-18 (user: "lets work through the known gaps"):
   - **Brand / model no. copied onto placed fixtures** — `room_fixtures.brand` + `model_no`
     (migration `fixtures_brand_snapshot`, applied live + backfilled; copy in

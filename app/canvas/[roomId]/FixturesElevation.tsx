@@ -12,6 +12,7 @@ import type { Pt } from '@/src/lib/geometry'
 import { wallFrame, type WallSide } from '@/src/lib/benchtopAnchor'
 import { wrapLabel } from '@/src/lib/textWrap'
 import { planShapePath } from '@/src/lib/fixturePlanShape'
+import { stretchedElevShape } from '@/src/lib/fixtureStretch'
 import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 import { roundMm } from '@/src/lib/format'
 
@@ -267,7 +268,7 @@ export default function FixturesElevation({
               stroke={fx.elev_shape?.lines.length ? 'none' : color} strokeWidth={lw} strokeDasharray={lp.strokeDasharray} />
             {fx.elev_shape?.lines.length ? (
               // Its own left is on the elevation's left when it faces this way; mirror if not.
-              <path d={planShapePath(fx.elev_shape, w, h)} fill="none" stroke={color} strokeWidth={lw} strokeLinejoin="round"
+              <path d={planShapePath(stretchedElevShape(fx.elev_shape, fx), w, h)} fill="none" stroke={color} strokeWidth={lw} strokeLinejoin="round"
                 strokeDasharray={lp.strokeDasharray}
                 transform={elevLeftSide(fx.rotation, f) === 'left' ? `translate(${x},${y})` : `translate(${x + w},${y}) scale(-1,1)`} />
             ) : fx.category === 'appliance' && (
