@@ -53,20 +53,28 @@ function flatMaterial(look: ModelLook, alpha: number) {
   })
 }
 
+// Our 3D views have no environment map, so a fully metallic material (metalness
+// 1 — what most manufacturer stainless exports use) has nothing to reflect and
+// renders near-black. Capping it keeps a share of the base colour (Abi Zalo sink,
+// Mark 2026-10-18: "very dark … mine be so much darker?").
+const MAX_METALNESS = 0.8
+
 function GlbSource({ url, children }: SourceProps) {
   const gltf = useGLTF(url)
-  // The GLB's own materials are shared by every instance, so clone them before
-  // going transparent.
+  // The GLB's own materials are shared by every instance (and cached by useGLTF),
+  // so clone them before changing anything.
   const alpha = useContext(PartAlphaContext)
   const cloned = useMemo(() => {
     const c = gltf.scene.clone(true)
     applyDoubleSide(c)
-    if (alpha < 1) c.traverse(o => {
+    c.traverse(o => {
       const m = o as THREE.Mesh
       if (!m.isMesh) return
       const mats = (Array.isArray(m.material) ? m.material : [m.material]).map(src => {
         const mat = (src as THREE.Material).clone()
-        mat.transparent = true; mat.opacity = alpha; mat.depthWrite = false
+        const std = mat as THREE.MeshStandardMaterial
+        if (typeof std.metalness === 'number' && std.metalness > MAX_METALNESS) std.metalness = MAX_METALNESS
+        if (alpha < 1) { mat.transparent = true; mat.opacity = alpha; mat.depthWrite = false }
         return mat
       })
       m.material = mats.length === 1 ? mats[0] : mats
