@@ -1,6 +1,7 @@
 # UBO — under-bench oven cabinet + cabinet contents
 
-Status: **U1 built 2026-10-18 (c82ba0b), in-app check pending.** RESUME HERE → U2.
+Status: **U1 + U2 built 2026-10-18 (c82ba0b, 2df4e62, e36fc3a), in-app check
+pending.** RESUME HERE → U3.
 
 A library base cabinet that comes out with an oven already inside it. Built
 natively (face grid + interior + carcass options), with the oven as a real
@@ -92,6 +93,20 @@ room / construction-method rule editors (group "Back"). Test:
   'bottom' | 'top' }`: resolver places the shelf so its **top face** = the
   bottom of that row's opening (or its bottom face = the top). Internal
   resolve reads the resolved face rows.
+
+*Also (2026-10-18, user):* with no back panel the interior runs to the box
+back — shelves, dividers, inner drawers, drawer slide depth (`caseBackT` in
+resolveCase.ts). A back rail on edge tapes its lower ('bottom') edge by
+default; an explicit `EDGING.back_rail` wins.
+
+*Built (U2):* `ResolvedCabinet.open_zones` (`ResolvedOpenZone` row / col / X
+/ Y / DX / DY — the face-grid cell; primary box front only, empty for shaped
+cabinets; not persisted, so canvas consumers must re-resolve or read the
+live resolve). `FixedShelfFitting.align_face_row` handled in fittings.ts
+`alignToFaceRows` before `positionFittings`; row edge from the open cell, else
+a front in that row. Missing row → `SHELF_FACE_ROW_MISSING`. **No editor UI
+yet** for align_face_row — set in data (UBO seed); add to the interior editor
+when custom appliance cabinets need it. Test: `openZones.test.ts`.
 
 **U3 — UBO library definition.** Seed `UBO` (copied from `B2D` for
 construction / materials / kick): 600 wide, face grid per D3, interior per D4,
