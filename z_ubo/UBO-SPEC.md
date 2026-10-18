@@ -1,6 +1,7 @@
 # UBO — under-bench oven cabinet + cabinet contents
 
-Status: **U1–U6 built 2026-10-18, in-app check pending.** RESUME HERE → U7 (in-app check).
+Status: **U1–U7 done 2026-10-18 — checked in-app by the user ("tested and works").**
+Next work goes under Open below.
 
 A library base cabinet that comes out with an oven already inside it. Built
 natively (face grid + interior + carcass options), with the oven as a real
@@ -192,4 +193,8 @@ cut list has the shelf + back rail and no back).
 
 ## Open
 
+- Small leftovers: headless `dbPlaceCabinetFromDefinition` doesn't spawn
+  contents; fixture-panel height edits are overridden while seated; no
+  interior-editor UI for `align_face_row`; shaped (footprint) cabinets ignore
+  `BACK_TYPE` and report no `open_zones`.
 - Later: `BSK` (sink + tap, point anchors), integrated D/W, `WOT` (two zones).
