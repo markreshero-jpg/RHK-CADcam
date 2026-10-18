@@ -31,7 +31,7 @@ export interface AnnotationLayerProps {
 
 /** rotate / width: text grips. vN: drag vertex N of a line, cloud or leader. mN: drag
  *  the midpoint of segment N→N+1 to insert a vertex there. cN: box / ellipse corner N. */
-export type AnnotGrip = 'rotate' | 'width' | `v${number}` | `m${number}` | `c${number}`
+export type AnnotGrip = 'rotate' | 'width' | 'offset' | `v${number}` | `m${number}` | `c${number}`
 
 export interface AnnotationEditProps {
   selectedIds: ReadonlySet<string>
@@ -133,11 +133,11 @@ function hitShape(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number,
 
 /** Vertex grips (circles) + midpoint insert grips (small diamonds) along a polyline.
  *  closed: a cloud — the last point joins back to the first. */
-function vertexGrips(id: string, pts: Pt[], edit: AnnotationEditProps, closed = false): React.ReactNode {
+function vertexGrips(id: string, pts: Pt[], edit: AnnotationEditProps, closed = false, mids = true): React.ReactNode {
   const hw = edit.hitWidth
   const down = (g: AnnotGrip) => (e: React.PointerEvent) => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, id, g) } }
   return <>
-    {(closed ? pts : pts.slice(0, -1)).map((p, i) => {
+    {mids && (closed ? pts : pts.slice(0, -1)).map((p, i) => {
       const q = pts[(i + 1) % pts.length], m = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, r = hw * 0.32
       return <path key={`m${i}`} d={`M${m.x} ${m.y - r}L${m.x + r} ${m.y}L${m.x} ${m.y + r}L${m.x - r} ${m.y}Z`}
         fill={SEL} fillOpacity={0.5} style={{ pointerEvents: 'all', cursor: 'copy' }} onPointerDown={down(`m${i}`)} />
@@ -178,6 +178,21 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
       {grip(rotG, 'rotate', true)}
       {g.width != null && grip(right, 'width', false)}
       {single && g.leader?.length ? vertexGrips(a.id, g.leader.map(p => mapPt(f, p)), edit) : null}
+    </>
+  }
+  // Dim: its two measured points, and a bar grip on the dim line to slide it in / out.
+  if (a.kind === 'dim' && single) {
+    const g = a.geom as DimGeom
+    if (!g?.p1 || !g?.p2) return null
+    const l = dimLayout(g)
+    const d1 = mapPt(f, l.d1), d2 = mapPt(f, l.d2), m = { x: (d1.x + d2.x) / 2, y: (d1.y + d2.y) / 2 }
+    const ang = Math.atan2(d2.y - d1.y, d2.x - d1.x) * 180 / Math.PI
+    return <>
+      {vertexGrips(a.id, [mapPt(f, g.p1), mapPt(f, g.p2)], edit, false, false)}
+      <rect x={m.x - hw * 0.7} y={m.y - hw * 0.25} width={hw * 1.4} height={hw * 0.5} rx={hw * 0.15}
+        transform={`rotate(${ang} ${m.x} ${m.y})`} fill="#0f172a" stroke={SEL} strokeWidth={hw / 6}
+        style={{ pointerEvents: 'all', cursor: 'move' }}
+        onPointerDown={e => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, a.id, 'offset') } }} />
     </>
   }
   if ((a.kind === 'line' || a.kind === 'cloud') && single) {

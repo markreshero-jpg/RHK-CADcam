@@ -1,6 +1,6 @@
 # CAD Annotation Tool — Spec
 
-Status: **A1–A4 built 2026-10-18 (plan: F7 CAD mode, ribbon, text / text box / leader / line / arrow / box / ellipse / cloud). A2 + A3 checked in-app by Mark; A4 check pending; A5 next.** All decisions below are Mark's
+Status: **A1–A5 built (plan: every v1 tool — text / text box / leader / line / arrow / box / ellipse / cloud / dimension). A2–A4 checked in-app by Mark; A5 check pending; A6 (elevations) next.** All decisions below are Mark's
 (2026-10-18). Open: how sheet notes react to cabinet revisions (decided at A7).
 
 > History: this folder used to hold the original Shape Editor handoff (May 2026). That
@@ -213,7 +213,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | A2 | Plan authoring: F7 CAD sidebar tool + **ribbon** under the view tabs, **Text** tool with full text styling (decision 7), colour picker, select/move/delete/copy, undo, snaps, last-used defaults, annotation scale on the ribbon; "Print annotation colours" report toggle; PDF text check | [x] built 2026-10-18; in-app check pending (PDF text check not done yet) |
 | A3 | **Arrow / line + text leaders** (full arrowhead set per end, dash types, weight, vertex grips) | [x] built 2026-10-18 (1865f72); in-app check pending |
 | A4 | **Box / ellipse / cloud** with fill (none / solid / tint) | [x] built 2026-10-18; in-app check pending |
-| A5 | **Manual dimension** (live value, text override, offset grip, arrowhead/tick ends) | [ ] |
+| A5 | **Manual dimension** (live value, text override, offset grip, arrowhead/tick ends) | [x] built 2026-10-19; in-app check pending |
 | A6 | **Elevations:** wall-local frame, canvas + Elevation Views report, wall-split remap | [ ] |
 | A7 | **Cabinet sheets:** ribbon on the sheet preview (decision 10), cabinet-local frame, sheet toggle, own undo; **decide the cabinet-revision behaviour first** | [ ] |
 | A8 | Room copy remap, tutorial lesson, mobile view check | [ ] |
@@ -332,4 +332,26 @@ A3 checked in-app by Mark 2026-10-18.
   paper mm, default 6) for clouds. The Fill group (none / solid / tint) was already
   there from A2.
 
-Next: A5 (manual dimension tool).
+A4 checked in-app by Mark 2026-10-19.
+
+**A5 built 2026-10-19** (in-app check pending).
+- **Tool:** Dimension (D). Click point 1, click point 2, move to pull the dim line out,
+  then click (or Enter) to place it. Points use the canvas snaps (cabinet corners,
+  wall ends…); the placing move snaps too, but with no 15° lock.
+- **Modes** (ribbon "Dim" group, per session, for new dims):
+  - **Linear** (default): `DimGeom.axis` 'x' / 'y'. The axis is picked from where
+    the line is pulled (`dimAxisFor`, DIMLINEAR-style: above / below = horizontal,
+    beside = vertical; sticky while the cursor is between the points). The offset is
+    then a y- / x-offset from p1.
+  - **Aligned:** no axis, as in A1.
+- **Text override:** ribbon field for a single selected dim. Blank = the measured
+  value; `<>` stands for it (`dimText`: "<> TBC" → "600 TBC").
+- **Text:** the size picker is in the Dim group. Vertical dim text now reads
+  bottom-to-top (`readableAngle` range is [-90, 90)).
+- **Grips:** p1 / p2 vertex grips (no midpoint inserts), plus a bar grip on the dim
+  line that slides its offset (`'offset'` grip, `dimOffsetFor`, axis kept).
+- Verified by a static render: linear horizontal + vertical with override, and
+  aligned.
+
+Next: A6 (elevations: wall-local frame, canvas + Elevation Views report, wall-split
+remap).

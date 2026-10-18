@@ -18,8 +18,10 @@ export interface TextGeom  { at: Pt; rot?: number; width?: number; leader?: Pt[]
 export interface LineGeom  { pts: Pt[] }
 export interface BoxGeom   { a: Pt; b: Pt; rot?: number }
 export interface CloudGeom { pts: Pt[] }
-/** offset: signed distance (frame mm) of the dim line from p1→p2, + = left of p1→p2. */
-export interface DimGeom   { p1: Pt; p2: Pt; offset: number }
+/** Aligned (no axis): offset = signed distance (frame mm) of the dim line from p1→p2,
+ *  + = left of p1→p2. Linear (A5): axis 'x' measures the horizontal span with the dim
+ *  line at y = p1.y + offset; axis 'y' the vertical span at x = p1.x + offset. */
+export interface DimGeom   { p1: Pt; p2: Pt; offset: number; axis?: 'x' | 'y' }
 export type AnnotationGeom = TextGeom | LineGeom | BoxGeom | CloudGeom | DimGeom
 
 /** frame → svg: svg = (ox + s·x, oy ± s·y). flipY for frames whose y runs up (elevation). */
@@ -222,6 +224,14 @@ export interface DimLayout {
 }
 
 export function dimLayout(g: DimGeom): DimLayout {
+  if (g.axis === 'x') {
+    const y = g.p1.y + g.offset
+    return { d1: { x: g.p1.x, y }, d2: { x: g.p2.x, y }, n: { x: 0, y: Math.sign(g.offset) || 1 }, value: Math.abs(g.p2.x - g.p1.x) }
+  }
+  if (g.axis === 'y') {
+    const x = g.p1.x + g.offset
+    return { d1: { x, y: g.p1.y }, d2: { x, y: g.p2.y }, n: { x: Math.sign(g.offset) || 1, y: 0 }, value: Math.abs(g.p2.y - g.p1.y) }
+  }
   const u = unit(sub(g.p2, g.p1))
   const n = { x: -u.y, y: u.x }
   return {
@@ -231,16 +241,42 @@ export function dimLayout(g: DimGeom): DimLayout {
   }
 }
 
-/** Text angle (deg, svg) for a line a→b, flipped so it never reads upside down. */
+/** Text angle (deg, svg) for a line a→b, flipped so it never reads upside down.
+ *  Range [-90, 90): vertical text reads bottom-to-top, as on drawings. */
 export function readableAngle(a: Pt, b: Pt): number {
   let ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI
-  if (ang > 90) ang -= 180
-  else if (ang <= -90) ang += 180
+  if (ang >= 90) ang -= 180
+  else if (ang < -90) ang += 180
   return ang
 }
 
+/** The measured value, unless overridden. `<>` in an override stands for the value
+ *  ("<> TBC" → "600 TBC"). */
 export function dimText(value: number, override: string | null | undefined): string {
-  return override?.trim() ? override : String(Math.round(value))
+  const v = String(Math.round(value))
+  if (!override?.trim()) return v
+  return override.includes('<>') ? override.split('<>').join(v) : override
+}
+
+/** Offset that puts a dim's line through `cur` (see DimGeom). */
+export function dimOffsetFor(g: Pick<DimGeom, 'p1' | 'p2' | 'axis'>, cur: Pt): number {
+  if (g.axis === 'x') return cur.y - g.p1.y
+  if (g.axis === 'y') return cur.x - g.p1.x
+  const u = unit(sub(g.p2, g.p1))
+  return (cur.x - g.p1.x) * -u.y + (cur.y - g.p1.y) * u.x
+}
+
+/** Linear dims pick their axis from where the line is pulled, like CAD's DIMLINEAR:
+ *  pulled above / below the two points = horizontal, beside them = vertical. */
+export function dimAxisFor(p1: Pt, p2: Pt, cur: Pt, prev: 'x' | 'y' = 'x'): 'x' | 'y' {
+  const minX = Math.min(p1.x, p2.x), maxX = Math.max(p1.x, p2.x)
+  const minY = Math.min(p1.y, p2.y), maxY = Math.max(p1.y, p2.y)
+  const outX = cur.x < minX ? minX - cur.x : cur.x > maxX ? cur.x - maxX : 0
+  const outY = cur.y < minY ? minY - cur.y : cur.y > maxY ? cur.y - maxY : 0
+  if (outY > 0 && outX === 0) return 'x'
+  if (outX > 0 && outY === 0) return 'y'
+  if (outX === 0 && outY === 0) return prev
+  return outY >= outX ? 'x' : 'y'
 }
 
 // ── Bounds (report viewBox) ──────────────────────────────────────────────────

@@ -75,7 +75,8 @@ describe('dimension', () => {
   })
   it('reads left-to-right and honours a text override', () => {
     expect(readableAngle({ x: 10, y: 0 }, { x: 0, y: 0 })).toBeCloseTo(0)
-    expect(readableAngle({ x: 0, y: 10 }, { x: 0, y: 0 })).toBe(90)
+    expect(readableAngle({ x: 0, y: 10 }, { x: 0, y: 0 })).toBe(-90)   // vertical reads bottom-to-top
+    expect(readableAngle({ x: 0, y: 0 }, { x: 0, y: 10 })).toBe(-90)
     expect(dimText(599.6, null)).toBe('600')
     expect(dimText(600, 'TBC')).toBe('TBC')
   })
@@ -182,5 +183,33 @@ describe('A4 boxes', () => {
   })
   it('rectangle cloud points', () => {
     expect(rectPts({ x: 0, y: 0 }, { x: 1, y: 1 })).toHaveLength(4)
+  })
+})
+
+import { dimOffsetFor, dimAxisFor } from '../annotations/geometry'
+
+describe('A5 manual dims', () => {
+  it('linear dims measure one axis only', () => {
+    const h = dimLayout({ p1: { x: 0, y: 0 }, p2: { x: 600, y: 300 }, offset: -100, axis: 'x' })
+    expect(h.value).toBe(600)
+    expect(h.d1).toEqual({ x: 0, y: -100 }); expect(h.d2).toEqual({ x: 600, y: -100 })
+    const v = dimLayout({ p1: { x: 0, y: 0 }, p2: { x: 600, y: 300 }, offset: 700, axis: 'y' })
+    expect(v.value).toBe(300)
+    expect(v.d2).toEqual({ x: 700, y: 300 })
+  })
+  it('offset follows the cursor for every mode', () => {
+    expect(dimOffsetFor({ p1: { x: 0, y: 0 }, p2: { x: 10, y: 0 }, axis: 'x' }, { x: 5, y: -40 })).toBe(-40)
+    expect(dimOffsetFor({ p1: { x: 0, y: 0 }, p2: { x: 10, y: 0 }, axis: 'y' }, { x: 30, y: 5 })).toBe(30)
+    expect(dimOffsetFor({ p1: { x: 0, y: 0 }, p2: { x: 10, y: 0 } }, { x: 5, y: 20 })).toBeCloseTo(20)
+  })
+  it('axis comes from where the line is pulled', () => {
+    const a = { x: 0, y: 0 }, b = { x: 600, y: 300 }
+    expect(dimAxisFor(a, b, { x: 300, y: -200 })).toBe('x')
+    expect(dimAxisFor(a, b, { x: 900, y: 150 })).toBe('y')
+    expect(dimAxisFor(a, b, { x: 300, y: 150 }, 'y')).toBe('y')
+  })
+  it('<> in an override stands for the value', () => {
+    expect(dimText(600.2, '<> TBC')).toBe('600 TBC')
+    expect(dimText(600, 'approx <> (<>)')).toBe('approx 600 (600)')
   })
 })

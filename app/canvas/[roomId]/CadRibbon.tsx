@@ -28,10 +28,7 @@ const TOOLS: { id: CadTool; label: string; key: string; icon: React.ReactNode }[
   { id: 'rect',    label: 'Box — drag corner to corner', key: 'R', icon: <rect x="3" y="4" width="10" height="8" /> },
   { id: 'ellipse', label: 'Ellipse — drag out its frame', key: 'E', icon: <ellipse cx="8" cy="8" rx="5.5" ry="4" /> },
   { id: 'cloud',   label: 'Revision cloud — drag a rectangle, or click the corners of a freehand one (double-click / Enter to close)', key: 'C', icon: <path d="M4 11a2 2 0 010-4 2.5 2.5 0 014-2 2.5 2.5 0 014 1.5 2 2 0 010 4.5z" /> },
-]
-// Later phases (A5) — shown so the ribbon's shape is settled, not clickable yet.
-const LATER: { label: string; phase: string; icon: React.ReactNode }[] = [
-  { label: 'Dimension', phase: 'A5', icon: <><path d="M2 8h12M2 5v6M14 5v6" /></> },
+  { id: 'dim',     label: 'Dimension — click two points, then click where the dimension line sits', key: 'D', icon: <><path d="M2 8h12M2 5v6M14 5v6" /></> },
 ]
 
 const keep = (e: React.MouseEvent) => e.preventDefault()
@@ -117,7 +114,7 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
   const arrows = kind === 'line' || kind === 'dim'
   const nSel = cad.selected.length
   const NEXT: Record<CadTool, string> = {
-    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud',
+    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud', dim: 'dimension',
   }
   const what = cad.editing ? (cad.editing.isNew ? 'New text' : 'Editing text')
     : nSel > 1 ? `${nSel} selected` : nSel === 1 ? `Selected ${kind === 'text' && (cad.selected[0].geom as { width?: number }).width != null ? 'text box' : kind}`
@@ -126,6 +123,8 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
   const drawHint = !cad.drawing ? null
     : cad.drawing.attachId ? 'Click where the leader points · Esc cancels'
     : cad.drawing.tool === 'leader' ? 'Click where the text goes · Esc cancels'
+    : cad.drawing.tool === 'dim' ? (cad.drawing.pts.length < 2 ? 'Click the second point · Esc cancels'
+      : 'Move to pull the dimension out · click (or Enter) to place · Esc cancels')
     : 'Click the next point · double-click / Enter / right-click finishes · Backspace steps back · Esc cancels'
 
   return (
@@ -137,9 +136,6 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
         <Btn key={t.id} on={cad.tool === t.id} title={`${t.label} (${t.key})`} onClick={() => cad.setTool(t.id)} disabled={!viewSupported} tour={`cad-${t.id}`}>
           <Icon>{t.icon}</Icon>
         </Btn>
-      ))}
-      {LATER.map(t => (
-        <Btn key={t.label} title={`${t.label} — coming in ${t.phase}`} disabled><Icon>{t.icon}</Icon></Btn>
       ))}
 
       {!viewSupported ? (
@@ -222,6 +218,22 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
               options={WEIGHTS.map(w => ({ id: w, label: `${w} mm` }))} />
             <Pick title="Line type" value={s.dash} onChange={v => set({ dash: v })} options={DASHES} />
           </Group>
+          {kind === 'dim' && (<>
+            <Sep />
+            <Group label="Dim">
+              <Pick title="Dimension type for new dims: linear = horizontal / vertical (from where you pull it), aligned = along the two points"
+                value={cad.dimMode} onChange={v => cad.setDimMode(v)}
+                options={[{ id: 'linear', label: 'Linear' }, { id: 'aligned', label: 'Aligned' }]} />
+              <Pick title="Dimension text height (paper mm)" value={(TEXT_SIZES as readonly number[]).includes(s.size) ? s.size : 0}
+                options={[...TEXT_SIZES.map(n => ({ id: n as number, label: `${n} mm` })), { id: 0, label: 'Custom' }]}
+                onChange={n => { if (n) set({ size: n }) }} />
+              {nSel === 1 && (
+                <input title="Text override — blank shows the measured length; <> stands for it (e.g. '<> TBC')"
+                  placeholder="Measured" value={cad.selected[0].text ?? ''} onChange={e => cad.applyDimText(e.target.value)}
+                  className="w-24 h-6 shrink-0 bg-gray-800 border border-gray-700 rounded px-1 text-xs text-gray-100 outline-none focus:border-rose-500" />
+              )}
+            </Group>
+          </>)}
           {arrows && (<>
             <Sep />
             <Group label="Ends">
