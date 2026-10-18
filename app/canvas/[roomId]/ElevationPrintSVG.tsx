@@ -14,7 +14,7 @@ import type { Room, Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
 import { openingOnWall } from '@/src/lib/fixtureGeometry'
 import { OpeningElev } from './FixturesElevation'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
-import { cabT, wallEnd, dist, cabWallSide, centroid } from '@/src/lib/geometry'
+import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ } from '@/src/lib/geometry'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone,
   ResolvedInternalPart, ResolvedDrawerStack, ResolvedDrawerBoxPart, ResolvedDrawerSlide,
@@ -82,17 +82,6 @@ function slideElevRect(s: ResolvedDrawerSlide) {
   return { ex: s.X, ey: s.Y + s.DY, ew: s.DZ, eh: s.DY }
 }
 
-// soffit_height (wall and room) = depth from top; wall_cabinet_top = height from floor.
-function wallCabTopFor(w: Wall | null, room: Room): number {
-  const soffit = w?.soffit_height ?? room.soffit_height
-  if (soffit != null) return (w?.height ?? room.room_dy ?? 2400) - soffit
-  return room.wall_cabinet_top ?? 2100
-}
-function cabBottomZ(cab: CabinetInstance, room: Room, elevWall: Wall | null): number {
-  if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner')
-    return wallCabTopFor(elevWall, room) - cab.dy
-  return cab.pos_z ?? 0   // floor units sit at pos_z (raised when kick-detached)
-}
 
 type Seg = { from: number; to: number; label: number }
 function computeElevChain(cabs: CabinetInstance[], wall: Wall): Seg[] {
@@ -480,7 +469,8 @@ export default function ElevationPrintSVG({
   function refs() {
     const soffitDrop = wall.soffit_height ?? room.soffit_height
     const soffitH = soffitDrop != null ? (wall.height ?? roomH) - soffitDrop : null
-    const wcTop = room.wall_cabinet_top ?? null
+    // A soffit overrides the room's wall-cab top, so that line only shows without one.
+    const wcTop = soffitDrop == null ? room.wall_cabinet_top ?? null : null
     return (
       <g pointerEvents="none">
         {/* Ceiling */}
@@ -509,7 +499,7 @@ export default function ElevationPrintSVG({
       ? (resolvedParts?.get(baseCabEl.id)?.toekick_parts.find(p => p.part_key === 'kick_front_face')?.DX ?? 150)
       : 0
     const baseDy = baseCabEl?.dy ?? 0
-    const wallCabTop = wallCabTopFor(wall, room)
+    const wcTopZ = wallCabTop(wall, room)
     const overheadDy = overheadCabEl?.dy ?? 0
 
     const segs: { fromY: number; toY: number; label: string }[] = []
@@ -520,8 +510,8 @@ export default function ElevationPrintSVG({
       segs.push({ fromY: baseCarcTopY, toY: cursorY, label: `${baseDy - kickH}` }); cursorY = baseCarcTopY
     }
     if (overheadDy > 0) {
-      const overheadBotY = roomH - (wallCabTop - overheadDy)
-      const overheadTopY = roomH - wallCabTop
+      const overheadBotY = roomH - (wcTopZ - overheadDy)
+      const overheadTopY = roomH - wcTopZ
       if (overheadBotY < cursorY - 0.5) segs.push({ fromY: overheadBotY, toY: cursorY, label: `${Math.round(cursorY - overheadBotY)}` })
       segs.push({ fromY: overheadTopY, toY: overheadBotY, label: `${overheadDy}` }); cursorY = overheadTopY
     }

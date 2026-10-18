@@ -39,6 +39,18 @@ export function wallCabTop(wall: Wall | null | undefined, room: Room): number {
   return room.wall_cabinet_top ?? 2100
 }
 
+// Height (mm from floor) of a cabinet's underside — the one rule every view
+// (elevation, print, section, 3D, object tree, panels) uses. Wall units hang
+// down from the wall-cabinet-top line (their pos_z is only a cache of this);
+// floor units sit at pos_z (0 unless raised — a kick-detached member is lifted
+// by the kick height).
+export function cabBottomZ(cab: CabinetInstance, room: Room, wall?: Wall | null): number {
+  if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') {
+    return wallCabTop(wall, room) - cab.dy
+  }
+  return cab.pos_z ?? 0
+}
+
 // Vertical extent [bottomZ, topZ] of a cabinet given its class + height. Base and
 // tall units sit on the floor; wall units hang down from the wall-cabinet-top line.
 export function cabVExtent(cls: string, dy: number, wall: Wall | null | undefined, room: Room): [number, number] {

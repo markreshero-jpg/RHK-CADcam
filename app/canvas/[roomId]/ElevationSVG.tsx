@@ -3,7 +3,7 @@ import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
-import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, SNAP_PX, type Pt } from '@/src/lib/geometry'
+import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, SNAP_PX, wallCabTop, cabBottomZ, type Pt } from '@/src/lib/geometry'
 import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode, MIN_STRETCH } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
@@ -110,28 +110,6 @@ function slideElevRect(s: ResolvedDrawerSlide) {
   return { ex: s.X, ey: s.Y + s.DY, ew: s.DZ, eh: s.DY }
 }
 
-
-// soffit_height (wall AND room level) is stored as depth FROM THE TOP
-// (e.g. 300 = soffit drops 300mm from ceiling). Convert to height-from-floor:
-// wallHeight - soffit_height. room.wall_cabinet_top is height-from-floor.
-function wallCabTopFor(w: Wall | null, room: Room): number {
-  const soffit = w?.soffit_height ?? room.soffit_height
-  if (soffit != null) {
-    const wallH = w?.height ?? room.room_dy ?? 2400
-    return wallH - soffit
-  }
-  return room.wall_cabinet_top ?? 2100
-}
-
-function cabBottomZ(cab: CabinetInstance, room: Room, elevWall?: Wall | null): number {
-  if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') {
-    return wallCabTopFor(elevWall ?? null, room) - cab.dy
-  }
-  // Floor units sit on the floor (pos_z = 0) unless raised — a kick-detached member
-  // is lifted by the kick height (pos_z) so its carcase stays where it was while the
-  // standalone kick assembly fills the floor band beneath it.
-  return cab.pos_z ?? 0
-}
 
 // xOf = the cabinet's left edge in elevation x (mirrored on the back side).
 function computeElevChain(cabs: CabinetInstance[], wall: Wall, xOf: (c: CabinetInstance) => number) {
@@ -697,7 +675,7 @@ export default function ElevationSVG({
     if (!cab) { setElevCabFollowing(null); setElevCabFloat(null); return }
 
     const isWallCab = cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner'
-    const wcTop = wallCabTopFor(wall, room)
+    const wcTop = wallCabTop(wall, room)
     // Floor units keep their current vertical position (pos_z) on a move — normally 0,
     // but a kick-detached member is raised by the kick height and must stay raised,
     // otherwise it drops back onto its kick assembly and looks re-attached.
@@ -1004,7 +982,7 @@ export default function ElevationSVG({
               const soffitH = soffitDrop != null
                 ? (wall.height ?? roomH) - soffitDrop
                 : null
-              const wcTop   = room.wall_cabinet_top ?? null
+              const wcTop   = soffitDrop == null ? room.wall_cabinet_top ?? null : null  // a soffit overrides it
               return (<>
                 <line x1={0} y1={0} x2={wall.length} y2={0}
                   stroke="#374151" strokeWidth={1 / lz}
@@ -1738,7 +1716,7 @@ export default function ElevationSVG({
             {/* Placement ghost — floating at cursor + snap landing */}
             {placeGhost && (() => {
               const isWallCls = placeGhost.cls === 'wall' || placeGhost.cls === 'wall_corner'
-              const wcTop = wallCabTopFor(wall, room)
+              const wcTop = wallCabTop(wall, room)
               const ghostBZ = isWallCls ? Math.max(0, wcTop - placeGhost.dy) : 0
 
               // Snap landing (snapped free slot, correct height)
@@ -1826,7 +1804,7 @@ export default function ElevationSVG({
               if (!followingCab || !wall) return null
 
               const isWallCab = followingCab.assembly_class === 'wall' || followingCab.assembly_class === 'wall_corner'
-              const wcTop = wallCabTopFor(wall, room)
+              const wcTop = wallCabTop(wall, room)
               const snapBottomZ = isWallCab ? Math.max(0, wcTop - followingCab.dy) : 0
 
               // Ghost centred on cursor
@@ -2102,7 +2080,7 @@ export default function ElevationSVG({
               // Carcase bottom above the floor + carcase height.
               const carcBottom = isDetachedMemberBase ? (baseCabEl!.pos_z ?? 0) : kickH
               const carcDy     = isDetachedMemberBase ? baseDy : (baseDy - kickH)
-              const wallCabTop = wallCabTopFor(wall, room)
+              const wcTopZ = wallCabTop(wall, room)
               const overheadDy = overheadCabEl?.dy ?? 0
 
               const segs: { fromY: number; toY: number; label: string }[] = []
@@ -2127,8 +2105,8 @@ export default function ElevationSVG({
               }
 
               if (overheadDy > 0) {
-                const overheadBotY = roomH - (wallCabTop - overheadDy)
-                const overheadTopY = roomH - wallCabTop
+                const overheadBotY = roomH - (wcTopZ - overheadDy)
+                const overheadTopY = roomH - wcTopZ
                 if (overheadBotY < cursorY - 0.5) {
                   segs.push({ fromY: overheadBotY, toY: cursorY, label: `${Math.round(cursorY - overheadBotY)}` })
                 }

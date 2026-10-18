@@ -4,7 +4,7 @@
 // cabinet on the active wall and the four corners of the wall face itself.
 
 import type { Pt } from './geometry'
-import { dist, snapAngle, cabT } from './geometry'
+import { dist, snapAngle, cabT, cabBottomZ } from './geometry'
 import type { Wall, Room, CabinetInstance } from './types'
 
 export type ElevSnapKind = 'cabinet-corner' | 'part-corner' | 'wall-corner'
@@ -43,22 +43,8 @@ export interface ElevSnapResult {
 
 export interface ElevSnapModifiers { ortho?: boolean; ortho45?: boolean }
 
-// soffit_height (wall and room level) stored as depth-from-top; convert to height-from-floor.
-function wallCabTopFor(wall: Wall, room: Room): number {
-  const soffit = wall.soffit_height ?? room.soffit_height
-  if (soffit != null) {
-    const wallH = wall.height ?? room.room_dy ?? 2400
-    return wallH - soffit
-  }
-  return room.wall_cabinet_top ?? 2100
-}
-
-export function cabBottomZ(cab: CabinetInstance, room: Room, wall: Wall): number {
-  if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') {
-    return wallCabTopFor(wall, room) - cab.dy
-  }
-  return cab.pos_z ?? 0   // floor units sit at pos_z (raised when kick-detached)
-}
+// The shared vertical rule lives in geometry.ts — re-exported for existing importers.
+export { cabBottomZ }
 
 // 4 cabinet corners in elevation coords (top-left, top-right, bottom-left, bottom-right).
 // back = viewing the wall's back side: the wall runs right-to-left, so x is mirrored.

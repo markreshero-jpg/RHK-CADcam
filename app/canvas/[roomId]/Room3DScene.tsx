@@ -12,7 +12,7 @@ import type { BtElevInfo } from './BenchtopElevation'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
-  wallDir, wallInwardNormal, cabWallSide, centroid, wallEnd, lineIntersect, dist, wallPieces, wallSpanQuad,
+  wallDir, wallInwardNormal, cabWallSide, centroid, wallEnd, lineIntersect, dist, wallPieces, wallSpanQuad, cabBottomZ,
 } from '@/src/lib/geometry'
 import { openingOnWall } from '@/src/lib/fixtureGeometry'
 import type { Pt, RoomRef } from '@/src/lib/geometry'
@@ -30,14 +30,6 @@ const TO_RAD = Math.PI / 180
 const FOV    = 40
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function cabFloorY(cab: CabinetInstance, room: Room): number {
-  if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner')
-    return (room.wall_cabinet_top ?? 2100) - cab.dy
-  // Floor units sit at pos_z (0 unless raised — a kick-detached member is lifted by
-  // the kick height so its carcase stays put while the kick assembly fills below).
-  return cab.pos_z ?? 0
-}
 
 // Same logic as wallMitrePolygon; returns [startInside, endInside, endOutside, startOutside]
 function mitreCorners(w: Wall, walls: Wall[], rc: RoomRef): [Pt, Pt, Pt, Pt] {
@@ -327,7 +319,7 @@ function CabinetMesh({ cab, wall, rc, room, selected, onSelect, onContextMenu, r
   const isNaturalPerp = (perp.x * (-Math.sin(angleRad)) + perp.y * Math.cos(angleRad)) >= 0
   const needTurn = isNaturalPerp === isFlipped
 
-  const floorY = cabFloorY(cab, room)
+  const floorY = cabBottomZ(cab, room, wall)
   const rotY   = -angleRad + (needTurn ? Math.PI : 0)
   // Turned: local +X runs back along the wall, so the origin is the span's far end.
   const originX = cab.pos_x + (needTurn ? cab.dx * wd.x : 0)

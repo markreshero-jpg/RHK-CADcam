@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import type { Room, Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
+import { cabBottomZ } from '@/src/lib/geometry'
 import type { ResolvedCabinet, ResolvedSeamJoint, JointTypeOp } from '@/src/lib/resolver/types'
 import {
   dbLoadPartPosOverrides, dbSavePartPosOverride, dbDeletePartPosOverride,
@@ -47,7 +48,7 @@ type PartPayload = {
   cabinetId: string
   wall: Wall
   // cabinet position fields (for room-space transform)
-  cabPosX: number; cabPosY: number; cabPosZ: number
+  cabPosX: number; cabPosY: number; cabPosZ: number   // cabPosZ = underside height (cabBottomZ)
   cabDy: number; cabClass: string
   partId: string
   localX: number; localY: number; localZ: number
@@ -158,7 +159,7 @@ function buildTree(
       const groups: TreeNode[] = []
 
       if (rp) {
-        const cabPos = { cabPosX: cab.pos_x, cabPosY: cab.pos_y, cabPosZ: cab.pos_z, cabDy: cab.dy, cabClass: cab.assembly_class }
+        const cabPos = { cabPosX: cab.pos_x, cabPosY: cab.pos_y, cabPosZ: cabBottomZ(cab, room, wall), cabDy: cab.dy, cabClass: cab.assembly_class }
         const cabOv = overrides.get(cab.id)
 
         // ── Case ──────────────────────────────────────────────────────────────
@@ -519,8 +520,7 @@ function PropertiesPanel({
   if (node.kind === 'part') {
     const n = node
     const θ = node.wall.angle * Math.PI / 180
-    const floorY = (node.cabClass === 'wall' || node.cabClass === 'wall_corner')
-      ? (room.wall_cabinet_top ?? 2100) - node.cabDy : 0
+    const floorY = node.cabPosZ
     const c = Math.cos(θ), s = Math.sin(θ)
     const roomX = Math.round(node.cabPosX + node.localX * c - node.localZ * s)
     const roomY = Math.round(floorY + node.localY)

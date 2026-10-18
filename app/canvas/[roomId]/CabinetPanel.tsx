@@ -4,7 +4,7 @@ import PanelDeleteButton, { PanelCloseButton } from './PanelDeleteButton'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
-import { cabT, wallDir, findFreeSlot, cabsBlock } from '@/src/lib/geometry'
+import { cabT, wallDir, findFreeSlot, cabsBlock, cabBottomZ } from '@/src/lib/geometry'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetShapeSection from './CabinetShapeSection'
@@ -61,10 +61,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
     }
   })() : null
 
-  const isWallClass = cabinet.assembly_class === 'wall' || cabinet.assembly_class === 'wall_corner'
-  const elevFromFloor = isWallClass && cabinet.pos_z === 0
-    ? Math.round((room?.wall_cabinet_top ?? 2100) - cabinet.dy)
-    : cabinet.pos_z
+  const elevFromFloor = room ? Math.round(cabBottomZ(cabinet, room, wall)) : cabinet.pos_z
 
   return (
     <div className="w-72 bg-gray-900 border-l border-gray-800 flex flex-col overflow-y-auto">

@@ -3,7 +3,7 @@ import { useState, useReducer, useRef, useEffect } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import type { Wall, CabinetInstance, Room } from '@/src/lib/types'
 import type { Pt } from '@/src/lib/geometry'
-import { wallDir, wallCorners, wallInwardNormal, centroid, cabWallPerp } from '@/src/lib/geometry'
+import { wallDir, wallCorners, wallInwardNormal, centroid, cabWallPerp, wallCabTop, cabBottomZ } from '@/src/lib/geometry'
 import { viewReducer } from './canvasTypes'
 import type { SectionCut } from './canvasTypes'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
@@ -62,19 +62,6 @@ function cabWorldCorners(cab: CabinetInstance, wall: Wall, perp: Pt): Pt[] {
     { x: cab.pos_x + d.x * cab.dx + perp.x * cab.dz, y: cab.pos_y + d.y * cab.dx + perp.y * cab.dz },
     { x: cab.pos_x + perp.x * cab.dz, y: cab.pos_y + perp.y * cab.dz },
   ]
-}
-
-function wallCabTopFor(w: Wall | null, room: Room): number {
-  const soffit = w?.soffit_height ?? room.soffit_height
-  if (soffit != null) return (w?.height ?? room.room_dy ?? 2400) - soffit
-  return room.wall_cabinet_top ?? 2100
-}
-
-function cabBottomZ(cab: CabinetInstance, room: Room, wall: Wall | null): number {
-  if (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner') {
-    return wallCabTopFor(wall, room) - cab.dy
-  }
-  return cab.pos_z ?? 0   // floor units sit at pos_z (raised when kick-detached)
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
