@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import CabinetFixtureCard from './CabinetFixtureCard'
+import { useTutorial } from '@/src/lib/tutorial/store'
 import type { LocalFixtureBox } from '@/src/lib/cabinetContents'
 import type { FixtureCatalogItem } from '@/src/lib/types'
 import type { CabinetInstance, Wall } from '@/src/lib/types'
@@ -198,7 +199,11 @@ export default function CabinetEditModal({
   onFixtureRemove?: (fixtureId: string) => void | Promise<void>
   onFixtureSelectOnCanvas?: (fixtureId: string) => void
 }) {
-  const [selFixtureId, setSelFixtureId] = useState<string | null>(null)
+  const [selFixtureId, setSelFixtureIdRaw] = useState<string | null>(null)
+  const setSelFixtureId = (id: string | null) => {
+    setSelFixtureIdRaw(id)
+    if (id) useTutorial.getState().emit('cab_fixture_pick')   // tutorial ubo_oven
+  }
   const selFixture = fixtures?.find(b => b.f.id === selFixtureId)?.f ?? null
   // Phones (z_mobile/MOBILE-SPEC.md): full screen, properties panel is a narrow
   // drawer over the views with an edge tab to hide / show it.

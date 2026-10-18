@@ -105,6 +105,8 @@ const selectedCab = (c: TutorialCtx) => c.selected?.type === 'cabinet' ? c.cabin
 const jointEdges = (c: TutorialCtx) => c.benchtops.reduce((n, b) => n + b.segments.filter(s => s.edge?.joint).length, 0)
 const profiledEdges = (c: TutorialCtx) => c.benchtops.reduce((n, b) => n + b.segments.filter(s => s.edge?.profile_id).length, 0)
 const sinks = (c: TutorialCtx) => c.fixtures.filter(f => f.category === 'sink')
+/** Fixtures seated in a cabinet's opening (cabinet contents, z_ubo). */
+const seated = (c: TutorialCtx) => c.fixtures.filter(f => f.cabinet_id && f.link_zone).length
 
 /** Two standard walls joined end to start — the corner of an L. */
 function cornerWalls(c: TutorialCtx): [Wall, Wall] | null {
@@ -473,6 +475,28 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'finish', title: 'Leave CAD mode',
       body: 'Press F7 again, or Esc until the ribbon closes. Your notes print on the Plan View report; tick Annotation colours there to print them in colour.',
       canvas: true, done: c => c.mode !== 'cad' },
+  ]},
+
+  // Appended 2026-10-18 (z_ubo U1–U6 — cabinets that come with fixtures inside).
+  { id: 'ubo_oven', level: 'intermediate', topic: 'appliances', title: 'Under-bench oven cabinet',
+    blurb: 'Place a UBO — it comes with the oven already in it.',
+    keywords: 'ubo oven under bench underbench housing appliance cabinet contents fixture inside swap save library', steps: [
+    { id: 'pick', title: 'Pick the UBO cabinet',
+      body: 'Open Cabinet in the sidebar (F3), go into Appliances and click UBO. It follows your cursor like any cabinet.',
+      target: 'tool-cabinet', canvas: true, done: c => c.mode.startsWith('place_') && c.mode !== 'place_fixture' },
+    { id: 'drop', title: 'Place it on a wall',
+      body: 'Drop it against a wall in your base run. A moment after it lands, the oven appears in its opening, sitting on the oven shelf with its front flush with the panels.',
+      canvas: true, done: (c, s) => seated(c) > seated(s),
+      hints: c => wallHint(mainRunWall(c) ?? longestWall(c), 'Put the oven cabinet in this run') },
+    { id: 'edit', title: 'Open the cabinet editor',
+      body: 'Double-click the UBO. The oven shows inside the cabinet in the 3D, Elevation, Top and Side tabs. There is no back panel, just a rail at the top back.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'oven', title: 'Click the oven',
+      body: 'In the 3D or Elevation tab, click the oven. Its card lets you swap it for another oven, remove it, or jump to it on the canvas.',
+      canvas: true, done: (c, s) => ev(c, 'cab_fixture_pick') > ev(s, 'cab_fixture_pick') },
+    { id: 'close', title: 'Close the editor',
+      body: 'Close the editor. Resize or move the UBO and the oven goes with it; delete it and the oven goes too. Set up your own appliance cabinet the same way (drop fixtures onto a cabinet), then use Save to library and it comes out with them.',
+      canvas: true, done: c => !c.cabEditorOpen },
   ]},
 ]
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useTutorial } from '../tutorial/store'
 import { LESSONS, EMPTY_CTX, searchLessons } from '../tutorial/lessons'
-import type { Wall, CabinetInstance, BenchtopInstance, RoomAnnotation } from '../types'
+import type { Wall, CabinetInstance, BenchtopInstance, RoomAnnotation, RoomFixture } from '../types'
 
 const wall = (id: string, angle: number, x = 0, y = 0, wall_type: Wall['wall_type'] = 'standard'): Wall => ({
   id, room_id: 'r', name: id, sort_order: 0, length: 3000, height: null, soffit_height: null,
@@ -149,6 +149,25 @@ describe('tutorial store', () => {
     expect(st().step).toBe(5)
     st().setCtx({ mode: 'select' })
     expect(st().step).toBe(6)
+  })
+
+  it('UBO oven: pick, drop (oven seated), editor, click the oven, close', () => {
+    const oven = { id: 'o1', category: 'appliance', cabinet_id: 'c1', link_zone: { row_index: 1, col_index: 0, y: 220 } } as unknown as RoomFixture
+    const loose = { id: 'd1', category: 'appliance', cabinet_id: null, link_zone: null } as unknown as RoomFixture
+    st().setCtx({ path: '/canvas/x', inCanvas: true, fixtures: [loose] })
+    st().setEnabled(true)
+    st().goTo(lessonIdx('ubo_oven'))
+    st().setCtx({ mode: 'place_cabinet' })
+    expect(st().step).toBe(1)
+    st().setCtx({ mode: 'select', fixtures: [loose, { ...loose, id: 'd2' }] })
+    expect(st().step).toBe(1) // a free-standing appliance isn't a seated oven
+    st().setCtx({ fixtures: [loose, oven] })
+    expect(st().step).toBe(2)
+    st().setCtx({ cabEditorOpen: true })
+    st().emit('cab_fixture_pick')
+    expect(st().step).toBe(4)
+    st().setCtx({ cabEditorOpen: false })
+    expect(st().step).toBe(5)
   })
 
   it('a PDF download ticks the print step', () => {
