@@ -25,3 +25,17 @@ SELECT 'BFK', assembly_class, construction_method_id, default_dx, default_dy, de
   preserve_dx, preserve_dy, preserve_dz, footprint, faces
 FROM cabinet_definitions WHERE name = 'BFF'
   AND NOT EXISTS (SELECT 1 FROM cabinet_definitions WHERE name = 'BFK');
+
+-- Follow-up (2026-10-18): kick fillers carry their own kick so Join Kicks picks
+-- them up (eligibleForKickRun needs has_toekick). Formulas switch to cab.kick:
+-- standalone, cab.kick = TOEH → panel on the kick; once joined, the detach
+-- transform raises the member by the kick and drops has_toekick (cab.kick = 0),
+-- so y = 0 / dy = cab.h keeps the panel in the same place. (r.TOEH would
+-- double-raise it.) BFKANG already has has_toekick = true.
+UPDATE cabinet_definitions SET has_toekick = true,
+  custom_parts = (SELECT jsonb_agg(jsonb_set(jsonb_set(e,
+      '{expressions,y}',  '"cab.kick"'::jsonb),
+      '{expressions,dy}', '"cab.h - cab.kick"'::jsonb))
+    FROM jsonb_array_elements(custom_parts) e),
+  description = 'Base filler, at kick height — carries its own kick (joins into kick runs); panel sits on the kick: y = cab.kick, height = cabinet height less kick. Width = assembly width (70 default).'
+WHERE name = 'BFK';
