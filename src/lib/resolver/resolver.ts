@@ -48,10 +48,13 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
 
   // ── 3. Face Module ────────────────────────────────────────────
   // Resolve face first — internal module needs face zone Y positions
-  const { rows, cols, zones, errors: faceErrors } = cab.has_face
+  const { rows, cols, zones, open_zones: openZones = [], errors: faceErrors } = cab.has_face
     ? (cab.footprint ? resolveShapedFaces(cab, r) : resolveFace(cab, r))
     : { rows: [], cols: [], zones: [], errors: [] }
   allErrors.push(...faceErrors)
+  // Shaped fronts keep facet zones in their own frames — open cells reported
+  // for the primary box front only.
+  const openCells = cab.footprint ? [] : openZones
   // One grip per door / drawer front from the handle schedule (z_handles H1).
   resolveHandles(cab, zones)
   // Face fillers with the support carcass off: return cleats (z_angled_filler).
@@ -64,7 +67,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
 
   // ── 4. Internal Module ────────────────────────────────────────
   let internal = cab.has_internal
-    ? resolveInternalParts(cab, r, cab.footprint ? [] : zones)
+    ? resolveInternalParts(cab, r, cab.footprint ? [] : zones, { openZones: openCells })
     : { parts: [], slides: [], errors: [], autoDouble: undefined }
   // A pull-out bin on the floor (z_bin_cabinet B3): inner drawers / pull-outs
   // start above it. The bin pick needs the dividers, so plan it off the first
@@ -74,7 +77,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     const planRails = cab.has_carcass ? fingerRails(cab, r, zones, caseParts, divs).rails : []
     const binTop = Math.max(-Infinity, ...resolveDrawerStacks(cab, r, zones, undefined, divs, planRails)
       .stacks.filter(s => s.drawer_type === 'bin').map(s => s.box_Y + s.box_height))
-    if (Number.isFinite(binTop)) internal = resolveInternalParts(cab, r, zones, { fittingFloorY: binTop + r.BINGAP })
+    if (Number.isFinite(binTop)) internal = resolveInternalParts(cab, r, zones, { fittingFloorY: binTop + r.BINGAP, openZones: openCells })
   }
   const { parts: rectInternalParts, slides: internalSlides, errors: internalErrors, autoDouble } = internal
   const internalParts = cab.footprint ? shapeShelves(cab, r, rectInternalParts) : rectInternalParts
@@ -149,6 +152,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     face_rows:       rows,
     face_cols:       cols,
     face_zones:      zones,
+    ...(openCells.length ? { open_zones: openCells } : {}),
     drawer_stacks:   drawerStacks,
     seam_joints:     seamJoints,
     hinge_instances: hingeInstances,

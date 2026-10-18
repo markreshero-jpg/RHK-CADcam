@@ -44,6 +44,9 @@ export interface FittingCtx {
   TS:       number   // shelf material thickness
   intD:     number   // interior depth
   intBack:  number   // cabinet Z of the interior back face (back panel inner face)
+  // Cabinet Y of a face row's bottom / top edge (z_ubo U2 align_face_row).
+  // Undefined when the row isn't on the front.
+  faceRowEdge?: (row_index: number, edge: 'bottom' | 'top') => number | undefined
 
   shelfMatId:   string
   carcMatId:    string
@@ -506,6 +509,23 @@ function fittingExtent(box: Box, f: InternalFitting, ctx: FittingCtx): number {
 //
 // adj_shelf is excluded — those are equalised across the whole compartment by
 // resolveAdjShelves and don't participate in ordered stacking.
+// Fixed shelves anchored to a face row (z_ubo U2) become locked at the row's
+// edge: 'bottom' → shelf top face on the opening's bottom, 'top' → shelf bottom
+// face on the opening's top. A row that isn't on the front leaves the shelf as
+// it was and reports SHELF_FACE_ROW_MISSING.
+function alignToFaceRows(fittings: InternalFitting[], ctx: FittingCtx): InternalFitting[] {
+  return fittings.map(f => {
+    if (f.type !== 'fixed_shelf' || !f.align_face_row) return f
+    const { row_index, edge } = f.align_face_row
+    const y = ctx.faceRowEdge?.(row_index, edge)
+    if (y === undefined) {
+      ctx.errors.push({ code: 'SHELF_FACE_ROW_MISSING', message: `Fixed shelf is set to face row ${row_index + 1}, which isn't on the front`, part: 'fixed_shelf' })
+      return f
+    }
+    return { ...f, y_locked: true, y_position: edge === 'bottom' ? y - ctx.TS : y }
+  })
+}
+
 function positionFittings(box: Box, fittings: InternalFitting[], ctx: FittingCtx): InternalFitting[] {
   const stackables = fittings.filter(f => f.type !== 'adj_shelf')
   if (stackables.length === 1 && stackables[0].type === 'fixed_shelf' && !stackables[0].y_locked) {
@@ -533,7 +553,7 @@ export function resolveFittings(box: Box, fittings: InternalFitting[], ctx: Fitt
   // type's resolver. Each type-specific resolver still computes its own
   // geometry — we just guarantee they all see consistent y_position values
   // when stacking applies.
-  const positioned = positionFittings(box, fittings, ctx)
+  const positioned = positionFittings(box, alignToFaceRows(fittings, ctx), ctx)
   const out: ResolvedInternalPart[] = []
   const byType = new Map<InternalFittingType, InternalFitting[]>()
   for (const f of positioned) {

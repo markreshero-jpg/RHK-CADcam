@@ -5,7 +5,7 @@
 
 import {
   CabinetInput, ConstructionRules, ResolverError,
-  ResolvedFaceRow, ResolvedFaceCol, ResolvedFaceZone, ResolvedDoorProfile,
+  ResolvedFaceRow, ResolvedFaceCol, ResolvedFaceZone, ResolvedDoorProfile, ResolvedOpenZone,
   FaceRowInput, FaceColInput, FaceZoneInput,
   edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
@@ -17,6 +17,8 @@ export interface FaceResolution {
   rows:   ResolvedFaceRow[]
   cols:   ResolvedFaceCol[]
   zones:  ResolvedFaceZone[]
+  /** Open cells (no part) as rects — z_ubo U2. Absent on early-error returns. */
+  open_zones?: ResolvedOpenZone[]
   errors: ResolverError[]
 }
 
@@ -196,6 +198,7 @@ export function resolveFace(
 
   // ── Resolve zones ─────────────────────────────────────────────
   const resolvedZones: ResolvedFaceZone[] = []
+  const openZones: ResolvedOpenZone[] = []
 
   for (const zone of grid.zones) {
     const row = resolvedRows.find(r => r.row_index === zone.row_index)
@@ -210,8 +213,15 @@ export function resolveFace(
       continue
     }
 
-    // Skip 'open' zones — no part generated
-    if (zone.face_type === 'open') continue
+    // 'open' zones — no part generated; report the cell rect (z_ubo U2)
+    if (zone.face_type === 'open') {
+      openZones.push({
+        row_index: zone.row_index, col_index: zone.col_index,
+        X: colOffsets[zone.col_index], Y: rowOffsets[zone.row_index],
+        DX: col.width, DY: row.height,
+      })
+      continue
+    }
 
     const zoneW  = col.width
     let   zoneH  = row.height
@@ -308,6 +318,7 @@ export function resolveFace(
     rows:   resolvedRows,
     cols:   resolvedCols,
     zones:  resolvedZones,
+    open_zones: openZones,
     errors,
   }
 }

@@ -1165,6 +1165,10 @@ export interface FixedShelfFitting {
   type:           'fixed_shelf'
   y_locked:       boolean
   y_position?:    number   // unlocked = compartment mid-height
+  // Sit on a face row instead (z_ubo U2): edge 'bottom' → the shelf's top face
+  // is the bottom of that row's opening (an oven sits on it); 'top' → its
+  // bottom face is the row's top. Wins over y_position; follows the row.
+  align_face_row?: { row_index: number; edge: 'bottom' | 'top' }
   setback_front?: number
   setback_back?:  number
 }
@@ -1248,6 +1252,15 @@ export interface ResolvedCustomPart {
   library_key?:     string | null
 }
 
+/** An open face cell: X / Y = its left / bottom in cabinet space, DX × DY its
+ *  width × height (the face grid cell, same frame as a front in that cell). */
+export interface ResolvedOpenZone {
+  row_index: number
+  col_index: number
+  X: number; Y: number
+  DX: number; DY: number
+}
+
 export interface ResolvedCabinet {
   cabinet_id:    string
   // Standalone custom parts (fillers/panels/end panels). Optional — only populated
@@ -1266,6 +1279,9 @@ export interface ResolvedCabinet {
   face_rows:     ResolvedFaceRow[]
   face_cols:     ResolvedFaceCol[]
   face_zones:    ResolvedFaceZone[]
+  // Open face cells (no front) as cabinet-space rects (z_ubo U2) — where an
+  // appliance goes. Not persisted; primary front only.
+  open_zones?:   ResolvedOpenZone[]
   drawer_stacks: ResolvedDrawerStack[]
   seam_joints:   ResolvedSeamJoint[]
   // One per physical hinge on each door zone (schema v0.6). Empty when no hinge

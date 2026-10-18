@@ -9,7 +9,7 @@
 // ============================================================
 
 import {
-  CabinetInput, ResolvedInternalPart, ResolvedDrawerSlide, ConstructionRules, ResolvedFaceZone,
+  CabinetInput, ResolvedInternalPart, ResolvedDrawerSlide, ConstructionRules, ResolvedFaceZone, ResolvedOpenZone,
   ResolverError, Section, SectionChild,
   edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults, DEFAULT_DB_RULES,
 } from './types'
@@ -90,7 +90,9 @@ export function resolveInternalParts(
   zones: ResolvedFaceZone[] = [],
   // fittingFloorY: cabinet Y below which no fitting may sit (the top of a
   // pull-out bin + BINGAP). Absent = the interior floor.
-  opts: { fittingFloorY?: number } = {},
+  // openZones: open face cells (z_ubo U2) — with `zones`, gives the face row
+  // edges a fixed shelf can sit on (align_face_row).
+  opts: { fittingFloorY?: number; openZones?: ResolvedOpenZone[] } = {},
 ): { parts: ResolvedInternalPart[], slides: ResolvedDrawerSlide[], errors: ResolverError[], autoDouble?: string[] } {
   const parts:  ResolvedInternalPart[] = []
   const slides: ResolvedDrawerSlide[]  = []
@@ -138,8 +140,17 @@ export function resolveInternalParts(
   }
 
   // Context handed to the fitting registry (compartment contents).
+  // Face row edges for align_face_row: an open cell in the row gives the row
+  // rect exactly; otherwise a front in it (primary front only).
+  const faceRowEdge = (row: number, edge: 'bottom' | 'top'): number | undefined => {
+    const cell = opts.openZones?.find(z => z.row_index === row)
+      ?? zones.find(z => z.row_index === row && !z.facet)
+    if (!cell) return undefined
+    return edge === 'bottom' ? cell.Y : cell.Y + cell.DY
+  }
+
   const ctx: FittingCtx = {
-    r, T, TS, intD, intBack,
+    r, T, TS, intD, intBack, faceRowEdge,
     shelfMatId:   sid,
     carcMatId:    mid,
     shelfEbId:    cab.shelf_edgeband_id,
