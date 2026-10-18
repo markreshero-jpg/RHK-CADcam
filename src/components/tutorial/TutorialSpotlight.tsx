@@ -1,7 +1,8 @@
 'use client'
 
 // ── Tutorial spotlight (z_tutorial) ───────────────────────────────────────────
-// A pulsing ring around the element tagged data-tour={target}. Follows it every
+// A pulsing ring around the element tagged data-tour={target} ("a|b" = first
+// one found). Follows it every
 // frame (sidebars open / close, panels resize). pointer-events: none, so the
 // click the step asks for goes straight through to the real control.
 
@@ -16,9 +17,12 @@ export default function TutorialSpotlight({ target }: { target: string }) {
     let raf = 0
     let last = ''
     const tick = () => {
-      const el = document.querySelector<HTMLElement>(`[data-tour="${target}"]`)
-      const r = el?.getBoundingClientRect()
-      const next = r && r.width > 0 && r.height > 0 ? { x: r.left, y: r.top, w: r.width, h: r.height } : null
+      // "a|b": ring the first one on screen (a tool row, else its collapsed section).
+      let next: Box | null = null
+      for (const id of target.split('|')) {
+        const r = document.querySelector<HTMLElement>(`[data-tour="${id}"]`)?.getBoundingClientRect()
+        if (r && r.width > 0 && r.height > 0) { next = { x: r.left, y: r.top, w: r.width, h: r.height }; break }
+      }
       const key = next ? `${next.x},${next.y},${next.w},${next.h}` : ''
       if (key !== last) { last = key; setBox(next) }
       raf = requestAnimationFrame(tick)

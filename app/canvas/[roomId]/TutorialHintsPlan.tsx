@@ -12,7 +12,7 @@ import { LESSONS, type TutorialHint } from '@/src/lib/tutorial/lessons'
 const AMBER = '#f59e0b'
 
 export default function TutorialHintsPlan({ zoom, layers }: { zoom: number; layers: LayerView }) {
-  const step = useTutorial(s => LESSONS[s.lesson]?.steps[s.step])
+  const step = useTutorial(s => s.picking ? undefined : LESSONS[s.lesson]?.steps[s.step])
   const ctx  = useTutorial(s => s.ctx)
   if (!step?.hints || !layers.show('tutorial_hints')) return null
   const hints = step.hints(ctx)

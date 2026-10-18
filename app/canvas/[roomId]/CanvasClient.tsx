@@ -230,11 +230,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
   const [fixtures, setFixtures] = useState<RoomFixture[]>(initialFixtures ?? [])
-  // Tutorial mode (z_tutorial): feed the drawing in so lesson steps tick themselves off.
-  const tutorialOn = useTutorial(s => s.enabled)
-  useEffect(() => {
-    if (tutorialOn) useTutorial.getState().setCtx({ mode, view: canvasView, walls, cabinets, benchtops, fixtures, cabEditorOpen: editCabId !== null })
-  }, [tutorialOn, mode, canvasView, walls, cabinets, benchtops, fixtures, editCabId])
   const [sectionCut, setSectionCut] = useState<SectionCut | null>(null)
   const [sectionDrag, setSectionDrag] = useState<{ offsetX: number; offsetY: number } | null>(null)
   // Plan reference grid (dots). Per-user, persisted to localStorage.
@@ -456,6 +451,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   })
   const benchtopMenuOpenRef = useRef(false)
   benchtopMenuOpenRef.current = bt.benchtopMenuOpen
+
+  // Tutorial mode (z_tutorial): feed the drawing in so lesson steps tick themselves off.
+  const tutorialOn = useTutorial(s => s.enabled)
+  const pickedTops = bt.btMulti.length, joinDialogOpen = bt.joinDialogIds !== null
+  useEffect(() => {
+    if (tutorialOn) useTutorial.getState().setCtx({
+      mode, view: canvasView, walls, cabinets, benchtops, fixtures, selected,
+      cabEditorOpen: editCabId !== null, pickedTops, joinDialogOpen,
+    })
+  }, [tutorialOn, mode, canvasView, walls, cabinets, benchtops, fixtures, selected, editCabId, pickedTops, joinDialogOpen])
 
   // F4 Benchtop mode owns selection: entering it drops a cabinet / wall
   // selection, leaving it drops a benchtop one (adjusted during render, so no

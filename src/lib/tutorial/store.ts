@@ -1,7 +1,10 @@
 // ── Tutorial mode state (z_tutorial/TUTORIAL-SPEC.md) ─────────────────────────
 // enabled / lesson / step / done persist in userPrefs.tutorial. `ctx` is live:
 // the canvas and TutorialHost push into it, and every push re-checks the current
-// step — when its done(ctx) is true the step is ticked and the next one starts.
+// step — when its done(ctx, start) is true the step is ticked and the next one
+// starts. `start` is the canvas ctx when the lesson began (taken the first time
+// the lesson sees the canvas; re-taken after a reload). `picking` shows the
+// tutorial picker instead of a lesson.
 // step === lesson.steps.length means the lesson is finished (panel offers Next).
 
 import { create } from 'zustand'
@@ -10,6 +13,8 @@ import { LESSONS, EMPTY_CTX, stepKey, type TutorialCtx } from './lessons'
 
 interface TutorialState extends TutorialPrefs {
   ctx: TutorialCtx
+  start: TutorialCtx | null
+  picking: boolean
   /** Show the spotlight ring on the current step's target. */
   spotlight: boolean
   loaded: boolean
@@ -19,6 +24,7 @@ interface TutorialState extends TutorialPrefs {
   goTo: (lesson: number, step?: number) => void
   next: () => void
   back: () => void
+  setPicking: (on: boolean) => void
   setSpotlight: (on: boolean) => void
   restart: () => void
 }
@@ -29,14 +35,14 @@ const persist = (s: TutorialPrefs) =>
 const clampLesson = (i: number) => Math.max(0, Math.min(LESSONS.length - 1, i))
 
 /** Tick the current step (and any after it) that ctx already satisfies. */
-function advance(s: TutorialPrefs, ctx: TutorialCtx): TutorialPrefs {
+function advance<S extends TutorialPrefs>(s: S, ctx: TutorialCtx, start: TutorialCtx | null): S {
   const lesson = LESSONS[clampLesson(s.lesson)]
   let step = s.step
   let done = s.done
   while (step < lesson.steps.length) {
     const st = lesson.steps[step]
-    if (st.canvas && !ctx.inCanvas) break
-    if (!st.done(ctx)) break
+    if (st.canvas && (!ctx.inCanvas || !start)) break
+    if (!st.done(ctx, start ?? ctx)) break
     const key = stepKey(lesson, st)
     if (!done.includes(key)) done = [...done, key]
     step++
@@ -44,9 +50,12 @@ function advance(s: TutorialPrefs, ctx: TutorialCtx): TutorialPrefs {
   return step === s.step ? s : { ...s, step, done }
 }
 
+/** The lesson's starting point: the canvas as it is now, or null outside it. */
+const startFrom = (ctx: TutorialCtx) => (ctx.inCanvas ? ctx : null)
+
 export const useTutorial = create<TutorialState>((set, get) => ({
   enabled: false, lesson: 0, step: 0, done: [],
-  ctx: EMPTY_CTX, spotlight: true, loaded: false,
+  ctx: EMPTY_CTX, start: null, picking: false, spotlight: true, loaded: false,
 
   load: () => {
     if (get().loaded) return
@@ -55,32 +64,27 @@ export const useTutorial = create<TutorialState>((set, get) => ({
   },
 
   setEnabled: on => {
-    const s = { ...get(), enabled: on }
-    // Turning it on inside a job: lesson 1 (start a job) is already done in spirit,
-    // so start at the first unfinished lesson after it.
-    if (on && get().ctx.inCanvas && s.lesson === 0 && s.step === 0) {
-      const first = LESSONS.findIndex((l, i) => i > 0 && l.steps.some(st => !s.done.includes(stepKey(l, st))))
-      s.lesson = first < 0 ? 1 : first
-      s.step = 0
-    }
-    const next = on ? advance(s, s.ctx) : s
-    set({ ...next, enabled: on, spotlight: true })
-    persist({ ...next, enabled: on })
+    const s = get()
+    // Turning it on opens the picker; the lesson in progress stays where it was.
+    set({ enabled: on, picking: on, spotlight: true, start: on ? startFrom(s.ctx) : null })
+    persist({ ...s, enabled: on })
   },
 
   setCtx: patch => {
     const ctx = { ...get().ctx, ...patch }
     const s = get()
-    if (!s.enabled) { set({ ctx }); return }
-    const next = advance(s, ctx)
-    set({ ctx, lesson: next.lesson, step: next.step, done: next.done })
+    if (!s.enabled || s.picking) { set({ ctx }); return }
+    const start = s.start ?? startFrom(ctx)
+    const next = advance(s, ctx, start)
+    set({ ctx, start, lesson: next.lesson, step: next.step, done: next.done })
     if (next !== s) persist(next)
   },
 
   goTo: (lesson, step = 0) => {
-    const s = { ...get(), lesson: clampLesson(lesson), step }
-    const next = advance(s, s.ctx)
-    set({ lesson: next.lesson, step: next.step, done: next.done, spotlight: true })
+    const s = get()
+    const start = startFrom(s.ctx)
+    const next = advance({ ...s, lesson: clampLesson(lesson), step }, s.ctx, start)
+    set({ lesson: next.lesson, step: next.step, done: next.done, start, picking: false, spotlight: true })
     persist(next)
   },
 
@@ -88,7 +92,10 @@ export const useTutorial = create<TutorialState>((set, get) => ({
     const s = get()
     const lesson = LESSONS[s.lesson]
     if (s.step >= lesson.steps.length) {
-      if (s.lesson < LESSONS.length - 1) get().goTo(s.lesson + 1)
+      // Finished: Getting started runs on to its next lesson; topics go back to the picker.
+      const following = LESSONS[s.lesson + 1]
+      if (following && following.group === lesson.group && lesson.group === 'start') get().goTo(s.lesson + 1)
+      else set({ picking: true })
       return
     }
     // Skip: move on without ticking it.
@@ -99,21 +106,18 @@ export const useTutorial = create<TutorialState>((set, get) => ({
 
   back: () => {
     const s = get()
-    if (s.step > 0) {
-      const n = { ...s, step: s.step - 1 }
-      set({ step: n.step, spotlight: true }); persist(n)
-    } else if (s.lesson > 0) {
-      const l = s.lesson - 1
-      const n = { ...s, lesson: l, step: LESSONS[l].steps.length - 1 }
-      set({ lesson: n.lesson, step: n.step, spotlight: true }); persist(n)
-    }
+    if (s.step <= 0) return
+    const n = { ...s, step: s.step - 1 }
+    set({ step: n.step, spotlight: true }); persist(n)
   },
+
+  setPicking: on => set({ picking: on }),
 
   setSpotlight: on => set({ spotlight: on }),
 
   restart: () => {
     const n = { ...get(), lesson: 0, step: 0, done: [] }
-    set({ lesson: 0, step: 0, done: [], spotlight: true })
+    set({ lesson: 0, step: 0, done: [], picking: true, spotlight: true })
     persist(n)
   },
 }))

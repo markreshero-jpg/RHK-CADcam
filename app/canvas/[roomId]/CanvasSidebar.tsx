@@ -169,12 +169,15 @@ function SectionBody({ tone, children }: { tone: Tone; children: React.ReactNode
   return <div className={`ml-2.5 pl-1.5 border-l-2 ${tone.rail} flex flex-col gap-px pt-1 pb-1`}>{children}</div>
 }
 
-function ToolRow({ tone, icon, label, active, title, onClick, iconClass, sub }: {
+function ToolRow({ tone, icon, label, active, title, onClick, iconClass, sub, tour }: {
   tone: Tone; icon?: React.ReactNode; label: string; active: boolean
   title?: string; onClick: () => void; iconClass?: string; sub?: string
+  /** data-tour id the tutorial spotlights (z_tutorial). */
+  tour?: string
 }) {
   return (
     <button
+      data-tour={tour}
       title={title ?? label}
       onClick={onClick}
       className={`relative w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors
@@ -734,7 +737,7 @@ export default function CanvasSidebar({
         {wallMenuOpen && (
           <SectionBody tone={TONES.wall}>
             {WALL_ITEMS.map(({ mode: m, label, icon, color }) => (
-              <ToolRow key={m} tone={TONES.wall} icon={icon} iconClass={color} label={label}
+              <ToolRow key={m} tone={TONES.wall} icon={icon} iconClass={color} label={label} tour={`mode-${m}`}
                 active={mode === m} onClick={() => onSelectMode(m)} />
             ))}
           </SectionBody>
@@ -837,7 +840,7 @@ export default function CanvasSidebar({
             {BENCHTOP_TOOLS.map(t => (
               <div key={t.mode}>
                 {t.divider && <div className="border-t border-gray-800 my-1 mx-1" />}
-                <ToolRow tone={TONES.benchtop} icon={t.icon} iconClass={t.color} label={t.label}
+                <ToolRow tone={TONES.benchtop} icon={t.icon} iconClass={t.color} label={t.label} tour={`mode-${t.mode}`}
                   active={mode === t.mode} onClick={() => onSelectMode(t.mode)} />
               </div>
             ))}

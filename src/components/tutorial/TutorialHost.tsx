@@ -17,7 +17,7 @@ export default function TutorialHost() {
   const enabled   = useTutorial(s => s.enabled)
   const lesson    = useTutorial(s => s.lesson)
   const step      = useTutorial(s => s.step)
-  const spotlight = useTutorial(s => s.spotlight)
+  const spotlight = useTutorial(s => s.spotlight && !s.picking)
 
   useEffect(() => { useTutorial.getState().load() }, [])
   useEffect(() => {

@@ -77,7 +77,7 @@ export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl 
   return (
     <div className="border-t border-gray-800 pt-3 space-y-2">
       <label className={lbl}>Shape</label>
-      <select value={fp?.preset ?? (fp ? '__custom' : '')} onChange={e => choosePreset(e.target.value)} className={inp}>
+      <select data-tour="cab-shape" value={fp?.preset ?? (fp ? '__custom' : '')} onChange={e => choosePreset(e.target.value)} className={inp}>
         <option value="">Rectangle</option>
         {SHAPE_PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
         {fp && !fp.preset && <option value="__custom" disabled>Custom (hand-edited)</option>}

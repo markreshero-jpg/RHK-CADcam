@@ -1,21 +1,21 @@
 'use client'
 
 // ── Tutorial panel (z_tutorial) ───────────────────────────────────────────────
-// Floating card, bottom-right: lesson picker, the lesson's steps (ticked / current
-// / to come), and Back · Show me · Skip. Minimises to a pill. Close = tutorial off.
+// Floating card, bottom-right. Two views: the picker (every tutorial, grouped,
+// ticked when finished) and a lesson (its steps ticked / current / to come, with
+// Back · Show me · Skip). Minimises to a pill. Close = tutorial mode off.
 
 import { useState } from 'react'
 import { useTutorial } from '@/src/lib/tutorial/store'
-import { LESSONS, stepKey } from '@/src/lib/tutorial/lessons'
+import { LESSONS, TUTORIAL_GROUPS, stepKey, lessonDone } from '@/src/lib/tutorial/lessons'
+
+const iconBtn = 'w-6 h-6 rounded text-gray-400 hover:text-white hover:bg-gray-800'
 
 export default function TutorialPanel() {
   const t = useTutorial()
   const [min, setMin] = useState(false)
   const lesson = LESSONS[t.lesson]
   const finished = t.step >= lesson.steps.length
-  const current = finished ? null : lesson.steps[t.step]
-  const needsCanvas = !!current?.canvas && !t.ctx.inCanvas
-  const lessonDone = (i: number) => LESSONS[i].steps.every(s => t.done.includes(stepKey(LESSONS[i], s)))
 
   if (min) {
     return (
@@ -23,32 +23,80 @@ export default function TutorialPanel() {
         onClick={() => setMin(false)}
         className="fixed bottom-4 right-4 z-[61] rounded-full bg-amber-500 hover:bg-amber-400 text-gray-950 text-xs font-semibold px-3 py-2 shadow-lg"
       >
-        Tutorial · {lesson.title} {Math.min(t.step + 1, lesson.steps.length)}/{lesson.steps.length}
+        {t.picking ? 'Tutorials' : <>Tutorial · {lesson.title} {Math.min(t.step + 1, lesson.steps.length)}/{lesson.steps.length}</>}
       </button>
     )
   }
 
   return (
     <div className="fixed bottom-4 right-4 z-[61] w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-amber-500/40 bg-gray-900 text-gray-200 shadow-2xl shadow-black/50 text-sm">
-      {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Tutorial</span>
-        <select
-          value={t.lesson}
-          onChange={e => t.goTo(Number(e.target.value))}
-          className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-xs text-gray-100 outline-none focus:border-amber-500"
-        >
-          {LESSONS.map((l, i) => (
-            <option key={l.id} value={i}>{i + 1}. {l.title}{lessonDone(i) ? ' ✓' : ''}</option>
-          ))}
-        </select>
-        <button title="Minimise" onClick={() => setMin(true)}
-          className="w-6 h-6 rounded text-gray-400 hover:text-white hover:bg-gray-800">–</button>
-        <button title="Turn tutorial mode off" onClick={() => t.setEnabled(false)}
-          className="w-6 h-6 rounded text-gray-400 hover:text-white hover:bg-gray-800">✕</button>
+        {t.picking
+          ? <span className="flex-1 text-[10px] font-bold uppercase tracking-wider text-amber-400">Tutorials</span>
+          : <>
+            <button onClick={() => t.setPicking(true)} title="All tutorials"
+              className="shrink-0 text-xs text-amber-400 hover:text-amber-300">☰ All</button>
+            <span className="flex-1 min-w-0 truncate font-semibold text-white">{lesson.title}</span>
+          </>}
+        <button title="Minimise" onClick={() => setMin(true)} className={iconBtn}>–</button>
+        <button title="Turn tutorial mode off" onClick={() => t.setEnabled(false)} className={iconBtn}>✕</button>
       </div>
+      {t.picking ? <Picker /> : <Lesson finished={finished} />}
+    </div>
+  )
+}
 
-      {/* Steps */}
+function Picker() {
+  const t = useTutorial()
+  return (
+    <div className="max-h-[60vh] overflow-y-auto px-2 py-2 flex flex-col gap-2">
+      {TUTORIAL_GROUPS.map(g => {
+        const items = LESSONS.map((l, i) => ({ l, i })).filter(x => x.l.group === g.id)
+        if (!items.length) return null
+        return (
+          <div key={g.id}>
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">{g.label}</p>
+            {g.blurb && <p className="px-1 text-[11px] text-gray-500 mb-0.5">{g.blurb}</p>}
+            <div className="flex flex-col">
+              {items.map(({ l, i }) => {
+                const done = lessonDone(l, t.done)
+                const going = !done && i === t.lesson && t.step > 0 && t.step < l.steps.length
+                return (
+                  <button key={l.id} onClick={() => t.goTo(i, going ? t.step : 0)}
+                    className="flex items-start gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-gray-800">
+                    <span className={`mt-0.5 flex-none w-4 h-4 rounded-full text-[10px] leading-4 text-center font-bold
+                      ${done ? 'bg-emerald-500 text-gray-950' : going ? 'bg-amber-400 text-gray-950' : 'bg-gray-800 text-gray-500'}`}>
+                      {done ? '✓' : g.id === 'start' ? items.findIndex(x => x.i === i) + 1 : '·'}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block font-medium text-gray-100">{l.title}
+                        {going && <span className="ml-1.5 text-[10px] text-amber-400">in progress</span>}</span>
+                      <span className="block text-[11px] text-gray-400 leading-snug">{l.blurb}</span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+      {t.done.length > 0 && (
+        <button onClick={t.restart} className="self-start px-2 text-[11px] text-gray-500 hover:text-gray-300">Reset progress</button>
+      )}
+    </div>
+  )
+}
+
+function Lesson({ finished }: { finished: boolean }) {
+  const t = useTutorial()
+  const lesson = LESSONS[t.lesson]
+  const current = finished ? null : lesson.steps[t.step]
+  const needsCanvas = !!current?.canvas && !t.ctx.inCanvas
+  const following = LESSONS[t.lesson + 1]
+  const runsOn = lesson.group === 'start' && following?.group === 'start'
+
+  return (
+    <>
       <ol className="px-3 py-2 flex flex-col gap-1 max-h-[45vh] overflow-y-auto">
         {lesson.steps.map((s, i) => {
           const isDone = t.done.includes(stepKey(lesson, s))
@@ -73,16 +121,15 @@ export default function TutorialPanel() {
         })}
         {finished && (
           <li className="rounded-lg px-2 py-2 bg-emerald-500/10 ring-1 ring-emerald-500/40 text-emerald-300 text-xs">
-            {t.lesson < LESSONS.length - 1
-              ? <>Lesson done. Next up: <b>{LESSONS[t.lesson + 1].title}</b>.</>
-              : <>All lessons done. Turn Tutorial mode off in the File menu, or pick a lesson to go again.</>}
+            {runsOn
+              ? <>Lesson done. Next up: <b>{following.title}</b>.</>
+              : <>Tutorial done. Pick another one, or turn Tutorial mode off in the File menu.</>}
           </li>
         )}
       </ol>
 
-      {/* Actions */}
       <div className="flex items-center gap-1.5 px-3 py-2 border-t border-gray-800">
-        <button onClick={t.back} disabled={t.lesson === 0 && t.step === 0}
+        <button onClick={t.back} disabled={t.step === 0}
           className="px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30">Back</button>
         {current?.target && (
           <button onClick={() => t.setSpotlight(!t.spotlight)}
@@ -92,15 +139,17 @@ export default function TutorialPanel() {
         )}
         <span className="flex-1" />
         {finished
-          ? t.lesson < LESSONS.length - 1 && (
+          ? (
             <button onClick={t.next}
-              className="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-gray-950 text-xs font-semibold">Next lesson →</button>
+              className="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-gray-950 text-xs font-semibold">
+              {runsOn ? 'Next lesson →' : 'All tutorials'}
+            </button>
           )
           : (
             <button onClick={t.next} title="Move on without doing this step"
               className="px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-gray-800">Skip step</button>
           )}
       </div>
-    </div>
+    </>
   )
 }
