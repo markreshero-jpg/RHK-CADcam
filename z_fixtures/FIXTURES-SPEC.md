@@ -242,6 +242,17 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- **Decision changed 2026-10-18 (user: "appliances aren't being recognised by the cabinets and
+  overlapping is occurring")** — replaces P4's "overlaps warn, never block":
+  - Cabinets treat appliances as obstacles: `fixtureOccupancy` (cabinetObstacles.ts) is in
+    CanvasClient `wfOcc`, so plan place / move / stretch and elevation (via `waterfallOcc`) all
+    stop at them. Obstacle = `solidFixtures`: not an opening, not benchtop-mount, not linked.
+  - Appliances avoid cabinets: on place / move a wall-snapped non-benchtop item that doesn't
+    link slides to the nearest free gap (`slideClear` + `bandOccupancy` over cabinets + other
+    solid fixtures; `clearOf` in useFixtureInteraction). Dropped over a cabinet it links to
+    (under-bench oven / wall rangehood) it links instead. The red clash warning stays for
+    anything that still overlaps (e.g. after a stretch / resize elsewhere).
+
 - 2026-10-18 (user): **move like a cabinet** — selected fixture shows the white centre
   crosshair (plan + elevation); click it → follows the cursor (same carry as Move / M), next
   click drops. The carried one is hidden in elevation while its ghost shows.

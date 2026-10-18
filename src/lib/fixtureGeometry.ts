@@ -295,6 +295,25 @@ export function stretchBounds(
 
 function round1(v: number) { return Math.round(v * 10) / 10 }
 
+/**
+ * A wall-snapped fixture slid along its wall to the nearest free stretch
+ * (`occupied` = along-wall ranges on that face, from bandOccupancy) — like a
+ * cabinet being placed. Unchanged when it already fits, or when there's no room.
+ */
+export function slideClear(
+  s: FixtureSnap, width: number, depth: number, wall: Wall, roomRef: Pt,
+  occupied: { t: number; dx: number }[], findSlot: (desired: number, dx: number, len: number, occ: { t: number; dx: number }[]) => number,
+): FixtureSnap {
+  const fp = { x: s.x, y: s.y, rotation: s.rotation, width, depth }
+  const face = wallFrame(wall, 'face', roomRef)
+  const side: WallSide = offOf(face, fixtureCenter(fp)) >= 0 ? 'face' : 'back'
+  const f = wallFrame(wall, side, roomRef)
+  const t0 = Math.min(...fixtureCorners(fp).map(p => alongOf(f, p)))
+  const t = findSlot(t0, width, f.len, occupied)
+  if (Math.abs(t - t0) < 0.5) return s
+  return { ...s, x: s.x + f.d.x * (t - t0), y: s.y + f.d.y * (t - t0) }
+}
+
 /** Default underside height for a mount type. */
 export const FIXTURE_BENCH_Z = 900
 export function defaultFixtureZ(mount: FixtureMount, mountHeight: number | null): number {

@@ -49,7 +49,7 @@ export function bodyFromCatalog(item: FixtureCatalogItem): FixtureBody {
 }
 
 export function useFixtureInteraction({
-  room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot, benchTopAt, linkAt,
+  room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot, benchTopAt, linkAt, clearOf,
 }: {
   room:          Room
   walls:         Wall[]
@@ -59,6 +59,8 @@ export function useFixtureInteraction({
   benchTopAt?:   (p: Pt) => number | null
   /** P4: the cabinet link for a pose (the cabinet it's dropped over), or null. */
   linkAt?:       (f: FixtureFootprint & { mount: RoomFixture['mount']; category: RoomFixture['category'] }) => FixtureLink | null
+  /** Slide a wall-snapped item clear of cabinets / other appliances (nearest free gap), like a cabinet. */
+  clearOf?:      (s: FixtureSnap, body: { id?: string; width: number; depth: number; height: number; z: number }) => FixtureSnap
   mode:          Mode
   setMode:       (m: Mode) => void
   selected:      Selected
@@ -115,7 +117,14 @@ export function useFixtureInteraction({
     if (!carried) return null
     // Doors / windows (P5) always sit in a wall — Shift doesn't free them.
     if (carried.category === 'opening') return snapOpening(wp, carried.width, walls, centroid(walls), SNAP_REACH)
-    return snapFixture(wp, carried.width, carried.depth, free ? [] : walls, centroid(walls), SNAP_REACH, freeRot)
+    const s = snapFixture(wp, carried.width, carried.depth, free ? [] : walls, centroid(walls), SNAP_REACH, freeRot)
+    // Appliances don't overlap cabinets: dropped over one it belongs to (oven over its
+    // housing, rangehood under its wall unit) it links; anywhere else it slides to the
+    // nearest free gap on the wall. Sinks / taps / cooktops sit on cabinets as before.
+    const mount = carry?.kind === 'place' ? carry.item.mount : fixtures.find(f => f.id === (carry as { id: string }).id)?.mount
+    if (!s.wall_id || !clearOf || mount === 'benchtop') return s
+    if (linkAt?.({ ...s, width: carried.width, depth: carried.depth, mount: mount ?? 'floor', category: carried.category })) return s
+    return clearOf(s, { id: carry?.kind === 'move' ? carry.id : undefined, width: carried.width, depth: carried.depth, height: carried.height, z: carriedZ })
   }
 
   /** Returns true when the move was a fixture carry (caller stops there). */

@@ -14,9 +14,10 @@ import {
 } from '@/src/lib/geometry'
 import { angledFillerSnap } from '@/src/lib/cabinetShape/angledFillerSnap'
 import { waterfallLegs, waterfallOccupancy } from '@/src/lib/waterfallObstacles'
-import { crossWallCabinetOccupancy } from '@/src/lib/cabinetObstacles'
+import { crossWallCabinetOccupancy, fixtureOccupancy, bandOccupancy, solidFixtures } from '@/src/lib/cabinetObstacles'
+import { cabBottomZ } from '@/src/lib/elevationSnap'
 import { btSegments, effectiveProfileId, transformBenchtop, translateFn } from '@/src/lib/benchtopGeometry'
-import { btPosition, wallFrame, btOverhangs } from '@/src/lib/benchtopAnchor'
+import { btPosition, wallFrame, btOverhangs, offOf } from '@/src/lib/benchtopAnchor'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
 import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
@@ -42,7 +43,7 @@ import { useFixtureInteraction } from './useFixtureInteraction'
 import FixturesPlan from './FixturesPlan'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
-import { withFixtureCutouts, benchtopAt, openingSpans, refitOpenings, type StretchSide } from '@/src/lib/fixtureGeometry'
+import { withFixtureCutouts, benchtopAt, openingSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, type StretchSide } from '@/src/lib/fixtureGeometry'
 import { cabinetPlans, linkFor, followLinks, fixtureClashes, stretchObstacles } from '@/src/lib/fixtureLinks'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
@@ -343,6 +344,24 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot,
     benchTopAt: p => { const b = benchtopAt(benchtops, p); return b ? btInfo(b).topZ : null },
     linkAt: f => linkFor(f, cabPlans),
+    clearOf: (s, body) => {
+      const wall = walls.find(w => w.id === s.wall_id)
+      if (!wall) return s
+      // Everything solid on that wall face: cabinets (any wall — corners reach in) + other appliances.
+      const items = [
+        ...cabPlans.filter(p => !p.cab.is_kick_assembly).map(p => {
+          const z0 = cabBottomZ(p.cab, room, p.wall)
+          return { pts: p.pts, z0, z1: z0 + p.cab.dy }
+        }),
+        ...solidFixtures(fixtures, body.id).map(f => ({ pts: fixtureCorners(f), z0: Number(f.z) || 0, z1: (Number(f.z) || 0) + Number(f.height) })),
+      ]
+      const cx = centroid(walls)
+      const face = wallFrame(wall, 'face', cx)
+      const fp = { x: s.x, y: s.y, rotation: s.rotation, width: body.width, depth: body.depth }
+      const side = offOf(face, fixtureCenter(fp)) >= 0 ? 'face' as const : 'back' as const
+      const occ = bandOccupancy(items, wall, side, cx, body.z, body.z + body.height, body.depth)
+      return slideClear(s, body.width, body.depth, wall, cx, occ, findFreeSlot)
+    },
   })
   const fixtureClashMap = useMemo(() => fixtureClashes(fixtures, cabPlans, room), [fixtures, cabPlans, room])
   const fixtureClashIds = useMemo(() => new Set(fixtureClashMap.keys()), [fixtureClashMap])
@@ -464,6 +483,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const wfOcc = (w: Wall, side: 'face' | 'back', mover: { id?: string; assembly_class: string; dy: number; dz?: number }) => [
     ...waterfallOccupancy(wfLegs, w, side, centroid(walls), room, mover),
     ...crossWallCabinetOccupancy(cabinets, walls, w, side, centroid(walls), room, mover),
+    ...fixtureOccupancy(fixtures, w, side, centroid(walls), room, mover),
   ]
 
   // F4 → Draw in Shape Editor. Starting outline = the selected base cabinets'
