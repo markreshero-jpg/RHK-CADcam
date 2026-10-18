@@ -23,6 +23,10 @@ export const DEFAULT_CONSTRUCTION_METHOD = {
     RD:       100,  // rail depth mm (its height when the rail stands on edge)
     RAIL_ORIENT: 'horizontal' as 'vertical' | 'horizontal',  // top rails on edge vs flat
 
+    // Back (z_ubo U1)
+    BACK_TYPE: 'panel' as 'panel' | 'none' | 'rail',
+    BKRH:      100,  // back top rail height when BACK_TYPE = rail
+
     // Adjustable shelves
     ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1,
 

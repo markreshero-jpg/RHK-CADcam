@@ -26,9 +26,15 @@ export function resolveCaseParts(
   const backMat   = cab.material
   const topMat    = cab.material
 
+  // BACK_TYPE (z_ubo U1): 'none' / 'rail' drop the back panel, so nothing
+  // makes room for it — backT is 0 for every offset below and the sides,
+  // bottom and top run to the back. 'rail' adds the back top rail on edge.
+  const backType = r.BACK_TYPE ?? 'panel'
+  const hasBack  = backType === 'panel'
+
   const sideT   = sideMat.DZ
   const bottomT = bottomMat.DZ
-  const backT   = backMat.DZ
+  const backT   = hasBack ? backMat.DZ : 0
   const topT    = topMat.DZ
 
   const DX = cab.DX   // cabinet width
@@ -148,7 +154,7 @@ export function resolveCaseParts(
   const backTop3D    = DY - r.SCRT - (topBackJoin === 'sits_over_back' ? topT : 0)
   const backDX       = backTop3D - backBottom3D
 
-  parts.push({
+  if (hasBack) parts.push({
     part_key: 'back',
     DX: backDX,
     DY: backW,
@@ -167,11 +173,14 @@ export function resolveCaseParts(
   // Top rails (RAIL_ORIENT): on edge — RD tall, front / back face flush with
   // the carcass front / the top's back line — or flat, RD deep. DX = RD,
   // DY = length, DZ = thickness either way; `upright` tells caseBox.
+  // A BACK_TYPE 'rail' back rail always stands on edge, BKRH tall.
   const railPlace = (at: 'front' | 'back') => {
-    const upright = r.RAIL_ORIENT === 'vertical'
+    const backRail = at === 'back' && backType === 'rail'
+    const upright  = backRail || r.RAIL_ORIENT === 'vertical'
+    const RD       = backRail ? r.BKRH : r.RD
     return {
-      DX: r.RD, DY: railW, DZ: topT, X: railX,
-      Y: DY - r.SCRT - (upright ? r.RD : topT),
+      DX: RD, DY: railW, DZ: topT, X: railX,
+      Y: DY - r.SCRT - (upright ? RD : topT),
       Z: at === 'back' ? topZstart : DZ - (upright ? topT : r.RD),
       AX: 0, AY: 0, AZ: 0,
       ...(upright ? { upright: true } : {}),
@@ -221,6 +230,17 @@ export function resolveCaseParts(
     })
   }
   // TOP_TYPE 'none' → no top parts added
+
+  // BACK_TYPE 'rail': the back top rail stands in for the back panel, whatever
+  // the top type (double_rail already emitted it above).
+  if (backType === 'rail' && topType !== 'double_rail') {
+    parts.push({
+      part_key: 'back_rail',
+      ...railPlace('back'),
+      material_id: topMat.id,
+      edge_band: edgeSidesToBanding(edging.back_rail, ebId),
+    })
+  }
 
   return { parts, errors }
 }

@@ -210,6 +210,32 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
             )
           })()}
         </div>
+        {/* Back (z_ubo U1) — rule_overrides.BACK_TYPE */}
+        {cabinet.has_carcass && !cabinet.is_kick_assembly && (() => {
+          const cur = (cabinet.rule_overrides ?? {}).BACK_TYPE
+          const inherited = getCachedInput(cabinet.id)?.rules_base?.BACK_TYPE ?? 'panel'
+          const name = (v: string) => v === 'none' ? 'no back' : v === 'rail' ? 'back rail' : 'back panel'
+          return (
+            <div>
+              <label className={lbl}>Back</label>
+              <select
+                value={cur === 'panel' || cur === 'none' || cur === 'rail' ? cur : ''}
+                onChange={e => {
+                  const next = { ...(cabinet.rule_overrides ?? {}) }
+                  if (e.target.value === '') delete next.BACK_TYPE
+                  else next.BACK_TYPE = e.target.value
+                  void onUpdate(cabinet.id, { rule_overrides: next })
+                }}
+                className={inp}
+              >
+                <option value="">Inherit ({name(inherited)})</option>
+                <option value="panel">Back panel</option>
+                <option value="none">No back</option>
+                <option value="rail">Back rail (top, on edge)</option>
+              </select>
+            </div>
+          )
+        })()}
         {(cabinet.assembly_class === 'base' || cabinet.assembly_class === 'tall' ||
           cabinet.assembly_class === 'base_corner' || cabinet.assembly_class === 'tall_corner') && (
           <div>

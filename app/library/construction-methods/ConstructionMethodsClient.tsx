@@ -1491,6 +1491,22 @@ function RuleRow({ ruleKey, delta, onChange }: {
     )
   }
 
+  if (ruleKey === 'BACK_TYPE') {
+    return (
+      <div className={rowCls}>
+        <span className={txtCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
+          <select value={value as string} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
+            <option value="panel">Back panel</option>
+            <option value="none">No back</option>
+            <option value="rail">Back rail (top, on edge)</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
   if (ruleKey === 'RAIL_ORIENT') {
     return (
       <div className={rowCls}>

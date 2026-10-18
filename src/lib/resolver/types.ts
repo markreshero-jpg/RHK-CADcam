@@ -153,6 +153,11 @@ export interface ConstructionRules {
   // Vertical is the shop norm (Mark, 2026-10-15).
   RAIL_ORIENT: 'vertical' | 'horizontal'
 
+  // Back (z_ubo U1): full back panel, no back, or no panel + a back top rail
+  // standing on edge, BKRH tall (e.g. an under-bench oven cabinet).
+  BACK_TYPE: 'panel' | 'none' | 'rail'
+  BKRH:      number   // back top rail height (BACK_TYPE 'rail')
+
   // Internal — adjustable shelf
   ADJSB_F:  number   // adj shelf setback front
   ADJSB_B:  number   // adj shelf setback back
@@ -256,6 +261,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   TOESCF: 40, TOESCB: 0, TOESCL: 0, TOESCR: 0,
   SCRBK: 0, SCRBT: 0, SCRL: 0, SCRR: 0, SCRT: 0,
   TOP_TYPE: 'front_rail', RD: 100, RAIL_ORIENT: 'horizontal',
+  BACK_TYPE: 'panel', BKRH: 100,
   ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1, ADJ_DRILL: 'per_shelf', ADJ_ROWS: 0,
   FIXSB_F: 0, FIXSB_B: 0,
   IDCL: 2, IDCR: 2, IDFAO: 0, SLIDE_SETBACK: 20,
