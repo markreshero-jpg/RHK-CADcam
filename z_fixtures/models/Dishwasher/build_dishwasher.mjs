@@ -1,5 +1,5 @@
 // Parametric freestanding dishwasher → GLB (z_fixtures).
-//   node z_fixtures/models/build_dishwasher.mjs [width] [depth] [height]
+//   node z_fixtures/models/Dishwasher/build_dishwasher.mjs [width] [depth] [height]
 // Defaults 600 × 600 × 850 (mm). Units are mm (model_scale 1). Frame matches the
 // fixture item box: origin back-bottom-left, +X width, +Y up, +Z toward the front.
 // Generic look only — stainless door + body, dark control strip with display,

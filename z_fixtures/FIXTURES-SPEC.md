@@ -355,7 +355,7 @@ Esc cancels; one undo step.
   ~~openings aren't in any schedule~~ Door & Window Schedule 2026-10-18;
   ~~a door's swing doesn't warn when it hits a cabinet~~ done 2026-10-18.
 - Dishwasher: "Generic dishwasher 600 freestanding" catalogue row added 2026-10-18;
-  GLB `z_fixtures/models/generic-dishwasher-600-freestanding.glb` (generator
+  GLB `z_fixtures/models/Dishwasher/generic-dishwasher-600-freestanding.glb` (generator
   `build_dishwasher.mjs`, any W × D × H) to be uploaded by the user in the library.
 - ~~Elevation / 3D don't show the overlap warning~~ done 2026-10-18.
 - ~~Existing placed fixtures aren't linked until moved once~~ — Link button 2026-10-18.
