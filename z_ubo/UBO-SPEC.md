@@ -1,6 +1,6 @@
 # UBO — under-bench oven cabinet + cabinet contents
 
-Status: **spec written 2026-10-18, nothing built.** RESUME HERE → U1.
+Status: **U1 built 2026-10-18 (c82ba0b), in-app check pending.** RESUME HERE → U2.
 
 A library base cabinet that comes out with an oven already inside it. Built
 natively (face grid + interior + carcass options), with the oven as a real
@@ -73,6 +73,17 @@ between gables, height `BKRH` (default 100) at the top of the box, joined to
 the gables like the top rails. Cut list / nest / drilling / 3D / views pick it
 up through the normal case-part path. **Locked 2026-10-18: one rail, at the top
 only** (`BKRH` default 100, overridable).
+
+*Built (U1):* rules `BACK_TYPE` ('panel' default) + `BKRH` (100). The rail is
+the existing `back_rail` part forced upright, `BKRH` tall — so joints, seams,
+drilling, 3D and labels ("Back Top Rail") already handle it; with a
+`double_rail` top it's the same single rail. With no back panel the back
+thickness counts as 0 for side depth / bottom / top Z, so they run to the back
+(`SCRBK` still holds them off). Sidebar "Back" select (cabinet
+`rule_overrides.BACK_TYPE`, inherit option) under Top Type; also the job /
+room / construction-method rule editors (group "Back"). Test:
+`src/lib/resolver/__tests__/backType.test.ts`. **Not applied to shaped
+(footprint) cabinets** — `resolveShapedCase` still always emits its backs.
 
 **U2 — open-zone rects + shelf on a face row.**
 - `resolveFace` emits `open_zones[]` (row, col, X, Y, DX, DY in cabinet
