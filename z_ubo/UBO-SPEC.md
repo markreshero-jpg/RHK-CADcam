@@ -1,0 +1,119 @@
+# UBO — under-bench oven cabinet + cabinet contents
+
+Status: **spec written 2026-10-18, nothing built.** RESUME HERE → U1.
+
+A library base cabinet that comes out with an oven already inside it. Built
+natively (face grid + interior + carcass options), with the oven as a real
+fixture linked to the cabinet — the first use of a general **cabinet contents**
+mechanism (later: `BSK` sink + tap, integrated D/W, `WOT` oven tower).
+
+## Locked decisions (user, 2026-10-18)
+
+- **D1 — native cabinet, not object nesting.** No Cabinet Vision-style
+  object-in-object tree. A cabinet definition carries *default contents*
+  (fixtures); placing it spawns them as ordinary `room_fixtures` linked to the
+  new cabinet. Each stays its own object: selectable in plan / elevation / 3D,
+  own panel, own display layer.
+- **D2 — box.** 600 wide overall (gables included). Base class, standard kick,
+  depth / height from the room → job → shop cascade. The oven fascia covers the
+  gables (the oven is wider than the clear opening — expected, not a clash).
+- **D3 — fronts.** Face grid, three rows, one column:
+  fixed panel (`false_panel`) / **open, locked 600 high** / fixed panel.
+  The two panels are unlocked, so they share the rest equally.
+- **D4 — interior.** One **fixed shelf at the bottom of the oven opening** —
+  the oven sits on it. Nothing at the top.
+- **D5 — no back.** No back panel at all; a **vertical back rail** instead
+  (new carcass option, see U1). Exposed in the sidebar.
+- **D6 — the oven lives in the opening.** It anchors to the open face zone, not
+  a plan point: centred on the zone across the width, sitting on the zone
+  bottom, front flush with the face plane. Resize the cabinet / change the kick
+  and it follows.
+- **D7 — edit modal shows it.** The cabinet edit modal draws its linked
+  fixtures: the real model in the 3D tab, the outline in Elevation / Side /
+  Top. Nothing behind the oven is hidden (parts show through as normal).
+- **D8 — authoring custom ones later:** set a cabinet up on the canvas, drop
+  fixtures into it, then **Save to library** — linked fixtures become the
+  definition's contents. (Library-editor Contents section: later, optional.)
+
+Supersedes z_fixtures P4 "**no appliance cabinet codes**" — appliance cabinets
+now exist as real library cabinets. Linking by position still works for any
+fixture dropped onto a plain cabinet.
+
+## Current code (survey 2026-10-18)
+
+- `resolveFace.ts` — rows: `FaceRowInput { height, height_locked }`, locked
+  rows keep `height`, unlocked split the remainder equally, stacked bottom-up
+  from `TK + revB` (114-187). **Open zones are skipped** (`continue` at ~214) —
+  no rect emitted; row/col offsets are locals.
+- `resolveInternal.ts` / `fittings.ts` — `fixed_shelf { y_locked, y_position }`
+  (cabinet-space Y). No link between interior and face rows.
+- `resolveCase.ts` — `back` is **always** emitted; no back type. `top_type`
+  has `double_rail` (horizontal `back_rail`), `RAIL_ORIENT: 'vertical'`.
+  Sidebar Top Type select: `CabinetPanel.tsx` ~181-209.
+- Fixture links — `room_fixtures.cabinet_id / link_x / link_z / link_rot`;
+  `followLinks` (fixtureLinks.ts) patches x / y / rotation only, **never z**;
+  follow effect in CanvasClient ~392.
+- 3D — `FixtureModel` (src/components/three/FixtureModel.tsx) renders any
+  FixtureLook in any r3f canvas (origin back-bottom-left, +X w, +Y up, +Z
+  front). `CabinetScene` (Cabinet3DView.tsx ~1259) works in raw cabinet coords
+  inside its root group — same frame.
+- Elevation outline — `planShapePath(stretchedElevShape(f.elev_shape, f), w, h)`.
+- Placement — `placeFromDraft` (CanvasClient ~1009), `handleReplaceCabinet`
+  (~1067), `dbPlaceCabinetFromDefinition` (canvasDB ~566). Save to library —
+  `saveCabinetToLibrary` (canvasDB ~598).
+- Oven: `fixture_catalog` "Generic oven 600" (600 × 600 × 596, under_bench, GLB).
+
+## Phases
+
+**U1 — back options.** New rule `BACK_TYPE: 'panel' | 'none' | 'rail'`
+(default `panel`), per-cabinet override via `rule_overrides`, sidebar select
+"Back" next to Top Type. `none` → no `back` part. `rail` → no panel, a
+`back_rail_v` part: board standing on edge in the back plane, full width
+between gables, height `BKRH` (default 100) at the top of the box, joined to
+the gables like the top rails. Cut list / nest / drilling / 3D / views pick it
+up through the normal case-part path. *Confirm: one rail at the top only, ~100
+high?*
+
+**U2 — open-zone rects + shelf on a face row.**
+- `resolveFace` emits `open_zones[]` (row, col, X, Y, DX, DY in cabinet
+  space) instead of dropping them. Views keep ignoring them.
+- Fixed shelf gets an optional anchor `align_face_row: { row_index, edge:
+  'bottom' | 'top' }`: resolver places the shelf so its **top face** = the
+  bottom of that row's opening (or its bottom face = the top). Internal
+  resolve reads the resolved face rows.
+
+**U3 — UBO library definition.** Seed `UBO` (copied from `B2D` for
+construction / materials / kick): 600 wide, face grid per D3, interior per D4,
+`BACK_TYPE: 'rail'`, contents per U4. Subcategory: Appliances (create if
+missing). Migration in `z_ubo/`.
+
+**U4 — contents data model + spawning.**
+- `cabinet_definitions.contents jsonb` — `[{ fixture_catalog_id, anchor }]`,
+  `anchor = { kind: 'zone', row_index, col_index }` or
+  `{ kind: 'point', link_x, link_z, link_rot, z }` (z above the cabinet floor).
+- `room_fixtures.link_zone jsonb null` — `{ row_index, col_index }`.
+- Zone-anchored pose: x centred on the open zone, y (underside) = zone bottom
+  = shelf top, front of the fixture flush with the face plane. Recomputed on
+  every resolve; `followLinks` extended to patch **z** for zone links.
+- Spawn on `placeFromDraft`, `handleReplaceCabinet`, `dbPlaceCabinetFromDefinition`.
+- Contents fixtures are **deleted with their cabinet** (and re-spawned by
+  Replace); a fixture dropped onto a plain cabinet keeps today's behaviour
+  (unlinks on delete).
+
+**U5 — edit modal shows contents.** `CabinetScene` gets a `fixtures` prop and
+renders `FixtureModel` at the cabinet-local pose (3D tab + room 3D unchanged
+since room fixtures render separately — room view passes none). Elevation /
+Side / Top draw the fixture outline. Clicking it selects it: small panel with
+Swap model (catalog picker, same kind), Remove, Open in fixture editor.
+
+**U6 — Save to library carries contents.** `saveCabinetToLibrary` snapshots
+the cabinet's linked fixtures into `contents` (zone anchor when the fixture
+sits in an open zone, else point). Library list shows a contents count.
+
+**U7 — check in-app** (place UBO, resize, change kick, join kicks, swap oven,
+cut list has the shelf + back rail and no back).
+
+## Open
+
+- Back rail details (U1 confirm).
+- Later: `BSK` (sink + tap, point anchors), integrated D/W, `WOT` (two zones).

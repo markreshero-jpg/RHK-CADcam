@@ -172,6 +172,8 @@ Locked with the user 2026-10-18:
   fixture stays exactly where it's dropped. It only *remembers* its spot on the cabinet.
 - **Link by position, no appliance cabinet codes.** Real jobs draw a plain B2 for the
   sink and leave oven voids / D/W gaps as space between panels.
+  *Changed 2026-10-18:* appliance cabinets now exist as library cabinets with default
+  contents (`UBO` first) — see `z_ubo/UBO-SPEC.md`. Linking by position is unchanged.
 - **Ovens in an open zone of a tower: later** (needs the resolver to expose open-zone
   rectangles — `resolveFace` skips open zones today).
 - **Overlaps warn, never block.**
