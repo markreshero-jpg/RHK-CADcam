@@ -4,3 +4,7 @@
 -- Generated in the library editor; copied onto placed fixtures like the other model fields.
 alter table fixture_catalog add column if not exists plan_shape jsonb;
 alter table room_fixtures   add column if not exists plan_shape jsonb;
+
+-- Front (elevation) shape, same format with v = down from the top. Applied live as `fixtures_p8_elev_shape` (2026-10-18).
+alter table fixture_catalog add column if not exists elev_shape jsonb;
+alter table room_fixtures   add column if not exists elev_shape jsonb;

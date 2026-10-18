@@ -11,6 +11,7 @@ import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { Pt } from '@/src/lib/geometry'
 import { wallFrame, type WallSide } from '@/src/lib/benchtopAnchor'
 import { wrapLabel } from '@/src/lib/textWrap'
+import { planShapePath } from '@/src/lib/fixturePlanShape'
 import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 
 
@@ -254,9 +255,15 @@ export default function FixturesElevation({
         return (
           <g key={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
             onPointerDown={e => { e.stopPropagation(); onSelect(fx.id) }}>
-            <rect x={x} y={y} width={w} height={h} fill={STROKE} fillOpacity={0.06 * (lp.fillOpacity ?? 1)}
-              stroke={color} strokeWidth={lw} strokeDasharray={lp.strokeDasharray} />
-            {fx.category === 'appliance' && (
+            {/* P8: the model's true front shape when traced; else the box (+ inner panel for appliances). */}
+            <rect x={x} y={y} width={w} height={h} fill={STROKE} fillOpacity={(fx.elev_shape?.lines.length ? 0.001 : 0.06) * (lp.fillOpacity ?? 1)}
+              stroke={fx.elev_shape?.lines.length ? 'none' : color} strokeWidth={lw} strokeDasharray={lp.strokeDasharray} />
+            {fx.elev_shape?.lines.length ? (
+              // Its own left is on the elevation's left when it faces this way; mirror if not.
+              <path d={planShapePath(fx.elev_shape, w, h)} fill="none" stroke={color} strokeWidth={lw} strokeLinejoin="round"
+                strokeDasharray={lp.strokeDasharray}
+                transform={elevLeftSide(fx.rotation, f) === 'left' ? `translate(${x},${y})` : `translate(${x + w},${y}) scale(-1,1)`} />
+            ) : fx.category === 'appliance' && (
               <rect x={x + w * 0.08} y={y + h * 0.08} width={w * 0.84} height={h * 0.84}
                 fill="none" stroke={color} strokeWidth={lw * 0.6} />
             )}

@@ -589,6 +589,8 @@ export interface FixtureBody {
   bench_drop:    number
   /** P8: true plan shape traced from the fitted model (null = draw the box + symbol). */
   plan_shape:    import('./fixturePlanShape').PlanShape | null
+  /** P8: true front (elevation) shape, u across, v down from the top. */
+  elev_shape:    import('./fixturePlanShape').PlanShape | null
 }
 
 /** A library category (P6): what the tabs / F6 picker show. `category` = the behaviour type its items get. */

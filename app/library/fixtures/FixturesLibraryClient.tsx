@@ -20,7 +20,7 @@ import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 import { modelFormatFromName, MODEL_ACCEPT } from '@/src/lib/modelFormat'
 import { fitScale } from '@/src/lib/fixtureFit'
 import { planShapePath } from '@/src/lib/fixturePlanShape'
-import { tracePlanShape } from '@/src/lib/fixturePlanShapeLoad'
+import { traceShapes } from '@/src/lib/fixturePlanShapeLoad'
 
 // three/drei loaders — client only.
 const PreviewCanvas = dynamic(
@@ -423,7 +423,7 @@ function FixtureEditor({ item, kinds, groups, onPatch, onError }: {
   // (and the first time an item with a model but no shape is opened). ──
   const fitKey = [item.model_url, item.model_format, item.model_scale, item.model_rot_x, item.model_rot_y,
     item.model_off_x, item.model_off_y, item.model_off_z, item.width, item.depth, item.height].join('|')
-  const tracedKey = useRef<string | null>(item.plan_shape ? fitKey : null)
+  const tracedKey = useRef<string | null>(item.plan_shape && item.elev_shape ? fitKey : null)
   useEffect(() => {
     if (!item.model_url) { tracedKey.current = fitKey; return }
     if (tracedKey.current === fitKey) return
@@ -436,14 +436,14 @@ function FixtureEditor({ item, kinds, groups, onPatch, onError }: {
     const key = fitKey
     setTracing(true)
     try {
-      const shape = await tracePlanShape(item)
+      const shapes = await traceShapes(item)
       if (!alive()) return
       tracedKey.current = key
-      onPatch({ plan_shape: shape })
-      // Placed copies of this item with the same model get the drawing too (it's
+      onPatch(shapes)
+      // Placed copies of this item with the same model get the drawings too (they're
       // derived from the model, not a spec change).
       if (item.model_url) {
-        await supabase.from('room_fixtures').update({ plan_shape: shape })
+        await supabase.from('room_fixtures').update(shapes)
           .eq('catalog_id', item.id).eq('model_url', item.model_url)
       }
     } catch (e) {
@@ -720,7 +720,7 @@ function FixtureEditor({ item, kinds, groups, onPatch, onError }: {
             {/* Plan shape (P8) — what plan view draws instead of the box + symbol */}
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className={`${lbl} mb-0`}>Plan shape</span>
+                <span className={`${lbl} mb-0`}>Plan + front shape</span>
                 <span className="text-[10px] text-ink-subtle">{tracing ? 'tracing…' : item.plan_shape?.lines.length ? 'traced from the model' : 'none'}</span>
                 <button onClick={() => void retrace()} disabled={tracing}
                   className="ml-auto px-2 py-0.5 bg-surface-3 hover:bg-surface-2 text-ink-muted text-[11px] rounded disabled:opacity-40"
@@ -735,7 +735,15 @@ function FixtureEditor({ item, kinds, groups, onPatch, onError }: {
                   <line x1={0} y1={d} x2={w} y2={d} stroke="#64748b" strokeWidth={2} vectorEffect="non-scaling-stroke" />
                 </svg>
               </div>
-              <p className="text-[10px] text-ink-subtle mt-1">Seen from above, front at the bottom. Updates when the model or its fit changes.</p>
+              <div className="border border-edge-strong rounded bg-[#030712] p-2 mt-1.5">
+                <svg viewBox={`-10 -10 ${w + 20} ${h + 20}`} className="w-full" style={{ maxHeight: 180 }}>
+                  <rect x={0} y={0} width={w} height={h} fill="none" stroke="#334155" strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
+                  {item.elev_shape && (
+                    <path d={planShapePath(item.elev_shape, w, h)} fill="none" stroke="#0ea5e9" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
+                  )}
+                </svg>
+              </div>
+              <p className="text-[10px] text-ink-subtle mt-1">Top: seen from above, front at the bottom. Bottom: seen from the front. Update when the model or its fit changes.</p>
             </div>
           </>)}
         </div>

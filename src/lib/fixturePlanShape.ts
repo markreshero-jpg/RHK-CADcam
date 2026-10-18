@@ -216,6 +216,24 @@ function pathLength(pts: [number, number][]) {
 }
 const round4 = (v: number) => Math.round(v * 10000) / 10000
 
+/**
+ * Front-view (elevation) shape from the same fitted triangles: looking at the
+ * fixture's front, keep what's nearest (largest z) per cell, outline it and
+ * contour wherever the face steps back (oven door / glass, dishwasher panel).
+ * Stored like PlanShape with u = x / width, v = (height − y) / height (0 = top).
+ */
+export function elevShapeFromTriangles(
+  tris: ArrayLike<number>, width: number, height: number, cell = 4, minDrop = 4,
+): PlanShape {
+  const m = new Float32Array(tris.length)
+  for (let i = 0; i + 2 < tris.length; i += 3) {
+    m[i] = tris[i]                     // across = x
+    m[i + 1] = tris[i + 2]             // "height" = toward the viewer (z)
+    m[i + 2] = height - tris[i + 1]    // down the page = from the top
+  }
+  return planShapeFromTriangles(m, width, height, cell, minDrop)
+}
+
 /** SVG path data for a plan shape in a fixture's local frame (x along width, y toward the front). */
 export function planShapePath(shape: PlanShape, width: number, depth: number): string {
   return shape.lines.map(l => l.map(([u, v], i) => `${i ? 'L' : 'M'}${(u * width).toFixed(1)} ${(v * depth).toFixed(1)}`).join('')).join('')

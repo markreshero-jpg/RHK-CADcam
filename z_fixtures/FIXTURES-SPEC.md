@@ -242,6 +242,13 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-18 (user): **elevation true shape** — `elev_shape` (same format, v down from the top;
+  migration `fixtures_p8_elev_shape`), traced with the plan shape (`traceShapes`): front view =
+  nearest surface toward +Z per cell, outline + step-back contours (oven door / glass / knobs).
+  FixturesElevation draws it instead of the box (+ inner panel); mirrored if the item's width runs
+  against the elevation. Library shows both previews. Backfilled the three models. Very thin
+  parts (< grid cell, e.g. a 1 mm sink flange) barely show.
+
 - 2026-10-18 (user): **P9 wall reference** — FixturePanel "Wall position" block like CabinetPanel for
   wall-backed items (not openings): From left end / From right end (its own left / right, looking
   at its front), Clear left / Clear right (from the clearance dims), **Off wall** (back → wall face,
