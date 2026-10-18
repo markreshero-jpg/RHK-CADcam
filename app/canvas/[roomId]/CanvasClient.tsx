@@ -20,7 +20,7 @@ import { cabBottomZ } from '@/src/lib/elevationSnap'
 import { btSegments, effectiveProfileId, transformBenchtop, translateFn } from '@/src/lib/benchtopGeometry'
 import { btPosition, wallFrame, btOverhangs, offOf } from '@/src/lib/benchtopAnchor'
 import { isEndpointUpdate, computeJointUpdates } from '@/src/lib/wallJoints'
-import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
+import { dbSaveWall, dbUpdateWall, dbDeleteWall, dbInsertCabinet, dbResolveAndPersistCabinet, dbUpdateCabinet, dbDeleteCabinet, dbLoadCabinetDefinition, buildInstanceFromDefinition, dbInsertDefinitionParts, dbCopyCabinetChildren, dbMigrateLegacyKickMembers, type KickRunMutation } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { usePinchZoom } from './usePinchZoom'
 import { useRightDragPan } from './useRightDragPan'
@@ -1126,7 +1126,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (cabinet) {
       setCabinets(cs => [...cs, cabinet])
       setSelected({ type: 'cabinet', id: cabinet.id })
-      dbResolveAndPersistCabinet(cabinet.id).then(resolved => {
+      dbCopyCabinetChildren(id, cabinet.id).then(() => dbResolveAndPersistCabinet(cabinet.id)).then(resolved => {
         if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
       })
     }
@@ -1207,7 +1207,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (cab) {
         working = [...working, cab]
         added.push(cab)
-        dbResolveAndPersistCabinet(cab.id).then(resolved => {
+        dbCopyCabinetChildren(id, cab.id).then(() => dbResolveAndPersistCabinet(cab.id)).then(resolved => {
           if (resolved) { setResolvedParts(m => new Map(m).set(cab.id, resolved)); applyInputColours(cab.id); applyInputEdgebands(cab.id) }
         })
       }

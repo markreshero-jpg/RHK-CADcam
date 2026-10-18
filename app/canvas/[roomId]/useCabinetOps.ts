@@ -2,7 +2,7 @@ import type { CabinetInstance, Wall, Room, AssemblyClass } from '@/src/lib/types
 import { DEFAULT_DIMS } from '@/src/lib/types'
 import { wallDir, findFreeSlot, cabT, cabsBlock, nextLabel, centroid } from '@/src/lib/geometry'
 import { crossWallCabinetOccupancy } from '@/src/lib/cabinetObstacles'
-import { dbInsertCabinet, dbResolveAndPersistCabinet } from './canvasDB'
+import { dbInsertCabinet, dbResolveAndPersistCabinet, dbCopyCabinetChildren } from './canvasDB'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { Selected } from './canvasTypes'
 
@@ -102,7 +102,7 @@ export function useCabinetOps(p: CabinetOpsParams) {
     if (inserted.length) {
       setCabinets(cs => [...cs, ...inserted])
       for (const c of inserted) {
-        dbResolveAndPersistCabinet(c.id).then(resolved => { if (resolved) onResolved(c.id, resolved) })
+        dbCopyCabinetChildren(cab.id, c.id).then(() => dbResolveAndPersistCabinet(c.id)).then(resolved => { if (resolved) onResolved(c.id, resolved) })
       }
     }
     setSplitCabId(null)
