@@ -151,7 +151,7 @@ function ElevClearance({ box, others, len, roomH, z, bg }: {
 
 export default function FixturesElevation({
   fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, onSelect, stretching, onStretchHandle, ghost, onMoveHandle,
-  obstacles = [], showClearance = false,
+  obstacles = [], showClearance = false, interactive = true,
 }: {
   fixtures:   RoomFixture[]
   wall:       Wall
@@ -173,6 +173,8 @@ export default function FixturesElevation({
   obstacles?: ElevBox[]
   /** Show clearance dims on the selected fixture. */
   showClearance?: boolean
+  /** false while a cabinet / fixture is being stretched or moved — fixtures are click-through. */
+  interactive?: boolean
 }) {
   const f = elevationFrame(wall, side, roomCx)
   const handles = (fx: RoomFixture, x: number, y: number, w: number, h: number) =>
@@ -214,7 +216,7 @@ export default function FixturesElevation({
   ) : null
 
   return (
-    <g>
+    <g style={interactive ? undefined : { pointerEvents: 'none' }}>
       {ghostEl}
       {clearanceEl}
       {fixtures.map(fx => {

@@ -258,7 +258,7 @@ export default function FixturesPlan({
           >
             <FixtureShape f={f} x={f.x} y={f.y} rotation={f.rotation} z={z} layers={layers}
               selected={f.id === selectedId} ghost={false} label={showLabels} clash={clashIds?.has(f.id)} />
-            {interactive && f.id === selectedId && onStretchHandle && (
+            {(interactive || stretching?.id === f.id) && f.id === selectedId && onStretchHandle && (
               <StretchHandles f={f} z={z} active={stretching?.id === f.id ? stretching.side : null}
                 onGrab={side => onStretchHandle(f.id, side)}
                 onMove={onMoveHandle ? () => onMoveHandle(f.id) : undefined} />

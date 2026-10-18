@@ -2580,7 +2580,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                   selectedId={selected?.type === 'fixture' ? selected.id : null}
                   zoom={view.zoom}
                   layers={planLayers}
-                  interactive={mode === 'select'}
+                  // Click-through while a cabinet / fixture is being stretched or moved, so the
+                  // finishing click over an appliance lands on the canvas instead of selecting it.
+                  interactive={mode === 'select' && !cabResize && !cabFollowing && !fx.stretch}
                   clashIds={fixtureClashIds}
                   stretching={fx.stretch ? { id: fx.stretch.id, side: fx.stretch.side } : null}
                   onStretchHandle={(id, side) => startFixtureStretch(id, side)}
