@@ -1,6 +1,6 @@
 # CAD Annotation Tool — Spec
 
-Status: **A1 + A2 built 2026-10-18 (plan: F7 CAD mode, ribbon, text + text box authoring); in-app check pending; A3 next.** All decisions below are Mark's
+Status: **A1–A3 built 2026-10-18 (plan: F7 CAD mode, ribbon, text / text box / leader / line / arrow). A2 checked in-app by Mark; A3 check pending; A4 next.** All decisions below are Mark's
 (2026-10-18). Open: how sheet notes react to cabinet revisions (decided at A7).
 
 > History: this folder used to hold the original Shape Editor handoff (May 2026). That
@@ -211,7 +211,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 |---|---|---|
 | A1 | Table + RLS + `rooms.annotation_scale`; types + DB helpers; layer items; `src/lib/annotations/` geometry + tests; `AnnotationLayer` read-only in the plan canvas + Plan View report (check with a hand-seeded row) | [x] built 2026-10-18; in-app check pending |
 | A2 | Plan authoring: F7 CAD sidebar tool + **ribbon** under the view tabs, **Text** tool with full text styling (decision 7), colour picker, select/move/delete/copy, undo, snaps, last-used defaults, annotation scale on the ribbon; "Print annotation colours" report toggle; PDF text check | [x] built 2026-10-18; in-app check pending (PDF text check not done yet) |
-| A3 | **Arrow / line + text leaders** (full arrowhead set per end, dash types, weight, vertex grips) | [ ] |
+| A3 | **Arrow / line + text leaders** (full arrowhead set per end, dash types, weight, vertex grips) | [x] built 2026-10-18 (1865f72); in-app check pending |
 | A4 | **Box / ellipse / cloud** with fill (none / solid / tint) | [ ] |
 | A5 | **Manual dimension** (live value, text override, offset grip, arrowhead/tick ends) | [ ] |
 | A6 | **Elevations:** wall-local frame, canvas + Elevation Views report, wall-split remap | [ ] |
@@ -289,5 +289,29 @@ reach localhost and there's no `AUTOMATION_*` login for headless runs).
   - Layer Manager still shows its colour / weight controls on the annot items.
   - Annotation text drawn in black is hard to see on the dark canvas.
 
-Next: Mark checks A2 in-app (Test Kitchen → Void Corner Demo), then A3 (arrow / line
-tools + text leaders).
+A2 checked in-app by Mark 2026-10-18 ("looks good").
+
+**A3 built 2026-10-18** (1865f72; in-app check pending).
+- **Tools:** Leader (Q), Line (L), Arrow (A); their ribbon buttons are now live.
+  - Line / Arrow: click points. Double-click, Enter or right-click finishes;
+    Backspace steps back a point; Esc cancels. A rubber-band preview draws through
+    `AnnotationLayer`. Arrow = a `line` row with `arrowEnd: 'closed'` (`ARROW_TOOL`).
+  - Leader: click the tip, then click the landing. The text editor opens just past
+    the landing (`leaderTextAt`), and the row is a `text` with `leader: [tip, landing]`.
+- **Snapping:** a point uses the canvas snap. If nothing snaps, the segment from the
+  previous point locks to 15° within 4° (`angleSnap`). Shift = free.
+- **Remembered styles:** lines remember their style apart from arrows
+  (`StyleKey = kind | 'arrow'`, `styleKeyOf`; `userPrefs.annotStyleDefaults` keyed by
+  StyleKey). The arrow defaults are `ARROW_TOOL` + saved.
+- **Grips** (single selection): every vertex of a line or leader is a draggable
+  circle; segment midpoints are diamonds that insert a vertex once dragged.
+  `AnnotGrip` = `rotate | width | v<N> | m<N>`.
+- **Ribbon, Leader group** (text):
+  - leader arrowhead, size and line weight when the text has a leader;
+  - **+ Add** (next click = tip, `leader: [tip]`) / **Remove** for a single selected
+    text;
+  - a hint line while drawing.
+- `8f776b0` (tutorial session) committed the A3 ribbon before its hook; 1865f72
+  restored a consistent main.
+
+Next: A4 (box / ellipse / cloud tools).
