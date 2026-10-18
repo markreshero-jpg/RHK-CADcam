@@ -1,6 +1,6 @@
 # Fixtures & Appliances — Spec
 
-Status: **P1–P4 on main (P4 checked in-app by the user 2026-10-18); P5 doors & windows, P6 categories with icons, P7 stretching built 2026-10-18, not yet checked in-app** — next: live check of P5–P7. See "RESUME HERE".
+Status: **P1–P9 built and on main (2026-10-18). User has checked P4 + several follow-ups live; P5 doors & windows, P6 categories, P7 stretching, P8 true shapes, P9 wall position not yet confirmed in-app.** Open items in "RESUME HERE".
 
 Bought-in things placed in a room: ovens, cooktops, dishwashers, fridges,
 rangehoods, sinks, taps, decorative items. Catalogue lives in the Settings →
@@ -319,11 +319,11 @@ Esc cancels; one undo step.
 
 - ~~Live visual check of a real uploaded model~~ done 2026-10-15 in the fixture viewer (Miele oven GLB); room 3D view still not eyeballed.
 - ~~Right-click context menu~~ done 2026-10-15 in plan: View 3D / elevations, Move, Turn 90°, Delete (undoable). Not in elevation / 3D yet.
-- ~~Fixtures don't avoid cabinets~~ decided in P4: warn only (red), never block.
+- ~~Fixtures don't avoid cabinets~~ P4 said warn only; changed 2026-10-18 — they now block / slide (see top).
 - Room 3D: sink-in-hole not clearly eyeballed yet (plan + resolver verified).
 - Cutout as a CNC op (optimiser / gcode ignore benchtop cutouts entirely today).
 - Per-placement cutout edits (FixturePanel only displays the template).
-- Elevation: fixtures aren't placeable from elevation; no dimension chains include them.
+- ~~Elevation: fixtures aren't placeable from elevation~~ done 2026-10-18. Dimension chains still don't include appliances (only clearance dims on the selected one; openings have their own row).
 
 ## Openings (P5 — built 2026-10-18)
 
