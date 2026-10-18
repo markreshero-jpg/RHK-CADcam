@@ -35,7 +35,19 @@ export interface UserPrefs {
   cabinetDoubleClickEdit: boolean
   /** Enter with one cabinet selected (plan or elevation) opens the cabinet editor. */
   cabinetEnterEdit: boolean
+  /** Tutorial mode (z_tutorial): on/off + where the user is up to. */
+  tutorial: TutorialPrefs
 }
+
+export interface TutorialPrefs {
+  enabled: boolean
+  lesson:  number
+  step:    number
+  /** Completed step keys, `${lessonId}/${stepId}`. */
+  done:    string[]
+}
+
+export const DEFAULT_TUTORIAL: TutorialPrefs = { enabled: false, lesson: 0, step: 0, done: [] }
 
 export interface WallDrawPrefs {
   /** Chained line: each click finishes a wall and starts the next from its end. */
@@ -79,6 +91,7 @@ const DEFAULTS: UserPrefs = {
   wallDraw: DEFAULT_WALL_DRAW,
   cabinetDoubleClickEdit: true,
   cabinetEnterEdit: true,
+  tutorial: DEFAULT_TUTORIAL,
 }
 
 // Legacy fields: per-view `drawingPresets.plan` and the older singular
@@ -101,6 +114,17 @@ function normaliseWallDraw(raw: unknown): WallDrawPrefs {
     chain:     typeof r.chain === 'boolean' ? r.chain : DEFAULT_WALL_DRAW.chain,
     thickness: typeof r.thickness === 'number' && r.thickness >= 10 ? r.thickness : DEFAULT_WALL_DRAW.thickness,
     angleStep: WALL_ANGLE_STEPS.includes(r.angleStep as (typeof WALL_ANGLE_STEPS)[number]) ? r.angleStep! : DEFAULT_WALL_DRAW.angleStep,
+  }
+}
+
+function normaliseTutorial(raw: unknown): TutorialPrefs {
+  const r = (raw ?? {}) as Partial<TutorialPrefs>
+  const int = (v: unknown) => (typeof v === 'number' && v >= 0 ? Math.floor(v) : 0)
+  return {
+    enabled: r.enabled === true,
+    lesson:  int(r.lesson),
+    step:    int(r.step),
+    done:    Array.isArray(r.done) ? r.done.filter((d): d is string => typeof d === 'string') : [],
   }
 }
 
@@ -127,6 +151,7 @@ export function getUserPrefs(): UserPrefs {
       elevSnapSettings: normaliseElevSnapSettings(merged.elevSnapSettings),
       planGrid:         normalisePlanGrid(merged.planGrid),
       wallDraw:         normaliseWallDraw(merged.wallDraw),
+      tutorial:         normaliseTutorial(merged.tutorial),
     }
   } catch {
     return DEFAULTS

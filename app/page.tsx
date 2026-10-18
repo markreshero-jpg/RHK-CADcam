@@ -104,6 +104,7 @@ export default async function HomePage({ searchParams }: {
               </Link>
               <div className="w-px h-5 bg-edge mx-1" />
               <Link
+                data-tour="new-project"
                 href="/projects/new"
                 className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
               >

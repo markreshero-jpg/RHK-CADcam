@@ -43,12 +43,17 @@ export interface MenuActions {
   openAddRoom:       () => void
   // Current project (for the Panel Optimiser entry point)
   projectId:         string | null
+  // Tutorial mode (z_tutorial)
+  tutorialOn:        boolean
+  setTutorialOn:     (on: boolean) => void
 }
 
 export function buildMenus(a: MenuActions): MenuGroup[] {
   return [
     { label: 'File', items: [
       { label: '← Back to Projects', action: () => { window.location.href = '/' } },
+      null,
+      { label: 'Tutorial mode', checked: a.tutorialOn, action: () => a.setTutorialOn(!a.tutorialOn) },
       null,
       { label: 'Export…', disabled: true },
     ]},

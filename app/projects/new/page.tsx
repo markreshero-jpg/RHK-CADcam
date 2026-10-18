@@ -107,7 +107,7 @@ export default function NewProjectPage() {
             <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wider">Project</h2>
             <div>
               <label className="block text-xs text-ink-muted mb-1.5">Project Name *</label>
-              <input name="name" value={form.name} onChange={handleChange}
+              <input data-tour="project-name" name="name" value={form.name} onChange={handleChange}
                 placeholder="e.g. Smith Kitchen" required className={inputCls} />
             </div>
             <div>

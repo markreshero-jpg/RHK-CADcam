@@ -47,6 +47,7 @@ export default function CanvasMenubar({ projectName, roomName, openMenu, setOpen
         onPointerDown={e => e.stopPropagation()}
       >
         <button
+          data-tour="menu-File"
           className={`px-3 border-r border-gray-800 transition-colors ${openMenu === COMPACT_MENU ? 'bg-blue-600 text-white' : 'text-gray-300'}`}
           onClick={() => setOpenMenu(openMenu === COMPACT_MENU ? null : COMPACT_MENU)}
         >
@@ -86,6 +87,7 @@ export default function CanvasMenubar({ projectName, roomName, openMenu, setOpen
       {menus.map(menu => (
         <div key={menu.label} className="relative">
           <button
+            data-tour={`menu-${menu.label}`}
             className={`h-full px-3 text-xs transition-colors ${openMenu === menu.label ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
             onClick={() => setOpenMenu(openMenu === menu.label ? null : menu.label)}
           >

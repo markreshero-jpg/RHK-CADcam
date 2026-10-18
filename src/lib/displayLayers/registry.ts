@@ -158,6 +158,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   // Labels
   { id: 'cabinet_labels', group: 'labels', label: 'Cabinet names', views: ['plan', 'elevation'], default: ON },
   { id: 'cabinet_sizes',  group: 'labels', label: 'Cabinet sizes', views: ['plan', 'elevation'], default: ON },
+  { id: 'tutorial_hints', group: 'labels', label: 'Tutorial hints', views: ['plan'], default: ON,
+    hint: 'Where-to-click hints while File → Tutorial mode is on (z_tutorial)' },
 
   // Dimensions
   { id: 'dim_wall_overall',     group: 'dimensions', label: 'Wall overall',       views: ['plan'], default: ON },

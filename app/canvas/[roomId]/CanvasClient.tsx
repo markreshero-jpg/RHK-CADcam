@@ -41,6 +41,8 @@ import {
 import { useBenchtopInteraction } from './useBenchtopInteraction'
 import { useFixtureInteraction } from './useFixtureInteraction'
 import FixturesPlan from './FixturesPlan'
+import TutorialHintsPlan from './TutorialHintsPlan'
+import { useTutorial } from '@/src/lib/tutorial/store'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
 import { withFixtureCutouts, benchtopAt, openingSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, fixtureClearances, type StretchSide } from '@/src/lib/fixtureGeometry'
@@ -227,6 +229,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
   const [fixtures, setFixtures] = useState<RoomFixture[]>(initialFixtures ?? [])
+  // Tutorial mode (z_tutorial): feed the drawing in so lesson steps tick themselves off.
+  const tutorialOn = useTutorial(s => s.enabled)
+  useEffect(() => {
+    if (tutorialOn) useTutorial.getState().setCtx({ mode, view: canvasView, walls, cabinets, benchtops, fixtures, cabEditorOpen: editCabId !== null })
+  }, [tutorialOn, mode, canvasView, walls, cabinets, benchtops, fixtures, editCabId])
   const [sectionCut, setSectionCut] = useState<SectionCut | null>(null)
   const [sectionDrag, setSectionDrag] = useState<{ offsetX: number; offsetY: number } | null>(null)
   // Plan reference grid (dots). Per-user, persisted to localStorage.
@@ -2291,6 +2298,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     openRoomSwitcher: () => roomSwitcherRef.current?.openSwitcher(),
     openAddRoom: () => roomSwitcherRef.current?.openAdd(),
     projectId: project?.id ?? null,
+    tutorialOn,
+    setTutorialOn: on => useTutorial.getState().setEnabled(on),
   })
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -2321,7 +2330,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         )}
         <div className={phone ? 'flex items-center gap-0.5 min-w-0' : 'absolute left-1/2 -translate-x-1/2 flex items-center gap-1'}>
           {(['plan', 'elevation', 'section', '3d'] as CanvasView[]).map(v => (
-            <button key={v} onClick={() => switchView(v)}
+            <button key={v} data-tour={`view-${v}`} onClick={() => switchView(v)}
               className={`${phone ? 'px-2 py-1.5' : 'px-3 py-1'} text-xs rounded transition-colors ${
                 canvasView === v
                   ? 'bg-blue-600 text-white'
@@ -2571,6 +2580,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               measureCursor={measureCursor}
               onMeasureCancel={() => { setMeasureStart(null); setMeasureEnd(null); setMeasureCursor(null); setSnapResult(null) }}
               wallOpenings={wallOpenings}
+              tutorialLayer={tutorialOn && <TutorialHintsPlan zoom={view.zoom} layers={planLayers} />}
               fixturesLayer={
                 <FixturesPlan
                   fixtures={fixtures}

@@ -124,8 +124,10 @@ export const TONES = {
   paste:    { solid: 'bg-yellow-700', bar: 'bg-yellow-400', rail: 'border-yellow-500/50', tint: 'bg-yellow-600/30', icon: 'text-yellow-400', ring: 'ring-yellow-500/60' },
 } satisfies Record<string, Tone>
 
-function SectionHeader({ tone, icon, label, shortcut, open, active, summary, title, onClick }: {
+function SectionHeader({ tone, icon, label, shortcut, open, active, summary, title, onClick, tour }: {
   tone: Tone; icon: React.ReactNode; label: string; shortcut?: string
+  /** data-tour id the tutorial spotlights (z_tutorial). */
+  tour?: string
   /** Section body expanded. Omit for headers with no dropdown (Select, Paste). */
   open?: boolean
   /** One of this section's tools is the current mode. */
@@ -137,6 +139,7 @@ function SectionHeader({ tone, icon, label, shortcut, open, active, summary, tit
 }) {
   return (
     <button
+      data-tour={tour}
       title={title ?? (shortcut ? `${label} (${shortcut})` : label)}
       aria-expanded={open}
       onClick={onClick}
@@ -723,7 +726,7 @@ export default function CanvasSidebar({
 
         {/* Wall (F2) */}
         <SectionHeader
-          tone={TONES.wall} icon={<WallIcon />} label="Wall" shortcut="F2"
+          tone={TONES.wall} icon={<WallIcon />} label="Wall" shortcut="F2" tour="tool-wall"
           open={wallMenuOpen} active={wallActive}
           summary={wallActive ? WALL_ITEMS.find(w => w.mode === mode)?.label : null}
           onClick={() => setWallMenuOpen(!wallMenuOpen)}
@@ -741,7 +744,7 @@ export default function CanvasSidebar({
 
         {/* Cabinet library (F3) — drill-down: tiles → category → cabinets */}
         <SectionHeader
-          tone={TONES.cabinet} icon={<CabinetIcon />} label="Cabinet" shortcut="F3" title="Cabinet Library (F3)"
+          tone={TONES.cabinet} icon={<CabinetIcon />} label="Cabinet" shortcut="F3" title="Cabinet Library (F3)" tour="tool-cabinet"
           open={cabMenuOpen} active={cabActive}
           summary={cabActive && armedDef ? armedDef.name : null}
           onClick={() => setCabMenuOpen(!cabMenuOpen)}
@@ -808,7 +811,7 @@ export default function CanvasSidebar({
 
         {/* Benchtop (F4) */}
         <SectionHeader
-          tone={TONES.benchtop} icon={<BenchtopIcon />} label="Benchtop" shortcut="F4"
+          tone={TONES.benchtop} icon={<BenchtopIcon />} label="Benchtop" shortcut="F4" tour="tool-benchtop"
           title="Benchtop (F4) — in Benchtop mode only benchtops can be selected; Esc to leave"
           open={benchtopMenuOpen} active={benchtopActive}
           summary={benchtopActive ? (mode === 'benchtop_select' ? 'Select Tops' : BENCHTOP_TOOLS.find(t => t.mode === mode)?.label ?? 'Benchtop mode') : null}
@@ -846,7 +849,7 @@ export default function CanvasSidebar({
 
           {/* Fixtures & appliances (F6) — z_fixtures */}
           <SectionHeader
-            tone={TONES.fixture} icon={<FixtureIcon />} label="Fixtures" shortcut="F6"
+            tone={TONES.fixture} icon={<FixtureIcon />} label="Fixtures" shortcut="F6" tour="tool-fixtures"
             title="Fixtures & appliances (F6) — pick one, click to drop it (backs onto the nearest wall; Shift = free, R = turn); Esc to finish"
             open={fixtureMenuOpen} active={mode === 'place_fixture'}
             summary={mode === 'place_fixture' ? (fixtureItems?.find(i => i.id === armedFixtureId)?.name ?? 'Moving') : null}
