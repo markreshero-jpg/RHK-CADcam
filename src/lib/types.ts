@@ -585,6 +585,8 @@ export interface FixtureBody {
   /** Cutout centre offset from the footprint centre: + right (along width), + forward. */
   cutout_off_x:  number
   cutout_off_y:  number
+  /** P10: the cutout cuts the benchtop under it (false = keep the size, no hole). */
+  cut_benchtop:  boolean
   /** Benchtop mount: underside sits this far below the benchtop top (sink bowl depth). */
   bench_drop:    number
   /** P8: true plan shape traced from the fitted model (null = draw the box + symbol). */

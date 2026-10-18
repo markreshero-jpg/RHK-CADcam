@@ -607,9 +607,13 @@ function FixtureEditor({ item, kinds, groups, onPatch, onError }: {
                   <NumField label="Offset right" value={item.cutout_off_x} onCommit={v => onPatch({ cutout_off_x: v })} />
                   <NumField label="Offset forward" value={item.cutout_off_y} onCommit={v => onPatch({ cutout_off_y: v })} />
                 </div>
+                <label className="flex items-center gap-2 text-xs text-ink-muted mt-2 cursor-pointer">
+                  <input type="checkbox" checked={item.cut_benchtop ?? true} onChange={e => onPatch({ cut_benchtop: e.target.checked })} />
+                  Cut benchtop (default for new placements)
+                </label>
                 <p className="text-[10px] text-ink-subtle mt-1">
                   From the maker&apos;s cutout template. Centred on the item unless offset (looking at its front).
-                  Cut into whichever benchtop is under it.
+                  Cut into whichever benchtop is under it. Sizes can be overridden per placement in the job.
                 </p>
               </>
             )}

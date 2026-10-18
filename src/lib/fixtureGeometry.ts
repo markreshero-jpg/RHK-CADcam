@@ -423,6 +423,7 @@ export const fixtureLayer = (category: string) => FIXTURE_LAYER[category] ?? 'fi
 
 export type FixtureCutoutSpec = FixtureFootprint & Pick<RoomFixture,
   'cutout_shape' | 'cutout_w' | 'cutout_d' | 'cutout_radius' | 'cutout_off_x' | 'cutout_off_y'>
+  & Partial<Pick<RoomFixture, 'cut_benchtop'>>
 
 export function fixtureCutoutCenter(f: FixtureCutoutSpec): Pt {
   const c = fixtureCenter(f)
@@ -484,6 +485,7 @@ export function benchtopContains(bt: BtOutline, p: Pt): boolean {
 export function benchtopFixtureCutouts(bt: BtOutline, fixtures: FixtureCutoutSpec[]): Pt[][] {
   const out: Pt[][] = []
   for (const f of fixtures) {
+    if (f.cut_benchtop === false) continue   // P10: "Cut benchtop" unticked
     const poly = fixtureCutoutPolygon(f)
     if (poly && benchtopContains(bt, fixtureCutoutCenter(f))) out.push(poly)
   }

@@ -297,6 +297,7 @@ Built:
   Verified headless: typed 1800 × 650 rect; L 2000 / 1500 @ depth 650.
 - [x] **Waterfall joint per edge** (Mark, 2026-10-11): edge.waterfall_join = mitre (default) | butt; B / M toggle on waterfall edges in the panel; plan + elevation label ▼M / ▼B. Mitre = leg to the top surface, 45° at the corner (elevation: band and end-on leg share the diagonal; face-on leg runs to the top edge; 3D: slab cut back by T, leg prism with the 45° face + corner wedge). Butt = the top sits ON the leg (leg stops at the underside; 3D leg box under the top). Phase 4: leg part length = topZ (mitre, both ends 45°) vs base height (butt).
 - [x] **Waterfall legs block cabinets** (Mark, 2026-10-12): `src/lib/waterfallObstacles.ts` — each waterfall leg (edge strip inset by the top thickness, floor to top surface) is added to the `occupied` ranges for cabinet place / move / stretch / paste in plan + elevation, on the wall + side within the mover's depth. Wall units above the top are not blocked. Typed positions in the cabinet panel (`CabinetPanel`, `useCabinetOps`) not yet covered.
+- [x] **Waterfall leg thickness in plan** (Mark, 2026-10-18): plan draws each waterfall leg's inner face — the edge inset by the top's total thickness — as a line in the outline's colour + weight (`benchtops` layer). Line edges only.
 - [x] **Editable sizes in the panel** (Mark, 2026-10-11): Size card — Length (a
   'Length grows from ◀ Left / Both / Right ▶' toggle picks the end that moves;
   default Right), Depth (front edge moves, back stays on the wall), Sits at / Top

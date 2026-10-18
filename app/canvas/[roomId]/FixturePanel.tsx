@@ -202,11 +202,44 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
             title="Open the viewer: 3D, front, back, sides, top (double-click)">View 3D / elevations</button>
         )}
 
-        {f.cutout_shape && (
-          <p className="text-[10px] text-gray-500">
-            Benchtop cutout: {f.cutout_shape === 'round' ? `Ø${f.cutout_w}` : `${f.cutout_w} × ${f.cutout_d}${f.cutout_radius ? ` R${f.cutout_radius}` : ''}`}
-            {f.bench_drop ? ` · drops ${f.bench_drop} below the top` : ''}
-          </p>
+        {/* Benchtop cutout (P10): this placement's copy of the library template —
+            edits here override it for this job only. */}
+        {!opening && (
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer"
+              title="Cut this fixture's cutout into the benchtop under it">
+              <input type="checkbox" checked={f.cut_benchtop ?? true}
+                onChange={e => onUpdate(f.id, { cut_benchtop: e.target.checked })} />
+              Cut benchtop
+            </label>
+            {(f.cut_benchtop ?? true) && <>
+              <div className="flex gap-1">
+                {toggle(!f.cutout_shape, 'None', () => onUpdate(f.id, { cutout_shape: null }), 'No cutout')}
+                {toggle(f.cutout_shape === 'rect', 'Rect', () => onUpdate(f.id, f.cutout_shape || f.cutout_w > 0
+                  ? { cutout_shape: 'rect' }
+                  : { cutout_shape: 'rect', cutout_w: Math.max(0, f.width - 20), cutout_d: Math.max(0, f.depth - 20) }), 'Rectangular cutout')}
+                {toggle(f.cutout_shape === 'round', 'Round', () => onUpdate(f.id, f.cutout_shape || f.cutout_w > 0
+                  ? { cutout_shape: 'round' }
+                  : { cutout_shape: 'round', cutout_w: Math.max(0, Math.min(f.width, f.depth) - 20) }), 'Round cutout (taps, round sinks)')}
+              </div>
+              {f.cutout_shape && <>
+                <div className="grid grid-cols-3 gap-1">
+                  {f.cutout_shape === 'round'
+                    ? field('Diameter', f.cutout_w, v => v > 0 && onUpdate(f.id, { cutout_w: v }), 'Cutout diameter (this placement only)')
+                    : <>
+                        {field('Width', f.cutout_w, v => v > 0 && onUpdate(f.id, { cutout_w: v }), 'Cutout width (this placement only)')}
+                        {field('Depth', f.cutout_d, v => v > 0 && onUpdate(f.id, { cutout_d: v }), 'Cutout depth (this placement only)')}
+                        {field('Radius', f.cutout_radius, v => onUpdate(f.id, { cutout_radius: Math.max(0, v) }), 'Corner radius')}
+                      </>}
+                </div>
+                <div className="grid grid-cols-3 gap-1">
+                  {field('Off right', f.cutout_off_x, v => onUpdate(f.id, { cutout_off_x: v }), 'Cutout centre offset to the right of the item centre (looking at its front)')}
+                  {field('Off fwd', f.cutout_off_y, v => onUpdate(f.id, { cutout_off_y: v }), 'Cutout centre offset forward of the item centre')}
+                </div>
+              </>}
+            </>}
+            {f.bench_drop ? <p className="text-[10px] text-gray-500">Drops {f.bench_drop} below the top</p> : null}
+          </div>
         )}
         {f.model_url
           ? <p className="text-[10px] text-gray-500">3D model: {f.model_format?.toUpperCase()}</p>
