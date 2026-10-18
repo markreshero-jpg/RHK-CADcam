@@ -153,7 +153,7 @@ function ElevClearance({ box, others, len, roomH, z, bg }: {
 
 export default function FixturesElevation({
   fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, onSelect, stretching, onStretchHandle, ghost, onMoveHandle,
-  obstacles = [], showClearance = false, interactive = true, clashIds,
+  obstacles = [], showClearance = false, interactive = true, clashIds, onContextMenu,
 }: {
   fixtures:   RoomFixture[]
   wall:       Wall
@@ -179,6 +179,8 @@ export default function FixturesElevation({
   interactive?: boolean
   /** Fixtures overlapping a cabinet / another fixture — drawn red, like plan. */
   clashIds?: Set<string>
+  /** Right-click: the same fixture menu as plan. */
+  onContextMenu?: (e: React.MouseEvent, id: string) => void
 }) {
   const f = elevationFrame(wall, side, roomCx)
   const handles = (fx: RoomFixture, x: number, y: number, w: number, h: number) =>
@@ -237,7 +239,8 @@ export default function FixturesElevation({
           const x = o.t0, w = o.t1 - o.t0, y = roomH - fx.z - fx.height, h = fx.height
           return (
             <g key={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
-              onPointerDown={e => { e.stopPropagation(); onSelect(fx.id) }}>
+              onPointerDown={e => { e.stopPropagation(); onSelect(fx.id) }}
+              onContextMenu={onContextMenu ? e => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, fx.id) } : undefined}>
               <rect x={x} y={y} width={w} height={h} fill="transparent" stroke={color} strokeWidth={lw} />
               <OpeningElev kind={fx.kind ?? ''} x={x} y={y} w={w} h={h} hingeT={o.hingeT} color={color} lw={lw} z={z} />
               {handles(fx, x, y, w, h)}
@@ -257,7 +260,8 @@ export default function FixturesElevation({
         const lines = showLabels ? wrapLabel(fx.name, w * 0.9, fs) : []
         return (
           <g key={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
-            onPointerDown={e => { e.stopPropagation(); onSelect(fx.id) }}>
+            onPointerDown={e => { e.stopPropagation(); onSelect(fx.id) }}
+              onContextMenu={onContextMenu ? e => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, fx.id) } : undefined}>
             {/* P8: the model's true front shape when traced; else the box (+ inner panel for appliances). */}
             <rect x={x} y={y} width={w} height={h} fill={STROKE} fillOpacity={(fx.elev_shape?.lines.length ? 0.001 : 0.06) * (lp.fillOpacity ?? 1)}
               stroke={fx.elev_shape?.lines.length ? 'none' : color} strokeWidth={lw} strokeDasharray={lp.strokeDasharray} />
