@@ -242,6 +242,12 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-18 (user): **P9 wall reference** — FixturePanel "Wall position" block like CabinetPanel for
+  wall-backed items (not openings): From left end / From right end (its own left / right, looking
+  at its front), Clear left / Clear right (from the clearance dims), **Off wall** (back → wall face,
+  pull a sink forward). `fixtureWallRef` (fixtureGeometry, + test). Moving along the same wall keeps
+  the off-wall distance; linked items re-link so they keep following their cabinet.
+
 - 2026-10-18 (user): **P8 true plan shape** — plan draws the model's top view instead of the box +
   symbol. `fixturePlanShape.ts` (+ test): fitted triangles → top-down height map (2–6 mm grid) →
   marching squares for the outline + a contour midway between neighbouring height plateaus

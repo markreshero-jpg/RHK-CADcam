@@ -14,6 +14,7 @@ import { supabase } from '@/src/lib/supabase'
 import type { Room, Wall, FixtureCatalogItem, RoomFixture, FixtureBody } from '@/src/lib/types'
 import { centroid, type Pt } from '@/src/lib/geometry'
 import { stretchBounds, stretchPatch, type StretchSide, type StretchBounds } from '@/src/lib/fixtureGeometry'
+import { fixtureWallRef, fixtureAxes } from '@/src/lib/fixtureGeometry'
 import { snapFixture, snapOpening, defaultFixtureZ, fixtureCenter, backLeftForCenter, type FixtureSnap, type FixtureFootprint } from '@/src/lib/fixtureGeometry'
 import type { FixtureLink } from '@/src/lib/fixtureLinks'
 import type { Mode, Selected } from './canvasTypes'
@@ -118,7 +119,16 @@ export function useFixtureInteraction({
     if (!carried) return null
     // Doors / windows (P5) always sit in a wall — Shift doesn't free them.
     if (carried.category === 'opening') return snapOpening(wp, carried.width, walls, centroid(walls), SNAP_REACH)
-    const s = snapFixture(wp, carried.width, carried.depth, free ? [] : walls, centroid(walls), SNAP_REACH, freeRot)
+    let s = snapFixture(wp, carried.width, carried.depth, free ? [] : walls, centroid(walls), SNAP_REACH, freeRot)
+    // Moving along the same wall keeps its distance off the wall (a sink pulled forward stays forward).
+    if (carry?.kind === 'move' && s.wall_id) {
+      const cur = fixtures.find(f => f.id === carry.id)
+      const ref = cur && cur.wall_id === s.wall_id ? fixtureWallRef(cur, walls, centroid(walls)) : null
+      if (ref && Math.abs(ref.off) > 0.5) {
+        const { n } = fixtureAxes(s.rotation)
+        s = { ...s, x: s.x + n.x * ref.off, y: s.y + n.y * ref.off }
+      }
+    }
     // Appliances don't overlap cabinets: dropped over one it belongs to (oven over its
     // housing, rangehood under its wall unit) it links; anywhere else it slides to the
     // nearest free gap on the wall. Sinks / taps / cooktops sit on cabinets as before.

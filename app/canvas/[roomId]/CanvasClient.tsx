@@ -2965,6 +2965,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             fixture={selectedFixture}
             walls={walls}
             linkedTo={selectedFixture.cabinet_id ? (cabinets.find(c => c.id === selectedFixture.cabinet_id)?.label ?? 'cabinet') : null}
+            clearance={fixtureClearance?.id === selectedFixture.id ? fixtureClearance.c : null}
             clashWith={fixtureClashMap.get(selectedFixture.id)?.map(c => c.label ?? 'cabinet')}
             onUnlink={id => void fx.unlink(id)}
             onUpdate={(id, patch) => void fx.update(id, patch)}

@@ -348,6 +348,37 @@ export function fixtureClearances(
   return { left: keep(-b.lo), right: keep(b.hi - f.width), front: keep(front), back: keep(back) }
 }
 
+// ── Wall reference (P9) ───────────────────────────────────────────────────────
+// Fixtures referenced off their wall like cabinets (Mark 2026-10-18: "offset (off
+// wall) so i can move sinks out"): which face it backs onto, how far its back is
+// off that face, and how far its sides are from the wall's ends (its own left /
+// right, looking at its front).
+
+export interface FixtureWallRef {
+  wall:  Wall
+  side:  WallSide
+  /** The face it backs onto — n points into the space in front of it. */
+  frame: WallFrame
+  /** Back edge → wall face (mm). */
+  off:   number
+  /** Its left / right side → the wall end on that side (mm, along the wall). */
+  endLeft:  number
+  endRight: number
+}
+
+export function fixtureWallRef(
+  f: Pick<RoomFixture, 'x' | 'y' | 'rotation' | 'width' | 'depth' | 'wall_id'>, walls: Wall[], roomRef: Pt,
+): FixtureWallRef | null {
+  const wall = f.wall_id ? walls.find(w => w.id === f.wall_id) : undefined
+  if (!wall) return null
+  const face = wallFrame(wall, 'face', roomRef)
+  const side: WallSide = offOf(face, fixtureCenter(f)) >= 0 ? 'face' : 'back'
+  const frame = side === 'face' ? face : wallFrame(wall, 'back', roomRef)
+  const b = stretchBounds(f, walls, roomRef, [])
+  if (!isFinite(b.lo) || !isFinite(b.hi)) return null   // not square to the wall
+  return { wall, side, frame, off: offOf(frame, { x: f.x, y: f.y }), endLeft: -b.lo, endRight: b.hi - f.width }
+}
+
 /** Default underside height for a mount type. */
 export const FIXTURE_BENCH_Z = 900
 export function defaultFixtureZ(mount: FixtureMount, mountHeight: number | null): number {

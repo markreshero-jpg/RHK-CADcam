@@ -8,7 +8,7 @@
 import PanelDeleteButton, { PanelCloseButton } from './PanelDeleteButton'
 import CalcInput from '@/src/components/CalcInput'
 import type { RoomFixture, Wall } from '@/src/lib/types'
-import { fixtureCenter, backLeftForCenter, fixtureCorners } from '@/src/lib/fixtureGeometry'
+import { fixtureCenter, backLeftForCenter, fixtureCorners, fixtureWallRef, fixtureAxes, type Clearances } from '@/src/lib/fixtureGeometry'
 import { wallFrame, alongOf } from '@/src/lib/benchtopAnchor'
 import { centroid } from '@/src/lib/geometry'
 
@@ -16,9 +16,11 @@ const CATEGORY_LABEL: Record<string, string> = {
   appliance: 'Appliance', sink: 'Sink', tap: 'Tap', decorative: 'Decorative', opening: 'Door / window',
 }
 
-export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMove, onTurn, onOpen, onClose, linkedTo, clashWith, onUnlink }: {
+export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMove, onTurn, onOpen, onClose, linkedTo, clashWith, onUnlink, clearance }: {
   fixture:  RoomFixture
   walls:    Wall[]
+  /** Gaps to the nearest objects (left / right feed Clear left / Clear right). */
+  clearance?: Clearances | null
   /** P4: label of the cabinet it sits on (follows it), or null. */
   linkedTo?:  string | null
   /** P4: labels of cabinets it overlaps. */
@@ -76,6 +78,14 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
       className={`flex-1 px-2 py-1 rounded text-xs ${on ? 'bg-blue-700 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{label}</button>
   )
 
+  // Wall position (like CabinetPanel): ends / clears along the wall + off the wall face.
+  const wref = !opening && wall ? fixtureWallRef(f, walls, centroid(walls)) : null
+  const { a: ax, n: nx } = fixtureAxes(f.rotation)
+  const shift = (along: number, out: number) => onUpdate(f.id, {
+    x: Math.round((f.x + ax.x * along + nx.x * out) * 10) / 10,
+    y: Math.round((f.y + ax.y * along + nx.y * out) * 10) / 10,
+  })
+
   function moveCentre(axis: 'x' | 'y', v: number) {
     const centre = { ...c, [axis]: v }
     const bl = backLeftForCenter(centre, f.rotation, f.width, f.depth)
@@ -116,6 +126,18 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
           </div>
         </div>
 
+        {wref && (
+          <div className="space-y-1.5">
+            <label className={lbl}>Wall position (mm)</label>
+            <div className="grid grid-cols-2 gap-1">
+              {field('From left end', wref.endLeft, v => shift(v - wref.endLeft, 0), 'Its left side to the wall end on that side (looking at its front)')}
+              {field('From right end', wref.endRight, v => shift(wref.endRight - v, 0), 'Its right side to the wall end on that side')}
+              {clearance?.left != null && field('Clear left', clearance.left, v => shift(v - clearance.left!, 0), 'Gap to the nearest thing on its left')}
+              {clearance?.right != null && field('Clear right', clearance.right, v => shift(clearance.right! - v, 0), 'Gap to the nearest thing on its right')}
+              {field('Off wall', wref.off, v => shift(0, v - wref.off), 'Back of the item to the wall face — pull a sink or appliance forward')}
+            </div>
+          </div>
+        )}
         {opening ? (
           <div className="space-y-1.5">
             <label className={lbl}>Position (mm)</label>
