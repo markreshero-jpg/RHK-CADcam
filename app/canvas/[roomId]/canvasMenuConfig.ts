@@ -113,6 +113,7 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
       null,
       { label: 'Construction', action: () => a.setRoomModalTab('construction') },
       { label: 'Hardware',     action: () => a.setRoomModalTab('hardware') },
+      { label: 'Doors',        action: () => a.setRoomModalTab('doors') },
       null,
       { label: 'Overrides',    action: () => a.setRoomModalTab('overrides') },
       null,

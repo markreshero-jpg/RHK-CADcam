@@ -337,6 +337,18 @@ alter table rooms add column
   door_style_override_id uuid references door_styles(id);
 ```
 
+**Built 2026-10-18 — Job and Room share one Doors tab** (`DoorStandardsPanel.tsx`):
+Job → Cabinet Standards → Doors and Room → Doors show the same fields (default
+style + Base/Wall/Tall style & colour). Room fields are blank = inherit the job.
+`rooms.door_style_override_id` is the room's default style; per-class room
+columns `base|wall|tall_door_style_id` / `_door_colour_id` added
+(`migration_room_door_classes.sql`, applied).
+
+Resolved cascade per cabinet class (loadCabinetInput §12):
+- style: zone → room class → room default → job class → job default
+- colour: room class → job class (only while the room keeps the job's style for
+  that class) → the effective style's default colour.
+
 ---
 
 ## 7. RLS POLICIES

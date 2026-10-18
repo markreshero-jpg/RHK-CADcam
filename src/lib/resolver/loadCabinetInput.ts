@@ -192,7 +192,7 @@ interface RoomCascadeConfig {
 function loadRoomCascadeConfig(roomId: string): Promise<RoomCascadeConfig> {
   return cachedCascade(`cfg:${roomId}`, async () => {
     const [roomRes, shopAsmRes, shopTkRes, shopFrontRes, shopSettingsRes, shopSlideRes, shopDbSchedRes] = await Promise.all([
-      supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, drawerbox_schedule_id, inner_drawerbox_schedule_id, inner_drawer_box_method_id, door_style_override_id, hinge_schedule_id, rule_overrides').eq('id', roomId).single(),
+      supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, drawerbox_schedule_id, inner_drawerbox_schedule_id, inner_drawer_box_method_id, door_style_override_id, base_door_style_id, wall_door_style_id, tall_door_style_id, base_door_colour_id, wall_door_colour_id, tall_door_colour_id, hinge_schedule_id, rule_overrides').eq('id', roomId).single(),
       supabase.from('assembly_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
       supabase.from('toekick_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
       supabase.from('front_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
@@ -770,7 +770,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     : classGroup === 'tall' ? projRow?.tall_door_style_id
     : projRow?.base_door_style_id
   ) ?? null
-  const doorColourOverride = (
+  const jobColourOverride = (
     classGroup === 'wall' ? projRow?.wall_door_colour_id
     : classGroup === 'tall' ? projRow?.tall_door_colour_id
     : projRow?.base_door_colour_id
@@ -781,8 +781,25 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     ?? (projRow?.default_door_style_id as string | null | undefined)
     ?? null
 
+  // Room level mirrors the job: per-class style/colour, else the room default
+  // style (door_style_override_id). The job's class colour is only inherited
+  // while the room keeps the job's style — a different style falls back to its
+  // own default colour (the job colour belongs to another range).
+  const roomClassStyle = ((
+    classGroup === 'wall' ? room?.wall_door_style_id
+    : classGroup === 'tall' ? room?.tall_door_style_id
+    : room?.base_door_style_id
+  ) as string | null | undefined) ?? null
+  const roomClassColour = ((
+    classGroup === 'wall' ? room?.wall_door_colour_id
+    : classGroup === 'tall' ? room?.tall_door_colour_id
+    : room?.base_door_colour_id
+  ) as string | null | undefined) ?? null
+  const roomStyleId = roomClassStyle ?? (room?.door_style_override_id as string | null | undefined) ?? null
+  const doorColourOverride = roomClassColour
+    ?? (!roomStyleId || roomStyleId === effectiveJobStyleId ? jobColourOverride : null)
+
   const faceGridInput = (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID
-  const roomStyleId = (room?.door_style_override_id as string | null | undefined) ?? null
   const resolvedDoors = await resolveDoorStyles(faceGridInput, roomStyleId, effectiveJobStyleId, doorColourOverride)
 
   // Shaped cabinets (z_cabinet_shape Phase 3): the other front facets' grids

@@ -3,13 +3,13 @@ import { useState, useEffect } from 'react'
 import { Room, Project, DEFAULT_DIMS } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
 import { supabase } from '@/src/lib/supabase'
-import { DoorStylePreview, useDoorStylePreviews } from '@/src/components/DoorStylePreview'
+import DoorStandardsPanel, { type DoorClassRow, type DoorJobInherit } from './DoorStandardsPanel'
 import MaterialsScheduleTab from './MaterialsScheduleTab'
 import CalcInput from '@/src/components/CalcInput'
 
 type DrawerBoxMethodItem = { id: string; name: string; is_default: boolean; kind?: 'external' | 'internal' | null }
 
-export type RoomPropertiesTab = 'details' | 'construction' | 'materials' | 'hardware' | 'overrides'
+export type RoomPropertiesTab = 'details' | 'construction' | 'materials' | 'hardware' | 'doors' | 'overrides'
 
 type Rules = typeof DEFAULT_CONSTRUCTION_METHOD.rules
 type RuleKey = keyof Rules
@@ -160,15 +160,23 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
     const v = (room.rule_overrides as Record<string, unknown> | null)?.RAILGRAIN
     return v === 'horizontal' || v === 'vertical' ? v : ''
   })
-  const [doorStyles, setDoorStyles] = useState<{ id: string; name: string }[]>([])
-  const doorPreviews = useDoorStylePreviews()
-
-  useEffect(() => {
-    let cancelled = false
-    supabase.from('door_styles').select('id,name').eq('is_active', true).order('sort_order').order('name')
-      .then(({ data }) => { if (!cancelled) setDoorStyles((data ?? []) as { id: string; name: string }[]) })
-    return () => { cancelled = true }
-  }, [])
+  // Doors tab — same fields as the job's Doors tab; blank = inherit the job.
+  const [baseDoorStyle,  setBaseDoorStyle]  = useState(room.base_door_style_id ?? '')
+  const [wallDoorStyle,  setWallDoorStyle]  = useState(room.wall_door_style_id ?? '')
+  const [tallDoorStyle,  setTallDoorStyle]  = useState(room.tall_door_style_id ?? '')
+  const [baseDoorColour, setBaseDoorColour] = useState(room.base_door_colour_id ?? '')
+  const [wallDoorColour, setWallDoorColour] = useState(room.wall_door_colour_id ?? '')
+  const [tallDoorColour, setTallDoorColour] = useState(room.tall_door_colour_id ?? '')
+  const doorClassRows: DoorClassRow[] = [
+    { key: 'base', style: baseDoorStyle, setStyle: setBaseDoorStyle, colour: baseDoorColour, setColour: setBaseDoorColour },
+    { key: 'wall', style: wallDoorStyle, setStyle: setWallDoorStyle, colour: wallDoorColour, setColour: setWallDoorColour },
+    { key: 'tall', style: tallDoorStyle, setStyle: setTallDoorStyle, colour: tallDoorColour, setColour: setTallDoorColour },
+  ]
+  const doorInherit: DoorJobInherit = {
+    defaultStyle: project?.default_door_style_id ?? null,
+    classStyle:  { base: project?.base_door_style_id ?? null,  wall: project?.wall_door_style_id ?? null,  tall: project?.tall_door_style_id ?? null },
+    classColour: { base: project?.base_door_colour_id ?? null, wall: project?.wall_door_colour_id ?? null, tall: project?.tall_door_colour_id ?? null },
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -203,6 +211,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
     { id: 'construction', label: 'Construction' },
     { id: 'materials',    label: 'Materials' },
     { id: 'hardware',     label: 'Hardware' },
+    { id: 'doors',        label: 'Doors' },
     { id: 'overrides',    label: overrideKeys.length > 0 ? `Overrides (${overrideKeys.length})` : 'Overrides' },
   ]
 
@@ -241,6 +250,12 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
       rule_overrides: newOverrides as Record<string, unknown>,
       inner_drawer_box_method_id: innerDrawerBoxMethod || null,
       door_style_override_id: doorStyleOverride || null,
+      base_door_style_id:  baseDoorStyle  || null,
+      wall_door_style_id:  wallDoorStyle  || null,
+      tall_door_style_id:  tallDoorStyle  || null,
+      base_door_colour_id: baseDoorColour || null,
+      wall_door_colour_id: wallDoorColour || null,
+      tall_door_colour_id: tallDoorColour || null,
     })
     onClose()
   }
@@ -448,43 +463,13 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
                 </select>
                 <p className="text-[10px] text-gray-500 mt-1">Door-colour rail notched into the sides behind every sharknose finger gap. Cabinets can override this.</p>
               </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Door Style</p>
-                <div className="flex items-center gap-2 mb-2 text-[11px] text-gray-500">
-                  <span>Inheriting from job:</span>
-                  <span className="text-gray-300">
-                    {project?.default_door_style_id
-                      ? (doorStyles.find(s => s.id === project.default_door_style_id)?.name ?? 'job default')
-                      : 'shop default'}
-                  </span>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="flex-1">
-                    <select
-                      value={doorStyleOverride}
-                      onChange={e => setDoorStyleOverride(e.target.value)}
-                      className={`w-full bg-gray-800 border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 ${
-                        doorStyleOverride ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
-                      }`}
-                    >
-                      <option value="">— inherit from job —</option>
-                      {doorStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                    <p className="text-[10px] text-gray-500 mt-1">Overrides the job door style for every door in this room (individual zones can still override).</p>
-                  </div>
-                  {/* Preview of the effective style (override, else the job's default) */}
-                  {(() => {
-                    const effStyleId = doorStyleOverride || project?.default_door_style_id || null
-                    const pv = doorPreviews.forStyle(effStyleId)
-                    return pv ? (
-                      <DoorStylePreview {...pv} className="h-28"
-                        caption={doorStyles.find(s => s.id === effStyleId)?.name ?? null} />
-                    ) : null
-                  })()}
-                </div>
-              </div>
               <p className="text-[11px] text-gray-600 border-t border-gray-800 pt-3">Room-level hardware overrides (hinges, runners) will be added here.</p>
             </div>
+          )}
+
+          {tab === 'doors' && (
+            <DoorStandardsPanel mode="room" defaultStyle={doorStyleOverride} setDefaultStyle={setDoorStyleOverride}
+              rows={doorClassRows} inherit={doorInherit} />
           )}
 
           {tab === 'overrides' && (

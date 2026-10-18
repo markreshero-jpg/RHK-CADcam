@@ -87,7 +87,14 @@ export interface Room {
   benchtop_build_method_id:    string | null
   construction_schedule_id:    string | null
   inner_drawer_box_method_id:  string | null
-  door_style_override_id:      string | null   // room-level door style override
+  door_style_override_id:      string | null   // room-level default door style (overrides the job)
+  // Per assembly-class room overrides (null = inherit room default → job).
+  base_door_style_id?:         string | null
+  wall_door_style_id?:         string | null
+  tall_door_style_id?:         string | null
+  base_door_colour_id?:        string | null
+  wall_door_colour_id?:        string | null
+  tall_door_colour_id?:        string | null
   /** CAD annotations (z_CAD_tool): the canvas previews paper-mm sizes at 1:this. */
   annotation_scale?:           number
   created_at: string
