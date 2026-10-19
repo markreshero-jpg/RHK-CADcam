@@ -37,6 +37,7 @@ import type { PlanGridPrefs } from '@/src/lib/userPrefs'
 import { getPalette } from '@/src/lib/partPalette'
 import { caseBox, caseBoxAABB, casePlanCorners, isSide, tkPlanBox, tkPlanCorners, tkBoxAABB, zoneBevelOutline, rotEulerXYZ } from '@/src/lib/jointDrilling'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
+import { binOutlines } from '@/src/lib/binGeometry'
 import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
 import { dbLoadRoomPartDetails, type PartPosOverrides } from './canvasDB'
 import { shapedFrontMarks, sweepFlag, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
@@ -1169,8 +1170,12 @@ export default function CanvasSVG({
           if (showOutline) drawnRects.push({ x: 0, z: 0, w: displayCab.dx, d: displayCab.dz })
           for (const p of casePartsR) drawnRects.push(caseBoxAABB(p))
           for (const p of kickPartsR) { const b = tkBoxAABB(p); drawnRects.push({ x: b.x, z: b.z, w: b.w, d: b.d }) }
-          if (layers.show('drawer_boxes'))   for (const ds of rpPlan?.drawer_stacks ?? []) for (const p of ds.box_parts) drawnRects.push(hwRect(dbBox(p), ds.turn))
-          if (layers.show('drawer_runners')) for (const ds of rpPlan?.drawer_stacks ?? []) for (const sl of ds.slides) drawnRects.push(hwRect(slideBox(sl), ds.turn))
+          if (layers.show('drawer_boxes'))   for (const ds of rpPlan?.drawer_stacks ?? []) if (ds.drawer_type !== 'bin') for (const p of ds.box_parts) drawnRects.push(hwRect(dbBox(p), ds.turn))
+          if (layers.show('drawer_runners')) for (const ds of rpPlan?.drawer_stacks ?? []) if (ds.drawer_type !== 'bin') for (const sl of ds.slides) drawnRects.push(hwRect(slideBox(sl), ds.turn))
+          if (layers.show('bins')) for (const ds of rpPlan?.drawer_stacks ?? []) if (ds.drawer_type === 'bin') for (const o of binOutlines(ds, 'top')) {
+            const xs = o.pts.map(([x]) => x), zs = o.pts.map(([, z]) => z)
+            drawnRects.push(hwRect({ x: Math.min(...xs), z: Math.min(...zs), w: Math.max(...xs) - Math.min(...xs), d: Math.max(...zs) - Math.min(...zs) }, ds.turn))
+          }
           for (const p of resolvedParts?.get(cab.id)?.custom_parts ?? []) {
             if (!p.show_in_room || !layers.show(customPartItem(p))) continue
             const { ex, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
@@ -1297,8 +1302,18 @@ export default function CanvasSVG({
                 )
               })}
 
-              {/* Drawer boxes + runners — plan footprint outlines (hardware items) */}
-              {layers.show('drawer_boxes') && (rpPlan?.drawer_stacks ?? []).flatMap((ds, si) => ds.box_parts.map((p, i) => {
+              {/* Drawer boxes + runners — plan footprint outlines (hardware items).
+                  A pull-out bin (z_bin_cabinet) draws its top outline instead of its rails. */}
+              {layers.show('bins') && (rpPlan?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type !== 'bin' ? [] : binOutlines(ds, 'top').map((o, i) => {
+                const lp = layers.props('bins', view.zoom)
+                const pts = o.pts.map(([x, z]) => { const [X, , Z] = turnPoint(ds.turn, x, 0, z); const q = toPlanC(X, Z); return `${q.x},${q.y}` }).join(' ')
+                return (
+                  <polygon key={`bin-${si}-${i}`} points={pts} data-part="bin"
+                    fill="none" stroke={isSel ? '#e2e8f0' : layers.color('bins', palette.slides)} strokeWidth={layers.w('bins', 0.6) / lz}
+                    strokeDasharray={lp.strokeDasharray ?? '3 2'} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
+                )
+              }))}
+              {layers.show('drawer_boxes') && (rpPlan?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type === 'bin' ? [] : ds.box_parts.map((p, i) => {
                 const b = dbBox(p)
                 if (b.w <= 0 || b.d <= 0) return null
                 const lp = layers.props('drawer_boxes', view.zoom)
@@ -1308,7 +1323,7 @@ export default function CanvasSVG({
                     strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
                 )
               }))}
-              {layers.show('drawer_runners') && (rpPlan?.drawer_stacks ?? []).flatMap((ds, si) => ds.slides.map((s, i) => {
+              {layers.show('drawer_runners') && (rpPlan?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type === 'bin' ? [] : ds.slides.map((s, i) => {
                 const b = slideBox(s)
                 if (b.w <= 0 || b.d <= 0) return null
                 const lp = layers.props('drawer_runners', view.zoom)

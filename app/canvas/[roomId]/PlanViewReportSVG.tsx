@@ -28,6 +28,7 @@ import { planShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { caseBox, casePlanCorners, isSide, tkPlanBox, tkPlanCorners } from '@/src/lib/jointDrilling'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
+import { binOutlines } from '@/src/lib/binGeometry'
 import { customExtents } from '@/src/lib/customPartBox'
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import { shapedFrontMarks, sweepFlag, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
@@ -411,13 +412,18 @@ export default function PlanViewReportSVG({
               return <polygon key={`tk-${i}`} points={tkPlanCorners(p).map(q => at(q.x, q.z)).join(' ')} opacity={pp.opacity} fill="none"
                 stroke={INK3} strokeWidth={layers.w(it, sw * 0.35)} strokeDasharray={pp.strokeDasharray} />
             })}
-            {layers.show('drawer_boxes') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.box_parts.map((p, i) => {
+            {layers.show('bins') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type !== 'bin' ? [] : binOutlines(ds, 'top').map((o, i) => {
+              const pp = lp('bins')   // pull-out bin (z_bin_cabinet): top outline instead of its rails
+              return <polygon key={`bin-${si}-${i}`} points={o.pts.map(([x, z]) => at(x, z)).join(' ')} opacity={pp.opacity} fill="none"
+                stroke={INK3} strokeWidth={layers.w('bins', sw * 0.3)} strokeDasharray={pp.strokeDasharray} />
+            }))}
+            {layers.show('drawer_boxes') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type === 'bin' ? [] : ds.box_parts.map((p, i) => {
               const b = dbBox(p), pp = lp('drawer_boxes')
               if (b.w <= 0 || b.d <= 0) return null
               return <polygon key={`db-${si}-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"
                 stroke={INK3} strokeWidth={layers.w('drawer_boxes', sw * 0.3)} strokeDasharray={pp.strokeDasharray} />
             }))}
-            {layers.show('drawer_runners') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.slides.map((s, i) => {
+            {layers.show('drawer_runners') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type === 'bin' ? [] : ds.slides.map((s, i) => {
               const b = slideBox(s), pp = lp('drawer_runners')
               if (b.w <= 0 || b.d <= 0) return null
               return <polygon key={`sl-${si}-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"

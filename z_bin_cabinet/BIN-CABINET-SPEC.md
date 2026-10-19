@@ -1,6 +1,6 @@
 # Bin Cabinet (BBIN) — Spec
 
-**Status:** B1–B5 live; parametric 3D bin (build_bin.py port), elevation outlines and cabinet-sheet hardware row built 2026-10-17. Plan view: not wanted (user, 2026-10-17). Remaining: real per-bin GLBs if supplied.
+**Status:** B1–B5 live; parametric 3D bin (build_bin.py port), elevation outlines and cabinet-sheet hardware row built 2026-10-17. Plan view: top outline added 2026-10-19 (user changed their mind). Remaining: real per-bin GLBs if supplied.
 **Owner module:** `z_bin_cabinet/`
 **Source data:** `Nikpol-Teramo-TDS-2026-05.pdf` (tech data sheet, May 2026) and
 `teramo-p5..p8.png` (install template + drilling pages for each bin height).
@@ -196,6 +196,7 @@ void | division | bin | division | void, with equal voids.
   elevation (ElevationPrintSVG), cabinet sheet front / side / 3D sketch (CabinetSheetSVG), and the
   cabinet editor's front / top / side views (ResolvedViews — dashed, not selectable). Gated by the
   `bins` layer, now on in elevation as well as 3D. Plan view draws nothing for a bin — by choice (user, 2026-10-17).
+- **Plan view (2026-10-19, user reversed the above):** `binOutlines(stack, 'top')` drawn instead of the bin's rails / box in the room plan (CanvasSVG, turned facets via `turnPoint`) and the printed plan (PlanViewReportSVG). The `bins` layer now covers plan too (default on); bin stacks no longer draw under the drawer-boxes / runners items in plan.
 - Cabinet sheet hardware: bin fronts are listed as the picked bin ("Teramo 74L · 620 high · runners
   incl."), from the resolved stacks, and are kept out of the drawer-runner estimate (which used to
   count a bin front as a runner pair). A bin front with no bin placed → "Pull-out bin — none fits".
