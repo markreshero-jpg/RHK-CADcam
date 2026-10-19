@@ -168,6 +168,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'dim_wall_overall',     group: 'dimensions', label: 'Wall overall',       views: ['plan'], default: ON },
   { id: 'dim_base_chain',       group: 'dimensions', label: 'Base chain',         views: ['plan'], default: ON },
   { id: 'dim_wall_chain',       group: 'dimensions', label: 'Wall-cabinet chain', views: ['plan'], default: ON },
+  { id: 'dim_row_labels',       group: 'dimensions', label: 'Row names',          views: ['plan'], default: ON,
+    hint: 'Plan: BASE / WALL CABS / TALL / OVERALL … at the start of each dimension row' },
   { id: 'dim_elev_height',      group: 'dimensions', label: 'Height chain',       views: ['elevation'], default: ON },
   { id: 'dim_elev_floor_chain', group: 'dimensions', label: 'Floor cabinet widths', views: ['elevation'], default: ON },
   { id: 'dim_elev_wall_chain',  group: 'dimensions', label: 'Overhead cabinet widths', views: ['elevation'], default: ON },

@@ -1028,6 +1028,7 @@ export default function CanvasSVG({
                   layerKick={layers.setting('dim_kicks')}
                   kickSpans={layers.show('dim_kicks') ? kickPlanSpans(cabinets, w, resolvedParts, cx) : undefined}
                   fixtureSpans={wallFixtureSpans?.get(w.id)?.filter(s => layers.show(fixtureLayer(s.category)))}
+                  showRowNames={layers.show('dim_row_labels')}
                   labelBg={layers.background}
                 />
               </Fragment>
@@ -1074,6 +1075,7 @@ export default function CanvasSVG({
                 layerOpenings={layers.setting('dim_openings')}
                 openingSpans={wallOpenings?.get(w.id)}
                 fixtureSpans={wallFixtureSpans?.get(w.id)?.filter(s => layers.show(fixtureLayer(s.category)))}
+                  showRowNames={layers.show('dim_row_labels')}
                   labelBg={layers.background}
               />
             </Fragment>

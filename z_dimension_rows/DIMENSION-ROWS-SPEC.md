@@ -142,6 +142,7 @@ The Plan and Elevation tabs get a "Dimension rows" section in the Dimensions gro
 | Phase | Scope | Status |
 |---|---|---|
 | P0 | Plan: talls on the overhead row; depth-dim lanes + return-wall clearance; fixed-mm spacing. Adjacent insert inherits class | ✅ 2026-10-12 |
+| P0b | Plan canvas + plan report: row names (BASE / WALL CABS / TALL / WALL + TALL / BULKHEAD / KICK / OPENINGS / OVERALL) just past each row's wall-start end, layer item `dim_row_labels` (`dimLabel.tsx` `wallRowName`). **P2: draw `row.name` there instead.** | ✅ 2026-10-19 |
 | P1 | `DimRow` type, `dimRows` in settings, legacy synthesis, `LayerView.dimRows()`, `dimensionRows.ts` + tests | — |
 | P2 | Plan canvas + plan report driven by rows | — |
 | P3 | Elevation canvas + print driven by rows; `dim_elev_overall` item | — |

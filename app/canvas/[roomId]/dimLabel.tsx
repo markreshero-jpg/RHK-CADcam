@@ -52,3 +52,10 @@ export function DimLabel({
     </g>
   )
 }
+
+// Plan row name for the overhead chain — talls ride that row.
+export function wallRowName(cabs: { assembly_class?: string | null }[], hasAppliances = false): string {
+  const tall = cabs.some(c => c.assembly_class === 'tall' || c.assembly_class === 'tall_corner')
+  const oh = hasAppliances || cabs.some(c => c.assembly_class === 'wall' || c.assembly_class === 'wall_corner')
+  return tall && oh ? 'WALL + TALL' : tall ? 'TALL' : 'WALL CABS'
+}

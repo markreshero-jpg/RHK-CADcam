@@ -5,7 +5,7 @@ import { returnWallThickness } from '@/src/lib/wallJoints'
 import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
 import { kickChain, type KickSpan } from '@/src/lib/kickDims'
 import { roundMm } from '@/src/lib/format'
-import { DimLabel, dimLabelFits, dimLabelSides } from './dimLabel'
+import { DimLabel, dimLabelFits, dimLabelSides, wallRowName } from './dimLabel'
 import type { FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 
 interface Props {
@@ -26,6 +26,8 @@ interface Props {
   openingSpans?: WallSpan[]
   /** Free-standing appliances on this wall (fixtureChainSpans) — they take their place in the base / wall-cabinet rows. */
   fixtureSpans?: FixtureChainSpan[]
+  /** Row names at the start of each chain (`dim_row_labels`). */
+  showRowNames?: boolean
   /** Label backing-chip colour — the view background (layer set). */
   labelBg?: string
 }
@@ -75,7 +77,7 @@ function spanChain(spans: WallSpan[], len: number): Seg[] {
 }
 
 function DimLine({
-  wall, out, dist, segs, zoom, col, weight = 1, bg = '#030712', opacity = 1,
+  wall, out, dist, segs, zoom, col, weight = 1, bg = '#030712', opacity = 1, name, nameClear = 0,
 }: {
   wall: Wall
   out: { x: number; y: number }
@@ -86,6 +88,8 @@ function DimLine({
   weight?: number   // layer line-weight multiplier
   bg?: string       // label backing-chip colour
   opacity?: number  // layer opacity multiplier
+  name?: string     // row name (`dim_row_labels`), drawn just past the line's start
+  nameClear?: number // model mm to clear at the start (return wall thickness)
 }) {
   const z = zoom
   const wd = wallDir(wall)
@@ -126,6 +130,19 @@ function DimLine({
           </g>
         )
       })}
+      {/* Row name past the wall's start (t = 0), outside the return wall. Always the
+          start end, never the reading-left one: round a room each corner is exactly
+          one wall's start, so names from neighbouring walls never share a corner. */}
+      {name && (() => {
+        const p = pt(-(nameClear + fs * 0.6))
+        const flipped = textAngle !== wall.angle
+        return (
+          <g transform={`rotate(${textAngle}, ${p.x}, ${p.y})`}>
+            <text x={p.x} y={p.y} textAnchor={flipped ? 'start' : 'end'} dominantBaseline="middle"
+              fontSize={fs * 0.85} fill={col} opacity={0.75} letterSpacing={fs * 0.05}>{name}</text>
+          </g>
+        )
+      })()}
     </g>
   )
 }
@@ -193,7 +210,7 @@ function DepthDim({
 export default function WallDimensionChain({
   wall, walls, cabinets, rc, zoom, selected,
   layerOverall, layerBase, layerWallCab, layerKick, kickSpans = [], labelBg = '#030712',
-  layerOpenings, openingSpans = [], fixtureSpans = [],
+  layerOpenings, openingSpans = [], fixtureSpans = [], showRowNames = false,
 }: Props) {
   const inward = wallInwardNormal(wall, rc)
   const out = { x: -inward.x, y: -inward.y }
@@ -249,6 +266,8 @@ export default function WallDimensionChain({
     const showBh = layerWallCab.visible && bhCabs.length > 0
     const bhSegs = showBh ? computeChain(bhCabs, wall) : []
     const nBh = showBh ? 1 : 0
+    // Row names (`dim_row_labels`).
+    const nm = (n: string) => showRowNames ? { name: n, nameClear: clear0 } : {}
     const overallSeg: Seg[] = [{ from: 0, to: wall.length, label: roundMm(wall.length) }]
     const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
     const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
@@ -271,22 +290,22 @@ export default function WallDimensionChain({
       <g key={key}>
         {/* Wall-parallel chain lines */}
         {layerWallCab.visible && (ohCabs.length > 0 || wallFx.length > 0) && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step + rW} segs={wallCabSegs} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step + rW} segs={wallCabSegs} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} bg={labelBg} {...nm(wallRowName(ohCabs, wallFx.length > 0))} />
         )}
         {showBh && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * 2 + rW} segs={bhSegs} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * 2 + rW} segs={bhSegs} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} bg={labelBg} {...nm('BULKHEAD')} />
         )}
         {layerBase.visible && (baseCabs.length > 0 || baseFx.length > 0) && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nB + rB} segs={baseSegs} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nB + rB} segs={baseSegs} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} bg={labelBg} {...nm('BASE')} />
         )}
         {showKicks && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nK + rK} segs={kickSegs} zoom={z} col={kickCol} weight={layerKick!.weight} opacity={layerKick!.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nK + rK} segs={kickSegs} zoom={z} col={kickCol} weight={layerKick!.weight} opacity={layerKick!.opacity} bg={labelBg} {...nm('KICK')} />
         )}
         {showOpen && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nD + rD} segs={openSegs} zoom={z} col={layerOpenings!.color ?? col} weight={layerOpenings!.weight} opacity={layerOpenings!.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nD + rD} segs={openSegs} zoom={z} col={layerOpenings!.color ?? col} weight={layerOpenings!.weight} opacity={layerOpenings!.opacity} bg={labelBg} {...nm('OPENINGS')} />
         )}
         {layerOverall.visible && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nO + rO} segs={overallSeg} zoom={z} col={layerOverall.color ?? col} weight={layerOverall.weight} opacity={layerOverall.opacity} bg={labelBg} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nO + rO} segs={overallSeg} zoom={z} col={layerOverall.color ?? col} weight={layerOverall.weight} opacity={layerOverall.opacity} bg={labelBg} {...nm('OVERALL')} />
         )}
         {/* Kick depth (wall face → kick face) at the wall ends, outside the cabinet depth lanes */}
         {showKicks && (

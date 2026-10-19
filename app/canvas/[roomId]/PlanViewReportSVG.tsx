@@ -32,7 +32,7 @@ import { customExtents } from '@/src/lib/customPartBox'
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import { shapedFrontMarks, sweepFlag, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
 import { roundMm } from '@/src/lib/format'
-import { DimLabel, dimLabelFits, dimLabelSides } from './dimLabel'
+import { DimLabel, dimLabelFits, dimLabelSides, wallRowName } from './dimLabel'
 
 /** Report-only page extras (not drawing layers). */
 export interface PlanViewPageOptions {
@@ -201,7 +201,7 @@ export default function PlanViewReportSVG({
   const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 
   // ── One dimension-chain line (main line + boundary ticks + segment labels) ─
-  function dimLine(wall: Wall, out: { x: number; y: number }, rowDist: number, segs: Seg[], key: string, item: string) {
+  function dimLine(wall: Wall, out: { x: number; y: number }, rowDist: number, segs: Seg[], key: string, item: string, name?: string) {
     const lineW = layers.w(item, dimSW), dash = lp(item).strokeDasharray
     const wd = wallDir(wall)
     const thick = wall.wall_type === 'island' ? 0 : wall.thickness
@@ -236,6 +236,16 @@ export default function PlanViewReportSVG({
             </g>
           )
         })}
+        {/* Row name (`dim_row_labels`) past the wall start — see WallDimensionChain. */}
+        {name && layers.show('dim_row_labels') && (() => {
+          const p = pt(-(returnWallThickness(wall, walls, 'start') + dimFS * 0.6))
+          const flipped = textAngle !== wall.angle
+          return (
+            <text x={p.x} y={p.y} transform={`rotate(${textAngle}, ${p.x}, ${p.y})`} textAnchor={flipped ? 'start' : 'end'}
+              dominantBaseline="middle" fontSize={dimFS * 0.85} fill={INK} opacity={0.75}
+              fontFamily="Arial, Helvetica, sans-serif">{name}</text>
+          )
+        })()}
       </g>
     )
   }
@@ -626,11 +636,11 @@ export default function PlanViewReportSVG({
           const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
           return (
             <g key={key}>
-              {layers.show('dim_wall_chain') && (ohCabs.length > 0 || wallFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`, 'dim_wall_chain')}
-              {showBh && dimLine(w, chainDir, depthOffset + ROW_WALLCAB + ROW_BH_STEP, computeChain(bhCabs, w), `bh-${key}`, 'dim_wall_chain')}
-              {layers.show('dim_base_chain') && (baseCabs.length > 0 || baseFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_BASE + bh, baseSegs, `bc-${key}`, 'dim_base_chain')}
-              {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL + bh, openSegs, `op-${key}`, 'dim_openings')}
-              {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall')}
+              {layers.show('dim_wall_chain') && (ohCabs.length > 0 || wallFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`, 'dim_wall_chain', wallRowName(ohCabs, wallFx.length > 0))}
+              {showBh && dimLine(w, chainDir, depthOffset + ROW_WALLCAB + ROW_BH_STEP, computeChain(bhCabs, w), `bh-${key}`, 'dim_wall_chain', 'BULKHEAD')}
+              {layers.show('dim_base_chain') && (baseCabs.length > 0 || baseFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_BASE + bh, baseSegs, `bc-${key}`, 'dim_base_chain', 'BASE')}
+              {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL + bh, openSegs, `op-${key}`, 'dim_openings', 'OPENINGS')}
+              {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall', 'OVERALL')}
               {layers.show('dim_base_chain') && baseDz > 0 && (
                 <>
                   {depthDim(w, depthDir, 0,        baseDz, -1, `dd0-${key}`, 'dim_base_chain', backOffset)}
