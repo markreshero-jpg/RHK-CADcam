@@ -597,6 +597,9 @@ export default function ElevationSVG({
       setMarquee(null)
       return
     }
+    // Only a left click places / drops / measures. A right-click's pointerup comes
+    // before its contextmenu (which cancels placing) — it must not place first.
+    if (e.button !== 0) return
 
     if (elevResizeFollowing) { await confirmResize(); return }
     if (fixtureStretching) { onFixtureStretchCommit?.(); return }
