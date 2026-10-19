@@ -529,7 +529,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Search (e.g. "EP" or "filler") and tick things like WEP, BEPK, BFK and WF, then Save. The list is kept in this browser.',
       canvas: true, done: (c, s) => ev(c, 'insert_list_save') > ev(s, 'insert_list_save') },
     { id: 'insert', title: 'Insert one beside a cabinet',
-      body: 'Right-click a wall cabinet → Insert → WEP → Left side. It butts against that side and takes the cabinet’s height, depth and elevation. Items for other cabinet types are under Insert → Other.',
+      body: 'Right-click a wall cabinet → Insert → WEP → Left side. It butts against that side and takes the cabinet’s height, depth and elevation. If the cabinet is hard against a wall or another cabinet, it narrows by the panel’s thickness to make room. Items for other cabinet types are under Insert → Other.',
       canvas: true, done: (c, s) => c.cabinets.length > s.cabinets.length },
   ]},
 

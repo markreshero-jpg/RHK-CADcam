@@ -9,7 +9,7 @@ import {
   toDeg, dist,
   wallEnd, wallDir,
   snapAngle,
-  nearestWall, wallMitreCorners, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabT, nextLabel,
+  nearestWall, wallMitreCorners, findFreeSlot, slideToFreeSlot, slideAlongWall, fitFreeSlot, cabsBlock, cabT, nextLabel,
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint, cabWallGap, cabWallSpan,
 } from '@/src/lib/geometry'
 import { bulkheadAutoHeight } from '@/src/lib/bulkhead'
@@ -1118,7 +1118,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   // Place the (possibly edited) armed draft. Follows the insert → setCabinets →
   // async-resolve pattern so the cabinet renders immediately.
-  async function placeFromDraft(draft: CabinetInstance, wall: Wall, pos_x: number, pos_y: number, islandFlip = false, dxOverride?: number) {
+  // snapshot=false when the caller already took one (Insert that narrows its host).
+  async function placeFromDraft(draft: CabinetInstance, wall: Wall, pos_x: number, pos_y: number, islandFlip = false, dxOverride?: number, snapshot = true) {
     // An armed draft places once. A second click / double-click landing before the
     // armed state clears (elevation has no placing guard; a kit takes a moment
     // before it shows) would otherwise drop a duplicate in the same spot.
@@ -1126,7 +1127,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     placedDraftsRef.current.add(draft)
     const kitDef = draft.cabinet_definition_id ? kitDefsRef.current.get(draft.cabinet_definition_id) : undefined
     if (kitDef) return placeKitFromDraft(kitDef, draft, wall, pos_x, pos_y, islandFlip)
-    captureSnapshot()
+    if (snapshot) captureSnapshot()
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, created_at, updated_at, ...rest } = draft
     const data: Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'> = {
@@ -1291,8 +1292,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // against the cabinet's side (left/right as seen from its front, so swapped for a
   // back-side cabinet). Same type (corners folded) → it takes the cabinet's height,
   // depth and elevation; a kick-run member's kick-less box is extended back to the
-  // floor so a kick / to-floor item gets its full height. Refuses when that side is
-  // taken or off the wall end rather than landing somewhere else.
+  // floor so a kick / to-floor item gets its full height. When that side is short of
+  // room (hard against a wall end, corner or neighbour) the cabinet narrows by the
+  // shortfall — moving its own side in — and the item fills the space it gave up;
+  // one undo step for both.
   async function handleInsertDefinitionAdjacent(cabId: string, definitionId: string, side: 'left' | 'right') {
     const host = cabinets.find(c => c.id === cabId)
     const wall = host && walls.find(w => w.id === host.wall_id)
@@ -1309,17 +1312,29 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const back = wallSide === 'back'
     const lowT = (side === 'left') !== back
     const t = cabT(host, wall)
-    const desired = lowT ? t - draft.dx : t + host.dx
-    const occupied = cabinets
-      .filter(c => c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(draft, c, wall, room) && cabWallSide(c, wall) === wallSide)
+    const end = t + host.dx
+    const others = cabinets
+      .filter(c => c.id !== host.id && c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(draft, c, wall, room) && cabWallSide(c, wall) === wallSide)
       .map(c => ({ t: cabT(c, wall), dx: c.dx })).concat(wfOcc(wall, wallSide, draft))
-    const slot = findFreeSlot(desired, draft.dx, wall.length, occupied)
-    if (desired < -0.5 || desired + draft.dx > wall.length + 0.5 || Math.abs(slot - desired) > 0.5) {
-      setToast(`No room for ${def.name} on the ${side} of ${host.label ?? 'this cabinet'}`)
-      return
+    // Free run on that side, up to the nearest neighbour / wall end.
+    const gap = lowT
+      ? t - Math.max(0, ...others.filter(o => o.t < t).map(o => Math.min(o.t + o.dx, t)))
+      : Math.min(wall.length, ...others.filter(o => o.t + o.dx > end).map(o => Math.max(o.t, end))) - end
+    const short = Math.max(0, Math.round((draft.dx - gap) * 10) / 10)
+    const name = host.label ?? 'this cabinet'
+    let t0 = lowT ? t - draft.dx : end
+    if (short > 0.5) {
+      if (host.footprint?.preset) { setToast(`No room for ${def.name} on the ${side} of ${name} (shaped cabinets aren't narrowed)`); return }
+      if (host.dx - short < 100) { setToast(`No room for ${def.name} on the ${side} of ${name} — it would leave the cabinet under 100 mm`); return }
+      captureSnapshot()
+      const newT = lowT ? t + short : t
+      const p = slideAlongWall(host, wall, newT)
+      await handleUpdateCabinet(host.id, { dx: host.dx - short, pos_x: p.x, pos_y: p.y })
+      t0 = lowT ? t - gap : end - short
+      setToast(`${name} narrowed ${short} mm to fit ${def.name}`)
     }
-    const a = wallAnchorPoint(wall, desired, back, centroid(walls), cabGap(host))
-    await placeFromDraft(draft, wall, a.x, a.y, back)
+    const a = wallAnchorPoint(wall, t0, back, centroid(walls), cabGap(host))
+    await placeFromDraft(draft, wall, a.x, a.y, back, undefined, !(short > 0.5))
   }
 
   // Drop a library definition onto the plan canvas at the drop point (drag-and-drop
