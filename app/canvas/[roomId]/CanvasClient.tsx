@@ -194,11 +194,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [saveLibCabId, setSaveLibCabId] = useState<string | null>(null)
   const isAdmin = useIsAdmin()   // testers can't write the shared library
   const [replaceCabId, setReplaceCabId] = useState<string | null>(null)
-  const [kickSettingsRunId, setKickSettingsRunId] = useState<string | null>(null)
   // Right-click → Insert list (library items offered beside a cabinet).
   // Only read when the menu opens, so a server render's empty list can't mismatch.
   const [insertFavs, setInsertFavs] = useState<InsertFavourite[]>(loadInsertFavourites)
   const [editInsertList, setEditInsertList] = useState(false)
+  const [kickSettingsRunId, setKickSettingsRunId] = useState<string | null>(null)
   const [libRefresh, setLibRefresh] = useState(0)   // bump to reload the library palette
   const [toast, setToast] = useState<string | null>(null)
   useEffect(() => {
@@ -1269,20 +1269,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setToast(`Replaced ${cabinet.label ?? 'cabinet'} with “${def.name}”`)
   }
 
-  // Drop a library definition onto the plan canvas at the drop point (drag-and-drop
-  // placement). Self-contained: converts the screen point to world coords, snaps to
-  // the nearest wall + gap, and places via the same draft path as click placement.
-  async function dropDefinitionAt(definitionId: string, clientX: number, clientY: number) {
-    const rect = svgRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const wp = toWorld(clientX - rect.left, clientY - rect.top)
-    const def = await dbLoadCabinetDefinition(definitionId)
-    if (!def) return
-    const draft = buildDraftFromDefinition(def)
-    const raw = nearestWall(wp, walls, draft.dx, Infinity)
-    if (!raw) return
-    const wd = wallDir(raw.wall)
-    const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
   // Right-click → Insert › <library item> › Left / Right side: place the item butted
   // against the cabinet's side (left/right as seen from its front, so swapped for a
   // back-side cabinet). Same type (corners folded) → it takes the cabinet's height,
@@ -1318,6 +1304,20 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     await placeFromDraft(draft, wall, a.x, a.y, back)
   }
 
+  // Drop a library definition onto the plan canvas at the drop point (drag-and-drop
+  // placement). Self-contained: converts the screen point to world coords, snaps to
+  // the nearest wall + gap, and places via the same draft path as click placement.
+  async function dropDefinitionAt(definitionId: string, clientX: number, clientY: number) {
+    const rect = svgRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const wp = toWorld(clientX - rect.left, clientY - rect.top)
+    const def = await dbLoadCabinetDefinition(definitionId)
+    if (!def) return
+    const draft = buildDraftFromDefinition(def)
+    const raw = nearestWall(wp, walls, draft.dx, Infinity)
+    if (!raw) return
+    const wd = wallDir(raw.wall)
+    const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
     const gc = centroid(walls)
     const inward = wallInwardNormal(raw.wall, gc)
     const flip = (wp.x - raw.wall.pos_x) * inward.x + (wp.y - raw.wall.pos_y) * inward.y < 0
@@ -3420,6 +3420,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeleteMultiple: ids => void handleDeleteMultipleCabinets(ids),
             onInsertCabinet: (wId, t, cls) => { void handleInsertCabinetAtElevT(wId, t, cls) },
             onInsertAdjacent: (cabId, type, side) => { void handleInsertAdjacent(cabId, type, side) },
+            insertFavourites: insertFavs,
+            onInsertDefinition: (cabId, defId, side) => { void handleInsertDefinitionAdjacent(cabId, defId, side) },
+            onEditInsertList: () => { setEditInsertList(true); useTutorial.getState().emit('insert_list_open') },   // tutorial insert_list
             onCopy: cab => {
               setClipboard(cab)
               setClipboardGroup([])
@@ -3443,9 +3446,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 setPlaceGhost(null)
               }
             },
-            insertFavourites: insertFavs,
-            onInsertDefinition: (cabId, defId, side) => { void handleInsertDefinitionAdjacent(cabId, defId, side) },
-            onEditInsertList: () => { setEditInsertList(true); useTutorial.getState().emit('insert_list_open') },   // tutorial insert_list
             onPaste: () => { if (clipboard) { setClipboardGroup([]); setMode('paste') } },
             onEdit: id => setEditCabId(id),
             onEqualizeWidths: handleEqualizeWidths,
@@ -3592,6 +3592,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         )
       })()}
 
+      {editInsertList && (
+        <InsertFavouritesModal
+          favourites={insertFavs}
+          onClose={() => setEditInsertList(false)}
+          onSave={favs => { setInsertFavs(favs); saveInsertFavourites(favs); setEditInsertList(false); useTutorial.getState().emit('insert_list_save') }}
+        />
+      )}
+
       {kickSettingsRunId && (() => {
         const asm = cabinets.find(c => c.kick_run_id === kickSettingsRunId && c.is_kick_assembly)
         if (!asm) return null
@@ -3615,14 +3623,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         <LayerManagerPanel
           api={layerSetsApi}
           initialView={canvasView === 'section' ? 'plan' : canvasView}
-      {editInsertList && (
-        <InsertFavouritesModal
-          favourites={insertFavs}
-          onClose={() => setEditInsertList(false)}
-          onSave={favs => { setInsertFavs(favs); saveInsertFavourites(favs); setEditInsertList(false); useTutorial.getState().emit('insert_list_save') }}
-        />
-      )}
-
           activeSetId={activeLayerSet?.id ?? null}
           onPreview={setLayerPreview}
           onUse={chooseLayerSet}
