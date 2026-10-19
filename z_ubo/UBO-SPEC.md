@@ -207,6 +207,9 @@ centred behind the sink, 50 off the wall → footprint centre 481.5 / 156.75).
 
 ## WOT — wall oven tower (2026-10-19)
 
+**Superseded 2026-10-19** — the user rejected the carcass version (towers have
+no gables). Rebuilt as a kit of cabinets: `z_wot/WOT-KIT-SPEC.md`.
+
 `z_ubo/migration_wot_library.sql`, applied. Locked with the user: oven opening
 starts **650** off the floor, **two drawers** below, a **450 microwave /
 compact** opening above the oven; the tower **stops above the microwave** and a

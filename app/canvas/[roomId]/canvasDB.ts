@@ -1,6 +1,9 @@
 import { supabase } from '@/src/lib/supabase'
 import type { Wall, CabinetInstance, CabinetDefinition, NeighbourType, RoomAnnotation, Room, RoomFixture } from '@/src/lib/types'
 import { contentsFromFixtures } from '@/src/lib/cabinetContents'
+import {
+  opsForLibrary, opsForInstance, keyedForLibrary, keyedForInstance, fromLibraryKey, remapCustomKey, type PartOpRow,
+} from '@/src/lib/libraryPartData'
 import { cabBottomZ } from '@/src/lib/geometry'
 import type { CustomOrient } from '@/src/lib/customPartBox'
 import { seedClassDepthParams, presetBox } from '@/src/lib/cabinetShape/presets'
@@ -503,8 +506,10 @@ export function buildInstanceFromDefinition(
 }
 
 // Insert a snapshot of custom parts (from a definition) as rows for a new cabinet.
-export async function dbInsertCustomPartsSnapshot(cabinetId: string, snapshot: Record<string, unknown>[]) {
-  if (!snapshot || snapshot.length === 0) return
+// Returns the new part ids in snapshot order (library ops / comments point at
+// custom parts by that index — src/lib/libraryPartData.ts).
+export async function dbInsertCustomPartsSnapshot(cabinetId: string, snapshot: Record<string, unknown>[]): Promise<string[]> {
+  if (!snapshot || snapshot.length === 0) return []
   const rows = snapshot.map((p, i) => ({
     cabinet_instance_id: cabinetId,
     part_library_id: p.part_library_id,
@@ -523,8 +528,35 @@ export async function dbInsertCustomPartsSnapshot(cabinetId: string, snapshot: R
     no_cnc: !!p.no_cnc,
     sort_order: (p.sort_order as number) ?? i,
   }))
-  const { error } = await supabase.from('cabinet_custom_parts').insert(rows)
-  if (error) console.error('dbInsertCustomPartsSnapshot', error)
+  // One row at a time so each id is known to belong to its snapshot index.
+  const ids: string[] = []
+  for (const row of rows) {
+    const { data, error } = await supabase.from('cabinet_custom_parts').insert(row).select('id').single()
+    if (error) console.error('dbInsertCustomPartsSnapshot', error)
+    ids.push((data?.id as string | undefined) ?? '')
+  }
+  return ids
+}
+
+// A definition's hand-drawn part ops + part comments / labels onto a newly
+// placed cabinet (z_wot K0). `customIds` = the new custom part ids, snapshot order.
+export async function dbApplyDefinitionPartData(
+  def: Pick<CabinetDefinition, 'part_operations' | 'part_comments' | 'part_labels'>,
+  cabinetId: string,
+  customIds: string[],
+) {
+  const mapKey = fromLibraryKey(customIds)
+  const ops = opsForInstance(def.part_operations ?? [], cabinetId, mapKey)
+  if (ops.length) {
+    const { error } = await supabase.from('part_operations').insert(ops)
+    if (error) console.error('dbApplyDefinitionPartData ops', error)
+  }
+  const part_comments = keyedForInstance(def.part_comments, mapKey)
+  const part_labels = keyedForInstance(def.part_labels, mapKey)
+  if (Object.keys(part_comments).length || Object.keys(part_labels).length) {
+    const { error } = await supabase.from('cabinet_instances').update({ part_comments, part_labels }).eq('id', cabinetId)
+    if (error) console.error('dbApplyDefinitionPartData comments', error)
+  }
 }
 
 // Copy/paste: clone a cabinet's user-authored child rows (custom parts + shape
@@ -559,12 +591,30 @@ export async function dbCopyCabinetChildren(srcCabinetId: string, dstCabinetId: 
     const { error } = await supabase.from('part_shape_overrides').insert(rows)
     if (error) console.error('dbCopyCabinetChildren shapes', error)
   }
+  // Hand-drawn drilling / routes + part comments and labels (z_wot K0).
+  const mapKey = remapCustomKey(idMap)
+  const [{ data: srcOps }, { data: srcInst }] = await Promise.all([
+    supabase.from('part_operations').select('*').eq('source_cabinet_id', srcCabinetId),
+    supabase.from('cabinet_instances').select('part_comments,part_labels').eq('id', srcCabinetId).single(),
+  ])
+  const ops = opsForInstance((srcOps ?? []) as PartOpRow[], dstCabinetId, mapKey)
+  if (ops.length) {
+    const { error } = await supabase.from('part_operations').insert(ops)
+    if (error) console.error('dbCopyCabinetChildren ops', error)
+  }
+  const part_comments = keyedForInstance(srcInst?.part_comments as Record<string, string> | null, mapKey)
+  const part_labels = keyedForInstance(srcInst?.part_labels as Record<string, string> | null, mapKey)
+  const { error: kErr } = await supabase.from('cabinet_instances').update({ part_comments, part_labels }).eq('id', dstCabinetId)
+  if (kErr) console.error('dbCopyCabinetChildren comments', kErr)
 }
 
-// Copy a definition's stored custom parts onto a newly-placed cabinet.
+// Copy a definition's stored custom parts (+ their drilling / comments) onto a
+// newly-placed cabinet.
 export async function dbInsertDefinitionParts(definitionId: string, cabinetId: string) {
-  const { data } = await supabase.from('cabinet_definitions').select('custom_parts').eq('id', definitionId).single()
-  await dbInsertCustomPartsSnapshot(cabinetId, ((data?.custom_parts ?? []) as Record<string, unknown>[]))
+  const { data } = await supabase.from('cabinet_definitions')
+    .select('custom_parts,part_operations,part_comments,part_labels').eq('id', definitionId).single()
+  const ids = await dbInsertCustomPartsSnapshot(cabinetId, ((data?.custom_parts ?? []) as Record<string, unknown>[]))
+  if (data) await dbApplyDefinitionPartData(data as Pick<CabinetDefinition, 'part_operations' | 'part_comments' | 'part_labels'>, cabinetId, ids)
 }
 
 // Load → build → insert → resolve. Returns the new instance plus its resolved
@@ -577,7 +627,8 @@ export async function dbPlaceCabinetFromDefinition(
   if (!def) return null
   const cabinet = await dbInsertCabinet(buildInstanceFromDefinition(def, placement))
   if (!cabinet) return null
-  await dbInsertCustomPartsSnapshot(cabinet.id, (def.custom_parts ?? []) as Record<string, unknown>[])
+  const ids = await dbInsertCustomPartsSnapshot(cabinet.id, (def.custom_parts ?? []) as Record<string, unknown>[])
+  await dbApplyDefinitionPartData(def, cabinet.id, ids)
   const resolved = await dbResolveAndPersistCabinet(cabinet.id)
   return { cabinet, resolved }
 }
@@ -647,9 +698,18 @@ export async function saveCabinetToLibrary(
   }
 
   // Snapshot the instance's custom parts so the definition carries them.
-  const { data: cps } = await supabase.from('cabinet_custom_parts')
-    .select('part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,no_cnc,sort_order')
+  const { data: cpRows } = await supabase.from('cabinet_custom_parts')
+    .select('id,part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,no_cnc,sort_order')
     .eq('cabinet_instance_id', cabinetInstanceId).order('sort_order')
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const cps = (cpRows ?? []).map(({ id, ...rest }) => rest)
+  // Hand-drawn drilling / routes + part comments and labels go with it (z_wot K0),
+  // custom parts referenced by their index in that snapshot.
+  const customIds = (cpRows ?? []).map(r => r.id as string)
+  const { data: opRows } = await supabase.from('part_operations').select('*').eq('source_cabinet_id', cabinetInstanceId)
+  const part_operations = opsForLibrary((opRows ?? []) as PartOpRow[], customIds)
+  const part_comments = keyedForLibrary(inst.part_comments as Record<string, string> | null, customIds)
+  const part_labels = keyedForLibrary(inst.part_labels as Record<string, string> | null, customIds)
 
   // Fixtures linked to it become the definition's default contents (z_ubo U6):
   // the oven seated in its opening, a sink on its base…
@@ -688,7 +748,8 @@ export async function saveCabinetToLibrary(
     footprint: inst.footprint ?? null,
     bulkhead: inst.bulkhead ?? null,
     faces: inst.faces ?? null,
-    custom_parts: cps ?? [],
+    custom_parts: cps,
+    part_operations, part_comments, part_labels,
     // Per-view part hides travel with the definition (z_display_layers/PART-HIDE-SPEC.md).
     part_hide_views: inst.part_hide_views ?? {},
     part_no_cnc: inst.part_no_cnc ?? [],

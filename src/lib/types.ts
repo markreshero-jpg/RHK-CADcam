@@ -269,6 +269,11 @@ export interface CabinetDefinition {
   part_no_cnc?: string[]
   // Default contents (z_ubo U4): fixtures spawned linked to the new cabinet at placement.
   contents?: import('./cabinetContents').ContentItem[]
+  // Hand-drawn part ops + part comments / labels (z_wot K0). Custom parts are
+  // keyed `custom_@<index in custom_parts>` — see src/lib/libraryPartData.ts.
+  part_operations?: Record<string, unknown>[]
+  part_comments?: Record<string, string>
+  part_labels?: Record<string, string>
   // UI metadata
   description: string | null
   thumbnail_svg: string | null
