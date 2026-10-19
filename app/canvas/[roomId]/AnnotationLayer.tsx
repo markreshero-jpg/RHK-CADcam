@@ -10,6 +10,7 @@ import type { RoomAnnotation } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
   type AnnotFrame, type Pt, type TextGeom, type LineGeom, type BoxGeom, type CloudGeom, type DimGeom,
+  type ArcGeom, type CircleGeom, arcSvgPath, arcPoint, arcStart, arcEnd, arcMid, arcSample, sweepOf,
   mapPt, mapRot, arrowHead, trimEnd, layoutText, leaderAttachLocal, rotatePt, cloudPath,
   dimLayout, readableAngle, dimText, annotLayerItem, boxCorners,
 } from '@/src/lib/annotations/geometry'
@@ -32,6 +33,7 @@ export interface AnnotationLayerProps {
 /** rotate / width: text grips. vN: drag vertex N of a line, cloud or leader. mN: drag
  *  the midpoint of segment N→N+1 to insert a vertex there. cN: box / ellipse corner N. */
 export type AnnotGrip = 'rotate' | 'width' | 'size' | 'offset' | `v${number}` | `m${number}` | `c${number}`
+  | 'arcS' | 'arcE' | 'arcM' | 'rad'
 
 export interface AnnotationEditProps {
   selectedIds: ReadonlySet<string>
@@ -123,6 +125,17 @@ function hitShape(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number,
         ? <rect x={cx - w / 2} y={cy - h / 2} width={w} height={h} {...props} />
         : <ellipse cx={cx} cy={cy} rx={w / 2} ry={h / 2} {...props} />
     }
+    case 'arc': {
+      const g = a.geom as ArcGeom
+      return g?.c ? <path d={arcSvgPath(f, g)} {...stroke} /> : null
+    }
+    case 'circle': {
+      const g = a.geom as CircleGeom
+      if (!g?.c) return null
+      const c = mapPt(f, g.c)
+      return <circle cx={c.x} cy={c.y} r={g.r * f.s} {...stroke} fill={filled ? 'transparent' : 'none'}
+        style={{ pointerEvents: filled ? 'all' : 'stroke' }} />
+    }
     case 'dim': {
       const g = a.geom as DimGeom
       if (!g?.p1 || !g?.p2) return null
@@ -182,6 +195,33 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
       {single && g.leader?.length ? vertexGrips(a.id, g.leader.map(p => mapPt(f, p)), edit) : null}
     </>
   }
+  // Arc: both ends + the middle (drag = re-bend through it); a dot marks the centre.
+  // Circle: one radius grip on the right.
+  if ((a.kind === 'arc' || a.kind === 'circle') && single) {
+    const grip = (p: Pt, g: AnnotGrip, cursor: string) => (
+      <circle key={g} cx={p.x} cy={p.y} r={hw * 0.4} fill="#0f172a" stroke={SEL} strokeWidth={hw / 6}
+        style={{ pointerEvents: 'all', cursor }}
+        onPointerDown={e => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, a.id, g) } }} />
+    )
+    if (a.kind === 'arc') {
+      const g = a.geom as ArcGeom
+      if (!g?.c) return null
+      const c = mapPt(f, g.c)
+      return <>
+        <circle cx={c.x} cy={c.y} r={hw * 0.18} fill={SEL} />
+        {grip(mapPt(f, arcStart(g)), 'arcS', 'crosshair')}
+        {grip(mapPt(f, arcEnd(g)), 'arcE', 'crosshair')}
+        {grip(mapPt(f, arcMid(g)), 'arcM', 'move')}
+      </>
+    }
+    const g = a.geom as CircleGeom
+    if (!g?.c) return null
+    const c = mapPt(f, g.c)
+    return <>
+      <circle cx={c.x} cy={c.y} r={hw * 0.18} fill={SEL} />
+      {grip(mapPt(f, arcPoint(g, 0)), 'rad', 'ew-resize')}
+    </>
+  }
   // Dim: its two measured points, and a bar grip on the dim line to slide it in / out.
   if (a.kind === 'dim' && single) {
     const g = a.geom as DimGeom
@@ -228,6 +268,8 @@ function selectionPoints(a: RoomAnnotation, f: AnnotFrame): Pt[] {
     case 'rect':
     case 'ellipse': { const g = a.geom as BoxGeom; return [mapPt(f, g.a), mapPt(f, g.b)] }
     case 'dim':     { const g = a.geom as DimGeom; const l = dimLayout(g); return [g.p1, g.p2, l.d1, l.d2].map(p => mapPt(f, p)) }
+    case 'arc':     return (a.geom as ArcGeom)?.c ? arcSample(a.geom as ArcGeom, 16).map(p => mapPt(f, p)) : []
+    case 'circle':  { const g = a.geom as CircleGeom; return g?.c ? [mapPt(f, { x: g.c.x - g.r, y: g.c.y - g.r }), mapPt(f, { x: g.c.x + g.r, y: g.c.y + g.r })] : [] }
     default:        return []
   }
 }
@@ -297,7 +339,35 @@ function renderOne(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
       return <path d={cloudPath(pts, Math.max(1, s.cloudBump) * k)} {...strokeProps(s, k)} {...shapeFill(s)} />
     }
     case 'dim':     return <ManualDim a={a} s={s} f={f} k={k} />
+    case 'arc': {
+      const g = a.geom as ArcGeom
+      if (!g?.c) return null
+      return <ArcShape g={g} s={s} f={f} k={k} />
+    }
+    case 'circle': {
+      const g = a.geom as CircleGeom
+      if (!g?.c) return null
+      const c = mapPt(f, g.c)
+      return <circle cx={c.x} cy={c.y} r={g.r * f.s} {...strokeProps(s, k)} {...shapeFill(s)} />
+    }
   }
+}
+
+/** Arc stroke + optional heads at its ends, pointing along the arc. */
+function ArcShape({ g, s, f, k }: { g: ArcGeom; s: ResolvedStyle; f: AnnotFrame; k: number }) {
+  const sw = sweepOf(g.a0, g.a1)
+  const step = Math.min(sw * 0.1, 3)
+  const size = s.arrowSize * k
+  const hs = arrowHead(mapPt(f, arcStart(g)), mapPt(f, arcPoint(g, g.a0 + step)), s.arrowStart, size)
+  const he = arrowHead(mapPt(f, arcEnd(g)), mapPt(f, arcPoint(g, g.a1 - step)), s.arrowEnd, size)
+  const head = (h: { d: string; filled: boolean }) => (
+    <path d={h.d} fill={h.filled ? s.color : 'none'} stroke={s.color} strokeWidth={s.weight * k} strokeLinejoin="miter" />
+  )
+  return <>
+    <path d={arcSvgPath(f, g)} {...strokeProps(s, k)} />
+    {hs && head(hs)}
+    {he && head(he)}
+  </>
 }
 
 function TextNote({ a, s, f, k, leaderOnly }: { a: RoomAnnotation; s: ResolvedStyle; f: AnnotFrame; k: number; leaderOnly?: boolean }) {

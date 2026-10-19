@@ -23,3 +23,41 @@ describe('typed entry (Tab while drawing)', () => {
     expect(typedBox(o, { x: 900, y: 900 }, { w: 600, h: 400 })).toEqual({ x: 700, y: 500 })
   })
 })
+
+import { lockPoint, typedFieldsFor, arcFromDrawing, type AnnotDrawing } from '@/app/canvas/[roomId]/useAnnotationTool'
+import { sweepOf, arcMid } from '../annotations/geometry'
+
+describe('B3 arc / circle drawing', () => {
+  const c = { x: 0, y: 0 }
+  it('circle radius locks the second point', () => {
+    const d: AnnotDrawing = { tool: 'circle', pts: [c], cur: null }
+    const p = lockPoint(d, { x: 0, y: 50 }, { radius: 300 })
+    expect(p.x).toBeCloseTo(0); expect(p.y).toBeCloseTo(300)
+    expect(typedFieldsFor(false, d)).toEqual(['radius'])
+  })
+  it('centre mode: sweep turns the end anticlockwise on screen from the start', () => {
+    const d: AnnotDrawing = { tool: 'arc', arcMode: 'centre', pts: [c, { x: 100, y: 0 }], cur: null }
+    expect(typedFieldsFor(false, d)).toEqual(['sweep'])
+    const end = lockPoint(d, { x: 5, y: 5 }, { sweep: 90 })
+    expect(end.x).toBeCloseTo(0); expect(end.y).toBeCloseTo(-100)   // up the screen
+    const g = arcFromDrawing(d, end, {})!
+    expect(sweepOf(g.a0, g.a1)).toBeCloseTo(90)
+  })
+  it('ends mode: typed radius, bulging to the cursor side', () => {
+    const d: AnnotDrawing = { tool: 'arc', arcMode: 'ends', pts: [{ x: 0, y: 0 }, { x: 200, y: 0 }], cur: null }
+    expect(typedFieldsFor(false, d)).toEqual(['radius'])
+    const g = arcFromDrawing(d, { x: 100, y: 40 }, { radius: 500 })!
+    expect(g.r).toBeCloseTo(500); expect(arcMid(g).y).toBeGreaterThan(0)
+  })
+  it('3-point mode: second click = through point', () => {
+    const d: AnnotDrawing = { tool: 'arc', arcMode: '3pt', pts: [{ x: -100, y: 0 }, { x: 0, y: -100 }], cur: null }
+    expect(typedFieldsFor(false, d)).toEqual([])
+    const g = arcFromDrawing(d, { x: 100, y: 0 }, {})!
+    expect(g.r).toBeCloseTo(100)
+  })
+  it('pending boxes and plain lines keep their fields', () => {
+    expect(typedFieldsFor(true, null)).toEqual(['w', 'h'])
+    expect(typedFieldsFor(false, { tool: 'line', pts: [c], cur: null })).toEqual(['length', 'angle'])
+    expect(typedFieldsFor(false, { tool: 'dim', pts: [c, { x: 1, y: 0 }], cur: null })).toEqual(['offset'])
+  })
+})

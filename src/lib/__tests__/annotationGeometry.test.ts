@@ -240,3 +240,43 @@ describe('B2b measuring', () => {
     expect(withBoxSize({ a: { x: 100, y: 100 }, b: { x: 0, y: 300 } }, 600, 400)).toEqual({ a: { x: 100, y: 100 }, b: { x: -500, y: 500 } })
   })
 })
+
+import { arcFrom3, arcFromCentre, arcFromEndsRadius, arcStart, arcEnd, arcMid, sweepOf, arcLength, arcSvgPath, circumcentre } from '../annotations/geometry'
+
+describe('B3 arcs', () => {
+  const close = (p: { x: number; y: number }, q: { x: number; y: number }) => { expect(p.x).toBeCloseTo(q.x); expect(p.y).toBeCloseTo(q.y) }
+  it('3-point arc passes through all three and keeps its ends', () => {
+    const a = arcFrom3({ x: -100, y: 0 }, { x: 0, y: -100 }, { x: 100, y: 0 })!   // top half (y up the screen)
+    close(a.c, { x: 0, y: 0 }); expect(a.r).toBeCloseTo(100)
+    close(arcMid(a), { x: 0, y: -100 })
+    expect(sweepOf(a.a0, a.a1)).toBeCloseTo(180)
+    const ends = [arcStart(a), arcEnd(a)]
+    expect(ends.some(p => Math.abs(p.x + 100) < 1e-6)).toBe(true)
+    expect(ends.some(p => Math.abs(p.x - 100) < 1e-6)).toBe(true)
+    expect(arcLength(a)).toBeCloseTo(Math.PI * 100)
+  })
+  it('the other bulge gives the other half', () => {
+    const a = arcFrom3({ x: -100, y: 0 }, { x: 0, y: 100 }, { x: 100, y: 0 })!
+    close(arcMid(a), { x: 0, y: 100 })
+  })
+  it('collinear points make no arc', () => {
+    expect(arcFrom3({ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 })).toBeNull()
+    expect(circumcentre({ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 2 })).toBeNull()
+  })
+  it('centre-start-end runs anticlockwise on screen', () => {
+    const a = arcFromCentre({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 0, y: -100 })!   // right → up = a quarter
+    expect(sweepOf(a.a0, a.a1)).toBeCloseTo(90)
+    close(arcMid(a), { x: Math.SQRT1_2 * 100, y: -Math.SQRT1_2 * 100 })
+  })
+  it('ends + radius bulges toward the side, min half circle', () => {
+    const a = arcFromEndsRadius({ x: 0, y: 0 }, { x: 200, y: 0 }, 500, { x: 100, y: -50 })!
+    expect(a.r).toBeCloseTo(500); expect(arcMid(a).y).toBeLessThan(0)
+    const h = arcFromEndsRadius({ x: 0, y: 0 }, { x: 200, y: 0 }, 10, { x: 100, y: 50 })!
+    expect(h.r).toBeCloseTo(100); close(arcMid(h), { x: 100, y: 100 })
+  })
+  it('svg path flags', () => {
+    const a = arcFrom3({ x: -100, y: 0 }, { x: 0, y: -100 }, { x: 100, y: 0 })!
+    expect(arcSvgPath({ ox: 0, oy: 0, s: 1, flipY: false }, a)).toMatch(/A100 100 0 0 1 /)
+    expect(arcSvgPath({ ox: 0, oy: 0, s: 1, flipY: true }, a)).toMatch(/A100 100 0 0 0 /)
+  })
+})

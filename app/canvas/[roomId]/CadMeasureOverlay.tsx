@@ -6,9 +6,12 @@
 // width and height. Sizes in screen px (÷ zoom).
 
 import type { RoomAnnotation } from '@/src/lib/types'
-import { type AnnotFrame, type Pt, type LineGeom, type BoxGeom, mapPt, segAngle, segLength } from '@/src/lib/annotations/geometry'
+import {
+  type AnnotFrame, type Pt, type LineGeom, type BoxGeom, type ArcGeom, type CircleGeom,
+  mapPt, segAngle, segLength, arcMid, arcLength, arcPoint, sweepOf,
+} from '@/src/lib/annotations/geometry'
 
-export type LiveMeasure = { mode: 'seg' | 'box'; a: Pt; b: Pt } | null
+export type LiveMeasure = { mode: 'seg' | 'box'; a: Pt; b: Pt } | { mode: 'label'; at: Pt; text: string } | null
 
 const fmt = (n: number) => String(Math.round(n))
 
@@ -33,7 +36,9 @@ export default function CadMeasureOverlay({ live, selected, frame, zoom }: {
 }) {
   const out: React.ReactNode[] = []
 
-  if (live) {
+  if (live?.mode === 'label') {
+    out.push(<Tag key="live" at={mapPt(frame, live.at)} zoom={zoom} dy={-22} text={live.text} />)
+  } else if (live) {
     const b = mapPt(frame, live.b)
     if (live.mode === 'seg') {
       out.push(<Tag key="live" at={b} zoom={zoom} dx={0} dy={-22}
@@ -59,6 +64,13 @@ export default function CadMeasureOverlay({ live, selected, frame, zoom }: {
         const off = 12 + Math.abs(nx) * 14
         out.push(<Tag key={`s${i}`} at={m} zoom={zoom} dx={nx * off} dy={ny * off} text={fmt(L)} />)
       }
+    }
+    if (selected.kind === 'arc' && (selected.geom as ArcGeom)?.c) {
+      const g = selected.geom as ArcGeom
+      out.push(<Tag key="r" at={mapPt(frame, arcMid(g))} zoom={zoom} dy={-16} text={`R${fmt(g.r)} · ${fmt(sweepOf(g.a0, g.a1))}° · ${fmt(arcLength(g))}`} />)
+    } else if (selected.kind === 'circle' && (selected.geom as CircleGeom)?.c) {
+      const g = selected.geom as CircleGeom
+      out.push(<Tag key="r" at={mapPt(frame, arcPoint(g, 0))} zoom={zoom} dx={52} text={`R${fmt(g.r)}  Ø${fmt(g.r * 2)}`} />)
     }
     if (selected.kind === 'line') sideTags((selected.geom as LineGeom).pts ?? [], false)
     else if (selected.kind === 'cloud') sideTags((selected.geom as LineGeom).pts ?? [], true)

@@ -75,6 +75,8 @@ const KIND_DEFAULTS: Record<AnnotationKind, AnnotationStyle> = {
   ellipse: {},
   cloud:   {},
   dim:     { arrowStart: 'tick', arrowEnd: 'tick', size: 2.5, weight: 0.25 },
+  arc:     {},
+  circle:  {},
 }
 
 export function styleDefaults(kind: AnnotationKind): ResolvedStyle {

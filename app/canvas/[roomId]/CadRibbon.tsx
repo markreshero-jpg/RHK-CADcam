@@ -30,6 +30,8 @@ const TOOLS: { id: CadTool; label: string; key: string; icon: React.ReactNode }[
   { id: 'ellipse', label: 'Ellipse — click one corner of its frame, then the opposite one (or drag)', key: 'E', icon: <ellipse cx="8" cy="8" rx="5.5" ry="4" /> },
   { id: 'cloud',   label: 'Revision cloud — Rectangle: click two corners (or drag). Freehand: click the corners, double-click / Enter to close', key: 'C', icon: <path d="M4 11a2 2 0 010-4 2.5 2.5 0 014-2 2.5 2.5 0 014 1.5 2 2 0 010 4.5z" /> },
   { id: 'dim',     label: 'Dimension — click two points, then click where the dimension line sits', key: 'D', icon: <><path d="M2 8h12M2 5v6M14 5v6" /></> },
+  { id: 'arc',     label: 'Arc — pick the method on the ribbon (3-point, centre-start-end, ends + radius)', key: 'K', icon: <path d="M3 12a6 6 0 0110 -6" /> },
+  { id: 'circle',  label: 'Circle — click the centre, then a point on it (Tab = radius)', key: 'O', icon: <circle cx="8" cy="8" r="5" /> },
 ]
 
 const keep = (e: React.MouseEvent) => e.preventDefault()
@@ -150,11 +152,11 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
   const set = (patch: AnnotationStyle) => { cad.applyStyle(patch); useTutorial.getState().emit('annot_style') }
   const kind = cad.ribbonKind
   const isText = kind === 'text'
-  const shapeFill = kind === 'rect' || kind === 'ellipse' || kind === 'cloud'
-  const arrows = kind === 'line' || kind === 'dim'
+  const shapeFill = kind === 'rect' || kind === 'ellipse' || kind === 'cloud' || kind === 'circle'
+  const arrows = kind === 'line' || kind === 'dim' || kind === 'arc'
   const nSel = cad.selected.length
   const NEXT: Record<CadTool, string> = {
-    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud', dim: 'dimension',
+    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud', dim: 'dimension', arc: 'arc', circle: 'circle',
   }
   const what = cad.editing ? (cad.editing.isNew ? 'New text' : 'Editing text')
     : nSel > 1 ? `${nSel} selected` : nSel === 1 ? `Selected ${kind === 'text' && (cad.selected[0].geom as { width?: number }).width != null ? 'text box' : kind}`
@@ -164,6 +166,11 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
     : !cad.drawing ? null
     : cad.drawing.attachId ? 'Click where the leader points · Esc cancels'
     : cad.drawing.tool === 'leader' ? 'Click where the text goes · Esc cancels'
+    : cad.drawing.tool === 'circle' ? 'Click a point on the circle · Tab = radius · Esc cancels'
+    : cad.drawing.tool === 'arc' ? (
+      cad.drawing.arcMode === 'centre' ? (cad.drawing.pts.length < 2 ? 'Click the start (sets the radius) · Tab = radius / angle · Esc cancels' : 'Click the end — the arc runs anticlockwise · Tab = sweep · Esc cancels')
+      : cad.drawing.arcMode === 'ends' ? (cad.drawing.pts.length < 2 ? 'Click the other end · Esc cancels' : 'Click which way it bulges · Tab = radius · Esc cancels')
+      : (cad.drawing.pts.length < 2 ? 'Click a point the arc passes through · Esc cancels' : 'Click the end · Esc cancels'))
     : cad.drawing.tool === 'dim' ? (cad.drawing.pts.length < 2 ? 'Click the second point · Esc cancels'
       : 'Move to pull the dimension out · click (or Enter) to place · Tab = type offset · Esc cancels')
     : 'Click the next point · Tab = type length / angle · double-click / Enter / right-click finishes · Backspace steps back · Esc cancels'
@@ -296,6 +303,12 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
               )}
             </Group>
           </>)}
+          {kind === 'arc' && (
+            <Group label="Arc">
+              <Pick title="How the Arc tool draws new arcs" value={cad.arcMode} onChange={v => cad.setArcMode(v)}
+                options={[{ id: '3pt', label: '3-point' }, { id: 'centre', label: 'Centre, start, end' }, { id: 'ends', label: 'Ends + radius' }]} />
+            </Group>
+          )}
           {kind === 'cloud' && (
             <Group label="Cloud">
               <Pick title="How the Cloud tool draws: a rectangle (two corners) or freehand (click each corner)"

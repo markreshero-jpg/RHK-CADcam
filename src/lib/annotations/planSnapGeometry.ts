@@ -10,7 +10,8 @@ import { fixtureCorners } from '../fixtureGeometry'
 import { addOutline, type SnapGeometry } from './cadSnap'
 import {
   type Pt, type TextGeom, type LineGeom, type BoxGeom, type DimGeom,
-  boxCorners, dimLayout, layoutText, rotatePt, textCorners,
+  type ArcGeom, type CircleGeom,
+  boxCorners, dimLayout, layoutText, rotatePt, textCorners, arcSample, circleSample, arcStart, arcEnd, arcMid, arcPoint,
 } from './geometry'
 import { resolveStyle } from './style'
 
@@ -81,6 +82,24 @@ export function planSnapGeometry({ walls, cabinets, resolved, fixtures, benchtop
         const l = dimLayout(dg)
         addOutline(g, [l.d1, l.d2], 'annotations', false, own)
         g.points.push({ p: dg.p1, kind: 'end', src: 'annotations', owner: own }, { p: dg.p2, kind: 'end', src: 'annotations', owner: own })
+        break
+      }
+      case 'arc': {
+        const ag = a.geom as ArcGeom
+        if (!ag?.c) break
+        const pts = arcSample(ag, 32)
+        for (let i = 0; i < pts.length - 1; i++) g.segs.push({ a: pts[i], b: pts[i + 1], src: 'annotations', owner: own })
+        g.points.push({ p: arcStart(ag), kind: 'end', src: 'annotations', owner: own }, { p: arcEnd(ag), kind: 'end', src: 'annotations', owner: own },
+          { p: arcMid(ag), kind: 'mid', src: 'annotations', owner: own }, { p: ag.c, kind: 'centre', src: 'annotations', owner: own })
+        break
+      }
+      case 'circle': {
+        const cg = a.geom as CircleGeom
+        if (!cg?.c) break
+        const ring = circleSample(cg, 48)
+        for (let i = 0; i < ring.length; i++) g.segs.push({ a: ring[i], b: ring[(i + 1) % ring.length], src: 'annotations', owner: own })
+        for (const q of [0, 90, 180, 270]) g.points.push({ p: arcPoint(cg, q), kind: 'end', src: 'annotations', owner: own })   // quadrants
+        g.points.push({ p: cg.c, kind: 'centre', src: 'annotations', owner: own })
         break
       }
       case 'text': {

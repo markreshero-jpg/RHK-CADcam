@@ -658,7 +658,7 @@ export interface FixtureCatalogItem extends FixtureBody {
 // ── CAD annotations (z_CAD_tool/ANNOTATION-SPEC.md) ──────────────────────────
 
 export type AnnotationView = 'plan' | 'elevation' | 'cabinet_sheet'
-export type AnnotationKind = 'text' | 'line' | 'rect' | 'ellipse' | 'cloud' | 'dim'
+export type AnnotationKind = 'text' | 'line' | 'rect' | 'ellipse' | 'cloud' | 'dim' | 'arc' | 'circle'
 
 /** A markup item printed on the shop drawings. geom is in real mm in the view frame;
  *  style sizes are paper mm (see src/lib/annotations/style.ts for the keys). */

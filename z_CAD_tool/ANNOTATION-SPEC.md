@@ -239,7 +239,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | B2c | **CAD side panel** (right, while F7 is on, plan): cursor X / Y / Δ / distance / angle; the shape being drawn point by point; the selection's numbers, editable (points, corner, W / H, rotation, text box size, leader, dim points + offset); multi-select extents; objects list to pick from | [x] built 2026-10-19; in-app check pending |
 | B2d | **Typed entry (Tab):** while drawing, Tab (or a digit) jumps to the CAD panel's size fields — Length / Angle for a segment, W / H for a box / ellipse / cloud / text box, Offset for a dim's last step; Enter places, Esc clears | [x] built 2026-10-19; in-app check pending |
 | B2e | **Self snaps:** a line / arrow / cloud / leader being drawn snaps to its own earlier points, segments and midpoints (close back on the start); a dragged vertex snaps to the rest of its own shape | [x] built 2026-10-19; in-app check pending |
-| B3 | **Arcs + circle:** kinds `arc` + `circle` (migration); arc by 3-point, centre-start-end, start-end-radius; circle by centre + radius; grips | [ ] |
+| B3 | **Arcs + circle:** kinds `arc` + `circle` (migration); arc by 3-point, centre-start-end, start-end-radius; circle by centre + radius; grips | [x] built 2026-10-19; in-app check pending |
 | B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [ ] |
 | B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [ ] |
 | A6 | **Elevations:** wall-local frame, canvas + Elevation Views report, wall-split remap | [ ] |
@@ -495,5 +495,33 @@ mid points etc."). In-app check pending.
   with no per-move concatenation. The hook's `toFrame` defaults `own` to the
   drawing in progress; the vertex drag passes its own.
 
-Next: B3 (arcs + circle), then B4–B5, then A6 (elevations: wall-local frame, canvas +
+**B3 built 2026-10-19** (in-app check pending). Migration `cad_b3_arc_circle` applied
+live (`migration_b3_arc_circle.sql`: kind check widened to add `arc`, `circle`).
+- **Geometry:** `ArcGeom { c, r, a0, a1 }` runs from a0 to a1 in degrees, svg
+  orientation (increasing = clockwise on screen); `CircleGeom { c, r }`. Helpers:
+  `arcFrom3` (circumcentre; the direction is picked so it passes the middle point),
+  `arcFromCentre` (anticlockwise on screen, start → end, the CAD default),
+  `arcFromEndsRadius` (shorter arc bulging to the cursor side, minimum a half
+  circle), plus `arcSvgPath` (flipY flips the sweep flag, ready for A6), sample,
+  length.
+- **Tools:** Arc (K), with a ribbon "Arc" method: 3-point (start · through · end),
+  Centre-start-end, Ends + radius (start · end · bulge side). Circle (O): centre,
+  then a point on it.
+  - Typed (Tab): circle Radius; centre-mode Sweep (end = start turned anticlockwise
+    on screen); ends-mode Radius; earlier clicks use Length / Angle.
+  - The helpers live in the hook: `lockPoint`, `typedFieldsFor`, `arcFromDrawing`
+    (exported + tested).
+- **Render:** an arc path with arrowheads that point along it (Ends group applies);
+  circles take Fill.
+- **Grips:** arc start / end / middle (re-bend through the three points, `arcFrom3`)
+  and a centre dot; circle radius grip. Drag kind `arcGrip`.
+- **Snaps:** arc ends + middle + centre and its sampled edge; circle quadrants +
+  centre + its ring.
+- **Panel:**
+  - arc: centre, R, From / To angles shown the drawing way (anticlockwise, 0° right),
+    sweep, arc length, chord, and "Flip to the other side" (swaps a0 / a1);
+  - circle: centre, R, Ø, circumference, area;
+  - live labels: R · sweep · length on the arc, R / Ø on the circle.
+
+Next: B4 (offset tool + side drag), then B5 (more dims), then A6 (elevations: wall-local frame, canvas +
 Elevation Views report, wall-split remap).

@@ -8,7 +8,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { RoomAnnotation } from '@/src/lib/types'
 import {
-  type Pt, type LineGeom, type BoxGeom, type TextGeom, type DimGeom,
+  type Pt, type LineGeom, type BoxGeom, type TextGeom, type DimGeom, type ArcGeom, type CircleGeom,
+  arcStart, arcEnd, arcLength, sweepOf,
   segLength, segAngle, dimLayout, dimText, boundsOf, annotationFramePoints,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
@@ -16,6 +17,7 @@ import type { AnnotationTool, TypedField } from './useAnnotationTool'
 
 const TYPED_LABEL: Record<TypedField, [string, string]> = {
   length: ['Length', 'mm'], angle: ['Angle', '°'], w: ['W', 'mm'], h: ['H', 'mm'], offset: ['Offset', 'mm'],
+  radius: ['Radius', 'mm'], sweep: ['Sweep', '°'],
 }
 
 /** Typed sizes while drawing: Tab from the canvas lands here; Tab cycles the fields,
@@ -47,6 +49,8 @@ function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
   if (lm?.mode === 'box') { live.w = Math.abs(lm.b.x - lm.a.x); live.h = Math.abs(lm.b.y - lm.a.y) }
   const prev = cad.drawPreview
   if (prev?.kind === 'dim') live.offset = Math.abs((prev.geom as DimGeom).offset)
+  if (prev?.kind === 'circle') live.radius = (prev.geom as CircleGeom).r
+  if (prev?.kind === 'arc') { live.radius = (prev.geom as ArcGeom).r; live.sweep = sweepOf((prev.geom as ArcGeom).a0, (prev.geom as ArcGeom).a1) }
 
   if (!fields.length) return null
   return (
@@ -92,7 +96,7 @@ const r0 = (n: number) => String(Math.round(n))
 const r1 = (n: number) => String(Math.round(n * 10) / 10)
 
 const KIND_LABEL: Record<string, string> = {
-  text: 'Text', line: 'Line', rect: 'Box', ellipse: 'Ellipse', cloud: 'Cloud', dim: 'Dimension',
+  text: 'Text', line: 'Line', rect: 'Box', ellipse: 'Ellipse', cloud: 'Cloud', dim: 'Dimension', arc: 'Arc', circle: 'Circle',
 }
 
 function polyArea(pts: Pt[]): number {
@@ -178,6 +182,8 @@ function summary(a: RoomAnnotation, k: number): string {
     case 'ellipse': { const g = a.geom as BoxGeom; return `${r0(Math.abs(g.b.x - g.a.x))} × ${r0(Math.abs(g.b.y - g.a.y))}` }
     case 'dim':   { const g = a.geom as DimGeom; return g?.p1 && g?.p2 ? dimText(dimLayout(g).value, a.text) : '' }
     case 'text':  { const t = (a.text ?? '').split('\n')[0]; void k; return t.length > 22 ? t.slice(0, 22) + '…' : t || '(empty)' }
+    case 'arc':   { const g = a.geom as ArcGeom; return g?.c ? `R${r0(g.r)} · ${r0(sweepOf(g.a0, g.a1))}°` : '' }
+    case 'circle': { const g = a.geom as CircleGeom; return g?.c ? `Ø${r0(g.r * 2)}` : '' }
   }
 }
 
@@ -327,6 +333,46 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
           <div className="text-[10px] text-gray-500 mt-2 mb-1">Leader (point 1 = arrow tip)</div>
           <PointTable pts={g.leader} closed={false} onPoint={(i, p) => set({ ...g, leader: g.leader!.map((q, j) => j === i ? p : q) })} />
         </>) : null}
+      </>
+    }
+    case 'arc': {
+      // Shown the drawing way: 0° = right, the arc runs anticlockwise From → To.
+      const g = a.geom as ArcGeom
+      if (!g?.c) return null
+      const conv = (svg: number) => ((-svg % 360) + 360) % 360
+      return <>
+        <div className="text-[10px] text-gray-500 mb-1">Centre</div>
+        <div className="flex gap-2"><Field label="X" value={g.c.x} onCommit={n => set({ ...g, c: { x: n, y: g.c.y } })} /><Field label="Y" value={g.c.y} onCommit={n => set({ ...g, c: { x: g.c.x, y: n } })} /></div>
+        <div className="flex gap-2 mt-1.5"><Field label="R" value={g.r} onCommit={n => n > 0 && set({ ...g, r: n })} suffix="mm" w="w-16" /></div>
+        <div className="flex gap-2 mt-1.5">
+          <Field label="↶" value={conv(g.a1)} onCommit={n => set({ ...g, a1: -n })} suffix="° from" w="w-14" />
+          <Field label="→" value={conv(g.a0)} onCommit={n => set({ ...g, a0: -n })} suffix="° to" w="w-14" />
+        </div>
+        <div className="mt-2">
+          <Row k="Sweep" v={`${r1(sweepOf(g.a0, g.a1))}°`} />
+          <Row k="Arc length" v={`${r0(arcLength(g))} mm`} />
+          <Row k="Chord" v={`${r0(segLength(arcStart(g), arcEnd(g)))} mm`} />
+        </div>
+        <button onClick={() => set({ ...g, a0: g.a1, a1: g.a0 })}
+          className="mt-2 text-xs px-2 py-1 rounded bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700">
+          Flip to the other side of the circle
+        </button>
+      </>
+    }
+    case 'circle': {
+      const g = a.geom as CircleGeom
+      if (!g?.c) return null
+      return <>
+        <div className="text-[10px] text-gray-500 mb-1">Centre</div>
+        <div className="flex gap-2"><Field label="X" value={g.c.x} onCommit={n => set({ ...g, c: { x: n, y: g.c.y } })} /><Field label="Y" value={g.c.y} onCommit={n => set({ ...g, c: { x: g.c.x, y: n } })} /></div>
+        <div className="flex gap-2 mt-1.5">
+          <Field label="R" value={g.r} onCommit={n => n > 0 && set({ ...g, r: n })} w="w-16" />
+          <Field label="Ø" value={g.r * 2} onCommit={n => n > 0 && set({ ...g, r: n / 2 })} w="w-16" />
+        </div>
+        <div className="mt-2">
+          <Row k="Circumference" v={`${r0(2 * Math.PI * g.r)} mm`} />
+          <Row k="Area" v={`${r1(Math.PI * g.r * g.r / 1e6)} m²`} />
+        </div>
       </>
     }
     case 'dim': {

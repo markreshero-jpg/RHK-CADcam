@@ -23,7 +23,11 @@ export interface CloudGeom { pts: Pt[] }
  *  + = left of p1→p2. Linear (A5): axis 'x' measures the horizontal span with the dim
  *  line at y = p1.y + offset; axis 'y' the vertical span at x = p1.x + offset. */
 export interface DimGeom   { p1: Pt; p2: Pt; offset: number; axis?: 'x' | 'y' }
-export type AnnotationGeom = TextGeom | LineGeom | BoxGeom | CloudGeom | DimGeom
+/** B3. Arc: centre, radius, and the angles it runs between — from a0 to a1 in degrees,
+ *  svg orientation (increasing = clockwise on screen). Circle: centre + radius. */
+export interface ArcGeom    { c: Pt; r: number; a0: number; a1: number }
+export interface CircleGeom { c: Pt; r: number }
+export type AnnotationGeom = TextGeom | LineGeom | BoxGeom | CloudGeom | DimGeom | ArcGeom | CircleGeom
 
 /** frame → svg: svg = (ox + s·x, oy ± s·y). flipY for frames whose y runs up (elevation). */
 export interface AnnotFrame { ox: number; oy: number; s: number; flipY: boolean }
@@ -299,6 +303,8 @@ export function annotationFramePoints(kind: AnnotationKind, geom: AnnotationGeom
     case 'rect':
     case 'ellipse': { const g = geom as BoxGeom; return [g.a, g.b, { x: g.a.x, y: g.b.y }, { x: g.b.x, y: g.a.y }] }
     case 'dim':     { const g = geom as DimGeom; const l = dimLayout(g); return [g.p1, g.p2, l.d1, l.d2] }
+    case 'arc':     return arcSample(geom as ArcGeom, 16)
+    case 'circle':  { const g = geom as CircleGeom; return [{ x: g.c.x - g.r, y: g.c.y - g.r }, { x: g.c.x + g.r, y: g.c.y + g.r }] }
   }
 }
 
@@ -319,6 +325,8 @@ export function translateGeom(kind: AnnotationKind, geom: AnnotationGeom, dx: nu
     case 'rect':
     case 'ellipse': { const g = geom as BoxGeom; return { ...g, a: t(g.a), b: t(g.b) } }
     case 'dim':     { const g = geom as DimGeom; return { ...g, p1: t(g.p1), p2: t(g.p2) } }
+    case 'arc':
+    case 'circle':  { const g = geom as ArcGeom | CircleGeom; return { ...g, c: t(g.c) } }
   }
 }
 
@@ -432,3 +440,79 @@ export function withBoxSize(g: BoxGeom, w: number, h: number): BoxGeom {
 }
 
 export const segLength = (a: Pt, b: Pt) => len(sub(b, a))
+
+// ── Arcs + circles (B3) ──────────────────────────────────────────────────────
+
+/** Angle of p seen from c, degrees, svg orientation (0 = right, increasing clockwise on screen). */
+export function angOf(c: Pt, p: Pt): number {
+  return Math.atan2(p.y - c.y, p.x - c.x) * 180 / Math.PI
+}
+/** How far (degrees, 0–360) the arc runs from a0 to a1. */
+export function sweepOf(a0: number, a1: number): number {
+  return (((a1 - a0) % 360) + 360) % 360
+}
+export function arcPoint(g: Pick<ArcGeom, 'c' | 'r'>, deg: number): Pt {
+  const r = deg * Math.PI / 180
+  return { x: g.c.x + g.r * Math.cos(r), y: g.c.y + g.r * Math.sin(r) }
+}
+export const arcStart = (g: ArcGeom) => arcPoint(g, g.a0)
+export const arcEnd   = (g: ArcGeom) => arcPoint(g, g.a1)
+export const arcMid   = (g: ArcGeom) => arcPoint(g, g.a0 + sweepOf(g.a0, g.a1) / 2)
+export const arcLength = (g: ArcGeom) => g.r * sweepOf(g.a0, g.a1) * Math.PI / 180
+
+/** Circle through three points (null when they're in a line). */
+export function circumcentre(a: Pt, b: Pt, c: Pt): Pt | null {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y))
+  if (Math.abs(d) < 1e-9) return null
+  const a2 = a.x * a.x + a.y * a.y, b2 = b.x * b.x + b.y * b.y, c2 = c.x * c.x + c.y * c.y
+  return {
+    x: (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d,
+    y: (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d,
+  }
+}
+
+/** The arc from p1 to p3 passing through pm (3-point arc). */
+export function arcFrom3(p1: Pt, pm: Pt, p3: Pt): ArcGeom | null {
+  const c = circumcentre(p1, pm, p3)
+  if (!c) return null
+  const r = len(sub(p1, c))
+  const a1 = angOf(c, p1), am = angOf(c, pm), a3 = angOf(c, p3)
+  return sweepOf(a1, am) < sweepOf(a1, a3) ? { c, r, a0: a1, a1: a3 } : { c, r, a0: a3, a1: a1 }
+}
+
+/** Centre, start, end — the arc runs anticlockwise on screen from start to end (CAD default). */
+export function arcFromCentre(c: Pt, start: Pt, end: Pt): ArcGeom | null {
+  const r = len(sub(start, c))
+  if (r < 1e-9) return null
+  return { c, r, a0: angOf(c, end), a1: angOf(c, start) }
+}
+
+/** Two ends + radius: the shorter arc, bulging towards `side`. A radius under half the
+ *  chord becomes a half circle. */
+export function arcFromEndsRadius(p1: Pt, p2: Pt, r: number, side: Pt): ArcGeom | null {
+  const L = len(sub(p2, p1))
+  if (L < 1e-9) return null
+  const rr = Math.max(r, L / 2)
+  const m = mul(add(p1, p2), 0.5)
+  const u = unit(sub(p2, p1))
+  let n = { x: -u.y, y: u.x }
+  if ((side.x - m.x) * n.x + (side.y - m.y) * n.y < 0) n = mul(n, -1)
+  const h = Math.sqrt(Math.max(0, rr * rr - (L / 2) ** 2))
+  return arcFrom3(p1, add(m, mul(n, rr - h)), p2)
+}
+
+/** Points along an arc (n segments). */
+export function arcSample(g: ArcGeom, n = 24): Pt[] {
+  const sw = sweepOf(g.a0, g.a1)
+  return Array.from({ length: n + 1 }, (_, i) => arcPoint(g, g.a0 + sw * i / n))
+}
+export function circleSample(g: CircleGeom, n = 48): Pt[] {
+  return Array.from({ length: n }, (_, i) => arcPoint(g, 360 * i / n))
+}
+
+/** SVG path for an arc through a frame (flipY mirrors the turn direction). */
+export function arcSvgPath(f: AnnotFrame, g: ArcGeom): string {
+  const s = mapPt(f, arcStart(g)), e = mapPt(f, arcEnd(g))
+  const sw = sweepOf(g.a0, g.a1), r = g.r * f.s
+  return `M${P(s)}A${f2(r)} ${f2(r)} 0 ${sw > 180 ? 1 : 0} ${f.flipY ? 0 : 1} ${P(e)}`
+}
