@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  cadSnap, addOutline, segIntersection, perpFoot, closestOnSeg, normaliseCadSnap,
+  cadSnap, addOutline, ownShapeGeometry, segIntersection, perpFoot, closestOnSeg, normaliseCadSnap,
   DEFAULT_CAD_SNAP, type SnapGeometry,
 } from '../annotations/cadSnap'
 
@@ -69,5 +69,25 @@ describe('planSnapGeometry', () => {
     expect(g.points.filter(p => p.src === 'fixtures' && p.kind === 'centre')).toEqual([{ p: { x: 300, y: 300 }, kind: 'centre', src: 'fixtures', owner: undefined }])
     expect(g.segs.filter(s => s.owner === 'n1')).toHaveLength(1)
     expect(cadSnap({ x: 251, y: 1004 }, g, DEFAULT_CAD_SNAP, 20).kind).toBe('mid')
+  })
+})
+
+describe('snapping to the shape itself', () => {
+  const poly = [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 800 }]
+  it('a line being drawn snaps back to its start and its own midpoints, not the point just placed', () => {
+    const own = ownShapeGeometry(poly, poly.length - 1, false, true)
+    expect(cadSnap({ x: 9, y: 6 }, [geo(), own], S, 20)).toEqual({ pt: { x: 0, y: 0 }, kind: 'end' })
+    expect(cadSnap({ x: 1004, y: 405 }, own, S, 20)).toEqual({ pt: { x: 1000, y: 400 }, kind: 'mid' })
+    expect(cadSnap({ x: 1003, y: 796 }, own, S, 20).kind).not.toBe('end')
+  })
+  it('a dragged vertex skips itself and the segments into it', () => {
+    const own = ownShapeGeometry(poly, 1, false)
+    expect(own.points.some(p => p.p.x === 1000 && p.p.y === 0)).toBe(false)
+    expect(own.segs).toHaveLength(0)
+    expect(cadSnap({ x: 990, y: 790 }, own, S, 20)).toEqual({ pt: { x: 1000, y: 800 }, kind: 'end' })
+  })
+  it('a closed cloud keeps its far edges', () => {
+    const sq = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }]
+    expect(ownShapeGeometry(sq, 0, true).segs).toHaveLength(2)
   })
 })

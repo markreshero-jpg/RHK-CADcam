@@ -71,6 +71,25 @@ export function addOutline(g: SnapGeometry, pts: Pt[], src: CadSnapSource, close
   }
 }
 
+/** Snap targets on the shape itself while it is drawn or a vertex is dragged (the
+ *  notes geometry skips it by owner id). `moving` = the point under the cursor: it is
+ *  left out, and so are the segments that run into it unless keepSegs (a drawing's
+ *  last point, whose segment back is already fixed). */
+export function ownShapeGeometry(pts: Pt[], moving: number, closed: boolean, keepSegs = false): SnapGeometry {
+  const g: SnapGeometry = { segs: [], points: [] }
+  const n = pts.length
+  pts.forEach((p, i) => { if (i !== moving) g.points.push({ p, kind: 'end', src: 'annotations' }) })
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const j = (i + 1) % n
+    if (!keepSegs && (i === moving || j === moving)) continue
+    const a = pts[i], b = pts[j]
+    if (a.x === b.x && a.y === b.y) continue
+    g.segs.push({ a, b, src: 'annotations' })
+    g.points.push({ p: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, kind: 'mid', src: 'annotations' })
+  }
+  return g
+}
+
 export interface CadSnapResult { pt: Pt; kind: CadSnapKind | null }
 
 const d2 = (a: Pt, b: Pt) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2
@@ -106,10 +125,12 @@ export function perpFoot(p: Pt, a: Pt, b: Pt): Pt | null {
 const RANK: Record<CadSnapKind, number> = { end: 0, intersection: 0, centre: 0, mid: 1, perpendicular: 2, nearest: 3 }
 
 /** The snap for `cur` within `radius` (frame mm). prev = the previous point of the shape
- *  being drawn (perpendicular). exclude = annotation ids to ignore (the one being edited). */
-export function cadSnap(cur: Pt, geo: SnapGeometry, s: CadSnapSettings, radius: number,
+ *  being drawn (perpendicular). exclude = annotation ids to ignore (the one being edited).
+ *  geo may be several sets (room + notes + the shape being drawn). */
+export function cadSnap(cur: Pt, geoIn: SnapGeometry | SnapGeometry[], s: CadSnapSettings, radius: number,
   prev?: Pt | null, exclude?: ReadonlySet<string>): CadSnapResult {
   if (!s.enabled) return { pt: cur, kind: null }
+  const geos = Array.isArray(geoIn) ? geoIn : [geoIn]
   const r2 = radius * radius
   const allowed = (src: CadSnapSource, owner?: string) => s.sources[src] && !(owner && exclude?.has(owner))
   let best: { pt: Pt; kind: CadSnapKind; d: number } | null = null
@@ -120,11 +141,11 @@ export function cadSnap(cur: Pt, geo: SnapGeometry, s: CadSnapSettings, radius: 
     if (!best || RANK[kind] < RANK[best.kind] || (RANK[kind] === RANK[best.kind] && d < best.d)) best = { pt, kind, d }
   }
 
-  for (const q of geo.points) if (allowed(q.src, q.owner)) offer(q.p, q.kind)
+  for (const geo of geos) for (const q of geo.points) if (allowed(q.src, q.owner)) offer(q.p, q.kind)
 
   // Edges near the cursor: nearest, perpendicular, and crossings between them.
   const near: SnapSeg[] = []
-  for (const sg of geo.segs) {
+  for (const geo of geos) for (const sg of geo.segs) {
     if (!allowed(sg.src, sg.owner)) continue
     const c = closestOnSeg(cur, sg.a, sg.b)
     if (d2(c, cur) > r2) continue

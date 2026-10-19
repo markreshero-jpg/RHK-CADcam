@@ -17,6 +17,7 @@ import {
   angleSnap, dedupePts, leaderTextAt, setBoxCorner, rectPts, dimOffsetFor, dimAxisFor, type DimGeom,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
+import { ownShapeGeometry, type SnapGeometry } from '@/src/lib/annotations/cadSnap'
 import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
 import { supabase } from '@/src/lib/supabase'
 import { dbUpdateAnnotation, dbDeleteAnnotations } from './canvasDB'
@@ -114,7 +115,8 @@ export function useAnnotationTool({
   /** CAD object snap in frame mm (B2). prev = the shape's previous point (perpendicular);
    *  exclude = annotation ids not to snap to (the one being edited). kind null = nothing
    *  snapped — lines then angle-lock to 15°. */
-  snap:            (p: Pt, prev: Pt | null, exclude: ReadonlySet<string>) => { pt: Pt; kind: string | null }
+  /** own = targets on the shape being drawn / edited (it is excluded from the notes set). */
+  snap:            (p: Pt, prev: Pt | null, exclude: ReadonlySet<string>, own?: SnapGeometry) => { pt: Pt; kind: string | null }
   enterCad:        () => void
   exitCad:         () => void
 }) {
@@ -150,11 +152,12 @@ export function useAnnotationTool({
   const [cursor, setCursor] = useState<Pt | null>(null)
 
   /** Pointer → frame mm. snapIt: object snaps; prev: perpendicular from it, or a 15° lock
-   *  when nothing snapped; exclude: annotation ids to ignore. */
-  const toFrame = useCallback((e: { clientX: number; clientY: number }, snapIt: boolean, prev?: Pt | null, exclude?: ReadonlySet<string>) => {
+   *  when nothing snapped; exclude: annotation ids to ignore; own: the edited shape's own
+   *  points (default: the line being drawn, so it snaps to its earlier points). */
+  const toFrame = useCallback((e: { clientX: number; clientY: number }, snapIt: boolean, prev?: Pt | null, exclude?: ReadonlySet<string>, own?: SnapGeometry) => {
     const p = unmapPt(frame, toWorld(e))
     if (!snapIt) { setSnapHit(null); setCursor(p); return p }
-    const r = snap(p, prev ?? null, exclude ?? NO_IDS)
+    const r = snap(p, prev ?? null, exclude ?? NO_IDS, own ?? drawingSnapGeometry(drawingRef.current))
     if (r.kind) { setSnapHit({ pt: r.pt, kind: r.kind }); setCursor(r.pt); return r.pt }
     setSnapHit(null)
     const out = prev ? angleSnap(prev, p) : p
@@ -619,7 +622,7 @@ export function useAnnotationTool({
         const a2 = annRef.current.find(x => x.id === cur.id)!
         const pts = [...vertsOf(a2)]
         const prev = pts[cur.i - 1] ?? pts[cur.i + 1] ?? null
-        pts[cur.i] = toFrame(ev, !ev.shiftKey, prev, new Set([cur.id]))
+        pts[cur.i] = toFrame(ev, !ev.shiftKey, prev, new Set([cur.id]), ownShapeGeometry(pts, cur.i, a2.kind === 'cloud'))
         setAnnotations(xs => xs.map(x => x.id === cur.id ? withVerts(x, pts) : x))
       } else if (cur.kind === 'offset') {
         if (!cur.moved && !far) return
@@ -952,6 +955,13 @@ export function useAnnotationTool({
 export type AnnotationTool = ReturnType<typeof useAnnotationTool>
 
 /** Editable vertices: a line's points, or a text's leader. */
+/** A half-drawn line / arrow / cloud / leader snaps to its own fixed points and segments
+ *  (back to its start to close it, a midpoint…), not to the point just placed. */
+function drawingSnapGeometry(d: AnnotDrawing | null): SnapGeometry | undefined {
+  if (!d || d.tool === 'dim' || d.pts.length < 2) return undefined
+  return ownShapeGeometry(d.pts, d.pts.length - 1, false, true)
+}
+
 function vertsOf(a: RoomAnnotation): Pt[] {
   if (a.kind === 'dim') { const g = a.geom as DimGeom; return [g.p1, g.p2] }
   if (a.kind === 'line' || a.kind === 'cloud') return (a.geom as LineGeom).pts ?? []

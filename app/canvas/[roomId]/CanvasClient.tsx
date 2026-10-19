@@ -618,14 +618,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const cadSnapNotes = useMemo(() => mode !== 'cad' ? EMPTY_SNAP_GEOMETRY : planSnapGeometry({
     walls: [], cabinets: [], fixtures: [], benchtops: [], annotations: planAnnotations, paperToFrame: annotScale,
   }), [mode, planAnnotations, annotScale])
-  const cadSnapGeo = useMemo(() => ({
-    segs: [...cadSnapRoom.segs, ...cadSnapNotes.segs], points: [...cadSnapRoom.points, ...cadSnapNotes.points],
-  }), [cadSnapRoom, cadSnapNotes])
   const cad = useAnnotationTool({
     room, annotations, setAnnotations, captureSnapshot, frame: IDENTITY_FRAME, paper: annotScale, zoom: view.zoom,
     active: mode === 'cad' && canvasView === 'plan',
     toWorld: e => { const r = svgRef.current!.getBoundingClientRect(); return toWorld(e.clientX - r.left, e.clientY - r.top) },
-    snap: (p, prev, exclude) => cadSnap(p, cadSnapGeo, cadSnapSettings, SNAP_PX / view.zoom, prev, exclude),
+    snap: (p, prev, exclude, own) => cadSnap(p, own ? [cadSnapRoom, cadSnapNotes, own] : [cadSnapRoom, cadSnapNotes],
+      cadSnapSettings, SNAP_PX / view.zoom, prev, exclude),
     enterCad, exitCad: () => setMode('select'),
   })
   function setAnnotScale(n: number) {

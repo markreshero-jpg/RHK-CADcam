@@ -238,6 +238,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | B2b | **Measurements + coordinates:** live length / angle while drawing, W × H while placing, side lengths / W × H on the selection (screen only); cursor X / Y + ΔX / ΔY readout; typed Length / Angle (2-point line) and W / H (box, ellipse) on the ribbon | [x] built 2026-10-19; in-app check pending |
 | B2c | **CAD side panel** (right, while F7 is on, plan): cursor X / Y / Δ / distance / angle; the shape being drawn point by point; the selection's numbers, editable (points, corner, W / H, rotation, text box size, leader, dim points + offset); multi-select extents; objects list to pick from | [x] built 2026-10-19; in-app check pending |
 | B2d | **Typed entry (Tab):** while drawing, Tab (or a digit) jumps to the CAD panel's size fields — Length / Angle for a segment, W / H for a box / ellipse / cloud / text box, Offset for a dim's last step; Enter places, Esc clears | [x] built 2026-10-19; in-app check pending |
+| B2e | **Self snaps:** a line / arrow / cloud / leader being drawn snaps to its own earlier points, segments and midpoints (close back on the start); a dragged vertex snaps to the rest of its own shape | [x] built 2026-10-19; in-app check pending |
 | B3 | **Arcs + circle:** kinds `arc` + `circle` (migration); arc by 3-point, centre-start-end, start-end-radius; circle by centre + radius; grips | [ ] |
 | B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [ ] |
 | B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [ ] |
@@ -481,6 +482,18 @@ the user can type in a size"). In-app check pending.
 - **Panel** `TypedEntryFields` in the Drawing section: Tab / Shift+Tab cycle, Enter
   places, Esc clears. Placeholders show the live value; a locked field turns yellow.
 - B3's arc / circle tools add a Radius field to `TypedEntry` the same way.
+
+**B2e built 2026-10-19** (Mark: "can you have cad lines snap to each other when close,
+mid points etc."). In-app check pending.
+- Snapping to other notes was already in B2. The gap was the shape itself: the notes
+  set skips it by owner id, so a polyline could not snap back to its own start.
+- `ownShapeGeometry(pts, moving, closed, keepSegs)` in `cadSnap.ts` builds targets
+  from the shape: every point but the moving one, plus the segments and midpoints.
+  While drawing, the point just placed is left out, but its segment back is kept.
+  A dragged vertex also drops the two segments that run into it.
+- `cadSnap` takes several geometry sets. CanvasClient passes room + notes (+ own),
+  with no per-move concatenation. The hook's `toFrame` defaults `own` to the
+  drawing in progress; the vertex drag passes its own.
 
 Next: B3 (arcs + circle), then B4–B5, then A6 (elevations: wall-local frame, canvas +
 Elevation Views report, wall-split remap).
