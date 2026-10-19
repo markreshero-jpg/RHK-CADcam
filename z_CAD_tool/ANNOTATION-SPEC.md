@@ -241,6 +241,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | B2e | **Self snaps:** a line / arrow / cloud / leader being drawn snaps to its own earlier points, segments and midpoints (close back on the start); a dragged vertex snaps to the rest of its own shape | [x] built 2026-10-19; in-app check pending |
 | B3 | **Arcs + circle:** kinds `arc` + `circle` (migration); arc by 3-point, centre-start-end, start-end-radius; circle by centre + radius; grips | [x] built 2026-10-19; in-app check pending |
 | B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [x] built 2026-10-19; in-app check pending |
+| B4b | **Fillet / chamfer / join + right-click menu:** two picks (two sides of a line → that corner; two lines → trim / extend to meet and join); a box = all corners; Join nearest ends / close; lines gain arc segments (bulges) + closed outlines; right-click menu on any note / line | [x] built 2026-10-19; in-app check pending |
 | B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [ ] |
 | A6 | **Elevations:** wall-local frame, canvas + Elevation Views report, wall-split remap | [ ] |
 | A7 | **Cabinet sheets:** ribbon on the sheet preview (decision 10), cabinet-local frame, sheet toggle, own undo; **decide the cabinet-revision behaviour first** | [ ] |
@@ -545,6 +546,43 @@ B3 fix 2026-10-19 (2c3a891): arc / circle clicks fell through to the text-box pa
   - **Ctrl + drag** on the bar still inserts a corner (`m<N>`).
   - Unrotated boxes / ellipses get side bars too (move one edge). Leaders use the
     same bars.
+
+**B4b built 2026-10-19** (Mark: "join line functions, corner radius and fillet
+chamfer when clicking on 2 lines … add it in as a right click option too"). In-app
+check pending.
+- **LineGeom** gains `bulges?: number[]` (per segment, tan(θ/4), + bulges to the
+  segment's left normal (-u.y, u.x) in svg coords) and `closed?: boolean`. Fillets are
+  arc segments *inside* the line, so it stays one item for offset, snaps, side drag
+  and lengths.
+- **Geometry:** `bulgeMid / bulgeTangent / bulgeArc / bulgeSegLength / sampleBulged /
+  bulgedPath` (flipY flips the bulge side), `filletAt / chamferAt / allCorners /
+  reversePoly / joinPolys / cornerJoin / boxToPoly / nearestSegIndex`.
+  `offsetPolyline` was rewritten on tangents: sides mitre and tangent arc joins
+  just shift, so fillet arcs offset concentric (bulges unchanged).
+- **Tools:** Fillet (G, radius on the ribbon, 0 = sharp corner), Chamfer (H, D1 / D2),
+  Join (J). Picks come through the items' hit areas (`clickRoute` 'modify').
+  - The same line, adjacent sides → that corner.
+  - Two lines → `cornerJoin`: each line's end nearer the other pick is trimmed or
+    extended to the crossing, they join into one line, then the corner is
+    filleted / chamfered. The second line is deleted.
+  - A box with Fillet / Chamfer → every corner (it becomes a closed line).
+  - Join: the nearest pair of ends (merged if touching, else bridged); the same line
+    twice → closed.
+  - Problems show as an amber `modMsg` on the ribbon. `replaceShape` can change
+    kind (`AnnotationPatch` now allows `kind`).
+- **Right-click menu** (`CadContextMenu.tsx`, `edit.onMenu` on the hit areas; also
+  opens CAD mode from plain select):
+  - fillet / chamfer this corner (nearest interior vertex within 16 px) or all
+    corners;
+  - join with…, close / open the outline, convert a box to lines, offset…;
+  - duplicate, front / back, delete.
+- **Bulges everywhere else:**
+  - render: a path with arrowheads along the ends; closed lines take Fill;
+  - hit areas and bounds use the sampled outline;
+  - snaps: corners, straight mids, arc mids + centres, the sampled edge;
+  - measure overlay and panel: arc lengths (⌒) and closed area;
+  - no side bar on arc segments; midpoint insert splits `bulges`; side drag honours
+    closed lines.
 
 Next: B5 (more dims), then A6 (elevations: wall-local frame, canvas +
 Elevation Views report, wall-split remap).

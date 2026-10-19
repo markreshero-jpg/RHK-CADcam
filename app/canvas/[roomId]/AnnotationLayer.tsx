@@ -10,7 +10,7 @@ import type { RoomAnnotation } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
   type AnnotFrame, type Pt, type TextGeom, type LineGeom, type BoxGeom, type CloudGeom, type DimGeom,
-  type ArcGeom, type CircleGeom, arcSvgPath, arcPoint, arcStart, arcEnd, arcMid, arcSample, sweepOf,
+  type ArcGeom, type CircleGeom, arcSvgPath, bulgedPath, sampleBulged, arcPoint, arcStart, arcEnd, arcMid, arcSample, sweepOf,
   mapPt, mapRot, arrowHead, trimEnd, layoutText, leaderAttachLocal, rotatePt, cloudPath,
   dimLayout, readableAngle, dimText, annotLayerItem, boxCorners,
 } from '@/src/lib/annotations/geometry'
@@ -46,6 +46,8 @@ export interface AnnotationEditProps {
   onDown:      (e: React.PointerEvent, id: string) => void
   onDouble:    (e: React.MouseEvent, id: string) => void
   onGrip:      (e: React.PointerEvent, id: string, grip: AnnotGrip) => void
+  /** Right-click on an item (B4b menu). */
+  onMenu?:     (e: React.MouseEvent, id: string) => void
 }
 
 const SEL = '#38bdf8'
@@ -68,7 +70,8 @@ export default function AnnotationLayer({ annotations, frame, paper, layers, pri
             {edit && !hidden && edit.hittable && (
               <g style={{ cursor: 'move' }}
                 onPointerDown={e => { if (e.button === 0) edit.onDown(e, a.id) }}
-                onDoubleClick={e => edit.onDouble(e, a.id)}>
+                onDoubleClick={e => edit.onDouble(e, a.id)}
+                onContextMenu={e => edit.onMenu?.(e, a.id)}>
                 {hitShape(a, s, frame, paper, edit.hitWidth)}
               </g>
             )}
@@ -106,8 +109,13 @@ function hitShape(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number,
         {g.leader?.length ? <polyline points={ptsAttr(g.leader.map(p => mapPt(f, p)))} {...stroke} /> : null}
       </>
     }
-    case 'line':
-      return <polyline points={ptsAttr(((a.geom as LineGeom).pts ?? []).map(p => mapPt(f, p)))} {...stroke} />
+    case 'line': {
+      const g = a.geom as LineGeom, pts = (g.pts ?? []).map(p => mapPt(f, p))
+      return g.closed || g.bulges?.some(Boolean)
+        ? <path d={bulgedPath(pts, g.bulges, !!g.closed, f.flipY)} {...stroke} fill={g.closed && s.fill !== 'none' ? 'transparent' : 'none'}
+            style={{ pointerEvents: g.closed && s.fill !== 'none' ? 'all' : 'stroke' }} />
+        : <polyline points={ptsAttr(pts)} {...stroke} />
+    }
     case 'cloud': {
       const pts = ((a.geom as CloudGeom).pts ?? []).map(p => mapPt(f, p))
       return <polygon points={ptsAttr(pts)} {...stroke} fill={filled ? 'transparent' : 'none'}
@@ -147,11 +155,12 @@ function hitShape(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number,
 
 /** Vertex grips (circles) + midpoint insert grips (small diamonds) along a polyline.
  *  closed: a cloud — the last point joins back to the first. */
-function vertexGrips(id: string, pts: Pt[], edit: AnnotationEditProps, closed = false, mids = true): React.ReactNode {
+function vertexGrips(id: string, pts: Pt[], edit: AnnotationEditProps, closed = false, mids = true, bulges?: number[]): React.ReactNode {
   const hw = edit.hitWidth
   const down = (g: AnnotGrip) => (e: React.PointerEvent) => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, id, g) } }
   return <>
-    {mids && (closed ? pts : pts.slice(0, -1)).map((p, i) => sideBar(id, i, p, pts[(i + 1) % pts.length], edit, true))}
+    {/* no side bar on an arc segment (a fillet) — its corners move it */}
+    {mids && (closed ? pts : pts.slice(0, -1)).map((p, i) => bulges?.[i] ? null : sideBar(id, i, p, pts[(i + 1) % pts.length], edit, true))}
     {pts.map((p, i) => (
       <circle key={`v${i}`} cx={p.x} cy={p.y} r={hw * 0.4} fill="#0f172a" stroke={SEL} strokeWidth={hw / 6}
         style={{ pointerEvents: 'all', cursor: 'crosshair' }} onPointerDown={down(`v${i}`)} />
@@ -254,8 +263,9 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
     </>
   }
   if ((a.kind === 'line' || a.kind === 'cloud') && single) {
-    const pts = ((a.geom as LineGeom).pts ?? []).map(p => mapPt(f, p))
-    return vertexGrips(a.id, pts, edit, a.kind === 'cloud')
+    const g = a.geom as LineGeom
+    const pts = (g.pts ?? []).map(p => mapPt(f, p))
+    return vertexGrips(a.id, pts, edit, a.kind === 'cloud' || !!g.closed, true, g.bulges)
   }
   // Unrotated box / ellipse: a square grip on each corner of its frame. (Rotated ones
   // move and rotate only — resizing a turned box is left for later.)
@@ -280,7 +290,7 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
 
 function selectionPoints(a: RoomAnnotation, f: AnnotFrame): Pt[] {
   switch (a.kind) {
-    case 'line':
+    case 'line':    { const g = a.geom as LineGeom; return sampleBulged(g.pts ?? [], g.bulges, !!g.closed).map(p => mapPt(f, p)) }
     case 'cloud':   return ((a.geom as LineGeom).pts ?? []).map(p => mapPt(f, p))
     case 'rect':
     case 'ellipse': { const g = a.geom as BoxGeom; return [mapPt(f, g.a), mapPt(f, g.b)] }
@@ -336,8 +346,21 @@ function renderOne(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
   switch (a.kind) {
     case 'text':    return <TextNote a={a} s={s} f={f} k={k} leaderOnly={textHidden} />
     case 'line': {
-      const pts = ((a.geom as LineGeom).pts ?? []).map(p => mapPt(f, p))
-      return <Arrowed pts={pts} s={s} k={k} start={s.arrowStart} end={s.arrowEnd} />
+      const g = a.geom as LineGeom
+      const pts = (g.pts ?? []).map(p => mapPt(f, p))
+      if (!g.closed && !g.bulges?.some(Boolean)) return <Arrowed pts={pts} s={s} k={k} start={s.arrowStart} end={s.arrowEnd} />
+      // Arcs (fillets) or a closed outline: one path; open ends still take arrowheads,
+      // pointing along the first / last bit of the line.
+      const smp = sampleBulged(g.pts ?? [], g.bulges, !!g.closed).map(p => mapPt(f, p))
+      const size = s.arrowSize * k
+      const hs = !g.closed && smp.length > 1 ? arrowHead(smp[0], smp[1], s.arrowStart, size) : null
+      const he = !g.closed && smp.length > 1 ? arrowHead(smp[smp.length - 1], smp[smp.length - 2], s.arrowEnd, size) : null
+      const head = (h: { d: string; filled: boolean }) => <path d={h.d} fill={h.filled ? s.color : 'none'} stroke={s.color} strokeWidth={s.weight * k} strokeLinejoin="miter" />
+      return <>
+        <path d={bulgedPath(pts, g.bulges, !!g.closed, f.flipY)} {...strokeProps(s, k)} {...(g.closed ? shapeFill(s) : {})} />
+        {hs && head(hs)}
+        {he && head(he)}
+      </>
     }
     case 'rect':
     case 'ellipse': {

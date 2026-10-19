@@ -33,6 +33,9 @@ const TOOLS: { id: CadTool; label: string; key: string; icon: React.ReactNode }[
   { id: 'arc',     label: 'Arc — pick the method on the ribbon (3-point, centre-start-end, ends + radius)', key: 'K', icon: <path d="M3 12a6 6 0 0110 -6" /> },
   { id: 'circle',  label: 'Circle — click the centre, then a point on it (Tab = radius)', key: 'O', icon: <circle cx="8" cy="8" r="5" /> },
   { id: 'offset',  label: 'Offset — click a line / box / cloud / ellipse / circle / arc, then click the side for a parallel copy (Tab = distance)', key: 'F', icon: <><path d="M3 11L11 3" /><path d="M6 13L13 6" strokeDasharray="2 1.5" /></> },
+  { id: 'fillet',  label: 'Fillet (corner radius) — click two sides / lines; click a box to round all its corners', key: 'G', icon: <path d="M3 13V8a5 5 0 015-5h5" /> },
+  { id: 'chamfer', label: 'Chamfer — click two sides / lines; click a box to chamfer all its corners', key: 'H', icon: <path d="M3 13V7l4-4h6" /> },
+  { id: 'join',    label: 'Join — click two lines to join their nearest ends (the same line twice closes it)', key: 'J', icon: <><path d="M2 11h5M9 5h5M7 11l2-6" /></> },
 ]
 
 const keep = (e: React.MouseEvent) => e.preventDefault()
@@ -157,13 +160,16 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
   const arrows = kind === 'line' || kind === 'dim' || kind === 'arc'
   const nSel = cad.selected.length
   const NEXT: Record<CadTool, string> = {
-    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud', dim: 'dimension', arc: 'arc', circle: 'circle', offset: 'offset copy',
+    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud', dim: 'dimension', arc: 'arc', circle: 'circle', offset: 'offset copy', fillet: 'fillet', chamfer: 'chamfer', join: 'join',
   }
   const what = cad.editing ? (cad.editing.isNew ? 'New text' : 'Editing text')
     : nSel > 1 ? `${nSel} selected` : nSel === 1 ? `Selected ${kind === 'text' && (cad.selected[0].geom as { width?: number }).width != null ? 'text box' : kind}`
     : `Next ${NEXT[cad.tool]}`
   const oneText = nSel === 1 && kind === 'text' && !cad.editing
-  const drawHint = cad.tool === 'offset' ? (cad.offsetSrc ? 'Click the side for the copy · Tab = distance · Esc = pick another' : 'Click the item to offset')
+  const modHint = cad.tool === 'fillet' || cad.tool === 'chamfer' || cad.tool === 'join'
+    ? (cad.modPick ? 'Now click the second side / line · Esc = start again' : cad.tool === 'join' ? 'Click the first line' : 'Click the first side / line (or a box for all corners)')
+    : null
+  const drawHint = modHint ? modHint : cad.tool === 'offset' ? (cad.offsetSrc ? 'Click the side for the copy · Tab = distance · Esc = pick another' : 'Click the item to offset')
     : cad.pending ? (cad.pending.tool === 'textbox' ? 'Click the opposite corner of the text box · Tab = type W / H · Esc cancels' : 'Click the opposite corner · Tab = type W / H · Esc cancels')
     : !cad.drawing ? null
     : cad.drawing.attachId ? 'Click where the leader points · Esc cancels'
@@ -194,6 +200,21 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
         <Sep />
         <span className="text-[11px] text-gray-400 shrink-0 w-24 truncate" title={what}>{what}</span>
         {drawHint && <span className="text-[11px] text-rose-200 shrink-0">{drawHint}</span>}
+        {cad.modMsg && <span className="text-[11px] text-amber-300 shrink-0">{cad.modMsg}</span>}
+        {cad.tool === 'fillet' && (
+          <Group label="Fillet">
+            <Num title="Fillet radius (mm). 0 = just meet at a sharp corner" value={cad.filletR} step={5} min={0} w="w-16" suffix="R"
+              onChange={n => cad.setFilletR(Math.max(0, n))} />
+          </Group>
+        )}
+        {cad.tool === 'chamfer' && (
+          <Group label="Chamfer">
+            <Num title="Chamfer distance on the first side (mm)" value={cad.chamfer.d1} step={5} min={1} w="w-14" suffix="D1"
+              onChange={n => cad.setChamfer({ ...cad.chamfer, d1: Math.max(1, n) })} />
+            <Num title="Chamfer distance on the second side (mm)" value={cad.chamfer.d2} step={5} min={1} w="w-14" suffix="D2"
+              onChange={n => cad.setChamfer({ ...cad.chamfer, d2: Math.max(1, n) })} />
+          </Group>
+        )}
 
         <Group label="Colour" tour="cad-colour">
           {PALETTE.map(c => (

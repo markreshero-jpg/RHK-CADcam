@@ -11,7 +11,7 @@ import { addOutline, type SnapGeometry } from './cadSnap'
 import {
   type Pt, type TextGeom, type LineGeom, type BoxGeom, type DimGeom,
   type ArcGeom, type CircleGeom,
-  boxCorners, dimLayout, layoutText, rotatePt, textCorners, arcSample, circleSample, arcStart, arcEnd, arcMid, arcPoint,
+  boxCorners, dimLayout, layoutText, rotatePt, textCorners, sampleBulged, bulgeMid, bulgeArc, arcSample, circleSample, arcStart, arcEnd, arcMid, arcPoint,
 } from './geometry'
 import { resolveStyle } from './style'
 
@@ -55,7 +55,22 @@ export function planSnapGeometry({ walls, cabinets, resolved, fixtures, benchtop
   for (const a of annotations) {
     const own = a.id
     switch (a.kind) {
-      case 'line':  addOutline(g, (a.geom as LineGeom).pts ?? [], 'annotations', false, own); break
+      case 'line': {
+        const lg = a.geom as LineGeom, pts = lg.pts ?? []
+        if (!lg.bulges?.some(Boolean)) { addOutline(g, pts, 'annotations', !!lg.closed, own); break }
+        // With fillet arcs: corners as ends, straight sides' middles, arc middles + centres,
+        // and the sampled outline for nearest / intersection.
+        const smp = sampleBulged(pts, lg.bulges, !!lg.closed)
+        for (let i = 0; i < smp.length - (lg.closed ? 0 : 1); i++) g.segs.push({ a: smp[i], b: smp[(i + 1) % smp.length], src: 'annotations', owner: own })
+        for (const p of pts) g.points.push({ p, kind: 'end', src: 'annotations', owner: own })
+        for (let i = 0; i < (lg.closed ? pts.length : pts.length - 1); i++) {
+          const p = pts[i], q = pts[(i + 1) % pts.length], bg = lg.bulges[i] ?? 0
+          g.points.push({ p: bulgeMid(p, q, bg), kind: 'mid', src: 'annotations', owner: own })
+          const arc = bulgeArc(p, q, bg)
+          if (arc) g.points.push({ p: arc.c, kind: 'centre', src: 'annotations', owner: own })
+        }
+        break
+      }
       case 'cloud': addOutline(g, (a.geom as LineGeom).pts ?? [], 'annotations', true, own, true); break
       case 'rect': {
         const bg = a.geom as BoxGeom

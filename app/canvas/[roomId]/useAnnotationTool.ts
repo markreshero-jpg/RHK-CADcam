@@ -16,6 +16,7 @@ import {
   segAngle, segLength, withLength, withAngle, withBoxSize,
   angleSnap, dedupePts, leaderTextAt, type ArcGeom, type CircleGeom,
   offsetDistanceFor, offsetGeom, moveEdge, edgeDistanceFor, OFFSETTABLE, type OffsetKind,
+  filletAt, chamferAt, allCorners, joinPolys, cornerJoin, boxToPoly, nearestSegIndex, type Poly,
   arcFrom3, arcFromCentre, arcFromEndsRadius, arcPoint, angOf, arcStart, arcMid, arcEnd, sweepOf, setBoxCorner, rectPts, dimOffsetFor, dimAxisFor, type DimGeom,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
@@ -26,7 +27,7 @@ import { dbUpdateAnnotation, dbDeleteAnnotations } from './canvasDB'
 import type { AnnotationEditProps, AnnotGrip } from './AnnotationLayer'
 import type { LiveMeasure } from './CadMeasureOverlay'
 
-export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'cloud' | 'dim' | 'arc' | 'circle' | 'offset'
+export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'cloud' | 'dim' | 'arc' | 'circle' | 'offset' | 'fillet' | 'chamfer' | 'join'
 
 /** How the Arc tool draws (B3): start / through / end, centre / start / end, or two ends + radius. */
 export type ArcMode = '3pt' | 'centre' | 'ends'
@@ -35,7 +36,7 @@ export type ArcMode = '3pt' | 'centre' | 'ends'
 export type DimMode = 'linear' | 'aligned'
 
 export const CAD_TOOL_KEYS: Record<string, CadTool> = {
-  s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', a: 'arrow', r: 'rect', e: 'ellipse', c: 'cloud', d: 'dim', k: 'arc', o: 'circle', f: 'offset',
+  s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', a: 'arrow', r: 'rect', e: 'ellipse', c: 'cloud', d: 'dim', k: 'arc', o: 'circle', f: 'offset', g: 'fillet', h: 'chamfer', j: 'join',
 }
 
 /** Tools that drag out a shape on the canvas. */
@@ -45,19 +46,20 @@ const PLACE_TOOLS = new Set<CadTool>(['text', 'textbox', 'rect', 'ellipse', 'clo
 /** Tools that click out points one by one (each click → drawClick). A freehand cloud
  *  joins them once it has started. Every drawing tool must be here or in PLACE_TOOLS. */
 const POINT_TOOLS = new Set<CadTool>(['line', 'arrow', 'leader', 'dim', 'arc', 'circle'])
-export function clickRoute(tool: CadTool, drawingActive: boolean): 'point' | 'place' | 'marquee' | 'offset' | 'none' {
+export function clickRoute(tool: CadTool, drawingActive: boolean): 'point' | 'place' | 'marquee' | 'offset' | 'modify' | 'none' {
   if (tool === 'select') return 'marquee'
   if (tool === 'offset') return 'offset'
+  if (tool === 'fillet' || tool === 'chamfer' || tool === 'join') return 'modify'   // picks come through the items' hit areas
   if (POINT_TOOLS.has(tool) || (tool === 'cloud' && drawingActive)) return 'point'
   return PLACE_TOOLS.has(tool) ? 'place' : 'none'
 }
 
 /** Kind of row a tool makes, and whose remembered style it starts from. */
 const TOOL_KIND: Record<CadTool, AnnotationKind> = {
-  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'line', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line',
+  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'line', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line', fillet: 'line', chamfer: 'line', join: 'line',
 }
 const TOOL_STYLE_KEY: Record<CadTool, StyleKey> = {
-  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'arrow', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line',
+  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'arrow', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line', fillet: 'line', chamfer: 'line', join: 'line',
 }
 
 /** A line / arrow / leader being clicked out. attachId = adding a leader to that text. */
@@ -72,6 +74,13 @@ export interface AnnotDrawing {
 /** Typed sizes while drawing (Tab → the CAD panel's fields). Set values lock the shape:
  *  a segment's length / angle, a box's W / H, a dim's offset. */
 export interface TypedEntry { length?: number; angle?: number; w?: number; h?: number; offset?: number; radius?: number; sweep?: number; distance?: number }
+
+/** A line or box as a polyline (fillet / chamfer / join work on these). */
+export function polyOfAnnotation(a: RoomAnnotation): Poly | null {
+  if (a.kind === 'line') return { ...(a.geom as LineGeom) }
+  if (a.kind === 'rect') return boxToPoly(a.geom as BoxGeom)
+  return null
+}
 
 /** Offset tool (B4): the signed distance for a copy of `src` through p; a typed distance
  *  keeps the cursor's side. */
@@ -197,6 +206,12 @@ export function useAnnotationTool({
   const offsetSrcRef = useRef<string | null>(null)
   const setOffsetSrc = useCallback((id: string | null) => { offsetSrcRef.current = id; setOffsetSrcState(id) }, [])
   const [offsetCur, setOffsetCur] = useState<Pt | null>(null)
+  // Fillet / chamfer / join (B4b): settings, the first pick, a status message; right-click menu.
+  const [filletR, setFilletR] = useState(50)
+  const [chamfer, setChamfer] = useState<{ d1: number; d2: number }>({ d1: 50, d2: 50 })
+  const [modPick, setModPick] = useState<{ id: string; pt: Pt } | null>(null)
+  const [modMsg, setModMsg] = useState<string | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string; pt: Pt } | null>(null)
   // Typed entry (Tab): values + the raw cursor they're applied to, and focus requests for
   // the CAD panel's fields.
   const [typed, setTypedState] = useState<TypedEntry>({})
@@ -252,7 +267,7 @@ export function useAnnotationTool({
   }
   // A new tool abandons a half-drawn line.
   const [drawTool, setDrawTool] = useState(tool)
-  if (drawTool !== tool) { setDrawTool(tool); setDrawing(null); setPending(null); setTypedState({}); setOffsetSrcState(null) }
+  if (drawTool !== tool) { setDrawTool(tool); setDrawing(null); setPending(null); setTypedState({}); setOffsetSrcState(null); setModPick(null); setModMsg(null) }
 
   // ── Styles ────────────────────────────────────────────────────────────────
 
@@ -693,6 +708,98 @@ export function useAnnotationTool({
     clearTyped()
   }, [finishPlace, drawClick, clearTyped, placeOffset])
 
+  // ── Fillet / chamfer / join (B4b) ─────────────────────────────────────────
+  // Two picks: two sides of one line meeting at a corner → that corner; two separate
+  // lines → trimmed / extended to meet and joined there (fillet / chamfer the corner).
+  // Join: nearest ends joined (bridged if apart); the same line twice closes it.
+  // A box picked with Fillet / Chamfer does all four corners (it becomes a line).
+
+  /** Swap a row's shape (a box turns into a line) and drop others it absorbed — one undo step. */
+  const replaceShape = useCallback((id: string, kind: AnnotationKind, geom: RoomAnnotation['geom'], removeIds: string[] = []) => {
+    captureSnapshot()
+    setAnnotations(xs => xs.filter(x => !removeIds.includes(x.id)).map(x => x.id === id ? { ...x, kind, geom } : x))
+    void dbUpdateAnnotation(id, { kind, geom })
+    if (removeIds.length) void dbDeleteAnnotations(removeIds)
+    setSelectedIds(new Set([id]))
+  }, [captureSnapshot, setAnnotations])
+
+  const cornerFn = useCallback((op: 'fillet' | 'chamfer') => (q: Poly, i: number) =>
+    op === 'fillet' ? filletAt(q, i, filletR) : chamferAt(q, i, chamfer.d1, chamfer.d2), [filletR, chamfer])
+
+  /** Fillet / chamfer one corner (vertex index) or every corner of a line or box. */
+  const cornerOp = useCallback((id: string, op: 'fillet' | 'chamfer', corner: number | 'all') => {
+    const a = annRef.current.find(x => x.id === id)
+    if (!a) return
+    const p = polyOfAnnotation(a)
+    if (!p) { setModMsg('Fillet and chamfer work on lines and boxes'); return }
+    const fn = cornerFn(op)
+    const out = corner === 'all' ? allCorners(p, fn) : fn(p, corner)
+    if (!out || out === p) {
+      setModMsg(op === 'fillet' ? `A ${filletR} mm radius doesn't fit there` : `A ${chamfer.d1} × ${chamfer.d2} chamfer doesn't fit there`)
+      return
+    }
+    setModMsg(null)
+    replaceShape(id, 'line', out)
+  }, [cornerFn, filletR, chamfer, replaceShape])
+
+  const runModify = useCallback((op: 'fillet' | 'chamfer' | 'join', A: { id: string; pt: Pt }, B: { id: string; pt: Pt }) => {
+    const a = annRef.current.find(x => x.id === A.id), b = annRef.current.find(x => x.id === B.id)
+    if (!a || !b) return
+    if (op === 'join') {
+      if (a.id === b.id) {
+        const g = a.geom as LineGeom
+        if (a.kind !== 'line' || (g.pts?.length ?? 0) < 3) { setModMsg('Pick two different lines (a line of 3+ points picked twice closes)'); return }
+        setModMsg(null); replaceShape(a.id, 'line', { ...g, closed: true }); return
+      }
+      const ga = a.geom as LineGeom, gb = b.geom as LineGeom
+      if (a.kind !== 'line' || b.kind !== 'line' || ga.closed || gb.closed) { setModMsg('Join works on open lines'); return }
+      const endPt = (g: LineGeom, e: 'start' | 'end') => e === 'start' ? g.pts[0] : g.pts[g.pts.length - 1]
+      const pairs = [['start', 'start'], ['start', 'end'], ['end', 'start'], ['end', 'end']] as const
+      const best = [...pairs].sort((p, q) => segLength(endPt(ga, p[0]), endPt(gb, p[1])) - segLength(endPt(ga, q[0]), endPt(gb, q[1])))[0]
+      setModMsg(null)
+      replaceShape(a.id, 'line', joinPolys(ga, best[0], gb, best[1], 2 / zoom / frame.s), [b.id])
+      return
+    }
+    if (a.id === b.id) {
+      const p = polyOfAnnotation(a)
+      if (!p || a.kind !== 'line') { setModMsg('Pick two sides that meet at a corner'); return }
+      const n = p.pts.length, closed = !!p.closed
+      const iA = nearestSegIndex(p.pts, p.bulges, closed, A.pt), iB = nearestSegIndex(p.pts, p.bulges, closed, B.pt)
+      const corner = Math.abs(iA - iB) === 1 ? Math.max(iA, iB)
+        : closed && ((iA === 0 && iB === n - 1) || (iB === 0 && iA === n - 1)) ? 0 : -1
+      if (corner < 0) { setModMsg('Pick two sides that meet at a corner'); return }
+      cornerOp(a.id, op, corner)
+      return
+    }
+    if (a.kind !== 'line' || b.kind !== 'line') { setModMsg('Pick two lines'); return }
+    const cj = cornerJoin(a.geom as LineGeom, b.geom as LineGeom, A.pt, B.pt)
+    if (!cj) { setModMsg('Those lines run parallel (or end in an arc) — no corner to make'); return }
+    const plain = op === 'fillet' && filletR <= 0
+    const done = plain ? cj.poly : (cornerFn(op)(cj.poly, cj.corner) ?? cj.poly)
+    setModMsg(!plain && done === cj.poly ? 'Joined at the corner — the radius / chamfer is too big for those sides' : null)
+    replaceShape(a.id, 'line', done, [b.id])
+  }, [replaceShape, cornerOp, cornerFn, filletR, zoom, frame.s])
+
+  /** Right-click menu actions. */
+  const setLineClosed = useCallback((id: string, closed: boolean) => {
+    const a = annRef.current.find(x => x.id === id)
+    if (!a || a.kind !== 'line') return
+    const g = { ...(a.geom as LineGeom) }
+    if (closed) g.closed = true
+    else { delete g.closed; if (g.bulges) g.bulges = g.bulges.slice(0, g.pts.length - 1) }
+    replaceShape(id, 'line', g)
+  }, [replaceShape])
+  const convertToLines = useCallback((id: string) => {
+    const a = annRef.current.find(x => x.id === id)
+    if (a?.kind === 'rect') replaceShape(id, 'line', boxToPoly(a.geom as BoxGeom))
+  }, [replaceShape])
+  const startJoinFrom = useCallback((id: string, pt: Pt) => {
+    setTool('join'); setDrawTool('join'); setModPick({ id, pt }); setModMsg(null)
+  }, [])
+  const startOffsetFrom = useCallback((id: string) => {
+    setTool('offset'); setDrawTool('offset'); setOffsetSrc(id); setSelectedIds(new Set([id]))
+  }, [setOffsetSrc])
+
   // ── Pointer: drags via window listeners ───────────────────────────────────
 
   const beginDrag = useCallback((d: Drag, startClient: { x: number; y: number }) => {
@@ -723,8 +830,13 @@ export function useAnnotationTool({
             const pts = [...vertsOf(a)]
             const i = cur.insertAfter, j = (i + 1) % pts.length   // a cloud's closing segment wraps
             pts.splice(i + 1, 0, { x: (pts[i].x + pts[j].x) / 2, y: (pts[i].y + pts[j].y) / 2 })
-            setAnnotations(xs => xs.map(x => x.id === a.id ? withVerts(x, pts) : x))
-            annRef.current = annRef.current.map(x => x.id === a.id ? withVerts(x, pts) : x)
+            // A line's bulges split with it (the side was straight — arcs have no side bar).
+            const split = (x: RoomAnnotation) => {
+              const v = withVerts(x, pts), b = x.kind === 'line' ? (x.geom as LineGeom).bulges : undefined
+              return b ? { ...v, geom: { ...(v.geom as LineGeom), bulges: [...b.slice(0, i + 1), 0, ...b.slice(i + 1)] } } : v
+            }
+            setAnnotations(xs => xs.map(x => x.id === a.id ? split(x) : x))
+            annRef.current = annRef.current.map(x => x.id === a.id ? split(x) : x)
             cur.i = i + 1; cur.insertAfter = undefined
           }
         }
@@ -749,7 +861,7 @@ export function useAnnotationTool({
           }
           const orig = vertsOf({ ...x, geom: cur.orig })
           const d = edgeDistanceFor(orig, cur.i, p) - edgeDistanceFor(orig, cur.i, cur.start)
-          return withVerts(x, moveEdge(orig, cur.i, d, x.kind === 'cloud'))
+          return withVerts(x, moveEdge(orig, cur.i, d, x.kind === 'cloud' || !!(x.geom as LineGeom).closed))
         }))
       } else if (cur.kind === 'arcGrip') {
         if (!cur.moved && !far) return
@@ -858,6 +970,7 @@ export function useAnnotationTool({
     }
     const route = clickRoute(tool, !!drawingRef.current)
     if (route === 'none') return
+    if (route === 'modify') return   // empty canvas: nothing to pick
     if (route === 'offset') {   // empty canvas: place the copy if something is picked
       if (offsetSrcRef.current) placeOffset(toFrame(e, !e.shiftKey, null, new Set([offsetSrcRef.current])))
       return
@@ -922,9 +1035,26 @@ export function useAnnotationTool({
     hiddenId: editing ? editing.draft.id : null,
     hitWidth: 10 / zoom,
     // In plain select mode a click on an annotation opens CAD mode on it (decision 9).
-    hittable: !active || tool === 'select' || tool === 'offset',
+    hittable: !active || tool === 'select' || tool === 'offset' || tool === 'fillet' || tool === 'chamfer' || tool === 'join',
+    onMenu: (e, id) => {
+      e.preventDefault(); e.stopPropagation()
+      if (editing) commitEdit()
+      if (!active) enterCad()
+      setSelectedIds(new Set([id]))
+      setMenu({ x: e.clientX, y: e.clientY, id, pt: unmapPt(frame, toWorld(e)) })
+    },
     onDown: (e, id) => {
       e.stopPropagation()
+      if (active && (tool === 'fillet' || tool === 'chamfer' || tool === 'join')) {
+        const a = annRef.current.find(x => x.id === id)
+        if (!a) return
+        const pt = toFrame(e, false)
+        if (tool !== 'join' && a.kind === 'rect' && !modPick) { cornerOp(id, tool, 'all'); return }   // a box: every corner
+        if (!modPick) { setModPick({ id, pt }); setSelectedIds(new Set([id])); setModMsg(null); return }
+        setModPick(null)
+        runModify(tool, modPick, { id, pt })
+        return
+      }
       if (active && tool === 'offset') {   // pick what to offset, or (once picked) place
         const a = annRef.current.find(x => x.id === id)
         if (offsetSrcRef.current) placeOffset(toFrame(e, !e.shiftKey, null, new Set([offsetSrcRef.current])))
@@ -986,6 +1116,7 @@ export function useAnnotationTool({
   }
 
   // ── Keyboard (capture phase, so the canvas-wide handler never sees these) ──
+  const menuOpen = !!menu, modPickOpen = !!modPick
 
   useEffect(() => {
     if (!active) return
@@ -1000,6 +1131,8 @@ export function useAnnotationTool({
         if (dragRef.current) return
         if (hasTyped(typedRef.current)) { clearTyped(); return }
         if (offsetSrcRef.current) { setOffsetSrc(null); setSelectedIds(new Set()); return }
+        if (menuOpen) { setMenu(null); return }
+        if (modPickOpen) { setModPick(null); setModMsg(null); setSelectedIds(new Set()); return }
         if (pendingRef.current) { pendingRef.current = null; setPending(null); return }
         if (drawingRef.current) { drawingRef.current = null; setDrawing(null); return }
         if (liveSelected.size) setSelectedIds(new Set())
@@ -1038,7 +1171,7 @@ export function useAnnotationTool({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc])
+  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc, menuOpen, modPickOpen])
 
   // Ghosts for the canvas: marquee box / text box being dragged out (frame coords).
   // A shape being placed: by drag, or armed by a first click (B1).
@@ -1122,7 +1255,9 @@ export function useAnnotationTool({
     ribbonKind, ribbonStyle, ribbonRot, ribbonLeader, applyStyle, resetStyle, applyRotation,
     deleteSelected, reorder, onCaptureDown, onCaptureMove, onCaptureDouble, onCaptureMenu, editProps, ghost,
     drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
-    dimMode, setDimMode, applyDimText, arcMode, setArcMode, offsetSrc: offsetSrcA, cloudMode, setCloudMode, pending,
+    dimMode, setDimMode, applyDimText, arcMode, setArcMode, offsetSrc: offsetSrcA,
+    filletR, setFilletR, chamfer, setChamfer, modPick, modMsg, cornerOp, setLineClosed, convertToLines,
+    startJoinFrom, startOffsetFrom, menu, closeMenu: () => setMenu(null), paste, cloudMode, setCloudMode, pending,
     /** Last object snap under the cursor (frame mm) — the canvas draws its marker. */
     snapHit: active ? snapHit : null,
     /** Cursor (frame mm) + the point Δ is measured from while drawing. */

@@ -51,6 +51,7 @@ import { planSnapGeometry } from '@/src/lib/annotations/planSnapGeometry'
 import CadSnapMarker from './CadSnapMarker'
 import CadMeasureOverlay from './CadMeasureOverlay'
 import CadPanel from './CadPanel'
+import CadContextMenu from './CadContextMenu'
 import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
 import TutorialHintsPlan from './TutorialHintsPlan'
 import { useTutorial } from '@/src/lib/tutorial/store'
@@ -2707,6 +2708,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           snap={cadSnapSettings} onSnap={setCadSnapSettings}
           onClose={() => setMode('select')} />
       )}
+      {canvasView === 'plan' && <CadContextMenu cad={cad} annotations={planAnnotations} zoom={view.zoom} />}
       {cad.editing && canvasView === 'plan' && (
         <AnnotTextEditor key={cad.editing.draft.id} editing={cad.editing} frame={IDENTITY_FRAME} paper={annotScale} zoom={view.zoom}
           toClient={p => { const r = svgRef.current!.getBoundingClientRect(); return { x: r.left + p.x * view.zoom + view.panX, y: r.top + p.y * view.zoom + view.panY } }}

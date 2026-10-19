@@ -8,7 +8,7 @@
 import type { RoomAnnotation } from '@/src/lib/types'
 import {
   type AnnotFrame, type Pt, type LineGeom, type BoxGeom, type ArcGeom, type CircleGeom,
-  mapPt, segAngle, segLength, arcMid, arcLength, arcPoint, sweepOf,
+  mapPt, segAngle, segLength, arcMid, arcLength, arcPoint, sweepOf, bulgeSegLength, bulgeMid,
 } from '@/src/lib/annotations/geometry'
 
 export type LiveMeasure = { mode: 'seg' | 'box'; a: Pt; b: Pt } | { mode: 'label'; at: Pt; text: string } | null
@@ -50,13 +50,13 @@ export default function CadMeasureOverlay({ live, selected, frame, zoom }: {
   }
 
   if (selected) {
-    const sideTags = (pts: Pt[], closed: boolean) => {
+    const sideTags = (pts: Pt[], closed: boolean, bulges?: number[]) => {
       const n = pts.length
       for (let i = 0; i < (closed ? n : n - 1); i++) {
-        const p = pts[i], q = pts[(i + 1) % n]
-        const L = segLength(p, q)
+        const p = pts[i], q = pts[(i + 1) % n], bg = bulges?.[i] ?? 0
+        const L = bulgeSegLength(p, q, bg)
         if (L < 1e-6) continue
-        const m = mapPt(frame, { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 })
+        const m = mapPt(frame, bulgeMid(p, q, bg))
         // Off to the side of the segment (its normal, flipped to point up / right on screen).
         const sp = mapPt(frame, p), sq = mapPt(frame, q), sl = Math.hypot(sq.x - sp.x, sq.y - sp.y) || 1
         let nx = -(sq.y - sp.y) / sl, ny = (sq.x - sp.x) / sl
@@ -72,7 +72,7 @@ export default function CadMeasureOverlay({ live, selected, frame, zoom }: {
       const g = selected.geom as CircleGeom
       out.push(<Tag key="r" at={mapPt(frame, arcPoint(g, 0))} zoom={zoom} dx={52} text={`R${fmt(g.r)}  Ø${fmt(g.r * 2)}`} />)
     }
-    if (selected.kind === 'line') sideTags((selected.geom as LineGeom).pts ?? [], false)
+    if (selected.kind === 'line') { const g = selected.geom as LineGeom; sideTags(g.pts ?? [], !!g.closed, g.bulges) }
     else if (selected.kind === 'cloud') sideTags((selected.geom as LineGeom).pts ?? [], true)
     else if ((selected.kind === 'rect' || selected.kind === 'ellipse') && !(selected.geom as BoxGeom).rot) {
       const g = selected.geom as BoxGeom

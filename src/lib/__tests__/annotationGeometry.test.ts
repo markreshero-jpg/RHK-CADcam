@@ -324,3 +324,73 @@ describe('B4 offset + side drag', () => {
     expect(lineIntersect({ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 })).toBeNull()
   })
 })
+
+import {
+  bulgeMid, bulgeTangent, bulgeSegLength, sampleBulged, bulgedPath, nearestSegIndex,
+  filletAt, chamferAt, allCorners, reversePoly, joinPolys, cornerJoin, boxToPoly,
+} from '../annotations/geometry'
+
+describe('B4b bulges, fillet, chamfer, join', () => {
+  const near = (p: { x: number; y: number }, q: { x: number; y: number }) => { expect(p.x).toBeCloseTo(q.x); expect(p.y).toBeCloseTo(q.y) }
+  const L = { pts: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }] }   // right, then down the screen
+
+  it('bulge = half circle bulging to the left normal', () => {
+    near(bulgeMid({ x: 0, y: 0 }, { x: 100, y: 0 }, 1), { x: 50, y: 50 })
+    expect(bulgeSegLength({ x: 0, y: 0 }, { x: 100, y: 0 }, 1)).toBeCloseTo(Math.PI * 50)
+    expect(bulgedPath([{ x: 0, y: 0 }, { x: 100, y: 0 }], [1], false)).toMatch(/A50 50 0 0 0 100 0/)
+    expect(bulgedPath([{ x: 0, y: 0 }, { x: 100, y: 0 }], [1], false, true)).toMatch(/A50 50 0 0 1 100 0/)
+  })
+  it('fillet replaces the corner with a tangent arc', () => {
+    const f = filletAt(L, 1, 20)!
+    expect(f.pts).toHaveLength(4)
+    near(f.pts[1], { x: 80, y: 0 }); near(f.pts[2], { x: 100, y: 20 })
+    expect(f.bulges![1]).toBeCloseTo(-Math.tan(Math.PI / 8))
+    near(bulgeTangent(f.pts[1], f.pts[2], f.bulges![1], false), { x: 1, y: 0 })   // leaves along the first side
+    near(bulgeTangent(f.pts[1], f.pts[2], f.bulges![1], true), { x: 0, y: 1 })    // arrives along the second
+    const mid = bulgeMid(f.pts[1], f.pts[2], f.bulges![1])
+    expect(Math.hypot(mid.x - 80, mid.y - 20)).toBeCloseTo(20)                    // on the radius-20 circle
+  })
+  it('fillet refuses a radius that will not fit, and end points', () => {
+    expect(filletAt(L, 1, 500)).toBeNull()
+    expect(filletAt(L, 0, 10)).toBeNull()
+  })
+  it('chamfer cuts each side back', () => {
+    const c = chamferAt(L, 1, 10, 30)!
+    near(c.pts[1], { x: 90, y: 0 }); near(c.pts[2], { x: 100, y: 30 })
+    expect(c.bulges).toBeUndefined()
+  })
+  it('a filleted line offsets with a concentric arc', () => {
+    const f = filletAt(L, 1, 20)!
+    const o = offsetPolyline(f.pts, 10, false, f.bulges)   // left normal = inside of this turn
+    near(o[1], { x: 80, y: 10 }); near(o[2], { x: 90, y: 20 })
+  })
+  it('every corner of a box', () => {
+    const p = boxToPoly({ a: { x: 0, y: 0 }, b: { x: 600, y: 400 } })
+    const f = allCorners(p, (q, i) => filletAt(q, i, 50))
+    expect(f.pts).toHaveLength(8)
+    expect(f.bulges!.filter(Boolean)).toHaveLength(4)
+    expect(f.closed).toBe(true)
+  })
+  it('reverse flips bulges; join merges touching ends or bridges a gap', () => {
+    const r = reversePoly({ pts: [{ x: 0, y: 0 }, { x: 10, y: 0 }], bulges: [0.5] })
+    expect(r.bulges![0]).toBeCloseTo(-0.5)
+    const A = { pts: [{ x: 0, y: 0 }, { x: 100, y: 0 }] }, B = { pts: [{ x: 100, y: 0 }, { x: 100, y: 50 }] }
+    expect(joinPolys(A, 'end', B, 'start', 1).pts).toHaveLength(3)
+    const g = joinPolys(A, 'end', { pts: [{ x: 120, y: 0 }, { x: 120, y: 50 }] }, 'start', 1)
+    expect(g.pts).toHaveLength(4)
+  })
+  it('two separate lines trim / extend to meet, then the corner can be filleted', () => {
+    const A = { pts: [{ x: 0, y: 0 }, { x: 80, y: 0 }] }        // stops short of the corner
+    const B = { pts: [{ x: 100, y: 130 }, { x: 100, y: -20 }] }  // overshoots it
+    const j = cornerJoin(A, B, { x: 40, y: 0 }, { x: 100, y: 60 })!
+    near(j.poly.pts[j.corner], { x: 100, y: 0 })
+    expect(j.poly.pts).toHaveLength(3)
+    expect(filletAt(j.poly, j.corner, 25)).not.toBeNull()
+  })
+  it('sampling and segment picking see the arcs', () => {
+    const f = filletAt(L, 1, 20)!
+    expect(sampleBulged(f.pts, f.bulges, false).length).toBeGreaterThan(f.pts.length)
+    expect(nearestSegIndex(f.pts, f.bulges, false, { x: 95, y: 6 })).toBe(1)
+    expect(nearestSegIndex(f.pts, f.bulges, false, { x: 40, y: 2 })).toBe(0)
+  })
+})

@@ -16,7 +16,9 @@ export interface Pt { x: number; y: number }
  *  width (paper mm) makes it a TEXT BOX — lines wrap to it; absent = point text.
  *  height (paper mm, B1): the box's drawn height — it still grows to fit the text. */
 export interface TextGeom  { at: Pt; rot?: number; width?: number; height?: number; leader?: Pt[] }
-export interface LineGeom  { pts: Pt[] }
+/** bulges (B4b): per segment, 0 = straight, else an arc (see bulgeMid). closed: the last
+ *  point joins back to the first (a closed outline drawn with lines). */
+export interface LineGeom  { pts: Pt[]; bulges?: number[]; closed?: boolean }
 export interface BoxGeom   { a: Pt; b: Pt; rot?: number }
 export interface CloudGeom { pts: Pt[] }
 /** Aligned (no axis): offset = signed distance (frame mm) of the dim line from p1→p2,
@@ -298,7 +300,7 @@ export function annotationFramePoints(kind: AnnotationKind, geom: AnnotationGeom
         .map(c => add(g.at, rotatePt(c, g.rot ?? 0)))
       return [...corners, ...(g.leader ?? [])]
     }
-    case 'line':
+    case 'line':    { const g = geom as LineGeom; return sampleBulged(g.pts ?? [], g.bulges, !!g.closed) }
     case 'cloud':   return (geom as LineGeom).pts ?? []
     case 'rect':
     case 'ellipse': { const g = geom as BoxGeom; return [g.a, g.b, { x: g.a.x, y: g.b.y }, { x: g.b.x, y: g.a.y }] }
@@ -533,23 +535,28 @@ export function lineIntersect(a: Pt, b: Pt, c: Pt, d: Pt): Pt | null {
 
 const leftN = (a: Pt, b: Pt): Pt => { const u = unit(sub(b, a)); return { x: -u.y, y: u.x } }
 
-/** Polyline / polygon offset by d with mitred corners (parallel neighbours just shift). */
-export function offsetPolyline(pts: Pt[], d: number, closed: boolean): Pt[] {
+/** Polyline / polygon offset by d. Corners are mitred along each side's direction where
+ *  they meet; where a side meets an arc tangentially (a fillet) the point just moves
+ *  along the shared normal, so arcs stay concentric (bulges are unchanged). */
+export function offsetPolyline(pts: Pt[], d: number, closed: boolean, bulges?: number[]): Pt[] {
   const n = pts.length
   if (n < 2) return pts
-  const segs: [Pt, Pt][] = []
-  for (let i = 0; i < (closed ? n : n - 1); i++) {
-    const a = pts[i], b = pts[(i + 1) % n]
-    const m = mul(leftN(a, b), d)
-    segs.push([add(a, m), add(b, m)])
-  }
+  const segCount = closed ? n : n - 1
+  const bulge = (i: number) => bulges?.[i] ?? 0
+  const tStart = (i: number) => bulgeTangent(pts[i], pts[(i + 1) % n], bulge(i), false)
+  const tEnd   = (i: number) => bulgeTangent(pts[i], pts[(i + 1) % n], bulge(i), true)
+  const nrm = (t: Pt): Pt => ({ x: -t.y, y: t.x })
   const out: Pt[] = []
   for (let i = 0; i < n; i++) {
-    const prev = closed ? segs[(i - 1 + segs.length) % segs.length] : segs[i - 1]
-    const next = segs[i] ?? null
-    if (prev && next) out.push(lineIntersect(prev[0], prev[1], next[0], next[1]) ?? next[0])
-    else if (next) out.push(next[0])
-    else out.push(prev![1])
+    const v = pts[i]
+    const inSeg = closed ? (i - 1 + segCount) % segCount : i - 1
+    const hasIn = closed || i > 0, hasOut = closed || i < segCount
+    const tin = hasIn ? tEnd(inSeg) : null, tout = hasOut ? tStart(i) : null
+    if (tin && tout) {
+      const pin = add(v, mul(nrm(tin), d)), pout = add(v, mul(nrm(tout), d))
+      const cross = tin.x * tout.y - tin.y * tout.x
+      out.push(Math.abs(cross) < 1e-6 ? pout : (lineIntersect(pin, add(pin, tin), pout, add(pout, tout)) ?? pout))
+    } else out.push(add(v, mul(nrm((tout ?? tin)!), d)))
   }
   return out
 }
@@ -582,7 +589,7 @@ export const OFFSETTABLE = new Set<string>(['line', 'cloud', 'rect', 'ellipse', 
 /** Signed offset distance that puts the copy through `p`. */
 export function offsetDistanceFor(kind: OffsetKind, geom: AnnotationGeom, p: Pt): number {
   switch (kind) {
-    case 'line':  return signedDistToPolyline((geom as LineGeom).pts ?? [], false, p)
+    case 'line':  { const g = geom as LineGeom; return signedDistToPolyline(sampleBulged(g.pts ?? [], g.bulges, !!g.closed), !!g.closed, p) }
     case 'cloud': return signedDistToPolyline((geom as LineGeom).pts ?? [], true, p)
     case 'rect': {
       const g = geom as BoxGeom, l = boxLocal(g, p)
@@ -603,7 +610,7 @@ export function offsetDistanceFor(kind: OffsetKind, geom: AnnotationGeom, p: Pt)
 /** The parallel copy at signed distance d (null when it would collapse). */
 export function offsetGeom(kind: OffsetKind, geom: AnnotationGeom, d: number): AnnotationGeom | null {
   switch (kind) {
-    case 'line':  return { pts: offsetPolyline((geom as LineGeom).pts ?? [], d, false) }
+    case 'line':  { const g = geom as LineGeom; return { ...g, pts: offsetPolyline(g.pts ?? [], d, !!g.closed, g.bulges) } }
     case 'cloud': return { pts: offsetPolyline((geom as LineGeom).pts ?? [], d, true) }
     case 'rect':
     case 'ellipse': {
@@ -640,4 +647,204 @@ export function moveEdge(pts: Pt[], i: number, d: number, closed: boolean): Pt[]
 export function edgeDistanceFor(pts: Pt[], i: number, p: Pt): number {
   const a = pts[i], b = pts[(i + 1) % pts.length], nn = leftN(a, b)
   return (p.x - a.x) * nn.x + (p.y - a.y) * nn.y
+}
+
+// ── Polyline bulges + corners (B4b) ──────────────────────────────────────────
+// A line segment pts[i] → pts[i+1] can be an arc: bulges[i] = tan(θ/4) (θ = the arc's
+// included angle). + bulges towards the segment's left normal n = (-u.y, u.x) (svg
+// coords). Fillets live inside the polyline this way, so offsets / snaps / lengths
+// still treat the line as one thing.
+
+/** The arc's middle point for a bulged segment (the chord's middle when bulge = 0). */
+export function bulgeMid(a: Pt, b: Pt, bulge: number): Pt {
+  const m = mul(add(a, b), 0.5)
+  return bulge ? add(m, mul(leftN(a, b), bulge * len(sub(b, a)) / 2)) : m
+}
+
+/** Unit direction of travel at the start (or end) of a possibly bulged segment. */
+export function bulgeTangent(a: Pt, b: Pt, bulge: number, atEnd: boolean): Pt {
+  const u = unit(sub(b, a))
+  if (!bulge) return u
+  const half = 2 * Math.atan(bulge) * 180 / Math.PI   // θ/2
+  return rotatePt(u, atEnd ? -half : half)
+}
+
+/** Centre + radius of a bulged segment (null when straight). */
+export function bulgeArc(a: Pt, b: Pt, bulge: number): { c: Pt; r: number } | null {
+  if (!bulge) return null
+  const c = circumcentre(a, bulgeMid(a, b, bulge), b)
+  return c ? { c, r: len(sub(a, c)) } : null
+}
+
+/** Length along a segment (arc length when bulged). */
+export function bulgeSegLength(a: Pt, b: Pt, bulge: number): number {
+  const L = len(sub(b, a))
+  if (!bulge) return L
+  const theta = 4 * Math.atan(Math.abs(bulge))
+  return theta / (2 * Math.sin(theta / 2)) * L
+}
+
+/** Points along a polyline with its arcs sampled (closed: no repeated first point). */
+export function sampleBulged(pts: Pt[], bulges: number[] | undefined, closed: boolean, perArc = 12): Pt[] {
+  const n = pts.length
+  if (n < 2 || !bulges?.some(Boolean)) return pts
+  const out: Pt[] = []
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const a = pts[i], b = pts[(i + 1) % n], bg = bulges[i] ?? 0
+    out.push(a)
+    const arc = bulgeArc(a, b, bg)
+    if (!arc) continue
+    const a0 = angOf(arc.c, a), sw = 4 * Math.atan(bg) * 180 / Math.PI   // signed sweep, svg degrees
+    for (let k = 1; k < perArc; k++) out.push(arcPoint(arc, a0 - sw * k / perArc))
+  }
+  if (!closed) out.push(pts[n - 1])
+  return out
+}
+
+/** SVG path for a polyline with bulges, from already-mapped points. flipY: the frame
+ *  mirrors y, which swaps which side an arc bulges. */
+export function bulgedPath(svgPts: Pt[], bulges: number[] | undefined, closed: boolean, flipY = false): string {
+  const n = svgPts.length
+  if (!n) return ''
+  let d = `M${P(svgPts[0])}`
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const a = svgPts[i], b = svgPts[(i + 1) % n]
+    const bg = (bulges?.[i] ?? 0) * (flipY ? -1 : 1)
+    if (!bg) { d += `L${P(b)}`; continue }
+    const L = len(sub(b, a)), theta = 4 * Math.atan(Math.abs(bg))
+    const r = L / (2 * Math.sin(theta / 2))
+    d += `A${f2(r)} ${f2(r)} 0 ${Math.abs(bg) > 1 ? 1 : 0} ${bg > 0 ? 0 : 1} ${P(b)}`
+  }
+  return closed ? d + 'Z' : d
+}
+
+/** Index of the segment nearest p (arcs sampled). */
+export function nearestSegIndex(pts: Pt[], bulges: number[] | undefined, closed: boolean, p: Pt): number {
+  const n = pts.length
+  let best = Infinity, idx = 0
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const seg = sampleBulged([pts[i], pts[(i + 1) % n]], [bulges?.[i] ?? 0], false)
+    for (let k = 0; k < seg.length - 1; k++) {
+      const a = seg[k], b = seg[k + 1], v = sub(b, a), L2 = v.x * v.x + v.y * v.y
+      const t = L2 ? Math.max(0, Math.min(1, ((p.x - a.x) * v.x + (p.y - a.y) * v.y) / L2)) : 0
+      const dd = len(sub(p, add(a, mul(v, t))))
+      if (dd < best) { best = dd; idx = i }
+    }
+  }
+  return idx
+}
+
+export interface Poly { pts: Pt[]; bulges?: number[]; closed?: boolean }
+
+const segCountOf = (p: Poly) => p.closed ? p.pts.length : p.pts.length - 1
+const bulgesFull = (p: Poly) => Array.from({ length: segCountOf(p) }, (_, i) => p.bulges?.[i] ?? 0)
+/** Drop an all-zero bulge list so plain lines stay plain. */
+const tidy = (p: Poly): Poly => {
+  const b = bulgesFull(p)
+  return { pts: p.pts, ...(b.some(Boolean) ? { bulges: b } : {}), ...(p.closed ? { closed: true } : {}) }
+}
+
+/** Corner i: the two straight sides meeting there, as unit directions away from it. */
+function cornerSides(p: Poly, i: number): { v: Pt; u1: Pt; u2: Pt; l1: number; l2: number } | null {
+  const n = p.pts.length, segs = bulgesFull(p)
+  if (!p.closed && (i <= 0 || i >= n - 1)) return null
+  const pi = (i - 1 + n) % n, ni = (i + 1) % n
+  if (segs[(i - 1 + segs.length) % segs.length] || segs[i % segs.length]) return null   // an arc side
+  const v = p.pts[i], a = p.pts[pi], b = p.pts[ni]
+  const l1 = len(sub(a, v)), l2 = len(sub(b, v))
+  if (l1 < 1e-9 || l2 < 1e-9) return null
+  return { v, u1: mul(sub(a, v), 1 / l1), u2: mul(sub(b, v), 1 / l2), l1, l2 }
+}
+
+/** Round corner i with radius r (null if it doesn't fit, the corner is straight-through,
+ *  or a side is already an arc). */
+export function filletAt(p: Poly, i: number, r: number): Poly | null {
+  const cs = cornerSides(p, i)
+  if (!cs || r <= 0) return null
+  const cos = Math.max(-1, Math.min(1, cs.u1.x * cs.u2.x + cs.u1.y * cs.u2.y))
+  const phi = Math.acos(cos)
+  if (phi < 1e-3 || Math.PI - phi < 1e-3) return null
+  const t = r / Math.tan(phi / 2)
+  if (t > cs.l1 + 1e-9 || t > cs.l2 + 1e-9) return null
+  const t1 = add(cs.v, mul(cs.u1, t)), t2 = add(cs.v, mul(cs.u2, t))
+  const m = mul(add(t1, t2), 0.5), nn = leftN(t1, t2)
+  const bulge = Math.tan((Math.PI - phi) / 4) * (((cs.v.x - m.x) * nn.x + (cs.v.y - m.y) * nn.y) >= 0 ? 1 : -1)
+  return spliceCorner(p, i, [t1, t2], bulge)
+}
+
+/** Cut corner i back d1 along the incoming side and d2 along the outgoing side. */
+export function chamferAt(p: Poly, i: number, d1: number, d2: number): Poly | null {
+  const cs = cornerSides(p, i)
+  if (!cs || d1 <= 0 || d2 <= 0 || d1 > cs.l1 + 1e-9 || d2 > cs.l2 + 1e-9) return null
+  return spliceCorner(p, i, [add(cs.v, mul(cs.u1, d1)), add(cs.v, mul(cs.u2, d2))], 0)
+}
+
+/** Replace corner i with two points and the segment between them. */
+function spliceCorner(p: Poly, i: number, two: [Pt, Pt], bulge: number): Poly {
+  const segs = bulgesFull(p)
+  const pts = [...p.pts.slice(0, i), two[0], two[1], ...p.pts.slice(i + 1)]
+  // segment i-1 (into the corner) keeps its bulge; the new piece is i; the old seg i shifts on.
+  const nb = [...segs.slice(0, i), bulge, ...segs.slice(i)]
+  if (p.closed && i === 0) {   // corner 0: the closing segment (last) still ends at the new first point
+    return tidy({ pts, bulges: nb, closed: true })
+  }
+  return tidy({ pts, bulges: nb, closed: p.closed })
+}
+
+/** Apply a corner op at every corner it fits (last to first, so indices hold). */
+export function allCorners(p: Poly, op: (q: Poly, i: number) => Poly | null): Poly {
+  let q = p
+  for (let i = p.pts.length - 1; i >= 0; i--) q = op(q, i) ?? q
+  return q
+}
+
+/** The same polyline drawn the other way (bulges reverse and flip sign). */
+export function reversePoly(p: Poly): Poly {
+  const segs = bulgesFull(p)
+  if (p.closed) return tidy({ pts: [p.pts[0], ...p.pts.slice(1).reverse()], bulges: [...segs].reverse().map(b => -b), closed: true })
+  return tidy({ pts: [...p.pts].reverse(), bulges: [...segs].reverse().map(b => -b) })
+}
+
+/** Join two open polylines end to end: A's `aEnd` meets B's `bEnd` (merged when they
+ *  touch, else bridged with a straight segment). */
+export function joinPolys(A: Poly, aEnd: 'start' | 'end', B: Poly, bEnd: 'start' | 'end', eps: number): Poly {
+  const a = aEnd === 'end' ? A : reversePoly(A)
+  const b = bEnd === 'start' ? B : reversePoly(B)
+  const touch = len(sub(a.pts[a.pts.length - 1], b.pts[0])) <= eps
+  const pts = [...a.pts, ...(touch ? b.pts.slice(1) : b.pts)]
+  const bulges = [...bulgesFull(a), ...(touch ? [] : [0]), ...bulgesFull(b)]
+  return tidy({ pts, bulges })
+}
+
+/** Which end of an open polyline is nearer p. */
+export function nearerEnd(p: Poly, q: Pt): 'start' | 'end' {
+  return len(sub(p.pts[0], q)) <= len(sub(p.pts[p.pts.length - 1], q)) ? 'start' : 'end'
+}
+
+/** Two separate open lines picked near their ends: trim / extend both end sides to where
+ *  they cross and join them there. Returns the joined line and the corner's index (for a
+ *  fillet / chamfer to follow), or null if the end sides are parallel or arcs. */
+export function cornerJoin(A: Poly, B: Poly, pickA: Pt, pickB: Pt): { poly: Poly; corner: number } | null {
+  if (A.closed || B.closed || A.pts.length < 2 || B.pts.length < 2) return null
+  const endSeg = (p: Poly, end: 'start' | 'end') => end === 'start' ? [p.pts[0], p.pts[1], 0] as const : [p.pts[p.pts.length - 1], p.pts[p.pts.length - 2], p.pts.length - 2] as const
+  // the end to move = the end of the line nearer the other line's pick
+  const aEnd = nearerEnd(A, pickB), bEnd = nearerEnd(B, pickA)
+  const [a0, a1, ai] = endSeg(A, aEnd), [b0, b1, bi] = endSeg(B, bEnd)
+  if (bulgesFull(A)[ai] || bulgesFull(B)[bi]) return null
+  const x = lineIntersect(a0, a1, b0, b1)
+  if (!x) return null
+  const moveEnd = (p: Poly, end: 'start' | 'end'): Poly => {
+    const pts = [...p.pts]
+    pts[end === 'start' ? 0 : pts.length - 1] = x
+    return { ...p, pts }
+  }
+  const poly = joinPolys(moveEnd(A, aEnd), aEnd, moveEnd(B, bEnd), bEnd, 1e-6)
+  return { poly, corner: A.pts.length - 1 }
+}
+
+/** A box as a closed polyline (its corners turned with it). */
+export function boxToPoly(g: BoxGeom): Poly {
+  const c = { x: (g.a.x + g.b.x) / 2, y: (g.a.y + g.b.y) / 2 }
+  const corners = boxCorners(g).map(p => g.rot ? add(c, rotatePt(sub(p, c), g.rot)) : p)
+  return { pts: corners, closed: true }
 }

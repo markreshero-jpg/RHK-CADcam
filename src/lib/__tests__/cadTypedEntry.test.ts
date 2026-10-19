@@ -95,3 +95,19 @@ describe('B4 offset tool', () => {
     expect(clickRoute('offset', false)).toBe('offset')
   })
 })
+
+import { polyOfAnnotation } from '@/app/canvas/[roomId]/useAnnotationTool'
+
+describe('B4b fillet / chamfer / join tools', () => {
+  it('route their clicks through the items (empty canvas does nothing)', () => {
+    expect(clickRoute('fillet', false)).toBe('modify')
+    expect(clickRoute('chamfer', false)).toBe('modify')
+    expect(clickRoute('join', false)).toBe('modify')
+  })
+  it('lines and boxes become polylines; other kinds do not', () => {
+    const box = { id: 'b', kind: 'rect', geom: { a: { x: 0, y: 0 }, b: { x: 10, y: 5 } } } as unknown as RoomAnnotation
+    expect(polyOfAnnotation(box)).toEqual({ pts: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 5 }, { x: 0, y: 5 }], closed: true })
+    const circ = { id: 'c', kind: 'circle', geom: { c: { x: 0, y: 0 }, r: 1 } } as unknown as RoomAnnotation
+    expect(polyOfAnnotation(circ)).toBeNull()
+  })
+})

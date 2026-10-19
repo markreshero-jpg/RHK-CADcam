@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import type { RoomAnnotation } from '@/src/lib/types'
 import {
   type Pt, type LineGeom, type BoxGeom, type TextGeom, type DimGeom, type ArcGeom, type CircleGeom,
-  arcStart, arcEnd, arcLength, sweepOf,
+  arcStart, arcEnd, arcLength, sweepOf, bulgeSegLength, sampleBulged,
   segLength, segAngle, dimLayout, dimText, boundsOf, annotationFramePoints,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
@@ -105,8 +105,9 @@ function polyArea(pts: Pt[]): number {
   for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p.x * q.y - q.x * p.y }
   return Math.abs(a) / 2
 }
-const polyLen = (pts: Pt[], closed: boolean) =>
-  pts.reduce((s, p, i) => (i === pts.length - 1 && !closed) ? s : s + segLength(p, pts[(i + 1) % pts.length]), 0)
+/** Length round a polyline; bulged sides (fillets) count their arc length. */
+const polyLen = (pts: Pt[], closed: boolean, bulges?: number[]) =>
+  pts.reduce((s, p, i) => (i === pts.length - 1 && !closed) ? s : s + bulgeSegLength(p, pts[(i + 1) % pts.length], bulges?.[i] ?? 0), 0)
 
 /** A number field that commits on Enter or blur (Esc reverts) — one undo step per edit. */
 function Field({ label, value, onCommit, suffix, w = 'w-20', disabled }: {
@@ -154,7 +155,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /** Point table: # · X · Y (editable) · length of the side leaving it. */
-function PointTable({ pts, closed, onPoint }: { pts: Pt[]; closed: boolean; onPoint?: (i: number, p: Pt) => void }) {
+function PointTable({ pts, closed, onPoint, bulges }: { pts: Pt[]; closed: boolean; onPoint?: (i: number, p: Pt) => void; bulges?: number[] }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="grid grid-cols-[1.25rem_1fr_1fr_3.5rem] gap-1 text-[10px] text-gray-500">
@@ -167,7 +168,9 @@ function PointTable({ pts, closed, onPoint }: { pts: Pt[]; closed: boolean; onPo
             <span className="text-[10px] text-gray-500">{i + 1}</span>
             <Field value={p.x} w="w-full" onCommit={onPoint && (n => onPoint(i, { x: n, y: p.y }))} />
             <Field value={p.y} w="w-full" onCommit={onPoint && (n => onPoint(i, { x: p.x, y: n }))} />
-            <span className="text-[11px] text-gray-300 font-mono text-right">{next ? r1(segLength(p, next)) : ''}</span>
+            <span className="text-[11px] text-gray-300 font-mono text-right" title={bulges?.[i] ? 'Arc (fillet) — length along the arc' : undefined}>
+              {next ? `${bulges?.[i] ? '⌒' : ''}${r1(bulgeSegLength(p, next, bulges?.[i] ?? 0))}` : ''}
+            </span>
           </div>
         )
       })}
@@ -177,7 +180,7 @@ function PointTable({ pts, closed, onPoint }: { pts: Pt[]; closed: boolean; onPo
 
 function summary(a: RoomAnnotation, k: number): string {
   switch (a.kind) {
-    case 'line':  { const p = (a.geom as LineGeom).pts ?? []; return `${r1(polyLen(p, false))} mm` }
+    case 'line':  { const g = a.geom as LineGeom; return `${r1(polyLen(g.pts ?? [], !!g.closed, g.bulges))} mm${g.closed ? ' round' : ''}` }
     case 'cloud': { const p = (a.geom as LineGeom).pts ?? []; return `${r1(polyLen(p, true))} mm round` }
     case 'rect':
     case 'ellipse': { const g = a.geom as BoxGeom; return `${r1(Math.abs(g.b.x - g.a.x))} × ${r1(Math.abs(g.b.y - g.a.y))}` }
@@ -289,12 +292,12 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
   switch (a.kind) {
     case 'line':
     case 'cloud': {
-      const g = a.geom as LineGeom, pts = g.pts ?? [], closed = a.kind === 'cloud'
+      const g = a.geom as LineGeom, pts = g.pts ?? [], closed = a.kind === 'cloud' || !!g.closed
       return <>
-        <PointTable pts={pts} closed={closed} onPoint={(i, p) => set({ ...g, pts: pts.map((q, j) => j === i ? p : q) })} />
+        <PointTable pts={pts} closed={closed} bulges={g.bulges} onPoint={(i, p) => set({ ...g, pts: pts.map((q, j) => j === i ? p : q) })} />
         <div className="mt-2">
-          <Row k={closed ? 'Perimeter' : 'Total length'} v={`${r1(polyLen(pts, closed))} mm`} />
-          {closed && <Row k="Area" v={`${r1(polyArea(pts) / 1e6)} m²`} />}
+          <Row k={closed ? 'Perimeter' : 'Total length'} v={`${r1(polyLen(pts, closed, g.bulges))} mm`} />
+          {closed && <Row k="Area" v={`${r1(polyArea(sampleBulged(pts, g.bulges, true)) / 1e6)} m²`} />}
           {!closed && pts.length >= 2 && <Row k="Angle (first side)" v={`${r1(segAngle(pts[0], pts[1]))}°`} />}
         </div>
         {cad.ribbonSize?.kind === 'line' && (
