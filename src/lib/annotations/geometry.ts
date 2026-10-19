@@ -402,3 +402,33 @@ export function setBoxCorner(g: BoxGeom, i: number, p: Pt): BoxGeom {
 export function rectPts(a: Pt, b: Pt): Pt[] {
   return [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }]
 }
+
+// ── Measuring (B2b) ──────────────────────────────────────────────────────────
+
+/** Drawing-convention angle of a→b in degrees: 0 = right, counter-clockwise as seen on
+ *  screen (svg y runs down), 0–360. */
+export function segAngle(a: Pt, b: Pt): number {
+  const deg = Math.atan2(-(b.y - a.y), b.x - a.x) * 180 / Math.PI
+  return ((deg % 360) + 360) % 360
+}
+
+/** b moved along a→b so the segment is `length` long (a zero segment goes right). */
+export function withLength(a: Pt, b: Pt, length: number): Pt {
+  const v = sub(b, a), L = len(v)
+  const u = L ? mul(v, 1 / L) : { x: 1, y: 0 }
+  return add(a, mul(u, length))
+}
+
+/** b turned about a to the drawing-convention angle `deg`, length kept. */
+export function withAngle(a: Pt, b: Pt, deg: number): Pt {
+  const L = len(sub(b, a)), r = deg * Math.PI / 180
+  return { x: a.x + Math.cos(r) * L, y: a.y - Math.sin(r) * L }
+}
+
+/** A box resized to w × h, its first corner fixed (directions kept). */
+export function withBoxSize(g: BoxGeom, w: number, h: number): BoxGeom {
+  const sx = g.b.x >= g.a.x ? 1 : -1, sy = g.b.y >= g.a.y ? 1 : -1
+  return { ...g, b: { x: g.a.x + sx * w, y: g.a.y + sy * h } }
+}
+
+export const segLength = (a: Pt, b: Pt) => len(sub(b, a))

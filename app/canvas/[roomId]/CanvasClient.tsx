@@ -49,6 +49,7 @@ import { useAnnotationTool } from './useAnnotationTool'
 import { cadSnap, EMPTY_SNAP_GEOMETRY, type CadSnapSettings } from '@/src/lib/annotations/cadSnap'
 import { planSnapGeometry } from '@/src/lib/annotations/planSnapGeometry'
 import CadSnapMarker from './CadSnapMarker'
+import CadMeasureOverlay from './CadMeasureOverlay'
 import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
 import TutorialHintsPlan from './TutorialHintsPlan'
 import { useTutorial } from '@/src/lib/tutorial/store'
@@ -2756,6 +2757,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 {cad.drawPreview && (
                   <AnnotationLayer annotations={[cad.drawPreview]} frame={IDENTITY_FRAME} paper={annotScale} />
                 )}
+                <CadMeasureOverlay live={cad.liveMeasure} frame={IDENTITY_FRAME} zoom={view.zoom}
+                  selected={mode === 'cad' && !cad.editing && cad.selected.length === 1 ? cad.selected[0] : null} />
                 {cad.snapHit && <CadSnapMarker pt={cad.snapHit.pt} kind={cad.snapHit.kind} size={9 / view.zoom} />}
                 {cad.ghost && (
                   <rect x={Math.min(cad.ghost.a.x, cad.ghost.b.x)} y={Math.min(cad.ghost.a.y, cad.ghost.b.y)}

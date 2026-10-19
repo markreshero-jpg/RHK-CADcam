@@ -312,6 +312,21 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
           )}
         </>)}
 
+        {cad.ribbonSize && (<>
+          <Sep />
+          <Group label="Size">
+            {cad.ribbonSize.kind === 'line' ? (<>
+              <Num title="Length (mm) — the end point moves along the line" value={Math.round(cad.ribbonSize.length)} step={1} min={1} w="w-16" suffix="mm"
+                onChange={n => cad.applyLength(n)} />
+              <Num title="Angle (degrees, 0 = right, anticlockwise)" value={Math.round(cad.ribbonSize.angle * 10) / 10} step={1} w="w-14" suffix="°"
+                onChange={n => cad.applyAngle(n)} />
+            </>) : (<>
+              <Num title="Width (mm)" value={Math.round(cad.ribbonSize.w)} step={1} min={1} w="w-16" suffix="W" onChange={n => cad.applyBoxSize(n, null)} />
+              <Num title="Height (mm)" value={Math.round(cad.ribbonSize.h)} step={1} min={1} w="w-16" suffix="H" onChange={n => cad.applyBoxSize(null, n)} />
+            </>)}
+          </Group>
+        </>)}
+
         <Sep />
         <Btn title="Bring to front" disabled={!nSel} onClick={() => cad.reorder('front')}>
           <Icon><rect x="5" y="5" width="8" height="8" fill="currentColor" fillOpacity="0.4" /><rect x="2.5" y="2.5" width="7" height="7" /></Icon>
@@ -326,6 +341,14 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
       </>)}
 
       <div className="ml-auto flex items-center gap-1.5 shrink-0 pl-2">
+        {viewSupported && cad.cursor && (
+          <div className="flex flex-col leading-tight text-[10px] font-mono text-gray-300 shrink-0 w-28" title="Cursor position in room mm (snapped when a snap is showing); Δ = from the last point">
+            <span>X {Math.round(cad.cursor.x)}  Y {Math.round(cad.cursor.y)}</span>
+            {cad.fromPt
+              ? <span className="text-yellow-300">ΔX {Math.round(cad.cursor.x - cad.fromPt.x)}  ΔY {Math.round(cad.cursor.y - cad.fromPt.y)}</span>
+              : <span className="text-gray-600">room mm</span>}
+          </div>
+        )}
         {viewSupported && <SnapMenu snap={snap} onSnap={onSnap} />}
         <Group label="Scale">
           <span className="text-xs text-gray-400">1:</span>

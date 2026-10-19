@@ -235,6 +235,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | A5 | **Manual dimension** (live value, text override, offset grip, arrowhead/tick ends) | [x] built 2026-10-19; in-app check pending |
 | B1 | **Feedback fixes:** leader typing bug; click-to-start / click-to-finish for box / ellipse / cloud / text box (drag still works); text box sized in width **and** height before typing (`geom.height`, corner grip); cloud rectangle / freehand ribbon option | [x] built 2026-10-19; in-app check pending |
 | B2 | **CAD snaps:** end / mid / centre / nearest-on-edge / intersection / perpendicular, on walls (faces + corners), cabinets (footprint + door / drawer front line), fixtures & appliances, benchtops and annotations; snap glyph; ribbon toggles | [x] built 2026-10-19; in-app check pending |
+| B2b | **Measurements + coordinates:** live length / angle while drawing, W × H while placing, side lengths / W × H on the selection (screen only); cursor X / Y + ΔX / ΔY readout; typed Length / Angle (2-point line) and W / H (box, ellipse) on the ribbon | [x] built 2026-10-19; in-app check pending |
 | B3 | **Arcs + circle:** kinds `arc` + `circle` (migration); arc by 3-point, centre-start-end, start-end-radius; circle by centre + radius; grips | [ ] |
 | B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [ ] |
 | B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [ ] |
@@ -421,6 +422,24 @@ the note was typed. Fixed in B2: the note being typed is drawn live
 - **Ribbon:** a Snap toggle + ▾ menu of kinds and sources (`userPrefs.cadSnap`;
   fixed-position popover so the ribbon scroll can't clip it). Shift = free, as
   before. The canvas's own SnapToolbar settings no longer drive CAD.
+
+**B2b built 2026-10-19** (Mark: "we need to be able to see how long cad lines are… x
+and y coordinates on canvas"). In-app check pending.
+- `CadMeasureOverlay.tsx` (screen-only, inside the CAD capture group):
+  - while drawing: "len mm  angle°" by the cursor (`hook.liveMeasure`: the segment
+    being placed, not a dim's offset click), or W × H for a box / ellipse / cloud /
+    text box being placed;
+  - a single selected line / cloud labels each side (offset along the side's
+    normal); an unrotated box / ellipse shows W and H.
+- **Ribbon readout:** X / Y of the cursor (frame mm, the snapped point when a snap
+  shows; `hook.cursor`), and ΔX / ΔY from the last point while drawing
+  (`hook.fromPt`).
+- **Ribbon "Size":** Length + Angle for a selected 2-point line (end point moves:
+  `withLength` / `withAngle`; angles 0 = right, anticlockwise on screen,
+  `segAngle`); W + H for a box / ellipse (`withBoxSize`, first corner fixed). Burst
+  undo + debounced save like the style fields.
+- Not yet: typing a length *while* drawing (CAD direct distance entry). Candidate
+  for B4 alongside the typed offset distance.
 
 Next: B3 (arcs + circle), then B4–B5, then A6 (elevations: wall-local frame, canvas +
 Elevation Views report, wall-split remap).

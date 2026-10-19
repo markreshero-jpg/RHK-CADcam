@@ -220,3 +220,23 @@ describe('B1 text box height', () => {
     expect(layoutText('a\nb\nc\nd\ne\nf\ng', 3.5, { width: 40, height: 5 }).h).toBeGreaterThan(5)
   })
 })
+
+import { segAngle, withLength, withAngle, withBoxSize, segLength } from '../annotations/geometry'
+
+describe('B2b measuring', () => {
+  it('angles read counter-clockwise on screen, 0–360', () => {
+    expect(segAngle({ x: 0, y: 0 }, { x: 10, y: 0 })).toBe(0)
+    expect(segAngle({ x: 0, y: 0 }, { x: 0, y: -10 })).toBe(90)   // up the screen
+    expect(segAngle({ x: 0, y: 0 }, { x: 0, y: 10 })).toBe(270)
+  })
+  it('sets length and angle about the first point', () => {
+    const q = withLength({ x: 0, y: 0 }, { x: 3, y: 4 }, 10)
+    expect(q.x).toBeCloseTo(6); expect(q.y).toBeCloseTo(8)
+    const p = withAngle({ x: 0, y: 0 }, { x: 10, y: 0 }, 90)
+    expect(p.x).toBeCloseTo(0); expect(p.y).toBeCloseTo(-10)
+    expect(segLength({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5)
+  })
+  it('resizes a box from its first corner, keeping direction', () => {
+    expect(withBoxSize({ a: { x: 100, y: 100 }, b: { x: 0, y: 300 } }, 600, 400)).toEqual({ a: { x: 100, y: 100 }, b: { x: -500, y: 500 } })
+  })
+})

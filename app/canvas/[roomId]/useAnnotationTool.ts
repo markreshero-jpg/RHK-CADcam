@@ -13,6 +13,7 @@ import {
   type AnnotFrame, type Pt, type TextGeom, type Box,
   type LineGeom, type BoxGeom,
   unmapPt, translateGeom, annotationFramePoints, boundsOf, boxesOverlap, layoutText, snapQuarter, rotatePt,
+  segAngle, segLength, withLength, withAngle, withBoxSize,
   angleSnap, dedupePts, leaderTextAt, setBoxCorner, rectPts, dimOffsetFor, dimAxisFor, type DimGeom,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
@@ -20,6 +21,7 @@ import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
 import { supabase } from '@/src/lib/supabase'
 import { dbUpdateAnnotation, dbDeleteAnnotations } from './canvasDB'
 import type { AnnotationEditProps, AnnotGrip } from './AnnotationLayer'
+import type { LiveMeasure } from './CadMeasureOverlay'
 
 export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'cloud' | 'dim'
 
@@ -117,16 +119,20 @@ export function useAnnotationTool({
   const k = paper / frame.s
   // What the cursor last snapped to — the canvas draws a marker there.
   const [snapHit, setSnapHit] = useState<{ pt: Pt; kind: string } | null>(null)
+  // Cursor in frame mm (snapped when a snap is on) — the ribbon's X / Y readout.
+  const [cursor, setCursor] = useState<Pt | null>(null)
 
   /** Pointer → frame mm. snapIt: object snaps; prev: perpendicular from it, or a 15° lock
    *  when nothing snapped; exclude: annotation ids to ignore. */
   const toFrame = useCallback((e: { clientX: number; clientY: number }, snapIt: boolean, prev?: Pt | null, exclude?: ReadonlySet<string>) => {
     const p = unmapPt(frame, toWorld(e))
-    if (!snapIt) { setSnapHit(null); return p }
+    if (!snapIt) { setSnapHit(null); setCursor(p); return p }
     const r = snap(p, prev ?? null, exclude ?? NO_IDS)
-    if (r.kind) { setSnapHit({ pt: r.pt, kind: r.kind }); return r.pt }
+    if (r.kind) { setSnapHit({ pt: r.pt, kind: r.kind }); setCursor(r.pt); return r.pt }
     setSnapHit(null)
-    return prev ? angleSnap(prev, p) : p
+    const out = prev ? angleSnap(prev, p) : p
+    setCursor(out)
+    return out
   }, [toWorld, snap, frame])
 
   // Drop ids that vanished (undo, delete elsewhere).
@@ -337,6 +343,39 @@ export function useAnnotationTool({
     setAnnotations(xs => xs.map(a => a.id === one.id ? { ...a, text: text || null } : a))
     persistSoon(one.id)
   }, [selected, snapshotForBurst, setAnnotations, persistSoon])
+
+  // ── Typed sizes (ribbon): a 2-point line's length / angle, a box / ellipse's W × H ──
+
+  const oneLine = selected.length === 1 && selected[0].kind === 'line' && ((selected[0].geom as LineGeom).pts?.length === 2) ? selected[0] : null
+  const oneBox = selected.length === 1 && (selected[0].kind === 'rect' || selected[0].kind === 'ellipse') ? selected[0] : null
+  const ribbonSize = oneLine
+    ? { kind: 'line' as const, length: segLength((oneLine.geom as LineGeom).pts[0], (oneLine.geom as LineGeom).pts[1]), angle: segAngle((oneLine.geom as LineGeom).pts[0], (oneLine.geom as LineGeom).pts[1]) }
+    : oneBox
+      ? { kind: 'box' as const, w: Math.abs((oneBox.geom as BoxGeom).b.x - (oneBox.geom as BoxGeom).a.x), h: Math.abs((oneBox.geom as BoxGeom).b.y - (oneBox.geom as BoxGeom).a.y) }
+      : null
+
+  const editGeom = useCallback((a: RoomAnnotation, geom: RoomAnnotation['geom']) => {
+    snapshotForBurst()
+    setAnnotations(xs => xs.map(x => x.id === a.id ? { ...x, geom } : x))
+    persistSoon(a.id)
+  }, [snapshotForBurst, setAnnotations, persistSoon])
+  const applyLength = useCallback((n: number) => {
+    if (!oneLine || !(n > 0)) return
+    const [p, q] = (oneLine.geom as LineGeom).pts
+    editGeom(oneLine, { pts: [p, withLength(p, q, n)] })
+  }, [oneLine, editGeom])
+  const applyAngle = useCallback((deg: number) => {
+    if (!oneLine || !Number.isFinite(deg)) return
+    const [p, q] = (oneLine.geom as LineGeom).pts
+    editGeom(oneLine, { pts: [p, withAngle(p, q, deg)] })
+  }, [oneLine, editGeom])
+  const applyBoxSize = useCallback((w: number | null, h: number | null) => {
+    if (!oneBox) return
+    const g = oneBox.geom as BoxGeom
+    const cw = Math.abs(g.b.x - g.a.x), ch = Math.abs(g.b.y - g.a.y)
+    const nw = w != null && w > 0 ? w : cw, nh = h != null && h > 0 ? h : ch
+    editGeom(oneBox, withBoxSize(g, nw, nh))
+  }, [oneBox, editGeom])
 
   const cancelEdit = useCallback(() => setEditing(null), [])
   const setEditText = useCallback((text: string) => setEditing(ed => ed && { ...ed, text }), [])
@@ -617,8 +656,9 @@ export function useAnnotationTool({
       return
     }
     const d = drawingRef.current
-    if (!d) {   // hovering with a drawing tool: show what the first click would snap to
+    if (!d) {   // hovering: a drawing tool shows what the first click would snap to
       if (tool !== 'select' && !editing) toFrame(e, !e.shiftKey)
+      else setCursor(unmapPt(frame, toWorld(e)))
       return
     }
     // A dim's third point only places the line: snap, but no 15° lock off the second point.
@@ -627,7 +667,7 @@ export function useAnnotationTool({
     const axis = placing && dimMode === 'linear' ? dimAxisFor(d.pts[0], d.pts[1], cur, d.axis) : d.axis
     const nd = { ...d, cur, axis }
     drawingRef.current = nd; setDrawing(nd)
-  }, [toFrame, dimMode, tool, editing])
+  }, [toFrame, dimMode, tool, editing, frame, toWorld])
 
   const onCaptureDouble = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -745,6 +785,15 @@ export function useAnnotationTool({
     : placing?.tool === 'textbox' ? { kind: 'place' as const, a: placing.start, b: placing.cur }
     : null
 
+  // Live readout while drawing: the segment being placed, or the box being dragged out
+  // (a dim's last click only places its line, which shows its own value).
+  const lastPt = drawing?.pts.length ? drawing.pts[drawing.pts.length - 1] : null
+  const liveMeasure: LiveMeasure = drawing?.cur && lastPt && !(drawing.tool === 'dim' && drawing.pts.length === 2)
+    ? { mode: 'seg', a: lastPt, b: drawing.cur }
+    : placing && (placing.start.x !== placing.cur.x || placing.start.y !== placing.cur.y) && placing.tool !== 'text'
+      ? { mode: 'box', a: placing.start, b: placing.cur }
+      : null
+
   // The line / arrow / leader being drawn, as a row the layer can draw (frame coords).
   // A box / ellipse / cloud being dragged out previews as the real shape.
   const drawPreview: RoomAnnotation | null = useMemo(() => {
@@ -791,6 +840,10 @@ export function useAnnotationTool({
     dimMode, setDimMode, applyDimText, cloudMode, setCloudMode, pending,
     /** Last object snap under the cursor (frame mm) — the canvas draws its marker. */
     snapHit: active ? snapHit : null,
+    /** Cursor (frame mm) + the point Δ is measured from while drawing. */
+    cursor: active ? cursor : null,
+    fromPt: drawing?.pts.length ? drawing.pts[drawing.pts.length - 1] : pending ? pending.start : null,
+    ribbonSize, applyLength, applyAngle, applyBoxSize, liveMeasure,
     /** Text block size helper for the editor overlay. */
     layoutFor: (a: RoomAnnotation, text: string) => {
       const s = resolveStyle(a.kind, a.style)
