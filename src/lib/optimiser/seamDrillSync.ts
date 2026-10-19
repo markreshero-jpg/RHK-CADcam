@@ -20,6 +20,7 @@ import { coalesceByKey } from './coalesce'
 import type { ResolvedCabinet, ResolvedCasePart } from '@/src/lib/resolver/types'
 import { dbPartId, zoneKey, zonePartId, stackKey, isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
+import { filterRemovedParts } from '@/src/lib/resolver/filterHidden'
 
 const GENERATED_MARK = 'seam_joint'
 
@@ -77,6 +78,7 @@ function memberPanel(parts: ResolvedCasePart[], d: { x: number; y: number; z: nu
 // footprint and keyed so the optimiser's buildSheetDrills can find it.
 // Exported for tests.
 export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: GeneratedDrill[]; skipped: number } {
+  rp = filterRemovedParts(rp)   // removed parts cause no drilling (PART-HIDE-SPEC R-D3)
   const rows: GeneratedDrill[] = []
   let skipped = 0
   const shaped = rp.case_parts.some(p => p.AY) || rp.face_zones.some(z => z.facet || z.AY)
@@ -358,6 +360,7 @@ interface GeneratedRoute {
 
 // Exported for tests.
 export function collectNotchRoutes(rp: ResolvedCabinet, cabinetId: string, toolId: string | null): { rows: GeneratedRoute[]; skipped: number } {
+  rp = filterRemovedParts(rp)
   const rows: GeneratedRoute[] = []
   let skipped = 0
   const rails = rp.case_parts.filter(p => p.part_key.startsWith('fprail:') && p.fprail && !p.fprail.shaped)

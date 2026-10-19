@@ -11,6 +11,8 @@ import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
 import { attachShape, shapeFrameFor, type ShapesByCab } from './shapes'
 import type { OutlinePt } from '@/src/lib/shapePath'
 import { zonePartId, dbPartId, zoneRef } from '@/src/lib/cabinetShape/partKeys'
+import { removedIdsFrom, isAllViews } from '@/src/lib/resolver/filterHidden'
+import type { PartHideViews } from '@/src/lib/resolver/types'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -52,7 +54,7 @@ export function canonicalPanelDims(dx: number, dy: number, dz: number): { w: num
 
 export interface RawProject { id: string; name: string; job_number: string | null }
 export interface RawRoom { id: string; name: string }
-export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; no_cnc?: boolean | null; part_no_cnc?: string[] | null }
+export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; no_cnc?: boolean | null; part_no_cnc?: string[] | null; part_hide_views?: PartHideViews | null }
 type Row = Record<string, unknown>
 
 export interface NormalizedProject {
@@ -83,6 +85,8 @@ export function normalizeProject(
   const cabNoCnc = new Set(cabsRaw.filter(c => c.no_cnc).map(c => c.id))
   // Per-part No CNC ticks (cabinet_instances.part_no_cnc), keyed by the same part ids as partKey.
   const partNoCnc = new Map(cabsRaw.map(c => [c.id, new Set(Array.isArray(c.part_no_cnc) ? c.part_no_cnc : [])]))
+  // Removed parts (hidden in every view) aren't made: left out entirely (PART-HIDE-SPEC R-D2).
+  const removedByCab = new Map(cabsRaw.map(c => [c.id, removedIdsFrom(c.part_hide_views)]))
 
   const parts: OptiPart[] = []
   const meta = (cabId: string) => {
@@ -108,6 +112,8 @@ export function normalizeProject(
     baseDims?: { w: number; h: number; thickness: number },   // set when sw/sh/sd overrides changed the row (O1)
   ) => {
     const cabId = row.cabinet_instance_id as string
+    if (removedByCab.get(cabId)?.has(partKey)) return
+    if (table === 'custom_parts' && isAllViews(row.hide_views as string[] | null)) return
     const m = meta(cabId)
     // Empty typeKey opts out of the type layers (custom parts carry their own name).
     // Order: live parts_library name → code default → naming.base (humanized key).
@@ -316,7 +322,7 @@ export const PART_SELECTS = {
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   drawer_box_parts: 'id,cabinet_instance_id,facet,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
-  custom_parts: 'id,cabinet_instance_id,name,orientation,dx,dy,dz,material_id,no_cnc,edge_top,edge_bottom,edge_left,edge_right',
+  custom_parts: 'id,cabinet_instance_id,name,orientation,dx,dy,dz,material_id,no_cnc,hide_views,edge_top,edge_bottom,edge_left,edge_right',
 } as const
 
 // Fetch the edge_banding thicknesses referenced by a set of part rows — shared

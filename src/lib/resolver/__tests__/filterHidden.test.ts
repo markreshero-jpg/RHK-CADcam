@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filterHiddenParts, filterHiddenMap } from '../filterHidden'
+import { filterHiddenParts, filterHiddenMap, filterRemovedParts } from '../filterHidden'
 import type { ResolvedCabinet } from '../types'
 
 const rp = (over: Partial<ResolvedCabinet> = {}): ResolvedCabinet => ({
@@ -36,5 +36,40 @@ describe('filterHiddenParts (per view)', () => {
     const m = new Map([['c1', cab]])
     expect(filterHiddenMap(m, 'plan', true)).toBe(m)
     expect(filterHiddenMap(m, 'plan').get('c1')!.case_parts).toHaveLength(1)
+  })
+})
+
+describe('filterRemovedParts (hidden in all views = not made)', () => {
+  const ALL = ['plan', 'elevation', '3d'] as const
+  const seam = (a: string, b: string) => ({ seam_key: `${a}:${b}`, part_a_key: a, part_b_key: b })
+  const cab = rp({
+    part_hide_views: { case_back: [...ALL], int_shelf_0: ['plan'], zone_0_0: [...ALL] },
+    seam_joints: [seam('back', 'left_side'), seam('bottom', 'left_side'), seam('int_shelf_0', 'left_side')] as unknown as ResolvedCabinet['seam_joints'],
+    hinge_instances: [
+      { row_index: 0, col_index: 0, mount_target: { table: 'case_parts', part_key: 'left_side' } },
+      { row_index: 1, col_index: 0, mount_target: { table: 'case_parts', part_key: 'back' } },
+      { row_index: 2, col_index: 0, mount_target: { table: 'case_parts', part_key: 'left_side' } },
+    ] as unknown as ResolvedCabinet['hinge_instances'],
+    drawer_stacks: [{ face_zone_row: 0, face_zone_col: 0, box_parts: [], slides: [{ side: 'left' }] }] as unknown as ResolvedCabinet['drawer_stacks'],
+    custom_parts: [{ id: 'p1', hide_views: [...ALL] }, { id: 'p2', hide_views: ['3d'] }] as unknown as ResolvedCabinet['custom_parts'],
+  })
+  const made = filterRemovedParts(cab)
+
+  it('drops removed parts but keeps partially hidden ones', () => {
+    expect(made.case_parts.map(p => p.part_key)).toEqual(['left_side'])
+    expect(made.internal_parts).toHaveLength(1)
+    expect(made.custom_parts!.map(p => p.id)).toEqual(['p2'])
+  })
+
+  it('drops the drilling the removed parts cause', () => {
+    expect(made.seam_joints.map(s => s.seam_key)).toEqual(['bottom:left_side', 'int_shelf_0:left_side'])
+    // hinge on the removed door (0,0) and the one plated to the removed back go
+    expect(made.hinge_instances.map(h => h.row_index)).toEqual([2])
+    expect(made.drawer_stacks[0].slides).toHaveLength(0)
+  })
+
+  it('returns the same object when nothing is removed', () => {
+    const c = rp({ part_hide_views: { case_back: ['plan'] } })
+    expect(filterRemovedParts(c)).toBe(c)
   })
 })

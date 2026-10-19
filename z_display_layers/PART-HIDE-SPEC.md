@@ -17,8 +17,44 @@ one cabinet* in chosen room views.
 4. **"Show hidden parts" override** in the header next to the Layers dropdown
    (a per-user pref, `userPrefs.showHiddenParts`). When ticked, room views draw
    hidden parts anyway, for checking.
-5. **Visual only.** Cut lists, the optimiser, CNC, costing and cabinet sheets
-   ignore it. A hidden part is still made.
+5. **Visual only** for partial hides (Plan / Elev / 3D in any mix short of all
+   three). Cut lists, the optimiser, CNC, costing and cabinet sheets ignore them.
+   ~~A hidden part is still made.~~ Superseded for "All" by Removed below.
+
+## Removed = hidden in all views (2026-10-19, user — Cabinet Vision behaviour)
+
+Used for system parts that can't be deleted (left gable, back, bottom…) and
+aren't wanted anywhere. Status: **built 2026-10-19 (R1–R5), pending in-app check.**
+
+R-D1. **All three views ticked = Removed (not made).** No separate tick; "All"
+      is the switch. Delete on a standard part = Removed (already sets all three).
+R-D2. A removed part is **off the cut lists, the optimiser (gone, not just
+      unticked), CNC and costing**. No costing module exists yet; the rule binds
+      it when built (it must read the gated sources below).
+R-D3. **No drilling caused by the part.** Its seam joints (cams / dowels / pins on
+      the neighbours), master operations, hinge plates (removed door), slide holes
+      (removed front / box), finger-rail notches all drop. Ops on the part itself
+      go with it.
+R-D4. **Geometry unchanged.** Neighbours keep their size and position (unlike
+      `BACK_TYPE = none`). The resolver is not touched; gating is downstream.
+R-D5. The edit modal still shows the part (decision 2 stands) so it can be
+      un-removed; the Parts tab marks the row "Removed" (struck through), and
+      the No CNC tick shows as implied.
+R-D6. Hardware: a removed door drops its hinges from the cabinet sheet's
+      hardware block; a removed drawer front drops its slides.
+
+### Build plan
+- R1 `isRemoved` / `removedIds(rp)` in `filterHidden.ts` (custom parts: their
+  own `hide_views` holding all three).
+- R2 Optimiser: loaders select `part_hide_views`; `normalize.push()` skips
+  removed parts.
+- R3 Drilling: filter `rp.seam_joints` (either part removed) before
+  `cabinetSeamDrills` (covers CNC + 2D drill drawings); `seamDrillSync` hinge /
+  slide / notch loops skip removed sources and targets; `fireMasters.partGeoms`
+  leaves removed ids out (neither source nor target).
+- R4 Reports: `ReportsModal.collectParts` and `CabinetSheetSVG.cutRows` +
+  hardware block skip removed parts.
+- R5 UI: Parts tab "Removed" row state + tooltips ("All = removed, not made").
 
 ## No CNC tick (added 2026-10-18, user)
 
@@ -90,3 +126,17 @@ false`), so it isn't nested or cut.
   save-to-library and place-from-library round trip.
 - Library editor (`/library/cabinets`) doesn't show or edit the ticks; they only
   arrive via save-from-canvas.
+
+### Removed — as built (2026-10-19)
+- `filterRemovedParts(rp)` / `removedIds` / `isAllViews` in `filterHidden.ts` are
+  the gate: parts, seam joints touching them (`seamPartId` maps bare case keys),
+  hinges of removed doors or plated to removed parts, runners of removed fronts.
+- Applied in `collectDrillRows` + `collectNotchRoutes` (seamDrillSync),
+  `fireMasters` (partGeoms), `cabinetSeamDrills` (seams only, so the editor's 2D
+  drill drawings match), `normalize.push()` (part dropped; custom parts via their
+  own `hide_views`), and ReportsModal's map (cut lists + cabinet sheets).
+- Known gap: shaped finger-pull rails notch the side's *outline* in the resolver
+  (`notchPanels`); removing such a rail leaves that outline notch. Plain rail
+  notch routes do drop.
+- At build time 3 cabinets already had all-view hides (Kitchen: "Filler" and
+  "BC-26" kick parts, "WC-01" back) — those are now removed.

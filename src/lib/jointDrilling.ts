@@ -9,6 +9,7 @@
 import type { Box } from '@/src/components/three/PartViewer'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, JointTypeOp, ResolvedToekickPart } from '@/src/lib/resolver/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
+import { removedIds, seamPartId } from '@/src/lib/resolver/filterHidden'
 import { sampleOutline } from '@/src/lib/shapePath'
 import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
 
@@ -948,7 +949,10 @@ export function coalesceOpposingDrills<T extends DrillOpPos>(
 export function cabinetSeamDrills(rp: ResolvedCabinet): SeamDrill[] {
   const boxByKey = caseBoxByKey(rp)
   const out: SeamDrill[] = []
+  // Seams touching a removed part aren't drilled (PART-HIDE-SPEC R-D3).
+  const removed = removedIds(rp)
   for (const sj of rp.seam_joints ?? []) {
+    if (removed.has(seamPartId(sj.part_a_key)) || removed.has(seamPartId(sj.part_b_key))) continue
     const bA = boxByKey[sj.part_a_key]
     const bB = boxByKey[sj.part_b_key]
     if (!bA || !bB) continue

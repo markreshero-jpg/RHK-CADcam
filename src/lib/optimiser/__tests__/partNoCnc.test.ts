@@ -26,3 +26,17 @@ describe('normalizeProject — part_no_cnc', () => {
     expect(parts[0].output_to_cnc).toBe(true)
   })
 })
+
+describe('normalizeProject — removed parts (hidden in all views)', () => {
+  it('leaves removed parts out entirely; partial hides are still made', () => {
+    const cabs = [{ id: 'c', label: 'B1', assembly_class: 'base', room_id: 'r',
+      part_hide_views: { case_left_side: ['plan', 'elevation', '3d'], case_right_side: ['plan'] } as Record<string, ('plan' | 'elevation' | '3d')[]> }]
+    const custom = [
+      { id: 'x', cabinet_instance_id: 'c', name: 'Panel', dx: 600, dy: 900, dz: 18, hide_views: ['plan', 'elevation', '3d'] },
+      { id: 'y', cabinet_instance_id: 'c', name: 'Filler', dx: 70, dy: 900, dz: 18, hide_views: [] },
+    ]
+    const { parts } = normalizeProject(project, rooms, cabs,
+      [casePart('1', 'left_side'), casePart('2', 'right_side')], [], [], [], [], new Map(), custom)
+    expect(parts.map(p => p.source_part_key)).toEqual(['case_right_side', 'custom_y'])
+  })
+})

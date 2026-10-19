@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
+import { useState, useEffect, useMemo, useContext, type Dispatch, type SetStateAction } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { rememberLibraryKeys } from '@/src/lib/displayLayers/customPartKinds'
 import type { ResolvedCabinet, ResolvedDrawerBoxPart, ResolvedDrawerSlide, PartHideView } from '@/src/lib/resolver/types'
-import { PartHideTicks, PartNoCncTick, HIDE_COLS } from '@/src/components/PartHideTicks'
+import { PartHideTicks, PartNoCncTick, PartHideContext, HIDE_COLS } from '@/src/components/PartHideTicks'
+import { isAllViews } from '@/src/lib/resolver/filterHidden'
 import {
   dbAddCustomPart, dbUpdateCustomPart, dbDeleteCustomPart,
   type CabinetCustomPart, type PartPosOverrides, type PartLabels, type PartComments,
@@ -538,6 +539,7 @@ export default function PartsView({
   const [libNames,   setLibNames]   = useState<Record<string, string>>({})
   const [dialog,     setDialog]     = useState<CabinetCustomPart | 'new' | null>(null)
   const [search,     setSearch]     = useState('')
+  const hideApi = useContext(PartHideContext)
   const [sortKey,    setSortKey]    = useState<SortKey>('type')
   const [sortDir,    setSortDir]    = useState<'asc' | 'desc'>('asc')
 
@@ -793,7 +795,7 @@ export default function PartsView({
           {/* Header */}
           <div className="flex items-end border-b border-gray-700 bg-gray-900/80 sticky top-0 z-10 pt-2">
             <div className={`${hdCls} text-center`} style={{ width: HIDE_W }}
-              title="Hide the part in a room view (plan / elevation / 3D). Visual only — still cut; always shown in this editor.">
+              title="Hide the part in a room view (plan / elevation / 3D) — visual only, still cut. All = removed: not made, cut, costed or drilled. Always shown in this editor.">
               <div className="text-[9px] text-orange-400/80 normal-case tracking-normal pb-0.5">Hide in</div>
               <div className="flex justify-around">
                 {HIDE_COLS.map(c => <span key={c.view} title={c.title}>{c.label}</span>)}
@@ -828,10 +830,13 @@ export default function PartsView({
               {search ? 'No parts match the filter.' : 'No parts.'}
             </div>
           ) : filtered.map(row => {
+            // Hidden in every view = removed, not made (PART-HIDE-SPEC R-D5).
+            const removed = !row.isOverride && !!hideApi && isAllViews(hideApi.get(row.id))
             return (
             <div key={row.id}
+              title={removed ? 'Removed — not made: off cut lists, optimiser / CNC and costing. Untick All to bring it back.' : undefined}
               className={`flex items-center border-b border-gray-800/50 hover:bg-gray-800/20 group min-h-[30px] ${
-                row.isOverride ? 'opacity-70' : ''
+                row.isOverride ? 'opacity-70' : removed ? 'opacity-50 line-through decoration-red-500/70' : ''
               }`}>
 
               {/* Hide in room views — the row itself stays fully visible here */}
@@ -849,6 +854,7 @@ export default function PartsView({
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full flex-none" style={{ background: TYPE_COLOR[row.typeKey] ?? '#888' }} />
                   <span className="text-gray-400 truncate">{row.typeLabel}</span>
+                  {removed && <span className="flex-none text-[9px] font-semibold uppercase text-red-400 no-underline">Removed</span>}
                 </div>
               </div>
 

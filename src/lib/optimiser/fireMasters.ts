@@ -19,6 +19,7 @@ import { caseFrame, zoneFrame, intFrame, projectToFrame, type FootprintFrame, ty
 import { caseBox } from '@/src/lib/jointDrilling'
 import { isFiringRole } from '@/src/lib/partOps/enums'
 import { zonePartId } from '@/src/lib/cabinetShape/partKeys'
+import { filterRemovedParts } from '@/src/lib/resolver/filterHidden'
 
 export const GENERATED_MARK = 'master_slave'
 
@@ -160,7 +161,8 @@ export interface FireResult {
 
 // Fire every master/joint op in `ops` onto its coincident target part(s).
 export function fireMasters(rp: ResolvedCabinet, ops: FireOpRow[], cabinetId: string): FireResult {
-  const geoms = partGeoms(rp)
+  // Removed parts are neither a firing source nor a target (PART-HIDE-SPEC R-D3).
+  const geoms = partGeoms(filterRemovedParts(rp))
 
   // Existing hand-added LOCAL ops per part — used only to defer a colliding slave
   // (§2.1). Generated rows (seam joints, other slaves) and firing sources don't count.

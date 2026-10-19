@@ -5,7 +5,7 @@ import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixtur
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { dbLoadResolvedParts } from './canvasDB'
-import { filterHiddenMap } from '@/src/lib/resolver/filterHidden'
+import { filterHiddenMap, filterRemovedParts } from '@/src/lib/resolver/filterHidden'
 import PlanViewReport from './PlanViewReport'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import ElevationPrintReport from './ElevationPrintReport'
@@ -166,9 +166,16 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
 
   const rooms          = scope === 'room' ? [room]        : jobRooms
   const allCabinets    = scope === 'room' ? cabinets      : jobCabinets
-  // Unfiltered: cut lists and cabinet sheets list every part. Per-view part hides
-  // (z_display_layers/PART-HIDE-SPEC.md) apply only to the plan / elevation drawings.
-  const allResolved    = scope === 'room' ? resolvedParts : jobResolved
+  // Cut lists and cabinet sheets list every part that is MADE: removed parts
+  // (hidden in all three views) drop out with their hinges / runners. Partial
+  // per-view hides (z_display_layers/PART-HIDE-SPEC.md) apply only to the plan /
+  // elevation drawings.
+  const rawResolved    = scope === 'room' ? resolvedParts : jobResolved
+  const allResolved    = useMemo(() => {
+    const m = new Map<string, ResolvedCabinet>()
+    for (const [id, r] of rawResolved) m.set(id, filterRemovedParts(r))
+    return m
+  }, [rawResolved])
   const planResolved   = useMemo(() => filterHiddenMap(allResolved, 'plan'), [allResolved])
   const elevResolved   = useMemo(() => filterHiddenMap(allResolved, 'elevation'), [allResolved])
   const allBtInstances = scope === 'room' ? benchtops     : jobBtInstances
