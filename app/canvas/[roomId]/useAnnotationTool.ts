@@ -71,6 +71,7 @@ const MIN_BOX_PAPER = 8   // text box narrower than this (paper mm) = point text
 
 // Survives CAD mode toggles and room switches within the tab.
 let clipboard: RoomAnnotation[] = []
+const NO_IDS: ReadonlySet<string> = new Set()
 
 export function useAnnotationTool({
   room, annotations, setAnnotations, captureSnapshot, frame, paper, zoom, active,
@@ -87,8 +88,10 @@ export function useAnnotationTool({
   /** CAD mode is on and this view takes annotation clicks. */
   active:          boolean
   toWorld:         (e: { clientX: number; clientY: number }) => Pt
-  /** Canvas snap; kind null = nothing snapped (then lines angle-lock to 15°). */
-  snap:            (wp: Pt) => { pt: Pt; kind: string | null }
+  /** CAD object snap in frame mm (B2). prev = the shape's previous point (perpendicular);
+   *  exclude = annotation ids not to snap to (the one being edited). kind null = nothing
+   *  snapped — lines then angle-lock to 15°. */
+  snap:            (p: Pt, prev: Pt | null, exclude: ReadonlySet<string>) => { pt: Pt; kind: string | null }
   enterCad:        () => void
   exitCad:         () => void
 }) {
@@ -112,13 +115,18 @@ export function useAnnotationTool({
 
   // frame mm per paper mm
   const k = paper / frame.s
-  /** Pointer → frame mm. snapIt: canvas snaps; prev: lock to 15° from it when nothing snapped. */
-  const toFrame = useCallback((e: { clientX: number; clientY: number }, snapIt: boolean, prev?: Pt | null) => {
-    const wp = toWorld(e)
-    if (!snapIt) return unmapPt(frame, wp)
-    const r = snap(wp)
-    const p = unmapPt(frame, r.pt)
-    return prev && !r.kind ? angleSnap(prev, p) : p
+  // What the cursor last snapped to — the canvas draws a marker there.
+  const [snapHit, setSnapHit] = useState<{ pt: Pt; kind: string } | null>(null)
+
+  /** Pointer → frame mm. snapIt: object snaps; prev: perpendicular from it, or a 15° lock
+   *  when nothing snapped; exclude: annotation ids to ignore. */
+  const toFrame = useCallback((e: { clientX: number; clientY: number }, snapIt: boolean, prev?: Pt | null, exclude?: ReadonlySet<string>) => {
+    const p = unmapPt(frame, toWorld(e))
+    if (!snapIt) { setSnapHit(null); return p }
+    const r = snap(p, prev ?? null, exclude ?? NO_IDS)
+    if (r.kind) { setSnapHit({ pt: r.pt, kind: r.kind }); return r.pt }
+    setSnapHit(null)
+    return prev ? angleSnap(prev, p) : p
   }, [toWorld, snap, frame])
 
   // Drop ids that vanished (undo, delete elsewhere).
@@ -472,7 +480,7 @@ export function useAnnotationTool({
       if (cur.kind === 'move') {
         if (!cur.moved && !far) return
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
-        const p = toFrame(ev, !ev.shiftKey)
+        const p = toFrame(ev, !ev.shiftKey, null, new Set(cur.orig.keys()))
         const dx = p.x - cur.start.x, dy = p.y - cur.start.y
         setAnnotations(xs => xs.map(a => cur.orig.has(a.id) ? { ...a, geom: translateGeom(a.kind, cur.orig.get(a.id)!, dx, dy) } : a))
       } else if (cur.kind === 'rotate') {
@@ -499,22 +507,22 @@ export function useAnnotationTool({
         const a2 = annRef.current.find(x => x.id === cur.id)!
         const pts = [...vertsOf(a2)]
         const prev = pts[cur.i - 1] ?? pts[cur.i + 1] ?? null
-        pts[cur.i] = toFrame(ev, !ev.shiftKey, prev)
+        pts[cur.i] = toFrame(ev, !ev.shiftKey, prev, new Set([cur.id]))
         setAnnotations(xs => xs.map(x => x.id === cur.id ? withVerts(x, pts) : x))
       } else if (cur.kind === 'offset') {
         if (!cur.moved && !far) return
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
-        const p = toFrame(ev, !ev.shiftKey)
+        const p = toFrame(ev, !ev.shiftKey, null, new Set([cur.id]))
         setAnnotations(xs => xs.map(x => x.id === cur.id ? { ...x, geom: { ...(x.geom as DimGeom), offset: dimOffsetFor(x.geom as DimGeom, p) } } : x))
       } else if (cur.kind === 'corner') {
         if (!cur.moved && !far) return
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
-        const p = toFrame(ev, !ev.shiftKey)
+        const p = toFrame(ev, !ev.shiftKey, null, new Set([cur.id]))
         setAnnotations(xs => xs.map(x => x.id === cur.id ? { ...x, geom: setBoxCorner(x.geom as BoxGeom, cur.i, p) } : x))
       } else if (cur.kind === 'size') {
         const a = annRef.current.find(x => x.id === cur.id); if (!a) return
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
-        const g = a.geom as TextGeom, p = toFrame(ev, !ev.shiftKey)
+        const g = a.geom as TextGeom, p = toFrame(ev, !ev.shiftKey, null, new Set([cur.id]))
         const local = rotatePt({ x: p.x - g.at.x, y: p.y - g.at.y }, -(g.rot ?? 0))
         const width = Math.max(MIN_BOX_PAPER, Math.round(local.x / k * 2) / 2)
         const height = Math.max(3, Math.round(local.y / k * 2) / 2)
@@ -536,7 +544,7 @@ export function useAnnotationTool({
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       const cur = dragRef.current
-      dragRef.current = null; setDrag(null)
+      dragRef.current = null; setDrag(null); setSnapHit(null)
       if (!cur) return
       if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex' || cur.kind === 'corner' || cur.kind === 'offset' || cur.kind === 'size') && cur.moved) {
         const ids = cur.kind === 'move' ? [...cur.orig.keys()] : [cur.id]
@@ -609,14 +617,17 @@ export function useAnnotationTool({
       return
     }
     const d = drawingRef.current
-    if (!d) return
+    if (!d) {   // hovering with a drawing tool: show what the first click would snap to
+      if (tool !== 'select' && !editing) toFrame(e, !e.shiftKey)
+      return
+    }
     // A dim's third point only places the line: snap, but no 15° lock off the second point.
     const placing = d.tool === 'dim' && d.pts.length === 2
     const cur = toFrame(e, !e.shiftKey, placing ? null : d.pts[d.pts.length - 1])
     const axis = placing && dimMode === 'linear' ? dimAxisFor(d.pts[0], d.pts[1], cur, d.axis) : d.axis
     const nd = { ...d, cur, axis }
     drawingRef.current = nd; setDrawing(nd)
-  }, [toFrame, dimMode])
+  }, [toFrame, dimMode, tool, editing])
 
   const onCaptureDouble = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -632,7 +643,7 @@ export function useAnnotationTool({
 
   const editProps: AnnotationEditProps = {
     selectedIds: liveSelected,
-    hiddenId: editing && !editing.isNew ? editing.draft.id : null,
+    hiddenId: editing ? editing.draft.id : null,
     hitWidth: 10 / zoom,
     // In plain select mode a click on an annotation opens CAD mode on it (decision 9).
     hittable: !active || tool === 'select',
@@ -763,13 +774,23 @@ export function useAnnotationTool({
     return row('line', { pts }, style)
   }, [drag, pending, drawing, defaultsFor, room.id, dimGeomFor])
 
+  /** The list to draw: the note being typed swaps in live (new ones are added), so its
+   *  leader shows and follows the text width while you type. */
+  const withEditing = useCallback((list: RoomAnnotation[]): RoomAnnotation[] => {
+    if (!editing) return list
+    const live = { ...editing.draft, text: editing.text }
+    return editing.isNew ? [...list, live] : list.map(a => a.id === live.id ? live : a)
+  }, [editing])
+
   return {
-    tool, setTool, selected, selectedIds: liveSelected, setSelectedIds,
+    tool, setTool, selected, withEditing, selectedIds: liveSelected, setSelectedIds,
     editing, setEditText, commitEdit, cancelEdit,
     ribbonKind, ribbonStyle, ribbonRot, ribbonLeader, applyStyle, resetStyle, applyRotation,
     deleteSelected, reorder, onCaptureDown, onCaptureMove, onCaptureDouble, onCaptureMenu, editProps, ghost,
     drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
     dimMode, setDimMode, applyDimText, cloudMode, setCloudMode, pending,
+    /** Last object snap under the cursor (frame mm) — the canvas draws its marker. */
+    snapHit: active ? snapHit : null,
     /** Text block size helper for the editor overlay. */
     layoutFor: (a: RoomAnnotation, text: string) => {
       const s = resolveStyle(a.kind, a.style)

@@ -234,7 +234,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | A4 | **Box / ellipse / cloud** with fill (none / solid / tint) | [x] built 2026-10-18; in-app check pending |
 | A5 | **Manual dimension** (live value, text override, offset grip, arrowhead/tick ends) | [x] built 2026-10-19; in-app check pending |
 | B1 | **Feedback fixes:** leader typing bug; click-to-start / click-to-finish for box / ellipse / cloud / text box (drag still works); text box sized in width **and** height before typing (`geom.height`, corner grip); cloud rectangle / freehand ribbon option | [x] built 2026-10-19; in-app check pending |
-| B2 | **CAD snaps:** end / mid / centre / nearest-on-edge / intersection / perpendicular, on walls (faces + corners), cabinets (footprint + door / drawer front line), fixtures & appliances, benchtops and annotations; snap glyph; ribbon toggles | [ ] |
+| B2 | **CAD snaps:** end / mid / centre / nearest-on-edge / intersection / perpendicular, on walls (faces + corners), cabinets (footprint + door / drawer front line), fixtures & appliances, benchtops and annotations; snap glyph; ribbon toggles | [x] built 2026-10-19; in-app check pending |
 | B3 | **Arcs + circle:** kinds `arc` + `circle` (migration); arc by 3-point, centre-start-end, start-end-radius; circle by centre + radius; grips | [ ] |
 | B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [ ] |
 | B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [ ] |
@@ -391,5 +391,36 @@ A4 checked in-app by Mark 2026-10-19.
 - **Cloud:** ribbon "Cloud" option — Rectangle (two corners / drag) or Freehand
   (click the corners); hook `cloudMode`.
 
-Next: B2 (CAD snaps), then B3–B5, then A6 (elevations: wall-local frame, canvas +
+B1 checked in-app by Mark 2026-10-19, with one follow-up: the leader vanished while
+the note was typed. Fixed in B2: the note being typed is drawn live
+(`withEditing`). Its text block is hidden under the editor but the leader stays
+(`renderOne(…, textHidden)` / `TextNote leaderOnly`), and new notes are included.
+
+**B2 built 2026-10-19** (in-app check pending).
+- **Engine** `src/lib/annotations/cadSnap.ts` (pure, tested): kinds end / mid / centre /
+  intersection / perpendicular / nearest. Point snaps outrank perpendicular, which
+  outranks nearest. Intersections are between edges near the cursor; perpendicular
+  is from the shape's previous point. Every target is tagged with a source (walls /
+  cabinets / fronts / fixtures / benchtops / annotations) and an optional owner
+  annotation id, so an item never snaps to itself while edited.
+- **Plan targets** `planSnapGeometry.ts`:
+  - walls: mitred face outlines (islands: centreline);
+  - cabinets: footprint + centre;
+  - fronts: resolved `face_zones` rects through `cabinetToPlan` (turned AY zones
+    skipped);
+  - fixtures: footprint + centre;
+  - benchtops: polygon;
+  - notes: lines, cloud / box outlines + centres, ellipse ring + quadrants + centre,
+    dim line + its points, text block + leader.
+  CanvasClient caches room targets and note targets separately (drags rebuild only
+  the notes).
+- **Hook:** `snap(p, prev, exclude)` works in frame mm (ready for A6 frames). The
+  angle lock now only applies when nothing snapped. Drags exclude the item being
+  edited. `snapHit` drives `CadSnapMarker` (CAD glyphs, yellow); hovering a drawing
+  tool shows what the first click would hit.
+- **Ribbon:** a Snap toggle + ▾ menu of kinds and sources (`userPrefs.cadSnap`;
+  fixed-position popover so the ribbon scroll can't clip it). Shift = free, as
+  before. The canvas's own SnapToolbar settings no longer drive CAD.
+
+Next: B3 (arcs + circle), then B4–B5, then A6 (elevations: wall-local frame, canvas +
 Elevation Views report, wall-split remap).

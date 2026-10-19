@@ -6,7 +6,8 @@
 // Buttons keep focus where it was (mousedown preventDefault), so styling text while
 // typing doesn't close the inline editor.
 
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { CAD_SNAP_KINDS, CAD_SNAP_SOURCES, type CadSnapSettings } from '@/src/lib/annotations/cadSnap'
 import { ARROW_TYPES, TEXT_SIZES, type AnnotationStyle, type DashType } from '@/src/lib/annotations/style'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import type { AnnotationTool, CadTool } from './useAnnotationTool'
@@ -97,13 +98,52 @@ function Group({ label, children, tour }: { label: string; children: React.React
   )
 }
 
-export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose }: {
+/** Object snaps (B2): a toggle plus a menu of snap kinds and what to snap to. The menu
+ *  is position: fixed so the ribbon's horizontal scroll can't clip it. */
+function SnapMenu({ snap, onSnap }: { snap: CadSnapSettings; onSnap: (s: CadSnapSettings) => void }) {
+  const [open, setOpen] = useState<{ x: number; y: number } | null>(null)
+  const btn = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest?.('[data-snapmenu]')) setOpen(null) }
+    window.addEventListener('pointerdown', close)
+    return () => window.removeEventListener('pointerdown', close)
+  }, [open])
+  const box = (label: string, on: boolean, flip: () => void) => (
+    <label key={label} className="flex items-center gap-2 px-2 py-1 text-xs text-gray-200 hover:bg-gray-700 rounded cursor-pointer">
+      <input type="checkbox" checked={on} onChange={flip} className="accent-yellow-400" />{label}
+    </label>
+  )
+  return (
+    <div className="flex items-center shrink-0" data-snapmenu>
+      <button title="Object snaps on / off (hold Shift to place freely)" onMouseDown={keep}
+        onClick={() => onSnap({ ...snap, enabled: !snap.enabled })}
+        className={`h-7 px-2 rounded-l text-xs ${snap.enabled ? 'bg-yellow-500/90 text-gray-900' : 'text-gray-400 hover:bg-gray-700'}`}>Snap</button>
+      <button ref={btn} title="What to snap to" onMouseDown={keep}
+        onClick={() => { const r = btn.current!.getBoundingClientRect(); setOpen(o => o ? null : { x: r.right, y: r.bottom + 4 }) }}
+        className={`h-7 px-1 rounded-r text-xs border-l border-gray-700 ${snap.enabled ? 'bg-yellow-500/70 text-gray-900' : 'text-gray-400 hover:bg-gray-700'}`}>▾</button>
+      {open && (
+        <div data-snapmenu className="fixed z-50 w-56 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-1.5"
+          style={{ left: open.x - 224, top: open.y }}>
+          <div className="px-2 pt-0.5 pb-1 text-[10px] uppercase tracking-wide text-gray-500">Snap to</div>
+          {CAD_SNAP_KINDS.map(k => box(k.label, snap.kinds[k.id], () => onSnap({ ...snap, kinds: { ...snap.kinds, [k.id]: !snap.kinds[k.id] } })))}
+          <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-gray-500">On</div>
+          {CAD_SNAP_SOURCES.map(k => box(k.label, snap.sources[k.id], () => onSnap({ ...snap, sources: { ...snap.sources, [k.id]: !snap.sources[k.id] } })))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose, snap, onSnap }: {
   cad: AnnotationTool
   /** false on views annotations don't cover yet (elevation until A6). */
   viewSupported: boolean
   scale: number
   onScale: (n: number) => void
   onClose: () => void
+  snap: CadSnapSettings
+  onSnap: (s: CadSnapSettings) => void
 }) {
   const s = cad.ribbonStyle
   // The tutorial (z_tutorial) counts a ribbon style change as one event.
@@ -286,6 +326,7 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
       </>)}
 
       <div className="ml-auto flex items-center gap-1.5 shrink-0 pl-2">
+        {viewSupported && <SnapMenu snap={snap} onSnap={onSnap} />}
         <Group label="Scale">
           <span className="text-xs text-gray-400">1:</span>
           <Pick title="Annotation scale — the canvas shows paper sizes as they print at this scale"

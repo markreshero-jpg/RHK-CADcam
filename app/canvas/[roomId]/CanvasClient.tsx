@@ -46,6 +46,9 @@ import AnnotationLayer from './AnnotationLayer'
 import AnnotTextEditor from './AnnotTextEditor'
 import CadRibbon from './CadRibbon'
 import { useAnnotationTool } from './useAnnotationTool'
+import { cadSnap, EMPTY_SNAP_GEOMETRY, type CadSnapSettings } from '@/src/lib/annotations/cadSnap'
+import { planSnapGeometry } from '@/src/lib/annotations/planSnapGeometry'
+import CadSnapMarker from './CadSnapMarker'
 import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
 import TutorialHintsPlan from './TutorialHintsPlan'
 import { useTutorial } from '@/src/lib/tutorial/store'
@@ -598,11 +601,25 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setArmedDef(null); setArmedDraft(null); setDrawStart(null); setPlaceGhost(null)
     if (canvasView !== 'plan' && canvasView !== 'elevation') switchView('plan')
   }
+  // CAD object snaps (B2): targets rebuilt when the room changes; toggles are a user pref.
+  const [cadSnapSettings, setCadSnapSettingsState] = useState<CadSnapSettings>(() => getUserPrefs().cadSnap)
+  const setCadSnapSettings = (s: CadSnapSettings) => { setCadSnapSettingsState(s); setUserPrefs({ cadSnap: s }) }
+  // Room targets and note targets cached apart: dragging a note changes the notes every
+  // move, and shouldn't rebuild every wall and cabinet.
+  const cadSnapRoom = useMemo(() => mode !== 'cad' ? EMPTY_SNAP_GEOMETRY : planSnapGeometry({
+    walls, cabinets, resolved: planResolvedParts, fixtures, benchtops, annotations: [], paperToFrame: annotScale,
+  }), [mode, walls, cabinets, planResolvedParts, fixtures, benchtops, annotScale])
+  const cadSnapNotes = useMemo(() => mode !== 'cad' ? EMPTY_SNAP_GEOMETRY : planSnapGeometry({
+    walls: [], cabinets: [], fixtures: [], benchtops: [], annotations: planAnnotations, paperToFrame: annotScale,
+  }), [mode, planAnnotations, annotScale])
+  const cadSnapGeo = useMemo(() => ({
+    segs: [...cadSnapRoom.segs, ...cadSnapNotes.segs], points: [...cadSnapRoom.points, ...cadSnapNotes.points],
+  }), [cadSnapRoom, cadSnapNotes])
   const cad = useAnnotationTool({
     room, annotations, setAnnotations, captureSnapshot, frame: IDENTITY_FRAME, paper: annotScale, zoom: view.zoom,
     active: mode === 'cad' && canvasView === 'plan',
     toWorld: e => { const r = svgRef.current!.getBoundingClientRect(); return toWorld(e.clientX - r.left, e.clientY - r.top) },
-    snap: wp => computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom),
+    snap: (p, prev, exclude) => cadSnap(p, cadSnapGeo, cadSnapSettings, SNAP_PX / view.zoom, prev, exclude),
     enterCad, exitCad: () => setMode('select'),
   })
   function setAnnotScale(n: number) {
@@ -2571,6 +2588,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
       {mode === 'cad' && (canvasView === 'plan' || canvasView === 'elevation') && (
         <CadRibbon cad={cad} viewSupported={canvasView === 'plan'} scale={annotScale} onScale={setAnnotScale}
+          snap={cadSnapSettings} onSnap={setCadSnapSettings}
           onClose={() => setMode('select')} />
       )}
       {cad.editing && canvasView === 'plan' && (
@@ -2733,11 +2751,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                     onPointerDown={cad.onCaptureDown} onPointerMove={cad.onCaptureMove}
                     onDoubleClick={cad.onCaptureDouble} onContextMenu={cad.onCaptureMenu} />
                 )}
-                <AnnotationLayer annotations={planAnnotations} frame={IDENTITY_FRAME} paper={annotScale} layers={planLayers}
+                <AnnotationLayer annotations={cad.withEditing(planAnnotations)} frame={IDENTITY_FRAME} paper={annotScale} layers={planLayers}
                   edit={{ ...cad.editProps, hittable: cad.editProps.hittable && (mode === 'cad' || mode === 'select') }} />
                 {cad.drawPreview && (
                   <AnnotationLayer annotations={[cad.drawPreview]} frame={IDENTITY_FRAME} paper={annotScale} />
                 )}
+                {cad.snapHit && <CadSnapMarker pt={cad.snapHit.pt} kind={cad.snapHit.kind} size={9 / view.zoom} />}
                 {cad.ghost && (
                   <rect x={Math.min(cad.ghost.a.x, cad.ghost.b.x)} y={Math.min(cad.ghost.a.y, cad.ghost.b.y)}
                     width={Math.abs(cad.ghost.b.x - cad.ghost.a.x)} height={Math.abs(cad.ghost.b.y - cad.ghost.a.y)}

@@ -61,7 +61,8 @@ export default function AnnotationLayer({ annotations, frame, paper, layers, pri
         const hidden = edit?.hiddenId === a.id
         return (
           <g key={a.id}>
-            {!hidden && <g opacity={opacity < 1 ? opacity : undefined}>{renderOne(a, s, frame, paper)}</g>}
+            {/* Being typed: the editor shows the text, but a leader stays drawn (B2 fix). */}
+            <g opacity={opacity < 1 ? opacity : undefined}>{renderOne(a, s, frame, paper, hidden)}</g>
             {edit && !hidden && edit.hittable && (
               <g style={{ cursor: 'move' }}
                 onPointerDown={e => { if (e.button === 0) edit.onDown(e, a.id) }}
@@ -271,9 +272,10 @@ function Arrowed({ pts, s, k, start, end }: { pts: Pt[]; s: ResolvedStyle; k: nu
   )
 }
 
-function renderOne(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number): React.ReactNode {
+function renderOne(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number, textHidden = false): React.ReactNode {
+  if (textHidden && a.kind !== 'text') return null
   switch (a.kind) {
-    case 'text':    return <TextNote a={a} s={s} f={f} k={k} />
+    case 'text':    return <TextNote a={a} s={s} f={f} k={k} leaderOnly={textHidden} />
     case 'line': {
       const pts = ((a.geom as LineGeom).pts ?? []).map(p => mapPt(f, p))
       return <Arrowed pts={pts} s={s} k={k} start={s.arrowStart} end={s.arrowEnd} />
@@ -298,7 +300,7 @@ function renderOne(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
   }
 }
 
-function TextNote({ a, s, f, k }: { a: RoomAnnotation; s: ResolvedStyle; f: AnnotFrame; k: number }) {
+function TextNote({ a, s, f, k, leaderOnly }: { a: RoomAnnotation; s: ResolvedStyle; f: AnnotFrame; k: number; leaderOnly?: boolean }) {
   const g = a.geom as TextGeom
   if (!g?.at) return null
   // Layout in paper mm, then scale the whole block by k.
@@ -322,6 +324,7 @@ function TextNote({ a, s, f, k }: { a: RoomAnnotation; s: ResolvedStyle; f: Anno
 
   const bgFill = s.bg === 'mask' ? '#ffffff' : s.bg === 'solid' ? s.bgColor : null
   const boxW = block.w + 2 * pad, boxH = block.h + 2 * pad
+  if (leaderOnly) return leader
   return (
     <>
       {leader}
