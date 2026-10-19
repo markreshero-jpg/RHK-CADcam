@@ -1145,26 +1145,34 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const wd = wallDir(wall)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, created_at, updated_at, ...selfDraft } = draft
-    const { placed, errors } = await dbPlaceKit({
+    // Returns once the set is on the canvas (the placement ghost clears then);
+    // parts, drilling and resolves carry on in the background.
+    let shown!: () => void
+    const onCanvas = new Promise<void>(res => { shown = res })
+    const done = dbPlaceKit({
       kit, selfDef: def, selfDraft: { ...selfDraft, room_id: room.id, wall_id: wall.id },
       room, dims: { room, project, shop: shopDims }, wall, ref: centroid(walls),
       t0: (pos_x - wall.pos_x) * wd.x + (pos_y - wall.pos_y) * wd.y, back,
       nextLabel: (added, cls) => nextLabel([...cabinets, ...added], cls),
-    })
-    if (errors.length) setToast(`${def.name}: ${errors.join(' · ')}`)
-    if (!placed.length) return
-    setCabinets(cs => [...cs, ...placed.map(p => p.cabinet)])
-    setResolvedParts(m => {
-      const n = new Map(m)
-      for (const p of placed) if (p.resolved) n.set(p.cabinet.id, p.resolved)
-      return n
-    })
-    const self = placed.find(p => p.cabinet.cabinet_definition_id === def.id) ?? placed[0]
-    setSelected({ type: 'cabinet', id: self.cabinet.id })
-    for (const p of placed) {
-      applyInputColours(p.cabinet.id); applyInputEdgebands(p.cabinet.id)
-      if (p.resolved) await spawnContents(p.cabinet, p.resolved)
-    }
+      // Show the set as soon as it's inserted; each member fills in as it resolves.
+      onInserted: added => {
+        shown()
+        if (!added.length) return
+        setCabinets(cs => [...cs, ...added])
+        const self = added.find(c => c.cabinet_definition_id === def.id) ?? added[0]
+        setSelected({ type: 'cabinet', id: self.id })
+      },
+      onResolved: (cabinet, resolved) => {
+        if (!resolved) return
+        setResolvedParts(m => new Map(m).set(cabinet.id, resolved))
+        applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id)
+        void spawnContents(cabinet, resolved)
+      },
+    }).then(({ errors }) => {
+      if (errors.length) setToast(`${def.name}: ${errors.join(' · ')}`)
+    }).catch(e => { console.error('placeKit', e); setToast(`${def.name}: placement failed`) })
+      .finally(() => shown())
+    await Promise.race([onCanvas, done])
   }
 
   // Swap a linked fixture for another catalogue item (cabinet edit modal, z_ubo

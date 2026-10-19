@@ -528,13 +528,10 @@ export async function dbInsertCustomPartsSnapshot(cabinetId: string, snapshot: R
     no_cnc: !!p.no_cnc,
     sort_order: (p.sort_order as number) ?? i,
   }))
-  // One row at a time so each id is known to belong to its snapshot index.
-  const ids: string[] = []
-  for (const row of rows) {
-    const { data, error } = await supabase.from('cabinet_custom_parts').insert(row).select('id').single()
-    if (error) console.error('dbInsertCustomPartsSnapshot', error)
-    ids.push((data?.id as string | undefined) ?? '')
-  }
+  // Ids made here so each is known to belong to its snapshot index — one insert.
+  const ids = rows.map(() => crypto.randomUUID())
+  const { error } = await supabase.from('cabinet_custom_parts').insert(rows.map((r, i) => ({ ...r, id: ids[i] })))
+  if (error) { console.error('dbInsertCustomPartsSnapshot', error); return [] }
   return ids
 }
 

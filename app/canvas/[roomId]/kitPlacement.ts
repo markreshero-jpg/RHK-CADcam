@@ -34,6 +34,10 @@ export interface KitPlaceArgs {
   back: boolean
   /** Next free label for a class, given the cabinets inserted so far. */
   nextLabel: (placed: CabinetInstance[], cls: string) => string
+  /** All members are in the DB — show them now, before parts / resolves. */
+  onInserted?: (cabinets: CabinetInstance[]) => void
+  /** One member resolved (its parts, drilling and comments are in). */
+  onResolved?: (cabinet: CabinetInstance, resolved: ResolvedCabinet | null) => void
 }
 
 export interface KitPlaced { cabinet: CabinetInstance; resolved: ResolvedCabinet | null }
@@ -79,7 +83,10 @@ export async function dbPlaceKit(a: KitPlaceArgs): Promise<{ placed: KitPlaced[]
   const perp = a.back ? { x: -inw.x, y: -inw.y } : inw
   const turned = d.x * perp.y - d.y * perp.x < 0
 
-  const placed: KitPlaced[] = []
+  // Build every row (labels need the earlier members), insert them together and
+  // hand them to the canvas straight away; parts + resolves then run in parallel.
+  const rows: { m: KitMember; def: CabinetDefinition; data: InstanceRow }[] = []
+  const labelled: CabinetInstance[] = []
   for (const p of layout.placed) {
     const m = members.find(x => x.key === p.key)!
     const { def, row } = built.get(m.key)!
@@ -89,7 +96,7 @@ export async function dbPlaceKit(a: KitPlaceArgs): Promise<{ placed: KitPlaced[]
     const data: InstanceRow = {
       ...row,
       room_id: a.room.id, wall_id: a.wall.id, rotation,
-      label: a.nextLabel(placed.map(x => x.cabinet), row.assembly_class),
+      label: a.nextLabel(labelled, row.assembly_class),
       pos_x: pos.x, pos_y: pos.y,
       // Wall units hang from the wall-cabinet top (pos_z is only a cache there).
       pos_z: isWall ? wallCabTop(a.wall, a.room) - p.dy : p.y,
@@ -98,16 +105,26 @@ export async function dbPlaceKit(a: KitPlaceArgs): Promise<{ placed: KitPlaced[]
       ...(m.neighbours ? { left_neighbour_type: m.neighbours[0], right_neighbour_type: m.neighbours[1] } : {}),
       rule_overrides: { ...(row.rule_overrides ?? {}), ...p.rules },
     }
-    const cabinet = await dbInsertCabinet(data)
-    if (!cabinet) { errors.push(`${m.key}: insert failed`); continue }
+    labelled.push(data as CabinetInstance)
+    rows.push({ m, def, data })
+  }
+  const inserted = await Promise.all(rows.map(r => dbInsertCabinet(r.data)))
+  rows.forEach((r, i) => { if (!inserted[i]) errors.push(`${r.m.key}: insert failed`) })
+  const cabinets = inserted.filter((c): c is CabinetInstance => !!c)
+  a.onInserted?.(cabinets)
+
+  const placed = await Promise.all(rows.map(async ({ m, def }, i): Promise<KitPlaced | null> => {
+    const cabinet = inserted[i]
+    if (!cabinet) return null
     // Definition parts first (its drilling / comments point at them by index), then the kit's extras.
     const ids = await dbInsertCustomPartsSnapshot(cabinet.id, [
       ...((def.custom_parts ?? []) as Record<string, unknown>[]),
-      ...(m.parts ?? []).map((cp, i) => ({ ...cp, sort_order: (def.custom_parts?.length ?? 0) + i })),
+      ...(m.parts ?? []).map((cp, j) => ({ ...cp, sort_order: (def.custom_parts?.length ?? 0) + j })),
     ])
     await dbApplyDefinitionPartData(def, cabinet.id, ids)
     const resolved = await dbResolveAndPersistCabinet(cabinet.id)
-    placed.push({ cabinet, resolved })
-  }
-  return { placed, errors }
+    a.onResolved?.(cabinet, resolved)
+    return { cabinet, resolved }
+  }))
+  return { placed: placed.filter((p): p is KitPlaced => !!p), errors }
 }
