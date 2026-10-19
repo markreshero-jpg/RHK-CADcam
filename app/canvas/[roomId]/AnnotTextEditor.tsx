@@ -23,9 +23,14 @@ export default function AnnotTextEditor({ editing, frame, paper, zoom, toClient,
   onCancel: () => void
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
+  const openedAt = useRef(0)
+  // Focus on the next frame too, in case the click that opened us is still settling.
   useEffect(() => {
-    const t = ref.current; if (!t) return
-    t.focus(); t.setSelectionRange(t.value.length, t.value.length)
+    const go = () => { const t = ref.current; if (!t || document.activeElement === t) return; t.focus(); t.setSelectionRange(t.value.length, t.value.length) }
+    openedAt.current = performance.now()
+    go()
+    const id = requestAnimationFrame(go)
+    return () => cancelAnimationFrame(id)
   }, [])
 
   const { draft, text } = editing
@@ -38,14 +43,15 @@ export default function AnnotTextEditor({ editing, frame, paper, zoom, toClient,
   const longest = Math.max(...lines.map(l => textWidth(l || ' ', s.size, s.bold)))
   const w = (g.width ?? Math.max(longest + s.size, s.size * 6)) * px
   const lh = s.size * s.lineSpacing
-  const h = (s.size * 1.15 + (lines.length - 1) * lh) * px
+  const h = Math.max(s.size * 1.15 + (lines.length - 1) * lh, g.height ?? 0) * px
 
   return (
     <textarea
       ref={ref}
       value={text}
       onChange={e => onChange(e.target.value)}
-      onBlur={onCommit}
+      // A blur in the first moments is the opening click settling, not the user leaving.
+      onBlur={() => { if (performance.now() - openedAt.current < 250) requestAnimationFrame(() => ref.current?.focus()); else onCommit() }}
       onPointerDown={e => e.stopPropagation()}
       onKeyDown={e => {
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onCancel() }

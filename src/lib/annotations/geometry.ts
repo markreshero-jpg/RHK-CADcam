@@ -13,8 +13,9 @@ import type { ArrowType } from './style'
 export interface Pt { x: number; y: number }
 
 /** text: `at` = top-left of the text block (svg orientation), rot in degrees.
- *  width (paper mm) makes it a TEXT BOX — lines wrap to it; absent = point text. */
-export interface TextGeom  { at: Pt; rot?: number; width?: number; leader?: Pt[] }
+ *  width (paper mm) makes it a TEXT BOX — lines wrap to it; absent = point text.
+ *  height (paper mm, B1): the box's drawn height — it still grows to fit the text. */
+export interface TextGeom  { at: Pt; rot?: number; width?: number; height?: number; leader?: Pt[] }
 export interface LineGeom  { pts: Pt[] }
 export interface BoxGeom   { a: Pt; b: Pt; rot?: number }
 export interface CloudGeom { pts: Pt[] }
@@ -167,12 +168,12 @@ export interface TextBlock {
 }
 
 /** Layout in "size" units (paper mm × whatever the caller scales by). */
-export function layoutText(text: string, size: number, opts: { bold?: boolean; lineSpacing?: number; width?: number } = {}): TextBlock {
+export function layoutText(text: string, size: number, opts: { bold?: boolean; lineSpacing?: number; width?: number; height?: number } = {}): TextBlock {
   const lines = wrapText(text, size, !!opts.bold, opts.width)
   const lh = size * (opts.lineSpacing ?? 1.3)
   const baselines = lines.map((_, i) => size * 0.9 + i * lh)
   const w = opts.width ?? Math.max(0, ...lines.map(l => textWidth(l, size, !!opts.bold)))
-  const h = size * 1.15 + (lines.length - 1) * lh
+  const h = Math.max(size * 1.15 + (lines.length - 1) * lh, opts.height ?? 0)
   return { lines, baselines, w, h, midFirst: size * 0.55 }
 }
 
@@ -287,7 +288,7 @@ export function annotationFramePoints(kind: AnnotationKind, geom: AnnotationGeom
   switch (kind) {
     case 'text': {
       const g = geom as TextGeom
-      const b = layoutText(text ?? '', size, { width: g.width })
+      const b = layoutText(text ?? '', size, { width: g.width, height: g.height })
       const w = b.w * paperToFrame, h = b.h * paperToFrame
       const corners = [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }]
         .map(c => add(g.at, rotatePt(c, g.rot ?? 0)))

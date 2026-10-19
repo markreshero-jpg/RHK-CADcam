@@ -55,6 +55,8 @@ type Drag =
   | { kind: 'move'; start: Pt; orig: Map<string, RoomAnnotation['geom']>; moved: boolean }
   | { kind: 'rotate'; id: string; origRot: number; startAng: number; moved: boolean }
   | { kind: 'width'; id: string; moved: boolean }
+  // Text box bottom-right corner: width + height together (B1).
+  | { kind: 'size'; id: string; moved: boolean }
   // Vertex of a line (pts) or a text's leader. insertAfter: a midpoint grip — the new
   // point is only added once the pointer actually moves.
   | { kind: 'vertex'; id: string; i: number; insertAfter?: number; moved: boolean }
@@ -96,6 +98,12 @@ export function useAnnotationTool({
   const [drag, setDrag] = useState<Drag | null>(null)
   const [drawing, setDrawing] = useState<AnnotDrawing | null>(null)
   const [dimMode, setDimMode] = useState<DimMode>('linear')
+  // Cloud tool: drag / click-click a rectangle, or click the corners of a freehand one.
+  const [cloudMode, setCloudMode] = useState<'rect' | 'free'>('rect')
+  // Click-click placement (B1): first click armed the shape, the next click finishes it.
+  const [pending, setPending] = useState<{ tool: PlaceTool; start: Pt; cur: Pt } | null>(null)
+  const pendingRef = useRef(pending)
+  useEffect(() => { pendingRef.current = pending }, [pending])
   const drawingRef = useRef<AnnotDrawing | null>(null)
   useEffect(() => { drawingRef.current = drawing }, [drawing])
   const dragRef = useRef<Drag | null>(null)
@@ -129,7 +137,7 @@ export function useAnnotationTool({
   }
   // A new tool abandons a half-drawn line.
   const [drawTool, setDrawTool] = useState(tool)
-  if (drawTool !== tool) { setDrawTool(tool); setDrawing(null) }
+  if (drawTool !== tool) { setDrawTool(tool); setDrawing(null); setPending(null) }
 
   // ── Styles ────────────────────────────────────────────────────────────────
 
@@ -432,6 +440,27 @@ export function useAnnotationTool({
     drawingRef.current = nd; setDrawing(nd)
   }, [tool, zoom, frame.s, k, defaultsFor, newRow, captureSnapshot, setAnnotations, dimRow, insertRows])
 
+  /** Finish a dragged / click-click shape from corner a to corner b. Text: a = the click. */
+  const finishPlace = useCallback((t: PlaceTool, a: Pt, b: Pt) => {
+    if (t === 'rect' || t === 'ellipse' || t === 'cloud') {
+      const eps = 1 / zoom / frame.s
+      if (Math.abs(b.x - a.x) < eps || Math.abs(b.y - a.y) < eps) return
+      const geom = t === 'cloud' ? { pts: rectPts(a, b) } : { a, b }
+      const row = newRow(t, geom, null, defaultsFor(t))
+      captureSnapshot()
+      setAnnotations(xs => [...xs, row])
+      void insertRows([row])
+      return
+    }
+    const wPaper = Math.abs(b.x - a.x) / k, hPaper = Math.abs(b.y - a.y) / k
+    const box = t === 'textbox' && wPaper >= MIN_BOX_PAPER
+    const at = box ? { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y) } : a
+    const half = (n: number) => Math.round(n * 2) / 2
+    const geom: TextGeom = box ? { at, width: half(wPaper), ...(hPaper >= 3 ? { height: half(hPaper) } : {}) } : { at }
+    setSelectedIds(new Set())
+    setEditing({ draft: newRow('text', geom, '', defaultsFor('text')), text: '', isNew: true })
+  }, [zoom, frame.s, k, newRow, defaultsFor, captureSnapshot, setAnnotations, insertRows])
+
   // ── Pointer: drags via window listeners ───────────────────────────────────
 
   const beginDrag = useCallback((d: Drag, startClient: { x: number; y: number }) => {
@@ -482,6 +511,14 @@ export function useAnnotationTool({
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
         const p = toFrame(ev, !ev.shiftKey)
         setAnnotations(xs => xs.map(x => x.id === cur.id ? { ...x, geom: setBoxCorner(x.geom as BoxGeom, cur.i, p) } : x))
+      } else if (cur.kind === 'size') {
+        const a = annRef.current.find(x => x.id === cur.id); if (!a) return
+        if (!cur.moved) { captureSnapshot(); cur.moved = true }
+        const g = a.geom as TextGeom, p = toFrame(ev, !ev.shiftKey)
+        const local = rotatePt({ x: p.x - g.at.x, y: p.y - g.at.y }, -(g.rot ?? 0))
+        const width = Math.max(MIN_BOX_PAPER, Math.round(local.x / k * 2) / 2)
+        const height = Math.max(3, Math.round(local.y / k * 2) / 2)
+        setAnnotations(xs => xs.map(x => x.id === cur.id ? { ...x, geom: { ...(x.geom as TextGeom), width, height } } : x))
       } else if (cur.kind === 'width') {
         const a = annRef.current.find(x => x.id === cur.id); if (!a) return
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
@@ -501,7 +538,7 @@ export function useAnnotationTool({
       const cur = dragRef.current
       dragRef.current = null; setDrag(null)
       if (!cur) return
-      if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex' || cur.kind === 'corner' || cur.kind === 'offset') && cur.moved) {
+      if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex' || cur.kind === 'corner' || cur.kind === 'offset' || cur.kind === 'size') && cur.moved) {
         const ids = cur.kind === 'move' ? [...cur.orig.keys()] : [cur.id]
         for (const id of ids) {
           const a = annRef.current.find(x => x.id === id)
@@ -520,39 +557,39 @@ export function useAnnotationTool({
           return b && boxesOverlap(b, box)
         }).map(a => a.id)
         setSelectedIds(prev => new Set(cur.additive ? [...prev, ...hit] : hit))
-      } else if (cur.kind === 'place' && (cur.tool === 'rect' || cur.tool === 'ellipse' || cur.tool === 'cloud')) {
+      } else if (cur.kind === 'place') {
+        // A drag finishes the shape now; a plain click arms it and the next click finishes
+        // it (B1). Point text opens its editor on the click; a freehand cloud starts here.
         const far = Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y) >= DRAG_PX
-        if (!far) {
-          // A click (no drag) with the cloud tool starts a freehand cloud: click the corners.
-          if (cur.tool === 'cloud') {
-            const nd: AnnotDrawing = { tool: 'cloud', pts: [cur.start], cur: cur.start }
-            drawingRef.current = nd; setDrawing(nd)
-          }
+        if (far) { finishPlace(cur.tool, cur.start, cur.cur); return }
+        if (cur.tool === 'text') { finishPlace('text', cur.start, cur.start); return }
+        if (cur.tool === 'cloud' && cloudMode === 'free') {
+          const nd: AnnotDrawing = { tool: 'cloud', pts: [cur.start], cur: cur.start }
+          drawingRef.current = nd; setDrawing(nd)
           return
         }
-        const geom = cur.tool === 'cloud' ? { pts: rectPts(cur.start, cur.cur) } : { a: cur.start, b: cur.cur }
-        const row = newRow(cur.tool, geom, null, defaultsFor(cur.tool))
-        captureSnapshot()
-        setAnnotations(xs => [...xs, row])
-        void insertRows([row])
-      } else if (cur.kind === 'place') {
-        const wPaper = Math.abs(cur.cur.x - cur.start.x) / k
-        const box = cur.tool === 'textbox' && wPaper >= MIN_BOX_PAPER
-        const at = box ? { x: Math.min(cur.start.x, cur.cur.x), y: Math.min(cur.start.y, cur.cur.y) } : cur.start
-        const geom: TextGeom = box ? { at, width: Math.round(wPaper * 2) / 2 } : { at }
-        setSelectedIds(new Set())
-        setEditing({ draft: newRow('text', geom, '', defaultsFor('text')), text: '', isNew: true })
+        const pd = { tool: cur.tool, start: cur.start, cur: cur.start }
+        pendingRef.current = pd; setPending(pd)
       }
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
-  }, [captureSnapshot, toFrame, setAnnotations, k, newRow, defaultsFor, insertRows])
+  }, [captureSnapshot, toFrame, setAnnotations, k, finishPlace, cloudMode])
 
   /** Empty canvas under CAD mode: place text / click out lines / start a marquee. */
   const onCaptureDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return
     e.stopPropagation()
+    // No default mousedown: its focus move would blur a text editor this click opens
+    // (the B1 leader bug — the note committed empty before you could type).
+    e.preventDefault()
     if (editing) { commitEdit(); return }   // first click outside the editor just finishes it
+    const pd = pendingRef.current
+    if (pd) {   // second click of a click-click shape
+      pendingRef.current = null; setPending(null)
+      finishPlace(pd.tool, pd.start, toFrame(e, !e.shiftKey))
+      return
+    }
     if (tool === 'line' || tool === 'arrow' || tool === 'leader' || tool === 'dim' || (tool === 'cloud' && drawingRef.current)) {
       const d = drawingRef.current
       drawClick(toFrame(e, !e.shiftKey, d?.pts[d.pts.length - 1]))
@@ -561,10 +598,16 @@ export function useAnnotationTool({
     const p = toFrame(e, tool !== 'select' && !e.shiftKey)
     if (tool === 'select') beginDrag({ kind: 'marquee', start: p, cur: p, additive: e.shiftKey }, { x: e.clientX, y: e.clientY })
     else beginDrag({ kind: 'place', start: p, cur: p, tool: tool as PlaceTool }, { x: e.clientX, y: e.clientY })
-  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick])
+  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace])
 
   /** Rubber band for the segment being drawn. */
   const onCaptureMove = useCallback((e: React.PointerEvent) => {
+    const pd = pendingRef.current
+    if (pd) {
+      const np = { ...pd, cur: toFrame(e, !e.shiftKey) }
+      pendingRef.current = np; setPending(np)
+      return
+    }
     const d = drawingRef.current
     if (!d) return
     // A dim's third point only places the line: snap, but no 15° lock off the second point.
@@ -636,7 +679,8 @@ export function useAnnotationTool({
         const at = (a.geom as TextGeom).at, p = toFrame(e, false)
         beginDrag({ kind: 'rotate', id, origRot: (a.geom as TextGeom).rot ?? 0,
           startAng: Math.atan2(p.y - at.y, p.x - at.x) * 180 / Math.PI, moved: false }, { x: e.clientX, y: e.clientY })
-      } else beginDrag({ kind: 'width', id, moved: false }, { x: e.clientX, y: e.clientY })
+      } else if (grip === 'size') beginDrag({ kind: 'size', id, moved: false }, { x: e.clientX, y: e.clientY })
+      else beginDrag({ kind: 'width', id, moved: false }, { x: e.clientX, y: e.clientY })
     },
   }
 
@@ -653,6 +697,7 @@ export function useAnnotationTool({
       if (e.key === 'Escape') {
         take()
         if (dragRef.current) return
+        if (pendingRef.current) { pendingRef.current = null; setPending(null); return }
         if (drawingRef.current) { drawingRef.current = null; setDrawing(null); return }
         if (liveSelected.size) setSelectedIds(new Set())
         else if (tool !== 'select') setTool('select')
@@ -683,8 +728,10 @@ export function useAnnotationTool({
   }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing])
 
   // Ghosts for the canvas: marquee box / text box being dragged out (frame coords).
-  const ghost = drag && (drag.kind === 'marquee' || (drag.kind === 'place' && drag.tool === 'textbox'))
-    ? { kind: drag.kind, a: drag.start, b: drag.cur }
+  // A shape being placed: by drag, or armed by a first click (B1).
+  const placing = drag?.kind === 'place' ? { tool: drag.tool, start: drag.start, cur: drag.cur } : pending
+  const ghost = drag?.kind === 'marquee' ? { kind: 'marquee' as const, a: drag.start, b: drag.cur }
+    : placing?.tool === 'textbox' ? { kind: 'place' as const, a: placing.start, b: placing.cur }
     : null
 
   // The line / arrow / leader being drawn, as a row the layer can draw (frame coords).
@@ -694,11 +741,12 @@ export function useAnnotationTool({
       id: '__draw__', room_id: room.id, view: 'plan', wall_id: null, cabinet_id: null, sheet_view: null,
       kind, geom, text: null, style, sort_order: 0, created_at: '', updated_at: '',
     })
-    if (drag?.kind === 'place' && (drag.tool === 'rect' || drag.tool === 'ellipse' || drag.tool === 'cloud')) {
-      if (drag.start.x === drag.cur.x && drag.start.y === drag.cur.y) return null
-      return drag.tool === 'cloud'
-        ? row('cloud', { pts: rectPts(drag.start, drag.cur) }, defaultsFor('cloud'))
-        : row(drag.tool, { a: drag.start, b: drag.cur }, defaultsFor(drag.tool))
+    const pl = drag?.kind === 'place' ? drag : pending
+    if (pl && (pl.tool === 'rect' || pl.tool === 'ellipse' || pl.tool === 'cloud')) {
+      if (pl.start.x === pl.cur.x && pl.start.y === pl.cur.y) return null
+      return pl.tool === 'cloud'
+        ? row('cloud', { pts: rectPts(pl.start, pl.cur) }, defaultsFor('cloud'))
+        : row(pl.tool, { a: pl.start, b: pl.cur }, defaultsFor(pl.tool))
     }
     if (!drawing || !drawing.pts.length) return null
     if (drawing.tool === 'dim') {
@@ -713,7 +761,7 @@ export function useAnnotationTool({
       ? { ...defaultsFor('text'), arrowEnd: 'none' as const }
       : defaultsFor(drawing.tool === 'arrow' ? 'arrow' : 'line')
     return row('line', { pts }, style)
-  }, [drag, drawing, defaultsFor, room.id, dimGeomFor])
+  }, [drag, pending, drawing, defaultsFor, room.id, dimGeomFor])
 
   return {
     tool, setTool, selected, selectedIds: liveSelected, setSelectedIds,
@@ -721,11 +769,11 @@ export function useAnnotationTool({
     ribbonKind, ribbonStyle, ribbonRot, ribbonLeader, applyStyle, resetStyle, applyRotation,
     deleteSelected, reorder, onCaptureDown, onCaptureMove, onCaptureDouble, onCaptureMenu, editProps, ghost,
     drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
-    dimMode, setDimMode, applyDimText,
+    dimMode, setDimMode, applyDimText, cloudMode, setCloudMode, pending,
     /** Text block size helper for the editor overlay. */
     layoutFor: (a: RoomAnnotation, text: string) => {
       const s = resolveStyle(a.kind, a.style)
-      return layoutText(text, s.size, { bold: s.bold, lineSpacing: s.lineSpacing, width: (a.geom as TextGeom).width })
+      return layoutText(text, s.size, { bold: s.bold, lineSpacing: s.lineSpacing, width: (a.geom as TextGeom).width, height: (a.geom as TextGeom).height })
     },
   }
 }

@@ -21,13 +21,13 @@ const SCALES = [5, 10, 20, 25, 50, 100]
 const TOOLS: { id: CadTool; label: string; key: string; icon: React.ReactNode }[] = [
   { id: 'select',  label: 'Select',   key: 'S', icon: <path d="M4 2l9 6-4 1 2 5-2 1-2-5-3 3z" fill="currentColor" /> },
   { id: 'text',    label: 'Text',     key: 'T', icon: <path d="M3 3h10M8 3v10M6 13h4" /> },
-  { id: 'textbox', label: 'Text box', key: 'B', icon: <><rect x="2" y="2.5" width="12" height="11" rx="1" /><path d="M5 6h6M5 8.5h6M5 11h4" /></> },
+  { id: 'textbox', label: 'Text box — click a corner, click the opposite corner (or drag), then type', key: 'B', icon: <><rect x="2" y="2.5" width="12" height="11" rx="1" /><path d="M5 6h6M5 8.5h6M5 11h4" /></> },
   { id: 'leader',  label: 'Leader note — click the tip, click where the text goes', key: 'Q', icon: <><path d="M3 13l6-6h5" /><path d="M3 13l1-3 2 2z" fill="currentColor" /></> },
   { id: 'line',    label: 'Line — click points; double-click, Enter or right-click to finish', key: 'L', icon: <path d="M3 13L13 3" /> },
   { id: 'arrow',   label: 'Arrow — click points; double-click, Enter or right-click to finish', key: 'A', icon: <><path d="M3 13L12 4" /><path d="M13 3l-1 4-3-3z" fill="currentColor" /></> },
-  { id: 'rect',    label: 'Box — drag corner to corner', key: 'R', icon: <rect x="3" y="4" width="10" height="8" /> },
-  { id: 'ellipse', label: 'Ellipse — drag out its frame', key: 'E', icon: <ellipse cx="8" cy="8" rx="5.5" ry="4" /> },
-  { id: 'cloud',   label: 'Revision cloud — drag a rectangle, or click the corners of a freehand one (double-click / Enter to close)', key: 'C', icon: <path d="M4 11a2 2 0 010-4 2.5 2.5 0 014-2 2.5 2.5 0 014 1.5 2 2 0 010 4.5z" /> },
+  { id: 'rect',    label: 'Box — click a corner, click the opposite corner (or drag)', key: 'R', icon: <rect x="3" y="4" width="10" height="8" /> },
+  { id: 'ellipse', label: 'Ellipse — click one corner of its frame, then the opposite one (or drag)', key: 'E', icon: <ellipse cx="8" cy="8" rx="5.5" ry="4" /> },
+  { id: 'cloud',   label: 'Revision cloud — Rectangle: click two corners (or drag). Freehand: click the corners, double-click / Enter to close', key: 'C', icon: <path d="M4 11a2 2 0 010-4 2.5 2.5 0 014-2 2.5 2.5 0 014 1.5 2 2 0 010 4.5z" /> },
   { id: 'dim',     label: 'Dimension — click two points, then click where the dimension line sits', key: 'D', icon: <><path d="M2 8h12M2 5v6M14 5v6" /></> },
 ]
 
@@ -120,7 +120,8 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
     : nSel > 1 ? `${nSel} selected` : nSel === 1 ? `Selected ${kind === 'text' && (cad.selected[0].geom as { width?: number }).width != null ? 'text box' : kind}`
     : `Next ${NEXT[cad.tool]}`
   const oneText = nSel === 1 && kind === 'text' && !cad.editing
-  const drawHint = !cad.drawing ? null
+  const drawHint = cad.pending ? (cad.pending.tool === 'textbox' ? 'Click the opposite corner of the text box · Esc cancels' : 'Click the opposite corner · Esc cancels')
+    : !cad.drawing ? null
     : cad.drawing.attachId ? 'Click where the leader points · Esc cancels'
     : cad.drawing.tool === 'leader' ? 'Click where the text goes · Esc cancels'
     : cad.drawing.tool === 'dim' ? (cad.drawing.pts.length < 2 ? 'Click the second point · Esc cancels'
@@ -256,7 +257,10 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose 
             </Group>
           </>)}
           {kind === 'cloud' && (
-            <Group label="Arcs">
+            <Group label="Cloud">
+              <Pick title="How the Cloud tool draws: a rectangle (two corners) or freehand (click each corner)"
+                value={cad.cloudMode} onChange={v => cad.setCloudMode(v)}
+                options={[{ id: 'rect', label: 'Rectangle' }, { id: 'free', label: 'Freehand' }]} />
               <Num title="Cloud arc length (paper mm)" value={s.cloudBump} step={1} min={2} max={30} w="w-11" suffix="mm"
                 onChange={n => set({ cloudBump: Math.max(2, Math.min(30, n)) })} />
             </Group>

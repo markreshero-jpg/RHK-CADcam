@@ -31,7 +31,7 @@ export interface AnnotationLayerProps {
 
 /** rotate / width: text grips. vN: drag vertex N of a line, cloud or leader. mN: drag
  *  the midpoint of segment N→N+1 to insert a vertex there. cN: box / ellipse corner N. */
-export type AnnotGrip = 'rotate' | 'width' | 'offset' | `v${number}` | `m${number}` | `c${number}`
+export type AnnotGrip = 'rotate' | 'width' | 'size' | 'offset' | `v${number}` | `m${number}` | `c${number}`
 
 export interface AnnotationEditProps {
   selectedIds: ReadonlySet<string>
@@ -80,7 +80,7 @@ export default function AnnotationLayer({ annotations, frame, paper, layers, pri
 /** Text block outline in svg (4 corners), padding included. */
 function textOutline(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number): Pt[] {
   const g = a.geom as TextGeom
-  const block = layoutText(a.text ?? '', s.size, { bold: s.bold, lineSpacing: s.lineSpacing, width: g.width })
+  const block = layoutText(a.text ?? '', s.size, { bold: s.bold, lineSpacing: s.lineSpacing, width: g.width, height: g.height })
   const pad = s.bg !== 'none' || s.border !== 'none' ? s.bgPad : 0
   const at = mapPt(f, g.at), rot = mapRot(f, g.rot)
   return [{ x: -pad, y: -pad }, { x: block.w + pad, y: -pad }, { x: block.w + pad, y: block.h + pad }, { x: -pad, y: block.h + pad }]
@@ -165,7 +165,7 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
     const rotG = { x: top.x + ux / ul * hw * 2.5, y: top.y + uy / ul * hw * 2.5 }
     const right = { x: (c[1].x + c[2].x) / 2, y: (c[1].y + c[2].y) / 2 }
     const grip = (p: Pt, kind: AnnotGrip, round: boolean) => (
-      <g style={{ pointerEvents: 'all', cursor: kind === 'rotate' ? 'grab' : 'ew-resize' }}
+      <g style={{ pointerEvents: 'all', cursor: kind === 'rotate' ? 'grab' : kind === 'size' ? 'nwse-resize' : 'ew-resize' }}
         onPointerDown={e => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, a.id, kind) } }}>
         {round
           ? <circle cx={p.x} cy={p.y} r={hw * 0.45} fill="#0f172a" stroke={SEL} strokeWidth={hw / 6} />
@@ -177,6 +177,7 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
       <line x1={top.x} y1={top.y} x2={rotG.x} y2={rotG.y} stroke={SEL} strokeWidth={hw / 6} />
       {grip(rotG, 'rotate', true)}
       {g.width != null && grip(right, 'width', false)}
+      {g.width != null && grip(c[2], 'size', false)}
       {single && g.leader?.length ? vertexGrips(a.id, g.leader.map(p => mapPt(f, p)), edit) : null}
     </>
   }
@@ -301,7 +302,7 @@ function TextNote({ a, s, f, k }: { a: RoomAnnotation; s: ResolvedStyle; f: Anno
   const g = a.geom as TextGeom
   if (!g?.at) return null
   // Layout in paper mm, then scale the whole block by k.
-  const block = layoutText(a.text ?? '', s.size, { bold: s.bold, lineSpacing: s.lineSpacing, width: g.width })
+  const block = layoutText(a.text ?? '', s.size, { bold: s.bold, lineSpacing: s.lineSpacing, width: g.width, height: g.height })
   const at = mapPt(f, g.at)
   const rot = mapRot(f, g.rot)
   const pad = s.bg !== 'none' || s.border !== 'none' ? s.bgPad : 0

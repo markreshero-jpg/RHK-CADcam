@@ -213,3 +213,10 @@ describe('A5 manual dims', () => {
     expect(dimText(600, 'approx <> (<>)')).toBe('approx 600 (600)')
   })
 })
+
+describe('B1 text box height', () => {
+  it('a set height is the minimum; text still grows past it', () => {
+    expect(layoutText('a', 3.5, { width: 40, height: 30 }).h).toBe(30)
+    expect(layoutText('a\nb\nc\nd\ne\nf\ng', 3.5, { width: 40, height: 5 }).h).toBeGreaterThan(5)
+  })
+})

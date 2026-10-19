@@ -102,6 +102,25 @@ paper information only.
 11. **Undo.** Plan and elevation annotations join `useCanvasHistory` snapshots (as an
     optional list, like fixtures). The sheet preview gets its own small undo stack.
 
+### Feedback round (Mark, 2026-10-19, after using A1–A5) → phases B1–B5, before A6
+
+12. **Everything now, before elevations.** A6 reuses the same hook, ribbon and
+    renderer, so behaviour changes go in on the plan first and elevations inherit them.
+13. **Snapping:** all CAD tools snap to cabinets, walls, door fronts, appliances,
+    benchtops and the annotations themselves (CAD-style object snaps). Snapping
+    never attaches a note to an object; decision 4 still holds.
+14. **Click, click.** Box / ellipse / cloud / text box start on one click and finish
+    on the next (a drag still works too). Text boxes take their width **and**
+    height from that frame before typing.
+15. **Leader note bug:** after placing a leader the text couldn't be typed. Cause:
+    the editor opened on pointerdown, then the browser's default mousedown focus
+    move blurred it, so it committed empty and was discarded.
+16. **Arcs:** 3-point, centre-start-end and start-end-radius, plus a **circle** tool.
+17. **Offset tool** (new parallel copies of lines, boxes, etc.), and **dragging a side**
+    of a line / box / cloud parallel, with the sides next to it stretching.
+18. **Dimensions:** linear + aligned (have), plus **angular, radius / diameter, arc
+    length, continue and baseline**.
+
 ## Frames (where coordinates live)
 
 | View | Owner | Frame |
@@ -214,6 +233,11 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | A3 | **Arrow / line + text leaders** (full arrowhead set per end, dash types, weight, vertex grips) | [x] built 2026-10-18 (1865f72); in-app check pending |
 | A4 | **Box / ellipse / cloud** with fill (none / solid / tint) | [x] built 2026-10-18; in-app check pending |
 | A5 | **Manual dimension** (live value, text override, offset grip, arrowhead/tick ends) | [x] built 2026-10-19; in-app check pending |
+| B1 | **Feedback fixes:** leader typing bug; click-to-start / click-to-finish for box / ellipse / cloud / text box (drag still works); text box sized in width **and** height before typing (`geom.height`, corner grip); cloud rectangle / freehand ribbon option | [x] built 2026-10-19; in-app check pending |
+| B2 | **CAD snaps:** end / mid / centre / nearest-on-edge / intersection / perpendicular, on walls (faces + corners), cabinets (footprint + door / drawer front line), fixtures & appliances, benchtops and annotations; snap glyph; ribbon toggles | [ ] |
+| B3 | **Arcs + circle:** kinds `arc` + `circle` (migration); arc by 3-point, centre-start-end, start-end-radius; circle by centre + radius; grips | [ ] |
+| B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [ ] |
+| B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [ ] |
 | A6 | **Elevations:** wall-local frame, canvas + Elevation Views report, wall-split remap | [ ] |
 | A7 | **Cabinet sheets:** ribbon on the sheet preview (decision 10), cabinet-local frame, sheet toggle, own undo; **decide the cabinet-revision behaviour first** | [ ] |
 | A8 | Room copy remap, tutorial lesson, mobile view check | [ ] |
@@ -353,5 +377,19 @@ A4 checked in-app by Mark 2026-10-19.
 - Verified by a static render: linear horizontal + vertical with override, and
   aligned.
 
-Next: A6 (elevations: wall-local frame, canvas + Elevation Views report, wall-split
-remap).
+**B1 built 2026-10-19** (in-app check pending).
+- **Leader fix:** `onCaptureDown` now `preventDefault()`s, so the browser's mousedown
+  focus move can't blur an editor that click just opened. `AnnotTextEditor` also
+  re-focuses on the next frame and ignores a blur in its first 250 ms.
+- **Click-click:** a place-tool click with no drag arms a `pending` shape: it
+  previews to the cursor and the next click finishes it (`finishPlace`). Esc or a
+  tool change cancels; a drag still finishes straight away. Point text still opens
+  on its click.
+- **Text box height:** `TextGeom.height` (paper mm) comes from the frame's height
+  (when ≥ 3 mm). `layoutText` treats it as a minimum, so text grows past it. New
+  bottom-right `size` grip (width + height); the right-edge `width` grip stays.
+- **Cloud:** ribbon "Cloud" option — Rectangle (two corners / drag) or Freehand
+  (click the corners); hook `cloudMode`.
+
+Next: B2 (CAD snaps), then B3–B5, then A6 (elevations: wall-local frame, canvas +
+Elevation Views report, wall-split remap).
