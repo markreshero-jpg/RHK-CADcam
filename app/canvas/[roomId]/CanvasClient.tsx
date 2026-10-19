@@ -144,6 +144,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [armedDef, setArmedDef] = useState<ArmedDefinition | null>(null)
   // Kit definitions seen by buildDraftFromDefinition, by id (z_wot K3).
   const kitDefsRef = useRef(new Map<string, CabinetDefinition>())
+  // Drafts already placed (placeFromDraft is once per armed draft).
+  const placedDraftsRef = useRef(new WeakSet<CabinetInstance>())
   // Editable draft of the armed cabinet (drives the right-hand panel + what gets placed).
   const [armedDraft, setArmedDraft] = useState<CabinetInstance | null>(null)
   const [selected, setSelected] = useState<Selected>(null)
@@ -1093,6 +1095,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Place the (possibly edited) armed draft. Follows the insert → setCabinets →
   // async-resolve pattern so the cabinet renders immediately.
   async function placeFromDraft(draft: CabinetInstance, wall: Wall, pos_x: number, pos_y: number, islandFlip = false, dxOverride?: number) {
+    // An armed draft places once. A second click / double-click landing before the
+    // armed state clears (elevation has no placing guard; a kit takes a moment
+    // before it shows) would otherwise drop a duplicate in the same spot.
+    if (placedDraftsRef.current.has(draft)) return
+    placedDraftsRef.current.add(draft)
     const kitDef = draft.cabinet_definition_id ? kitDefsRef.current.get(draft.cabinet_definition_id) : undefined
     if (kitDef) return placeKitFromDraft(kitDef, draft, wall, pos_x, pos_y, islandFlip)
     captureSnapshot()
