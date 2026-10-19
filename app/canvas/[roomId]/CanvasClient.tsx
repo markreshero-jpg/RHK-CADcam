@@ -50,6 +50,7 @@ import { cadSnap, EMPTY_SNAP_GEOMETRY, type CadSnapSettings } from '@/src/lib/an
 import { planSnapGeometry } from '@/src/lib/annotations/planSnapGeometry'
 import CadSnapMarker from './CadSnapMarker'
 import CadMeasureOverlay from './CadMeasureOverlay'
+import CadPanel from './CadPanel'
 import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
 import TutorialHintsPlan from './TutorialHintsPlan'
 import { useTutorial } from '@/src/lib/tutorial/store'
@@ -3017,6 +3018,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeleteMany={() => setDeleteWallPending(multiWalls)}
             onClear={() => { setSelected(null); setMultiWalls([]) }}
           />
+        )}
+        {/* CAD side panel (z_CAD_tool B2c): coordinates, the shape being drawn, the selection's numbers. */}
+        {mode === 'cad' && canvasView === 'plan' && (
+          <CadPanel cad={cad} annotations={planAnnotations} paper={annotScale} onClose={() => setMode('select')} />
         )}
         {mode !== 'draw_wall' && mode !== 'draw_island' && selectedWall && multiWallObjs.length < 2 && (canvasView === 'plan' || canvasView === 'elevation') && (
           <WallPanel wall={selectedWall} roomHeight={room.room_dy ?? undefined} onUpdate={handleUpdateWall} onDelete={handleDeleteWall} onClose={() => setSelected(null)} />

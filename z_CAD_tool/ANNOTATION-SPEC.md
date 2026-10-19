@@ -236,6 +236,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | B1 | **Feedback fixes:** leader typing bug; click-to-start / click-to-finish for box / ellipse / cloud / text box (drag still works); text box sized in width **and** height before typing (`geom.height`, corner grip); cloud rectangle / freehand ribbon option | [x] built 2026-10-19; in-app check pending |
 | B2 | **CAD snaps:** end / mid / centre / nearest-on-edge / intersection / perpendicular, on walls (faces + corners), cabinets (footprint + door / drawer front line), fixtures & appliances, benchtops and annotations; snap glyph; ribbon toggles | [x] built 2026-10-19; in-app check pending |
 | B2b | **Measurements + coordinates:** live length / angle while drawing, W × H while placing, side lengths / W × H on the selection (screen only); cursor X / Y + ΔX / ΔY readout; typed Length / Angle (2-point line) and W / H (box, ellipse) on the ribbon | [x] built 2026-10-19; in-app check pending |
+| B2c | **CAD side panel** (right, while F7 is on, plan): cursor X / Y / Δ / distance / angle; the shape being drawn point by point; the selection's numbers, editable (points, corner, W / H, rotation, text box size, leader, dim points + offset); multi-select extents; objects list to pick from | [x] built 2026-10-19; in-app check pending |
 | B3 | **Arcs + circle:** kinds `arc` + `circle` (migration); arc by 3-point, centre-start-end, start-end-radius; circle by centre + radius; grips | [ ] |
 | B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [ ] |
 | B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [ ] |
@@ -440,6 +441,28 @@ and y coordinates on canvas"). In-app check pending.
   undo + debounced save like the style fields.
 - Not yet: typing a length *while* drawing (CAD direct distance entry). Candidate
   for B4 alongside the typed offset distance.
+
+**B2c built 2026-10-19** (Mark: "we need a cad side bar when drawing… coordinates,
+length, width etc. … on the right hand side when cad f7 is selected"). In-app check
+pending.
+- `CadPanel.tsx`, docked in the canvas's right panel row (where WallPanel /
+  FixturePanel go; CAD mode already clears the canvas selection, so they never show
+  together).
+- **Sections:**
+  - **Cursor:** X / Y, plus ΔX / ΔY / distance / angle from the last point; the snap
+    kind.
+  - **Drawing:** a point table that follows the cursor; the placing corner + W × H.
+  - **Selected:** a typed `Field` commits on Enter / blur (Esc reverts), one undo
+    step each via new `hook.patchGeom`.
+    - line / cloud: point table (X / Y editable, side lengths), total length /
+      perimeter, cloud area, Length + Angle for 2-point lines;
+    - box / ellipse: first corner (moves the box), W, H, rotation, centre, area;
+    - text: top-left, rotation, text-box W / H (paper mm + plan mm), leader points;
+    - dim: both points, offset, type, measured value and shown text.
+  - **Multi-select:** extents.
+  - **Objects:** every plan note (newest first; colour swatch, kind, summary); click
+    to select.
+- The ribbon's Size group and X / Y readout moved here (removed from the ribbon).
 
 Next: B3 (arcs + circle), then B4–B5, then A6 (elevations: wall-local frame, canvas +
 Elevation Views report, wall-split remap).

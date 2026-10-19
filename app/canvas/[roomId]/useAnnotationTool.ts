@@ -377,6 +377,14 @@ export function useAnnotationTool({
     editGeom(oneBox, withBoxSize(g, nw, nh))
   }, [oneBox, editGeom])
 
+  /** CAD panel: replace one item's geometry (a typed coordinate). One undo step, saved now. */
+  const patchGeom = useCallback((id: string, geom: RoomAnnotation['geom']) => {
+    if (!annRef.current.some(x => x.id === id)) return
+    captureSnapshot()
+    setAnnotations(xs => xs.map(x => x.id === id ? { ...x, geom } : x))
+    void dbUpdateAnnotation(id, { geom })
+  }, [captureSnapshot, setAnnotations])
+
   const cancelEdit = useCallback(() => setEditing(null), [])
   const setEditText = useCallback((text: string) => setEditing(ed => ed && { ...ed, text }), [])
 
@@ -843,7 +851,7 @@ export function useAnnotationTool({
     /** Cursor (frame mm) + the point Δ is measured from while drawing. */
     cursor: active ? cursor : null,
     fromPt: drawing?.pts.length ? drawing.pts[drawing.pts.length - 1] : pending ? pending.start : null,
-    ribbonSize, applyLength, applyAngle, applyBoxSize, liveMeasure,
+    ribbonSize, applyLength, applyAngle, applyBoxSize, liveMeasure, patchGeom,
     /** Text block size helper for the editor overlay. */
     layoutFor: (a: RoomAnnotation, text: string) => {
       const s = resolveStyle(a.kind, a.style)
