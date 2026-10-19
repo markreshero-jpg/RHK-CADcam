@@ -39,6 +39,16 @@ export const CAD_TOOL_KEYS: Record<string, CadTool> = {
 
 /** Tools that drag out a shape on the canvas. */
 type PlaceTool = 'text' | 'textbox' | 'rect' | 'ellipse' | 'cloud'
+const PLACE_TOOLS = new Set<CadTool>(['text', 'textbox', 'rect', 'ellipse', 'cloud'])
+
+/** Tools that click out points one by one (each click → drawClick). A freehand cloud
+ *  joins them once it has started. Every drawing tool must be here or in PLACE_TOOLS. */
+const POINT_TOOLS = new Set<CadTool>(['line', 'arrow', 'leader', 'dim', 'arc', 'circle'])
+export function clickRoute(tool: CadTool, drawingActive: boolean): 'point' | 'place' | 'marquee' | 'none' {
+  if (tool === 'select') return 'marquee'
+  if (POINT_TOOLS.has(tool) || (tool === 'cloud' && drawingActive)) return 'point'
+  return PLACE_TOOLS.has(tool) ? 'place' : 'none'
+}
 
 /** Kind of row a tool makes, and whose remembered style it starts from. */
 const TOOL_KIND: Record<CadTool, AnnotationKind> = {
@@ -795,7 +805,9 @@ export function useAnnotationTool({
       clearTyped()
       return
     }
-    if (tool === 'line' || tool === 'arrow' || tool === 'leader' || tool === 'dim' || (tool === 'cloud' && drawingRef.current)) {
+    const route = clickRoute(tool, !!drawingRef.current)
+    if (route === 'none') return
+    if (route === 'point') {
       const d = drawingRef.current
       // A typed length / angle locks the point; the click just confirms it.
       const hit = toFrame(e, !e.shiftKey, d?.pts[d.pts.length - 1])
@@ -805,7 +817,7 @@ export function useAnnotationTool({
       return
     }
     const p = toFrame(e, tool !== 'select' && !e.shiftKey)
-    if (tool === 'select') beginDrag({ kind: 'marquee', start: p, cur: p, additive: e.shiftKey }, { x: e.clientX, y: e.clientY })
+    if (route === 'marquee') beginDrag({ kind: 'marquee', start: p, cur: p, additive: e.shiftKey }, { x: e.clientX, y: e.clientY })
     else beginDrag({ kind: 'place', start: p, cur: p, tool: tool as PlaceTool }, { x: e.clientX, y: e.clientY })
   }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace, clearTyped])
 

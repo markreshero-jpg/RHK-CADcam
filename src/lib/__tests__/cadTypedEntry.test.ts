@@ -61,3 +61,22 @@ describe('B3 arc / circle drawing', () => {
     expect(typedFieldsFor(false, { tool: 'dim', pts: [c, { x: 1, y: 0 }], cur: null })).toEqual(['offset'])
   })
 })
+
+import { clickRoute, CAD_TOOL_KEYS, type CadTool } from '@/app/canvas/[roomId]/useAnnotationTool'
+
+describe('click routing (every tool goes somewhere sensible)', () => {
+  it('arc and circle click out points — never the text / box path', () => {
+    expect(clickRoute('arc', false)).toBe('point')
+    expect(clickRoute('circle', false)).toBe('point')
+  })
+  it('every keyboard tool has a route other than none', () => {
+    for (const t of Object.values(CAD_TOOL_KEYS) as CadTool[]) expect(clickRoute(t, false)).not.toBe('none')
+  })
+  it('box-type tools place; a started freehand cloud clicks points', () => {
+    expect(clickRoute('rect', false)).toBe('place')
+    expect(clickRoute('textbox', false)).toBe('place')
+    expect(clickRoute('cloud', false)).toBe('place')
+    expect(clickRoute('cloud', true)).toBe('point')
+    expect(clickRoute('select', false)).toBe('marquee')
+  })
+})
