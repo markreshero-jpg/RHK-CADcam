@@ -120,6 +120,18 @@ underside when the bulkhead isn't sitting on cabinets.
       and get their own row just outside it, under the same layer item
       (`dim_elev_wall_chain` / `dim_wall_chain`); plan rows past it step out.
       Library bulkheads never take the wall-cab height cascade (canvasDB).
+- [x] **B6 — shadowline (`BHSL`)** (Mark, 2026-10-19). `bulkhead.kind =
+      'shadowline'`: one flat strip of exposed board (thickness high, `width`
+      deep, default 60) lying on the overhead tops, flush with the carcase
+      front; front edge taped, ends taped unless a return turns there. Optional
+      left / right flat returns (butt behind the strip) run back `depth` to the
+      wall; outer edge taped, back end taped when short of the wall. It sits on
+      the overheads (`cabVExtent` bottom = wall-cab top), not hung from the
+      ceiling — set the soffit to the board thickness. No auto height / cleat /
+      bottom return; mitre returns not built. Parts `bh:sl_front`,
+      `bh:sl_ret_l`, `bh:sl_ret_r` (flat, Bulkheads layer). Sidebar section +
+      right-click "Shadowline" submenu. Library row via
+      `migration_b6_bhsl_library.sql` (applied; copy of BH, dy 16.5 preserved).
 - [ ] **B5 — in-app check.** Plan, elevation, 3D, cut list, optimiser,
       dimension rows, reports.
 

@@ -33,6 +33,7 @@ const MITRE = 45
 export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): ResolvedCasePart[] {
   const b = cab.bulkhead
   if (!b) return []
+  if (b.kind === 'shadowline') return resolveShadowline(cab)
   const W = cab.DX, H = cab.DY
   const t = cab.exposed_material.DZ
   const tc = cab.material.DZ
@@ -127,5 +128,51 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
       edge_band: band({}),
     })
   }
+  return out
+}
+
+// Shadowline: a flat exposed-board strip on the overhead tops, flush with their
+// carcase front (Z = DZ), `width` deep; optional flat returns at the ends run
+// back to the wall, butted behind the strip. Box frame of `bottom`: DY along X,
+// DX along Z, DZ thickness; band top = front edge, bottom = back, left / right =
+// the X-min / X-max edges.
+function resolveShadowline(cab: CabinetInput): ResolvedCasePart[] {
+  const b = cab.bulkhead!
+  const W = cab.DX, D = cab.DZ
+  const t = cab.exposed_material.DZ
+  const w = Math.min(b.width, D)
+  const { left: L, right: R } = b
+  const band = (e: Partial<EdgeBanding>): EdgeBanding =>
+    ({ top: !!e.top, bottom: !!e.bottom, left: !!e.left, right: !!e.right, id: cab.exposed_edgeband_id })
+  const out: ResolvedCasePart[] = []
+  const push = (p: Omit<ResolvedCasePart, 'AX' | 'AY' | 'AZ'>) => {
+    if (p.DX > 0 && p.DY > 0 && p.DZ > 0) out.push({ AX: 0, AY: 0, AZ: 0, ...p })
+  }
+
+  // Front strip: front edge taped; an end shows unless a return turns there.
+  push({
+    part_key: 'bh:sl_front',
+    DX: w, DY: W, DZ: t,
+    X: 0, Y: 0, Z: D - w,
+    material_id: cab.exposed_material.id,
+    edge_band: band({ top: true, left: !L.on, right: !R.on }),
+  })
+
+  // Returns: from behind the strip back `depth` from the front (capped at the wall).
+  const ret = (key: 'bh:sl_ret_l' | 'bh:sl_ret_r', on: boolean, depth: number) => {
+    if (!on) return
+    const full = Math.min(depth, D)
+    const isL = key === 'bh:sl_ret_l'
+    push({
+      part_key: key,
+      DX: full - w, DY: w, DZ: t,
+      X: isL ? 0 : W - w, Y: 0, Z: D - full,
+      material_id: cab.exposed_material.id,
+      // Outer long edge shows; the back end shows when it stops short of the wall.
+      edge_band: band({ bottom: full < D - 0.5, ...(isL ? { left: true } : { right: true }) }),
+    })
+  }
+  ret('bh:sl_ret_l', L.on, L.depth)
+  ret('bh:sl_ret_r', R.on, R.depth)
   return out
 }

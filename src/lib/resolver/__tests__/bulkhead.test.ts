@@ -3,7 +3,9 @@ import { resolveCabinet } from '../resolver'
 import { mergeRules } from '../mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type Material, type ResolvedCasePart } from '../types'
 import { casePlanCorners, caseBox } from '../../jointDrilling'
-import { DEFAULT_BULKHEAD, normaliseBulkhead, type BulkheadSettings } from '../../bulkhead'
+import { DEFAULT_BULKHEAD, DEFAULT_SHADOWLINE, normaliseBulkhead, type BulkheadSettings } from '../../bulkhead'
+import { cabVExtent } from '../../geometry'
+import type { Room } from '../../types'
 import { isShapedPanelKey } from '../../cabinetShape/partKeys'
 
 // z_bulkhead B2: fascia + returns + L cleat from the bulkhead settings.
@@ -102,6 +104,31 @@ describe('bulkhead parts', () => {
   it('flush with doors: the fascia comes forward to the door front', () => {
     const f = get(parts(cab({ front: 'doors' })), 'bh:fascia')!
     expect(plan(f).z1).toBeGreaterThan(D + 17)
+  })
+
+  it('shadowline: one flat strip on top, flush with the carcase front, front edge taped', () => {
+    const ps = parts(cab({ ...DEFAULT_SHADOWLINE }, { DY: T }))
+    expect(ps.map(p => p.part_key)).toEqual(['bh:sl_front'])
+    const s = ps[0]
+    expect(caseBox(s)).toMatchObject({ x: 0, w: W, y: 0, h: T, z: D - 60, d: 60 })
+    expect(s.material_id).toBe('exposed')
+    expect(s.edge_band).toMatchObject({ top: true, bottom: false, left: true, right: true })
+  })
+
+  it('shadowline returns butt behind the strip and run back to the wall', () => {
+    const ps = parts(cab({ ...DEFAULT_SHADOWLINE, left: on('butt'), right: on('butt', 200) }, { DY: T }))
+    const s = get(ps, 'bh:sl_front')!, l = get(ps, 'bh:sl_ret_l')!, r = get(ps, 'bh:sl_ret_r')!
+    expect(s.edge_band).toMatchObject({ left: false, right: false })
+    expect(caseBox(l)).toMatchObject({ x: 0, w: 60, z: 0, d: D - 60 })
+    expect(l.edge_band).toMatchObject({ left: true, bottom: false })          // reaches the wall
+    expect(caseBox(r)).toMatchObject({ x: W - 60, w: 60, z: D - 200, d: 140 })
+    expect(r.edge_band).toMatchObject({ right: true, bottom: true })          // stops short
+  })
+
+  it('shadowline sits on the overhead tops; a bulkhead hangs from the ceiling', () => {
+    const room = { room_dy: 2400, wall_cabinet_top: 2100 } as unknown as Room
+    expect(cabVExtent('wall', T, null, room, DEFAULT_SHADOWLINE)).toEqual([2100, 2100 + T])
+    expect(cabVExtent('wall', 300, null, room, DEFAULT_BULKHEAD)).toEqual([2100, 2400])
   })
 
   it('not a bulkhead → no bh parts', () => {

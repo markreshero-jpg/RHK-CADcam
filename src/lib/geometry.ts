@@ -45,7 +45,7 @@ export function wallCabTop(wall: Wall | null | undefined, room: Room): number {
 // floor units sit at pos_z (0 unless raised — a kick-detached member is lifted
 // by the kick height). Bulkheads (z_bulkhead) hang from the ceiling instead.
 export function cabBottomZ(cab: CabinetInstance, room: Room, wall?: Wall | null): number {
-  return cabVExtent(cab.assembly_class, cab.dy, wall, room, !!cab.bulkhead, cab.pos_z)[0]
+  return cabVExtent(cab.assembly_class, cab.dy, wall, room, cab.bulkhead, cab.pos_z)[0]
 }
 
 // Vertical extent [bottomZ, topZ] of a cabinet given its class + height. Base and
@@ -53,9 +53,13 @@ export function cabBottomZ(cab: CabinetInstance, room: Room, wall?: Wall | null)
 // wall-cabinet-top line; a bulkhead's top is the ceiling.
 export function cabVExtent(
   cls: string, dy: number, wall: Wall | null | undefined, room: Room,
-  bulkhead = false, posZ?: number | null,
+  bulkhead: unknown = null, posZ?: number | null,
 ): [number, number] {
-  const bottom = bulkhead ? (wall?.height ?? room.room_dy ?? 2400) - dy
+  // `bulkhead` = the cabinet's bulkhead settings: a bulkhead hangs from the
+  // ceiling; a shadowline (z_bulkhead) lies on the overhead tops.
+  const shadowline = !!bulkhead && (bulkhead as { kind?: unknown }).kind === 'shadowline'
+  const bottom = shadowline ? wallCabTop(wall, room)
+    : bulkhead ? (wall?.height ?? room.room_dy ?? 2400) - dy
     : (cls === 'wall' || cls === 'wall_corner') ? wallCabTop(wall, room) - dy
     : posZ ?? 0
   return [bottom, bottom + dy]
@@ -70,8 +74,8 @@ export function cabsBlock(
   room: Room,
   eps = 1,
 ): boolean {
-  const [aB, aT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, !!mover.bulkhead)
-  const [bB, bT] = cabVExtent(obstacle.assembly_class, obstacle.dy, wall, room, !!obstacle.bulkhead)
+  const [aB, aT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead)
+  const [bB, bT] = cabVExtent(obstacle.assembly_class, obstacle.dy, wall, room, obstacle.bulkhead)
   return aB < bT - eps && bB < aT - eps
 }
 

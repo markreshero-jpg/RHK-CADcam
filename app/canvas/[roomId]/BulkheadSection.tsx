@@ -25,6 +25,31 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
   const putRet = (k: typeof RETURNS[number][0], r: Partial<BulkheadReturn>) => put({ [k]: { ...b[k], ...r } })
   const autoH = room ? bulkheadAutoHeight(wall, room) : null
 
+  // Shadowline: strip width + left / right returns (butt only).
+  if (b.kind === 'shadowline') return (
+    <div className="space-y-2 border-t border-gray-800 pt-3">
+      <p className={lbl}>Shadowline</p>
+      <div className="grid grid-cols-[1fr_4.5rem] gap-1 items-center">
+        <label className="text-xs text-gray-300">Strip width</label>
+        <CalcInput value={b.width} decimals={1}
+          onCommit={v => { if (v > 0) put({ width: v }) }}
+          className={inp + ' text-right'} />
+      </div>
+      {RETURNS.filter(([k]) => k !== 'bottom').map(([k, name]) => (
+        <div key={k} className="grid grid-cols-[1fr_4.5rem] gap-1 items-center">
+          <label className="flex items-center gap-2 text-xs text-gray-300">
+            <input type="checkbox" checked={b[k].on} onChange={e => putRet(k, { on: e.target.checked })} />
+            {name}
+          </label>
+          <CalcInput value={b[k].depth} decimals={0} disabled={!b[k].on}
+            onCommit={v => { if (v > 0) putRet(k, { depth: v }) }}
+            className={inp + ' text-right disabled:opacity-40'} />
+        </div>
+      ))}
+      <p className="text-[10px] text-gray-600">Sits on the overhead tops, flush with their front. Depth = how far a return runs back from the front (stops at the wall). Set the soffit to the board thickness to meet the ceiling.</p>
+    </div>
+  )
+
   return (
     <div className="space-y-2 border-t border-gray-800 pt-3">
       <p className={lbl}>Bulkhead</p>

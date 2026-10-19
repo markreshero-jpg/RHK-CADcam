@@ -167,10 +167,12 @@ export function buildContextMenuGroups({
     const tick = (on: boolean, label: string) => (on ? '✓ ' : '    ') + label
     const ret = (k: 'left' | 'right' | 'bottom', label: string) =>
       ({ label: tick(bh[k].on, label), onClick: () => onUpdateBulkhead(cabId, { ...bh, [k]: { ...bh[k], on: !bh[k].on } }) })
-    groups.push([{ label: 'Bulkhead', children: [
-      ret('left', 'Left return'), ret('right', 'Right return'), ret('bottom', 'Bottom return'),
-      { label: tick(bh.cleat, 'Fixing cleat'), onClick: () => onUpdateBulkhead(cabId, { ...bh, cleat: !bh.cleat }) },
-    ] }])
+    groups.push([bh.kind === 'shadowline'
+      ? { label: 'Shadowline', children: [ret('left', 'Left return'), ret('right', 'Right return')] }
+      : { label: 'Bulkhead', children: [
+          ret('left', 'Left return'), ret('right', 'Right return'), ret('bottom', 'Bottom return'),
+          { label: tick(bh.cleat, 'Fixing cleat'), onClick: () => onUpdateBulkhead(cabId, { ...bh, cleat: !bh.cleat }) },
+        ] }])
   }
 
   const libItems: ContextMenuItem[] = []

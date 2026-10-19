@@ -55,7 +55,7 @@ export function waterfallOccupancy(
   mover: { assembly_class: string; dy: number; dz?: number; bulkhead?: unknown },
 ): { t: number; dx: number }[] {
   if (!legs.length) return []
-  const [bottom] = cabVExtent(mover.assembly_class, mover.dy, wall, room, !!mover.bulkhead)
+  const [bottom] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead)
   const depth = mover.dz ?? 600
   const f = wallFrame(wall, side, cx)
   const out: { t: number; dx: number }[] = []

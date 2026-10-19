@@ -28,6 +28,9 @@ export const PART_TYPE_LABELS: Record<string, string> = {
   'bh:ret_b':    'Bulkhead Bottom Return',
   'bh:cleat_v':  'Bulkhead Cleat (upright)',
   'bh:cleat_h':  'Bulkhead Cleat (flat)',
+  'bh:sl_front': 'Shadowline',
+  'bh:sl_ret_l': 'Shadowline Left Return',
+  'bh:sl_ret_r': 'Shadowline Right Return',
 }
 
 export const humanizePartKey = (s: string): string =>
