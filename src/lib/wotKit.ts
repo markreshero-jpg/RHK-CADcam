@@ -133,5 +133,5 @@ export const WOT_LIBRARY = {
 /** Fixtures that come with each (point anchors in the core frame; z above the core bottom). */
 export const WOT_CONTENTS = {
   WOT: [{ name: 'Generic oven 600', link_x: 300, z: 0 }],
-  'WOT-COMBI': [{ name: 'Generic oven 600', link_x: 300, z: 0 }, { name: 'Generic microwave 600 x 450', link_x: 300, z: OVEN_H + 16.5 }],   // on a 16.5 combi shelf
+  'WOT-COMBI': [{ name: 'Generic oven 600', link_x: 300, z: 0 }, { name: 'Miele combi steam oven 600 x 450', link_x: 300, z: OVEN_H + 16.5 }],   // on a 16.5 combi shelf
 } as const

@@ -138,6 +138,10 @@ W2D / Off wall → open the core).
 - Appliance point anchors are fixed numbers for 580 tall depth + 18 doors
   (oven front = 600 from the wall); a different tall depth leaves the oven off
   the panel fronts until moved. The combi sits at 616.5 (16.5 shelf).
+- 2026-10-19 (user): WOT-COMBI's combi is now **Miele combi steam oven 600 x 450**
+  (DGC 7840 HCPro GLB, 600 × 600 × 455 box, +39 nudge so its fascia lines up with the
+  Generic oven 600), replacing the model-less Generic microwave 600 x 450. Updated live in
+  `contents` + `wotKit.ts`; towers already placed keep their microwave.
 - TEPF instead of TEPK: swap with Replace on each panel for now.
 - `SCRBT` is set from the exposed thickness at placement; a later material
   change doesn't re-sync it.
