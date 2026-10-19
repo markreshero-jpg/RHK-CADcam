@@ -34,7 +34,7 @@ import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 import { hingePlacement, hingeSilhouetteOutline, hingeSilhouetteSnapPoints } from '@/src/lib/hingeSilhouette'
 import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
 import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
-import { handleShapes } from '@/src/lib/handleGeometry'
+import { handleShapes, sharknoseProfile, sharknoseTopLine } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, SharknoseLinesSVG } from './HandleSVG'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
@@ -963,6 +963,13 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
             fillOpacity={wireMode ? 1 : 0.85}
             dataPartId={meta.id} style={cp} />
           {ec && <EdgeTapeSVG box={zoneBox3(z)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="y" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+          {/* Sharknose: where the land meets the bevel (dashed when it's under the face) */}
+          {(() => {
+            const l = sharknoseTopLine(pp as typeof z); if (!l) return null
+            const a = proj(l.x1, 0, l.z), b = proj(l.x2, 0, l.z)
+            return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#fbbf24" strokeWidth={1}
+              strokeDasharray={l.hidden ? '6 4' : undefined} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
+          })()}
         </g>
       })}
 
@@ -1224,9 +1231,11 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
         const r = zoneSideRect(pp as typeof z); const s = toSVG(r.sz, r.cy_top, r.sw, r.sh)
         const col = z.face_type === 'drawer_face' ? RC.drawer : RC.door
         const ec = ebColor(ebByMatId, z.material_id)
+        // Sharknose fronts: the true side profile, back of the grip edge cut away.
+        const sn = sharknoseProfile(z)?.map(q => proj(0, pp.Y + q.y, pp.Z + q.x))
         return <g key={`fz${i}`}>
           <PartShape x={s.x} y={s.y} w={s.w} h={s.h}
-            box={zoneBox3(z)} ov={partOverrides?.[meta.id]} project={proj}
+            box={zoneBox3(z)} ov={partOverrides?.[meta.id]} project={proj} outline={sn}
             fill={wireMode ? 'transparent' : col.fill}
             stroke={stroke(meta.id, col.stroke)} strokeWidth={sw(meta.id, wireMode ? 0.75 : 1)}
             fillOpacity={wireMode ? 1 : 0.85}

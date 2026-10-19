@@ -622,17 +622,21 @@ export function rotatedBoxPolygon(
 // Draws a part as an axis-aligned rect, or — when it has a rotation override — as the
 // projected silhouette of its rotated 3D box. Same fill/stroke/hit-test either way.
 export function PartShape({
-  x, y, w, h, box, ov, project, fill, stroke, strokeWidth, strokeDasharray, fillOpacity, dataPartId, style,
+  x, y, w, h, box, ov, project, outline, fill, stroke, strokeWidth, strokeDasharray, fillOpacity, dataPartId, style,
 }: {
   x: number; y: number; w: number; h: number
   box?: Box3
   ov?: PartOv
   project?: (x: number, y: number, z: number) => P2
+  /** SVG-space outline drawn instead of the rect (e.g. a sharknose profile);
+   *  a rotation override still wins. */
+  outline?: P2[] | null
   fill: string; stroke: string; strokeWidth: number
   strokeDasharray?: string; fillOpacity?: number
   dataPartId: string; style?: React.CSSProperties
 }) {
-  const poly = box && project ? rotatedBoxPolygon(box, ov, project) : null
+  const poly = (box && project ? rotatedBoxPolygon(box, ov, project) : null)
+    ?? (outline?.length ? outline.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ') : null)
   if (poly) {
     return <polygon points={poly} fill={fill} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke"
       strokeDasharray={strokeDasharray} fillOpacity={fillOpacity} data-part-id={dataPartId} style={style} />

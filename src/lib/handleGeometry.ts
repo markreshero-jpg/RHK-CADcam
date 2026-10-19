@@ -66,6 +66,15 @@ export function sharknoseLine(z: ResolvedFaceZone): { x1: number; x2: number; y:
   return { x1: z.X, x2: z.X + z.DX, y: top ? z.Y + z.DY - run : z.Y + run, edgeY: top ? z.Y + z.DY : z.Y, angle: bv.angle_deg }
 }
 
+/** Top-view line over a sharknose front (cabinet X / Z): where the land meets
+ *  the bevel — seen from above on a top grip, hidden on a bottom grip. Null
+ *  for a knife edge (land 0): it falls on the front face line. */
+export function sharknoseTopLine(z: ResolvedFaceZone): { x1: number; x2: number; z: number; hidden: boolean } | null {
+  const bv = z.handle?.bevel
+  if (!bv || z.facet || z.AY || bv.land < 0.5 || bv.land >= z.DZ) return null
+  return { x1: z.X, x2: z.X + z.DX, z: z.Z + z.DZ - bv.land, hidden: z.handle!.grip_edge !== 'top' }
+}
+
 export function handleShapes(zones: ResolvedFaceZone[]): HandleShape[] {
   const out: HandleShape[] = []
   for (const z of zones) { const s = handleShape(z); if (s) out.push(s) }
