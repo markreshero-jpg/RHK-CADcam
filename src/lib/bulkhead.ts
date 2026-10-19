@@ -9,7 +9,7 @@
 // `kind: 'shadowline'` is the light version: one flat strip of exposed board
 // (its thickness high, `width` deep) lying on the overhead tops, flush with
 // their carcase front, with optional flat left / right returns back to the wall
-// (butt-jointed behind the strip). It sits on the overheads rather than hanging
+// (mitred to the strip by default, or butted behind it). It sits on the overheads rather than hanging
 // from the ceiling; set the soffit to the board thickness so it meets the
 // ceiling.
 // ============================================================
@@ -45,10 +45,9 @@ export const DEFAULT_BULKHEAD: BulkheadSettings = {
   left: ret(false), right: ret(false), bottom: ret(false),
 }
 
-// Shadowline: no ceiling fit, cleat or bottom return; returns butt behind the strip.
+// Shadowline: no ceiling fit, cleat or bottom return.
 export const DEFAULT_SHADOWLINE: BulkheadSettings = {
   ...DEFAULT_BULKHEAD, kind: 'shadowline', front: 'carcase', auto_h: false, cleat: false,
-  left: { ...ret(false), joint: 'butt' }, right: { ...ret(false), joint: 'butt' },
 }
 
 export const isShadowline = (b: { kind?: unknown } | null | undefined): boolean => b?.kind === 'shadowline'
@@ -60,8 +59,7 @@ export function normaliseBulkhead(b: Partial<BulkheadSettings> | null | undefine
   const r = (x: Partial<BulkheadReturn> | undefined, d: BulkheadReturn): BulkheadReturn => ({
     on: x?.on ?? d.on,
     depth: x?.depth != null && x.depth > 0 ? x.depth : d.depth,
-    // Shadowline returns are butt-only (flat strips; no mitre geometry yet).
-    joint: sl || x?.joint === 'butt' ? 'butt' : 'mitre',
+    joint: x?.joint === 'butt' ? 'butt' : 'mitre',
   })
   return {
     kind:   sl ? 'shadowline' : 'bulkhead',

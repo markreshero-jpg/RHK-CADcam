@@ -149,30 +149,41 @@ function resolveShadowline(cab: CabinetInput): ResolvedCasePart[] {
     if (p.DX > 0 && p.DY > 0 && p.DZ > 0) out.push({ AX: 0, AY: 0, AZ: 0, ...p })
   }
 
+  const mL = L.on && L.joint === 'mitre', mR = R.on && R.joint === 'mitre'
+
   // Front strip: front edge taped; an end shows unless a return turns there.
+  // Mitred: the back edge stops `w` short at that end (45° in plan). Outline in
+  // the horizontal shape frame: x along X, y back from the front edge.
   push({
     part_key: 'bh:sl_front',
     DX: w, DY: W, DZ: t,
     X: 0, Y: 0, Z: D - w,
     material_id: cab.exposed_material.id,
     edge_band: band({ top: true, left: !L.on, right: !R.on }),
+    ...(mL || mR ? { outline: [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: mR ? W - w : W, y: w }, { x: mL ? w : 0, y: w }] } : {}),
   })
 
-  // Returns: from behind the strip back `depth` from the front (capped at the wall).
-  const ret = (key: 'bh:sl_ret_l' | 'bh:sl_ret_r', on: boolean, depth: number) => {
-    if (!on) return
-    const full = Math.min(depth, D)
+  // Returns, back `depth` from the front (capped at the wall). Mitred: from the
+  // front corner, 45° across the strip width; butt: from behind the strip.
+  const ret = (key: 'bh:sl_ret_l' | 'bh:sl_ret_r', r: typeof L) => {
+    if (!r.on) return
+    const full = Math.min(r.depth, D)
+    const mitre = r.joint === 'mitre'
+    const l = mitre ? full : full - w
     const isL = key === 'bh:sl_ret_l'
     push({
       part_key: key,
-      DX: full - w, DY: w, DZ: t,
+      DX: l, DY: w, DZ: t,
       X: isL ? 0 : W - w, Y: 0, Z: D - full,
       material_id: cab.exposed_material.id,
       // Outer long edge shows; the back end shows when it stops short of the wall.
       edge_band: band({ bottom: full < D - 0.5, ...(isL ? { left: true } : { right: true }) }),
+      ...(mitre ? { outline: isL
+        ? [{ x: 0, y: 0 }, { x: w, y: w }, { x: w, y: l }, { x: 0, y: l }]
+        : [{ x: 0, y: w }, { x: w, y: 0 }, { x: w, y: l }, { x: 0, y: l }] } : {}),
     })
   }
-  ret('bh:sl_ret_l', L.on, L.depth)
-  ret('bh:sl_ret_r', R.on, R.depth)
+  ret('bh:sl_ret_l', L)
+  ret('bh:sl_ret_r', R)
   return out
 }

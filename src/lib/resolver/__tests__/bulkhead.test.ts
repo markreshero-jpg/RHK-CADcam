@@ -125,6 +125,21 @@ describe('bulkhead parts', () => {
     expect(r.edge_band).toMatchObject({ right: true, bottom: true })          // stops short
   })
 
+  it('shadowline returns default to mitre: blanks run to the front corner, 45° outlines', () => {
+    expect(DEFAULT_SHADOWLINE.left.joint).toBe('mitre')
+    const ps = parts(cab({ ...DEFAULT_SHADOWLINE, left: on(), right: on() }, { DY: T }))
+    const s = get(ps, 'bh:sl_front')!, l = get(ps, 'bh:sl_ret_l')!, r = get(ps, 'bh:sl_ret_r')!
+    // Plan footprints meet on the 45° line at each front corner, no overlap.
+    expect(plan(s)).toEqual({ x0: 0, x1: W, z0: D - 60, z1: D })
+    expect(casePlanCorners(s)).toContainEqual({ x: 60, z: D - 60 })
+    expect(casePlanCorners(s)).toContainEqual({ x: W - 60, z: D - 60 })
+    expect(plan(l)).toEqual({ x0: 0, x1: 60, z0: 0, z1: D })
+    expect(casePlanCorners(l)).toContainEqual({ x: 60, z: D - 60 })
+    expect(plan(r)).toEqual({ x0: W - 60, x1: W, z0: 0, z1: D })
+    expect(casePlanCorners(r)).toContainEqual({ x: W - 60, z: D - 60 })
+    expect(l.DX).toBe(D)
+  })
+
   it('shadowline sits on the overhead tops; a bulkhead hangs from the ceiling', () => {
     const room = { room_dy: 2400, wall_cabinet_top: 2100 } as unknown as Room
     expect(cabVExtent('wall', T, null, room, DEFAULT_SHADOWLINE)).toEqual([2100, 2100 + T])
