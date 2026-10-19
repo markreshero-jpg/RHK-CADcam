@@ -103,7 +103,7 @@ export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl 
           {preset.params.filter(d => !d.hidden).map(d => (
             <div key={d.key}>
               <label className={lbl}>{d.label}{d.label.includes('°') ? '' : ' (mm)'}</label>
-              <CalcInput value={Number(fp.params[d.key] ?? d.default)} decimals={0}
+              <CalcInput value={Number(fp.params[d.key] ?? d.default)} decimals={1}
                 onCommit={v => setParam(d.key, v)} className={inp + ' text-right'} />
             </div>
           ))}

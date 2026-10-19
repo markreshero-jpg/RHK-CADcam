@@ -47,7 +47,7 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
   const field = (k: string, value: number, onCommit: (v: number) => void, title: string) => (
     <div title={title}>
       <div className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5">{k}</div>
-      <CalcInput value={Math.round(value * 10) / 10} decimals={1} onCommit={onCommit} className={inp} />
+      <CalcInput value={value} decimals={1} onCommit={onCommit} className={inp} />
     </div>
   )
 

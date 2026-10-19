@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function CabinetResizePanel({ dim, liveValue, onApply, onCancel, onTabApply }: Props) {
-  const [val, setVal] = useState(String(Math.round(liveValue)))
+  const [val, setVal] = useState(String(Math.round(liveValue * 10) / 10))
   const inputRef = useRef<HTMLInputElement>(null)
   const dirty = useRef(false)
 
@@ -22,7 +22,7 @@ export default function CabinetResizePanel({ dim, liveValue, onApply, onCancel, 
   }, [])
 
   useEffect(() => {
-    if (!dirty.current) setVal(String(Math.round(liveValue)))
+    if (!dirty.current) setVal(String(Math.round(liveValue * 10) / 10))
   }, [liveValue])
 
   function apply() {

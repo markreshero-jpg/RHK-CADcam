@@ -86,7 +86,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
           <label className={lbl}>Elevation from floor (mm)</label>
           <CalcInput
             value={elevFromFloor}
-            decimals={0}
+            decimals={1}
             onCommit={v => onUpdate(cabinet.id, { pos_z: v })}
             className={inp + ' text-right'} />
         </div>
@@ -99,7 +99,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                 <p className="text-[9px] text-gray-500 mb-0.5">From left end</p>
                 <CalcInput
                   value={meas.posLeft}
-                  decimals={0}
+                  decimals={1}
                   onCommit={v => {
                     const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
                     const t = findFreeSlot(v, cabinet.dx, wall.length, occ)
@@ -112,7 +112,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                 <p className="text-[9px] text-gray-500 mb-0.5">From right end</p>
                 <CalcInput
                   value={meas.posRight}
-                  decimals={0}
+                  decimals={1}
                   onCommit={v => {
                     const newT = wall.length - v - cabinet.dx
                     const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
@@ -126,7 +126,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                 <p className="text-[9px] text-gray-500 mb-0.5">Clear left</p>
                 <CalcInput
                   value={meas.clearLeft}
-                  decimals={0}
+                  decimals={1}
                   onCommit={v => {
                     const lN = meas.leftN
                     const desiredT = lN ? lN.t + lN.dx + v : v
@@ -141,7 +141,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                 <p className="text-[9px] text-gray-500 mb-0.5">Clear right</p>
                 <CalcInput
                   value={meas.clearRight}
-                  decimals={0}
+                  decimals={1}
                   onCommit={v => {
                     const rN = meas.rightN
                     const desiredT = rN ? rN.t - v - cabinet.dx : wall.length - v - cabinet.dx
@@ -156,7 +156,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                 <div>
                   <p className="text-[9px] text-gray-500 mb-0.5">Off wall</p>
                   <CalcInput
-                    value={Math.round(cabWallGap(cabinet, wall, roomRef) * 10) / 10}
+                    value={cabWallGap(cabinet, wall, roomRef)}
                     decimals={1}
                     onCommit={v => {
                       const p = wallAnchorPoint(wall, cabT(cabinet, wall), cabWallSide(cabinet, wall) === 'back', roomRef, Math.max(0, v))
@@ -175,7 +175,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
             {(['dx', 'dy', 'dz'] as const).map(dim => (
               <div key={dim}>
                 <p className="text-[10px] text-gray-600 text-center mb-0.5 uppercase">{dim}</p>
-                <CalcInput value={f(dim) as number}
+                <CalcInput value={f(dim) as number} decimals={1}
                   autoFocus={autoFocusWidth && dim === 'dx'}
                   onCommit={v => onUpdate(cabinet.id, {
                     [dim]: v,
@@ -394,7 +394,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                   <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
                   <CalcInput
                     value={cur}
-                    decimals={0}
+                    decimals={1}
                     onCommit={v => {
                       const next = { ...(cabinet.rule_overrides ?? {}) }
                       if (v === 0) delete next[key]; else next[key] = v
@@ -421,9 +421,9 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                       <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
                       <CalcInput
                         value={ov[key] ?? null}
-                        decimals={0}
+                        decimals={1}
                         min={0}
-                        placeholder={rules ? String(Math.round(rules[key])) : ''}
+                        placeholder={rules ? String(Math.round(rules[key] * 10) / 10) : ''}
                         onCommit={v => {
                           const next = { ...(cabinet.rule_overrides ?? {}) }
                           next[key] = v

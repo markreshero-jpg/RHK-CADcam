@@ -64,7 +64,7 @@ export default function WallDrawPanel({
             <label className={labelCls}>Thickness (mm)</label>
             <CalcInput
               value={settings.thickness}
-              decimals={0}
+              decimals={1}
               min={10}
               onCommit={v => onSettings({ thickness: v })}
               className={inputCls}
@@ -78,7 +78,7 @@ export default function WallDrawPanel({
           </label>
           <CalcInput
             value={height}
-            decimals={0}
+            decimals={1}
             placeholder="2400"
             onCommit={setHeight}
             onClear={() => setHeight(null)}
@@ -93,7 +93,7 @@ export default function WallDrawPanel({
             </label>
             <CalcInput
               value={soffit}
-              decimals={0}
+              decimals={1}
               placeholder="Room default"
               onCommit={setSoffit}
               onClear={() => setSoffit(null)}

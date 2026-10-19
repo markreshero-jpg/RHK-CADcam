@@ -35,14 +35,14 @@ export default function MultiWallPanel({ walls, roomHeight, onUpdateMany, onDele
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className={lbl}>Thickness (mm)</label>
-            <CalcInput value={common('thickness') as number | null} decimals={0}
+            <CalcInput value={common('thickness') as number | null} decimals={1}
               placeholder={mixed('thickness') ? 'Mixed' : undefined}
               disabled={standard.length === 0}
               onCommit={v => onUpdateMany({ thickness: v })} className={inp + ' text-right'} />
           </div>
           <div>
             <label className={lbl}>Height (mm)</label>
-            <CalcInput value={common('height') as number | null} decimals={0}
+            <CalcInput value={common('height') as number | null} decimals={1}
               placeholder={mixed('height') ? 'Mixed' : roomHeight != null ? String(roomHeight) : 'Room default'}
               onCommit={v => onUpdateMany({ height: v })}
               onClear={() => onUpdateMany({ height: null as unknown as number })}
@@ -51,7 +51,7 @@ export default function MultiWallPanel({ walls, roomHeight, onUpdateMany, onDele
         </div>
         <div>
           <label className={lbl}>Soffit Depth from top (mm)</label>
-          <CalcInput value={common('soffit_height') as number | null} decimals={0}
+          <CalcInput value={common('soffit_height') as number | null} decimals={1}
             placeholder={mixed('soffit_height') ? 'Mixed' : 'Room default'}
             onCommit={v => onUpdateMany({ soffit_height: v })}
             onClear={() => onUpdateMany({ soffit_height: null as unknown as number })}

@@ -53,7 +53,7 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClos
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className={lbl}>Length (mm)</label>
-            <CalcInput value={Math.round((f('length') as number) * 10) / 10} decimals={1}
+            <CalcInput value={f('length') as number} decimals={1}
               onCommit={v => onUpdate(wall.id, { length: v })} className={inp + ' text-right'} />
           </div>
           <div>
@@ -65,12 +65,12 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClos
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className={lbl}>Thickness (mm)</label>
-            <CalcInput value={f('thickness') as number} decimals={0}
+            <CalcInput value={f('thickness') as number} decimals={1}
               onCommit={v => onUpdate(wall.id, { thickness: v })} className={inp + ' text-right'} />
           </div>
           <div>
             <label className={lbl}>Height (mm)</label>
-            <CalcInput value={(f('height') ?? null) as number | null} decimals={0}
+            <CalcInput value={(f('height') ?? null) as number | null} decimals={1}
               placeholder={roomHeight != null ? String(roomHeight) : 'Room default'}
               onCommit={v => onUpdate(wall.id, { height: v })}
               onClear={() => onUpdate(wall.id, { height: null as unknown as number })}
@@ -79,7 +79,7 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClos
         </div>
         <div>
           <label className={lbl}>Soffit Depth from top (mm)</label>
-          <CalcInput value={(f('soffit_height') ?? null) as number | null} decimals={0}
+          <CalcInput value={(f('soffit_height') ?? null) as number | null} decimals={1}
             placeholder="Room default"
             onCommit={v => onUpdate(wall.id, { soffit_height: v })}
             onClear={() => onUpdate(wall.id, { soffit_height: null as unknown as number })}
@@ -88,9 +88,9 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClos
         <div>
           <label className={lbl}>Start position (mm)</label>
           <div className="grid grid-cols-2 gap-2">
-            <CalcInput value={Math.round(f('pos_x') as number)} decimals={0}
+            <CalcInput value={f('pos_x') as number} decimals={1}
               onCommit={v => onUpdate(wall.id, { pos_x: v })} className={inp + ' text-right'} placeholder="X" />
-            <CalcInput value={Math.round(f('pos_y') as number)} decimals={0}
+            <CalcInput value={f('pos_y') as number} decimals={1}
               onCommit={v => onUpdate(wall.id, { pos_y: v })} className={inp + ' text-right'} placeholder="Y" />
           </div>
         </div>

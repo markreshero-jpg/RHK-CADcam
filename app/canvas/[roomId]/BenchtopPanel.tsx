@@ -165,7 +165,7 @@ export default function BenchtopPanel({
             <div title={title}>
               <div className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5">{k}</div>
               {onCommit
-                ? <CalcInput value={Math.round(value)} decimals={0} onCommit={onCommit} className={inp + ' text-right ' + extra} />
+                ? <CalcInput value={value} decimals={1} onCommit={onCommit} className={inp + ' text-right ' + extra} />
                 : <div className="bg-gray-800/60 rounded px-2 py-1 text-xs text-gray-300 text-right tabular-nums">{value}</div>}
             </div>
           )
@@ -273,7 +273,7 @@ export default function BenchtopPanel({
               ] as const).map(([k, v, commit, title]) => (
                 <div key={k} title={title}>
                   <div className="text-[9px] text-gray-500 mb-0.5">{k}</div>
-                  <CalcInput value={Math.round(v)} decimals={0} onCommit={commit} className={inp + ' text-right'} />
+                  <CalcInput value={v} decimals={1} onCommit={commit} className={inp + ' text-right'} />
                 </div>
               ))}
             </div>
@@ -287,7 +287,7 @@ export default function BenchtopPanel({
                 {([['Left', 'left', overhang.left], ['Right', 'right', overhang.right], ['Front', 'front', overhang.front]] as const).map(([k, end, v]) => (
                   <div key={k}>
                     <div className="text-[9px] text-gray-500 mb-0.5">{k}</div>
-                    <CalcInput value={Math.round(v)} decimals={0}
+                    <CalcInput value={v} decimals={1}
                       onCommit={nv => onStretch(benchtop.id, end, nv - v)}
                       className={`${inp} text-right ${v < 0 ? 'text-red-400' : ''}`} />
                   </div>
@@ -409,7 +409,7 @@ export default function BenchtopPanel({
           <div>
             <label className={lbl}>Offset shape (mm)</label>
             <div className="flex gap-1">
-              <CalcInput value={offsetAmt} onCommit={setOffsetAmt}
+              <CalcInput value={offsetAmt} decimals={1} onCommit={setOffsetAmt}
                 className={inp + ' flex-1'} placeholder="0" />
               <button onClick={() => { if (offsetAmt !== 0) { onOffset(benchtop.id, offsetAmt); setOffsetAmt(0) } }}
                 className="px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white">
@@ -423,7 +423,7 @@ export default function BenchtopPanel({
           <div>
             <label className={lbl}>Corner radius (mm)</label>
             <div className="flex gap-1">
-              <CalcInput value={filletRadius} min={1} max={500}
+              <CalcInput value={filletRadius} decimals={1} min={1} max={500}
                 onCommit={setFilletRadius}
                 className={inp + ' flex-1'} />
               <span className="text-[10px] text-gray-500 self-center pr-1">used by<br/>Round/Chamfer</span>

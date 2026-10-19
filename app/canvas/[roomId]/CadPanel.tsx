@@ -93,7 +93,7 @@ function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
   )
 }
 
-const r0 = (n: number) => String(Math.round(n))
+const rScale = (n: number) => String(Math.round(n))
 const r1 = (n: number) => String(Math.round(n * 10) / 10)
 
 const KIND_LABEL: Record<string, string> = {
@@ -167,7 +167,7 @@ function PointTable({ pts, closed, onPoint }: { pts: Pt[]; closed: boolean; onPo
             <span className="text-[10px] text-gray-500">{i + 1}</span>
             <Field value={p.x} w="w-full" onCommit={onPoint && (n => onPoint(i, { x: n, y: p.y }))} />
             <Field value={p.y} w="w-full" onCommit={onPoint && (n => onPoint(i, { x: p.x, y: n }))} />
-            <span className="text-[11px] text-gray-300 font-mono text-right">{next ? r0(segLength(p, next)) : ''}</span>
+            <span className="text-[11px] text-gray-300 font-mono text-right">{next ? r1(segLength(p, next)) : ''}</span>
           </div>
         )
       })}
@@ -177,14 +177,14 @@ function PointTable({ pts, closed, onPoint }: { pts: Pt[]; closed: boolean; onPo
 
 function summary(a: RoomAnnotation, k: number): string {
   switch (a.kind) {
-    case 'line':  { const p = (a.geom as LineGeom).pts ?? []; return `${r0(polyLen(p, false))} mm` }
-    case 'cloud': { const p = (a.geom as LineGeom).pts ?? []; return `${r0(polyLen(p, true))} mm round` }
+    case 'line':  { const p = (a.geom as LineGeom).pts ?? []; return `${r1(polyLen(p, false))} mm` }
+    case 'cloud': { const p = (a.geom as LineGeom).pts ?? []; return `${r1(polyLen(p, true))} mm round` }
     case 'rect':
-    case 'ellipse': { const g = a.geom as BoxGeom; return `${r0(Math.abs(g.b.x - g.a.x))} × ${r0(Math.abs(g.b.y - g.a.y))}` }
+    case 'ellipse': { const g = a.geom as BoxGeom; return `${r1(Math.abs(g.b.x - g.a.x))} × ${r1(Math.abs(g.b.y - g.a.y))}` }
     case 'dim':   { const g = a.geom as DimGeom; return g?.p1 && g?.p2 ? dimText(dimLayout(g).value, a.text) : '' }
     case 'text':  { const t = (a.text ?? '').split('\n')[0]; void k; return t.length > 22 ? t.slice(0, 22) + '…' : t || '(empty)' }
-    case 'arc':   { const g = a.geom as ArcGeom; return g?.c ? `R${r0(g.r)} · ${r0(sweepOf(g.a0, g.a1))}°` : '' }
-    case 'circle': { const g = a.geom as CircleGeom; return g?.c ? `Ø${r0(g.r * 2)}` : '' }
+    case 'arc':   { const g = a.geom as ArcGeom; return g?.c ? `R${r1(g.r)} · ${r1(sweepOf(g.a0, g.a1))}°` : '' }
+    case 'circle': { const g = a.geom as CircleGeom; return g?.c ? `Ø${r1(g.r * 2)}` : '' }
   }
 }
 
@@ -213,12 +213,12 @@ export default function CadPanel({ cad, annotations, paper, onClose }: {
 
       <Section title="Cursor">
         <div className="grid grid-cols-2 gap-x-3">
-          <Row k="X" v={c ? r0(c.x) : '—'} />
-          <Row k="Y" v={c ? r0(c.y) : '—'} />
+          <Row k="X" v={c ? r1(c.x) : '—'} />
+          <Row k="Y" v={c ? r1(c.y) : '—'} />
           {from && c && (<>
-            <Row k="ΔX" v={r0(c.x - from.x)} />
-            <Row k="ΔY" v={r0(c.y - from.y)} />
-            <Row k="Dist" v={r0(segLength(from, c))} />
+            <Row k="ΔX" v={r1(c.x - from.x)} />
+            <Row k="ΔY" v={r1(c.y - from.y)} />
+            <Row k="Dist" v={r1(segLength(from, c))} />
             <Row k="Angle" v={`${r1(segAngle(from, c))}°`} />
           </>)}
         </div>
@@ -242,8 +242,8 @@ export default function CadPanel({ cad, annotations, paper, onClose }: {
           </>)}
           <TypedEntryFields cad={cad} />
           {cad.pending && c && (<>
-            <Row k="Corner" v={`${r0(cad.pending.start.x)}, ${r0(cad.pending.start.y)}`} />
-            <Row k="W × H" v={`${r0(Math.abs(c.x - cad.pending.start.x))} × ${r0(Math.abs(c.y - cad.pending.start.y))}`} />
+            <Row k="Corner" v={`${r1(cad.pending.start.x)}, ${r1(cad.pending.start.y)}`} />
+            <Row k="W × H" v={`${r1(Math.abs(c.x - cad.pending.start.x))} × ${r1(Math.abs(c.y - cad.pending.start.y))}`} />
           </>)}
         </Section>
       )}
@@ -278,9 +278,9 @@ function MultiInfo({ sel, k }: { sel: RoomAnnotation[]; k: number }) {
   const b = boundsOf(sel.flatMap(a => annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, k)))
   if (!b) return null
   return <>
-    <Row k="Extents X" v={`${r0(b.minX)} → ${r0(b.maxX)}`} />
-    <Row k="Extents Y" v={`${r0(b.minY)} → ${r0(b.maxY)}`} />
-    <Row k="W × H" v={`${r0(b.maxX - b.minX)} × ${r0(b.maxY - b.minY)}`} />
+    <Row k="Extents X" v={`${r1(b.minX)} → ${r1(b.maxX)}`} />
+    <Row k="Extents Y" v={`${r1(b.minY)} → ${r1(b.maxY)}`} />
+    <Row k="W × H" v={`${r1(b.maxX - b.minX)} × ${r1(b.maxY - b.minY)}`} />
   </>
 }
 
@@ -293,7 +293,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
       return <>
         <PointTable pts={pts} closed={closed} onPoint={(i, p) => set({ ...g, pts: pts.map((q, j) => j === i ? p : q) })} />
         <div className="mt-2">
-          <Row k={closed ? 'Perimeter' : 'Total length'} v={`${r0(polyLen(pts, closed))} mm`} />
+          <Row k={closed ? 'Perimeter' : 'Total length'} v={`${r1(polyLen(pts, closed))} mm`} />
           {closed && <Row k="Area" v={`${r1(polyArea(pts) / 1e6)} m²`} />}
           {!closed && pts.length >= 2 && <Row k="Angle (first side)" v={`${r1(segAngle(pts[0], pts[1]))}°`} />}
         </div>
@@ -320,7 +320,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
         </div>
         <div className="flex gap-2 mt-1.5"><Field label="∠" value={g.rot ?? 0} onCommit={n => set({ ...g, rot: ((n % 360) + 360) % 360 })} suffix="°" w="w-16" /></div>
         <div className="mt-2">
-          <Row k="Centre" v={`${r0((g.a.x + g.b.x) / 2)}, ${r0((g.a.y + g.b.y) / 2)}`} />
+          <Row k="Centre" v={`${r1((g.a.x + g.b.x) / 2)}, ${r1((g.a.y + g.b.y) / 2)}`} />
           <Row k="Area" v={`${r1((a.kind === 'rect' ? w * h : Math.PI * w * h / 4) / 1e6)} m²`} />
         </div>
       </>
@@ -337,7 +337,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
             <Field label="W" value={g.width} onCommit={n => n >= 8 && set({ ...g, width: n })} w="w-16" />
             <Field label="H" value={g.height ?? 0} onCommit={n => set({ ...g, height: n > 0 ? n : undefined })} w="w-16" />
           </div>
-          <div className="mt-1 text-[11px] text-gray-500">= {r0(g.width * k)} × {r0((g.height ?? 0) * k)} mm on the plan at 1:{r0(k)}</div>
+          <div className="mt-1 text-[11px] text-gray-500">= {r1(g.width * k)} × {r1((g.height ?? 0) * k)} mm on the plan at 1:{rScale(k)}</div>
         </>)}
         {g.leader?.length ? (<>
           <div className="text-[10px] text-gray-500 mt-2 mb-1">Leader (point 1 = arrow tip)</div>
@@ -360,8 +360,8 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
         </div>
         <div className="mt-2">
           <Row k="Sweep" v={`${r1(sweepOf(g.a0, g.a1))}°`} />
-          <Row k="Arc length" v={`${r0(arcLength(g))} mm`} />
-          <Row k="Chord" v={`${r0(segLength(arcStart(g), arcEnd(g)))} mm`} />
+          <Row k="Arc length" v={`${r1(arcLength(g))} mm`} />
+          <Row k="Chord" v={`${r1(segLength(arcStart(g), arcEnd(g)))} mm`} />
         </div>
         <button onClick={() => set({ ...g, a0: g.a1, a1: g.a0 })}
           className="mt-2 text-xs px-2 py-1 rounded bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700">
@@ -380,7 +380,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
           <Field label="Ø" value={g.r * 2} onCommit={n => n > 0 && set({ ...g, r: n / 2 })} w="w-16" />
         </div>
         <div className="mt-2">
-          <Row k="Circumference" v={`${r0(2 * Math.PI * g.r)} mm`} />
+          <Row k="Circumference" v={`${r1(2 * Math.PI * g.r)} mm`} />
           <Row k="Area" v={`${r1(Math.PI * g.r * g.r / 1e6)} m²`} />
         </div>
       </>
@@ -397,7 +397,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
         <div className="flex gap-2 mt-1.5"><Field label="Off" value={g.offset} onCommit={n => set({ ...g, offset: n })} suffix="mm" w="w-16" /></div>
         <div className="mt-2">
           <Row k="Type" v={g.axis === 'x' ? 'Linear — horizontal' : g.axis === 'y' ? 'Linear — vertical' : 'Aligned'} />
-          <Row k="Measures" v={`${r0(l.value)} mm`} />
+          <Row k="Measures" v={`${r1(l.value)} mm`} />
           <Row k="Shows" v={dimText(l.value, a.text)} />
         </div>
       </>

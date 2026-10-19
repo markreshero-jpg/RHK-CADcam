@@ -32,10 +32,10 @@ interface CalcInputProps {
   onClear?: () => void
 }
 
-function fmt(value: number | null | undefined): string {
+function fmt(value: number | null | undefined, decimals?: number): string {
   if (value == null || !Number.isFinite(value)) return ''
-  const r = Math.round(value * 1000) / 1000 // trim float noise, keep ≤3 dp
-  return String(r)
+  const f = 10 ** (decimals ?? 3) // show at the commit precision; else ≤3 dp trims float noise
+  return String(Math.round(value * f) / f)
 }
 
 export default function CalcInput({
@@ -45,7 +45,7 @@ export default function CalcInput({
   // null = not editing → mirror `value`; string = in-progress draft
   const [draft, setDraft] = useState<string | null>(null)
 
-  const shown = draft ?? fmt(value)
+  const shown = draft ?? fmt(value, decimals)
 
   function commit() {
     if (draft == null) return

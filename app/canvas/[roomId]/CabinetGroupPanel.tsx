@@ -87,7 +87,7 @@ export default function CabinetGroupPanel({ cabinets, wallCabinets, walls, room,
     <div>
       <p className="text-[10px] text-gray-600 text-center mb-0.5 uppercase">{label}</p>
       {value != null
-        ? <CalcInput value={value} onCommit={v => onUpdateMany({ [key]: v })} className={inp + ' text-right'} />
+        ? <CalcInput value={value} decimals={1} onCommit={v => onUpdateMany({ [key]: v })} className={inp + ' text-right'} />
         : <div className={inp + ' text-right text-gray-500 italic'} title="Cabinets differ — type a value to make them equal">mixed</div>}
     </div>
   )
@@ -101,7 +101,7 @@ export default function CabinetGroupPanel({ cabinets, wallCabinets, walls, room,
   const clrMove = (label: string, v: number, side: 'left' | 'right') => (
     <div>
       <p className="text-[9px] text-gray-500 mb-0.5">{label}</p>
-      <CalcInput value={v} decimals={0} onCommit={n => slideTo(side, n)}
+      <CalcInput value={v} decimals={1} onCommit={n => slideTo(side, n)}
         className={`${inp} text-right ${v < 0 ? 'text-red-400' : ''}`} />
     </div>
   )

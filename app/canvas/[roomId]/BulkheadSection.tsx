@@ -41,7 +41,7 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
             <input type="checkbox" checked={b[k].on} onChange={e => putRet(k, { on: e.target.checked })} />
             {name}
           </label>
-          <CalcInput value={b[k].depth} decimals={0} disabled={!b[k].on}
+          <CalcInput value={b[k].depth} decimals={1} disabled={!b[k].on}
             onCommit={v => { if (v > 0) putRet(k, { depth: v }) }}
             className={inp + ' text-right disabled:opacity-40'} />
           <select value={b[k].joint} disabled={!b[k].on}
@@ -79,7 +79,7 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
             <input type="checkbox" checked={b[k].on} onChange={e => putRet(k, { on: e.target.checked })} />
             {name}
           </label>
-          <CalcInput value={b[k].depth} decimals={0} disabled={!b[k].on}
+          <CalcInput value={b[k].depth} decimals={1} disabled={!b[k].on}
             onCommit={v => { if (v > 0) putRet(k, { depth: v }) }}
             className={inp + ' text-right disabled:opacity-40'} />
           <select value={b[k].joint} disabled={!b[k].on}

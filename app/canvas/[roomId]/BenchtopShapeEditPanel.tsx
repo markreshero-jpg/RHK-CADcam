@@ -106,9 +106,9 @@ export default function BenchtopShapeEditPanel({
                   <button onClick={() => onSelect({ kind: 'v', i })}
                     className={`text-[11px] rounded ${on ? 'bg-amber-600 text-white' : 'text-gray-500 hover:text-gray-200'}`}
                     title="Pick this corner on the plan">{i + 1}</button>
-                  <CalcInput key={`x${i}-${Math.round(l.x)}`} value={Math.round(l.x)} decimals={0}
+                  <CalcInput key={`x${i}-${Math.round(l.x)}`} value={l.x} decimals={1}
                     onCommit={v => ops.setCorner(i, { x: v, y: l.y })} className={inp + (on ? ' border-amber-600' : '')} />
-                  <CalcInput key={`y${i}-${Math.round(l.y)}`} value={Math.round(l.y)} decimals={0}
+                  <CalcInput key={`y${i}-${Math.round(l.y)}`} value={l.y} decimals={1}
                     onCommit={v => ops.setCorner(i, { x: l.x, y: v })} className={inp + (on ? ' border-amber-600' : '')} />
                 </div>
               )
@@ -120,11 +120,11 @@ export default function BenchtopShapeEditPanel({
           <div className="border border-amber-700/50 rounded p-2 space-y-1.5">
             <p className="text-[11px] text-amber-300">Corner {picked + 1}</p>
             <div className="flex gap-1 items-center">
-              <div className="w-16"><CalcInput value={radius} decimals={0} onCommit={v => setRadius(Math.max(1, v))} className={inp} /></div>
+              <div className="w-16"><CalcInput value={radius} decimals={1} onCommit={v => setRadius(Math.max(1, v))} className={inp} /></div>
               <button onClick={() => ops.round(picked, radius)} className={btn + ' flex-1'}>Round</button>
             </div>
             <div className="flex gap-1 items-center">
-              <div className="w-16"><CalcInput value={chamfer} decimals={0} onCommit={v => setChamfer(Math.max(1, v))} className={inp} /></div>
+              <div className="w-16"><CalcInput value={chamfer} decimals={1} onCommit={v => setChamfer(Math.max(1, v))} className={inp} /></div>
               <button onClick={() => ops.chamfer(picked, chamfer)} className={btn + ' flex-1'}>Chamfer</button>
             </div>
             <button onClick={() => ops.deleteCorner(picked)} disabled={n <= 3}
