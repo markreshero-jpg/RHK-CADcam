@@ -5,14 +5,88 @@
 // item (typed values commit on Enter / leaving the field), and a list of the room's
 // notes and markup to pick from. All values are room mm unless marked paper mm.
 
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import type { RoomAnnotation } from '@/src/lib/types'
 import {
   type Pt, type LineGeom, type BoxGeom, type TextGeom, type DimGeom,
   segLength, segAngle, dimLayout, dimText, boundsOf, annotationFramePoints,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
-import type { AnnotationTool } from './useAnnotationTool'
+import type { AnnotationTool, TypedField } from './useAnnotationTool'
+
+const TYPED_LABEL: Record<TypedField, [string, string]> = {
+  length: ['Length', 'mm'], angle: ['Angle', '°'], w: ['W', 'mm'], h: ['H', 'mm'], offset: ['Offset', 'mm'],
+}
+
+/** Typed sizes while drawing: Tab from the canvas lands here; Tab cycles the fields,
+ *  Enter places the point / shape, Esc clears. Blank = follow the cursor. */
+function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
+  const refs = useRef<Partial<Record<TypedField, HTMLInputElement | null>>>({})
+  const [drafts, setDrafts] = useState<Partial<Record<TypedField, string>>>({})
+  const fields = cad.typedFields
+
+  // Focus requests from the canvas (Tab, or a digit that seeds the field).
+  const req = cad.focusReq
+  useEffect(() => {
+    if (!req) return
+    const el = refs.current[req.field]
+    if (!el) return
+    el.focus()
+    if (req.seed != null) {
+      const n = parseFloat(req.seed)
+      cad.setTyped(req.field, Number.isFinite(n) ? n : undefined)
+      requestAnimationFrame(() => { el.value = req.seed!; el.setSelectionRange(1, 1) })
+    } else el.select()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [req?.n])
+
+  // Live values (placeholders) for what the cursor is doing now.
+  const lm = cad.liveMeasure
+  const live: Partial<Record<TypedField, number>> = {}
+  if (lm?.mode === 'seg') { live.length = segLength(lm.a, lm.b); live.angle = segAngle(lm.a, lm.b) }
+  if (lm?.mode === 'box') { live.w = Math.abs(lm.b.x - lm.a.x); live.h = Math.abs(lm.b.y - lm.a.y) }
+  const prev = cad.drawPreview
+  if (prev?.kind === 'dim') live.offset = Math.abs((prev.geom as DimGeom).offset)
+
+  if (!fields.length) return null
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      {fields.map((f, i) => {
+        const t = cad.typed[f]
+        const draft = drafts[f]
+        const shown = t != null ? (draft ?? String(t)) : draft && !Number.isFinite(parseFloat(draft)) ? draft : ''
+        return (
+          <label key={f} className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-400 w-12">{TYPED_LABEL[f][0]}</span>
+            <input ref={el => { refs.current[f] = el }} value={shown} inputMode="decimal"
+              placeholder={live[f] != null ? r1(live[f]!) : 'cursor'}
+              onChange={e => {
+                const v = e.target.value
+                setDrafts(d => ({ ...d, [f]: v }))
+                const n = parseFloat(v)
+                cad.setTyped(f, v.trim() && Number.isFinite(n) ? n : undefined)
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Tab') {
+                  e.preventDefault()
+                  const next = fields[(i + (e.shiftKey ? fields.length - 1 : 1)) % fields.length]
+                  refs.current[next]?.focus(); refs.current[next]?.select()
+                } else if (e.key === 'Enter') {
+                  e.preventDefault(); setDrafts({}); cad.commitTyped(); (e.target as HTMLInputElement).blur()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault(); e.stopPropagation(); setDrafts({}); cad.clearTyped(); (e.target as HTMLInputElement).blur()
+                }
+              }}
+              className={`w-24 h-7 bg-gray-800 border rounded px-1.5 text-sm font-mono outline-none ${t != null ? 'border-yellow-500 text-yellow-200' : 'border-gray-700 text-gray-100'} focus:border-rose-500`} />
+            <span className="text-[10px] text-gray-500">{TYPED_LABEL[f][1]}</span>
+            {t != null && <span className="text-[10px] text-yellow-400">locked</span>}
+          </label>
+        )
+      })}
+      <div className="text-[11px] text-gray-500">Tab = next field · Enter = place · Esc = clear · blank follows the cursor</div>
+    </div>
+  )
+}
 
 const r0 = (n: number) => String(Math.round(n))
 const r1 = (n: number) => String(Math.round(n * 10) / 10)
@@ -121,7 +195,7 @@ export default function CadPanel({ cad, annotations, paper, onClose }: {
   const d = cad.drawing
 
   return (
-    <div className="w-72 bg-gray-900 border-l border-gray-800 flex flex-col overflow-y-auto shrink-0" onPointerDown={e => e.stopPropagation()}>
+    <div data-cad-panel className="w-72 bg-gray-900 border-l border-gray-800 flex flex-col overflow-y-auto shrink-0" onPointerDown={e => e.stopPropagation()}>
       <div className="px-3 py-2.5 border-b border-gray-800 flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-rose-300">CAD</div>
@@ -148,8 +222,9 @@ export default function CadPanel({ cad, annotations, paper, onClose }: {
         <Section title={d ? `Drawing — ${d.tool === 'dim' ? 'dimension' : d.tool}` : 'Placing'}>
           {d && d.pts.length > 0 && (<>
             <PointTable pts={d.cur && d.tool !== 'leader' ? [...d.pts, d.cur] : d.pts} closed={false} />
-            <div className="mt-1.5 text-[11px] text-gray-500">The last row follows the cursor.</div>
+            <div className="mt-1.5 text-[11px] text-gray-500">The last row follows the cursor. Press Tab to type a size.</div>
           </>)}
+          <TypedEntryFields cad={cad} />
           {cad.pending && c && (<>
             <Row k="Corner" v={`${r0(cad.pending.start.x)}, ${r0(cad.pending.start.y)}`} />
             <Row k="W × H" v={`${r0(Math.abs(c.x - cad.pending.start.x))} × ${r0(Math.abs(c.y - cad.pending.start.y))}`} />

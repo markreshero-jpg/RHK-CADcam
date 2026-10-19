@@ -237,6 +237,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | B2 | **CAD snaps:** end / mid / centre / nearest-on-edge / intersection / perpendicular, on walls (faces + corners), cabinets (footprint + door / drawer front line), fixtures & appliances, benchtops and annotations; snap glyph; ribbon toggles | [x] built 2026-10-19; in-app check pending |
 | B2b | **Measurements + coordinates:** live length / angle while drawing, W × H while placing, side lengths / W × H on the selection (screen only); cursor X / Y + ΔX / ΔY readout; typed Length / Angle (2-point line) and W / H (box, ellipse) on the ribbon | [x] built 2026-10-19; in-app check pending |
 | B2c | **CAD side panel** (right, while F7 is on, plan): cursor X / Y / Δ / distance / angle; the shape being drawn point by point; the selection's numbers, editable (points, corner, W / H, rotation, text box size, leader, dim points + offset); multi-select extents; objects list to pick from | [x] built 2026-10-19; in-app check pending |
+| B2d | **Typed entry (Tab):** while drawing, Tab (or a digit) jumps to the CAD panel's size fields — Length / Angle for a segment, W / H for a box / ellipse / cloud / text box, Offset for a dim's last step; Enter places, Esc clears | [x] built 2026-10-19; in-app check pending |
 | B3 | **Arcs + circle:** kinds `arc` + `circle` (migration); arc by 3-point, centre-start-end, start-end-radius; circle by centre + radius; grips | [ ] |
 | B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [ ] |
 | B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [ ] |
@@ -463,6 +464,23 @@ pending.
   - **Objects:** every plan note (newest first; colour swatch, kind, summary); click
     to select.
 - The ribbon's Size group and X / Y readout moved here (removed from the ribbon).
+
+**B2d built 2026-10-19** (Mark: "when tab is pressed it sends it to the length field so
+the user can type in a size"). In-app check pending.
+- **Hook state:** `typed` (`TypedEntry`: length / angle / w / h / offset),
+  `rawCursorRef` (the unlocked cursor), and `focusReq` for the panel.
+  - `typedSeg`: the segment end from the last point; unset parts follow the cursor.
+  - `typedBox`: the opposite corner; the cursor picks the direction.
+  - A typed dim offset keeps the cursor's side.
+  - `typedFields` lists what's offered now; `setTyped` re-locks the preview at once;
+    `commitTyped` (Enter) places via `drawClick` / `finishPlace`.
+- **Keys** (canvas): Tab or a digit while drawing → focus the first field (a digit
+  seeds it). Esc clears typed values first, then cancels. A mouse click while values
+  are typed places the locked point. A canvas click blurs a focused panel field
+  (pointerdown's preventDefault would otherwise leave it focused).
+- **Panel** `TypedEntryFields` in the Drawing section: Tab / Shift+Tab cycle, Enter
+  places, Esc clears. Placeholders show the live value; a locked field turns yellow.
+- B3's arc / circle tools add a Radius field to `TypedEntry` the same way.
 
 Next: B3 (arcs + circle), then B4–B5, then A6 (elevations: wall-local frame, canvas +
 Elevation Views report, wall-split remap).

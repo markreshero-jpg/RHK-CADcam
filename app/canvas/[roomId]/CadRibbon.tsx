@@ -160,13 +160,13 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
     : nSel > 1 ? `${nSel} selected` : nSel === 1 ? `Selected ${kind === 'text' && (cad.selected[0].geom as { width?: number }).width != null ? 'text box' : kind}`
     : `Next ${NEXT[cad.tool]}`
   const oneText = nSel === 1 && kind === 'text' && !cad.editing
-  const drawHint = cad.pending ? (cad.pending.tool === 'textbox' ? 'Click the opposite corner of the text box · Esc cancels' : 'Click the opposite corner · Esc cancels')
+  const drawHint = cad.pending ? (cad.pending.tool === 'textbox' ? 'Click the opposite corner of the text box · Tab = type W / H · Esc cancels' : 'Click the opposite corner · Tab = type W / H · Esc cancels')
     : !cad.drawing ? null
     : cad.drawing.attachId ? 'Click where the leader points · Esc cancels'
     : cad.drawing.tool === 'leader' ? 'Click where the text goes · Esc cancels'
     : cad.drawing.tool === 'dim' ? (cad.drawing.pts.length < 2 ? 'Click the second point · Esc cancels'
-      : 'Move to pull the dimension out · click (or Enter) to place · Esc cancels')
-    : 'Click the next point · double-click / Enter / right-click finishes · Backspace steps back · Esc cancels'
+      : 'Move to pull the dimension out · click (or Enter) to place · Tab = type offset · Esc cancels')
+    : 'Click the next point · Tab = type length / angle · double-click / Enter / right-click finishes · Backspace steps back · Esc cancels'
 
   return (
     <div className="flex-none h-10 bg-gray-900 border-b border-rose-900/60 flex items-center gap-1.5 px-2 shrink-0 relative z-20 overflow-x-auto"

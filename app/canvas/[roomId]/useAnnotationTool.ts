@@ -50,6 +50,27 @@ export interface AnnotDrawing {
   axis?: 'x' | 'y'
 }
 
+/** Typed sizes while drawing (Tab → the CAD panel's fields). Set values lock the shape:
+ *  a segment's length / angle, a box's W / H, a dim's offset. */
+export interface TypedEntry { length?: number; angle?: number; w?: number; h?: number; offset?: number }
+export type TypedField = keyof TypedEntry
+const hasTyped = (t: TypedEntry) => Object.values(t).some(v => v != null)
+
+/** The segment end from `last` with typed length / angle; unset parts follow the cursor. */
+export function typedSeg(last: Pt, raw: Pt, t: TypedEntry): Pt {
+  if (t.length == null && t.angle == null) return raw
+  const L = t.length ?? segLength(last, raw)
+  return withAngle(last, { x: last.x + L, y: last.y }, t.angle ?? segAngle(last, raw))
+}
+/** The opposite corner from `start` with typed W / H; the cursor picks the direction. */
+export function typedBox(start: Pt, raw: Pt, t: TypedEntry): Pt {
+  const sx = raw.x >= start.x ? 1 : -1, sy = raw.y >= start.y ? 1 : -1
+  return {
+    x: t.w != null ? start.x + sx * t.w : raw.x,
+    y: t.h != null ? start.y + sy * t.h : raw.y,
+  }
+}
+
 /** Text being typed in the inline editor. `draft` is the row as it will be saved. */
 export interface AnnotEditing { draft: RoomAnnotation; text: string; isNew: boolean }
 
@@ -103,6 +124,12 @@ export function useAnnotationTool({
   const [drag, setDrag] = useState<Drag | null>(null)
   const [drawing, setDrawing] = useState<AnnotDrawing | null>(null)
   const [dimMode, setDimMode] = useState<DimMode>('linear')
+  // Typed entry (Tab): values + the raw cursor they're applied to, and focus requests for
+  // the CAD panel's fields.
+  const [typed, setTypedState] = useState<TypedEntry>({})
+  const typedRef = useRef<TypedEntry>({})
+  const rawCursorRef = useRef<Pt | null>(null)
+  const [focusReq, setFocusReq] = useState<{ field: TypedField; n: number; seed?: string } | null>(null)
   // Cloud tool: drag / click-click a rectangle, or click the corners of a freehand one.
   const [cloudMode, setCloudMode] = useState<'rect' | 'free'>('rect')
   // Click-click placement (B1): first click armed the shape, the next click finishes it.
@@ -151,7 +178,7 @@ export function useAnnotationTool({
   }
   // A new tool abandons a half-drawn line.
   const [drawTool, setDrawTool] = useState(tool)
-  if (drawTool !== tool) { setDrawTool(tool); setDrawing(null); setPending(null) }
+  if (drawTool !== tool) { setDrawTool(tool); setDrawing(null); setPending(null); setTypedState({}) }
 
   // ── Styles ────────────────────────────────────────────────────────────────
 
@@ -397,8 +424,10 @@ export function useAnnotationTool({
   const dimGeomFor = useCallback((d: AnnotDrawing, cur: Pt): DimGeom => {
     const [p1, p2] = d.pts
     const axis = dimMode === 'aligned' ? undefined : dimAxisFor(p1, p2, cur, d.axis)
-    return { p1, p2, axis, offset: dimOffsetFor({ p1, p2, axis }, cur) }
-  }, [dimMode])
+    const offset = dimOffsetFor({ p1, p2, axis }, cur)
+    // A typed offset keeps the side the cursor is on.
+    return { p1, p2, axis, offset: typed.offset != null ? Math.sign(offset || 1) * Math.abs(typed.offset) : offset }
+  }, [dimMode, typed.offset])
   const dimRow = useCallback((d: AnnotDrawing, cur: Pt): RoomAnnotation | null => {
     const g = dimGeomFor(d, cur)
     const span = g.axis === 'x' ? Math.abs(g.p2.x - g.p1.x) : g.axis === 'y' ? Math.abs(g.p2.y - g.p1.y) : Math.hypot(g.p2.x - g.p1.x, g.p2.y - g.p1.y)
@@ -515,6 +544,42 @@ export function useAnnotationTool({
     setSelectedIds(new Set())
     setEditing({ draft: newRow('text', geom, '', defaultsFor('text')), text: '', isNew: true })
   }, [zoom, frame.s, k, newRow, defaultsFor, captureSnapshot, setAnnotations, insertRows])
+
+  // ── Typed entry (Tab while drawing) ───────────────────────────────────────
+
+  const clearTyped = useCallback(() => { typedRef.current = {}; setTypedState({}) }, [])
+
+  /** Which fields the CAD panel offers for what's being drawn, in Tab order. */
+  const typedFields: TypedField[] = pending ? ['w', 'h']
+    : drawing?.tool === 'dim' && drawing.pts.length === 2 ? ['offset']
+    : drawing && drawing.pts.length && !drawing.attachId ? ['length', 'angle']
+    : []
+
+  /** Panel field typed into (undefined clears it): re-lock the preview at once. */
+  const setTyped = useCallback((field: TypedField, value: number | undefined) => {
+    const next = { ...typedRef.current, [field]: value }
+    typedRef.current = next; setTypedState(next)
+    const raw = rawCursorRef.current
+    const pd = pendingRef.current, d = drawingRef.current
+    if (pd && raw) { const np = { ...pd, cur: typedBox(pd.start, raw, next) }; pendingRef.current = np; setPending(np) }
+    else if (d && raw && d.pts.length && !(d.tool === 'dim' && d.pts.length === 2)) {
+      const nd = { ...d, cur: typedSeg(d.pts[d.pts.length - 1], raw, next) }; drawingRef.current = nd; setDrawing(nd)
+    }
+  }, [])
+
+  /** Enter in a panel field: place the point / finish the shape with the typed values. */
+  const commitTyped = useCallback(() => {
+    const pd = pendingRef.current, d = drawingRef.current
+    if (pd) {
+      pendingRef.current = null; setPending(null)
+      finishPlace(pd.tool, pd.start, typedBox(pd.start, rawCursorRef.current ?? pd.cur, typedRef.current))
+    } else if (d && d.pts.length) {
+      const last = d.pts[d.pts.length - 1]
+      const raw = rawCursorRef.current ?? d.cur ?? last
+      drawClick(d.tool === 'dim' && d.pts.length === 2 ? raw : typedSeg(last, raw, typedRef.current))
+    }
+    clearTyped()
+  }, [finishPlace, drawClick, clearTyped])
 
   // ── Pointer: drags via window listeners ───────────────────────────────────
 
@@ -638,28 +703,39 @@ export function useAnnotationTool({
     // No default mousedown: its focus move would blur a text editor this click opens
     // (the B1 leader bug — the note committed empty before you could type).
     e.preventDefault()
+    // …which also means a size field keeps focus; hand it back so Enter / keys reach the canvas.
+    const ae = document.activeElement
+    if (ae instanceof HTMLInputElement && ae.closest('[data-cad-panel]')) ae.blur()
     if (editing) { commitEdit(); return }   // first click outside the editor just finishes it
     const pd = pendingRef.current
-    if (pd) {   // second click of a click-click shape
+    if (pd) {   // second click of a click-click shape (typed W / H win over the click)
       pendingRef.current = null; setPending(null)
-      finishPlace(pd.tool, pd.start, toFrame(e, !e.shiftKey))
+      const hit = toFrame(e, !e.shiftKey)
+      finishPlace(pd.tool, pd.start, hasTyped(typedRef.current) ? typedBox(pd.start, hit, typedRef.current) : hit)
+      clearTyped()
       return
     }
     if (tool === 'line' || tool === 'arrow' || tool === 'leader' || tool === 'dim' || (tool === 'cloud' && drawingRef.current)) {
       const d = drawingRef.current
-      drawClick(toFrame(e, !e.shiftKey, d?.pts[d.pts.length - 1]))
+      // A typed length / angle locks the point; the click just confirms it.
+      const hit = toFrame(e, !e.shiftKey, d?.pts[d.pts.length - 1])
+      const locked = d && d.pts.length && hasTyped(typedRef.current)
+      drawClick(locked ? (d.tool === 'dim' && d.pts.length === 2 ? hit : typedSeg(d.pts[d.pts.length - 1], hit, typedRef.current)) : hit)
+      clearTyped()
       return
     }
     const p = toFrame(e, tool !== 'select' && !e.shiftKey)
     if (tool === 'select') beginDrag({ kind: 'marquee', start: p, cur: p, additive: e.shiftKey }, { x: e.clientX, y: e.clientY })
     else beginDrag({ kind: 'place', start: p, cur: p, tool: tool as PlaceTool }, { x: e.clientX, y: e.clientY })
-  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace])
+  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace, clearTyped])
 
   /** Rubber band for the segment being drawn. */
   const onCaptureMove = useCallback((e: React.PointerEvent) => {
     const pd = pendingRef.current
     if (pd) {
-      const np = { ...pd, cur: toFrame(e, !e.shiftKey) }
+      const raw = toFrame(e, !e.shiftKey)
+      rawCursorRef.current = raw
+      const np = { ...pd, cur: typedBox(pd.start, raw, typedRef.current) }
       pendingRef.current = np; setPending(np)
       return
     }
@@ -671,7 +747,9 @@ export function useAnnotationTool({
     }
     // A dim's third point only places the line: snap, but no 15° lock off the second point.
     const placing = d.tool === 'dim' && d.pts.length === 2
-    const cur = toFrame(e, !e.shiftKey, placing ? null : d.pts[d.pts.length - 1])
+    const raw = toFrame(e, !e.shiftKey, placing ? null : d.pts[d.pts.length - 1])
+    rawCursorRef.current = raw
+    const cur = placing ? raw : typedSeg(d.pts[d.pts.length - 1], raw, typedRef.current)
     const axis = placing && dimMode === 'linear' ? dimAxisFor(d.pts[0], d.pts[1], cur, d.axis) : d.axis
     const nd = { ...d, cur, axis }
     drawingRef.current = nd; setDrawing(nd)
@@ -756,6 +834,7 @@ export function useAnnotationTool({
       if (e.key === 'Escape') {
         take()
         if (dragRef.current) return
+        if (hasTyped(typedRef.current)) { clearTyped(); return }
         if (pendingRef.current) { pendingRef.current = null; setPending(null); return }
         if (drawingRef.current) { drawingRef.current = null; setDrawing(null); return }
         if (liveSelected.size) setSelectedIds(new Set())
@@ -767,6 +846,15 @@ export function useAnnotationTool({
       if (mod && (e.key === 'v' || e.key === 'V')) { take(); paste(clipboard); return }
       if (mod && (e.key === 'd' || e.key === 'D')) { take(); paste(selected); return }
       if (mod && (e.key === 'a' || e.key === 'A')) { take(); setSelectedIds(new Set(annRef.current.filter(a => a.view === 'plan').map(a => a.id))); return }
+      // Tab (or a digit) while drawing → the CAD panel's first size field.
+      const canType = !!pendingRef.current || (!!drawingRef.current?.pts.length && !drawingRef.current?.attachId)
+      if (canType && (e.key === 'Tab' || (/^[0-9.]$/.test(e.key) && !mod))) {
+        take()
+        const d = drawingRef.current
+        const field: TypedField = pendingRef.current ? 'w' : d?.tool === 'dim' && d.pts.length === 2 ? 'offset' : 'length'
+        setFocusReq(f => ({ field, n: (f?.n ?? 0) + 1, seed: e.key === 'Tab' ? undefined : e.key }))
+        return
+      }
       if (e.key === 'Enter' && drawingRef.current) { take(); finishDrawing(); return }
       if (e.key === 'Backspace' && drawingRef.current && drawingRef.current.pts.length > 1) {   // step back one point
         take()
@@ -784,7 +872,7 @@ export function useAnnotationTool({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing])
+  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing, clearTyped])
 
   // Ghosts for the canvas: marquee box / text box being dragged out (frame coords).
   // A shape being placed: by drag, or armed by a first click (B1).
@@ -852,6 +940,7 @@ export function useAnnotationTool({
     cursor: active ? cursor : null,
     fromPt: drawing?.pts.length ? drawing.pts[drawing.pts.length - 1] : pending ? pending.start : null,
     ribbonSize, applyLength, applyAngle, applyBoxSize, liveMeasure, patchGeom,
+    typed, typedFields, setTyped, commitTyped, clearTyped, focusReq,
     /** Text block size helper for the editor overlay. */
     layoutFor: (a: RoomAnnotation, text: string) => {
       const s = resolveStyle(a.kind, a.style)
