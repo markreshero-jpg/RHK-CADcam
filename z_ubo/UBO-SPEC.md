@@ -205,6 +205,24 @@ centred behind the sink, 50 off the wall → footprint centre 481.5 / 156.75).
   benchtop after placing doesn't re-seat them (same as any sink today, P3).
 - Fixed the Zalo catalogue row (was under_bench / drop 0 → benchtop / 205).
 
+## WOT — wall oven tower (2026-10-19)
+
+`z_ubo/migration_wot_library.sql`, applied. Locked with the user: oven opening
+starts **650** off the floor, **two drawers** below, a **450 microwave /
+compact** opening above the oven; the tower **stops above the microwave** and a
+**W2D** cupboard goes over it as its own cabinet (the face grid can't put a
+pair of doors in one row only — no cell spans).
+- `WOT` (tall, Appliances): 600 wide, **height preserved at 1706** (= 650 +
+  600 + GAPR 2 + 450 + REVT 4). Rows bottom-up: drawer / drawer (unlocked,
+  equal) / open 600 / open 450 — so the oven sits at 650 whatever the kick
+  (drawers 253 each at a 140 kick, 248 at 150). Full top (from T2D),
+  `BACK_TYPE` rail, fixed shelves on both opening bottoms.
+- Contents: Generic oven 600 in row 2, new **Generic microwave 600 x 450**
+  fixture (600 × 400 × 450, under_bench, no model yet) in row 3.
+- Test: `src/lib/resolver/__tests__/wotCabinet.test.ts` (both kicks).
+- Assumes the default reveals (REVT 4, GAPR 2); a method with other values
+  moves the oven by the difference.
+
 ## Open
 
 - Small leftovers: headless `dbPlaceCabinetFromDefinition` doesn't spawn
