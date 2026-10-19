@@ -122,8 +122,8 @@ export function binShape(stack: ResolvedDrawerStack): BinPart[] {
       })
       box('rim', true, cx - rimW / 2, yBin1 - RIM_H, cz - rimD / 2, cx + rimW / 2, yBin1, cz + rimD / 2)
       box('lid', true, cx - topW / 2, yLid0, cz - topD / 2, cx + topW / 2, yLid1, cz + topD / 2)
-      const [hw, hh, hd] = HANDLE
-      box('lid', true, cx - hw / 2, yLid1, cz + topD / 2 - 5 - hd, cx + hw / 2, yLid1 + hh, cz + topD / 2 - 5)
+      const [hw, hh, hd] = HANDLE   // centred on the lid (user, 2026-10-19; the script puts it at the front edge)
+      box('lid', true, cx - hw / 2, yLid1, cz - hd / 2, cx + hw / 2, yLid1 + hh, cz + hd / 2)
     }
   }
   return out

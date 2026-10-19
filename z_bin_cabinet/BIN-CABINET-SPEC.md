@@ -175,6 +175,7 @@ void | division | bin | division | void, with equal voids.
   when the drawer opens (`Fixed` cancels the travel of the group tagged `userData.drawerTravel`).
   NB the script's ProductSpec "74L" (362–380 / 540 high) disagrees with Nikpol's TDS (412–430 / 620);
   the app uses the TDS via the bin pick.
+- **Lid handle centred on the lid (user, 2026-10-19)** — the script puts it at the lid's front edge.
 - **Models:** a bin product's `model_url` still renders in place of the parametric bin, FITTED to the bin
   envelope from its bounding box (any units / size; model_anchor_x/y/z nudge in mm). None set today — the
   user's 360 × 540 74L GLB (source copy here) was replaced by the parametric bin. `.glb` is in the
