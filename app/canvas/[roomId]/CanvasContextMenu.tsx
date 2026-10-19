@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { ContextMenuItem } from './canvasTypes'
+import { ContextMenuItem, ContextMenuSubItem } from './canvasTypes'
 
 const COLOR = {
   red:   'text-red-400 hover:text-red-300',
@@ -8,9 +8,7 @@ const COLOR = {
   amber: 'text-amber-300 hover:text-amber-200',
 }
 
-type NonNull = Extract<ContextMenuItem, { label: string }>
-
-function MenuItem({ item, btn, onClose }: { item: NonNull; btn: string; onClose: () => void }) {
+function MenuItem({ item, btn, onClose }: { item: ContextMenuSubItem; btn: string; onClose: () => void }) {
   const [subOpen, setSubOpen] = useState(false)
   const colorCls = item.color ? COLOR[item.color] : 'text-gray-300 hover:text-white'
 
@@ -33,16 +31,7 @@ function MenuItem({ item, btn, onClose }: { item: NonNull; btn: string; onClose:
             className="absolute left-full top-0 z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl py-1 min-w-[140px]"
             onPointerDown={e => e.stopPropagation()}
           >
-            {item.children.map((sub, i) => (
-              <button
-                key={i}
-                onClick={() => { sub.onClick(); onClose() }}
-                disabled={sub.disabled}
-                className={`${btn} ${sub.color ? COLOR[sub.color] : 'text-gray-300 hover:text-white'}`}
-              >
-                {sub.label}
-              </button>
-            ))}
+            {item.children.map((sub, i) => <MenuItem key={i} item={sub} btn={btn} onClose={onClose} />)}
           </div>
         )}
       </div>

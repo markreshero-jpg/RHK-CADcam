@@ -78,6 +78,8 @@ import ConfirmDeleteModal from '@/src/components/ConfirmDeleteModal'
 import SplitCabinetModal from './SplitCabinetModal'
 import SaveToLibraryModal from './SaveToLibraryModal'
 import ReplaceCabinetModal from './ReplaceCabinetModal'
+import InsertFavouritesModal from './InsertFavouritesModal'
+import { loadInsertFavourites, saveInsertFavourites, foldClass, type InsertFavourite } from './insertFavourites'
 import KickRunSettingsModal from './KickRunSettingsModal'
 import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
 import BenchtopDrawPanel, { type BenchtopDrawPanelHandle } from './BenchtopDrawPanel'
@@ -193,6 +195,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const isAdmin = useIsAdmin()   // testers can't write the shared library
   const [replaceCabId, setReplaceCabId] = useState<string | null>(null)
   const [kickSettingsRunId, setKickSettingsRunId] = useState<string | null>(null)
+  // Right-click → Insert list (library items offered beside a cabinet).
+  // Only read when the menu opens, so a server render's empty list can't mismatch.
+  const [insertFavs, setInsertFavs] = useState<InsertFavourite[]>(loadInsertFavourites)
+  const [editInsertList, setEditInsertList] = useState(false)
   const [libRefresh, setLibRefresh] = useState(0)   // bump to reload the library palette
   const [toast, setToast] = useState<string | null>(null)
   useEffect(() => {
@@ -1277,6 +1283,41 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (!raw) return
     const wd = wallDir(raw.wall)
     const desired = (raw.pos_x - raw.wall.pos_x) * wd.x + (raw.pos_y - raw.wall.pos_y) * wd.y
+  // Right-click → Insert › <library item> › Left / Right side: place the item butted
+  // against the cabinet's side (left/right as seen from its front, so swapped for a
+  // back-side cabinet). Same type (corners folded) → it takes the cabinet's height,
+  // depth and elevation; a kick-run member's kick-less box is extended back to the
+  // floor so a kick / to-floor item gets its full height. Refuses when that side is
+  // taken or off the wall end rather than landing somewhere else.
+  async function handleInsertDefinitionAdjacent(cabId: string, definitionId: string, side: 'left' | 'right') {
+    const host = cabinets.find(c => c.id === cabId)
+    const wall = host && walls.find(w => w.id === host.wall_id)
+    if (!host || !wall) return
+    const def = await dbLoadCabinetDefinition(definitionId)
+    if (!def) { setToast('Insert failed — library item not found (Edit insert list… to refresh)'); return }
+    const draft = buildDraftFromDefinition(def)
+    if (foldClass(def.assembly_class) === foldClass(host.assembly_class) && !draft.footprint?.preset) {
+      draft.dz = host.dz
+      if (host.kick_run_id) { draft.dy = host.dy + (host.pos_z || 0); draft.pos_z = 0 }
+      else { draft.dy = host.dy; draft.pos_z = host.pos_z }
+    }
+    const wallSide = cabWallSide(host, wall)
+    const back = wallSide === 'back'
+    const lowT = (side === 'left') !== back
+    const t = cabT(host, wall)
+    const desired = lowT ? t - draft.dx : t + host.dx
+    const occupied = cabinets
+      .filter(c => c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(draft, c, wall, room) && cabWallSide(c, wall) === wallSide)
+      .map(c => ({ t: cabT(c, wall), dx: c.dx })).concat(wfOcc(wall, wallSide, draft))
+    const slot = findFreeSlot(desired, draft.dx, wall.length, occupied)
+    if (desired < -0.5 || desired + draft.dx > wall.length + 0.5 || Math.abs(slot - desired) > 0.5) {
+      setToast(`No room for ${def.name} on the ${side} of ${host.label ?? 'this cabinet'}`)
+      return
+    }
+    const a = wallAnchorPoint(wall, desired, back, centroid(walls), cabGap(host))
+    await placeFromDraft(draft, wall, a.x, a.y, back)
+  }
+
     const gc = centroid(walls)
     const inward = wallInwardNormal(raw.wall, gc)
     const flip = (wp.x - raw.wall.pos_x) * inward.x + (wp.y - raw.wall.pos_y) * inward.y < 0
@@ -3402,6 +3443,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 setPlaceGhost(null)
               }
             },
+            insertFavourites: insertFavs,
+            onInsertDefinition: (cabId, defId, side) => { void handleInsertDefinitionAdjacent(cabId, defId, side) },
+            onEditInsertList: () => { setEditInsertList(true); useTutorial.getState().emit('insert_list_open') },   // tutorial insert_list
             onPaste: () => { if (clipboard) { setClipboardGroup([]); setMode('paste') } },
             onEdit: id => setEditCabId(id),
             onEqualizeWidths: handleEqualizeWidths,
@@ -3571,6 +3615,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         <LayerManagerPanel
           api={layerSetsApi}
           initialView={canvasView === 'section' ? 'plan' : canvasView}
+      {editInsertList && (
+        <InsertFavouritesModal
+          favourites={insertFavs}
+          onClose={() => setEditInsertList(false)}
+          onSave={favs => { setInsertFavs(favs); saveInsertFavourites(favs); setEditInsertList(false); useTutorial.getState().emit('insert_list_save') }}
+        />
+      )}
+
           activeSetId={activeLayerSet?.id ?? null}
           onPreview={setLayerPreview}
           onUse={chooseLayerSet}

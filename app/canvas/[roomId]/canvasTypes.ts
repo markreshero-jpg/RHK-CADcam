@@ -116,8 +116,10 @@ export type BtShapeSnapshot = Pick<BenchtopInstance, 'segments' | 'polygon' | 'a
 export type MenuItem = { label: string; action?: () => void; disabled?: boolean; shortcut?: string; checked?: boolean } | null
 export type MenuGroup = { label: string; items: MenuItem[] }
 
-export type ContextMenuSubItem = { label: string; onClick: () => void; disabled?: boolean; color?: 'red' | 'blue' | 'amber' }
-export type ContextMenuItem = { label: string; onClick?: () => void; children?: ContextMenuSubItem[]; disabled?: boolean; color?: 'red' | 'blue' | 'amber' } | null
+// Submenus nest (Insert › WEP › Left side): an item with children opens on hover,
+// one without is a leaf that runs onClick.
+export type ContextMenuSubItem = { label: string; onClick?: () => void; children?: ContextMenuSubItem[]; disabled?: boolean; color?: 'red' | 'blue' | 'amber' }
+export type ContextMenuItem = ContextMenuSubItem | null
 
 export interface ViewState { panX: number; panY: number; zoom: number }
 export type ViewAction =

@@ -517,6 +517,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Double-click the oven core between the panels. The cleats, shelf and back panel are its parts; each cleat has its two 5 mm fixing holes and an "Edge in black" comment.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-10-19 (right-click → Insert list of library items).
+  { id: 'insert_list', level: 'basics', topic: 'cabinets', title: 'Insert end panels and fillers',
+    blurb: 'Right-click a cabinet → Insert → WEP → Left side, and choose what that menu offers.',
+    keywords: 'insert right click end panel filler wep bep bepk bfk wf tepk side left right beside adjacent edit insert list favourites menu', steps: [
+    { id: 'edit', title: 'Right-click a cabinet → Insert → Edit insert list…',
+      body: 'Right-click any cabinet and hover Insert. At the bottom, click Edit insert list….',
+      canvas: true, done: (c, s) => ev(c, 'insert_list_open') > ev(s, 'insert_list_open') },
+    { id: 'tick', title: 'Tick the items you insert most',
+      body: 'Search (e.g. "EP" or "filler") and tick things like WEP, BEPK, BFK and WF, then Save. The list is kept in this browser.',
+      canvas: true, done: (c, s) => ev(c, 'insert_list_save') > ev(s, 'insert_list_save') },
+    { id: 'insert', title: 'Insert one beside a cabinet',
+      body: 'Right-click a wall cabinet → Insert → WEP → Left side. It butts against that side and takes the cabinet’s height, depth and elevation. Items for other cabinet types are under Insert → Other.',
+      canvas: true, done: (c, s) => c.cabinets.length > s.cabinets.length },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

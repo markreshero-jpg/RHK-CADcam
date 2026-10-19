@@ -1,12 +1,13 @@
 import type { AssemblyClass } from '@/src/lib/types'
-import type { CabinetInstance, ContextMenuItem } from './canvasTypes'
+import type { CabinetInstance, ContextMenuItem, ContextMenuSubItem } from './canvasTypes'
+import { foldClass, type InsertFavourite } from './insertFavourites'
 import { normaliseBulkhead, type BulkheadSettings } from '@/src/lib/bulkhead'
 
 export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, fixtureId, fixture, canEqualize, clipboard, cabinets, multiSelect,
   onDeleteWall, onDeleteCabinet, onDeleteMultiple, onDeleteBenchtop, onDeleteBenchtopVertex, onRoundCorner, onChamfer,
   onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
-  onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, onSplit,
+  onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, insertFavourites, onInsertDefinition, onEditInsertList, onSplit,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
   onUpdateBulkhead,
 }: {
@@ -46,6 +47,10 @@ export function buildContextMenuGroups({
   onEqualizeWidths: (targetDx?: number) => void
   onInsertCabinet?: (wallId: string, wallT: number, cls: AssemblyClass) => void
   onInsertAdjacent?: (cabId: string, type: 'panel' | 'filler', side: 'left' | 'right') => void
+  /** Insert › <library item> › side, from the ticked insert list. */
+  insertFavourites?: InsertFavourite[]
+  onInsertDefinition?: (cabId: string, definitionId: string, side: 'left' | 'right') => void
+  onEditInsertList?: () => void
   onSplit?: (cabId: string) => void
   onAlignLeft?: () => void
   onAlignRight?: () => void
@@ -202,15 +207,30 @@ export function buildContextMenuGroups({
   }
 
   if (onInsertAdjacent) {
-    groups.push([{
-      label: 'Insert',
-      children: [
-        { label: 'Panel Left',   onClick: () => onInsertAdjacent(cabId, 'panel',  'left') },
-        { label: 'Panel Right',  onClick: () => onInsertAdjacent(cabId, 'panel',  'right') },
-        { label: 'Filler Left',  onClick: () => onInsertAdjacent(cabId, 'filler', 'left') },
-        { label: 'Filler Right', onClick: () => onInsertAdjacent(cabId, 'filler', 'right') },
-      ],
-    }])
+    // The ticked library items (Edit insert list…), this cabinet's type first and
+    // the rest under Other. Nothing ticked yet → the generic panel / filler.
+    const favs = insertFavourites ?? []
+    const sides = (f: InsertFavourite): ContextMenuSubItem => ({
+      label: f.name,
+      children: onInsertDefinition
+        ? [
+            { label: 'Left side',  onClick: () => onInsertDefinition(cabId, f.id, 'left') },
+            { label: 'Right side', onClick: () => onInsertDefinition(cabId, f.id, 'right') },
+          ]
+        : [],
+    })
+    const own = cab ? favs.filter(f => foldClass(f.assembly_class) === foldClass(cab.assembly_class)) : favs
+    const other = favs.filter(f => !own.includes(f))
+    const children: ContextMenuSubItem[] = favs.length && onInsertDefinition
+      ? [...own.map(sides), ...(other.length ? [{ label: 'Other', children: other.map(sides) }] : [])]
+      : [
+          { label: 'Panel Left',   onClick: () => onInsertAdjacent(cabId, 'panel',  'left') },
+          { label: 'Panel Right',  onClick: () => onInsertAdjacent(cabId, 'panel',  'right') },
+          { label: 'Filler Left',  onClick: () => onInsertAdjacent(cabId, 'filler', 'left') },
+          { label: 'Filler Right', onClick: () => onInsertAdjacent(cabId, 'filler', 'right') },
+        ]
+    if (onEditInsertList) children.push({ label: 'Edit insert list…', onClick: onEditInsertList, color: 'blue' })
+    groups.push([{ label: 'Insert', children }])
   }
 
   groups.push([
