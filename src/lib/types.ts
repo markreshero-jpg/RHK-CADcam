@@ -274,6 +274,8 @@ export interface CabinetDefinition {
   part_operations?: Record<string, unknown>[]
   part_comments?: Record<string, string>
   part_labels?: Record<string, string>
+  // Kit (z_wot K3): other library cabinets dropped with this one from one pick.
+  kit?: import('./cabinetKit').CabinetKit | null
   // UI metadata
   description: string | null
   thumbnail_svg: string | null

@@ -105,6 +105,7 @@ orders by level / topic, not array position.
 | Intermediate › Cabinets | Make a shaped cabinet | Select a base → Shape preset (footprint set) → sizes + 3D |
 | | Join kicks along a run | ≥ 2 bases on a wall (hint) → right-click → Join kicks in run (new kick_run_id) → Elevation → right-click the kick → Kick split… |
 | Intermediate › Appliances | Under-bench oven cabinet (z_ubo) | Arm a cabinet (UBO, Appliances) → drop it (a fixture seated in an opening appears: `cabinet_id` + `link_zone`) → open the cabinet editor → click the oven (`cab_fixture_pick`) → close the editor (tip: Save to library keeps fixtures) |
+| Intermediate › Appliances | Wall oven tower (z_wot) | Arm a cabinet (WOT / WOT-COMBI) → drop it (≥ 5 cabinets added: TEPK, D2-LL, oven core, W2D, TEPK) → select the W2D (wall class; Off wall field) → open the oven core in the cabinet editor |
 | Intermediate › Benchtops | Join benchtops in a corner | L corner → Line + Offset → top 1 + top 2 into the corner (hints) → Shift-pick both → right-click → Join benchtops → Apply (joint edge appears) |
 | | Edge profiles | Have a top → right-click → Edit edges → paint an edge + save |
 | Intermediate › Reports | Print elevations | Reports → Room Reports… → Elevation Views → Download PDF (`elevation_pdf`) |

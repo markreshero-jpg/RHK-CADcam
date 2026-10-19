@@ -1,6 +1,6 @@
 # WOT — wall oven tower as a kit of cabinets
 
-Status: **spec'd 2026-10-19**, nothing built yet. Supersedes the single-carcass
+Status: **K0–K5 built 2026-10-19**, in-app check pending (user to look at the cleats). Supersedes the single-carcass
 `WOT` in `z_ubo/UBO-SPEC.md` (WOT section), which the user rejected: a tower has
 **no gables**. Touches the library drilling gap found the same day (phase K0).
 
@@ -20,9 +20,11 @@ Status: **spec'd 2026-10-19**, nothing built yet. Supersedes the single-carcass
    top of the oven cleats, front **flush with the TEPs**, no fixing holes (angle
    brackets on site). An **exposed back panel** runs up behind it. Clear opening
    **350–400** (default 380), then the W2D.
-5. **Option 2 — integrated microwave / combi / steam oven:** a shelf sits on the
-   oven cleats, **internal board, set back 20 in line with the cleats** (the
-   appliance fascia covers it), edged on the 600 edge, comment "edge in black".
+5. **Option 2 — integrated microwave / combi / steam oven (`WOT-COMBI`, code
+   given by the user "for now"):** a shelf sits on the oven cleats, **internal
+   board, set back 20 in line with the cleats** (the appliance fascia covers
+   it), edged on the 600 edge, comment "edge in black". The combi gets **its own
+   pair of cleats**; the W2D sits straight on top.
 6. **W2D above:** **400 deep + doors**, **outset off the back wall** so its doors
    finish flush with the TEP fronts. **Bottom scribe** = the exposed under
    panel's thickness (16.5 or 18 by the material cascade) with an **exposed
@@ -91,25 +93,52 @@ of re-anchoring — which also stops them dropping a back-side cabinet onto the
 wall's inside face. Test `src/lib/__tests__/wallGap.test.ts`.
 
 **K2 — D2-LL** library entry (two equal drawers) — needed by the kit, useful on
-its own.
+its own. ✅ **Built 2026-10-19** (`z_wot/migration_k2_d2ll_library.sql`, applied):
+copy of D2-SL, 600 wide, both rows unlocked; library row keeps D2-SL's front
+rail — the kit sets its full top.
 
 **K3 — kit placement.** `cabinet_definitions.kit` jsonb: members (definition,
 x / y / dx / dy / dz / wall_gap as numbers or formulas over `t.*`, `r.*`,
 `tall.h`, `tall.d`) + per-member top type, rule overrides, extra custom parts.
 Placing a kit drops every member under one snapshot (like group paste).
+✅ **Built 2026-10-19**, in-app check pending. Column `cabinet_definitions.kit`
+(applied). Pure layout `src/lib/cabinetKit.ts` (`layoutKit`, `kitMemberT` — a
+turned frame mirrors the kit so its left stays left); DB `app/canvas/[roomId]/kitPlacement.ts`
+(`dbPlaceKit`: member defs by name, each member's own cascade for `t.*` / `r.*`,
+insert → definition parts + kit extras → drilling / comments → resolve).
+`placeFromDraft` hands a kit definition to `placeKitFromDraft` (one snapshot,
+contents spawned per member). The kit definition is the `self` member, so a
+kit is a normal library card. Members ignore free-slot fitting (placed exactly
+at their offsets from the drop slot). Replace-cabinet with a kit definition
+places the core only.
 
-**K4 — WOT kit.** Oven core definition (no carcass: cleats + option-1 shelf +
-back panel, oven content), D2-LL, W2D with under panel + `SCRBT`, TEPKs.
-Retire the single-carcass `WOT` (inactive). Option 2 entry. Tests on the
-layout at 16.5 / 18 exposed and 140 / 150 kick.
+**K4 — WOT kit.** ✅ **Built 2026-10-19**, in-app check pending. Data in
+`src/lib/wotKit.ts` (test `src/lib/__tests__/wotKit.test.ts`), SQL from
+`scripts/seedWotKit.ts` → `z_wot/migration_k4_wot_library.sql` (applied).
+- `WOT` row rewritten in place as the oven core (tall, no carcass / face /
+  kick): oven cleats L/R (Nailer / Cleat, interior) + Microwave Shelf + Back
+  Panel (Applied Panel, exposed); oven as a point anchor (front on the panel
+  fronts). Kit `lp` TEPK · `dr` D2-LL (650, full top) · `core` self (600 +
+  t.exposed + 380) · `up` W2D (400 deep, gap tall.d − 400, `SCRBT` t.exposed,
+  Under Panel running back to the back panel) · `rp` TEPK.
+- `WOT-COMBI` (new): oven cleats, Combi Shelf (Bottom Panel, interior, front 20
+  back, full depth to the wall), combi cleats 450 above it; oven + Generic
+  microwave 600 x 450 (combi). Core 600 + t.gable + 450; W2D straight on top,
+  under panel the W2D's depth.
+- Cleat holes: 2 × Ø5, depth 18 (≥ board → drilled through + overshoot) at
+  40 / 50 and 40 / h − 50; every cleat + the combi shelf: comment "Edge in
+  black", front (top) edge banded.
+- Old single-carcass test `wotCabinet.test.ts` removed.
 
-**K5 — tutorial** (place a WOT, switch TEPK→TEPF, change opening).
+**K5 — tutorial** ✅ lesson `wot_tower` (pick → drop five cabinets → select the
+W2D / Off wall → open the core).
 
 ## Open
 
-- Option 2 code — not given yet (skill: don't invent codes).
-- Option 2: assumed the combi gets its own cleats like the oven (≈450 high) and
-  the W2D sits straight on top. Confirm.
+- Appliance point anchors are fixed numbers for 580 tall depth + 18 doors
+  (oven front = 600 from the wall); a different tall depth leaves the oven off
+  the panel fronts until moved. The combi sits at 616.5 (16.5 shelf).
+- TEPF instead of TEPK: swap with Replace on each panel for now.
 - `SCRBT` is set from the exposed thickness at placement; a later material
   change doesn't re-sync it.
 - W2D top uses the wall-cabinet top line, the panels the tall height — fine

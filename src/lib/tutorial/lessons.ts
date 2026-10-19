@@ -498,6 +498,25 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Close the editor. Resize or move the UBO and the oven goes with it; delete it and the oven goes too. Set up your own appliance cabinet the same way (drop fixtures onto a cabinet), then use Save to library and it comes out with them.',
       canvas: true, done: c => !c.cabEditorOpen },
   ]},
+
+  // Appended 2026-10-19 (z_wot K3/K4 — the oven tower drops as a set of cabinets).
+  { id: 'wot_tower', level: 'intermediate', topic: 'appliances', title: 'Wall oven tower',
+    blurb: 'Place a WOT — end panels, drawers, oven and the cupboard above, all in one go.',
+    keywords: 'wot oven tower tall wall oven combi microwave steam cleats end panel tepk d2-ll w2d under panel scribe off wall kit set appliance', steps: [
+    { id: 'pick', title: 'Pick WOT or WOT-COMBI',
+      body: 'Open Cabinet in the sidebar (F3), go into Appliances and click WOT (oven with an open microwave box) or WOT-COMBI (oven with an integrated microwave or combi above).',
+      target: 'tool-cabinet', canvas: true, done: c => c.mode.startsWith('place_') && c.mode !== 'place_fixture' },
+    { id: 'drop', title: 'Place it on a wall',
+      body: 'Drop it against a wall. It lands as five cabinets: a TEPK either side, a D2-LL with a full top at 650, the oven on its cleats, and a W2D over it with an under panel, set out off the wall so its doors meet the panel fronts.',
+      canvas: true, done: (c, s) => c.cabinets.length >= s.cabinets.length + 5,
+      hints: c => wallHint(longestWall(c), 'Put the oven tower on this wall') },
+    { id: 'w2d', title: 'Select the cupboard above',
+      body: 'Click the W2D at the top. Under Wall position, Off wall shows how far it stands off the wall. Change it there if your panels are a different depth.',
+      canvas: true, done: c => !!c.selected && c.cabinets.find(x => x.id === c.selected!.id)?.assembly_class === 'wall' },
+    { id: 'core', title: 'Look at the oven cleats',
+      body: 'Double-click the oven core between the panels. The cleats, shelf and back panel are its parts; each cleat has its two 5 mm fixing holes and an "Edge in black" comment.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

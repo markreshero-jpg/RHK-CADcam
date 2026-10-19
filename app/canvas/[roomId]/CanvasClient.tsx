@@ -60,6 +60,8 @@ import { withFixtureCutouts, benchtopAt, openingSpans, fixtureChainSpans, refitO
 import { cabinetPlans, linkFor, followLinks, fixtureClashes, stretchObstacles } from '@/src/lib/fixtureLinks'
 import { zoneFollow, fixtureLocalBox } from '@/src/lib/cabinetContents'
 import { dbSpawnDefinitionContents } from './contentsDB'
+import { parseKit } from '@/src/lib/cabinetKit'
+import { dbPlaceKit } from './kitPlacement'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
 import { findLayerSet } from '@/src/lib/displayLayers/legacy'
@@ -140,6 +142,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [mode, setMode] = useState<Mode>('select')
   // Library definition armed for placement (mode === 'place_definition').
   const [armedDef, setArmedDef] = useState<ArmedDefinition | null>(null)
+  // Kit definitions seen by buildDraftFromDefinition, by id (z_wot K3).
+  const kitDefsRef = useRef(new Map<string, CabinetDefinition>())
   // Editable draft of the armed cabinet (drives the right-hand panel + what gets placed).
   const [armedDraft, setArmedDraft] = useState<CabinetInstance | null>(null)
   const [selected, setSelected] = useState<Selected>(null)
@@ -1076,6 +1080,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Build an editable draft instance from a library definition (id '__draft', not in
   // the DB). The right-hand CabinetPanel edits this; placement inserts it.
   function buildDraftFromDefinition(def: CabinetDefinition): CabinetInstance {
+    // A kit definition (z_wot K3) drops its whole set — remember it for placeFromDraft.
+    if (parseKit(def.kit)) kitDefsRef.current.set(def.id, def)
     // Resolve the class's cascade height/depth so an unpreserved definition adopts
     // this room/job's standards; preserved axes keep the definition's frozen size.
     const { dy, dz } = resolveClassDims(def.assembly_class, { room, project, shop: shopDims })
@@ -1089,6 +1095,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Place the (possibly edited) armed draft. Follows the insert → setCabinets →
   // async-resolve pattern so the cabinet renders immediately.
   async function placeFromDraft(draft: CabinetInstance, wall: Wall, pos_x: number, pos_y: number, islandFlip = false, dxOverride?: number) {
+    const kitDef = draft.cabinet_definition_id ? kitDefsRef.current.get(draft.cabinet_definition_id) : undefined
+    if (kitDef) return placeKitFromDraft(kitDef, draft, wall, pos_x, pos_y, islandFlip)
     captureSnapshot()
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, created_at, updated_at, ...rest } = draft
@@ -1128,6 +1136,36 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         if (resolved) { setResolvedParts(m => new Map(m).set(cabinet.id, resolved)); applyInputColours(cabinet.id); applyInputEdgebands(cabinet.id) }
         if (resolved) void spawnContents(cabinet, resolved)
       })
+    }
+  }
+
+  // Kit placement (z_wot K3): every member as its own cabinet, one undo step.
+  async function placeKitFromDraft(def: CabinetDefinition, draft: CabinetInstance, wall: Wall, pos_x: number, pos_y: number, back: boolean) {
+    const kit = parseKit(def.kit)
+    if (!kit) return
+    captureSnapshot()
+    const wd = wallDir(wall)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, created_at, updated_at, ...selfDraft } = draft
+    const { placed, errors } = await dbPlaceKit({
+      kit, selfDef: def, selfDraft: { ...selfDraft, room_id: room.id, wall_id: wall.id },
+      room, dims: { room, project, shop: shopDims }, wall, ref: centroid(walls),
+      t0: (pos_x - wall.pos_x) * wd.x + (pos_y - wall.pos_y) * wd.y, back,
+      nextLabel: (added, cls) => nextLabel([...cabinets, ...added], cls),
+    })
+    if (errors.length) setToast(`${def.name}: ${errors.join(' · ')}`)
+    if (!placed.length) return
+    setCabinets(cs => [...cs, ...placed.map(p => p.cabinet)])
+    setResolvedParts(m => {
+      const n = new Map(m)
+      for (const p of placed) if (p.resolved) n.set(p.cabinet.id, p.resolved)
+      return n
+    })
+    const self = placed.find(p => p.cabinet.cabinet_definition_id === def.id) ?? placed[0]
+    setSelected({ type: 'cabinet', id: self.cabinet.id })
+    for (const p of placed) {
+      applyInputColours(p.cabinet.id); applyInputEdgebands(p.cabinet.id)
+      if (p.resolved) await spawnContents(p.cabinet, p.resolved)
     }
   }
 
