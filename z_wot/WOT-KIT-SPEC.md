@@ -82,9 +82,13 @@ travel too (stable keys); generated rows don't (seamDrillSync rebuilds them).
 Still not carried: undo/redo of a deleted cabinet (snapshot holds the instance
 row only — existing gap).
 
-**K1 — wall gap.** `cabinet_instances.wall_gap` (mm, default 0): the cabinet's
-back sits that far off the wall face. `wallAnchorPoint` callers add it; drag
-keeps it; Cabinet panel field "Off wall". Plan / elevation / 3D follow `pos`.
+**K1 — wall gap.** The cabinet's back sits a gap off the wall face. Plan /
+elevation / 3D follow `pos`. Cabinet panel field "Off wall".
+✅ **Built 2026-10-19.** No column: the gap lives in `pos` (`wallAnchorPoint(…, gap)`)
+and is read back with `cabWallGap`; drag, move, paste keep it, and the position
+fields / align / equalise now slide along the wall (`slideAlongWall`) instead
+of re-anchoring — which also stops them dropping a back-side cabinet onto the
+wall's inside face. Test `src/lib/__tests__/wallGap.test.ts`.
 
 **K2 — D2-LL** library entry (two equal drawers) — needed by the kit, useful on
 its own.

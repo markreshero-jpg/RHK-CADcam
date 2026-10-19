@@ -4,15 +4,17 @@ import PanelDeleteButton, { PanelCloseButton } from './PanelDeleteButton'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
-import { cabT, wallDir, findFreeSlot, cabsBlock, cabBottomZ } from '@/src/lib/geometry'
+import { cabT, findFreeSlot, cabsBlock, cabBottomZ, slideAlongWall, cabWallGap, cabWallSide, wallAnchorPoint, type RoomRef } from '@/src/lib/geometry'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetShapeSection from './CabinetShapeSection'
 import BulkheadSection from './BulkheadSection'
 
-export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpdate, onDelete, onClose, hideWallPosition, hideDelete, autoFocusWidth }: {
+export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRef, onUpdate, onDelete, onClose, hideWallPosition, hideDelete, autoFocusWidth }: {
   cabinet: CabinetInstance
   wall: Wall | null
+  /** centroid(walls) — which way is into the room. Omitted → no "Off wall" field. */
+  roomRef?: RoomRef
   wallCabinets: CabinetInstance[]
   room: Room | null
   onUpdate: (id: string, u: Partial<CabinetInstance>) => Promise<void>
@@ -99,10 +101,10 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
                   value={meas.posLeft}
                   decimals={0}
                   onCommit={v => {
-                    const d = wallDir(wall)
                     const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
                     const t = findFreeSlot(v, cabinet.dx, wall.length, occ)
-                    onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
+                    const p = slideAlongWall(cabinet, wall, t)
+                    onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
                   }}
                   className={inp + ' text-right'} />
               </div>
@@ -112,11 +114,11 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
                   value={meas.posRight}
                   decimals={0}
                   onCommit={v => {
-                    const d = wallDir(wall)
                     const newT = wall.length - v - cabinet.dx
                     const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
                     const t = findFreeSlot(newT, cabinet.dx, wall.length, occ)
-                    onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
+                    const p = slideAlongWall(cabinet, wall, t)
+                    onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
                   }}
                   className={inp + ' text-right'} />
               </div>
@@ -126,12 +128,12 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
                   value={meas.clearLeft}
                   decimals={0}
                   onCommit={v => {
-                    const d = wallDir(wall)
                     const lN = meas.leftN
                     const desiredT = lN ? lN.t + lN.dx + v : v
                     const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
                     const t = findFreeSlot(desiredT, cabinet.dx, wall.length, occ)
-                    onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
+                    const p = slideAlongWall(cabinet, wall, t)
+                    onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
                   }}
                   className={`${inp} text-right ${meas.clearLeft < 0 ? 'text-red-400' : ''}`} />
               </div>
@@ -141,15 +143,28 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, onUpda
                   value={meas.clearRight}
                   decimals={0}
                   onCommit={v => {
-                    const d = wallDir(wall)
                     const rN = meas.rightN
                     const desiredT = rN ? rN.t - v - cabinet.dx : wall.length - v - cabinet.dx
                     const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
                     const t = findFreeSlot(desiredT, cabinet.dx, wall.length, occ)
-                    onUpdate(cabinet.id, { pos_x: wall.pos_x + t * d.x, pos_y: wall.pos_y + t * d.y })
+                    const p = slideAlongWall(cabinet, wall, t)
+                    onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
                   }}
                   className={`${inp} text-right ${meas.clearRight < 0 ? 'text-red-400' : ''}`} />
               </div>
+              {roomRef && (
+                <div>
+                  <p className="text-[9px] text-gray-500 mb-0.5">Off wall</p>
+                  <CalcInput
+                    value={Math.round(cabWallGap(cabinet, wall, roomRef) * 10) / 10}
+                    decimals={1}
+                    onCommit={v => {
+                      const p = wallAnchorPoint(wall, cabT(cabinet, wall), cabWallSide(cabinet, wall) === 'back', roomRef, Math.max(0, v))
+                      onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
+                    }}
+                    className={inp + ' text-right'} />
+                </div>
+              )}
             </div>
           </div>
         )}

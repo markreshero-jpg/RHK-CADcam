@@ -10,7 +10,7 @@ import {
   wallEnd, wallDir,
   snapAngle,
   nearestWall, wallMitreCorners, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabT, nextLabel,
-  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint, cabWallSpan,
+  centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint, cabWallGap, cabWallSpan,
 } from '@/src/lib/geometry'
 import { bulkheadAutoHeight } from '@/src/lib/bulkhead'
 import { angledFillerSnap } from '@/src/lib/cabinetShape/angledFillerSnap'
@@ -1295,6 +1295,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const w = walls.find(x => x.id === c.wall_id)
     return w ? cabT(c, w) : 0
   }
+  // How far a cabinet stands off its wall (z_wot K1) — moves and pastes keep it.
+  function cabGap(c: CabinetInstance): number {
+    const w = walls.find(x => x.id === c.wall_id)
+    return w ? cabWallGap(c, w, centroid(walls)) : 0
+  }
 
   // Ctrl+V → enter the click-to-place ghost paste. The lead (leftmost) copied
   // cabinet follows the pointer as an outline; on click the whole buffer is
@@ -1327,7 +1332,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         .filter(c => c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(src, c, wall, room) && cabWallSide(c, wall) === side)
         .map(c => ({ t: cabT(c, wall), dx: c.dx })).concat(wfOcc(wall, side, src))
       const t = findFreeSlot(desired, src.dx, wall.length, occupied)
-      const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, flip, cxp)
+      const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, flip, cxp, cabGap(src))
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, created_at, updated_at, ...rest } = src
       const cab = await dbInsertCabinet({ ...rest, room_id: room.id, wall_id: wall.id, label: nextLabel(working, src.assembly_class), pos_x, pos_y, rotation: flip ? wall.angle + 180 : wall.angle })
@@ -1702,7 +1707,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(dragCab ?? { assembly_class: assemblyClass, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === dragSide).map(c => ({ t: cabT(c, wall), dx: c.dx })).concat(wfOcc(wall, dragSide, dragCab ?? { assembly_class: assemblyClass, dy: 9999 }))
         const t = slideToFreeSlot(desired + sp.lo, sp.hi - sp.lo, wall.length, occupied, dragCab ? cabT(dragCab, wall) + sp.lo : undefined) - sp.lo
         const cxp = centroid(walls)
-        const a = wallAnchorPoint(wall, t, dragSide === 'back', cxp)
+        const a = wallAnchorPoint(wall, t, dragSide === 'back', cxp, dragCab ? cabGap(dragCab) : 0)
         setCabDrag({ id: cabId, pos_x: a.x, pos_y: a.y })
       }
     }
@@ -1726,7 +1731,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           const sp = cabWallSpan(cab, raw.wall, flip ? { x: -inw.x, y: -inw.y } : inw)
           const t = slideToFreeSlot(Math.max(0, desired + sp.lo), sp.hi - sp.lo, raw.wall.length, occupied, origT != null ? origT + sp.lo : undefined) - sp.lo
           const cxp = centroid(walls)
-          const a = wallAnchorPoint(raw.wall, t, flip, cxp)
+          const a = wallAnchorPoint(raw.wall, t, flip, cxp, cabGap(cab))
           setCabMoveDrag({ id, wall: raw.wall, pos_x: a.x, pos_y: a.y, islandFlip: flip, freePos: wp })
         }
       }
@@ -3100,6 +3105,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             wall={walls.find(w => w.id === selectedCab.wall_id) ?? null}
             wallCabinets={cabinets.filter(c => c.wall_id === selectedCab.wall_id)}
             room={room}
+            roomRef={centroid(walls)}
             onUpdate={handleUpdateCabinet}
             onDelete={handleDeleteCabinet}
             onClose={() => { setSelected(null); setCabResize(null) }}

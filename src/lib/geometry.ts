@@ -481,13 +481,33 @@ export const islandCabPerp = cabWallPerp
 // by the wall thickness so their back is flush with the wall's OUTER face rather than
 // overlapping the wall body. Islands (thickness 0) get no offset. ref = centroid(walls),
 // the same reference wallInwardNormal uses everywhere else.
-export function wallAnchorPoint(wall: Wall, t: number, back: boolean, ref: RoomRef): Pt {
+// `gap` stands the cabinet's back that far off the wall face (z_wot K1 — a W2D
+// over an oven tower, outset so its doors meet the tower panels).
+export function wallAnchorPoint(wall: Wall, t: number, back: boolean, ref: RoomRef, gap = 0): Pt {
   const d = wallDir(wall)
   const px = wall.pos_x + t * d.x
   const py = wall.pos_y + t * d.y
-  if (!back || wall.thickness <= 0) return { x: px, y: py }
+  if (!back && !gap) return { x: px, y: py }
   const inward = wallInwardNormal(wall, ref)
-  return { x: px - inward.x * wall.thickness, y: py - inward.y * wall.thickness }
+  const off = back ? -(Math.max(0, wall.thickness) + gap) : gap
+  return { x: px + inward.x * off, y: py + inward.y * off }
+}
+
+// How far a cabinet's back stands off the wall face it sits against (the gap
+// wallAnchorPoint applied). Read from pos, so nothing else has to store it.
+export function cabWallGap(cab: CabinetInstance, wall: Wall, ref: RoomRef): number {
+  const inward = wallInwardNormal(wall, ref)
+  const off = (cab.pos_x - wall.pos_x) * inward.x + (cab.pos_y - wall.pos_y) * inward.y
+  const gap = cabWallSide(cab, wall) === 'back' ? -off - Math.max(0, wall.thickness) : off
+  return Math.abs(gap) < 0.05 ? 0 : gap
+}
+
+// Move a cabinet to along-wall distance `t`, keeping whatever it stands off the
+// wall by (back-side thickness offset, wall gap).
+export function slideAlongWall(cab: CabinetInstance, wall: Wall, t: number): Pt {
+  const d = wallDir(wall)
+  const dt = t - cabT(cab, wall)
+  return { x: cab.pos_x + dt * d.x, y: cab.pos_y + dt * d.y }
 }
 
 // pos_x/pos_y is the cabinet's back-left corner: the wall's inside face for face-side

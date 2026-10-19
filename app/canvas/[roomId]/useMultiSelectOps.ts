@@ -1,6 +1,12 @@
 import type { CabinetInstance, Wall, Room } from '@/src/lib/types'
-import { wallDir, cabT, cabsBlock } from '@/src/lib/geometry'
+import { cabT, cabsBlock, slideAlongWall } from '@/src/lib/geometry'
 import type { ContextMenuState } from './canvasTypes'
+
+// Keeps whatever the cabinet stands off the wall by (back side, wall gap).
+function slidePos(cab: CabinetInstance, wall: Wall, t: number) {
+  const p = slideAlongWall(cab, wall, t)
+  return { pos_x: p.x, pos_y: p.y }
+}
 
 interface MultiSelectOpsParams {
   multiSelect:         string[]
@@ -34,7 +40,6 @@ export function useMultiSelectOps(p: MultiSelectOpsParams) {
     const hit = wallForSelection()
     if (!hit) return
     const { wall, sel } = hit
-    const wd = wallDir(wall)
     const requested = targetDx != null && targetDx > 0
       ? Math.round(targetDx)
       : Math.round(sel.reduce((sum, c) => sum + c.dx, 0) / sel.length)
@@ -60,7 +65,7 @@ export function useMultiSelectOps(p: MultiSelectOpsParams) {
       if (newDx < requested) clampedTo = Math.min(clampedTo, newDx)
       let t = t0
       for (const cab of sorted) {
-        updates.push({ id: cab.id, u: { dx: newDx, pos_x: wall.pos_x + t * wd.x, pos_y: wall.pos_y + t * wd.y } })
+        updates.push({ id: cab.id, u: { dx: newDx, ...slidePos(cab, wall, t) } })
         t += newDx
       }
     }
@@ -77,13 +82,11 @@ export function useMultiSelectOps(p: MultiSelectOpsParams) {
     const hit = wallForSelection()
     if (!hit) return
     const { wall, sel } = hit
-    const wd = wallDir(wall)
     const leftT = Math.min(...sel.map(c => cabT(c, wall)))
     await Promise.all(sel.map(cab => {
       if (Math.abs(cabT(cab, wall) - leftT) < 0.5) return Promise.resolve()
       return handleUpdateCabinet(cab.id, {
-        pos_x: wall.pos_x + leftT * wd.x,
-        pos_y: wall.pos_y + leftT * wd.y,
+        ...slidePos(cab, wall, leftT),
       })
     }))
     setContextMenu(null)
@@ -93,13 +96,11 @@ export function useMultiSelectOps(p: MultiSelectOpsParams) {
     const hit = wallForSelection()
     if (!hit) return
     const { wall, sel } = hit
-    const wd = wallDir(wall)
     const rightT = Math.max(...sel.map(c => cabT(c, wall) + c.dx))
     await Promise.all(sel.map(cab => {
       const newT = rightT - cab.dx
       return handleUpdateCabinet(cab.id, {
-        pos_x: wall.pos_x + newT * wd.x,
-        pos_y: wall.pos_y + newT * wd.y,
+        ...slidePos(cab, wall, newT),
       })
     }))
     setContextMenu(null)
