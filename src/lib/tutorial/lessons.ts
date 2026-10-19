@@ -535,7 +535,7 @@ export const LESSONS: TutorialLesson[] = [
 
   { id: 'auto_tops', level: 'basics', topic: 'benchtops', title: 'Auto-build benchtops',
     blurb: 'Let the app put a top over every run of base cabinets, with joints at the corners.',
-    keywords: 'auto build automatic benchtop tops overhang corner mitre butt joint island gap', steps: [
+    keywords: 'auto build automatic benchtop tops overhang corner mitre butt joint island gap waterfall profile', steps: [
     { id: 'bases', title: 'Have some base cabinets',
       body: 'Place a few base cabinets (F3) — ideally a run on two walls meeting in a corner.',
       canvas: true, done: c => bases(c).length >= 2 },
@@ -543,7 +543,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Open Benchtop in the sidebar (F4) and choose Auto-build tops…. Select some cabinets first to build over just those; otherwise it covers the whole room.',
       target: 'tool-benchtop-autobuild|tool-benchtop', canvas: true, done: (c, s) => ev(c, 'bt_autobuild_open') > ev(s, 'bt_autobuild_open') },
     { id: 'answer', title: 'Answer the questions and click through',
-      body: 'Set the front and open-end overhangs, how wide a gap to bridge (a freestanding dishwasher) and Mitre or Butt corners. Next → shows each top (skip it or change its overhangs) and each corner (pick the joint). Build now skips ahead; Esc cancels.',
+      body: 'Set the front and open-end overhangs, how wide a gap to bridge (a freestanding dishwasher), Mitre or Butt corners, waterfall ends (island ends or every open end) and the edge profile. Next → shows each top (skip it or change its overhangs) and each corner (pick the joint). Build now skips ahead; Esc cancels.',
       canvas: true, done: (c, s) => ev(c, 'bt_autobuild') > ev(s, 'bt_autobuild') && c.benchtops.length > s.benchtops.length },
     { id: 'check', title: 'Check the result',
       body: 'Each top is a separate benchtop anchored to its wall, with joint edges (red) where they meet. Right-click one → Edit shape or Edit edges to adjust it. Ctrl+Z undoes the whole build.',

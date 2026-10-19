@@ -4,14 +4,14 @@
 // Auto-build benchtops (F4 → Auto-build tops…, BENCHTOP-SPEC
 // Phase 8). A click-through: general answers (overhangs, gap
 // bridging, corner joint) → each top (build it?, front / end
-// overhangs) → each corner (Mitre / Butt, which runs through)
+// overhangs, waterfall ends) → each corner (Mitre / Butt, which runs through)
 // → review → Build. The plan drawing updates live; "Build now"
 // skips the click-through from any page. Enter = next / build,
 // Esc = cancel.
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
-import type { Wall, CabinetInstance, BenchtopInstance, BenchtopSegment, RoomFixture } from '@/src/lib/types'
+import type { Wall, CabinetInstance, BenchtopInstance, BenchtopSegment, RoomFixture, BenchtopEdgeProfile } from '@/src/lib/types'
 import { centroid, wallEnd } from '@/src/lib/geometry'
 import { cabinetCorners } from '@/src/lib/canvasSnap'
 import { outlinePath, outlinePoints, btSegments } from '@/src/lib/benchtopGeometry'
@@ -28,7 +28,7 @@ const END_TEXT: Record<EndKind, string> = {
 type Page = { k: 'settings' } | { k: 'top'; i: number } | { k: 'corner'; i: number } | { k: 'review' }
 
 export default function BenchtopAutoBuildDialog({
-  walls, cabinets, fixtures, benchtops, cabIds, defaultFront, onBuild, onCancel,
+  walls, cabinets, fixtures, benchtops, cabIds, defaultFront, profiles, defaultProfileId, thickness, onBuild, onCancel,
 }: {
   walls: Wall[]
   cabinets: CabinetInstance[]
@@ -38,11 +38,22 @@ export default function BenchtopAutoBuildDialog({
   cabIds: string[]
   /** Front overhang from the handle schedule (40 handles / 25 finger pulls). */
   defaultFront: number
+  /** Edge profile library (waterfall + exposed-edge picks). */
+  profiles: BenchtopEdgeProfile[]
+  /** The build method's default edge profile — its category picks the waterfall profile. */
+  defaultProfileId: string | null
+  /** Top thickness (a waterfall leg's too) — how far a waterfall end runs past the cabinets. */
+  thickness: number
   onBuild: (tops: BenchtopSegment[][]) => void
   onCancel: () => void
 }) {
+  const wfProfiles = profiles.filter(p => p.active !== false && p.generates === 'waterfall')
+  const edgeProfiles = profiles.filter(p => p.active !== false && p.generates !== 'waterfall')
+  const cat = profiles.find(p => p.id === defaultProfileId)?.category
   const [s, setS] = useState<AutoBuildSettings>({
     frontOverhang: defaultFront, endOverhang: 0, bridgeGap: 650, corner: 'mitre', islandBackOverhang: 0, skipCovered: true,
+    waterfall: 'none', waterfallJoin: 'mitre', waterfallOverhang: thickness, edgeProfileId: null,
+    waterfallProfileId: (wfProfiles.find(p => p.category === cat) ?? wfProfiles[0])?.id ?? null,
   })
   const [ov, setOv] = useState<Record<string, TopOverride>>({})
   const [picks, setPicks] = useState<Record<string, JoinChoice | undefined>>({})
@@ -94,6 +105,7 @@ export default function BenchtopAutoBuildDialog({
   const vb = `${minX - pad} ${minY - pad} ${w + pad * 2} ${h + pad * 2}`
   const fs = Math.max(w, h) / 26
 
+  const selectCls = 'bg-surface-3 border border-edge rounded px-2 py-1 text-ink outline-none focus:border-accent max-w-[14rem]'
   const chip = (on: boolean) =>
     `px-2.5 py-1 text-xs rounded-lg border transition-colors ${on ? 'bg-accent border-accent text-white' : 'bg-surface-3 border-edge text-ink-muted hover:text-ink'}`
   const numField = (label: string, value: number | undefined, placeholder: number | undefined, set: (v: number | undefined) => void, hint?: string) => (
@@ -158,6 +170,10 @@ export default function BenchtopAutoBuildDialog({
             <path key={`j${t.key}-${n}`} d={`M ${q.p0.x} ${q.p0.y} L ${q.p1.x} ${q.p1.y}`} stroke="#ef4444" strokeWidth={3}
               vectorEffect="non-scaling-stroke" />
           )))}
+          {r.tops.flatMap(t => t.skip ? [] : t.segs.filter(q => q.edge?.waterfall_join && q.edge.profile_id === s.waterfallProfileId).map((q, n) => (
+            <path key={`f${t.key}-${n}`} d={`M ${q.p0.x} ${q.p0.y} L ${q.p1.x} ${q.p1.y}`} stroke="#c084fc" strokeWidth={5}
+              vectorEffect="non-scaling-stroke" />
+          )))}
           {r.tops.map(t => {
             const pts = outlinePoints(t.segs, 4)
             const c = pts.reduce((a, p) => ({ x: a.x + p.x / pts.length, y: a.y + p.y / pts.length }), { x: 0, y: 0 })
@@ -185,6 +201,40 @@ export default function BenchtopAutoBuildDialog({
               <button className={chip(s.corner === 'mitre')} onClick={() => setS({ ...s, corner: 'mitre' })}>Mitre</button>
               <button className={chip(s.corner === 'butt')} onClick={() => setS({ ...s, corner: 'butt' })}>Butt — longer top runs through</button>
             </div>
+            {s.waterfallProfileId ? (<>
+              <div className="flex items-center gap-2 text-xs text-ink-muted">
+                <span className="w-40 shrink-0">Waterfall ends</span>
+                <button className={chip(s.waterfall === 'none')} onClick={() => setS({ ...s, waterfall: 'none' })}>None</button>
+                <button className={chip(s.waterfall === 'island')} onClick={() => setS({ ...s, waterfall: 'island' })}>Island / peninsula ends</button>
+                <button className={chip(s.waterfall === 'open')} onClick={() => setS({ ...s, waterfall: 'open' })}>Every open end</button>
+              </div>
+              {s.waterfall !== 'none' && (<>
+                <div className="flex items-center gap-2 text-xs text-ink-muted">
+                  <span className="w-40 shrink-0">Waterfall joint</span>
+                  <button className={chip(s.waterfallJoin === 'mitre')} onClick={() => setS({ ...s, waterfallJoin: 'mitre' })}>Mitre</button>
+                  <button className={chip(s.waterfallJoin === 'butt')} onClick={() => setS({ ...s, waterfallJoin: 'butt' })}>Butt — top sits on the leg</button>
+                </div>
+                {wfProfiles.length > 1 && (
+                  <label className="flex items-center gap-2 text-xs text-ink-muted">
+                    <span className="w-40 shrink-0">Waterfall profile</span>
+                    <select value={s.waterfallProfileId} onChange={e => setS({ ...s, waterfallProfileId: e.target.value })} className={selectCls}>
+                      {wfProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </label>
+                )}
+                {numField('Waterfall end overhang', s.waterfallOverhang, undefined, v => setS({ ...s, waterfallOverhang: v ?? 0 }), 'the leg thickness')}
+              </>)}
+            </>) : (
+              <p className="text-xs text-ink-subtle">No waterfall edge profile in the library — add one in Settings → Benchtop Builder → Edge Profiles for waterfall ends.</p>
+            )}
+            <label className="flex items-center gap-2 text-xs text-ink-muted">
+              <span className="w-40 shrink-0">Edge profile</span>
+              <select value={s.edgeProfileId ?? ''} onChange={e => setS({ ...s, edgeProfileId: e.target.value || null })} className={selectCls}>
+                <option value="">Build method default</option>
+                {edgeProfiles.map(p => <option key={p.id} value={p.id}>{p.name}{p.code ? ` (${p.code})` : ''}</option>)}
+              </select>
+              <span className="text-ink-subtle">exposed edges</span>
+            </label>
             <label className="flex items-center gap-2 text-xs text-ink-muted">
               <input type="checkbox" checked={s.skipCovered} onChange={e => setS({ ...s, skipCovered: e.target.checked })} />
               Skip cabinets that already have a top
@@ -204,7 +254,19 @@ export default function BenchtopAutoBuildDialog({
             {!curTop.skip && (<>
               {numField('Front overhang', ov[curTop.key]?.front, s.frontOverhang, v => setTop(curTop.key, { front: v }))}
               {(['left', 'right'] as const).map((side, e) => curTop.ends[e] === 'open'
-                ? <div key={side}>{numField(`${side === 'left' ? 'Left' : 'Right'} end overhang`, ov[curTop.key]?.[side], s.endOverhang, v => setTop(curTop.key, { [side]: v }))}</div>
+                ? (
+                  <div key={side} className="flex items-center gap-3">
+                    {numField(`${side === 'left' ? 'Left' : 'Right'} end overhang`, ov[curTop.key]?.[side],
+                      curTop.waterfall[e] ? s.waterfallOverhang : s.endOverhang, v => setTop(curTop.key, { [side]: v }))}
+                    {s.waterfallProfileId && (
+                      <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+                        <input type="checkbox" checked={curTop.waterfall[e]}
+                          onChange={ev => setTop(curTop.key, { [`${side}Waterfall`]: ev.target.checked })} />
+                        Waterfall
+                      </label>
+                    )}
+                  </div>
+                )
                 : (
                   <div key={side} className="flex items-center gap-2 text-xs text-ink-muted">
                     <span className="w-40 shrink-0">{side === 'left' ? 'Left' : 'Right'} end</span>
@@ -237,7 +299,10 @@ export default function BenchtopAutoBuildDialog({
               ? <p>{building.length} top{building.length === 1 ? '' : 's'}, {r.corners.length} corner joint{r.corners.length === 1 ? '' : 's'}. Each is a separate benchtop — edit shape, edges and tape as usual afterwards.</p>
               : <p>Nothing to build.</p>}
             {building.map(t => (
-              <p key={t.key} className="text-ink-subtle">{name(t.key)} — {t.wallName} · {t.length} × {t.depth}</p>
+              <p key={t.key} className="text-ink-subtle">
+                {name(t.key)} — {t.wallName} · {t.length} × {t.depth}
+                {t.waterfall.some(Boolean) ? ` · waterfall ${t.waterfall[0] && t.waterfall[1] ? 'both ends' : t.waterfall[0] ? 'left end' : 'right end'}` : ''}
+              </p>
             ))}
           </div>
         )}

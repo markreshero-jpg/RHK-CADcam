@@ -647,7 +647,15 @@ defaults — **not locked** until Mark has tried it.
   kinds shown) → one page per corner (joint chips) → review → Build. Live plan
   drawing throughout; **Build now** from any page; Enter = next, Esc = cancel.
   One insert, one undo step, tops anchored with `autoAnchor`.
-- Tests: `src/lib/__tests__/benchtopAutoBuild.test.ts` (12). Also run against
+- **A-g Waterfalls + profiles** (Mark 2026-10-19: "options for waterfall ends etc") —
+  setting **Waterfall ends**: None / Island & peninsula ends / Every open end;
+  joint Mitre / Butt (`edge.waterfall_join`); profile = the library's waterfall
+  profile in the build method's category (picker when there are several); a
+  waterfall end runs **the top's thickness** past the cabinets (the leg sits
+  outside the carcase; editable). Per-top **Waterfall** tick on each open end
+  overrides the setting. Only open ends (never wall / tall / appliance / corner).
+  **Edge profile** for exposed edges: build method default (unset) or a pick.
+- Tests: `src/lib/__tests__/benchtopAutoBuild.test.ts` (15). Also run against
   three live rooms (L + two-sided island; pie corner + peninsula + fridge) —
   headless in-app check not possible (no AUTOMATION_* creds).
 - Tutorial: **Auto-build benchtops** (basics ▸ benchtops).

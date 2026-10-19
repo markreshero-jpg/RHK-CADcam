@@ -600,6 +600,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // F4 → Auto-build tops (Phase 8): over the selected base cabinets, else the
   // whole room; front overhang defaults from the handle schedule.
   const [autoBuild, setAutoBuild] = useState<{ cabIds: string[]; front: number } | null>(null)
+  // A new top has no method / schedule of its own: the room → job → shop default.
+  const NEW_TOP = { benchtop_build_method_id: null, benchtop_schedule_id: null } as unknown as BenchtopInstance
   async function openAutoBuild() {
     const ids = new Set([...multiSelect, ...(selected?.type === 'cabinet' ? [selected.id] : []), ...btSeedCabIds])
     const cabIds = cabinets.filter(c => ids.has(c.id) && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')).map(c => c.id)
@@ -3243,6 +3245,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           <BenchtopAutoBuildDialog
             walls={walls} cabinets={cabinets} fixtures={fixtures} benchtops={benchtops}
             cabIds={autoBuild.cabIds} defaultFront={autoBuild.front}
+            profiles={btCatalog.profiles}
+            defaultProfileId={btCatalog.defaultProfileIdFor(NEW_TOP)}
+            thickness={Math.round(btCatalog.thicknessFor(NEW_TOP).total)}
             onBuild={tops => { setAutoBuild(null); void bt.commitAutoBuild(tops); useTutorial.getState().emit('bt_autobuild') }}
             onCancel={() => setAutoBuild(null)}
           />

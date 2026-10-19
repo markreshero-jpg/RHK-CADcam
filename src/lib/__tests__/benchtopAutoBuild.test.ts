@@ -14,7 +14,8 @@ let n = 0
 const cab = (w: Wall, x: number, y: number, dx: number, extra: Partial<CabinetInstance> = {}) =>
   ({ id: `c${n++}`, wall_id: w.id, pos_x: x, pos_y: y, dx, dz: 580, dy: 870, rotation: w.angle, footprint: null, assembly_class: 'base', ...extra }) as unknown as CabinetInstance
 
-const S: AutoBuildSettings = { frontOverhang: 40, endOverhang: 20, bridgeGap: 650, corner: 'mitre', islandBackOverhang: 0, skipCovered: true }
+const S: AutoBuildSettings = { frontOverhang: 40, endOverhang: 20, bridgeGap: 650, corner: 'mitre', islandBackOverhang: 0, skipCovered: true,
+  waterfall: 'none', waterfallJoin: 'mitre', waterfallProfileId: 'WF', waterfallOverhang: 33, edgeProfileId: null }
 const areaOf = (s: BenchtopSegment[]) => Math.abs(signedArea(outlinePoints(s, 4)))
 const bbox = (s: BenchtopSegment[]) => {
   const p = outlinePoints(s, 4), xs = p.map(q => Math.round(q.x)), ys = p.map(q => Math.round(q.y))
@@ -135,6 +136,42 @@ describe('auto-build benchtops', () => {
   it('a run that is only an end panel starts unticked', () => {
     const r = planAutoBuild({ walls: ROOM, cabinets: [cab(W1, 500, 0, 18), cab(W1, 1500, 0, 600)] }, { ...S, bridgeGap: 0 })
     expect(r.tops.map(t => t.skip)).toEqual([true, false])
+  })
+
+  it('waterfall ends on an island: both ends get the leg profile + join, the top runs a leg thickness past the cabinets', () => {
+    const isl = wall('I1', 800, 1300, 0, 1800, { wall_type: 'island', thickness: 0 })
+    const cabs = [{ ...cab(isl, 900, 1300, 1200), rotation: 0 } as CabinetInstance]
+    const r = planAutoBuild({ walls: [...ROOM, isl], cabinets: cabs }, { ...S, waterfall: 'island', waterfallJoin: 'butt' })
+    const t = r.tops[0]
+    expect(t.waterfall).toEqual([true, true])
+    expect(bbox(t.segs)).toEqual([867, 1300, 2133, 1920])
+    const wf = t.segs.filter(q => q.edge?.profile_id === 'WF')
+    expect(wf).toHaveLength(2)
+    expect(wf.every(q => q.edge?.waterfall_join === 'butt' && Math.abs(q.p0.x - q.p1.x) < 0.01)).toBe(true)
+    // 'island' leaves wall runs alone.
+    expect(planAutoBuild({ walls: ROOM, cabinets: [cab(W1, 500, 0, 600)] }, { ...S, waterfall: 'island' }).tops[0].waterfall).toEqual([false, false])
+  })
+
+  it('waterfall on every open end never goes on a wall end; a per-top tick turns one off', () => {
+    const cabs = [cab(W1, 0, 0, 1200)]
+    const r = planAutoBuild({ walls: ROOM, cabinets: cabs }, { ...S, waterfall: 'open' })
+    const t = r.tops[0]
+    expect(t.ends).toEqual(['wall', 'open'])
+    expect(t.waterfall).toEqual([false, true])
+    expect(bbox(t.segs)[2]).toBe(1233)
+    const off = planAutoBuild({ walls: ROOM, cabinets: cabs }, { ...S, waterfall: 'open' }, { [t.key]: { rightWaterfall: false } }).tops[0]
+    expect(off.waterfall).toEqual([false, false])
+    expect(bbox(off.segs)[2]).toBe(1220)
+    expect(off.segs.some(q => q.edge?.profile_id === 'WF')).toBe(false)
+    // No waterfall profile in the library → never.
+    expect(planAutoBuild({ walls: ROOM, cabinets: cabs }, { ...S, waterfall: 'open', waterfallProfileId: null }).tops[0].waterfall).toEqual([false, false])
+  })
+
+  it('an edge profile goes on the exposed edges only', () => {
+    const r = planAutoBuild({ walls: ROOM, cabinets: [cab(W1, 0, 0, 1200)] }, { ...S, edgeProfileId: 'BN' })
+    const t = r.tops[0]
+    expect(t.segs.filter(q => q.edge?.wall).every(q => !q.edge?.profile_id)).toBe(true)
+    expect(t.segs.filter(q => !q.edge?.wall).every(q => q.edge?.profile_id === 'BN')).toBe(true)
   })
 
   it('selection only, and cabinets already under a top are skipped', () => {

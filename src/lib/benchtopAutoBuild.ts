@@ -41,12 +41,24 @@ export interface AutoBuildSettings {
   islandBackOverhang: number
   /** Leave out cabinets that already have a top over them. */
   skipCovered: boolean
+  /** Waterfall legs on open ends: none, island / peninsula ends, or every open end (per-top ticks override). */
+  waterfall: 'none' | 'island' | 'open'
+  waterfallJoin: 'mitre' | 'butt'
+  /** The waterfall edge profile to use; null = no waterfall profile in the library (waterfalls off). */
+  waterfallProfileId: string | null
+  /** A waterfall end runs this far past the cabinets (the leg's thickness — the top's). */
+  waterfallOverhang: number
+  /** Profile on the exposed edges; null = the build method's default (left unset on the edge). */
+  edgeProfileId: string | null
 }
 
 export type EndKind = 'open' | 'wall' | 'corner' | 'tee' | 'tall' | 'appliance'
 
 /** Per-top answers from the click-through. Unset = the general setting. */
-export interface TopOverride { skip?: boolean; front?: number; left?: number; right?: number }
+export interface TopOverride {
+  skip?: boolean; front?: number; left?: number; right?: number
+  leftWaterfall?: boolean; rightWaterfall?: boolean
+}
 
 export interface AutoTop {
   key: string
@@ -58,6 +70,8 @@ export interface AutoTop {
   segs: BenchtopSegment[]
   /** Left / right end as seen in the wall's elevation. */
   ends: [EndKind, EndKind]
+  /** Left / right end has a waterfall leg. */
+  waterfall: [boolean, boolean]
   length: number
   depth: number
   skip: boolean
@@ -159,14 +173,15 @@ function clipHalf(pts: Pt[], side: (p: Pt) => number): Pt[] {
   return out
 }
 
-/** Merge consecutive straight edges that run on in line with the same wall flag. */
+/** Merge consecutive straight edges that run on in line with the same finish. */
 function mergeInLine(segs: BenchtopSegment[]): BenchtopSegment[] {
   const out = segs.slice()
   for (let i = 0; out.length > 3 && i < out.length;) {
     const e = out[i], n = out[(i + 1) % out.length]
     const u = sub(e.p1, e.p0), v = sub(n.p1, n.p0)
     const lu = Math.hypot(u.x, u.y), lv = Math.hypot(v.x, v.y)
-    if (lu && lv && Math.abs(cross(u, v)) / (lu * lv) < 1e-6 && u.x * v.x + u.y * v.y > 0 && !!e.edge?.wall === !!n.edge?.wall) {
+    const same = !!e.edge?.wall === !!n.edge?.wall && e.edge?.profile_id === n.edge?.profile_id && e.edge?.waterfall_join === n.edge?.waterfall_join
+    if (lu && lv && Math.abs(cross(u, v)) / (lu * lv) < 1e-6 && u.x * v.x + u.y * v.y > 0 && same) {
       out[i] = { ...e, p1: { ...n.p1 } }
       out.splice((i + 1) % out.length, 1)
       if (i >= out.length) i = 0
@@ -407,32 +422,51 @@ export function planAutoBuild(
   }
 
   // ── Outlines ──
+  // Waterfall on an open end: the setting (island / peninsula ends, or all), a per-top tick over it.
+  const wfOn = (k: number, e: 0 | 1) => {
+    if (ends[k][e] !== 'open' || !s.waterfallProfileId || !shapes[k].endV[e]) return false
+    const run = shapes[k].run, o = ov[run.key] ?? {}
+    const pick = (e === (run.leftIsMin ? 0 : 1)) ? o.leftWaterfall : o.rightWaterfall
+    return pick ?? (s.waterfall === 'open' || (s.waterfall === 'island' && run.island))
+  }
+  // How far each open end runs past the cabinets (a waterfall end: the leg's thickness).
+  const endOh = (k: number, e: 0 | 1) => {
+    if (ends[k][e] !== 'open') return 0
+    const run = shapes[k].run, o = ov[run.key] ?? {}
+    const typed = (e === (run.leftIsMin ? 0 : 1)) ? o.left : o.right
+    return Math.max(0, typed ?? (wfOn(k, e) ? s.waterfallOverhang : s.endOverhang))
+  }
   const built = shapes.map((sh, k) => {
-    const run = sh.run, o = ov[run.key] ?? {}
+    const run = sh.run
     const polys = [sh.loop, ...extra[k]]
-    const leftE = run.leftIsMin ? 0 : 1
+    const oh = [endOh(k, 0), endOh(k, 1)]
     for (const e of [0, 1] as const) {
-      if (ends[k][e] !== 'open') continue
-      const oh = (e === leftE ? o.left : o.right) ?? s.endOverhang
       const vb = sh.endV[e]
-      if (!(oh > 0) || !vb) continue
-      polys.push(e ? frameRect(run.f, sh.u1, sh.u1 + oh, vb[0], vb[1]) : frameRect(run.f, sh.u0 - oh, sh.u0, vb[0], vb[1]))
+      if (!(oh[e] > 0) || !vb) continue
+      polys.push(e ? frameRect(run.f, sh.u1, sh.u1 + oh[e], vb[0], vb[1]) : frameRect(run.f, sh.u0 - oh[e], sh.u0, vb[0], vb[1]))
     }
     // One-sided island: exposed back, plus the seating overhang.
     if (run.oneSided && s.islandBackOverhang > 0) {
       const back = Math.abs(sh.v0) < Math.abs(sh.v1) ? sh.v0 : sh.v1
       const away = back === sh.v0 ? -s.islandBackOverhang : s.islandBackOverhang
-      const lo = (ends[k][0] === 'open' && sh.endV[0] ? -((leftE === 0 ? o.left : o.right) ?? s.endOverhang) : 0)
-      const hi = (ends[k][1] === 'open' && sh.endV[1] ? ((leftE === 1 ? o.left : o.right) ?? s.endOverhang) : 0)
-      polys.push(frameRect(run.f, sh.u0 + Math.min(0, lo), sh.u1 + Math.max(0, hi), Math.min(back, back + away), Math.max(back, back + away)))
+      polys.push(frameRect(run.f, sh.u0 - (sh.endV[0] ? oh[0] : 0), sh.u1 + (sh.endV[1] ? oh[1] : 0), Math.min(back, back + away), Math.max(back, back + away)))
     }
     const loop = simplifyLoop(polys.length > 1 ? unionOutlines(polys) : sh.loop)
     if (loop.length < 3) warnings.push(`Couldn't build a top along ${run.wall.name}.`)
+    // Waterfall end lines (frame u).
+    const wfU = ([0, 1] as const).filter(e => wfOn(k, e)).map(e => (e ? sh.u1 + oh[1] : sh.u0 - oh[0]))
     const segs: BenchtopSegment[] = loop.map(e => {
       let wall = !run.island && (e.role === 'back' || e.role === 'scribe')
       // Any edge lying on a standard wall's face is a wall edge.
       if (!wall) wall = faces.some(f => [e.a, e.b].every(p => Math.abs(vOf(f, p)) < 5 && uOf(f, p) > -5 && uOf(f, p) < f.len + 5))
-      return { type: 'line', p0: { ...e.a }, p1: { ...e.b }, edge: { wall } } as BenchtopSegment
+      const seg = { type: 'line', p0: { ...e.a }, p1: { ...e.b }, edge: { wall } } as BenchtopSegment
+      if (wall) return seg
+      if (wfU.some(u => Math.abs(uOf(run.f, e.a) - u) < 0.5 && Math.abs(uOf(run.f, e.b) - u) < 0.5)) {
+        seg.edge = { wall: false, profile_id: s.waterfallProfileId, waterfall_join: s.waterfallJoin }
+      } else if (s.edgeProfileId) {
+        seg.edge = { wall: false, profile_id: s.edgeProfileId }
+      }
+      return seg
     })
     return mergeInLine(segs)
   })
@@ -481,6 +515,7 @@ export function planAutoBuild(
       key: sh.run.key, wallId: sh.run.wall.id, wallName: sh.run.wall.name, island: sh.run.island,
       cabIds: sh.run.cabs.map(c => c.cab.id), segs,
       ends: sh.run.leftIsMin ? [lo, hi] : [hi, lo],
+      waterfall: sh.run.leftIsMin ? [wfOn(k, 0), wfOn(k, 1)] : [wfOn(k, 1), wfOn(k, 0)],
       length: Math.round(Math.max(...us) - Math.min(...us)), depth: Math.round(Math.max(...vs) - Math.min(...vs)),
       skip: !keep[k],
     }
