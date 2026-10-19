@@ -435,6 +435,13 @@ outside it tops stay locked exactly as before (no drags).
   - Drag a corner (snaps to walls / cabinets / other tops; Ctrl = ortho from
     the previous corner). Drag a straight edge = push / pull: it stays parallel
     and the neighbouring edges stretch along their own lines.
+    *2026-10-19 (Mark: "snap to cabinet end panels, cabinets etc." when editing
+    shape): every benchtop tool snaps to what floor cabinets really draw
+    (resolved case parts, added parts such as end panels, fronts), not just the
+    carcase box; overheads are left out. New snap kind **Cabinet edges** (on by
+    default, snap toolbar): when no corner is in range the point lands on the
+    nearest cabinet outline edge (diamond marker), so a dragged corner / pushed
+    line stops on an end panel or front face. `canvasSnap.cabinetSnapOutlines`.*
   - Select an edge → type its length + which end moves (start / both / end):
     the edge at the moving end is pushed, so an end cap moves out square.
     Push / pull by a typed amount.

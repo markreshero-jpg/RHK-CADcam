@@ -489,6 +489,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setSelected, setContextMenu, setMode,
     captureSnapshot,
     snapSettings, setSnapResult,
+    resolvedParts: planResolvedParts,
     defaultJoinType: b => btCatalog.methodFor(b)?.default_join_type ?? 'butt',
   })
   const benchtopMenuOpenRef = useRef(false)

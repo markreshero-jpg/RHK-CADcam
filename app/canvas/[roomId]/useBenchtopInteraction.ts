@@ -19,6 +19,11 @@ import { btWorld, type Mode, type Selected, type ContextMenuState, type BtShapeS
 import { paintTape, paintProfile } from '@/src/lib/benchtopEdgeband'
 import { jointTops, offsetFromLine, lineRect, type JoinChoice } from '@/src/lib/benchtopJoinTops'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
+import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+
+// Tops snap to floor-standing cabinets only — overhead fronts above the bench
+// would otherwise catch every drag.
+const FLOOR_CLASSES = new Set(['base', 'base_corner', 'tall', 'tall_corner'])
 
 interface Params {
   room: Room
@@ -39,6 +44,8 @@ interface Params {
   captureSnapshot: () => void
   snapSettings: SnapSettings
   setSnapResult: (r: SnapResult | null) => void
+  /** Resolved parts (plan view), so tops snap to end panels / fronts as drawn. */
+  resolvedParts?: Map<string, ResolvedCabinet>
   /** Join type a new join line starts with — the build method default (P-b). */
   defaultJoinType?: (bt: BenchtopInstance) => BenchtopJoinType
 }
@@ -117,7 +124,7 @@ export function useBenchtopInteraction(p: Params) {
     selected,
     setSelected, setContextMenu, setMode,
     captureSnapshot,
-    snapSettings, setSnapResult, defaultJoinType,
+    snapSettings, setSnapResult, defaultJoinType, resolvedParts,
   } = p
 
   // ── Draw state ────────────────────────────────────────────────────────────
@@ -210,7 +217,12 @@ export function useBenchtopInteraction(p: Params) {
   function snapWorld(wp: Pt, prevPt?: Pt | null, excludeBtId?: string): Pt {
     const res = computeSnap(
       wp,
-      { walls, cabinets, benchtops: excludeBtId ? benchtops.filter(b => b.id !== excludeBtId) : benchtops },
+      {
+        walls,
+        cabinets: cabinets.filter(c => FLOOR_CLASSES.has(c.assembly_class)),
+        benchtops: excludeBtId ? benchtops.filter(b => b.id !== excludeBtId) : benchtops,
+        resolved: resolvedParts,
+      },
       snapSettings,
       SNAP_PX / zoom,
       prevPt,

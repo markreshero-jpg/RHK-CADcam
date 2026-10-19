@@ -2040,8 +2040,12 @@ export default function CanvasSVG({
           const color = SNAP_KIND_META[kind].color
           return (
             <g style={{ pointerEvents: 'none' }}>
-              <rect x={pt.x - s} y={pt.y - s} width={s * 2} height={s * 2}
-                fill="none" stroke={color} strokeWidth={1.5 / lz} />
+              {/* On an edge (not a corner): a diamond, CAD "nearest" style. */}
+              {kind === 'cabinet-edge'
+                ? <polygon points={`${pt.x},${pt.y - s * 1.3} ${pt.x + s * 1.3},${pt.y} ${pt.x},${pt.y + s * 1.3} ${pt.x - s * 1.3},${pt.y}`}
+                    fill="none" stroke={color} strokeWidth={1.5 / lz} />
+                : <rect x={pt.x - s} y={pt.y - s} width={s * 2} height={s * 2}
+                    fill="none" stroke={color} strokeWidth={1.5 / lz} />}
               <line x1={pt.x - s * 1.7} y1={pt.y} x2={pt.x + s * 1.7} y2={pt.y}
                 stroke={color} strokeWidth={0.75 / lz} />
               <line x1={pt.x} y1={pt.y - s * 1.7} x2={pt.x} y2={pt.y + s * 1.7}
