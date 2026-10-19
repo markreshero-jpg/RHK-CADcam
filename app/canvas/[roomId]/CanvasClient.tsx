@@ -101,6 +101,7 @@ import Room3DScene, { type Camera3DState } from './Room3DScene'
 import BenchtopPanel from './BenchtopPanel'
 import BenchtopShapeEditPanel, { SaveShapePrompt } from './BenchtopShapeEditPanel'
 import BenchtopJoinDialog from './BenchtopJoinDialog'
+import BenchtopAutoBuildDialog from './BenchtopAutoBuildDialog'
 import BenchtopEdgeEditPanel from './BenchtopEdgeEditPanel'
 import { edgeTape } from '@/src/lib/benchtopEdgeband'
 import { useBenchtopCatalog } from './useBenchtopCatalog'
@@ -594,6 +595,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     setMultiSelect([])
     bt.openNewInShapeEditor(seed)
+  }
+
+  // F4 → Auto-build tops (Phase 8): over the selected base cabinets, else the
+  // whole room; front overhang defaults from the handle schedule.
+  const [autoBuild, setAutoBuild] = useState<{ cabIds: string[]; front: number } | null>(null)
+  async function openAutoBuild() {
+    const ids = new Set([...multiSelect, ...(selected?.type === 'cabinet' ? [selected.id] : []), ...btSeedCabIds])
+    const cabIds = cabinets.filter(c => ids.has(c.id) && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')).map(c => c.id)
+    const front = btFrontOverhang(await loadRoomHandleSchedule(room.id, project?.id).catch(() => ({})))
+    setMultiSelect([])
+    if (!isBenchtopMode(mode)) setMode('benchtop_select')
+    setAutoBuild({ cabIds, front })
+    useTutorial.getState().emit('bt_autobuild_open')   // tutorial auto_tops
   }
 
   // ── Coordinate helpers ────────────────────────────────────────────────────
@@ -2720,6 +2734,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           benchtopMenuOpen={bt.benchtopMenuOpen}
           setBenchtopMenuOpen={bt.setBenchtopMenuOpen}
           onDrawBenchtopInShapeEditor={drawBenchtopInShapeEditor}
+          onAutoBuildBenchtops={() => void openAutoBuild()}
           fixtureMenuOpen={fx.menuOpen}
           setFixtureMenuOpen={fx.setMenuOpen}
           armedFixtureId={fx.carry?.kind === 'place' ? fx.carry.item.id : null}
@@ -3222,6 +3237,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             stretch={bt.shapeStretch}
             onStretchSize={bt.stretchToSize}
             onStretchCancel={bt.cancelStretch}
+          />
+        )}
+        {autoBuild && (
+          <BenchtopAutoBuildDialog
+            walls={walls} cabinets={cabinets} fixtures={fixtures} benchtops={benchtops}
+            cabIds={autoBuild.cabIds} defaultFront={autoBuild.front}
+            onBuild={tops => { setAutoBuild(null); void bt.commitAutoBuild(tops); useTutorial.getState().emit('bt_autobuild') }}
+            onCancel={() => setAutoBuild(null)}
           />
         )}
         {bt.joinDialogIds && (() => {

@@ -477,6 +477,23 @@ export function useBenchtopInteraction(p: Params) {
     for (const { error } of res) if (error) console.error('Failed to save benchtop joint:', error)
   }
 
+  // ── Auto-build (Phase 8) ──
+  // Every top from the auto-build dialog in one insert — one undo step.
+  async function commitAutoBuild(list: BenchtopSegment[][]) {
+    if (!list.length) return
+    captureSnapshot()
+    const rows = list.map((segs, k) => ({
+      room_id: room.id, label: `Benchtop ${benchtops.length + k + 1}`, ...shapeWrite(segs), ...(anchorOf(segs) ?? {}),
+      joins: [] as BenchtopJoinLine[], cutout_polygons: [] as Array<Array<{ x: number; y: number }>>,
+      benchtop_build_method_id: null, benchtop_schedule_id: null, notes: null,
+    }))
+    const { data: saved, error } = await supabase.from('benchtop_instances').insert(rows).select()
+    if (error || !saved?.length) { console.error('Failed to create benchtops:', error); return }
+    setBenchtops(bs => [...bs, ...(saved as BenchtopInstance[])])
+    setSelected({ type: 'benchtop', id: (saved as BenchtopInstance[])[0].id })
+    setMode('benchtop_select')
+  }
+
   // ── Shape Editor overlay ───────────────────────────────────────────────────
 
   function openShapeEditor(id: string) {
@@ -1158,7 +1175,7 @@ export function useBenchtopInteraction(p: Params) {
     btLPoints, btLCursor,
     btUPoints, btUCursor,
     btLinePts, btLineCursor,
-    btMulti, joinDialogIds, setJoinDialogIds, openJoinDialog, commitJoin,
+    btMulti, joinDialogIds, setJoinDialogIds, openJoinDialog, commitJoin, commitAutoBuild,
     btCutoutStart, btCutoutCursor,
     btJoinStart, btJoinCursor,
     benchtopMenuOpen, setBenchtopMenuOpen,

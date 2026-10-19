@@ -15,6 +15,8 @@
 > **2026-10-18: CNC cutouts done** (sink / cooktop holes on worktop + subtop, cross members move
 > clear) — see z_fixtures/FIXTURES-SPEC.md RESUME HERE. Edge profiles on the CNC still open.
 > Phase 4 rules Q-a…Q-h are Claude's defaults; its 3 open questions are locked.
+> **2026-10-19: Phase 8 auto-build tops** built (F4 → Auto-build tops…, click-through dialog) —
+> Mark trying it to see if he likes it; rules A-a…A-f below are Claude's defaults, not locked.
 
 ---
 
@@ -609,6 +611,47 @@ option window pops up for user to choose what join type".
   join, end to end, 45° mitre + butt, apart / curve / T, U of three, no pair,
   line rect at 45°).
 
+### Phase 8 — Auto-build tops  `[~]` built (2026-10-19), Mark trying it
+Mark (2026-10-19): "auto build benchtops function in F4 … prompt the user a few
+questions about overhangs, joint types etc. it can be a click through as you build
+each top … lets try it and i'll see if i like it". Rules below are Claude's
+defaults — **not locked** until Mark has tried it.
+
+- **A-a Entry** — F4 menu → **Auto-build tops…** (`BenchtopAutoBuildDialog.tsx`).
+  Selected base cabinets (incl. the ones carried into F4 mode) = build over just
+  those; none = every base cabinet in the room.
+- **A-b Runs** (`src/lib/benchtopAutoBuild.ts`, pure) — one top per run, never one
+  L / U (one top per wall). Base / base_corner cabinets (no kick assemblies)
+  grouped by wall + side (an island's two sides together), sorted along the wall,
+  split where a gap is wider than **Bridge gaps up to** (650) or holds a tall
+  cabinet or a floor-mount fixture; an under-bench fixture in a gap always
+  bridges. Outline = `benchtopSeed` cabinet outlines (shaped footprints, front
+  overhang), snapped to whole mm in the wall frame first (0.5 mm overlaps between
+  neighbours otherwise break the union). Cabinets already under a top are skipped
+  (tick). A run under 150 mm long (a lone end panel) starts unticked.
+- **A-c Ends** — against a wall face / tall cabinet / floor appliance (within
+  50 mm): no overhang. **Corner (L)**: another run across the end within 150 mm
+  and the end's band reaches past that run's end → both tops are pushed through
+  the corner to the other's back line, then cut by the 7c joint rules.
+  **Tee (peninsula)**: within 50 mm of the side of another run → stops at its
+  front, butt, the other runs through. Else **open** → open-end overhang (0).
+  Left / right = as seen in the wall's elevation.
+- **A-d Corners** — default **Mitre** (setting) or **Butt — longer top runs
+  through**; per-corner pick in the click-through (`choicesFor`; tees butt only).
+  `jointTops` cuts them; joint edges `edge.joint` as 7c.
+- **A-e Islands** — wall edges never on an island line; one-sided island → back
+  exposed + **Island back overhang** (0, seating).
+- **A-f Click-through** — Settings (front overhang = handle schedule 40 / 25,
+  open-end overhang, bridge gap, island back overhang, corner joint, skip
+  covered) → one page per top (build it?, front / left / right overhang, end
+  kinds shown) → one page per corner (joint chips) → review → Build. Live plan
+  drawing throughout; **Build now** from any page; Enter = next, Esc = cancel.
+  One insert, one undo step, tops anchored with `autoAnchor`.
+- Tests: `src/lib/__tests__/benchtopAutoBuild.test.ts` (12). Also run against
+  three live rooms (L + two-sided island; pie corner + peninsula + fridge) —
+  headless in-app check not possible (no AUTOMATION_* creds).
+- Tutorial: **Auto-build benchtops** (basics ▸ benchtops).
+
 ### Deferred
 Splashback module · CNC machining of profiles · automatic panel splits ·
 sharing the profile library with cabinet-part shapes.
@@ -616,6 +659,8 @@ sharing the profile library with cabinet-part shapes.
 ---
 
 ## Session log
+- 2026-10-19 — Phase 8 auto-build tops (F4 → Auto-build tops…): runs per wall,
+  overhang / gap / corner questions, click-through per top + corner. For Mark to try.
 - 2026-10-15 — Phase 7c: Line + offset draw tool (any wall angle) and
   Shift-click → right-click → Join benchtops. First built as a merge into one
   top; Mark: tops stay separate with joints → reworked to joint edges

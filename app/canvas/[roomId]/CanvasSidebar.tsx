@@ -263,7 +263,7 @@ export default function CanvasSidebar({
   armedDefinitionId, onArmDefinition, armedDraft = null, matColours, ebByMatId,
   wallMenuOpen, setWallMenuOpen,
   cabMenuOpen, setCabMenuOpen,
-  benchtopMenuOpen, setBenchtopMenuOpen, onDrawBenchtopInShapeEditor,
+  benchtopMenuOpen, setBenchtopMenuOpen, onDrawBenchtopInShapeEditor, onAutoBuildBenchtops,
   fixtureMenuOpen = false, setFixtureMenuOpen, armedFixtureId = null, onArmFixture,
   cadOn = false, onToggleCad,
   clipboard, sidebarW, libRefresh = 0,
@@ -287,6 +287,8 @@ export default function CanvasSidebar({
   setBenchtopMenuOpen: (v: boolean) => void
   /** F4 → Draw in Shape Editor: new benchtop drawn straight in the full editor. */
   onDrawBenchtopInShapeEditor?: () => void
+  /** F4 → Auto-build tops: one top per base cabinet run, click-through dialog (Phase 8). */
+  onAutoBuildBenchtops?: () => void
   /** F6 Fixtures & appliances (z_fixtures P2). */
   fixtureMenuOpen?: boolean
   setFixtureMenuOpen?: (v: boolean) => void
@@ -849,6 +851,14 @@ export default function CanvasSidebar({
                 title="Open the full Shape Editor for a new benchtop. Select base cabinets first to start from their footprint."
                 icon={BT_ICON(<><path d="M2 12V4h7l5 4v4z" fill="currentColor" fillOpacity="0.12"/><path d="M11.5 1.5l3 3" /></>)}
                 onClick={onDrawBenchtopInShapeEditor}
+              />
+            )}
+            {onAutoBuildBenchtops && (
+              <ToolRow
+                tone={TONES.benchtop} iconClass="text-amber-400" label="Auto-build tops…" active={false} tour="tool-benchtop-autobuild"
+                title="Build a top over every run of base cabinets (or the selected ones) — answer a few questions, check each top and corner, then build."
+                icon={BT_ICON(<><path d="M2 6h12v4H2z" fill="currentColor" fillOpacity="0.15"/><path d="M8 1.5l.8 1.7 1.7.8-1.7.8L8 6.5l-.8-1.7L5.5 4l1.7-.8z" /></>)}
+                onClick={onAutoBuildBenchtops}
               />
             )}
             {BENCHTOP_TOOLS.map(t => (

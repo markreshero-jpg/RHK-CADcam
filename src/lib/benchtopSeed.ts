@@ -28,7 +28,7 @@ export function btFrontOverhang(schedule: Partial<Record<HandleRole, HandleSched
   return BT_FRONT_OH_FINGER
 }
 
-interface RoleEdge { a: Pt; b: Pt; role: EdgeRole }
+export interface RoleEdge { a: Pt; b: Pt; role: EdgeRole }
 
 const RECT_ROLES: EdgeRole[] = ['back', 'side', 'front', 'side']
 
@@ -147,7 +147,7 @@ export function unionOutlines(polys: RoleEdge[][]): RoleEdge[] {
 }
 
 /** Merge consecutive collinear edges that share a wall flag. */
-function simplify(loop: RoleEdge[]): RoleEdge[] {
+export function simplifyLoop(loop: RoleEdge[]): RoleEdge[] {
   const wallOf = (r: EdgeRole) => r === 'back' || r === 'scribe'
   const out = loop.slice()
   let changed = true
@@ -181,7 +181,7 @@ export function benchtopSeedFromCabinets(
   // An edge on a wall's face line (a run's end into the corner) is a wall edge too.
   const faces = [...new Set(cabs.map(c => c.wall))].map(w => ({ a: { x: w.pos_x, y: w.pos_y }, b: wallEnd(w) }))
   const onWall = (e: RoleEdge) => faces.some(f => distToSeg(e.a, f.a, f.b) < TOL && distToSeg(e.b, f.a, f.b) < TOL)
-  const loop = simplify(unionOutlines(polys).map(e => (e.role !== 'back' && onWall(e) ? { ...e, role: 'back' as EdgeRole } : e)))
+  const loop = simplifyLoop(unionOutlines(polys).map(e => (e.role !== 'back' && onWall(e) ? { ...e, role: 'back' as EdgeRole } : e)))
   if (loop.length < 3) return null
   return loop.map(e => ({
     type: 'line', p0: { ...e.a }, p1: { ...e.b },
