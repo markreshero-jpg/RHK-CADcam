@@ -17,7 +17,7 @@ import type { AnnotationTool, TypedField } from './useAnnotationTool'
 
 const TYPED_LABEL: Record<TypedField, [string, string]> = {
   length: ['Length', 'mm'], angle: ['Angle', '°'], w: ['W', 'mm'], h: ['H', 'mm'], offset: ['Offset', 'mm'],
-  radius: ['Radius', 'mm'], sweep: ['Sweep', '°'],
+  radius: ['Radius', 'mm'], sweep: ['Sweep', '°'], distance: ['Distance', 'mm'],
 }
 
 /** Typed sizes while drawing: Tab from the canvas lands here; Tab cycles the fields,
@@ -49,6 +49,7 @@ function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
   if (lm?.mode === 'box') { live.w = Math.abs(lm.b.x - lm.a.x); live.h = Math.abs(lm.b.y - lm.a.y) }
   const prev = cad.drawPreview
   if (prev?.kind === 'dim') live.offset = Math.abs((prev.geom as DimGeom).offset)
+  if (cad.offsetSrc && lm?.mode === 'label') live.distance = parseFloat(lm.text.replace(/[^0-9.]/g, ''))
   if (prev?.kind === 'circle') live.radius = (prev.geom as CircleGeom).r
   if (prev?.kind === 'arc') { live.radius = (prev.geom as ArcGeom).r; live.sweep = sweepOf((prev.geom as ArcGeom).a0, (prev.geom as ArcGeom).a1) }
 
@@ -223,6 +224,15 @@ export default function CadPanel({ cad, annotations, paper, onClose }: {
         </div>
         {cad.snapHit && <div className="mt-1 text-[11px] text-yellow-300">Snapped: {cad.snapHit.kind}</div>}
       </Section>
+
+      {cad.tool === 'offset' && (
+        <Section title="Offset">
+          <div className="text-xs text-gray-400">{cad.offsetSrc
+            ? 'Move to the side you want, then click to place the copy. Tab = type the distance. It carries on from the new copy; Esc to pick another.'
+            : 'Click a line, cloud, box, ellipse, circle or arc to offset it.'}</div>
+          <TypedEntryFields cad={cad} />
+        </Section>
+      )}
 
       {(d || cad.pending) && (
         <Section title={d ? `Drawing — ${d.tool === 'dim' ? 'dimension' : d.tool}` : 'Placing'}>

@@ -280,3 +280,47 @@ describe('B3 arcs', () => {
     expect(arcSvgPath({ ox: 0, oy: 0, s: 1, flipY: true }, a)).toMatch(/A100 100 0 0 0 /)
   })
 })
+
+import { offsetPolyline, signedDistToPolyline, offsetDistanceFor, offsetGeom, moveEdge, edgeDistanceFor, lineIntersect } from '../annotations/geometry'
+
+describe('B4 offset + side drag', () => {
+  const sq = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }]
+  it('mitred polyline offset keeps right angles', () => {
+    // svg: the left normal of a rightward segment points +y (down the screen)
+    expect(offsetPolyline([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }], 10, false))
+      .toEqual([{ x: 0, y: 10 }, { x: 90, y: 10 }, { x: 90, y: 100 }])
+  })
+  it('closed offset grows or shrinks the outline', () => {
+    // sq winds clockwise on screen, so its left normal points inward
+    expect(offsetPolyline(sq, 10, true)).toEqual([{ x: 10, y: 10 }, { x: 90, y: 10 }, { x: 90, y: 90 }, { x: 10, y: 90 }])
+  })
+  it('cursor side picks the sign', () => {
+    expect(signedDistToPolyline([{ x: 0, y: 0 }, { x: 100, y: 0 }], false, { x: 50, y: 20 })).toBeCloseTo(20)
+    expect(signedDistToPolyline([{ x: 0, y: 0 }, { x: 100, y: 0 }], false, { x: 50, y: -20 })).toBeCloseTo(-20)
+  })
+  it('boxes, circles and ellipses: + is outward', () => {
+    const box = { a: { x: 0, y: 0 }, b: { x: 600, y: 400 } }
+    expect(offsetDistanceFor('rect', box, { x: 650, y: 200 })).toBeCloseTo(50)
+    expect(offsetGeom('rect', box, 50)).toEqual({ a: { x: -50, y: -50 }, b: { x: 650, y: 450 } })
+    expect(offsetDistanceFor('rect', box, { x: 300, y: 380 })).toBeCloseTo(-20)
+    expect(offsetDistanceFor('circle', { c: { x: 0, y: 0 }, r: 100 }, { x: 0, y: 130 })).toBeCloseTo(30)
+    expect(offsetGeom('circle', { c: { x: 0, y: 0 }, r: 100 }, -150)).toBeNull()
+    expect(offsetDistanceFor('ellipse', box, { x: 650, y: 200 })).toBeCloseTo(50)
+  })
+  it('side drag keeps the neighbours on their lines', () => {
+    // right side runs downward; its left normal points -x, so -20 pushes it out to x = 120
+    const moved = moveEdge(sq, 1, -20, true)
+    expect(moved[1]).toEqual({ x: 120, y: 0 })
+    expect(moved[2]).toEqual({ x: 120, y: 100 })
+    expect(moved[0]).toEqual(sq[0])
+    expect(edgeDistanceFor(sq, 1, { x: 130, y: 50 })).toBeCloseTo(-30)
+  })
+  it('an open polyline end side just shifts', () => {
+    const m = moveEdge([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }], 0, 10, false)
+    expect(m[0]).toEqual({ x: 0, y: 10 })
+    expect(m[1]).toEqual({ x: 100, y: 10 })
+  })
+  it('parallel lines do not cross', () => {
+    expect(lineIntersect({ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 })).toBeNull()
+  })
+})

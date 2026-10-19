@@ -80,3 +80,18 @@ describe('click routing (every tool goes somewhere sensible)', () => {
     expect(clickRoute('select', false)).toBe('marquee')
   })
 })
+
+import { offsetDist } from '@/app/canvas/[roomId]/useAnnotationTool'
+import type { RoomAnnotation } from '../types'
+
+describe('B4 offset tool', () => {
+  const line = { id: 'l', kind: 'line', geom: { pts: [{ x: 0, y: 0 }, { x: 1000, y: 0 }] }, style: {} } as unknown as RoomAnnotation
+  it('distance follows the cursor; a typed one keeps the cursor side', () => {
+    expect(offsetDist(line, { x: 500, y: 120 }, {})).toBeCloseTo(120)
+    expect(offsetDist(line, { x: 500, y: 120 }, { distance: 50 })).toBe(50)
+    expect(offsetDist(line, { x: 500, y: -120 }, { distance: 50 })).toBe(-50)
+  })
+  it('offset routes its own clicks', () => {
+    expect(clickRoute('offset', false)).toBe('offset')
+  })
+})

@@ -33,7 +33,7 @@ export interface AnnotationLayerProps {
 /** rotate / width: text grips. vN: drag vertex N of a line, cloud or leader. mN: drag
  *  the midpoint of segment N→N+1 to insert a vertex there. cN: box / ellipse corner N. */
 export type AnnotGrip = 'rotate' | 'width' | 'size' | 'offset' | `v${number}` | `m${number}` | `c${number}`
-  | 'arcS' | 'arcE' | 'arcM' | 'rad'
+  | 'arcS' | 'arcE' | 'arcM' | 'rad' | `e${number}`
 
 export interface AnnotationEditProps {
   selectedIds: ReadonlySet<string>
@@ -151,16 +151,32 @@ function vertexGrips(id: string, pts: Pt[], edit: AnnotationEditProps, closed = 
   const hw = edit.hitWidth
   const down = (g: AnnotGrip) => (e: React.PointerEvent) => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, id, g) } }
   return <>
-    {mids && (closed ? pts : pts.slice(0, -1)).map((p, i) => {
-      const q = pts[(i + 1) % pts.length], m = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, r = hw * 0.32
-      return <path key={`m${i}`} d={`M${m.x} ${m.y - r}L${m.x + r} ${m.y}L${m.x} ${m.y + r}L${m.x - r} ${m.y}Z`}
-        fill={SEL} fillOpacity={0.5} style={{ pointerEvents: 'all', cursor: 'copy' }} onPointerDown={down(`m${i}`)} />
-    })}
+    {mids && (closed ? pts : pts.slice(0, -1)).map((p, i) => sideBar(id, i, p, pts[(i + 1) % pts.length], edit, true))}
     {pts.map((p, i) => (
       <circle key={`v${i}`} cx={p.x} cy={p.y} r={hw * 0.4} fill="#0f172a" stroke={SEL} strokeWidth={hw / 6}
         style={{ pointerEvents: 'all', cursor: 'crosshair' }} onPointerDown={down(`v${i}`)} />
     ))}
   </>
+}
+
+/** Bar on the middle of side i: drag = slide the side parallel (B4); with `insert`,
+ *  Ctrl + drag adds a corner there instead. */
+function sideBar(id: string, i: number, p: Pt, q: Pt, edit: AnnotationEditProps, insert: boolean): React.ReactNode {
+  const hw = edit.hitWidth
+  const m = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }
+  const ang = Math.atan2(q.y - p.y, q.x - p.x) * 180 / Math.PI
+  return (
+    <rect key={`e${i}`} x={m.x - hw * 0.6} y={m.y - hw * 0.25} width={hw * 1.2} height={hw * 0.5} rx={hw * 0.12}
+      transform={`rotate(${ang} ${m.x} ${m.y})`} fill={SEL} stroke="#0f172a" strokeWidth={hw / 12}
+      style={{ pointerEvents: 'all', cursor: Math.abs(Math.sin(ang * Math.PI / 180)) > 0.7 ? 'ew-resize' : 'ns-resize' }}
+      onPointerDown={e => {
+        if (e.button !== 0) return
+        e.stopPropagation()
+        edit.onGrip(e, id, insert && (e.ctrlKey || e.metaKey) ? `m${i}` : `e${i}`)
+      }}>
+      <title>{insert ? 'Drag to slide this side · Ctrl + drag to add a corner' : 'Drag to slide this side'}</title>
+    </rect>
+  )
 }
 
 /** Dashed outline round a selected annotation; text also gets rotate + (text box) width
@@ -247,6 +263,7 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
     const c = boxCorners(a.geom as BoxGeom).map(p => mapPt(f, p))
     return <>
       <polygon points={ptsAttr(c)} {...line} />
+      {c.map((p, i) => sideBar(a.id, i, p, c[(i + 1) % 4], edit, false))}
       {c.map((p, i) => (
         <rect key={i} x={p.x - hw * 0.4} y={p.y - hw * 0.4} width={hw * 0.8} height={hw * 0.8}
           fill="#0f172a" stroke={SEL} strokeWidth={hw / 6} style={{ pointerEvents: 'all', cursor: 'nwse-resize' }}

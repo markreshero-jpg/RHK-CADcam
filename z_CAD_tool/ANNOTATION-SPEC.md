@@ -240,7 +240,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | B2d | **Typed entry (Tab):** while drawing, Tab (or a digit) jumps to the CAD panel's size fields — Length / Angle for a segment, W / H for a box / ellipse / cloud / text box, Offset for a dim's last step; Enter places, Esc clears | [x] built 2026-10-19; in-app check pending |
 | B2e | **Self snaps:** a line / arrow / cloud / leader being drawn snaps to its own earlier points, segments and midpoints (close back on the start); a dragged vertex snaps to the rest of its own shape | [x] built 2026-10-19; in-app check pending |
 | B3 | **Arcs + circle:** kinds `arc` + `circle` (migration); arc by 3-point, centre-start-end, start-end-radius; circle by centre + radius; grips | [x] built 2026-10-19; in-app check pending |
-| B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [ ] |
+| B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [x] built 2026-10-19; in-app check pending |
 | B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [ ] |
 | A6 | **Elevations:** wall-local frame, canvas + Elevation Views report, wall-split remap | [ ] |
 | A7 | **Cabinet sheets:** ribbon on the sheet preview (decision 10), cabinet-local frame, sheet toggle, own undo; **decide the cabinet-revision behaviour first** | [ ] |
@@ -523,5 +523,28 @@ live (`migration_b3_arc_circle.sql`: kind check widened to add `arc`, `circle`).
   - circle: centre, R, Ø, circumference, area;
   - live labels: R · sweep · length on the arc, R / Ø on the circle.
 
-Next: B4 (offset tool + side drag), then B5 (more dims), then A6 (elevations: wall-local frame, canvas +
+B3 fix 2026-10-19 (2c3a891): arc / circle clicks fell through to the text-box path
+(missing from the hand-written point-tool list). Clicks now route through `clickRoute`
+(named tool sets; an unknown tool does nothing); a test covers every keyboard tool.
+
+**B4 built 2026-10-19** (in-app check pending).
+- **Offset tool (F):**
+  - Click an item to pick it; a dashed copy follows the cursor on its side; click
+    places it. The new copy becomes the source, so clicks repeat outward; Esc picks
+    another.
+  - Tab → Distance (it keeps the cursor's side and is kept for the next placement).
+  - Hit areas stay clickable with the Offset tool (pick); once something is picked,
+    any click places.
+  - Copies keep the source's style. Geometry: `offsetGeom` / `offsetDistanceFor`.
+    Polylines and clouds use mitred corners (`offsetPolyline`); a box or ellipse
+    grows / shrinks about its centre; circles and arcs change radius. Not text /
+    dims.
+- **Side drag:** the midpoint diamonds became **side bars** (`e<N>` grip).
+  - Drag = slide that side parallel. `moveEdge` keeps the neighbouring sides on
+    their own lines and intersects them with the moved side, so squares stay square.
+  - **Ctrl + drag** on the bar still inserts a corner (`m<N>`).
+  - Unrotated boxes / ellipses get side bars too (move one edge). Leaders use the
+    same bars.
+
+Next: B5 (more dims), then A6 (elevations: wall-local frame, canvas +
 Elevation Views report, wall-split remap).

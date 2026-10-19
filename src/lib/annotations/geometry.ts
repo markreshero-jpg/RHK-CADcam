@@ -516,3 +516,128 @@ export function arcSvgPath(f: AnnotFrame, g: ArcGeom): string {
   const sw = sweepOf(g.a0, g.a1), r = g.r * f.s
   return `M${P(s)}A${f2(r)} ${f2(r)} 0 ${sw > 180 ? 1 : 0} ${f.flipY ? 0 : 1} ${P(e)}`
 }
+
+// ── Offset + side drag (B4) ──────────────────────────────────────────────────
+// Sign convention: for polylines / clouds, + = the left-hand normal of each segment
+// (n = (-u.y, u.x) in svg coords). For boxes / ellipses / circles / arcs, + = outward.
+// offsetDistanceFor returns the signed distance that puts the copy through the cursor.
+
+/** Crossing point of two infinite lines (null when parallel). */
+export function lineIntersect(a: Pt, b: Pt, c: Pt, d: Pt): Pt | null {
+  const r = sub(b, a), s = sub(d, c)
+  const den = r.x * s.y - r.y * s.x
+  if (Math.abs(den) < 1e-9) return null
+  const t = ((c.x - a.x) * s.y - (c.y - a.y) * s.x) / den
+  return add(a, mul(r, t))
+}
+
+const leftN = (a: Pt, b: Pt): Pt => { const u = unit(sub(b, a)); return { x: -u.y, y: u.x } }
+
+/** Polyline / polygon offset by d with mitred corners (parallel neighbours just shift). */
+export function offsetPolyline(pts: Pt[], d: number, closed: boolean): Pt[] {
+  const n = pts.length
+  if (n < 2) return pts
+  const segs: [Pt, Pt][] = []
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const a = pts[i], b = pts[(i + 1) % n]
+    const m = mul(leftN(a, b), d)
+    segs.push([add(a, m), add(b, m)])
+  }
+  const out: Pt[] = []
+  for (let i = 0; i < n; i++) {
+    const prev = closed ? segs[(i - 1 + segs.length) % segs.length] : segs[i - 1]
+    const next = segs[i] ?? null
+    if (prev && next) out.push(lineIntersect(prev[0], prev[1], next[0], next[1]) ?? next[0])
+    else if (next) out.push(next[0])
+    else out.push(prev![1])
+  }
+  return out
+}
+
+/** Signed distance from p to the nearest segment (left normal = +). */
+export function signedDistToPolyline(pts: Pt[], closed: boolean, p: Pt): number {
+  let best = Infinity, sign = 1
+  const n = pts.length
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const a = pts[i], b = pts[(i + 1) % n]
+    const v = sub(b, a), L2 = v.x * v.x + v.y * v.y
+    if (!L2) continue
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * v.x + (p.y - a.y) * v.y) / L2))
+    const q = add(a, mul(v, t))
+    const dd = len(sub(p, q))
+    if (dd < best) { best = dd; const nn = leftN(a, b); sign = (p.x - a.x) * nn.x + (p.y - a.y) * nn.y >= 0 ? 1 : -1 }
+  }
+  return Number.isFinite(best) ? best * sign : 0
+}
+
+/** Point p in a box's own (unturned, centred) frame. */
+function boxLocal(g: BoxGeom, p: Pt): Pt {
+  const c = { x: (g.a.x + g.b.x) / 2, y: (g.a.y + g.b.y) / 2 }
+  return rotatePt(sub(p, c), -(g.rot ?? 0))
+}
+
+export type OffsetKind = 'line' | 'cloud' | 'rect' | 'ellipse' | 'circle' | 'arc'
+export const OFFSETTABLE = new Set<string>(['line', 'cloud', 'rect', 'ellipse', 'circle', 'arc'])
+
+/** Signed offset distance that puts the copy through `p`. */
+export function offsetDistanceFor(kind: OffsetKind, geom: AnnotationGeom, p: Pt): number {
+  switch (kind) {
+    case 'line':  return signedDistToPolyline((geom as LineGeom).pts ?? [], false, p)
+    case 'cloud': return signedDistToPolyline((geom as LineGeom).pts ?? [], true, p)
+    case 'rect': {
+      const g = geom as BoxGeom, l = boxLocal(g, p)
+      return Math.max(Math.abs(l.x) - Math.abs(g.b.x - g.a.x) / 2, Math.abs(l.y) - Math.abs(g.b.y - g.a.y) / 2)
+    }
+    case 'ellipse': {
+      const g = geom as BoxGeom, l = boxLocal(g, p)
+      const rx = Math.abs(g.b.x - g.a.x) / 2, ry = Math.abs(g.b.y - g.a.y) / 2
+      const t = Math.atan2(l.y, l.x)
+      const rAt = rx && ry ? (rx * ry) / Math.hypot(ry * Math.cos(t), rx * Math.sin(t)) : 0
+      return len(l) - rAt
+    }
+    case 'circle':
+    case 'arc': { const g = geom as CircleGeom; return len(sub(p, g.c)) - g.r }
+  }
+}
+
+/** The parallel copy at signed distance d (null when it would collapse). */
+export function offsetGeom(kind: OffsetKind, geom: AnnotationGeom, d: number): AnnotationGeom | null {
+  switch (kind) {
+    case 'line':  return { pts: offsetPolyline((geom as LineGeom).pts ?? [], d, false) }
+    case 'cloud': return { pts: offsetPolyline((geom as LineGeom).pts ?? [], d, true) }
+    case 'rect':
+    case 'ellipse': {
+      const g = geom as BoxGeom
+      const c = { x: (g.a.x + g.b.x) / 2, y: (g.a.y + g.b.y) / 2 }
+      const hw = Math.abs(g.b.x - g.a.x) / 2 + d, hh = Math.abs(g.b.y - g.a.y) / 2 + d
+      if (hw <= 0 || hh <= 0) return null
+      return { ...g, a: { x: c.x - hw, y: c.y - hh }, b: { x: c.x + hw, y: c.y + hh } }
+    }
+    case 'circle':
+    case 'arc': {
+      const g = geom as CircleGeom
+      return g.r + d > 0 ? { ...g, r: g.r + d } : null
+    }
+  }
+}
+
+/** Slide side i (pts[i] to pts[i+1]) by d along its left normal; the sides either side
+ *  keep their direction and stretch to meet it (like pushing a wall). */
+export function moveEdge(pts: Pt[], i: number, d: number, closed: boolean): Pt[] {
+  const n = pts.length, j = (i + 1) % n
+  if (n < 2 || (!closed && i >= n - 1)) return pts
+  const m = mul(leftN(pts[i], pts[j]), d)
+  const a2 = add(pts[i], m), b2 = add(pts[j], m)
+  const out = [...pts]
+  const hasPrev = closed || i > 0, hasNext = closed || j < n - 1
+  const pi = (i - 1 + n) % n, nj = (j + 1) % n
+  out[i] = (hasPrev && n > 2 && lineIntersect(pts[pi], pts[i], a2, b2)) || a2
+  out[j] = (hasNext && n > 2 && lineIntersect(pts[j], pts[nj], a2, b2)) || b2
+  return out
+}
+
+/** Signed push of side i that brings it through p (left normal = +). */
+export function edgeDistanceFor(pts: Pt[], i: number, p: Pt): number {
+  const a = pts[i], b = pts[(i + 1) % pts.length], nn = leftN(a, b)
+  return (p.x - a.x) * nn.x + (p.y - a.y) * nn.y
+}

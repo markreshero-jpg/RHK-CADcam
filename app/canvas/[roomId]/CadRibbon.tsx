@@ -32,6 +32,7 @@ const TOOLS: { id: CadTool; label: string; key: string; icon: React.ReactNode }[
   { id: 'dim',     label: 'Dimension — click two points, then click where the dimension line sits', key: 'D', icon: <><path d="M2 8h12M2 5v6M14 5v6" /></> },
   { id: 'arc',     label: 'Arc — pick the method on the ribbon (3-point, centre-start-end, ends + radius)', key: 'K', icon: <path d="M3 12a6 6 0 0110 -6" /> },
   { id: 'circle',  label: 'Circle — click the centre, then a point on it (Tab = radius)', key: 'O', icon: <circle cx="8" cy="8" r="5" /> },
+  { id: 'offset',  label: 'Offset — click a line / box / cloud / ellipse / circle / arc, then click the side for a parallel copy (Tab = distance)', key: 'F', icon: <><path d="M3 11L11 3" /><path d="M6 13L13 6" strokeDasharray="2 1.5" /></> },
 ]
 
 const keep = (e: React.MouseEvent) => e.preventDefault()
@@ -156,13 +157,14 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
   const arrows = kind === 'line' || kind === 'dim' || kind === 'arc'
   const nSel = cad.selected.length
   const NEXT: Record<CadTool, string> = {
-    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud', dim: 'dimension', arc: 'arc', circle: 'circle',
+    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud', dim: 'dimension', arc: 'arc', circle: 'circle', offset: 'offset copy',
   }
   const what = cad.editing ? (cad.editing.isNew ? 'New text' : 'Editing text')
     : nSel > 1 ? `${nSel} selected` : nSel === 1 ? `Selected ${kind === 'text' && (cad.selected[0].geom as { width?: number }).width != null ? 'text box' : kind}`
     : `Next ${NEXT[cad.tool]}`
   const oneText = nSel === 1 && kind === 'text' && !cad.editing
-  const drawHint = cad.pending ? (cad.pending.tool === 'textbox' ? 'Click the opposite corner of the text box · Tab = type W / H · Esc cancels' : 'Click the opposite corner · Tab = type W / H · Esc cancels')
+  const drawHint = cad.tool === 'offset' ? (cad.offsetSrc ? 'Click the side for the copy · Tab = distance · Esc = pick another' : 'Click the item to offset')
+    : cad.pending ? (cad.pending.tool === 'textbox' ? 'Click the opposite corner of the text box · Tab = type W / H · Esc cancels' : 'Click the opposite corner · Tab = type W / H · Esc cancels')
     : !cad.drawing ? null
     : cad.drawing.attachId ? 'Click where the leader points · Esc cancels'
     : cad.drawing.tool === 'leader' ? 'Click where the text goes · Esc cancels'

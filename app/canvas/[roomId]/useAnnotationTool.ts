@@ -15,6 +15,7 @@ import {
   unmapPt, translateGeom, annotationFramePoints, boundsOf, boxesOverlap, layoutText, snapQuarter, rotatePt,
   segAngle, segLength, withLength, withAngle, withBoxSize,
   angleSnap, dedupePts, leaderTextAt, type ArcGeom, type CircleGeom,
+  offsetDistanceFor, offsetGeom, moveEdge, edgeDistanceFor, OFFSETTABLE, type OffsetKind,
   arcFrom3, arcFromCentre, arcFromEndsRadius, arcPoint, angOf, arcStart, arcMid, arcEnd, sweepOf, setBoxCorner, rectPts, dimOffsetFor, dimAxisFor, type DimGeom,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
@@ -25,7 +26,7 @@ import { dbUpdateAnnotation, dbDeleteAnnotations } from './canvasDB'
 import type { AnnotationEditProps, AnnotGrip } from './AnnotationLayer'
 import type { LiveMeasure } from './CadMeasureOverlay'
 
-export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'cloud' | 'dim' | 'arc' | 'circle'
+export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'cloud' | 'dim' | 'arc' | 'circle' | 'offset'
 
 /** How the Arc tool draws (B3): start / through / end, centre / start / end, or two ends + radius. */
 export type ArcMode = '3pt' | 'centre' | 'ends'
@@ -34,7 +35,7 @@ export type ArcMode = '3pt' | 'centre' | 'ends'
 export type DimMode = 'linear' | 'aligned'
 
 export const CAD_TOOL_KEYS: Record<string, CadTool> = {
-  s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', a: 'arrow', r: 'rect', e: 'ellipse', c: 'cloud', d: 'dim', k: 'arc', o: 'circle',
+  s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', a: 'arrow', r: 'rect', e: 'ellipse', c: 'cloud', d: 'dim', k: 'arc', o: 'circle', f: 'offset',
 }
 
 /** Tools that drag out a shape on the canvas. */
@@ -44,18 +45,19 @@ const PLACE_TOOLS = new Set<CadTool>(['text', 'textbox', 'rect', 'ellipse', 'clo
 /** Tools that click out points one by one (each click → drawClick). A freehand cloud
  *  joins them once it has started. Every drawing tool must be here or in PLACE_TOOLS. */
 const POINT_TOOLS = new Set<CadTool>(['line', 'arrow', 'leader', 'dim', 'arc', 'circle'])
-export function clickRoute(tool: CadTool, drawingActive: boolean): 'point' | 'place' | 'marquee' | 'none' {
+export function clickRoute(tool: CadTool, drawingActive: boolean): 'point' | 'place' | 'marquee' | 'offset' | 'none' {
   if (tool === 'select') return 'marquee'
+  if (tool === 'offset') return 'offset'
   if (POINT_TOOLS.has(tool) || (tool === 'cloud' && drawingActive)) return 'point'
   return PLACE_TOOLS.has(tool) ? 'place' : 'none'
 }
 
 /** Kind of row a tool makes, and whose remembered style it starts from. */
 const TOOL_KIND: Record<CadTool, AnnotationKind> = {
-  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'line', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle',
+  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'line', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line',
 }
 const TOOL_STYLE_KEY: Record<CadTool, StyleKey> = {
-  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'arrow', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle',
+  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'arrow', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line',
 }
 
 /** A line / arrow / leader being clicked out. attachId = adding a leader to that text. */
@@ -69,7 +71,14 @@ export interface AnnotDrawing {
 
 /** Typed sizes while drawing (Tab → the CAD panel's fields). Set values lock the shape:
  *  a segment's length / angle, a box's W / H, a dim's offset. */
-export interface TypedEntry { length?: number; angle?: number; w?: number; h?: number; offset?: number; radius?: number; sweep?: number }
+export interface TypedEntry { length?: number; angle?: number; w?: number; h?: number; offset?: number; radius?: number; sweep?: number; distance?: number }
+
+/** Offset tool (B4): the signed distance for a copy of `src` through p; a typed distance
+ *  keeps the cursor's side. */
+export function offsetDist(src: RoomAnnotation, p: Pt, t: TypedEntry): number {
+  const d0 = offsetDistanceFor(src.kind as OffsetKind, src.geom, p)
+  return t.distance != null ? Math.sign(d0 || 1) * Math.abs(t.distance) : d0
+}
 export type TypedField = keyof TypedEntry
 const hasTyped = (t: TypedEntry) => Object.values(t).some(v => v != null)
 
@@ -142,6 +151,8 @@ type Drag =
   | { kind: 'offset'; id: string; moved: boolean }
   // Arc end / middle (re-bent through the three points) or a circle's radius grip (B3).
   | { kind: 'arcGrip'; id: string; which: 'arcS' | 'arcE' | 'arcM' | 'rad'; moved: boolean }
+  // Side i slid parallel (B4) — from the geometry and grab point at the start.
+  | { kind: 'edge'; id: string; i: number; start: Pt; orig: RoomAnnotation['geom']; moved: boolean }
   | { kind: 'corner'; id: string; i: number; moved: boolean }
 
 const DRAG_PX = 4
@@ -181,6 +192,11 @@ export function useAnnotationTool({
   const [drawing, setDrawing] = useState<AnnotDrawing | null>(null)
   const [dimMode, setDimMode] = useState<DimMode>('linear')
   const [arcMode, setArcMode] = useState<ArcMode>('3pt')
+  // Offset tool (B4): the item being offset (the last copy, after a placement) + cursor.
+  const [offsetSrc, setOffsetSrcState] = useState<string | null>(null)
+  const offsetSrcRef = useRef<string | null>(null)
+  const setOffsetSrc = useCallback((id: string | null) => { offsetSrcRef.current = id; setOffsetSrcState(id) }, [])
+  const [offsetCur, setOffsetCur] = useState<Pt | null>(null)
   // Typed entry (Tab): values + the raw cursor they're applied to, and focus requests for
   // the CAD panel's fields.
   const [typed, setTypedState] = useState<TypedEntry>({})
@@ -236,7 +252,7 @@ export function useAnnotationTool({
   }
   // A new tool abandons a half-drawn line.
   const [drawTool, setDrawTool] = useState(tool)
-  if (drawTool !== tool) { setDrawTool(tool); setDrawing(null); setPending(null); setTypedState({}) }
+  if (drawTool !== tool) { setDrawTool(tool); setDrawing(null); setPending(null); setTypedState({}); setOffsetSrcState(null) }
 
   // ── Styles ────────────────────────────────────────────────────────────────
 
@@ -631,7 +647,19 @@ export function useAnnotationTool({
   const clearTyped = useCallback(() => { typedRef.current = {}; setTypedState({}) }, [])
 
   /** Which fields the CAD panel offers for what's being drawn, in Tab order. */
-  const typedFields: TypedField[] = typedFieldsFor(!!pending, drawing)
+  const typedFields: TypedField[] = tool === 'offset' && offsetSrc ? ['distance'] : typedFieldsFor(!!pending, drawing)
+
+  /** Offset tool: place the copy through p, then carry on offsetting from the new copy. */
+  const placeOffset = useCallback((p: Pt) => {
+    const src = annRef.current.find(a => a.id === offsetSrcRef.current)
+    if (!src || !OFFSETTABLE.has(src.kind)) return
+    const d = offsetDist(src, p, typedRef.current)
+    const g = Math.abs(d) > 1e-6 ? offsetGeom(src.kind as OffsetKind, src.geom, d) : null
+    if (!g) return
+    const row = newRow(src.kind, g, null, src.style)
+    captureSnapshot(); setAnnotations(xs => [...xs, row]); void insertRows([row])
+    setOffsetSrc(row.id); setSelectedIds(new Set([row.id]))
+  }, [newRow, captureSnapshot, setAnnotations, insertRows, setOffsetSrc])
 
   /** Panel field typed into (undefined clears it): re-lock the preview at once. */
   const setTyped = useCallback((field: TypedField, value: number | undefined) => {
@@ -647,6 +675,11 @@ export function useAnnotationTool({
 
   /** Enter in a panel field: place the point / finish the shape with the typed values. */
   const commitTyped = useCallback(() => {
+    if (offsetSrcRef.current) {   // offset: keep the typed distance for the next one
+      const p = rawCursorRef.current
+      if (p) placeOffset(p)
+      return
+    }
     const pd = pendingRef.current, d = drawingRef.current
     if (pd) {
       pendingRef.current = null; setPending(null)
@@ -658,7 +691,7 @@ export function useAnnotationTool({
       drawClick(lockPoint(d, raw, typedRef.current))
     }
     clearTyped()
-  }, [finishPlace, drawClick, clearTyped])
+  }, [finishPlace, drawClick, clearTyped, placeOffset])
 
   // ── Pointer: drags via window listeners ───────────────────────────────────
 
@@ -700,6 +733,24 @@ export function useAnnotationTool({
         const prev = pts[cur.i - 1] ?? pts[cur.i + 1] ?? null
         pts[cur.i] = toFrame(ev, !ev.shiftKey, prev, new Set([cur.id]), ownShapeGeometry(pts, cur.i, a2.kind === 'cloud'))
         setAnnotations(xs => xs.map(x => x.id === cur.id ? withVerts(x, pts) : x))
+      } else if (cur.kind === 'edge') {
+        if (!cur.moved && !far) return
+        if (!cur.moved) { captureSnapshot(); cur.moved = true }
+        const p = toFrame(ev, !ev.shiftKey, null, new Set([cur.id]))
+        setAnnotations(xs => xs.map(x => {
+          if (x.id !== cur.id) return x
+          if (x.kind === 'rect' || x.kind === 'ellipse') {   // boxCorners order: top, right, bottom, left
+            const g = cur.orig as BoxGeom, dx = p.x - cur.start.x, dy = p.y - cur.start.y
+            const ng = cur.i === 0 ? { ...g, a: { x: g.a.x, y: g.a.y + dy } }
+              : cur.i === 1 ? { ...g, b: { x: g.b.x + dx, y: g.b.y } }
+              : cur.i === 2 ? { ...g, b: { x: g.b.x, y: g.b.y + dy } }
+              : { ...g, a: { x: g.a.x + dx, y: g.a.y } }
+            return { ...x, geom: ng }
+          }
+          const orig = vertsOf({ ...x, geom: cur.orig })
+          const d = edgeDistanceFor(orig, cur.i, p) - edgeDistanceFor(orig, cur.i, cur.start)
+          return withVerts(x, moveEdge(orig, cur.i, d, x.kind === 'cloud'))
+        }))
       } else if (cur.kind === 'arcGrip') {
         if (!cur.moved && !far) return
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
@@ -748,7 +799,7 @@ export function useAnnotationTool({
       const cur = dragRef.current
       dragRef.current = null; setDrag(null); setSnapHit(null)
       if (!cur) return
-      if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex' || cur.kind === 'corner' || cur.kind === 'offset' || cur.kind === 'size' || cur.kind === 'arcGrip') && cur.moved) {
+      if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex' || cur.kind === 'corner' || cur.kind === 'offset' || cur.kind === 'size' || cur.kind === 'arcGrip' || cur.kind === 'edge') && cur.moved) {
         const ids = cur.kind === 'move' ? [...cur.orig.keys()] : [cur.id]
         for (const id of ids) {
           const a = annRef.current.find(x => x.id === id)
@@ -807,6 +858,10 @@ export function useAnnotationTool({
     }
     const route = clickRoute(tool, !!drawingRef.current)
     if (route === 'none') return
+    if (route === 'offset') {   // empty canvas: place the copy if something is picked
+      if (offsetSrcRef.current) placeOffset(toFrame(e, !e.shiftKey, null, new Set([offsetSrcRef.current])))
+      return
+    }
     if (route === 'point') {
       const d = drawingRef.current
       // A typed length / angle locks the point; the click just confirms it.
@@ -819,7 +874,7 @@ export function useAnnotationTool({
     const p = toFrame(e, tool !== 'select' && !e.shiftKey)
     if (route === 'marquee') beginDrag({ kind: 'marquee', start: p, cur: p, additive: e.shiftKey }, { x: e.clientX, y: e.clientY })
     else beginDrag({ kind: 'place', start: p, cur: p, tool: tool as PlaceTool }, { x: e.clientX, y: e.clientY })
-  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace, clearTyped])
+  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace, clearTyped, placeOffset])
 
   /** Rubber band for the segment being drawn. */
   const onCaptureMove = useCallback((e: React.PointerEvent) => {
@@ -833,7 +888,10 @@ export function useAnnotationTool({
     }
     const d = drawingRef.current
     if (!d) {   // hovering: a drawing tool shows what the first click would snap to
-      if (tool !== 'select' && !editing) toFrame(e, !e.shiftKey)
+      if (tool === 'offset') {   // offset preview follows the cursor
+        const p = toFrame(e, !e.shiftKey, null, offsetSrcRef.current ? new Set([offsetSrcRef.current]) : undefined)
+        rawCursorRef.current = p; setOffsetCur(p)
+      } else if (tool !== 'select' && !editing) toFrame(e, !e.shiftKey)
       else setCursor(unmapPt(frame, toWorld(e)))
       return
     }
@@ -864,9 +922,15 @@ export function useAnnotationTool({
     hiddenId: editing ? editing.draft.id : null,
     hitWidth: 10 / zoom,
     // In plain select mode a click on an annotation opens CAD mode on it (decision 9).
-    hittable: !active || tool === 'select',
+    hittable: !active || tool === 'select' || tool === 'offset',
     onDown: (e, id) => {
       e.stopPropagation()
+      if (active && tool === 'offset') {   // pick what to offset, or (once picked) place
+        const a = annRef.current.find(x => x.id === id)
+        if (offsetSrcRef.current) placeOffset(toFrame(e, !e.shiftKey, null, new Set([offsetSrcRef.current])))
+        else if (a && OFFSETTABLE.has(a.kind)) { setOffsetSrc(id); setSelectedIds(new Set([id])) }
+        return
+      }
       if (editing) commitEdit()
       if (!active) enterCad()
       const additive = e.shiftKey
@@ -888,6 +952,10 @@ export function useAnnotationTool({
     onGrip: (e, id, grip: AnnotGrip) => {
       const a = annRef.current.find(x => x.id === id)
       if (!a) return
+      if (grip.startsWith('e')) {   // side bar: slide that side parallel
+        beginDrag({ kind: 'edge', id, i: Number(grip.slice(1)), start: toFrame(e, false), orig: a.geom, moved: false }, { x: e.clientX, y: e.clientY })
+        return
+      }
       if (grip === 'arcS' || grip === 'arcE' || grip === 'arcM' || grip === 'rad') {
         beginDrag({ kind: 'arcGrip', id, which: grip, moved: false }, { x: e.clientX, y: e.clientY })
         return
@@ -931,6 +999,7 @@ export function useAnnotationTool({
         take()
         if (dragRef.current) return
         if (hasTyped(typedRef.current)) { clearTyped(); return }
+        if (offsetSrcRef.current) { setOffsetSrc(null); setSelectedIds(new Set()); return }
         if (pendingRef.current) { pendingRef.current = null; setPending(null); return }
         if (drawingRef.current) { drawingRef.current = null; setDrawing(null); return }
         if (liveSelected.size) setSelectedIds(new Set())
@@ -943,11 +1012,11 @@ export function useAnnotationTool({
       if (mod && (e.key === 'd' || e.key === 'D')) { take(); paste(selected); return }
       if (mod && (e.key === 'a' || e.key === 'A')) { take(); setSelectedIds(new Set(annRef.current.filter(a => a.view === 'plan').map(a => a.id))); return }
       // Tab (or a digit) while drawing → the CAD panel's first size field.
-      const canType = !!pendingRef.current || (!!drawingRef.current?.pts.length && !drawingRef.current?.attachId)
+      const canType = !!pendingRef.current || (!!drawingRef.current?.pts.length && !drawingRef.current?.attachId) || (tool === 'offset' && !!offsetSrcRef.current)
       if (canType && (e.key === 'Tab' || (/^[0-9.]$/.test(e.key) && !mod))) {
         take()
         const d = drawingRef.current
-        const field = typedFieldsFor(!!pendingRef.current, d)[0]
+        const field: TypedField | undefined = tool === 'offset' && offsetSrcRef.current ? 'distance' : typedFieldsFor(!!pendingRef.current, d)[0]
         if (!field) return
         setFocusReq(f => ({ field, n: (f?.n ?? 0) + 1, seed: e.key === 'Tab' ? undefined : e.key }))
         return
@@ -969,7 +1038,7 @@ export function useAnnotationTool({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing, clearTyped])
+  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc])
 
   // Ghosts for the canvas: marquee box / text box being dragged out (frame coords).
   // A shape being placed: by drag, or armed by a first click (B1).
@@ -981,8 +1050,12 @@ export function useAnnotationTool({
   // Live readout while drawing: the segment being placed, or the box being dragged out
   // (a dim's last click only places its line, which shows its own value).
   const lastPt = drawing?.pts.length ? drawing.pts[drawing.pts.length - 1] : null
+  const offsetSrcA = offsetSrc ? annotations.find(a => a.id === offsetSrc && OFFSETTABLE.has(a.kind)) ?? null : null
+  const offsetLive: LiveMeasure = tool === 'offset' && offsetSrcA && offsetCur
+    ? { mode: 'label', at: offsetCur, text: `Offset ${Math.round(Math.abs(offsetDist(offsetSrcA, offsetCur, typed)))}` }
+    : null
   const liveArc = drawing?.tool === 'arc' && drawing.pts.length === 2 && drawing.cur ? arcFromDrawing(drawing, drawing.cur, typed) : null
-  const liveMeasure: LiveMeasure = drawing?.tool === 'circle' && drawing.cur && lastPt
+  const liveMeasure: LiveMeasure = offsetLive ? offsetLive : drawing?.tool === 'circle' && drawing.cur && lastPt
     ? { mode: 'label', at: drawing.cur, text: `R ${Math.round(segLength(lastPt, drawing.cur))}  Ø ${Math.round(2 * segLength(lastPt, drawing.cur))}` }
     : liveArc && drawing?.cur
       ? { mode: 'label', at: drawing.cur, text: `R ${Math.round(liveArc.r)}  ${Math.round(sweepOf(liveArc.a0, liveArc.a1))}°` }
@@ -999,6 +1072,10 @@ export function useAnnotationTool({
       id: '__draw__', room_id: room.id, view: 'plan', wall_id: null, cabinet_id: null, sheet_view: null,
       kind, geom, text: null, style, sort_order: 0, created_at: '', updated_at: '',
     })
+    if (tool === 'offset' && offsetSrcA && offsetCur) {   // the copy that the next click places
+      const g = offsetGeom(offsetSrcA.kind as OffsetKind, offsetSrcA.geom, offsetDist(offsetSrcA, offsetCur, typed))
+      return g ? row(offsetSrcA.kind, g, { ...offsetSrcA.style, dash: 'dashed' }) : null
+    }
     const pl = drag?.kind === 'place' ? drag : pending
     if (pl && (pl.tool === 'rect' || pl.tool === 'ellipse' || pl.tool === 'cloud')) {
       if (pl.start.x === pl.cur.x && pl.start.y === pl.cur.y) return null
@@ -1029,7 +1106,7 @@ export function useAnnotationTool({
       ? { ...defaultsFor('text'), arrowEnd: 'none' as const }
       : defaultsFor(drawing.tool === 'arrow' ? 'arrow' : 'line')
     return row('line', { pts }, style)
-  }, [drag, pending, drawing, defaultsFor, room.id, dimGeomFor, typed])
+  }, [drag, pending, drawing, defaultsFor, room.id, dimGeomFor, typed, tool, offsetSrcA, offsetCur])
 
   /** The list to draw: the note being typed swaps in live (new ones are added), so its
    *  leader shows and follows the text width while you type. */
@@ -1045,7 +1122,7 @@ export function useAnnotationTool({
     ribbonKind, ribbonStyle, ribbonRot, ribbonLeader, applyStyle, resetStyle, applyRotation,
     deleteSelected, reorder, onCaptureDown, onCaptureMove, onCaptureDouble, onCaptureMenu, editProps, ghost,
     drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
-    dimMode, setDimMode, applyDimText, arcMode, setArcMode, cloudMode, setCloudMode, pending,
+    dimMode, setDimMode, applyDimText, arcMode, setArcMode, offsetSrc: offsetSrcA, cloudMode, setCloudMode, pending,
     /** Last object snap under the cursor (frame mm) — the canvas draws its marker. */
     snapHit: active ? snapHit : null,
     /** Cursor (frame mm) + the point Δ is measured from while drawing. */
