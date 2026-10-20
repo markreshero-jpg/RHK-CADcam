@@ -368,6 +368,11 @@ Esc cancels; one undo step.
     solid fixtures; `clearOf` in useFixtureInteraction). Dropped over a cabinet it links to
     (under-bench oven / wall rangehood) it links instead. The red clash warning stays for
     anything that still overlaps (e.g. after a stretch / resize elsewhere).
+  - 2026-10-20 (user: "allow cabinets to be placed/stretched under sinks and taps"): sinks and
+    taps are never obstacles whatever their mount (an undermount sink stored as `under_bench`
+    blocked its cabinet). One rule, `sitsOnCabinets` (fixtureGeometry): benchtop mount OR
+    category sink / tap — used by solidFixtures, fixtureClashes, stretchObstacles,
+    fixtureChainSpans and the place / move slide-clear.
 
 - 2026-10-18 (user): **move like a cabinet** — selected fixture shows the white centre
   crosshair (plan + elevation); click it → follows the cursor (same carry as Move / M), next

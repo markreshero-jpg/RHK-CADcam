@@ -407,6 +407,17 @@ export function fixtureWallRef(
   return { wall, side, frame, off: offOf(frame, { x: f.x, y: f.y }), endLeft: -b.lo, endRight: b.hi - f.width }
 }
 
+/**
+ * Sinks, taps and benchtop-mount items (cooktops) sit on / in the cabinets
+ * below them, never beside them: cabinets place and stretch under them and
+ * they're never an obstacle or clash. A sink or tap counts whatever its mount
+ * (Mark 2026-10-20: an undermount sink stored as under_bench blocked the
+ * cabinet under it).
+ */
+export function sitsOnCabinets(f: { category?: string | null; mount?: string | null }): boolean {
+  return f.mount === 'benchtop' || f.category === 'sink' || f.category === 'tap'
+}
+
 /** Default underside height for a mount type. */
 export const FIXTURE_BENCH_Z = 900
 export function defaultFixtureZ(mount: FixtureMount, mountHeight: number | null): number {
@@ -446,7 +457,7 @@ export interface FixtureChainSpan { side: WallSide; row: 'floor' | 'wall'; t: nu
 export function fixtureChainSpans(fixtures: RoomFixture[], wall: Wall, roomRef: Pt): FixtureChainSpan[] {
   const out: FixtureChainSpan[] = []
   for (const fx of fixtures) {
-    if (fx.wall_id !== wall.id || fx.category === 'opening' || fx.mount === 'benchtop' || fx.cabinet_id) continue
+    if (fx.wall_id !== wall.id || fx.category === 'opening' || sitsOnCabinets(fx) || fx.cabinet_id) continue
     for (const side of ['face', 'back'] as const) {
       const on = fixtureOnFace(fx, wallFrame(wall, side, roomRef), 300)
       if (!on) continue

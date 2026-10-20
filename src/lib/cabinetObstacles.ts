@@ -8,7 +8,7 @@
 // within the mover's depth off this wall face, and add its along-wall range.
 
 import type { CabinetInstance, Wall, Room, RoomFixture } from './types'
-import { fixtureCorners } from './fixtureGeometry'
+import { fixtureCorners, sitsOnCabinets } from './fixtureGeometry'
 import { cabVExtent, cabWallPerp, cabinetCornerPts, wallInwardNormal, type Pt } from './geometry'
 import { wallFrame, alongOf, offOf, type WallSide } from './benchtopAnchor'
 import { clipToRect } from './cabinetShape/construct'
@@ -39,7 +39,7 @@ export function bandOccupancy(
 /** Fixtures that stand in the floor / wall space (z_fixtures) — what cabinets and other fixtures stop against. */
 export function solidFixtures(fixtures: RoomFixture[], excludeId?: string): RoomFixture[] {
   // Openings live in the wall; sinks / taps / cooktops sit on cabinets; linked items belong to their cabinet.
-  return fixtures.filter(f => f.id !== excludeId && f.category !== 'opening' && f.mount !== 'benchtop' && !f.cabinet_id)
+  return fixtures.filter(f => f.id !== excludeId && f.category !== 'opening' && !sitsOnCabinets(f) && !f.cabinet_id)
 }
 
 /**

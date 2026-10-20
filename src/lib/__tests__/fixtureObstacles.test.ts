@@ -36,6 +36,13 @@ describe('appliances as obstacles', () => {
     expect(solidFixtures([sink, win, oven, fx({})]).map(f => f.id)).toEqual(['dw'])
   })
 
+  it('an undermount sink or a tap never blocks the cabinet under it, whatever its mount', () => {
+    const under = fx({ id: 'u', category: 'sink', mount: 'under_bench', z: 700, height: 200 })
+    const tap = fx({ id: 't', category: 'tap', mount: 'floor' })
+    expect(solidFixtures([under, tap])).toEqual([])
+    expect(fixtureOccupancy([under, tap], top, 'face', cx, room, { assembly_class: 'base', dy: 870, dz: 580 })).toEqual([])
+  })
+
   it('a dropped dishwasher slides off a cabinet to the nearest free gap', () => {
     // base cabinet over 1000…1600; the dishwasher was dropped at 1100…1700
     const cab = { pts: [{ x: 1000, y: 0 }, { x: 1600, y: 0 }, { x: 1600, y: 580 }, { x: 1000, y: 580 }], z0: 0, z1: 870 }

@@ -16,7 +16,7 @@ import { centroid, type Pt } from '@/src/lib/geometry'
 import { stretchBounds, stretchPatch, type StretchSide, type StretchBounds } from '@/src/lib/fixtureGeometry'
 import { fixtureWallRef, fixtureAxes } from '@/src/lib/fixtureGeometry'
 import { stretchedCutout } from '@/src/lib/fixtureStretch'
-import { snapFixture, snapOpening, defaultFixtureZ, fixtureCenter, backLeftForCenter, type FixtureSnap, type FixtureFootprint } from '@/src/lib/fixtureGeometry'
+import { snapFixture, snapOpening, defaultFixtureZ, sitsOnCabinets, fixtureCenter, backLeftForCenter, type FixtureSnap, type FixtureFootprint } from '@/src/lib/fixtureGeometry'
 import type { FixtureLink } from '@/src/lib/fixtureLinks'
 import type { Mode, Selected } from './canvasTypes'
 
@@ -134,7 +134,7 @@ export function useFixtureInteraction({
     // housing, rangehood under its wall unit) it links; anywhere else it slides to the
     // nearest free gap on the wall. Sinks / taps / cooktops sit on cabinets as before.
     const mount = carry?.kind === 'place' ? carry.item.mount : fixtures.find(f => f.id === (carry as { id: string }).id)?.mount
-    if (!s.wall_id || !clearOf || mount === 'benchtop') return s
+    if (!s.wall_id || !clearOf || sitsOnCabinets({ mount, category: carried.category })) return s
     if (linkAt?.({ ...s, width: carried.width, depth: carried.depth, mount: mount ?? 'floor', category: carried.category })) return s
     return clearOf(s, { id: carry?.kind === 'move' ? carry.id : undefined, width: carried.width, depth: carried.depth, height: carried.height, z: carriedZ })
   }
