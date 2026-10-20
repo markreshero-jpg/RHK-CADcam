@@ -57,9 +57,9 @@ import TutorialHintsPlan from './TutorialHintsPlan'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
-import { withFixtureCutouts, benchtopAt, openingSpans, fixtureChainSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, fixtureClearances, type StretchSide } from '@/src/lib/fixtureGeometry'
-import { cabinetPlans, linkFor, followLinks, fixtureClashes, stretchObstacles } from '@/src/lib/fixtureLinks'
-import { zoneFollow, fixtureLocalBox } from '@/src/lib/cabinetContents'
+import { withFixtureCutouts, benchtopAt, openingSpans, fixtureChainSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, fixtureClearances, sitsOnCabinets, type StretchSide } from '@/src/lib/fixtureGeometry'
+import { cabinetPlans, linkFor, followLinks, fixtureClashes, stretchObstacles, linkedPose } from '@/src/lib/fixtureLinks'
+import { zoneFollow, fixtureLocalBox, pickOpenZone, zoneSeat } from '@/src/lib/cabinetContents'
 import { dbSpawnDefinitionContents } from './contentsDB'
 import { parseKit } from '@/src/lib/cabinetKit'
 import { dbPlaceKit } from './kitPlacement'
@@ -402,7 +402,37 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const occ = bandOccupancy(items, wall, side, cx, body.z, body.z + body.height, Math.max(...offs), Math.max(0, Math.min(...offs)))
       return slideClear(s, body.width, body.depth, wall, cx, occ, findFreeSlot)
     },
+    onDropped: (f, cursorZ) => { void seatInOpening(f, cursorZ) },
   })
+
+  // An appliance dropped on a cabinet with an open face cell (oven into a tower /
+  // UBO opening) seats in it like cabinet contents (z_ubo U4): centred, on the
+  // cell bottom, front on the face plane, re-seated on every resolve. The page-load
+  // resolve map has no open cells, so resolve the cabinet once when it's missing.
+  // No undo step of its own — the drop already took one.
+  async function seatInOpening(f: RoomFixture, cursorZ?: number) {
+    if (!f.cabinet_id || f.category === 'opening' || sitsOnCabinets(f)) return
+    const plan = cabPlans.find(p => p.cab.id === f.cabinet_id)
+    if (!plan) return
+    let rc = resolvedParts.get(plan.cab.id)
+    if (!rc?.open_zones) {
+      const fresh = await dbResolveAndPersistCabinet(plan.cab.id)
+      if (!fresh) return
+      setResolvedParts(m => new Map(m).set(plan.cab.id, fresh))
+      rc = fresh
+    }
+    const bottom = cabBottomZ(plan.cab, room, plan.wall)
+    const zone = pickOpenZone(rc.open_zones, { width: f.width, height: f.height }, cursorZ != null ? cursorZ - bottom : undefined)
+    const seat = zone && zoneSeat(rc, plan.cab, plan, zone, f.depth)
+    if (!seat) return
+    const patch: Partial<RoomFixture> = {
+      ...linkedPose(seat, plan, f.width, f.depth), ...seat,
+      cabinet_id: plan.cab.id, z: Math.round((bottom + seat.link_zone.y) * 10) / 10,
+    }
+    setFixtures(xs => xs.map(x => x.id === f.id ? { ...x, ...patch } : x))
+    const { error } = await supabase.from('room_fixtures').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', f.id)
+    if (error) console.error('seatInOpening', error)
+  }
   const fixtureClashMap = useMemo(() => fixtureClashes(fixtures, cabPlans, room), [fixtures, cabPlans, room])
   const fixtureClashIds = useMemo(() => new Set(fixtureClashMap.keys()), [fixtureClashMap])
   // Doors / windows (P5) split the walls they sit in.
@@ -3065,7 +3095,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onFixtureStretchCommit={() => { void fx.commitStretch() }}
             fixtureGhost={fx.ghost && fx.carried ? { snap: fx.ghost, body: fx.carried, z: fx.carriedZ } : null}
             onFixtureCarryMove={p => { fx.handlePointerMove(p, false) }}
-            onFixtureCarryDrop={p => { void fx.handlePointerUp(p, false) }}
+            onFixtureCarryDrop={(p, z) => { void fx.handlePointerUp(p, false, z) }}
             onFixtureMoveHandle={id => { setCabResize(null); setContextMenu(null); fx.startMove(id) }}
             onSeamClick={(cabId) => {
               setSelected({ type: 'cabinet', id: cabId })
@@ -3117,6 +3147,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               clashIds: fixtureClashIds,
               selectedId: selected?.type === 'fixture' ? selected.id : null,
               onSelect: id => { setSelected({ type: 'fixture', id }); setMultiSelect([]) },
+              onContextMenu: (id, x, y) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setContextMenu({ x, y, fixtureId: id }) },
             }}
           />
         )}

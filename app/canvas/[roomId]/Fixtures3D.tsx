@@ -50,9 +50,11 @@ export interface Fixtures3DProps {
   onSelect:   (id: string) => void
   /** Overlapping a cabinet / another fixture — red outline, like plan. */
   clashIds?:  Set<string>
+  /** Right-click → the plan / elevation fixture menu, at screen x / y. */
+  onContextMenu?: (id: string, x: number, y: number) => void
 }
 
-export default function Fixtures3D({ fixtures, selectedId, onSelect, clashIds, layers, hiddenWallIds, pick }: Fixtures3DProps & {
+export default function Fixtures3D({ fixtures, selectedId, onSelect, clashIds, onContextMenu, layers, hiddenWallIds, pick }: Fixtures3DProps & {
   layers: LayerView
   hiddenWallIds: Set<string>
   /** false in F4 / measure: fixtures don't take clicks. */
@@ -70,6 +72,7 @@ export default function Fixtures3D({ fixtures, selectedId, onSelect, clashIds, l
             position={[f.x, f.z, f.y]}
             rotation={[0, -f.rotation * Math.PI / 180, 0]}
             onClick={pick ? e => { e.stopPropagation(); onSelect(f.id) } : undefined}
+            onContextMenu={pick && onContextMenu ? e => { e.stopPropagation(); onContextMenu(f.id, e.nativeEvent.clientX, e.nativeEvent.clientY) } : undefined}
           >
             <PartAlpha a={layers.alpha(id)}>
               {f.category === 'opening' && !f.model_url

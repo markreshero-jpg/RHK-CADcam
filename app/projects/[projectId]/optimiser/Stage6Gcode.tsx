@@ -18,7 +18,7 @@ import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
 
-interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number; findings: Finding[]; outlines?: Record<string, { x: number; y: number }[]> }
+interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number; findings: Finding[]; outlines?: Record<string, { x: number; y: number }[]>; holes?: Record<string, { x: number; y: number }[][]> }
 
 function dateStamp() {
   const d = new Date()
@@ -191,6 +191,7 @@ export default function Stage6Gcode() {
         // Material-level feed override (% of the tool/profile base feed).
         if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100)
         const outlines = outlinesFor(sheet)
+        const holes = holesFor(sheet)
         const gcode = generateSheetGcode({
           sheet, thickness: sheet.thickness, profile: post, drills, routes,
           toolNumber: toolNum(tool?.tool_number), drillToolNumber: 2,
@@ -201,14 +202,14 @@ export default function Stage6Gcode() {
           programNumber: `O${String(oBase + i).padStart(4, '0')}`,
           drillBlock,
           outlines,
-          holes: holesFor(sheet),
+          holes,
         })
         const fileName = gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: i + 1, ext: post.file_extension })
         return {
           sheetIndex: sheet.index, fileName,
           gcode, lines: gcode.split('\n').length,
           findings: validateGcode(gcode, { maxCommentLength: post.max_comment_length }),
-          outlines,
+          outlines, holes,
         }
       })
 
@@ -356,7 +357,7 @@ export default function Stage6Gcode() {
 
       {simulating && nestResult && (
         <Simulator
-          files={files.map(f => ({ sheetIndex: f.sheetIndex, fileName: f.fileName, gcode: f.gcode, outlines: f.outlines }))}
+          files={files.map(f => ({ sheetIndex: f.sheetIndex, fileName: f.fileName, gcode: f.gcode, outlines: f.outlines, holes: f.holes }))}
           sheets={nestResult.sheets}
           coord={coord ?? undefined}
           drillBlock={simDrillBlock ?? undefined}

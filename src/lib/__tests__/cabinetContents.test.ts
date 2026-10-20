@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { zoneSeat, zoneFollow, definitionContents, fixtureLocalBox, contentsFromFixtures, facingOutRot } from '../cabinetContents'
+import { zoneSeat, zoneFollow, pickOpenZone, definitionContents, fixtureLocalBox, contentsFromFixtures, facingOutRot } from '../cabinetContents'
 import { cabinetPlans, linkedPose } from '../fixtureLinks'
 import { fixtureCenter } from '../fixtureGeometry'
 import { centroid } from '../geometry'
@@ -104,5 +104,32 @@ describe('definitionContents', () => {
     expect(definitionContents(null)).toEqual([])
     expect(definitionContents([{ fixture_catalog_id: 'a', anchor: { kind: 'zone', row_index: 1, col_index: 0 } }, { foo: 1 }, { fixture_catalog_id: 'b' }]))
       .toHaveLength(1)
+  })
+})
+
+describe('pickOpenZone (oven dropped on a tower)', () => {
+  // Tower: oven opening 600 high at Y 800, compact (microwave) opening 450 at Y 1500.
+  const zones = [
+    { row_index: 1, col_index: 0, X: 18, Y: 800, DX: 564, DY: 600 },
+    { row_index: 3, col_index: 0, X: 18, Y: 1500, DX: 564, DY: 450 },
+  ]
+
+  it('snuggest fit by height: oven → the oven opening, microwave → the compact one', () => {
+    expect(pickOpenZone(zones, { width: 600, height: 596 })).toEqual({ row_index: 1, col_index: 0 })
+    expect(pickOpenZone(zones, { width: 595, height: 390 })).toEqual({ row_index: 3, col_index: 0 })
+  })
+
+  it('the cell under the elevation cursor wins when it fits', () => {
+    expect(pickOpenZone(zones, { width: 595, height: 390 }, 1000)).toEqual({ row_index: 1, col_index: 0 })
+  })
+
+  it('cursor over a cell it does not fit → best fit instead', () => {
+    expect(pickOpenZone(zones, { width: 600, height: 596 }, 1600)).toEqual({ row_index: 1, col_index: 0 })
+  })
+
+  it('too wide or too tall, or no openings → null', () => {
+    expect(pickOpenZone(zones, { width: 900, height: 596 })).toBeNull()
+    expect(pickOpenZone(zones, { width: 600, height: 700 })).toBeNull()
+    expect(pickOpenZone(undefined, { width: 600, height: 596 })).toBeNull()
   })
 })

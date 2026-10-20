@@ -192,7 +192,8 @@ interface ElevationSVGProps {
   /** Placing / moving a fixture here (mode 'place_fixture'): cursor → plan point just off this face. */
   fixtureGhost?: { snap: FixtureSnap; body: Pick<RoomFixture, 'category' | 'name' | 'width' | 'depth' | 'height'>; z: number } | null
   onFixtureCarryMove?: (p: Pt) => void
-  onFixtureCarryDrop?: (p: Pt) => void
+  /** z = cursor height above the floor (seats an oven in the opening under it). */
+  onFixtureCarryDrop?: (p: Pt, z: number) => void
   onFixtureMoveHandle?: (id: string) => void
 }
 
@@ -603,7 +604,11 @@ export default function ElevationSVG({
 
     if (elevResizeFollowing) { await confirmResize(); return }
     if (fixtureStretching) { onFixtureStretchCommit?.(); return }
-    if (mode === 'place_fixture' && wall && onFixtureCarryDrop) { onFixtureCarryDrop(fixtureCarryPoint(e)); return }
+    if (mode === 'place_fixture' && wall && onFixtureCarryDrop) {
+      const svgR = svgRef.current!.getBoundingClientRect()
+      onFixtureCarryDrop(fixtureCarryPoint(e), roomH - (e.clientY - svgR.top - view.panY) / view.zoom)
+      return
+    }
 
     // Measure tool — first click sets start, second sets end; further clicks restart.
     if (mode === 'measure' && wall) {

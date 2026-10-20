@@ -22,7 +22,7 @@ import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import ToolProfilePreview from '@/src/components/ToolProfilePreview'
 import SimCanvas3D from './SimCanvas3D'
 
-export interface SimFile { sheetIndex: number; fileName: string; gcode: string; outlines?: Record<string, { x: number; y: number }[]> }
+export interface SimFile { sheetIndex: number; fileName: string; gcode: string; outlines?: Record<string, { x: number; y: number }[]>; holes?: Record<string, { x: number; y: number }[][]> }
 // The output datum the G-code was posted with, so the simulator can map the
 // machine coordinates BACK to the canonical internal frame it renders in
 // (bottom-left origin, Y up, top-of-material Z = 0 with cuts negative).
@@ -204,7 +204,7 @@ export default function Simulator({
         <div className={`flex-1 overflow-hidden p-4 ${view === '3d' ? '' : 'grid place-items-center'}`}>
           {!sheet ? <p className="text-xs text-ink-subtle">No sheet geometry for this file.</p>
             : view === '3d'
-              ? <SimCanvas3D sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} activeShape={activeShape} drillBlock={drillBlock} outlines={file?.outlines} />
+              ? <SimCanvas3D sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} activeShape={activeShape} drillBlock={drillBlock} outlines={file?.outlines} holes={file?.holes} />
               : <Canvas sheet={sheet} prog={prog} elapsed={elapsed} toolDia={toolDia} headPos={frame.pos} cutting={frame.cutting} activeTool={activeTool} drillBlock={drillBlock} outlines={file?.outlines} />}
         </div>
 

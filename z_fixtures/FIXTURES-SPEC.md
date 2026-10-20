@@ -1,6 +1,6 @@
 # Fixtures & Appliances — Spec
 
-Status: **P1–P9 built and on main (2026-10-18). User has checked P4 + several follow-ups live; P5 doors & windows, P6 categories, P7 stretching, P8 true shapes, P9 wall position not yet confirmed in-app.** Open items in "RESUME HERE".
+Status: **P1–P11 built and on main; P4–P11 checked in-app by the user (2026-10-20: "P5-P11 is good"). 2026-10-20: 3D right-click, simulator cutout carve, ovens seat in tower openings — built, not checked in-app.** Open items in "RESUME HERE".
 
 Bought-in things placed in a room: ovens, cooktops, dishwashers, fridges,
 rangehoods, sinks, taps, decorative items. Catalogue lives in the Settings →
@@ -174,8 +174,8 @@ Locked with the user 2026-10-18:
   sink and leave oven voids / D/W gaps as space between panels.
   *Changed 2026-10-18:* appliance cabinets now exist as library cabinets with default
   contents (`UBO` first) — see `z_ubo/UBO-SPEC.md`. Linking by position is unchanged.
-- **Ovens in an open zone of a tower: later** (needs the resolver to expose open-zone
-  rectangles — `resolveFace` skips open zones today).
+- ~~Ovens in an open zone of a tower: later~~ — built 2026-10-20 on z_ubo's `open_zones`
+  + `link_zone` (see RESUME HERE).
 - **Overlaps warn, never block.**
 - Future, separate module (no spec yet): **cabinet groups / assemblies** — save e.g. a
   WOT (oven tower) as a group of cabinets in the library, drop it as one, then edit each
@@ -244,6 +244,24 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-20 (user: "P5-P11 is good" — P5–P11 checked in-app). Then built, **not checked in-app**:
+  - **Right-click menu in 3D** — `Fixtures3DProps.onContextMenu`; Room3DScene guards it like a
+    cabinet hit (no wall menu, right-drag pans) and CanvasClient opens the same
+    `CanvasContextMenu` as plan / elevation. Move from 3D switches to plan first (as before).
+  - **Simulator 3D carve cuts the cutouts** — Stage 6 passes each sheet's `holes` to the
+    Simulator (`SimFile.holes`) → SimCanvas3D: the inside of a cutout is waste-coloured, its loop
+    is outlined, and the slug drops out (inside lowered to the underside, dark) at the time of the
+    last through-depth cut inside the loop. Scrub back puts it back. 2-D simulator unchanged.
+  - **Ovens seat in a tower's open zone** — dropping (F6 place or Move) an appliance that links
+    to a cabinet with open face cells seats it like cabinet contents (z_ubo U4: centred, on the
+    cell bottom, front on the face plane, `link_zone` so it re-seats on every resolve).
+    `pickOpenZone` (cabinetContents.ts, tested): fits when ≤ 80 wider than the cell (fascia over
+    the gables) and ≤ cell height + 5; in elevation the cell under the cursor wins, else the
+    snuggest fit by height (oven → oven opening, microwave → compact opening). Nothing fits →
+    position link as before. The page-load resolve map has no `open_zones`, so the cabinet is
+    resolved once on the drop when they're missing. Linking still follows `linkFor` (floor-mount
+    items never link, so never seat). Sinks / taps / benchtop items never seat.
+
 - 2026-10-18 (user): **library rows from supplied GLBs** — Abi Ohelu 380 + Seba 550 U/M sinks,
   Abi pull-out tap, gas + induction cooktops 600 / 900 (7 rows). Models served from the app's
   `public/fixture-models/` (model_url `/fixture-models/<file>.glb`) — no bucket write access
@@ -300,7 +318,7 @@ Esc cancels; one undo step.
     Mark (label, else D1 / S1 / W1 / O1 per room), type, name, W × H, sill, head, wall,
     hinge + swing for hinged doors. Room or job scope, print like the appliance schedule.
   - **Right-click menu in elevation** (View 3D / elevations, Move, Turn 90°, Delete) — same
-    menu as plan, via ElevationSVG `onFixtureContextMenu`. Not in 3D.
+    menu as plan, via ElevationSVG `onFixtureContextMenu`. 3D added 2026-10-20.
   - **Appliances in the dimension rows** — `fixtureChainSpans` (fixtureGeometry, test
     `fixtureChainSpans.test.ts`): wall-snapped solid fixtures (not openings / benchtop / linked)
     within 300 of a face. Floor items → base row (plan) / floor chain (elevation); wall-mount
@@ -322,7 +340,7 @@ Esc cancels; one undo step.
     along the start edge (a straight ramp would run out of the hole into the part) and lifts
     straight out. A hole the bit can't get round → WARN comment, not cut. Tests
     `cutoutHoles.test.ts` (resolver) + `holeGcode.test.ts` (optimiser). **Existing tops need
-    Resolve pressed once** to get holes. Simulator 3D carve doesn't cut the hole out (the toolpath
+    Resolve pressed once** to get holes. Simulator 3D carve drops the slug out since 2026-10-20 (the toolpath
     shows). Same routing bit as the perimeter.
 
 - 2026-10-18 (user): **P10 Cut benchtop tick box + per-placement cutout override.** Column
@@ -391,7 +409,8 @@ Esc cancels; one undo step.
   this wall / side; dashed ghost at the landing spot; drop on pointer-up). And placing is
   **one drop, then Select with it selected** (like cabinets) — no longer stays armed.
 
-- **P6 / P7 not checked in the app.** Check: library tabs + icons, + Category / ✎ editor,
+- ~~P5–P11 in-app checks~~ done by the user 2026-10-20 ("P5-P11 is good").
+- ~~**P6 / P7 not checked in the app.**~~ Check: library tabs + icons, + Category / ✎ editor,
   F6 picker headings; stretch a dishwasher between two cabinets (stops at them), a window
   in plan + its sill in elevation, a linked sink (stays linked).
 
@@ -412,7 +431,7 @@ Esc cancels; one undo step.
 - ~~Existing placed fixtures aren't linked until moved once~~ — Link button 2026-10-18.
 
 - ~~Live visual check of a real uploaded model~~ done 2026-10-15 in the fixture viewer (Miele oven GLB); room 3D view still not eyeballed.
-- ~~Right-click context menu~~ done 2026-10-15 in plan: View 3D / elevations, Move, Turn 90°, Delete (undoable); elevation 2026-10-18. Not in 3D.
+- ~~Right-click context menu~~ done 2026-10-15 in plan: View 3D / elevations, Move, Turn 90°, Delete (undoable); elevation 2026-10-18; 3D 2026-10-20.
 - ~~Fixtures don't avoid cabinets~~ P4 said warn only; changed 2026-10-18 — they now block / slide (see top).
 - Room 3D: sink-in-hole not clearly eyeballed yet (plan + resolver verified).
 - ~~Cutout as a CNC op~~ done 2026-10-18 (see the gaps block). Not checked on the machine.

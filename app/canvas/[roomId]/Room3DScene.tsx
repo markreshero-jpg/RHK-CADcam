@@ -1049,7 +1049,17 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
               cameraStateRef={cameraStateRef}
               layers={layers}
               bt={bt}
-              fx={fx}
+              fx={fx && {
+                ...fx,
+                // Same guard as cabinets: a hit stops the empty-space wall menu,
+                // a right-drag (pan) opens nothing.
+                onContextMenu: fx.onContextMenu && ((id, x, y) => {
+                  hitCabRef.current = true
+                  if (rightDragged()) return
+                  setMenu(null); setWallMenu(null)
+                  fx.onContextMenu!(id, x, y)
+                }),
+              }}
               pickBenchtops={pickBenchtops}
               measuring={measuring}
               wire={wire}

@@ -52,7 +52,7 @@ export function bodyFromCatalog(item: FixtureCatalogItem): FixtureBody {
 }
 
 export function useFixtureInteraction({
-  room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot, benchTopAt, linkAt, clearOf,
+  room, walls, fixtures, setFixtures, mode, setMode, selected, setSelected, captureSnapshot, benchTopAt, linkAt, clearOf, onDropped,
 }: {
   room:          Room
   walls:         Wall[]
@@ -64,6 +64,9 @@ export function useFixtureInteraction({
   linkAt?:       (f: FixtureFootprint & { mount: RoomFixture['mount']; category: RoomFixture['category'] }) => FixtureLink | null
   /** Slide a wall-snapped item clear of cabinets / other appliances (nearest free gap), like a cabinet. */
   clearOf?:      (s: FixtureSnap, body: { id?: string; width: number; depth: number; height: number; z: number }) => FixtureSnap
+  /** After a drop (place / move): seat it in an open cell of the cabinet it linked to.
+   *  `cursorZ` = cursor height above the floor when dropped in elevation. */
+  onDropped?:    (f: RoomFixture, cursorZ?: number) => void
   mode:          Mode
   setMode:       (m: Mode) => void
   selected:      Selected
@@ -146,7 +149,7 @@ export function useFixtureInteraction({
     return true
   }
 
-  async function handlePointerUp(wp: Pt, free: boolean): Promise<boolean> {
+  async function handlePointerUp(wp: Pt, free: boolean, cursorZ?: number): Promise<boolean> {
     if (mode !== 'place_fixture' || !carry) return false
     const s = snapAt(wp, free)
     if (!s) return true
@@ -167,18 +170,21 @@ export function useFixtureInteraction({
       // One drop, then back to Select with it selected — like placing a cabinet.
       setCarry(null); setGhost(null); setMode('select')
       setSelected({ type: 'fixture', id: placed.id })
+      onDropped?.(placed, cursorZ)
       return true
     }
     const id = carry.id
     setCarry(null); setGhost(null); setMode('select')
     const moved = fixtures.find(f => f.id === id)
     const z = moved ? benchZ(moved, s) : null
-    await update(id, {
+    const patch: Partial<RoomFixture> = {
       x: round1(s.x), y: round1(s.y), rotation: round3(s.rotation), wall_id: s.wall_id, ...(z != null ? { z } : {}),
       ...(s.depth != null ? { depth: s.depth } : {}),
       ...(moved ? linkFields({ ...s, width: moved.width, depth: s.depth ?? moved.depth, mount: moved.mount, category: moved.category }) : {}),
-    })
+    }
+    await update(id, patch)
     setSelected({ type: 'fixture', id })
+    if (moved) onDropped?.({ ...moved, ...patch }, cursorZ)
     return true
   }
 

@@ -66,6 +66,30 @@ export function zoneSeat(
 }
 
 /**
+ * The open cell an appliance dropped on a cabinet by hand seats in (an oven
+ * into a tower's opening), or null when none fits. It fits when it's no more
+ * than `WIDTH_OVERHANG` wider than the cell (the fascia covers the gables, as
+ * in a UBO) and no taller than the cell (+ a little slack). `cursorY` (height
+ * above the cabinet bottom — the cursor in elevation) picks the cell under it;
+ * otherwise the snuggest fit by height, lowest first on a tie.
+ */
+export const WIDTH_OVERHANG = 80
+export function pickOpenZone(
+  zones: ResolvedCabinet['open_zones'],
+  body: { width: number; height: number },
+  cursorY?: number,
+): { row_index: number; col_index: number } | null {
+  const fits = (zones ?? []).filter(z => body.width <= z.DX + WIDTH_OVERHANG && body.height <= z.DY + 5)
+  if (!fits.length) return null
+  if (cursorY != null) {
+    const under = fits.find(z => cursorY >= z.Y && cursorY <= z.Y + z.DY)
+    if (under) return { row_index: under.row_index, col_index: under.col_index }
+  }
+  const best = [...fits].sort((a, b) => (a.DY - body.height) - (b.DY - body.height) || a.Y - b.Y)[0]
+  return { row_index: best.row_index, col_index: best.col_index }
+}
+
+/**
  * Re-seat zone-anchored fixtures: link fields from the cabinet's current resolve
  * (when it carries open_zones) and the underside height from the cabinet's
  * bottom + link_zone.y. Returns only fixtures that changed.

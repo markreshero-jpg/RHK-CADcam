@@ -35,6 +35,7 @@ const BOARD_COLOR = '#d8c8a4'   // finished panel face
 const PART_COLOR  = '#c6ad82'   // nested parts — a touch darker so they read against the board
 const EDGE_COLOR  = '#9a8a5e'   // board edge / underside
 const CUT_CORE = new THREE.Color('#2a2316')   // freshly-cut material at the trench bottom (true kerf width)
+const SLUG_GONE = new THREE.Color('#0e1420')  // a cut-out's slug has dropped — see through to the bed
 const RAPID_Y = 14              // rapids float above the sheet on a constant safe plane
 const GRID_TARGET = 1100        // ~ max grid cells across the longest board edge (caps vertex count)
 const OUTLINE_COLOR = '#7a6a45' // crisp part-edge lines (sharp at any zoom, grid-independent)
@@ -83,8 +84,9 @@ function Segments({ moves, map, level, color, opacity }: {
 }
 
 // ── The carvable board (height-field / Z-map) ─────────────────────────────────
-function CarvedBoard({ W, H, thickness, placements, outlines, prog, elapsedRef, toolDia }: {
+function CarvedBoard({ W, H, thickness, placements, outlines, holes, prog, elapsedRef, toolDia }: {
   outlines?: Record<string, { x: number; y: number }[]>
+  holes?: Record<string, { x: number; y: number }[][]>
   W: number; H: number; thickness: number
   placements: NestedSheet['placements']
   prog: ParsedProgram
@@ -95,7 +97,7 @@ function CarvedBoard({ W, H, thickness, placements, outlines, prog, elapsedRef, 
 
   // Build the grid once per board/layout. Vertices start flush (y = 0); the
   // colour attribute marks part vs. waste so the parts read a shade apart.
-  const { geom, heights, state, baseColors, cols, rows, cell, floorY } = useMemo(() => {
+  const { geom, heights, state, baseColors, cols, rows, cell, floorY, slugs } = useMemo(() => {
     const cell = Math.max(2, Math.max(W, H) / GRID_TARGET)
     const cols = Math.max(1, Math.round(W / cell))
     const rows = Math.max(1, Math.round(H / cell))
@@ -110,6 +112,23 @@ function CarvedBoard({ W, H, thickness, placements, outlines, prog, elapsedRef, 
     const rects = placements.map(p => ({ x0: p.x, y0: p.y, x1: p.x + p.w, y1: p.y + p.h, poly: outlines?.[p.uid] }))
     const inRect = (r: (typeof rects)[number], x: number, y: number) =>
       x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1 && (!r.poly || pointInShape({ x, y }, r.poly))
+    // Benchtop cutouts: the inside is waste (board colour), and once the bit has
+    // gone right round it at full depth the slug drops out. Release time = the
+    // last through-depth cutting move inside the loop (inside profiles keep the
+    // bit centre inside it).
+    const loops = Object.values(holes ?? {}).flat().filter(h => h.length >= 3)
+    const inHole = (x: number, y: number) => loops.some(h => pointInShape({ x, y }, h))
+    const throughZ = -(thickness - 0.5)
+    const slugs = loops.map(h => {
+      let t = Infinity
+      for (const m of prog.moves) {
+        if (m.kind !== 'cut' && m.kind !== 'plunge') continue
+        if (Math.min(m.z0, m.z1) > throughZ) continue
+        if (!pointInShape({ x: (m.x0 + m.x1) / 2, y: (m.y0 + m.y1) / 2 }, h)) continue
+        t = t === Infinity ? m.t1 : Math.max(t, m.t1)
+      }
+      return { t, poly: h, idxs: [] as number[] }
+    })
     for (let j = 0; j < cz; j++) {
       const sy = Math.min(H, j * cell)
       for (let i = 0; i < cx; i++) {
@@ -118,7 +137,8 @@ function CarvedBoard({ W, H, thickness, placements, outlines, prog, elapsedRef, 
         positions[idx * 3] = sx - W / 2
         positions[idx * 3 + 1] = 0
         positions[idx * 3 + 2] = H / 2 - sy
-        const inPart = rects.some(r => inRect(r, sx, sy))
+        const inPart = rects.some(r => inRect(r, sx, sy)) && !(loops.length && inHole(sx, sy))
+        for (const s of slugs) if (pointInShape({ x: sx, y: sy }, s.poly)) s.idxs.push(idx)
         const c = inPart ? part : board
         colors[idx * 3] = c.r; colors[idx * 3 + 1] = c.g; colors[idx * 3 + 2] = c.b
       }
@@ -134,10 +154,12 @@ function CarvedBoard({ W, H, thickness, placements, outlines, prog, elapsedRef, 
     geom.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3))
     geom.setIndex(new THREE.BufferAttribute(index, 1))
-    return { geom, heights, state, baseColors: colors.slice(), cols, rows, cell, floorY: -(thickness - 0.3) }
-  }, [W, H, thickness, placements, outlines])
+    return { geom, heights, state, baseColors: colors.slice(), cols, rows, cell, floorY: -(thickness - 0.3), slugs }
+  }, [W, H, thickness, placements, outlines, holes, prog])
 
-  useEffect(() => { last.current = 0 }, [geom])
+  // Which slugs have dropped (index into slugs) — cleared on scrub-back.
+  const dropped = useRef(new Set<number>())
+  useEffect(() => { last.current = 0; dropped.current.clear() }, [geom])
   useEffect(() => () => geom.dispose(), [geom])
 
   // Incremental carve each frame: stamp the tool footprint of every cutting move
@@ -174,6 +196,7 @@ function CarvedBoard({ W, H, thickness, placements, outlines, prog, elapsedRef, 
       ;(col.array as Float32Array).set(baseColors)
       col.needsUpdate = true
       last.current = 0
+      dropped.current.clear()
       changed = true
     }
 
@@ -198,6 +221,17 @@ function CarvedBoard({ W, H, thickness, placements, outlines, prog, elapsedRef, 
       }
       last.current = to
     }
+
+    // Cut right round → the slug falls out: the inside drops to the underside.
+    slugs.forEach((s, k) => {
+      if (s.t > target || dropped.current.has(k)) return
+      dropped.current.add(k)
+      for (const idx of s.idxs) {
+        heights[idx] = -thickness; pos.setY(idx, -thickness)
+        state[idx] = 2; col.setXYZ(idx, SLUG_GONE.r, SLUG_GONE.g, SLUG_GONE.b)
+      }
+      changed = true
+    })
 
     if (changed) { pos.needsUpdate = true; col.needsUpdate = true }
   })
@@ -311,7 +345,7 @@ function Tool({ shape, cx, cz, tipY, cutting, span }: {
 }
 
 // ── Scene ──────────────────────────────────────────────────────────────────────
-function Scene({ sheet, prog, elapsed, toolDia, activeShape, drillBlock, outlines }: Props) {
+function Scene({ sheet, prog, elapsed, toolDia, activeShape, drillBlock, outlines, holes }: Props) {
   const { w: W, h: H } = sheet.stock
   const thickness = sheet.thickness || 18
   const span = Math.max(W, H)
@@ -359,7 +393,7 @@ function Scene({ sheet, prog, elapsed, toolDia, activeShape, drillBlock, outline
         <Lightformer intensity={1.0} position={[-span, span * 0.5, -span]} scale={span * 0.7} color="#ffe7c2" />
       </Environment>
 
-      <CarvedBoard W={W} H={H} thickness={thickness} placements={sheet.placements} outlines={outlines}
+      <CarvedBoard W={W} H={H} thickness={thickness} placements={sheet.placements} outlines={outlines} holes={holes}
         prog={prog} elapsedRef={elapsedRef} toolDia={toolDia} />
 
       {/* Drilled holes popping in sequence (gang block has no routing-Z carve) */}
@@ -379,6 +413,10 @@ function Scene({ sheet, prog, elapsed, toolDia, activeShape, drillBlock, outline
             color={OUTLINE_COLOR} lineWidth={1.25} transparent opacity={0.55} />
         )
       })}
+      {Object.entries(holes ?? {}).flatMap(([uid, hs]) => hs.filter(h => h.length >= 3).map((h, k) => (
+        <Line key={`${uid}-h${k}`} points={[...h, h[0]].map(q => [q.x - W / 2, 0.3, H / 2 - q.y] as [number, number, number])}
+          color={OUTLINE_COLOR} lineWidth={1.25} transparent opacity={0.55} />
+      )))}
 
       {/* Soft grounding shadow under the board */}
       <ContactShadows position={[0, -thickness - 1, 0]} scale={span * 1.5} far={thickness + 6}
@@ -417,6 +455,7 @@ interface Props {
   activeShape: ToolShape
   drillBlock?: DrillBlockConfig
   outlines?: Record<string, { x: number; y: number }[]>   // shaped parts, sheet coords (O4)
+  holes?: Record<string, { x: number; y: number }[][]>    // benchtop cutouts, sheet coords
 }
 
 export default function SimCanvas3D(props: Props) {
