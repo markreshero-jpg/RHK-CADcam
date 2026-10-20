@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0;padding:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head><body>
+<title>Vanity Curved End</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --paper:#EEF1EF; --panel:#FAFBF9; --ink:#1B252C; --muted:#5A6870; --rule:#CBD3D1; --accent:#E0762B;
+  --scene:#E6EAE8; --wrap:#B98A5E;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+  --paper:#10161A; --panel:#151D22; --ink:#DCE4E7; --muted:#8B9AA2; --rule:#2B373E; --accent:#EB8A45; --scene:#182127; --wrap:#C99A6E;}}
+:root[data-theme="dark"]{color-scheme:dark;
+  --paper:#10161A; --panel:#151D22; --ink:#DCE4E7; --muted:#8B9AA2; --rule:#2B373E; --accent:#EB8A45; --scene:#182127; --wrap:#C99A6E;}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans Condensed","Arial Narrow",Arial,sans-serif;font-size:15px}
+.app{height:100%;display:grid;grid-template-columns:1fr 300px}
+#view{position:relative;min-height:0;background:var(--scene);touch-action:none}
+#view canvas{display:block;width:100%;height:100%;outline:none}
+.hint{position:absolute;left:16px;bottom:14px;font:12px "IBM Plex Mono",monospace;color:var(--muted);pointer-events:none}
+.side{background:var(--panel);border-left:1.5px solid var(--ink);padding:18px 18px 20px;overflow:auto;display:flex;flex-direction:column;gap:18px}
+h1{margin:0;font-size:24px;line-height:1.1;font-weight:700;text-wrap:balance}
+.sub{margin:4px 0 0;color:var(--muted);font-size:13.5px}
+h2{margin:0 0 8px;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase}
+.row{display:flex;flex-wrap:wrap;gap:6px}
+button{font:500 13px "IBM Plex Sans Condensed",sans-serif;color:var(--ink);background:transparent;border:1px solid var(--ink);padding:6px 10px;cursor:pointer}
+button:hover{background:var(--ink);color:var(--panel)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+label{display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer}
+input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.val{font:13px "IBM Plex Mono",monospace;color:var(--muted)}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px}
+dt{color:var(--muted)} dd{margin:0;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.swatch{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:0}
+#plan{width:100%;max-height:280px;display:block}
+#flat{width:100%;height:auto;display:block;margin-top:10px}
+#flat text{font:10px "IBM Plex Mono",monospace;fill:var(--muted)}
+#plan text{font:10px "IBM Plex Mono",monospace;fill:var(--muted)}
+.note{font-size:13px;color:var(--muted);margin:0;line-height:1.4}
+.params{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px}
+.params label{display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:0;cursor:default;font-size:12.5px;color:var(--muted)}
+.params input{font:14px "IBM Plex Mono",monospace;color:var(--ink);background:var(--paper);border:1px solid var(--rule);padding:5px 7px;width:100%;box-sizing:border-box;font-variant-numeric:tabular-nums}
+.params input:focus,.params select:focus{border-color:var(--accent)}
+.params label.chk{flex-direction:row;align-items:center;justify-content:flex-start;gap:8px;color:var(--ink);font-size:14px;cursor:pointer}
+.params label.chk input{width:16px;height:16px;padding:0;flex:none}
+.params .fld{display:flex;flex-direction:column;gap:3px}
+.params input:disabled{opacity:.5}
+.params select{font:13px "IBM Plex Sans Condensed",sans-serif;color:var(--ink);background:var(--paper);border:1px solid var(--rule);padding:5px 4px;width:100%;box-sizing:border-box}
+.warn{margin:0;padding:8px 10px;border-left:3px solid #C0392B;background:color-mix(in srgb,#C0392B 10%,transparent);font-size:13px;line-height:1.35}
+.warn:empty{display:none}
+.params input[type=text]{font:14px "IBM Plex Mono",monospace}
+#bZip{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+#bZip:hover{background:var(--ink);border-color:var(--ink)}
+#bZip[disabled],#bPdf[disabled],#bJobSave[disabled]{opacity:.5;cursor:default}
+.filebtn{font:500 13px "IBM Plex Sans Condensed",sans-serif;color:var(--ink);border:1px solid var(--ink);padding:6px 10px;cursor:pointer;display:inline-flex;align-items:center}
+.filebtn:hover{background:var(--ink);color:var(--panel)}
+#fJob:focus-visible+*,.filebtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:62vh auto;height:auto}
+  .side{border-left:0;border-top:1.5px solid var(--ink)}
+}
+</style>
+
+<div class="app">
+  <div id="view"><div class="hint">drag to spin · scroll or pinch to zoom · right-drag to pan</div></div>
+  <aside class="side">
+    <div>
+      <h1>Vanity Curved End</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+    <div>
+      <h2>Sizes (mm)</h2>
+      <div class="params">
+        <label>Width<input id="pW" type="number" inputmode="decimal" min="40" step="1" value="170"></label>
+        <label>Depth<input id="pD" type="number" inputmode="decimal" min="100" step="1" value="500"></label>
+        <label>Height<input id="pH" type="number" inputmode="decimal" min="100" step="1" value="500"></label>
+        <label>Radius<input id="pR" type="number" inputmode="decimal" min="20" step="1" value="150"></label>
+        <label>Face board<input id="pFT" type="number" inputmode="decimal" min="6" step="0.5" value="18"></label>
+        <label>Skin<input id="pSK" type="number" inputmode="decimal" min="0.5" step="0.5" value="2"></label>
+        <label>Carcass<input id="pT" type="number" inputmode="decimal" min="6" step="0.5" value="16.5"></label>
+        <label>Hand<select id="pHand"><option value="RH">Right hand</option><option value="LH">Left hand</option><option value="DOUBLE">Both ends curved</option></select></label>
+        <label>Back overhang L<input id="pOL" type="number" inputmode="decimal" min="0" step="5" value="0"></label>
+        <label>Back overhang R<input id="pOR" type="number" inputmode="decimal" min="0" step="5" value="0"></label>
+        <label>Gable overhang<input id="pOG" type="number" inputmode="decimal" min="0" step="5" value="0"></label>
+        <label>Back scribe<input id="pSBK" type="number" inputmode="decimal" min="0" step="5" value="0"></label>
+        <label>Bottom scribe<input id="pSBT" type="number" inputmode="decimal" min="0" step="5" value="0"></label>
+        <label>Top scribe<input id="pSTP" type="number" inputmode="decimal" min="0" step="5" value="0"></label>
+        <label class="chk" style="grid-column:1/-1"><input id="pBlkS" type="checkbox"> Fixing block on flat side</label>
+        <label class="chk" style="grid-column:1/-1"><input id="pBlkF" type="checkbox"> Fixing block on flat front</label>
+        <label class="chk" style="grid-column:1/-1"><input id="pLight" type="checkbox"> Cut out rib centres</label>
+        <label>Rib border<input id="pB" type="number" inputmode="decimal" min="20" step="5" value="60"></label>
+        <div class="fld"><label class="chk" style="font-size:12.5px;color:var(--muted)"><input id="pOnion" type="checkbox"> Onion skin</label><input id="pOS" type="number" inputmode="decimal" min="0.1" step="0.1" value="0.3" disabled aria-label="Onion skin thickness"></div>
+        <label>&nbsp;<button id="bReset" type="button">Reset sizes</button></label>
+      </div>
+      <p class="warn" id="warn" style="margin-top:10px"></p>
+    </div>
+    <div>
+      <h2>Export for S2M</h2>
+      <div class="params">
+        <label style="grid-column:1/-1">File prefix<input id="pName" type="text" value="CurvedEnd" spellcheck="false"></label>
+      </div>
+      <div class="row" style="margin-top:8px"><button id="bZip" type="button">Download DXFs (.zip)</button><button id="bPdf" type="button">Shop drawings (PDF)</button></div>
+      <div class="row" style="margin-top:6px"><button id="bJobSave" type="button">Save job file</button><label class="filebtn" for="fJob">Load job file</label><input id="fJob" type="file" accept=".json,application/json" hidden></div>
+      <p class="val" id="zipMsg" style="margin:6px 0 0"></p>
+    </div>
+    <div>
+      <h2>Explode</h2>
+      <input id="explode" type="range" min="0" max="100" value="0" aria-label="Explode">
+      <div class="row" style="margin-top:8px"><button id="bAsm">Assembled</button><button id="bExp">Exploded</button></div>
+    </div>
+    <div>
+      <h2>Show</h2>
+      <label><input id="cWrap" type="checkbox" checked><span class="swatch" style="background:var(--wrap)"></span>Face board</label>
+      <label><input id="cXray" type="checkbox"> See-through face board</label>
+      <label><input id="cXmel" type="checkbox"> See-through melamine</label>
+      <label><input id="cTop" type="checkbox" checked> Top former</label>
+      <label><input id="cFix" type="checkbox" checked> Fixing panel</label>
+      <label><input id="cBack" type="checkbox" checked> Back</label>
+      <label><input id="cHoles" type="checkbox" checked><span class="swatch" style="background:var(--accent)"></span>Ø5 fixing holes</label>
+      <label><input id="cVan" type="checkbox" checked> Vanity (ghost)</label>
+      <label><input id="cSpin" type="checkbox"> Auto-rotate</label>
+    </div>
+    <div>
+      <h2>Views</h2>
+      <div class="row"><button data-v="iso">3/4</button><button data-v="front">Front</button><button data-v="side">Side</button><button data-v="top">Plan</button><button data-v="inside">Inside</button><button id="bHoles">Holes</button><button data-v="back">Back</button></div>
+    </div>
+    <div>
+      <h2>Former · plan (rib cut-out in orange)</h2>
+      <svg id="plan" viewBox="0 0 200 560" role="img" aria-label="Plan of the shaped former"></svg>
+    </div>
+    <div>
+      <h2>Cut list · DXF part names</h2>
+      <dl id="cut"></dl>
+    </div>
+    <div>
+      <h2>Fixing holes · Ø5 through</h2>
+      <dl id="holes"></dl>
+    </div>
+    <div>
+      <h2>Face pocket · back of face board</h2>
+      <dl id="kerf"></dl>
+      <svg id="flat" viewBox="0 0 300 280" role="img" aria-label="Face board laid flat, back face up, with pocket"></svg>
+    </div>
+    <p class="note" id="rules"></p>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function(){
+// ---------- rules (same as the DXF generator) ----------
+const DEF={W:170,D:500,H:500,R:150,FT:18,SK:2,T:16.5,B:60,OS:0.3,OL:0,OR:0,OG:0,SBK:0,SBT:0,STP:0};
+const BLOCK_WIDE=100, BLOCK_NARROW=60;
+const POCK_EXT=3, OVER=8, HOLE_D=5, INSET=50, BACK_INSET=40, MAX_PITCH=250;
+function spread(len,inset,maxP){const span=len-2*inset; if(span<=0) return [len/2];
+  const n=Math.max(1,Math.ceil(span/maxP-1e-9)); return Array.from({length:n+1},(_,i)=>inset+span*i/n);}
+// Geometry is described as closed loops in plan coords (x across, d = depth from front, front at d=0),
+// each vertex [x, d, bulge]; bulge = tan(angle/4) of the arc to the next vertex, + = anticlockwise (d drawn upward).
+const TB=Math.tan(Math.PI/8);
+// Where the rib cut-out's rounded corner meets its rectangle (inset by the border).
+function cornerArc(x0,x1,d0,d1,CX,CD,r){
+  const cl=v=>Math.max(-1,Math.min(1,v));
+  if(r<=0||x1<=CX) return null;
+  const a=(x0-CX)/r; if(a>=1) return {cutFront:true};
+  const tFront=Math.asin(cl((d0-CD)/r)), tLeft=a<=-1?-Infinity:-Math.acos(a);
+  const ts=Math.max(tFront,tLeft), te=-Math.acos(cl((x1-CX)/r));
+  if(te<=ts) return null;
+  return {ts,te,b:Math.tan((te-ts)/4),onLeft:tLeft>tFront,
+    ps:[CX+r*Math.cos(ts),CD+r*Math.sin(ts)], pe:[x1,CD+r*Math.sin(te)]};
+}
+// Rib cut-out: rib outline brought in by the border B (the rib, ignoring its small shoulders, is convex).
+function ribCutout(p,c){
+  const {W,D,FT,T,B}=p, r=c.RI-B;
+  if(c.double){
+    const x0=FT+B+(c.blkSide?T:0), x1=W-FT-B-(c.blkSide?T:0), d0=FT+B+(c.blkFront?T:0), d1=c.Dc-T-B, xm=W/2;
+    if(x1-x0<30||d1-d0<30) return null;
+    const k=cornerArc(xm,x1,d0,d1,c.CX,c.CD,r);
+    if(!k) return [[x0,d0,0],[x1,d0,0],[x1,d1,0],[x0,d1,0]];
+    if(k.cutFront) return null;
+    const m=([x,d])=>[W-x,d], pe=k.pe, ps=k.ps, mpe=m(pe), mps=m(ps);
+    const L=[[x0,d1,0],[mpe[0],mpe[1],k.b]];
+    if(Math.abs(mps[0]-ps[0])>0.01) L.push([mps[0],mps[1],0]);
+    L.push([ps[0],ps[1],k.b],[pe[0],pe[1],0],[x1,d1,0]);
+    return L;
+  }
+  let x0=T+B, x1=W-FT-B-(c.blkSide?T:0), d0=FT+B+(c.blkFront?T:0), d1=c.Dc-T-B;
+  if(x1-x0<30||d1-d0<30) return null;
+  const rect=()=>[[x0,d0,0],[x1,d0,0],[x1,d1,0],[x0,d1,0]];
+  const k=cornerArc(x0,x1,d0,d1,c.CX,c.CD,r);
+  if(!k) return rect();
+  if(k.cutFront){ d0=Math.max(d0,c.CD); return d1-d0<30?null:rect(); }
+  const L=[]; if(!k.onLeft) L.push([x0,d0,0]);
+  L.push([k.ps[0],k.ps[1],k.b],[k.pe[0],k.pe[1],0],[x1,d1,0],[x0,d1,0]);
+  return L;
+}
+// hand: RH / LH = one curved end beside a vanity (fixing panel on the vanity side);
+// DOUBLE = one cabinet, curve on both front corners, no fixing panel.
+function calc(p){
+  const {W,D,H,R,FT,SK,T}=p, c={...p}, E=POCK_EXT;
+  // scribes: the face board keeps the full D x H; the carcass finishes short of the wall (Dc) and sits up off the floor (y0)
+  const SBK=p.SBK||0, SBT=p.SBT||0, STP=p.STP||0, Dc=D-SBK, Hc=H-SBT-STP; c.Dc=Dc; c.Hc=Hc; c.y0=SBT;   // top scribe: carcass also stops STP below the top of the face board
+  c.double=p.hand==='DOUBLE';
+  c.CX=W-R; c.CD=R; c.RI=R-SK;
+  c.maxGap=SK<=2?170:250;
+  let g=1; while((Hc-(g+1)*T)/g>=c.maxGap && g<60) g++;
+  c.gaps=g; c.pitch=(Hc-T)/g; c.clear=(Hc-(g+1)*T)/g;
+  c.levels=Array.from({length:g+1},(_,i)=>i*c.pitch);
+  c.holeY=c.levels.map(y=>y+T/2);
+  c.arc=Math.PI/2*R;
+  const RI=c.RI, CX=c.CX;
+  if(c.double){
+    const side=D-R, flat=W-2*R;
+    // face board runs from the left wall end (X0) to the right wall end, plus the back overhangs to trim after glue-up
+    const OL=p.OL||0, OR=p.OR||0; c.ovL=OL; c.ovR=OR;
+    c.wrapLen=OL+2*side+2*c.arc+flat+OR;
+    c.pockets=[[OL+side-E,OL+side+c.arc+E],[OL+side+c.arc+flat-E,OL+side+2*c.arc+flat+E]];
+    if(c.pockets[0][1]>=c.pockets[1][0]) c.pockets=[[c.pockets[0][0],c.pockets[1][1]]];
+    c.fixDepth=0; c.backX0=FT; c.backW=W-2*FT; c.formerX0=SK; c.formerW=W-2*SK; c.formerD=Dc-T-SK;
+    c.fixToFormerX=[]; c.fixToBackY=[];
+    // a full half-round front (width = 2 x radius) has no flat, so no front shoulders
+    c.formerLoop=flat>0.01
+      ? [[FT,Dc-T,0],[FT,R,0],[SK,R,TB],[R,SK,0],[R,FT,0],[W-R,FT,0],[W-R,SK,TB],[W-SK,R,0],[W-FT,R,0],[W-FT,Dc-T,0]]
+      : [[FT,Dc-T,0],[FT,R,0],[SK,R,TB],[R,SK,TB],[W-SK,R,0],[W-FT,R,0],[W-FT,Dc-T,0]];
+    c.wrapLoop=[[0,D+OL,0],[0,R,TB],[R,0,0],[W-R,0,TB],[W,R,0],[W,D+OR,0],[W-FT,D+OR,0],[W-FT,R+E,0],[W-SK,R+E,0],[W-SK,R,-TB],
+      ...(flat>=2*E?[[W-R,SK,0],[W-R-E,SK,0],[W-R-E,FT,0],[R+E,FT,0],[R+E,SK,0],[R,SK,-TB]]:flat>0.01?[[W-R,SK,0],[R,SK,-TB]]:[[R,SK,-TB]]),[SK,R,0],[SK,R+E,0],[FT,R+E,0],[FT,D+OL,0]];
+    c.pocketLines=flat>=2*E?[[R+E,FT],[W-R-E,FT],[FT,R+E],[W-FT,R+E]]:[[FT,R+E],[W-FT,R+E]];
+  } else {
+    // single end: X0 is the front end; only the wall end gets an overhang (right for RH, left for LH)
+    // plus a gable overhang on the front (vanity-side) end, X0
+    const OV=p.hand==='LH'?(p.OL||0):(p.OR||0), OG=p.OG||0; c.ovL=p.hand==='LH'?OV:0; c.ovR=p.hand==='LH'?0:OV; c.ovG=OG;
+    c.wrapLen=OG+CX+c.arc+(D-R)+OV;
+    c.pockets=[[OG+CX-E,OG+CX+c.arc+E]];
+    c.fixDepth=Dc-FT; c.backX0=T; c.backW=W-FT-T; c.formerX0=T; c.formerW=W-SK-T; c.formerD=Dc-T-SK;
+    c.fixToFormerX=spread(Dc-T-FT,INSET,MAX_PITCH);
+    c.fixToBackX=Dc-T/2-FT; c.fixToBackY=spread(Hc,INSET,MAX_PITCH);
+    c.formerLoop=[[T,FT,0],[CX,FT,0],[CX,SK,TB],[W-SK,R,0],[W-FT,R,0],[W-FT,Dc-T,0],[T,Dc-T,0]];
+    c.wrapLoop=[[-OG,0,0],[CX,0,TB],[W,R,0],[W,D+OV,0],[W-FT,D+OV,0],[W-FT,R+E,0],[W-SK,R+E,0],[W-SK,R,-TB],[CX,SK,0],[CX-E,SK,0],[CX-E,FT,0],[-OG,FT,0]];
+    c.pocketLines=[[CX-E,FT],[W-FT,R+E]];
+  }
+  c.backToFormerX=spread(c.backW,BACK_INSET,MAX_PITCH);
+  // Fixing blocks: carcass-board strips, full carcass height, lying flat against the back of the face board's
+  // full-thickness straights, checked into (notched through) the top, bottom and ribs. 100 wide if the straight
+  // allows, otherwise 60. Side block sits hard against the back; front block hard against the fixing panel
+  // (both-ends cabinet: a block on each side, and the front block centred).
+  c.warn=[]; c.notes=[];   // notes are shown but don't block the export
+  c.blocks=[]; c.blkSide=false; c.blkFront=false;
+  const pickW=avail=>[BLOCK_WIDE,BLOCK_NARROW].find(v=>v<=avail+1e-9);
+  if(p.blkS){ const wb=pickW((Dc-T)-(R+E));
+    if(!wb) c.notes.push(`No room for a side fixing block: the flat side behind the curve is only ${f1(Math.max(0,(Dc-T)-(R+E)))} long (needs ${BLOCK_NARROW}).`);
+    else { c.blkSide=true; const d0=Dc-T-wb, d1=Dc-T;
+      c.blocks.push({name:c.double?'Block_SideR':'Block_Side',face:'side',dir:1,x0:W-FT-T,x1:W-FT,d0,d1,wb});
+      const L=c.formerLoop, i=L.findIndex(v=>v[0]===W-FT&&v[1]===Dc-T);
+      L.splice(i,1,[W-FT,d0,0],[W-FT-T,d0,0],[W-FT-T,d1,0]);
+      if(c.double){ c.blocks.push({name:'Block_SideL',face:'side',dir:-1,x0:FT,x1:FT+T,d0,d1,wb});
+        const j=L.findIndex(v=>v[0]===FT&&v[1]===Dc-T); L.splice(j,1,[FT+T,d1,0],[FT+T,d0,0],[FT,d0,0]); } } }
+  if(p.blkF){ const avail=c.double?(W-R-E)-(R+E):(CX-E)-T, wb=pickW(avail);
+    if(!wb) c.notes.push(`No room for a front fixing block: the flat front is only ${f1(Math.max(0,avail))} wide (needs ${BLOCK_NARROW}).`);
+    else { c.blkFront=true; const L=c.formerLoop;
+      if(c.double){ const a=W/2-wb/2, b=W/2+wb/2, i=L.findIndex(v=>v[0]===R&&v[1]===FT);
+        c.blocks.push({name:'Block_Front',face:'front',dir:1,x0:a,x1:b,d0:FT,d1:FT+T,wb});
+        L.splice(i+1,0,[a,FT,0],[a,FT+T,0],[b,FT+T,0],[b,FT,0]); }
+      else { c.blocks.push({name:'Block_Front',face:'front',dir:1,x0:T,x1:T+wb,d0:FT,d1:FT+T,wb});
+        const i=L.findIndex(v=>v[0]===T&&v[1]===FT); L.splice(i,1,[T,FT+T,0],[T+wb,FT+T,0],[T+wb,FT,0]); } } }
+  c.blockHoleY=spread(Hc,INSET,MAX_PITCH);
+  // each block: face holes up the centre (screw out into the face board) plus end holes on the top and bottom
+  // formers' centrelines (screw back into their edges in the notch): 2 holes 25 in on a 100 block, 1 centred on a 60
+  // former holes on every former's centreline (top, bottom and each rib) to screw back into them;
+  // a face hole that would land within 20 of a former hole is dropped
+  c.blocks.forEach(k=>{ const ex=k.wb>=80?[25,k.wb-25]:[k.wb/2];
+    k.endHoles=c.holeY.flatMap(y=>ex.map(x=>[x,y]));
+    k.faceHoles=c.blockHoleY.map(y=>[k.wb/2,y]).filter(([x,y])=>!k.endHoles.some(([a,b])=>Math.hypot(a-x,b-y)<20));
+    k.holes=[...k.faceHoles,...k.endHoles]; k.holeX=[...new Set([k.wb/2,...ex])].sort((a,b)=>a-b);
+    k.holeYs=[...new Set([...c.holeY,...k.faceHoles.map(h=>h[1])].map(v=>Math.round(v*100)/100))].sort((a,b)=>a-b); });
+  c.cut=p.lighten?ribCutout(p,c):null; c.cutDepth=T-(p.OS||0);
+  
+  if(c.double){
+    if(W<2*R) c.warn.push(`Radius too big for the width: two R${f1(R)} corners need at least ${f1(2*R)} wide.`);
+  } else if(CX-E<T) c.warn.push(`Radius too big for the width: the pocket would start over the fixing panel. Needs at least ${f1(T+E)} mm of flat front, has ${f1(CX)}.`);
+  if(R+E>Dc-T-20) c.warn.push('Radius too big for the depth (after the back scribe).');
+  if(Hc<3*T+40) c.warn.push('The top and bottom scribes leave too little carcass height.');
+  if(SK>=FT) c.warn.push('Skin must be thinner than the face board.');
+  return c;
+}
+// reverse a loop's direction: each bulge moves to the new start of its segment and flips sign
+function revLoop(L){ const n=L.length, o=[]; for(let i=0;i<n;i++){ const j=(n-i)%n, prev=(j-1+n)%n; o.push([L[j][0],L[j][1],-L[prev][2]]); } return o; }
+function mirLoop(L,w){ return revLoop(L.map(([x,y,b])=>[w-x,y,-b])); }   // mirror across x, keep direction
+const f1=n=>(Math.round(n*10)/10).toString(), f2=n=>(Math.round(n*100)/100).toString();
+
+// ---------- DXF (R12, S2M layer names) ----------
+const THROUGH_EXTRA=0.2, OUTLINE_EXTRA=0;   // outlines cut to exactly the board thickness; through-holes 0.2 mm past it
+const lnum=v=>String(+(+v).toFixed(2)).replace('.','P');
+const r3=v=>Math.round(v*1000)/1000;
+function dxfDoc(layers,ents){
+  const L=[]; const g=(c,v)=>L.push(String(c),String(v));
+  g(0,'SECTION');g(2,'HEADER');g(9,'$ACADVER');g(1,'AC1009');g(0,'ENDSEC');
+  g(0,'SECTION');g(2,'TABLES');
+  g(0,'TABLE');g(2,'LTYPE');g(70,1);g(0,'LTYPE');g(2,'CONTINUOUS');g(70,0);g(3,'Solid line');g(72,65);g(73,0);g(40,0);g(0,'ENDTAB');
+  const all=['0',...layers];
+  g(0,'TABLE');g(2,'LAYER');g(70,all.length);
+  all.forEach(n=>{g(0,'LAYER');g(2,n);g(70,0);g(62,7);g(6,'CONTINUOUS');});
+  g(0,'ENDTAB');g(0,'ENDSEC');
+  g(0,'SECTION');g(2,'BLOCKS');g(0,'ENDSEC');
+  g(0,'SECTION');g(2,'ENTITIES');
+  ents.forEach(e=>{
+    if(e.type==='circle'){ g(0,'CIRCLE');g(8,e.layer);g(10,r3(e.x));g(20,r3(e.y));g(30,0);g(40,e.r); }
+    else { g(0,'POLYLINE');g(8,e.layer);g(66,1);g(10,0);g(20,0);g(30,0);g(70,1);
+      e.pts.forEach(([x,y,b])=>{g(0,'VERTEX');g(8,e.layer);g(10,r3(x));g(20,r3(y));g(30,0);if(b)g(42,b);});
+      g(0,'SEQEND');g(8,e.layer); }
+  });
+  g(0,'ENDSEC');g(0,'EOF');
+  return L.join('\r\n')+'\r\n';
+}
+const partName=nm=>(nm==='FaceBoard'?'ext_':'int_')+nm;
+const rectCCW=(L,H)=>[[0,0],[L,0],[L,H],[0,H]], rectCW=(L,H)=>[[0,0],[0,H],[L,H],[L,0]];
+function dxfParts(p){
+  const c=calc(p), {H,FT,SK,T}=p, out={};
+  const lo=`OUTLINEZ${lnum(FT+OUTLINE_EXTRA)}L`, lp=`PKZ${lnum(FT-SK)}`;
+  const lo16=`OUTLINEZ${lnum(T+OUTLINE_EXTRA)}L`, lb=`VBOREZ${lnum(T+THROUGH_EXTRA)}`;
+  const rect=(L,H,layer)=>[{type:'poly',layer:'PART',pts:rectCCW(L,H)},{type:'poly',layer,pts:rectCW(L,H)}];
+  const r2=v=>Math.round(v*100)/100;
+  const circ=(x,y)=>({type:'circle',layer:lb,x:r2(x),y:r2(y),r:HOLE_D/2});
+  // Face board, back face up. Single: front end at X0. Double: one side's wall end at X0.
+  // (Face board, fixing panel and back are the same part for either hand: they are fitted the other way round.)
+  const L=r2(c.wrapLen);
+  out.FaceBoard=dxfDoc(['PART',lo,lp],[...rect(L,H,lo),...c.pockets.map(([a,b])=>({type:'poly',layer:lp,
+    pts:[[r2(a),-OVER],[r2(b),-OVER],[r2(b),H+OVER],[r2(a),H+OVER]]}))]);
+  if(!c.double){
+    const fh=[]; c.holeY.forEach(y=>c.fixToFormerX.forEach(x=>fh.push([x,y]))); c.fixToBackY.forEach(y=>fh.push([c.fixToBackX,y]));
+    out.FixingPanel=dxfDoc(['PART',lo16,lb],[...rect(r2(c.fixDepth),r2(c.Hc),lo16),...fh.map(([x,y])=>circ(x,y))]);
+  }
+  const bh=[]; c.holeY.forEach(y=>c.backToFormerX.forEach(x=>bh.push([x,y])));
+  out.Back=dxfDoc(['PART',lo16,lb],[...rect(r2(c.backW),r2(c.Hc),lo16),...bh.map(([x,y])=>circ(x,y))]);
+  // Formers: top view, front at Y0. Outline clockwise (left comp = outside); cut-out anticlockwise (cutter in the waste).
+  const fw=r2(c.formerW), fd=r2(c.formerD), tx=([x,d,b])=>[x-c.formerX0,d-SK,b];
+  let ccw=c.formerLoop.map(tx);
+  if(p.hand==='LH') ccw=mirLoop(ccw,fw);
+  const formerEnts=[{type:'poly',layer:'PART',pts:rectCCW(fw,fd)},{type:'poly',layer:lo16,pts:revLoop(ccw)}];
+  const former=dxfDoc(['PART',lo16],formerEnts);
+  let rib=former;
+  if(c.cut){
+    const lr=`ROUTEZ${lnum(c.cutDepth)}L`;   // leaves the onion skin, if set
+    let loop=c.cut.map(tx); if(p.hand==='LH') loop=mirLoop(loop,fw);
+    rib=dxfDoc(['PART',lo16,lr],[...formerEnts,{type:'poly',layer:lr,pts:loop}]);
+  }
+  out.Bottom=former; for(let i=1;i<c.gaps;i++) out['Rib'+i]=rib; out.Top=former;
+  // fixing blocks: wb x carcass height, Ø5 through-holes up the centre for screwing out into the face board
+  c.blocks.forEach(k=>{ out[k.name]=dxfDoc(['PART',lo16,lb],[...rect(r2(k.wb),r2(c.Hc),lo16),...k.holes.map(([x,y])=>circ(x,y))]); });
+  return {c,files:out};
+}
+window.__dxfParts=dxfParts;
+
+// ---------- scene ----------
+const host=document.getElementById('view');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+host.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(35,1,1,30000);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true; controls.dampingFactor=0.08; controls.zoomSpeed=0.25; controls.rotateSpeed=0.6; controls.panSpeed=0.6;
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function setBg(){ scene.background=new THREE.Color(css('--scene')||'#E6EAE8'); }
+setBg();
+try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',setBg);}catch(e){}
+new MutationObserver(setBg).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+scene.add(new THREE.HemisphereLight(0xffffff,0x8a8f94,.75));
+const sun=new THREE.DirectionalLight(0xffffff,.65); sun.position.set(900,1200,700); scene.add(sun);
+const fill=new THREE.DirectionalLight(0xffffff,.28); fill.position.set(-700,300,-500); scene.add(fill);
+
+const melMat=new THREE.MeshStandardMaterial({color:0xF4F4F0,roughness:.55,transparent:true,opacity:1});
+const ribMat=new THREE.MeshStandardMaterial({color:0xE9ECE8,roughness:.55,transparent:true,opacity:1});
+const wrapMat=new THREE.MeshStandardMaterial({color:0xB98A5E,roughness:.6,transparent:true,opacity:1,side:THREE.DoubleSide});
+const edgeMat=new THREE.LineBasicMaterial({color:0x5b666c,transparent:true,opacity:.9});
+const kerfMat=new THREE.LineBasicMaterial({color:0x3a2a1c});
+const ghostMat=new THREE.MeshStandardMaterial({color:0x9aa6ac,transparent:true,opacity:.18,depthWrite:false});
+const ghostEdge=new THREE.LineBasicMaterial({color:0x8b979d,transparent:true,opacity:.5});
+const holeMat=new THREE.MeshBasicMaterial({color:0xE0762B});
+const ringMat=new THREE.MeshBasicMaterial({color:0xE0762B,side:THREE.DoubleSide});
+const screwMat=new THREE.LineDashedMaterial({color:0xE0762B,dashSize:4,gapSize:3});
+
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(8000,8000),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.05}));
+floor.rotation.x=-Math.PI/2; floor.position.set(0,-.5,-250); scene.add(floor);
+
+let root=null, parts=[], refs={}, C=null;
+function extrudePlan(shape,height,mat){
+  const g=new THREE.ExtrudeGeometry(shape,{depth:height,bevelEnabled:false,curveSegments:64});
+  g.rotateX(-Math.PI/2);   // shape (x, d) -> world (x, up, -d)
+  const m=new THREE.Mesh(g,mat); m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g,30),edgeMat)); return m;
+}
+function addHole(group,x,y,z,axis,T,sgn){ sgn=sgn||1;
+  const c=new THREE.Mesh(new THREE.CylinderGeometry(HOLE_D/2,HOLE_D/2,T+0.8,24),holeMat);
+  if(axis==='x') c.rotation.z=Math.PI/2; else c.rotation.x=Math.PI/2;
+  c.position.set(x,y,z); group.add(c);
+  [-(T/2+0.5),(T/2+0.5)].forEach(o=>{
+    const r=new THREE.Mesh(new THREE.RingGeometry(HOLE_D/2+2,HOLE_D/2+3.2,32),ringMat);
+    if(axis==='x'){ r.rotation.y=Math.PI/2; r.position.set(x+o,y,z);} else r.position.set(x,y,z+o);
+    group.add(r);
+  });
+  const a=-(T/2+25)*sgn, b=(T/2+45)*sgn;
+  const p1=axis==='x'?new THREE.Vector3(x+a,y,z):new THREE.Vector3(x,y,z+a);
+  const p2=axis==='x'?new THREE.Vector3(x+b,y,z):new THREE.Vector3(x,y,z+b);
+  const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints([p1,p2]),screwMat); l.computeLineDistances(); group.add(l);
+}
+function disposeTree(o){ o.traverse(n=>{ if(n.geometry) n.geometry.dispose(); }); }
+
+// bulge loop -> THREE path (shape y = depth d)
+function loopPath(L,path){
+  path.moveTo(L[0][0],L[0][1]);
+  for(let i=0;i<L.length;i++){
+    const [x1,y1,b]=L[i], [x2,y2]=L[(i+1)%L.length];
+    if(!b){ path.lineTo(x2,y2); continue; }
+    const dx=x2-x1, dy=y2-y1, d=Math.hypot(dx,dy), k=d*(1-b*b)/(4*b);
+    const cx=(x1+x2)/2-dy/d*k, cy=(y1+y2)/2+dx/d*k, r=Math.hypot(x1-cx,y1-cy);
+    path.absarc(cx,cy,r,Math.atan2(y1-cy,x1-cx),Math.atan2(y2-cy,x2-cx),b<0);
+  }
+  return path;
+}
+function buildUnit(p,c,hand,x){
+  const g=new THREE.Group(); g.scale.x=hand==='LH'?-1:1; g.position.x=x; root.add(g);
+  const {W,D,H,FT,T}=p;
+  const add=(o,dir)=>{ g.add(o); parts.push({obj:o,base:o.position.clone(),dir}); return o; };
+  // formers
+  const shape=withCut=>{ const s=loopPath(c.formerLoop,new THREE.Shape()); if(withCut&&c.cut) s.holes.push(loopPath(c.cut,new THREE.Path())); return s; };
+  const formers=c.levels.map((y,i)=>{
+    const end=i===0||i===c.levels.length-1;
+    const m=extrudePlan(shape(!end),T,end?melMat:ribMat); m.position.y=c.y0+y;
+    return add(m,new THREE.Vector3(0,(i-(c.levels.length-1)/2)*H*.14,0));
+  });
+  refs.top.push(formers[formers.length-1]);
+  // fixing panel (single ends only)
+  if(!c.double){
+    const Hc=c.Hc, Dc=c.Dc, fixG=new THREE.BoxGeometry(T,Hc,Dc-FT);
+    const fix=new THREE.Mesh(fixG,melMat); fix.position.set(T/2,c.y0+Hc/2,-(FT+(Dc-FT)/2));
+    fix.add(new THREE.LineSegments(new THREE.EdgesGeometry(fixG),edgeMat));
+    add(fix,new THREE.Vector3(-Math.max(110,W*.65),0,0)); refs.fix.push(fix);
+    const fixHoles=new THREE.Group(); fix.add(fixHoles); refs.holes.push(fixHoles);
+    c.holeY.forEach(y=>c.fixToFormerX.forEach(px=>addHole(fixHoles,0,y-Hc/2,(Dc-FT)/2-px,'x',T)));
+    c.fixToBackY.forEach(y=>addHole(fixHoles,0,y-Hc/2,(Dc-FT)/2-c.fixToBackX,'x',T));
+  }
+  // back
+  const BW=c.backW, backG=new THREE.BoxGeometry(BW,c.Hc,T);
+  const back=new THREE.Mesh(backG,melMat); back.position.set(c.backX0+BW/2,c.y0+c.Hc/2,-(c.Dc-T/2));
+  back.add(new THREE.LineSegments(new THREE.EdgesGeometry(backG),edgeMat));
+  add(back,new THREE.Vector3(0,0,-Math.max(130,D*.26))); refs.back.push(back);
+  const backHoles=new THREE.Group(); back.add(backHoles); refs.holes.push(backHoles);
+  c.holeY.forEach(y=>c.backToFormerX.forEach(bx=>addHole(backHoles,bx-BW/2,y-c.Hc/2,0,'z',T)));
+  // fixing blocks
+  c.blocks.forEach(k=>{ const w=k.x1-k.x0, dd=k.d1-k.d0, g2=new THREE.BoxGeometry(w,c.Hc,dd);
+    const m=new THREE.Mesh(g2,ribMat); m.position.set((k.x0+k.x1)/2,c.y0+c.Hc/2,-(k.d0+k.d1)/2);
+    m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g2),edgeMat));
+    add(m,k.face==='side'?new THREE.Vector3(k.dir*Math.max(60,W*.35),0,0):new THREE.Vector3(0,0,Math.max(60,D*.15))); refs.blocks.push(m);
+    const hg=new THREE.Group(); m.add(hg); refs.holes.push(hg);
+    const ax=k.face==='side'?'x':'z', at=(x,y)=>k.face==='side'?[0,y-c.Hc/2,x-k.wb/2]:[x-k.wb/2,y-c.Hc/2,0];
+    k.faceHoles.forEach(([x,y])=>addHole(hg,...at(x,y),ax,T,k.dir));     // out into the face board
+    k.endHoles.forEach(([x,y])=>addHole(hg,...at(x,y),ax,T,-k.dir)); });  // back into the top and bottom
+  // face board
+  const wrap=extrudePlan(loopPath(c.wrapLoop,new THREE.Shape()),H,wrapMat);
+  const kp=[]; c.pocketLines.forEach(([x,d])=>kp.push(x,-0.2,-d-0.3, x,H+0.2,-d-0.3));
+  const kg=new THREE.BufferGeometry(); kg.setAttribute('position',new THREE.Float32BufferAttribute(kp,3));
+  wrap.add(new THREE.LineSegments(kg,kerfMat));
+  add(wrap,c.double?new THREE.Vector3(0,0,Math.max(120,D*.3)):new THREE.Vector3(Math.max(110,W*.65),0,Math.max(90,D*.18))); refs.wrap.push(wrap);
+}
+function build(p){
+  if(root){ scene.remove(root); disposeTree(root); }
+  root=new THREE.Group(); scene.add(root); parts=[];
+  refs={top:[],fix:[],back:[],holes:[],wrap:[],blocks:[]};
+  const c=C=calc(p), {H,D}=p;
+  buildUnit(p,c,p.hand==='LH'?'LH':'RH',0);
+  // vanity ghost beside a single end (none for a double-ended cabinet)
+  const vg=new THREE.BoxGeometry(599,H,D), van=new THREE.Mesh(vg,ghostMat);
+  van.position.set(p.hand==='LH'?300:-300,H/2,-D/2); van.add(new THREE.LineSegments(new THREE.EdgesGeometry(vg),ghostEdge));
+  root.add(van); refs.van=van; van.userData.hide=c.double;
+  applyToggles(); updateSide(); setViews();
+}
+
+// ---------- views ----------
+let views={}, camFrom=null, camTo=null, t0=0, tgtFrom=null, tgtTo=null;
+function setViews(){
+  const {W,D,H}=C, sx=C.hand==='LH'?-1:1;
+  const m=Math.max(W,D,H), k=m/500;
+  const ctr=new THREE.Vector3(sx*W/2,H/2,-D/2);
+  views={ctr,
+    iso:[ctr.x+sx*1060*k, ctr.y+620*k, ctr.z+930*k], front:[ctr.x,ctr.y+20*k,ctr.z+1750*k], side:[ctr.x+sx*1750*k,ctr.y+20*k,ctr.z],
+    top:[ctr.x,ctr.y+1750*k,ctr.z+1], inside:[ctr.x-sx*940*k,ctr.y+470*k,ctr.z-670*k],
+    holes:[ctr.x-sx*1290*k,ctr.y+420*k,ctr.z+680*k], back:[ctr.x-sx*640*k,ctr.y+420*k,ctr.z-1270*k]};
+  controls.minDistance=m*.4; controls.maxDistance=m*8;
+}
+function goView(v){ camFrom=camera.position.clone(); camTo=new THREE.Vector3(...views[v]);
+  tgtFrom=controls.target.clone(); tgtTo=views.ctr.clone(); t0=performance.now(); }
+
+// ---------- UI ----------
+const $=id=>document.getElementById(id);
+let ex=0, exT=0;
+$('explode').addEventListener('input',e=>exT=+e.target.value/100);
+$('bAsm').onclick=()=>{exT=0;$('explode').value=0;};
+$('bExp').onclick=()=>{exT=1;$('explode').value=100;};
+function applyToggles(){
+  refs.wrap.forEach(o=>o.visible=$('cWrap').checked);
+  const xw=$('cXray').checked; wrapMat.opacity=xw?.3:1; wrapMat.depthWrite=!xw; wrapMat.needsUpdate=true;
+  const xm=$('cXmel').checked; [melMat,ribMat].forEach(m=>{m.opacity=xm?.3:1;m.depthWrite=!xm;m.needsUpdate=true;});
+  refs.top.forEach(o=>o.visible=$('cTop').checked);
+  refs.fix.forEach(o=>o.visible=$('cFix').checked); refs.back.forEach(o=>o.visible=$('cBack').checked);
+  refs.holes.forEach(o=>o.visible=$('cHoles').checked);
+  refs.van.visible=$('cVan').checked&&!refs.van.userData.hide;
+}
+['cWrap','cXray','cXmel','cTop','cFix','cBack','cHoles','cVan'].forEach(id=>$(id).addEventListener('change',applyToggles));
+$('cSpin').onchange=e=>controls.autoRotate=e.target.checked; controls.autoRotateSpeed=1.2;
+$('bHoles').onclick=()=>{exT=.6;$('explode').value=60;$('cHoles').checked=true;applyToggles();goView('holes');};
+document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>goView(b.dataset.v));
+
+const keys=['W','D','H','R','FT','SK','T','OL','OR','OG','SBK','SBT','STP'];
+function readParams(){ const p={}; keys.forEach(k=>{ const v=parseFloat($('p'+k).value); p[k]=isFinite(v)&&v>0?v:DEF[k]; }); p.hand=['LH','DOUBLE'].includes($('pHand').value)?$('pHand').value:'RH'; const b=parseFloat($('pB').value); p.B=isFinite(b)&&b>0?b:60; p.lighten=$('pLight').checked; p.blkS=$('pBlkS').checked; p.blkF=$('pBlkF').checked; const os=parseFloat($('pOS').value); p.onion=$('pOnion').checked; p.OS=p.onion?(isFinite(os)&&os>0?os:DEF.OS):0; return p; }
+let tmr=null;
+function onParam(){ clearTimeout(tmr); tmr=setTimeout(()=>build(readParams()),200); }
+keys.forEach(k=>{ $('p'+k).addEventListener('input',onParam); $('p'+k).addEventListener('change',onParam); });
+$('pLight').addEventListener('change',()=>build(readParams()));
+['pBlkS','pBlkF'].forEach(id=>$(id).addEventListener('change',()=>build(readParams())));
+$('pB').addEventListener('input',onParam);
+$('pOS').addEventListener('input',onParam);
+$('pOnion').addEventListener('change',()=>{ $('pOS').disabled=!$('pOnion').checked; if($('pOnion').checked&&!(parseFloat($('pOS').value)>0)) $('pOS').value=DEF.OS; build(readParams()); });
+function syncOverhang(){ const h=$('pHand').value; $('pOL').disabled=h==='RH'; $('pOR').disabled=h==='LH'; $('pOG').disabled=h==='DOUBLE'; }
+syncOverhang();
+$('pHand').addEventListener('change',()=>{ syncOverhang(); build(readParams()); goView('iso'); });
+$('bReset').onclick=()=>{ keys.forEach(k=>$('p'+k).value=DEF[k]); $('pB').value=DEF.B; $('pOS').value=DEF.OS; build(readParams()); saveSettings(); goView('iso'); };
+
+// ---------- remember settings in this browser (survives page updates) ----------
+const STORE='vanityCurvedEnd.settings.v1';
+const SAVE_IDS=[...keys.map(k=>'p'+k),'pB','pOS','pName','pHand'], SAVE_CHECKS=['pLight','pOnion','pBlkS','pBlkF'];
+function saveSettings(){ try{ localStorage.setItem(STORE,JSON.stringify(currentSettings())); }catch(e){} }
+function currentSettings(){ const o={}; SAVE_IDS.forEach(id=>o[id]=$(id).value); SAVE_CHECKS.forEach(id=>o[id]=$(id).checked); return o; }
+function applySettings(o){
+  SAVE_IDS.forEach(id=>{ if(o[id]!=null&&$(id)) $(id).value=o[id]; });
+  SAVE_CHECKS.forEach(id=>{ if(o[id]!=null&&$(id)) $(id).checked=!!o[id]; });
+  $('pOS').disabled=!$('pOnion').checked; syncOverhang(); }
+function loadSettings(){ try{ const o=JSON.parse(localStorage.getItem(STORE)||'null'); if(!o) return false; applySettings(o); return true; }catch(e){ return false; } }
+// ---------- job file: every field value, so a job can be reloaded later ----------
+const JOB_APP='vanity-curved-end';
+function jobFile(){
+  const p=readParams(), c=calc(p), nR=c.gaps-1;
+  return { app:JOB_APP, version:1, saved:new Date().toISOString(), job:$('pName').value,
+    settings:currentSettings(),
+    // readable copy of what these settings produce (for reference only; loading uses "settings")
+    summary:{ type:c.double?'Both ends curved':(p.hand==='LH'?'Left hand':'Right hand'),
+      overall:`${p.W} W x ${p.D} D x ${p.H} H, R${p.R}`, faceBoard:`${f2(c.wrapLen)} x ${p.H} x ${p.FT}`,
+      skin:p.SK, pocketDepth:+(p.FT-p.SK).toFixed(2), pockets:c.pockets.map(([a,b])=>`${f2(a)} to ${f2(b)}`),
+      carcassBoard:p.T, fixingPanel:c.double?null:`${f1(c.fixDepth)} x ${f1(c.Hc)}`, back:`${f1(c.backW)} x ${f1(c.Hc)}`,
+      formers:`${f1(c.formerW)} x ${f1(c.formerD)}, R${f1(c.RI)}`, ribs:nR, ribPitch:+c.pitch.toFixed(2),
+      ribCutOut:c.cut?`${p.B} border`+(p.OS?`, ${p.OS} onion skin`:''):'none',
+      overhangs:{gable:c.ovG||0,backLeft:c.ovL||0,backRight:c.ovR||0}, scribes:{back:p.SBK||0,bottom:p.SBT||0,top:p.STP||0},
+      fixingBlocks:c.blocks.map(k=>`${k.name} ${f1(k.wb)} x ${f1(c.Hc)}`) } };
+}
+function loadJob(text){
+  let j; try{ j=JSON.parse(text); }catch(e){ return 'That file isn’t a job file (it could not be read as JSON).'; }
+  if(!j||j.app!==JOB_APP||!j.settings) return 'That file isn’t a Vanity Curved End job file.';
+  keys.forEach(k=>$('p'+k).value=DEF[k]); $('pB').value=DEF.B; $('pOS').value=DEF.OS; $('pLight').checked=false; $('pOnion').checked=false; $('pBlkS').checked=false; $('pBlkF').checked=false;   // anything the file lacks falls back to the defaults
+  applySettings(j.settings); build(readParams()); saveSettings(); goView('iso');
+  const d=j.saved?new Date(j.saved):null;
+  return `Loaded ${j.job||'job'}`+(d&&!isNaN(d)?`, saved ${d.toLocaleDateString('en-AU')}`:'')+'.';
+}
+window.__job={jobFile,loadJob};
+document.querySelector('.side').addEventListener('input',e=>{ if(e.target.closest('.params')||e.target.id==='pName') saveSettings(); });
+document.querySelector('.side').addEventListener('change',e=>{ if(e.target.closest('.params')||e.target.id==='pName') saveSettings(); });
+
+// ---------- sidebar ----------
+function dl(rows){ return rows.map(([a,b])=>`<dt>${a}</dt><dd>${b}</dd>`).join(''); }
+function loopSvg(L,P,sc){ let d=`M${P(L[0][0],L[0][1])}`;
+  for(let i=0;i<L.length;i++){ const [x1,y1,b]=L[i], [x2,y2]=L[(i+1)%L.length];
+    if(!b){ d+=` L${P(x2,y2)}`; continue; }
+    const ch=Math.hypot(x2-x1,y2-y1), r=ch*(1+b*b)/(4*Math.abs(b));
+    d+=` A${(r*sc).toFixed(2)},${(r*sc).toFixed(2)} 0 0 ${b>0?1:0} ${P(x2,y2)}`; }
+  return d+' Z'; }
+function updateSide(){
+  const c=C, {W,D,H,R,FT,SK,T}=c;
+  $('sub').textContent=`${c.double?'Cabinet curved at both ends.':(c.hand==='LH'?'Left':'Right')+'-hand end.'} ${f1(W)} wide × ${f1(D)} deep × ${f1(H)} high, R${f1(R)} ${c.double?'front corners':'outside corner'}. ${f1(FT)} mm face board pocketed to a ${f1(SK)} mm skin on the curve, over ${f1(T)} mm white melamine.`;
+  $('warn').textContent=[...c.warn,...c.notes].join(' ');
+  const nR=c.gaps-1;
+  $('cut').innerHTML=dl([
+    ['ext_FaceBoard ×1',`${f2(c.wrapLen)} × ${f1(H)} · ${f1(FT)}`+((c.ovL||c.ovR||c.ovG)?` (incl. ${[c.ovG&&`${f1(c.ovG)} gable`,c.ovL&&`${f1(c.ovL)} L`,c.ovR&&`${f1(c.ovR)} R`].filter(Boolean).join(' + ')} overhang)`:'')],
+    ...(c.double?[]:[['int_FixingPanel ×1',`${f1(c.fixDepth)} × ${f1(c.Hc)}`]]),
+    ['int_Back ×1',`${f1(c.backW)} × ${f1(c.Hc)}`],
+    ...((c.SBK||c.SBT||c.STP)?[['Scribe',`${f1(c.SBK||0)} back · ${f1(c.SBT||0)} bottom · ${f1(c.STP||0)} top`]]:[]),
+    ...c.blocks.map(k=>[`int_${k.name} ×1`,`${f1(k.wb)} × ${f1(c.Hc)} · ${k.holes.length} × Ø${HOLE_D}`]),
+    ['int_Top, int_Bottom',`${f1(c.formerW)} × ${f1(c.formerD)} · R${f1(c.RI)}`],
+    [nR?(nR>1?`int_Rib1–${nR}`:'int_Rib1'):'Ribs',nR?`${f1(c.formerW)} × ${f1(c.formerD)} · R${f1(c.RI)}`+(c.lighten?(c.cut?` · cut-out, ${f1(c.B)} border`+(c.OS?`, ${f2(c.OS)} onion skin`:''):' · too small for a cut-out'):''):'none needed'],
+    ['Former pitch',`${f1(c.pitch)} c/c`],
+    ['Clear gap',`${f1(c.clear)} (max ${c.maxGap})`],
+  ]);
+  const nFix=c.double?0:c.holeY.length*c.fixToFormerX.length+c.fixToBackY.length, nBack=c.holeY.length*c.backToFormerX.length;
+  $('holes').innerHTML=dl([
+    ...(c.double?[]:[
+    ['FixingPanel',`${nFix} holes`],
+    ['→ formers',`${c.fixToFormerX.map(f1).join(' · ')} from front`],
+    ['',`${c.holeY.map(f1).join(' · ')} up`],
+    ['→ back',`${f1(c.fixToBackX)} from front`],
+    ['',`${c.fixToBackY.map(f1).join(' · ')} up`]]),
+    ['Back',`${nBack} holes`],
+    ['→ formers',`${c.backToFormerX.map(f1).join(' · ')} across`],
+    ...(c.double?[['',`${c.holeY.map(f1).join(' · ')} up`]]:[]),
+  ]);
+  $('kerf').innerHTML=dl([
+    ...c.pockets.map(([a,b],i)=>[c.pockets.length>1?`Pocket ${i+1}`:'Along board',`${f2(a)} → ${f2(b)} (${f2(b-a)})`]),
+    ['Across board',`−${OVER} → ${f1(H+OVER)} (${f1(H+2*OVER)})`],
+    ['Depth',`${f1(FT-SK)} · leaves ${f1(SK)} skin`],
+    ['Layer',`PKZ${String(+(FT-SK).toFixed(2)).replace('.','P')}, back face up`],
+  ]);
+  $('rules').textContent=`Rules: ribs are added until the clear gap is under ${c.maxGap} (170 for a 2 mm skin or less, 250 above). Holes sit 50 in from each end of the adjoining part (40 for the back into the formers), at most ${MAX_PITCH} apart, centred on its thickness. Pocket runs ${POCK_EXT} past each end of the curve and ${OVER} past top and bottom.`;
+  // plan of former
+  const sc=Math.min((c.double?240:150)/(W+(c.ovG||0)),470/(D+Math.max(c.ovL||0,c.ovR||0))), ox=22+(c.ovG||0)*sc, oy=14, P=(x,d)=>`${(ox+x*sc).toFixed(1)},${(oy+d*sc).toFixed(1)}`;
+  $('plan').setAttribute('viewBox',`0 0 ${Math.ceil(ox+W*sc+60)} ${Math.ceil(oy+(D+Math.max(c.ovL||0,c.ovR||0))*sc+30)}`);
+  const mir=c.hand==='LH'?`transform="translate(${2*ox+W*sc},0) scale(-1,1)"`:'';
+  $('plan').innerHTML=`<g ${mir}><path d="${loopSvg(c.wrapLoop,P,sc)}" fill="none" stroke="var(--wrap)" stroke-width="1" stroke-dasharray="3 2"/>`+
+   `<path d="${loopSvg(c.formerLoop,P,sc)}" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.2"/>`+
+   (c.cut?`<path d="${loopSvg(c.cut,P,sc)}" fill="var(--scene)" stroke="var(--accent)" stroke-width="1.2"/>`:'')+`</g>`+
+   `<text x="${ox+W*sc+6}" y="${oy+8}">front</text><text x="${ox+W*sc+6}" y="${oy+D*sc}">wall</text>`+
+   `<text x="${ox+4}" y="${oy+D*sc+18}">${f1(c.formerW)} × ${f1(c.formerD)} · R${f1(c.RI)}</text>`;
+  // face board flat
+  const L=c.wrapLen, s2=Math.min(260/L,200/H), fx=10, fy=18, X=v=>(fx+v*s2).toFixed(1), Y=v=>(fy+(H-v)*s2).toFixed(1);
+  $('flat').setAttribute('viewBox',`0 0 ${Math.ceil(fx*2+L*s2)} ${Math.ceil(fy+H*s2+36)}`);
+  $('flat').innerHTML=`<rect x="${X(0)}" y="${Y(H)}" width="${(L*s2).toFixed(1)}" height="${(H*s2).toFixed(1)}" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.2"/>`+
+   c.pockets.map(([a,b])=>`<rect x="${X(a)}" y="${Y(H+OVER)}" width="${((b-a)*s2).toFixed(1)}" height="${((H+2*OVER)*s2).toFixed(1)}" fill="var(--accent)" fill-opacity=".22" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="4 2"/>`).join('')+
+   `<text x="${X(0)}" y="${fy-6}">${c.double?'left wall end (X0)':'front end (X0)'}</text>`+
+   (c.ovG?`<line x1="${X(c.ovG)}" y1="${Y(H)}" x2="${X(c.ovG)}" y2="${Y(0)}" stroke="var(--muted)" stroke-dasharray="2 2"/>`:'')+
+   ((c.ovL&&c.double)?`<line x1="${X(c.ovL)}" y1="${Y(H)}" x2="${X(c.ovL)}" y2="${Y(0)}" stroke="var(--muted)" stroke-dasharray="2 2"/>`:'')+
+   (c.ovR||(!c.double&&c.ovL)?`<line x1="${X(L-(c.ovR||c.ovL))}" y1="${Y(H)}" x2="${X(L-(c.ovR||c.ovL))}" y2="${Y(0)}" stroke="var(--muted)" stroke-dasharray="2 2"/>`:'')+
+   `<text x="${X(0)}" y="${(fy+H*s2+16).toFixed(1)}">${f2(L)} × ${f1(H)} · back face up</text>`;
+}
+
+// ---------- shop drawings (A3 landscape PDF) ----------
+function flatLoop(L,seg){ const o=[]; seg=seg||28;
+  for(let i=0;i<L.length;i++){ const [x1,y1,b]=L[i], [x2,y2]=L[(i+1)%L.length]; o.push([x1,y1]);
+    if(!b) continue;
+    const dx=x2-x1, dy=y2-y1, d=Math.hypot(dx,dy), k=d*(1-b*b)/(4*b);
+    const cx=(x1+x2)/2-dy/d*k, cy=(y1+y2)/2+dx/d*k, r=Math.hypot(x1-cx,y1-cy);
+    let a1=Math.atan2(y1-cy,x1-cx), sw=4*Math.atan(b);
+    for(let j=1;j<seg;j++){ const a=a1+sw*j/seg; o.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]); } }
+  return o; }
+function shopDrawings(p,jobName){
+  const {jsPDF}=window.jspdf, doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a3'});
+  const c=calc(p), {W,D,H,R,FT,SK,T}=p, PW=420, PH=297, M=10, TBH=20;
+  const lh=p.hand==='LH', handTxt=c.double?'Both ends curved':(lh?'Left hand':'Right hand');
+  const n1=v=>String(Math.round(v*10)/10);
+  const INK=[27,37,44], DIMC=[90,104,112], ACC=[200,95,25];
+  const stroke=(col,w,dash)=>{ doc.setDrawColor(...col); doc.setLineWidth(w); doc.setLineDashPattern(dash||[],0); };
+  const txt=(s,x,y,size,o)=>{ doc.setFontSize(size||7); doc.setTextColor(...((o&&o.col)||INK)); doc.setFont('helvetica',(o&&o.bold)?'bold':'normal'); doc.text(String(s),x,y,{align:(o&&o.align)||'left'}); };
+  const vtxt=(s,x,yc,size)=>{ doc.setFontSize(size||7); doc.setTextColor(...DIMC); doc.setFont('helvetica','normal'); const w=doc.getTextWidth(String(s)); doc.text(String(s),x,yc+w/2,{angle:90}); };
+  const SCALES=[1,2,2.5,3,4,5,6,8,10,12,15,20,25,30,40,50,75,100];
+  const pickScale=(w,h,bw,bh)=>{ const need=Math.max(w/bw,h/bh); return SCALES.find(s=>s>=need)||Math.ceil(need/50)*50; };
+  // a view maps model (x right, y up) to paper; (ox, oy) is the paper position of model (0,0)
+  function view(ox,oy,sc){ const X=x=>ox+x/sc, Y=y=>oy-y/sc; return {X,Y,sc,
+    poly(pts,close){ for(let i=0;i<pts.length-(close?0:1);i++){ const a=pts[i], b=pts[(i+1)%pts.length]; doc.line(X(a[0]),Y(a[1]),X(b[0]),Y(b[1])); } },
+    rect(x,y,w,h,style){ doc.rect(X(x),Y(y+h),w/sc,h/sc,style||'S'); },
+    circle(x,y,r){ doc.circle(X(x),Y(y),Math.max(r/sc,0.35),'S'); },
+    // horizontal dimension between model x1..x2, drawn `off` mm (paper) below (+) or above (-) model y
+    dimH(x1,x2,y,off,label){ stroke(DIMC,0.12); const py=Y(y)+off, a=X(x1), b=X(x2), s=off>0?1:-1;
+      doc.line(a,Y(y)+s*1,a,py+s*1.2); doc.line(b,Y(y)+s*1,b,py+s*1.2); doc.line(a,py,b,py);
+      doc.line(a-0.8,py+0.8,a+0.8,py-0.8); doc.line(b-0.8,py+0.8,b+0.8,py-0.8);
+      const t=label!=null?label:n1(Math.abs(x2-x1)); doc.setFontSize(6.5);
+      if(doc.getTextWidth(String(t))+2>Math.abs(b-a)){ const k=(view.n=(view.n||0)+1)%2; txt(t,Math.max(a,b)+1.6,py+(off>0?3+k*2.8:-1.2-k*2.8),6.5,{col:DIMC}); }
+      else txt(t,(a+b)/2,py-0.9,6.5,{align:'center',col:DIMC}); },
+    // vertical dimension between model y1..y2, drawn `off` mm (paper) right (+) or left (-) of model x
+    dimV(y1,y2,x,off,label){ stroke(DIMC,0.12); const px=X(x)+off, a=Y(y1), b=Y(y2), s=off>0?1:-1;
+      doc.line(X(x)+s*1,a,px+s*1.2,a); doc.line(X(x)+s*1,b,px+s*1.2,b); doc.line(px,a,px,b);
+      doc.line(px-0.8,a+0.8,px+0.8,a-0.8); doc.line(px-0.8,b+0.8,px+0.8,b-0.8);
+      const t=label!=null?label:n1(Math.abs(y2-y1)); doc.setFontSize(6.5);
+      if(doc.getTextWidth(String(t))+2>Math.abs(b-a)) txt(t,px+(off>0?1.5:-1.5),Math.min(a,b)-1.6,6.5,{col:DIMC,align:off>0?'left':'right'});
+      else vtxt(t,px-0.9,(a+b)/2,6.5); } }; }
+  // Fit-to-area: every group of views is drawn twice. First in "measure" mode, which only records the extent of
+  // everything it would draw (lines, dimensions and their text), then for real, shifted so that extent sits
+  // inside its area. The largest scale whose extent fits is used, so nothing can land outside the border.
+  const st={m:false,dx:0,dy:0,bb:null}, raw={line:doc.line.bind(doc),rect:doc.rect.bind(doc),circle:doc.circle.bind(doc),text:doc.text.bind(doc)};
+  const ext=(x,y)=>{ const b=st.bb; if(x<b[0])b[0]=x; if(y<b[1])b[1]=y; if(x>b[2])b[2]=x; if(y>b[3])b[3]=y; };
+  doc.line=(x1,y1,x2,y2)=>{ if(st.m){ ext(x1,y1); ext(x2,y2); return doc; } return raw.line(x1+st.dx,y1+st.dy,x2+st.dx,y2+st.dy); };
+  doc.rect=(x,y,w,h,sty)=>{ if(st.m){ ext(x,y); ext(x+w,y+h); return doc; } return raw.rect(x+st.dx,y+st.dy,w,h,sty); };
+  doc.circle=(x,y,r,sty)=>{ if(st.m){ ext(x-r,y-r); ext(x+r,y+r); return doc; } return raw.circle(x+st.dx,y+st.dy,r,sty); };
+  doc.text=(t,x,y,op)=>{ if(st.m){ const w=doc.getTextWidth(String(t)), h=doc.getFontSize()*0.36;
+      if(op&&op.angle===90){ ext(x-h,y-w); ext(x+h*0.3,y); }
+      else { const x0=op&&op.align==='center'?x-w/2:op&&op.align==='right'?x-w:x; ext(x0,y-h); ext(x0+w,y+h*0.3); }
+      return doc; }
+    return raw.text(t,x+st.dx,y+st.dy,op); };
+  function fit(area,draw){
+    for(let i=0;i<SCALES.length;i++){ const sc=SCALES[i];
+      view.n=0; st.m=true; st.bb=[1e9,1e9,-1e9,-1e9]; draw(sc); st.m=false;
+      const b=st.bb;
+      if((b[2]-b[0]<=area.w&&b[3]-b[1]<=area.h)||i===SCALES.length-1){ st.dx=area.x-b[0]; st.dy=area.y-b[1]; view.n=0; draw(sc); st.dx=st.dy=0; return sc; } } }
+  const sheets=[]; let first=true;
+  function sheet(title){ if(!first) doc.addPage('a3','landscape'); first=false; sheets.push(title);
+    stroke(INK,0.5); doc.rect(M,M,PW-2*M,PH-2*M);
+    const y=PH-M-TBH; stroke(INK,0.35); doc.line(M,y,PW-M,y);
+    [150,250,330,372].forEach(x=>doc.line(M+x,y,M+x,PH-M));
+    txt('VANITY CURVED END',M+4,y+7,11,{bold:true}); txt(title,M+4,y+14,9);
+    txt('JOB',M+153,y+5,5.5,{col:DIMC}); txt(jobName,M+153,y+12,10,{bold:true});
+    txt('TYPE',M+253,y+5,5.5,{col:DIMC}); txt(handTxt,M+253,y+11,8.5);
+    txt('OVERALL  W × D × H · R',M+253,y+15.5,5.5,{col:DIMC});
+    txt(`${n1(W)} × ${n1(D)} × ${n1(H)} · R${n1(R)}`,M+253,y+18.6,6.5);
+    txt('DATE',M+333,y+5,5.5,{col:DIMC}); txt(new Date().toLocaleDateString('en-AU'),M+333,y+11,8.5);
+    txt('SHEET',M+375,y+5,5.5,{col:DIMC}); doc.__sheetPos=doc.__sheetPos||[]; doc.__sheetPos.push([M+375,y+12]);
+    txt('All dimensions in mm. Do not scale.',M+333,y+17,5.5,{col:DIMC});
+    return {x:M+8,y:M+8,w:PW-2*M-16,h:PH-2*M-TBH-16}; }
+  const label=(s,x,y,sub)=>{ txt(s,x,y,8,{bold:true}); if(sub) txt(sub,x,y+3.6,6,{col:DIMC}); };
+  const mx=x=>lh?W-x:x;                     // mirror plan for a left-hand end
+  const mloop=L=>L.map(([x,d,b])=>[mx(x),d,lh?-b:b]);
+  const ovBack=Math.max(c.ovL||0,c.ovR||0), ovG=c.ovG||0;
+
+  // ===== Sheet 1: general arrangement =====
+  { const a=sheet('General arrangement');
+    const tblW=118, vw=a.w-tblW-14, gx=36, gy=34;
+    const planW=W+ovG, planH=D+ovBack;
+    fit({x:a.x,y:a.y,w:vw,h:a.h},sc=>{
+    // plan (top view): front at the bottom, wall at the top
+    const px0=a.x+36+(lh?0:ovG/sc), planBase=a.y+16+planH/sc, pv=view(px0,planBase,sc);
+    const tp=L=>flatLoop(mloop(L));
+    label('PLAN',a.x+36,a.y+6,`Scale 1:${sc} · viewed from above, front at bottom`);
+    stroke(ACC,0.45); pv.poly(tp(c.wrapLoop),true);
+    stroke(INK,0.3); pv.poly(tp(c.formerLoop),true);
+    if(c.cut){ stroke(INK,0.2,[1.2,0.8]); pv.poly(tp(c.cut),true); }
+    stroke(INK,0.3);
+    const bx=lh?W-c.backX0-c.backW:c.backX0; pv.rect(bx,c.Dc-T,c.backW,T);
+    if(!c.double) pv.rect(lh?W-T:0,FT,T,c.Dc-FT);
+    c.blocks.forEach(k=>pv.rect(lh?W-k.x1:k.x0,k.d0,k.x1-k.x0,k.d1-k.d0));
+    pv.dimV(0,D,lh?-(ovG):W,lh?-9:9,n1(D));
+    if(p.SBK) pv.dimV(c.Dc,D,lh?W:0,lh?9:-9,`${n1(p.SBK)} scribe`);
+    if(ovBack) pv.dimV(D,D+ovBack,lh?-(ovG):W,lh?-17:17,`${n1(ovBack)} o/hang`);
+    stroke(DIMC,0.12); const rr=R*0.7071, sg=lh?-1:1, rcx=mx(c.CX);
+    doc.line(pv.X(rcx),pv.Y(c.CD),pv.X(rcx+sg*rr),pv.Y(c.CD-rr)); txt(`R${n1(R)}`,pv.X(rcx+sg*rr*0.5)-sg*4,pv.Y(c.CD-rr*0.5)-1,7,{col:DIMC,align:'center'});
+    if(c.double){ doc.line(pv.X(R),pv.Y(R),pv.X(R-rr),pv.Y(R-rr)); txt(`R${n1(R)}`,pv.X(R-rr*0.5)+4,pv.Y(R-rr*0.5)-1,7,{col:DIMC,align:'center'}); }
+    // front elevation, directly below the plan
+    const elevBase=planBase+gy+H/sc, fv=view(px0,elevBase,sc);
+    label('FRONT ELEVATION',a.x+36,planBase+gy-10,`Scale 1:${sc}`);
+    stroke(ACC,0.45); fv.rect(lh?0:-ovG,0,W+ovG,H);
+    stroke(INK,0.2,[1.2,0.8]);
+    const cx0=c.double?FT:(lh?FT:0), cx1=c.double?W-FT:(lh?W:W-FT);
+    c.levels.forEach(y=>fv.rect(cx0,c.y0+y,cx1-cx0,T));
+    if(!c.double) fv.rect(lh?W-T:0,c.y0,T,c.Hc);
+    fv.dimH(0,W,0,9); if(ovG) fv.dimH(lh?W:-ovG,lh?W+ovG:0,0,17,`${n1(ovG)} o/hang`);
+    const lx=lh?0:-ovG;
+    fv.dimV(0,H,lx,-9); if(p.SBT) fv.dimV(0,c.y0,lx,-17,`${n1(p.SBT)} scribe`); if(p.STP) fv.dimV(c.y0+c.Hc,H,lx,-17,`${n1(p.STP)} scribe`);
+    // side elevation, to the right of the front elevation (front at left, wall at right)
+    const sx0=px0+(W+(lh?ovG:0))/sc+gx, sv=view(sx0,elevBase,sc);
+    label('SIDE ELEVATION',sx0,planBase+gy-10,`Scale 1:${sc} · front at left`);
+    stroke(ACC,0.45); sv.rect(0,0,D+ovBack,H);
+    if(ovBack){ stroke(DIMC,0.15,[0.8,0.8]); sv.poly([[D,0],[D,H]]); }
+    stroke(INK,0.2,[1.2,0.8]); c.levels.forEach(y=>sv.rect(FT,c.y0+y,c.Dc-T-FT,T)); sv.rect(c.Dc-T,c.y0,T,c.Hc);
+    sv.dimH(0,D,0,9); if(p.SBK) sv.dimH(c.Dc,D,0,17,`${n1(p.SBK)} scribe`);
+    sv.dimV(c.y0,c.y0+c.Hc,D+ovBack,9,`${n1(c.Hc)} carcass`);
+    if(c.gaps>1) sv.dimV(c.y0+c.levels[0]+T/2,c.y0+c.levels[1]+T/2,D+ovBack,18,`${n1(c.pitch)} c/c`);
+    });
+    // cut list
+    const tx=a.x+a.w-tblW, ty=a.y+4; label('CUT LIST',tx,ty+4);
+    const nR=c.gaps-1, rows=[['Part (DXF name)','Qty','Size','Board']];
+    rows.push(['ext_FaceBoard','1',`${f2(c.wrapLen)} × ${n1(H)}`,n1(FT)]);
+    if(!c.double) rows.push(['int_FixingPanel','1',`${n1(c.fixDepth)} × ${n1(c.Hc)}`,n1(T)]);
+    rows.push(['int_Back','1',`${n1(c.backW)} × ${n1(c.Hc)}`,n1(T)]);
+    rows.push(['int_Top','1',`${n1(c.formerW)} × ${n1(c.formerD)}`,n1(T)],['int_Bottom','1',`${n1(c.formerW)} × ${n1(c.formerD)}`,n1(T)]);
+    c.blocks.forEach(k=>rows.push([`int_${k.name}`,'1',`${n1(k.wb)} × ${n1(c.Hc)}`,n1(T)]));
+    if(nR) rows.push([nR>1?`int_Rib1–int_Rib${nR}`:'int_Rib1',String(nR),`${n1(c.formerW)} × ${n1(c.formerD)}`,n1(T)]);
+    const cw=[40,12,46,20]; let yy=ty+10;
+    rows.forEach((r,i)=>{ let xx=tx; r.forEach((cell,j)=>{ txt(cell,xx+1.5,yy+4,7,{bold:i===0}); xx+=cw[j]; });
+      stroke(INK,i===0?0.3:0.1); doc.line(tx,yy+5.6,tx+tblW,yy+5.6); yy+=6.2; });
+    yy+=6; label('NOTES',tx,yy); yy+=5;
+    const notes=[`Face board: ${n1(FT)} mm, pocketed on the back to a ${n1(SK)} mm skin across each curve.`,
+      `Carcass: ${n1(T)} mm white melamine.`,
+      `Formers: top, bottom${nR?` and ${nR} rib${nR>1?'s':''}`:''} at ${n1(c.pitch)} c/c (clear gap ${n1(c.clear)}).`,
+      c.cut?`Ribs have a centre cut-out leaving a ${n1(p.B)} border${p.OS?`, ${f2(p.OS)} onion skin`:''}.`:null,
+      `Fixings: Ø${HOLE_D} through-holes, centred on the adjoining part.`,
+      (ovBack||ovG)?`Overhangs (trim after glue-up): ${[ovG&&`${n1(ovG)} gable`,c.ovL&&`${n1(c.ovL)} back left`,c.ovR&&`${n1(c.ovR)} back right`].filter(Boolean).join(', ')}.`:null,
+      (p.SBK||p.SBT||p.STP)?`Scribe allowance (left on for site): ${n1(p.SBK||0)} back, ${n1(p.SBT||0)} bottom, ${n1(p.STP||0)} top.`:null].filter(Boolean);
+    notes.forEach(s=>{ const lines=doc.setFontSize(7).splitTextToSize('• '+s,tblW-2); lines.forEach(l=>{ txt(l,tx,yy,7); yy+=3.6; }); yy+=1; });
+  }
+
+  // ===== Sheet 2: face board =====
+  { const a=sheet('Face board — flat, back face up');
+    const L=c.wrapLen;
+    const trims=[]; if(c.double){ if(c.ovL) trims.push(c.ovL); if(c.ovR) trims.push(L-c.ovR); } else { if(ovG) trims.push(ovG); const ob=c.ovL||c.ovR; if(ob) trims.push(L-ob); }
+    fit({x:a.x,y:a.y,w:a.w,h:a.h-30},sc=>{ const v=view(a.x+25,a.y+30+(H+OVER)/sc,sc);
+    label('FACE BOARD',a.x+25,a.y+8,`Scale 1:${sc} · ${n1(FT)} mm board · viewed from the back face · ${c.double?'left wall end':'front (gable) end'} at left`);
+    c.pockets.forEach(([s,e])=>{ doc.setFillColor(250,226,205); v.rect(s,-OVER,e-s,H+2*OVER,'F'); stroke(ACC,0.3,[1.5,1]); v.rect(s,-OVER,e-s,H+2*OVER); });
+    stroke(INK,0.45); v.rect(0,0,L,H);
+    stroke(DIMC,0.15,[0.8,0.8]); trims.forEach(x=>v.poly([[x,0],[x,H]]));
+    const pts=[0]; c.pockets.forEach(([s,e])=>pts.push(s,e)); pts.push(L);
+    for(let i=0;i<pts.length-1;i++) v.dimH(pts[i],pts[i+1],-OVER,9,f2(pts[i+1]-pts[i]));
+    v.dimH(0,L,-OVER,18,f2(L)); v.dimV(0,H,L,9); v.dimV(-OVER,H+OVER,c.pockets[0][0],-8,n1(H+2*OVER));
+    c.pockets.forEach(([s,e],i)=>txt(`POCKET${c.pockets.length>1?' '+(i+1):''}`,v.X((s+e)/2),v.Y(H/2),7,{align:'center',col:ACC,bold:true}));
+    });
+    let yy=a.y+a.h-22; label('NOTES',a.x,yy); yy+=5;
+    [`Pocket depth ${n1(FT-SK)} from the back face, leaving a ${n1(SK)} mm skin. Pocket runs ${POCK_EXT} mm past each end of the curve.`,
+     `Pocket overruns the top and bottom edges by ${OVER} mm (${n1(H+2*OVER)} overall) so the cutter clears the board.`,
+     trims.length?'Dashed lines mark the overhang to trim off after glue-up.':null,
+     `DXF layers: PKZ${lnum(FT-SK)} (pocket), OUTLINEZ${lnum(FT)}L (outline).`].filter(Boolean).forEach(s=>{ txt('• '+s,a.x,yy,7); yy+=4; });
+  }
+
+  // ===== Sheet 3 (and 3b): drilled panels =====
+  const drillSheet=(title,panels,note)=>{ const a=sheet(title);
+    const th=Math.max(...panels.map(q=>q.h));
+    const subOf=(q,sc)=>`Scale 1:${sc} · ${n1(q.w)} × ${n1(q.h)} × ${n1(T)} · ${q.holes.length} × Ø${HOLE_D} through · ${q.sub}`;
+    fit({x:a.x,y:a.y,w:a.w,h:a.h-10},sc=>{ let x0=a.x+35;
+    panels.forEach(q=>{ const v=view(x0,a.y+24+th/sc,sc);
+      label(q.name,x0,a.y+8,subOf(q,sc));
+      stroke(INK,0.45); v.rect(0,0,q.w,q.h);
+      stroke(DIMC,0.1,[0.6,0.8]); c.holeY.forEach(y=>v.poly([[0,y],[q.w,y]]));
+      stroke(ACC,0.3); q.holes.forEach(([x,y])=>{ v.circle(x,y,HOLE_D/2); const px=v.X(x), py=v.Y(y); doc.line(px-1.6,py,px+1.6,py); doc.line(px,py-1.6,px,py+1.6); });
+      const xs=[0,...q.xs.slice().sort((a,b)=>a-b),q.w]; for(let i=0;i<xs.length-1;i++) if(xs[i+1]-xs[i]>0.01) v.dimH(xs[i],xs[i+1],0,8,n1(xs[i+1]-xs[i]));
+      v.dimH(0,q.w,0,16,n1(q.w));
+      const ys=[0,...q.ys,q.h]; for(let i=0;i<ys.length-1;i++) if(ys[i+1]-ys[i]>0.01) v.dimV(ys[i],ys[i+1],0,-8,n1(ys[i+1]-ys[i]));
+      v.dimV(0,q.h,0,-17,n1(q.h));
+      if(q.ysR){ const yr=[0,...q.ysR,q.h]; for(let i=0;i<yr.length-1;i++) if(yr[i+1]-yr[i]>0.01) v.dimV(yr[i],yr[i+1],q.w,8,n1(yr[i+1]-yr[i])); }
+      doc.setFontSize(6); x0+=Math.max(q.w/sc+(q.ysR?20:8), doc.getTextWidth(subOf(q,sc)))+38; });
+    });
+    txt('• '+note,a.x,a.y+a.h-2,7); };
+  { const panels=[];
+    if(!c.double){ const h=[]; c.holeY.forEach(y=>c.fixToFormerX.forEach(x=>h.push([x,y]))); c.fixToBackY.forEach(y=>h.push([c.fixToBackX,y]));
+      panels.push({name:'FIXING PANEL',sub:'front edge at left',w:c.fixDepth,h:c.Hc,holes:h,xs:[...c.fixToFormerX,c.fixToBackX],ys:c.holeY,ysR:c.fixToBackY}); }
+    const h=[]; c.holeY.forEach(y=>c.backToFormerX.forEach(x=>h.push([x,y])));
+    panels.push({name:'BACK',sub:c.double?'left edge at left':'vanity-side edge at left',w:c.backW,h:c.Hc,holes:h,xs:c.backToFormerX,ys:c.holeY});
+    drillSheet(c.double?'Back — drilling':'Fixing panel and back — drilling',panels,
+      `Holes are centred on the thickness of the part they screw into (dotted lines = former centrelines). DXF layer VBOREZ${lnum(T+THROUGH_EXTRA)}.`); }
+  if(c.blocks.length) drillSheet('Fixing blocks — drilling',
+    c.blocks.map(k=>({name:'int_'+k.name,sub:k.name.includes('Front')?'flat front':'flat side, hard to the back',w:k.wb,h:c.Hc,holes:k.holes,xs:k.holeX,ys:k.holeYs})),
+    `Blocks run the full carcass height and are checked into the top, bottom and ribs, lying flat against the back of the face board. Screw out through the centre Ø${HOLE_D} holes into the face board, and back through the holes on each former line into the top, bottom and ribs.`);
+
+  // ===== Sheet 4: formers =====
+  { const a=sheet('Top, bottom and ribs');
+    const fw=c.formerW, fd=c.formerD, two=!!c.cut, gap=50;
+    const tx=L=>{ let q=L.map(([x,d,b])=>[x-c.formerX0,d-SK,b]); if(lh) q=mirLoop(q,fw); return flatLoop(q); };  // true top view, front at bottom
+    const drawFormer=(sc,x0,name,withCut)=>{ const v=view(x0,a.y+26+fd/sc,sc);
+      label(name,x0,a.y+8,`Scale 1:${sc} · ${n1(fw)} × ${n1(fd)} × ${n1(T)} · top view, front at bottom`);
+      stroke(INK,0.45); v.poly(tx(c.formerLoop),true);
+      if(withCut){ stroke(ACC,0.35); v.poly(tx(c.cut),true); const q=tx(c.cut), ymax=Math.max(...q.map(k=>k[1])), xmid=(Math.min(...q.map(k=>k[0]))+Math.max(...q.map(k=>k[0])))/2;
+        v.dimV(ymax,fd,xmid,0,`${n1(p.B)} border`); txt('CUT-OUT',v.X(xmid),v.Y(ymax)+8,7,{align:'center',col:ACC,bold:true}); }
+      v.dimH(0,fw,0,9,n1(fw)); v.dimV(0,fd,lh?0:fw,lh?-9:9,n1(fd));
+      const cxm=(lh?fw-(c.CX-c.formerX0):c.CX-c.formerX0), cym=c.CD-SK, rr=c.RI*0.7071, sgn=lh?-1:1;
+      stroke(DIMC,0.12); doc.line(v.X(cxm),v.Y(cym),v.X(cxm+sgn*rr),v.Y(cym-rr)); txt(`R${n1(c.RI)}`,v.X(cxm+sgn*rr*0.5)-sgn*4,v.Y(cym-rr*0.5)-1,7,{col:DIMC,align:'center'});
+      if(c.double){ const cx2=R-SK; doc.line(v.X(cx2),v.Y(cym),v.X(cx2-rr),v.Y(cym-rr)); txt(`R${n1(c.RI)}`,v.X(cx2-rr*0.5)+4,v.Y(cym-rr*0.5)-1,7,{col:DIMC,align:'center'}); }
+      return x0+Math.max(fw/sc,95); };
+    const nR=c.gaps-1;
+    fit({x:a.x,y:a.y,w:a.w,h:a.h-16},sc=>{ const nx=drawFormer(sc,a.x+30,'TOP / BOTTOM (2 off)',false);
+      if(two) drawFormer(sc,nx+gap,`RIB (${nR} off)`,true); });
+    let yy=a.y+a.h-10;
+    [`Corner radius R${n1(c.RI)} = outside radius less the ${n1(SK)} mm skin. Shoulders step from the skin back to the full ${n1(FT)} mm board.`,
+     two?`Rib cut-out leaves a ${n1(p.B)} mm border all round${p.OS?`; routed ${n1(T-p.OS)} deep to leave a ${f2(p.OS)} onion skin`:''}. Top and bottom are solid.`:(nR?`Ribs (${nR} off) are the same shape as the top and bottom.`:null)].filter(Boolean)
+      .forEach(s=>{ txt('• '+s,a.x,yy,7); yy+=4; });
+  }
+  // sheet numbers
+  const N=sheets.length; doc.__sheetPos.forEach(([x,y],i)=>{ doc.setPage(i+1); txt(`${i+1} / ${N}`,x,y,10,{bold:true}); });
+  return doc;
+}
+window.__shopDrawings=shopDrawings;
+
+// ---------- export ----------
+// Inside Claude, saves go through Claude's save prompt. Opened as a plain .html file (no Claude runtime),
+// the page falls back to an ordinary browser download so the buttons still work.
+const standalone=!window.claude;
+const browserSave={ async save({filename,data}){ const blob=data instanceof Blob?data:new Blob([data]);
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000); return {status:'saved'}; } };
+let downloads=standalone?browserSave:null;
+(async()=>{ if(standalone) return; try{ downloads=await window.claude?.use?.('downloads'); }catch(e){ downloads=null; }
+  if(!downloads){ $('bZip').disabled=true; $('bPdf').disabled=true; $('bJobSave').disabled=true; $('zipMsg').textContent='Downloads aren’t available in this view. Ask Claude for the files instead.'; } })();
+$('bZip').onclick=async()=>{
+  const p=readParams(), tag=p.hand==='DOUBLE'?'2E':p.hand;
+  const sets=[{h:tag,...dxfParts(p)}], c=sets[0].c;
+  const pre=(($('pName').value||'CurvedEnd').trim().replace(/[^A-Za-z0-9_-]+/g,'_'))||'CurvedEnd';
+  if(c.warn.length){ $('zipMsg').textContent='Fix the size warning first.'; return; }
+  if(!downloads||typeof JSZip==='undefined'){ $('zipMsg').textContent='Downloads aren’t available in this view.'; return; }
+  const zip=new JSZip(); let nFiles=0; sets.forEach(({h,files})=>Object.entries(files).forEach(([nm,txt])=>{ zip.file(`${partName(nm)}.dxf`,txt); nFiles++; }));
+  zip.file(`${pre}_job.json`,JSON.stringify(jobFile(),null,2));   // record of the settings these DXFs were cut from
+  const blob=await zip.generateAsync({type:'blob'});
+  const fname=`${pre}_${tag}_${f1(p.W)}x${f1(p.D)}x${f1(p.H)}_R${f1(p.R)}.zip`;
+  $('bZip').disabled=true; $('zipMsg').textContent=standalone?'Saving…':'Waiting for you to confirm the save…';
+  try{ await downloads.save({filename:fname,data:blob}); $('zipMsg').textContent=`Saved ${fname} · ${nFiles} DXFs + job file`; }
+  catch(e){ $('zipMsg').textContent= e&&e.code==='declined'?'Save cancelled.':e&&e.code==='rate_limited'?'A save prompt is already open.':'Couldn’t save: '+(e&&e.message||'unknown error'); }
+  finally{ $('bZip').disabled=false; }
+};
+
+$('bJobSave').onclick=async()=>{
+  const p=readParams(), tag=p.hand==='DOUBLE'?'2E':p.hand;
+  const pre=(($('pName').value||'CurvedEnd').trim().replace(/[^A-Za-z0-9_-]+/g,'_'))||'CurvedEnd';
+  if(!downloads){ $('zipMsg').textContent='Downloads aren’t available in this view.'; return; }
+  const fname=`${pre}_${tag}_${f1(p.W)}x${f1(p.D)}x${f1(p.H)}_R${f1(p.R)}_job.json`;
+  $('bJobSave').disabled=true; $('zipMsg').textContent=standalone?'Saving…':'Waiting for you to confirm the save…';
+  try{ await downloads.save({filename:fname,data:JSON.stringify(jobFile(),null,2)}); $('zipMsg').textContent=`Saved ${fname}`; }
+  catch(e){ $('zipMsg').textContent= e&&e.code==='declined'?'Save cancelled.':e&&e.code==='rate_limited'?'A save prompt is already open.':'Couldn’t save the job file: '+(e&&e.message||'unknown error'); }
+  finally{ $('bJobSave').disabled=false; }
+};
+$('fJob').addEventListener('change',e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ $('zipMsg').textContent=loadJob(String(r.result)); e.target.value=''; };
+  r.onerror=()=>{ $('zipMsg').textContent='Couldn’t read that file.'; e.target.value=''; };
+  r.readAsText(f);
+});
+
+$('bPdf').onclick=async()=>{
+  const p=readParams(), c=calc(p), tag=p.hand==='DOUBLE'?'2E':p.hand;
+  const pre=(($('pName').value||'CurvedEnd').trim().replace(/[^A-Za-z0-9_-]+/g,'_'))||'CurvedEnd';
+  if(c.warn.length){ $('zipMsg').textContent='Fix the size warning first.'; return; }
+  if(!downloads||!window.jspdf){ $('zipMsg').textContent='Downloads aren’t available in this view.'; return; }
+  const fname=`${pre}_${tag}_${f1(p.W)}x${f1(p.D)}x${f1(p.H)}_R${f1(p.R)}_ShopDrawings.pdf`;
+  $('bPdf').disabled=true; $('zipMsg').textContent=standalone?'Saving…':'Waiting for you to confirm the save…';
+  try{ const doc=shopDrawings(p,pre); await downloads.save({filename:fname,data:doc.output('arraybuffer')}); $('zipMsg').textContent=`Saved ${fname}`; }
+  catch(e){ $('zipMsg').textContent= e&&e.code==='declined'?'Save cancelled.':e&&e.code==='rate_limited'?'A save prompt is already open.':'Couldn’t make the drawings: '+(e&&e.message||'unknown error'); }
+  finally{ $('bPdf').disabled=false; }
+};
+
+function resize(){const w=host.clientWidth,h=host.clientHeight||500;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+new ResizeObserver(resize).observe(host); resize();
+
+loadSettings();
+build(readParams());
+camera.position.set(...views.iso); controls.target.copy(views.ctr);
+
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function loop(now){
+  if(camTo){const k=Math.min(1,(now-t0)/(reduce?1:700));const e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+    camera.position.lerpVectors(camFrom,camTo,e); controls.target.lerpVectors(tgtFrom,tgtTo,e); if(k>=1)camTo=null;}
+  ex+=(exT-ex)*(reduce?1:.12);
+  parts.forEach(p=>p.obj.position.copy(p.base).addScaledVector(p.dir,ex));
+  controls.update(); renderer.render(scene,camera); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+
+</body></html>

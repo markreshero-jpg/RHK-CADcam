@@ -1,0 +1,12 @@
+[
+  {"id":"01_rh_default", "note":"Right hand, page defaults", "p":{"hand":"RH"}},
+  {"id":"02_lh_default", "note":"Left hand, page defaults", "p":{"hand":"LH"}},
+  {"id":"03_rh_overhangs_scribes", "note":"RH with gable/back overhangs and all three scribes", "p":{"hand":"RH","W":220,"D":560,"H":720,"OG":25,"OR":40,"SBK":20,"SBT":50,"STP":15}},
+  {"id":"04_rh_tall_cutout_onion", "note":"RH tall end, 3 mm skin (250 gap rule), rib cut-outs with onion skin", "p":{"hand":"RH","W":450,"D":450,"H":2000,"R":300,"SK":3,"lighten":true,"onion":true,"OS":0.3}},
+  {"id":"05_rh_blocks", "note":"RH with side + front fixing blocks (both 100 wide) and rib cut-outs", "p":{"hand":"RH","W":450,"D":600,"H":900,"lighten":true,"blkS":true,"blkF":true}},
+  {"id":"06_rh_block_60", "note":"RH where the front block drops to 60 wide", "p":{"hand":"RH","W":230,"D":500,"H":720,"blkS":true,"blkF":true}},
+  {"id":"07_lh_blocks_16board", "note":"LH, 16 face board, blocks, cut-outs", "p":{"hand":"LH","W":450,"D":600,"H":900,"FT":16,"lighten":true,"blkS":true,"blkF":true,"OL":30}},
+  {"id":"08_double_full", "note":"Both ends curved, 1000 wide, overhangs, scribes, blocks, cut-outs + onion", "p":{"hand":"DOUBLE","W":1000,"D":500,"H":720,"OL":40,"OR":40,"SBK":20,"SBT":50,"STP":20,"lighten":true,"onion":true,"OS":0.3,"blkS":true,"blkF":true}},
+  {"id":"09_double_halfround", "note":"Both ends curved, width = 2R (half-round front, no flat)", "p":{"hand":"DOUBLE","W":300,"D":500,"H":720,"blkS":true,"blkF":true}},
+  {"id":"10_warn_radius_too_big", "note":"Invalid: radius too big for the width (warning, export blocked)", "p":{"hand":"RH","W":160,"R":150}}
+]

@@ -1,0 +1,776 @@
+{
+  "01_rh_default": {
+    "note": "Right hand, page defaults",
+    "input": {
+      "W": 170,
+      "D": 500,
+      "H": 500,
+      "R": 150,
+      "FT": 18,
+      "SK": 2,
+      "T": 16.5,
+      "B": 60,
+      "OS": 0,
+      "OL": 0,
+      "OR": 0,
+      "OG": 0,
+      "SBK": 0,
+      "SBT": 0,
+      "STP": 0,
+      "lighten": false,
+      "onion": false,
+      "blkS": false,
+      "blkF": false,
+      "hand": "RH"
+    },
+    "warnings": [],
+    "notes": [],
+    "derived": {
+      "wrapLen": 605.62,
+      "pockets": [
+        [
+          17,
+          258.62
+        ]
+      ],
+      "gaps": 3,
+      "ribs": 2,
+      "pitch": 161.17,
+      "clear": 144.67,
+      "carcass": {
+        "Dc": 500,
+        "Hc": 500,
+        "y0": 0
+      },
+      "former": {
+        "w": 151.5,
+        "d": 481.5,
+        "R": 148
+      },
+      "fixingPanel": {
+        "l": 482,
+        "h": 500
+      },
+      "back": {
+        "w": 135.5,
+        "h": 500
+      },
+      "blocks": [],
+      "ribCutOut": false
+    },
+    "files": [
+      "ext_FaceBoard.dxf",
+      "int_FixingPanel.dxf",
+      "int_Back.dxf",
+      "int_Bottom.dxf",
+      "int_Rib1.dxf",
+      "int_Rib2.dxf",
+      "int_Top.dxf"
+    ]
+  },
+  "02_lh_default": {
+    "note": "Left hand, page defaults",
+    "input": {
+      "W": 170,
+      "D": 500,
+      "H": 500,
+      "R": 150,
+      "FT": 18,
+      "SK": 2,
+      "T": 16.5,
+      "B": 60,
+      "OS": 0,
+      "OL": 0,
+      "OR": 0,
+      "OG": 0,
+      "SBK": 0,
+      "SBT": 0,
+      "STP": 0,
+      "lighten": false,
+      "onion": false,
+      "blkS": false,
+      "blkF": false,
+      "hand": "LH"
+    },
+    "warnings": [],
+    "notes": [],
+    "derived": {
+      "wrapLen": 605.62,
+      "pockets": [
+        [
+          17,
+          258.62
+        ]
+      ],
+      "gaps": 3,
+      "ribs": 2,
+      "pitch": 161.17,
+      "clear": 144.67,
+      "carcass": {
+        "Dc": 500,
+        "Hc": 500,
+        "y0": 0
+      },
+      "former": {
+        "w": 151.5,
+        "d": 481.5,
+        "R": 148
+      },
+      "fixingPanel": {
+        "l": 482,
+        "h": 500
+      },
+      "back": {
+        "w": 135.5,
+        "h": 500
+      },
+      "blocks": [],
+      "ribCutOut": false
+    },
+    "files": [
+      "ext_FaceBoard.dxf",
+      "int_FixingPanel.dxf",
+      "int_Back.dxf",
+      "int_Bottom.dxf",
+      "int_Rib1.dxf",
+      "int_Rib2.dxf",
+      "int_Top.dxf"
+    ]
+  },
+  "03_rh_overhangs_scribes": {
+    "note": "RH with gable/back overhangs and all three scribes",
+    "input": {
+      "W": 220,
+      "D": 560,
+      "H": 720,
+      "R": 150,
+      "FT": 18,
+      "SK": 2,
+      "T": 16.5,
+      "B": 60,
+      "OS": 0,
+      "OL": 0,
+      "OR": 40,
+      "OG": 25,
+      "SBK": 20,
+      "SBT": 50,
+      "STP": 15,
+      "lighten": false,
+      "onion": false,
+      "blkS": false,
+      "blkF": false,
+      "hand": "RH"
+    },
+    "warnings": [],
+    "notes": [],
+    "derived": {
+      "wrapLen": 780.62,
+      "pockets": [
+        [
+          92,
+          333.62
+        ]
+      ],
+      "gaps": 4,
+      "ribs": 3,
+      "pitch": 159.63,
+      "clear": 143.13,
+      "carcass": {
+        "Dc": 540,
+        "Hc": 655,
+        "y0": 50
+      },
+      "former": {
+        "w": 201.5,
+        "d": 521.5,
+        "R": 148
+      },
+      "fixingPanel": {
+        "l": 522,
+        "h": 655
+      },
+      "back": {
+        "w": 185.5,
+        "h": 655
+      },
+      "blocks": [],
+      "ribCutOut": false
+    },
+    "files": [
+      "ext_FaceBoard.dxf",
+      "int_FixingPanel.dxf",
+      "int_Back.dxf",
+      "int_Bottom.dxf",
+      "int_Rib1.dxf",
+      "int_Rib2.dxf",
+      "int_Rib3.dxf",
+      "int_Top.dxf"
+    ]
+  },
+  "04_rh_tall_cutout_onion": {
+    "note": "RH tall end, 3 mm skin (250 gap rule), rib cut-outs with onion skin",
+    "input": {
+      "W": 450,
+      "D": 450,
+      "H": 2000,
+      "R": 300,
+      "FT": 18,
+      "SK": 3,
+      "T": 16.5,
+      "B": 60,
+      "OS": 0.3,
+      "OL": 0,
+      "OR": 0,
+      "OG": 0,
+      "SBK": 0,
+      "SBT": 0,
+      "STP": 0,
+      "lighten": true,
+      "onion": true,
+      "blkS": false,
+      "blkF": false,
+      "hand": "RH"
+    },
+    "warnings": [],
+    "notes": [],
+    "derived": {
+      "wrapLen": 771.24,
+      "pockets": [
+        [
+          147,
+          624.24
+        ]
+      ],
+      "gaps": 8,
+      "ribs": 7,
+      "pitch": 247.94,
+      "clear": 231.44,
+      "carcass": {
+        "Dc": 450,
+        "Hc": 2000,
+        "y0": 0
+      },
+      "former": {
+        "w": 430.5,
+        "d": 430.5,
+        "R": 297
+      },
+      "fixingPanel": {
+        "l": 432,
+        "h": 2000
+      },
+      "back": {
+        "w": 415.5,
+        "h": 2000
+      },
+      "blocks": [],
+      "ribCutOut": true
+    },
+    "files": [
+      "ext_FaceBoard.dxf",
+      "int_FixingPanel.dxf",
+      "int_Back.dxf",
+      "int_Bottom.dxf",
+      "int_Rib1.dxf",
+      "int_Rib2.dxf",
+      "int_Rib3.dxf",
+      "int_Rib4.dxf",
+      "int_Rib5.dxf",
+      "int_Rib6.dxf",
+      "int_Rib7.dxf",
+      "int_Top.dxf"
+    ]
+  },
+  "05_rh_blocks": {
+    "note": "RH with side + front fixing blocks (both 100 wide) and rib cut-outs",
+    "input": {
+      "W": 450,
+      "D": 600,
+      "H": 900,
+      "R": 150,
+      "FT": 18,
+      "SK": 2,
+      "T": 16.5,
+      "B": 60,
+      "OS": 0,
+      "OL": 0,
+      "OR": 0,
+      "OG": 0,
+      "SBK": 0,
+      "SBT": 0,
+      "STP": 0,
+      "lighten": true,
+      "onion": false,
+      "blkS": true,
+      "blkF": true,
+      "hand": "RH"
+    },
+    "warnings": [],
+    "notes": [],
+    "derived": {
+      "wrapLen": 985.62,
+      "pockets": [
+        [
+          297,
+          538.62
+        ]
+      ],
+      "gaps": 5,
+      "ribs": 4,
+      "pitch": 176.7,
+      "clear": 160.2,
+      "carcass": {
+        "Dc": 600,
+        "Hc": 900,
+        "y0": 0
+      },
+      "former": {
+        "w": 431.5,
+        "d": 581.5,
+        "R": 148
+      },
+      "fixingPanel": {
+        "l": 582,
+        "h": 900
+      },
+      "back": {
+        "w": 415.5,
+        "h": 900
+      },
+      "blocks": [
+        {
+          "name": "Block_Side",
+          "w": 100,
+          "holes": 17
+        },
+        {
+          "name": "Block_Front",
+          "w": 100,
+          "holes": 17
+        }
+      ],
+      "ribCutOut": true
+    },
+    "files": [
+      "ext_FaceBoard.dxf",
+      "int_FixingPanel.dxf",
+      "int_Back.dxf",
+      "int_Bottom.dxf",
+      "int_Rib1.dxf",
+      "int_Rib2.dxf",
+      "int_Rib3.dxf",
+      "int_Rib4.dxf",
+      "int_Top.dxf",
+      "int_Block_Side.dxf",
+      "int_Block_Front.dxf"
+    ]
+  },
+  "06_rh_block_60": {
+    "note": "RH where the front block drops to 60 wide",
+    "input": {
+      "W": 230,
+      "D": 500,
+      "H": 720,
+      "R": 150,
+      "FT": 18,
+      "SK": 2,
+      "T": 16.5,
+      "B": 60,
+      "OS": 0,
+      "OL": 0,
+      "OR": 0,
+      "OG": 0,
+      "SBK": 0,
+      "SBT": 0,
+      "STP": 0,
+      "lighten": false,
+      "onion": false,
+      "blkS": true,
+      "blkF": true,
+      "hand": "RH"
+    },
+    "warnings": [],
+    "notes": [],
+    "derived": {
+      "wrapLen": 665.62,
+      "pockets": [
+        [
+          77,
+          318.62
+        ]
+      ],
+      "gaps": 4,
+      "ribs": 3,
+      "pitch": 175.88,
+      "clear": 159.38,
+      "carcass": {
+        "Dc": 500,
+        "Hc": 720,
+        "y0": 0
+      },
+      "former": {
+        "w": 211.5,
+        "d": 481.5,
+        "R": 148
+      },
+      "fixingPanel": {
+        "l": 482,
+        "h": 720
+      },
+      "back": {
+        "w": 195.5,
+        "h": 720
+      },
+      "blocks": [
+        {
+          "name": "Block_Side",
+          "w": 100,
+          "holes": 14
+        },
+        {
+          "name": "Block_Front",
+          "w": 60,
+          "holes": 9
+        }
+      ],
+      "ribCutOut": false
+    },
+    "files": [
+      "ext_FaceBoard.dxf",
+      "int_FixingPanel.dxf",
+      "int_Back.dxf",
+      "int_Bottom.dxf",
+      "int_Rib1.dxf",
+      "int_Rib2.dxf",
+      "int_Rib3.dxf",
+      "int_Top.dxf",
+      "int_Block_Side.dxf",
+      "int_Block_Front.dxf"
+    ]
+  },
+  "07_lh_blocks_16board": {
+    "note": "LH, 16 face board, blocks, cut-outs",
+    "input": {
+      "W": 450,
+      "D": 600,
+      "H": 900,
+      "R": 150,
+      "FT": 16,
+      "SK": 2,
+      "T": 16.5,
+      "B": 60,
+      "OS": 0,
+      "OL": 30,
+      "OR": 0,
+      "OG": 0,
+      "SBK": 0,
+      "SBT": 0,
+      "STP": 0,
+      "lighten": true,
+      "onion": false,
+      "blkS": true,
+      "blkF": true,
+      "hand": "LH"
+    },
+    "warnings": [],
+    "notes": [],
+    "derived": {
+      "wrapLen": 1015.62,
+      "pockets": [
+        [
+          297,
+          538.62
+        ]
+      ],
+      "gaps": 5,
+      "ribs": 4,
+      "pitch": 176.7,
+      "clear": 160.2,
+      "carcass": {
+        "Dc": 600,
+        "Hc": 900,
+        "y0": 0
+      },
+      "former": {
+        "w": 431.5,
+        "d": 581.5,
+        "R": 148
+      },
+      "fixingPanel": {
+        "l": 584,
+        "h": 900
+      },
+      "back": {
+        "w": 417.5,
+        "h": 900
+      },
+      "blocks": [
+        {
+          "name": "Block_Side",
+          "w": 100,
+          "holes": 17
+        },
+        {
+          "name": "Block_Front",
+          "w": 100,
+          "holes": 17
+        }
+      ],
+      "ribCutOut": true
+    },
+    "files": [
+      "ext_FaceBoard.dxf",
+      "int_FixingPanel.dxf",
+      "int_Back.dxf",
+      "int_Bottom.dxf",
+      "int_Rib1.dxf",
+      "int_Rib2.dxf",
+      "int_Rib3.dxf",
+      "int_Rib4.dxf",
+      "int_Top.dxf",
+      "int_Block_Side.dxf",
+      "int_Block_Front.dxf"
+    ]
+  },
+  "08_double_full": {
+    "note": "Both ends curved, 1000 wide, overhangs, scribes, blocks, cut-outs + onion",
+    "input": {
+      "W": 1000,
+      "D": 500,
+      "H": 720,
+      "R": 150,
+      "FT": 18,
+      "SK": 2,
+      "T": 16.5,
+      "B": 60,
+      "OS": 0.3,
+      "OL": 40,
+      "OR": 40,
+      "OG": 0,
+      "SBK": 20,
+      "SBT": 50,
+      "STP": 20,
+      "lighten": true,
+      "onion": true,
+      "blkS": true,
+      "blkF": true,
+      "hand": "DOUBLE"
+    },
+    "warnings": [],
+    "notes": [],
+    "derived": {
+      "wrapLen": 1951.24,
+      "pockets": [
+        [
+          387,
+          628.62
+        ],
+        [
+          1322.62,
+          1564.24
+        ]
+      ],
+      "gaps": 4,
+      "ribs": 3,
+      "pitch": 158.38,
+      "clear": 141.88,
+      "carcass": {
+        "Dc": 480,
+        "Hc": 650,
+        "y0": 50
+      },
+      "former": {
+        "w": 996,
+        "d": 461.5,
+        "R": 148
+      },
+      "fixingPanel": null,
+      "back": {
+        "w": 964,
+        "h": 650
+      },
+      "blocks": [
+        {
+          "name": "Block_SideR",
+          "w": 100,
+          "holes": 14
+        },
+        {
+          "name": "Block_SideL",
+          "w": 100,
+          "holes": 14
+        },
+        {
+          "name": "Block_Front",
+          "w": 100,
+          "holes": 14
+        }
+      ],
+      "ribCutOut": true
+    },
+    "files": [
+      "ext_FaceBoard.dxf",
+      "int_Back.dxf",
+      "int_Bottom.dxf",
+      "int_Rib1.dxf",
+      "int_Rib2.dxf",
+      "int_Rib3.dxf",
+      "int_Top.dxf",
+      "int_Block_SideR.dxf",
+      "int_Block_SideL.dxf",
+      "int_Block_Front.dxf"
+    ]
+  },
+  "09_double_halfround": {
+    "note": "Both ends curved, width = 2R (half-round front, no flat)",
+    "input": {
+      "W": 300,
+      "D": 500,
+      "H": 720,
+      "R": 150,
+      "FT": 18,
+      "SK": 2,
+      "T": 16.5,
+      "B": 60,
+      "OS": 0,
+      "OL": 0,
+      "OR": 0,
+      "OG": 0,
+      "SBK": 0,
+      "SBT": 0,
+      "STP": 0,
+      "lighten": false,
+      "onion": false,
+      "blkS": true,
+      "blkF": true,
+      "hand": "DOUBLE"
+    },
+    "warnings": [],
+    "notes": [
+      "No room for a front fixing block: the flat front is only 0 wide (needs 60)."
+    ],
+    "derived": {
+      "wrapLen": 1171.24,
+      "pockets": [
+        [
+          347,
+          824.24
+        ]
+      ],
+      "gaps": 4,
+      "ribs": 3,
+      "pitch": 175.88,
+      "clear": 159.38,
+      "carcass": {
+        "Dc": 500,
+        "Hc": 720,
+        "y0": 0
+      },
+      "former": {
+        "w": 296,
+        "d": 481.5,
+        "R": 148
+      },
+      "fixingPanel": null,
+      "back": {
+        "w": 264,
+        "h": 720
+      },
+      "blocks": [
+        {
+          "name": "Block_SideR",
+          "w": 100,
+          "holes": 14
+        },
+        {
+          "name": "Block_SideL",
+          "w": 100,
+          "holes": 14
+        }
+      ],
+      "ribCutOut": false
+    },
+    "files": [
+      "ext_FaceBoard.dxf",
+      "int_Back.dxf",
+      "int_Bottom.dxf",
+      "int_Rib1.dxf",
+      "int_Rib2.dxf",
+      "int_Rib3.dxf",
+      "int_Top.dxf",
+      "int_Block_SideR.dxf",
+      "int_Block_SideL.dxf"
+    ]
+  },
+  "10_warn_radius_too_big": {
+    "note": "Invalid: radius too big for the width (warning, export blocked)",
+    "input": {
+      "W": 160,
+      "D": 500,
+      "H": 500,
+      "R": 150,
+      "FT": 18,
+      "SK": 2,
+      "T": 16.5,
+      "B": 60,
+      "OS": 0,
+      "OL": 0,
+      "OR": 0,
+      "OG": 0,
+      "SBK": 0,
+      "SBT": 0,
+      "STP": 0,
+      "lighten": false,
+      "onion": false,
+      "blkS": false,
+      "blkF": false,
+      "hand": "RH"
+    },
+    "warnings": [
+      "Radius too big for the width: the pocket would start over the fixing panel. Needs at least 19.5 mm of flat front, has 10."
+    ],
+    "notes": [],
+    "derived": {
+      "wrapLen": 595.62,
+      "pockets": [
+        [
+          7,
+          248.62
+        ]
+      ],
+      "gaps": 3,
+      "ribs": 2,
+      "pitch": 161.17,
+      "clear": 144.67,
+      "carcass": {
+        "Dc": 500,
+        "Hc": 500,
+        "y0": 0
+      },
+      "former": {
+        "w": 141.5,
+        "d": 481.5,
+        "R": 148
+      },
+      "fixingPanel": {
+        "l": 482,
+        "h": 500
+      },
+      "back": {
+        "w": 125.5,
+        "h": 500
+      },
+      "blocks": [],
+      "ribCutOut": false
+    },
+    "files": [
+      "ext_FaceBoard.dxf",
+      "int_FixingPanel.dxf",
+      "int_Back.dxf",
+      "int_Bottom.dxf",
+      "int_Rib1.dxf",
+      "int_Rib2.dxf",
+      "int_Top.dxf"
+    ]
+  }
+}
