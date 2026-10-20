@@ -66,6 +66,38 @@ export function sharknoseLine(z: ResolvedFaceZone): { x1: number; x2: number; y:
   return { x1: z.X, x2: z.X + z.DX, y: top ? z.Y + z.DY - run : z.Y + run, edgeY: top ? z.Y + z.DY : z.Y, angle: bv.angle_deg }
 }
 
+/** Edge tape on a sharknose grip edge, in sharknoseProfile space: a band `t`
+ *  thick following the land + bevel, ends cut square to the front / back faces. */
+export function sharknoseTapeBand(z: ResolvedFaceZone, t: number): { x: number; y: number }[] | null {
+  const bv = z.handle?.bevel
+  if (!bv || z.bevel_l || z.bevel_r || t <= 0) return null
+  const d = z.DZ, h = z.DY, run = Math.min(bv.run, h)
+  const top = z.handle!.grip_edge === 'top'
+  // Front face (x = d) → back face (x = 0) along the cut edge.
+  const chain = top
+    ? [{ x: d, y: h }, { x: d - bv.land, y: h }, { x: 0, y: h - run }]
+    : [{ x: d, y: 0 }, { x: d - bv.land, y: 0 }, { x: 0, y: run }]
+  if (bv.land < 0.01) chain.splice(1, 1)
+  type L = { p: { x: number; y: number }; v: { x: number; y: number } }
+  const cx = d / 2, cy = h / 2
+  const offs: L[] = chain.slice(1).map((b, i) => {
+    const a = chain[i], len = Math.hypot(b.x - a.x, b.y - a.y)
+    let nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len
+    if ((cx - a.x) * nx + (cy - a.y) * ny < 0) { nx = -nx; ny = -ny }   // inward
+    return { p: { x: a.x + nx * t, y: a.y + ny * t }, v: { x: b.x - a.x, y: b.y - a.y } }
+  })
+  const meet = (a: L, b: L) => {
+    const den = a.v.x * b.v.y - a.v.y * b.v.x
+    const s = ((b.p.x - a.p.x) * b.v.y - (b.p.y - a.p.y) * b.v.x) / den
+    return { x: a.p.x + a.v.x * s, y: a.p.y + a.v.y * s }
+  }
+  const front: L = { p: { x: d, y: 0 }, v: { x: 0, y: 1 } }, back: L = { p: { x: 0, y: 0 }, v: { x: 0, y: 1 } }
+  const inner = [meet(front, offs[0])]
+  for (let i = 0; i + 1 < offs.length; i++) inner.push(meet(offs[i], offs[i + 1]))
+  inner.push(meet(offs[offs.length - 1], back))
+  return [...chain, ...inner.reverse()]
+}
+
 /** Top-view line over a sharknose front (cabinet X / Z): where the land meets
  *  the bevel — seen from above on a top grip, hidden on a bottom grip. Null
  *  for a knife edge (land 0): it falls on the front face line. */

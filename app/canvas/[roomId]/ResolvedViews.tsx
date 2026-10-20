@@ -34,7 +34,7 @@ import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
 import { hingePlacement, hingeSilhouetteOutline, hingeSilhouetteSnapPoints } from '@/src/lib/hingeSilhouette'
 import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
 import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
-import { handleShapes, sharknoseProfile, sharknoseTopLine } from '@/src/lib/handleGeometry'
+import { handleShapes, sharknoseProfile, sharknoseTapeBand, sharknoseTopLine } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, SharknoseLinesSVG } from './HandleSVG'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
@@ -1240,7 +1240,16 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
             stroke={stroke(meta.id, col.stroke)} strokeWidth={sw(meta.id, wireMode ? 0.75 : 1)}
             fillOpacity={wireMode ? 1 : 0.85}
             dataPartId={meta.id} style={cp} />
-          {ec && <EdgeTapeSVG box={zoneBox3(z)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="x" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+          {ec && <EdgeTapeSVG box={zoneBox3(z)} edge={sn && z.handle ? { ...meta.edge, [z.handle.grip_edge]: false } : meta.edge}
+            kind={meta.panelKind} eb={ec} viewAxis="x" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} />}
+          {/* Sharknose grip edge: the tape follows the land + bevel */}
+          {(() => {
+            if (!ec || !sn || !z.handle || !meta.edge[z.handle.grip_edge]) return null
+            const band = sharknoseTapeBand(z, Math.max(ec.t, 0)); if (!band) return null
+            const pts = band.map(q => proj(0, pp.Y + q.y, pp.Z + q.x)).map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
+            return <polygon points={pts} fill={wireMode ? 'transparent' : ec.color} stroke={wireMode ? ec.color : '#1a1a1a'}
+              strokeWidth={0.75} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
+          })()}
         </g>
       })}
 
