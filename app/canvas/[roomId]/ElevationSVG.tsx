@@ -955,6 +955,12 @@ export default function ElevationSVG({
             {(() => {
               const isWallSel = selected?.type === 'wall' && selected.id === wall.id
               const isIsland = wall.wall_type === 'island'
+              // Moving / resizing a cabinet → the click bubbles to onSVGClick, which drops
+              // it. Stopping it here selected the wall instead (an island's face is all hit area).
+              const wallClick = (e: React.MouseEvent) => {
+                if (elevCabFollowing || elevResizeFollowing) return
+                e.stopPropagation(); onSelectWall(wall.id)
+              }
               const cmHandler = (e: React.MouseEvent) => {
                 e.preventDefault(); e.stopPropagation()
                 const svgR = svgRef.current!.getBoundingClientRect()
@@ -965,7 +971,7 @@ export default function ElevationSVG({
                 <rect x={0} y={0} width={wall.length} height={roomH}
                   fill="transparent" stroke="none"
                   style={{ cursor: 'pointer' }}
-                  onClick={e => { e.stopPropagation(); onSelectWall(wall.id) }}
+                  onClick={wallClick}
                   onContextMenu={cmHandler} />
               ) : (
                 <rect x={0} y={0} width={wall.length} height={roomH}
@@ -973,7 +979,7 @@ export default function ElevationSVG({
                   stroke={isWallSel ? '#3b82f6' : '#374151'}
                   strokeWidth={isWallSel ? 2 / lz : 1 / lz}
                   style={{ cursor: 'pointer' }}
-                  onClick={e => { e.stopPropagation(); onSelectWall(wall.id) }}
+                  onClick={wallClick}
                   onContextMenu={cmHandler} />
               )
             })()}
