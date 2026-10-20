@@ -588,6 +588,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Tick Bottom panel to put an exposed-board bottom under the gables, taped front and ends. The gables sit on it, so the overall height stays the same. To keep it as a starting point, right-click → Save to library and pick the Vanity section.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.FLOAT_BOTTOM) },
   ]},
+
+  // Appended 2026-10-21 (group panel — shared Off wall field).
+  { id: 'group_off_wall', level: 'intermediate', topic: 'cabinets', title: 'Move a group off the wall',
+    blurb: 'Select several cabinets on one wall and set how far they all stand off it.',
+    keywords: 'group multi select shift click several cabinets off wall distance gap move together clearance', steps: [
+    { id: 'select', title: 'Select the cabinets',
+      body: 'Click a cabinet, then Shift-click the others on the same wall. The right-hand panel changes to "N cabinets selected".',
+      canvas: true, done: c => c.selected?.type === 'cabinet' },
+    { id: 'offwall', title: 'Change Off wall',
+      body: 'Under Clearance, Off wall shows how far they stand off the wall — it only appears when they’re all the same distance off. Type a new value and they all move out (or back) together, each keeping its place along the wall.',
+      canvas: true, done: (c, s) => c.cabinets.some(cab => { const o = s.cabinets.find(x => x.id === cab.id); return !!o && (o.pos_x !== cab.pos_x || o.pos_y !== cab.pos_y) }) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

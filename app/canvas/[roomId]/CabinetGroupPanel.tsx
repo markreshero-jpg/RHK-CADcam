@@ -1,7 +1,7 @@
 'use client'
 
 import { Room, Wall, CabinetInstance } from '@/src/lib/types'
-import { cabT, cabVExtent } from '@/src/lib/geometry'
+import { cabT, cabVExtent, cabWallGap, cabWallSide, wallAnchorPoint, type RoomRef } from '@/src/lib/geometry'
 import CalcInput from '@/src/components/CalcInput'
 
 // Right-hand panel shown when 2+ cabinets are selected. Reads size as a group:
@@ -9,12 +9,16 @@ import CalcInput from '@/src/components/CalcInput'
 // "mixed") and editing them applies to every selected cabinet. Per-cabinet fields
 // (label, neighbours, scribes, …) are intentionally omitted — they only make sense
 // for a single cabinet. Clearances are shown around the whole group's bounding box.
-export default function CabinetGroupPanel({ cabinets, wallCabinets, walls, room, onUpdateMany, onMoveAlongWall, onDeleteMany }: {
+export default function CabinetGroupPanel({ cabinets, wallCabinets, walls, room, roomRef, onUpdateMany, onUpdateEach, onMoveAlongWall, onDeleteMany }: {
   cabinets: CabinetInstance[]
   wallCabinets: CabinetInstance[]   // every cabinet on the group's wall (incl. selected)
   walls: Wall[]
   room: Room | null
+  /** centroid(walls) — which way is into the room. Omitted → no "Off wall" field. */
+  roomRef?: RoomRef
   onUpdateMany: (u: Partial<CabinetInstance>) => void
+  /** Per-cabinet patches (each cabinet gets its own position). */
+  onUpdateEach: (patches: { id: string; u: Partial<CabinetInstance> }[]) => void
   onMoveAlongWall: (deltaT: number) => void   // slide every selected cabinet by deltaT mm along the wall
   onDeleteMany: () => void
 }) {
@@ -74,6 +78,22 @@ export default function CabinetGroupPanel({ cabinets, wallCabinets, walls, room,
       up:    Math.round((upN.length   ? Math.min(...upN.map(c => vEx(c)[0]))   : ceiling)  - gTop),
     }
   })() : null
+
+  // Shared distance off the wall — only when every selected cabinet stands off the
+  // same wall face by the same amount (else the field is hidden).
+  const offWall = (wall && roomRef) ? (() => {
+    const sides = new Set(cabinets.map(c => cabWallSide(c, wall)))
+    if (sides.size !== 1) return null
+    const gaps = cabinets.map(c => cabWallGap(c, wall, roomRef))
+    return Math.max(...gaps) - Math.min(...gaps) < 0.5 ? gaps[0] : null
+  })() : null
+  const setOffWall = (v: number) => {
+    if (!wall || !roomRef) return
+    onUpdateEach(cabinets.map(c => {
+      const p = wallAnchorPoint(wall, cabT(c, wall), cabWallSide(c, wall) === 'back', roomRef, Math.max(0, v))
+      return { id: c.id, u: { pos_x: p.x, pos_y: p.y } }
+    }))
+  }
 
   // Slide the whole group so its left/right clearance becomes `v`, clamped to the gap.
   const slideTo = (side: 'left' | 'right', v: number) => {
@@ -139,9 +159,15 @@ export default function CabinetGroupPanel({ cabinets, wallCabinets, walls, room,
               {clrMove('Right', box.right, 'right')}
               {clrRO('Up', box.up)}
               {clrRO('Down', box.down)}
+              {offWall != null && (
+                <div>
+                  <p className="text-[9px] text-gray-500 mb-0.5">Off wall</p>
+                  <CalcInput value={offWall} decimals={1} onCommit={setOffWall} className={inp + ' text-right'} />
+                </div>
+              )}
             </div>
             <p className="text-[10px] text-gray-600 mt-1.5 leading-snug">
-              Edit Left / Right to slide the group along the wall. Up / Down are read-only — vertical position is set by cabinet type (base on the floor, wall units from the soffit).
+              Edit Left / Right to slide the group along the wall. Up / Down are read-only — vertical position is set by cabinet type (base on the floor, wall units from the soffit). Off wall shows when they all stand off the wall by the same amount; editing it moves them together.
             </p>
           </div>
         )}

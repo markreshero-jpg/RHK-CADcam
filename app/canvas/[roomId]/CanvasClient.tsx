@@ -3252,7 +3252,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               : []}
             walls={walls}
             room={room}
+            roomRef={centroid(walls)}
             onUpdateMany={u => { multiSelect.forEach(id => void handleUpdateCabinet(id, u)) }}
+            onUpdateEach={patches => { patches.forEach(({ id, u }) => void handleUpdateCabinet(id, u)) }}
             onMoveAlongWall={deltaT => {
               const w = walls.find(wl => wl.id === multiSelectCabs[0]?.wall_id)
               if (!w || !deltaT) return
