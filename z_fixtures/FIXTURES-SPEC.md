@@ -257,6 +257,11 @@ Esc cancels; one undo step.
     files replaced in `public/fixture-models/`. Zalo's library row moved off the bucket to
     `/fixture-models/ABI_Zalo_Double_Bowl.glb`; the one already-placed Zalo keeps the old
     bucket copy (jobs are as-built).
+  - 2026-10-20 (user): **Abi Elysian Minimal wall mixer + spout set** (`z_fixtures/models/Taps/`) —
+    tap row, **wall mount**, 161 W × 213.7 D × 119 H from the bbox (scale 1000, no rotation: the GLB is
+    already +Z out of the wall, back on the wall face). mount_height 1060 (outlets ~250 above a 900 top;
+    underside = mixer lever, 88 below the outlet centres). No benchtop cutout. Shapes traced headless.
+    Not checked in-app.
 
 - 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
   section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`
