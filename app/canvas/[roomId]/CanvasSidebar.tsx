@@ -265,7 +265,7 @@ export default function CanvasSidebar({
   cabMenuOpen, setCabMenuOpen,
   benchtopMenuOpen, setBenchtopMenuOpen, onDrawBenchtopInShapeEditor, onAutoBuildBenchtops,
   fixtureMenuOpen = false, setFixtureMenuOpen, armedFixtureId = null, onArmFixture,
-  cadOn = false, onToggleCad,
+  cadOn = false, onToggleCad, cadPanel,
   clipboard, sidebarW, libRefresh = 0,
 }: {
   room: Room
@@ -297,6 +297,8 @@ export default function CanvasSidebar({
   /** F7 CAD annotations (z_CAD_tool): mode on + toggle. */
   cadOn?: boolean
   onToggleCad?: () => void
+  /** The CAD tools panel, shown under the CAD button while CAD mode is on. */
+  cadPanel?: React.ReactNode
   clipboard: CabinetInstance | null
   sidebarW: number
   /** Bumped by the parent after a Save-to-library so the palette reloads. */
@@ -315,6 +317,10 @@ export default function CanvasSidebar({
     else if (fixtureMenuOpen && !p.fx) { setWallMenuOpen(false); setCabMenuOpen(false); setBenchtopMenuOpen(false) }
     prevOpen.current = { wall: wallMenuOpen, cab: cabMenuOpen, bt: benchtopMenuOpen, fx: fixtureMenuOpen }
   }, [wallMenuOpen, cabMenuOpen, benchtopMenuOpen, fixtureMenuOpen, setWallMenuOpen, setCabMenuOpen, setBenchtopMenuOpen, setFixtureMenuOpen])
+
+  // The CAD tools panel opens under the CAD button: bring it into view when CAD starts.
+  const cadPanelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { if (cadOn) cadPanelRef.current?.scrollIntoView({ block: 'nearest' }) }, [cadOn])
 
   // ── Fixtures catalogue (F6) — loaded the first time the section opens ──
   const [fixtureItems, setFixtureItems] = useState<FixtureCatalogItem[] | null>(null)
@@ -950,13 +956,14 @@ export default function CanvasSidebar({
 
         {onToggleCad && (<>
           <div className="border-t border-gray-800 my-1 mx-1" />
-          {/* CAD annotations (F7) — z_CAD_tool. Opens the ribbon under the view tabs. */}
+          {/* CAD annotations (F7) — z_CAD_tool. Its tools panel opens underneath. */}
           <SectionHeader
             tone={TONES.cad} icon={<CadIcon />} label="CAD" shortcut="F7" tour="tool-cad"
             title="CAD annotations (F7): text, text boxes and markup that print on the shop drawings. Esc / F7 to finish"
             active={cadOn} summary={cadOn ? 'Annotating' : null}
             onClick={onToggleCad}
           />
+          {cadOn && cadPanel && <div ref={cadPanelRef}>{cadPanel}</div>}
         </>)}
 
         {clipboard && (

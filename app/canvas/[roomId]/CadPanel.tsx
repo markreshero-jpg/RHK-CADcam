@@ -256,7 +256,7 @@ export default function CadPanel({ cad, annotations, paper, onClose }: {
       )}
 
       <Section title={one ? `Selected — ${KIND_LABEL[one.kind]}` : sel.length > 1 ? `${sel.length} selected` : 'Selection'}>
-        {!sel.length && !cad.editing && <div className="text-xs text-gray-500">Nothing selected. Click a note or line, drag a box round several, or pick a tool on the ribbon.</div>}
+        {!sel.length && !cad.editing && <div className="text-xs text-gray-500">Nothing selected. Click a note or line, drag a box round several, or pick a tool in the CAD tools on the left.</div>}
         {cad.editing && <div className="text-xs text-gray-400">Typing text… click away or Ctrl+Enter to finish.</div>}
         {sel.length > 1 && !cad.editing && <MultiInfo sel={sel} k={paper} />}
         {one && <SelectedInfo a={one} cad={cad} k={paper} />}

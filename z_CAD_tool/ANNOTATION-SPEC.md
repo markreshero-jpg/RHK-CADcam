@@ -77,7 +77,10 @@ paper information only.
    separately on lines, leaders and dimensions. Size is in paper mm (default 2.5).
 9. **F7 = CAD mode.** A new **CAD** tool goes in the left sidebar (shortcut F7, after
    Fixtures F6, styled like the other tools). Turning it on shows a **ribbon bar under
-   the Plan / Elevation / 3D tab row**, holding:
+   the Plan / Elevation / 3D tab row**, holding *(changed 2026-10-20 at Mark's request:
+   the "ribbon" is now a compact stacked panel in the left sidebar, right under the CAD
+   button — the band across the top was too long. Same contents; still `CadRibbon.tsx`.
+   Entering CAD folds the other sidebar menus away so it sits near the top)*:
    - the tools: Select, Text, Leader, Line, Arrow, Box, Ellipse, Cloud, Dimension;
    - the style controls (decisions 7 and 8) for the active tool or the selection;
    - snap toggles (reusing the existing snaps: endpoint, midpoint, wall face, cabinet
@@ -243,6 +246,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [x] built 2026-10-19; in-app check pending |
 | B4b | **Fillet / chamfer / join + right-click menu:** two picks (two sides of a line → that corner; two lines → trim / extend to meet and join); a box = all corners; Join nearest ends / close; lines gain arc segments (bulges) + closed outlines; right-click menu on any note / line | [x] built 2026-10-19; in-app check pending |
 | B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [x] built 2026-10-20; in-app check pending |
+| B5b | **Ribbon → sidebar:** the CAD tools / styles / snap / scale move from the band under the view tabs into a compact panel under F7 in the left sidebar (decision 9 note) | [x] built 2026-10-20; in-app check pending |
 | A6 | **Elevations:** wall-local frame, canvas + Elevation Views report, wall-split remap | [ ] |
 | A7 | **Cabinet sheets:** ribbon on the sheet preview (decision 10), cabinet-local frame, sheet toggle, own undo; **decide the cabinet-revision behaviour first** | [ ] |
 | A8 | Room copy remap, tutorial lesson, mobile view check | [ ] |

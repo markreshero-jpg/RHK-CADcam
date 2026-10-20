@@ -632,6 +632,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setMode('cad'); setSelected(null); setMultiSelect([]); setContextMenu(null)
     setArmedDef(null); setArmedDraft(null); setDrawStart(null); setPlaceGhost(null)
     if (canvasView !== 'plan' && canvasView !== 'elevation') switchView('plan')
+    // The CAD tools open in the sidebar under the CAD button: fold the other menus away.
+    setWallMenuOpen(false); setCabMenuOpen(false); bt.setBenchtopMenuOpen(false); fx.setMenuOpen(false)
   }
   // CAD object snaps (B2): targets rebuilt when the room changes; toggles are a user pref.
   const [cadSnapSettings, setCadSnapSettingsState] = useState<CadSnapSettings>(() => getUserPrefs().cadSnap)
@@ -792,7 +794,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         e.preventDefault()
         fx.setMenuOpen(v => !v)
       }
-      // F7 CAD annotations (z_CAD_tool): toggles CAD mode + the ribbon.
+      // F7 CAD annotations (z_CAD_tool): toggles CAD mode + its sidebar tools.
       if (e.key === 'F7' && !isInput(e.target)) {
         e.preventDefault()
         if (mode === 'cad') setMode('select'); else enterCad()
@@ -2721,11 +2723,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         </div>
       </div>
 
-      {mode === 'cad' && (canvasView === 'plan' || canvasView === 'elevation') && (
-        <CadRibbon cad={cad} viewSupported={canvasView === 'plan'} scale={annotScale} onScale={setAnnotScale}
-          snap={cadSnapSettings} onSnap={setCadSnapSettings}
-          onClose={() => setMode('select')} />
-      )}
       {canvasView === 'plan' && <CadContextMenu cad={cad} annotations={planAnnotations} zoom={view.zoom} />}
       {cad.editing && canvasView === 'plan' && (
         <AnnotTextEditor key={cad.editing.draft.id} editing={cad.editing} frame={IDENTITY_FRAME} paper={annotScale} zoom={view.zoom}
@@ -2764,6 +2761,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           onArmFixture={armFixture}
           cadOn={mode === 'cad'}
           onToggleCad={() => { if (mode === 'cad') setMode('select'); else enterCad() }}
+          cadPanel={(canvasView === 'plan' || canvasView === 'elevation') && (
+            <CadRibbon cad={cad} viewSupported={canvasView === 'plan'} scale={annotScale} onScale={setAnnotScale}
+              snap={cadSnapSettings} onSnap={setCadSnapSettings} />
+          )}
           clipboard={clipboard}
           sidebarW={sidebarW}
         />

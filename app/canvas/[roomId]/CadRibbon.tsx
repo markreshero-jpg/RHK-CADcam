@@ -1,8 +1,9 @@
 'use client'
 
-// CAD ribbon (z_CAD_tool decision 9): shown under the Plan / Elevation / 3D tabs while
-// F7 CAD mode is on. Tools on the left, then the style of whatever is being edited /
-// selected (or the next new item's defaults), then the room's annotation scale.
+// CAD tools (z_CAD_tool decision 9): a compact panel in the left sidebar under the F7
+// CAD button while CAD mode is on (was a ribbon under the view tabs). Tools grid, what
+// the next click does, then the style of whatever is being edited / selected (or the
+// next new item's defaults), then snaps and the room's annotation scale.
 // Buttons keep focus where it was (mousedown preventDefault), so styling text while
 // typing doesn't close the inline editor.
 
@@ -40,7 +41,7 @@ const TOOLS: { id: CadTool; label: string; key: string; icon: React.ReactNode }[
 
 const keep = (e: React.MouseEvent) => e.preventDefault()
 
-function Sep() { return <div className="w-px self-stretch my-1.5 bg-gray-700 shrink-0" /> }
+function Sep() { return <div className="h-px bg-gray-800 my-0.5" /> }
 
 function Btn({ on, title, onClick, children, disabled, wide, tour }: {
   on?: boolean; title: string; onClick?: () => void; children: React.ReactNode; disabled?: boolean; wide?: boolean
@@ -89,7 +90,7 @@ function Pick<T extends string | number>({ value, options, onChange, title }: {
   return (
     <select title={title} value={String(value)}
       onChange={e => { const o = options.find(x => String(x.id) === e.target.value); if (o) onChange(o.id) }}
-      className="h-6 shrink-0 bg-gray-800 border border-gray-700 rounded px-1 text-xs text-gray-100 outline-none focus:border-rose-500">
+      className="h-6 min-w-0 max-w-full bg-gray-800 border border-gray-700 rounded px-1 text-xs text-gray-100 outline-none focus:border-rose-500">
       {options.map(o => <option key={String(o.id)} value={String(o.id)}>{o.label}</option>)}
     </select>
   )
@@ -97,15 +98,15 @@ function Pick<T extends string | number>({ value, options, onChange, title }: {
 
 function Group({ label, children, tour }: { label: string; children: React.ReactNode; tour?: string }) {
   return (
-    <div className="flex items-center gap-1 shrink-0" data-tour={tour}>
-      <span className="text-[10px] uppercase tracking-wide text-gray-500 mr-0.5">{label}</span>
-      {children}
+    <div data-tour={tour}>
+      <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-0.5">{label}</div>
+      <div className="flex flex-wrap items-center gap-1">{children}</div>
     </div>
   )
 }
 
 /** Object snaps (B2): a toggle plus a menu of snap kinds and what to snap to. The menu
- *  is position: fixed so the ribbon's horizontal scroll can't clip it. */
+ *  is position: fixed so the sidebar's scroll can't clip it. */
 function SnapMenu({ snap, onSnap }: { snap: CadSnapSettings; onSnap: (s: CadSnapSettings) => void }) {
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null)
   const btn = useRef<HTMLButtonElement>(null)
@@ -126,11 +127,11 @@ function SnapMenu({ snap, onSnap }: { snap: CadSnapSettings; onSnap: (s: CadSnap
         onClick={() => onSnap({ ...snap, enabled: !snap.enabled })}
         className={`h-7 px-2 rounded-l text-xs ${snap.enabled ? 'bg-yellow-500/90 text-gray-900' : 'text-gray-400 hover:bg-gray-700'}`}>Snap</button>
       <button ref={btn} title="What to snap to" onMouseDown={keep}
-        onClick={() => { const r = btn.current!.getBoundingClientRect(); setOpen(o => o ? null : { x: r.right, y: r.bottom + 4 }) }}
+        onClick={() => { const r = btn.current!.getBoundingClientRect(); setOpen(o => o ? null : { x: r.left, y: r.bottom + 4 }) }}
         className={`h-7 px-1 rounded-r text-xs border-l border-gray-700 ${snap.enabled ? 'bg-yellow-500/70 text-gray-900' : 'text-gray-400 hover:bg-gray-700'}`}>▾</button>
       {open && (
         <div data-snapmenu className="fixed z-50 w-56 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-1.5"
-          style={{ left: open.x - 224, top: open.y }}>
+          style={{ left: Math.max(8, open.x - 60), top: Math.min(open.y, window.innerHeight - 380) }}>
           <div className="px-2 pt-0.5 pb-1 text-[10px] uppercase tracking-wide text-gray-500">Snap to</div>
           {CAD_SNAP_KINDS.map(k => box(k.label, snap.kinds[k.id], () => onSnap({ ...snap, kinds: { ...snap.kinds, [k.id]: !snap.kinds[k.id] } })))}
           <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-gray-500">On</div>
@@ -141,13 +142,12 @@ function SnapMenu({ snap, onSnap }: { snap: CadSnapSettings; onSnap: (s: CadSnap
   )
 }
 
-export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose, snap, onSnap }: {
+export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, onSnap }: {
   cad: AnnotationTool
   /** false on views annotations don't cover yet (elevation until A6). */
   viewSupported: boolean
   scale: number
   onScale: (n: number) => void
-  onClose: () => void
   snap: CadSnapSettings
   onSnap: (s: CadSnapSettings) => void
 }) {
@@ -192,23 +192,24 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
     : 'Click the next point · Tab = type length / angle · double-click / Enter / right-click finishes · Backspace steps back · Esc cancels'
 
   return (
-    <div className="flex-none h-10 bg-gray-900 border-b border-rose-900/60 flex items-center gap-1.5 px-2 shrink-0 relative z-20 overflow-x-auto"
+    <div className="ml-2.5 pl-1.5 border-l-2 border-rose-500/50 flex flex-col gap-1.5 pt-1 pb-1.5"
       onPointerDown={e => e.stopPropagation()}>
-      <span className="text-[11px] font-semibold text-rose-300 shrink-0 mr-1" title="CAD annotations (F7)">CAD</span>
-
+      <div className="grid grid-cols-[repeat(auto-fill,1.75rem)] gap-0.5">
       {TOOLS.map(t => (
         <Btn key={t.id} on={cad.tool === t.id} title={`${t.label} (${t.key})`} onClick={() => cad.setTool(t.id)} disabled={!viewSupported} tour={`cad-${t.id}`}>
           <Icon>{t.icon}</Icon>
         </Btn>
       ))}
+      </div>
 
       {!viewSupported ? (
-        <span className="text-xs text-gray-400 ml-2">Elevation annotations arrive in phase A6. Switch to Plan to annotate.</span>
+        <span className="text-xs text-gray-400">Elevation annotations arrive in phase A6. Switch to Plan to annotate.</span>
       ) : (<>
-        <Sep />
-        <span className="text-[11px] text-gray-400 shrink-0 w-24 truncate" title={what}>{what}</span>
-        {drawHint && <span className="text-[11px] text-rose-200 shrink-0">{drawHint}</span>}
-        {cad.modMsg && <span className="text-[11px] text-amber-300 shrink-0">{cad.modMsg}</span>}
+        <div className="min-h-[2.6rem] text-[11px] leading-snug">
+          <div className="text-gray-300 font-medium truncate" title={what}>{what}</div>
+          {drawHint && <div className="text-rose-200">{drawHint}</div>}
+          {cad.modMsg && <div className="text-amber-300">{cad.modMsg}</div>}
+        </div>
         {cad.tool === 'fillet' && (
           <Group label="Fillet">
             <Num title="Fillet radius (mm). 0 = just meet at a sharp corner" value={cad.filletR} step={5} min={0} w="w-16" suffix="R"
@@ -362,6 +363,7 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
 
 
         <Sep />
+        <div className="flex items-center gap-0.5">
         <Btn title="Bring to front" disabled={!nSel} onClick={() => cad.reorder('front')}>
           <Icon><rect x="5" y="5" width="8" height="8" fill="currentColor" fillOpacity="0.4" /><rect x="2.5" y="2.5" width="7" height="7" /></Icon>
         </Btn>
@@ -372,18 +374,18 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
           <Icon><path d="M3 4.5h10M6 4.5V3h4v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5" /></Icon>
         </Btn>
         <Btn title="Reset style to defaults" wide onClick={cad.resetStyle}>Reset</Btn>
+        </div>
       </>)}
 
-      <div className="ml-auto flex items-center gap-1.5 shrink-0 pl-2">
+      <div className="flex items-center gap-1.5 flex-wrap">
         {viewSupported && <SnapMenu snap={snap} onSnap={onSnap} />}
-        <Group label="Scale">
+        <span className="flex items-center gap-0.5 ml-auto" title="Annotation scale">
           <span className="text-xs text-gray-400">1:</span>
           <Pick title="Annotation scale — the canvas shows paper sizes as they print at this scale"
             value={SCALES.includes(scale) ? scale : 0}
             options={[...SCALES.map(n => ({ id: n, label: String(n) })), ...(SCALES.includes(scale) ? [] : [{ id: 0, label: String(scale) }])]}
             onChange={n => { if (n) onScale(n) }} />
-        </Group>
-        <Btn title="Close CAD (F7 / Esc)" onClick={onClose}><Icon><path d="M4 4l8 8M12 4l-8 8" /></Icon></Btn>
+        </span>
       </div>
     </div>
   )
