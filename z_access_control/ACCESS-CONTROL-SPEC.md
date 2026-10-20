@@ -1,6 +1,6 @@
 # Access control — admin vs tester
 
-Status: **Phase 1 + 2 done 2026-10-13.** Phase 1 = roles + RLS (migration
+Status: **Phase 1 + 2 done 2026-10-13; Phase 3 (online presence) built 2026-10-20.** Phase 1 = roles + RLS (migration
 `access_control_roles`); Phase 2 = Settings → Users tab (migration
 `access_control_users_admin`). Both applied to the live project; app code in the
 working tree.
@@ -52,6 +52,16 @@ test job and can't touch the library or other jobs.
     dashboard (no service-role key in the app). You can't change your own role
     or allowlist entry in the UI; the `keep_one_admin` trigger blocks removing
     the last admin.
+
+13. **Online presence** (Phase 3, 2026-10-20; migration `online_presence`,
+    `migration_online_presence.sql`): every signed-in tab joins the **private**
+    Realtime channel `online-users` (`src/lib/presence.ts`, started by
+    `src/components/PresenceTracker.tsx` in the root layout), keyed by user id,
+    tracking `{email, path, online_at}` and re-tracking on navigation. RLS on
+    `realtime.messages` lets any login read + write presence on that one topic
+    (joining needs read). So testers technically receive the list too; only the
+    admin UI shows it: Settings → Users green dot + Online column (job › room or
+    page per open tab). No history is kept: closed tab = gone within seconds.
 
 ## Rule for new tables
 

@@ -4,11 +4,15 @@
 // Settings → Users (admins only). Per login: can-sign-in (allowed_emails),
 // role (user_roles) and, for testers, which jobs they can open
 // (project_access). Logins themselves are created in the Supabase dashboard.
+// Online = live Realtime presence (src/lib/presence.ts): a dot + where each
+// open tab is.
 // See z_access_control/ACCESS-CONTROL-SPEC.md.
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { UserRole } from '@/src/lib/role'
+import { usePresence, type PresenceMeta } from '@/src/lib/presence'
+import { useTutorial } from '@/src/lib/tutorial/store'
 
 interface UserRow {
   id: string
@@ -30,6 +34,15 @@ interface Job {
 const fmtDate = (s: string | null) =>
   s ? new Date(s).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never'
 
+const fmtTime = (s: string) => new Date(s).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+
+const PAGE_NAMES: [string, string][] = [
+  ['/settings', 'Settings'], ['/library', 'Library'], ['/projects/new', 'New job'],
+  ['/shape-editor-test', 'Shape editor'], ['/login', 'Signing in'],
+]
+
+const roomIdOf = (path: string) => path.match(/^\/canvas\/([^/]+)/)?.[1]
+
 export default function UsersClient() {
   const [users, setUsers] = useState<UserRow[]>([])
   const [jobs, setJobs] = useState<Job[]>([])
@@ -39,6 +52,36 @@ export default function UsersClient() {
   const [jobFilter, setJobFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const presence = usePresence()
+  const [rooms, setRooms] = useState<Record<string, { name: string; project_id: string }>>({})
+
+  useEffect(() => { useTutorial.getState().emit('users_view') }, [])   // tutorial who_online
+
+  // Rooms someone has open, looked up once each for the "where" label.
+  const missingRooms = useMemo(() => [...new Set(Object.values(presence).flat()
+    .map(m => roomIdOf(m.path)).filter((id): id is string => !!id && !(id in rooms)))].sort().join(','),
+  [presence, rooms])
+  useEffect(() => {
+    if (!missingRooms) return
+    supabase.from('rooms').select('id, name, project_id').in('id', missingRooms.split(',')).then(({ data }) => {
+      if (data) setRooms(prev => ({ ...prev, ...Object.fromEntries(data.map(r => [r.id, r])) }))
+    })
+  }, [missingRooms])
+
+  function where(m: PresenceMeta): string {
+    const jobName = (id: string) => jobs.find(j => j.id === id)?.name ?? 'a job'
+    const roomId = roomIdOf(m.path)
+    if (roomId) {
+      const r = rooms[roomId]
+      return r ? `${jobName(r.project_id)} › ${r.name}` : 'Drawing'
+    }
+    const proj = m.path.match(/^\/projects\/([^/]+)(\/optimiser)?/)
+    if (proj && proj[1] !== 'new') return `${jobName(proj[1])}${proj[2] ? ' · CNC' : ''}`
+    if (m.path === '/') return 'Job list'
+    return PAGE_NAMES.find(([p]) => m.path.startsWith(p))?.[1] ?? m.path
+  }
+
+  const onlineCount = Object.keys(presence).length
 
   useEffect(() => {
     let cancelled = false
@@ -95,13 +138,20 @@ export default function UsersClient() {
   const jobCount = (userId: string) => jobs.filter(j => access.has(`${userId}:${j.id}`)).length
 
   return (
-    <div className="flex-1 overflow-y-auto px-8 py-6 max-w-4xl">
+    <div className="flex-1 overflow-y-auto px-8 py-6 max-w-5xl">
       <p className="text-xs text-ink-subtle mb-4 max-w-2xl leading-relaxed">
         <span className="text-ink-muted font-medium">Admins</span> see every job and can change the library and settings.{' '}
         <span className="text-ink-muted font-medium">Testers</span> only see the jobs ticked for them, and can view but not
         change the library. To add someone, create their login in Supabase → Authentication → Users (tick
-        “Auto Confirm User”), then refresh this page.
+        “Auto Confirm User”), then refresh this page. <span className="text-ink-muted font-medium">Online</span> updates
+        live: a green dot for each person with the app open, and the job or page each of their tabs is on.
       </p>
+
+      {!loading && (
+        <div className="text-xs text-ink-muted mb-2">
+          {onlineCount === 0 ? 'Nobody online' : `${onlineCount} online now`}
+        </div>
+      )}
 
       {error && <div className="text-xs text-red-400 mb-3">{error}</div>}
 
@@ -110,7 +160,8 @@ export default function UsersClient() {
       ) : (
         <div className="border border-edge-strong rounded-lg overflow-hidden">
           <div className="flex items-center bg-surface-2/60 border-b border-edge-strong text-[9px] text-ink-subtle uppercase tracking-wide">
-            <div className="px-3 py-2 flex-1">Email</div>
+            <div className="px-3 py-2" style={{ width: 220 }}>Email</div>
+            <div className="px-3 py-2 flex-1">Online</div>
             <div className="px-3 py-2" style={{ width: 110 }}>Last sign-in</div>
             <div className="px-3 py-2" style={{ width: 90 }}>Can sign in</div>
             <div className="px-3 py-2" style={{ width: 110 }}>Role</div>
@@ -121,11 +172,23 @@ export default function UsersClient() {
             const isMe = u.id === me
             const isTester = u.role !== 'admin'
             const open = openId === u.id && isTester
+            const tabs = presence[u.id] ?? []
             return (
               <div key={u.id} className="border-b border-edge last:border-b-0">
                 <div className="flex items-center text-xs">
-                  <div className="px-3 py-2 flex-1 text-ink truncate">
-                    {u.email}{isMe && <span className="text-ink-subtle"> (you)</span>}
+                  <div className="px-3 py-2 text-ink flex items-center gap-2 min-w-0" style={{ width: 220 }}>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${tabs.length ? 'bg-green-500' : 'bg-edge-strong'}`}
+                      title={tabs.length ? 'Online' : 'Offline'} />
+                    <span className="truncate">{u.email}{isMe && <span className="text-ink-subtle"> (you)</span>}</span>
+                  </div>
+                  <div className="px-3 py-2 flex-1 min-w-0 text-ink-muted">
+                    {tabs.length === 0 ? (
+                      <span className="text-ink-subtle">—</span>
+                    ) : tabs.map((m, i) => (
+                      <div key={i} className="truncate" title={`${m.path} · open since ${fmtTime(m.online_at)}`}>
+                        {where(m)}
+                      </div>
+                    ))}
                   </div>
                   <div className="px-3 py-2 text-ink-muted" style={{ width: 110 }}>{fmtDate(u.last_sign_in_at)}</div>
                   <div className="px-3 py-2" style={{ width: 90 }}>

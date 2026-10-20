@@ -549,6 +549,15 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Each top is a separate benchtop anchored to its wall, with joint edges (red) where they meet. Right-click one → Edit shape or Edit edges to adjust it. Ctrl+Z undoes the whole build.',
       canvas: true, done: c => c.selected?.type === 'benchtop' },
   ]},
+
+  // Appended 2026-10-20 (z_access_control Phase 3 — live online presence).
+  { id: 'who_online', level: 'basics', topic: 'production', title: 'See who’s online',
+    blurb: 'Admins: see who has the app open right now, and which job they’re in.',
+    keywords: 'online who logged in signed in users presence active admin tester settings', steps: [
+    { id: 'open', title: 'Settings → Users',
+      body: 'From the job list, open Settings and pick Users (admins only). A green dot next to an email means that person has the app open right now. The Online column says which job and room (or page) each of their open tabs is on, and updates live as they move around. Hover a line to see when that tab was opened.',
+      done: (c, s) => ev(c, 'users_view') > ev(s, 'users_view') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
