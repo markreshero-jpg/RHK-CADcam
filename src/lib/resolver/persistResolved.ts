@@ -60,6 +60,8 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       upright:           !!p.upright,
       // Finger-pull rails carry their sheet grain (z_handles H6); others keep the default.
       ...(p.grain_direction ? { grain_direction: p.grain_direction } : {}),
+      // Curved end face board's bent plan shape (z_curved_end).
+      ...(p.wrap ? { wrap: p.wrap } : {}),
     })),
     toekick_parts: resolved.toekick_parts.map(p => ({
       part_key:        p.part_key,

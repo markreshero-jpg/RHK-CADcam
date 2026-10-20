@@ -25,6 +25,7 @@ import { fingerRails, fingerRailParts, notchPanels, pushFrontRailBack, type Fing
 import { shapedFingerRails } from './resolveShapedFingerRails'
 import { resolveFillerCleats } from './resolveFillerCleats'
 import { resolveBulkhead } from './resolveBulkhead'
+import { resolveCurvedEnd } from './resolveCurvedEnd'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -37,7 +38,8 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     ? resolveCaseParts(cab, r)
     : { parts: [], errors: [] }
   // Shaped cabinets (z_cabinet_shape): reshape the box carcass to the footprint.
-  const caseParts = cab.footprint ? shapeCaseParts(cab, r, rectCaseParts, caseErrors) : rectCaseParts
+  // A curved end's footprint is only its plan outline — resolveCurvedEnd builds every part.
+  const caseParts = cab.footprint && !cab.curved_end ? shapeCaseParts(cab, r, rectCaseParts, caseErrors) : rectCaseParts
   allErrors.push(...caseErrors)
 
   // ── 2. Toe Kick Module ────────────────────────────────────────
@@ -61,6 +63,13 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   if (cab.footprint && !cab.has_carcass) caseParts.push(...resolveFillerCleats(cab, r, zones))
   // Bulkheads (z_bulkhead): fascia, returns + fixing cleat.
   if (cab.bulkhead) caseParts.push(...resolveBulkhead(cab, r))
+  // Curved fixed-panel cabinets (z_curved_end): face board, formers, panels, blocks.
+  if (cab.curved_end) {
+    const crv = resolveCurvedEnd(cab)
+    caseParts.push(...crv.parts)
+    allErrors.push(...crv.errors)
+    allWarnings.push(...crv.warnings)
+  }
   // Shaped cabinets (z_cabinet_shape Phase 3b): hinges + drawer boxes on every
   // facet, fitted to the footprint and built in each zone's square frame.
   const shapedHw = cab.footprint ? shapedHardwareCtx(cab) : null

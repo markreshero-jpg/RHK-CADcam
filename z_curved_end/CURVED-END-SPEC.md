@@ -8,7 +8,10 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → C1 done 2026-10-20: `src/lib/curvedEnd/` (geometry.ts engine, kitHoles.ts hole oracle), 30 tests vs all 10 kit fixtures pass. Next: C2 (library entries, placement, hand dropdown, resolver hook, 3D).
+> **RESUME HERE** → C2 built 2026-10-20 (migration `migration_c2_curved_end.sql` applied: columns,
+> part-key check, BCRVFIXP / WCRVFIXP / TCRVFIXP library rows). **In-app check pending (Mark)**: place
+> each class from F3 → End Panels, flip Right / Left / Both, change radius / skin / scribes / blocks,
+> look at plan, 3D, elevation and the cut list. Then C3 (pocket + joints drilling).
 
 ---
 
@@ -94,6 +97,53 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
 - Overhangs and scribes (`OG`, `OL/OR`, `SBK`, `SBT`, `STP`) are per-cabinet parameters.
 - The kit's validation warnings are cabinet errors (they block CNC). Its notes are cabinet warnings.
 
+## Built in C2 (2026-10-20)
+
+- **Data**: `cabinet_definitions.curved_end` / `cabinet_instances.curved_end` jsonb
+  (`src/lib/curvedEnd/settings.ts`: hand RH / LH / DOUBLE, R, SK, OG, OL, OR, SBK, SBT, STP, lighten,
+  B, onion, OS, blkS, blkF, grain). `case_parts.wrap` jsonb. Part keys `^crv:[a-z0-9_]+$`.
+- **Library**: `BCRVFIXP` 300 × 900 × 580, `WCRVFIXP` 300 × 700 × 350, `TCRVFIXP` 300 × 2100 × 580,
+  each under its class's **End Panels** category. No carcass / internals / face / kick flags. Height and
+  depth cascade like the class.
+- **Placement**: `buildInstanceFromDefinition` copies `curved_end` and builds the plan `footprint` from
+  it. The internal presets `curved_end` (sided) and `curved_end_double` are hidden from the Shape
+  section. Roles: back = back; the face board's front and curve = `front`; the straight it wraps back
+  along and the neighbour side = `side`. Changing the hand or radius rewrites the footprint.
+- **Resolver**: `resolveCurvedEnd.ts`. `shapeCaseParts` is skipped for curved ends, because the
+  footprint is only the plan outline. Kit warnings → errors `CURVED_END`; kit notes and skin limits →
+  warnings `CURVED_END_NOTE`. Face board = `exposed_material` (decision 11); all else = the carcass
+  board. Part keys:
+  - `crv:face`
+  - `crv:fix`
+  - `crv:back`
+  - `crv:bottom` / `crv:top` / `crv:rib_<n>`
+  - `crv:blk_side` (`_l` / `_r`) / `crv:blk_front`
+- **Face board**:
+  - DX × DY is the flat blank, with DY along the grain. Vertical (default) = DY is the height;
+    horizontal = DY is the wrap length (decision 8).
+  - `grain_direction` is set to match.
+  - `wrap` = its bent plan outline (cabinet frame, bulges) + height.
+  - `caseBox` / `casePlanCorners` / elevation / 3D (extruded up as a shape) all draw from `wrap`.
+- **Other parts**:
+  - Uprights (fixing panel, back, blocks) are face-kind turned panels (`isCurvedEndUprightKey`).
+  - Formers are horizontal, with the kit outline.
+  - No edge banding (the kit has none).
+- **UI**: `CurvedEndSection.tsx` in the cabinet panel. Header shows `BCRVFIXP/R` etc. Sections:
+  - curve hand, face grain
+  - radius, skin
+  - overhangs, scribes
+  - blocks
+  - rib cut-outs
+  - a live summary plus the kit warnings
+- **Layers**: one new item, `curved_ends` (group panels, all views, on by default).
+- **Not yet (later phases)**:
+  - the pocket and holes (C3)
+  - rib cut-outs as parts (C4)
+  - kick / benchtop (C5)
+  - the face-board-longer-than-sheet panel joint (decision 12)
+  - face board edge banding (ask Mark)
+  - a code suffix anywhere other than the sidebar header (the label stays B1, B2, …)
+
 ## Mapping onto the native pipeline (proposed)
 
 | Kit item | Native home |
@@ -112,8 +162,8 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
 - [x] **C0** Spec (this file)
 - [x] **C1** (2026-10-20) Geometry engine in TS (`src/lib/curvedEnd/`) plus tests against all 10 kit fixtures
   (numbers, outlines and holes vs the golden DXFs)
-- [ ] **C2** Library entries + placement + hand + RHS-bar parameters, footprint preset, resolver hook,
-  shop materials, 3D
+- [~] **C2** (built 2026-10-20, in-app check pending) Library entries + placement + hand + RHS-bar
+  parameters, footprint preset, resolver hook, shop materials, 3D
 - [ ] **C3** Operations: pocket + drill ops generated and persisted, reaching the optimiser/G-code; cut
   list and costing; grain option
 - [ ] **C4** Rib cut-out: inner-loop route with per-op depth (onion skin) in the optimiser/G-code

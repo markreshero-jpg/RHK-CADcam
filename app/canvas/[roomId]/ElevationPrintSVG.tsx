@@ -27,7 +27,8 @@ import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { customExtents } from '@/src/lib/customPartBox'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
-import { tkBoxAABB } from '@/src/lib/jointDrilling'
+import { tkBoxAABB, caseBoxAABB } from '@/src/lib/jointDrilling'
+import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
 import { DimLabel, dimLabelFits, dimLabelSides } from './dimLabel'
@@ -42,6 +43,11 @@ export interface ElevationPageOptions {
 function caseElevRect(p: ResolvedCasePart) {
   if (p.part_key === 'left_side' || p.part_key === 'right_side')
     return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
+  // Turned / shaped panels and the curved end face board: their front-view bounds.
+  if (isShapedPanelKey(p.part_key) || p.AY || p.wrap) {
+    const b = caseBoxAABB(p)
+    return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h }
+  }
   return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
 }
 function tkElevRect(p: ResolvedToekickPart) {

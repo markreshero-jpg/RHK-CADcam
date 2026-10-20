@@ -73,6 +73,12 @@ export function tkBoxAABB(p: ResolvedToekickPart): Box {
 // like the back, before their AY rotation about the min corner — see
 // caseBoxAABB / casePlanCorners for where they actually land.
 export function caseBox(p: ResolvedCasePart): Box {
+  // Curved end face board (z_curved_end): the bounds of its bent plan shape.
+  if (p.wrap) {
+    const pts = sampleOutline(p.wrap.pts), xs = pts.map(q => q.x), zs = pts.map(q => q.y)
+    const x0 = Math.min(...xs), z0 = Math.min(...zs)
+    return { x: x0, y: p.Y, z: z0, w: Math.max(...xs) - x0, h: p.wrap.h, d: Math.max(...zs) - z0 }
+  }
   if (isSide(p.part_key))
     return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
   if (p.part_key === 'back')
@@ -86,6 +92,7 @@ export function caseBox(p: ResolvedCasePart): Box {
 // the room) points: the box corners turned by the part's AY, or a horizontal
 // part's resolver outline (shaped cabinets).
 export function casePlanCorners(p: ResolvedCasePart): { x: number; z: number }[] {
+  if (p.wrap) return sampleOutline(p.wrap.pts).map(q => ({ x: q.x, z: q.y }))
   const b = caseBox(p)
   if (p.outline && p.outline.length >= 3 && !isSide(p.part_key) && p.part_key !== 'back' && !isShapedPanelKey(p.part_key) && !p.AY)
     return sampleOutline(p.outline).map(q => ({ x: b.x + q.x, z: b.z + b.d - q.y }))

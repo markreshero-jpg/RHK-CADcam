@@ -35,6 +35,8 @@ export interface ShapePreset {
   /** Does the shape sit at one end? Then a left/right choice is offered. */
   sided: boolean
   build: (side: ShapeSide) => PresetEdge[]
+  /** Built by another module, not offered in the Shape section (curved ends, z_curved_end). */
+  internal?: boolean
   /** The vertices are formulas of the params only (never cab.w / cab.d), and the
    *  cabinet's box is the outline's bbox — set dx / dz from presetBox() whenever
    *  the footprint is (re)built (z_angled_filler). */
@@ -165,6 +167,34 @@ export const SHAPE_PRESETS: ShapePreset[] = [
       { id: 'curve', x: mx('cab.w', side),            y: 'cab.d - p.radius', role: 'open', arc: { r: 'p.radius' } },
       { id: 'front', x: mx('cab.w - p.radius', side), y: 'cab.d',            role: 'front' },
       { id: 'side',  x: mx('0', side),                y: 'cab.d',            role: 'side' },
+    ],
+  },
+  // Curved fixed-panel cabinet (z_curved_end): the face board's outline — the
+  // front and its 90° curve are `front`, the straight it wraps back along and
+  // the neighbour (fixing panel) side are `side`. Built from curved_end settings
+  // (curvedEnd/settings.ts), never picked in the Shape section.
+  {
+    key: 'curved_end', label: 'Curved end', modifier: null, sided: true, internal: true,
+    params: [{ key: 'radius', label: 'Radius', default: 150 }],
+    build: side => [
+      { id: 'back',  x: mx('0', side),                y: '0',                role: 'back' },
+      { id: 'end',   x: mx('cab.w', side),            y: '0',                role: 'side' },
+      { id: 'curve', x: mx('cab.w', side),            y: 'cab.d - p.radius', role: 'front', arc: { r: 'p.radius' } },
+      { id: 'front', x: mx('cab.w - p.radius', side), y: 'cab.d',            role: 'front' },
+      { id: 'side',  x: mx('0', side),                y: 'cab.d',            role: 'side' },
+    ],
+  },
+  {
+    key: 'curved_end_double', label: 'Curved both ends', modifier: null, sided: false, internal: true,
+    params: [{ key: 'radius', label: 'Radius', default: 150 }],
+    // width = 2 × radius leaves a zero-length front, which consumers drop (isDegenerate)
+    build: () => [
+      { id: 'back',    x: '0',                y: '0',                role: 'back' },
+      { id: 'end_r',   x: 'cab.w',            y: '0',                role: 'side' },
+      { id: 'curve_r', x: 'cab.w',            y: 'cab.d - p.radius', role: 'front', arc: { r: 'p.radius' } },
+      { id: 'front',   x: 'cab.w - p.radius', y: 'cab.d',            role: 'front' },
+      { id: 'curve_l', x: 'p.radius',         y: 'cab.d',            role: 'front', arc: { r: 'p.radius' } },
+      { id: 'end_l',   x: '0',                y: 'cab.d - p.radius', role: 'side' },
     ],
   },
   {

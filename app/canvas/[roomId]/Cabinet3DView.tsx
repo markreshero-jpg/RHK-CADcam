@@ -169,7 +169,7 @@ function buildCaseInfo(p: ResolvedCasePart, b: Box): PartMeta {
     w: b.w, h: b.h, d: b.d,
     thickness: p.DZ,
     edge:      p.edge_band,
-    panelKind: isSide(p.part_key) ? 'side' : p.part_key === 'back' || isShapedPanelKey(p.part_key) || p.upright ? 'face' : 'horizontal',
+    panelKind: p.wrap ? 'horizontal' : isSide(p.part_key) ? 'side' : p.part_key === 'back' || isShapedPanelKey(p.part_key) || p.upright ? 'face' : 'horizontal',
     materialId: p.material_id,
     ...(p.outline && (!p.AY || isShapedPanelKey(p.part_key)) ? { outline: p.outline } : {}),
     ...(caseBevelNote(p) ? { detail: `${caseBevelNote(p)} — cut ${Math.round(isSide(p.part_key) ? p.DX : p.DY)} long` } : {}),
@@ -1303,6 +1303,13 @@ export function CabinetScene({
     // Turned per-edge panels carry theirs in their own face frame (finger-rail
     // notches on an L corner's end panel), so they draw too.
     for (const p of rp.case_parts) if (p.outline && (!p.AY || isShapedPanelKey(p.part_key))) m.set(`case_${p.part_key}`, { pts: sampleOutline(p.outline, 2) })
+    // Curved end face board (z_curved_end): its bent plan shape extruded up
+    // (horizontal shape frame: x across its box, y down from the box front).
+    for (const p of rp.case_parts) {
+      if (!p.wrap) continue
+      const b = caseBox(p)
+      m.set(`case_${p.part_key}`, { pts: sampleOutline(p.wrap.pts, 2).map(q => ({ x: q.x - b.x, y: b.z + b.d - q.y })), extrude: 'up' })
+    }
     // Angled panel ends (4a): top-view outline extruded up.
     for (const p of rp.case_parts) {
       const o = caseBevelOutline(p)

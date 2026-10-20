@@ -628,6 +628,8 @@ export interface CabinetInput {
 
   // Bulkhead (z_bulkhead): fascia + returns + cleat from resolveBulkhead.
   bulkhead?:      import('../bulkhead').BulkheadSettings | null
+  // Curved fixed-panel cabinet (z_curved_end): every part from resolveCurvedEnd.
+  curved_end?:    import('../curvedEnd/settings').CurvedEndSettings | null
 
   // Kick-run membership — present only when this cabinet is joined into a kick
   // run. The lead member resolves the whole run's continuous toe kick; the rest
@@ -1317,7 +1319,7 @@ export interface ResolvedPart extends PartTransform {
 //   cleat:<edge>               return cleat behind a face filler on side edge <edge>
 //                              (z_angled_filler, carcass off) — same frame as side:<edge>
 // See src/lib/cabinetShape/partKeys.ts.
-export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}` | `cleat:${string}` | `bh:${string}`
+export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}` | `cleat:${string}` | `bh:${string}` | `crv:${string}`
 
 export interface ResolvedCasePart extends ResolvedPart {
   // Finger-pull rails only (z_handles H6): sheet grain, and the side notch +
@@ -1336,6 +1338,11 @@ export interface ResolvedCasePart extends ResolvedPart {
   // height, DZ its thickness front-to-back — the box maps like a back panel
   // (caseBox). Persisted (case_parts.upright).
   upright?: boolean
+  // Curved end face board (z_curved_end): its bent plan shape, cabinet-local
+  // (x along the width, y = Z from the back), true arcs as bulges, plus its
+  // height. 3D / plan / elevation draw the part from this; DX × DY stay the
+  // flat blank (DY with the grain). Persisted (case_parts.wrap).
+  wrap?: { pts: OutlinePt[]; h: number }
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
             'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
             `fprail:${number}`   // finger-pull backing rail (z_handles H6)

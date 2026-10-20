@@ -23,6 +23,7 @@ import { rowToJointTypeOp, seamAssignJoint, seamAssignRows } from '@/src/lib/res
 import type { ConstructionRules } from '@/src/lib/resolver/types'
 import { mergeRules } from '@/src/lib/resolver/mergeRules'
 import { normaliseBulkhead } from '@/src/lib/bulkhead'
+import { normaliseCurvedEnd, curvedEndFootprint } from '@/src/lib/curvedEnd/settings'
 
 const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 
@@ -137,6 +138,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
       ...(p.bevel_lo ? { bevel_lo: Number(p.bevel_lo) } : {}),
       ...(p.bevel_hi ? { bevel_hi: Number(p.bevel_hi) } : {}),
       ...(p.upright ? { upright: true } : {}),
+      ...(p.wrap ? { wrap: p.wrap } : {}),
     }))
     const intPartsArr = myInt.map(p => ({
       part_type: p.part_type,
@@ -467,7 +469,11 @@ export function buildInstanceFromDefinition(
   const dz = def.preserve_dz || p.cascade_dz == null ? def.default_dz : p.cascade_dz
   // Shape params that follow the run's depth (L corner legs) take the cascaded
   // class depth even when the box depth itself is preserved (900 × 900 corner).
-  const footprint = seedClassDepthParams(def.footprint ?? null, p.cascade_dz, { w: dx, d: dz })
+  // A curved end (z_curved_end) takes its plan outline from its own settings.
+  const curvedEnd = normaliseCurvedEnd(def.curved_end)
+  const footprint = curvedEnd
+    ? curvedEndFootprint(curvedEnd, { w: dx, d: dz })
+    : seedClassDepthParams(def.footprint ?? null, p.cascade_dz, { w: dx, d: dz })
   // A shape that sets its own box (angled corner filler, z_angled_filler).
   const shapeBox = presetBox(footprint)
   return {
@@ -498,6 +504,7 @@ export function buildInstanceFromDefinition(
     no_cnc: def.no_cnc ?? false,
     footprint,
     bulkhead: def.bulkhead ?? null,
+    curved_end: curvedEnd,
     faces: def.faces ?? null,
     part_hide_views: def.part_hide_views ?? {},
     part_no_cnc: def.part_no_cnc ?? [],
@@ -744,6 +751,7 @@ export async function saveCabinetToLibrary(
     no_cnc: !!inst.no_cnc,
     footprint: inst.footprint ?? null,
     bulkhead: inst.bulkhead ?? null,
+    curved_end: inst.curved_end ?? null,
     faces: inst.faces ?? null,
     custom_parts: cps,
     part_operations, part_comments, part_labels,
@@ -785,7 +793,8 @@ export async function dbUpdateCabinet(
   // fall through to a full resolve, and the caller fans the run out (resolveKickRun).
   const keys = Object.keys(u)
   // Bulkhead settings (z_bulkhead) only feed resolveBulkhead — same fast path.
-  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead') ? getCachedInput(id) : undefined
+  // So do curved end settings (z_curved_end) and the plan outline they rebuild.
+  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead' || k === 'curved_end' || (k === 'footprint' && 'curved_end' in u)) ? getCachedInput(id) : undefined
   if (cached && !cached.kick_run) {
     const updated = {
       ...cached,
@@ -793,6 +802,8 @@ export async function dbUpdateCabinet(
       ...(u.dy !== undefined && { DY: Number(u.dy) }),
       ...(u.dz !== undefined && { DZ: Number(u.dz) }),
       ...(u.bulkhead !== undefined && { bulkhead: normaliseBulkhead(u.bulkhead) }),
+      ...(u.curved_end !== undefined && { curved_end: normaliseCurvedEnd(u.curved_end) }),
+      ...(u.footprint !== undefined && { footprint: u.footprint ?? null }),
     }
     setCachedInput(id, updated)
     return resolveFromCachedInput(id, updated)

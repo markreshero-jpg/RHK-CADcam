@@ -105,8 +105,8 @@ export function isSidePanel(key: string) {
 // Shaped-cabinet per-edge parts (z_cabinet_shape) turn about Y; the ortho views
 // draw their axis-aligned footprint (caseBoxAABB). Upright top rails map their
 // box like a back panel, so they go the same way.
-const isTurned = (p: { part_key?: string; AY?: number; upright?: boolean }) =>
-  !!p.part_key && (isShapedPanelKey(p.part_key) || isShapedRailKey(p.part_key) || !!p.AY || !!p.upright)
+const isTurned = (p: { part_key?: string; AY?: number; upright?: boolean; wrap?: unknown }) =>
+  !!p.part_key && (isShapedPanelKey(p.part_key) || isShapedRailKey(p.part_key) || !!p.AY || !!p.upright || !!p.wrap)
 
 // Elevation (X-Y plane, front face)
 export function elevRect(p: { X: number; Y: number; DX: number; DY: number; DZ: number; part_key?: string }) {

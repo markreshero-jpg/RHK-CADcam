@@ -9,6 +9,7 @@ import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetShapeSection from './CabinetShapeSection'
 import BulkheadSection from './BulkheadSection'
+import CurvedEndSection from './CurvedEndSection'
 
 export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRef, onUpdate, onDelete, onClose, hideWallPosition, hideDelete, autoFocusWidth }: {
   cabinet: CabinetInstance
@@ -192,6 +193,9 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
         )}
         {cabinet.bulkhead && (
           <BulkheadSection cabinet={cabinet} wall={wall} room={room} onUpdate={onUpdate} inp={inp} lbl={lbl} />
+        )}
+        {cabinet.curved_end && (
+          <CurvedEndSection cabinet={cabinet} onUpdate={onUpdate} inp={inp} lbl={lbl} />
         )}
         <div>
           <label className={lbl}>Top Type</label>

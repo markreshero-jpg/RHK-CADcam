@@ -14,6 +14,7 @@ import { zonePartId, dbPartId, zoneRef } from '@/src/lib/cabinetShape/partKeys'
 import { removedIdsFrom, isAllViews } from '@/src/lib/resolver/filterHidden'
 import type { PartHideViews } from '@/src/lib/resolver/types'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
+import { curvedEndPartLabel } from '@/src/lib/resolver/resolveCurvedEnd'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -218,7 +219,7 @@ export function normalizeProject(
       ? { w: Number(r.dy), h: Number(r.dx), thickness: Number(r.dz) } : undefined
     // Angled panel ends (z_cabinet_shape 4a): nested as the blank, bevel named.
     const bevel = caseBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
-    push('case_parts', r, `case_${key}`, { typeKey: key, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : humanize(key),
+    push('case_parts', r, `case_${key}`, { typeKey: key, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : curvedEndPartLabel(key) ?? humanize(key),
       ...(bevel ? { suffix: ` (${bevel})` } : {}) },
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), turned, eb, base)
   }

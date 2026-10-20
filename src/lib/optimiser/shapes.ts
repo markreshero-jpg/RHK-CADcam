@@ -94,7 +94,7 @@ export function shapeFrameFor(table: string, typeKey: string, partId: string): S
   switch (table) {
     case 'case_parts':
       kind = typeKey === 'left_side' || typeKey === 'right_side' ? 'side'
-        : typeKey === 'back' || /^(side|back|fprail|cleat):/.test(typeKey) ? 'face' : 'horizontal'
+        : typeKey === 'back' || /^(side|back|fprail|cleat):/.test(typeKey) || /^crv:(face|fix|back|blk_)/.test(typeKey) ? 'face' : 'horizontal'
       break
     case 'internal_parts':
       kind = INT_SIDE_KINDS.has(typeKey) ? 'side' : INT_FACE_KINDS.has(typeKey) ? 'face' : 'horizontal'

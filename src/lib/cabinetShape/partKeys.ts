@@ -3,6 +3,7 @@
 // through these, so an angled panel is never mistaken for a horizontal one.
 
 import { edgeLabel } from './footprint'
+import { curvedEndPartLabel } from '../resolver/resolveCurvedEnd'
 
 /** Vertical per-edge panel (`side:<edge>` / `back:<edge>`), 'face' panel kind.
  *  Finger-pull backing rails (`fprail:<n>`, z_handles H6) and filler return
@@ -11,6 +12,7 @@ import { edgeLabel } from './footprint'
 export function isShapedPanelKey(k: string): boolean {
   return k.startsWith('side:') || k.startsWith('back:') || k.startsWith('fprail:') || k.startsWith('cleat:')
     || (isBulkheadKey(k) && !BH_HORIZONTAL.has(k))
+    || isCurvedEndUprightKey(k)
 }
 
 /** Bulkhead parts (z_bulkhead, resolveBulkhead). Fascia, side returns and the
@@ -20,6 +22,17 @@ export function isShapedPanelKey(k: string): boolean {
 export const BH_HORIZONTAL = new Set(['bh:ret_b', 'bh:cleat_h', 'bh:sl_front', 'bh:sl_ret_l', 'bh:sl_ret_r'])
 export function isBulkheadKey(k: string): boolean {
   return k.startsWith('bh:')
+}
+
+/** Curved fixed-panel cabinet parts (z_curved_end, resolveCurvedEnd). The
+ *  fixing panel, back and fixing blocks are face-kind panels (turned AY, as
+ *  side:/back:<edge>); the formers are horizontal with outlines; the face board
+ *  (crv:face) is drawn from its `wrap` plan shape. */
+export function isCurvedEndKey(k: string): boolean {
+  return k.startsWith('crv:')
+}
+export function isCurvedEndUprightKey(k: string): boolean {
+  return k === 'crv:fix' || k === 'crv:back' || k.startsWith('crv:blk_')
 }
 
 /** Top rail along a front facet (`rail:<edge>`), horizontal panel kind. */
@@ -53,7 +66,9 @@ export function parseZonePartId(id: string): { facet?: string; row: number; col:
 
 /** Human label for a per-edge part, e.g. "Side (facet)". */
 export function shapedPartLabel(k: string): string | null {
-  const fp = /^fprail:(\d+)$/.exec(k)
+  const crv = curvedEndPartLabel(k)
+  if (crv) return crv
+  const fp =/^fprail:(\d+)$/.exec(k)
   if (fp) return `Finger Rail ${Number(fp[1]) + 1}`
   const m = /^(side|back|rail|cleat):(.+)$/.exec(k)
   if (!m) return null

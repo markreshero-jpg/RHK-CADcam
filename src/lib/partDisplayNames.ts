@@ -15,6 +15,8 @@
 // as "Bottom" at the optimiser, the ambiguity this fallback exists to avoid.
 // ============================================================
 
+import { curvedEndPartLabel } from './resolver/resolveCurvedEnd'
+
 export const PART_TYPE_LABELS: Record<string, string> = {
   db_left_side:  'Drawer Box Left Side',
   db_right_side: 'Drawer Box Right Side',
@@ -40,7 +42,8 @@ export const humanizePartKey = (s: string): string =>
 // layers). `fallback` lets a caller pass a pre-humanized string it already
 // computed; otherwise the raw key is humanized.
 export const partTypeLabel = (typeKey: string, fallback?: string): string =>
-  PART_TYPE_LABELS[typeKey] ?? fallback ?? humanizePartKey(typeKey)
+  // Curved end parts (z_curved_end): "crv:rib_2" would humanize badly.
+  PART_TYPE_LABELS[typeKey] ?? curvedEndPartLabel(typeKey) ?? fallback ?? humanizePartKey(typeKey)
 
 // Full drawer-box panel names for the cabinet-context views (Cabinet3DView,
 // cabinetEditSvgHelpers, PartsView) — keyed by raw part_type. Derived from

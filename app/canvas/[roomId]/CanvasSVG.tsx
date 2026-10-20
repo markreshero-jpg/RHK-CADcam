@@ -1276,7 +1276,7 @@ export default function CanvasSVG({
                 const it = casePartItem(p.part_key)
                 const lp = layers.props(it, view.zoom)
                 const col = layers.color(it, palette.carcase)
-                const vertical = isSide(p.part_key) || p.part_key === 'back' || isShapedPanelKey(p.part_key) || !!p.upright
+                const vertical = isSide(p.part_key) || p.part_key === 'back' || isShapedPanelKey(p.part_key) || !!p.upright || !!p.wrap
                 const toPlan = cabinetToPlan(displayCab, wall, perp)
                 const pts = casePlanCorners(p).map(q => toPlan(q.x, q.z)).map(q => `${q.x},${q.y}`).join(' ')
                 return (

@@ -137,6 +137,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'fillers',        group: 'panels', label: 'Fillers',              views: ALL, default: ON },
   { id: 'bulkheads',      group: 'panels', label: 'Bulkheads',            views: ALL, default: ON,
     hint: 'Bulkhead fascia, returns and fixing cleat (z_bulkhead)' },
+  { id: 'curved_ends',    group: 'panels', label: 'Curved ends',          views: ALL, default: ON,
+    hint: 'Curved fixed-panel cabinets: face board, formers, fixing panel, back and blocks (z_curved_end)' },
   { id: 'custom_panels',  group: 'panels', label: 'Other added parts',    views: ALL, default: ON,
     hint: 'Added parts that are not applied panels or fillers (scribe mould, nailer, gusset…)' },
 
@@ -247,6 +249,7 @@ export function casePartItem(partKey: string): string {
   // Return cleats behind angled corner fillers (z_angled_filler).
   if (partKey.startsWith('cleat:')) return 'fillers'
   if (partKey.startsWith('bh:')) return 'bulkheads'      // z_bulkhead
+  if (partKey.startsWith('crv:')) return 'curved_ends'   // z_curved_end
   return 'carcass_top'            // full_top, front_rail, back_rail, rail:<edge>
 }
 export function kickPartItem(partKey: string): string {
