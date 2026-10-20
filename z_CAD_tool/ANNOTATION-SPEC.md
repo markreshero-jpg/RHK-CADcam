@@ -251,6 +251,20 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | A7 | **Cabinet sheets:** ribbon on the sheet preview (decision 10), cabinet-local frame, sheet toggle, own undo; **decide the cabinet-revision behaviour first** | [ ] |
 | A8 | Room copy remap, tutorial lesson, mobile view check | [ ] |
 
+## Later (Mark, 2026-10-20) — not scheduled, details to agree before building
+
+- **Saved CAD symbols.** Save a group of notes / lines / shapes as a named symbol
+  (e.g. north arrow, GPO, section marker, logo) and drop it on any plan, elevation
+  or sheet from a symbols list. Open questions: shop-wide library vs per user;
+  placed copies linked to the symbol (editing it updates them) or plain copies;
+  scale with the annotation scale (paper size) or real size; insertion point +
+  rotation on placing.
+- **Text spec docs.** Saved blocks of standard text (general notes, material /
+  finish specs, install notes) to insert as a text box instead of retyping.
+  Open questions: shop-wide library vs per job; plain text or with fields that
+  fill in from the job / room (e.g. door colour, benchtop material); linked so a
+  library edit updates placed copies, or copied at insert.
+
 ## RESUME HERE
 
 **A1 built 2026-10-18.** Migration `cad_a1_room_annotations` applied live (SQL in
