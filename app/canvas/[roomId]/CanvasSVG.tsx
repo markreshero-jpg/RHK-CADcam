@@ -999,7 +999,7 @@ export default function CanvasSVG({
           const midY = w.pos_y + w.length * 0.5 * wd.y
           const clickable = mode !== 'draw_wall' && mode !== 'draw_island' && mode !== 'paste' && !placeInfoFor(mode, armedDef)
           const onCtx = (ev: React.MouseEvent) => { ev.preventDefault(); ev.stopPropagation(); setSelected({ type: 'wall', id: w.id }); setContextMenu({ x: ev.clientX, y: ev.clientY, wallId: w.id }) }
-          const onClick = (ev: React.MouseEvent) => { if (clickable) { ev.stopPropagation(); if (!ev.shiftKey) setSelected({ type: 'wall', id: w.id }) } }
+          const onClick = (ev: React.MouseEvent) => { if (clickable && !cabFollowing) { ev.stopPropagation(); if (!ev.shiftKey) setSelected({ type: 'wall', id: w.id }) } }
 
           if (w.wall_type === 'island') {
             return (

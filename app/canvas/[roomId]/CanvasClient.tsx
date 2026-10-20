@@ -2187,6 +2187,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const clickable = mode !== 'draw_wall' && mode !== 'draw_island' && mode !== 'paste' && !currentPlaceInfo()
     if (!clickable || e.button !== 0 || spaceRef.current) return
     e.stopPropagation()
+    // Moving a cabinet → leave the click to onSVGClick, which drops it. An island's
+    // hit line is where its cabinets land, so the drop click nearly always hits it.
+    if (cabFollowing) return
     svgPointerDownRef.current = true
     setContextMenu(null); setOpenMenu(null)
     setCabResize(null)
