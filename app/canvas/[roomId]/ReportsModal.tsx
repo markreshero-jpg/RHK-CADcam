@@ -15,6 +15,11 @@ import { BenchtopSupplySheet, supplyPrintHtml } from './BenchtopSupplyReport'
 import { buildSupplyLines, supplyTotals } from '@/src/lib/benchtop-resolver/supply'
 import { ApplianceScheduleSheet, buildSchedule, schedulePrintHtml, type CatalogRef } from './ApplianceScheduleReport'
 import { OpeningScheduleSheet, buildOpeningSchedule, openingSchedulePrintHtml } from './OpeningScheduleReport'
+import { cutListDims, shapeMark, type CutListPart, type CutListTable } from '@/src/lib/optimiser/cutListDims'
+import { buildSizeOvByCab, type SizeOv, type SizeOvByCab } from '@/src/lib/optimiser/sizeOverrides'
+import { buildShapesByCab, SHAPE_SELECT, type ShapeRow, type ShapesByCab } from '@/src/lib/optimiser/shapes'
+import { shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
+import { zoneBlank } from '@/src/lib/jointDrilling'
 
 export type ReportScope = 'job' | 'room'
 type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets'
@@ -48,34 +53,47 @@ const INT_LABELS: Record<string, string> = {
 const FACE_LABELS: Record<string, string> = {
   door: 'Door', drawer_face: 'Drawer Face', false_panel: 'False Panel',
 }
+const DB_LABELS: Record<string, string> = {
+  db_left_side: 'Drawer Box Side', db_right_side: 'Drawer Box Side', db_front: 'Drawer Box Front',
+  db_back: 'Drawer Box Back', db_bottom: 'Drawer Box Bottom',
+}
 
+// Listed L = DY (with the grain) × W = DX × T = DZ — the CV part convention,
+// as PartsView and optimiser Stage 2.
 interface PartRow {
   sourceLabel:  string
   partDesc:     string
+  length:       number
   width:        number
-  depth:        number
   thickness:    number
   quantity:     number
   materialId:   string | null
   materialName?: string   // pre-resolved; overrides materialNames[materialId] lookup
 }
 
-function collectParts(cabinets: CabinetInstance[], resolved: Map<string, ResolvedCabinet>): PartRow[] {
+// Sizes as the optimiser reads them (cutListDims, phase plan O6): hand / shape
+// resizes folded in, shaped parts marked ⬠.
+function collectParts(cabinets: CabinetInstance[], resolved: Map<string, ResolvedCabinet>, sizeOv: SizeOvByCab, shapes: ShapesByCab): PartRow[] {
   const rows: PartRow[] = []
   for (const cab of cabinets) {
     const r = resolved.get(cab.id)
     if (!r) continue
     const lbl = cab.label ?? cab.assembly_class
-    for (const p of r.case_parts)
-      rows.push({ sourceLabel: lbl, partDesc: CASE_LABELS[p.part_key] ?? p.part_key, width: p.DY, depth: p.DX, thickness: p.DZ, quantity: 1, materialId: p.material_id })
-    for (const p of r.toekick_parts)
-      rows.push({ sourceLabel: lbl, partDesc: TK_LABELS[p.part_key] ?? p.part_key, width: p.DY, depth: p.DX, thickness: p.DZ, quantity: 1, materialId: p.material_id })
-    for (const p of r.internal_parts)
-      rows.push({ sourceLabel: lbl, partDesc: INT_LABELS[p.part_type] ?? p.part_type, width: p.DY, depth: p.DX, thickness: p.DZ, quantity: 1, materialId: p.material_id })
+    const add = (desc: string, table: CutListTable, p: CutListPart & { material_id: string }, ref?: Parameters<typeof cutListDims>[5], blankW?: (DX: number, DZ: number) => number) => {
+      const d = cutListDims(table, p, cab.id, sizeOv, shapes, ref)
+      const mark = shapeMark(d)
+      rows.push({ sourceLabel: lbl, partDesc: mark ? `${desc} ${mark}` : desc, length: d.DY, width: blankW ? blankW(d.DX, d.DZ) : d.DX, thickness: d.DZ, quantity: 1, materialId: p.material_id })
+    }
+    for (const p of r.case_parts) add(CASE_LABELS[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key, 'case_parts', p)
+    for (const p of r.toekick_parts) add(TK_LABELS[p.part_key] ?? p.part_key, 'toekick_parts', p)
+    for (const p of r.internal_parts) add(INT_LABELS[p.part_type] ?? p.part_type, 'internal_parts', p)
     for (const z of r.face_zones) {
       if (z.face_type === 'open') continue
-      rows.push({ sourceLabel: lbl, partDesc: FACE_LABELS[z.face_type] ?? z.face_type, width: z.DX, depth: z.DY, thickness: z.DZ, quantity: 1, materialId: z.material_id })
+      // Mitred facet fronts (z_cabinet_shape 3c) are cut at the blank width.
+      add(FACE_LABELS[z.face_type] ?? z.face_type, 'face_zones', z, z, (DX, DZ) => zoneBlank({ ...z, DX, DZ }).width)
     }
+    for (const stk of r.drawer_stacks ?? [])
+      for (const p of stk.box_parts) add(DB_LABELS[p.part_type] ?? p.part_type, 'drawer_box_parts', p, stk)
   }
   return rows
 }
@@ -102,8 +120,8 @@ function collectBtParts(
       rows.push({
         sourceLabel:  lbl,
         partDesc:     p.label,
+        length:       p.length_mm,
         width:        p.width_mm,
-        depth:        p.length_mm,
         thickness:    p.thickness_mm,
         quantity:     p.quantity,
         materialId:   p.material_id ?? p.benchtop_material_id ?? null,
@@ -181,6 +199,25 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
   const allBtInstances = scope === 'room' ? benchtops     : jobBtInstances
   const allBtParts     = scope === 'room' ? roomBtParts   : jobBtParts
 
+  // Size overrides + drawn shapes for every cabinet in scope (cut-list sizes, O6).
+  const [sizeOv, setSizeOv] = useState<SizeOvByCab>(new Map())
+  const [shapes, setShapes] = useState<ShapesByCab>(new Map())
+  const cabIdsKey = allCabinets.map(c => c.id).sort().join(',')
+  useEffect(() => {
+    const ids = cabIdsKey ? cabIdsKey.split(',') : []
+    if (!ids.length) return
+    let cancelled = false
+    void Promise.all([
+      supabase.from('cabinet_instances').select('id, part_pos_overrides').in('id', ids),
+      supabase.from('part_shape_overrides').select(SHAPE_SELECT).in('cabinet_id', ids).order('revision', { ascending: false }),
+    ]).then(([{ data: ov }, { data: sh }]) => {
+      if (cancelled) return
+      setSizeOv(buildSizeOvByCab((ov ?? []) as { id: string; part_pos_overrides?: Record<string, SizeOv> | null }[]))
+      setShapes(buildShapesByCab((sh ?? []) as ShapeRow[]))
+    })
+    return () => { cancelled = true }
+  }, [cabIdsKey])
+
   useEffect(() => {
     if (scope !== 'job' || !project || jobRooms.length > 0) return
     setLoadingJob(true)
@@ -220,6 +257,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
       r.toekick_parts.forEach(p  => matIds.add(p.material_id))
       r.internal_parts.forEach(p => matIds.add(p.material_id))
       r.face_zones.forEach(z     => matIds.add(z.material_id))
+      ;(r.drawer_stacks ?? []).forEach(s => s.box_parts.forEach(p => matIds.add(p.material_id)))
     }
     const missing = [...matIds].filter(id => !materialNames[id])
     if (missing.length === 0) return
@@ -247,7 +285,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
       const roomCabs = allCabinets
         .filter(c => c.room_id === r.id)
         .sort((a, b) => (a.label ?? '').localeCompare(b.label ?? '', undefined, { numeric: true }))
-      const cabParts = collectParts(roomCabs, allResolved)
+      const cabParts = collectParts(roomCabs, allResolved, sizeOv, shapes)
       const roomBenchtops = allBtInstances.filter(bt => bt.room_id === r.id)
       const btParts = collectBtParts(roomBenchtops, allBtParts)
       const allParts = [...cabParts, ...btParts]
@@ -261,7 +299,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
         .map(([matName, ps]) => ({ matName, parts: ps }))
       return { room: r, materialGroups, totalParts: allParts.length }
     })
-  }, [rooms, allCabinets, allResolved, allBtInstances, allBtParts, materialNames])
+  }, [rooms, allCabinets, allResolved, allBtInstances, allBtParts, materialNames, sizeOv, shapes])
 
   const supplyData = useMemo(() => rooms.map(r => ({
     room: r,
@@ -298,14 +336,14 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
         ${materialGroups.map(({ matName, parts }) => `
           <h3>${matName}</h3>
           <table>
-            <thead><tr><th>Source</th><th>Part</th><th class="r">Width (mm)</th><th class="r">Depth (mm)</th><th class="r">Thk (mm)</th><th class="r">Qty</th></tr></thead>
+            <thead><tr><th>Source</th><th>Part</th><th class="r">Length (mm)</th><th class="r">Width (mm)</th><th class="r">Thk (mm)</th><th class="r">Qty</th></tr></thead>
             <tbody>
               ${parts.map((p, i) => `
                 <tr class="${i % 2 ? 'alt' : ''}">
                   <td class="mono">${p.sourceLabel}</td>
                   <td>${p.partDesc}</td>
+                  <td class="r mono">${Math.round(p.length)}</td>
                   <td class="r mono">${Math.round(p.width)}</td>
-                  <td class="r mono">${Math.round(p.depth)}</td>
                   <td class="r mono">${Math.round(p.thickness)}</td>
                   <td class="r mono">${p.quantity}</td>
                 </tr>`).join('')}
@@ -512,8 +550,8 @@ function PartsListSummary({ data }: {
                     <tr className="text-gray-500 text-[10px]">
                       <th className="text-left pb-1 pr-3 font-medium w-16 border-b border-gray-800">Source</th>
                       <th className="text-left pb-1 pr-3 font-medium border-b border-gray-800">Part</th>
+                      <th className="text-right pb-1 pr-3 font-medium w-24 border-b border-gray-800">Length&nbsp;mm</th>
                       <th className="text-right pb-1 pr-3 font-medium w-24 border-b border-gray-800">Width&nbsp;mm</th>
-                      <th className="text-right pb-1 pr-3 font-medium w-24 border-b border-gray-800">Depth&nbsp;mm</th>
                       <th className="text-right pb-1 pr-3 font-medium w-16 border-b border-gray-800">Thk&nbsp;mm</th>
                       <th className="text-right pb-1 font-medium w-10 border-b border-gray-800">Qty</th>
                     </tr>
@@ -523,8 +561,8 @@ function PartsListSummary({ data }: {
                       <tr key={i} className={i % 2 === 0 ? 'text-gray-300' : 'text-gray-400 bg-gray-800/30'}>
                         <td className="py-0.5 pr-3 font-mono text-gray-500 text-[10px]">{p.sourceLabel}</td>
                         <td className="py-0.5 pr-3">{p.partDesc}</td>
+                        <td className="py-0.5 pr-3 text-right font-mono">{Math.round(p.length)}</td>
                         <td className="py-0.5 pr-3 text-right font-mono">{Math.round(p.width)}</td>
-                        <td className="py-0.5 pr-3 text-right font-mono">{Math.round(p.depth)}</td>
                         <td className="py-0.5 pr-3 text-right font-mono">{Math.round(p.thickness)}</td>
                         <td className="py-0.5 text-right font-mono">{p.quantity}</td>
                       </tr>

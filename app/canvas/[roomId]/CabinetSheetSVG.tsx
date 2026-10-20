@@ -23,6 +23,8 @@ import { zonePartId, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 import { binOutlines, binShape } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
+import { cutListDims, cabinetLookups, shapeMark, type CutListDims, type CutListPart, type CutListTable } from '@/src/lib/optimiser/cutListDims'
+import type { ShapeRow } from '@/src/lib/optimiser/shapes'
 
 export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean }
 
@@ -78,13 +80,15 @@ const INT_FILL = '#efefef', INT_STROKE = '#9a9a9a'   // lighter grey internals
 const PANEL_T = '#f0f0f0', PANEL_R = '#e8e8e8'
 const DASH = '1 0.7'
 
-type Row = { desc: string; w: number; l: number; t: number; mat: string; qty: number }
+type Row = { desc: string; l: number; w: number; t: number; mat: string; qty: number }
+// One part as the cut list lists it: effective size + shape (optimiser O1 / O2 rules, O6).
+type Listed = { desc: string; dims: CutListDims; mat: string }
 type HwRow = { item: string; qty: number; note: string }
 type OvP = { X: number; Y: number; Z: number }
 
 export default function CabinetSheetSVG({
   cab, rp: rpRaw, wall, projectName, roomName, materialNames, paperKey, svgRef, show,
-  partOverrides, customParts, hardware, jointNames,
+  partOverrides, customParts, hardware, jointNames, shapeRows,
 }: {
   cab: CabinetInstance
   rp?: ResolvedCabinet
@@ -99,6 +103,8 @@ export default function CabinetSheetSVG({
   customParts?: CabinetCustomPart[]
   hardware?: HardwareCfg
   jointNames?: Record<string, string>
+  /** part_shape_overrides rows for this cabinet (any revision order). */
+  shapeRows?: ShapeRow[]
 }) {
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for the elevation.
   const rp = rpRaw && frontViewHardware(rpRaw)
@@ -319,48 +325,64 @@ export default function CabinetSheetSVG({
   }
 
   // ── Cut list ──────────────────────────────────────────────────────────────
-  function cutRows(): Row[] {
+  // Sizes are the optimiser's (src/lib/optimiser/cutListDims — O6): hand / shape
+  // resizes folded in, shaped parts marked ⬠. L = DY (grain), W = DX, T = DZ.
+  const lookups = cabinetLookups(cab.id, partOverrides, shapeRows)
+  function listedParts(): Listed[] {
     if (!rp) return []
-    const map = new Map<string, Row>()
-    const add = (desc: string, p: { DX: number; DY: number; DZ: number; material_id: string }) => {
-      const mat = materialNames[p.material_id] ?? p.material_id ?? '—'
-      const w = Math.round(p.DY), l = Math.round(p.DX), t = Math.round(p.DZ)
-      const key = `${desc}|${w}|${l}|${t}|${mat}`
-      const ex = map.get(key); if (ex) ex.qty++; else map.set(key, { desc, w, l, t, mat, qty: 1 })
+    const out: Listed[] = []
+    const add = (desc: string, table: CutListTable, p: CutListPart & { material_id: string }, ref?: Parameters<typeof cutListDims>[5]) => {
+      const dims = cutListDims(table, p, cab.id, lookups.sizeOv, lookups.shapes, ref)
+      out.push({ desc, dims, mat: materialNames[p.material_id] ?? p.material_id ?? '—' })
     }
     // Angled panel ends (z_cabinet_shape 4a): listed at the blank, bevel noted.
     rp.case_parts.forEach(p => {
       const label = CASE_LABELS[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key
-      add(caseBevelNote(p) ? `${label} ${caseBevelNote(p)}` : label, p)
+      add(caseBevelNote(p) ? `${label} ${caseBevelNote(p)}` : label, 'case_parts', p)
     })
     rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => {
       const label = TK_LABELS[p.part_key] ?? p.part_key
-      add(tkBevelNote(p) ? `${label} ${tkBevelNote(p)}` : label, p)
+      add(tkBevelNote(p) ? `${label} ${tkBevelNote(p)}` : label, 'toekick_parts', p)
     })
-    rp.internal_parts.forEach(p => add(INT_LABELS[p.part_type] ?? p.part_type, p))
+    rp.internal_parts.forEach(p => add(INT_LABELS[p.part_type] ?? p.part_type, 'internal_parts', p))
     // Sharknose fronts carry the saw note (z_handles D3): edge + blade tilt.
     rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => {
       const bv = z.handle?.bevel
       const label = FACE_LABELS[z.face_type] ?? z.face_type
-      // Mitred facet fronts (z_cabinet_shape 3c): cut at the front-face width, bevel noted.
-      const mitre = zoneBevelNote(z)
       const desc = bv ? `${label} SN ${z.handle!.grip_edge === 'top' ? 'T' : 'B'}${Math.round(bv.angle_deg)}°` : label
-      add(mitre ? `${desc} ${mitre}` : desc, mitre ? { ...z, DX: zoneBlank(z).width } : z)
+      add(desc, 'face_zones', z, z)
     })
-    ;(rp.drawer_stacks ?? []).forEach(stk => stk.box_parts.forEach(p => add(INT_LABELS[p.part_type as string] ?? p.part_type, p)))
+    ;(rp.drawer_stacks ?? []).forEach(stk => stk.box_parts.forEach(p => add(INT_LABELS[p.part_type as string] ?? p.part_type, 'drawer_box_parts', p, stk)))
+    return out
+  }
+  const listed = listedParts()
+  function cutRows(): Row[] {
+    const map = new Map<string, Row>()
+    for (const { desc: d0, dims, mat } of listed) {
+      let desc = d0, DX = dims.DX
+      // Mitred facet fronts (z_cabinet_shape 3c): cut at the front-face width, bevel noted.
+      const zone = dims.partId.startsWith('zone_') ? rp!.face_zones.find(z => zonePartId(z) === dims.partId) : undefined
+      const mitre = zone ? zoneBevelNote(zone) : null
+      if (zone && mitre) { desc = `${desc} ${mitre}`; DX = zoneBlank({ ...zone, DX: dims.DX, DZ: dims.DZ }).width }
+      const mark = shapeMark(dims)
+      if (mark) desc = `${desc} ${mark}`
+      const l = Math.round(dims.DY), w = Math.round(DX), t = Math.round(dims.DZ)
+      const key = `${desc}|${l}|${w}|${t}|${mat}`
+      const ex = map.get(key); if (ex) ex.qty++; else map.set(key, { desc, l, w, t, mat, qty: 1 })
+    }
     return [...map.values()].sort((a, b) => a.desc.localeCompare(b.desc))
   }
   function cutList() {
     const rows = cutRows()
     const els: React.ReactNode[] = []
     const padc = 2.5
-    const xQ = cutBox.x + cutBox.w - padc, xT = xQ - 11, xL = xT - 16, xW = xL - 16
+    const xQ = cutBox.x + cutBox.w - padc, xT = xQ - 11, xW = xT - 16, xL = xW - 16
     const xPart = cutBox.x + padc, xMat = cutBox.x + cutBox.w * 0.40
     const trunc = (str: string, n: number) => str.length > n ? str.slice(0, n - 1) + '…' : str
     els.push(<text key="ct" x={xPart} y={cutBox.y + 4} fontSize={3.2} fontWeight="bold" fill={INK} fontFamily={font}>CUT LIST</text>)
     const headY = cutBox.y + 9, fsH = 2.4
     const hdr = (k: string, x: number, t: string, a: 'start' | 'end') => <text key={k} x={x} y={headY} textAnchor={a} fontSize={fsH} fontWeight="bold" fill={INK2} fontFamily={font}>{t}</text>
-    els.push(hdr('hp', xPart, 'Part', 'start'), hdr('hm', xMat, 'Material', 'start'), hdr('hw', xW, 'W', 'end'), hdr('hl', xL, 'L', 'end'), hdr('hk', xT, 'Thk', 'end'), hdr('hq', xQ, 'Qty', 'end'))
+    els.push(hdr('hp', xPart, 'Part', 'start'), hdr('hm', xMat, 'Material', 'start'), hdr('hl', xL, 'L', 'end'), hdr('hw', xW, 'W', 'end'), hdr('hk', xT, 'Thk', 'end'), hdr('hq', xQ, 'Qty', 'end'))
     els.push(<line key="hln" x1={cutBox.x} y1={headY + 1.5} x2={cutBox.x + cutBox.w} y2={headY + 1.5} stroke={INK2} strokeWidth={THIN} />)
     if (rows.length === 0) {
       els.push(<text key="e" x={xPart} y={headY + 7} fontSize={2.6} fill={INK3} fontFamily={font}>{rp ? 'No parts.' : 'Cabinet not resolved — open it to generate parts.'}</text>)
@@ -371,7 +393,7 @@ export default function CabinetSheetSVG({
     rows.forEach((row, i) => {
       const y = top + rh * i + rh * 0.7
       if (i % 2 === 1) els.push(<rect key={`zb${i}`} x={cutBox.x} y={top + rh * i} width={cutBox.w} height={rh} fill="#f5f5f5" />)
-      els.push(<text key={`p${i}`} x={xPart} y={y} fontSize={fs} fill={INK} fontFamily={font}>{trunc(row.desc, 20)}</text>)
+      els.push(<text key={`p${i}`} x={xPart} y={y} fontSize={fs} fill={INK} fontFamily={font}>{trunc(row.desc, 24)}</text>)
       els.push(<text key={`m${i}`} x={xMat} y={y} fontSize={fs} fill={INK2} fontFamily={font}>{trunc(row.mat, 13)}</text>)
       els.push(<text key={`w${i}`} x={xW} y={y} textAnchor="end" fontSize={fs} fill={INK} fontFamily={font}>{row.w}</text>)
       els.push(<text key={`l${i}`} x={xL} y={y} textAnchor="end" fontSize={fs} fill={INK} fontFamily={font}>{row.l}</text>)
@@ -511,6 +533,19 @@ export default function CabinetSheetSVG({
       if (o.oax || o.oay || o.oaz) seg.push(`rot ${o.oax || 0}/${o.oay || 0}/${o.oaz || 0}°`)
       if (seg.length) rows.push(`${partIdLabel(id)}: ${seg.join(' ')}`)
     }
+    // Size overrides (hand resize or a shape's bbox) and drawn shapes — the same
+    // effective sizes the cut list shows (O6).
+    const fmt = (v: number) => String(roundMm(v))
+    for (const { desc, dims } of listed) {
+      const seg: string[] = []
+      if (dims.base) {
+        if (Math.abs(dims.base.DY - dims.DY) > 1e-6) seg.push(`L ${fmt(dims.base.DY)}→${fmt(dims.DY)}`)
+        if (Math.abs(dims.base.DX - dims.DX) > 1e-6) seg.push(`W ${fmt(dims.base.DX)}→${fmt(dims.DX)}`)
+        if (Math.abs(dims.base.DZ - dims.DZ) > 1e-6) seg.push(`T ${fmt(dims.base.DZ)}→${fmt(dims.DZ)}`)
+      }
+      if (dims.shape?.source === 'drawn') seg.push(dims.shape.stale ? 'shape STALE — re-edit' : `shape r${dims.shape.revision}`)
+      if (seg.length) rows.push(`${desc}: ${seg.join(' ')}`)
+    }
     // Joint overrides (seam label + assigned joint name / suppressed / rows)
     const cj = (cab.carcase_joints ?? {}) as Record<string, SeamJointAssign>
     if (Object.keys(cj).length) {
@@ -526,7 +561,7 @@ export default function CabinetSheetSVG({
       }
     }
     // Custom parts
-    for (const cp of customParts ?? []) rows.push(`+ ${cp.name ?? 'Custom part'} ${Math.round(Number(cp.dy))}×${Math.round(Number(cp.dx))}`)
+    for (const cp of customParts ?? []) rows.push(`+ ${cp.name ?? 'Custom part'} ${Math.round(Number(cp.dy))}×${Math.round(Number(cp.dx))}`)   // L × W
     return rows
   }
   function overrides() {

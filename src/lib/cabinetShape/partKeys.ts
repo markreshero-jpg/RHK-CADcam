@@ -32,7 +32,7 @@ export function isShapedRailKey(k: string): boolean {
 // `zone_<edge>.<r>_<c>`: the dot keeps legacy parsers (`id.slice(5).split('_')
 // .map(Number)`) from reading it as a primary zone — they get NaN and match nothing.
 
-type ZoneRef = { row_index: number; col_index: number; facet?: string | null }
+export type ZoneRef = { row_index: number; col_index: number; facet?: string | null }
 
 /** Lookup key for a zone within its cabinet: `r_c`, or `edge.r_c` on a facet. */
 export function zoneKey(z: ZoneRef): string {
@@ -62,7 +62,7 @@ export function shapedPartLabel(k: string): string | null {
 }
 
 // ── Drawer hardware on facets (Phase 3b) ───────────────────────
-type StackRef = { face_zone_row: number; face_zone_col: number; facet?: string | null }
+export type StackRef = { face_zone_row: number; face_zone_col: number; facet?: string | null }
 
 /** Lookup key of a drawer stack = its front zone's key. */
 export function stackKey(s: StackRef): string {

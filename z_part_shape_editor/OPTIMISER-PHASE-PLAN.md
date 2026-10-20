@@ -21,7 +21,7 @@
 > cabinet work well").
 > **2026-10-18: O5 built** (EB deduction on shaped contours — see O5). In-app check pending: a
 > deducting profile on RHK6581 — BC-09's L bottom should nest 1 tape smaller on its fronts / ends only.
-> Next: O6 / O7.
+> **2026-10-20: O6 built** (paper cut lists read sizes like Stage 2 — see O6). Next: O7.
 
 ---
 
@@ -290,7 +290,26 @@ the sheet / G-code contour (`placedOutline` = the blank's outline). Plain rectan
   unchanged; failure cases warn visibly.
 
 ### O6 — Cut-list report fix
-**Status: [ ] not started**
+**Status: [x] built 2026-10-20 — in-app check pending.** New `src/lib/optimiser/cutListDims.ts`:
+`cutListDims(table, part, cabinetId, sizeOv, shapes, ref)` = the resolved part's effective dims through
+the SAME `applySizeOverride` (O1) and `attachShape` (O2 — drawn wins, stale flag, a resolver outline
+that no longer fits is dropped) that normalize.ts uses; `shapeMark` → "⬠" / "⬠ auto" / "⬠ STALE".
+- **Cabinet sheet** (`CabinetSheetSVG`): one `listedParts()` pass feeds the cut list and the OVERRIDES
+  block. Cut rows use effective sizes + the ⬠ mark (mitred fronts: blank width from the effective DX).
+  OVERRIDES now lists sw/sh/sd resizes as `L 720→700` / `W …` / `T …` and drawn shapes (`shape r3`, or
+  `shape STALE — re-edit`). `CabinetSheetReport` loads `part_shape_overrides` for the visible cabinets.
+- **Parts List Summary** (`ReportsModal`): same helper; loads `part_pos_overrides` + shapes for every
+  cabinet in scope; now also lists **drawer box parts** (the sheet already did) and mitred fronts at their
+  blank width; shaped-panel labels via `shapedPartLabel`.
+- **Column fix (CV convention, locked 2026-08-16)**: both lists printed W = DY / L = DX (the sheet) and
+  "Width = DY / Depth = DX" (the summary) — reversed. Now **L = DY, W = DX, T = DZ** (Length / Width on the
+  summary), as PartsView and Stage 2.
+- Test `__tests__/cutListDims.test.ts`: every case / internal / face part of a box cabinet (resized gable
+  + door, fresh drawn shelf, stale drawn bottom) and of a BCNP (resolver outlines) — dims, overridden flag,
+  shape source and stale flag equal normalizeProject's OptiPart.
+- Not done: custom parts are still not in the Parts List Summary (the sheet lists them in OVERRIDES);
+  toe-kick spreaders stay off the cabinet sheet (unchanged). Paper sizes are finished size (Stage 2 with
+  deduction off) — no cut-size option on paper.
 - `CabinetSheetSVG.tsx` cut rows (`:304-349`) + `ReportsModal.tsx` parts list (`collectParts
   :59-77`): apply the SAME effective-size module as O1 (shared import, not a copy); shaped
   parts marked (⬠ + bbox) and sw/sh/sd overrides finally listed in the OVERRIDES note block

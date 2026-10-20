@@ -9,6 +9,7 @@ import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, Wall, CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet, SlideProduct, SlideScheduleEntry } from '@/src/lib/resolver/types'
 import { dbLoadPartPosOverrides, dbLoadCustomParts, type PartPosOverrides, type CabinetCustomPart } from './canvasDB'
+import { SHAPE_SELECT, type ShapeRow } from '@/src/lib/optimiser/shapes'
 import CabinetSheetSVG, { type CabinetSheetLayers, type HardwareCfg } from './CabinetSheetSVG'
 
 const PAPER: Record<string, { w: number; h: number }> = {
@@ -53,16 +54,24 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
   // ── Per-cabinet overrides + custom parts (so views match the modal) ─────────
   const [overridesByCab, setOverridesByCab] = useState<Record<string, PartPosOverrides>>({})
   const [customByCab, setCustomByCab] = useState<Record<string, CabinetCustomPart[]>>({})
+  // Drawn part shapes (every revision; the sheet takes the latest) — cut-list marker + size check (O6).
+  const [shapesByCab, setShapesByCab] = useState<Record<string, ShapeRow[]>>({})
   useEffect(() => {
     let cancelled = false
-    Promise.all(visible.map(async c => {
-      const [ov, cp] = await Promise.all([dbLoadPartPosOverrides(c.id), dbLoadCustomParts(c.id)])
-      return [c.id, ov, cp] as const
-    })).then(results => {
+    const ids = visible.map(c => c.id)
+    Promise.all([
+      Promise.all(visible.map(async c => {
+        const [ov, cp] = await Promise.all([dbLoadPartPosOverrides(c.id), dbLoadCustomParts(c.id)])
+        return [c.id, ov, cp] as const
+      })),
+      ids.length ? supabase.from('part_shape_overrides').select(SHAPE_SELECT).in('cabinet_id', ids) : Promise.resolve({ data: [] }),
+    ]).then(([results, { data: shapeRows }]) => {
       if (cancelled) return
       const o: Record<string, PartPosOverrides> = {}, cm: Record<string, CabinetCustomPart[]> = {}
       for (const [id, ov, cp] of results) { o[id] = ov; cm[id] = cp }
-      setOverridesByCab(o); setCustomByCab(cm)
+      const sm: Record<string, ShapeRow[]> = {}
+      for (const r of (shapeRows ?? []) as ShapeRow[]) (sm[r.cabinet_id] ??= []).push(r)
+      setOverridesByCab(o); setCustomByCab(cm); setShapesByCab(sm)
     })
     return () => { cancelled = true }
   }, [visibleKey]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -190,6 +199,7 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
             show={show}
             partOverrides={overridesByCab[c.id]}
             customParts={customByCab[c.id]}
+            shapeRows={shapesByCab[c.id]}
             hardware={hardware ?? undefined}
             jointNames={jointNames}
           />
