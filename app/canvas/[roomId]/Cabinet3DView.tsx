@@ -169,7 +169,8 @@ function buildCaseInfo(p: ResolvedCasePart, b: Box): PartMeta {
     w: b.w, h: b.h, d: b.d,
     thickness: p.DZ,
     edge:      p.edge_band,
-    panelKind: p.wrap ? 'horizontal' : isSide(p.part_key) ? 'side' : p.part_key === 'back' || isShapedPanelKey(p.part_key) || p.upright ? 'face' : 'horizontal',
+    // Curved end face board: face kind, so its extruded-up walls take the face colour (as mitred doors).
+    panelKind: p.wrap ? 'face' : isSide(p.part_key) ? 'side' : p.part_key === 'back' || isShapedPanelKey(p.part_key) || p.upright ? 'face' : 'horizontal',
     materialId: p.material_id,
     ...(p.outline && (!p.AY || isShapedPanelKey(p.part_key)) ? { outline: p.outline } : {}),
     ...(caseBevelNote(p) ? { detail: `${caseBevelNote(p)} — cut ${Math.round(isSide(p.part_key) ? p.DX : p.DY)} long` } : {}),

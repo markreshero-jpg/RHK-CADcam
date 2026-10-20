@@ -170,7 +170,7 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
 - [x] **C0** Spec (this file)
 - [x] **C1** (2026-10-20) Geometry engine in TS (`src/lib/curvedEnd/`) plus tests against all 10 kit fixtures
   (numbers, outlines and holes vs the golden DXFs)
-- [~] **C2** (built 2026-10-20, in-app check pending) Library entries + placement + hand + RHS-bar
+- [x] **C2** (built 2026-10-20, checked in-app by Mark 2026-10-20) Library entries + placement + hand + RHS-bar
   parameters, footprint preset, resolver hook, shop materials, 3D
 - [ ] **C3** Operations: pocket + drill ops generated and persisted, reaching the optimiser/G-code; cut
   list and costing; grain option
