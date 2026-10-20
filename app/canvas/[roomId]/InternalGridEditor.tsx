@@ -12,6 +12,7 @@ import { EMPTY_SECTION } from '@/src/lib/resolver/types'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { useViewBoxPinch } from './usePinchZoom'
 import { supabase } from '@/src/lib/supabase'
+import { isFloating } from '@/src/lib/floating'
 
 function useSvgZoom(initW: number, initH: number) {
   const initRef = useRef({ w: initW, h: initH })
@@ -1098,7 +1099,10 @@ export default function InternalGridEditor({
   const { svgRef, viewBox } = useSvgZoom(vw, vh)
   const svgY = (cabY: number) => oy + (cabDY - cabY)
 
-  const intY0 = cabinet.has_toekick ? toeH + T : T
+  // Floating (z_floating): the floor is the bottom panel's top, or the carcass bottom.
+  const floatBot = isFloating(cabinet) ? rp?.case_parts.find(p => p.part_key === 'bottom') : undefined
+  const intY0 = isFloating(cabinet) ? (floatBot ? floatBot.Y + floatBot.DZ : 0)
+    : cabinet.has_toekick ? toeH + T : T
   const intH  = cabDY - intY0 - T
   // Interior X bounds — prefer the resolved gable inner faces so scribes (which
   // shift/narrow the opening) are reflected; fall back to the flat approximation.

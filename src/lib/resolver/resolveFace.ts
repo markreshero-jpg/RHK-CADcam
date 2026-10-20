@@ -52,7 +52,8 @@ export function resolveFace(
   // Faces sit above the toe kick — but only when this cabinet actually has its own
   // kick. A kick-detached member (has_toekick=false) carries no kick, so its faces
   // run flush to the carcase bottom (its kick lives in the standalone kick assembly).
-  const TK  = (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner' || !cab.has_toekick) ? 0 : r.TOEH
+  // A floating cabinet (z_floating) has no kick either: fronts run to the carcass bottom.
+  const TK  = (cab.assembly_class === 'wall' || cab.assembly_class === 'wall_corner' || !cab.has_toekick || r.FLOAT) ? 0 : r.TOEH
   const DX  = frame ? frame.width : cab.DX
   const DY  = cab.DY
   const DZ  = cab.DZ

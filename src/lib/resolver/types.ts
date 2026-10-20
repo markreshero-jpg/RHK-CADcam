@@ -214,6 +214,11 @@ export interface ConstructionRules {
   // Rail grain on the sheet: along the rail (horizontal, default) or across it.
   RAILGRAIN?: 'horizontal' | 'vertical'
 
+  // Floating cabinets (z_floating): wall-hung, no kick, no bottom panel unless
+  // FLOAT_BOTTOM adds an exposed-board bottom under the gables. Cabinet layer.
+  FLOAT?:        boolean
+  FLOAT_BOTTOM?: boolean
+
   // Joinery — how panels connect to each other
   BOTTOM_JOIN:      'sides_outside' | 'bottom_outside'    // sides span full height vs bottom spans full width
   BOTTOM_BACK_JOIN: 'back_on_bottom' | 'butts_into_back'  // bottom runs behind back vs stops at back inner face

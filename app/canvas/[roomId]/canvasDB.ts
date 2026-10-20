@@ -24,6 +24,7 @@ import type { ConstructionRules } from '@/src/lib/resolver/types'
 import { mergeRules } from '@/src/lib/resolver/mergeRules'
 import { normaliseBulkhead } from '@/src/lib/bulkhead'
 import { normaliseCurvedEnd, curvedEndFootprint } from '@/src/lib/curvedEnd/settings'
+import { FLOAT_Z } from '@/src/lib/floating'
 
 const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 
@@ -480,7 +481,8 @@ export function buildInstanceFromDefinition(
     room_id: p.room_id, wall_id: p.wall_id,
     cabinet_definition_id: def.id,                 // audit / origin pointer only
     label: p.label, assembly_class: def.assembly_class,
-    pos_x: p.pos_x, pos_y: p.pos_y, pos_z: 0, rotation: p.rotation,
+    // A floating definition (z_floating) hangs off the floor; it was saved kick-less.
+    pos_x: p.pos_x, pos_y: p.pos_y, pos_z: def.rule_overrides?.FLOAT ? FLOAT_Z : 0, rotation: p.rotation,
     dx: shapeBox?.w ?? dx,
     // A bulkhead never takes the wall-cabinet height: it keeps its own (or fits the
     // ceiling at placement when "Height to ceiling" is on).
@@ -729,7 +731,7 @@ export async function saveCabinetToLibrary(
   // Carcass choices made on the cabinet travel with it (z_ubo U6) — a saved
   // UBO copy keeps its back rail. Other cabinet overrides (e.g. the kick height
   // a kick join writes) stay behind.
-  const CARRIED_RULES = ['BACK_TYPE', 'BKRH', 'RAIL_ORIENT'] as const
+  const CARRIED_RULES = ['BACK_TYPE', 'BKRH', 'RAIL_ORIENT', 'FLOAT', 'FLOAT_BOTTOM'] as const
   const instRules = (inst.rule_overrides ?? {}) as Record<string, unknown>
   const rule_overrides = Object.fromEntries(CARRIED_RULES.filter(k => instRules[k] !== undefined).map(k => [k, instRules[k]]))
 

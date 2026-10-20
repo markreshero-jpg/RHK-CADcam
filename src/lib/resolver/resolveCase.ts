@@ -5,7 +5,7 @@
 
 import {
   CabinetInput, ResolvedCasePart, ConstructionRules,
-  ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
+  ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults, EdgeSides
 } from './types'
 
 /** Thickness of the back panel the interior stops at — 0 when BACK_TYPE drops
@@ -13,6 +13,20 @@ import {
  *  back of the box (z_ubo U1). */
 export function caseBackT(cab: CabinetInput, r: ConstructionRules): number {
   return (r.BACK_TYPE ?? 'panel') === 'panel' ? cab.material.DZ : 0
+}
+
+/** Where the carcass floor sits (z_floating). TK is the kick lift, floorT the
+ *  thickness of the panel the interior stands on, so the interior floor is at
+ *  Y = TK + SCRBT + floorT. A floating cabinet has no kick and no bottom panel
+ *  unless FLOAT_BOTTOM adds an exposed-board bottom under the gables. */
+export function caseFloor(cab: CabinetInput, r: ConstructionRules): {
+  TK: number; floorT: number; floating: boolean; hasBottom: boolean
+} {
+  if (r.FLOAT) {
+    const hasBottom = !!r.FLOAT_BOTTOM
+    return { TK: 0, floorT: hasBottom ? cab.exposed_material.DZ : 0, floating: true, hasBottom }
+  }
+  return { TK: cab.has_toekick ? r.TOEH : 0, floorT: cab.material.DZ, floating: false, hasBottom: true }
 }
 
 export function resolveCaseParts(
@@ -29,7 +43,7 @@ export function resolveCaseParts(
   // All case parts currently use the primary carcass material.
   // Individual part-level overrides wire in here when supported.
   const sideMat   = cab.material
-  const bottomMat = cab.material
+  let   bottomMat = cab.material
   const backMat   = cab.material
   const topMat    = cab.material
 
@@ -39,6 +53,12 @@ export function resolveCaseParts(
   const backType = r.BACK_TYPE ?? 'panel'
   const hasBack  = backType === 'panel'
 
+  // Floating (z_floating): no kick; no bottom, or an exposed-board bottom the
+  // gables stand on.
+  const { TK, floating, hasBottom } = caseFloor(cab, r)
+  const floatBottom = floating && hasBottom
+  if (floatBottom) bottomMat = cab.exposed_material
+
   const sideT   = sideMat.DZ
   const bottomT = bottomMat.DZ
   const backT   = caseBackT(cab, r)
@@ -47,7 +67,6 @@ export function resolveCaseParts(
   const DX = cab.DX   // cabinet width
   const DY = cab.DY   // cabinet height
   const DZ = cab.DZ   // cabinet depth
-  const TK = cab.has_toekick ? r.TOEH : 0
 
   if (DX <= 2 * sideT) {
     errors.push({ code: 'CASE_TOO_NARROW', message: `Cabinet DX (${DX}mm) is too narrow for side material thickness (${sideT}mm)`, part: 'case' })
@@ -55,8 +74,9 @@ export function resolveCaseParts(
   }
 
   // ── Joinery ──────────────────────────────────────────────────
-  const bottomJoin     = r.BOTTOM_JOIN
-  const bottomBackJoin = r.BOTTOM_BACK_JOIN
+  // A floating bottom always runs under the gables and the full depth.
+  const bottomJoin     = floatBottom ? 'bottom_outside' : floating ? 'sides_outside' : r.BOTTOM_JOIN
+  const bottomBackJoin = floatBottom ? 'back_on_bottom' : r.BOTTOM_BACK_JOIN
   const backJoin       = r.BACK_JOIN
   const topBackJoin    = r.TOP_BACK_JOIN
   const railJoin       = r.RAIL_JOIN
@@ -106,6 +126,14 @@ export function resolveCaseParts(
   // The rail/top drops by SCRT so that SCRT mm of the side panels protrude above it.
   // SCRBT: extra material on side panels below the bottom panel for scribing to the floor.
 
+  // Floating: gable tops + bottoms and the back's bottom edge show, so they're
+  // taped on top of whatever the method tapes (z_floating decision 3).
+  const withEnds = (sides: EdgeSides, add: EdgeSides): EdgeSides =>
+    floating ? [...new Set([...sides, ...add])] : sides
+  const leftEdging  = withEnds(edging.left_side,  ['top', 'bottom'])
+  const rightEdging = withEnds(edging.right_side, ['top', 'bottom'])
+  const backEdging  = withEnds(edging.back,       ['bottom'])
+
   // ── Left Side ────────────────────────────────────────────────
   parts.push({
     part_key: 'left_side',
@@ -117,7 +145,7 @@ export function resolveCaseParts(
     Z:  sideZstart,
     AX: 0, AY: 0, AZ: 0,
     material_id: sideMat.id,
-    edge_band: edgeSidesToBanding(edging.left_side, ebId),
+    edge_band: edgeSidesToBanding(leftEdging, ebId),
   })
 
   // ── Right Side ───────────────────────────────────────────────
@@ -131,11 +159,12 @@ export function resolveCaseParts(
     Z:  sideZstart,
     AX: 0, AY: 0, AZ: 0,
     material_id: sideMat.id,
-    edge_band: edgeSidesToBanding(edging.right_side, ebId),
+    edge_band: edgeSidesToBanding(rightEdging, ebId),
   })
 
   // ── Bottom ───────────────────────────────────────────────────
-  parts.push({
+  // Floating: none, or the exposed-board bottom taped front + both ends.
+  if (!floating || floatBottom) parts.push({
     part_key: 'bottom',
     DX: botDepth,
     DY: botW,
@@ -145,19 +174,24 @@ export function resolveCaseParts(
     Z:  botZstart,
     AX: 0, AY: 0, AZ: 0,
     material_id: bottomMat.id,
-    edge_band: edgeSidesToBanding(edging.bottom, ebId),
+    edge_band: floatBottom
+      ? edgeSidesToBanding(['top', 'left', 'right'], cab.exposed_edgeband_id)
+      : edgeSidesToBanding(edging.bottom, ebId),
   })
 
   // ── Back ─────────────────────────────────────────────────────
   // Bottom joinery shifts the back's stored Y so its 3D bottom face (p.Y + p.DZ)
   // lands at TK+SCRBT (butts_into_back) or TK+SCRBT+backT (back_on_bottom).
-  const backY = bottomBackJoin === 'butts_into_back' ? TK + r.SCRBT - backT : TK + r.SCRBT
+  // Floating: the back stands on the bottom panel, or runs to the carcass bottom.
+  const backY = floating
+    ? r.SCRBT + (floatBottom ? bottomT : 0) - backT
+    : bottomBackJoin === 'butts_into_back' ? TK + r.SCRBT - backT : TK + r.SCRBT
 
   // Top joinery trims the back's top face by topT when the top sits over it.
   // SCRT: back panel stops at DY - SCRT (scribe material on sides above).
   // Cabinet3DView now uses p.DX directly as the rendered height of the back panel,
   // so compute it as (top face) − (bottom face in 3D).
-  const backBottom3D = backY + backT  // = TK + SCRBT
+  const backBottom3D = backY + backT
   const backTop3D    = DY - r.SCRT - (topBackJoin === 'sits_over_back' ? topT : 0)
   const backDX       = backTop3D - backBottom3D
 
@@ -171,7 +205,7 @@ export function resolveCaseParts(
     Z:  r.SCRBK,
     AX: 0, AY: 0, AZ: 0,
     material_id: backMat.id,
-    edge_band: edgeSidesToBanding(edging.back, ebId),
+    edge_band: edgeSidesToBanding(backEdging, ebId),
   })
 
   // ── Top options ───────────────────────────────────────────────

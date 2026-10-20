@@ -573,6 +573,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Switch to 3D and right-click the oven. You get the same menu as in plan: View 3D / elevations, Move, Turn 90° and Delete.',
       canvas: true, done: c => c.selected?.type === 'fixture' },
   ]},
+
+  // Appended 2026-10-20 (z_floating — wall-hung cabinets with no kick).
+  { id: 'floating_vanity', level: 'intermediate', topic: 'cabinets', title: 'Make a floating vanity',
+    blurb: 'Hang a base cabinet off the floor with no kick, with taped gable ends.',
+    keywords: 'floating vanity wall hung no kick bathroom bottom panel edge tape gable underside elevation off floor', steps: [
+    { id: 'place', title: 'Place a base cabinet',
+      body: 'Place a base cabinet (F3). Anything from Base, or a starting point from the Vanity section. If it’s in a kick run, detach it first.',
+      canvas: true, done: (c, s) => c.cabinets.length > s.cabinets.length },
+    { id: 'float', title: 'Tick Floating',
+      body: 'Select it. In the cabinet panel, tick Floating (wall-hung, no kick). The kick goes, the box keeps its size, and it hangs 300 off the floor (change that in Elevation from floor). There’s no bottom panel. The gable tops and bottoms and the bottom edge of the back are taped, and the doors finish flush with the carcass bottom.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.FLOAT) },
+    { id: 'bottom', title: 'Optional: add a bottom panel',
+      body: 'Tick Bottom panel to put an exposed-board bottom under the gables, taped front and ends. The gables sit on it, so the overall height stays the same. To keep it as a starting point, right-click → Save to library and pick the Vanity section.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.FLOAT_BOTTOM) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

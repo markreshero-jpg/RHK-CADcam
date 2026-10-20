@@ -23,7 +23,7 @@ import {
   DEFAULT_DB_RULES,
 } from './types'
 import { resolveDrawerBox } from './resolveDrawerBox'
-import { caseBackT } from './resolveCase'
+import { caseBackT, caseFloor } from './resolveCase'
 import { slideDrillOps } from '../slideDrilling'
 import { gridForFacet, zoneTurn, type ZoneOpening } from './resolveShapedHardware'
 
@@ -201,11 +201,13 @@ export function resolveDrawerStacks(
   // intBottom. The drawer box must rest on this, not on the face-grid bottom
   // (which for the lowest drawer sits one panel thickness lower, at the cabinet
   // exterior). TK mirrors the case/internal resolvers exactly.
-  const TK = cab.has_toekick &&
+  // A floating cabinet (z_floating) has no kick and maybe no bottom panel.
+  const floor = caseFloor(cab, r)
+  const TK = floor.floating ? 0 : cab.has_toekick &&
     (cab.assembly_class === 'base' || cab.assembly_class === 'tall' ||
      cab.assembly_class === 'base_corner' || cab.assembly_class === 'tall_corner')
     ? r.TOEH : 0
-  const internalFloorY = TK + T + r.SCRBT
+  const internalFloorY = TK + (floor.floating ? floor.floorT : T) + r.SCRBT
 
   const stacks: ResolvedDrawerStack[] = []
 

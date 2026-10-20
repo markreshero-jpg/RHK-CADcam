@@ -3,8 +3,9 @@
 
 import { ConstructionRules, DEFAULT_RULES, EdgingDefaults, DEFAULT_EDGING, EdgeSides } from './resolver/types'
 
-// HANDLE_DRILL is a job / room / cabinet switch (z_handles D13), not a method rule.
-export type RuleKey    = Exclude<keyof ConstructionRules, 'EDGING' | 'HANDLE_DRILL' | 'FPRAIL' | 'RAILGRAIN'>
+// HANDLE_DRILL is a job / room / cabinet switch (z_handles D13), not a method rule;
+// FLOAT / FLOAT_BOTTOM are cabinet-layer switches (z_floating).
+export type RuleKey    = Exclude<keyof ConstructionRules, 'EDGING' | 'HANDLE_DRILL' | 'FPRAIL' | 'RAILGRAIN' | 'FLOAT' | 'FLOAT_BOTTOM'>
 export type EdgingKey  = keyof Required<EdgingDefaults>
 
 export const RULE_LABELS: Record<RuleKey, string> = {

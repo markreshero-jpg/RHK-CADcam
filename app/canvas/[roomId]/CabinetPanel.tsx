@@ -10,6 +10,7 @@ import CalcInput from '@/src/components/CalcInput'
 import CabinetShapeSection from './CabinetShapeSection'
 import BulkheadSection from './BulkheadSection'
 import CurvedEndSection from './CurvedEndSection'
+import { canFloat, isFloating, floatingPatch, FLOAT_Z } from '@/src/lib/floating'
 
 export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRef, onUpdate, onDelete, onClose, hideWallPosition, hideDelete, autoFocusWidth }: {
   cabinet: CabinetInstance
@@ -445,6 +446,41 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                 })}
               </div>
               <p className="text-[10px] text-gray-600 mt-1">Blank = inherited from the construction method.</p>
+            </div>
+          )
+        })()}
+
+        {/* Floating (z_floating) — rule_overrides.FLOAT / FLOAT_BOTTOM */}
+        {canFloat(cabinet) && (() => {
+          const floating = isFloating(cabinet)
+          const inKickRun = !!cabinet.kick_run_id
+          const kickH = Number(getCachedInput(cabinet.id)?.rules?.TOEH ?? 150)
+          return (
+            <div>
+              <p className={lbl}>Floating</p>
+              <label className={`flex items-center gap-2 ${inKickRun ? 'opacity-50' : 'cursor-pointer'}`}>
+                <input type="checkbox" checked={floating} disabled={inKickRun}
+                  onChange={e => void onUpdate(cabinet.id, floatingPatch(cabinet, e.target.checked, kickH))}
+                  className="accent-blue-500" />
+                <span className="text-xs text-gray-400">Wall-hung, no kick</span>
+              </label>
+              {floating && (
+                <label className="flex items-center gap-2 cursor-pointer mt-1">
+                  <input type="checkbox" checked={!!cabinet.rule_overrides?.FLOAT_BOTTOM}
+                    onChange={e => {
+                      const next = { ...(cabinet.rule_overrides ?? {}) }
+                      if (e.target.checked) next.FLOAT_BOTTOM = true; else delete next.FLOAT_BOTTOM
+                      void onUpdate(cabinet.id, { rule_overrides: next })
+                    }}
+                    className="accent-blue-500" />
+                  <span className="text-xs text-gray-400">Bottom panel (exposed board)</span>
+                </label>
+              )}
+              <p className="text-[10px] text-gray-600 mt-1">
+                {inKickRun ? 'Detach it from the kick run first.'
+                  : floating ? 'Gable tops/bottoms and the back bottom edge are taped.'
+                  : `Drops the kick and hangs it ${FLOAT_Z} off the floor.`}
+              </p>
             </div>
           )
         })()}
