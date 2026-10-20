@@ -227,6 +227,10 @@ export interface GcodeInput {
   // loops in SHEET coords (shapes.placedHoles + the placement corner). Each is
   // cut as an inside profile just before that part's perimeter.
   holes?: Record<string, { x: number; y: number }[][]>
+  // Onion skin (mm) each of those holes leaves, index-matched (curved end rib
+  // cut-outs, z_curved_end C4): cut to thickness − skin, never through. 0 /
+  // absent = through, like a benchtop cutout.
+  holeSkins?: Record<string, number[]>
 }
 
 // Modal compaction (spec §5.8 / Anderson .anc). Drops words that are unchanged
@@ -621,11 +625,17 @@ export function generateSheetGcode(input: GcodeInput): string {
     return o && o.length >= 3 ? o : undefined
   }
   // A part's holes, cut inside-out before its perimeter (the part still held).
+  // A hole with its own onion skin (rib cut-out) stops at thickness − skin:
+  // capped on the roughing pass, skipped on the separation pass once reached.
   const cutHoles = (emitR: (s: string) => void, cR: (s: string) => void, pl: { uid: string; label: string }, depth: number, start: number) => {
-    const hs = (input.holes?.[pl.uid] ?? []).filter(h => h.length >= 3)
-    hs.forEach((h, i) => {
-      cR(`Cutout ${i + 1} in ${pl.label}`)
-      routePerimeter(emitR, f, fz, { x: 0, y: 0, w: 0, h: 0, label: `${pl.label} cutout ${i + 1}` }, depth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, start, toolR, input.toolNumber, h, true)
+    const skins = input.holeSkins?.[pl.uid] ?? []
+    ;(input.holes?.[pl.uid] ?? []).forEach((h, i) => {
+      if (h.length < 3) return
+      const skin = skins[i] ?? 0
+      const d = skin > 0 ? Math.min(depth, thickness - skin) : depth
+      if (d <= start + 1e-6) return
+      cR(`Cutout ${i + 1} in ${pl.label}${skin > 0 ? ` - leave ${f(skin)} onion skin` : ''}`)
+      routePerimeter(emitR, f, fz, { x: 0, y: 0, w: 0, h: 0, label: `${pl.label} cutout ${i + 1}` }, d, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, start, toolR, input.toolNumber, h, true)
     })
   }
   emitRouterSection(input.toolNumber, input.toolDiameter, (emitR, cR) => {

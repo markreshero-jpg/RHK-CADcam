@@ -62,6 +62,8 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       ...(p.grain_direction ? { grain_direction: p.grain_direction } : {}),
       // Curved end face board's bent plan shape (z_curved_end).
       ...(p.wrap ? { wrap: p.wrap } : {}),
+      // Rib cut-outs (z_curved_end C4).
+      ...(p.cutouts?.length ? { cutouts: p.cutouts } : {}),
     })),
     toekick_parts: resolved.toekick_parts.map(p => ({
       part_key:        p.part_key,

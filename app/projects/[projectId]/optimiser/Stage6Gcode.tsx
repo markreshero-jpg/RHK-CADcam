@@ -179,6 +179,15 @@ export default function Stage6Gcode() {
         }
         return out
       }
+      // Rib cut-outs (z_curved_end C4): the onion skin each hole leaves.
+      const holeSkinsFor = (sheet: (typeof nestResult.sheets)[number]) => {
+        const out: Record<string, number[]> = {}
+        for (const pl of sheet.placements) {
+          const skins = partByUid.get(pl.baseUid)?.cut_hole_skins
+          if (skins?.some(s => s > 0)) out[pl.uid] = skins
+        }
+        return out
+      }
 
       const gen: GenFile[] = nestResult.sheets.map((sheet, i) => {
         const drills = sheetDrills.get(sheet.index) ?? []
@@ -203,6 +212,7 @@ export default function Stage6Gcode() {
           drillBlock,
           outlines,
           holes,
+          holeSkins: holeSkinsFor(sheet),
         })
         const fileName = gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: i + 1, ext: post.file_extension })
         return {

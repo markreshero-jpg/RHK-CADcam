@@ -1303,7 +1303,10 @@ export function CabinetScene({
     // Shape Editor override for the same part replaces them below.
     // Turned per-edge panels carry theirs in their own face frame (finger-rail
     // notches on an L corner's end panel), so they draw too.
-    for (const p of rp.case_parts) if (p.outline && (!p.AY || isShapedPanelKey(p.part_key))) m.set(`case_${p.part_key}`, { pts: sampleOutline(p.outline, 2) })
+    for (const p of rp.case_parts) if (p.outline && (!p.AY || isShapedPanelKey(p.part_key))) m.set(`case_${p.part_key}`, {
+      pts: sampleOutline(p.outline, 2),
+      ...(p.cutouts?.length ? { holes: p.cutouts.map(c => sampleOutline(c.pts, 2)) } : {}),   // rib cut-outs (z_curved_end C4)
+    })
     // Curved end face board (z_curved_end): its bent plan shape extruded up
     // (horizontal shape frame: x across its box, y down from the box front).
     for (const p of rp.case_parts) {

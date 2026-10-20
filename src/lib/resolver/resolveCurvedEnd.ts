@@ -137,6 +137,8 @@ export function curvedEndCaseParts(
       X: x0, Y: c.y0 + c.levels[p.level], Z: D - SK - p.sizeY, AX: 0, AY: 0, AZ: 0,
       material_id: carcassMat, edge_band: { ...NO_BAND },
       outline: p.outline,
+      // Rib cut-out (C4): cut inside the rib before its perimeter, leaving the onion skin.
+      ...(p.cutout ? { cutouts: [{ pts: p.cutout.loop, skin: r2(T - p.cutout.depth) }] } : {}),
     })
   }
   return out

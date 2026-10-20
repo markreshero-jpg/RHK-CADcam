@@ -57,6 +57,9 @@ export interface OptiPart {
   // Through-cut holes (benchtop sink / cooktop cutouts): closed loops in the
   // op frame at finished size, placed like the outline (shapes.placedHoles).
   cut_holes?: { x: number; y: number }[][]
+  // Onion skin (mm) each cut hole leaves, index-matched; 0 / absent = through
+  // (curved end rib cut-outs, z_curved_end C4).
+  cut_hole_skins?: number[]
 }
 
 // Cabinet-level maps of user-authored, regen-surviving content keyed by

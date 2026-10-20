@@ -8,7 +8,7 @@
 import type { OptiPart, OptiRoom, OptiCabinet, SourceTable } from './types'
 import { PART_TYPE_LABELS } from '@/src/lib/partDisplayNames'
 import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
-import { attachShape, shapeFrameFor, type ShapesByCab } from './shapes'
+import { attachShape, cutoutsToOp, shapeFrameFor, type ShapesByCab } from './shapes'
 import type { OutlinePt } from '@/src/lib/shapePath'
 import { zonePartId, dbPartId, zoneRef } from '@/src/lib/cabinetShape/partKeys'
 import { removedIdsFrom, isAllViews } from '@/src/lib/resolver/filterHidden'
@@ -140,6 +140,10 @@ export function normalizeProject(
     const { shape, stale, tapeMissing } = attachShape(shapesByCab.get(cabId)?.[partKey], effW, effH,
       inPlane ? { frame, DX, DY, transpose } : undefined,
       Array.isArray(row.outline) ? row.outline as OutlinePt[] : null, bandOf(table, row))
+    // Inner cut-outs (curved end ribs, C4) ride on the resolver outline: dropped
+    // with it when a drawn shape replaces it or a size override no longer fits.
+    const holes = shape?.source === 'resolver' && inPlane
+      ? cutoutsToOp(row.cutouts as { pts: OutlinePt[]; skin?: number }[] | null, { frame, DX, DY, transpose }) : null
     parts.push({
       uid: `${table}:${row.id as string}`,
       source_table: table, source_part_id: row.id as string,
@@ -162,6 +166,7 @@ export function normalizeProject(
         base_w: baseDims.w, base_h: baseDims.h, base_thickness: baseDims.thickness,
       } : {}),
       ...(shape ? { shape, shape_stale: stale } : {}),
+      ...(holes ?? {}),
     })
   }
   // Fold sw/sh/sd size overrides into the row's dx/dy/dz BEFORE any downstream
@@ -318,7 +323,7 @@ export function normalizeProject(
 
 // Column selections shared by server + client loaders.
 export const PART_SELECTS = {
-  case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,outline,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
+  case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,outline,cutouts,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,outline,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_back,edge_band_front,edge_band_id',
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',

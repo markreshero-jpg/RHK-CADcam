@@ -160,7 +160,8 @@ export function edgeStrips(
 // `extrude: 'across'` = a side profile (x = depth from the back face, y = up
 // from the bottom, both mm) extruded across the part's width — sharknose
 // fronts (z_handles H3, handleGeometry.sharknoseProfile).
-export type PartShape = { pts: ShapePt[]; mirror?: boolean; extrude?: 'up' | 'across' }
+// `holes` = inner loops in the same frame (curved end rib cut-outs), drawn through.
+export type PartShape = { pts: ShapePt[]; mirror?: boolean; extrude?: 'up' | 'across'; holes?: ShapePt[][] }
 
 // Extruded silhouette in box-local coords ([0..w]×[0..h]×[0..d] off the box
 // origin corner — mount inside the Part group at position [0,0,0]). The 2D
@@ -186,6 +187,13 @@ export function buildShapedGeometry(shape: PartShape, b: Box, panelKind: PanelKi
   const thick = kind === 'side' ? b.w : kind === 'horizontal' ? b.h : b.d
   const s = new THREE.Shape()
   shape.pts.forEach((p, i) => { if (i === 0) s.moveTo(p.x, up - p.y); else s.lineTo(p.x, up - p.y) })
+  for (const h of shape.holes ?? []) {
+    if (h.length < 3) continue
+    const path = new THREE.Path()
+    h.forEach((p, i) => { if (i === 0) path.moveTo(p.x, up - p.y); else path.lineTo(p.x, up - p.y) })
+    path.closePath()
+    s.holes.push(path)
+  }
   s.closePath()
   const g = new THREE.ExtrudeGeometry(s, { depth: thick, bevelEnabled: false })
   if (kind === 'side') {

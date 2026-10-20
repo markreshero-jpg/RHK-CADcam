@@ -8,11 +8,14 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → C3 built 2026-10-20 (`migration_c3_curved_end_joints.sql` applied). **In-app check
+> **RESUME HERE** → C4 built 2026-10-21 (`migration_c4_rib_cutouts.sql` applied): with rib cut-outs on,
+> each rib shows its hole in 3D, the optimiser sheet preview shows it, and the G-code cuts it inside the
+> rib before its perimeter, stopping at T − onion skin. **In-app check pending (Mark)**, together with C3.
+> C3 built 2026-10-20 (`migration_c3_curved_end_joints.sql` applied). **In-app check
 > pending (Mark)**: Library → Joints shows the four `CRV …` joints; Construction methods → Curved ends
 > shows their defaults; on a placed curved end, 3D drilling (Machining layer) shows the holes, a part’s
 > edge joints list its seams, and the optimiser G-code has the Ø5 through-holes plus one bend pocket per
-> curve on the face board (10 mm bit, 6 mm past top and bottom). Then C4 (rib cut-out route).
+> curve on the face board (10 mm bit, 6 mm past top and bottom). Next: C5 (curved kick + benchtop follow).
 
 ---
 
@@ -147,7 +150,7 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
 - **Layers**: one new item, `curved_ends` (group panels, all views, on by default).
 - **Not yet (later phases)**:
   - the pocket and holes (C3)
-  - rib cut-outs as parts (C4)
+  - ~~rib cut-outs as parts (C4)~~ → built 2026-10-21
   - kick / benchtop (C5)
   - the face-board-longer-than-sheet panel joint (decision 12)
   - ~~face board edge banding~~ → decision 16 (gable end only), built 2026-10-20
@@ -192,6 +195,23 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   - a nest check that the overrun clears the neighbouring part (the gap is ~14 vs a 6 overrun today)
   - the cabinet edit modal's Joints tab (box seams only); the part's edge joints cover it
 
+## Built in C4 (2026-10-21)
+
+- **Resolver**: each rib (never the top or bottom) carries `cutouts: [{ pts, skin }]`, the kit's inner
+  loop in the same frame as its `outline`, with `skin` = OS when onion is on, else 0 (through).
+  Persisted as `case_parts.cutouts` (`migration_c4_rib_cutouts.sql`).
+- **Optimiser**: `shapes.cutoutsToOp` maps them into the op frame exactly like the resolver outline,
+  as the part's `cut_holes` plus `cut_hole_skins`. They are dropped with the outline (a drawn shape
+  replaces it, or a size override no longer fits). The sheet preview draws them like benchtop cut-outs.
+- **G-code**: holes are cut inside the part before its perimeter (as benchtop cut-outs). A hole with a
+  skin stops at thickness − skin: capped on the roughing pass, skipped on the separation pass once
+  reached; the comment reads "leave 0.3 onion skin". Skin 0 cuts through as before.
+- **3D**: the rib is extruded with its hole (`PartShape.holes`).
+- **Tests**: `ribCutouts.test.ts`: kit cases 04/05/07/08 through resolver → persist payload →
+  normaliser (ribs only, skin, area, at least B of border, inside the rib) and the G-code depth with
+  and without a sheet onion skin (a mutation check confirmed they catch a lost depth cap).
+- **Not yet**: the simulator carves an onion-skinned hole as through (display only).
+
 ## Mapping onto the native pipeline (proposed)
 
 | Kit item | Native home |
@@ -202,7 +222,7 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
 | Former outlines (arcs, block notches) | `ResolvedPart.outline` with bulges → `case_parts.outline` → existing nest true shapes and G2/G3 contours |
 | Face board pocket | generated route `pocket` op on the back face (routes already run on the material-up pass) |
 | Ø5 through-holes | joints library on generator-declared seams → `seam_joint` drill ops (see Open) |
-| Rib cut-out (inner closed loop, optional onion skin) | **new**: an inner-loop route with its own depth. Today only `cut_holes` exists, and it only cuts through with a sheet-wide onion skin |
+| Rib cut-out (inner closed loop, optional onion skin) | `case_parts.cutouts` → the nest part's `cut_holes` + `cut_hole_skins` → G-code holes with their own depth (C4) |
 | 3D | formers/back/panel as existing extrudes. The face board is drawn as its plan wrap outline, extruded up to full height (as in the kit's page), with pocket lines shown. It is cut as a flat blank |
 
 ## Phases (proposed)
@@ -214,7 +234,7 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   parameters, footprint preset, resolver hook, shop materials, 3D
 - [~] **C3** (built 2026-10-20, in-app check pending) Operations: pocket + drill ops generated and persisted, reaching the optimiser/G-code; cut
   list and costing; grain option
-- [ ] **C4** Rib cut-out: inner-loop route with per-op depth (onion skin) in the optimiser/G-code
+- [~] **C4** (built 2026-10-21, in-app check pending) Rib cut-out: inner-loop route with per-op depth (onion skin) in the optimiser/G-code
 - [ ] **C5** Curved kick + benchtop follow (on kick-height placement)
 - [ ] **C6** Tutorial; elevation curve (later, if wanted)
 

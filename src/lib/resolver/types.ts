@@ -1382,6 +1382,10 @@ export interface ResolvedCasePart extends ResolvedPart {
   // `bend` = the back-face bend pockets: [start, end] along the wrap from the gable
   // (front) end — DOUBLE: from the left wall end — and their depth (FT − SK).
   wrap?: { pts: OutlinePt[]; h: number; bend?: { at: [number, number][]; depth: number } }
+  // Inner closed loops cut inside the part before its perimeter (curved end rib
+  // cut-outs, C4), in the same frame as `outline`; `skin` = the onion skin left
+  // (0 = through). Persisted (case_parts.cutouts).
+  cutouts?: { pts: OutlinePt[]; skin: number }[]
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
             'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
             `fprail:${number}`   // finger-pull backing rail (z_handles H6)

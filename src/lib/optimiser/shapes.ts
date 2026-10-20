@@ -434,3 +434,22 @@ export function attachShape(
     ...(tapeMissing ? { tapeMissing } : {}),
   }
 }
+
+/** A resolver part's inner cut-outs (curved end rib cut-outs, C4: case_parts.cutouts)
+ *  in its op frame — the same transform attachShape gives its resolver outline —
+ *  as cut_holes plus the onion skin each leaves (cut_hole_skins). */
+export function cutoutsToOp(
+  cutouts: { pts: OutlinePt[]; skin?: number }[] | null | undefined,
+  op: { frame: ShapeFrame; DX: number; DY: number; transpose?: boolean },
+): { cut_holes: ShapePt[][]; cut_hole_skins: number[] } | null {
+  const loops = (cutouts ?? []).filter(c => Array.isArray(c?.pts) && c.pts.length >= 3)
+  if (!loops.length) return null
+  const frame = { ...op.frame, mirror: false }
+  return {
+    cut_holes: loops.map(c => {
+      const pts = shapeToOpFrame(sampleShapeOutline(outlineToSegments(c.pts), 5), frame, op.DX, op.DY)
+      return op.transpose ? pts.map(p => ({ x: p.y, y: p.x })) : pts
+    }),
+    cut_hole_skins: loops.map(c => Math.max(0, Number(c.skin) || 0)),
+  }
+}
