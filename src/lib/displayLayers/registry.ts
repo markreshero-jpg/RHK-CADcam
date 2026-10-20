@@ -249,7 +249,10 @@ export function casePartItem(partKey: string): string {
   // Return cleats behind angled corner fillers (z_angled_filler).
   if (partKey.startsWith('cleat:')) return 'fillers'
   if (partKey.startsWith('bh:')) return 'bulkheads'      // z_bulkhead
-  if (partKey.startsWith('crv:')) return 'curved_ends'   // z_curved_end
+  // z_curved_end: its curved kick (C5) shows with the kicks.
+  if (partKey.startsWith('crv:kick_spr_')) return 'kick_spreaders'
+  if (partKey.startsWith('crv:kick')) return 'kick_faces'
+  if (partKey.startsWith('crv:')) return 'curved_ends'
   return 'carcass_top'            // full_top, front_rail, back_rail, rail:<edge>
 }
 export function kickPartItem(partKey: string): string {

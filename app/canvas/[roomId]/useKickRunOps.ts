@@ -14,6 +14,7 @@ export function eligibleForKickRun(c: CabinetInstance): boolean {
   return !c.is_kick_assembly
     && (c.assembly_class === 'base' || c.assembly_class === 'tall')
     && c.has_toekick && c.toe_type !== 'leg' && c.toe_type !== 'none'
+    && !c.curved_end   // builds its own curved kick (z_curved_end C5)
 }
 
 // The contiguous straight run of kick-eligible cabinets containing `clicked`,

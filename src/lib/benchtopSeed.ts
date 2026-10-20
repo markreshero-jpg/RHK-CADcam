@@ -17,6 +17,7 @@ import { canonicalSegments, insetPolygonTagged, edgeFrame } from './cabinetShape
 import { withRoleOverrides, type FootprintSegment, type EdgeRole } from './cabinetShape/footprint'
 import { sampleShapeOutline } from './shapePath'
 import type { HandleRole, HandleScheduleEntryInput } from './resolver/types'
+import { curvedEndFootprint, normaliseCurvedEnd } from './curvedEnd/settings'
 
 export const BT_FRONT_OH_HANDLE = 40
 export const BT_FRONT_OH_FINGER = 25
@@ -35,8 +36,12 @@ const RECT_ROLES: EdgeRole[] = ['back', 'side', 'front', 'side']
 /** One cabinet's outline in plan, front edges pushed out by `oh`, with the role of each edge. */
 export function cabinetSeedOutline(cab: CabinetInstance, wall: Wall, perp: Pt, oh: number): RoleEdge[] {
   const w = cab.dx, d = cab.dz
-  const segs: FootprintSegment[] = cab.footprint?.segments?.length
-    ? canonicalSegments(withRoleOverrides(cab.footprint), w, d)
+  // A curved end's outline is rebuilt from its settings, so tops on ends placed
+  // before its exposed straight became `front` overhang it too (z_curved_end C5).
+  const crv = normaliseCurvedEnd(cab.curved_end)
+  const fp = (crv ? curvedEndFootprint(crv, { w, d }) : null) ?? cab.footprint
+  const segs: FootprintSegment[] = fp?.segments?.length
+    ? canonicalSegments(withRoleOverrides(fp), w, d)
     : [[0, 0, w, 0], [w, 0, w, d], [w, d, 0, d], [0, d, 0, 0]].map(([x0, y0, x1, y1], i) => ({
         type: 'line', p0: { x: x0, y: y0 }, p1: { x: x1, y: y1 }, edge: { id: `r${i}`, role: RECT_ROLES[i] },
       }) as FootprintSegment)

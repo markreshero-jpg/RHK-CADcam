@@ -170,15 +170,16 @@ export const SHAPE_PRESETS: ShapePreset[] = [
     ],
   },
   // Curved fixed-panel cabinet (z_curved_end): the face board's outline — the
-  // front and its 90° curve are `front`, the straight it wraps back along and
-  // the neighbour (fixing panel) side are `side`. Built from curved_end settings
+  // front, its 90° curve and the exposed straight it wraps back along are
+  // `front` (a benchtop overhangs all three, C5); the neighbour (fixing panel)
+  // side is `side`. Built from curved_end settings
   // (curvedEnd/settings.ts), never picked in the Shape section.
   {
     key: 'curved_end', label: 'Curved end', modifier: null, sided: true, internal: true,
     params: [{ key: 'radius', label: 'Radius', default: 150 }],
     build: side => [
       { id: 'back',  x: mx('0', side),                y: '0',                role: 'back' },
-      { id: 'end',   x: mx('cab.w', side),            y: '0',                role: 'side' },
+      { id: 'end',   x: mx('cab.w', side),            y: '0',                role: 'front' },
       { id: 'curve', x: mx('cab.w', side),            y: 'cab.d - p.radius', role: 'front', arc: { r: 'p.radius' } },
       { id: 'front', x: mx('cab.w - p.radius', side), y: 'cab.d',            role: 'front' },
       { id: 'side',  x: mx('0', side),                y: 'cab.d',            role: 'side' },
@@ -187,14 +188,15 @@ export const SHAPE_PRESETS: ShapePreset[] = [
   {
     key: 'curved_end_double', label: 'Curved both ends', modifier: null, sided: false, internal: true,
     params: [{ key: 'radius', label: 'Radius', default: 150 }],
+    // both exposed straights are `front` too (benchtop overhang, C5)
     // width = 2 × radius leaves a zero-length front, which consumers drop (isDegenerate)
     build: () => [
       { id: 'back',    x: '0',                y: '0',                role: 'back' },
-      { id: 'end_r',   x: 'cab.w',            y: '0',                role: 'side' },
+      { id: 'end_r',   x: 'cab.w',            y: '0',                role: 'front' },
       { id: 'curve_r', x: 'cab.w',            y: 'cab.d - p.radius', role: 'front', arc: { r: 'p.radius' } },
       { id: 'front',   x: 'cab.w - p.radius', y: 'cab.d',            role: 'front' },
       { id: 'curve_l', x: 'p.radius',         y: 'cab.d',            role: 'front', arc: { r: 'p.radius' } },
-      { id: 'end_l',   x: '0',                y: 'cab.d - p.radius', role: 'side' },
+      { id: 'end_l',   x: '0',                y: 'cab.d - p.radius', role: 'front' },
     ],
   },
   {

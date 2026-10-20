@@ -9,10 +9,12 @@ import { CabinetInstance } from '@/src/lib/types'
 import CalcInput from '@/src/components/CalcInput'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import {
-  normaliseCurvedEnd, curvedEndFootprint, curvedEndParams, curvedEndCode, HAND_OPTIONS,
+  normaliseCurvedEnd, curvedEndFootprint, curvedEndParams, curvedEndKickH, curvedEndCode, HAND_OPTIONS,
   type CurvedEndSettings,
 } from '@/src/lib/curvedEnd/settings'
 import { calcCurvedEnd, SKIN_MIN, SKIN_MAX, f1 } from '@/src/lib/curvedEnd/geometry'
+import { calcCurvedKick } from '@/src/lib/curvedEnd/kick'
+import { curvedKickParamsFor } from '@/src/lib/resolver/resolveCurvedEnd'
 
 const BASE_CODE: Record<string, string> = { base: 'BCRVFIXP', wall: 'WCRVFIXP', tall: 'TCRVFIXP' }
 
@@ -35,7 +37,11 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
   // Live check with the real board thicknesses (shop materials) once resolved.
   const cached = getCachedInput(cabinet.id)
   const FT = cached?.exposed_material.DZ ?? 18, T = cached?.material.DZ ?? 16.5
-  const c = calcCurvedEnd(curvedEndParams(s, { DX: cabinet.dx, DY: cabinet.dy, DZ: cabinet.dz }, FT, T))
+  const canKick = !cabinet.assembly_class.startsWith('wall')
+  const kickH = curvedEndKickH(s, cabinet.assembly_class, cached?.rules.TOEH ?? 150)
+  const c = calcCurvedEnd(curvedEndParams(s, { DX: cabinet.dx, DY: cabinet.dy, DZ: cabinet.dz }, FT, T, kickH))
+  // C5: the curved kick, checked once the cabinet has resolved (needs the kick boards).
+  const kick: ReturnType<typeof calcCurvedKick> | null = kickH > 0 && cached ? calcCurvedKick(c, curvedKickParamsFor(cached, kickH)) : null
   const single = s.hand !== 'DOUBLE'
   // A single end only overhangs at its wall end: right for RH, left for LH.
   const backKey: 'OL' | 'OR' = s.hand === 'LH' ? 'OL' : 'OR'
@@ -72,6 +78,8 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
           </select>
         </div>
       </div>
+      {canKick && tick('On a kick (curved kick)', s.kick, v => put({ kick: v }),
+        'Carcass sits up at the kick height; the kick board follows the curve, set back and bent like the face board')}
       {row('Radius', s.R, v => { if (v > 0) put({ R: v }) }, 'Outside radius of the curve')}
       {row('Skin', s.SK, v => { if (v > 0) put({ SK: v }) },
         `Face board left in the bend pocket (pocket depth = board − skin). ${SKIN_MIN}–${SKIN_MAX} mm bends best.`)}
@@ -113,14 +121,19 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
           {row('Border', s.B, v => { if (v > 0) put({ B: v }) })}
           {tick('Onion skin', s.onion, v => put({ onion: v }))}
           {s.onion && row('Onion skin', s.OS, v => put({ OS: Math.max(0, v) }))}
-          <p className="text-[10px] text-gray-600">Shown in the parts once the cut-out route is built (C4).</p>
         </>
       )}
 
       <p className="text-[10px] text-gray-500">
-        Face board {f1(c.wrapLen)} × {f1(cabinet.dy)} · {f1(FT)} · pocket {f1(FT - s.SK)} deep
+        Face board {f1(c.wrapLen)} × {f1(c.p.H)} · {f1(FT)} · pocket {f1(FT - s.SK)} deep
         {single && !s.OG ? ' · gable end edged' : ''} · {c.gaps - 1} rib{c.gaps - 1 === 1 ? '' : 's'} at {f1(c.pitch)} c/c, {f1(c.clear)} clear
       </p>
+      {kick?.ok && (
+        <p className="text-[10px] text-gray-500">
+          Kick {f1(kick.len)} × {f1(kickH)} · pocket {f1((cached?.toekick_face_material.DZ ?? 16) - s.SK)} deep · {kick.spreaders.length} spreader{kick.spreaders.length === 1 ? '' : 's'}
+        </p>
+      )}
+      {kick && !kick.ok && kick.warnings.map(m => <p key={m} className="text-[10px] text-red-400">{m}</p>)}
       {[...c.warnings, ...c.notes].map(m => (
         <p key={m} className={`text-[10px] ${c.warnings.includes(m) ? 'text-red-400' : 'text-amber-400'}`}>{m}</p>
       ))}

@@ -43,8 +43,9 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   allErrors.push(...caseErrors)
 
   // ── 2. Toe Kick Module ────────────────────────────────────────
-  // A floating cabinet (z_floating) never builds a kick, whatever has_toekick says.
-  const { parts: toekickParts, errors: toekickErrors } = cab.has_toekick && !r.FLOAT
+  // A floating cabinet (z_floating) never builds a kick, whatever has_toekick says;
+  // a curved end builds its own curved kick (resolveCurvedEnd, z_curved_end C5).
+  const { parts: toekickParts, errors: toekickErrors } = cab.has_toekick && !r.FLOAT && !cab.curved_end
     ? resolveToekickParts(cab, r)
     : { parts: [], errors: [] }
   allErrors.push(...toekickErrors)

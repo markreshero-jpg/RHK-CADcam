@@ -8,14 +8,18 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → C4 built 2026-10-21 (`migration_c4_rib_cutouts.sql` applied): with rib cut-outs on,
+> **RESUME HERE** → C5 built 2026-10-21 (no migration: `curved_end.kick`): tick "On a kick" on a base / tall
+> curved end; the carcass sits TOEH up and a curved kick (bent board + back + spreaders) follows the curve,
+> set back TOESCF, with its own bend pocket in the G-code; a benchtop overhangs the curve and the exposed
+> side. **In-app check pending (Mark)**, with C3 and C4. Next: C6 (tutorial).
+> C4 built 2026-10-21 (`migration_c4_rib_cutouts.sql` applied): with rib cut-outs on,
 > each rib shows its hole in 3D, the optimiser sheet preview shows it, and the G-code cuts it inside the
 > rib before its perimeter, stopping at T − onion skin. **In-app check pending (Mark)**, together with C3.
 > C3 built 2026-10-20 (`migration_c3_curved_end_joints.sql` applied). **In-app check
 > pending (Mark)**: Library → Joints shows the four `CRV …` joints; Construction methods → Curved ends
 > shows their defaults; on a placed curved end, 3D drilling (Machining layer) shows the holes, a part’s
 > edge joints list its seams, and the optimiser G-code has the Ø5 through-holes plus one bend pocket per
-> curve on the face board (10 mm bit, 6 mm past top and bottom). Next: C5 (curved kick + benchtop follow).
+> curve on the face board (10 mm bit, 6 mm past top and bottom).
 
 ---
 
@@ -151,7 +155,7 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
 - **Not yet (later phases)**:
   - the pocket and holes (C3)
   - ~~rib cut-outs as parts (C4)~~ → built 2026-10-21
-  - kick / benchtop (C5)
+  - ~~kick / benchtop (C5)~~ → built 2026-10-21
   - the face-board-longer-than-sheet panel joint (decision 12)
   - ~~face board edge banding~~ → decision 16 (gable end only), built 2026-10-20
   - a code suffix anywhere other than the sidebar header (the label stays B1, B2, …)
@@ -212,6 +216,39 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   and without a sheet onion skin (a mutation check confirmed they catch a lost depth cap).
 - **Not yet**: the simulator carves an onion-skinned hole as through (display only).
 
+## Built in C5 (2026-10-21)
+
+- **Setting**: `curved_end.kick` ("On a kick (curved kick)" in the sidebar), base / tall only (a wall
+  curved end ignores it; a floating cabinet never builds one). The cabinet's DY includes the kick, as on
+  any kicked base: the kit engine builds `DY − TOEH` tall and every part and declared seam lifts TOEH
+  (`curvedEndKickH`, `curvedEndParams(…, kickH)`).
+- **Kick** (`src/lib/curvedEnd/kick.ts`, kit plan frame; parts in `resolveCurvedEnd.curvedKickParts`),
+  built as curved-end case parts so the bent board reuses `wrap`, 3D / plan and the bend pocket:
+  - `crv:kick`: kick face material, TOEH high, front and curved side set back TOESCF, to TOESCB off the
+    wall; the curve bends round `R − TOESCF` with a back-face pocket over each curve (arc on the outer
+    face ± 3, depth `TF − SK`, the same skin as the face board). Grain along the wrap. Single ends run
+    from the gable (x = 0, butting the neighbour's kick); DOUBLE runs wall to wall.
+  - `crv:kick_back`: kick interior material, `TOEH − TOEFC` high, lifted TOEFC, along the wall between
+    the kick's sides (single: from the gable).
+  - `crv:kick_spr_<n>`: spreaders on the flat front — at the gable end (single), just before each
+    curve's pocket, and between at no more than TOESP centres.
+  - Errors (`CURVED_END`, block the CNC): radius too small for the setback (`R − TOESCF < TF + 10`),
+    curve deeper than the kick's wall line, skin ≥ kick board, no room for spreaders.
+  - The standard box kick is never built for a curved end, and curved ends never join a kick run.
+  - Layers: `crv:kick*` → `kick_faces`, `crv:kick_spr_*` → `kick_spreaders` (not `curved_ends`).
+- **Benchtop follow**: the `curved_end` / `curved_end_double` presets now tag the exposed straight(s)
+  the face board wraps back along `front`, so the seed (F4 / auto-build, `cabinetSeedOutline`) pushes
+  the front, the curve and that side out by the overhang. Ends placed before this keep a stored
+  footprint with `side` there, so the seed rebuilds a curved end's outline from its settings. The
+  curve is a sampled polyline (5°) in the top, as for any arc today.
+- **Tests**: `curvedKick.test.ts` (lift = a DY − TOEH cabinet moved up, seams too; RH / LH / DOUBLE
+  kick sizes, arc radius, setbacks, spreaders; kick pocket in the G-code rows; wall / float; the
+  small-radius block; layers; benchtop overhang round the curve and down the exposed side on both
+  hands, mutation-checked).
+- **Not yet / needs work** (decision 14): no fixing holes on the kick (screwed by hand, like the box
+  kick today); no kick edge tape; elevation draws the kick as its box; no spreaders along a long
+  curved side.
+
 ## Mapping onto the native pipeline (proposed)
 
 | Kit item | Native home |
@@ -235,7 +272,7 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
 - [~] **C3** (built 2026-10-20, in-app check pending) Operations: pocket + drill ops generated and persisted, reaching the optimiser/G-code; cut
   list and costing; grain option
 - [~] **C4** (built 2026-10-21, in-app check pending) Rib cut-out: inner-loop route with per-op depth (onion skin) in the optimiser/G-code
-- [ ] **C5** Curved kick + benchtop follow (on kick-height placement)
+- [~] **C5** (built 2026-10-21, in-app check pending) Curved kick + benchtop follow (on kick-height placement)
 - [ ] **C6** Tutorial; elevation curve (later, if wanted)
 
 ## Open

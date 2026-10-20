@@ -34,13 +34,14 @@ export interface CurvedEndSettings {
   blkF:    boolean         // front fixing block
   grain:   CurvedEndGrain  // face board grain (decision 8: vertical by default)
   ribs:    number | null   // ribs between top and bottom; null = auto (the kit's gap rule)
+  kick:    boolean         // C5: carcass on a kick (TOEH up) with a curved kick board; base / tall only
 }
 
 export const DEFAULT_CURVED_END: CurvedEndSettings = {
   hand: 'RH', R: CURVED_END_DEFAULTS.R, SK: CURVED_END_DEFAULTS.SK,
   OG: 0, OL: 0, OR: 0, SBK: 0, SBT: 0, STP: 0,
   lighten: false, B: CURVED_END_DEFAULTS.B, onion: false, OS: CURVED_END_DEFAULTS.OS,
-  blkS: false, blkF: false, grain: 'vertical', ribs: null,
+  blkS: false, blkF: false, grain: 'vertical', ribs: null, kick: false,
 }
 
 const num = (v: unknown, d: number, min = 0) => {
@@ -65,15 +66,24 @@ export function normaliseCurvedEnd(s: Partial<CurvedEndSettings> | null | undefi
     blkS:    !!s.blkS, blkF: !!s.blkF,
     grain:   s.grain === 'horizontal' ? 'horizontal' : 'vertical',
     ribs:    s.ribs != null && Number.isFinite(Number(s.ribs)) && Number(s.ribs) >= 0 ? Math.round(Number(s.ribs)) : null,
+    kick:    !!s.kick,
   }
 }
 
-/** Engine inputs: settings + the cabinet box + the real board thicknesses. */
+/** Height the curved end sits up on its kick (C5): TOEH when `kick` is on
+ *  (base / tall), else 0. The cabinet's DY includes it, like any kicked base. */
+export function curvedEndKickH(s: Pick<CurvedEndSettings, 'kick'>, assemblyClass: string, TOEH: number): number {
+  return s.kick && !assemblyClass.startsWith('wall') ? Math.max(0, TOEH) : 0
+}
+
+/** Engine inputs: settings + the cabinet box + the real board thicknesses.
+ *  `kickH` (curvedEndKickH) comes off the height: the engine builds above the kick. */
 export function curvedEndParams(
   s: CurvedEndSettings, box: { DX: number; DY: number; DZ: number }, faceThickness: number, carcassThickness: number,
+  kickH = 0,
 ): CurvedEndParams {
   return {
-    W: box.DX, D: box.DZ, H: box.DY, R: s.R, FT: faceThickness, SK: s.SK, T: carcassThickness, hand: s.hand,
+    W: box.DX, D: box.DZ, H: box.DY - kickH, R: s.R, FT: faceThickness, SK: s.SK, T: carcassThickness, hand: s.hand,
     OL: s.OL, OR: s.OR, OG: s.OG, SBK: s.SBK, SBT: s.SBT, STP: s.STP,
     lighten: s.lighten, B: s.B, onion: s.onion, OS: s.OS, blkS: s.blkS, blkF: s.blkF, ribs: s.ribs,
   }

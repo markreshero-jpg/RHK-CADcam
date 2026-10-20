@@ -25,8 +25,9 @@
 
 import type { CabinetInput, DeclaredSeam, DeclaredSeamGeom, ResolvedCasePart, ResolverError } from './types'
 import type { OutlinePt } from '../shapePath'
-import { calcCurvedEnd, curvedEndParts, type CurvedEndGeometry, type CurvedEndPart } from '../curvedEnd/geometry'
-import { curvedEndParams } from '../curvedEnd/settings'
+import { calcCurvedEnd, curvedEndParts, type CurvedEndGeometry, type CurvedEndPart, type Loop } from '../curvedEnd/geometry'
+import { calcCurvedKick, type CurvedKick, type CurvedKickParams, type KickRect } from '../curvedEnd/kick'
+import { curvedEndKickH, curvedEndParams } from '../curvedEnd/settings'
 
 /** Part key per engine part name. */
 export function curvedEndPartKey(name: CurvedEndPart['name']): ResolvedCasePart['part_key'] {
@@ -64,13 +65,86 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
   const s = cab.curved_end
   if (!s) return { parts: [], seams: [], errors: [], warnings: [] }
   const FT = cab.exposed_material.DZ, T = cab.material.DZ
-  const c = calcCurvedEnd(curvedEndParams(s, cab, FT, T))
+  // On a kick (C5) the engine builds the carcass above it and everything lifts TOEH.
+  const kickH = cab.rules.FLOAT ? 0 : curvedEndKickH(s, cab.assembly_class, cab.rules.TOEH)
+  const c = calcCurvedEnd(curvedEndParams(s, cab, FT, T, kickH))
   const errors: ResolverError[] = c.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'case' }))
   const warnings: ResolverError[] = c.notes.map(m => ({ code: 'CURVED_END_NOTE', message: m, part: 'case' }))
-  return {
-    parts: curvedEndCaseParts(c, cab.exposed_material.id, cab.material.id, s.grain, cab.exposed_edgeband_id),
-    seams: curvedEndSeams(c), errors, warnings,
+  const parts = curvedEndCaseParts(c, cab.exposed_material.id, cab.material.id, s.grain, cab.exposed_edgeband_id)
+    .map(p => (kickH ? { ...p, Y: p.Y + kickH } : p))
+  const seams = curvedEndSeams(c).map(sm => (kickH ? { ...sm, geom: { ...sm.geom, origin: { ...sm.geom.origin, y: sm.geom.origin.y + kickH } } } : sm))
+  if (kickH) {
+    const kp = curvedKickParamsFor(cab, kickH)
+    const k = calcCurvedKick(c, kp)
+    if (k.ok) parts.push(...curvedKickParts(c, k, kp, cab.toekick_face_material.id, cab.toekick_interior_material.id))
+    else errors.push(...k.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'toekick' as const })))
   }
+  return { parts, seams, errors, warnings }
+}
+
+/** Kick sizes for a curved end on a kick: the cabinet's toe rules + kick boards. */
+export function curvedKickParamsFor(cab: CabinetInput, kickH: number): CurvedKickParams {
+  const r = cab.rules
+  return { H: kickH, FC: r.TOEFC, s: r.TOESCF, sb: r.TOESCB, TF: cab.toekick_face_material.DZ, TI: cab.toekick_interior_material.DZ, SP: r.TOESP }
+}
+
+/** Upright panel from its kit plan rect + which face is outside, turned so
+ *  local z = 0 is that face (see the header). LH mirrors x. */
+function turnedPanel(
+  c: CurvedEndGeometry, key: ResolvedCasePart['part_key'], r: KickRect, outer: '-x' | '+x' | '-d' | '+d',
+  o: { h: number; y: number; t: number; mat: string },
+): ResolvedCasePart {
+  const { W, D } = c.p
+  const lh = c.p.hand === 'LH'
+  const X = (x: number) => (lh ? W - x : x)
+  let xa = X(r.x0), xb = X(r.x1)
+  if (xa > xb) [xa, xb] = [xb, xa]
+  const ox = lh && (outer === '-x' || outer === '+x') ? (outer === '-x' ? '+x' : '-x') : outer
+  const za = D - r.d1, zb = D - r.d0
+  const t = { X: 0, Z: 0, AY: 0, len: 0 }
+  if (ox === '-x')      Object.assign(t, { AY: 90,  X: xa, Z: zb, len: zb - za })
+  else if (ox === '+x') Object.assign(t, { AY: -90, X: xb, Z: za, len: zb - za })
+  else if (ox === '-d') Object.assign(t, { AY: 180, X: xb, Z: zb, len: xb - xa })   // outer = the front (+Z)
+  else                  Object.assign(t, { AY: 0,   X: xa, Z: za, len: xb - xa })   // outer = the wall side (−Z)
+  return {
+    part_key: key, DX: o.h, DY: r2(t.len), DZ: o.t, X: t.X, Y: o.y, Z: t.Z, AX: 0, AY: t.AY, AZ: 0,
+    material_id: o.mat, edge_band: { ...NO_BAND },
+  }
+}
+
+/** A kit plan loop → cabinet-frame outline points. Z = D − d is a reflection
+ *  (bulges flip); LH mirrors x as well (flips them back). */
+function planPts(c: CurvedEndGeometry, loop: Loop): OutlinePt[] {
+  const { W, D } = c.p
+  const lh = c.p.hand === 'LH'
+  return loop.map(([x, d, b]) => {
+    const p: OutlinePt = { x: lh ? W - x : x, y: D - d }
+    const bb = lh ? b : -b
+    return bb ? { ...p, b: bb } : p
+  })
+}
+
+/**
+ * Curved kick parts (C5): the bent kick board (kick face material, grain along
+ * the wrap, `wrap` like the face board so 3D / plan and the bend pockets come
+ * for free), the kick back and the spreaders (kick interior material, lifted
+ * TOEFC). Built from the floor up; the carcass sits on top at TOEH.
+ */
+export function curvedKickParts(
+  c: CurvedEndGeometry, k: CurvedKick, kp: CurvedKickParams, faceMat: string, interiorMat: string,
+): ResolvedCasePart[] {
+  const pts = planPts(c, k.loop)
+  const xs = pts.map(p => p.x), zs = pts.map(p => p.y)
+  const out: ResolvedCasePart[] = [{
+    part_key: 'crv:kick', DX: kp.H, DY: k.len, DZ: kp.TF,
+    X: Math.min(...xs), Y: 0, Z: Math.min(...zs), AX: 0, AY: 0, AZ: 0,
+    material_id: faceMat, edge_band: { ...NO_BAND }, grain_direction: 'horizontal',
+    wrap: { pts, h: kp.H, bend: { at: k.pockets, depth: r2(kp.TF - c.p.SK) } },
+  }]
+  const low = { h: kp.H - kp.FC, y: kp.FC, t: kp.TI, mat: interiorMat }
+  out.push(turnedPanel(c, 'crv:kick_back', k.back, '+d', low))
+  k.spreaders.forEach((r, i) => out.push(turnedPanel(c, `crv:kick_spr_${i + 1}`, r, '-x', low)))
+  return out
 }
 
 /** Engine geometry → cabinet-frame case parts. Pure (tested without a DB). */
@@ -82,24 +156,9 @@ export function curvedEndCaseParts(
   const X = (x: number) => (lh ? W - x : x)
   const out: ResolvedCasePart[] = []
 
-  // Upright panel from its kit plan rect + which face is outside, turned so
-  // local z = 0 is that face (see the header).
   const upright = (key: ResolvedCasePart['part_key'], x0: number, x1: number, d0: number, d1: number,
-    outer: '-x' | '+x' | '-d' | '+d') => {
-    let xa = X(x0), xb = X(x1)
-    if (xa > xb) [xa, xb] = [xb, xa]
-    const ox = lh && (outer === '-x' || outer === '+x') ? (outer === '-x' ? '+x' : '-x') : outer
-    const za = D - d1, zb = D - d0
-    const t = { X: 0, Z: 0, AY: 0, len: 0 }
-    if (ox === '-x')      Object.assign(t, { AY: 90,  X: xa, Z: zb, len: zb - za })
-    else if (ox === '+x') Object.assign(t, { AY: -90, X: xb, Z: za, len: zb - za })
-    else if (ox === '-d') Object.assign(t, { AY: 180, X: xb, Z: zb, len: xb - xa })   // outer = the front (+Z)
-    else                  Object.assign(t, { AY: 0,   X: xa, Z: za, len: xb - xa })   // outer = the wall side (−Z)
-    out.push({
-      part_key: key, DX: c.Hc, DY: t.len, DZ: T, X: t.X, Y: c.y0, Z: t.Z, AX: 0, AY: t.AY, AZ: 0,
-      material_id: carcassMat, edge_band: { ...NO_BAND },
-    })
-  }
+    outer: '-x' | '+x' | '-d' | '+d') =>
+    out.push(turnedPanel(c, key, { x0, x1, d0, d1 }, outer, { h: c.Hc, y: c.y0, t: T, mat: carcassMat }))
 
   // Face board: flat blank + its bent plan shape. Z = D − d is a reflection
   // (bulges flip); LH mirrors x as well (flips them back).
@@ -217,9 +276,9 @@ export function curvedEndSeams(c: CurvedEndGeometry): DeclaredSeam[] {
  *  overrides list every seam, assigned or not). */
 export function curvedEndSeamsFor(
   s: import('../curvedEnd/settings').CurvedEndSettings, box: { DX: number; DY: number; DZ: number },
-  faceThickness: number, carcassThickness: number,
+  faceThickness: number, carcassThickness: number, kickH = 0,
 ): DeclaredSeam[] {
-  return curvedEndSeams(calcCurvedEnd(curvedEndParams(s, box, faceThickness, carcassThickness)))
+  return curvedEndSeams(calcCurvedEnd(curvedEndParams(s, box, faceThickness, carcassThickness, kickH)))
 }
 
 /** Display name of a curved-end part key, e.g. "Rib 2", "Face Board". */
@@ -228,11 +287,14 @@ export function curvedEndPartLabel(key: string): string | null {
   const k = key.slice(4)
   const rib = /^rib_(\d+)$/.exec(k)
   if (rib) return `Curved End Rib ${rib[1]}`
+  const spr = /^kick_spr_(\d+)$/.exec(k)
+  if (spr) return `Curved Kick Spreader ${spr[1]}`
   return ({
     face: 'Curved Face Board', fix: 'Curved End Fixing Panel', back: 'Curved End Back',
     top: 'Curved End Top', bottom: 'Curved End Bottom',
     blk_side: 'Curved End Fixing Block (side)', blk_side_l: 'Curved End Fixing Block (left)',
     blk_side_r: 'Curved End Fixing Block (right)', blk_front: 'Curved End Fixing Block (front)',
+    kick: 'Curved Kick', kick_back: 'Curved Kick Back',
   } as Record<string, string>)[k] ?? null
 }
 
