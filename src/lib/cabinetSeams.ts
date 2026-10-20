@@ -139,6 +139,33 @@ export function internalSeamParts(): SeamPart[] {
   ]
 }
 
+// Curved fixed-panel cabinets (z_curved_end C3): their generator declares
+// these seams; one CM default per family (every former / block inherits it).
+export function curvedEndSeamParts(): SeamPart[] {
+  return [
+    {
+      partKey: 'crv:fix', label: 'Curved end fixing panel',
+      edges: [
+        { edgeLabel: 'Into the formers', seamKey: 'crv_fix:former', joinsLabel: 'Top / bottom / ribs' },
+        { edgeLabel: 'Into the back',    seamKey: 'crv_fix:back',   joinsLabel: 'Back' },
+      ],
+    },
+    {
+      partKey: 'crv:back', label: 'Curved end back',
+      edges: [
+        { edgeLabel: 'Into the formers', seamKey: 'crv_back:former', joinsLabel: 'Top / bottom / ribs' },
+      ],
+    },
+    {
+      partKey: 'crv:blk', label: 'Curved end fixing blocks',
+      edges: [
+        { edgeLabel: 'Out into the face board', seamKey: 'crv_block:face',   joinsLabel: 'Face board' },
+        { edgeLabel: 'Into the former notches', seamKey: 'crv_block:former', joinsLabel: 'Top / bottom / ribs' },
+      ],
+    },
+  ]
+}
+
 // ── Per-cabinet seam assignment state (shared by JointsPanel / PartEdgeJoints) ─
 
 export interface SeamAssignState {

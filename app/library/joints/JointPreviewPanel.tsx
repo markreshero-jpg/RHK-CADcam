@@ -100,7 +100,9 @@ function sectionDepthRect(
 }
 
 // ── Expression evaluator ──────────────────────────────────────────────────────
-// Variables: W/L/D = target part dims, T = thickness, MW/ML/MD/SW/SL/SD = both parts.
+// Variables: W/L/D = target part dims, T = thickness, MW/ML/MD/SW/SL/SD = both parts,
+// CW = the contact width across the joint (part A's thickness here; a declared
+// face-to-face seam — curved end blocks — passes the strip width).
 // Math globals (floor, ceil, round, abs, min, max, PI) are available via the JS global scope.
 
 function evalExpr(expr: string, vars: Record<string, number>): number | null {
@@ -128,6 +130,7 @@ function buildVars(
     T: isA ? thickA : thickB,  // thickness of the target part
     MW: masterW, ML: masterL, MD: masterD,
     SW: slaveW,  SL: slaveL,  SD: slaveD,
+    CW: thickA,
   }
 }
 

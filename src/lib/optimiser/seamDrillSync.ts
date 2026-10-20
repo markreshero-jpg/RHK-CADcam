@@ -456,6 +456,43 @@ function shapedNotchRoutes(
   }
 }
 
+// Curved end bend pockets (z_curved_end C3): one back-face pocket per curve on
+// the face board, the full height plus an overrun of the cutter radius + 1 past
+// the top and bottom edges so the cut-out comes out clean and square (decision
+// 13 — the nest gap is the outline cutter + pad + entry, ~14 with a 10 mm bit).
+// Same cutter as the finger-rail notches: the active 10 mm bit.
+// Part-local frame = DX × DY; the wrap runs along DX (vertical grain) or DY.
+export const CURVED_POCKET_OVERRUN = NOTCH_TOOL_DIA / 2 + 1
+
+export function collectCurvedPocketRoutes(rp: ResolvedCabinet, cabinetId: string, toolId: string | null): { rows: GeneratedRoute[]; skipped: number } {
+  rp = filterRemovedParts(rp)
+  const rows: GeneratedRoute[] = []
+  let skipped = 0
+  for (const p of rp.case_parts) {
+    const bend = p.wrap?.bend
+    if (!bend) continue
+    if (!toolId) { skipped += bend.at.length; continue }
+    // grain along the wrap (horizontal) puts the wrap on DY, else DX (resolveCurvedEnd)
+    const H = p.wrap!.h, along = p.grain_direction === 'horizontal' ? 'y' : 'x'
+    bend.at.forEach(([a, b], i) => {
+      const mid = (a + b) / 2, len = b - a, across = H + 2 * CURVED_POCKET_OVERRUN
+      rows.push({
+        source_table: 'case_parts', source_cabinet_id: cabinetId, source_part_key: `case_${p.part_key}`,
+        operation_type: 'route', operation_action: 'pocket', operation_key: `curved_pocket_${i}`,
+        ...(along === 'x'
+          ? { pos_x: round(mid), pos_y: round(H / 2), size_dx: round(len), size_dy: round(across) }
+          : { pos_x: round(H / 2), pos_y: round(mid), size_dx: round(across), size_dy: round(len) }),
+        length: null, width: null,
+        depth: round(bend.depth),
+        output_face: 'back',          // the face board machines back face up (kit §6)
+        output_to_cnc: true, router_tool_id: toolId,
+        parameters: { generated: GENERATED_MARK, kind: 'curved_pocket' },
+      })
+    })
+  }
+  return { rows, skipped }
+}
+
 // The notch cutter: the active 10mm router bit with the lowest tool number.
 async function notchToolId(): Promise<string | null> {
   const { data } = await supabase.from('cnc_tools').select('id,tool_number,diameter').eq('active', true)
@@ -513,7 +550,12 @@ async function runSeamDrillSync(cabinetId: string): Promise<SeamDrillSyncResult>
 
   // Generated routes + grooves (finger-rail notches + reliefs) — same wholesale replace.
   const hasRails = rp.case_parts.some(p => p.part_key.startsWith('fprail:'))
-  const notch = collectNotchRoutes(rp, cabinetId, hasRails ? await notchToolId() : null)
+  const hasBends = rp.case_parts.some(p => p.wrap?.bend)
+  const cutter = hasRails || hasBends ? await notchToolId() : null
+  const notch = collectNotchRoutes(rp, cabinetId, hasRails ? cutter : null)
+  const bends = collectCurvedPocketRoutes(rp, cabinetId, cutter)
+  notch.rows.push(...bends.rows)
+  if (hasBends && bends.skipped) console.warn(`[seamDrillSync] ${bends.skipped} curved end bend pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
   const { error: delRErr } = await supabase.from('part_operations')
     .delete()
     .eq('source_cabinet_id', cabinetId)
@@ -526,7 +568,7 @@ async function runSeamDrillSync(cabinetId: string): Promise<SeamDrillSyncResult>
   }
   if (hasRails && notch.skipped) console.warn(`[seamDrillSync] ${notch.skipped} finger-rail notch(es) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
 
-  return { written: rows.length + notch.rows.length, skipped: skipped + notch.skipped }
+  return { written: rows.length + notch.rows.length, skipped: skipped + notch.skipped + bends.skipped }
 }
 
 // Regenerate for many cabinets (e.g. every cabinet in a nest), with bounded

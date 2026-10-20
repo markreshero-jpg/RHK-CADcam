@@ -8,7 +8,7 @@
 //   // result.case_parts, result.toekick_parts, etc. ready to write to Supabase
 // ============================================================
 
-import { CabinetInput, ResolvedCabinet, ResolverError } from './types'
+import { CabinetInput, DeclaredSeam, ResolvedCabinet, ResolverError } from './types'
 import { resolveCaseParts }      from './resolveCase'
 import { resolveToekickParts }   from './resolveToekick'
 import { resolveInternalParts }  from './resolveInternal'
@@ -65,9 +65,11 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // Bulkheads (z_bulkhead): fascia, returns + fixing cleat.
   if (cab.bulkhead) caseParts.push(...resolveBulkhead(cab, r))
   // Curved fixed-panel cabinets (z_curved_end): face board, formers, panels, blocks.
+  const declaredSeams: DeclaredSeam[] = []
   if (cab.curved_end) {
     const crv = resolveCurvedEnd(cab)
     caseParts.push(...crv.parts)
+    declaredSeams.push(...crv.seams)
     allErrors.push(...crv.errors)
     allWarnings.push(...crv.warnings)
   }
@@ -128,7 +130,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // For each seam that has a joint assigned (per-cabinet or CM default) — carcase
   // part seams plus internal seams (shelf ↔ support, divider ↔ panel) — collect
   // the joint type operations ready for display and drilling export.
-  const seamJoints = resolveJoints(cab, caseParts, internalParts)
+  const seamJoints = resolveJoints(cab, caseParts, internalParts, declaredSeams)
 
   // ── 6b. Hinges ────────────────────────────────────────────────
   // One instance per physical hinge on each door zone. Count is driven by the

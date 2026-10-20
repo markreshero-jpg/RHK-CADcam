@@ -502,6 +502,10 @@ export interface JointTypeOp {
   auto_tool:         boolean
   notes:             string | null
   expressions:       Record<string, string> | null
+  // Drop this op's holes that land within this distance (mm, measured on the
+  // drilled face) of a hole from another op on the same part — e.g. a curved
+  // end block's face screws give way to its end screws (z_curved_end C3). null = keep all.
+  skip_near_mm?:     number | null
 }
 
 // Single source of truth for mapping a raw joint_type_operations row to a
@@ -529,6 +533,7 @@ export function rowToJointTypeOp(op: Record<string, unknown>): JointTypeOp {
     auto_tool:         (op.auto_tool as boolean) ?? false,
     notes:             (op.notes as string | null) ?? null,
     expressions:       (op.expressions as Record<string, string> | null) ?? null,
+    skip_near_mm:      op.skip_near_mm != null && Number(op.skip_near_mm) > 0 ? Number(op.skip_near_mm) : null,
   }
 }
 
@@ -563,6 +568,33 @@ export interface ResolvedSeamJoint {
   // back panel lies along X with the bottom in front (kind 'back_bottom'); the
   // holes are turned back to cabinet coords. Key `${part_a}|${part_b}`.
   shaped?: { turn: number; kind: 'side' | 'back_bottom'; side: 'left' | 'right' }
+  // Generator-declared seam (z_curved_end C3): the generator knows exactly
+  // where its parts meet, so it states the joint line instead of the resolver
+  // finding it. Drilled by declaredSeamDrillOps. Key `${part_a}|${part_b}`.
+  declared?: DeclaredSeamGeom
+}
+
+// A declared joint line in cabinet coords. offset_z / spacing run `along` from
+// `origin`; offset_y runs `across` the contact (width CW — A's thickness for an
+// edge on a face, a strip's width for face-to-face). Part B (an upright, turned
+// AY) is drilled through from its inner face; part A's ops enter at the contact
+// plane heading `toward` A.
+export interface DeclaredSeamGeom {
+  origin: { x: number; y: number; z: number }
+  along:  { x: number; y: number; z: number }
+  across: { x: number; y: number; z: number }
+  toward: { x: number; y: number; z: number }
+  length: number
+  width:  number
+}
+
+// What a generator declares; resolveJoints adds the joint assignment cascade.
+export interface DeclaredSeam {
+  seam_key:    string   // `${part_a}|${part_b}`
+  generic_key: string   // construction-method default key, e.g. 'crv_fix:former'
+  part_a_key:  string
+  part_b_key:  string
+  geom:        DeclaredSeamGeom
 }
 
 // ── Drawer Box Input ──────────────────────────────────────────
@@ -1347,7 +1379,9 @@ export interface ResolvedCasePart extends ResolvedPart {
   // (x along the width, y = Z from the back), true arcs as bulges, plus its
   // height. 3D / plan / elevation draw the part from this; DX × DY stay the
   // flat blank (DY with the grain). Persisted (case_parts.wrap).
-  wrap?: { pts: OutlinePt[]; h: number }
+  // `bend` = the back-face bend pockets: [start, end] along the wrap from the gable
+  // (front) end — DOUBLE: from the left wall end — and their depth (FT − SK).
+  wrap?: { pts: OutlinePt[]; h: number; bend?: { at: [number, number][]; depth: number } }
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
             'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
             `fprail:${number}`   // finger-pull backing rail (z_handles H6)

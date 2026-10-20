@@ -9,6 +9,8 @@ import { enumerateInternalSeams } from '@/src/lib/resolver/resolveJoints'
 import { enumerateShapedSeams } from '@/src/lib/resolver/shapedSeams'
 import { shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { curvedEndSeamsFor } from '@/src/lib/resolver/resolveCurvedEnd'
+import { normaliseCurvedEnd } from '@/src/lib/curvedEnd/settings'
 import type { SeamJointAssign } from '@/src/lib/resolver/types'
 
 // Compact per-edge joint (drilling) control for the part properties panel.
@@ -79,7 +81,14 @@ export default function PartEdgeJoints({ cabinet, rp, partKey, onUpdate }: {
   const shapedSeams = enumerateShapedSeams(rp.case_parts, rp.internal_parts, {
     adjFullBank: adjDrillEffective === 'full_bank',
   }).filter(c => c.part_a_key === partKey || c.part_b_key === partKey)
-  const genericByKey = new Map(shapedSeams.map(c => [c.seam_key, c.generic_key]))
+  // Curved end (z_curved_end C3): the generator's declared seams on this part.
+  const crv = normaliseCurvedEnd(cabinet.curved_end)
+  const crvInput = getCachedInput(cabinet.id)
+  const declaredSeams = crv
+    ? curvedEndSeamsFor(crv, { DX: cabinet.dx, DY: cabinet.dy, DZ: cabinet.dz }, crvInput?.exposed_material.DZ ?? 18, crvInput?.material.DZ ?? 16.5)
+        .filter(c => c.part_a_key === partKey || c.part_b_key === partKey)
+    : []
+  const genericByKey = new Map([...shapedSeams, ...declaredSeams].map(c => [c.seam_key, c.generic_key]))
 
   const getSeamState = (seamKey: string) => getSeamAssignState(carcaseJoints, cmDefaults, seamKey, genericByKey.get(seamKey))
 
@@ -111,7 +120,7 @@ export default function PartEdgeJoints({ cabinet, rp, partKey, onUpdate }: {
         ? `→ ${internalSeamPartLabel(c.part_b_key)}${c.bank ? ' (bank)' : ''}`
         : `← ${c.bank ? 'Shelf Bank' : internalSeamPartLabel(c.part_a_key)}`,
     })),
-    ...shapedSeams.map(c => {
+    ...[...shapedSeams, ...declaredSeams.map(d => ({ ...d, bank: undefined }))].map(c => {
       const other = c.part_a_key === partKey ? c.part_b_key : c.part_a_key
       const name = shapedPartLabel(other) ?? (other.startsWith('int_') ? internalSeamPartLabel(other) : ({
         left_side: 'Left Gable', right_side: 'Right Gable', bottom: 'Bottom', back: 'Back',

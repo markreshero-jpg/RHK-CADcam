@@ -45,6 +45,7 @@ interface JointTypeOperation {
   auto_tool:         boolean
   notes:             string | null
   expressions:       Record<string, string> | null
+  skip_near_mm:      number | null
 }
 
 interface Fastener {
@@ -116,6 +117,7 @@ const OP_DEFAULTS: Omit<JointTypeOperation, 'id' | 'joint_type_id'> = {
   auto_tool:         true,
   notes:             null,
   expressions:       null,
+  skip_near_mm:      null,
 }
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -146,6 +148,7 @@ function toOp(r: Record<string, unknown>): JointTypeOperation {
     auto_tool:         (r.auto_tool as boolean) ?? false,
     notes:             (r.notes as string | null) ?? null,
     expressions:       (r.expressions as Record<string, string> | null) ?? null,
+    skip_near_mm:      r.skip_near_mm != null ? Number(r.skip_near_mm) : null,
   }
 }
 
@@ -311,7 +314,7 @@ export default function JointsClient({
   }
 
   async function patchOp(id: string, key: keyof JointTypeOperation, raw: string | number) {
-    const numKeys: (keyof JointTypeOperation)[] = ['operation_order','tool_diameter_mm','depth_mm','offset_x_mm','offset_y_mm','offset_z_mm','qty','spacing_mm','qty2','spacing2_mm']
+    const numKeys: (keyof JointTypeOperation)[] = ['operation_order','tool_diameter_mm','depth_mm','offset_x_mm','offset_y_mm','offset_z_mm','qty','spacing_mm','qty2','spacing2_mm','skip_near_mm']
     const val = numKeys.includes(key) ? parseFloat(raw as string) : raw
     if (numKeys.includes(key) && isNaN(val as number)) return
     const { error } = await supabase.from('joint_type_operations').update({ [key]: val }).eq('id', id)
@@ -571,6 +574,7 @@ const EXPR_SUGGESTIONS: Record<string, { label: string; formula: string }[]> = {
   offset_y_mm: [
     { label: 'Centre (zero)',      formula: '0' },
     { label: 'Half thickness',     formula: 'T / 2' },
+    { label: 'Centre of the contact', formula: 'CW / 2' },
     { label: 'Half part width',    formula: 'W / 2' },
   ],
   offset_z_mm: [
@@ -645,6 +649,7 @@ function OpsTable({
               <th className={thCls} style={{ width: 58 }}>Depth</th>
               <th className={thCls} style={{ width: 56 }} title="Position along the face (offset_y for end/normal, offset_x for top/bottom)">U</th>
               <th className={thCls} style={{ width: 56 }} title="Distance from front face (offset_z)">V (front)</th>
+              <th className={thCls} style={{ width: 56 }} title="Skip near: drop this op's holes within this many mm of another op's hole in the same part (blank = keep all)">Skip ≤</th>
               <th className={thCls} style={{ width: 28 }} />
             </tr>
           </thead>
@@ -761,6 +766,11 @@ function OpsTable({
                       onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
                       className={numCls} />
                   </td>
+                  <td className={tdCls} title="0 = keep every hole">
+                    <NumCell value={op.skip_near_mm ?? 0}
+                      onChange={n => onPatch(op.id, 'skip_near_mm', Math.max(0, n))}
+                      className={numCls} />
+                  </td>
                   <td className="border border-edge-strong px-1.5 text-center">
                     <button onClick={e => { e.stopPropagation(); onDelete(op.id) }}
                       className="text-ink-subtle hover:text-red-400 transition-colors">✕</button>
@@ -770,7 +780,7 @@ function OpsTable({
             })}
             {ops.length === 0 && (
               <tr>
-                <td colSpan={15} className="px-4 py-6 text-center text-xs text-ink-subtle">
+                <td colSpan={16} className="px-4 py-6 text-center text-xs text-ink-subtle">
                   No operations yet. Click + Add operation below.
                 </td>
               </tr>

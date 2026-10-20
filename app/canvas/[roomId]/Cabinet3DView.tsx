@@ -24,7 +24,7 @@ import {
   panelFaceColors, unpackMatCol,
   Part, PartPropertiesPanel, PreviewCanvas, PassivePartsContext,
 } from '@/src/components/three/PartViewer'
-import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamDrillsFor, intoPartFrame, seamExtentBoxes, coalesceOpposingDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelOutline, caseBevelNote, tkBevelOutline, tkBevelNote } from '@/src/lib/jointDrilling'
+import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamDrillsFor, intoPartFrame, seamExtentBoxes, coalesceOpposingDrills, dropNearDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelOutline, caseBevelNote, tkBevelOutline, tkBevelNote } from '@/src/lib/jointDrilling'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, parseZonePartId, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
@@ -1378,7 +1378,7 @@ export function CabinetScene({
     const turned = rp.case_parts.filter(p => p.AY)
     const eb = turned.length ? seamExtentBoxes(rp) : null
     const ext = eb ? { ...boxByKey, ...Object.fromEntries(turned.map(p => [p.part_key, eb[p.part_key]])) } : boxByKey
-    for (const d of coalesceOpposingDrills(flat, ext)) {
+    for (const d of coalesceOpposingDrills(dropNearDrills(flat), ext)) {
       const arr = m.get(d.targetPartKey) ?? []
       arr.push(d)
       m.set(d.targetPartKey, arr)

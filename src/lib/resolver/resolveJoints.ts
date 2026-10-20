@@ -1,4 +1,4 @@
-import { CabinetInput, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, seamAssignJoint, seamAssignRows } from './types'
+import { CabinetInput, DeclaredSeam, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, seamAssignJoint, seamAssignRows } from './types'
 import { toGenericSeamKey } from '../cabinetSeams'
 import { enumerateShapedSeams } from './shapedSeams'
 
@@ -136,6 +136,8 @@ export function resolveJoints(
   cab: CabinetInput,
   caseParts: ResolvedCasePart[],
   internalParts: ResolvedInternalPart[] = [],
+  // Generator-declared seams (z_curved_end C3) — same assignment cascade.
+  declared: DeclaredSeam[] = [],
 ): ResolvedSeamJoint[] {
   if (!caseParts.length) return []
 
@@ -233,6 +235,24 @@ export function resolveJoints(
       ...(cand.internal_edge ? { internal_edge: cand.internal_edge } : {}),
       ...(cand.bank ? { bank: cand.bank } : {}),
       ...(rows !== undefined ? { rows_override: rows } : {}),
+    })
+  }
+
+  // Declared seams: per-cabinet override → exact key → the generator's generic key.
+  for (const d of declared) {
+    const entry = Object.prototype.hasOwnProperty.call(carcaseJoints, d.seam_key) ? carcaseJoints[d.seam_key] : undefined
+    const assigned = seamAssignJoint(entry)
+    const jointTypeId = assigned !== undefined ? assigned : jointDefaults[d.seam_key] ?? jointDefaults[d.generic_key] ?? null
+    if (!jointTypeId) continue
+    result.push({
+      seam_key:        d.seam_key,
+      joint_type_id:   jointTypeId,
+      joint_type_name: jointTypeNames[jointTypeId] ?? 'Unknown',
+      source:          assigned !== undefined ? 'cabinet' : 'method',
+      part_a_key:      d.part_a_key,
+      part_b_key:      d.part_b_key,
+      ops:             jointTypeOps[jointTypeId] ?? [],
+      declared:        d.geom,
     })
   }
 

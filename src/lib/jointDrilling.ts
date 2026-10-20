@@ -225,6 +225,10 @@ export interface DrillOpPos {
   router_tool_id?: string | null
   drill_id?:       string | null
   auto_tool?:      boolean
+  // Joint op skip-near rule (JointTypeOp.skip_near_mm) + which seam op made the
+  // hole, so dropNearDrills only yields to OTHER ops' holes (z_curved_end C3).
+  skipNear?:       number
+  opRef?:          string
 }
 
 // Expression evaluator: supports math globals + part-dimension variables.
@@ -240,7 +244,9 @@ function evalExpr(expr: string, vars: Record<string, number>): number | null {
 // thickA/thickB = material thickness of each part (varies by panel orientation in caseBox).
 // T resolves to the TARGET part's thickness so expressions like "T" mean "drill to my depth".
 // Returns null if any expression-bearing field fails to evaluate — callers must skip the op.
-function evalOp(op: JointTypeOp, boxA: Box, boxB: Box, thickA: number, thickB: number): {
+// CW = the contact width across the joint: part A's thickness for an edge on a
+// face, or the strip's width on a declared face-to-face seam.
+function evalOp(op: JointTypeOp, boxA: Box, boxB: Box, thickA: number, thickB: number, contactWidth = thickA): {
   tool_diameter_mm: number; depth_mm: number
   offset_x_mm: number; offset_y_mm: number; offset_z_mm: number
   qty: number; spacing_mm: number | null
@@ -255,6 +261,7 @@ function evalOp(op: JointTypeOp, boxA: Box, boxB: Box, thickA: number, thickB: n
     T:  isA ? thickA : thickB,
     MW: boxA.w, ML: boxA.h, MD: boxA.d,
     SW: boxB.w, SL: boxB.h, SD: boxB.d,
+    CW: contactWidth,
   }
   const ev = (field: string, fallback: number): number | null =>
     exprs[field] != null ? evalExpr(exprs[field], vars) : fallback
@@ -807,9 +814,83 @@ export function intoPartFrame<T extends DrillOpPos>(p: Pick<ResolvedCasePart, 'A
   return rest as T
 }
 
-/** One seam's drills, shaped or legacy. */
+/** One seam's drills, declared, shaped or legacy. */
 export function seamDrillsFor(sj: ResolvedSeamJoint, rp: Pick<ResolvedCabinet, 'case_parts' | 'internal_parts'>, boxA: Box, boxB: Box): DrillOpPos[] {
+  if (sj.declared) return declaredSeamDrillOps(sj, rp.case_parts, boxA, boxB)
   return sj.shaped ? shapedSeamDrillOps(sj, rp.case_parts, rp.internal_parts ?? []) : seamJointDrillOps(sj, boxA, boxB)
+}
+
+// ── Declared seams (z_curved_end C3) ──────────────────────────────────────────
+// The generator states the joint line (DeclaredSeamGeom). Each drill op lays its
+// holes from `origin`: offset_z + i·spacing `along`, offset_y (+ the 2nd-axis
+// step) `across`. Part B — an upright turned by AY, local z = 0 its outer face —
+// is bored right through from its INNER face (the face its footprint frame puts
+// up on the machine, so every hole in it machines on one face); part A's ops
+// enter at the contact heading `toward` it, to the op's depth.
+const axisOf = (v: { x: number; y: number; z: number }): DrillAxis =>
+  Math.abs(v.x) > 0.5 ? (v.x > 0 ? 'x+' : 'x-') : Math.abs(v.y) > 0.5 ? (v.y > 0 ? 'y+' : 'y-') : (v.z > 0 ? 'z+' : 'z-')
+
+export function declaredSeamDrillOps(sj: ResolvedSeamJoint, caseParts: ResolvedCasePart[], boxA: Box, boxB: Box): DrillOpPos[] {
+  const g = sj.declared
+  const a = caseParts.find(p => p.part_key === sj.part_a_key), b = caseParts.find(p => p.part_key === sj.part_b_key)
+  if (!g || !a || !b) return []
+  const rad = (b.AY ?? 0) * Math.PI / 180
+  const nIn = { x: Math.round(Math.sin(rad)), y: 0, z: Math.round(Math.cos(rad)) }   // outer → inner face of B
+  const intoB = axisOf({ x: -nIn.x, y: 0, z: -nIn.z })                                 // inner face → out through B
+  const innerX = b.X + b.DZ * nIn.x, innerZ = b.Z + b.DZ * nIn.z
+  const evA = { ...boxA, d: g.length }, evB = { ...boxB, d: g.length }
+  const out: DrillOpPos[] = []
+  for (const op of sj.ops) {
+    if (op.machine_operation !== 'drill') continue
+    const ev = evalOp(op, evA, evB, a.DZ, b.DZ, g.width)
+    if (!ev) continue
+    const spc = ev.spacing_mm ?? 0
+    for (let i = 0; i < ev.qty; i++) {
+      for (const du of uSteps(ev.qty2, ev.spacing2_mm)) {
+        const s = ev.offset_z_mm + i * spc, t = ev.offset_y_mm + du
+        const p = {
+          x: g.origin.x + g.along.x * s + g.across.x * t,
+          y: g.origin.y + g.along.y * s + g.across.y * t,
+          z: g.origin.z + g.along.z * s + g.across.z * t,
+        }
+        let axis: DrillAxis, depthLen: number
+        if (op.target_part === 'part_b') {
+          if (op.face !== 'normal') continue
+          if (nIn.x) p.x = innerX; else p.z = innerZ
+          axis = intoB; depthLen = b.DZ
+        } else {
+          if (op.face !== 'normal' && op.face !== 'end') continue
+          axis = axisOf(g.toward); depthLen = ev.depth_mm
+        }
+        out.push({
+          ...p, axis, radius: ev.tool_diameter_mm / 2, depthLen,
+          targetPartKey: op.target_part === 'part_b' ? sj.part_b_key : sj.part_a_key,
+          router_tool_id: op.router_tool_id, drill_id: op.drill_id, auto_tool: op.auto_tool,
+          opRef: `${sj.seam_key}#${op.id}`,
+          ...(op.skip_near_mm ? { skipNear: op.skip_near_mm } : {}),
+        })
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Joint ops with a skip-near distance give way: drop each of their holes that
+ * lands within that distance of a hole from ANOTHER op (that isn't itself
+ * giving way) in the same part, measured on the drilled face (the axis
+ * coordinate ignored). The curved end's block face screws vs its end screws.
+ */
+export function dropNearDrills<T extends DrillOpPos>(drills: T[]): T[] {
+  if (!drills.some(d => d.skipNear)) return drills
+  const firm = drills.filter(d => !d.skipNear)
+  const gap = (a: DrillOpPos, b: DrillOpPos) => {
+    const ax = a.axis[0]
+    const dx = ax === 'x' ? 0 : a.x - b.x, dy = ax === 'y' ? 0 : a.y - b.y, dz = ax === 'z' ? 0 : a.z - b.z
+    return Math.hypot(dx, dy, dz)
+  }
+  return drills.filter(d => !d.skipNear || !firm.some(e =>
+    e.targetPartKey === d.targetPartKey && e.axis[0] === d.axis[0] && e.opRef !== d.opRef && gap(d, e) < d.skipNear!))
 }
 
 // Cabinet-axis extents per seam part key, for coalesceOpposingDrills: a turned
@@ -967,5 +1048,5 @@ export function cabinetSeamDrills(rp: ResolvedCabinet): SeamDrill[] {
       out.push({ ...d, source: sj.source, seamKey: sj.seam_key })
     }
   }
-  return coalesceOpposingDrills(out, seamExtentBoxes(rp))
+  return coalesceOpposingDrills(dropNearDrills(out), seamExtentBoxes(rp))
 }

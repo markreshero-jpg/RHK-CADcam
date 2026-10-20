@@ -8,10 +8,11 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → C2 built 2026-10-20 (migration `migration_c2_curved_end.sql` applied: columns,
-> part-key check, BCRVFIXP / WCRVFIXP / TCRVFIXP library rows). **In-app check pending (Mark)**: place
-> each class from F3 → End Panels, flip Right / Left / Both, change radius / skin / scribes / blocks,
-> look at plan, 3D, elevation and the cut list. Then C3 (pocket + joints drilling).
+> **RESUME HERE** → C3 built 2026-10-20 (`migration_c3_curved_end_joints.sql` applied). **In-app check
+> pending (Mark)**: Library → Joints shows the four `CRV …` joints; Construction methods → Curved ends
+> shows their defaults; on a placed curved end, 3D drilling (Machining layer) shows the holes, a part’s
+> edge joints list its seams, and the optimiser G-code has the Ø5 through-holes plus one bend pocket per
+> curve on the face board (10 mm bit, 6 mm past top and bottom). Then C4 (rib cut-out route).
 
 ---
 
@@ -152,6 +153,45 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   - ~~face board edge banding~~ → decision 16 (gable end only), built 2026-10-20
   - a code suffix anywhere other than the sidebar header (the label stays B1, B2, …)
 
+## Built in C3 (2026-10-20)
+
+- **Declared seams**:
+  - `resolveCurvedEnd.curvedEndSeams` declares every join as `DeclaredSeam` (part A = screwed into,
+    part B = drilled through), with the kit's join lines (SPEC §5).
+  - The resolver passes them to `resolveJoints`. The cascade is: per-cabinet `carcase_joints[seam]` →
+    the exact key → the generic key.
+  - Generic keys: `crv_fix:former`, `crv_back:former`, `crv_fix:back`, `crv_block:face`,
+    `crv_block:former`.
+  - Seam keys are `<partA>|<partB>`, e.g. `crv:rib_1|crv:fix`.
+- **Drilling**:
+  - `jointDrilling.declaredSeamDrillOps` lays each op along the declared line.
+  - Part B is bored through from its inner face, which is the face its CNC frame puts up, so each panel
+    machines on one face.
+  - The holes flow through `seamDrillsFor` → `cabinetSeamDrills` → `seamDrillSync` (part_operations)
+    and the 3D Machining layer, like every joint.
+  - New formula variable **`CW`** = the contact width (A's thickness, or the block width face-to-face).
+- **Skip-near** (general joint option): `joint_type_operations.skip_near_mm`, the "Skip ≤" column in
+  Library → Joints. An op's holes give way to another op's holes within that distance on the same part
+  (`dropNearDrills`). The kit uses 20 for the block face screws.
+- **Library joints** (seeded; `src/lib/curvedEnd/joints.ts` is the source; the migration is checked by a
+  test): `CRV screw 50/250`, `CRV screw 40/250`, `CRV block face screw`, `CRV block end screw`. They are
+  the defaults on every construction-method schedule row. Construction methods → Joint Defaults →
+  "Curved ends" edits them. Per cabinet, a part's edge joints list its curved-end seams.
+- **Proof**: every kit fixture goes through `resolveCabinet` → `collectDrillRows`, and each part's holes
+  equal the kit's to 0.01 mm. The LH fixing panel reads mirrored, because it is the same part turned
+  over (kit §1). A 1-rib case proves the skip-near drop.
+- **Bend pocket**:
+  - Built by `seamDrillSync.collectCurvedPocketRoutes`: one generated route pocket per curve on the
+    face board's back face, depth FT − SK.
+  - It runs the full height plus **cutter radius + 1 = 6 mm** past the top and bottom (decision 13).
+  - It uses the finger-rail notch cutter (the active 10 mm bit). Without one it is skipped and logged.
+  - The positions are stored on the part as `wrap.bend` (from the gable end; DOUBLE from the left wall
+    end). The axis follows the grain.
+- **Not yet**:
+  - the pocket drawn in 3D
+  - a nest check that the overrun clears the neighbouring part (the gap is ~14 vs a 6 overrun today)
+  - the cabinet edit modal's Joints tab (box seams only); the part's edge joints cover it
+
 ## Mapping onto the native pipeline (proposed)
 
 | Kit item | Native home |
@@ -172,7 +212,7 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   (numbers, outlines and holes vs the golden DXFs)
 - [x] **C2** (built 2026-10-20, checked in-app by Mark 2026-10-20) Library entries + placement + hand + RHS-bar
   parameters, footprint preset, resolver hook, shop materials, 3D
-- [ ] **C3** Operations: pocket + drill ops generated and persisted, reaching the optimiser/G-code; cut
+- [~] **C3** (built 2026-10-20, in-app check pending) Operations: pocket + drill ops generated and persisted, reaching the optimiser/G-code; cut
   list and costing; grain option
 - [ ] **C4** Rib cut-out: inner-loop route with per-op depth (onion skin) in the optimiser/G-code
 - [ ] **C5** Curved kick + benchtop follow (on kick-height placement)
