@@ -80,5 +80,10 @@ library row against it:
 | Front, 127 | 47.5, 79.5, 111.5 | same | ✅ |
 | Front, 178 | 47.5, 79.5, 143.5, 175.5 (pairs, 128 apart) | 47.5, 79.5, 111.5, 143.5 | ❌ |
 
+**2026-10-20 — front holes moved to the shop rule:** all Dragon Pro front holes start
+**64 mm up from the bottom of the drawer front** (the guide's 47.5 is from its own reference
+line). Every `drawer_front` op shifted +16.5 in the library: 95 → 64, 96 · 127 → 64, 96, 128 ·
+178 → 64, 96 + 128, 160.
+
 (Back holes: guide gives them down from the back's top — 20 / 22 / 39, 32 pitch, 9 in.
 The DTC Dragon Pro drawer-box method makes the back box height − 11 = 84 / 116 / 167, as the guide.)
