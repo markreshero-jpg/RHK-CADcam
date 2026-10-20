@@ -43,6 +43,9 @@ export interface CurvedEndParams {
   B: number            // rib cut-out border
   onion: boolean; OS: number   // onion skin on the rib cut-out
   blkS: boolean; blkF: boolean // side / front fixing blocks
+  /** Number of ribs between the top and bottom (RHK addition, Mark 2026-10-20).
+   *  null = the kit's rule: add ribs until the clear gap is under 170 (250 above a 2 mm skin). */
+  ribs?: number | null
 }
 
 export const CURVED_END_DEFAULTS: CurvedEndParams = {
@@ -164,7 +167,9 @@ export function calcCurvedEnd(input: Partial<CurvedEndParams>): CurvedEndGeometr
   const CX = W - R, CD = R, RI = R - SK
   const maxGap = SK <= 2 ? 170 : 250
   let g = 1
-  while ((Hc - (g + 1) * T) / g >= maxGap && g < 60) g++
+  const manualRibs = p.ribs != null && Number.isFinite(p.ribs) && p.ribs >= 0
+  if (manualRibs) g = Math.min(60, Math.round(p.ribs!) + 1)
+  else while ((Hc - (g + 1) * T) / g >= maxGap && g < 60) g++
   const pitch = (Hc - T) / g
   const levels = Array.from({ length: g + 1 }, (_, i) => i * pitch)
   const arc = Math.PI / 2 * R
@@ -258,6 +263,10 @@ export function calcCurvedEnd(input: Partial<CurvedEndParams>): CurvedEndGeometr
   // Decision 10 (RHK addition to the kit): skin outside 2–3 mm is a warning, not a block.
   else if (SK < SKIN_MIN) c.notes.push(`Skin ${f1(SK)} mm is under ${SKIN_MIN} mm — too thin, the face board may crack or break through.`)
   else if (SK > SKIN_MAX) c.notes.push(`Skin ${f1(SK)} mm is over ${SKIN_MAX} mm — too thick to bend easily.`)
+  // A typed rib count: too many can't fit; too few leaves the face board unsupported.
+  if (manualRibs && c.clear < 1) c.warnings.push(`Too many ribs for the carcass height: ${g - 1} ribs leave no gap between the formers.`)
+  else if (manualRibs && c.clear >= maxGap)
+    c.notes.push(`${g - 1} rib${g === 2 ? '' : 's'} leave${g === 2 ? 's' : ''} ${f1(c.clear)} between supports — over the ${maxGap} the kit allows for a ${f1(SK)} mm skin; the face board may flex.`)
   return c
 }
 

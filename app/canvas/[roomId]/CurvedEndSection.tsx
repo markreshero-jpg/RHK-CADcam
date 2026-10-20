@@ -76,6 +76,19 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
       {row('Skin', s.SK, v => { if (v > 0) put({ SK: v }) },
         `Face board left in the bend pocket (pocket depth = board − skin). ${SKIN_MIN}–${SKIN_MAX} mm bends best.`)}
 
+      <div className="grid grid-cols-[1fr_3.5rem_4.5rem] gap-1 items-center"
+        title={`Formers between the top and bottom. Auto adds them until the clear gap is under ${c.maxGap}.`}>
+        <label className="text-xs text-gray-300">Ribs</label>
+        <label className="flex items-center gap-1 text-[10px] text-gray-400">
+          <input type="checkbox" checked={s.ribs == null}
+            onChange={e => put({ ribs: e.target.checked ? null : c.gaps - 1 })} />
+          Auto
+        </label>
+        <CalcInput value={c.gaps - 1} decimals={0} disabled={s.ribs == null}
+          onCommit={v => { if (v >= 0) put({ ribs: Math.round(v) }) }}
+          className={inp + ' text-right disabled:opacity-40'} />
+      </div>
+
       <p className={lbl}>Overhangs (trimmed after glue-up)</p>
       {single && row('Gable end', s.OG, v => put({ OG: Math.max(0, v) }), 'Face board runs past the fixing panel at its front end')}
       {single
@@ -105,7 +118,8 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
       )}
 
       <p className="text-[10px] text-gray-500">
-        Face board {f1(c.wrapLen)} × {f1(cabinet.dy)} · {f1(FT)} · pocket {f1(FT - s.SK)} deep · {c.gaps - 1} rib{c.gaps - 1 === 1 ? '' : 's'} at {f1(c.pitch)} c/c
+        Face board {f1(c.wrapLen)} × {f1(cabinet.dy)} · {f1(FT)} · pocket {f1(FT - s.SK)} deep
+        {single && !s.OG ? ' · gable end edged' : ''} · {c.gaps - 1} rib{c.gaps - 1 === 1 ? '' : 's'} at {f1(c.pitch)} c/c, {f1(c.clear)} clear
       </p>
       {[...c.warnings, ...c.notes].map(m => (
         <p key={m} className={`text-[10px] ${c.warnings.includes(m) ? 'text-red-400' : 'text-amber-400'}`}>{m}</p>

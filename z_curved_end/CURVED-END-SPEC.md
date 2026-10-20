@@ -81,7 +81,15 @@ The cabinet is a closed carcass with no doors. It is built from these parts (kit
     a 10 mm bit (5 mm radius). The current part spacing is believed to be about 12–14 mm; check this in
     C3 and warn if spacing ≤ the overrun.
 14. **Curved kick** = the same skin-pocket bend on the kick board (*needs work*, C5).
-15. The kit lives in `z_curved_end/kit/`. Its README prompt and DXF checker refer to the old S2M
+16. **Face board edging** (Mark, 2026-10-20): the top and bottom edges are **not** taped. The **gable
+    end that butts into the next cabinet is** taped (exposed edgeband). Single ends only. The wall end
+    is not taped (it is scribed or trimmed). With a gable overhang the end is trimmed after glue-up, so
+    it is left raw.
+17. **Rib count is editable** (Mark, 2026-10-20: "number of internal supports editable"). The default is
+    **Auto** (the kit's gap rule). A typed count sets the ribs between the top and bottom, evenly
+    pitched. Fewer than the rule allows gives a warning (the face board may flex). Too many to fit
+    blocks the CNC.
+18. The kit lives in `z_curved_end/kit/`. Its README prompt and DXF checker refer to the old S2M
     workflow; only the rules and fixtures are used here.
 
 ## Geometry rules
@@ -128,7 +136,7 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   - Uprights (fixing panel, back, blocks) are face-kind turned panels (`isCurvedEndUprightKey`).
   - Formers are horizontal, with the kit outline.
   - No edge banding (the kit has none).
-- **UI**: `CurvedEndSection.tsx` in the cabinet panel. Header shows `BCRVFIXP/R` etc. Sections:
+- **UI**: `CurvedEndSection.tsx` in the cabinet panel. Header shows `BCRVFIXP/R` etc. Sections (plus a Ribs count with an Auto tick, decision 17):
   - curve hand, face grain
   - radius, skin
   - overhangs, scribes
@@ -141,7 +149,7 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   - rib cut-outs as parts (C4)
   - kick / benchtop (C5)
   - the face-board-longer-than-sheet panel joint (decision 12)
-  - face board edge banding (ask Mark)
+  - ~~face board edge banding~~ → decision 16 (gable end only), built 2026-10-20
   - a code suffix anywhere other than the sidebar header (the label stays B1, B2, …)
 
 ## Mapping onto the native pipeline (proposed)

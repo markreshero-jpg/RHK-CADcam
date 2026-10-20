@@ -33,13 +33,14 @@ export interface CurvedEndSettings {
   blkS:    boolean         // side fixing block
   blkF:    boolean         // front fixing block
   grain:   CurvedEndGrain  // face board grain (decision 8: vertical by default)
+  ribs:    number | null   // ribs between top and bottom; null = auto (the kit's gap rule)
 }
 
 export const DEFAULT_CURVED_END: CurvedEndSettings = {
   hand: 'RH', R: CURVED_END_DEFAULTS.R, SK: CURVED_END_DEFAULTS.SK,
   OG: 0, OL: 0, OR: 0, SBK: 0, SBT: 0, STP: 0,
   lighten: false, B: CURVED_END_DEFAULTS.B, onion: false, OS: CURVED_END_DEFAULTS.OS,
-  blkS: false, blkF: false, grain: 'vertical',
+  blkS: false, blkF: false, grain: 'vertical', ribs: null,
 }
 
 const num = (v: unknown, d: number, min = 0) => {
@@ -63,6 +64,7 @@ export function normaliseCurvedEnd(s: Partial<CurvedEndSettings> | null | undefi
     OS:      num(s.OS, d.OS),
     blkS:    !!s.blkS, blkF: !!s.blkF,
     grain:   s.grain === 'horizontal' ? 'horizontal' : 'vertical',
+    ribs:    s.ribs != null && Number.isFinite(Number(s.ribs)) && Number(s.ribs) >= 0 ? Math.round(Number(s.ribs)) : null,
   }
 }
 
@@ -73,7 +75,7 @@ export function curvedEndParams(
   return {
     W: box.DX, D: box.DZ, H: box.DY, R: s.R, FT: faceThickness, SK: s.SK, T: carcassThickness, hand: s.hand,
     OL: s.OL, OR: s.OR, OG: s.OG, SBK: s.SBK, SBT: s.SBT, STP: s.STP,
-    lighten: s.lighten, B: s.B, onion: s.onion, OS: s.OS, blkS: s.blkS, blkF: s.blkF,
+    lighten: s.lighten, B: s.B, onion: s.onion, OS: s.OS, blkS: s.blkS, blkF: s.blkF, ribs: s.ribs,
   }
 }
 

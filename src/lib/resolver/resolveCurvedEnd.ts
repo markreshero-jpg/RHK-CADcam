@@ -46,6 +46,19 @@ export function curvedEndPartKey(name: CurvedEndPart['name']): ResolvedCasePart[
 
 const NO_BAND = { top: false, bottom: false, left: false, right: false }
 
+/**
+ * Face board tape (Mark, 2026-10-20): only the gable end that butts into the
+ * next cabinet — not the top / bottom edges, not the wall end (scribed /
+ * trimmed). Single ends only; a gable overhang is trimmed after glue-up, so its
+ * end stays raw. The gable end is at 0 along the wrap: the blank's x = 0 edge
+ * when the wrap runs along DX (vertical grain), y = 0 when along DY — the
+ * `bottom` / `left` flags in the optimiser's case-part frame (normalize ebFields).
+ */
+function gableBand(c: CurvedEndGeometry, grain: 'vertical' | 'horizontal', id?: string) {
+  if (c.double || c.ovG > 0) return { ...NO_BAND }
+  return { ...NO_BAND, ...(grain === 'vertical' ? { bottom: true } : { left: true }), id }
+}
+
 export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]; errors: ResolverError[]; warnings: ResolverError[] } {
   const s = cab.curved_end
   if (!s) return { parts: [], errors: [], warnings: [] }
@@ -53,12 +66,12 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
   const c = calcCurvedEnd(curvedEndParams(s, cab, FT, T))
   const errors: ResolverError[] = c.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'case' }))
   const warnings: ResolverError[] = c.notes.map(m => ({ code: 'CURVED_END_NOTE', message: m, part: 'case' }))
-  return { parts: curvedEndCaseParts(c, cab.exposed_material.id, cab.material.id, s.grain), errors, warnings }
+  return { parts: curvedEndCaseParts(c, cab.exposed_material.id, cab.material.id, s.grain, cab.exposed_edgeband_id), errors, warnings }
 }
 
 /** Engine geometry → cabinet-frame case parts. Pure (tested without a DB). */
 export function curvedEndCaseParts(
-  c: CurvedEndGeometry, faceMat: string, carcassMat: string, grain: 'vertical' | 'horizontal' = 'vertical',
+  c: CurvedEndGeometry, faceMat: string, carcassMat: string, grain: 'vertical' | 'horizontal' = 'vertical', faceEb?: string,
 ): ResolvedCasePart[] {
   const { W, D, H, T, FT, SK } = c.p
   const lh = c.p.hand === 'LH'
@@ -97,7 +110,7 @@ export function curvedEndCaseParts(
     part_key: 'crv:face',
     ...(grain === 'vertical' ? { DX: len, DY: H } : { DX: H, DY: len }),
     DZ: FT, X: Math.min(...xs), Y: 0, Z: Math.min(...zs), AX: 0, AY: 0, AZ: 0,
-    material_id: faceMat, edge_band: { ...NO_BAND },
+    material_id: faceMat, edge_band: gableBand(c, grain, faceEb),
     grain_direction: grain,
     wrap: { pts: wrapPts, h: H },
   })

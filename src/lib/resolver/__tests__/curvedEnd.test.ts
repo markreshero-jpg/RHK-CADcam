@@ -144,3 +144,26 @@ describe('resolveCabinet with a curved end', () => {
     expect(thick.warnings.map(e => e.code)).toContain('CURVED_END_NOTE')
   })
 })
+
+describe('curved end: rib count and gable edging (Mark, 2026-10-20)', () => {
+  it('a typed rib count replaces the auto rule; too few is a note, too many blocks', () => {
+    const auto = calcCurvedEnd({ H: 900 })
+    expect(auto.gaps - 1).toBe(4)
+    const two = calcCurvedEnd({ H: 900, ribs: 2 })
+    expect([two.gaps, Math.round(two.pitch * 100) / 100]).toEqual([3, Math.round((900 - 16.5) / 3 * 100) / 100])
+    expect(two.notes[0]).toMatch(/2 ribs leave .* between supports/)
+    expect(two.warnings).toEqual([])
+    expect(parts({ H: 900, ribs: 0 }).map(q => q.part_key)).toEqual(['crv:face', 'crv:fix', 'crv:back', 'crv:bottom', 'crv:top'])
+    expect(calcCurvedEnd({ H: 900, ribs: 6 }).notes).toEqual([])     // more than auto: fine
+    expect(calcCurvedEnd({ H: 300, ribs: 30 }).warnings[0]).toMatch(/Too many ribs/)
+  })
+
+  it('only the gable end that butts the next cabinet is taped', () => {
+    const k = (p: Partial<CurvedEndParams>, g: 'vertical' | 'horizontal' = 'vertical') =>
+      curvedEndCaseParts(calcCurvedEnd(p), 'face', 'carcass', g, 'eb1').find(q => q.part_key === 'crv:face')!.edge_band
+    expect(k({ hand: 'RH' })).toEqual({ top: false, bottom: true, left: false, right: false, id: 'eb1' })    // x = 0 of the blank
+    expect(k({ hand: 'LH' }, 'horizontal')).toEqual({ top: false, bottom: false, left: true, right: false, id: 'eb1' })  // y = 0
+    expect(k({ hand: 'RH', OG: 25 })).toMatchObject({ top: false, bottom: false, left: false, right: false })   // trimmed on site
+    expect(k({ hand: 'DOUBLE', W: 600 })).toMatchObject({ top: false, bottom: false, left: false, right: false })
+  })
+})
