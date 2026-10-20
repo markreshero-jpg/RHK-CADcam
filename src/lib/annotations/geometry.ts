@@ -29,7 +29,7 @@ export interface DimGeom   { p1: Pt; p2: Pt; offset: number; axis?: 'x' | 'y' }
  *  svg orientation (increasing = clockwise on screen). Circle: centre + radius. */
 export interface ArcGeom    { c: Pt; r: number; a0: number; a1: number }
 export interface CircleGeom { c: Pt; r: number }
-export type AnnotationGeom = TextGeom | LineGeom | BoxGeom | CloudGeom | DimGeom | ArcGeom | CircleGeom
+export type AnnotationGeom = TextGeom | LineGeom | BoxGeom | CloudGeom | DimGeom | ArcGeom | CircleGeom | SpecialDim
 
 /** frame → svg: svg = (ox + s·x, oy ± s·y). flipY for frames whose y runs up (elevation). */
 export interface AnnotFrame { ox: number; oy: number; s: number; flipY: boolean }
@@ -304,7 +304,10 @@ export function annotationFramePoints(kind: AnnotationKind, geom: AnnotationGeom
     case 'cloud':   return (geom as LineGeom).pts ?? []
     case 'rect':
     case 'ellipse': { const g = geom as BoxGeom; return [g.a, g.b, { x: g.a.x, y: g.b.y }, { x: g.b.x, y: g.a.y }] }
-    case 'dim':     { const g = geom as DimGeom; const l = dimLayout(g); return [g.p1, g.p2, l.d1, l.d2] }
+    case 'dim':     {
+      if (isSpecialDim(geom)) return specialDimPoints(geom)
+      const g = geom as DimGeom; const l = dimLayout(g); return [g.p1, g.p2, l.d1, l.d2]
+    }
     case 'arc':     return arcSample(geom as ArcGeom, 16)
     case 'circle':  { const g = geom as CircleGeom; return [{ x: g.c.x - g.r, y: g.c.y - g.r }, { x: g.c.x + g.r, y: g.c.y + g.r }] }
   }
@@ -326,7 +329,15 @@ export function translateGeom(kind: AnnotationKind, geom: AnnotationGeom, dx: nu
     case 'cloud':   { const g = geom as LineGeom; return { ...g, pts: (g.pts ?? []).map(t) } }
     case 'rect':
     case 'ellipse': { const g = geom as BoxGeom; return { ...g, a: t(g.a), b: t(g.b) } }
-    case 'dim':     { const g = geom as DimGeom; return { ...g, p1: t(g.p1), p2: t(g.p2) } }
+    case 'dim': {
+      if (isSpecialDim(geom)) {
+        const g = geom as SpecialDim
+        if (g.dt === 'angular') return { ...g, c: t(g.c), a: t(g.a), b: t(g.b), at: t(g.at) }
+        if (g.dt === 'arclen') return { ...g, c: t(g.c) }
+        return { ...g, c: t(g.c), at: t(g.at) }
+      }
+      const g = geom as DimGeom; return { ...g, p1: t(g.p1), p2: t(g.p2) }
+    }
     case 'arc':
     case 'circle':  { const g = geom as ArcGeom | CircleGeom; return { ...g, c: t(g.c) } }
   }
@@ -847,4 +858,83 @@ export function boxToPoly(g: BoxGeom): Poly {
   const c = { x: (g.a.x + g.b.x) / 2, y: (g.a.y + g.b.y) / 2 }
   const corners = boxCorners(g).map(p => g.rot ? add(c, rotatePt(sub(p, c), g.rot)) : p)
   return { pts: corners, closed: true }
+}
+
+// ── More dimensions (B5) ─────────────────────────────────────────────────────
+// Still kind 'dim' (no migration): `dt` marks the newer shapes. Linear / aligned dims
+// keep DimGeom (p1, p2, offset, axis). None of these follow what they measure (decision 4).
+
+export type DimType = 'linear' | 'aligned' | 'angular' | 'radius' | 'diameter' | 'arclen'
+/** Angle at c between the rays through a and b; `at` = where the arc sits — which of the
+ *  four angles the two lines make is the one `at` falls in. */
+export interface AngularDim { dt: 'angular'; c: Pt; a: Pt; b: Pt; at: Pt }
+/** Radius / diameter of a circle or arc (c, r); text at `at`. */
+export interface RadialDim  { dt: 'radius' | 'diameter'; c: Pt; r: number; at: Pt }
+/** Length along an arc (c, r, a0 → a1 as ArcGeom); dim arc drawn `off` further out. */
+export interface ArcLenDim  { dt: 'arclen'; c: Pt; r: number; a0: number; a1: number; off: number }
+export type SpecialDim = AngularDim | RadialDim | ArcLenDim
+
+export function isSpecialDim(g: unknown): g is SpecialDim {
+  const dt = (g as { dt?: string } | null)?.dt
+  return dt === 'angular' || dt === 'radius' || dt === 'diameter' || dt === 'arclen'
+}
+
+/** The sector an angular dim measures: from a0 to a1 (svg degrees, increasing), radius r. */
+export function angularSector(g: AngularDim): { a0: number; a1: number; sweep: number; r: number } {
+  const norm = (x: number) => ((x % 360) + 360) % 360
+  const ta = norm(angOf(g.c, g.a)), tb = norm(angOf(g.c, g.b)), tt = norm(angOf(g.c, g.at))
+  const dirs = [ta, tb, norm(ta + 180), norm(tb + 180)].sort((x, y) => x - y)
+  let a0 = dirs[3], a1 = dirs[0] + 360   // the wrap-around sector by default
+  for (let i = 0; i < 3; i++) if (tt >= dirs[i] && tt <= dirs[i + 1]) { a0 = dirs[i]; a1 = dirs[i + 1] }
+  if (tt < dirs[0]) { a0 = dirs[3] - 360; a1 = dirs[0] }
+  return { a0, a1, sweep: a1 - a0, r: len(sub(g.at, g.c)) }
+}
+
+/** What a special dim measures: degrees, radius, diameter or arc length (mm). */
+export function specialDimValue(g: SpecialDim): number {
+  switch (g.dt) {
+    case 'angular':  return angularSector(g).sweep
+    case 'radius':   return g.r
+    case 'diameter': return g.r * 2
+    case 'arclen':   return g.r * sweepOf(g.a0, g.a1) * Math.PI / 180
+  }
+}
+
+/** The text a special dim shows (an override's <> stands for the value). */
+export function specialDimText(g: SpecialDim, override: string | null | undefined): string {
+  const v = specialDimValue(g)
+  const base = g.dt === 'angular' ? `${(Math.round(v * 10) / 10).toFixed(1)}°`
+    : g.dt === 'radius' ? `R${Math.round(v)}` : g.dt === 'diameter' ? `Ø${Math.round(v)}` : `⌒${Math.round(v)}`
+  if (!override?.trim()) return base
+  return override.includes('<>') ? override.split('<>').join(base) : override
+}
+
+/** Points a special dim covers (bounds / selection). */
+export function specialDimPoints(g: SpecialDim): Pt[] {
+  switch (g.dt) {
+    case 'angular': {
+      const s = angularSector(g)
+      return [g.c, g.a, g.b, g.at, ...arcSample({ c: g.c, r: s.r, a0: s.a0, a1: s.a1 }, 8)]
+    }
+    case 'radius':
+    case 'diameter': return [g.c, g.at, arcPoint(g, angOf(g.c, g.at)), arcPoint(g, angOf(g.c, g.at) + 180)]
+    case 'arclen':   return arcSample({ c: g.c, r: g.r + g.off, a0: g.a0, a1: g.a1 }, 8)
+  }
+}
+
+/** Continue / baseline: the next linear or aligned dim from `prev` to point p.
+ *  Continue: starts at prev's second point, dim line on prev's line. Baseline: starts
+ *  at `root`'s first point, dim line `step` further out than prev's. */
+export function chainedDim(mode: 'continue' | 'baseline', root: DimGeom, prev: DimGeom, p: Pt, step: number): DimGeom {
+  const lineAt = (g: DimGeom) => dimLayout(g).d1   // a point on g's dim line
+  const p1 = mode === 'continue' ? prev.p2 : root.p1
+  const axis = prev.axis
+  const sign = Math.sign(prev.offset) || 1
+  const base = lineAt(prev)
+  const target = mode === 'continue' ? base
+    : axis === 'x' ? { x: base.x, y: base.y + sign * step }
+    : axis === 'y' ? { x: base.x + sign * step, y: base.y }
+    : add(base, mul(dimLayout(prev).n, sign * step))
+  const g: DimGeom = { p1, p2: p, axis, offset: 0 }
+  return { ...g, offset: dimOffsetFor(g, target) }
 }

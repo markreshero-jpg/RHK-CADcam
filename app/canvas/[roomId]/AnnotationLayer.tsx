@@ -10,7 +10,8 @@ import type { RoomAnnotation } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
   type AnnotFrame, type Pt, type TextGeom, type LineGeom, type BoxGeom, type CloudGeom, type DimGeom,
-  type ArcGeom, type CircleGeom, arcSvgPath, bulgedPath, sampleBulged, arcPoint, arcStart, arcEnd, arcMid, arcSample, sweepOf,
+  type ArcGeom, type CircleGeom, arcSvgPath, bulgedPath, sampleBulged,
+  type SpecialDim, isSpecialDim, specialDimText, specialDimPoints, angularSector, angOf, arcPoint, arcStart, arcEnd, arcMid, arcSample, sweepOf,
   mapPt, mapRot, arrowHead, trimEnd, layoutText, leaderAttachLocal, rotatePt, cloudPath,
   dimLayout, readableAngle, dimText, annotLayerItem, boxCorners,
 } from '@/src/lib/annotations/geometry'
@@ -33,7 +34,7 @@ export interface AnnotationLayerProps {
 /** rotate / width: text grips. vN: drag vertex N of a line, cloud or leader. mN: drag
  *  the midpoint of segment N→N+1 to insert a vertex there. cN: box / ellipse corner N. */
 export type AnnotGrip = 'rotate' | 'width' | 'size' | 'offset' | `v${number}` | `m${number}` | `c${number}`
-  | 'arcS' | 'arcE' | 'arcM' | 'rad' | `e${number}`
+  | 'arcS' | 'arcE' | 'arcM' | 'rad' | `e${number}` | 'dimAt'
 
 export interface AnnotationEditProps {
   selectedIds: ReadonlySet<string>
@@ -145,6 +146,7 @@ function hitShape(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number,
         style={{ pointerEvents: filled ? 'all' : 'stroke' }} />
     }
     case 'dim': {
+      if (isSpecialDim(a.geom)) return <polyline points={ptsAttr(specialDimHitPts(a.geom).map(p => mapPt(f, p)))} {...stroke} />
       const g = a.geom as DimGeom
       if (!g?.p1 || !g?.p2) return null
       const l = dimLayout(g)
@@ -247,6 +249,25 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
       {grip(mapPt(f, arcPoint(g, 0)), 'rad', 'ew-resize')}
     </>
   }
+  // B5 dims: angular = corner + both ray points + where the arc sits; radius / diameter
+  // = where the text sits; arc length = a bar on the dim arc (in / out).
+  if (a.kind === 'dim' && single && isSpecialDim(a.geom)) {
+    const g = a.geom
+    const down = (gr: AnnotGrip) => (e: React.PointerEvent) => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, a.id, gr) } }
+    const dot = (p: Pt, gr: AnnotGrip, key: string) => (
+      <circle key={key} cx={p.x} cy={p.y} r={hw * 0.4} fill="#0f172a" stroke={SEL} strokeWidth={hw / 6}
+        style={{ pointerEvents: 'all', cursor: 'move' }} onPointerDown={down(gr)} />
+    )
+    if (g.dt === 'angular') return <>
+      {vertexGrips(a.id, [g.c, g.a, g.b].map(p => mapPt(f, p)), edit, false, false)}
+      {dot(mapPt(f, g.at), 'dimAt', 'at')}
+    </>
+    if (g.dt === 'arclen') {
+      const s = sweepOf(g.a0, g.a1)
+      return dot(mapPt(f, arcPoint({ c: g.c, r: g.r + g.off }, g.a0 + s / 2)), 'offset', 'off')
+    }
+    return dot(mapPt(f, g.at), 'dimAt', 'at')
+  }
   // Dim: its two measured points, and a bar grip on the dim line to slide it in / out.
   if (a.kind === 'dim' && single) {
     const g = a.geom as DimGeom
@@ -294,7 +315,10 @@ function selectionPoints(a: RoomAnnotation, f: AnnotFrame): Pt[] {
     case 'cloud':   return ((a.geom as LineGeom).pts ?? []).map(p => mapPt(f, p))
     case 'rect':
     case 'ellipse': { const g = a.geom as BoxGeom; return [mapPt(f, g.a), mapPt(f, g.b)] }
-    case 'dim':     { const g = a.geom as DimGeom; const l = dimLayout(g); return [g.p1, g.p2, l.d1, l.d2].map(p => mapPt(f, p)) }
+    case 'dim':     {
+      if (isSpecialDim(a.geom)) return specialDimPoints(a.geom).map(p => mapPt(f, p))
+      const g = a.geom as DimGeom; const l = dimLayout(g); return [g.p1, g.p2, l.d1, l.d2].map(p => mapPt(f, p))
+    }
     case 'arc':     return (a.geom as ArcGeom)?.c ? arcSample(a.geom as ArcGeom, 16).map(p => mapPt(f, p)) : []
     case 'circle':  { const g = a.geom as CircleGeom; return g?.c ? [mapPt(f, { x: g.c.x - g.r, y: g.c.y - g.r }), mapPt(f, { x: g.c.x + g.r, y: g.c.y + g.r })] : [] }
     default:        return []
@@ -456,7 +480,93 @@ function TextNote({ a, s, f, k, leaderOnly }: { a: RoomAnnotation; s: ResolvedSt
   )
 }
 
+/** Hit outline for a B5 dim (the drawn arc / leader). */
+function specialDimHitPts(g: SpecialDim): Pt[] {
+  switch (g.dt) {
+    case 'angular': { const s = angularSector(g); return arcSample({ c: g.c, r: s.r, a0: s.a0, a1: s.a1 }, 16) }
+    case 'radius':  return [g.c, g.at]
+    case 'diameter': { const d = angOf(g.c, g.at); return [arcPoint(g, d + 180), arcPoint(g, d), g.at] }
+    case 'arclen':  return arcSample({ c: g.c, r: g.r + g.off, a0: g.a0, a1: g.a1 }, 16)
+  }
+}
+
+/** Angular / radius / diameter / arc-length dims (B5). Ticks read badly on these, so a
+ *  tick end draws as a closed arrow. */
+function SpecialDimShape({ g, a, s, f, k }: { g: SpecialDim; a: RoomAnnotation; s: ResolvedStyle; f: AnnotFrame; k: number }) {
+  const text = specialDimText(g, a.text)
+  const size = s.arrowSize * k, fs = s.size * k
+  const endType = (t: ArrowType): ArrowType => t === 'tick' ? 'closed' : t
+  const head = (h: { d: string; filled: boolean } | null, key: string) => h &&
+    <path key={key} d={h.d} fill={h.filled ? s.color : 'none'} stroke={s.color} strokeWidth={s.weight * k} strokeLinejoin="miter" />
+  const line = (p: Pt, q: Pt, key: string) => <line key={key} x1={p.x} y1={p.y} x2={q.x} y2={q.y} {...strokeProps(s, k, s.weight, 'solid')} />
+  const label = (at: Pt, ang: number, anchor: 'start' | 'middle' | 'end') => (
+    <text transform={`translate(${at.x} ${at.y}) rotate(${ang})`} y={-0.8 * k} fontFamily={FONT} fontSize={fs}
+      fill={s.color} textAnchor={anchor} fontWeight={s.bold ? 700 : 400}>{text}</text>
+  )
+  /** An arc (frame) with heads at both ends pointing along it, text at its middle. */
+  const dimArc = (arc: ArcGeom) => {
+    const sw = sweepOf(arc.a0, arc.a1), step = Math.min(sw * 0.15, 4)
+    const e0 = mapPt(f, arcPoint(arc, arc.a0)), e1 = mapPt(f, arcPoint(arc, arc.a1))
+    const mid = arcPoint(arc, arc.a0 + sw / 2)
+    const out = mapPt(f, arcPoint({ c: arc.c, r: arc.r + 1.2 * s.size * k / f.s }, arc.a0 + sw / 2))
+    const tan = readableAngle(mapPt(f, arcPoint(arc, arc.a0 + sw / 2 - 1)), mapPt(f, arcPoint(arc, arc.a0 + sw / 2 + 1)))
+    void mid
+    return <>
+      <path d={arcSvgPath(f, arc)} {...strokeProps(s, k, s.weight, 'solid')} />
+      {head(arrowHead(e0, mapPt(f, arcPoint(arc, arc.a0 + step)), endType(s.arrowStart), size), 'h0')}
+      {head(arrowHead(e1, mapPt(f, arcPoint(arc, arc.a1 - step)), endType(s.arrowEnd), size), 'h1')}
+      {label(out, tan, 'middle')}
+    </>
+  }
+  /** Extension line along direction `deg` from `from` out to radius r (gap + overshoot). */
+  const ext = (deg: number, from: Pt, r: number, key: string) => {
+    const d0 = len2(from, g.c), gap = 1 * k / f.s, over = 1.5 * k / f.s
+    if (r <= d0 + gap) return null
+    return line(mapPt(f, arcPoint({ c: g.c, r: d0 + gap }, deg)), mapPt(f, arcPoint({ c: g.c, r: r + over }, deg)), key)
+  }
+  switch (g.dt) {
+    case 'angular': {
+      const sec = angularSector(g)
+      const rayPt = (deg: number) => {
+        const near = (p: Pt) => Math.abs((((angOf(g.c, p) - deg) % 360) + 540) % 360 - 180) < 0.5
+        return near(g.a) ? g.a : near(g.b) ? g.b : g.c
+      }
+      return <>
+        {ext(sec.a0, rayPt(sec.a0), sec.r, 'x0')}
+        {ext(sec.a1, rayPt(sec.a1), sec.r, 'x1')}
+        {dimArc({ c: g.c, r: sec.r, a0: sec.a0, a1: sec.a1 })}
+      </>
+    }
+    case 'arclen': {
+      const R = g.r + g.off
+      return <>
+        {ext(g.a0, arcPoint(g, g.a0), R, 'x0')}
+        {ext(g.a1, arcPoint(g, g.a1), R, 'x1')}
+        {dimArc({ c: g.c, r: R, a0: g.a0, a1: g.a1 })}
+      </>
+    }
+    case 'radius':
+    case 'diameter': {
+      const deg = angOf(g.c, g.at), outside = len2(g.at, g.c) > g.r
+      const e1 = arcPoint(g, deg), e2 = arcPoint(g, deg + 180)
+      const from = g.dt === 'radius' ? g.c : e2
+      const to = outside ? g.at : e1
+      const at = mapPt(f, g.at), right = at.x >= mapPt(f, g.c).x
+      return <>
+        {line(mapPt(f, from), mapPt(f, to), 'l')}
+        {head(arrowHead(mapPt(f, e1), mapPt(f, g.c), endType(s.arrowEnd), size), 'h1')}
+        {g.dt === 'diameter' && head(arrowHead(mapPt(f, e2), mapPt(f, g.c), endType(s.arrowStart), size), 'h0')}
+        {outside && line(at, { x: at.x + (right ? 1 : -1) * 3 * k, y: at.y }, 'tail')}
+        {label({ x: at.x + (right ? 1 : -1) * 3.5 * k, y: at.y + 0.8 * k + fs * 0.35 }, 0, right ? 'start' : 'end')}
+      </>
+    }
+  }
+}
+
+const len2 = (p: Pt, q: Pt) => Math.hypot(p.x - q.x, p.y - q.y)
+
 function ManualDim({ a, s, f, k }: { a: RoomAnnotation; s: ResolvedStyle; f: AnnotFrame; k: number }) {
+  if (isSpecialDim(a.geom)) return <SpecialDimShape g={a.geom} a={a} s={s} f={f} k={k} />
   const g = a.geom as DimGeom
   if (!g?.p1 || !g?.p2) return null
   const l = dimLayout(g)

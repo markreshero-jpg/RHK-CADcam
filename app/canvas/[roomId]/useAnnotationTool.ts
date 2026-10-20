@@ -17,6 +17,7 @@ import {
   angleSnap, dedupePts, leaderTextAt, type ArcGeom, type CircleGeom,
   offsetDistanceFor, offsetGeom, moveEdge, edgeDistanceFor, OFFSETTABLE, type OffsetKind,
   filletAt, chamferAt, allCorners, joinPolys, cornerJoin, boxToPoly, nearestSegIndex, type Poly,
+  bulgeArc, isSpecialDim, chainedDim, type SpecialDim,
   arcFrom3, arcFromCentre, arcFromEndsRadius, arcPoint, angOf, arcStart, arcMid, arcEnd, sweepOf, setBoxCorner, rectPts, dimOffsetFor, dimAxisFor, type DimGeom,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
@@ -33,7 +34,11 @@ export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'arrow
 export type ArcMode = '3pt' | 'centre' | 'ends'
 
 /** Manual dimension mode: linear = horizontal / vertical (picked from the pull), aligned = along the points. */
-export type DimMode = 'linear' | 'aligned'
+export type DimMode = 'linear' | 'aligned' | 'angular' | 'radius' | 'diameter' | 'arclen' | 'continue' | 'baseline'
+/** Dimension modes that start by clicking something rather than a point (B5). */
+export const PICK_DIM_MODES = new Set<DimMode>(['radius', 'diameter', 'arclen', 'continue', 'baseline'])
+/** The circle / arc a radial or arc-length dim measures (a0 / a1 only for arcs). */
+export interface ArcSource { c: Pt; r: number; a0?: number; a1?: number }
 
 export const CAD_TOOL_KEYS: Record<string, CadTool> = {
   s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', a: 'arrow', r: 'rect', e: 'ellipse', c: 'cloud', d: 'dim', k: 'arc', o: 'circle', f: 'offset', g: 'fillet', h: 'chamfer', j: 'join',
@@ -67,6 +72,9 @@ export interface AnnotDrawing {
   tool: 'line' | 'arrow' | 'leader' | 'cloud' | 'dim' | 'arc' | 'circle'; pts: Pt[]; cur: Pt | null; attachId?: string
   /** arc: the method chosen when it started. */
   arcMode?: ArcMode
+  /** dim (B5): the type chosen when it started; src = the circle / arc a radial dim measures. */
+  dimType?: DimMode
+  src?: ArcSource
   /** dim: the axis a linear dim is showing (sticky while the cursor is between the points). */
   axis?: 'x' | 'y'
 }
@@ -118,6 +126,7 @@ export function typedFieldsFor(pendingActive: boolean, d: AnnotDrawing | null): 
   if (pendingActive) return ['w', 'h']
   if (!d || !d.pts.length || d.attachId) return []
   const n = d.pts.length
+  if (d.tool === 'dim' && d.dimType && d.dimType !== 'linear' && d.dimType !== 'aligned') return []
   if (d.tool === 'dim' && n === 2) return ['offset']
   if (d.tool === 'circle') return ['radius']
   if (d.tool === 'arc' && n === 2) return d.arcMode === 'centre' ? ['sweep'] : d.arcMode === 'ends' ? ['radius'] : []
@@ -158,6 +167,8 @@ type Drag =
   | { kind: 'place'; start: Pt; cur: Pt; tool: PlaceTool }
   // Corner of an unrotated box / ellipse (boxCorners order).
   | { kind: 'offset'; id: string; moved: boolean }
+  // B5: where an angular / radial dim's arc or text sits.
+  | { kind: 'dimAt'; id: string; moved: boolean }
   // Arc end / middle (re-bent through the three points) or a circle's radius grip (B3).
   | { kind: 'arcGrip'; id: string; which: 'arcS' | 'arcE' | 'arcM' | 'rad'; moved: boolean }
   // Side i slid parallel (B4) — from the geometry and grab point at the start.
@@ -199,7 +210,10 @@ export function useAnnotationTool({
   const [editing, setEditing] = useState<AnnotEditing | null>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
   const [drawing, setDrawing] = useState<AnnotDrawing | null>(null)
-  const [dimMode, setDimMode] = useState<DimMode>('linear')
+  const [dimMode, setDimModeState] = useState<DimMode>('linear')
+  // B5: the continue / baseline chain (first dim + latest), and the last dim drawn.
+  const [chain, setChain] = useState<{ rootId: string; prevId: string } | null>(null)
+  const [lastDimId, setLastDimId] = useState<string | null>(null)
   const [arcMode, setArcMode] = useState<ArcMode>('3pt')
   // Offset tool (B4): the item being offset (the last copy, after a placement) + cursor.
   const [offsetSrc, setOffsetSrcState] = useState<string | null>(null)
@@ -226,6 +240,10 @@ export function useAnnotationTool({
   useEffect(() => { pendingRef.current = pending }, [pending])
   const drawingRef = useRef<AnnotDrawing | null>(null)
   useEffect(() => { drawingRef.current = drawing }, [drawing])
+  /** Changing the dim type drops a half-picked radial dim and any chain. */
+  const setDimMode = useCallback((m: DimMode) => {
+    setDimModeState(m); setChain(null); drawingRef.current = null; setDrawing(null); setModMsg(null)
+  }, [])
   const dragRef = useRef<Drag | null>(null)
   const annRef = useRef(annotations)
   useEffect(() => { annRef.current = annotations }, [annotations])
@@ -267,7 +285,7 @@ export function useAnnotationTool({
   }
   // A new tool abandons a half-drawn line.
   const [drawTool, setDrawTool] = useState(tool)
-  if (drawTool !== tool) { setDrawTool(tool); setDrawing(null); setPending(null); setTypedState({}); setOffsetSrcState(null); setModPick(null); setModMsg(null) }
+  if (drawTool !== tool) { setDrawTool(tool); setDrawing(null); setPending(null); setTypedState({}); setOffsetSrcState(null); setModPick(null); setModMsg(null); setChain(null) }
 
   // ── Styles ────────────────────────────────────────────────────────────────
 
@@ -532,6 +550,7 @@ export function useAnnotationTool({
     if (!d || d.tool === 'leader') return
     if (d.tool === 'dim') {   // Enter with both points down places the dim where it's previewing
       const row = d.pts.length === 2 && d.cur ? dimRow(d, d.cur) : null
+      if (row) setLastDimId(row.id)
       if (row) { captureSnapshot(); setAnnotations(xs => [...xs, row]); void insertRows([row]) }
       return
     }
@@ -571,7 +590,7 @@ export function useAnnotationTool({
     const d = drawingRef.current
     const t = tool as AnnotDrawing['tool']
     if (!d) {
-      const nd: AnnotDrawing = { tool: t, pts: [p], cur: p, arcMode: t === 'arc' ? arcMode : undefined }
+      const nd: AnnotDrawing = { tool: t, pts: [p], cur: p, arcMode: t === 'arc' ? arcMode : undefined, dimType: t === 'dim' ? dimMode : undefined }
       drawingRef.current = nd; setDrawing(nd)
       return
     }
@@ -610,6 +629,18 @@ export function useAnnotationTool({
       void dbUpdateAnnotation(a.id, { geom })
       return
     }
+    if (d.tool === 'dim' && d.dimType === 'angular') {   // corner, a point on each side, then where the arc sits
+      if (d.pts.length < 3) {
+        if (segLength(d.pts[d.pts.length - 1], p) < 1 / zoom / frame.s) return
+        const nd = { ...d, pts: [...d.pts, p], cur: p }
+        drawingRef.current = nd; setDrawing(nd)
+        return
+      }
+      drawingRef.current = null; setDrawing(null)
+      const row = newRow('dim', { dt: 'angular', c: d.pts[0], a: d.pts[1], b: d.pts[2], at: p }, null, defaultsFor('dim'))
+      captureSnapshot(); setAnnotations(xs => [...xs, row]); void insertRows([row])
+      return
+    }
     if (d.tool === 'dim') {   // second click = other end; third click = where the line sits
       if (d.pts.length < 2) {
         if (Math.hypot(p.x - d.pts[0].x, p.y - d.pts[0].y) < 1 / zoom / frame.s) return
@@ -619,6 +650,7 @@ export function useAnnotationTool({
       }
       drawingRef.current = null; setDrawing(null)
       const row = dimRow(d, p)
+      if (row) setLastDimId(row.id)
       if (row) { captureSnapshot(); setAnnotations(xs => [...xs, row]); void insertRows([row]) }
       return
     }
@@ -634,7 +666,7 @@ export function useAnnotationTool({
     }
     const nd = { ...d, pts: [...d.pts, p], cur: p }
     drawingRef.current = nd; setDrawing(nd)
-  }, [tool, zoom, frame.s, k, defaultsFor, newRow, captureSnapshot, setAnnotations, dimRow, insertRows, arcMode])
+  }, [tool, zoom, frame.s, k, defaultsFor, newRow, captureSnapshot, setAnnotations, dimRow, insertRows, arcMode, dimMode])
 
   /** Finish a dragged / click-click shape from corner a to corner b. Text: a = the click. */
   const finishPlace = useCallback((t: PlaceTool, a: Pt, b: Pt) => {
@@ -800,6 +832,81 @@ export function useAnnotationTool({
     setTool('offset'); setDrawTool('offset'); setOffsetSrc(id); setSelectedIds(new Set([id]))
   }, [setOffsetSrc])
 
+  // ── More dimensions (B5) ──────────────────────────────────────────────────
+  // Radius / diameter / arc length: click a circle, arc or rounded corner, then click
+  // where the text (or dim arc) goes. Continue / baseline: click a linear / aligned dim
+  // (or carry on from the last one drawn), then each click adds the next dim.
+
+  /** The circle / arc a radial or arc-length dim measures, from a clicked item. */
+  const arcSourceOf = useCallback((a: RoomAnnotation, pt: Pt): ArcSource | null => {
+    if (a.kind === 'circle') { const g = a.geom as CircleGeom; return { c: g.c, r: g.r } }
+    if (a.kind === 'arc') { const g = a.geom as ArcGeom; return { c: g.c, r: g.r, a0: g.a0, a1: g.a1 } }
+    if (a.kind === 'line') {
+      const g = a.geom as LineGeom
+      if (!g.bulges?.some(Boolean)) return null
+      const i = nearestSegIndex(g.pts, g.bulges, !!g.closed, pt)
+      const p = g.pts[i], q = g.pts[(i + 1) % g.pts.length], bg = g.bulges[i] ?? 0
+      const arc = bulgeArc(p, q, bg)
+      if (!arc) return null
+      // ArcGeom runs a0 → a1 increasing; a + bulge turns the other way (see sampleBulged).
+      return bg > 0 ? { ...arc, a0: angOf(arc.c, q), a1: angOf(arc.c, p) } : { ...arc, a0: angOf(arc.c, p), a1: angOf(arc.c, q) }
+    }
+    return null
+  }, [])
+
+  const addRow = useCallback((row: RoomAnnotation) => {
+    captureSnapshot(); setAnnotations(xs => [...xs, row]); void insertRows([row])
+  }, [captureSnapshot, setAnnotations, insertRows])
+
+  /** Radius / diameter / arc length: drop it with its text (or dim arc) at p. */
+  const placeRadial = useCallback((p: Pt) => {
+    const d = drawingRef.current
+    if (!d?.src || !d.dimType) return
+    const { c, r } = d.src
+    let geom: SpecialDim
+    if (d.dimType === 'arclen') {
+      if (d.src.a0 == null || d.src.a1 == null) return
+      geom = { dt: 'arclen', c, r, a0: d.src.a0, a1: d.src.a1, off: segLength(c, p) - r }
+    } else geom = { dt: d.dimType as 'radius' | 'diameter', c, r, at: p }
+    drawingRef.current = null; setDrawing(null)
+    addRow(newRow('dim', geom, null, defaultsFor('dim')))
+  }, [addRow, newRow, defaultsFor])
+
+  /** Continue / baseline: the next dim to p. */
+  const placeChain = useCallback((p: Pt) => {
+    const ch = chain ?? (lastDimId ? { rootId: lastDimId, prevId: lastDimId } : null)
+    const root = ch && annRef.current.find(x => x.id === ch.rootId), prev = ch && annRef.current.find(x => x.id === ch.prevId)
+    if (!ch || !root || !prev || isSpecialDim(root.geom) || isSpecialDim(prev.geom)) {
+      setChain(null); setModMsg('Click a linear or aligned dimension to carry on from'); return
+    }
+    const g = chainedDim(dimMode === 'baseline' ? 'baseline' : 'continue', root.geom as DimGeom, prev.geom as DimGeom, p, 8 * k)
+    const row = newRow('dim', g, null, prev.style)
+    addRow(row)
+    setChain({ rootId: ch.rootId, prevId: row.id }); setModMsg(null)
+    setLastDimId(row.id)
+  }, [chain, dimMode, k, newRow, addRow, lastDimId])
+
+  /** A click (on the canvas or an item) while the Dimension tool is in a pick mode. */
+  const pickDimClick = useCallback((p: Pt, item: RoomAnnotation | null, rawPt: Pt) => {
+    if (dimMode === 'radius' || dimMode === 'diameter' || dimMode === 'arclen') {
+      if (drawingRef.current?.src) { placeRadial(p); return }
+      const src = item ? arcSourceOf(item, rawPt) : null
+      if (!src || (dimMode === 'arclen' && src.a0 == null)) {
+        setModMsg(dimMode === 'arclen' ? 'Click an arc or a rounded corner' : 'Click a circle, arc or rounded corner'); return
+      }
+      setModMsg(null)
+      const nd: AnnotDrawing = { tool: 'dim', dimType: dimMode, pts: [], cur: p, src }
+      drawingRef.current = nd; setDrawing(nd)
+      return
+    }
+    // continue / baseline: a click on a linear / aligned dim (re)starts the chain from it
+    if (item?.kind === 'dim' && !isSpecialDim(item.geom) && (!chain || item.id !== chain.prevId)) {
+      setChain({ rootId: item.id, prevId: item.id }); setSelectedIds(new Set([item.id])); setModMsg(null)
+      return
+    }
+    placeChain(p)
+  }, [dimMode, placeRadial, arcSourceOf, chain, placeChain])
+
   // ── Pointer: drags via window listeners ───────────────────────────────────
 
   const beginDrag = useCallback((d: Drag, startClient: { x: number; y: number }) => {
@@ -878,7 +985,16 @@ export function useAnnotationTool({
         if (!cur.moved && !far) return
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
         const p = toFrame(ev, !ev.shiftKey, null, new Set([cur.id]))
-        setAnnotations(xs => xs.map(x => x.id === cur.id ? { ...x, geom: { ...(x.geom as DimGeom), offset: dimOffsetFor(x.geom as DimGeom, p) } } : x))
+        setAnnotations(xs => xs.map(x => {
+          if (x.id !== cur.id) return x
+          if (isSpecialDim(x.geom) && x.geom.dt === 'arclen') return { ...x, geom: { ...x.geom, off: segLength(x.geom.c, p) - x.geom.r } }
+          return { ...x, geom: { ...(x.geom as DimGeom), offset: dimOffsetFor(x.geom as DimGeom, p) } }
+        }))
+      } else if (cur.kind === 'dimAt') {
+        if (!cur.moved && !far) return
+        if (!cur.moved) { captureSnapshot(); cur.moved = true }
+        const p = toFrame(ev, !ev.shiftKey, null, new Set([cur.id]))
+        setAnnotations(xs => xs.map(x => x.id === cur.id && isSpecialDim(x.geom) && x.geom.dt !== 'arclen' ? { ...x, geom: { ...x.geom, at: p } } : x))
       } else if (cur.kind === 'corner') {
         if (!cur.moved && !far) return
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
@@ -911,7 +1027,7 @@ export function useAnnotationTool({
       const cur = dragRef.current
       dragRef.current = null; setDrag(null); setSnapHit(null)
       if (!cur) return
-      if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex' || cur.kind === 'corner' || cur.kind === 'offset' || cur.kind === 'size' || cur.kind === 'arcGrip' || cur.kind === 'edge') && cur.moved) {
+      if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex' || cur.kind === 'corner' || cur.kind === 'offset' || cur.kind === 'size' || cur.kind === 'arcGrip' || cur.kind === 'edge' || cur.kind === 'dimAt') && cur.moved) {
         const ids = cur.kind === 'move' ? [...cur.orig.keys()] : [cur.id]
         for (const id of ids) {
           const a = annRef.current.find(x => x.id === id)
@@ -975,6 +1091,10 @@ export function useAnnotationTool({
       if (offsetSrcRef.current) placeOffset(toFrame(e, !e.shiftKey, null, new Set([offsetSrcRef.current])))
       return
     }
+    if (route === 'point' && tool === 'dim' && PICK_DIM_MODES.has(dimMode)) {   // an empty-canvas click
+      pickDimClick(toFrame(e, !e.shiftKey), null, toFrame(e, false))
+      return
+    }
     if (route === 'point') {
       const d = drawingRef.current
       // A typed length / angle locks the point; the click just confirms it.
@@ -987,7 +1107,7 @@ export function useAnnotationTool({
     const p = toFrame(e, tool !== 'select' && !e.shiftKey)
     if (route === 'marquee') beginDrag({ kind: 'marquee', start: p, cur: p, additive: e.shiftKey }, { x: e.clientX, y: e.clientY })
     else beginDrag({ kind: 'place', start: p, cur: p, tool: tool as PlaceTool }, { x: e.clientX, y: e.clientY })
-  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace, clearTyped, placeOffset])
+  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace, clearTyped, placeOffset, dimMode, pickDimClick])
 
   /** Rubber band for the segment being drawn. */
   const onCaptureMove = useCallback((e: React.PointerEvent) => {
@@ -1035,7 +1155,8 @@ export function useAnnotationTool({
     hiddenId: editing ? editing.draft.id : null,
     hitWidth: 10 / zoom,
     // In plain select mode a click on an annotation opens CAD mode on it (decision 9).
-    hittable: !active || tool === 'select' || tool === 'offset' || tool === 'fillet' || tool === 'chamfer' || tool === 'join',
+    hittable: !active || tool === 'select' || tool === 'offset' || tool === 'fillet' || tool === 'chamfer' || tool === 'join'
+      || (tool === 'dim' && PICK_DIM_MODES.has(dimMode)),
     onMenu: (e, id) => {
       e.preventDefault(); e.stopPropagation()
       if (editing) commitEdit()
@@ -1045,6 +1166,11 @@ export function useAnnotationTool({
     },
     onDown: (e, id) => {
       e.stopPropagation()
+      if (active && tool === 'dim' && PICK_DIM_MODES.has(dimMode)) {   // B5: pick a circle / arc / dim, or place
+        const a = annRef.current.find(x => x.id === id) ?? null
+        pickDimClick(toFrame(e, !e.shiftKey, null, new Set([id])), a, toFrame(e, false))
+        return
+      }
       if (active && (tool === 'fillet' || tool === 'chamfer' || tool === 'join')) {
         const a = annRef.current.find(x => x.id === id)
         if (!a) return
@@ -1090,6 +1216,7 @@ export function useAnnotationTool({
         beginDrag({ kind: 'arcGrip', id, which: grip, moved: false }, { x: e.clientX, y: e.clientY })
         return
       }
+      if (grip === 'dimAt') { beginDrag({ kind: 'dimAt', id, moved: false }, { x: e.clientX, y: e.clientY }); return }
       if (grip === 'offset') {
         beginDrag({ kind: 'offset', id, moved: false }, { x: e.clientX, y: e.clientY })
         return
@@ -1116,7 +1243,7 @@ export function useAnnotationTool({
   }
 
   // ── Keyboard (capture phase, so the canvas-wide handler never sees these) ──
-  const menuOpen = !!menu, modPickOpen = !!modPick
+  const menuOpen = !!menu, modPickOpen = !!modPick, chainOpen = !!chain
 
   useEffect(() => {
     if (!active) return
@@ -1132,6 +1259,7 @@ export function useAnnotationTool({
         if (hasTyped(typedRef.current)) { clearTyped(); return }
         if (offsetSrcRef.current) { setOffsetSrc(null); setSelectedIds(new Set()); return }
         if (menuOpen) { setMenu(null); return }
+        if (chainOpen) { setChain(null); setSelectedIds(new Set()); return }
         if (modPickOpen) { setModPick(null); setModMsg(null); setSelectedIds(new Set()); return }
         if (pendingRef.current) { pendingRef.current = null; setPending(null); return }
         if (drawingRef.current) { drawingRef.current = null; setDrawing(null); return }
@@ -1171,7 +1299,7 @@ export function useAnnotationTool({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc, menuOpen, modPickOpen])
+  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc, menuOpen, modPickOpen, chainOpen])
 
   // Ghosts for the canvas: marquee box / text box being dragged out (frame coords).
   // A shape being placed: by drag, or armed by a first click (B1).
@@ -1192,7 +1320,7 @@ export function useAnnotationTool({
     ? { mode: 'label', at: drawing.cur, text: `R ${Math.round(segLength(lastPt, drawing.cur))}  Ø ${Math.round(2 * segLength(lastPt, drawing.cur))}` }
     : liveArc && drawing?.cur
       ? { mode: 'label', at: drawing.cur, text: `R ${Math.round(liveArc.r)}  ${Math.round(sweepOf(liveArc.a0, liveArc.a1))}°` }
-    : drawing?.cur && lastPt && !(drawing.tool === 'dim' && drawing.pts.length === 2)
+    : drawing?.cur && lastPt && !(drawing.tool === 'dim' && (drawing.pts.length === 2 && drawing.dimType !== 'angular' || drawing.pts.length === 3))
     ? { mode: 'seg', a: lastPt, b: drawing.cur }
     : placing && (placing.start.x !== placing.cur.x || placing.start.y !== placing.cur.y) && placing.tool !== 'text'
       ? { mode: 'box', a: placing.start, b: placing.cur }
@@ -1216,6 +1344,21 @@ export function useAnnotationTool({
         ? row('cloud', { pts: rectPts(pl.start, pl.cur) }, defaultsFor('cloud'))
         : row(pl.tool, { a: pl.start, b: pl.cur }, defaultsFor(pl.tool))
     }
+    // B5: radial / arc-length dims follow the cursor once their circle / arc is picked;
+    // continue / baseline preview the next dim from the chain.
+    if (drawing?.tool === 'dim' && drawing.src && drawing.cur && drawing.dimType) {
+      const { c, r } = drawing.src
+      if (drawing.dimType === 'arclen' && drawing.src.a0 != null && drawing.src.a1 != null)
+        return row('dim', { dt: 'arclen', c, r, a0: drawing.src.a0, a1: drawing.src.a1, off: segLength(c, drawing.cur) - r }, defaultsFor('dim'))
+      if (drawing.dimType === 'radius' || drawing.dimType === 'diameter')
+        return row('dim', { dt: drawing.dimType, c, r, at: drawing.cur }, defaultsFor('dim'))
+    }
+    if (tool === 'dim' && (dimMode === 'continue' || dimMode === 'baseline') && cursor) {
+      const ch = chain ?? (lastDimId ? { rootId: lastDimId, prevId: lastDimId } : null)
+      const root = ch && annotations.find(x => x.id === ch.rootId), prev = ch && annotations.find(x => x.id === ch.prevId)
+      if (root && prev && !isSpecialDim(root.geom) && !isSpecialDim(prev.geom))
+        return row('dim', chainedDim(dimMode, root.geom as DimGeom, prev.geom as DimGeom, cursor, 8 * k), prev.style)
+    }
     if (!drawing || !drawing.pts.length) return null
     if (drawing.tool === 'circle') {
       const r = drawing.cur ? segLength(drawing.pts[0], drawing.cur) : 0
@@ -1226,6 +1369,13 @@ export function useAnnotationTool({
       if (drawing.pts.length === 1) return row('line', { pts: [drawing.pts[0], drawing.cur] }, { ...defaultsFor('arc'), arrowStart: 'none', arrowEnd: 'none', dash: 'dashed' })
       const g = arcFromDrawing(drawing, drawing.cur, typed)
       return g ? row('arc', g, defaultsFor('arc')) : null
+    }
+    if (drawing.tool === 'dim' && drawing.dimType === 'angular') {
+      if (!drawing.cur) return null
+      const dashed = { ...defaultsFor('dim'), arrowStart: 'none' as const, arrowEnd: 'none' as const, dash: 'dashed' as const }
+      if (drawing.pts.length === 1) return row('line', { pts: [drawing.pts[0], drawing.cur] }, dashed)
+      if (drawing.pts.length === 2) return row('line', { pts: [drawing.pts[1], drawing.pts[0], drawing.cur] }, dashed)
+      return row('dim', { dt: 'angular', c: drawing.pts[0], a: drawing.pts[1], b: drawing.pts[2], at: drawing.cur }, defaultsFor('dim'))
     }
     if (drawing.tool === 'dim') {
       if (drawing.pts.length === 2 && drawing.cur) return row('dim', dimGeomFor(drawing, drawing.cur), defaultsFor('dim'))
@@ -1239,7 +1389,7 @@ export function useAnnotationTool({
       ? { ...defaultsFor('text'), arrowEnd: 'none' as const }
       : defaultsFor(drawing.tool === 'arrow' ? 'arrow' : 'line')
     return row('line', { pts }, style)
-  }, [drag, pending, drawing, defaultsFor, room.id, dimGeomFor, typed, tool, offsetSrcA, offsetCur])
+  }, [drag, pending, drawing, defaultsFor, room.id, dimGeomFor, typed, tool, offsetSrcA, offsetCur, dimMode, cursor, chain, lastDimId, annotations, k])
 
   /** The list to draw: the note being typed swaps in live (new ones are added), so its
    *  leader shows and follows the text width while you type. */
@@ -1255,7 +1405,7 @@ export function useAnnotationTool({
     ribbonKind, ribbonStyle, ribbonRot, ribbonLeader, applyStyle, resetStyle, applyRotation,
     deleteSelected, reorder, onCaptureDown, onCaptureMove, onCaptureDouble, onCaptureMenu, editProps, ghost,
     drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
-    dimMode, setDimMode, applyDimText, arcMode, setArcMode, offsetSrc: offsetSrcA,
+    dimMode, setDimMode, applyDimText, chain, arcMode, setArcMode, offsetSrc: offsetSrcA,
     filletR, setFilletR, chamfer, setChamfer, modPick, modMsg, cornerOp, setLineClosed, convertToLines,
     startJoinFrom, startOffsetFrom, menu, closeMenu: () => setMenu(null), paste, cloudMode, setCloudMode, pending,
     /** Last object snap under the cursor (frame mm) — the canvas draws its marker. */
@@ -1284,13 +1434,19 @@ function drawingSnapGeometry(d: AnnotDrawing | null): SnapGeometry | undefined {
 }
 
 function vertsOf(a: RoomAnnotation): Pt[] {
-  if (a.kind === 'dim') { const g = a.geom as DimGeom; return [g.p1, g.p2] }
+  if (a.kind === 'dim') {
+    if (isSpecialDim(a.geom)) return a.geom.dt === 'angular' ? [a.geom.c, a.geom.a, a.geom.b] : []
+    const g = a.geom as DimGeom; return [g.p1, g.p2]
+  }
   if (a.kind === 'line' || a.kind === 'cloud') return (a.geom as LineGeom).pts ?? []
   if (a.kind === 'text') return (a.geom as TextGeom).leader ?? []
   return []
 }
 function withVerts(a: RoomAnnotation, pts: Pt[]): RoomAnnotation {
-  if (a.kind === 'dim') return { ...a, geom: { ...(a.geom as DimGeom), p1: pts[0], p2: pts[1] } }
+  if (a.kind === 'dim') {
+    if (isSpecialDim(a.geom)) return a.geom.dt === 'angular' ? { ...a, geom: { ...a.geom, c: pts[0], a: pts[1], b: pts[2] } } : a
+    return { ...a, geom: { ...(a.geom as DimGeom), p1: pts[0], p2: pts[1] } }
+  }
   if (a.kind === 'line' || a.kind === 'cloud') return { ...a, geom: { ...(a.geom as LineGeom), pts } }
   if (a.kind === 'text') return { ...a, geom: { ...(a.geom as TextGeom), leader: pts } }
   return a

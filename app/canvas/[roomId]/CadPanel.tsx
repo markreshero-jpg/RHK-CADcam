@@ -10,6 +10,7 @@ import type { RoomAnnotation } from '@/src/lib/types'
 import {
   type Pt, type LineGeom, type BoxGeom, type TextGeom, type DimGeom, type ArcGeom, type CircleGeom,
   arcStart, arcEnd, arcLength, sweepOf, bulgeSegLength, sampleBulged,
+  isSpecialDim, specialDimText, specialDimValue,
   segLength, segAngle, dimLayout, dimText, boundsOf, annotationFramePoints,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
@@ -184,7 +185,10 @@ function summary(a: RoomAnnotation, k: number): string {
     case 'cloud': { const p = (a.geom as LineGeom).pts ?? []; return `${r1(polyLen(p, true))} mm round` }
     case 'rect':
     case 'ellipse': { const g = a.geom as BoxGeom; return `${r1(Math.abs(g.b.x - g.a.x))} × ${r1(Math.abs(g.b.y - g.a.y))}` }
-    case 'dim':   { const g = a.geom as DimGeom; return g?.p1 && g?.p2 ? dimText(dimLayout(g).value, a.text) : '' }
+    case 'dim':   {
+      if (isSpecialDim(a.geom)) return specialDimText(a.geom, a.text)
+      const g = a.geom as DimGeom; return g?.p1 && g?.p2 ? dimText(dimLayout(g).value, a.text) : ''
+    }
     case 'text':  { const t = (a.text ?? '').split('\n')[0]; void k; return t.length > 22 ? t.slice(0, 22) + '…' : t || '(empty)' }
     case 'arc':   { const g = a.geom as ArcGeom; return g?.c ? `R${r1(g.r)} · ${r1(sweepOf(g.a0, g.a1))}°` : '' }
     case 'circle': { const g = a.geom as CircleGeom; return g?.c ? `Ø${r1(g.r * 2)}` : '' }
@@ -389,6 +393,19 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
       </>
     }
     case 'dim': {
+      if (isSpecialDim(a.geom)) {
+        const sg = a.geom
+        const TYPE = { angular: 'Angular', radius: 'Radius', diameter: 'Diameter', arclen: 'Arc length' } as const
+        const v = specialDimValue(sg)
+        return <>
+          <Row k="Type" v={TYPE[sg.dt]} />
+          <Row k="Measures" v={sg.dt === 'angular' ? `${r1(v)}°` : `${r1(v)} mm`} />
+          <Row k="Shows" v={specialDimText(sg, a.text)} />
+          {sg.dt !== 'angular' && <Row k="Centre" v={`${r1(sg.c.x)}, ${r1(sg.c.y)}`} />}
+          {sg.dt === 'angular' && <Row k="Corner" v={`${r1(sg.c.x)}, ${r1(sg.c.y)}`} />}
+          <div className="mt-1 text-[11px] text-gray-500">Measured when placed — it doesn&apos;t follow the shape if that changes.</div>
+        </>
+      }
       const g = a.geom as DimGeom
       if (!g?.p1 || !g?.p2) return null
       const l = dimLayout(g)

@@ -169,7 +169,15 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
   const modHint = cad.tool === 'fillet' || cad.tool === 'chamfer' || cad.tool === 'join'
     ? (cad.modPick ? 'Now click the second side / line · Esc = start again' : cad.tool === 'join' ? 'Click the first line' : 'Click the first side / line (or a box for all corners)')
     : null
-  const drawHint = modHint ? modHint : cad.tool === 'offset' ? (cad.offsetSrc ? 'Click the side for the copy · Tab = distance · Esc = pick another' : 'Click the item to offset')
+  // Dimension tool (B5): what the next click does in each type.
+  const dimHint = cad.tool !== 'dim' ? null
+    : cad.dimMode === 'angular' ? (!cad.drawing ? 'Click the corner of the angle'
+      : cad.drawing.pts.length === 1 ? 'Click a point on the first side' : cad.drawing.pts.length === 2 ? 'Click a point on the second side' : 'Click where the arc sits (pick the angle you want) · Esc cancels')
+    : cad.dimMode === 'radius' || cad.dimMode === 'diameter' ? (cad.drawing?.src ? 'Click where the text goes · Esc cancels' : 'Click a circle, arc or rounded corner')
+    : cad.dimMode === 'arclen' ? (cad.drawing?.src ? 'Move to pull the dimension arc out · click to place' : 'Click an arc or rounded corner')
+    : cad.dimMode === 'continue' || cad.dimMode === 'baseline' ? (cad.chain ? `Click the next point · click another dim to start from it · Esc ends` : 'Click a linear / aligned dim to carry on from (or just click — it follows the last one drawn)')
+    : null
+  const drawHint = modHint ? modHint : dimHint ? dimHint : cad.tool === 'offset' ? (cad.offsetSrc ? 'Click the side for the copy · Tab = distance · Esc = pick another' : 'Click the item to offset')
     : cad.pending ? (cad.pending.tool === 'textbox' ? 'Click the opposite corner of the text box · Tab = type W / H · Esc cancels' : 'Click the opposite corner · Tab = type W / H · Esc cancels')
     : !cad.drawing ? null
     : cad.drawing.attachId ? 'Click where the leader points · Esc cancels'
@@ -294,7 +302,11 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, onClose,
             <Group label="Dim">
               <Pick title="Dimension type for new dims: linear = horizontal / vertical (from where you pull it), aligned = along the two points"
                 value={cad.dimMode} onChange={v => cad.setDimMode(v)}
-                options={[{ id: 'linear', label: 'Linear' }, { id: 'aligned', label: 'Aligned' }]} />
+                options={[
+                  { id: 'linear', label: 'Linear' }, { id: 'aligned', label: 'Aligned' }, { id: 'angular', label: 'Angular' },
+                  { id: 'radius', label: 'Radius' }, { id: 'diameter', label: 'Diameter' }, { id: 'arclen', label: 'Arc length' },
+                  { id: 'continue', label: 'Continue' }, { id: 'baseline', label: 'Baseline' },
+                ]} />
               <Pick title="Dimension text height (paper mm)" value={(TEXT_SIZES as readonly number[]).includes(s.size) ? s.size : 0}
                 options={[...TEXT_SIZES.map(n => ({ id: n as number, label: `${n} mm` })), { id: 0, label: 'Custom' }]}
                 onChange={n => { if (n) set({ size: n }) }} />

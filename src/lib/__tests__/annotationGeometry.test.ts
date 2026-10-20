@@ -394,3 +394,42 @@ describe('B4b bulges, fillet, chamfer, join', () => {
     expect(nearestSegIndex(f.pts, f.bulges, false, { x: 40, y: 2 })).toBe(0)
   })
 })
+
+import { angularSector, specialDimValue, specialDimText, specialDimPoints, chainedDim, isSpecialDim, type AngularDim } from '../annotations/geometry'
+
+describe('B5 dimensions', () => {
+  const c = { x: 0, y: 0 }
+  it('angular: the sector the placement falls in', () => {
+    const g: AngularDim = { dt: 'angular', c, a: { x: 100, y: 0 }, b: { x: 0, y: 100 }, at: { x: 50, y: 50 } }
+    expect(specialDimValue(g)).toBeCloseTo(90)
+    expect(angularSector(g).r).toBeCloseTo(Math.hypot(50, 50))
+    // 30° lines: the narrow angle, or the wide one when placed on the other side
+    const s: AngularDim = { dt: 'angular', c, a: { x: 100, y: 0 }, b: { x: 100 * Math.cos(Math.PI / 6), y: 100 * Math.sin(Math.PI / 6) }, at: { x: 80, y: 20 } }
+    expect(specialDimValue(s)).toBeCloseTo(30)
+    expect(specialDimValue({ ...s, at: { x: 0, y: 80 } })).toBeCloseTo(150)
+    expect(specialDimValue({ ...s, at: { x: 80, y: -5 } })).toBeCloseTo(150)
+  })
+  it('radius / diameter / arc length values and text', () => {
+    expect(specialDimText({ dt: 'radius', c, r: 300, at: { x: 400, y: 0 } }, null)).toBe('R300')
+    expect(specialDimText({ dt: 'diameter', c, r: 300, at: { x: 400, y: 0 } }, '<> TYP')).toBe('Ø600 TYP')
+    const al = { dt: 'arclen' as const, c, r: 100, a0: 0, a1: 90, off: 20 }
+    expect(specialDimValue(al)).toBeCloseTo(Math.PI * 50)
+    expect(specialDimText(al, null)).toBe('⌒157')
+    expect(specialDimText({ dt: 'angular', c, a: { x: 1, y: 0 }, b: { x: 0, y: 1 }, at: { x: 1, y: 1 } }, null)).toBe('90.0°')
+  })
+  it('points for bounds; old linear dims are not special', () => {
+    expect(specialDimPoints({ dt: 'radius', c, r: 100, at: { x: 200, y: 0 } })).toHaveLength(4)
+    expect(isSpecialDim({ p1: c, p2: c, offset: 0 })).toBe(false)
+    expect(isSpecialDim({ dt: 'arclen' })).toBe(true)
+  })
+  it('continue starts at the last end on the same dim line; baseline steps out from the first start', () => {
+    const root = { p1: { x: 0, y: 0 }, p2: { x: 600, y: 0 }, offset: -100, axis: 'x' as const }
+    const cont = chainedDim('continue', root, root, { x: 1000, y: 0 }, 160)
+    expect(cont.p1).toEqual({ x: 600, y: 0 })
+    expect(dimLayout(cont).d1.y).toBeCloseTo(-100)
+    const base = chainedDim('baseline', root, root, { x: 1000, y: 0 }, 160)
+    expect(base.p1).toEqual({ x: 0, y: 0 })
+    expect(dimLayout(base).d1.y).toBeCloseTo(-260)
+    expect(dimLayout(base).value).toBe(1000)
+  })
+})

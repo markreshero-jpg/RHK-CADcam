@@ -242,7 +242,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | B3 | **Arcs + circle:** kinds `arc` + `circle` (migration); arc by 3-point, centre-start-end, start-end-radius; circle by centre + radius; grips | [x] built 2026-10-19; in-app check pending |
 | B4 | **Offset tool + side drag:** offset a line / polyline / box / cloud / arc / circle / ellipse by cursor or typed distance (repeats); drag one side of a line / box / cloud parallel with the neighbours stretching | [x] built 2026-10-19; in-app check pending |
 | B4b | **Fillet / chamfer / join + right-click menu:** two picks (two sides of a line → that corner; two lines → trim / extend to meet and join); a box = all corners; Join nearest ends / close; lines gain arc segments (bulges) + closed outlines; right-click menu on any note / line | [x] built 2026-10-19; in-app check pending |
-| B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [ ] |
+| B5 | **More dims:** angular, radius / diameter, arc length, continue + baseline chains | [x] built 2026-10-20; in-app check pending |
 | A6 | **Elevations:** wall-local frame, canvas + Elevation Views report, wall-split remap | [ ] |
 | A7 | **Cabinet sheets:** ribbon on the sheet preview (decision 10), cabinet-local frame, sheet toggle, own undo; **decide the cabinet-revision behaviour first** | [ ] |
 | A8 | Room copy remap, tutorial lesson, mobile view check | [ ] |
@@ -584,5 +584,34 @@ check pending.
   - no side bar on arc segments; midpoint insert splits `bulges`; side drag honours
     closed lines.
 
-Next: B5 (more dims), then A6 (elevations: wall-local frame, canvas +
+**B5 built 2026-10-20** (in-app check pending).
+- **Data:** no migration. The newer dims stay kind `dim` with `dt` geometry
+  (`SpecialDim`, `isSpecialDim`); linear / aligned keep `DimGeom`.
+  - `AngularDim { c, a, b, at }`: `angularSector` picks which of the four angles
+    the two lines make from where `at` falls.
+  - `RadialDim { dt: radius | diameter, c, r, at }`.
+  - `ArcLenDim { c, r, a0, a1, off }`.
+  - All are measured when placed and never follow the shape (decision 4).
+- **Dimension tool Type** (ribbon): Linear · Aligned · Angular · Radius · Diameter ·
+  Arc length · Continue · Baseline (`DimMode`, stored on the drawing as `dimType`).
+  - Angular: four clicks (corner, a point on each side, then where the arc sits).
+    Snaps make it work on walls / cabinets too.
+  - Radius / Diameter / Arc length: pick a circle, an arc or a rounded line corner
+    (bulge → `bulgeArc`), then click where the text / dim arc goes
+    (`PICK_DIM_MODES`, `arcSourceOf`, `placeRadial`).
+  - Continue / Baseline (`chainedDim`): click a linear / aligned dim (or just click —
+    it carries on from the last dim drawn, `lastDimId`); each click adds the next.
+    Continue = from the previous end, on the same dim line; Baseline = from the
+    first dim's start, each one 8 paper mm further out. Esc ends the chain.
+  - Changing Type drops a half-done pick / chain (`setDimMode` wrapper).
+- **Render** (`SpecialDimShape`): arcs with heads along them (a tick end draws as a
+  closed arrow on these), radial extension lines with gap / overshoot, radius /
+  diameter leader + tail with horizontal text. Text: `90.0°`, `R300`, `Ø600`,
+  `⌒471`; overrides with `<>` still work.
+- **Grips:** angular corner + both ray points + `dimAt`; radial `dimAt`; arc length
+  `offset`.
+- **Panel:** type / measures / shows / centre, plus a note that they don't follow
+  the shape.
+
+Next: Mark's real test of the whole plan toolset, then A6 (elevations) (elevations: wall-local frame, canvas +
 Elevation Views report, wall-split remap).
