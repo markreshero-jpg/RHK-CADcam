@@ -558,6 +558,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'From the job list, open Settings and pick Users (admins only). A green dot next to an email means that person has the app open right now. The Online column says which job and room (or page) each of their open tabs is on, and updates live as they move around. Hover a line to see when that tab was opened.',
       done: (c, s) => ev(c, 'users_view') > ev(s, 'users_view') },
   ]},
+
+  // Appended 2026-10-20 (fixtures: appliances seat in a cabinet's open opening).
+  { id: 'oven_in_opening', level: 'intermediate', topic: 'appliances', title: 'Drop an oven into a tower opening',
+    blurb: 'An oven dropped on a tall cabinet with an open space sits itself in that opening.',
+    keywords: 'oven tower opening open zone seat microwave compact tall cabinet appliance drop right click 3d', steps: [
+    { id: 'pick', title: 'Pick an oven',
+      body: 'Open Fixtures in the sidebar (F6) and click an oven (or a microwave). You need a tall cabinet on the canvas with an open space in its front.',
+      target: 'tool-fixtures', canvas: true, done: c => c.mode === 'place_fixture' },
+    { id: 'drop', title: 'Drop it on the cabinet',
+      body: 'Drop it over the cabinet. It moves into the opening on its own: centred, sitting on the shelf, front flush with the doors. In elevation, drop it over the opening you want; in plan it picks the one it fits best (an oven goes in the oven space, a microwave in the smaller one). Change the cabinet’s height or kick and it stays in the opening. If it fits no opening it just sits where you dropped it.',
+      canvas: true, done: (c, s) => seated(c) > seated(s) },
+    { id: 'menu', title: 'Right-click it in 3D',
+      body: 'Switch to 3D and right-click the oven. You get the same menu as in plan: View 3D / elevations, Move, Turn 90° and Delete.',
+      canvas: true, done: c => c.selected?.type === 'fixture' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
