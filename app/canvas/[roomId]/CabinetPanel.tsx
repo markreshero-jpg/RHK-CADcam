@@ -96,6 +96,24 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
         {meas && wall && !hideWallPosition && (
           <div>
             <p className={lbl}>Wall position</p>
+            {/* Left / centre / right X, all from the wall's left end — type one to move the cabinet there. */}
+            <div className="grid grid-cols-3 gap-1 mb-1">
+              {([['Left X', 0], ['Centre X', 0.5], ['Right X', 1]] as const).map(([name, k]) => (
+                <div key={name}>
+                  <p className="text-[9px] text-gray-500 mb-0.5">{name}</p>
+                  <CalcInput
+                    value={Math.round((meas.posLeft + cabinet.dx * k) * 10) / 10}
+                    decimals={1}
+                    onCommit={v => {
+                      const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
+                      const t = findFreeSlot(v - cabinet.dx * k, cabinet.dx, wall.length, occ)
+                      const p = slideAlongWall(cabinet, wall, t)
+                      onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
+                    }}
+                    className={inp + ' text-right'} />
+                </div>
+              ))}
+            </div>
             <div className="grid grid-cols-2 gap-1">
               <div>
                 <p className="text-[9px] text-gray-500 mb-0.5">From left end</p>
