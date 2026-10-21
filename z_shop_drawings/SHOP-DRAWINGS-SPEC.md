@@ -171,8 +171,16 @@ How it's built (plan):
     near / far tightened to the scene.
   - Crease edges come from `EdgesGeometry` (25°), sampled every ~1.5px. An edge is visible where any of
     the 3×3 pixels is at or behind it (tolerance 0.4% + 2mm).
-  - Meshes over 1500 triangles (GLB appliances / handles) are swapped for a bounding-box stand-in for
-    the whole capture, so they both draw and occlude as a clean box.
+  - **Feature edges, not mesh edges (Mark, 2026-10-21: "fixtures aren't showing true shape"):**
+    vertices are welded by position, then an edge is drawn if it's a boundary, a crease (> 25°; > 50°
+    for meshes over 1500 triangles), or a silhouette (its two faces point opposite ways from the eye).
+    Curved appliances / taps / handles print as their true outline plus main creases. On detailed
+    meshes, crease pieces under 2px are dropped. (This replaced the bounding-box stand-in.)
+  - **Drawer fronts showing through (fixed):** the visibility tolerance was 0.4% of depth (~25mm at 6m),
+    so drawer boxes and carcase edges 20mm behind an 18mm front leaked through. Now 1mm + 0.04%.
+    Runs bridge up to 2 hidden samples (grazing flicker). Partial runs under 2px are dropped; whole
+    short edges (silhouette chains) are kept.
+  - Mesh-based line objects (drei <Edges> / Line2 fat lines) are excluded from depth and edges.
   - Ghosted (opacity < 0.5) meshes, lines, text and sprites are ignored.
   - Checked headless (SwiftShader) on a test room: the island hides the run behind it, back edges are
     gone, a 3k-triangle "appliance" prints as a box; ~180ms.
