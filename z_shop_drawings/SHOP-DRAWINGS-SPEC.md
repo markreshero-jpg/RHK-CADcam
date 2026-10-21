@@ -1,6 +1,7 @@
 # Shop Drawings Package — Spec
 
-Status: **S1 checked by Mark 2026-10-21. S2 built 2026-10-21** (print check pending). Next: S3.
+Status: **S1 + S2 checked by Mark 2026-10-21. S3 built 2026-10-21** (in-app check pending), with
+benchtops added to the plan drawing. S9 tutorial written for the S3 flow. Next: S4.
 
 Reference: `z_sample_planscabinet_vision/RHK6456 - Suzie and Jeff Morris - Kitchen Shop Drawings.pdf`
 (the Cabinet Vision set we're replacing: plan, wall elevations, island elevations, 3D, doors-off interior).
@@ -104,13 +105,36 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
 - Test `src/lib/__tests__/shopDrawingPens.test.ts`: renders both SVGs at 1:20 and 1:50 and
   asserts every stroke is #000 and ≥ 0.13mm, and that there are no numeric font weights. It fails on the
   pre-S2 code.
-| S3 | **Package export.** Shop Drawings dialog (scale default 1:20, paper default A3L, sheet list with ticks, interior-elevation ticks, fit warnings); one multi-page jsPDF; Sheet n of N; filename `shop-drawings-{job}-{room}.pdf`; enable the menu item | [ ] |
+| S3 | **Package export.** Shop Drawings dialog (scale default 1:20, paper default A3L, sheet list with ticks, interior-elevation ticks, fit warnings); one multi-page jsPDF; Sheet n of N; filename `shop-drawings-{job}-{room}.pdf`; enable the menu item | [x] built 2026-10-21; in-app check pending |
+
+### S3 notes (as built)
+
+- `ShopDrawingsReport.tsx` is a new **Shop Drawings** entry at the top of the Reports window. It reuses the
+  modal's data, scale (default 1:20) and paper (default A3). **Production → Shop Drawings…** opens the
+  room's reports straight on it (`openShopDrawings` → `initialReport`).
+- Sheets = Plan, then each standard wall by `sort_order`. Default ticks: the plan plus walls with
+  cabinets. Ticks are remembered per room (localStorage `shop-drawings-sheets`). Island walls come in S4;
+  interior-elevation ticks come in S7.
+- Page layout (`pageLayout(paper, 10, tbH, HEADING_H)`): 10mm margin; `SheetHeading` ("Kitchen Plan
+  1 : 20", "Kitchen Elevation W1 1 : 20") top-left; drawing at true scale, centred in the band between
+  heading and title block; `ShopTitleBlock` at the foot with Sheet n of N over the ticked sheets.
+- The previews are true page layouts (percent-positioned on a paper-aspect box), so what you see is the PDF.
+  A sheet that doesn't fit gets an amber outline and is named in the warning with its size. It is never
+  rescaled (decision 6).
+- Layer sets: one picker for the plan and one for elevations. They share Plan View / Elevation Views'
+  stored choice, as do their page extras (hatch, wall names, return walls, annotation colours). The title
+  block is always on.
+- **Benchtops on the plan (Mark, 2026-10-21):** PlanViewReportSVG now draws `benchtops` (Plan View and
+  the package). Outline in the front pen with sink / hob cutouts as holes, no fill, over the cabinets;
+  `bt.joins` dashed thin. They follow the `benchtops` / `benchtop_joins` layer items and are included in
+  the drawing's fit. Edge-profile codes aren't printed.
+- Tutorial `shop_drawings` (reports topic), emit `shop_pdf`, tour target `shop-download`.
 | S4 | **Multi-view sheets:** lay out several views on one page at one scale (island front + back); fall back to one per page | [ ] |
 | S5 | **CAD carry-over check.** Plan CAD already prints (Plan View). Elevation CAD needs z_CAD_tool **A6** first. Confirm text boxes with borders (the spec block) print right | [ ] (blocked on A6 for elevations) |
 | S6 | **Cabinet numbering:** #n tags under each cabinet on elevations, same as on the plan, from `cab.label` as it is (no renumbering) | [ ] |
 | S7 | **Interior elevation (doors off):** drawing mode with fronts hidden, shelves shown and labelled (ADJ SH / FIX SH) and dimensioned | [ ] |
 | S8 | **3D sheet** (kept): vector hidden-line room views from saved camera angles | [ ] |
-| S9 | Tutorial (Production → Shop Drawings) | [ ] |
+| S9 | Tutorial (Production → Shop Drawings) | [x] written with S3; extend as S4–S8 land |
 
 ## Answered (Mark, 2026-10-21)
 

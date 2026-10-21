@@ -31,12 +31,31 @@ export function sheetTitle(project: Project | null, room: Room, scale: number, s
   }
 }
 
-/** Paper-mm placement of a page's title block and the drawing area left above it. */
-export function pageLayout(paper: { w: number; h: number }, margin: number, tbH: number | null) {
+/** Sheet heading height, paper mm (view name + scale, top-left of the page). */
+export const HEADING_H = 8
+
+/** Paper-mm placement of a page's title block, optional heading, and the drawing area between. */
+export function pageLayout(paper: { w: number; h: number }, margin: number, tbH: number | null, headingH = 0) {
   const usableW = paper.w - margin * 2
   const gap = 4
   const tb = tbH == null ? null : { x: margin, y: paper.h - margin - tbH, w: usableW, h: tbH }
-  return { usableW, usableH: paper.h - margin * 2 - (tb ? tbH! + gap : 0), tb }
+  const top = margin + (headingH ? headingH + gap : 0)
+  const bottom = tb ? tb.y - gap : paper.h - margin
+  return { usableW, usableH: bottom - top, top, tb }
+}
+
+/** "Kitchen Plan  1 : 20" — the view heading at the top-left of a sheet (paper mm). */
+export function SheetHeading({ title, scale, width }: { title: string; scale: number; width: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${width} ${HEADING_H}`}
+      width={`${width}mm`} height={`${HEADING_H}mm`} style={{ width: '100%', height: 'auto', display: 'block' }}
+      fontFamily={FONT} fill={INK}>
+      <text x={0} y={HEADING_H * 0.55} dominantBaseline="central" fontSize={4.5} fontWeight="bold">{title}</text>
+      <text x={Math.max(60, title.length * 4.5 * 0.62 + 12)} y={HEADING_H * 0.55} dominantBaseline="central" fontSize={4.5}>
+        {`1 : ${scale}`}
+      </text>
+    </svg>
+  )
 }
 
 const FONT = 'Arial, Helvetica, sans-serif'

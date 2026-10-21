@@ -9,7 +9,8 @@
 // mm and the drawing prints at the correct physical size at 1:scale.
 'use client'
 import type { ReactNode, RefObject } from 'react'
-import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
+import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance } from '@/src/lib/types'
+import { btSegments, outlinePath, outlinePoints } from '@/src/lib/benchtopGeometry'
 import { openingSpans, fixtureChainSpans, fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 import { OpeningSymbol } from './FixturesPlan'
 import AnnotationLayer from './AnnotationLayer'
@@ -77,13 +78,15 @@ function cabinetTypeFill(cab: CabinetInstance): string {
 }
 
 export default function PlanViewReportSVG({
-  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [],
+  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [], benchtops = [],
 }: {
   walls:       Wall[]
   /** Placed fixtures — doors / windows (z_fixtures P5) split the walls and draw their symbol. */
   fixtures?:   RoomFixture[]
   /** CAD annotations (z_CAD_tool), plan rows — drawn on top, paper-mm sized at this scale. */
   annotations?: RoomAnnotation[]
+  /** Benchtops (z_benchtop_builder) — outline, cutouts and join lines. */
+  benchtops?:  BenchtopInstance[]
   cabinets:    CabinetInstance[]
   resolvedParts?: Map<string, ResolvedCabinet>
   svgRef:      RefObject<SVGSVGElement | null>
@@ -131,6 +134,8 @@ export default function PlanViewReportSVG({
     if (!layers.show(annotLayerItem(a.kind))) continue
     pts.push(...annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, P))
   }
+  // Benchtops overhang their cabinets (islands especially) — fit them too.
+  if (layers.show('benchtops')) for (const bt of benchtops) pts.push(...outlinePoints(btSegments(bt), 4))
   const minX = Math.min(...pts.map(p => p.x))
   const maxX = Math.max(...pts.map(p => p.x))
   const minY = Math.min(...pts.map(p => p.y))
@@ -582,6 +587,23 @@ export default function PlanViewReportSVG({
         }
 
         return nodes
+      })}
+
+      {/* ── Benchtops — outline over the cabinets (sink / hob cutouts as holes), join lines dashed ── */}
+      {layers.show('benchtops') && benchtops.map(bt => {
+        const segs = btSegments(bt)
+        if (segs.length < 2) return null
+        const btP = lp('benchtops')
+        return (
+          <g key={`bt-${bt.id}`} opacity={btP.opacity}>
+            <path d={outlinePath(segs, bt.cutout_polygons ?? [])} fillRule="evenodd" fill="none"
+              stroke={INK} strokeWidth={lw('benchtops', pen('front', P))} strokeLinejoin="miter" strokeDasharray={btP.strokeDasharray} />
+            {layers.show('benchtop_joins') && (bt.joins ?? []).map((j, i) => (
+              <line key={i} x1={j.p0.x} y1={j.p0.y} x2={j.p1.x} y2={j.p1.y} opacity={layers.op('benchtop_joins')}
+                stroke={INK} strokeWidth={lw('benchtop_joins', pen('thin', P))} strokeDasharray={`${1.5 * P} ${0.8 * P}`} />
+            ))}
+          </g>
+        )
       })}
 
       {/* ── Dimension chains — wall-cab / base / overall + depth (layer items) ── */}

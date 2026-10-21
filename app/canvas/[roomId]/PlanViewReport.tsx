@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
-import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
+import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
@@ -37,7 +37,9 @@ const TOGGLES: { key: keyof PlanViewPageOptions; label: string }[] = [
   { key: 'annotColours', label: 'Annotation colours' },
 ]
 
-export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, annotations }: {
+export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, annotations, benchtops }: {
+  /** Benchtops — drawn on the plan (outline, cutouts, join lines). */
+  benchtops?: BenchtopInstance[]
   /** Doors / windows (z_fixtures P5) are drawn from these. */
   fixtures?: RoomFixture[]
   /** CAD annotations (z_CAD_tool), plan view rows. */
@@ -203,6 +205,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
           cabinets={cabinets}
           fixtures={fixtures}
           annotations={annotations}
+          benchtops={benchtops}
           resolvedParts={resolvedParts}
           svgRef={svgRef}
           scale={scale}

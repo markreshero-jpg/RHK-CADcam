@@ -99,7 +99,7 @@ import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
 import RoomPropertiesModal, { type RoomPropertiesTab } from './RoomPropertiesModal'
 import { type RoomSwitcherHandle } from './RoomSwitcher'
 import ObjectTreeModal from './ObjectTreeModal'
-import ReportsModal, { type ReportScope } from './ReportsModal'
+import ReportsModal, { type ReportScope, type ReportId } from './ReportsModal'
 import Room3DScene, { type Camera3DState } from './Room3DScene'
 import BenchtopPanel from './BenchtopPanel'
 import BenchtopShapeEditPanel, { SaveShapePrompt } from './BenchtopShapeEditPanel'
@@ -259,6 +259,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [roomModalTab, setRoomModalTab] = useState<RoomPropertiesTab | null>(null)
   const [showObjectTree, setShowObjectTree] = useState(false)
   const [reportScope, setReportScope] = useState<ReportScope | null>(null)
+  const [reportInitial, setReportInitial] = useState<ReportId | undefined>(undefined)
   const [editCabId, setEditCabId] = useState<string | null>(null)
   const [viewFixtureId, setViewFixtureId] = useState<string | null>(null)
   const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation' | 'joints'>('elevation')
@@ -2607,7 +2608,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     openLayerManager: () => setShowLayerManager(true),
     planGrid, setPlanGrid,
     setJobModalTab, setRoomModalTab,
-    openReportModal: setReportScope,
+    openReportModal: (s: ReportScope) => { setReportInitial(undefined); setReportScope(s) },
+    openShopDrawings: () => { setReportInitial('shop_drawings'); setReportScope('room') },
     openObjectTree: () => setShowObjectTree(true),
     openRoomSwitcher: () => roomSwitcherRef.current?.openSwitcher(),
     openAddRoom: () => roomSwitcherRef.current?.openAdd(),
@@ -3752,6 +3754,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       {reportScope && (
         <ReportsModal
           initialScope={reportScope}
+          initialReport={reportInitial}
           project={project}
           room={room}
           walls={walls}

@@ -38,6 +38,8 @@ export interface MenuActions {
   setJobModalTab:    (tab: JobPropertiesTab) => void
   setRoomModalTab:   (tab: RoomPropertiesTab) => void
   openReportModal:   (scope: ReportScope) => void
+  /** Production → Shop Drawings: the room's reports window, opened on the package. */
+  openShopDrawings:  () => void
   openObjectTree:    () => void
   openRoomSwitcher:  () => void
   openAddRoom:       () => void
@@ -126,7 +128,7 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
     { label: 'Production', items: [
       { label: 'Cut List…',          action: () => a.openReportModal('room') },
       { label: 'Material Schedule…', disabled: true },
-      { label: 'Shop Drawings…',     disabled: true },
+      { label: 'Shop Drawings…',     action: () => a.openShopDrawings() },
       null,
       { label: 'Generate CNC…',      disabled: !a.projectId,
         action: () => { if (a.projectId) window.location.href = `/projects/${a.projectId}/optimiser` } },

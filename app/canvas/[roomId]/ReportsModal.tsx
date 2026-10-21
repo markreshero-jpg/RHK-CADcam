@@ -9,6 +9,7 @@ import { filterHiddenMap, filterRemovedParts } from '@/src/lib/resolver/filterHi
 import PlanViewReport from './PlanViewReport'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import ElevationPrintReport from './ElevationPrintReport'
+import ShopDrawingsReport from './ShopDrawingsReport'
 import CabinetSheetReport from './CabinetSheetReport'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import { BenchtopSupplySheet, supplyPrintHtml } from './BenchtopSupplyReport'
@@ -22,9 +23,10 @@ import { shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { zoneBlank } from '@/src/lib/jointDrilling'
 
 export type ReportScope = 'job' | 'room'
-type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets'
+export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
+  { id: 'shop_drawings',      label: 'Shop Drawings',       desc: 'One PDF per room: plan + elevations, one scale' },
   { id: 'parts_list_summary', label: 'Parts List Summary',  desc: 'Parts by room · material · cabinet' },
   { id: 'benchtop_supply',    label: 'Benchtop Supply',     desc: 'Stone / laminate order · m² · edges' },
   { id: 'appliance_schedule', label: 'Appliance Schedule',  desc: 'Appliances, sinks, taps · model · location' },
@@ -139,8 +141,10 @@ const PAPER = {
   A1L: { w: 841, h: 594, label: 'A1 Landscape' },
 }
 
-export default function ReportsModal({ initialScope, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
+export default function ReportsModal({ initialScope, initialReport, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
   initialScope: ReportScope
+  /** Report to open on (Production → Shop Drawings opens straight on the package). */
+  initialReport?: ReportId
   project: Project | null
   room: Room
   walls: Wall[]
@@ -158,7 +162,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
   onClose: () => void
 }) {
   const [scope, setScope] = useState<ReportScope>(initialScope)
-  const [selectedReport, setSelectedReport] = useState<ReportId>('parts_list_summary')
+  const [selectedReport, setSelectedReport] = useState<ReportId>(initialReport ?? 'parts_list_summary')
   // Tutorial mode (z_tutorial): which report is open, null once the window closes.
   useEffect(() => {
     useTutorial.getState().setCtx({ report: selectedReport })
@@ -438,14 +442,14 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {(selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view_v2') && (
+                {(selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view_v2' || selectedReport === 'shop_drawings') && (
                   <select value={printScale} onChange={e => setPrintScale(Number(e.target.value))}
                     className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1"
                     title="Drawing scale — 1:N">
                     {SCALES.map(s => <option key={s} value={s}>1:{s}</option>)}
                   </select>
                 )}
-                {(selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view_v2' || selectedReport === 'cabinet_sheets') && (
+                {(selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view_v2' || selectedReport === 'cabinet_sheets' || selectedReport === 'shop_drawings') && (
                   <select value={printPaper} onChange={e => setPrintPaper(e.target.value as keyof typeof PAPER)}
                     className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1">
                     {(Object.keys(PAPER) as (keyof typeof PAPER)[]).map(k => (
@@ -454,7 +458,7 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                   </select>
                 )}
                 {/* The plan / elevation / cabinet reports have their own download button in their toolbar. */}
-                {selectedReport !== 'plan_view_v2' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && (
+                {selectedReport !== 'plan_view_v2' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && selectedReport !== 'shop_drawings' && (
                   <button onClick={handlePrint}
                     className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium">
                     Print / PDF
@@ -467,12 +471,30 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
             <div className="flex-1 overflow-y-auto p-4">
               {loadingJob ? (
                 <div className="text-gray-500 text-center py-12 text-sm">Loading job data…</div>
+              ) : selectedReport === 'shop_drawings' ? (
+                <ShopDrawingsReport
+                  project={project}
+                  room={room}
+                  walls={walls}
+                  fixtures={roomFixtures}
+                  annotations={annotations.filter(a => a.view === 'plan')}
+                  benchtops={scope === 'room' ? benchtops : []}
+                  benchTopZ={benchTopZ}
+                  cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
+                  planResolved={planResolved}
+                  elevResolved={elevResolved}
+                  layerSets={layerSets}
+                  activeLayerSetId={activeLayerSetId}
+                  scale={printScale}
+                  paperKey={printPaper}
+                />
               ) : selectedReport === 'plan_view_v2' ? (
                 <PlanViewReport
                   project={project}
                   room={room}
                   walls={walls}
                   fixtures={roomFixtures}
+                  benchtops={scope === 'room' ? benchtops : []}
                   annotations={annotations.filter(a => a.view === 'plan')}
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
                   resolvedParts={planResolved}

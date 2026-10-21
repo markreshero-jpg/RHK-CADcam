@@ -5,7 +5,7 @@ import PlanViewReportSVG from '@/app/canvas/[roomId]/PlanViewReportSVG'
 import ElevationPrintSVG from '@/app/canvas/[roomId]/ElevationPrintSVG'
 import { resolveLayerView } from '../displayLayers/resolve'
 import { MIN_PEN, PRINT_INK } from '../shopDrawings/pens'
-import type { Wall, CabinetInstance, Room } from '../types'
+import type { Wall, CabinetInstance, Room, BenchtopInstance } from '../types'
 
 // z_shop_drawings S2: every printed line is black and at least the minimum pen,
 // at the default 1:20 and at a coarse 1:50, and all text stays Helvetica.
@@ -24,6 +24,14 @@ const CABS = [
   cab(ROOM[1], 3000, 580, 1200, { assembly_class: 'tall', dy: 2200 }),
 ]
 const room = { id: 'r', name: 'Kitchen', height: 2400 } as unknown as Room
+// A top over the W1 run with a sink cutout and one butt join.
+const rect = (x0: number, y0: number, x1: number, y1: number) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+const BT = {
+  id: 'bt1', room_id: 'r',
+  segments: rect(0, 0, 1500, 600).map(([x, y], i, a) => ({ type: 'line', p0: { x, y }, p1: { x: a[(i + 1) % 4][0], y: a[(i + 1) % 4][1] } })),
+  joins: [{ p0: { x: 600, y: 0 }, p1: { x: 600, y: 600 }, type: 'butt' }],
+  cutout_polygons: [rect(800, 150, 1300, 450).map(([x, y]) => ({ x, y }))],
+} as unknown as BenchtopInstance
 
 /** stroke / stroke-width pairs on every element that draws a line. */
 function strokes(svg: string) {
@@ -43,7 +51,7 @@ for (const scale of [20, 50]) {
   describe(`print pens at 1:${scale}`, () => {
     it('plan: black lines, none thinner than the minimum pen', () => {
       const svg = renderToStaticMarkup(createElement(PlanViewReportSVG, {
-        walls: ROOM, cabinets: CABS, resolvedParts: new Map(), svgRef: { current: null }, scale,
+        walls: ROOM, cabinets: CABS, benchtops: [BT], resolvedParts: new Map(), svgRef: { current: null }, scale,
         layers: resolveLayerView(undefined, 'plan'),
         show: { wallNames: true, hatch: true, titleBlock: true, annotColours: false },
       }))
@@ -74,3 +82,17 @@ for (const scale of [20, 50]) {
     })
   })
 }
+
+describe('plan benchtops', () => {
+  it('draws the outline with its cutout as a hole, plus the join line', () => {
+    const svg = renderToStaticMarkup(createElement(PlanViewReportSVG, {
+      walls: ROOM, cabinets: CABS, benchtops: [BT], resolvedParts: new Map(), svgRef: { current: null }, scale: 20,
+      layers: resolveLayerView(undefined, 'plan'),
+      show: { wallNames: true, hatch: true, titleBlock: true, annotColours: false },
+    }))
+    const top = /<path d="([^"]*)" fill-rule="evenodd" fill="none"/.exec(svg)
+    expect(top).not.toBeNull()
+    expect(top![1].match(/M/g)).toHaveLength(2)           // outline + sink cutout
+    expect(svg).toContain('x1="600" y1="0" x2="600" y2="600"')   // butt join
+  })
+})

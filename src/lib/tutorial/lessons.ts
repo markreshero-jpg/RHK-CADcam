@@ -633,6 +633,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Select any notes or markup (a north arrow, a standard note), right-click and choose Save as CAD block…, then name it. Every user gets it in their CAD blocks list.',
       canvas: true, done: c => c.mode === 'cad' },
   ]},
+  { id: 'shop_drawings', level: 'intermediate', topic: 'reports', title: 'Print shop drawings',
+    blurb: 'One PDF for the room: plan + elevations, one scale, company title block.', keywords: 'shop drawings pdf print plan elevation title block sheet package client', steps: [
+    { id: 'open', title: 'Production → Shop Drawings…',
+      body: 'Click Production in the menu bar and choose Shop Drawings…. It opens the room\'s reports on the Shop Drawings package.',
+      target: 'menu-Production', canvas: true, done: c => c.report === 'shop_drawings' },
+    { id: 'sheets', title: 'Pick scale, paper and sheets',
+      body: 'Every sheet prints at the same scale (1:20 on A3 is usual). Tick the sheets you want: the plan and each wall. If a sheet won\'t fit, it\'s named in the warning: pick bigger paper or a larger scale number.',
+      canvas: true, done: c => c.report === 'shop_drawings' },
+    { id: 'download', title: 'Download the PDF',
+      body: 'Click Download PDF. Each page has its heading, the drawing at true scale, and your company title block (Settings → Company) with Sheet n of N.',
+      target: 'shop-download', canvas: true, done: (c, s) => ev(c, 'shop_pdf') > ev(s, 'shop_pdf') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
