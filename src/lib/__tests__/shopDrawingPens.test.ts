@@ -123,3 +123,15 @@ describe('fixtures on the printed sheets', () => {
     expect(svg).toMatch(/<rect x="2048" y="948" width="504" height="504"/)
   })
 })
+
+describe('plan cabinet labels', () => {
+  it('name only (no size text), just inside the front edge', () => {
+    const svg = renderToStaticMarkup(createElement(PlanViewReportSVG, {
+      walls: ROOM, cabinets: CABS, resolvedParts: new Map(), svgRef: { current: null }, scale: 20,
+      layers: resolveLayerView(undefined, 'plan'), show: { wallNames: true, hatch: true, titleBlock: true, annotColours: false },
+    }))
+    expect(svg).not.toMatch(/\d+×\d+/)
+    // Cabinet "1" on W1 (front at y = 580): label 3.5mm × 20 = 70 → y = 580 - 63 = 517, centred on x = 300.
+    expect(svg).toMatch(/<text x="300" y="517"[^>]*>1<\/text>/)
+  })
+})

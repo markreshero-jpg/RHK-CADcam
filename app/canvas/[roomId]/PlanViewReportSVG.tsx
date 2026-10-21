@@ -19,7 +19,7 @@ import { resolveStyle } from '@/src/lib/annotations/style'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
   toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon, wallPieces,
-  cabinetPolygon, cabinetCenterPt, centroid, cabWallPerp, cabWallSide, cabT,
+  cabinetPolygon, centroid, cabWallPerp, cabWallSide, cabT,
   cabinetToPlan, cabinetPlanFrame,
 } from '@/src/lib/geometry'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -371,9 +371,11 @@ export default function PlanViewReportSVG({
           const b = tkPlanBox(kickFace)
           const lx = b.x + b.w / 2, lz = Math.max(0, b.z - 150)
           return toPlanC(lx, lz)
-        })() : cabinetCenterPt(cab, wall, perp)
+        })() : null
         const labelFs = layers.w('cabinet_labels', fontSize)
-        const sizeFs  = layers.w('cabinet_sizes', fontSize * 0.7)
+        // Shop drawings: the name sits just inside the cabinet's front edge (Mark, 2026-10-21) —
+        // name only, no size text — so it stays clear of sinks / hobs in the middle of the top.
+        const labelAt = labelPt ?? toPlanC(cab.dx / 2, Math.max(cab.dz / 2, cab.dz - labelFs * 0.9))
         const hasLabel = layers.show('cabinet_labels') && !!cab.label
         return (
           <g key={cab.id}>
@@ -437,22 +439,12 @@ export default function PlanViewReportSVG({
             )}
             {hasLabel && (
               <text
-                x={labelPt.x} y={labelPt.y}
+                x={labelAt.x} y={labelAt.y}
                 textAnchor="middle" dominantBaseline="central"
                 fontSize={labelFs} fill={INK} opacity={layers.op('cabinet_labels')}
                 fontFamily="Arial, Helvetica, sans-serif"
               >
                 {cab.label}
-              </text>
-            )}
-            {layers.show('cabinet_sizes') && (
-              <text
-                x={labelPt.x} y={labelPt.y + (hasLabel ? labelFs * 0.55 + sizeFs * 0.6 : 0)}
-                textAnchor="middle" dominantBaseline="central"
-                fontSize={sizeFs} fill={INK} opacity={layers.op('cabinet_sizes')}
-                fontFamily="Arial, Helvetica, sans-serif"
-              >
-                {roundMm(cab.dx)}×{roundMm(cab.dz)}
               </text>
             )}
           </g>
