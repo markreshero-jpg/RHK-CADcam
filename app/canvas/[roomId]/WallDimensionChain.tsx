@@ -4,6 +4,7 @@ import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide, type RoomRef, type
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
 import { kickChain, type KickSpan } from '@/src/lib/kickDims'
+import type { BenchtopSpan } from '@/src/lib/benchtopDims'
 import { roundMm } from '@/src/lib/format'
 import { DimLabel, dimLabelFits, dimLabelSides, wallRowName } from './dimLabel'
 import type { FixtureChainSpan } from '@/src/lib/fixtureGeometry'
@@ -18,6 +19,9 @@ interface Props {
   layerOverall: LayerConfig
   layerBase: LayerConfig
   layerWallCab: LayerConfig
+  /** Benchtop row (`dim_benchtop`); spans from benchtopWallSpans. */
+  layerBenchtop?: LayerConfig
+  benchtopSpans?: BenchtopSpan[]
   /** Kick chain + kick depth dims (`dim_kicks`); spans from kickPlanSpans. */
   layerKick?: LayerConfig
   kickSpans?: KickSpan[]
@@ -211,6 +215,7 @@ export default function WallDimensionChain({
   wall, walls, cabinets, rc, zoom, selected,
   layerOverall, layerBase, layerWallCab, layerKick, kickSpans = [], labelBg = '#030712',
   layerOpenings, openingSpans = [], fixtureSpans = [], showRowNames = false,
+  layerBenchtop, benchtopSpans = [],
 }: Props) {
   const inward = wallInwardNormal(wall, rc)
   const out = { x: -inward.x, y: -inward.y }
@@ -251,9 +256,14 @@ export default function WallDimensionChain({
     kicks: KickSpan[] = [],
     openings: WallSpan[] = [],
     fx: FixtureChainSpan[] = [],
+    tops: BenchtopSpan[] = [],
   ) {
     const baseFx = fx.filter(s => s.row === 'floor'), wallFx = fx.filter(s => s.row === 'wall')
     const baseSegs = computeChain(baseCabs, wall, baseFx)
+    // Benchtop row sits just outside the base row.
+    const showTop = !!layerBenchtop?.visible && tops.length > 0
+    const topSegs = showTop ? spanChain(tops, wall.length) : []
+    const nTop = showTop ? 1 : 0
     // Kick row sits between the base row and the overall, which steps out past it.
     const showKicks = !!layerKick?.visible && kicks.length > 0
     const kickSegs = showKicks ? kickChain(kicks, wall.length) : []
@@ -282,9 +292,10 @@ export default function WallDimensionChain({
     const openSegs = showOpen ? spanChain(openings, wall.length) : []
     const oK = showKicks ? (layerKick?.offset ?? 0) : 0, oO = layerOverall.offset ?? 0
     const oD = showOpen ? (layerOpenings?.offset ?? 0) : 0
-    const rW = oW, rB = rW + oB, rK = rB + oK, rD = rK + oD, rO = rD + oO
-    // Row numbers: 1 wall cabs, 2 base, then kicks / openings when shown, overall last.
-    const nB = 2 + nBh, nK = 3 + nBh, nD = (showKicks ? 4 : 3) + nBh, nO = nD + (showOpen ? 1 : 0)
+    const oT = showTop ? (layerBenchtop?.offset ?? 0) : 0
+    const rW = oW, rB = rW + oB, rT = rB + oT, rK = rT + oK, rD = rK + oD, rO = rD + oO
+    // Row numbers: 1 wall cabs, 2 base, then benchtops / kicks / openings when shown, wall length last.
+    const nB = 2 + nBh, nT = 3 + nBh, nK = nT + nTop, nD = nK + (showKicks ? 1 : 0), nO = nD + (showOpen ? 1 : 0)
 
     return (
       <g key={key}>
@@ -298,6 +309,9 @@ export default function WallDimensionChain({
         {layerBase.visible && (baseCabs.length > 0 || baseFx.length > 0) && (
           <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nB + rB} segs={baseSegs} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} bg={labelBg} {...nm('BASE')} />
         )}
+        {showTop && (
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nT + rT} segs={topSegs} zoom={z} col={layerBenchtop!.color ?? col} weight={layerBenchtop!.weight} opacity={layerBenchtop!.opacity} bg={labelBg} {...nm('BENCHTOP')} />
+        )}
         {showKicks && (
           <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nK + rK} segs={kickSegs} zoom={z} col={kickCol} weight={layerKick!.weight} opacity={layerKick!.opacity} bg={labelBg} {...nm('KICK')} />
         )}
@@ -305,7 +319,7 @@ export default function WallDimensionChain({
           <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nD + rD} segs={openSegs} zoom={z} col={layerOpenings!.color ?? col} weight={layerOpenings!.weight} opacity={layerOpenings!.opacity} bg={labelBg} {...nm('OPENINGS')} />
         )}
         {layerOverall.visible && (
-          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nO + rO} segs={overallSeg} zoom={z} col={layerOverall.color ?? col} weight={layerOverall.weight} opacity={layerOverall.opacity} bg={labelBg} {...nm('OVERALL')} />
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nO + rO} segs={overallSeg} zoom={z} col={layerOverall.color ?? col} weight={layerOverall.weight} opacity={layerOverall.opacity} bg={labelBg} {...nm('WALL')} />
         )}
         {/* Kick depth (wall face → kick face) at the wall ends, outside the cabinet depth lanes */}
         {showKicks && (
@@ -342,13 +356,15 @@ export default function WallDimensionChain({
   const outKicks = kickSpans.filter(k => k.side === 'back')
   const inFx  = fixtureSpans.filter(s => s.side === 'face')
   const outFx = fixtureSpans.filter(s => s.side === 'back')
+  const inTops  = benchtopSpans.filter(s => s.side === 'face')
+  const outTops = benchtopSpans.filter(s => s.side === 'back')
   const hasIn  = inBase.length > 0 || inWall.length > 0 || inFx.length > 0
   const hasOut = outBase.length > 0 || outWall.length > 0 || outFx.length > 0
 
   // Perimeter wall with cabinets only on the room side (the common case): keep the
   // historic single chain on the empty outward side, depth dims pointing inward.
   if (!isIsland && !hasOut) {
-    return renderSide('main', out, inward, allBase, allWall, 0, 0, kickSpans, openingSpans, inFx)
+    return renderSide('main', out, inward, allBase, allWall, 0, 0, kickSpans, openingSpans, inFx, inTops)
   }
 
   // Island, or a perimeter wall that now has back-side cabinets: draw each occupied
@@ -358,8 +374,8 @@ export default function WallDimensionChain({
   const outBackOffset = isIsland ? 0 : wall.thickness
   return (
     <g>
-      {hasIn && renderSide('in', inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]), 0, inKicks, [], inFx)}
-      {(hasOut || !hasIn) && renderSide('out', out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, outKicks, openingSpans, outFx)}
+      {hasIn && renderSide('in', inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]), 0, inKicks, [], inFx, inTops)}
+      {(hasOut || !hasIn) && renderSide('out', out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, outKicks, openingSpans, outFx, outTops)}
     </g>
   )
 }

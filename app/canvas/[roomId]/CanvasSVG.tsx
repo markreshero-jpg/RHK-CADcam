@@ -25,6 +25,7 @@ import { footprintEdgesPlan } from '@/src/lib/cabinetShape/footprint'
 import { isShapedPanelKey, zonePartId } from '@/src/lib/cabinetShape/partKeys'
 import WallDimensionChain from './WallDimensionChain'
 import { kickPlanSpans } from '@/src/lib/kickDims'
+import { benchtopWallSpans } from '@/src/lib/benchtopDims'
 import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, SectionCut, isBenchtopMode, type BtShapeEdit, btLocal } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
@@ -1026,6 +1027,8 @@ export default function CanvasSVG({
                   layerOverall={layers.setting('dim_wall_overall')}
                   layerBase={layers.setting('dim_base_chain')}
                   layerWallCab={layers.setting('dim_wall_chain')}
+                  layerBenchtop={layers.setting('dim_benchtop')}
+                  benchtopSpans={layers.show('dim_benchtop') ? benchtopWallSpans(benchtops, w) : undefined}
                   layerKick={layers.setting('dim_kicks')}
                   kickSpans={layers.show('dim_kicks') ? kickPlanSpans(cabinets, w, resolvedParts, cx) : undefined}
                   fixtureSpans={wallFixtureSpans?.get(w.id)?.filter(s => layers.show(fixtureLayer(s.category)))}
@@ -1071,6 +1074,8 @@ export default function CanvasSVG({
                 layerOverall={layers.setting('dim_wall_overall')}
                 layerBase={layers.setting('dim_base_chain')}
                 layerWallCab={layers.setting('dim_wall_chain')}
+                layerBenchtop={layers.setting('dim_benchtop')}
+                benchtopSpans={layers.show('dim_benchtop') ? benchtopWallSpans(benchtops, w) : undefined}
                 layerKick={layers.setting('dim_kicks')}
                 kickSpans={layers.show('dim_kicks') ? kickPlanSpans(cabinets, w, resolvedParts, cx) : undefined}
                 layerOpenings={layers.setting('dim_openings')}

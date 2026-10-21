@@ -167,11 +167,13 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     hint: 'Where-to-click hints while File → Tutorial mode is on (z_tutorial)' },
 
   // Dimensions
-  { id: 'dim_wall_overall',     group: 'dimensions', label: 'Wall overall',       views: ['plan'], default: ON },
+  { id: 'dim_wall_overall',     group: 'dimensions', label: 'Wall length',        views: ['plan'], default: ON },
   { id: 'dim_base_chain',       group: 'dimensions', label: 'Base chain',         views: ['plan'], default: ON },
+  { id: 'dim_benchtop',         group: 'dimensions', label: 'Benchtops',          views: ['plan'], default: ON,
+    hint: 'Plan: a BENCHTOP row just outside the base row — the length of each top on the wall' },
   { id: 'dim_wall_chain',       group: 'dimensions', label: 'Wall-cabinet chain', views: ['plan'], default: ON },
   { id: 'dim_row_labels',       group: 'dimensions', label: 'Row names',          views: ['plan'], default: ON,
-    hint: 'Plan: BASE / WALL CABS / TALL / OVERALL … at the start of each dimension row' },
+    hint: 'Plan: BASE / BENCHTOP / WALL CABS / TALL / WALL … at the start of each dimension row' },
   { id: 'dim_elev_height',      group: 'dimensions', label: 'Height chain',       views: ['elevation'], default: ON },
   { id: 'dim_elev_bench',       group: 'dimensions', label: 'Bench & basin heights', views: ['elevation'], default: ON,
     hint: 'Elevation: floor to the top of the benchtop, and to the rim of a basin sitting on it' },

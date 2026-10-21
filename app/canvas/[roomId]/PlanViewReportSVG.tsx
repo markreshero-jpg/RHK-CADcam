@@ -11,6 +11,7 @@
 import type { ReactNode, RefObject } from 'react'
 import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance } from '@/src/lib/types'
 import { btSegments, outlinePath, outlinePoints } from '@/src/lib/benchtopGeometry'
+import { benchtopWallSpans, type BenchtopSpan } from '@/src/lib/benchtopDims'
 import { openingSpans, fixtureChainSpans, fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 import { OpeningSymbol, FixturesPlanPrint } from './FixturesPlan'
 import AnnotationLayer from './AnnotationLayer'
@@ -106,7 +107,7 @@ export default function PlanViewReportSVG({
   const P  = scale   // 1 physical mm in model mm
   // Layer props at a "zoom" that makes the layer dash pattern 1.6 / 0.8 paper mm.
   const lp = (id: string) => layers.props(id, 5 / P)
-  const dimIds = ['dim_wall_chain', 'dim_base_chain', 'dim_wall_overall', 'dim_openings'] as const
+  const dimIds = ['dim_wall_chain', 'dim_base_chain', 'dim_benchtop', 'dim_wall_overall', 'dim_openings'] as const
   const showDims = layers.any(...dimIds)
   // Dimension chains measure only cabinets the layer set draws.
   const chainCabs = cabinets.filter(c => planShowsCabinet(c, layers, resolvedParts?.get(c.id)))
@@ -155,6 +156,7 @@ export default function PlanViewReportSVG({
   const ROW_OVERALL = 12 * P
   const ROW_OPEN_STEP = 4 * P   // doors / windows row sits where the overall was; the overall steps out
   const ROW_BH_STEP   = 4 * P   // bulkhead row (z_bulkhead) sits next to the overheads; rows past it step out
+  const ROW_TOP_STEP  = 4 * P   // benchtop row sits just outside the base row; rows past it step out
 
   const swingSW = pen('thin', P)  // door swing arc
   const drawSW  = pen('thin', P)  // drawer indicator line
@@ -180,7 +182,9 @@ export default function PlanViewReportSVG({
   const basePad  = 4 * P
   // Bulkheads get their own row outside the overhead row; the rows past it step out.
   const bhStep = layers.show('dim_wall_chain') && chainCabs.some(c => !!c.bulkhead) ? ROW_BH_STEP : 0
-  const dimExtra = showDims ? maxThick + chainClearDepth + ROW_OVERALL + bhStep + (openingsByWall.size && layers.show('dim_openings') ? ROW_OPEN_STEP : 0) + dimFS * 2 + tickH : 0
+  const topsByWall = new Map(walls.map(w => [w.id, layers.show('dim_benchtop') ? benchtopWallSpans(benchtops, w) : []]))
+  const topStep = [...topsByWall.values()].some(t => t.length) ? ROW_TOP_STEP : 0
+  const dimExtra = showDims ? maxThick + chainClearDepth + ROW_OVERALL + bhStep + topStep + (openingsByWall.size && layers.show('dim_openings') ? ROW_OPEN_STEP : 0) + dimFS * 2 + tickH : 0
   const padL = basePad + dimExtra
   const padR = basePad + dimExtra
   const padT = basePad + dimExtra
@@ -620,6 +624,7 @@ export default function PlanViewReportSVG({
           backOffset = 0,
           withOpenings = false,
           fx: FixtureChainSpan[] = [],
+          tops: BenchtopSpan[] = [],
         ) => {
           const baseFx = fx.filter(s => s.row === 'floor'), wallFx = fx.filter(s => s.row === 'wall')
           // Doors / windows row (z_fixtures P5): wall start → jambs → wall end.
@@ -636,7 +641,17 @@ export default function PlanViewReportSVG({
           const ohCabs = wallCabs.filter(c => !c.bulkhead), bhCabs = wallCabs.filter(c => !!c.bulkhead)
           const showBh = layers.show('dim_wall_chain') && bhCabs.length > 0
           const bh = showBh ? ROW_BH_STEP : 0
-          const rowOverall = ROW_OVERALL + bh + (openSegs.length ? ROW_OPEN_STEP : 0)
+          // Benchtop row just outside the base row: wall start → each top → wall end.
+          const topSegs: Seg[] = []
+          let tc = 0
+          for (const s of tops) {
+            if (s.t0 > tc + 0.5) topSegs.push({ from: tc, to: s.t0, label: roundMm(s.t0 - tc) })
+            topSegs.push({ from: s.t0, to: s.t1, label: roundMm(s.t1 - s.t0) })
+            tc = s.t1
+          }
+          if (tops.length && tc < w.length - 0.5) topSegs.push({ from: tc, to: w.length, label: roundMm(w.length - tc) })
+          const ts = topSegs.length ? ROW_TOP_STEP : 0
+          const rowOverall = ROW_OVERALL + bh + ts + (openSegs.length ? ROW_OPEN_STEP : 0)
           const baseSegs    = computeChain(baseCabs, w, baseFx)
           const wallCabSegs = computeChain(ohCabs, w, wallFx)
           const overallSeg: Seg[] = [{ from: 0, to: w.length, label: roundMm(w.length) }]
@@ -648,8 +663,9 @@ export default function PlanViewReportSVG({
               {layers.show('dim_wall_chain') && (ohCabs.length > 0 || wallFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`, 'dim_wall_chain', wallRowName(ohCabs, wallFx.length > 0))}
               {showBh && dimLine(w, chainDir, depthOffset + ROW_WALLCAB + ROW_BH_STEP, computeChain(bhCabs, w), `bh-${key}`, 'dim_wall_chain', 'BULKHEAD')}
               {layers.show('dim_base_chain') && (baseCabs.length > 0 || baseFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_BASE + bh, baseSegs, `bc-${key}`, 'dim_base_chain', 'BASE')}
-              {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL + bh, openSegs, `op-${key}`, 'dim_openings', 'OPENINGS')}
-              {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall', 'OVERALL')}
+              {topSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_BASE + bh + ROW_TOP_STEP, topSegs, `bt-${key}`, 'dim_benchtop', 'BENCHTOP')}
+              {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL + bh + ts, openSegs, `op-${key}`, 'dim_openings', 'OPENINGS')}
+              {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall', 'WALL')}
               {layers.show('dim_base_chain') && baseDz > 0 && (
                 <>
                   {depthDim(w, depthDir, 0,        baseDz, -1, `dd0-${key}`, 'dim_base_chain', backOffset)}
@@ -676,11 +692,13 @@ export default function PlanViewReportSVG({
         const inFx = fxSpans.filter(s => s.side === 'face'), outFx = fxSpans.filter(s => s.side === 'back')
         const hasIn  = inBase.length > 0 || inWall.length > 0 || inFx.length > 0
         const hasOut = outBase.length > 0 || outWall.length > 0 || outFx.length > 0
+        const wTops = topsByWall.get(w.id) ?? []
+        const inTops = wTops.filter(s => s.side === 'face'), outTops = wTops.filter(s => s.side === 'back')
 
         // Perimeter wall with cabinets only on the room side (the common case): keep
         // the historic single chain on the empty outward side, depth dims inward.
         if (w.wall_type !== 'island' && !hasOut) {
-          return <g key={`dim-${w.id}`}>{renderSide(`m-${w.id}`, out, inward, allBase, allWall, 0, 0, true, inFx)}</g>
+          return <g key={`dim-${w.id}`}>{renderSide(`m-${w.id}`, out, inward, allBase, allWall, 0, 0, true, inFx, inTops)}</g>
         }
 
         // Island, or a perimeter wall with back-side cabinets: dimension each occupied
@@ -689,8 +707,8 @@ export default function PlanViewReportSVG({
         const outBackOffset = w.wall_type === 'island' ? 0 : w.thickness
         return (
           <g key={`dim-${w.id}`}>
-            {hasIn && renderSide(`in-${w.id}`, inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]), 0, false, inFx)}
-            {(hasOut || !hasIn) && renderSide(`out-${w.id}`, out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, true, outFx)}
+            {hasIn && renderSide(`in-${w.id}`, inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]), 0, false, inFx, inTops)}
+            {(hasOut || !hasIn) && renderSide(`out-${w.id}`, out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, true, outFx, outTops)}
           </g>
         )
       })}
