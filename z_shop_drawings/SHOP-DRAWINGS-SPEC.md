@@ -230,6 +230,10 @@ How it's built (plan):
 - **Elevation drilling off (Mark, 2026-10-21):** hinge cup / plate bores and drawer-front fixing bores never
   print on the elevations (`PRINT_DRILLING = false` in ElevationPrintSVG), whatever the layer set.
 
+### Labels on the package (Mark, 2026-10-21)
+- No cabinet names on the plan sheet, no cabinet sizes on the elevation sheets, whatever the layer set
+  (`without()` in ShopDrawingsReport). The standalone Plan View / Elevation Views reports still follow the set.
+
 ### Job Reports — any room (fix, 2026-10-21)
 - The drawing reports (shop drawings, plan, elevations, cabinet sheets) used to draw only the open room in
   Job Reports, with no benchtops (so no tops in the 3D views either). Job Reports now shows a **Room:** picker;

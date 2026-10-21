@@ -10,7 +10,7 @@ import { svg2pdf } from 'svg2pdf.js'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
-import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
+import { resolveLayerView, type LayerView } from '@/src/lib/displayLayers/resolve'
 import { fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { useCompanyTitle } from '@/src/lib/shopDrawings/companyTitle'
 import { useTutorial } from '@/src/lib/tutorial/store'
@@ -57,6 +57,11 @@ function shotCells(n: number, x: number, y: number, w: number, h: number) {
   return Array.from({ length: n }, (_, i) => ({ x: x + (i % cols) * (cw + SHOT_GAP), y: y + Math.floor(i / cols) * (ch + SHOT_GAP), w: cw, h: ch }))
 }
 
+/** A layer view with some items always hidden. */
+function without(v: LayerView, ...ids: string[]): LayerView {
+  return { ...v, show: id => !ids.includes(id) && v.show(id), any: (...xs) => xs.some(id => !ids.includes(id) && v.show(id)) }
+}
+
 export default function ShopDrawingsReport({ project, room, walls, cabinets, planResolved, elevResolved, threeDResolved, bt3d, fixtures = [], annotations = [],
   benchtops = [], benchTopZ, layerSets, activeLayerSetId, scale, paperKey, onDeleteSavedShot, batch }: {
   /** Job Reports, several rooms: download as soon as ready, then call this (useBatchDownload). */
@@ -89,8 +94,10 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
 
   const [planSet, setPlanSetId] = useReportLayerSet('plan-view-layer-set', layerSets, activeLayerSetId)
   const [elevSet, setElevSetId] = useReportLayerSet('elevation-print-layer-set', layerSets, activeLayerSetId)
-  const planLayers = useMemo(() => resolveLayerView(planSet, 'plan'), [planSet])
-  const elevLayers = useMemo(() => resolveLayerView(elevSet, 'elevation'), [elevSet])
+  // Shop drawings never print cabinet names on the plan nor sizes on the elevations
+  // (Mark, 2026-10-21), whatever the layer set — the spec block / schedules carry them.
+  const planLayers = useMemo(() => without(resolveLayerView(planSet, 'plan'), 'cabinet_labels'), [planSet])
+  const elevLayers = useMemo(() => without(resolveLayerView(elevSet, 'elevation'), 'cabinet_sizes'), [elevSet])
   const [planShow] = useState<PlanViewPageOptions>(() => ({
     ...readPage('plan-view-layers', { wallNames: true, hatch: true, titleBlock: true, annotColours: false }), titleBlock: true }))
   const [elevShow] = useState<ElevationPageOptions>(() => ({
