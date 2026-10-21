@@ -3755,6 +3755,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         <ReportsModal
           initialScope={reportScope}
           initialReport={reportInitial}
+          bt3d={{ info: btInfo, profiles: btCatalog.profileById }}
           project={project}
           room={room}
           walls={walls}

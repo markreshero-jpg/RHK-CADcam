@@ -10,6 +10,7 @@ import PlanViewReport from './PlanViewReport'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import ElevationPrintReport from './ElevationPrintReport'
 import ShopDrawingsReport from './ShopDrawingsReport'
+import type { Bt3DPrint } from './Room3DCapture'
 import CabinetSheetReport from './CabinetSheetReport'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import { BenchtopSupplySheet, supplyPrintHtml } from './BenchtopSupplyReport'
@@ -141,10 +142,12 @@ const PAPER = {
   A1L: { w: 841, h: 594, label: 'A1 Landscape' },
 }
 
-export default function ReportsModal({ initialScope, initialReport, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
+export default function ReportsModal({ initialScope, initialReport, bt3d, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
   initialScope: ReportScope
   /** Report to open on (Production → Shop Drawings opens straight on the package). */
   initialReport?: ReportId
+  /** Benchtop slab inputs for the shop drawings 3D views. */
+  bt3d?: Omit<Bt3DPrint, 'benchtops'>
   project: Project | null
   room: Room
   walls: Wall[]
@@ -202,6 +205,7 @@ export default function ReportsModal({ initialScope, initialReport, project, roo
   }, [rawResolved])
   const planResolved   = useMemo(() => filterHiddenMap(allResolved, 'plan'), [allResolved])
   const elevResolved   = useMemo(() => filterHiddenMap(allResolved, 'elevation'), [allResolved])
+  const threeDResolved = useMemo(() => filterHiddenMap(allResolved, '3d'), [allResolved])
   const allBtInstances = scope === 'room' ? benchtops     : jobBtInstances
   const allBtParts     = scope === 'room' ? roomBtParts   : jobBtParts
 
@@ -483,6 +487,8 @@ export default function ReportsModal({ initialScope, initialReport, project, roo
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
                   planResolved={planResolved}
                   elevResolved={elevResolved}
+                  threeDResolved={threeDResolved}
+                  bt3d={scope === 'room' ? bt3d : undefined}
                   layerSets={layerSets}
                   activeLayerSetId={activeLayerSetId}
                   scale={printScale}

@@ -13,14 +13,15 @@ export interface SheetTitleInfo {
   drawingLine: string
   /** Site address. */
   siteLine:   string
-  scale:      number
+  /** 1:N, or a label such as "NTS" for the 3D sheet. */
+  scale:      number | string
   sheetNo:    number
   sheetCount: number
   drawnBy:    string
   date:       string
 }
 
-export function sheetTitle(project: Project | null, room: Room, scale: number, sheetNo: number, sheetCount: number): SheetTitleInfo {
+export function sheetTitle(project: Project | null, room: Room, scale: number | string, sheetNo: number, sheetCount: number): SheetTitleInfo {
   return {
     jobLine:     [project?.job_number, project?.client_name || project?.name].filter(Boolean).join('  '),
     drawingLine: room.name,
@@ -30,6 +31,9 @@ export function sheetTitle(project: Project | null, room: Room, scale: number, s
     date:    todayDdMmYy(),
   }
 }
+
+/** "1 : 20", or a label as given ("NTS"). */
+export const scaleText = (s: number | string) => (typeof s === 'number' ? `1 : ${s}` : s)
 
 /** Sheet heading height, paper mm (view name + scale, top-left of the page). */
 export const HEADING_H = 8
@@ -45,14 +49,14 @@ export function pageLayout(paper: { w: number; h: number }, margin: number, tbH:
 }
 
 /** "Kitchen Plan  1 : 20" — the view heading at the top-left of a sheet (paper mm). */
-export function SheetHeading({ title, scale, width }: { title: string; scale: number; width: number }) {
+export function SheetHeading({ title, scale, width }: { title: string; scale: number | string; width: number }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${width} ${HEADING_H}`}
       width={`${width}mm`} height={`${HEADING_H}mm`} style={{ width: '100%', height: 'auto', display: 'block' }}
       fontFamily={FONT} fill={INK}>
       <text x={0} y={HEADING_H * 0.55} dominantBaseline="central" fontSize={4.5} fontWeight="bold">{title}</text>
       <text x={Math.max(60, title.length * 4.5 * 0.62 + 12)} y={HEADING_H * 0.55} dominantBaseline="central" fontSize={4.5}>
-        {`1 : ${scale}`}
+        {scaleText(scale)}
       </text>
     </svg>
   )
@@ -153,7 +157,7 @@ export default function ShopTitleBlock({ company, sheet, width }: {
       {cell(x1, x2 - x1, 2, sheet.siteLine, 3)}
 
       {/* Scale */}
-      {cell(x2, x3 - x2, 0, `Scale: 1 : ${sheet.scale}`, 3, true)}
+      {cell(x2, x3 - x2, 0, `Scale: ${scaleText(sheet.scale)}`, 3, true)}
       {cell(x2, x3 - x2, 1, company.disclaimer, 2.2)}
 
       {/* Sheet */}

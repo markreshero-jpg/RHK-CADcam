@@ -156,6 +156,31 @@ How it's built (plan):
   Otherwise their thousands of tiny edges print as a smudge.
 - Same pen table (S2): outlines medium, fronts / handles thin, all black.
 
+### S8 stage 1 (built 2026-10-21, in-app check pending)
+
+- `src/lib/shopDrawings/hiddenLine.ts` → `captureHiddenLines(gl, scene, camera)`:
+  - A float render target (2400×1800) holds eye depth from a tiny ShaderMaterial override, with
+    near / far tightened to the scene.
+  - Crease edges come from `EdgesGeometry` (25°), sampled every ~1.5px. An edge is visible where any of
+    the 3×3 pixels is at or behind it (tolerance 0.4% + 2mm).
+  - Meshes over 1500 triangles (GLB appliances / handles) are swapped for a bounding-box stand-in for
+    the whole capture, so they both draw and occlude as a clean box.
+  - Ghosted (opacity < 0.5) meshes, lines, text and sprites are ignored.
+  - Checked headless (SwiftShader) on a test room: the island hides the run behind it, back edges are
+    gone, a 3k-triangle "appliance" prints as a box; ~180ms.
+- `shots3d.ts` → `autoShots()`. Stage 1 = one raised 3/4 shot (swung 28°) of the wall with the most
+  cabinet run; eye far enough back to fit the run. `wallsBehindEye()` hides every perimeter wall whose
+  room side the eye isn't on. RoomScene's hiddenWallIds also drops that wall's cabinets and tops.
+- `RoomScene` is exported with `printMode` (no orbit controls, floor, wall labels).
+  `Room3DCapture.tsx` mounts it off-screen (1200×900 canvas). For each shot it sets the hidden walls,
+  waits 1.5s to settle (part details, GLBs), points the camera, and captures. `Shot3DSVG` draws the
+  segments as one black path, padded and fitted to the sheet band, at the front pen.
+- Package: a **3D views** sheet (heading "Room 3D NTS", title block "Scale: NTS"), ticked by default.
+  Captured once per open; **Re-render 3D** recaptures. Download waits for the capture. Uses the elevation
+  layer set's 3D view.
+- Stage 2 next: more shots (each run, island both sides, object blockers), saved camera angles, shots per
+  sheet by room size (3–4 if the longest side is < 2000mm, else 1–2).
+
 ## Answered (Mark, 2026-10-21)
 
 - 3D sheet: **keep it** (S8).

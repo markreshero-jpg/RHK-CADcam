@@ -755,7 +755,9 @@ function ResetView({ signal, controlsRef, position, target }: {
 
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, fx, pickBenchtops, measuring, wire }: {
+export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, fx, pickBenchtops, measuring, wire, printMode = false }: {
+  /** Shop drawings 3D capture (z_shop_drawings S8): no controls, floor or wall labels — the caller drives the camera. */
+  printMode?: boolean
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -840,6 +842,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
         position={camPosition}
         near={10} far={500000}
       />
+      {!printMode && <>
       <OrbitControls
         ref={controlsRef}
         target={camTarget}
@@ -858,16 +861,19 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
         camHeight={span * 2}
         targetY={0}
       />
+      </>}
 
       <ambientLight intensity={1.8} />
       <directionalLight position={[midX + span, roomH * 2, midZ + span * 0.8]} intensity={1.6} />
       <directionalLight position={[midX - span * 0.4, roomH * 0.5, midZ - span * 0.5]} intensity={0.6} color="#e8f0ff" />
 
       {/* Floor */}
-      <mesh position={[midX, 0, midZ]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[spanX + 1500, spanZ + 1500]} />
-        <meshStandardMaterial color="#c8b89a" roughness={0.9} />
-      </mesh>
+      {!printMode && (
+        <mesh position={[midX, 0, midZ]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[spanX + 1500, spanZ + 1500]} />
+          <meshStandardMaterial color="#c8b89a" roughness={0.9} />
+        </mesh>
+      )}
 
       {/* Walls */}
       {layers.show('walls') && walls.map(w => hiddenWallIds.has(w.id) ? null : (
@@ -876,7 +882,7 @@ function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabCo
 
       {/* Wall name labels on top edge */}
       <Suspense fallback={null}>
-        {layers.show('walls') && walls.map(w => hiddenWallIds.has(w.id) ? null : (
+        {!printMode && layers.show('walls') && walls.map(w => hiddenWallIds.has(w.id) ? null : (
           <WallLabel key={`lbl_${w.id}`} wall={w} room={room} rc={rc} />
         ))}
       </Suspense>

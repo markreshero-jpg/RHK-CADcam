@@ -19,6 +19,9 @@ import PlanViewReportSVG, { type PlanViewPageOptions } from './PlanViewReportSVG
 import ElevationPrintSVG, { type ElevationPageOptions } from './ElevationPrintSVG'
 import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
 import ShopTitleBlock, { SheetHeading, HEADING_H, sheetTitle, pageLayout, titleBlockHeight } from './ShopTitleBlock'
+import Room3DCapture, { Shot3DSVG, type Bt3DPrint } from './Room3DCapture'
+import { autoShots } from '@/src/lib/shopDrawings/shots3d'
+import type { HiddenLineResult } from '@/src/lib/shopDrawings/hiddenLine'
 
 const PAPER: Record<string, { w: number; h: number; label: string }> = {
   A4L: { w: 297, h: 210, label: 'A4' }, A3L: { w: 420, h: 297, label: 'A3' },
@@ -41,9 +44,15 @@ function readPage<T extends object>(key: string, defaults: T): T {
 }
 
 type Sheet = { key: string; title: string; wall?: Wall }
+/** The 3D views sheet (S8) — not to scale. */
+const KEY_3D = '3d'
 
-export default function ShopDrawingsReport({ project, room, walls, cabinets, planResolved, elevResolved, fixtures = [], annotations = [],
+export default function ShopDrawingsReport({ project, room, walls, cabinets, planResolved, elevResolved, threeDResolved, bt3d, fixtures = [], annotations = [],
   benchtops = [], benchTopZ, layerSets, activeLayerSetId, scale, paperKey }: {
+  /** Resolved parts with the 3D view's hidden parts removed. */
+  threeDResolved: Map<string, ResolvedCabinet>
+  /** Benchtop slab inputs for the 3D views (the canvas's thickness cascade + edge profiles). */
+  bt3d?: Omit<Bt3DPrint, 'benchtops'>
   project:  Project | null
   room:     Room
   walls:    Wall[]
@@ -79,7 +88,15 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
     ...walls.filter(w => w.wall_type === 'standard')
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(w => ({ key: w.id, title: `${room.name} Elevation ${w.name}`, wall: w })),
+    { key: KEY_3D, title: `${room.name} 3D` },
   ], [walls, room.name])
+
+  // 3D views: auto shots, captured off-screen once per open (or on Re-render).
+  const threeDLayers = useMemo(() => resolveLayerView(elevSet, '3d'), [elevSet])
+  const shots = useMemo(() => autoShots(walls, cabinets, room.room_dy ?? 2400), [walls, cabinets, room.room_dy])
+  const [shotResults, setShotResults] = useState<Record<string, HiddenLineResult>>({})
+  const [captureRun, setCaptureRun] = useState(0)
+  const captured = shots.length > 0 && shots.every(s => shotResults[s.id])
 
   // Ticks: remembered per room; by default the plan + walls with cabinets on them.
   const [ticked, setTicked] = useState<Set<string>>(() => {
@@ -87,7 +104,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       const saved = JSON.parse(localStorage.getItem(LS_SHEETS) ?? '{}')[room.id]
       if (Array.isArray(saved)) return new Set(saved as string[])
     } catch { /* ignore */ }
-    return new Set(['plan', ...walls.filter(w => cabinets.some(c => c.wall_id === w.id)).map(w => w.id)])
+    return new Set(['plan', ...walls.filter(w => cabinets.some(c => c.wall_id === w.id)).map(w => w.id), KEY_3D])
   })
   useEffect(() => {
     try {
@@ -125,6 +142,8 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
 
   /** Paper-mm box of a sheet's drawing: centred across, centred in the band between heading and title block. */
   const place = (key: string) => {
+    // 3D views aren't to scale: they fill the band.
+    if (key === KEY_3D) return { x: MARGIN, y: layout.top, w: layout.usableW, h: layout.usableH, fits: true }
     const s = sizes[key]
     if (!s) return null
     return {
@@ -147,7 +166,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       for (let i = 0; i < printed.length; i++) {
         const sheet = printed[i]
         const page = pageRefs.current.get(sheet.key)
-        const drawing = sheet.key === 'plan' ? planRef.current : drawRefs.current.get(sheet.key)
+        const drawing = page?.querySelector<SVGSVGElement>('[data-role="drawing"] svg')
         const box = place(sheet.key)
         if (!page || !drawing || !box) continue
         if (i > 0) doc.addPage([paper.w, paper.h], orientation)
@@ -181,8 +200,15 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
         <ReportLayerSetSelect sets={layerSets} value={planSet} onChange={setPlanSetId} />
         <span className="text-[10px] text-gray-500 uppercase tracking-wider ml-2">Elevations</span>
         <ReportLayerSetSelect sets={layerSets} value={elevSet} onChange={setElevSetId} />
-        <button data-tour="shop-download" onClick={handleDownload} disabled={busy || printed.length === 0}
-          className="ml-auto px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded transition-colors font-medium">
+        {ticked.has(KEY_3D) && (
+          <button onClick={() => { setShotResults({}); setCaptureRun(n => n + 1) }} disabled={!captured}
+            title="Capture the 3D views again (after changing the room)"
+            className="ml-auto px-2 py-1 text-xs border border-gray-700 text-gray-300 hover:border-gray-500 disabled:opacity-50 rounded">
+            {captured ? 'Re-render 3D' : 'Rendering 3D…'}
+          </button>
+        )}
+        <button data-tour="shop-download" onClick={handleDownload} disabled={busy || printed.length === 0 || (ticked.has(KEY_3D) && !captured && shots.length > 0)}
+          className={`${ticked.has(KEY_3D) ? '' : 'ml-auto '}px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded transition-colors font-medium`}>
           {busy ? 'Generating…' : `Download PDF · ${printed.length} sheet${printed.length === 1 ? '' : 's'} · 1:${scale} ${paper.label}`}
         </button>
       </div>
@@ -195,7 +221,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
               ticked.has(s.key) ? 'bg-blue-600/25 border-blue-600/50 text-blue-300'
                                 : 'bg-transparent border-gray-700 text-gray-500 hover:border-gray-500'
             }`}>
-            {ticked.has(s.key) ? '☑' : '☐'} {s.key === 'plan' ? 'Plan' : s.wall!.name}
+            {ticked.has(s.key) ? '☑' : '☐'} {s.key === 'plan' ? 'Plan' : s.key === KEY_3D ? '3D views' : s.wall!.name}
           </button>
         ))}
       </div>
@@ -216,18 +242,25 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       {sheets.map(sheet => {
         const n = printed.indexOf(sheet)
         const box = place(sheet.key)
+        const sheetScale = sheet.key === KEY_3D ? 'NTS' : scale
+        const shot = shots[0] && shotResults[shots[0].id]
         return (
           <div key={sheet.key} ref={el => { if (el) pageRefs.current.set(sheet.key, el); else pageRefs.current.delete(sheet.key) }}
             className={`relative bg-white shadow-inner rounded-sm overflow-hidden ${n < 0 ? 'hidden' : ''}`}
             style={{ aspectRatio: `${paper.w} / ${paper.h}` }}>
             <div data-role="heading" className="absolute" style={{ left: pct(MARGIN, paper.w), top: pct(MARGIN, paper.h), width: pct(layout.usableW, paper.w) }}>
-              <SheetHeading title={sheet.title} scale={scale} width={layout.usableW} />
+              <SheetHeading title={sheet.title} scale={sheetScale} width={layout.usableW} />
             </div>
-            <div className={`absolute ${box && !box.fits ? 'outline outline-2 outline-amber-500' : ''}`}
+            <div data-role="drawing" className={`absolute ${box && !box.fits ? 'outline outline-2 outline-amber-500' : ''}`}
               style={box
                 ? { left: pct(box.x, paper.w), top: pct(box.y, paper.h), width: pct(box.w, paper.w) }
                 : { left: pct(MARGIN, paper.w), top: pct(layout.top, paper.h), width: pct(layout.usableW, paper.w), visibility: 'hidden' }}>
-              {sheet.wall ? (
+              {sheet.key === KEY_3D ? (
+                shot ? <Shot3DSVG shot={shot} width={layout.usableW} height={layout.usableH} />
+                  : <div className="flex items-center justify-center text-gray-400 text-sm" style={{ aspectRatio: `${layout.usableW} / ${layout.usableH}` }}>
+                      {shots.length ? 'Rendering 3D view…' : 'No walls to view.'}
+                    </div>
+              ) : sheet.wall ? (
                 <ElevationPrintSVG
                   wall={sheet.wall} walls={walls} room={room}
                   cabinets={cabinets} fixtures={fixtures} resolvedParts={elevResolved}
@@ -245,12 +278,19 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
             </div>
             {layout.tb && (
               <div data-role="title-block" className="absolute" style={{ left: pct(layout.tb.x, paper.w), top: pct(layout.tb.y, paper.h), width: pct(layout.tb.w, paper.w) }}>
-                <ShopTitleBlock company={company} sheet={sheetTitle(project, room, scale, Math.max(1, n + 1), printed.length)} width={layout.tb.w} />
+                <ShopTitleBlock company={company} sheet={sheetTitle(project, room, sheetScale, Math.max(1, n + 1), printed.length)} width={layout.tb.w} />
               </div>
             )}
           </div>
         )
       })}
+
+      {ticked.has(KEY_3D) && !captured && (
+        <Room3DCapture key={captureRun} shots={shots}
+          walls={walls} cabinets={cabinets} room={room} resolvedParts={threeDResolved} layers={threeDLayers}
+          fixtures={fixtures} bt={bt3d && { ...bt3d, benchtops }}
+          onCaptured={(id, r) => setShotResults(prev => ({ ...prev, [id]: r }))} />
+      )}
     </div>
   )
 }
