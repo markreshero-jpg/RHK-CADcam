@@ -295,7 +295,7 @@ export default function ElevationSVG({
       ? waterfallOcc(wall, elevWallSide, mover).map(o => ({ t: mirrorX(o.t, o.dx), dx: o.dx }))
       : []
   // Dimension chains measure only cabinets the layer set draws.
-  const chainCabs = wallCabs.filter(c => elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))
+  const chainCabs = wallCabs.filter(c => !c.rule_overrides?.UNDER_PANEL && elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))   // BBP lies under its run
   // Free-standing appliances on this face, in elevation x, for the floor / wall rows.
   const chainFx = wall && fixtures
     ? fixtureChainSpans(fixtures.filter(f => layers.show(fixtureLayer(f.category))), wall, centroid(walls))
@@ -2100,7 +2100,7 @@ export default function ElevationSVG({
 
             {/* Left dimension — Y-axis height chain */}
             {layers.show('dim_elev_height') && (() => {
-              const baseCabEl = chainCabs.find(c => !c.is_kick_assembly && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')) ?? null
+              const baseCabEl = chainCabs.find(c => !c.is_kick_assembly && !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')) ?? null
               const overheadCabEl = chainCabs.find(c => (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead) ?? null
               const bulkheadEl = chainCabs.find(c => !!c.bulkhead) ?? null
 

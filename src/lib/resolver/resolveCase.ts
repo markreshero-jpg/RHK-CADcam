@@ -16,17 +16,27 @@ export function caseBackT(cab: CabinetInput, r: ConstructionRules): number {
 }
 
 /** Where the carcass floor sits (z_floating). TK is the kick lift, floorT the
- *  thickness of the panel the interior stands on, so the interior floor is at
- *  Y = TK + SCRBT + floorT. A floating cabinet has no kick and no bottom panel
- *  unless FLOAT_BOTTOM adds an exposed-board bottom between the gables. */
+ *  thickness of the carcass bottom, so the interior floor is at
+ *  Y = TK + SCRBT + floorT. A floating cabinet has no kick; `underPanel` = it
+ *  sits on a run's exposed bottom panel (FLOAT_BOTTOM, see withFloatScribe). */
 export function caseFloor(cab: CabinetInput, r: ConstructionRules): {
-  TK: number; floorT: number; floating: boolean; hasBottom: boolean
+  TK: number; floorT: number; floating: boolean; underPanel: boolean
 } {
-  if (r.FLOAT) {
-    const hasBottom = !!r.FLOAT_BOTTOM
-    return { TK: 0, floorT: hasBottom ? cab.exposed_material.DZ : 0, floating: true, hasBottom }
+  const floating = !!r.FLOAT
+  return {
+    TK: floating || !cab.has_toekick ? 0 : r.TOEH, floorT: cab.material.DZ,
+    floating, underPanel: floating && !!r.FLOAT_BOTTOM,
   }
-  return { TK: cab.has_toekick ? r.TOEH : 0, floorT: cab.material.DZ, floating: false, hasBottom: true }
+}
+
+/** FLOAT_BOTTOM (z_floating): the run's exposed bottom panel (a BBP) sits under
+ *  the carcass inside its envelope, so the carcass takes a bottom scribe of the
+ *  exposed board's thickness on top of the method's SCRBT. The fronts don't
+ *  scribe — they run down over the panel's edge. */
+export function withFloatScribe(cab: CabinetInput): CabinetInput {
+  const r = cab.rules
+  if (!r.FLOAT || !r.FLOAT_BOTTOM) return cab
+  return { ...cab, rules: { ...r, SCRBT: r.SCRBT + cab.exposed_material.DZ } }
 }
 
 export function resolveCaseParts(
@@ -43,7 +53,7 @@ export function resolveCaseParts(
   // All case parts currently use the primary carcass material.
   // Individual part-level overrides wire in here when supported.
   const sideMat   = cab.material
-  let   bottomMat = cab.material
+  const bottomMat = cab.material
   const backMat   = cab.material
   const topMat    = cab.material
 
@@ -53,11 +63,8 @@ export function resolveCaseParts(
   const backType = r.BACK_TYPE ?? 'panel'
   const hasBack  = backType === 'panel'
 
-  // Floating (z_floating): no kick; no bottom, or an exposed-board bottom
-  // between the gables.
-  const { TK, floating, hasBottom } = caseFloor(cab, r)
-  const floatBottom = floating && hasBottom
-  if (floatBottom) bottomMat = cab.exposed_material
+  // Floating (z_floating): no kick; a normal carcass bottom between the gables.
+  const { TK, floating, underPanel } = caseFloor(cab, r)
 
   const sideT   = sideMat.DZ
   const bottomT = bottomMat.DZ
@@ -74,10 +81,9 @@ export function resolveCaseParts(
   }
 
   // ── Joinery ──────────────────────────────────────────────────
-  // A floating cabinet's gables always run through; its bottom (if any) sits
-  // between them, full depth.
+  // A floating cabinet's gables always run through, the bottom between them.
   const bottomJoin     = floating ? 'sides_outside' : r.BOTTOM_JOIN
-  const bottomBackJoin = floatBottom ? 'back_on_bottom' : r.BOTTOM_BACK_JOIN
+  const bottomBackJoin = r.BOTTOM_BACK_JOIN
   const backJoin       = r.BACK_JOIN
   const topBackJoin    = r.TOP_BACK_JOIN
   const railJoin       = r.RAIL_JOIN
@@ -127,13 +133,15 @@ export function resolveCaseParts(
   // The rail/top drops by SCRT so that SCRT mm of the side panels protrude above it.
   // SCRBT: extra material on side panels below the bottom panel for scribing to the floor.
 
-  // Floating: gable tops + bottoms and the back's bottom edge show, so they're
-  // taped on top of whatever the method tapes (z_floating decision 3).
+  // Floating: gable tops + bottoms show, so they're taped on top of whatever
+  // the method tapes (z_floating decision 3) — bottoms only when no bottom
+  // panel hides them.
   const withEnds = (sides: EdgeSides, add: EdgeSides): EdgeSides =>
     floating ? [...new Set([...sides, ...add])] : sides
-  const leftEdging  = withEnds(edging.left_side,  ['top', 'bottom'])
-  const rightEdging = withEnds(edging.right_side, ['top', 'bottom'])
-  const backEdging  = withEnds(edging.back,       ['bottom'])
+  const gableEnds: EdgeSides = underPanel ? ['top'] : ['top', 'bottom']
+  const leftEdging  = withEnds(edging.left_side,  gableEnds)
+  const rightEdging = withEnds(edging.right_side, gableEnds)
+  const backEdging  = edging.back
 
   // ── Left Side ────────────────────────────────────────────────
   parts.push({
@@ -164,8 +172,7 @@ export function resolveCaseParts(
   })
 
   // ── Bottom ───────────────────────────────────────────────────
-  // Floating: none, or the exposed-board bottom between the gables, taped front.
-  if (!floating || floatBottom) parts.push({
+  parts.push({
     part_key: 'bottom',
     DX: botDepth,
     DY: botW,
@@ -175,18 +182,13 @@ export function resolveCaseParts(
     Z:  botZstart,
     AX: 0, AY: 0, AZ: 0,
     material_id: bottomMat.id,
-    edge_band: floatBottom
-      ? edgeSidesToBanding(['top'], cab.exposed_edgeband_id)
-      : edgeSidesToBanding(edging.bottom, ebId),
+    edge_band: edgeSidesToBanding(edging.bottom, ebId),
   })
 
   // ── Back ─────────────────────────────────────────────────────
   // Bottom joinery shifts the back's stored Y so its 3D bottom face (p.Y + p.DZ)
   // lands at TK+SCRBT (butts_into_back) or TK+SCRBT+backT (back_on_bottom).
-  // Floating: the back stands on the bottom panel, or runs to the carcass bottom.
-  const backY = floating
-    ? r.SCRBT + (floatBottom ? bottomT : 0) - backT
-    : bottomBackJoin === 'butts_into_back' ? TK + r.SCRBT - backT : TK + r.SCRBT
+  const backY = bottomBackJoin === 'butts_into_back' ? TK + r.SCRBT - backT : TK + r.SCRBT
 
   // Top joinery trims the back's top face by topT when the top sits over it.
   // SCRT: back panel stops at DY - SCRT (scribe material on sides above).

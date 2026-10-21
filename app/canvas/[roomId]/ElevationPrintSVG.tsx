@@ -500,7 +500,7 @@ export default function ElevationPrintSVG({
 
   // ── Left height chain ─────────────────────────────────────────────────────
   function heightChain() {
-    const baseCabEl = wallCabs.find(c => c.assembly_class === 'base' || c.assembly_class === 'base_corner') ?? null
+    const baseCabEl = wallCabs.find(c => !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')) ?? null
     const overheadCabEl = wallCabs.find(c => (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead) ?? null
     const bulkheadEl = wallCabs.find(c => !!c.bulkhead) ?? null
     const kickH = baseCabEl?.has_toekick
@@ -587,9 +587,9 @@ export default function ElevationPrintSVG({
   const overheadCabs = wallCabs.filter(c => (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead)
   // Bulkheads overlap the overheads below them — their own row, just outside.
   const bulkheadCabs = wallCabs.filter(c => !!c.bulkhead)
-  const floorCabs = wallCabs.filter(c =>
+  const floorCabs = wallCabs.filter(c => !c.rule_overrides?.UNDER_PANEL && (
     c.assembly_class === 'base' || c.assembly_class === 'base_corner' ||
-    c.assembly_class === 'tall' || c.assembly_class === 'tall_corner')
+    c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'))
   // Free-standing appliances on this face take their place in the rows.
   const chainFx = fixtureChainSpans(fixtures.filter(f => layers.show(fixtureLayer(f.category))), wall, centroid(walls)).filter(s => s.side === 'face')
   const fxWall = chainFx.filter(s => s.row === 'wall'), fxFloor = chainFx.filter(s => s.row === 'floor')

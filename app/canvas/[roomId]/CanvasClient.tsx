@@ -1462,7 +1462,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const flip = (wp.x - raw.wall.pos_x) * inward.x + (wp.y - raw.wall.pos_y) * inward.y < 0
     const side = flip ? 'back' : 'face'
     const occupied = cabinets
-      .filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: draft.assembly_class, dy: draft.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side)
+      .filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock(draft, c, raw.wall, room) && cabWallSide(c, raw.wall) === side)
       .map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, side, draft))
     const fit = fitFreeSlot(desired, draft.dx, raw.wall.length, occupied)
     const a = wallAnchorPoint(raw.wall, fit.t, flip, gc)
@@ -1897,7 +1897,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (!raw) { setPlaceGhost(null); return }
       const flip = wallFlipFor(raw.wall)
       const side = flip ? 'back' : 'face'
-      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: clsInfo.cls, dy: clsInfo.dy }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, side, { assembly_class: clsInfo.cls, dy: clsInfo.dy, dz: clsInfo.dz }))
+      const occupied = cabinets.filter(c => c.wall_id === raw.wall.id && !c.is_kick_assembly && cabsBlock({ assembly_class: clsInfo.cls, dy: clsInfo.dy, rule_overrides: { UNDER_PANEL: clsInfo.under } }, c, raw.wall, room) && cabWallSide(c, raw.wall) === side).map(c => ({ t: cabT(c, raw.wall), dx: c.dx })).concat(wfOcc(raw.wall, side, { assembly_class: clsInfo.cls, dy: clsInfo.dy, dz: clsInfo.dz }))
       // Fit into the available gap: shrink the new cabinet's width if the gap is
       // narrower than the default, rather than overlapping the neighbour.
       // fitFreeSlot centres on the cursor point itself.
@@ -2604,7 +2604,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (mode === 'place_definition' && armedDef?.id === def.id) {
       setArmedDef(null); setArmedDraft(null); setMode('select')
     } else {
-      setArmedDef({ id: def.id, assembly_class: def.assembly_class, dx: def.default_dx, dy: def.default_dy, dz: def.default_dz, name: def.name })
+      setArmedDef({ id: def.id, assembly_class: def.assembly_class, dx: def.default_dx, dy: def.default_dy, dz: def.default_dz, name: def.name, under: !!def.rule_overrides?.UNDER_PANEL })
       setArmedDraft(buildDraftFromDefinition(def))
       setMode('place_definition')
     }

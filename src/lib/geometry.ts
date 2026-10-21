@@ -65,15 +65,19 @@ export function cabVExtent(
   return [bottom, bottom + dy]
 }
 
+type Blocker = { assembly_class: string; dy: number; bulkhead?: unknown; rule_overrides?: { UNDER_PANEL?: boolean } | null }
+
 // Do two cabinets overlap vertically? `eps` keeps a flush top/bottom touch from
-// counting as an overlap.
+// counting as an overlap. A run's bottom panel (BBP, rule UNDER_PANEL — z_floating)
+// lies inside the floating carcasses' bottom scribe, so it never blocks them.
 export function cabsBlock(
-  mover: { assembly_class: string; dy: number; bulkhead?: unknown },
-  obstacle: { assembly_class: string; dy: number; bulkhead?: unknown },
+  mover: Blocker,
+  obstacle: Blocker,
   wall: Wall | null | undefined,
   room: Room,
   eps = 1,
 ): boolean {
+  if (mover.rule_overrides?.UNDER_PANEL || obstacle.rule_overrides?.UNDER_PANEL) return false
   const [aB, aT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead)
   const [bB, bT] = cabVExtent(obstacle.assembly_class, obstacle.dy, wall, room, obstacle.bulkhead)
   return aB < bT - eps && bB < aT - eps

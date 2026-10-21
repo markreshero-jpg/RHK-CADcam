@@ -110,7 +110,7 @@ export default function PlanViewReportSVG({
   const dimIds = ['dim_wall_chain', 'dim_base_chain', 'dim_benchtop', 'dim_wall_overall', 'dim_openings'] as const
   const showDims = layers.any(...dimIds)
   // Dimension chains measure only cabinets the layer set draws.
-  const chainCabs = cabinets.filter(c => planShowsCabinet(c, layers, resolvedParts?.get(c.id)))
+  const chainCabs = cabinets.filter(c => !c.rule_overrides?.UNDER_PANEL && planShowsCabinet(c, layers, resolvedParts?.get(c.id)))   // BBP lies under its run
   const showOpenings = layers.show('fixture_openings')
   const openings = showOpenings ? fixtures.filter(f => f.category === 'opening' && f.wall_id) : []
   const openingsByWall = openingSpans(openings, walls, cx)

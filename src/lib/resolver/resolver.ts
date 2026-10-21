@@ -9,7 +9,7 @@
 // ============================================================
 
 import { CabinetInput, DeclaredSeam, ResolvedCabinet, ResolverError } from './types'
-import { resolveCaseParts }      from './resolveCase'
+import { resolveCaseParts, withFloatScribe } from './resolveCase'
 import { resolveToekickParts }   from './resolveToekick'
 import { resolveInternalParts }  from './resolveInternal'
 import { resolveFace }           from './resolveFace'
@@ -27,10 +27,12 @@ import { resolveFillerCleats } from './resolveFillerCleats'
 import { resolveBulkhead } from './resolveBulkhead'
 import { resolveCurvedEnd } from './resolveCurvedEnd'
 
-export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
+export function resolveCabinet(input: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
   const allWarnings: ResolverError[] = []
 
+  // Floating on a bottom panel: the carcass takes the panel's thickness as a bottom scribe.
+  const cab = withFloatScribe(input)
   const r = cab.rules  // already merged from system → job → room → cabinet
 
   // ── 1. Case Module ────────────────────────────────────────────
@@ -148,7 +150,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
 
   // ── 7. Warnings ───────────────────────────────────────────────
   // Non-fatal checks
-  if (cab.DX > 1200) {
+  if (cab.has_carcass && cab.DX > 1200) {   // panels (BBP, island backs) run long
     allWarnings.push({
       code: 'WIDE_CABINET',
       message: `Cabinet width ${cab.DX}mm exceeds 1200mm — consider a partition`,

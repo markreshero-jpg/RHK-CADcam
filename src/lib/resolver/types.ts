@@ -214,10 +214,13 @@ export interface ConstructionRules {
   // Rail grain on the sheet: along the rail (horizontal, default) or across it.
   RAILGRAIN?: 'horizontal' | 'vertical'
 
-  // Floating cabinets (z_floating): wall-hung, no kick, no bottom panel unless
-  // FLOAT_BOTTOM adds an exposed-board bottom between the gables. Cabinet layer.
+  // Floating cabinets (z_floating): wall-hung, no kick. FLOAT_BOTTOM = it sits
+  // on a run's exposed bottom panel, so the carcass takes a bottom scribe of
+  // the panel's thickness. Cabinet layer.
   FLOAT?:        boolean
   FLOAT_BOTTOM?: boolean
+  // UNDER_PANEL marks a run's bottom panel (BBP) so it doesn't block the carcasses over it.
+  UNDER_PANEL?: boolean
 
   // Joinery — how panels connect to each other
   BOTTOM_JOIN:      'sides_outside' | 'bottom_outside'    // sides span full height vs bottom spans full width

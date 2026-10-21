@@ -1,6 +1,6 @@
 # Floating cabinets (wall-hung, no kick) — spec
 
-Status: **F1–F3 built 2026-10-20, in-app check pending.** Next: F4 tutorial (done with F3), then a Vanity library build-out once Mark saves his first vanities.
+Status: **F1–F6 built (F6 2026-10-21), in-app check pending.** Next: a Vanity library build-out once Mark saves his first vanities.
 
 ## What it is
 
@@ -11,17 +11,23 @@ Floating is a **setting on a cabinet**, not a cabinet type or a library section
 
 ## Locked decisions (Mark, 2026-10-20)
 
-1. **No bottom panel by default.** A floating carcass is two gables, a back and
-   a top (whatever the top type gives). The back runs down to the carcass bottom.
-2. **Optional bottom panel** (per-cabinet tick). When on, it sits **between**
-   the gables (gables run through to the carcass bottom), full depth, and the
-   interior moves up by its thickness (overall height unchanged). It is made
-   from the **exposed / external board** (the material schedule's Exposed row)
-   with the exposed edgeband, taped on the front edge only. *Changed
-   2026-10-21 (Mark, RHK6570): it first ran under the gables.*
-3. **Edging when floating:** gable **tops and bottoms** taped (added to whatever
-   the construction method already tapes, e.g. the front edge), and the **bottom
-   edge of the back** taped. Uses the carcass edgeband.
+1. **Always a carcass bottom.** A floating carcass is a normal carcass minus the
+   kick: gables run through to the carcass bottom, the carcass-board bottom sits
+   between them, back and top as the method gives. *Changed 2026-10-21 (Mark,
+   RHK6570): it first had no bottom unless ticked.*
+2. **Optional bottom panel = an extra exposed panel under the run** (`BBP`,
+   Vanity category). One panel spans the run between the end panels, exposed
+   board to match the other exposed panels, carcass depth, front edge taped.
+   The carcasses over it tick **"Sits on a bottom panel"** (`FLOAT_BOTTOM`):
+   they take a **bottom scribe** of the exposed board's thickness (SCRBT +=
+   t.exposed), so gables and bottom start 18 up and the overall height is
+   unchanged. The **fronts don't scribe** — they run down to the cabinet bottom
+   and cover the panel's front edge. *Changed 2026-10-21 (Mark, RHK6570): it
+   was first a per-cabinet exposed bottom under, then between, the gables.*
+3. **Edging when floating:** gable **tops** taped, and gable **bottoms** unless
+   the cabinet sits on a bottom panel (added to whatever the construction
+   method already tapes, e.g. the front edge). Uses the carcass edgeband. The
+   back keeps the method's edging (it stands on the bottom now).
 4. **Doors / fronts flush with the carcass bottom.** Already true: a kick-less
    cabinet's faces start at the carcass bottom and the shop's `REVB` is 0.
 5. **No hanging hardware / rail.** Use the cabinet's top type (e.g. a back rail)
@@ -39,7 +45,8 @@ placement with everything else):
 | Rule | Type | Default | Meaning |
 |---|---|---|---|
 | `FLOAT` | boolean | unset (false) | Floating cabinet |
-| `FLOAT_BOTTOM` | boolean | unset (false) | Add the exposed bottom panel between the gables |
+| `FLOAT_BOTTOM` | boolean | unset (false) | Sits on a run bottom panel: bottom scribe += t.exposed |
+| `UNDER_PANEL` | boolean | unset (false) | This item IS a run bottom panel (`BBP`): never blocks the carcasses over it, drawn under them in plan, left out of dim chains |
 
 The resolver treats a floating cabinet as kick-less whatever `has_toekick`
 says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
@@ -56,14 +63,14 @@ says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
 
 ## Resolver (F1)
 
-- `caseFloor(cab, r)` in `resolveCase.ts` → `{ TK, floorT, floating, hasBottom }`.
+- `caseFloor(cab, r)` in `resolveCase.ts` → `{ TK, floorT, floating, underPanel }`.
   Interior floor Y = `TK + SCRBT + floorT` everywhere (case, internal, drawer stack).
-  - normal: TK = has_toekick ? TOEH : 0, floorT = carcass thickness
-  - floating, no bottom: TK = 0, floorT = 0
-  - floating + bottom: TK = 0, floorT = exposed board thickness
-- Floating forces the sides-outside geometry (gables run through, any bottom
-  sits between them), regardless of the method's `BOTTOM_JOIN`.
-- Back bottom face lands on the interior floor (Y = floorT).
+  TK = 0 when floating; floorT is always the carcass thickness.
+- `withFloatScribe(cab)` (start of `resolveCabinet`): FLOAT + FLOAT_BOTTOM adds
+  the exposed thickness to SCRBT, so every module sees the scribe. Faces ignore
+  SCRBT, so fronts still run to the cabinet bottom.
+- Floating forces the sides-outside geometry (gables run through, the bottom
+  between them), regardless of the method's `BOTTOM_JOIN`.
 - Shaped cabinets (`resolveShapedCase`) don't float yet — out of scope.
 
 ## Phases
@@ -76,6 +83,7 @@ says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
 | F4 | Tutorial: floating vanity | built 2026-10-20 |
 | — | Vanity definitions (sizes TBD with Mark — save from canvas into Vanity) | open |
 | F5 | Fixes from the first real job (RHK6570 vanities) — see below | built 2026-10-21 |
+| F6 | Always a carcass bottom; bottom panel = `BBP` run panel + carcass bottom scribe (decisions 1–3 rewritten) | built 2026-10-21, in-app check pending |
 
 ## F5 — fixes from RHK6570 (2026-10-21)
 
@@ -98,3 +106,22 @@ says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
 - **Bench & basin heights.** New layer item `dim_elev_bench`: overall dims from
   the floor to the benchtop top and to a vessel basin's rim, outside the height
   chain. Shown on the canvas and in the report. `app/canvas/[roomId]/benchDims.ts`.
+
+## F6 — bottom panel rethink (Mark, 2026-10-21)
+
+Mark: "there is always a bottom in a cabinet. a bottom panel would be an
+additional panel (exposed panel) that matches all other exposed panels. then,
+there would be a bottom scribe to all carcases of the bottom panel thickness."
+One panel under the run between the end panels; fronts cover its edge.
+
+- `BBP` library definition (Vanity): no carcass, one flat Applied Panel
+  (`dx = cab.d`, `dy = cab.w`, `dz = t.exposed`, front edge taped), rules
+  `FLOAT` (places at 300) + `UNDER_PANEL`. `migration_bbp_library.sql`.
+  Place it at the first carcass's offset, width = the run between the end
+  panels, dy = 18, dz = carcass depth.
+- `cabsBlock` (geometry.ts): an UNDER_PANEL item never blocks / is blocked.
+- Plan draws it under the carcasses; plan + elevation dim chains (canvas and
+  reports) skip it; the elevation height chain never measures from it.
+- WIDE_CABINET only warns on carcasses.
+- Not automatic yet: ticking "Sits on a bottom panel" doesn't place the BBP,
+  and placing a BBP doesn't tick the carcasses.

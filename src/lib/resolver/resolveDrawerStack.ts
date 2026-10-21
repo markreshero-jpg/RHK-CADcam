@@ -201,7 +201,7 @@ export function resolveDrawerStacks(
   // intBottom. The drawer box must rest on this, not on the face-grid bottom
   // (which for the lowest drawer sits one panel thickness lower, at the cabinet
   // exterior). TK mirrors the case/internal resolvers exactly.
-  // A floating cabinet (z_floating) has no kick and maybe no bottom panel.
+  // A floating cabinet (z_floating) has no kick.
   const floor = caseFloor(cab, r)
   const TK = floor.floating ? 0 : cab.has_toekick &&
     (cab.assembly_class === 'base' || cab.assembly_class === 'tall' ||

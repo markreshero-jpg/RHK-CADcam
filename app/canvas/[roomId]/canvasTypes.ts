@@ -80,6 +80,8 @@ export type ArmedDefinition = {
   dy:             number
   dz:             number
   name:           string
+  /** A run's bottom panel (z_floating BBP) — never blocks the carcasses over it. */
+  under?:         boolean
 }
 
 export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: string } | { type: 'benchtop'; id: string } | { type: 'fixture'; id: string } | null
@@ -157,10 +159,10 @@ export function modeAssemblyClass(m: Mode): { cls: AssemblyClass; ep: boolean } 
 export function placeInfoFor(
   m: Mode,
   armedDef: ArmedDefinition | null,
-): { cls: AssemblyClass; ep: boolean; dx: number; dy: number; dz: number; definitionId?: string } | null {
+): { cls: AssemblyClass; ep: boolean; dx: number; dy: number; dz: number; definitionId?: string; under?: boolean } | null {
   if (m === 'place_definition') {
     return armedDef
-      ? { cls: armedDef.assembly_class, ep: false, dx: armedDef.dx, dy: armedDef.dy, dz: armedDef.dz, definitionId: armedDef.id }
+      ? { cls: armedDef.assembly_class, ep: false, dx: armedDef.dx, dy: armedDef.dy, dz: armedDef.dz, definitionId: armedDef.id, under: armedDef.under }
       : null
   }
   const ci = modeAssemblyClass(m)

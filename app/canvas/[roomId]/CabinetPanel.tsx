@@ -482,7 +482,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                   className="accent-blue-500" />
                 <span className="text-xs text-gray-400">Wall-hung, no kick</span>
               </label>
-              {floating && (
+              {floating && cabinet.has_carcass && (
                 <label className="flex items-center gap-2 cursor-pointer mt-1">
                   <input type="checkbox" checked={!!cabinet.rule_overrides?.FLOAT_BOTTOM}
                     onChange={e => {
@@ -491,12 +491,13 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                       void onUpdate(cabinet.id, { rule_overrides: next })
                     }}
                     className="accent-blue-500" />
-                  <span className="text-xs text-gray-400">Bottom panel (exposed board)</span>
+                  <span className="text-xs text-gray-400">Sits on a bottom panel</span>
                 </label>
               )}
               <p className="text-[10px] text-gray-600 mt-1">
                 {inKickRun ? 'Detach it from the kick run first.'
-                  : floating ? 'Gable tops/bottoms and the back bottom edge are taped.'
+                  : floating && cabinet.rule_overrides?.FLOAT_BOTTOM ? 'Carcass scribes up by the exposed board. Place a BBP (Vanity) under the run.'
+                  : floating ? 'Gable tops and bottoms are taped.'
                   : `Drops the kick and hangs it ${FLOAT_Z} off the floor.`}
               </p>
             </div>

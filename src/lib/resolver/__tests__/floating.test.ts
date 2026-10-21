@@ -23,19 +23,19 @@ const shop: Partial<ConstructionRules> = { EDGING: { left_side: ['right'], right
 const part = (c: CabinetInput, key: string) => resolveCabinet(c).case_parts.find(p => p.part_key === key)
 
 describe('floating cabinets', () => {
-  it('no bottom panel by default; gables run the full height from 0', () => {
+  it('a normal carcass bottom between the gables; gables run the full height from 0', () => {
     const c = cab({ ...shop, FLOAT: true })
-    expect(part(c, 'bottom')).toBeUndefined()
+    expect(part(c, 'bottom')).toMatchObject({ X: 18, Y: 0, DY: 600 - 36, DZ: 18, material_id: 'm18' })
     const side = part(c, 'left_side')!
     expect(side.Y).toBe(0)
     expect(side.DY).toBe(500)
   })
 
-  it('tapes gable tops + bottoms on top of the method edging, and the back bottom edge', () => {
+  it('tapes gable tops + bottoms on top of the method edging; back keeps the method edging', () => {
     const c = cab({ ...shop, FLOAT: true })
     expect(part(c, 'left_side')!.edge_band).toMatchObject({ top: true, bottom: true, left: false, right: true })
     expect(part(c, 'right_side')!.edge_band).toMatchObject({ top: true, bottom: true, left: false, right: true })
-    expect(part(c, 'back')!.edge_band).toMatchObject({ top: false, bottom: true, left: false, right: false })
+    expect(part(c, 'back')!.edge_band).toMatchObject({ top: false, bottom: false, left: false, right: false })
   })
 
   it('a non-floating cabinet keeps the method edging', () => {
@@ -44,23 +44,23 @@ describe('floating cabinets', () => {
     expect(part(c, 'back')!.edge_band.bottom).toBe(false)
   })
 
-  it('back runs to the carcass bottom with no bottom panel', () => {
-    const back = part(cab({ FLOAT: true }), 'back')!
-    expect(back.Y + back.DZ).toBe(0)
-    expect(back.Y + back.DZ + back.DX).toBe(500)
+  it('FLOAT_BOTTOM: the carcass takes a bottom scribe of the exposed thickness for the run panel', () => {
+    const c = cab({ ...shop, FLOAT: true, FLOAT_BOTTOM: true })
+    expect(part(c, 'bottom')).toMatchObject({ X: 18, Y: 16, DY: 600 - 36, DZ: 18, material_id: 'm18' })
+    const side = part(c, 'left_side')!
+    expect(side.Y).toBe(16)
+    expect(side.DY).toBe(500 - 16)
+    // Gable bottoms sit on the panel, so only their tops are added.
+    expect(side.edge_band).toMatchObject({ top: true, bottom: false, right: true })
   })
 
-  it('FLOAT_BOTTOM: exposed bottom between the gables, full depth, taped front only', () => {
-    const c = cab({ ...shop, FLOAT: true, FLOAT_BOTTOM: true })
-    const bottom = part(c, 'bottom')!
-    expect(bottom.material_id).toBe('x16')
-    expect(bottom).toMatchObject({ X: 18, Y: 0, Z: 0, DY: 600 - 36, DX: 460, DZ: 16 })
-    expect(bottom.edge_band).toMatchObject({ top: true, bottom: false, left: false, right: false, id: 'eb-exp' })
-    const side = part(c, 'left_side')!
-    expect(side.Y).toBe(0)
-    expect(side.DY).toBe(500)
-    const back = part(c, 'back')!
-    expect(back.Y + back.DZ).toBe(16)
+  it('FLOAT_BOTTOM: fronts still run to the cabinet bottom, over the panel edge', () => {
+    const faced = (rules: Partial<ConstructionRules>) => resolveCabinet(cab(rules, {
+      has_face: true,
+      face_grid: { rows: [{ row_index: 0, height_locked: false }], cols: [{ col_index: 0, width_locked: false }], zones: [{ row_index: 0, col_index: 0, face_type: 'door', hinge_side: 'left' }] },
+    } as Partial<CabinetInput>))
+    const y = (r: ReturnType<typeof resolveCabinet>) => r.face_zones[0].Y
+    expect(y(faced({ FLOAT: true, FLOAT_BOTTOM: true }))).toBe(y(faced({ FLOAT: true })))
   })
 
   it('never builds a kick, even if has_toekick is left on', () => {
@@ -69,16 +69,15 @@ describe('floating cabinets', () => {
     expect(side.Y).toBe(0)
   })
 
-  it('interior floor drops to the carcass bottom (or the bottom panel top)', () => {
+  it('interior floor: carcass bottom top, raised by the panel scribe', () => {
     const shelf = (rules: Partial<ConstructionRules>) => resolveCabinet({
       ...cab(rules), has_internal: true,
       internal_tree: { type: 'open', fittings: [{ type: 'fixed_shelf', y_locked: false }] },
     }).internal_parts.find(p => p.part_type === 'fixed_shelf')!
-    // Interior heights: normal 500 − 18 − 18 = 464, floating 500 − 18 = 482, + bottom 500 − 16 − 18 = 466.
-    // A single fixed shelf centres in the interior, so its Y tracks floor + half height.
-    const normal = shelf({}), float = shelf({ FLOAT: true }), withBottom = shelf({ FLOAT: true, FLOAT_BOTTOM: true })
-    expect(float.Y - normal.Y).toBeCloseTo((0 + 482 / 2) - (18 + 464 / 2), 0)
-    expect(withBottom.Y - normal.Y).toBeCloseTo((16 + 466 / 2) - (18 + 464 / 2), 0)
+    // Interior heights: normal / floating 500 − 18 − 18 = 464, + panel scribe 464 − 16 = 448.
+    const normal = shelf({}), float = shelf({ FLOAT: true }), withPanel = shelf({ FLOAT: true, FLOAT_BOTTOM: true })
+    expect(float.Y).toBeCloseTo(normal.Y, 0)
+    expect(withPanel.Y - normal.Y).toBeCloseTo((34 + 448 / 2) - (18 + 464 / 2), 0)
   })
 })
 

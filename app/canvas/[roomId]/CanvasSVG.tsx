@@ -221,7 +221,7 @@ export default function CanvasSVG({
   const lz = view.zoom / useLineScale()
   const cx = centroid(walls)
   // Dimension chains measure only cabinets the layer set draws.
-  const chainCabs = cabinets.filter(c => planShowsCabinet(c, layers, resolvedParts?.get(c.id)))
+  const chainCabs = cabinets.filter(c => !c.rule_overrides?.UNDER_PANEL && planShowsCabinet(c, layers, resolvedParts?.get(c.id)))   // BBP lies under its run
   const dots = planGrid.visible
     ? gridDots(view.panX, view.panY, view.zoom, svgSize.w, svgSize.h, planGrid.step)
     : []
@@ -1100,9 +1100,10 @@ export default function CanvasSVG({
         {/* ── Cabinets ── rendered low→high so overheads overlap bases in plan */}
         {[...cabinets].sort((a, b) => {
           // Kick assemblies first (underneath): where a kick and its member cabinets
-          // are both shown, the cabinet above wins the click.
+          // are both shown, the cabinet above wins the click. A run's bottom panel
+          // (BBP, z_floating) likewise sits under its carcasses.
           const order: Record<string, number> = { base: 0, base_corner: 0, tall: 1, tall_corner: 1, wall: 2, wall_corner: 2 }
-          const rank = (c: CabinetInstance) => c.is_kick_assembly ? -1 : (order[c.assembly_class] ?? 0)
+          const rank = (c: CabinetInstance) => c.is_kick_assembly || c.rule_overrides?.UNDER_PANEL ? -1 : (order[c.assembly_class] ?? 0)
           return rank(a) - rank(b)
         }).map(cab => {
           const wall = walls.find(w => w.id === cab.wall_id)
