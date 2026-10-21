@@ -6,7 +6,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
-import type { Project, Room, Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
+import type { Project, Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance } from '@/src/lib/types'
+import { fixtureLayer } from '@/src/lib/fixtureGeometry'
+import { benchDimHeights } from './benchDims'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
@@ -26,9 +28,12 @@ const TOGGLES: { key: keyof ElevationPageOptions; label: string }[] = [
   { key: 'titleBlock',  label: 'Title Block' },
 ]
 
-export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures }: {
+export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, benchtops, benchTopZ }: {
   /** Doors / windows (z_fixtures P5). */
   fixtures?: RoomFixture[]
+  /** Bench + basin height dims (dim_elev_bench). */
+  benchtops?: BenchtopInstance[]
+  benchTopZ?: (bt: BenchtopInstance) => number
   project:       Project | null
   room:          Room
   walls:         Wall[]
@@ -147,6 +152,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
             walls={walls}
             cabinets={cabinets}
             fixtures={fixtures}
+            benchHeights={benchTopZ ? benchDimHeights(w.id, benchtops ?? [], benchTopZ, (fixtures ?? []).filter(f => layers.show(fixtureLayer(f.category)))) : []}
             room={room}
             resolvedParts={resolvedParts}
             svgRef={el => { if (el) refs.current.set(w.id, el); else refs.current.delete(w.id) }}

@@ -112,8 +112,10 @@ const INK3 = '#999'
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
-  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, projectName, roomName, paperKey, fixtures = [],
+  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, projectName, roomName, paperKey, fixtures = [], benchHeights = [],
 }: {
+  /** Floor → bench top, floor → basin rim (dim_elev_bench, see benchDims.ts). */
+  benchHeights?: number[]
   wall:          Wall
   /** Doors / windows in this wall (z_fixtures P5) — outline + symbol + a width row. */
   fixtures?:     RoomFixture[]
@@ -183,7 +185,8 @@ export default function ElevationPrintSVG({
   const tbW = 66 * P
 
   // ── ViewBox padding ───────────────────────────────────────────────────────
-  const padL = 20 * P
+  const benchDimStep = 8 * P   // bench / basin height lines, outside the height chain
+  const padL = 20 * P + (layers.show('dim_elev_bench') ? benchHeights.length * benchDimStep : 0)
   const padR = 11 * P
   const padT = 16 * P
   const padB = 18 * P + (show.titleBlock ? tbH + 4 * P : 0)
@@ -509,7 +512,10 @@ export default function ElevationPrintSVG({
     let cursorY = roomH
     if (baseDy > 0) {
       if (kickH > 0) { const kickTopY = roomH - kickH; segs.push({ fromY: kickTopY, toY: cursorY, label: `${kickH}` }); cursorY = kickTopY }
-      const baseCarcTopY = roomH - baseDy
+      // A raised cabinet (floating, z_floating) starts at its own bottom height.
+      const lift = cabBottomZ(baseCabEl!, room, wall)
+      if (lift > 0.5) { const liftY = roomH - kickH - lift; segs.push({ fromY: liftY, toY: cursorY, label: `${roundMm(lift)}` }); cursorY = liftY }
+      const baseCarcTopY = roomH - lift - baseDy
       segs.push({ fromY: baseCarcTopY, toY: cursorY, label: `${baseDy - kickH}` }); cursorY = baseCarcTopY
     }
     if (overheadDy > 0) {
@@ -544,6 +550,28 @@ export default function ElevationPrintSVG({
             <g key={i} transform={`rotate(-90,${heightChainX},${midY})`}>
               <DimLabel x={heightChainX} y={midY} label={seg.label} fs={dimFs} col={INK}
                 bg="white" side={sides[i]} padY={0.7} fontFamily="Arial, Helvetica, sans-serif" />
+            </g>
+          )
+        })}
+      </g>
+    )
+  }
+
+  // ── Bench + basin heights (overall from the floor, outside the height chain) ──
+  function benchDims() {
+    const lineW = layers.w('dim_elev_bench', thinSW)
+    return (
+      <g pointerEvents="none" opacity={layers.op('dim_elev_bench')}>
+        {benchHeights.map((h, i) => {
+          const x = heightChainX - (i + 1) * benchDimStep, y1 = roomH - h, midY = (roomH + y1) / 2
+          return (
+            <g key={i}>
+              <line x1={x} y1={roomH} x2={x} y2={y1} stroke={INK} strokeWidth={lineW} />
+              <line x1={x - tk} y1={roomH} x2={x + tk} y2={roomH} stroke={INK} strokeWidth={lineW} />
+              <line x1={x - tk} y1={y1} x2={x + tk} y2={y1} stroke={INK} strokeWidth={lineW} />
+              <g transform={`rotate(-90,${x},${midY})`}>
+                <DimLabel x={x} y={midY} label={`${roundMm(h)}`} fs={dimFs} col={INK} bg="white" padY={0.7} fontFamily="Arial, Helvetica, sans-serif" />
+              </g>
             </g>
           )
         })}
@@ -601,6 +629,7 @@ export default function ElevationPrintSVG({
           {layers.show('dim_elev_wall_chain') && bulkheadCabs.length > 0 && hChain(computeElevChain(bulkheadCabs, wall), bulkheadChainY, 'bh', 'dim_elev_wall_chain')}
           {layers.show('dim_elev_floor_chain') && (floorCabs.length > 0 || fxFloor.length > 0) && hChain(computeElevChain(floorCabs, wall, fxFloor), floorChainY, 'fl', 'dim_elev_floor_chain')}
           {layers.show('dim_elev_height') && heightChain()}
+          {layers.show('dim_elev_bench') && benchDims()}
           {layers.show('dim_openings') && openings.length > 0 && hChain(openingSegs, openingChainY, 'op', 'dim_openings')}
           {/* Sill + opening height at each right jamb (same as the canvas) */}
           {layers.show('dim_openings') && openings.map(o => {

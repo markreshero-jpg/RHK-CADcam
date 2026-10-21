@@ -145,7 +145,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 | Benchtops | `benchtops` (P / E / 3D), `benchtop_edges` (P: profile colour + code, wall edges; E: code on the front edge), `benchtop_joins` (P / E) — edges + joins added by benchtop Phase 3; elevation + 3D views by Phase 3b |
 | Room | `walls` (3D) |
 | Labels | `cabinet_labels`, `cabinet_sizes` (P,E) |
-| Dimensions | `dim_wall_overall`, `dim_base_chain`, `dim_wall_chain`, `dim_row_labels` (P; row names at each chain's wall-start end), `dim_elev_height`, `dim_elev_floor_chain`, `dim_elev_wall_chain` (E), `dim_kicks` (P,E; default off — plan: kick board chain between the base row and the overall + kick depth at the wall ends on lane 2; elevation: kick height per kick, `src/lib/kickDims.ts`; not in reports yet) — chain items to be replaced by user-defined rows (`settings.<view>.dimRows`), see `z_dimension_rows/DIMENSION-ROWS-SPEC.md` |
+| Dimensions | `dim_wall_overall`, `dim_base_chain`, `dim_wall_chain`, `dim_row_labels` (P; row names at each chain's wall-start end), `dim_elev_height`, `dim_elev_floor_chain`, `dim_elev_wall_chain` (E), `dim_elev_bench` (E, default on — floor to benchtop top + vessel basin rim, canvas + Elevation Views report, `benchDims.ts`; 2026-10-21), `dim_kicks` (P,E; default off — plan: kick board chain between the base row and the overall + kick depth at the wall ends on lane 2; elevation: kick height per kick, `src/lib/kickDims.ts`; not in reports yet) — chain items to be replaced by user-defined rows (`settings.<view>.dimRows`), see `z_dimension_rows/DIMENSION-ROWS-SPEC.md` |
 
 Retired ids: `hardware` (Phase 1: hinges + inner-drawer slides, elevation) was
 split into `hinges` + `inner_drawer_runners`. Stored rows were migrated

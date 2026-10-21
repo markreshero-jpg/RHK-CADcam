@@ -74,3 +74,26 @@ says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
 | F3 | Library: top-level **Vanity** category | built 2026-10-20 |
 | F4 | Tutorial: floating vanity | built 2026-10-20 |
 | — | Vanity definitions (sizes TBD with Mark — save from canvas into Vanity) | open |
+| F5 | Fixes from the first real job (RHK6570 vanities) — see below | built 2026-10-21 |
+
+## F5 — fixes from RHK6570 (2026-10-21)
+
+- **Edge overrides bug (all cabinets, not just floating).** A re-resolve used to
+  re-apply every persisted edge flag as if it were a manual edit, so ticking
+  Floating on a cabinet that was already placed never taped its gable ends.
+  Hand edge edits now live on `cabinet_instances.edge_overrides` (jsonb, keyed by
+  the editor's part id: `case_<key>`, `tk_<key>_<sort>`, `int_<type>_<sort>`,
+  `zone_<zoneKey>`). The resolver re-applies only those. Migration:
+  `migration_edge_overrides.sql`.
+  - **Backfill:** each of the 286 cabinets was resolved fresh. Wherever its saved
+    edges differed, the saved value was kept as an override: 93 part edges on 33
+    cabinets.
+  - **Caveat:** some of those are probably old rule output, not hand edits. The
+    Hive bulkhead `bh:fascia` / `bh:sl_front` and curved `crv:face` look like it.
+    Clear the key to let the rules apply.
+- **Elevation height chain.** It now starts a raised cabinet at its own bottom
+  height: floor → 300 → carcass → rest. Done on the canvas and in the Elevation
+  Views report.
+- **Bench & basin heights.** New layer item `dim_elev_bench`: overall dims from
+  the floor to the benchtop top and to a vessel basin's rim, outside the height
+  chain. Shown on the canvas and in the report. `app/canvas/[roomId]/benchDims.ts`.

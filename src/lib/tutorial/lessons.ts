@@ -600,6 +600,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Under Clearance, Off wall shows how far they stand off the wall — it only appears when they’re all the same distance off. Type a new value and they all move out (or back) together, each keeping its place along the wall.',
       canvas: true, done: (c, s) => c.cabinets.some(cab => { const o = s.cabinets.find(x => x.id === cab.id); return !!o && (o.pos_x !== cab.pos_x || o.pos_y !== cab.pos_y) }) },
   ]},
+
+  // Appended 2026-10-21 (elevation height chain for raised cabinets + bench / basin dims).
+  { id: 'bench_basin_heights', level: 'intermediate', topic: 'reports', title: 'Bench and basin heights in elevation',
+    blurb: 'Read how high a vanity hangs, and dimension the bench and basin heights.',
+    keywords: 'elevation dimension height bench benchtop basin vanity floating off floor layer chain', steps: [
+    { id: 'elevation', title: 'Open the elevation',
+      body: 'Select the wall with the vanity and click Elevation. The height chain on the left starts at the floor: for a floating cabinet it shows the gap under it (300), then the cabinet height, then the rest of the wall.',
+      target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' },
+    { id: 'bench', title: 'Bench and basin heights',
+      body: 'Outside the height chain are two dimensions from the floor: one to the top of the benchtop, and one to the rim of a basin standing on it. They need a benchtop drawn on that wall. Undermount sinks don’t get the second one.',
+      canvas: true, done: c => c.view === 'elevation' },
+    { id: 'layer', title: 'Turn them on or off',
+      body: 'Open Layers → Dimensions and untick Bench & basin heights to hide them. The setting is per layer set, so a print layer set can show them while your working set hides them. The Elevation Views report follows the layer set you pick there.',
+      target: 'menu-Layers', canvas: true, done: c => c.view === 'elevation' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

@@ -173,6 +173,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'dim_row_labels',       group: 'dimensions', label: 'Row names',          views: ['plan'], default: ON,
     hint: 'Plan: BASE / WALL CABS / TALL / OVERALL … at the start of each dimension row' },
   { id: 'dim_elev_height',      group: 'dimensions', label: 'Height chain',       views: ['elevation'], default: ON },
+  { id: 'dim_elev_bench',       group: 'dimensions', label: 'Bench & basin heights', views: ['elevation'], default: ON,
+    hint: 'Elevation: floor to the top of the benchtop, and to the rim of a basin sitting on it' },
   { id: 'dim_elev_floor_chain', group: 'dimensions', label: 'Floor cabinet widths', views: ['elevation'], default: ON },
   { id: 'dim_elev_wall_chain',  group: 'dimensions', label: 'Overhead cabinet widths', views: ['elevation'], default: ON },
   { id: 'dim_kicks',            group: 'dimensions', label: 'Kicks',              views: ['plan', 'elevation'], default: OFF,

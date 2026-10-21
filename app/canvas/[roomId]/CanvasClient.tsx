@@ -3753,6 +3753,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           cabinets={cabinets}
           resolvedParts={resolvedParts}
           benchtops={benchtops}
+          benchTopZ={b => btInfo(b).topZ}
           fixtures={fixtures}
           annotations={annotations}
           layerSets={layerSetsApi.sets}

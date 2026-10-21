@@ -28,6 +28,7 @@ import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
+import { benchDimHeights } from './benchDims'
 import FixturesElevation, { OpeningHoles } from './FixturesElevation'
 import { openingOnWall, elevationFrame, fixtureChainSpans, fixtureLayer, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 import type { RoomFixture } from '@/src/lib/types'
@@ -2095,8 +2096,10 @@ export default function ElevationSVG({
                     ? (resolvedParts?.get(baseCabEl.id)?.toekick_parts.find(p => p.part_key === 'kick_front_face')?.DX ?? 150)
                     : 0)
               const baseDy = baseCabEl?.dy ?? 0
-              // Carcase bottom above the floor + carcase height.
-              const carcBottom = isDetachedMemberBase ? (baseCabEl!.pos_z ?? 0) : kickH
+              // Carcase bottom above the floor + carcase height. A raised cabinet (floating,
+              // z_floating) starts at its own bottom height; the gap below it is its own segment.
+              const carcBottom = isDetachedMemberBase ? (baseCabEl!.pos_z ?? 0)
+                : (baseCabEl ? cabBottomZ(baseCabEl, room, wall) : 0) + kickH
               const carcDy     = isDetachedMemberBase ? baseDy : (baseDy - kickH)
               const wcTopZ = wallCabTop(wall, room)
               const overheadDy = overheadCabEl?.dy ?? 0
@@ -2178,6 +2181,34 @@ export default function ElevationSVG({
                       )
                     })
                   })()}
+                </g>
+              )
+            })()}
+
+            {/* Bench + basin heights — overall dims from the floor, outside the height chain */}
+            {layers.show('dim_elev_bench') && (() => {
+              const dims = benchtops && benchtopInfo
+                ? benchDimHeights(wall.id, benchtops, bt => benchtopInfo(bt).topZ, (fixtures ?? []).filter(f => layers.show(fixtureLayer(f.category))))
+                : []
+              if (dims.length === 0) return null
+              const col = layers.color('dim_elev_bench', '#ffffff')
+              const sw = layers.w('dim_elev_bench', 1) / lz, fs = 12 / z, tk = 8 / z
+              const x0 = -70 / z - (layers.show('dim_elev_height') ? 70 / z + layers.offset('dim_elev_height') : 0) - layers.offset('dim_elev_bench')
+              return (
+                <g pointerEvents="none" opacity={layers.op('dim_elev_bench')} style={{ userSelect: 'none' }}>
+                  {dims.map((h, i) => {
+                    const x = x0 - i * 50 / z, y1 = roomH - h, midY = (roomH + y1) / 2
+                    return (
+                      <g key={i}>
+                        <line x1={x} y1={roomH} x2={x} y2={y1} stroke={col} strokeWidth={sw} />
+                        <line x1={x - tk} y1={roomH} x2={x + tk} y2={roomH} stroke={col} strokeWidth={sw} />
+                        <line x1={x - tk} y1={y1} x2={x + tk} y2={y1} stroke={col} strokeWidth={sw} />
+                        <g transform={`rotate(-90,${x},${midY})`}>
+                          <DimLabel x={x} y={midY} label={`${roundMm(h)}`} fs={fs} col={col} bg={layers.background ?? '#030712'} />
+                        </g>
+                      </g>
+                    )
+                  })}
                 </g>
               )
             })()}

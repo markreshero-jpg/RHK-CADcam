@@ -139,7 +139,7 @@ const PAPER = {
   A1L: { w: 841, h: 594, label: 'A1 Landscape' },
 }
 
-export default function ReportsModal({ initialScope, project, room, walls, cabinets, resolvedParts, benchtops, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
+export default function ReportsModal({ initialScope, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
   initialScope: ReportScope
   project: Project | null
   room: Room
@@ -147,6 +147,8 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
   cabinets: CabinetInstance[]
   resolvedParts: Map<string, ResolvedCabinet>
   benchtops: BenchtopInstance[]
+  /** Top-surface height of a benchtop (the canvas thickness cascade) — elevation bench dims. */
+  benchTopZ?: (bt: BenchtopInstance) => number
   /** Placed fixtures in this room (appliance schedule). */
   fixtures?: RoomFixture[]
   /** CAD annotations (z_CAD_tool) for this room — the plan / elevation reports draw the canvas room. */
@@ -485,6 +487,8 @@ export default function ReportsModal({ initialScope, project, room, walls, cabin
                   room={room}
                   walls={walls}
                   fixtures={roomFixtures}
+                  benchtops={scope === 'room' ? benchtops : []}
+                  benchTopZ={benchTopZ}
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
                   resolvedParts={elevResolved}
                   layerSets={layerSets}
