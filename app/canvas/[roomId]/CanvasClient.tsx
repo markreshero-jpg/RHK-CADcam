@@ -61,6 +61,7 @@ import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
 import { withFixtureCutouts, benchtopAt, openingSpans, fixtureChainSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, fixtureClearances, sitsOnCabinets, type StretchSide } from '@/src/lib/fixtureGeometry'
 import { cabinetPlans, linkFor, followLinks, fixtureClashes, stretchObstacles, linkedPose } from '@/src/lib/fixtureLinks'
+import { groupFollow, lockMates, alignPatches, type AlignMode } from '@/src/lib/fixtureGroups'
 import { zoneFollow, fixtureLocalBox, pickOpenZone, zoneSeat } from '@/src/lib/cabinetContents'
 import { dbSpawnDefinitionContents } from './contentsDB'
 import { parseKit } from '@/src/lib/cabinetKit'
@@ -185,6 +186,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [cabMoveDrag, setCabMoveDrag] = useState<CabMoveDrag | null>(null)
   const [cabFollowing, setCabFollowing] = useState<{ id: string; assemblyClass: string } | null>(null)
   const [multiSelect, setMultiSelect] = useState<string[]>([])
+  // Shift+click fixtures (plan / elevation) — align / lock from the right-click menu.
+  const [fixtureMulti, setFixtureMulti] = useState<string[]>([])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (selected?.type !== 'fixture' && fixtureMulti.length) setFixtureMulti([])
+  }, [selected, fixtureMulti.length])
   // Box / Shift+click wall selection. `selected` holds one of these walls;
   // any other selection drops the set (effect below).
   const [multiWalls, setMultiWalls] = useState<string[]>([])
@@ -460,7 +467,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const seatMap = new Map(seats.map(s => [s.id, s.patch]))
     const seated = seats.length ? fixtures.map(f => seatMap.has(f.id) ? { ...f, ...seatMap.get(f.id)! } : f) : fixtures
     // + doors / windows re-seated in a wall that moved or changed thickness (P5).
-    const moves = [...seats, ...followLinks(seated, cabPlans), ...refitOpenings(fixtures, walls, centroid(walls))]
+    const moves: { id: string; patch: Partial<RoomFixture> }[] = [...seats, ...followLinks(seated, cabPlans), ...refitOpenings(fixtures, walls, centroid(walls))]
+    // Locked mates go with whichever member moved — unless they follow a cabinet of their own.
+    if (moves.length) {
+      const moved = new Map<string, Partial<RoomFixture>>()
+      for (const m of moves) moved.set(m.id, { ...moved.get(m.id), ...m.patch })
+      for (const [id, patch] of groupFollow(fixtures, moved, m => !!m.cabinet_id)) moves.push({ id, patch })
+    }
     // A deleted cabinet clears the link in the DB (on delete set null); mirror it locally.
     // Its contents (zone-seated fixtures) go with it — undo restores both from the snapshot.
     const cabIds = new Set(cabinets.map(c => c.id))
@@ -2440,6 +2453,36 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const selectedCab       = selected?.type === 'cabinet'   ? cabinets.find(c => c.id === selected.id) ?? null   : null
   const selectedBenchtop  = selected?.type === 'benchtop'  ? benchtops.find(b => b.id === selected.id) ?? null  : null
   const selectedFixture   = selected?.type === 'fixture'   ? fixtures.find(f => f.id === selected.id) ?? null   : null
+  // Click a fixture; Shift adds / removes it from the multi-pick (like cabinets).
+  function pickFixture(id: string, shift = false) {
+    setMultiSelect([]); setCabResize(null); setContextMenu(null)
+    if (!shift) { setFixtureMulti([]); setSelected({ type: 'fixture', id }); return }
+    const base = fixtureMulti.length ? fixtureMulti : selected?.type === 'fixture' ? [selected.id] : []
+    const next = base.includes(id) ? base.filter(x => x !== id) : [...base, id]
+    setFixtureMulti(next)
+    const lead = next.includes(id) ? id : next[next.length - 1]
+    setSelected(lead ? { type: 'fixture', id: lead } : null)
+  }
+  // Right-click keeps the multi-pick when it's on one of them (the anchor for Align).
+  function fixtureMenu(id: string, x: number, y: number) {
+    setMultiSelect([]); setCabResize(null)
+    if (!fixtureMulti.includes(id)) setFixtureMulti([])
+    setSelected({ type: 'fixture', id })
+    setContextMenu({ x, y, fixtureId: id })
+  }
+  // Drawn lit: the multi-pick, plus whatever the selected fixture is locked with.
+  const fixtureHighlight = useMemo(() => {
+    const ids = new Set(fixtureMulti)
+    if (selected?.type === 'fixture') for (const id of lockMates(fixtures, selected.id)) ids.add(id)
+    return ids
+  }, [fixtureMulti, selected, fixtures])
+  function alignFixtures(anchorId: string, mode: AlignMode) {
+    const anchor = fixtures.find(f => f.id === anchorId)
+    if (!anchor) return
+    const others = fixtures.filter(f => fixtureMulti.includes(f.id) && f.id !== anchorId)
+    const patches = alignPatches(anchor, others, mode)
+    if (patches.size) void fx.updateMany(patches)
+  }
   // Selected top measured against its anchor wall face (panel sizes / ends).
   // While shaping in plan (Phase 6) it follows the working outline, so the overhang is live.
   const selectedBtPos = (() => {
@@ -2594,6 +2637,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   const selectionInfo =
     multiSelect.length >= 2                             ? `${multiSelect.length} cabinets selected · right-click to equalize widths`
+    : fixtureMulti.length >= 2                          ? `${fixtureMulti.length} fixtures selected · Shift+click to add/remove · right-click the one to align to · Lock together`
     : multiWallObjs.length >= 2                         ? `${multiWallObjs.length} walls selected · drag to move · Shift+click to add/remove · Delete = remove`
     : selected?.type === 'wall'       && selectedWall       ? `${selectedWall.name} · ${Math.round(selectedWall.length)}mm · ${Math.round(selectedWall.angle)}°`
     : selected?.type === 'cabinet'    && selectedCab        ? `${selectedCab.assembly_class.replace(/_/g,' ')} · ${selectedCab.label ?? '—'} · ${selectedCab.dx}×${selectedCab.dy}×${selectedCab.dz}`
@@ -2959,8 +3003,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                   onStretchHandle={(id, side) => startFixtureStretch(id, side)}
                   onMoveHandle={id => { setCabResize(null); setContextMenu(null); fx.startMove(id) }}
                   clearance={mode === 'select' || fx.stretch ? fixtureClearance : null}
-                  onPointerDown={(_e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null); setContextMenu(null) }}
-                  onContextMenu={(e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setContextMenu({ x: e.clientX, y: e.clientY, fixtureId: id }) }}
+                  highlightIds={fixtureHighlight}
+                  onPointerDown={(e, id) => pickFixture(id, e.shiftKey)}
+                  onContextMenu={(e, id) => fixtureMenu(id, e.clientX, e.clientY)}
                   onDoubleClick={(_e, id) => { setSelected({ type: 'fixture', id }); setViewFixtureId(id) }}
                 />
               }
@@ -3054,7 +3099,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             }}
             onCabinetContextMenu={onCabinetContextMenu}
             onBlankWallContextMenu={onBlankWallContextMenu}
-            onFixtureContextMenu={(e, id) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null); setContextMenu({ x: e.clientX, y: e.clientY, fixtureId: id }) }}
+            onFixtureContextMenu={(e, id) => fixtureMenu(id, e.clientX, e.clientY)}
             onShiftSelectCabinet={id => {
               setSelected({ type: 'cabinet', id })
               setMultiSelect(prev => {
@@ -3095,7 +3140,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onSelectBenchtop={id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]); setCabResize(null) }}
             fixtures={movingFixtureId ? fixtures.filter(x => x.id !== movingFixtureId) : fixtures}
             fixtureClashIds={fixtureClashIds}
-            onSelectFixture={id => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setCabResize(null) }}
+            onSelectFixture={(id, shift) => pickFixture(id, shift)}
+            fixtureHighlight={fixtureHighlight}
             fixtureStretching={fx.stretch ? { id: fx.stretch.id, side: fx.stretch.side } : null}
             onFixtureStretchHandle={(id, side) => startFixtureStretch(id, side, 10)}
             onFixtureStretchMove={c => { fx.stretchMove(c) }}
@@ -3153,8 +3199,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               fixtures,
               clashIds: fixtureClashIds,
               selectedId: selected?.type === 'fixture' ? selected.id : null,
-              onSelect: id => { setSelected({ type: 'fixture', id }); setMultiSelect([]) },
-              onContextMenu: (id, x, y) => { setSelected({ type: 'fixture', id }); setMultiSelect([]); setContextMenu({ x, y, fixtureId: id }) },
+              onSelect: id => pickFixture(id),
+              onContextMenu: (id, x, y) => fixtureMenu(id, x, y),
             }}
           />
         )}
@@ -3490,6 +3536,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               onMove:   id => { setContextMenu(null); if (canvasView !== 'plan' && canvasView !== 'elevation') switchView('plan'); fx.startMove(id) },
               onTurn:   id => { setContextMenu(null); void fx.rotateBy(id, 90) },
               onDelete: id => { setContextMenu(null); setSelected(null); void fx.remove(id) },
+              multi: contextMenu.fixtureId && fixtureMulti.length >= 2 && fixtureMulti.includes(contextMenu.fixtureId) ? {
+                count: fixtureMulti.length,
+                onAlign: mode => { const a = contextMenu.fixtureId!; setContextMenu(null); alignFixtures(a, mode) },
+                onLock:  () => { setContextMenu(null); void fx.lock(fixtureMulti) },
+              } : undefined,
+              lockedCount: contextMenu.fixtureId && fixtures.find(f => f.id === contextMenu.fixtureId)?.lock_group
+                ? lockMates(fixtures, contextMenu.fixtureId).length : 0,
+              onUnlock: id => { setContextMenu(null); void fx.unlock(id) },
             },
             onDeleteBenchtop: id => void bt.handleDeleteBenchtop(id),
             onDeleteBenchtopVertex: bt.handleDeleteBenchtopVertex,

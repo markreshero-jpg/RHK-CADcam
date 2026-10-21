@@ -224,7 +224,7 @@ function StretchHandles({ f, z, active, onGrab, onMove }: {
 }
 
 export default function FixturesPlan({
-  fixtures, ghost, ghostBody, hiddenId, selectedId, zoom, layers, interactive, clashIds,
+  fixtures, ghost, ghostBody, hiddenId, selectedId, highlightIds, zoom, layers, interactive, clashIds,
   stretching, onStretchHandle, onMoveHandle, clearance,
   onPointerDown, onContextMenu, onDoubleClick,
 }: {
@@ -234,6 +234,8 @@ export default function FixturesPlan({
   /** Fixture being moved — drawn as the ghost instead. */
   hiddenId:   string | null
   selectedId: string | null
+  /** Shift-picked / locked-with fixtures — drawn lit like the selected one (no handles). */
+  highlightIds?: Set<string>
   zoom:       number
   layers:     LayerView
   /** false while another tool owns the clicks (fixtures click-through). */
@@ -265,7 +267,7 @@ export default function FixturesPlan({
             onDoubleClick={e => { e.stopPropagation(); onDoubleClick(e, f.id) }}
           >
             <FixtureShape f={f} x={f.x} y={f.y} rotation={f.rotation} z={z} layers={layers}
-              selected={f.id === selectedId} ghost={false} label={showLabels} clash={clashIds?.has(f.id)} />
+              selected={f.id === selectedId || !!highlightIds?.has(f.id)} ghost={false} label={showLabels} clash={clashIds?.has(f.id)} />
             {(interactive || stretching?.id === f.id) && f.id === selectedId && onStretchHandle && (
               <StretchHandles f={f} z={z} active={stretching?.id === f.id ? stretching.side : null}
                 onGrab={side => onStretchHandle(f.id, side)}

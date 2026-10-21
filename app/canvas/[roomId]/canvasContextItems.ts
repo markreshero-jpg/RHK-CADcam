@@ -2,6 +2,7 @@ import type { AssemblyClass } from '@/src/lib/types'
 import type { CabinetInstance, ContextMenuItem, ContextMenuSubItem } from './canvasTypes'
 import { foldClass, type InsertFavourite } from './insertFavourites'
 import { normaliseBulkhead, type BulkheadSettings } from '@/src/lib/bulkhead'
+import type { AlignMode } from '@/src/lib/fixtureGroups'
 
 export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, fixtureId, fixture, canEqualize, clipboard, cabinets, multiSelect,
@@ -24,6 +25,11 @@ export function buildContextMenuGroups({
     onMove:   (id: string) => void
     onTurn:   (id: string) => void
     onDelete: (id: string) => void
+    /** Shift-picked fixtures (≥ 2, incl. this one): line up with this one / lock together. */
+    multi?: { count: number; onAlign: (mode: AlignMode) => void; onLock: () => void }
+    /** How many fixtures this one is locked with (itself included); 0 = not locked. */
+    lockedCount?: number
+    onUnlock?: (id: string) => void
   }
   canEqualize: boolean
   clipboard: CabinetInstance | null
@@ -73,7 +79,21 @@ export function buildContextMenuGroups({
   }
 
   if (fixtureId && fixture) {
+    const m = fixture.multi
     return [
+      ...(m ? [[
+        { label: `Align ${m.count - 1} to this`, color: 'amber' as const, children: [
+          { label: 'Centres along the wall', onClick: () => m.onAlign('centre_along') },
+          { label: 'Centres front-to-back',  onClick: () => m.onAlign('centre_depth') },
+          { label: 'Left edges',             onClick: () => m.onAlign('left') },
+          { label: 'Right edges',            onClick: () => m.onAlign('right') },
+          { label: 'Same height',            onClick: () => m.onAlign('height') },
+        ] },
+        { label: `Lock ${m.count} together`, onClick: m.onLock, color: 'amber' as const },
+      ]] : []),
+      ...(fixture.lockedCount && fixture.onUnlock
+        ? [[{ label: `Unlock (${fixture.lockedCount} locked)`, onClick: () => fixture.onUnlock!(fixtureId) }]]
+        : []),
       [
         { label: 'View 3D / elevations', onClick: () => fixture.onView(fixtureId), color: 'blue' },
         { label: 'Move', onClick: () => fixture.onMove(fixtureId) },

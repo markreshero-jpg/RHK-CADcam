@@ -18,6 +18,7 @@ import { fixtureWallRef, fixtureAxes } from '@/src/lib/fixtureGeometry'
 import { stretchedCutout } from '@/src/lib/fixtureStretch'
 import { snapFixture, snapOpening, defaultFixtureZ, sitsOnCabinets, fixtureCenter, backLeftForCenter, type FixtureSnap, type FixtureFootprint } from '@/src/lib/fixtureGeometry'
 import type { FixtureLink } from '@/src/lib/fixtureLinks'
+import { groupFollow, lockMates } from '@/src/lib/fixtureGroups'
 import type { Mode, Selected } from './canvasTypes'
 
 /** How far (mm) from a wall face the cursor can be and still snap to it. */
@@ -258,22 +259,61 @@ export function useFixtureInteraction({
   }
 
   async function update(id: string, patch: Partial<RoomFixture>) {
-    // A pose change from the panel (centre / rotation fields) re-links to
-    // whatever cabinet is now under it; callers that set the link pass it.
-    if (('x' in patch || 'y' in patch || 'rotation' in patch) && !('cabinet_id' in patch)) {
-      const f = fixturesRef.current.find(x => x.id === id)
-      if (f) { const m = { ...f, ...patch }; patch = { ...patch, ...linkFields(m) } }
+    await updateMany(new Map([[id, patch]]))
+  }
+
+  /**
+   * Several fixtures in one undo step. Locked mates of anything whose pose
+   * changes are carried along (fixtureGroups) unless `carry` is false.
+   */
+  async function updateMany(changes: Map<string, Partial<RoomFixture>>, carry = true) {
+    const cur = fixturesRef.current
+    const all = new Map<string, Partial<RoomFixture>>()
+    for (const [id, p0] of changes) {
+      const f = cur.find(x => x.id === id)
+      if (!f) continue
+      let patch = p0
+      // A pose change from the panel (centre / rotation fields) re-links to
+      // whatever cabinet is now under it; callers that set the link pass it.
+      if (('x' in patch || 'y' in patch || 'rotation' in patch) && !('cabinet_id' in patch)) {
+        patch = { ...patch, ...linkFields({ ...f, ...patch }) }
+      }
+      // P11: a resizable model's cutout follows a typed width / depth (unless the cutout itself is being set).
+      if (('width' in patch || 'depth' in patch) && !Object.keys(patch).some(k => k.startsWith('cutout_'))) {
+        patch = { ...patch, ...stretchedCutout(f, { ...f, ...patch }) }
+      }
+      all.set(id, patch)
     }
-    // P11: a resizable model's cutout follows a typed width / depth (unless the cutout itself is being set).
-    if (('width' in patch || 'depth' in patch) && !Object.keys(patch).some(k => k.startsWith('cutout_'))) {
-      const f = fixturesRef.current.find(x => x.id === id)
-      if (f) patch = { ...patch, ...stretchedCutout(f, { ...f, ...patch }) }
+    if (carry) {
+      for (const [id, gp] of groupFollow(cur, all)) {
+        const m = cur.find(x => x.id === id)!
+        all.set(id, { ...gp, ...linkFields({ ...m, ...gp }) })
+      }
     }
+    if (!all.size) return
     captureSnapshot()
-    setFixtures(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f))
-    const { error: e } = await supabase.from('room_fixtures')
-      .update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
+    setFixtures(prev => prev.map(f => all.has(f.id) ? { ...f, ...all.get(f.id)! } : f))
+    const now = new Date().toISOString()
+    const res = await Promise.all([...all].map(([id, p]) =>
+      supabase.from('room_fixtures').update({ ...p, updated_at: now }).eq('id', id)))
+    const e = res.find(r => r.error)?.error
     if (e) setError(e.message)
+  }
+
+  /** Lock fixtures together (any groups they're already in merge into one). */
+  async function lock(ids: string[]) {
+    const cur = fixturesRef.current
+    const groups = new Set(cur.filter(f => ids.includes(f.id) && f.lock_group).map(f => f.lock_group))
+    const members = cur.filter(f => ids.includes(f.id) || (f.lock_group && groups.has(f.lock_group)))
+    if (members.length < 2) return
+    const g = crypto.randomUUID()
+    await updateMany(new Map(members.map(f => [f.id, { lock_group: g }])), false)
+  }
+
+  /** Split the group `id` is locked in (every member goes free). */
+  async function unlock(id: string) {
+    const ids = lockMates(fixturesRef.current, id)
+    await updateMany(new Map(ids.map(i => [i, { lock_group: null }])), false)
   }
 
   /** Turn in place about the footprint centre (keeps the item where it is). */
@@ -300,7 +340,7 @@ export function useFixtureInteraction({
     carry, ghost, carried, carriedZ, freeRot, error,
     arm, startMove, cancel, rotateCarry,
     handlePointerMove, handlePointerUp,
-    update, rotateBy, remove, unlink,
+    update, updateMany, lock, unlock, rotateBy, remove, unlink,
     stretch, startStretch, stretchMove, commitStretch, cancelStretch,
   }
 }

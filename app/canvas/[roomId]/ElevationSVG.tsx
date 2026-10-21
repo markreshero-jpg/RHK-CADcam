@@ -184,7 +184,9 @@ interface ElevationSVGProps {
   fixtures?: RoomFixture[]
   /** Fixtures that overlap a cabinet / another fixture (red, like plan). */
   fixtureClashIds?: Set<string>
-  onSelectFixture?: (id: string) => void
+  onSelectFixture?: (id: string, shift: boolean) => void
+  /** Shift-picked / locked-with fixtures, drawn lit. */
+  fixtureHighlight?: Set<string>
   /** P7: fixture edge stretch — handle grab, live cursor, commit (the canvas owns the state). */
   fixtureStretching?: { id: string; side: StretchSide } | null
   onFixtureStretchHandle?: (id: string, side: StretchSide) => void
@@ -210,7 +212,7 @@ export default function ElevationSVG({
   elevMeasureStart, elevMeasureEnd, elevMeasureCursor,
   setElevMeasureStart, setElevMeasureEnd, setElevMeasureCursor,
   benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop, waterfallOcc,
-  fixtures, fixtureClashIds, onSelectFixture,
+  fixtures, fixtureClashIds, onSelectFixture, fixtureHighlight,
   fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
   fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop, onFixtureMoveHandle,
 }: ElevationSVGProps) {
@@ -1712,7 +1714,8 @@ export default function ElevationSVG({
                 fixtures={fixtures ?? []} wall={wall} side={elevWallSide}
                 roomCx={centroid(walls)} roomH={roomH} zoom={z} layers={layers}
                 selectedId={selected?.type === 'fixture' ? selected.id : null}
-                onSelect={id => onSelectFixture?.(id)}
+                highlightIds={fixtureHighlight}
+                onSelect={(id, shift) => onSelectFixture?.(id, shift)}
                 stretching={fixtureStretching}
                 ghost={mode === 'place_fixture' ? fixtureGhost : null}
                 showClearance={mode === 'select' || !!fixtureStretching}

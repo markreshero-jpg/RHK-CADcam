@@ -645,6 +645,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click Download PDF. Each page has its heading, the drawing at true scale, and your company title block (Settings → Company) with Sheet n of N.',
       target: 'shop-download', canvas: true, done: (c, s) => ev(c, 'shop_pdf') > ev(s, 'shop_pdf') },
   ]},
+
+  // Appended 2026-10-21 (fixtures: shift-pick, align, lock together).
+  { id: 'fixture_align_lock', level: 'intermediate', topic: 'appliances', title: 'Line up and lock a basin and tap',
+    blurb: 'Shift-click fixtures, line them up with one of them, then lock them so they move together.',
+    keywords: 'fixture multi select shift click align centre centres edges height lock group unlock basin tap sink move together', steps: [
+    { id: 'pick', title: 'Shift-click two fixtures',
+      body: 'In plan or elevation, click a basin, then Shift+click its tap. Both light up. Shift+click one again to drop it from the pick.',
+      canvas: true, done: c => c.selected?.type === 'fixture' },
+    { id: 'align', title: 'Right-click the one to line up with',
+      body: 'Right-click the basin and open Align 1 to this. The basin stays put and the tap moves: Centres along the wall puts the tap over the basin; front-to-back, left / right edges and same height work the same way.',
+      canvas: true, done: c => c.selected?.type === 'fixture' },
+    { id: 'lock', title: 'Lock them together',
+      body: 'With both still picked, right-click and choose Lock 2 together. Now move, nudge or turn either one and the other comes too. If the basin follows its vanity, so does the tap. Click one later and its locked partner lights up. To split them, right-click and choose Unlock.',
+      canvas: true, done: c => c.fixtures.some(f => !!f.lock_group) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

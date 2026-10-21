@@ -244,6 +244,26 @@ Esc cancels; one undo step.
 
 ## RESUME HERE — open items
 
+- 2026-10-21 (user): **Multi-select, align, lock together** — built, **not checked in-app**. Locked:
+  - **Shift+click** fixtures in plan / elevation adds / removes them from a pick (`fixtureMulti` in
+    CanvasClient, separate from the cabinet `multiSelect`); picked + locked-with items draw lit
+    (`highlightIds`). 3D click selects one (no Shift there yet).
+  - **Align: the right-clicked fixture is the anchor and stays put**; the rest move to it, in the
+    anchor's own frame: centres along the wall (its width), centres front-to-back, left / right
+    edges (as seen from its front, = elevation left / right), same height (underside z).
+    `alignPatches` in `src/lib/fixtureGroups.ts` (+ test).
+  - **Lock = rigid group**, no reference point: column `room_fixtures.lock_group` (uuid; migration
+    `fixtures_lock_group`, applied live; copy `z_fixtures/migration_lock_group.sql`). Whichever
+    member moves (Move, panel fields, Turn 90°, align, benchtop re-fit) carries the others by the
+    same turn about its centre + shift + rise (`rigidFollow` / `groupFollow`); a mate on the
+    mover's old wall goes to its new wall. All in one undo step (`updateMany` in
+    useFixtureInteraction). Cabinet follow (P4) carries unlinked mates too (wall tap follows the
+    basin that follows its vanity); a mate linked to its own cabinet follows that instead.
+    Locking items already in groups merges them. Right-click → **Unlock (n locked)** splits the
+    whole group. Stretching one member doesn't move the others. While carrying (Move) only the
+    picked item shows as the ghost; the mates jump on the drop.
+  - Tutorial `fixture_align_lock`.
+
 - 2026-10-20 (user: "P5-P11 is good" — P5–P11 checked in-app). Then built, **not checked in-app**:
   - **Right-click menu in 3D** — `Fixtures3DProps.onContextMenu`; Room3DScene guards it like a
     cabinet hit (no wall menu, right-drag pans) and CanvasClient opens the same

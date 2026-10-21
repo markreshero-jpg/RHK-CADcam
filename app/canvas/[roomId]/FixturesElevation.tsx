@@ -160,7 +160,7 @@ function ElevClearance({ box, others, len, roomH, z, bg }: {
 }
 
 export default function FixturesElevation({
-  fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, onSelect, stretching, onStretchHandle, ghost, onMoveHandle,
+  fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, highlightIds, onSelect, stretching, onStretchHandle, ghost, onMoveHandle,
   obstacles = [], showClearance = false, interactive = true, clashIds, onContextMenu,
 }: {
   fixtures:   RoomFixture[]
@@ -171,7 +171,9 @@ export default function FixturesElevation({
   zoom:       number
   layers:     LayerView
   selectedId: string | null
-  onSelect:   (id: string) => void
+  /** Shift-picked / locked-with fixtures — drawn lit like the selected one (no handles). */
+  highlightIds?: Set<string>
+  onSelect:   (id: string, shift: boolean) => void
   /** P7: the edge being stretched, and grabbing a handle (omitted → no handles). */
   stretching?: { id: string; side: StretchSide } | null
   onStretchHandle?: (id: string, side: StretchSide) => void
@@ -240,14 +242,14 @@ export default function FixturesElevation({
           // Holes are cut under the cabinets by OpeningHoles; this is the frame + symbol.
           const o = openingOnWall(fx, wall, side, roomCx)
           if (!o) return null
-          const sel = fx.id === selectedId
+          const sel = fx.id === selectedId || !!highlightIds?.has(fx.id)
           const lp = layers.props(id, z)
           const color = sel ? '#f59e0b' : layers.color(id, '#94a3b8')
           const lw = layers.w(id, (sel ? 2 : 1.4) / z)
           const x = o.t0, w = o.t1 - o.t0, y = roomH - fx.z - fx.height, h = fx.height
           return (
             <g key={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
-              onPointerDown={e => { e.stopPropagation(); onSelect(fx.id) }}
+              onPointerDown={e => { e.stopPropagation(); onSelect(fx.id, e.shiftKey) }}
               onContextMenu={onContextMenu ? e => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, fx.id) } : undefined}>
               <rect x={x} y={y} width={w} height={h} fill="transparent" stroke={color} strokeWidth={lw} />
               <OpeningElev kind={fx.kind ?? ''} x={x} y={y} w={w} h={h} hingeT={o.hingeT} color={color} lw={lw} z={z} />
@@ -257,7 +259,7 @@ export default function FixturesElevation({
         }
         const on = fixtureOnFace(fx, f)
         if (!on) return null
-        const sel = fx.id === selectedId
+        const sel = fx.id === selectedId || !!highlightIds?.has(fx.id)
         const lp = layers.props(id, z)
         const color = clashIds?.has(fx.id) ? '#dc2626' : sel ? '#f59e0b' : layers.color(id, STROKE)
         const lw = layers.w(id, (sel ? 2 : 1.4) / z)
@@ -268,7 +270,7 @@ export default function FixturesElevation({
         const lines = showLabels ? wrapLabel(fx.label || fx.name, w * 0.9, fs) : []
         return (
           <g key={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
-            onPointerDown={e => { e.stopPropagation(); onSelect(fx.id) }}
+            onPointerDown={e => { e.stopPropagation(); onSelect(fx.id, e.shiftKey) }}
             onContextMenu={onContextMenu ? e => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, fx.id) } : undefined}>
             {/* P8: the model's true front shape when traced; else the box (+ inner panel for appliances). */}
             <rect x={x} y={y} width={w} height={h} fill={STROKE} fillOpacity={(fx.elev_shape?.lines.length ? 0.001 : 0.06) * (lp.fillOpacity ?? 1)}
