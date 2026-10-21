@@ -11,6 +11,7 @@ import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { Pt } from '@/src/lib/geometry'
 import { wallFrame, type WallSide } from '@/src/lib/benchtopAnchor'
 import { wrapLabel } from '@/src/lib/textWrap'
+import { fixtureDisplayName } from '@/src/lib/fixtureDisplayName'
 import { planShapePath } from '@/src/lib/fixturePlanShape'
 import { stretchedElevShape } from '@/src/lib/fixtureStretch'
 import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
@@ -267,7 +268,7 @@ export default function FixturesElevation({
         const y = roomH - fx.z - fx.height, h = fx.height
         // Same on-screen size as cabinet names (11 px); wraps to the item's width.
         const fs = 11 / z
-        const lines = showLabels ? wrapLabel(fx.label || fx.name, w * 0.9, fs) : []
+        const lines = showLabels ? wrapLabel(fixtureDisplayName(fx), w * 0.9, fs) : []
         return (
           <g key={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
             onPointerDown={e => { e.stopPropagation(); onSelect(fx.id, e.shiftKey) }}
@@ -320,7 +321,7 @@ export function FixturesElevationPrint({ fixtures, wall, roomCx, roomH, layers, 
         const lw = Math.max(layers.w(id, PEN.front * P), MIN_PEN * P / 0.6)
         const x = on.t0, w = on.t1 - on.t0
         const y = roomH - fx.z - fx.height, h = fx.height
-        const lines = showLabels ? wrapLabel(fx.label || fx.name, w * 0.9, fs) : []
+        const lines = showLabels ? wrapLabel(fixtureDisplayName(fx), w * 0.9, fs) : []
         return (
           <g key={fx.id} opacity={lp.opacity}>
             {fx.elev_shape?.lines.length ? (

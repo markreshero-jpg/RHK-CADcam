@@ -10,9 +10,10 @@
 // All sizes are physical mm × scale = model mm, so the viewBox stays in model
 // mm and the drawing prints at true 1:scale.
 'use client'
-import type { Room, Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
+import type { Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import { openingOnWall, fixtureChainSpans, fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { OpeningElev, FixturesElevationPrint } from './FixturesElevation'
+import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ } from '@/src/lib/geometry'
 import { PRINT_INK, pen, atLeastMin } from '@/src/lib/shopDrawings/pens'
@@ -112,11 +113,16 @@ function computeElevChain(cabs: CabinetInstance[], wall: Wall, extra: { t: numbe
 const INK  = PRINT_INK
 const INK2 = PRINT_INK
 const INK3 = PRINT_INK
+const NO_SELECT = () => {}
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
-  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [],
+  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [], benchtops = [], btInfo, btProfiles,
 }: {
+  /** Benchtops (z_benchtop_builder) — the canvas's band / waterfall drawing in print mode. Needs btInfo. */
+  benchtops?:    BenchtopInstance[]
+  btInfo?:       (bt: BenchtopInstance) => BtElevInfo
+  btProfiles?:   Record<string, BenchtopEdgeProfile>
   /** Floor → bench top, floor → basin rim (dim_elev_bench, see benchDims.ts). */
   benchHeights?: number[]
   wall:          Wall
@@ -617,6 +623,13 @@ export default function ElevationPrintSVG({
 
       {/* Cabinets */}
       {wallCabs.map(renderCab)}
+
+      {/* Benchtops on this face — over the cabinets, under the sinks / taps */}
+      {btInfo && benchtops.length > 0 && (
+        <BenchtopElevation benchtops={benchtops} walls={walls} wall={wall} side="face" roomCx={centroid(walls)} roomH={roomH}
+          zoom={2 / P} layers={layers} selectedId={null} info={btInfo} profiles={btProfiles ?? {}}
+          onSelect={NO_SELECT} interactive={false} print={{ P }} />
+      )}
 
       {/* Fixtures & appliances facing this wall (sinks, ovens, rangehoods …) — over the cabinets */}
       <FixturesElevationPrint fixtures={fixtures} wall={wall} roomCx={centroid(walls)} roomH={roomH} layers={layers} P={P} />

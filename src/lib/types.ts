@@ -693,6 +693,8 @@ export interface RoomFixture extends FixtureBody {
   z:          number
   wall_id:    string | null
   label:      string | null
+  /** Short name on the drawings (plan / elevation / print); null → fixtureDisplayName() generic. */
+  display_name?: string | null
   /** Locked with the other fixtures sharing this id — they move as one (fixtureGroups.ts). */
   lock_group?: string | null
   /** P4: the cabinet it sits on (it follows that cabinet), else null. */

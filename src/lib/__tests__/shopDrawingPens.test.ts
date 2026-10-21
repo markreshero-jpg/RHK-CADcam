@@ -27,11 +27,12 @@ const room = { id: 'r', name: 'Kitchen', height: 2400 } as unknown as Room
 // A top over the W1 run with a sink cutout and one butt join.
 const rect = (x0: number, y0: number, x1: number, y1: number) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
 const BT = {
-  id: 'bt1', room_id: 'r',
+  id: 'bt1', room_id: 'r', wall_id: 'W1', wall_side: 'face',
   segments: rect(0, 0, 1500, 600).map(([x, y], i, a) => ({ type: 'line', p0: { x, y }, p1: { x: a[(i + 1) % 4][0], y: a[(i + 1) % 4][1] } })),
   joins: [{ p0: { x: 600, y: 0 }, p1: { x: 600, y: 600 }, type: 'butt' }],
   cutout_polygons: [rect(800, 150, 1300, 450).map(([x, y]) => ({ x, y }))],
 } as unknown as BenchtopInstance
+const BT_INFO = () => ({ topZ: 900, thick: { total: 30, top: 30, buildUp: false }, defaultProfileId: null })
 // A sink in the top, and a wall oven against W1 (facing into the room) at 900 up.
 const fx = (id: string, category: string, name: string, x: number, y: number, width: number, depth: number, height: number, z: number) =>
   ({ id, room_id: 'r', category, kind: '', name, label: null, x, y, rotation: 0, width, depth, height, z, wall_id: null,
@@ -72,7 +73,7 @@ for (const scale of [20, 50]) {
 
     it('elevation: black lines, none thinner than the minimum pen', () => {
       const svg = renderToStaticMarkup(createElement(ElevationPrintSVG, {
-        wall: ROOM[0], walls: ROOM, cabinets: CABS, fixtures: FX, room, resolvedParts: new Map(), svgRef: () => {}, scale,
+        wall: ROOM[0], walls: ROOM, cabinets: CABS, fixtures: FX, benchtops: [BT], btInfo: BT_INFO, room, resolvedParts: new Map(), svgRef: () => {}, scale,
         layers: resolveLayerView(undefined, 'elevation'),
         show: { returnWalls: true, titleBlock: true },
       }))
@@ -133,5 +134,16 @@ describe('plan cabinet labels', () => {
     expect(svg).not.toMatch(/\d+×\d+/)
     // Cabinet "1" on W1 (front at y = 580): label 3.5mm × 20 = 70 → y = 580 - 63 = 517, centred on x = 300.
     expect(svg).toMatch(/<text x="300" y="517"[^>]*>1<\/text>/)
+  })
+})
+
+describe('benchtops on the printed elevation', () => {
+  it('draws the top band at its height, black, filled white', () => {
+    const svg = renderToStaticMarkup(createElement(ElevationPrintSVG, {
+      wall: ROOM[0], walls: ROOM, cabinets: CABS, benchtops: [BT], btInfo: BT_INFO, room, resolvedParts: new Map(), svgRef: () => {}, scale: 20,
+      layers: resolveLayerView(undefined, 'elevation'), show: { returnWalls: true, titleBlock: true },
+    }))
+    // top at 900 → y = 2400 - 900 = 1500; 30 thick → 1530; spans 0 → 1500 along W1.
+    expect(svg).toContain('points="0,1500 1500,1500 1500,1530 0,1530" fill="white" fill-opacity="1" stroke="#000"')
   })
 })

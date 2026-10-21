@@ -11,6 +11,7 @@ import type { RoomFixture } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { wrapLabel } from '@/src/lib/textWrap'
+import { fixtureDisplayName } from '@/src/lib/fixtureDisplayName'
 import { planShapePath } from '@/src/lib/fixturePlanShape'
 import { stretchedPlanShape } from '@/src/lib/fixtureStretch'
 import { PEN, MIN_PEN, PRINT_INK } from '@/src/lib/shopDrawings/pens'
@@ -107,7 +108,7 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, cl
   const lw = layers.w(id, (selected ? 2 : 1.4) / z)
   // Same on-screen size as cabinet names (11 px); wraps to the item's width.
   const fs = 11 / z
-  const lines = label ? wrapLabel(f.label || f.name, f.width * 0.9, fs) : []
+  const lines = label ? wrapLabel(fixtureDisplayName(f), f.width * 0.9, fs) : []
   const opening = f.category === 'opening'
   // P8: a traced plan shape replaces the box outline, symbol and front edge.
   const shaped = !opening && !!f.plan_shape?.lines?.length
@@ -308,7 +309,7 @@ export function FixturesPlanPrint({ fixtures, layers, P }: { fixtures: RoomFixtu
         const shaped = !!f.plan_shape?.lines?.length
         const r = ((f.rotation % 360) + 360) % 360
         const flip = r > 90 && r < 270
-        const lines = showLabels ? wrapLabel(f.label || f.name, f.width * 0.9, fs) : []
+        const lines = showLabels ? wrapLabel(fixtureDisplayName(f), f.width * 0.9, fs) : []
         return (
           <g key={f.id} transform={`translate(${f.x},${f.y}) rotate(${f.rotation})`} opacity={lp.opacity}>
             {shaped ? (

@@ -136,7 +136,20 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
   ≥ 0.13mm. Plan: over the benchtops. Elevation: over the cabinets (white fill, so it hides what's
   behind; appliances keep their inner panel). Follow the `fixture_*` / `fixture_labels` layer items.
   Doors / windows were already drawn.
-  Known: a plan label (e.g. "Sink") can sit over the cabinet number under it.
+  (Plan cabinet names moved to the front edge, sizes dropped, so the "Sink" label no longer clashes.)
+- **Fixture display names (Mark, 2026-10-21):** drawings show a short name, not the full product name.
+  The full detail lives in the spec block / schedules. New column `room_fixtures.display_name`
+  (migration_fixture_display_name.sql, applied) is set in the fixture sidebar under Label. Blank →
+  `fixtureDisplayName()` generic from the kind: Sink, Basin, Tap, Cooktop, Oven, Microwave, D/W,
+  Rangehood, Fridge; else the kind; else the category; else the name. Used by the canvas plan /
+  elevation labels and every print sheet. Schedules / lists still use label || name.
+- **Benchtops on elevations (Mark, 2026-10-21):** BenchtopElevation has a `print` mode (black, white fill,
+  pen widths, no labels / picking / profile codes). Elevation Views and the package draw it over the
+  cabinets and under the fixtures. Inputs come from the canvas (`bt3d` → btInfo / btProfiles).
+- **3D layer set (Mark, 2026-10-21: "drawer fronts missing / see-through, no benchtops"):** the 3D sheet
+  was using the Elevations set's 3D settings, and several saved sets hide fronts / tops in 3D (Schematic,
+  Kicks, No tops) or ghost the carcase (Face elevation). The 3D views now have their own picker
+  (`shop-3d-layer-set`), defaulting to the canvas's active set. Changing it re-captures.
 | S4 | **Multi-view sheets:** lay out several views on one page at one scale (island front + back); fall back to one per page | [ ] |
 | S5 | **CAD carry-over check.** Plan CAD already prints (Plan View). Elevation CAD needs z_CAD_tool **A6** first. Confirm text boxes with borders (the spec block) print right | [ ] (blocked on A6 for elevations) |
 | S6 | **Cabinet numbering:** #n tags under each cabinet on elevations, same as on the plan, from `cab.label` as it is (no renumbering) | [ ] |

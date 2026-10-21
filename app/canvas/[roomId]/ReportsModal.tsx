@@ -517,6 +517,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, projec
                   fixtures={roomFixtures}
                   benchtops={scope === 'room' ? benchtops : []}
                   benchTopZ={benchTopZ}
+                  btInfo={scope === 'room' ? bt3d?.info : undefined}
+                  btProfiles={bt3d?.profiles}
                   cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
                   resolvedParts={elevResolved}
                   layerSets={layerSets}

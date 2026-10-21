@@ -92,7 +92,10 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   ], [walls, room.name])
 
   // 3D views: auto shots, captured off-screen once per open (or on Re-render).
-  const threeDLayers = useMemo(() => resolveLayerView(elevSet, '3d'), [elevSet])
+  // Own layer set for the 3D views — the elevation set's 3D settings often hide
+  // fronts / tops or ghost the carcase (Mark, 2026-10-21). Defaults to the canvas's set.
+  const [threeDSet, setThreeDSetId] = useReportLayerSet('shop-3d-layer-set', layerSets, activeLayerSetId)
+  const threeDLayers = useMemo(() => resolveLayerView(threeDSet, '3d'), [threeDSet])
   const shots = useMemo(() => autoShots(walls, cabinets, room.room_dy ?? 2400), [walls, cabinets, room.room_dy])
   const [shotResults, setShotResults] = useState<Record<string, HiddenLineResult>>({})
   const [captureRun, setCaptureRun] = useState(0)
@@ -200,6 +203,9 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
         <ReportLayerSetSelect sets={layerSets} value={planSet} onChange={setPlanSetId} />
         <span className="text-[10px] text-gray-500 uppercase tracking-wider ml-2">Elevations</span>
         <ReportLayerSetSelect sets={layerSets} value={elevSet} onChange={setElevSetId} />
+        <span className="text-[10px] text-gray-500 uppercase tracking-wider ml-2">3D</span>
+        <ReportLayerSetSelect sets={layerSets} value={threeDSet}
+          onChange={id => { setThreeDSetId(id); setShotResults({}); setCaptureRun(n => n + 1) }} />
         {ticked.has(KEY_3D) && (
           <button onClick={() => { setShotResults({}); setCaptureRun(n => n + 1) }} disabled={!captured}
             title="Capture the 3D views again (after changing the room)"
@@ -264,6 +270,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                 <ElevationPrintSVG
                   wall={sheet.wall} walls={walls} room={room}
                   cabinets={cabinets} fixtures={fixtures} resolvedParts={elevResolved}
+                  benchtops={benchtops} btInfo={bt3d?.info} btProfiles={bt3d?.profiles}
                   benchHeights={benchTopZ ? benchDimHeights(sheet.wall.id, benchtops, benchTopZ, fixtures.filter(f => elevLayers.show(fixtureLayer(f.category)))) : []}
                   svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }}
                   scale={scale} layers={elevLayers} show={elevShow}

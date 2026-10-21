@@ -27,6 +27,7 @@ import {
 import { wallFrame, alongOf, offOf, wallContacts, btShowsOn, type WallSide } from '@/src/lib/benchtopAnchor'
 import type { BtThickness } from './useBenchtopCatalog'
 import { roundMm } from '@/src/lib/format'
+import { PRINT_INK, MIN_PEN, pen } from '@/src/lib/shopDrawings/pens'
 
 export interface BtElevInfo {
   /** Top-surface height above the floor = underside (base height) + thickness (P-g). */
@@ -38,8 +39,10 @@ export interface BtElevInfo {
 const dot = (a: Pt, b: Pt) => a.x * b.x + a.y * b.y
 
 export default function BenchtopElevation({
-  benchtops, walls, wall, side, roomCx, roomH, zoom, layers, selectedId, info, profiles, onSelect, interactive,
+  benchtops, walls, wall, side, roomCx, roomH, zoom, layers, selectedId, info, profiles, onSelect, interactive, print,
 }: {
+  /** Shop drawings (z_shop_drawings): black ink, white fill, pen-table widths at 1:P; no labels / picking. */
+  print?: { P: number }
   benchtops: BenchtopInstance[]
   walls: Wall[]
   wall: Wall
@@ -66,7 +69,10 @@ export default function BenchtopElevation({
   const z = zoom
   const lz = z / lineScale   // strokes only — finer on phones
   const lp = layers.props('benchtops', z)
-  const stroke = layers.color('benchtops', '#14b8a6')
+  const stroke = print ? PRINT_INK : layers.color('benchtops', '#14b8a6')
+  // Stroke widths: screen px on the canvas, pen-table paper mm in print.
+  const bandW = (sel: boolean) => print ? Math.max(layers.w('benchtops', pen('front', print.P)), MIN_PEN * print.P) : layers.w('benchtops', sel ? 2 : 1.25) / lz
+  const thinW = (px: number) => print ? pen('thin', print.P) : px / lz
   const showEdges = layers.show('benchtop_edges')
   const showJoins = layers.show('benchtop_joins')
 
@@ -84,7 +90,8 @@ export default function BenchtopElevation({
         const t0 = Math.min(...ts), t1 = Math.max(...ts)
         const yTop = roomH - topZ, yBot = yTop + thick.total
         const isSel = bt.id === selectedId
-        const fill = layers.lineDrawing ? 'none' : layers.color('benchtops', '#134e4a')
+        const fill = print ? 'white' : layers.lineDrawing ? 'none' : layers.color('benchtops', '#134e4a')
+        const fillOp = print ? 1 : layers.lineDrawing ? 0 : lp.fillOpacity
 
         // Front faces = exposed or not, edges whose outward normal faces the viewer.
         const fronts = segs.map((s, i) => ({ s, i, n: outwardNormal(segs, i) }))
@@ -140,8 +147,8 @@ export default function BenchtopElevation({
         }
         const legEl = (l: typeof legs[number]) => (
           <polygon key={`wf${l.i}`} points={legPts(l).map(q => q.join(',')).join(' ')}
-            fill={fill} fillOpacity={layers.lineDrawing ? 0 : 0.85 * lp.fillOpacity}
-            stroke={isSel ? '#f59e0b' : stroke} strokeWidth={1 / lz} opacity={lp.opacity}
+            fill={fill} fillOpacity={print ? 1 : 0.85 * fillOp}
+            stroke={isSel ? '#f59e0b' : stroke} strokeWidth={print ? bandW(false) : 1 / lz} opacity={lp.opacity}
             strokeDasharray={lp.strokeDasharray}
             style={{ cursor: 'pointer' }}
             onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
@@ -158,9 +165,9 @@ export default function BenchtopElevation({
 
             {/* Top band — its ends follow any mitred end-on legs */}
             <polygon points={bandPts}
-              fill={fill} fillOpacity={layers.lineDrawing ? 0 : lp.fillOpacity}
+              fill={fill} fillOpacity={fillOp}
               stroke={isSel ? '#f59e0b' : stroke}
-              strokeWidth={layers.w('benchtops', isSel ? 2 : 1.25) / lz}
+              strokeWidth={bandW(isSel)}
               strokeDasharray={lp.strokeDasharray} opacity={lp.opacity}
               style={{ cursor: 'pointer' }}
               onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
@@ -170,7 +177,7 @@ export default function BenchtopElevation({
 
             {/* Hit area: a top is only 20–40 mm tall (a few px zoomed out), so pick
                 over at least 16 screen px centred on the band. */}
-            {(() => {
+            {!print && (() => {
               const h = Math.max(thick.total, 16 / z)
               return (
                 <rect x={t0} y={yTop + thick.total / 2 - h / 2} width={t1 - t0} height={h}
@@ -184,13 +191,13 @@ export default function BenchtopElevation({
             <g style={{ pointerEvents: 'none' }} opacity={lp.opacity}>
               {/* Front-face steps (return legs end-on read as their own band) */}
               {[...steps].map(t => (
-                <line key={`st${t}`} x1={t} y1={yTop} x2={t} y2={yBot} stroke={stroke} strokeWidth={0.75 / lz} />
+                <line key={`st${t}`} x1={t} y1={yTop} x2={t} y2={yBot} stroke={stroke} strokeWidth={thinW(0.75)} />
               ))}
 
               {/* Build-up: worktop over strips / rails */}
               {thick.buildUp && thick.total > thick.top && (
                 <line x1={t0} y1={yTop + thick.top} x2={t1} y2={yTop + thick.top}
-                  stroke={stroke} strokeWidth={0.5 / lz} strokeDasharray={`${4 / z} ${2 / z}`} />
+                  stroke={stroke} strokeWidth={thinW(0.5)} strokeDasharray={`${4 / z} ${2 / z}`} />
               )}
 
 
@@ -198,20 +205,20 @@ export default function BenchtopElevation({
               {showJoins && (bt.joins ?? []).map((j, k) => {
                 const p = offOf(f, j.p0) >= offOf(f, j.p1) ? j.p0 : j.p1
                 const t = alongOf(f, p)
-                const col = layers.color('benchtop_joins', '#ef4444')
+                const col = print ? PRINT_INK : layers.color('benchtop_joins', '#ef4444')
                 return (
                   <g key={`j${k}`} opacity={layers.op('benchtop_joins')}>
                     <line x1={t} y1={yTop} x2={t} y2={yBot} stroke={col}
-                      strokeWidth={layers.w('benchtop_joins', 1.25) / lz} strokeDasharray={`${3 / z} ${2 / z}`} />
-                    <text x={t} y={yTop - 4 / z} textAnchor="middle" fontSize={8 / z} fill={col}>
+                      strokeWidth={print ? pen('thin', print.P) : layers.w('benchtop_joins', 1.25) / lz} strokeDasharray={`${3 / z} ${2 / z}`} />
+                    {!print && <text x={t} y={yTop - 4 / z} textAnchor="middle" fontSize={8 / z} fill={col}>
                       {j.type === 'mitre' ? 'M' : 'B'}
-                    </text>
+                    </text>}
                   </g>
                 )
               })}
 
               {/* Profile codes under the front edges */}
-              {showEdges && fronts.map(({ s, i }) => {
+              {showEdges && !print && fronts.map(({ s, i }) => {
                 const prof = profileOf(i)
                 if (!prof) return null
                 const ets = segSamples(s, 8).concat([s.p1]).map(p => alongOf(f, p))
@@ -225,11 +232,11 @@ export default function BenchtopElevation({
                 )
               })}
 
-              {/* Label above the band — stacked when tops share a span */}
-              <text x={(t0 + t1) / 2} y={yTop - (14 + 11 * k) / z} textAnchor="middle"
+              {/* Label above the band — stacked when tops share a span (not in print) */}
+              {!print && <text x={(t0 + t1) / 2} y={yTop - (14 + 11 * k) / z} textAnchor="middle"
                 fontSize={9 / z} fill={isSel ? '#fcd34d' : '#5eead4'} style={{ userSelect: 'none' }}>
                 {bt.label ?? 'Benchtop'} · {roundMm(topZ)}
-              </text>
+              </text>}
             </g>
           </Fragment>
         )

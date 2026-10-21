@@ -11,6 +11,7 @@ import type { RoomFixture, Wall } from '@/src/lib/types'
 import { fixtureCenter, backLeftForCenter, fixtureCorners, fixtureWallRef, fixtureAxes, type Clearances } from '@/src/lib/fixtureGeometry'
 import { wallFrame, alongOf } from '@/src/lib/benchtopAnchor'
 import { centroid } from '@/src/lib/geometry'
+import { fixtureDisplayName } from '@/src/lib/fixtureDisplayName'
 
 const CATEGORY_LABEL: Record<string, string> = {
   appliance: 'Appliance', sink: 'Sink', tap: 'Tap', decorative: 'Decorative', opening: 'Door / window',
@@ -119,6 +120,21 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
             className={inp.replace('text-right', '')}
           />
         </div>
+
+        {f.category !== 'opening' && (
+          // Short name on the drawings (plan / elevation / shop drawings); blank → the generic one.
+          <div>
+            <label className={lbl} title="Shown on plan, elevation and the shop drawings. Leave blank for the generic name.">Display name</label>
+            <input
+              key={f.id + (f.display_name ?? '')}
+              defaultValue={f.display_name ?? ''}
+              placeholder={fixtureDisplayName({ ...f, display_name: null })}
+              onBlur={e => { const v = e.target.value.trim() || null; if (v !== (f.display_name ?? null)) onUpdate(f.id, { display_name: v }) }}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+              className={inp.replace('text-right', '')}
+            />
+          </div>
+        )}
 
         {f.category !== 'opening' && (
           // This job's copy — the schedule prints these; editing doesn't touch the library.
