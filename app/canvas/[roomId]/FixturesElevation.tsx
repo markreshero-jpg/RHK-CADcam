@@ -16,6 +16,8 @@ import { planShapePath } from '@/src/lib/fixturePlanShape'
 import { stretchedElevShape } from '@/src/lib/fixtureStretch'
 import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 import { roundMm } from '@/src/lib/format'
+import { useLabelDrag } from './useLabelDrag'
+import type { LabelOff } from '@/src/lib/labelOffsets'
 import { PEN, MIN_PEN, PRINT_INK } from '@/src/lib/shopDrawings/pens'
 
 
@@ -162,8 +164,10 @@ function ElevClearance({ box, others, len, roomH, z, bg }: {
 
 export default function FixturesElevation({
   fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, highlightIds, onSelect, stretching, onStretchHandle, ghost, onMoveHandle,
-  obstacles = [], showClearance = false, interactive = true, clashIds, onContextMenu,
+  obstacles = [], showClearance = false, interactive = true, clashIds, onContextMenu, onLabelMove,
 }: {
+  /** The selected fixture's name dragged (elevation offset from its box centre, mm). */
+  onLabelMove?: (id: string, off: LabelOff) => void
   fixtures:   RoomFixture[]
   wall:       Wall
   side:       WallSide
@@ -203,6 +207,7 @@ export default function FixturesElevation({
     ) : null
   const z = zoom
   const showLabels = layers.show('fixture_labels')
+  const labelDrag = useLabelDrag(onLabelMove)
 
   // Ghost: dashed outline at the landing spot on this face (openings: in this wall).
   const ghostEl = (() => {
@@ -285,14 +290,20 @@ export default function FixturesElevation({
               <rect x={x + w * 0.08} y={y + h * 0.08} width={w * 0.84} height={h * 0.84}
                 fill="none" stroke={color} strokeWidth={lw * 0.6} />
             )}
-            {showLabels && (
-              <text x={x + w / 2} y={y + h / 2} fontSize={fs} fill={color} textAnchor="middle" dominantBaseline="central"
-                style={{ pointerEvents: 'none', userSelect: 'none' }}>
+            {showLabels && (() => {
+              const off = labelDrag.offOf(fx.id, fx.label_offsets?.elev) ?? { x: 0, y: 0 }
+              const cx = x + w / 2 + off.x, cy = y + h / 2 + off.y
+              const drag = interactive && fx.id === selectedId && onLabelMove ? labelDrag.bind(fx.id, off, (dx, dy) => ({ x: dx / z, y: dy / z })) : undefined
+              return (
+              <text x={cx} y={cy} fontSize={fs} fill={color} textAnchor="middle" dominantBaseline="central"
+                {...drag} style={drag?.style ?? { pointerEvents: 'none', userSelect: 'none' }}>
+                {drag && <title>Drag to move the name · right-click → Reset label position</title>}
                 {lines.map((ln, i) => (
-            <tspan key={i} x={x + w / 2} y={y + h / 2 + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
+            <tspan key={i} x={cx} y={cy + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
           ))}
               </text>
-            )}
+              )
+            })()}
             {handles(fx, x, y, w, h)}
           </g>
         )
@@ -334,13 +345,17 @@ export function FixturesElevationPrint({ fixtures, wall, roomCx, roomH, layers, 
                 <rect x={x + w * 0.08} y={y + h * 0.08} width={w * 0.84} height={h * 0.84} fill="none" stroke={PRINT_INK} strokeWidth={lw * 0.6} />
               )}
             </>}
-            {lines.length > 0 && (
-              <text x={x + w / 2} y={y + h / 2} fontSize={fs} fill={PRINT_INK} textAnchor="middle" dominantBaseline="central">
+            {lines.length > 0 && (() => {
+              // Moved on the canvas (label_offsets.elev).
+              const cx = x + w / 2 + (fx.label_offsets?.elev?.x ?? 0), cy = y + h / 2 + (fx.label_offsets?.elev?.y ?? 0)
+              return (
+              <text x={cx} y={cy} fontSize={fs} fill={PRINT_INK} textAnchor="middle" dominantBaseline="central">
                 {lines.map((ln, i) => (
-                  <tspan key={i} x={x + w / 2} y={y + h / 2 + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
+                  <tspan key={i} x={cx} y={cy + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
                 ))}
               </text>
-            )}
+              )
+            })()}
           </g>
         )
       })}

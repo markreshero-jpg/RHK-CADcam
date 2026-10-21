@@ -16,6 +16,8 @@ import { planShapePath } from '@/src/lib/fixturePlanShape'
 import { stretchedPlanShape } from '@/src/lib/fixtureStretch'
 import { PEN, MIN_PEN, PRINT_INK } from '@/src/lib/shopDrawings/pens'
 import type { FixtureSnap, StretchSide, Clearances } from '@/src/lib/fixtureGeometry'
+import { useLabelDrag, type LabelDragProps } from './useLabelDrag'
+import { toFrame, type LabelOff } from '@/src/lib/labelOffsets'
 
 const STROKE = '#0ea5e9'
 const FILL   = '#0ea5e9'
@@ -96,9 +98,13 @@ function Symbol({ f, z, color, lw }: { f: Body; z: number; color: string; lw: nu
   </>
 }
 
-function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, clash = false }: {
+function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, clash = false, labelOff, labelDrag }: {
   f: Body; x: number; y: number; rotation: number; z: number
   layers: LayerView; selected: boolean; ghost: boolean; label: boolean
+  /** Moved label (label_offsets.plan): offset from the centre in the item's frame. */
+  labelOff?: LabelOff
+  /** Pointer props when the label can be dragged (selected fixture). */
+  labelDrag?: LabelDragProps
   /** P4: overlaps a cabinet — drawn red. */
   clash?: boolean
 }) {
@@ -127,15 +133,19 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, cl
         : <Symbol f={f} z={z} color={color} lw={lw} />}
       {/* front edge */}
       {!opening && !shaped && <line x1={0} y1={f.depth} x2={f.width} y2={f.depth} stroke={color} strokeWidth={lw * 2.2} />}
-      {label && !opening && (
-        <text x={f.width / 2} y={f.depth / 2} fontSize={fs} fill={color} textAnchor="middle" dominantBaseline="central"
-          transform={flip ? `rotate(180 ${f.width / 2} ${f.depth / 2})` : undefined}
-          style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      {label && !opening && (() => {
+        const cx = f.width / 2 + (labelOff?.x ?? 0), cy = f.depth / 2 + (labelOff?.y ?? 0)
+        return (
+        <text x={cx} y={cy} fontSize={fs} fill={color} textAnchor="middle" dominantBaseline="central"
+          transform={flip ? `rotate(180 ${cx} ${cy})` : undefined}
+          {...labelDrag} style={labelDrag?.style ?? { pointerEvents: 'none', userSelect: 'none' }}>
+          {labelDrag && <title>Drag to move the name · right-click → Reset label position</title>}
           {lines.map((ln, i) => (
-            <tspan key={i} x={f.width / 2} y={f.depth / 2 + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
+            <tspan key={i} x={cx} y={cy + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
           ))}
         </text>
-      )}
+        )
+      })()}
     </g>
   )
 }
@@ -227,8 +237,10 @@ function StretchHandles({ f, z, active, onGrab, onMove }: {
 export default function FixturesPlan({
   fixtures, ghost, ghostBody, hiddenId, selectedId, highlightIds, zoom, layers, interactive, clashIds,
   stretching, onStretchHandle, onMoveHandle, clearance,
-  onPointerDown, onContextMenu, onDoubleClick,
+  onPointerDown, onContextMenu, onDoubleClick, onLabelMove,
 }: {
+  /** The selected fixture's name dragged (plan offset in its own frame, mm). */
+  onLabelMove?: (id: string, off: LabelOff) => void
   fixtures:   RoomFixture[]
   ghost:      FixtureSnap | null
   ghostBody:  Body | null
@@ -256,6 +268,7 @@ export default function FixturesPlan({
 }) {
   const z = zoom
   const showLabels = layers.show('fixture_labels')
+  const labelDrag = useLabelDrag(onLabelMove)
   return (
     <g>
       {fixtures.map(f => {
@@ -268,7 +281,14 @@ export default function FixturesPlan({
             onDoubleClick={e => { e.stopPropagation(); onDoubleClick(e, f.id) }}
           >
             <FixtureShape f={f} x={f.x} y={f.y} rotation={f.rotation} z={z} layers={layers}
-              selected={f.id === selectedId || !!highlightIds?.has(f.id)} ghost={false} label={showLabels} clash={clashIds?.has(f.id)} />
+              selected={f.id === selectedId || !!highlightIds?.has(f.id)} ghost={false} label={showLabels} clash={clashIds?.has(f.id)}
+              labelOff={labelDrag.offOf(f.id, f.label_offsets?.plan)}
+              labelDrag={interactive && f.id === selectedId && onLabelMove ? (() => {
+                // Screen px → mm → the fixture's own frame (it's drawn rotated).
+                const r = f.rotation * Math.PI / 180
+                const u = { x: Math.cos(r), y: Math.sin(r) }, v = { x: -Math.sin(r), y: Math.cos(r) }
+                return labelDrag.bind(f.id, f.label_offsets?.plan ?? { x: 0, y: 0 }, (dx, dy) => toFrame(dx / z, dy / z, u, v))
+              })() : undefined} />
             {(interactive || stretching?.id === f.id) && f.id === selectedId && onStretchHandle && (
               <StretchHandles f={f} z={z} active={stretching?.id === f.id ? stretching.side : null}
                 onGrab={side => onStretchHandle(f.id, side)}
@@ -320,14 +340,18 @@ export function FixturesPlanPrint({ fixtures, layers, P }: { fixtures: RoomFixtu
               <Symbol f={f} z={z} color={PRINT_INK} lw={lw} />
               <line x1={0} y1={f.depth} x2={f.width} y2={f.depth} stroke={PRINT_INK} strokeWidth={Math.max(lw, PEN.medium * P)} />
             </>}
-            {lines.length > 0 && (
-              <text x={f.width / 2} y={f.depth / 2} fontSize={fs} fill={PRINT_INK} textAnchor="middle" dominantBaseline="central"
-                transform={flip ? `rotate(180 ${f.width / 2} ${f.depth / 2})` : undefined}>
+            {lines.length > 0 && (() => {
+              // Moved on the canvas (label_offsets.plan), in the fixture's own frame.
+              const cx = f.width / 2 + (f.label_offsets?.plan?.x ?? 0), cy = f.depth / 2 + (f.label_offsets?.plan?.y ?? 0)
+              return (
+              <text x={cx} y={cy} fontSize={fs} fill={PRINT_INK} textAnchor="middle" dominantBaseline="central"
+                transform={flip ? `rotate(180 ${cx} ${cy})` : undefined}>
                 {lines.map((ln, i) => (
-                  <tspan key={i} x={f.width / 2} y={f.depth / 2 + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
+                  <tspan key={i} x={cx} y={cy + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
                 ))}
               </text>
-            )}
+              )
+            })()}
           </g>
         )
       })}

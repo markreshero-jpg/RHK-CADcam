@@ -419,7 +419,8 @@ export default function ElevationPrintSVG({
         {/* Cabinet name just under the cabinet's bottom edge (Mark, 2026-10-21) — for floor
             units that's between the floor line and the floor dimension chain; size in the middle. */}
         {hasLabel && (
-          <text x={rx + cab.dx / 2} y={ry + cab.dy + labelFsL * 0.75}
+          <text x={rx + cab.dx / 2 + (cab.label_offsets?.elev?.x ?? 0)}
+            y={cab.label_offsets?.elev ? ry + cab.dy / 2 + cab.label_offsets.elev.y : ry + cab.dy + labelFsL * 0.75}
             textAnchor="middle" dominantBaseline="middle" opacity={layers.op('cabinet_labels')}
             fontSize={labelFsL} fontWeight="bold" fill={INK} fontFamily="Arial, Helvetica, sans-serif">
             {cab.label ?? '—'}

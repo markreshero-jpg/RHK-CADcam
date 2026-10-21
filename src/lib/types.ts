@@ -145,6 +145,8 @@ export interface CabinetInstance {
   wall_id: string | null
   cabinet_definition_id: string | null
   label: string | null
+  /** Label moved on the canvas (plan / elevation) — offsets from the centre, mm. */
+  label_offsets?: import('./labelOffsets').LabelOffsets | null
   assembly_class: AssemblyClass
   pos_x: number
   pos_y: number
@@ -697,6 +699,8 @@ export interface RoomFixture extends FixtureBody {
   label:      string | null
   /** Short name on the drawings (plan / elevation / print); null → fixtureDisplayName() generic. */
   display_name?: string | null
+  /** Label moved on the canvas (plan / elevation) — offsets from the centre, mm. */
+  label_offsets?: import('./labelOffsets').LabelOffsets | null
   /** Locked with the other fixtures sharing this id — they move as one (fixtureGroups.ts). */
   lock_group?: string | null
   /** P4: the cabinet it sits on (it follows that cabinet), else null. */

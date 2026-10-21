@@ -379,7 +379,9 @@ export default function PlanViewReportSVG({
         const labelFs = layers.w('cabinet_labels', fontSize)
         // Shop drawings: the name sits just inside the cabinet's front edge (Mark, 2026-10-21) —
         // name only, no size text — so it stays clear of sinks / hobs in the middle of the top.
-        const labelAt = labelPt ?? toPlanC(cab.dx / 2, Math.max(cab.dz / 2, cab.dz - labelFs * 0.9))
+        // Moved on the canvas (label_offsets.plan): centre + offset in the cabinet's frame.
+        const lo = cab.label_offsets?.plan
+        const labelAt = lo ? toPlanC(cab.dx / 2 + lo.x, cab.dz / 2 + lo.y) : labelPt ?? toPlanC(cab.dx / 2, Math.max(cab.dz / 2, cab.dz - labelFs * 0.9))
         const hasLabel = layers.show('cabinet_labels') && !!cab.label
         return (
           <g key={cab.id}>

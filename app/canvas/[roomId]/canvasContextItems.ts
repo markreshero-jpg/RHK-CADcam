@@ -10,8 +10,10 @@ export function buildContextMenuGroups({
   onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, insertFavourites, onInsertDefinition, onEditInsertList, onSplit,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
-  onUpdateBulkhead,
+  onUpdateBulkhead, onResetLabel,
 }: {
+  /** The right-clicked cabinet's / fixture's label was moved in this view: put it back. */
+  onResetLabel?: () => void
   cabId?: string
   wallId?: string
   elevWallId?: string
@@ -98,6 +100,7 @@ export function buildContextMenuGroups({
         { label: 'View 3D / elevations', onClick: () => fixture.onView(fixtureId), color: 'blue' },
         { label: 'Move', onClick: () => fixture.onMove(fixtureId) },
         { label: 'Turn 90°', onClick: () => fixture.onTurn(fixtureId) },
+        ...(onResetLabel ? [{ label: 'Reset label position', onClick: onResetLabel }] : []),
       ],
       [{ label: 'Delete', onClick: () => fixture.onDelete(fixtureId), color: 'red' }],
     ]
@@ -261,6 +264,8 @@ export function buildContextMenuGroups({
       disabled: !clipboard,
     },
   ])
+
+  if (onResetLabel) groups.push([{ label: 'Reset label position', onClick: onResetLabel }])
 
   const isMultiSel = multiSelect && multiSelect.length > 1 && cabId && multiSelect.includes(cabId)
   if (isMultiSel && onDeleteMultiple) {

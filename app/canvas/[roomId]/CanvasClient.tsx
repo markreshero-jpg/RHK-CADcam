@@ -27,6 +27,7 @@ import { useRightDragPan } from './useRightDragPan'
 import { useIsPhone } from '@/src/lib/usePhone'
 import PhoneDrawerTab from './PhoneDrawerTab'
 import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
+import { withLabelOff, type LabelOff, type LabelView } from '@/src/lib/labelOffsets'
 import { filterHiddenMap } from '@/src/lib/resolver/filterHidden'
 import { invalidateResolverCaches } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { useCanvasHistory } from './useCanvasHistory'
@@ -704,6 +705,38 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Live {field} values (z_CAD_tool C2): drawn + printed notes show them; the editor keeps the tokens.
   const cadFields = useCadFields({ project, room, resolvedParts, fixtures })
   const [blockSaveReq, setBlockSaveReq] = useState(0)
+  // Moved cabinet / fixture labels (label_offsets; plan + elevation, printed too).
+  const labelView: LabelView = canvasView === 'elevation' ? 'elev' : 'plan'
+  function saveCabLabel(id: string, view: LabelView, off: LabelOff | null) {
+    const cab = cabinets.find(c => c.id === id)
+    if (!cab) return
+    captureSnapshot()
+    if (off) useTutorial.getState().emit('label_moved')
+    const label_offsets = withLabelOff(cab.label_offsets, view, off)
+    // Straight to the row — a label move needs no re-resolve (dbUpdateCabinet would).
+    setCabinets(prev => prev.map(c => c.id === id ? { ...c, label_offsets } : c))
+    void supabase.from('cabinet_instances').update({ label_offsets }).eq('id', id)
+      .then(({ error }) => { if (error) console.error('[cabinet label]', error) })
+  }
+  function saveFixtureLabel(id: string, view: LabelView, off: LabelOff | null) {
+    const f = fixtures.find(x => x.id === id)
+    if (!f) return
+    if (off) useTutorial.getState().emit('label_moved')
+    fx.update(id, { label_offsets: withLabelOff(f.label_offsets, view, off) })
+  }
+  const menuLabelReset = (() => {
+    const m = contextMenu
+    if (m?.fixtureId) {
+      const id = m.fixtureId
+      return fixtures.find(f => f.id === id)?.label_offsets?.[labelView] ? () => { setContextMenu(null); saveFixtureLabel(id, labelView, null) } : undefined
+    }
+    if (m?.cabId) {
+      const id = m.cabId
+      return cabinets.find(c => c.id === id)?.label_offsets?.[labelView] ? () => { setContextMenu(null); saveCabLabel(id, labelView, null) } : undefined
+    }
+    return undefined
+  })()
+
   // Shop drawings 3D views saved from the 3D view (z_shop_drawings S8).
   function saveShopShots(shots: Shot3D[]) {
     setRoomState(prev => ({ ...prev, shop_3d_shots: shots }))
@@ -2909,6 +2942,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               onCabinetPointerDown={onCabinetPointerDown}
               onCabinetCrosshairClick={onCabinetCrosshairClick}
               onCabinetContextMenu={onCabinetContextMenu}
+              onCabLabelMove={(id, off) => saveCabLabel(id, 'plan', off)}
               onCabinetDoubleClick={onCabinetDoubleClick}
               onCabMarkerClick={onCabMarkerClick}
               cabMoveDrag={cabMoveDrag}
@@ -3018,6 +3052,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                   highlightIds={fixtureHighlight}
                   onPointerDown={(e, id) => pickFixture(id, e.shiftKey)}
                   onContextMenu={(e, id) => fixtureMenu(id, e.clientX, e.clientY)}
+                  onLabelMove={(id, off) => saveFixtureLabel(id, 'plan', off)}
                   onDoubleClick={(_e, id) => { setSelected({ type: 'fixture', id }); setViewFixtureId(id) }}
                 />
               }
@@ -3112,6 +3147,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onCabinetContextMenu={onCabinetContextMenu}
             onBlankWallContextMenu={onBlankWallContextMenu}
             onFixtureContextMenu={(e, id) => fixtureMenu(id, e.clientX, e.clientY)}
+            onCabLabelMove={(id, off) => saveCabLabel(id, 'elev', off)}
+            onFixtureLabelMove={(id, off) => saveFixtureLabel(id, 'elev', off)}
             onShiftSelectCabinet={id => {
               setSelected({ type: 'cabinet', id })
               setMultiSelect(prev => {
@@ -3574,6 +3611,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeleteWall: handleDeleteWall,
             onDeleteCabinet: id => void handleDeleteCabinet(id),
             onUpdateBulkhead: (id, next) => { setContextMenu(null); captureSnapshot(); void handleUpdateCabinet(id, { bulkhead: next }) },
+            onResetLabel: menuLabelReset,
             onDeleteMultiple: ids => void handleDeleteMultipleCabinets(ids),
             onInsertCabinet: (wId, t, cls) => { void handleInsertCabinetAtElevT(wId, t, cls) },
             onInsertAdjacent: (cabId, type, side) => { void handleInsertAdjacent(cabId, type, side) },

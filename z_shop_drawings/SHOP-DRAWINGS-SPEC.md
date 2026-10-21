@@ -234,6 +234,13 @@ How it's built (plan):
 - No cabinet names on the plan sheet, no cabinet sizes on the elevation sheets, whatever the layer set
   (`without()` in ShopDrawingsReport). The standalone Plan View / Elevation Views reports still follow the set.
 
+### Movable labels (Mark, 2026-10-21)
+- Cabinet + fixture names can be dragged on the canvas plan and elevation once the item is selected
+  (`useLabelDrag`, pointer capture). Saved per item in `label_offsets` {plan, elev} (migration_label_offsets.sql,
+  applied): plan = offset from the centre in the item's own frame, elev = offset from the elevation box centre.
+  Right-click → Reset label position clears the current view. Plan View / Elevation Views / shop drawings print
+  at the same spot. Tutorial `move_label`.
+
 ### Job Reports — any room (fix, 2026-10-21)
 - The drawing reports (shop drawings, plan, elevations, cabinet sheets) used to draw only the open room in
   Job Reports, with no benchtops (so no tops in the 3D views either). Job Reports now shows a **Room:** picker;

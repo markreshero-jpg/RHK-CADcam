@@ -673,6 +673,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Production → Shop Drawings…: your view is in the 3D views row (✕ removes it). Small rooms put 4 views on a sheet, bigger rooms 2.',
       target: 'menu-Production', canvas: true, done: c => c.report === 'shop_drawings' },
   ]},
+  { id: 'move_label', level: 'basics', topic: 'cabinets', title: 'Move a cabinet or fixture name',
+    blurb: 'Drag a name clear of other lines on plan or elevation; the PDFs follow.', keywords: 'label name move drag position text cabinet fixture plan elevation reset', steps: [
+    { id: 'select', title: 'Select the cabinet (or fixture)',
+      body: 'Click a cabinet or fixture once so it is selected — its name can then be dragged.',
+      canvas: true, done: c => c.selected?.type === 'cabinet' || c.selected?.type === 'fixture' },
+    { id: 'drag', title: 'Drag its name',
+      body: 'Press on the name and drag it where you want it. Plan and elevation each keep their own spot, and the Plan / Elevation / Shop Drawings PDFs print it there.',
+      canvas: true, done: (c, s) => ev(c, 'label_moved') > ev(s, 'label_moved') },
+    { id: 'reset', title: 'Right-click → Reset label position',
+      body: 'To put a name back where it started, right-click the item and choose Reset label position.',
+      canvas: true, done: () => true },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
