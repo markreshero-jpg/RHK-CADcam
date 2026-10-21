@@ -280,6 +280,11 @@ Esc cancels; one undo step.
     already +Z out of the wall, back on the wall face). mount_height 1060 (outlets ~250 above a 900 top;
     underside = mixer lever, 88 below the outlet centres). No benchtop cutout. Shapes traced headless.
     Not checked in-app.
+  - 2026-10-21 (user): **Mizu Soothe MK2 wall outlet 250** (Reece 2265233, `z_fixtures/models/Taps/`) —
+    tap row, **wall mount**, spout only (mixer is a separate item), 65 W × 251.5 D × 65 H from the bbox
+    (scale 1000, no rotation: GLB already +Z out of the wall, origin = wall face at the Ø65 plate centre).
+    mount_height 1117.5 (outlet centre 1150, ~250 above a 900 top). No benchtop cutout. Shapes traced
+    headless. Not checked in-app.
 
 - 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
   section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`
