@@ -48,7 +48,8 @@ BFKW,Base filler - kick height - wide,Filler,-,confirmed,corner default 40 face 
 BFFW,Base filler - floor - wide,Filler,-,confirmed,
 WF,Wall (overhead) filler,Filler,-,confirmed,hangs - no K/F variant
 WFW,Wall (overhead) filler - wide,Filler,-,confirmed,decided 2026-08-06
-TFK,Tall filler - at kick height,Filler,-,unconfirmed,extrapolated - confirm
+TFK,Tall filler - at kick height,Filler,-,confirmed,in library 2026-10-21 - 70 default
+TFKW,Tall filler - kick height - wide,Filler,-,confirmed,in library 2026-10-21 - 30 default
 TFF,Tall filler - runs to floor,Filler,-,unconfirmed,extrapolated - confirm
 KB,Kickboard,Kick,-,confirmed,height from job properties (normally 140mm) - never in code
 BH,Bulkhead / infill,Bulkhead,-,proposed,sized off soffit height (room/job) - app soffit behaviour reported buggy 2026-08-06
