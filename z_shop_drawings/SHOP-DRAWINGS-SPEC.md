@@ -1,6 +1,6 @@
 # Shop Drawings Package — Spec
 
-Status: **S1 built 2026-10-21** (in-app check pending). Next: S2.
+Status: **S1 checked by Mark 2026-10-21. S2 built 2026-10-21** (print check pending). Next: S3.
 
 Reference: `z_sample_planscabinet_vision/RHK6456 - Suzie and Jeff Morris - Kitchen Shop Drawings.pdf`
 (the Cabinet Vision set we're replacing: plan, wall elevations, island elevations, 3D, doors-off interior).
@@ -81,7 +81,29 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
   draws `ShopTitleBlock` at the page foot as a second svg2pdf pass, and the fit check uses the
   smaller area. Elevations number Sheet n of N across the selected walls.
 - Logo upload takes PNG / JPEG only. Checked headless: the PNG embeds and all text stays real PDF text.
-| S2 | **Pen table + crispness pass** on PlanViewReportSVG / ElevationPrintSVG: shared paper-mm pen table, remove opacity/raster, check overlapping strokes; zoom + print check | [ ] |
+| S2 | **Pen table + crispness pass** on PlanViewReportSVG / ElevationPrintSVG: shared paper-mm pen table, remove opacity/raster, check overlapping strokes; zoom + print check | [x] built 2026-10-21; Mark's zoom + A3 print check pending |
+
+### S2 notes (as built)
+
+- `src/lib/shopDrawings/pens.ts`: `PEN` = ground 0.7 / heavy 0.5 / medium 0.35 / front 0.25 /
+  thin 0.18 / fine 0.13 (paper mm), `PRINT_INK` = #000, `pen(name, P)`, `atLeastMin()`.
+- PlanViewReportSVG: walls heavy; carcase outline medium; case parts / kicks / bins / drawer boxes /
+  runners / internals / swings / drawer lines / dims thin; drawer fronts front; hatch fine.
+  The greys (#222 / #333 / #777) are now black; vertical case parts keep a grey *fill*. The 0.75-opacity
+  row-name text is now solid.
+- ElevationPrintSVG: carcase / openings medium; fronts / kicks front; internals / dims / handles /
+  hinges / chevrons thin; floor line ground. #111 / #555 / #999 are all black.
+- Both: every layer-weighted line goes through `lw()` = `atLeastMin(layers.w(...))`, so a layer
+  set can thicken lines but never take them below 0.13mm. Layer-set opacity / ghost stays (the user's
+  choice). `opacity="1"` writes nothing into the PDF (checked), so those attributes stay.
+- **Fonts:** svg2pdf only knows normal / bold. The elevation's `fontWeight="600"` cabinet labels were
+  printing in **Times**; now bold. The root `<svg>` of both drawings sets Arial/Helvetica, so every
+  text inherits it. Checked: the exported PDF uses only Helvetica + Helvetica-Bold.
+- Overlapping strokes: coincident black lines at the same width print the same as one line, so no
+  dedupe was done.
+- Test `src/lib/__tests__/shopDrawingPens.test.ts`: renders both SVGs at 1:20 and 1:50 and
+  asserts every stroke is #000 and ≥ 0.13mm, and that there are no numeric font weights. It fails on the
+  pre-S2 code.
 | S3 | **Package export.** Shop Drawings dialog (scale default 1:20, paper default A3L, sheet list with ticks, interior-elevation ticks, fit warnings); one multi-page jsPDF; Sheet n of N; filename `shop-drawings-{job}-{room}.pdf`; enable the menu item | [ ] |
 | S4 | **Multi-view sheets:** lay out several views on one page at one scale (island front + back); fall back to one per page | [ ] |
 | S5 | **CAD carry-over check.** Plan CAD already prints (Plan View). Elevation CAD needs z_CAD_tool **A6** first. Confirm text boxes with borders (the spec block) print right | [ ] (blocked on A6 for elevations) |

@@ -27,6 +27,7 @@ import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { planShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { caseBox, casePlanCorners, isSide, tkPlanBox, tkPlanCorners } from '@/src/lib/jointDrilling'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
+import { PRINT_INK, pen, atLeastMin } from '@/src/lib/shopDrawings/pens'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { customExtents } from '@/src/lib/customPartBox'
@@ -136,10 +137,11 @@ export default function PlanViewReportSVG({
   const maxY = Math.max(...pts.map(p => p.y))
 
   // ── Scale-aware sizes (physical mm × scale = model mm) ─────────────────────
-  const sw       = 0.45 * P   // wall stroke
+  // Pens (z_shop_drawings S2): paper-mm widths from the shared pen table, all black.
+  const sw       = pen('heavy', P)   // wall stroke
   const fontSize = 3.5 * P    // cabinet label
 
-  const dimSW = 0.3 * P       // dimension line stroke
+  const dimSW = pen('thin', P)  // dimension line stroke
   const dimFS = 2.6 * P       // dimension text
   const tickH = 1.1 * P       // dimension tick half-length
   // Chain row offsets from outer wall face (innermost → outermost, like canvas 25/50/75)
@@ -149,12 +151,12 @@ export default function PlanViewReportSVG({
   const ROW_OPEN_STEP = 4 * P   // doors / windows row sits where the overall was; the overall steps out
   const ROW_BH_STEP   = 4 * P   // bulkhead row (z_bulkhead) sits next to the overheads; rows past it step out
 
-  const swingSW = 0.25 * P    // door swing arc
-  const drawSW  = 0.25 * P    // drawer indicator line
-  const INK = '#000'
-  const INK2 = '#222'
-  const INK3 = '#333'
-  const CARCASE_LINE = '#777'
+  const swingSW = pen('thin', P)  // door swing arc
+  const drawSW  = pen('thin', P)  // drawer indicator line
+  const INK = PRINT_INK
+  const CASE_FILL = '#bdbdbd'   // vertical case parts (fill only)
+  // Layer-weighted line width, never below the minimum pen.
+  const lw = (id: string, base: number) => atLeastMin(layers.w(id, base), P)
   const HATCH_ID = 'plan-report-wall-hatch'
 
   // ── ViewBox padding — extend for dims when shown ──────────────────────────
@@ -186,7 +188,7 @@ export default function PlanViewReportSVG({
 
   // ── One dimension-chain line (main line + boundary ticks + segment labels) ─
   function dimLine(wall: Wall, out: { x: number; y: number }, rowDist: number, segs: Seg[], key: string, item: string, name?: string) {
-    const lineW = layers.w(item, dimSW), dash = lp(item).strokeDasharray
+    const lineW = lw(item, dimSW), dash = lp(item).strokeDasharray
     const wd = wallDir(wall)
     const thick = wall.wall_type === 'island' ? 0 : wall.thickness
     const textAngle = Math.cos(toRad(wall.angle)) < -0.001 ? wall.angle + 180 : wall.angle
@@ -226,7 +228,7 @@ export default function PlanViewReportSVG({
           const flipped = textAngle !== wall.angle
           return (
             <text x={p.x} y={p.y} transform={`rotate(${textAngle}, ${p.x}, ${p.y})`} textAnchor={flipped ? 'start' : 'end'}
-              dominantBaseline="middle" fontSize={dimFS * 0.85} fill={INK} opacity={0.75}
+              dominantBaseline="middle" fontSize={dimFS * 0.85} fill={INK}
               fontFamily="Arial, Helvetica, sans-serif">{name}</text>
           )
         })()}
@@ -239,7 +241,7 @@ export default function PlanViewReportSVG({
   // the wall line to the cabinet back (0 for front cabinets; wall thickness for
   // back-side cabinets, whose back sits on the outer face).
   function depthDim(wall: Wall, inward: { x: number; y: number }, tPos: number, dz: number, sign: 1 | -1, key: string, item: string, backOffset = 0) {
-    const lineW = layers.w(item, dimSW)
+    const lineW = lw(item, dimSW)
     const wd = wallDir(wall)
     // Clear the return wall joined at this end before the paper-space gap.
     const off = returnWallThickness(wall, walls, tPos === 0 ? 'start' : 'end') + 5 * P
@@ -269,13 +271,14 @@ export default function PlanViewReportSVG({
       viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
       xmlns="http://www.w3.org/2000/svg"
       data-vb-w={vbW} data-vb-h={vbH}
+      fontFamily="Arial, Helvetica, sans-serif"
       shapeRendering="geometricPrecision"
       textRendering="geometricPrecision"
       style={{ width: '100%', height: 'auto', background: 'white', display: 'block' }}
     >
       <defs>
         <pattern id={HATCH_ID} patternUnits="userSpaceOnUse" width={6 * P} height={6 * P} patternTransform="rotate(45)">
-          <line x1={0} y1={0} x2={0} y2={6 * P} stroke={INK3} strokeWidth={0.12 * P} />
+          <line x1={0} y1={0} x2={0} y2={6 * P} stroke={INK} strokeWidth={pen('fine', P)} />
         </pattern>
       </defs>
       {/* ── Walls (always on) — hatch fill toggles ── */}
@@ -372,8 +375,8 @@ export default function PlanViewReportSVG({
             {outline && (
               <g opacity={carcP.opacity}>
                 <polygon points={poly} fill={cabinetTypeFill(cab)} fillOpacity={carcP.fillOpacity}
-                  stroke={INK2} strokeWidth={layers.w('carcass_outline', sw * 0.7)} strokeDasharray={carcP.strokeDasharray} />
-                {innerPoly && <polygon points={innerPoly} fill="none" stroke={CARCASE_LINE} strokeWidth={layers.w('carcass_outline', sw * 0.35)} />}
+                  stroke={INK} strokeWidth={lw('carcass_outline', pen('medium', P))} strokeDasharray={carcP.strokeDasharray} />
+                {innerPoly && <polygon points={innerPoly} fill="none" stroke={INK} strokeWidth={lw('carcass_outline', pen('thin', P))} />}
               </g>
             )}
             {(rp?.case_parts ?? []).map((p, i) => {
@@ -384,8 +387,8 @@ export default function PlanViewReportSVG({
               const vertical = isSide(p.part_key) || p.part_key === 'back' || isShapedPanelKey(p.part_key) || !!p.upright || !!p.wrap
               const pts = casePlanCorners(p).map(q => at(q.x, q.z)).join(' ')
               return <polygon key={`cp-${i}`} points={pts} opacity={pp.opacity}
-                fill={vertical ? CARCASE_LINE : 'none'} fillOpacity={vertical ? 0.45 * pp.fillOpacity : 0}
-                stroke={CARCASE_LINE} strokeWidth={layers.w(it, sw * 0.35)} strokeDasharray={pp.strokeDasharray} />
+                fill={vertical ? CASE_FILL : 'none'} fillOpacity={vertical ? pp.fillOpacity : 0}
+                stroke={INK} strokeWidth={lw(it, pen('thin', P))} strokeDasharray={pp.strokeDasharray} />
             })}
             {(rp?.toekick_parts ?? []).map((p, i) => {
               const it = kickPartItem(p.part_key)
@@ -393,24 +396,24 @@ export default function PlanViewReportSVG({
               if (!layers.show(it) || b.w <= 0 || b.d <= 0) return null
               const pp = lp(it)
               return <polygon key={`tk-${i}`} points={tkPlanCorners(p).map(q => at(q.x, q.z)).join(' ')} opacity={pp.opacity} fill="none"
-                stroke={INK3} strokeWidth={layers.w(it, sw * 0.35)} strokeDasharray={pp.strokeDasharray} />
+                stroke={INK} strokeWidth={lw(it, pen('thin', P))} strokeDasharray={pp.strokeDasharray} />
             })}
             {layers.show('bins') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type !== 'bin' ? [] : binOutlines(ds, 'top').map((o, i) => {
               const pp = lp('bins')   // pull-out bin (z_bin_cabinet): top outline instead of its rails
               return <polygon key={`bin-${si}-${i}`} points={o.pts.map(([x, z]) => at(x, z)).join(' ')} opacity={pp.opacity} fill="none"
-                stroke={INK3} strokeWidth={layers.w('bins', sw * 0.3)} strokeDasharray={pp.strokeDasharray} />
+                stroke={INK} strokeWidth={lw('bins', pen('thin', P))} strokeDasharray={pp.strokeDasharray} />
             }))}
             {layers.show('drawer_boxes') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type === 'bin' ? [] : ds.box_parts.map((p, i) => {
               const b = dbBox(p), pp = lp('drawer_boxes')
               if (b.w <= 0 || b.d <= 0) return null
               return <polygon key={`db-${si}-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"
-                stroke={INK3} strokeWidth={layers.w('drawer_boxes', sw * 0.3)} strokeDasharray={pp.strokeDasharray} />
+                stroke={INK} strokeWidth={lw('drawer_boxes', pen('thin', P))} strokeDasharray={pp.strokeDasharray} />
             }))}
             {layers.show('drawer_runners') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type === 'bin' ? [] : ds.slides.map((s, i) => {
               const b = slideBox(s), pp = lp('drawer_runners')
               if (b.w <= 0 || b.d <= 0) return null
               return <polygon key={`sl-${si}-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"
-                stroke={INK3} strokeWidth={layers.w('drawer_runners', sw * 0.3)} strokeDasharray={pp.strokeDasharray} />
+                stroke={INK} strokeWidth={lw('drawer_runners', pen('thin', P))} strokeDasharray={pp.strokeDasharray} />
             }))}
             {(rp?.custom_parts ?? []).map((p, i) => {
               const it = customPartItem(p)
@@ -419,12 +422,12 @@ export default function PlanViewReportSVG({
               if (ex <= 0 || ez <= 0) return null
               const pp = lp(it)
               return <polygon key={`cu-${i}`} points={boxPoly({ x: p.x, z: p.z, w: ex, d: ez })} opacity={pp.opacity}
-                fill="#d4d4d4" fillOpacity={pp.fillOpacity} stroke={INK2}
-                strokeWidth={layers.w(it, sw * 0.5)} strokeDasharray={pp.strokeDasharray} />
+                fill="#d4d4d4" fillOpacity={pp.fillOpacity} stroke={INK}
+                strokeWidth={lw(it, pen('front', P))} strokeDasharray={pp.strokeDasharray} />
             })}
             {layers.show('internal_outline') && cab.has_internal && cab.dx > 40 && cab.dz > 40 && (
               <polygon points={boxPoly({ x: 20, z: 20, w: cab.dx - 40, d: cab.dz - 40 })} opacity={lp('internal_outline').opacity}
-                fill="none" stroke={INK3} strokeWidth={layers.w('internal_outline', sw * 0.3)}
+                fill="none" stroke={INK} strokeWidth={lw('internal_outline', pen('thin', P))}
                 strokeDasharray={lp('internal_outline').strokeDasharray ?? `${1 * P} ${0.8 * P}`} />
             )}
             {hasLabel && (
@@ -441,7 +444,7 @@ export default function PlanViewReportSVG({
               <text
                 x={labelPt.x} y={labelPt.y + (hasLabel ? labelFs * 0.55 + sizeFs * 0.6 : 0)}
                 textAnchor="middle" dominantBaseline="central"
-                fontSize={sizeFs} fill={INK2} opacity={layers.op('cabinet_sizes')}
+                fontSize={sizeFs} fill={INK} opacity={layers.op('cabinet_sizes')}
                 fontFamily="Arial, Helvetica, sans-serif"
               >
                 {roundMm(cab.dx)}×{roundMm(cab.dz)}
@@ -472,13 +475,13 @@ export default function PlanViewReportSVG({
           const marks = shapedFrontMarks(rpS.face_zones)
           const out: ReactNode[] = []
           if (layers.show('door_swings')) {
-            const swP = lp('door_swings'), swW = layers.w('door_swings', swingSW)
+            const swP = lp('door_swings'), swW = lw('door_swings', swingSW)
             const swDash = swP.strokeDasharray ?? `${1.2 * P} ${0.8 * P}`
             for (const s of marks.swings) {
               const h = toP(s.hinge), f = toP(s.free), e = toP(s.end)
               out.push(<path key={`swing-${cab.id}-${s.key}`}
                 d={`M ${h.x} ${h.y} L ${f.x} ${f.y} A ${s.r} ${s.r} 0 0 ${sweepFlag(h, f, e)} ${e.x} ${e.y} Z`}
-                fill="none" stroke={INK3} strokeWidth={swW} opacity={swP.opacity}
+                fill="none" stroke={INK} strokeWidth={swW} opacity={swP.opacity}
                 strokeDasharray={swDash} style={{ pointerEvents: 'none' }} />)
             }
           }
@@ -491,7 +494,7 @@ export default function PlanViewReportSVG({
               out.push(<line key={`drawer-${cab.id}-${d.key}`}
                 x1={a.x + off * o.x + ins * al.x} y1={a.y + off * o.y + ins * al.y}
                 x2={b.x + off * o.x - ins * al.x} y2={b.y + off * o.y - ins * al.y}
-                stroke={INK3} strokeWidth={layers.w('drawer_lines', drawSW)} opacity={drP.opacity}
+                stroke={INK} strokeWidth={lw('drawer_lines', drawSW)} opacity={drP.opacity}
                 strokeDasharray={drP.strokeDasharray ?? `${1.5 * P} ${0.8 * P}`} strokeLinecap="round"
                 style={{ pointerEvents: 'none' }} />)
             }
@@ -514,7 +517,7 @@ export default function PlanViewReportSVG({
         const nodes: ReactNode[] = []
 
         // Door swing arcs — one per column (rows irrelevant in plan)
-        const swP = lp('door_swings'), swW = layers.w('door_swings', swingSW)
+        const swP = lp('door_swings'), swW = lw('door_swings', swingSW)
         const swDash = swP.strokeDasharray ?? `${1.2 * P} ${0.8 * P}`
         if (layers.show('door_swings')) {
           const baseCross  = wd.x * perp.y - wd.y * perp.x
@@ -536,14 +539,14 @@ export default function PlanViewReportSVG({
               const endY = colLeft.y + r * (c15 * wd.y + s15 * perp.y)
               nodes.push(<path key={`swing-${cab.id}-${col}`}
                 d={`M ${colLeft.x} ${colLeft.y} L ${colRight.x} ${colRight.y} A ${r} ${r} 0 0 ${leftSweep} ${endX} ${endY} Z`}
-                fill="none" stroke={INK3} strokeWidth={swW} opacity={swP.opacity}
+                fill="none" stroke={INK} strokeWidth={swW} opacity={swP.opacity}
                 strokeDasharray={swDash} style={{ pointerEvents: 'none' }} />)
             } else {
               const endX = colRight.x + r * (c15 * (-wd.x) + s15 * perp.x)
               const endY = colRight.y + r * (c15 * (-wd.y) + s15 * perp.y)
               nodes.push(<path key={`swing-${cab.id}-${col}`}
                 d={`M ${colRight.x} ${colRight.y} L ${colLeft.x} ${colLeft.y} A ${r} ${r} 0 0 ${rightSweep} ${endX} ${endY} Z`}
-                fill="none" stroke={INK3} strokeWidth={swW} opacity={swP.opacity}
+                fill="none" stroke={INK} strokeWidth={swW} opacity={swP.opacity}
                 strokeDasharray={swDash} style={{ pointerEvents: 'none' }} />)
             }
           }
@@ -571,7 +574,7 @@ export default function PlanViewReportSVG({
                 y1={colLeft.y  + perpOff * perp.y + widthInset * wd.y}
                 x2={colRight.x + perpOff * perp.x - widthInset * wd.x}
                 y2={colRight.y + perpOff * perp.y - widthInset * wd.y}
-                stroke={INK3} strokeWidth={layers.w('drawer_lines', drawSW)} opacity={drP.opacity}
+                stroke={INK} strokeWidth={lw('drawer_lines', drawSW)} opacity={drP.opacity}
                 strokeDasharray={drP.strokeDasharray ?? `${1.5 * P} ${0.8 * P}`} strokeLinecap="round"
                 style={{ pointerEvents: 'none' }} />)
             }

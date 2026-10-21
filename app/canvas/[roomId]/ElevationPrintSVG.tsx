@@ -15,6 +15,7 @@ import { openingOnWall, fixtureChainSpans, fixtureLayer } from '@/src/lib/fixtur
 import { OpeningElev } from './FixturesElevation'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ } from '@/src/lib/geometry'
+import { PRINT_INK, pen, atLeastMin } from '@/src/lib/shopDrawings/pens'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone,
   ResolvedInternalPart, ResolvedDrawerStack, ResolvedDrawerBoxPart, ResolvedDrawerSlide,
@@ -107,9 +108,10 @@ function computeElevChain(cabs: CabinetInstance[], wall: Wall, extra: { t: numbe
   return segs
 }
 
-const INK  = '#111'
-const INK2 = '#555'
-const INK3 = '#999'
+// All print ink is black (z_shop_drawings S2); weight + dash carry the hierarchy.
+const INK  = PRINT_INK
+const INK2 = PRINT_INK
+const INK3 = PRINT_INK
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
@@ -159,13 +161,16 @@ export default function ElevationPrintSVG({
   const FACE_INS = 15
 
   // ── Sizes (physical mm × scale) ───────────────────────────────────────────
-  const partSW = 0.3 * P
-  const boxSW  = 0.45 * P
-  const thinSW = 0.2 * P
+  // Pens: paper-mm widths from the shared pen table (z_shop_drawings S2).
+  const partSW = pen('front', P)
+  const boxSW  = pen('medium', P)
+  const thinSW = pen('thin', P)
+  // Layer-weighted line width, never below the minimum pen.
+  const lw = (id: string, base: number) => atLeastMin(layers.w(id, base), P)
   const labelFs = 3 * P
   const dimFs  = 2.4 * P
   const tk     = 1.4 * P
-  const dashSW = 0.22 * P                  // thin internals (shelves / drawer boxes)
+  const dashSW = pen('thin', P)                // thin internals (shelves / drawer boxes)
   const dash   = `${0.9 * P} ${0.7 * P}`   // clean dash pattern
 
   // Chain / annotation positions
@@ -193,7 +198,7 @@ export default function ElevationPrintSVG({
     if (segs.length === 0) return null
     const boundaries = Array.from(new Set(segs.flatMap(s => [s.from, s.to])))
     const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.to - s.from })), dimFs)
-    const lineW = layers.w(item, thinSW)
+    const lineW = lw(item, thinSW)
     return (
       <g key={key} pointerEvents="none" opacity={layers.op(item)}>
         <line x1={0} y1={chainY} x2={wall.length} y2={chainY} stroke={INK} strokeWidth={lineW} strokeDasharray={lp(item).strokeDasharray} />
@@ -226,14 +231,14 @@ export default function ElevationPrintSVG({
       const { x, y, w, h } = toSVG(r.ex, r.ey, r.ew, r.eh)
       const pp = lp(item)
       return <rect key={key} x={x} y={y} width={w} height={h} fill="none" stroke={INK3} opacity={pp.opacity}
-        strokeWidth={layers.w(item, dashSW)} strokeDasharray={pp.strokeDasharray ?? dash} />
+        strokeWidth={lw(item, dashSW)} strokeDasharray={pp.strokeDasharray ?? dash} />
     }
     // Pull-out bin outline (z_bin_cabinet), same fine dash as the other hardware.
     const binPolys = (key: string, ds: ResolvedDrawerStack) => {
       const pp = lp('bins')
       return binOutlines(ds, 'front').map((o, j) => (
         <polygon key={`${key}-${j}`} points={o.pts.map(([px, py]) => { const p = toSVG(px, py, 0, 0); return `${p.x},${p.y}` }).join(' ')}
-          fill="none" stroke={INK3} opacity={pp.opacity} strokeWidth={layers.w('bins', dashSW)} strokeDasharray={pp.strokeDasharray ?? dash} />
+          fill="none" stroke={INK3} opacity={pp.opacity} strokeWidth={lw('bins', dashSW)} strokeDasharray={pp.strokeDasharray ?? dash} />
       ))
     }
     const labelFsL = layers.w('cabinet_labels', labelFs)
@@ -246,7 +251,7 @@ export default function ElevationPrintSVG({
         {layers.show('carcass_outline') && (() => {
           const pp = lp('carcass_outline')
           return <rect x={rx} y={ry} width={cab.dx} height={cab.dy} fill={lineDrawing ? 'none' : 'white'} fillOpacity={pp.fillOpacity}
-            opacity={pp.opacity} stroke={INK} strokeWidth={layers.w('carcass_outline', boxSW)} strokeDasharray={pp.strokeDasharray} />
+            opacity={pp.opacity} stroke={INK} strokeWidth={lw('carcass_outline', boxSW)} strokeDasharray={pp.strokeDasharray} />
         })()}
 
         {rp ? (
@@ -259,7 +264,7 @@ export default function ElevationPrintSVG({
               const { x, y, w, h } = toSVG(ex, ey, ew, eh)
               const pp = lp(it)
               return <rect key={`cp-${i}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK2} opacity={pp.opacity}
-                strokeWidth={layers.w(it, partSW)} strokeDasharray={pp.strokeDasharray} />
+                strokeWidth={lw(it, partSW)} strokeDasharray={pp.strokeDasharray} />
             })}
 
             {/* Toe kick parts */}
@@ -270,7 +275,7 @@ export default function ElevationPrintSVG({
               const { x, y, w, h } = toSVG(ex, ey, ew, eh)
               const pp = lp(it)
               return <rect key={`tk-${i}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK2} opacity={pp.opacity}
-                strokeWidth={layers.w(it, partSW)} strokeDasharray={pp.strokeDasharray} />
+                strokeWidth={lw(it, partSW)} strokeDasharray={pp.strokeDasharray} />
             })}
 
             {/* Added parts (applied panels / fillers / other) */}
@@ -282,7 +287,7 @@ export default function ElevationPrintSVG({
               const { x, y, w, h } = toSVG(p.x, p.y + ey, ex, ey)
               const pp = lp(it)
               return <rect key={`cu-${i}`} x={x} y={y} width={w} height={h} fill={faceFill} fillOpacity={pp.fillOpacity}
-                stroke={INK} opacity={pp.opacity} strokeWidth={layers.w(it, partSW)} strokeDasharray={pp.strokeDasharray} />
+                stroke={INK} opacity={pp.opacity} strokeWidth={lw(it, partSW)} strokeDasharray={pp.strokeDasharray} />
             })}
 
             {/* Faces (doors / drawers / panels) — shaded so they read against open shelves.
@@ -293,11 +298,11 @@ export default function ElevationPrintSVG({
               const { ex, ey, ew, eh } = zoneElevRect(fz)
               const { x, y, w, h } = toSVG(ex, ey, ew, eh)
               const pp = lp(it)
-              const fsw = layers.w(it, partSW)
+              const fsw = lw(it, partSW)
               const hinge = fz.hinge_side === 'left'
-                ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={INK} strokeWidth={layers.w(it, boxSW)} />
+                ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={INK} strokeWidth={lw(it, boxSW)} />
                 : fz.hinge_side === 'right'
-                ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={INK} strokeWidth={layers.w(it, boxSW)} />
+                ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={INK} strokeWidth={lw(it, boxSW)} />
                 : null
               const chP = lp('door_chevrons')
               const chevron = layers.show('door_chevrons') && fz.face_type === 'door' && fz.hinge_side
@@ -305,7 +310,7 @@ export default function ElevationPrintSVG({
                     points={fz.hinge_side === 'left'
                       ? `${x},${y} ${x + w},${y + h / 2} ${x},${y + h}`
                       : `${x + w},${y} ${x},${y + h / 2} ${x + w},${y + h}`}
-                    fill="none" stroke={INK2} strokeWidth={layers.w('door_chevrons', thinSW)} opacity={chP.opacity}
+                    fill="none" stroke={INK2} strokeWidth={lw('door_chevrons', thinSW)} opacity={chP.opacity}
                     strokeDasharray={chP.strokeDasharray ?? `${1.5 * P} ${0.8 * P}`} />
                 : null
               const lblFs = layers.w('drawer_labels', dimFs * 0.9)
@@ -330,16 +335,16 @@ export default function ElevationPrintSVG({
             {layers.show('handles') && handleShapes(rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })).map((s, i) => (
               <HandleElevSVG key={`hd-${i}`} s={s} project={(px, py) => toSVG(px, py, 0, 0)}
                 stroke={layers.color('handles', INK)} fill={lineDrawing ? 'none' : layers.color('handles', '#94a3b8')}
-                strokeWidth={layers.w('handles', thinSW)} opacity={layers.op('handles')} />
+                strokeWidth={lw('handles', thinSW)} opacity={layers.op('handles')} />
             ))}
             {layers.show('handles') && (
               <SharknoseLinesSVG zones={rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })}
                 project={(px, py) => toSVG(px, py, 0, 0)} stroke={layers.color('handles', INK2)}
-                strokeWidth={layers.w('handles', thinSW)} dash={`${1.5 * P} ${0.8 * P}`} opacity={layers.op('handles')} fontSize={dimFs * 0.8} />
+                strokeWidth={lw('handles', thinSW)} dash={`${1.5 * P} ${0.8 * P}`} opacity={layers.op('handles')} fontSize={dimFs * 0.8} />
             )}
             {layers.show('handle_holes') && handleShapes(rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })).map((s, i) => (
               <HandleHolesSVG key={`hh-${i}`} s={s} project={(px, py) => toSVG(px, py, 0, 0)}
-                color={layers.color('handle_holes', INK2)} strokeWidth={layers.w('handle_holes', thinSW)} opacity={layers.op('handle_holes')} />
+                color={layers.color('handle_holes', INK2)} strokeWidth={lw('handle_holes', thinSW)} opacity={layers.op('handle_holes')} />
             ))}
 
             {/* Hinge cup + plate bore positions */}
@@ -348,7 +353,7 @@ export default function ElevationPrintSVG({
                 {[...h.cup_drills, ...h.plate_drills].map((dr, j) => {
                   const c = toSVG(dr.x, dr.y, 0, 0)
                   return <circle key={j} cx={c.x} cy={c.y} r={Math.max(dr.radius, 0.5)} fill="none" stroke={INK2}
-                    strokeWidth={layers.w('hinges', thinSW)} strokeDasharray={lp('hinges').strokeDasharray} />
+                    strokeWidth={lw('hinges', thinSW)} strokeDasharray={lp('hinges').strokeDasharray} />
                 })}
               </g>
             ))}
@@ -362,7 +367,7 @@ export default function ElevationPrintSVG({
                 ].flatMap((s, si) => s.drills.filter(dr => dr.surface === 'drawer_front').map((dr, j) => {
                   const c = toSVG(dr.x, dr.y, 0, 0)
                   return <circle key={`dfd-${si}-${j}`} cx={c.x} cy={c.y} r={Math.max(dr.radius, 0.5)} fill="none" stroke={INK2}
-                    strokeWidth={layers.w('drawer_front_drilling', thinSW)} strokeDasharray={lp('drawer_front_drilling').strokeDasharray} />
+                    strokeWidth={lw('drawer_front_drilling', thinSW)} strokeDasharray={lp('drawer_front_drilling').strokeDasharray} />
                 }))}
               </g>
             )}
@@ -389,7 +394,7 @@ export default function ElevationPrintSVG({
           <>
             {tkH > 0 && layers.show('kick_faces') && (
               <rect x={rx} y={ry + cab.dy - tkH} width={cab.dx} height={tkH} fill="none" opacity={lp('kick_faces').opacity}
-                stroke={INK2} strokeWidth={layers.w('kick_faces', partSW)} strokeDasharray={`${1 * P} ${0.7 * P}`} />
+                stroke={INK2} strokeWidth={lw('kick_faces', partSW)} strokeDasharray={`${1 * P} ${0.7 * P}`} />
             )}
             {layers.any('doors', 'drawer_fronts') && cab.has_face && (() => {
               const fw = cab.dx - FACE_INS * 2, fh = cab.dy - tkH - FACE_INS * 2
@@ -397,7 +402,7 @@ export default function ElevationPrintSVG({
               const it = layers.show('doors') ? 'doors' : 'drawer_fronts'
               const pp = lp(it)
               return <rect x={rx + FACE_INS} y={ry + FACE_INS} width={fw} height={fh} fill={faceFill} fillOpacity={pp.fillOpacity}
-                opacity={pp.opacity} stroke={INK} strokeWidth={layers.w(it, partSW)} strokeDasharray={pp.strokeDasharray} />
+                opacity={pp.opacity} stroke={INK} strokeWidth={lw(it, partSW)} strokeDasharray={pp.strokeDasharray} />
             })()}
           </>
         )}
@@ -406,7 +411,7 @@ export default function ElevationPrintSVG({
         {hasLabel && (
           <text x={rx + cab.dx / 2} y={ry + cab.dy / 2}
             textAnchor="middle" dominantBaseline="middle" opacity={layers.op('cabinet_labels')}
-            fontSize={labelFsL} fontWeight="600" fill={INK} fontFamily="Arial, Helvetica, sans-serif">
+            fontSize={labelFsL} fontWeight="bold" fill={INK} fontFamily="Arial, Helvetica, sans-serif">
             {cab.label ?? '—'}
           </text>
         )}
@@ -526,7 +531,7 @@ export default function ElevationPrintSVG({
 
     const boundaries = Array.from(new Set(segs.flatMap(s => [s.fromY, s.toY])))
     const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.toY - s.fromY })), dimFs)
-    const lineW = layers.w('dim_elev_height', thinSW)
+    const lineW = lw('dim_elev_height', thinSW)
     return (
       <g pointerEvents="none" opacity={layers.op('dim_elev_height')}>
         <line x1={heightChainX} y1={0} x2={heightChainX} y2={roomH} stroke={INK} strokeWidth={lineW} strokeDasharray={lp('dim_elev_height').strokeDasharray} />
@@ -548,7 +553,7 @@ export default function ElevationPrintSVG({
 
   // ── Bench + basin heights (overall from the floor, outside the height chain) ──
   function benchDims() {
-    const lineW = layers.w('dim_elev_bench', thinSW)
+    const lineW = lw('dim_elev_bench', thinSW)
     return (
       <g pointerEvents="none" opacity={layers.op('dim_elev_bench')}>
         {benchHeights.map((h, i) => {
@@ -584,6 +589,7 @@ export default function ElevationPrintSVG({
       viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
       xmlns="http://www.w3.org/2000/svg"
       data-vb-w={vbW} data-vb-h={vbH}
+      fontFamily="Arial, Helvetica, sans-serif"
       style={{ width: '100%', height: 'auto', background: 'white', display: 'block' }}
     >
       {/* Title */}
@@ -607,7 +613,7 @@ export default function ElevationPrintSVG({
       ))}
 
       {/* Floor (bold) */}
-      <line x1={0} y1={roomH} x2={wall.length} y2={roomH} stroke={INK} strokeWidth={boxSW * 1.6} />
+      <line x1={0} y1={roomH} x2={wall.length} y2={roomH} stroke={INK} strokeWidth={pen('ground', P)} />
 
       {/* Cabinets */}
       {wallCabs.map(renderCab)}
@@ -623,7 +629,7 @@ export default function ElevationPrintSVG({
           {/* Sill + opening height at each right jamb (same as the canvas) */}
           {layers.show('dim_openings') && openings.map(o => {
             const x = o.t1 - 4 * P
-            const lineW = layers.w('dim_openings', thinSW)
+            const lineW = lw('dim_openings', thinSW)
             const vDim = (key: string, zLo: number, zHi: number) => {
               const y0 = roomH - zLo, y1 = roomH - zHi, my = (y0 + y1) / 2
               return (
@@ -649,7 +655,7 @@ export default function ElevationPrintSVG({
           {/* Overall wall length */}
           {layers.show('dim_elev_floor_chain') && (() => {
             const mx = wall.length / 2, padX = dimFs * 1.8, padY = dimFs * 0.7
-            const lineW = layers.w('dim_elev_floor_chain', thinSW)
+            const lineW = lw('dim_elev_floor_chain', thinSW)
             return (
               <g pointerEvents="none" opacity={layers.op('dim_elev_floor_chain')}>
                 <line x1={0} y1={overallY} x2={wall.length} y2={overallY} stroke={INK} strokeWidth={lineW} />
