@@ -230,6 +230,13 @@ How it's built (plan):
 - **Elevation drilling off (Mark, 2026-10-21):** hinge cup / plate bores and drawer-front fixing bores never
   print on the elevations (`PRINT_DRILLING = false` in ElevationPrintSVG), whatever the layer set.
 
+### Job Reports — any room (fix, 2026-10-21)
+- The drawing reports (shop drawings, plan, elevations, cabinet sheets) used to draw only the open room in
+  Job Reports, with no benchtops (so no tops in the 3D views either). Job Reports now shows a **Room:** picker;
+  each room still makes its own PDF (locked: one PDF per room). The open room draws from the live canvas;
+  other rooms from the job load, with their own walls / cabinets / fixtures / tops, CAD (`{fields}` filled
+  for that room) and benchtop thickness (`useBenchtopCatalog.forRoom` + that room's base height).
+
 ## Answered (Mark, 2026-10-21)
 
 - 3D sheet: **keep it** (S8).

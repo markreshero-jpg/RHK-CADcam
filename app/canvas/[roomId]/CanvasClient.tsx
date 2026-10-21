@@ -3823,6 +3823,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           initialScope={reportScope}
           initialReport={reportInitial}
           bt3d={{ info: btInfo, profiles: btCatalog.profileById }}
+          btInfoFor={rm => {
+            // Another room of the job (Job Reports drawings): its own base height + top cascade.
+            const base = resolveClassDims('base', { room: rm, project, shop: shopDims }).dy
+            const c = btCatalog.forRoom(rm)
+            return b => {
+              const thick = c.thicknessFor(b)
+              return { topZ: (b.height_mm ?? base) + thick.total, thick, defaultProfileId: c.defaultProfileIdFor(b) }
+            }
+          }}
           onDeleteShopShot={id => saveShopShots((room.shop_3d_shots ?? []).filter(s => s.id !== id))}
           project={project}
           room={room}

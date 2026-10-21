@@ -11,6 +11,9 @@ import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import ElevationPrintReport from './ElevationPrintReport'
 import ShopDrawingsReport from './ShopDrawingsReport'
 import type { Bt3DPrint } from './Room3DCapture'
+import type { BtElevInfo } from './BenchtopElevation'
+import { useCadFields } from './useCadFields'
+import { withFieldsFilled } from '@/src/lib/annotations/blocks'
 import CabinetSheetReport from './CabinetSheetReport'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import { BenchtopSupplySheet, supplyPrintHtml } from './BenchtopSupplyReport'
@@ -135,6 +138,9 @@ function collectBtParts(
   return rows
 }
 
+/** Reports that draw one room at a time (one PDF per room); Job Reports picks the room. */
+const DRAWING_REPORTS: ReportId[] = ['shop_drawings', 'plan_view_v2', 'elevation_view_v2', 'cabinet_sheets']
+
 const PAPER = {
   A4L: { w: 297, h: 210, label: 'A4 Landscape' },
   A3L: { w: 420, h: 297, label: 'A3 Landscape' },
@@ -142,12 +148,14 @@ const PAPER = {
   A1L: { w: 841, h: 594, label: 'A1 Landscape' },
 }
 
-export default function ReportsModal({ initialScope, initialReport, bt3d, onDeleteShopShot, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
+export default function ReportsModal({ initialScope, initialReport, bt3d, btInfoFor, onDeleteShopShot, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
   initialScope: ReportScope
   /** Report to open on (Production → Shop Drawings opens straight on the package). */
   initialReport?: ReportId
   /** Benchtop slab inputs for the shop drawings 3D views. */
   bt3d?: Omit<Bt3DPrint, 'benchtops'>
+  /** Benchtop info for another room of the job (its own base height + top cascade). */
+  btInfoFor?: (rm: Room) => (bt: BenchtopInstance) => BtElevInfo
   /** Remove a 3D view saved from the 3D view (room.shop_3d_shots). */
   onDeleteShopShot?: (id: string) => void
   project: Project | null
@@ -205,9 +213,6 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, onDele
     for (const [id, r] of rawResolved) m.set(id, filterRemovedParts(r))
     return m
   }, [rawResolved])
-  const planResolved   = useMemo(() => filterHiddenMap(allResolved, 'plan'), [allResolved])
-  const elevResolved   = useMemo(() => filterHiddenMap(allResolved, 'elevation'), [allResolved])
-  const threeDResolved = useMemo(() => filterHiddenMap(allResolved, '3d'), [allResolved])
   const allBtInstances = scope === 'room' ? benchtops     : jobBtInstances
   const allBtParts     = scope === 'room' ? roomBtParts   : jobBtParts
 
@@ -320,8 +325,6 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, onDele
   // Appliance schedule: brand / model no. come from the library row each fixture was placed from.
   const allFixtures = scope === 'room' ? fixtures : jobFixtures
   const allWalls    = scope === 'room' ? walls    : jobWalls
-  // The plan / elevation PDFs draw the current room only.
-  const roomFixtures = scope === 'room' ? fixtures : jobFixtures.filter(f => f.room_id === room.id)
   useEffect(() => {
     const ids = [...new Set(allFixtures.map(f => f.catalog_id).filter((x): x is string => !!x))].filter(id => !fixtureCatalog.has(id))
     if (!ids.length) return
@@ -333,6 +336,51 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, onDele
   const openingData = useMemo(() => buildOpeningSchedule(rooms, allFixtures, allWalls), [rooms, allFixtures, allWalls])
   const scheduleData = useMemo(() => buildSchedule(rooms, allFixtures, allCabinets, allWalls, fixtureCatalog),
     [rooms, allFixtures, allCabinets, allWalls, fixtureCatalog])
+
+  // ── Drawing reports: one room at a time. The open room draws from the live
+  // canvas; in Job Reports any other room draws from what was loaded for the job.
+  const [drawRoomId, setDrawRoomId] = useState(room.id)
+  const drawRoom = scope === 'room' ? room : (jobRooms.find(r => r.id === drawRoomId) ?? room)
+  const isHere = drawRoom.id === room.id
+  const drawWalls = useMemo(() => isHere ? walls : jobWalls.filter(w => w.room_id === drawRoom.id), [isHere, walls, jobWalls, drawRoom.id])
+  const drawCabinets = useMemo(() => isHere ? cabinets : jobCabinets.filter(c => c.room_id === drawRoom.id), [isHere, cabinets, jobCabinets, drawRoom.id])
+  const drawFixtures = useMemo(() => isHere ? fixtures : jobFixtures.filter(f => f.room_id === drawRoom.id), [isHere, fixtures, jobFixtures, drawRoom.id])
+  const drawBenchtops = useMemo(() => isHere ? benchtops : jobBtInstances.filter(b => b.room_id === drawRoom.id), [isHere, benchtops, jobBtInstances, drawRoom.id])
+  const drawResolved = useMemo(() => {
+    const src = isHere ? resolvedParts : jobResolved
+    const m = new Map<string, ResolvedCabinet>()
+    for (const c of drawCabinets) { const r = src.get(c.id); if (r) m.set(c.id, filterRemovedParts(r)) }
+    return m
+  }, [isHere, resolvedParts, jobResolved, drawCabinets])
+  const drawPlanResolved = useMemo(() => filterHiddenMap(drawResolved, 'plan'), [drawResolved])
+  const drawElevResolved = useMemo(() => filterHiddenMap(drawResolved, 'elevation'), [drawResolved])
+  const draw3DResolved = useMemo(() => filterHiddenMap(drawResolved, '3d'), [drawResolved])
+  // Keyed on the room id — the room object is rebuilt on every job load.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const drawBtInfo = useMemo(() => isHere ? bt3d?.info : btInfoFor?.(drawRoom), [isHere, drawRoom.id, bt3d, btInfoFor])
+  const drawBenchTopZ = isHere ? benchTopZ : drawBtInfo && ((b: BenchtopInstance) => drawBtInfo(b).topZ)
+  const drawBt3d = drawBtInfo && bt3d ? { info: drawBtInfo, profiles: bt3d.profiles } : undefined
+  // CAD (spec block etc.) of another room, with that room's {fields} filled.
+  const [otherAnnots, setOtherAnnots] = useState<{ roomId: string; rows: RoomAnnotation[] } | null>(null)
+  useEffect(() => {
+    if (isHere) return
+    let dead = false
+    void supabase.from('room_annotations').select('*').eq('room_id', drawRoom.id).order('sort_order')
+      .then(({ data }) => { if (!dead) setOtherAnnots({ roomId: drawRoom.id, rows: (data ?? []) as RoomAnnotation[] }) })
+    return () => { dead = true }
+  }, [isHere, drawRoom.id])
+  const otherFields = useCadFields({ project, room: drawRoom, resolvedParts: drawResolved, fixtures: drawFixtures })
+  const drawPlanAnnots = useMemo(() => (isHere
+    ? annotations
+    : withFieldsFilled(otherAnnots?.roomId === drawRoom.id ? otherAnnots.rows : [], otherFields)
+  ).filter(a => a.view === 'plan'), [isHere, annotations, otherAnnots, drawRoom.id, otherFields])
+  function deleteShot(id: string) {
+    if (isHere) { onDeleteShopShot?.(id); return }
+    const shots = (drawRoom.shop_3d_shots ?? []).filter(s => s.id !== id)
+    setJobRooms(prev => prev.map(r => r.id === drawRoom.id ? { ...r, shop_3d_shots: shots } : r))
+    void supabase.from('rooms').update({ shop_3d_shots: shots }).eq('id', drawRoom.id)
+      .then(({ error }) => { if (error) console.error('[shop 3D views]', error) })
+  }
 
   const supplyTotalsAll = useMemo(() => supplyTotals(supplyData.flatMap(d => d.lines)), [supplyData])
 
@@ -445,6 +493,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, onDele
                 <span className="font-medium">{REPORTS.find(r => r.id === selectedReport)?.label}</span>
                 <span className="text-gray-500 ml-2">
                   {scope === 'room' ? room.name : (project?.name ?? 'Job')}
+                  {scope === 'job' && DRAWING_REPORTS.includes(selectedReport) && ` · ${drawRoom.name}`}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -473,25 +522,39 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, onDele
               </div>
             </div>
 
+            {/* Job Reports: which room the drawing report draws (one PDF per room). */}
+            {scope === 'job' && DRAWING_REPORTS.includes(selectedReport) && jobRooms.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-gray-800 shrink-0">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Room:</span>
+                {jobRooms.map(r => (
+                  <button key={r.id} onClick={() => setDrawRoomId(r.id)}
+                    className={`px-2 py-0.5 rounded text-xs border ${r.id === drawRoom.id ? 'bg-blue-600/25 border-blue-600/50 text-blue-300' : 'border-gray-700 text-gray-400 hover:text-gray-200'}`}>
+                    {r.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-4">
               {loadingJob ? (
                 <div className="text-gray-500 text-center py-12 text-sm">Loading job data…</div>
               ) : selectedReport === 'shop_drawings' ? (
                 <ShopDrawingsReport
+                  key={drawRoom.id}
                   project={project}
-                  room={room}
-                  walls={walls}
-                  fixtures={roomFixtures}
-                  annotations={annotations.filter(a => a.view === 'plan')}
-                  benchtops={scope === 'room' ? benchtops : []}
-                  benchTopZ={benchTopZ}
-                  cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
-                  planResolved={planResolved}
-                  elevResolved={elevResolved}
-                  threeDResolved={threeDResolved}
-                  bt3d={scope === 'room' ? bt3d : undefined}
-                  onDeleteSavedShot={onDeleteShopShot}
+                  room={drawRoom}
+                  walls={drawWalls}
+                  fixtures={drawFixtures}
+                  annotations={drawPlanAnnots}
+                  benchtops={drawBenchtops}
+                  benchTopZ={drawBenchTopZ}
+                  cabinets={drawCabinets}
+                  planResolved={drawPlanResolved}
+                  elevResolved={drawElevResolved}
+                  threeDResolved={draw3DResolved}
+                  bt3d={drawBt3d}
+                  onDeleteSavedShot={deleteShot}
                   layerSets={layerSets}
                   activeLayerSetId={activeLayerSetId}
                   scale={printScale}
@@ -499,14 +562,15 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, onDele
                 />
               ) : selectedReport === 'plan_view_v2' ? (
                 <PlanViewReport
+                  key={drawRoom.id}
                   project={project}
-                  room={room}
-                  walls={walls}
-                  fixtures={roomFixtures}
-                  benchtops={scope === 'room' ? benchtops : []}
-                  annotations={annotations.filter(a => a.view === 'plan')}
-                  cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
-                  resolvedParts={planResolved}
+                  room={drawRoom}
+                  walls={drawWalls}
+                  fixtures={drawFixtures}
+                  benchtops={drawBenchtops}
+                  annotations={drawPlanAnnots}
+                  cabinets={drawCabinets}
+                  resolvedParts={drawPlanResolved}
                   layerSets={layerSets}
                   activeLayerSetId={activeLayerSetId}
                   scale={printScale}
@@ -514,16 +578,17 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, onDele
                 />
               ) : selectedReport === 'elevation_view_v2' ? (
                 <ElevationPrintReport
+                  key={drawRoom.id}
                   project={project}
-                  room={room}
-                  walls={walls}
-                  fixtures={roomFixtures}
-                  benchtops={scope === 'room' ? benchtops : []}
-                  benchTopZ={benchTopZ}
-                  btInfo={scope === 'room' ? bt3d?.info : undefined}
+                  room={drawRoom}
+                  walls={drawWalls}
+                  fixtures={drawFixtures}
+                  benchtops={drawBenchtops}
+                  benchTopZ={drawBenchTopZ}
+                  btInfo={drawBtInfo}
                   btProfiles={bt3d?.profiles}
-                  cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
-                  resolvedParts={elevResolved}
+                  cabinets={drawCabinets}
+                  resolvedParts={drawElevResolved}
                   layerSets={layerSets}
                   activeLayerSetId={activeLayerSetId}
                   scale={printScale}
@@ -531,11 +596,12 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, onDele
                 />
               ) : selectedReport === 'cabinet_sheets' ? (
                 <CabinetSheetReport
+                  key={drawRoom.id}
                   project={project}
-                  room={room}
-                  walls={walls}
-                  cabinets={scope === 'room' ? cabinets : jobCabinets.filter(c => c.room_id === room.id)}
-                  resolvedParts={allResolved}
+                  room={drawRoom}
+                  walls={drawWalls}
+                  cabinets={drawCabinets}
+                  resolvedParts={drawResolved}
                   materialNames={materialNames}
                   paperKey={printPaper}
                 />

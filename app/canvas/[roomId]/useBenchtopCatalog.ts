@@ -57,36 +57,38 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
 
   const profileById = useMemo(() => Object.fromEntries(profiles.map(p => [p.id, p])), [profiles])
 
-  // Same cascade as loadBenchtopInput: benchtop → room → job → shop default.
-  const methodFor = useCallback((bt: BenchtopInstance): BenchtopBuildMethod | null => {
-    const id = bt.benchtop_build_method_id ?? room.benchtop_build_method_id ?? project?.benchtop_build_method_id ?? null
-    return (id ? methods.find(m => m.id === id) : undefined) ?? methods.find(m => m.is_default) ?? null
-  }, [methods, room.benchtop_build_method_id, project?.benchtop_build_method_id])
+  // The cascades below for any room of the job — the job reports draw other
+  // rooms' tops (shop drawings) with that room's method / schedule.
+  const forRoom = useCallback((rm: Pick<Room, 'benchtop_build_method_id' | 'benchtop_schedule_id'>) => {
+    // Same cascade as loadBenchtopInput: benchtop → room → job → shop default.
+    const methodFor = (bt: BenchtopInstance): BenchtopBuildMethod | null => {
+      const id = bt.benchtop_build_method_id ?? rm.benchtop_build_method_id ?? project?.benchtop_build_method_id ?? null
+      return (id ? methods.find(m => m.id === id) : undefined) ?? methods.find(m => m.is_default) ?? null
+    }
+    // Schedule cascade as loadBenchtopInput (benchtop → method → room → job →
+    // shop default); thickness rule shared with the resolver (topThickness), so
+    // the canvas draws exactly what the parts list cuts. Job / room per-role
+    // material overrides are not applied here (display only).
+    const scheduleRowsFor = (bt: BenchtopInstance) => {
+      const method = methodFor(bt)
+      const schedId = bt.benchtop_schedule_id ?? method?.default_schedule_id ?? rm.benchtop_schedule_id
+        ?? project?.benchtop_schedule_id ?? schedules.find(s => s.is_default)?.id ?? null
+      return rows.filter(r => r.schedule_id === schedId)
+    }
+    const thicknessFor = (bt: BenchtopInstance): BtThickness => {
+      const method = methodFor(bt)
+      const sched = scheduleRowsFor(bt)
+      if (!method) return { top: 33, total: 33, buildUp: false }
+      const asMat = (m: Map<string, number>) => new Map([...m].map(([k, dz]) => [k, { name: '', dz }]))
+      const t = topThickness(method, sched, asMat(boardDz), asMat(surfaceDz))
+      return { ...t, buildUp: isBuildUp(method.construction) }
+    }
+    const defaultProfileIdFor = (bt: BenchtopInstance) => methodFor(bt)?.default_edge_profile_id ?? null
+    return { methodFor, scheduleRowsFor, thicknessFor, defaultProfileIdFor }
+  }, [methods, rows, schedules, boardDz, surfaceDz, project?.benchtop_build_method_id, project?.benchtop_schedule_id])
 
-  const defaultProfileIdFor = useCallback(
-    (bt: BenchtopInstance) => methodFor(bt)?.default_edge_profile_id ?? null,
-    [methodFor],
-  )
-
-  // Schedule cascade as loadBenchtopInput (benchtop → method → room → job →
-  // shop default); thickness rule shared with the resolver (topThickness), so
-  // the canvas draws exactly what the parts list cuts. Job / room per-role
-  // material overrides are not applied here (display only).
-  const scheduleRowsFor = useCallback((bt: BenchtopInstance) => {
-    const method = methodFor(bt)
-    const schedId = bt.benchtop_schedule_id ?? method?.default_schedule_id ?? room.benchtop_schedule_id
-      ?? project?.benchtop_schedule_id ?? schedules.find(s => s.is_default)?.id ?? null
-    return rows.filter(r => r.schedule_id === schedId)
-  }, [methodFor, rows, schedules, room.benchtop_schedule_id, project?.benchtop_schedule_id])
-
-  const thicknessFor = useCallback((bt: BenchtopInstance): BtThickness => {
-    const method = methodFor(bt)
-    const sched = scheduleRowsFor(bt)
-    if (!method) return { top: 33, total: 33, buildUp: false }
-    const asMat = (m: Map<string, number>) => new Map([...m].map(([k, dz]) => [k, { name: '', dz }]))
-    const t = topThickness(method, sched, asMat(boardDz), asMat(surfaceDz))
-    return { ...t, buildUp: isBuildUp(method.construction) }
-  }, [methodFor, scheduleRowsFor, boardDz, surfaceDz])
+  const here = useMemo(() => forRoom(room), [forRoom, room])
+  const { methodFor, scheduleRowsFor, thicknessFor, defaultProfileIdFor } = here
 
   // Same rule as the resolver: tape only on in-house board tops; the default
   // is the tape on the schedule row the top is made from.
@@ -97,5 +99,5 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
     return { applies, defaultTape: applies ? top?.edgeband_id ?? null : null }
   }, [methodFor, scheduleRowsFor])
 
-  return { methods, profiles, profileById, methodFor, defaultProfileIdFor, thicknessFor, tapes, tapeContextFor }
+  return { methods, profiles, profileById, methodFor, defaultProfileIdFor, thicknessFor, tapes, tapeContextFor, forRoom }
 }
