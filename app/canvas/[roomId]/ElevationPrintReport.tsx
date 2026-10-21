@@ -4,6 +4,7 @@
 // to localStorage. Scale + paper come from the modal (same as plan view).
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useBatchDownload } from './useBatchDownload'
 import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
@@ -31,7 +32,9 @@ const TOGGLES: { key: keyof ElevationPageOptions; label: string }[] = [
   { key: 'titleBlock',  label: 'Title Block' },
 ]
 
-export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, benchtops, benchTopZ, btInfo, btProfiles }: {
+export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, benchtops, benchTopZ, btInfo, btProfiles, batch }: {
+  /** Job Reports, several rooms: download as soon as ready, then call this (useBatchDownload). */
+  batch?: () => void
   /** Benchtop band drawing inputs (the canvas's thickness cascade + edge profiles). */
   btInfo?: (bt: BenchtopInstance) => BtElevInfo
   btProfiles?: Record<string, BenchtopEdgeProfile>
@@ -107,6 +110,8 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
       setBusy(false)
     }
   }
+
+  useBatchDownload(batch, true, handleDownload)
 
   if (standardWalls.length === 0) {
     return <div className="text-gray-500 text-center py-12 text-sm">No standard walls in this room.</div>

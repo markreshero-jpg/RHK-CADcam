@@ -19,6 +19,7 @@ import PlanViewReportSVG, { type PlanViewPageOptions } from './PlanViewReportSVG
 import ElevationPrintSVG, { type ElevationPageOptions } from './ElevationPrintSVG'
 import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
 import ShopTitleBlock, { SheetHeading, HEADING_H, sheetTitle, pageLayout, titleBlockHeight } from './ShopTitleBlock'
+import { useBatchDownload } from './useBatchDownload'
 import Room3DCapture, { Shot3DSVG, type Bt3DPrint } from './Room3DCapture'
 import { autoShots, shotsPerSheet, type Shot3D } from '@/src/lib/shopDrawings/shots3d'
 import type { HiddenLineResult } from '@/src/lib/shopDrawings/hiddenLine'
@@ -57,7 +58,9 @@ function shotCells(n: number, x: number, y: number, w: number, h: number) {
 }
 
 export default function ShopDrawingsReport({ project, room, walls, cabinets, planResolved, elevResolved, threeDResolved, bt3d, fixtures = [], annotations = [],
-  benchtops = [], benchTopZ, layerSets, activeLayerSetId, scale, paperKey, onDeleteSavedShot }: {
+  benchtops = [], benchTopZ, layerSets, activeLayerSetId, scale, paperKey, onDeleteSavedShot, batch }: {
+  /** Job Reports, several rooms: download as soon as ready, then call this (useBatchDownload). */
+  batch?: () => void
   /** Remove a view saved from the 3D view (room.shop_3d_shots). */
   onDeleteSavedShot?: (id: string) => void
   /** Resolved parts with the 3D view's hidden parts removed. */
@@ -238,6 +241,11 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       setBusy(false)
     }
   }
+
+  // Ready once every printed drawing has measured and the 3D views are rendered.
+  const batchReady = printed.length === 0 || (printed.every(s => s.shots || sizes[s.key])
+    && (!ticked.has(KEY_3D) || captured || shots.length === 0))
+  useBatchDownload(batch, batchReady, handleDownload)
 
   const pct = (mm: number, of: number) => `${(mm / of) * 100}%`
 

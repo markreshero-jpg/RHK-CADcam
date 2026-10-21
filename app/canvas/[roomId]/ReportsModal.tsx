@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
@@ -340,8 +340,27 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   // ── Drawing reports: one room at a time. The open room draws from the live
   // canvas; in Job Reports any other room draws from what was loaded for the job.
   const [drawRoomId, setDrawRoomId] = useState(room.id)
+  // Rooms ticked for "Download N rooms" (all by default); the queue runs them one at a
+  // time — each report downloads its own PDF once ready, then hands on (useBatchDownload).
+  const [roomsOff, setRoomsOff] = useState<Set<string>>(new Set())
+  const tickedRooms = jobRooms.filter(r => !roomsOff.has(r.id))
+  const [queue, setQueue] = useState<{ ids: string[]; total: number } | null>(null)
+  const startBatch = () => {
+    if (!tickedRooms.length) return
+    setQueue({ ids: tickedRooms.map(r => r.id), total: tickedRooms.length })
+    setDrawRoomId(tickedRooms[0].id)
+  }
+  const batchNext = useCallback(() => setQueue(q => {
+    const rest = q ? q.ids.slice(1) : []
+    if (!q || !rest.length) return null
+    setDrawRoomId(rest[0])
+    return { ...q, ids: rest }
+  }), [])
+  const batch = queue ? batchNext : undefined
   const drawRoom = scope === 'room' ? room : (jobRooms.find(r => r.id === drawRoomId) ?? room)
   const isHere = drawRoom.id === room.id
+  // Remount per room, and once more when a queue starts on the room already shown.
+  const reportKey = queue ? `${drawRoom.id}:b${queue.ids.length}` : drawRoom.id
   const drawWalls = useMemo(() => isHere ? walls : jobWalls.filter(w => w.room_id === drawRoom.id), [isHere, walls, jobWalls, drawRoom.id])
   const drawCabinets = useMemo(() => isHere ? cabinets : jobCabinets.filter(c => c.room_id === drawRoom.id), [isHere, cabinets, jobCabinets, drawRoom.id])
   const drawFixtures = useMemo(() => isHere ? fixtures : jobFixtures.filter(f => f.room_id === drawRoom.id), [isHere, fixtures, jobFixtures, drawRoom.id])
@@ -525,13 +544,39 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
             {/* Job Reports: which room the drawing report draws (one PDF per room). */}
             {scope === 'job' && DRAWING_REPORTS.includes(selectedReport) && jobRooms.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-gray-800 shrink-0">
-                <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Room:</span>
-                {jobRooms.map(r => (
-                  <button key={r.id} onClick={() => setDrawRoomId(r.id)}
-                    className={`px-2 py-0.5 rounded text-xs border ${r.id === drawRoom.id ? 'bg-blue-600/25 border-blue-600/50 text-blue-300' : 'border-gray-700 text-gray-400 hover:text-gray-200'}`}>
-                    {r.name}
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1"
+                  title="Tick the rooms to download; click a name to preview that room">Rooms:</span>
+                {jobRooms.map(r => {
+                  const on = !roomsOff.has(r.id), shown = r.id === drawRoom.id
+                  return (
+                    <span key={r.id} className={`inline-flex items-center rounded text-xs border ${shown ? 'border-blue-500 bg-blue-600/25 text-blue-200' : on ? 'border-gray-600 text-gray-300' : 'border-gray-800 text-gray-500'}`}>
+                      <button className="pl-1.5 pr-1 py-0.5" disabled={!!queue} title={on ? 'Leave this room out' : 'Include this room'}
+                        onClick={() => setRoomsOff(prev => {
+                          const next = new Set(prev)
+                          if (next.has(r.id)) next.delete(r.id); else next.add(r.id)
+                          return next
+                        })}>{on ? '☑' : '☐'}</button>
+                      <button className="pr-2 py-0.5" disabled={!!queue} onClick={() => setDrawRoomId(r.id)}>{r.name}</button>
+                    </span>
+                  )
+                })}
+                <button className="px-1.5 py-0.5 text-[11px] text-gray-400 hover:text-gray-200" disabled={!!queue}
+                  onClick={() => setRoomsOff(new Set())}>All</button>
+                <button className="px-1.5 py-0.5 text-[11px] text-gray-400 hover:text-gray-200" disabled={!!queue}
+                  onClick={() => setRoomsOff(new Set(jobRooms.map(r => r.id)))}>None</button>
+                {queue ? (
+                  <span className="ml-auto flex items-center gap-2 text-xs text-amber-300">
+                    Downloading {queue.total - queue.ids.length + 1} / {queue.total} · {drawRoom.name}…
+                    <button className="px-2 py-0.5 border border-gray-700 rounded text-gray-300 hover:border-gray-500"
+                      onClick={() => setQueue(null)}>Stop</button>
+                  </span>
+                ) : (
+                  <button onClick={startBatch} disabled={!tickedRooms.length}
+                    title="One PDF per room, downloaded one after another"
+                    className="ml-auto px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded font-medium">
+                    Download {tickedRooms.length} room{tickedRooms.length === 1 ? '' : 's'}
                   </button>
-                ))}
+                )}
               </div>
             )}
 
@@ -541,7 +586,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                 <div className="text-gray-500 text-center py-12 text-sm">Loading job data…</div>
               ) : selectedReport === 'shop_drawings' ? (
                 <ShopDrawingsReport
-                  key={drawRoom.id}
+                  key={reportKey}
+                  batch={batch}
                   project={project}
                   room={drawRoom}
                   walls={drawWalls}
@@ -562,7 +608,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                 />
               ) : selectedReport === 'plan_view_v2' ? (
                 <PlanViewReport
-                  key={drawRoom.id}
+                  key={reportKey}
+                  batch={batch}
                   project={project}
                   room={drawRoom}
                   walls={drawWalls}
@@ -578,7 +625,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                 />
               ) : selectedReport === 'elevation_view_v2' ? (
                 <ElevationPrintReport
-                  key={drawRoom.id}
+                  key={reportKey}
+                  batch={batch}
                   project={project}
                   room={drawRoom}
                   walls={drawWalls}
@@ -596,7 +644,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                 />
               ) : selectedReport === 'cabinet_sheets' ? (
                 <CabinetSheetReport
-                  key={drawRoom.id}
+                  key={reportKey}
+                  batch={batch}
                   project={project}
                   room={drawRoom}
                   walls={drawWalls}

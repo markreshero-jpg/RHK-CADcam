@@ -11,6 +11,7 @@ import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation,
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
+import { useBatchDownload } from './useBatchDownload'
 import PlanViewReportSVG, { type PlanViewPageOptions } from './PlanViewReportSVG'
 import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
 import { useTutorial } from '@/src/lib/tutorial/store'
@@ -37,7 +38,9 @@ const TOGGLES: { key: keyof PlanViewPageOptions; label: string }[] = [
   { key: 'annotColours', label: 'Annotation colours' },
 ]
 
-export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, annotations, benchtops }: {
+export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, annotations, benchtops, batch }: {
+  /** Job Reports, several rooms: download as soon as ready, then call this (useBatchDownload). */
+  batch?: () => void
   /** Benchtops — drawn on the plan (outline, cutouts, join lines). */
   benchtops?: BenchtopInstance[]
   /** Doors / windows (z_fixtures P5) are drawn from these. */
@@ -169,6 +172,8 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
       setBusy(false)
     }
   }
+
+  useBatchDownload(batch, true, handleDownload)
 
   return (
     <div className="space-y-3">

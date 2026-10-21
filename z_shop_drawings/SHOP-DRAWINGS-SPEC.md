@@ -236,6 +236,10 @@ How it's built (plan):
   each room still makes its own PDF (locked: one PDF per room). The open room draws from the live canvas;
   other rooms from the job load, with their own walls / cabinets / fixtures / tops, CAD (`{fields}` filled
   for that room) and benchtop thickness (`useBenchtopCatalog.forRoom` + that room's base height).
+- **Several rooms at once (Mark, 2026-10-21):** the Rooms row ticks rooms (All / None; click a name to preview).
+  **Download N rooms** queues them: each room's report remounts with `batch`, downloads its own PDF once ready
+  (useBatchDownload: drawings measured, 3D rendered, data loaded; 90s give-up), then hands on. Still one PDF
+  per room. Works for shop drawings, plan, elevations and cabinet sheets.
 
 ## Answered (Mark, 2026-10-21)
 

@@ -3,6 +3,7 @@
 // parts opaque, internals dashed through). PDF = one svg2pdf call per page.
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useBatchDownload } from './useBatchDownload'
 import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
 import { supabase } from '@/src/lib/supabase'
@@ -23,7 +24,9 @@ const TOGGLES: { key: keyof CabinetSheetLayers; label: string }[] = [
   { key: 'threeD',    label: '3D View' },
 ]
 
-export default function CabinetSheetReport({ project, room, walls, cabinets, resolvedParts, materialNames, paperKey }: {
+export default function CabinetSheetReport({ project, room, walls, cabinets, resolvedParts, materialNames, paperKey, batch }: {
+  /** Job Reports, several rooms: download as soon as ready, then call this (useBatchDownload). */
+  batch?: () => void
   project:       Project | null
   room:          Room
   walls:         Wall[]
@@ -139,6 +142,9 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
       setBusy(false)
     }
   }
+
+  // Ready once the hardware + per-cabinet overrides have loaded.
+  useBatchDownload(batch, hardware !== null && visible.every(c => c.id in overridesByCab), handleDownload)
 
   if (sorted.length === 0) {
     return <div className="text-gray-500 text-center py-12 text-sm">No cabinets in this room.</div>
