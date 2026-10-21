@@ -1729,6 +1729,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           await handleAddUnderPanel(ids as string[])
           return { added: refs }
         },
+        // Right-click → Join kicks: one kick assembly across the cabinet's straight run.
+        async joinKicks(ref: string) {
+          const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
+          if (!cab) throw new Error(`Cabinet not found: ${ref}`)
+          await handleJoinKicks(cab.id)
+          return { joined: cab.label }
+        },
         // Open the cabinet edit modal — same path as double-clicking the cabinet
         // in the plan (lets headless tests reach the Part/Shape editors).
         openCabinet(ref: string) {
@@ -1736,6 +1743,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           if (!cab) throw new Error(`Cabinet not found: ${ref}`)
           setEditCabId(cab.id)
           return { opened: cab.label, id: cab.id }
+        },
+        // Full resolved cabinet (parts, seams, hinges) for headless inspection.
+        async getResolved(ref: string) {
+          const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
+          if (!cab) throw new Error(`Cabinet not found: ${ref}`)
+          return await dbResolveAndPersistCabinet(cab.id, { awaitPersist: true })
         },
         async getIssues() {
           const out = []

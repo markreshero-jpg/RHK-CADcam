@@ -12,7 +12,8 @@
 // build error. The thresholds below are tunable.
 // ============================================================
 
-import type { ResolvedHingeInstance, ResolvedInternalPart, ResolverError } from './types'
+import type { ResolvedCabinet, ResolvedCasePart, ResolvedHingeInstance, ResolvedInternalPart, ResolvedSeamJoint, ResolverError } from './types'
+import { cabinetSeamDrills } from '../jointDrilling'
 
 // Keep-out around the cup bore centre (on the door back face), in mm.
 const HINGE_HALF_W  = 22   // across the cabinet width (X) from the cup centre
@@ -59,6 +60,79 @@ export function checkHingeInnerDrawerClash(
         break   // one warning per hinge is enough
       }
     }
+  }
+  return out
+}
+
+// ============================================================
+// Hinge plate ↔ adjustable-shelf hole clash
+//
+// A hinge plate screws to the gable just behind the door, and its body covers
+// the front column of shelf-pin holes. A pin hole under the plate means the
+// plate screw lands in (or beside) a 5mm hole, so Mark wants it as an ERROR.
+// The plate outline isn't in the hardware data, so it's a keep-out box around
+// the plate's own screw holes (tunable below).
+// ============================================================
+
+const PLATE_PAD_Y     = 9    // plate body past its screw holes, up and down
+const PLATE_PAD_BACK  = 30   // plate body behind its screw holes (into the cabinet)
+const PLATE_PAD_FRONT = 15   // plate body in front of its screw holes
+
+export interface ShelfHole { part: string; y: number; z: number; r: number }
+
+/** Adj-shelf pin holes on the case parts, in cabinet coords. */
+export function adjShelfHoles(
+  caseParts: ResolvedCasePart[],
+  internalParts: ResolvedInternalPart[],
+  seamJoints: ResolvedSeamJoint[],
+): ShelfHole[] {
+  const rp = { case_parts: caseParts, internal_parts: internalParts, seam_joints: seamJoints } as ResolvedCabinet
+  return cabinetSeamDrills(rp)
+    .filter(d => d.seamKey.startsWith('int_adj_shelf_'))
+    .map(d => ({ part: d.targetPartKey, y: d.y, z: d.z, r: d.radius }))
+}
+
+// Keep-out box (y, z) of one hinge's plate, or null when it has no plate drills.
+function plateBox(h: ResolvedHingeInstance) {
+  const ds = h.plate_drills ?? []
+  if (!ds.length) return null
+  const ys = ds.map(d => d.y), zs = ds.map(d => d.z)
+  return {
+    y0: Math.min(...ys) - PLATE_PAD_Y, y1: Math.max(...ys) + PLATE_PAD_Y,
+    z0: Math.min(...zs) - PLATE_PAD_BACK, z1: Math.max(...zs) + PLATE_PAD_FRONT,
+  }
+}
+
+/** Shelf holes on the hinge's mounting part that fall under its plate. */
+export function plateHoleHits(h: ResolvedHingeInstance, holes: ShelfHole[]): ShelfHole[] {
+  const b = plateBox(h)
+  const part = h.mount_target && 'part_key' in h.mount_target ? h.mount_target.part_key : null
+  if (!b || !part) return []
+  return holes.filter(s => s.part === part
+    && s.y + s.r >= b.y0 && s.y - s.r <= b.y1
+    && s.z + s.r >= b.z0 && s.z - s.r <= b.z1)
+}
+
+export function checkHingeShelfHoleClash(
+  hinges: ResolvedHingeInstance[],
+  caseParts: ResolvedCasePart[],
+  internalParts: ResolvedInternalPart[],
+  seamJoints: ResolvedSeamJoint[],
+): ResolverError[] {
+  if (!hinges.length || !seamJoints.some(sj => sj.part_a_key.startsWith('int_adj_shelf_'))) return []
+  const holes = adjShelfHoles(caseParts, internalParts, seamJoints)
+  const out: ResolverError[] = []
+  for (const h of hinges) {
+    const hits = plateHoleHits(h, holes)
+    if (!hits.length) continue
+    const cupY = h.cup_drills?.[0]?.y ?? h.y_position_mm
+    out.push({
+      code: 'HINGE_SHELF_HOLE_CLASH',
+      message: `Door [${h.row_index},${h.col_index}] hinge ${h.sort_order + 1} (≈${Math.round(cupY)}mm high) has its plate over `
+        + `${hits.length} adj. shelf hole${hits.length > 1 ? 's' : ''} at ${[...new Set(hits.map(s => Math.round(s.y)))].join('/')}mm. `
+        + 'Move the hinge (higher if it fits) or change the shelf drilling.',
+      part: 'hinge',
+    })
   }
   return out
 }

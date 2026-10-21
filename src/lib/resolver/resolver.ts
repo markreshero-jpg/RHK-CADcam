@@ -16,7 +16,7 @@ import { resolveFace }           from './resolveFace'
 import { resolveDrawerStacks, treeHasDrawerFittings } from './resolveDrawerStack'
 import { resolveJoints }         from './resolveJoints'
 import { resolveHinges }         from './resolveHinges'
-import { checkHingeInnerDrawerClash } from './hingeClash'
+import { checkHingeInnerDrawerClash, checkHingeShelfHoleClash } from './hingeClash'
 import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
 import { resolveShapedFaces } from './resolveShapedFace'
 import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
@@ -145,6 +145,10 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // A hinge body protruding into the front of the interior can foul an inner
   // drawer at the same height. Reported as a warning (approximate geometry).
   allWarnings.push(...checkHingeInnerDrawerClash(hingeInstances, internalParts))
+
+  // ── 6d. Hinge plate ↔ adj-shelf hole clash ────────────────────
+  // A plate over a shelf-pin hole can't be screwed on — an error (Mark).
+  allErrors.push(...checkHingeShelfHoleClash(hingeInstances, caseParts, internalParts, seamJoints))
 
   // ── 7. Warnings ───────────────────────────────────────────────
   // Non-fatal checks
