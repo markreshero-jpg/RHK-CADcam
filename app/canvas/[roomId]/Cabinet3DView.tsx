@@ -6,8 +6,7 @@ import { createPortal } from 'react-dom'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { Edges } from '@react-three/drei'
-import { supabase } from '@/src/lib/supabase'
-import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { saveSVGEdge } from './cabinetEditSvgHelpers'
 import type { CabinetInstance } from '@/src/lib/types'
 import { dbUpdateCustomPart, dbSavePartPosOverride, type CabinetCustomPart, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
 import { sampleOutline, sampleShapeOutline } from '@/src/lib/shapePath'
@@ -26,7 +25,7 @@ import {
 } from '@/src/components/three/PartViewer'
 import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamDrillsFor, intoPartFrame, seamExtentBoxes, coalesceOpposingDrills, dropNearDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelOutline, caseBevelNote, tkBevelOutline, tkBevelNote } from '@/src/lib/jointDrilling'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
-import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, parseZonePartId, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
+import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import type { ResolvedDoorProfile } from '@/src/lib/resolver/types'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
@@ -1071,51 +1070,6 @@ function SeamJointOverlay({ seamJoints, boxByKey, wire }: {
   )
 }
 
-// ── Edge band persistence ─────────────────────────────────────────────────────
-// Parses PartMeta.id to determine which table/row to update. Internal parts use
-// front/back column names instead of right/left due to their coordinate mapping.
-
-async function saveEdge(cabId: string, part: PartMeta) {
-  const { id, edge } = part
-  const direct = { edge_band_top: edge.top, edge_band_bottom: edge.bottom,
-                   edge_band_left: edge.left, edge_band_right: edge.right }
-
-  let result: { error: unknown }
-
-  if (id.startsWith('case_')) {
-    result = await supabase.from('case_parts').update(direct)
-      .eq('cabinet_instance_id', cabId).eq('part_key', id.slice(5))
-
-  } else if (id.startsWith('tk_')) {
-    const rest = id.slice(3), cut = rest.lastIndexOf('_')
-    result = await supabase.from('toekick_parts').update(direct)
-      .eq('cabinet_instance_id', cabId)
-      .eq('part_key', rest.slice(0, cut))
-      .eq('sort_order', parseInt(rest.slice(cut + 1)))
-
-  } else if (id.startsWith('int_')) {
-    const rest = id.slice(4), cut = rest.lastIndexOf('_')
-    result = await supabase.from('internal_parts').update({
-      edge_band_top: edge.top, edge_band_bottom: edge.bottom,
-      edge_band_back: edge.left, edge_band_front: edge.right,
-    }).eq('cabinet_instance_id', cabId)
-      .eq('part_type', rest.slice(0, cut))
-      .eq('sort_order', parseInt(rest.slice(cut + 1)))
-
-  } else if (id.startsWith('zone_')) {
-    const zid = parseZonePartId(id)
-    if (!zid) return
-    result = await supabase.from('face_zones').update(direct)
-      .eq('cabinet_instance_id', cabId).eq('facet', zid.facet ?? '')
-      .eq('row_index', zid.row).eq('col_index', zid.col)
-
-  } else {
-    return // drawer box / slide parts — no edge band columns
-  }
-
-  if (result.error) console.error('[edge save]', result.error)
-  else patchEdgeOverrideCache(cabId, id, edge)
-}
 
 // ── PartMeta by stable id ──────────────────────────────────────────────────────
 // Rebuild the same PartMeta the 3D render produces for a part id, without going
@@ -1978,7 +1932,7 @@ export default function Cabinet3DView({
     if (prev && prevId !== curId && originalEdgeRef.current) {
       const orig    = originalEdgeRef.current
       const changed = (Object.keys(orig) as (keyof PartEdge)[]).some(k => prev.edge[k] !== orig[k])
-      if (changed) saveEdge(cab.id, prev)
+      if (changed) saveSVGEdge(cab.id, prev)
     }
 
     if (selectedPart && selectedPart.id !== prevId) {

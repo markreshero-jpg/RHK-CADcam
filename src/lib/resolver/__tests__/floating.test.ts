@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+vi.mock('@/src/lib/supabase', () => ({ supabase: {} }))
 import { resolveCabinet } from '../resolver'
 import { mergeRules } from '../mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type ConstructionRules, type Material } from '../types'
@@ -78,5 +79,18 @@ describe('floating cabinets', () => {
     const normal = shelf({}), float = shelf({ FLOAT: true }), withBottom = shelf({ FLOAT: true, FLOAT_BOTTOM: true })
     expect(float.Y - normal.Y).toBeCloseTo((0 + 482 / 2) - (18 + 464 / 2), 0)
     expect(withBottom.Y - normal.Y).toBeCloseTo((16 + 466 / 2) - (18 + 464 / 2), 0)
+  })
+})
+
+// Only hand edits (cabinet_instances.edge_overrides) re-apply after a resolve, so
+// turning FLOAT on for an already-resolved cabinet tapes its gable ends.
+describe('edge overrides', () => {
+  it('a hand edit wins; parts without one keep the rule-driven edging', async () => {
+    const { applyEdgeOverrides } = await import('../resolveCabinetFromDB')
+    const resolved = resolveCabinet(cab({ ...shop, FLOAT: true }))
+    applyEdgeOverrides(resolved, { case_right_side: { top: false, bottom: false, left: false, right: true } })
+    const get = (k: string) => resolved.case_parts.find(p => p.part_key === k)!.edge_band
+    expect(get('left_side')).toMatchObject({ top: true, bottom: true, right: true })
+    expect(get('right_side')).toMatchObject({ top: false, bottom: false, right: true })
   })
 })

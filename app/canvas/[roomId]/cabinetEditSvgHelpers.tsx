@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { PartMeta } from '@/src/components/three/PartViewer'
-import { patchEdgeOverrideCache } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { saveEdgeOverride } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { caseBox, caseBoxAABB, zoneBoxAABB, rotEulerXYZ, type SeamDrill, type OrientedDrill, type DrillAxis, tkBoxAABB } from '@/src/lib/jointDrilling'
 import type { PartPosOverrides } from './canvasDB'
 import type {
@@ -382,6 +382,8 @@ export function svgInternalSlideMeta(s: ResolvedDrawerSlide): PartMeta {
 
 // ── Edge persistence ───────────────────────────────────────────────────────────
 
+// Shared by the 2D part views and the 3D view. The part row is updated for an
+// immediate display; edge_overrides is what makes the edit survive re-resolves.
 export async function saveSVGEdge(cabId: string, part: PartMeta) {
   const { id, edge } = part
   const direct = { edge_band_top: edge.top, edge_band_bottom: edge.bottom, edge_band_left: edge.left, edge_band_right: edge.right }
@@ -402,7 +404,7 @@ export async function saveSVGEdge(cabId: string, part: PartMeta) {
     return
   }
   if (result.error) console.error('[svg edge save]', result.error)
-  else patchEdgeOverrideCache(cabId, id, edge)
+  else await saveEdgeOverride(cabId, id, edge)
 }
 
 // ── Hit testing ────────────────────────────────────────────────────────────────

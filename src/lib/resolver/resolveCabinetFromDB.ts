@@ -102,21 +102,17 @@ export function setCachedInput(id: string, input: CabinetInput): void {
   _inputCache.set(id, input)
 }
 
-// Load manually-edited edge bands from the DB so they survive re-resolution.
-async function loadEdgeOverrides(cabinetId: string) {
-  const [cp, tp, ip, fz] = await Promise.all([
-    supabase.from('case_parts').select('part_key,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right').eq('cabinet_instance_id', cabinetId),
-    supabase.from('toekick_parts').select('part_key,sort_order,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right').eq('cabinet_instance_id', cabinetId),
-    supabase.from('internal_parts').select('part_type,sort_order,edge_band_top,edge_band_bottom,edge_band_front,edge_band_back').eq('cabinet_instance_id', cabinetId),
-    supabase.from('face_zones').select('facet,row_index,col_index,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right').eq('cabinet_instance_id', cabinetId),
-  ])
-  return {
-    case:     new Map((cp.data ?? []).map(p => [p.part_key, { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right }])),
-    toekick:  new Map((tp.data ?? []).map(p => [`${p.part_key}_${p.sort_order}`, { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_left, right: p.edge_band_right }])),
-    internal: new Map((ip.data ?? []).map(p => [`${p.part_type}_${p.sort_order}`, { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_back, right: p.edge_band_front }])),
-    // Keyed like the zone part id minus 'zone_' (zoneKey): facets get `edge.r_c`.
-    zone:     new Map((fz.data ?? []).map(z => [zoneKey(z), { top: z.edge_band_top, bottom: z.edge_band_bottom, left: z.edge_band_left, right: z.edge_band_right }])),
-  }
+// Hand-edited edge bands live on cabinet_instances.edge_overrides, keyed by the
+// editor's part id (case_<key>, tk_<key>_<sort>, int_<type>_<sort>, zone_<zoneKey>).
+// Only those are re-applied after a resolve — the persisted part rows are the
+// resolver's own output and must not override it, or rule-driven edging (e.g.
+// FLOAT taping gable ends) never reaches a cabinet that was resolved before.
+export type EdgeFlags = { top: boolean; bottom: boolean; left: boolean; right: boolean }
+export type EdgeOverrides = Record<string, EdgeFlags>
+
+async function loadEdgeOverrides(cabinetId: string): Promise<EdgeOverrides> {
+  const { data } = await supabase.from('cabinet_instances').select('edge_overrides').eq('id', cabinetId).maybeSingle()
+  return { ...((data?.edge_overrides ?? {}) as EdgeOverrides) }
 }
 
 // Load the user's per-view hide map so it can be carried on the resolved cabinet
@@ -127,25 +123,22 @@ export async function loadHiddenParts(cabinetId: string): Promise<PartHideViews>
   return ((data as { part_hide_views?: unknown } | null)?.part_hide_views ?? {}) as PartHideViews
 }
 
-// Merge saved edge bands back onto freshly-resolved parts (preserves manual edits through resolves).
-function applyEdgeOverrides(
-  resolved: ResolvedCabinet,
-  ov: Awaited<ReturnType<typeof loadEdgeOverrides>>,
-) {
+// Merge hand-edited edge bands onto freshly-resolved parts (they survive resolves).
+export function applyEdgeOverrides(resolved: ResolvedCabinet, ov: EdgeOverrides) {
   for (const p of resolved.case_parts) {
-    const e = ov.case.get(p.part_key)
+    const e = ov[`case_${p.part_key}`]
     if (e) p.edge_band = { ...p.edge_band, ...e }
   }
   for (const p of resolved.toekick_parts) {
-    const e = ov.toekick.get(`${p.part_key}_${p.sort_order}`)
+    const e = ov[`tk_${p.part_key}_${p.sort_order}`]
     if (e) p.edge_band = { ...p.edge_band, ...e }
   }
   for (const p of resolved.internal_parts) {
-    const e = ov.internal.get(`${p.part_type}_${p.sort_order}`)
+    const e = ov[`int_${p.part_type}_${p.sort_order}`]
     if (e) p.edge_band = { ...p.edge_band, ...e }
   }
   for (const z of resolved.face_zones) {
-    const e = ov.zone.get(zoneKey(z))
+    const e = ov[`zone_${zoneKey(z)}`]
     if (e) z.edge_band = { ...z.edge_band, ...e }
   }
 }
@@ -156,19 +149,25 @@ export function applyEdgeOverridesFromCache(resolved: ResolvedCabinet) {
   if (ov) applyEdgeOverrides(resolved, ov)
 }
 
-// Patch the cache when a single part's edge bands are saved manually.
-// Keeps the fast resize path from overwriting the just-saved values.
-export function patchEdgeOverrideCache(
-  cabinetId: string,
-  partId: string,
-  edge: { top: boolean; bottom: boolean; left: boolean; right: boolean },
-) {
-  const ov = _edgeOvCache.get(cabinetId)
-  if (!ov) return
-  if      (partId.startsWith('case_'))  ov.case.set(partId.slice(5), edge)
-  else if (partId.startsWith('tk_'))    ov.toekick.set(partId.slice(3), edge)
-  else if (partId.startsWith('int_'))   ov.internal.set(partId.slice(4), edge)
-  else if (partId.startsWith('zone_'))  ov.zone.set(partId.slice(5), edge)
+// Saves are chained per cabinet so quick successive edge clicks don't race the
+// read-modify-write of edge_overrides.
+const _edgeSaveChain = new Map<string, Promise<unknown>>()
+
+/** Record a hand edge edit on the cabinet (edge_overrides) and patch the cache
+ *  so the fast resize path keeps it. The caller updates the part row itself. */
+export function saveEdgeOverride(cabinetId: string, partId: string, edge: EdgeFlags): Promise<unknown> {
+  const flags = { top: edge.top, bottom: edge.bottom, left: edge.left, right: edge.right }
+  const cached = _edgeOvCache.get(cabinetId)
+  if (cached) cached[partId] = flags
+  const run = (_edgeSaveChain.get(cabinetId) ?? Promise.resolve()).then(async () => {
+    const { data, error: readErr } = await supabase.from('cabinet_instances').select('edge_overrides').eq('id', cabinetId).single()
+    if (readErr) throw readErr
+    const next = { ...((data?.edge_overrides ?? {}) as EdgeOverrides), [partId]: flags }
+    const { error } = await supabase.from('cabinet_instances').update({ edge_overrides: next }).eq('id', cabinetId)
+    if (error) throw error
+  }).catch(e => console.error('[edge override save]', e))
+  _edgeSaveChain.set(cabinetId, run)
+  return run
 }
 
 /**
