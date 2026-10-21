@@ -36,6 +36,7 @@ import { DimLabel, dimLabelFits, dimLabelSides } from './dimLabel'
 /** Report-only page extras (not drawing layers). */
 export interface ElevationPageOptions {
   returnWalls: boolean
+  /** Page-level (ShopTitleBlock, drawn by the report export) — not drawn in this SVG. */
   titleBlock:  boolean
 }
 
@@ -112,7 +113,7 @@ const INK3 = '#999'
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
-  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, projectName, roomName, paperKey, fixtures = [], benchHeights = [],
+  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [],
 }: {
   /** Floor → bench top, floor → basin rim (dim_elev_bench, see benchDims.ts). */
   benchHeights?: number[]
@@ -127,9 +128,6 @@ export default function ElevationPrintSVG({
   scale?:        number
   layers:        LayerView
   show:          ElevationPageOptions
-  projectName:   string
-  roomName:      string
-  paperKey:      string
 }) {
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = frontViewHardwareMap(resolvedPartsRaw)
@@ -179,28 +177,16 @@ export default function ElevationPrintSVG({
   const heightChainX   = -13 * P
   const titleY         = (wallCabs.some(c => !!c.bulkhead) ? -13.5 : -12) * P   // clear of the bulkhead row
 
-  // ── Title block ───────────────────────────────────────────────────────────
-  const tbRowH = 4.6 * P, tbPad = 2 * P, tbRows = 5
-  const tbH = tbRowH * tbRows + tbPad * 2
-  const tbW = 66 * P
-
   // ── ViewBox padding ───────────────────────────────────────────────────────
   const benchDimStep = 8 * P   // bench / basin height lines, outside the height chain
   const padL = 20 * P + (layers.show('dim_elev_bench') ? benchHeights.length * benchDimStep : 0)
   const padR = 11 * P
   const padT = 16 * P
-  const padB = 18 * P + (show.titleBlock ? tbH + 4 * P : 0)
+  const padB = 18 * P
   const vbX = -padL
   const vbY = -padT
   const vbW = wall.length + padL + padR
   const vbH = roomH + padT + padB
-
-  const tbX = vbX + 1 * P
-  const tbY = vbY + vbH - tbH - 1 * P
-
-  const paperLabel = `${paperKey.replace(/L$/, '')} Landscape`
-  const d = new Date()
-  const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 
   // ── Horizontal dimension chain (top or bottom) ────────────────────────────
   function hChain(segs: Seg[], chainY: number, key: string, item: string) {
@@ -679,25 +665,6 @@ export default function ElevationPrintSVG({
           })()}
       </>
 
-      {/* Title block */}
-      {show.titleBlock && (
-        <g fontFamily="Arial, Helvetica, sans-serif" fill={INK}>
-          <rect x={tbX} y={tbY} width={tbW} height={tbH} fill="white" stroke={INK} strokeWidth={boxSW} />
-          <line x1={tbX} y1={tbY + tbPad + tbRowH} x2={tbX + tbW} y2={tbY + tbPad + tbRowH} stroke={INK} strokeWidth={boxSW * 0.6} />
-          {[
-            { t: projectName || 'Untitled Project', bold: true,  fs: tbRowH * 0.6 },
-            { t: `Room:  ${roomName}`,              bold: false, fs: tbRowH * 0.5 },
-            { t: `Wall:  ${wall.name}`,             bold: false, fs: tbRowH * 0.5 },
-            { t: `Scale  1:${scale}  ·  ${paperLabel}`, bold: false, fs: tbRowH * 0.5 },
-            { t: dateStr,                           bold: false, fs: tbRowH * 0.5 },
-          ].map((r, i) => (
-            <text key={i} x={tbX + tbPad} y={tbY + tbPad + tbRowH * (i + 0.5)}
-              textAnchor="start" dominantBaseline="central" fontSize={r.fs} fontWeight={r.bold ? 'bold' : 'normal'}>
-              {r.t}
-            </text>
-          ))}
-        </g>
-      )}
     </svg>
   )
 }

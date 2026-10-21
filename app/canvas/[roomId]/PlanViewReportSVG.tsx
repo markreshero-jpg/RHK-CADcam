@@ -39,6 +39,7 @@ import { DimLabel, dimLabelFits, dimLabelSides, wallRowName } from './dimLabel'
 export interface PlanViewPageOptions {
   wallNames:  boolean
   hatch:      boolean
+  /** Page-level (ShopTitleBlock, drawn by the report export) — not drawn in this SVG. */
   titleBlock: boolean
   /** z_CAD_tool decision 6: print annotations in their own colours (off = black). */
   annotColours: boolean
@@ -75,7 +76,7 @@ function cabinetTypeFill(cab: CabinetInstance): string {
 }
 
 export default function PlanViewReportSVG({
-  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, projectName, roomName, paperKey, fixtures = [], annotations = [],
+  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [],
 }: {
   walls:       Wall[]
   /** Placed fixtures — doors / windows (z_fixtures P5) split the walls and draw their symbol. */
@@ -88,9 +89,6 @@ export default function PlanViewReportSVG({
   scale?:      number
   layers:      LayerView
   show:        PlanViewPageOptions
-  projectName: string
-  roomName:    string
-  paperKey:    string   // e.g. 'A3L'
 }) {
   if (walls.length === 0) {
     return (
@@ -159,14 +157,7 @@ export default function PlanViewReportSVG({
   const CARCASE_LINE = '#777'
   const HATCH_ID = 'plan-report-wall-hatch'
 
-  // ── Title block dimensions ────────────────────────────────────────────────
-  const tbRowH = 4.2 * P
-  const tbPad  = 1.5 * P
-  const tbRows = 5
-  const tbH    = tbRowH * tbRows + tbPad * 2
-  const tbW    = 66 * P
-
-  // ── ViewBox padding — extend for dims / title block when shown ────────────
+  // ── ViewBox padding — extend for dims when shown ──────────────────────────
   const maxThick = Math.max(0, ...walls.filter(w => w.wall_type !== 'island').map(w => w.thickness))
   // Chains stack beyond their cabinets, so the viewBox must reserve room for the
   // deepest cabinet a chain must clear: any island cabinet, plus back-side cabinets
@@ -186,20 +177,12 @@ export default function PlanViewReportSVG({
   const padL = basePad + dimExtra
   const padR = basePad + dimExtra
   const padT = basePad + dimExtra
-  const padB = basePad + dimExtra + (show.titleBlock ? tbH + 2 * P : 0)
+  const padB = basePad + dimExtra
 
   const vbX = minX - padL
   const vbY = minY - padT
   const vbW = (maxX - minX) + padL + padR
   const vbH = (maxY - minY) + padT + padB
-
-  // Title block anchored bottom-left of the viewBox
-  const tbX = vbX + 1 * P
-  const tbY = vbY + vbH - tbH - 1 * P
-
-  const paperLabel = `${paperKey.replace(/L$/, '')} Landscape`
-  const d = new Date()
-  const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 
   // ── One dimension-chain line (main line + boundary ticks + segment labels) ─
   function dimLine(wall: Wall, out: { x: number; y: number }, rowDist: number, segs: Seg[], key: string, item: string, name?: string) {
@@ -695,31 +678,6 @@ export default function PlanViewReportSVG({
       {/* ── CAD annotations (z_CAD_tool) — black unless "Annotation colours" is ticked ── */}
       <AnnotationLayer annotations={annotations} frame={IDENTITY_FRAME} paper={P} layers={layers} printColours={show.annotColours} />
 
-      {/* ── Title block (toggle) ── */}
-      {show.titleBlock && (
-        <g fontFamily="Arial, Helvetica, sans-serif" fill={INK}>
-          <rect x={tbX} y={tbY} width={tbW} height={tbH} fill="white" stroke={INK} strokeWidth={sw} />
-          <line
-            x1={tbX} y1={tbY + tbPad + tbRowH} x2={tbX + tbW} y2={tbY + tbPad + tbRowH}
-            stroke={INK} strokeWidth={sw * 0.6}
-          />
-          {[
-            { t: projectName || 'Untitled Project', bold: true,  fs: tbRowH * 0.6 },
-            { t: `Room:  ${roomName}`,              bold: false, fs: tbRowH * 0.5 },
-            { t: `Scale  1:${scale}`,               bold: false, fs: tbRowH * 0.5 },
-            { t: `Paper  ${paperLabel}`,            bold: false, fs: tbRowH * 0.5 },
-            { t: dateStr,                           bold: false, fs: tbRowH * 0.5 },
-          ].map((r, i) => (
-            <text key={i}
-              x={tbX + tbPad} y={tbY + tbPad + tbRowH * (i + 0.5)}
-              textAnchor="start" dominantBaseline="central"
-              fontSize={r.fs} fontWeight={r.bold ? 'bold' : 'normal'}
-            >
-              {r.t}
-            </text>
-          ))}
-        </g>
-      )}
     </svg>
   )
 }

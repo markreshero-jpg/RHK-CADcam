@@ -14,6 +14,8 @@ import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
 import PlanViewReportSVG, { type PlanViewPageOptions } from './PlanViewReportSVG'
 import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
 import { useTutorial } from '@/src/lib/tutorial/store'
+import { useCompanyTitle } from '@/src/lib/shopDrawings/companyTitle'
+import ShopTitleBlock, { sheetTitle, pageLayout, titleBlockHeight } from './ShopTitleBlock'
 
 const PAPER: Record<string, { w: number; h: number }> = {
   A4L: { w: 297, h: 210 },
@@ -51,6 +53,8 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
   paperKey: string
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
+  const tbRef = useRef<HTMLDivElement>(null)
+  const company = useCompanyTitle()
   const [layerSet, setLayerSetId] = useReportLayerSet(LS_SET_KEY, layerSets, activeLayerSetId)
   const layers = useMemo(() => resolveLayerView(layerSet, 'plan'), [layerSet])
   // Modal only mounts on user action (never SSR'd), so reading localStorage in the
@@ -74,11 +78,13 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
     try { localStorage.setItem(LS_KEY, JSON.stringify(show)) } catch { /* storage unavailable */ }
   }, [show])
 
-  const projectName = project?.name ?? 'Untitled Project'
 
   function paperLabel(key: string) {
     return `${key.replace(/L$/, '')} Landscape`
   }
+
+  // Title block sits at the foot of the page in paper mm; the drawing fits above it.
+  const tbH = show.titleBlock ? titleBlockHeight(company) : null
 
   const getFitInfo = useCallback(() => {
     const svgEl = svgRef.current
@@ -90,10 +96,9 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
 
     const targetW = vbW / scale
     const targetH = vbH / scale
-    const usableW = paper.w - MARGIN * 2
-    const usableH = paper.h - MARGIN * 2
-    return { paper, targetW, targetH, usableW, usableH }
-  }, [paperKey, scale])
+    const { usableW, usableH, tb } = pageLayout(paper, MARGIN, tbH)
+    return { paper, targetW, targetH, usableW, usableH, tb }
+  }, [paperKey, scale, tbH])
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -109,9 +114,10 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
         return
       }
 
-      const paperSuggestion = Object.entries(PAPER).find(([, p]) => (
-        fit.targetW <= p.w - MARGIN * 2 && fit.targetH <= p.h - MARGIN * 2
-      ))
+      const paperSuggestion = Object.entries(PAPER).find(([, p]) => {
+        const l = pageLayout(p, MARGIN, tbH)
+        return fit.targetW <= l.usableW && fit.targetH <= l.usableH
+      })
       const requiredScale = scale * Math.max(fit.targetW / fit.usableW, fit.targetH / fit.usableH)
       const scaleSuggestion = STANDARD_SCALES.find(s => s >= requiredScale)
       const suggestions = [
@@ -124,7 +130,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
       )
     })
     return () => cancelAnimationFrame(id)
-  }, [show, layers, walls, cabinets, getFitInfo, paperKey, scale])
+  }, [show, layers, walls, cabinets, getFitInfo, paperKey, scale, tbH])
 
   async function handleDownload() {
     const svgEl = svgRef.current
@@ -134,7 +140,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
     try {
       const fit = getFitInfo()
       if (!fit) return
-      const { paper, targetW, targetH, usableW, usableH } = fit
+      const { paper, targetW, targetH, usableW, usableH, tb } = fit
 
       // True scale: vbW model mm renders into vbW/scale paper mm → exactly 1:scale.
       // Centre within the usable area; clamp to the margin if it overflows.
@@ -152,6 +158,8 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
         orientation: paper.w >= paper.h ? 'landscape' : 'portrait',
       })
       await svg2pdf(pdfSvg, doc, { x, y, width: targetW, height: targetH })
+      const tbSvg = tbRef.current?.querySelector('svg')
+      if (tb && tbSvg) await svg2pdf(tbSvg, doc, { x: tb.x, y: tb.y, width: tb.w, height: tb.h })
 
       const safeRoom = room.name.replace(/[^\w-]/g, '_')
       doc.save(`plan-${safeRoom}-1-${scale}.pdf`)
@@ -200,10 +208,13 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
           scale={scale}
           layers={layers}
           show={show}
-          projectName={projectName}
-          roomName={room.name}
-          paperKey={paperKey}
         />
+        {show.titleBlock && (
+          <div ref={tbRef} className="px-2 pb-2">
+            <ShopTitleBlock company={company} sheet={sheetTitle(project, room, scale, 1, 1)}
+              width={pageLayout(PAPER[paperKey] ?? PAPER.A3L, MARGIN, null).usableW} />
+          </div>
+        )}
       </div>
     </div>
   )

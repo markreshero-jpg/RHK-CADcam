@@ -15,6 +15,8 @@ import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
 import ElevationPrintSVG, { type ElevationPageOptions } from './ElevationPrintSVG'
 import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
 import { useTutorial } from '@/src/lib/tutorial/store'
+import { useCompanyTitle } from '@/src/lib/shopDrawings/companyTitle'
+import ShopTitleBlock, { sheetTitle, pageLayout, titleBlockHeight } from './ShopTitleBlock'
 
 const PAPER: Record<string, { w: number; h: number }> = {
   A4L: { w: 297, h: 210 }, A3L: { w: 420, h: 297 }, A2L: { w: 594, h: 420 }, A1L: { w: 841, h: 594 },
@@ -45,6 +47,8 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
   paperKey:      string
 }) {
   const refs = useRef<Map<string, SVGSVGElement>>(new Map())
+  const tbRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const company = useCompanyTitle()
   const [busy, setBusy] = useState(false)
   const [layerSet, setLayerSetId] = useReportLayerSet(LS_SET_KEY, layerSets, activeLayerSetId)
   const layers = useMemo(() => resolveLayerView(layerSet, 'elevation'), [layerSet])
@@ -69,7 +73,6 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
     return next
   })
   const visibleWalls = standardWalls.filter(w => selectedIds.has(w.id))
-  const projectName = project?.name ?? 'Untitled Project'
 
   async function handleDownload() {
     if (visibleWalls.length === 0) return
@@ -77,7 +80,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
     setBusy(true)
     try {
       const paper = PAPER[paperKey] ?? PAPER.A3L
-      const usableW = paper.w - MARGIN * 2, usableH = paper.h - MARGIN * 2
+      const { usableW, usableH, tb } = pageLayout(paper, MARGIN, show.titleBlock ? titleBlockHeight(company) : null)
       const doc = new jsPDF({ unit: 'mm', format: [paper.w, paper.h], orientation: paper.w >= paper.h ? 'landscape' : 'portrait' })
       let first = true
       for (const w of visibleWalls) {
@@ -91,6 +94,8 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
         const x = MARGIN + Math.max(0, (usableW - targetW) / 2)
         const y = MARGIN + Math.max(0, (usableH - targetH) / 2)
         await svg2pdf(svgEl, doc, { x, y, width: targetW, height: targetH })
+        const tbSvg = tbRefs.current.get(w.id)?.querySelector('svg')
+        if (tb && tbSvg) await svg2pdf(tbSvg, doc, { x: tb.x, y: tb.y, width: tb.w, height: tb.h })
       }
       const safeRoom = room.name.replace(/[^\w-]/g, '_')
       doc.save(`elevations-${safeRoom}-1-${scale}.pdf`)
@@ -145,7 +150,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
       {/* Previews — one per selected wall */}
       {visibleWalls.length === 0 ? (
         <div className="text-gray-500 text-center py-8 text-sm">No walls selected.</div>
-      ) : visibleWalls.map(w => (
+      ) : visibleWalls.map((w, i) => (
         <div key={w.id} className="bg-white rounded overflow-hidden shadow-inner">
           <ElevationPrintSVG
             wall={w}
@@ -159,10 +164,13 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
             scale={scale}
             layers={layers}
             show={show}
-            projectName={projectName}
-            roomName={room.name}
-            paperKey={paperKey}
           />
+          {show.titleBlock && (
+            <div ref={el => { if (el) tbRefs.current.set(w.id, el); else tbRefs.current.delete(w.id) }} className="px-2 pb-2">
+              <ShopTitleBlock company={company} sheet={sheetTitle(project, room, scale, i + 1, visibleWalls.length)}
+                width={pageLayout(PAPER[paperKey] ?? PAPER.A3L, MARGIN, null).usableW} />
+            </div>
+          )}
         </div>
       ))}
     </div>

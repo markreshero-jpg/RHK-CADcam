@@ -29,6 +29,9 @@ import {
   type PartPalette, type PaletteCategory,
 } from '@/src/lib/partPalette'
 import { ThemeToggle } from '../ThemeToggle'
+import { invalidateCompanyTitle } from '@/src/lib/shopDrawings/companyTitle'
+
+const LOGO_BUCKET = 'company-assets'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -40,6 +43,12 @@ export interface ShopSettings {
   company_phone: string | null
   company_email: string | null
   company_website: string | null
+  company_fax: string | null
+  /** Shop drawings title block (z_shop_drawings S1). */
+  company_logo_url: string | null
+  drawing_copyright: string | null
+  drawing_disclaimer: string
+  drawing_signature_line: boolean
   default_base_dy: number
   default_base_dz: number
   default_wall_dy: number
@@ -342,6 +351,8 @@ const EMPTY_SETTINGS: ShopSettings = {
   id: '',
   company_name: null, company_address: null, company_abn: null,
   company_phone: null, company_email: null, company_website: null,
+  company_fax: null, company_logo_url: null, drawing_copyright: null,
+  drawing_disclaimer: 'Do not scale off this drawing.', drawing_signature_line: true,
   default_base_dy: DEFAULT_DIMS.base.dy, default_base_dz: DEFAULT_DIMS.base.dz,
   default_wall_dy: DEFAULT_DIMS.wall.dy, default_wall_dz: DEFAULT_DIMS.wall.dz,
   default_tall_dy: DEFAULT_DIMS.tall.dy, default_tall_dz: DEFAULT_DIMS.tall.dz,
@@ -373,6 +384,39 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
   const [companyPhone,   setCompanyPhone]   = useState(s.company_phone   ?? '')
   const [companyEmail,   setCompanyEmail]   = useState(s.company_email   ?? '')
   const [companyWebsite, setCompanyWebsite] = useState(s.company_website ?? '')
+  const [companyFax,     setCompanyFax]     = useState(s.company_fax     ?? '')
+  // Shop drawings title block
+  const [logoUrl,        setLogoUrl]        = useState(s.company_logo_url ?? '')
+  const [logoBusy,       setLogoBusy]       = useState(false)
+  const [logoError,      setLogoError]      = useState<string | null>(null)
+  const [copyright,      setCopyright]      = useState(s.drawing_copyright ?? '')
+  const [disclaimer,     setDisclaimer]     = useState(s.drawing_disclaimer ?? EMPTY_SETTINGS.drawing_disclaimer)
+  const [signatureLine,  setSignatureLine]  = useState(s.drawing_signature_line ?? true)
+
+  // Logo saves straight away (like the model uploads); the old file is removed after.
+  async function setLogo(file: File | null) {
+    if (!s.id) { setLogoError('Save the company details first.'); return }
+    setLogoBusy(true)
+    setLogoError(null)
+    try {
+      let next: string | null = null
+      if (file) {
+        if (!/^image\/(png|jpeg)$/.test(file.type)) { setLogoError('Use a PNG or JPEG logo (PDF export can\'t embed SVG).'); return }
+        const path = `logo/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+        const { error } = await supabase.storage.from(LOGO_BUCKET).upload(path, file, { upsert: true, contentType: file.type })
+        if (error) { setLogoError(`Upload failed: ${error.message}`); return }
+        next = supabase.storage.from(LOGO_BUCKET).getPublicUrl(path).data.publicUrl
+      }
+      const { error } = await supabase.from('shop_settings').update({ company_logo_url: next }).eq('id', s.id)
+      if (error) { setLogoError(error.message); return }
+      const prior = logoUrl.split(`/${LOGO_BUCKET}/`)[1]
+      if (prior) await supabase.storage.from(LOGO_BUCKET).remove([prior])
+      setLogoUrl(next ?? '')
+      invalidateCompanyTitle()
+    } finally {
+      setLogoBusy(false)
+    }
+  }
 
   // Dimensions
   const [baseDy, setBaseDy] = useState(s.default_base_dy)
@@ -470,6 +514,10 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
         company_phone:   companyPhone.trim()   || null,
         company_email:   companyEmail.trim()   || null,
         company_website: companyWebsite.trim() || null,
+        company_fax:     companyFax.trim()     || null,
+        drawing_copyright:      copyright.trim() || null,
+        drawing_disclaimer:     disclaimer.trim() || EMPTY_SETTINGS.drawing_disclaimer,
+        drawing_signature_line: signatureLine,
         default_base_dy: baseDy, default_base_dz: baseDz,
         default_wall_dy: wallDy, default_wall_dz: wallDz,
         default_tall_dy: tallDy, default_tall_dz: tallDz,
@@ -479,6 +527,7 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
       } else {
         await supabase.from('shop_settings').insert(payload)
       }
+      invalidateCompanyTitle()
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } finally {
@@ -794,11 +843,47 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
                     type="email" placeholder="info@example.com"
                     className={INP} />
                 </Field>
+                <Field label="Fax">
+                  <input value={companyFax} onChange={e => setCompanyFax(e.target.value)}
+                    className={INP} />
+                </Field>
                 <Field label="Website">
                   <input value={companyWebsite} onChange={e => setCompanyWebsite(e.target.value)}
                     placeholder="https://example.com"
                     className={INP} />
                 </Field>
+
+                <h3 className="pt-4 text-xs font-semibold uppercase tracking-wider text-ink-muted">Shop drawings title block</h3>
+                <Field label="Logo">
+                  <div className="flex items-center gap-3">
+                    {logoUrl
+                      ? <img src={logoUrl} alt="Company logo" className="h-12 max-w-[10rem] object-contain bg-white rounded border border-edge p-1" />
+                      : <span className="text-xs text-ink-subtle">No logo</span>}
+                    <label className={`px-2 py-1 text-xs rounded border border-edge-strong cursor-pointer hover:border-accent ${logoBusy ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {logoBusy ? 'Saving…' : logoUrl ? 'Replace…' : 'Upload…'}
+                      <input type="file" accept="image/png,image/jpeg" className="hidden"
+                        onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void setLogo(f) }} />
+                    </label>
+                    {logoUrl && !logoBusy && (
+                      <button onClick={() => void setLogo(null)} className="text-xs text-ink-subtle hover:text-ink">Remove</button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[11px] text-ink-subtle">PNG or JPEG. Use a large image (600px+ wide) so it prints sharp.</p>
+                  {logoError && <p className="mt-1 text-xs text-red-500">{logoError}</p>}
+                </Field>
+                <Field label="Copyright line">
+                  <input value={copyright} onChange={e => setCopyright(e.target.value)}
+                    placeholder="All drawings are copyright & are owned & controlled by …"
+                    className={INP} />
+                </Field>
+                <Field label="Scale note">
+                  <input value={disclaimer} onChange={e => setDisclaimer(e.target.value)}
+                    className={INP} />
+                </Field>
+                <label className="flex items-center gap-2 text-sm text-ink">
+                  <input type="checkbox" checked={signatureLine} onChange={e => setSignatureLine(e.target.checked)} />
+                  Client approved signature line
+                </label>
               </div>
             )}
 

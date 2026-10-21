@@ -1,6 +1,6 @@
 # Shop Drawings Package — Spec
 
-Status: **spec written 2026-10-21, nothing built.** Next: S1.
+Status: **S1 built 2026-10-21** (in-app check pending). Next: S2.
 
 Reference: `z_sample_planscabinet_vision/RHK6456 - Suzie and Jeff Morris - Kitchen Shop Drawings.pdf`
 (the Cabinet Vision set we're replacing: plan, wall elevations, island elevations, 3D, doors-off interior).
@@ -41,7 +41,7 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
 2. Wall elevations, in wall order (walls with nothing on them are skipped)
 3. Island / peninsula: both faces on one sheet if they fit
 4. Interior elevations (only walls ticked in the dialog)
-5. (open, see S7) 3D views
+5. 3D views (S8)
 
 ## PDF quality rules
 
@@ -60,18 +60,38 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
 
 | Phase | Scope | Status |
 |---|---|---|
-| S1 | **Company settings + shared title block.** Settings → Company: logo upload, name, address, phone, fax, website, copyright text, signature-line toggle. One `ShopTitleBlock` SVG component in the CV layout, used by Plan View, Elevation Views and the package. New table needs RLS policies (admin/tester). | [ ] |
+| S1 | **Company settings + shared title block.** Settings → Company: logo upload, name, address, phone, fax, website, copyright text, signature-line toggle. One `ShopTitleBlock` SVG component in the CV layout, used by Plan View, Elevation Views and the package. New table needs RLS policies (admin/tester). | [x] built 2026-10-21; in-app check pending |
+
+### S1 notes (as built)
+
+- **No new table.** Company fields already lived on `shop_settings`; S1 added `company_fax`,
+  `company_logo_url`, `drawing_copyright`, `drawing_disclaimer` (default "Do not scale off this
+  drawing."), `drawing_signature_line` (default true). Logo goes in a new public-read / admin-write
+  bucket `company-assets`. It has its own policies, so the shared `models_admin_*` ones are untouched.
+  Migration: `migration_s1_company_title_block.sql` (applied).
+- `src/lib/shopDrawings/companyTitle.ts` → `useCompanyTitle()` loads it once per session and
+  turns the logo into a data URL (svg2pdf can't fetch remote images). Settings → Company calls
+  `invalidateCompanyTitle()` after a save.
+- `app/canvas/[roomId]/ShopTitleBlock.tsx` is a standalone SVG in **paper mm**: 24mm box, a 6mm signature line
+  above, a 4.5mm copyright line below. Columns: company 30% / job 36% / scale 17% / sheet 17%.
+  `sheetTitle()` fills job no. + client, room name, site address (`client_address`), scale,
+  sheet n of N and date. **Drawn By is blank** (no user display name yet). `pageLayout()` puts it at
+  the foot of the page and gives back the drawing area above it.
+- Plan View and Elevation Views no longer draw a title block inside the scaled drawing. The export
+  draws `ShopTitleBlock` at the page foot as a second svg2pdf pass, and the fit check uses the
+  smaller area. Elevations number Sheet n of N across the selected walls.
+- Logo upload takes PNG / JPEG only. Checked headless: the PNG embeds and all text stays real PDF text.
 | S2 | **Pen table + crispness pass** on PlanViewReportSVG / ElevationPrintSVG: shared paper-mm pen table, remove opacity/raster, check overlapping strokes; zoom + print check | [ ] |
 | S3 | **Package export.** Shop Drawings dialog (scale default 1:20, paper default A3L, sheet list with ticks, interior-elevation ticks, fit warnings); one multi-page jsPDF; Sheet n of N; filename `shop-drawings-{job}-{room}.pdf`; enable the menu item | [ ] |
 | S4 | **Multi-view sheets:** lay out several views on one page at one scale (island front + back); fall back to one per page | [ ] |
 | S5 | **CAD carry-over check.** Plan CAD already prints (Plan View). Elevation CAD needs z_CAD_tool **A6** first. Confirm text boxes with borders (the spec block) print right | [ ] (blocked on A6 for elevations) |
-| S6 | **Cabinet numbering:** #n tags under each cabinet on elevations, same as on the plan, from `cab.label` | [ ] |
+| S6 | **Cabinet numbering:** #n tags under each cabinet on elevations, same as on the plan, from `cab.label` as it is (no renumbering) | [ ] |
 | S7 | **Interior elevation (doors off):** drawing mode with fronts hidden, shelves shown and labelled (ADJ SH / FIX SH) and dimensioned | [ ] |
-| S8 | (open, Mark to decide) **3D sheet:** vector hidden-line room views from saved camera angles | [ ] |
+| S8 | **3D sheet** (kept): vector hidden-line room views from saved camera angles | [ ] |
 | S9 | Tutorial (Production → Shop Drawings) | [ ] |
 
-## Open questions
+## Answered (Mark, 2026-10-21)
 
-- S8: is the 3D sheet wanted? It's the hardest part to keep vector.
-- S6: are `cab.label` values already numbered the way you want (#1…#n), or should the package number
-  cabinets itself in wall order?
+- 3D sheet: **keep it** (S8).
+- Cabinet numbers: **use `cab.label` as it is.** No renumbering in the package. Mark may change
+  labelling at canvas level later.
