@@ -9,11 +9,13 @@ import { type LineGeom, segLength } from '@/src/lib/annotations/geometry'
 import { OFFSETTABLE } from '@/src/lib/annotations/geometry'
 import type { AnnotationTool } from './useAnnotationTool'
 
-export default function CadContextMenu({ cad, annotations, zoom }: {
+export default function CadContextMenu({ cad, annotations, zoom, onSaveBlock }: {
   cad:         AnnotationTool
   annotations: RoomAnnotation[]
   /** canvas zoom (px per mm) — how near the click must be to a corner. */
   zoom:        number
+  /** Open the CAD panel's "save as block" name box for the selection (z_CAD_tool C1). */
+  onSaveBlock?: () => void
 }) {
   const m = cad.menu
   useEffect(() => {
@@ -56,6 +58,7 @@ export default function CadContextMenu({ cad, annotations, zoom }: {
   if (OFFSETTABLE.has(a.kind)) items.push({ label: 'Offset…', act: run(() => cad.startOffsetFrom(a.id)) })
   if (items.length) items.push('sep')
   items.push({ label: 'Duplicate', act: run(() => cad.paste([a])) })
+  if (onSaveBlock) items.push({ label: cad.selected.length > 1 ? `Save ${cad.selected.length} items as CAD block…` : 'Save as CAD block…', act: run(onSaveBlock) })
   items.push({ label: 'Bring to front', act: run(() => cad.reorder('front')) })
   items.push({ label: 'Send to back', act: run(() => cad.reorder('back')) })
   items.push('sep')

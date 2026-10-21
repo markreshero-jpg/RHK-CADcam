@@ -51,6 +51,8 @@ import { planSnapGeometry } from '@/src/lib/annotations/planSnapGeometry'
 import CadSnapMarker from './CadSnapMarker'
 import CadMeasureOverlay from './CadMeasureOverlay'
 import CadPanel from './CadPanel'
+import { useCadFields } from './useCadFields'
+import { withFieldsFilled } from '@/src/lib/annotations/blocks'
 import CadContextMenu from './CadContextMenu'
 import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
 import TutorialHintsPlan from './TutorialHintsPlan'
@@ -684,6 +686,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       cadSnapSettings, SNAP_PX / view.zoom, prev, exclude),
     enterCad, exitCad: () => setMode('select'),
   })
+  // Live {field} values (z_CAD_tool C2): drawn + printed notes show them; the editor keeps the tokens.
+  const cadFields = useCadFields({ project, room, resolvedParts, fixtures })
+  const [blockSaveReq, setBlockSaveReq] = useState(0)
   function setAnnotScale(n: number) {
     setRoomState(prev => ({ ...prev, annotation_scale: n }))
     void supabase.from('rooms').update({ annotation_scale: n }).eq('id', room.id)
@@ -2753,7 +2758,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         </div>
       </div>
 
-      {canvasView === 'plan' && <CadContextMenu cad={cad} annotations={planAnnotations} zoom={view.zoom} />}
+      {canvasView === 'plan' && <CadContextMenu cad={cad} annotations={planAnnotations} zoom={view.zoom} onSaveBlock={() => setBlockSaveReq(n => n + 1)} />}
       {cad.editing && canvasView === 'plan' && (
         <AnnotTextEditor key={cad.editing.draft.id} editing={cad.editing} frame={IDENTITY_FRAME} paper={annotScale} zoom={view.zoom}
           toClient={p => { const r = svgRef.current!.getBoundingClientRect(); return { x: r.left + p.x * view.zoom + view.panX, y: r.top + p.y * view.zoom + view.panY } }}
@@ -2919,7 +2924,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                     onPointerDown={cad.onCaptureDown} onPointerMove={cad.onCaptureMove}
                     onDoubleClick={cad.onCaptureDouble} onContextMenu={cad.onCaptureMenu} />
                 )}
-                <AnnotationLayer annotations={cad.withEditing(planAnnotations)} frame={IDENTITY_FRAME} paper={annotScale} layers={planLayers}
+                <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(planAnnotations), cadFields)} frame={IDENTITY_FRAME} paper={annotScale} layers={planLayers}
                   edit={{ ...cad.editProps, hittable: cad.editProps.hittable && (mode === 'cad' || mode === 'select') }} />
                 {cad.drawPreview && (
                   <AnnotationLayer annotations={[cad.drawPreview]} frame={IDENTITY_FRAME} paper={annotScale} />
@@ -3183,7 +3188,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         )}
         {/* CAD side panel (z_CAD_tool B2c): coordinates, the shape being drawn, the selection's numbers. */}
         {mode === 'cad' && canvasView === 'plan' && (
-          <CadPanel cad={cad} annotations={planAnnotations} paper={annotScale} onClose={() => setMode('select')} />
+          <CadPanel cad={cad} annotations={planAnnotations} paper={annotScale} walls={walls} fieldValues={cadFields} blockSaveReq={blockSaveReq} onClose={() => setMode('select')} />
         )}
         {mode !== 'draw_wall' && mode !== 'draw_island' && selectedWall && multiWallObjs.length < 2 && (canvasView === 'plan' || canvasView === 'elevation') && (
           <WallPanel wall={selectedWall} roomHeight={room.room_dy ?? undefined} onUpdate={handleUpdateWall} onDelete={handleDeleteWall} onClose={() => setSelected(null)} />
@@ -3755,7 +3760,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           benchtops={benchtops}
           benchTopZ={b => btInfo(b).topZ}
           fixtures={fixtures}
-          annotations={annotations}
+          annotations={withFieldsFilled(annotations, cadFields)}
           layerSets={layerSetsApi.sets}
           activeLayerSetId={activeLayerSet?.id ?? null}
           onClose={() => setReportScope(null)}

@@ -251,19 +251,62 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | A7 | **Cabinet sheets:** ribbon on the sheet preview (decision 10), cabinet-local frame, sheet toggle, own undo; **decide the cabinet-revision behaviour first** | [ ] |
 | A8 | Room copy remap, tutorial lesson, mobile view check | [ ] |
 
-## Later (Mark, 2026-10-20) — not scheduled, details to agree before building
+## CAD blocks + live fields (phase C) — decided 2026-10-21
 
-- **Saved CAD symbols.** Save a group of notes / lines / shapes as a named symbol
-  (e.g. north arrow, GPO, section marker, logo) and drop it on any plan, elevation
-  or sheet from a symbols list. Open questions: shop-wide library vs per user;
-  placed copies linked to the symbol (editing it updates them) or plain copies;
-  scale with the annotation scale (paper size) or real size; insertion point +
-  rotation on placing.
-- **Text spec docs.** Saved blocks of standard text (general notes, material /
-  finish specs, install notes) to insert as a text box instead of retyping.
-  Open questions: shop-wide library vs per job; plain text or with fields that
-  fill in from the job / room (e.g. door colour, benchtop material); linked so a
-  library edit updates placed copies, or copied at insert.
+Replaces the two "Later" ideas (saved CAD symbols, text spec docs) with one
+feature. First use: the finishes **spec block** on the plan (RHK6570 vanities).
+
+### Locked (Mark, 2026-10-21)
+
+1. **Any CAD selection can be saved as a block**: text boxes, lines, arrows, shapes,
+   dims, in any mix. A spec block is one block; a north arrow is another.
+2. **One shop-wide library** (`cad_blocks`). Everyone signed in reads it; admins
+   write it (same RLS as the other library tables).
+3. **Live fields.** Text can hold `{field}` tokens that always show the job's /
+   room's current values. Change the door colour and the block changes too. The
+   editor shows the raw tokens; the canvas and the reports show the values. Plain
+   typed text sits next to the fields (e.g. `{benchtop} - Alpha Opal Mist`).
+
+### Defaults (Claude, 2026-10-21; Mark to overrule)
+
+- **Paper-size blocks.** Saved in paper mm, relative to the selection's top-left.
+  They drop in at the room's annotation scale, so a 75mm-wide spec block is 75mm on
+  paper at 1:20 or 1:50.
+- **Plain copies.** Inserting copies the items into the room. Editing the library
+  block later doesn't change placed copies (their fields still stay live).
+- **Insert place.** It drops to the right of the outermost wall, 25mm (paper)
+  outside the wall's outer face, clear of the dimension rows. It goes below any CAD
+  note already in that column, and arrives selected so it can be dragged.
+- **Spec block layout** (Mark, RHK6570): BENCHTOP (name + thickness only) /
+  FRONTS + PANELS / HANDLES / CARCASS / DRAWERS / HARDWARE (hinges + runners incl.
+  length) / BASIN last. The client approval signature goes on the shop-drawings
+  title block (z_shop_drawings S1), not in this block.
+
+### Fields (room value first, then job)
+
+| Token | Value |
+|---|---|
+| `{job}` / `{job_number}` / `{client}` / `{room}` / `{date}` | job no. + client / job no. / client / room name / today |
+| `{benchtop}` | the room's benchtop material(s), e.g. "40mm Stone" (+ " - colour" when the material has one) |
+| `{fronts}` | door style + colour, e.g. "Laminex 18mm ABS Grain - Elegant Oak"; one line per class when base / wall / tall differ |
+| `{panels}` | exposed material (end panels, floating bottoms) |
+| `{handles}` | handle schedule |
+| `{carcass}` | carcass material (from the resolved parts) |
+| `{drawer_box}` | drawer box system + material |
+| `{runners}` | slide schedule + the lengths used in the room, e.g. "DTC Dragon Pro 400mm" |
+| `{hinges}` | hinge schedule |
+| `{basins}` | sinks / basins placed in the room: name + W x D x H |
+
+An unknown token stays as typed; a field with no value shows `-`.
+
+### Phases
+
+| Phase | Scope | Status |
+|---|---|---|
+| C1 | `cad_blocks` table + RLS (`migration_c1_cad_blocks.sql`, applied live); save selection as block (right-click → Save as CAD block…, or the panel button); CAD blocks list in the CAD panel: insert (auto place), delete. `src/lib/annotations/blocks.ts`, `CadBlocksSection.tsx` | [x] built 2026-10-21; save + insert checked headless, in-app check pending |
+| C2 | Live fields: token fill on the plan canvas + Plan View report (`useCadFields.ts`, `withFieldsFilled`); Fields list in the CAD panel inserts a token at the caret while editing text | [x] built 2026-10-21; canvas fill checked headless (RHK6570 Bed 3), report + field insert not clicked through |
+| C3 | Seed the "Spec block" from RHK6570; switch the RHK6570 blocks to fields; tutorial `cad_spec_block` | [x] built 2026-10-21 |
+| C4 | Elevations / sheets once A6 / A7 land | [ ] |
 
 ## RESUME HERE
 

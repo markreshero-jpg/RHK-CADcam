@@ -15,6 +15,9 @@ import {
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
 import type { AnnotationTool, TypedField } from './useAnnotationTool'
+import type { Wall } from '@/src/lib/types'
+import type { CadFieldValues } from '@/src/lib/annotations/blocks'
+import { CadBlocksSection, CadFieldsSection } from './CadBlocksSection'
 
 const TYPED_LABEL: Record<TypedField, [string, string]> = {
   length: ['Length', 'mm'], angle: ['Angle', '°'], w: ['W', 'mm'], h: ['H', 'mm'], offset: ['Offset', 'mm'],
@@ -195,12 +198,18 @@ function summary(a: RoomAnnotation, k: number): string {
   }
 }
 
-export default function CadPanel({ cad, annotations, paper, onClose }: {
+export default function CadPanel({ cad, annotations, paper, walls, fieldValues, blockSaveReq, onClose }: {
   cad:         AnnotationTool
   /** Plan annotations (the list to pick from). */
   annotations: RoomAnnotation[]
   /** frame mm per paper mm (text block sizes). */
   paper:       number
+  /** Room walls — a CAD block drops in right of them (z_CAD_tool C1). */
+  walls:       Wall[]
+  /** Live {field} values for this room (C2). */
+  fieldValues: CadFieldValues
+  /** Bumped by right-click → Save as CAD block… */
+  blockSaveReq: number
   onClose:     () => void
 }) {
   const sel = cad.selected
@@ -261,6 +270,9 @@ export default function CadPanel({ cad, annotations, paper, onClose }: {
         {sel.length > 1 && !cad.editing && <MultiInfo sel={sel} k={paper} />}
         {one && <SelectedInfo a={one} cad={cad} k={paper} />}
       </Section>
+
+      <CadFieldsSection cad={cad} values={fieldValues} Section={Section} />
+      <CadBlocksSection cad={cad} annotations={annotations} walls={walls} paper={paper} saveReq={blockSaveReq} Section={Section} />
 
       <Section title={`Objects (${annotations.length})`}>
         {!annotations.length && <div className="text-xs text-gray-500">No notes or markup in this room yet.</div>}

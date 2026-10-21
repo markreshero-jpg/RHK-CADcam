@@ -425,6 +425,18 @@ export function useAnnotationTool({
     void insertRows(rows)
   }, [k, captureSnapshot, newRow, setAnnotations, insertRows])
 
+  /** Drop items (already in frame mm, e.g. a placed CAD block) in as new notes,
+   *  selected so they can be dragged into place. */
+  const insertItems = useCallback((items: { kind: AnnotationKind; geom: RoomAnnotation['geom']; text: string | null; style: AnnotationStyle }[]) => {
+    if (!items.length) return
+    captureSnapshot()
+    let order = nextOrder()
+    const rows = items.map(it => ({ ...newRow(it.kind, it.geom, it.text, it.style), sort_order: order++ }))
+    setAnnotations(xs => [...xs, ...rows])
+    setSelectedIds(new Set(rows.map(r => r.id)))
+    void insertRows(rows)
+  }, [captureSnapshot, newRow, setAnnotations, insertRows])
+
   // ── Inline text editor ────────────────────────────────────────────────────
 
   const startEdit = useCallback((a: RoomAnnotation) => {
@@ -1407,7 +1419,7 @@ export function useAnnotationTool({
     drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
     dimMode, setDimMode, applyDimText, chain, arcMode, setArcMode, offsetSrc: offsetSrcA,
     filletR, setFilletR, chamfer, setChamfer, modPick, modMsg, cornerOp, setLineClosed, convertToLines,
-    startJoinFrom, startOffsetFrom, menu, closeMenu: () => setMenu(null), paste, cloudMode, setCloudMode, pending,
+    startJoinFrom, startOffsetFrom, menu, closeMenu: () => setMenu(null), paste, insertItems, cloudMode, setCloudMode, pending,
     /** Last object snap under the cursor (frame mm) — the canvas draws its marker. */
     snapHit: active ? snapHit : null,
     /** Cursor (frame mm) + the point Δ is measured from while drawing. */

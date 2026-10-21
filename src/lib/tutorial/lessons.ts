@@ -615,6 +615,24 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Open Layers → Dimensions and untick Bench & basin heights to hide them. The setting is per layer set, so a print layer set can show them while your working set hides them. The Elevation Views report follows the layer set you pick there.',
       target: 'menu-Layers', canvas: true, done: c => c.view === 'elevation' },
   ]},
+
+  // Appended 2026-10-21 (z_CAD_tool phase C — CAD blocks + live fields).
+  { id: 'cad_spec_block', level: 'intermediate', topic: 'cad', title: 'Drop in the spec block',
+    blurb: 'Insert the finishes spec block on the plan; its fields fill in from the job.',
+    keywords: 'cad block blocks spec specification finishes schedule notes fields template save library benchtop fronts handles runners hinges', steps: [
+    { id: 'open', title: 'Turn on CAD mode',
+      body: 'Open the Plan and press F7. The CAD panel opens on the right.',
+      target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
+    { id: 'insert', title: 'Insert the Spec block',
+      body: 'In the CAD panel, under CAD blocks, click Spec block. It drops in to the right of the walls, clear of the dimensions and any other notes, and stays selected so you can drag it.',
+      canvas: true, done: (c, s) => notes(c, true) > notes(s, true) },
+    { id: 'fields', title: 'Fields fill themselves in',
+      body: 'Words in curly brackets, like {benchtop} or {runners}, are fields: they show this job’s values and change when the job does. Double-click the block to edit it. Type extra words next to a field (e.g. the stone colour after {benchtop}), or click a field in the Fields list to add one where the cursor is.',
+      canvas: true, done: c => c.mode === 'cad' },
+    { id: 'save', title: 'Save your own blocks',
+      body: 'Select any notes or markup (a north arrow, a standard note), right-click and choose Save as CAD block…, then name it. Every user gets it in their CAD blocks list.',
+      canvas: true, done: c => c.mode === 'cad' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
