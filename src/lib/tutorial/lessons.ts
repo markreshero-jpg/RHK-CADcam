@@ -674,12 +674,12 @@ export const LESSONS: TutorialLesson[] = [
       target: 'menu-Production', canvas: true, done: c => c.report === 'shop_drawings' },
   ]},
   { id: 'move_label', level: 'basics', topic: 'cabinets', title: 'Move a cabinet or fixture name',
-    blurb: 'Drag a name clear of other lines on plan or elevation; the PDFs follow.', keywords: 'label name move drag position text cabinet fixture plan elevation reset', steps: [
-    { id: 'select', title: 'Select the cabinet (or fixture)',
-      body: 'Click a cabinet or fixture once so it is selected — its name can then be dragged.',
-      canvas: true, done: c => c.selected?.type === 'cabinet' || c.selected?.type === 'fixture' },
-    { id: 'drag', title: 'Drag its name',
-      body: 'Press on the name and drag it where you want it. Plan and elevation each keep their own spot, and the Plan / Elevation / Shop Drawings PDFs print it there.',
+    blurb: 'Move a name clear of other lines on plan or elevation; the PDFs follow.', keywords: 'label name move drag position text cabinet fixture plan elevation reset', steps: [
+    { id: 'menu', title: 'Right-click → Move label',
+      body: 'Right-click a cabinet or fixture and choose Move label. Its name gets an orange dashed box.',
+      canvas: true, done: () => true },
+    { id: 'place', title: 'Move the mouse, click to place',
+      body: 'The name follows the mouse — click to drop it there (Esc or right-click cancels). Plan and elevation each keep their own spot, and the Plan / Elevation / Shop Drawings PDFs print it there.',
       canvas: true, done: (c, s) => ev(c, 'label_moved') > ev(s, 'label_moved') },
     { id: 'reset', title: 'Right-click → Reset label position',
       body: 'To put a name back where it started, right-click the item and choose Reset label position.',

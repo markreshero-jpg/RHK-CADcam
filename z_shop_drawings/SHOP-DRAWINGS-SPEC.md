@@ -235,8 +235,9 @@ How it's built (plan):
   (`without()` in ShopDrawingsReport). The standalone Plan View / Elevation Views reports still follow the set.
 
 ### Movable labels (Mark, 2026-10-21)
-- Cabinet + fixture names can be dragged on the canvas plan and elevation once the item is selected
-  (`useLabelDrag`, pointer capture). Saved per item in `label_offsets` {plan, elev} (migration_label_offsets.sql,
+- Cabinet + fixture names move on the canvas plan and elevation via right-click → **Move label**: the name
+  gets a dashed box, follows the mouse, a click places it, Esc / right-click cancels (`useLabelMove` +
+  `LabelBox`; window capture listeners swallow the clicks). Replaced drag-when-selected (Mark, 2026-10-21). Saved per item in `label_offsets` {plan, elev} (migration_label_offsets.sql,
   applied): plan = offset from the centre in the item's own frame, elev = offset from the elevation box centre.
   Right-click → Reset label position clears the current view. Plan View / Elevation Views / shop drawings print
   at the same spot. Tutorial `move_label`.

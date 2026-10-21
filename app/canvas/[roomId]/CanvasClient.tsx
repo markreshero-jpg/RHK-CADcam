@@ -724,6 +724,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (off) useTutorial.getState().emit('label_moved')
     fx.update(id, { label_offsets: withLabelOff(f.label_offsets, view, off) })
   }
+  // Right-click → Move label: that label follows the mouse until a click places it.
+  const [labelMoving, setLabelMoving] = useState<{ kind: 'cab' | 'fixture'; id: string } | null>(null)
+  const endLabelMove = useCallback(() => setLabelMoving(null), [])
+  const menuLabelMove = (() => {
+    const m = contextMenu
+    if (canvasView !== 'plan' && canvasView !== 'elevation') return undefined
+    if (m?.fixtureId) { const id = m.fixtureId; return () => { setContextMenu(null); setLabelMoving({ kind: 'fixture', id }) } }
+    if (m?.cabId) { const id = m.cabId; return () => { setContextMenu(null); setLabelMoving({ kind: 'cab', id }) } }
+    return undefined
+  })()
   const menuLabelReset = (() => {
     const m = contextMenu
     if (m?.fixtureId) {
@@ -2943,6 +2953,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               onCabinetCrosshairClick={onCabinetCrosshairClick}
               onCabinetContextMenu={onCabinetContextMenu}
               onCabLabelMove={(id, off) => saveCabLabel(id, 'plan', off)}
+              cabLabelMoving={labelMoving?.kind === 'cab' ? labelMoving.id : null}
+              onLabelMoveEnd={endLabelMove}
               onCabinetDoubleClick={onCabinetDoubleClick}
               onCabMarkerClick={onCabMarkerClick}
               cabMoveDrag={cabMoveDrag}
@@ -3052,7 +3064,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                   highlightIds={fixtureHighlight}
                   onPointerDown={(e, id) => pickFixture(id, e.shiftKey)}
                   onContextMenu={(e, id) => fixtureMenu(id, e.clientX, e.clientY)}
+                  labelMovingId={labelMoving?.kind === 'fixture' ? labelMoving.id : null}
                   onLabelMove={(id, off) => saveFixtureLabel(id, 'plan', off)}
+                  onLabelMoveEnd={endLabelMove}
                   onDoubleClick={(_e, id) => { setSelected({ type: 'fixture', id }); setViewFixtureId(id) }}
                 />
               }
@@ -3149,6 +3163,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onFixtureContextMenu={(e, id) => fixtureMenu(id, e.clientX, e.clientY)}
             onCabLabelMove={(id, off) => saveCabLabel(id, 'elev', off)}
             onFixtureLabelMove={(id, off) => saveFixtureLabel(id, 'elev', off)}
+            labelMoving={labelMoving}
+            onLabelMoveEnd={endLabelMove}
             onShiftSelectCabinet={id => {
               setSelected({ type: 'cabinet', id })
               setMultiSelect(prev => {
@@ -3611,6 +3627,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeleteWall: handleDeleteWall,
             onDeleteCabinet: id => void handleDeleteCabinet(id),
             onUpdateBulkhead: (id, next) => { setContextMenu(null); captureSnapshot(); void handleUpdateCabinet(id, { bulkhead: next }) },
+            onMoveLabel: menuLabelMove,
             onResetLabel: menuLabelReset,
             onDeleteMultiple: ids => void handleDeleteMultipleCabinets(ids),
             onInsertCabinet: (wId, t, cls) => { void handleInsertCabinetAtElevT(wId, t, cls) },

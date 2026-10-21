@@ -42,7 +42,7 @@ import { binOutlines } from '@/src/lib/binGeometry'
 import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
 import { dbLoadRoomPartDetails, type PartPosOverrides } from './canvasDB'
 import { shapedFrontMarks, sweepFlag, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
-import { useLabelDrag } from './useLabelDrag'
+import { useLabelMove, LabelBox } from './useLabelMove'
 import { toFrame, type LabelOff } from '@/src/lib/labelOffsets'
 
 // Union of cabinet-local plan rects (X along wall, Z = depth) → the cabinet's
@@ -94,8 +94,12 @@ interface CanvasSVGProps {
   onCabinetPointerDown: (e: React.PointerEvent, cab: CabinetInstance) => void
   onCabinetCrosshairClick: (e: React.MouseEvent, cab: CabinetInstance) => void
   onCabinetContextMenu: (e: React.MouseEvent, cabId: string) => void
-  /** A selected cabinet's name dragged to a new spot (plan offset in the cabinet's frame). */
+  /** The cabinet whose name is in move mode (right-click → Move label); placed via onCabLabelMove. */
+  cabLabelMoving?: string | null
+  /** A cabinet's name placed at a new spot (plan offset in the cabinet's frame). */
   onCabLabelMove?: (cabId: string, off: LabelOff) => void
+  /** Label move mode finished (placed or cancelled). */
+  onLabelMoveEnd?: () => void
   onCabinetDoubleClick: (e: React.MouseEvent, cabId: string) => void
   onCabMarkerClick: (e: React.MouseEvent, cab: CabinetInstance, side: 'left' | 'right' | 'front', wall: Wall, perp: Pt) => void
   cabFollowing: { id: string } | null
@@ -184,7 +188,7 @@ export default function CanvasSVG({
   drawStart, drawCursor, drawThickness, placeGhost, clipboard, clipboardGroup, cabDrag, cabMoveDrag, cabResize, multiSelect, multiWalls = [], marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
   setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
-  onCabMarkerClick, cabFollowing, onSVGClick, onCabLabelMove,
+  onCabMarkerClick, cabFollowing, onSVGClick, onCabLabelMove, cabLabelMoving, onLabelMoveEnd,
   benchtops, selectedBenchtopId, btDrawPoly, btDrawCursor, onBenchtopClick, onBenchtopEdgeClick, onBenchtopVertexClick,
   onBenchtopContextMenu, onBenchtopEdgeShiftClick, onBenchtopEdgeAltClick, onBtUndoVertex,
   btDrawArcs, btArcMode, btArcMidpoint, btRectStart, btRectCursor,
@@ -224,7 +228,7 @@ export default function CanvasSVG({
   const dotR = 1.5 / view.zoom
   const wallNameFs = 14 / view.zoom
   const cabLabelFs = 11 / view.zoom
-  const cabLabelDrag = useLabelDrag(onCabLabelMove)
+  const cabLabelMove = useLabelMove(cabLabelMoving, onCabLabelMove, onLabelMoveEnd)
   const cabDimFs   = 9 / view.zoom
 
   const drawLen = drawStart && drawCursor ? roundMm(dist(drawStart, drawCursor)) : 0
@@ -1245,21 +1249,21 @@ export default function CanvasSVG({
           // front stretch marker.
           const kickFace = isKickAsm ? kickPartsR.find(p => p.part_key === 'kick_front_face') : undefined
           // Moved label (label_offsets.plan): centre + offset in the cabinet's frame.
-          const labelOff = cabLabelDrag.offOf(cab.id, cab.label_offsets?.plan)
+          const labelOff = cabLabelMove.offOf(cab.id, cab.label_offsets?.plan)
           const labelPt = labelOff ? toPlanC(displayCab.dx / 2 + labelOff.x, displayCab.dz / 2 + labelOff.y) : kickFace ? (() => {
             const b = tkPlanBox(kickFace)
             const lx = b.x + b.w / 2, lz = Math.max(0, b.z - 150)
             return toPlanC(lx, lz)
           })() : center
-          // Drag the selected cabinet's name: screen px → mm → the cabinet's frame.
-          const labelDragProps = isSel && onCabLabelMove ? (() => {
+          // Moving this cabinet's name: screen px → mm → the cabinet's frame.
+          const labelTrack = cab.id === cabLabelMoving ? (() => {
             const o = toPlanC(0, 0), ux = toPlanC(1, 0), vz = toPlanC(0, 1)
             const u = { x: ux.x - o.x, y: ux.y - o.y }, v = { x: vz.x - o.x, y: vz.y - o.y }
             const from = labelOff ?? (kickFace ? (() => {
               const b = tkPlanBox(kickFace)
               return { x: b.x + b.w / 2 - displayCab.dx / 2, y: Math.max(0, b.z - 150) - displayCab.dz / 2 }
             })() : { x: 0, y: 0 })
-            return cabLabelDrag.bind(cab.id, from, (dx, dy) => toFrame(dx / view.zoom, dy / view.zoom, u, v))
+            return cabLabelMove.track(cab.id, from, (dx, dy) => toFrame(dx / view.zoom, dy / view.zoom, u, v))
           })() : undefined
 
           const isBeingMoved = cabMoveDrag?.id === cab.id
@@ -1449,14 +1453,15 @@ export default function CanvasSVG({
 
               {/* Label */}
               {hitRect && layers.show('cabinet_labels') && (
+                <LabelBox track={labelTrack}>
                 <text x={labelPt.x} y={labelPt.y - layers.w('cabinet_labels', cabLabelFs) * 0.7}
                   textAnchor="middle" dominantBaseline="middle"
                   fontSize={layers.w('cabinet_labels', cabLabelFs)} fontWeight="600"
                   fill={isSel ? '#fff' : layers.color('cabinet_labels', '#93c5fd')} opacity={layers.op('cabinet_labels')}
-                  style={{ userSelect: 'none', pointerEvents: 'none' }} {...labelDragProps}>
-                  {labelDragProps && <title>Drag to move the name · right-click → Reset label position</title>}
+                  style={{ userSelect: 'none', pointerEvents: 'none' }}>
                   {cab.label ?? '—'}
                 </text>
+                </LabelBox>
               )}
 
               {/* Dimensions */}

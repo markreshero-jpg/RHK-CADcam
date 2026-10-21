@@ -37,7 +37,7 @@ import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
-import { useLabelDrag } from './useLabelDrag'
+import { useLabelMove, LabelBox } from './useLabelMove'
 import type { LabelOff } from '@/src/lib/labelOffsets'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
@@ -151,9 +151,13 @@ interface ElevationSVGProps {
   onUpdateCabinet: (id: string, u: Partial<CabinetInstance>) => void
   onPlaceAtWall: (wall: Wall, pos_x: number, pos_y: number, dx?: number) => Promise<void>
   onCabinetContextMenu: (e: React.MouseEvent, cabId: string) => void
-  /** A selected cabinet's / fixture's name dragged (elevation offset from its box centre, mm). */
+  /** The cabinet / fixture whose name is in move mode (right-click → Move label). */
+  labelMoving?: { kind: 'cab' | 'fixture'; id: string } | null
+  /** A cabinet's / fixture's name placed (elevation offset from its box centre, mm). */
   onCabLabelMove?: (cabId: string, off: LabelOff) => void
   onFixtureLabelMove?: (fixtureId: string, off: LabelOff) => void
+  /** Label move mode finished (placed or cancelled). */
+  onLabelMoveEnd?: () => void
   onBlankWallContextMenu: (e: React.MouseEvent, wallId: string, wallT: number) => void
   onFixtureContextMenu?: (e: React.MouseEvent, fixtureId: string) => void
   onShiftSelectCabinet: (id: string) => void
@@ -208,7 +212,7 @@ interface ElevationSVGProps {
 export default function ElevationSVG({
   walls, cabinets, room, elevWallId, selected, layers,
   multiSelect, canEqualize, mode, armedDef, clipboard, clipboardGroup,
-  onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu, onCabLabelMove, onFixtureLabelMove,
+  onSelectCabinet, onSelectWall, onSetElevWall, onUpdateCabinet, onPlaceAtWall, onCabinetContextMenu, onCabLabelMove, onFixtureLabelMove, labelMoving, onLabelMoveEnd,
   onBlankWallContextMenu, onFixtureContextMenu, onShiftSelectCabinet, onMarqueeSelect, onEqualizeWidths,
   cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
   resolvedParts: resolvedPartsRaw, onDeselect, onSeamClick, onCabinetDoubleClick, elevWallSide, onSetElevWallSide,
@@ -809,7 +813,7 @@ export default function ElevationSVG({
   // Strokes divide by the line zoom (finer on phones); text and hit targets use z.
   const lz = z / lineScale
   const labelFs = 11 / z
-  const cabLabelDrag = useLabelDrag(onCabLabelMove)
+  const cabLabelMove = useLabelMove(labelMoving?.kind === 'cab' ? labelMoving.id : null, onCabLabelMove, onLabelMoveEnd)
   const dimFs   =  9 / z
   const tickH   = 30 / z
   const mr      =  6 / z
@@ -1638,19 +1642,19 @@ export default function ElevationSVG({
                   {/* Label — just under the cabinet's bottom edge (Mark, 2026-10-21), as the printed elevation */}
                   {hit && layers.show('cabinet_labels') && (() => {
                     // Moved (label_offsets.elev) = box centre + offset; else just under the bottom edge.
-                    const stored = cabLabelDrag.offOf(cab.id, cab.label_offsets?.elev)
+                    const stored = cabLabelMove.offOf(cab.id, cab.label_offsets?.elev)
                     const off = stored ?? { x: 0, y: displayDy / 2 + layers.w('cabinet_labels', labelFs) * 0.75 }
-                    const drag = isSel && onCabLabelMove ? cabLabelDrag.bind(cab.id, off, (dx, dy) => ({ x: dx / z, y: dy / z })) : undefined
                     return (
-                    <text {...drag}
+                    <LabelBox track={cabLabelMove.track(cab.id, off, (dx, dy) => ({ x: dx / z, y: dy / z }))}>
+                    <text
                       x={rx + displayDx / 2 + off.x} y={ry + displayDy / 2 + off.y}
                       textAnchor="middle" dominantBaseline="middle"
                       fontSize={layers.w('cabinet_labels', labelFs)} fontWeight="600"
                       fill={isSel ? '#fff' : layers.color('cabinet_labels', '#93c5fd')} opacity={layers.op('cabinet_labels')}
-                      style={drag?.style ?? { userSelect: 'none', pointerEvents: 'none' }}>
-                      {drag && <title>Drag to move the name · right-click → Reset label position</title>}
+                      style={{ userSelect: 'none', pointerEvents: 'none' }}>
                       {cab.label ?? '—'}
                     </text>
+                    </LabelBox>
                     )
                   })()}
 
@@ -1741,7 +1745,9 @@ export default function ElevationSVG({
                 })}
                 onStretchHandle={mode === 'select' ? onFixtureStretchHandle : undefined}
                 onMoveHandle={mode === 'select' ? onFixtureMoveHandle : undefined}
-                onLabelMove={mode === 'select' ? onFixtureLabelMove : undefined}
+                labelMovingId={labelMoving?.kind === 'fixture' ? labelMoving.id : null}
+                onLabelMove={onFixtureLabelMove}
+                onLabelMoveEnd={onLabelMoveEnd}
               />
             )}
 
