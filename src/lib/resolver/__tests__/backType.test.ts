@@ -57,6 +57,12 @@ describe('BACK_TYPE', () => {
     expect(rail.Z).toBe(none.Z)
   })
 
+  it('flat back rail of a double-rail top: front edge taped', () => {
+    const rail = parts({}, 'double_rail').find(p => p.part_key === 'back_rail')!
+    expect(rail.upright).toBeUndefined()
+    expect(rail.edge_band).toMatchObject({ top: true, bottom: false, left: false, right: false })
+  })
+
   it('rail with a double-rail top: one back rail, on edge, BKRH tall', () => {
     const rails = parts({ BACK_TYPE: 'rail', BKRH: 120 }, 'double_rail').filter(p => p.part_key === 'back_rail')
     expect(rails).toHaveLength(1)

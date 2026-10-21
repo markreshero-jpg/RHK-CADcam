@@ -103,7 +103,7 @@ export const DEFAULT_EDGING: Required<EdgingDefaults> = {
   back:                [],
   full_top:            ['top', 'left', 'right'],
   front_rail:          ['top'],
-  back_rail:           [],
+  back_rail:           ['top'],                               // flat: front edge faces the cabinet front
   kick_front_face:     ['top'],
   kick_sub_front:      ['top'],
   kick_back:           [],

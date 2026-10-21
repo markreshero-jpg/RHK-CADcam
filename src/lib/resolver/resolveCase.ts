@@ -230,7 +230,7 @@ export function resolveCaseParts(
   }
 
   // A back rail on edge shows its lower edge (DX runs bottom → top, so that's
-  // 'bottom') — taped by default. Flat, it keeps DEFAULT_EDGING (none). An
+  // 'bottom') — taped by default. Flat, it keeps DEFAULT_EDGING (front edge). An
   // explicit EDGING.back_rail always wins.
   const backRailUpright = backType === 'rail' || r.RAIL_ORIENT === 'vertical'
   const backRailEdging = r.EDGING?.back_rail ?? (backRailUpright ? ['bottom' as const] : edging.back_rail)
