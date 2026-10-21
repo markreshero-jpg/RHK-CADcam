@@ -2123,6 +2123,13 @@ export default function ElevationSVG({
                 const carcTopY = roomH - (carcBottom + carcDy)
                 segs.push({ fromY: carcTopY, toY: cursorY, label: `${roundMm(carcDy)}` })
                 cursorY = carcTopY
+                // Benchtop on this wall: its thickness above the carcase.
+                const benchZ = benchtops && benchtopInfo ? benchDimHeights(wall.id, benchtops, bt => benchtopInfo(bt).topZ, [])[0] ?? 0 : 0
+                if (benchZ > roomH - cursorY + 0.5) {
+                  const benchY = roomH - benchZ
+                  segs.push({ fromY: benchY, toY: cursorY, label: `${roundMm(cursorY - benchY)}` })
+                  cursorY = benchY
+                }
               }
 
               if (overheadDy > 0) {

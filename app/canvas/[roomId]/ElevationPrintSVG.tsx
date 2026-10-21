@@ -517,6 +517,9 @@ export default function ElevationPrintSVG({
       if (lift > 0.5) { const liftY = roomH - kickH - lift; segs.push({ fromY: liftY, toY: cursorY, label: `${roundMm(lift)}` }); cursorY = liftY }
       const baseCarcTopY = roomH - lift - baseDy
       segs.push({ fromY: baseCarcTopY, toY: cursorY, label: `${baseDy - kickH}` }); cursorY = baseCarcTopY
+      // Benchtop on this wall: its thickness above the carcase.
+      const benchZ = benchHeights[0] ?? 0
+      if (benchZ > roomH - cursorY + 0.5) { const benchY = roomH - benchZ; segs.push({ fromY: benchY, toY: cursorY, label: `${roundMm(cursorY - benchY)}` }); cursorY = benchY }
     }
     if (overheadDy > 0) {
       const overheadBotY = roomH - (wcTopZ - overheadDy)
