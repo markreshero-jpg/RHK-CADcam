@@ -129,6 +129,14 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
   `bt.joins` dashed thin. They follow the `benchtops` / `benchtop_joins` layer items and are included in
   the drawing's fit. Edge-profile codes aren't printed.
 - Tutorial `shop_drawings` (reports topic), emit `shop_pdf`, tour target `shop-download`.
+- **Fixtures on plan + elevation (Mark, 2026-10-21):** `FixturesPlanPrint` (FixturesPlan.tsx) and
+  `FixturesElevationPrint` (FixturesElevation.tsx) draw the non-opening fixtures (appliances, sinks, taps,
+  hobs, decorative) on Plan View, Elevation Views and the package, using the canvas's shapes / symbols /
+  traced shapes and labels. Black, front pen; plan front edge medium; labels 2.5mm. Symbol lines stay
+  ≥ 0.13mm. Plan: over the benchtops. Elevation: over the cabinets (white fill, so it hides what's
+  behind; appliances keep their inner panel). Follow the `fixture_*` / `fixture_labels` layer items.
+  Doors / windows were already drawn.
+  Known: a plan label (e.g. "Sink") can sit over the cabinet number under it.
 | S4 | **Multi-view sheets:** lay out several views on one page at one scale (island front + back); fall back to one per page | [ ] |
 | S5 | **CAD carry-over check.** Plan CAD already prints (Plan View). Elevation CAD needs z_CAD_tool **A6** first. Confirm text boxes with borders (the spec block) print right | [ ] (blocked on A6 for elevations) |
 | S6 | **Cabinet numbering:** #n tags under each cabinet on elevations, same as on the plan, from `cab.label` as it is (no renumbering) | [ ] |

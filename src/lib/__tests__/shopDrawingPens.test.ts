@@ -5,7 +5,7 @@ import PlanViewReportSVG from '@/app/canvas/[roomId]/PlanViewReportSVG'
 import ElevationPrintSVG from '@/app/canvas/[roomId]/ElevationPrintSVG'
 import { resolveLayerView } from '../displayLayers/resolve'
 import { MIN_PEN, PRINT_INK } from '../shopDrawings/pens'
-import type { Wall, CabinetInstance, Room, BenchtopInstance } from '../types'
+import type { Wall, CabinetInstance, Room, BenchtopInstance, RoomFixture } from '../types'
 
 // z_shop_drawings S2: every printed line is black and at least the minimum pen,
 // at the default 1:20 and at a coarse 1:50, and all text stays Helvetica.
@@ -32,6 +32,11 @@ const BT = {
   joins: [{ p0: { x: 600, y: 0 }, p1: { x: 600, y: 600 }, type: 'butt' }],
   cutout_polygons: [rect(800, 150, 1300, 450).map(([x, y]) => ({ x, y }))],
 } as unknown as BenchtopInstance
+// A sink in the top, and a wall oven against W1 (facing into the room) at 900 up.
+const fx = (id: string, category: string, name: string, x: number, y: number, width: number, depth: number, height: number, z: number) =>
+  ({ id, room_id: 'r', category, kind: '', name, label: null, x, y, rotation: 0, width, depth, height, z, wall_id: null,
+     plan_shape: null, elev_shape: null }) as unknown as RoomFixture
+const FX = [fx('f1', 'sink', 'Sink', 800, 150, 500, 300, 200, 700), fx('f2', 'appliance', 'Oven', 2000, 0, 600, 560, 600, 900)]
 
 /** stroke / stroke-width pairs on every element that draws a line. */
 function strokes(svg: string) {
@@ -51,7 +56,7 @@ for (const scale of [20, 50]) {
   describe(`print pens at 1:${scale}`, () => {
     it('plan: black lines, none thinner than the minimum pen', () => {
       const svg = renderToStaticMarkup(createElement(PlanViewReportSVG, {
-        walls: ROOM, cabinets: CABS, benchtops: [BT], resolvedParts: new Map(), svgRef: { current: null }, scale,
+        walls: ROOM, cabinets: CABS, benchtops: [BT], fixtures: FX, resolvedParts: new Map(), svgRef: { current: null }, scale,
         layers: resolveLayerView(undefined, 'plan'),
         show: { wallNames: true, hatch: true, titleBlock: true, annotColours: false },
       }))
@@ -67,7 +72,7 @@ for (const scale of [20, 50]) {
 
     it('elevation: black lines, none thinner than the minimum pen', () => {
       const svg = renderToStaticMarkup(createElement(ElevationPrintSVG, {
-        wall: ROOM[0], walls: ROOM, cabinets: CABS, room, resolvedParts: new Map(), svgRef: () => {}, scale,
+        wall: ROOM[0], walls: ROOM, cabinets: CABS, fixtures: FX, room, resolvedParts: new Map(), svgRef: () => {}, scale,
         layers: resolveLayerView(undefined, 'elevation'),
         show: { returnWalls: true, titleBlock: true },
       }))
@@ -94,5 +99,27 @@ describe('plan benchtops', () => {
     expect(top).not.toBeNull()
     expect(top![1].match(/M/g)).toHaveLength(2)           // outline + sink cutout
     expect(svg).toContain('x1="600" y1="0" x2="600" y2="600"')   // butt join
+  })
+})
+
+describe('fixtures on the printed sheets', () => {
+  const plan = () => renderToStaticMarkup(createElement(PlanViewReportSVG, {
+    walls: ROOM, cabinets: CABS, fixtures: FX, resolvedParts: new Map(), svgRef: { current: null }, scale: 20,
+    layers: resolveLayerView(undefined, 'plan'), show: { wallNames: true, hatch: true, titleBlock: true, annotColours: false },
+  }))
+  const elev = () => renderToStaticMarkup(createElement(ElevationPrintSVG, {
+    wall: ROOM[0], walls: ROOM, cabinets: CABS, fixtures: FX, room, resolvedParts: new Map(), svgRef: () => {}, scale: 20,
+    layers: resolveLayerView(undefined, 'elevation'), show: { returnWalls: true, titleBlock: true },
+  }))
+  it('plan draws the sink and oven footprints', () => {
+    const svg = plan()
+    expect(svg).toContain('translate(800,150) rotate(0)')
+    expect(svg).toContain('translate(2000,0) rotate(0)')
+  })
+  it('elevation draws the oven facing the wall at its height, with its inner panel', () => {
+    const svg = elev()
+    // y = roomH (2400) - z (900) - height (600) = 900
+    expect(svg).toMatch(/<rect x="2000" y="900" width="600" height="600"/)
+    expect(svg).toMatch(/<rect x="2048" y="948" width="504" height="504"/)
   })
 })

@@ -15,6 +15,7 @@ import { planShapePath } from '@/src/lib/fixturePlanShape'
 import { stretchedElevShape } from '@/src/lib/fixtureStretch'
 import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 import { roundMm } from '@/src/lib/format'
+import { PEN, MIN_PEN, PRINT_INK } from '@/src/lib/shopDrawings/pens'
 
 
 // Centre move handle (white crosshair) — same as the cabinet one: click it and
@@ -290,6 +291,53 @@ export default function FixturesElevation({
               </text>
             )}
             {handles(fx, x, y, w, h)}
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
+// Shop drawings (z_shop_drawings): fixtures facing this wall on the printed
+// elevation — outline (or traced front shape), appliance inner panel, label;
+// black ink, pen-table widths. Doors / windows are drawn by the report itself.
+export function FixturesElevationPrint({ fixtures, wall, roomCx, roomH, layers, P }: {
+  fixtures: RoomFixture[]; wall: Wall; roomCx: Pt; roomH: number; layers: LayerView; P: number
+}) {
+  const f = elevationFrame(wall, 'face', roomCx)
+  const fs = 2.5 * P
+  const showLabels = layers.show('fixture_labels')
+  return (
+    <g fontFamily="Arial, Helvetica, sans-serif">
+      {fixtures.map(fx => {
+        const id = fixtureLayer(fx.category)
+        if (fx.category === 'opening' || !layers.show(id)) return null
+        const on = fixtureOnFace(fx, f)
+        if (!on) return null
+        const lp = layers.props(id, 4 / P)
+        const lw = Math.max(layers.w(id, PEN.front * P), MIN_PEN * P / 0.6)
+        const x = on.t0, w = on.t1 - on.t0
+        const y = roomH - fx.z - fx.height, h = fx.height
+        const lines = showLabels ? wrapLabel(fx.label || fx.name, w * 0.9, fs) : []
+        return (
+          <g key={fx.id} opacity={lp.opacity}>
+            {fx.elev_shape?.lines.length ? (
+              <path d={planShapePath(stretchedElevShape(fx.elev_shape, fx), w, h)} fill="none" stroke={PRINT_INK} strokeWidth={lw}
+                strokeLinejoin="round" strokeDasharray={lp.strokeDasharray}
+                transform={elevLeftSide(fx.rotation, f) === 'left' ? `translate(${x},${y})` : `translate(${x + w},${y}) scale(-1,1)`} />
+            ) : <>
+              <rect x={x} y={y} width={w} height={h} fill="white" stroke={PRINT_INK} strokeWidth={lw} strokeDasharray={lp.strokeDasharray} />
+              {fx.category === 'appliance' && (
+                <rect x={x + w * 0.08} y={y + h * 0.08} width={w * 0.84} height={h * 0.84} fill="none" stroke={PRINT_INK} strokeWidth={lw * 0.6} />
+              )}
+            </>}
+            {lines.length > 0 && (
+              <text x={x + w / 2} y={y + h / 2} fontSize={fs} fill={PRINT_INK} textAnchor="middle" dominantBaseline="central">
+                {lines.map((ln, i) => (
+                  <tspan key={i} x={x + w / 2} y={y + h / 2 + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
+                ))}
+              </text>
+            )}
           </g>
         )
       })}

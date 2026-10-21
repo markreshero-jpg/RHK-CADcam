@@ -12,7 +12,7 @@ import type { ReactNode, RefObject } from 'react'
 import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance } from '@/src/lib/types'
 import { btSegments, outlinePath, outlinePoints } from '@/src/lib/benchtopGeometry'
 import { openingSpans, fixtureChainSpans, fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
-import { OpeningSymbol } from './FixturesPlan'
+import { OpeningSymbol, FixturesPlanPrint } from './FixturesPlan'
 import AnnotationLayer from './AnnotationLayer'
 import { IDENTITY_FRAME, annotLayerItem, annotationFramePoints } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
@@ -605,6 +605,9 @@ export default function PlanViewReportSVG({
           </g>
         )
       })}
+
+      {/* ── Fixtures & appliances (sinks, hobs, taps, appliances …) — over the benchtops ── */}
+      <FixturesPlanPrint fixtures={fixtures} layers={layers} P={P} />
 
       {/* ── Dimension chains — wall-cab / base / overall + depth (layer items) ── */}
       {showDims && walls.map(w => {

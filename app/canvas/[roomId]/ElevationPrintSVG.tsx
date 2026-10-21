@@ -12,7 +12,7 @@
 'use client'
 import type { Room, Wall, CabinetInstance, RoomFixture } from '@/src/lib/types'
 import { openingOnWall, fixtureChainSpans, fixtureLayer } from '@/src/lib/fixtureGeometry'
-import { OpeningElev } from './FixturesElevation'
+import { OpeningElev, FixturesElevationPrint } from './FixturesElevation'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ } from '@/src/lib/geometry'
 import { PRINT_INK, pen, atLeastMin } from '@/src/lib/shopDrawings/pens'
@@ -617,6 +617,9 @@ export default function ElevationPrintSVG({
 
       {/* Cabinets */}
       {wallCabs.map(renderCab)}
+
+      {/* Fixtures & appliances facing this wall (sinks, ovens, rangehoods …) — over the cabinets */}
+      <FixturesElevationPrint fixtures={fixtures} wall={wall} roomCx={centroid(walls)} roomH={roomH} layers={layers} P={P} />
 
       {/* Dimensions (layer items; the overall wall length goes with the floor chain) */}
       <>

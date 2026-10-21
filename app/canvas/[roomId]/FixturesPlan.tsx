@@ -13,6 +13,7 @@ import { fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { wrapLabel } from '@/src/lib/textWrap'
 import { planShapePath } from '@/src/lib/fixturePlanShape'
 import { stretchedPlanShape } from '@/src/lib/fixtureStretch'
+import { PEN, MIN_PEN, PRINT_INK } from '@/src/lib/shopDrawings/pens'
 import type { FixtureSnap, StretchSide, Clearances } from '@/src/lib/fixtureGeometry'
 
 const STROKE = '#0ea5e9'
@@ -283,6 +284,50 @@ export default function FixturesPlan({
             selected={false} ghost label />
         </g>
       )}
+    </g>
+  )
+}
+
+// Shop drawings (z_shop_drawings): fixtures on the printed plan — same shapes and
+// symbols as the canvas, black ink, pen-table widths, labels in paper mm. Doors /
+// windows are drawn by the report itself (they split the walls).
+export function FixturesPlanPrint({ fixtures, layers, P }: { fixtures: RoomFixture[]; layers: LayerView; P: number }) {
+  const z = 4 / P   // symbol dashes ≈ 3 / 2 mm on paper
+  const fs = 2.5 * P
+  const showLabels = layers.show('fixture_labels')
+  return (
+    <g fontFamily="Arial, Helvetica, sans-serif">
+      {fixtures.map(f => {
+        const id = fixtureLayer(f.category)
+        if (f.category === 'opening' || !layers.show(id)) return null
+        const lp = layers.props(id, z)
+        // Symbols draw at 0.6 × lw — keep those above the minimum pen too.
+        const lw = Math.max(layers.w(id, PEN.front * P), MIN_PEN * P / 0.6)
+        const shaped = !!f.plan_shape?.lines?.length
+        const r = ((f.rotation % 360) + 360) % 360
+        const flip = r > 90 && r < 270
+        const lines = showLabels ? wrapLabel(f.label || f.name, f.width * 0.9, fs) : []
+        return (
+          <g key={f.id} transform={`translate(${f.x},${f.y}) rotate(${f.rotation})`} opacity={lp.opacity}>
+            {shaped ? (
+              <path d={planShapePath(stretchedPlanShape(f.plan_shape!, f), f.width, f.depth)} fill="none" stroke={PRINT_INK}
+                strokeWidth={lw} strokeLinejoin="round" strokeDasharray={lp.strokeDasharray} />
+            ) : <>
+              <rect x={0} y={0} width={f.width} height={f.depth} fill="none" stroke={PRINT_INK} strokeWidth={lw} strokeDasharray={lp.strokeDasharray} />
+              <Symbol f={f} z={z} color={PRINT_INK} lw={lw} />
+              <line x1={0} y1={f.depth} x2={f.width} y2={f.depth} stroke={PRINT_INK} strokeWidth={Math.max(lw, PEN.medium * P)} />
+            </>}
+            {lines.length > 0 && (
+              <text x={f.width / 2} y={f.depth / 2} fontSize={fs} fill={PRINT_INK} textAnchor="middle" dominantBaseline="central"
+                transform={flip ? `rotate(180 ${f.width / 2} ${f.depth / 2})` : undefined}>
+                {lines.map((ln, i) => (
+                  <tspan key={i} x={f.width / 2} y={f.depth / 2 + (i - (lines.length - 1) / 2) * fs * 1.15}>{ln}</tspan>
+                ))}
+              </text>
+            )}
+          </g>
+        )
+      })}
     </g>
   )
 }
