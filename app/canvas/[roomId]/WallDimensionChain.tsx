@@ -279,10 +279,9 @@ export default function WallDimensionChain({
     // Row names (`dim_row_labels`).
     const nm = (n: string) => showRowNames ? { name: n, nameClear: clear0 } : {}
     const overallSeg: Seg[] = [{ from: 0, to: wall.length, label: roundMm(wall.length) }]
-    const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
+    // Depths at the wall ends: the benchtop (not the base carcass) and the overheads.
     const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
-    // Only show wall depth separately if it differs meaningfully from base depth
-    const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
+    const top0 = tops[0], topL = tops[tops.length - 1]
 
     const step = dimStep(z)
     // Layer offsets (mm). Each row moves out by its own offset plus every row inside
@@ -330,13 +329,13 @@ export default function WallDimensionChain({
         )}
 
         {/* Perpendicular depth dimensions at wall ends */}
-        {layerBase.visible && baseDz > 0 && (
+        {showTop && (
           <>
-            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={baseDz} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} sign={-1} backOffset={backOffset} extra={oB} endClear={clear0} bg={labelBg} />
-            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={baseDz} zoom={z} col={layerBase.color ?? col} weight={layerBase.weight} opacity={layerBase.opacity} sign={1} backOffset={backOffset} extra={oB} endClear={clearL} bg={labelBg} />
+            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={top0.depth} zoom={z} col={layerBenchtop!.color ?? col} weight={layerBenchtop!.weight} opacity={layerBenchtop!.opacity} sign={-1} backOffset={backOffset} extra={oT} endClear={clear0} bg={labelBg} />
+            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={topL.depth} zoom={z} col={layerBenchtop!.color ?? col} weight={layerBenchtop!.weight} opacity={layerBenchtop!.opacity} sign={1} backOffset={backOffset} extra={oT} endClear={clearL} bg={labelBg} />
           </>
         )}
-        {layerWallCab.visible && showWallDepthSeparate && (
+        {layerWallCab.visible && wallDz > 0 && (
           <>
             <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={wallDz} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} sign={-1} backOffset={backOffset} lane={1} extra={oW} endClear={clear0} bg={labelBg} />
             <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={wallDz} zoom={z} col={layerWallCab.color ?? col} weight={layerWallCab.weight} opacity={layerWallCab.opacity} sign={1} backOffset={backOffset} lane={1} extra={oW} endClear={clearL} bg={labelBg} />

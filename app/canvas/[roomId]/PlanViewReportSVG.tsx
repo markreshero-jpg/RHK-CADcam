@@ -182,7 +182,7 @@ export default function PlanViewReportSVG({
   const basePad  = 4 * P
   // Bulkheads get their own row outside the overhead row; the rows past it step out.
   const bhStep = layers.show('dim_wall_chain') && chainCabs.some(c => !!c.bulkhead) ? ROW_BH_STEP : 0
-  const topsByWall = new Map(walls.map(w => [w.id, layers.show('dim_benchtop') ? benchtopWallSpans(benchtops, w) : []]))
+  const topsByWall = new Map(walls.map(w => [w.id, layers.show('dim_benchtop') ? benchtopWallSpans(benchtops, w, wallInwardNormal(w, cx)) : []]))
   const topStep = [...topsByWall.values()].some(t => t.length) ? ROW_TOP_STEP : 0
   const dimExtra = showDims ? maxThick + chainClearDepth + ROW_OVERALL + bhStep + topStep + (openingsByWall.size && layers.show('dim_openings') ? ROW_OPEN_STEP : 0) + dimFS * 2 + tickH : 0
   const padL = basePad + dimExtra
@@ -655,9 +655,8 @@ export default function PlanViewReportSVG({
           const baseSegs    = computeChain(baseCabs, w, baseFx)
           const wallCabSegs = computeChain(ohCabs, w, wallFx)
           const overallSeg: Seg[] = [{ from: 0, to: w.length, label: roundMm(w.length) }]
-          const baseDz = baseCabs.length > 0 ? Math.max(...baseCabs.map(c => c.dz)) : 0
+          // Depths at the wall ends: the benchtop (not the base carcass) and the overheads.
           const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
-          const showWallDepthSeparate = wallDz > 0 && Math.abs(wallDz - baseDz) > 5
           return (
             <g key={key}>
               {layers.show('dim_wall_chain') && (ohCabs.length > 0 || wallFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`, 'dim_wall_chain', wallRowName(ohCabs, wallFx.length > 0))}
@@ -666,13 +665,13 @@ export default function PlanViewReportSVG({
               {topSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_BASE + bh + ROW_TOP_STEP, topSegs, `bt-${key}`, 'dim_benchtop', 'BENCHTOP')}
               {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL + bh + ts, openSegs, `op-${key}`, 'dim_openings', 'OPENINGS')}
               {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall', 'WALL')}
-              {layers.show('dim_base_chain') && baseDz > 0 && (
+              {topSegs.length > 0 && (
                 <>
-                  {depthDim(w, depthDir, 0,        baseDz, -1, `dd0-${key}`, 'dim_base_chain', backOffset)}
-                  {depthDim(w, depthDir, w.length, baseDz,  1, `dd1-${key}`, 'dim_base_chain', backOffset)}
+                  {depthDim(w, depthDir, 0,        tops[0].depth,               -1, `dd0-${key}`, 'dim_benchtop', backOffset)}
+                  {depthDim(w, depthDir, w.length, tops[tops.length - 1].depth,  1, `dd1-${key}`, 'dim_benchtop', backOffset)}
                 </>
               )}
-              {layers.show('dim_wall_chain') && showWallDepthSeparate && (
+              {layers.show('dim_wall_chain') && wallDz > 0 && (
                 <>
                   {depthDim(w, depthDir, 0,        wallDz, -1, `wdd0-${key}`, 'dim_wall_chain', backOffset)}
                   {depthDim(w, depthDir, w.length, wallDz,  1, `wdd1-${key}`, 'dim_wall_chain', backOffset)}
