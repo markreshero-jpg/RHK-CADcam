@@ -1,5 +1,5 @@
 import { CabinetInput, DeclaredSeam, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, seamAssignJoint, seamAssignRows } from './types'
-import { toGenericSeamKey } from '../cabinetSeams'
+import { toGenericSeamKey, topSeamPartKeys, topSeamSibling } from '../cabinetSeams'
 import { enumerateShapedSeams } from './shapedSeams'
 
 // ── Internal seams (shelves & dividers ↔ their supports) ─────────────────────
@@ -150,16 +150,15 @@ export function resolveJoints(
   const byKey: Partial<Record<string, ResolvedCasePart>> = {}
   for (const p of caseParts) byKey[p.part_key] = p
 
-  const topKey = byKey['full_top']   ? 'full_top'
-               : byKey['front_rail'] ? 'front_rail'
-               : byKey['back_rail']  ? 'back_rail'
-               : null
+  const has = (k: string) => !!byKey[k]
 
   const seamKeys: string[] = []
   if (byKey['bottom'] && byKey['left_side'])  seamKeys.push('bottom:left_side')
   if (byKey['bottom'] && byKey['right_side']) seamKeys.push('bottom:right_side')
-  if (topKey && byKey['left_side'])           seamKeys.push(`${topKey}:left_side`)
-  if (topKey && byKey['right_side'])          seamKeys.push(`${topKey}:right_side`)
+  for (const topKey of topSeamPartKeys(has)) {
+    if (byKey['left_side'])  seamKeys.push(`${topKey}:left_side`)
+    if (byKey['right_side']) seamKeys.push(`${topKey}:right_side`)
+  }
   if (byKey['back']   && byKey['left_side'])  seamKeys.push('back:left_side')
   if (byKey['back']   && byKey['right_side']) seamKeys.push('back:right_side')
   if (byKey['back']   && byKey['bottom'])     seamKeys.push('back:bottom')
@@ -168,21 +167,24 @@ export function resolveJoints(
 
   for (const seamKey of seamKeys) {
     const genericKey = toGenericSeamKey(seamKey)
+    const sibling    = topSeamSibling(seamKey, has)
+    const cabAssign  = (k: string | null) => k && Object.prototype.hasOwnProperty.call(carcaseJoints, k)
+      ? seamAssignJoint(carcaseJoints[k])   // string = assigned, null = suppressed, undefined = rows-only entry
+      : undefined
 
     // Resolve assignment: per-cabinet override wins, then CM default
     let jointTypeId: string | null | undefined
     let source: 'cabinet' | 'method' = 'method'
 
-    const assigned = Object.prototype.hasOwnProperty.call(carcaseJoints, seamKey)
-      ? seamAssignJoint(carcaseJoints[seamKey])   // string = assigned, null = suppressed, undefined = rows-only entry
-      : undefined
+    const own      = cabAssign(seamKey)
+    const assigned = own !== undefined ? own : cabAssign(sibling)
     if (assigned !== undefined) {
       jointTypeId = assigned
       source = 'cabinet'
     } else {
       // Prefer the exact part-specific key (e.g. full_top:left_side); fall back
       // to the generic top:… key for methods saved before the rail/top split.
-      const inherited = jointDefaults[seamKey] ?? jointDefaults[genericKey] ?? null
+      const inherited = jointDefaults[seamKey] ?? (sibling ? jointDefaults[sibling] : undefined) ?? jointDefaults[genericKey] ?? null
       jointTypeId = inherited
     }
 

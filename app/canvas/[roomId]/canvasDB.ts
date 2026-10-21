@@ -13,6 +13,7 @@ import { loadCabinetInput } from '@/src/lib/resolver/loadCabinetInput'
 import { resolveHinges } from '@/src/lib/resolver/resolveHinges'
 import { enumerateInternalSeams } from '@/src/lib/resolver/resolveJoints'
 import { enumerateShapedSeams } from '@/src/lib/resolver/shapedSeams'
+import { topSeamPartKeys, topSeamSibling } from '@/src/lib/cabinetSeams'
 import { persistResolved } from '@/src/lib/resolver/persistResolved'
 import type {
   ResolvedCabinet, ResolvedSeamJoint, JointTypeOp, SeamJointAssign,
@@ -114,16 +115,15 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
     // Reconstruct seam joints from persisted case parts + cabinet-level joint assignments
     const carcaseJoints = carcaseJointsById.get(id) ?? {}
     const partKeys = new Set(myCase.map(p => p.part_key as string))
-    const topKey = partKeys.has('full_top')   ? 'full_top'
-                 : partKeys.has('front_rail') ? 'front_rail'
-                 : partKeys.has('back_rail')  ? 'back_rail'
-                 : null
+    const has = (k: string) => partKeys.has(k)
 
     const candidateSeams: string[] = []
     if (partKeys.has('bottom')   && partKeys.has('left_side'))  candidateSeams.push('bottom:left_side')
     if (partKeys.has('bottom')   && partKeys.has('right_side')) candidateSeams.push('bottom:right_side')
-    if (topKey && partKeys.has('left_side'))                    candidateSeams.push(`${topKey}:left_side`)
-    if (topKey && partKeys.has('right_side'))                   candidateSeams.push(`${topKey}:right_side`)
+    for (const topKey of topSeamPartKeys(has)) {
+      if (partKeys.has('left_side'))  candidateSeams.push(`${topKey}:left_side`)
+      if (partKeys.has('right_side')) candidateSeams.push(`${topKey}:right_side`)
+    }
     if (partKeys.has('back')     && partKeys.has('left_side'))  candidateSeams.push('back:left_side')
     if (partKeys.has('back')     && partKeys.has('right_side')) candidateSeams.push('back:right_side')
     if (partKeys.has('back')     && partKeys.has('bottom'))     candidateSeams.push('back:bottom')
@@ -157,7 +157,9 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
 
     const seamJoints: ResolvedSeamJoint[] = []
     for (const seamKey of candidateSeams) {
-      const jointTypeId = seamAssignJoint(carcaseJoints[seamKey])
+      const sibling     = topSeamSibling(seamKey, has)
+      const own         = Object.prototype.hasOwnProperty.call(carcaseJoints, seamKey) ? seamAssignJoint(carcaseJoints[seamKey]) : undefined
+      const jointTypeId = own !== undefined ? own : sibling ? seamAssignJoint(carcaseJoints[sibling]) : undefined
       if (!jointTypeId) continue
       const colonIdx = seamKey.indexOf(':')
       seamJoints.push({

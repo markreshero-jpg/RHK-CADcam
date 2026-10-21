@@ -25,6 +25,20 @@ export function toGenericSeamKey(key: string): string {
   return key.replace(/^(front_rail|full_top|back_rail):/, 'top:')
 }
 
+// Top parts that seam into the gables. full_top and front_rail never coexist;
+// a double-rail top (or a BACK_TYPE 'rail' back) adds a back rail, which needs
+// its own fixing holes too.
+export function topSeamPartKeys(has: (partKey: string) => boolean): string[] {
+  return ['full_top', 'front_rail', 'back_rail'].filter(has)
+}
+
+// The back rail shares the front rail's joint unless it has one of its own —
+// the joints UI edits a double-rail top ("Top Rails") under the front_rail key.
+export function topSeamSibling(seamKey: string, has: (partKey: string) => boolean): string | null {
+  const m = seamKey.match(/^back_rail:(.+)$/)
+  return m && has('front_rail') ? `front_rail:${m[1]}` : null
+}
+
 // ── Part-grouped edge model (CM builder joint UI) ────────────────────────────
 // Describes each carcase part by the edges that join another part. The same
 // seam key may appear under two parts (e.g. bottom:left_side under both Bottom
