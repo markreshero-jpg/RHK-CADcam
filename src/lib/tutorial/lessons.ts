@@ -585,7 +585,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Select it. In the cabinet panel, tick Floating (wall-hung, no kick). The kick goes, the box keeps its size, and it hangs 300 off the floor (change that in Elevation from floor). There’s no bottom panel. The gable tops and bottoms and the bottom edge of the back are taped, and the doors finish flush with the carcass bottom.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.FLOAT) },
     { id: 'bottom', title: 'Optional: add a bottom panel',
-      body: 'Tick Bottom panel to put an exposed-board bottom under the gables, taped front and ends. The gables sit on it, so the overall height stays the same. To keep it as a starting point, right-click → Save to library and pick the Vanity section.',
+      body: 'Tick Bottom panel to put an exposed-board bottom between the gables, taped on the front. The gables run down past it, so the overall height stays the same. To keep it as a starting point, right-click → Save to library and pick the Vanity section.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.FLOAT_BOTTOM) },
   ]},
 

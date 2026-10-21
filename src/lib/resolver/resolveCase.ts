@@ -18,7 +18,7 @@ export function caseBackT(cab: CabinetInput, r: ConstructionRules): number {
 /** Where the carcass floor sits (z_floating). TK is the kick lift, floorT the
  *  thickness of the panel the interior stands on, so the interior floor is at
  *  Y = TK + SCRBT + floorT. A floating cabinet has no kick and no bottom panel
- *  unless FLOAT_BOTTOM adds an exposed-board bottom under the gables. */
+ *  unless FLOAT_BOTTOM adds an exposed-board bottom between the gables. */
 export function caseFloor(cab: CabinetInput, r: ConstructionRules): {
   TK: number; floorT: number; floating: boolean; hasBottom: boolean
 } {
@@ -53,8 +53,8 @@ export function resolveCaseParts(
   const backType = r.BACK_TYPE ?? 'panel'
   const hasBack  = backType === 'panel'
 
-  // Floating (z_floating): no kick; no bottom, or an exposed-board bottom the
-  // gables stand on.
+  // Floating (z_floating): no kick; no bottom, or an exposed-board bottom
+  // between the gables.
   const { TK, floating, hasBottom } = caseFloor(cab, r)
   const floatBottom = floating && hasBottom
   if (floatBottom) bottomMat = cab.exposed_material
@@ -74,8 +74,9 @@ export function resolveCaseParts(
   }
 
   // ── Joinery ──────────────────────────────────────────────────
-  // A floating bottom always runs under the gables and the full depth.
-  const bottomJoin     = floatBottom ? 'bottom_outside' : floating ? 'sides_outside' : r.BOTTOM_JOIN
+  // A floating cabinet's gables always run through; its bottom (if any) sits
+  // between them, full depth.
+  const bottomJoin     = floating ? 'sides_outside' : r.BOTTOM_JOIN
   const bottomBackJoin = floatBottom ? 'back_on_bottom' : r.BOTTOM_BACK_JOIN
   const backJoin       = r.BACK_JOIN
   const topBackJoin    = r.TOP_BACK_JOIN
@@ -163,7 +164,7 @@ export function resolveCaseParts(
   })
 
   // ── Bottom ───────────────────────────────────────────────────
-  // Floating: none, or the exposed-board bottom taped front + both ends.
+  // Floating: none, or the exposed-board bottom between the gables, taped front.
   if (!floating || floatBottom) parts.push({
     part_key: 'bottom',
     DX: botDepth,
@@ -175,7 +176,7 @@ export function resolveCaseParts(
     AX: 0, AY: 0, AZ: 0,
     material_id: bottomMat.id,
     edge_band: floatBottom
-      ? edgeSidesToBanding(['top', 'left', 'right'], cab.exposed_edgeband_id)
+      ? edgeSidesToBanding(['top'], cab.exposed_edgeband_id)
       : edgeSidesToBanding(edging.bottom, ebId),
   })
 

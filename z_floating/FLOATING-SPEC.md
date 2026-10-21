@@ -13,11 +13,12 @@ Floating is a **setting on a cabinet**, not a cabinet type or a library section
 
 1. **No bottom panel by default.** A floating carcass is two gables, a back and
    a top (whatever the top type gives). The back runs down to the carcass bottom.
-2. **Optional bottom panel** (per-cabinet tick). When on, it runs **under** the
-   gables, full width and full depth, and everything above moves up by its
-   thickness (overall height unchanged). It is made from the **exposed /
-   external board** (the material schedule's Exposed row) with the exposed
-   edgeband, taped front + both ends (not the back edge — it's on the wall).
+2. **Optional bottom panel** (per-cabinet tick). When on, it sits **between**
+   the gables (gables run through to the carcass bottom), full depth, and the
+   interior moves up by its thickness (overall height unchanged). It is made
+   from the **exposed / external board** (the material schedule's Exposed row)
+   with the exposed edgeband, taped on the front edge only. *Changed
+   2026-10-21 (Mark, RHK6570): it first ran under the gables.*
 3. **Edging when floating:** gable **tops and bottoms** taped (added to whatever
    the construction method already tapes, e.g. the front edge), and the **bottom
    edge of the back** taped. Uses the carcass edgeband.
@@ -38,7 +39,7 @@ placement with everything else):
 | Rule | Type | Default | Meaning |
 |---|---|---|---|
 | `FLOAT` | boolean | unset (false) | Floating cabinet |
-| `FLOAT_BOTTOM` | boolean | unset (false) | Add the exposed bottom panel under the gables |
+| `FLOAT_BOTTOM` | boolean | unset (false) | Add the exposed bottom panel between the gables |
 
 The resolver treats a floating cabinet as kick-less whatever `has_toekick`
 says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
@@ -60,8 +61,8 @@ says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
   - normal: TK = has_toekick ? TOEH : 0, floorT = carcass thickness
   - floating, no bottom: TK = 0, floorT = 0
   - floating + bottom: TK = 0, floorT = exposed board thickness
-- Floating + bottom forces the bottom-outside geometry (gables stand on it),
-  regardless of the method's `BOTTOM_JOIN`.
+- Floating forces the sides-outside geometry (gables run through, any bottom
+  sits between them), regardless of the method's `BOTTOM_JOIN`.
 - Back bottom face lands on the interior floor (Y = floorT).
 - Shaped cabinets (`resolveShapedCase`) don't float yet — out of scope.
 

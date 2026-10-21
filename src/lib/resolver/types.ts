@@ -215,7 +215,7 @@ export interface ConstructionRules {
   RAILGRAIN?: 'horizontal' | 'vertical'
 
   // Floating cabinets (z_floating): wall-hung, no kick, no bottom panel unless
-  // FLOAT_BOTTOM adds an exposed-board bottom under the gables. Cabinet layer.
+  // FLOAT_BOTTOM adds an exposed-board bottom between the gables. Cabinet layer.
   FLOAT?:        boolean
   FLOAT_BOTTOM?: boolean
 

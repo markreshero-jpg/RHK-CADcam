@@ -50,15 +50,15 @@ describe('floating cabinets', () => {
     expect(back.Y + back.DZ + back.DX).toBe(500)
   })
 
-  it('FLOAT_BOTTOM: exposed bottom under the gables, full width + depth, taped front + ends', () => {
+  it('FLOAT_BOTTOM: exposed bottom between the gables, full depth, taped front only', () => {
     const c = cab({ ...shop, FLOAT: true, FLOAT_BOTTOM: true })
     const bottom = part(c, 'bottom')!
     expect(bottom.material_id).toBe('x16')
-    expect(bottom).toMatchObject({ X: 0, Y: 0, Z: 0, DY: 600, DX: 460, DZ: 16 })
-    expect(bottom.edge_band).toMatchObject({ top: true, bottom: false, left: true, right: true, id: 'eb-exp' })
+    expect(bottom).toMatchObject({ X: 18, Y: 0, Z: 0, DY: 600 - 36, DX: 460, DZ: 16 })
+    expect(bottom.edge_band).toMatchObject({ top: true, bottom: false, left: false, right: false, id: 'eb-exp' })
     const side = part(c, 'left_side')!
-    expect(side.Y).toBe(16)
-    expect(side.DY).toBe(500 - 16)
+    expect(side.Y).toBe(0)
+    expect(side.DY).toBe(500)
     const back = part(c, 'back')!
     expect(back.Y + back.DZ).toBe(16)
   })
