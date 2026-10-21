@@ -102,6 +102,7 @@ import { type RoomSwitcherHandle } from './RoomSwitcher'
 import ObjectTreeModal from './ObjectTreeModal'
 import ReportsModal, { type ReportScope, type ReportId } from './ReportsModal'
 import Room3DScene, { type Camera3DState } from './Room3DScene'
+import type { Shot3D } from '@/src/lib/shopDrawings/shots3d'
 import BenchtopPanel from './BenchtopPanel'
 import BenchtopShapeEditPanel, { SaveShapePrompt } from './BenchtopShapeEditPanel'
 import BenchtopJoinDialog from './BenchtopJoinDialog'
@@ -703,6 +704,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Live {field} values (z_CAD_tool C2): drawn + printed notes show them; the editor keeps the tokens.
   const cadFields = useCadFields({ project, room, resolvedParts, fixtures })
   const [blockSaveReq, setBlockSaveReq] = useState(0)
+  // Shop drawings 3D views saved from the 3D view (z_shop_drawings S8).
+  function saveShopShots(shots: Shot3D[]) {
+    setRoomState(prev => ({ ...prev, shop_3d_shots: shots }))
+    void supabase.from('rooms').update({ shop_3d_shots: shots }).eq('id', room.id)
+      .then(({ error }) => { if (error) console.error('[shop 3D views]', error) })
+  }
+  function addShopShot(cam: Camera3DState, hiddenWallIds: string[]) {
+    const prev = room.shop_3d_shots ?? []
+    saveShopShots([...prev, { id: crypto.randomUUID(), label: `View ${prev.length + 1}`, eye: cam.pos, target: cam.target, hiddenWallIds, saved: true }])
+    useTutorial.getState().emit('shop_view_saved')
+  }
   function setAnnotScale(n: number) {
     setRoomState(prev => ({ ...prev, annotation_scale: n }))
     void supabase.from('rooms').update({ annotation_scale: n }).eq('id', room.id)
@@ -3187,6 +3199,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             materialColours={matColours}
             ebByMatId={ebByMatId}
             cameraStateRef={camera3DStateRef}
+            onSaveShot={addShopShot}
             resetSignal={reset3DSignal}
             layers={layers3D}
             wire={room3DStyle === 'wire'}
@@ -3810,6 +3823,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           initialScope={reportScope}
           initialReport={reportInitial}
           bt3d={{ info: btInfo, profiles: btCatalog.profileById }}
+          onDeleteShopShot={id => saveShopShots((room.shop_3d_shots ?? []).filter(s => s.id !== id))}
           project={project}
           room={room}
           walls={walls}

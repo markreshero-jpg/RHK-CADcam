@@ -660,6 +660,19 @@ export const LESSONS: TutorialLesson[] = [
       body: 'With both still picked, right-click and choose Lock 2 together. Now move, nudge or turn either one and the other comes too. If the basin follows its vanity, so does the tap. Click one later and its locked partner lights up. To split them, right-click and choose Unlock.',
       canvas: true, done: c => c.fixtures.some(f => !!f.lock_group) },
   ]},
+
+  { id: 'shop_3d_view', level: 'intermediate', topic: 'reports', title: 'Add a 3D view to the shop drawings',
+    blurb: 'Save your own 3D angle for the Shop Drawings 3D sheet.', keywords: 'shop drawings 3d view angle camera save perspective sheet', steps: [
+    { id: 'open', title: 'Go to 3D',
+      body: 'Click 3D. Orbit to the angle you want; right-click a wall area to hide walls that are in the way.',
+      target: 'view-3d', canvas: true, done: c => c.view === '3d' },
+    { id: 'save', title: 'Right-click → Save view for shop drawings',
+      body: 'Right-click empty space and choose Save view for shop drawings. It keeps this angle and the walls you have hidden.',
+      canvas: true, done: (c, s) => ev(c, 'shop_view_saved') > ev(s, 'shop_view_saved') },
+    { id: 'print', title: 'It prints with the 3D views',
+      body: 'Production → Shop Drawings…: your view is in the 3D views row (✕ removes it). Small rooms put 4 views on a sheet, bigger rooms 2.',
+      target: 'menu-Production', canvas: true, done: c => c.report === 'shop_drawings' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

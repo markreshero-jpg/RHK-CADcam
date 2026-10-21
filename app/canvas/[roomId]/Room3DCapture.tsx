@@ -4,7 +4,7 @@
 // fixture models), then captures it as vector hidden lines. <Shot3DSVG> draws a
 // captured shot as black SVG lines fitted to a paper-mm box.
 'use client'
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import type { PerspectiveCamera } from 'three'
 import type { Wall, CabinetInstance, Room, RoomFixture, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
@@ -57,9 +57,10 @@ export default function Room3DCapture({ shots, walls, cabinets, room, resolvedPa
   bt?: Bt3DPrint
   onCaptured: (shotId: string, r: HiddenLineResult) => void
 }) {
-  const [i, setI] = useState(0)
-  const shot = shots[i]
+  // Always the first view still to capture — the parent drops it once its result is in.
+  const shot = shots[0]
   const hidden = useMemo(() => new Set(shot?.hiddenWallIds ?? []), [shot])
+  const hiddenCabs = useMemo(() => new Set(shot?.hiddenCabinetIds ?? []), [shot])
   if (!shot) return null
   return (
     <div aria-hidden style={{ position: 'fixed', left: -20000, top: 0, width: 1200, height: 900, pointerEvents: 'none' }}>
@@ -71,13 +72,14 @@ export default function Room3DCapture({ shots, walls, cabinets, room, resolvedPa
             selectedId={null} onSelectCabinet={NOOP} onCabContextMenu={NOOP}
             resolvedParts={resolvedParts}
             hiddenWallIds={hidden}
+            hiddenCabinetIds={hiddenCabs}
             birdsEyeSignal={0} resetSignal={0}
             layers={layers}
             bt={bt && { ...bt, selectedId: null, onSelect: NOOP }}
             fx={{ fixtures, selectedId: null, onSelect: NOOP }}
             pickBenchtops={false} measuring={false} wire={false}
           />
-          <CaptureDriver key={shot.id} shot={shot} onDone={r => { onCaptured(shot.id, r); setI(n => n + 1) }} />
+          <CaptureDriver key={shot.id} shot={shot} onDone={r => onCaptured(shot.id, r)} />
         </Suspense>
       </Canvas>
     </div>

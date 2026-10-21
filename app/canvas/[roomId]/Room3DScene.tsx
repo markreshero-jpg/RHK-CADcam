@@ -439,7 +439,9 @@ const EMPTY_EDGES = new Map<string, PartEdge>()
 
 // ── Wall visibility menu (DOM overlay) ───────────────────────────────────────
 
-function WallVisibilityMenu({ x, y, walls, hiddenWallIds, onToggle, onShowAll, onBirdsEye, onReset, onClose }: {
+function WallVisibilityMenu({ x, y, walls, hiddenWallIds, onToggle, onShowAll, onBirdsEye, onReset, onClose, onSaveShot }: {
+  /** Shop drawings (z_shop_drawings S8): keep this camera + hidden walls as a 3D view. */
+  onSaveShot?: () => void
   x: number; y: number
   walls: Wall[]
   hiddenWallIds: Set<string>
@@ -516,6 +518,15 @@ function WallVisibilityMenu({ x, y, walls, hiddenWallIds, onToggle, onShowAll, o
       >
         Reset view
       </button>
+      {onSaveShot && (
+        <button
+          className="w-full text-left px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700"
+          title="Adds this angle (and the walls hidden now) to the room's Shop Drawings 3D views"
+          onClick={() => { onSaveShot(); onClose() }}
+        >
+          Save view for shop drawings
+        </button>
+      )}
     </div>
   )
 }
@@ -704,6 +715,7 @@ function CameraPersistence({ controlsRef, stateRef }: {
         target: [ctrl.target.x, ctrl.target.y, ctrl.target.z],
       }
     }
+    save()   // known from the start — "Save view" works before any orbit
     ctrl.addEventListener('change', save)
     return () => ctrl.removeEventListener('change', save)
   }, [camera, controlsRef, stateRef])
@@ -755,7 +767,9 @@ function ResetView({ signal, controlsRef, position, target }: {
 
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, fx, pickBenchtops, measuring, wire, printMode = false }: {
+export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, hiddenCabinetIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, fx, pickBenchtops, measuring, wire, printMode = false }: {
+  /** Shop drawings 3D shots: single cabinets left out (blockers in front of the subject). */
+  hiddenCabinetIds?: Set<string>
   /** Shop drawings 3D capture (z_shop_drawings S8): no controls, floor or wall labels — the caller drives the camera. */
   printMode?: boolean
   walls: Wall[]
@@ -890,7 +904,7 @@ export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, 
       {/* Cabinets */}
       {cabinets.map(cab => {
         const wall = walls.find(w => w.id === cab.wall_id)
-        if (!wall || (cab.wall_id != null && hiddenWallIds.has(cab.wall_id))) return null
+        if (!wall || (cab.wall_id != null && hiddenWallIds.has(cab.wall_id)) || hiddenCabinetIds?.has(cab.id)) return null
         return (
           <CabinetMesh
             key={cab.id}
@@ -946,7 +960,9 @@ export interface Bt3DProps {
 type MenuState     = { x: number; y: number; cabId: string }
 type WallMenuState = { x: number; y: number }
 
-export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, fx, pickBenchtops = false, measuring = false, wire = false }: {
+export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, fx, pickBenchtops = false, measuring = false, wire = false, onSaveShot }: {
+  /** Right-click → "Save view for shop drawings": the current camera + hidden walls. */
+  onSaveShot?: (cam: Camera3DState, hiddenWallIds: string[]) => void
   walls: Wall[]
   cabinets: CabinetInstance[]
   room: Room
@@ -1108,6 +1124,10 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
           onBirdsEye={() => setBirdsEyeSignal(s => s + 1)}
           onReset={() => setResetViewSignal(s => s + 1)}
           onClose={() => setWallMenu(null)}
+          onSaveShot={onSaveShot && cameraStateRef ? () => {
+            const cam = cameraStateRef.current
+            if (cam) onSaveShot(cam, [...hiddenWallIds])
+          } : undefined}
         />
       )}
     </div>

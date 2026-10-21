@@ -207,8 +207,28 @@ How it's built (plan):
 - Package: a **3D views** sheet (heading "Room 3D NTS", title block "Scale: NTS"), ticked by default.
   Captured once per open; **Re-render 3D** recaptures. Download waits for the capture. Uses the elevation
   layer set's 3D view.
-- Stage 2 next: more shots (each run, island both sides, object blockers), saved camera angles, shots per
-  sheet by room size (3–4 if the longest side is < 2000mm, else 1–2).
+### S8 stage 2 (built 2026-10-21, in-app check pending)
+
+- **Auto views** (`autoShots`): one per cabinet run (face-side run ≥ 400mm, longest first, max 4, swings
+  alternate ±28°), plus each island from both sides (`I1 front` / `I1 back`). With no runs, one view of
+  the longest wall.
+- **Blockers:** any cabinet with a corner inside the eye → subject triangle **and** ≥ 700mm in front of the
+  subject line. This catches islands / peninsulas / free-standing units out on the floor, but not the
+  corner units beside a run. An island blocker hides its whole island wall (its top goes too); any other
+  hides just that cabinet (`hiddenCabinetIds`, new RoomScene prop).
+- **Saved views:** in the 3D view, right-click empty space → **Save view for shop drawings**. It stores the
+  camera + the walls hidden right now in `rooms.shop_3d_shots` (jsonb, migration_s8_saved_3d_shots.sql,
+  applied). The live view now records its camera from the start, so saving works before any orbit. The
+  package lists the saved views with a ✕ to remove them.
+- **Per-view ticks:** a "3D views" row under the sheet ticks, remembered per room
+  (`shop-drawings-3d-off`).
+- **Layout** (`shotsPerSheet`): a room whose longest side is < 2000mm puts 4 per sheet (2 × 2); else 2 per
+  sheet (side by side); a lone last view gets the whole band. As many 3D sheets as needed, all NTS. The
+  PDF places each view from its cell's paper-mm box.
+- Capture runs through the pending views one at a time (1.5s settle each).
+- Tutorial `shop_3d_view` (emit `shop_view_saved`).
+- **Elevation drilling off (Mark, 2026-10-21):** hinge cup / plate bores and drawer-front fixing bores never
+  print on the elevations (`PRINT_DRILLING = false` in ElevationPrintSVG), whatever the layer set.
 
 ## Answered (Mark, 2026-10-21)
 

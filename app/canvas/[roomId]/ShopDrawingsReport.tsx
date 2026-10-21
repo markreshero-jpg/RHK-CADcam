@@ -20,7 +20,7 @@ import ElevationPrintSVG, { type ElevationPageOptions } from './ElevationPrintSV
 import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
 import ShopTitleBlock, { SheetHeading, HEADING_H, sheetTitle, pageLayout, titleBlockHeight } from './ShopTitleBlock'
 import Room3DCapture, { Shot3DSVG, type Bt3DPrint } from './Room3DCapture'
-import { autoShots } from '@/src/lib/shopDrawings/shots3d'
+import { autoShots, shotsPerSheet, type Shot3D } from '@/src/lib/shopDrawings/shots3d'
 import type { HiddenLineResult } from '@/src/lib/shopDrawings/hiddenLine'
 
 const PAPER: Record<string, { w: number; h: number; label: string }> = {
@@ -43,12 +43,23 @@ function readPage<T extends object>(key: string, defaults: T): T {
   return defaults
 }
 
-type Sheet = { key: string; title: string; wall?: Wall }
-/** The 3D views sheet (S8) — not to scale. */
+type Sheet = { key: string; title: string; wall?: Wall; shots?: Shot3D[] }
+/** The 3D views (S8) — not to scale; one tick for all of them, laid out over as many sheets as they need. */
 const KEY_3D = '3d'
+const LS_3D_OFF = 'shop-drawings-3d-off'
+const SHOT_GAP = 4   // mm between views on a 3D sheet
+
+/** Views laid out in the band: 1 → whole band; 2 → side by side; 3–4 → 2 × 2. */
+function shotCells(n: number, x: number, y: number, w: number, h: number) {
+  const cols = n === 1 ? 1 : 2, rows = Math.ceil(n / cols)
+  const cw = (w - SHOT_GAP * (cols - 1)) / cols, ch = (h - SHOT_GAP * (rows - 1)) / rows
+  return Array.from({ length: n }, (_, i) => ({ x: x + (i % cols) * (cw + SHOT_GAP), y: y + Math.floor(i / cols) * (ch + SHOT_GAP), w: cw, h: ch }))
+}
 
 export default function ShopDrawingsReport({ project, room, walls, cabinets, planResolved, elevResolved, threeDResolved, bt3d, fixtures = [], annotations = [],
-  benchtops = [], benchTopZ, layerSets, activeLayerSetId, scale, paperKey }: {
+  benchtops = [], benchTopZ, layerSets, activeLayerSetId, scale, paperKey, onDeleteSavedShot }: {
+  /** Remove a view saved from the 3D view (room.shop_3d_shots). */
+  onDeleteSavedShot?: (id: string) => void
   /** Resolved parts with the 3D view's hidden parts removed. */
   threeDResolved: Map<string, ResolvedCabinet>
   /** Benchtop slab inputs for the 3D views (the canvas's thickness cascade + edge profiles). */
@@ -82,13 +93,12 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   const [elevShow] = useState<ElevationPageOptions>(() => ({
     ...readPage('elevation-print-layers', { returnWalls: true, titleBlock: true }), titleBlock: true }))
 
-  // Sheets: the plan, then each standard wall in wall order.
-  const sheets: Sheet[] = useMemo(() => [
+  // Sheets: the plan, then each standard wall in wall order (the 3D views follow, below).
+  const baseSheets: Sheet[] = useMemo(() => [
     { key: 'plan', title: `${room.name} Plan` },
     ...walls.filter(w => w.wall_type === 'standard')
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(w => ({ key: w.id, title: `${room.name} Elevation ${w.name}`, wall: w })),
-    { key: KEY_3D, title: `${room.name} 3D` },
   ], [walls, room.name])
 
   // 3D views: auto shots, captured off-screen once per open (or on Re-render).
@@ -96,10 +106,30 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   // fronts / tops or ghost the carcase (Mark, 2026-10-21). Defaults to the canvas's set.
   const [threeDSet, setThreeDSetId] = useReportLayerSet('shop-3d-layer-set', layerSets, activeLayerSetId)
   const threeDLayers = useMemo(() => resolveLayerView(threeDSet, '3d'), [threeDSet])
-  const shots = useMemo(() => autoShots(walls, cabinets, room.room_dy ?? 2400), [walls, cabinets, room.room_dy])
+  // Auto views (each run, islands both sides) + views saved from the 3D view; each can be switched off.
+  const allShots = useMemo(() => [
+    ...autoShots(walls, cabinets, room.room_dy ?? 2400),
+    ...(room.shop_3d_shots ?? []).map(s => ({ ...s, saved: true })),
+  ], [walls, cabinets, room.room_dy, room.shop_3d_shots])
+  const [shotsOff, setShotsOff] = useState<Set<string>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LS_3D_OFF) ?? '{}')[room.id]
+      if (Array.isArray(saved)) return new Set(saved as string[])
+    } catch { /* ignore */ }
+    return new Set()
+  })
+  useEffect(() => {
+    try {
+      const all = JSON.parse(localStorage.getItem(LS_3D_OFF) ?? '{}')
+      localStorage.setItem(LS_3D_OFF, JSON.stringify({ ...all, [room.id]: [...shotsOff] }))
+    } catch { /* storage unavailable */ }
+  }, [shotsOff, room.id])
+  const shots = allShots.filter(s => !shotsOff.has(s.id))
   const [shotResults, setShotResults] = useState<Record<string, HiddenLineResult>>({})
   const [captureRun, setCaptureRun] = useState(0)
-  const captured = shots.length > 0 && shots.every(s => shotResults[s.id])
+  const pending = shots.filter(s => !shotResults[s.id])
+  const captured = shots.length > 0 && pending.length === 0
+  const perSheet = shotsPerSheet(walls)
 
   // Ticks: remembered per room; by default the plan + walls with cabinets on them.
   const [ticked, setTicked] = useState<Set<string>>(() => {
@@ -120,7 +150,13 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
     if (next.has(key)) next.delete(key); else next.add(key)
     return next
   })
-  const printed = sheets.filter(s => ticked.has(s.key))
+  // 3D pages: the switched-on views, perSheet at a time.
+  const threeDPages: Sheet[] = []
+  for (let i = 0; i < shots.length; i += perSheet) {
+    threeDPages.push({ key: `${KEY_3D}:${i / perSheet}`, title: `${room.name} 3D`, shots: shots.slice(i, i + perSheet) })
+  }
+  const sheets = [...baseSheets, ...threeDPages]
+  const printed = sheets.filter(s => (s.shots ? ticked.has(KEY_3D) : ticked.has(s.key)))
 
   // Drawing sizes (model mm) come from each SVG's data-vb-* once it has rendered.
   const drawRefs = useRef<Map<string, SVGSVGElement>>(new Map())
@@ -146,7 +182,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   /** Paper-mm box of a sheet's drawing: centred across, centred in the band between heading and title block. */
   const place = (key: string) => {
     // 3D views aren't to scale: they fill the band.
-    if (key === KEY_3D) return { x: MARGIN, y: layout.top, w: layout.usableW, h: layout.usableH, fits: true }
+    if (key.startsWith(KEY_3D)) return { x: MARGIN, y: layout.top, w: layout.usableW, h: layout.usableH, fits: true }
     const s = sizes[key]
     if (!s) return null
     return {
@@ -171,18 +207,27 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
         const page = pageRefs.current.get(sheet.key)
         const drawing = page?.querySelector<SVGSVGElement>('[data-role="drawing"] svg')
         const box = place(sheet.key)
-        if (!page || !drawing || !box) continue
+        if (!page || !box || (!drawing && !sheet.shots)) continue
         if (i > 0) doc.addPage([paper.w, paper.h], orientation)
 
         const heading = page.querySelector<SVGSVGElement>('[data-role="heading"] svg')
         if (heading) await svg2pdf(heading, doc, { x: MARGIN, y: MARGIN, width: layout.usableW, height: HEADING_H })
 
-        // True scale: the model-mm viewBox renders into vbW/scale paper mm.
-        const clone = drawing.cloneNode(true) as SVGSVGElement
-        clone.setAttribute('width', `${box.w}mm`)
-        clone.setAttribute('height', `${box.h}mm`)
-        clone.setAttribute('preserveAspectRatio', 'xMinYMin meet')
-        await svg2pdf(clone, doc, { x: box.x, y: box.y, width: box.w, height: box.h })
+        if (sheet.shots) {
+          // 3D views: each cell's paper-mm box is on its element.
+          for (const cell of page.querySelectorAll<HTMLElement>('[data-role="shot"]')) {
+            const svg = cell.querySelector('svg')
+            const d = cell.dataset
+            if (svg) await svg2pdf(svg, doc, { x: Number(d.x), y: Number(d.y), width: Number(d.w), height: Number(d.h) })
+          }
+        } else if (drawing) {
+          // True scale: the model-mm viewBox renders into vbW/scale paper mm.
+          const clone = drawing.cloneNode(true) as SVGSVGElement
+          clone.setAttribute('width', `${box.w}mm`)
+          clone.setAttribute('height', `${box.h}mm`)
+          clone.setAttribute('preserveAspectRatio', 'xMinYMin meet')
+          await svg2pdf(clone, doc, { x: box.x, y: box.y, width: box.w, height: box.h })
+        }
 
         const tb = page.querySelector<SVGSVGElement>('[data-role="title-block"] svg')
         if (tb && layout.tb) await svg2pdf(tb, doc, { x: layout.tb.x, y: layout.tb.y, width: layout.tb.w, height: layout.tb.h })
@@ -221,7 +266,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
 
       <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-800">
         <span className="text-[10px] text-gray-500 uppercase tracking-wider self-center mr-1">Sheets:</span>
-        {sheets.map(s => (
+        {[...baseSheets, { key: KEY_3D, title: '3D' } as Sheet].map(s => (
           <button key={s.key} onClick={() => toggle(s.key)}
             className={`px-2 py-0.5 rounded text-xs border transition-colors ${
               ticked.has(s.key) ? 'bg-blue-600/25 border-blue-600/50 text-blue-300'
@@ -231,6 +276,30 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
           </button>
         ))}
       </div>
+
+      {ticked.has(KEY_3D) && (
+        <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-gray-800">
+          <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1"
+            title="Saved views: right-click empty space in the 3D view → Save view for shop drawings">3D views:</span>
+          {allShots.map(s => {
+            const on = !shotsOff.has(s.id)
+            return (
+              <span key={s.id} className={`inline-flex items-center rounded text-xs border ${on ? 'bg-blue-600/25 border-blue-600/50 text-blue-300' : 'border-gray-700 text-gray-500'}`}>
+                <button className="px-2 py-0.5" onClick={() => setShotsOff(prev => {
+                  const next = new Set(prev)
+                  if (next.has(s.id)) next.delete(s.id); else next.add(s.id)
+                  return next
+                })}>{on ? '☑' : '☐'} {s.label}{s.saved ? ' (saved)' : ''}</button>
+                {s.saved && onDeleteSavedShot && (
+                  <button className="px-1.5 py-0.5 text-gray-500 hover:text-red-400" title="Remove this saved view"
+                    onClick={() => onDeleteSavedShot(s.id)}>✕</button>
+                )}
+              </span>
+            )
+          })}
+          <span className="text-[10px] text-gray-600">{perSheet} per sheet</span>
+        </div>
+      )}
 
       {misfits.length > 0 && (
         <div className="rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 space-y-0.5">
@@ -248,8 +317,8 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       {sheets.map(sheet => {
         const n = printed.indexOf(sheet)
         const box = place(sheet.key)
-        const sheetScale = sheet.key === KEY_3D ? 'NTS' : scale
-        const shot = shots[0] && shotResults[shots[0].id]
+        const sheetScale = sheet.shots ? 'NTS' : scale
+        const cells = sheet.shots ? shotCells(sheet.shots.length, MARGIN, layout.top, layout.usableW, layout.usableH) : []
         return (
           <div key={sheet.key} ref={el => { if (el) pageRefs.current.set(sheet.key, el); else pageRefs.current.delete(sheet.key) }}
             className={`relative bg-white shadow-inner rounded-sm overflow-hidden ${n < 0 ? 'hidden' : ''}`}
@@ -257,16 +326,21 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
             <div data-role="heading" className="absolute" style={{ left: pct(MARGIN, paper.w), top: pct(MARGIN, paper.h), width: pct(layout.usableW, paper.w) }}>
               <SheetHeading title={sheet.title} scale={sheetScale} width={layout.usableW} />
             </div>
-            <div data-role="drawing" className={`absolute ${box && !box.fits ? 'outline outline-2 outline-amber-500' : ''}`}
+            {sheet.shots?.map((s, ci) => {
+              const c = cells[ci], r = shotResults[s.id]
+              return (
+                <div key={s.id} data-role="shot" data-x={c.x} data-y={c.y} data-w={c.w} data-h={c.h} className="absolute"
+                  style={{ left: pct(c.x, paper.w), top: pct(c.y, paper.h), width: pct(c.w, paper.w) }}>
+                  {r ? <Shot3DSVG shot={r} width={c.w} height={c.h} />
+                    : <div className="flex items-center justify-center text-gray-400 text-xs" style={{ aspectRatio: `${c.w} / ${c.h}` }}>Rendering {s.label}…</div>}
+                </div>
+              )
+            })}
+            {!sheet.shots && <div data-role="drawing" className={`absolute ${box && !box.fits ? 'outline outline-2 outline-amber-500' : ''}`}
               style={box
                 ? { left: pct(box.x, paper.w), top: pct(box.y, paper.h), width: pct(box.w, paper.w) }
                 : { left: pct(MARGIN, paper.w), top: pct(layout.top, paper.h), width: pct(layout.usableW, paper.w), visibility: 'hidden' }}>
-              {sheet.key === KEY_3D ? (
-                shot ? <Shot3DSVG shot={shot} width={layout.usableW} height={layout.usableH} />
-                  : <div className="flex items-center justify-center text-gray-400 text-sm" style={{ aspectRatio: `${layout.usableW} / ${layout.usableH}` }}>
-                      {shots.length ? 'Rendering 3D view…' : 'No walls to view.'}
-                    </div>
-              ) : sheet.wall ? (
+              {sheet.wall ? (
                 <ElevationPrintSVG
                   wall={sheet.wall} walls={walls} room={room}
                   cabinets={cabinets} fixtures={fixtures} resolvedParts={elevResolved}
@@ -282,7 +356,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                   scale={scale} layers={planLayers} show={planShow}
                 />
               )}
-            </div>
+            </div>}
             {layout.tb && (
               <div data-role="title-block" className="absolute" style={{ left: pct(layout.tb.x, paper.w), top: pct(layout.tb.y, paper.h), width: pct(layout.tb.w, paper.w) }}>
                 <ShopTitleBlock company={company} sheet={sheetTitle(project, room, sheetScale, Math.max(1, n + 1), printed.length)} width={layout.tb.w} />
@@ -293,7 +367,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       })}
 
       {ticked.has(KEY_3D) && !captured && (
-        <Room3DCapture key={captureRun} shots={shots}
+        <Room3DCapture key={captureRun} shots={pending}
           walls={walls} cabinets={cabinets} room={room} resolvedParts={threeDResolved} layers={threeDLayers}
           fixtures={fixtures} bt={bt3d && { ...bt3d, benchtops }}
           onCaptured={(id, r) => setShotResults(prev => ({ ...prev, [id]: r }))} />

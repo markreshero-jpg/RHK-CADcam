@@ -97,6 +97,8 @@ export interface Room {
   tall_door_colour_id?:        string | null
   /** CAD annotations (z_CAD_tool): the canvas previews paper-mm sizes at 1:this. */
   annotation_scale?:           number
+  /** Shop drawings 3D views saved from the 3D view (z_shop_drawings S8). */
+  shop_3d_shots?:              import('./shopDrawings/shots3d').Shot3D[]
   created_at: string
   updated_at: string
 }

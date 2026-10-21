@@ -114,6 +114,8 @@ const INK  = PRINT_INK
 const INK2 = PRINT_INK
 const INK3 = PRINT_INK
 const NO_SELECT = () => {}
+/** Hinge cup / plate bores and drawer-front fixing bores stay off the printed elevations. */
+const PRINT_DRILLING = false
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
@@ -354,7 +356,8 @@ export default function ElevationPrintSVG({
             ))}
 
             {/* Hinge cup + plate bore positions */}
-            {layers.show('hinges') && (rp.hinge_instances ?? []).map((h, hi) => (
+            {/* Hinge + drawer-front drilling are workshop detail, never on the shop drawings (Mark, 2026-10-21). */}
+            {PRINT_DRILLING && layers.show('hinges') && (rp.hinge_instances ?? []).map((h, hi) => (
               <g key={`hg-${hi}`} opacity={layers.op('hinges')}>
                 {[...h.cup_drills, ...h.plate_drills].map((dr, j) => {
                   const c = toSVG(dr.x, dr.y, 0, 0)
@@ -365,7 +368,7 @@ export default function ElevationPrintSVG({
             ))}
 
             {/* Drawer-box fixing bores into the back of each drawer front */}
-            {layers.show('drawer_front_drilling') && (
+            {PRINT_DRILLING && layers.show('drawer_front_drilling') && (
               <g opacity={layers.op('drawer_front_drilling')}>
                 {[
                   ...rp.drawer_stacks.flatMap(ds => ds.slides),

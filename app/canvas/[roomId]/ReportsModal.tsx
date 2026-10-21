@@ -142,12 +142,14 @@ const PAPER = {
   A1L: { w: 841, h: 594, label: 'A1 Landscape' },
 }
 
-export default function ReportsModal({ initialScope, initialReport, bt3d, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
+export default function ReportsModal({ initialScope, initialReport, bt3d, onDeleteShopShot, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
   initialScope: ReportScope
   /** Report to open on (Production → Shop Drawings opens straight on the package). */
   initialReport?: ReportId
   /** Benchtop slab inputs for the shop drawings 3D views. */
   bt3d?: Omit<Bt3DPrint, 'benchtops'>
+  /** Remove a 3D view saved from the 3D view (room.shop_3d_shots). */
+  onDeleteShopShot?: (id: string) => void
   project: Project | null
   room: Room
   walls: Wall[]
@@ -489,6 +491,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, projec
                   elevResolved={elevResolved}
                   threeDResolved={threeDResolved}
                   bt3d={scope === 'room' ? bt3d : undefined}
+                  onDeleteSavedShot={onDeleteShopShot}
                   layerSets={layerSets}
                   activeLayerSetId={activeLayerSetId}
                   scale={printScale}
