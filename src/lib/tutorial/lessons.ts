@@ -577,15 +577,15 @@ export const LESSONS: TutorialLesson[] = [
   // Appended 2026-10-20 (z_floating — wall-hung cabinets with no kick).
   { id: 'floating_vanity', level: 'intermediate', topic: 'cabinets', title: 'Make a floating vanity',
     blurb: 'Hang a base cabinet off the floor with no kick, with taped gable ends.',
-    keywords: 'floating vanity wall hung no kick bathroom bottom panel edge tape gable underside elevation off floor', steps: [
+    keywords: 'floating vanity wall hung no kick bathroom bottom under panel BUP edge tape gable underside elevation off floor', steps: [
     { id: 'place', title: 'Place a base cabinet',
       body: 'Place a base cabinet (F3). Anything from Base, or a starting point from the Vanity section. If it’s in a kick run, detach it first.',
       canvas: true, done: (c, s) => c.cabinets.length > s.cabinets.length },
     { id: 'float', title: 'Tick Floating',
       body: 'Select it. In the cabinet panel, tick Floating (wall-hung, no kick). The kick goes, the box keeps its size, and it hangs 300 off the floor (change that in Elevation from floor). It keeps its carcass bottom, between the gables. The gable tops and bottoms are taped, and the doors finish flush with the carcass bottom.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.FLOAT) },
-    { id: 'bottom', title: 'Optional: sit it on a bottom panel',
-      body: 'For an exposed panel under the whole run, Shift-click the cabinets (not the end panels), right-click one → Add bottom panel. It places a BBP between the end panels, at carcass depth, and gives each cabinet a bottom scribe of the panel thickness (Scribe Bottom, under Case Scribes). The fronts still run down over the panel edge. Delete the BBP and the scribes go with it. To keep a vanity as a starting point, right-click → Save to library and pick the Vanity section.',
+    { id: 'bottom', title: 'Optional: sit it on an under panel',
+      body: 'For an exposed panel under the whole run, Shift-click the cabinets (not the end panels), right-click one → Add under panel. It places a BUP between the end panels, at carcass depth, and gives each cabinet a bottom scribe of the panel thickness (Scribe Bottom, under Case Scribes). The fronts still run down over the panel edge. Delete the BUP and the scribes go with it. Overheads work the same way (WUP). To keep a vanity as a starting point, right-click → Save to library and pick the Vanity section.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.UNDER_PANEL) },
   ]},
 

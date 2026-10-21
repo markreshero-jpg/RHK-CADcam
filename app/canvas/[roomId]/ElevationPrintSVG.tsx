@@ -501,7 +501,7 @@ export default function ElevationPrintSVG({
   // ── Left height chain ─────────────────────────────────────────────────────
   function heightChain() {
     const baseCabEl = wallCabs.find(c => !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')) ?? null
-    const overheadCabEl = wallCabs.find(c => (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead) ?? null
+    const overheadCabEl = wallCabs.find(c => !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead) ?? null
     const bulkheadEl = wallCabs.find(c => !!c.bulkhead) ?? null
     const kickH = baseCabEl?.has_toekick
       ? (resolvedParts?.get(baseCabEl.id)?.toekick_parts.find(p => p.part_key === 'kick_front_face')?.DX ?? 150)
@@ -584,7 +584,7 @@ export default function ElevationPrintSVG({
     )
   }
 
-  const overheadCabs = wallCabs.filter(c => (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead)
+  const overheadCabs = wallCabs.filter(c => !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead)
   // Bulkheads overlap the overheads below them — their own row, just outside.
   const bulkheadCabs = wallCabs.filter(c => !!c.bulkhead)
   const floorCabs = wallCabs.filter(c => !c.rule_overrides?.UNDER_PANEL && (

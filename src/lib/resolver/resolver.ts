@@ -148,7 +148,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
 
   // ── 7. Warnings ───────────────────────────────────────────────
   // Non-fatal checks
-  if (cab.has_carcass && cab.DX > 1200) {   // panels (BBP, island backs) run long
+  if (cab.has_carcass && cab.DX > 1200) {   // panels (BUP / WUP, island backs) run long
     allWarnings.push({
       code: 'WIDE_CABINET',
       message: `Cabinet width ${cab.DX}mm exceeds 1200mm — consider a partition`,

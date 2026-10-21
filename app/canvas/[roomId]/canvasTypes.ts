@@ -80,7 +80,7 @@ export type ArmedDefinition = {
   dy:             number
   dz:             number
   name:           string
-  /** A run's bottom panel (z_floating BBP) — never blocks the carcasses over it. */
+  /** A run's under panel (z_floating BUP / WUP) — never blocks the carcasses over it. */
   under?:         boolean
 }
 

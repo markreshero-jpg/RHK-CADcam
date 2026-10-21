@@ -216,7 +216,7 @@ export interface ConstructionRules {
 
   // Floating cabinets (z_floating): wall-hung, no kick. Cabinet layer.
   FLOAT?:        boolean
-  // Marks a run's bottom panel (BBP) — not a construction rule: it only keeps
+  // Marks a run's under panel (BUP / WUP) — not a construction rule: it only keeps
   // the panel from blocking the carcasses over it and out of the dim chains.
   UNDER_PANEL?: boolean
 

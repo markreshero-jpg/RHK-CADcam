@@ -295,7 +295,7 @@ export default function ElevationSVG({
       ? waterfallOcc(wall, elevWallSide, mover).map(o => ({ t: mirrorX(o.t, o.dx), dx: o.dx }))
       : []
   // Dimension chains measure only cabinets the layer set draws.
-  const chainCabs = wallCabs.filter(c => !c.rule_overrides?.UNDER_PANEL && elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))   // BBP lies under its run
+  const chainCabs = wallCabs.filter(c => !c.rule_overrides?.UNDER_PANEL && elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))   // an under panel lies under its run
   // Free-standing appliances on this face, in elevation x, for the floor / wall rows.
   const chainFx = wall && fixtures
     ? fixtureChainSpans(fixtures.filter(f => layers.show(fixtureLayer(f.category))), wall, centroid(walls))

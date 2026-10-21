@@ -484,7 +484,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
               </label>
               <p className="text-[10px] text-gray-600 mt-1">
                 {inKickRun ? 'Detach it from the kick run first.'
-                  : floating ? 'Gable tops and bottoms are taped. For a bottom panel under the run, right-click the cabinets → Add bottom panel.'
+                  : floating ? 'Gable tops and bottoms are taped. For an exposed panel under the run, right-click the cabinets → Add under panel.'
                   : `Drops the kick and hangs it ${FLOAT_Z} off the floor.`}
               </p>
             </div>

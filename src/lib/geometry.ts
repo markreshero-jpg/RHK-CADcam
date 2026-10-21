@@ -45,6 +45,8 @@ export function wallCabTop(wall: Wall | null | undefined, room: Room): number {
 // floor units sit at pos_z (0 unless raised — a kick-detached member is lifted
 // by the kick height). Bulkheads (z_bulkhead) hang from the ceiling instead.
 export function cabBottomZ(cab: CabinetInstance, room: Room, wall?: Wall | null): number {
+  // An under panel (BUP / WUP, z_floating) sits at its own pos_z, wall class or not.
+  if (cab.rule_overrides?.UNDER_PANEL) return cab.pos_z ?? 0
   return cabVExtent(cab.assembly_class, cab.dy, wall, room, cab.bulkhead, cab.pos_z)[0]
 }
 
@@ -68,7 +70,7 @@ export function cabVExtent(
 type Blocker = { assembly_class: string; dy: number; bulkhead?: unknown; rule_overrides?: { UNDER_PANEL?: boolean } | null }
 
 // Do two cabinets overlap vertically? `eps` keeps a flush top/bottom touch from
-// counting as an overlap. A run's bottom panel (BBP, rule UNDER_PANEL — z_floating)
+// counting as an overlap. A run's under panel (BUP / WUP, rule UNDER_PANEL — z_floating)
 // lies inside the floating carcasses' bottom scribe, so it never blocks them.
 export function cabsBlock(
   mover: Blocker,

@@ -1,6 +1,6 @@
 # Floating cabinets (wall-hung, no kick) — spec
 
-Status: **F1–F6 built (F6 2026-10-21), in-app check pending.** Next: a Vanity library build-out once Mark saves his first vanities.
+Status: **F1–F8 built (F8 2026-10-21), in-app check pending.** Next: a Vanity library build-out once Mark saves his first vanities.
 
 ## What it is
 
@@ -15,14 +15,14 @@ Floating is a **setting on a cabinet**, not a cabinet type or a library section
    kick: gables run through to the carcass bottom, the carcass-board bottom sits
    between them, back and top as the method gives. *Changed 2026-10-21 (Mark,
    RHK6570): it first had no bottom unless ticked.*
-2. **Optional bottom panel = an extra exposed panel under the run** (`BBP`,
-   Vanity category). One panel spans the run between the end panels, exposed
+2. **Optional under panel = an extra exposed panel under the run** (`BUP`,
+   Base › End Panels; `WUP` for overheads, F8). One panel spans the run between the end panels, exposed
    board to match the other exposed panels, carcass depth, front edge taped.
    Nothing floating-specific: any base run can have one. The carcasses over it
    take a plain **bottom scribe** (their own `SCRBT`, shown in Case Scribes) of
    the exposed board's thickness, so gables and bottom start 18 up and the
-   overall height is unchanged. Right-click the cabinets → **Add bottom panel**
-   does both; deleting the BBP clears the scribes. The **fronts don't scribe** — they run down to the cabinet bottom
+   overall height is unchanged. Right-click the cabinets → **Add under panel**
+   does both; deleting the BUP clears the scribes. The **fronts don't scribe** — they run down to the cabinet bottom
    and cover the panel's front edge. *Changed 2026-10-21 (Mark, RHK6570): it
    was first a per-cabinet exposed bottom under, then between, the gables.*
 3. **Edging when floating:** gable **tops** taped, and gable **bottoms** unless
@@ -46,7 +46,7 @@ placement with everything else):
 | Rule | Type | Default | Meaning |
 |---|---|---|---|
 | `FLOAT` | boolean | unset (false) | Floating cabinet |
-| `UNDER_PANEL` | boolean | unset (false) | Marker, not a construction rule: this item IS a run bottom panel (`BBP`) — never blocks the carcasses over it, drawn under them in plan, left out of dim chains. Hidden from the rules UI |
+| `UNDER_PANEL` | boolean | unset (false) | Marker, not a construction rule: this item IS a run under panel (`BUP` / `WUP`) — never blocks the carcasses over it, drawn under them in plan, left out of dim chains. Hidden from the rules UI |
 
 (`FLOAT_BOTTOM` existed briefly on 2026-10-21 and was retired in F7 — the
 cabinets carry a plain `SCRBT` instead.)
@@ -86,7 +86,8 @@ says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
 | — | Vanity definitions (sizes TBD with Mark — save from canvas into Vanity) | open |
 | F5 | Fixes from the first real job (RHK6570 vanities) — see below | built 2026-10-21 |
 | F6 | Always a carcass bottom; bottom panel = `BBP` run panel + carcass bottom scribe (decisions 1–3 rewritten) | built 2026-10-21 |
-| F7 | Plain SCRBT instead of the hidden FLOAT_BOTTOM; right-click → Add bottom panel; delete clears scribes; BBP not floating-tied | built 2026-10-21, in-app check pending |
+| F7 | Plain SCRBT instead of the hidden FLOAT_BOTTOM; right-click → Add bottom panel; delete clears scribes; BBP not floating-tied | built 2026-10-21 |
+| F8 | BBP renamed **BUP** (Base Under Panel, Base › End Panels); new **WUP** (Wall Under Panel, Wall › End Panels); menu → Add under panel; under panels sit at their own pos_z | built 2026-10-21, in-app check pending |
 
 ## F5 — fixes from RHK6570 (2026-10-21)
 
@@ -147,3 +148,21 @@ cause confusion."
   direction, overlapping, SCRBT = its thickness).
 - Not handled: moving / resizing a BBP doesn't re-scribe; hand-placed BBPs from
   the library don't scribe anything.
+
+## F8 — BUP / WUP (Mark, 2026-10-21)
+
+"lets change it to BUP - Base Under Panel. we can make one in library for wall
+too called WUP." Supersedes the name BBP everywhere (decision 2 and F6/F7 read
+BUP).
+
+- Library: `BUP` (base, Base › End Panels) and `WUP` (wall, Wall › End Panels),
+  both one flat "Under Panel" (`dx = cab.d`, `dy = cab.w`, `dz = t.exposed`,
+  front edge taped), rule `UNDER_PANEL`.
+- `cabBottomZ`: an UNDER_PANEL item sits at its own `pos_z` whatever its class,
+  so a WUP doesn't hang from the wall-cab line. It doesn't follow later changes
+  to the wall-cab top / overhead height — re-add it.
+- `src/lib/underPanel.ts` (was bottomPanel.ts): `underPanelRun` takes base
+  cabinets → BUP or overheads → WUP (not both, no bulkheads); `z` = lowest
+  carcass bottom. Right-click → **Add under panel**; `__canvasApi.addUnderPanel`.
+- Print elevation's overhead row / height chain skip under panels too.
+- RHK6570: both BBPs removed and their scribes cleared (Mark).

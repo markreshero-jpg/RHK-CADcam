@@ -121,7 +121,7 @@ export function resolveCaseParts(
 
   // Floating: gable tops + bottoms show, so they're taped on top of whatever
   // the method tapes (z_floating decision 3) — bottoms only when no bottom
-  // scribe lifts them onto a bottom panel (BBP).
+  // scribe lifts them onto an under panel (BUP).
   const withEnds = (sides: EdgeSides, add: EdgeSides): EdgeSides =>
     floating ? [...new Set([...sides, ...add])] : sides
   const gableEnds: EdgeSides = r.SCRBT > 0 ? ['top'] : ['top', 'bottom']
