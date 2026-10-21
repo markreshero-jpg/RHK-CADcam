@@ -133,8 +133,28 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
 | S5 | **CAD carry-over check.** Plan CAD already prints (Plan View). Elevation CAD needs z_CAD_tool **A6** first. Confirm text boxes with borders (the spec block) print right | [ ] (blocked on A6 for elevations) |
 | S6 | **Cabinet numbering:** #n tags under each cabinet on elevations, same as on the plan, from `cab.label` as it is (no renumbering) | [ ] |
 | S7 | **Interior elevation (doors off):** drawing mode with fronts hidden, shelves shown and labelled (ADJ SH / FIX SH) and dimensioned | [ ] |
-| S8 | **3D sheet** (kept): vector hidden-line room views from saved camera angles | [ ] |
+| S8 | **3D sheet**: perspective vector hidden-line room views, auto + saved shots, blockers removed, 3–4 / 1–2 per sheet by room size, NTS (see "S8 — 3D room views") | [ ] |
 | S9 | Tutorial (Production → Shop Drawings) | [x] written with S3; extend as S4–S8 land |
+
+## S8 — 3D room views (locked, Mark 2026-10-21)
+
+1. **Perspective** views, like CV / a photo.
+2. **Auto + adjustable shots:** 3–4 angles picked from the room layout (one looking at each main run,
+   the island from each side). Each can be unticked, and Mark can save his own angle from the 3D view as
+   an extra shot.
+3. **Blockers are removed** from that shot. A wall between the camera and what it's looking at is hidden
+   (dollhouse cut-away). So is an island / tall unit / other object that blocks the subject.
+4. **Layout by room size:** a small room (longest side < 2000mm, e.g. a vanity) puts **3–4 shots on a
+   sheet**. Bigger rooms put **1–2 per sheet**.
+5. 3D sheets are the one exception to "one scale": they're marked **NTS**.
+
+How it's built (plan):
+- **Vector hidden-line output:** render the existing 3D scene off-screen per shot, then use its depth
+  buffer to keep only the visible pieces of each edge. Only those go to svg2pdf as lines, so nothing is
+  raster. (CabinetSheetSVG's painter-sorted iso is too simple for a whole room.)
+- Appliance / fixture GLB models print as **simplified outlines** (bounding shapes + main edges).
+  Otherwise their thousands of tiny edges print as a smudge.
+- Same pen table (S2): outlines medium, fronts / handles thin, all black.
 
 ## Answered (Mark, 2026-10-21)
 
