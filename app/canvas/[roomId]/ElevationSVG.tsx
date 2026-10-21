@@ -1629,10 +1629,10 @@ export default function ElevationSVG({
                     />
                   )}
 
-                  {/* Label */}
+                  {/* Label — just under the cabinet's bottom edge (Mark, 2026-10-21), as the printed elevation */}
                   {hit && layers.show('cabinet_labels') && (
                     <text
-                      x={rx + displayDx / 2} y={ry + displayDy / 2 - layers.w('cabinet_labels', labelFs) * 0.6}
+                      x={rx + displayDx / 2} y={ry + displayDy + layers.w('cabinet_labels', labelFs) * 0.75}
                       textAnchor="middle" dominantBaseline="middle"
                       fontSize={layers.w('cabinet_labels', labelFs)} fontWeight="600"
                       fill={isSel ? '#fff' : layers.color('cabinet_labels', '#93c5fd')} opacity={layers.op('cabinet_labels')}
@@ -1644,7 +1644,7 @@ export default function ElevationSVG({
                   {/* Dimensions */}
                   {hit && layers.show('cabinet_sizes') && (
                     <text
-                      x={rx + displayDx / 2} y={ry + displayDy / 2 + layers.w('cabinet_sizes', dimFs) * 0.8}
+                      x={rx + displayDx / 2} y={ry + displayDy / 2}
                       textAnchor="middle" dominantBaseline="middle"
                       fontSize={layers.w('cabinet_sizes', dimFs)} fill={layers.color('cabinet_sizes', '#ffffff')} opacity={layers.op('cabinet_sizes')}
                       style={{ userSelect: 'none', pointerEvents: 'none' }}>
