@@ -585,8 +585,8 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Select it. In the cabinet panel, tick Floating (wall-hung, no kick). The kick goes, the box keeps its size, and it hangs 300 off the floor (change that in Elevation from floor). It keeps its carcass bottom, between the gables. The gable tops and bottoms are taped, and the doors finish flush with the carcass bottom.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.FLOAT) },
     { id: 'bottom', title: 'Optional: sit it on a bottom panel',
-      body: 'For an exposed panel under the whole run, place a BBP from the Vanity section under the cabinets, between the end panels (same width as the run, 18 high, carcass depth). Then tick Sits on a bottom panel on each cabinet over it: the carcass scribes up by the panel thickness and the fronts still run down over the panel edge. To keep a vanity as a starting point, right-click → Save to library and pick the Vanity section.',
-      canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.FLOAT_BOTTOM) },
+      body: 'For an exposed panel under the whole run, Shift-click the cabinets (not the end panels), right-click one → Add bottom panel. It places a BBP between the end panels, at carcass depth, and gives each cabinet a bottom scribe of the panel thickness (Scribe Bottom, under Case Scribes). The fronts still run down over the panel edge. Delete the BBP and the scribes go with it. To keep a vanity as a starting point, right-click → Save to library and pick the Vanity section.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.UNDER_PANEL) },
   ]},
 
   // Appended 2026-10-21 (group panel — shared Off wall field).

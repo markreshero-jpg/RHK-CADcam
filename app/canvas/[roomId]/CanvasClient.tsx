@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback, useReducer, useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { bottomPanelRun, carcassesOverPanel, isBottomPanel, withoutScribe } from '@/src/lib/bottomPanel'
 import { useIsAdmin } from '@/src/lib/useRole'
 import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopSegment, RoomFixture, RoomAnnotation, FixtureCatalogItem } from '@/src/lib/types'
 import {
@@ -1108,6 +1110,27 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     dbMigrateLegacyKickMembers(room.id).then(m => { if (m) applyKickMutation(m) }).catch(e => console.error('legacy kick migrate', e))
   }, [room.id, applyKickMutation])
 
+  // Bottom panel (z_floating F7): one BBP under the picked base cabinets, between
+  // their outer gables, and a bottom scribe of its thickness on each — a plain
+  // SCRBT on the cabinet, visible in Case Scribes. Fronts run down over its edge.
+  async function handleAddBottomPanel(ids: string[]) {
+    setContextMenu(null)
+    const kickOf = (c: CabinetInstance) => c.has_toekick && !c.rule_overrides?.FLOAT
+      ? Number(getCachedInput(c.id)?.rules?.TOEH ?? 0) : 0
+    const run = bottomPanelRun(cabinets.filter(c => ids.includes(c.id)), room, walls, kickOf)
+    if (typeof run === 'string') { setToast(run); return }
+    const wall = walls.find(w => w.id === run.anchor.wall_id)
+    const { data: def } = await supabase.from('cabinet_definitions').select('*')
+      .eq('name', 'BBP').eq('is_library_item', true).limit(1).maybeSingle()
+    if (!wall || !def) { setToast('No BBP bottom panel in the library.'); return }
+    const t = getCachedInput(run.anchor.id)?.exposed_material?.DZ ?? 18
+    captureSnapshot()
+    const draft = { ...buildDraftFromDefinition(def as CabinetDefinition), dy: t, dz: run.dz, pos_z: run.z }
+    await placeFromDraft(draft, wall, run.anchor.pos_x, run.anchor.pos_y, cabWallSide(run.anchor, wall) === 'back', run.dx, false)
+    for (const c of run.carcasses) void handleUpdateCabinet(c.id, { rule_overrides: { ...(c.rule_overrides ?? {}), SCRBT: t } })
+    setToast(`Bottom panel added — ${run.carcasses.length} cabinet${run.carcasses.length > 1 ? 's' : ''} scribed up ${t}`)
+  }
+
   // Both open the confirm modal; confirmDeleteCabinets does the work.
   function handleDeleteCabinet(id: string) {
     setDeleteCabsPending([id])
@@ -1129,6 +1152,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setSelected(null)
     setMultiSelect([])
     setContextMenu(null)
+    // A bottom panel's scribe goes with it (z_floating F7).
+    const kept = cabinets.filter(c => !ids.includes(c.id))
+    for (const p of cabinets.filter(c => ids.includes(c.id) && isBottomPanel(c)))
+      for (const c of carcassesOverPanel(p, kept)) void handleUpdateCabinet(c.id, { rule_overrides: withoutScribe(c.rule_overrides) })
     // Sequential so concurrent reconciles of the same run don't race.
     for (const id of ids) {
       const mut = await dbDeleteCabinet(id)
@@ -1693,6 +1720,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           }
           await handleUpdateCabinet(cab.id, u)
           return { updated: cab.label, ...u }
+        },
+        // Right-click → Add bottom panel on these cabinets (z_floating F7).
+        async addBottomPanel(refs: string[]) {
+          const ids = refs.map(ref => cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())?.id)
+          if (ids.some(id => !id)) throw new Error(`Cabinet not found in: ${refs.join(', ')}`)
+          await handleAddBottomPanel(ids as string[])
+          return { added: refs }
         },
         // Open the cabinet edit modal — same path as double-clicking the cabinet
         // in the plan (lets headless tests reach the Part/Shape editors).
@@ -3667,6 +3701,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onSaveToLibrary: isAdmin ? id => { setContextMenu(null); setSaveLibCabId(id) } : undefined,
             onReplace: id => { setContextMenu(null); setReplaceCabId(id) },
             onJoinKicks: id => { void handleJoinKicks(id) },
+            onAddBottomPanel: ids => { void handleAddBottomPanel(ids) },
             onDetachKick: id => { void handleDetachKickSingle(id) },
             onSeparateKicks: id => { void handleSeparateKicks(id) },
             onKickSettings: id => {

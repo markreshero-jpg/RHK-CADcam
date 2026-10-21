@@ -17,26 +17,12 @@ export function caseBackT(cab: CabinetInput, r: ConstructionRules): number {
 
 /** Where the carcass floor sits (z_floating). TK is the kick lift, floorT the
  *  thickness of the carcass bottom, so the interior floor is at
- *  Y = TK + SCRBT + floorT. A floating cabinet has no kick; `underPanel` = it
- *  sits on a run's exposed bottom panel (FLOAT_BOTTOM, see withFloatScribe). */
+ *  Y = TK + SCRBT + floorT. A floating cabinet has no kick. */
 export function caseFloor(cab: CabinetInput, r: ConstructionRules): {
-  TK: number; floorT: number; floating: boolean; underPanel: boolean
+  TK: number; floorT: number; floating: boolean
 } {
   const floating = !!r.FLOAT
-  return {
-    TK: floating || !cab.has_toekick ? 0 : r.TOEH, floorT: cab.material.DZ,
-    floating, underPanel: floating && !!r.FLOAT_BOTTOM,
-  }
-}
-
-/** FLOAT_BOTTOM (z_floating): the run's exposed bottom panel (a BBP) sits under
- *  the carcass inside its envelope, so the carcass takes a bottom scribe of the
- *  exposed board's thickness on top of the method's SCRBT. The fronts don't
- *  scribe — they run down over the panel's edge. */
-export function withFloatScribe(cab: CabinetInput): CabinetInput {
-  const r = cab.rules
-  if (!r.FLOAT || !r.FLOAT_BOTTOM) return cab
-  return { ...cab, rules: { ...r, SCRBT: r.SCRBT + cab.exposed_material.DZ } }
+  return { TK: floating || !cab.has_toekick ? 0 : r.TOEH, floorT: cab.material.DZ, floating }
 }
 
 export function resolveCaseParts(
@@ -64,7 +50,7 @@ export function resolveCaseParts(
   const hasBack  = backType === 'panel'
 
   // Floating (z_floating): no kick; a normal carcass bottom between the gables.
-  const { TK, floating, underPanel } = caseFloor(cab, r)
+  const { TK, floating } = caseFloor(cab, r)
 
   const sideT   = sideMat.DZ
   const bottomT = bottomMat.DZ
@@ -135,10 +121,10 @@ export function resolveCaseParts(
 
   // Floating: gable tops + bottoms show, so they're taped on top of whatever
   // the method tapes (z_floating decision 3) — bottoms only when no bottom
-  // panel hides them.
+  // scribe lifts them onto a bottom panel (BBP).
   const withEnds = (sides: EdgeSides, add: EdgeSides): EdgeSides =>
     floating ? [...new Set([...sides, ...add])] : sides
-  const gableEnds: EdgeSides = underPanel ? ['top'] : ['top', 'bottom']
+  const gableEnds: EdgeSides = r.SCRBT > 0 ? ['top'] : ['top', 'bottom']
   const leftEdging  = withEnds(edging.left_side,  gableEnds)
   const rightEdging = withEnds(edging.right_side, gableEnds)
   const backEdging  = edging.back

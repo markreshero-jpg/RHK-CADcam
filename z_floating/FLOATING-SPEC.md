@@ -18,10 +18,11 @@ Floating is a **setting on a cabinet**, not a cabinet type or a library section
 2. **Optional bottom panel = an extra exposed panel under the run** (`BBP`,
    Vanity category). One panel spans the run between the end panels, exposed
    board to match the other exposed panels, carcass depth, front edge taped.
-   The carcasses over it tick **"Sits on a bottom panel"** (`FLOAT_BOTTOM`):
-   they take a **bottom scribe** of the exposed board's thickness (SCRBT +=
-   t.exposed), so gables and bottom start 18 up and the overall height is
-   unchanged. The **fronts don't scribe** — they run down to the cabinet bottom
+   Nothing floating-specific: any base run can have one. The carcasses over it
+   take a plain **bottom scribe** (their own `SCRBT`, shown in Case Scribes) of
+   the exposed board's thickness, so gables and bottom start 18 up and the
+   overall height is unchanged. Right-click the cabinets → **Add bottom panel**
+   does both; deleting the BBP clears the scribes. The **fronts don't scribe** — they run down to the cabinet bottom
    and cover the panel's front edge. *Changed 2026-10-21 (Mark, RHK6570): it
    was first a per-cabinet exposed bottom under, then between, the gables.*
 3. **Edging when floating:** gable **tops** taped, and gable **bottoms** unless
@@ -45,8 +46,10 @@ placement with everything else):
 | Rule | Type | Default | Meaning |
 |---|---|---|---|
 | `FLOAT` | boolean | unset (false) | Floating cabinet |
-| `FLOAT_BOTTOM` | boolean | unset (false) | Sits on a run bottom panel: bottom scribe += t.exposed |
-| `UNDER_PANEL` | boolean | unset (false) | This item IS a run bottom panel (`BBP`): never blocks the carcasses over it, drawn under them in plan, left out of dim chains |
+| `UNDER_PANEL` | boolean | unset (false) | Marker, not a construction rule: this item IS a run bottom panel (`BBP`) — never blocks the carcasses over it, drawn under them in plan, left out of dim chains. Hidden from the rules UI |
+
+(`FLOAT_BOTTOM` existed briefly on 2026-10-21 and was retired in F7 — the
+cabinets carry a plain `SCRBT` instead.)
 
 The resolver treats a floating cabinet as kick-less whatever `has_toekick`
 says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
@@ -56,7 +59,7 @@ says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
 - **On:** `FLOAT = true`, `has_toekick = false`; if it had a kick, `dy -= TOEH`
   (keep the carcass the same size); `pos_z = FLOAT_Z` (300). Leaves any kick run
   first (a member of a kick run can't float — detach it).
-- **Off:** delete `FLOAT` / `FLOAT_BOTTOM`, `has_toekick = true`, `dy += TOEH`,
+- **Off:** delete `FLOAT`, `has_toekick = true`, `dy += TOEH`,
   `pos_z = 0`.
 - **Placement:** a definition whose `rule_overrides.FLOAT` is set places at
   `pos_z = FLOAT_Z` (its `has_toekick` / `dy` were saved kick-less already).
@@ -66,9 +69,8 @@ says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
 - `caseFloor(cab, r)` in `resolveCase.ts` → `{ TK, floorT, floating, underPanel }`.
   Interior floor Y = `TK + SCRBT + floorT` everywhere (case, internal, drawer stack).
   TK = 0 when floating; floorT is always the carcass thickness.
-- `withFloatScribe(cab)` (start of `resolveCabinet`): FLOAT + FLOAT_BOTTOM adds
-  the exposed thickness to SCRBT, so every module sees the scribe. Faces ignore
-  SCRBT, so fronts still run to the cabinet bottom.
+- A bottom panel is just `SCRBT` on the cabinet. Faces ignore SCRBT, so fronts
+  still run to the cabinet bottom. Gable bottoms are only taped while SCRBT is 0.
 - Floating forces the sides-outside geometry (gables run through, the bottom
   between them), regardless of the method's `BOTTOM_JOIN`.
 - Shaped cabinets (`resolveShapedCase`) don't float yet — out of scope.
@@ -83,7 +85,8 @@ says (no kick parts, TK = 0), so a stray cascade can't build a kick under it.
 | F4 | Tutorial: floating vanity | built 2026-10-20 |
 | — | Vanity definitions (sizes TBD with Mark — save from canvas into Vanity) | open |
 | F5 | Fixes from the first real job (RHK6570 vanities) — see below | built 2026-10-21 |
-| F6 | Always a carcass bottom; bottom panel = `BBP` run panel + carcass bottom scribe (decisions 1–3 rewritten) | built 2026-10-21, in-app check pending |
+| F6 | Always a carcass bottom; bottom panel = `BBP` run panel + carcass bottom scribe (decisions 1–3 rewritten) | built 2026-10-21 |
+| F7 | Plain SCRBT instead of the hidden FLOAT_BOTTOM; right-click → Add bottom panel; delete clears scribes; BBP not floating-tied | built 2026-10-21, in-app check pending |
 
 ## F5 — fixes from RHK6570 (2026-10-21)
 
@@ -123,5 +126,24 @@ One panel under the run between the end panels; fronts cover its edge.
 - Plan draws it under the carcasses; plan + elevation dim chains (canvas and
   reports) skip it; the elevation height chain never measures from it.
 - WIDE_CABINET only warns on carcasses.
-- Not automatic yet: ticking "Sits on a bottom panel" doesn't place the BBP,
-  and placing a BBP doesn't tick the carcasses.
+
+## F7 — Add bottom panel (Mark, 2026-10-21)
+
+Mark: build both (visible scribe + one-step action); "bottom panel could be
+used in other places as well. if there is this type of rule attached it may
+cause confusion."
+
+- `FLOAT_BOTTOM` retired; existing cabinets migrated to `SCRBT: 18`. The BBP
+  lost `FLOAT` (any base run, kick or not).
+- `src/lib/bottomPanel.ts`: `bottomPanelRun` (picked cabinets → the run's
+  left-most carcass in its own frame, width, depth, panel height = lowest
+  carcass bottom above any kick), `carcassesOverPanel` (scribed carcasses
+  overlapping a panel), `withoutScribe`.
+- Right-click a base cabinet (or a Shift-picked run) → **Add bottom panel**:
+  places the BBP at the left-most carcass's position + rotation (so back-side
+  and outset cabinets work), dy = exposed thickness, dz = deepest carcass, and
+  sets `SCRBT` = that thickness on each carcass.
+- Deleting a BBP clears `SCRBT` on the carcasses it scribed (same wall +
+  direction, overlapping, SCRBT = its thickness).
+- Not handled: moving / resizing a BBP doesn't re-scribe; hand-placed BBPs from
+  the library don't scribe anything.

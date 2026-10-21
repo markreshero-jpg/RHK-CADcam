@@ -32,7 +32,6 @@ export function floatingPatch(
     }
   }
   delete ro.FLOAT
-  delete ro.FLOAT_BOTTOM
   return {
     rule_overrides: ro,
     has_toekick: true,

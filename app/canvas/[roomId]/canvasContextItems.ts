@@ -3,6 +3,7 @@ import type { CabinetInstance, ContextMenuItem, ContextMenuSubItem } from './can
 import { foldClass, type InsertFavourite } from './insertFavourites'
 import { normaliseBulkhead, type BulkheadSettings } from '@/src/lib/bulkhead'
 import type { AlignMode } from '@/src/lib/fixtureGroups'
+import { isRunCarcass } from '@/src/lib/bottomPanel'
 
 export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, fixtureId, fixture, canEqualize, clipboard, cabinets, multiSelect,
@@ -10,8 +11,10 @@ export function buildContextMenuGroups({
   onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, insertFavourites, onInsertDefinition, onEditInsertList, onSplit,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
-  onUpdateBulkhead, onMoveLabel, onResetLabel,
+  onUpdateBulkhead, onMoveLabel, onResetLabel, onAddBottomPanel,
 }: {
+  /** Bottom panel (z_floating F7) under these base cabinets: a BBP + their bottom scribe. */
+  onAddBottomPanel?: (ids: string[]) => void
   /** Put the right-clicked cabinet's / fixture's label into move mode (this view). */
   onMoveLabel?: () => void
   /** The right-clicked cabinet's / fixture's label was moved in this view: put it back. */
@@ -212,6 +215,11 @@ export function buildContextMenuGroups({
   if (libItems.length) groups.push(libItems)
 
   if (onSplit) groups.push([{ label: 'Split…', onClick: () => onSplit(cabId) }])
+
+  if (onAddBottomPanel && cab && isRunCarcass(cab)) {
+    const ids = multiSelect && multiSelect.length > 1 && multiSelect.includes(cabId) ? multiSelect : [cabId]
+    groups.push([{ label: ids.length > 1 ? `Add bottom panel (${ids.length})` : 'Add bottom panel', onClick: () => onAddBottomPanel(ids) }])
+  }
 
   // Detach toe kick(s) into a standalone kick assembly. A cabinet already in a run
   // (its kick is detached) only offers Separate; an un-detached floor unit with a
