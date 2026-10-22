@@ -2774,8 +2774,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         return !start || end ? 'Measure: click first point · snaps to corners · Ctrl=ortho · Esc=exit' : 'Click second point · Ctrl=ortho · Shift=45° · right-click=clear'
       })()
     : mode === 'draw_section'     ? (!drawStart ? 'Click to set start of section cut · Esc=cancel' : 'Click to finish · Shift=45° snap · Esc=cancel')
-    : mode === 'draw_wall'       ? (!drawStart ? 'Click to set start point · snap rings show existing endpoints' : (wallDraw.chain ? 'Click to place & continue · click first point to close · double-click / Esc = finish · Shift = 5° snap' : 'Click to finish · Shift = 5° snap · or type in panel →'))
-    : mode === 'draw_island'     ? (!drawStart ? 'Click to set island start · Shift = 5° snap · Right-click = cancel' : 'Click to finish island · cabinets snap to either side')
+    : mode === 'draw_wall'       ? (!drawStart ? 'Click to set start point · Tab = type start X / Y · snap rings show existing endpoints' : (wallDraw.chain ? 'Click to place & continue · click first point to close · double-click / Esc = finish · Shift = 5° snap' : 'Click to finish · Shift = 5° snap · or type in panel →'))
+    : mode === 'draw_island'     ? (!drawStart ? 'Click to set island start · Tab = type start X / Y · Shift = 5° snap · Right-click = cancel' : 'Click to finish island · cabinets snap to either side')
     : mode === 'place_base'        ? 'Click near a wall to place base cabinet · Esc or right-click = cancel'
     : mode === 'place_wall_unit'   ? 'Click near a wall to place wall unit · Esc or right-click = cancel'
     : mode === 'place_tall'        ? 'Click near a wall to place tall cabinet · Esc or right-click = cancel'
