@@ -24,6 +24,7 @@ import { rowToJointTypeOp, seamAssignJoint, seamAssignRows } from '@/src/lib/res
 import type { ConstructionRules } from '@/src/lib/resolver/types'
 import { mergeRules } from '@/src/lib/resolver/mergeRules'
 import { normaliseBulkhead } from '@/src/lib/bulkhead'
+import { normaliseFloatShelf } from '@/src/lib/floatShelf'
 import { normaliseCurvedEnd, curvedEndFootprint } from '@/src/lib/curvedEnd/settings'
 import { FLOAT_Z } from '@/src/lib/floating'
 
@@ -488,7 +489,7 @@ export function buildInstanceFromDefinition(
     dx: shapeBox?.w ?? dx,
     // A bulkhead never takes the wall-cabinet height: it keeps its own (or fits the
     // ceiling at placement when "Height to ceiling" is on).
-    dy: def.preserve_dy || def.bulkhead || p.cascade_dy == null ? def.default_dy : p.cascade_dy,
+    dy: def.preserve_dy || def.bulkhead || def.float_shelf || p.cascade_dy == null ? def.default_dy : p.cascade_dy,
     dz: shapeBox?.d ?? dz,
     has_carcass: def.has_carcass, has_internal: def.has_internal,
     has_face: def.has_face, has_toekick: def.has_toekick,
@@ -509,6 +510,7 @@ export function buildInstanceFromDefinition(
     footprint,
     bulkhead: def.bulkhead ?? null,
     curved_end: curvedEnd,
+    float_shelf: normaliseFloatShelf(def.float_shelf),
     faces: def.faces ?? null,
     part_hide_views: def.part_hide_views ?? {},
     part_no_cnc: def.part_no_cnc ?? [],
@@ -756,6 +758,7 @@ export async function saveCabinetToLibrary(
     footprint: inst.footprint ?? null,
     bulkhead: inst.bulkhead ?? null,
     curved_end: inst.curved_end ?? null,
+    float_shelf: inst.float_shelf ?? null,
     faces: inst.faces ?? null,
     custom_parts: cps,
     part_operations, part_comments, part_labels,
@@ -797,8 +800,9 @@ export async function dbUpdateCabinet(
   // fall through to a full resolve, and the caller fans the run out (resolveKickRun).
   const keys = Object.keys(u)
   // Bulkhead settings (z_bulkhead) only feed resolveBulkhead — same fast path.
-  // So do curved end settings (z_curved_end) and the plan outline they rebuild.
-  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead' || k === 'curved_end' || (k === 'footprint' && 'curved_end' in u)) ? getCachedInput(id) : undefined
+  // So do curved end settings (z_curved_end) and the plan outline they rebuild,
+  // and floating shelf settings (z_floating_shelf).
+  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead' || k === 'curved_end' || k === 'float_shelf' || (k === 'footprint' && 'curved_end' in u)) ? getCachedInput(id) : undefined
   if (cached && !cached.kick_run) {
     const updated = {
       ...cached,
@@ -807,6 +811,7 @@ export async function dbUpdateCabinet(
       ...(u.dz !== undefined && { DZ: Number(u.dz) }),
       ...(u.bulkhead !== undefined && { bulkhead: normaliseBulkhead(u.bulkhead) }),
       ...(u.curved_end !== undefined && { curved_end: normaliseCurvedEnd(u.curved_end) }),
+      ...(u.float_shelf !== undefined && { float_shelf: normaliseFloatShelf(u.float_shelf) }),
       ...(u.footprint !== undefined && { footprint: u.footprint ?? null }),
     }
     setCachedInput(id, updated)

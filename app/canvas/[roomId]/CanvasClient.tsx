@@ -13,6 +13,7 @@ import {
   snapAngle,
   nearestWall, wallMitreCorners, findFreeSlot, slideToFreeSlot, slideAlongWall, fitFreeSlot, cabsBlock, cabT, nextLabel,
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint, cabWallGap, cabWallSpan,
+  wallCabTop,
 } from '@/src/lib/geometry'
 import { bulkheadAutoHeight } from '@/src/lib/bulkhead'
 import { angledFillerSnap } from '@/src/lib/cabinetShape/angledFillerSnap'
@@ -29,6 +30,7 @@ import { useRightDragPan } from './useRightDragPan'
 import { useIsPhone } from '@/src/lib/usePhone'
 import PhoneDrawerTab from './PhoneDrawerTab'
 import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
+import { floatShelfThickness } from '@/src/lib/floatShelf'
 import { withLabelOff, type LabelOff, type LabelView } from '@/src/lib/labelOffsets'
 import { filterHiddenMap } from '@/src/lib/resolver/filterHidden'
 import { invalidateResolverCaches } from '@/src/lib/resolver/resolveCabinetFromDB'
@@ -1198,6 +1200,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }, [cabinets, walls, room, handleUpdateCabinet])
 
+  // Floating shelves (z_floating_shelf): height = the built thickness (layers ×
+  // the exposed board), which only the resolver knows — follow it.
+  useEffect(() => {
+    for (const c of cabinets) {
+      if (!c.float_shelf) continue
+      const h = floatShelfThickness(resolvedParts.get(c.id))
+      if (h > 0 && Math.abs(h - c.dy) >= 0.05) void handleUpdateCabinet(c.id, { dy: h })
+    }
+  }, [cabinets, resolvedParts, handleUpdateCabinet])
+
   function commitResize() {
     if (!cabResize) return
     captureSnapshot()
@@ -1283,6 +1295,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (data.bulkhead?.auto_h) {
       const h = bulkheadAutoHeight(wall, room)
       if (h > 0) data.dy = h
+    }
+    // Floating shelf (z_floating_shelf): underside at this wall's overhead bottom.
+    if (data.float_shelf) {
+      const z = wallCabTop(wall, room) - resolveClassDims('wall', { room, project, shop: shopDims }).dy
+      data.pos_z = Math.max(0, Math.round(z))
     }
     // Angled corner filler (z_angled_filler A3): drop into the nearer inside
     // corner of the wall, angle + hand from the wall joined there. Its box comes
@@ -2701,7 +2718,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (mode === 'place_definition' && armedDef?.id === def.id) {
       setArmedDef(null); setArmedDraft(null); setMode('select')
     } else {
-      setArmedDef({ id: def.id, assembly_class: def.assembly_class, dx: def.default_dx, dy: def.default_dy, dz: def.default_dz, name: def.name, under: !!def.rule_overrides?.UNDER_PANEL })
+      setArmedDef({ id: def.id, assembly_class: def.assembly_class, dx: def.default_dx, dy: def.default_dy, dz: def.default_dz, name: def.name, under: !!def.rule_overrides?.UNDER_PANEL || !!def.float_shelf })
       setArmedDraft(buildDraftFromDefinition(def))
       setMode('place_definition')
     }
@@ -3738,6 +3755,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeleteWall: handleDeleteWall,
             onDeleteCabinet: id => void handleDeleteCabinet(id),
             onUpdateBulkhead: (id, next) => { setContextMenu(null); captureSnapshot(); void handleUpdateCabinet(id, { bulkhead: next }) },
+            onUpdateFloatShelf: (id, next) => { setContextMenu(null); captureSnapshot(); void handleUpdateCabinet(id, { float_shelf: next }) },
             onMoveLabel: menuLabelMove,
             onResetLabel: menuLabelReset,
             onDeleteMultiple: ids => void handleDeleteMultipleCabinets(ids),

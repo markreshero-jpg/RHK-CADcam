@@ -1924,8 +1924,9 @@ export default function ElevationSVG({
                 below them, so one row can't hold both). */}
             {layers.show('dim_elev_wall_chain') && (() => {
               const isOverhead = (c: CabinetInstance) => c.assembly_class === 'wall' || c.assembly_class === 'wall_corner'
-              const overheadCabs = chainCabs.filter(c => isOverhead(c) && !c.bulkhead)
-              const bulkheadCabs = chainCabs.filter(c => isOverhead(c) && !!c.bulkhead)
+              // Floating shelves (z_floating_shelf) overlap the overheads too — the outer row.
+              const overheadCabs = chainCabs.filter(c => isOverhead(c) && !c.bulkhead && !c.float_shelf)
+              const bulkheadCabs = chainCabs.filter(c => isOverhead(c) && (!!c.bulkhead || !!c.float_shelf))
               const col = layers.color('dim_elev_wall_chain', '#ffffff')
               const chainOp = layers.op('dim_elev_wall_chain')
               const sw = layers.w('dim_elev_wall_chain', 1) / lz, fs = 12 / z, tk = 8 / z
@@ -2102,7 +2103,7 @@ export default function ElevationSVG({
             {/* Left dimension — Y-axis height chain */}
             {layers.show('dim_elev_height') && (() => {
               const baseCabEl = chainCabs.find(c => !c.is_kick_assembly && !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')) ?? null
-              const overheadCabEl = chainCabs.find(c => (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead) ?? null
+              const overheadCabEl = chainCabs.find(c => (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead && !c.float_shelf) ?? null
               const bulkheadEl = chainCabs.find(c => !!c.bulkhead) ?? null
 
               // A kick-detached member carries no kick of its own (has_toekick false): its

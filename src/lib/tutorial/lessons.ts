@@ -691,6 +691,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Open the Room menu and choose Centre Room. The plan zooms out to fit everything in the room — walls, cabinets, benchtops, fixtures and CAD notes like the spec block — and centres it. From an elevation or 3D it goes back to plan first.',
       target: 'menu-Room', canvas: true, done: () => true },
   ]},
+
+  // Appended 2026-10-22 (z_floating_shelf — FLSHLF).
+  { id: 'floating_shelf', level: 'intermediate', topic: 'cabinets', title: 'Add a floating shelf',
+    blurb: 'A thick glued-up shelf on a hidden cleat, with seen sides and the cleat slot set per shelf.',
+    keywords: 'floating shelf FLSHLF thick glue up build up double triple strips cleat rebate pocket slot seen side wide tape edge open shelves', steps: [
+    { id: 'place', title: 'Place FLSHLF',
+      body: 'Press F3 and open Wall → Open Shelves. Pick FLSHLF and click a wall. Its underside starts level with the bottom of the overheads. It sits at its own height, so change Elevation from floor to put it anywhere, even below the overheads. It doesn’t push other cabinets along the wall.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.float_shelf) },
+    { id: 'seen', title: 'Tick the seen sides',
+      body: 'Select it. Under Floating shelf, tick Seen left / Seen right for any end you can see (or right-click → Floating shelf). A seen end gets the wide tape and no cleat slot, and the back slot stops 30 short of it. An unseen end gets a slot for a side cleat. The front and underside are always seen.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.float_shelf?.seen_left || !!cab.float_shelf?.seen_right) },
+    { id: 'build', title: 'Pick the build',
+      body: 'Double is two boards of the exposed colour glued together (2 × 16.5 = 33). Triple build-up adds a middle layer of strips: front and back rails, side strips and cross strips. It keeps the weight down. Triple solid is three full boards. The height follows the board thickness. Rebate depth (30) and height (10 into each board) set the cleat slot. The cleats are listed for hand cutting and never go to the CNC. Every board is marked “build up then edge”.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.float_shelf && cab.float_shelf.build !== 'double') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

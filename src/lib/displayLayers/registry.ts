@@ -139,6 +139,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     hint: 'Bulkhead fascia, returns and fixing cleat (z_bulkhead)' },
   { id: 'curved_ends',    group: 'panels', label: 'Curved ends',          views: ALL, default: ON,
     hint: 'Curved fixed-panel cabinets: face board, formers, fixing panel, back and blocks (z_curved_end)' },
+  { id: 'floating_shelves', group: 'panels', label: 'Floating shelves',   views: ALL, default: ON,
+    hint: 'Floating shelf boards, strips and cleats (z_floating_shelf)' },
   { id: 'custom_panels',  group: 'panels', label: 'Other added parts',    views: ALL, default: ON,
     hint: 'Added parts that are not applied panels or fillers (scribe mould, nailer, gusset…)' },
 
@@ -257,6 +259,7 @@ export function casePartItem(partKey: string): string {
   if (partKey.startsWith('crv:kick_spr_')) return 'kick_spreaders'
   if (partKey.startsWith('crv:kick')) return 'kick_faces'
   if (partKey.startsWith('crv:')) return 'curved_ends'
+  if (partKey.startsWith('fs:')) return 'floating_shelves'   // z_floating_shelf
   return 'carcass_top'            // full_top, front_rail, back_rail, rail:<edge>
 }
 export function kickPartItem(partKey: string): string {

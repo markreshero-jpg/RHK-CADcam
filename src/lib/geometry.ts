@@ -47,6 +47,8 @@ export function wallCabTop(wall: Wall | null | undefined, room: Room): number {
 export function cabBottomZ(cab: CabinetInstance, room: Room, wall?: Wall | null): number {
   // An under panel (BUP / WUP, z_floating) sits at its own pos_z, wall class or not.
   if (cab.rule_overrides?.UNDER_PANEL) return cab.pos_z ?? 0
+  // So does a floating shelf (FLSHLF, z_floating_shelf): pos_z = its underside.
+  if (cab.float_shelf) return cab.pos_z ?? 0
   return cabVExtent(cab.assembly_class, cab.dy, wall, room, cab.bulkhead, cab.pos_z)[0]
 }
 
@@ -67,11 +69,13 @@ export function cabVExtent(
   return [bottom, bottom + dy]
 }
 
-type Blocker = { assembly_class: string; dy: number; bulkhead?: unknown; rule_overrides?: { UNDER_PANEL?: boolean } | null }
+type Blocker = { assembly_class: string; dy: number; bulkhead?: unknown; rule_overrides?: { UNDER_PANEL?: boolean } | null; float_shelf?: unknown; pos_z?: number | null }
 
 // Do two cabinets overlap vertically? `eps` keeps a flush top/bottom touch from
 // counting as an overlap. A run's under panel (BUP / WUP, rule UNDER_PANEL — z_floating)
 // lies inside the floating carcasses' bottom scribe, so it never blocks them.
+// A floating shelf (z_floating_shelf) only blocks another floating shelf at the
+// same height — it often sits under the overheads or over the benchtop.
 export function cabsBlock(
   mover: Blocker,
   obstacle: Blocker,
@@ -80,6 +84,11 @@ export function cabsBlock(
   eps = 1,
 ): boolean {
   if (mover.rule_overrides?.UNDER_PANEL || obstacle.rule_overrides?.UNDER_PANEL) return false
+  if (mover.float_shelf || obstacle.float_shelf) {
+    if (!mover.float_shelf || !obstacle.float_shelf) return false
+    const a = mover.pos_z ?? 0, b = obstacle.pos_z ?? 0
+    return a < b + obstacle.dy - eps && b < a + mover.dy - eps
+  }
   const [aB, aT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead)
   const [bB, bT] = cabVExtent(obstacle.assembly_class, obstacle.dy, wall, room, obstacle.bulkhead)
   return aB < bT - eps && bB < aT - eps

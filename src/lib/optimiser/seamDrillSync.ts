@@ -493,6 +493,38 @@ export function collectCurvedPocketRoutes(rp: ResolvedCabinet, cabinetId: string
   return { rows, skipped }
 }
 
+// Floating shelf cleat slot (z_floating_shelf): each board's inner-face pockets.
+// Rects come in the horizontal shape frame (x along the width, y back from the
+// front); the op frame of a flat case part is x = DX − y (from the back edge),
+// y = x. An edge on the board's boundary is open — it overruns by the cutter
+// radius + 1 like the bend pockets so the slot comes out clean.
+export function collectFloatShelfPocketRoutes(rp: ResolvedCabinet, cabinetId: string, toolId: string | null): { rows: GeneratedRoute[]; skipped: number } {
+  rp = filterRemovedParts(rp)
+  const rows: GeneratedRoute[] = []
+  let skipped = 0
+  const ov = CURVED_POCKET_OVERRUN
+  for (const p of rp.case_parts) {
+    if (!p.pockets?.length) continue
+    if (!toolId) { skipped += p.pockets.length; continue }
+    p.pockets.forEach((k, i) => {
+      const x0 = k.x0 <= 0.01 ? -ov : k.x0, x1 = k.x1 >= p.DY - 0.01 ? p.DY + ov : k.x1
+      const y0 = k.y0 <= 0.01 ? -ov : k.y0, y1 = k.y1 >= p.DX - 0.01 ? p.DX + ov : k.y1
+      rows.push({
+        source_table: 'case_parts', source_cabinet_id: cabinetId, source_part_key: `case_${p.part_key}`,
+        operation_type: 'route', operation_action: 'pocket', operation_key: `fs_pocket_${i}`,
+        pos_x: round(p.DX - (y0 + y1) / 2), pos_y: round((x0 + x1) / 2),
+        size_dx: round(y1 - y0), size_dy: round(x1 - x0),
+        length: null, width: null,
+        depth: round(k.depth),
+        output_face: 'back',          // the inner (glue) face; the show face is the front
+        output_to_cnc: true, router_tool_id: toolId,
+        parameters: { generated: GENERATED_MARK, kind: 'float_shelf_pocket' },
+      })
+    })
+  }
+  return { rows, skipped }
+}
+
 // The notch cutter: the active 10mm router bit with the lowest tool number.
 async function notchToolId(): Promise<string | null> {
   const { data } = await supabase.from('cnc_tools').select('id,tool_number,diameter').eq('active', true)
@@ -551,10 +583,14 @@ async function runSeamDrillSync(cabinetId: string): Promise<SeamDrillSyncResult>
   // Generated routes + grooves (finger-rail notches + reliefs) — same wholesale replace.
   const hasRails = rp.case_parts.some(p => p.part_key.startsWith('fprail:'))
   const hasBends = rp.case_parts.some(p => p.wrap?.bend)
-  const cutter = hasRails || hasBends ? await notchToolId() : null
+  const hasSlots = rp.case_parts.some(p => p.pockets?.length)
+  const cutter = hasRails || hasBends || hasSlots ? await notchToolId() : null
   const notch = collectNotchRoutes(rp, cabinetId, hasRails ? cutter : null)
   const bends = collectCurvedPocketRoutes(rp, cabinetId, cutter)
   notch.rows.push(...bends.rows)
+  const slots = collectFloatShelfPocketRoutes(rp, cabinetId, cutter)
+  notch.rows.push(...slots.rows)
+  if (hasSlots && slots.skipped) console.warn(`[seamDrillSync] ${slots.skipped} floating shelf slot pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
   if (hasBends && bends.skipped) console.warn(`[seamDrillSync] ${bends.skipped} curved end bend pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
   const { error: delRErr } = await supabase.from('part_operations')
     .delete()
@@ -568,7 +604,7 @@ async function runSeamDrillSync(cabinetId: string): Promise<SeamDrillSyncResult>
   }
   if (hasRails && notch.skipped) console.warn(`[seamDrillSync] ${notch.skipped} finger-rail notch(es) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
 
-  return { written: rows.length + notch.rows.length, skipped: skipped + notch.skipped + bends.skipped }
+  return { written: rows.length + notch.rows.length, skipped: skipped + notch.skipped + bends.skipped + slots.skipped }
 }
 
 // Regenerate for many cabinets (e.g. every cabinet in a nest), with bounded

@@ -189,6 +189,8 @@ export interface CabinetInstance {
   bulkhead?: import('./bulkhead').BulkheadSettings | null
   // Curved fixed-panel cabinet settings (z_curved_end); non-null = a curved end.
   curved_end?: import('./curvedEnd/settings').CurvedEndSettings | null
+  // Floating shelf settings (z_floating_shelf); non-null = a floating shelf (FLSHLF).
+  float_shelf?: import('./floatShelf').FloatShelfSettings | null
   // Per-view part hiding (z_display_layers/PART-HIDE-SPEC.md).
   part_hide_views?: import('./resolver/types').PartHideViews
   // Part ids not sent to the optimiser / CNC (custom parts use their own no_cnc).
@@ -271,6 +273,8 @@ export interface CabinetDefinition {
   bulkhead?: import('./bulkhead').BulkheadSettings | null
   // Curved end defaults (z_curved_end), copied to the instance at placement.
   curved_end?: import('./curvedEnd/settings').CurvedEndSettings | null
+  // Floating shelf defaults (z_floating_shelf), copied to the instance at placement.
+  float_shelf?: import('./floatShelf').FloatShelfSettings | null
   // Per-view part hides, copied to the instance at placement (PART-HIDE-SPEC).
   part_hide_views?: import('./resolver/types').PartHideViews
   // Per-part No CNC list, copied to the instance at placement.

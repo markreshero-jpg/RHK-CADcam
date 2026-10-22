@@ -668,6 +668,8 @@ export interface CabinetInput {
   bulkhead?:      import('../bulkhead').BulkheadSettings | null
   // Curved fixed-panel cabinet (z_curved_end): every part from resolveCurvedEnd.
   curved_end?:    import('../curvedEnd/settings').CurvedEndSettings | null
+  // Floating shelf (z_floating_shelf): boards, strips + cleats from resolveFloatShelf.
+  float_shelf?:   import('../floatShelf').FloatShelfSettings | null
 
   // Kick-run membership — present only when this cabinet is joined into a kick
   // run. The lead member resolves the whole run's continuous toe kick; the rest
@@ -1357,7 +1359,7 @@ export interface ResolvedPart extends PartTransform {
 //   cleat:<edge>               return cleat behind a face filler on side edge <edge>
 //                              (z_angled_filler, carcass off) — same frame as side:<edge>
 // See src/lib/cabinetShape/partKeys.ts.
-export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}` | `cleat:${string}` | `bh:${string}` | `crv:${string}`
+export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}` | `cleat:${string}` | `bh:${string}` | `crv:${string}` | `fs:${string}`
 
 export interface ResolvedCasePart extends ResolvedPart {
   // Finger-pull rails only (z_handles H6): sheet grain, and the side notch +
@@ -1387,6 +1389,14 @@ export interface ResolvedCasePart extends ResolvedPart {
   // cut-outs, C4), in the same frame as `outline`; `skin` = the onion skin left
   // (0 = through). Persisted (case_parts.cutouts).
   cutouts?: { pts: OutlinePt[]; skin: number }[]
+  // Floating shelf boards (z_floating_shelf): the cleat-slot pockets on the
+  // board's inner (glue) face — rects in the horizontal shape frame (x along the
+  // width, y back from the front edge) + depth. seamDrillSync turns them into
+  // generated route pockets. Not persisted.
+  pockets?: { x0: number; x1: number; y0: number; y1: number; depth: number }[]
+  // Listed on the cut list but cut by hand, never sent to the CNC (floating
+  // shelf cleats). Persisted as case_parts.output_to_cnc = false.
+  hand_cut?: true
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
             'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
             `fprail:${number}`   // finger-pull backing rail (z_handles H6)

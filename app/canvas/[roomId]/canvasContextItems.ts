@@ -2,6 +2,7 @@ import type { AssemblyClass } from '@/src/lib/types'
 import type { CabinetInstance, ContextMenuItem, ContextMenuSubItem } from './canvasTypes'
 import { foldClass, type InsertFavourite } from './insertFavourites'
 import { normaliseBulkhead, type BulkheadSettings } from '@/src/lib/bulkhead'
+import { normaliseFloatShelf, type FloatShelfSettings } from '@/src/lib/floatShelf'
 import type { AlignMode } from '@/src/lib/fixtureGroups'
 import { isRunCarcass } from '@/src/lib/underPanel'
 
@@ -11,7 +12,7 @@ export function buildContextMenuGroups({
   onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, insertFavourites, onInsertDefinition, onEditInsertList, onSplit,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
-  onUpdateBulkhead, onMoveLabel, onResetLabel, onAddUnderPanel,
+  onUpdateBulkhead, onUpdateFloatShelf, onMoveLabel, onResetLabel, onAddUnderPanel,
 }: {
   /** Under panel (z_floating F7/F8) under these base cabinets / overheads: a BUP / WUP + their bottom scribe. */
   onAddUnderPanel?: (ids: string[]) => void
@@ -75,6 +76,8 @@ export function buildContextMenuGroups({
   onKickSettings?: (cabId: string) => void
   /** Bulkheads (z_bulkhead): toggle a return / the cleat. */
   onUpdateBulkhead?: (cabId: string, next: BulkheadSettings) => void
+  /** Floating shelves (z_floating_shelf): toggle a seen side / the cleat. */
+  onUpdateFloatShelf?: (cabId: string, next: FloatShelfSettings) => void
 }): ContextMenuItem[][] {
   if (vertexContext && onDeleteBenchtopVertex) {
     const { btId, vi } = vertexContext
@@ -207,6 +210,15 @@ export function buildContextMenuGroups({
           ret('left', 'Left return'), ret('right', 'Right return'), ret('bottom', 'Bottom return'),
           { label: tick(bh.cleat, 'Fixing cleat'), onClick: () => onUpdateBulkhead(cabId, { ...bh, cleat: !bh.cleat }) },
         ] }])
+  }
+
+  // Floating shelf toggles — the same switches as the sidebar section.
+  const fs = normaliseFloatShelf(cab?.float_shelf)
+  if (fs && onUpdateFloatShelf) {
+    const tick = (on: boolean, label: string) => (on ? '✓ ' : '    ') + label
+    const flip = (k: 'seen_left' | 'seen_right' | 'cleat', label: string) =>
+      ({ label: tick(fs[k], label), onClick: () => onUpdateFloatShelf(cabId, { ...fs, [k]: !fs[k] }) })
+    groups.push([{ label: 'Floating shelf', children: [flip('seen_left', 'Seen left'), flip('seen_right', 'Seen right'), flip('cleat', 'Cleats')] }])
   }
 
   const libItems: ContextMenuItem[] = []

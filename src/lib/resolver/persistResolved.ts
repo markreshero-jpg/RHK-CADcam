@@ -53,7 +53,7 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       edge_band_id:      p.edge_band.id ?? null,
       rule_overrides:    {},
       nest_priority:     0,
-      output_to_cnc:     true,
+      output_to_cnc:     !p.hand_cut,   // floating shelf cleats are cut by hand
       outline:           p.outline ?? null,
       bevel_lo:          p.bevel_lo ?? null,
       bevel_hi:          p.bevel_hi ?? null,

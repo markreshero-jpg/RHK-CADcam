@@ -181,7 +181,7 @@ export default function PlanViewReportSVG({
     .map(c => c.dz))
   const basePad  = 4 * P
   // Bulkheads get their own row outside the overhead row; the rows past it step out.
-  const bhStep = layers.show('dim_wall_chain') && chainCabs.some(c => !!c.bulkhead) ? ROW_BH_STEP : 0
+  const bhStep = layers.show('dim_wall_chain') && chainCabs.some(c => !!c.bulkhead || !!c.float_shelf) ? ROW_BH_STEP : 0
   const topsByWall = new Map(walls.map(w => [w.id, layers.show('dim_benchtop') ? benchtopWallSpans(benchtops, w, wallInwardNormal(w, cx)) : []]))
   const topStep = [...topsByWall.values()].some(t => t.length) ? ROW_TOP_STEP : 0
   const dimExtra = showDims ? maxThick + chainClearDepth + ROW_OVERALL + bhStep + topStep + (openingsByWall.size && layers.show('dim_openings') ? ROW_OPEN_STEP : 0) + dimFS * 2 + tickH : 0
@@ -640,7 +640,8 @@ export default function PlanViewReportSVG({
           }
           if (spans.length && cur < w.length - 0.5) openSegs.push({ from: cur, to: w.length, label: roundMm(w.length - cur) })
           // Bulkheads overlap the overheads below them — own row, same layer item.
-          const ohCabs = wallCabs.filter(c => !c.bulkhead), bhCabs = wallCabs.filter(c => !!c.bulkhead)
+          // Floating shelves (z_floating_shelf) share the outer row.
+          const ohCabs = wallCabs.filter(c => !c.bulkhead && !c.float_shelf), bhCabs = wallCabs.filter(c => !!c.bulkhead || !!c.float_shelf)
           const showBh = layers.show('dim_wall_chain') && bhCabs.length > 0
           const bh = showBh ? ROW_BH_STEP : 0
           // Benchtop row just outside the base row: wall start → each top → wall end.

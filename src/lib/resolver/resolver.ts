@@ -26,6 +26,7 @@ import { shapedFingerRails } from './resolveShapedFingerRails'
 import { resolveFillerCleats } from './resolveFillerCleats'
 import { resolveBulkhead } from './resolveBulkhead'
 import { resolveCurvedEnd } from './resolveCurvedEnd'
+import { resolveFloatShelf } from './resolveFloatShelf'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
@@ -65,6 +66,8 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   if (cab.footprint && !cab.has_carcass) caseParts.push(...resolveFillerCleats(cab, r, zones))
   // Bulkheads (z_bulkhead): fascia, returns + fixing cleat.
   if (cab.bulkhead) caseParts.push(...resolveBulkhead(cab, r))
+  // Floating shelves (z_floating_shelf): glued-up boards / strips + hand-cut cleats.
+  if (cab.float_shelf) caseParts.push(...resolveFloatShelf(cab))
   // Curved fixed-panel cabinets (z_curved_end): face board, formers, panels, blocks.
   const declaredSeams: DeclaredSeam[] = []
   if (cab.curved_end) {

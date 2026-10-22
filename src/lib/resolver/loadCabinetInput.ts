@@ -11,6 +11,7 @@ import {
 import { mergeRules } from './mergeRules'
 import { cachedCascade } from './cascadeCache'
 import { normaliseBulkhead } from '../bulkhead'
+import { normaliseFloatShelf } from '../floatShelf'
 import { normaliseCurvedEnd } from '../curvedEnd/settings'
 
 function dbRowToMaterial(row: Record<string, unknown>): Material {
@@ -853,6 +854,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     footprint:       (cab.footprint as CabinetInput['footprint']) ?? null,
     bulkhead:        normaliseBulkhead(cab.bulkhead),
     curved_end:      normaliseCurvedEnd(cab.curved_end),
+    float_shelf:     normaliseFloatShelf(cab.float_shelf),
     left_neighbour:  (cab.left_neighbour_type  ?? 'wall') as CabinetInput['left_neighbour'],
     right_neighbour: (cab.right_neighbour_type ?? 'wall') as CabinetInput['right_neighbour'],
     exposed_interior: cab.exposed_interior,

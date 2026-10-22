@@ -10,6 +10,7 @@ import CalcInput from '@/src/components/CalcInput'
 import CabinetShapeSection from './CabinetShapeSection'
 import BulkheadSection from './BulkheadSection'
 import CurvedEndSection from './CurvedEndSection'
+import FloatShelfSection from './FloatShelfSection'
 import { canFloat, isFloating, floatingPatch, FLOAT_Z } from '@/src/lib/floating'
 
 export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRef, onUpdate, onDelete, onClose, hideWallPosition, hideDelete, autoFocusWidth }: {
@@ -212,6 +213,9 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
         )}
         {cabinet.bulkhead && (
           <BulkheadSection cabinet={cabinet} wall={wall} room={room} onUpdate={onUpdate} inp={inp} lbl={lbl} />
+        )}
+        {cabinet.float_shelf && (
+          <FloatShelfSection cabinet={cabinet} onUpdate={onUpdate} inp={inp} lbl={lbl} />
         )}
         {cabinet.curved_end && (
           <CurvedEndSection cabinet={cabinet} onUpdate={onUpdate} inp={inp} lbl={lbl} />

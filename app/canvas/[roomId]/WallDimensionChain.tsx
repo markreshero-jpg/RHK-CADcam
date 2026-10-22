@@ -271,7 +271,8 @@ export default function WallDimensionChain({
     const kick0 = kicks[0], kickL = kicks[kicks.length - 1]
     // Bulkheads overlap the overheads below them, so they get their own row just
     // outside the overhead row (same layer item); every row further out steps by one.
-    const ohCabs = wallCabs.filter(c => !c.bulkhead), bhCabs = wallCabs.filter(c => !!c.bulkhead)
+    // Floating shelves (z_floating_shelf) share the outer row.
+    const ohCabs = wallCabs.filter(c => !c.bulkhead && !c.float_shelf), bhCabs = wallCabs.filter(c => !!c.bulkhead || !!c.float_shelf)
     const wallCabSegs = computeChain(ohCabs, wall, wallFx)
     const showBh = layerWallCab.visible && bhCabs.length > 0
     const bhSegs = showBh ? computeChain(bhCabs, wall) : []

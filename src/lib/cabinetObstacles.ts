@@ -63,14 +63,16 @@ export function crossWallCabinetOccupancy(
   side: WallSide,
   cx: Pt,
   room: Room,
-  mover: { id?: string; assembly_class: string; dy: number; dz?: number; bulkhead?: unknown },
+  mover: { id?: string; assembly_class: string; dy: number; dz?: number; bulkhead?: unknown; float_shelf?: unknown },
 ): { t: number; dx: number }[] {
+  // Floating shelves (z_floating_shelf) don't block across walls, as cabsBlock.
+  if (mover.float_shelf) return []
   const [mB, mT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead)
   const depth = mover.dz ?? 600
   const f = wallFrame(wall, side, cx)
   const out: { t: number; dx: number }[] = []
   for (const c of cabinets) {
-    if (c.id === mover.id || c.wall_id === wall.id || c.is_kick_assembly) continue
+    if (c.id === mover.id || c.wall_id === wall.id || c.is_kick_assembly || c.float_shelf) continue
     const cw = walls.find(w => w.id === c.wall_id)
     if (!cw) continue
     // Vertical: wall units clear base units, as cabsBlock.

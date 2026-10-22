@@ -188,7 +188,7 @@ export default function ElevationPrintSVG({
   const floorChainY    = roomH + 6 * P
   const overallY       = roomH + 13 * P
   const heightChainX   = -13 * P
-  const titleY         = (wallCabs.some(c => !!c.bulkhead) ? -13.5 : -12) * P   // clear of the bulkhead row
+  const titleY         = (wallCabs.some(c => !!c.bulkhead || !!c.float_shelf) ? -13.5 : -12) * P   // clear of the bulkhead row
 
   // ── ViewBox padding ───────────────────────────────────────────────────────
   const benchDimStep = 8 * P   // bench / basin height lines, outside the height chain
@@ -501,7 +501,7 @@ export default function ElevationPrintSVG({
   // ── Left height chain ─────────────────────────────────────────────────────
   function heightChain() {
     const baseCabEl = wallCabs.find(c => !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'base' || c.assembly_class === 'base_corner')) ?? null
-    const overheadCabEl = wallCabs.find(c => !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead) ?? null
+    const overheadCabEl = wallCabs.find(c => !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead && !c.float_shelf) ?? null
     const bulkheadEl = wallCabs.find(c => !!c.bulkhead) ?? null
     const kickH = baseCabEl?.has_toekick
       ? (resolvedParts?.get(baseCabEl.id)?.toekick_parts.find(p => p.part_key === 'kick_front_face')?.DX ?? 150)
@@ -584,9 +584,9 @@ export default function ElevationPrintSVG({
     )
   }
 
-  const overheadCabs = wallCabs.filter(c => !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead)
-  // Bulkheads overlap the overheads below them — their own row, just outside.
-  const bulkheadCabs = wallCabs.filter(c => !!c.bulkhead)
+  const overheadCabs = wallCabs.filter(c => !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead && !c.float_shelf)
+  // Bulkheads (and floating shelves) overlap the overheads — their own row, just outside.
+  const bulkheadCabs = wallCabs.filter(c => !!c.bulkhead || !!c.float_shelf)
   const floorCabs = wallCabs.filter(c => !c.rule_overrides?.UNDER_PANEL && (
     c.assembly_class === 'base' || c.assembly_class === 'base_corner' ||
     c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'))

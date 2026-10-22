@@ -4,6 +4,7 @@
 
 import { edgeLabel } from './footprint'
 import { curvedEndPartLabel } from '../resolver/resolveCurvedEnd'
+import { floatShelfPartLabel } from '../floatShelf'
 
 /** Vertical per-edge panel (`side:<edge>` / `back:<edge>`), 'face' panel kind.
  *  Finger-pull backing rails (`fprail:<n>`, z_handles H6) and filler return
@@ -66,7 +67,7 @@ export function parseZonePartId(id: string): { facet?: string; row: number; col:
 
 /** Human label for a per-edge part, e.g. "Side (facet)". */
 export function shapedPartLabel(k: string): string | null {
-  const crv = curvedEndPartLabel(k)
+  const crv = curvedEndPartLabel(k) ?? floatShelfPartLabel(k)
   if (crv) return crv
   const fp =/^fprail:(\d+)$/.exec(k)
   if (fp) return `Finger Rail ${Number(fp[1]) + 1}`

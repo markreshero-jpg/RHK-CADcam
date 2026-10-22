@@ -15,6 +15,7 @@ import { removedIdsFrom, isAllViews } from '@/src/lib/resolver/filterHidden'
 import type { PartHideViews } from '@/src/lib/resolver/types'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 import { curvedEndPartLabel } from '@/src/lib/resolver/resolveCurvedEnd'
+import { floatShelfPartLabel, floatShelfPartNote } from '@/src/lib/floatShelf'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -160,7 +161,8 @@ export function normalizeProject(
       material_id: (row.material_id as string) ?? null,
       grain_direction: grain, nest_priority: nestPriority,
       output_to_cnc: partCut && !cabNoCnc.has(cabId) && !partNoCnc.get(cabId)?.has(partKey),
-      comment: commentsByCab.get(cabId)?.[partKey] ?? null,
+      // Floating shelf parts default to "build up then edge" / hand-cut notes (z_floating_shelf).
+      comment: commentsByCab.get(cabId)?.[partKey] ?? (table === 'case_parts' ? floatShelfPartNote(naming.typeKey) : null),
       ...(baseDims ? {
         size_overridden: true,
         base_w: baseDims.w, base_h: baseDims.h, base_thickness: baseDims.thickness,
@@ -224,7 +226,7 @@ export function normalizeProject(
       ? { w: Number(r.dy), h: Number(r.dx), thickness: Number(r.dz) } : undefined
     // Angled panel ends (z_cabinet_shape 4a): nested as the blank, bevel named.
     const bevel = caseBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
-    push('case_parts', r, `case_${key}`, { typeKey: key, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : curvedEndPartLabel(key) ?? humanize(key),
+    push('case_parts', r, `case_${key}`, { typeKey: key, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? humanize(key),
       ...(bevel ? { suffix: ` (${bevel})` } : {}) },
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), turned, eb, base)
   }
