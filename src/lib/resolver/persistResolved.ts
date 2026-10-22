@@ -97,7 +97,8 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       edge_band_back:    p.edge_band.left,
       edge_band_id:      p.edge_band.id ?? null,
       rule_overrides:    {},
-      output_to_cnc:     true,
+      // Accessories (hanging rail …) are bought hardware, not cut board.
+      output_to_cnc:     p.part_type !== 'accessory',
       outline:           p.outline ?? null,
     })),
     // Cuttable box panels, one row per panel per stack, keyed by (face_zone

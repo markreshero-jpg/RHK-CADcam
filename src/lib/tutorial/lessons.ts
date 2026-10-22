@@ -706,6 +706,17 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Double is two boards of the exposed colour glued together (2 × 16.5 = 33). Triple build-up adds a middle layer of strips: front and back rails, side strips and cross strips. It keeps the weight down. Triple solid is three full boards. The height follows the board thickness. Rebate depth (30) and height (10 into each board) set the cleat slot. The cleats are listed for hand cutting and never go to the CNC. Every board is marked “build up then edge”.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.float_shelf && cab.float_shelf.build !== 'double') },
   ]},
+
+  // Appended 2026-10-22 (HANGING_RAIL_OVAL accessory, RHK6581 Bed 2).
+  { id: 'hanging_rail', level: 'intermediate', topic: 'cabinets', title: 'Add a hanging rail',
+    blurb: 'Put a 30 × 15 oval robe rail under a shelf.', keywords: 'hanging rail robe wardrobe oval hang coat accessory internals', steps: [
+    { id: 'open', title: 'Open the cabinet',
+      body: 'Double-click a robe cupboard to open it, and go to the internals.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'add', title: 'Add → Hanging rail',
+      body: 'Click the opening under the shelf, then Add → Hanging rail. The rail runs wall to wall, centred in the depth, 60 under the top of the opening. Lock its height to put it somewhere else. It’s hardware, so it never goes to the CNC or the cut list.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

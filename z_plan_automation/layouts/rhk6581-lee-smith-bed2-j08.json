@@ -1,0 +1,26 @@
+{
+  "_source": "z_sample_plans/RHK6581 - Lee Smith - 38 Howard St, Grange/38 Howard SM - Markup 260927.pdf p3, views 4 (J08 Bed 2 plan) + 3 (robe elevation, FLIPPED) + Mark Q&A 2026-10-22",
+  "_notes": [
+    "1750 OA (markup). Seen 18 LAM01 end panel on the LEFT, wall on the RIGHT. Drawers away from the wall = right cupboard (Mark).",
+    "TEPF 18 | T2D 841 hanging | T2D 841 drawers | TFKW 50 at the wall (50 so the door clears the inner drawers - Mark rule).",
+    "410 OA incl doors: carcass 390 (380 only fitted 300 runners - 350 needs int depth - 20 setback >= 350), back scribe 0 (SCRBK 0). Panel dz 390 (def adds door + 2). Mark OK to 420.",
+    "Ceiling 2770: 2400 incl 100 kick + 370 BH flush with carcass. Kick joined TC run after placement.",
+    "Hanging cpbd: fixed T/S shelf 1920, HANGING_RAIL_OVAL 30x15 under it. Drawer cpbd: fixed T/S 1920, 2 adj, fixed T/S 920, 4 inner drawers height 143 (161 fronts), stack_gap 53 = 35 finger gaps. Rail locked Y1714 (60 under the shelf). TC-03 hinges [2196,1570,799,100] clear of shelf holes. Internals + SCRBK + hinges + joinKicks set after placement; KICK dz set by hand.",
+    "Return wall 600 / back wall lengths: robe wall only; room size not on the drawing."
+  ],
+  "projectName": "RHK6581 Lee Smith",
+  "roomName": "Bed 2 J08",
+  "roomHeight": 2770,
+  "wallCabinetTop": 2400,
+  "walls": [
+    { "x": 0, "y": 0, "length": 1750, "angle": 0, "_": "robe back wall, west->east = elevation left->right" },
+    { "x": 1750, "y": 0, "length": 600, "angle": 90, "_": "right return wall (drawer end)" }
+  ],
+  "cabinets": [
+    { "def": "TEPF", "wall": 1, "offset": 0, "dx": 18, "dy": 2400, "dz": 390, "note": "J08 seen 18 LAM01 end panel (left, open end), to floor" },
+    { "def": "T2D", "wall": 1, "offset": 18, "dx": 841, "dy": 2400, "dz": 390, "note": "J08 hanging cpbd - fixed T/S shelf 1920, 30x15 oval hanging rail under. (Drawing asked for a front hang rail - Mark: oval rail.) HD01 by client, undrilled" },
+    { "def": "T2D", "wall": 1, "offset": 859, "dx": 841, "dy": 2400, "dz": 390, "note": "J08 drawer cpbd - fixed T/S 1920, 2 adj, fixed T/S 920, 4 inner drawers. HD01 by client, undrilled" },
+    { "def": "TFKW", "wall": 1, "offset": 1700, "dx": 50, "dy": 2400, "dz": 390, "note": "J08 50 filler on the kick at right wall - door clears the inner drawers" },
+    { "def": "BH", "wall": 1, "offset": 0, "dx": 1750, "dy": 370, "dz": 390, "note": "J08 LAM01 bulkhead 2400-2770, flush with carcase" }
+  ]
+}

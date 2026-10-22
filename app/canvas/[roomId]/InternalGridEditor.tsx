@@ -9,6 +9,7 @@ import type {
   DrawerType,
 } from '@/src/lib/resolver/types'
 import { EMPTY_SECTION } from '@/src/lib/resolver/types'
+import { HANGING_RAIL_OVAL } from '@/src/lib/resolver/fittings'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { useViewBoxPinch } from './usePinchZoom'
 import { supabase } from '@/src/lib/supabase'
@@ -154,12 +155,13 @@ const FITTING_LABEL: Record<InternalFittingType, string> = {
 // SHELF is the one and only way to make a horizontal division — it splits the
 // opening into structural bays, each independently lockable / equalisable.
 // Everything else is a fitting placed inside the opening.
-type AddKind = 'fixed_shelf' | 'adj_shelf' | 'pull_out' | 'inner_drawer' | 'accessory'
+type AddKind = 'fixed_shelf' | 'adj_shelf' | 'pull_out' | 'inner_drawer' | 'hanging_rail' | 'accessory'
 const ADD_ELEMENTS: { kind: AddKind; label: string; title: string }[] = [
   { kind: 'fixed_shelf',  label: 'Fixed shelf',      title: 'A fixed shelf — splits this opening into bays you can lock or equalise.' },
   { kind: 'adj_shelf',    label: 'Adjustable shelf', title: 'A movable shelf inside this opening.' },
   { kind: 'pull_out',     label: 'Rollout shelf',    title: 'A pull-out / rollout shelf on slides.' },
   { kind: 'inner_drawer', label: 'Inner drawer',     title: 'An inner drawer on slides.' },
+  { kind: 'hanging_rail', label: 'Hanging rail',     title: 'A 30 x 15 oval robe rail, wall to wall, 60 below the top of the opening.' },
   { kind: 'accessory',    label: 'Accessory',        title: 'An accessory (wine rack, etc.).' },
 ]
 
@@ -1401,11 +1403,11 @@ export default function InternalGridEditor({
     )
   }
 
-  function handleAddFitting(path: Path, type: InternalFittingType) {
+  function handleAddFitting(path: Path, type: InternalFittingType, fitting: InternalFitting = newFitting(type)) {
     const s = getSection(tree, path)
     if (s?.type !== 'open') return
     const idx = s.fittings.length
-    save(addFitting(tree, path, newFitting(type)))
+    save(addFitting(tree, path, fitting))
     setSelected({ kind: 'fitting', path, fittingIndex: idx })
     setMenu(null)
   }
@@ -1419,6 +1421,7 @@ export default function InternalGridEditor({
     if (kind === 'fixed_shelf')      { save(addSeparator(tree, path, 'hsplit', 'fixed_shelf')); setMenu(null) }
     else if (kind === 'adj_shelf')   { save(addSeparator(tree, path, 'hsplit', 'adj_shelf'));  setMenu(null) }
     else if (kind === 'inner_drawer' || kind === 'pull_out') { save(addDrawerBay(tree, path, kind)); setMenu(null) }
+    else if (kind === 'hanging_rail') handleAddFitting(path, 'accessory', { type: 'accessory', key: HANGING_RAIL_OVAL.key, y_locked: false })
     else                             handleAddFitting(path, kind)   // accessory
   }
 

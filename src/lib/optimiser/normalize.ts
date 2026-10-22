@@ -232,6 +232,7 @@ export function normalizeProject(
   }
   for (const r0 of ip) {
     const type = String(r0.part_type)
+    if (type === 'accessory') continue   // hardware (hanging rail …), not a board part
     const { r, base } = sized('internal_parts', r0, `int_${type}_${r0.sort_order}`)
     // DB columns: edge_band_back → resolver 'left', edge_band_front → 'right'.
     const flags: EdgeFlags = {

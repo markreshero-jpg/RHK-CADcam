@@ -25,7 +25,7 @@
 import {
   ResolvedInternalPart, ConstructionRules, ResolverError,
   InternalFitting, InternalFittingType,
-  AdjShelfFitting, FixedShelfFitting, InnerDrawerFitting, PullOutFitting,
+  AdjShelfFitting, FixedShelfFitting, InnerDrawerFitting, PullOutFitting, AccessoryFitting,
   DrawerType, DrawerBoxRules, DrawerBoxPartType, Material,
   SlideProduct, SlideScheduleEntry, ResolvedDrawerSlide,
   edgeSidesToBanding, EdgingDefaults,
@@ -457,10 +457,31 @@ function resolvePullOuts(box: Box, fittings: InternalFitting[], ctx: FittingCtx)
 }
 
 // ── Accessory (wine rack / file rail / misc) — registry slot, geometry TBD ───────
-function resolveAccessories(_box: Box, _fittings: InternalFitting[], _ctx: FittingCtx): ResolvedInternalPart[] {
-  // Phase 2 stub: accepted in the model + editor, but emits no parts yet.
-  // Geometry will be driven by the parts_library `key` in a later phase.
-  return []
+// Accessories by parts_library key. Unknown keys still take up height but emit
+// nothing. Accessory parts are hardware, not board: persisted with
+// output_to_cnc false and skipped by the optimiser.
+//   HANGING_RAIL_OVAL — 30 high x 15 wide oval robe rail, wall to wall across the
+//   compartment, centred in the depth; drawn as a block for now (Mark 2026-10-22).
+export const HANGING_RAIL_OVAL = { key: 'HANGING_RAIL_OVAL', h: 30, w: 15, belowTop: 60 }
+
+function resolveAccessories(box: Box, fittings: InternalFitting[], ctx: FittingCtx): ResolvedInternalPart[] {
+  const out: ResolvedInternalPart[] = []
+  for (const a of fittings.filter((f): f is AccessoryFitting => f.type === 'accessory')) {
+    if (a.key !== HANGING_RAIL_OVAL.key) continue
+    const R = HANGING_RAIL_OVAL
+    const y = (a.y_locked && a.y_position !== undefined) ? a.y_position : box.y + box.h - R.belowTop - R.h
+    out.push({
+      part_type:   'accessory',
+      sort_order:  ctx.sort.accessory++,
+      DX: R.w, DY: box.w, DZ: R.h,
+      X:  box.x, Y: y, Z: ctx.intBack + (ctx.intD - R.w) / 2,
+      AX: 0, AY: 0, AZ: 0,
+      material_id: ctx.shelfMatId,
+      edge_band:   edgeSidesToBanding([]),
+      y_locked:    !!a.y_locked,
+    })
+  }
+  return out
 }
 
 // ── Registry + dispatcher ───────────────────────────────────────────────────────
@@ -490,7 +511,7 @@ function fittingExtent(box: Box, f: InternalFitting, ctx: FittingCtx): number {
       const def    = f.type === 'inner_drawer' ? 150 : 60
       return f.height ?? slide?.box_height ?? def
     }
-    case 'accessory': return f.height ?? 80
+    case 'accessory': return f.height ?? (f.key === HANGING_RAIL_OVAL.key ? HANGING_RAIL_OVAL.h : 80)
     default:          return 0
   }
 }
@@ -508,7 +529,8 @@ function fittingExtent(box: Box, f: InternalFitting, ctx: FittingCtx): number {
 // stackable fittings opts in to ordered stacking.
 //
 // adj_shelf is excluded — those are equalised across the whole compartment by
-// resolveAdjShelves and don't participate in ordered stacking.
+// resolveAdjShelves and don't participate in ordered stacking. So is an unlocked
+// hanging rail: it hangs from the top of the opening (resolveAccessories).
 // Fixed shelves anchored to a face row (z_ubo U2) become locked at the row's
 // edge: 'bottom' → shelf top face on the opening's bottom, 'top' → shelf bottom
 // face on the opening's top. A row that isn't on the front leaves the shelf as
@@ -526,14 +548,17 @@ function alignToFaceRows(fittings: InternalFitting[], ctx: FittingCtx): Internal
   })
 }
 
+const hangsFromTop = (f: InternalFitting) =>
+  f.type === 'accessory' && f.key === HANGING_RAIL_OVAL.key && !f.y_locked
+
 function positionFittings(box: Box, fittings: InternalFitting[], ctx: FittingCtx): InternalFitting[] {
-  const stackables = fittings.filter(f => f.type !== 'adj_shelf')
+  const stackables = fittings.filter(f => f.type !== 'adj_shelf' && !hangsFromTop(f))
   if (stackables.length === 1 && stackables[0].type === 'fixed_shelf' && !stackables[0].y_locked) {
     return fittings
   }
   let cursor = box.y
   return fittings.map(f => {
-    if (f.type === 'adj_shelf') return f
+    if (f.type === 'adj_shelf' || hangsFromTop(f)) return f
     const h = fittingExtent(box, f, ctx)
     if (f.y_locked && f.y_position !== undefined) {
       cursor = Math.max(cursor, f.y_position + h + ctx.stackGap)
