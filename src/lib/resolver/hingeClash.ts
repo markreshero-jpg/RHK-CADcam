@@ -136,3 +136,37 @@ export function checkHingeShelfHoleClash(
   }
   return out
 }
+
+// ============================================================
+// Hinge plate ↔ fixed shelf
+//
+// A fixed shelf is screwed hard to the gable and runs to the front, so a plate
+// overlapping its thickness can't be fitted at all — an ERROR. Fixed shelves
+// resolve with Y = underside, DZ = thickness, X..X+DX = gable to gable.
+// ============================================================
+
+/** Fixed shelves touching the hinge's gable whose thickness falls under its plate. */
+export function plateFixedShelfHits(h: ResolvedHingeInstance, internalParts: ResolvedInternalPart[]): ResolvedInternalPart[] {
+  const b = plateBox(h)
+  const x = h.plate_drills?.[0]?.x
+  if (!b || x === undefined) return []
+  return internalParts.filter(p => p.part_type === 'fixed_shelf'
+    && x >= p.X - 2 && x <= p.X + p.DX + 2
+    && p.Y + p.DZ >= b.y0 && p.Y <= b.y1)
+}
+
+export function checkHingeFixedShelfClash(hinges: ResolvedHingeInstance[], internalParts: ResolvedInternalPart[]): ResolverError[] {
+  const out: ResolverError[] = []
+  for (const h of hinges) {
+    const hit = plateFixedShelfHits(h, internalParts)[0]
+    if (!hit) continue
+    const cupY = h.cup_drills?.[0]?.y ?? h.y_position_mm
+    out.push({
+      code: 'HINGE_FIXED_SHELF_CLASH',
+      message: `Door [${h.row_index},${h.col_index}] hinge ${h.sort_order + 1} (≈${Math.round(cupY)}mm high) has its plate on the `
+        + `fixed shelf (${Math.round(hit.Y)}–${Math.round(hit.Y + hit.DZ)}mm). Move the hinge clear of the shelf.`,
+      part: 'hinge',
+    })
+  }
+  return out
+}

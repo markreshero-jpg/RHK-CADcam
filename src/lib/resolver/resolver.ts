@@ -16,7 +16,7 @@ import { resolveFace }           from './resolveFace'
 import { resolveDrawerStacks, treeHasDrawerFittings } from './resolveDrawerStack'
 import { resolveJoints }         from './resolveJoints'
 import { resolveHinges }         from './resolveHinges'
-import { checkHingeInnerDrawerClash, checkHingeShelfHoleClash } from './hingeClash'
+import { checkHingeFixedShelfClash, checkHingeInnerDrawerClash, checkHingeShelfHoleClash } from './hingeClash'
 import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
 import { resolveShapedFaces } from './resolveShapedFace'
 import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
@@ -152,6 +152,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // ── 6d. Hinge plate ↔ adj-shelf hole clash ────────────────────
   // A plate over a shelf-pin hole can't be screwed on — an error (Mark).
   allErrors.push(...checkHingeShelfHoleClash(hingeInstances, caseParts, internalParts, seamJoints))
+  allErrors.push(...checkHingeFixedShelfClash(hingeInstances, internalParts))
 
   // ── 7. Warnings ───────────────────────────────────────────────
   // Non-fatal checks

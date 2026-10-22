@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { plateHoleHits, type ShelfHole } from '../hingeClash'
-import type { ResolvedHingeInstance } from '../types'
+import { plateFixedShelfHits, plateHoleHits, type ShelfHole } from '../hingeClash'
+import type { ResolvedHingeInstance, ResolvedInternalPart } from '../types'
 
 // Plate screws ±16 about the cup, 37 back from a 582 front (RHK6581 TC-02).
 const hinge = (cupY: number) => ({
@@ -25,5 +25,20 @@ describe('hinge plate ↔ adj shelf holes', () => {
   })
   it('ignores holes well behind the plate', () => {
     expect(plateHoleHits(hinge(899), bank('left_side', 869).map(h => ({ ...h, z: 66.5 })))).toEqual([])
+  })
+})
+
+// RHK6581 Bed 2 TC-03: fixed shelf underside 803.5, 16.5 thick, gable to gable.
+const fixedShelf = { part_type: 'fixed_shelf', X: 16.5, Y: 803.5, DX: 808, DY: 373.5, DZ: 16.5 } as unknown as ResolvedInternalPart
+
+describe('hinge plate ↔ fixed shelf', () => {
+  it('flags a plate over the shelf (799 hinge)', () => {
+    expect(plateFixedShelfHits(hinge(799), [fixedShelf])).toHaveLength(1)
+  })
+  it('clears a hinge in the drawer gap below', () => {
+    expect(plateFixedShelfHits(hinge(565), [fixedShelf])).toEqual([])
+  })
+  it('ignores a shelf on another bay', () => {
+    expect(plateFixedShelfHits(hinge(799), [{ ...fixedShelf, X: 900 } as ResolvedInternalPart])).toEqual([])
   })
 })
