@@ -305,6 +305,11 @@ Esc cancels; one undo step.
     (scale 1000, no rotation: GLB already +Z out of the wall, origin = wall face at the Ø65 plate centre).
     mount_height 1117.5 (outlet centre 1150, ~250 above a 900 top). No benchtop cutout. Shapes traced
     headless. Not checked in-app.
+  - 2026-10-22 (user): **LG front load washer 12kg** (WX10-1412W, `z_fixtures/models/Washing Machines/`) —
+    appliance row, kind Washing machine, Laundry group, **floor mount**, 600 W × 660 D × 850 H from the
+    bbox (660 = closed door; body 615, door open 1135). Scale 1000, no rotation (GLB origin back-left
+    floor, +Z front). Served from `/fixture-models/LG_WX10-1412W_Front_Loader.glb`. No benchtop cut.
+    Shapes traced headless. Not checked in-app.
 
 - 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
   section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`
