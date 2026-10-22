@@ -281,7 +281,9 @@ feature. First use: the finishes **spec block** on the plan (RHK6570 vanities).
   note already in that column, and arrives selected so it can be dragged.
 - **Spec block layout** (Mark, RHK6570): BENCHTOP (name + thickness only) /
   FRONTS + PANELS / HANDLES / CARCASS / DRAWERS / HARDWARE (hinges + runners incl.
-  length) / BASIN last. The client approval signature goes on the shop-drawings
+  length) / BASIN last. Sections for items the room doesn't have are left off
+  (Mark, 2026-10-22: no drawers → no DRAWERS / Runners; no basin, no
+  benchtop → no section). The client approval signature goes on the shop-drawings
   title block (z_shop_drawings S1), not in this block.
 
 ### Fields (room value first, then job)
