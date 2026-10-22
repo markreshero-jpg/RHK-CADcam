@@ -240,6 +240,8 @@ export function useAnnotationTool({
   const typedRef = useRef<TypedEntry>({})
   const rawCursorRef = useRef<Pt | null>(null)
   const [focusReq, setFocusReq] = useState<{ field: TypedField; n: number; seed?: string } | null>(null)
+  // Several selected: Tab → the panel's X field (then Y) to move them by their extents' top-left.
+  const [selFocusReq, setSelFocusReq] = useState<{ n: number; seed?: string } | null>(null)
   // Cloud tool: drag / click-click a rectangle, or click the corners of a freehand one.
   const [cloudMode, setCloudMode] = useState<'rect' | 'free'>('rect')
   // Click-click placement (B1): first click armed the shape, the next click finishes it.
@@ -530,6 +532,20 @@ export function useAnnotationTool({
     const nw = w != null && w > 0 ? w : cw, nh = h != null && h > 0 ? h : ch
     editGeom(oneBox, withBoxSize(g, nw, nh))
   }, [oneBox, editGeom])
+
+  /** CAD panel: move the selection so its extents' top-left lands on x / y (either may
+   *  be left out). One undo step, saved now. */
+  const moveSelectionTo = useCallback((x: number | null, y: number | null) => {
+    const sel = annRef.current.filter(a => liveSelected.has(a.id))
+    const b = boundsOf(sel.flatMap(a => annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, k)))
+    if (!b) return
+    const dx = x != null ? x - b.minX : 0, dy = y != null ? y - b.minY : 0
+    if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return
+    captureSnapshot()
+    const moved = new Map(sel.map(a => [a.id, translateGeom(a.kind, a.geom, dx, dy)]))
+    setAnnotations(xs => xs.map(a => moved.has(a.id) ? { ...a, geom: moved.get(a.id)! } : a))
+    for (const [id, geom] of moved) void dbUpdateAnnotation(id, { geom })
+  }, [liveSelected, k, captureSnapshot, setAnnotations])
 
   /** CAD panel: replace one item's geometry (a typed coordinate). One undo step, saved now. */
   const patchGeom = useCallback((id: string, geom: RoomAnnotation['geom']) => {
@@ -1323,6 +1339,12 @@ export function useAnnotationTool({
       if (mod && (e.key === 'd' || e.key === 'D')) { take(); paste(selected); return }
       if (mod && (e.key === 'a' || e.key === 'A')) { take(); setSelectedIds(new Set(annRef.current.filter(a => a.view === 'plan').map(a => a.id))); return }
       // Tab (or a digit) while drawing → the CAD panel's first size field.
+      // Several selected: Tab (or a digit) → the panel's X field to move them.
+      if (tool === 'select' && liveSelected.size > 1 && !drawingRef.current && (e.key === 'Tab' || (/^[0-9.\-]$/.test(e.key) && !mod))) {
+        take()
+        setSelFocusReq(f => ({ n: (f?.n ?? 0) + 1, seed: e.key === 'Tab' ? undefined : e.key }))
+        return
+      }
       // Before the first click: Tab → X (then Tab → Y) for where the shape starts.
       const startOK = !pendingRef.current && !drawingRef.current && startTypable(tool, dimMode)
       const canType = startOK || !!pendingRef.current || (!!drawingRef.current?.pts.length && !drawingRef.current?.attachId) || (tool === 'offset' && !!offsetSrcRef.current)
@@ -1469,7 +1491,7 @@ export function useAnnotationTool({
     cursor: active ? cursor : null,
     fromPt: drawing?.pts.length ? drawing.pts[drawing.pts.length - 1] : pending ? pending.start : null,
     ribbonSize, applyLength, applyAngle, applyBoxSize, liveMeasure, patchGeom,
-    typed, typedFields, setTyped, commitTyped, clearTyped, focusReq,
+    typed, typedFields, setTyped, commitTyped, clearTyped, focusReq, selFocusReq, moveSelectionTo,
     /** Text block size helper for the editor overlay. */
     layoutFor: (a: RoomAnnotation, text: string) => {
       const s = resolveStyle(a.kind, a.style)

@@ -275,7 +275,7 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
       <Section title={one ? `Selected — ${KIND_LABEL[one.kind]}` : sel.length > 1 ? `${sel.length} selected` : 'Selection'}>
         {!sel.length && !cad.editing && <div className="text-xs text-gray-500">Nothing selected. Click a note or line, drag a box round several, or pick a tool in the CAD tools on the left.</div>}
         {cad.editing && <div className="text-xs text-gray-400">Typing text… click away or Ctrl+Enter to finish.</div>}
-        {sel.length > 1 && !cad.editing && <MultiInfo sel={sel} k={paper} />}
+        {sel.length > 1 && !cad.editing && <MultiInfo sel={sel} k={paper} cad={cad} />}
         {one && <SelectedInfo a={one} cad={cad} k={paper} />}
       </Section>
 
@@ -301,13 +301,48 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
   )
 }
 
-function MultiInfo({ sel, k }: { sel: RoomAnnotation[]; k: number }) {
+/** Several selected: their extents, and X / Y (the extents' top-left) to move them to.
+ *  Tab from the canvas lands on X; Tab = Y; Enter moves; Esc clears. */
+function MultiInfo({ sel, k, cad }: { sel: RoomAnnotation[]; k: number; cad: AnnotationTool }) {
   const b = boundsOf(sel.flatMap(a => annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, k)))
+  const [draft, setDraft] = useState<{ x?: string; y?: string }>({})
+  const xRef = useRef<HTMLInputElement>(null), yRef = useRef<HTMLInputElement>(null)
+  const req = cad.selFocusReq
+  useEffect(() => {
+    if (!req) return
+    const el = xRef.current
+    if (!el) return
+    el.focus()
+    if (req.seed != null) requestAnimationFrame(() => { setDraft({ x: req.seed }); requestAnimationFrame(() => el.setSelectionRange(1, 1)) })
+    else el.select()
+  }, [req?.n])   // eslint-disable-line react-hooks/exhaustive-deps
   if (!b) return null
+  const num = (s?: string) => { const n = s != null && s.trim() ? parseFloat(s) : NaN; return Number.isFinite(n) ? n : null }
+  const field = (f: 'x' | 'y', ref: React.RefObject<HTMLInputElement | null>, cur: number) => (
+    <label className="flex items-center gap-2">
+      <span className="text-[11px] text-gray-400 w-12">{f.toUpperCase()}</span>
+      <input ref={ref} value={draft[f] ?? ''} inputMode="decimal" placeholder={r1(cur)}
+        onChange={e => setDraft(d => ({ ...d, [f]: e.target.value }))}
+        onKeyDown={e => {
+          if (e.key === 'Tab') { e.preventDefault(); const o = f === 'x' ? yRef.current : xRef.current; o?.focus(); o?.select() }
+          else if (e.key === 'Enter') {
+            e.preventDefault(); cad.moveSelectionTo(num(draft.x), num(draft.y)); setDraft({}); (e.target as HTMLInputElement).blur()
+          } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setDraft({}); (e.target as HTMLInputElement).blur() }
+        }}
+        className={`w-24 h-7 bg-gray-800 border rounded px-1.5 text-sm font-mono outline-none ${num(draft[f]) != null ? 'border-yellow-500 text-yellow-200' : 'border-gray-700 text-gray-100'} focus:border-rose-500`} />
+      <span className="text-[10px] text-gray-500">mm</span>
+    </label>
+  )
   return <>
     <Row k="Extents X" v={`${r1(b.minX)} → ${r1(b.maxX)}`} />
     <Row k="Extents Y" v={`${r1(b.minY)} → ${r1(b.maxY)}`} />
     <Row k="W × H" v={`${r1(b.maxX - b.minX)} × ${r1(b.maxY - b.minY)}`} />
+    <div className="mt-2 text-[10px] uppercase tracking-wide text-gray-500">Move to (top-left)</div>
+    <div className="mt-1 flex flex-col gap-1.5">
+      {field('x', xRef, b.minX)}
+      {field('y', yRef, b.minY)}
+      <div className="text-[11px] text-gray-500">Tab = next field · Enter = move · Esc = clear · blank keeps that axis</div>
+    </div>
   </>
 }
 
