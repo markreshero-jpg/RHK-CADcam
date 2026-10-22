@@ -111,3 +111,21 @@ describe('B4b fillet / chamfer / join tools', () => {
     expect(polyOfAnnotation(circ)).toBeNull()
   })
 })
+
+import { typedStart, startTypable } from '@/app/canvas/[roomId]/useAnnotationTool'
+
+describe('typed start point (X / Y before the first click)', () => {
+  it('locks the typed parts, the cursor fills the rest', () => {
+    expect(typedStart({ x: 5, y: 7 }, {})).toEqual({ x: 5, y: 7 })
+    expect(typedStart({ x: 5, y: 7 }, { x: 1200 })).toEqual({ x: 1200, y: 7 })
+    expect(typedStart({ x: 5, y: 7 }, { x: 1200, y: -300 })).toEqual({ x: 1200, y: -300 })
+  })
+  it('drawing tools take X / Y; select, modify tools and pick-first dims do not', () => {
+    for (const t of ['line', 'arrow', 'leader', 'arc', 'circle', 'rect', 'ellipse', 'cloud', 'text', 'textbox'] as const) expect(startTypable(t, 'linear')).toBe(true)
+    expect(startTypable('dim', 'linear')).toBe(true)
+    expect(startTypable('dim', 'angular')).toBe(true)
+    expect(startTypable('dim', 'radius')).toBe(false)
+    expect(startTypable('dim', 'continue')).toBe(false)
+    for (const t of ['select', 'offset', 'fillet', 'chamfer', 'join'] as const) expect(startTypable(t, 'linear')).toBe(false)
+  })
+})

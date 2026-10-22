@@ -21,7 +21,7 @@ import { CadBlocksSection, CadFieldsSection } from './CadBlocksSection'
 
 const TYPED_LABEL: Record<TypedField, [string, string]> = {
   length: ['Length', 'mm'], angle: ['Angle', '°'], w: ['W', 'mm'], h: ['H', 'mm'], offset: ['Offset', 'mm'],
-  radius: ['Radius', 'mm'], sweep: ['Sweep', '°'], distance: ['Distance', 'mm'],
+  radius: ['Radius', 'mm'], sweep: ['Sweep', '°'], distance: ['Distance', 'mm'], x: ['X', 'mm'], y: ['Y', 'mm'],
 }
 
 /** Typed sizes while drawing: Tab from the canvas lands here; Tab cycles the fields,
@@ -55,6 +55,7 @@ function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
   if (prev?.kind === 'dim') live.offset = Math.abs((prev.geom as DimGeom).offset)
   if (cad.offsetSrc && lm?.mode === 'label') live.distance = parseFloat(lm.text.replace(/[^0-9.]/g, ''))
   if (prev?.kind === 'circle') live.radius = (prev.geom as CircleGeom).r
+  if (cad.cursor) { live.x = cad.cursor.x; live.y = cad.cursor.y }
   if (prev?.kind === 'arc') { live.radius = (prev.geom as ArcGeom).r; live.sweep = sweepOf((prev.geom as ArcGeom).a0, (prev.geom as ArcGeom).a1) }
 
   if (!fields.length) return null
@@ -246,6 +247,13 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
           <div className="text-xs text-gray-400">{cad.offsetSrc
             ? 'Move to the side you want, then click to place the copy. Tab = type the distance. It carries on from the new copy; Esc to pick another.'
             : 'Click a line, cloud, box, ellipse, circle or arc to offset it.'}</div>
+          <TypedEntryFields cad={cad} />
+        </Section>
+      )}
+
+      {!d && !cad.pending && cad.typedFields[0] === 'x' && (
+        <Section title="Start point">
+          <div className="text-[11px] text-gray-500">Click to start, or Tab to type where it starts (Tab = next field, Enter = start there).</div>
           <TypedEntryFields cad={cad} />
         </Section>
       )}

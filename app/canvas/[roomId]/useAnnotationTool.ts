@@ -80,8 +80,9 @@ export interface AnnotDrawing {
 }
 
 /** Typed sizes while drawing (Tab → the CAD panel's fields). Set values lock the shape:
- *  a segment's length / angle, a box's W / H, a dim's offset. */
-export interface TypedEntry { length?: number; angle?: number; w?: number; h?: number; offset?: number; radius?: number; sweep?: number; distance?: number }
+ *  a segment's length / angle, a box's W / H, a dim's offset. Before the first click,
+ *  x / y lock where the shape starts. */
+export interface TypedEntry { length?: number; angle?: number; w?: number; h?: number; offset?: number; radius?: number; sweep?: number; distance?: number; x?: number; y?: number }
 
 /** A line or box as a polyline (fillet / chamfer / join work on these). */
 export function polyOfAnnotation(a: RoomAnnotation): Poly | null {
@@ -98,6 +99,13 @@ export function offsetDist(src: RoomAnnotation, p: Pt, t: TypedEntry): number {
 }
 export type TypedField = keyof TypedEntry
 const hasTyped = (t: TypedEntry) => Object.values(t).some(v => v != null)
+/** The first click's point with a typed X / Y locked in (unset parts follow the cursor). */
+export const typedStart = (raw: Pt, t: TypedEntry): Pt => ({ x: t.x ?? raw.x, y: t.y ?? raw.y })
+const hasTypedStart = (t: TypedEntry) => t.x != null || t.y != null
+/** Tools whose first click is a point that X / Y can be typed for. */
+export function startTypable(tool: CadTool, dimMode: DimMode): boolean {
+  return (POINT_TOOLS.has(tool) || PLACE_TOOLS.has(tool)) && !(tool === 'dim' && PICK_DIM_MODES.has(dimMode))
+}
 
 /** The segment end from `last` with typed length / angle; unset parts follow the cursor. */
 export function typedSeg(last: Pt, raw: Pt, t: TypedEntry): Pt {
@@ -706,7 +714,9 @@ export function useAnnotationTool({
   const clearTyped = useCallback(() => { typedRef.current = {}; setTypedState({}) }, [])
 
   /** Which fields the CAD panel offers for what's being drawn, in Tab order. */
-  const typedFields: TypedField[] = tool === 'offset' && offsetSrc ? ['distance'] : typedFieldsFor(!!pending, drawing)
+  const typedFields: TypedField[] = tool === 'offset' && offsetSrc ? ['distance']
+    : !pending && !drawing && !editing && startTypable(tool, dimMode) ? ['x', 'y']
+    : typedFieldsFor(!!pending, drawing)
 
   /** Offset tool: place the copy through p, then carry on offsetting from the new copy. */
   const placeOffset = useCallback((p: Pt) => {
@@ -730,7 +740,26 @@ export function useAnnotationTool({
     else if (d && raw && d.pts.length) {
       const nd = { ...d, cur: lockPoint(d, raw, next) }; drawingRef.current = nd; setDrawing(nd)
     }
+    else if (!pd && !d && (field === 'x' || field === 'y')) {
+      setCursor(typedStart(raw ?? { x: 0, y: 0 }, next))
+      if (next.x != null && next.y != null) setSnapHit(null)
+    }
   }, [])
+
+  /** The first click of the current tool at p (a click on the canvas, or Enter on typed X / Y). */
+  const startAt = useCallback((p: Pt) => {
+    const route = clickRoute(tool, false)
+    if (route === 'point') { drawClick(p); return }
+    if (route !== 'place') return
+    if (tool === 'text') { finishPlace('text', p, p); return }
+    if (tool === 'cloud' && cloudMode === 'free') {
+      const nd: AnnotDrawing = { tool: 'cloud', pts: [p], cur: p }
+      drawingRef.current = nd; setDrawing(nd)
+      return
+    }
+    const pd = { tool: tool as PlaceTool, start: p, cur: p }
+    pendingRef.current = pd; setPending(pd)
+  }, [tool, drawClick, finishPlace, cloudMode])
 
   /** Enter in a panel field: place the point / finish the shape with the typed values. */
   const commitTyped = useCallback(() => {
@@ -740,7 +769,9 @@ export function useAnnotationTool({
       return
     }
     const pd = pendingRef.current, d = drawingRef.current
-    if (pd) {
+    if (!pd && !d && hasTypedStart(typedRef.current)) {   // typed X / Y: start the shape there
+      startAt(typedStart(rawCursorRef.current ?? { x: 0, y: 0 }, typedRef.current))
+    } else if (pd) {
       pendingRef.current = null; setPending(null)
       finishPlace(pd.tool, pd.start, typedBox(pd.start, rawCursorRef.current ?? pd.cur, typedRef.current))
     } else if (d && d.pts.length) {
@@ -750,7 +781,7 @@ export function useAnnotationTool({
       drawClick(lockPoint(d, raw, typedRef.current))
     }
     clearTyped()
-  }, [finishPlace, drawClick, clearTyped, placeOffset])
+  }, [finishPlace, drawClick, clearTyped, placeOffset, startAt])
 
   // ── Fillet / chamfer / join (B4b) ─────────────────────────────────────────
   // Two picks: two sides of one line meeting at a corner → that corner; two separate
@@ -1112,11 +1143,12 @@ export function useAnnotationTool({
       // A typed length / angle locks the point; the click just confirms it.
       const hit = toFrame(e, !e.shiftKey, d?.pts[d.pts.length - 1])
       const locked = d && d.pts.length && hasTyped(typedRef.current)
-      drawClick(locked ? lockPoint(d, hit, typedRef.current) : hit)
+      drawClick(locked ? lockPoint(d, hit, typedRef.current) : !d ? typedStart(hit, typedRef.current) : hit)
       clearTyped()
       return
     }
-    const p = toFrame(e, tool !== 'select' && !e.shiftKey)
+    const p = typedStart(toFrame(e, tool !== 'select' && !e.shiftKey), route === 'place' ? typedRef.current : {})
+    if (route === 'place') clearTyped()
     if (route === 'marquee') beginDrag({ kind: 'marquee', start: p, cur: p, additive: e.shiftKey }, { x: e.clientX, y: e.clientY })
     else beginDrag({ kind: 'place', start: p, cur: p, tool: tool as PlaceTool }, { x: e.clientX, y: e.clientY })
   }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace, clearTyped, placeOffset, dimMode, pickDimClick])
@@ -1136,7 +1168,13 @@ export function useAnnotationTool({
       if (tool === 'offset') {   // offset preview follows the cursor
         const p = toFrame(e, !e.shiftKey, null, offsetSrcRef.current ? new Set([offsetSrcRef.current]) : undefined)
         rawCursorRef.current = p; setOffsetCur(p)
-      } else if (tool !== 'select' && !editing) toFrame(e, !e.shiftKey)
+      } else if (tool !== 'select' && !editing) {
+        const p = toFrame(e, !e.shiftKey)
+        rawCursorRef.current = p
+        const t = typedRef.current
+        if (hasTypedStart(t)) setCursor(typedStart(p, t))   // typed X / Y hold
+        if (t.x != null && t.y != null) setSnapHit(null)
+      }
       else setCursor(unmapPt(frame, toWorld(e)))
       return
     }
@@ -1285,15 +1323,18 @@ export function useAnnotationTool({
       if (mod && (e.key === 'd' || e.key === 'D')) { take(); paste(selected); return }
       if (mod && (e.key === 'a' || e.key === 'A')) { take(); setSelectedIds(new Set(annRef.current.filter(a => a.view === 'plan').map(a => a.id))); return }
       // Tab (or a digit) while drawing → the CAD panel's first size field.
-      const canType = !!pendingRef.current || (!!drawingRef.current?.pts.length && !drawingRef.current?.attachId) || (tool === 'offset' && !!offsetSrcRef.current)
-      if (canType && (e.key === 'Tab' || (/^[0-9.]$/.test(e.key) && !mod))) {
+      // Before the first click: Tab → X (then Tab → Y) for where the shape starts.
+      const startOK = !pendingRef.current && !drawingRef.current && startTypable(tool, dimMode)
+      const canType = startOK || !!pendingRef.current || (!!drawingRef.current?.pts.length && !drawingRef.current?.attachId) || (tool === 'offset' && !!offsetSrcRef.current)
+      if (canType && (e.key === 'Tab' || (/^[0-9.\-]$/.test(e.key) && !mod))) {
         take()
         const d = drawingRef.current
-        const field: TypedField | undefined = tool === 'offset' && offsetSrcRef.current ? 'distance' : typedFieldsFor(!!pendingRef.current, d)[0]
+        const field: TypedField | undefined = tool === 'offset' && offsetSrcRef.current ? 'distance' : startOK ? 'x' : typedFieldsFor(!!pendingRef.current, d)[0]
         if (!field) return
         setFocusReq(f => ({ field, n: (f?.n ?? 0) + 1, seed: e.key === 'Tab' ? undefined : e.key }))
         return
       }
+      if (e.key === 'Enter' && startOK && hasTypedStart(typedRef.current)) { take(); commitTyped(); return }
       if (e.key === 'Enter' && drawingRef.current) { take(); finishDrawing(); return }
       if (e.key === 'Backspace' && drawingRef.current && drawingRef.current.pts.length > 1) {   // step back one point
         take()
@@ -1311,7 +1352,7 @@ export function useAnnotationTool({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc, menuOpen, modPickOpen, chainOpen])
+  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc, menuOpen, modPickOpen, chainOpen, dimMode, commitTyped])
 
   // Ghosts for the canvas: marquee box / text box being dragged out (frame coords).
   // A shape being placed: by drag, or armed by a first click (B1).
@@ -1336,6 +1377,8 @@ export function useAnnotationTool({
     ? { mode: 'seg', a: lastPt, b: drawing.cur }
     : placing && (placing.start.x !== placing.cur.x || placing.start.y !== placing.cur.y) && placing.tool !== 'text'
       ? { mode: 'box', a: placing.start, b: placing.cur }
+    : !drawing && !placing && hasTypedStart(typed) && cursor && startTypable(tool, dimMode)
+      ? { mode: 'label', at: cursor, text: `Start  X ${Math.round(cursor.x)}  Y ${Math.round(cursor.y)}`, dot: true }
       : null
 
   // The line / arrow / leader being drawn, as a row the layer can draw (frame coords).

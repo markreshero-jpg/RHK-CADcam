@@ -11,7 +11,7 @@ import {
   mapPt, segAngle, segLength, arcMid, arcLength, arcPoint, sweepOf, bulgeSegLength, bulgeMid,
 } from '@/src/lib/annotations/geometry'
 
-export type LiveMeasure = { mode: 'seg' | 'box'; a: Pt; b: Pt } | { mode: 'label'; at: Pt; text: string } | null
+export type LiveMeasure = { mode: 'seg' | 'box'; a: Pt; b: Pt } | { mode: 'label'; at: Pt; text: string; dot?: boolean } | null
 
 const fmt = (n: number) => String(Math.round(n))
 
@@ -37,7 +37,13 @@ export default function CadMeasureOverlay({ live, selected, frame, zoom }: {
   const out: React.ReactNode[] = []
 
   if (live?.mode === 'label') {
-    out.push(<Tag key="live" at={mapPt(frame, live.at)} zoom={zoom} dy={-22} text={live.text} />)
+    const at = mapPt(frame, live.at)
+    if (live.dot) out.push(   // a typed start point (X / Y): a small cross-hair circle
+      <g key="dot" style={{ pointerEvents: 'none' }} stroke="#facc15" strokeWidth={1.2 / zoom} fill="none">
+        <circle cx={at.x} cy={at.y} r={5 / zoom} />
+        <path d={`M${at.x - 9 / zoom} ${at.y}H${at.x + 9 / zoom}M${at.x} ${at.y - 9 / zoom}V${at.y + 9 / zoom}`} />
+      </g>)
+    out.push(<Tag key="live" at={at} zoom={zoom} dy={-22} text={live.text} />)
   } else if (live) {
     const b = mapPt(frame, live.b)
     if (live.mode === 'seg') {
