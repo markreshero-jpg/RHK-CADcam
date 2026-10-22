@@ -473,7 +473,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'With the note selected, pick a colour in the CAD tools, or change the size, bold, background or border. Whatever you pick becomes the default for your next note.',
       target: 'cad-colour', canvas: true, done: (c, s) => ev(c, 'annot_style') > ev(s, 'annot_style') },
     { id: 'finish', title: 'Leave CAD mode',
-      body: 'Press F7 again, or Esc until the CAD tools close. Your notes print on the Plan View report; tick Annotation colours there to print them in colour.',
+      body: 'Press F7 again, or Esc until the CAD tools close. Plan notes print on the Plan View report; notes drawn on an elevation print on that wall's page of the Elevation Views report and on its shop-drawing sheet. Tick Annotation colours on either report to print them in colour.',
       canvas: true, done: c => c.mode !== 'cad' },
   ]},
 

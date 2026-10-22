@@ -389,10 +389,11 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
     return () => { dead = true }
   }, [isHere, drawRoom.id])
   const otherFields = useCadFields({ project, room: drawRoom, resolvedParts: drawResolved, fixtures: drawFixtures })
-  const drawPlanAnnots = useMemo(() => (isHere
+  const drawAnnots = useMemo(() => isHere
     ? annotations
-    : withFieldsFilled(otherAnnots?.roomId === drawRoom.id ? otherAnnots.rows : [], otherFields)
-  ).filter(a => a.view === 'plan'), [isHere, annotations, otherAnnots, drawRoom.id, otherFields])
+    : withFieldsFilled(otherAnnots?.roomId === drawRoom.id ? otherAnnots.rows : [], otherFields),
+  [isHere, annotations, otherAnnots, drawRoom.id, otherFields])
+  const drawPlanAnnots = useMemo(() => drawAnnots.filter(a => a.view === 'plan'), [drawAnnots])
   function deleteShot(id: string) {
     if (isHere) { onDeleteShopShot?.(id); return }
     const shots = (drawRoom.shop_3d_shots ?? []).filter(s => s.id !== id)
@@ -592,7 +593,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   room={drawRoom}
                   walls={drawWalls}
                   fixtures={drawFixtures}
-                  annotations={drawPlanAnnots}
+                  annotations={drawAnnots}
                   benchtops={drawBenchtops}
                   benchTopZ={drawBenchTopZ}
                   cabinets={drawCabinets}
@@ -635,6 +636,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   benchTopZ={drawBenchTopZ}
                   btInfo={drawBtInfo}
                   btProfiles={bt3d?.profiles}
+                  annotations={drawAnnots}
                   cabinets={drawCabinets}
                   resolvedParts={drawElevResolved}
                   layerSets={layerSets}

@@ -7,7 +7,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useBatchDownload } from './useBatchDownload'
 import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
-import type { Project, Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
+import type { Project, Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance, BenchtopEdgeProfile, RoomAnnotation } from '@/src/lib/types'
 import type { BtElevInfo } from './BenchtopElevation'
 import { fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { benchDimHeights } from './benchDims'
@@ -26,13 +26,16 @@ const PAPER: Record<string, { w: number; h: number }> = {
 const MARGIN = 20
 const LS_KEY = 'elevation-print-layers'
 const LS_SET_KEY = 'elevation-print-layer-set'
-const DEFAULT_PAGE: ElevationPageOptions = { returnWalls: true, titleBlock: true }
+const DEFAULT_PAGE: ElevationPageOptions = { returnWalls: true, titleBlock: true, annotColours: false }
 const TOGGLES: { key: keyof ElevationPageOptions; label: string }[] = [
   { key: 'returnWalls', label: 'Return Walls' },
   { key: 'titleBlock',  label: 'Title Block' },
+  { key: 'annotColours', label: 'Annotation colours' },
 ]
 
-export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, benchtops, benchTopZ, btInfo, btProfiles, batch }: {
+export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, benchtops, benchTopZ, btInfo, btProfiles, annotations, batch }: {
+  /** CAD notes (z_CAD_tool A6c) — each wall's face-side elevation notes print on its page. */
+  annotations?: RoomAnnotation[]
   /** Job Reports, several rooms: download as soon as ready, then call this (useBatchDownload). */
   batch?: () => void
   /** Benchtop band drawing inputs (the canvas's thickness cascade + edge profiles). */
@@ -166,6 +169,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
             walls={walls}
             cabinets={cabinets}
             fixtures={fixtures}
+            annotations={annotations}
             benchtops={benchtops} btInfo={btInfo} btProfiles={btProfiles}
             benchHeights={benchTopZ ? benchDimHeights(w.id, benchtops ?? [], benchTopZ, (fixtures ?? []).filter(f => layers.show(fixtureLayer(f.category)))) : []}
             room={room}

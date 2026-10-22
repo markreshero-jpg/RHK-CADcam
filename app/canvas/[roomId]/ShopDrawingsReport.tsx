@@ -79,7 +79,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   planResolved: Map<string, ResolvedCabinet>
   elevResolved: Map<string, ResolvedCabinet>
   fixtures?:    RoomFixture[]
-  /** Plan-view CAD annotations — they print on the plan sheet. */
+  /** CAD annotations — plan notes print on the plan sheet, elevation notes on their wall's sheet. */
   annotations?: RoomAnnotation[]
   benchtops?:   BenchtopInstance[]
   benchTopZ?:   (bt: BenchtopInstance) => number
@@ -98,10 +98,11 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   // (Mark, 2026-10-21), whatever the layer set — the spec block / schedules carry them.
   const planLayers = useMemo(() => without(resolveLayerView(planSet, 'plan'), 'cabinet_labels'), [planSet])
   const elevLayers = useMemo(() => without(resolveLayerView(elevSet, 'elevation'), 'cabinet_sizes'), [elevSet])
+  const planAnnots = useMemo(() => annotations.filter(a => a.view === 'plan'), [annotations])
   const [planShow] = useState<PlanViewPageOptions>(() => ({
     ...readPage('plan-view-layers', { wallNames: true, hatch: true, titleBlock: true, annotColours: false }), titleBlock: true }))
   const [elevShow] = useState<ElevationPageOptions>(() => ({
-    ...readPage('elevation-print-layers', { returnWalls: true, titleBlock: true }), titleBlock: true }))
+    ...readPage('elevation-print-layers', { returnWalls: true, titleBlock: true, annotColours: false }), titleBlock: true }))
 
   // Sheets: the plan, then each standard wall in wall order (the 3D views follow, below).
   const baseSheets: Sheet[] = useMemo(() => [
@@ -358,7 +359,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
               {sheet.wall ? (
                 <ElevationPrintSVG
                   wall={sheet.wall} walls={walls} room={room}
-                  cabinets={cabinets} fixtures={fixtures} resolvedParts={elevResolved}
+                  cabinets={cabinets} fixtures={fixtures} annotations={annotations} resolvedParts={elevResolved}
                   benchtops={benchtops} btInfo={bt3d?.info} btProfiles={bt3d?.profiles}
                   benchHeights={benchTopZ ? benchDimHeights(sheet.wall.id, benchtops, benchTopZ, fixtures.filter(f => elevLayers.show(fixtureLayer(f.category)))) : []}
                   svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }}
@@ -366,7 +367,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                 />
               ) : (
                 <PlanViewReportSVG
-                  walls={walls} cabinets={cabinets} fixtures={fixtures} annotations={annotations} benchtops={benchtops}
+                  walls={walls} cabinets={cabinets} fixtures={fixtures} annotations={planAnnots} benchtops={benchtops}
                   resolvedParts={planResolved} svgRef={planRef}
                   scale={scale} layers={planLayers} show={planShow}
                 />

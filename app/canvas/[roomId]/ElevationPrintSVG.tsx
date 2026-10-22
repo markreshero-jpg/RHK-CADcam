@@ -10,7 +10,7 @@
 // All sizes are physical mm × scale = model mm, so the viewBox stays in model
 // mm and the drawing prints at true 1:scale.
 'use client'
-import type { Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
+import type { Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance, BenchtopEdgeProfile, RoomAnnotation } from '@/src/lib/types'
 import { openingOnWall, fixtureChainSpans, fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { OpeningElev, FixturesElevationPrint } from './FixturesElevation'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
@@ -35,12 +35,18 @@ import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
 import { DimLabel, dimLabelFits, dimLabelSides } from './dimLabel'
+import AnnotationLayer from './AnnotationLayer'
+import { annotLayerItem, annotationFramePoints, mapPt } from '@/src/lib/annotations/geometry'
+import { resolveStyle } from '@/src/lib/annotations/style'
+import { ownedBy, elevationOwner, elevationAnnotFrame } from '@/src/lib/annotations/owner'
 
 /** Report-only page extras (not drawing layers). */
 export interface ElevationPageOptions {
   returnWalls: boolean
   /** Page-level (ShopTitleBlock, drawn by the report export) — not drawn in this SVG. */
   titleBlock:  boolean
+  /** z_CAD_tool decision 6: print CAD notes in their own colours (off = black). */
+  annotColours?: boolean
 }
 
 // ── Resolved-part → elevation rect (copied from canvas ElevationSVG) ──────────
@@ -120,8 +126,10 @@ const PRINT_DRILLING = false
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
-  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [], benchtops = [], btInfo, btProfiles,
+  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [], benchtops = [], btInfo, btProfiles, annotations = [],
 }: {
+  /** CAD notes (z_CAD_tool A6c) — only this wall's face-side elevation notes are drawn. */
+  annotations?:  RoomAnnotation[]
   /** Benchtops (z_benchtop_builder) — the canvas's band / waterfall drawing in print mode. Needs btInfo. */
   benchtops?:    BenchtopInstance[]
   btInfo?:       (bt: BenchtopInstance) => BtElevInfo
@@ -197,10 +205,20 @@ export default function ElevationPrintSVG({
   const padR = 11 * P
   const padT = 16 * P
   const padB = 18 * P
-  const vbX = -padL
-  const vbY = -padT
-  const vbW = wall.length + padL + padR
-  const vbH = roomH + padT + padB
+  // CAD notes on this wall's face (the side printed), in the canvas elevation frame.
+  const notes = annotations.filter(a => ownedBy(a, elevationOwner(wall.id, 'face')) && layers.show(annotLayerItem(a.kind)))
+  const noteFrame = elevationAnnotFrame(roomH)
+  // Notes may sit outside the drawing (off to the side / above) — grow the viewBox to fit them.
+  let x0 = -padL, y0 = -padT, x1 = wall.length + padR, y1 = roomH + padB
+  for (const a of notes) for (const q of annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, P)) {
+    const m = mapPt(noteFrame, q)
+    x0 = Math.min(x0, m.x - 2 * P); x1 = Math.max(x1, m.x + 2 * P)
+    y0 = Math.min(y0, m.y - 2 * P); y1 = Math.max(y1, m.y + 2 * P)
+  }
+  const vbX = x0
+  const vbY = y0
+  const vbW = x1 - x0
+  const vbH = y1 - y0
 
   // ── Horizontal dimension chain (top or bottom) ────────────────────────────
   function hChain(segs: Seg[], chainY: number, key: string, item: string) {
@@ -720,6 +738,8 @@ export default function ElevationPrintSVG({
           })()}
       </>
 
+      {/* ── CAD notes (z_CAD_tool A6c) — black unless "Annotation colours" is ticked ── */}
+      <AnnotationLayer annotations={notes} frame={noteFrame} paper={P} layers={layers} printColours={!!show.annotColours} />
     </svg>
   )
 }
