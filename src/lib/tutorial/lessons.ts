@@ -688,7 +688,7 @@ export const LESSONS: TutorialLesson[] = [
   { id: 'centre_room', level: 'basics', topic: 'room', title: 'Centre the room on screen',
     blurb: 'Lost the drawing? Room → Centre Room brings the whole job back to the middle.', keywords: 'center centre room zoom fit screen lost view pan extents', steps: [
     { id: 'centre', title: 'Room → Centre Room',
-      body: 'Open the Room menu and choose Centre Room. The plan zooms to fit everything in the room — walls, cabinets, benchtops and fixtures — and centres it. From an elevation or 3D it goes back to plan first.',
+      body: 'Open the Room menu and choose Centre Room. The plan zooms out to fit everything in the room — walls, cabinets, benchtops, fixtures and CAD notes like the spec block — and centres it. From an elevation or 3D it goes back to plan first.',
       target: 'menu-Room', canvas: true, done: () => true },
   ]},
 ]

@@ -55,7 +55,7 @@ import CadSnapMarker from './CadSnapMarker'
 import CadMeasureOverlay from './CadMeasureOverlay'
 import CadPanel from './CadPanel'
 import { useCadFields } from './useCadFields'
-import { withFieldsFilled } from '@/src/lib/annotations/blocks'
+import { withFieldsFilled, annotationsBounds } from '@/src/lib/annotations/blocks'
 import CadContextMenu from './CadContextMenu'
 import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
 import TutorialHintsPlan from './TutorialHintsPlan'
@@ -89,6 +89,7 @@ import InsertFavouritesModal from './InsertFavouritesModal'
 import { loadInsertFavourites, saveInsertFavourites, foldClass, type InsertFavourite } from './insertFavourites'
 import KickRunSettingsModal from './KickRunSettingsModal'
 import DrawingPanel, { type DrawingPanelHandle } from './DrawingPanel'
+import WallStartPanel, { type WallStart, type WallStartPanelHandle, wallStartPoint } from './WallStartPanel'
 import BenchtopDrawPanel, { type BenchtopDrawPanelHandle } from './BenchtopDrawPanel'
 import WallDrawPanel from './WallDrawPanel'
 import WallPanel from './WallPanel'
@@ -385,6 +386,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Set to true when pointerDown starts the draw (so the matching pointerUp doesn't finish it).
   const drawStartedThisDownRef = useRef(false)
   const drawingPanelRef = useRef<DrawingPanelHandle>(null)
+  // Wall / island before the first click: typed start X / Y (Tab → WallStartPanel).
+  const wallStartPanelRef = useRef<WallStartPanelHandle>(null)
+  const wallStartRef = useRef<WallStart>({})
+  const wallHoverRef = useRef<Pt | null>(null)
   const btDrawPanelRef = useRef<BenchtopDrawPanelHandle>(null)
   const roomSwitcherRef = useRef<RoomSwitcherHandle>(null)
 
@@ -854,6 +859,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (e.key === 'Control') ctrlRef.current = true
       if (e.key === 'Tab' && mode === 'draw_wall' && drawStartRef.current && !isInput(e.target)) {
         e.preventDefault(); drawingPanelRef.current?.focusLength()
+      }
+      if (e.key === 'Tab' && (mode === 'draw_wall' || mode === 'draw_island') && !drawStartRef.current && !isInput(e.target)) {
+        e.preventDefault(); wallStartPanelRef.current?.focusX()
       }
       // Chained walls: Esc ends the chain but keeps the wall tool armed;
       // a second Esc (nothing in progress) leaves the tool.
@@ -1652,6 +1660,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     endWallChain()
   }
 
+  /** Start a wall / island at p (a click, or Enter on the typed start X / Y). */
+  function startWallAt(p: Pt) {
+    wallStartRef.current = {}
+    setDrawStart(p); setDrawCursor(p)
+    chainStartRef.current = p; setChainCount(0)
+  }
+
   /** Drop the pending start point (wall tool stays armed). */
   function endWallChain() {
     chainStartRef.current = null
@@ -1836,8 +1851,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       e.preventDefault()
       if (!drawStart) {
         const snapped = computeSnap(wp, { walls, cabinets, benchtops }, snapSettings, SNAP_PX / view.zoom).pt
-        setDrawStart(snapped); setDrawCursor(snapped)
-        chainStartRef.current = snapped; setChainCount(0)
+        startWallAt(wallStartPoint(snapped, wallStartRef.current))   // a typed X / Y wins
         drawStartedThisDownRef.current = true
       }
       return
@@ -1899,7 +1913,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (drawStart && snap.kind == null) {
         end = wallAngleSnap(drawStart, end)
       }
-      setSnapResult(snap.kind ? snap : null)
+      const t = wallStartRef.current
+      if (!drawStart) { wallHoverRef.current = end; end = wallStartPoint(end, t) }   // typed start X / Y hold
+      setSnapResult(snap.kind && !(!drawStart && t.x != null && t.y != null) ? snap : null)
       setDrawCursor(end)
       return
     }
@@ -2649,11 +2665,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       ...cabPlans.flatMap(p => p.pts),
       ...benchtops.flatMap(b => b.polygon),
       ...fixtures.flatMap(f => fixtureCorners(f)),
-    ].filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
-    if (!pts.length) { fitToWalls(); return }
-    const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x))
-    const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y))
-    const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(width * 0.85 / Math.max(maxX - minX, 500), height * 0.85 / Math.max(maxY - minY, 500))))
+    ]
+    // CAD notes on the plan (spec block etc.), with their {fields} filled so text widths are real.
+    const notes = annotationsBounds(withFieldsFilled(planAnnotations, cadFields), annotScale)
+    if (notes) pts.push({ x: notes.minX, y: notes.minY }, { x: notes.maxX, y: notes.maxY })
+    const ok = pts.filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
+    if (!ok.length) { fitToWalls(); return }
+    // Pad for dimension lines and labels drawn outside the walls.
+    const pad = 400
+    const minX = Math.min(...ok.map(p => p.x)) - pad, maxX = Math.max(...ok.map(p => p.x)) + pad
+    const minY = Math.min(...ok.map(p => p.y)) - pad, maxY = Math.max(...ok.map(p => p.y)) + pad
+    const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(width * 0.8 / (maxX - minX), height * 0.8 / (maxY - minY))))
     dispatchView({ type: 'set', panX: width / 2 - ((minX + maxX) / 2) * z, panY: height / 2 - ((minY + maxY) / 2) * z, zoom: z })
   }
 
@@ -3162,6 +3184,20 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 onFinishChain={endWallChain}
                 onCancel={() => { endWallChain(); setMode('select') }}
               >
+                {!drawStart && (
+                  <WallStartPanel
+                    ref={wallStartPanelRef}
+                    cursor={drawCursor}
+                    onTyped={t => {
+                      wallStartRef.current = t
+                      const p = wallStartPoint(wallHoverRef.current ?? drawCursor ?? { x: 0, y: 0 }, t)
+                      setDrawCursor(p)
+                      if (t.x != null && t.y != null) setSnapResult(null)
+                    }}
+                    onGone={() => { wallStartRef.current = {} }}
+                    onStart={() => startWallAt(wallStartPoint(wallHoverRef.current ?? drawCursor ?? { x: 0, y: 0 }, wallStartRef.current))}
+                  />
+                )}
                 {mode === 'draw_wall' && drawStart && (
                   <DrawingPanel
                     ref={drawingPanelRef}
