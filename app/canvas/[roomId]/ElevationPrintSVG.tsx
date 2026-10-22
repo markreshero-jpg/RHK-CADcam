@@ -398,6 +398,28 @@ export default function ElevationPrintSVG({
                 fineRect(`sl-${i}-${j}`, 'drawer_runners', slideElevRect(s))) : []),
               ...(ds.drawer_type === 'bin' && layers.show('bins') ? binPolys(`bin-${i}`, ds) : []),
             ])}
+
+            {/* Inner-drawer labels — one per inner-drawer front, like the canvas. */}
+            {layers.show('inner_drawers') && layers.show('inner_drawer_labels') &&
+              rp.internal_parts.filter(p => p.part_type === 'inner_drawer_front').map((p, i) => {
+                const { x, y, w, h } = (({ ex, ey, ew, eh }) => toSVG(ex, ey, ew, eh))(shelfElevRect(p))
+                const fs = layers.w('inner_drawer_labels', dimFs * 0.9)
+                if (h < fs * 1.7 || w < fs * 5) return null
+                return <text key={`idl-${i}`} x={x + w / 2} y={y + h - fs * 0.6} textAnchor="middle" dominantBaseline="auto"
+                  opacity={layers.op('inner_drawer_labels')} fontSize={fs} fill={INK2} fontFamily="Arial, Helvetica, sans-serif">inner drawer</text>
+              })}
+
+            {/* Shelf labels — "adj sh" / "fix sh" at each shelf's top-left corner. */}
+            {layers.show('shelf_labels') &&
+              rp.internal_parts.filter(p => (p.part_type === 'adj_shelf' || p.part_type === 'fixed_shelf') && layers.show(internalPartItem(p.part_type))).map((p, i) => {
+                const { x, y, w } = (({ ex, ey, ew, eh }) => toSVG(ex, ey, ew, eh))(shelfElevRect(p))
+                const fs = layers.w('shelf_labels', dimFs * 0.75)
+                if (w < fs * 4) return null
+                return <text key={`shl-${i}`} x={x + fs * 0.4} y={y - fs * 0.25} textAnchor="start" dominantBaseline="auto"
+                  opacity={layers.op('shelf_labels')} fontSize={fs} fill={INK2} fontFamily="Arial, Helvetica, sans-serif">
+                  {p.part_type === 'adj_shelf' ? 'adj sh' : 'fix sh'}
+                </text>
+              })}
           </>
         ) : (
           // Fallback when cabinet is not resolved — box + toekick + face inset
