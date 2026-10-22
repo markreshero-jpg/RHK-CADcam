@@ -681,6 +681,8 @@ export interface RoomAnnotation {
   wall_id:    string | null
   cabinet_id: string | null
   sheet_view: 'front' | 'side' | null
+  /** Elevation only: the side of wall_id the note was drawn on (z_CAD_tool A6). */
+  wall_side?: 'face' | 'back' | null
   kind:       AnnotationKind
   geom:       import('./annotations/geometry').AnnotationGeom
   text:       string | null

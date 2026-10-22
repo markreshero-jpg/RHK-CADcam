@@ -208,6 +208,13 @@ interface ElevationSVGProps {
   /** z = cursor height above the floor (seats an oven in the opening under it). */
   onFixtureCarryDrop?: (p: Pt, z: number) => void
   onFixtureMoveHandle?: (id: string) => void
+  /** CAD notes for this wall side (z_CAD_tool A6), drawn last inside the wall's
+   *  transformed group (svg mm: x along the elevation, y down from the ceiling line). */
+  annotationsLayer?: React.ReactNode
+  /** Pan / zoom as it changes — the CAD tools map clicks with it. */
+  onViewChange?: (v: { panX: number; panY: number; zoom: number }) => void
+  /** Receives the svg element (CAD click → svg mm). */
+  svgElRef?: React.MutableRefObject<SVGSVGElement | null>
 }
 
 export default function ElevationSVG({
@@ -225,12 +232,14 @@ export default function ElevationSVG({
   fixtures, fixtureClashIds, onSelectFixture, fixtureHighlight,
   fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
   fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop, onFixtureMoveHandle,
+  annotationsLayer, onViewChange, svgElRef,
 }: ElevationSVGProps) {
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = useMemo(() => frontViewHardwareMap(resolvedPartsRaw), [resolvedPartsRaw])
   const svgRef = useRef<SVGSVGElement>(null)
   const lineScale = useLineScale()
   const [view, dispatchView] = useReducer(viewReducer, { panX: 80, panY: 60, zoom: 1 })
+  useEffect(() => { onViewChange?.(view) }, [view, onViewChange])
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
   const spaceRef = useRef(false)
   const shiftRef = useRef(false)
@@ -734,6 +743,7 @@ export default function ElevationSVG({
   }
 
   function onSVGClick() {
+    if (mode === 'cad') return   // CAD clicks belong to the notes layer (z_CAD_tool A6)
     if (elevResizeFollowing) { void confirmResize(); return }
     dropFollowingCab()
   }
@@ -932,7 +942,7 @@ export default function ElevationSVG({
 
       {/* SVG */}
       <svg
-        ref={svgRef}
+        ref={el => { svgRef.current = el; if (svgElRef) svgElRef.current = el }}
         className="flex-1 bg-gray-950 select-none"
         style={{ background: layers.background, cursor: mode === 'measure' ? 'crosshair' : (placeInfoFor(mode, armedDef) || mode === 'paste') ? 'crosshair' : elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
         onPointerDown={onPointerDown}
@@ -2333,6 +2343,7 @@ export default function ElevationSVG({
               )
             })()}
 
+            {annotationsLayer}
           </g>
         )}
       </svg>

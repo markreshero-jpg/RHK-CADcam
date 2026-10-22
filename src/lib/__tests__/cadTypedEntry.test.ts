@@ -129,3 +129,21 @@ describe('typed start point (X / Y before the first click)', () => {
     for (const t of ['select', 'offset', 'fillet', 'chamfer', 'join'] as const) expect(startTypable(t, 'linear')).toBe(false)
   })
 })
+
+import { ownedBy, PLAN_OWNER, elevationOwner, elevationAnnotFrame } from '@/src/lib/annotations/owner'
+import { mapPt as mapFramePt } from '@/src/lib/annotations/geometry'
+
+describe('A6 note owners (plan / one side of one wall)', () => {
+  const face = elevationOwner('w1', 'face'), back = elevationOwner('w1', 'back')
+  it('a note shows only on the drawing it was drawn on', () => {
+    const e = { view: 'elevation' as const, wall_id: 'w1', wall_side: 'face' as const }
+    expect(ownedBy(e, face)).toBe(true)
+    expect(ownedBy(e, back)).toBe(false)
+    expect(ownedBy(e, elevationOwner('w2', 'face'))).toBe(false)
+    expect(ownedBy(e, PLAN_OWNER)).toBe(false)
+    expect(ownedBy({ view: 'plan', wall_id: null }, PLAN_OWNER)).toBe(true)
+  })
+  it('elevation frame: y down from the floor, floor drawn at roomH', () => {
+    expect(mapFramePt(elevationAnnotFrame(2400), { x: 1000, y: -900 })).toEqual({ x: 1000, y: 1500 })
+  })
+})

@@ -22,6 +22,7 @@ import {
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
 import { ownShapeGeometry, type SnapGeometry } from '@/src/lib/annotations/cadSnap'
+import { ownedBy, ownerColumns, ownerKey, type AnnotOwner } from '@/src/lib/annotations/owner'
 import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
 import { supabase } from '@/src/lib/supabase'
 import { dbUpdateAnnotation, dbDeleteAnnotations } from './canvasDB'
@@ -191,10 +192,13 @@ let clipboard: RoomAnnotation[] = []
 const NO_IDS: ReadonlySet<string> = new Set()
 
 export function useAnnotationTool({
-  room, annotations, setAnnotations, captureSnapshot, frame, paper, zoom, active,
+  room, annotations, setAnnotations, captureSnapshot, owner, frame, paper, zoom, active,
   toWorld, snap, enterCad, exitCad,
 }: {
   room:            Room
+  /** The drawing being annotated (plan, or one side of one wall — A6): new notes go to
+   *  it, and marquee / Ctrl+A only pick its notes. */
+  owner:           AnnotOwner
   annotations:     RoomAnnotation[]
   setAnnotations:  React.Dispatch<React.SetStateAction<RoomAnnotation[]>>
   captureSnapshot: () => void
@@ -292,6 +296,12 @@ export function useAnnotationTool({
   if (wasActive !== active) {
     setWasActive(active)
     if (!active) { setTool('select'); setDrawing(null) }
+  }
+  // Another drawing (plan ↔ an elevation, another wall / side): drop what was going on.
+  const [drawingOf, setDrawingOf] = useState(ownerKey(owner))
+  if (drawingOf !== ownerKey(owner)) {
+    setDrawingOf(ownerKey(owner))
+    setSelectedIds(new Set()); setDrawing(null); setPending(null); setEditing(null); setOffsetSrcState(null); setModPick(null); setChain(null)
   }
   // A new tool abandons a half-drawn line.
   const [drawTool, setDrawTool] = useState(tool)
@@ -391,10 +401,10 @@ export function useAnnotationTool({
   const newRow = useCallback((kind: AnnotationKind, geom: RoomAnnotation['geom'], text: string | null, style: AnnotationStyle): RoomAnnotation => {
     const now = new Date().toISOString()
     return {
-      id: crypto.randomUUID(), room_id: room.id, view: 'plan', wall_id: null, cabinet_id: null, sheet_view: null,
+      id: crypto.randomUUID(), room_id: room.id, ...ownerColumns(owner),
       kind, geom, text, style, sort_order: nextOrder(), created_at: now, updated_at: now,
     }
-  }, [room.id])
+  }, [room.id, owner])
 
   const insertRows = useCallback(async (rows: RoomAnnotation[]) => {
     if (!rows.length) return
@@ -1100,7 +1110,7 @@ export function useAnnotationTool({
           minY: Math.min(cur.start.y, cur.cur.y), maxY: Math.max(cur.start.y, cur.cur.y),
         }
         const hit = annRef.current.filter(a => {
-          if (a.view !== 'plan') return false
+          if (!ownedBy(a, owner)) return false
           const b = boundsOf(annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, k))
           return b && boxesOverlap(b, box)
         }).map(a => a.id)
@@ -1340,7 +1350,7 @@ export function useAnnotationTool({
       if (mod && (e.key === 'c' || e.key === 'C')) { take(); clipboard = selected; return }
       if (mod && (e.key === 'v' || e.key === 'V')) { take(); paste(clipboard); return }
       if (mod && (e.key === 'd' || e.key === 'D')) { take(); paste(selected); return }
-      if (mod && (e.key === 'a' || e.key === 'A')) { take(); setSelectedIds(new Set(annRef.current.filter(a => a.view === 'plan').map(a => a.id))); return }
+      if (mod && (e.key === 'a' || e.key === 'A')) { take(); setSelectedIds(new Set(annRef.current.filter(a => ownedBy(a, owner)).map(a => a.id))); return }
       // Tab (or a digit) while drawing → the CAD panel's first size field.
       // Several selected: Tab (or a digit) → the panel's X field to move them.
       if (tool === 'select' && liveSelected.size > 1 && !drawingRef.current && (e.key === 'Tab' || (/^[0-9.\-]$/.test(e.key) && !mod))) {
@@ -1403,14 +1413,14 @@ export function useAnnotationTool({
     : placing && (placing.start.x !== placing.cur.x || placing.start.y !== placing.cur.y) && placing.tool !== 'text'
       ? { mode: 'box', a: placing.start, b: placing.cur }
     : !drawing && !placing && hasTypedStart(typed) && cursor && startTypable(tool, dimMode)
-      ? { mode: 'label', at: cursor, text: `Start  X ${Math.round(cursor.x)}  Y ${Math.round(cursor.y)}`, dot: true }
+      ? { mode: 'label', at: cursor, text: owner.view === 'elevation' ? `Start  X ${Math.round(cursor.x)}  Z ${Math.round(-cursor.y)}` : `Start  X ${Math.round(cursor.x)}  Y ${Math.round(cursor.y)}`, dot: true }
       : null
 
   // The line / arrow / leader being drawn, as a row the layer can draw (frame coords).
   // A box / ellipse / cloud being dragged out previews as the real shape.
   const drawPreview: RoomAnnotation | null = useMemo(() => {
     const row = (kind: AnnotationKind, geom: RoomAnnotation['geom'], style: AnnotationStyle): RoomAnnotation => ({
-      id: '__draw__', room_id: room.id, view: 'plan', wall_id: null, cabinet_id: null, sheet_view: null,
+      id: '__draw__', room_id: room.id, ...ownerColumns(owner),
       kind, geom, text: null, style, sort_order: 0, created_at: '', updated_at: '',
     })
     if (tool === 'offset' && offsetSrcA && offsetCur) {   // the copy that the next click places

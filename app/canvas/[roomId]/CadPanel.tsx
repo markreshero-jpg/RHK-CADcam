@@ -5,7 +5,7 @@
 // item (typed values commit on Enter / leaving the field), and a list of the room's
 // notes and markup to pick from. All values are room mm unless marked paper mm.
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { RoomAnnotation } from '@/src/lib/types'
 import {
   type Pt, type LineGeom, type BoxGeom, type TextGeom, type DimGeom, type ArcGeom, type CircleGeom,
@@ -27,6 +27,7 @@ const TYPED_LABEL: Record<TypedField, [string, string]> = {
 /** Typed sizes while drawing: Tab from the canvas lands here; Tab cycles the fields,
  *  Enter places the point / shape, Esc clears. Blank = follow the cursor. */
 function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
+  const ys = useContext(YSign)
   const refs = useRef<Partial<Record<TypedField, HTMLInputElement | null>>>({})
   const [drafts, setDrafts] = useState<Partial<Record<TypedField, string>>>({})
   const fields = cad.typedFields
@@ -40,7 +41,7 @@ function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
     el.focus()
     if (req.seed != null) {
       const n = parseFloat(req.seed)
-      cad.setTyped(req.field, Number.isFinite(n) ? n : undefined)
+      cad.setTyped(req.field, Number.isFinite(n) ? (req.field === 'y' ? ys * n : n) : undefined)
       requestAnimationFrame(() => { el.value = req.seed!; el.setSelectionRange(1, 1) })
     } else el.select()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,26 +56,27 @@ function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
   if (prev?.kind === 'dim') live.offset = Math.abs((prev.geom as DimGeom).offset)
   if (cad.offsetSrc && lm?.mode === 'label') live.distance = parseFloat(lm.text.replace(/[^0-9.]/g, ''))
   if (prev?.kind === 'circle') live.radius = (prev.geom as CircleGeom).r
-  if (cad.cursor) { live.x = cad.cursor.x; live.y = cad.cursor.y }
+  if (cad.cursor) { live.x = cad.cursor.x; live.y = ys * cad.cursor.y }
   if (prev?.kind === 'arc') { live.radius = (prev.geom as ArcGeom).r; live.sweep = sweepOf((prev.geom as ArcGeom).a0, (prev.geom as ArcGeom).a1) }
 
   if (!fields.length) return null
   return (
     <div className="mt-2 flex flex-col gap-1.5">
       {fields.map((f, i) => {
-        const t = cad.typed[f]
+        const sg = f === 'y' ? ys : 1   // elevation: Z up, stored y down
+        const t = cad.typed[f] != null ? sg * cad.typed[f]! : undefined
         const draft = drafts[f]
         const shown = t != null ? (draft ?? String(t)) : draft && !Number.isFinite(parseFloat(draft)) ? draft : ''
         return (
           <label key={f} className="flex items-center gap-2">
-            <span className="text-[11px] text-gray-400 w-12">{TYPED_LABEL[f][0]}</span>
+            <span className="text-[11px] text-gray-400 w-12">{f === 'y' && ys < 0 ? 'Z' : TYPED_LABEL[f][0]}</span>
             <input ref={el => { refs.current[f] = el }} value={shown} inputMode="decimal"
               placeholder={live[f] != null ? r1(live[f]!) : 'cursor'}
               onChange={e => {
                 const v = e.target.value
                 setDrafts(d => ({ ...d, [f]: v }))
                 const n = parseFloat(v)
-                cad.setTyped(f, v.trim() && Number.isFinite(n) ? n : undefined)
+                cad.setTyped(f, v.trim() && Number.isFinite(n) ? sg * n : undefined)
               }}
               onKeyDown={e => {
                 if (e.key === 'Tab') {
@@ -99,6 +101,15 @@ function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
 }
 
 const rScale = (n: number) => String(Math.round(n))
+
+/** -1 on an elevation: notes store y down from the floor, the panel shows height up (Z). */
+const YSign = createContext(1)
+
+/** A Y coordinate field: shows Z (up) on an elevation; onCommit gets frame y. */
+function YField({ value, onCommit, bare, w }: { value: number; onCommit?: (n: number) => void; bare?: boolean; w?: string }) {
+  const ys = useContext(YSign)
+  return <Field label={bare ? undefined : ys < 0 ? 'Z' : 'Y'} value={ys * value} w={w} onCommit={onCommit && (n => onCommit(ys * n))} />
+}
 const r1 = (n: number) => String(Math.round(n * 10) / 10)
 
 const KIND_LABEL: Record<string, string> = {
@@ -161,10 +172,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /** Point table: # · X · Y (editable) · length of the side leaving it. */
 function PointTable({ pts, closed, onPoint, bulges }: { pts: Pt[]; closed: boolean; onPoint?: (i: number, p: Pt) => void; bulges?: number[] }) {
+  const ys = useContext(YSign)
   return (
     <div className="flex flex-col gap-1">
       <div className="grid grid-cols-[1.25rem_1fr_1fr_3.5rem] gap-1 text-[10px] text-gray-500">
-        <span>#</span><span>X</span><span>Y</span><span className="text-right">side</span>
+        <span>#</span><span>X</span><span>{ys < 0 ? 'Z' : 'Y'}</span><span className="text-right">side</span>
       </div>
       {pts.map((p, i) => {
         const next = i < pts.length - 1 ? pts[i + 1] : closed ? pts[0] : null
@@ -172,7 +184,7 @@ function PointTable({ pts, closed, onPoint, bulges }: { pts: Pt[]; closed: boole
           <div key={i} className="grid grid-cols-[1.25rem_1fr_1fr_3.5rem] gap-1 items-center">
             <span className="text-[10px] text-gray-500">{i + 1}</span>
             <Field value={p.x} w="w-full" onCommit={onPoint && (n => onPoint(i, { x: n, y: p.y }))} />
-            <Field value={p.y} w="w-full" onCommit={onPoint && (n => onPoint(i, { x: p.x, y: n }))} />
+            <YField bare value={p.y} w="w-full" onCommit={onPoint && (n => onPoint(i, { x: p.x, y: n }))} />
             <span className="text-[11px] text-gray-300 font-mono text-right" title={bulges?.[i] ? 'Arc (fillet) — length along the arc' : undefined}>
               {next ? `${bulges?.[i] ? '⌒' : ''}${r1(bulgeSegLength(p, next, bulges?.[i] ?? 0))}` : ''}
             </span>
@@ -199,9 +211,9 @@ function summary(a: RoomAnnotation, k: number): string {
   }
 }
 
-export default function CadPanel({ cad, annotations, paper, walls, fieldValues, blockSaveReq, onClose }: {
+export default function CadPanel({ cad, annotations, paper, walls, fieldValues, blockSaveReq, onClose, elevation }: {
   cad:         AnnotationTool
-  /** Plan annotations (the list to pick from). */
+  /** The drawing's annotations (the list to pick from). */
   annotations: RoomAnnotation[]
   /** frame mm per paper mm (text block sizes). */
   paper:       number
@@ -212,18 +224,23 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
   /** Bumped by right-click → Save as CAD block… */
   blockSaveReq: number
   onClose:     () => void
+  /** Annotating an elevation (z_CAD_tool A6): its title, e.g. "Wall 2 — Face". Heights
+   *  then show up (Z), though notes store y down from the floor. */
+  elevation?:  string | null
 }) {
+  const ys = elevation ? -1 : 1
   const sel = cad.selected
   const one = !cad.editing && sel.length === 1 ? sel[0] : null
   const c = cad.cursor, from = cad.fromPt
   const d = cad.drawing
 
   return (
+    <YSign.Provider value={ys}>
     <div data-cad-panel className="w-72 bg-gray-900 border-l border-gray-800 flex flex-col overflow-y-auto shrink-0" onPointerDown={e => e.stopPropagation()}>
       <div className="px-3 py-2.5 border-b border-gray-800 flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-rose-300">CAD</div>
-          <div className="text-[11px] text-gray-500">Room mm · Y runs down the plan</div>
+          <div className="text-[11px] text-gray-500">{elevation ? `${elevation} · X along the wall · Z up from the floor` : 'Room mm · Y runs down the plan'}</div>
         </div>
         <button onClick={onClose} title="Close CAD (F7)" className="text-gray-500 hover:text-white text-lg leading-none px-1">×</button>
       </div>
@@ -231,10 +248,10 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
       <Section title="Cursor">
         <div className="grid grid-cols-2 gap-x-3">
           <Row k="X" v={c ? r1(c.x) : '—'} />
-          <Row k="Y" v={c ? r1(c.y) : '—'} />
+          <Row k={ys < 0 ? 'Z' : 'Y'} v={c ? r1(ys * c.y) : '—'} />
           {from && c && (<>
             <Row k="ΔX" v={r1(c.x - from.x)} />
-            <Row k="ΔY" v={r1(c.y - from.y)} />
+            <Row k={ys < 0 ? 'ΔZ' : 'ΔY'} v={r1(ys * (c.y - from.y))} />
             <Row k="Dist" v={r1(segLength(from, c))} />
             <Row k="Angle" v={`${r1(segAngle(from, c))}°`} />
           </>)}
@@ -266,7 +283,7 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
           </>)}
           <TypedEntryFields cad={cad} />
           {cad.pending && c && (<>
-            <Row k="Corner" v={`${r1(cad.pending.start.x)}, ${r1(cad.pending.start.y)}`} />
+            <Row k="Corner" v={`${r1(cad.pending.start.x)}, ${r1(ys * cad.pending.start.y)}`} />
             <Row k="W × H" v={`${r1(Math.abs(c.x - cad.pending.start.x))} × ${r1(Math.abs(c.y - cad.pending.start.y))}`} />
           </>)}
         </Section>
@@ -280,10 +297,11 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
       </Section>
 
       <CadFieldsSection cad={cad} values={fieldValues} Section={Section} />
-      <CadBlocksSection cad={cad} annotations={annotations} walls={walls} paper={paper} saveReq={blockSaveReq} Section={Section} />
+      {/* Blocks on elevations come with C4 (insert place is plan-only for now). */}
+      {!elevation && <CadBlocksSection cad={cad} annotations={annotations} walls={walls} paper={paper} saveReq={blockSaveReq} Section={Section} />}
 
       <Section title={`Objects (${annotations.length})`}>
-        {!annotations.length && <div className="text-xs text-gray-500">No notes or markup in this room yet.</div>}
+        {!annotations.length && <div className="text-xs text-gray-500">{elevation ? 'No notes on this side of the wall yet.' : 'No notes or markup in this room yet.'}</div>}
         <div className="flex flex-col">
           {[...annotations].sort((x, y) => y.sort_order - x.sort_order).map(a => (
             <button key={a.id} onClick={() => cad.setSelectedIds(new Set([a.id]))}
@@ -298,6 +316,7 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
         </div>
       </Section>
     </div>
+    </YSign.Provider>
   )
 }
 
@@ -307,6 +326,7 @@ function MultiInfo({ sel, k, cad }: { sel: RoomAnnotation[]; k: number; cad: Ann
   const b = boundsOf(sel.flatMap(a => annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, k)))
   const [draft, setDraft] = useState<{ x?: string; y?: string }>({})
   const xRef = useRef<HTMLInputElement>(null), yRef = useRef<HTMLInputElement>(null)
+  const ys = useContext(YSign)
   const req = cad.selFocusReq
   useEffect(() => {
     if (!req) return
@@ -320,13 +340,13 @@ function MultiInfo({ sel, k, cad }: { sel: RoomAnnotation[]; k: number; cad: Ann
   const num = (s?: string) => { const n = s != null && s.trim() ? parseFloat(s) : NaN; return Number.isFinite(n) ? n : null }
   const field = (f: 'x' | 'y', ref: React.RefObject<HTMLInputElement | null>, cur: number) => (
     <label className="flex items-center gap-2">
-      <span className="text-[11px] text-gray-400 w-12">{f.toUpperCase()}</span>
-      <input ref={ref} value={draft[f] ?? ''} inputMode="decimal" placeholder={r1(cur)}
+      <span className="text-[11px] text-gray-400 w-12">{f === 'y' && ys < 0 ? 'Z' : f.toUpperCase()}</span>
+      <input ref={ref} value={draft[f] ?? ''} inputMode="decimal" placeholder={r1(f === 'y' ? ys * cur : cur)}
         onChange={e => setDraft(d => ({ ...d, [f]: e.target.value }))}
         onKeyDown={e => {
           if (e.key === 'Tab') { e.preventDefault(); const o = f === 'x' ? yRef.current : xRef.current; o?.focus(); o?.select() }
           else if (e.key === 'Enter') {
-            e.preventDefault(); cad.moveSelectionTo(num(draft.x), num(draft.y)); setDraft({}); (e.target as HTMLInputElement).blur()
+            e.preventDefault(); const y = num(draft.y); cad.moveSelectionTo(num(draft.x), y == null ? null : ys * y); setDraft({}); (e.target as HTMLInputElement).blur()
           } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setDraft({}); (e.target as HTMLInputElement).blur() }
         }}
         className={`w-24 h-7 bg-gray-800 border rounded px-1.5 text-sm font-mono outline-none ${num(draft[f]) != null ? 'border-yellow-500 text-yellow-200' : 'border-gray-700 text-gray-100'} focus:border-rose-500`} />
@@ -347,6 +367,7 @@ function MultiInfo({ sel, k, cad }: { sel: RoomAnnotation[]; k: number; cad: Ann
 }
 
 function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k: number }) {
+  const ys = useContext(YSign)
   const set = (geom: RoomAnnotation['geom']) => cad.patchGeom(a.id, geom)
   switch (a.kind) {
     case 'line':
@@ -375,14 +396,14 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
       const moveA = (p: Pt) => set({ ...g, a: p, b: { x: p.x + (g.b.x - g.a.x), y: p.y + (g.b.y - g.a.y) } })
       return <>
         <div className="text-[10px] text-gray-500 mb-1">First corner</div>
-        <div className="flex gap-2"><Field label="X" value={g.a.x} onCommit={n => moveA({ x: n, y: g.a.y })} /><Field label="Y" value={g.a.y} onCommit={n => moveA({ x: g.a.x, y: n })} /></div>
+        <div className="flex gap-2"><Field label="X" value={g.a.x} onCommit={n => moveA({ x: n, y: g.a.y })} /><YField value={g.a.y} onCommit={n => moveA({ x: g.a.x, y: n })} /></div>
         <div className="flex gap-2 mt-1.5">
           <Field label="W" value={w} onCommit={n => n > 0 && set({ ...g, b: { x: g.a.x + sx * n, y: g.b.y } })} />
           <Field label="H" value={h} onCommit={n => n > 0 && set({ ...g, b: { x: g.b.x, y: g.a.y + sy * n } })} />
         </div>
         <div className="flex gap-2 mt-1.5"><Field label="∠" value={g.rot ?? 0} onCommit={n => set({ ...g, rot: ((n % 360) + 360) % 360 })} suffix="°" w="w-16" /></div>
         <div className="mt-2">
-          <Row k="Centre" v={`${r1((g.a.x + g.b.x) / 2)}, ${r1((g.a.y + g.b.y) / 2)}`} />
+          <Row k="Centre" v={`${r1((g.a.x + g.b.x) / 2)}, ${r1(ys * (g.a.y + g.b.y) / 2)}`} />
           <Row k="Area" v={`${r1((a.kind === 'rect' ? w * h : Math.PI * w * h / 4) / 1e6)} m²`} />
         </div>
       </>
@@ -391,7 +412,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
       const g = a.geom as TextGeom
       return <>
         <div className="text-[10px] text-gray-500 mb-1">Top-left</div>
-        <div className="flex gap-2"><Field label="X" value={g.at.x} onCommit={n => set({ ...g, at: { x: n, y: g.at.y } })} /><Field label="Y" value={g.at.y} onCommit={n => set({ ...g, at: { x: g.at.x, y: n } })} /></div>
+        <div className="flex gap-2"><Field label="X" value={g.at.x} onCommit={n => set({ ...g, at: { x: n, y: g.at.y } })} /><YField value={g.at.y} onCommit={n => set({ ...g, at: { x: g.at.x, y: n } })} /></div>
         <div className="flex gap-2 mt-1.5"><Field label="∠" value={g.rot ?? 0} onCommit={n => set({ ...g, rot: ((n % 360) + 360) % 360 })} suffix="°" w="w-16" /></div>
         {g.width != null && (<>
           <div className="text-[10px] text-gray-500 mt-2 mb-1">Text box (paper mm)</div>
@@ -414,7 +435,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
       const conv = (svg: number) => ((-svg % 360) + 360) % 360
       return <>
         <div className="text-[10px] text-gray-500 mb-1">Centre</div>
-        <div className="flex gap-2"><Field label="X" value={g.c.x} onCommit={n => set({ ...g, c: { x: n, y: g.c.y } })} /><Field label="Y" value={g.c.y} onCommit={n => set({ ...g, c: { x: g.c.x, y: n } })} /></div>
+        <div className="flex gap-2"><Field label="X" value={g.c.x} onCommit={n => set({ ...g, c: { x: n, y: g.c.y } })} /><YField value={g.c.y} onCommit={n => set({ ...g, c: { x: g.c.x, y: n } })} /></div>
         <div className="flex gap-2 mt-1.5"><Field label="R" value={g.r} onCommit={n => n > 0 && set({ ...g, r: n })} suffix="mm" w="w-16" /></div>
         <div className="flex gap-2 mt-1.5">
           <Field label="↶" value={conv(g.a1)} onCommit={n => set({ ...g, a1: -n })} suffix="° from" w="w-14" />
@@ -436,7 +457,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
       if (!g?.c) return null
       return <>
         <div className="text-[10px] text-gray-500 mb-1">Centre</div>
-        <div className="flex gap-2"><Field label="X" value={g.c.x} onCommit={n => set({ ...g, c: { x: n, y: g.c.y } })} /><Field label="Y" value={g.c.y} onCommit={n => set({ ...g, c: { x: g.c.x, y: n } })} /></div>
+        <div className="flex gap-2"><Field label="X" value={g.c.x} onCommit={n => set({ ...g, c: { x: n, y: g.c.y } })} /><YField value={g.c.y} onCommit={n => set({ ...g, c: { x: g.c.x, y: n } })} /></div>
         <div className="flex gap-2 mt-1.5">
           <Field label="R" value={g.r} onCommit={n => n > 0 && set({ ...g, r: n })} w="w-16" />
           <Field label="Ø" value={g.r * 2} onCommit={n => n > 0 && set({ ...g, r: n / 2 })} w="w-16" />
@@ -456,8 +477,8 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
           <Row k="Type" v={TYPE[sg.dt]} />
           <Row k="Measures" v={sg.dt === 'angular' ? `${r1(v)}°` : `${r1(v)} mm`} />
           <Row k="Shows" v={specialDimText(sg, a.text)} />
-          {sg.dt !== 'angular' && <Row k="Centre" v={`${r1(sg.c.x)}, ${r1(sg.c.y)}`} />}
-          {sg.dt === 'angular' && <Row k="Corner" v={`${r1(sg.c.x)}, ${r1(sg.c.y)}`} />}
+          {sg.dt !== 'angular' && <Row k="Centre" v={`${r1(sg.c.x)}, ${r1(ys * sg.c.y)}`} />}
+          {sg.dt === 'angular' && <Row k="Corner" v={`${r1(sg.c.x)}, ${r1(ys * sg.c.y)}`} />}
           <div className="mt-1 text-[11px] text-gray-500">Measured when placed — it doesn&apos;t follow the shape if that changes.</div>
         </>
       }
@@ -466,9 +487,9 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
       const l = dimLayout(g)
       return <>
         <div className="text-[10px] text-gray-500 mb-1">Point 1</div>
-        <div className="flex gap-2"><Field label="X" value={g.p1.x} onCommit={n => set({ ...g, p1: { x: n, y: g.p1.y } })} /><Field label="Y" value={g.p1.y} onCommit={n => set({ ...g, p1: { x: g.p1.x, y: n } })} /></div>
+        <div className="flex gap-2"><Field label="X" value={g.p1.x} onCommit={n => set({ ...g, p1: { x: n, y: g.p1.y } })} /><YField value={g.p1.y} onCommit={n => set({ ...g, p1: { x: g.p1.x, y: n } })} /></div>
         <div className="text-[10px] text-gray-500 mt-1.5 mb-1">Point 2</div>
-        <div className="flex gap-2"><Field label="X" value={g.p2.x} onCommit={n => set({ ...g, p2: { x: n, y: g.p2.y } })} /><Field label="Y" value={g.p2.y} onCommit={n => set({ ...g, p2: { x: g.p2.x, y: n } })} /></div>
+        <div className="flex gap-2"><Field label="X" value={g.p2.x} onCommit={n => set({ ...g, p2: { x: n, y: g.p2.y } })} /><YField value={g.p2.y} onCommit={n => set({ ...g, p2: { x: g.p2.x, y: n } })} /></div>
         <div className="flex gap-2 mt-1.5"><Field label="Off" value={g.offset} onCommit={n => set({ ...g, offset: n })} suffix="mm" w="w-16" /></div>
         <div className="mt-2">
           <Row k="Type" v={g.axis === 'x' ? 'Linear — horizontal' : g.axis === 'y' ? 'Linear — vertical' : 'Aligned'} />
