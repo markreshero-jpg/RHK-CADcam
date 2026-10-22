@@ -28,6 +28,8 @@ export interface MenuActions {
   dispatchView: React.Dispatch<ViewAction>
   svgSize:      { w: number; h: number }
   fitToWalls:   () => void
+  /** Room → Centre Room: fit + centre the plan on everything in the room. */
+  centreRoom:   () => void
   switchView:   (v: CanvasView) => void
   // Display layers
   openLayerManager: () => void
@@ -112,6 +114,8 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
       { label: 'Room Details', action: () => a.setRoomModalTab('details') },
       { label: 'Switch Room',  action: () => a.openRoomSwitcher() },
       { label: 'Add New Room', action: () => a.openAddRoom() },
+      null,
+      { label: 'Centre Room',  action: () => a.centreRoom() },
       null,
       { label: 'Construction', action: () => a.setRoomModalTab('construction') },
       { label: 'Hardware',     action: () => a.setRoomModalTab('hardware') },

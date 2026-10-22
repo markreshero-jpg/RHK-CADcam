@@ -2630,6 +2630,33 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }
 
+  // Room → Centre Room (CV's "Center Room"): fit the plan to everything drawn —
+  // walls at full thickness, cabinets, benchtops and fixtures — and centre it.
+  function centreRoom() {
+    if (canvasView !== 'plan') {
+      switchView('plan')
+      requestAnimationFrame(() => requestAnimationFrame(centrePlan))
+      return
+    }
+    centrePlan()
+  }
+  function centrePlan() {
+    if (!svgRef.current) return
+    const { width, height } = svgRef.current.getBoundingClientRect()
+    const cx = centroid(walls)
+    const pts: Pt[] = [
+      ...walls.flatMap(w => wallMitreCorners(w, walls, cx)),
+      ...cabPlans.flatMap(p => p.pts),
+      ...benchtops.flatMap(b => b.polygon),
+      ...fixtures.flatMap(f => fixtureCorners(f)),
+    ].filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
+    if (!pts.length) { fitToWalls(); return }
+    const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x))
+    const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y))
+    const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(width * 0.85 / Math.max(maxX - minX, 500), height * 0.85 / Math.max(maxY - minY, 500))))
+    dispatchView({ type: 'set', panX: width / 2 - ((minX + maxX) / 2) * z, panY: height / 2 - ((minY + maxY) / 2) * z, zoom: z })
+  }
+
   function onSelectMode(m: Mode) {
     // Re-clicking a benchtop tool drops back to Benchtop mode, not Select.
     setMode(prev => prev === m ? (isBenchtopMode(m) && m !== 'benchtop_select' ? 'benchtop_select' : 'select') : m)
@@ -2751,7 +2778,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     canUndo, canRedo, handleUndo, handleRedo,
     selected, cabinets, clipboard, setClipboard, setMode, setPlaceGhost,
     handleDeleteCabinet, handleDeleteWall,
-    dispatchView, svgSize, fitToWalls, switchView,
+    dispatchView, svgSize, fitToWalls, centreRoom, switchView,
     openLayerManager: () => setShowLayerManager(true),
     planGrid, setPlanGrid,
     setJobModalTab, setRoomModalTab,

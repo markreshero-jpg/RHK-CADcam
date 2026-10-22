@@ -685,6 +685,12 @@ export const LESSONS: TutorialLesson[] = [
       body: 'To put a name back where it started, right-click the item and choose Reset label position.',
       canvas: true, done: () => true },
   ]},
+  { id: 'centre_room', level: 'basics', topic: 'room', title: 'Centre the room on screen',
+    blurb: 'Lost the drawing? Room → Centre Room brings the whole job back to the middle.', keywords: 'center centre room zoom fit screen lost view pan extents', steps: [
+    { id: 'centre', title: 'Room → Centre Room',
+      body: 'Open the Room menu and choose Centre Room. The plan zooms to fit everything in the room — walls, cabinets, benchtops and fixtures — and centres it. From an elevation or 3D it goes back to plan first.',
+      target: 'menu-Room', canvas: true, done: () => true },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
