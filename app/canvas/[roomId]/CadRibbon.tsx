@@ -189,7 +189,7 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
       : (cad.drawing.pts.length < 2 ? 'Click a point the arc passes through · Esc cancels' : 'Click the end · Esc cancels'))
     : cad.drawing.tool === 'dim' ? (cad.drawing.pts.length < 2 ? 'Click the second point · Esc cancels'
       : 'Move to pull the dimension out · click (or Enter) to place · Tab = type offset · Esc cancels')
-    : 'Click the next point · Tab = type length / angle · double-click / Enter / right-click finishes · Backspace steps back · Esc cancels'
+    : 'Click the next point · Tab = type length / angle · double-click / Enter / right-click / Esc finishes · Backspace steps back'
 
   return (
     <div className="ml-2.5 pl-1.5 border-l-2 border-rose-500/50 flex flex-col gap-1.5 pt-1 pb-1.5"

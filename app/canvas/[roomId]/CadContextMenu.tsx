@@ -43,26 +43,28 @@ export default function CadContextMenu({ cad, annotations, zoom, onSaveBlock }: 
   const run = (fn: () => void) => () => { fn(); cad.closeMenu() }
   type Item = { label: string; act: () => void; danger?: boolean } | 'sep'
   const items: Item[] = []
-  if (corner >= 0) {
+  // Several selected: only what applies to them all (shape tools are one item at a time).
+  const many = cad.selected.length > 1 && cad.selected.some(s => s.id === a.id)
+  if (!many && corner >= 0) {
     items.push({ label: `Fillet this corner (R ${cad.filletR})`, act: run(() => cad.cornerOp(a.id, 'fillet', corner)) })
     items.push({ label: `Chamfer this corner (${cad.chamfer.d1} × ${cad.chamfer.d2})`, act: run(() => cad.cornerOp(a.id, 'chamfer', corner)) })
   }
-  if ((g && pts.length >= 3) || a.kind === 'rect') {
+  if (!many && ((g && pts.length >= 3) || a.kind === 'rect')) {
     items.push({ label: `Fillet all corners (R ${cad.filletR})`, act: run(() => cad.cornerOp(a.id, 'fillet', 'all')) })
     items.push({ label: `Chamfer all corners`, act: run(() => cad.cornerOp(a.id, 'chamfer', 'all')) })
   }
-  if (g && !g.closed) items.push({ label: 'Join with another line…', act: run(() => cad.startJoinFrom(a.id, m.pt)) })
-  if (g && !g.closed && pts.length >= 3) items.push({ label: 'Close the outline', act: run(() => cad.setLineClosed(a.id, true)) })
-  if (g?.closed) items.push({ label: 'Open the outline', act: run(() => cad.setLineClosed(a.id, false)) })
-  if (a.kind === 'rect') items.push({ label: 'Convert to lines', act: run(() => cad.convertToLines(a.id)) })
-  if (OFFSETTABLE.has(a.kind)) items.push({ label: 'Offset…', act: run(() => cad.startOffsetFrom(a.id)) })
+  if (!many && g && !g.closed) items.push({ label: 'Join with another line…', act: run(() => cad.startJoinFrom(a.id, m.pt)) })
+  if (!many && g && !g.closed && pts.length >= 3) items.push({ label: 'Close the outline', act: run(() => cad.setLineClosed(a.id, true)) })
+  if (!many && g?.closed) items.push({ label: 'Open the outline', act: run(() => cad.setLineClosed(a.id, false)) })
+  if (!many && a.kind === 'rect') items.push({ label: 'Convert to lines', act: run(() => cad.convertToLines(a.id)) })
+  if (!many && OFFSETTABLE.has(a.kind)) items.push({ label: 'Offset…', act: run(() => cad.startOffsetFrom(a.id)) })
   if (items.length) items.push('sep')
-  items.push({ label: 'Duplicate', act: run(() => cad.paste([a])) })
+  items.push({ label: many ? `Duplicate ${cad.selected.length} items` : 'Duplicate', act: run(() => cad.paste(many ? cad.selected : [a])) })
   if (onSaveBlock) items.push({ label: cad.selected.length > 1 ? `Save ${cad.selected.length} items as CAD block…` : 'Save as CAD block…', act: run(onSaveBlock) })
   items.push({ label: 'Bring to front', act: run(() => cad.reorder('front')) })
   items.push({ label: 'Send to back', act: run(() => cad.reorder('back')) })
   items.push('sep')
-  items.push({ label: 'Delete', act: run(cad.deleteSelected), danger: true })
+  items.push({ label: many ? `Delete ${cad.selected.length} items` : 'Delete', act: run(cad.deleteSelected), danger: true })
 
   // Keep the menu on screen.
   const x = Math.min(m.x, window.innerWidth - 240), y = Math.min(m.y, window.innerHeight - items.length * 30 - 16)

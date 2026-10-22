@@ -583,7 +583,7 @@ export function useAnnotationTool({
     const d = drawingRef.current
     drawingRef.current = null
     setDrawing(null)
-    if (!d || d.tool === 'leader') return
+    if (!d || d.tool === 'leader' || d.tool === 'arc' || d.tool === 'circle') return   // unfinished: nothing to keep
     if (d.tool === 'dim') {   // Enter with both points down places the dim where it's previewing
       const row = d.pts.length === 2 && d.cur ? dimRow(d, d.cur) : null
       if (row) setLastDimId(row.id)
@@ -1106,17 +1106,17 @@ export function useAnnotationTool({
         }).map(a => a.id)
         setSelectedIds(prev => new Set(cur.additive ? [...prev, ...hit] : hit))
       } else if (cur.kind === 'place') {
-        // A drag finishes the shape now; a plain click arms it and the next click finishes
-        // it (B1). Point text opens its editor on the click; a freehand cloud starts here.
-        const far = Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y) >= DRAG_PX
-        if (far) { finishPlace(cur.tool, cur.start, cur.cur); return }
+        // Click to start, click to finish (Mark, 2026-10-22: no drag-to-finish — a click
+        // that wobbled a few px used to finish a tiny shape). A drag just arms it like a
+        // click; the next click finishes. Point text opens its editor on the click; a
+        // freehand cloud starts here.
         if (cur.tool === 'text') { finishPlace('text', cur.start, cur.start); return }
         if (cur.tool === 'cloud' && cloudMode === 'free') {
           const nd: AnnotDrawing = { tool: 'cloud', pts: [cur.start], cur: cur.start }
           drawingRef.current = nd; setDrawing(nd)
           return
         }
-        const pd = { tool: cur.tool, start: cur.start, cur: cur.start }
+        const pd = { tool: cur.tool, start: cur.start, cur: cur.cur }
         pendingRef.current = pd; setPending(pd)
       }
     }
@@ -1227,7 +1227,8 @@ export function useAnnotationTool({
       e.preventDefault(); e.stopPropagation()
       if (editing) commitEdit()
       if (!active) enterCad()
-      setSelectedIds(new Set([id]))
+      // Right-click inside a multi-selection keeps it: the menu acts on all of them.
+      if (!liveSelected.has(id)) setSelectedIds(new Set([id]))
       setMenu({ x: e.clientX, y: e.clientY, id, pt: unmapPt(frame, toWorld(e)) })
     },
     onDown: (e, id) => {
@@ -1328,7 +1329,9 @@ export function useAnnotationTool({
         if (chainOpen) { setChain(null); setSelectedIds(new Set()); return }
         if (modPickOpen) { setModPick(null); setModMsg(null); setSelectedIds(new Set()); return }
         if (pendingRef.current) { pendingRef.current = null; setPending(null); return }
-        if (drawingRef.current) { drawingRef.current = null; setDrawing(null); return }
+        // Like right-click: keep what's been clicked (a line ends at its last point, a
+        // dim with both points places), drop only the step following the cursor.
+        if (drawingRef.current) { finishDrawing(); return }
         if (liveSelected.size) setSelectedIds(new Set())
         else if (tool !== 'select') setTool('select')
         else exitCad()
