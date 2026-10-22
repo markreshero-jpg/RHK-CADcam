@@ -5,7 +5,7 @@
     "TEPF 18 | T2D 1041 hanging | T2D 1041 drawers | TFKW 50 at the wall (inner drawers next to a wall - Mark rule).",
     "600 OA incl doors: carcass 580, back scribe 0 (rules SCRBK 0). Panel dz 580 (def adds door + 2).",
     "Ceiling 2770: 2400 incl 100 kick + 370 BH flush with carcase front + side: starts at the carcass (offset 18), left return on 580 deep mitre - set after placement. Kick joined after placement.",
-    "Hanging cpbd: fixed T/S shelf 1920, HANGING_RAIL_OVAL locked Y1714. Drawer cpbd: fixed T/S 1920, 2 adj, fixed T/S 920, 4 inner drawers Dragon Pro 500x95 (height 95, 113 fronts) locked at Y 30.5/226.5/422.5/618.5 = 83 gaps; hinges [2196,1570,850,187] as Bed 2. Internals + hinges + BH return + joinKicks + 'HANGING RAIL' elevation note set after placement.",
+    "Hanging cpbd: fixed T/S shelf 1920, HANGING_RAIL_OVAL locked Y1714. Drawer cpbd: fixed T/S 1920, 2 adj, fixed T/S 920, 4 inner drawers Dragon Pro 500x95 (height 95, 113 fronts) locked at Y 30.5/226.5/422.5/618.5 = 83 gaps; hinges [2196,1570,870,187] as Bed 2. Internals + hinges + BH return + joinKicks + 'HANGING RAIL' elevation note set after placement.",
     "Return wall 600: robe wall only; room size not on the drawing."
   ],
   "projectName": "RHK6581 Lee Smith",
