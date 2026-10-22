@@ -129,3 +129,6 @@ FS1 migration `migration_fs1_float_shelf.sql` applied 2026-10-22. Tests: `src/li
 - Pocket face: `output_face: 'back'` = each board's inner (glue) face, the show face
   being `front` — check against how the nest flips flat parts (FS6).
 - Width dims: shelves share the outer (bulkhead) row in elevation / plan.
+- Elevation height chain (screen + print): each shelf is a gap + its thickness, shelves under
+  the overheads before them, the rest after (`stackShelfSegs`, 2026-10-22, Mark asked).
+- First real use: RHK6581 Laundry J03, 2 shelves (2026-10-22).

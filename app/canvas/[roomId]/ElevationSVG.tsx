@@ -4,6 +4,7 @@ import { useLineScale } from '@/src/lib/usePhone'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, SNAP_PX, wallCabTop, cabBottomZ, type Pt } from '@/src/lib/geometry'
+import { stackShelfSegs } from '@/src/lib/floatShelf'
 import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode, MIN_STRETCH } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
@@ -2157,6 +2158,11 @@ export default function ElevationSVG({
                 }
               }
 
+              // Floating shelves (z_floating_shelf): those under the overheads first, the rest after.
+              const shelfSpans = chainCabs.filter(c => !!c.float_shelf)
+                .map(c => { const b = cabBottomZ(c, room, wall); return [b, b + c.dy] as [number, number] })
+              cursorY = stackShelfSegs(segs, cursorY, roomH, shelfSpans, overheadDy > 0 ? wcTopZ - overheadDy : Infinity, mm => `${roundMm(mm)}`)
+
               if (overheadDy > 0) {
                 const overheadBotY = roomH - (wcTopZ - overheadDy)
                 const overheadTopY = roomH - wcTopZ
@@ -2165,6 +2171,7 @@ export default function ElevationSVG({
                 }
                 segs.push({ fromY: overheadTopY, toY: overheadBotY, label: `${overheadDy}` })
                 cursorY = overheadTopY
+                cursorY = stackShelfSegs(segs, cursorY, roomH, shelfSpans, Infinity, mm => `${roundMm(mm)}`)
               }
 
               // Bulkhead: hangs from the ceiling (z_bulkhead), its own segment.

@@ -16,6 +16,7 @@ import { OpeningElev, FixturesElevationPrint } from './FixturesElevation'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ } from '@/src/lib/geometry'
+import { stackShelfSegs } from '@/src/lib/floatShelf'
 import { PRINT_INK, pen, atLeastMin } from '@/src/lib/shopDrawings/pens'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedFaceZone,
@@ -523,11 +524,16 @@ export default function ElevationPrintSVG({
       const benchZ = benchHeights[0] ?? 0
       if (benchZ > roomH - cursorY + 0.5) { const benchY = roomH - benchZ; segs.push({ fromY: benchY, toY: cursorY, label: `${roundMm(cursorY - benchY)}` }); cursorY = benchY }
     }
+    // Floating shelves (z_floating_shelf): those under the overheads first, the rest after.
+    const shelfSpans = wallCabs.filter(c => !!c.float_shelf)
+      .map(c => { const b = cabBottomZ(c, room, wall); return [b, b + c.dy] as [number, number] })
+    cursorY = stackShelfSegs(segs, cursorY, roomH, shelfSpans, overheadDy > 0 ? wcTopZ - overheadDy : Infinity, mm => `${roundMm(mm)}`)
     if (overheadDy > 0) {
       const overheadBotY = roomH - (wcTopZ - overheadDy)
       const overheadTopY = roomH - wcTopZ
       if (overheadBotY < cursorY - 0.5) segs.push({ fromY: overheadBotY, toY: cursorY, label: `${roundMm(cursorY - overheadBotY)}` })
       segs.push({ fromY: overheadTopY, toY: overheadBotY, label: `${overheadDy}` }); cursorY = overheadTopY
+      cursorY = stackShelfSegs(segs, cursorY, roomH, shelfSpans, Infinity, mm => `${roundMm(mm)}`)
     }
     // Bulkhead: hangs from the ceiling (z_bulkhead), its own segment.
     if (bulkheadEl && bulkheadEl.dy > 0) {

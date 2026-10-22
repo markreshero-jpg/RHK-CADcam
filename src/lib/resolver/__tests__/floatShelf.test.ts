@@ -158,3 +158,18 @@ describe('floating shelf — CNC + notes', () => {
     expect(cabsBlock(shelf, { ...shelf, pos_z: 1600 }, null, room)).toBe(false)
   })
 })
+
+describe('floating shelf — elevation height chain', () => {
+  it('stacks gap + thickness per shelf above the cursor, in height order', async () => {
+    const { stackShelfSegs } = await import('../../floatShelf')
+    const segs: { fromY: number; toY: number; label: string }[] = []
+    // Room 2570, cursor at the bench top (900); shelves 2130–2166 and 1730–1766.
+    const y = stackShelfSegs(segs, 2570 - 900, 2570, [[2130, 2166], [1730, 1766]])
+    expect(segs.map(s => s.label)).toEqual(['830', '36', '364', '36'])
+    expect(y).toBe(2570 - 2166)
+    // maxZ: only the shelves under the overheads.
+    const s2: typeof segs = []
+    stackShelfSegs(s2, 2570 - 900, 2570, [[2130, 2166], [1730, 1766]], 2000)
+    expect(s2.map(s => s.label)).toEqual(['830', '36'])
+  })
+})

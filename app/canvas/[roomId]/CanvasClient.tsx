@@ -1739,13 +1739,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           await placeFromDraft(draft, w, pos_x, pos_y, false, opts.dx)
           return { placed: opts.def, wall: w.name, offset: opts.offset, dx: opts.dx ?? draft.dx }
         },
-        async updateCabinet(ref: string, patch: { dx?: number; dy?: number; dz?: number; offset?: number }) {
+        async updateCabinet(ref: string, patch: { dx?: number; dy?: number; dz?: number; offset?: number; pos_z?: number }) {
           const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
           if (!cab) throw new Error(`Cabinet not found: ${ref}`)
           const u: Partial<CabinetInstance> = {}
           if (patch.dx != null) u.dx = patch.dx
           if (patch.dy != null) u.dy = patch.dy
           if (patch.dz != null) u.dz = patch.dz
+          if (patch.pos_z != null) u.pos_z = patch.pos_z   // elevation from floor (floating shelves, under panels)
           if (patch.offset != null) {
             const w = walls.find(x => x.id === cab.wall_id)
             if (!w) throw new Error(`Cabinet ${cab.label} is not on a wall`)

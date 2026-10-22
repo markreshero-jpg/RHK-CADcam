@@ -92,6 +92,29 @@ export function floatShelfThickness(rp: { case_parts: { part_key: string; Y: num
   return top ? Math.round((top.Y + top.DZ) * 10) / 10 : 0
 }
 
+/**
+ * Elevation height chain (z_floating_shelf): stack the floating shelves whose
+ * underside is at or above the chain's cursor — a gap segment up to each shelf,
+ * then its thickness. `spans` = [bottomZ, topZ] from the floor; Y runs down
+ * from the ceiling (Y = roomH − z). Only shelves between `minZ` and `maxZ`
+ * (their tops) are taken, so the caller can stack those under the overheads
+ * before them and the rest after. Returns the new cursor Y.
+ */
+export function stackShelfSegs(
+  segs: { fromY: number; toY: number; label: string }[], cursorY: number, roomH: number,
+  spans: [number, number][], maxZ = Infinity, label: (mm: number) => string = mm => `${Math.round(mm * 10) / 10}`,
+): number {
+  for (const [b, t] of [...spans].sort((x, y) => x[0] - y[0])) {
+    if (t > maxZ + 0.5) continue
+    const bY = roomH - b, tY = roomH - t
+    if (bY > cursorY + 0.5) continue          // below the cursor (overlaps what's already chained)
+    if (bY < cursorY - 0.5) segs.push({ fromY: bY, toY: cursorY, label: label(cursorY - bY) })
+    segs.push({ fromY: tY, toY: bY, label: label(t - b) })
+    cursorY = tY
+  }
+  return cursorY
+}
+
 /** Wide tape run on the glued blank (mm): the front plus each seen side. */
 export function fsTapeLength(s: FloatShelfSettings, W: number, D: number): number {
   return Math.round(W + (s.seen_left ? D : 0) + (s.seen_right ? D : 0))

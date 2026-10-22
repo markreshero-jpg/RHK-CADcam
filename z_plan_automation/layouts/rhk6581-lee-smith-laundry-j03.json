@@ -4,7 +4,7 @@
     "Own room (Mark). 2015 OA wall-to-wall (markup). 600 OA INCLUDES the 20 stone overhang: doors face at 580, carcass 560, panels 580 (BEPF dz 560 — the def adds door + 2) (Mark 2026-10-22). Elevation left->right = wall start->end: WM/DR bay then sink cpbd.",
     "18 BEPF at left wall | 620 DRYER bay | 18 BEPF centre panel | 620 WASHER bay | 18 BEPF | 691 B2D sink cpbd | 30 BFK at right wall (620 clear per 600 machine, Mark 2026-10-22). Fixtures: 2 x LG 12kg front loader 600x660x850, centred, left renamed Dryer (display_name).",
     "20mm stone (by others) straight on carcass at 900 -> cabinets 880 incl 100 kick. Kick joined B2D+BFK after placement.",
-    "Adj shelf locked 250 up from the cabinet base. No hose / tap cut-outs (Mark). Floating shelves above NOT drawn yet - Mark building the floating-shelf def.",
+    "Adj shelf locked 250 up from the cabinet base. No hose / tap cut-outs (Mark). Floating shelves (2026-10-22): 2 x FLSHLF 2015 x 350, double LAM01 = 36, both ends unseen, undersides 1730 / 2130 (scaled elev 6). Placed via the bridge then updateCabinet({dz: 350, pos_z}).",
     "Sink: Abi Ohelu 380 single bowl U/M centred on the cpbd. Benchtop drawn 2015 x 600, sink y=80. Ceiling 2570 as J02. Return walls 600 (Mark). KICK 1 (721 from 1294) had to be re-fitted by hand after depth + width changes — the kick assembly does not follow its members."
   ],
   "projectName": "RHK6581 Lee Smith",
