@@ -129,7 +129,7 @@ paper information only.
 | View | Owner | Frame |
 |---|---|---|
 | plan | room | Room mm, the same frame as walls and cabinet `pos_x/pos_y` |
-| elevation | `wall_id` | Wall-local: `u` along the wall as drawn left→right in that wall's elevation, `z` up from the floor. **Verify against `ElevationSVG`'s cabinet x mapping at A6**, including back-face / island walls (see memories: back-face placement, island face convention). |
+| elevation | `wall_id` + `wall_side` (face / back) | **One side only** (Mark, 2026-10-22): a note shows only on the side of the wall it was drawn on — e.g. an island's back elevation never shows its front's notes. Migration `migration_a6_wall_side.sql`. Wall-local: `u` along the wall as drawn left→right in that wall's elevation, `z` up from the floor. **Verify against `ElevationSVG`'s cabinet x mapping at A6**, including back-face / island walls (see memories: back-face placement, island face convention). |
 | cabinet_sheet | `cabinet_id` + `sheet_view` (`front` / `side`) | Cabinet-local mm in that orthographic view: `x` across, `z` up from the cabinet base |
 
 ## Data model
