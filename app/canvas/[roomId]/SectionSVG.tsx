@@ -112,7 +112,10 @@ export default function SectionSVG({ walls, cabinets, room, sectionCut, onFlipLo
   }, [])
 
   useEffect(() => {
-    const kd = (e: KeyboardEvent) => { if (e.key === ' ') { spaceRef.current = true; e.preventDefault() } }
+    const kd = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (e.key === ' ' && !typing) { spaceRef.current = true; e.preventDefault() }
+    }
     const ku = (e: KeyboardEvent) => { if (e.key === ' ') spaceRef.current = false }
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku)
     return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku) }

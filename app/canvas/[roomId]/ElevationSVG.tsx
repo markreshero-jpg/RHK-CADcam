@@ -418,7 +418,8 @@ export default function ElevationSVG({
 
   useEffect(() => {
     const kd = (e: KeyboardEvent) => {
-      if (e.key === ' ') { spaceRef.current = true; e.preventDefault() }
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      if (e.key === ' ' && !typing) { spaceRef.current = true; e.preventDefault() }
       if (e.key === 'Shift') shiftRef.current = true
       if (e.key === 'Control') ctrlRef.current = true
       if (e.key === 'Escape') {
