@@ -51,7 +51,7 @@ function caseElevRect(p: ResolvedCasePart) {
   }
   // Shaped-cabinet panels / facet rails: their front-view footprint after AY
   // (true-width facet elevations are z_cabinet_shape Phase 5).
-  if (isShapedPanelKey(p.part_key) || p.AY || p.wrap) {
+  if (isShapedPanelKey(p.part_key) || p.AY || p.wrap || p.upright) {
     const b = caseBoxAABB(p)
     return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h }
   }

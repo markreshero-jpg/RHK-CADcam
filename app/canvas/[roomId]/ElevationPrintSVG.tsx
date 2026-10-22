@@ -47,7 +47,7 @@ function caseElevRect(p: ResolvedCasePart) {
   if (p.part_key === 'left_side' || p.part_key === 'right_side')
     return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
   // Turned / shaped panels and the curved end face board: their front-view bounds.
-  if (isShapedPanelKey(p.part_key) || p.AY || p.wrap) {
+  if (isShapedPanelKey(p.part_key) || p.AY || p.wrap || p.upright) {
     const b = caseBoxAABB(p)
     return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h }
   }
