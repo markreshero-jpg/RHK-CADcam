@@ -185,9 +185,11 @@ try {
     if (!p) die(`cannot find placed cabinet for override: ${JSON.stringify(c)}`)
     p._claimed = true
     c._id = p.id; c._label = p.label
-    if (islandWalls.has(`Wall ${c.wall}`)) {
+    // Per-cabinet `rules` (e.g. sink cabinets: { RAIL_ORIENT: 'vertical' }).
+    const extra = { ...(islandWalls.has(`Wall ${c.wall}`) ? { SCRBK: 0 } : {}), ...(c.rules ?? {}) }
+    if (Object.keys(extra).length) {
       const { data: row } = await sb.from('cabinet_instances').select('rule_overrides').eq('id', p.id).single()
-      await sb.from('cabinet_instances').update({ rule_overrides: { ...(row?.rule_overrides ?? {}), SCRBK: 0 } }).eq('id', p.id)
+      await sb.from('cabinet_instances').update({ rule_overrides: { ...(row?.rule_overrides ?? {}), ...extra } }).eq('id', p.id)
       c._touch = true   // force a re-resolve even if no dim change
     }
   }
