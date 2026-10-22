@@ -1,0 +1,25 @@
+{
+  "_source": "z_sample_plans/RHK6581 - Lee Smith - 38 Howard St, Grange/38 Howard SM - Markup 260927.pdf p2, views 5+6 (J03 Laundry joinery) + Mark Q&A 2026-10-22",
+  "_notes": [
+    "Own room (Mark). 2015 OA wall-to-wall (markup), 600 deep. Elevation left->right = wall start->end: WM/DR bay then sink cpbd.",
+    "18 BEPF at left wall | 1200 open WM+DR bay split by an 18 BEPF centre panel (2 x 591) | 18 BEPF | 749 B2D sink cpbd | 30 BFK at right wall.",
+    "20mm stone (by others) straight on carcass at 900 -> cabinets 880 incl 100 kick. Kick joined B2D+BFK after placement.",
+    "Adj shelf locked 250 up from the cabinet base. No hose / tap cut-outs (Mark). Floating shelves above NOT drawn yet - Mark building the floating-shelf def.",
+    "Sink: Abi Ohelu 380 single bowl U/M centred on the cpbd. Benchtop drawn 2015 x 620 (20 front overhang assumed). Ceiling 2570 as J02. Return wall lengths 1000 are placeholders."
+  ],
+  "projectName": "RHK6581 Lee Smith",
+  "roomName": "Laundry J03",
+  "roomHeight": 2570,
+  "walls": [
+    { "x": 0, "y": 1000, "length": 1000, "angle": 270, "_": "left return (WM end), south->north (length placeholder)" },
+    { "x": 0, "y": 0, "length": 2015, "angle": 0, "_": "J03 back wall, west->east = elevation 6 left->right" },
+    { "x": 2015, "y": 0, "length": 1000, "angle": 90, "_": "right return (sink end), north->south (length placeholder)" }
+  ],
+  "cabinets": [
+    { "def": "BEPF", "wall": 2, "offset": 0, "dx": 18, "dy": 880, "dz": 600, "note": "J03 LAM01 end panel at left wall, to floor" },
+    { "def": "BEPF", "wall": 2, "offset": 609, "dx": 18, "dy": 880, "dz": 600, "note": "J03 centre panel splitting the WM + DR bay (Mark markup: add centre panel)" },
+    { "def": "BEPF", "wall": 2, "offset": 1218, "dx": 18, "dy": 880, "dz": 600, "note": "J03 LAM01 panel between WM/DR bay and sink cpbd, to floor" },
+    { "def": "B2D", "wall": 2, "offset": 1236, "dx": 749, "dy": 880, "dz": 580, "note": "J03 sink cpbd - pair of doors, adj shelf 250 up. Abi Ohelu 380 U/M sink. HD01 by client, undrilled" },
+    { "def": "BFK", "wall": 2, "offset": 1985, "dx": 30, "dy": 880, "note": "J03 30 filler on the kick at right wall" }
+  ]
+}
