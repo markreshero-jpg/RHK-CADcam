@@ -8,7 +8,8 @@
     "Double hanging: fixed T/S 1920 + rail under, second rail top 940 AFFL with no shelf (Mark).",
     "Elev B (wall 4): TFKW 22 at the bottom wall | T2D 1000 | T2D 1000 | TEPF 18 seen at the door = 2040. Hanging: rail top 1800 AFFL, fixed shelf 50 above (underside 1850), low fixed shelf top 400. Then door. New cupboard (markup): TEPF 18 seen at the door | T2D 800 5 adj | TFKW 30 at the top wall.",
     "End panels to the floor where seen (no wall); TEPK between cupboards (Mark). 600 OA incl doors: carcass 580, SCRBK 0. Rails 30x15 oval (type TBC). Internals, D4 rows, WUP height, BH returns, kicks, rail notes, hinges set after placement.",
-    "After placement: joinKicks BC-02/TC-02/TC-05/TC-09 (stops at the TEPK - KICK 1 stretched to 1000 under it); pos_z WC-01/02/03 862, BHs 2400. Hinges: TC-09 [2196,1630,870,100], WC-01/02 [1434,870,100] (clear of shelf holes). Rail notes x4, spec block from Bed 1."
+    "After placement: joinKicks BC-02/TC-02/TC-05/TC-09 (stops at the TEPK - KICK 1 stretched to 1000 under it); pos_z WC-01/02/03 862, BHs 2400. Hinges: TC-09 [2196,1630,870,100], WC-01/02 [1434,870,100] (clear of shelf holes). Rail notes x4, spec block from Bed 1.",
+    "2026-10-23 after drawing: room rotated 90 deg CCW in the DB for landscape (x'=y, y'=2380-x, angle-90; spec block moved to 4962,-53). Openings added as room_fixtures: Door 890 x 2040 (new library item) on Wall 4, 890 from Wall 1, hinged at the hanging-cupboard end, swing in; Opening 820 x 2100 on Wall 1, 620-1440 from Wall 4 (scaled off the markup)."
   ],
   "projectName": "RHK6581 Lee Smith",
   "roomName": "WIR J11",
