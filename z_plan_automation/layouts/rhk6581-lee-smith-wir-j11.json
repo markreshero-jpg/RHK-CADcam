@@ -1,0 +1,277 @@
+{
+  "_source": "z_sample_plans/RHK6581 - Lee Smith - 38 Howard St, Grange/38 Howard SM - Markup 260927.pdf p4 views 1 (J11 WIR plan) + 2 (elevation A) + 3 (elevation B) + Mark Q&A 2026-10-23.",
+  "_notes": [
+    "Room 2380 x 3922 inside (plan scale). Walls clockwise: 1 top, 2 right (elevation A, left = top), 3 bottom, 4 left (elevation B, left = bottom). Door + top-wall opening not drawn.",
+    "Kick 100 (job). Cupboards 2400 incl kick, LAM01 bulkhead 400 to the 2800 ceiling (green markup), flush with carcase front + side, returns at seen ends.",
+    "Elev A (wall 2, 3922 between walls): BFK 30 at the top wall | D4 952 open-bay drawers + WUP 18 LAM01 top to 880 (no cabinet above - Mark) | TEPK 18 (panel between cupboards on the kick) | D4 962 + W2D 962 on top | D4 960 + W2D 960 | T2D 960 double hanging | TFKW 40 at the bottom wall.",
+    "Drawer bases 762 carcass (862 incl kick) so all four-drawer fronts line up under the open-bay top at 880; wall cupboards sit on them 862-2400 (separate cupboards - Mark). 4 equal drawers (D4 rows unlocked). Uppers: 3 adj shelves.",
+    "Double hanging: fixed T/S 1920 + rail under, second rail top 940 AFFL with no shelf (Mark).",
+    "Elev B (wall 4): TFKW 22 at the bottom wall | T2D 1000 | T2D 1000 | TEPF 18 seen at the door = 2040. Hanging: rail top 1800 AFFL, fixed shelf 50 above (underside 1850), low fixed shelf top 400. Then door. New cupboard (markup): TEPF 18 seen at the door | T2D 800 5 adj | TFKW 30 at the top wall.",
+    "End panels to the floor where seen (no wall); TEPK between cupboards (Mark). 600 OA incl doors: carcass 580, SCRBK 0. Rails 30x15 oval (type TBC). Internals, D4 rows, WUP height, BH returns, kicks, rail notes, hinges set after placement.",
+    "After placement: joinKicks BC-02/TC-02/TC-05/TC-09 (stops at the TEPK - KICK 1 stretched to 1000 under it); pos_z WC-01/02/03 862, BHs 2400. Hinges: TC-09 [2196,1630,870,100], WC-01/02 [1434,870,100] (clear of shelf holes). Rail notes x4, spec block from Bed 1."
+  ],
+  "projectName": "RHK6581 Lee Smith",
+  "roomName": "WIR J11",
+  "roomHeight": 2800,
+  "wallCabinetTop": 2400,
+  "walls": [
+    {
+      "x": 0,
+      "y": 0,
+      "length": 2380,
+      "angle": 0,
+      "_": "top wall (opening to ensuite not drawn)"
+    },
+    {
+      "x": 2380,
+      "y": 0,
+      "length": 3922,
+      "angle": 90,
+      "_": "right wall - elevation A"
+    },
+    {
+      "x": 2380,
+      "y": 3922,
+      "length": 2380,
+      "angle": 180,
+      "_": "bottom wall (entry not drawn)"
+    },
+    {
+      "x": 0,
+      "y": 3922,
+      "length": 3922,
+      "angle": 270,
+      "_": "left wall - elevation B (door not drawn)"
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "BFK",
+      "wall": 2,
+      "offset": 0,
+      "dx": 30,
+      "dy": 862,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 30 filler on the kick at the top wall, open-bay drawers"
+    },
+    {
+      "def": "D4-SSSL",
+      "wall": 2,
+      "offset": 30,
+      "dx": 952,
+      "dy": 862,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 open-bay drawers, 4 equal, 18 LAM01 top over (no cabinet above)"
+    },
+    {
+      "def": "TEPK",
+      "wall": 2,
+      "offset": 982,
+      "dx": 18,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 LAM01 panel between open bay and cupboards, on the kick"
+    },
+    {
+      "def": "D4-SSSL",
+      "wall": 2,
+      "offset": 1000,
+      "dx": 962,
+      "dy": 862,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 drawers under cupboard 1, 4 equal"
+    },
+    {
+      "def": "D4-SSSL",
+      "wall": 2,
+      "offset": 1962,
+      "dx": 960,
+      "dy": 862,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 drawers under cupboard 2, 4 equal"
+    },
+    {
+      "def": "T2D",
+      "wall": 2,
+      "offset": 2922,
+      "dx": 960,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 double hanging cupboard (markup) - fixed T/S 1920 + rail, second rail top 940"
+    },
+    {
+      "def": "TFKW",
+      "wall": 2,
+      "offset": 3882,
+      "dx": 40,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 40 filler on the kick at the bottom wall"
+    },
+    {
+      "def": "W2D",
+      "wall": 2,
+      "offset": 1000,
+      "dx": 962,
+      "dy": 1538,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 cupboard 1 on the drawers, 862-2400, 3 adj"
+    },
+    {
+      "def": "W2D",
+      "wall": 2,
+      "offset": 1962,
+      "dx": 960,
+      "dy": 1538,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 cupboard 2 on the drawers, 862-2400, 3 adj"
+    },
+    {
+      "def": "WUP",
+      "wall": 2,
+      "offset": 0,
+      "dx": 982,
+      "dy": 18,
+      "dz": 600,
+      "note": "J11 18 LAM01 top over the open-bay drawers + filler, top at 880 (pos_z 862 set after placement)"
+    },
+    {
+      "def": "BH",
+      "wall": 2,
+      "offset": 1000,
+      "dx": 2922,
+      "dy": 400,
+      "dz": 580,
+      "note": "J11 elev A LAM01 bulkhead 2400-2800, from the carcass after the TEPK to the bottom wall, left return 580 (seen from the open bay)"
+    },
+    {
+      "def": "TFKW",
+      "wall": 4,
+      "offset": 0,
+      "dx": 22,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 22 filler on the kick at the bottom wall (cupboards stay 1000)"
+    },
+    {
+      "def": "T2D",
+      "wall": 4,
+      "offset": 22,
+      "dx": 1000,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 hanging 1 - rail top 1800, fixed shelf 50 above, low fixed shelf 400"
+    },
+    {
+      "def": "T2D",
+      "wall": 4,
+      "offset": 1022,
+      "dx": 1000,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 hanging 2 - rail top 1800, fixed shelf 50 above, low fixed shelf 400"
+    },
+    {
+      "def": "TEPF",
+      "wall": 4,
+      "offset": 2022,
+      "dx": 18,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 seen LAM01 end panel at the door, to floor"
+    },
+    {
+      "def": "TEPF",
+      "wall": 4,
+      "offset": 3074,
+      "dx": 18,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 new cupboard seen LAM01 end panel at the door, to floor"
+    },
+    {
+      "def": "T2D",
+      "wall": 4,
+      "offset": 3092,
+      "dx": 800,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 new cupboard (markup) - 5 adj shelves"
+    },
+    {
+      "def": "TFKW",
+      "wall": 4,
+      "offset": 3892,
+      "dx": 30,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J11 30 filler on the kick at the top wall"
+    },
+    {
+      "def": "BH",
+      "wall": 4,
+      "offset": 0,
+      "dx": 2022,
+      "dy": 400,
+      "dz": 580,
+      "note": "J11 elev B LAM01 bulkhead over the hanging run, wall to carcass edge, right return 580"
+    },
+    {
+      "def": "BH",
+      "wall": 4,
+      "offset": 3092,
+      "dx": 830,
+      "dy": 400,
+      "dz": 580,
+      "note": "J11 LAM01 bulkhead over the new cupboard, carcass edge to wall, left return 580"
+    }
+  ]
+}
