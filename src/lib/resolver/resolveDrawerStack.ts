@@ -208,6 +208,11 @@ export function resolveDrawerStacks(
      cab.assembly_class === 'base_corner' || cab.assembly_class === 'tall_corner')
     ? r.TOEH : 0
   const internalFloorY = TK + (floor.floating ? floor.floorT : T) + r.SCRBT
+  // System drawers: every box sits this far above the bottom of its own front —
+  // the lowest drawer's offset (its front covers the bottom panel) — so the
+  // front-fixing holes (measured up from the front bottom, 64 on Dragon Pro)
+  // land at the same height on the box in every drawer of the stack.
+  const frontLift = internalFloorY - TK
 
   const stacks: ResolvedDrawerStack[] = []
 
@@ -352,7 +357,10 @@ export function resolveDrawerStacks(
       })
       continue
     }
-    const slide = findSlide(depthHere, openingHeight, slideProducts, slideSchedule, slideOverride, { clearance })
+    // System boxes ride frontLift above the front bottom, so that much of the front is unusable.
+    const lift = drawerType === 'system' ? frontLift : 0
+
+    const slide = findSlide(depthHere, openingHeight - lift, slideProducts, slideSchedule, slideOverride, { clearance })
 
     if (!slide && hasHardware && !slideOverride) {
       const source = slideSchedule.length > 0 ? 'the slide schedule' : 'the slide list'
@@ -407,7 +415,7 @@ export function resolveDrawerStacks(
 
     // A forced slide (per-zone or cabinet override) bypasses the fitting search, so an
     // over-tall box can still reach here. Emit the geometry so the clash is visible.
-    if (boxHeight + clearance > openingHeight + EPS) {
+    if (boxHeight + clearance + lift > openingHeight + EPS) {
       warnings.push({
         code: 'DRAWER_BOX_TOO_TALL',
         message: `Drawer ${zoneRef}: ${round1(boxHeight)}mm box` +
@@ -447,10 +455,10 @@ export function resolveDrawerStacks(
     // Cabinet-space origin of the box — interior left face (T + SCRL) plus the left
     // runner, so the box sits between the two rails which touch the gables.
     const boxX = leftMemberX + runnerThick
-    // Bottom aligns with the face zone, but never below the interior floor — the
-    // lowest drawer's zone.Y sits a panel thickness below it, which would drop the
-    // box through the carcase bottom panel.
-    const boxY = Math.max(zone.Y, internalFloorY)
+    // Bottom sits `lift` above the face zone (system drawers), never below the
+    // interior floor — the lowest drawer's zone.Y sits a panel thickness below it,
+    // which would drop the box through the carcase bottom panel.
+    const boxY = Math.max(zone.Y + lift, internalFloorY)
     const boxZ = zone.Z - boxDepth    // cabinet Z of the back face of the box
 
     // Slide Z: back of slide rail. Front of slide aligns with the front face of the box sides
