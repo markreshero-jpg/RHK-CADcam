@@ -1,0 +1,154 @@
+{
+  "_source": "z_sample_plans/RHK6581 - Lee Smith - 38 Howard St, Grange/38 Howard SM - Markup 260927.pdf p2, views 1 (J01 plan) + 2 (elevation) + Mark Q&A 2026-10-23",
+  "_notes": [
+    "2520 OA x 500 OA deep (incl doors): carcass 480, SCRBK 0. 2400 incl 100 kick; ceiling 2900 (Mark); no bulkhead - flat LAM01 panel 2400-2900 flush with the door faces (BH front 'doors'), left return (seen end).",
+    "Elevation L->R: TEPF 18 seen end to floor (no wall) | T2D 500 set to ONE door (hinge left), adj ~450 AFFL, rail, adj ~1700 AFFL (Mark: draw the elevation's version, not the plan's 5 adj) | TEPK 18 | open bay 960: D2 base (2 drawers side by side + divider) to 432 + 18 LAM01 seat top = 450 AFFL, LAM01 back panel 450-1800, W2D 600 overhead 1800-2400 no shelf | TEPK 18 | T2D 976 4 adj | TFKW 30 at the right return wall (1000 long).",
+    "Hat hooks: 3 CAD circles at 1370 AFFL (920 above the 450 seat) + boxed text 'HAT HOOKS SUPPLIED BY OTHERS'. Handles client supplied, undrilled. Internals white MEL01.",
+    "Done after placement (room 13f64536): TC-02 face_grid -> 1 col door hinge left, internal hsplit [333.5 adj | 1234 adj + HANGING_RAIL_OVAL Y1510 | open] (shelf undersides 450 / 1700 AFFL, rail bottom 1610 AFFL); BC-01 face 1 row x 2 drawer cols + vsplit single divider (178 boxes); WC-03 no shelf; pos_z WC-01 432, WC-02 450, WC-03 1800, WC-04 2400; BH front doors + left return 500. Kick: TEPKs split the run into singles, so BC-01/TC-05/TC-06 were slid together, joinKicks(TC-02), slid back, KICK 1 stretched to 2502 (18 to the wall). Default hinges clear the shelf banks (0 errors / 0 warnings). CAD: rail note, 3 hook circles r15 at 1370 AFFL (x 776/1016/1256), boxed text, spec block from Bed 1."
+  ],
+  "projectName": "RHK6581 Lee Smith",
+  "roomName": "Entry J01",
+  "roomHeight": 2900,
+  "wallCabinetTop": 2400,
+  "walls": [
+    {
+      "x": 0,
+      "y": 0,
+      "length": 2520,
+      "angle": 0,
+      "_": "back wall, elevation left->right; left end open (no wall)"
+    },
+    {
+      "x": 2520,
+      "y": 0,
+      "length": 1000,
+      "angle": 90,
+      "_": "right return wall 1000 (Mark)"
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "TEPF",
+      "wall": 1,
+      "offset": 0,
+      "dx": 18,
+      "dy": 2400,
+      "dz": 480,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J01 seen 18 LAM01 end panel (left, open end), to floor"
+    },
+    {
+      "def": "T2D",
+      "wall": 1,
+      "offset": 18,
+      "dx": 500,
+      "dy": 2400,
+      "dz": 480,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J01 500 cpbd, ONE door hinged left, adj / hanging rail / adj (per elevation). HD01 by client, undrilled"
+    },
+    {
+      "def": "TEPK",
+      "wall": 1,
+      "offset": 518,
+      "dx": 18,
+      "dy": 2400,
+      "dz": 480,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J01 18 LAM01 panel, seen side of the open seat bay"
+    },
+    {
+      "def": "TEPK",
+      "wall": 1,
+      "offset": 1496,
+      "dx": 18,
+      "dy": 2400,
+      "dz": 480,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J01 18 LAM01 panel, seen side of the open seat bay"
+    },
+    {
+      "def": "T2D",
+      "wall": 1,
+      "offset": 1514,
+      "dx": 976,
+      "dy": 2400,
+      "dz": 480,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J01 2-door cpbd, 4 adj shelves 16 white. HD01 by client, undrilled"
+    },
+    {
+      "def": "TFKW",
+      "wall": 1,
+      "offset": 2490,
+      "dx": 30,
+      "dy": 2400,
+      "dz": 480,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J01 30 filler on the kick at the right wall"
+    },
+    {
+      "def": "D2-SL",
+      "wall": 1,
+      "offset": 536,
+      "dx": 960,
+      "dy": 432,
+      "dz": 480,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J01 seat drawers: 2 side by side (centre divider), top of seat 450 AFFL incl the 18 top"
+    },
+    {
+      "def": "WUP",
+      "wall": 1,
+      "offset": 536,
+      "dx": 960,
+      "dy": 18,
+      "dz": 500,
+      "note": "J01 18 LAM01 seat top, top at 450 AFFL (pos_z 432 set after placement); 30 cushion by others"
+    },
+    {
+      "def": "WUP",
+      "wall": 1,
+      "offset": 536,
+      "dx": 960,
+      "dy": 1350,
+      "dz": 18,
+      "note": "J01 18 LAM01 back panel in the open seat bay, 450-1800 AFFL (pos_z 450 set after placement)"
+    },
+    {
+      "def": "W2D",
+      "wall": 1,
+      "offset": 536,
+      "dx": 960,
+      "dy": 600,
+      "dz": 480,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J01 overhead over the seat, 1800-2400, no shelf. HD01 by client, undrilled"
+    },
+    {
+      "def": "BH",
+      "wall": 1,
+      "offset": 0,
+      "dx": 2520,
+      "dy": 500,
+      "dz": 480,
+      "note": "J01 flat LAM01 panel 2400-2900 (no bulkhead - Mark): flush with the door faces (front 'doors'), over the end panel, left return on - set after placement"
+    }
+  ]
+}
