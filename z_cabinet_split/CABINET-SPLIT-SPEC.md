@@ -7,8 +7,8 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → S0 spec drafted 2026-10-24 from Mark's description; open questions below
-> waiting on Mark before S1.
+> **RESUME HERE** → S0 done 2026-10-24 (questions answered). Next: S1 — after the RHK6581
+> kitchen benchtops (Mark: benchtops first).
 
 ---
 
@@ -44,16 +44,15 @@
 - Drawings: elevation draws the cut line; cut list / labels show "Left Side (lower / upper)".
 - Doors are not split.
 
-## Open (Mark)
+## Answered (Mark, 2026-10-24)
 
-1. Doors: a door across the cut stays one full-height door?
-2. More than one cut per cabinet, or only ever one?
-3. Anything joining the two halves besides the lip (dowels / connector holes through the shelf
-   into the upper sides)?
+1. **Doors stay full height** — a door across a cut is never split.
+2. **One or two cuts** per cabinet.
+3. **Hand fixings are enough** — nothing drilled across the cut (the 3 mm lip locates it).
 
 ## Phases
 
-- [~] **S0** Spec (this file)
+- [x] **S0** Spec (this file) — answered 2026-10-24
 - [ ] **S1** Data + resolver: split sides / back, part keys, persistence, tests
 - [ ] **S2** UI: right-click Split cabinet height, sidebar (suggestions + height), splitter line in elevation
 - [ ] **S3** Drawings / cut list labels / tutorial
