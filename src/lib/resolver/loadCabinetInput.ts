@@ -350,11 +350,14 @@ function loadClassSchedules(a: ClassScheduleArgs) {
 
 // The cabinet's construction method rules — cached by method id (or the shop
 // default when the cabinet doesn't name one), since the rows are library data.
+// Only an explicitly assigned method layers in. There is no fallback to the
+// is_default construction_methods row: it holds a full copy of the old system
+// defaults (REVT 4 …) and, merging after the schedule row, silently overrode the
+// cabinet builder's per-class values.
 function loadConstructionMethod(methodId: string | null) {
-  return cachedCascade(`method:${methodId ?? 'default'}`, async () =>
-    methodId
-      ? await supabase.from('construction_methods').select('rules').eq('id', methodId).single()
-      : await supabase.from('construction_methods').select('rules').eq('is_default', true).limit(1).maybeSingle())
+  if (!methodId) return Promise.resolve({ data: null } as { data: { rules?: unknown } | null })
+  return cachedCascade(`method:${methodId}`, async () =>
+    await supabase.from('construction_methods').select('rules').eq('id', methodId).single())
 }
 
 export async function loadCabinetInput(cabinetId: string): Promise<CabinetInput> {
