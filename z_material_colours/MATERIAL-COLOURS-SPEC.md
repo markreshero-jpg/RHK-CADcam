@@ -7,7 +7,7 @@
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
 > **RESUME HERE** → MC0 + MC1 done 2026-10-24: schema applied, 3 colours seeded
-> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). Next: MC2 library UI.
+> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI done. Next: MC3 resolver.
 > Grain: generic tinted tile by default, supplier images optional (§8).
 
 ---
@@ -183,14 +183,14 @@ fallback. To revisit at MC6 whether Colour Ranges then merge into board colours.
 ## 7. Phases
 
 - [x] **MC0** Data fix: back colour = face on LX Colour 16mm, PT Colour Matt 16mm and PT Woodmatt 16mm (2026-10-24).
-- [x] **MC1** Schema + seed (2026-10-24; board→colour propagation not yet proven by a real board edit).
+- [x] **MC1** Schema + seed (2026-10-24; board→colour propagation proven by a dz edit).
   - [x] `unpackMatCol` back null = face.
   - [x] Apply `migration_mc1_board_colours.sql` (Mark ran it in the SQL editor).
   - [x] Seed PT Classic White Matt (under PT Colour Matt 16mm, default), Elegant Oak (under LX Abs Grain 18mm, `has_grain`, default) and
     Boston Oak Woodmatt (under PT Woodmatt 16mm, `has_grain`, default). Costs blank.
-- [ ] **MC2** Library UI: boards list, colour sub-table, default radio, two-step pickers.
+- [x] **MC2** Library UI (2026-10-24): Board Stock lists boards only with an "N colours" chip; selecting a board opens `BoardColoursEditor` (name, code, finish, face/back/edge, grain, matching tape, sheet override, $/sht, default radio, active; saves on blur). Two-step board→colour pickers moved to MC4.
 - [ ] **MC3** Resolver: board-with-colours → default colour + `COLOUR_NOT_CHOSEN`; colour-matched edgeband.
-- [ ] **MC4** Job + room Colours tab: exposed grid row + interior picker (existing tables).
+- [ ] **MC4** Job + room Colours tab: exposed grid row + interior picker (existing tables); two-step board→colour picker component.
 - [ ] **MC5** CNC nest Materials list shows the colour-not-chosen warning; cut lists / costing show colour names.
 - [ ] **MC6** Fronts colour per class (§5) in the grid.
 - [ ] **MC7** CSV import of colour lists (when Mark has the files).

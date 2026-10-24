@@ -8,6 +8,7 @@ import SlideModelEditor, { type SlideModelRow } from './SlideModelEditor'
 import SlideDrillingEditor from './SlideDrillingEditor'
 import HingeDetailEditor from './HingeDetailEditor'
 import HandleModelEditor from './HandleModelEditor'
+import BoardColoursEditor from './BoardColoursEditor'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,7 +49,7 @@ const TABS: TabConfig[] = [
     id: 'board', label: 'Board Stock', table: 'materials', initKey: 'board',
     defaults: { name: '', brand: null, finish: null, dz: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, face_colour: null, back_colour: null, edge_colour: null, cost_per_sheet: null, cnc_tool_id: null, feed_rate_pct: null, active: true },
     fields: [
-      { key: 'name',           label: 'Name',     type: 'text',    w: 180 },
+      { key: 'name',           label: 'Name',     type: 'text',    w: 230 },
       { key: 'brand',          label: 'Brand',    type: 'text',    w: 110, placeholder: 'Laminex' },
       { key: 'finish',         label: 'Finish',   type: 'text',    w: 130, placeholder: 'White Satin' },
       { key: 'dz',             label: 'dz mm',    type: 'number',  w: 60,  step: '0.5' },
@@ -338,9 +339,21 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
 
   const hasBrandField = tab.fields.some(f => f.key === 'brand')
 
-  const visibleRows = rows.filter(r => {
+  // Board Stock lists boards only; colour rows (parent_id set) live under their
+  // board in the Colours panel (z_material_colours). The name filter also
+  // finds a board by one of its colours.
+  const isBoardTab = activeTab === 'board'
+  const baseRows = isBoardTab ? rows.filter(r => !r.parent_id) : rows
+  const coloursOf = (boardId: unknown) => isBoardTab ? rows.filter(r => r.parent_id === boardId) : []
+
+  const visibleRows = baseRows.filter(r => {
     if (!showInactive && r.active === false) return false
-    if (filterName && !String(r.name ?? '').toLowerCase().includes(filterName.toLowerCase())) return false
+    if (filterName) {
+      const q = filterName.toLowerCase()
+      const hit = String(r.name ?? '').toLowerCase().includes(q)
+        || coloursOf(r.id).some(c => String(c.colour_name ?? '').toLowerCase().includes(q))
+      if (!hit) return false
+    }
     if (filterBrand && !String(r.brand ?? '').toLowerCase().includes(filterBrand.toLowerCase())) return false
     return true
   })
@@ -401,6 +414,12 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
           ...prev,
           [activeTab]: prev[activeTab].map(r => r.id === editingId ? { ...r, ...payload } : r),
         }))
+        // Board edits flow into its colours by DB trigger (name, thickness,
+        // sheet size…): read them back so the Colours panel is current.
+        if (isBoardTab) {
+          const { data: cols } = await supabase.from('materials').select('*').eq('parent_id', editingId)
+          if (cols?.length) upsertBoardRows(cols as Record<string, unknown>[])
+        }
       } else {
         console.error('update error:', error)
       }
@@ -415,6 +434,15 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
       }
     }
     setSaving(false)
+  }
+
+  function upsertBoardRows(fresh: Record<string, unknown>[]) {
+    setAllRows(prev => {
+      const byId = new Map(fresh.map(r => [r.id, r]))
+      const kept = prev.board.map(r => byId.has(r.id) ? { ...r, ...byId.get(r.id)! } : r)
+      const added = fresh.filter(r => !prev.board.some(x => x.id === r.id))
+      return { ...prev, board: [...kept, ...added] }
+    })
   }
 
   const cellCls = (f: FieldConfig, i: number, last: number) =>
@@ -659,6 +687,30 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
           )
         })()}
 
+        {/* ── Board colours (z_material_colours MC2), when editing a board ── */}
+        {isBoardTab && editingId && (() => {
+          const r = rows.find(x => x.id === editingId)
+          if (!r || r.parent_id) return null
+          return (
+            <BoardColoursEditor
+              key={`colours-${editingId}`}
+              board={r}
+              colours={coloursOf(editingId)}
+              edgebands={allRows.edgeband ?? []}
+              onColours={upsertBoardRows}
+              onEdgebands={patches => {
+                setAllRows(prev => ({
+                  ...prev,
+                  edgeband: prev.edgeband.map(b => {
+                    const p = patches.find(x => x.id === b.id)
+                    return p ? { ...b, material_match_id: p.material_match_id } : b
+                  }),
+                }))
+              }}
+            />
+          )
+        })()}
+
         {/* ── Portal list ── */}
         <div className="flex-1 overflow-auto">
 
@@ -694,7 +746,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
             {sortedRows.length === 0 ? (
               <div className="px-4 py-10">
                 <p className="text-xs text-ink-subtle">
-                  {rows.length === 0
+                  {baseRows.length === 0
                     ? 'No records yet — fill in the form above and click Save.'
                     : 'All records inactive. Enable "Show inactive" to see them.'}
                 </p>
@@ -729,7 +781,15 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                             {row[f.key] ? String(row[f.key]) : '—'}
                           </span>
                         </>
-                      ) : f.key === 'cnc_tool_id' ? toolLabel(row[f.key]) : fmtCell(row[f.key], f)}
+                      ) : f.key === 'cnc_tool_id' ? toolLabel(row[f.key]) : isBoardTab && f.key === 'name' ? (
+                        <>
+                          {fmtCell(row[f.key], f)}
+                          {(() => {
+                            const n = coloursOf(row.id).filter(c => c.active !== false).length
+                            return n > 0 ? <span className="ml-1.5 px-1 rounded bg-accent/15 text-accent-ink text-[9px]">{n} colour{n !== 1 ? 's' : ''}</span> : null
+                          })()}
+                        </>
+                      ) : fmtCell(row[f.key], f)}
                     </div>
                   ))}
                 </div>
@@ -741,13 +801,13 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         {/* Footer */}
         <div className="flex-none border-t border-edge px-4 py-1.5 flex items-center justify-between">
           <span className="text-[10px] text-ink-subtle">
-            {sortedRows.length} of {rows.length} record{rows.length !== 1 ? 's' : ''}
+            {sortedRows.length} of {baseRows.length} record{baseRows.length !== 1 ? 's' : ''}
             {(filterName || filterBrand) && (
               <span className="ml-1">· filtered</span>
             )}
-            {!showInactive && rows.some(r => r.active === false) && (
+            {!showInactive && baseRows.some(r => r.active === false) && (
               <span className="ml-1">
-                · {rows.filter(r => r.active === false).length} inactive hidden
+                · {baseRows.filter(r => r.active === false).length} inactive hidden
               </span>
             )}
           </span>
