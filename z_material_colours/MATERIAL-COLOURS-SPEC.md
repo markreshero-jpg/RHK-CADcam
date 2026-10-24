@@ -7,7 +7,7 @@
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
 > **RESUME HERE** → MC0 + MC1 done 2026-10-24: schema applied, 3 colours seeded
-> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI, MC3 resolver, MC4 pickers, MC5 warnings + nest done. Next: MC6 fronts colour per class.
+> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI, MC3 resolver, MC4 pickers, MC5 warnings + nest, MC6 fronts colour done. Next: MC8 tutorial, then MC9 generic grain (MC7 CSV import waits on supplier files).
 > Grain: generic tinted tile by default, supplier images optional (§8).
 
 ---
@@ -160,11 +160,16 @@ every cell blank = inherit the job.
 The door **style** (profile / blank) stays in the door system. The fronts **colour**
 cell needs to point at a board colour.
 
-**Proposed for MC6:** `projects` / `rooms` gain
-`base|wall|tall_front_material_id` → materials (a colour row). When set, it is the
-fronts board and colour, overriding the Colour Range pick's `material_id`. The
-existing door Colour Ranges stay for supplier / painted doors and become a
-fallback. To revisit at MC6 whether Colour Ranges then merge into board colours.
+**Built at MC6 (2026-10-25), no schema change:** the fronts colour is a
+`door_face` row in `job_materials` / `room_materials` per class (the grid's
+"Doors / drawers" row). Precedence, weakest first: job Doors-tab colour 1 · job
+grid 2 · room Doors-tab colour 3 · room grid 4 · cabinet `material_overrides.door_face`
+5. When the grid pick wins, every front takes that board + colour and the
+`door_face` tape (colour-matched, else the style's tape); the style keeps profile +
+thickness. Blank grid = Doors tab as before. Doors-tab colours whose
+`material_id` is a board with colours fall back to its default colour +
+`COLOUR_NOT_CHOSEN` ("Doors: …"). Colour Ranges stay; merging them into board
+colours is left open.
 
 ## 6. Resolver + warnings
 
@@ -193,7 +198,7 @@ fallback. To revisit at MC6 whether Colour Ranges then merge into board colours.
 - [x] **MC3** Resolver (2026-10-25): `applyBoardColours` in loadCabinetInput (after cabinet overrides) swaps a board-with-colours for its default colour + `COLOUR_NOT_CHOSEN` (carried on `CabinetInput.material_warnings`, `ResolverError.material_id` = colour used); roles on a colour take its matched tape (colours only; plain boards keep schedule tapes). Covers matMap + kick roles; door Colour Range picks (`colour_material_id`) not yet — MC6. Checked live: forced exposed → PT Woodmatt board gave Boston Oak + warning; matched tape picked up; control cabinet unchanged. **Gap:** resolver warnings are not persisted (canvasDB loads `warnings: []`), so the warning only shows after a cabinet re-resolves; MC5 must persist or re-derive it for the nest.
 - [x] **MC4** (2026-10-25) Two-step `BoardColourSelect` (board, then colour; board-with-colours and no colour saves the board and shows amber "choose colour" = resolver warns). Used in the existing Interior/Exposed × base/wall/tall grid (Job Properties → Cabinet Standards → Material Schedules; Room Properties → Materials for room overrides) and the toe-kick rows, instead of a new Colours tab. "Copy to wall & tall" on the base column. Headless-checked on the job grid (pick board → amber, pick colour → saved colour id); room mode + copy button not clicked.
 - [x] **MC5** (2026-10-25) Resolver warnings now persist inside `cabinet_instances.resolved_drawer_hw.warnings` (rides the existing persist RPC blob, no schema change) and load back in canvasDB, so warnings show on page load. Nest: cabinets carry `colour_warnings` (`warnings:resolved_drawer_hw->warnings`, filtered to COLOUR_NOT_CHOSEN); Stage 2 Materials chip gets ⚠, Stage 3 material group "⚠ colour not chosen", Stage 4 amber note naming the colour + cabinets. Colour names on cut lists / nest come from the trigger-built `name` ("Board – Colour"). Checked end-to-end on RHK1234 BC-02 (job base interior → bare PT Woodmatt board: persisted Boston Oak + warning, all three nest spots showed it), then restored. Note: a board-without-colour pick warns on every cabinet of that class, even ones with no parts in that role.
-- [ ] **MC6** Fronts colour per class (§5) in the grid.
+- [x] **MC6** (2026-10-25) Fronts colour per class (§5): "Doors / drawers" grid row + resolver precedence; Doors-tab colours on a board-with-colours fall back + warn. Checked live on RHK1234 BC-02: job base fronts → Classic White Matt applied over the Doors tab; with it removed, the Doors-tab colour on bare PT Woodmatt fell back to Boston Oak + "Doors:" warning. Door colour "Elegant Oak" (Laminex Absolute Grain) relinked to the Elegant Oak colour row; the generic "Colour A" / "Colour TBC" door colours stay on their boards (they warn).
 - [ ] **MC7** CSV import of colour lists (when Mark has the files).
 - [ ] **MC8** Tutorial: "Job colours" (grid, room overrides, interior, colour-not-chosen warning).
 

@@ -839,6 +839,26 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     }
   }
 
+  // Fronts colour from the job / room material grid (z_material_colours MC6):
+  // a door_face pick there sets every front's board + tape, over the Doors-tab
+  // colour unless that colour is set at a more specific level. Rank, weakest
+  // first: job Doors colour 1 · job grid 2 · room Doors colour 3 · room grid 4
+  // · cabinet override 5. The door style still supplies profile + thickness.
+  const hasDoorFace = (res: unknown) =>
+    (((res as { data: unknown[] }).data ?? []) as MatRow[]).some(r => r.material_role === 'door_face' && r.materials)
+  const frontGridRank = matOverrides.door_face ? 5 : hasDoorFace(roomMatsRes) ? 4 : hasDoorFace(jobMatsRes) ? 2 : 0
+  const doorColourRank = roomClassColour ? 3 : doorColourOverride ? 1 : 0
+  if (frontGridRank > doorColourRank) {
+    for (const d of Object.values(resolvedDoors)) {
+      d.colour_material_id = doorFace.id
+      d.edgeband_id = ebMap.get('door_face') ?? d.edgeband_id
+    }
+  } else {
+    // Doors-tab colours linked to a board that has colours: same fallback as
+    // the carcass roles (default colour + COLOUR_NOT_CHOSEN, matched tape).
+    materialWarnings.push(...await applyDoorBoardColours(resolvedDoors))
+  }
+
   // Shadowline split rail board (z_bulkhead B7).
   const bh = normaliseBulkhead(cab.bulkhead)
   const splitMatId = bh?.split.on ? bh.split.material_id : null
@@ -1037,6 +1057,37 @@ async function applyBoardColours(
     }
     const tape = tapeByColour.get(mat.id)
     if (tape) ebMap.set(s.ebKey, tape)
+  }
+  return warnings
+}
+
+// Door styles whose colour links a board with colours (Doors-tab colour
+// ranges): swap each to the board's default colour + warn, and take the
+// colour's matched tape. Mutates the resolved styles.
+async function applyDoorBoardColours(doors: Record<string, ResolvedDoorStyleInput>): Promise<ResolverError[]> {
+  const ids = [...new Set(Object.values(doors).map(d => d.colour_material_id).filter((x): x is string => !!x))]
+  if (ids.length === 0) return []
+  const { colours, tapes } = await loadBoardColourInfo(ids)
+  if (colours.length === 0) return []
+  const { data: boards } = await loadMaterialsByIds(ids)
+  const boardName = new Map(((boards ?? []) as Record<string, unknown>[]).map(b => [b.id as string, b.name as string]))
+  const tapeByColour = new Map(tapes.map(t => [t.material_match_id as string, t.id as string]))
+  const warnings: ResolverError[] = []
+  for (const boardId of ids) {
+    const boardColours = colours.filter(c => c.parent_id === boardId)
+    if (boardColours.length === 0) continue
+    const def = boardColours.find(c => c.is_default_colour)
+    for (const d of Object.values(doors)) {
+      if (d.colour_material_id !== boardId || !def) continue
+      d.colour_material_id = def.id as string
+      d.edgeband_id = tapeByColour.get(def.id as string) ?? d.edgeband_id
+    }
+    warnings.push({
+      code: 'COLOUR_NOT_CHOSEN', part: 'material', material_id: (def?.id as string | undefined) ?? boardId,
+      message: def
+        ? `Doors: the door colour uses ${boardName.get(boardId) ?? 'a board'}, which has colours, but none was chosen. Using the default, ${def.colour_name}.`
+        : `Doors: the door colour uses ${boardName.get(boardId) ?? 'a board'}, which has colours, but none was chosen, and the board has no default colour.`,
+    })
   }
   return warnings
 }

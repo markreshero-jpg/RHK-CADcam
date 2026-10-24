@@ -24,10 +24,12 @@ const ALL_SCHED_COLS = SCHED_TYPES.map(t => t.col).join(', ')
 
 // ── Per-role override config ──────────────────────────────────────────────────
 
-// door_face is deliberately absent: door material is owned by the Doors tab
-// (style + colour → linked board). The front schedule remains the silent
-// fallback for zones with no door style assigned.
+// door_face = the fronts colour (z_material_colours MC6): a pick here sets
+// every door / drawer front / false panel board for that class, over the Doors
+// tab colour at the same or a less specific level. Blank = the Doors tab
+// (style + colour) decides, as before; the style always sets profile + thickness.
 const ASM_ROLES = [
+  { key: 'door_face', label: 'Doors / drawers', desc: 'All fronts. Blank = Doors tab colour' },
   { key: 'interior',  label: 'Interior',  desc: 'Carcass panels' },
   { key: 'exposed',   label: 'Exposed',   desc: 'End panels, fillers, open interiors' },
   { key: 'shelf',     label: 'Shelf',     desc: 'Shelves' },
@@ -356,8 +358,8 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
   // ── Render ────────────────────────────────────────────────────────────────
 
   const asmRoles =
-    roleFilter === 'primary'   ? ASM_ROLES.filter(r => r.key === 'interior' || r.key === 'exposed')
-    : roleFilter === 'secondary' ? ASM_ROLES.filter(r => r.key !== 'interior' && r.key !== 'exposed')
+    roleFilter === 'primary'   ? ASM_ROLES.filter(r => r.key === 'door_face' || r.key === 'interior' || r.key === 'exposed')
+    : roleFilter === 'secondary' ? ASM_ROLES.filter(r => r.key !== 'door_face' && r.key !== 'interior' && r.key !== 'exposed')
     : ASM_ROLES
 
   function renderAsmGrid() {
@@ -382,7 +384,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
                   <BoardColourSelect
                     value={cur}
                     mats={allMats}
-                    inheritLabel={inh ? matName(inh) : '— no schedule value —'}
+                    inheritLabel={role.key === 'door_face' ? '— Doors tab colour —' : inh ? matName(inh) : '— no schedule value —'}
                     onChange={id => saveMatOverride(cls, role.key, id)}
                     className={selCls}
                   />

@@ -659,7 +659,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                       <section>
                         <SectionHead>Materials</SectionHead>
                         <p className="text-xs text-gray-500 mb-3">
-                          Interior &amp; exposed material per cabinet class — the job&apos;s main material picks.
+                          Doors / drawers, interior &amp; exposed board + colour per cabinet class — the job&apos;s main material picks.
                         </p>
                         <MaterialsScheduleTab mode="job" projectId={project.id} showSchedules={false} roleFilter="primary" />
                       </section>
