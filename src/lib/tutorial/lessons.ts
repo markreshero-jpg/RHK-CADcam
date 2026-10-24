@@ -717,6 +717,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click the opening under the shelf, then Add → Hanging rail. The rail runs wall to wall, centred in the depth, 60 under the top of the opening. Lock its height to put it somewhere else. It’s hardware, so it never goes to the CNC or the cut list.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-10-24 (z_island_back_panel — IBPF / IBPK).
+  { id: 'island_back_panel', level: 'intermediate', topic: 'cabinets', title: 'Add an island back panel',
+    blurb: 'Clad the back of an island run in the exposed board, split at the sheet width.',
+    keywords: 'island back panel IBPF IBPK floor kick sheet width grain split join exposed end panels', steps: [
+    { id: 'place', title: 'Place IBPF or IBPK on the island back',
+      body: 'Press F3 and open Base → End Panels. Pick IBPF (runs to the floor) or IBPK (stands on the kick), then click the back side of the island line. Set its width to cover the run, end panels included. Its depth follows the exposed board, and its height follows the base cabinets.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.back_panel) },
+    { id: 'sheet', title: 'Set the sheet width',
+      body: 'Select it. Under Island back panel, Sheet width (1200) is the widest piece the board allows. A wider panel splits into equal pieces with the grain running up, e.g. 2500 makes 3 × 833. Every edge is taped, joins included. The bottom edge is taped only when it stands on the kick. Switch To floor / To kick here too.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.back_panel && (cab.back_panel.sheet_w !== 1200 || cab.back_panel.mount === 'kick')) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
