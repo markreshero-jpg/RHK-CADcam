@@ -35,7 +35,7 @@ export function isCurvedEndKey(k: string): boolean {
   return k.startsWith('crv:')
 }
 export function isCurvedEndUprightKey(k: string): boolean {
-  return k === 'crv:fix' || k === 'crv:back' || k.startsWith('crv:blk_') || k === 'crv:kick_back' || k.startsWith('crv:kick_spr_')
+  return k === 'crv:fix' || k === 'crv:back' || k === 'crv:inner' || k.startsWith('crv:blk_') || k === 'crv:kick_back' || k.startsWith('crv:kick_spr_')
 }
 
 /** Top rail along a front facet (`rail:<edge>`), horizontal panel kind. */

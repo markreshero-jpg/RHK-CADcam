@@ -14,7 +14,7 @@ import {
 } from '@/src/lib/curvedEnd/settings'
 import { calcCurvedEnd, SKIN_MIN, SKIN_MAX, f1 } from '@/src/lib/curvedEnd/geometry'
 import { calcCurvedKick } from '@/src/lib/curvedEnd/kick'
-import { curvedEndLift, curvedKickParamsFor } from '@/src/lib/resolver/resolveCurvedEnd'
+import { curvedEndInnerT, curvedEndLift, curvedKickParamsFor } from '@/src/lib/resolver/resolveCurvedEnd'
 
 const BASE_CODE: Record<string, string> = { base: 'BCRVFIXP', wall: 'WCRVFIXP', tall: 'TCRVFIXP' }
 
@@ -39,7 +39,8 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
   const FT = cached?.exposed_material.DZ ?? 18, T = cached?.material.DZ ?? 16.5
   const canKick = !cabinet.assembly_class.startsWith('wall')
   const { kickH, splitH } = curvedEndLift(s, cabinet.assembly_class, cached)
-  const c = calcCurvedEnd(curvedEndParams(s, { DX: cabinet.dx, DY: cabinet.dy, DZ: cabinet.dz }, FT, T, kickH + splitH))
+  // C8: an inside face panel takes its thickness off the width the curved end builds in.
+  const c = calcCurvedEnd(curvedEndParams(s, { DX: cabinet.dx - curvedEndInnerT(s, FT), DY: cabinet.dy, DZ: cabinet.dz }, FT, T, kickH + splitH))
   // C5: the curved kick, checked once the cabinet has resolved (needs the kick boards).
   const kick: ReturnType<typeof calcCurvedKick> | null = kickH > 0 && cached ? calcCurvedKick(c, curvedKickParamsFor(cached, kickH)) : null
   const single = s.hand !== 'DOUBLE'
@@ -79,6 +80,8 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
           </select>
         </div>
       </div>
+      {single && tick('Inside face panel', s.inner, v => put({ inner: v }),
+        'Exposed panel on the square (gable) side, front to back, for when the inside is seen (e.g. an island knee space). It covers the fixing panel and the face board edge.')}
       {canKick && tick('On a kick (curved kick)', s.kick, v => put({ kick: v }),
         'Carcass sits up at the kick height; the kick board follows the curve, set back and bent like the face board')}
       {row('Radius', s.R, v => { if (v > 0) put({ R: v }) }, 'Outside radius of the curve')}

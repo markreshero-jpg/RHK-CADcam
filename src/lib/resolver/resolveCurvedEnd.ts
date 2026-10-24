@@ -82,12 +82,20 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
   // On a kick (C5) / a split rail (C7) the engine builds the carcass above it and everything lifts.
   const { kickH, splitH } = curvedEndLift(s, cab.assembly_class, cab)
   const lift = kickH + splitH
-  const c = calcCurvedEnd(curvedEndParams(s, cab, FT, T, lift))
+  // Inside face panel (C8): the engine builds the rest of the width, moved off
+  // the gable side by the panel (RH: the gable is at X 0; LH: at X = DX).
+  const pT = curvedEndInnerT(s, FT)
+  const shiftX = s.hand === 'RH' ? pT : 0
+  const c = calcCurvedEnd(curvedEndParams(s, { DX: cab.DX - pT, DY: cab.DY, DZ: cab.DZ }, FT, T, lift))
   const errors: ResolverError[] = c.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'case' }))
   const warnings: ResolverError[] = c.notes.map(m => ({ code: 'CURVED_END_NOTE', message: m, part: 'case' }))
   const parts = curvedEndCaseParts(c, cab.exposed_material.id, cab.material.id, s.grain, cab.exposed_edgeband_id)
-    .map(p => (lift ? { ...p, Y: p.Y + lift } : p))
-  const seams = curvedEndSeams(c).map(sm => (lift ? { ...sm, geom: { ...sm.geom, origin: { ...sm.geom.origin, y: sm.geom.origin.y + lift } } } : sm))
+    .map(p => ({
+      ...p, Y: p.Y + lift,
+      // The inside panel covers the face board's gable end — no tape there.
+      ...(pT && p.part_key === 'crv:face' ? { edge_band: { ...NO_BAND } } : {}),
+    }))
+  const seams = curvedEndSeams(c).map(sm => ({ ...sm, geom: { ...sm.geom, origin: { ...sm.geom.origin, x: sm.geom.origin.x + shiftX, y: sm.geom.origin.y + lift } } }))
   if (splitH) {
     if (c.double) errors.push({ code: 'CURVED_END', message: 'A shadowline split rail follows a single curve only — not on a double curved end.', part: 'case' })
     else parts.push(curvedSplitRail(c, cab.bulkhead!.split, splitH, cab.split_material!.id))
@@ -98,7 +106,35 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
     if (k.ok) parts.push(...curvedKickParts(c, k, kp, cab.toekick_face_material.id, cab.toekick_interior_material.id))
     else errors.push(...k.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'toekick' as const })))
   }
-  return { parts, seams, errors, warnings }
+  const out = shiftX ? parts.map(p => ({ ...p, X: p.X + shiftX, ...(p.wrap ? { wrap: { ...p.wrap, pts: p.wrap.pts.map(q => ({ ...q, x: q.x + shiftX })) } } : {}) })) : parts
+  if (pT) out.push(curvedInnerPanel(s.hand === 'LH', pT, cab.DX, cab.DZ, c.p.H, lift, cab.exposed_material.id, cab.exposed_edgeband_id))
+  return { parts: out, seams, errors, warnings }
+}
+
+/** Thickness of a curved end's inside face panel (C8): the exposed board when
+ *  ticked on a single end, else 0. */
+export function curvedEndInnerT(s: Pick<CurvedEndSettings, 'inner' | 'hand'>, exposedT: number): number {
+  return s.inner && s.hand !== 'DOUBLE' ? exposedT : 0
+}
+
+/**
+ * Inside face panel (C8, Mark 2026-10-24: "the inside of them is going to be
+ * seen … allowing a face panel to be added to the inside square edge"): an
+ * exposed board on the square gable side, front to back and the face board's
+ * height, covering the fixing panel and the face board's gable end. Upright,
+ * face-kind (as a bulkhead side return): RH at X 0 turned +90 (front end =
+ * local `left`), LH at X = DX turned −90 (front end = local `right`). Only the
+ * front edge is taped.
+ */
+export function curvedInnerPanel(
+  lh: boolean, t: number, W: number, D: number, H: number, y: number, mat: string, ebId?: string,
+): ResolvedCasePart {
+  return {
+    part_key: 'crv:inner', DX: H, DY: D, DZ: t,
+    X: lh ? W : 0, Y: y, Z: lh ? 0 : D, AX: 0, AY: lh ? -90 : 90, AZ: 0,
+    material_id: mat,
+    edge_band: { ...NO_BAND, ...(lh ? { right: true } : { left: true }), id: ebId },
+  }
 }
 
 /**
@@ -346,7 +382,7 @@ export function curvedEndPartLabel(key: string): string | null {
   const spr = /^kick_spr_(\d+)$/.exec(k)
   if (spr) return `Curved Kick Spreader ${spr[1]}`
   return ({
-    face: 'Curved Face Board', fix: 'Curved End Fixing Panel', back: 'Curved End Back',
+    face: 'Curved Face Board', fix: 'Curved End Fixing Panel', inner: 'Curved End Inside Panel', back: 'Curved End Back',
     top: 'Curved End Top', bottom: 'Curved End Bottom',
     blk_side: 'Curved End Fixing Block (side)', blk_side_l: 'Curved End Fixing Block (left)',
     blk_side_r: 'Curved End Fixing Block (right)', blk_front: 'Curved End Fixing Block (front)',

@@ -293,6 +293,12 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
     the front, the curve (radius R − setback) and the side back to the wall, `setback` behind the
     face; the engine builds `DY − rail` high and every part lifts by the rail. Single ends only
     (DOUBLE → error).
+- [~] **C8** (built 2026-10-24, in-app check pending) Inside face panel (Mark, 2026-10-24, RHK6581 J05
+  island: "the inside of them is going to be seen … allowing a face panel to be added to the inside
+  square edge"). `curved_end.inner` (sidebar tick, single ends): an exposed board `crv:inner` on the
+  square gable side, front to back × the face board height, front edge taped. The kit builds
+  `DX − panel` and every part (seams, wrap, rail, kick) moves off the gable by the panel — the kit
+  geometry is unchanged. The face board's gable-end tape (decision 16) is dropped under it.
 
 ## Open
 

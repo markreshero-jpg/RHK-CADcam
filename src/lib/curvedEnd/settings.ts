@@ -35,13 +35,14 @@ export interface CurvedEndSettings {
   grain:   CurvedEndGrain  // face board grain (decision 8: vertical by default)
   ribs:    number | null   // ribs between top and bottom; null = auto (the kit's gap rule)
   kick:    boolean         // C5: carcass on a kick (TOEH up) with a curved kick board; base / tall only
+  inner:   boolean         // C8: exposed face panel on the square gable side (seen inside, e.g. island knee space); single ends only
 }
 
 export const DEFAULT_CURVED_END: CurvedEndSettings = {
   hand: 'RH', R: CURVED_END_DEFAULTS.R, SK: CURVED_END_DEFAULTS.SK,
   OG: 0, OL: 0, OR: 0, SBK: 0, SBT: 0, STP: 0,
   lighten: false, B: CURVED_END_DEFAULTS.B, onion: false, OS: CURVED_END_DEFAULTS.OS,
-  blkS: false, blkF: false, grain: 'vertical', ribs: null, kick: false,
+  blkS: false, blkF: false, grain: 'vertical', ribs: null, kick: false, inner: false,
 }
 
 const num = (v: unknown, d: number, min = 0) => {
@@ -67,6 +68,7 @@ export function normaliseCurvedEnd(s: Partial<CurvedEndSettings> | null | undefi
     grain:   s.grain === 'horizontal' ? 'horizontal' : 'vertical',
     ribs:    s.ribs != null && Number.isFinite(Number(s.ribs)) && Number(s.ribs) >= 0 ? Math.round(Number(s.ribs)) : null,
     kick:    !!s.kick,
+    inner:   !!s.inner,
   }
 }
 
