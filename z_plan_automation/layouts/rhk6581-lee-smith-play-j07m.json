@@ -5,7 +5,8 @@
     "L->R: TFKW 30 at the left wall | T2D 750 | T2D 750 | TEPF 16.5 seen from the desk, to floor | desk bay 839.5 (16.5 top at 720 AFFL) to the right wall.",
     "600 OA incl doors (carcass 581.5, SCRBK 0), 2400 incl 100 kick, LAM03 bulkhead flush with carcass 2400-2475 wall to wall. ",
     "Done after placement (room a642f31b-05cc-47b4-ad15-22f42c2dcede): rooms door_style_override_id + base/wall/tall_door_style_id = Laminex 16mm Colour, base/wall/tall_door_colour_id = Sunbaked Natural; room_materials exposed (base/wall/tall) + room_toekick_materials face = LX Colour 16mm. Panel dx 16.5 + desk dx 839.5 reset after placeCabinet rounding; desk pos_z 703.5, BH pos_z 2400. joinKicks -> KICK 1 0-1530 under the filler + T2Ds. CAD: spec block (from J12). 0 errors / 0 warnings.",
-    "2026-10-24 Mark: NOT existing - we make the cabinets (5 adj shelves each, hinges [2196,1630,870,100] clear of shelf holes). Bulkhead only over the cupboards: offset 0, dx 1530, stops at the carcass on the desk side with a right return 581.5 mitre."
+    "2026-10-24 Mark: NOT existing - we make the cabinets (5 adj shelves each, hinges [2196,1630,870,100] clear of shelf holes). Bulkhead only over the cupboards: offset 0, dx 1530, stops at the carcass on the desk side with a right return 581.5 mitre.",
+    "2026-10-24 Mark: desk support panel BC-01 = BEPF 16.5 x 703.5 at the wall (offset 2369.5), floor to the desk underside; elevation CAD text DESK above the top. All carcass/panel/BH/kick dz 582 -> 600 OA (doors are the 16 blank; t.door fix makes panels cab.d + 16 + 2 = 600)."
   ],
   "projectName": "RHK6581 Lee Smith",
   "roomName": "Play J07M",
@@ -41,7 +42,7 @@
       "offset": 0,
       "dx": 30,
       "dy": 2400,
-      "dz": 581.5,
+      "dz": 582,
       "rules": {
         "SCRBK": 0
       },
@@ -53,7 +54,7 @@
       "offset": 30,
       "dx": 750,
       "dy": 2400,
-      "dz": 581.5,
+      "dz": 582,
       "rules": {
         "SCRBK": 0
       },
@@ -65,7 +66,7 @@
       "offset": 780,
       "dx": 750,
       "dy": 2400,
-      "dz": 581.5,
+      "dz": 582,
       "rules": {
         "SCRBK": 0
       },
@@ -77,7 +78,7 @@
       "offset": 1530,
       "dx": 16.5,
       "dy": 2400,
-      "dz": 581.5,
+      "dz": 582,
       "rules": {
         "SCRBK": 0
       },
@@ -98,8 +99,20 @@
       "offset": 0,
       "dx": 1530,
       "dy": 75,
-      "dz": 581.5,
+      "dz": 582,
       "note": "J07M LAM03 bulkhead 2400-2475, flush with carcass, over the cupboards only, right return on the desk side"
+    },
+    {
+      "def": "BEPF",
+      "wall": 2,
+      "offset": 2369.5,
+      "dx": 16.5,
+      "dy": 703.5,
+      "dz": 582,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "Desk support panel 16.5 LAM03 at the wall, floor to the underside of the desk top"
     }
   ]
 }
