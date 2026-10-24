@@ -1,0 +1,377 @@
+{
+  "_source": "z_sample_plans/RHK6581 - Lee Smith - 38 Howard St, Grange/38 Howard SM - Markup 260927.pdf p1 (kitchen plan, elev A island + butler's section, elev B back run) + Mark Q&A 2026-10-24",
+  "_notes": [
+    "One room for J04 Butler's + J05 Kitchen (Mark). CH 2500. Frame: x from the butler's west wall, y from the north wall (grid C). Butler's 1685 wide, 90 partition (1685-1775), kitchen 4925 (1775-6700), south wall (grid A) at 3061.",
+    "Butler's walls drawn square; the real north-east corner is a R500 curved wall (CAD arc). Kitchen east + south walls = their own chain. Island on a detached island line at y 665 (cabinet backs), 2818-5818, faces south.",
+    "J05 back run (south wall, east->west = Elev B L->R): TFKW 32 | broom T2D 600 (1 door) | WOT-COMBI 636 (TEPK|600|TEPK) | 3 x D3-SLL 865 (cooktop on the middle) | TEPF 18 | fridge 994 + W2D 994 x 700 over (1800-2500) | TEPF 18 | TFKW 32 = 4925. Carcass 655 (700 bench), talls 2500 to the ceiling, bases 900 (20 slab straight on the carcass, no shadowline).",
+    "J05 island (3000 x 1200): south 580 carcass (600 incl doors): BEPF 18 | D4 448 | D4 448 | BBIN 450 | B2D 1000 sink | BEPF 18 | 600 DW gap | BEPF 18. 80 apron slab: carcass to 900, REVT +60 (fronts hang 60 + reveal below the carcass top). North: BCRVFIXP 500 x 580 x 900 each end (R300, to the floor, inside face panel) + IBPF 2000 between.",
+    "Rangehood canopy: BHCRVFIXP DOUBLE 1200 x 1000 (1500-2500) x 400, R200, raw MDF 18 face, centred on the cooktop. Push-to-open: oven tower top door + fridge overhead.",
+    "J04 butler's: north wall TFKW 30 | 2 x open tall 796 x 2500 x 400, 5 fixed shelves, all 16 whiteboard | TFKW 50 at the curve; right cab back-right corner truncated to the curved wall chord. West wall (S->N): BEPF 18 | wine fridge 505 | BEPF 18 | B2D 900 (2 door) to the shelves = 1445 (+4); bench 900 (carcass 880 + 20 ST01). Doorway 912 in the partition.",
+    "WOT-COMBI is a kit (placeCabinet drops 5 members) - placed AFTER draw-plan, once rooms.class_dimension_defaults = { tall: {dy 2500, dz 655}, base: {dy 900, dz 655} } so the kit sizes to 2500 x 655.",
+    "Done after placement (room 1227b2c8-ee65-4ea8-a7e8-e3b1144bfcd0): class_dimension_defaults tall 2500/655 base 900/655 wall 700/655; WOT-COMBI kit placed Wall 6 @632 (TEPK TC-10 | D2-LL BC-17 | oven core TC-11 | W2D WC-03 outset | TEPK TC-12); broom TC-02 1 door; canopy WC-02 DOUBLE R200 ribs auto, auto_h off, exposed = MDF 18mm; island BC-01 RH / BC-03 LH R300 inner panel; island BC-08..11 REVT 64 (80 apron), D4 rows unlocked; butler TC-07/08 open face, 6 equal bays / 5 fixed shelves, all whiteboard (exposed + kick face), TC-08 footprint back-right clipped 359 along / 257 deep; kicks: KICK 1 0-650, KICK 4 1250-3863 (under both kit TEPKs), island KICK 2, butler KICK 3 (white); doorway 912 on Wall 3 @1095; PUSH TO OPEN notes; plan note for the R500 curved wall; spec block from Bed 1. 0 errors / 0 warnings."
+  ],
+  "projectName": "RHK6581 Lee Smith",
+  "roomName": "Kitchen J05 + Butler's J04",
+  "roomHeight": 2500,
+  "wallCabinetTop": 2500,
+  "walls": [
+    {
+      "x": 0,
+      "y": 3061,
+      "length": 3061,
+      "angle": 270,
+      "_": "1 butler's west wall (grid 3), S->N"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "length": 1685,
+      "angle": 0,
+      "_": "2 butler's north wall (grid C); NE corner is really a R500 curve"
+    },
+    {
+      "x": 1685,
+      "y": 0,
+      "length": 3061,
+      "angle": 90,
+      "_": "3 partition, butler's face (90 thick to the kitchen side); doorway 1095-2007"
+    },
+    {
+      "x": 1685,
+      "y": 3061,
+      "length": 1685,
+      "angle": 180,
+      "_": "4 butler's south wall (under the stair)"
+    },
+    {
+      "x": 6700,
+      "y": 0,
+      "length": 3061,
+      "angle": 90,
+      "detached": true,
+      "_": "5 kitchen east wall (grid 4), N->S"
+    },
+    {
+      "x": 6700,
+      "y": 3061,
+      "length": 4925,
+      "angle": 180,
+      "_": "6 kitchen back wall (grid A), E->W = Elev B L->R"
+    },
+    {
+      "x": 2818,
+      "y": 665,
+      "length": 3000,
+      "angle": 0,
+      "type": "island",
+      "detached": true,
+      "height": 900,
+      "_": "7 island line (cabinet backs), W->E, faces south = Elev A L->R"
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "TFKW",
+      "wall": 6,
+      "offset": 0,
+      "dx": 32,
+      "dy": 2500,
+      "dz": 655,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 filler at the east wall"
+    },
+    {
+      "def": "T2D",
+      "wall": 6,
+      "offset": 32,
+      "dx": 600,
+      "dy": 2500,
+      "dz": 655,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 BROOM tall, one full-height door. Linear handle TBC"
+    },
+    {
+      "def": "D3-SLL",
+      "wall": 6,
+      "offset": 1268,
+      "dx": 865,
+      "dy": 900,
+      "dz": 655,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 3 drawers"
+    },
+    {
+      "def": "D3-SLL",
+      "wall": 6,
+      "offset": 2133,
+      "dx": 865,
+      "dy": 900,
+      "dz": 655,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 3 drawers, cooktop over"
+    },
+    {
+      "def": "D3-SLL",
+      "wall": 6,
+      "offset": 2998,
+      "dx": 865,
+      "dy": 900,
+      "dz": 655,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 3 drawers"
+    },
+    {
+      "def": "TEPF",
+      "wall": 6,
+      "offset": 3863,
+      "dx": 18,
+      "dy": 2500,
+      "dz": 655,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 fridge panel (drawer side), to the floor"
+    },
+    {
+      "def": "TEPF",
+      "wall": 6,
+      "offset": 4875,
+      "dx": 18,
+      "dy": 2500,
+      "dz": 655,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 fridge panel (partition side), to the floor"
+    },
+    {
+      "def": "TFKW",
+      "wall": 6,
+      "offset": 4893,
+      "dx": 32,
+      "dy": 2500,
+      "dz": 655,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 filler at the partition"
+    },
+    {
+      "def": "W2D",
+      "wall": 6,
+      "offset": 3881,
+      "dx": 994,
+      "dy": 700,
+      "dz": 655,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 fridge overhead 1800-2500, PUSH TO OPEN"
+    },
+    {
+      "def": "BHCRVFIXP",
+      "wall": 6,
+      "offset": 1965.5,
+      "dx": 1200,
+      "dy": 1000,
+      "dz": 400,
+      "note": "J05 rangehood canopy, raw MDF 18 face (painted by others), R200 both corners, recessed LED under"
+    },
+    {
+      "def": "BEPF",
+      "wall": 7,
+      "offset": 0,
+      "dx": 18,
+      "dy": 900,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 island end panel (west)"
+    },
+    {
+      "def": "D4-SSSL",
+      "wall": 7,
+      "offset": 18,
+      "dx": 448,
+      "dy": 900,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 island 4 drawers"
+    },
+    {
+      "def": "D4-SSSL",
+      "wall": 7,
+      "offset": 466,
+      "dx": 448,
+      "dy": 900,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 island 4 drawers, 2 x double GPO to the back of the top drawer"
+    },
+    {
+      "def": "BBIN",
+      "wall": 7,
+      "offset": 914,
+      "dx": 450,
+      "dy": 900,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 island bin"
+    },
+    {
+      "def": "B2D",
+      "wall": 7,
+      "offset": 1364,
+      "dx": 1000,
+      "dy": 900,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 island sink cupboard, 1 adj"
+    },
+    {
+      "def": "BEPF",
+      "wall": 7,
+      "offset": 2364,
+      "dx": 18,
+      "dy": 900,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 panel beside the dishwasher"
+    },
+    {
+      "def": "BEPF",
+      "wall": 7,
+      "offset": 2982,
+      "dx": 18,
+      "dy": 900,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J05 island end panel (east)"
+    },
+    {
+      "def": "BCRVFIXP",
+      "wall": 7,
+      "offset": 0,
+      "dx": 500,
+      "dy": 900,
+      "dz": 580,
+      "flip": true,
+      "note": "J05 island curved end (west), R300, to the floor, inside face panel"
+    },
+    {
+      "def": "IBPF",
+      "wall": 7,
+      "offset": 500,
+      "dx": 2000,
+      "dy": 900,
+      "dz": 18,
+      "flip": true,
+      "note": "J05 island knee-space back panel (cabinet backs seen)"
+    },
+    {
+      "def": "BCRVFIXP",
+      "wall": 7,
+      "offset": 2500,
+      "dx": 500,
+      "dy": 900,
+      "dz": 580,
+      "flip": true,
+      "note": "J05 island curved end (east), R300, to the floor, inside face panel"
+    },
+    {
+      "def": "TFKW",
+      "wall": 2,
+      "offset": 0,
+      "dx": 30,
+      "dy": 2500,
+      "dz": 400,
+      "note": "J04 filler at the west wall, 16 whiteboard"
+    },
+    {
+      "def": "T2D",
+      "wall": 2,
+      "offset": 30,
+      "dx": 796,
+      "dy": 2500,
+      "dz": 400,
+      "note": "J04 open shelving tall, 5 fixed shelves, 16 whiteboard"
+    },
+    {
+      "def": "T2D",
+      "wall": 2,
+      "offset": 826,
+      "dx": 796,
+      "dy": 2500,
+      "dz": 400,
+      "note": "J04 open shelving tall, 5 fixed shelves, 16 whiteboard; back-right corner truncated to the curved wall"
+    },
+    {
+      "def": "TFKW",
+      "wall": 2,
+      "offset": 1622,
+      "dx": 50,
+      "dy": 2500,
+      "dz": 400,
+      "note": "J04 50 filler at the curved wall (scribe)"
+    },
+    {
+      "def": "BEPF",
+      "wall": 1,
+      "offset": 1216,
+      "dx": 18,
+      "dy": 880,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J04 wine fridge panel (doorway end), to the floor"
+    },
+    {
+      "def": "BEPF",
+      "wall": 1,
+      "offset": 1739,
+      "dx": 18,
+      "dy": 880,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J04 wine fridge panel (cupboard side)"
+    },
+    {
+      "def": "B2D",
+      "wall": 1,
+      "offset": 1757,
+      "dx": 900,
+      "dy": 880,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J04 2-door cupboard under the bench, 1 adj. HD01 by client, undrilled"
+    }
+  ]
+}
