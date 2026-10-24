@@ -1851,7 +1851,7 @@ export function CabinetScene({
 export default function Cabinet3DView({
   cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, shapeOverrides, onPartSelect, showDrilling = true, onUpdate, onDeletePart,
   setCustomParts, onOverridesChange, onEditPart, panelHost, onPanelVisibleChange, compactInfo = false,
-  fixtures, selectedFixtureId, onFixtureSelect,
+  fixtures, selectedFixtureId, onFixtureSelect, onEdgeSaved,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
@@ -1897,6 +1897,9 @@ export default function Cabinet3DView({
   fixtures?:          LocalFixtureBox[]
   selectedFixtureId?: string | null
   onFixtureSelect?:   (id: string) => void
+  // Fires after an edge-band click is saved, so the host can patch its copy of
+  // the resolved cabinet (otherwise reopening shows the old edges).
+  onEdgeSaved?:       (partId: string, edge: PartEdge) => void
 }) {
   const [selectedPart, setSelectedPart]       = useState<PartMeta | null>(null)
   const [fullFor, setFullFor]                 = useState<string | null>(null)   // compactInfo: part showing the full panel
@@ -1913,8 +1916,6 @@ export default function Cabinet3DView({
 
   const didHitPartRef   = useRef(false)
   const hitHardwareRef  = useRef(false)   // last pick was a hinge / handle / bin (no edit menu)
-  const prevPartRef     = useRef<PartMeta | null>(null)
-  const originalEdgeRef = useRef<PartEdge | null>(null)
 
   // Report panel visibility to the host (edit modal) so it can swap the cabinet
   // info out while the docked part panel is showing.
@@ -1922,26 +1923,6 @@ export default function Cabinet3DView({
     onPanelVisibleChange?.(showFullPanel)
     return () => onPanelVisibleChange?.(false)
   }, [showFullPanel, onPanelVisibleChange])
-
-  // Persist edge band changes when the selection moves away from a part.
-  useEffect(() => {
-    const prev  = prevPartRef.current
-    const prevId = prev?.id
-    const curId  = selectedPart?.id
-
-    if (prev && prevId !== curId && originalEdgeRef.current) {
-      const orig    = originalEdgeRef.current
-      const changed = (Object.keys(orig) as (keyof PartEdge)[]).some(k => prev.edge[k] !== orig[k])
-      if (changed) saveSVGEdge(cab.id, prev)
-    }
-
-    if (selectedPart && selectedPart.id !== prevId) {
-      originalEdgeRef.current = { ...selectedPart.edge }
-    } else if (!selectedPart) {
-      originalEdgeRef.current = null
-    }
-    prevPartRef.current = selectedPart
-  }, [selectedPart]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Delete/Backspace removes the selected part (custom → deleted, resolved →
   // hidden). Capture phase + stopImmediatePropagation so the canvas behind the
@@ -1982,12 +1963,14 @@ export default function Cabinet3DView({
     }
   }
 
+  // Saved on every click — waiting for the selection to move lost the edit when
+  // the modal was closed with the part still selected.
   function handleEdgeChange(edge: PartEdge) {
-    setSelectedPart(prev => {
-      if (!prev) return null
-      setEdgeOverrides(m => { const n = new Map(m); n.set(prev.id, edge); return n })
-      return { ...prev, edge }
-    })
+    const part = selectedPart
+    if (!part) return
+    setEdgeOverrides(m => new Map(m).set(part.id, edge))
+    setSelectedPart({ ...part, edge })
+    saveSVGEdge(cab.id, { ...part, edge }).then(() => onEdgeSaved?.(part.id, edge))
   }
 
   // Resize the selected part from the inspector. The panel edits the visible 3D

@@ -173,7 +173,7 @@ function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onO
 }
 
 export default function CabinetEditModal({
-  cabinet, wall, wallCabinets, resolvedCabinet, initialView, onUpdate, onDelete, onClose, materialColours, ebByMatId, onHiddenChange, onCustomPartsChange,
+  cabinet, wall, wallCabinets, resolvedCabinet, initialView, onUpdate, onDelete, onClose, materialColours, ebByMatId, onHiddenChange, onCustomPartsChange, onEdgeChange,
   fixtures, onFixtureSwap, onFixtureRemove, onFixtureSelectOnCanvas,
 }: {
   cabinet: CabinetInstance
@@ -192,6 +192,9 @@ export default function CabinetEditModal({
   // Lets the parent canvas reflect custom-part add/edit/delete live (updates the
   // shared resolved map's custom_parts so the room plan/elevation/3D update at once).
   onCustomPartsChange?: (cabinetId: string, parts: CabinetCustomPart[]) => void
+  // Fires after a hand edge-band edit is saved, so the parent patches the shared
+  // resolved map (without it, reopening the modal shows the old edges).
+  onEdgeChange?: (cabinetId: string, partId: string, edge: PartEdge) => void
   // Fixtures linked to this cabinet, in its frame (z_ubo U5) — drawn in the
   // Top / Elevation / Side / 3D views; picking one shows its card.
   fixtures?: LocalFixtureBox[]
@@ -269,8 +272,6 @@ export default function CabinetEditModal({
   const [panelHost, setPanelHost]         = useState<HTMLDivElement | null>(null)
   const [panel3DVisible, setPanel3DVisible] = useState(false)
 
-  const prevPartRef     = useRef<PartMeta | null>(null)
-  const originalEdgeRef = useRef<PartEdge | null>(null)
 
   const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face' && activeView !== 'interior' && activeView !== 'joints' && activeView !== 'overrides' && activeView !== 'routes' && activeView !== 'errors'
   const dockedPanelOpen = (isOrthoView && !!selectedSVGPart) || (activeView === '3d' && panel3DVisible)
@@ -421,22 +422,6 @@ export default function CabinetEditModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOrthoView, selectedSVGPart])
 
-  // Auto-save edge changes when selection moves to another part
-  useEffect(() => {
-    const prev = prevPartRef.current
-    if (prev && prev.id !== selectedSVGPart?.id && originalEdgeRef.current) {
-      const orig = originalEdgeRef.current
-      const changed = (Object.keys(orig) as (keyof PartEdge)[]).some(k => prev.edge[k] !== orig[k])
-      if (changed) saveSVGEdge(cabinet.id, prev)
-    }
-    if (selectedSVGPart && selectedSVGPart.id !== prev?.id) {
-      originalEdgeRef.current = { ...selectedSVGPart.edge }
-    } else if (!selectedSVGPart) {
-      originalEdgeRef.current = null
-    }
-    prevPartRef.current = selectedSVGPart
-  }, [selectedSVGPart]) // eslint-disable-line react-hooks/exhaustive-deps
-
   function handlePartContextMenu(parts: PartMeta[], cx: number, cy: number) {
     if (!selectedSVGPart) return
     const hit = parts.find(p => p.id === selectedSVGPart.id)
@@ -493,8 +478,13 @@ export default function CabinetEditModal({
     }
   }
 
+  // Saved on every click — waiting for the selection to move lost the edit when
+  // the modal was closed with the part still selected.
   function handleSVGEdgeChange(edge: PartEdge) {
-    setSelectedSVGPart(prev => prev ? { ...prev, edge } : null)
+    const part = selectedSVGPart
+    if (!part) return
+    setSelectedSVGPart({ ...part, edge })
+    saveSVGEdge(cabinet.id, { ...part, edge }).then(() => onEdgeChange?.(cabinet.id, part.id, edge))
   }
 
   // Hold the last known-good resolved data so the 3D view never blanks while the
@@ -704,7 +694,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'face'     && <FacetFaceGridEditor cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onPanelVisibleChange={setPanel3DVisible} compactInfo={phone}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onEdgeSaved={(partId, edge) => onEdgeChange?.(cabinet.id, partId, edge)} onPanelVisibleChange={setPanel3DVisible} compactInfo={phone}
               fixtures={fixtures} selectedFixtureId={selFixtureId} onFixtureSelect={setSelFixtureId} />}
             {selFixture && (activeView === '3d' || isOrthoView) && (
               <CabinetFixtureCard f={selFixture}

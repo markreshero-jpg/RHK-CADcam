@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useReducer, useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { getCachedInput, applyEdgeOverrides } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { underPanelRun, carcassesOverPanel, isUnderPanel, withoutScribe, UNDER_PANEL_DEF } from '@/src/lib/underPanel'
 import { useIsAdmin } from '@/src/lib/useRole'
 import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopSegment, RoomFixture, RoomAnnotation, FixtureCatalogItem } from '@/src/lib/types'
@@ -3930,6 +3930,20 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               const r = m.get(cabinetId)
               if (!r) return m
               return new Map(m).set(cabinetId, { ...r, custom_parts: parts as unknown as typeof r.custom_parts })
+            })}
+            onEdgeChange={(cabinetId, partId, edge) => setResolvedParts(m => {
+              const r = m.get(cabinetId)
+              if (!r) return m
+              // Copy the part arrays before applyEdgeOverrides mutates them in place.
+              const next = {
+                ...r,
+                case_parts:    r.case_parts.map(p => ({ ...p })),
+                toekick_parts: r.toekick_parts.map(p => ({ ...p })),
+                internal_parts: r.internal_parts.map(p => ({ ...p })),
+                face_zones:    r.face_zones.map(z => ({ ...z })),
+              }
+              applyEdgeOverrides(next, { [partId]: edge })
+              return new Map(m).set(cabinetId, next)
             })}
             fixtures={(() => {
               const plan = cabPlans.find(p => p.cab.id === cab.id)
