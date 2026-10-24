@@ -299,6 +299,13 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   square gable side, front to back × the face board height, front edge taped. The kit builds
   `DX − panel` and every part (seams, wrap, rail, kick) moves off the gable by the panel — the kit
   geometry is unchanged. The face board's gable-end tape (decision 16) is dropped under it.
+  - **Changed 2026-10-25** (Mark, BC-03 J05: "put a right scribe on the cabinet so i can sit the panel
+    inside the edge"): the panel now sits **behind the face board**. With the panel on, the gable
+    overhang `OG` becomes the **gable scribe** (sidebar "Gable scribe (right/left)"): the kit builds
+    `DX − panel − scribe`, its `OG` = panel + scribe, so the face board's gable end lands on the cabinet
+    edge and covers the panel's front edge. The panel is `D − FT` deep, set in by the scribe, untaped;
+    the face board's gable end is taped (it's the finished edge). `curvedEndInnerFit` in
+    resolveCurvedEnd.ts is the one place this is worked out (resolver + sidebar summary).
 
 ## Open
 

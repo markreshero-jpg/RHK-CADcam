@@ -59,8 +59,10 @@ const r2 = (v: number) => Math.round(v * 100) / 100
  */
 function gableBand(c: CurvedEndGeometry, grain: 'vertical' | 'horizontal', id?: string) {
   if (c.double || c.ovG > 0) return { ...NO_BAND }
-  return { ...NO_BAND, ...(grain === 'vertical' ? { bottom: true } : { left: true }), id }
+  return gableTape(grain, id)
 }
+const gableTape = (grain: 'vertical' | 'horizontal', id?: string) =>
+  ({ ...NO_BAND, ...(grain === 'vertical' ? { bottom: true } : { left: true }), id })
 
 /**
  * How far a curved end's carcass sits up: its kick (C5, base / tall) and, on a
@@ -83,17 +85,18 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
   const { kickH, splitH } = curvedEndLift(s, cab.assembly_class, cab)
   const lift = kickH + splitH
   // Inside face panel (C8): the engine builds the rest of the width, moved off
-  // the gable side by the panel (RH: the gable is at X 0; LH: at X = DX).
-  const pT = curvedEndInnerT(s, FT)
-  const shiftX = s.hand === 'RH' ? pT : 0
-  const c = calcCurvedEnd(curvedEndParams(s, { DX: cab.DX - pT, DY: cab.DY, DZ: cab.DZ }, FT, T, lift))
+  // the gable side by the panel + its scribe (RH: the gable is at X 0; LH: at X = DX).
+  const { pT, inset, s: built } = curvedEndInnerFit(s, FT)
+  const shiftX = s.hand === 'RH' ? inset : 0
+  const c = calcCurvedEnd(curvedEndParams(built, { DX: cab.DX - inset, DY: cab.DY, DZ: cab.DZ }, FT, T, lift))
   const errors: ResolverError[] = c.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'case' }))
   const warnings: ResolverError[] = c.notes.map(m => ({ code: 'CURVED_END_NOTE', message: m, part: 'case' }))
   const parts = curvedEndCaseParts(c, cab.exposed_material.id, cab.material.id, s.grain, cab.exposed_edgeband_id)
     .map(p => ({
       ...p, Y: p.Y + lift,
-      // The inside panel covers the face board's gable end — no tape there.
-      ...(pT && p.part_key === 'crv:face' ? { edge_band: { ...NO_BAND } } : {}),
+      // The face board runs over the inside panel's front edge: its gable end is
+      // the finished edge, taped (the engine's overhang would leave it raw).
+      ...(pT && p.part_key === 'crv:face' ? { edge_band: gableTape(s.grain, cab.exposed_edgeband_id) } : {}),
     }))
   const seams = curvedEndSeams(c).map(sm => ({ ...sm, geom: { ...sm.geom, origin: { ...sm.geom.origin, x: sm.geom.origin.x + shiftX, y: sm.geom.origin.y + lift } } }))
   if (splitH) {
@@ -107,7 +110,7 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
     else errors.push(...k.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'toekick' as const })))
   }
   const out = shiftX ? parts.map(p => ({ ...p, X: p.X + shiftX, ...(p.wrap ? { wrap: { ...p.wrap, pts: p.wrap.pts.map(q => ({ ...q, x: q.x + shiftX })) } } : {}) })) : parts
-  if (pT) out.push(curvedInnerPanel(s.hand === 'LH', pT, cab.DX, cab.DZ, c.p.H, lift, cab.exposed_material.id, cab.exposed_edgeband_id))
+  if (pT) out.push(curvedInnerPanel(s.hand === 'LH', pT, inset - pT, FT, cab.DX, cab.DZ, c.p.H, lift, cab.exposed_material.id))
   return { parts: out, seams, errors, warnings }
 }
 
@@ -118,22 +121,37 @@ export function curvedEndInnerT(s: Pick<CurvedEndSettings, 'inner' | 'hand'>, ex
 }
 
 /**
+ * C8 fit (Mark, 2026-10-25, BC-03 J05): the inside panel sits behind the face
+ * board, set in from the cabinet's gable edge by the gable overhang (OG — the
+ * "gable scribe" while the panel is on). The engine builds DX − inset and its
+ * face board runs the panel + scribe past the fixing panel, so its gable end
+ * lands on the cabinet edge and covers the panel's front edge.
+ */
+export function curvedEndInnerFit(s: CurvedEndSettings, exposedT: number): { pT: number; inset: number; s: CurvedEndSettings } {
+  const pT = curvedEndInnerT(s, exposedT)
+  if (!pT) return { pT, inset: 0, s }
+  const inset = pT + s.OG
+  return { pT, inset, s: { ...s, OG: inset } }
+}
+
+/**
  * Inside face panel (C8, Mark 2026-10-24: "the inside of them is going to be
  * seen … allowing a face panel to be added to the inside square edge"): an
- * exposed board on the square gable side, front to back and the face board's
- * height, covering the fixing panel and the face board's gable end. Upright,
- * face-kind (as a bulkhead side return): RH at X 0 turned +90 (front end =
- * local `left`), LH at X = DX turned −90 (front end = local `right`). Only the
- * front edge is taped.
+ * exposed board on the square gable side, the face board's height, covering
+ * the fixing panel. It stops behind the face board (D − FT) and sits `scribe`
+ * in from the gable edge, so the face board's end covers its front edge — no
+ * tape (Mark, 2026-10-25). Upright, face-kind (as a bulkhead side return): RH
+ * at X = scribe turned +90 (front end = local `left`), LH at X = DX − scribe
+ * turned −90 (front end = local `right`).
  */
 export function curvedInnerPanel(
-  lh: boolean, t: number, W: number, D: number, H: number, y: number, mat: string, ebId?: string,
+  lh: boolean, t: number, scribe: number, FT: number, W: number, D: number, H: number, y: number, mat: string,
 ): ResolvedCasePart {
   return {
-    part_key: 'crv:inner', DX: H, DY: D, DZ: t,
-    X: lh ? W : 0, Y: y, Z: lh ? 0 : D, AX: 0, AY: lh ? -90 : 90, AZ: 0,
+    part_key: 'crv:inner', DX: H, DY: D - FT, DZ: t,
+    X: lh ? W - scribe : scribe, Y: y, Z: lh ? 0 : D - FT, AX: 0, AY: lh ? -90 : 90, AZ: 0,
     material_id: mat,
-    edge_band: { ...NO_BAND, ...(lh ? { right: true } : { left: true }), id: ebId },
+    edge_band: { ...NO_BAND },
   }
 }
 
