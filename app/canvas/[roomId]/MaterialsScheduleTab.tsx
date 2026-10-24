@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import BoardColourSelect, { type PickMat } from './BoardColourSelect'
 
 // ── Schedule type config ──────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ interface Props {
 
 export default function MaterialsScheduleTab({ mode, projectId, roomId, showSchedules = true, roleFilter }: Props) {
   const [loading,   setLoading]   = useState(true)
-  const [allMats,    setAllMats]    = useState<{ id: string; name: string; dz: number }[]>([])
+  const [allMats,    setAllMats]    = useState<PickMat[]>([])
   const [allBtMats,  setAllBtMats]  = useState<{ id: string; name: string; dz: number; material_type: string | null }[]>([])
   const [schedLists, setSchedLists] = useState<SchedListMap>({})
   const [ownIds,     setOwnIds]     = useState<SchedMap>({})
@@ -109,7 +110,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
         mode === 'room' && roomId
           ? supabase.from('room_toekick_materials').select('part_role, material_id').eq('room_id', roomId)
           : supabase.from('job_toekick_materials').select('part_role, material_id').eq('project_id', projectId),
-        supabase.from('materials').select('id, name, dz').eq('active', true).order('name'),
+        supabase.from('materials').select('id, name, dz, parent_id, colour_name').eq('active', true).order('name'),
         supabase.from('benchtop_materials').select('id, name, dz, material_type').eq('active', true).order('name'),
         mode === 'room' && roomId
           ? supabase.from('room_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('room_id', roomId)
@@ -155,7 +156,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
       }
       setTkOvr(to)
 
-      setAllMats(matsRes.data ?? [])
+      setAllMats((matsRes.data ?? []) as PickMat[])
       setAllBtMats((btMatsRes.data ?? []) as { id: string; name: string; dz: number; material_type: string | null }[])
 
       const bto: MatMap = {}
@@ -378,18 +379,20 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
               const inh = schedMat[k] ?? ''
               return (
                 <div key={cls} className="bg-gray-900 px-2 py-2">
-                  <select
+                  <BoardColourSelect
                     value={cur}
-                    onChange={e => saveMatOverride(cls, role.key, e.target.value)}
-                    className={selCls(!!cur)}
-                  >
-                    <option value="">
-                      {inh ? matName(inh) : `— no schedule value —`}
-                    </option>
-                    {allMats.map(m => (
-                      <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
-                    ))}
-                  </select>
+                    mats={allMats}
+                    inheritLabel={inh ? matName(inh) : '— no schedule value —'}
+                    onChange={id => saveMatOverride(cls, role.key, id)}
+                    className={selCls}
+                  />
+                  {/* One-colour jobs: copy the base pick across (z_material_colours MC4). */}
+                  {cls === 'base' && cur && (matOvr[`wall|${role.key}`] !== cur || matOvr[`tall|${role.key}`] !== cur) && (
+                    <button
+                      onClick={() => { saveMatOverride('wall', role.key, cur); saveMatOverride('tall', role.key, cur) }}
+                      className="mt-1 text-[10px] text-blue-400 hover:text-blue-300"
+                    >Copy to wall &amp; tall →</button>
+                  )}
                 </div>
               )
             })}
@@ -484,18 +487,15 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
                   <p className={`text-xs font-medium ${cur ? 'text-blue-300' : 'text-gray-300'}`}>{role.label}</p>
                   <p className="text-[9px] text-gray-600">{role.desc}</p>
                 </div>
-                <select
-                  value={cur}
-                  onChange={e => saveTkOverride(role.key, e.target.value)}
-                  className={`flex-1 max-w-xs ${selCls(!!cur)}`}
-                >
-                  <option value="">
-                    {inh ? matName(inh) : `— no schedule value —`}
-                  </option>
-                  {allMats.map(m => (
-                    <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
-                  ))}
-                </select>
+                <div className="flex-1 max-w-xs">
+                  <BoardColourSelect
+                    value={cur}
+                    mats={allMats}
+                    inheritLabel={inh ? matName(inh) : '— no schedule value —'}
+                    onChange={id => saveTkOverride(role.key, id)}
+                    className={selCls}
+                  />
+                </div>
               </div>
             )
           })}

@@ -7,7 +7,7 @@
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
 > **RESUME HERE** → MC0 + MC1 done 2026-10-24: schema applied, 3 colours seeded
-> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI + MC3 resolver done. Next: MC4 job/room Colours tab.
+> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI, MC3 resolver, MC4 pickers done. Next: MC5 (persist warnings, nest Materials warning, colour names on reports).
 > Grain: generic tinted tile by default, supplier images optional (§8).
 
 ---
@@ -191,7 +191,7 @@ fallback. To revisit at MC6 whether Colour Ranges then merge into board colours.
     Boston Oak Woodmatt (under PT Woodmatt 16mm, `has_grain`, default). Costs blank.
 - [x] **MC2** Library UI (2026-10-24): Board Stock lists boards only with an "N colours" chip; selecting a board opens `BoardColoursEditor` (name, code, finish, face/back/edge, grain, matching tape, sheet override, $/sht, default radio, active; saves on blur). Two-step board→colour pickers moved to MC4.
 - [x] **MC3** Resolver (2026-10-25): `applyBoardColours` in loadCabinetInput (after cabinet overrides) swaps a board-with-colours for its default colour + `COLOUR_NOT_CHOSEN` (carried on `CabinetInput.material_warnings`, `ResolverError.material_id` = colour used); roles on a colour take its matched tape (colours only; plain boards keep schedule tapes). Covers matMap + kick roles; door Colour Range picks (`colour_material_id`) not yet — MC6. Checked live: forced exposed → PT Woodmatt board gave Boston Oak + warning; matched tape picked up; control cabinet unchanged. **Gap:** resolver warnings are not persisted (canvasDB loads `warnings: []`), so the warning only shows after a cabinet re-resolves; MC5 must persist or re-derive it for the nest.
-- [ ] **MC4** Job + room Colours tab: exposed grid row + interior picker (existing tables); two-step board→colour picker component.
+- [x] **MC4** (2026-10-25) Two-step `BoardColourSelect` (board, then colour; board-with-colours and no colour saves the board and shows amber "choose colour" = resolver warns). Used in the existing Interior/Exposed × base/wall/tall grid (Job Properties → Cabinet Standards → Material Schedules; Room Properties → Materials for room overrides) and the toe-kick rows, instead of a new Colours tab. "Copy to wall & tall" on the base column. Headless-checked on the job grid (pick board → amber, pick colour → saved colour id); room mode + copy button not clicked.
 - [ ] **MC5** CNC nest Materials list shows the colour-not-chosen warning; cut lists / costing show colour names.
 - [ ] **MC6** Fronts colour per class (§5) in the grid.
 - [ ] **MC7** CSV import of colour lists (when Mark has the files).
