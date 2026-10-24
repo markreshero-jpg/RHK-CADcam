@@ -12,6 +12,7 @@ import BulkheadSection from './BulkheadSection'
 import CurvedEndSection from './CurvedEndSection'
 import FloatShelfSection from './FloatShelfSection'
 import BackPanelSection from './BackPanelSection'
+import CabinetSplitSection from './CabinetSplitSection'
 import { canFloat, isFloating, floatingPatch, FLOAT_Z } from '@/src/lib/floating'
 
 export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRef, onUpdate, onDelete, onClose, hideWallPosition, hideDelete, autoFocusWidth }: {
@@ -223,6 +224,9 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
         )}
         {cabinet.curved_end && (
           <CurvedEndSection cabinet={cabinet} onUpdate={onUpdate} inp={inp} lbl={lbl} />
+        )}
+        {cabinet.split && (
+          <CabinetSplitSection cabinet={cabinet} wall={wall} room={room} onUpdate={onUpdate} inp={inp} lbl={lbl} />
         )}
         <div>
           <label className={lbl}>Top Type</label>

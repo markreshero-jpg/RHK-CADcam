@@ -7,8 +7,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → S0 done 2026-10-24 (questions answered). Next: S1 — after the RHK6581
-> kitchen benchtops (Mark: benchtops first).
+> **RESUME HERE** → S2 built 2026-10-25 (right-click Split cabinet height, sidebar section, elevation
+> split line); used on RHK6581 butler's shelving. **In-app check pending (Mark).** Next: S3 (drag the line,
+> tutorial, 3D / cabinet sheet showing the pieces).
 
 ---
 
@@ -53,6 +54,10 @@
 ## Phases
 
 - [x] **S0** Spec (this file) — answered 2026-10-24
-- [ ] **S1** Data + resolver: split sides / back, part keys, persistence, tests
-- [ ] **S2** UI: right-click Split cabinet height, sidebar (suggestions + height), splitter line in elevation
-- [ ] **S3** Drawings / cut list labels / tutorial
+- [x] **S1** (2026-10-25) Data + resolver: `split` column, `src/lib/cabinetSplit.ts` (pieces, suggestions, piece lookup),
+  persist payload cuts the sides / back, drill rows go to their piece (frame built as the base part),
+  cut list (lower) / (upper) names, canvas fast path; tests `cabinetSplit.test.ts`
+- [x] **S2** (2026-10-25) UI: right-click **Split cabinet height** (starts at the fixed shelf nearest mid-height),
+  sidebar `CabinetSplitSection` (cut heights + off-the-floor, shelf suggestion buttons, + Add cut, Remove split),
+  dashed red split line + height on the elevation (layer item `split_lines`). Dragging the line → S3.
+- [ ] **S3** Drag the split line in elevation; 3D / cabinet sheet / Part view show the pieces; tutorial (cut list labels done in S1)

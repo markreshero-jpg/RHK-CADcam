@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useCallback, useReducer, useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { getCachedInput, applyEdgeOverrides } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { resolveCabinet } from '@/src/lib/resolver/resolver'
+import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
 import { underPanelRun, carcassesOverPanel, isUnderPanel, withoutScribe, UNDER_PANEL_DEF } from '@/src/lib/underPanel'
 import { useIsAdmin } from '@/src/lib/useRole'
 import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopSegment, RoomFixture, RoomAnnotation, FixtureCatalogItem } from '@/src/lib/types'
@@ -3873,6 +3875,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onAlignLeft: handleAlignLeft,
             onAlignRight: handleAlignRight,
             onSplit: id => { setContextMenu(null); setSplitCabId(id) },
+            // Height split (z_cabinet_split): start at the fixed shelf nearest mid-height
+            // (else mid-height) and open the sidebar section on the cabinet.
+            onSplitHeight: id => {
+              setContextMenu(null)
+              setSelected({ type: 'cabinet', id })
+              const cab = cabinets.find(c => c.id === id)
+              if (!cab || normaliseSplit(cab.split)) return
+              const input = getCachedInput(id)
+              const sug = input ? splitSuggestions(resolveCabinet(input).internal_parts) : []
+              const mid = cab.dy / 2
+              const at = sug.length ? sug.reduce((b, x) => (Math.abs(x.at - mid) < Math.abs(b.at - mid) ? x : b)).at : Math.round(mid)
+              void handleUpdateCabinet(id, { split: { at: [at] } })
+            },
             onSaveToLibrary: isAdmin ? id => { setContextMenu(null); setSaveLibCabId(id) } : undefined,
             onReplace: id => { setContextMenu(null); setReplaceCabId(id) },
             onJoinKicks: id => { void handleJoinKicks(id) },

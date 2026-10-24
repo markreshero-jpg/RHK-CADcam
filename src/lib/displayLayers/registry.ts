@@ -72,6 +72,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   // Carcase
   { id: 'carcass_outline', group: 'carcase', label: 'Cabinet outline', views: ['plan', 'elevation'], default: ON,
     hint: 'Plan footprint; elevation box while parts are loading or resizing' },
+  { id: 'split_lines',     group: 'carcase', label: 'Split lines', views: ['elevation'], default: ON,
+    hint: 'Where the sides and back of a height-split cabinet are cut (z_cabinet_split)' },
   { id: 'carcass_gables', group: 'carcase', label: 'Gables',       views: ALL, default: ON },
   { id: 'finger_rails',   group: 'carcase', label: 'Finger pull rails', views: ALL, default: ON,
     viewDefaults: { plan: { visible: false } },

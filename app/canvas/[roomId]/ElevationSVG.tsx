@@ -39,6 +39,7 @@ import { handleShapes } from '@/src/lib/handleGeometry'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { useLabelMove, LabelBox } from './useLabelMove'
+import { normaliseSplit } from '@/src/lib/cabinetSplit'
 import type { LabelOff } from '@/src/lib/labelOffsets'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
@@ -1736,6 +1737,27 @@ export default function ElevationSVG({
               )
             })}
             </g>
+
+            {/* Height split cuts (z_cabinet_split): a dashed line across the cabinet at each cut. */}
+            {layers.show('split_lines') && wallCabs.map(cab => {
+              const cuts = normaliseSplit(cab.split)?.at ?? []
+              if (!cuts.length) return null
+              const x0 = elevX(cab), top = roomH - cabBottomZ(cab, room, wall) - cab.dy
+              return (
+                <g key={`split_${cab.id}`} style={{ pointerEvents: 'none' }}>
+                  {cuts.map((h, i) => {
+                    const y = top + cab.dy - h
+                    return (
+                      <g key={i}>
+                        <line x1={x0 - 20} y1={y} x2={x0 + cab.dx + 20} y2={y}
+                          stroke="#ef4444" strokeWidth={1.5 / lz} strokeDasharray={`${8 / z} ${4 / z}`} />
+                        <text x={x0 + cab.dx + 26} y={y + 4 / z} fill="#ef4444" fontSize={11 / z}>SPLIT {Math.round(h * 10) / 10}</text>
+                      </g>
+                    )
+                  })}
+                </g>
+              )
+            })}
 
             {/* Fixtures & appliances (z_fixtures) — also while placing the first one */}
             {((fixtures && fixtures.length > 0) || (mode === 'place_fixture' && fixtureGhost)) && (

@@ -10,7 +10,7 @@ export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, fixtureId, fixture, canEqualize, clipboard, cabinets, multiSelect,
   onDeleteWall, onDeleteCabinet, onDeleteMultiple, onDeleteBenchtop, onDeleteBenchtopVertex, onRoundCorner, onChamfer,
   onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
-  onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, insertFavourites, onInsertDefinition, onEditInsertList, onSplit,
+  onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, insertFavourites, onInsertDefinition, onEditInsertList, onSplit, onSplitHeight,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
   onUpdateBulkhead, onUpdateFloatShelf, onMoveLabel, onResetLabel, onAddUnderPanel,
 }: {
@@ -66,6 +66,8 @@ export function buildContextMenuGroups({
   onInsertDefinition?: (cabId: string, definitionId: string, side: 'left' | 'right') => void
   onEditInsertList?: () => void
   onSplit?: (cabId: string) => void
+  /** Height split (z_cabinet_split): cut the sides + back at a fixed shelf. */
+  onSplitHeight?: (cabId: string) => void
   onAlignLeft?: () => void
   onAlignRight?: () => void
   onSaveToLibrary?: (cabId: string) => void
@@ -226,7 +228,10 @@ export function buildContextMenuGroups({
   if (onSaveToLibrary) libItems.push({ label: 'Save to library…', onClick: () => onSaveToLibrary(cabId) })
   if (libItems.length) groups.push(libItems)
 
-  if (onSplit) groups.push([{ label: 'Split…', onClick: () => onSplit(cabId) }])
+  const splitItems: ContextMenuItem[] = []
+  if (onSplit) splitItems.push({ label: 'Split…', onClick: () => onSplit(cabId) })
+  if (onSplitHeight && cab?.has_carcass) splitItems.push({ label: cab.split ? 'Split cabinet height (edit)' : 'Split cabinet height', onClick: () => onSplitHeight(cabId) })
+  if (splitItems.length) groups.push(splitItems)
 
   if (onAddUnderPanel && cab && isRunCarcass(cab)) {
     const ids = multiSelect && multiSelect.length > 1 && multiSelect.includes(cabId) ? multiSelect : [cabId]
