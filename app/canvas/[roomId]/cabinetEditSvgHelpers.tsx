@@ -1,5 +1,6 @@
 'use client'
 
+import { getPalette, type PartPalette } from '@/src/lib/partPalette'
 import React, { useMemo } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { PartMeta } from '@/src/components/three/PartViewer'
@@ -35,6 +36,22 @@ export const RC = {
   face:      { fill: '#0f2240', stroke: '#60a5fa' },
   drawerBox: { fill: '#052e16', stroke: '#22c55e' },
   slide:     { fill: '#1c1917', stroke: '#d97706' },
+}
+
+// RC with its line colours from the editable part palette (Settings → part
+// colours, src/lib/partPalette) — the same lines as the canvas plan / elevation
+// and the 3D view. Fills stay the dark editor fills above.
+export function paletteRC(p: PartPalette = getPalette()): typeof RC {
+  return {
+    carcass:   { ...RC.carcass,   stroke: p.carcase },
+    toekick:   { ...RC.toekick,   stroke: p.toekick },
+    shelf:     { ...RC.shelf,     stroke: p.internal },
+    door:      { ...RC.door,      stroke: p.door },
+    drawer:    { ...RC.drawer,    stroke: p.drawer_face },
+    face:      { ...RC.face,      stroke: p.door },
+    drawerBox: { ...RC.drawerBox, stroke: p.drawer_box },
+    slide:     { ...RC.slide,     stroke: p.slides },
+  }
 }
 
 // ── Part label maps ────────────────────────────────────────────────────────────

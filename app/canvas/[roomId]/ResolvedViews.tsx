@@ -23,7 +23,7 @@ import {
   slideElevRect, slideTopRect, slideSideRect,
   svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta, svgDbMeta, svgSlideMeta, svgInternalSlideMeta,
   svgHitParts, partIdColor, DrillOverlay, SlideDrillOverlay,
-  PartShape, SlideShape, EdgeTapeSVG, caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3,
+  PartShape, SlideShape, paletteRC, EdgeTapeSVG, caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3,
   doorProfileSvg,
 } from './cabinetEditSvgHelpers'
 import type { EbByMatId } from './useMaterialColours'
@@ -481,6 +481,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   ebByMatId?: EbByMatId
 }) {
   const { dx, dy } = cab
+  const RC = useMemo(() => paletteRC(), [])   // line colours from Settings → part colours
   const drills = useMemo(() => (showDrilling ? orientSeamDrills(cabinetSeamDrills(rp), caseBoxByKey(rp), partOverrides) : []), [rp, showDrilling, partOverrides])
   const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? [], rp.internal_slides ?? []) : []), [rp, showDrilling])
   const hingeDrills = useMemo(() => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []), [rp, showDrilling])
@@ -791,6 +792,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
   ebByMatId?: EbByMatId
 }) {
   const { dx, dz } = cab
+  const RC = useMemo(() => paletteRC(), [])   // line colours from Settings → part colours
   const drills = useMemo(() => (showDrilling ? orientSeamDrills(cabinetSeamDrills(rp), caseBoxByKey(rp), partOverrides) : []), [rp, showDrilling, partOverrides])
   const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? [], rp.internal_slides ?? []) : []), [rp, showDrilling])
   const hingeDrills = useMemo(() => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []), [rp, showDrilling])
@@ -1057,6 +1059,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
   ebByMatId?: EbByMatId
 }) {
   const { dz, dy } = cab
+  const RC = useMemo(() => paletteRC(), [])   // line colours from Settings → part colours
   const drills = useMemo(() => (showDrilling ? orientSeamDrills(cabinetSeamDrills(rp), caseBoxByKey(rp), partOverrides) : []), [rp, showDrilling, partOverrides])
   const slideDrills = useMemo(() => (showDrilling ? cabinetSlideDrills(rp.drawer_stacks ?? [], rp.internal_slides ?? []) : []), [rp, showDrilling])
   const hingeDrills = useMemo(() => (showDrilling ? cabinetHingeDrills(rp.hinge_instances ?? []) : []), [rp, showDrilling])

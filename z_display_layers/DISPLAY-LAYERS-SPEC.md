@@ -35,6 +35,9 @@ The DB side (`drawing_layer_sets` table + rows, incl. the recreated "Design" set
 
 **Next work:** nothing queued for display layers. Open threads: benchtops are not drawn
 in the plan report (not passed to it), and 3D wall labels ignore wall opacity.
+**Queued (Mark 2026-10-25):** the cabinet edit modal's Top / Elevation / Side views should move onto
+layers (colour, line weight, visibility per part type). Interim: their line colours come from the
+Settings part palette via `paletteRC()` (cabinetEditSvgHelpers); fills + line weights still hard-coded.
 
 **Environment notes:**
 - Supabase MCP disconnected mid-session. DB reads / writes to `drawing_layer_sets` work
