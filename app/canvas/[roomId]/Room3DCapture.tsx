@@ -4,7 +4,7 @@
 // fixture models), then captures it as vector hidden lines. <Shot3DSVG> draws a
 // captured shot as black SVG lines fitted to a paper-mm box.
 'use client'
-import { Suspense, useEffect, useMemo } from 'react'
+import { Suspense, useEffect, useMemo, type ComponentProps } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import type { PerspectiveCamera } from 'three'
 import type { Wall, CabinetInstance, Room, RoomFixture, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
@@ -80,6 +80,78 @@ export default function Room3DCapture({ shots, walls, cabinets, room, resolvedPa
             pickBenchtops={false} measuring={false} wire={false}
           />
           <CaptureDriver key={shot.id} shot={shot} onDone={r => onCaptured(shot.id, r)} />
+        </Suspense>
+      </Canvas>
+    </div>
+  )
+}
+
+// ── Colour render (trial report, 2026-10-24) ─────────────────────────────────
+// Same off-screen scene and shots, but shaded in the room's material colours and
+// captured as a JPEG. A raster picture — the vector rule (S8) is for the shop drawings.
+
+const RENDER_BG = '#f4f2ee'
+
+function RenderDriver({ shot, onDone }: { shot: Shot3D; onDone: (dataUrl: string) => void }) {
+  const { gl, scene, camera } = useThree()
+  useEffect(() => {
+    let cancelled = false
+    const t = setTimeout(() => requestAnimationFrame(() => {
+      if (cancelled) return
+      const cam = camera as PerspectiveCamera
+      cam.position.set(...shot.eye)
+      cam.lookAt(...shot.target)
+      cam.updateMatrixWorld()
+      // Render and read back in the same tick (no preserveDrawingBuffer needed).
+      gl.render(scene, cam)
+      onDone(gl.domElement.toDataURL('image/jpeg', 0.92))
+    }), SETTLE_MS)
+    return () => { cancelled = true; clearTimeout(t) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shot.id, gl, scene, camera])
+  return null
+}
+
+/** Off-screen colour render of each shot in turn, at width × height pixels. */
+export function Room3DRender({ shots, width, height, walls, cabinets, room, resolvedParts, layers, fixtures, bt, materialColours, ebByMatId, onCaptured }: {
+  shots: Shot3D[]
+  width: number
+  height: number
+  walls: Wall[]
+  cabinets: CabinetInstance[]
+  room: Room
+  resolvedParts: Map<string, ResolvedCabinet>
+  layers: LayerView
+  fixtures: RoomFixture[]
+  bt?: Bt3DPrint
+  materialColours?: ComponentProps<typeof RoomScene>['materialColours']
+  ebByMatId?: ComponentProps<typeof RoomScene>['ebByMatId']
+  onCaptured: (shotId: string, dataUrl: string) => void
+}) {
+  const shot = shots[0]
+  const hidden = useMemo(() => new Set(shot?.hiddenWallIds ?? []), [shot])
+  const hiddenCabs = useMemo(() => new Set(shot?.hiddenCabinetIds ?? []), [shot])
+  if (!shot) return null
+  return (
+    <div aria-hidden style={{ position: 'fixed', left: -20000, top: 0, width, height, pointerEvents: 'none' }}>
+      <Canvas gl={{ antialias: true }} dpr={1}>
+        <color attach="background" args={[RENDER_BG]} />
+        <Suspense fallback={null}>
+          <RoomScene
+            printMode floor
+            walls={walls} cabinets={cabinets} room={room}
+            selectedId={null} onSelectCabinet={NOOP} onCabContextMenu={NOOP}
+            resolvedParts={resolvedParts}
+            materialColours={materialColours} ebByMatId={ebByMatId}
+            hiddenWallIds={hidden}
+            hiddenCabinetIds={hiddenCabs}
+            birdsEyeSignal={0} resetSignal={0}
+            layers={layers}
+            bt={bt && { ...bt, selectedId: null, onSelect: NOOP }}
+            fx={{ fixtures, selectedId: null, onSelect: NOOP }}
+            pickBenchtops={false} measuring={false} wire={false}
+          />
+          <RenderDriver key={shot.id} shot={shot} onDone={url => onCaptured(shot.id, url)} />
         </Suspense>
       </Canvas>
     </div>

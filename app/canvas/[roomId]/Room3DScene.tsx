@@ -797,7 +797,9 @@ function ResetView({ signal, controlsRef, position, target }: {
 
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, hiddenCabinetIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, fx, pickBenchtops, measuring, wire, printMode = false }: {
+export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, hiddenCabinetIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, fx, pickBenchtops, measuring, wire, printMode = false, floor = !printMode }: {
+  /** Draw the floor (default: not in printMode). The colour render report keeps it. */
+  floor?: boolean
   /** Shop drawings 3D shots: single cabinets left out (blockers in front of the subject). */
   hiddenCabinetIds?: Set<string>
   /** Shop drawings 3D capture (z_shop_drawings S8): no controls, floor or wall labels — the caller drives the camera. */
@@ -915,7 +917,7 @@ export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, 
       <directionalLight position={[midX - span * 0.4, roomH * 0.5, midZ - span * 0.5]} intensity={0.6} color="#e8f0ff" />
 
       {/* Floor */}
-      {!printMode && (
+      {floor && (
         <mesh position={[midX, 0, midZ]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[spanX + 1500, spanZ + 1500]} />
           <meshStandardMaterial color="#c8b89a" roughness={0.9} />

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, type ComponentProps } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
@@ -10,6 +10,7 @@ import PlanViewReport from './PlanViewReport'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import ElevationPrintReport from './ElevationPrintReport'
 import ShopDrawingsReport from './ShopDrawingsReport'
+import Render3DReport from './Render3DReport'
 import type { Bt3DPrint } from './Room3DCapture'
 import type { BtElevInfo } from './BenchtopElevation'
 import { useCadFields } from './useCadFields'
@@ -27,7 +28,7 @@ import { shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { zoneBlank } from '@/src/lib/jointDrilling'
 
 export type ReportScope = 'job' | 'room'
-export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings'
+export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings' | 'render_3d'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'shop_drawings',      label: 'Shop Drawings',       desc: 'One PDF per room: plan + elevations, one scale' },
@@ -38,6 +39,7 @@ const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'plan_view_v2',       label: 'Plan View',           desc: 'Scaled PDF, follows a layer set' },
   { id: 'elevation_view_v2',  label: 'Elevation Views',     desc: 'Scaled PDF, one wall per page, layer set' },
   { id: 'cabinet_sheets',     label: 'Cabinet Sheets',      desc: '1 page/cabinet — front, side, 3D + cut list' },
+  { id: 'render_3d',          label: '3D Colour Render',    desc: 'Trial: shaded 3D views in the job colours, one per page' },
 ]
 
 const CASE_LABELS: Record<string, string> = {
@@ -139,7 +141,7 @@ function collectBtParts(
 }
 
 /** Reports that draw one room at a time (one PDF per room); Job Reports picks the room. */
-const DRAWING_REPORTS: ReportId[] = ['shop_drawings', 'plan_view_v2', 'elevation_view_v2', 'cabinet_sheets']
+const DRAWING_REPORTS: ReportId[] = ['shop_drawings', 'plan_view_v2', 'elevation_view_v2', 'cabinet_sheets', 'render_3d']
 
 const PAPER = {
   A4L: { w: 297, h: 210, label: 'A4 Landscape' },
@@ -148,7 +150,10 @@ const PAPER = {
   A1L: { w: 841, h: 594, label: 'A1 Landscape' },
 }
 
-export default function ReportsModal({ initialScope, initialReport, bt3d, btInfoFor, onDeleteShopShot, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], layerSets, activeLayerSetId, onClose }: {
+export default function ReportsModal({ initialScope, initialReport, bt3d, btInfoFor, onDeleteShopShot, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], materialColours, ebByMatId, layerSets, activeLayerSetId, onClose }: {
+  /** Material colours for the 3D colour render (keyed by material id). */
+  materialColours?: ComponentProps<typeof Render3DReport>['materialColours']
+  ebByMatId?: ComponentProps<typeof Render3DReport>['ebByMatId']
   initialScope: ReportScope
   /** Report to open on (Production → Shop Drawings opens straight on the package). */
   initialReport?: ReportId
@@ -524,7 +529,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                     {SCALES.map(s => <option key={s} value={s}>1:{s}</option>)}
                   </select>
                 )}
-                {(selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view_v2' || selectedReport === 'cabinet_sheets' || selectedReport === 'shop_drawings') && (
+                {(selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view_v2' || selectedReport === 'cabinet_sheets' || selectedReport === 'shop_drawings' || selectedReport === 'render_3d') && (
                   <select value={printPaper} onChange={e => setPrintPaper(e.target.value as keyof typeof PAPER)}
                     className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1">
                     {(Object.keys(PAPER) as (keyof typeof PAPER)[]).map(k => (
@@ -533,7 +538,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   </select>
                 )}
                 {/* The plan / elevation / cabinet reports have their own download button in their toolbar. */}
-                {selectedReport !== 'plan_view_v2' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && selectedReport !== 'shop_drawings' && (
+                {selectedReport !== 'plan_view_v2' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && selectedReport !== 'shop_drawings' && selectedReport !== 'render_3d' && (
                   <button onClick={handlePrint}
                     className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium">
                     Print / PDF
@@ -642,6 +647,24 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   layerSets={layerSets}
                   activeLayerSetId={activeLayerSetId}
                   scale={printScale}
+                  paperKey={printPaper}
+                />
+              ) : selectedReport === 'render_3d' ? (
+                <Render3DReport
+                  key={reportKey}
+                  batch={batch}
+                  project={project}
+                  room={drawRoom}
+                  walls={drawWalls}
+                  cabinets={drawCabinets}
+                  resolvedParts={draw3DResolved}
+                  fixtures={drawFixtures}
+                  benchtops={drawBenchtops}
+                  bt3d={drawBt3d}
+                  materialColours={materialColours}
+                  ebByMatId={ebByMatId}
+                  layerSets={layerSets}
+                  activeLayerSetId={activeLayerSetId}
                   paperKey={printPaper}
                 />
               ) : selectedReport === 'cabinet_sheets' ? (

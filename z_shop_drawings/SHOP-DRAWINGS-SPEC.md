@@ -258,3 +258,13 @@ How it's built (plan):
 - 3D sheet: **keep it** (S8).
 - Cabinet numbers: **use `cab.label` as it is.** No renumbering in the package. Mark may change
   labelling at canvas level later.
+
+## 3D colour render report (trial, Mark 2026-10-24)
+
+A separate report, **3D Colour Render**, so the vector-only rule above still holds for the shop drawings.
+`Render3DReport.tsx`: the same views as the 3D sheet (auto + saved, blockers hidden, own ticks
+`render-3d-off` + layer set `render-3d-layer-set`), rendered off-screen by `Room3DRender`
+(Room3DCapture.tsx: RoomScene printMode + floor, antialiased, the canvas's material colours) to a
+2400px-wide JPEG shaped to the page band, one view per page, heading "<room> 3D · <view>" + title block, NTS.
+Checked headless (`z_plan_automation/verify-render3d.mjs`, RHK6581 Laundry J02). Next: Mark tweaks the look
+(lighting / shadows / edges / background), then decide whether its pages join the shop drawings / other reports.

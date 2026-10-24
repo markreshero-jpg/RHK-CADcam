@@ -4121,6 +4121,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           benchTopZ={b => btInfo(b).topZ}
           fixtures={fixtures}
           annotations={withFieldsFilled(annotations, cadFields)}
+          materialColours={matColours}
+          ebByMatId={ebByMatId}
           layerSets={layerSetsApi.sets}
           activeLayerSetId={activeLayerSet?.id ?? null}
           onClose={() => setReportScope(null)}
