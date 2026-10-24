@@ -53,6 +53,7 @@ import Bin3D from '@/src/components/three/Bin3D'
 import Runner3D from '@/src/components/three/Runner3D'
 import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
 import { PartHideTicks } from '@/src/components/PartHideTicks'
+import { splitCaseParts, splitBaseKey } from '@/src/lib/cabinetSplit'
 
 export type { MatColSpec, MatColMap }
 
@@ -1229,6 +1230,9 @@ export function CabinetScene({
     }
     return m
   }, [rp.case_parts, rp.internal_parts, partOverrides])
+  // Height split (z_cabinet_split): the case parts as made, and which ones were cut.
+  const casePieces = useMemo(() => splitCaseParts(rp.case_parts, rp.split_at), [rp.case_parts, rp.split_at])
+  const cutBases = useMemo(() => new Set(casePieces.filter(q => q.part_key.startsWith('split:')).map(q => splitBaseKey(q.part_key))), [casePieces])
 
   const drawerStackByKey = useMemo(() => {
     const m = new Map<string, ResolvedDrawerStack>()
@@ -1354,19 +1358,26 @@ export function CabinetScene({
       {showDrilling && handMarkers.length > 0 && (
         <HandOpMarkers3D markers={handMarkers} csgPartKeys={new Set([...pocketsByPart.keys()].filter(k => k.startsWith('case_')))} />
       )}
-      {rp.case_parts.filter(p => show(casePartItem(p.part_key))).map(p => {
-        const id    = `case_${p.part_key}`
+      {/* Height split (z_cabinet_split): cut sides / back draw as their pieces. Each piece is the
+          part it came from for geometry, colours, selection and holes (its own height's only). */}
+      {casePieces.filter(q => show(casePartItem(splitBaseKey(q.part_key)))).map(piece => {
+        const base  = splitBaseKey(piece.part_key) as typeof piece.part_key
+        const cut   = cutBases.has(base)
+        const p     = { ...piece, part_key: base }
+        const id    = `case_${base}`
+        const key   = `case_${piece.part_key}`
+        const [y0, y1] = base === 'back' ? [piece.Y, piece.Y + piece.DX] : [piece.Y, piece.Y + piece.DY]
         const pp    = applyPosOv(p, id, partOverrides)
-        const b     = applySizeOv(caseBox(pp), id, partOverrides)
+        const b     = cut ? caseBox(pp) : applySizeOv(caseBox(pp), id, partOverrides)
         const info  = applyEdge(buildCaseInfo(p, b))
         const s     = matSpec(p.material_id, '#ddd3bb')
         // Turned per-edge panels draw in their own frame (z_cabinet_shape L3).
-        const holes = (holesByPartKey.get(p.part_key) ?? []).map(d => intoPartFrame(p, d))
+        const holes = (holesByPartKey.get(p.part_key) ?? []).filter(d => !cut || (d.y >= y0 - 0.5 && d.y <= y1 + 0.5)).map(d => intoPartFrame(p, d))
         const pockets = pocketsByPart.get(id)
 
         if (holes.length > 0) {
           return (
-            <PartAlpha key={id} a={alpha(casePartItem(p.part_key))}><PartWithHoles
+            <PartAlpha key={key} a={alpha(casePartItem(p.part_key))}><PartWithHoles
               b={b}
               drills={holes}
               faceColors={panelFaceColors(info.panelKind, p.part_key, s.face, s.back, s.edge)}
@@ -1381,13 +1392,13 @@ export function CabinetScene({
               ebSpec={ebFor(p.material_id)}
               rotation={caseRot(p, id, partOverrides)}
               subtractions={pockets}
-              shape={shapes3D.get(id)}
+              shape={cut ? undefined : shapes3D.get(id)}
             /></PartAlpha>
           )
         }
 
         return (
-          <PartAlpha key={id} a={alpha(casePartItem(p.part_key))}><Part
+          <PartAlpha key={key} a={alpha(casePartItem(p.part_key))}><Part
             b={b}
             faceColors={panelFaceColors(info.panelKind, p.part_key, s.face, s.back, s.edge)}
             edgeLineColor={outline('carcase', casePartItem(p.part_key))}
@@ -1401,7 +1412,7 @@ export function CabinetScene({
             wire={wire}
             rotation={caseRot(p, id, partOverrides)}
             subtractions={pockets}
-            shape={shapes3D.get(id)}
+            shape={cut ? undefined : shapes3D.get(id)}
           /></PartAlpha>
         )
       })}

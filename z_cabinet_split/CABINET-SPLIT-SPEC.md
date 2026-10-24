@@ -7,10 +7,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → S1–S3 built (S2 checked by Mark 2026-10-25: looks good). S3: drag the split line in
-> elevation (snaps to the shelves), cabinet sheet front view + parts list show the cut / pieces, tutorial.
-> In-app check of S3 pending. Not done: 3D / Part view still draw the sides whole (they read the live
-> resolve, keyed by part name — splitting there would break drilling display + selection).
+> **RESUME HERE** → Split complete 2026-10-25 (S1–S4). S2 checked by Mark; S3 / S4 in-app check pending.
+> Every view shows the pieces: canvas + modal elevation / side (SPLIT line), 3D (room + modal: each side /
+> back drawn as its pieces, own holes), Parts tab, cabinet sheet, cut list / optimiser / CNC.
 
 ---
 
@@ -64,4 +63,7 @@
 - [x] **S3** (2026-10-25) Drag the split line in elevation (snaps to a shelf suggestion within 15, else the mm);
   cabinet sheet: SPLIT line on the front view + the parts list as (lower) / (upper) pieces; tutorial
   "Split a tall cabinet in height". Cabinet edit modal (Mark 2026-10-25): the SPLIT line on its Elevation
-  and Side views (ResolvedViews), as on the canvas. Open: 3D / Part view still show whole sides.
+  and Side views (ResolvedViews), as on the canvas.
+- [x] **S4** (2026-10-25) 3D (CabinetScene — room + modal): cut sides / back drawn as their pieces, each
+  framed as its base part with only its own holes; modal Parts tab lists (lower) / (upper);
+  `splitPieceSuffix` / `cutBaseKeys` shared by the cut list, cabinet sheet and Parts tab.

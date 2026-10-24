@@ -8,7 +8,7 @@ import { mergeRules } from '../resolver/mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type JointTypeOp, type Material, type Section } from '../resolver/types'
 import { buildPersistPayload } from '../resolver/persistResolved'
 import { collectDrillRows } from '../optimiser/seamDrillSync'
-import { splitCaseParts, splitSuggestions, splitPieceFor, splitBaseKey, normaliseSplit, SPLIT_LIP } from '../cabinetSplit'
+import { splitCaseParts, splitSuggestions, splitPieceFor, splitBaseKey, normaliseSplit, cutBaseKeys, splitPieceSuffix, SPLIT_LIP } from '../cabinetSplit'
 
 const board: Material = { id: 'm', name: 'Board', DZ: 16.5, sheet_dx: 2400, sheet_dy: 1200, has_grain: false }
 const open = (): Section => ({ type: 'open', fittings: [] })
@@ -97,6 +97,12 @@ describe('splitCaseParts', () => {
     expect(splitPieceFor(ps, 'left_side', at - 20)!.part_key).toBe('left_side')
     expect(splitPieceFor(ps, 'left_side', at + 20)!.part_key).toBe('split:left_side:1')
     expect(splitPieceFor(ps, 'left_side', 99999)!.part_key).toBe('split:left_side:1')
+  })
+
+  it('piece names: (lower) on the cut part, (upper) / (upper 2) above, nothing on uncut parts', () => {
+    const keys = ['left_side', 'split:left_side:1', 'split:left_side:2', 'right_side', 'bottom']
+    const cut = cutBaseKeys(keys)
+    expect(keys.map(k => splitPieceSuffix(k, cut))).toEqual([' (lower)', ' (upper)', ' (upper 2)', '', ''])
   })
 
   it('normaliseSplit: positive, ascending, de-duplicated, at most 2', () => {

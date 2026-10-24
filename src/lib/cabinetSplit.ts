@@ -102,3 +102,16 @@ export function splitSuggestions(internal: ResolvedInternalPart[]): { shelf: num
     .sort((a, b) => a - b)
     .map((at, i) => ({ shelf: i + 1, at: Math.round(at * 10) / 10 }))
 }
+
+/** The parts a set of pieces was cut from (`left_side` when `split:left_side:1` is there). */
+export function cutBaseKeys(keys: string[]): Set<string> {
+  return new Set(keys.filter(k => k.startsWith('split:')).map(splitBaseKey))
+}
+
+/** Name suffix for a piece: " (lower)" on the bottom piece of a cut part,
+ *  " (upper)" / " (upper 2)" above it, "" for a part that wasn't cut. */
+export function splitPieceSuffix(key: string, cut: Set<string>): string {
+  const base = splitBaseKey(key)
+  if (base !== key) return key.endsWith(':1') ? ' (upper)' : ` (upper ${key.slice(-1)})`
+  return cut.has(base) ? ' (lower)' : ''
+}

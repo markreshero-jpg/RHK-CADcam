@@ -18,6 +18,7 @@ import { CUSTOM_ORIENT_LABELS, type CustomOrient } from '@/src/lib/customPartBox
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { zonePartId, zoneKey, dbPartId, zoneRef, stackRef, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
+import { splitCaseParts, splitBaseKey, cutBaseKeys, splitPieceSuffix } from '@/src/lib/cabinetSplit'
 
 // One dimension/position field: accepts a plain number (fixed), a plain
 // arithmetic calc (e.g. "100+100" → 200, evaluated and stored as the value), OR
@@ -582,11 +583,16 @@ export default function PartsView({
   const rows = useMemo((): FlatRow[] => {
     const result: FlatRow[] = []
 
-    for (const p of rp.case_parts) {
+    // Height split (z_cabinet_split): cut sides / back listed as their (lower) / (upper) pieces.
+    const pieces = splitCaseParts(rp.case_parts, rp.split_at)
+    const cutBases = cutBaseKeys(pieces.map(q => q.part_key))
+    for (const p of pieces) {
       const id = `case_${p.part_key}`
+      const base = splitBaseKey(p.part_key)
+      const piece = splitPieceSuffix(p.part_key, cutBases)
       result.push({
         id, typeKey: 'carcass', typeLabel: 'Carcass',
-        name: partLabels?.[id] ?? `${PART_LABEL[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key}${caseBevelNote(p) ? ` (${caseBevelNote(p)})` : ''}`,
+        name: partLabels?.[id] ?? `${PART_LABEL[base] ?? shapedPartLabel(base) ?? base}${piece}${caseBevelNote(p) ? ` (${caseBevelNote(p)})` : ''}`,
         material: matNames[p.material_id] ?? '—', materialColor: matColours[p.material_id] ?? null,
         dy: p.DY, dx: p.DX, dz: p.DZ, eb: p.edge_band,
         comment: partComments?.[id] ?? '',

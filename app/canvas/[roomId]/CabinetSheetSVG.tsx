@@ -31,7 +31,7 @@ import { binOutlines, binShape } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
 import { cutListDims, cabinetLookups, shapeMark, type CutListDims, type CutListPart, type CutListTable } from '@/src/lib/optimiser/cutListDims'
 import type { ShapeRow } from '@/src/lib/optimiser/shapes'
-import { normaliseSplit, splitCaseParts, splitBaseKey } from '@/src/lib/cabinetSplit'
+import { normaliseSplit, splitCaseParts, splitBaseKey, cutBaseKeys, splitPieceSuffix } from '@/src/lib/cabinetSplit'
 
 export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean }
 
@@ -491,11 +491,10 @@ export default function CabinetSheetSVG({
     // Height split (z_cabinet_split): the sides / back listed as their cut pieces,
     // each sized as the part it came from.
     const pieces = splitCaseParts(rp.case_parts, rp.split_at)
-    const cutBases = new Set(pieces.filter(p => p.part_key.startsWith('split:')).map(p => splitBaseKey(p.part_key)))
+    const cutBases = cutBaseKeys(pieces.map(p => p.part_key))
     pieces.forEach(p => {
       const base = splitBaseKey(p.part_key) as typeof p.part_key
-      const piece = base !== p.part_key ? (p.part_key.endsWith(':1') ? ' (upper)' : ` (upper ${p.part_key.slice(-1)})`)
-        : cutBases.has(base) ? ' (lower)' : ''
+      const piece = splitPieceSuffix(p.part_key, cutBases)
       const label = (CASE_LABELS[base] ?? shapedPartLabel(base) ?? base) + piece
       add(caseBevelNote(p) ? `${label} ${caseBevelNote(p)}` : label, 'case_parts', { ...p, part_key: base })
     })

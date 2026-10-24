@@ -17,7 +17,7 @@ import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/
 import { curvedEndPartLabel } from '@/src/lib/resolver/resolveCurvedEnd'
 import { floatShelfPartLabel, floatShelfPartNote } from '@/src/lib/floatShelf'
 import { backPanelPartLabel } from '@/src/lib/backPanel'
-import { splitBaseKey } from '@/src/lib/cabinetSplit'
+import { splitBaseKey, splitPieceSuffix } from '@/src/lib/cabinetSplit'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -238,8 +238,8 @@ export function normalizeProject(
       ? { w: Number(r.dy), h: Number(r.dx), thickness: Number(r.dz) } : undefined
     // Angled panel ends (z_cabinet_shape 4a): nested as the blank, bevel named.
     const bevel = caseBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
-    const piece = pieceOf !== key ? (key.endsWith(':1') ? 'upper' : `upper ${key.slice(-1)}`)
-      : cutParts.has(`${r.cabinet_instance_id}|${key}`) ? 'lower' : null
+    const cutHere = new Set(cutParts.has(`${r.cabinet_instance_id}|${pieceOf}`) ? [pieceOf] : [])
+    const piece = splitPieceSuffix(key, cutHere).trim().replace(/[()]/g, '') || null
     push('case_parts', r, `case_${key}`, { typeKey: pieceOf, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(pieceOf),
       ...(bevel || piece ? { suffix: [bevel, piece].filter(Boolean).map(t => ` (${t})`).join('') } : {}) },
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), turned, eb, base)
