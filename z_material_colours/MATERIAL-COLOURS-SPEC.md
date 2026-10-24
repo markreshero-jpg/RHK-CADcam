@@ -9,7 +9,8 @@
 > **RESUME HERE** → Decisions locked 2026-10-24 (§0). MC0 done. MC1 code part done
 > (back null = face); MC1 migration `migration_mc1_board_colours.sql` written but
 > **NOT applied** (Supabase connector refused DDL). Apply it, then seed the first
-> two colours (MC1 seed below), then MC2.
+> three colours (MC1 seed below), then MC2. Grain: generic tinted tile by
+> default, supplier images optional (§8).
 
 ---
 
@@ -213,27 +214,59 @@ select id, 'Elegant Oak', '#b98d5f', '#b98d5f', true, true, 'Grain', true
 
 ## 8. Decor textures (woodgrain patterns)
 
-Woodgrain and stone decors render as a real image tile, not a flat colour.
+**Locked (Mark, 2026-10-24): a generic grain, tinted by the colour, is the default.
+Real supplier images are an optional per-colour upgrade.**
+
+Every `has_grain` colour shows timber grain with no per-colour work. A colour only
+needs its own image when the exact decor figure matters (e.g. a client choosing
+between two oaks).
+
+### 8a. Generic grain (default)
+
+- **One shared image:** a seamless greyscale timber-grain tile from a licence-free
+  (CC0) source such as ambientCG or Poly Haven. Desaturated and levelled light
+  (mean around 0.85) so tinting keeps the colour true. It ships with the app as
+  `public/textures/grain_generic.jpg`, about 1024–2048 px, with its real tile
+  size in mm recorded next to it.
+- **Tint:** in 3D, a grained colour's face = generic grain map × `face_colour`.
+  Boston Oak, Elegant Oak and Walnut each read as their own colour from the same
+  image.
+- **Applies to every colour with `has_grain = true` and no `texture_path`.**
+  Plain colours stay flat.
+- **Later, optional:** a second generic tile (straight grain vs crown /
+  cathedral), picked per colour with a `grain_style` column. Not in the first build.
+
+### 8b. Supplier image (optional override)
 
 - **Columns on the colour row** (in the MC1 migration): `texture_path`, plus
   `texture_w_mm` and `texture_h_mm`, the real-world size of one tile
   (W = across the grain, H = along the grain).
+- **When `texture_path` is set,** that image is used untinted instead of the
+  generic grain.
 - **Storage:** Supabase Storage bucket `material-textures`, as compressed
-  JPG/WebP at about 1024–2048 px. `face_colour` stays as the average colour, used
-  for edges, plan view and as a fallback while the image loads.
-- **3D:** load each texture once per material (cached). Repeat it at real scale:
-  repeat = part size ÷ tile mm. Rotate it by the part's grain direction, so the
-  grain runs along DY (length), following [[cv-part-dimension-convention]].
-  Doors and drawer fronts use the same rule. Edges stay the tape colour.
-- **Where the images come from:** Laminex and Polytec publish downloadable
-  swatch / texture images for designers. Mark downloads them (some need a free
-  trade login) into `z_material_colours/textures/`, and Claude uploads them and
-  fills in the columns. No site scraping. The images are for internal
-  visualisation and client drawings of their own products.
-- **Library:** the colour row gets a thumbnail plus an upload / replace button.
-  Tile size defaults to the image's stated size, or 1200 × 2400 when it is
+  JPG/WebP at about 1024–2048 px.
+- **Where the images come from:** Laminex / Polytec designer downloads (some need
+  a free trade login), placed by Mark in `z_material_colours/textures/`. Claude
+  uploads them. No site scraping.
+- **Library:** the colour row gets a thumbnail plus an upload / replace / clear
+  button. Tile size defaults to the image's stated size, or 1200 × 2400 when it is
   unknown.
+
+### 8c. Mapping rules (both kinds)
+
+- Each texture loads once per material and is cached.
+- **True scale:** repeat = part size ÷ tile mm.
+- **Grain direction:** rotate by the part's grain direction, so grain runs along
+  DY (length), following [[cv-part-dimension-convention]]. Doors and drawer fronts
+  use the same rule.
+- **Edges** stay the tape colour. `face_colour` remains the average colour, used
+  for plan view and while an image loads.
 - **Later, optional:** pattern fill in elevation and shop drawings.
 
-Phases: **MC9** texture upload in the library + storage bucket · **MC10** 3D texture
-mapping with grain rotation · **MC11** (optional) elevation / print fills.
+### Phases
+
+- [ ] **MC9** Generic grain: source and level the CC0 tile, 3D tinted mapping at
+  true scale with grain rotation, on for every `has_grain` colour.
+- [ ] **MC10** Supplier image override: storage bucket, library upload / thumbnail,
+  untinted use when set.
+- [ ] **MC11** (optional) Elevation / print grain fills; second generic grain style.
