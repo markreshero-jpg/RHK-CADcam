@@ -6,11 +6,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Decisions locked 2026-10-24 (§0). MC0 done. MC1 code part done
-> (back null = face); MC1 migration `migration_mc1_board_colours.sql` written but
-> **NOT applied** (Supabase connector refused DDL). Apply it, then seed the first
-> three colours (MC1 seed below), then MC2. Grain: generic tinted tile by
-> default, supplier images optional (§8).
+> **RESUME HERE** → MC0 + MC1 done 2026-10-24: schema applied, 3 colours seeded
+> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). Next: MC2 library UI.
+> Grain: generic tinted tile by default, supplier images optional (§8).
 
 ---
 
@@ -185,10 +183,10 @@ fallback. To revisit at MC6 whether Colour Ranges then merge into board colours.
 ## 7. Phases
 
 - [x] **MC0** Data fix: back colour = face on LX Colour 16mm, PT Colour Matt 16mm and PT Woodmatt 16mm (2026-10-24).
-- [~] **MC1** Schema + seed.
+- [x] **MC1** Schema + seed (2026-10-24; board→colour propagation not yet proven by a real board edit).
   - [x] `unpackMatCol` back null = face.
-  - [ ] Apply `migration_mc1_board_colours.sql`.
-  - [ ] Seed PT Classic White Matt (under PT Colour Matt 16mm, default), Elegant Oak (under LX Abs Grain 18mm, `has_grain`, default) and
+  - [x] Apply `migration_mc1_board_colours.sql` (Mark ran it in the SQL editor).
+  - [x] Seed PT Classic White Matt (under PT Colour Matt 16mm, default), Elegant Oak (under LX Abs Grain 18mm, `has_grain`, default) and
     Boston Oak Woodmatt (under PT Woodmatt 16mm, `has_grain`, default). Costs blank.
 - [ ] **MC2** Library UI: boards list, colour sub-table, default radio, two-step pickers.
 - [ ] **MC3** Resolver: board-with-colours → default colour + `COLOUR_NOT_CHOSEN`; colour-matched edgeband.
