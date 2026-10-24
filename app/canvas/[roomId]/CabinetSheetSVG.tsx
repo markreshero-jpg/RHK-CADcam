@@ -31,6 +31,7 @@ import { binOutlines, binShape } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
 import { cutListDims, cabinetLookups, shapeMark, type CutListDims, type CutListPart, type CutListTable } from '@/src/lib/optimiser/cutListDims'
 import type { ShapeRow } from '@/src/lib/optimiser/shapes'
+import { normaliseSplit, splitCaseParts, splitBaseKey } from '@/src/lib/cabinetSplit'
 
 export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean }
 
@@ -250,6 +251,12 @@ export default function CabinetSheetSVG({
       const ins = 15, fw = dx - ins * 2, fh = dy - ins * 2
       if (fw > 0 && fh > 0) els.push(<rect key="ff" {...R(ins, dy - ins, fw, fh)} fill={FACE_FILL} stroke={INK} strokeWidth={PART} />)
     }
+    // Height split (z_cabinet_split): where the sides and back are cut, with the height.
+    ;(normaliseSplit(cab.split)?.at ?? []).forEach((h, i) => {
+      const y = ty + (dy - h) * s
+      els.push(<line key={`sp${i}`} x1={tx - 3} y1={y} x2={tx + dx * s + 3} y2={y} stroke={INK} strokeWidth={PART} strokeDasharray={DASH} />)
+      els.push(<text key={`spt${i}`} x={tx + dx * s + 4} y={y + 1} fontSize={2.5} fill={INK} fontFamily={font}>SPLIT {roundMm(h)}</text>)
+    })
     if (show.dims) {
       const yb = ty + dy * s + 4
       els.push(...dim(tx, yb, tx + dx * s, yb, `${roundMm(dx)}`, 'below', 'fw'))
@@ -481,9 +488,16 @@ export default function CabinetSheetSVG({
       out.push({ desc, dims, mat: materialNames[p.material_id] ?? p.material_id ?? '—' })
     }
     // Angled panel ends (z_cabinet_shape 4a): listed at the blank, bevel noted.
-    rp.case_parts.forEach(p => {
-      const label = CASE_LABELS[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key
-      add(caseBevelNote(p) ? `${label} ${caseBevelNote(p)}` : label, 'case_parts', p)
+    // Height split (z_cabinet_split): the sides / back listed as their cut pieces,
+    // each sized as the part it came from.
+    const pieces = splitCaseParts(rp.case_parts, rp.split_at)
+    const cutBases = new Set(pieces.filter(p => p.part_key.startsWith('split:')).map(p => splitBaseKey(p.part_key)))
+    pieces.forEach(p => {
+      const base = splitBaseKey(p.part_key) as typeof p.part_key
+      const piece = base !== p.part_key ? (p.part_key.endsWith(':1') ? ' (upper)' : ` (upper ${p.part_key.slice(-1)})`)
+        : cutBases.has(base) ? ' (lower)' : ''
+      const label = (CASE_LABELS[base] ?? shapedPartLabel(base) ?? base) + piece
+      add(caseBevelNote(p) ? `${label} ${caseBevelNote(p)}` : label, 'case_parts', { ...p, part_key: base })
     })
     rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => {
       const label = TK_LABELS[p.part_key] ?? p.part_key

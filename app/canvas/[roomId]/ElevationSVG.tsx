@@ -39,7 +39,10 @@ import { handleShapes } from '@/src/lib/handleGeometry'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { useLabelMove, LabelBox } from './useLabelMove'
-import { normaliseSplit } from '@/src/lib/cabinetSplit'
+import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
+
+// A dragged split line snaps to a fixed-shelf suggestion this close (mm).
+const SPLIT_SNAP = 15
 import type { LabelOff } from '@/src/lib/labelOffsets'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
@@ -262,6 +265,8 @@ export default function ElevationSVG({
     startCabT: number; startCabEndT: number
     resWall: Wall; neighbours: { t: number; dx: number }[]
   } | null>(null)
+  // Split line being dragged (z_cabinet_split): its cabinet, cut index and live height.
+  const [splitDrag, setSplitDrag] = useState<{ cabId: string; idx: number; h: number } | null>(null)
   const [elevResizeLive, setElevResizeLive] = useState<{
     cabId: string; dim: 'dx' | 'dy'; value: number; posX?: number; posY?: number
   } | null>(null)
@@ -1738,20 +1743,48 @@ export default function ElevationSVG({
             })}
             </g>
 
-            {/* Height split cuts (z_cabinet_split): a dashed line across the cabinet at each cut. */}
+            {/* Height split cuts (z_cabinet_split): a dashed line across the cabinet at each cut.
+                On the selected cabinet each line can be dragged: it snaps to a fixed-shelf
+                suggestion (3 below its top) within SPLIT_SNAP, else to the mm, and saves on release. */}
             {layers.show('split_lines') && wallCabs.map(cab => {
               const cuts = normaliseSplit(cab.split)?.at ?? []
               if (!cuts.length) return null
-              const x0 = elevX(cab), top = roomH - cabBottomZ(cab, room, wall) - cab.dy
+              const bottomZ = cabBottomZ(cab, room, wall)
+              const x0 = elevX(cab), top = roomH - bottomZ - cab.dy
+              const isSel = selected?.type === 'cabinet' && selected.id === cab.id
+              const hAt = (clientY: number) => {
+                const r = svgRef.current!.getBoundingClientRect()
+                const raw = roomH - bottomZ - (clientY - r.top - view.panY) / view.zoom
+                const sug = splitSuggestions(resolvedParts?.get(cab.id)?.internal_parts ?? []).map(x => x.at)
+                const near = sug.find(v => Math.abs(v - raw) <= SPLIT_SNAP)
+                return Math.max(1, Math.min(cab.dy - 1, near ?? Math.round(raw)))
+              }
               return (
-                <g key={`split_${cab.id}`} style={{ pointerEvents: 'none' }}>
-                  {cuts.map((h, i) => {
+                <g key={`split_${cab.id}`}>
+                  {cuts.map((h0, i) => {
+                    const live = splitDrag?.cabId === cab.id && splitDrag.idx === i
+                    const h = live ? splitDrag.h : h0
                     const y = top + cab.dy - h
                     return (
                       <g key={i}>
-                        <line x1={x0 - 20} y1={y} x2={x0 + cab.dx + 20} y2={y}
-                          stroke="#ef4444" strokeWidth={1.5 / lz} strokeDasharray={`${8 / z} ${4 / z}`} />
-                        <text x={x0 + cab.dx + 26} y={y + 4 / z} fill="#ef4444" fontSize={11 / z}>SPLIT {Math.round(h * 10) / 10}</text>
+                        <line x1={x0 - 20} y1={y} x2={x0 + cab.dx + 20} y2={y} style={{ pointerEvents: 'none' }}
+                          stroke="#ef4444" strokeWidth={(live ? 2.5 : 1.5) / lz} strokeDasharray={`${8 / z} ${4 / z}`} />
+                        <text x={x0 + cab.dx + 26} y={y + 4 / z} fill="#ef4444" fontSize={11 / z} style={{ pointerEvents: 'none' }}>
+                          SPLIT {Math.round(h * 10) / 10}
+                        </text>
+                        {isSel && (
+                          <line x1={x0} y1={y} x2={x0 + cab.dx} y2={y} stroke="transparent" strokeWidth={10 / z}
+                            style={{ cursor: 'ns-resize' }}
+                            onPointerDown={e => { e.stopPropagation(); e.currentTarget.setPointerCapture(e.pointerId); setSplitDrag({ cabId: cab.id, idx: i, h: h0 }) }}
+                            onPointerMove={e => { if (live) setSplitDrag({ cabId: cab.id, idx: i, h: hAt(e.clientY) }) }}
+                            onPointerUp={e => {
+                              if (!live) return
+                              e.currentTarget.releasePointerCapture(e.pointerId)
+                              const next = hAt(e.clientY)
+                              setSplitDrag(null)
+                              if (Math.abs(next - h0) >= 0.5) onUpdateCabinet(cab.id, { split: normaliseSplit({ at: cuts.map((a, j) => (j === i ? next : a)) }) })
+                            }} />
+                        )}
                       </g>
                     )
                   })}

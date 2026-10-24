@@ -756,6 +756,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Open Job Properties → Cabinet Standards → Construction Methods (or Room Properties → Construction). Under Face Reveals each row has a Base, Wall and Tall column, filled from the cabinet builder. Type a new value in one column, e.g. Wall top reveal 0, and Save. Blue means overridden; clear the field to follow the builder (or the job, in a room) again. The Overrides tab lists them.',
       canvas: true, done: (c, s) => ev(c, 'class_reveals_saved') > ev(s, 'class_reveals_saved') },
   ]},
+
+  // Appended 2026-10-25 (z_cabinet_split — height split at a fixed shelf).
+  { id: 'cabinet_height_split', level: 'intermediate', topic: 'cabinets', title: 'Split a tall cabinet in height',
+    blurb: 'Make a tall unit in two pieces, cut at a fixed shelf so the upper sides drop over a 3 mm lip.',
+    keywords: 'split height cut tall two pieces sections fixed shelf lip 3mm sides back carry under stair upper lower', steps: [
+    { id: 'split', title: 'Right-click → Split cabinet height',
+      body: 'Right-click a tall cabinet with fixed shelves and pick Split cabinet height. It cuts the sides and back 3 mm below the top of the fixed shelf nearest the middle: the shelf stays with the lower section, 3 mm proud, and the upper sides drop over it. Doors stay full height. A red SPLIT line shows the cut in elevation.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.split?.at?.length) },
+    { id: 'move', title: 'Move the cut',
+      body: 'With the cabinet selected, the sidebar’s Height split section lists the cut (height from the cabinet bottom and off the floor). Click a Shelf button to cut at another fixed shelf, type a height, or drag the red line in elevation — it snaps to the shelves. + Add cut makes a third section; Remove split joins it back up.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.split?.at?.length) },
+    { id: 'parts', title: 'Check the pieces',
+      body: 'The cut list and the cabinet sheet show the sides and back as (lower) and (upper) pieces, and each piece keeps its own shelf and top holes. Nothing is drilled across the cut — it’s fixed by hand.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.split?.at?.length) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

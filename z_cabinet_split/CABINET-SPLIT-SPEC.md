@@ -7,9 +7,10 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → S2 built 2026-10-25 (right-click Split cabinet height, sidebar section, elevation
-> split line); used on RHK6581 butler's shelving. **In-app check pending (Mark).** Next: S3 (drag the line,
-> tutorial, 3D / cabinet sheet showing the pieces).
+> **RESUME HERE** → S1–S3 built (S2 checked by Mark 2026-10-25: looks good). S3: drag the split line in
+> elevation (snaps to the shelves), cabinet sheet front view + parts list show the cut / pieces, tutorial.
+> In-app check of S3 pending. Not done: 3D / Part view still draw the sides whole (they read the live
+> resolve, keyed by part name — splitting there would break drilling display + selection).
 
 ---
 
@@ -60,4 +61,6 @@
 - [x] **S2** (2026-10-25) UI: right-click **Split cabinet height** (starts at the fixed shelf nearest mid-height),
   sidebar `CabinetSplitSection` (cut heights + off-the-floor, shelf suggestion buttons, + Add cut, Remove split),
   dashed red split line + height on the elevation (layer item `split_lines`). Dragging the line → S3.
-- [ ] **S3** Drag the split line in elevation; 3D / cabinet sheet / Part view show the pieces; tutorial (cut list labels done in S1)
+- [x] **S3** (2026-10-25) Drag the split line in elevation (snaps to a shelf suggestion within 15, else the mm);
+  cabinet sheet: SPLIT line on the front view + the parts list as (lower) / (upper) pieces; tutorial
+  "Split a tall cabinet in height". Open: 3D / Part view still show whole sides.
