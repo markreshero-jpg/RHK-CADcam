@@ -1970,6 +1970,13 @@ export default function Cabinet3DView({
     if (!part) return
     setEdgeOverrides(m => new Map(m).set(part.id, edge))
     setSelectedPart({ ...part, edge })
+    if (part.id.startsWith('custom_')) {
+      const cid = part.id.slice(7)
+      setCustomParts?.(prev => prev.map(p => p.id === cid
+        ? { ...p, edge_top: edge.top, edge_bottom: edge.bottom, edge_left: edge.left, edge_right: edge.right } : p))
+      saveSVGEdge(cab.id, { ...part, edge })
+      return
+    }
     saveSVGEdge(cab.id, { ...part, edge }).then(() => onEdgeSaved?.(part.id, edge))
   }
 

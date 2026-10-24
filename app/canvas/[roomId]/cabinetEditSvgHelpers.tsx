@@ -388,6 +388,15 @@ export async function saveSVGEdge(cabId: string, part: PartMeta) {
   const { id, edge } = part
   const direct = { edge_band_top: edge.top, edge_band_bottom: edge.bottom, edge_band_left: edge.left, edge_band_right: edge.right }
   let result: { error: unknown }
+  if (id.startsWith('custom_')) {
+    // Custom parts (e.g. Applied Panel) keep their own edges on the row — no
+    // edge_overrides needed, the resolver never regenerates them.
+    const { error } = await supabase.from('cabinet_custom_parts')
+      .update({ edge_top: edge.top, edge_bottom: edge.bottom, edge_left: edge.left, edge_right: edge.right })
+      .eq('id', id.slice(7))
+    if (error) console.error('[svg edge save]', error)
+    return
+  }
   if (id.startsWith('case_')) {
     result = await supabase.from('case_parts').update(direct).eq('cabinet_instance_id', cabId).eq('part_key', id.slice(5))
   } else if (id.startsWith('tk_')) {

@@ -484,6 +484,13 @@ export default function CabinetEditModal({
     const part = selectedSVGPart
     if (!part) return
     setSelectedSVGPart({ ...part, edge })
+    if (part.id.startsWith('custom_')) {
+      const cid = part.id.slice(7)
+      setCustomParts(prev => prev.map(p => p.id === cid
+        ? { ...p, edge_top: edge.top, edge_bottom: edge.bottom, edge_left: edge.left, edge_right: edge.right } : p))
+      saveSVGEdge(cabinet.id, { ...part, edge })
+      return
+    }
     saveSVGEdge(cabinet.id, { ...part, edge }).then(() => onEdgeChange?.(cabinet.id, part.id, edge))
   }
 
