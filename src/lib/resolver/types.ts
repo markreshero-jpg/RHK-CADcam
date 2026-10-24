@@ -712,6 +712,10 @@ export interface CabinetInput {
   toekick_face_edgeband_id?:     string
   toekick_interior_edgeband_id?: string
 
+  // Warnings raised while loading materials (z_material_colours MC3), e.g.
+  // COLOUR_NOT_CHOSEN; the resolver starts its warning list with these.
+  material_warnings?: ResolverError[]
+
   // Slide hardware (for inner drawers — legacy scalar, kept for fallback)
   slide_side_deduction: number
 
@@ -1561,6 +1565,8 @@ export interface ResolverError {
   code:    string
   message: string
   part?:   string
+  // Material the warning is about (COLOUR_NOT_CHOSEN: the colour used).
+  material_id?: string
   // A one-click fix the UI can offer (z_bin_cabinet B4).
   action?: ResolverAction
 }

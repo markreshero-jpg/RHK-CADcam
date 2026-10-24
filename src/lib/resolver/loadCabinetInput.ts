@@ -5,7 +5,7 @@ import {
   JointTypeOp, rowToJointTypeOp, SeamJointAssign, seamAssignJoint,
   RawProfileOp, ResolvedDoorStyleInput, EdgeSides,
   HingeRuleInput, HingeHardwareInput, HingePlateInput, ExistingHingeInput, HingeBoreHole,
-  KickRunInput, KickSplitMode,
+  KickRunInput, KickSplitMode, ResolverError,
   HandleRole, GripKind, HandleProductInput, HandleScheduleEntryInput,
 } from './types'
 import { mergeRules, rulesForClass } from './mergeRules'
@@ -526,6 +526,10 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     }
   }
 
+  // Board colours (z_material_colours MC3): a board picked without a colour
+  // becomes its default colour; colours take their matched tape.
+  const materialWarnings = await applyBoardColours(matMap, tkMap, ebMap)
+
   // ── 7. Build construction rules ──────────────────────────────────────────────
   // Cascade: system defaults → schedule row → cabinet method → project overrides → room overrides → cabinet overrides
   const scheduleRules = (conStrSchedRowRes.data?.rules ?? {}) as Partial<ConstructionRules>
@@ -895,6 +899,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     exposed_edgeband_id:          ebMap.get('exposed'),
     toekick_face_edgeband_id:     ebMap.get('tk_face'),
     toekick_interior_edgeband_id: ebMap.get('tk_interior'),
+    material_warnings:            materialWarnings.length ? materialWarnings : undefined,
     slide_side_deduction:      fallbackDeduction,
     default_drawer_type:       (dbMethodRes.data?.drawer_type as 'system' | 'five_piece' | null) ?? undefined,
     default_inner_drawer_type: (innerDbMethodRes.data?.drawer_type as 'system' | 'five_piece' | null)
@@ -972,6 +977,88 @@ async function loadKickRunInput(
     max_segment_length: r.max_segment_length != null ? Number(r.max_segment_length) : null,
     split_mode:         (r.split_mode as KickSplitMode) ?? 'equal',
   }
+}
+
+// ── Board colours (z_material_colours MC3) ───────────────────────────────────
+// A colour is a materials row whose parent_id is its board. For every role:
+//  - a board that has active colours (picked without a colour, e.g. a schedule
+//    naming the generic board) becomes the board's default colour, with a
+//    COLOUR_NOT_CHOSEN warning; with no default colour it stays the board and
+//    warns.
+//  - a role landing on a colour takes the tape matched to that colour
+//    (edge_banding.material_match_id), else keeps the schedule tape. Only
+//    colours: plain boards keep today's schedule tapes.
+// ebMap keys: material role as-is, toekick roles as tk_<role>.
+const ROLE_LABEL: Record<string, string> = {
+  interior: 'Interior', exposed: 'Exposed', door_face: 'Doors', shelf: 'Shelves', drawerbox: 'Drawer box',
+}
+async function applyBoardColours(
+  matMap: Map<string, Material>, tkMap: Map<string, Material>, ebMap: Map<string, string>,
+): Promise<ResolverError[]> {
+  const slots: { map: Map<string, Material>; role: string; ebKey: string; label: string }[] = [
+    ...[...matMap.keys()].map(role => ({ map: matMap, role, ebKey: role, label: ROLE_LABEL[role] ?? role })),
+    ...[...tkMap.keys()].map(role => ({ map: tkMap, role, ebKey: `tk_${role}`, label: `Kick ${role}` })),
+  ]
+  const ids = [...new Set(slots.map(s => s.map.get(s.role)!.id))]
+  if (ids.length === 0) return []
+  const { colours, tapes } = await loadBoardColourInfo(ids)
+  if (colours.length === 0 && tapes.length === 0) return []
+
+  const coloursByBoard = new Map<string, Record<string, unknown>[]>()
+  for (const c of colours) {
+    const b = c.parent_id as string
+    coloursByBoard.set(b, [...(coloursByBoard.get(b) ?? []), c])
+  }
+  const tapeByColour = new Map(tapes.map(t => [t.material_match_id as string, t.id as string]))
+
+  const warnings: ResolverError[] = []
+  const warned = new Set<string>()
+  for (const s of slots) {
+    let mat = s.map.get(s.role)!
+    const boardColours = coloursByBoard.get(mat.id)
+    if (boardColours?.length) {
+      const def = boardColours.find(c => c.is_default_colour)
+      const key = `${s.label}|${mat.id}`
+      if (def) {
+        const board = mat.name
+        mat = dbRowToMaterial(def)
+        s.map.set(s.role, mat)
+        if (!warned.has(key)) warnings.push({
+          code: 'COLOUR_NOT_CHOSEN', part: 'material', material_id: mat.id,
+          message: `${s.label}: ${board} has colours but none was chosen. Using the default, ${def.colour_name}.`,
+        })
+      } else if (!warned.has(key)) {
+        warnings.push({
+          code: 'COLOUR_NOT_CHOSEN', part: 'material', material_id: mat.id,
+          message: `${s.label}: ${mat.name} has colours but none was chosen, and the board has no default colour.`,
+        })
+      }
+      warned.add(key)
+    }
+    const tape = tapeByColour.get(mat.id)
+    if (tape) ebMap.set(s.ebKey, tape)
+  }
+  return warnings
+}
+
+// Active colours of the given boards + tapes matched to the given materials
+// or their colours. Library data, cached per session.
+function loadBoardColourInfo(ids: string[]) {
+  const key = [...new Set(ids)].sort()
+  return cachedCascade(`boardColours:${key.join(',')}`, async () => {
+    const { data: colours } = await supabase.from('materials').select('*').in('parent_id', key).eq('active', true)
+    const matIds = [...key, ...((colours ?? []) as Record<string, unknown>[]).map(c => c.id as string)]
+    const { data: tapes } = await supabase.from('edge_banding').select('id, material_match_id')
+      .in('material_match_id', matIds).eq('active', true)
+    // Tapes count only when matched to a colour row (see applyBoardColours).
+    const colourIds = new Set(((colours ?? []) as Record<string, unknown>[]).map(c => c.id as string))
+    const { data: picked } = await supabase.from('materials').select('id').in('id', key).not('parent_id', 'is', null)
+    for (const r of (picked ?? []) as { id: string }[]) colourIds.add(r.id)
+    return {
+      colours: (colours ?? []) as Record<string, unknown>[],
+      tapes: ((tapes ?? []) as Record<string, unknown>[]).filter(t => colourIds.has(t.material_match_id as string)),
+    }
+  })
 }
 
 // Material rows by id (cabinet-level material/toekick overrides). Library data,

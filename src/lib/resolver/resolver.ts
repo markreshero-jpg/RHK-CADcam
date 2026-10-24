@@ -31,7 +31,7 @@ import { resolveBackPanel } from './resolveBackPanel'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const allErrors:   ResolverError[] = []
-  const allWarnings: ResolverError[] = []
+  const allWarnings: ResolverError[] = [...(cab.material_warnings ?? [])]
 
   const r = cab.rules  // already merged from system → job → room → cabinet
 
