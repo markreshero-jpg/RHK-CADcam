@@ -33,8 +33,9 @@ import { FLOAT_Z } from '@/src/lib/floating'
 const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 
 // cabinet_instances.resolved_drawer_hw — written by persistResolved.
-// hinge_instances: saved since z_cabinet_shape Phase 3b (absent on older saves).
-type DrawerHw = Pick<ResolvedCabinet, 'drawer_stacks' | 'internal_slides'> & Partial<Pick<ResolvedCabinet, 'hinge_instances'>>
+// hinge_instances: saved since z_cabinet_shape Phase 3b; warnings since
+// z_material_colours MC5 (both absent on older saves).
+type DrawerHw = Pick<ResolvedCabinet, 'drawer_stacks' | 'internal_slides'> & Partial<Pick<ResolvedCabinet, 'hinge_instances' | 'warnings'>>
 
 // `needsResolve` (optional) collects cabinets whose saved copy can't be drawn
 // as-is and needs a live resolve: drawers but no saved drawer hardware (saved
@@ -261,7 +262,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
       seam_joints: seamJoints,
       hinge_instances: [],
       errors: [],
-      warnings: [],
+      warnings: drawerHwById.get(id)?.warnings ?? [],
       part_hide_views: hiddenById.get(id) ?? {},
     }
     // Recover hinges (drills + 3D model fields) from the persisted instances so

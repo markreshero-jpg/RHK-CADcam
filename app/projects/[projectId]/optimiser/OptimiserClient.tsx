@@ -271,6 +271,7 @@ function Stage2Parts() {
   }
 
   const matName = useMemo(() => new Map(snap.materials.map(m => [m.id, m.name])), [snap.materials])
+  const noColour = useMemo(() => colourNotChosen(snap), [snap])
   // Cabinet filter options reflect the room filter.
   const cabOptions = useMemo(
     () => snap.cabinets.filter(c => filterRoomIds.length === 0 || filterRoomIds.includes(c.room_id)),
@@ -346,7 +347,7 @@ function Stage2Parts() {
       <div className="flex-none px-8 pt-3 pb-3 space-y-3 border-b border-edge">
         <ChipFilter label="Rooms" options={snap.rooms.map(r => ({ id: r.id, label: isBatch ? `${snap.parts.find(p => p.room_id === r.id)?.job_number ?? ''} ${r.name}`.trim() : r.name }))} selected={filterRoomIds} onChange={setFilterRooms} />
         <ChipFilter label="Cabinets" options={cabOptions.map(c => ({ id: c.id, label: c.label }))} selected={filterCabinetIds} onChange={setFilterCabinets} />
-        <ChipFilter label="Materials" options={snap.materials.map(m => ({ id: m.id, label: m.name }))} selected={filterMaterialIds} onChange={setFilterMaterials} />
+        <ChipFilter label="Materials" options={snap.materials.map(m => ({ id: m.id, label: noColour.has(m.id) ? `${m.name} ⚠` : m.name }))} selected={filterMaterialIds} onChange={setFilterMaterials} />
       </div>
 
       {/* Actions + summary */}
@@ -498,12 +499,19 @@ function ChipFilter({ label, options, selected, onChange }: {
   )
 }
 
+// Materials some cabinet fell back to because no colour was chosen for a board
+// with colours (COLOUR_NOT_CHOSEN, z_material_colours MC5).
+function colourNotChosen(snap: OptiSnapshot): Set<string> {
+  return new Set(snap.cabinets.flatMap(c => (c.colour_warnings ?? []).map(w => w.material_id)))
+}
+
 // Material groups present in the current selection.
 function useSelectedGroups() {
   const snap = useOptiStore(s => s.snapshot)!
   const selectedUids = useOptiStore(s => s.selectedUids)
   return useMemo(() => {
     const matName = new Map(snap.materials.map(m => [m.id, m.name]))
+    const noColour = colourNotChosen(snap)
     const map = new Map<string, { key: string; materialId: string | null; thickness: number; name: string; count: number }>()
     for (const p of snap.parts) {
       if (!selectedUids.has(p.uid)) continue
@@ -512,7 +520,7 @@ function useSelectedGroups() {
       if (g) g.count++
       else map.set(key, {
         key, materialId: p.material_id, thickness: p.thickness,
-        name: `${p.material_id ? (matName.get(p.material_id) ?? 'Material') : 'No material'} · ${p.thickness}mm`,
+        name: `${p.material_id ? (matName.get(p.material_id) ?? 'Material') : 'No material'} · ${p.thickness}mm${p.material_id && noColour.has(p.material_id) ? ' · ⚠ colour not chosen' : ''}`,
         count: 1,
       })
     }
@@ -667,6 +675,15 @@ function Stage4Nesting() {
   // outline offset in by the tape). One whose offset didn't come out clean is
   // cut at finished size instead — never silently wrong geometry — and named.
   const offsetFailed = deductEb ? nestableParts.filter(p => p.shape && cutBlank(p, true).failed) : []
+  // Parts on a colour their cabinet fell back to (no colour chosen for the board).
+  const cabById = new Map(snap.cabinets.map(c => [c.id, c]))
+  const noColourGroups = new Map<string, Set<string>>()   // material id → cabinet labels
+  for (const p of nestableParts) {
+    if (!p.material_id) continue
+    const cab = cabById.get(p.cabinet_instance_id)
+    if (!cab?.colour_warnings?.some(w => w.material_id === p.material_id)) continue
+    noColourGroups.set(p.material_id, (noColourGroups.get(p.material_id) ?? new Set<string>()).add(p.cabinet_label))
+  }
 
   function run() {
     const isBatch = includedProjectIds.length > 1
@@ -747,6 +764,13 @@ function Stage4Nesting() {
             offset cleanly (an edge too short for the tape?): {[...new Set(offsetFailed.map(p => `${p.cabinet_label} ${p.label}`))].slice(0, 6).join(', ')}{offsetFailed.length > 6 ? '…' : ''}
           </p>
         )}
+        {[...noColourGroups].map(([matId, cabs]) => (
+          <p key={matId} className="text-[11px] text-amber-500 mb-4">
+            {`⚠ Colour not chosen: ${matById.get(matId)?.name ?? 'material'} is the board's default colour, used because `
+              + `no colour was picked for ${cabs.size} cabinet(s): ${[...cabs].slice(0, 6).join(', ')}${cabs.size > 6 ? '…' : ''}. `
+              + 'Pick the colour in Job / Room materials and re-save those cabinets.'}
+          </p>
+        ))}
         {ebMissing.length > 0 && (
           <p className="text-[11px] text-amber-500 mb-4">
             Edgeband deduction is on, but {ebMissing.length} part(s) have banded edges with no edgeband

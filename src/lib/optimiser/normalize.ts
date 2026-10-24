@@ -58,7 +58,9 @@ export function canonicalPanelDims(dx: number, dy: number, dz: number): { w: num
 
 export interface RawProject { id: string; name: string; job_number: string | null }
 export interface RawRoom { id: string; name: string }
-export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; no_cnc?: boolean | null; part_no_cnc?: string[] | null; part_hide_views?: PartHideViews | null }
+export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; no_cnc?: boolean | null; part_no_cnc?: string[] | null; part_hide_views?: PartHideViews | null
+  // resolved_drawer_hw->warnings (saved resolver warnings, z_material_colours MC5)
+  warnings?: { code?: string; message?: string; material_id?: string }[] | null }
 type Row = Record<string, unknown>
 
 export interface NormalizedProject {
@@ -83,7 +85,12 @@ export function normalizeProject(
 ): NormalizedProject {
   const rooms: OptiRoom[] = roomsRaw.map(r => ({ id: r.id, name: r.name }))
   const roomById = new Map(rooms.map(r => [r.id, r]))
-  const cabinets: OptiCabinet[] = cabsRaw.map(c => ({ id: c.id, label: c.label ?? humanize(c.assembly_class), room_id: c.room_id }))
+  const cabinets: OptiCabinet[] = cabsRaw.map(c => {
+    const colour_warnings = (Array.isArray(c.warnings) ? c.warnings : [])
+      .filter(w => w.code === 'COLOUR_NOT_CHOSEN' && w.material_id)
+      .map(w => ({ material_id: w.material_id!, message: w.message ?? '' }))
+    return { id: c.id, label: c.label ?? humanize(c.assembly_class), room_id: c.room_id, ...(colour_warnings.length ? { colour_warnings } : {}) }
+  })
   const cabById = new Map(cabinets.map(c => [c.id, c]))
   // Assembly-level no_cnc cascades to ALL of a cabinet's parts (standard + custom).
   const cabNoCnc = new Set(cabsRaw.filter(c => c.no_cnc).map(c => c.id))

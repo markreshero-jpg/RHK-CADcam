@@ -119,7 +119,12 @@ export interface OptiTool {
 }
 
 export interface OptiRoom { id: string; name: string }
-export interface OptiCabinet { id: string; label: string; room_id: string }
+export interface OptiCabinet {
+  id: string; label: string; room_id: string
+  // Saved COLOUR_NOT_CHOSEN warnings (z_material_colours MC5): material_id =
+  // the default colour the cabinet fell back to.
+  colour_warnings?: { material_id: string; message: string }[]
+}
 
 // Everything the server hands the client at load.
 export interface OptiSnapshot {

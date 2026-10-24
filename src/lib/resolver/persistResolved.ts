@@ -189,11 +189,14 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
     // Computed drawer hardware + hinges, so the room loads them without
     // re-resolving (dbLoadResolvedParts reads cabinet_instances.resolved_drawer_hw).
     // Hinges ride along because a shaped cabinet's facet hinges can't be
-    // rebuilt from the hinge rows alone (they need the footprint).
+    // rebuilt from the hinge rows alone (they need the footprint). Warnings
+    // ride along so they show on load and in the nest, e.g. COLOUR_NOT_CHOSEN
+    // (z_material_colours MC5).
     drawer_hw: {
       drawer_stacks:   resolved.drawer_stacks,
       internal_slides: resolved.internal_slides,
       hinge_instances: resolved.hinge_instances,
+      warnings:        resolved.warnings,
     },
   }
 }
