@@ -683,7 +683,8 @@ function CustomZoom({ controlsRef }: { controlsRef: React.RefObject<any> }) {
 
 export type Camera3DState = { pos: [number, number, number]; target: [number, number, number] }
 
-const camStorageKey = (roomId: string) => `rhk.cam3d.${roomId}`
+// v2: v1 could hold the throwaway camera's view (see the ctrl.object guard below).
+const camStorageKey = (roomId: string) => `rhk.cam3d.v2.${roomId}`
 
 function loadStoredCamera(roomId: string): Camera3DState | null {
   try {
@@ -708,7 +709,10 @@ function CameraPersistence({ controlsRef, stateRef, roomId }: {
 
   useEffect(() => {
     const ctrl = controlsRef.current
-    if (!ctrl) return
+    // Until the swap settles, the effect sees R3F's throwaway camera (at 0,0,5).
+    // Saving that and "restoring" it onto the real camera pulled the view right in
+    // to minDistance on every first open — so only touch the camera being driven.
+    if (!ctrl || ctrl.object !== camera) return
 
     // Restore the saved view (returning from elevation/plan, else the last view
     // stored for this room before a refresh).
@@ -857,7 +861,10 @@ export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, 
   const spanX   = bounds.maxX - bounds.minX
   const spanZ   = bounds.maxZ - bounds.minZ
   const span    = Math.max(spanX, spanZ, roomH)
-  const camDist = span * 1.5
+  // Default view fits the room's bounding sphere in the vertical FOV with ~15%
+  // margin. camPosition's offset vector below has length ≈1.2 × camDist.
+  const radius  = Math.hypot(spanX, spanZ, roomH) / 2
+  const camDist = (radius / Math.sin((FOV / 2) * Math.PI / 180)) * 1.15 / 1.2
   const midX    = (bounds.minX + bounds.maxX) / 2
   const midZ    = (bounds.minZ + bounds.maxZ) / 2
 
