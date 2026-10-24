@@ -9,7 +9,6 @@ import { Edges } from '@react-three/drei'
 import { saveSVGEdge } from './cabinetEditSvgHelpers'
 import type { CabinetInstance } from '@/src/lib/types'
 import { dbUpdateCustomPart, dbSavePartPosOverride, type CabinetCustomPart, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
-import { sampleOutline, sampleShapeOutline } from '@/src/lib/shapePath'
 import { customExtents, customFieldForExtent, customPanelKind, type CustomOrient } from '@/src/lib/customPartBox'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
@@ -23,7 +22,7 @@ import {
   panelFaceColors, unpackMatCol,
   Part, PartPropertiesPanel, PreviewCanvas, PassivePartsContext,
 } from '@/src/components/three/PartViewer'
-import { isSide, caseBox, zoneBevelOutline, internalBox, internalSeamPartKey, seamDrillsFor, intoPartFrame, seamExtentBoxes, coalesceOpposingDrills, dropNearDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelOutline, caseBevelNote, tkBevelOutline, tkBevelNote } from '@/src/lib/jointDrilling'
+import { isSide, caseBox, internalBox, internalSeamPartKey, seamDrillsFor, intoPartFrame, seamExtentBoxes, coalesceOpposingDrills, dropNearDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
@@ -41,13 +40,14 @@ import { FixtureModel, FixtureOutline } from '@/src/components/three/FixtureMode
 import type { LocalFixtureBox } from '@/src/lib/cabinetContents'
 import { getPalette } from '@/src/lib/partPalette'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
+import { tkBox, intBox, zoneBox, INT_PANEL_KIND, partShapes } from '@/src/lib/partSolids'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { PartAlpha, NO_ROTATION } from '@/src/components/three/PartViewer'
 import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
 import { areaSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
-import { handleShape, sharknoseProfile, type HandleShape } from '@/src/lib/handleGeometry'
+import { handleShape, type HandleShape } from '@/src/lib/handleGeometry'
 import Handle3D from '@/src/components/three/Handle3D'
 import Bin3D from '@/src/components/three/Bin3D'
 import Runner3D from '@/src/components/three/Runner3D'
@@ -74,39 +74,7 @@ function makeOutline(room: boolean | undefined, palette: ReturnType<typeof getPa
 // Cabinet origin = bottom-left-back corner (+X=right, +Y=up, +Z=front).
 // Each helper returns { x,y,z (part origin), w (X extent), h (Y extent), d (Z extent) }.
 
-function tkBox(p: ResolvedToekickPart): Box {
-  return p.part_key === 'spreader_horizontal'
-    ? { x: p.X, y: p.Y, z: p.Z, w: p.DX, h: p.DY, d: p.DZ }
-    : { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
-}
-
-function intBox(p: ResolvedInternalPart): Box {
-  // Inner-drawer / pull-out parts come from resolveDrawerBox (see fittings.ts) and
-  // carry the drawer-box dimension convention (per-part DX/DY/DZ semantics + Z =
-  // front face). They map to a cabinet Box the same way dbBox does for face drawers.
-  switch (p.part_type) {
-    case 'divider':
-      return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
-    case 'inner_drawer_side':
-    case 'pull_out_side':
-      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DZ, h: p.DY, d: p.DX }
-    case 'inner_drawer_front':
-    case 'inner_drawer_back':
-    case 'pull_out_back':
-      return { x: p.X, y: p.Y, z: p.Z - p.DZ, w: p.DY, h: p.DX, d: p.DZ }
-    case 'inner_drawer_bottom':
-    case 'pull_out_bottom':
-      return { x: p.X, y: p.Y, z: p.Z - p.DX, w: p.DY, h: p.DZ, d: p.DX }
-    // adj_shelf, fixed_shelf, accessory — horizontal shelf-like; Z stored is the back edge.
-    default:
-      return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
-  }
-}
-
-function zoneBox(z: ResolvedFaceZone): Box {
-  return { x: z.X, y: z.Y, z: z.Z, w: z.DX, h: z.DY, d: z.DZ }   // face: DX=width, DY=height
-}
-
+// tkBox / intBox / zoneBox: src/lib/partSolids.ts (shared with the cabinet sheets)
 // dbBox / slideBox: src/lib/drawerHardwareBoxes.ts (shared with plan + room 3D)
 
 // ── Part labels ────────────────────────────────────────────────────────────────
@@ -143,15 +111,7 @@ const INT_LABELS: Record<string, string> = {
 }
 
 // Panel kind dispatch for ResolvedInternalPart — drives panelFaceColors + edgeStrips orientation.
-const INT_PANEL_KIND: Record<string, 'side' | 'horizontal' | 'face'> = {
-  divider:             'side',
-  inner_drawer_side:   'side',
-  pull_out_side:       'side',
-  inner_drawer_front:  'face',
-  inner_drawer_back:   'face',
-  pull_out_back:       'face',
-  // adj_shelf, fixed_shelf, inner_drawer_bottom, pull_out_bottom, accessory → horizontal (default below)
-}
+
 
 const FACE_LABELS: Record<string, string> = {
   door:        'Door',
@@ -1252,47 +1212,7 @@ export function CabinetScene({
   // drawer-box — were authored on the mirrored frame). Slides are hardware,
   // not panels: never shaped.
   const shapes3D = useMemo(() => {
-    const m = new Map<string, PartShape>()
-    // Resolver outlines first (shaped cabinets' bottom / top / shelves); a
-    // Shape Editor override for the same part replaces them below.
-    // Turned per-edge panels carry theirs in their own face frame (finger-rail
-    // notches on an L corner's end panel), so they draw too.
-    for (const p of rp.case_parts) if (p.outline && (!p.AY || isShapedPanelKey(p.part_key))) m.set(`case_${p.part_key}`, {
-      pts: sampleOutline(p.outline, 2),
-      ...(p.cutouts?.length ? { holes: p.cutouts.map(c => sampleOutline(c.pts, 2)) } : {}),   // rib cut-outs (z_curved_end C4)
-    })
-    // Curved end face board (z_curved_end): its bent plan shape extruded up
-    // (horizontal shape frame: x across its box, y down from the box front).
-    for (const p of rp.case_parts) {
-      if (!p.wrap) continue
-      const b = caseBox(p)
-      m.set(`case_${p.part_key}`, { pts: sampleOutline(p.wrap.pts, 2).map(q => ({ x: q.x - b.x, y: b.z + b.d - q.y })), extrude: 'up' })
-    }
-    // Angled panel ends (4a): top-view outline extruded up.
-    for (const p of rp.case_parts) {
-      const o = caseBevelOutline(p)
-      if (o) m.set(`case_${p.part_key}`, { pts: o, extrude: 'up' })
-    }
-    // Mitred kick boards on shaped cabinets (4b).
-    for (const p of rp.toekick_parts) {
-      const o = tkBevelOutline(p)
-      if (o) m.set(`tk_${p.part_key}_${p.sort_order}`, { pts: o, extrude: 'up' })
-    }
-    for (const p of rp.internal_parts ?? []) if (p.outline) m.set(`int_${p.part_type}_${p.sort_order}`, { pts: sampleOutline(p.outline, 2) })
-    // Mitred doors where two facets meet: top-view outline extruded up
-    // (horizontal shape frame: y down from the front face).
-    for (const z of rp.face_zones) {
-      const o = zoneBevelOutline(z)
-      if (o) m.set(zonePartId(z), { pts: o.map(q => ({ x: q.x, y: z.DZ - q.z })), extrude: 'up' })
-      // Sharknose fronts (z_handles H3): side profile with the back bevel.
-      const sn = sharknoseProfile(z)
-      if (sn) m.set(zonePartId(z), { pts: sn, extrude: 'across' })
-    }
-    for (const [pid, ov] of Object.entries(shapeOverrides ?? {})) {
-      if (pid.startsWith('slide_')) continue
-      if ((ov.segments?.length ?? 0) > 2) m.set(pid, { pts: sampleShapeOutline(ov.segments), mirror: pid.includes('right_side') })
-    }
-    return m
+    return partShapes(rp, shapeOverrides)
   }, [shapeOverrides, rp])
 
   const boxByKey = useMemo(() => {

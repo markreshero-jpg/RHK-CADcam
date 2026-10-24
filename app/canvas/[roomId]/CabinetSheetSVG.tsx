@@ -5,10 +5,14 @@
 // PNG of the modal's real Cabinet3DView when provided, else a vector axonometric.
 // One SVG in page mm (viewBox = paper), so it previews 1:1 and exports in one
 // svg2pdf call per page.
+// True shapes (src/lib/partSolids): a part with a shape (Shape Editor, resolver
+// outline, bevel, sharknose) or a turn draws its projected outline — the real
+// outline where the view sees it face-on, else its silhouette. The PLAN view draws
+// every part that way; the 3D view draws those parts as extruded prisms.
 'use client'
 import type { Wall, CabinetInstance } from '@/src/lib/types'
-import { frontViewHardware } from '@/src/lib/drawerHardwareBoxes'
-import type { ResolvedCabinet, SlideProduct, SlideScheduleEntry, SeamJointAssign } from '@/src/lib/resolver/types'
+import { frontViewHardware, dbBox } from '@/src/lib/drawerHardwareBoxes'
+import type { ResolvedCabinet, ResolvedCasePart, SlideProduct, SlideScheduleEntry, SeamJointAssign } from '@/src/lib/resolver/types'
 import { seamAssignJoint, seamAssignRows } from '@/src/lib/resolver/types'
 import type { CabinetCustomPart, PartPosOverrides } from './canvasDB'
 import { findSlide } from '@/src/lib/resolver/resolveDrawerStack'
@@ -17,9 +21,11 @@ import {
   elevRect, tkElevRect, zoneElevRect, intElevRect, dbElevRect, slideElevRect,
   sideRect, tkSideRect, intSideRect, zoneSideRect, dbSideRect, slideSideRect,
   caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3, type Box3,
-  doorProfileSvg,
+  doorProfileSvg, isSidePanel,
 } from './cabinetEditSvgHelpers'
-import { zonePartId, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, dbPartId, shapedPartLabel, isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
+import { partShapes, partPrism, prismOutline, tkBox, intBox, zoneBox, INT_PANEL_KIND, type Box3D, type PanelKind, type PartShape, type Prism, type V3, type View2D } from '@/src/lib/partSolids'
+import type { ShapeSegmentLike } from '@/src/lib/shapePath'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 import { binOutlines, binShape } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
@@ -118,6 +124,48 @@ export default function CabinetSheetSVG({
     const o = ov(id); return o ? { ...p, X: p.X + o.ox, Y: p.Y + o.oy, Z: p.Z + o.oz } : p
   }
 
+  // ── True shapes: every part as the cabinet 3D view builds it ──────────────
+  const shapeOvs: Record<string, { segments: ShapeSegmentLike[] }> = {}
+  {
+    const rev: Record<string, number> = {}
+    for (const r of shapeRows ?? []) if (!(r.part_key in rev) || r.revision > rev[r.part_key]) { rev[r.part_key] = r.revision; shapeOvs[r.part_key] = { segments: r.segments } }
+  }
+  const shapes = rp ? partShapes(rp, shapeOvs) : new Map<string, PartShape>()
+  type Role = 'case' | 'kick' | 'spreader' | 'face' | 'int' | 'db'
+  type Solid = { id: string; role: Role; prism: Prism; shaped: boolean; special: boolean }
+  const solids: Solid[] = []
+  const addSolid = (id: string, role: Role, b0: Box3D, kind: PanelKind, ay = 0) => {
+    const o = ov(id)
+    const b = o ? { ...b0, w: o.sw ?? b0.w, h: o.sh ?? b0.h, d: o.sd ?? b0.d } : b0
+    const r: V3 = [o?.oax ?? 0, (o?.oay ?? 0) + ay, o?.oaz ?? 0]
+    const rot = r[0] || r[1] || r[2] ? r : null
+    const shape = shapes.get(id)
+    solids.push({ id, role, prism: partPrism(b, kind, shape, rot), shaped: !!shape, special: !!shape || !!rot })
+  }
+  const caseKind = (p: ResolvedCasePart): PanelKind =>
+    p.wrap ? 'face' : isSidePanel(p.part_key) ? 'side' : p.part_key === 'back' || isShapedPanelKey(p.part_key) || p.upright ? 'face' : 'horizontal'
+  if (rp) {
+    rp.case_parts.forEach(p => { const id = `case_${p.part_key}`; addSolid(id, 'case', caseBox(applyOv(p, id)), caseKind(p), p.AY ?? 0) })
+    rp.toekick_parts.forEach(p => {
+      const id = `tk_${p.part_key}_${p.sort_order}`
+      addSolid(id, p.part_key.startsWith('spreader') ? 'spreader' : 'kick', tkBox(applyOv(p, id)),
+        p.part_key === 'spreader_horizontal' ? 'horizontal' : p.part_key === 'spreader_vertical' ? 'side' : 'face', p.AY ?? 0)
+    })
+    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const id = zonePartId(z); addSolid(id, 'face', zoneBox(applyOv(z, id)), 'face', z.AY ?? 0) })
+    rp.internal_parts.forEach(p => { const id = `int_${p.part_type}_${p.sort_order}`; addSolid(id, 'int', intBox(applyOv(p, id)), INT_PANEL_KIND[p.part_type] ?? 'horizontal') })
+    ;(rp.drawer_stacks ?? []).forEach(stk => stk.box_parts.forEach(p => addSolid(dbPartId(stk, p.part_type), 'db', dbBox(p),
+      p.part_type === 'db_left_side' || p.part_type === 'db_right_side' ? 'side' : p.part_type === 'db_bottom' ? 'horizontal' : 'face')))
+  }
+  const solidById = new Map(solids.map(s => [s.id, s]))
+  /** The part's solid when its rect isn't its true shape (shaped or turned). */
+  const special = (id: string) => { const s = solidById.get(id); return s?.special ? s : undefined }
+  type ToPage = (u: number, v: number) => [number, number]
+  const outlineD = (o: { outer: { x: number; y: number }[]; holes: { x: number; y: number }[][] }, m: ToPage) =>
+    [o.outer, ...o.holes].filter(l => l.length > 2)
+      .map(l => 'M' + l.map(q => { const [x, y] = m(q.x, q.y); return `${x.toFixed(2)} ${y.toFixed(2)}` }).join('L') + 'Z').join('')
+  const shapeEl = (key: string, sol: Solid, view: View2D, m: ToPage, props: React.SVGProps<SVGPathElement>) =>
+    <path key={key} d={outlineD(prismOutline(sol.prism, view), m)} fillRule="evenodd" {...props} />
+
   // ── Page layout (mm) ──────────────────────────────────────────────────────
   const M = 11, headerH = 17
   const contentTop = M + headerH + 3
@@ -132,7 +180,8 @@ export default function CabinetSheetSVG({
   const viewW = (leftW - halfGap) / 2
   const frontBox = { x: M, y: contentTop, w: viewW, h: rowH }
   const sideBox  = { x: M + viewW + halfGap, y: contentTop, w: viewW, h: rowH }
-  const isoBox   = { x: M, y: contentTop + rowH + vGap, w: leftW, h: rowH }
+  const planBox  = { x: M, y: contentTop + rowH + vGap, w: viewW, h: rowH }
+  const isoBox   = { x: M + viewW + halfGap, y: contentTop + rowH + vGap, w: viewW, h: rowH }
   // Right column: cut list (top) + hardware + overrides
   const hwH = 34, ovH = 30, gap = 4
   const cutBox = { x: rightX, y: contentTop, w: rightW, h: contentH - hwH - ovH - gap * 2 }
@@ -168,15 +217,20 @@ export default function CabinetSheetSVG({
   function front() {
     const { s, tx, ty } = place(frontBox, dx, dy, 6, 5, show.dims ? 8 : 4, show.dims ? 9 : 4)
     const R = (ex: number, ey: number, ew: number, eh: number) => ({ x: tx + ex * s, y: ty + (dy - ey) * s, width: ew * s, height: eh * s })
+    const FM: ToPage = (u, v) => [tx + u * s, ty + (dy - v) * s]
     const els: React.ReactNode[] = []
     els.push(<rect key="ob" {...R(0, dy, dx, dy)} fill="white" stroke={INK} strokeWidth={OUT} />)
     if (rp) {
       rp.case_parts.filter(p => p.part_key !== 'back').forEach((p, i) => {
+        const sp = special(`case_${p.part_key}`)
+        if (sp) { els.push(shapeEl(`c${i}`, sp, 'front', FM, { fill: 'none', stroke: CASE_STROKE, strokeWidth: PART })); return }
         const r = elevRect({ ...applyOv(p, `case_${p.part_key}`), part_key: p.part_key })
         els.push(<rect key={`c${i}`} {...R(r.ex, r.ey, r.ew, r.eh)} fill="none" stroke={CASE_STROKE} strokeWidth={PART} />)
       })
       rp.toekick_parts.forEach((p, i) => {
         const spreader = p.part_key === 'spreader_vertical' || p.part_key === 'spreader_horizontal'
+        const sp = special(`tk_${p.part_key}_${p.sort_order}`)
+        if (sp) { els.push(shapeEl(`t${i}`, sp, 'front', FM, { fill: 'none', stroke: spreader ? INK3 : INK2, strokeWidth: PART, strokeDasharray: spreader ? DASH : undefined })); return }
         const r = tkElevRect(applyOv(p, `tk_${p.part_key}_${p.sort_order}`))
         els.push(<rect key={`t${i}`} {...R(r.ex, r.ey, r.ew, r.eh)} fill="none" stroke={spreader ? INK3 : INK2} strokeWidth={PART} strokeDasharray={spreader ? `${1 * 1} 0.7` : undefined} />)
       })
@@ -184,23 +238,30 @@ export default function CabinetSheetSVG({
       rp.face_zones.filter(z => z.face_type !== 'open').forEach((z, i) => {
         const r = zoneElevRect(applyOv(z, zonePartId(z)))
         const rc = R(r.ex, r.ey, r.ew, r.eh)
-        els.push(<rect key={`f${i}`} {...rc} fill={FACE_FILL} stroke={INK} strokeWidth={PART} />)
+        const sp = special(zonePartId(z))
+        els.push(sp ? shapeEl(`f${i}`, sp, 'front', FM, { fill: FACE_FILL, stroke: INK, strokeWidth: PART })
+          : <rect key={`f${i}`} {...rc} fill={FACE_FILL} stroke={INK} strokeWidth={PART} />)
         if (z.hinge_side === 'left') els.push(<line key={`fh${i}`} x1={rc.x} y1={rc.y} x2={rc.x} y2={rc.y + rc.height} stroke={INK} strokeWidth={OUT} />)
         if (z.hinge_side === 'right') els.push(<line key={`fh${i}`} x1={rc.x + rc.width} y1={rc.y} x2={rc.x + rc.width} y2={rc.y + rc.height} stroke={INK} strokeWidth={OUT} />)
-        const fp = doorProfileSvg(z, { x: rc.x, y: rc.y, w: rc.width, h: rc.height }, INK, THIN, 0.9)
+        const fp = !sp?.shaped && doorProfileSvg(z, { x: rc.x, y: rc.y, w: rc.width, h: rc.height }, INK, THIN, 0.9)
         if (fp) els.push(<g key={`fp${i}`}>{fp}</g>)
       })
       // Internals (lighter grey, on top so visible through faces)
       if (show.internals) {
         rp.internal_parts.forEach((p, i) => {
+          const sp = special(`int_${p.part_type}_${p.sort_order}`)
+          if (sp) { els.push(shapeEl(`i${i}`, sp, 'front', FM, { fill: INT_FILL, fillOpacity: 0.6, stroke: INT_STROKE, strokeWidth: THIN, strokeDasharray: DASH })); return }
           const r = intElevRect(applyOv(p, `int_${p.part_type}_${p.sort_order}`))
           els.push(<rect key={`i${i}`} {...R(r.ex, r.ey, r.ew, r.eh)} fill={INT_FILL} fillOpacity={0.6} stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />)
         })
         ;(rp.drawer_stacks ?? []).forEach((stk, si) => {
-          stk.box_parts.forEach((p, j) => { const r = dbElevRect(p); els.push(<rect key={`db${si}_${j}`} {...R(r.ex, r.ey, r.ew, r.eh)} fill={INT_FILL} fillOpacity={0.6} stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
+          stk.box_parts.forEach((p, j) => { const sp = special(dbPartId(stk, p.part_type)); if (sp) { els.push(shapeEl(`db${si}_${j}`, sp, 'front', FM, { fill: INT_FILL, fillOpacity: 0.6, stroke: INT_STROKE, strokeWidth: THIN, strokeDasharray: DASH })); return }; const r = dbElevRect(p); els.push(<rect key={`db${si}_${j}`} {...R(r.ex, r.ey, r.ew, r.eh)} fill={INT_FILL} fillOpacity={0.6} stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
           if (stk.drawer_type === 'bin') { els.push(...binOutlines(stk, 'front').map((o, j) => <polygon key={`binf${si}_${j}`} points={o.pts.map(([h, y]) => `${tx + h * s},${ty + (dy - y) * s}`).join(' ')} fill="none" stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />)); return }   // z_bin_cabinet: bin outline, not rails
           stk.slides.forEach((sl, j) => { const r = slideElevRect(sl); els.push(<rect key={`sl${si}_${j}`} {...R(r.ex, r.ey, r.ew, r.eh)} fill="none" stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
         })
+        // A shaped back sits behind everything: its true outline, dashed.
+        const back = solidById.get('case_back')
+        if (back?.shaped) els.push(shapeEl('bk', back, 'front', FM, { fill: 'none', stroke: INT_STROKE, strokeWidth: THIN, strokeDasharray: DASH }))
         // Hinge cup + plate bore positions (front projection).
         ;(rp.hinge_instances ?? []).forEach((h, hi) => {
           [...h.cup_drills, ...h.plate_drills].forEach((dr, j) => {
@@ -225,29 +286,38 @@ export default function CabinetSheetSVG({
   function side() {
     const { s, tx, ty } = place(sideBox, dz, dy, 6, 5, show.dims ? 8 : 4, show.dims ? 9 : 4)
     const S = (sz: number, cyTop: number, w: number, h: number) => ({ x: tx + sz * s, y: ty + (dy - cyTop) * s, width: w * s, height: h * s })
+    const SM: ToPage = (u, v) => [tx + u * s, ty + (dy - v) * s]
     const els: React.ReactNode[] = []
     els.push(<rect key="ob" {...S(0, dy, dz, dy)} fill="white" stroke={INK} strokeWidth={OUT} />)
     if (rp) {
       rp.case_parts.forEach((p, i) => {
+        const sp = special(`case_${p.part_key}`)
+        if (sp) { els.push(shapeEl(`c${i}`, sp, 'side', SM, { fill: 'none', stroke: CASE_STROKE, strokeWidth: PART })); return }
         const r = sideRect(applyOv(p, `case_${p.part_key}`)); if (!r) return
         els.push(<rect key={`c${i}`} {...S(r.sz, r.cy_top, r.sw, r.sh)} fill="none" stroke={CASE_STROKE} strokeWidth={PART} />)
       })
       rp.toekick_parts.forEach((p, i) => {
         const spreader = p.part_key === 'spreader_vertical' || p.part_key === 'spreader_horizontal'
+        const sp = special(`tk_${p.part_key}_${p.sort_order}`)
+        if (sp) { els.push(shapeEl(`t${i}`, sp, 'side', SM, { fill: 'none', stroke: spreader ? INK3 : INK2, strokeWidth: PART, strokeDasharray: spreader ? DASH : undefined })); return }
         const r = tkSideRect(applyOv(p, `tk_${p.part_key}_${p.sort_order}`))
         els.push(<rect key={`t${i}`} {...S(r.sz, r.cy_top, r.sw, r.sh)} fill="none" stroke={spreader ? INK3 : INK2} strokeWidth={PART} strokeDasharray={spreader ? '1 0.7' : undefined} />)
       })
       rp.face_zones.filter(z => z.face_type !== 'open').forEach((z, i) => {
+        const sp = special(zonePartId(z))
+        if (sp) { els.push(shapeEl(`f${i}`, sp, 'side', SM, { fill: FACE_FILL, stroke: INK, strokeWidth: PART })); return }
         const r = zoneSideRect(applyOv(z, zonePartId(z)))
         els.push(<rect key={`f${i}`} {...S(r.sz, r.cy_top, r.sw, r.sh)} fill={FACE_FILL} stroke={INK} strokeWidth={PART} />)
       })
       if (show.internals) {
         rp.internal_parts.forEach((p, i) => {
+          const sp = special(`int_${p.part_type}_${p.sort_order}`)
+          if (sp) { els.push(shapeEl(`i${i}`, sp, 'side', SM, { fill: INT_FILL, fillOpacity: 0.6, stroke: INT_STROKE, strokeWidth: THIN, strokeDasharray: DASH })); return }
           const r = intSideRect(applyOv(p, `int_${p.part_type}_${p.sort_order}`))
           els.push(<rect key={`i${i}`} {...S(r.sz, r.cy_top, r.sw, r.sh)} fill={INT_FILL} fillOpacity={0.6} stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />)
         })
         ;(rp.drawer_stacks ?? []).forEach((stk, si) => {
-          stk.box_parts.forEach((p, j) => { const r = dbSideRect(p); els.push(<rect key={`db${si}_${j}`} {...S(r.sz, r.cy_top, r.sw, r.sh)} fill={INT_FILL} fillOpacity={0.6} stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
+          stk.box_parts.forEach((p, j) => { const sp = special(dbPartId(stk, p.part_type)); if (sp) { els.push(shapeEl(`db${si}_${j}`, sp, 'side', SM, { fill: INT_FILL, fillOpacity: 0.6, stroke: INT_STROKE, strokeWidth: THIN, strokeDasharray: DASH })); return }; const r = dbSideRect(p); els.push(<rect key={`db${si}_${j}`} {...S(r.sz, r.cy_top, r.sw, r.sh)} fill={INT_FILL} fillOpacity={0.6} stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
           if (stk.drawer_type === 'bin') { els.push(...binOutlines(stk, 'side').map((o, j) => <polygon key={`bins${si}_${j}`} points={o.pts.map(([h, y]) => `${tx + h * s},${ty + (dy - y) * s}`).join(' ')} fill="none" stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />)); return }
           stk.slides.forEach((sl, j) => { const r = slideSideRect(sl); els.push(<rect key={`sl${si}_${j}`} {...S(r.sz, r.cy_top, r.sw, r.sh)} fill="none" stroke={INT_STROKE} strokeWidth={THIN} strokeDasharray={DASH} />) })
         })
@@ -262,6 +332,40 @@ export default function CabinetSheetSVG({
     return els
   }
 
+  // ── PLAN (from above, front of the cabinet down the page) ─────────────────
+  // Every part's true outline seen from above, line-drawn like the front view:
+  // carcase / kick lines, grey fronts, internals dashed (no fill — shelves stack).
+  function plan() {
+    const shown = solids.filter(sol => show.internals || (sol.role !== 'int' && sol.role !== 'db'))
+    const outs = shown.map(sol => ({ sol, o: prismOutline(sol.prism, 'plan') }))
+    let x0 = 0, z0 = 0, x1 = dx, z1 = dz
+    for (const { o } of outs) for (const q of o.outer) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); z0 = Math.min(z0, q.y); z1 = Math.max(z1, q.y) }
+    const { s, tx, ty } = place(planBox, x1 - x0, z1 - z0, 6, 5, show.dims ? 8 : 4, show.dims ? 9 : 4)
+    const PM: ToPage = (u, v) => [tx + (u - x0) * s, ty + (v - z0) * s]
+    const [fx, fy] = PM(0, 0)
+    const els: React.ReactNode[] = []
+    els.push(<rect key="ob" x={fx} y={fy} width={dx * s} height={dz * s} fill="white" stroke={INK} strokeWidth={OUT} />)
+    const style: Record<Role, React.SVGProps<SVGPathElement>> = {
+      case:     { fill: 'none', stroke: CASE_STROKE, strokeWidth: PART },
+      kick:     { fill: 'none', stroke: INK2, strokeWidth: PART },
+      spreader: { fill: 'none', stroke: INK3, strokeWidth: PART, strokeDasharray: DASH },
+      face:     { fill: FACE_FILL, stroke: INK, strokeWidth: PART },
+      int:      { fill: 'none', stroke: INT_STROKE, strokeWidth: THIN, strokeDasharray: DASH },
+      db:       { fill: 'none', stroke: INT_STROKE, strokeWidth: THIN, strokeDasharray: DASH },
+    }
+    // Internals last so they show through, as on the front view.
+    const order: Role[] = ['case', 'kick', 'spreader', 'face', 'int', 'db']
+    for (const role of order) outs.filter(x => x.sol.role === role).forEach(({ o }, i) =>
+      els.push(<path key={`p${role}${i}`} d={outlineD(o, PM)} fillRule="evenodd" {...style[role]} />))
+    if (show.dims) {
+      const yb = ty + (z1 - z0) * s + 4
+      els.push(...dim(fx, yb, fx + dx * s, yb, `${roundMm(dx)}`, 'below', 'pw'))
+      const xl = tx - 4.5
+      els.push(...dim(xl, fy, xl, fy + dz * s, `${roundMm(dz)}`, 'left', 'pd'))
+    }
+    return els
+  }
+
   // ── 3D line view (oblique) — every part as a projected box. External parts
   //    opaque & painter-sorted back→front; internals dashed on top (show through).
   function iso() {
@@ -272,6 +376,61 @@ export default function CabinetSheetSVG({
     const P = (cx: number, cy: number, cz: number) => {
       const zf = dz - cz
       return `${tx + (cx + zf * f * cos) * s},${ty + ((dy - cy) - zf * f * sin + dyz) * s}`
+    }
+    // A shaped / turned part as its extruded prism: visible faces filled far→near
+    // (shaded by which way they face, like the box faces), then the visible
+    // outline — cap edges, silhouettes and creases (not every facet of a curve).
+    const VIEW: V3 = [f * cos, f * sin, 1]   // toward the viewer: front, right, up
+    const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+    const crossV = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+    const shade = (n: V3, faceFill: string) => {
+      const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2])
+      return ax >= ay && ax >= az ? PANEL_R : ay >= az ? PANEL_T : faceFill
+    }
+    const loopD = (l: V3[]) => 'M' + l.map(v => P(...v)).join('L') + 'Z'
+    function prismIso(key: string, pr: Prism, faceFill: string, dashed: boolean): React.ReactNode[] {
+      const L = pr.outer, n = L.length, E = pr.ext
+      if (n < 3) return []
+      const N: V3 = [0, 0, 0]   // Newell normal: the loop runs CCW about it
+      for (let i = 0; i < n; i++) {
+        const a = L[i], b = L[(i + 1) % n]
+        N[0] += (a[1] - b[1]) * (a[2] + b[2]); N[1] += (a[2] - b[2]) * (a[0] + b[0]); N[2] += (a[0] - b[0]) * (a[1] + b[1])
+      }
+      const cap0N: V3 = dot(N, E) > 0 ? [-N[0], -N[1], -N[2]] : N   // outward at the outer loop's cap
+      const cap0Vis = dot(cap0N, VIEW) > 0
+      const L1 = L.map(v => add(v, E))
+      const qN = L.map((a, i) => { const b = L[(i + 1) % n]; return crossV([b[0] - a[0], b[1] - a[1], b[2] - a[2]], N) })
+      const vis = qN.map(q => dot(q, VIEW) > 1e-9)
+      const els: React.ReactNode[] = []
+      if (!dashed) {
+        const order = L.map((_, i) => i).filter(i => vis[i])
+          .sort((i, j) => dot(add(L[i], L1[(i + 1) % n]), VIEW) - dot(add(L[j], L1[(j + 1) % n]), VIEW))
+        for (const i of order) {
+          const j = (i + 1) % n, fill = shade(qN[i], faceFill)
+          els.push(<polygon key={`${key}q${i}`} points={[L[i], L[j], L1[j], L1[i]].map(v => P(...v)).join(' ')} fill={fill} stroke={fill} strokeWidth={THIN * 0.5} />)
+        }
+        const cap = cap0Vis ? L : L1
+        const holes = cap0Vis ? pr.holes : pr.holes.map(h => h.map(v => add(v, E)))
+        els.push(<path key={`${key}c`} d={[cap, ...holes].map(loopD).join('')} fillRule="evenodd" fill={shade(cap0N, faceFill)} stroke="none" />)
+      }
+      const segs: string[] = []
+      const seg = (a: V3, b: V3) => segs.push(`M${P(...a)}L${P(...b)}`)
+      const COS_CREASE = Math.cos(20 * Math.PI / 180)
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n, h = (i - 1 + n) % n
+        if (vis[i] || cap0Vis) seg(L[i], L[j])
+        if (vis[i] || !cap0Vis) seg(L1[i], L1[j])
+        const crease = vis[i] && vis[h] && dot(qN[h], qN[i]) < COS_CREASE * Math.hypot(...qN[h]) * Math.hypot(...qN[i])
+        if (vis[i] !== vis[h] || crease) seg(L[i], L1[i])
+      }
+      for (const hl of pr.holes) {
+        const l = cap0Vis ? hl : hl.map(v => add(v, E))
+        l.forEach((v, i) => seg(v, l[(i + 1) % l.length]))
+      }
+      els.push(<path key={`${key}l`} d={segs.join('')} fill="none" strokeLinejoin="round"
+        stroke={dashed ? INT_STROKE : faceFill === FACE_FILL ? INK : INK2} strokeWidth={dashed ? THIN : PART} strokeDasharray={dashed ? DASH : undefined} />)
+      return els
     }
     const faces = (b: Box3) => {
       const { x, y, z, w, h, d } = b
@@ -290,13 +449,14 @@ export default function CabinetSheetSVG({
       return els
     }
     // External (opaque) parts, painter-sorted back→front by centroid Z
-    type Ext = { b: Box3; z: number; faceFill: string }
+    type Ext = { b: Box3; z: number; faceFill: string; sp?: Solid }
     const ext: Ext[] = []
-    rp.case_parts.forEach(p => { const b = caseBox(applyOv(p, `case_${p.part_key}`)); ext.push({ b, z: b.z + b.d / 2, faceFill: 'white' }) })
-    rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => { const b = tkBox3(applyOv(p, `tk_${p.part_key}_${p.sort_order}`)); ext.push({ b, z: b.z + b.d / 2, faceFill: 'white' }) })
-    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const b = zoneBox3(applyOv(z, zonePartId(z))); ext.push({ b, z: b.z + b.d / 2, faceFill: FACE_FILL }) })
+    rp.case_parts.forEach(p => { const b = caseBox(applyOv(p, `case_${p.part_key}`)); ext.push({ b, z: b.z + b.d / 2, faceFill: 'white', sp: special(`case_${p.part_key}`) }) })
+    rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => { const b = tkBox3(applyOv(p, `tk_${p.part_key}_${p.sort_order}`)); ext.push({ b, z: b.z + b.d / 2, faceFill: 'white', sp: special(`tk_${p.part_key}_${p.sort_order}`) }) })
+    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const b = zoneBox3(applyOv(z, zonePartId(z))); ext.push({ b, z: b.z + b.d / 2, faceFill: FACE_FILL, sp: special(zonePartId(z)) }) })
     ext.sort((a, b) => a.z - b.z)
     ext.forEach((e, i) => {
+      if (e.sp) { els.push(...prismIso(`xp${i}`, e.sp.prism, e.faceFill, false)); return }
       const fc = faces(e.b)
       els.push(<polygon key={`xt${i}`} points={fc.top} fill={PANEL_T} stroke={INK2} strokeWidth={PART} />)
       els.push(<polygon key={`xr${i}`} points={fc.right} fill={PANEL_R} stroke={INK2} strokeWidth={PART} />)
@@ -305,9 +465,17 @@ export default function CabinetSheetSVG({
     // Internals — dashed, drawn on top so they show through the opaque shell
     if (show.internals) {
       const intl: Box3[] = []
-      rp.internal_parts.forEach(p => intl.push(intBox3(applyOv(p, `int_${p.part_type}_${p.sort_order}`))))
-      ;(rp.drawer_stacks ?? []).forEach(stk => {
-        stk.box_parts.forEach(p => intl.push(dbBox3(p)))
+      rp.internal_parts.forEach((p, i) => {
+        const sp = special(`int_${p.part_type}_${p.sort_order}`)
+        if (sp) els.push(...prismIso(`ip${i}`, sp.prism, INT_FILL, true))
+        else intl.push(intBox3(applyOv(p, `int_${p.part_type}_${p.sort_order}`)))
+      })
+      ;(rp.drawer_stacks ?? []).forEach((stk, si) => {
+        stk.box_parts.forEach((p, j) => {
+          const sp = special(dbPartId(stk, p.part_type))
+          if (sp) els.push(...prismIso(`dp${si}_${j}`, sp.prism, INT_FILL, true))
+          else intl.push(dbBox3(p))
+        })
         // A bin draws as its parts (tapered bodies as their top footprint), not its rails.
         if (stk.drawer_type === 'bin') binShape(stk).forEach(p => intl.push(p.shape === 'box'
           ? { x: p.x, y: p.y, z: p.z, w: p.w, h: p.h, d: p.d }
@@ -601,6 +769,7 @@ export default function CabinetSheetSVG({
 
       {frame(frontBox)}{caption(frontBox, 'FRONT')}{front()}
       {frame(sideBox)}{caption(sideBox, 'SIDE')}{side()}
+      {frame(planBox)}{caption(planBox, 'PLAN')}{plan()}
       {show.threeD && <>{frame(isoBox)}{caption(isoBox, '3D')}{iso()}</>}
 
       {cutList()}

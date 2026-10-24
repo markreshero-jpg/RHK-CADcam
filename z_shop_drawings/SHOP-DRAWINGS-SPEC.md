@@ -268,3 +268,14 @@ A separate report, **3D Colour Render**, so the vector-only rule above still hol
 2400px-wide JPEG shaped to the page band, one view per page, heading "<room> 3D · <view>" + title block, NTS.
 Checked headless (`z_plan_automation/verify-render3d.mjs`, RHK6581 Laundry J02). Next: Mark tweaks the look
 (lighting / shadows / edges / background), then decide whether its pages join the shop drawings / other reports.
+
+## Cabinet sheets: true part shapes (Mark 2026-10-24)
+
+Decisions: keep the sheet's look (grey fronts, dashed internals, dims) and draw real outlines; a **PLAN** view
+is always on the sheet (bottom row: PLAN | 3D). `src/lib/partSolids.ts` builds each part as the cabinet 3D view
+does (same box helpers, `partShapes()` — now shared with Cabinet3DView — size + rotation overrides, AY turns) as a
+prism in cabinet coords. FRONT / SIDE: a shaped or turned part draws `prismOutline()` (true outline + holes when
+seen face-on, else its silhouette) instead of its rect; a shaped back shows dashed in FRONT. PLAN: every part's
+outline from above. 3D: shaped / turned parts as shaded prisms (cap + visible sides, silhouette / crease lines).
+Checked headless on the test room's BC-04 (rib cut-out gable) + BC-08 (shaped door + back):
+`z_plan_automation/verify-sheet-shapes.mjs`. Not drawn yet: standalone custom parts (never were on the sheet).

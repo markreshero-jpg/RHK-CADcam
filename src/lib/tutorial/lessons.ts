@@ -672,6 +672,9 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'print', title: 'It prints with the 3D views',
       body: 'Production → Shop Drawings…: your view is in the 3D views row (✕ removes it). Small rooms put 4 views on a sheet, bigger rooms 2.',
       target: 'menu-Production', canvas: true, done: c => c.report === 'shop_drawings' },
+    { id: 'render', title: 'Try it in colour (trial)',
+      body: 'Reports → Room Reports… → 3D Colour Render shows the same views shaded in the job colours, one per page. Untick a view to leave it out; Re-render after changing the room.',
+      canvas: true, done: () => true },
   ]},
   { id: 'move_label', level: 'basics', topic: 'cabinets', title: 'Move a cabinet or fixture name',
     blurb: 'Move a name clear of other lines on plan or elevation; the PDFs follow.', keywords: 'label name move drag position text cabinet fixture plan elevation reset', steps: [

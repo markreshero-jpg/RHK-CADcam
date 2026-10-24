@@ -16,6 +16,7 @@ import { getUserPrefs } from '@/src/lib/userPrefs'
 import { fmtMm, roundMm } from '@/src/lib/format'
 import { evalCalc } from '@/src/lib/calc'
 import type { OutlinePt, ShapePt } from '@/src/lib/shapePath'
+import type { PartShape } from '@/src/lib/partSolids'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { PartHideTicks } from '@/src/components/PartHideTicks'
 
@@ -162,7 +163,8 @@ export function edgeStrips(
 // from the bottom, both mm) extruded across the part's width — sharknose
 // fronts (z_handles H3, handleGeometry.sharknoseProfile).
 // `holes` = inner loops in the same frame (curved end rib cut-outs), drawn through.
-export type PartShape = { pts: ShapePt[]; mirror?: boolean; extrude?: 'up' | 'across'; holes?: ShapePt[][] }
+// Type + frames live in src/lib/partSolids (shared with the cabinet sheets' 2D projection).
+export type { PartShape }
 
 // Extruded silhouette in box-local coords ([0..w]×[0..h]×[0..d] off the box
 // origin corner — mount inside the Part group at position [0,0,0]). The 2D
