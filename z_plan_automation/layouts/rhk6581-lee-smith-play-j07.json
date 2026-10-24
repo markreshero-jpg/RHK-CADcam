@@ -7,7 +7,8 @@
     " Handles client supplied, undrilled.",
     "Done after placement (room 3737003a-5ea4-42ba-be59-c97e4b1379de): rooms door_style_override_id + base/wall/tall_door_style_id = Laminex 16mm Colour, base/wall/tall_door_colour_id = Sunbaked Natural; room_materials exposed (base/wall/tall) + room_toekick_materials face = LX Colour 16mm. Panel dx 16.5 + desk dx 839.5 reset after placeCabinet rounding; desk pos_z 703.5, BH pos_z 2400. joinKicks -> KICK 1 856-2386 (1530) under the T2Ds + filler. CAD: spec block (from J12). 0 errors / 0 warnings.",
     "2026-10-24 Mark: NOT existing - we make the cabinets (5 adj shelves each, hinges [2196,1630,870,100] clear of shelf holes). Bulkhead only over the cupboards: offset 856, dx 1530, stops at the carcass on the desk side with a left return 581.5 mitre.",
-    "2026-10-24 Mark: desk support panel BC-01 = BEPF 16.5 x 703.5 at the wall (offset 0), floor to the desk underside; elevation CAD text DESK above the top. All carcass/panel/BH/kick dz 582 -> 600 OA (doors are the 16 blank; t.door fix makes panels cab.d + 16 + 2 = 600)."
+    "2026-10-24 Mark: desk support panel BC-01 = BEPF 16.5 x 703.5 at the wall (offset 0), floor to the desk underside; elevation CAD text DESK above the top. All carcass/panel/BH/kick dz 582 -> 600 OA (doors are the 16 blank; t.door fix makes panels cab.d + 16 + 2 = 600).",
+    "2026-10-24 Mark: desk back rail WC-03 = WUP 823 x 70 x 16.5 LAM03 on the wall under the desk top (633.5-703.5 AFFL), support panel to end panel; custom part orientation front {dx:cab.w, dy:cab.h, dz:t.exposed}, edge_bottom only (one long edge), UNDER_PANEL so it sits at pos_z."
   ],
   "projectName": "RHK6581 Lee Smith",
   "roomName": "Play J07",
@@ -114,6 +115,15 @@
         "SCRBK": 0
       },
       "note": "Desk support panel 16.5 LAM03 at the wall, floor to the underside of the desk top"
+    },
+    {
+      "def": "WUP",
+      "wall": 2,
+      "offset": 16.5,
+      "dx": 823,
+      "dy": 70,
+      "dz": 16.5,
+      "note": "Desk back rail 70 x 16.5 LAM03 on the wall under the desk top (pos_z 633.5), bottom long edge edged - stood upright after placement"
     }
   ]
 }
