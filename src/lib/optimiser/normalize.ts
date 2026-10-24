@@ -17,6 +17,7 @@ import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/
 import { curvedEndPartLabel } from '@/src/lib/resolver/resolveCurvedEnd'
 import { floatShelfPartLabel, floatShelfPartNote } from '@/src/lib/floatShelf'
 import { backPanelPartLabel } from '@/src/lib/backPanel'
+import { splitBaseKey } from '@/src/lib/cabinetSplit'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -209,11 +210,17 @@ export function normalizeProject(
     return { t: tFor(r) ?? (r.material_id ? matEb.get(r.material_id as string) : undefined), flags: flagsOf(r) }
   }
 
+  // Height-split cabinets (z_cabinet_split): which sides / backs were cut, so the
+  // lowest piece reads "(lower)" and the ones above "(upper)".
+  const cutParts = new Set(cp.filter(r => String(r.part_key).startsWith('split:'))
+    .map(r => `${r.cabinet_instance_id}|${splitBaseKey(String(r.part_key))}`))
+
   // partKey mirrors the svg*Meta synthetic ids so it matches part_operations.source_part_key.
   for (const r0 of cp) {
     const key = String(r0.part_key)
     const { r, base } = sized('case_parts', r0, `case_${key}`)
-    const isSide = key === 'left_side' || key === 'right_side'
+    const pieceOf = splitBaseKey(key)   // a cut piece is its part for naming + tape
+    const isSide = pieceOf === 'left_side' || pieceOf === 'right_side'
     // Sides: footprint u = depth (banded back/front = left/right flags), v = height.
     // Back + horizontals: u runs bottom→top (back panels) / back→front where the
     // horizontal 'bottom' flag is the back edge; v runs left→right.
@@ -231,8 +238,10 @@ export function normalizeProject(
       ? { w: Number(r.dy), h: Number(r.dx), thickness: Number(r.dz) } : undefined
     // Angled panel ends (z_cabinet_shape 4a): nested as the blank, bevel named.
     const bevel = caseBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
-    push('case_parts', r, `case_${key}`, { typeKey: key, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(key),
-      ...(bevel ? { suffix: ` (${bevel})` } : {}) },
+    const piece = pieceOf !== key ? (key.endsWith(':1') ? 'upper' : `upper ${key.slice(-1)}`)
+      : cutParts.has(`${r.cabinet_instance_id}|${key}`) ? 'lower' : null
+    push('case_parts', r, `case_${key}`, { typeKey: pieceOf, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(pieceOf),
+      ...(bevel || piece ? { suffix: [bevel, piece].filter(Boolean).map(t => ` (${t})`).join('') } : {}) },
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), turned, eb, base)
   }
   for (const r0 of ip) {

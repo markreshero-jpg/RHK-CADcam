@@ -21,6 +21,7 @@ import type { ResolvedCabinet, ResolvedCasePart } from '@/src/lib/resolver/types
 import { dbPartId, zoneKey, zonePartId, stackKey, isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
 import { filterRemovedParts } from '@/src/lib/resolver/filterHidden'
+import { splitCaseParts, splitPieceFor, isSplitKey } from '@/src/lib/cabinetSplit'
 
 const GENERATED_MARK = 'seam_joint'
 
@@ -84,6 +85,8 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
   const shaped = rp.case_parts.some(p => p.AY) || rp.face_zones.some(z => z.facet || z.AY)
 
   const caseByKey = new Map(rp.case_parts.map(p => [p.part_key, p]))
+  // Cut sides / back (z_cabinet_split) — holes are worked on the whole part, then moved to their piece.
+  const cutPieces = rp.split_at?.length ? splitCaseParts(rp.case_parts, rp.split_at) : null
   const zoneByKey = new Map(rp.face_zones.map(z => [zoneKey(z), z]))
   const intByKey = new Map(rp.internal_parts.map(p => [`${p.part_type}_${p.sort_order}`, p]))
 
@@ -98,6 +101,15 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
     // meaningless there and the editor's face toggle isn't shown for them.
     planeKind: string | null = null,
   ) => {
+    // Height split (z_cabinet_split): a hole in a cut side / back goes to the piece it lands in.
+    if (sourceTable === 'case_parts' && cutPieces) {
+      const base = sourcePartKey.slice(5)
+      if (isSplitKey(base)) {
+        const piece = splitPieceFor(cutPieces, base, drill.y)
+        // The frame reads the panel kind off the key — build it as the part it came from.
+        if (piece) { sourcePartKey = `case_${piece.part_key}`; frame = caseFrame({ ...piece, part_key: base }) }
+      }
+    }
     if (!frame) { skipped++; return }
     const proj = projectToFrame(drill, frame)
     if (!proj) { skipped++; return }

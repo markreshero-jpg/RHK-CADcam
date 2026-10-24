@@ -181,6 +181,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     ...(openCells.length ? { open_zones: openCells } : {}),
     drawer_stacks:   drawerStacks,
     seam_joints:     seamJoints,
+    ...(cab.split?.at.length ? { split_at: cab.split.at } : {}),
     hinge_instances: hingeInstances,
     errors:          allErrors,
     warnings:        allWarnings,

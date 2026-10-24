@@ -3,6 +3,7 @@
 
 import { supabase } from '@/src/lib/supabase'
 import { ResolvedCabinet } from './types'
+import { splitCaseParts } from '../cabinetSplit'
 
 // Per-cabinet serialization. persistResolved does a delete-then-insert across
 // several tables; two overlapping calls for the SAME cabinet race (one deletes
@@ -40,7 +41,8 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
 // Row objects keyed by column name; cabinet_instance_id is filled in server-side.
 export function buildPersistPayload(resolved: ResolvedCabinet) {
   return {
-    case_parts: resolved.case_parts.map(p => ({
+    // Height split (z_cabinet_split): the sides / back go to the DB as their cut pieces.
+    case_parts: splitCaseParts(resolved.case_parts, resolved.split_at).map(p => ({
       part_key:        p.part_key,
       dx: p.DX, dy: p.DY, dz: p.DZ,
       x:  p.X,  y:  p.Y,  z:  p.Z,

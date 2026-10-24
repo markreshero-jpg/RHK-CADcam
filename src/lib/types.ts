@@ -193,6 +193,8 @@ export interface CabinetInstance {
   float_shelf?: import('./floatShelf').FloatShelfSettings | null
   // Island back panel settings (z_island_back_panel); non-null = IBPF / IBPK.
   back_panel?: import('./backPanel').BackPanelSettings | null
+  // Height split (z_cabinet_split): sides + back cut at these heights.
+  split?: import('./cabinetSplit').CabinetSplit | null
   // Per-view part hiding (z_display_layers/PART-HIDE-SPEC.md).
   part_hide_views?: import('./resolver/types').PartHideViews
   // Part ids not sent to the optimiser / CNC (custom parts use their own no_cnc).

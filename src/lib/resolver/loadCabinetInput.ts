@@ -11,6 +11,7 @@ import {
 import { mergeRules, rulesForClass } from './mergeRules'
 import { cachedCascade } from './cascadeCache'
 import { normaliseBulkhead } from '../bulkhead'
+import { normaliseSplit } from '../cabinetSplit'
 import { normaliseFloatShelf } from '../floatShelf'
 import { normaliseBackPanel } from '../backPanel'
 import { normaliseCurvedEnd } from '../curvedEnd/settings'
@@ -880,6 +881,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     left_neighbour:  (cab.left_neighbour_type  ?? 'wall') as CabinetInput['left_neighbour'],
     right_neighbour: (cab.right_neighbour_type ?? 'wall') as CabinetInput['right_neighbour'],
     exposed_interior: cab.exposed_interior,
+    split:           normaliseSplit(cab.split),
     material:                  carcassMat,
     door_material:             doorFace,
     door_thickness:            doorThickness,

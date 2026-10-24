@@ -672,6 +672,8 @@ export interface CabinetInput {
   curved_end?:    import('../curvedEnd/settings').CurvedEndSettings | null
   // Floating shelf (z_floating_shelf): boards, strips + cleats from resolveFloatShelf.
   float_shelf?:   import('../floatShelf').FloatShelfSettings | null
+  // Height split (z_cabinet_split): sides + back cut at these heights (cabinet frame).
+  split?:         import('../cabinetSplit').CabinetSplit | null
   // Island back panel (z_island_back_panel): sheet-width pieces from resolveBackPanel.
   back_panel?:    import('../backPanel').BackPanelSettings | null
 
@@ -1316,6 +1318,9 @@ export interface ResolvedCabinet {
   // by the room-canvas loader; the cabinet editor reads cabinet_custom_parts directly.
   custom_parts?: ResolvedCustomPart[]
   case_parts:    ResolvedCasePart[]
+  // Height split cuts (z_cabinet_split) — the parts stay whole here; the persist
+  // payload and the drill rows cut the sides / back (splitCaseParts).
+  split_at?:     number[]
   toekick_parts: ResolvedToekickPart[]
   internal_parts: ResolvedInternalPart[]
   // Slide rails emitted by inner-drawer / pull-out fittings — rendered like the
@@ -1407,7 +1412,8 @@ export interface ResolvedCasePart extends ResolvedPart {
   hand_cut?: true
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
             'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
-            `fprail:${number}`   // finger-pull backing rail (z_handles H6)
+            `fprail:${number}` |  // finger-pull backing rail (z_handles H6)
+            `split:${'left_side' | 'right_side' | 'back'}:${number}`   // a cut piece (z_cabinet_split)
 }
 
 export interface ResolvedToekickPart extends ResolvedPart {
