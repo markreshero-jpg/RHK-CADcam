@@ -1,15 +1,50 @@
-# Material colours (boards ▸ colours ▸ job palette) — Spec & Phase Tracker
+# Material colours (boards ▸ colours ▸ job colour grid) — Spec & Phase Tracker
 
 > Living spec for board colours: one library row per board type, a colour list
-> under each board, and a per-job colour palette that roles and cabinets point at.
+> under each board, and per-job / per-room colour picks by class and role.
 > Update status lines and decisions in the same change as the code.
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Spec drafted 2026-10-24, not locked. MC0 data fix done.
-> Next: Mark answers the open questions (§7), then MC1 schema.
+> **RESUME HERE** → Decisions locked 2026-10-24 (§0). MC0 done. MC1 code part done
+> (back null = face); MC1 migration `migration_mc1_board_colours.sql` written but
+> **NOT applied** (Supabase connector refused DDL). Apply it, then seed the first
+> two colours (MC1 seed below), then MC2.
 
 ---
+
+## 0. Locked decisions (Mark, 2026-10-24)
+
+1. **One library row per board type**, with colours listed under it. No
+   per-colour boards, and no A/B/C duplicate boards.
+2. **Colours are picked per class and role**, at job level, and **a room can
+   override any of them**:
+
+   | | Doors / drawers (fronts) | Exposed |
+   |---|---|---|
+   | **Base** | base fronts | base exposed |
+   | **Wall** | wall fronts | wall exposed |
+   | **Tall** | tall fronts | tall exposed |
+
+   These six picks replace the free "Colour 1/2/3" palette slots from the first
+   draft, which are dropped. "Swap a colour once" = change the cell. The Colours
+   tab gets a "same as…" / apply-to-all helper so a single-colour job is still a
+   couple of clicks.
+3. **Interior is separate**, not in the grid and not auto-tied to any colour. It
+   is normally 16mm Whiteboard, with a simple job/room picker for the occasional
+   grey interior. It still resolves through the existing `interior` role.
+4. **Pricing is per colour** (`cost_per_sheet` on the colour row). Left blank for
+   now, to be filled later by CSV import or by hand. No price groups.
+5. **First colours:**
+   - **PT Classic White Matt**, under board `PT Colour Matt 16mm`.
+   - **Polytec Boston Oak Woodmatt**, under board `PT Woodmatt 16mm`. It is a
+     timber grain, so `has_grain = true`, and it sits on a different board.
+6. **Board picked with no colour** (e.g. a shop default names the generic board):
+   the board's default colour is used, **plus a "colour not chosen" warning**. The
+   warning shows in the cabinet errors **and in the CNC nest Materials list**.
+7. **The Laminex / Polytec decors here are the same colour both sides.**
+   `back_colour` null = face colour, and all three generic boards now have
+   back = face.
 
 ## Why
 
@@ -18,173 +53,157 @@ The new `LX Colour 16mm` board showed white on its back face because the row's
 board per colour turns into hundreds of near-identical materials, each needing its
 own price, sheet size, edgeband and CNC settings kept in step.
 
-Mark's goal: **one row per board type** (e.g. `LX Colour 16mm Matt`), with the
-colour/finish picked **in the job**.
-
-The colour still has to be a real, picked value and not free text, because it
+The colour still has to be a real picked value and not free text, because it
 drives:
 
 - **Nesting.** Walnut and Polar White must never share a sheet.
 - **Grain.** Woodgrains are grained and plain colours aren't.
 - **Matching edge tape.**
-- **Back face.** Same decor both sides, or a white backer.
-- **Cost group and available sheet sizes.**
+- **Back face.**
+- **Cost.**
 - **Real colour names** on cut lists, orders and costing.
 
-We rejected the "A/B/C slots in the library" idea (`LX Colour 16mm Matt A`,
-`… B`). It duplicates boards again, caps a job at 3–4 colours, and prints
-meaningless "Matt A" on reports. The useful part of the idea, swapping a colour
-once for the whole job, becomes the **job colour palette** (§4).
-
 ```
- LIBRARY                                 JOB (project)                 CABINET / ROLE
- ───────                                 ─────────────                 ──────────────
- Board: LX Colour 16mm Matt   ──┐        Palette                       exposed  → Colour 1
-   ├ Natural Walnut  (grain)    ├──────► Colour 1 = LX Matt / Walnut   interior → Colour 2
-   ├ Polar White                │        Colour 2 = LX Matt / Polar    doors    → Colour 1 (§7 Q3)
-   └ Oak Classic     (grain)    │        Colour 3 = PT Woodmatt / Oak
- Board: PT Woodmatt 16mm      ──┘
-   └ …
+ LIBRARY                                   JOB  (room may override any cell)
+ ───────                                   ───
+ Board: PT Colour Matt 16mm                         Fronts            Exposed
+   └ Classic White          ──────────►   Base   PT Woodmatt/Oak    PT Woodmatt/Oak
+ Board: PT Woodmatt 16mm                   Wall   PT Matt/White      PT Matt/White
+   └ Boston Oak (grain)     ──────────►   Tall   PT Matt/White      PT Matt/White
+ Board: Whiteboard 16.5 (no colours)  ──►  Interior: Whiteboard 16.5  (grey option)
 ```
 
 ## 1. Current state (2026-10-24)
 
-- `materials` (`id, name, brand, finish, dz, sheet_dx/dy, has_grain, grain_direction,
-  cost_per_sheet, face/back/edge_colour, cnc_tool_id, trim_*, pad, feed_rate_pct`)
-  is one flat list, and each row is a full board.
-- Role → material cascade: `assembly_schedule_rows` / `shop_material_defaults` →
-  `job_materials` → `room_materials` → cabinet `material_overrides` JSONB
-  (`{ role: material_id }`), all resolved in `src/lib/resolver/loadCabinetInput.ts`.
-- Everything downstream keys on `material_id`: persisted part rows, optimiser
-  sheets and margins (`src/lib/optimiser/store.ts`, `types.ts buildMargins`),
-  3D colours (`useMaterialColours.ts` → `panelFaceColors`), and reports. There are
-  21 `from('materials')` readers across 17 files.
-- Doors already use a board+colour pattern: Door Blanks + Colour Ranges, where
-  `door_schedule_materials.material_id` links each door colour to a board.
+- `materials` is one flat list, and each row is a full board.
+- **Exposed, per class:** the cascade is `assembly_schedule_rows` /
+  `shop_material_defaults` → `job_materials` → `room_materials` → cabinet
+  `material_overrides` (`{ role: material_id }`). The job and room tables are
+  already keyed by `(assembly_class, material_role)`, so **base/wall/tall exposed
+  already fit them**. Resolved in `src/lib/resolver/loadCabinetInput.ts`.
+- **Fronts, per class:** `projects` and `rooms` `base|wall|tall_door_style_id` +
+  `_door_colour_id` → `door_schedule_materials` (Colour Ranges), whose
+  `material_id` links a board (DOOR_SYSTEM_SPEC §6). `resolveFace.ts` uses
+  `colour_material_id`.
+- Everything downstream keys on `material_id`: persisted parts, optimiser sheets
+  and margins (`src/lib/optimiser/store.ts`, `types.ts buildMargins`), 3D colours
+  (`useMaterialColours.ts` → `unpackMatCol` / `panelFaceColors`), and reports.
+  There are 21 `from('materials')` readers across 17 files.
 - `edge_banding.material_match_id` already exists (tape ↔ material link).
-- Known gap (material schedules audit): material overrides don't swap the edgeband.
 
-## 2. Core decision — a colour IS a material row (child of a board)
+## 2. Core model — a colour IS a material row (child of a board)
 
-**Proposed.** Each colour is stored as a `materials` row with `parent_id` → its board.
+Each colour is stored as a `materials` row with `parent_id` → its board.
 
 - **Downstream code is unchanged.** The resolver, persisted parts, optimiser,
-  margins, 3D colours and reports all still see one `material_id` per part. A
-  colour id is a material id, so **nesting splits by colour automatically**, with
-  no new grouping key.
+  margins, 3D view and reports still see one `material_id` per part. A colour id
+  is a material id, so **nesting splits by colour automatically**.
 - **The library UI hides the child rows.** The Materials tab lists boards
-  (`parent_id is null`). Each board expands to its colour list, so the user
-  manages one board and not hundreds of materials.
-- **Colour rows inherit board fields.** A trigger copies the board's
-  `dz, brand, cnc_tool_id, trim_*, pad, feed_rate_pct` into its colours, and also
-  `sheet_dx/dy, cost_per_sheet` unless the colour overrides them. Editing the
-  board updates every colour. Overridden fields are listed in
-  `materials.overridden text[]`.
-- **The name is generated automatically.** The trigger sets the colour row's
-  `name = '<board name> – <colour_name>'`, so the 17 existing readers print
-  `LX Colour 16mm Matt – Natural Walnut` with no code change.
+  (`parent_id is null`), and each board expands to its colours.
+- **Trigger `materials_colour_inherit`** (BEFORE insert/update on colour rows):
+  - Copies from the board: `dz, brand, cnc_tool_id, trim_*, pad, feed_rate_pct`.
+  - Copies `sheet_dx/dy` unless the colour lists them in `overridden`.
+  - Generates `name = '<board name> – <colour_name>'`, so existing readers print
+    the real colour with no code change.
+  - Refuses a colour whose parent is itself a colour, or a colour with no
+    `colour_name`.
+- **Trigger `materials_board_propagate`** (AFTER update on a board) touches its
+  colours, so board edits flow down.
+- **Colour-owned fields:** `colour_name, colour_code, face/back/edge_colour,
+  has_grain, grain_direction, finish, cost_per_sheet`.
+- **A board with no colours keeps working as it does today**, as a plain board
+  used directly (Whiteboard, MDF).
 
-Rejected alternative: a separate `board_colours` table plus a `colour_id` column on
-every part table, the optimiser key and report. It is cleaner on paper but touches
-every material consumer.
-
-### Columns added to `materials`
-
-| column | purpose |
+| new column | purpose |
 |---|---|
 | `parent_id uuid null` → materials | null = board; set = colour of that board |
-| `colour_name text` | e.g. `Natural Walnut` |
+| `colour_name text` | e.g. `Classic White` |
 | `colour_code text` | supplier code |
-| `price_group text null` | supplier price tier (optional, §7 Q4) |
-| `is_default_colour bool` | the board's fallback colour (§5) |
-| `overridden text[]` | inherited fields this colour overrides |
+| `is_default_colour bool` | the board's fallback colour (one per board, unique index) |
+| `overridden text[]` | inherited fields this colour overrides (`sheet_dx`, `sheet_dy`) |
 
-Each colour row keeps its own `face_colour`, `back_colour`, `edge_colour`,
-`has_grain`, `grain_direction` and `finish`.
+**Back face:** `back_colour` null = same as face. `unpackMatCol` in
+`src/components/three/PartViewer.tsx` now falls back to the face colour, not
+white. Set `back_colour` only for a real backer board.
 
-### Back face
-
-**`back_colour` null = same as face.** The 3D view, part editor and drawer-box view
-treat a missing back as the face colour, not white. Set `back_colour` only for a
-backer board (e.g. colour face / white back). This covers Laminex decor boards,
-which are normally the same both sides.
-
-### Edge tape per colour
-
-A colour's matching tape is the `edge_banding` row whose `material_match_id` = the
-colour. When a role resolves to a colour with a matching tape, the resolver uses
-that tape. Otherwise it falls back to the schedule row's `edgeband_id`. This also
-fixes the audit's "overrides keep the old edgeband" gap for colour swaps.
+**Edge tape per colour:** a colour's matching tape is the `edge_banding` row with
+`material_match_id` = the colour. The resolver uses it when present, otherwise the
+schedule row's `edgeband_id`. This also fixes the audit's "overrides keep the old
+edgeband" gap for colour swaps.
 
 ## 3. Library UI (Library → Materials)
 
-- The **Boards** list shows only parent rows, with the existing columns. Each row
-  gets a "N colours" chip and expands to its colour table.
-- The **colour table** has: colour name, code, face / back / edge swatches, grain
-  tick, matching tape, price group, and sheet size / cost overrides (blank =
-  board's).
-- **CSV import** of a supplier colour list into a board (name, code, grain, hex).
-- A board with **no colours** keeps working as it does today: a plain board used
-  directly, e.g. Whiteboard 16.5, MDF 18.
+- The **Boards** list shows parent rows only. Each row gets an "N colours" chip
+  and expands to its colour table.
+- The **colour table** has: colour name, code, face / back / edge swatches
+  (back blank = face), grain tick, matching tape, cost per sheet, sheet size
+  override, and a default-colour radio.
+- **CSV import** of a supplier colour list into a board (later).
+- Material pickers elsewhere: pick a board, then a colour. A board with no
+  colours is picked directly.
 
-## 4. Job colour palette
+## 4. Job / room colours
 
-A new table, `job_colour_slots`:
+Job Properties gets a **Colours** tab, and Room properties gets the same tab with
+every cell blank = inherit the job.
 
-`id, project_id, slot_no int, label text (default 'Colour N'), material_id uuid → materials`
+- **The 3 × 2 grid (§0.2).** Each cell picks a board, then a colour.
+  - **Exposed cells** write `job_materials` / `room_materials` rows
+    `(class, 'exposed')`. These tables already exist.
+  - **Fronts cells** set the front colour per class (§5).
+  - Helpers: "Same as base" on the wall and tall rows, and "Exposed = fronts".
+- **Interior picker** (§0.3): one pick, written as `(class, 'interior')` rows for
+  base, wall and tall. Defaults to the shop's Whiteboard.
+- Cabinet-level `material_overrides` still win over the grid for one-offs.
 
-`material_id` must be a colour row, or a board with no colours.
+## 5. Fronts — colour vs door style
 
-- **Job Properties → Colours tab.** Add, remove and reorder slots. Each slot picks
-  a board, then a colour. Unlimited slots.
-- **Roles point at slots.** `job_materials` and `room_materials` gain
-  `colour_slot_id uuid null`. When it is set, it wins over `material_id`. Cabinet
-  `material_overrides` values may be `slot:<uuid>` as well as a material id.
-- **Swapping a slot's colour re-resolves every cabinet using it.** This is the
-  "change Walnut to Oak once" workflow.
-- The palette is **job-level**. Rooms pick from the job's palette and don't keep
-  their own (§7 Q1).
+The door **style** (profile / blank) stays in the door system. The fronts **colour**
+cell needs to point at a board colour.
 
-## 5. Resolver rules
+**Proposed for MC6:** `projects` / `rooms` gain
+`base|wall|tall_front_material_id` → materials (a colour row). When set, it is the
+fronts board and colour, overriding the Colour Range pick's `material_id`. The
+existing door Colour Ranges stay for supplier / painted doors and become a
+fallback. To revisit at MC6 whether Colour Ranges then merge into board colours.
 
-The cascade order is unchanged: shop → job per-class → job → room → cabinet.
+## 6. Resolver + warnings
 
-1. If the effective pick is a slot, it becomes the slot's `material_id`.
-2. If the pick is a **board that has colours**, which happens when a shop default
-   or assembly schedule names the generic board, the resolver uses that board's
-   `is_default_colour` row and adds the warning **"colour not chosen"**. That
-   warning shows in the error list and reports, so an unpicked colour never nests
-   silently. If the board has no default colour, the resolver throws a hard error,
-   matching the "exposed row required" rule.
-3. Edgeband: the colour's matched tape, else the schedule tape (§2).
-4. Persisted parts store the colour's `material_id`. Jobs stay static as built,
-   following [[job-version-pinning-model]].
+1. The cascade order is unchanged: shop → job class → room class → cabinet
+   override.
+2. If the pick is a **board that has colours**, the resolver uses its
+   `is_default_colour` row and adds warning **`COLOUR_NOT_CHOSEN`** ("<board>:
+   colour not chosen, using <default>"). If there is no default colour, it throws
+   a hard error.
+3. **CNC nest:** the optimiser's Materials list flags any material reached through
+   `COLOUR_NOT_CHOSEN` with the same warning (§0.6).
+4. Edgeband: the colour's matched tape, else the schedule tape.
+5. Persisted parts store the colour's `material_id`. Jobs stay static as built
+   ([[job-version-pinning-model]]).
 
-## 6. Phases
+## 7. Phases
 
-- [x] **MC0** Data fix: `LX Colour 16mm` back colour set to its face colour (2026-10-24).
-- [ ] **MC1** Schema: §2 columns, sync + name trigger, `back_colour` null = face in all renderers.
-- [ ] **MC2** Library UI: boards list, colour sub-table, CSV import.
-- [ ] **MC3** Migrate data: turn the generic boards (LX Colour, PT Colour Matt, PT Woodmatt, LX Abs Grain) into boards with colours; existing job refs stay valid.
-- [ ] **MC4** Job palette: `job_colour_slots`, Job Properties → Colours tab.
-- [ ] **MC5** Role pickers: job/room roles and cabinet overrides pick a slot or board+colour; resolver rules §5 + edgeband match.
-- [ ] **MC6** Downstream check: optimiser splits by colour, cut lists / orders / costing show the colour name, colour-not-chosen warning surfaced.
-- [ ] **MC7** Doors: door colours may point at board colours and door styles may take a palette slot (per §7 Q3).
-- [ ] **MC8** Tutorial: "Job colours" (palette, swapping a colour, colour-not-chosen warning).
+- [x] **MC0** Data fix: back colour = face on LX Colour 16mm, PT Colour Matt 16mm and PT Woodmatt 16mm (2026-10-24).
+- [~] **MC1** Schema + seed.
+  - [x] `unpackMatCol` back null = face.
+  - [ ] Apply `migration_mc1_board_colours.sql`.
+  - [ ] Seed PT Classic White Matt (under PT Colour Matt 16mm, default) and
+    Boston Oak Woodmatt (under PT Woodmatt 16mm, `has_grain`, default). Costs blank.
+- [ ] **MC2** Library UI: boards list, colour sub-table, default radio, two-step pickers.
+- [ ] **MC3** Resolver: board-with-colours → default colour + `COLOUR_NOT_CHOSEN`; colour-matched edgeband.
+- [ ] **MC4** Job + room Colours tab: exposed grid row + interior picker (existing tables).
+- [ ] **MC5** CNC nest Materials list shows the colour-not-chosen warning; cut lists / costing show colour names.
+- [ ] **MC6** Fronts colour per class (§5) in the grid.
+- [ ] **MC7** CSV import of colour lists (when Mark has the files).
+- [ ] **MC8** Tutorial: "Job colours" (grid, room overrides, interior, colour-not-chosen warning).
 
-## 7. Open questions (Mark to lock)
+### MC1 seed (run after the migration)
 
-1. **Palette level.** Job-only (proposed), or can a room add its own slots too?
-2. **Default slots.** Should a new job auto-create Colour 1 = exposed and
-   Colour 2 = interior from the shop defaults?
-3. **Doors in the palette.** Should doors / drawer fronts pick a palette slot, so
-   "Colour 1" drives panels and doors together? Or do door Colour Ranges stay
-   separate, and longer-term merge into board colours?
-4. **Pricing.** Cost per colour, or price groups (A/B/C tiers) on the board with
-   each colour assigned a group?
-5. **Colour lists.** Where should the first lists come from? A Laminex / Polytec
-   CSV from Mark, or entered by hand?
-6. **Board with colours named by a shop default.** Use the default colour plus a
-   warning (proposed), or force a pick before the job can resolve?
-7. **Other generic boards.** PT Colour Matt and PT Woodmatt also have white
-   (`#ededed`) backs today. Are they double-sided too (back = face)?
+```sql
+insert into materials (parent_id, colour_name, face_colour, edge_colour, has_grain, is_default_colour, finish, active)
+select id, 'Classic White Matt', '#f1f0eb', '#f1f0eb', false, true, 'Matt', true
+  from materials where name = 'PT Colour Matt 16mm' and parent_id is null;
+insert into materials (parent_id, colour_name, face_colour, edge_colour, has_grain, is_default_colour, finish, active)
+select id, 'Boston Oak Woodmatt', '#b48a5e', '#b48a5e', true, true, 'Woodmatt', true
+  from materials where name = 'PT Woodmatt 16mm' and parent_id is null;
+```

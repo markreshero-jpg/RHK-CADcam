@@ -74,7 +74,8 @@ export function unpackMatCol(spec: string | MatColSpec | undefined, fallback: st
   // separate strip meshes with their own EbSpec colour, so replacing this with
   // the face colour makes unbanded edges turn white and hides which edges have
   // tape applied. Fall back to the face only when no edge colour is configured.
-  return { face, back: spec.back ?? fallback, edge: spec.edge ?? face }
+  // No back colour on record = same decor both sides (back_colour null = face).
+  return { face, back: spec.back ?? face, edge: spec.edge ?? face }
 }
 
 // BoxGeometry face order: +X(0) -X(1) +Y(2) -Y(3) +Z(4) -Z(5)
