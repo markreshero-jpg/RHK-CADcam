@@ -107,7 +107,7 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
       if (isSplitKey(base)) {
         const piece = splitPieceFor(cutPieces, base, drill.y)
         // The frame reads the panel kind off the key — build it as the part it came from.
-        if (piece) { sourcePartKey = `case_${piece.part_key}`; frame = caseFrame({ ...piece, part_key: base }) }
+        if (piece) { sourcePartKey = `case_${piece.part_key}`; frame = caseFrame({ ...piece, part_key: base as typeof piece.part_key }) }
       }
     }
     if (!frame) { skipped++; return }

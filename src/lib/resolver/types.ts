@@ -1417,7 +1417,7 @@ export interface ResolvedCasePart extends ResolvedPart {
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
             'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
             `fprail:${number}` |  // finger-pull backing rail (z_handles H6)
-            `split:${'left_side' | 'right_side' | 'back'}:${number}`   // a cut piece (z_cabinet_split)
+            `split:${string}:${number}`   // a cut piece (z_cabinet_split): split:<part key>:<n>
 }
 
 export interface ResolvedToekickPart extends ResolvedPart {

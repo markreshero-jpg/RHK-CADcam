@@ -53,7 +53,7 @@ import Bin3D from '@/src/components/three/Bin3D'
 import Runner3D from '@/src/components/three/Runner3D'
 import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
 import { PartHideTicks } from '@/src/components/PartHideTicks'
-import { splitCaseParts, splitBaseKey } from '@/src/lib/cabinetSplit'
+import { splitCaseParts, splitBaseKey, splitPieceRange } from '@/src/lib/cabinetSplit'
 
 export type { MatColSpec, MatColMap }
 
@@ -1366,7 +1366,7 @@ export function CabinetScene({
         const p     = { ...piece, part_key: base }
         const id    = `case_${base}`
         const key   = `case_${piece.part_key}`
-        const [y0, y1] = base === 'back' ? [piece.Y, piece.Y + piece.DX] : [piece.Y, piece.Y + piece.DY]
+        const [y0, y1] = splitPieceRange(piece)
         const pp    = applyPosOv(p, id, partOverrides)
         const b     = cut ? caseBox(pp) : applySizeOv(caseBox(pp), id, partOverrides)
         const info  = applyEdge(buildCaseInfo(p, b))

@@ -7,6 +7,7 @@ import { resolveCabinet } from '../resolver/resolver'
 import { mergeRules } from '../resolver/mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type JointTypeOp, type Material, type Section } from '../resolver/types'
 import { buildPersistPayload } from '../resolver/persistResolved'
+import { caseBox } from '../jointDrilling'
 import { collectDrillRows } from '../optimiser/seamDrillSync'
 import { splitCaseParts, splitSuggestions, splitPieceFor, splitBaseKey, normaliseSplit, cutBaseKeys, splitPieceSuffix, SPLIT_LIP } from '../cabinetSplit'
 
@@ -78,11 +79,28 @@ describe('splitCaseParts', () => {
       expect(hi.edge_band.top).toBe(whole.edge_band.top); expect(lo.edge_band.bottom).toBe(whole.edge_band.bottom)
     }
     const back = rp.case_parts.find(p => p.part_key === 'back')!
-    const bhi = ps.find(p => p.part_key === 'split:back:1')!
-    expect(ps.find(p => p.part_key === 'back')!.DX).toBeCloseTo(at - back.Y)
-    expect(bhi).toMatchObject({ Y: at, DY: back.DY })
+    const bhi = ps.find(p => p.part_key === 'split:back:1')!, blo = ps.find(p => p.part_key === 'back')!
+    // The back sits on the bottom (caseBox draws it at Y + DZ): the cut is at the same real
+    // height as the sides', not a board higher (Mark 2026-10-25).
+    const box = (q: typeof back) => caseBox({ ...q, part_key: 'back' })
+    expect(box(blo).y).toBeCloseTo(box(back).y)
+    expect(box(blo).y + box(blo).h).toBeCloseTo(at)
+    expect(box(bhi).y).toBeCloseTo(at)
+    expect(box(bhi).y + box(bhi).h).toBeCloseTo(box(back).y + box(back).h)
+    expect(bhi.DY).toBe(back.DY)
     // top / bottom untouched
     expect(ps.filter(p => p.part_key === 'full_top' || p.part_key === 'bottom')).toEqual(rp.case_parts.filter(p => p.part_key === 'full_top' || p.part_key === 'bottom'))
+  })
+
+  it('a shaped cabinet’s per-edge back / side panels are cut too, at the same real height', () => {
+    // A turned back on a clipped corner (TC-08 J04): face-kind, height along DX from Y.
+    const angled = { ...rp.case_parts.find(p => p.part_key === 'back')!, part_key: 'back:back2' as const, Y: 16.5, DX: 2367, AY: -30 }
+    const ps = splitCaseParts([angled], [at])
+    expect(ps.map(p => p.part_key)).toEqual(['back:back2', 'split:back:back2:1'])
+    expect(ps[0]).toMatchObject({ Y: 16.5, DX: at - 16.5 })
+    expect(ps[1]).toMatchObject({ Y: at, DX: 16.5 + 2367 - at, AY: -30 })
+    expect(splitBaseKey('split:back:back2:1')).toBe('back:back2')
+    expect(splitPieceFor(ps, 'back:back2', at + 5)!.part_key).toBe('split:back:back2:1')
   })
 
   it('two cuts = three pieces; a cut past the part is ignored', () => {

@@ -67,3 +67,8 @@
 - [x] **S4** (2026-10-25) 3D (CabinetScene — room + modal): cut sides / back drawn as their pieces, each
   framed as its base part with only its own holes; modal Parts tab lists (lower) / (upper);
   `splitPieceSuffix` / `cutBaseKeys` shared by the cut list, cabinet sheet and Parts tab.
+- [x] **S4a** (2026-10-25, Mark: back cut sat 16.5 high) The back sits on the bottom — its stored Y is one
+  board (bottom.t) below where caseBox draws it — so `splitPieceRange` cuts it at Y + DZ (the same real height
+  as the sides) and back pieces store Y = cut − DZ. A shaped cabinet's per-edge `side:<edge>` / `back:<edge>`
+  panels (e.g. TC-08's angled back:back2) are cut too (height along DX from Y); piece key
+  `split:back:back2:1`, DB constraint widened (`migration_s1b_shaped_pieces.sql`, applied).

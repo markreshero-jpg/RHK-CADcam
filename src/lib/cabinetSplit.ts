@@ -22,9 +22,10 @@ export interface CabinetSplit { at: number[] }
 /** Default cut: this far below the top of a fixed shelf (Mark, 2026-10-24). */
 export const SPLIT_LIP = 3
 export const MAX_CUTS = 2
-/** Parts that are cut: the two sides and the back. */
+/** Parts that are cut: the two sides and the back — and on a shaped cabinet its
+ *  per-edge side / back panels (side:<edge>, back:<edge>). */
 export const SPLIT_KEYS = ['left_side', 'right_side', 'back'] as const
-type SplitKey = typeof SPLIT_KEYS[number]
+const isShapedUpright = (k: string) => /^(side|back):[A-Za-z0-9_-]+$/.test(k)
 
 // Tolerates partial / legacy stored values; at most MAX_CUTS, ascending, positive.
 export function normaliseSplit(s: Partial<CabinetSplit> | null | undefined): CabinetSplit | null {
@@ -33,26 +34,34 @@ export function normaliseSplit(s: Partial<CabinetSplit> | null | undefined): Cab
   return at.length ? { at } : null
 }
 
-/** Height range of a cut-able part in the cabinet frame. The sides run their
- *  height along DY; the back along DX (resolveCase frames). */
-function heightRange(p: ResolvedCasePart): [number, number] {
-  return splitBaseKey(p.part_key) === 'back' ? [p.Y, p.Y + p.DX] : [p.Y, p.Y + p.DY]
+/** Where a cut-able part really sits, bottom → top, in the cabinet frame. The
+ *  sides run their height along DY from Y. The back runs along DX and sits on
+ *  the bottom: its stored Y is one board (DZ, the bottom's thickness) below
+ *  it — caseBox draws it at Y + DZ — so its real span starts there. */
+export function splitPieceRange(p: ResolvedCasePart): [number, number] {
+  const base = splitBaseKey(p.part_key)
+  // Shaped per-edge panels are face-kind: height along DX from Y (caseBox).
+  if (isShapedUpright(base)) return [p.Y, p.Y + p.DX]
+  if (base !== 'back') return [p.Y, p.Y + p.DY]
+  const y0 = p.Y + p.DZ
+  return [y0, y0 + p.DX]
 }
 
-export const isSplitKey = (k: string): k is SplitKey => (SPLIT_KEYS as readonly string[]).includes(k)
+export const isSplitKey = (k: string): boolean => (SPLIT_KEYS as readonly string[]).includes(k) || isShapedUpright(k)
 
 /** Piece key: the lowest piece keeps the part's key, the n-th above is split:<key>:<n>. */
 export const splitPieceKey = (key: string, n: number) => (n === 0 ? key : `split:${key}:${n}`)
 
-/** The part a split piece came from (`split:left_side:1` → `left_side`). */
+/** The part a split piece came from (`split:left_side:1` → `left_side`,
+ *  `split:back:back2:1` → `back:back2`). */
 export function splitBaseKey(key: string): string {
-  const m = /^split:([a-z_]+):\d$/.exec(key)
+  const m = /^split:(.+):\d$/.exec(key)
   return m ? m[1] : key
 }
 
 /** Cuts that fall inside the part (a cut at or past an end is ignored). */
 function cutsIn(p: ResolvedCasePart, at: number[]): number[] {
-  const [y0, y1] = heightRange(p)
+  const [y0, y1] = splitPieceRange(p)
   return at.filter(h => h > y0 + 1 && h < y1 - 1)
 }
 
@@ -68,7 +77,7 @@ export function splitCaseParts(parts: ResolvedCasePart[], at: number[] | null | 
   for (const p of parts) {
     const cuts = isSplitKey(p.part_key) ? cutsIn(p, at) : []
     if (!cuts.length) { out.push(p); continue }
-    const [y0, y1] = heightRange(p)
+    const [y0, y1] = splitPieceRange(p)
     const bounds = [y0, ...cuts, y1]
     for (let i = 0; i < bounds.length - 1; i++) {
       const lo = bounds[i], hi = bounds[i + 1], h = hi - lo
@@ -76,8 +85,8 @@ export function splitCaseParts(parts: ResolvedCasePart[], at: number[] | null | 
       out.push({
         ...p,
         part_key: splitPieceKey(p.part_key, i) as ResolvedCasePart['part_key'],
-        Y: lo,
-        ...(p.part_key === 'back' ? { DX: h } : { DY: h }),
+        // A back piece keeps the back's frame (stored one board below where it sits).
+        ...(p.part_key === 'back' ? { Y: lo - p.DZ, DX: h } : isShapedUpright(p.part_key) ? { Y: lo, DX: h } : { Y: lo, DY: h }),
         edge_band: { ...p.edge_band, ...(last ? {} : { top: false }), ...(first ? {} : { bottom: false }) },
         // Shapes / notches are drawn on the whole part; a cut piece is a plain rectangle.
         outline: undefined,
@@ -91,7 +100,7 @@ export function splitCaseParts(parts: ResolvedCasePart[], at: number[] | null | 
  *  (pieces stack bottom-up; a point past either end takes the end piece). */
 export function splitPieceFor(pieces: ResolvedCasePart[], baseKey: string, y: number): ResolvedCasePart | undefined {
   const own = pieces.filter(p => splitBaseKey(p.part_key) === baseKey).sort((a, b) => a.Y - b.Y)
-  return own.find(p => y < heightRange(p)[1]) ?? own[own.length - 1]
+  return own.find(p => y < splitPieceRange(p)[1]) ?? own[own.length - 1]
 }
 
 /** Suggested cuts: SPLIT_LIP below the top of each fixed shelf, lowest first. */
