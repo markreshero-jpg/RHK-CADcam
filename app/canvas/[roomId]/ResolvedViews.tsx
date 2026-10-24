@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import CabinetFixturesOverlay from './CabinetFixturesOverlay'
 import type { LocalFixtureBox } from '@/src/lib/cabinetContents'
-import { zoneKey } from '@/src/lib/cabinetShape/partKeys'
+import { zoneKey, isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack } from '@/src/lib/resolver/types'
 import type { PartMeta } from '@/src/components/three/PartViewer'
@@ -802,6 +802,9 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
   // Cabinet (x,y,z) → svg, for rotated-part silhouettes (Y ignored in top view).
   const proj = (px: number, _py: number, pz: number) => ({ x: ox + px, y: oz + pz })
   const trueD = useTrueShapes(rp, partOverrides, shapeOverrides, 'plan', (x, z) => proj(x, 0, z))
+  // Shaped / curved footprint: the dx × dz box isn't the cabinet's outline, so
+  // don't draw it (or its interior fill) — the parts' true shapes show the outline.
+  const shapedPlan = rp.case_parts.some(p => p.wrap || p.outline || p.AY || isShapedPanelKey(p.part_key))
   const handMarkers = useHandOpMarkers(cab.id, rp)
   function sel(id: string) { return selectedPartId === id }
   function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
@@ -881,7 +884,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
       <rect x={ox} y={oz - wallH} width={dx} height={wallH} fill={C_WALL} stroke={C_STROKE} strokeWidth={1} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
       <text x={ox + dx/2} y={oz - wallH/2} textAnchor="middle" dominantBaseline="central"
         fontSize={18} fill="#475569" fontFamily="system-ui,sans-serif" letterSpacing={2}>WALL</text>
-      <rect x={ox} y={oz} width={dx} height={dz} fill={wireMode ? '#050a12' : C_INT} />
+      {!shapedPlan && <rect x={ox} y={oz} width={dx} height={dz} fill={wireMode ? '#050a12' : C_INT} />}
 
       {showInternals && (rp.drawer_stacks ?? []).flatMap((stack, si) => [
         ...stack.box_parts.map((p, pi) => {
@@ -1016,7 +1019,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
       <SlideDrillOverlay drills={hingeDrills} perp="y" color={HINGE_DRILL_COL}
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'z+' ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 }} />
-      <rect x={ox} y={oz} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
+      {!shapedPlan && <rect x={ox} y={oz} width={dx} height={dz} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />}
       <text x={ox + dx/2} y={oz + dz + 22} textAnchor="middle" dominantBaseline="central"
         fontSize={18} fill="#374151" fontFamily="system-ui,sans-serif">ACCESS</text>
       {dimH(ox, ox + dx, oz + dz + 50, `${dx}mm`)}
