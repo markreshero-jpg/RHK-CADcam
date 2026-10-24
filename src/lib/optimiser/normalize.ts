@@ -16,6 +16,7 @@ import type { PartHideViews } from '@/src/lib/resolver/types'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 import { curvedEndPartLabel } from '@/src/lib/resolver/resolveCurvedEnd'
 import { floatShelfPartLabel, floatShelfPartNote } from '@/src/lib/floatShelf'
+import { backPanelPartLabel } from '@/src/lib/backPanel'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -216,17 +217,21 @@ export function normalizeProject(
     // Sides: footprint u = depth (banded back/front = left/right flags), v = height.
     // Back + horizontals: u runs bottom→top (back panels) / back→front where the
     // horizontal 'bottom' flag is the back edge; v runs left→right.
+    // A turned island back panel (below) nests w = its width: tape pairs as a side's.
+    const sidePairs = isSide || (key.startsWith('ibp:') && r.grain_direction === 'vertical')
     const eb = ebFields(flagsOf(r), tFor(r),
-      isSide ? ['left', 'right'] : ['bottom', 'top'],
-      isSide ? ['bottom', 'top'] : ['left', 'right'])
+      sidePairs ? ['left', 'right'] : ['bottom', 'top'],
+      sidePairs ? ['bottom', 'top'] : ['left', 'right'])
     // Finger-pull rails: the nest's h runs with the grain, so a horizontal-grain
     // rail nests as-is (h = length) and a vertical-grain rail is turned. Rails
     // carry no machining, so turning them can't misplace an op.
-    const turned = key.startsWith('fprail:') && r.grain_direction === 'vertical'
+    // Island back panels (z_island_back_panel) are vertical-grain applied panels
+    // with no machining: turned the same way, their tape turning with them.
+    const turned = (key.startsWith('fprail:') || key.startsWith('ibp:')) && r.grain_direction === 'vertical'
       ? { w: Number(r.dy), h: Number(r.dx), thickness: Number(r.dz) } : undefined
     // Angled panel ends (z_cabinet_shape 4a): nested as the blank, bevel named.
     const bevel = caseBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
-    push('case_parts', r, `case_${key}`, { typeKey: key, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? humanize(key),
+    push('case_parts', r, `case_${key}`, { typeKey: key, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(key),
       ...(bevel ? { suffix: ` (${bevel})` } : {}) },
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), turned, eb, base)
   }

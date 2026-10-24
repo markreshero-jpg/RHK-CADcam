@@ -260,6 +260,7 @@ export function casePartItem(partKey: string): string {
   if (partKey.startsWith('crv:kick')) return 'kick_faces'
   if (partKey.startsWith('crv:')) return 'curved_ends'
   if (partKey.startsWith('fs:')) return 'floating_shelves'   // z_floating_shelf
+  if (partKey.startsWith('ibp:')) return 'applied_panels'     // z_island_back_panel
   return 'carcass_top'            // full_top, front_rail, back_rail, rail:<edge>
 }
 export function kickPartItem(partKey: string): string {

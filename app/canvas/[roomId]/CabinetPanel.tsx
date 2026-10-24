@@ -11,6 +11,7 @@ import CabinetShapeSection from './CabinetShapeSection'
 import BulkheadSection from './BulkheadSection'
 import CurvedEndSection from './CurvedEndSection'
 import FloatShelfSection from './FloatShelfSection'
+import BackPanelSection from './BackPanelSection'
 import { canFloat, isFloating, floatingPatch, FLOAT_Z } from '@/src/lib/floating'
 
 export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRef, onUpdate, onDelete, onClose, hideWallPosition, hideDelete, autoFocusWidth }: {
@@ -216,6 +217,9 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
         )}
         {cabinet.float_shelf && (
           <FloatShelfSection cabinet={cabinet} onUpdate={onUpdate} inp={inp} lbl={lbl} />
+        )}
+        {cabinet.back_panel && (
+          <BackPanelSection cabinet={cabinet} onUpdate={onUpdate} inp={inp} lbl={lbl} />
         )}
         {cabinet.curved_end && (
           <CurvedEndSection cabinet={cabinet} onUpdate={onUpdate} inp={inp} lbl={lbl} />

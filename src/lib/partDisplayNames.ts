@@ -17,6 +17,7 @@
 
 import { curvedEndPartLabel } from './resolver/resolveCurvedEnd'
 import { floatShelfPartLabel } from './floatShelf'
+import { backPanelPartLabel } from './backPanel'
 
 export const PART_TYPE_LABELS: Record<string, string> = {
   db_left_side:  'Drawer Box Left Side',
@@ -44,7 +45,7 @@ export const humanizePartKey = (s: string): string =>
 // computed; otherwise the raw key is humanized.
 export const partTypeLabel = (typeKey: string, fallback?: string): string =>
   // Curved end parts (z_curved_end): "crv:rib_2" would humanize badly.
-  PART_TYPE_LABELS[typeKey] ?? curvedEndPartLabel(typeKey) ?? floatShelfPartLabel(typeKey) ?? fallback ?? humanizePartKey(typeKey)
+  PART_TYPE_LABELS[typeKey] ?? curvedEndPartLabel(typeKey) ?? floatShelfPartLabel(typeKey) ?? backPanelPartLabel(typeKey) ?? fallback ?? humanizePartKey(typeKey)
 
 // Full drawer-box panel names for the cabinet-context views (Cabinet3DView,
 // cabinetEditSvgHelpers, PartsView) — keyed by raw part_type. Derived from

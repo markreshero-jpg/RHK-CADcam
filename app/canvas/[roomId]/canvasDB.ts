@@ -25,6 +25,7 @@ import type { ConstructionRules } from '@/src/lib/resolver/types'
 import { mergeRules } from '@/src/lib/resolver/mergeRules'
 import { normaliseBulkhead } from '@/src/lib/bulkhead'
 import { normaliseFloatShelf } from '@/src/lib/floatShelf'
+import { normaliseBackPanel } from '@/src/lib/backPanel'
 import { normaliseCurvedEnd, curvedEndFootprint } from '@/src/lib/curvedEnd/settings'
 import { FLOAT_Z } from '@/src/lib/floating'
 
@@ -511,6 +512,7 @@ export function buildInstanceFromDefinition(
     bulkhead: def.bulkhead ?? null,
     curved_end: curvedEnd,
     float_shelf: normaliseFloatShelf(def.float_shelf),
+    back_panel: normaliseBackPanel(def.back_panel),
     faces: def.faces ?? null,
     part_hide_views: def.part_hide_views ?? {},
     part_no_cnc: def.part_no_cnc ?? [],
@@ -759,6 +761,7 @@ export async function saveCabinetToLibrary(
     bulkhead: inst.bulkhead ?? null,
     curved_end: inst.curved_end ?? null,
     float_shelf: inst.float_shelf ?? null,
+    back_panel: inst.back_panel ?? null,
     faces: inst.faces ?? null,
     custom_parts: cps,
     part_operations, part_comments, part_labels,
@@ -802,7 +805,7 @@ export async function dbUpdateCabinet(
   // Bulkhead settings (z_bulkhead) only feed resolveBulkhead — same fast path.
   // So do curved end settings (z_curved_end) and the plan outline they rebuild,
   // and floating shelf settings (z_floating_shelf).
-  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead' || k === 'curved_end' || k === 'float_shelf' || (k === 'footprint' && 'curved_end' in u)) ? getCachedInput(id) : undefined
+  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead' || k === 'curved_end' || k === 'float_shelf' || k === 'back_panel' || (k === 'footprint' && 'curved_end' in u)) ? getCachedInput(id) : undefined
   if (cached && !cached.kick_run) {
     const updated = {
       ...cached,
@@ -812,6 +815,7 @@ export async function dbUpdateCabinet(
       ...(u.bulkhead !== undefined && { bulkhead: normaliseBulkhead(u.bulkhead) }),
       ...(u.curved_end !== undefined && { curved_end: normaliseCurvedEnd(u.curved_end) }),
       ...(u.float_shelf !== undefined && { float_shelf: normaliseFloatShelf(u.float_shelf) }),
+      ...(u.back_panel !== undefined && { back_panel: normaliseBackPanel(u.back_panel) }),
       ...(u.footprint !== undefined && { footprint: u.footprint ?? null }),
     }
     setCachedInput(id, updated)
