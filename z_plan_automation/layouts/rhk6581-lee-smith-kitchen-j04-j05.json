@@ -8,7 +8,8 @@
     "Rangehood canopy: BHCRVFIXP DOUBLE 1200 x 1000 (1500-2500) x 400, R200, raw MDF 18 face, centred on the cooktop. Push-to-open: oven tower top door + fridge overhead.",
     "J04 butler's: north wall TFKW 30 | 2 x open tall 796 x 2500 x 400, 5 fixed shelves, all 16 whiteboard | TFKW 50 at the curve; right cab back-right corner truncated to the curved wall chord. West wall (S->N): BEPF 18 | wine fridge 505 | BEPF 18 | B2D 900 (2 door) to the shelves = 1445 (+4); bench 900 (carcass 880 + 20 ST01). Doorway 912 in the partition.",
     "WOT-COMBI is a kit (placeCabinet drops 5 members) - placed AFTER draw-plan, once rooms.class_dimension_defaults = { tall: {dy 2500, dz 655}, base: {dy 900, dz 655} } so the kit sizes to 2500 x 655.",
-    "Done after placement (room 1227b2c8-ee65-4ea8-a7e8-e3b1144bfcd0): class_dimension_defaults tall 2500/655 base 900/655 wall 700/655; WOT-COMBI kit placed Wall 6 @632 (TEPK TC-10 | D2-LL BC-17 | oven core TC-11 | W2D WC-03 outset | TEPK TC-12); broom TC-02 1 door; canopy WC-02 DOUBLE R200 ribs auto, auto_h off, exposed = MDF 18mm; island BC-01 RH / BC-03 LH R300 inner panel; island BC-08..11 REVT 64 (80 apron), D4 rows unlocked; butler TC-07/08 open face, 6 equal bays / 5 fixed shelves, all whiteboard (exposed + kick face), TC-08 footprint back-right clipped 359 along / 257 deep; kicks: KICK 1 0-650, KICK 4 1250-3863 (under both kit TEPKs), island KICK 2, butler KICK 3 (white); doorway 912 on Wall 3 @1095; PUSH TO OPEN notes; plan note for the R500 curved wall; spec block from Bed 1. 0 errors / 0 warnings."
+    "Done after placement (room 1227b2c8-ee65-4ea8-a7e8-e3b1144bfcd0): class_dimension_defaults tall 2500/655 base 900/655 wall 700/655; WOT-COMBI kit placed Wall 6 @632 (TEPK TC-10 | D2-LL BC-17 | oven core TC-11 | W2D WC-03 outset | TEPK TC-12); broom TC-02 1 door; canopy WC-02 DOUBLE R200 ribs auto, auto_h off, exposed = MDF 18mm; island BC-01 RH / BC-03 LH R300 inner panel; island BC-08..11 REVT 64 (80 apron), D4 rows unlocked; butler TC-07/08 open face, 6 equal bays / 5 fixed shelves, all whiteboard (exposed + kick face), TC-08 footprint back-right clipped 359 along / 257 deep; kicks: KICK 1 0-650, KICK 4 1250-3863 (under both kit TEPKs), island KICK 2, butler KICK 3 (white); doorway 912 on Wall 3 @1095; PUSH TO OPEN notes; plan note for the R500 curved wall; spec block from Bed 1. 0 errors / 0 warnings.",
+    "2026-10-24 Mark round 2: broom TC-02 hinged left; partition filler -> TFFW TC-13 (TC-05 removed); butler bench BC-14/15/16 dy 900 (same as the kitchen); PTO notes at the non-hinged bottom corners of WC-03 + WC-01 (no PUSH TO OPEN text); FRIDGE SPACE + 1800 dim to the overhead underside; integrated DW door BC-18 (B1D, no carcass/internal/kick, pos_z 100, dy 800, REVT 64, hinge bottom, no hinges) + INTEGRATED DW; Induction cooktop 900 on BC-05 centred under the canopy; Abi Zalo double bowl in BC-11; plan CAD arc R500 (c 1185,500) for the curved corner; Wall 2 thickness 1. Kit combi clashes WC-03 (kit appliance anchors assume 580 depth, WOT spec open item)."
   ],
   "projectName": "RHK6581 Lee Smith",
   "roomName": "Kitchen J05 + Butler's J04",
@@ -342,7 +343,7 @@
       "wall": 1,
       "offset": 1216,
       "dx": 18,
-      "dy": 880,
+      "dy": 900,
       "dz": 580,
       "rules": {
         "SCRBK": 0
@@ -354,7 +355,7 @@
       "wall": 1,
       "offset": 1739,
       "dx": 18,
-      "dy": 880,
+      "dy": 900,
       "dz": 580,
       "rules": {
         "SCRBK": 0
@@ -366,7 +367,7 @@
       "wall": 1,
       "offset": 1757,
       "dx": 900,
-      "dy": 880,
+      "dy": 900,
       "dz": 580,
       "rules": {
         "SCRBK": 0
