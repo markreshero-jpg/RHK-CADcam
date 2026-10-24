@@ -1,0 +1,104 @@
+{
+  "_source": "J07M = J07 mirrored (Mark 2026-10-24: separate room). See rhk6581-lee-smith-play-j07.json for the source + Q&A.",
+  "_notes": [
+    "Mirror of J07: 2386 wall to wall, ceiling 2475, all LAM03 Sunbaked Natural 16mm (room overrides set after placement).",
+    "L->R: TFKW 30 at the left wall | T2D 750 existing | T2D 750 existing | TEPF 16.5 seen from the desk, to floor | desk bay 839.5 (16.5 top at 720 AFFL) to the right wall.",
+    "600 OA incl doors (carcass 581.5, SCRBK 0), 2400 incl 100 kick, LAM03 bulkhead flush with carcass 2400-2475 wall to wall. Existing cabinets: carcass + shelves Removed (doors, panel, kick only).",
+    "Done after placement (room a642f31b-05cc-47b4-ad15-22f42c2dcede): rooms door_style_override_id + base/wall/tall_door_style_id = Laminex 16mm Colour, base/wall/tall_door_colour_id = Sunbaked Natural; room_materials exposed (base/wall/tall) + room_toekick_materials face = LX Colour 16mm. Panel dx 16.5 + desk dx 839.5 reset after placeCabinet rounding; desk pos_z 703.5, BH pos_z 2400. joinKicks -> KICK 1 0-1530 under the filler + T2Ds. Existing T2Ds: part_hide_views all views on case_left_side/right_side/bottom/back/full_top + int_adj_shelf_0..3 (Removed). CAD: spec block (from J12) + boxed EXISTING CABINETS note. 0 errors / 0 warnings."
+  ],
+  "projectName": "RHK6581 Lee Smith",
+  "roomName": "Play J07M",
+  "roomHeight": 2475,
+  "wallCabinetTop": 2400,
+  "walls": [
+    {
+      "x": 0,
+      "y": 1000,
+      "length": 1000,
+      "angle": 270,
+      "_": "left return wall (filler end), length placeholder"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "length": 2386,
+      "angle": 0,
+      "_": "back wall, elevation left->right"
+    },
+    {
+      "x": 2386,
+      "y": 0,
+      "length": 1000,
+      "angle": 90,
+      "_": "right return wall (desk end), length placeholder"
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "TFKW",
+      "wall": 2,
+      "offset": 0,
+      "dx": 30,
+      "dy": 2400,
+      "dz": 581.5,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J07M 30 filler on the kick at the left wall"
+    },
+    {
+      "def": "T2D",
+      "wall": 2,
+      "offset": 30,
+      "dx": 750,
+      "dy": 2400,
+      "dz": 581.5,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J07M EXISTING cabinet - LAM03 doors only (carcass + shelves removed, not made). HD01 by client, undrilled"
+    },
+    {
+      "def": "T2D",
+      "wall": 2,
+      "offset": 780,
+      "dx": 750,
+      "dy": 2400,
+      "dz": 581.5,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J07M EXISTING cabinet - LAM03 doors only (carcass + shelves removed, not made). HD01 by client, undrilled"
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 1530,
+      "dx": 16.5,
+      "dy": 2400,
+      "dz": 581.5,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J07M 16.5 LAM03 panel, seen from the desk bay, to floor"
+    },
+    {
+      "def": "WUP",
+      "wall": 2,
+      "offset": 1546.5,
+      "dx": 839.5,
+      "dy": 16.5,
+      "dz": 600,
+      "note": "J07M desk top 16.5 LAM03, top at 720 AFFL (pos_z 703.5 set after placement), panel to wall"
+    },
+    {
+      "def": "BH",
+      "wall": 2,
+      "offset": 0,
+      "dx": 2386,
+      "dy": 75,
+      "dz": 581.5,
+      "note": "J07M LAM03 bulkhead 2400-2475, flush with carcass, wall to wall (no returns)"
+    }
+  ]
+}
