@@ -679,12 +679,24 @@ function CustomZoom({ controlsRef }: { controlsRef: React.RefObject<any> }) {
 // Saves the camera position + orbit target into a parent-held ref so the view is
 // retained when the 3D Canvas unmounts (switching to elevation/plan) and restored
 // when it remounts. Without this, returning to 3D resets to the default view.
+// Also mirrored to localStorage per room so the view survives a browser refresh.
 
 export type Camera3DState = { pos: [number, number, number]; target: [number, number, number] }
 
-function CameraPersistence({ controlsRef, stateRef }: {
+const camStorageKey = (roomId: string) => `rhk.cam3d.${roomId}`
+
+function loadStoredCamera(roomId: string): Camera3DState | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(camStorageKey(roomId)) ?? 'null')
+    const ok = (a: unknown) => Array.isArray(a) && a.length === 3 && a.every(n => Number.isFinite(n))
+    return v && ok(v.pos) && ok(v.target) ? v : null
+  } catch { return null }
+}
+
+function CameraPersistence({ controlsRef, stateRef, roomId }: {
   controlsRef: React.RefObject<any>
   stateRef?: React.MutableRefObject<Camera3DState | null>
+  roomId: string
 }) {
   // Subscribe to the *active default* camera. On first render the default is still
   // R3F's throwaway camera — drei's <PerspectiveCamera makeDefault> only swaps it in
@@ -698,8 +710,9 @@ function CameraPersistence({ controlsRef, stateRef }: {
     const ctrl = controlsRef.current
     if (!ctrl) return
 
-    // Restore the saved view (e.g. returning from elevation/plan).
-    const saved = stateRef?.current
+    // Restore the saved view (returning from elevation/plan, else the last view
+    // stored for this room before a refresh).
+    const saved = stateRef?.current ?? (stateRef ? loadStoredCamera(roomId) : null)
     if (saved) {
       camera.position.set(saved.pos[0], saved.pos[1], saved.pos[2])
       ctrl.target.set(saved.target[0], saved.target[1], saved.target[2])
@@ -716,9 +729,22 @@ function CameraPersistence({ controlsRef, stateRef }: {
       }
     }
     save()   // known from the start — "Save view" works before any orbit
-    ctrl.addEventListener('change', save)
-    return () => ctrl.removeEventListener('change', save)
-  }, [camera, controlsRef, stateRef])
+    // localStorage write is debounced — 'change' fires every frame while orbiting.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const store = () => {
+      try { localStorage.setItem(camStorageKey(roomId), JSON.stringify(stateRef.current)) } catch { /* storage blocked */ }
+    }
+    const onChange = () => {
+      save()
+      clearTimeout(timer)
+      timer = setTimeout(store, 300)
+    }
+    ctrl.addEventListener('change', onChange)
+    return () => {
+      ctrl.removeEventListener('change', onChange)
+      if (timer !== undefined) { clearTimeout(timer); store() }
+    }
+  }, [camera, controlsRef, stateRef, roomId])
 
   return null
 }
@@ -866,7 +892,7 @@ export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, 
         enableZoom={false}
       />
       <CustomZoom controlsRef={controlsRef} />
-      <CameraPersistence controlsRef={controlsRef} stateRef={cameraStateRef} />
+      <CameraPersistence controlsRef={controlsRef} stateRef={cameraStateRef} roomId={room.id} />
       <ResetView signal={resetSignal} controlsRef={controlsRef} position={camPosition} target={camTarget} />
       <CameraController
         signal={birdsEyeSignal}
