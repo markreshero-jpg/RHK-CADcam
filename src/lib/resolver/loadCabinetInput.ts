@@ -805,16 +805,24 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
   const faceGridInput = (cab.face_grid as FaceGridInput | null) ?? DEFAULT_FACE_GRID
   const resolvedDoors = await resolveDoorStyles(faceGridInput, roomStyleId, effectiveJobStyleId, doorColourOverride)
 
+  // t.door follows the room/job door style's blank, not the schedule's door_face
+  // board — a 16mm style in an 18mm job must size panels (cab.d + t.door + 2) to
+  // the doors actually made. Panels / fillers have no zones, so resolve it from a
+  // one-door grid.
+  const ONE_DOOR: FaceGridInput = {
+    rows: [{ row_index: 0, height_locked: false }], cols: [{ col_index: 0, width_locked: false }],
+    zones: [{ row_index: 0, col_index: 0, face_type: 'door' }],
+  }
+  const doorThickness = (roomStyleId ?? effectiveJobStyleId)
+    ? (await resolveDoorStyles(ONE_DOOR, roomStyleId, effectiveJobStyleId, doorColourOverride))['0_0']?.thickness_mm
+    : undefined
+
   // Shaped cabinets (z_cabinet_shape Phase 3): the other front facets' grids
   // resolve their styles under `${edgeId}.${row}_${col}`, and '*' carries the
   // room/job default for facets that have no stored grid yet.
   const facesInput = (cab.faces as Record<string, FaceGridInput> | null) ?? undefined
   if (cab.footprint) {
-    const oneDoor: FaceGridInput = {
-      rows: [{ row_index: 0, height_locked: false }], cols: [{ col_index: 0, width_locked: false }],
-      zones: [{ row_index: 0, col_index: 0, face_type: 'door' }],
-    }
-    const dflt = (await resolveDoorStyles(oneDoor, roomStyleId, effectiveJobStyleId, doorColourOverride))['0_0']
+    const dflt = (await resolveDoorStyles(ONE_DOOR, roomStyleId, effectiveJobStyleId, doorColourOverride))['0_0']
     if (dflt) resolvedDoors['*'] = dflt
     for (const [edgeId, grid] of Object.entries(facesInput ?? {})) {
       const styles = await resolveDoorStyles(grid, roomStyleId, effectiveJobStyleId, doorColourOverride)
@@ -862,6 +870,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     exposed_interior: cab.exposed_interior,
     material:                  carcassMat,
     door_material:             doorFace,
+    door_thickness:            doorThickness,
     shelf_material:            shelfMat,
     exposed_material:          exposed,
     toekick_face_material:     tkFace,

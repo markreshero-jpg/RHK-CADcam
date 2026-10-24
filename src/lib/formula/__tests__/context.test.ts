@@ -79,6 +79,13 @@ describe('buildFormulaScope roots', () => {
     expect(ev('t.shelf')).toBe(16)  // falls back to carcass material
   })
 
+  it('t.door follows the door style blank over the door_face board', () => {
+    // A 16mm style in a room of an 18mm job: panels must size to the 16 doors made.
+    const s = buildFormulaScope(resolved, { ...input, door_thickness: 16 } as CabinetInput)
+    const r = evaluateFormula('cab.d + t.door + 2', s)
+    expect(r.ok && r.value).toBe(560 + 16 + 2)
+  })
+
   it('extras: room / wall scopes', () => {
     expect(ev('room.cab_depth + 20')).toBe(590)
     expect(ev('wall.length')).toBe(3600)

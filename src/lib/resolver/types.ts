@@ -688,6 +688,9 @@ export interface CabinetInput {
   // Materials (resolved before passing to resolver)
   material:        Material   // primary carcass material
   door_material:   Material   // face material
+  // Thickness of the door style a plain door on this cabinet gets (room → job
+  // style's blank). Formulas read it as t.door; absent = door_material.DZ.
+  door_thickness?: number
   shelf_material:  Material   // shelf material
   // Exposed material — every visible non-door part resolves here: end panels,
   // fillers, island back panels, open shelves, and the whole carcass when

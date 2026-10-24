@@ -135,7 +135,7 @@ export function buildFormulaScope(
   const t: Record<string, number> = {
     gable:   input.material?.DZ ?? 0,
     back:    input.material?.DZ ?? 0,
-    door:    input.door_material?.DZ ?? 0,
+    door:    input.door_thickness ?? input.door_material?.DZ ?? 0,
     shelf:   input.shelf_material?.DZ ?? input.material?.DZ ?? 0,
     toe:     input.toekick_face_material?.DZ ?? input.material?.DZ ?? 0,
     drw:     input.drawer_material?.DZ ?? input.material?.DZ ?? 0,
