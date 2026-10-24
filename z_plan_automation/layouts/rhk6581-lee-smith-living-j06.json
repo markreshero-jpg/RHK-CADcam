@@ -1,0 +1,94 @@
+{
+  "_source": "z_sample_plans/RHK6581 - Lee Smith - 38 Howard St, Grange/38 Howard SM - Markup 260927.pdf p2, views 3 (J06 plan) + 4 (elevation) + Mark Q&A 2026-10-24",
+  "_notes": [
+    "2575 OA (site, markup), ceiling 2680 CH. LAM02 Laminex Aries OR Surf (Colour TBC) - Laminex 16mm Colour style, room-level overrides set after placement. Carcass white.",
+    "L->R (elevation 4): TCRVFIXP 500 curve on the LEFT (LH, R370) to the floor, 600 OA (= door faces) | T2D 1000 | T2D 1000 | TFKW 75 at the builder's box (403, by builder). 600 OA incl doors: carcass 582 (16 doors + 2), SCRBK 0, 2400 incl 100 kick, 5 adj shelves each.",
+    "Bulkhead 2400-2680: BHCRVFIXP 500 (LH R370, ribs 0, DZ 600 = flush with the curve below + doors) over the curved end; BH 2075 front 'doors' over the cupboards to the box; the curved face board's straight leg butts the straight BH. Both with the shadowline split (Mark): 10 MDF rail 60 wide, set back 10.",
+    "Done after placement (room f7f7a99d-91fa-4a4b-a576-152c9d318d6b): TC-01 + WC-01 curved_end hand LH, R 370 (WC-01 ribs 0, TC-01 ribs auto = 12) + footprint from curvedEndFootprint (tsx); WC-01 + WC-02 bulkhead.split on (MDF 10mm, 60 wide, setback 10), WC-02 front doors (fascia Z 600 after the door-thickness fix); room door style Laminex 16mm Colour + Colour TBC, exposed + kick face LX Colour 16mm; TC-02/03 5 adj + hinges [2196,1630,870,100]; joinKicks -> KICK 1 500-2575 (curved end to the floor); spec block from J07 with fronts = Aries OR Surf (TBC). 0 errors; WC-01 CURVED_END_NOTE (0 ribs leave 247 > 170 - Mark asked for no rib)."
+  ],
+  "projectName": "RHK6581 Lee Smith",
+  "roomName": "Living J06",
+  "roomHeight": 2680,
+  "wallCabinetTop": 2400,
+  "walls": [
+    {
+      "x": 0,
+      "y": 0,
+      "length": 2575,
+      "angle": 0,
+      "_": "back wall, elevation left->right; left end open (curved end)"
+    },
+    {
+      "x": 2575,
+      "y": 0,
+      "length": 600,
+      "angle": 90,
+      "_": "builder's box face at the right end (403 by builder), length placeholder"
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "TCRVFIXP",
+      "wall": 1,
+      "offset": 0,
+      "dx": 500,
+      "dy": 2400,
+      "dz": 600,
+      "note": "J06 curved end, curve on the left (LH) R370, to the floor, LAM02. Flush with the door faces"
+    },
+    {
+      "def": "T2D",
+      "wall": 1,
+      "offset": 500,
+      "dx": 1000,
+      "dy": 2400,
+      "dz": 582,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J06 2-door cpbd, 5 adj shelves 16 white, LAM02 doors. HD01 by client, undrilled"
+    },
+    {
+      "def": "T2D",
+      "wall": 1,
+      "offset": 1500,
+      "dx": 1000,
+      "dy": 2400,
+      "dz": 582,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J06 2-door cpbd, 5 adj shelves 16 white, LAM02 doors. HD01 by client, undrilled"
+    },
+    {
+      "def": "TFKW",
+      "wall": 1,
+      "offset": 2500,
+      "dx": 75,
+      "dy": 2400,
+      "dz": 582,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J06 filler on the kick at the builder's box (takes the rest of 2575)"
+    },
+    {
+      "def": "BHCRVFIXP",
+      "wall": 1,
+      "offset": 0,
+      "dx": 500,
+      "dy": 280,
+      "dz": 600,
+      "note": "J06 curved bulkhead over the curved end, LH R370, flush with it, 10 shadowline split"
+    },
+    {
+      "def": "BH",
+      "wall": 1,
+      "offset": 500,
+      "dx": 2075,
+      "dy": 280,
+      "dz": 582,
+      "note": "J06 LAM02 bulkhead over the cupboards, flush with the doors, 10 shadowline split; the curved face board butts its end"
+    }
+  ]
+}
