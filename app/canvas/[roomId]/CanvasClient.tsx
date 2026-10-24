@@ -126,6 +126,18 @@ import { type ElevSnapSettings, type ElevSnapResult } from '@/src/lib/elevationS
 import { benchtopSeedFromCabinets, btFrontOverhang } from '@/src/lib/benchtopSeed'
 import { loadRoomHandleSchedule } from '@/src/lib/resolver/loadCabinetInput'
 
+// Last canvas tab for a room (see canvasView state). A stored elevation wall that
+// no longer exists falls back to the first wall.
+function loadStoredCanvasView(roomId: string, walls: Wall[]): { view: CanvasView; elevWallId: string | null; elevWallSide: 'face' | 'back' } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(`rhk.canvasView.${roomId}`) ?? 'null')
+    if (!v || !['plan', 'elevation', '3d'].includes(v.view)) return null
+    const wallId = walls.some(w => w.id === v.elevWallId) ? v.elevWallId as string : walls[0]?.id ?? null
+    if (v.view === 'elevation' && !wallId) return null
+    return { view: v.view, elevWallId: wallId, elevWallSide: v.elevWallSide === 'back' && wallId === v.elevWallId ? 'back' : 'face' }
+  } catch { return null }
+}
+
 // Shape Editor overlay is client-only and heavy — load it when first opened.
 const BenchtopShapeEditor = dynamic(() => import('./BenchtopShapeEditor'), { ssr: false })
 
@@ -245,9 +257,20 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [drawerToolKey, setDrawerToolKey] = useState(toolKey)
   if (toolKey !== drawerToolKey) { setDrawerToolKey(toolKey); setPhoneSidebar(false) }
   const [mouseWorld, setMouseWorld] = useState<Pt>({ x: 0, y: 0 })
+  // Plan / elevation / 3D tab (and elevation wall + side) remembered per room in
+  // localStorage, so a browser refresh reopens the same view. Section isn't
+  // restored — its cut line isn't kept. Restored after mount (see below) since the
+  // page is server-rendered.
   const [canvasView, setCanvasView] = useState<CanvasView>('plan')
   const [elevWallId, setElevWallId] = useState<string | null>(null)
   const [elevWallSide, setElevWallSide] = useState<'face' | 'back'>('face')
+  const viewRestoredRef = useRef(false)
+  useEffect(() => {
+    if (!viewRestoredRef.current) return
+    try {
+      localStorage.setItem(`rhk.canvasView.${room.id}`, JSON.stringify({ view: canvasView, elevWallId, elevWallSide }))
+    } catch { /* storage blocked */ }
+  }, [room.id, canvasView, elevWallId, elevWallSide])
   // Display layer sets (z_display_layers spec): ONE active set drives plan,
   // elevation and 3D (each set carries per-view item settings). The choice is
   // remembered per user.
@@ -884,6 +907,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     pendingElevSideRef.current = null
   }, [elevWallId])
 
+  // Reopen the last canvas tab for this room (saved by the effect beside canvasView).
+  useEffect(() => {
+    const s = loadStoredCanvasView(room.id, walls)
+    viewRestoredRef.current = true
+    if (!s) return
+    if (s.elevWallId) { pendingElevSideRef.current = s.elevWallSide; setElevWallId(s.elevWallId) }
+    setElevWallSide(s.elevWallSide)
+    setCanvasView(s.view)
+  }, [room.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Drop any in-progress measurement (and snap glyph) whenever the measure tool
   // is exited — via Esc, view switch, or picking another tool.
   useEffect(() => {
@@ -1257,6 +1290,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (!c.float_shelf) continue
       const h = floatShelfThickness(resolvedParts.get(c.id))
       if (h > 0 && Math.abs(h - c.dy) >= 0.05) void handleUpdateCabinet(c.id, { dy: h })
+    }
+    // Island back panels (z_island_back_panel): depth = the exposed board.
+    for (const c of cabinets) {
+      if (!c.back_panel) continue
+      const t = resolvedParts.get(c.id)?.case_parts.find(p => p.part_key === 'ibp:1')?.DZ ?? 0
+      if (t > 0 && Math.abs(t - c.dz) >= 0.05) void handleUpdateCabinet(c.id, { dz: t })
     }
   }, [cabinets, resolvedParts, handleUpdateCabinet])
 
@@ -1780,13 +1819,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           setWalls(ws => [...ws, saved])
           return { id: saved.id, name: saved.name, length: saved.length, angle: saved.angle }
         },
-        async placeCabinet(opts: { def: string; wall: string; offset: number; dx?: number }) {
+        // back: on the wall's back face (island back) — offset is still the left end along the wall.
+        async placeCabinet(opts: { def: string; wall: string; offset: number; dx?: number; back?: boolean }) {
           const w = findWall(opts.wall)
           const { data: defRow } = await supabase.from('cabinet_definitions').select('*').ilike('name', opts.def).limit(1).maybeSingle()
           if (!defRow) throw new Error(`Definition not found: ${opts.def}`)
           const draft = buildDraftFromDefinition(defRow as CabinetDefinition)
-          const { pos_x, pos_y } = wallOffsetPos(w, opts.offset)
-          await placeFromDraft(draft, w, pos_x, pos_y, false, opts.dx)
+          // Anchored as the UI does (pos at the low end along the wall), on the outer face.
+          const { x: pos_x, y: pos_y } = opts.back
+            ? wallAnchorPoint(w, opts.offset, true, centroid(walls))
+            : (p => ({ x: p.pos_x, y: p.pos_y }))(wallOffsetPos(w, opts.offset))
+          await placeFromDraft(draft, w, pos_x, pos_y, !!opts.back, opts.dx)
           return { placed: opts.def, wall: w.name, offset: opts.offset, dx: opts.dx ?? draft.dx }
         },
         async updateCabinet(ref: string, patch: { dx?: number; dy?: number; dz?: number; offset?: number; pos_z?: number }) {
