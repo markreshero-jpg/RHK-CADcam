@@ -674,7 +674,7 @@ export default function CabinetEditModal({
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
-                customParts={customParts} partOverrides={partOverrides}
+                customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides}
                 partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId}
                 fixtures={fixtures} selectedFixtureId={selFixtureId} onFixtureSelect={setSelFixtureId} />
               : <TopView cab={cabinet} />
@@ -684,7 +684,7 @@ export default function CabinetEditModal({
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
-                customParts={customParts} partOverrides={partOverrides}
+                customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides}
                 partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId}
                 fixtures={fixtures} selectedFixtureId={selFixtureId} onFixtureSelect={setSelFixtureId} />
               : <ElevationView cab={cabinet} />
@@ -694,7 +694,7 @@ export default function CabinetEditModal({
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
-                customParts={customParts} partOverrides={partOverrides}
+                customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides}
                 partLabels={partLabels} partComments={partComments} ebByMatId={ebByMatId}
                 fixtures={fixtures} selectedFixtureId={selFixtureId} onFixtureSelect={setSelFixtureId} />
               : <SideView cab={cabinet} />

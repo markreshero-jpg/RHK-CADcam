@@ -279,3 +279,7 @@ seen face-on, else its silhouette) instead of its rect; a shaped back shows dash
 outline from above. 3D: shaped / turned parts as shaded prisms (cap + visible sides, silhouette / crease lines).
 Checked headless on the test room's BC-04 (rib cut-out gable) + BC-08 (shaped door + back):
 `z_plan_automation/verify-sheet-shapes.mjs`. Not drawn yet: standalone custom parts (never were on the sheet).
+**Cabinet edit modal (2026-10-25):** the Top / Elevation / Side tabs now draw the same true shapes —
+`buildPartSolids()` (partSolids.ts) is shared by the sheet and `ResolvedViews`; a shaped / turned part passes
+`pathD` to `PartShape` (wins over the rect / rotation silhouette, holes evenodd) and skips its rect edge tape.
+Checked headless on BC-04 + BC-08: `z_plan_automation/verify-modal-shapes.mjs`.

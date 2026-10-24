@@ -13,7 +13,8 @@ import type { ShapePt, ShapeSegmentLike } from './shapePath'
 import { sampleOutline, sampleShapeOutline } from './shapePath'
 import { caseBox, zoneBevelOutline, caseBevelOutline, tkBevelOutline, rotEulerXYZ } from './jointDrilling'
 import { sharknoseProfile } from './handleGeometry'
-import { isShapedPanelKey, zonePartId } from './cabinetShape/partKeys'
+import { isShapedPanelKey, zonePartId, dbPartId } from './cabinetShape/partKeys'
+import { dbBox } from './drawerHardwareBoxes'
 
 export type Box3D = { x: number; y: number; z: number; w: number; h: number; d: number }
 export type PanelKind = 'side' | 'horizontal' | 'face'
@@ -137,6 +138,47 @@ export function partPrism(b: Box3D, kind: PanelKind, shape?: PartShape | null, r
   const turn = (v: V3): V3 => rot ? rotEulerXYZ(rot[0], rot[1], rot[2], v[0], v[1], v[2]) : v
   const place = (v: V3): V3 => { const r = turn(v); return [b.x + r[0], b.y + r[1], b.z + r[2]] }
   return { outer: local.outer.map(place), holes: local.holes.map(h => h.map(place)), ext: turn(local.ext) }
+}
+
+// ── Every resolved part as a solid ───────────────────────────────────────────
+
+export type SolidRole = 'case' | 'kick' | 'spreader' | 'face' | 'int' | 'db'
+/** `special` = its rect isn't its true shape (shaped, or turned by AY / a rotation override). */
+export type PartSolid = { id: string; role: SolidRole; prism: Prism; shaped: boolean; special: boolean }
+type PosOv = { ox: number; oy: number; oz: number; oax?: number; oay?: number; oaz?: number; sw?: number; sh?: number; sd?: number }
+
+/** part id → solid, as the cabinet 3D view builds it (position / size / rotation
+ *  overrides, AY turns, shapes). Shared by the cabinet sheets and the editor's
+ *  ortho views. */
+export function buildPartSolids(rp: ResolvedCabinet, partOverrides?: Record<string, PosOv>,
+  shapeOvs?: Record<string, { segments?: ShapeSegmentLike[] }>): Map<string, PartSolid> {
+  const shapes = partShapes(rp, shapeOvs)
+  const out = new Map<string, PartSolid>()
+  const applyOv = <T extends { X: number; Y: number; Z: number }>(p: T, id: string): T => {
+    const o = partOverrides?.[id]; return o ? { ...p, X: p.X + o.ox, Y: p.Y + o.oy, Z: p.Z + o.oz } : p
+  }
+  const add = (id: string, role: SolidRole, b0: Box3D, kind: PanelKind, ay = 0) => {
+    const o = partOverrides?.[id]
+    const b = o ? { ...b0, w: o.sw ?? b0.w, h: o.sh ?? b0.h, d: o.sd ?? b0.d } : b0
+    const r: V3 = [o?.oax ?? 0, (o?.oay ?? 0) + ay, o?.oaz ?? 0]
+    const rot = r[0] || r[1] || r[2] ? r : null
+    const shape = shapes.get(id)
+    out.set(id, { id, role, prism: partPrism(b, kind, shape, rot), shaped: !!shape, special: !!shape || !!rot })
+  }
+  const caseKind = (p: ResolvedCabinet['case_parts'][number]): PanelKind =>
+    p.wrap ? 'face' : p.part_key === 'left_side' || p.part_key === 'right_side' ? 'side'
+      : p.part_key === 'back' || isShapedPanelKey(p.part_key) || p.upright ? 'face' : 'horizontal'
+  rp.case_parts.forEach(p => { const id = `case_${p.part_key}`; add(id, 'case', caseBox(applyOv(p, id)), caseKind(p), p.AY ?? 0) })
+  rp.toekick_parts.forEach(p => {
+    const id = `tk_${p.part_key}_${p.sort_order}`
+    add(id, p.part_key.startsWith('spreader') ? 'spreader' : 'kick', tkBox(applyOv(p, id)),
+      p.part_key === 'spreader_horizontal' ? 'horizontal' : p.part_key === 'spreader_vertical' ? 'side' : 'face', p.AY ?? 0)
+  })
+  rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const id = zonePartId(z); add(id, 'face', zoneBox(applyOv(z, id)), 'face', z.AY ?? 0) })
+  ;(rp.internal_parts ?? []).forEach(p => { const id = `int_${p.part_type}_${p.sort_order}`; add(id, 'int', intBox(applyOv(p, id)), INT_PANEL_KIND[p.part_type] ?? 'horizontal') })
+  ;(rp.drawer_stacks ?? []).forEach(stk => stk.box_parts.forEach(p => add(dbPartId(stk, p.part_type), 'db', dbBox(p),
+    p.part_type === 'db_left_side' || p.part_type === 'db_right_side' ? 'side' : p.part_type === 'db_bottom' ? 'horizontal' : 'face')))
+  return out
 }
 
 // ── Orthographic projection ──────────────────────────────────────────────────

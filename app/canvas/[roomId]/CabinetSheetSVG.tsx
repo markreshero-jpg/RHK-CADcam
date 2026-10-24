@@ -24,7 +24,7 @@ import {
   doorProfileSvg, isSidePanel,
 } from './cabinetEditSvgHelpers'
 import { zonePartId, dbPartId, shapedPartLabel, isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
-import { partShapes, partPrism, prismOutline, tkBox, intBox, zoneBox, INT_PANEL_KIND, type Box3D, type PanelKind, type PartShape, type Prism, type V3, type View2D } from '@/src/lib/partSolids'
+import { buildPartSolids, prismOutline, type PartSolid, type SolidRole, type Prism, type V3, type View2D } from '@/src/lib/partSolids'
 import type { ShapeSegmentLike } from '@/src/lib/shapePath'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 import { binOutlines, binShape } from '@/src/lib/binGeometry'
@@ -130,33 +130,10 @@ export default function CabinetSheetSVG({
     const rev: Record<string, number> = {}
     for (const r of shapeRows ?? []) if (!(r.part_key in rev) || r.revision > rev[r.part_key]) { rev[r.part_key] = r.revision; shapeOvs[r.part_key] = { segments: r.segments } }
   }
-  const shapes = rp ? partShapes(rp, shapeOvs) : new Map<string, PartShape>()
-  type Role = 'case' | 'kick' | 'spreader' | 'face' | 'int' | 'db'
-  type Solid = { id: string; role: Role; prism: Prism; shaped: boolean; special: boolean }
-  const solids: Solid[] = []
-  const addSolid = (id: string, role: Role, b0: Box3D, kind: PanelKind, ay = 0) => {
-    const o = ov(id)
-    const b = o ? { ...b0, w: o.sw ?? b0.w, h: o.sh ?? b0.h, d: o.sd ?? b0.d } : b0
-    const r: V3 = [o?.oax ?? 0, (o?.oay ?? 0) + ay, o?.oaz ?? 0]
-    const rot = r[0] || r[1] || r[2] ? r : null
-    const shape = shapes.get(id)
-    solids.push({ id, role, prism: partPrism(b, kind, shape, rot), shaped: !!shape, special: !!shape || !!rot })
-  }
-  const caseKind = (p: ResolvedCasePart): PanelKind =>
-    p.wrap ? 'face' : isSidePanel(p.part_key) ? 'side' : p.part_key === 'back' || isShapedPanelKey(p.part_key) || p.upright ? 'face' : 'horizontal'
-  if (rp) {
-    rp.case_parts.forEach(p => { const id = `case_${p.part_key}`; addSolid(id, 'case', caseBox(applyOv(p, id)), caseKind(p), p.AY ?? 0) })
-    rp.toekick_parts.forEach(p => {
-      const id = `tk_${p.part_key}_${p.sort_order}`
-      addSolid(id, p.part_key.startsWith('spreader') ? 'spreader' : 'kick', tkBox(applyOv(p, id)),
-        p.part_key === 'spreader_horizontal' ? 'horizontal' : p.part_key === 'spreader_vertical' ? 'side' : 'face', p.AY ?? 0)
-    })
-    rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const id = zonePartId(z); addSolid(id, 'face', zoneBox(applyOv(z, id)), 'face', z.AY ?? 0) })
-    rp.internal_parts.forEach(p => { const id = `int_${p.part_type}_${p.sort_order}`; addSolid(id, 'int', intBox(applyOv(p, id)), INT_PANEL_KIND[p.part_type] ?? 'horizontal') })
-    ;(rp.drawer_stacks ?? []).forEach(stk => stk.box_parts.forEach(p => addSolid(dbPartId(stk, p.part_type), 'db', dbBox(p),
-      p.part_type === 'db_left_side' || p.part_type === 'db_right_side' ? 'side' : p.part_type === 'db_bottom' ? 'horizontal' : 'face')))
-  }
-  const solidById = new Map(solids.map(s => [s.id, s]))
+  const solidById = rp ? buildPartSolids(rp, partOverrides, shapeOvs) : new Map<string, PartSolid>()
+  const solids = [...solidById.values()]
+  type Solid = PartSolid
+  type Role = SolidRole
   /** The part's solid when its rect isn't its true shape (shaped or turned). */
   const special = (id: string) => { const s = solidById.get(id); return s?.special ? s : undefined }
   type ToPage = (u: number, v: number) => [number, number]

@@ -630,10 +630,10 @@ export function rotatedBoxPolygon(
   return convexHull(pts).map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
 }
 
-// Draws a part as an axis-aligned rect, or — when it has a rotation override — as the
-// projected silhouette of its rotated 3D box. Same fill/stroke/hit-test either way.
+// Draws a part as its true shape (pathD), an axis-aligned rect, or — when it has a
+// rotation override — as the projected silhouette of its rotated 3D box. Same fill/stroke/hit-test either way.
 export function PartShape({
-  x, y, w, h, box, ov, project, outline, fill, stroke, strokeWidth, strokeDasharray, fillOpacity, dataPartId, style,
+  x, y, w, h, box, ov, project, outline, pathD, fill, stroke, strokeWidth, strokeDasharray, fillOpacity, dataPartId, style,
 }: {
   x: number; y: number; w: number; h: number
   box?: Box3
@@ -642,10 +642,17 @@ export function PartShape({
   /** SVG-space outline drawn instead of the rect (e.g. a sharknose profile);
    *  a rotation override still wins. */
   outline?: P2[] | null
+  /** SVG path of the part's true projected shape (partSolids, holes evenodd);
+   *  wins over everything else. */
+  pathD?: string | null
   fill: string; stroke: string; strokeWidth: number
   strokeDasharray?: string; fillOpacity?: number
   dataPartId: string; style?: React.CSSProperties
 }) {
+  if (pathD) {
+    return <path d={pathD} fillRule="evenodd" fill={fill} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke"
+      strokeDasharray={strokeDasharray} fillOpacity={fillOpacity} data-part-id={dataPartId} style={style} />
+  }
   const poly = (box && project ? rotatedBoxPolygon(box, ov, project) : null)
     ?? (outline?.length ? outline.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ') : null)
   if (poly) {
