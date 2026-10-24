@@ -39,6 +39,7 @@ import { handleShapes, sharknoseProfile, sharknoseTapeBand, sharknoseTopLine } f
 import { HandleElevSVG, SharknoseLinesSVG } from './HandleSVG'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
+import { normaliseSplit } from '@/src/lib/cabinetSplit'
 import { PartHideTicks } from '@/src/components/PartHideTicks'
 
 // Hinge cup/plate drill marker colour (distinct from amber slide drills).
@@ -756,6 +757,14 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
       <rect x={ox} y={oy} width={dx} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
       <line x1={ox-20} y1={oy+dy} x2={ox+dx+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
+      {/* Height split (z_cabinet_split): where the sides and back are cut — as on the canvas elevation. */}
+      {(normaliseSplit(cab.split)?.at ?? []).map((h, i) => (
+        <g key={`split${i}`} style={{ pointerEvents: 'none' }}>
+          <line x1={ox - 20} y1={oy + dy - h} x2={ox + dx + 20} y2={oy + dy - h}
+            stroke="#ef4444" strokeWidth={1.5} strokeDasharray="8 4" vectorEffect="non-scaling-stroke" />
+          <text x={ox + dx + 24} y={oy + dy - h + 4} fill="#ef4444" fontSize={12}>SPLIT {roundMm(h)}</text>
+        </g>
+      ))}
       {dimH(ox, ox+dx, oy-35, `${dx}mm`, true)}
       {dimV(ox-50, oy, oy+dy, `${dy}mm`)}
       {selOrigin != null && selOrigin.x != null && selOrigin.y != null && (
@@ -1302,6 +1311,14 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
         dirOf={(a: DrillAxis) => a === 'z+' ? { dx: 1, dy: 0 } : a === 'z-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
       <rect x={oz} y={oy} width={dz} height={dy} fill="none" stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
       <line x1={oz-20} y1={oy+dy} x2={oz+dz+20} y2={oy+dy} stroke="#334155" strokeWidth={2} strokeDasharray="8 4" vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
+      {/* Height split (z_cabinet_split): the cut across the side, as in the elevation. */}
+      {(normaliseSplit(cab.split)?.at ?? []).map((h, i) => (
+        <g key={`split${i}`} style={{ pointerEvents: 'none' }}>
+          <line x1={oz - 20} y1={oy + dy - h} x2={oz + dz + 20} y2={oy + dy - h}
+            stroke="#ef4444" strokeWidth={1.5} strokeDasharray="8 4" vectorEffect="non-scaling-stroke" />
+          <text x={oz + dz + 24} y={oy + dy - h + 4} fill="#ef4444" fontSize={12}>SPLIT {roundMm(h)}</text>
+        </g>
+      ))}
 
       {dimH(oz, oz + dz, oy - 50, `${dz}mm`, false)}
       {kickZmin < Infinity && dimH(oz + kickZmin, oz + kickZmax, oy + dy + 30, `${roundMm(kickZmax - kickZmin)}mm`)}

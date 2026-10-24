@@ -63,4 +63,5 @@
   dashed red split line + height on the elevation (layer item `split_lines`). Dragging the line → S3.
 - [x] **S3** (2026-10-25) Drag the split line in elevation (snaps to a shelf suggestion within 15, else the mm);
   cabinet sheet: SPLIT line on the front view + the parts list as (lower) / (upper) pieces; tutorial
-  "Split a tall cabinet in height". Open: 3D / Part view still show whole sides.
+  "Split a tall cabinet in height". Cabinet edit modal (Mark 2026-10-25): the SPLIT line on its Elevation
+  and Side views (ResolvedViews), as on the canvas. Open: 3D / Part view still show whole sides.

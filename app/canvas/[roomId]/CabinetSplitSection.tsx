@@ -33,21 +33,24 @@ export default function CabinetSplitSection({ cabinet, wall, room, onUpdate, inp
   const at = split.at
   const put = (next: number[] | null) =>
     void onUpdate(cabinet.id, { split: next && next.length ? normaliseSplit({ at: next }) : null })
-  const floor = room ? cabBottomZ(cabinet, room, wall) : 0
+  // Off the floor: the cabinet's bottom height (no room in the edit modal → its pos_z).
+  const floor = room ? cabBottomZ(cabinet, room, wall) : Number(cabinet.pos_z ?? 0)
   const used = (v: number) => at.some(a => Math.abs(a - v) < 0.5)
 
   return (
     <div className="space-y-2 border-t border-gray-800 pt-3">
       <p className={lbl}>Height split</p>
       {at.map((h, i) => (
-        <div key={i} className="grid grid-cols-[3.5rem_4.5rem_1fr_1.25rem] gap-1 items-center">
-          <label className="text-xs text-gray-300">Cut {i + 1}</label>
-          <CalcInput value={h} decimals={1}
-            onCommit={v => { if (v > 0 && v < cabinet.dy) put(at.map((a, j) => (j === i ? v : a))) }}
-            className={inp + ' text-right'} />
-          <span className="text-[10px] text-gray-500">{f1(floor + h)} off the floor</span>
+        <div key={i} className="flex items-center gap-2">
+          <label className="text-xs text-gray-300 w-10 shrink-0">Cut {i + 1}</label>
+          <div className="w-20 shrink-0">
+            <CalcInput value={h} decimals={1}
+              onCommit={v => { if (v > 0 && v < cabinet.dy) put(at.map((a, j) => (j === i ? v : a))) }}
+              className={inp + ' text-right'} />
+          </div>
+          <span className="text-[10px] text-gray-500 flex-1">{f1(floor + h)} off the floor</span>
           <button onClick={() => put(at.filter((_, j) => j !== i))} title="Remove this cut"
-            className="text-gray-500 hover:text-red-400 text-xs">✕</button>
+            className="text-gray-500 hover:text-red-400 text-xs shrink-0">✕</button>
         </div>
       ))}
       {suggestions.length > 0 && (
