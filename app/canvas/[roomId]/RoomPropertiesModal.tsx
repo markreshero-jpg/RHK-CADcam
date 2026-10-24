@@ -6,6 +6,9 @@ import { supabase } from '@/src/lib/supabase'
 import DoorStandardsPanel, { type DoorClassRow, type DoorJobInherit } from './DoorStandardsPanel'
 import MaterialsScheduleTab from './MaterialsScheduleTab'
 import CalcInput from '@/src/components/CalcInput'
+import ClassRulesTable, { CLASS_RULE_KEYS, readClassOverrides, writeClassOverrides, useBuilderRules, classOverrideCount, type ClassRuleKey } from './ClassRulesTable'
+import { RULE_CLASSES, rulesForClass } from '@/src/lib/resolver/mergeRules'
+import { useTutorial } from '@/src/lib/tutorial/store'
 
 type DrawerBoxMethodItem = { id: string; name: string; is_default: boolean; kind?: 'external' | 'internal' | null }
 
@@ -84,7 +87,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Adjustable Shelves',keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },
   { label: 'Fixed Shelves',     keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',     keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
-  { label: 'Face Reveals',      keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR', 'FPGAP'] },
+  // Face Reveals (CLASS_RULE_KEYS) render per class — see ClassRulesTable.
   { label: 'Finger Pull Rails', keys: ['RAILH', 'RAILUP', 'RAILCUT', 'RAILBLK', 'RAILBLKD', 'RAILBLKZ'] },
   { label: 'Bins',               keys: ['BINUP', 'BINGAP'] },
   { label: 'Face Clearance',    keys: ['FACBUF', 'FACINS'] },
@@ -203,8 +206,17 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
     setRules(prev => ({ ...prev, [key]: value }))
   }
 
+  // Face reveals per class: baseline = cabinet builder value for the class
+  // (room → job → shop construction schedule) with the job's override on top.
+  const builderRules = useBuilderRules(room.construction_schedule_id ?? project?.construction_schedule_id ?? null)
+  const jobClassRules = builderRules && Object.fromEntries(RULE_CLASSES.map(c =>
+    [c, { ...builderRules[c], ...rulesForClass(project?.rule_overrides, c) }])) as typeof builderRules
+  const [classVals, setClassVals] = useState(() => readClassOverrides(room.rule_overrides))
+  const classOverrides = classOverrideCount(classVals, jobClassRules)
+
   // Keys where room's value differs from job-effective
-  const overrideKeys = (Object.keys(SYS) as RuleKey[]).filter(k => rules[k] !== jobRules[k])
+  const isClassKey = (k: string) => (CLASS_RULE_KEYS as readonly string[]).includes(k)
+  const overrideKeys = (Object.keys(SYS) as RuleKey[]).filter(k => !isClassKey(k) && rules[k] !== jobRules[k])
 
   const TABS: { id: RoomPropertiesTab; label: string }[] = [
     { id: 'details',      label: 'Room Details' },
@@ -212,15 +224,17 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
     { id: 'materials',    label: 'Materials' },
     { id: 'hardware',     label: 'Hardware' },
     { id: 'doors',        label: 'Doors' },
-    { id: 'overrides',    label: overrideKeys.length > 0 ? `Overrides (${overrideKeys.length})` : 'Overrides' },
+    { id: 'overrides',    label: overrideKeys.length + classOverrides > 0 ? `Overrides (${overrideKeys.length + classOverrides})` : 'Overrides' },
   ]
 
   async function handleSave() {
     // Only store keys that differ from job-effective rules
     const newOverrides: Partial<Rules> = {}
     for (const k of Object.keys(SYS) as RuleKey[]) {
-      if (rules[k] !== jobRules[k]) (newOverrides as Record<string, unknown>)[k] = rules[k]
+      if (!isClassKey(k) && rules[k] !== jobRules[k]) (newOverrides as Record<string, unknown>)[k] = rules[k]
     }
+    writeClassOverrides(newOverrides as Record<string, unknown>, classVals, jobClassRules)
+    if ((newOverrides as Record<string, unknown>).BY_CLASS) useTutorial.getState().emit('class_reveals_saved')   // tutorial class_reveals
     if (handleDrill) (newOverrides as Record<string, unknown>).HANDLE_DRILL = handleDrill === 'on'
     if (fpRail) (newOverrides as Record<string, unknown>).FPRAIL = fpRail === 'on'
     if (railGrain) (newOverrides as Record<string, unknown>).RAILGRAIN = railGrain
@@ -413,6 +427,13 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
                   </div>
                 </div>
               ))}
+
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Face Reveals</p>
+                <p className="text-[10px] text-gray-600 mb-1 px-2">Per cabinet type, inherited from the job (cabinet builder + job overrides). Blue = room override; clear a field to follow the job again.</p>
+                <ClassRulesTable labels={RULE_LABELS as Record<ClassRuleKey, string>} values={classVals} setValues={setClassVals}
+                  baselines={jobClassRules} baselineLabel="job" />
+              </div>
             </div>
           )}
 
@@ -473,14 +494,14 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
           )}
 
           {tab === 'overrides' && (
-            overrideKeys.length === 0 ? (
+            overrideKeys.length + classOverrides === 0 ? (
               <EmptyState
                 title="No room overrides"
                 body="This room inherits all construction rules from the job." />
             ) : (
               <div>
                 <p className="text-xs text-gray-500 mb-3">
-                  {overrideKeys.length} rule{overrideKeys.length !== 1 ? 's' : ''} overriding job defaults.
+                  {overrideKeys.length + classOverrides} rule{overrideKeys.length + classOverrides !== 1 ? 's' : ''} overriding job defaults.
                 </p>
                 <table className="w-full text-xs">
                   <thead>
@@ -498,6 +519,15 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
                         <td className="py-2 text-right text-blue-400 font-mono">{String(rules[k])}</td>
                       </tr>
                     ))}
+                    {RULE_CLASSES.flatMap(c => (Object.entries(classVals[c]) as [ClassRuleKey, number][])
+                      .filter(([k, v]) => jobClassRules?.[c][k] !== v)
+                      .map(([k, v]) => (
+                        <tr key={`${c}-${k}`}>
+                          <td className="py-2 text-gray-300"><span className="capitalize">{c}</span> · {RULE_LABELS[k]}</td>
+                          <td className="py-2 text-right pr-6 text-gray-600 font-mono">{jobClassRules ? String(jobClassRules[c][k]) : '…'}</td>
+                          <td className="py-2 text-right text-blue-400 font-mono">{v}</td>
+                        </tr>
+                      )))}
                   </tbody>
                 </table>
               </div>

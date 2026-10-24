@@ -744,6 +744,15 @@ export const LESSONS: TutorialLesson[] = [
       body: 'In the bulkhead section, tick Shadowline split on both bulkheads. A 60-wide MDF 10mm rail goes under each, 10 back from the face, and the bulkhead builds above it, so a 10 shadow shows over the cupboards. On the curved bulkhead the rail follows the front, the curve and the side. Change the rail width, setback or board there.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.bulkhead?.split?.on) },
   ]},
+
+  // Appended 2026-10-24 (per-class face reveals in Job / Room Properties).
+  { id: 'class_reveals', level: 'intermediate', topic: 'room', title: 'Set face reveals per cabinet type',
+    blurb: 'Base, wall and tall reveals come from the cabinet builder; change one type for a job or a room.',
+    keywords: 'reveal reveals gap face door top bottom end base wall tall job room properties construction cabinet builder override', steps: [
+    { id: 'set', title: 'Change a reveal for one cabinet type',
+      body: 'Open Job Properties → Cabinet Standards → Construction Methods (or Room Properties → Construction). Under Face Reveals each row has a Base, Wall and Tall column, filled from the cabinet builder. Type a new value in one column, e.g. Wall top reveal 0, and Save. Blue means overridden; clear the field to follow the builder (or the job, in a room) again. The Overrides tab lists them.',
+      canvas: true, done: (c, s) => ev(c, 'class_reveals_saved') > ev(s, 'class_reveals_saved') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

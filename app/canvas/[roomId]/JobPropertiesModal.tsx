@@ -7,6 +7,9 @@ import { useIsAdmin } from '@/src/lib/useRole'
 import DoorStandardsPanel, { type DoorClassRow } from './DoorStandardsPanel'
 import MaterialsScheduleTab from './MaterialsScheduleTab'
 import CalcInput from '@/src/components/CalcInput'
+import ClassRulesTable, { CLASS_RULE_KEYS, readClassOverrides, writeClassOverrides, useBuilderRules, classOverrideCount, type ClassRuleKey } from './ClassRulesTable'
+import { RULE_CLASSES } from '@/src/lib/resolver/mergeRules'
+import { useTutorial } from '@/src/lib/tutorial/store'
 
 export type JobPropertiesTab = 'details' | 'cabinet_standards' | 'overrides'
 type CabinetStandardsTab = 'construction' | 'materials' | 'hardware' | 'doors'
@@ -75,7 +78,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Adjustable Shelves', keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },
   { label: 'Fixed Shelves',      keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
-  { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR', 'FPGAP'] },
+  // Face Reveals (CLASS_RULE_KEYS) render per class — see ClassRulesTable.
   { label: 'Finger Pull Rails', keys: ['RAILH', 'RAILUP', 'RAILCUT', 'RAILBLK', 'RAILBLKD', 'RAILBLKZ'] },
   { label: 'Bins',               keys: ['BINUP', 'BINGAP'] },
   { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
@@ -141,10 +144,17 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   function setRule<K extends RuleKey>(key: K, value: Rules[K]) {
     setRules(prev => ({ ...prev, [key]: value }))
   }
-  const overrideKeys = (Object.keys(SYS) as RuleKey[]).filter(k => rules[k] !== SYS[k])
+  const isClassKey = (k: string) => (CLASS_RULE_KEYS as readonly string[]).includes(k)
+  const overrideKeys = (Object.keys(SYS) as RuleKey[]).filter(k => !isClassKey(k) && rules[k] !== SYS[k])
 
   // ── Construction method schedules ─────────────────────────────────────────
   const [constructionSched,    setConstructionSched]    = useState(project.construction_schedule_id ?? '')
+
+  // Face reveals per class: baseline = the cabinet builder's value for each class
+  // in the job's construction method schedule; the job can override each one.
+  const builderRules = useBuilderRules(constructionSched || null)
+  const [classVals, setClassVals] = useState(() => readClassOverrides(project.rule_overrides))
+  const classOverrides = classOverrideCount(classVals, builderRules)
   const [drawerBoxMethod,      setDrawerBoxMethod]      = useState(project.drawer_box_method_id ?? '')
   const [innerDrawerBoxMethod, setInnerDrawerBoxMethod] = useState(project.inner_drawer_box_method_id ?? '')
   const [constructionScheds,   setConstructionScheds]   = useState<SchedItem[]>([])
@@ -229,7 +239,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const OUTER_TABS: { id: JobPropertiesTab; label: string }[] = [
     { id: 'details',          label: 'Details' },
     { id: 'cabinet_standards', label: 'Cabinet Standards' },
-    { id: 'overrides',        label: overrideKeys.length > 0 ? `Overrides (${overrideKeys.length})` : 'Overrides' },
+    { id: 'overrides',        label: overrideKeys.length + classOverrides > 0 ? `Overrides (${overrideKeys.length + classOverrides})` : 'Overrides' },
   ]
 
   const CS_TABS: { id: CabinetStandardsTab; label: string }[] = [
@@ -241,10 +251,14 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
 
   // ── Save ──────────────────────────────────────────────────────────────────
   async function handleSave() {
-    const newOverrides: Partial<Rules> = {}
+    // Keep keys this modal doesn't edit (HANDLE_DRILL, FPRAIL, …) as they were.
+    const newOverrides: Record<string, unknown> = Object.fromEntries(
+      Object.entries(project.rule_overrides ?? {}).filter(([k]) => !(k in SYS) && k !== 'BY_CLASS'))
     for (const k of Object.keys(SYS) as RuleKey[]) {
-      if (rules[k] !== SYS[k]) (newOverrides as Record<string, unknown>)[k] = rules[k]
+      if (!isClassKey(k) && rules[k] !== SYS[k]) newOverrides[k] = rules[k]
     }
+    writeClassOverrides(newOverrides, classVals, builderRules)
+    if (newOverrides.BY_CLASS) useTutorial.getState().emit('class_reveals_saved')   // tutorial class_reveals
     await onSave({
       name:          name.trim() || project.name,
       job_number:    jobNumber.trim() || null,
@@ -622,6 +636,12 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                         </div>
                       </div>
                     ))}
+                    <div className="mb-3">
+                      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Face Reveals</p>
+                      <p className="text-[10px] text-gray-600 mb-1 px-2">Per cabinet type, from the cabinet builder. Blue = job override; clear a field to follow the builder again.</p>
+                      <ClassRulesTable labels={RULE_LABELS as Record<ClassRuleKey, string>} values={classVals} setValues={setClassVals}
+                        baselines={builderRules} baselineLabel="builder" />
+                    </div>
                   </section>
 
                   <SaveDefaultsButton onClick={saveConstructionDefaults} saving={savingDefaults} />
@@ -706,14 +726,14 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
 
           {/* ── Overrides ── */}
           {tab === 'overrides' && (
-            overrideKeys.length === 0 ? (
+            overrideKeys.length + classOverrides === 0 ? (
               <EmptyState
                 title="No overrides"
                 body="All construction rules are using system defaults." />
             ) : (
               <div>
                 <p className="text-xs text-gray-500 mb-3">
-                  {overrideKeys.length} rule{overrideKeys.length !== 1 ? 's' : ''} overriding system defaults.
+                  {overrideKeys.length + classOverrides} rule{overrideKeys.length + classOverrides !== 1 ? 's' : ''} overriding defaults.
                 </p>
                 <table className="w-full text-xs">
                   <thead>
@@ -731,6 +751,15 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                         <td className="py-2 text-right text-blue-400 font-mono">{String(rules[k])}</td>
                       </tr>
                     ))}
+                    {RULE_CLASSES.flatMap(c => (Object.entries(classVals[c]) as [ClassRuleKey, number][])
+                      .filter(([k, v]) => builderRules?.[c][k] !== v)
+                      .map(([k, v]) => (
+                        <tr key={`${c}-${k}`}>
+                          <td className="py-2 text-gray-300"><span className="capitalize">{c}</span> · {RULE_LABELS[k]}</td>
+                          <td className="py-2 text-right pr-6 text-gray-600 font-mono">{builderRules ? `${builderRules[c][k]} (builder)` : '…'}</td>
+                          <td className="py-2 text-right text-blue-400 font-mono">{v}</td>
+                        </tr>
+                      )))}
                   </tbody>
                 </table>
               </div>

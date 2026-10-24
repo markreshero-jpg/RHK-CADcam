@@ -31,6 +31,22 @@ export function mergeRules(
   return result
 }
 
+// Job / room rule_overrides can carry per-class values under BY_CLASS
+// ({ base: {...}, wall: {...}, tall: {...} }) — e.g. face reveals that differ
+// between base, wall and tall cabinets. Flattens one level for a class:
+// the class values win over the flat (all-class) ones at the same level.
+export type RuleClass = 'base' | 'wall' | 'tall'
+export const RULE_CLASSES: RuleClass[] = ['base', 'wall', 'tall']
+
+export function rulesForClass(
+  ro: Record<string, unknown> | null | undefined,
+  cls: RuleClass,
+): Partial<ConstructionRules> {
+  if (!ro) return {}
+  const { BY_CLASS, ...flat } = ro as { BY_CLASS?: Partial<Record<RuleClass, Partial<ConstructionRules>>> }
+  return { ...(flat as Partial<ConstructionRules>), ...(BY_CLASS?.[cls] ?? {}) }
+}
+
 // Resolve the effective reveal for a given side,
 // accounting for neighbour type
 export function resolveReveal(

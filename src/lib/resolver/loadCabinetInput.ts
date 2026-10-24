@@ -8,7 +8,7 @@ import {
   KickRunInput, KickSplitMode,
   HandleRole, GripKind, HandleProductInput, HandleScheduleEntryInput,
 } from './types'
-import { mergeRules } from './mergeRules'
+import { mergeRules, rulesForClass } from './mergeRules'
 import { cachedCascade } from './cascadeCache'
 import { normaliseBulkhead } from '../bulkhead'
 import { normaliseFloatShelf } from '../floatShelf'
@@ -526,8 +526,9 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
   // Cascade: system defaults → schedule row → cabinet method → project overrides → room overrides → cabinet overrides
   const scheduleRules = (conStrSchedRowRes.data?.rules ?? {}) as Partial<ConstructionRules>
   const methodRules   = (methodRes.data?.rules ?? {}) as Partial<ConstructionRules>
-  const projRules     = ((projRow as Record<string, unknown> | null)?.rule_overrides ?? {}) as Partial<ConstructionRules>
-  const roomRules     = ((room as Record<string, unknown> | null)?.rule_overrides   ?? {}) as Partial<ConstructionRules>
+  // Job / room levels fold their per-class (BY_CLASS) values in for this cabinet's class.
+  const projRules     = rulesForClass((projRow as Record<string, unknown> | null)?.rule_overrides as Record<string, unknown> | undefined, classGroup)
+  const roomRules     = rulesForClass((room as Record<string, unknown> | null)?.rule_overrides as Record<string, unknown> | undefined, classGroup)
   // Split at the cabinet layer: rulesBase is everything the cabinet sits on top
   // of, cached so a scribe/reveal edit re-merges locally (dbUpdateCabinet).
   const rulesBase = mergeRules(DEFAULT_RULES, scheduleRules, methodRules, projRules, roomRules)
