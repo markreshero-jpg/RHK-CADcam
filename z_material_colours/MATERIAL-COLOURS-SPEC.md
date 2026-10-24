@@ -187,7 +187,7 @@ fallback. To revisit at MC6 whether Colour Ranges then merge into board colours.
 - [~] **MC1** Schema + seed.
   - [x] `unpackMatCol` back null = face.
   - [ ] Apply `migration_mc1_board_colours.sql`.
-  - [ ] Seed PT Classic White Matt (under PT Colour Matt 16mm, default) and
+  - [ ] Seed PT Classic White Matt (under PT Colour Matt 16mm, default), Elegant Oak (under LX Abs Grain 18mm, `has_grain`, default) and
     Boston Oak Woodmatt (under PT Woodmatt 16mm, `has_grain`, default). Costs blank.
 - [ ] **MC2** Library UI: boards list, colour sub-table, default radio, two-step pickers.
 - [ ] **MC3** Resolver: board-with-colours → default colour + `COLOUR_NOT_CHOSEN`; colour-matched edgeband.
@@ -206,4 +206,34 @@ select id, 'Classic White Matt', '#f1f0eb', '#f1f0eb', false, true, 'Matt', true
 insert into materials (parent_id, colour_name, face_colour, edge_colour, has_grain, is_default_colour, finish, active)
 select id, 'Boston Oak Woodmatt', '#b48a5e', '#b48a5e', true, true, 'Woodmatt', true
   from materials where name = 'PT Woodmatt 16mm' and parent_id is null;
+insert into materials (parent_id, colour_name, face_colour, edge_colour, has_grain, is_default_colour, finish, active)
+select id, 'Elegant Oak', '#b98d5f', '#b98d5f', true, true, 'Grain', true
+  from materials where name = 'LX Abs Grain 18mm' and parent_id is null;
 ```
+
+## 8. Decor textures (woodgrain patterns)
+
+Woodgrain and stone decors render as a real image tile, not a flat colour.
+
+- **Columns on the colour row** (in the MC1 migration): `texture_path`, plus
+  `texture_w_mm` and `texture_h_mm`, the real-world size of one tile
+  (W = across the grain, H = along the grain).
+- **Storage:** Supabase Storage bucket `material-textures`, as compressed
+  JPG/WebP at about 1024–2048 px. `face_colour` stays as the average colour, used
+  for edges, plan view and as a fallback while the image loads.
+- **3D:** load each texture once per material (cached). Repeat it at real scale:
+  repeat = part size ÷ tile mm. Rotate it by the part's grain direction, so the
+  grain runs along DY (length), following [[cv-part-dimension-convention]].
+  Doors and drawer fronts use the same rule. Edges stay the tape colour.
+- **Where the images come from:** Laminex and Polytec publish downloadable
+  swatch / texture images for designers. Mark downloads them (some need a free
+  trade login) into `z_material_colours/textures/`, and Claude uploads them and
+  fills in the columns. No site scraping. The images are for internal
+  visualisation and client drawings of their own products.
+- **Library:** the colour row gets a thumbnail plus an upload / replace button.
+  Tile size defaults to the image's stated size, or 1200 × 2400 when it is
+  unknown.
+- **Later, optional:** pattern fill in elevation and shop drawings.
+
+Phases: **MC9** texture upload in the library + storage bucket · **MC10** 3D texture
+mapping with grain rotation · **MC11** (optional) elevation / print fills.

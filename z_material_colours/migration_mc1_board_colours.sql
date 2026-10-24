@@ -8,7 +8,12 @@ alter table materials
   add column if not exists colour_name       text,
   add column if not exists colour_code       text,
   add column if not exists is_default_colour boolean not null default false,
-  add column if not exists overridden        text[] not null default '{}';
+  add column if not exists overridden        text[] not null default '{}',
+  -- Decor pattern image (woodgrains etc.), real-world size of one tile in mm
+  -- (W across the grain, H along it). See spec §8.
+  add column if not exists texture_path      text,
+  add column if not exists texture_w_mm      numeric,
+  add column if not exists texture_h_mm      numeric;
 
 create index if not exists materials_parent_id_idx on materials(parent_id);
 
