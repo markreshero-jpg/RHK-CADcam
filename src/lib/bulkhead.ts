@@ -20,6 +20,10 @@ import { wallCabTop } from './geometry'
 export type BulkheadKind = 'bulkhead' | 'shadowline'
 export type BulkheadJoint = 'mitre' | 'butt'
 export interface BulkheadReturn { on: boolean; depth: number; joint: BulkheadJoint }
+/** Shadowline split (B7): a flat rail of its own board under the bulkhead, its
+ *  front edge `setback` behind the bulkhead face, `width` deep. The bulkhead
+ *  builds above it, so a rail-thickness × setback recess shows. */
+export interface BulkheadSplit { on: boolean; width: number; setback: number; material_id: string | null }
 
 export interface BulkheadSettings {
   kind:   BulkheadKind
@@ -30,19 +34,24 @@ export interface BulkheadSettings {
   left:   BulkheadReturn
   right:  BulkheadReturn
   bottom: BulkheadReturn
+  split:  BulkheadSplit
 }
 
 export const BH_RETURN_DEPTH = 600
 // Two 100 mm legs; a bulkhead lower than this has no room for one.
 export const BH_CLEAT_LEG = 100
 export const SL_WIDTH = 60
+// Shadowline split rail (B7, Mark 2026-10-24): 60 wide, 10 MDF, a square 10 recess.
+export const SPLIT_WIDTH = 60, SPLIT_SETBACK = 10
+export const SPLIT_MATERIAL_NAME = 'MDF 10mm'
+const NO_SPLIT: BulkheadSplit = { on: false, width: SPLIT_WIDTH, setback: SPLIT_SETBACK, material_id: null }
 
 const ret = (on: boolean): BulkheadReturn => ({ on, depth: BH_RETURN_DEPTH, joint: 'mitre' })
 
 export const DEFAULT_BULKHEAD: BulkheadSettings = {
   kind: 'bulkhead', width: SL_WIDTH,
   front: 'doors', auto_h: true, cleat: true,
-  left: ret(false), right: ret(false), bottom: ret(false),
+  left: ret(false), right: ret(false), bottom: ret(false), split: NO_SPLIT,
 }
 
 // Shadowline: no ceiling fit, cleat or bottom return.
@@ -70,6 +79,13 @@ export function normaliseBulkhead(b: Partial<BulkheadSettings> | null | undefine
     left:   r(b.left, DEFAULT_BULKHEAD.left),
     right:  r(b.right, DEFAULT_BULKHEAD.right),
     bottom: r(b.bottom, DEFAULT_BULKHEAD.bottom),
+    // A shadowline strip sits on the overheads itself — no split under it.
+    split: sl || !b.split ? NO_SPLIT : {
+      on:          !!b.split.on,
+      width:       b.split.width > 0 ? b.split.width : SPLIT_WIDTH,
+      setback:     b.split.setback >= 0 ? b.split.setback : SPLIT_SETBACK,
+      material_id: b.split.material_id ?? null,
+    },
   }
 }
 

@@ -666,6 +666,8 @@ export interface CabinetInput {
 
   // Bulkhead (z_bulkhead): fascia + returns + cleat from resolveBulkhead.
   bulkhead?:      import('../bulkhead').BulkheadSettings | null
+  // Board of the bulkhead's shadowline split rail (z_bulkhead B7); absent = no rail.
+  split_material?: Material
   // Curved fixed-panel cabinet (z_curved_end): every part from resolveCurvedEnd.
   curved_end?:    import('../curvedEnd/settings').CurvedEndSettings | null
   // Floating shelf (z_floating_shelf): boards, strips + cleats from resolveFloatShelf.

@@ -65,8 +65,10 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   resolveHandles(cab, zones)
   // Face fillers with the support carcass off: return cleats (z_angled_filler).
   if (cab.footprint && !cab.has_carcass) caseParts.push(...resolveFillerCleats(cab, r, zones))
-  // Bulkheads (z_bulkhead): fascia, returns + fixing cleat.
-  if (cab.bulkhead) caseParts.push(...resolveBulkhead(cab, r))
+  // Bulkheads (z_bulkhead): fascia, returns + fixing cleat. A curved bulkhead
+  // (BHCRVFIXP, z_curved_end C7) is a curved end hung like a bulkhead —
+  // resolveCurvedEnd builds its parts and its split rail.
+  if (cab.bulkhead && !cab.curved_end) caseParts.push(...resolveBulkhead(cab, r))
   // Floating shelves (z_floating_shelf): glued-up boards / strips + hand-cut cleats.
   if (cab.float_shelf) caseParts.push(...resolveFloatShelf(cab))
   // Island back panels (z_island_back_panel): equal sheet-width pieces of exposed board.

@@ -806,7 +806,11 @@ export async function dbUpdateCabinet(
   // So do curved end settings (z_curved_end) and the plan outline they rebuild,
   // and floating shelf settings (z_floating_shelf).
   const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead' || k === 'curved_end' || k === 'float_shelf' || k === 'back_panel' || (k === 'footprint' && 'curved_end' in u)) ? getCachedInput(id) : undefined
-  if (cached && !cached.kick_run) {
+  // A shadowline split rail (z_bulkhead B7) switched on / to another board needs
+  // that board loaded — full resolve.
+  const split = u.bulkhead !== undefined ? normaliseBulkhead(u.bulkhead)?.split : undefined
+  const splitBoardMoved = !!cached && !!split && (split.on ? split.material_id : null) !== (cached.split_material?.id ?? null)
+  if (cached && !cached.kick_run && !splitBoardMoved) {
     const updated = {
       ...cached,
       ...(u.dx !== undefined && { DX: Number(u.dx) }),

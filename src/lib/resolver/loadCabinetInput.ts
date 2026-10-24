@@ -830,6 +830,13 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     }
   }
 
+  // Shadowline split rail board (z_bulkhead B7).
+  const bh = normaliseBulkhead(cab.bulkhead)
+  const splitMatId = bh?.split.on ? bh.split.material_id : null
+  const splitMaterial = splitMatId
+    ? (((await loadMaterialsByIds([splitMatId])).data ?? []) as Record<string, unknown>[]).map(dbRowToMaterial)[0]
+    : undefined
+
   // ── 13. Resolve hinge hardware + count rules + existing instances ───────────
   // All hinge queries are defensive (maybeSingle / tolerant of errors) so the
   // resolver keeps working before the v0.6 migration is applied — a missing
@@ -861,7 +868,8 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     top_type:        cab.top_type ?? undefined,
     toe_type:        cab.toe_type ?? undefined,
     footprint:       (cab.footprint as CabinetInput['footprint']) ?? null,
-    bulkhead:        normaliseBulkhead(cab.bulkhead),
+    bulkhead:        bh,
+    split_material:  splitMaterial,
     curved_end:      normaliseCurvedEnd(cab.curved_end),
     float_shelf:     normaliseFloatShelf(cab.float_shelf),
     back_panel:      normaliseBackPanel(cab.back_panel),

@@ -22,7 +22,7 @@ export function isShapedPanelKey(k: string): boolean {
  *  cleat's upright leg are face-kind panels (turned AY, as side:/back:<edge>);
  *  the bottom return, the cleat's flat leg and the shadowline strips are
  *  horizontal box-frame panels. */
-export const BH_HORIZONTAL = new Set(['bh:ret_b', 'bh:cleat_h', 'bh:sl_front', 'bh:sl_ret_l', 'bh:sl_ret_r'])
+export const BH_HORIZONTAL = new Set(['bh:ret_b', 'bh:cleat_h', 'bh:sl_front', 'bh:sl_ret_l', 'bh:sl_ret_r', 'bh:split'])
 export function isBulkheadKey(k: string): boolean {
   return k.startsWith('bh:')
 }

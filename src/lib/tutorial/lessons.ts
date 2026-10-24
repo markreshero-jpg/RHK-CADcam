@@ -729,6 +729,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Select it. Under Island back panel, Sheet width (1200) is the widest piece the board allows. A wider panel splits into equal pieces with the grain running up, e.g. 2500 makes 3 × 833. Every edge is taped, joins included. The bottom edge is taped only when it stands on the kick. Switch To floor / To kick here too.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.back_panel && (cab.back_panel.sheet_w !== 1200 || cab.back_panel.mount === 'kick')) },
   ]},
+
+  // Appended 2026-10-24 (z_curved_end C7 — BHCRVFIXP; z_bulkhead B7 — shadowline split).
+  { id: 'curved_bulkhead', level: 'advanced', topic: 'cabinets', title: 'Put a curved bulkhead over a curved end',
+    blurb: 'Carry a curved end up to the ceiling with a curved bulkhead, with a shadow gap above the cupboards.',
+    keywords: 'curved bulkhead BHCRVFIXP curved end TCRVFIXP radius ceiling shadowline split shadow gap rail MDF 10 ribs', steps: [
+    { id: 'place', title: 'Place BHCRVFIXP over the curved end',
+      body: 'Press F3 and open Wall → Bulkheads. Pick BHCRVFIXP and click it over a curved end (e.g. a TCRVFIXP), the same width. It hangs from the ceiling and fills down to the wall-cabinet top, like a straight bulkhead.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.bulkhead && !!cab.curved_end) },
+    { id: 'match', title: 'Match the curve below',
+      body: 'Select it. In the curved end section, set the same curve side and Radius as the curved end below, and give it the same depth, so it runs up as one curve. It’s built the same way: face board pocketed to bend, top and bottom formers, fixing panel and back. Ribs default to 0; untick Auto to type a count (any curved end). Put a straight BH (front Flush with overhead doors) beside it; its face board butts into the straight bulkhead.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.bulkhead && !!cab.curved_end && cab.curved_end.R !== 150) },
+    { id: 'split', title: 'Tick Shadowline split',
+      body: 'In the bulkhead section, tick Shadowline split on both bulkheads. A 60-wide MDF 10mm rail goes under each, 10 back from the face, and the bulkhead builds above it, so a 10 shadow shows over the cupboards. On the curved bulkhead the rail follows the front, the curve and the side. Change the rail width, setback or board there.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.bulkhead?.split?.on) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

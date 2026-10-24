@@ -13,6 +13,9 @@
 //                        the fascia's bottom edge — lifted by the bottom
 //                        return's thickness when that's on; none when the
 //                        bulkhead is lower than a leg
+//   bh:split             shadowline split rail (B7): flat, its own board, under
+//                        everything else, front edge `setback` behind the
+//                        front face; the parts above lift by its thickness
 //
 // Joints to the fascia: mitre = both blanks run to the outer corner with 45°
 // ends (bevel_lo / bevel_hi, + = inner face shorter); butt = the fascia runs
@@ -34,7 +37,10 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
   const b = cab.bulkhead
   if (!b) return []
   if (b.kind === 'shadowline') return resolveShadowline(cab)
-  const W = cab.DX, H = cab.DY
+  const W = cab.DX
+  // Shadowline split (B7): the rail takes the bottom of the height.
+  const ts = splitThickness(cab)
+  const H = cab.DY - ts
   const t = cab.exposed_material.DZ
   const tc = cab.material.DZ
   const exp = cab.exposed_material.id
@@ -43,7 +49,8 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
     ({ top: !!e.top, bottom: !!e.bottom, left: !!e.left, right: !!e.right, id: ebId })
 
   // Front face line (distance from the wall).
-  const ft = cab.resolved_doors?.['*']?.thickness_mm ?? cab.door_material.DZ
+  // The doors actually made: the room / job style's blank, not the schedule board.
+  const ft = cab.resolved_doors?.['*']?.thickness_mm ?? cab.door_thickness ?? cab.door_material.DZ
   const Zf = b.front === 'doors' ? resolveFaceZ(cab.DZ, ft, r) + ft : cab.DZ
   const { left: L, right: R, bottom: B } = b
   const mL = L.on && L.joint === 'mitre', mR = R.on && R.joint === 'mitre', mB = B.on && B.joint === 'mitre'
@@ -52,7 +59,7 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
 
   const out: ResolvedCasePart[] = []
   const push = (p: Omit<ResolvedCasePart, 'AX' | 'AZ'>) => {
-    if (p.DX > 0 && p.DY > 0 && p.DZ > 0) out.push({ AX: 0, AZ: 0, ...p })
+    if (p.DX > 0 && p.DY > 0 && p.DZ > 0) out.push({ AX: 0, AZ: 0, ...p, Y: p.Y + ts })
   }
 
   // Fascia — turned 180°: runs right → left from (W, Zf), outer face at the front.
@@ -128,7 +135,24 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
       edge_band: band({}),
     })
   }
+  if (ts > 0) {
+    // Full width under the fascia (not round the returns yet), front edge set back.
+    const s = b.split, d = Math.min(s.width, Zf - s.setback)
+    if (d > 0) out.push({
+      part_key: 'bh:split',
+      DX: d, DY: W, DZ: ts,
+      X: 0, Y: 0, Z: Zf - s.setback - d, AX: 0, AY: 0, AZ: 0,
+      material_id: cab.split_material!.id,
+      edge_band: band({}),
+    })
+  }
   return out
+}
+
+/** Thickness of the bulkhead's shadowline split rail (B7); 0 when it's off or
+ *  its board didn't load. */
+export function splitThickness(cab: CabinetInput): number {
+  return cab.bulkhead?.split.on && cab.split_material ? cab.split_material.DZ : 0
 }
 
 // Shadowline: a flat exposed-board strip on the overhead tops, flush with their

@@ -9,12 +9,12 @@ import { CabinetInstance } from '@/src/lib/types'
 import CalcInput from '@/src/components/CalcInput'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import {
-  normaliseCurvedEnd, curvedEndFootprint, curvedEndParams, curvedEndKickH, curvedEndCode, HAND_OPTIONS,
+  normaliseCurvedEnd, curvedEndFootprint, curvedEndParams, curvedEndCode, HAND_OPTIONS,
   type CurvedEndSettings,
 } from '@/src/lib/curvedEnd/settings'
 import { calcCurvedEnd, SKIN_MIN, SKIN_MAX, f1 } from '@/src/lib/curvedEnd/geometry'
 import { calcCurvedKick } from '@/src/lib/curvedEnd/kick'
-import { curvedKickParamsFor } from '@/src/lib/resolver/resolveCurvedEnd'
+import { curvedEndLift, curvedKickParamsFor } from '@/src/lib/resolver/resolveCurvedEnd'
 
 const BASE_CODE: Record<string, string> = { base: 'BCRVFIXP', wall: 'WCRVFIXP', tall: 'TCRVFIXP' }
 
@@ -38,14 +38,15 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
   const cached = getCachedInput(cabinet.id)
   const FT = cached?.exposed_material.DZ ?? 18, T = cached?.material.DZ ?? 16.5
   const canKick = !cabinet.assembly_class.startsWith('wall')
-  const kickH = curvedEndKickH(s, cabinet.assembly_class, cached?.rules.TOEH ?? 150)
-  const c = calcCurvedEnd(curvedEndParams(s, { DX: cabinet.dx, DY: cabinet.dy, DZ: cabinet.dz }, FT, T, kickH))
+  const { kickH, splitH } = curvedEndLift(s, cabinet.assembly_class, cached)
+  const c = calcCurvedEnd(curvedEndParams(s, { DX: cabinet.dx, DY: cabinet.dy, DZ: cabinet.dz }, FT, T, kickH + splitH))
   // C5: the curved kick, checked once the cabinet has resolved (needs the kick boards).
   const kick: ReturnType<typeof calcCurvedKick> | null = kickH > 0 && cached ? calcCurvedKick(c, curvedKickParamsFor(cached, kickH)) : null
   const single = s.hand !== 'DOUBLE'
   // A single end only overhangs at its wall end: right for RH, left for LH.
   const backKey: 'OL' | 'OR' = s.hand === 'LH' ? 'OL' : 'OR'
-  const code = curvedEndCode(BASE_CODE[cabinet.assembly_class.replace(/_corner$/, '')] ?? 'CRVFIXP', s.hand)
+  // A curved end hung like a bulkhead is the curved bulkhead (C7).
+  const code = curvedEndCode(cabinet.bulkhead ? 'BHCRVFIXP' : BASE_CODE[cabinet.assembly_class.replace(/_corner$/, '')] ?? 'CRVFIXP', s.hand)
 
   const row = (label: string, value: number, onCommit: (v: number) => void, title?: string) => (
     <div className="grid grid-cols-[1fr_4.5rem] gap-1 items-center" title={title}>

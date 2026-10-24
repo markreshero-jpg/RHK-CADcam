@@ -8,7 +8,10 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → C5 built 2026-10-21 (no migration: `curved_end.kick`): tick "On a kick" on a base / tall
+> **RESUME HERE** → C7 built 2026-10-24 (`migration_c7_curved_bulkhead.sql` applied): BHCRVFIXP curved bulkhead
+> (curved end hung like a bulkhead, ribs 0) + its shadowline split rail round the curve; first used on RHK6581 J06.
+> **In-app check pending (Mark)**. Tutorial "Put a curved bulkhead over a curved end" added.
+> C5 built 2026-10-21 (no migration: `curved_end.kick`): tick "On a kick" on a base / tall
 > curved end; the carcass sits TOEH up and a curved kick (bent board + back + spreaders) follows the curve,
 > set back TOESCF, with its own bend pocket in the G-code; a benchtop overhangs the curve and the exposed
 > side. **In-app check pending (Mark)**, with C3 and C4. Next: C6 (tutorial).
@@ -274,6 +277,22 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
 - [~] **C4** (built 2026-10-21, in-app check pending) Rib cut-out: inner-loop route with per-op depth (onion skin) in the optimiser/G-code
 - [~] **C5** (built 2026-10-21, in-app check pending) Curved kick + benchtop follow (on kick-height placement)
 - [ ] **C6** Tutorial; elevation curve (later, if wanted)
+- [~] **C7** (built 2026-10-24, in-app check pending) Curved bulkhead `BHCRVFIXP` (Mark, 2026-10-24, RHK6581 J06 — R370 curved end to 2400
+  with a 280 bulkhead above it to the 2680 ceiling; one face board can't do 2680, it's longer than
+  the sheet). Locked:
+  - **Same construction** as the curved end: face board + bend pocket, fixing panel, back, top /
+    bottom formers, ribs, blocks, joints and drilling. **Ribs default 0** (top + bottom only); the
+    count stays editable (decision 17, the "Ribs" Auto tick — already on every ?CRVFIXP).
+  - **One cabinet, two settings**: `curved_end` (the parts) + `bulkhead` (positioning: hangs from the
+    ceiling, `auto_h` fills down to the wall-cab top). The resolver builds the curved-end parts and
+    skips the straight fascia / returns / cleat. Wall class, library under Wall → Bulkheads.
+  - **Flush with the doors and the curve below**: same R and DZ (= overall incl. doors) as the
+    TCRVFIXP under it; the straight bulkhead beside it is `front: 'doors'`.
+  - **Join**: the face board's straight leg (gable end) **butts into the straight bulkhead**.
+  - **Shadowline split** (z_bulkhead B7): with `bulkhead.split` on, a 10 MDF rail 60 wide follows
+    the front, the curve (radius R − setback) and the side back to the wall, `setback` behind the
+    face; the engine builds `DY − rail` high and every part lifts by the rail. Single ends only
+    (DOUBLE → error).
 
 ## Open
 

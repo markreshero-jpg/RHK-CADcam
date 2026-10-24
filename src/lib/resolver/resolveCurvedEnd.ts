@@ -25,9 +25,10 @@
 
 import type { CabinetInput, DeclaredSeam, DeclaredSeamGeom, ResolvedCasePart, ResolverError } from './types'
 import type { OutlinePt } from '../shapePath'
-import { calcCurvedEnd, curvedEndParts, type CurvedEndGeometry, type CurvedEndPart, type Loop } from '../curvedEnd/geometry'
+import { calcCurvedEnd, curvedEndParts, loopToOutline, mirLoop, type CurvedEndGeometry, type CurvedEndPart, type Loop } from '../curvedEnd/geometry'
 import { calcCurvedKick, type CurvedKick, type CurvedKickParams, type KickRect } from '../curvedEnd/kick'
-import { curvedEndKickH, curvedEndParams } from '../curvedEnd/settings'
+import { curvedEndKickH, curvedEndParams, type CurvedEndSettings } from '../curvedEnd/settings'
+import { splitThickness } from './resolveBulkhead'
 
 /** Part key per engine part name. */
 export function curvedEndPartKey(name: CurvedEndPart['name']): ResolvedCasePart['part_key'] {
@@ -61,18 +62,36 @@ function gableBand(c: CurvedEndGeometry, grain: 'vertical' | 'horizontal', id?: 
   return { ...NO_BAND, ...(grain === 'vertical' ? { bottom: true } : { left: true }), id }
 }
 
+/**
+ * How far a curved end's carcass sits up: its kick (C5, base / tall) and, on a
+ * curved bulkhead (BHCRVFIXP, C7), the shadowline split rail under it (z_bulkhead
+ * B7). The engine builds DY − both, and every part and seam lifts by both.
+ * `cab` is the loaded input — absent (UI before the first resolve) = no split.
+ */
+export function curvedEndLift(
+  s: Pick<CurvedEndSettings, 'kick'>, assemblyClass: string, cab: CabinetInput | undefined,
+): { kickH: number; splitH: number } {
+  const kickH = cab?.rules.FLOAT ? 0 : curvedEndKickH(s, assemblyClass, cab?.rules.TOEH ?? 150)
+  return { kickH, splitH: cab?.bulkhead ? splitThickness(cab) : 0 }
+}
+
 export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]; seams: DeclaredSeam[]; errors: ResolverError[]; warnings: ResolverError[] } {
   const s = cab.curved_end
   if (!s) return { parts: [], seams: [], errors: [], warnings: [] }
   const FT = cab.exposed_material.DZ, T = cab.material.DZ
-  // On a kick (C5) the engine builds the carcass above it and everything lifts TOEH.
-  const kickH = cab.rules.FLOAT ? 0 : curvedEndKickH(s, cab.assembly_class, cab.rules.TOEH)
-  const c = calcCurvedEnd(curvedEndParams(s, cab, FT, T, kickH))
+  // On a kick (C5) / a split rail (C7) the engine builds the carcass above it and everything lifts.
+  const { kickH, splitH } = curvedEndLift(s, cab.assembly_class, cab)
+  const lift = kickH + splitH
+  const c = calcCurvedEnd(curvedEndParams(s, cab, FT, T, lift))
   const errors: ResolverError[] = c.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'case' }))
   const warnings: ResolverError[] = c.notes.map(m => ({ code: 'CURVED_END_NOTE', message: m, part: 'case' }))
   const parts = curvedEndCaseParts(c, cab.exposed_material.id, cab.material.id, s.grain, cab.exposed_edgeband_id)
-    .map(p => (kickH ? { ...p, Y: p.Y + kickH } : p))
-  const seams = curvedEndSeams(c).map(sm => (kickH ? { ...sm, geom: { ...sm.geom, origin: { ...sm.geom.origin, y: sm.geom.origin.y + kickH } } } : sm))
+    .map(p => (lift ? { ...p, Y: p.Y + lift } : p))
+  const seams = curvedEndSeams(c).map(sm => (lift ? { ...sm, geom: { ...sm.geom, origin: { ...sm.geom.origin, y: sm.geom.origin.y + lift } } } : sm))
+  if (splitH) {
+    if (c.double) errors.push({ code: 'CURVED_END', message: 'A shadowline split rail follows a single curve only — not on a double curved end.', part: 'case' })
+    else parts.push(curvedSplitRail(c, cab.bulkhead!.split, splitH, cab.split_material!.id))
+  }
   if (kickH) {
     const kp = curvedKickParamsFor(cab, kickH)
     const k = calcCurvedKick(c, kp)
@@ -80,6 +99,43 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
     else errors.push(...k.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'toekick' as const })))
   }
   return { parts, seams, errors, warnings }
+}
+
+/**
+ * Shadowline split rail under a curved bulkhead (C7 / z_bulkhead B7): a flat
+ * band `width` deep whose outer edge runs `setback` inside the face board's
+ * outside — along the front from the gable end (x 0, butting the straight
+ * bulkhead's rail), round the curve at R − setback and down the side to the
+ * wall. A radius that leaves no room for the inner arc turns a square corner.
+ * Horizontal shape frame like the formers: x across from X, y back from the
+ * front edge; kit-frame bulges (LH mirrors).
+ */
+export function curvedSplitRail(
+  c: CurvedEndGeometry, split: { width: number; setback: number }, thickness: number, mat: string,
+): ResolvedCasePart {
+  const { W, D, R } = c.p
+  const sb = split.setback, w = split.width
+  const CX = W - R, ro = R - sb, ri = R - sb - w
+  const xo = W - sb, xi = W - sb - w
+  const TBv = Math.tan(Math.PI / 8)
+  // Kit plan frame (x across, d from the front face), anticlockwise.
+  const loop: Loop = [[0, sb, 0]]
+  if (ro > 0) loop.push([CX, sb, TBv], [xo, R, 0])
+  else loop.push([xo, sb, 0])
+  loop.push([xo, D, 0], [xi, D, 0])
+  if (ri > 0) loop.push([xi, R, -TBv], [CX, sb + w, 0])
+  else loop.push([xi, sb + w, 0])
+  loop.push([0, sb + w, 0])
+  let local: Loop = loop.map(([x, d, b]) => [x, d - sb, b])
+  const lh = c.p.hand === 'LH'
+  if (lh) local = mirLoop(local, xo)
+  return {
+    part_key: 'bh:split',
+    DX: D - sb, DY: xo, DZ: thickness,
+    X: lh ? sb : 0, Y: 0, Z: 0, AX: 0, AY: 0, AZ: 0,
+    material_id: mat, edge_band: { ...NO_BAND },
+    outline: loopToOutline(local),
+  }
 }
 
 /** Kick sizes for a curved end on a kick: the cabinet's toe rules + kick boards. */

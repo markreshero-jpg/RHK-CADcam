@@ -11,7 +11,8 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → B0–B4 built 2026-10-18 (migrations b1 + b4 applied; BH is in the library under Wall → Bulkheads). Next: B5 in-app check by Mark — place BH over overheads with a soffit set; tick returns; check 3D, elevation, cut list.
+> **RESUME HERE** → B7 shadowline split built 2026-10-24 (MDF 10mm board added by z_curved_end
+> migration_c7; no schema change) — in-app check pending, with B5. B0–B4 built 2026-10-18 (migrations b1 + b4 applied; BH is in the library under Wall → Bulkheads). Next: B5 in-app check by Mark — place BH over overheads with a soffit set; tick returns; check 3D, elevation, cut list.
 
 ---
 
@@ -132,6 +133,20 @@ underside when the bulkhead isn't sitting on cabinets.
       `bh:sl_ret_l`, `bh:sl_ret_r` (flat, Bulkheads layer). Sidebar section +
       right-click "Shadowline" submenu. Library row via
       `migration_b6_bhsl_library.sql` (applied; copy of BH, dy 16.5 preserved).
+- [~] **B7 — shadowline split** (built 2026-10-24, in-app check pending) (Mark, 2026-10-24, RHK6581 J06: "a 10mm
+      shadowline split between the top of the cupboards and the bulkhead … add
+      this into the bulkhead as it will need to follow the curve. 60mm wide rail
+      10mm thick MDF"). `bulkhead.split = { on, width (60), setback (10),
+      material_id }`: a flat rail `bh:split` of its own board (default
+      **MDF 10mm**, new library material) under the bulkhead, its front edge
+      `setback` behind the bulkhead's front face, `width` deep. The bulkhead
+      keeps its overall height (bottom at the wall-cab top, top at the ceiling):
+      every other part is lifted by the rail's thickness and the fascia /
+      returns lose it, so a `thickness × setback` recess shows. Raw rail, no
+      tape (it sits in the shadow). Straight bulkhead: the rail runs the full
+      width (not round the returns yet). Curved bulkhead (BHCRVFIXP,
+      z_curved_end C7): the rail follows the front, the curve and the side.
+      Not for `kind: 'shadowline'`.
 - [ ] **B5 — in-app check.** Plan, elevation, 3D, cut list, optimiser,
       dimension rows, reports.
 
