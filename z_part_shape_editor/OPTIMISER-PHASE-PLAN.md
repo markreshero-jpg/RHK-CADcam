@@ -53,6 +53,13 @@
 - **Nester**: hand-written skyline rect packer, `src/lib/optimiser/nest.ts` (random-restart,
   offcut pool, grain lock, top-left mirror). "Arbitrary-polygon NFP packing is a future
   extension" — `nest.ts:11-13`.
+- **Grain (fixed 2026-10-26)**: parts carry h = along the grain (CV DY). Sheets keep the board
+  length (`sheet_dx`) on W / machine X, and `SheetStock.grainAlong` (default `'w'`; `'h'` when the
+  material's grain_direction = width; Stage 3 toggle) says which way the grain runs. Grain-locked
+  parts take the ONE orientation that matches (`nest.grainOrient` — turned 90° on a W-grain
+  sheet), in the nest and in Stage 5 place/paste; Stage 5 Rotate is refused for them. Before this
+  the lock just meant "never rotate", so grained parts were cut ACROSS the grain and anything taller
+  than the sheet width went unplaced (Elegant Oak doors, RHK6581).
 - **G-code**: `src/lib/optimiser/gcode.ts` — order: drills → circular pockets → routes/grooves →
   perimeter. The perimeter cut IS the sizing cut; `routePerimeter` (`gcode.ts:725`) hard-codes
   4 corners from `pl.x/y/w/h`. Onion-skin two-phase, cutter comp, ramp/lead arcs, tabs.

@@ -13,7 +13,7 @@ import { useOptiStore } from '@/src/lib/optimiser/store'
 import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/optimiser/edit'
 import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
-import type { NestedSheet } from '@/src/lib/optimiser/nest'
+import { grainOrient, type NestedSheet } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { ShapePt } from '@/src/lib/shapePath'
 import { PlacedOutline, PlacedHoles } from './SheetSVG'
@@ -290,7 +290,8 @@ export default function Stage5Edit() {
               <button key={p.uid}
                 onClick={() => {
                   const gap = gapForSheet(sheet)
-                  const pos = findBestPlacement(sheet, p.w, p.h, gap)
+                  const o = grainOrient(p, sheet.stock) ?? p
+                  const pos = findBestPlacement(sheet, o.w, o.h, gap)
                   if (pos) placeFromUnplaced(p.uid, sheet.index, pos.x, pos.y)
                   else setEditError('No room on this sheet for this part.')
                 }}

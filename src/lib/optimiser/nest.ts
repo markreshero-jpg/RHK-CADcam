@@ -22,7 +22,7 @@ export interface NestPartInput {
   w: number; h: number   // cut size (mm)
   thickness: number
   materialId: string | null
-  grainLock: boolean     // true → orientation fixed (no rotation)
+  grainLock: boolean     // true → orientation fixed to the sheet's grain (h = along the grain)
   priority: number       // higher places earlier within its group
 }
 
@@ -31,6 +31,9 @@ export interface SheetStock {
   trimTop: number; trimBottom: number; trimLeft: number; trimRight: number
   isOffcut: boolean
   label: string | null
+  // Sheet axis the board's grain runs along. Absent = 'w': the grain runs with
+  // the board's length (sheet_dx), which is laid along W / machine X.
+  grainAlong?: 'w' | 'h'
 }
 
 export interface Placement {
@@ -73,6 +76,25 @@ export interface GroupStock {
 
 interface Seg { x: number; width: number; y: number }
 const EPS = 1e-6
+
+// The one orientation a grain-locked part may take on this sheet: parts carry
+// h = along the grain, so on a sheet whose grain runs along W they're turned a
+// quarter (w ↔ h, rotated). Free parts → null (either orientation is fine).
+export function grainOrient(part: { w: number; h: number; grainLock: boolean }, stock: SheetStock): { w: number; h: number; rotated: boolean } | null {
+  if (!part.grainLock) return null
+  return (stock.grainAlong ?? 'w') === 'h'
+    ? { w: part.w, h: part.h, rotated: false }
+    : { w: part.h, h: part.w, rotated: true }
+}
+
+// Every orientation a part may take on this sheet ([w, h] as placed, rotated).
+function orientsFor(part: NestPartInput, stock: SheetStock, allowRot: boolean): [number, number, boolean][] {
+  const g = grainOrient(part, stock)
+  if (g) return [[g.w, g.h, g.rotated]]
+  const o: [number, number, boolean][] = [[part.w, part.h, false]]
+  if (allowRot && Math.abs(part.w - part.h) > EPS) o.push([part.h, part.w, true])
+  return o
+}
 
 function usable(stock: SheetStock) {
   return {
@@ -119,8 +141,7 @@ function raise(sky: Seg[], x: number, w: number, top: number): Seg[] {
 interface OpenSheet { sheet: NestedSheet; sky: Seg[]; uW: number; uH: number; placedArea: number }
 
 function tryPlace(open: OpenSheet, part: NestPartInput, gap: number, allowRot: boolean): boolean {
-  const orients: [number, number, boolean][] = [[part.w, part.h, false]]
-  if (allowRot && !part.grainLock && Math.abs(part.w - part.h) > EPS) orients.push([part.h, part.w, true])
+  const orients = orientsFor(part, open.sheet.stock, allowRot)
 
   let chosen: { x: number; y: number; w: number; h: number; rotated: boolean } | null = null
   for (const [w, h, rotated] of orients) {
@@ -168,7 +189,7 @@ function packGroup(parts: NestPartInput[], stock: GroupStock, settings: NestSett
   const fitsEmpty = (stk: SheetStock, part: NestPartInput): boolean => {
     const u = usable(stk)
     const ok = (w: number, h: number) => w + gap <= u.w + EPS && h + gap <= u.h + EPS
-    return ok(part.w, part.h) || (settings.allowRotation && !part.grainLock && ok(part.h, part.w))
+    return orientsFor(part, stk, settings.allowRotation).some(([w, h]) => ok(w, h))
   }
 
   for (const part of parts) {

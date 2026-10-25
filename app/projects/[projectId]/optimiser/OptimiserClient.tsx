@@ -535,6 +535,8 @@ function seedStock(snap: OptiSnapshot, materialId: string | null): SheetStock {
     trimTop: m?.trim_top ?? 0, trimBottom: m?.trim_bottom ?? 0,
     trimLeft: m?.trim_left ?? 0, trimRight: m?.trim_right ?? 0,
     isOffcut: false, label: null,
+    // Board grain runs with its length (sheet_dx → W) unless the material says width.
+    grainAlong: m?.grain_direction === 'width' ? 'h' : 'w',
   }
 }
 
@@ -549,6 +551,7 @@ function Stage3Settings() {
   const addOffcut = useOptiStore(s => s.addOffcut)
   const removeOffcut = useOptiStore(s => s.removeOffcut)
   const groups = useSelectedGroups()
+  const grained = useMemo(() => new Set(snap.materials.filter(m => m.has_grain).map(m => m.id)), [snap])
 
   useEffect(() => { for (const g of groups) ensureStock(g.key, seedStock(snap, g.materialId)) }, [groups, ensureStock, snap])
 
@@ -603,6 +606,13 @@ function Stage3Settings() {
                 <div key={g.key} className="border border-edge-strong rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs font-medium text-ink">{g.name} <span className="text-ink-subtle">· {g.count} parts</span></p>
+                    {grained.has(g.materialId ?? '') && (
+                      <button onClick={() => setStock(g.key, { grainAlong: (gs.standard.grainAlong ?? 'w') === 'w' ? 'h' : 'w' })}
+                        title="Which way the board's grain runs. Grained parts are turned to run with it."
+                        className="ml-auto mr-2 text-[11px] px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">
+                        Grain {(gs.standard.grainAlong ?? 'w') === 'w' ? '↔ along W' : '↕ along H'}
+                      </button>
+                    )}
                     <button onClick={() => addOffcut(g.key, { ...seedStock(snap, g.materialId), w: 1200, h: 600, isOffcut: true, label: `Offcut ${gs.offcuts.length + 1}` })}
                       className="text-[11px] px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">+ Offcut</button>
                   </div>

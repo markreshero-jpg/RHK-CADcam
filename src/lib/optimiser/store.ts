@@ -9,7 +9,7 @@
 import { create } from 'zustand'
 import { materialGroupKey, buildMargins, type OptiSnapshot } from './types'
 import type { NormalizedProject } from './normalize'
-import type { GroupStock, SheetStock, NestResult, NestPartInput, Placement } from './nest'
+import { grainOrient, type GroupStock, type SheetStock, type NestResult, type NestPartInput, type Placement } from './nest'
 import { findBestPlacement, findNearestValid, sheetEfficiency } from './edit'
 import { getUserPrefs, setUserPrefs } from '../userPrefs'
 
@@ -26,6 +26,8 @@ function reconcilePartCols(stored: string[] | null | undefined): string[] {
 }
 
 const clone = <T,>(v: T): T => structuredClone(v)
+// How a part goes onto a sheet by hand: grain-locked parts take the sheet's grain.
+const placedAs = (def: NestPartInput, stock: SheetStock) => grainOrient(def, stock) ?? { w: def.w, h: def.h, rotated: false }
 let pasteSeq = 0
 
 // Any change to what gets nested (selection, qty, settings, stock) invalidates a
@@ -270,6 +272,7 @@ export const useOptiStore = create<OptiState>((set) => ({
 
   rotatePart: (uid) => set(st => {
     if (!st.nestResult) return {}
+    if (st.partIndex[uid]?.grainLock) return { editError: 'Grained part — it stays with the sheet grain.' }
     const next = clone(st.nestResult)
     const margins = st.snapshot ? buildMargins(st.snapshot, st.profileId) : { byMaterial: {}, fallback: 4 }
     for (const s of next.sheets) {
@@ -314,7 +317,7 @@ export const useOptiStore = create<OptiState>((set) => ({
       return { editError: 'Part material/thickness does not match this sheet.' }
     }
     next.unplaced = next.unplaced.filter(p => p.uid !== uid)
-    sheet.placements.push({ uid, baseUid: def.baseUid, label: def.label, x, y, w: def.w, h: def.h, rotated: false })
+    sheet.placements.push({ uid, baseUid: def.baseUid, label: def.label, x, y, ...placedAs(def, sheet.stock) })
     // If this was the cut part, the clipboard is now consumed.
     const clip = st.clipboardMode === 'cut' && st.clipboard.some(c => c.uid === uid) ? { clipboard: [] } : {}
     return { ...commit(st, next), ...clip }
@@ -349,10 +352,11 @@ export const useOptiStore = create<OptiState>((set) => ({
         if (!sameGroup(def)) continue
         const idx = next.unplaced.findIndex(u => u.uid === def.uid)
         if (idx < 0) continue                       // already placed elsewhere
-        const pos = findBestPlacement(sheet, def.w, def.h, gap)
+        const o = placedAs(def, sheet.stock)
+        const pos = findBestPlacement(sheet, o.w, o.h, gap)
         if (!pos) continue
         next.unplaced.splice(idx, 1)
-        sheet.placements.push({ uid: def.uid, baseUid: def.baseUid, label: def.label, x: pos.x, y: pos.y, w: def.w, h: def.h, rotated: false })
+        sheet.placements.push({ uid: def.uid, baseUid: def.baseUid, label: def.label, x: pos.x, y: pos.y, ...o })
         moved = true
       }
       if (!moved) return { editError: 'No room on this sheet for the cut part.' }
@@ -366,8 +370,9 @@ export const useOptiStore = create<OptiState>((set) => ({
       const nu = `${def.baseUid}#paste${++pasteSeq}`
       const np: NestPartInput = { ...def, uid: nu }
       addedIdx[nu] = np
-      const pos = findBestPlacement(sheet, def.w, def.h, gap)
-      if (pos) sheet.placements.push({ uid: nu, baseUid: def.baseUid, label: def.label, x: pos.x, y: pos.y, w: def.w, h: def.h, rotated: false })
+      const o = placedAs(def, sheet.stock)
+      const pos = findBestPlacement(sheet, o.w, o.h, gap)
+      if (pos) sheet.placements.push({ uid: nu, baseUid: def.baseUid, label: def.label, x: pos.x, y: pos.y, ...o })
       else next.unplaced.push(np)
     }
     return { ...commit(st, next), partIndex: { ...st.partIndex, ...addedIdx } }
