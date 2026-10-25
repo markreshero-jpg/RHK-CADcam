@@ -290,6 +290,13 @@ export const PassivePartsContext = createContext(false)
 // each part in <PartAlpha> so a layer set's "ghost" style / opacity shows through
 // (z_display_layers spec, Phase 3c). Models (hinges, runners) read it too.
 export const PartAlphaContext = createContext(1)
+
+/** Edge banding on the selected part (Cabinet Edit modal): that part draws its four
+ *  edges as click targets — taped in cyan, bare in rose — and a click toggles
+ *  the edge (z_edgeband_edit). null = off. */
+export const EdgeEditContext = createContext<{ partId: string; onToggle: (side: keyof PartEdge) => void } | null>(null)
+const EDGE_TAPED = '#06b6d4', EDGE_BARE = '#f43f5e', EDGE_HOVER = '#ffffff'
+const SIDES = ['top', 'bottom', 'left', 'right'] as const
 export function PartAlpha({ a, children }: { a: number; children: React.ReactNode }) {
   return <PartAlphaContext.Provider value={a}>{children}</PartAlphaContext.Provider>
 }
@@ -340,8 +347,10 @@ export function Part({
   shape?:             PartShape | null
 }) {
   const [hovered, setHovered] = useState(false)
+  const [edgeHover, setEdgeHover] = useState<keyof PartEdge | null>(null)
   const touchDownRef = useRef<{ x: number; y: number } | null>(null)   // finger press origin (tap-to-select)
   const passive = useContext(PassivePartsContext)
+  const edgeEdit = useContext(EdgeEditContext)
   const alpha   = useContext(PartAlphaContext)
   const wireCol = useContext(WireColorContext)
   const am      = alphaMat(alpha)
@@ -376,6 +385,16 @@ export function Part({
   // Computed before the wire early-return because the CSG memo below needs it.
   const strips = ebSpec && !shapeGeom ? edgeStrips(b, meta.edge, meta.panelKind, tapeT) : []
   const core = ebSpec && !shapeGeom ? edgeCoreBox(b, meta.edge, meta.panelKind, tapeT) : b
+
+  // Edge-banding targets on the selected part: each edge as a band 4 mm into the
+  // panel, standing 1 mm proud of every face so it reads (and takes the click) over it.
+  const NO_EDGE: PartEdge = { top: false, bottom: false, left: false, right: false }
+  const edgeTargets = edgeEdit && edgeEdit.partId === meta.id && !passive && !shapeGeom
+    ? SIDES.map(side => {
+        const st = edgeStrips(b, { ...NO_EDGE, [side]: true }, meta.panelKind, Math.min(4, Math.max(1, Math.min(b.w, b.h, b.d) / 3)))[0]
+        return st ? { side, pos: st.pos, args: st.args.map(v => v + 2) as [number, number, number] } : null
+      }).filter((t): t is NonNullable<typeof t> => !!t)
+    : []
 
   // Pocket ops → geometry computed imperatively with three-bvh-csg and handed to
   // the mesh as a plain `geometry` prop. The former reactive <Geometry> tree
@@ -456,6 +475,20 @@ export function Part({
   }, [grainOn, csgGeom, shapeGeom, shape?.extrude, meta.panelKind, meta.id, core.w, core.h, core.d])
   useEffect(() => () => { grainMaps?.forEach(t => t?.dispose()) }, [grainMaps])
 
+  // The edge targets (selected part, edge-banding on) — in solid and wire alike.
+  const edgeTargetMeshes = edgeTargets.map(t => (
+    <mesh key={`ee-${t.side}`} position={[t.pos[0] - b.x, t.pos[1] - b.y, t.pos[2] - b.z]} renderOrder={2}
+      onPointerDown={e => { e.stopPropagation(); dragRef.current = false }}
+      onPointerMove={e => { if (e.buttons) dragRef.current = true }}
+      onClick={e => { e.stopPropagation(); if (!dragRef.current) edgeEdit!.onToggle(t.side) }}
+      onPointerOver={e => { e.stopPropagation(); setEdgeHover(t.side); document.body.style.cursor = 'pointer' }}
+      onPointerOut={() => { setEdgeHover(h => (h === t.side ? null : h)); document.body.style.cursor = '' }}>
+      <boxGeometry args={t.args} />
+      <meshStandardMaterial color={edgeHover === t.side ? EDGE_HOVER : meta.edge[t.side] ? EDGE_TAPED : EDGE_BARE}
+        transparent opacity={meta.edge[t.side] || edgeHover === t.side ? 0.95 : 0.7} depthWrite={false} roughness={0.5} />
+    </mesh>
+  ))
+
   if (wire) {
     const ownGeom = csgGeom ?? shapeGeom
     return (
@@ -471,6 +504,7 @@ export function Part({
           <meshStandardMaterial color={wireCol.fill} transparent opacity={0.08} depthWrite={false} />
           <Edges threshold={10} color={wireCol.edge} linewidth={1} />
         </mesh>
+        {edgeTargetMeshes}
       </group>
     )
   }
@@ -577,6 +611,7 @@ export function Part({
           {!passive && <Edges threshold={10} color="#1a1a1a" linewidth={hairline} />}
         </mesh>
       ))}
+      {edgeTargetMeshes}
       {shapedTapeGeoms.map((g, i) => (
         <mesh key={`st${i}${alpha < 1 ? '-t' : ''}`} geometry={g}>
           <meshStandardMaterial color={ebSpec!.color} roughness={0.35} metalness={0.0} {...am} />

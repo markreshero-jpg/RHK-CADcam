@@ -46,7 +46,7 @@ import { tkBox, intBox, zoneBox, INT_PANEL_KIND, partShapes } from '@/src/lib/pa
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
-import { PartAlpha, NO_ROTATION } from '@/src/components/three/PartViewer'
+import { PartAlpha, NO_ROTATION, EdgeEditContext } from '@/src/components/three/PartViewer'
 import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
 import { areaSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 import { handleShape, type HandleShape } from '@/src/lib/handleGeometry'
@@ -1938,6 +1938,16 @@ export default function Cabinet3DView({
     saveSVGEdge(cab.id, { ...part, edge }).then(() => onEdgeSaved?.(part.id, edge))
   }
 
+  // Edge banding straight on the selected part (z_edgeband_edit): its four edges
+  // show on the 3D part — taped cyan, bare rose — and a click toggles one. Board
+  // parts only (case, kick, internal, fronts, added parts), the same set the
+  // properties panel's edge ticks save.
+  const edgeEdit = useMemo(() => selectedPart && !selectedPart.hardware && /^(case_|tk_|int_|zone_|custom_)/.test(selectedPart.id)
+    ? { partId: selectedPart.id, onToggle: (side: keyof PartEdge) => handleEdgeChange({ ...selectedPart.edge, [side]: !selectedPart.edge[side] }) }
+    : null,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [selectedPart])
+
   // Resize the selected part from the inspector. The panel edits the visible 3D
   // box (w/h/d). Custom parts are authoritative (real dims → cut list); resolved
   // parts store an absolute size override applied to the preview box.
@@ -2093,7 +2103,7 @@ export default function Cabinet3DView({
       enablePan
       onDeselect={() => setSelectedPart(null)}
       onContextMenu={handleCanvasContextMenu}
-      hint="Left-drag rotate · scroll zoom · Ctrl fast · Shift fine · right-click part to inspect"
+      hint={selectedPart && edgeEdit ? "Click the picked part's edges to tape (cyan) or untape (rose) · right-click another part to pick it · Left-drag rotate" : "Left-drag rotate · scroll zoom · Ctrl fast · Shift fine · right-click part to inspect"}
       overlay={
         <>
           {selectedPart && !showFullPanel && (
@@ -2183,6 +2193,7 @@ export default function Cabinet3DView({
       }
     >
       {rp ? (
+        <EdgeEditContext.Provider value={edgeEdit}>
         <CabinetScene
           cab={cab} rp={rp}
           selected={selectedPart} onSelect={handleSelect}
@@ -2200,6 +2211,7 @@ export default function Cabinet3DView({
           showDrilling={showDrilling}
           handMarkers={handMarkers}
         />
+        </EdgeEditContext.Provider>
       ) : (
         <mesh>
           <boxGeometry args={[dx, dy, dz]} />
