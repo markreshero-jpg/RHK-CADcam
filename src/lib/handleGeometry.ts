@@ -13,7 +13,9 @@ const DEFAULT_PROJECTION      = 30
 
 export interface HandleShape {
   handle: ResolvedHandle
-  kind:   'bar' | 'knob'
+  // strip = a linear strip handle (D17): the strip itself is a case part (lh:<n>),
+  // drawn with the carcass parts — only its screw holes are drawn from here.
+  kind:   'bar' | 'knob' | 'strip'
   cx: number; cy: number                 // centre on the face (cabinet X / Y)
   w:  number; h:  number                 // face-on extent (X / Y)
   frontZ:     number                     // front face of the door (cabinet Z)
@@ -25,6 +27,11 @@ export interface HandleShape {
 export function handleShape(z: ResolvedFaceZone): HandleShape | null {
   const h = z.handle
   if (!h || h.x == null || h.y == null || z.facet || z.AY) return null
+  const holes = (h.holes ?? []).map(p => ({ x: z.X + p.x, y: z.Y + p.y, r: (h.hole_dia ?? 5) / 2 }))
+  if (h.strip) {
+    return { handle: h, kind: 'strip', cx: z.X + h.x, cy: z.Y + h.y, w: h.strip.w, h: h.strip.h,
+      frontZ: z.Z + z.DZ, backZ: z.Z, projection: z.DZ, holes }
+  }
   const bc = h.bore_centres ?? 0
   const kind: HandleShape['kind'] = bc > 0 || (h.length ?? 0) > KNOB_DEFAULT_DIA * 1.5 ? 'bar' : 'knob'
   const len = h.length ?? (bc > 0 ? bc + 20 : KNOB_DEFAULT_DIA)
@@ -38,7 +45,7 @@ export function handleShape(z: ResolvedFaceZone): HandleShape | null {
     backZ: z.Z,
     projection: h.projection ?? DEFAULT_PROJECTION,
     // Handles saved by H1 carry no holes / hole_dia until the cabinet re-resolves.
-    holes: (h.holes ?? []).map(p => ({ x: z.X + p.x, y: z.Y + p.y, r: (h.hole_dia ?? 5) / 2 })),
+    holes,
   }
 }
 

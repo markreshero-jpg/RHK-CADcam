@@ -20,7 +20,7 @@ import { checkHingeFixedShelfClash, checkHingeInnerDrawerClash, checkHingeShelfH
 import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
 import { resolveShapedFaces } from './resolveShapedFace'
 import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
-import { resolveHandles } from './resolveHandles'
+import { resolveHandles, linearHandleParts } from './resolveHandles'
 import { fingerRails, fingerRailParts, notchPanels, pushFrontRailBack, type FingerRail } from './resolveFingerRails'
 import { shapedFingerRails } from './resolveShapedFingerRails'
 import { resolveFillerCleats } from './resolveFillerCleats'
@@ -63,6 +63,8 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const openCells = cab.footprint ? [] : openZones
   // One grip per door / drawer front from the handle schedule (z_handles H1).
   resolveHandles(cab, zones)
+  // Linear strip handles (z_handles D17): a strip of each front's board on its face.
+  caseParts.push(...linearHandleParts(zones))
   // Face fillers with the support carcass off: return cleats (z_angled_filler).
   if (cab.footprint && !cab.has_carcass) caseParts.push(...resolveFillerCleats(cab, r, zones))
   // Bulkheads (z_bulkhead): fascia, returns + fixing cleat. A curved bulkhead

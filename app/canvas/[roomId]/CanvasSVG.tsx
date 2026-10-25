@@ -1240,7 +1240,8 @@ export default function CanvasSVG({
                 const item = faceZoneItem(z.face_type)
                 if (!item || !layers.show(item)) return []
                 const hs = handleShape(z)
-                return hs ? [{ id: zonePartId(z), poly: partPoly({ x: hs.cx - hs.w / 2, z: hs.frontZ, w: hs.w, d: hs.projection }) }] : []
+                // Linear strips (D17) are case parts, drawn with the carcass.
+                return hs && hs.kind !== 'strip' ? [{ id: zonePartId(z), poly: partPoly({ x: hs.cx - hs.w / 2, z: hs.frontZ, w: hs.w, d: hs.projection }) }] : []
               })
             : []
           if (layers.show('internal_outline') && cab.has_internal) drawnRects.push({ x: 20, z: 20, w: displayCab.dx - 40, d: displayCab.dz - 40 })

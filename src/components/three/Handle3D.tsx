@@ -31,7 +31,8 @@ export default function Handle3D({ s, offset = [0, 0, 0], opacity = 1, showBar =
     </mesh>
   ))
 
-  if (!showBar) return <group>{holes}</group>
+  // A linear strip (D17) is drawn as its case part; only its screw holes here.
+  if (!showBar || s.kind === 'strip') return <group>{holes}</group>
 
   if (s.kind === 'knob') {
     const r = s.w / 2

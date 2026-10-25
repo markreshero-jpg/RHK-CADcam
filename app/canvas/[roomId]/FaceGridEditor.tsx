@@ -390,7 +390,7 @@ export default function FaceGridEditor({
   }
 
   // Per-front grip overrides (z_handles D14). null = inherit.
-  function setZoneGrip<K extends 'handle_id' | 'grip_edge' | 'handle_offset' | 'handle_inset' | 'finger_gap'>(
+  function setZoneGrip<K extends 'handle_id' | 'grip_edge' | 'handle_offset' | 'handle_inset' | 'finger_gap' | 'handle_length'>(
     rowIdx: number, colIdx: number, key: K, value: FaceZoneInput[K] | null,
   ) {
     save({
@@ -1038,24 +1038,34 @@ export default function FaceGridEditor({
                   const rh = rp?.face_zones.find(z => z.row_index === gz.row_index && z.col_index === gz.col_index)?.handle ?? null
                   const sel = 'bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full'
                   const sideInset = gz.face_type === 'door' && (gz.hinge_side ?? 'left') !== 'top' && gz.hinge_side !== 'bottom'
-                  const positioned = rh ? rh.x != null : true
-                  const num = (key: 'handle_offset' | 'handle_inset' | 'finger_gap', label: string, placeholder: string) => (
+                  // Linear strip (D17): no bar position — its length + where a shorter one sits.
+                  const linear = rh?.grip_kind === 'linear'
+                  const positioned = rh ? rh.x != null && !linear : true
+                  const num = (key: 'handle_offset' | 'handle_inset' | 'finger_gap' | 'handle_length', label: string, placeholder: string) => (
                     <div className="flex items-center gap-1">
                       <span className="text-gray-500 text-[10px] w-20 shrink-0">{label}</span>
                       <input
                         key={`${key}-${gz.row_index}-${gz.col_index}-${gz[key] ?? ''}`}
                         type="number" step={1} defaultValue={gz[key] ?? ''} placeholder={placeholder}
+                        title={gz[key] != null ? 'Overridden on this front — clear it to go back to the default' : undefined}
                         onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
                         onBlur={e => {
                           const v = parseFloat(e.target.value)
                           const next = isNaN(v) ? null : v
                           if (next !== (gz[key] ?? null)) setZoneGrip(gz.row_index, gz.col_index, key, next)
                         }}
-                        className={inp}
+                        className={`${inp}${gz[key] != null ? ' !border-amber-500 !text-amber-300' : ''}`}
                       />
                       <span className="text-gray-600 text-[9px] shrink-0">mm</span>
+                      {gz[key] != null && (
+                        <button type="button" title="Clear the override"
+                          onClick={() => setZoneGrip(gz.row_index, gz.col_index, key, null)}
+                          className="text-amber-400 hover:text-amber-200 text-[10px] shrink-0">↺</button>
+                      )}
                     </div>
                   )
+                  const strip = rh?.strip
+                  const stripInsetLabel = rh?.orientation === 'vertical' ? 'From top' : gz.face_type === 'drawer_face' ? 'From left' : 'From side'
                   return (
                     <div className="flex flex-col gap-1">
                       <p className="text-gray-600">Handle</p>
@@ -1081,6 +1091,9 @@ export default function FaceGridEditor({
                       </div>
                       {positioned && num('handle_offset', 'From grip edge', 'schedule')}
                       {positioned && sideInset && num('handle_inset', 'From side', 'schedule')}
+                      {(linear || gz.handle_length != null) && num('handle_length', 'Length', strip ? `full ${Math.round(strip.full)}` : 'full')}
+                      {linear && (gz.handle_length != null || gz.handle_inset != null) &&
+                        num('handle_inset', stripInsetLabel, gz.face_type === 'drawer_face' && rh?.orientation !== 'vertical' ? 'centred' : '0')}
                       {(rh?.finger_gap || gz.finger_gap != null) &&
                         num('finger_gap', 'Finger gap', String(rh?.finger_gap_mm ?? ''))}
                     </div>

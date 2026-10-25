@@ -176,6 +176,37 @@ New tables need RLS policies (see access-control memory and `z_access_control/`)
 | **H8a** | 3D models, schema + library: model columns on `hardware_handles` (D16), handle detail panel with upload / preview / hole markers / Auto-fit | built 2026-10-15, see D16 as-built. Migration `z_handles/migration_h8_models.sql` written, not applied yet |
 | **H8b** | 3D models in the views: `Handle3D` draws the model through `ModelAsset`, falls back to bar / knob; STL takes the `finish` colour | spec'd 2026-10-15 |
 | **H8c** | (optional) Elevation silhouette from the model, like `slideSilhouette.ts` | later |
+| **H9** | Linear applied strip handle (grip kind `linear`, D17): a strip of the front's own board on the face, full length, sharknose edge, screw holes, length override | building 2026-10-25 — see D17 |
+
+**D17. Linear applied strip handle — grip kind `linear`** (Mark, 2026-10-25, RHK6581 kitchen "Linear G").
+A 35-wide strip of the **front's own face material** (same board + colour, so it
+matches) fixed ON the face of the door / drawer front — it stands one front
+thickness proud. One strip per front:
+- **Base doors + drawer fronts**: horizontal, flush with the top edge (grip edge
+  top), full width of the front. Wall doors mirror it (bottom edge) — though our
+  overheads are usually push-to-open.
+- **Tall doors**: vertical, against the **non-hinged** edge, full height of the door.
+- Sharknose on the edge the fingers go under — the bottom edge of a horizontal
+  strip, the inner (hinge-side) edge of a vertical one — same bevel as the
+  existing sharknose entry (catalogue `bevel_angle_deg` / `bevel_land_mm`,
+  38° / 0 today). Saw op, cut-list note, no G-code (D3).
+- Edge tape on the other long edge and both ends; the bevelled edge is bare.
+- Fixed with screws **from the back of the front**, at most 350 apart
+  (`screw_spacing_mm`), first / last `screw_inset_mm` (50) in from the strip
+  ends: drilled through the front as handle holes, so the D13 switches (rule
+  `HANDLE_DRILL`, per-front `handle_drill`) turn them on / off like any handle.
+- No finger gap (`needs_finger_gap` false): the strip is the grip.
+- **Length is editable per front** (face_grid zone `handle_length`, shown as an
+  override in the Handle panel, placeholder = full length). A shortened strip
+  keeps to the non-hinged side on doors (`handle_inset` = gap from that side),
+  is centred on drawers (or `handle_inset` from the left), and hangs from the
+  top on tall doors (`handle_inset` = gap from the top).
+- Built as case parts `lh:<n>` (face-kind panels like the finger rails), layer
+  item `handles`, cut list "Linear Handle n" with the sharknose noted.
+- Catalogue: `hardware_handles` gains `strip_width_mm` (35), `screw_spacing_mm`
+  (350), `screw_inset_mm` (50); migration `z_handles/migration_h9_linear.sql`.
+  Kitchen use: a room handle schedule with base / drawer / tall rows on the strip
+  and the wall row push-to-open.
 
 **H1 notes (2026-10-13):**
 - Migration applied to live: grip-kind columns on `hardware_handles`,

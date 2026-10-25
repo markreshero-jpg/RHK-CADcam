@@ -14,7 +14,7 @@
 
 import type {
   CabinetInput, FaceGridInput, FaceZoneInput, HandleProductInput, HandleRole,
-  HandleScheduleEntryInput, ResolvedFaceZone, ResolvedHandle,
+  HandleScheduleEntryInput, ResolvedCasePart, ResolvedFaceZone, ResolvedHandle,
 } from './types'
 
 // The bits of a zone the grip lookup needs — a resolved zone or a face-grid
@@ -78,6 +78,7 @@ export function resolveHandle(cab: CabinetInput, zone: ResolvedFaceZone): Resolv
   if (!g) return null
   const { role, entry, product, zoneIn, edge } = g
   const override = g.override
+  if (product.grip_kind === 'linear') return linearHandle(cab, zone, g)
   const orientation = entry?.orientation ?? (role === 'drawer' ? 'horizontal' : 'vertical')
   const offset      = zoneIn?.handle_offset ?? entry?.offset_from_edge_mm ?? 50
   const inset       = role === 'drawer' ? null : (zoneIn?.handle_inset ?? entry?.inset_from_side_mm ?? null)
@@ -138,6 +139,107 @@ export function resolveHandle(cab: CabinetInput, zone: ResolvedFaceZone): Resolv
     finger_gap_mm: product.needs_finger_gap ? (zoneIn?.finger_gap ?? cab.rules.FPGAP) : null,
     bevel:        product.grip_kind === 'sharknose' ? sharknoseBevel(product, zone.DZ) : null,
   }
+}
+
+// ── Linear strip handle (D17) ────────────────────────────────────────────────
+// A strip of the front's own board on its face: horizontal along the grip edge
+// (base doors, drawers; wall doors at the bottom), vertical against the
+// non-hinged edge on tall doors. Full length unless the front's handle_length
+// says otherwise; a shorter strip keeps to the non-hinged side (doors), the
+// middle (drawers), or the top (tall doors), handle_inset in from there.
+// Screws come through from the back of the front: at most screw_spacing apart,
+// the outer ones screw_inset from the strip ends — drilled as handle holes, so
+// HANDLE_DRILL / handle_drill switch them like any handle's (D13).
+function linearHandle(cab: CabinetInput, zone: ResolvedFaceZone, g: ZoneGrip): ResolvedHandle {
+  const { role, entry, product, zoneIn, edge } = g
+  const W = product.strip_width_mm ?? 35
+  const side = zone.hinge_side === 'left' ? 'right' : zone.hinge_side === 'right' ? 'left' : null
+  const vertical = role === 'door_tall' && !!side && (entry?.orientation ?? 'vertical') === 'vertical'
+  const full = vertical ? zone.DY : zone.DX
+  const length = Math.max(1, zoneIn?.handle_length ?? full)
+  const inset = zoneIn?.handle_inset ?? null
+
+  // The strip's sharknose — on the strip, not the front (the front keeps a square edge).
+  const bv = sharknoseBevel(product, zone.DZ)!
+  const cut = { angle_deg: bv.angle_deg, land: bv.land }
+  let strip: NonNullable<ResolvedHandle['strip']>
+  if (vertical) {
+    const y0 = zone.DY - (inset ?? 0) - length
+    strip = side === 'right'
+      ? { x0: zone.DX - W, y0, w: W, h: length, bevel_edge: 'left', ...cut, full, length, overridden: zoneIn?.handle_length != null }
+      : { x0: 0, y0, w: W, h: length, bevel_edge: 'right', ...cut, full, length, overridden: zoneIn?.handle_length != null }
+  } else {
+    const x0 = role !== 'drawer' && side
+      ? (side === 'right' ? zone.DX - (inset ?? 0) - length : (inset ?? 0))
+      : (inset ?? (zone.DX - length) / 2)
+    const top = edge === 'top'
+    strip = { x0, y0: top ? zone.DY - W : 0, w: length, h: W, bevel_edge: top ? 'bottom' : 'top', ...cut,
+      full, length, overridden: zoneIn?.handle_length != null }
+  }
+
+  // Screws along the strip's centre line.
+  const drilled = zoneIn?.handle_drill ?? cab.rules.HANDLE_DRILL ?? true
+  const holes: { x: number; y: number }[] = []
+  if (drilled) {
+    const spacing = product.screw_spacing_mm ?? 350
+    const end = Math.min(product.screw_inset_mm ?? 50, length / 2)
+    const run = length - 2 * end
+    const n = run <= 0 ? 1 : Math.ceil(run / spacing) + 1
+    for (let i = 0; i < n; i++) {
+      const along = n === 1 ? length / 2 : end + (run * i) / (n - 1)
+      holes.push(vertical
+        ? { x: strip.x0 + W / 2, y: strip.y0 + along }
+        : { x: strip.x0 + along, y: strip.y0 + W / 2 })
+    }
+  }
+
+  return {
+    handle_id:    product.id,
+    name:         product.name,
+    grip_kind:    'linear',
+    role,
+    source:       g.override ? 'zone' : 'schedule',
+    grip_edge:    edge,
+    orientation:  vertical ? 'vertical' : 'horizontal',
+    x: strip.x0 + strip.w / 2, y: strip.y0 + strip.h / 2,
+    length,
+    bore_centres: null,
+    projection:   zone.DZ,
+    holes,
+    hole_dia:     product.hole_dia_mm ?? 4.5,
+    drilled,
+    finger_gap:   false,
+    finger_gap_mm: null,
+    bevel:        null,
+    strip,
+  }
+}
+
+/** The strips as case parts `lh:<n>` (face-kind: DX = height, DY = width, DZ =
+ *  thickness, X / Y = left / bottom, Z = back face), standing on each front's
+ *  face in the front's own material. Tape on the long edge away from the
+ *  sharknose and on both ends; the bevelled edge stays bare. Facet fronts of
+ *  shaped cabinets are skipped (turned AY), like their handle holes. */
+export function linearHandleParts(zones: ResolvedFaceZone[]): ResolvedCasePart[] {
+  const out: ResolvedCasePart[] = []
+  for (const z of zones) {
+    const s = z.handle?.strip
+    if (!s || z.facet || z.AY) continue
+    const horizontal = s.bevel_edge === 'top' || s.bevel_edge === 'bottom'
+    out.push({
+      part_key: `lh:${out.length}`,
+      X: z.X + s.x0, Y: z.Y + s.y0, Z: z.Z + z.DZ,
+      DX: s.h, DY: s.w, DZ: z.DZ,
+      AX: 0, AY: 0, AZ: 0,
+      material_id: z.material_id,
+      grain_direction: horizontal ? 'horizontal' : 'vertical',
+      edge_band: horizontal
+        ? { top: s.bevel_edge !== 'top', bottom: s.bevel_edge !== 'bottom', left: true, right: true, id: z.edge_band?.id }
+        : { top: true, bottom: true, left: s.bevel_edge !== 'left', right: s.bevel_edge !== 'right', id: z.edge_band?.id },
+      lh: { bevel_edge: s.bevel_edge, angle_deg: s.angle_deg, land: s.land },
+    } as ResolvedCasePart)
+  }
+  return out
 }
 
 // Saw tilt from vertical cuts the back of the edge: the bevel runs

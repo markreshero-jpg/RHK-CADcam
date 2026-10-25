@@ -232,7 +232,7 @@ export function normalizeProject(
     // Back + horizontals: u runs bottom→top (back panels) / back→front where the
     // horizontal 'bottom' flag is the back edge; v runs left→right.
     // A turned island back panel (below) nests w = its width: tape pairs as a side's.
-    const sidePairs = isSide || (key.startsWith('ibp:') && r.grain_direction === 'vertical')
+    const sidePairs = isSide || ((key.startsWith('ibp:') || key.startsWith('lh:')) && r.grain_direction === 'vertical')
     const eb = ebFields(flagsOf(r), tFor(r),
       sidePairs ? ['left', 'right'] : ['bottom', 'top'],
       sidePairs ? ['bottom', 'top'] : ['left', 'right'])
@@ -241,14 +241,14 @@ export function normalizeProject(
     // carry no machining, so turning them can't misplace an op.
     // Island back panels (z_island_back_panel) are vertical-grain applied panels
     // with no machining: turned the same way, their tape turning with them.
-    const turned = (key.startsWith('fprail:') || key.startsWith('ibp:')) && r.grain_direction === 'vertical'
+    const turned = (key.startsWith('fprail:') || key.startsWith('ibp:') || key.startsWith('lh:')) && r.grain_direction === 'vertical'
       ? { w: Number(r.dy), h: Number(r.dx), thickness: Number(r.dz) } : undefined
     // Angled panel ends (z_cabinet_shape 4a): nested as the blank, bevel named.
     const bevel = caseBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
     const cutHere = new Set(cutParts.has(`${r.cabinet_instance_id}|${pieceOf}`) ? [pieceOf] : [])
     const piece = splitPieceSuffix(key, cutHere).trim().replace(/[()]/g, '') || null
-    push('case_parts', r, `case_${key}`, { typeKey: pieceOf, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(pieceOf),
-      ...(bevel || piece ? { suffix: [bevel, piece].filter(Boolean).map(t => ` (${t})`).join('') } : {}) },
+    push('case_parts', r, `case_${key}`, { typeKey: pieceOf, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : key.startsWith('lh:') ? `Linear Handle ${Number(key.slice(3)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(pieceOf),
+      ...(bevel || piece || key.startsWith('lh:') ? { suffix: [bevel, piece, key.startsWith('lh:') ? 'sharknose edge, saw' : null].filter(Boolean).map(t => ` (${t})`).join('') } : {}) },
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), turned, eb, base)
   }
   for (const r0 of ip) {

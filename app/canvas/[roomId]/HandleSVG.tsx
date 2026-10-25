@@ -16,6 +16,8 @@ export function HandleElevSVG({ s, project, stroke, fill, strokeWidth, opacity, 
   opacity?: number
   showHoles?: boolean
 }) {
+  // A linear strip (D17) is drawn as its case part; only its screw holes here.
+  if (s.kind === 'strip') return showHoles ? <HandleHolesSVG s={s} project={project} color={stroke} strokeWidth={strokeWidth} opacity={opacity} /> : null
   const tl = project(s.cx - s.w / 2, s.cy + s.h / 2)
   const br = project(s.cx + s.w / 2, s.cy - s.h / 2)
   const x = Math.min(tl.x, br.x), y = Math.min(tl.y, br.y)

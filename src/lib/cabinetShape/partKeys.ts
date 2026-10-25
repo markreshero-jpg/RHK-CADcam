@@ -13,6 +13,7 @@ import { backPanelPartLabel } from '../backPanel'
  *  frame, so they ride the same path — as do the upright bulkhead parts. */
 export function isShapedPanelKey(k: string): boolean {
   return k.startsWith('side:') || k.startsWith('back:') || k.startsWith('fprail:') || k.startsWith('cleat:')
+    || k.startsWith('lh:')   // linear strip handles on the fronts (z_handles D17)
     || (isBulkheadKey(k) && !BH_HORIZONTAL.has(k))
     || isCurvedEndUprightKey(k)
     || k.startsWith('ibp:')   // island back panels (z_island_back_panel)
@@ -73,6 +74,8 @@ export function shapedPartLabel(k: string): string | null {
   if (crv) return crv
   const fp =/^fprail:(\d+)$/.exec(k)
   if (fp) return `Finger Rail ${Number(fp[1]) + 1}`
+  const lh = /^lh:(\d+)$/.exec(k)
+  if (lh) return `Linear Handle ${Number(lh[1]) + 1}`
   const m = /^(side|back|rail|cleat):(.+)$/.exec(k)
   if (!m) return null
   const kind = m[1] === 'side' ? 'Side' : m[1] === 'back' ? 'Back' : m[1] === 'cleat' ? 'Return Cleat' : 'Top Rail'

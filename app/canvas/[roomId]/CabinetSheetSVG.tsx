@@ -648,6 +648,7 @@ export default function CabinetSheetSVG({
     for (const z of [...doors, ...drawerZones]) {
       if (z.handle === null) continue
       if (z.handle?.grip_kind === 'sharknose') continue   // sawn into the front — no hardware
+      if (z.handle?.grip_kind === 'linear') continue      // a board strip (lh: part, D17) — on the cut list, not hardware
       const name = z.handle?.name ?? hardware?.handleName ?? 'Handle'
       byHandle.set(name, (byHandle.get(name) ?? 0) + 1)
     }

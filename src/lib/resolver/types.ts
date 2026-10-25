@@ -835,7 +835,7 @@ export interface CabinetInput {
 
 // ── Handles (z_handles/HANDLES-SPEC.md) ─────────────────────────────────────
 export type HandleRole = 'door_base' | 'door_wall' | 'door_tall' | 'drawer'
-export type GripKind   = 'hardware' | 'sharknose' | 'routed' | 'push' | 'rail' | 'channel'
+export type GripKind   = 'hardware' | 'sharknose' | 'routed' | 'push' | 'rail' | 'channel' | 'linear'
 
 export interface HandleProductInput {
   id:            string
@@ -852,6 +852,11 @@ export interface HandleProductInput {
   // at the front. The bevel runs (thickness − land) × tan(angle) along the face.
   bevel_angle_deg: number | null                // null → 45
   bevel_land_mm:   number | null                // null → 0 (knife edge)
+  // Linear strip (D17): width across the strip, max screw spacing along it, and
+  // the first / last screw's inset from the strip ends.
+  strip_width_mm?:   number | null              // null → 35
+  screw_spacing_mm?: number | null              // null → 350
+  screw_inset_mm?:   number | null              // null → 50
   // Custom hole pattern from the handle centre (offset_x along the handle,
   // offset_y across it). Empty → derived: two holes at ±bore_centres/2, or one
   // centre hole when bore_centres is unset (knob).
@@ -895,6 +900,14 @@ export interface ResolvedHandle {
   // Sharknose back bevel on the grip edge (null for other grips). run = how far
   // the bevel reaches along the back face from the edge.
   bevel:       { angle_deg: number; land: number; run: number } | null
+  // Linear strip handle (D17), zone-local: min corner (x0, y0), size along X / Y,
+  // its sharknose edge, the full length it defaults to, and whether the front's
+  // own handle_length changed it. Absent for other grips.
+  strip?: {
+    x0: number; y0: number; w: number; h: number
+    bevel_edge: 'top' | 'bottom' | 'left' | 'right'; angle_deg: number; land: number
+    full: number; length: number; overridden: boolean
+  }
 }
 
 // ── Hinge resolver inputs ─────────────────────────────────────────────────────
@@ -1124,6 +1137,7 @@ export interface FaceZoneInput {
   handle_offset?: number             // grip edge → nearest hole (else the schedule row)
   handle_inset?:  number             // doors: non-hinged side → hole line (else the schedule row)
   finger_gap?:    number             // mm at the grip edge, for grips that need one (else FPGAP)
+  handle_length?: number             // linear strip (D17): its length (else the front's full width / height)
 }
 
 // ── Internal Part Inputs ──────────────────────────────────────
@@ -1385,6 +1399,9 @@ export interface ResolvedCasePart extends ResolvedPart {
   // shaped: a facet rail (resolveShapedFingerRails) — turned AY, local z = DZ its
   // front face (as the box rails); seamDrillSync machines its ends in each panel's own frame.
   fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number; shaped?: true }
+  // Linear strip handle (z_handles D17): the sharknose edge (face-kind frame:
+  // top / bottom = ends of DX, left / right = ends of DY) and its bevel.
+  lh?: { bevel_edge: 'top' | 'bottom' | 'left' | 'right'; angle_deg: number; land: number }
   // Shaped cabinets (z_cabinet_shape 4a): vertical panels' angled ends, degrees
   // from square at the low / high end of the part's length axis (sides: Z,
   // back: X, side:/back:<edge>: its own length from the outer start corner).
@@ -1417,6 +1434,7 @@ export interface ResolvedCasePart extends ResolvedPart {
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
             'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
             `fprail:${number}` |  // finger-pull backing rail (z_handles H6)
+            `lh:${number}` |      // linear strip handle on a front (z_handles D17)
             `split:${string}:${number}`   // a cut piece (z_cabinet_split): split:<part key>:<n>
 }
 
