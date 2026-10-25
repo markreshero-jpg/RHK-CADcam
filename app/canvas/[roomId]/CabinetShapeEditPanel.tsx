@@ -2,7 +2,9 @@
 
 // Side panel for Edit shape (z_cabinet_shape_edit E3). Shows what is picked on
 // the plan — an edge (type, sub-type, scribe) or a corner (how the pieces meet)
-// — plus every edge and corner as a list to pick from. Changes save as they're
+// — plus every edge and corner as a list to pick from, and (E4b) the outline
+// tools: Select (drag corners / sides), Line, Box (a new outline), Offset, Fillet,
+// Chamfer, Join. Changes save as they're
 // made (the cabinet re-resolves); ✓ Done / Enter / Esc finishes, Cancel puts the
 // shape back as it was, ↶ / Ctrl+Z steps back inside the edit.
 
@@ -18,13 +20,28 @@ import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { edgeRuleScribe } from '@/src/lib/resolver/resolveShapedCase'
 import { ROLE_COLOUR, edgePlanLabel } from './CabinetShapeEditPlan'
 import type { CabinetShapeEdit, ShapeEditSel } from './useCabinetShapeEdit'
+import type { AnnotationTool, CadTool } from './useAnnotationTool'
+
+const TOOLS: { id: CadTool; label: string; key: string; tip: string }[] = [
+  { id: 'select',  label: 'Select',  key: 'S', tip: 'Click the outline, then drag a corner or a side (the sides next to it stretch)' },
+  { id: 'line',    label: 'Line',    key: 'L', tip: 'Draw a closed outline back to its start to replace the shape' },
+  { id: 'rect',    label: 'Box',     key: 'R', tip: 'Click two corners: a new rectangular outline replaces the shape (edge types carry over by direction)' },
+  { id: 'offset',  label: 'Offset',  key: 'F', tip: 'Click the outline, then the side: the whole outline grows / shrinks by the distance (Tab = type it)' },
+  { id: 'fillet',  label: 'Fillet',  key: 'G', tip: 'Click the two sides of a corner to round it (the arc is a new front edge)' },
+  { id: 'chamfer', label: 'Chamfer', key: 'H', tip: 'Click the two sides of a corner to cut it (the cut is a new front edge)' },
+  { id: 'join',    label: 'Join',    key: 'J', tip: 'Join line ends' },
+]
 
 const btn = 'px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white disabled:opacity-40'
 const inp = 'w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white'
 
-export default function CabinetShapeEditPanel({ edit, cab, onApply, onSelect, onDone, onCancel, onUndo }: {
+export default function CabinetShapeEditPanel({ edit, cab, cad, msg, onApply, onSelect, onDone, onCancel, onUndo }: {
   edit: CabinetShapeEdit
   cab: CabinetInstance
+  /** The CAD tools on the outline (E4b). */
+  cad?: AnnotationTool
+  /** Why the last outline change was refused (or what it dropped). */
+  msg?: string | null
   onApply: (next: CabinetShapeEdit['fp']) => void
   onSelect: (s: ShapeEditSel) => void
   onDone: () => void
@@ -53,6 +70,35 @@ export default function CabinetShapeEditPanel({ edit, cab, onApply, onSelect, on
       </div>
 
       <div className="p-4 space-y-4">
+        {cad && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">Outline tools</p>
+            <div className="grid grid-cols-4 gap-1">
+              {TOOLS.map(t => (
+                <button key={t.id} title={`${t.tip} (${t.key})`} onClick={() => cad.setTool(t.id)}
+                  className={`text-[11px] py-1 rounded border ${cad.tool === t.id ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'}`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {cad.tool === 'fillet' && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-gray-400">Radius (mm)</span>
+                <CalcInput value={cad.filletR} decimals={1} min={0} onCommit={v => cad.setFilletR(v)} className={inp + ' w-20 text-right'} />
+              </div>
+            )}
+            {cad.tool === 'chamfer' && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-gray-400">Cut (mm)</span>
+                <CalcInput value={cad.chamfer.d1} decimals={1} min={1} onCommit={v => cad.setChamfer({ ...cad.chamfer, d1: v })} className={inp + ' w-16 text-right'} />
+                <CalcInput value={cad.chamfer.d2} decimals={1} min={1} onCommit={v => cad.setChamfer({ ...cad.chamfer, d2: v })} className={inp + ' w-16 text-right'} />
+              </div>
+            )}
+            {cad.modMsg && <p className="text-[10px] text-sky-300">{cad.modMsg}</p>}
+            {msg && <p className="text-[11px] text-amber-400">{msg}</p>}
+          </div>
+        )}
+
         {!selEdge && !selCorner && (
           <p className="text-[11px] text-gray-400">Click an edge or a corner dot on the plan (or pick one below).</p>
         )}

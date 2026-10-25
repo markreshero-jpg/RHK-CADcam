@@ -14,16 +14,22 @@ import type { CabinetInstance } from '@/src/lib/types'
 import type { Footprint } from '@/src/lib/cabinetShape/footprint'
 import { rectangleFootprint } from '@/src/lib/cabinetShape/edit'
 
+/** The cabinet fields an edit can change (E4b: drawing the outline moves / resizes the box). */
+export type ShapeCabSnap = Pick<CabinetInstance, 'footprint' | 'dx' | 'dz' | 'pos_x' | 'pos_y'>
+const snapOf = (c: CabinetInstance): ShapeCabSnap => ({ footprint: c.footprint ?? null, dx: c.dx, dz: c.dz, pos_x: c.pos_x, pos_y: c.pos_y })
+
 export type ShapeEditSel = { kind: 'edge'; id: string } | { kind: 'corner'; key: string } | null
 
 export interface CabinetShapeEdit {
   cabId: string
   /** The footprint as it was when the edit started (null = a plain box). */
   orig: Footprint | null
+  /** The cabinet's footprint / box / position when the edit started (Cancel puts it back). */
+  origCab: ShapeCabSnap
   /** What the edit is working on (the cabinet's footprint, or the rectangle start). */
   fp: Footprint
   /** Earlier states inside this edit, for Ctrl+Z. */
-  history: Footprint[]
+  history: { fp: Footprint; cab: ShapeCabSnap }[]
   sel: ShapeEditSel
   hover: ShapeEditSel
 }
@@ -42,17 +48,22 @@ export function useCabinetShapeEdit({ cabinets, onUpdate, captureSnapshot }: {
     const cab = cabinets.find(c => c.id === cabId)
     if (!cab) return false
     const orig = cab.footprint?.segments?.length ? cab.footprint : null
-    setEdit({ cabId, orig, fp: orig ?? rectangleFootprint({ w: cab.dx, d: cab.dz }), history: [], sel: null, hover: null })
+    setEdit({ cabId, orig, origCab: snapOf(cab), fp: orig ?? rectangleFootprint({ w: cab.dx, d: cab.dz }), history: [], sel: null, hover: null })
     return true
   }, [cabinets])
 
-  /** Apply a footprint change (write-through). */
-  const apply = useCallback((next: Footprint) => {
+  const cabsRef = useRef(cabinets)
+  cabsRef.current = cabinets
+
+  /** Apply a footprint change (write-through); `extra` = a new box / position (E4b). */
+  const apply = useCallback((next: Footprint, extra: Partial<CabinetInstance> = {}) => {
     const e = editRef.current
-    if (!e) return
+    const cab = cabsRef.current.find(c => c.id === e?.cabId)
+    if (!e || !cab) return
     if (!e.history.length) captureSnapshot()
-    setEdit({ ...e, fp: next, history: [...e.history, e.fp] })
-    void onUpdate(e.cabId, { footprint: next })
+    const was = { ...snapOf(cab), footprint: e.history.length ? e.fp : cab.footprint ?? null }
+    setEdit({ ...e, fp: next, history: [...e.history, { fp: e.fp, cab: was }] })
+    void onUpdate(e.cabId, { footprint: next, ...extra })
   }, [captureSnapshot, onUpdate])
 
   const undo = useCallback(() => {
@@ -60,9 +71,9 @@ export function useCabinetShapeEdit({ cabinets, onUpdate, captureSnapshot }: {
     if (!e?.history.length) return
     const prev = e.history[e.history.length - 1]
     const history = e.history.slice(0, -1)
-    setEdit({ ...e, fp: prev, history })
+    setEdit({ ...e, fp: prev.fp, history })
     // Back to where it started: a plain box goes back to no footprint.
-    void onUpdate(e.cabId, { footprint: history.length ? prev : e.orig })
+    void onUpdate(e.cabId, history.length ? prev.cab : e.origCab)
   }, [onUpdate])
 
   /** Finish, keeping the changes. Returns the cabinet id. */
@@ -76,7 +87,7 @@ export function useCabinetShapeEdit({ cabinets, onUpdate, captureSnapshot }: {
   const cancel = useCallback(() => {
     const e = editRef.current
     setEdit(null)
-    if (e?.history.length) void onUpdate(e.cabId, { footprint: e.orig })
+    if (e?.history.length) void onUpdate(e.cabId, e.origCab)
     return e?.cabId ?? null
   }, [onUpdate])
 

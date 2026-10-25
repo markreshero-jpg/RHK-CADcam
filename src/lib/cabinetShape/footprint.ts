@@ -66,7 +66,8 @@ const EDGE_LABELS: Record<string, string> = {
   fill_a: 'Filler A', fill_b: 'Filler B', side_a: 'Side A', side_b: 'Side B',
 }
 export function edgeLabel(id: string): string {
-  return EDGE_LABELS[id] ?? id
+  const n = /^e(\d+)$/.exec(id)   // drawn in Edit shape (footprintCad)
+  return EDGE_LABELS[id] ?? (n ? `Edge ${n[1]}` : id)
 }
 
 export interface FootprintEdge {

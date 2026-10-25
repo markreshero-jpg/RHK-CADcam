@@ -9,9 +9,10 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → **E1–E3 + E4a built 2026-10-25** (sub-types, corner joins,
-> plan Edit shape picking, CAD tool save store), in-app checks pending — see the
-> notes under Phases. Next **E4b** (CAD tools on the footprint — plan in "E4a notes").
+> **RESUME HERE** → **E1–E4b built 2026-10-25** (sub-types, corner joins, plan
+> Edit shape, CAD tools on the outline), in-app checks pending — see the notes
+> under Phases. Next **E5** (library: preserve ticks, /CS, hand flip) — ask Mark
+> about the E5 tick list first.
 
 ---
 
@@ -238,7 +239,7 @@ for). The code gets `/CS` unless the shape is still a preset (decision 15).
 | E2 | **Junctions in the resolver.** `joins` map; through A / B, butt-bevel, mitre at any angle incl. square; panel↔facet + panel↔open square / flush (flush_ends retired); facet↔facet mitre / reveal. Corner dropdowns in the Shape section. Tests as 4a's band-fill tests for every choice | [x] built 2026-10-25, in-app check pending |
 | E3 | **Plan edit mode — picking only.** Right-click Edit shape, dim + highlight, edges coloured by type, click edge / corner → panels in the sidebar, Done / Cancel / undo. No geometry editing yet | [x] built 2026-10-25, headless-checked, in-app check pending |
 | E4a | **CAD tool extraction** — target adapter in `useAnnotationTool`, annotation behaviour unchanged (headless check of the B-phase tools) | [x] built 2026-10-25, headless-checked |
-| E4b | **CAD tools on the footprint** — grips, side drag, line / arc / box drawing from scratch, fillet / chamfer / join / offset, snaps (walls, neighbours, own points), typed entry; validity; ids + formula re-expression; pos / bbox update | [ ] |
+| E4b | **CAD tools on the footprint** — grips, side drag, line / arc / box drawing from scratch, fillet / chamfer / join / offset, snaps (walls, neighbours, own points), typed entry; validity; ids + formula re-expression; pos / bbox update | [x] built 2026-10-25, headless-checked, in-app check pending |
 | E5 | **Library** — save shaped cabinets with their footprint (types, subs, joins, formulas) + the new preserve ticks; placement evaluates at the placed size, optional hand flip; `/CS` in the parser + skill | [ ] |
 | E6 | Tutorial lesson ("Editing a cabinet shape"), in-app check list | [ ] |
 
@@ -386,6 +387,38 @@ for). The code gets `/CS` unless the shape is still a preset (decision 15).
   - The edit's `captureSnapshot` = no-op (E3's first-change snapshot covers it);
     tool set limited to Select, Line, Arc, Box, Offset, Fillet, Chamfer, Join (a
     `tools` prop on the ribbon, decision 2).
+
+### E4b notes (built 2026-10-25)
+
+- Built as planned in "E4a notes". `src/lib/cabinetShape/footprintCad.ts`:
+  `planMap` (cabinet frame ↔ plan, `posFor` for a moved origin incl. turned
+  frames), `footprintLine`, `matchEdges`, `lineToFootprint`, `outlineProblem`.
+  New edges are `e1, e2, …` (labelled "Edge 1"), `front / faces`.
+- `app/canvas/[roomId]/useShapeCad.ts`: the second `useAnnotationTool` (store =
+  footprint, `tools` = SHAPE_TOOLS). Insert takes the last closed line or Box
+  (rotation honoured) as a replacement outline; remove is refused with a message.
+- `useAnnotationTool` gained an optional **`tools`** set (setTool / tool keys ignore
+  the rest); every other caller passes none = all tools.
+- `useCabinetShapeEdit.apply(fp, extra)` — history / Cancel now snapshot
+  footprint + dx / dz / pos (outline edits move and resize the box).
+- CanvasClient `shapeEditLayer()`: overlay drawn passive, the CAD sheet,
+  AnnotationLayer for the outline (thin white line — moves live under a drag; the
+  coloured edges follow on release), previews, live sizes, snap marker, marquee.
+  Select-tool clicks also pick the edge / corner under them
+  (`shapeEditPickAt`, 10 px). Snaps: walls, other cabinets, fixtures, tops (the
+  edited cabinet's old outline is left out).
+- Panel: "Outline tools" bar (Select, Line, Box, Offset, Fillet + radius, Chamfer +
+  cuts, Join), the tool's status line, and why a change was refused.
+- **Not in E4b:** typed entry (Tab → length / X / Y) — those fields live in the F7
+  CadPanel, which isn't shown in Edit shape (it was mid-edit in another session);
+  the CAD right-click menu isn't drawn in Edit shape; arcs come from Fillet only
+  (no Arc tool).
+- Check: `z_plan_automation/verify-shape-edit-e4b.mjs` (Test Kitchen BC-01: select
+  the outline; right side +40 px → dx 940 → 1064.6; left side −40 px → 1189.2 and
+  the cabinet moves left 125; fillet front-left → 5 edges (new `e1`); Delete →
+  refused; Ctrl+Z → 4 edges; Cancel → 940 / offset 212 / footprint none). Passed
+  2026-10-25; E4a plan-CAD check re-run after the `tools` change, passed.
+  Tests `footprintCad.test.ts` (14).
 
 Later (not this module): rectangular cabinets on the same edge model (decision
 3); a `none` edge type (decision 4); kick / benchtop per edge (decision 9);

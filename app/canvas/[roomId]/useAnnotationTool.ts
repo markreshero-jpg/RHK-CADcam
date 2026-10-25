@@ -211,7 +211,7 @@ export const DB_ANNOT_STORE: AnnotStore = {
 
 export function useAnnotationTool({
   room, annotations, setAnnotations, captureSnapshot, owner, frame, paper, zoom, active,
-  toWorld, snap, enterCad, exitCad, store,
+  toWorld, snap, enterCad, exitCad, store, tools,
 }: {
   room:            Room
   /** The drawing being annotated (plan, or one side of one wall — A6): new notes go to
@@ -236,10 +236,13 @@ export function useAnnotationTool({
   exitCad:         () => void
   /** Where new / changed / deleted items are saved (default: room_annotations). */
   store?:          AnnotStore
+  /** Only these tools can be picked (default: all) — Edit shape offers the outline tools. */
+  tools?:          ReadonlySet<CadTool>
 }) {
   const storeRef = useRef<AnnotStore>(store ?? DB_ANNOT_STORE)
   useEffect(() => { storeRef.current = store ?? DB_ANNOT_STORE }, [store])
-  const [tool, setTool] = useState<CadTool>('select')
+  const [tool, setToolState] = useState<CadTool>('select')
+  const setTool = useCallback((t: CadTool) => { if (t === 'select' || !tools || tools.has(t)) setToolState(t) }, [tools])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [editing, setEditing] = useState<AnnotEditing | null>(null)
   const [drag, setDrag] = useState<Drag | null>(null)

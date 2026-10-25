@@ -121,7 +121,8 @@ import BenchtopJoinDialog from './BenchtopJoinDialog'
 import BenchtopAutoBuildDialog from './BenchtopAutoBuildDialog'
 import BenchtopEdgeEditPanel from './BenchtopEdgeEditPanel'
 import CabinetShapeEditPanel from './CabinetShapeEditPanel'
-import CabinetShapeEditPlan from './CabinetShapeEditPlan'
+import CabinetShapeEditPlan, { shapeEditGeo, shapeEditPickAt } from './CabinetShapeEditPlan'
+import { useShapeCad } from './useShapeCad'
 import { useCabinetShapeEdit, shapeEditable } from './useCabinetShapeEdit'
 import { edgeTape } from '@/src/lib/benchtopEdgeband'
 import { useBenchtopCatalog } from './useBenchtopCatalog'
@@ -1314,6 +1315,48 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const id = cancel ? shp.cancel() : shp.done()
     setMode('select')
     if (id && cabinets.some(c => c.id === id)) setSelected({ type: 'cabinet', id })
+  }
+  // CAD tools on the outline (E4b): snaps skip the edited cabinet's own (old) outline.
+  const roomCentroid = useMemo(() => centroid(walls), [walls])
+  const shapeSnapRoom = useMemo(() => mode !== 'edit_cabinet_shape' || !shp.edit ? EMPTY_SNAP_GEOMETRY : planSnapGeometry({
+    walls, cabinets: cabinets.filter(c => c.id !== shp.edit!.cabId), resolved: planResolvedParts, fixtures, benchtops, annotations: [], paperToFrame: annotScale,
+  }), [mode, shp.edit, walls, cabinets, planResolvedParts, fixtures, benchtops, annotScale])
+  const shapeCad = useShapeCad({
+    shp, cabinets, walls, roomRef: roomCentroid, room, paper: annotScale, zoom: view.zoom,
+    active: mode === 'edit_cabinet_shape' && canvasView === 'plan',
+    toWorld: e => { const r = svgRef.current!.getBoundingClientRect(); return toWorld(e.clientX - r.left, e.clientY - r.top) },
+    snap: (p, prev, exclude, own) => cadSnap(p, own ? [shapeSnapRoom, own] : [shapeSnapRoom], cadSnapSettings, SNAP_PX / view.zoom, prev, exclude),
+    onExit: () => finishCabinetShapeEdit(),
+  })
+  /** Edit shape's plan layer: the coloured outline (draw only), the CAD sheet, the
+   *  outline as a CAD line (grips, side drag), previews, snap marker. In the Select
+   *  tool a click also picks the edge / corner under it for the side panel. */
+  function shapeEditLayer() {
+    const e = shp.edit, c = e && cabinets.find(x => x.id === e.cabId), w = c && walls.find(x => x.id === c.wall_id)
+    if (!e || !c || !w) return null
+    const sc = shapeCad.cad, z = view.zoom
+    const gh = sc.ghost
+    return (
+      <g onPointerDownCapture={ev => {
+        if (sc.tool !== 'select' || ev.button !== 0 || !svgRef.current) return
+        const r = svgRef.current.getBoundingClientRect()
+        shp.setSel(shapeEditPickAt(shapeEditGeo(e, c, w, roomCentroid), toWorld(ev.clientX - r.left, ev.clientY - r.top), 10 / z))
+      }}>
+        <CabinetShapeEditPlan edit={e} cab={c} wall={w} roomRef={roomCentroid} zoom={z} onPick={shp.setSel} onHover={shp.setHover} passive />
+        <rect x={-1e7} y={-1e7} width={2e7} height={2e7} fill="transparent"
+          style={{ pointerEvents: 'all', cursor: sc.tool === 'select' ? 'default' : 'crosshair' }}
+          onPointerDown={sc.onCaptureDown} onPointerMove={sc.onCaptureMove}
+          onDoubleClick={sc.onCaptureDouble} onContextMenu={sc.onCaptureMenu} />
+        <AnnotationLayer annotations={shapeCad.annotations} frame={IDENTITY_FRAME} paper={annotScale} edit={sc.editProps} />
+        {sc.drawPreview && <AnnotationLayer annotations={[sc.drawPreview]} frame={IDENTITY_FRAME} paper={annotScale} />}
+        <CadMeasureOverlay live={sc.liveMeasure} frame={IDENTITY_FRAME} zoom={z} selected={sc.selected.length === 1 ? sc.selected[0] : null} />
+        {sc.snapHit && <CadSnapMarker pt={sc.snapHit.pt} kind={sc.snapHit.kind} size={9 / z} />}
+        {gh && (
+          <rect x={Math.min(gh.a.x, gh.b.x)} y={Math.min(gh.a.y, gh.b.y)} width={Math.abs(gh.b.x - gh.a.x)} height={Math.abs(gh.b.y - gh.a.y)}
+            fill="rgba(56,189,248,0.08)" stroke="#38bdf8" strokeWidth={1 / z} strokeDasharray={`${5 / z} ${3 / z}`} style={{ pointerEvents: 'none' }} />
+        )}
+      </g>
+    )
   }
   // Leave the edit if its cabinet goes away or the view leaves the plan.
   useEffect(() => {
@@ -2927,7 +2970,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     : mode === 'benchtop_select' ? 'Benchtop mode: click a benchtop to select · Shift-click = pick several (then right-click = Join) · right-click = Edit shape / Edit edges · double-click = Shape Editor · cabinets are locked · F4 / Esc = back to cabinets'
     : mode === 'edit_benchtop_shape' ? (bt.shapeStretch ? 'Stretch: move the mouse (snaps) · click to place · or type the size in the panel · Esc = cancel the stretch'
       : 'Edit shape: click a line to stretch it · drag a line to move it · click a corner for X / Y · Shift-click a line = add corner · Enter = save · Esc = finish · Ctrl+Z = undo')
-    : mode === 'edit_cabinet_shape' ? 'Edit shape: click an edge to set its type, a corner dot to set how the pieces meet · changes save as you go · Enter / Esc = done · Ctrl+Z = undo'
+    : mode === 'edit_cabinet_shape' ? 'Edit shape: click an edge / corner dot to set its type or join · click the outline, then drag a corner or a side to reshape · Box = draw a new outline · L/R/F/G/H/J = tools · Enter / Esc = done · Ctrl+Z = undo'
     : mode === 'edit_benchtop_edges' ? 'Edit edges: pick a chip in the panel, then click edges on the plan · click again = take it off · Alt-click = default · Enter = save · Esc = finish · Ctrl+Z = undo'
     : mode === 'move_benchtop' ? (!bt.btMoveBase ? 'Move benchtop: click a base point (snaps) · Esc=cancel' : 'Click the point to move it to · Ctrl=ortho · Esc=cancel')
     : mode === 'draw_benchtop_join' ? (!bt.btJoinStart ? 'Join line: click a point on the benchtop edge · Esc=cancel' : 'Click the opposite edge to finish the join · Ctrl=ortho')
@@ -3292,11 +3335,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               wallOpenings={wallOpenings}
               wallFixtureSpans={wallFixtureSpans}
               annotationsLayer={cadLayer(planLayers)}
-              shapeEditLayer={mode === 'edit_cabinet_shape' && shp.edit ? (() => {
-                const c = cabinets.find(x => x.id === shp.edit!.cabId), w = c && walls.find(x => x.id === c.wall_id)
-                return c && w ? <CabinetShapeEditPlan edit={shp.edit} cab={c} wall={w} roomRef={centroid(walls)} zoom={view.zoom}
-                  onPick={shp.setSel} onHover={shp.setHover} /> : null
-              })() : undefined}
+              shapeEditLayer={mode === 'edit_cabinet_shape' ? shapeEditLayer() : undefined}
               tutorialLayer={tutorialOn && <TutorialHintsPlan zoom={view.zoom} layers={planLayers} />}
               fixturesLayer={
                 <FixturesPlan
@@ -3752,7 +3791,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         )}
         {mode === 'edit_cabinet_shape' && shp.edit && (() => {
           const c = cabinets.find(x => x.id === shp.edit!.cabId)
-          return c ? <CabinetShapeEditPanel edit={shp.edit} cab={c} onApply={shp.apply} onSelect={shp.setSel}
+          return c ? <CabinetShapeEditPanel edit={shp.edit} cab={c} cad={shapeCad.cad} msg={shapeCad.msg} onApply={shp.apply} onSelect={shp.setSel}
             onDone={() => finishCabinetShapeEdit()} onCancel={() => finishCabinetShapeEdit(true)} onUndo={shp.undo} /> : null
         })()}
         {mode === 'edit_benchtop_edges' && selectedBenchtop && bt.edgeEdit?.btId === selectedBenchtop.id && btEdgeAux && (

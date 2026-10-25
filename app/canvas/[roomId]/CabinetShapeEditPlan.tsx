@@ -31,10 +31,42 @@ export function edgePlanLabel(e: FootprintEdge): string {
   return sub === 'scribe' && e.scribe != null ? `${l} ${e.scribe}` : l
 }
 
+/** The edited footprint in plan: edges (points), corners with a choice, centre, outline ring. */
+export function shapeEditGeo(edit: CabinetShapeEdit, cab: CabinetInstance, wall: Wall, roomRef: Pt) {
+  const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, roomRef))
+  const toPlan = cabinetToPlan(cab, wall, perp)
+  const dims = { w: cab.dx, d: cab.dz }
+  const edges = footprintEdgesPlan(withEdgeOverrides(edit.fp), dims, toPlan)
+  const all = edges.flatMap(e => e.pts)
+  const c = all.reduce((a, p) => ({ x: a.x + p.x / all.length, y: a.y + p.y / all.length }), { x: 0, y: 0 })
+  const corners = footprintJunctions(edit.fp, dims.w, dims.d).map(j => ({ j, p: toPlan(j.at.x, j.at.y) }))
+  // The outline as one ring (each edge's points, its end = the next start).
+  const ring = edges.flatMap(e => e.pts.slice(0, -1))
+  return { edges, corners, c, ring }
+}
+
+/** What a click at plan point `p` picks (E4b: the Select tool's clicks go to the CAD
+ *  outline too, so picking reads the point instead of the overlay's own hit areas). */
+export function shapeEditPickAt(geo: ReturnType<typeof shapeEditGeo>, p: Pt, tol: number): ShapeEditSel {
+  let best: { s: ShapeEditSel; d: number } | null = null
+  for (const { j, p: q } of geo.corners) {
+    const d = Math.hypot(q.x - p.x, q.y - p.y)
+    if (d <= tol && (!best || d < best.d)) best = { s: { kind: 'corner', key: j.key }, d }
+  }
+  if (best) return best.s
+  for (const { edge, pts } of geo.edges) for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i], b = pts[i + 1], dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy
+    const t = L2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2)) : 0
+    const d = Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy)
+    if (d <= tol && (!best || d < best.d)) best = { s: { kind: 'edge', id: edge.id }, d }
+  }
+  return best?.s ?? null
+}
+
 const same = (a: ShapeEditSel, b: ShapeEditSel) =>
   !!a && !!b && a.kind === b.kind && (a.kind === 'edge' ? a.id === (b as { id: string }).id : a.key === (b as { key: string }).key)
 
-export default function CabinetShapeEditPlan({ edit, cab, wall, roomRef, zoom, onPick, onHover }: {
+export default function CabinetShapeEditPlan({ edit, cab, wall, roomRef, zoom, onPick, onHover, passive }: {
   edit: CabinetShapeEdit
   cab: CabinetInstance
   wall: Wall
@@ -42,19 +74,10 @@ export default function CabinetShapeEditPlan({ edit, cab, wall, roomRef, zoom, o
   zoom: number
   onPick: (s: ShapeEditSel) => void
   onHover: (s: ShapeEditSel) => void
+  /** Draw only — the CAD tools take the clicks (picks come from shapeEditPickAt). */
+  passive?: boolean
 }) {
-  const geo = useMemo(() => {
-    const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, roomRef))
-    const toPlan = cabinetToPlan(cab, wall, perp)
-    const dims = { w: cab.dx, d: cab.dz }
-    const edges = footprintEdgesPlan(withEdgeOverrides(edit.fp), dims, toPlan)
-    const all = edges.flatMap(e => e.pts)
-    const c = all.reduce((a, p) => ({ x: a.x + p.x / all.length, y: a.y + p.y / all.length }), { x: 0, y: 0 })
-    const corners = footprintJunctions(edit.fp, dims.w, dims.d).map(j => ({ j, p: toPlan(j.at.x, j.at.y) }))
-    // The outline as one ring (each edge's points, its end = the next start).
-    const ring = edges.flatMap(e => e.pts.slice(0, -1))
-    return { edges, corners, c, ring }
-  }, [edit.fp, cab, wall, roomRef])
+  const geo = useMemo(() => shapeEditGeo(edit, cab, wall, roomRef), [edit, cab, wall, roomRef])
 
   const px = (n: number) => n / zoom
   const down = (s: ShapeEditSel) => (e: React.PointerEvent) => {
@@ -64,7 +87,7 @@ export default function CabinetShapeEditPlan({ edit, cab, wall, roomRef, zoom, o
   }
 
   return (
-    <g data-shape-edit>
+    <g data-shape-edit style={passive ? { pointerEvents: 'none' } : undefined}>
       {/* Dim everything else (still visible); the edited cabinet is cut out of it. */}
       <path fillRule="evenodd" fill="#030712" fillOpacity={0.55} style={{ pointerEvents: 'none' }}
         d={`M-1e6,-1e6H1e6V1e6H-1e6Z${geo.ring.length > 2 ? 'M' + geo.ring.map(p => `${p.x},${p.y}`).join('L') + 'Z' : ''}`} />
