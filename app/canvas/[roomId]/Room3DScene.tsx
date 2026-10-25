@@ -946,7 +946,21 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
 }) {
   const [menu, setMenu]               = useState<MenuState | null>(null)
   const [wallMenu, setWallMenu]       = useState<WallMenuState | null>(null)
-  const [hiddenWallIds, setHiddenWallIds] = useState<Set<string>>(new Set())
+  // Hidden walls are remembered per room (localStorage) so leaving the 3D view
+  // and coming back — or reloading — keeps them hidden.
+  const hiddenKey = `rhk.3d.hiddenWalls.${room.id}`
+  const [hiddenWallIds, setHiddenWallIds] = useState<Set<string>>(() => {
+    try {
+      const ids = JSON.parse(localStorage.getItem(hiddenKey) ?? '[]')
+      return new Set(Array.isArray(ids) ? ids.filter((id: unknown) => typeof id === 'string') : [])
+    } catch { return new Set() }
+  })
+  useEffect(() => {
+    try {
+      if (hiddenWallIds.size) localStorage.setItem(hiddenKey, JSON.stringify([...hiddenWallIds]))
+      else localStorage.removeItem(hiddenKey)
+    } catch { /* storage blocked — session-only */ }
+  }, [hiddenKey, hiddenWallIds])
   const [birdsEyeSignal, setBirdsEyeSignal] = useState(0)
   // Local reset trigger (from the right-click menu), combined with the parent's
   // resetSignal prop so either source snaps the camera back to the default view.
