@@ -110,7 +110,7 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
 
       <div className="p-4 space-y-4">
         <div>
-          <label className={lbl}>Label</label>
+          <label className={lbl} title="Shown on the appliance spec block instead of the model name + size.">Label</label>
           <input
             key={f.id + (f.label ?? '')}
             defaultValue={f.label ?? ''}
@@ -119,6 +119,12 @@ export default function FixturePanel({ fixture, walls, onUpdate, onDelete, onMov
             onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
             className={inp.replace('text-right', '')}
           />
+          {f.label && (
+            <button onClick={() => onUpdate(f.id, { label: null })}
+              className="mt-1 text-[10px] text-gray-500 hover:text-red-400" title="Remove override: the spec block goes back to the model name + size">
+              ✕ Remove override
+            </button>
+          )}
         </div>
 
         {f.category !== 'opening' && (

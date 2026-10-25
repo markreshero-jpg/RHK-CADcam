@@ -68,5 +68,6 @@ describe('appliance spec fields', () => {
     expect(v.rangehoods).toBe('')
     expect(v.sinks).toBe('Sink (600 x 600 x 600)')
     expect(fillFields('RANGEHOOD\n{rangehoods}', v)).toBe('RANGEHOOD\n-')
+    expect(fixtureSpecLine(fx({ category: 'sink', name: 'Abi Zalo', label: ' Sink TBC by client ' }))).toBe('Sink TBC by client')
   })
 })

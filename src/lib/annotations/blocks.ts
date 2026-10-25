@@ -119,15 +119,19 @@ export const CAD_FIELDS: { key: string; label: string }[] = [
 
 // ── Appliance spec fields ──────────────────────────────────────────────────
 
-type SpecFixture = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'brand' | 'model_no' | 'width' | 'depth' | 'height'>
+type SpecFixture = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'brand' | 'model_no' | 'width' | 'depth' | 'height'> & { label?: string | null }
 
 /** Appliance kinds with their own field; anything else goes to {appliances_other}. */
 const APPLIANCE_FIELDS: Record<string, string> = {
   oven: 'ovens', cooker: 'ovens', cooktop: 'cooktops', rangehood: 'rangehoods', dishwasher: 'dishwashers',
 }
 
-/** One spec line: brand (when the name doesn't already say it) + name + model + W x D x H. */
+/** One spec line: the fixture's label as typed (e.g. a placeholder sink "TBC by
+ *  client", Mark 2026-10-25), else brand (when the name doesn't already say it) +
+ *  name + model + W x D x H. */
 export function fixtureSpecLine(f: SpecFixture): string {
+  const label = f.label?.trim()
+  if (label) return label
   const name = f.name.trim(), lower = name.toLowerCase()
   const brand = f.brand?.trim() ?? '', model = f.model_no?.trim() ?? ''
   const pre = brand && !lower.startsWith(brand.toLowerCase()) ? `${brand} ` : ''

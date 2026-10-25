@@ -305,7 +305,7 @@ feature. First use: the finishes **spec block** on the plan (RHK6570 vanities).
 | `{hinges}` | hinge schedule |
 | `{basins}` | sinks / basins placed in the room: name + W x D x H |
 
-| `{sinks}` / `{taps}` | sinks / taps placed in the room, one per line: brand (if not in the name) + name + model no. + (W x D x H); repeats as "2 x …" |
+| `{sinks}` / `{taps}` | sinks / taps placed in the room, one per line: the fixture's **Label** when set (Mark 2026-10-25: placeholder models until the client confirms; ✕ Remove override under the field clears it), else brand (if not in the name) + name + model no. + (W x D x H); repeats as "2 x …" |
 | `{ovens}` / `{cooktops}` / `{rangehoods}` / `{dishwashers}` | appliances by fixture kind (Oven + Cooker → ovens), same line format |
 | `{appliances_other}` / `{appliances}` | appliances of any other kind (microwave, washer…) / every appliance |
 
