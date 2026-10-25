@@ -771,6 +771,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'The cut list and the cabinet sheet show the sides and back as (lower) and (upper) pieces, and each piece keeps its own shelf and top holes. Nothing is drilled across the cut — it’s fixed by hand.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.split?.at?.length) },
   ]},
+
+  // Appended 2026-10-25 (fixed shelf → back construction holes).
+  { id: 'fixed_shelf_back_joint', level: 'advanced', topic: 'production', title: 'Fixed shelf holes into the back',
+    blurb: 'Fixed shelves screw through the back as well as the gables — set or change that joint.',
+    keywords: 'fixed shelf back construction holes screws dynamic joint drilling back edge construction method', steps: [
+    { id: 'open', title: 'Open the construction method',
+      body: 'Go to Library → Construction Methods, pick a method and open its Joints section. Under Fixed Shelf there is now a Back edge row beside Side supports.',
+      done: c => c.path.startsWith('/library/construction-methods') },
+    { id: 'joint', title: 'Pick the back joint (or leave it)',
+      body: 'Left blank, the back edge uses the same joint as the sides, so fixed shelves get the same holes through the back as through the gables. Pick a different joint to drill the back another way. Holes only go in when the shelf sits hard against the back: a shelf with a back setback, or a cabinet with no back, gets none. To turn it off for one cabinet, select the back (or the shelf) in the cabinet edit modal and click ✕ on its Fixed Shelf row to suppress it.',
+      done: c => c.path.startsWith('/library/construction-methods') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
