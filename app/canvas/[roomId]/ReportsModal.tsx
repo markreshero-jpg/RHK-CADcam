@@ -27,7 +27,7 @@ import { buildShapesByCab, SHAPE_SELECT, type ShapeRow, type ShapesByCab } from 
 import { shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { zoneBlank } from '@/src/lib/jointDrilling'
 import { EdgebandSheet, edgebandPrintHtml } from './EdgebandReport'
-import { buildEdgebandReport, type EdgebandProduct } from '@/src/lib/optimiser/edgebandLength'
+import { buildEdgebandReport, type EdgebandProduct, type EdgebandBoard } from '@/src/lib/optimiser/edgebandLength'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import type { OptiPart } from '@/src/lib/optimiser/types'
 
@@ -417,6 +417,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   // when the report is first opened; scoped to the rooms in view.
   const [ebParts, setEbParts] = useState<OptiPart[] | null>(null)
   const [ebProducts, setEbProducts] = useState<Map<string, EdgebandProduct>>(new Map())
+  const [ebBoards, setEbBoards] = useState<Map<string, EdgebandBoard>>(new Map())
   const [ebWaste, setEbWaste] = useState(() => {
     try {
       const raw = localStorage.getItem('rhk.edgebandWastePct')
@@ -428,12 +429,22 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
     if (selectedReport !== 'edgeband_length' || !project || ebParts) return
     let cancelled = false
     void loadProjectParts(project.id).then(async ({ parts }) => {
-      const ids = [...new Set(parts.flatMap(p => (p.eb_tape ?? []).map(t => t.id).filter((id): id is string => !!id)))]
-      const { data } = ids.length
-        ? await supabase.from('edge_banding').select('id,name,brand,color,thickness,width,cost_per_metre').in('id', ids)
-        : { data: [] }
+      const banded = parts.filter(p => p.eb_tape?.length)
+      const ids = [...new Set(banded.flatMap(p => p.eb_tape!.map(t => t.id).filter((id): id is string => !!id)))]
+      // The boards the tape goes on (a matching tape's finish), and which of
+      // them are bare boards that have colours (= colour not chosen).
+      const matIds = [...new Set(banded.map(p => p.material_id).filter((id): id is string => !!id))]
+      const [{ data }, { data: mats }, { data: kids }] = await Promise.all([
+        ids.length
+          ? supabase.from('edge_banding').select('id,name,brand,color,finish,material_match_id,thickness,width,cost_per_metre').in('id', ids)
+          : Promise.resolve({ data: [] }),
+        matIds.length ? supabase.from('materials').select('id,name').in('id', matIds) : Promise.resolve({ data: [] }),
+        matIds.length ? supabase.from('materials').select('parent_id').in('parent_id', matIds).eq('active', true) : Promise.resolve({ data: [] }),
+      ])
       if (cancelled) return
+      const parents = new Set(((kids ?? []) as { parent_id: string }[]).map(k => k.parent_id))
       setEbProducts(new Map(((data ?? []) as EdgebandProduct[]).map(p => [p.id, p])))
+      setEbBoards(new Map(((mats ?? []) as { id: string; name: string }[]).map(m => [m.id, { id: m.id, name: m.name, hasColours: parents.has(m.id) }])))
       setEbParts(parts)
     })
     return () => { cancelled = true }
@@ -441,8 +452,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   const ebReport = useMemo(() => {
     if (!ebParts) return null
     const ids = rooms.map(r => r.id)
-    return buildEdgebandReport(ebParts.filter(p => ids.includes(p.room_id)), ebProducts, ebWaste / 100, ids)
-  }, [ebParts, ebProducts, ebWaste, rooms])
+    return buildEdgebandReport(ebParts.filter(p => ids.includes(p.room_id)), ebProducts, ebWaste / 100, ids, ebBoards)
+  }, [ebParts, ebProducts, ebBoards, ebWaste, rooms])
 
   const supplyTotalsAll = useMemo(() => supplyTotals(supplyData.flatMap(d => d.lines)), [supplyData])
 

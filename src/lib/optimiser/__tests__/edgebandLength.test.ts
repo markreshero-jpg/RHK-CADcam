@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 vi.mock('@/src/lib/supabase', () => ({ supabase: {} }))
-import { bandedLengthMM, buildEdgebandReport, type EdgebandProduct } from '../edgebandLength'
+import { bandedLengthMM, buildEdgebandReport, tapeFinish, type EdgebandProduct, type EdgebandBoard } from '../edgebandLength'
 import { normalizeProject } from '../normalize'
 import { normalizeBenchtopParts } from '../benchtopParts'
 import { sampleShapeOutline } from '@/src/lib/shapePath'
@@ -66,7 +66,7 @@ describe('snapshot eb_tape + report', () => {
 
   it('rolls up by tape: metres, waste, cost', () => {
     const products = new Map<string, EdgebandProduct>([
-      ['eb1', { id: 'eb1', name: 'White', brand: 'Rehau', thickness: 1, width: 22, cost_per_metre: 0.8 }],
+      ['eb1', { id: 'eb1', name: 'White', brand: 'Rehau', color: 'White', finish: 'STP', thickness: 1, width: 22, cost_per_metre: 0.8 }],
       ['eb2', { id: 'eb2', name: 'Oak', thickness: null, width: 22, cost_per_metre: null }],
     ])
     const r = buildEdgebandReport(snap(), products, 0.1)
@@ -76,12 +76,36 @@ describe('snapshot eb_tape + report', () => {
     expect(eb1.mWaste).toBeCloseTo(2.7302, 6)
     expect(eb1.cost).toBeCloseTo(2.18416, 6)
     expect(eb1.name).toBe('Rehau White 22×1')
+    expect(eb1.finish).toBe('White STP')
     const eb2 = r.totals.find(l => l.id === 'eb2')!
     expect(eb2.m).toBeCloseTo(2.2, 6)
     expect(eb2.cost).toBeNull()
     expect(r.unpriced).toBe(1)
     expect(r.totalM).toBeCloseTo(4.682, 6)
     expect(r.rooms[0].cabinets.map(c => [c.cabinet, c.tape, c.parts])).toEqual([['BC-01', 'Oak', 1], ['BC-01', 'Rehau White 22×1', 3]])
+  })
+
+  it('a matching tape takes the board colour it goes on, one line per colour', () => {
+    const products = new Map<string, EdgebandProduct>([
+      ['m', { id: 'm', name: 'Matching Col A - 21x1', color: 'Matching', finish: 'Matching', cost_per_metre: 1 }],
+    ])
+    const boards = new Map<string, EdgebandBoard>([
+      ['white', { id: 'white', name: 'PT Colour Matt 16mm – Classic White' }],
+      ['bare', { id: 'bare', name: 'PT Woodmatt 16mm', hasColours: true }],
+    ])
+    const part = (uid: string, material_id: string, mm: number) =>
+      ({ uid, room_id: 'r', room_name: 'R', cabinet_instance_id: 'c', cabinet_label: 'BC-01', material_id, eb_tape: [{ id: 'm', mm }] })
+    const r = buildEdgebandReport([part('a', 'white', 1000), part('b', 'white', 500), part('c', 'bare', 2000)], products, 0, [], boards)
+    expect(r.totals.map(l => [l.finish, l.m, l.colourNotChosen])).toEqual([
+      ['PT Colour Matt 16mm – Classic White', 1.5, false],
+      ['PT Woodmatt 16mm', 2, true],
+    ])
+    expect(r.colourNotChosen).toBe(1)
+    expect(r.rooms[0].cabinets.map(c => c.finish)).toEqual(['PT Colour Matt 16mm – Classic White', 'PT Woodmatt 16mm'])
+    // A tape linked to one colour counts as matching; a hex swatch never prints.
+    expect(tapeFinish({ id: 'g', name: 'LX Abs Grain 1mm', color: '#9a8a51', finish: 'Grain', material_match_id: 'oak' }, { id: 'oak', name: 'LX Abs Grain 18mm – Elegant Oak' }).finish)
+      .toBe('LX Abs Grain 18mm – Elegant Oak')
+    expect(tapeFinish({ id: 'w', name: 'Black 21x1', color: '#000000', finish: 'Gloss' }, undefined).finish).toBe('Gloss')
   })
 
   it('a banded part with no tape anywhere lands on "Tape not set"', () => {

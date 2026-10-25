@@ -4,6 +4,8 @@
 // cost_per_metre. Read from the same saved part snapshot the optimiser nests
 // (loadProjectParts), so the metres follow the parts actually cut — removed
 // parts out, size overrides and shaped outlines in. Finished edge lengths.
+// Finish: a matching tape takes the board colour it goes on (the parts' saved
+// material — the job → room → cabinet cascade), a fixed tape its own colour.
 // Rollup: src/lib/optimiser/edgebandLength.ts.
 
 import type { EdgebandReport, EdgebandLine } from '@/src/lib/optimiser/edgebandLength'
@@ -11,21 +13,29 @@ import type { EdgebandReport, EdgebandLine } from '@/src/lib/optimiser/edgebandL
 const m2 = (m: number) => m.toFixed(2)
 const money = (v: number | null) => (v == null ? '—' : `$${v.toFixed(2)}`)
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+const NOT_CHOSEN = 'colour not chosen'
+
+function Finish({ finish, notChosen }: { finish: string; notChosen: boolean }) {
+  return notChosen
+    ? <span className="text-amber-300" title="Pick the board colour in Job / Room Properties → Materials">{finish} — {NOT_CHOSEN}</span>
+    : <>{finish}</>
+}
 
 function LinesTable({ lines, waste }: { lines: EdgebandLine[]; waste: number }) {
   return (
     <table className="w-full text-[11px] border-collapse">
       <thead>
         <tr className="text-gray-500 text-[10px]">
-          {['Tape', 'Parts', 'Metres', `+${Math.round(waste * 100)}% waste`, '$/m', 'Cost'].map((h, i) => (
-            <th key={h} className={`pb-1 pr-3 font-medium border-b border-gray-800 ${i ? 'text-right' : 'text-left'}`}>{h}</th>
+          {['Tape', 'Finish', 'Parts', 'Metres', `+${Math.round(waste * 100)}% waste`, '$/m', 'Cost'].map((h, i) => (
+            <th key={h} className={`pb-1 pr-3 font-medium border-b border-gray-800 ${i >= 2 ? 'text-right' : 'text-left'}`}>{h}</th>
           ))}
         </tr>
       </thead>
       <tbody>
         {lines.map((l, i) => (
-          <tr key={l.id ?? '-'} className={`${i % 2 === 0 ? 'text-gray-300' : 'text-gray-400 bg-gray-800/30'} ${l.id ? '' : 'text-amber-300'}`}>
+          <tr key={`${l.id ?? '-'}|${l.finish}`} className={`${i % 2 === 0 ? 'text-gray-300' : 'text-gray-400 bg-gray-800/30'} ${l.id ? '' : 'text-amber-300'}`}>
             <td className="py-0.5 pr-3">{l.name}</td>
+            <td className="py-0.5 pr-3"><Finish finish={l.finish} notChosen={l.colourNotChosen} /></td>
             <td className="py-0.5 pr-3 text-right font-mono">{l.parts}</td>
             <td className="py-0.5 pr-3 text-right font-mono">{m2(l.m)}</td>
             <td className="py-0.5 pr-3 text-right font-mono">{m2(l.mWaste)}</td>
@@ -60,16 +70,17 @@ export function EdgebandSheet({ report, waste, loading }: { report: EdgebandRepo
           <table className="w-full text-[11px] border-collapse mt-3">
             <thead>
               <tr className="text-gray-500 text-[10px]">
-                {['Cabinet', 'Tape', 'Parts', 'Metres'].map((h, i) => (
-                  <th key={h} className={`pb-1 pr-3 font-medium border-b border-gray-800 ${i >= 2 ? 'text-right' : 'text-left'}`}>{h}</th>
+                {['Cabinet', 'Tape', 'Finish', 'Parts', 'Metres'].map((h, i) => (
+                  <th key={h} className={`pb-1 pr-3 font-medium border-b border-gray-800 ${i >= 3 ? 'text-right' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {r.cabinets.map((c, i) => (
-                <tr key={`${c.cabinetId}|${c.tape}`} className={i % 2 === 0 ? 'text-gray-400' : 'text-gray-500 bg-gray-800/30'}>
+                <tr key={`${c.cabinetId}|${c.tape}|${c.finish}`} className={i % 2 === 0 ? 'text-gray-400' : 'text-gray-500 bg-gray-800/30'}>
                   <td className="py-0.5 pr-3 font-mono">{c.cabinet}</td>
                   <td className="py-0.5 pr-3">{c.tape}</td>
+                  <td className="py-0.5 pr-3"><Finish finish={c.finish} notChosen={c.colourNotChosen} /></td>
                   <td className="py-0.5 pr-3 text-right font-mono">{c.parts}</td>
                   <td className="py-0.5 text-right font-mono">{m2(c.m)}</td>
                 </tr>
@@ -96,18 +107,23 @@ function Footer({ report }: { report: EdgebandReport }) {
       <span>With waste <span className="font-mono">{m2(report.totalMWaste)} m</span></span>
       <span>Cost <span className="font-mono">{money(report.totalCost)}</span>
         {report.unpriced > 0 && <span className="text-amber-300"> · {report.unpriced} tape{report.unpriced > 1 ? 's' : ''} with no $/m (Library → Materials)</span>}</span>
+      {report.colourNotChosen > 0 && (
+        <span className="text-amber-300">{report.colourNotChosen} matching tape{report.colourNotChosen > 1 ? 's' : ''} on a board with no colour picked — set it in Job / Room Properties → Materials</span>
+      )}
     </div>
   )
 }
+
+const finishHtml = (finish: string, notChosen: boolean) => esc(finish) + (notChosen ? ` <b>— ${NOT_CHOSEN}</b>` : '')
 
 /** Printable HTML body (ReportsModal's Print / PDF). */
 export function edgebandPrintHtml(report: EdgebandReport | null, waste: number): string {
   if (!report?.totals.length) return ''
   const lines = (ls: EdgebandLine[]) => `
     <table>
-      <thead><tr><th>Tape</th><th class="r">Parts</th><th class="r">Metres</th><th class="r">+${Math.round(waste * 100)}% waste</th><th class="r">$/m</th><th class="r">Cost</th></tr></thead>
+      <thead><tr><th>Tape</th><th>Finish</th><th class="r">Parts</th><th class="r">Metres</th><th class="r">+${Math.round(waste * 100)}% waste</th><th class="r">$/m</th><th class="r">Cost</th></tr></thead>
       <tbody>${ls.map((l, i) => `
-        <tr class="${i % 2 ? 'alt' : ''}"><td>${esc(l.name)}</td><td class="r mono">${l.parts}</td><td class="r mono">${m2(l.m)}</td>
+        <tr class="${i % 2 ? 'alt' : ''}"><td>${esc(l.name)}</td><td>${finishHtml(l.finish, l.colourNotChosen)}</td><td class="r mono">${l.parts}</td><td class="r mono">${m2(l.m)}</td>
         <td class="r mono">${m2(l.mWaste)}</td><td class="r mono">${money(l.costPerMetre)}</td><td class="r mono">${money(l.cost)}</td></tr>`).join('')}
       </tbody>
     </table>`
@@ -116,9 +132,9 @@ export function edgebandPrintHtml(report: EdgebandReport | null, waste: number):
     ${lines(r.lines)}
     <h3>By cabinet</h3>
     <table>
-      <thead><tr><th>Cabinet</th><th>Tape</th><th class="r">Parts</th><th class="r">Metres</th></tr></thead>
+      <thead><tr><th>Cabinet</th><th>Tape</th><th>Finish</th><th class="r">Parts</th><th class="r">Metres</th></tr></thead>
       <tbody>${r.cabinets.map((c, i) => `
-        <tr class="${i % 2 ? 'alt' : ''}"><td class="mono">${esc(c.cabinet)}</td><td>${esc(c.tape)}</td><td class="r mono">${c.parts}</td><td class="r mono">${m2(c.m)}</td></tr>`).join('')}
+        <tr class="${i % 2 ? 'alt' : ''}"><td class="mono">${esc(c.cabinet)}</td><td>${esc(c.tape)}</td><td>${finishHtml(c.finish, c.colourNotChosen)}</td><td class="r mono">${c.parts}</td><td class="r mono">${m2(c.m)}</td></tr>`).join('')}
       </tbody>
     </table>`).join('')
   return `${rooms}

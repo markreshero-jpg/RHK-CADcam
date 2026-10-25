@@ -55,13 +55,24 @@ export function tapeRuns(id: string | null, mm: number): TapeRun[] {
 // ── Rollup ───────────────────────────────────────────────────────────────────
 
 export interface EdgebandProduct {
-  id: string; name: string; brand?: string | null; color?: string | null
+  id: string; name: string; brand?: string | null; color?: string | null; finish?: string | null
+  material_match_id?: string | null
   thickness?: number | null; width?: number | null; cost_per_metre?: number | null
+}
+
+/** The board (or board colour) a banded part is cut from — its persisted material_id,
+ *  i.e. the job → room → cabinet material cascade incl. Room Properties picks. */
+export interface EdgebandBoard {
+  id: string
+  name: string               // colour rows carry "Board – Colour"
+  hasColours?: boolean       // a bare board that has colours = colour not chosen
 }
 
 export interface EdgebandLine {
   id: string | null          // null = banded, no tape set on the part
   name: string
+  finish: string             // the tape's own colour, or the board colour a matching tape goes on
+  colourNotChosen: boolean   // matching tape on a board whose colour wasn't picked
   thickness: number | null
   width: number | null
   parts: number              // parts carrying this tape
@@ -71,7 +82,7 @@ export interface EdgebandLine {
   cost: number | null        // mWaste × costPerMetre (null when no price)
 }
 
-export interface EdgebandCabinetLine { cabinetId: string; cabinet: string; tape: string; parts: number; m: number }
+export interface EdgebandCabinetLine { cabinetId: string; cabinet: string; tape: string; finish: string; colourNotChosen: boolean; parts: number; m: number }
 
 export interface EdgebandRoom { roomId: string; room: string; cabinets: EdgebandCabinetLine[]; lines: EdgebandLine[] }
 
@@ -82,6 +93,7 @@ export interface EdgebandReport {
   totalMWaste: number
   totalCost: number          // priced lines only
   unpriced: number           // lines with metres but no cost_per_metre
+  colourNotChosen: number    // lines whose board colour wasn't picked
 }
 
 export function tapeName(p: EdgebandProduct | undefined, id: string | null): string {
@@ -92,38 +104,64 @@ export function tapeName(p: EdgebandProduct | undefined, id: string | null): str
   return [p.brand, p.name].filter(Boolean).join(' ') + size
 }
 
+const isMatching = (p: EdgebandProduct) =>
+  !!p.material_match_id || [p.finish, p.color, p.name].some(v => /matching/i.test(v ?? ''))
+
+/**
+ * The finish to order a tape in. A matching tape (finish / colour "Matching",
+ * or linked to one board colour) takes the colour of the board it is on; a
+ * fixed tape shows its own colour + finish ("White STP"; hex swatches skipped).
+ */
+export function tapeFinish(p: EdgebandProduct | undefined, board: EdgebandBoard | undefined): { finish: string; colourNotChosen: boolean } {
+  if (!p || isMatching(p)) {
+    if (!board) return { finish: p ? '—' : '', colourNotChosen: false }
+    return { finish: board.name, colourNotChosen: !!board.hasColours }
+  }
+  const own = [...new Set([p.color, p.finish].filter((v): v is string => !!v && !v.startsWith('#')))]
+  return { finish: own.join(' ') || '—', colourNotChosen: false }
+}
+
 const NATURAL = { numeric: true } as const
 
-function rollup(runs: { id: string | null; mm: number; uid: string }[], products: Map<string, EdgebandProduct>, waste: number): EdgebandLine[] {
-  const by = new Map<string | null, { mm: number; parts: Set<string> }>()
+type Run = { id: string | null; mm: number; uid: string; finish: string; colourNotChosen: boolean }
+
+function rollup(runs: Run[], products: Map<string, EdgebandProduct>, waste: number): EdgebandLine[] {
+  const by = new Map<string, { id: string | null; finish: string; colourNotChosen: boolean; mm: number; parts: Set<string> }>()
   for (const r of runs) {
-    const e = by.get(r.id) ?? { mm: 0, parts: new Set<string>() }
-    e.mm += r.mm; e.parts.add(r.uid); by.set(r.id, e)
+    const k = `${r.id ?? ''}|${r.finish}`
+    const e = by.get(k) ?? { id: r.id, finish: r.finish, colourNotChosen: r.colourNotChosen, mm: 0, parts: new Set<string>() }
+    e.mm += r.mm; e.parts.add(r.uid); by.set(k, e)
   }
-  return [...by.entries()].map(([id, e]) => {
-    const p = id ? products.get(id) : undefined
+  return [...by.values()].map(e => {
+    const p = e.id ? products.get(e.id) : undefined
     const m = e.mm / 1000
     const mWaste = m * (1 + waste)
     const costPerMetre = p?.cost_per_metre ?? null
     return {
-      id, name: tapeName(p, id), thickness: p?.thickness ?? null, width: p?.width ?? null,
+      id: e.id, name: tapeName(p, e.id), finish: e.finish, colourNotChosen: e.colourNotChosen,
+      thickness: p?.thickness ?? null, width: p?.width ?? null,
       parts: e.parts.size, m, mWaste, costPerMetre,
       cost: costPerMetre != null ? mWaste * costPerMetre : null,
     }
-  }).sort((a, b) => (a.id ? 0 : 1) - (b.id ? 0 : 1) || a.name.localeCompare(b.name, undefined, NATURAL))
+  }).sort((a, b) => (a.id ? 0 : 1) - (b.id ? 0 : 1) || a.name.localeCompare(b.name, undefined, NATURAL) || a.finish.localeCompare(b.finish, undefined, NATURAL))
 }
 
 /**
  * Edgeband report over snapshot parts (already scoped to the rooms wanted).
  * `waste` = fraction added on top of the finished metres (0.1 = 10%).
+ * `boards` = the parts' materials, for a matching tape's finish.
  */
 export function buildEdgebandReport(
-  parts: Pick<OptiPart, 'uid' | 'room_id' | 'room_name' | 'cabinet_instance_id' | 'cabinet_label' | 'eb_tape'>[],
+  parts: Pick<OptiPart, 'uid' | 'room_id' | 'room_name' | 'cabinet_instance_id' | 'cabinet_label' | 'eb_tape' | 'material_id'>[],
   products: Map<string, EdgebandProduct>,
   waste: number,
   roomOrder: string[] = [],
+  boards: Map<string, EdgebandBoard> = new Map(),
 ): EdgebandReport {
-  const runs = parts.flatMap(p => (p.eb_tape ?? []).map(t => ({ ...t, uid: p.uid, part: p })))
+  const runs = parts.flatMap(p => (p.eb_tape ?? []).map(t => ({
+    ...t, uid: p.uid, part: p,
+    ...tapeFinish(t.id ? products.get(t.id) : undefined, p.material_id ? boards.get(p.material_id) : undefined),
+  })))
   const roomIds = [...new Set(runs.map(r => r.part.room_id))]
     .sort((a, b) => (roomOrder.indexOf(a) + 1 || 1e9) - (roomOrder.indexOf(b) + 1 || 1e9))
   const rooms: EdgebandRoom[] = roomIds.map(roomId => {
@@ -131,8 +169,8 @@ export function buildEdgebandReport(
     const cab = new Map<string, EdgebandCabinetLine>()
     const uids = new Map<string, Set<string>>()
     for (const r of rr) {
-      const k = `${r.part.cabinet_instance_id}|${r.id ?? ''}`
-      const e = cab.get(k) ?? { cabinetId: r.part.cabinet_instance_id, cabinet: r.part.cabinet_label, tape: tapeName(r.id ? products.get(r.id) : undefined, r.id), parts: 0, m: 0 }
+      const k = `${r.part.cabinet_instance_id}|${r.id ?? ''}|${r.finish}`
+      const e = cab.get(k) ?? { cabinetId: r.part.cabinet_instance_id, cabinet: r.part.cabinet_label, tape: tapeName(r.id ? products.get(r.id) : undefined, r.id), finish: r.finish, colourNotChosen: r.colourNotChosen, parts: 0, m: 0 }
       const u = uids.get(k) ?? new Set<string>()
       u.add(r.uid); uids.set(k, u)
       e.m += r.mm / 1000; e.parts = u.size
@@ -141,7 +179,7 @@ export function buildEdgebandReport(
     return {
       roomId, room: rr[0].part.room_name,
       cabinets: [...cab.values()]
-        .sort((a, b) => a.cabinet.localeCompare(b.cabinet, undefined, NATURAL) || a.tape.localeCompare(b.tape)),
+        .sort((a, b) => a.cabinet.localeCompare(b.cabinet, undefined, NATURAL) || a.tape.localeCompare(b.tape) || a.finish.localeCompare(b.finish)),
       lines: rollup(rr, products, waste),
     }
   })
@@ -152,5 +190,6 @@ export function buildEdgebandReport(
     totalMWaste: totals.reduce((a, l) => a + l.mWaste, 0),
     totalCost: totals.reduce((a, l) => a + (l.cost ?? 0), 0),
     unpriced: totals.filter(l => l.cost == null && l.m > 0).length,
+    colourNotChosen: totals.filter(l => l.colourNotChosen).length,
   }
 }

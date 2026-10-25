@@ -338,6 +338,13 @@ we'll work on a report centre later" — so the Stage 2 summary line is NOT buil
   breakdown; job scope adds totals. Waste % input in the header (localStorage `rhk.edgebandWastePct`,
   default 10). No price → "—" + an unpriced count; banded edge with no tape → "Tape not set" (amber).
   Tape name = brand + name, + W×T only when the name carries no size.
+- **Finish column** (Mark 2026-10-25: "can we have the finish put next to it … from the room properties if the
+  board colour is selected"): a MATCHING tape (finish / colour "Matching", or `material_match_id` set) takes the
+  board it goes on — the part's saved `material_id`, i.e. the job → room → cabinet cascade incl. Room Properties
+  picks and cabinet overrides — so one tape splits into a line per board colour. A bare board that has colours
+  shows "<board> — colour not chosen" (amber + footer count). A fixed tape shows its own colour + finish
+  ("White STP"; hex swatches skipped). RHK6581 Kitchen today: Matching Col A → "PT Colour Matt 16mm — colour
+  not chosen" (parts saved before a colour was picked; re-resolve after picking to see the colour).
 - Tests `__tests__/edgebandLength.test.ts` (rect / L / arc / custom fallback / unknown thickness / rollup /
   benchtop). Verified headlessly (`z_plan_automation/verify-o7.mjs`) on RHK6581 Kitchen: BC-14 hand calc —
   drawer fronts 2×2(265+235)+2(265+170) = 2.87 m Matching Col A; White = 2 notched gables × 570 (front

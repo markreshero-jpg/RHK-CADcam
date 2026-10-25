@@ -926,7 +926,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click Reports in the menu bar and choose Room Reports… (Job Reports… adds up every room).',
       target: 'menu-Reports', canvas: true, done: c => c.report !== null },
     { id: 'pick', title: 'Choose Edgeband Length',
-      body: 'In the list on the left, click Edgeband Length. Each tape gets a line: parts, finished metres, metres with waste, $/m and cost, then a per-cabinet breakdown. It reads the saved parts the optimiser cuts, so save after changing cabinets. Shaped parts count their banded outline, arcs included.',
+      body: 'In the list on the left, click Edgeband Length. Each tape gets a line with its Finish (a matching tape shows the board colour it goes on, from Job / Room Properties → Materials), parts, finished metres, metres with waste, $/m and cost, then a per-cabinet breakdown. It reads the saved parts the optimiser cuts, so save after changing cabinets. Shaped parts count their banded outline, arcs included.',
       target: 'report-edgeband_length', canvas: true, done: c => c.report === 'edgeband_length' },
     { id: 'print', title: 'Set waste and print',
       body: 'Type the Waste % at the top (it is remembered on this computer, default 10). A tape with no price shows — : set its $/m in Library → Materials → Edge banding. "Tape not set" means a banded edge with no tape chosen. Click Print / PDF.',
