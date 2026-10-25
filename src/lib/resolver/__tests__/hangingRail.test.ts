@@ -35,4 +35,19 @@ describe('hanging rail accessory', () => {
   it('unknown accessory keys emit nothing', () => {
     expect(rail([{ type: 'accessory', key: 'WINE_RACK', y_locked: false }])).toEqual([])
   })
+  // z_accessories A4/A5: size + colour from the library rail.
+  const products = [
+    { id: 'p1', name: 'Oval 15 x 30', category: 'hanging_rail', width_mm: 15, height_mm: 30, colour: '#fff', is_default: true },
+    { id: 'p2', name: 'Round 25', category: 'hanging_rail', width_mm: 25, height_mm: 25, colour: '#999', is_default: false },
+  ]
+  const railP = (f: InternalFitting) => resolveCabinet({ ...cab([f]), accessory_products: products }).internal_parts.filter(p => p.part_type === 'accessory')
+  it('uses the default library rail when none is picked', () => {
+    const [r] = railP({ type: 'accessory', key: HANGING_RAIL_OVAL.key, y_locked: false })
+    expect(r.accessory).toEqual({ product_id: 'p1', name: 'Oval 15 x 30', colour: '#fff' })
+  })
+  it('a picked rail sets the size it draws at', () => {
+    const [r] = railP({ type: 'accessory', key: HANGING_RAIL_OVAL.key, y_locked: false, product_id: 'p2' })
+    expect([r.DX, r.DZ, r.accessory?.product_id]).toEqual([25, 25, 'p2'])
+    expect(r.Y).toBeCloseTo(cab([]).DY - board.DZ - 60 - 25)
+  })
 })

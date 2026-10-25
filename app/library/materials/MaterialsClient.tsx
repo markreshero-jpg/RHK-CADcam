@@ -40,6 +40,7 @@ interface InitialData {
   hinges:   Record<string, unknown>[]
   handles:  Record<string, unknown>[]
   slides:   Record<string, unknown>[]
+  accessories: Record<string, unknown>[]
 }
 
 // ─── Tab configs ──────────────────────────────────────────────────────────────
@@ -221,6 +222,44 @@ const TABS: TabConfig[] = [
       { key: 'active',           label: 'Active',     type: 'boolean', w: 48  },
     ],
   },
+  {
+    // Accessories (z_accessories A1): hanging rails + their supports now,
+    // wardrobe / pantry / misc items later — one list, filtered by category.
+    id: 'accessories', label: 'Accessories', table: 'hardware_accessories', initKey: 'accessories',
+    defaults: { name: '', brand: null, category: 'hanging_rail', supplier_code: null, profile: null, width_mm: null, height_mm: null, stock_length_mm: null, max_span_mm: null, end_support_id: null, centre_support_id: null, colour: null, finish: null, cost_per_unit: null, is_default: false, active: true },
+    fields: [
+      { key: 'name',          label: 'Name',     type: 'text',    w: 200 },
+      { key: 'brand',         label: 'Brand',    type: 'text',    w: 100 },
+      { key: 'category',      label: 'Category', type: 'select',  w: 110,
+        options: [
+          { value: 'hanging_rail', label: 'Hanging rail' },
+          { value: 'rail_support', label: 'Rail support' },
+          { value: 'other',        label: 'Other' },
+        ],
+      },
+      { key: 'supplier_code', label: 'Supplier', type: 'text',    w: 80 },
+      { key: 'profile',       label: 'Profile',  type: 'select',  w: 70,
+        options: [
+          { value: '',      label: '—' },
+          { value: 'oval',  label: 'Oval' },
+          { value: 'round', label: 'Round' },
+          { value: 'rect',  label: 'Rect' },
+        ],
+      },
+      { key: 'width_mm',        label: 'W mm',     type: 'number',  w: 52 },
+      { key: 'height_mm',       label: 'H mm',     type: 'number',  w: 52 },
+      { key: 'stock_length_mm', label: 'Bar mm',   type: 'number',  w: 62 },
+      { key: 'max_span_mm',     label: 'Max span', type: 'number',  w: 66 },
+      { key: 'end_support_id',    label: 'End support',    type: 'select', w: 150, options: [] },
+      { key: 'centre_support_id', label: 'Centre support', type: 'select', w: 150, options: [] },
+      { key: 'colour',        label: 'Colour',   type: 'colour',  w: 90 },
+      { key: 'finish',        label: 'Finish',   type: 'text',    w: 100 },
+      { key: 'cost_per_unit', label: '$/ea',     type: 'number',  w: 60,  step: '0.01' },
+      // The rail a hanging-rail fitting uses when it doesn't pick one.
+      { key: 'is_default',    label: 'Default',  type: 'boolean', w: 52 },
+      { key: 'active',        label: 'Active',   type: 'boolean', w: 48 },
+    ],
+  },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -262,6 +301,7 @@ function formToPayload(form: Record<string, FVal>, fields: FieldConfig[]): Recor
 function fmtCell(val: unknown, f: FieldConfig): string {
   if (val == null || val === '') return '—'
   if (f.type === 'boolean') return val ? '✓' : ''
+  if (f.type === 'select' && f.options?.length) return f.options.find(o => o.value === val)?.label ?? String(val)
   if (f.type === 'number') {
     const n = Number(val)
     if (isNaN(n)) return String(val)
@@ -283,13 +323,14 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
     if (initialData) return
     let cancelled = false
     async function load() {
-      const [boards, bands, benchtops, hinges, handles, slides] = await Promise.all([
+      const [boards, bands, benchtops, hinges, handles, slides, accessories] = await Promise.all([
         supabase.from('materials').select('*').order('name'),
         supabase.from('edge_banding').select('*').order('name'),
         supabase.from('benchtop_materials').select('*').order('name'),
         supabase.from('hardware_hinges').select('*').order('name'),
         supabase.from('hardware_handles').select('*').order('name'),
         supabase.from('hardware_slides').select('*').order('name'),
+        supabase.from('hardware_accessories').select('*').order('name'),
       ])
       if (cancelled) return
       setAllRows({
@@ -299,6 +340,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         hinges:   (hinges.data    ?? []) as Record<string, unknown>[],
         handles:  (handles.data   ?? []) as Record<string, unknown>[],
         slides:   (slides.data    ?? []) as Record<string, unknown>[],
+        accessories: (accessories.data ?? []) as Record<string, unknown>[],
       })
     }
     load()
@@ -316,6 +358,12 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
   }, [])
   const toolOptions = [{ value: '', label: '— none —' }, ...tools.map(t => ({ value: t.id, label: t.tool_number ? `${t.tool_number} · ${t.name}` : t.name }))]
   const toolLabel = (id: unknown) => { const t = tools.find(x => x.id === id); return t ? (t.tool_number ? `${t.tool_number} · ${t.name}` : t.name) : '—' }
+
+  // Rail support picks on the Accessories tab (z_accessories A3).
+  const supports = (allRows.accessories ?? []).filter(r => r.category === 'rail_support')
+  const supportOptions = [{ value: '', label: '— none —' }, ...supports.map(r => ({ value: String(r.id), label: String(r.name) }))]
+  const isSupportKey = (k: string) => k === 'end_support_id' || k === 'centre_support_id'
+  const supportLabel = (id: unknown) => String(supports.find(r => r.id === id)?.name ?? '—')
 
   const [forms, setForms] = useState<Record<string, Record<string, FVal>>>(() =>
     Object.fromEntries(TABS.map(t => [t.id, mkForm(t.defaults)]))
@@ -569,7 +617,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                     onChange={e => patchForm({ [f.key]: e.target.value })}
                     className="bg-transparent border-b border-edge-strong text-xs text-ink focus:outline-none focus:border-accent py-0.5 w-full"
                   >
-                    {(f.key === 'cnc_tool_id' ? toolOptions : f.options!).map(o => (
+                    {(f.key === 'cnc_tool_id' ? toolOptions : isSupportKey(f.key) ? supportOptions : f.options!).map(o => (
                       <option key={o.value} value={o.value} className="bg-surface">{o.label}</option>
                     ))}
                   </select>
@@ -781,7 +829,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                             {row[f.key] ? String(row[f.key]) : '—'}
                           </span>
                         </>
-                      ) : f.key === 'cnc_tool_id' ? toolLabel(row[f.key]) : isBoardTab && f.key === 'name' ? (
+                      ) : f.key === 'cnc_tool_id' ? toolLabel(row[f.key]) : isSupportKey(f.key) ? supportLabel(row[f.key]) : isBoardTab && f.key === 'name' ? (
                         <>
                           {fmtCell(row[f.key], f)}
                           {(() => {

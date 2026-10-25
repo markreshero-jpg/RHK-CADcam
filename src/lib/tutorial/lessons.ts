@@ -865,6 +865,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Each section fills from the fixtures in the room: name, brand, model no. and W x D x H, with "2 x" for repeats. If the sink or tap is only a stand-in, type what to show in the fixture’s Label (e.g. "Sink TBC by client"); ✕ Remove override under the field puts the model back. Place or swap a fixture and the block follows. A section with nothing placed shows "-": double-click the block and delete that section.',
       canvas: true, done: c => c.mode === 'cad' },
   ]},
+
+  // Appended 2026-10-25 (z_accessories — Accessories library, hanging rails).
+  { id: 'accessories_library', level: 'intermediate', topic: 'cabinets', title: 'Hanging rails from the library',
+    blurb: 'Keep your robe rails (and their supports) in Library → Materials → Accessories and pick one per rail.',
+    keywords: 'accessories accessory hanging rail robe wardrobe oval supports end support centre pillar library misc', steps: [
+    { id: 'tab', title: 'Open the Accessories tab',
+      body: 'Go to Library → Materials and click Accessories. Rails are Category "Hanging rail": W and H are the profile size the rail is drawn at (oval 15 × 30), Bar mm the length you buy, Colour how it shows in 3D. Supports are their own rows ("Rail support") — pick them in a rail’s End support / Centre support. Tick Default on the rail most jobs use.',
+      done: c => c.path.startsWith('/library/materials') },
+    { id: 'pick', title: 'Pick a rail in a cupboard',
+      body: 'Open a robe cupboard, go to the internals and click its hanging rail (or Add → Hanging rail). The Rail select says Default (the ticked rail) — pick another rail to change just this one. The rail takes that rail’s size and colour.',
+      canvas: true, done: (c, s) => ev(c, 'rail_product_set') > ev(s, 'rail_product_set') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

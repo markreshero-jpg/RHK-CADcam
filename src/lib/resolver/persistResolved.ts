@@ -104,6 +104,7 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       // Accessories (hanging rail …) are bought hardware, not cut board.
       output_to_cnc:     p.part_type !== 'accessory',
       outline:           p.outline ?? null,
+      accessory:         p.accessory ?? null,   // hanging rail product (z_accessories)
     })),
     // Cuttable box panels, one row per panel per stack, keyed by (face_zone
     // row/col, part_type) so part_operations can attach.

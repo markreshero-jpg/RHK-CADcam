@@ -24,7 +24,7 @@
 
 import {
   ResolvedInternalPart, ConstructionRules, ResolverError,
-  InternalFitting, InternalFittingType,
+  InternalFitting, InternalFittingType, AccessoryProduct,
   AdjShelfFitting, FixedShelfFitting, InnerDrawerFitting, PullOutFitting, AccessoryFitting,
   DrawerType, DrawerBoxRules, DrawerBoxPartType, Material,
   SlideProduct, SlideScheduleEntry, ResolvedDrawerSlide,
@@ -68,6 +68,7 @@ export interface FittingCtx {
   innerDrawerFrontMat?:  Material
   innerDrawerFrontEbId?: string
   slideProducts:    SlideProduct[]
+  accessoryProducts?: AccessoryProduct[]
   slideSchedule:    SlideScheduleEntry[]
   // Per-fitting method override map (id → rules). Pre-fetched in loadCabinetInput.
   methodRulesById:  Record<string, DrawerBoxRules>
@@ -462,13 +463,22 @@ function resolvePullOuts(box: Box, fittings: InternalFitting[], ctx: FittingCtx)
 // output_to_cnc false and skipped by the optimiser.
 //   HANGING_RAIL_OVAL — 30 high x 15 wide oval robe rail, wall to wall across the
 //   compartment, centred in the depth; drawn as a block for now (Mark 2026-10-22).
+// The rail's size + colour come from its hardware_accessories product (the
+// fitting's product_id, else the default rail — z_accessories A4); with no
+// products the built-in 15 x 30 stands.
 export const HANGING_RAIL_OVAL = { key: 'HANGING_RAIL_OVAL', h: 30, w: 15, belowTop: 60 }
+
+export function hangingRailProduct(products: AccessoryProduct[] | undefined, id?: string): AccessoryProduct | undefined {
+  const rails = (products ?? []).filter(p => p.category === 'hanging_rail')
+  return (id ? rails.find(p => p.id === id) : undefined) ?? rails.find(p => p.is_default) ?? undefined
+}
 
 function resolveAccessories(box: Box, fittings: InternalFitting[], ctx: FittingCtx): ResolvedInternalPart[] {
   const out: ResolvedInternalPart[] = []
   for (const a of fittings.filter((f): f is AccessoryFitting => f.type === 'accessory')) {
     if (a.key !== HANGING_RAIL_OVAL.key) continue
-    const R = HANGING_RAIL_OVAL
+    const prod = hangingRailProduct(ctx.accessoryProducts, a.product_id)
+    const R = { ...HANGING_RAIL_OVAL, h: Number(prod?.height_mm) || HANGING_RAIL_OVAL.h, w: Number(prod?.width_mm) || HANGING_RAIL_OVAL.w }
     const y = (a.y_locked && a.y_position !== undefined) ? a.y_position : box.y + box.h - R.belowTop - R.h
     out.push({
       part_type:   'accessory',
@@ -479,6 +489,7 @@ function resolveAccessories(box: Box, fittings: InternalFitting[], ctx: FittingC
       material_id: ctx.shelfMatId,
       edge_band:   edgeSidesToBanding([]),
       y_locked:    !!a.y_locked,
+      ...(prod ? { accessory: { product_id: prod.id, name: prod.name, colour: prod.colour } } : {}),
     })
   }
   return out
@@ -511,7 +522,8 @@ function fittingExtent(box: Box, f: InternalFitting, ctx: FittingCtx): number {
       const def    = f.type === 'inner_drawer' ? 150 : 60
       return f.height ?? slide?.box_height ?? def
     }
-    case 'accessory': return f.height ?? (f.key === HANGING_RAIL_OVAL.key ? HANGING_RAIL_OVAL.h : 80)
+    case 'accessory': return f.height ?? (f.key === HANGING_RAIL_OVAL.key
+      ? Number(hangingRailProduct(ctx.accessoryProducts, f.product_id)?.height_mm) || HANGING_RAIL_OVAL.h : 80)
     default:          return 0
   }
 }

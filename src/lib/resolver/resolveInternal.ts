@@ -165,6 +165,7 @@ export function resolveInternalParts(
     innerDrawerFrontMat:   cab.inner_drawer_front_material,
     innerDrawerFrontEbId:  cab.inner_drawer_front_edgeband_id,
     slideProducts:    cab.slide_products ?? [],
+    accessoryProducts: cab.accessory_products,
     slideSchedule:    cab.slide_schedule ?? [],
     methodRulesById:  cab.drawer_box_method_rules ?? {},
     stackGap:         cab.internal_stack_gap ?? DEFAULT_STACK_GAP,

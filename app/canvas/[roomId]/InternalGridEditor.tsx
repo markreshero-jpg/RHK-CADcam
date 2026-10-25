@@ -14,6 +14,7 @@ import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { useViewBoxPinch } from './usePinchZoom'
 import { supabase } from '@/src/lib/supabase'
 import { isFloating } from '@/src/lib/floating'
+import { useTutorial } from '@/src/lib/tutorial/store'
 
 function useSvgZoom(initW: number, initH: number) {
   const initRef = useRef({ w: initW, h: initH })
@@ -47,6 +48,28 @@ function useSvgZoom(initW: number, initH: number) {
   useViewBoxPinch(svgRef, vbRef, setVb, initW / 20, initW * 4)
 
   return { svgRef, viewBox: `${vb.x} ${vb.y} ${vb.w} ${vb.h}` }
+}
+
+// Hanging rail product pick (z_accessories A5): the Accessories library's rails;
+// "Default" leaves product_id unset so the library default applies.
+function RailProductSelect({ inp, value, onChange }: { inp: string; value?: string; onChange: (id: string | undefined) => void }) {
+  const [rails, setRails] = useState<{ id: string; name: string; is_default: boolean }[]>([])
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('hardware_accessories').select('id, name, is_default').eq('category', 'hanging_rail').eq('active', true).order('name')
+      .then(({ data }) => { if (!cancelled) setRails((data ?? []) as { id: string; name: string; is_default: boolean }[]) })
+    return () => { cancelled = true }
+  }, [])
+  const def = rails.find(r => r.is_default)
+  return (
+    <label className="block">
+      <span className="block text-gray-500 mb-1">Rail</span>
+      <select value={value ?? ''} onChange={e => { onChange(e.target.value || undefined); useTutorial.getState().emit('rail_product_set') }} className={inp + ' text-left'}>
+        <option value="">Default{def ? ` (${def.name})` : ''}</option>
+        {rails.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+      </select>
+    </label>
+  )
 }
 
 // ── Display constants ────────────────────────────────────────────────────────
@@ -2031,7 +2054,13 @@ export default function InternalGridEditor({
 
               {selFittingData.type === 'accessory' && (
                 <div className="flex flex-col gap-2">
-                  <label className="block">
+                  {(selFittingData as AccessoryFitting).key === HANGING_RAIL_OVAL.key ? (
+                    <RailProductSelect
+                      inp={inp}
+                      value={(selFittingData as AccessoryFitting).product_id}
+                      onChange={id => handlePatchFitting(selFittingPath, selFittingIndex, { product_id: id })}
+                    />
+                  ) : <label className="block">
                     <span className="block text-gray-500 mb-1">Key (parts_library)</span>
                     <input type="text"
                       defaultValue={(selFittingData as AccessoryFitting).key ?? ''}
@@ -2039,7 +2068,7 @@ export default function InternalGridEditor({
                       placeholder="WINE_RACK"
                       className={inp + ' text-left'}
                     />
-                  </label>
+                  </label>}
                   <InnerHeightYRow
                     inp={inp}
                     height={(selFittingData as AccessoryFitting).height}

@@ -757,6 +757,7 @@ export interface CabinetInput {
   slide_products?:  SlideProduct[]        // all active slide products available
   slide_schedule?:  SlideScheduleEntry[]  // depth-range → slide_id mapping
   bin_products?:    SlideProduct[]        // active kind='bin' products (z_bin_cabinet)
+  accessory_products?: AccessoryProduct[] // active hardware_accessories (z_accessories)
 
   // Cabinet-level hardware overrides (highest-priority cascade layer). Currently
   // honoured: `slide_id` (forces the drawer slide product, bypassing the schedule).
@@ -1269,6 +1270,8 @@ export interface PullOutFitting {
 export interface AccessoryFitting {
   type:        'accessory'
   key?:        string    // references parts_library.key (e.g. WINE_RACK, FILE_RAIL) — geometry TBD
+  // Hanging rail product (hardware_accessories, z_accessories A5); unset = the default rail.
+  product_id?: string
   height?:     number
   y_position?: number
   y_locked?:   boolean
@@ -1463,6 +1466,19 @@ export interface ResolvedInternalPart extends ResolvedPart {
   // 3D view can animate them together (e.g. open-drawer cascade). Unique per
   // emitted drawer; absent on shelves, dividers, accessories.
   inner_drawer_index?: number
+  // Bought-in accessory this part stands for (hanging rail product, z_accessories A5).
+  accessory?: { product_id: string; name: string; colour: string | null }
+}
+
+/** hardware_accessories row the resolver reads (z_accessories). */
+export interface AccessoryProduct {
+  id:         string
+  name:       string
+  category:   string
+  width_mm:   number | null
+  height_mm:  number | null
+  colour:     string | null
+  is_default: boolean
 }
 
 export interface ResolvedFaceRow {

@@ -158,6 +158,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
       // edge_band_back  (DB) = left in resolver space
       edge_band: { top: p.edge_band_top, bottom: p.edge_band_bottom, left: p.edge_band_back, right: p.edge_band_front, id: p.edge_band_id ?? undefined },
       ...(p.outline ? { outline: p.outline } : {}),
+      ...(p.accessory ? { accessory: p.accessory } : {}),
     }))
 
     const seamJoints: ResolvedSeamJoint[] = []

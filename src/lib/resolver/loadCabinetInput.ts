@@ -6,7 +6,7 @@ import {
   RawProfileOp, ResolvedDoorStyleInput, EdgeSides,
   HingeRuleInput, HingeHardwareInput, HingePlateInput, ExistingHingeInput, HingeBoreHole,
   KickRunInput, KickSplitMode, ResolverError,
-  HandleRole, GripKind, HandleProductInput, HandleScheduleEntryInput,
+  HandleRole, GripKind, HandleProductInput, HandleScheduleEntryInput, AccessoryProduct,
 } from './types'
 import { mergeRules, rulesForClass } from './mergeRules'
 import { cachedCascade } from './cascadeCache'
@@ -877,6 +877,9 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
   const { handle_schedule, handle_products } =
     await loadHandleInputs(cab.room_id as string, projectId, (cab.hardware_overrides ?? {}) as Record<string, unknown>)
 
+  // ── 13c. Accessory products (z_accessories): hanging rail size + colour ────
+  const accessory_products = await loadAccessoryProducts()
+
   // ── 14. Kick-run context ────────────────────────────────────────────────────
   // When this cabinet is linked to a kick run, load its role + split settings so
   // the resolver builds the continuous kick (assembly) or skips it (member).
@@ -938,6 +941,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     inner_drawer_front_material:      innerDrawerFrontMat,
     inner_drawer_front_edgeband_id:   innerDrawerFrontEbId,
     slide_products:            slideProducts,
+    accessory_products,
     bin_products:              binProducts,
     slide_schedule:            slideSchedule,
     hardware_overrides:        (cab.hardware_overrides ?? {}) as Record<string, unknown>,
@@ -1192,6 +1196,20 @@ function loadHandleProducts() {
   return cachedCascade('handles:all', async () => {
     const { data } = await supabase.from('hardware_handles').select(HANDLE_COLS).eq('active', true)
     return Object.fromEntries(((data ?? []) as Record<string, unknown>[]).map(h => [h.id as string, toHandleProduct(h)]))
+  })
+}
+
+/** Active hardware_accessories rows the resolver reads (z_accessories A2). */
+function loadAccessoryProducts(): Promise<AccessoryProduct[]> {
+  return cachedCascade('accessories:all', async () => {
+    const { data } = await supabase.from('hardware_accessories')
+      .select('id, name, category, width_mm, height_mm, colour, is_default').eq('active', true)
+    return ((data ?? []) as Record<string, unknown>[]).map(a => ({
+      id: a.id as string, name: a.name as string, category: a.category as string,
+      width_mm: a.width_mm == null ? null : Number(a.width_mm),
+      height_mm: a.height_mm == null ? null : Number(a.height_mm),
+      colour: (a.colour as string | null) ?? null, is_default: !!a.is_default,
+    }))
   })
 }
 

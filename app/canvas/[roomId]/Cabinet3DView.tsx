@@ -1453,7 +1453,9 @@ export function CabinetScene({
           const pp   = applyPosOv(p, id, partOverrides)
           const b    = applySizeOv(intBox(pp), id, partOverrides)
           const info = applyEdge(buildIntInfo(p, b))
-          const s    = matSpec(p.material_id, '#e8dece')
+          // A hanging rail draws in its product's colour (z_accessories A5).
+          const ac   = p.accessory?.colour
+          const s    = ac ? { face: ac, back: ac, edge: ac } : matSpec(p.material_id, '#e8dece')
           const holes = holesByPartKey.get(id) ?? []
           if (holes.length > 0) {
             return (
