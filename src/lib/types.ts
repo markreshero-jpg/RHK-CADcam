@@ -686,7 +686,7 @@ export interface RoomAnnotation {
   view:       AnnotationView
   wall_id:    string | null
   cabinet_id: string | null
-  sheet_view: 'front' | 'side' | null
+  sheet_view: 'front' | 'side' | 'top' | null
   /** Elevation only: the side of wall_id the note was drawn on (z_CAD_tool A6). */
   wall_side?: 'face' | 'back' | null
   kind:       AnnotationKind

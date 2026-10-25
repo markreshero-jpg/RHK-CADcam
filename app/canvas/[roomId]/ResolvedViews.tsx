@@ -451,6 +451,28 @@ function hingeSnapPts(
   return out
 }
 
+// ── CAD host (z_item_cad) ─────────────────────────────────────────────────────
+// A view that takes CAD notes (the Cabinet Edit modal's Elevation tab): it hands its
+// svg + screen scale up, draws the notes layer last, and ignores its own clicks while on.
+
+/** Elevation view margins: the cabinet's left edge is at svg x = pl, its top at y = pt. */
+export const ELEV_PAD = { pl: 80, pt: 50 }
+
+export interface ModalCadHost {
+  on:       boolean
+  overlay:  React.ReactNode
+  /** Receives the view's svg (pointer → svg mm). */
+  setSvg:   (el: SVGSVGElement | null) => void
+  /** svg units per screen px. */
+  onUnit:   (unit: number) => void
+}
+
+function useModalCadHost(cad: ModalCadHost | undefined, svgRef: React.RefObject<SVGSVGElement | null>, unit: number) {
+  const setSvg = cad?.setSvg, onUnit = cad?.onUnit
+  useEffect(() => { setSvg?.(svgRef.current) })
+  useEffect(() => { onUnit?.(unit) }, [onUnit, unit])
+}
+
 // ── Resolved views ────────────────────────────────────────────────────────────
 
 // Client (screen) coords → SVG user-space coords for the given <svg>, honouring
@@ -468,7 +490,7 @@ function clientToSvgUser(svg: SVGSVGElement | null, clientX: number, clientY: nu
 // caller can offer "Add part here". Each ortho view maps two of the three axes.
 export type EmptyContextMenu = (pos: { x: number; y: number; z: number }, clientX: number, clientY: number) => void
 
-export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, shapeOverrides, partLabels, partComments, ebByMatId, fixtures, selectedFixtureId, onFixtureSelect }: {
+export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, shapeOverrides, partLabels, partComments, ebByMatId, fixtures, selectedFixtureId, onFixtureSelect, cad }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
   // Linked fixtures drawn in the cabinet (z_ubo U5) + their selection.
@@ -479,6 +501,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides; shapeOverrides?: ShapeOverrides
   partLabels?: PartLabels; partComments?: PartComments
   ebByMatId?: EbByMatId
+  /** CAD in the modal (z_item_cad): notes layer drawn on top; while on, clicks go to it. */
+  cad?: ModalCadHost
 }) {
   const { dx, dy } = cab
   const RC = useMemo(() => paletteRC(), [])   // line colours from Settings → part colours
@@ -489,7 +513,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   const triMap = useSlideTriangles(allSlides)
   const hingeRefs = useMemo(() => hingeModelRefs(rp), [rp])
   const hingeTri = useSlideTriangles(hingeRefs)
-  const pl = 80, pt = 50, pr = 40, pb = 40
+  const { pl, pt } = ELEV_PAD, pr = 40, pb = 40
   const vw = dx + pl + pr
   const vh = dy + pt + pb
   const ox = pl, oy = pt
@@ -588,7 +612,10 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   }
   const measure = useMeasure(!!measureMode, svgRef, measurePts, [], rawPanelPts)
 
+  useModalCadHost(cad, svgRef, unit)
+
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
+    if (cad?.on) { e.stopPropagation(); return }
     if (measureMode) { e.stopPropagation(); measure.onClick(e); return }
     e.stopPropagation()
     onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
@@ -596,6 +623,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
 
   function handleContextMenu(e: React.MouseEvent<SVGSVGElement>) {
     e.preventDefault(); e.stopPropagation()
+    if (cad?.on) return
     if (measureMode) { measure.cancel(); return }
     const hits = svgHitParts(e, partMap)
     // Right-clicking the already-selected part → its part menu. Anywhere else
@@ -775,6 +803,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
       {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={unit} vb={vb} pts={[...measurePts, ...rawPanelPts]} />}
       <CabinetFixturesOverlay view="elevation" fixtures={fixtures ?? []} map={(x, y) => ({ x: ox + x, y: oy + dy - y })}
         selectedId={selectedFixtureId} onSelect={onFixtureSelect} />
+      {cad?.overlay}
     </svg>
   )
 }

@@ -1,6 +1,6 @@
 # Item CAD — CAD attached to library items
 
-**Status:** spec drafted 2026-10-25, nothing built. Next: IC1.
+**Status:** IC1 built 2026-10-25 (checked headless, in-app check pending). Next: IC2.
 
 CAD notes (the F7 tools) that belong to a library item, not a room: whenever
 the item comes out of the library, its CAD draws with it. First use: "PULLOUT BIN"
@@ -24,6 +24,9 @@ built), display layers (`z_display_layers/DISPLAY-LAYERS-SPEC.md`), job pinning
 4. **No silent job updates.** Changing item CAD in the library does **not** change jobs
    already drawn. A job keeps the version it first used until an explicit
    **Update job**. Mark: this applies to all library changes going forward.
+5. **Fixtures get an edit window** (Mark, 2026-10-25): reuse the Cabinet Edit modal's
+   views (Top / Side / Elevation…) for fixtures, so fixture item CAD is drawn the same
+   way as cabinet item CAD (phase IC6).
 
 ## Defaults (Claude, 2026-10-25; Mark to overrule)
 
@@ -51,6 +54,15 @@ built), display layers (`z_display_layers/DISPLAY-LAYERS-SPEC.md`), job pinning
   (`job_item_cad`: project id + library_cad id + version + items). Every item in the job
   draws from the job copy. A front changed to a bin later in the same job uses the job
   copy if there is one, else copies the library's current version then.
+- **Only item CAD that existed when the job started** (library row `created_at` ≤
+  project `created_at`) is copied by itself (Claude, 2026-10-25, so new library CAD can't
+  appear in old jobs on their next open). Newer item CAD reaches an existing job through
+  Update job, or by moving notes to the library from inside that job (that job's copy is
+  written with the library). Known gap: no version history, so a job opened for the first
+  time after a library edit gets the edited version.
+- Edit / Remove never delete a library row (that would cascade away jobs' copies): Remove
+  empties its items and bumps the version; Edit brings the notes back onto the cabinet
+  and empties the row until they're moved back.
 - **Update job** (first piece of the general Update job feature): lists library item CAD
   newer than the job's copies → tick → refresh. Same screen to take the other library
   changes later, once they're pinned too.
@@ -68,13 +80,34 @@ renderer (`AnnotationLayer`), with notes placed into each view's frame through t
 
 | Phase | Scope | Status |
 |---|---|---|
-| IC1 | `library_cad` + `job_item_cad` tables; F7 CAD in the Cabinet Edit modal Elevation tab; save target picker (cabinet only / front type / cabinet code); anchors; draw on the elevation canvas from the job copy | [ ] |
-| IC2 | Item fields (`{bin}`, `{code}`…), `item_cad` display layer, Hide / Detach per placed item; seed "PULLOUT BIN" on the bin front | [ ] |
+| IC1 | `library_cad` + `job_item_cad` tables; F7 CAD in the Cabinet Edit modal Elevation tab; save target picker (cabinet only / front type / cabinet code); anchors; draw on the elevation canvas from the job copy | [x] built 2026-10-25, see IC1 notes; checked headless, in-app check pending |
+| IC2 | Item fields (`{bin}`, `{code}`…), Hide / Detach per placed item; seed "PULLOUT BIN" on the bin front (Mark to draw it — the test one was removed) | [ ] |
 | IC3 | Top tab → plan attachments (canvas + Plan View PDF); prints: Elevation Views PDF, shop drawings, cabinet sheets | [ ] |
 | IC4 | Update job (item CAD part): newer-version list + refresh | [ ] |
-| IC5 | Library view of attachments (list / edit / remove without a room), fixture models as owners, optional stretch, tutorial | [ ] |
+| IC5 | Library view of attachments (list / edit / remove without a room), optional stretch | [ ] |
+| IC6 | Fixture edit window: the Cabinet Edit modal's view shell (Top / Elevation / Side) for a fixture, F7 CAD in it, fixture models as owners (decision 5) | [ ] |
 
-## Open
+## IC1 notes (2026-10-25)
 
-- Fixtures have no Cabinet Edit modal. Draw their item CAD in the fixture panel's
-  elevation preview, or on the room elevation with "Attach to library item"? (IC5)
+- Migration `item_cad_ic1` applied live (`migration_ic1_item_cad.sql`): the two tables +
+  `room_annotations.sheet_view` allows `'top'`.
+- Pure: `src/lib/annotations/itemCad.ts` (anchors, to/place items, pinning helpers; tests
+  `src/lib/__tests__/itemCad.test.ts`). Owner `cabinetSheetOwner(cabId, 'front' | 'top' |
+  'side')` in `owner.ts`; cabinet front frame = x from the cabinet's left, y down from
+  its bottom (heights negative, like elevations).
+- `useItemCad.ts` (canvas): loads library + job rows, pins, targets per cabinet (bin
+  fronts from `drawer_stacks` with `drawer_type 'bin'`, cabinet code = definition name),
+  `frontNotes(cab)` = the cabinet's own notes + placed library notes.
+- `CabinetCad.tsx` (`useCabinetCad`): the CAD tool on the modal's Elevation view
+  (`ResolvedElevation` `cad` host prop: svg + screen scale + overlay, ignores its own
+  clicks while on). CAD tools left of the view, CAD panel over the properties panel,
+  Item CAD bar above (Move to library / Edit / Remove). Dashed cyan boxes = targets.
+  The canvas's own CAD stands down while the modal is open; Ctrl+Z inside the modal is
+  still shielded (undo after closing it).
+- Room elevation: `ElevationSVG` draws `itemCadNotes(cab)` inside each cabinet's group,
+  gated by the new `item_cad` layer (Annotations group, elevation, default on).
+- Tutorial `item_cad` (events `item_cad_on`, `item_cad_moved`).
+- Headless check (`z_plan_automation/verify-item-cad.mjs`, RHK1234 Kitchen Test Room):
+  text typed in the modal, moved to Bin front, drawn on the room elevation; Edit brought
+  it back selected, Move again, Remove emptied the row. Not yet: prints (IC3), canvas
+  undo of a Move, back-side elevations.

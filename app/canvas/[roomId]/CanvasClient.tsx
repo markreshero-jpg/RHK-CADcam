@@ -59,6 +59,7 @@ import { planSnapGeometry } from '@/src/lib/annotations/planSnapGeometry'
 import CadSnapMarker from './CadSnapMarker'
 import CadMeasureOverlay from './CadMeasureOverlay'
 import CadPanel from './CadPanel'
+import { useItemCad } from './useItemCad'
 import { useCadFields } from './useCadFields'
 import { withFieldsFilled, annotationsBounds } from '@/src/lib/annotations/blocks'
 import CadContextMenu from './CadContextMenu'
@@ -757,7 +758,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }), [mode, viewAnnotations, annotScale])
   const cad = useAnnotationTool({
     room, annotations, setAnnotations, captureSnapshot, owner: cadOwner, frame: cadFrame, paper: annotScale, zoom: cadZoom,
-    active: mode === 'cad' && (canvasView === 'plan' || !!cadElevWallId),
+    // The Cabinet Edit modal has its own CAD (z_item_cad): the canvas's stands down under it.
+    active: mode === 'cad' && (canvasView === 'plan' || !!cadElevWallId) && !editCabId,
     toWorld: e => {
       if (cadElevWallId) {   // elevation svg: translate(pan) scale(zoom)
         const r = elevSvgRef.current!.getBoundingClientRect()
@@ -801,6 +803,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   // Live {field} values (z_CAD_tool C2): drawn + printed notes show them; the editor keeps the tokens.
   const cadFields = useCadFields({ project, room, resolvedParts, fixtures })
+  // Item CAD (z_item_cad): library notes on bin fronts / cabinet codes, pinned to the job.
+  const itemCad = useItemCad({ projectId: project?.id ?? null, projectCreatedAt: project?.created_at ?? null, roomId: room.id, cabinets, resolvedParts, annotations, paper: annotScale })
   const [blockSaveReq, setBlockSaveReq] = useState(0)
   // Moved cabinet / fixture labels (label_offsets; plan + elevation, printed too).
   const labelView: LabelView = canvasView === 'elevation' ? 'elev' : 'plan'
@@ -1009,7 +1013,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         fx.setMenuOpen(v => !v)
       }
       // F7 CAD annotations (z_CAD_tool): toggles CAD mode + its sidebar tools.
-      if (e.key === 'F7' && !isInput(e.target)) {
+      if (e.key === 'F7' && !isInput(e.target) && !editCabId) {
         e.preventDefault()
         if (mode === 'cad') setMode('select'); else enterCad()
       }
@@ -1074,7 +1078,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku)
     return () => { window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku) }
-  }, [selected, multiWalls, mode, canvasView, bt.shapeEdit, bt.shapeStretch])
+  }, [selected, multiWalls, mode, canvasView, bt.shapeEdit, bt.shapeStretch, editCabId])
 
   // Right-click while a cabinet / fixture is on the cursor (not yet placed) cancels
   // it, same as Esc. Capture phase so no wall/cabinet context menu opens underneath.
@@ -3381,6 +3385,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             elevWallSide={elevWallSide}
             onSetElevWallSide={setElevWallSide}
             annotationsLayer={cadElevWallId ? cadLayer(elevLayers) : undefined}
+            itemCadNotes={itemCad.frontNotes} itemCadPaper={annotScale} itemCadFields={cadFields}
             onViewChange={setElevView}
             svgElRef={elevSvgRef}
             onUpdateCabinet={handleUpdateCabinet}
@@ -3976,6 +3981,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             wallCabinets={wall ? cabinets.filter(c => c.wall_id === wall.id) : []}
             resolvedCabinet={resolvedParts.get(cab.id)}
             initialView={editCabInitialView}
+            cadCtx={{
+              room, walls, annotations, setAnnotations, captureSnapshot,
+              scale: annotScale, onScale: setAnnotScale, snap: cadSnapSettings, onSnap: setCadSnapSettings,
+              fields: cadFields, itemCad,
+            }}
             onUpdate={handleUpdateCabinet}
             onDelete={handleDeleteCabinet}
             onClose={() => { setEditCabId(null); setEditCabInitialView('elevation') }}

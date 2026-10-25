@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import CabinetFixtureCard from './CabinetFixtureCard'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import type { LocalFixtureBox } from '@/src/lib/cabinetContents'
@@ -41,6 +41,7 @@ import { addBinDivisions } from './binDivisionsAction'
 import PartEditor from './PartEditor'
 import { buildReferenceOutlines } from './partEditor/referenceOutlines'
 import { getUserPrefs } from '@/src/lib/userPrefs'
+import { useCabinetCad, type ModalCadContext } from './CabinetCad'
 
 type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'interior' | 'joints' | 'overrides' | 'tree' | 'routes' | 'errors'
 
@@ -174,7 +175,7 @@ function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onO
 
 export default function CabinetEditModal({
   cabinet, wall, wallCabinets, resolvedCabinet, initialView, onUpdate, onDelete, onClose, materialColours, ebByMatId, onHiddenChange, onCustomPartsChange, onEdgeChange,
-  fixtures, onFixtureSwap, onFixtureRemove, onFixtureSelectOnCanvas,
+  fixtures, onFixtureSwap, onFixtureRemove, onFixtureSelectOnCanvas, cadCtx,
 }: {
   cabinet: CabinetInstance
   wall: Wall | null
@@ -201,6 +202,8 @@ export default function CabinetEditModal({
   onFixtureSwap?: (fixtureId: string, item: FixtureCatalogItem) => void | Promise<void>
   onFixtureRemove?: (fixtureId: string) => void | Promise<void>
   onFixtureSelectOnCanvas?: (fixtureId: string) => void
+  // CAD on the Elevation tab (z_item_cad): the room's notes, undo, scale + item CAD.
+  cadCtx?: ModalCadContext
 }) {
   const [selFixtureId, setSelFixtureIdRaw] = useState<string | null>(null)
   const setSelFixtureId = (id: string | null) => {
@@ -241,6 +244,7 @@ export default function CabinetEditModal({
   const [showDrilling, setShowDrilling]   = useState(true)
   const [measureMode, setMeasureMode]     = useState(false)
   const measureModeRef = useRef(measureMode); measureModeRef.current = measureMode
+  const cadOnRef = useRef(false)
   const [selectedSVGPart, setSelectedSVGPart] = useState<PartMeta | null>(null)
   const [picker, setPicker] = useState<{ parts: PartMeta[]; clientX: number; clientY: number } | null>(null)
   const [localRp, setLocalRp]             = useState<ResolvedCabinet | null>(null)
@@ -358,6 +362,8 @@ export default function CabinetEditModal({
       // Let inputs (e.g. inline rename) handle their own Esc-to-cancel.
       const t = e.target
       if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return
+      // CAD on (z_item_cad): its own Esc steps back (selection, tool, then CAD off).
+      if (cadOnRef.current) return
       // The modal owns Escape while open: stop the canvas's global Escape handler
       // behind it from also firing. Esc first exits the measure tool; only when
       // not measuring does it close the modal. Read measureMode from a ref so the
@@ -405,7 +411,7 @@ export default function CabinetEditModal({
       if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return
       const mod = e.ctrlKey || e.metaKey
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (isOrthoView && selectedSVGPart) {
+        if (isOrthoView && selectedSVGPart && !cadOnRef.current) {
           e.preventDefault(); e.stopImmediatePropagation()
           deleteSelectedSVGPart()
           return
@@ -530,6 +536,11 @@ export default function CabinetEditModal({
     return rp && input ? buildFormulaScope(rp, input) : null
   }, [rp, cabinet.id])
 
+  // CAD on the Elevation tab (z_item_cad IC1).
+  const onCadEnter = useCallback(() => { setSelectedSVGPart(null); setMeasureMode(false) }, [])
+  const mcad = useCabinetCad({ ctx: cadCtx, cabinet, rp, viewOn: activeView === 'elevation', onEnter: onCadEnter })
+  useEffect(() => { cadOnRef.current = mcad.on }, [mcad.on])
+
   return (
     <PartHideContext.Provider value={partHideApi}>
     <div
@@ -602,6 +613,19 @@ export default function CabinetEditModal({
             })}
             {(isOrthoView || activeView === 'face' || activeView === 'interior' || activeView === '3d') && rp && (
               <div className="ml-auto flex items-center gap-1.5">
+                {activeView === 'elevation' && mcad.available && (
+                  <button
+                    onClick={() => mcad.toggle()}
+                    title="CAD notes on this cabinet (F7). Move them to the library to show on every bin front / cabinet code"
+                    className={`px-2.5 py-1 text-xs rounded transition-colors ${
+                      mcad.on
+                        ? 'bg-rose-700 text-white hover:bg-rose-600'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'
+                    }`}
+                  >
+                    CAD
+                  </button>
+                )}
                 {isOrthoView && (
                   <button
                     onClick={() => setMeasureMode(m => !m)}
@@ -653,10 +677,14 @@ export default function CabinetEditModal({
               </div>
             )}
           </div>
+          {mcad.bar}
+          {/* CAD tools (z_item_cad) sit left of the view, as in the canvas sidebar. */}
+          <div className="flex-1 flex min-h-0">
+          {mcad.ribbon}
           {/* Content */}
           <div
             ref={contentRef}
-            className={`flex-1 overflow-hidden relative ${
+            className={`flex-1 min-w-0 overflow-hidden relative ${
               activeView === 'parts'     ? 'bg-gray-900'
               : activeView === '3d'      ? 'bg-gray-950'
               : activeView === 'face'    ? 'bg-gray-950'
@@ -680,7 +708,7 @@ export default function CabinetEditModal({
               : <TopView cab={cabinet} />
             )}
             {activeView === 'elevation' && (
-              visibleRp ? <ResolvedElevation cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
+              visibleRp ? <ResolvedElevation cad={mcad.host} cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
@@ -802,6 +830,7 @@ export default function CabinetEditModal({
               />
             )}
           </div>
+          </div>
         </div>
 
         {/* Right: properties panel. Selecting a part swaps the cabinet info out
@@ -814,6 +843,7 @@ export default function CabinetEditModal({
         <div className={phone
           ? 'h-full w-[min(15rem,70vw)] bg-gray-900 border-l border-gray-700 shadow-2xl relative [&_.w-72]:w-full! [&_.w-72]:border-l-0'
           : 'flex-none w-72 border-l border-gray-800 relative'}>
+          {mcad.panel && <div className="absolute inset-0 z-20 flex [&>*]:w-full! [&>*]:border-l-0">{mcad.panel}</div>}
           <div className={dockedPanelOpen ? 'hidden' : 'h-full overflow-y-auto'}>
             <CabinetPanel
               cabinet={cabinet}
@@ -856,6 +886,7 @@ export default function CabinetEditModal({
         </div>
       </div>
 
+      {mcad.floating}
       {/* Single-part operation editor — overlays the whole modal, cabinet kept underneath. */}
       {editingPart && (
         <PartEditor

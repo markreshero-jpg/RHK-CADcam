@@ -2,7 +2,7 @@
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
-import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
+import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile, type RoomAnnotation } from '@/src/lib/types'
 import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, SNAP_PX, wallCabTop, cabBottomZ, type Pt } from '@/src/lib/geometry'
 import { stackShelfSegs } from '@/src/lib/floatShelf'
 import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode, MIN_STRETCH } from './canvasTypes'
@@ -46,6 +46,8 @@ import GrainSVG, { GRAIN_INK, useGrainedMaterialIds } from './GrainSVG'
 // A dragged split line snaps to a fixed-shelf suggestion this close (mm).
 const SPLIT_SNAP = 15
 import type { LabelOff } from '@/src/lib/labelOffsets'
+import AnnotationLayer from './AnnotationLayer'
+import { withFieldsFilled, type CadFieldValues } from '@/src/lib/annotations/blocks'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
 // resolved per render below. PART_COLORS / LINE_DRAW_COLORS keep their `MAP[key]`
@@ -227,6 +229,10 @@ interface ElevationSVGProps {
   onViewChange?: (v: { panX: number; panY: number; zoom: number }) => void
   /** Receives the svg element (CAD click → svg mm). */
   svgElRef?: React.MutableRefObject<SVGSVGElement | null>
+  /** Item CAD (z_item_cad) a cabinet's front draws, in its front frame; + paper scale, live fields. */
+  itemCadNotes?: (cab: CabinetInstance) => RoomAnnotation[]
+  itemCadPaper?: number
+  itemCadFields?: CadFieldValues
 }
 
 export default function ElevationSVG({
@@ -245,7 +251,7 @@ export default function ElevationSVG({
   fixtures, fixtureClashIds, onSelectFixture, fixtureHighlight,
   fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
   fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop, onFixtureMoveHandle,
-  annotationsLayer, onViewChange, svgElRef,
+  annotationsLayer, onViewChange, svgElRef, itemCadNotes, itemCadPaper, itemCadFields,
 }: ElevationSVGProps) {
   // Ghost grain on grained colours (z_material_colours MC11).
   const grainedIds = useGrainedMaterialIds()
@@ -1781,6 +1787,12 @@ export default function ElevationSVG({
                         onClick={e => onMarkerClick(e, cab, 'top')}
                       />
                     </>
+                  )}
+                  {/* Item CAD (z_item_cad): the cabinet's own notes + library notes on its
+                      bin fronts / code, in its front frame (x from the left, y down from the bottom). */}
+                  {itemCadNotes && layers.show('item_cad') && (
+                    <AnnotationLayer annotations={withFieldsFilled(itemCadNotes(cab), itemCadFields)}
+                      frame={{ ox: rx, oy: ry + displayDy, s: 1, flipY: false }} paper={itemCadPaper ?? 20} layers={layers} />
                   )}
                 </g>
               )
