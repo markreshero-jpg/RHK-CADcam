@@ -46,11 +46,12 @@ their supports now; wardrobe / pantry / misc items later on the same table.
   optimiser like shelf / carcase joints. Hand master drills are per cabinet and
   keyed to the part number, so every rail in every job would need one added.
   Pillars: no drilling for now.
-  **Hole pattern** (Mark, 2026-10-25): 2 holes at 32 centres, front-to-back,
-  centred on the end support's width, 10 up from the bottom of the end support;
-  pricked 1 deep into the gable face (marking only, screwed on site).
-  Support bottom relative to the rail centre comes from the support's size /
-  model (open). Bit: 5 mm boring bit unless Mark says otherwise.
+  **Hole pattern** (Mark, 2026-10-25): 2 holes at 32 centres **one above the
+  other**, centred front-to-back on the end support, the lower hole 10 up from
+  the bottom of the end support; pricked 1 deep into the gable face (marking
+  only, screwed on site) with the 5 mm boring bit. The support's centre sits
+  20 above the rail's bottom. Open: the end support's height H (support bottom
+  = rail bottom + 20 − H/2) — from Mark or the model.
 - **A9 Rails are controlled in the Interior editor** (existing): add / drag /
   lock height, product. S2 adds the support controls to the same rail row.
 
