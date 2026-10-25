@@ -103,12 +103,42 @@ export function partShapes(rp: ResolvedCabinet, overrides?: Record<string, { seg
     const sn = sharknoseProfile(z)
     if (sn) m.set(zonePartId(z), { pts: sn, extrude: 'across' })
   }
+  // Linear strip handles (z_handles D17): the sharknose on the strip's finger edge.
+  for (const p of rp.case_parts) {
+    const s = linearStripShape(p)
+    if (s) m.set(`case_${p.part_key}`, s)
+  }
   for (const [pid, ov] of Object.entries(overrides ?? {})) {
     if (pid.startsWith('slide_')) continue
     if ((ov.segments?.length ?? 0) > 2) m.set(pid, { pts: sampleShapeOutline(ov.segments!), mirror: pid.includes('right_side') })
   }
   return m
 }
+
+/** A linear strip handle's sharknose (z_handles D17): the back of its finger
+ *  edge cut away at the saw tilt, leaving `land` at the front — like a sharknose
+ *  front (sharknoseProfile). Box: w = length / width along X, h = height, d =
+ *  thickness, back face against the door. A horizontal strip (bevel bottom /
+ *  top) is a side profile across its length; a vertical one (bevel left / right)
+ *  a top-view outline extruded up its height. */
+export function linearStripShape(p: ResolvedCaseLike): PartShape | null {
+  const lh = p.lh
+  if (!lh) return null
+  const b = caseBox(p)
+  const d = b.d, land = Math.min(Math.max(lh.land, 0), d)
+  const run = (d - land) * Math.tan((lh.angle_deg * Math.PI) / 180)
+  if (lh.bevel_edge === 'bottom' || lh.bevel_edge === 'top') {
+    const r = Math.min(run, b.h)   // across: x = depth from the back face, y = up
+    return { extrude: 'across', pts: lh.bevel_edge === 'bottom'
+      ? [{ x: 0, y: r }, { x: d - land, y: 0 }, { x: d, y: 0 }, { x: d, y: b.h }, { x: 0, y: b.h }]
+      : [{ x: 0, y: 0 }, { x: d, y: 0 }, { x: d, y: b.h }, { x: d - land, y: b.h }, { x: 0, y: b.h - r }] }
+  }
+  const r = Math.min(run, b.w)     // up: x across, y down from the front face
+  return { extrude: 'up', pts: lh.bevel_edge === 'left'
+    ? [{ x: 0, y: 0 }, { x: b.w, y: 0 }, { x: b.w, y: d }, { x: r, y: d }, { x: 0, y: land }]
+    : [{ x: 0, y: 0 }, { x: b.w, y: 0 }, { x: b.w, y: land }, { x: b.w - r, y: d }, { x: 0, y: d }] }
+}
+type ResolvedCaseLike = ResolvedCabinet['case_parts'][number]
 
 // ── Solids in cabinet coords ─────────────────────────────────────────────────
 

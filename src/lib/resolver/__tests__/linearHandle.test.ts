@@ -98,3 +98,27 @@ describe('linear strip handle', () => {
     expect(handleShape(z)!.kind).toBe('strip')
   })
 })
+
+describe('linear strip sharknose shape (3D / drawings)', () => {
+  it('horizontal strip: back of the bottom edge cut away at the saw tilt (side profile)', async () => {
+    const { partShapes } = await import('../../partSolids')
+    const rp = resolveCabinet(cab())
+    const p = rp.case_parts.find(q => q.part_key === 'lh:0')!
+    const s = partShapes(rp).get('case_lh:0')!
+    const run = 18 * Math.tan((38 * Math.PI) / 180)
+    expect(s.extrude).toBe('across')
+    expect(s.pts[0].x).toBe(0); expect(s.pts[0].y).toBeCloseTo(run)   // back face meets the bevel `run` up
+    expect(s.pts[1]).toEqual({ x: 18, y: 0 })                           // knife edge at the front, bottom
+    expect(Math.max(...s.pts.map(q => q.y))).toBeCloseTo(p.DX)          // full 35 high
+  })
+
+  it('vertical strip: top-view outline, bevel on the hinge-side back corner', async () => {
+    const { partShapes } = await import('../../partSolids')
+    const rp = resolveCabinet(cab({ assembly_class: 'tall', DY: 2300 }))
+    const s = partShapes(rp).get('case_lh:0')!   // left door → strip on its right edge, bevel left
+    const run = 18 * Math.tan((38 * Math.PI) / 180)
+    expect(s.extrude).toBe('up')
+    expect(s.pts).toContainEqual({ x: 0, y: 0 })
+    expect(s.pts.find(q => q.y === 18 && q.x < 35)!.x).toBeCloseTo(run)
+  })
+})
