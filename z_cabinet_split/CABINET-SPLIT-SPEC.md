@@ -7,7 +7,7 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Split complete 2026-10-25 (S1–S4). S2 checked by Mark; S3 / S4 in-app check pending.
+> **RESUME HERE** → Split complete 2026-10-25 (S1–S4 + S4a), all checked in-app by Mark.
 > Every view shows the pieces: canvas + modal elevation / side (SPLIT line), 3D (room + modal: each side /
 > back drawn as its pieces, own holes), Parts tab, cabinet sheet, cut list / optimiser / CNC.
 
