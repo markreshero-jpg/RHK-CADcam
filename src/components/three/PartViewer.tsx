@@ -210,6 +210,63 @@ export function buildShapedGeometry(shape: PartShape, b: Box, panelKind: PanelKi
   return g
 }
 
+// Edge tape on a shaped part (shape.tape — linear strip handles). The outline is
+// cut into pieces: the core, a tape band along each banded edge running the
+// extrusion (clipped from the outline, so it follows a bevel), and full-outline
+// tape caps at the ends of the extrusion. Same finished-size rule as edgeCoreBox.
+// `from` / `len` = the piece's span along the extrusion axis.
+type ShapePiece = { pts: ShapePt[]; from: number; len: number }
+
+function clipAxis(pts: ShapePt[], axis: 'x' | 'y', lo: number, hi: number): ShapePt[] {
+  const half = (src: ShapePt[], keep: (v: number) => boolean, at: number) => {
+    const out: ShapePt[] = []
+    src.forEach((a, i) => {
+      const c = src[(i + 1) % src.length]
+      if (keep(a[axis])) out.push(a)
+      if (keep(a[axis]) !== keep(c[axis])) {
+        const t = (at - a[axis]) / (c[axis] - a[axis])
+        out.push({ x: a.x + (c.x - a.x) * t, y: a.y + (c.y - a.y) * t })
+      }
+    })
+    return out
+  }
+  return half(half(pts, v => v >= lo, lo), v => v <= hi, hi)
+}
+
+export function shapedTapePieces(shape: PartShape, b: Box, edge: PartEdge, t: number): { core: ShapePiece; tape: ShapePiece[] } {
+  const lt = edge.left ? t : 0, rt = edge.right ? t : 0
+  const bt = edge.bottom ? t : 0, tt = edge.top ? t : 0
+  const tape: ShapePiece[] = []
+  const band = (axis: 'x' | 'y', lo: number, hi: number, from: number, len: number) => {
+    const pts = clipAxis(shape.pts, axis, lo, hi)
+    if (pts.length > 2 && hi > lo) tape.push({ pts, from, len })
+  }
+  if (shape.extrude === 'across') {
+    // Profile y = up (top / bottom tape); extruded across X (left / right caps).
+    const from = lt, len = Math.max(0, b.w - lt - rt)
+    band('y', b.h - tt, b.h, from, len)
+    band('y', 0, bt, from, len)
+    if (lt) tape.push({ pts: shape.pts, from: 0, len: lt })
+    if (rt) tape.push({ pts: shape.pts, from: b.w - rt, len: rt })
+    return { core: { pts: clipAxis(shape.pts, 'y', bt, b.h - tt), from, len }, tape }
+  }
+  // 'up': profile x = across (left / right tape); extruded up Y (top / bottom caps).
+  const from = bt, len = Math.max(0, b.h - bt - tt)
+  band('x', 0, lt, from, len)
+  band('x', b.w - rt, b.w, from, len)
+  if (bt) tape.push({ pts: shape.pts, from: 0, len: bt })
+  if (tt) tape.push({ pts: shape.pts, from: b.h - tt, len: tt })
+  return { core: { pts: clipAxis(shape.pts, 'x', lt, b.w - rt), from, len }, tape }
+}
+
+/** One piece of a taped shape, in the same box-local frame as buildShapedGeometry. */
+export function shapePieceGeometry(shape: PartShape, piece: ShapePiece, b: Box, panelKind: PanelKind): THREE.ExtrudeGeometry {
+  const across = shape.extrude === 'across'
+  const g = buildShapedGeometry({ ...shape, pts: piece.pts, holes: undefined }, across ? { ...b, w: piece.len } : { ...b, h: piece.len }, panelKind)
+  if (across) g.translate(piece.from, 0, 0); else g.translate(0, piece.from, 0)
+  return g
+}
+
 // ── Camera ─────────────────────────────────────────────────────────────────────
 
 const FOV = 32
@@ -278,7 +335,8 @@ export function Part({
   hoverHighlight?:    boolean
   // Shape Editor override: sampled outline → the panel renders as an extruded
   // silhouette instead of a box. Edge-band tape strips are suppressed on shaped
-  // parts (rectangle-based tape would float over cut-away regions).
+  // parts (rectangle-based tape would float over cut-away regions), unless the
+  // shape carries `tape` — then the tape is cut from the outline (shapedTapePieces).
   shape?:             PartShape | null
 }) {
   const [hovered, setHovered] = useState(false)
@@ -294,15 +352,28 @@ export function Part({
   // Extruded silhouette for shaped parts. Keyed on the dims, not the b object
   // (callers rebuild b every render); pts identity is stable via the callers'
   // shape cache, so re-tessellation only happens on a real change.
+  // A shape that carries its own tape (shape.tape) is cut into a core + tape pieces.
+  const tapeT = ebSpec ? Math.max(0, ebSpec.thick) : 0
+  const pe = meta.edge
+  const shapedTape = useMemo(
+    () => (shape?.tape && tapeT > 0 && !wire && shape.pts.length > 2 ? shapedTapePieces(shape, b, pe, tapeT) : null),
+    [shape, b.w, b.h, b.d, tapeT, wire, pe.top, pe.bottom, pe.left, pe.right],  // eslint-disable-line react-hooks/exhaustive-deps
+  )
   const shapeGeom = useMemo(
-    () => (shape && shape.pts.length > 2 ? buildShapedGeometry(shape, b, meta.panelKind) : null),
-    [shape, b.w, b.h, b.d, meta.panelKind],  // eslint-disable-line react-hooks/exhaustive-deps
+    () => (!shape || shape.pts.length <= 2 ? null
+         : shapedTape ? shapePieceGeometry(shape, shapedTape.core, b, meta.panelKind)
+         : buildShapedGeometry(shape, b, meta.panelKind)),
+    [shape, shapedTape, b.w, b.h, b.d, meta.panelKind],  // eslint-disable-line react-hooks/exhaustive-deps
   )
   useEffect(() => () => { shapeGeom?.dispose() }, [shapeGeom])
+  const shapedTapeGeoms = useMemo(
+    () => (shape && shapedTape ? shapedTape.tape.map(p => shapePieceGeometry(shape, p, b, meta.panelKind)) : []),
+    [shape, shapedTape, meta.panelKind],  // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  useEffect(() => () => { shapedTapeGeoms.forEach(g => g.dispose()) }, [shapedTapeGeoms])
 
   // Edge-band tape shrinks the panel core; the tape strips render separately.
   // Computed before the wire early-return because the CSG memo below needs it.
-  const tapeT = ebSpec ? Math.max(0, ebSpec.thick) : 0
   const strips = ebSpec && !shapeGeom ? edgeStrips(b, meta.edge, meta.panelKind, tapeT) : []
   const core = ebSpec && !shapeGeom ? edgeCoreBox(b, meta.edge, meta.panelKind, tapeT) : b
 
@@ -503,6 +574,12 @@ export function Part({
           <meshStandardMaterial color={ebSpec!.color} roughness={0.35} metalness={0.0} {...am} />
           {/* Faint black outline so the tape reads as a separate strip on the panel
               (not in the room 3D view — passive parts — where it reads too bold) */}
+          {!passive && <Edges threshold={10} color="#1a1a1a" linewidth={hairline} />}
+        </mesh>
+      ))}
+      {shapedTapeGeoms.map((g, i) => (
+        <mesh key={`st${i}${alpha < 1 ? '-t' : ''}`} geometry={g}>
+          <meshStandardMaterial color={ebSpec!.color} roughness={0.35} metalness={0.0} {...am} />
           {!passive && <Edges threshold={10} color="#1a1a1a" linewidth={hairline} />}
         </mesh>
       ))}

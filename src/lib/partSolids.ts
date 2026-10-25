@@ -25,7 +25,8 @@ export type PanelKind = 'side' | 'horizontal' | 'face'
 // outline (x across, y DOWN from the front face) extruded up the part's height.
 // `extrude: 'across'` = a side profile (x = depth from the back face, y = up from the
 // bottom) extruded across the part's width. `holes` = inner loops, same frame.
-export type PartShape = { pts: ShapePt[]; mirror?: boolean; extrude?: 'up' | 'across'; holes?: ShapePt[][] }
+// `tape` = draw its edge tape in 3D, cut to the outline (linear strip handles).
+export type PartShape = { pts: ShapePt[]; mirror?: boolean; extrude?: 'up' | 'across'; holes?: ShapePt[][]; tape?: boolean }
 
 // ── Boxes (same as the cabinet 3D view) ──────────────────────────────────────
 
@@ -129,12 +130,12 @@ export function linearStripShape(p: ResolvedCaseLike): PartShape | null {
   const run = (d - land) * Math.tan((lh.angle_deg * Math.PI) / 180)
   if (lh.bevel_edge === 'bottom' || lh.bevel_edge === 'top') {
     const r = Math.min(run, b.h)   // across: x = depth from the back face, y = up
-    return { extrude: 'across', pts: lh.bevel_edge === 'bottom'
+    return { extrude: 'across', tape: true, pts: lh.bevel_edge === 'bottom'
       ? [{ x: 0, y: r }, { x: d - land, y: 0 }, { x: d, y: 0 }, { x: d, y: b.h }, { x: 0, y: b.h }]
       : [{ x: 0, y: 0 }, { x: d, y: 0 }, { x: d, y: b.h }, { x: d - land, y: b.h }, { x: 0, y: b.h - r }] }
   }
   const r = Math.min(run, b.w)     // up: x across, y down from the front face
-  return { extrude: 'up', pts: lh.bevel_edge === 'left'
+  return { extrude: 'up', tape: true, pts: lh.bevel_edge === 'left'
     ? [{ x: 0, y: 0 }, { x: b.w, y: 0 }, { x: b.w, y: d }, { x: r, y: d }, { x: 0, y: land }]
     : [{ x: 0, y: 0 }, { x: b.w, y: 0 }, { x: b.w, y: land }, { x: b.w - r, y: d }, { x: 0, y: d }] }
 }
