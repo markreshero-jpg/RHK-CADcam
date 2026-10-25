@@ -191,9 +191,27 @@ const MIN_BOX_PAPER = 8   // text box narrower than this (paper mm) = point text
 let clipboard: RoomAnnotation[] = []
 const NO_IDS: ReadonlySet<string> = new Set()
 
+/** Where the tool saves what it draws (z_cabinet_shape_edit E4a). Default: the
+ *  room_annotations table. Edit shape plugs in a store that writes the cabinet's
+ *  footprint instead, so the same tools draw / edit it. */
+export interface AnnotStore {
+  insert: (rows: RoomAnnotation[]) => void | Promise<void>
+  update: (id: string, patch: Parameters<typeof dbUpdateAnnotation>[1]) => void | Promise<void>
+  remove: (ids: string[]) => void | Promise<void>
+}
+export const DB_ANNOT_STORE: AnnotStore = {
+  async insert(rows) {
+    if (!rows.length) return
+    const { error } = await supabase.from('room_annotations').insert(rows)
+    if (error) console.error('[annotation insert]', error)
+  },
+  update: dbUpdateAnnotation,
+  remove: dbDeleteAnnotations,
+}
+
 export function useAnnotationTool({
   room, annotations, setAnnotations, captureSnapshot, owner, frame, paper, zoom, active,
-  toWorld, snap, enterCad, exitCad,
+  toWorld, snap, enterCad, exitCad, store,
 }: {
   room:            Room
   /** The drawing being annotated (plan, or one side of one wall — A6): new notes go to
@@ -216,7 +234,11 @@ export function useAnnotationTool({
   snap:            (p: Pt, prev: Pt | null, exclude: ReadonlySet<string>, own?: SnapGeometry) => { pt: Pt; kind: string | null }
   enterCad:        () => void
   exitCad:         () => void
+  /** Where new / changed / deleted items are saved (default: room_annotations). */
+  store?:          AnnotStore
 }) {
+  const storeRef = useRef<AnnotStore>(store ?? DB_ANNOT_STORE)
+  useEffect(() => { storeRef.current = store ?? DB_ANNOT_STORE }, [store])
   const [tool, setTool] = useState<CadTool>('select')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [editing, setEditing] = useState<AnnotEditing | null>(null)
@@ -342,7 +364,7 @@ export function useAnnotationTool({
     persistTimers.current.set(id, setTimeout(() => {
       persistTimers.current.delete(id)
       const a = annRef.current.find(x => x.id === id)
-      if (a) void dbUpdateAnnotation(id, { geom: a.geom, style: a.style, text: a.text, sort_order: a.sort_order })
+      if (a) void storeRef.current.update(id, { geom: a.geom, style: a.style, text: a.text, sort_order: a.sort_order })
     }, 400))
   }, [])
   // One undo step per burst of edits (a colour picker drag fires dozens).
@@ -408,8 +430,7 @@ export function useAnnotationTool({
 
   const insertRows = useCallback(async (rows: RoomAnnotation[]) => {
     if (!rows.length) return
-    const { error } = await supabase.from('room_annotations').insert(rows)
-    if (error) console.error('[annotation insert]', error)
+    await storeRef.current.insert(rows)
   }, [])
 
   const deleteSelected = useCallback(() => {
@@ -418,7 +439,7 @@ export function useAnnotationTool({
     const ids = [...liveSelected]
     setAnnotations(xs => xs.filter(a => !liveSelected.has(a.id)))
     setSelectedIds(new Set())
-    void dbDeleteAnnotations(ids)
+    void storeRef.current.remove(ids)
   }, [liveSelected, captureSnapshot, setAnnotations])
 
   const reorder = useCallback((to: 'front' | 'back') => {
@@ -430,7 +451,7 @@ export function useAnnotationTool({
     for (const a of [...annRef.current].sort((x, y) => x.sort_order - y.sort_order))
       if (liveSelected.has(a.id)) updated.set(a.id, n++)
     setAnnotations(xs => xs.map(a => updated.has(a.id) ? { ...a, sort_order: updated.get(a.id)! } : a))
-    for (const [id, sort_order] of updated) void dbUpdateAnnotation(id, { sort_order })
+    for (const [id, sort_order] of updated) void storeRef.current.update(id, { sort_order })
   }, [liveSelected, captureSnapshot, setAnnotations])
 
   const paste = useCallback((src: RoomAnnotation[]) => {
@@ -490,14 +511,14 @@ export function useAnnotationTool({
     if (!text.trim()) {
       captureSnapshot()
       setAnnotations(xs => xs.filter(a => a.id !== orig.id))
-      void dbDeleteAnnotations([orig.id])
+      void storeRef.current.remove([orig.id])
       return
     }
     const next = { ...orig, text, style: ed.draft.style, geom: ed.draft.geom }
     if (JSON.stringify([orig.text, orig.style, orig.geom]) !== JSON.stringify([next.text, next.style, next.geom])) {
       captureSnapshot()
       setAnnotations(xs => xs.map(a => a.id === orig.id ? next : a))
-      void dbUpdateAnnotation(orig.id, { text, style: next.style, geom: next.geom })
+      void storeRef.current.update(orig.id, { text, style: next.style, geom: next.geom })
     }
   }, [captureSnapshot, setAnnotations, insertRows])
 
@@ -554,7 +575,7 @@ export function useAnnotationTool({
     captureSnapshot()
     const moved = new Map(sel.map(a => [a.id, translateGeom(a.kind, a.geom, dx, dy)]))
     setAnnotations(xs => xs.map(a => moved.has(a.id) ? { ...a, geom: moved.get(a.id)! } : a))
-    for (const [id, geom] of moved) void dbUpdateAnnotation(id, { geom })
+    for (const [id, geom] of moved) void storeRef.current.update(id, { geom })
   }, [liveSelected, k, captureSnapshot, setAnnotations])
 
   /** CAD panel: replace one item's geometry (a typed coordinate). One undo step, saved now. */
@@ -562,7 +583,7 @@ export function useAnnotationTool({
     if (!annRef.current.some(x => x.id === id)) return
     captureSnapshot()
     setAnnotations(xs => xs.map(x => x.id === id ? { ...x, geom } : x))
-    void dbUpdateAnnotation(id, { geom })
+    void storeRef.current.update(id, { geom })
   }, [captureSnapshot, setAnnotations])
 
   const cancelEdit = useCallback(() => setEditing(null), [])
@@ -628,7 +649,7 @@ export function useAnnotationTool({
     const geom: TextGeom = { ...(a.geom as TextGeom) }
     delete geom.leader
     setAnnotations(xs => xs.map(x => x.id === a.id ? { ...x, geom } : x))
-    void dbUpdateAnnotation(a.id, { geom })
+    void storeRef.current.update(a.id, { geom })
   }, [selected, captureSnapshot, setAnnotations])
 
   /** A drawing click. Line / arrow: add a point. Leader: tip, then landing → type the note. */
@@ -672,7 +693,7 @@ export function useAnnotationTool({
       const geom: TextGeom = { ...(a.geom as TextGeom), leader: [p] }
       setAnnotations(xs => xs.map(x => x.id === a.id ? { ...x, geom } : x))
       setSelectedIds(new Set([a.id]))
-      void dbUpdateAnnotation(a.id, { geom })
+      void storeRef.current.update(a.id, { geom })
       return
     }
     if (d.tool === 'dim' && d.dimType === 'angular') {   // corner, a point on each side, then where the arc sits
@@ -819,8 +840,8 @@ export function useAnnotationTool({
   const replaceShape = useCallback((id: string, kind: AnnotationKind, geom: RoomAnnotation['geom'], removeIds: string[] = []) => {
     captureSnapshot()
     setAnnotations(xs => xs.filter(x => !removeIds.includes(x.id)).map(x => x.id === id ? { ...x, kind, geom } : x))
-    void dbUpdateAnnotation(id, { kind, geom })
-    if (removeIds.length) void dbDeleteAnnotations(removeIds)
+    void storeRef.current.update(id, { kind, geom })
+    if (removeIds.length) void storeRef.current.remove(removeIds)
     setSelectedIds(new Set([id]))
   }, [captureSnapshot, setAnnotations])
 
@@ -1100,7 +1121,7 @@ export function useAnnotationTool({
         const ids = cur.kind === 'move' ? [...cur.orig.keys()] : [cur.id]
         for (const id of ids) {
           const a = annRef.current.find(x => x.id === id)
-          if (a) void dbUpdateAnnotation(id, { geom: a.geom })
+          if (a) void storeRef.current.update(id, { geom: a.geom })
         }
       } else if (cur.kind === 'marquee') {
         const far = Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y) >= DRAG_PX

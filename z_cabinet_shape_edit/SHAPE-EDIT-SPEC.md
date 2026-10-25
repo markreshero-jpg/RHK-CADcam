@@ -9,9 +9,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → **E1 + E2 + E3 built 2026-10-25** (sub-types, corner joins,
-> plan Edit shape mode with picking), in-app checks pending — see "E1 / E2 / E3
-> notes" under Phases. Next **E4a** (CAD tool target adapter).
+> **RESUME HERE** → **E1–E3 + E4a built 2026-10-25** (sub-types, corner joins,
+> plan Edit shape picking, CAD tool save store), in-app checks pending — see the
+> notes under Phases. Next **E4b** (CAD tools on the footprint — plan in "E4a notes").
 
 ---
 
@@ -237,7 +237,7 @@ for). The code gets `/CS` unless the shape is still a preset (decision 15).
 | E1 | **Types + sub-types in the resolver.** `sub` on edges, upgrade-on-read (scribe, role_overrides; flush_ends moved to E2), per-edge material + thickness (decision 5) through the inset polygon + joins, applied end panel part, finished tape. Pickers added to the existing Shape section dropdowns so it's checkable before plan editing exists. Tests: rectangle footprint = box parts still; every preset × every sub-type stays inside the outline, no overlaps | [x] built 2026-10-25, in-app check pending |
 | E2 | **Junctions in the resolver.** `joins` map; through A / B, butt-bevel, mitre at any angle incl. square; panel↔facet + panel↔open square / flush (flush_ends retired); facet↔facet mitre / reveal. Corner dropdowns in the Shape section. Tests as 4a's band-fill tests for every choice | [x] built 2026-10-25, in-app check pending |
 | E3 | **Plan edit mode — picking only.** Right-click Edit shape, dim + highlight, edges coloured by type, click edge / corner → panels in the sidebar, Done / Cancel / undo. No geometry editing yet | [x] built 2026-10-25, headless-checked, in-app check pending |
-| E4a | **CAD tool extraction** — target adapter in `useAnnotationTool`, annotation behaviour unchanged (headless check of the B-phase tools) | [ ] |
+| E4a | **CAD tool extraction** — target adapter in `useAnnotationTool`, annotation behaviour unchanged (headless check of the B-phase tools) | [x] built 2026-10-25, headless-checked |
 | E4b | **CAD tools on the footprint** — grips, side drag, line / arc / box drawing from scratch, fillet / chamfer / join / offset, snaps (walls, neighbours, own points), typed entry; validity; ids + formula re-expression; pos / bbox update | [ ] |
 | E5 | **Library** — save shaped cabinets with their footprint (types, subs, joins, formulas) + the new preserve ticks; placement evaluates at the placed size, optional hand flip; `/CS` in the parser + skill | [ ] |
 | E6 | Tutorial lesson ("Editing a cabinet shape"), in-app check list | [ ] |
@@ -350,6 +350,42 @@ for). The code gets `/CS` unless the shape is still a preset (decision 15).
   pick left edge, Finished gable → left side in the exposed board, pick a corner,
   Cancel → restored, footprint back to none; open + Esc writes nothing) — passed
   2026-10-25.
+
+### E4a notes (built 2026-10-25)
+
+- The hook already worked on an in-memory list (`annotations` / `setAnnotations`,
+  `owner`, `frame`, `toWorld`, `snap` — all props) — the item CAD in the cabinet
+  edit modal (z_item_cad) reuses it that way. The only room-specific part left was
+  **saving**: ~15 direct `dbUpdateAnnotation` / `dbDeleteAnnotations` calls + one
+  insert. These now go through an optional **`store: AnnotStore`** prop
+  (`insert / update / remove`), default **`DB_ANNOT_STORE`** = the same
+  room_annotations calls, so every existing caller (plan, elevations, cabinet modal)
+  is unchanged. Less invasive than the geometry extraction first planned — the
+  drawing / grip / fillet / offset code didn't need to move.
+- Not routed (outside the hook, stay room-only): `useCanvasHistory`'s undo / redo
+  sync, `CabinetCad`'s library move, `canvasDB` loads.
+- Check: `z_plan_automation/verify-cad-store-e4a.mjs` in the Test Kitchen —
+  PHASE=a Line + Box → 2 rows; Fillet the box (closed line with corner bulges) and
+  drag the line → both rows updated; PHASE=b Ctrl+A + Delete → 0 rows. Passed
+  2026-10-25 (room left empty). `cadTypedEntry` / `itemCad` tests pass.
+- **Plan for E4b** (how the footprint plugs in):
+  - Edit mode keeps its own `annotations` state holding ONE item: the footprint as a
+    closed `line` annotation in **room plan mm** (`pts` + `bulges` for arcs,
+    `closed: true`), built from `evaluateFootprint` through `cabinetToPlan`; a
+    parallel `edgeIds[]` (one per segment) kept by the adapter.
+  - A `footprintStore`: `update(id, {geom})` → map pts back to the cabinet frame
+    (inverse of `cabinetToPlan`), match segments to the old ones to keep edge ids
+    (moved vertex keeps both; an inserted vertex = a split → one half keeps the id,
+    the other gets a new id + `front / faces` per decision 14; a removed vertex merges
+    → the longer edge's id survives, the other's joins entry is dropped with a
+    warning), re-express moved vertices as formulas against the nearest bbox side,
+    validate (closed, no self-crossing, edges ≥ 10 mm, ≥ 1 panel edge), set
+    `preset: null`, then `shp.apply`. `insert` (a new line / box drawn in edit mode)
+    = replace the outline only if it is closed (Box tool / closed polyline) — a
+    fresh shape, all edges new; `remove` = refuse (a cabinet needs an outline).
+  - The edit's `captureSnapshot` = no-op (E3's first-change snapshot covers it);
+    tool set limited to Select, Line, Arc, Box, Offset, Fillet, Chamfer, Join (a
+    `tools` prop on the ribbon, decision 2).
 
 Later (not this module): rectangular cabinets on the same edge model (decision
 3); a `none` edge type (decision 4); kick / benchtop per edge (decision 9);
