@@ -3,6 +3,7 @@ import { resolveCabinet } from '../resolver'
 import { mergeRules } from '../mergeRules'
 import { HANGING_RAIL_OVAL } from '../fittings'
 import { DEFAULT_RULES, type CabinetInput, type InternalFitting, type Material } from '../types'
+import { cabinetSeamDrills } from '../../jointDrilling'
 
 // HANGING_RAIL_OVAL accessory (RHK6581 Bed 2): 30 x 15 block, wall to wall,
 // hanging 60 under the top of its opening unless locked.
@@ -49,5 +50,58 @@ describe('hanging rail accessory', () => {
     const [r] = railP({ type: 'accessory', key: HANGING_RAIL_OVAL.key, y_locked: false, product_id: 'p2' })
     expect([r.DX, r.DZ, r.accessory?.product_id]).toEqual([25, 25, 'p2'])
     expect(r.Y).toBeCloseTo(cab([]).DY - board.DZ - 60 - 25)
+  })
+})
+
+// z_accessories A6 / A8: the rail places its supports; end supports prick the gables.
+describe('hanging rail supports', () => {
+  const products = [
+    { id: 'r', name: 'Oval', category: 'hanging_rail', width_mm: 15, height_mm: 30, colour: '#fff', is_default: true,
+      end_support_id: 'es', centre_support_id: 'cp', end_pillar_id: 'ep', max_span_mm: 1000 },
+    { id: 'es', name: 'End support', category: 'rail_support', width_mm: 25, height_mm: 50, depth_mm: 12, colour: null, is_default: false, joint_id: 'j1' },
+    { id: 'cp', name: 'Centre pillar', category: 'rail_support', width_mm: 20, height_mm: null, depth_mm: 20, colour: null, is_default: false },
+    { id: 'ep', name: 'End pillar', category: 'rail_support', width_mm: 20, height_mm: null, depth_mm: 20, colour: null, is_default: false },
+  ]
+  const op = {
+    id: 'o1', joint_type_id: 'j1', operation_order: 1, target_part: 'part_a', machine_operation: 'drill', face: 'normal',
+    tool_diameter_mm: 5, depth_mm: 1, offset_x_mm: 0, offset_y_mm: 0, offset_z_mm: 10, qty: 2, spacing_mm: 32,
+    qty2: 1, spacing2_mm: null, router_tool_id: null, drill_id: null, auto_tool: true, notes: null, expressions: null,
+  } as const
+  const run = (f: InternalFitting, DX = 841) => resolveCabinet({
+    ...cab([f]), DX, accessory_products: products,
+    joint_type_ops: { j1: [op] }, joint_type_names: { j1: 'Finista end support' },
+  })
+  const RAIL = { type: 'accessory', key: HANGING_RAIL_OVAL.key, y_locked: true, y_position: 1700 } as const
+  const sups = (rp: ReturnType<typeof run>) => rp.internal_parts.filter(p => p.part_type === 'rail_support')
+
+  it('an end support on each gable, centred 20 above the rail bottom, no centre pillar up to 1000', () => {
+    const s = sups(run(RAIL))
+    expect(s.map(p => p.accessory?.role)).toEqual(['end_support', 'end_support'])
+    expect([s[0].X, s[0].Y, s[0].DZ, s[0].DY]).toEqual([16.5, 1700 + 20 - 25, 50, 12])
+    expect(s[1].X + s[1].DY).toBeCloseTo(841 - 16.5)
+  })
+  it('a centre pillar once the rail is over 1000, rail centre up to the top of the opening', () => {
+    const c = sups(run(RAIL, 1100)).filter(p => p.accessory?.role === 'centre_pillar')
+    expect(c).toHaveLength(1)
+    expect(c[0].Y).toBe(1715)
+    expect(c[0].Y + c[0].DZ).toBeCloseTo(2300 - 16.5)
+  })
+  it('end pillar / none per end, and a centre count override', () => {
+    const s = sups(run({ ...RAIL, supports: { left: 'end_pillar', right: 'none', centre: 2 } }))
+    expect(s.map(p => p.accessory?.role)).toEqual(['end_pillar', 'centre_pillar', 'centre_pillar'])
+  })
+  it('end supports prick two holes 32 apart into each gable, 5 and 37 above the rail bottom, 1 deep', () => {
+    const rp = run(RAIL)
+    const seams = rp.seam_joints.filter(j => j.part_b_key.startsWith('int_rail_support_'))
+    expect(seams.map(j => j.part_a_key)).toEqual(['left_side', 'right_side'])
+    const holes = cabinetSeamDrills(rp).filter(d => d.seamKey.includes('int_rail_support_'))
+    const left = holes.filter(d => d.targetPartKey === 'left_side')
+    expect(left.map(d => d.y)).toEqual([1705, 1737])
+    expect(left.every(d => d.x === 16.5 && d.axis === 'x-' && d.depthLen === 1 && d.radius === 2.5)).toBe(true)
+    expect(holes.filter(d => d.targetPartKey === 'right_side').every(d => d.axis === 'x+')).toBe(true)
+  })
+  it('drilling off → no seam', () => {
+    const rp = run({ ...RAIL, supports: { drill: false } })
+    expect(rp.seam_joints.some(j => j.part_b_key.startsWith('int_rail_support_'))).toBe(false)
   })
 })

@@ -136,7 +136,7 @@ export function resolveInternalParts(
   // Per-type sort counters — shared between the separator emitters below and the
   // fitting resolvers (via ctx.sort) for stable downstream naming.
   const sort: Record<string, number> = {
-    adj_shelf: 0, fixed_shelf: 0, divider: 0, inner_drawer: 0, pull_out: 0, accessory: 0,
+    adj_shelf: 0, fixed_shelf: 0, divider: 0, inner_drawer: 0, pull_out: 0, accessory: 0, rail_support: 0,
   }
 
   // Context handed to the fitting registry (compartment contents).

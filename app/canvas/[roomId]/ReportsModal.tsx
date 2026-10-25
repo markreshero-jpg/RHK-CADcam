@@ -57,6 +57,7 @@ const INT_LABELS: Record<string, string> = {
   pull_out_bottom:     'Pull-out Bottom',    pull_out_side:      'Pull-out Side',
   pull_out_back:       'Pull-out Back',
   accessory:           'Accessory',
+  rail_support:        'Rail support',
 }
 const FACE_LABELS: Record<string, string> = {
   door: 'Door', drawer_face: 'Drawer Face', false_panel: 'False Panel',

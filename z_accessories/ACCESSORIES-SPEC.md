@@ -64,8 +64,8 @@ their supports now; wardrobe / pantry / misc items later on the same table.
 | A3 | Interior editor Product select on the rail fitting | built 2026-10-25 |
 | A4 | Tutorial | built 2026-10-25 |
 | S1 | Model columns + upload / preview on Accessories rows (A7) | not started |
-| S2 | Rail places its supports (A6) — 3D + elevation, Interior editor overrides | not started |
-| S3 | End support joint (A8) → gable drilling → optimiser | not started — needs the hole pattern |
+| S2 | Rail places its supports (A6) — 3D + elevation, Interior editor overrides | built 2026-10-25 (`migration_s2_rail_supports.sql`): part type `rail_support` (hardware, not CNC), shelf-like box; drawn as blocks until models (S1). RHK6581 rails re-resolved. In-app check pending |
+| S3 | End support joint (A8) → gable drilling → optimiser | built 2026-10-25: `railSupportSeams` declares gable ↔ support seams (`rail:end_support`, joint from the support's `joint_id`); `declaredSeamDrillOps` takes internal parts too. Support sizes other than the 50 height are placeholders |
 | A6 | Hardware list / ordering: rail bars (cut lengths → 3.6 m stock), end supports ×2 per rail, centre supports per `max_span_mm` (1000) | not started |
 | A7 | Other categories (wardrobe pull-downs, trouser racks, pantry baskets …) | not started |
 

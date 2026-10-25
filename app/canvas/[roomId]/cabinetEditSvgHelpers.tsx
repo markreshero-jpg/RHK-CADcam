@@ -70,6 +70,7 @@ const INT_LABELS: Record<string, string> = {
   pull_out_bottom:     'Pull-out Bottom',    pull_out_side:      'Pull-out Side',
   pull_out_back:       'Pull-out Back',
   accessory:           'Accessory',
+  rail_support:        'Rail support',
   divider: 'Divider',
 }
 const FACE_LABELS_MAP: Record<string, string> = {

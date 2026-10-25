@@ -877,6 +877,34 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Open a robe cupboard, go to the internals and click its hanging rail (or Add → Hanging rail). The Rail select says Default (the ticked rail) — pick another rail to change just this one. The rail takes that rail’s size and colour.',
       canvas: true, done: (c, s) => ev(c, 'rail_product_set') > ev(s, 'rail_product_set') },
   ]},
+  // Appended 2026-10-25 (z_accessories A6 / A8 — rail supports + end support drilling).
+  { id: 'rail_supports', level: 'intermediate', topic: 'cabinets', title: 'Hanging rail supports and drilling',
+    blurb: 'Rails place their own end supports and centre pillars; end supports prick their screw holes in the gables.',
+    keywords: 'hanging rail supports end support end pillar centre pillar drilling joint gable prick holes robe wardrobe', steps: [
+    { id: 'supports', title: 'Set a rail’s supports',
+      body: 'Open a robe cupboard, go to the internals and click its hanging rail. Each end gets an End support (screwed to the gable) unless you pick End pillar — use that for an open end or where another rail runs the other way — or None. Centre pillars are added one per 1000 of rail; type a number to override. Move the rail up or down and the supports go with it.',
+      canvas: true, done: (c, s) => ev(c, 'rail_supports_set') > ev(s, 'rail_supports_set') },
+    { id: 'drill', title: 'End support holes',
+      body: 'With “Drill end support holes” ticked, each end support pricks two holes 32 apart, one above the other, 1 deep into the gable — 10 up from the bottom of the support. Turn on Drilling in the 3D view to see them. The pattern is the “Finista end support” joint in Library → Joints; change it there and every rail follows.',
+      canvas: true, done: (c, s) => ev(c, 'rail_supports_set') > ev(s, 'rail_supports_set') },
+  ]},
+  // Appended 2026-10-25 (z_item_cad IC1 — CAD drawn on a cabinet, item CAD in the library).
+  { id: 'item_cad', level: 'intermediate', topic: 'cad', title: 'Notes that come with a cabinet (item CAD)',
+    blurb: 'Draw a note on a cabinet in its edit window, e.g. PULLOUT BIN, and move it to the library so every bin front shows it.',
+    keywords: 'item cad cabinet notes library bin front pullout pull out bin label elevation edit window f7 attach code', steps: [
+    { id: 'open', title: 'Open the cabinet, Elevation tab, CAD',
+      body: 'Double-click a bin cabinet to open its edit window. On the Elevation tab press F7 (or click CAD next to Measure). The CAD tools open on the left, the CAD panel on the right.',
+      canvas: true, done: (c, s) => ev(c, 'item_cad_on') > ev(s, 'item_cad_on') },
+    { id: 'draw', title: 'Draw the note on the front',
+      body: 'Pick the Text tool (T) and click on the bin front, then type PULLOUT BIN and press Ctrl+Enter. Notes drawn here belong to this cabinet only, and show on the room elevation with it.',
+      canvas: true, done: (c, s) => ev(c, 'item_cad_on') > ev(s, 'item_cad_on') },
+    { id: 'move', title: 'Move it to the library',
+      body: 'Select the note (Ctrl+A selects them all), then in the Item CAD bar click Bin front (all cabinets). Now every cabinet with a bin front draws it, sitting in the same place on the front at any width. The dashed blue boxes show where library notes can attach. Pick the cabinet code button instead to attach it to that cabinet type only.',
+      canvas: true, done: (c, s) => ev(c, 'item_cad_moved') > ev(s, 'item_cad_moved') },
+    { id: 'jobs', title: 'Edit, remove, and older jobs',
+      body: 'Edit brings the library notes back onto this cabinet to change, then Move to library again. Remove takes them out of the library. Jobs already drawn keep the notes they had: library changes never change an old job by themselves.',
+      canvas: true, done: (c, s) => ev(c, 'item_cad_moved') > ev(s, 'item_cad_moved') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

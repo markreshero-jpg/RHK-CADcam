@@ -593,6 +593,9 @@ export interface DeclaredSeamGeom {
 export interface DeclaredSeam {
   seam_key:    string   // `${part_a}|${part_b}`
   generic_key: string   // construction-method default key, e.g. 'crv_fix:former'
+  // Joint the part itself names (a rail end support's library joint, z_accessories
+  // A8) — used when neither the cabinet nor the construction method sets one.
+  joint_type_id?: string
   part_a_key:  string
   part_b_key:  string
   geom:        DeclaredSeamGeom
@@ -1272,10 +1275,21 @@ export interface AccessoryFitting {
   key?:        string    // references parts_library.key (e.g. WINE_RACK, FILE_RAIL) — geometry TBD
   // Hanging rail product (hardware_accessories, z_accessories A5); unset = the default rail.
   product_id?: string
+  // Rail supports (z_accessories A6): each end's support (default end support),
+  // centre pillar count (default one per max_span_mm), drilling on (default).
+  supports?:   RailSupportsSetting
   height?:     number
   y_position?: number
   y_locked?:   boolean
   notes?:      string
+}
+
+export type RailEndSupport = 'end_support' | 'end_pillar' | 'none'
+export interface RailSupportsSetting {
+  left?:   RailEndSupport
+  right?:  RailEndSupport
+  centre?: number
+  drill?:  boolean
 }
 
 export type InternalFitting =
@@ -1458,7 +1472,7 @@ export interface ResolvedInternalPart extends ResolvedPart {
               'inner_drawer_bottom' | 'inner_drawer_back' |
               'inner_drawer_side'   | 'inner_drawer_front' |
               'pull_out_bottom' | 'pull_out_side' | 'pull_out_back' |
-              'accessory'
+              'accessory' | 'rail_support'
   sort_order: number
   y_locked:   boolean
   x_locked?:  boolean   // dividers only
@@ -1467,7 +1481,14 @@ export interface ResolvedInternalPart extends ResolvedPart {
   // emitted drawer; absent on shelves, dividers, accessories.
   inner_drawer_index?: number
   // Bought-in accessory this part stands for (hanging rail product, z_accessories A5).
-  accessory?: { product_id: string; name: string; colour: string | null }
+  // Rail supports (z_accessories A6) add their role, which end, and the joint
+  // that drills an end support's holes (null when drilling is off).
+  accessory?: {
+    product_id: string; name: string; colour: string | null
+    role?: 'end_support' | 'centre_pillar' | 'end_pillar'
+    side?: 'left' | 'right'
+    joint_id?: string | null
+  }
 }
 
 /** hardware_accessories row the resolver reads (z_accessories). */
@@ -1475,10 +1496,18 @@ export interface AccessoryProduct {
   id:         string
   name:       string
   category:   string
-  width_mm:   number | null
+  width_mm:   number | null   // rail: across; support: front-to-back
   height_mm:  number | null
+  depth_mm?:  number | null   // support: off the mounting face
   colour:     string | null
   is_default: boolean
+  // Rail → its supports (z_accessories A3 / A6) and the centre pillar spacing.
+  end_support_id?:    string | null
+  centre_support_id?: string | null
+  end_pillar_id?:     string | null
+  max_span_mm?:       number | null
+  // Support → the joint that drills its fixing holes (A8).
+  joint_id?:          string | null
 }
 
 export interface ResolvedFaceRow {

@@ -280,7 +280,7 @@ export function internalPartItem(partType: string): string {
   if (partType === 'adj_shelf') return 'adj_shelves'
   if (partType === 'fixed_shelf') return 'fixed_shelves'
   if (partType === 'divider') return 'dividers'
-  if (partType === 'accessory') return 'accessories'
+  if (partType === 'accessory' || partType === 'rail_support') return 'accessories'
   return 'inner_drawers'          // inner_drawer_*, pull_out_*
 }
 export function faceZoneItem(faceType: string): string | null {

@@ -102,7 +102,7 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       edge_band_id:      p.edge_band.id ?? null,
       rule_overrides:    {},
       // Accessories (hanging rail …) are bought hardware, not cut board.
-      output_to_cnc:     p.part_type !== 'accessory',
+      output_to_cnc:     p.part_type !== 'accessory' && p.part_type !== 'rail_support',
       outline:           p.outline ?? null,
       accessory:         p.accessory ?? null,   // hanging rail product (z_accessories)
     })),

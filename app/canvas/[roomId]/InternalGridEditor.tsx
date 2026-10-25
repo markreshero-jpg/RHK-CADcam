@@ -6,7 +6,7 @@ import type {
   ResolvedCabinet, ResolvedInternalPart, Section, SplitSection, SectionChild, SectionSeparator,
   InternalFitting, InternalFittingType,
   AdjShelfFitting, FixedShelfFitting, InnerDrawerFitting, PullOutFitting, AccessoryFitting,
-  DrawerType,
+  DrawerType, RailSupportsSetting, RailEndSupport,
 } from '@/src/lib/resolver/types'
 import { EMPTY_SECTION } from '@/src/lib/resolver/types'
 import { HANGING_RAIL_OVAL } from '@/src/lib/resolver/fittings'
@@ -69,6 +69,43 @@ function RailProductSelect({ inp, value, onChange }: { inp: string; value?: stri
         {rails.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
       </select>
     </label>
+  )
+}
+
+// Rail supports (z_accessories A6): each end's support, centre pillar count
+// (blank = one per the rail's max span), and the end supports' gable drilling.
+function RailSupportsControls({ inp, value, onChange }: { inp: string; value?: RailSupportsSetting; onChange: (s: RailSupportsSetting | undefined) => void }) {
+  const s = value ?? {}
+  const set = (p: Partial<RailSupportsSetting>) => {
+    const next = Object.fromEntries(Object.entries({ ...s, ...p }).filter(([, v]) => v !== undefined)) as RailSupportsSetting
+    onChange(Object.keys(next).length ? next : undefined)
+    useTutorial.getState().emit('rail_supports_set')
+  }
+  const endSel = (side: 'left' | 'right') => (
+    <label className="block flex-1">
+      <span className="block text-gray-500 mb-1">{side === 'left' ? 'Left end' : 'Right end'}</span>
+      <select value={s[side] ?? 'end_support'} onChange={e => set({ [side]: e.target.value === 'end_support' ? undefined : e.target.value as RailEndSupport })} className={inp + ' text-left'}>
+        <option value="end_support">End support</option>
+        <option value="end_pillar">End pillar</option>
+        <option value="none">None</option>
+      </select>
+    </label>
+  )
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2">{endSel('left')}{endSel('right')}</div>
+      <label className="block">
+        <span className="block text-gray-500 mb-1">Centre pillars</span>
+        <input type="number" min={0} step={1} placeholder="Auto (1 per 1000)"
+          key={s.centre ?? 'auto'} defaultValue={s.centre ?? ''}
+          onBlur={e => set({ centre: e.target.value === '' ? undefined : Math.max(0, Math.round(Number(e.target.value))) })}
+          className={inp + ' text-left'} />
+      </label>
+      <label className="flex items-center gap-2">
+        <input type="checkbox" checked={s.drill !== false} onChange={e => set({ drill: e.target.checked ? undefined : false })} />
+        <span className="text-gray-600">Drill end support holes</span>
+      </label>
+    </div>
   )
 }
 
@@ -2054,13 +2091,18 @@ export default function InternalGridEditor({
 
               {selFittingData.type === 'accessory' && (
                 <div className="flex flex-col gap-2">
-                  {(selFittingData as AccessoryFitting).key === HANGING_RAIL_OVAL.key ? (
+                  {(selFittingData as AccessoryFitting).key === HANGING_RAIL_OVAL.key ? (<>
                     <RailProductSelect
                       inp={inp}
                       value={(selFittingData as AccessoryFitting).product_id}
                       onChange={id => handlePatchFitting(selFittingPath, selFittingIndex, { product_id: id })}
                     />
-                  ) : <label className="block">
+                    <RailSupportsControls
+                      inp={inp}
+                      value={(selFittingData as AccessoryFitting).supports}
+                      onChange={sup => handlePatchFitting(selFittingPath, selFittingIndex, { supports: sup } as Partial<InternalFitting>)}
+                    />
+                  </>) : <label className="block">
                     <span className="block text-gray-500 mb-1">Key (parts_library)</span>
                     <input type="text"
                       defaultValue={(selFittingData as AccessoryFitting).key ?? ''}

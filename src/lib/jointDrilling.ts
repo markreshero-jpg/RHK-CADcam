@@ -201,6 +201,7 @@ export function internalBox(p: ResolvedInternalPart): Box | null {
       return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
     case 'adj_shelf':
     case 'fixed_shelf':
+    case 'rail_support':   // hanging rail end support ↔ gable seam (z_accessories A8)
       return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
     default:
       return null
@@ -820,7 +821,7 @@ export function intoPartFrame<T extends DrillOpPos>(p: Pick<ResolvedCasePart, 'A
 
 /** One seam's drills, declared, shaped or legacy. */
 export function seamDrillsFor(sj: ResolvedSeamJoint, rp: Pick<ResolvedCabinet, 'case_parts' | 'internal_parts'>, boxA: Box, boxB: Box): DrillOpPos[] {
-  if (sj.declared) return declaredSeamDrillOps(sj, rp.case_parts, boxA, boxB)
+  if (sj.declared) return declaredSeamDrillOps(sj, rp.case_parts, boxA, boxB, rp.internal_parts ?? [])
   return sj.shaped ? shapedSeamDrillOps(sj, rp.case_parts, rp.internal_parts ?? []) : seamJointDrillOps(sj, boxA, boxB)
 }
 
@@ -830,13 +831,16 @@ export function seamDrillsFor(sj: ResolvedSeamJoint, rp: Pick<ResolvedCabinet, '
 // step) `across`. Part B — an upright turned by AY, local z = 0 its outer face —
 // is bored right through from its INNER face (the face its footprint frame puts
 // up on the machine, so every hole in it machines on one face); part A's ops
-// enter at the contact heading `toward` it, to the op's depth.
+// enter at the contact heading `toward` it, to the op's depth. Either part may
+// be an internal one by its int_… key (a rail end support on a divider, A8).
 const axisOf = (v: { x: number; y: number; z: number }): DrillAxis =>
   Math.abs(v.x) > 0.5 ? (v.x > 0 ? 'x+' : 'x-') : Math.abs(v.y) > 0.5 ? (v.y > 0 ? 'y+' : 'y-') : (v.z > 0 ? 'z+' : 'z-')
 
-export function declaredSeamDrillOps(sj: ResolvedSeamJoint, caseParts: ResolvedCasePart[], boxA: Box, boxB: Box): DrillOpPos[] {
+export function declaredSeamDrillOps(sj: ResolvedSeamJoint, caseParts: ResolvedCasePart[], boxA: Box, boxB: Box,
+                                     internalParts: ResolvedInternalPart[] = []): DrillOpPos[] {
   const g = sj.declared
-  const a = caseParts.find(p => p.part_key === sj.part_a_key), b = caseParts.find(p => p.part_key === sj.part_b_key)
+  const find = (k: string) => caseParts.find(p => p.part_key === k) ?? internalParts.find(p => internalSeamPartKey(p) === k)
+  const a = find(sj.part_a_key), b = find(sj.part_b_key)
   if (!g || !a || !b) return []
   const rad = (b.AY ?? 0) * Math.PI / 180
   const nIn = { x: Math.round(Math.sin(rad)), y: 0, z: Math.round(Math.cos(rad)) }   // outer → inner face of B

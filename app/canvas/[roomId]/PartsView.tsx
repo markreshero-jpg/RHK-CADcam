@@ -93,6 +93,7 @@ const PART_LABEL: Record<string, string> = {
   pull_out_side:       'Pull-out Side',
   pull_out_back:       'Pull-out Back',
   accessory:           'Accessory',
+  rail_support:        'Rail support',
 }
 
 const TYPE_COLOR: Record<string, string> = {

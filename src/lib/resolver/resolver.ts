@@ -28,6 +28,7 @@ import { resolveFillerCleats } from './resolveFillerCleats'
 import { resolveBulkhead } from './resolveBulkhead'
 import { resolveCurvedEnd } from './resolveCurvedEnd'
 import { resolveFloatShelf } from './resolveFloatShelf'
+import { railSupportSeams } from './railSupportSeams'
 import { resolveBackPanel } from './resolveBackPanel'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
@@ -142,6 +143,8 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // For each seam that has a joint assigned (per-cabinet or CM default) — carcase
   // part seams plus internal seams (shelf ↔ support, divider ↔ panel) — collect
   // the joint type operations ready for display and drilling export.
+  // Hanging rail end supports declare their gable seam (z_accessories A8).
+  declaredSeams.push(...railSupportSeams(caseParts, internalParts))
   const seamJoints = resolveJoints(cab, caseParts, internalParts, declaredSeams)
   // Upright panels meeting off square get no CNC holes — fixed by hand.
   if (cab.footprint) {

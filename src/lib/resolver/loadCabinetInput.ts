@@ -713,8 +713,12 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     if (j) jointTypeIds.add(j)
   }
   for (const v of Object.values(jointDefaults)) if (v) jointTypeIds.add(v)
+  // Accessory joints (rail end supports, z_accessories A8) — loaded up front so
+  // a declared support seam finds its ops.
+  const accessory_products = await loadAccessoryProducts()
+  for (const a of accessory_products) if (a.joint_id) jointTypeIds.add(a.joint_id)
 
-  const jointTypeOps:   Record<string, JointTypeOp[]> = {}
+  const jointTypeOps:  Record<string, JointTypeOp[]> = {}
   const jointTypeNames: Record<string, string>          = {}
 
   if (jointTypeIds.size > 0) {
@@ -877,8 +881,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
   const { handle_schedule, handle_products } =
     await loadHandleInputs(cab.room_id as string, projectId, (cab.hardware_overrides ?? {}) as Record<string, unknown>)
 
-  // ── 13c. Accessory products (z_accessories): hanging rail size + colour ────
-  const accessory_products = await loadAccessoryProducts()
+  // ── 13c. Accessory products (z_accessories): loaded with the joints (§10) ──
 
   // ── 14. Kick-run context ────────────────────────────────────────────────────
   // When this cabinet is linked to a kick run, load its role + split settings so
@@ -1203,12 +1206,18 @@ function loadHandleProducts() {
 function loadAccessoryProducts(): Promise<AccessoryProduct[]> {
   return cachedCascade('accessories:all', async () => {
     const { data } = await supabase.from('hardware_accessories')
-      .select('id, name, category, width_mm, height_mm, colour, is_default').eq('active', true)
+      .select('id, name, category, width_mm, height_mm, depth_mm, colour, is_default, end_support_id, centre_support_id, end_pillar_id, max_span_mm, joint_id')
+      .eq('active', true)
+    const num = (v: unknown) => (v == null ? null : Number(v))
     return ((data ?? []) as Record<string, unknown>[]).map(a => ({
       id: a.id as string, name: a.name as string, category: a.category as string,
-      width_mm: a.width_mm == null ? null : Number(a.width_mm),
-      height_mm: a.height_mm == null ? null : Number(a.height_mm),
+      width_mm: num(a.width_mm), height_mm: num(a.height_mm), depth_mm: num(a.depth_mm),
       colour: (a.colour as string | null) ?? null, is_default: !!a.is_default,
+      end_support_id: (a.end_support_id as string | null) ?? null,
+      centre_support_id: (a.centre_support_id as string | null) ?? null,
+      end_pillar_id: (a.end_pillar_id as string | null) ?? null,
+      max_span_mm: num(a.max_span_mm),
+      joint_id: (a.joint_id as string | null) ?? null,
     }))
   })
 }

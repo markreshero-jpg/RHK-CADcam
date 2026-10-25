@@ -250,7 +250,7 @@ export function resolveJoints(
   for (const d of declared) {
     const entry = Object.prototype.hasOwnProperty.call(carcaseJoints, d.seam_key) ? carcaseJoints[d.seam_key] : undefined
     const assigned = seamAssignJoint(entry)
-    const jointTypeId = assigned !== undefined ? assigned : jointDefaults[d.seam_key] ?? jointDefaults[d.generic_key] ?? null
+    const jointTypeId = assigned !== undefined ? assigned : jointDefaults[d.seam_key] ?? jointDefaults[d.generic_key] ?? d.joint_type_id ?? null
     if (!jointTypeId) continue
     result.push({
       seam_key:        d.seam_key,

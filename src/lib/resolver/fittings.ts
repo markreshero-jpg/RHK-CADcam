@@ -491,6 +491,64 @@ function resolveAccessories(box: Box, fittings: InternalFitting[], ctx: FittingC
       y_locked:    !!a.y_locked,
       ...(prod ? { accessory: { product_id: prod.id, name: prod.name, colour: prod.colour } } : {}),
     })
+    if (prod) out.push(...railSupports(box, { y, h: R.h }, prod, a, ctx))
+  }
+  return out
+}
+
+// Rail supports (z_accessories A6), shelf-like parts (DY along X, DZ up, DX
+// front-to-back), centred on the rail front-to-back:
+//   • end support — on the end gable / divider face, its centre 20 above the
+//     rail's bottom; its library joint drills the gable (A8, railSupportSeams);
+//   • end pillar  — at the rail end, rail centre up to the top of the opening
+//     (the shelf above); for an open end / another rail running across;
+//   • centre pillar — evenly spaced, one per max_span_mm of rail (default),
+//     rail centre up to the top of the opening.
+// Product size missing → 20 × 20 (pillars) / 50 × 25 × 12 (end support).
+export const RAIL_SUPPORT_CENTRE_UP = 20   // support centre above the rail's bottom
+
+function railSupports(box: Box, rail: { y: number; h: number }, prod: AccessoryProduct, a: AccessoryFitting, ctx: FittingCtx): ResolvedInternalPart[] {
+  const byId = (id?: string | null) => (id ? ctx.accessoryProducts?.find(p => p.id === id) : undefined)
+  const endSup = byId(prod.end_support_id), endPil = byId(prod.end_pillar_id), ctrPil = byId(prod.centre_support_id)
+  const set = a.supports ?? {}
+  const drill = set.drill !== false
+  const zc = ctx.intBack + ctx.intD / 2
+  const pillarY = rail.y + rail.h / 2, top = box.y + box.h
+  const out: ResolvedInternalPart[] = []
+  const add = (sup: AccessoryProduct, role: 'end_support' | 'centre_pillar' | 'end_pillar', x: number, y: number,
+               along: number, up: number, across: number, side?: 'left' | 'right') => {
+    if (up <= 0 || along <= 0) return
+    out.push({
+      part_type:   'rail_support',
+      sort_order:  ctx.sort.rail_support++,
+      DX: across, DY: along, DZ: up,
+      X: x, Y: y, Z: zc - across / 2,
+      AX: 0, AY: 0, AZ: 0,
+      material_id: ctx.shelfMatId,
+      edge_band:   edgeSidesToBanding([]),
+      y_locked:    !!a.y_locked,
+      accessory:   {
+        product_id: sup.id, name: sup.name, colour: sup.colour ?? prod.colour, role,
+        ...(side ? { side } : {}),
+        ...(role === 'end_support' ? { joint_id: drill ? sup.joint_id ?? null : null } : {}),
+      },
+    })
+  }
+  for (const side of ['left', 'right'] as const) {
+    const kind = set[side] ?? 'end_support'
+    if (kind === 'end_support' && endSup) {
+      const t = Number(endSup.depth_mm) || 12, H = Number(endSup.height_mm) || 50, W = Number(endSup.width_mm) || 25
+      add(endSup, 'end_support', side === 'left' ? box.x : box.x + box.w - t, rail.y + RAIL_SUPPORT_CENTRE_UP - H / 2, t, H, W, side)
+    } else if (kind === 'end_pillar' && endPil) {
+      const t = Number(endPil.depth_mm) || 20, W = Number(endPil.width_mm) || 20
+      add(endPil, 'end_pillar', side === 'left' ? box.x : box.x + box.w - t, pillarY, t, top - pillarY, W, side)
+    }
+  }
+  const span = Number(prod.max_span_mm) || 0
+  const n = Math.max(0, Math.round(set.centre ?? (span > 0 && box.w > span ? Math.ceil(box.w / span) - 1 : 0)))
+  if (ctrPil) {
+    const t = Number(ctrPil.depth_mm) || 20, W = Number(ctrPil.width_mm) || 20
+    for (let i = 1; i <= n; i++) add(ctrPil, 'centre_pillar', box.x + (box.w * i) / (n + 1) - t / 2, pillarY, t, top - pillarY, W)
   }
   return out
 }
